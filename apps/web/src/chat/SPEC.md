@@ -37,8 +37,8 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   names. Each row is one comment (`▸ L2 · the remark…`, one line), unfolding to its full text plus
   the quoted `<fragment>` verbatim (monospace, height-capped). Everything is parsed from the MESSAGE
   itself — never the review snapshot, which the next review replaces — so any transcript answers
-  "what was sent" forever, on any client; both fold levels ride the shared fold cache
-  (row id / `rowId:path`), surviving virtualization. The retry countdown carries a `source` (`turn` =
+  "what was sent" forever, on any client; the comment-row folds ride the shared fold cache (keyed
+  `rowId:<content-key>`), surviving virtualization. The retry countdown carries a `source` (`turn` =
   pi `auto_retry_*`; `summarization` = compaction/branch-summary `summarization_retry_*`, pi ≥0.81.1) —
   the flows can overlap mid-run, each keeps exactly one indicator (re-scheduling replaces, each source's
   end event clears only its own), and `RetryIndicator` labels them apart ("Retrying" vs "Retrying

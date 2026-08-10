@@ -13,7 +13,6 @@ import { useEffect, useState } from "react";
 import { cn, projectRelativePath, userText } from "@/lib";
 import { ActivityGroup } from "./ActivityGroup";
 import { useFold, useSelection } from "./foldState";
-
 import { Markdown } from "./Markdown";
 import { parseReviewPackage, type ReviewPackageItem, reviewPackageLabel } from "./reviewPackage";
 import type { ChatRow, TurnDividerData } from "./rows";

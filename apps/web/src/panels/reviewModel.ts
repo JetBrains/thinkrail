@@ -110,7 +110,7 @@ export function reviewFlags(comments: ReviewComment[] | undefined): Map<string, 
 
 /** One file's pending draft ids — what its "Send review (N)" button counts and sends: the review chat
  * is per file, so the action covers exactly this file's drafts, never another's. `null` keys the
- * anchorless whole-change-set bucket (the Review panel's file level shows it like any file). */
+ * anchorless whole-change-set bucket (the Review panel's accordion shows it like any file). */
 export function fileDraftIds(comments: ReviewComment[] | undefined, path: string | null): string[] {
 	return (comments ?? [])
 		.filter((c) => c.status === "draft" && (c.anchor?.path ?? null) === path)

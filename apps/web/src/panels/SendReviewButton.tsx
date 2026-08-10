@@ -9,8 +9,8 @@ import { sendReviewBatch } from "./reviewSend";
  * renders only while THIS file has pending drafts, counts exactly them, and sends exactly them into
  * the file's chat, which opens immediately (the host fires the package into the session detached).
  * Other files' drafts stay put — each pane carries its own button. Shared by `FilePane`, `DiffPane`,
- * and the Review panel's FILE level (`testid` keeps the sidebar's copy distinguishable in tests;
- * `path: null` is the panel's anchorless whole-change-set bucket, which the panes never show).
+ * and the Review panel's unfolded section strip (`testid` keeps the sidebar's copy distinguishable in
+ * tests; `path: null` is the panel's anchorless whole-change-set bucket, which the panes never show).
  */
 export function SendReviewButton({
 	workspaceId,

@@ -2,6 +2,12 @@ import { Send, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { ReviewThreadActions, ReviewThreadData } from "./reviewWidgets";
 
+/** Auto-size a textarea to its wrapped content (the in-place draft editor grows with typing). */
+function grow(el: HTMLTextAreaElement): void {
+	el.style.height = "auto";
+	el.style.height = `${el.scrollHeight}px`;
+}
+
 /**
  * The in-flow review comment card (the inline-edit branch's action-box presentation, adopted for
  * comments): a box sitting IN the document flow directly below its anchor — spliced between markdown
@@ -11,12 +17,6 @@ import type { ReviewThreadActions, ReviewThreadData } from "./reviewWidgets";
  * sent, a comment is a record; no rollback anywhere in review); sent/outdated cards are
  * passive read-only markers. Wears the `.review-thread*` skin the Monaco DOM twin uses.
  */
-/** Auto-size a textarea to its wrapped content (the in-place draft editor grows with typing). */
-function grow(el: HTMLTextAreaElement): void {
-	el.style.height = "auto";
-	el.style.height = `${el.scrollHeight}px`;
-}
-
 export function ReviewThreadCard({
 	thread,
 	actions,
