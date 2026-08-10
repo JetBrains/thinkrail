@@ -184,10 +184,12 @@ components. The **Skills-reload badge** rides the same tick without a separate s
   `noteFsChanged` also folds **`skillChangeTickByWorkspace: Record<workspaceId, tick>`** — the tick of the
   most recent *skill-relevant* batch (a `.claude|.github|.gemini|.pi|.agents/skills` path, via
   `isSkillPath`, or a genuinely truncated watcher batch), *accumulated* so a later non-skill batch never
-  clears it. The watcher's synthetic startup nudge is pathless + non-truncated: it advances the general
-  workspace tick and makes live readers re-read, but does **not** advance this skill tick or falsely badge
-  a clean chat. Each chat records **`skillsSyncedTickBySession: Record<sessionId, tick>`** = the tick it
-  loaded skills at.
+  clears it. When the watcher's before/after project-skill fingerprints prove startup was clean, its
+  synthetic nudge is pathless + non-truncated: it advances the general workspace tick and makes live
+  readers re-read, but does **not** advance this skill tick or falsely badge a clean chat. A changed or
+  unavailable fingerprint instead arrives as a genuinely truncated batch and keeps the conservative stale
+  signal. Each chat records **`skillsSyncedTickBySession: Record<sessionId, tick>`** = the tick it loaded
+  skills at.
   It advances **only when resources are actually (re)loaded against current disk**: a fresh
   `openChatSession`, a disk-only `hydrateSession` attach, and **`markSkillsSynced(sessionId, syncedTick)`** on
   a successful reload (`markSkillsSynced` is **monotonic** — `Math.max`, so an out-of-order reload completion

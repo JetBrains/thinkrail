@@ -4,6 +4,7 @@ export {
 	isIgnoredPath,
 	setRepoMetaPublisher,
 	setWatchPublisher,
+	setWatchSkillSnapshotter,
 	stopAllWatches,
 	stopWatch,
 } from "./watch";

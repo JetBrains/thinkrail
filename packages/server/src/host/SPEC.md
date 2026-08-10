@@ -48,8 +48,10 @@ channel fan-out, and the process-boot wrapper both launchers share.
   record of work that finished and drops only its answer,
   the **`provider.login`** channel publish (the `auth` module's session-less login-frame bridge, wired like
   `pi.extensionUi`) and the `provider.*` login handlers, the **`watch` wiring** (inject the
-  `workspace.fsChanged` publish callback into `watch`, plus its **repo-metadata** callback
-  (`setRepoMetaPublisher`) fanned out to **two** convergences for a git-metadata write in a watched worktree:
+  `workspace.fsChanged` publish callback into `watch`, plus the **startup skill-snapshot** callback
+  (`setWatchSkillSnapshotter`: workspace id → worktree path → `agent.projectSkillFingerprint`, keeping the
+  sibling composition here) and its **repo-metadata** callback (`setRepoMetaPublisher`) fanned out to
+  **two** convergences for a git-metadata write in a watched worktree:
   `refreshUserOwnedWorkspace` (**re-sync a user-owned workspace's folder-truth branch** — host-mediated,
   since `watch` has no `workspaces` edge, and self-publishing through the workspace-lifecycle tee) **and** a
   pathless `fsChanged` frame (`paths: []`, `truncated: false`) so the clients' `HEAD`-relative reads

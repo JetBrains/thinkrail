@@ -184,10 +184,14 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     (`~/.copilot/skills`), and Gemini (`${GEMINI_CLI_HOME:-~}/.gemini/skills`), **plus each installed Claude
     plugin's `skills/` dir** (read from `~/.claude/plugins/installed_plugins.json` — the resolved `installPath`,
     never a cache sweep, so stale versions and transitive `node_modules/**/skills` are excluded); project-root
-    aliases are `.claude/skills`, `.github/skills`, and `.gemini/skills`. The fixed project/personal alias roots are
-    registered as candidate skill paths **whether or not they exist yet**, so a `loader.reload()` picks up one a branch
-    switch / pull / clone creates mid-session (plugin dirs are the set installed at construction — a plugin added later
-    needs a fresh session); classification still only counts dirs that actually exist. Still never arbitrary
+    aliases are `.claude/skills`, `.github/skills`, and `.gemini/skills`. **`projectSkillFingerprint(cwd)`**
+    hashes the relative structure + file content of those roots together with Pi-native `.pi/skills` and
+    `.agents/skills`; the host injects that opaque snapshot into `watch`'s startup-gap guard, so a dropped
+    registration-window event still marks running sessions stale only when project skill state actually
+    changed (a racy/unreadable snapshot fails conservatively as unknown). The fixed project/personal alias
+    roots are registered as candidate skill paths **whether or not they exist yet**, so a `loader.reload()`
+    picks one up when a branch switch / pull / clone creates it mid-session (plugin dirs are the set
+    installed at construction — a plugin added later needs a fresh session); classification still only counts dirs that actually exist. Still never arbitrary
     dot-directory scanning, plugin caches, commands, or nested downward discovery. Pi remains the parser:
     vendor-only macros/hooks/models/subagents/metadata are not emulated. First-name-wins precedence is
     Pi native/configured/shared → ThinkRail-bundled → personal aliases → project aliases, so a repo can
@@ -250,7 +254,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   helpers (`validateQuestionnaire`/`buildQuestionnaireResponse`/`assessAnswerability`/
   `buildAnswersMessage`); `repairDanglingToolCalls`; the skill catalog helpers
   `listSkillCommands(cwd, admission)` (filtered, pre-session autocomplete) / `listSkillCatalog(cwd, admission)`
-  (unfiltered, the manager's `skills.state`) / `listProjectAliasSkillNames(cwd)` (present-alias count);
+  (unfiltered, the manager's `skills.state`) / `listProjectAliasSkillNames(cwd)` (present-alias count) /
+  `projectSkillFingerprint(cwd)` (project skill-tree startup snapshot);
   `reloadSessionResources(sessionId)` (active-chat reload); the **`setSkillAdmissionResolver`** seam (host
   wires `workspaceId` → the admission context);
   the compiled-binary seam (`registerBundledRuntime` +

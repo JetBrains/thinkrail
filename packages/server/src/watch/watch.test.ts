@@ -9,6 +9,7 @@ import {
 	isIgnoredPath,
 	setRepoMetaPublisher,
 	setWatchPublisher,
+	setWatchSkillSnapshotter,
 	stopAllWatches,
 	stopWatch,
 } from "./watch";
@@ -141,11 +142,13 @@ beforeEach(() => {
 	);
 	payloads = [];
 	setWatchPublisher((p) => payloads.push(p));
+	setWatchSkillSnapshotter(() => "stable");
 });
 
 afterEach(() => {
 	stopAllWatches();
 	setWatchPublisher(null);
+	setWatchSkillSnapshotter(null);
 	setRepoMetaPublisher(null);
 	rmSync(dataDir, { recursive: true, force: true });
 	if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
@@ -239,12 +242,28 @@ test("unknown workspace and stopWatch are safe no-ops; stopped watchers stay sil
 	expect(payloads).toHaveLength(0);
 });
 
-test("a fresh watcher publishes one pathless non-truncated startup nudge with no fs activity", async () => {
+test("a fresh watcher publishes a non-truncated startup nudge when skill state is known-stable", async () => {
 	ensureWatch("ws1");
 	await waitFor(() => payloads.length > 0, 2000);
 	expect(payloads[0]).toEqual({ workspaceId: "ws1", paths: [], truncated: false });
 	await sleep(300);
 	expect(payloads).toHaveLength(1); // one-shot, not periodic
+});
+
+test("a fresh watcher publishes a truncated startup nudge when skill state changed", async () => {
+	let snapshot = "before";
+	setWatchSkillSnapshotter(() => snapshot);
+	ensureWatch("ws1");
+	snapshot = "after";
+	await waitFor(() => payloads.length > 0, 2000);
+	expect(payloads[0]).toEqual({ workspaceId: "ws1", paths: [], truncated: true });
+});
+
+test("a fresh watcher publishes a truncated startup nudge when skill state is unavailable", async () => {
+	setWatchSkillSnapshotter(() => null);
+	ensureWatch("ws1");
+	await waitFor(() => payloads.length > 0, 2000);
+	expect(payloads[0]).toEqual({ workspaceId: "ws1", paths: [], truncated: true });
 });
 
 test("a deleted-and-recreated worktree root (same path, new inode) is re-watched on the next read", async () => {

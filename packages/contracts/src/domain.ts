@@ -131,13 +131,14 @@ export interface EditorInfo {
  * on-disk change (agent edit, terminal command, Finder) or a pathless synchronization nudge. An
  * **invalidation nudge, not data** — clients re-read via the existing read methods, so a duplicate or
  * replayed frame is harmless. `paths` are worktree-relative and deduped, capped host-side;
- * `truncated: true` means an observed watcher batch's path list is incomplete, so clients treat it as a
- * wildcard (anything may have changed).
+ * `truncated: true` means path uncertainty remains — an observed watcher batch was incomplete, or the
+ * startup-gap project-skill fingerprint changed/could not be read — so clients treat it as a wildcard.
  *
  * An **empty, non-truncated** frame (`paths: []`, `truncated: false`) is the pathless variant: re-read the
- * workspace without claiming a file changed. The host emits it as the fresh watcher's synchronization
- * nudge and when worktree git metadata moves (a `commit`/`reset`/`switch` in a terminal), which invalidates
- * git-derived reads (`git.status`, an `uncommitted`-scope diff) while leaving the working tree untouched.
+ * workspace without claiming a file changed. The host emits it when equal before/after fingerprints prove
+ * a fresh watcher started without skill drift, and when worktree git metadata moves (a
+ * `commit`/`reset`/`switch` in a terminal), which invalidates git-derived reads (`git.status`, an
+ * `uncommitted`-scope diff) while leaving the working tree untouched.
  * Same contract: re-read, don't patch.
  */
 export interface WorkspaceFsChangedPayload {

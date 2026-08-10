@@ -29,12 +29,14 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
   300ms quiet / 1s max-wait, capped at 100 paths → `truncated: true` = wildcard — the ≤ ~1 frame/sec
   bound is **pinned by the e2e churn canary** in `live-refresh.spec.ts`: ~200 writes over ~3s must
   reach the client as ≤ 8 frames while a mid-storm `/health` round-trip stays fast); the **startup
-  nudge** — a fresh watcher publishes one synthetic **pathless, non-truncated** batch after the platform
-  stream's registration window (~750ms), because a write landing inside that window is otherwise lost
-  forever. The pathless frame still advances the workspace invalidation tick and makes every live reader
-  re-read, but it does not claim an observed path batch was incomplete (and therefore cannot falsely mark
-  every running session's Skills as stale when nothing changed); an invalidation nudge is idempotent, so
-  the cost is one cheap no-op refetch.
+  nudge** — a fresh watcher snapshots an opaque, host-injected project-skill fingerprint immediately
+  before registration, then compares it after the platform stream's registration window (~750ms), because
+  a write landing inside that window can lose its event forever. Equal known snapshots publish a synthetic
+  **pathless, non-truncated** batch: the workspace invalidation tick still makes live readers re-read, but
+  clean startup cannot falsely mark every session's Skills stale. Changed or unavailable snapshots publish
+  a **truncated wildcard**, conservatively marking Skills stale when the gap may have hidden a real edit.
+  The snapshot callback is an inversion seam — `watch` compares opaque strings and never imports `agent`;
+  an invalidation nudge remains idempotent, so the cost is one cheap no-op refetch.
 - **Repo-metadata nudge (second seam):** a git-metadata write is *metadata, not content*, so it never
   becomes an `fsChanged` path (the `.git` blackout stands — plumbing storms must not turn into frames). It
   instead arms a separately debounced (300ms), **pathless** `setRepoMetaPublisher(workspaceId)` nudge. This
@@ -69,6 +71,6 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
   panels fall back to read-on-demand until a later read re-creates it. No idle-stop in V1 (bounded by
   workspaces actually visited).
 - **Public surface (barrel):** `ensureWatch`, `stopWatch`, `stopAllWatches`, `setWatchPublisher`,
-  `setRepoMetaPublisher`.
+  `setWatchSkillSnapshotter`, `setRepoMetaPublisher`.
 - **Allowed deps:** `persistence` (workspace lookup); `contracts` (payload type); Bun/Node.
 - **Forbidden:** `host`; sibling features; any pi package.

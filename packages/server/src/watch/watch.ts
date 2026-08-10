@@ -17,9 +17,9 @@ const MAX_PATHS = 100;
 /**
  * Platform watch streams (FSEvents/inotify/kqueue) have a brief post-registration window where events
  * can drop. A write landing in that window would be lost forever (one batch is the only signal), so a
- * fresh watcher publishes ONE synthetic pathless nudge after the window — receivers just refetch, and
- * a nudge with nothing changed is a cheap no-op re-read. It is non-truncated because it is not an
- * observed path batch whose names were lost; that distinction keeps consumers from inferring a change.
+ * fresh watcher publishes ONE synthetic nudge after the window. An injected project-skill fingerprint
+ * makes a known-clean gap pathless/non-truncated; changed or unknown state stays a wildcard so a dropped
+ * skill event cannot leave a running session falsely clean. Receivers re-read either way.
  */
 const STARTUP_NUDGE_MS = 750;
 
@@ -35,15 +35,36 @@ const IGNORED_NAMES = new Set([".DS_Store"]);
 const REPO_META_DEBOUNCE_MS = 300;
 
 type WatchPublisher = (payload: WorkspaceFsChangedPayload) => void;
+/** Opaque project-skill state, injected by host so this module never imports its `agent` sibling. */
+type WatchSkillSnapshotter = (workspaceId: string) => string | null;
 /** The repo-metadata nudge: "this workspace's git metadata moved" — no paths, it isn't file data. */
 type RepoMetaPublisher = (workspaceId: string) => void;
 
 let publish: WatchPublisher | null = null;
+let snapshotSkills: WatchSkillSnapshotter | null = null;
 let publishRepoMeta: RepoMetaPublisher | null = null;
 
 /** Host injects the `workspace.fsChanged` publish callback at wiring time (the tee pattern). */
 export function setWatchPublisher(publisher: WatchPublisher | null): void {
 	publish = publisher;
+}
+
+/**
+ * Install (or clear) the project-skill snapshot seam used to guard the watcher's registration gap.
+ * A known-equal before/after pair proves the synthetic startup nudge can be non-truncated; changed,
+ * missing, or thrown snapshots fail conservatively to a wildcard. Host owns the workspace→agent
+ * composition — `watch` only compares opaque strings.
+ */
+export function setWatchSkillSnapshotter(snapshotter: WatchSkillSnapshotter | null): void {
+	snapshotSkills = snapshotter;
+}
+
+function readSkillSnapshot(workspaceId: string): string | null {
+	try {
+		return snapshotSkills?.(workspaceId) ?? null;
+	} catch {
+		return null;
+	}
 }
 
 /**
@@ -205,6 +226,9 @@ export function ensureWatch(workspaceId: string): void {
 	});
 
 	try {
+		// Capture immediately before registration: the delayed comparison tells whether the gap may have
+		// hidden a skill edit even when the platform stream never reported its path.
+		const startupSkillSnapshot = readSkillSnapshot(workspaceId);
 		const watcher = watch(ws.worktreePath, { recursive: true }, (_event, filename) => {
 			// `filename` can be null (platform edge) → treat as wildcard rather than dropping the signal.
 			const rel = typeof filename === "string" ? filename.replaceAll("\\", "/") : null;
@@ -223,7 +247,12 @@ export function ensureWatch(workspaceId: string): void {
 		});
 		const nudgeTimer = setTimeout(() => {
 			if (entries.get(workspaceId)?.watcher === watcher) {
-				publish?.({ workspaceId, paths: [], truncated: false });
+				const currentSkillSnapshot = readSkillSnapshot(workspaceId);
+				const skillsChangedOrUnknown =
+					startupSkillSnapshot === null ||
+					currentSkillSnapshot === null ||
+					startupSkillSnapshot !== currentSkillSnapshot;
+				publish?.({ workspaceId, paths: [], truncated: skillsChangedOrUnknown });
 			}
 		}, STARTUP_NUDGE_MS);
 		const gitDir = resolveExternalGitDir(ws.worktreePath);
