@@ -111,6 +111,19 @@ test("stats refresh after a turn completes (cheap win #3)", { tag: "@agent" }, a
 	await expect(
 		page.locator('[data-testid="chat-message"][data-role="system"]').filter({ hasText: "Done" }),
 	).toBeVisible({ timeout: 80_000 });
-	await expect(page.getByTestId("session-stats")).toBeVisible();
-	await expect(page.getByTestId("session-stats")).toContainText(/[↑↓RW]/);
+	const stats = page.getByTestId("session-stats");
+	await expect(stats).toBeVisible();
+	await expect(stats).toContainText(/[↑↓RW]/);
+
+	// Populated usage wraps at field boundaries on a phone instead of pushing the context or Skills out.
+	await page.setViewportSize({ width: 320, height: 720 });
+	const skills = page.getByTestId("open-skills");
+	await expect(skills).toBeVisible();
+	const statsBox = await stats.boundingBox();
+	const skillsBox = await skills.boundingBox();
+	if (!statsBox || !skillsBox) throw new Error("chat header item has no bounding box");
+	for (const box of [statsBox, skillsBox]) {
+		expect(box.x).toBeGreaterThanOrEqual(0);
+		expect(box.x + box.width).toBeLessThanOrEqual(320);
+	}
 });
