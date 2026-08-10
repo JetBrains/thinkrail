@@ -2,7 +2,8 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Workspace } from "@thinkrail/contracts";
+import type { Workspace, WorkspaceWatchReadyResult } from "@thinkrail/contracts";
+import { stopAllWatches } from "../watch";
 import { handleRequest } from "./handlers";
 
 /** Requests carry their calling client (terminals scope PTYs to it); nothing here is client-scoped. */
@@ -35,9 +36,29 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+	stopAllWatches();
 	rmSync(dataDir, { recursive: true, force: true });
 	if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
 	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
+});
+
+test("workspace.watchReady waits for startup once, then reports an already-ready watcher", async () => {
+	const rows = (await handleRequest("workspace.list", { projectId: "p1" }, CTX)) as Workspace[];
+	const workspace = rows[0];
+	if (!workspace) throw new Error("expected a workspace");
+
+	const first = (await handleRequest(
+		"workspace.watchReady",
+		{ workspaceId: workspace.id },
+		CTX,
+	)) as WorkspaceWatchReadyResult;
+	expect(first).toEqual({ startupNudge: true });
+	const second = (await handleRequest(
+		"workspace.watchReady",
+		{ workspaceId: workspace.id },
+		CTX,
+	)) as WorkspaceWatchReadyResult;
+	expect(second).toEqual({ startupNudge: false });
 });
 
 test("workspace.remove rejects the Default at the handler level, before any teardown side-effect", async () => {

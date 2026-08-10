@@ -321,6 +321,38 @@ async function openDiskSession(sessionId: string, workspaceId: string, cwd: stri
 }
 
 /**
+ * Make a persisted session live again so it can be prompted — a no-op when it already is, else the same
+ * single-flighted disk re-open `getSessionMessages` uses (restart survival).
+ *
+ * Returns **`false` only when the id names no transcript in this cwd** — the chat is genuinely gone, the
+ * one case a caller may recover from by starting a new one. Every other failure (runtime, provider,
+ * corrupt transcript) **throws**: a caller that treated those as "not there" would silently fork a
+ * conversation that is merely unreadable right now.
+ */
+export async function ensureSessionAttached(
+	sessionId: string,
+	workspaceId: string,
+	cwd: string,
+): Promise<boolean> {
+	// Scope to the requested workspace (like `getSessionMessages`): a live session registered under a
+	// different workspace must not be promptable through this one — a caller could otherwise route a
+	// review package (and its source fragments) into an unrelated chat and pin comments to it.
+	const live = sessions.get(sessionId);
+	if (live) {
+		if (live.workspaceId !== workspaceId) throw new Error(`Unknown session: ${sessionId}`);
+		return true;
+	}
+	const known = (await SessionManager.list(cwd)).some((i) => i.id === sessionId && i.cwd === cwd);
+	if (!known) return false;
+	await attachDiskSession(sessionId, workspaceId, cwd);
+	// Attached-but-not-registered is not "absent": reporting it as such is exactly the silent fork this
+	// function exists to prevent, so it surfaces as the failure it is.
+	if (!sessions.has(sessionId))
+		throw new Error(`Session ${sessionId} was re-opened but did not register.`);
+	return true;
+}
+
+/**
  * A session's transcript (pi-canonical user/assistant/toolResult messages) + its current summary. Re-opens
  * the session from disk first if it isn't live, so a reopened chat is continuable and its summary accurate.
  */
@@ -390,12 +422,28 @@ export async function steerSession(
 	await mustGet(sessionId).steer(text, images);
 }
 
+/**
+ * Send a turn that must NOT interrupt one in flight: queued as a follow-up while the session streams,
+ * an ordinary `prompt()` when it is idle.
+ *
+ * pi's `followUp()` only ENQUEUES — the queue is drained by a run that is already going, so a follow-up
+ * handed to an idle session is parked with nothing to deliver it (silently, until someone prompts that
+ * chat). Every caller picks `followUp` from a *belief* that the session streams: a client's belief goes
+ * stale the moment the turn ends, and `review.sendBatch` follows up into the review's existing chat,
+ * which is idle by construction after a re-attach. Parking there is the worst outcome of all — the
+ * comments are already marked sent, so the review reads as delivered to an agent that never saw it.
+ */
 export async function followUpSession(
 	sessionId: string,
 	text: string,
 	images?: ImageContent[],
 ): Promise<void> {
-	await mustGet(sessionId).followUp(text, images);
+	const session = mustGet(sessionId);
+	if (session.isStreaming) {
+		await session.followUp(text, images);
+		return;
+	}
+	await session.prompt(text, images ? { images } : undefined);
 }
 
 /** Trigger compaction (fire-and-forget — progress/result arrive as `compaction_*` events). */

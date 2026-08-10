@@ -7,10 +7,9 @@ import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
 // a real session. No prompt is ever sent — the session only has to exist — so this stays fast and never
 // spends provider tokens (session create + session.reloadResources are config/fs work, no model round-trip).
 //
-// The bug this pins: the badge was per-mount React state, and CenterTabs unmounts inactive chats — so
-// every tab switch remounted ChatView and re-raised the badge (even after a Reload had cleared it). It is
-// now store-derived per session (selectSkillsStale / markSkillsSynced), so a reload clears it for good and
-// a sibling chat that loaded the current skills is never flagged.
+// The bugs this pins: watcher startup must not look like a skill change, and the badge must remain
+// store-derived per session across CenterTabs remounts. A reload clears it for good and a sibling chat that
+// loaded the current skills is never flagged.
 test("skills badge: flags a worktree skill change, clears on reload, and survives a tab switch", {
 	tag: "@agent",
 }, async ({ page }) => {
@@ -23,6 +22,14 @@ test("skills badge: flags a worktree skill change, clears on reload, and survive
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 	const skillsBtn = page.getByTestId("open-skills");
 	await expect(skillsBtn).toBeVisible();
+
+	// Session creation waits for the lazy watcher's one-shot wildcard before loading skills. The startup
+	// uncertainty is therefore part of this chat's baseline and must NOT leave the new chat stale. Opening
+	// Files also proves ordinary live readers still work without another delayed startup.
+	await page.getByTestId("tab-files").click();
+	await expect(page.getByTestId("file-node").filter({ hasText: "README.md" })).toBeVisible();
+	await page.waitForTimeout(1200);
+	await expect(skillsBtn).not.toHaveAttribute("data-stale", "true");
 
 	// A skill file appears on disk (a pull/branch/edit) → the loaded session is flagged for a reload.
 	mkdirSync(join(worktree, ".claude", "skills", "demo"), { recursive: true });

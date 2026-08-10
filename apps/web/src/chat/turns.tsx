@@ -10,10 +10,11 @@ import {
 	Wrench,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { cn, projectRelativePath } from "@/lib";
+import { cn, projectRelativePath, userText } from "@/lib";
 import { ActivityGroup } from "./ActivityGroup";
-import { useSelection } from "./foldState";
+import { useFold, useSelection } from "./foldState";
 import { Markdown } from "./Markdown";
+import { parseReviewPackage, type ReviewPackageItem, reviewPackageLabel } from "./reviewPackage";
 import type { ChatRow, TurnDividerData } from "./rows";
 import { ToolCard } from "./ToolCard";
 import { getToolChrome, getToolRenderer } from "./toolRegistry";
@@ -42,7 +43,7 @@ export function ChatTurnView({
 }) {
 	switch (row.kind) {
 		case "user":
-			return <UserTurn message={row.message} />;
+			return <UserTurn id={row.id} message={row.message} />;
 		case "system":
 			return <SystemTurn text={row.text} />;
 		case "error":
@@ -93,21 +94,86 @@ export function ChatTurnView({
 	}
 }
 
-function userText(content: UserMessage["content"]): string {
-	if (typeof content === "string") return content;
-	return content
-		.filter((c) => c.type === "text")
-		.map((c) => c.text)
-		.join("");
-}
-
-function UserTurn({ message }: { message: UserMessage }) {
+/** The user bubble. A review send's context package renders as a compact card — the "Sent N review
+ * comments on <file>" line with the COMMENT rows right under it (a send is one message per file, so a
+ * file level would always hold exactly one entry — the summary already names the file); each comment
+ * unfolds to its full text + the quoted fragment — instead of the structured XML the agent needs.
+ * Everything is parsed from the message itself (the transcript IS the history), so any old chat
+ * unfolds the same way; the folds survive virtualization via the shared cache. */
+function UserTurn({ id, message }: { id: string; message: UserMessage }) {
+	const text = userText(message.content);
+	const review = parseReviewPackage(text);
 	return (
 		<div data-testid="chat-message" data-role="user" className="flex justify-end">
 			<div className="max-w-[85%] whitespace-pre-wrap rounded-[var(--radius-md)] border border-bubble-user-border bg-clip-padding bg-bubble-user-bg px-md py-sm tr-text-reading text-text-muted">
-				{userText(message.content)}
+				{review ? (
+					<div data-testid="review-package-card" className="whitespace-normal">
+						<span data-testid="review-package-summary" className="block text-text-default">
+							{reviewPackageLabel(review)}
+						</span>
+						<ul className="mt-xs flex flex-col">
+							{keyPackageItems(review.items).map(({ key, item }) => (
+								<PackageCommentRow key={key} foldId={`${id}:${key}`} item={item} />
+							))}
+						</ul>
+					</div>
+				) : (
+					text
+				)}
 			</div>
 		</div>
+	);
+}
+
+/** Content keys (+ a per-duplicate ordinal) for a package's comment rows: parsed from an immutable
+ * message — exact identity, no index keys. */
+function keyPackageItems(items: ReviewPackageItem[]): { key: string; item: ReviewPackageItem }[] {
+	const seen = new Map<string, number>();
+	return items.map((item) => {
+		const base = `${item.lineRef}·${item.body}`;
+		const n = (seen.get(base) ?? 0) + 1;
+		seen.set(base, n);
+		return { key: `${base}·${n}`, item };
+	});
+}
+
+/** One comment row in the package card: collapsed — a one-line `▸ L2 · the remark…`; expanded — the
+ * full text plus the quoted fragment (verbatim from the package, monospace, height-capped). */
+function PackageCommentRow({ foldId, item }: { foldId: string; item: ReviewPackageItem }) {
+	const [expanded, toggle] = useFold(foldId);
+	return (
+		<li data-testid="review-package-item" data-expanded={expanded}>
+			<button
+				type="button"
+				data-testid="review-package-item-toggle"
+				aria-expanded={expanded}
+				onClick={toggle}
+				className="flex w-full cursor-pointer select-none items-start gap-xs rounded-[var(--radius-sm)] px-xs py-xs text-left outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary"
+			>
+				<ChevronRight
+					className={cn(
+						"mt-0.5 size-3 shrink-0 text-text-subtle transition-transform",
+						expanded && "rotate-90",
+					)}
+				/>
+				{item.lineRef && (
+					<span className="shrink-0 tr-code-text text-text-subtle">{item.lineRef}</span>
+				)}
+				<span
+					className={cn(
+						"min-w-0 flex-1 text-text-default",
+						expanded ? "whitespace-pre-wrap" : "truncate",
+					)}
+				>
+					{item.body}
+				</span>
+			</button>
+			{expanded && item.fragment && (
+				<pre className="mb-xs ml-lg max-h-32 overflow-auto whitespace-pre-wrap rounded-[var(--radius-sm)] border border-border-muted bg-sunken px-sm py-xs tr-code-text text-text-muted">
+					{item.fragment}
+				</pre>
+			)}
+		</li>
 	);
 }
 

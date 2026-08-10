@@ -30,7 +30,9 @@ ref off the workspace-create critical path.
   file list ancestry-consistent with `listCommits`' `base..HEAD`;
   `uncommitted`: `git diff HEAD` + untracked, sides = `HEAD` ↔ worktree; `commit`: `git diff <sha>^ <sha>`, no
   untracked, both sides from history — a **root** commit degrades to `git show --format=` with an empty
-  original, the same add-style degradation an absent path already gets). Both reads build their argv from it
+  original, the same add-style degradation an absent path already gets; `pinned`: `git diff <oid>` +
+  untracked, sides = the given immutable commit ↔ worktree — the review sidebar's base-side
+  navigation, validated exactly like a `commit` sha, same `UNKNOWN_COMMIT` rejection). Both reads build their argv from it
   through `changedFileArgs(range, mode)`, so the file list and a file's two sides can never disagree on the
   range — and that argv brackets its revs on **both** sides: **`--end-of-options`** ahead of them (no ref can be
   re-parsed as a git option) and a trailing **`--`** after them (a rev that also names a path on disk — a branch
@@ -55,6 +57,12 @@ ref off the workspace-create critical path.
   **`diffBaseRef(ws)`** — `diffBase ?? baseBranch`, the single collapse of a workspace's two base meanings
   (creation provenance vs review target), consumed by the resolver and `listCommits` (the `workspaces`
   module's `diffStats` reaches it *through* the resolver — see Get right);
+  **`resolveCommitOid(worktreePath, ref)`** — the full commit oid a ref names right now, or `null`. The one
+  place a symbolic ref is FROZEN, and every caller that must still mean the same thing later goes through
+  it: the review's `baseSha`, a base-side comment's `baseRef`. A scope's
+  `originalRef` is not already immutable (`uncommitted` is the literal `HEAD`; a `branch` scope degrades to
+  the raw base ref when `merge-base` fails), so storing one verbatim lets the content move under whoever
+  stored it;
   `gitStatus(workspaceId, scope?)` — changed files over the range plus untracked (only when the range ends at
   the worktree), each carrying per-file `added`/`removed` line counts (`git diff --numstat`, its rename-mangled paths resolved
   via `numstatPath` to match `--name-status`; binary rows dropped; untracked files count their whole
@@ -97,11 +105,14 @@ ref off the workspace-create critical path.
   (the write lands in the project repo's shared `.git`, outside every watched location) — so the
   `git.prefetch` handler uses `moved` to fan out the host's pathless `fsChanged` nudge (`host`'s fsNudge
   seam; an unaffected re-read is an idempotent no-op). `moved` is host-internal; the wire response stays
-  `{ ok }`.
-- **Public surface (barrel):** `git`, `gitAsync`, `gitStatus`, `gitDiffFile`, `listCommits`,
-  `resolveDiffRange`, `changedFileArgs`, `diffBaseRef`, `DiffRange`, `isSafeRef`, `assertSafeRef`,
-  `listBranches`, `resolveDefaultBranch`, `tryCurrentBranch`, `currentBranch`, `canonicalPath`,
-  `prefetchBranch`.
+  `{ ok }`;
+  **`readBlobAt(worktreePath, ref, path)`** → the file's byte-exact content at a ref, or `null` when the
+  read produced none (the diff sides degrade that to `""`; the `reviews` module uses it to capture and
+  render a base-side anchor's own content).
+- **Public surface (barrel):** `git`, `gitAsync`, `gitStatus`, `gitDiffFile`, `readBlobAt`, `listCommits`,
+  `resolveDiffRange`, `changedFileArgs`, `diffBaseRef`, `resolveCommitOid`, `DiffRange`, `isSafeRef`,
+  `assertSafeRef`, `listBranches`, `resolveDefaultBranch`, `tryCurrentBranch`, `currentBranch`,
+  `canonicalPath`, `prefetchBranch`.
 - **Allowed deps:** `persistence` (workspace + project lookup); `contracts` (`Git*`/`BranchList` types);
   `@thinkrail/shared/codedError` (naming a failure for the wire); Bun (spawn).
 - **Forbidden:** `host`; sibling features.

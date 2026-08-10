@@ -6,7 +6,7 @@ import {
 	RotateCcw,
 	X,
 } from "lucide-react";
-import { lazy, Suspense, useEffect } from "react";
+import { lazy, Suspense, useEffect, useMemo } from "react";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import {
 	DropdownMenu,
@@ -25,13 +25,19 @@ import {
 	isExternalWorkspace,
 	selectActiveWorkspace,
 	selectContextProject,
-	selectWorkspaceTick,
 	toast,
 	useAppStore,
 } from "../store";
-import { errorText, getTransport } from "../transport";
+import {
+	createSessionWithSkillBaseline,
+	errorText,
+	getSessionMessagesWithSkillBaseline,
+	getTransport,
+} from "../transport";
 import { DiffPane } from "./DiffPane";
 import { FilePane } from "./FilePane";
+import { openChatInTab } from "./openChat";
+import { type ReviewFlag, reviewFlags } from "./reviewModel";
 
 // The chat view is heavy — load it only when its tab is first shown (protects first paint). File panes
 // lazy-load their own Monaco / markdown chunks inside `FilePane`.
@@ -42,6 +48,27 @@ const MarkdownPreview = lazy(() => import("./MarkdownPreview"));
 /** An ephemeral `doc` tab: rendered markdown from inline content, no fs/source toggle (see `DocTab`). */
 function DocPane({ tab }: { tab: DocTab }) {
 	return <MarkdownPreview content={tab.content} workspaceId={tab.workspaceId} path={tab.docPath} />;
+}
+
+/**
+ * A file/diff tab's review marker. It has TWO states rather than being present-or-absent, because
+ * "in review" and "there is something to send" are different facts: violet while the file holds an
+ * UNSENT draft (actionable — the pane toolbar's `Send review` is showing too), muted once only sent
+ * comments remain. A file the chat is actively working through must not read as untouched in the tab
+ * strip while the Review rail insists it is in review.
+ */
+function ReviewTabFlag({ flag }: { flag: ReviewFlag | null }) {
+	if (!flag) return null;
+	return (
+		<span
+			data-testid="review-tab-flag"
+			data-flag={flag}
+			title={flag === "draft" ? "Unsent review comments" : "Review in progress"}
+			className={`shrink-0 tr-text-eyebrow ${flag === "draft" ? "text-primary" : "text-text-subtle"}`}
+		>
+			Review
+		</span>
+	);
 }
 
 /**
@@ -112,6 +139,12 @@ export function CenterTabs() {
 	const closeTab = useAppStore((s) => s.closeTab);
 
 	const openTabs = activeWorkspaceId ? (tabsByWorkspace[activeWorkspaceId] ?? NO_TABS) : NO_TABS;
+	// Review is self-announcing (panels/SPEC.md): tabs whose file is still in review wear a flag, loud
+	// for unsent drafts and quiet once the chat has them — derived once per snapshot here, not per tab.
+	const reviewComments = useAppStore((s) =>
+		activeWorkspaceId ? s.reviewsByWorkspace[activeWorkspaceId]?.comments : undefined,
+	);
+	const reviewFlagByPath = useMemo(() => reviewFlags(reviewComments), [reviewComments]);
 	const activeTabId = activeWorkspaceId ? (activeTabByWorkspace[activeWorkspaceId] ?? null) : null;
 	const previewTabId = activeWorkspaceId
 		? (previewTabByWorkspace[activeWorkspaceId] ?? null)
@@ -133,23 +166,20 @@ export function CenterTabs() {
 		if (!activeWorkspaceId) return;
 		const workspaceId = activeWorkspaceId;
 		let cancelled = false;
-		// Sync baseline for disk-only attaches, snapshotted before the fetches (see selectWorkspaceTick).
-		const syncedTick = selectWorkspaceTick(useAppStore.getState(), workspaceId);
 		// Split into request + apply so a batch can have its reads in flight together while the *writes*
-		// still land in a chosen order (focus follows the first write, not the first response).
+		// still land in a chosen order (focus follows the first write, not the first response). The guarded
+		// wrapper single-flights watcher readiness, then captures each load's conservative start tick.
 		const fetchMessages = (sessionId: string) =>
-			getTransport()
-				.request("session.getMessages", { sessionId, workspaceId })
+			getSessionMessagesWithSkillBaseline({ sessionId, workspaceId })
 				// A session that failed to load is skipped; the others still hydrate.
 				.catch(() => null);
-		const applyHydrate = (result: Awaited<ReturnType<typeof fetchMessages>>, live: boolean) => {
-			if (!result || cancelled) return;
+		const applyHydrate = (loaded: Awaited<ReturnType<typeof fetchMessages>>, live: boolean) => {
+			if (!loaded || cancelled) return;
 			// A live restore reused the server's already-loaded resources → no baseline (stays
-			// conservatively stale); a disk attach reloaded against current disk → the pre-fetch tick.
-			const tick = live ? undefined : syncedTick;
-			useAppStore
-				.getState()
-				.hydrateSession(result.summary, messagesToRuntime(result.messages), false, tick);
+			// conservatively stale); a disk attach reloaded against current disk → the guarded start tick.
+			const tick = live ? undefined : loaded.syncedTick;
+			const { summary, messages } = loaded.result;
+			useAppStore.getState().hydrateSession(summary, messagesToRuntime(messages), false, tick);
 		};
 		const hydrateFromHost = async (sessionId: string, live: boolean) =>
 			applyHydrate(await fetchMessages(sessionId), live);
@@ -230,10 +260,14 @@ export function CenterTabs() {
 		}
 		// (c) Neither — the same fetch + hydrate `onReopenChat` below does for a disk-only history entry.
 		let cancelled = false;
-		void getTransport()
-			.request("session.getMessages", { sessionId, workspaceId: chatLocationRequest.workspaceId })
-			.then(({ summary, messages }) => {
+		void getSessionMessagesWithSkillBaseline({
+			sessionId,
+			workspaceId: chatLocationRequest.workspaceId,
+		})
+			.then(({ result: { summary, messages } }) => {
 				if (cancelled) return;
+				// The target may already be live in another client; without proof of a disk attach, preserve
+				// the existing conservative no-baseline behavior.
 				useAppStore.getState().hydrateSession(summary, messagesToRuntime(messages), true);
 			})
 			.catch((err) => {
@@ -248,28 +282,11 @@ export function CenterTabs() {
 		};
 	}, [chatLocationRequest, activeWorkspaceId, openTabs, setActiveTab]);
 
-	// Reopen a chat from history: a live runtime just restores its tab; a disk-only one is re-opened on the
-	// host, its transcript fetched, then hydrated + focused (hydrateSession drops it from history, keyed to
-	// the session's own workspace — robust to a workspace switch during the fetch).
+	// Reopen a chat from history — the shared tab→runtime→disk escalation (`openChat.ts`); a failed
+	// fetch raises a toast and the entry stays in history for a retry.
 	const onReopenChat = async (sessionId: string) => {
-		const store = useAppStore.getState();
-		if (store.sessions[sessionId]) {
-			store.reopenChat(sessionId);
-			return;
-		}
 		if (!activeWorkspaceId) return;
-		// Snapshot the sync baseline before the fetch (see selectWorkspaceTick / hydrateSession).
-		const syncedTick = selectWorkspaceTick(useAppStore.getState(), activeWorkspaceId);
-		try {
-			const { summary, messages } = await getTransport().request("session.getMessages", {
-				sessionId,
-				workspaceId: activeWorkspaceId,
-			});
-			useAppStore.getState().hydrateSession(summary, messagesToRuntime(messages), true, syncedTick);
-		} catch (err) {
-			// The chat stays in history for a retry — but say why the click did nothing.
-			toast.error(errorText(err), "Couldn't reopen the chat");
-		}
+		await openChatInTab(activeWorkspaceId, sessionId);
 	};
 
 	const startChat = async () => {
@@ -277,12 +294,11 @@ export function CenterTabs() {
 		// Starting a chat is a navigation, even though its tab only appears once the create returns — so a
 		// file read still in flight must not activate itself on top of the chat the user asked for.
 		useAppStore.getState().noteNavigation(activeWorkspaceId);
-		// Snapshot the sync baseline before the create round-trip (see selectWorkspaceTick / openChatSession).
-		const syncedTick = selectWorkspaceTick(useAppStore.getState(), activeWorkspaceId);
 		try {
-			const { sessionId, model, thinkingLevel } = await getTransport().request("session.create", {
-				workspaceId: activeWorkspaceId,
-			});
+			const {
+				result: { sessionId, model, thinkingLevel },
+				syncedTick,
+			} = await createSessionWithSkillBaseline({ workspaceId: activeWorkspaceId });
 			useAppStore
 				.getState()
 				.openChatSession(activeWorkspaceId, sessionId, model, thinkingLevel, syncedTick);
@@ -391,6 +407,9 @@ export function CenterTabs() {
 										<GitCompareArrows className="size-3.5 shrink-0 text-text-muted" />
 									) : null}
 									<span className={`truncate ${isPreview ? "italic" : ""}`}>{tab.name}</span>
+									{(tab.kind === "file" || tab.kind === "diff") && (
+										<ReviewTabFlag flag={reviewFlagByPath.get(tab.path) ?? null} />
+									)}
 								</button>
 								<button
 									type="button"

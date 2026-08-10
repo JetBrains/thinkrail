@@ -15,6 +15,8 @@ import {
 	clampThinkingForModel,
 	createSession,
 	disposeAllSessions,
+	ensureSessionAttached,
+	followUpSession,
 	getDefaultModel,
 	getSessionCommands,
 	getSessionMessages,
@@ -531,6 +533,62 @@ test("disk-reopen: a disposed session is re-listed from disk and re-opened with 
 		expect(
 			(await listSessions("ws-disk", cwd)).filter((x) => x.sessionId === s.sessionId),
 		).toHaveLength(1);
+		removeSession(s.sessionId);
+	} finally {
+		setSessionManagerFactory(() => SessionManager.inMemory());
+	}
+});
+
+test("ensureSessionAttached: a detached-but-persisted session comes back live; a missing id is `false`", async () => {
+	// What the review's batch send stands on: `Review.sessionId` outlives the host, so "not live" must
+	// mean "re-open it", not "there is no chat" — the latter forks the review into a second chat.
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	try {
+		fauxA.setResponses([fauxAssistantMessage("REVIEW_CHAT")]);
+		const cwd = tmpCwd("trpi-reattach-");
+		const s = await createSession({
+			cwd,
+			workspaceId: "ws-reattach",
+			model: toWireModel(fauxA.getModel()),
+		});
+		await promptSession(s.sessionId, "the review package");
+		removeSession(s.sessionId); // host restart: transcript on disk, nothing in memory
+		expect(hasSession(s.sessionId)).toBe(false);
+
+		expect(await ensureSessionAttached(s.sessionId, "ws-reattach", cwd)).toBe(true);
+		expect(hasSession(s.sessionId)).toBe(true);
+		// Already live → a no-op that still answers yes (the routine second batch).
+		expect(await ensureSessionAttached(s.sessionId, "ws-reattach", cwd)).toBe(true);
+
+		// A genuinely absent transcript is the ONE recoverable case, reported as `false` rather than thrown.
+		expect(await ensureSessionAttached("no-such-session", "ws-reattach", cwd)).toBe(false);
+		removeSession(s.sessionId);
+	} finally {
+		setSessionManagerFactory(() => SessionManager.inMemory());
+	}
+});
+
+test("followUpSession on an IDLE session runs the turn — pi's follow-up queue has nothing to drain it", async () => {
+	// The other half of the review's batch send: it follows up into the file's review chat, which is idle
+	// by construction (the previous turn ended; after a restart it was only just re-attached). pi's
+	// `followUp()` merely ENQUEUES, and that queue is drained by a run already in flight — parking there
+	// would mark the comments sent to an agent that never saw them.
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	try {
+		fauxA.setResponses([fauxAssistantMessage("FIRST_BATCH")]);
+		const cwd = tmpCwd("trpi-followup-");
+		const s = await createSession({
+			cwd,
+			workspaceId: "ws-followup",
+			model: toWireModel(fauxA.getModel()),
+		});
+		await promptSession(s.sessionId, "batch one");
+		removeSession(s.sessionId);
+		expect(await ensureSessionAttached(s.sessionId, "ws-followup", cwd)).toBe(true);
+
+		fauxA.appendResponses([fauxAssistantMessage("SECOND_BATCH")]);
+		await followUpSession(s.sessionId, "batch two");
+		expect(seen(s.sessionId)).toContain("SECOND_BATCH");
 		removeSession(s.sessionId);
 	} finally {
 		setSessionManagerFactory(() => SessionManager.inMemory());

@@ -329,6 +329,23 @@ test("resolveDiffRange: one definition per scope (branch / uncommitted / commit)
 	expect(commit).toMatchObject({ untracked: false, modifiedRef: sha, listRevs: [parent, sha] });
 	// An abbreviated sha resolves to the same full-oid range.
 	expect(resolveDiffRange(ws, { kind: "commit", sha: sha.slice(0, 8) })).toEqual(commit);
+
+	// Pinned: one IMMUTABLE commit vs the worktree — the review sidebar's base-side navigation. Same
+	// shape/existence validation as `commit`, but the WORKTREE is the modified side (untracked included).
+	const pinned = resolveDiffRange(ws, { kind: "pinned", baseRef: sha });
+	expect(pinned).toMatchObject({
+		untracked: true,
+		originalRef: sha,
+		modifiedRef: null,
+		listRevs: [sha],
+	});
+	expect(resolveDiffRange(ws, { kind: "pinned", baseRef: sha.slice(0, 8) })).toEqual(pinned);
+	expect(() => resolveDiffRange(ws, { kind: "pinned", baseRef: "--output=x" })).toThrow(
+		/Not a commit id/,
+	);
+	expect(() => resolveDiffRange(ws, { kind: "pinned", baseRef: "deadbeefcafe" })).toThrow(
+		/Unknown commit/,
+	);
 });
 
 test("resolveDiffRange degrades a root commit to an add-style diff (no parent to subtract)", () => {

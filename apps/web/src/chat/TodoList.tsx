@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "../lib";
+import { PlanStatusIcon, SectionLabel } from "./planKit";
 import { groupProgress, type PlanGlance, planSections } from "./planView";
 
 // Presentational TODO rendering for the in-chat plan popup (SPEC §Chat TODO plan). Props-driven (no transport) —
@@ -57,12 +58,11 @@ function statusLabel(status: TodoStatus, glance: PlanGlance): string {
 }
 
 function StatusIcon({ status, glance }: { status: TodoStatus; glance: PlanGlance }) {
-	if (status === "done") return <Check className="size-4 shrink-0 text-primary" />;
 	if (status === "in_progress") {
 		const { Icon, className } = glanceIcon(glance);
 		return <Icon data-glance={glance} className={cn("size-4 shrink-0", className)} />;
 	}
-	return <Circle className="size-4 shrink-0 text-text-muted" />;
+	return <PlanStatusIcon kind={status === "done" ? "done" : "pending"} />;
 }
 
 /** The add-a-TODO input row, with an "open as markdown" action on the right. */
@@ -178,11 +178,6 @@ function LooseList({
 			))}
 		</ul>
 	);
-}
-
-/** A section header (`To do`), the quiet uppercase label shared by the status sections. */
-function SectionLabel({ label }: { label: string }) {
-	return <div className="px-xs py-xs tr-text-eyebrow text-text-muted">{label}</div>;
 }
 
 /**

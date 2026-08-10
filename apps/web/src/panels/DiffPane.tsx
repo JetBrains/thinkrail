@@ -5,8 +5,10 @@ import type { DiffTab } from "../store";
 import { selectDiffTabTargetRef, useAppStore } from "../store";
 import { getTransport } from "../transport";
 import { splitPath } from "./changesModel";
+import { SendReviewButton } from "./SendReviewButton";
 import { ToggleSegment } from "./ToggleSegment";
 import { useLiveTabContent } from "./useLiveTabContent";
+import { useFileReview } from "./useReviewCommenting";
 
 // Heavy views load only when shown — same lazy stance as FilePane: Monaco for the diff, markdown+shiki
 // (+ htmldiff) for the rendered rich-diff view of a markdown file's diff.
@@ -45,6 +47,12 @@ export function DiffPane({ tab }: { tab: DiffTab }) {
 	const setDiffTabRendered = useAppStore((s) => s.setDiffTabRendered);
 	const setDiffTabIgnoreWhitespace = useAppStore((s) => s.setDiffTabIgnoreWhitespace);
 	const [copied, setCopied] = useState(false);
+	// Review commenting attaches only for scopes whose modified side is the worktree (branch /
+	// uncommitted) — a commit-scope tab shows historical content on both sides, and a comment anchored
+	// there would pin lines the worktree may not have. The tab's scope also travels with a base-side
+	// comment: it is what lets the host resolve the very blob the original editor is showing.
+	const reviewable = tab.scope.kind !== "commit";
+	const review = useFileReview(tab.workspaceId, tab.path, "diff", tab.scope);
 
 	const targetRef = useAppStore((s) => selectDiffTabTargetRef(s, tab));
 	useLiveTabContent(
@@ -141,6 +149,7 @@ export function DiffPane({ tab }: { tab: DiffTab }) {
 						{base}
 					</span>
 				</span>
+				<SendReviewButton workspaceId={tab.workspaceId} path={tab.path} />
 				{/* Hide whitespace-only changes — Monaco's own `ignoreTrimWhitespace`, per tab. Not offered in
 				    the rendered markdown view, which has no lines to compare. */}
 				{rendered ? null : (
@@ -173,6 +182,7 @@ export function DiffPane({ tab }: { tab: DiffTab }) {
 							modified={tab.modified}
 							view={markdown ? "split" : view}
 							ignoreWhitespace={ignoreWhitespace}
+							{...(reviewable ? { review } : {})}
 						/>
 					)}
 				</Suspense>

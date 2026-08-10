@@ -266,3 +266,35 @@ export function selectActiveTerminalId(state: TerminalState): string | null {
 	if (!state.activeWorkspaceId) return null;
 	return state.activeTerminalByWorkspace[state.activeWorkspaceId] ?? null;
 }
+
+/** The workspace's "current" chat — where a review send should land: the ACTIVE tab when it is a
+ * chat, else the most recently opened chat tab, else `null` (the host then creates a fresh one). The
+ * ONE derivation of "the last open chat", shared by every send affordance. */
+export function selectLastOpenChatSession(
+	state: {
+		tabsByWorkspace: Record<string, { kind: string; id: string; sessionId?: string }[]>;
+		activeTabByWorkspace: Record<string, string | null>;
+	},
+	workspaceId: string,
+): string | null {
+	const tabs = state.tabsByWorkspace[workspaceId] ?? [];
+	const activeId = state.activeTabByWorkspace[workspaceId];
+	const active = tabs.find((t) => t.id === activeId);
+	if (active?.kind === "chat" && active.sessionId) return active.sessionId;
+	for (let i = tabs.length - 1; i >= 0; i--) {
+		const tab = tabs[i];
+		if (tab?.kind === "chat" && tab.sessionId) return tab.sessionId;
+	}
+	return null;
+}
+
+/** A workspace's pending review drafts — the Review tab badge + the "Send review (N)" count. The ONE
+ * derivation of "how many drafts", so the badge and the footer can never disagree. */
+export function selectReviewDraftCount(
+	state: { reviewsByWorkspace: Record<string, { comments: { status: string }[] }> },
+	workspaceId: string | null,
+): number {
+	if (!workspaceId) return 0;
+	const snapshot = state.reviewsByWorkspace[workspaceId];
+	return snapshot ? snapshot.comments.filter((c) => c.status === "draft").length : 0;
+}

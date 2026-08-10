@@ -54,6 +54,7 @@ internals**. The edges between them are owned here (see the dependency graph), n
 | `fs` | read dirs/files inside a worktree (path-contained) | [fs/SPEC.md](src/fs/SPEC.md) |
 | `spec` | the worktree's spec-graph snapshot (`spec.graph`) + project-level `projectHasSpecs`, via `pi-spec-graph/core` | [spec/SPEC.md](src/spec/SPEC.md) |
 | `todos` | a chat's per-session TODO plan read/write (`todo.*`), via `pi-todos/core` | [todos/SPEC.md](src/todos/SPEC.md) |
+| `reviews` | draft review comments on files/diffs: store + anchoring + context-package render | [reviews/SPEC.md](src/reviews/SPEC.md) |
 | `watch` | per-worktree fs watcher → debounced `workspace.fsChanged` invalidation push | [watch/SPEC.md](src/watch/SPEC.md) |
 | `terminal` | workspace-scoped `bun-pty` terminals | [terminal/SPEC.md](src/terminal/SPEC.md) |
 | `agent` | in-process pi `AgentSession`s + the shared pi runtime + one-shot completions | [agent/SPEC.md](src/agent/SPEC.md) |
@@ -72,11 +73,18 @@ the host from env via `bootHost` for dev/e2e.
 
 `host` is the **only composition root** — it wires each feature's handlers into the WS registry.
 
-- `host` → `projects`, `workspaces`, `git`, `github`, `fs`, `spec`, `todos`, `watch`, `terminal`, `dialog`, `editors`, `agent`, `auth`, `assist`, `settings`, `history`, `templates`, `analytics`
+- `host` → `projects`, `workspaces`, `git`, `github`, `fs`, `spec`, `todos`, `reviews`, `watch`, `terminal`, `dialog`, `editors`, `agent`, `auth`, `assist`, `settings`, `history`, `templates`, `analytics`
 - `workspaces` → `projects`, `git`, `persistence`
 - `projects` → `git` (shared runner), `persistence`
 - `git`, `fs`, `spec`, `watch`, `terminal`, `settings`, `analytics` → `persistence` (`spec` also → `pi-spec-graph/core`, external; `analytics` also → the pi-ai built-in provider/model catalog + `posthog-node`, external — the identity-bucketing vocabulary and the delivery SDK)
 - `todos` → `workspaces` (worktree path lookup) + `pi-todos/core` (external, value-imported, pi-free)
+- `reviews` → `workspaces` (worktree path lookup), `persistence` (data dir), `git` (the review's baseSha
+  resolve, plus the diff range + blob read behind a base-side anchor). The `review.send*` flows are
+  **composed in `host`'s handlers** (reviews builds the package, `agent` runs the session — no
+  `reviews`→`agent` edge; `host` serializes sends *and* review mutations per workspace via
+  `reviewLock`, and re-attaches the review's persisted chat via `agent.ensureSessionAttached`), and the
+  agent-side `resolve_comment` tool delegates back through a seam
+  `host` installs (`agent.setReviewCommentHandler` → `reviews.resolveCommentFromAgent`)
 - `assist` → `agent` (the one-shot completion primitive)
 - `auth` → `agent` (`getPiRuntime` — the shared `AuthStorage` + `ModelRegistry`; one-way, `agent` never imports `auth`)
 - `agent` → (no internal deps — only the pi runtime)

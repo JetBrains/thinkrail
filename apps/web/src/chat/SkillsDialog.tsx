@@ -4,8 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { selectWorkspaceTick, toast, useAppStore } from "@/store";
-import { errorText, getTransport } from "@/transport";
+import { toast, useAppStore } from "@/store";
+import { errorText, getTransport, reloadSessionResourcesWithSkillBaseline } from "@/transport";
 
 /**
  * The Skills manager. Two modes from one component:
@@ -128,11 +128,10 @@ export function SkillsDialog({
 	const reload = async () => {
 		if (busy || !workspace) return;
 		setBusy(true);
-		// Capture the sync baseline BEFORE the load: the server scans skills as of now, so a change whose
-		// fsChanged frame folds while this request is in flight must stay flagged (it wasn't loaded).
-		const syncedTick = selectWorkspaceTick(useAppStore.getState(), workspace.workspaceId);
 		try {
-			await getTransport().request("session.reloadResources", { sessionId: workspace.sessionId });
+			const { syncedTick } = await reloadSessionResourcesWithSkillBaseline(workspace.workspaceId, {
+				sessionId: workspace.sessionId,
+			});
 			workspace.onReloaded?.(syncedTick);
 			toast.success("This chat now uses the updated skills.", "Skills reloaded");
 		} catch (err) {

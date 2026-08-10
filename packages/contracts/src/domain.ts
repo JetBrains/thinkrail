@@ -127,16 +127,17 @@ export interface EditorInfo {
 }
 
 /**
- * The `workspace.fsChanged` push frame: the host's worktree watcher noticed on-disk changes (agent
- * edits, terminal commands, Finder). An **invalidation nudge, not data** — clients re-read via the
- * existing read methods, so a duplicate/replayed frame is harmless. `paths` are worktree-relative and
- * deduped, capped host-side; `truncated: true` = treat as a wildcard (anything may have changed).
+ * The `workspace.fsChanged` push frame from the host's worktree change notifier: either an observed
+ * on-disk change (agent edit, terminal command, Finder) or a pathless synchronization nudge. An
+ * **invalidation nudge, not data** — clients re-read via the existing read methods, so a duplicate or
+ * replayed frame is harmless. `paths` are worktree-relative and deduped, capped host-side;
+ * `truncated: true` means path uncertainty remains — an observed watcher batch was incomplete or a fresh
+ * watcher's registration window may have hidden an event — so clients treat it as a wildcard.
  *
- * An **empty, non-truncated** frame (`paths: []`, `truncated: false`) is the pathless variant: something
- * the reads depend on moved *without* naming a file — the host emits it when a worktree's git metadata
- * moves (a `commit`/`reset`/`switch` in a terminal), which invalidates the git-derived reads (`git.status`,
- * an `uncommitted`-scope diff) while leaving the working tree untouched. Same contract: re-read, don't
- * patch. Path-driven consumers see no paths and correctly do nothing extra.
+ * An **empty, non-truncated** frame (`paths: []`, `truncated: false`) is the pathless variant: re-read the
+ * workspace without claiming a file changed. The host emits it when worktree git metadata moves (a
+ * `commit`/`reset`/`switch` in a terminal), which invalidates git-derived reads (`git.status`, an
+ * `uncommitted`-scope diff) while leaving the working tree untouched. Same contract: re-read, don't patch.
  */
 export interface WorkspaceFsChangedPayload {
 	workspaceId: string;
@@ -266,11 +267,17 @@ export interface GitStatus {
  *   upstream work landing on the base is not this workspace's change and never shows up here.
  * - `uncommitted` — the worktree vs `HEAD` (what a commit here would record).
  * - `commit` — one commit alone (`sha^` vs `sha`; a root commit degrades to an add-style diff).
+ * - `pinned` — the worktree vs one IMMUTABLE commit (`baseRef`, a full oid). The review sidebar's
+ *   navigation surface for a base-side comment: the anchor pinned the blob it quotes at creation, and
+ *   this scope is what reopens exactly that original side later — a `branch`/`uncommitted` scope
+ *   re-resolves against the current fork point/`HEAD`, which moves out from under the comment when the
+ *   worktree commits or the review target is re-pointed.
  */
 export type GitDiffScope =
 	| { kind: "branch" }
 	| { kind: "uncommitted" }
-	| { kind: "commit"; sha: string };
+	| { kind: "commit"; sha: string }
+	| { kind: "pinned"; baseRef: string };
 
 /** One commit on the workspace's branch (not on its diff base) — a row of the scope menu's commit list. */
 export interface GitCommit {
@@ -546,4 +553,115 @@ export interface TemplateInfo {
 export interface Template extends TemplateInfo {
 	/** The full file text: frontmatter + body. */
 	content: string;
+}
+
+// ---- review mode (draft comments on files/diffs → AI sessions) ----
+
+/** What a review comment is attached to: a line range, a diff-side range, a whole file, or the review. */
+export type ReviewCommentKind = "inline" | "diff" | "file" | "review";
+
+/** A comment's lifecycle. Orthogonal to {@link ReviewAnchorState} — "was it discussed" vs "is the
+ * anchor alive" never overwrite each other. */
+export type ReviewCommentStatus = "draft" | "sent" | "resolved" | "dismissed";
+
+/** Whether a comment's anchor still holds against the current worktree: `anchored` (content unchanged),
+ * `moved` (the fragment was found elsewhere and the line range silently re-pinned), or `outdated` (the
+ * fragment is gone/ambiguous — the comment keeps its creation-time snapshot). Host-derived. */
+export type ReviewAnchorState = "anchored" | "moved" | "outdated";
+
+/**
+ * One member of an anchor's ordered fallback chain (most precise first), modeled on the W3C Web
+ * Annotation selectors so non-code media slot in later. V1 authors populate `lineRange` + `textQuote`;
+ * `diffHunk` and `structural` are forward slots (kept in the union so persisted anchors never migrate).
+ */
+export type ReviewSelector =
+	| { kind: "lineRange"; startLine: number; endLine: number }
+	| { kind: "textQuote"; exact: string; prefix: string; suffix: string }
+	| { kind: "diffHunk"; hunkHeader: string }
+	| { kind: "structural"; scheme: string; ref: string };
+
+/** Where a comment is pinned. `side` matters for diff comments (`base` anchors are never re-anchored —
+ * the blob they name is immutable). `contentHash` is the host-computed sha-256 of the
+ * file at comment time (the cheap "nothing changed" check). A `file`-level comment carries only `path`. */
+export interface ReviewAnchor {
+	/** Worktree-relative path. */
+	path: string;
+	side: "base" | "worktree";
+	/**
+	 * `base` anchors only: the ref whose blob the line range + fragment were captured against — the
+	 * diff's ORIGINAL side, resolved host-side from the tab's scope (a merge-base, `HEAD`, or a commit).
+	 * A base anchor means "this pre-change content", so it is read back from here, never from the
+	 * worktree (whose lines say something else entirely).
+	 */
+	baseRef?: string;
+	/**
+	 * `base` anchors only: the diff scope the remark was made in — the tab identity that reopens the very
+	 * diff whose ORIGINAL side it quotes. Stored because that surface is the *only* one rendering the
+	 * pre-change blob: navigating a base comment to the plain file tab lands on worktree lines that say
+	 * something else, with no card to focus. Absent on comments made before this was persisted, and on
+	 * every worktree anchor (a file tab renders those).
+	 */
+	scope?: GitDiffScope;
+	contentHash?: string;
+	selectors: ReviewSelector[];
+}
+
+/** A draft/sent review comment. `sessionId` links the chat the comment was sent into — its file's
+ * review chat (see `Review.fileSessions`). */
+export interface ReviewComment {
+	id: string;
+	reviewId: string;
+	kind: ReviewCommentKind;
+	/** `null` for `kind: "review"` (the whole change set). */
+	anchor: ReviewAnchor | null;
+	/** The comment text (markdown). */
+	body: string;
+	status: ReviewCommentStatus;
+	anchorState: ReviewAnchorState;
+	sessionId?: string;
+	resolvedBy?: "agent" | "user";
+	/** The agent's note passed to `resolve_comment` (what it did about the remark). */
+	resolveNote?: string;
+	createdAt: number;
+	sentAt?: number;
+	resolvedAt?: number;
+}
+
+/** A workspace's review — at most one `open` per workspace (created lazily, archived by `review.close`).
+ * `fileSessions` maps a review key to its chat: comments sharing a key share ONE chat for the review's
+ * life — the first send creates it, every later send (single or batch) follows up into it. The key is
+ * the comment's file path, or the **empty string** for anchorless (whole-change-set) remarks, which are
+ * pinned like a file so a second overall remark continues the same discussion. */
+export interface Review {
+	id: string;
+	workspaceId: string;
+	status: "open" | "closed";
+	/**
+	 * The **original side of the reviewed diff**, resolved to a full commit oid at creation — the immutable
+	 * diff identity comments were made against: the **fork point** (`merge-base` of the diff target and
+	 * `HEAD`), which is what the branch-scope diff displays — not the target's tip, whose later upstream
+	 * commits the review never showed. Immutable on purpose: the target is re-pointable mid-review and
+	 * its branch can move, but what the review *is* must not. Degrades to the raw ref string when it
+	 * wouldn't resolve.
+	 */
+	baseSha: string;
+	fileSessions?: Record<string, string>;
+	/** Session keys (path, or "" for the whole-change-set bucket) whose review the user marked
+	 * finished — a fully-resolved file stays listed until this says "we're done here"; a new comment
+	 * on the file clears it. */
+	doneFiles?: string[];
+	createdAt: number;
+	closedAt?: number;
+}
+
+/** The `review.get` read: the open review + all its comments. */
+export interface ReviewSnapshot {
+	review: Review;
+	comments: ReviewComment[];
+}
+
+/** The `review.changed` push — the full snapshot (idempotent under last-value replay), plus the
+ * workspace it belongs to so clients can key their fold. */
+export interface ReviewChangedPayload extends ReviewSnapshot {
+	workspaceId: string;
 }

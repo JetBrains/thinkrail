@@ -39,8 +39,8 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { selectCatalogModel, selectWorkspaceTick, toast, useAppStore } from "@/store";
-import { errorText, getTransport } from "@/transport";
+import { selectCatalogModel, toast, useAppStore } from "@/store";
+import { createSessionWithSkillBaseline, errorText, getTransport } from "@/transport";
 import { BranchPicker } from "./BranchPicker";
 import { useBranchList } from "./branches";
 import { enterDefaultWorkspace } from "./defaultWorkspace";
@@ -372,10 +372,8 @@ export function NewWorkspaceDialog({
 		// picked model + effort apply even without a prompt) and open its tab; a typed prompt is
 		// additionally sent as the first message — an empty one just leaves the composer focused.
 		const text = prompt.trim();
-		// Snapshot the sync baseline before the create round-trip (see selectWorkspaceTick / openChatSession).
-		const syncedTick = selectWorkspaceTick(useAppStore.getState(), workspace.id);
 		try {
-			const session = await getTransport().request("session.create", {
+			const { result: session, syncedTick } = await createSessionWithSkillBaseline({
 				workspaceId: workspace.id,
 				...(model ? { model } : {}),
 				thinkingLevel,

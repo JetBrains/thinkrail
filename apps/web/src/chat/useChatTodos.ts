@@ -1,8 +1,8 @@
 import type { SessionEventPayload, TodoPlan } from "@thinkrail/contracts";
 import { TODO_NUDGE_PREFIX, WS_CHANNELS } from "@thinkrail/contracts";
 import { useEffect, useState } from "react";
-import { selectWorkspaceTick, useAppStore } from "../store";
-import { errorText, getTransport } from "../transport";
+import { useAppStore } from "../store";
+import { errorText, getSessionMessagesWithSkillBaseline, getTransport } from "../transport";
 import { messagesToRuntime } from "./hydrate";
 import { planToMarkdown } from "./planMarkdown";
 import { sessionGlance, shouldNudgeOnAdd } from "./planView";
@@ -164,11 +164,10 @@ async function nudgeAgent(workspaceId: string, sessionId: string, title: string)
 		});
 	} catch {
 		try {
-			const syncedTick = selectWorkspaceTick(useAppStore.getState(), workspaceId);
-			const { summary, messages } = await getTransport().request("session.getMessages", {
-				sessionId,
-				workspaceId,
-			});
+			const {
+				result: { summary, messages },
+				syncedTick,
+			} = await getSessionMessagesWithSkillBaseline({ sessionId, workspaceId });
 			useAppStore
 				.getState()
 				.hydrateSession(summary, messagesToRuntime(messages), false, syncedTick);

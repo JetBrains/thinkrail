@@ -1,12 +1,15 @@
 import { RefreshCw } from "lucide-react";
-import { useEffect, useState } from "react";
-import { type RightPanelTab, useAppStore } from "../store";
+import { useEffect, useRef, useState } from "react";
+import { type RightPanelTab, selectReviewDraftCount, useAppStore } from "../store";
 import { ChangesPanel } from "./ChangesPanel";
 import { FileTree } from "./FileTree";
+import { ReviewPanel, selectActiveReviewedPath } from "./ReviewPanel";
 import { SpecsPanel } from "./SpecsPanel";
+import { useWorkspaceReview } from "./useWorkspaceReview";
 import { useWorkspaceSpecs } from "./useWorkspaceSpecs";
 
-/** Right panel for the active worktree: Specs (read-only spec-graph tree), All-files tree, and Changes (git diff vs base). Checks/Review = V2. */
+/** Right panel for the active worktree: Specs (read-only spec-graph tree), All-files tree, Changes
+ * (git diff vs base), and Review (draft comments → AI sessions; the tab carries a pending-draft badge). */
 export function RightPanel() {
 	const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
 	const rightTabRequest = useAppStore((s) => s.rightTabRequest);
@@ -14,6 +17,28 @@ export function RightPanel() {
 	// Owned here, not in the tab body: the spec graph is app-wide state (the chat classifies its artifacts
 	// with it), and this panel outlives any one tab. See `useWorkspaceSpecs`.
 	const { failed: specsFailed, reload: reloadSpecs } = useWorkspaceSpecs(activeWorkspaceId);
+	const draftCount = useAppStore((s) => selectReviewDraftCount(s, activeWorkspaceId));
+	// Owned here like the specs read: the tab strip's Review flags need the snapshot with the panel closed.
+	const { failed: reviewFailed } = useWorkspaceReview(activeWorkspaceId);
+
+	// Opening a reviewed file auto-opens the Review tab (per-file view — see ReviewPanel). Keyed on the
+	// ACTIVATION (the active tab id changing onto a reviewed path), so it fires once per open — the user
+	// can still switch the rail away without being yanked back.
+	const activeTabId = useAppStore((s) =>
+		activeWorkspaceId ? (s.activeTabByWorkspace[activeWorkspaceId] ?? null) : null,
+	);
+	const activeReviewedPath = useAppStore((s) =>
+		activeWorkspaceId ? selectActiveReviewedPath(s, activeWorkspaceId) : null,
+	);
+	const lastTabRef = useRef<string | null>(null);
+	useEffect(() => {
+		const previous = lastTabRef.current;
+		lastTabRef.current = activeTabId;
+		// Only a tab-id CHANGE counts as "opening" — a comment saved while the tab is already active
+		// must not yank the rail (the inline card is the feedback there).
+		if (!activeTabId || activeTabId === previous || !activeReviewedPath) return;
+		setTab("review");
+	}, [activeTabId, activeReviewedPath]);
 
 	// Anything outside the panel that wants a view shown raises one intent (`requestRightTab`, carried along
 	// by the chat deep-links too), so the flip is decided in a single place rather than inferred from each
@@ -39,6 +64,17 @@ export function RightPanel() {
 					onClick={() => setTab("changes")}
 				>
 					Changes
+				</TabButton>
+				<TabButton testid="tab-review" active={tab === "review"} onClick={() => setTab("review")}>
+					Review
+					{draftCount > 0 && (
+						<span
+							data-testid="review-pending-badge"
+							className="ml-[3px] inline-flex min-w-4 items-center justify-center rounded-full bg-primary px-[3px] tr-text-label-pill text-text-on-primary"
+						>
+							{draftCount}
+						</span>
+					)}
 				</TabButton>
 				{tab === "specs" && activeWorkspaceId && (
 					<button
@@ -66,6 +102,8 @@ export function RightPanel() {
 					<div className="p-xs">
 						<FileTree workspaceId={activeWorkspaceId} />
 					</div>
+				) : tab === "review" ? (
+					<ReviewPanel workspaceId={activeWorkspaceId} failed={reviewFailed} />
 				) : (
 					<ChangesPanel workspaceId={activeWorkspaceId} />
 				)}

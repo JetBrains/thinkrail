@@ -11,6 +11,7 @@ import type {
 import { type FileTab, type SessionRuntime, toast, useAppStore } from "./appStore";
 import {
 	selectDiffScope,
+	selectLastOpenChatSession,
 	selectSkillsStale,
 	selectWorkspaceNavTick,
 	selectWorkspaceTick,
@@ -98,6 +99,18 @@ function rt(sessionId: string): SessionRuntime {
 	return runtime;
 }
 
+test("selectLastOpenChatSession: active chat tab first, then the most recent chat tab, else null", () => {
+	const store = useAppStore.getState();
+	expect(selectLastOpenChatSession(useAppStore.getState(), "ws1")).toBeNull();
+	store.openChatSession("ws1", "s1", null, "medium");
+	store.openChatSession("ws1", "s2", null, "medium");
+	// The just-opened chat is active → it wins.
+	expect(selectLastOpenChatSession(useAppStore.getState(), "ws1")).toBe("s2");
+	// A non-chat tab takes focus → the most recently opened chat tab still answers.
+	useAppStore.getState().openTab(fileTab("ws1", "a.ts"), "keep");
+	expect(selectLastOpenChatSession(useAppStore.getState(), "ws1")).toBe("s2");
+});
+
 test("pi events route to the right session runtime; chats stay independent", () => {
 	const store = useAppStore.getState();
 	store.openChatSession("ws1", "a", null, "medium");
@@ -122,6 +135,30 @@ test("pi events route to the right session runtime; chats stay independent", () 
 	expect(rt("a").turns.some((t) => t.kind === "system" && t.text === "✓ Done")).toBe(true);
 	expect(rt("b").isStreaming).toBe(true);
 	expect(rt("b").turns).toHaveLength(0);
+});
+
+test("a host-fired USER message folds into the transcript; the composer's optimistic twin doesn't duplicate", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", null, "medium");
+	const userStart = (text: string) =>
+		({
+			type: "message_start",
+			message: { role: "user", content: [{ type: "text", text }], timestamp: 1 },
+		}) as unknown as PiEvent;
+
+	// Host-fired (a review send's package): no optimistic append happened — the event builds the turn.
+	store.handlePiEvent(userStart("<review pkg>"), "a");
+	expect(rt("a").turns).toHaveLength(1);
+	expect(rt("a").turns[0]?.kind).toBe("user");
+
+	// Composer flow: optimistic append first, then pi echoes the same text — no duplicate.
+	store.appendUserMessage("a", "fix the tests");
+	store.handlePiEvent(userStart("fix the tests"), "a");
+	expect(rt("a").turns.filter((t) => t.kind === "user")).toHaveLength(2);
+
+	// A control message (a pi-todos nudge) stays hidden, like in hydration.
+	store.handlePiEvent(userStart("[thinkrail:todo-nudge] plan changed"), "a");
+	expect(rt("a").turns.filter((t) => t.kind === "user")).toHaveLength(2);
 });
 
 test("an assistant turn is built (and replaced, not duplicated) from message_update partials", () => {
@@ -1399,6 +1436,14 @@ test("skills badge: the skill-change tick is accumulated, so a later non-skill b
 	s().noteFsChanged(skillFs("ws1", ["src/app.ts"])); // later non-skill batch replaces `paths`
 	// Before the fix this false-negatived (the last batch wasn't a skill path); now it stays stale.
 	expect(isStale("ws1", "a")).toBe(true);
+});
+
+test("skills badge: a pathless non-truncated repo-metadata nudge refreshes without staling", () => {
+	const s = () => useAppStore.getState();
+	s().openChatSession("ws1", "a", null, "medium");
+	s().noteFsChanged(skillFs("ws1", []));
+	expect(selectWorkspaceTick(s(), "ws1")).toBe(1); // live readers still re-read
+	expect(isStale("ws1", "a")).toBe(false);
 });
 
 test("skills badge: a truncated wildcard batch flags stale even with no skill path", () => {

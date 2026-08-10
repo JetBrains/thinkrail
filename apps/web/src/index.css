@@ -82,3 +82,274 @@
 		}
 	}
 }
+
+/* Review Monaco surfaces (panels/reviewGutter.ts + reviewWidgets.ts): commented-line decorations, the
+   floating comment icon, and the inline composer. Plain-DOM widgets inside Monaco's layers — styled
+   here from the live theme tokens, so every theme wears them. */
+/* Commented lines: just a lighter wash of the editor's own background (the app's hover shade) — no
+   extra hue. The gutter rail is the neutral hint grey. */
+.review-comment-line {
+	background: var(--control-bg-hovered);
+}
+.review-comment-rail {
+	background: var(--text-subtle);
+}
+.review-add-icon-holder {
+	/* Right-above the cursor point: the nudge + the ABOVE placement make the standard floating
+	   "comment here" offset (see reviewWidgets.ts / PreviewCommenting.tsx). */
+	padding-left: 8px;
+	padding-bottom: 2px;
+	/* Above the view zones: a thread card sitting right where the icon floats must not intercept its
+	   click (Monaco stacks zones and content widgets in one context). */
+	position: relative;
+	z-index: 60;
+}
+.review-add-icon {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	/* Never part of the text selection it floats over — a selectable node here lets a drag extend into
+	   the button and repaint the document tail as selected. */
+	user-select: none;
+	width: 22px;
+	height: 22px;
+	border-radius: var(--radius-sm);
+	border: 1px solid var(--border-default);
+	background: var(--container-elevated-bg);
+	color: var(--primary);
+	cursor: pointer;
+	/* Elevation: it floats OVER text, so it must read as a button above the page, not a hole in it. */
+	box-shadow: 0 2px 8px color-mix(in srgb, var(--container-header-bg) 70%, transparent);
+}
+.review-add-icon:hover {
+	background: var(--control-bg-hovered);
+}
+/* The rendered preview's ::selection: translucent (the muted alpha step of the theme's selection),
+   because Chrome paints a multi-block selection wall-to-wall — with the theme's OPAQUE selection over
+   the near-black canvas, the unselected remainder of the focus line read as a black hole punched in
+   the wash. Monaco never shows this (it paints its own selection), so only the preview needs it. */
+[data-testid="markdown-preview"] ::selection {
+	background: var(--selection-bg-muted);
+}
+
+/* The rendered preview's floating icon (the React twin of Monaco's content widget): its position is a
+   measured DOM rect, so the two coordinates arrive as custom properties the component sets on the node
+   (`PreviewCommenting`) — the geometry stays HERE, next to the rest of the icon's skin, instead of
+   becoming a second styling mechanism in JSX. */
+.review-add-icon-float {
+	/* FIXED + a body portal (PreviewCommenting): the icon is not a child of the preview's DOM, so the
+	   native selection can never extend into it — it floats over the text without touching it. */
+	position: fixed;
+	top: var(--review-icon-top, 0);
+	left: var(--review-icon-left, 0);
+	z-index: 60;
+	/* Hidden until PreviewCommenting positions it — IMPERATIVELY, never through React state: a state
+	   update mid-drag re-renders the markdown tree and replaces the text nodes under the LIVE native
+	   selection, which Chrome then "restores" by flooding whole blocks (a few selected words painted
+	   the entire bullet). */
+	display: none;
+}
+.review-add-icon-float[data-visible] {
+	display: flex;
+}
+/* Mid-drag the icon follows the selection but is mouse-transparent: a clickable node under the moving
+   cursor is one the native selection extends into (see PreviewCommenting). */
+.review-add-icon-float[data-dragging] {
+	pointer-events: none;
+}
+/* The zone node spans Monaco's content (scroll) width — it stays a transparent, click-through holder;
+   the visible composer is the bounded card inside it (width capped in reviewWidgets.ts). */
+.review-composer-zone {
+	pointer-events: none;
+	z-index: 10;
+}
+/* The composer wears the CHAT INPUT's skin (see chat/Composer.tsx's textarea): same input surface,
+   border, radius and focus treatment — only the buttons differ. No accent chrome of its own. */
+.review-composer {
+	pointer-events: auto;
+	display: flex;
+	flex-direction: column;
+	align-items: stretch;
+	gap: 6px;
+	margin-left: 12px;
+	padding: 8px;
+	border: 1px solid var(--border-default);
+	border-radius: var(--radius-md);
+	background: var(--container-header-bg);
+	box-shadow: 0 4px 16px color-mix(in srgb, var(--container-header-bg) 60%, transparent);
+}
+/* Typography comes from the generated `tr-code-text` class on the node; only color lives here. */
+.review-composer-label {
+	color: var(--text-subtle);
+}
+.review-composer-input {
+	width: 100%;
+	box-sizing: border-box;
+	resize: none;
+	/* Auto-grown by reviewWidgets' relayout (56–160px); text wraps — never a horizontal scroll. */
+	min-height: 56px;
+	overflow-x: hidden;
+	overflow-y: auto;
+	overflow-wrap: break-word;
+	padding: 8px 12px;
+	border-radius: var(--radius-md);
+	border: 1px solid var(--border-default);
+	background: var(--control-bg);
+	color: var(--text);
+	/* Typography comes from the generated `tr-text-ui` class on the node. */
+	transition: border-color 0.15s;
+}
+.review-composer-input::placeholder {
+	color: var(--text-subtle);
+}
+.review-composer-input:focus-visible {
+	outline: none;
+	border-color: var(--primary);
+	box-shadow: 0 0 0 2px var(--primary-soft);
+}
+.review-composer-row {
+	display: flex;
+	gap: 6px;
+}
+/* Typography comes from the generated `tr-text-action` class on the node. */
+.review-composer-btn {
+	padding: 2px var(--space-sm);
+	border-radius: var(--radius-md);
+	border: 1px solid var(--border-default);
+	background: var(--container-elevated-bg);
+	color: var(--text);
+	cursor: pointer;
+}
+.review-composer-btn:hover {
+	background: var(--control-bg-hovered);
+}
+.review-composer-btn:disabled {
+	opacity: 0.5;
+	pointer-events: none;
+}
+.review-composer-btn-primary {
+	border-color: var(--primary);
+	background: var(--primary);
+	color: var(--text-on-primary);
+}
+.review-composer-btn-quiet {
+	border-color: transparent;
+	background: transparent;
+	color: var(--text-subtle);
+}
+
+/* In-flow review thread cards (ReviewThreadCard + reviewWidgets.attachReviewThreads): the comment
+   sits IN the document flow directly below its anchor — spliced between markdown segments in the
+   preview, held by a Monaco view zone in source/diff — with a status-colored left bar (the
+   inline-edit presentation, adopted for comments). */
+/* The card IS the composer's component, minus the buttons row (same chrome: border2, radius-md,
+   bg-dark, the same paddings) — no accent bars of its own. */
+.review-thread {
+	pointer-events: auto;
+	display: flex;
+	flex-direction: column;
+	align-items: stretch;
+	gap: 6px;
+	margin: var(--space-xs) 0 var(--space-xs) 12px;
+	max-width: 560px;
+	padding: 8px;
+	border: 1px solid var(--border-default);
+	border-radius: var(--radius-md);
+	background: var(--container-header-bg);
+}
+.review-thread-head {
+	display: flex;
+	align-items: center;
+	gap: var(--space-sm);
+	padding: 0 4px;
+}
+.review-thread-actions {
+	margin-left: auto;
+	display: flex;
+	gap: 4px;
+}
+.review-thread-dot {
+	flex-shrink: 0;
+	width: 6px;
+	height: 6px;
+	border-radius: 9999px;
+}
+.review-thread-dot-draft {
+	background: var(--primary);
+}
+.review-thread-dot-sent {
+	background: var(--feedback-info);
+}
+/* Typography comes from the generated `tr-text-eyebrow` class on the node; only color lives here. */
+.review-thread-label {
+	flex-shrink: 0;
+	color: var(--text-subtle);
+}
+/* Typography comes from the generated `tr-text-ui` class on the node; only color lives here. */
+.review-thread-body {
+	margin: 0;
+	min-width: 0;
+	padding: 0 4px;
+	overflow-wrap: break-word;
+	color: var(--text);
+}
+/* A DRAFT's body is editable in place — the same input surface as the composer's field (input-bg,
+   border2, radius-md, primary focus ring). Auto-grown by its controller; wraps, never scrolls. */
+.review-thread-edit {
+	width: 100%;
+	min-height: 2.2em;
+	box-sizing: border-box;
+	margin: 0;
+	padding: 8px 12px;
+	border: 1px solid var(--border-default);
+	border-radius: var(--radius-md);
+	resize: none;
+	overflow-x: hidden;
+	overflow-y: hidden;
+	background: var(--control-bg);
+	color: var(--text);
+	overflow-wrap: break-word;
+	transition: border-color 0.15s;
+}
+.review-thread-edit:focus-visible {
+	outline: none;
+	border-color: var(--primary);
+	box-shadow: 0 0 0 2px var(--primary-soft);
+}
+.review-thread-action {
+	display: flex;
+	flex-shrink: 0;
+	align-items: center;
+	justify-content: center;
+	width: 20px;
+	height: 20px;
+	border: 0;
+	border-radius: var(--radius-sm);
+	background: transparent;
+	color: var(--text-subtle);
+	cursor: pointer;
+}
+.review-thread-action:hover {
+	background: var(--control-bg-hovered);
+	color: var(--text);
+}
+.review-thread-action:disabled {
+	opacity: 0.5;
+	pointer-events: none;
+}
+
+/* The preview's in-flow composer + the commented-region mark (parity with Monaco's decorations). */
+.review-composer-flow {
+	margin: 8px 0 8px 12px;
+	max-width: 560px;
+}
+/* The commented region in the preview: a thin LEFT RAIL only (the gutter-rail half of Monaco's
+   decoration — `.review-comment-rail`), never a background wash. A full-block wash reads as a broken
+   text selection: picking three words in a bullet painted the whole bullet wall-to-wall, which is
+   exactly what a reader calls "my selection flooded everywhere". The rail marks the block without
+   impersonating the selection. Inset shadow, not border — zero layout shift. */
+.review-region {
+	box-shadow: inset 2px 0 0 var(--text-subtle);
+	padding-left: 10px;
+	margin-left: -10px;
+}

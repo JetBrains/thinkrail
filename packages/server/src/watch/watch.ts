@@ -7,7 +7,7 @@
 
 import { type FSWatcher, readFileSync, statSync, watch } from "node:fs";
 import { isAbsolute, resolve } from "node:path";
-import type { WorkspaceFsChangedPayload } from "@thinkrail/contracts";
+import type { WorkspaceFsChangedPayload, WorkspaceWatchReadyResult } from "@thinkrail/contracts";
 import { loadWorkspaces } from "../persistence";
 import { type Coalescer, createCoalescer } from "./coalesce";
 
@@ -17,8 +17,9 @@ const MAX_PATHS = 100;
 /**
  * Platform watch streams (FSEvents/inotify/kqueue) have a brief post-registration window where events
  * can drop. A write landing in that window would be lost forever (one batch is the only signal), so a
- * fresh watcher publishes ONE synthetic wildcard nudge after the window — receivers just refetch, and
- * a nudge with nothing changed is a cheap no-op re-read.
+ * fresh watcher publishes ONE synthetic wildcard after the window. Skill-loading clients await that
+ * startup through `workspace.watchReady` before capturing their load baseline; ordinary readers keep
+ * starting the watcher without waiting. Receivers re-read from source either way.
  */
 const STARTUP_NUDGE_MS = 750;
 
@@ -36,6 +37,11 @@ const REPO_META_DEBOUNCE_MS = 300;
 type WatchPublisher = (payload: WorkspaceFsChangedPayload) => void;
 /** The repo-metadata nudge: "this workspace's git metadata moved" — no paths, it isn't file data. */
 type RepoMetaPublisher = (workspaceId: string) => void;
+
+const ALREADY_READY: WorkspaceWatchReadyResult = { startupNudge: false };
+const STARTUP_NUDGE: WorkspaceWatchReadyResult = { startupNudge: true };
+const alreadyReady = Promise.resolve(ALREADY_READY);
+const startupFallback = Promise.resolve(STARTUP_NUDGE);
 
 let publish: WatchPublisher | null = null;
 let publishRepoMeta: RepoMetaPublisher | null = null;
@@ -155,7 +161,11 @@ interface WatchEntry {
 	 * inode, and the old watcher silently follows the dead one, so identity must be re-checked. */
 	rootIno: number;
 	/** The pending one-shot startup nudge, cleared on stop so a torn-down watcher never publishes. */
-	nudgeTimer: ReturnType<typeof setTimeout>;
+	nudgeTimer: ReturnType<typeof setTimeout> | null;
+	/** Shared by every preflight that joins this startup; stop settles it so callers never hang. */
+	ready: Promise<WorkspaceWatchReadyResult>;
+	resolveReady: (result: WorkspaceWatchReadyResult) => void;
+	readySettled: boolean;
 	/** The pending debounced repo-metadata nudge (see `setRepoMetaPublisher`), cleared on stop. */
 	metaTimer: ReturnType<typeof setTimeout> | null;
 	/** The non-recursive watcher on the resolved git metadata dir (see `watchGitDir`); null if absent. */
@@ -163,6 +173,12 @@ interface WatchEntry {
 }
 
 const entries = new Map<string, WatchEntry>();
+
+function settleReady(entry: WatchEntry): void {
+	if (entry.readySettled) return;
+	entry.readySettled = true;
+	entry.resolveReady(STARTUP_NUDGE);
+}
 
 /**
  * Start (or repair) the watcher for a workspace's worktree — idempotent and self-healing, called by
@@ -173,24 +189,24 @@ const entries = new Map<string, WatchEntry>();
  * record is gone (a worktree removed out-of-band can resurrect its path-based stream and keep
  * publishing for a forgotten id).
  */
-export function ensureWatch(workspaceId: string): void {
+export function ensureWatch(workspaceId: string): Promise<WorkspaceWatchReadyResult> {
 	const workspaces = loadWorkspaces();
 	for (const id of [...entries.keys()]) {
 		if (!workspaces.some((w) => w.id === id)) stopWatch(id);
 	}
 	const ws = workspaces.find((w) => w.id === workspaceId);
-	if (!ws) return;
+	if (!ws) return alreadyReady;
 
 	let rootIno: number;
 	try {
 		rootIno = statSync(ws.worktreePath).ino;
 	} catch {
 		stopWatch(workspaceId); // root gone — drop any stale watcher; a later read retries
-		return;
+		return startupFallback;
 	}
 	const existing = entries.get(workspaceId);
 	if (existing) {
-		if (existing.rootIno === rootIno) return;
+		if (existing.rootIno === rootIno) return existing.readySettled ? alreadyReady : existing.ready;
 		stopWatch(workspaceId); // same path, new inode — the old watcher is dead, re-create
 	}
 
@@ -220,27 +236,38 @@ export function ensureWatch(workspaceId: string): void {
 			console.warn(`worktree watcher for ${workspaceId} failed: ${err}`);
 			stopWatch(workspaceId);
 		});
-		const nudgeTimer = setTimeout(() => {
-			if (entries.get(workspaceId)?.watcher === watcher) {
-				publish?.({ workspaceId, paths: [], truncated: true });
-			}
-		}, STARTUP_NUDGE_MS);
-		const gitDir = resolveExternalGitDir(ws.worktreePath);
+		let resolveReady: (result: WorkspaceWatchReadyResult) => void = () => {};
+		const ready = new Promise<WorkspaceWatchReadyResult>((resolve) => {
+			resolveReady = resolve;
+		});
 		const entry: WatchEntry = {
 			watcher,
 			coalescer,
 			rootIno,
-			nudgeTimer,
+			nudgeTimer: null,
+			ready,
+			resolveReady,
+			readySettled: false,
 			metaTimer: null,
 			metaWatcher: null,
 		};
-		// Registered after the entry is in the map: the git-dir watcher's callback resolves it through
-		// `scheduleRepoMeta` (live-watcher identity check), and a write can land the moment the stream opens.
 		entries.set(workspaceId, entry);
+		entry.nudgeTimer = setTimeout(() => {
+			if (entries.get(workspaceId) !== entry) return;
+			entry.nudgeTimer = null;
+			try {
+				publish?.({ workspaceId, paths: [], truncated: true });
+			} finally {
+				settleReady(entry);
+			}
+		}, STARTUP_NUDGE_MS);
+		const gitDir = resolveExternalGitDir(ws.worktreePath);
 		if (gitDir) entry.metaWatcher = watchGitDir(workspaceId, gitDir, watcher);
+		return ready;
 	} catch (err) {
 		coalescer.dispose();
 		console.warn(`could not watch worktree for ${workspaceId}: ${err}`);
+		return startupFallback;
 	}
 }
 
@@ -249,7 +276,8 @@ export function stopWatch(workspaceId: string): void {
 	const entry = entries.get(workspaceId);
 	if (!entry) return;
 	entries.delete(workspaceId);
-	clearTimeout(entry.nudgeTimer);
+	if (entry.nudgeTimer) clearTimeout(entry.nudgeTimer);
+	settleReady(entry);
 	if (entry.metaTimer) clearTimeout(entry.metaTimer);
 	entry.metaWatcher?.close();
 	entry.coalescer.dispose();

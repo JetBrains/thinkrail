@@ -22,16 +22,26 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
 ## Boundary
 
 - **Owns:** the watcher registry + its lifecycle: `ensureWatch(workspaceId)` (idempotent and
-  **self-healing**; started lazily by `host` when a workspace read lands — the read *is* the "a client
-  is looking" signal), `stopWatch(workspaceId)` (called in `workspace.remove`'s fast path),
+  **self-healing**; returns the live watcher's shared readiness promise; started lazily by `host` when a
+  workspace read or `workspace.watchReady` preflight lands — the read is the "a client is looking" signal;
+  readiness reports whether the watcher was already known ready), `stopWatch(workspaceId)` (called
+  in `workspace.remove`'s fast path),
   `stopAllWatches()` (called in `server.stop()`); the ignore filter (any path segment `.git` or
   `node_modules`, plus `.DS_Store`); per-workspace coalescing (deduped relative paths, flushed after
   300ms quiet / 1s max-wait, capped at 100 paths → `truncated: true` = wildcard — the ≤ ~1 frame/sec
   bound is **pinned by the e2e churn canary** in `live-refresh.spec.ts`: ~200 writes over ~3s must
   reach the client as ≤ 8 frames while a mid-storm `/health` round-trip stays fast); the **startup
-  nudge** — a fresh watcher publishes one synthetic wildcard batch after the platform stream's
-  registration window (~750ms), because a write landing inside that window is otherwise lost forever
-  (an invalidation nudge is idempotent, so the cost is one cheap no-op refetch).
+  nudge** — a fresh watcher publishes one synthetic **truncated wildcard** after the platform stream's
+  registration window (~750ms), because a write landing inside that window can lose its event forever.
+  Its readiness promise resolves only after that publish. The web's skill-loading flows await the typed
+  `workspace.watchReady` host preflight *before* capturing their start-of-load freshness tick, so startup
+  uncertainty is absorbed into the new session's baseline instead of falsely marking it stale; a real edit
+  after readiness stays newer than that baseline. Unless the watcher was already known ready, the result
+  tells the web to fold a duplicate wildcard fallback if the broadcast died with its socket while the request
+  response survived replay — or if startup failed before publishing. Ordinary workspace reads do not await
+  readiness and never gain startup latency. Stopping a watcher settles its pending readiness and cancels the nudge, so callers cannot
+  hang and torn-down watchers cannot publish. An invalidation nudge remains idempotent, so the fallback's
+  possible duplicate is one cheap no-op refetch.
 - **Repo-metadata nudge (second seam):** a git-metadata write is *metadata, not content*, so it never
   becomes an `fsChanged` path (the `.git` blackout stands — plumbing storms must not turn into frames). It
   instead arms a separately debounced (300ms), **pathless** `setRepoMetaPublisher(workspaceId)` nudge. This

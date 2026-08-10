@@ -239,12 +239,36 @@ test("unknown workspace and stopWatch are safe no-ops; stopped watchers stay sil
 	expect(payloads).toHaveLength(0);
 });
 
-test("a fresh watcher publishes one wildcard startup nudge even with no fs activity", async () => {
-	ensureWatch("ws1");
-	await waitFor(() => payloads.length > 0, 2000);
-	expect(payloads[0]).toEqual({ workspaceId: "ws1", paths: [], truncated: true });
+test("a fresh watcher shares readiness, publishes its wildcard first, then reports already-ready", async () => {
+	const order: string[] = [];
+	setWatchPublisher((payload) => {
+		payloads.push(payload);
+		order.push("publish");
+	});
+	const first = ensureWatch("ws1");
+	const second = ensureWatch("ws1");
+	expect(second).toBe(first);
+	const settled = first.then((result) => {
+		order.push("ready");
+		return result;
+	});
+
+	await sleep(100);
+	expect(order).toEqual([]);
+	expect(await settled).toEqual({ startupNudge: true });
+	expect(payloads).toEqual([{ workspaceId: "ws1", paths: [], truncated: true }]);
+	expect(order).toEqual(["publish", "ready"]);
+	expect(await ensureWatch("ws1")).toEqual({ startupNudge: false });
 	await sleep(300);
 	expect(payloads).toHaveLength(1); // one-shot, not periodic
+});
+
+test("stopping before readiness settles callers conservatively without a late publish", async () => {
+	const ready = ensureWatch("ws1");
+	stopWatch("ws1");
+	expect(await ready).toEqual({ startupNudge: true });
+	await sleep(1000);
+	expect(payloads).toHaveLength(0);
 });
 
 test("a deleted-and-recreated worktree root (same path, new inode) is re-watched on the next read", async () => {

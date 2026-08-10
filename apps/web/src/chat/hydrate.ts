@@ -1,15 +1,7 @@
-import type { AskUserAnswersDetails, TranscriptMessage, UserMessage } from "@thinkrail/contracts";
+import type { AskUserAnswersDetails, TranscriptMessage } from "@thinkrail/contracts";
 import { isAskUserAnswersMessage, isControlMessage } from "@thinkrail/contracts";
+import { userText } from "../lib";
 import type { ChatTurn, ToolResultState } from "./types";
-
-/** The leading text of a user message (string or text blocks). */
-function userText(content: UserMessage["content"]): string {
-	if (typeof content === "string") return content;
-	return content
-		.filter((c) => c.type === "text")
-		.map((c) => c.text)
-		.join("");
-}
 
 /** The runtime slice a transcript hydrates: what `hydrateSession` seeds a fresh `SessionRuntime` with. */
 export interface HydratedRuntime {
