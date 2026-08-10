@@ -201,6 +201,46 @@ test("selection → icon → inline composer → draft; the tab wears the violet
 	await expect(page.getByTestId("review-thread")).toHaveCount(0);
 });
 
+test("a Monaco draft card keeps its mid-edit textarea across a sibling review push (zone reconcile)", async ({
+	page,
+}) => {
+	await openDiff(page);
+	// Two drafts on different lines — sorted by line, so nth(0) is L2, nth(1) is L3.
+	await composeComment(page, "two = 2", "First remark.");
+	await page.getByTestId("review-composer-save").click();
+	await expect(page.getByTestId("review-composer")).toHaveCount(0);
+	await composeComment(page, "three = 3", "Second remark.");
+	await page.getByTestId("review-composer-save").click();
+	await expect(page.getByTestId("review-composer")).toHaveCount(0);
+	await expect(page.getByTestId("review-thread")).toHaveCount(2);
+
+	// Start editing the FIRST draft's body but DON'T blur/save — an unsaved local edit living only in
+	// the textarea (its persisted body is still "First remark.").
+	const firstEdit = page.getByTestId("review-thread-edit").nth(0);
+	await expect(firstEdit).toHaveValue("First remark.");
+	await firstEdit.click();
+	await firstEdit.fill("First remark — work in progress, unsaved");
+	await expect(firstEdit).toBeFocused();
+
+	// Another client edits the OTHER comment — a `review.changed` push that re-runs `setThreads`. Before
+	// the zone reconcile this tore every view zone (and this textarea) down and rebuilt it from the
+	// persisted body, silently dropping the in-flight edit.
+	const second = (await persistedComments(page)).find((c) => c.body === "Second remark.");
+	await overWire(page, [
+		{
+			method: "review.commentUpdate",
+			params: { id: second?.id, body: "Second remark — edited elsewhere." },
+		},
+	]);
+	// The push landed (the second card rebuilt with the new body)…
+	await expect(page.getByTestId("review-thread-edit").nth(1)).toHaveValue(
+		"Second remark — edited elsewhere.",
+	);
+	// …and the first card — unchanged in the snapshot — kept its exact DOM: the unsaved edit, and focus.
+	await expect(firstEdit).toHaveValue("First remark — work in progress, unsaved");
+	await expect(firstEdit).toBeFocused();
+});
+
 test("sidebar: an accordion — the active reviewed file's section auto-unfolds; a row click folds/unfolds", async ({
 	page,
 }) => {

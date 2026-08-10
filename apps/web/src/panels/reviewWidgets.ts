@@ -280,7 +280,13 @@ export function attachReviewThreads(
 	codeEditor: monaco.editor.ICodeEditor,
 	actions: ReviewThreadActions,
 ): { setThreads: (threads: ReviewThreadData[]) => void; dispose: () => void } {
-	let zones: { id: string; zone: monaco.editor.IViewZone; card: HTMLElement }[] = [];
+	let zones: {
+		id: string;
+		zone: monaco.editor.IViewZone;
+		card: HTMLElement;
+		commentId: string;
+		signature: string;
+	}[] = [];
 
 	const iconButton = (testid: string, title: string, svg: string): HTMLButtonElement => {
 		const el = document.createElement("button");
@@ -415,27 +421,52 @@ export function attachReviewThreads(
 	// the zone's reserved height true to the card at all times.
 	const cardSizeObserver = new ResizeObserver(() => relayoutCards());
 
+	// A card's identity for RECONCILIATION: everything it paints. `setThreads` rebuilds a zone only when
+	// this changes, so an unrelated push (another client adding a comment, a re-anchor/resolve elsewhere)
+	// leaves an unchanged card — and its DOM — untouched. That is what preserves a draft edit in flight:
+	// the textarea, its value, focus and selection all survive, because that card is never torn down.
+	const signature = (t: ReviewThreadData): string =>
+		[t.status, t.anchorState, t.startLine, t.endLine, t.body].join("\u0000");
+
+	const buildZone = (accessor: monaco.editor.IViewZoneChangeAccessor, thread: ReviewThreadData) => {
+		const domNode = document.createElement("div");
+		domNode.className = "review-composer-zone";
+		const card = cardFor(thread);
+		const layout = codeEditor.getLayoutInfo();
+		card.style.maxWidth = `${Math.max(280, Math.min(560, layout.contentWidth - 24))}px`;
+		domNode.appendChild(card);
+		const zone: monaco.editor.IViewZone = {
+			afterLineNumber: thread.endLine,
+			heightInPx: 48,
+			domNode,
+		};
+		return {
+			id: accessor.addZone(zone),
+			zone,
+			card,
+			commentId: thread.id,
+			signature: signature(thread),
+		};
+	};
+
 	const setThreads = (threads: ReviewThreadData[]) => {
 		codeEditor.changeViewZones((accessor) => {
-			for (const { id } of zones) accessor.removeZone(id);
-			zones = threads.map((thread) => {
-				const domNode = document.createElement("div");
-				domNode.className = "review-composer-zone";
-				const card = cardFor(thread);
-				const layout = codeEditor.getLayoutInfo();
-				card.style.maxWidth = `${Math.max(280, Math.min(560, layout.contentWidth - 24))}px`;
-				domNode.appendChild(card);
-				const zone: monaco.editor.IViewZone = {
-					afterLineNumber: thread.endLine,
-					heightInPx: 48,
-					domNode,
-				};
-				return { id: accessor.addZone(zone), zone, card };
-			});
+			// Reconcile by comment id: keep every zone whose card renders the same content (signature match),
+			// rebuild the ones that changed, drop the ones now gone, add the new — instead of tearing every
+			// zone down and back up on each snapshot. A draft the user is mid-edit is a signature match under
+			// a sibling push (its persisted body is unchanged), so its live textarea is left in place.
+			const kept = new Map<string, (typeof zones)[number]>();
+			for (const entry of zones) {
+				const next = threads.find((t) => t.id === entry.commentId);
+				if (next && signature(next) === entry.signature) kept.set(entry.commentId, entry);
+				else accessor.removeZone(entry.id);
+			}
+			zones = threads.map((thread) => kept.get(thread.id) ?? buildZone(accessor, thread));
 		});
 		cardSizeObserver.disconnect();
 		for (const { card } of zones) cardSizeObserver.observe(card);
-		// Size each zone to its rendered card (Monaco attaches the nodes on the next frame).
+		// Size each zone to its rendered card (Monaco attaches new nodes on the next frame; kept ones
+		// re-measure too, in case a font/layout change moved them while their content stayed put).
 		relayoutCards();
 	};
 

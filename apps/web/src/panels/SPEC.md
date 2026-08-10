@@ -468,7 +468,12 @@ a project picker, the prompt hero, and the reused
   time (the markdown tab's rendered→source switch mounts exactly this way) measures 0 and a one-shot
   measure would leave its zone at the placeholder height — the card then paints OVER the following
   lines when scrolled in. The observer re-measures when a card gains real geometry or grows (in-card
-  editing), so long comments never overflow. **Rendered preview**: `MarkdownPreview` splits the stripped document at each insert's
+  editing), so long comments never overflow. `setThreads` **reconciles zones by comment id** rather
+  than tearing every one down and back up on each snapshot: a card whose rendered content is unchanged
+  (a `status`/`anchorState`/line-range/`body` signature) keeps its exact DOM, so a draft the user is
+  mid-edit survives an unrelated push (another client's comment, a re-anchor/resolve elsewhere) with
+  its textarea value, focus and selection intact — only changed cards rebuild, gone ones drop, new ones
+  add. **Rendered preview**: `MarkdownPreview` splits the stripped document at each insert's
   anchor and splices it between the markdown segments (`splicedSegments` — the inline-edit split
   pattern; a cut **never divides a multi-line construct**: an anchor inside a fenced code block or a
   GFM table snaps to that construct's last line (`sourceLines`' `indivisibleSpans` + `snapSplitLine`),
