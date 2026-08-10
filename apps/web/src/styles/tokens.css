@@ -19,12 +19,15 @@
 	--transition-fast: 120ms ease;
 	--transition-normal: 200ms ease;
 
-	/* Spacing (only calc family — tracks --space-base) */
+	/* General spacing (one calc family — tracks --space-base) */
 	--space-xs: calc(var(--space-base) * 0.31);
 	--space-sm: calc(var(--space-base) * 0.62);
 	--space-md: calc(var(--space-base) * 0.92);
 	--space-lg: calc(var(--space-base) * 1.23);
 	--space-xl: calc(var(--space-base) * 1.85);
+
+	/* Shared chrome geometry stays independent from typography. */
+	--panel-tab-strip-height: 28px;
 }
 
 /*

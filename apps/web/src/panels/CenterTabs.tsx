@@ -374,7 +374,10 @@ export function CenterTabs() {
 
 	return (
 		<div className="flex h-full min-h-0 flex-col">
-			<div className="flex h-8 shrink-0 items-stretch border-border-muted border-b bg-container-workspace-bg">
+			<div
+				data-testid="center-tab-strip"
+				className="flex h-panel-tab-strip shrink-0 items-stretch border-border-muted border-b bg-container-workspace-bg"
+			>
 				<div role="tablist" className="flex flex-1 items-stretch overflow-x-auto">
 					{openTabs.map((tab) => {
 						const isActive = tab.id === activeTabId;
