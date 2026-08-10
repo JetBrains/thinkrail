@@ -194,7 +194,7 @@ ref off the workspace-create critical path.
   `assertSafeRef`, `listBranches`,
   `resolveDefaultBranch`, `tryCurrentBranch`, `currentBranch`, `canonicalPath`, `prefetchBranch`,
   `probeRemoteRefsArgv`, `probeRemoteRefs`, `fetchRemoteRefsArgv`, `fetchRemoteRefs`, `behindCount`,
-  `remoteUrlKind`, `sshAgentPresent`.
+  `remoteUrlKind`, `sshAgentPresent`, `trackingRefOid`.
 - **Allowed deps:** `persistence` (workspace + project lookup); `contracts` (`Git*`/`BranchList` types);
   `@thinkrail/shared/codedError` (naming a failure for the wire); Bun (spawn).
 - **Forbidden:** `host`; sibling features.
