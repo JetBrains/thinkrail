@@ -90,6 +90,27 @@ export function resolveDiffRange(
 			modifiedRef: null,
 		};
 	}
+	if (scope.kind === "pinned") {
+		// The review sidebar's base-side navigation: worktree vs one immutable commit. Validated like a
+		// `commit` scope (shape, then existence — the anchor's pinned oid can be gone after a prune/gc),
+		// with the same coded rejection so the client can say "that commit no longer exists" precisely.
+		if (!OID.test(scope.baseRef)) throw new Error(`Not a commit id: ${scope.baseRef}`);
+		const resolved = git(ws.worktreePath, [
+			"rev-parse",
+			"--verify",
+			"--quiet",
+			`${scope.baseRef}^{commit}`,
+		]);
+		if (!resolved.ok || !resolved.out)
+			throw new CodedError("UNKNOWN_COMMIT", `Unknown commit: ${scope.baseRef}`);
+		return {
+			listPrefix: ["diff"],
+			listRevs: [resolved.out],
+			untracked: true,
+			originalRef: resolved.out,
+			modifiedRef: null,
+		};
+	}
 	if (scope.kind === "commit") {
 		if (!OID.test(scope.sha)) throw new Error(`Not a commit id: ${scope.sha}`);
 		const resolved = git(ws.worktreePath, [

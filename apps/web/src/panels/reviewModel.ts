@@ -15,10 +15,16 @@ import type { ReviewThreadData } from "./reviewWidgets";
  */
 export type ReviewSurface = { kind: "file" } | { kind: "diff"; scope?: GitDiffScope };
 
-/** The surface ONE comment lives on. */
+/** The surface ONE comment lives on. A base-side anchor reopens as a **pinned** diff — worktree vs
+ * the anchor's own `baseRef` (frozen at creation) — never the scope it was captured in: a
+ * branch/uncommitted scope re-resolves against the current fork point/`HEAD`, which moves out from
+ * under the comment when the worktree commits or the review target is re-pointed, mounting the card
+ * on a different blob at stale line numbers. The captured `scope` remains the fallback for comments
+ * saved before `baseRef` was stamped. */
 export function commentSurface(comment: ReviewComment): ReviewSurface {
 	const anchor = comment.anchor;
 	if (anchor?.side !== "base") return { kind: "file" };
+	if (anchor.baseRef) return { kind: "diff", scope: { kind: "pinned", baseRef: anchor.baseRef } };
 	return { kind: "diff", ...(anchor.scope ? { scope: anchor.scope } : {}) };
 }
 

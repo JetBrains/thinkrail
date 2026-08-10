@@ -68,9 +68,10 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 
 	/**
 	 * Open the center surface a review anchor is readable on (`reviewModel`'s {@link ReviewSurface}): the
-	 * DIFF for a base-side anchor — reopened by the scope that anchor captured, so it is the very diff
-	 * the remark was made against — and the plain file tab for a worktree one. A comment saved before
-	 * that scope was persisted falls back to the workspace's current scope.
+	 * DIFF for a base-side anchor — a **pinned** scope on the anchor's own `baseRef`, so the original
+	 * side is the very blob the remark quotes no matter how the worktree or the review target moved
+	 * since — and the plain file tab for a worktree one. A comment saved before `baseRef` was stamped
+	 * falls back to its captured scope, then to the workspace's current one.
 	 */
 	const openSurface = (path: string, surface: ReviewSurface) => {
 		if (surface.kind === "file") {

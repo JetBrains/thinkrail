@@ -530,8 +530,12 @@ a project picker, the prompt hero, and the reused
   `reviewModel`'s `ReviewSurface`: `commentSurface` for a row, `reviewFileSurface` for a file row —
   which picks the diff only when *every* unresolved comment on that file is base-side): a `base`
   anchor's lines index the pre-change blob, which only the diff's ORIGINAL editor renders and only it
-  mounts `base` threads, so it reopens THAT diff by the scope the anchor captured (falling back to the
-  workspace's current scope for comments saved before it was persisted). Routing every row to the file
+  mounts `base` threads, so it reopens a **pinned diff on the anchor's own `baseRef`**
+  (`GitDiffScope.kind: "pinned"`, wire v30: worktree vs one immutable commit) — never the scope it was
+  captured in, which re-resolves against the current fork point/`HEAD` and moves out from under the
+  comment when the worktree commits or the review target is re-pointed (the old card would mount on a
+  different blob at stale line numbers). A comment saved before `baseRef` was stamped falls back to
+  its captured scope, then to the workspace's current one. Routing every row to the file
   tab put base remarks on worktree lines that say something else, with no card and a focus request
   nothing consumes.
 - **Live refresh (the worktree panels follow the disk).** Every workspace-scoped read goes through one

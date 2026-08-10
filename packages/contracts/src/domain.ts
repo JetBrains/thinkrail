@@ -266,11 +266,17 @@ export interface GitStatus {
  *   upstream work landing on the base is not this workspace's change and never shows up here.
  * - `uncommitted` — the worktree vs `HEAD` (what a commit here would record).
  * - `commit` — one commit alone (`sha^` vs `sha`; a root commit degrades to an add-style diff).
+ * - `pinned` — the worktree vs one IMMUTABLE commit (`baseRef`, a full oid). The review sidebar's
+ *   navigation surface for a base-side comment: the anchor pinned the blob it quotes at creation, and
+ *   this scope is what reopens exactly that original side later — a `branch`/`uncommitted` scope
+ *   re-resolves against the current fork point/`HEAD`, which moves out from under the comment when the
+ *   worktree commits or the review target is re-pointed.
  */
 export type GitDiffScope =
 	| { kind: "branch" }
 	| { kind: "uncommitted" }
-	| { kind: "commit"; sha: string };
+	| { kind: "commit"; sha: string }
+	| { kind: "pinned"; baseRef: string };
 
 /** One commit on the workspace's branch (not on its diff base) — a row of the scope menu's commit list. */
 export interface GitCommit {

@@ -1,3 +1,4 @@
+import { execSync } from "node:child_process";
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
@@ -119,7 +120,9 @@ async function overWire(
 			const workspaceId = workspaces.find((w) => w.kind !== "default")?.id;
 			const results: unknown[] = [];
 			for (const call of pending) {
-				results.push(await request(call.method, { workspaceId, ...call.params }));
+				// Injected under BOTH param names the handlers use (`workspaceId` for review.*, `id` for
+				// workspace.*); explicit params win via spread order (e.g. commentUpdate's own `id`).
+				results.push(await request(call.method, { workspaceId, id: workspaceId, ...call.params }));
 			}
 			ws.close();
 			return results;
@@ -743,6 +746,25 @@ test("the diff's ORIGINAL (left) side is its own anchor space — base, never re
 	await expect(
 		page.locator('[data-testid="editor-tab"][data-active="true"][data-kind="diff"]'),
 	).toContainText("README.md");
+	await expect(page.locator(".editor.original").getByTestId("review-thread")).toHaveCount(1);
+
+	// The reopened surface is PINNED to the anchor's own baseRef: land the rename as a commit and
+	// re-point the review target to HEAD — a branch scope's original side now resolves to the
+	// workspace's own tip, where no "# sample-project" line exists — and navigation must still show
+	// the very blob the remark quotes, card mounted on it.
+	execSync(`git -C "${worktree()}" commit -am "land the rename"`, { stdio: "ignore" });
+	await overWire(page, [{ method: "workspace.setDiffBase", params: { ref: "HEAD" } }]);
+	await page.getByTestId("tab-files").click();
+	await page.getByTestId("file-node").filter({ hasText: "notes.txt" }).click();
+	await page.getByTestId("tab-review").click();
+	await page.getByTestId("review-file-row").filter({ hasText: "README.md" }).click();
+	await expect(
+		page.locator('[data-testid="editor-tab"][data-active="true"][data-kind="diff"]'),
+	).toContainText("README.md");
+	// The pinned original is the PRE-rename blob: the rename exists only on the modified side. (A
+	// substring check alone is too weak — "# sample-project — renamed" contains "# sample-project".)
+	await expect(page.locator(".editor.original")).toContainText("# sample-project");
+	await expect(page.locator(".editor.original")).not.toContainText("renamed");
 	await expect(page.locator(".editor.original").getByTestId("review-thread")).toHaveCount(1);
 });
 

@@ -114,21 +114,33 @@ test("status vocabulary: outdated rides draft/sent labels but never resolved", (
 	expect(statusLabel(comment({ status: "resolved", anchorState: "outdated" }))).toBe("resolved");
 });
 
-test("a base-side comment navigates to its DIFF (by the scope it captured), a worktree one to the file", () => {
-	// The card for a base anchor is mounted only by the diff's ORIGINAL editor: the file tab would show
-	// worktree lines that say something else, with nothing to focus.
+test("a base-side comment navigates to a PINNED diff on its own baseRef, a worktree one to the file", () => {
+	// The card for a base anchor is mounted only by the diff's ORIGINAL editor — and that original must
+	// be the very blob the anchor pinned at creation, not a re-resolution of the mutable scope it was
+	// captured in (which moves when the worktree commits or the review target is re-pointed).
 	const base = comment({
 		id: "cb",
 		anchor: {
 			path: "a.ts",
 			side: "base",
 			baseRef: "abc123",
-			scope: { kind: "commit", sha: "abc123" },
+			scope: { kind: "branch" },
 			selectors: [{ kind: "lineRange", startLine: 2, endLine: 2 }],
 		},
 	});
-	expect(commentSurface(base)).toEqual({ kind: "diff", scope: { kind: "commit", sha: "abc123" } });
-	// Saved before the scope was persisted: the caller falls back to the workspace's current scope.
+	expect(commentSurface(base)).toEqual({
+		kind: "diff",
+		scope: { kind: "pinned", baseRef: "abc123" },
+	});
+	// Saved before baseRef was stamped: fall back to the captured scope…
+	expect(
+		commentSurface(
+			comment({
+				anchor: { path: "a.ts", side: "base", scope: { kind: "uncommitted" }, selectors: [] },
+			}),
+		),
+	).toEqual({ kind: "diff", scope: { kind: "uncommitted" } });
+	// …and with neither, to the workspace's current scope (the caller's job).
 	expect(
 		commentSurface(comment({ anchor: { path: "a.ts", side: "base", selectors: [] } })),
 	).toEqual({ kind: "diff" });

@@ -192,7 +192,10 @@ export interface TerminalTabsPush {
 // or a new one; both sends answer `ReviewSendResult` (`reused` → hydrate, don't open as new), and
 // `review.sendBatch` returns every session it touched. `review.fileDone` + `Review.doneFiles` keep a
 // fully-resolved file listed until the user finishes it.
-export const PROTOCOL_VERSION = 29;
+// v30: `GitDiffScope.kind: "pinned"` — worktree vs one immutable commit (`baseRef`). The review
+// sidebar reopens a base-side comment through it, so navigation shows the very blob the anchor pinned
+// at creation instead of re-resolving a mutable branch/uncommitted scope whose original side has moved.
+export const PROTOCOL_VERSION = 30;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a

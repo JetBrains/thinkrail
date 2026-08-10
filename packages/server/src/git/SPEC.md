@@ -30,7 +30,9 @@ ref off the workspace-create critical path.
   file list ancestry-consistent with `listCommits`' `base..HEAD`;
   `uncommitted`: `git diff HEAD` + untracked, sides = `HEAD` ↔ worktree; `commit`: `git diff <sha>^ <sha>`, no
   untracked, both sides from history — a **root** commit degrades to `git show --format=` with an empty
-  original, the same add-style degradation an absent path already gets). Both reads build their argv from it
+  original, the same add-style degradation an absent path already gets; `pinned`: `git diff <oid>` +
+  untracked, sides = the given immutable commit ↔ worktree — the review sidebar's base-side
+  navigation, validated exactly like a `commit` sha, same `UNKNOWN_COMMIT` rejection). Both reads build their argv from it
   through `changedFileArgs(range, mode)`, so the file list and a file's two sides can never disagree on the
   range — and that argv brackets its revs on **both** sides: **`--end-of-options`** ahead of them (no ref can be
   re-parsed as a git option) and a trailing **`--`** after them (a rev that also names a path on disk — a branch
