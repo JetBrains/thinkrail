@@ -1,11 +1,26 @@
 import { expect, test } from "@playwright/test";
-import { openFixtureProject } from "./fixtures/app";
+import { enterDefaultWorkspace, openFixtureProject } from "./fixtures/app";
 
 async function width(page: import("@playwright/test").Page, testId: string): Promise<number> {
 	const box = await page.getByTestId(testId).boundingBox();
 	if (!box) throw new Error(`no bounding box for ${testId}`);
 	return box.width;
 }
+
+test("center and right tab strips share one aligned height", async ({ page }) => {
+	await openFixtureProject(page);
+	await enterDefaultWorkspace(page);
+	await page.getByTestId("start-chat").click();
+	await expect(page.getByTestId("center-tab-strip")).toBeVisible();
+
+	const center = await page.getByTestId("center-tab-strip").boundingBox();
+	const right = await page.getByTestId("right-tab-strip").boundingBox();
+	if (!center || !right) throw new Error("tab strip has no bounding box");
+
+	expect(center.y).toBe(right.y);
+	expect(center.height).toBe(28);
+	expect(right.height).toBe(center.height);
+});
 
 test("the left|center divider is draggable and resizes the panels", async ({ page }) => {
 	await openFixtureProject(page);

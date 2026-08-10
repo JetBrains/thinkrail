@@ -51,7 +51,10 @@ export function RightPanel() {
 
 	return (
 		<div className="flex h-full min-h-0 flex-col">
-			<div className="flex h-7 shrink-0 items-center gap-md border-b border-border-default px-sm">
+			<div
+				data-testid="right-tab-strip"
+				className="flex h-panel-tab-strip shrink-0 items-center gap-md border-b border-border-default px-sm"
+			>
 				<TabButton testid="tab-specs" active={tab === "specs"} onClick={() => setTab("specs")}>
 					Specs
 				</TabButton>
