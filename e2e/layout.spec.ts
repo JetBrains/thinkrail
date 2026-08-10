@@ -7,11 +7,15 @@ async function width(page: import("@playwright/test").Page, testId: string): Pro
 	return box.width;
 }
 
-test("center and right tab strips share one aligned height", async ({ page }) => {
+test("center and right tab strips align and the center strip scrolls only horizontally", async ({
+	page,
+}) => {
 	await openFixtureProject(page);
 	await enterDefaultWorkspace(page);
 	await page.getByTestId("start-chat").click();
 	await expect(page.getByTestId("center-tab-strip")).toBeVisible();
+	await expect(page.getByRole("tablist")).toHaveCSS("overflow-x", "auto");
+	await expect(page.getByRole("tablist")).toHaveCSS("overflow-y", "hidden");
 
 	const center = await page.getByTestId("center-tab-strip").boundingBox();
 	const right = await page.getByTestId("right-tab-strip").boundingBox();
