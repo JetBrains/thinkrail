@@ -417,7 +417,11 @@ a project picker, the prompt hero, and the reused
   shared by `FilePane`/`DiffPane` through the Monaco components): selecting text shows a floating
   **comment icon right of the selection** (a Monaco content widget; the rendered preview's icon
   follows the selection live but stays mouse-transparent until the drag ends — a clickable node under
-  the moving cursor is one the native selection extends into, repainting the document tail); clicking it opens an **inline
+  the moving cursor is one the native selection extends into, repainting the document tail). The
+  preview icon's position/visibility are **imperative DOM (refs + custom properties + `data-visible`),
+  never React state**: the markdown components are per-render-typed, so a state flip mid-drag remounts
+  the text nodes under the LIVE selection, which Chrome "restores" by flooding whole blocks — a few
+  selected words painted the entire bullet; clicking it opens an **inline
   composer under the selection** (a view zone: textarea + Save draft / Send now / Esc cancels). In
   Monaco surfaces the same action also sits in the editor's **right-click context menu** ("Comment on
   selection", right after Copy, `Cmd/Ctrl+Shift+M`; `editorHasSelection` precondition) — the «+» and
@@ -476,8 +480,10 @@ a project picker, the prompt hero, and the reused
   cards AND the open composer (in-flow under the selected block, via `PreviewCommenting`'s
   children-as-function contract; only the transient icon stays floating). **Region parity with
   Monaco**: the blocks under every unresolved comment — and under the composer's target while open —
-  wear `.review-region` (`markReviewRegions` — just a lighter shade of the page background, the app's
-  hover surface; no new hue, no bar; leaf-most BLOCK elements only). Preview anchoring is **exact**: `sourceLines.ts` (adopted from
+  wear `.review-region` (`markReviewRegions` — a thin LEFT RAIL only, the gutter-rail half of
+  Monaco's decoration; **never a background wash**: a full-block wash read as a broken text
+  selection — picking three words in a bullet painted the whole bullet wall-to-wall; leaf-most BLOCK
+  elements only). Preview anchoring is **exact**: `sourceLines.ts` (adopted from
   inline-edit) stamps elements with remark source positions in RAW-file coordinates
   (`sourceLineRehype` tuple-form takes each segment's offset — segments re-parse from line 1; via
   `chat/Markdown`'s `rehypePlugins` prop) and the composer resolves selections through the stamps (a

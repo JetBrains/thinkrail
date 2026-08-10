@@ -143,6 +143,14 @@
 	top: var(--review-icon-top, 0);
 	left: var(--review-icon-left, 0);
 	z-index: 60;
+	/* Hidden until PreviewCommenting positions it — IMPERATIVELY, never through React state: a state
+	   update mid-drag re-renders the markdown tree and replaces the text nodes under the LIVE native
+	   selection, which Chrome then "restores" by flooding whole blocks (a few selected words painted
+	   the entire bullet). */
+	display: none;
+}
+.review-add-icon-float[data-visible] {
+	display: flex;
 }
 /* Mid-drag the icon follows the selection but is mouse-transparent: a clickable node under the moving
    cursor is one the native selection extends into (see PreviewCommenting). */
@@ -335,11 +343,13 @@
 	margin: 8px 0 8px 12px;
 	max-width: 560px;
 }
-/* The commented region in the preview: only a lighter shade of the page background — no new hue,
-   no bar (parity with the Monaco line wash above). */
+/* The commented region in the preview: a thin LEFT RAIL only (the gutter-rail half of Monaco's
+   decoration — `.review-comment-rail`), never a background wash. A full-block wash reads as a broken
+   text selection: picking three words in a bullet painted the whole bullet wall-to-wall, which is
+   exactly what a reader calls "my selection flooded everywhere". The rail marks the block without
+   impersonating the selection. Inset shadow, not border — zero layout shift. */
 .review-region {
-	background: var(--control-bg-hovered);
-	border-radius: var(--radius-sm);
-	padding-left: 6px;
-	margin-left: -6px;
+	box-shadow: inset 2px 0 0 var(--text-subtle);
+	padding-left: 10px;
+	margin-left: -10px;
 }

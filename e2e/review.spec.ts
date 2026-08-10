@@ -504,6 +504,67 @@ async function scrollCardsIntoView(page: Page): Promise<void> {
 	throw new Error("No review card scrolled into view");
 }
 
+test("preview selection stays honest: a dragged piece stays a piece, and the composer's region mark is a rail, not a wash", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	writeFileSync(
+		join(worktree(), "BULLETS.md"),
+		[
+			"# Spec",
+			"",
+			"- **Owns:** the review store and its lifecycle, plus the anchoring helpers.",
+			"- **Forbidden:** reaching into the agent module.",
+			"",
+			"Closing prose.",
+			"",
+		].join("\n"),
+	);
+	await page.getByTestId("tab-files").click();
+	await page.getByTestId("file-node").filter({ hasText: "BULLETS.md" }).click();
+	const preview = page.getByTestId("markdown-preview");
+	await expect(preview).toContainText("Owns");
+	// Let the open-time fs tick settle — a live re-read remounting the document mid-drag is a
+	// different (inherent) event; this test pins that the SELECTION itself causes no remount.
+	await page.waitForTimeout(1200);
+
+	// Drag across a few words INSIDE the first bullet. The icon-follows-selection machinery must not
+	// touch React state mid-drag: a re-render swaps the text nodes under the live selection and
+	// Chrome "restores" it by flooding whole blocks (a few words painted the entire bullet).
+	const li = preview.locator("li").first();
+	const box = await li.boundingBox();
+	if (!box) throw new Error("bullet has no box");
+	await page.mouse.move(box.x + 60, box.y + 11);
+	await page.mouse.down();
+	await page.mouse.move(box.x + 280, box.y + 11, { steps: 10 });
+	await page.mouse.up();
+
+	const state = await page.evaluate(() => {
+		const sel = document.getSelection();
+		const li = document.querySelector('[data-testid="markdown-preview"] li');
+		const range = sel && sel.rangeCount > 0 ? sel.getRangeAt(0) : null;
+		return {
+			text: sel?.toString() ?? "",
+			// The selection must stay INSIDE the bullet — never span out into neighboring blocks.
+			insideBullet: !!(range && li?.contains(range.commonAncestorContainer)),
+			bullet: li?.textContent ?? "",
+		};
+	});
+	expect(state.text.length).toBeGreaterThan(3);
+	expect(state.insideBullet).toBe(true);
+	expect(state.bullet).toContain(state.text); // a piece of the bullet — not the whole document
+	expect(state.text.length).toBeLessThan(state.bullet.length); // …and strictly a piece
+
+	// Open the composer: the target block wears the region RAIL — never a background wash, which
+	// painted the whole bullet wall-to-wall and read as "my selection flooded everywhere".
+	await addIcon(page).click();
+	await expect(page.getByTestId("review-composer")).toBeVisible();
+	const region = preview.locator(".review-region").first();
+	await expect(region).toBeVisible();
+	await expect(region).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+});
+
 test("an in-flow card never halves a code fence — the rest of the document stays prose", async ({
 	page,
 }) => {

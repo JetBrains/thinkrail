@@ -41,10 +41,12 @@ export function PreviewCommenting({
 }) {
 	const scrollerRef = useRef<HTMLDivElement>(null);
 	const iconRef = useRef<HTMLButtonElement>(null);
-	const [icon, setIcon] = useState<{ top: number; left: number } | null>(null);
-	// A REF + an imperative attribute, deliberately not state: pointerdown/up fire on every click in
-	// the preview, and a state flip re-renders the (per-render-typed) markdown components between
-	// mousedown and click — remounting the very link the user is clicking, which swallowed the click.
+	// The icon's whole lifecycle is REFS + imperative DOM, deliberately never React state: the markdown
+	// components are per-render-typed, so ANY state flip remounts the document's text nodes — under a
+	// mousedown it swallowed the click being made, and under a LIVE drag it replaced the nodes the
+	// native selection anchored to, which Chrome "restores" by flooding whole blocks (selecting a few
+	// words painted the entire bullet). The node is always mounted (a body portal); position rides the
+	// `--review-icon-*` custom properties and visibility the `data-visible` attribute.
 	const draggingRef = useRef(false);
 	const [selection, setSelection] = useState<LineSelection | null>(null);
 	const [composing, setComposing] = useState(false);
@@ -59,19 +61,6 @@ export function PreviewCommenting({
 	useEffect(() => {
 		if (composing) inputRef.current?.focus();
 	}, [composing]);
-
-	// The icon's place is a MEASURED rect, so it can't be a utility class — but it must not become an
-	// inline style object either (the repo's one styling surface is Tailwind/token utilities + this
-	// module's stylesheet skin). The two coordinates go over as custom properties the `.review-add-icon-float`
-	// rule consumes, the same seam `PanZoomView` uses for its measured zoom.
-	useEffect(() => {
-		const node = iconRef.current;
-		if (!node || !icon) return;
-		node.style.setProperty("--review-icon-top", `${icon.top}px`);
-		node.style.setProperty("--review-icon-left", `${icon.left}px`);
-		// A drag already in flight when the icon (re)mounts: carry the mouse-transparency over.
-		if (draggingRef.current) node.setAttribute("data-dragging", "true");
-	}, [icon]);
 
 	// The Review panel's "focus this comment" deep link: scroll the in-flow card into view, then
 	// consume the request so it fires exactly once.
@@ -97,21 +86,27 @@ export function PreviewCommenting({
 	}, [threads, composing, selection]);
 
 	useEffect(() => {
-		if (composing) return; // frozen while composing
+		if (composing) {
+			iconRef.current?.removeAttribute("data-visible"); // frozen + hidden while composing
+			return;
+		}
+		const hideIcon = () => iconRef.current?.removeAttribute("data-visible");
 		// The icon follows the selection LIVE — including mid-drag, floating right of the focus point —
-		// but stays mouse-transparent until the drag ends (`data-dragging` → `pointer-events: none`): a
-		// clickable DOM node under the moving cursor is one the native selection extends INTO (it sits
-		// after the article), repainting the document tail as selected and "breaking" the highlight.
+		// via IMPERATIVE positioning only (see the refs note above: a setState here would remount the
+		// text nodes under the live selection). It stays mouse-transparent until the drag ends
+		// (`data-dragging` → `pointer-events: none`): a clickable DOM node under the moving cursor is
+		// one the native selection extends INTO, repainting the document tail as selected.
 		const evaluate = () => {
 			const scroller = scrollerRef.current;
+			const node = iconRef.current;
 			const sel = document.getSelection();
-			if (!scroller || !sel || sel.isCollapsed || sel.rangeCount === 0 || !sel.focusNode) {
-				setIcon(null);
+			if (!scroller || !node || !sel || sel.isCollapsed || sel.rangeCount === 0 || !sel.focusNode) {
+				hideIcon();
 				return;
 			}
 			const range = sel.getRangeAt(0);
 			if (!scroller.contains(range.commonAncestorContainer)) {
-				setIcon(null);
+				hideIcon();
 				return;
 			}
 			// The focus point — where the cursor ended (top when selecting upward), same as Monaco's side.
@@ -120,7 +115,7 @@ export function PreviewCommenting({
 				focusRange.setStart(sel.focusNode, sel.focusOffset);
 				focusRange.collapse(true);
 			} catch {
-				setIcon(null);
+				hideIcon();
 				return;
 			}
 			const rect = focusRange.getClientRects()[0] ?? range.getBoundingClientRect();
@@ -131,10 +126,12 @@ export function PreviewCommenting({
 			// only when the line touches the pane's top edge): on the line itself the button covers the
 			// just-selected words and reads as a hole punched in the selection.
 			const above = rect.top - 28;
-			setIcon({
-				top: above >= box.top ? above : rect.bottom + 4,
-				left: Math.max(box.left + 4, Math.min(rect.right + 6, box.right - 34)),
-			});
+			const top = above >= box.top ? above : rect.bottom + 4;
+			const left = Math.max(box.left + 4, Math.min(rect.right + 6, box.right - 34));
+			node.style.setProperty("--review-icon-top", `${top}px`);
+			node.style.setProperty("--review-icon-left", `${left}px`);
+			if (draggingRef.current) node.setAttribute("data-dragging", "true");
+			node.setAttribute("data-visible", "true");
 		};
 		const onPointerDown = (e: PointerEvent) => {
 			// A press on the icon itself is the click, not a new drag — it must stay clickable through it.
@@ -163,13 +160,12 @@ export function PreviewCommenting({
 
 	const openComposer = () => {
 		const scroller = scrollerRef.current;
-		if (!icon || !scroller) return;
+		if (!iconRef.current?.hasAttribute("data-visible") || !scroller) return;
 		// Exact lines from the stamped blocks first; the phrase search covers unstamped content.
 		const resolved =
 			stampedSelectionLines(scroller) ?? mapPreviewSelection(source, selectedTextRef.current);
 		setSelection(resolved);
 		setComposing(true);
-		setIcon(null);
 		setText("");
 	};
 
@@ -256,10 +252,10 @@ export function PreviewCommenting({
 			className="relative h-full overflow-auto bg-container-workspace-bg"
 		>
 			{children(composerInsert)}
-			{icon &&
-				!composing &&
-				// A BODY portal: the button is not a child of the scroller, so the DOM selection can never
-				// extend into it — it floats OVER the text and cannot influence the selection at all.
+			{
+				// A BODY portal, ALWAYS mounted (visibility + position are imperative — see the refs note):
+				// the button is not a child of the scroller, so the DOM selection can never extend into it —
+				// it floats OVER the text and cannot influence the selection at all.
 				createPortal(
 					<button
 						ref={iconRef}
@@ -274,7 +270,8 @@ export function PreviewCommenting({
 						<MessageSquarePlus className="size-3.5" />
 					</button>,
 					document.body,
-				)}
+				)
+			}
 		</div>
 	);
 }
