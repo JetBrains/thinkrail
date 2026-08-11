@@ -15,14 +15,36 @@ if (motionOK) document.documentElement.classList.add("anim");
 
 const editor = document.getElementById("editor-scroll");
 
-/* ── Scroll-spy: file-tree rows follow the section in view ─────────────── */
-// Top tabs are now decorative editor tabs; scroll-spy only updates file tree navigation.
+/* ── Top tabs: mirror the right-rail file tree (Table of Contents) ──────── */
+// The `.filetree` is the single static source of truth for navigation; the top
+// tabs are generated from it so labels + #anchors can never drift into a second
+// hardcoded list. Both light up together via the shared scroll-spy below.
 
 const sections = Array.from(document.querySelectorAll<HTMLElement>(".file-section"));
 const treeRows = Array.from(document.querySelectorAll<HTMLAnchorElement>(".filetree a.ft-row"));
+const tabstrip = document.querySelector<HTMLElement>(".tabstrip");
+const tabRows: HTMLAnchorElement[] = [];
+
+if (tabstrip) {
+	for (const row of treeRows) {
+		const href = row.getAttribute("href");
+		if (!href) continue;
+		const tab = document.createElement("a");
+		tab.className = "tab";
+		tab.href = href;
+		// Copy the row's leading icon (SVG sprite) so tabs match the tree glyphs.
+		const icon = row.querySelector("svg.i");
+		if (icon) tab.appendChild(icon.cloneNode(true));
+		tab.appendChild(document.createTextNode(row.textContent?.trim() ?? ""));
+		tabstrip.appendChild(tab);
+		tabRows.push(tab);
+	}
+}
+
+/* ── Scroll-spy: file-tree rows + top tabs follow the section in view ───── */
 
 function setActiveTreeRow(id: string): void {
-	for (const el of treeRows) {
+	for (const el of [...treeRows, ...tabRows]) {
 		const active = el.getAttribute("href") === `#${id}`;
 		el.classList.toggle("active", active);
 	}
@@ -420,24 +442,16 @@ if (railNote && railNoteDismiss) {
 }
 
 /* ── Mock-disabled tooltips ─────────────────────────────────────────────── */
-// Disabled mock UI elements show a rich callout encouraging visitors to try the real product.
-// Tooltip is anchored to the trigger region, not the cursor.
+// Disabled mock UI elements show a compact callout encouraging visitors to try the real product.
+// Click-to-open: clicking a disabled region toggles the tooltip; clicking outside (or Escape)
+// closes it. The tooltip is anchored to the trigger region, not the cursor.
 
 const mockElements = document.querySelectorAll<HTMLElement>("[data-mock-hint]");
 if (mockElements.length > 0) {
-	// Create a shared tooltip element with icon, text, and CTA
+	// Create a shared tooltip element with text and CTA
 	const tooltip = document.createElement("div");
 	tooltip.className = "mock-tooltip";
 	tooltip.setAttribute("role", "tooltip");
-
-	// Info icon (uses the SVG sprite)
-	const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-	icon.setAttribute("class", "mock-tooltip-icon");
-	icon.setAttribute("aria-hidden", "true");
-	const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
-	use.setAttribute("href", "#i-info");
-	icon.appendChild(use);
-	tooltip.appendChild(icon);
 
 	// Text message (updated dynamically)
 	const text = document.createElement("div");
@@ -455,7 +469,6 @@ if (mockElements.length > 0) {
 
 	document.body.appendChild(tooltip);
 
-	let hideTimeout: ReturnType<typeof setTimeout> | null = null;
 	let currentTarget: HTMLElement | null = null;
 
 	const GAP = 8; // Gap between trigger and tooltip
@@ -520,15 +533,6 @@ if (mockElements.length > 0) {
 	};
 
 	const showTooltip = (target: HTMLElement) => {
-		// Cancel any pending hide
-		if (hideTimeout) {
-			clearTimeout(hideTimeout);
-			hideTimeout = null;
-		}
-
-		// If already showing for this target, don't restart animation
-		if (currentTarget === target) return;
-
 		const hint = target.dataset.mockHint;
 		if (!hint) return;
 
@@ -539,32 +543,32 @@ if (mockElements.length > 0) {
 	};
 
 	const hideTooltip = () => {
-		hideTimeout = setTimeout(() => {
-			tooltip.classList.remove("visible");
-			currentTarget = null;
-		}, 200); // Grace delay allows moving cursor to tooltip
+		tooltip.classList.remove("visible");
+		currentTarget = null;
 	};
-
-	const cancelHide = () => {
-		if (hideTimeout) {
-			clearTimeout(hideTimeout);
-			hideTimeout = null;
-		}
-	};
-
-	// Keep tooltip open when hovering the tooltip itself (for clicking the CTA)
-	tooltip.addEventListener("mouseenter", cancelHide);
-	tooltip.addEventListener("mouseleave", hideTooltip);
 
 	for (const el of mockElements) {
-		// Re-enable pointer events for hover detection, but prevent clicks
+		// Re-enable pointer events so the disabled region is clickable.
 		el.style.pointerEvents = "auto";
-		el.addEventListener("mouseenter", () => showTooltip(el));
-		el.addEventListener("mouseleave", hideTooltip);
-		// Block clicks on the element itself
+		// Click toggles the tooltip for this region; the disabled control never navigates.
 		el.addEventListener("click", (e) => {
 			e.preventDefault();
 			e.stopPropagation();
+			if (currentTarget === el) hideTooltip();
+			else showTooltip(el);
 		});
 	}
+
+	// Click outside the tooltip (and outside any trigger) closes it.
+	document.addEventListener("click", (e) => {
+		if (!currentTarget) return;
+		const node = e.target as Node | null;
+		if (node && (tooltip.contains(node) || currentTarget.contains(node))) return;
+		hideTooltip();
+	});
+
+	// Escape closes it too.
+	document.addEventListener("keydown", (e) => {
+		if (e.key === "Escape" && currentTarget) hideTooltip();
+	});
 }

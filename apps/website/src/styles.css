@@ -586,19 +586,13 @@ code {
 	white-space: nowrap;
 	position: relative;
 	flex: none;
+	text-decoration: none;
 }
 
 .tab:hover {
 	text-decoration: none;
 	color: var(--text);
 	background: var(--hover);
-}
-
-/* Tabs inside disabled mock chrome have no hover state */
-[data-mock-hint] .tab:hover {
-	text-decoration: none;
-	color: var(--muted);
-	background: transparent;
 }
 
 .tab .i {
@@ -621,41 +615,6 @@ code {
 
 .tab.active .i {
 	color: var(--accent);
-}
-
-.tab-x {
-	width: 8px;
-	height: 8px;
-	position: relative;
-	opacity: 0;
-}
-
-.tab:hover .tab-x {
-	opacity: 0.6;
-}
-
-/* No close button on disabled tabs */
-[data-mock-hint] .tab:hover .tab-x {
-	opacity: 0;
-}
-
-.tab-x::before,
-.tab-x::after {
-	content: "";
-	position: absolute;
-	inset: 50% auto auto 50%;
-	width: 9px;
-	height: 1.4px;
-	background: currentColor;
-	transform-origin: center;
-}
-
-.tab-x::before {
-	transform: translate(-50%, -50%) rotate(45deg);
-}
-
-.tab-x::after {
-	transform: translate(-50%, -50%) rotate(-45deg);
 }
 
 /* The scrolling editor pane */
@@ -1779,7 +1738,7 @@ html.anim .terminal.armed [data-out] {
 	flex-direction: column;
 	align-items: flex-start;
 	text-align: left;
-	padding: 12px;
+	padding: 8px;
 	background: var(--elevated);
 	border: 1px solid var(--border2);
 	border-radius: 12px;
@@ -1794,20 +1753,7 @@ html.anim .terminal.armed [data-out] {
 	max-width: calc(100vw - 32px);
 }
 
-.mock-tooltip-icon {
-	width: 24px;
-	height: 24px;
-	color: var(--text);
-	flex-shrink: 0;
-	fill: none;
-	stroke: currentColor;
-	stroke-width: 2;
-	stroke-linecap: round;
-	stroke-linejoin: round;
-}
-
 .mock-tooltip-text {
-	margin-top: 12px;
 	font-size: 15px;
 	line-height: 1.5;
 	color: var(--text);
@@ -1815,7 +1761,7 @@ html.anim .terminal.armed [data-out] {
 }
 
 .mock-tooltip-cta {
-	margin-top: 16px;
+	margin-top: 8px;
 }
 
 /* Secondary outlined button for tooltip CTA */

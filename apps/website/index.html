@@ -297,14 +297,9 @@
 
 				<!-- ══ Center: tab strip + the scrolling "editor" ══ -->
 				<div class="center">
-					<nav class="tabstrip" aria-label="Editor tabs" data-mock-hint="The real experience starts inside the app.">
-						<span class="tab active"><svg class="i" aria-hidden="true"><use href="#i-file" /></svg>README.md<i class="tab-x"></i></span>
-						<span class="tab"><svg class="i" aria-hidden="true"><use href="#i-file" /></svg>CHANGELOG.md<i class="tab-x"></i></span>
-						<span class="tab"><svg class="i" aria-hidden="true"><use href="#i-file" /></svg>diff.patch<i class="tab-x"></i></span>
-						<span class="tab"><svg class="i" aria-hidden="true"><use href="#i-book" /></svg>SPEC.md<i class="tab-x"></i></span>
-						<span class="tab"><svg class="i" aria-hidden="true"><use href="#i-file" /></svg>architecture.md<i class="tab-x"></i></span>
-						<span class="tab"><svg class="i" aria-hidden="true"><use href="#i-file" /></svg>session.tsx<i class="tab-x"></i></span>
-					</nav>
+					<!-- Editor tabs mirror the right-rail file tree (Table of Contents). JS fills
+					     them from `.filetree a.ft-row` so the two nav lists can never drift. -->
+					<nav class="tabstrip" aria-label="Editor tabs"></nav>
 
 					<main class="editor" id="editor-scroll" aria-label="Page content">
 						<!-- ── README.md ─ hero ── -->
