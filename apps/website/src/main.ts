@@ -463,7 +463,7 @@ if (mockElements.length > 0) {
 	cta.className = "mock-tooltip-cta";
 	cta.innerHTML = `<a class="btn" href="https://github.com/JetBrains/thinkrail" target="_blank" rel="noopener noreferrer">
 		<svg class="i i-fill" aria-hidden="true"><use href="#i-github" /></svg>
-		Star on GitHub
+		Open on GitHub
 	</a>`;
 	tooltip.appendChild(cta);
 
