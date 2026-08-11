@@ -9,6 +9,8 @@ export interface FolderChain {
 	label: string;
 	/** Path of the current deepest directory represented by the compact row. */
 	path: string;
+	/** Every directory path represented by the row, shallowest to deepest. */
+	paths: readonly string[];
 }
 
 /** A directory row after following its run of single-directory children. */
@@ -18,7 +20,7 @@ export interface ResolvedFolderChain<TNode extends FolderChainNode> extends Fold
 }
 
 export function startFolderChain(node: FolderChainNode): FolderChain {
-	return { label: node.name, path: node.path };
+	return { label: node.name, path: node.path, paths: [node.path] };
 }
 
 function hasSingleDirectoryChild<TNode extends FolderChainNode>(
@@ -35,7 +37,11 @@ export function extendFolderChain<TNode extends FolderChainNode>(
 	if (!hasSingleDirectoryChild(children)) return null;
 	const directory = children[0];
 	return {
-		chain: { label: `${chain.label}/${directory.name}`, path: directory.path },
+		chain: {
+			label: `${chain.label}/${directory.name}`,
+			path: directory.path,
+			paths: [...chain.paths, directory.path],
+		},
 		directory,
 	};
 }

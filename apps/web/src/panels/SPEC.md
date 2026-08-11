@@ -594,8 +594,10 @@ a project picker, the prompt hero, and the reused
   construction the one the key names). It is threaded to `read` (and `reload`) as an argument for a caller that
   would rather branch on it than close over the parameter; ignoring it — as `ChangesPanel` does, its `scope`
   being an object the key merely names — is expected. Refetches **preserve view state**: `FileTree` re-reads
-  the root + the directory probes backing each visible compact row and expanded branch (rows keyed by path;
-  vanished dirs drop out via their parent), `ChangesPanel` re-reads
+  the root + the directory probes backing each visible compact row and expanded branch. Expansion lives
+  above individual rows and is keyed by every directory path a compact row represents, so shortening or
+  lengthening a chain cannot hide descendants that were visible before the refetch; vanished dirs drop out
+  via their parent. `ChangesPanel` re-reads
   `git.status` (list-only — the diff renders in the center tab, not under the list), `SpecsPanel`
   refetches without remounting (expansion survives), and `FilePane`/`DiffPane` re-read an
   open tab's content when the workspace ticked past the tab's loaded tick (live while visible;

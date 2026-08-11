@@ -1,11 +1,13 @@
 import type { FileNode } from "@thinkrail/contracts";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { TabIntent } from "../store";
 import { getTransport } from "../transport";
 import { type ResolvedFolderChain, resolveFolderChain } from "./folderChains";
 import { openFileInTab } from "./openTabs";
 import { TreeRow } from "./TreeRow";
 import { useWorkspaceRead } from "./useWorkspaceRead";
+
+type SetPathsExpanded = (paths: readonly string[], expanded: boolean) => void;
 
 /**
  * Lazy file tree of the active worktree. Single-click a file to **preview** it in the workspace's one
@@ -17,6 +19,18 @@ import { useWorkspaceRead } from "./useWorkspaceRead";
  */
 export function FileTree({ workspaceId }: { workspaceId: string }) {
 	const [nodes, setNodes] = useState<FileNode[] | null>(null);
+	const [expandedPaths, setExpandedPaths] = useState<ReadonlySet<string>>(() => new Set());
+
+	const setPathsExpanded: SetPathsExpanded = (paths, expanded) => {
+		setExpandedPaths((current) => {
+			const next = new Set(current);
+			for (const path of paths) {
+				if (expanded) next.add(path);
+				else next.delete(path);
+			}
+			return next;
+		});
+	};
 
 	// The root listing, re-read on the workspace's fs tick; a switch clears the old tree, a failed re-read
 	// keeps it (and a failed *first* read shows an empty tree rather than a permanent "Loading…").
@@ -37,16 +51,34 @@ export function FileTree({ workspaceId }: { workspaceId: string }) {
 	return (
 		<ul className="flex flex-col">
 			{nodes.map((node) => (
-				<FileNodeRow key={node.path} node={node} workspaceId={workspaceId} />
+				<FileNodeRow
+					key={node.path}
+					node={node}
+					workspaceId={workspaceId}
+					expandedPaths={expandedPaths}
+					setPathsExpanded={setPathsExpanded}
+				/>
 			))}
 		</ul>
 	);
 }
 
-function FileNodeRow({ node, workspaceId }: { node: FileNode; workspaceId: string }) {
+function FileNodeRow({
+	node,
+	workspaceId,
+	expandedPaths,
+	setPathsExpanded,
+}: {
+	node: FileNode;
+	workspaceId: string;
+	expandedPaths: ReadonlySet<string>;
+	setPathsExpanded: SetPathsExpanded;
+}) {
 	const isDir = node.kind === "dir";
-	const [expanded, setExpanded] = useState(false);
 	const [directory, setDirectory] = useState<ResolvedFolderChain<FileNode> | null>(null);
+	// Covers the brief window where a user expands a row before its eager chain probe resolves: once the
+	// represented paths are known, the expansion intent is applied to all of them.
+	const pendingExpand = useRef(false);
 
 	// A visible directory follows only its run of single-directory children, even while collapsed, so the
 	// compact label is available without making the user expand every segment. The deepest listing doubles
@@ -60,18 +92,28 @@ function FileNodeRow({ node, workspaceId }: { node: FileNode; workspaceId: strin
 				getTransport().request("fs.readDir", { workspaceId: id, path }),
 			),
 		{
-			onResult: (result) => setDirectory(result),
-			onFailure: () =>
-				setDirectory((prev) => prev ?? { label: node.name, path: node.path, children: [] }),
-			onSwitch: () => setDirectory(null),
+			onResult: (result) => {
+				setDirectory(result);
+				if (!pendingExpand.current) return;
+				pendingExpand.current = false;
+				setPathsExpanded(result.paths, true);
+			},
+			onSwitch: () => {
+				pendingExpand.current = false;
+				setDirectory(null);
+			},
 		},
 	);
 
 	const label = directory?.label ?? node.name;
+	const representedPaths = directory?.paths ?? [node.path];
+	const expanded = expandedPaths.has(directory?.path ?? node.path);
 	const children = directory?.children ?? null;
 	const toggleDirectory = () => {
-		if (!expanded) reload();
-		setExpanded((value) => !value);
+		const nextExpanded = !expanded;
+		pendingExpand.current = nextExpanded && directory === null;
+		setPathsExpanded(representedPaths, nextExpanded);
+		if (nextExpanded) reload();
 	};
 	const open = (intent: TabIntent) => void openFileInTab(workspaceId, node.path, intent);
 
@@ -88,7 +130,13 @@ function FileNodeRow({ node, workspaceId }: { node: FileNode; workspaceId: strin
 			{isDir && expanded && children && (
 				<ul className="flex flex-col pl-md">
 					{children.map((child) => (
-						<FileNodeRow key={child.path} node={child} workspaceId={workspaceId} />
+						<FileNodeRow
+							key={child.path}
+							node={child}
+							workspaceId={workspaceId}
+							expandedPaths={expandedPaths}
+							setPathsExpanded={setPathsExpanded}
+						/>
 					))}
 				</ul>
 			)}
