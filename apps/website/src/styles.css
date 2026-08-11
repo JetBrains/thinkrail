@@ -1757,7 +1757,8 @@ html.anim .terminal.armed [data-out] {
 }
 
 .mock-tooltip-text {
-	font-size: 15px;
+	/* s14 — next smaller level on the ThinkRail type scale (no 15 exists). */
+	font-size: 14px;
 	line-height: 1.5;
 	color: var(--text);
 }
@@ -1771,6 +1772,8 @@ html.anim .terminal.armed [data-out] {
 	justify-content: center;
 	gap: 6px;
 	padding: 6px 10px;
+	/* s13 — one level below the s14 body text, keeping the prior proportion. */
+	font-size: 13px;
 	white-space: nowrap;
 	pointer-events: auto;
 }
