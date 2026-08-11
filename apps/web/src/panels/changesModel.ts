@@ -1,4 +1,5 @@
 import type { GitCommit, GitDiffScope, GitFileChange, GitFileStatus } from "@thinkrail/contracts";
+import { extendFolderChain, startFolderChain } from "./folderChains";
 
 /**
  * Token-utility classes for a changed file's *name*, encoding its git status without a letter glyph
@@ -117,8 +118,9 @@ interface DirBuild {
 
 /**
  * Build a folder tree from the flat `git.status` change list, aggregating each file's `+/−` counts up
- * into its folders. Directories sort before files, each alphabetically — the same shape the file tree
- * shows. Pure (no store/transport) so it's trivially unit-testable.
+ * into its folders and compacting single-directory runs into slash-joined rows. Directories sort before
+ * files, each alphabetically — the same shape the file tree shows. Pure (no store/transport) so it's
+ * trivially unit-testable.
  */
 export function buildChangesTree(changes: readonly GitFileChange[]): ChangeTreeNode[] {
 	const root: DirBuild = { dirs: new Map(), files: [] };
@@ -148,15 +150,22 @@ export function buildChangesTree(changes: readonly GitFileChange[]): ChangeTreeN
 	const materialize = (build: DirBuild, prefix: string): ChangeTreeNode[] => {
 		const dirNodes: ChangeTreeDir[] = [...build.dirs.entries()]
 			.map(([name, child]): ChangeTreeDir => {
-				const path = prefix ? `${prefix}/${name}` : name;
-				const children = materialize(child, path);
+				const initialPath = prefix ? `${prefix}/${name}` : name;
+				let chain = startFolderChain({ kind: "dir", name, path: initialPath });
+				let children = materialize(child, initialPath);
+				for (;;) {
+					const extension = extendFolderChain(chain, children);
+					if (!extension) break;
+					chain = extension.chain;
+					children = extension.directory.children;
+				}
 				let added = 0;
 				let removed = 0;
 				for (const node of children) {
 					added += node.added;
 					removed += node.removed;
 				}
-				return { kind: "dir", name, path, children, added, removed };
+				return { kind: "dir", name: chain.label, path: chain.path, children, added, removed };
 			})
 			.sort((a, b) => a.name.localeCompare(b.name));
 		const fileNodes = [...build.files].sort((a, b) => a.name.localeCompare(b.name));

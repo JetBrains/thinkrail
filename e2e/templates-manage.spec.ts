@@ -275,16 +275,11 @@ test.describe("templates management", () => {
 		).toBeVisible();
 
 		// The file really landed in the worktree: `.pi/prompts/scoped-note.md`, browsable like any other file
-		// — `fs.readDir` doesn't special-case dotdirs beyond `.git`, so no app-side special-casing is needed.
+		// — `fs.readDir` doesn't special-case dotdirs beyond `.git`, and the single-directory run is one row.
 		await page.getByTestId("tab-files").click();
-		const piDir = page
-			.locator('[data-testid="file-node"][data-kind="dir"]')
-			.filter({ hasText: /^\.pi$/ });
-		await expect(piDir).toBeVisible();
-		await piDir.click();
 		const promptsDir = page
 			.locator('[data-testid="file-node"][data-kind="dir"]')
-			.filter({ hasText: /^prompts$/ });
+			.filter({ hasText: /^\.pi\/prompts$/ });
 		await expect(promptsDir).toBeVisible();
 		await promptsDir.click();
 		await expect(
