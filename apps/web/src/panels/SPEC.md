@@ -918,7 +918,10 @@ a project picker, the prompt hero, and the reused
   re-measure, non-Latin glyphs render into cells sized for the fallback font and the PTY holds the wrong
   cols/rows; the panel drives `relayout()` itself so it knows when to re-`fit()`. Its pre-bind output buffer is
   a bounded waiting state: successful bind filters it to the adopted PTY, while permanent creation failure
-  clears it and stops accepting page-wide terminal frames. PTY sizing distinguishes desired, in-flight, and
+  clears it and stops accepting page-wide terminal frames. **Historical replay is input-inert:** the PTY id
+  remains unadopted until xterm's replay callback, which rechecks attach freshness before binding and draining
+  genuinely live frames; replies xterm synthesizes for recorded terminal queries can therefore never enter the
+  live shell. PTY sizing distinguishes desired, in-flight, and
   host-acknowledged grids; only a successful `terminal.resize` advances the acknowledgement, so reconnect
   replay cannot leave a full-screen app permanently sized to a request the host never applied.
 - Heavy deps (Monaco / shiki / xterm) load via `React.lazy(() => import())` to stay out of the eager bundle.

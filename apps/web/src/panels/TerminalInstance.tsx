@@ -348,41 +348,49 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 					if (disposed) return;
 					// Someone took the tab over while this was in flight, so this answer is already stale. A newer
 					// attempt owns `prebind` by now; only this attempt's own buffer is ours to retire.
-					if (attachGeneration !== startedAt) {
+					if (attachGeneration !== startedAt || prebind !== attemptPrebind) {
 						attemptPrebind.stop();
 						return;
 					}
-					sizeSync.acknowledge(spawnedAt);
-					// Repaint what this shell last showed before live frames resume: a remount is a fresh xterm
-					// buffer, so without this a surviving shell comes back behind a blank screen and looks dead.
-					// After a host restart this is the revived tab's picture, over a genuinely new shell.
-					if (replay) term.write(replay);
-					serverIdRef.current = id;
-					const buffered = attemptPrebind.bind(id);
-					if (buffered.truncated) writeTruncation();
-					for (const ev of buffered.frames) writeFrame(ev);
-					// The host now knows this tab, so it is no longer exempt from an authoritative list.
-					useAppStore.getState().settleTerminalAttach(workspaceId, tabKey);
-					setDetached(false);
-					setExited(false);
-					setReady(true);
-					// A very short-lived shell can send its addressed exit before the response names its id.
-					// Paint buffered data first, then apply that matching exit exactly as a live subscription would.
-					if (buffered.exit) handleExit(buffered.exit);
-					// Catch up if the grid moved while we were waiting; a no-op when it didn't.
-					applyFit();
-					if (created && serverIdRef.current === id && initialCommandRef.current) {
-						sendTerminalWrite(
-							getTransport().request("terminal.write", {
-								id,
-								data: `${initialCommandRef.current}\r`,
-							}),
-						);
-						// Spend it: `created` is also true when a tab's previous shell exited and this attach spawned
-						// a replacement, so gating on that alone would reopen vim on every revisit.
-						initialCommandRef.current = undefined;
-						useAppStore.getState().consumeTerminalInitialCommand(workspaceId, tabKey);
-					}
+					const finishAttach = (): void => {
+						// Parsing the replay is asynchronous. A takeover or newer attempt can land while it is queued,
+						// so adoption needs the same freshness check at the point the PTY becomes writable.
+						if (disposed || attachGeneration !== startedAt || prebind !== attemptPrebind) {
+							attemptPrebind.stop();
+							return;
+						}
+						sizeSync.acknowledge(spawnedAt);
+						serverIdRef.current = id;
+						const buffered = attemptPrebind.bind(id);
+						if (buffered.truncated) writeTruncation();
+						for (const ev of buffered.frames) writeFrame(ev);
+						// The host now knows this tab, so it is no longer exempt from an authoritative list.
+						useAppStore.getState().settleTerminalAttach(workspaceId, tabKey);
+						setDetached(false);
+						setExited(false);
+						setReady(true);
+						// A very short-lived shell can send its addressed exit before the response names its id.
+						// Paint buffered data first, then apply that matching exit exactly as a live subscription would.
+						if (buffered.exit) handleExit(buffered.exit);
+						// Catch up if the grid moved while we were waiting; a no-op when it didn't.
+						applyFit();
+						if (created && serverIdRef.current === id && initialCommandRef.current) {
+							sendTerminalWrite(
+								getTransport().request("terminal.write", {
+									id,
+									data: `${initialCommandRef.current}\r`,
+								}),
+							);
+							// Spend it: `created` is also true when a tab's previous shell exited and this attach spawned
+							// a replacement, so gating on that alone would reopen vim on every revisit.
+							initialCommandRef.current = undefined;
+							useAppStore.getState().consumeTerminalInitialCommand(workspaceId, tabKey);
+						}
+					};
+					// Repaint before the PTY id becomes writable. Queries in historical output must not be answered
+					// into the live shell; genuinely live frames stay in `attemptPrebind` until this parse completes.
+					if (replay) term.write(replay, finishAttach);
+					else finishAttach();
 				})
 				.catch(() => {
 					if (disposed) return;
