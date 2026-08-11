@@ -22,8 +22,9 @@ interface WorkspaceReadHandlers<T> {
 /**
  * Read something for a workspace and keep it live: on workspace change, on that workspace's fs tick (the
  * host's debounced `workspace.fsChanged` nudge), and on demand through the returned `reload` (a manual
- * Refresh). A null `workspaceId` reads nothing — which is also how a *paused* read is expressed (a collapsed
- * `FileTree` dir), so no tick has to be threaded down as a prop.
+ * Refresh). A null `workspaceId` reads nothing — how any caller expresses a paused read. Visible `FileTree`
+ * directories stay active while collapsed only to resolve compact folder runs; their descendants still do
+ * not mount until expansion, so no tick has to be threaded down as a prop.
  *
  * This is the one place the worktree-scoped panel reads share, so none of them re-implements the guard that
  * makes a switch safe: a response in flight when the caller has moved on must not land in the new

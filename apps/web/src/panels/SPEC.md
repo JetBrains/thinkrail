@@ -103,7 +103,12 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   `Split|Inline`, `List|Tree`) is the shared `ToggleSegment`. The **file-style tree row** (chevron/spacer
   lead, folder/file icon, truncated label, trailing slot; `min-w-0` so a row can shrink when it shares a
   flex line with a trailing control) is the shared **`TreeRow`**, used by both
-  `FileTree` and `ChangesTree` so the two trees stay identical; the **`+N −M` diff-count badge** is the
+  `FileTree` and `ChangesTree` so the two trees stay identical. Both trees **compact a single-directory
+  run into one slash-joined row** (`apps/web/src`): the run continues only while a directory has exactly
+  one child and that child is another directory, and the compact row expands/collapses the deepest
+  directory as one unit. `ChangesTree` evaluates this against the changed-file tree; `FileTree` resolves
+  only visible compact runs through its existing client-side directory reads, so the wire remains a plain
+  immediate-directory listing. The **`+N −M` diff-count badge** is the
   shared **`DiffStatBadge`**, used by the project-rail worktree stats and the Changes tree's per-file /
   per-folder counts. `ChangesTree`'s tree build + `+/−` aggregation + shared status glyphs live in the pure
   **`changesModel.ts`** (unit-tested; no store/transport — `ChangesTree` is presentational, fed `changes` +
@@ -559,10 +564,13 @@ a project picker, the prompt hero, and the reused
   the caller owns *what to do* with the outcome (`onResult` / `onFailure` / `onSwitch`). Centralized because
   each site was otherwise re-implementing the **stale-response guard**: an answer in flight when the caller
   moves on must not land in the new workspace's view (reads are generation-stamped — latest wins, abandoned
-  ones stay silent). A `null` workspaceId reads nothing, which is also how a *paused* read is expressed (a
-  collapsed `FileTree` dir), so no tick has to be threaded down as a prop.
-  Its users — `FileTree` (root + each expanded dir), `ChangesPanel` (`git.status`), `useWorkspaceSpecs`
-  (`spec.graph`) — plus `FilePane`/`DiffPane`, which follow the same tick contract per open tab. Agent edits,
+  ones stay silent). A `null` workspaceId reads nothing, which is also how a component expresses a
+  *paused* read. A visible `FileTree` directory probes while collapsed only as far as needed to identify
+  its compact single-directory run; descendants below the run's deepest directory mount and read only
+  when that compact row is expanded. No tick has to be threaded down as a prop.
+  Its users — `FileTree` (root + each visible directory chain), `ChangesPanel` (`git.status`),
+  `useWorkspaceSpecs` (`spec.graph`) — plus `FilePane`/`DiffPane`, which follow the same tick contract per
+  open tab. Agent edits,
   terminal commands, and Finder changes all land without a manual step.
   Three shapes keep its effect's dependency list **honest** (no exhaustive-deps exemption anywhere in it):
   the fs tick is consumed as an **event** (`useAppStore.subscribe`) rather than selected into the component —
@@ -585,8 +593,11 @@ a project picker, the prompt hero, and the reused
   caller's `read` closure, which the hook re-captures every render, so the value a re-read uses is by
   construction the one the key names). It is threaded to `read` (and `reload`) as an argument for a caller that
   would rather branch on it than close over the parameter; ignoring it — as `ChangesPanel` does, its `scope`
-  being an object the key merely names — is expected. Refetches **preserve view state**: `FileTree` re-reads the root + every
-  expanded dir (rows keyed by path; vanished dirs drop out via their parent), `ChangesPanel` re-reads
+  being an object the key merely names — is expected. Refetches **preserve view state**: `FileTree` re-reads
+  the root + the directory probes backing each visible compact row and expanded branch. Expansion lives
+  above individual rows and is keyed by every directory path a compact row represents, so shortening or
+  lengthening a chain cannot hide descendants that were visible before the refetch; vanished dirs drop out
+  via their parent. `ChangesPanel` re-reads
   `git.status` (list-only — the diff renders in the center tab, not under the list), `SpecsPanel`
   refetches without remounting (expansion survives), and `FilePane`/`DiffPane` re-read an
   open tab's content when the workspace ticked past the tab's loaded tick (live while visible;
@@ -756,9 +767,10 @@ a project picker, the prompt hero, and the reused
 - **Changes: List | Tree.** A header toggle (`store.changesView`, app-wide — persisted in the store, not
   per workspace, so it survives workspace switches) switches the flat **List** and a folder **Tree**
   (`ChangesTree`), both built from the same `git.status` list. The Tree is styled exactly like the
-  All-files tree (shared `TreeRow`); folders **default expanded** (change sets are small); **no single-child
-  folder compaction** — one row per segment, matching `FileTree`. **Status is shown on the file name, not
-  a letter glyph** (the git-decoration convention — `changesModel.statusNameClass`, shared by both views):
+  All-files tree (shared `TreeRow`); folders **default expanded** (change sets are small), and a
+  single-directory run is one slash-joined compact row (based on the changed-file tree, regardless of
+  unchanged siblings on disk), matching `FileTree`. **Status is shown on the file name, not a letter glyph**
+  (the git-decoration convention — `changesModel.statusNameClass`, shared by both views):
   added / untracked → green, deleted → red + strikethrough, renamed → blue, modified → plain. Each file
   and folder also shows a `+N −M` badge (shared `DiffStatBadge`) — per-file counts come from `git.status`
   (`GitFileChange.added/removed`, from `git diff --numstat`; untracked files count their whole content as

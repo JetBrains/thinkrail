@@ -106,7 +106,8 @@ export function RightPanel() {
 					</div>
 				) : tab === "files" ? (
 					<div className="p-xs">
-						<FileTree workspaceId={activeWorkspaceId} />
+						{/* Expansion paths belong to one workspace; remount before another can reuse them. */}
+						<FileTree key={activeWorkspaceId} workspaceId={activeWorkspaceId} />
 					</div>
 				) : tab === "review" ? (
 					<ReviewPanel workspaceId={activeWorkspaceId} failed={reviewFailed} />

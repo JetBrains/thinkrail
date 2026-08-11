@@ -161,23 +161,31 @@ test("Changes has a List|Tree toggle; Tree groups files into folders with +/- co
 	await openFixtureProject(page);
 	await createWorkspaceViaDialog(page);
 
-	// A changed file inside a subfolder, so the tree has a folder row to group under.
+	// A changed file inside a single-directory run, so the tree compacts the folder chain into one row.
 	const worktree = join(E2E_DATA_DIR, "worktrees", "sample-project", "workspace-1");
-	mkdirSync(join(worktree, "docs"), { recursive: true });
-	writeFileSync(join(worktree, "docs", "notes.md"), "one\ntwo\nthree\n");
+	mkdirSync(join(worktree, "docs", "guides"), { recursive: true });
+	writeFileSync(join(worktree, "docs", "guides", "notes.md"), "one\ntwo\nthree\n");
 
 	await page.getByTestId("tab-changes").click();
 	// List is the default view.
 	await expect(page.getByTestId("changes-toggle-list")).toHaveAttribute("data-active", "true");
-	await expect(page.getByTestId("change-item").filter({ hasText: "docs/notes.md" })).toBeVisible();
+	await expect(
+		page.getByTestId("change-item").filter({ hasText: "docs/guides/notes.md" }),
+	).toBeVisible();
 
 	// Switch to the folder tree.
 	await page.getByTestId("changes-toggle-tree").click();
 	await expect(page.getByTestId("changes-toggle-tree")).toHaveAttribute("data-active", "true");
 
-	// A `docs` folder row (default-expanded) and the file node beneath it, with a +count badge.
-	await expect(page.getByTestId("change-tree-folder").filter({ hasText: "docs" })).toBeVisible();
+	// One default-expanded `docs/guides` row represents the whole run; no row is spent per segment.
+	const compactFolder = page.getByTestId("change-tree-folder");
+	await expect(compactFolder).toHaveCount(1);
+	await expect(compactFolder).toContainText("docs/guides");
 	const fileNode = page.getByTestId("change-node").filter({ hasText: "notes.md" });
+	await expect(fileNode).toBeVisible();
+	await compactFolder.click();
+	await expect(fileNode).toBeHidden();
+	await compactFolder.click();
 	await expect(fileNode).toBeVisible();
 	await expect(fileNode).toHaveAttribute("data-status", "untracked");
 	await expect(fileNode).toContainText("+3");

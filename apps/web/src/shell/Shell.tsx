@@ -2,7 +2,6 @@ import { ChevronRight, GitBranch, Settings } from "lucide-react";
 import { useEffect } from "react";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "../components/ui/resizable";
-import { PRODUCT_NAME } from "../constants/branding";
 import { CenterTabs } from "../panels/CenterTabs";
 import { ProjectTree } from "../panels/ProjectTree";
 import { RightPanel } from "../panels/RightPanel";
@@ -18,6 +17,7 @@ import {
 } from "../store";
 import { applyTheme, writeThemeHint } from "../themes";
 import type { ConnectionStatus } from "../transport";
+import { BrandLogo } from "./BrandLogo";
 import { useGlobalHotkeys } from "./useGlobalHotkeys";
 
 const STATUS_LABEL: Record<ConnectionStatus, string> = {
@@ -51,7 +51,7 @@ export function Shell() {
 		<div data-testid="shell" className="grid h-full grid-rows-[auto_1fr]">
 			<header className="flex items-center justify-between border-b border-border-default bg-container-header-bg px-lg py-sm">
 				<div className="flex min-w-0 items-center gap-md">
-					<span className="tr-brand-wordmark shrink-0 text-primary">{PRODUCT_NAME}</span>
+					<BrandLogo />
 					{contextProject ? (
 						<div
 							data-testid="scope-context"
@@ -94,10 +94,14 @@ export function Shell() {
 					<span
 						data-testid="connection-status"
 						data-status={status}
+						role="status"
+						aria-label={STATUS_LABEL[status]}
 						className="inline-flex items-center gap-sm tr-text-ui text-text-muted"
 					>
-						<span className={`size-2 rounded-full ${STATUS_DOT[status]}`} />
-						{STATUS_LABEL[status]}
+						<span aria-hidden="true" className={`size-2 rounded-full ${STATUS_DOT[status]}`} />
+						<span aria-hidden="true" className="hidden sm:inline">
+							{STATUS_LABEL[status]}
+						</span>
 					</span>
 					<button
 						type="button"
