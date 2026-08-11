@@ -5,6 +5,7 @@ import { ChangesPanel } from "./ChangesPanel";
 import { FileTree } from "./FileTree";
 import { ReviewPanel, selectActiveReviewedPath } from "./ReviewPanel";
 import { SpecsPanel } from "./SpecsPanel";
+import { workspaceTabStateClass } from "./tabState";
 import { useWorkspaceReview } from "./useWorkspaceReview";
 import { useWorkspaceSpecs } from "./useWorkspaceSpecs";
 
@@ -53,32 +54,38 @@ export function RightPanel() {
 		<div className="flex h-full min-h-0 flex-col">
 			<div
 				data-testid="right-tab-strip"
-				className="flex h-panel-header-row shrink-0 items-center gap-md border-b border-border-default px-sm"
+				className="flex h-panel-header-row shrink-0 items-center border-b border-border-default px-sm"
 			>
-				<TabButton testid="tab-specs" active={tab === "specs"} onClick={() => setTab("specs")}>
-					Specs
-				</TabButton>
-				<TabButton testid="tab-files" active={tab === "files"} onClick={() => setTab("files")}>
-					All files
-				</TabButton>
-				<TabButton
-					testid="tab-changes"
-					active={tab === "changes"}
-					onClick={() => setTab("changes")}
+				<div
+					role="tablist"
+					aria-label="Workspace panels"
+					className="flex h-full items-stretch gap-xs"
 				>
-					Changes
-				</TabButton>
-				<TabButton testid="tab-review" active={tab === "review"} onClick={() => setTab("review")}>
-					Review
-					{draftCount > 0 && (
-						<span
-							data-testid="review-pending-badge"
-							className="ml-[3px] inline-flex min-w-4 items-center justify-center rounded-full bg-primary px-[3px] tr-text-label-pill text-text-on-primary"
-						>
-							{draftCount}
-						</span>
-					)}
-				</TabButton>
+					<TabButton testid="tab-specs" active={tab === "specs"} onClick={() => setTab("specs")}>
+						Specs
+					</TabButton>
+					<TabButton testid="tab-files" active={tab === "files"} onClick={() => setTab("files")}>
+						All files
+					</TabButton>
+					<TabButton
+						testid="tab-changes"
+						active={tab === "changes"}
+						onClick={() => setTab("changes")}
+					>
+						Changes
+					</TabButton>
+					<TabButton testid="tab-review" active={tab === "review"} onClick={() => setTab("review")}>
+						Review
+						{draftCount > 0 && (
+							<span
+								data-testid="review-pending-badge"
+								className="ml-[3px] inline-flex min-w-4 items-center justify-center rounded-full bg-primary px-[3px] tr-text-label-pill text-text-on-primary"
+							>
+								{draftCount}
+							</span>
+						)}
+					</TabButton>
+				</div>
 				{tab === "specs" && activeWorkspaceId && (
 					<button
 						type="button"
@@ -131,8 +138,10 @@ function TabButton({
 			type="button"
 			data-testid={testid}
 			data-active={active}
+			role="tab"
+			aria-selected={active}
 			onClick={onClick}
-			className={`tr-text-eyebrow ${active ? "text-text-default" : "text-text-muted hover:text-text-muted"}`}
+			className={`flex h-full items-center px-xs tr-text-eyebrow ${workspaceTabStateClass(active)}`}
 		>
 			{children}
 		</button>

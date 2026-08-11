@@ -38,6 +38,7 @@ import { DiffPane } from "./DiffPane";
 import { FilePane } from "./FilePane";
 import { openChatInTab } from "./openChat";
 import { type ReviewFlag, reviewFlags } from "./reviewModel";
+import { workspaceTabStateClass } from "./tabState";
 
 // The chat view is heavy — load it only when its tab is first shown (protects first paint). File panes
 // lazy-load their own Monaco / markdown chunks inside `FilePane`.
@@ -378,7 +379,11 @@ export function CenterTabs() {
 				data-testid="center-tab-strip"
 				className="flex h-panel-header-row shrink-0 items-stretch border-border-muted border-b bg-container-workspace-bg"
 			>
-				<div role="tablist" className="flex flex-1 items-stretch overflow-x-auto overflow-y-hidden">
+				<div
+					role="tablist"
+					aria-label="Open tabs"
+					className="flex flex-1 items-stretch overflow-x-auto overflow-y-hidden"
+				>
 					{openTabs.map((tab) => {
 						const isActive = tab.id === activeTabId;
 						const isPreview = tab.id === previewTabId;
@@ -389,14 +394,12 @@ export function CenterTabs() {
 								data-active={isActive}
 								data-preview={isPreview}
 								data-kind={tab.kind}
-								className={`group flex items-center gap-xs border-border-default border-r pr-xs pl-sm tr-text-ui ${
-									isActive
-										? "bg-container-workspace-bg text-text-default"
-										: "text-text-muted hover:bg-control-bg-hovered"
-								}`}
+								className={`group flex items-center gap-xs border-border-default border-r pr-xs pl-sm tr-text-ui ${workspaceTabStateClass(isActive)}`}
 							>
 								<button
 									type="button"
+									role="tab"
+									aria-selected={isActive}
 									className="flex max-w-[180px] items-center gap-xs py-xs"
 									title={isPreview ? "Preview — double-click to keep" : undefined}
 									// A click on the tab that is BOTH active and in preview keeps it: the one promote
