@@ -165,8 +165,9 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   primitive** (filter/menu/caret + Up/Down, Enter/Tab, Escape), reused by `panels/NewWorkspaceDialog` so
   the two inputs cannot drift; `HistoryOverlay` (the history-recall/search overlay `Composer` opens —
   presentational, driven entirely by `useHistorySearch.ts`'s state + callbacks, plus **Save as template**
-  and one-click **Trash chat** actions on mapped hits (`ChatView` owns `session.delete` + the atomic store
-  removal; success closes the overlay, failure toasts), and a
+  and one-click **Trash chat** actions on mapped hits (`ChatView` owns `session.delete` + the idempotent
+  store deletion fold; success closes the overlay, failure toasts; `session.deleted` also drives that fold
+  in every connected client), and a
   **zoomed-stage preview pane** + **scope picker** — see the next bullet),
   `ModelSelector` + `ThinkingSelector` (also shared with `NewWorkspaceDialog`;
   optional `container` prop portals their popovers into a host Dialog; `ModelSelector` takes

@@ -33,12 +33,14 @@ The single WebSocket client to the host, and its app-wide singleton.
   from the WS `url` — for building host HTTP URLs like the `/files/<workspaceId>/<path>` worktree-file
   endpoint the markdown viewer points relative `<img>`s at, targeting the same host the transport dials); `wireTransport.ts` (`initTransport`/
   `getTransport` singleton; routes `server.welcome`, **`project.updated`**, `pi.event`, `pi.extensionUi`,
-  **the `workspace.created`/`updated`/`removed` lifecycle trio, and `workspace.fsChanged`** into the store —
+  **`session.deleted`**, **the `workspace.created`/`updated`/`removed` lifecycle trio, and
+  `workspace.fsChanged`** into the store —
   welcome's open + recent project views via `installProjectSnapshot`, project snapshots via
   `applyProjectUpdated`, `pi.event` via `handlePiEvent(event, sessionId)`, `pi.extensionUi` via `applyExtUi(request)`,
   `workspace.created` via `addWorkspace(workspace)`, `workspace.updated` via `updateWorkspace(workspace)`,
-  `workspace.removed` via `applyWorkspaceRemoved(projectId, id)`, `workspace.fsChanged` via
-  `noteFsChanged(payload)`, and **`settings.changed`** (+ the `config` field in `server.welcome`) via
+  `workspace.removed` via `applyWorkspaceRemoved(projectId, id)`, `session.deleted` via the idempotent
+  `deleteChat(workspaceId, sessionId)` tombstone fold, `workspace.fsChanged` via `noteFsChanged(payload)`,
+  and **`settings.changed`** (+ the `config` field in `server.welcome`) via
   `applyConfig(config)` — the server-synced app config (theme, …), applied on connect + on every broadcast
   so clients converge; all subscriptions happen once at init, never in component effects);
   `errorText.ts` (**`errorText(err, fallback?)`** — normalizes a rejected `request` (the host's error
@@ -56,7 +58,8 @@ The single WebSocket client to the host, and its app-wide singleton.
   wrappers, `errorText`, `RequestError`, `wsErrorCode`, `ConnectionStatus`, `TransportOptions`.
 - **Allowed deps:** `contracts` (method maps, `WS_CHANNELS`, `Project` for welcome + `project.updated`, `SessionEventPayload`
   for `pi.event`, `ExtUiRequest` for `pi.extensionUi`, `Workspace` for `workspace.created`/`updated`,
-  `WorkspaceRemoved` for `workspace.removed`, `WorkspaceFsChangedPayload` for `workspace.fsChanged`,
+  `WorkspaceRemoved` for `workspace.removed`, `SessionDeletedPayload` for `session.deleted`,
+  `WorkspaceFsChangedPayload` for `workspace.fsChanged`,
   `AppConfig` for `server.welcome`'s config + `settings.changed`); `store`
   (welcome + event routing — a runtime edge owned by the parent graph); the browser `WebSocket`.
 - **Forbidden:** `server`/`shared`/any `pi` package; importing `panels`/`shell`.

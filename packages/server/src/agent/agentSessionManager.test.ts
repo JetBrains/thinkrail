@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, jest, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -14,6 +14,7 @@ import {
 	buildSessionSettings,
 	clampThinkingForModel,
 	createSession,
+	deleteSession,
 	disposeAllSessions,
 	ensureSessionAttached,
 	followUpSession,
@@ -570,6 +571,35 @@ test("disk-reopen: a disposed session is re-listed from disk and re-opened with 
 			(await listSessions("ws-disk", cwd)).filter((x) => x.sessionId === s.sessionId),
 		).toHaveLength(1);
 		removeSession(s.sessionId);
+	} finally {
+		setSessionManagerFactory(() => SessionManager.inMemory());
+	}
+});
+
+test("deleteSession tombstones its id so a stale transcript cannot reattach in this host", async () => {
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	try {
+		fauxA.setResponses([fauxAssistantMessage("DELETE_ME")]);
+		const cwd = tmpCwd("trpi-delete-");
+		const session = await createSession({
+			cwd,
+			workspaceId: "ws-delete",
+			model: toWireModel(fauxA.getModel()),
+		});
+		await promptSession(session.sessionId, "persist before deletion");
+		const info = (await SessionManager.list(cwd)).find((item) => item.id === session.sessionId);
+		if (!info) throw new Error("expected the session transcript to exist");
+		const staleTranscript = readFileSync(info.path);
+
+		await deleteSession(session.sessionId, "ws-delete", cwd);
+		expect(hasSession(session.sessionId)).toBe(false);
+
+		// Model a disk-open that began before deletion: its stale path/data must not register after the delete.
+		writeFileSync(info.path, staleTranscript);
+		await expect(getSessionMessages(session.sessionId, "ws-delete", cwd)).rejects.toThrow(
+			`Unknown session: ${session.sessionId}`,
+		);
+		rmSync(info.path, { force: true });
 	} finally {
 		setSessionManagerFactory(() => SessionManager.inMemory());
 	}

@@ -205,7 +205,9 @@ export interface TerminalTabsPush {
 // detectable.
 // v34: `session.delete` — remove a chat for good (dispose if live, then move its transcript to the OS
 // trash), triggered from the history / closed-chats list.
-export const PROTOCOL_VERSION = 34;
+// v35: `session.deleted` broadcasts permanent deletion so every client converges and stale hydration can
+// no longer restore the removed chat.
+export const PROTOCOL_VERSION = 35;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a
@@ -232,6 +234,12 @@ export interface ServerWelcome {
 export interface WorkspaceRemoved {
 	projectId: string;
 	id: string;
+}
+
+/** A permanent chat deletion, broadcast so every client's projection drops the session. */
+export interface SessionDeletedPayload {
+	workspaceId: string;
+	sessionId: string;
 }
 
 /** Request/response methods. `session.*` drives the pi engine. */
@@ -389,6 +397,9 @@ export const WS_CHANNELS = {
 	projectUpdated: "project.updated",
 	piEvent: "pi.event",
 	piExtensionUi: "pi.extensionUi",
+	// Permanent chat deletion is shared domain state. This event carries the owning workspace + session id;
+	// clients retain a tombstone so an older session.list/getMessages response cannot resurrect the chat.
+	sessionDeleted: "session.deleted",
 	// In-app login flow updates (a `LoginPush` per frame), keyed by loginId. Session-less — a login runs on
 	// the Welcome screen before any session exists, so this is the sibling of pi.extensionUi, not scoped to one.
 	providerLogin: "provider.login",

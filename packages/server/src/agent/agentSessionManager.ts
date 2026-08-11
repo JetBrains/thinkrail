@@ -15,6 +15,7 @@ import type {
 	Model,
 	PiEvent,
 	RefreshedModels,
+	SessionDeletedPayload,
 	SessionEventPayload,
 	SessionStats,
 	SessionSummary,
@@ -46,6 +47,13 @@ interface Entry {
 }
 
 const sessions = new Map<string, Entry>();
+// Permanent for this host lifetime. A process restart naturally clears it; by then the trashed transcript
+// is absent, or the user deliberately restored it from the OS trash.
+const deletedSessions = new Map<string, string>();
+
+function isSessionDeleted(sessionId: string, workspaceId: string): boolean {
+	return deletedSessions.get(sessionId) === workspaceId;
+}
 
 // `SessionEventPayload` is a wire type — it lives in `@thinkrail/contracts`; re-exported so the
 // `../agent` barrel keeps exposing it.
@@ -54,6 +62,11 @@ export type { SessionEventPayload };
 let publish: (payload: SessionEventPayload) => void = () => {};
 export function setSessionPublisher(fn: (payload: SessionEventPayload) => void): void {
 	publish = fn;
+}
+
+let publishDeleted: (payload: SessionDeletedPayload) => void = () => {};
+export function setSessionDeletedPublisher(fn: (payload: SessionDeletedPayload) => void): void {
+	publishDeleted = fn;
 }
 
 // Per-session persistence. Overridable so tests can use `SessionManager.inMemory()` (no disk).
@@ -224,6 +237,14 @@ async function registerSession(
 		uiContext: createWebUiContext(sessionId),
 		onError: (error) => notifyExtUi(sessionId, `Extension error: ${error.error}`, "error"),
 	});
+	// A delete can land while disk re-open is awaiting extension binding. Never register that stale open
+	// behind the deletion; otherwise the trashed transcript returns as a live host session.
+	if (isSessionDeleted(sessionId, workspaceId)) {
+		cancelExtUiForSession(sessionId);
+		unsubscribe();
+		session.dispose();
+		throw new Error(`Unknown session: ${sessionId}`);
+	}
 	sessions.set(sessionId, { session, unsubscribe, workspaceId, lastSettlement: undefined });
 	return {
 		sessionId,
@@ -277,7 +298,7 @@ export async function listSessions(workspaceId: string, cwd: string): Promise<Se
 	const live: SessionSummary[] = [];
 	const liveIds = new Set<string>();
 	for (const [sessionId, entry] of sessions) {
-		if (entry.workspaceId !== workspaceId) continue;
+		if (entry.workspaceId !== workspaceId || isSessionDeleted(sessionId, workspaceId)) continue;
 		live.push(summaryOf(sessionId, entry));
 		liveIds.add(sessionId);
 	}
@@ -287,7 +308,10 @@ export async function listSessions(workspaceId: string, cwd: string): Promise<Se
 		// `list(cwd)` reads one encoded-cwd dir, but pi's encoding (`[/\:]`→`-`) can map distinct cwds to the
 		// same dir, so match on the session's true recorded `cwd` to disambiguate; live ones are already above.
 		disk = infos
-			.filter((info) => info.cwd === cwd && !liveIds.has(info.id))
+			.filter(
+				(info) =>
+					info.cwd === cwd && !liveIds.has(info.id) && !isSessionDeleted(info.id, workspaceId),
+			)
 			.map((info) => ({
 				sessionId: info.id,
 				workspaceId,
@@ -313,6 +337,8 @@ const attaching = new Map<string, Promise<void>>();
 
 /** Re-open a persisted session from disk into the manager (restart survival), keyed by its stable id. */
 function attachDiskSession(sessionId: string, workspaceId: string, cwd: string): Promise<void> {
+	if (isSessionDeleted(sessionId, workspaceId))
+		return Promise.reject(new Error(`Unknown session: ${sessionId}`));
 	if (sessions.has(sessionId)) return Promise.resolve();
 	let pending = attaching.get(sessionId);
 	if (!pending) {
@@ -325,6 +351,7 @@ function attachDiskSession(sessionId: string, workspaceId: string, cwd: string):
 }
 
 async function openDiskSession(sessionId: string, workspaceId: string, cwd: string): Promise<void> {
+	if (isSessionDeleted(sessionId, workspaceId)) throw new Error(`Unknown session: ${sessionId}`);
 	const info = (await SessionManager.list(cwd)).find((i) => i.id === sessionId && i.cwd === cwd);
 	if (!info) throw new Error(`Unknown session: ${sessionId}`);
 	if (sessions.has(sessionId)) return; // attached while we listed
@@ -366,6 +393,7 @@ export async function ensureSessionAttached(
 	workspaceId: string,
 	cwd: string,
 ): Promise<boolean> {
+	if (isSessionDeleted(sessionId, workspaceId)) return false;
 	// Scope to the requested workspace (like `getSessionMessages`): a live session registered under a
 	// different workspace must not be promptable through this one — a caller could otherwise route a
 	// review package (and its source fragments) into an unrelated chat and pin comments to it.
@@ -393,11 +421,13 @@ export async function getSessionMessages(
 	workspaceId: string,
 	cwd: string,
 ): Promise<{ summary: SessionSummary; messages: TranscriptMessage[] }> {
+	if (isSessionDeleted(sessionId, workspaceId)) throw new Error(`Unknown session: ${sessionId}`);
 	let entry = sessions.get(sessionId);
 	// Scope the read to the requested workspace — a client can't pull a session from a different one.
 	if (entry && entry.workspaceId !== workspaceId) throw new Error(`Unknown session: ${sessionId}`);
 	if (!entry) {
 		await attachDiskSession(sessionId, workspaceId, cwd);
+		if (isSessionDeleted(sessionId, workspaceId)) throw new Error(`Unknown session: ${sessionId}`);
 		entry = sessions.get(sessionId);
 		if (!entry) throw new Error(`Unknown session: ${sessionId}`);
 	}
@@ -637,6 +667,7 @@ export function disposeAllSessions(): void {
 		entry.session.dispose();
 	}
 	sessions.clear();
+	deletedSessions.clear();
 }
 
 /**
@@ -705,16 +736,29 @@ export async function deleteSession(
 	workspaceId: string,
 	cwd: string,
 ): Promise<void> {
-	const entry = sessions.get(sessionId);
-	if (entry?.workspaceId === workspaceId) {
-		if (entry.session.isStreaming) await entry.session.abort().catch(() => {});
-		removeSession(sessionId);
-	}
-	let path: string | undefined;
+	// Win before any await: a disk re-open already in flight will see this before it can register, and a
+	// later one is rejected at its entry point.
+	deletedSessions.set(sessionId, workspaceId);
 	try {
-		path = (await SessionManager.list(cwd)).find((i) => i.id === sessionId && i.cwd === cwd)?.path;
-	} catch {
-		return; // no sessions dir for this cwd — nothing on disk to trash
+		await attaching.get(sessionId)?.catch(() => {});
+		const entry = sessions.get(sessionId);
+		if (entry?.workspaceId === workspaceId) {
+			if (entry.session.isStreaming) await entry.session.abort().catch(() => {});
+			removeSession(sessionId);
+		}
+		let path: string | undefined;
+		try {
+			path = (await SessionManager.list(cwd)).find(
+				(i) => i.id === sessionId && i.cwd === cwd,
+			)?.path;
+		} catch {
+			// No sessions dir for this cwd — the idempotent domain deletion still converges to clients.
+		}
+		if (path) trashFile(path);
+	} catch (error) {
+		// A failed disk mutation did not complete the domain delete; allow a retry/re-open in this host.
+		if (isSessionDeleted(sessionId, workspaceId)) deletedSessions.delete(sessionId);
+		throw error;
 	}
-	if (path) trashFile(path);
+	publishDeleted({ workspaceId, sessionId });
 }

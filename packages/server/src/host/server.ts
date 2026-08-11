@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { join, normalize } from "node:path";
 import type {
 	ServerWelcome,
+	SessionDeletedPayload,
 	TerminalTabsPush,
 	WorkspaceFsChangedPayload,
 } from "@thinkrail/contracts";
@@ -13,6 +14,7 @@ import {
 	isProjectSkillPath,
 	setExtUiPublisher,
 	setReviewCommentHandler,
+	setSessionDeletedPublisher,
 	setSessionPublisher,
 	setSkillAdmissionResolver,
 } from "../agent";
@@ -198,6 +200,7 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 				// listens on.
 				ws.subscribe(WS_CHANNELS.piEvent);
 				ws.subscribe(WS_CHANNELS.piExtensionUi);
+				ws.subscribe(WS_CHANNELS.sessionDeleted);
 				ws.subscribe(WS_CHANNELS.providerLogin);
 				ws.subscribe(WS_CHANNELS.projectUpdated);
 				ws.subscribe(WS_CHANNELS.terminalTabs);
@@ -462,6 +465,15 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 			JSON.stringify({ channel: WS_CHANNELS.settingsChanged, data: config }),
 		);
 		setAnalyticsSending(config.analyticsEnabled);
+	});
+
+	// Permanent session deletion is shared domain state: every connected client drops the chat and records
+	// a tombstone before any older hydration response can land.
+	setSessionDeletedPublisher((payload: SessionDeletedPayload) => {
+		server.publish(
+			WS_CHANNELS.sessionDeleted,
+			JSON.stringify({ channel: WS_CHANNELS.sessionDeleted, data: payload }),
+		);
 	});
 
 	// Stream each in-process AgentSession's events to subscribed clients over the pi.event channel, and

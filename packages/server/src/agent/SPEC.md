@@ -130,9 +130,10 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     the worktree `cwd` — pi's `SessionManager` is append-only, so purge = `list(cwd)` then `rm` the files
     whose recorded `cwd` matches, never `rm -rf` the encoded dir since pi's cwd→dir encoding can alias
     distinct cwds; `cwd` omitted on a double-archive skips only the disk purge);
-    **`deleteSession(sessionId, workspaceId, cwd)`** (dispose it if live in this workspace, then move its
-    one transcript to the OS trash via `trashFile`; only a matching recorded `cwd` is touched);
-    `setSessionPublisher` + `setSessionManagerFactory` seams.
+    **`deleteSession(sessionId, workspaceId, cwd)`** (mark it deleted before any await so an in-flight disk
+    attach cannot register afterward; dispose it if live in this workspace, move its one matching-cwd
+    transcript to the OS trash via `trashFile`, then publish `SessionDeletedPayload` for client convergence);
+    `setSessionPublisher` + `setSessionDeletedPublisher` + `setSessionManagerFactory` seams.
   - `oneshot` — one-shot LLM completions **without** an `AgentSession` (no tools/extensions/disk):
     `completeOnce(request)` picks a model from the shared runtime's authenticated set and dispatches a
     single `runtime.completeSimple()` — pi's canonical provider-agnostic request path, which resolves

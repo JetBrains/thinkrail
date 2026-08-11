@@ -88,6 +88,7 @@ beforeEach(() => {
 		previewTabByWorkspace: {},
 		navTickByWorkspace: {},
 		closedChatsByWorkspace: {},
+		deletedSessionsByWorkspace: {},
 		fsChangesByWorkspace: {},
 		skillChangeTickByWorkspace: {},
 		skillsSyncedTickBySession: {},
@@ -638,6 +639,63 @@ test("deleteChat removes history/runtime state and falls back when deleting the 
 	expect(st.activeTabByWorkspace.ws1).toBe("ws1:b");
 	expect(st.navTickByWorkspace.ws1).toBe(beforeNav + 1);
 	expect(st.sessions.c).toBeUndefined();
+});
+
+test("a deletion that beats getMessages prevents its late hydrate from restoring the chat", () => {
+	const store = useAppStore.getState();
+	const summary: SessionSummary = {
+		sessionId: "late",
+		workspaceId: "ws1",
+		title: "Deleted chat",
+		model: null,
+		thinkingLevel: "medium",
+		isStreaming: false,
+		messageCount: 1,
+		updatedAt: 1,
+		live: true,
+	};
+
+	store.deleteChat("ws1", "late");
+	store.hydrateSession(summary, {
+		turns: [],
+		toolResults: {},
+		askAnswers: {},
+		turnIdByMessageIndex: [],
+	});
+
+	const state = useAppStore.getState();
+	expect(state.sessions.late).toBeUndefined();
+	expect(state.tabsByWorkspace.ws1 ?? []).toHaveLength(0);
+});
+
+test("a page-lifetime deletion tombstone survives workspace cleanup until late hydration settles", () => {
+	const store = useAppStore.getState();
+	const summary: SessionSummary = {
+		sessionId: "late",
+		workspaceId: "ws1",
+		title: "Deleted chat",
+		model: null,
+		thinkingLevel: "medium",
+		isStreaming: false,
+		messageCount: 1,
+		updatedAt: 1,
+		live: true,
+	};
+
+	store.deleteChat("ws1", "late");
+	store.clearWorkspaceTabs("ws1");
+	store.hydrateSession(summary, { turns: [], toolResults: {}, askAnswers: {} });
+
+	expect(useAppStore.getState().sessions.late).toBeUndefined();
+});
+
+test("a deletion that beats session.list prevents its late history row from returning", () => {
+	const store = useAppStore.getState();
+
+	store.deleteChat("ws1", "late");
+	store.noteClosedChats("ws1", [{ sessionId: "late", title: "Deleted chat", closedAt: 1 }]);
+
+	expect(useAppStore.getState().closedChatsByWorkspace.ws1 ?? []).toHaveLength(0);
 });
 
 test("hydrateSession rebuilds a runtime + tab on connect, and never clobbers a live one", () => {

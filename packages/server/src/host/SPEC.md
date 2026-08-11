@@ -203,6 +203,9 @@ channel fan-out, and the process-boot wrapper both launchers share.
   is the **single** place workspace membership changes reach the wire — create/rename/archive all flow
   through it, so every client (including the initiator) converges by reacting, never by per-client optimism.
   The two new channels are `ws.subscribe`d in the WS `open` handler alongside `workspace.updated`.
+- **Session-deletion fan-out:** `createServer` installs the agent module's deletion publisher and
+  broadcasts each workspace-scoped `SessionDeletedPayload` on `session.deleted`; the WS `open` handler
+  subscribes every client so permanent domain deletion converges beyond the initiating page.
 - **Public surface (barrel):** `createServer`, `CreateServerOptions`, `RunningServer`, `bootHost`,
   `BootHostOptions`, `BootedHost`.
 - **Allowed deps:** `contracts` (`PROTOCOL_VERSION`, `WS_CHANNELS`); `shared` (`freePort`, `shellEnv` — for
@@ -214,8 +217,9 @@ channel fan-out, and the process-boot wrapper both launchers share.
 
 - WS commands return values directly; only events + extension-UI + **`project.updated`** (published from
   the `projects` module's injected publisher) + the workspace lifecycle trio
-  (`workspace.created`/`updated`/`removed`, published from the `workspaces` module's injected publisher)
-  use push channels. Every **broadcast** push channel a client should hear must be `ws.subscribe`d in the WS
+  (`workspace.created`/`updated`/`removed`, published from the `workspaces` module's injected publisher) +
+  **`session.deleted`** (published from the agent module's injected publisher) use push channels. Every
+  **broadcast** push channel a client should hear must be `ws.subscribe`d in the WS
   `open` handler — a publish on an unsubscribed topic reaches nobody, silently. Two channels are deliberately
   **not** subscribed and not broadcast: `terminal.data`, `terminal.exit` and `terminal.detached` are sent with
   `ws.send` to the single *attached* client (see [[submodule-server-terminal]]). Adding a terminal-style

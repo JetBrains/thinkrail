@@ -330,7 +330,8 @@ a project picker, the prompt hero, and the reused
   `DocPane`→`MarkdownPreview`; used for the plan-as-markdown snapshot (see the `chat` module). `CenterTabs`
   closing a chat tab routes to `store.closeChatToHistory` (keeps the session alive) and shows a
   **chat-history** dropdown (recently-closed + disk-only chats, shown only when non-empty); each row has
-  a one-click trash action (`session.delete` → `store.deleteChat`, no confirm). On
+  a one-click trash action (`session.delete` → idempotent `store.deleteChat`, no confirm); the
+  `session.deleted` broadcast drives the same fold in every connected client. On
   workspace-activate it **hydrates**: `session.list` → **live** sessions auto-restore as tabs
   (`session.getMessages` → `messagesToRuntime` → `store.hydrateSession`), and so do **disk-only sessions
   carrying unfinished TODOs** (`SessionSummary.openTodos > 0` — work in progress survives a host restart

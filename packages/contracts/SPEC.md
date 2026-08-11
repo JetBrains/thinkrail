@@ -242,7 +242,7 @@ of the host.
   per-skill `decision` + `group` — for a `workspaceId`) / **`project.skills`** (the same, project-scoped, for
   the pre-session manager) / **`session.reloadResources`** (re-scan skills + rebuild the system prompt for one
   running session; rejected while streaming) /
-  `session.*` — `create`/`prompt`/`steer`/`followUp`/`abort`/`dispose`/`setModel`/
+  `session.*` — `create`/`prompt`/`steer`/`followUp`/`abort`/`dispose`/**`delete`**/`setModel`/
   `setThinkingLevel`/`compact`/`getStats`/`getCommands`/`extUiReply`/**`answerQuestion`** (the inline
   `ask_user_question` reply, correlated by tool call id)/**`list`**/**`getMessages`** (the
   read side) / **`settings.update`** (merge + persist a partial `AppConfig`, returns the merged
@@ -272,6 +272,8 @@ of the host.
   (open records) and **`recentProjects`** (all known records, open + closed) / **`project.updated`** — the
   full persisted `Project` snapshot after open/reopen/close, including `closed` membership, so every client
   atomically converges its rail + Recents without optimistic removal / `pi.event` / `pi.extensionUi` /
+  **`session.deleted`** (workspace + session id; a non-replayable domain event broadcast after permanent
+  deletion so every client removes the chat and blocks stale hydration) /
   **`settings.changed`** (the full `AppConfig`, broadcast so every client
   converges) / **`provider.login`** — the session-less in-app login stream (a `LoginPush`
   per frame, keyed by `loginId`; the sibling of `pi.extensionUi`, since a login runs on the Welcome screen

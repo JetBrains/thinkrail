@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, realpathSync, rmSync, utimesSync, writeFileSync 
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import { TodoStore } from "pi-todos/core";
-import { enterDefaultWorkspace, openFixtureProject } from "./fixtures/app";
+import { defaultWorkspaceRow, enterDefaultWorkspace, openFixtureProject } from "./fixtures/app";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { seedWorkspaceSession } from "./fixtures/sessions";
 
@@ -137,6 +137,37 @@ test("a closed chat can be moved to trash from history", async ({ page }) => {
 	await searchRow.getByTestId("history-delete-chat").click();
 	await expect(page.getByTestId("history-overlay")).toHaveCount(0);
 	await expect.poll(() => existsSync(searchDoomed.path)).toBe(false);
+});
+
+test("trashing a chat converges to a second client", async ({ page, context }) => {
+	await openFixtureProject(page);
+
+	const doomed = seedWorkspaceSession(repoCwd(), {
+		name: "shared doomed chat",
+		messages: [{ role: "user", text: "shared doomed transcript", timestamp: BASE_TS }],
+	});
+	setMtime(doomed.path, BASE_TS);
+
+	await enterDefaultWorkspace(page);
+	await expect(page.getByText("shared doomed transcript")).toBeVisible();
+
+	const page2 = await context.newPage();
+	await page2.goto("/");
+	await expect(page2.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+	await page2.getByTestId("project-expand").first().click();
+	await defaultWorkspaceRow(page2).click();
+	await expect(page2.getByText("shared doomed transcript")).toBeVisible();
+
+	const chatTab = page.locator('[data-testid="editor-tab"][data-kind="chat"]');
+	await chatTab.getByTestId("editor-tab-close").click();
+	await page.getByTestId("chat-history").click();
+	const row = page.getByTestId("closed-chat-row").filter({ hasText: "shared doomed chat" });
+	await row.getByTestId("closed-chat-delete").click();
+
+	await expect.poll(() => existsSync(doomed.path)).toBe(false);
+	await expect(page2.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(0);
+	await expect(page2.getByTestId("workspace-ready")).toBeVisible();
+	await page2.close();
 });
 
 test("with no TODOs anywhere, the most recent disk chat opens as the fallback", async ({
