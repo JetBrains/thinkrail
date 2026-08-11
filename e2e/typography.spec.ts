@@ -45,12 +45,8 @@ async function typeOf(locator: import("@playwright/test").Locator): Promise<Type
 	});
 }
 
-test("brand, welcome hero and label pill render the generated brand styles", async ({ page }) => {
+test("welcome hero renders the generated brand style", async ({ page }) => {
 	await openAppFresh(page);
-	const wordmark = await typeOf(page.locator(".tr-brand-wordmark").first());
-	expect(wordmark).toMatchObject({ size: "18px", weight: "800", lineHeight: "22.5px" });
-	expect(wordmark.family).toMatch(INTERFACE_FACE);
-
 	await openFixtureProject(page);
 	expect(await typeOf(page.getByTestId("welcome-title"))).toMatchObject({
 		size: "44px",

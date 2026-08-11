@@ -72,15 +72,6 @@
 
 @layer components {
 /* Semantic text styles — one class per style. Colour stays at the call site. */
-.tr-brand-wordmark {
-	font-family: var(--tr-font-family-brand);
-	font-size: var(--tr-font-size-s18);
-	font-weight: var(--tr-font-weight-brand);
-	line-height: var(--tr-line-height-compact);
-	letter-spacing: var(--tr-letter-spacing-brand);
-	text-transform: none;
-	font-style: normal;
-}
 .tr-brand-hero {
 	font-family: var(--tr-font-family-brand);
 	font-size: var(--tr-font-size-s44);

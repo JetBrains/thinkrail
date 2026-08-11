@@ -57,7 +57,7 @@ Children (left → right):
 
 | Canonical name | Implementation | `data-testid` | Responsibility |
 |---|---|---|---|
-| Wordmark | `<span className="tr-brand-wordmark">` (text = `PRODUCT_NAME`) | — | The ThinkRail brand mark |
+| Logo | `<BrandLogo />` (the supplied full vector artwork) | `brand-logo` | The theme-aware ThinkRail brand mark |
 | Scope Context | inline block in `Shell.tsx` | `scope-context` | Persistent location breadcrumb; two lines when a workspace is active |
 | — Scope Project | inline `<span>` | `scope-project` | Owning project name |
 | — Scope Name | inline `<span>` | `scope-name` | Active workspace display name, or `"Project home"` |

@@ -14,16 +14,19 @@ later, the mobile single-view-with-switcher).
 
 ## Boundary
 
-- **Owns:** `Shell.tsx` — the topbar (wordmark + a compact store-derived **location context** +
-  connection-status pill + a Settings gear that opens the store-driven `panels/SettingsDialog` via
+- **Owns:** `Shell.tsx` — the topbar (the full supplied ThinkRail vector logo, rendered through the
+  semantic `text-primary` colour so it remains legible in every theme; a compact store-derived
+  **location context**; the connection-status pill; and a Settings gear that opens the store-driven
+  `panels/SettingsDialog` via
   `store.openSettings()` — open state lives in the store, not local, so other surfaces (the Welcome
   provider warning) can open it too) over a body that branches on whether a workspace is active. The
   location context makes scope persistent rather than rail-dependent: an **active workspace** renders two
   lines — `project / workspace display name`, then the git `branch · from baseBranch` metadata line
   (proportional `tr-text-metadata text-text-subtle` per [[web-typography]]); a selected
-  project with no active workspace renders `project / Project home`; no project leaves the wordmark alone.
+  project with no active workspace renders `project / Project home`; no project leaves the logo alone.
   It follows the existing workspace lifecycle snapshots, so auto-renames update live. Responsive
-  degradation drops the base, then the project prefix, before it drops active workspace/branch identity.
+  degradation drops the connection label to its still-labelled status dot below `sm`, then drops the
+  base and project prefix before it drops active workspace/branch identity; the full logo stays visible.
   **Active workspace**
   → the resizable 3 columns (projects | center | right-over-terminals). **No active workspace**
   (`activeWorkspaceId == null` — fresh install / after archiving the last one) → the projects rail (kept

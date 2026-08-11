@@ -76,15 +76,6 @@
 	},
 	"textStyles": {
 		"brand": {
-			"wordmark": {
-				"fontFamily": "brand",
-				"fontSize": "s18",
-				"fontWeight": "brand",
-				"lineHeight": "compact",
-				"letterSpacing": "brand",
-				"textTransform": "none",
-				"fontStyle": "normal"
-			},
 			"hero": {
 				"fontFamily": "brand",
 				"fontSize": "s44",
