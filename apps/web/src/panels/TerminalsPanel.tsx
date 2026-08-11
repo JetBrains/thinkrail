@@ -98,11 +98,7 @@ export function TerminalsPanel() {
 		<div data-testid="terminal-panel" className="flex h-full min-h-0 flex-col">
 			<div className="flex h-7 shrink-0 items-center gap-xs border-b border-border-default pr-xs pl-sm">
 				<span className="shrink-0 tr-text-eyebrow text-text-muted">Terminal</span>
-				<div
-					role="tablist"
-					aria-label="Terminals"
-					className="flex h-full min-w-0 flex-1 items-stretch gap-px overflow-x-auto"
-				>
+				<div className="flex h-full min-w-0 flex-1 items-stretch gap-px overflow-x-auto">
 					{tabs.map((tab) => (
 						<TerminalTabButton
 							key={tab.tabKey}
@@ -179,8 +175,6 @@ function TerminalTabButton({
 				type="button"
 				data-testid="terminal-tab"
 				data-active={active}
-				role="tab"
-				aria-selected={active}
 				onClick={onSelect}
 				className="max-w-[120px] truncate py-xs"
 			>

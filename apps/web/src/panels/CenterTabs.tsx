@@ -379,11 +379,7 @@ export function CenterTabs() {
 				data-testid="center-tab-strip"
 				className="flex h-panel-header-row shrink-0 items-stretch border-border-muted border-b bg-container-workspace-bg"
 			>
-				<div
-					role="tablist"
-					aria-label="Open tabs"
-					className="flex flex-1 items-stretch overflow-x-auto overflow-y-hidden"
-				>
+				<div className="flex flex-1 items-stretch overflow-x-auto overflow-y-hidden">
 					{openTabs.map((tab) => {
 						const isActive = tab.id === activeTabId;
 						const isPreview = tab.id === previewTabId;
@@ -398,8 +394,6 @@ export function CenterTabs() {
 							>
 								<button
 									type="button"
-									role="tab"
-									aria-selected={isActive}
 									className="flex max-w-[180px] items-center gap-xs py-xs"
 									title={isPreview ? "Preview — double-click to keep" : undefined}
 									// A click on the tab that is BOTH active and in preview keeps it: the one promote

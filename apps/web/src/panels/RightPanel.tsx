@@ -56,11 +56,7 @@ export function RightPanel() {
 				data-testid="right-tab-strip"
 				className="flex h-panel-header-row shrink-0 items-center border-b border-border-default px-sm"
 			>
-				<div
-					role="tablist"
-					aria-label="Workspace panels"
-					className="flex h-full items-stretch gap-xs"
-				>
+				<div className="flex h-full items-stretch gap-xs">
 					<TabButton testid="tab-specs" active={tab === "specs"} onClick={() => setTab("specs")}>
 						Specs
 					</TabButton>
@@ -138,8 +134,6 @@ function TabButton({
 			type="button"
 			data-testid={testid}
 			data-active={active}
-			role="tab"
-			aria-selected={active}
 			onClick={onClick}
 			className={`flex h-full items-center px-xs tr-text-eyebrow ${workspaceTabStateClass(active)}`}
 		>

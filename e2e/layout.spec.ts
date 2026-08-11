@@ -12,7 +12,7 @@ test("panel header rows align without making the chat toolbar scrollable", async
 	await enterDefaultWorkspace(page);
 	await page.getByTestId("start-chat").click();
 	await expect(page.getByTestId("center-tab-strip")).toBeVisible();
-	const openTabs = page.getByRole("tablist", { name: "Open tabs" });
+	const openTabs = page.getByTestId("center-tab-strip").locator(":scope > div").first();
 	await expect(openTabs).toHaveCSS("overflow-x", "auto");
 	await expect(openTabs).toHaveCSS("overflow-y", "hidden");
 

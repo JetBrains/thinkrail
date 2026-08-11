@@ -373,9 +373,11 @@ a project picker, the prompt hero, and the reused
   ring. The marker is a shape cue, not merely a text-colour change, so selection remains obvious when a
   high-contrast theme makes neighbouring surfaces equal. Compound center/terminal tabs apply the state to
   the wrapper so label + close affordance read as one tab; right-rail labels add only compact horizontal
-  padding, never height. Typography/weight never changes. Every strip exposes `role="tablist"`; its
-  selecting buttons expose `role="tab"` + `aria-selected`, while the existing `data-active` hooks remain
-  the test/automation contract.
+  padding, never height. Typography/weight never changes. The strips deliberately keep native button
+  semantics rather than advertise the ARIA tabs pattern: they do not yet implement roving focus,
+  arrow/Home/End navigation, or `tabpanel` relationships, and the center/terminal strips also carry
+  auxiliary close/new actions. Introduce `tablist` / `tab` / `aria-selected` only as a complete pattern;
+  `data-active` remains the selection and test/automation contract in the meantime.
 - `RightPanel` tabs are **Specs | All files | Changes | Review** (Specs leftmost and the **default** — specs are
   the project's ground truth, so the rail leads with them). The Review tab carries a **pending-draft
   count badge** (store-derived from `reviewsByWorkspace`).

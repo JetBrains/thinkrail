@@ -129,7 +129,7 @@ test("Monaco opens files and re-themes under every discovered manifest", async (
 
 // Break caught: selected tabs regressing to a text-colour-only state in a high-contrast theme. The
 // assertion runs against the built UI and checks the one user-visible contract across all three strips:
-// semantic selected fill + a 2px content-edge marker, with tab semantics exposing the same selection.
+// semantic selected fill + a 2px content-edge marker, while retaining honest native-button semantics.
 test("selected workspace tabs keep their surface and edge marker in high contrast", async ({
 	page,
 }) => {
@@ -150,10 +150,13 @@ test("selected workspace tabs keep their surface and edge marker in high contras
 	await page.getByTestId("terminal-add").click();
 	await expect(page.getByTestId("terminal-tab")).toHaveCount(2);
 
-	for (const name of ["Open tabs", "Workspace panels", "Terminals"]) {
-		await expect(page.getByRole("tablist", { name })).toBeVisible();
+	for (const strip of [
+		page.getByTestId("center-tab-strip"),
+		page.getByTestId("right-tab-strip"),
+		page.getByTestId("terminal-panel"),
+	]) {
+		await expect(strip.locator('[role="tablist"], [role="tab"], [aria-selected]')).toHaveCount(0);
 	}
-	await expect(page.locator('[role="tab"][aria-selected="true"]')).toHaveCount(3);
 
 	const state = await page.evaluate(() => {
 		const center = document.querySelector<HTMLElement>(
