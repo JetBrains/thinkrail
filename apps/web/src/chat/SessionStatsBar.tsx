@@ -43,7 +43,7 @@ export function SessionStatsBar({ stats }: { stats: SessionStats | null }) {
 	return (
 		<div
 			data-testid="session-stats"
-			className="flex min-w-0 flex-wrap items-center justify-end gap-x-xs gap-y-0 text-text-muted tr-text-metadata"
+			className="flex shrink-0 flex-nowrap items-center justify-end gap-x-xs text-text-muted tr-text-metadata"
 			title="Cumulative usage: ↑ input · ↓ output · R cache read · W cache write"
 		>
 			{parts.map((part, index) => (

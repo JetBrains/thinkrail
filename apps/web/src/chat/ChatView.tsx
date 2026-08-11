@@ -601,7 +601,7 @@ export default function ChatView({
 													type="button"
 													data-testid="chat-plan-toggle"
 													data-open={planOpen}
-													className="flex min-w-0 items-center gap-xs text-text-muted tr-text-metadata hover:text-text-default"
+													className="flex min-w-0 max-w-full items-center gap-xs overflow-clip whitespace-nowrap text-text-muted tr-text-metadata hover:text-text-default"
 												>
 													<ChatPlanStripContent
 														plan={plan}

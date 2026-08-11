@@ -185,7 +185,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 				// The toolbar holds the scope selector and the target-branch picker as well as the List|Tree
 				// segments, so it is named for what it is, not for the one control it used to hold.
 				aria-label="Changes scope and view"
-				className="flex h-8 shrink-0 items-center gap-xs border-border-default border-b bg-container-header-bg px-sm"
+				className="flex h-panel-header-row shrink-0 items-center gap-xs overflow-clip border-border-default border-b bg-container-header-bg px-sm"
 			>
 				<div className="mr-auto flex min-w-0 items-center gap-xs">
 					{/* Keyed ON PURPOSE (do not "clean up") by the menu's full identity — workspace **and** target ref:

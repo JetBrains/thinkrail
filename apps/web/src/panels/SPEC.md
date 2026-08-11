@@ -90,8 +90,9 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   screen comes back too. **Only `terminal.close`, from the user closing a tab, kills a PTY** — and it refuses
   a shell with child processes until a `ConfirmDialog` is accepted. Also
   `FileTree`, `SpecsPanel`, `RightPanel`,
-  `ChangesPanel` (the changed files under a header that says **what** is being diffed — the
-  **`ChangesScopeMenu`** scope pill + the shared **`BranchPicker`** target-branch pill — plus the
+  `ChangesPanel` (the changed files under a fixed **28px panel-header row** — shared structural geometry
+  with the center/right tab strips and chat header — that says **what** is being diffed via the
+  **`ChangesScopeMenu`** scope pill + the shared **`BranchPicker`** target-branch pill, plus the
   **List | Tree** toggle (`store.changesView`, app-wide) switching a flat list and a folder
   **`ChangesTree`**; clicking a file in either opens/focuses its **center Monaco diff tab**, and every file
   row carries the shared **`ChangeRowActions`** menu),

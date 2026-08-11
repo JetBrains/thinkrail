@@ -46,7 +46,7 @@
 	--spacing-md: var(--space-md);
 	--spacing-lg: var(--space-lg);
 	--spacing-xl: var(--space-xl);
-	--spacing-panel-tab-strip: var(--panel-tab-strip-height);
+	--spacing-panel-header-row: var(--panel-header-row-height);
 
 	/* A block appearing in place (e.g. the ask-question card's atomic reveal once its args are final). */
 	--animate-reveal: reveal 150ms ease-out;

@@ -180,8 +180,10 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   directly via `thinking_level_changed`. Its rows follow the **live catalog** — `ChatView` resolves the
   session's model through `store`'s `selectCatalogModel` before passing it down, rather than reading the
   session's own snapshot, so a `model.refresh` that changes what a model supports changes the offered
-  levels with it), `SessionStatsBar`, `ChatHeader`
-  (its `left` slot carries the plan strip; its **Skills** button is the presentational **`SkillsButton`**
+  levels with it), `SessionStatsBar`, `ChatHeader` (the fixed, single-line **28px panel-header row** —
+  the same structural geometry as the center/right tab strips and the Changes toolbar; it never scrolls,
+  and constrained widths clip/truncate TODO + status/usage text while preserving the trailing Skills
+  action. Its `left` slot carries the plan strip; its **Skills** button is the presentational **`SkillsButton`**
   primitive — a `BookOpen` pill, badged when a skill dir changed on disk — also shared with
   `NewWorkspaceDialog` so the two triggers cannot drift), `ExtUiDialog`, and **`SkillsDialog`** (the **Skills manager**: a catalog
   grouped by source with **sticky section headers** — the first-party **ThinkRail** and **Pi** groups lead

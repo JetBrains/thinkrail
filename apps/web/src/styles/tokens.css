@@ -27,7 +27,7 @@
 	--space-xl: calc(var(--space-base) * 1.85);
 
 	/* Shared chrome geometry stays independent from typography. */
-	--panel-tab-strip-height: 28px;
+	--panel-header-row-height: 28px;
 }
 
 /*

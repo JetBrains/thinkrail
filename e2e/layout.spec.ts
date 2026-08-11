@@ -7,9 +7,7 @@ async function width(page: import("@playwright/test").Page, testId: string): Pro
 	return box.width;
 }
 
-test("center and right tab strips align and the center strip scrolls only horizontally", async ({
-	page,
-}) => {
+test("panel header rows align without making the chat toolbar scrollable", async ({ page }) => {
 	await openFixtureProject(page);
 	await enterDefaultWorkspace(page);
 	await page.getByTestId("start-chat").click();
@@ -24,6 +22,21 @@ test("center and right tab strips align and the center strip scrolls only horizo
 	expect(center.y).toBe(right.y);
 	expect(center.height).toBe(28);
 	expect(right.height).toBe(center.height);
+
+	await page.getByTestId("tab-changes").click();
+	const chat = page.getByTestId("chat-toolbar");
+	const changes = page.getByTestId("changes-view-toggle");
+	await expect(chat).toHaveCSS("overflow-x", "clip");
+	await expect(chat).toHaveCSS("overflow-y", "clip");
+	await expect(page.getByTestId("open-skills")).toBeVisible();
+
+	const chatBox = await chat.boundingBox();
+	const changesBox = await changes.boundingBox();
+	if (!chatBox || !changesBox) throw new Error("panel toolbar has no bounding box");
+
+	expect(chatBox.y).toBe(changesBox.y);
+	expect(chatBox.height).toBe(28);
+	expect(changesBox.height).toBe(chatBox.height);
 });
 
 test("the left|center divider is draggable and resizes the panels", async ({ page }) => {

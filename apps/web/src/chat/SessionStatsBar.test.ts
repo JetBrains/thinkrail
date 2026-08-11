@@ -53,7 +53,7 @@ describe("SessionStatsBar pi-style formatting", () => {
 		});
 	});
 
-	it("separates fields with middle dots and lets the line wrap only between fields", () => {
+	it("separates fields with middle dots and keeps the compact header line unwrapped", () => {
 		const value = stats({
 			tokens: { input: 12_345, output: 342, cacheRead: 0, cacheWrite: 0, total: 12_687 },
 			cost: 0.125,
@@ -61,7 +61,7 @@ describe("SessionStatsBar pi-style formatting", () => {
 		});
 		const markup = renderToStaticMarkup(SessionStatsBar({ stats: value }));
 		expect(markup.replace(/<[^>]+>/g, "")).toBe("↑12k·↓342·$0.125·▰▰▰▱▱60.0%/200k");
-		expect(markup).toContain("flex-wrap");
+		expect(markup).toContain("flex-nowrap");
 		expect(markup.match(/whitespace-nowrap/g)).toHaveLength(4);
 	});
 });
