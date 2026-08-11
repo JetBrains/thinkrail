@@ -1750,45 +1750,38 @@ html.anim .terminal.armed [data-out] {
 		transform 200ms ease-out;
 	z-index: 1001;
 	box-shadow: 0 8px 24px rgb(0 0 0 / 0.35);
-	max-width: calc(100vw - 32px);
+	/* Width follows the widest child: the nowrap CTA button. The text (which
+	   wraps) is narrower, so the popover sizes to the button, not the sentence. */
+	width: min-content;
+	max-width: min(240px, calc(100vw - 32px));
 }
 
 .mock-tooltip-text {
 	font-size: 15px;
 	line-height: 1.5;
 	color: var(--text);
-	white-space: nowrap;
 }
 
 .mock-tooltip-cta {
 	margin-top: 8px;
 }
 
-/* Secondary outlined button for tooltip CTA */
-.mock-tooltip-cta a {
-	display: inline-flex;
-	align-items: center;
+/* CTA reuses the shared `.btn` label typography/treatment; only sizing is tuned down here. */
+.mock-tooltip-cta .btn {
 	justify-content: center;
-	gap: 9px;
-	padding: 10px 18px;
-	border-radius: 8px;
-	border: 1px solid var(--border2);
-	background: transparent;
-	color: var(--text);
-	font-size: 14px;
-	font-weight: 500;
-	text-decoration: none;
+	gap: 6px;
+	padding: 6px 10px;
+	white-space: nowrap;
 	pointer-events: auto;
 }
 
-.mock-tooltip-cta a:hover {
-	background: var(--hover);
+.mock-tooltip-cta .btn:hover {
 	border-color: var(--muted);
 }
 
 .mock-tooltip-cta .i {
-	width: 16px;
-	height: 16px;
+	width: 14px;
+	height: 14px;
 	fill: currentColor;
 }
 

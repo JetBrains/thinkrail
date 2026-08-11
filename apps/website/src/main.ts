@@ -458,10 +458,10 @@ if (mockElements.length > 0) {
 	text.className = "mock-tooltip-text";
 	tooltip.appendChild(text);
 
-	// CTA button (reuses hero button styling)
+	// CTA button (reuses the site's shared `.btn` label typography; only sizing is overridden in CSS)
 	const cta = document.createElement("div");
 	cta.className = "mock-tooltip-cta";
-	cta.innerHTML = `<a href="https://github.com/JetBrains/thinkrail" target="_blank" rel="noopener noreferrer">
+	cta.innerHTML = `<a class="btn" href="https://github.com/JetBrains/thinkrail" target="_blank" rel="noopener noreferrer">
 		<svg class="i i-fill" aria-hidden="true"><use href="#i-github" /></svg>
 		Star on GitHub
 	</a>`;
