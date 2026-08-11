@@ -74,8 +74,15 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     with a per-session `SessionManager` **and a `buildSessionSettings(cwd)` settings manager** (the user's
     real settings + an in-memory `images.autoResize:false` override — never persisted — so the `read` tool
     sends image files **raw**, bypassing pi's photon/WASM resizer that the single-file binary can't bundle;
-    the web UI downsizes user-attached images itself); a shared `registerSession` forwards each event tagged with its id +
-    `bindExtensions({ mode:'rpc', uiContext })`; `prompt`/`steer`/`followUp` (with images) / `abort` /
+    the web UI downsizes user-attached images itself); a shared `registerSession` forwards each event
+    tagged with its id + `bindExtensions({ mode:'rpc', uiContext })`. The event projection retains the
+    final `agent_end` assistant's reported terminal metadata and attaches it to `agent_settled`, so the
+    wire has one authoritative automatic-work terminal even when compaction/retry happens between those
+    events; it forwards rather than re-derives pi's result. The live entry retains that settlement in
+    `SessionSummary.lastSettlement` for reconnect after Pi removed a failed attempt from its rebuilt
+    context; a new `agent_start` exposes explicit `null` (no current terminal) so an older persisted failure
+    cannot reappear mid-run, while disk sessions remain transcript-authoritative.
+    `prompt`/`steer`/`followUp` (with images) / `abort` /
     — **both `promptSession` and `followUpSession` resolve the delivery mode against the session's
     LIVE `isStreaming`, never the caller's belief about it**: `prompt()` throws mid-turn (so it falls
     back to `steer`), and pi's `followUp()` only *enqueues* into a queue that a run already in flight

@@ -5,7 +5,7 @@
  * completion would time the request out client-side and surface a phantom "request timed out" error over
  * a perfectly healthy turn. An immediate rejection (bad model, missing API key, malformed send) still
  * lands well inside the window; a fault after the ack reaches the client through the event stream
- * (`agent_end` / a message's `stopReason: "error"`), which the chat already renders as an error turn.
+ * (`agent_settled` / its terminal `stopReason: "error"`), which the chat renders as an error turn.
  */
 export const SEND_ACK_MS = 10_000;
 

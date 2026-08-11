@@ -123,7 +123,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
     set dedupes re-fired prompt-commits. This is why a long first turn no longer leaves the workspace as
     `workspace-N` for minutes.
   - **Agentic (refine):** `maybeAutoRenameWorkspace(sessionId, workspaceId)` on every **settled** turn
-    (`isSettledTurn(event)`, exported: `agent_end` with `willRetry: false`). It asks assist for a
+    (`isSettledTurn(event)`, exported: `agent_settled` — never `agent_end`, which is attempt-level and can
+    precede compaction/retry even when `willRetry` is false). It asks assist for a
     human-readable name (cheap model), re-checks the workspace (exists, not `renamed`) after the await,
     then calls `renameWorkspace` in the same tick — upgrading the provisional naive name into the final
     name (and its derived branch) and **locking** it (`renamed: true`). Best-effort by contract: every failure path resolves `null` and

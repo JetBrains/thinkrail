@@ -3,7 +3,7 @@
  * `workspaces` (a composition only the host may make), in two fire-and-forget passes `createServer` tees
  * off the session publisher: an **instant naive** name when the first prompt lands
  * ({@link maybeNaiveNameWorkspace}, on {@link isPromptCommitted}) and an **agentic refine** on the settled
- * turn ({@link maybeAutoRenameWorkspace}, on {@link isSettledTurn} — `agent_end` with `willRetry: false`).
+ * turn ({@link maybeAutoRenameWorkspace}, on {@link isSettledTurn} — `agent_settled`).
  *
  * Best-effort by contract: every failure path resolves `null`. The naive pass renames provisionally
  * (leaves `renamed` unset) so the agentic pass still refines; only the agentic (or user) rename sets the
@@ -23,11 +23,11 @@ import { getWorkspace, renameWorkspace } from "../workspaces";
 const PRISTINE_BRANCH = /^workspace-\d+$/;
 
 /**
- * A settled turn: the run concluded and no auto-retry follows. `turn_end` is NOT settlement (it fires
- * once per provider round); `agent_end` with `willRetry: true` is followed by another run.
+ * A settled turn: retries, compaction, and queued continuations have all finished. `turn_end` and
+ * `agent_end` are attempt-level; even `agent_end.willRetry === false` can precede overflow recovery.
  */
 export function isSettledTurn(event: PiEvent): boolean {
-	return event.type === "agent_end" && !event.willRetry;
+	return event.type === "agent_settled";
 }
 
 /**
@@ -42,8 +42,8 @@ export function isPromptCommitted(event: PiEvent): boolean {
 
 /**
  * Workspaces with a rename attempt in flight. `renamed` is not a mutex — it's only set on success, and
- * `agent_end` fires per turn *and* per session (a workspace can run several), so a second turn settling
- * during the one-shot's window would double-fire without this.
+ * `agent_settled` fires per automatic run *and* per session (a workspace can run several), so another
+ * run settling during the one-shot's window would double-fire without this.
  */
 const inFlight = new Set<string>();
 

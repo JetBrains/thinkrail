@@ -10,7 +10,7 @@ export type ExtUiDialogRequest = Extract<
  * A rendered chat turn. User/assistant turns are pi's **canonical** message objects (so these renderers
  * drop into any pi UI); `system` is a web-local notice (e.g. "✓ Done"); `error` is a web-local failure
  * notice (a turn that ended in a provider/model error, or a send the host rejected — e.g. a bad model or a
- * missing API key). A turn-end "✓ Done" marker also carries `endedAt` (the agent_end wall-clock) so the
+ * missing API key). A final "✓ Done" marker also carries `endedAt` (the `agent_settled` wall-clock) so the
  * round summary can measure the turn's duration. Tool results are not turns — they're indexed by
  * `toolCallId` and rendered inline with their call (see `ToolResultState`).
  */

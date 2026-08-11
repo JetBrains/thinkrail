@@ -156,8 +156,10 @@ lib; the extra steps are the **web UI** (a directory the host normally serves) a
 extensions** (which the server path-loads out of `node_modules` in dev — impossible inside a binary):
 
 - `scripts/build-binary.ts` writes two **transient** generated modules, runs
-  `bun build --compile --target=<host|--target>` on `src/compiled-entry.ts`, then deletes them (so the
-  working tree + `tsc` stay clean); each has a committed `.d.ts` type contract `tsc` resolves against
+  `bun build --compile --no-compile-autoload-bunfig --target=<host|--target>` on
+  `src/compiled-entry.ts`, then deletes them (so the artifact cannot execute a project-local
+  `bunfig.toml` preload before ThinkRail boots, and the working tree + `tsc` stay clean); each generated
+  module has a committed `.d.ts` type contract `tsc` resolves against
   when the `.ts` is absent:
   - `src/web-assets.generated.ts` — enumerates `apps/web/dist`: a Bun file-attribute import per asset +
     a `{ route, data }[]` manifest + a content-hash version.
@@ -186,8 +188,9 @@ extensions** (which the server path-loads out of `node_modules` in dev — impos
 - **Verify by booting the artifact** (not just building it): extension wiring regressions surface only at
   runtime — e.g. path-loading broke silently for every extension added after the binary build first landed.
   `scripts/smoke-binary.ts` (root: `bun run smoke:binary`, after `build:binary`) boots the built binary
-  against throwaway data/agent/cache dirs and asserts: `/health` answers, `/` serves the staged UI, the
-  bundled skills staged to the cache dir, **an OAuth sign-in reaches its auth URL** (a WS
+  against throwaway data/agent/cache dirs and asserts: a project-local `bunfig.toml` preload does **not**
+  execute, `/health` answers, `/` serves the staged UI, the bundled skills staged to the cache dir,
+  **an OAuth sign-in reaches its auth URL** (a WS
   `provider.loginStart` for the Codex provider must answer the method select and push an `authUrl`
   frame — offline and credential-free, since pi's flow only does PKCE + a local callback server before
   notifying the URL; this pins the statically-registered OAuth flows, which can only break inside the

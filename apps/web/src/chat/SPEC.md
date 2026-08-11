@@ -43,8 +43,10 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   the flows can overlap mid-run, each keeps exactly one indicator (re-scheduling replaces, each source's
   end event clears only its own), and `RetryIndicator` labels them apart ("Retrying" vs "Retrying
   summarization"). **`ErrorTurn`** is a persistent tinted failure notice
-  (provider/model error, or a rejected send) — **never folded**, so a failed turn can't look like
-  nothing happened.
+  (provider/model error, an unrecovered `length` truncation, or a rejected send) — **never folded**, so
+  a failed turn can't look like nothing happened. Live settlement and transcript hydration share the
+  same assistant-failure classifier, so reload cannot turn the latest unresolved failure into success;
+  recovered historical `length` attempts followed by later work are not re-labeled as current failures.
 - `markdown` — a non-empty assistant text block (react-markdown + remark-gfm + shiki).
 - `tool` — a **primary** tool call: the collapsible `ToolCard` frame (collapsed unless registered
   `defaultExpanded`; errors auto-expand; a manual toggle wins), or a `"bare"` renderer that owns its
@@ -124,10 +126,13 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   terminate** (its tool result is just an ack; the reply arrives later as an `ask-user-answers` message),
   so "answered / superseded / awaiting" is a fact about the transcript, not a tool status — derived once
   per runtime snapshot and consumed by the card via context, keeping it props-driven everywhere else.
-- **Hydration** (`hydrate.ts`) — the pure `messagesToRuntime(TranscriptMessage[])` converter (read-side
-  counterpart of the event reducer): rebuilds `{ turns, toolResults, askAnswers, turnIdByMessageIndex }`
-  (a `HydratedRuntime`) from a persisted transcript so a reconnecting/second client renders identically to
-  the live path (same `raw` result shape, same error-turn surfacing for `stopReason: "error"`). It also
+- **Hydration** (`hydrate.ts`) — the pure
+  `messagesToRuntime(TranscriptMessage[], lastSettlement?)` converter (read-side counterpart of the event
+  reducer): rebuilds `{ turns, toolResults, askAnswers, turnIdByMessageIndex }` (a `HydratedRuntime`) from a
+  persisted transcript so a reconnecting/second client renders identically to the live path (same `raw`
+  result shape). When supplied, the live summary's `lastSettlement` is authoritative; otherwise only the
+  final conversational assistant can synthesize an error/length turn. Compacted historical length attempts
+  followed by later messages remain history, not a stale current warning. It also
   returns `turnIdByMessageIndex` (message-position → minted turn id) — the jump anchor map a
   history-search "jump to message" deep link (`chatLocationRequest`, see `store/SPEC.md`) resolves
   against; entries are `null` for a `toolResult`/`custom` message (never its own turn), and a message that
@@ -403,7 +408,7 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
     `description: 'single-quoted'` loaded into the form with literal quotes and saved back corrupted).
     Its boundary
     rule is ported byte-for-byte from pi's own `extractFrontmatter` (`@earendil-works/pi-coding-agent`'s
-    `dist/utils/frontmatter.js`, pinned against pi v0.80.6 — the same pin `packages/server/src/templates/
+    `dist/utils/frontmatter.js`, pinned against pi v0.84.1 — the same pin `packages/server/src/templates/
     SPEC.md` uses server-side; re-verify both on a pi version bump): the frontmatter block ends at the
     FIRST later `\n---` line, and the body is everything after that fence run through `.trim()` — not a
     single optional `\n`. A prior version had two independently hand-rolled regex splitters (one per
@@ -492,7 +497,8 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
 - **Chat TODO plan** — the chat's `pi-todos` list surfaced **only in the chat** (engine:
   [[module-pi-todos]]; host read/write: [[submodule-server-todos]]):
   `useChatTodos` (the `todo.*` data hook — fetch + live `pi.event` refetch + edits + the add-nudge + the
-  `openMarkdown` snapshot action), `planView` (pure derivations over the DTO: `groupProgress`,
+  `openMarkdown` snapshot action; tool completion refreshes immediately and `agent_settled` supplies the
+  final refresh), `planView` (pure derivations over the DTO: `groupProgress`,
   `planSummary`, `planGlance`/`sessionGlance`, `planSections`, and `shouldNudgeOnAdd`. A group's *status* is
   **not** derived here — the host computes it and ships it on `TodoGroupItem.status`, so the rule has one
   home; a user edit therefore re-reads the plan rather than patching it locally, see `useChatTodos`), `TodoList` (the
@@ -516,8 +522,8 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   askStates)` — derived from session state in `ChatView`, **never stored**, so the agent can't make it
   lie — renders the `in_progress` step as working (dot), **waiting for your answer**
   (`MessageCircleQuestion` — the same glyph as the `ask_user_question` card, when the agent stopped with
-  an awaiting question), or **paused — waiting for you**
-  (`CirclePause`, any other stop: turn ended, error). **The header strip reflects the agent's state,
+  an awaiting question), or **paused** (`CirclePause`, any other stop: turn ended, error). A stop with no
+  pending question never claims the user owes an answer. **The header strip reflects the agent's state,
   not the checkboxes** (`stripStatus`, decoupled from the `in_progress` step): it shows "waiting for
   your answer" **even when every item is done** (the earlier strip hid it whenever there was no
   in-progress step, so an agent blocked on a question read as "finished"); "working" while it runs;
@@ -585,14 +591,18 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
 The `store` folds pi events into pi-canonical turns **per session**: the in-flight assistant turn **is**
 the latest `assistantMessageEvent.partial` snapshot (replaced each update — not hand-accumulated). A
 message's true terminal is **`message_end`**: the reducer adopts the final message (it carries
-`stopReason`, how renderers spot dead tool calls) and clears the turn's `streaming` flag **there** — not
-at `agent_end`, which for a tool-calling message arrives only after its tools ran. Tool results are
+`stopReason`, how renderers spot dead tool calls) and clears that message's `streaming` flag **there**.
+`agent_end` is only an attempt boundary (for a tool-calling message it arrives after its tools ran, but
+it can still precede auto-compaction/retry); `agent_settled` alone closes the automatic run, clears the
+session loader, and appends one success/error marker. A successful overflow `compaction_end` with
+`willRetry: true` removes the superseded errored/truncated attempt, matching Pi's rebuilt context. Tool results are
 indexed by `toolCallId` in `toolResults`; `ask-user-answers` custom messages index into `askAnswers`
 (never the turn list — the questionnaire card is their rendering). The view re-derives rows each render
 (`deriveRows` is pure; `ChatView` memoizes) — stable row/step ids keep fold state across snapshots.
 
 **One live indicator, always.** pi splits a run into several assistant messages, so the reducer sweeps
-the `streaming` flag on new-message start and `agent_end` (at most one turn is ever flagged). The loader
+the per-message `streaming` flag on new-message start and the final `agent_settled` (at most one turn is
+ever flagged). The session remains live across attempt-level `agent_end` events. The loader
 is a **single footer** (`StreamIndicator`: typing-dots + a phase label from the pure `streamStatus`
 deriver — `working` → `thinking` → `running-tool` → `writing`) — not a per-turn cursor — so it can't
 duplicate and it fills the post-send gap. The activity fold's live ticker is a *status* line (spinner,

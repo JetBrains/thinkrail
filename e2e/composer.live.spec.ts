@@ -106,8 +106,8 @@ test("stats refresh after a turn completes (cheap win #3)", { tag: "@agent" }, a
 	await page.getByTestId("chat-input").fill("Reply with the single word: pong");
 	await page.getByTestId("chat-send").click();
 
-	// Key off turn *completion* (the agent_end notice), not model output — the stats refresh hangs off
-	// `agent_end`, and the env's default model may vary. The stats bar then shows cumulative usage.
+	// Key off final settlement (the completion notice), not model output — stats refresh when the store
+	// folds `agent_settled`, and the env's default model may vary. The bar then shows cumulative usage.
 	await expect(
 		page.locator('[data-testid="chat-message"][data-role="system"]').filter({ hasText: "Done" }),
 	).toBeVisible({ timeout: 80_000 });

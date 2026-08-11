@@ -55,7 +55,7 @@ test("refresh() on the shared runtime never opts into the network (provider.stat
 		// and availability paths ride global fetch, so a blocking spy proves no egress is attempted.
 		// Refresh only touches providers holding a credential, so seed one — that's also the production
 		// shape (a signed-in user whose provider.status reads must not stall on pi.dev).
-		await runtime.setRuntimeApiKey("anthropic", "sk-test-never-used", { allowNetwork: false });
+		await runtime.setRuntimeApiKey("anthropic", "sk-test-never-used");
 		const originalFetch = globalThis.fetch;
 		const fetched: string[] = [];
 		globalThis.fetch = ((input: string | URL | Request) => {

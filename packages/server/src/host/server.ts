@@ -461,7 +461,8 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 	// tee the best-effort workspace auto-rename off two points, fire-and-forget (`void` — the hooks never
 	// reject, and this closure's slot is sync by design): the **first prompt landing** (a user
 	// `message_end`, before the model responds) gets an instant non-agentic name, and a **settled turn**
-	// (agent_end, no retry) refines it with the agentic namer and locks it. The `workspace.updated` push is
+	// (`agent_settled`, after retries/compaction/continuations) refines it with the agentic namer and locks it.
+	// The `workspace.updated` push is
 	// self-emitted by `renameWorkspace` (via the lifecycle publisher above) — the tee just triggers it.
 	setSessionPublisher((payload) => {
 		server.publish(

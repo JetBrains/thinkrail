@@ -20,6 +20,15 @@ import {
 // Event fixtures — the reducer only reads the fields below, so casting minimal objects is safe here.
 const agentStart = { type: "agent_start" } as unknown as PiEvent;
 const agentEnd = { type: "agent_end", willRetry: false, messages: [] } as unknown as PiEvent;
+const agentSettled = (terminal: Extract<PiEvent, { type: "agent_settled" }>["terminal"] = null) =>
+	({ type: "agent_settled", terminal }) as PiEvent;
+const recoveredOverflow: PiEvent = {
+	type: "compaction_end",
+	reason: "overflow",
+	result: {},
+	aborted: false,
+	willRetry: true,
+};
 const toolStart = (toolCallId: string) =>
 	({ type: "tool_execution_start", toolCallId, toolName: "bash" }) as unknown as PiEvent;
 const toolUpdate = (toolCallId: string, partialResult: unknown) =>
@@ -47,9 +56,8 @@ const summarizationScheduled = (
 	errorMessage: "stream dropped",
 });
 const summarizationFinished: PiEvent = { type: "summarization_retry_finished" };
-// A turn that ends in a provider/model error: retries exhausted (or non-retryable), so `willRetry` is
-// false and the run's last assistant message carries `stopReason: "error"` + the provider's `errorMessage`
-// (this is what a bad model like a nonexistent "gpt-5.5" produces — a 404/model-not-found from the API).
+// An attempt whose last assistant message is a provider/model error. The host retains these reported
+// fields and projects them onto the later `agent_settled` terminal.
 const agentEndError = (errorMessage: string) =>
 	({
 		type: "agent_end",
@@ -129,8 +137,11 @@ test("pi events route to the right session runtime; chats stay independent", () 
 	expect(rt("a").isStreaming).toBe(true);
 	expect(rt("b").isStreaming).toBe(true);
 
-	// A finishes; B keeps streaming and gains no "Done" notice of its own.
+	// A's attempt ends, but automatic post-run work may still follow — it remains live until settled.
 	store.handlePiEvent(agentEnd, "a");
+	expect(rt("a").isStreaming).toBe(true);
+	expect(rt("a").turns.some((t) => t.kind === "system" && t.text === "✓ Done")).toBe(false);
+	store.handlePiEvent(agentSettled(), "a");
 	expect(rt("a").isStreaming).toBe(false);
 	expect(rt("a").turns.some((t) => t.kind === "system" && t.text === "✓ Done")).toBe(true);
 	expect(rt("b").isStreaming).toBe(true);
@@ -177,6 +188,8 @@ test("an assistant turn is built (and replaced, not duplicated) from message_upd
 	expect(turn?.kind === "assistant" && turn.message.content[0]?.type === "text").toBe(true);
 
 	store.handlePiEvent(agentEnd, "a");
+	expect(rt("a").isStreaming).toBe(true);
+	store.handlePiEvent(agentSettled(), "a");
 	const after = rt("a");
 	expect(after.isStreaming).toBe(false);
 	expect(after.currentAssistantId).toBeNull();
@@ -198,9 +211,11 @@ test("a multi-message turn leaves no assistant turn flagged streaming (no stray 
 	const streamingMid = rt("a").turns.filter((t) => t.kind === "assistant" && t.streaming);
 	expect(streamingMid).toHaveLength(1); // exactly one turn is ever live at a time
 
-	// The run ends without B getting a `done` either — agent_end must sweep the flag off every turn, or a
-	// blinking cursor lingers in the transcript after "✓ Done".
+	// The run settles without B getting a `done` either — settlement must sweep the flag off every turn,
+	// or a blinking cursor lingers in the transcript after "✓ Done".
 	store.handlePiEvent(agentEnd, "a");
+	expect(rt("a").turns.some((t) => t.kind === "assistant" && t.streaming)).toBe(true);
+	store.handlePiEvent(agentSettled(), "a");
 	const after = rt("a");
 	expect(after.turns.filter((t) => t.kind === "assistant")).toHaveLength(2);
 	expect(after.turns.some((t) => t.kind === "assistant" && t.streaming)).toBe(false);
@@ -214,7 +229,7 @@ test("message_end finalizes the turn the moment its message completes (not at ag
 	// pi forwards only *streaming* variants as message_update — a message's real terminal is message_end.
 	// The distinction matters most for a tool-calling message: its tools run AFTER it completes (for
 	// ask_user_question, until the user answers), and the card gates Submit on the turn's streaming flag —
-	// were the flag to survive until agent_end, an interactive tool could never be answered.
+	// were the flag to survive until agent_settled, an interactive tool could never be answered.
 	store.handlePiEvent(agentStart, "a");
 	store.handlePiEvent(assistantStart, "a");
 	store.handlePiEvent(assistantText("asking…"), "a");
@@ -364,12 +379,15 @@ test("overlapping turn + summarization retries never clear each other", () => {
 	expect(rt("a").turns.some((t) => t.kind === "retry")).toBe(false);
 });
 
-test("a lingering retry countdown is swept up by the final agent_end", () => {
+test("a lingering retry countdown is swept up only when the run settles", () => {
 	const store = useAppStore.getState();
 	store.openChatSession("ws1", "a", null, "medium");
 
+	store.handlePiEvent(agentStart, "a");
 	store.handlePiEvent(retryStart(1, 3, 1_000), "a");
-	store.handlePiEvent(agentEnd, "a"); // willRetry: false → conclude
+	store.handlePiEvent(agentEnd, "a");
+	expect(rt("a").turns.some((t) => t.kind === "retry")).toBe(true);
+	store.handlePiEvent(agentSettled(), "a");
 	expect(rt("a").turns.some((t) => t.kind === "retry")).toBe(false);
 	expect(rt("a").turns.some((t) => t.kind === "system" && t.text === "✓ Done")).toBe(true);
 });
@@ -381,6 +399,11 @@ test("a turn that ends in a provider error surfaces the error (not a false ✓ D
 	// Reproduces "pick a bad model → nothing happens": the run streams no content and ends in an error.
 	store.handlePiEvent(agentStart, "a");
 	store.handlePiEvent(agentEndError("model 'gpt-5.5' not found"), "a");
+	expect(rt("a").isStreaming).toBe(true);
+	store.handlePiEvent(
+		agentSettled({ stopReason: "error", errorMessage: "model 'gpt-5.5' not found" }),
+		"a",
+	);
 
 	const after = rt("a");
 	expect(after.isStreaming).toBe(false);
@@ -389,6 +412,96 @@ test("a turn that ends in a provider error surfaces the error (not a false ✓ D
 	expect(err?.kind === "error" && err.text).toContain("gpt-5.5");
 	// And it must NOT masquerade as a successful "✓ Done".
 	expect(after.turns.some((t) => t.kind === "system" && t.text === "✓ Done")).toBe(false);
+});
+
+test("a terminal length stop is a visible failure, never a false ✓ Done", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", null, "medium");
+
+	store.handlePiEvent(agentStart, "a");
+	store.handlePiEvent(agentEnd, "a");
+	store.handlePiEvent(agentSettled({ stopReason: "length" }), "a");
+
+	const after = rt("a");
+	const error = after.turns.find((turn) => turn.kind === "error");
+	expect(error?.kind === "error" && error.text.toLowerCase()).toContain("truncated");
+	expect(after.turns.some((turn) => turn.kind === "system" && turn.text === "✓ Done")).toBe(false);
+	expect(after.isStreaming).toBe(false);
+});
+
+test("a successful overflow compaction removes the superseded assistant attempt", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", null, "medium");
+
+	store.handlePiEvent(agentStart, "a");
+	store.handlePiEvent(assistantStart, "a");
+	store.handlePiEvent(assistantText("incomplete"), "a");
+	store.handlePiEvent(
+		{
+			type: "message_end",
+			message: {
+				role: "assistant",
+				content: [{ type: "text", text: "incomplete" }],
+				stopReason: "length",
+			},
+		} as unknown as PiEvent,
+		"a",
+	);
+	store.handlePiEvent(agentEnd, "a");
+	expect(rt("a").turns.filter((turn) => turn.kind === "assistant")).toHaveLength(1);
+
+	store.handlePiEvent(recoveredOverflow, "a");
+	expect(rt("a").turns.filter((turn) => turn.kind === "assistant")).toHaveLength(0);
+	expect(rt("a").isStreaming).toBe(true);
+});
+
+test("overflow recovery never removes an older failure when this attempt was not observed", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", null, "medium");
+
+	store.handlePiEvent(agentStart, "a");
+	store.handlePiEvent(assistantStart, "a");
+	store.handlePiEvent(assistantText("old failed answer"), "a");
+	store.handlePiEvent(
+		{
+			type: "message_end",
+			message: {
+				role: "assistant",
+				content: [{ type: "text", text: "old failed answer" }],
+				stopReason: "error",
+				errorMessage: "old failure",
+			},
+		} as unknown as PiEvent,
+		"a",
+	);
+	store.handlePiEvent(agentEndError("old failure"), "a");
+	store.handlePiEvent(agentSettled({ stopReason: "error", errorMessage: "old failure" }), "a");
+	expect(rt("a").turns.filter((turn) => turn.kind === "assistant")).toHaveLength(1);
+
+	// A hidden control turn starts, but this client misses its assistant events (e.g. it connected while
+	// Pi was compacting). Its successful recovery must not guess that the prior run's failure is current.
+	store.handlePiEvent(agentStart, "a");
+	store.handlePiEvent(agentEnd, "a");
+	store.handlePiEvent(recoveredOverflow, "a");
+
+	expect(rt("a").turns.filter((turn) => turn.kind === "assistant")).toHaveLength(1);
+});
+
+test("compact-and-retry produces one completion marker at final settlement", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", null, "medium");
+
+	store.handlePiEvent(agentStart, "a");
+	store.handlePiEvent(agentEnd, "a");
+	store.handlePiEvent(recoveredOverflow, "a");
+	store.handlePiEvent(agentStart, "a");
+	store.handlePiEvent(agentEnd, "a");
+	expect(rt("a").turns.filter((turn) => turn.kind === "system")).toHaveLength(0);
+
+	store.handlePiEvent(agentSettled(), "a");
+	expect(
+		rt("a").turns.filter((turn) => turn.kind === "system" && turn.text === "✓ Done"),
+	).toHaveLength(1);
 });
 
 test("appendErrorTurn surfaces a failed send (a rejected prompt) as a visible error turn", () => {

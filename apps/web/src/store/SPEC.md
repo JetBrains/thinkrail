@@ -98,7 +98,8 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   **per-session chat state** — `sessions: Record<sessionId, SessionRuntime>`, where a `SessionRuntime` holds
   one chat's `turns` (pi-canonical) / `toolResults` / `askAnswers` (the `ask-user-answers` replies keyed
   by tool call id — indexed by the reducer and hydration, never turned into bubbles) /
-  `currentAssistantId` / `isStreaming` / `model` /
+  `currentAssistantId` / `attemptAssistantId` (scopes overflow removal to the attempt actually observed) /
+  `isStreaming` / `model` /
   `thinkingLevel` / `stats` / `commands` / `draft` and its **extension-UI state** (`pendingExtUi` (typed by
   `chat`'s `ExtUiDialogRequest`) + `extUiQueue` (overlapping dialogs FIFO so none orphans its server
   promise) + `extUiStatus` / `extUiWidget`). `openChatSession` creates a runtime; `closeChatRuntime` /
@@ -107,15 +108,19 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   **`appendErrorTurn(sessionId, text)`** appends an `error` turn for a **rejected** turn-driving wire call
   (`session.prompt`/`steer`/`followUp`/`create`) — e.g. `prompt()` throwing "no API key" / a bad model —
   so a failed send lands in the chat instead of being swallowed; a *streaming* fault instead ends the run
-  via **`reduceSessionEvent`**'s terminal-error `agent_end` (last assistant `stopReason: "error"` → an
-  `error` turn carrying its `errorMessage`, in place of the "✓ Done" marker). Closed
+  through **`reduceSessionEvent`** at `agent_settled`, using the host-projected final terminal metadata:
+  `stopReason: "error"` carries Pi's `errorMessage`, and `stopReason: "length"` becomes an actionable
+  truncation error — neither may become "✓ Done". `agent_end` is attempt-level and never clears
+  `isStreaming`; settlement alone finishes retries, compaction, and queued continuations. Closed
   chats are reopenable: **`closeChatToHistory`** removes a chat tab but **keeps its runtime + session
   alive**, recording it in **`closedChatsByWorkspace`** (`ClosedChat[]`, per workspace, most-recent-first);
   **`reopenChat`** restores the tab with full state (the runtime never left); **`noteClosedChats`** records
   disk-only sessions (from `session.list`) there too — idempotently (skips live/open/already-listed) — so a
   chat that survived a host restart is reopenable. **`hydrateSession`** rebuilds a runtime + tab from a host
-  `SessionSummary` + converted transcript on connect — a no-op if a runtime already exists, so a live/ahead
-  chat is never clobbered. The
+  `SessionSummary` + converted transcript on connect — the live summary's `lastSettlement` is authoritative
+  when present; otherwise only a failure on the persisted transcript's final conversational message is
+  current (historical `length` attempts followed by later work must not become stale warnings). Hydration is
+  a no-op if a runtime already exists, so a live/ahead chat is never clobbered. The
   pure **`reduceSessionEvent`** folds a `PiEvent` into a runtime; **`handlePiEvent(event,
   sessionId)`** and **`applyExtUi(request)`** route by id via the `withRuntime` helper (a no-op for an
   unknown session). The host-wide **`models`** list stays global (not per session), plus

@@ -76,7 +76,9 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
    second tab, a phone, or a **host restart** all rebuild the same view: `session.list` unions the host's
    in-memory sessions (auto-restored as tabs) with pi's **on-disk** sessions (surfaced in chat-history,
    re-opened on demand via `session.getMessages`, which attaches the persisted session back into the host).
-   The client is a **stateless projection**, never a second source of truth.
+   The client is a **stateless projection**, never a second source of truth. An automatic agent run
+   remains active through retries, compaction, and queued continuations: pi's `agent_end` is only an
+   attempt boundary and may precede more work; `agent_settled` is the authoritative transition to idle.
 9. **Domain state vs. view state.** *Domain* state — projects, workspaces, **sessions + their
    transcripts**, git — is backend-owned, shared across all clients, and persistent; every client hydrates
    it from the host. *View* state — which sessions are open as tabs, the active tab, composer drafts, panel
