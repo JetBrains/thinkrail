@@ -1,4 +1,4 @@
-import { mkdirSync, realpathSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, realpathSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import { TodoStore } from "pi-todos/core";
@@ -94,6 +94,49 @@ test("a disk chat with unfinished TODOs auto-opens (scrolled to its latest messa
 	await expect(
 		page.getByTestId("closed-chat-item").filter({ hasText: "release notes chat" }),
 	).toHaveCount(1);
+});
+
+test("a closed chat can be moved to trash from history", async ({ page }) => {
+	await openFixtureProject(page);
+
+	const doomed = seedWorkspaceSession(repoCwd(), {
+		name: "trash this chat",
+		messages: [{ role: "user", text: "remove this transcript", timestamp: BASE_TS }],
+	});
+	setMtime(doomed.path, BASE_TS);
+	const searchDoomed = seedWorkspaceSession(repoCwd(), {
+		name: "search trash chat",
+		messages: [{ role: "user", text: "delete this from search", timestamp: BASE_TS + 10_000 }],
+	});
+	setMtime(searchDoomed.path, BASE_TS + 10_000);
+	const kept = seedWorkspaceSession(repoCwd(), {
+		name: "keep this chat",
+		messages: [{ role: "user", text: "keep this transcript", timestamp: BASE_TS + 50_000 }],
+	});
+	setMtime(kept.path, BASE_TS + 50_000);
+
+	await enterDefaultWorkspace(page);
+	await expect(page.getByText("keep this transcript")).toBeVisible();
+	await page.getByTestId("chat-history").click();
+	const row = page.getByTestId("closed-chat-row").filter({ hasText: "trash this chat" });
+	await row.getByTestId("closed-chat-delete").click();
+
+	await expect.poll(() => existsSync(doomed.path)).toBe(false);
+	await page.getByTestId("chat-history").click();
+	await expect(
+		page.getByTestId("closed-chat-row").filter({ hasText: "trash this chat" }),
+	).toHaveCount(0);
+	await page.keyboard.press("Escape");
+	await expect(page.getByText("remove this transcript")).toHaveCount(0);
+
+	await page.getByTestId("chat-input").press("Control+r");
+	await page.getByTestId("history-query").fill("delete this from search");
+	const searchRow = page
+		.locator('[data-testid="history-item"][data-kind="prompt"]')
+		.filter({ hasText: "delete this from search" });
+	await searchRow.getByTestId("history-delete-chat").click();
+	await expect(page.getByTestId("history-overlay")).toHaveCount(0);
+	await expect.poll(() => existsSync(searchDoomed.path)).toBe(false);
 });
 
 test("with no TODOs anywhere, the most recent disk chat opens as the fallback", async ({

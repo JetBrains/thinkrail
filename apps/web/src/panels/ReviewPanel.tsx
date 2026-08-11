@@ -45,7 +45,9 @@ import { SendAllReviewsButton, SendReviewButton } from "./SendReviewButton";
 export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; failed: boolean }) {
 	const snapshot = useAppStore((s) => s.reviewsByWorkspace[workspaceId]);
 	const activeReviewedPath = useAppStore((s) => selectActiveReviewedPath(s, workspaceId));
+	const setWorkspaceReview = useAppStore((s) => s.setWorkspaceReview);
 	const [sending, setSending] = useState(false);
+	const [clearing, setClearing] = useState(false);
 	// The unfolded sections, keyed like `fileSummaries` rows (`null` = the whole-change-set bucket).
 	// Seeded with the active reviewed file: the panel often MOUNTS on it (RightPanel auto-opens the
 	// Review tab on such an activation), and the adjust-on-change below only sees later changes.
@@ -121,6 +123,17 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 			toast.error(errorText(err), "Couldn't finish the file's review");
 		}
 	};
+	// Clear the whole review: archive it, then read back the fresh (empty) review the next touch creates.
+	// `review.close` republishes the CLOSED snapshot with its comments intact, so the empty state only
+	// lands once `review.get` (→ `ensureSnapshot`) re-creates the open review.
+	const clearReview = async () => {
+		try {
+			await getTransport().request("review.close", { workspaceId });
+			setWorkspaceReview(workspaceId, await getTransport().request("review.get", { workspaceId }));
+		} catch (err) {
+			toast.error(errorText(err), "Couldn't clear the review");
+		}
+	};
 	const hasDrafts = snapshot.comments.some((c) => c.status === "draft");
 	const toggleFile = (file: ReviewFileSummary) => {
 		const isOpen = expanded.has(file.path);
@@ -135,9 +148,33 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 
 	return (
 		<div className="flex h-full min-h-0 flex-col" data-testid="review-panel">
-			{hasDrafts && (
-				<div className="flex h-7 shrink-0 items-center justify-end border-border-default border-b px-sm">
-					<SendAllReviewsButton workspaceId={workspaceId} />
+			{files.length > 0 && (
+				<div className="flex h-7 shrink-0 items-center justify-end gap-sm border-border-default border-b px-sm">
+					{hasDrafts && <SendAllReviewsButton workspaceId={workspaceId} />}
+					<ConfirmPopover
+						open={clearing}
+						onOpenChange={setClearing}
+						title="Clear this review?"
+						description="Archives every comment and starts a fresh review. Unsent drafts are discarded."
+						confirmLabel="Clear"
+						destructive
+						confirmTestId="review-clear-confirm"
+						onConfirm={() => void clearReview()}
+						align="end"
+					>
+						<PopoverTrigger asChild>
+							<button
+								type="button"
+								data-testid="review-clear"
+								title="Clear review — archive all comments"
+								aria-label="Clear review"
+								className="flex shrink-0 items-center gap-xs px-xs tr-text-metadata text-text-subtle hover:text-feedback-error"
+							>
+								<Trash2 className="size-3.5" />
+								Clear
+							</button>
+						</PopoverTrigger>
+					</ConfirmPopover>
 				</div>
 			)}
 			<div className="min-h-0 flex-1 overflow-auto">

@@ -833,6 +833,22 @@ test("resolved comments sink into a muted Resolved section (TODO Done style)", a
 	await expect(page.getByTestId("review-empty")).toBeVisible();
 });
 
+test("Clear archives the whole review after confirmation and starts fresh", async ({ page }) => {
+	await openDiff(page);
+	await composeComment(page, "one = 1", "Discard this draft with the review.");
+	await page.getByTestId("review-composer-save").click();
+	await page.getByTestId("tab-review").click();
+
+	await page.getByTestId("review-clear").click();
+	await expect(page.getByTestId("confirm-popover")).toContainText("Unsent drafts are discarded");
+	await expect(page.getByTestId("review-file-row")).toHaveCount(1);
+	await page.getByTestId("review-clear-confirm").click();
+
+	await expect(page.getByTestId("review-empty")).toBeVisible();
+	await expect(page.getByTestId("review-clear")).toHaveCount(0);
+	await expect(persistedComments(page)).resolves.toEqual([]);
+});
+
 test("a draft is server truth: a second client converges by push, and a cold reload re-hydrates it", async ({
 	page,
 	browser,

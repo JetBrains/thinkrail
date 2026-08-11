@@ -203,7 +203,9 @@ export interface TerminalTabsPush {
 // v33: `WorkspaceFsChangedPayload.skillChange` separates detected/unknown skill evidence from generic path
 // truncation, so a large non-skill build cannot masquerade as a skill edit while over-cap skill paths remain
 // detectable.
-export const PROTOCOL_VERSION = 33;
+// v34: `session.delete` — remove a chat for good (dispose if live, then move its transcript to the OS
+// trash), triggered from the history / closed-chats list.
+export const PROTOCOL_VERSION = 34;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a
@@ -313,6 +315,8 @@ export const WS_METHODS = {
 	sessionFollowUp: "session.followUp",
 	sessionAbort: "session.abort",
 	sessionDispose: "session.dispose",
+	// Delete a chat for good: dispose it if live, then move its transcript to the OS trash (recoverable).
+	sessionDelete: "session.delete",
 	sessionSetModel: "session.setModel",
 	sessionSetThinkingLevel: "session.setThinkingLevel",
 	sessionCompact: "session.compact",
@@ -685,6 +689,7 @@ export interface WsMethodMap {
 	};
 	"session.abort": { params: { sessionId: string }; result: Ack };
 	"session.dispose": { params: { sessionId: string }; result: Ack };
+	"session.delete": { params: { workspaceId: string; sessionId: string }; result: Ack };
 	"session.setModel": { params: { sessionId: string; model: WireModel }; result: Ack };
 	"session.setThinkingLevel": { params: { sessionId: string; level: ThinkingLevel }; result: Ack };
 	"session.compact": { params: { sessionId: string; instructions?: string }; result: Ack };

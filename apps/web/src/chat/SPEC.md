@@ -164,8 +164,9 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   below), image paste/drop, `openHistory` on its imperative handle → `onHistoryOpen`) plus its props-driven **slash-completion
   primitive** (filter/menu/caret + Up/Down, Enter/Tab, Escape), reused by `panels/NewWorkspaceDialog` so
   the two inputs cannot drift; `HistoryOverlay` (the history-recall/search overlay `Composer` opens —
-  presentational, driven entirely by `useHistorySearch.ts`'s state + callbacks, plus a **Save as
-  template** action on the selected prompt row — see the Save-as-template bullet below, and a
+  presentational, driven entirely by `useHistorySearch.ts`'s state + callbacks, plus **Save as template**
+  and one-click **Trash chat** actions on mapped hits (`ChatView` owns `session.delete` + the atomic store
+  removal; success closes the overlay, failure toasts), and a
   **zoomed-stage preview pane** + **scope picker** — see the next bullet),
   `ModelSelector` + `ThinkingSelector` (also shared with `NewWorkspaceDialog`;
   optional `container` prop portals their popovers into a host Dialog; `ModelSelector` takes

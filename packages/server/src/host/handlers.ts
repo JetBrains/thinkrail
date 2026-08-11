@@ -24,6 +24,7 @@ import {
 	clampThinkingForModel,
 	compactSession,
 	createSession,
+	deleteSession,
 	ensureSessionAttached,
 	followUpSession,
 	getDefaultModel,
@@ -566,6 +567,11 @@ const handlers: Record<string, Handler> = {
 	},
 	"session.dispose": (params) => {
 		removeSession((params as { sessionId: string }).sessionId);
+		return { ok: true } as const;
+	},
+	"session.delete": async (params) => {
+		const p = params as { workspaceId: string; sessionId: string };
+		await deleteSession(p.sessionId, p.workspaceId, getWorkspace(p.workspaceId).worktreePath);
 		return { ok: true } as const;
 	},
 	"session.setModel": async (params) => {

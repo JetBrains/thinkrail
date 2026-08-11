@@ -68,7 +68,7 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   slot from it) — and it takes that count at **request** time (`noteNavigation`, as the read starts), so a
   browse is ordered by when the user asked for it, not by when the host happened to answer. It is bumped
   *inside* every action that moves the active tab — `openDoc`, `setActiveTab`,
-  `openChatSession`, `reopenChat`,
+  `openChatSession`, `reopenChat`, `deleteChat`,
   `requestHistoryOpen`, `hydrateSession` **only when it actually takes focus** (a background
   auto-restore must not supersede a read the user is waiting on), and `closeTab` /
   `closeChatToHistory` **only when the closed tab was the active one** (closing some other tab in the strip
@@ -116,7 +116,9 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   alive**, recording it in **`closedChatsByWorkspace`** (`ClosedChat[]`, per workspace, most-recent-first);
   **`reopenChat`** restores the tab with full state (the runtime never left); **`noteClosedChats`** records
   disk-only sessions (from `session.list`) there too — idempotently (skips live/open/already-listed) — so a
-  chat that survived a host restart is reopenable. **`hydrateSession`** rebuilds a runtime + tab from a host
+  chat that survived a host restart is reopenable. **`deleteChat(workspaceId, sessionId)`** atomically drops
+  that chat's tab/history row/runtime + skill baseline after `session.delete` succeeds (and chooses the normal
+  fallback when its active tab was removed). **`hydrateSession`** rebuilds a runtime + tab from a host
   `SessionSummary` + converted transcript on connect — the live summary's `lastSettlement` is authoritative
   when present; otherwise only a failure on the persisted transcript's final conversational message is
   current (historical `length` attempts followed by later work must not become stale warnings). Hydration is

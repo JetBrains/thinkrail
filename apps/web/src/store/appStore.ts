@@ -811,6 +811,8 @@ interface AppState {
 	closeChatRuntime: (sessionId: string) => void;
 	/** Close a chat tab to history: remove the tab but keep its runtime + session alive for reopening. */
 	closeChatToHistory: (sessionId: string) => void;
+	/** Drop a server-deleted chat from every client-side surface/state bucket in one write. */
+	deleteChat: (workspaceId: string, sessionId: string) => void;
 	/** Reopen a chat from history (its runtime is still live, so the full transcript returns instantly). */
 	reopenChat: (sessionId: string) => void;
 	/**
@@ -1603,6 +1605,47 @@ export const useAppStore = create<AppState>((set, get) => ({
 					...s.closedChatsByWorkspace,
 					[wsId]: [entry, ...(s.closedChatsByWorkspace[wsId] ?? [])],
 				},
+			};
+		}),
+	deleteChat: (workspaceId, sessionId) =>
+		set((s) => {
+			const tabs = s.tabsByWorkspace[workspaceId] ?? [];
+			const tab = tabs.find((t) => t.kind === "chat" && t.sessionId === sessionId);
+			const closed = s.closedChatsByWorkspace[workspaceId] ?? [];
+			const inHistory = closed.some((c) => c.sessionId === sessionId);
+			const hasRuntime = s.sessions[sessionId] !== undefined;
+			const hasSkillBaseline = Object.hasOwn(s.skillsSyncedTickBySession, sessionId);
+			const targetsLocation =
+				s.chatLocationRequest?.workspaceId === workspaceId &&
+				s.chatLocationRequest.sessionId === sessionId;
+			if (!tab && !inHistory && !hasRuntime && !hasSkillBaseline && !targetsLocation) return {};
+
+			const remaining = tab ? tabs.filter((t) => t.id !== tab.id) : tabs;
+			const wasActive = !!tab && s.activeTabByWorkspace[workspaceId] === tab.id;
+			return {
+				...(tab ? { tabsByWorkspace: { ...s.tabsByWorkspace, [workspaceId]: remaining } } : {}),
+				...(wasActive
+					? {
+							activeTabByWorkspace: {
+								...s.activeTabByWorkspace,
+								[workspaceId]: remaining.at(-1)?.id ?? null,
+							},
+							navTickByWorkspace: bumpNav(s, workspaceId),
+						}
+					: {}),
+				...(inHistory
+					? {
+							closedChatsByWorkspace: {
+								...s.closedChatsByWorkspace,
+								[workspaceId]: closed.filter((c) => c.sessionId !== sessionId),
+							},
+						}
+					: {}),
+				...(hasRuntime ? { sessions: omitKey(s.sessions, sessionId) } : {}),
+				...(hasSkillBaseline
+					? { skillsSyncedTickBySession: omitKey(s.skillsSyncedTickBySession, sessionId) }
+					: {}),
+				...(targetsLocation ? { chatLocationRequest: null } : {}),
 			};
 		}),
 	reopenChat: (sessionId) =>

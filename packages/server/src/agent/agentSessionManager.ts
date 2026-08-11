@@ -33,6 +33,7 @@ import {
 } from "./piRuntime";
 import { repairDanglingToolCalls } from "./sessionRepair";
 import type { SkillAdmissionContext } from "./skillAdmission";
+import { trashFile } from "./trash";
 import { cancelExtUiForSession, createWebUiContext, notifyExtUi } from "./webUiContext";
 
 interface Entry {
@@ -690,4 +691,30 @@ async function purgeDiskSessions(cwd: string): Promise<void> {
 	for (const info of infos) {
 		if (info.cwd === cwd) rmSync(info.path, { force: true });
 	}
+}
+
+/**
+ * Delete ONE chat for good (the history/closed-chats list's trash action): dispose it if it happens to be
+ * live (aborting a mid-stream turn first, like the archive teardown), then move its transcript to the OS
+ * trash so the delete is recoverable. The chat is usually a CLOSED one, so the file is resolved from disk
+ * with the same cwd+id disambiguation `getSessionMessages` uses — and only a file whose recorded `cwd`
+ * matches this workspace is touched, so a stray/foreign id disposes nothing and trashes nothing.
+ */
+export async function deleteSession(
+	sessionId: string,
+	workspaceId: string,
+	cwd: string,
+): Promise<void> {
+	const entry = sessions.get(sessionId);
+	if (entry?.workspaceId === workspaceId) {
+		if (entry.session.isStreaming) await entry.session.abort().catch(() => {});
+		removeSession(sessionId);
+	}
+	let path: string | undefined;
+	try {
+		path = (await SessionManager.list(cwd)).find((i) => i.id === sessionId && i.cwd === cwd)?.path;
+	} catch {
+		return; // no sessions dir for this cwd — nothing on disk to trash
+	}
+	if (path) trashFile(path);
 }

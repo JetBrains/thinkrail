@@ -4,6 +4,7 @@ import {
 	History,
 	MessageSquarePlus,
 	RotateCcw,
+	Trash2,
 	X,
 } from "lucide-react";
 import { lazy, Suspense, useEffect, useMemo } from "react";
@@ -87,9 +88,11 @@ const NO_CLOSED: ClosedChat[] = [];
 function ChatHistoryMenu({
 	closedChats,
 	onReopen,
+	onDelete,
 }: {
 	closedChats: ClosedChat[];
 	onReopen: (sessionId: string) => void;
+	onDelete: (sessionId: string) => void;
 }) {
 	return (
 		<DropdownMenu>
@@ -104,18 +107,29 @@ function ChatHistoryMenu({
 			<DropdownMenuContent align="end" className="min-w-[16rem]">
 				<DropdownMenuLabel>Recently closed</DropdownMenuLabel>
 				{closedChats.map((c) => (
-					<DropdownMenuItem
-						key={c.sessionId}
-						data-testid="closed-chat-item"
-						data-session-id={c.sessionId}
-						onSelect={() => onReopen(c.sessionId)}
-					>
-						<span className="flex-1 truncate">{c.title}</span>
-						<span className="shrink-0 text-text-muted tr-text-metadata">
-							{relativeTime(c.closedAt)}
-						</span>
-						<RotateCcw className="size-3.5 shrink-0 text-text-muted" />
-					</DropdownMenuItem>
+					<div key={c.sessionId} data-testid="closed-chat-row" className="flex items-center">
+						<DropdownMenuItem
+							data-testid="closed-chat-item"
+							data-session-id={c.sessionId}
+							onSelect={() => onReopen(c.sessionId)}
+							className="min-w-0 flex-1"
+						>
+							<span className="flex-1 truncate">{c.title}</span>
+							<span className="shrink-0 text-text-muted tr-text-metadata">
+								{relativeTime(c.closedAt)}
+							</span>
+							<RotateCcw className="size-3.5 shrink-0 text-text-muted" />
+						</DropdownMenuItem>
+						<DropdownMenuItem
+							data-testid="closed-chat-delete"
+							aria-label={`Move ${c.title} to trash`}
+							title="Move chat to trash"
+							onSelect={() => onDelete(c.sessionId)}
+							className="shrink-0 px-xs text-text-muted focus:text-feedback-error"
+						>
+							<Trash2 className="size-3.5" />
+						</DropdownMenuItem>
+					</div>
 				))}
 			</DropdownMenuContent>
 		</DropdownMenu>
@@ -294,6 +308,16 @@ export function CenterTabs() {
 		await openChatInTab(activeWorkspaceId, sessionId);
 	};
 
+	const onDeleteChat = async (sessionId: string) => {
+		if (!activeWorkspaceId) return;
+		try {
+			await getTransport().request("session.delete", { workspaceId: activeWorkspaceId, sessionId });
+			useAppStore.getState().deleteChat(activeWorkspaceId, sessionId);
+		} catch (err) {
+			toast.error(errorText(err), "Couldn't delete the chat");
+		}
+	};
+
 	const startChat = async () => {
 		if (!activeWorkspaceId) return;
 		// Starting a chat is a navigation, even though its tab only appears once the create returns — so a
@@ -440,7 +464,11 @@ export function CenterTabs() {
 					) : null}
 				</div>
 				{closedChats.length > 0 ? (
-					<ChatHistoryMenu closedChats={closedChats} onReopen={(id) => void onReopenChat(id)} />
+					<ChatHistoryMenu
+						closedChats={closedChats}
+						onReopen={(id) => void onReopenChat(id)}
+						onDelete={(id) => void onDeleteChat(id)}
+					/>
 				) : null}
 			</div>
 			<div data-testid="editor-pane" className="min-h-0 flex-1">

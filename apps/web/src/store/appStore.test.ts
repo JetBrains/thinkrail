@@ -616,6 +616,30 @@ test("closing a chat moves it to history with its runtime kept; reopening restor
 	expect(st.sessions.a?.isStreaming).toBe(true); // full transcript/state intact
 });
 
+test("deleteChat removes history/runtime state and falls back when deleting the active tab", () => {
+	const store = useAppStore.getState();
+	useAppStore.setState({ activeWorkspaceId: "ws1" });
+	store.openChatSession("ws1", "a", null, "medium");
+	store.openChatSession("ws1", "b", null, "medium");
+
+	store.closeChatToHistory("a");
+	store.deleteChat("ws1", "a");
+	let st = useAppStore.getState();
+	expect(st.closedChatsByWorkspace.ws1 ?? []).toHaveLength(0);
+	expect(st.sessions.a).toBeUndefined();
+	expect(st.skillsSyncedTickBySession.a).toBeUndefined();
+	expect(st.sessions.b).toBeDefined();
+
+	store.openChatSession("ws1", "c", null, "medium");
+	const beforeNav = useAppStore.getState().navTickByWorkspace.ws1 ?? 0;
+	store.deleteChat("ws1", "c");
+	st = useAppStore.getState();
+	expect(st.tabsByWorkspace.ws1?.some((t) => t.kind === "chat" && t.sessionId === "c")).toBe(false);
+	expect(st.activeTabByWorkspace.ws1).toBe("ws1:b");
+	expect(st.navTickByWorkspace.ws1).toBe(beforeNav + 1);
+	expect(st.sessions.c).toBeUndefined();
+});
+
 test("hydrateSession rebuilds a runtime + tab on connect, and never clobbers a live one", () => {
 	const store = useAppStore.getState();
 	useAppStore.setState({ activeWorkspaceId: "ws1" });

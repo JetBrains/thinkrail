@@ -329,7 +329,8 @@ a project picker, the prompt hero, and the reused
   **`doc`** tabs (`DocTab` — inline rendered markdown, no file on disk) via its own
   `DocPane`→`MarkdownPreview`; used for the plan-as-markdown snapshot (see the `chat` module). `CenterTabs`
   closing a chat tab routes to `store.closeChatToHistory` (keeps the session alive) and shows a
-  **chat-history** dropdown (recently-closed + disk-only chats, shown only when non-empty). On
+  **chat-history** dropdown (recently-closed + disk-only chats, shown only when non-empty); each row has
+  a one-click trash action (`session.delete` → `store.deleteChat`, no confirm). On
   workspace-activate it **hydrates**: `session.list` → **live** sessions auto-restore as tabs
   (`session.getMessages` → `messagesToRuntime` → `store.hydrateSession`), and so do **disk-only sessions
   carrying unfinished TODOs** (`SessionSummary.openTodos > 0` — work in progress survives a host restart
@@ -427,7 +428,9 @@ a project picker, the prompt hero, and the reused
   carries the same per-file `Send review (N)` (`testid: review-panel-send`; `path: null` covers the
   anchorless whole-change-set bucket), the panel header a **`Send all (N)`** across every file
   (`SendAllReviewsButton`, `testid: review-send-all`, over `allDraftIds`; no ids passed — the host's
-  "all drafts" is the batch, so the count can't race a concurrent edit). The review-level
+  "all drafts" is the batch, so the count can't race a concurrent edit); the header shows **whenever the
+  review has files** and also carries a **Clear** (`testid: review-clear`) — a destructive `ConfirmPopover`
+  that archives the review (`review.close`) then re-reads the fresh empty one. The review-level
   (overall-note) composer was removed for
   now (the `review` comment kind stays in the model, UI-less). The `review.get` hydration read is **owned by `RightPanel`**
   (`useWorkspaceReview`, the `useWorkspaceSpecs` pattern — the read also re-anchors server-side): the
