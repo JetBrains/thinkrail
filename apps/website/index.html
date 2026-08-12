@@ -344,21 +344,25 @@
 										<button type="button" class="windows-shell-tab" role="tab" id="hero-shell-cmd-tab" aria-controls="hero-shell-cmd" aria-selected="false" tabindex="-1" data-windows-shell="cmd">Command Prompt</button>
 										<button type="button" class="windows-shell-tab" role="tab" id="hero-shell-wsl-tab" aria-controls="hero-shell-wsl" aria-selected="false" tabindex="-1" data-windows-shell="wsl">WSL</button>
 									</div>
-									<button type="button" class="copy-btn copy-btn-tabbar" data-copy="" aria-label="Copy install command">
-										<svg class="i" aria-hidden="true"><use href="#i-copy" /></svg>
-										<svg class="i i-done" aria-hidden="true"><use href="#i-check" /></svg>
-									</button>
 								</div>
 								<div class="install-panel" id="hero-install-macos" role="tabpanel" aria-labelledby="hero-install-macos-tab" data-install-panel="macos">
 									<p class="install-fallback-heading">macOS</p>
 									<div class="install-line">
 										<code>curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash</code>
+										<button type="button" class="copy-btn" data-copy="curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash" aria-label="Copy macOS install command">
+											<svg class="i" aria-hidden="true"><use href="#i-copy" /></svg>
+											<svg class="i i-done" aria-hidden="true"><use href="#i-check" /></svg>
+										</button>
 									</div>
 								</div>
 								<div class="install-panel" id="hero-install-linux" role="tabpanel" aria-labelledby="hero-install-linux-tab" data-install-panel="linux">
 									<p class="install-fallback-heading">Linux</p>
 									<div class="install-line">
 										<code>curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash</code>
+										<button type="button" class="copy-btn" data-copy="curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash" aria-label="Copy Linux install command">
+											<svg class="i" aria-hidden="true"><use href="#i-copy" /></svg>
+											<svg class="i i-done" aria-hidden="true"><use href="#i-check" /></svg>
+										</button>
 									</div>
 								</div>
 								<div class="install-panel" id="hero-install-windows" role="tabpanel" aria-labelledby="hero-install-windows-tab" data-install-panel="windows">
@@ -368,18 +372,30 @@
 											<p class="install-fallback-heading">PowerShell</p>
 											<div class="install-line">
 												<code>powershell -c "irm https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1 | iex"</code>
+												<button type="button" class="copy-btn" data-copy="powershell -c &quot;irm https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1 | iex&quot;" aria-label="Copy PowerShell install command">
+													<svg class="i" aria-hidden="true"><use href="#i-copy" /></svg>
+													<svg class="i i-done" aria-hidden="true"><use href="#i-check" /></svg>
+												</button>
 											</div>
 										</div>
 										<div class="windows-shell-panel" id="hero-shell-cmd" role="tabpanel" aria-labelledby="hero-shell-cmd-tab" data-windows-shell-panel="cmd">
 											<p class="install-fallback-heading">Command Prompt</p>
 											<div class="install-line">
 												<code>powershell -c "irm https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1 | iex"</code>
+												<button type="button" class="copy-btn" data-copy="powershell -c &quot;irm https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1 | iex&quot;" aria-label="Copy Command Prompt install command">
+													<svg class="i" aria-hidden="true"><use href="#i-copy" /></svg>
+													<svg class="i i-done" aria-hidden="true"><use href="#i-check" /></svg>
+												</button>
 											</div>
 										</div>
 										<div class="windows-shell-panel" id="hero-shell-wsl" role="tabpanel" aria-labelledby="hero-shell-wsl-tab" data-windows-shell-panel="wsl">
 											<p class="install-fallback-heading">WSL</p>
 											<div class="install-line">
 												<code>curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash</code>
+												<button type="button" class="copy-btn" data-copy="curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash" aria-label="Copy WSL install command">
+													<svg class="i" aria-hidden="true"><use href="#i-copy" /></svg>
+													<svg class="i i-done" aria-hidden="true"><use href="#i-check" /></svg>
+												</button>
 											</div>
 										</div>
 									</div>

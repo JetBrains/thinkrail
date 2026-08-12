@@ -383,7 +383,6 @@ if (installPicker) {
 	const shellPanels = document.querySelectorAll<HTMLElement>("[data-windows-shell-panel]");
 	// The Windows shell switcher lives inline in the tab bar; it shows only while Windows is active.
 	const shellSwitcher = installPicker.querySelector<HTMLElement>(".windows-shell-tabs");
-	const copyButton = installPicker.querySelector<HTMLElement>(".copy-btn-tabbar");
 
 	// The command currently on screen is the single source of truth for both the copy button and the
 	// terminal simulation: visible OS panel -> its visible Windows shell panel (if any) -> the <code>.
@@ -394,7 +393,7 @@ if (installPicker) {
 		);
 		const code = (shellPanel ?? osPanel)?.querySelector(".install-line code");
 		const command = code?.textContent?.trim() ?? "";
-		if (copyButton) copyButton.dataset.copy = command;
+		// The terminal simulation follows the active command; the copy buttons live per command row.
 		publishInstallSelection({ command, platform: selectedPlatform });
 	};
 	let selectedPlatform: InstallPlatform = detectedPlatform ?? "linux";

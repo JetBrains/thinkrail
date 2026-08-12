@@ -877,18 +877,6 @@ p.hero-lede {
 	display: none;
 }
 
-/* The single copy button lives in the OS tab bar, pushed into the empty space
-   on the right and vertically centred against the tabs. */
-.install-tabs .copy-btn {
-	align-self: center;
-	margin-left: auto;
-	width: 30px;
-	height: 28px;
-	border-left: 0;
-	border-radius: 4px;
-	font-size: 14px;
-}
-
 /* OS tabs attach to the command surface like editor tabs. Without JS the controls stay hidden and all
    labelled instruction panels remain visible; main.ts adds install-tabs-ready only after wiring them. */
 .install-picker {
@@ -1006,40 +994,47 @@ html.install-tabs-ready .install-frame .windows-shell-picker {
 	border-radius: 0;
 }
 
-/* Inline in the tab bar, next to the Windows tab — visible only when the Windows tab is active
-   (JS toggles [hidden]). Vertically centred + compact so it never grows the tab-bar height. */
+/* Inline next to the active Windows tab, shown only while Windows is active (JS toggles [hidden]).
+   Compact segmented control: one shared border/container on the container-workspace-bg surface (it
+   belongs to the active tab state), options are segments not chips. Centred + short so the tab-bar
+   height stays stable across OS. */
 html.install-tabs-ready .windows-shell-tabs:not([hidden]) {
-	display: flex;
+	display: inline-flex;
 	align-self: center;
-	gap: 4px;
 	margin-left: 8px;
+	border: 1px solid var(--border);
+	border-radius: 4px;
+	overflow: hidden;
+	background: var(--container-workspace-bg);
 }
 
 .windows-shell-tab {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	min-height: 27px;
-	padding: 5px 10px;
-	border: 1px solid var(--border2);
-	border-radius: 4px;
+	min-height: 24px;
+	padding: 4px 9px;
+	border: 0;
+	border-right: 1px solid var(--border);
 	background: transparent;
-	color: var(--hint);
+	color: var(--muted);
 	font-family: var(--font-mono);
 	font-size: 10.5px;
 	line-height: 1;
 	cursor: pointer;
 }
 
+.windows-shell-tab:last-child {
+	border-right: 0;
+}
+
 .windows-shell-tab:hover {
 	color: var(--text);
-	background: var(--hover);
 }
 
 .windows-shell-tab[aria-selected="true"] {
-	border-color: color-mix(in srgb, var(--accent) 45%, var(--border2));
-	background: color-mix(in srgb, var(--accent) 9%, transparent);
-	color: var(--accent);
+	background: var(--hover);
+	color: var(--text);
 }
 
 html.install-tabs-ready .windows-shell-picker .install-line {
