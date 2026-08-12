@@ -191,9 +191,13 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     (`~/.copilot/skills`), and Gemini (`${GEMINI_CLI_HOME:-~}/.gemini/skills`), **plus each installed Claude
     plugin's `skills/` dir** (read from `~/.claude/plugins/installed_plugins.json` — the resolved `installPath`,
     never a cache sweep, so stale versions and transitive `node_modules/**/skills` are excluded); project-root
-    aliases are `.claude/skills`, `.github/skills`, and `.gemini/skills`. The fixed project/personal alias roots are
-    registered as candidate skill paths **whether or not they exist yet**, so a `loader.reload()` picks up one a branch
-    switch / pull / clone creates mid-session (plugin dirs are the set installed at construction — a plugin added later
+    aliases are `.claude/skills`, `.github/skills`, and `.gemini/skills`. The pure
+    **`isProjectSkillPath(relativePath)`** predicate is the one server-side definition used by the worktree
+    watcher (injected through `host`): it recognizes those aliases plus Pi's native `.pi/skills` and
+    `.agents/skills`, so capped filesystem batches carry truthful skill-change evidence without making
+    `watch` depend on `agent`. The fixed project/personal alias roots are registered as candidate skill paths
+    **whether or not they exist yet**, so a `loader.reload()` picks up one a branch switch / pull / clone
+    creates mid-session (plugin dirs are the set installed at construction — a plugin added later
     needs a fresh session); classification still only counts dirs that actually exist. Still never arbitrary
     dot-directory scanning, plugin caches, commands, or nested downward discovery. Pi remains the parser:
     vendor-only macros/hooks/models/subagents/metadata are not emulated. First-name-wins precedence is
@@ -257,7 +261,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   helpers (`validateQuestionnaire`/`buildQuestionnaireResponse`/`assessAnswerability`/
   `buildAnswersMessage`); `repairDanglingToolCalls`; the skill catalog helpers
   `listSkillCommands(cwd, admission)` (filtered, pre-session autocomplete) / `listSkillCatalog(cwd, admission)`
-  (unfiltered, the manager's `skills.state`) / `listProjectAliasSkillNames(cwd)` (present-alias count);
+  (unfiltered, the manager's `skills.state`) / `listProjectAliasSkillNames(cwd)` (present-alias count) /
+  `isProjectSkillPath(relativePath)` (watch-classification predicate);
   `reloadSessionResources(sessionId)` (active-chat reload); the **`setSkillAdmissionResolver`** seam (host
   wires `workspaceId` → the admission context);
   the compiled-binary seam (`registerBundledRuntime` +

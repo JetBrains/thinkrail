@@ -34,7 +34,12 @@ export function createSkillLoadRequests(deps: SkillLoadDependencies) {
 
 		const started = deps.watchReady(workspaceId).then(({ startupNudge }) => {
 			if (startupNudge) {
-				deps.noteFsChanged({ workspaceId, paths: [], truncated: true });
+				deps.noteFsChanged({
+					workspaceId,
+					paths: [],
+					truncated: true,
+					skillChange: "unknown",
+				});
 			}
 			return deps.workspaceTick(workspaceId);
 		});

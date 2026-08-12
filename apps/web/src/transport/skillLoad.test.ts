@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import type { WorkspaceWatchReadyResult } from "@thinkrail/contracts";
+import type { WorkspaceFsChangedPayload, WorkspaceWatchReadyResult } from "@thinkrail/contracts";
 import { createSkillLoadRequests } from "./skillLoad";
 
 test("skill-load requests share startup, fold the replay fallback before the baseline, and guard every load", async () => {
@@ -10,13 +10,15 @@ test("skill-load requests share startup, fold the replay fallback before the bas
 	let watchCalls = 0;
 	let tick = 0;
 	const order: string[] = [];
+	const fallbacks: WorkspaceFsChangedPayload[] = [];
 	const requests = createSkillLoadRequests({
 		watchReady: () => {
 			watchCalls += 1;
 			return watchCalls === 1 ? firstReady : Promise.resolve({ startupNudge: false });
 		},
-		noteFsChanged: () => {
+		noteFsChanged: (payload) => {
 			order.push("fallback");
+			fallbacks.push(payload);
 			tick += 1;
 		},
 		workspaceTick: () => {
@@ -63,6 +65,9 @@ test("skill-load requests share startup, fold the replay fallback before the bas
 	expect(messages.syncedTick).toBe(1);
 	expect(order.slice(0, 2)).toEqual(["fallback", "baseline"]);
 	expect(order.filter((step) => step === "fallback")).toHaveLength(1);
+	expect(fallbacks).toEqual([
+		{ workspaceId: "ws1", paths: [], truncated: true, skillChange: "unknown" },
+	]);
 	expect(order).toContain("create");
 	expect(order).toContain("messages");
 	expect(tick).toBe(2);

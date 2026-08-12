@@ -131,18 +131,24 @@ export interface EditorInfo {
  * on-disk change (agent edit, terminal command, Finder) or a pathless synchronization nudge. An
  * **invalidation nudge, not data** — clients re-read via the existing read methods, so a duplicate or
  * replayed frame is harmless. `paths` are worktree-relative and deduped, capped host-side;
- * `truncated: true` means path uncertainty remains — an observed watcher batch was incomplete or a fresh
- * watcher's registration window may have hidden an event — so clients treat it as a wildcard.
+ * `truncated: true` means that generic path list is incomplete, so path consumers treat it as a wildcard.
+ * `skillChange` is independent evidence accumulated before the cap: `detected` means a concrete project
+ * skill path was observed, `unknown` means the platform supplied no classifiable path (including watcher
+ * startup uncertainty), and `none` means no skill path was observed and no such uncertainty remains.
  *
- * An **empty, non-truncated** frame (`paths: []`, `truncated: false`) is the pathless variant: re-read the
- * workspace without claiming a file changed. The host emits it when worktree git metadata moves (a
- * `commit`/`reset`/`switch` in a terminal), which invalidates git-derived reads (`git.status`, an
- * `uncommitted`-scope diff) while leaving the working tree untouched. Same contract: re-read, don't patch.
+ * An **empty, non-truncated, skill-neutral** frame (`paths: []`, `truncated: false`,
+ * `skillChange: "none"`) is the pathless variant: re-read the workspace without claiming a file changed.
+ * The host emits it when worktree git metadata moves (a `commit`/`reset`/`switch` in a terminal), which
+ * invalidates git-derived reads (`git.status`, an `uncommitted`-scope diff) while leaving the working tree
+ * untouched. Same contract: re-read, don't patch.
  */
+export type WorkspaceSkillChange = "none" | "detected" | "unknown";
+
 export interface WorkspaceFsChangedPayload {
 	workspaceId: string;
 	paths: string[];
 	truncated: boolean;
+	skillChange: WorkspaceSkillChange;
 }
 
 /** A chat tab bound to a workspace. `id` is the UI tab id; `sessionId` is the pi `AgentSession` id. */

@@ -10,6 +10,7 @@ import { errorCodeOf } from "@thinkrail/shared/codedError";
 import {
 	disposeAllSessions,
 	getSessionWorkspaceId,
+	isProjectSkillPath,
 	setExtUiPublisher,
 	setReviewCommentHandler,
 	setSessionPublisher,
@@ -40,7 +41,12 @@ import {
 	setTerminalPublisher,
 	setTerminalTabsPublisher,
 } from "../terminal";
-import { setRepoMetaPublisher, setWatchPublisher, stopAllWatches } from "../watch";
+import {
+	setRepoMetaPublisher,
+	setSkillPathClassifier,
+	setWatchPublisher,
+	stopAllWatches,
+} from "../watch";
 import { getWorkspace, refreshUserOwnedWorkspace, setWorkspacePublisher } from "../workspaces";
 import {
 	isPromptCommitted,
@@ -409,6 +415,7 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 		reanchorWorkspace(payload.workspaceId);
 	};
 	setWatchPublisher(publishFsChanged);
+	setSkillPathClassifier(isProjectSkillPath);
 	// The same frame, publishable from the `git.prefetch` handler: the app's own background fetch moves
 	// `refs/remotes/…` in the project repo's shared `.git` — a location no worktree watcher can see — so the
 	// handler nudges the workspaces whose diff base that ref is (see `fsNudge.ts`).
@@ -429,7 +436,7 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 	//      badge) correctly see nothing of interest.
 	setRepoMetaPublisher((workspaceId) => {
 		refreshUserOwnedWorkspace(workspaceId);
-		publishFsChanged({ workspaceId, paths: [], truncated: false });
+		publishFsChanged({ workspaceId, paths: [], truncated: false, skillChange: "none" });
 	});
 
 	// Fan `review.changed` snapshots out to every client (the reviews module stays channel-ignorant),

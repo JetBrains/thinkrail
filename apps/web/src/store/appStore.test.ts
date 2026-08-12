@@ -7,6 +7,8 @@ import type {
 	SpecGraphNode,
 	WireModel,
 	Workspace,
+	WorkspaceFsChangedPayload,
+	WorkspaceSkillChange,
 } from "@thinkrail/contracts";
 import { type FileTab, type SessionRuntime, toast, useAppStore } from "./appStore";
 import {
@@ -1510,11 +1512,12 @@ test("the diff scope is per workspace, defaults to the branch, and is dropped wi
 
 // The Skills-reload badge (selectSkillsStale) is store-derived, so it must not depend on the ChatView
 // mount that reads it. These drive the real store actions end-to-end.
-const skillFs = (workspaceId: string, paths: string[], truncated = false) => ({
-	workspaceId,
-	paths,
-	truncated,
-});
+const skillFs = (
+	workspaceId: string,
+	paths: string[],
+	skillChange: WorkspaceSkillChange = "detected",
+	truncated = false,
+): WorkspaceFsChangedPayload => ({ workspaceId, paths, truncated, skillChange });
 const isStale = (workspaceId: string, sessionId: string) =>
 	selectSkillsStale(useAppStore.getState(), workspaceId, sessionId);
 
@@ -1536,8 +1539,8 @@ test("skills badge: a skill-dir change flags the loaded session; reload clears i
 	expect(isStale("ws1", "a")).toBe(false);
 
 	// Later unrelated (non-skill) fs churn must not re-raise the badge — the core regression.
-	s().noteFsChanged(skillFs("ws1", ["src/app.ts"]));
-	s().noteFsChanged(skillFs("ws1", ["README.md"]));
+	s().noteFsChanged(skillFs("ws1", ["src/app.ts"], "none"));
+	s().noteFsChanged(skillFs("ws1", ["README.md"], "none"));
 	expect(isStale("ws1", "a")).toBe(false);
 });
 
@@ -1546,24 +1549,48 @@ test("skills badge: the skill-change tick is accumulated, so a later non-skill b
 	s().openChatSession("ws1", "a", null, "medium");
 
 	s().noteFsChanged(skillFs("ws1", [".claude/skills/foo/SKILL.md"])); // skill change
-	s().noteFsChanged(skillFs("ws1", ["src/app.ts"])); // later non-skill batch replaces `paths`
+	s().noteFsChanged(skillFs("ws1", ["src/app.ts"], "none")); // later non-skill batch replaces `paths`
 	// Before the fix this false-negatived (the last batch wasn't a skill path); now it stays stale.
 	expect(isStale("ws1", "a")).toBe(true);
 });
 
-test("skills badge: a pathless non-truncated repo-metadata nudge refreshes without staling", () => {
+test("skills badge: a pathless skill-neutral repo-metadata nudge refreshes without staling", () => {
 	const s = () => useAppStore.getState();
 	s().openChatSession("ws1", "a", null, "medium");
-	s().noteFsChanged(skillFs("ws1", []));
+	s().noteFsChanged(skillFs("ws1", [], "none"));
 	expect(selectWorkspaceTick(s(), "ws1")).toBe(1); // live readers still re-read
 	expect(isStale("ws1", "a")).toBe(false);
 });
 
-test("skills badge: a truncated wildcard batch flags stale even with no skill path", () => {
+test("skills badge: generic path overflow is neutral, but detected and unknown skill impact flags", () => {
 	const s = () => useAppStore.getState();
 	s().openChatSession("ws1", "a", null, "medium");
-	s().noteFsChanged(skillFs("ws1", [], true));
+
+	// The live false positive: a build exceeded the generic path cap, but every observed path was
+	// concretely non-skill. `truncated` still refreshes broad readers; it is not skill evidence.
+	s().noteFsChanged(skillFs("ws1", ["dist/chunk.js"], "none", true));
+	expect(selectWorkspaceTick(s(), "ws1")).toBe(1);
+	expect(isStale("ws1", "a")).toBe(false);
+
+	// A skill event survives even when its own path was beyond the retained generic list.
+	s().noteFsChanged(skillFs("ws1", ["dist/chunk.js"], "detected", true));
 	expect(isStale("ws1", "a")).toBe(true);
+	s().markSkillsSynced("a", selectWorkspaceTick(s(), "ws1"));
+
+	// A platform event with no classifiable path remains conservative.
+	s().noteFsChanged(skillFs("ws1", [], "unknown", true));
+	expect(isStale("ws1", "a")).toBe(true);
+});
+
+test("skills badge: non-skill overflow during session creation does not open the new chat stale", () => {
+	const s = () => useAppStore.getState();
+	// Startup uncertainty is folded before the load baseline (the workspace.watchReady contract).
+	s().noteFsChanged(skillFs("ws1", [], "unknown", true));
+	const baseline = selectWorkspaceTick(s(), "ws1");
+	// The reproduced event: >100 generated build outputs land while session.create is in flight.
+	s().noteFsChanged(skillFs("ws1", ["dist/chunk.js"], "none", true));
+	s().openChatSession("ws1", "new", null, "medium", baseline);
+	expect(isStale("ws1", "new")).toBe(false);
 });
 
 test("skills badge: per session — a chat opened after the change isn't flagged; reload clears only its own", () => {

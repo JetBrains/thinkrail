@@ -48,7 +48,8 @@ The single WebSocket client to the host, and its app-wide singleton.
   host error) with a plain `Error`, so *having* a code is exactly how a caller tells "this
   specific failure" from "the read failed"); `skillLoad.ts` (the one app-integration coordinator for session
   resource loads: single-flight `workspace.watchReady` per workspace; unless the watcher was already known
-  ready, fold the conservative wildcard locally as a replay-safe fallback; capture the store tick only
+  ready, fold the conservative `skillChange: "unknown"` wildcard locally as a replay-safe fallback; capture
+  the store tick only
   afterward; then wrappers issue `session.create` / `session.getMessages` / `session.reloadResources`, so no
   call site can accidentally reverse readiness and baseline ordering).
 - **Public surface (barrel):** `initTransport`, `getTransport`, the three skill-load-safe session request

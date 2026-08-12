@@ -289,12 +289,14 @@ of the host.
   state changed (emitted by the server's `reviews` publisher on every mutation — UI edits, agent
   `resolve_comment` calls, re-anchoring — so all clients converge, same pattern as the trio) /
   **`workspace.fsChanged`** — the worktree
-  change-notifier push (**`WorkspaceFsChangedPayload`**: `{ workspaceId, paths, truncated }`,
-  worktree-relative deduped paths, capped — `truncated` means path uncertainty remains (an observed batch
-  was incomplete, or a fresh watcher's registration window may have hidden an event) and must be treated as
-  a wildcard; a pathless non-truncated frame is a whole-workspace invalidation such as repo-metadata drift);
-  an **invalidation nudge, not data**: clients re-read via the existing read methods, so a
-  duplicate/replayed frame is harmless.
+  change-notifier push (**`WorkspaceFsChangedPayload`**: `{ workspaceId, paths, truncated, skillChange }`,
+  worktree-relative deduped paths, capped — `truncated` means the generic path list is incomplete and must
+  be treated as a wildcard; `skillChange: "none" | "detected" | "unknown"` is an **independent semantic
+  fact**, accumulated before that cap, so a concrete non-skill overflow stays `none`, a skill path omitted
+  after the cap stays `detected`, and only a pathless platform/startup uncertainty is `unknown`; a pathless
+  non-truncated/`none` frame is a whole-workspace invalidation such as repo-metadata drift); an
+  **invalidation nudge, not data**: clients re-read via the existing read methods, so a duplicate/replayed
+  frame is harmless.
   The `WsMethodMap` typed request/result map +
   `WsParams`/`WsResult` helpers, and `PROTOCOL_VERSION`. Request ids are also the reconnect idempotency key:
   an unresolved client replays the same frame/id, and the host returns the one cached result for

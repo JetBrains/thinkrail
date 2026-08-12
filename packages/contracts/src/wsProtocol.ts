@@ -200,7 +200,10 @@ export interface TerminalTabsPush {
 // its socket before that baseline is captured.
 // v32: `agent_settled` is the automatic-run terminal and carries final assistant metadata;
 // `SessionSummary.lastSettlement` closes live reconnect gaps after Pi rebuilds context.
-export const PROTOCOL_VERSION = 32;
+// v33: `WorkspaceFsChangedPayload.skillChange` separates detected/unknown skill evidence from generic path
+// truncation, so a large non-skill build cannot masquerade as a skill edit while over-cap skill paths remain
+// detectable.
+export const PROTOCOL_VERSION = 33;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a

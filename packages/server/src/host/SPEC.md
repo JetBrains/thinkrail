@@ -48,14 +48,17 @@ channel fan-out, and the process-boot wrapper both launchers share.
   record of work that finished and drops only its answer,
   the **`provider.login`** channel publish (the `auth` module's session-less login-frame bridge, wired like
   `pi.extensionUi`) and the `provider.*` login handlers, the **`watch` wiring** (inject the
-  `workspace.fsChanged` publish callback into `watch`; expose **`workspace.watchReady`** as the typed
-  preflight that awaits a fresh watcher's conservative startup nudge before a web skill-loading flow
+  `workspace.fsChanged` publish callback into `watch` and inject `agent`'s project-skill path classifier so
+  each capped batch carries independent `skillChange: none|detected|unknown` evidence; expose
+  **`workspace.watchReady`** as the typed preflight that awaits a fresh watcher's conservative startup nudge
+  before a web skill-loading flow
   captures its baseline and reports whether the watcher was already known ready (the client's replay-safe
   conservative fallback); plus the **repo-metadata** callback (`setRepoMetaPublisher`) fanned out to **two**
   convergences for a git-metadata write in a watched worktree:
   `refreshUserOwnedWorkspace` (**re-sync a user-owned workspace's folder-truth branch** — host-mediated,
   since `watch` has no `workspaces` edge, and self-publishing through the workspace-lifecycle tee) **and** a
-  pathless `fsChanged` frame (`paths: []`, `truncated: false`) so the clients' `HEAD`-relative reads
+  pathless, skill-neutral `fsChanged` frame (`paths: []`, `truncated: false`, `skillChange: "none"`) so the
+  clients' `HEAD`-relative reads
   (`git.status`, an `uncommitted`-scope diff tab) re-read when a terminal `commit`/`reset` moves a ref;
   the same publish also feeds the **fsNudge seam** (`fsNudge.ts`: `setFsNudgePublisher` +
   `nudgeBaseRefWorkspaces`), the host mediation the `git.prefetch` handler triggers when the app's own
