@@ -68,34 +68,185 @@ if (editor && sections.length > 0) {
 	for (const section of sections) spy.observe(section);
 }
 
-/* ── Terminal: type the install command, then reveal the output ─────────── */
+/* ── Terminal: OS-synced install replay + ThinkRail logo banner ─────────── */
+// The hero install picker is the single source of truth for the command (see the picker block
+// below, which calls publishInstallSelection). The terminal subscribes, so it always types the
+// command for the OS/shell selected in the hero. On load / OS change it types that command, shows a
+// short install sequence, then draws the logo. Clicking the finished terminal replays the logo alone
+// plus a GitHub CTA — never the install. Clicks mid-animation are ignored, and prefers-reduced-motion
+// renders each end state with no typing or per-line stagger.
+
+interface InstallSelection {
+	command: string;
+	platform: InstallPlatform;
+}
+let installSelection: InstallSelection | null = null;
+const installSelectionListeners: ((selection: InstallSelection) => void)[] = [];
+function publishInstallSelection(selection: InstallSelection): void {
+	installSelection = selection;
+	for (const listener of installSelectionListeners) listener(selection);
+}
+function onInstallSelection(listener: (selection: InstallSelection) => void): void {
+	installSelectionListeners.push(listener);
+	if (installSelection) listener(installSelection);
+}
+
+// The ThinkRail logo banner, drawn one line at a time — preserved exactly.
+const TERMINAL_LOGO: readonly string[] = [
+	"",
+	"",
+	"   æææææææææææææææææææææææææææææææææææææææææææææææææææææφ    ææææææææææ▄╖,_",
+	"   ████████████████████████████████████████████████████████▌    ███████████████W,",
+	"   ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀    ▀▀▀▀▀▀▀▀▓█████████┐",
+	'                                                                             "▀█████▌',
+	"   ,,,,,,,,,,,,,,,,,,,,,,,,,,,,,_     ,,,,,,,,,,,,,,,,,,,,,,,,,,,,__     `█████▌",
+	"   █████████████████████████████████    ║███████████████████████████████▄     █████",
+	"   █████████████████████████████████    ║████████████████████████████████▌    ║████L",
+	"                         █████████████    ║████▌                      ╙█████    ║████L",
+	"                         █████████████    ║████▌                       █████    ║████Γ",
+	"                         █████████████    ║████▌                       █████    ╞████Γ",
+	"                         █████████████    ║████▌                       █████    ╞████Γ",
+	"                         █████████████    ║████▌                       █████    ╞████L",
+	"                         █████████████    ║████▌                      ▄█████    ╞████L",
+	"                         █████████████    ║████▌  _╓▄æ@▌███████████████████Γ    ║████",
+	"                         █████████████    ║█████Æ█████████████████████████`     █████",
+	"                         █████████████    ║████████████▓▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀^      ╓█████",
+	"                         █████████████    ║███████▀^                       _▄▓█████",
+	"                         █████████████    ║██████      ,╓╓╓╓╓╓╓╓╓╓,     ¢▌███████^",
+	"                         █████████████    ║█████    ┌▌██████████████▄    ╙██████_",
+	"                         █████████████    ║████▌    █████████████████▌    `██████▄",
+	"                         █████████████    ║████L   [█████▀      ╙██████     ▀█████▌",
+	"                         █████████████    ║████L   [█████         ╫█████▄    ╙██████,",
+	"                         █████████████    ║████L   [█████          ╙█████▌    `██████▄",
+	"                         █████████████    ║████L   [█████           `██████     ▀█████▓",
+	"                         █████████████    ║████L   [█████             ╙█████▄    ╙██████┐",
+	"                         █████████████    ║████L   [█████              '█████▌    `██████▌",
+	"                         █████████████    ║████L   [█████                ▀█████_    ▀██████",
+	"                         █████████████    ║████L   [█████                 ╙█████▄    ╙██████▄",
+	"",
+	"",
+];
+
+const GITHUB_URL = "https://github.com/JetBrains/thinkrail";
+const INSTALL_ARCH: Record<InstallPlatform, string> = {
+	macos: "macos-arm64",
+	linux: "linux-x64",
+	windows: "windows-x64",
+};
 
 const terminal = document.querySelector<HTMLElement>(".terminal");
-const typeTarget = document.querySelector<HTMLElement>(".term-cmd[data-type]");
-if (motionOK && terminal && typeTarget) {
-	terminal.classList.add("armed");
-	const text = typeTarget.dataset.type ?? "";
-	const outs = Array.from(terminal.querySelectorAll<HTMLElement>("[data-out]"));
-	const caret = terminal.querySelector<HTMLElement>(".term-caret");
-	let i = 0;
-	const typeNext = () => {
-		if (i <= text.length) {
-			typeTarget.textContent = text.slice(0, i);
-			i += 1;
-			setTimeout(typeNext, 14 + Math.random() * 26);
-			return;
-		}
-		outs.forEach((out, index) => {
-			setTimeout(
-				() => {
-					out.style.visibility = "visible";
-					if (index === outs.length - 1 && caret) caret.remove();
-				},
-				350 + index * 420,
-			);
-		});
+const termScreen = document.getElementById("term-screen");
+if (terminal && termScreen) {
+	const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+	const makeLine = (className: string, text = "") => {
+		const el = document.createElement("span");
+		el.className = className;
+		if (text) el.textContent = text;
+		return el;
 	};
-	setTimeout(typeNext, 900);
+
+	// A generation counter: each new sequence invalidates any still-running one (so an OS change
+	// restarts cleanly). `animating` gates clicks; the initial sequence must finish before replays.
+	let generation = 0;
+	let animating = false;
+	let initialDone = false;
+
+	// The logo is wider than the narrow terminal: fit the longest line to the available width by
+	// shrinking the font — the characters are never touched, only the size.
+	const maxLogoLen = Math.max(...TERMINAL_LOGO.map((line) => line.length));
+	const fitLogo = () => {
+		const avail = termScreen.clientWidth - 28; // .term-screen horizontal padding
+		if (avail <= 0) return;
+		const px = Math.max(4, Math.min(11, Math.floor(avail / (maxLogoLen * 0.6))));
+		termScreen.style.setProperty("--term-logo-fs", `${px}px`);
+	};
+
+	const typeCommand = async (command: string, gen: number) => {
+		const row = makeLine("term-line");
+		const prompt = makeLine("term-prompt", "❯");
+		const cmd = makeLine("term-cmd");
+		const caret = makeLine("term-caret");
+		row.append(prompt, document.createTextNode(" "), cmd, caret);
+		termScreen.append(row);
+		if (motionOK) {
+			for (let i = 1; i <= command.length; i += 1) {
+				if (gen !== generation) return;
+				cmd.textContent = command.slice(0, i);
+				await wait(14 + Math.random() * 26);
+			}
+		} else {
+			cmd.textContent = command;
+		}
+		caret.remove();
+	};
+
+	const drawLines = async (
+		lines: readonly string[],
+		className: string,
+		perLineMs: number,
+		gen: number,
+	) => {
+		for (const text of lines) {
+			if (gen !== generation) return;
+			termScreen.append(makeLine(className, text));
+			termScreen.scrollTop = termScreen.scrollHeight;
+			if (motionOK && perLineMs > 0) await wait(perLineMs);
+		}
+	};
+
+	const runInstall = async (selection: InstallSelection) => {
+		generation += 1;
+		const gen = generation;
+		animating = true;
+		termScreen.replaceChildren();
+		fitLogo();
+		await typeCommand(selection.command, gen);
+		if (gen !== generation) return;
+		await drawLines(
+			[
+				`⬇ thinkrail latest (${INSTALL_ARCH[selection.platform]}) · sha256 verified ✓`,
+				"✓ installed — starting ThinkRail …",
+			],
+			"term-out",
+			420,
+			gen,
+		);
+		if (gen !== generation) return;
+		await drawLines(TERMINAL_LOGO, "term-out term-logo", 60, gen);
+		if (gen !== generation) return;
+		animating = false;
+		initialDone = true;
+	};
+
+	const replayLogo = async () => {
+		if (animating || !initialDone) return;
+		generation += 1;
+		const gen = generation;
+		animating = true;
+		termScreen.replaceChildren();
+		fitLogo();
+		await drawLines(TERMINAL_LOGO, "term-out term-logo", 60, gen);
+		if (gen !== generation) return;
+		const cta = makeLine("term-out term-cta");
+		cta.append(document.createTextNode("Ready for the real thing? → "));
+		const link = document.createElement("a");
+		link.href = GITHUB_URL;
+		link.target = "_blank";
+		link.rel = "noopener noreferrer";
+		link.textContent = "GitHub";
+		link.addEventListener("click", (event) => event.stopPropagation());
+		cta.append(link);
+		termScreen.append(cta);
+		termScreen.scrollTop = termScreen.scrollHeight;
+		animating = false;
+	};
+
+	terminal.addEventListener("click", () => {
+		void replayLogo();
+	});
+	onInstallSelection((selection) => {
+		void runInstall(selection);
+	});
 }
 
 /* ── Chat demo: replay the captured session when it scrolls into view ───── */
@@ -242,16 +393,17 @@ if (installPicker) {
 	const shellPanels = document.querySelectorAll<HTMLElement>("[data-windows-shell-panel]");
 	const copyButton = installPicker.querySelector<HTMLElement>(".copy-btn-tabbar");
 
-	// Point the single tab-bar copy button at the command currently on screen:
-	// visible OS panel -> its visible Windows shell panel (if any) -> the command <code>.
-	const updateCopyTarget = () => {
-		if (!copyButton) return;
+	// The command currently on screen is the single source of truth for both the copy button and the
+	// terminal simulation: visible OS panel -> its visible Windows shell panel (if any) -> the <code>.
+	const syncActiveCommand = () => {
 		const osPanel = Array.from(platformPanels).find((panel) => !panel.hidden);
 		const shellPanel = osPanel?.querySelector<HTMLElement>(
 			"[data-windows-shell-panel]:not([hidden])",
 		);
 		const code = (shellPanel ?? osPanel)?.querySelector(".install-line code");
-		copyButton.dataset.copy = code?.textContent?.trim() ?? "";
+		const command = code?.textContent?.trim() ?? "";
+		if (copyButton) copyButton.dataset.copy = command;
+		publishInstallSelection({ command, platform: selectedPlatform });
 	};
 	let selectedPlatform: InstallPlatform = detectedPlatform ?? "linux";
 	const initialShell: WindowsShell = "powershell";
@@ -282,7 +434,7 @@ if (installPicker) {
 			panel.hidden = platformFrom(panel.dataset.installPanel) !== platform;
 		}
 		updateDetectionNote();
-		updateCopyTarget();
+		syncActiveCommand();
 	};
 
 	const selectShell = (shell: WindowsShell) => {
@@ -294,7 +446,7 @@ if (installPicker) {
 		for (const panel of shellPanels) {
 			panel.hidden = windowsShellFrom(panel.dataset.windowsShellPanel) !== shell;
 		}
-		updateCopyTarget();
+		syncActiveCommand();
 	};
 
 	const nextTab = (

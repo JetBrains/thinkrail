@@ -1584,13 +1584,27 @@ p.footer-fineprint {
 	font-weight: 600;
 }
 
-.term-cmd,
-.term-cmd2 {
+.term-cmd {
 	color: var(--text);
 }
 
 .term-out {
 	display: block;
+	color: var(--hint);
+}
+
+/* The logo banner: wide ASCII, so it never wraps and its font is sized by JS (--term-logo-fs) to fit
+   the narrow terminal without altering any character. */
+.term-logo {
+	white-space: pre;
+	word-break: normal;
+	font-size: var(--term-logo-fs, 6px);
+	line-height: 1.05;
+	color: var(--muted);
+}
+
+.term-cta {
+	margin-top: 6px;
 	color: var(--hint);
 }
 
@@ -1606,10 +1620,6 @@ p.footer-fineprint {
 
 html:not(.anim) .term-caret {
 	display: none;
-}
-
-html.anim .terminal.armed [data-out] {
-	visibility: hidden;
 }
 
 @keyframes caret-blink {
