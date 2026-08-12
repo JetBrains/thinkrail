@@ -11,6 +11,7 @@
 import { existsSync, globSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { defaultSessionDirFor, writeFixtureSession } from "@thinkrail/server/history-test-fixtures";
 
 const binary = resolve(process.argv[2] ?? join(import.meta.dir, "..", "dist", "thinkrail"));
 if (!existsSync(binary)) {
@@ -22,6 +23,8 @@ const tmp = mkdtempSync(join(tmpdir(), "thinkrail-smoke-"));
 const cacheDir = join(tmp, "cache");
 const homeDir = join(tmp, "home");
 const projectDir = join(tmp, "project");
+const dataDir = join(tmp, "data");
+const agentDir = join(tmp, "pi-agent");
 
 function fail(message: string): never {
 	console.error(`smoke FAILED: ${message}`);
@@ -87,6 +90,31 @@ writeFileSync(
 );
 const gitInit = Bun.spawnSync(["git", "-C", projectDir, "init", "-b", "main"]);
 if (gitInit.exitCode !== 0) fail("could not initialise the portable-skill smoke project");
+const gitAdd = Bun.spawnSync(["git", "-C", projectDir, "add", "."]);
+if (gitAdd.exitCode !== 0) fail("could not stage the portable-skill smoke project");
+const gitCommit = Bun.spawnSync([
+	"git",
+	"-C",
+	projectDir,
+	"-c",
+	"user.name=ThinkRail Smoke",
+	"-c",
+	"user.email=smoke@thinkrail.invalid",
+	"commit",
+	"--quiet",
+	"-m",
+	"seed smoke project",
+]);
+if (gitCommit.exitCode !== 0) fail("could not commit the portable-skill smoke project");
+
+// A real transcript drives the binary-only Linux trash path. `trash` loads processMountinfo through a
+// template-literal CommonJS require; without the server's static inclusion seam this exact RPC fails only
+// inside the artifact, even though source e2e stays green.
+const doomedTranscript = writeFixtureSession(defaultSessionDirFor(agentDir, projectDir), {
+	cwd: projectDir,
+	name: "compiled trash probe",
+	messages: [{ role: "user", text: "move this transcript to trash", timestamp: Date.now() }],
+});
 
 // 24262 is only the scan start: the CLI free-picks past a taken port and we read the actually served
 // URL from stdout below — so concurrent runs (other worktrees, dev hosts, e2e suites) never collide.
@@ -95,8 +123,8 @@ const proc = Bun.spawn([binary, "--no-open", "--port", "24262"], {
 		...process.env,
 		// Full isolation: never touch the runner/dev machine's real state, and force a fresh
 		// cache so the binary's staging path (web assets + skills) is exercised from scratch.
-		THINKRAIL_DATA_DIR: join(tmp, "data"),
-		PI_CODING_AGENT_DIR: join(tmp, "pi-agent"),
+		THINKRAIL_DATA_DIR: dataDir,
+		PI_CODING_AGENT_DIR: agentDir,
 		XDG_CACHE_HOME: cacheDir,
 		HOME: homeDir,
 		CLAUDE_CONFIG_DIR: join(homeDir, ".claude"),
@@ -259,6 +287,20 @@ try {
 		"project.open",
 	)) as { id?: string };
 	if (!project.id) fail("project.open returned no project id");
+	const workspaces = (await within(
+		rpc(rpcSocket, "workspace.list", { projectId: project.id }),
+		10_000,
+		"workspace.list",
+	)) as { id?: string; kind?: string }[];
+	const workspaceId = workspaces.find((workspace) => workspace.kind === "default")?.id;
+	if (!workspaceId) fail("workspace.list returned no Default workspace");
+	await within(
+		rpc(rpcSocket, "session.delete", { sessionId: doomedTranscript.id, workspaceId }),
+		10_000,
+		"session.delete compiled trash probe",
+	);
+	if (existsSync(doomedTranscript.path)) fail("session.delete left the seeded transcript on disk");
+
 	// Project-scoped aliases are gated behind trust — grant it so the compiled skill.list surfaces the
 	// committed `.claude/skills` alias below (personal/bundled skills would load regardless).
 	await within(
@@ -332,7 +374,7 @@ try {
 	}
 
 	console.log(
-		`smoke OK: ${binary} booted at ${url}, served the UI + staged skills + portable alias, OAuth reached its auth URL, exited cleanly.`,
+		`smoke OK: ${binary} booted at ${url}, served the UI + staged skills + portable alias, trashed a transcript, OAuth reached its auth URL, exited cleanly.`,
 	);
 } catch (err) {
 	proc.kill("SIGKILL");

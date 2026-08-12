@@ -194,7 +194,10 @@ extensions** (which the server path-loads out of `node_modules` in dev — impos
   `provider.loginStart` for the Codex provider must answer the method select and push an `authUrl`
   frame — offline and credential-free, since pi's flow only does PKCE + a local callback server before
   notifying the URL; this pins the statically-registered OAuth flows, which can only break inside the
-  artifact — the frames are hand-rolled JSON, keeping `contracts` out of the cli), and SIGTERM exits 0. CI builds + smokes the binary on every PR
+  artifact — the frames are hand-rolled JSON, keeping `contracts` out of the cli), **moves a seeded pi
+  transcript through `session.delete` into the OS trash** (pinning the static `processMountinfo` parser
+  inclusion that `trash`'s Linux implementation otherwise reaches through a binary-opaque CommonJS
+  require), and SIGTERM exits 0. CI builds + smokes the binary on every PR
   (its host target — the generation/bundling/staging logic is platform-independent). What it can't cover
   without provider auth: the factories registering inside a live session (that's `e2e:agent` territory,
   run-from-source). The smoke's **broad-net sibling** is `bun run e2e:binary` (root
@@ -214,7 +217,8 @@ extensions** (which the server path-loads out of `node_modules` in dev — impos
   `install.json` + the staging cache root), `src/powershell.ts` (the Windows PowerShell seam), and
   `src/jbcentral.ts` (the `jbcentral` subcommand — JetBrains Central CLI proxy wiring).
 - **Allowed deps:** `@thinkrail/server` (`createServer`, `registerBundledRuntime`, `dataDir` — the
-  uninstaller has to name the app state dir, and must name the *same* one the host uses),
+  uninstaller has to name the app state dir, and must name the *same* one the host uses — plus the
+  test-only `history-test-fixtures` subpath in the artifact smoke to seed a real pi transcript),
   `@thinkrail/shared/shellEnv` (`resolveShellEnv`), Bun/Node; the generated build module may
   value-import the bundled extension packages' entries (resolved via the server package — build-time
   only, deleted after compile).

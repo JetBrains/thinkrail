@@ -254,7 +254,11 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
       imports inside the seam** — literal specifiers are statically bundled by `bun build --compile`,
       while dev (which never calls the seam) never loads the flow modules or the AWS SDK. Registration
       lands in the same `pi-ai` instance pi consults at login time because the catalog pins one exact
-      `pi-ai` version repo-wide (one store entry → one bundled module instance).
+      `pi-ai` version repo-wide (one store entry → one bundled module instance). The chat-trash wrapper
+      also statically includes `@stroncium/procfs`'s `processMountinfo` parser: `trash`'s Linux path reaches
+      it through a template-literal CommonJS `require`, which source runs can resolve from `node_modules`
+      but a single-file Bun binary cannot discover. This is an inclusion seam only — `trash` still owns
+      OS-specific recycle-bin behavior.
     Both modes append `extensionFactories`: a **headless-search policy** (a `tool_call` hook defaulting
     `web_search`'s `workflow` to `"none"`, since pi-web-access would otherwise open a browser curator our
     `rpc` host can't render) **and** `askUserQuestionExtension` (registers the `ask_user_question` tool).
@@ -282,6 +286,7 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   compiled binary's value-imports live in `apps/cli`'s generated build module); `typebox` (the
   `ask_user_question` parameter schema); `trash` (the cross-platform OS recycle-bin implementation;
   called with globbing disabled and allowed to throw — never degraded to `unlink`);
+  `@stroncium/procfs` (directly pinned solely for the compiled Linux trash parser inclusion seam);
   `contracts` (`PiEvent`/`Model`/`ThinkingLevel`/`ImageContent`/`SessionStats`/`SlashCommandInfo`/`ExtUi*`/
   `AskUserQuestion*`/`ProviderStatus*`); `@thinkrail/shared/jbcentral` (the proxy-URL predicate); Node.
 - **Forbidden:** `host`; sibling features (the `cwd` is passed in, not looked up via `persistence`).
