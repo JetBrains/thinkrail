@@ -297,6 +297,22 @@ code {
 	background: #28c840;
 }
 
+/* Brand logomark left of the wordmark. The span controls the size; the SVG scales to it and
+   follows the primary accent via currentColor. */
+.wordmark-logo {
+	display: inline-flex;
+	align-items: center;
+	height: 32px;
+	flex: none;
+	color: var(--accent);
+}
+
+.wordmark-logo svg {
+	display: block;
+	height: 100%;
+	width: auto;
+}
+
 .wordmark {
 	font-family: var(--font-display);
 	font-weight: 400;
