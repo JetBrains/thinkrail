@@ -284,7 +284,7 @@ code {
 
 .wordmark {
 	font-family: var(--font-display);
-	font-weight: 700;
+	font-weight: 400;
 	font-size: 13px;
 	color: var(--accent);
 	white-space: nowrap;
@@ -789,7 +789,7 @@ code {
 
 .hero-title {
 	font-family: var(--font-display);
-	font-weight: 800;
+	font-weight: 400;
 	font-size: clamp(52px, 9vw, 96px);
 	line-height: 0.98;
 	letter-spacing: 0.5px;

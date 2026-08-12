@@ -51,7 +51,7 @@
 		"regular": 400,
 		"medium": 500,
 		"semibold": 600,
-		"brand": 800
+		"brand": 400
 	},
 	"fontSizes": {
 		"s10": 10,

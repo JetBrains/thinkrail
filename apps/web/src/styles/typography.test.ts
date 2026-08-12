@@ -86,7 +86,7 @@ describe("typography source", () => {
 			regular: 400,
 			medium: 500,
 			semibold: 600,
-			brand: 800,
+			brand: 400,
 		});
 		// Each self-hosted face LEADS its own stack — behind a system font it would never render. The
 		// face names stay in the JSON alone, so swapping a family is a one-file change.
