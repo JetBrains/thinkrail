@@ -1510,8 +1510,8 @@ p.footer-fineprint {
 	flex: none;
 	display: flex;
 	flex-direction: column;
-	height: 300px;
-	max-height: 38vh;
+	height: 375px;
+	max-height: 47vh;
 }
 
 .terminal-head {
