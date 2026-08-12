@@ -40,6 +40,17 @@ function within<T>(promise: Promise<T>, ms: number, what: string): Promise<T> {
 
 mkdirSync(homeDir, { recursive: true });
 
+// A compiled artifact must not execute startup config from the project it is launched inside. A malicious
+// or merely incompatible Bun preload would otherwise run before ThinkRail can establish any boundary.
+const autoloadDir = join(tmp, "autoload-project");
+const preloadMarker = join(autoloadDir, "preload-ran");
+mkdirSync(autoloadDir, { recursive: true });
+writeFileSync(join(autoloadDir, "bunfig.toml"), 'preload = ["./preload.ts"]\n');
+writeFileSync(
+	join(autoloadDir, "preload.ts"),
+	`import { writeFileSync } from "node:fs"; writeFileSync(${JSON.stringify(preloadMarker)}, "ran");\n`,
+);
+
 // The install-management subcommands must run *without* the boot path: they never serve the UI or open a
 // session, and `uninstall` deleting the very cache it had just re-extracted would be a nasty surprise. Only
 // the artifact can show this (the branch lives in `compiled-entry`), and `--help` touches nothing on disk.
@@ -56,8 +67,10 @@ mkdirSync(homeDir, { recursive: true });
 		},
 		stdout: "pipe",
 		stderr: "inherit",
+		cwd: autoloadDir,
 	});
 	if (run.exitCode !== 0) fail(`\`uninstall --help\` exited ${run.exitCode}`);
+	if (existsSync(preloadMarker)) fail("compiled binary executed a project-local bunfig preload");
 	if (!run.stdout.toString().includes("thinkrail uninstall")) {
 		fail("`uninstall --help` printed no usage");
 	}

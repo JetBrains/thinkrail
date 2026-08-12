@@ -99,6 +99,8 @@ Architecture decisions live as spec-graph nodes, dogfooding the spec layer the p
   **REPLACE**.
 - **`prompt()` throws while a session is streaming** → call `steer()` / `followUp()`. Errors arrive via
   the event stream + thrown methods, not a crash signal — wrap each call and forward to the WS client.
+- **Automatic work ends at `agent_settled`, never `agent_end`.** `agent_end` is attempt-level and may be
+  followed by provider retry, compaction/recovery, or a queued continuation even when `willRetry` is false.
 - **UI panels are layout-agnostic**; the shell arranges them (desktop multi-pane / mobile single-view).
 - **Web styling = Tailwind v4 utilities mapped to the CSS-var tokens** (`@theme inline` — colour in the
   generated `styles/generated/colors.css`, everything else in `apps/web/src/index.css`); themes swap the

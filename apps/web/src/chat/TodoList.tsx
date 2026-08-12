@@ -24,7 +24,8 @@ import { groupProgress, type PlanGlance, planSections } from "./planView";
 // user's pending loose items), then a **Done** label at the very bottom with each finished task as its
 // own foldable row (collapsed) + done loose items. Finished *steps* stay inline in their group; only
 // whole done tasks move to Done. The in_progress step's icon follows the glance: working → dot, stopped on a
-// question → `?`, stopped otherwise → pause — so the list never claims "in work" while the system waits.
+// question → `?`, stopped otherwise → pause — so the list never claims "in work" while paused or
+// falsely says the user owes an answer without a pending question.
 // Status is read-only (agent-owned); the user's edit surface is add + remove.
 
 const STATUS_LABEL: Record<TodoStatus, string> = {
@@ -48,7 +49,7 @@ export function glanceIcon(glance: PlanGlance): {
 			className: "text-primary",
 		};
 	if (glance === "waiting")
-		return { Icon: CirclePause, label: "Paused — waiting for you", className: "text-text-muted" };
+		return { Icon: CirclePause, label: "Paused", className: "text-text-muted" };
 	return { Icon: CircleDot, label: STATUS_LABEL.in_progress, className: "text-primary" };
 }
 

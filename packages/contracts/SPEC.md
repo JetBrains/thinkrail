@@ -53,10 +53,13 @@ of the host.
   - `@earendil-works/pi-agent-core`: `AgentEvent`, `AgentMessage`, `ThinkingLevel` (the
     `off`-inclusive one);
   - the local render union **`PiEvent`** — the real superset `AgentSessionEvent` lives in the Node-only
-    `pi-coding-agent`, so it's **mirrored** here (the `agent_end.willRetry` + `queue_update` /
-    `compaction_*` / `auto_retry_*` / `summarization_retry_*` / `session_info_changed` /
-    `thinking_level_changed` members, plus `bash_execution_update` — mirrored for union fidelity only;
-    the host never calls `executeBash`, so the UI never receives it);
+    `pi-coding-agent`, so it's **mirrored** here (the `agent_end.willRetry` + `agent_settled` /
+    `queue_update` / `compaction_*` / `auto_retry_*` / `summarization_retry_*` /
+    `session_info_changed` / `thinking_level_changed` members, plus `bash_execution_update` — mirrored
+    for union fidelity only; the host never calls `executeBash`, so the UI never receives it).
+    `agent_settled` is a host projection carrying the final attempt's reported terminal metadata
+    (`stopReason` + optional `errorMessage`): `agent_end.willRetry` covers provider auto-retry only and
+    is not an automatic-work terminal when compaction or a queued continuation follows;
   - **`SessionEventPayload`** (`{ sessionId, event: PiEvent }`) — the `pi.event` push frame.
   - the cheap-win mirrors (declared in the Node-only `pi-coding-agent`): **`SessionStats`** + **`ContextUsage`**
     (tokens/cost/context bar — display only) and **`SlashCommandInfo`** + **`SlashCommandSourceInfo`** (the
@@ -67,8 +70,11 @@ of the host.
     distinguishes an in-memory session (auto-restored) from a disk-only one (surfaced in chat-history,
     re-opened on demand — except one carrying unfinished TODOs, which a client auto-opens). The optional
     **`openTodos`** (count of non-`done` items in the chat's TODO plan) is populated only by
-    `session.list` (the host decorates via the todos module); absent = unknown, treated as 0 — an
-    additive optional field, so no protocol-version bump. `session.getMessages` returns `{ summary, messages }` (the transcript is
+    `session.list` (the host decorates via the todos module); absent = unknown, treated as 0. A live
+    summary's optional **`lastSettlement`** retains the host-observed terminal (`null` = the live run is
+    active or settled without an assistant) so reconnect can surface a final failure Pi removed from its rebuilt context; absent
+    means this host process has not observed a settlement and the persisted transcript is authoritative.
+    `session.getMessages` returns `{ summary, messages }` (the transcript is
     **`TranscriptMessage[]`** — the pi-canonical `Message` union widened with **`WireCustomMessage`**, a
     type-only mirror of pi-coding-agent's Node-only `CustomMessage`, so extension-injected messages like
     the ask replies cross the wire; the summary reflects the now-live session after a disk re-open).
@@ -306,10 +312,10 @@ of the host.
 
 - **Mirrors are not version-pinned in comments.** A shape re-declared here because its real home is
   Node-only carries *what* it mirrors, never *which pi version it was last checked against*: those
-  markers had to be hand-edited across several files on every bump, nothing verified them, and they
-  missed real drift anyway — **`PiEvent` is not exhaustive** (`agent_settled`, `entry_appended`), and the
-  host's relay cast means those still reach clients. Re-audit a mirror when a bump's changelog touches
-  it, not because a comment names a version.
+  markers had to be hand-edited across several files on every bump and nothing verified them. A
+  UI-relevant lifecycle member must be explicit here (especially the host-enriched `agent_settled`);
+  UI-irrelevant session events such as `entry_appended` may remain unmodelled and ignored. Re-audit a
+  mirror when a bump's changelog touches it, not because a comment names a version.
 - **Type-only, from the package roots, always** (type-only imports are erased by
   `verbatimModuleSyntax`, so the web bundle stays provider-free; the pi-ai provider/API subpaths
   statically import the Node SDKs — never touch them). The `/base` entries existed only in 0.79.8–0.79.9.

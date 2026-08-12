@@ -180,7 +180,9 @@ export function CenterTabs() {
 			// conservatively stale); a disk attach reloaded against current disk → the guarded start tick.
 			const tick = live ? undefined : loaded.syncedTick;
 			const { summary, messages } = loaded.result;
-			useAppStore.getState().hydrateSession(summary, messagesToRuntime(messages), false, tick);
+			useAppStore
+				.getState()
+				.hydrateSession(summary, messagesToRuntime(messages, summary.lastSettlement), false, tick);
 		};
 		const hydrateFromHost = async (sessionId: string, live: boolean) =>
 			applyHydrate(await fetchMessages(sessionId), live);
@@ -269,7 +271,9 @@ export function CenterTabs() {
 				if (cancelled) return;
 				// The target may already be live in another client; without proof of a disk attach, preserve
 				// the existing conservative no-baseline behavior.
-				useAppStore.getState().hydrateSession(summary, messagesToRuntime(messages), true);
+				useAppStore
+					.getState()
+					.hydrateSession(summary, messagesToRuntime(messages, summary.lastSettlement), true);
 			})
 			.catch((err) => {
 				if (cancelled) return;

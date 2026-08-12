@@ -25,6 +25,7 @@ import type {
 import { DEFAULT_CONFIG, isAskUserAnswersMessage, isControlMessage } from "@thinkrail/contracts";
 import { create } from "zustand";
 import type { LoginState } from "../auth";
+import { assistantFailureText } from "../chat/assistantFailure";
 import type { HydratedRuntime } from "../chat/hydrate";
 import type { ChatTurn, ExtUiDialogRequest, ToolResultState } from "../chat/types";
 import { shallowEqualArrays, userText } from "../lib";
@@ -216,6 +217,8 @@ export interface SessionRuntime {
 	/** `ask_user_question` replies keyed by tool call id (from `ask-user-answers` custom messages). */
 	askAnswers: Record<string, AskUserQuestionResult>;
 	currentAssistantId: string | null;
+	/** Latest assistant turn observed in the current attempt; scopes overflow-recovery removal. */
+	attemptAssistantId: string | null;
 	isStreaming: boolean;
 	/** This chat's model + thinking level (display only; `pi` owns them). */
 	model: WireModel | null;
@@ -241,6 +244,7 @@ function newRuntime(model: WireModel | null, thinkingLevel: ThinkingLevel): Sess
 		toolResults: {},
 		askAnswers: {},
 		currentAssistantId: null,
+		attemptAssistantId: null,
 		isStreaming: false,
 		model,
 		thinkingLevel,
@@ -268,6 +272,21 @@ export const EMPTY_RUNTIME: SessionRuntime = newRuntime(null, "medium");
 function clearTurnStreaming(turns: ChatTurn[]): ChatTurn[] {
 	if (!turns.some((t) => t.kind === "assistant" && t.streaming)) return turns;
 	return turns.map((t) => (t.kind === "assistant" && t.streaming ? { ...t, streaming: false } : t));
+}
+
+/** Drop the failed assistant attempt Pi removed from its rebuilt context before an overflow retry. */
+function removeSupersededAssistant(
+	turns: ChatTurn[],
+	attemptAssistantId: string | null,
+): ChatTurn[] {
+	if (!attemptAssistantId) return turns;
+	const index = turns.findIndex(
+		(turn) =>
+			turn.id === attemptAssistantId &&
+			turn.kind === "assistant" &&
+			assistantFailureText(turn.message) !== null,
+	);
+	return index < 0 ? turns : [...turns.slice(0, index), ...turns.slice(index + 1)];
 }
 
 type RetrySource = Extract<ChatTurn, { kind: "retry" }>["source"];
@@ -305,7 +324,7 @@ function clearRetryTurns(rt: SessionRuntime, source: RetrySource): SessionRuntim
 export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionRuntime {
 	switch (event.type) {
 		case "agent_start":
-			return { ...rt, isStreaming: true };
+			return { ...rt, isStreaming: true, attemptAssistantId: null };
 		case "message_start": {
 			// The assistant turn is created lazily on the first message_update (from its `partial`
 			// snapshot) — here we just reserve its id. A new assistant message also finalizes the previous
@@ -314,6 +333,7 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 				return {
 					...rt,
 					currentAssistantId: crypto.randomUUID(),
+					attemptAssistantId: null,
 					turns: clearTurnStreaming(rt.turns),
 				};
 			// A USER message: composer sends append it optimistically (skip the echo — the last turn is
@@ -355,6 +375,7 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 			return {
 				...rt,
 				currentAssistantId: streaming ? id : null,
+				attemptAssistantId: streaming ? rt.attemptAssistantId : id,
 				turns: rt.turns.some((t) => t.id === id)
 					? rt.turns.map((t) => (t.id === id ? turn : t))
 					: [...rt.turns, turn],
@@ -371,7 +392,7 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 			}
 			// The message's true terminal: pi forwards only *streaming* variants as `message_update` (the
 			// LLM-level done/error become this event), so without it the turn would stay flagged streaming
-			// until `agent_end` — seconds or minutes later when tools run. Adopt the final message too: it
+			// until final `agent_settled` — seconds or minutes later when tools run. Adopt the final message too: it
 			// carries `stopReason`, which the renderers use to spot dead (aborted/errored) tool calls.
 			if (event.message.role !== "assistant" || !rt.currentAssistantId) return rt;
 			const id = rt.currentAssistantId;
@@ -379,6 +400,7 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 			return {
 				...rt,
 				currentAssistantId: null,
+				attemptAssistantId: id,
 				turns: rt.turns.some((t) => t.id === id)
 					? rt.turns.map((t) => (t.id === id ? turn : t))
 					: [...rt.turns, turn],
@@ -408,35 +430,34 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 					[event.toolCallId]: { status: event.isError ? "error" : "done", raw: event.result },
 				},
 			};
-		case "agent_end": {
-			if (event.willRetry) return rt; // auto-retry / compaction follows — stay streaming
-			// Did the run terminally fail? pi ends an errored turn (retries exhausted / non-retryable, e.g. a
-			// nonexistent model 404-ing) with `willRetry: false` and a last assistant message carrying
-			// `stopReason: "error"` + the provider's `errorMessage`. Surface that as a visible error turn
-			// instead of a misleading "✓ Done" — otherwise a bad model just looks like nothing happened.
-			const lastAssistant = [...event.messages]
-				.reverse()
-				.find((m): m is Extract<typeof m, { role: "assistant" }> => m.role === "assistant");
-			const closer: ChatTurn =
-				lastAssistant?.stopReason === "error"
-					? {
-							kind: "error",
-							id: crypto.randomUUID(),
-							text: lastAssistant.errorMessage || "The agent run ended in an error.",
-						}
-					: // `endedAt` timestamps the turn end so the round summary (shown right here) can measure the
-						// turn's duration — user-submit → agent_end — without waiting for the next user turn.
-						{ kind: "system", id: crypto.randomUUID(), text: "✓ Done", endedAt: Date.now() };
+		case "agent_end":
+			// Attempt-level only: provider retry, compaction/recovery, or queued work may still follow even
+			// when `willRetry` is false. `agent_settled` is the one automatic-work terminal.
+			return rt;
+		case "agent_settled": {
+			const failure = assistantFailureText(event.terminal);
+			const closer: ChatTurn = failure
+				? { kind: "error", id: crypto.randomUUID(), text: failure }
+				: // `endedAt` measures the whole automatic run — prompt through retries/compaction/continuations.
+					{ kind: "system", id: crypto.randomUUID(), text: "✓ Done", endedAt: Date.now() };
 			return {
 				...rt,
-				// Drop any lingering retry countdown + sweep any turn still flagged streaming; the run concluded.
-				turns: [...clearTurnStreaming(rt.turns).filter((t) => t.kind !== "retry"), closer],
+				turns: [...clearTurnStreaming(rt.turns).filter((turn) => turn.kind !== "retry"), closer],
 				isStreaming: false,
 				currentAssistantId: null,
+				attemptAssistantId: null,
 			};
 		}
+		case "compaction_end":
+			return event.reason === "overflow" && event.willRetry
+				? {
+						...rt,
+						turns: removeSupersededAssistant(rt.turns, rt.attemptAssistantId),
+						attemptAssistantId: null,
+					}
+				: rt;
 		case "auto_retry_start":
-			// Show a live countdown over the back-off; cleared on auto_retry_end (or the final agent_end).
+			// Show a live countdown over the back-off; cleared on auto_retry_end (or final settlement).
 			// Replace-or-append per source: the event fires once per attempt, and the two retry flows
 			// (turn vs summarization) may overlap — each keeps exactly one indicator.
 			return appendRetryTurn(rt, "turn", event);
@@ -1709,6 +1730,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				// The send never started a run — clear streaming so the composer + loader don't hang.
 				isStreaming: false,
 				currentAssistantId: null,
+				attemptAssistantId: null,
 				turns: [...clearTurnStreaming(rt.turns), { kind: "error", id: crypto.randomUUID(), text }],
 			})),
 		),

@@ -119,7 +119,16 @@ generateWebManifest();
 generateBundledExtensions();
 try {
 	const proc = Bun.spawnSync(
-		["bun", "build", "--compile", `--target=${target ?? "bun"}`, entryPath, "--outfile", outFile],
+		[
+			"bun",
+			"build",
+			"--compile",
+			"--no-compile-autoload-bunfig",
+			`--target=${target ?? "bun"}`,
+			entryPath,
+			"--outfile",
+			outFile,
+		],
 		{ stdout: "inherit", stderr: "inherit", cwd: cliDir },
 	);
 	if (!proc.success) process.exit(proc.exitCode ?? 1);

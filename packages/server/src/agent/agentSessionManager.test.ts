@@ -9,7 +9,7 @@ import {
 } from "@earendil-works/pi-ai";
 import { createFauxCore, fauxAssistantMessage } from "@earendil-works/pi-ai/providers/faux";
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
-import type { ExtUiRequest } from "@thinkrail/contracts";
+import type { AgentSettlement, ExtUiRequest } from "@thinkrail/contracts";
 import {
 	buildSessionSettings,
 	clampThinkingForModel,
@@ -169,6 +169,42 @@ test("two sessions in two worktrees stream independently; disposing one leaves t
 
 	expect(seen(b.sessionId)).toContain("BRAVO_AGAIN");
 	expect((events.get(a.sessionId) ?? []).length).toBe(aEventsBefore);
+});
+
+test("agent_settled carries the final attempt's terminal metadata", async () => {
+	fauxA.setResponses([
+		fauxAssistantMessage("incomplete", {
+			stopReason: "length",
+			errorMessage: "response truncated",
+		}),
+	]);
+	const cwd = tmpCwd("trpi-settled-");
+	const session = await createSession({
+		cwd,
+		workspaceId: "ws-settled",
+		model: toWireModel(fauxA.getModel()),
+	});
+
+	await promptSession(session.sessionId, "hello");
+
+	const settled = (events.get(session.sessionId) ?? []).find(
+		(
+			event,
+		): event is Record<string, unknown> & {
+			type: "agent_settled";
+			terminal: AgentSettlement | null;
+		} =>
+			typeof event === "object" &&
+			event !== null &&
+			"type" in event &&
+			event.type === "agent_settled",
+	);
+	expect(settled?.terminal).toEqual({
+		stopReason: "length",
+		errorMessage: "response truncated",
+	});
+	const hydrated = await getSessionMessages(session.sessionId, "ws-settled", cwd);
+	expect(hydrated.summary.lastSettlement).toEqual(settled?.terminal);
 });
 
 test("buildSessionSettings disables image autoResize (in-memory, so the read tool sends images raw)", () => {

@@ -198,7 +198,9 @@ export interface TerminalTabsPush {
 // v31: `workspace.watchReady` orders a fresh watcher's conservative startup wildcard before web clients
 // capture a session skill-load baseline; `startupNudge` lets a replayed response restore a push lost with
 // its socket before that baseline is captured.
-export const PROTOCOL_VERSION = 31;
+// v32: `agent_settled` is the automatic-run terminal and carries final assistant metadata;
+// `SessionSummary.lastSettlement` closes live reconnect gaps after Pi rebuilds context.
+export const PROTOCOL_VERSION = 32;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a

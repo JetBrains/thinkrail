@@ -9,6 +9,7 @@ import {
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import type {
+	AgentSettlement,
 	AskUserQuestionResult,
 	ImageContent,
 	Model,
@@ -39,6 +40,8 @@ interface Entry {
 	unsubscribe: () => void;
 	/** The workspace this session belongs to — so `listSessions` can report a workspace's sessions. */
 	workspaceId: string;
+	/** Latest live terminal; undefined before observation, null while active or with no assistant. */
+	lastSettlement: AgentSettlement | null | undefined;
 }
 
 const sessions = new Map<string, Entry>();
@@ -186,14 +189,41 @@ async function registerSession(
 	workspaceId: string,
 ): Promise<CreateSessionResult> {
 	const { sessionId } = session;
-	const unsubscribe = session.subscribe((event) => publish({ sessionId, event: event as PiEvent }));
+	let terminal: AgentSettlement | null = null;
+	const unsubscribe = session.subscribe((event) => {
+		if (event.type === "agent_start") {
+			const entry = sessions.get(sessionId);
+			if (entry) entry.lastSettlement = null;
+		}
+		if (event.type === "agent_end") {
+			const assistant = [...event.messages]
+				.reverse()
+				.find((message) => message.role === "assistant");
+			terminal = assistant
+				? {
+						stopReason: assistant.stopReason,
+						...(assistant.errorMessage !== undefined
+							? { errorMessage: assistant.errorMessage }
+							: {}),
+					}
+				: null;
+		}
+		const projected: PiEvent =
+			event.type === "agent_settled" ? { type: "agent_settled", terminal } : (event as PiEvent);
+		if (event.type === "agent_settled") {
+			const entry = sessions.get(sessionId);
+			if (entry) entry.lastSettlement = terminal;
+		}
+		publish({ sessionId, event: projected });
+		if (event.type === "agent_settled") terminal = null;
+	});
 	// `rpc` mode = dialog-capable, non-TUI: extension `uiContext` dialogs bridge to the browser over WS.
 	await session.bindExtensions({
 		mode: "rpc",
 		uiContext: createWebUiContext(sessionId),
 		onError: (error) => notifyExtUi(sessionId, `Extension error: ${error.error}`, "error"),
 	});
-	sessions.set(sessionId, { session, unsubscribe, workspaceId });
+	sessions.set(sessionId, { session, unsubscribe, workspaceId, lastSettlement: undefined });
 	return {
 		sessionId,
 		model: session.model ? toWireModel(session.model as unknown as Model<string>) : null,
@@ -233,6 +263,7 @@ function summaryOf(sessionId: string, entry: Entry): SessionSummary {
 		messageCount: session.messages.length,
 		updatedAt: Date.now(),
 		live: true,
+		...(entry.lastSettlement !== undefined ? { lastSettlement: entry.lastSettlement } : {}),
 	};
 }
 

@@ -91,7 +91,7 @@ export class HistoryIndex {
 		let subdirs: string[] = [];
 		try {
 			subdirs = (await readdir(root, { withFileTypes: true }))
-				.filter((entry) => entry.isDirectory())
+				.filter((entry) => entry.isDirectory() || entry.isSymbolicLink())
 				.map((entry) => join(root, entry.name));
 		} catch {
 			return [];

@@ -513,7 +513,7 @@ const handlers: Record<string, Handler> = {
 		return { ok: true } as const;
 	},
 	// session.* — the pi engine. A thrown/failed call returns a `{ ok:false, error }` WS response;
-	// streaming faults arrive as `pi.event`s (the error/agent_end variants), not here.
+	// streaming faults arrive as `pi.event`s and surface at `agent_settled`, not here.
 	"session.create": async (params) => {
 		const p = params as {
 			workspaceId: string;

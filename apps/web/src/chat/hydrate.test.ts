@@ -54,10 +54,71 @@ test("an assistant turn that ended in a provider error hydrates a following erro
 	expect(err?.kind === "error" && err.text).toContain("gpt-5.5");
 });
 
+test("an assistant turn that ended at length hydrates a visible truncation failure", () => {
+	const { turns } = messagesToRuntime([
+		{ role: "user", content: "hi", timestamp: 1 },
+		{ role: "assistant", content: [], stopReason: "length" },
+	] as unknown as Message[]);
+
+	expect(turns.map((turn) => turn.kind)).toEqual(["user", "assistant", "error"]);
+	const error = turns.find((turn) => turn.kind === "error");
+	expect(error?.kind === "error" && error.text.toLowerCase()).toContain("truncated");
+});
+
+test("a recovered historical length stop does not become the current chat failure", () => {
+	const { turns } = messagesToRuntime([
+		{
+			role: "assistant",
+			content: [{ type: "text", text: "old truncated attempt" }],
+			stopReason: "length",
+			timestamp: 1000,
+		},
+		{ role: "user", content: "continue", timestamp: 2000 },
+		{
+			role: "assistant",
+			content: [{ type: "text", text: "finished later" }],
+			stopReason: "stop",
+			timestamp: 3000,
+		},
+	] as unknown as Message[]);
+
+	expect(turns.filter((turn) => turn.kind === "error")).toHaveLength(0);
+});
+
+test("settlement metadata restores a failure Pi removed from a live session's context", () => {
+	const { turns } = messagesToRuntime([], { stopReason: "length" });
+
+	expect(turns.map((turn) => turn.kind)).toEqual(["error"]);
+});
+
+test("settlement metadata does not duplicate a failure already represented by the transcript", () => {
+	const { turns } = messagesToRuntime(
+		[
+			{
+				role: "assistant",
+				content: [],
+				stopReason: "length",
+				timestamp: 2000,
+			},
+		] as unknown as Message[],
+		{ stopReason: "length" },
+	);
+
+	expect(turns.map((turn) => turn.kind)).toEqual(["assistant", "error"]);
+});
+
+test("an explicit live null suppresses a stale persisted failure while a resumed run is active", () => {
+	const { turns } = messagesToRuntime(
+		[{ role: "assistant", content: [], stopReason: "length" }] as unknown as Message[],
+		null,
+	);
+
+	expect(turns.map((turn) => turn.kind)).toEqual(["assistant"]);
+});
+
 test("turnIdByMessageIndex maps each message's position to its own turn id, null for non-turn messages, and the assistant's id (not the injected error turn's) when the message ended in an error", () => {
 	const { turns, turnIdByMessageIndex } = messagesToRuntime([
 		{ role: "user", content: "hi", timestamp: 1 },
-		{ role: "assistant", content: [], stopReason: "error", errorMessage: "boom" },
 		{
 			role: "toolResult",
 			toolCallId: "x",
@@ -74,17 +135,18 @@ test("turnIdByMessageIndex maps each message's position to its own turn id, null
 			timestamp: 3,
 		},
 		{ role: "user", content: "again", timestamp: 4 },
+		{ role: "assistant", content: [], stopReason: "error", errorMessage: "boom" },
 	] as unknown as Message[]);
 
-	// [user, assistant, error, user] — the injected error turn has no message index of its own.
-	expect(turns.map((t) => t.kind)).toEqual(["user", "assistant", "error", "user"]);
+	// [user, user, assistant, error] — the injected error turn has no message index of its own.
+	expect(turns.map((t) => t.kind)).toEqual(["user", "user", "assistant", "error"]);
 	expect(turnIdByMessageIndex).toHaveLength(5);
 	expect(turnIdByMessageIndex[0]).toBe(turns[0]?.id);
-	expect(turnIdByMessageIndex[1]).toBe(turns[1]?.id); // the assistant turn itself...
-	expect(turnIdByMessageIndex[1]).not.toBe(turns[2]?.id); // ...never the synthesized error turn
-	expect(turnIdByMessageIndex[2]).toBeNull(); // toolResult never becomes a turn
-	expect(turnIdByMessageIndex[3]).toBeNull(); // custom never becomes a turn
-	expect(turnIdByMessageIndex[4]).toBe(turns[3]?.id); // the trailing user turn
+	expect(turnIdByMessageIndex[1]).toBeNull(); // toolResult never becomes a turn
+	expect(turnIdByMessageIndex[2]).toBeNull(); // custom never becomes a turn
+	expect(turnIdByMessageIndex[3]).toBe(turns[1]?.id);
+	expect(turnIdByMessageIndex[4]).toBe(turns[2]?.id); // the assistant turn itself...
+	expect(turnIdByMessageIndex[4]).not.toBe(turns[3]?.id); // ...never the synthesized error turn
 });
 
 test("a failed tool result maps to error status", () => {

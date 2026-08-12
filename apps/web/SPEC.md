@@ -171,7 +171,7 @@ The module set: `transport` / `store` / branded `shell`; `ProjectTree`; `FileTre
 
 - **`apps/web` depends on `packages/contracts` only.** Never value-import `pi`; never import `server`/`shared`.
 - Streaming invariant: `text_delta` / `thinking_delta` **APPEND**; `tool_execution_update.partialResult`
-  **REPLACE**.
+  **REPLACE**. Attempt-level `agent_end` never means idle; automatic work ends only at `agent_settled`.
 - Panels stay arrangement-agnostic so the mobile shell is an additive layer, not a rewrite.
 
 ## Later

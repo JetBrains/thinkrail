@@ -168,7 +168,7 @@ export function deriveRows(
 
 /** Orientation metadata for the round-end divider (derived here, not in the reducer). */
 export interface TurnDividerData {
-	/** Wall-clock from the round's user turn to its end (agent_end, or the last assistant reply), or null. */
+	/** Wall-clock from the round's user turn to final settlement (or the last assistant reply), or null. */
 	elapsedMs: number | null;
 	/** Tool calls made by the assistant turn(s) in this round. */
 	toolCount: number;

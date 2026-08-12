@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { appendFileSync, mkdtempSync, rmSync } from "node:fs";
+import { appendFileSync, mkdirSync, mkdtempSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getHistoryIndex, HistoryIndex, makeSnippet, matchesTerms } from "./historyIndex";
@@ -307,6 +307,37 @@ describe("HistoryIndex.search", () => {
 		} finally {
 			if (prev === undefined) delete process.env.PI_CODING_AGENT_DIR;
 			else process.env.PI_CODING_AGENT_DIR = prev;
+		}
+	});
+
+	test("(k) default layout discovers a session directory reached through a top-level symlink", async () => {
+		const previousAgentDir = process.env.PI_CODING_AGENT_DIR;
+		process.env.PI_CODING_AGENT_DIR = dir;
+		try {
+			const target = join(dir, "linked-session-target");
+			writeFixtureSession(target, {
+				id: "sess-linked",
+				cwd: "/repo/linked",
+				messages: [{ role: "user", text: "linked history prompt", timestamp: 1000 }],
+			});
+			const sessionsRoot = join(dir, "sessions");
+			mkdirSync(sessionsRoot, { recursive: true });
+			symlinkSync(
+				target,
+				join(sessionsRoot, "--linked--"),
+				process.platform === "win32" ? "junction" : "dir",
+			);
+
+			const result = await new HistoryIndex().search({
+				query: "linked history",
+				filter: allowAll,
+				labels: noLabels,
+			});
+
+			expect(result.prompts.map((prompt) => prompt.sessionId)).toEqual(["sess-linked"]);
+		} finally {
+			if (previousAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
+			else process.env.PI_CODING_AGENT_DIR = previousAgentDir;
 		}
 	});
 

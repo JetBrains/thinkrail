@@ -44,9 +44,9 @@ test("picking the seeded template from the / menu sends the expanded text and ge
 	await expect(bubble).not.toContainText("⟨");
 	await expect(bubble).not.toContainText("/review");
 
-	// An assistant reply arrives — any non-error completion (`agent_end` without a `stopReason: "error"`
-	// last message renders "✓ Done"; an error renders a distinct `ErrorTurn` instead — see
-	// `store/appStore.ts`'s `agent_end` case). The pinned e2e default model; content isn't asserted.
+	// An assistant reply settles — a non-error `agent_settled` renders "✓ Done"; an error renders a
+	// distinct `ErrorTurn` instead (see `store/appStore.ts`). The pinned e2e default model varies, so
+	// content isn't asserted.
 	await waitForDone(page);
 });
 

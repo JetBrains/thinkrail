@@ -1,5 +1,5 @@
 // File CRUD over pi's two sanctioned prompt-template directories (global + project-scoped). Frontmatter
-// is pi's own convention (`description` / `argument-hint`, pinned in SPEC.md against pi v0.80.6); this
+// is pi's own convention (`description` / `argument-hint`, pinned in SPEC.md against pi v0.84.1); this
 // module owns the traversal gate (`isValidTemplateName`) that pi's own loader doesn't provide. `content`
 // is always the full file text (frontmatter + body) — the wire's `TemplateInfo.content` contract — never
 // pi's parsed/stripped body. See SPEC.md for the pinned pi facts and the freshness rationale.

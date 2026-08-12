@@ -1,7 +1,7 @@
 /**
  * Frontmatter split/assemble for prompt-template files — the client-side mirror of pi's own
  * `stripFrontmatter`/`parseFrontmatter` (`@earendil-works/pi-coding-agent`'s `dist/utils/frontmatter.js`,
- * pinned against pi v0.80.6 — the same pin `packages/server/src/templates/SPEC.md` uses for the server
+ * pinned against pi v0.84.1 — the same pin `packages/server/src/templates/SPEC.md` uses for the server
  * side; re-verify both on a pi version bump). pi's real parser is server-only (real YAML via the `yaml`
  * package, `node:fs`) and never reaches the browser bundle — and this module deliberately does **no YAML
  * value parsing at all**: it only locates the frontmatter *boundary* (`stripFrontmatter`) and writes a
