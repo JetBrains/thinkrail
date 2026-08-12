@@ -1,4 +1,5 @@
 import { existsSync } from "node:fs";
+import { delimiter } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig, devices } from "@playwright/test";
 import {
@@ -10,6 +11,7 @@ import {
 	E2E_HOME_DIR,
 	E2E_PI_AGENT_DIR,
 	E2E_PICK_DIR_POINTER,
+	E2E_WIRE_PROXY_PORT,
 } from "./e2e/fixtures/paths";
 
 // The e2e suite run against the COMPILED single-file binary instead of the dev host (`bun run
@@ -24,9 +26,10 @@ import {
 // providers are registered by `packages/server/src/dev.ts`, which deliberately never ships — the
 // artifact's login path is covered by smoke-binary's real-provider probe instead).
 //
-// Not concurrent-safe with `bun run e2e` in the SAME worktree (both own that worktree's
-// E2E_DATA_DIR); run them sequentially. Parallel runs from DIFFERENT worktrees are isolated —
-// per-worktree state dirs + ports, see e2e/fixtures/paths.ts. Unix-only for now, like the main
+// The adaptive `bun run e2e` lanes have their own state/port namespaces; this suite keeps the
+// unsharded per-worktree namespace. Two binary runs (or a binary run plus `e2e:serial`) in the SAME
+// worktree remain sequential. Parallel runs from DIFFERENT worktrees are isolated — per-worktree
+// state dirs + ports, see e2e/fixtures/paths.ts. Unix-only for now, like the main
 // config's PATH stub wiring (`:` separator, `#!/bin/sh` central stub).
 
 const rootDir = fileURLToPath(new URL(".", import.meta.url));
@@ -86,8 +89,8 @@ export default defineConfig({
 			GEMINI_CLI_HOME: E2E_HOME_DIR,
 			PI_CODING_AGENT_DIR: E2E_PI_AGENT_DIR,
 			PI_OFFLINE: "1",
-			PATH: `${fakeBinDir}:${process.env.PATH ?? ""}`,
-			WIRE_PROXY_PORT: "19516",
+			PATH: `${fakeBinDir}${delimiter}${process.env.PATH ?? ""}`,
+			WIRE_PROXY_PORT: String(E2E_WIRE_PROXY_PORT),
 			CENTRAL_STUB_STATE: E2E_CENTRAL_STATE,
 			// Where the stub `code` appends each invocation's argv — see playwright.config.ts.
 			THINKRAIL_E2E_EDITOR_LOG: E2E_EDITOR_LOG,

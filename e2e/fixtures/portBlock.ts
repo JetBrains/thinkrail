@@ -16,9 +16,10 @@ import { join } from "node:path";
 // space can land two worktrees on the same block, and under that collision the binary suite's
 // failure shape is SILENT — its CLI free-scans past the taken port while Playwright polls the
 // expected one, which the other worktree's host answers). A tiny machine-local registry arbitrates
-// ownership instead: one claim file per slot under $TMPDIR, its content = the owning worktree's
-// repo root. The hash still picks the *preferred* slot, so the happy path stays deterministic and
-// debuggable; the registry steps in to detect and skip a genuinely taken slot.
+// ownership instead: one claim file per slot under $TMPDIR, carrying a stable logical owner key
+// plus the real worktree path that determines liveness. Legacy files whose whole content is the
+// worktree path remain valid owner records. The hash still picks the *preferred* slot, so the happy
+// path stays deterministic and debuggable; the registry skips a genuinely taken slot.
 //
 // The whole claim transaction is serialized by an interprocess lock (review round 2: an
 // unserialized read→reclaim→create dance has a real TOCTOU — two processes can both judge one claim
@@ -59,11 +60,11 @@ import { join } from "node:path";
 // orphaned-token wedge parks claims behind a loud, self-describing timeout until a human removes
 // the registry dir once.
 //
-// Allocation under the lock is two-pass: an existing claim for this worktree wins over everything
-// (assignments are sticky — a freed lower slot is never migrated to, so a displaced worktree can't
+// Allocation under the lock is two-pass: an existing logical-owner claim wins over everything
+// (assignments are sticky — a freed lower slot is never migrated to, so a displaced owner can't
 // strand its old claim and leak slots; legacy duplicates are deduped to the lowest slot), else the
 // scan takes the first slot that is free or stale from `preferredSlot`. A claim whose recorded
-// worktree path no longer exists is stale (the worktree was removed) and its slot is reusable.
+// liveness path no longer exists is stale (the worktree was removed) and its slot is reusable.
 // Suite teardown never touches the registry — it deliberately outlives runs; it is the memory that
 // keeps two live worktrees apart.
 
@@ -71,24 +72,65 @@ export const PORT_BLOCK_BASE = 25000;
 export const PORT_BLOCK_STRIDE = 10;
 export const PORT_BLOCK_SLOTS = 500;
 
-/** Machine-local registry of claimed slots (one file per slot, content = owner repo root). */
+/** Machine-local registry of claimed slots (one file per slot, content = owner record). */
 export const PORT_BLOCK_REGISTRY = join(tmpdir(), "thinkrail-e2e-port-blocks");
+
+/** A stable logical owner can claim independently while sharing a real worktree liveness path.
+ * Plain string owners preserve the original `key === livenessPath` per-worktree contract. */
+export interface PortBlockOwner {
+	key: string;
+	livenessPath: string;
+}
+
+type PortBlockOwnerInput = string | PortBlockOwner;
 
 /** Age fallback for a garbled lock only (no readable owner — a state the protocol itself cannot
  * produce). Locks with a readable owner are arbitrated by pid liveness; break-tokens are never
  * reclaimed at all (see header). */
 const STALE_LOCK_MS = 10_000;
 
+/** Recursive lock-dir removal can transiently report ENOTEMPTY while concurrent claimants inspect it.
+ * Node's bounded retry handles exactly that documented rm race without weakening nonce fencing. */
+function removeLockTree(path: string): void {
+	rmSync(path, { recursive: true, force: true, maxRetries: 5, retryDelay: 10 });
+}
+
 function slotBase(slot: number): number {
 	return PORT_BLOCK_BASE + slot * PORT_BLOCK_STRIDE;
 }
 
-function readClaim(path: string): string | undefined {
+function normalizeOwner(owner: PortBlockOwnerInput): PortBlockOwner {
+	return typeof owner === "string" ? { key: owner, livenessPath: owner } : owner;
+}
+
+/** Read both the original plain-path format and the lane-aware structured format. */
+function readClaim(path: string): PortBlockOwner | undefined {
+	let raw: string;
 	try {
-		return readFileSync(path, "utf8");
+		raw = readFileSync(path, "utf8");
 	} catch {
 		return undefined; // no claim (ENOENT)
 	}
+	try {
+		const parsed = JSON.parse(raw) as unknown;
+		if (
+			parsed !== null &&
+			typeof parsed === "object" &&
+			"key" in parsed &&
+			"livenessPath" in parsed &&
+			typeof parsed.key === "string" &&
+			typeof parsed.livenessPath === "string"
+		) {
+			return { key: parsed.key, livenessPath: parsed.livenessPath };
+		}
+	} catch {
+		// A legacy claim is a filesystem path, not JSON.
+	}
+	return { key: raw, livenessPath: raw };
+}
+
+function writeClaim(path: string, owner: PortBlockOwner): void {
+	writeFileSync(path, owner.key === owner.livenessPath ? owner.key : JSON.stringify(owner));
 }
 
 /** Burn ~`ms` between lock attempts — sync on purpose: callers claim at module load. */
@@ -138,7 +180,7 @@ function removeIfAged(path: string): boolean {
 		return false; // vanished — nothing to remove
 	}
 	if (ageMs > STALE_LOCK_MS) {
-		rmSync(path, { recursive: true, force: true });
+		removeLockTree(path);
 		return true;
 	}
 	return false;
@@ -162,12 +204,12 @@ export function tryBreakLock(lockPath: string): void {
 	try {
 		const owner = readLockOwner(lockPath);
 		if (owner !== undefined) {
-			if (!pidAlive(owner.pid)) rmSync(lockPath, { recursive: true, force: true }); // provably dead
+			if (!pidAlive(owner.pid)) removeLockTree(lockPath); // provably dead
 			return; // alive — never usurped
 		}
 		removeIfAged(lockPath); // garbled (ownerless) — the protocol can't produce this; age it out
 	} finally {
-		rmSync(tokenPath, { recursive: true, force: true });
+		removeLockTree(tokenPath);
 	}
 }
 
@@ -211,7 +253,7 @@ function acquireRegistryLock(
 			}
 		}
 	} catch (error) {
-		rmSync(prepPath, { recursive: true, force: true }); // the staged, never-installed lock
+		removeLockTree(prepPath); // the staged, never-installed lock
 		throw error;
 	}
 }
@@ -220,7 +262,7 @@ function acquireRegistryLock(
  * resuming after a suspension can never delete a successor's mutex. */
 function releaseRegistryLock(lockPath: string, nonce: string): void {
 	if (readLockOwner(lockPath)?.nonce === nonce) {
-		rmSync(lockPath, { recursive: true, force: true });
+		removeLockTree(lockPath);
 	}
 }
 
@@ -234,17 +276,17 @@ function claimedSlots(registryDir: string): number[] {
 
 /** One locked claim transaction; returns the slot. (See `claimPortBlock` for the semantics.) */
 function claimSlotOnce(
-	repoRoot: string,
+	owner: PortBlockOwner,
 	preferredSlot: number,
 	registryDir: string,
 	lockTimeoutMs: number,
 ): number {
 	const lock = acquireRegistryLock(registryDir, lockTimeoutMs);
 	try {
-		// Pass 1: this worktree's existing claim wins over everything — even a now-free lower slot —
-		// so assignments never migrate (migration would strand the old claim and leak its slot).
+		// Pass 1: this logical owner's existing claim wins over everything — even a now-free lower
+		// slot — so assignments never migrate (migration would strand the old claim and leak its slot).
 		const [mine, ...duplicates] = claimedSlots(registryDir).filter(
-			(slot) => readClaim(join(registryDir, String(slot))) === repoRoot,
+			(slot) => readClaim(join(registryDir, String(slot)))?.key === owner.key,
 		);
 		if (mine !== undefined) {
 			for (const extra of duplicates) rmSync(join(registryDir, String(extra)), { force: true });
@@ -252,13 +294,13 @@ function claimSlotOnce(
 		}
 
 		// Pass 2: allocate — first slot from `preferredSlot` that is free, or stale (its recorded
-		// worktree path is gone). Plain overwrite is safe here: the lock serializes the transaction.
+		// liveness path is gone). Plain overwrite is safe here: the lock serializes the transaction.
 		for (let attempt = 0; attempt < PORT_BLOCK_SLOTS; attempt++) {
 			const slot = (preferredSlot + attempt) % PORT_BLOCK_SLOTS;
 			const claimPath = join(registryDir, String(slot));
-			const owner = readClaim(claimPath);
-			if (owner !== undefined && existsSync(owner)) continue; // live claim by another worktree
-			writeFileSync(claimPath, repoRoot);
+			const claim = readClaim(claimPath);
+			if (claim !== undefined && existsSync(claim.livenessPath)) continue;
+			writeClaim(claimPath, owner);
 			return slot;
 		}
 		throw new Error(
@@ -270,23 +312,24 @@ function claimSlotOnce(
 }
 
 /**
- * Claim a port block for `repoRoot` and return its base port. An existing claim for `repoRoot`
- * always wins (sticky); otherwise the scan starts at `preferredSlot` (its path hash) and takes the
- * first slot that is unclaimed or whose claim is stale. After the lock is released the claim is
- * re-read and the transaction retried if it was overwritten (the belt over the lock protocol — see
- * the header). Throws only when every slot is owned by a live worktree (practically impossible),
- * the registry lock cannot be acquired, or the claim will not settle.
+ * Claim a port block for `owner` and return its base port. A string keeps the original per-worktree
+ * contract; `{ key, livenessPath }` lets independent lanes keep stable claims whose staleness still
+ * follows the real worktree. An existing key always wins (sticky); otherwise the scan starts at
+ * `preferredSlot` and takes the first slot that is unclaimed or stale. After releasing the lock the
+ * claim is re-read and the transaction retries if it was overwritten (the belt over the lock
+ * protocol — see the header).
  */
 export function claimPortBlock(
-	repoRoot: string,
+	ownerInput: PortBlockOwnerInput,
 	preferredSlot: number,
 	registryDir: string = PORT_BLOCK_REGISTRY,
 	lockTimeoutMs = 15_000,
 ): number {
+	const owner = normalizeOwner(ownerInput);
 	mkdirSync(registryDir, { recursive: true });
 	for (let round = 0; round < 5; round++) {
-		const slot = claimSlotOnce(repoRoot, preferredSlot, registryDir, lockTimeoutMs);
-		if (readClaim(join(registryDir, String(slot))) === repoRoot) return slotBase(slot);
+		const slot = claimSlotOnce(owner, preferredSlot, registryDir, lockTimeoutMs);
+		if (readClaim(join(registryDir, String(slot)))?.key === owner.key) return slotBase(slot);
 	}
 	throw new Error(
 		`e2e port-block claim did not settle after 5 rounds (mutual-exclusion failure?) — inspect ${registryDir}`,

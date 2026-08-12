@@ -41,18 +41,23 @@ bun run typecheck   # tsc across all packages
 bun run test        # unit tests (bun test, per package)
 ```
 
-Every change that touches the app is verified by the end-to-end suite, which builds
-the web app, boots the host on an isolated state dir, and runs headless against the
-real UI:
+Every change that touches the app is verified by the end-to-end suite against the
+real UI. The no-agent gate builds once and automatically uses isolated parallel
+shards (half the available CPUs, capped at eight):
 
 ```bash
-bunx playwright install chromium   # one-time
-bun run e2e          # no-agent suite (fast, no auth)
-bun run e2e:full     # everything, including @agent specs (needs pi authenticated)
-bun run e2e:agent    # only the @agent specs
+bunx playwright install chromium                    # one-time
+bun run e2e                                         # complete no-agent gate
+bun run e2e -- e2e/changes.spec.ts                  # focused iteration
+bun run e2e -- --last-failed                        # repair loop
+bun run e2e:serial                                  # one-host debugging fallback
+bun run e2e -- --shards=12                          # explicit 1–16 override
+bun run e2e:full                                    # everything; needs pi auth
+bun run e2e:agent                                   # only @agent; remains serial
 ```
 
-Agent-driven specs are tagged `@agent` and run against a real provider on an
+Use focused or last-failed runs while iterating, then run the complete `bun run e2e`
+once before handoff. Agent-driven specs are tagged `@agent` and run against a real provider on an
 **isolated** `pi` agent dir — never your real `~/.pi/agent`.
 
 ## Module boundaries

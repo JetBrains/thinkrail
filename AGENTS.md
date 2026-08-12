@@ -136,14 +136,21 @@ reusable by any pi UI (extraction-ready as a future `packages/chat-ui`).
 
 ## Verification (run for every app-affecting change)
 
-Every change that touches the app is verified by the **e2e suite** before it's considered done.
-`bun run e2e` is **fully self-contained**: it builds the web app, boots the host on a **per-worktree
-derived port with an isolated, per-worktree state dir** (both derived in `e2e/fixtures/paths.ts` — never
-touches `~/.thinkrail`, and parallel runs from *different* worktrees never collide; within one worktree
-the suites still share state and run sequentially), seeds fixtures (Playwright `globalSetup`), runs the
-suite headless against the real web UI, then tears the host down and cleans up (`globalTeardown`).
-Tests live in `e2e/` and assert via `data-testid` / `data-status` hooks. When Electrobun lands, the
-same suite runs against the desktop app too.
+Every change that touches the app is verified by the **complete e2e suite once before it is considered
+done**. During implementation, iterate with the affected spec
+(`bun run e2e -- e2e/<feature>.spec.ts`) or `bun run e2e -- --last-failed`; do not rerun the full gate
+after every edit.
+
+`bun run e2e` is **fully self-contained and machine-adaptive**: it builds the web app once, then runs the
+no-agent tests across isolated Playwright shard processes (automatic count = half the available CPUs,
+clamped to 1–8). Every lane owns one serial worker + host and its own per-worktree-qualified ports, state,
+HOME, pi-agent dir, fixture repo, and control files; reports merge into one result. Override with
+`THINKRAIL_E2E_SHARDS=N` or `--shards=N` (1–16); use `bun run e2e:serial` for one-lane debugging. The
+paths derive in `e2e/fixtures/paths.ts`, never touch `~/.thinkrail`, and parallel runs from different
+worktrees never collide. Two complete invocations in the same worktree remain sequential. Each lane
+seeds fixtures (`globalSetup`), drives the real web UI, then tears its host down and cleans up
+(`globalTeardown`). Tests live in `e2e/` and assert via `data-testid` / `data-status` hooks. Design:
+`e2e/SPEC.md`. When Electrobun lands, the same suite runs against the desktop app too.
 
 **Agent tests are tagged, not faked.** Specs that drive a real `pi` agent are tagged `@agent` (Playwright
 `{ tag: "@agent" }`). The host runs against an **isolated pi agent dir** (`PI_CODING_AGENT_DIR` → a

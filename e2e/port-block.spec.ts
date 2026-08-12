@@ -52,11 +52,35 @@ test("two live worktrees preferring the same slot get distinct blocks", () => {
 	expect(claimPortBlock(rootB, 42, registry)).toBe(b);
 });
 
+test("logical lanes on one live worktree get distinct sticky blocks", () => {
+	const { registry, rootA } = setup();
+	const laneA = { key: `${rootA}#lane-0`, livenessPath: rootA };
+	const laneB = { key: `${rootA}#lane-1`, livenessPath: rootA };
+	const a = claimPortBlock(laneA, 5, registry);
+	const b = claimPortBlock(laneB, 5, registry);
+	expect(a).toBe(base(5));
+	expect(b).toBe(base(6));
+	expect(claimPortBlock(laneA, 5, registry)).toBe(a);
+	expect(claimPortBlock(laneB, 5, registry)).toBe(b);
+	expect(JSON.parse(readFileSync(join(registry, "5"), "utf8"))).toEqual(laneA);
+});
+
 test("a stale claim (its worktree path is gone) is reclaimed", () => {
 	const { registry, rootA } = setup();
 	writeFileSync(join(registry, "5"), join(tmpdir(), "port-block-vanished-worktree"));
 	expect(claimPortBlock(rootA, 5, registry)).toBe(base(5));
 	expect(readFileSync(join(registry, "5"), "utf8")).toBe(rootA);
+});
+
+test("a logical lane becomes stale with its real worktree, not its synthetic key", () => {
+	const { registry, rootA, rootB } = setup();
+	const lane = { key: `${rootA}#lane-0`, livenessPath: rootA };
+	expect(claimPortBlock(lane, 8, registry)).toBe(base(8));
+	// The key is deliberately not a real path; the existing worktree keeps the claim alive.
+	expect(claimPortBlock(rootB, 8, registry)).toBe(base(9));
+	rmSync(rootA, { recursive: true, force: true });
+	const rootC = mkdtempSync(join(tmpdir(), "port-block-root-c-"));
+	expect(claimPortBlock(rootC, 8, registry)).toBe(base(8));
 });
 
 test("assignments are sticky: a displaced worktree never migrates to its freed predecessor slot", () => {

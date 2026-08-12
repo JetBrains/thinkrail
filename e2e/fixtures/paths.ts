@@ -3,18 +3,16 @@ import { realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { claimPortBlock, PORT_BLOCK_SLOTS } from "./portBlock";
+import { MAX_E2E_SHARDS } from "../shardPlan";
+import { claimPortBlock, PORT_BLOCK_SLOTS, PORT_BLOCK_STRIDE } from "./portBlock";
 
 // ─── Per-worktree isolation ─────────────────────────────────────────────────────────────────────
 // Every machine-global name the suites touch (tmp state dirs, listen ports) derives here from a
-// stable per-worktree key, so parallel e2e runs from DIFFERENT worktrees never collide — they used
-// to share `$TMPDIR/thinkrail-e2e` + fixed ports, letting one run's global setup/teardown wipe a
-// sibling run's live host state. Within ONE worktree the suites still share these paths and stay
-// sequential (see playwright.binary.config.ts). The key is deterministic (path-derived, never
-// random) because the Playwright runner, its workers, and global setup each evaluate this module
-// independently and must all agree on the same paths and ports; the port block additionally rides
-// a persistent atomic claim (portBlock.ts), which is stable across processes AND runs for the
-// same worktree while guaranteeing distinct blocks for distinct live worktrees.
+// stable per-worktree + optional shard-lane key. Different worktrees never collide, and one sharded
+// invocation can run isolated hosts inside the same worktree. The key is deterministic (never random)
+// because the Playwright runner, workers, global setup, and webServer each evaluate this module in
+// separate processes and must still agree. Two complete invocations in one worktree remain sequential:
+// stable lane ids deliberately reclaim interrupted state rather than leaking one namespace per run.
 
 /** This worktree's repo root (this file lives at `<root>/e2e/fixtures/`). */
 const repoRoot = realpathSync(dirname(dirname(dirname(fileURLToPath(import.meta.url)))));
@@ -23,13 +21,29 @@ const rootHash = createHash("sha256").update(repoRoot).digest("hex");
 /** Human-readable + collision-proof: `<sanitized basename>-<hash8>`, e.g. `workspace-16-1a2b3c4d`. */
 const WORKTREE_KEY = `${basename(repoRoot).replace(/[^A-Za-z0-9._-]+/g, "-")}-${rootHash.slice(0, 8)}`;
 
+function resolveLane(): number | undefined {
+	const raw = process.env.THINKRAIL_E2E_LANE;
+	if (raw === undefined || raw === "") return undefined;
+	const lane = Number(raw);
+	if (!Number.isInteger(lane) || lane < 0 || lane >= MAX_E2E_SHARDS) {
+		throw new Error(
+			`THINKRAIL_E2E_LANE must be an integer in [0, ${MAX_E2E_SHARDS - 1}], got ${JSON.stringify(raw)}`,
+		);
+	}
+	return lane;
+}
+
+const E2E_LANE = resolveLane();
+const E2E_STATE_KEY =
+	E2E_LANE === undefined ? WORKTREE_KEY : `${WORKTREE_KEY}-lane-${E2E_LANE + 1}`;
+const claimKey = E2E_LANE === undefined ? repoRoot : `${repoRoot}#e2e-lane-${E2E_LANE}`;
+const claimHash = createHash("sha256").update(claimKey).digest("hex");
+
 /**
- * Per-worktree port block, [25000, 29990] — clear of the dev host's 24242 and the OS-ephemeral
- * range. The path hash picks the *preferred* slot; actual ownership is arbitrated by the atomic
- * claim registry (see portBlock.ts), so two worktrees whose hashes collide still get distinct
- * blocks — no manual coordination. THINKRAIL_E2E_PORT_BASE bypasses the registry and pins the
- * block explicitly (invalid values throw: loud beats silently colliding). The offsets below keep
- * one worktree's suites apart within its block.
+ * Per-lane port block, [25000, 29990] — clear of the dev host's 24242 and the OS-ephemeral range.
+ * The atomic registry distinguishes shard lanes by logical key while using the real worktree path
+ * for liveness, so lanes and worktrees cannot collide. THINKRAIL_E2E_PORT_BASE bypasses the registry;
+ * in a sharded run it pins lane zero and each later lane takes the next block.
  */
 function resolvePortBase(): number {
 	const env = process.env.THINKRAIL_E2E_PORT_BASE;
@@ -40,9 +54,12 @@ function resolvePortBase(): number {
 				`THINKRAIL_E2E_PORT_BASE must be an integer in [1024, 65000], got ${JSON.stringify(env)}`,
 			);
 		}
-		return base;
+		return base + (E2E_LANE ?? 0) * PORT_BLOCK_STRIDE;
 	}
-	return claimPortBlock(repoRoot, Number.parseInt(rootHash.slice(0, 8), 16) % PORT_BLOCK_SLOTS);
+	return claimPortBlock(
+		E2E_LANE === undefined ? repoRoot : { key: claimKey, livenessPath: repoRoot },
+		Number.parseInt(claimHash.slice(0, 8), 16) % PORT_BLOCK_SLOTS,
+	);
 }
 const PORT_BASE = resolvePortBase();
 
@@ -55,11 +72,14 @@ export const E2E_BINARY_PORT = PORT_BASE + 2;
 /** The self-hosting restart spec's private-host port (`ask-restart.live.spec.ts`). */
 export const E2E_RESTART_PORT = PORT_BASE + 4;
 
+/** The lane-local JetBrains proxy port used by the central CLI stub. */
+export const E2E_WIRE_PROXY_PORT = PORT_BASE + 6;
+
 /**
  * Isolated on-disk state for an e2e run — per-worktree, so tests never touch the user's real
  * ~/.thinkrail and parallel runs from different worktrees never touch each other.
  */
-export const E2E_DATA_DIR = join(tmpdir(), `thinkrail-e2e-${WORKTREE_KEY}`);
+export const E2E_DATA_DIR = join(tmpdir(), `thinkrail-e2e-${E2E_STATE_KEY}`);
 
 /** Isolated HOME so cross-agent skill discovery never reads a developer's real personal libraries. */
 export const E2E_HOME_DIR = join(E2E_DATA_DIR, "home");
@@ -73,7 +93,7 @@ export const E2E_FIXTURE_REPO = join(E2E_DATA_DIR, "sample-project");
  * at server boot, and this must not depend on the wipe-then-seed order between global setup and the
  * webServer launch. Removed in global teardown instead, so every run still stages fresh.
  */
-export const E2E_BINARY_CACHE = join(tmpdir(), `thinkrail-e2e-binary-cache-${WORKTREE_KEY}`);
+export const E2E_BINARY_CACHE = join(tmpdir(), `thinkrail-e2e-binary-cache-${E2E_STATE_KEY}`);
 
 /**
  * A dev/e2e control file the stubbed directory picker (`THINKRAIL_PICK_DIR`) points at: `selectDirectory`
@@ -124,10 +144,10 @@ export const E2E_PI_MODELS_SEED = join(E2E_DATA_DIR, "pi-agent-models.seed.json"
  * The restart spec's private, self-managed state dir (`ask-restart.live.spec.ts` seeds and wipes it
  * itself — deliberately outside `E2E_DATA_DIR`, whose lifecycle the shared global setup/teardown owns).
  */
-export const E2E_RESTART_DATA_DIR = join(tmpdir(), `thinkrail-e2e-restart-${WORKTREE_KEY}`);
+export const E2E_RESTART_DATA_DIR = join(tmpdir(), `thinkrail-e2e-restart-${E2E_STATE_KEY}`);
 
 /** Outside the restart data dir so a failed run's per-test wipe doesn't destroy the post-mortem trail. */
 export const E2E_RESTART_HOST_LOG = join(
 	tmpdir(),
-	`thinkrail-e2e-restart-${WORKTREE_KEY}-host.log`,
+	`thinkrail-e2e-restart-${E2E_STATE_KEY}-host.log`,
 );
