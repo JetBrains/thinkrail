@@ -79,7 +79,7 @@ import {
 import {
 	addComment,
 	buildSendPackage,
-	closeReview,
+	clearReview,
 	deleteComment,
 	fileReviewSession,
 	getReviewSnapshot,
@@ -747,7 +747,7 @@ const handlers: Record<string, Handler> = {
 	"review.close": (params) => {
 		const p = params as { workspaceId: string };
 		return withReviewLock(p.workspaceId, async () => {
-			closeReview(p.workspaceId);
+			clearReview(p.workspaceId);
 			return { ok: true } as const;
 		});
 	},

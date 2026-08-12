@@ -8,7 +8,6 @@ import { mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync
 import { isAbsolute, join, relative, resolve } from "node:path";
 import type {
 	GitDiffScope,
-	Review,
 	ReviewAnchor,
 	ReviewChangedPayload,
 	ReviewComment,
@@ -103,11 +102,8 @@ function readWorktreeFile(worktreePath: string, path: string): string | null {
 	}
 }
 
-/** The open review for a workspace, created lazily (a closed review stays on disk until the next touch
- * replaces the file with the fresh one — V1 keeps no archive browser). */
-function ensureSnapshot(workspaceId: string): ReviewSnapshot {
-	const existing = load(workspaceId);
-	if (existing && existing.review.status === "open") return existing;
+/** Build a fresh open review against the workspace's current branch range; persistence is the caller's. */
+function freshSnapshot(workspaceId: string): ReviewSnapshot {
 	const ws = getWorkspace(workspaceId);
 	// The review is made against the ORIGINAL SIDE OF THE DIFF the user is reviewing, pinned to a full
 	// oid. That is the branch range's `originalRef` — the **fork point** (`merge-base` of the diff target
@@ -120,14 +116,23 @@ function ensureSnapshot(workspaceId: string): ReviewSnapshot {
 	// surface over an unreadable base would cost far more than it saves.
 	const ref = resolveDiffRange(ws).originalRef ?? diffBaseRef(ws);
 	const base = resolveCommitOid(ws.worktreePath, ref);
-	const review: Review = {
-		id: `rev_${randomUUID().slice(0, 8)}`,
-		workspaceId,
-		status: "open",
-		baseSha: base ?? ref,
-		createdAt: Date.now(),
+	return {
+		review: {
+			id: `rev_${randomUUID().slice(0, 8)}`,
+			workspaceId,
+			status: "open",
+			baseSha: base ?? ref,
+			createdAt: Date.now(),
+		},
+		comments: [],
 	};
-	const snapshot: ReviewSnapshot = { review, comments: [] };
+}
+
+/** The open review for a workspace, created lazily. Old closed snapshots are migrated on first touch. */
+function ensureSnapshot(workspaceId: string): ReviewSnapshot {
+	const existing = load(workspaceId);
+	if (existing && existing.review.status === "open") return existing;
+	const snapshot = freshSnapshot(workspaceId);
 	save(workspaceId, snapshot);
 	return snapshot;
 }
@@ -329,13 +334,15 @@ export function deleteComment(workspaceId: string, id: string): void {
 	persistAndPublish(workspaceId, snapshot);
 }
 
-/** Archive the open review; the next touch starts a fresh one. */
-export function closeReview(workspaceId: string): void {
-	const snapshot = load(workspaceId);
-	if (snapshot?.review.status !== "open") return;
-	snapshot.review.status = "closed";
-	snapshot.review.closedAt = Date.now();
+/**
+ * Clear a review as one shared-state mutation: refuse to overwrite a damaged file, replace any healthy
+ * snapshot with a fresh open review, and publish only that fresh snapshot so every client empties together.
+ */
+export function clearReview(workspaceId: string): ReviewSnapshot {
+	load(workspaceId);
+	const snapshot = freshSnapshot(workspaceId);
 	persistAndPublish(workspaceId, snapshot);
+	return snapshot;
 }
 
 /**

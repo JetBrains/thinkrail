@@ -157,8 +157,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
   check-then-mark straddling an `await createSession(…)`, the review layer's only non-atomic gap.
   **`withReviewLock` covers every review mutation the WIRE exposes, not just sends**, because two different things fall
   into that gap: a second *send* reads the same "drafts, no session yet" and forks the review, and a
-  *mutation* invalidates the package already built — a `review.close` landing there strands the
-  package: the mark re-creates a fresh empty review and links the chat to *that*, leaving comment ids
+  *mutation* invalidates the package already built — a `review.close` Clear landing there strands the
+  package: the mark sees a fresh empty review and links the chat to *that*, leaving comment ids
   the agent can never `resolve_comment`. One queue per workspace, so a mutation issued mid-send simply
   happens after it.
   The package prompt is fired **detached** after the mark, so the lock only ever holds session

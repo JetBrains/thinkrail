@@ -18,8 +18,11 @@ re-anchoring, and package rendering. Design + user-confirmed decisions: [[task-r
 
 ## Model (mirrors the wire DTOs in `contracts`)
 
-- **One open `Review` per workspace** (auto-created lazily on the first read/comment; `review.close`
-  archives it and the next touch starts a fresh one). `Review.fileSessions` pins each review KEY to
+- **One open `Review` per workspace** (auto-created lazily on the first read/comment). Wire
+  **`review.close` is the Clear operation**: under the host's workspace review lock, `clearReview`
+  atomically replaces the current snapshot with a fresh open review and publishes that fresh snapshot —
+  clients never converge on an intermediate closed copy. V1 keeps no archive browser. `Review.fileSessions`
+  pins each review KEY to
   its chat (key → sessionId): one chat per file for the review's life — the file's first send creates
   it, every later send (single or batch) follows up into it. The key is the comment's path, or the
   **empty string** for anchorless whole-change-set remarks, pinned exactly like a file (`reviewSessionKey`)
@@ -95,8 +98,8 @@ batch spanning several keys sends each group separately and answers with all of 
 running unseen; whatever received the package becomes the key's pin) → `markSent` → prompt. The whole sequence is **serialized per
 workspace together with every review mutation** (`host`'s `withReviewLock`): the draft/session check
 happens *before* the awaited session creation, so in that gap two concurrent sends would both see
-"drafts, no session" and fork the review — and a concurrent `close` would invalidate the package
-already built, leaving the agent with comment ids no open review contains.
+"drafts, no session" and fork the review — and a concurrent `review.close` Clear would invalidate the
+package already built, leaving the agent with comment ids no open review contains.
 **The prompt is fired DETACHED** (`fireReviewPrompt`): the handler returns the
 moment the session exists so the client opens the chat immediately — awaiting the ack meant sitting
 out pi's 10s acceptance window on every send. Because `markSent` runs synchronously (before the turn is
@@ -109,7 +112,8 @@ send is unpinned unless another comment still backs it. A fault AFTER acceptance
 (the package *was* delivered) and rides the event stream, leaving the `sent` state correct. The
 rollback runs DETACHED (after the send's lock released) and fully synchronously, so — like
 `reanchorWorkspace` — it stays correct unlocked, and it reads with `load` (never `ensureSnapshot`): a
-`close`/archive that lands first makes it a clean no-op instead of resurrecting an empty open review. The **`resolve_comment`** capability is an agent-module custom tool
+`review.close` Clear that lands first makes it a clean no-op against the fresh review instead of
+resurrecting the cleared comments. The **`resolve_comment`** capability is an agent-module custom tool
 (`agent/reviewTool.ts`, registered on every session like `ask_user_question`) whose execution is
 delegated back here through a host-installed seam — the agent module stays dependency-free.
 
@@ -123,7 +127,7 @@ delegated back here through a host-installed seam — the agent module stays dep
   package rendering (pure `packageRender.ts`), and the `review.changed` publisher seam
   (`setReviewPublisher`, installed by `host` — full-snapshot pushes, idempotent under last-value replay).
 - **Public surface (barrel):** `getReviewSnapshot`, `addComment`, `updateComment`, `deleteComment`
-  (draft-only), `closeReview`, `markCommentsSent`, `rollbackSend` (undo `markCommentsSent` on a
+  (draft-only), `clearReview`, `markCommentsSent`, `rollbackSend` (undo `markCommentsSent` on a
   pre-turn send rejection), `markFileDone`, `fileReviewSession` + `reviewSessionKey`/`REVIEW_LEVEL_KEY` (the
   per-key chat pin), `resolveCommentFromAgent`, `reanchorWorkspace`, `sendableComments`,
   `buildSendPackage`, `removeWorkspaceReviews`, `setReviewPublisher` (+ the pure
@@ -137,7 +141,8 @@ delegated back here through a host-installed seam — the agent module stays dep
 ## Get right
 
 - **Statuses converge via the push, never optimism** — every mutation (UI edit, agent resolve, a
-  reanchor that changed states) emits one full `review.changed` snapshot; clients fold it.
+  reanchor that changed states) emits one full `review.changed` snapshot; clients fold it. Clear emits
+  exactly the fresh open snapshot (never the discarded review), so every connected client empties together.
 - Sends **re-anchor first**, so the package's line numbers are true at send time — and are **serialized
   per workspace with every mutation**, so nothing can close or re-send out from under a
   check-then-mark. A package that quotes a comment id is a promise the id still exists.

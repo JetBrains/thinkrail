@@ -45,7 +45,6 @@ import { SendAllReviewsButton, SendReviewButton } from "./SendReviewButton";
 export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; failed: boolean }) {
 	const snapshot = useAppStore((s) => s.reviewsByWorkspace[workspaceId]);
 	const activeReviewedPath = useAppStore((s) => selectActiveReviewedPath(s, workspaceId));
-	const setWorkspaceReview = useAppStore((s) => s.setWorkspaceReview);
 	const [sending, setSending] = useState(false);
 	const [clearing, setClearing] = useState(false);
 	// The unfolded sections, keyed like `fileSummaries` rows (`null` = the whole-change-set bucket).
@@ -123,13 +122,11 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 			toast.error(errorText(err), "Couldn't finish the file's review");
 		}
 	};
-	// Clear the whole review: archive it, then read back the fresh (empty) review the next touch creates.
-	// `review.close` republishes the CLOSED snapshot with its comments intact, so the empty state only
-	// lands once `review.get` (→ `ensureSnapshot`) re-creates the open review.
+	// Clear is one server-side mutation. Its `review.changed` fresh-snapshot push is the only state fold,
+	// so this page and every sibling client empty together — no initiating-only `review.get` write.
 	const clearReview = async () => {
 		try {
 			await getTransport().request("review.close", { workspaceId });
-			setWorkspaceReview(workspaceId, await getTransport().request("review.get", { workspaceId }));
 		} catch (err) {
 			toast.error(errorText(err), "Couldn't clear the review");
 		}

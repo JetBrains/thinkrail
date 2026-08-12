@@ -9,7 +9,7 @@ export { renderPackage } from "./packageRender";
 export {
 	addComment,
 	buildSendPackage,
-	closeReview,
+	clearReview,
 	deleteComment,
 	fileReviewSession,
 	getReviewSnapshot,
