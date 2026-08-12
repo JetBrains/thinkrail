@@ -724,6 +724,72 @@ test("a pending delete blocks live commands, then trash failure restores the sam
 	}
 });
 
+test("concurrent deletes of one chat coalesce into a single owned transaction", async () => {
+	// Regression (Air): two clients trashing the same chat must not run rival transactions. A loser's
+	// rollback could otherwise clear the winner's tombstone mid-move, re-opening the chat to a new turn
+	// that the winner's move then loses or that recreates the deleted file.
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	let trashCalls = 0;
+	let reportTrashStarted: () => void = () => {};
+	const trashStarted = new Promise<void>((resolve) => {
+		reportTrashStarted = resolve;
+	});
+	let failTrash: () => void = () => {};
+	const trashOutcome = new Promise<void>((_resolve, reject) => {
+		failTrash = () => reject(new Error("recycle bin unavailable"));
+	});
+	setTrashImplementationForTests(async () => {
+		trashCalls++;
+		reportTrashStarted();
+		await trashOutcome;
+	});
+	let sessionId: string | undefined;
+	let first: Promise<void> | undefined;
+	let second: Promise<void> | undefined;
+	try {
+		fauxA.setResponses([fauxAssistantMessage("COALESCE_ME")]);
+		const cwd = tmpCwd("trpi-delete-coalesce-");
+		const session = await createSession({
+			cwd,
+			workspaceId: "ws-delete-coalesce",
+			model: toWireModel(fauxA.getModel()),
+		});
+		sessionId = session.sessionId;
+		await promptSession(session.sessionId, "persist before concurrent delete");
+		const info = (await SessionManager.list(cwd)).find((item) => item.id === session.sessionId);
+		if (!info) throw new Error("expected the session transcript to exist");
+
+		// Two clients trash the same chat at once — the second joins the first: one trash, one owner.
+		first = deleteSession(session.sessionId, "ws-delete-coalesce", cwd);
+		second = deleteSession(session.sessionId, "ws-delete-coalesce", cwd);
+		await trashStarted;
+		expect(trashCalls).toBe(1);
+
+		// The tombstone holds throughout the single pending move: no live command slips through.
+		await expect(promptSession(session.sessionId, "must not be accepted")).rejects.toThrow(
+			`Unknown session: ${session.sessionId}`,
+		);
+
+		// The sole owner's trash fails → both callers reject, and the tombstone it installed is rolled back,
+		// so the same runtime is addressable again — never left un-openable by a loser's stale clear.
+		failTrash();
+		await expect(first).rejects.toThrow("recycle bin unavailable");
+		await expect(second).rejects.toThrow("recycle bin unavailable");
+		expect(hasSession(session.sessionId)).toBe(true);
+		expect(readFileSync(info.path, "utf8")).toContain("persist before concurrent delete");
+		expect(readFileSync(info.path, "utf8")).not.toContain("must not be accepted");
+		fauxA.appendResponses([fauxAssistantMessage("AFTER_ROLLBACK")]);
+		await promptSession(session.sessionId, "accepted after rollback");
+		expect(readFileSync(info.path, "utf8")).toContain("accepted after rollback");
+	} finally {
+		failTrash();
+		await Promise.allSettled([first, second]);
+		if (sessionId && hasSession(sessionId)) removeSession(sessionId);
+		setTrashImplementationForTests(undefined);
+		setSessionManagerFactory(() => SessionManager.inMemory());
+	}
+});
+
 test("archival teardown is not blocked by a chat whose recoverable delete is mid-trash", async () => {
 	// Regression: the delete tombstone makes the retained entry reject `removeSession`, so archival must
 	// dispose unconditionally. Otherwise one in-flight chat delete would abort the loop and strand the

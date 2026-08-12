@@ -56,6 +56,11 @@ const sessions = new Map<string, Entry>();
 // is absent, or the user deliberately restored it from the OS trash.
 const deletedSessions = new Map<string, string>();
 
+// In-flight delete transactions, keyed by session id. A second trash click on the same chat (another tab
+// or another client) joins the running transaction instead of starting a rival one — so the tombstone is
+// installed and cleared by exactly one owner, never cleared by a loser while the winner's move is pending.
+const deletingSessions = new Map<string, { workspaceId: string; done: Promise<void> }>();
+
 function isSessionDeleted(sessionId: string, workspaceId: string): boolean {
 	return deletedSessions.get(sessionId) === workspaceId;
 }
@@ -854,14 +859,38 @@ async function purgeDiskSessions(cwd: string): Promise<void> {
  * succeeds. The chat is usually a CLOSED one, so the file is resolved from disk
  * with the same cwd+id disambiguation `getSessionMessages` uses — and only a file whose recorded `cwd`
  * matches this workspace is touched, so a stray/foreign id disposes nothing and trashes nothing.
+ *
+ * **Single-flighted per session id.** Concurrent trash clicks on one chat must not run rival transactions:
+ * two owners of the shared tombstone would let the loser's failure roll it back while the winner's move is
+ * still pending, briefly re-opening the chat to new turns. A duplicate call for the same id joins the
+ * running transaction (same workspace) or is rejected as unknown (a foreign workspace naming this id).
  */
-export async function deleteSession(
+export function deleteSession(sessionId: string, workspaceId: string, cwd: string): Promise<void> {
+	const inFlight = deletingSessions.get(sessionId);
+	if (inFlight) {
+		// A session id belongs to exactly one workspace; a different one naming it isn't this client's chat.
+		if (inFlight.workspaceId !== workspaceId)
+			return Promise.reject(new Error(`Unknown session: ${sessionId}`));
+		return inFlight.done;
+	}
+	// `runDeleteTransaction` installs the tombstone synchronously (before its first await), so the entry is
+	// registered here before the promise suspends and any concurrent caller can only observe it in flight.
+	const done = runDeleteTransaction(sessionId, workspaceId, cwd).finally(() =>
+		deletingSessions.delete(sessionId),
+	);
+	deletingSessions.set(sessionId, { workspaceId, done });
+	return done;
+}
+
+async function runDeleteTransaction(
 	sessionId: string,
 	workspaceId: string,
 	cwd: string,
 ): Promise<void> {
 	// Win before any await: a disk re-open already in flight will see this before it can register, and a
-	// later one is rejected at its entry point.
+	// later one is rejected at its entry point. Only clear on failure what THIS transaction installed — a
+	// pre-existing tombstone from an earlier successful deletion must survive a later spurious re-delete.
+	const installedTombstone = !deletedSessions.has(sessionId);
 	deletedSessions.set(sessionId, workspaceId);
 	let liveEntry: Entry | undefined;
 	try {
@@ -893,8 +922,9 @@ export async function deleteSession(
 		if (path) await trashFile(path);
 	} catch (error) {
 		// The deletion boundary did not complete: retain any live entry, allow disk re-attach/retry, and
-		// publish nothing. The client that received the failure still has a usable chat runtime.
-		if (isSessionDeleted(sessionId, workspaceId)) deletedSessions.delete(sessionId);
+		// publish nothing. The client that received the failure still has a usable chat runtime. Single-flight
+		// makes this the sole owner, so it clears only the tombstone it just installed.
+		if (installedTombstone) deletedSessions.delete(sessionId);
 		throw error;
 	}
 	// Only disposal after the recoverable disk move is committed. If another path already removed this
