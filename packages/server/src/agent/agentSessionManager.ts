@@ -725,9 +725,9 @@ async function purgeDiskSessions(cwd: string): Promise<void> {
 }
 
 /**
- * Delete ONE chat for good (the history/closed-chats list's trash action): dispose it if it happens to be
- * live (aborting a mid-stream turn first, like the archive teardown), then move its transcript to the OS
- * trash so the delete is recoverable. The chat is usually a CLOSED one, so the file is resolved from disk
+ * Delete ONE chat for good (the history/closed-chats list's trash action): abort it if streaming, move its
+ * transcript to the OS trash, then dispose its live runtime only after that recoverable deletion boundary
+ * succeeds. The chat is usually a CLOSED one, so the file is resolved from disk
  * with the same cwd+id disambiguation `getSessionMessages` uses — and only a file whose recorded `cwd`
  * matches this workspace is touched, so a stray/foreign id disposes nothing and trashes nothing.
  */
@@ -739,12 +739,15 @@ export async function deleteSession(
 	// Win before any await: a disk re-open already in flight will see this before it can register, and a
 	// later one is rejected at its entry point.
 	deletedSessions.set(sessionId, workspaceId);
+	let liveEntry: Entry | undefined;
 	try {
 		await attaching.get(sessionId)?.catch(() => {});
 		const entry = sessions.get(sessionId);
 		if (entry?.workspaceId === workspaceId) {
-			if (entry.session.isStreaming) await entry.session.abort().catch(() => {});
-			removeSession(sessionId);
+			liveEntry = entry;
+			// Stop any writer before moving its transcript, but keep the entry registered until that move
+			// succeeds. A trash failure must leave the client-visible runtime addressable, not half-deleted.
+			if (entry.session.isStreaming) await entry.session.abort();
 		}
 		let path: string | undefined;
 		try {
@@ -756,9 +759,13 @@ export async function deleteSession(
 		}
 		if (path) await trashFile(path);
 	} catch (error) {
-		// A failed disk mutation did not complete the domain delete; allow a retry/re-open in this host.
+		// The deletion boundary did not complete: retain any live entry, allow disk re-attach/retry, and
+		// publish nothing. The client that received the failure still has a usable chat runtime.
 		if (isSessionDeleted(sessionId, workspaceId)) deletedSessions.delete(sessionId);
 		throw error;
 	}
+	// Only disposal after the recoverable disk move is committed. If another path already removed this
+	// exact entry, `removeSession` is an idempotent no-op; never dispose a replacement entry by mistake.
+	if (liveEntry && sessions.get(sessionId) === liveEntry) removeSession(sessionId);
 	publishDeleted({ workspaceId, sessionId });
 }

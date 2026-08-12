@@ -131,11 +131,12 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     whose recorded `cwd` matches, never `rm -rf` the encoded dir since pi's cwd→dir encoding can alias
     distinct cwds; `cwd` omitted on a double-archive skips only the disk purge);
     **`deleteSession(sessionId, workspaceId, cwd)`** (mark it deleted before any await so an in-flight disk
-    attach cannot register afterward; dispose it if live in this workspace, move its one matching-cwd
-    transcript to the OS trash via `trashFile`, then publish `SessionDeletedPayload` for client convergence;
-    the cross-platform trash operation is the deletion boundary — if it fails, the request throws, the
-    tombstone is rolled back, the transcript stays on disk, and nothing is published; there is deliberately
-    no permanent-unlink fallback behind a recoverable UI action);
+    attach cannot register afterward; abort a live turn if needed but retain the live entry, move its one
+    matching-cwd transcript to the OS trash via `trashFile`, then dispose the live entry and publish
+    `SessionDeletedPayload` for client convergence; the cross-platform trash operation is the deletion
+    boundary — if it fails, the request throws, the tombstone is rolled back, the transcript stays on disk,
+    the retained live entry remains addressable, and nothing is published; there is deliberately no
+    permanent-unlink fallback behind a recoverable UI action);
     `setSessionPublisher` + `setSessionDeletedPublisher` + `setSessionManagerFactory` seams.
   - `oneshot` — one-shot LLM completions **without** an `AgentSession` (no tools/extensions/disk):
     `completeOnce(request)` picks a model from the shared runtime's authenticated set and dispatches a

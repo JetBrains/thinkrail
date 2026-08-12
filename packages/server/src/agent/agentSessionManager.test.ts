@@ -34,6 +34,7 @@ import {
 	toWireModel,
 } from "./agentSessionManager";
 import { configurePiRuntime } from "./piRuntime";
+import { setTrashImplementationForTests } from "./trash";
 import {
 	cancelExtUiForSession,
 	createWebUiContext,
@@ -578,6 +579,10 @@ test("disk-reopen: a disposed session is re-listed from disk and re-opened with 
 
 test("deleteSession tombstones its id so a stale transcript cannot reattach in this host", async () => {
 	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	setTrashImplementationForTests(async (input) => {
+		const paths = typeof input === "string" ? [input] : input;
+		for (const path of paths) rmSync(path, { force: true });
+	});
 	try {
 		fauxA.setResponses([fauxAssistantMessage("DELETE_ME")]);
 		const cwd = tmpCwd("trpi-delete-");
@@ -601,6 +606,41 @@ test("deleteSession tombstones its id so a stale transcript cannot reattach in t
 		);
 		rmSync(info.path, { force: true });
 	} finally {
+		setTrashImplementationForTests(undefined);
+		setSessionManagerFactory(() => SessionManager.inMemory());
+	}
+});
+
+test("a trash failure retains the live chat runtime and rolls back its tombstone", async () => {
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	setTrashImplementationForTests(async () => {
+		throw new Error("recycle bin unavailable");
+	});
+	let sessionId: string | undefined;
+	try {
+		fauxA.setResponses([fauxAssistantMessage("STILL_HERE")]);
+		const cwd = tmpCwd("trpi-delete-failure-");
+		const session = await createSession({
+			cwd,
+			workspaceId: "ws-delete-failure",
+			model: toWireModel(fauxA.getModel()),
+		});
+		sessionId = session.sessionId;
+		await promptSession(session.sessionId, "persist before failed deletion");
+		const info = (await SessionManager.list(cwd)).find((item) => item.id === session.sessionId);
+		if (!info) throw new Error("expected the session transcript to exist");
+
+		await expect(deleteSession(session.sessionId, "ws-delete-failure", cwd)).rejects.toThrow(
+			"recycle bin unavailable",
+		);
+		expect(hasSession(session.sessionId)).toBe(true);
+		expect(readFileSync(info.path, "utf8")).toContain("persist before failed deletion");
+		const restored = await getSessionMessages(session.sessionId, "ws-delete-failure", cwd);
+		expect(restored.summary.live).toBe(true);
+		expect(restored.messages.some((message) => message.role === "assistant")).toBe(true);
+	} finally {
+		if (sessionId) removeSession(sessionId);
+		setTrashImplementationForTests(undefined);
 		setSessionManagerFactory(() => SessionManager.inMemory());
 	}
 });

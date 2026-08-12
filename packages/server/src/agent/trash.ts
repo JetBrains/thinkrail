@@ -24,6 +24,14 @@ export interface BundledTrashHelpers {
 }
 
 let bundledHelpers: BundledTrashHelpers | undefined;
+let testImplementation: TrashImplementation | undefined;
+
+/** Internal test seam for exercising manager rollback without touching the machine's real trash. */
+export function setTrashImplementationForTests(
+	implementation: TrashImplementation | undefined,
+): void {
+	testImplementation = implementation;
+}
 
 /** Compiled-runtime seam: helpers must be staged to real files before the host accepts requests. */
 export function setBundledTrashHelpers(helpers: BundledTrashHelpers): void {
@@ -49,7 +57,7 @@ function defaultTrashImplementation(): TrashImplementation {
 /** Move one literal path to the OS trash. Failures propagate; a recoverable action never falls back to unlink. */
 export async function trashFile(
 	path: string,
-	implementation: TrashImplementation = defaultTrashImplementation(),
+	implementation: TrashImplementation = testImplementation ?? defaultTrashImplementation(),
 ): Promise<void> {
 	await implementation(path, { glob: false });
 }
