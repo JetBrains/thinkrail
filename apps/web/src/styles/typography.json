@@ -34,7 +34,16 @@
 			]
 		},
 		"brand": {
-			"$ref": "interface"
+			"stack": [
+				"Orbitron Variable",
+				"Orbitron",
+				"-apple-system",
+				"BlinkMacSystemFont",
+				"Segoe UI",
+				"sans-serif"
+			],
+			"kind": "proportional",
+			"selfHosted": ["@fontsource-variable/orbitron"]
 		}
 	},
 	"fontWeights": {

@@ -32,8 +32,10 @@ binary.
   app's.
 - **Fonts are self-hosted; the site makes no external font request.** Packages and stacks are copied
   from the app's `typography.json`, not imported — and `src/fonts.test.ts` reads that JSON at test time
-  and fails on drift, which is what makes copying safe. `--font-display` aliases `--font-sans`,
-  mirroring the app's `brand` family.
+  and fails on drift, which is what makes copying safe. `--font-display` mirrors the app's `brand`
+  family — **Orbitron** (`@fontsource-variable/orbitron`, self-hosted), a distinct display face for the
+  brand elements (wordmark + hero heading), falling back to `--font-sans`; section headings and the
+  tagline are the interface face (`--font-sans`), matching the app.
 - **Brand values are copied, not imported.** Theme palettes are lifted at authoring time from
   `apps/web/src/themes/bundled/*.theme.json` (dark = default, darcula, light, gruvbox) into the site's
   own CSS custom properties under `[data-theme]`; the site never reaches into `apps/web` at build time

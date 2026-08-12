@@ -11,6 +11,7 @@
 @import "@fontsource-variable/geist/wght-italic.css";
 @import "@fontsource-variable/jetbrains-mono";
 @import "@fontsource-variable/jetbrains-mono/wght-italic.css";
+@import "@fontsource-variable/orbitron";
 
 /* ── Theme palettes ─────────────────────────────────────────────────────── */
 
@@ -18,9 +19,11 @@
 	--font-sans: "Geist Variable", "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 	--font-mono:
 		"JetBrains Mono Variable", "JetBrains Mono", "Fira Code", "SF Mono", "Cascadia Code", monospace;
-	/* The display role, mirroring the app's `brand` family — an alias of the interface face, not a
-	   second typeface. */
-	--font-display: var(--font-sans);
+	/* The display role, mirroring the app's `brand` family — Orbitron (self-hosted above), a distinct
+	   display face used by the brand elements (wordmark + hero heading). Falls back to the interface
+	   stack. See src/fonts.test.ts (kept in step with apps/web/src/styles/typography.json). */
+	--font-display:
+		"Orbitron Variable", "Orbitron", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 
 	/* dark (the app's default) */
 	--chrome: #171719;
@@ -658,7 +661,7 @@ code {
 }
 
 .file-section h2 {
-	font-family: var(--font-display);
+	font-family: var(--font-sans);
 	font-weight: 700;
 	font-size: clamp(26px, 4vw, 34px);
 	line-height: 1.15;
@@ -796,7 +799,7 @@ code {
 
 /* p.<class> ties with `.file-section p` on specificity and wins by source order — no !important. */
 p.hero-tagline {
-	font-family: var(--font-display);
+	font-family: var(--font-sans);
 	font-weight: 700;
 	font-size: clamp(20px, 3.4vw, 30px);
 	color: var(--text);

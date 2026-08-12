@@ -7,7 +7,7 @@ import {
 	visibleTerminalScreen,
 	waitTerminalReady,
 } from "./fixtures/app";
-import { CODE_FACE, INTERFACE_FACE } from "./fixtures/typography";
+import { BRAND_FACE, CODE_FACE, INTERFACE_FACE } from "./fixtures/typography";
 
 /**
  * Computed-style verification: the generated typography actually renders on the real surfaces, and the
@@ -49,7 +49,7 @@ test("brand, welcome hero and label pill render the generated brand styles", asy
 	await openAppFresh(page);
 	const wordmark = await typeOf(page.locator(".tr-brand-wordmark").first());
 	expect(wordmark).toMatchObject({ size: "18px", weight: "800", lineHeight: "22.5px" });
-	expect(wordmark.family).toMatch(INTERFACE_FACE);
+	expect(wordmark.family).toMatch(BRAND_FACE);
 
 	await openFixtureProject(page);
 	expect(await typeOf(page.getByTestId("welcome-title"))).toMatchObject({
