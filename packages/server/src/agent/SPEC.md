@@ -103,7 +103,10 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     is never trusted (blocks disclosure *and* arbitrary-URL injection). The **hydration read side** —
     `listSessions(workspaceId, cwd)` (live sessions
     **unioned with on-disk** ones pi persisted under `cwd`, live winning on id → `SessionSummary[]` tagged
-    `live`) + `getSessionMessages(sessionId, workspaceId, cwd)` (re-opens a disk session into the manager if
+    `live`; before treating that disk list as authoritative it strictly scans every transcript header and
+    verifies pi returned every file, so an unreadable/malformed/skipped file rejects the read rather than
+    masquerading as absent and being tombstoned by reconnect reconciliation) +
+    `getSessionMessages(sessionId, workspaceId, cwd)` (re-opens a disk session into the manager if
     not live, then returns `{ summary, messages }` — `TranscriptMessage[]`: the pi-canonical subset **plus
     `custom` messages**, which carry the `ask-user-answers` replies the questionnaire card pairs by tool
     call id), plus **`ensureSessionAttached(sessionId, workspaceId, cwd)`** — the same single-flighted
@@ -131,12 +134,13 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     whose recorded `cwd` matches, never `rm -rf` the encoded dir since pi's cwd→dir encoding can alias
     distinct cwds; `cwd` omitted on a double-archive skips only the disk purge);
     **`deleteSession(sessionId, workspaceId, cwd)`** (mark it deleted before any await so an in-flight disk
-    attach cannot register afterward; abort a live turn if needed but retain the live entry, move its one
-    matching-cwd transcript to the OS trash via `trashFile`, then dispose the live entry and publish
-    `SessionDeletedPayload` for client convergence; the cross-platform trash operation is the deletion
-    boundary — if it fails, the request throws, the tombstone is rolled back, the transcript stays on disk,
-    the retained live entry remains addressable, and nothing is published; there is deliberately no
-    permanent-unlink fallback behind a recoverable UI action);
+    attach cannot register afterward; abort a live turn if needed but retain the live entry, resolve a live
+    transcript from that session's own `SessionManager` (never a lossy directory listing), otherwise use the
+    same strict disk lookup above, move the exact matching-cwd transcript to the OS trash via `trashFile`,
+    then dispose the live entry and publish `SessionDeletedPayload` for client convergence; only an exact
+    trashed file or a successfully established absence counts as deletion. Any lookup or trash failure
+    throws, rolls back the tombstone, leaves the transcript/live entry in place, and publishes nothing;
+    there is deliberately no permanent-unlink fallback behind a recoverable UI action);
     `setSessionPublisher` + `setSessionDeletedPublisher` + `setSessionManagerFactory` seams.
   - `oneshot` — one-shot LLM completions **without** an `AgentSession` (no tools/extensions/disk):
     `completeOnce(request)` picks a model from the shared runtime's authenticated set and dispatches a

@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, jest, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -29,6 +29,7 @@ import {
 	refreshAvailableModels,
 	removeSession,
 	removeWorkspaceSessions,
+	setSessionDeletedPublisher,
 	setSessionManagerFactory,
 	setSessionPublisher,
 	toWireModel,
@@ -595,9 +596,13 @@ test("deleteSession tombstones its id so a stale transcript cannot reattach in t
 		const info = (await SessionManager.list(cwd)).find((item) => item.id === session.sessionId);
 		if (!info) throw new Error("expected the session transcript to exist");
 		const staleTranscript = readFileSync(info.path);
+		// A live session's own manager still knows this exact file even when directory listing would skip its
+		// temporarily malformed header. Deletion must move that file, not treat the skipped entry as absent.
+		writeFileSync(info.path, "temporarily malformed\n");
 
 		await deleteSession(session.sessionId, "ws-delete", cwd);
 		expect(hasSession(session.sessionId)).toBe(false);
+		expect(existsSync(info.path)).toBe(false);
 
 		// Model a disk-open that began before deletion: its stale path/data must not register after the delete.
 		writeFileSync(info.path, staleTranscript);
@@ -606,6 +611,53 @@ test("deleteSession tombstones its id so a stale transcript cannot reattach in t
 		);
 		rmSync(info.path, { force: true });
 	} finally {
+		setTrashImplementationForTests(undefined);
+		setSessionManagerFactory(() => SessionManager.inMemory());
+	}
+});
+
+test("a malformed detached transcript is never treated as authoritative absence", async () => {
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	const published: string[] = [];
+	let trashCalls = 0;
+	setSessionDeletedPublisher(({ sessionId }) => published.push(sessionId));
+	setTrashImplementationForTests(async () => {
+		trashCalls++;
+	});
+	let sessionId: string | undefined;
+	try {
+		fauxA.setResponses([fauxAssistantMessage("DETACHED_CORRUPT")]);
+		const cwd = tmpCwd("trpi-delete-corrupt-");
+		const session = await createSession({
+			cwd,
+			workspaceId: "ws-delete-corrupt",
+			model: toWireModel(fauxA.getModel()),
+		});
+		sessionId = session.sessionId;
+		await promptSession(session.sessionId, "persist before corruption");
+		const info = (await SessionManager.list(cwd)).find((item) => item.id === session.sessionId);
+		if (!info) throw new Error("expected the session transcript to exist");
+		const transcript = readFileSync(info.path);
+		removeSession(session.sessionId); // host restart: only the disk lookup can identify it now
+		writeFileSync(info.path, "not a pi transcript\n");
+
+		// Both the reconnect membership read and explicit deletion fail closed. Neither may turn pi's
+		// presentation-friendly skipped entry into a durable "this chat is absent" decision.
+		await expect(listSessions("ws-delete-corrupt", cwd)).rejects.toThrow("unreadable or malformed");
+		await expect(deleteSession(session.sessionId, "ws-delete-corrupt", cwd)).rejects.toThrow(
+			"unreadable or malformed",
+		);
+		expect(trashCalls).toBe(0);
+		expect(published).toEqual([]);
+		expect(existsSync(info.path)).toBe(true);
+
+		// Restoring the bytes makes the same id attachable again: failed deletion rolled its tombstone back.
+		writeFileSync(info.path, transcript);
+		const restored = await getSessionMessages(session.sessionId, "ws-delete-corrupt", cwd);
+		expect(restored.summary.live).toBe(true);
+	} finally {
+		if (sessionId) removeSession(sessionId);
+		setSessionDeletedPublisher(() => {});
 		setTrashImplementationForTests(undefined);
 		setSessionManagerFactory(() => SessionManager.inMemory());
 	}

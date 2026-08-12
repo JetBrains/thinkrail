@@ -1,10 +1,15 @@
-import { rmSync } from "node:fs";
+import { createReadStream, rmSync } from "node:fs";
+import { readdir } from "node:fs/promises";
+import { join, resolve } from "node:path";
+import { createInterface } from "node:readline";
 // Value imports of PURE catalog helpers (data-only projections over `Model`) — the only root
 // value-imports the module boundary allows; dispatch stays on the shared `ModelRuntime` (SPEC §Allowed deps).
 import { clampThinkingLevel, getSupportedThinkingLevels } from "@earendil-works/pi-ai";
 import {
 	type AgentSession,
 	createAgentSession,
+	getAgentDir,
+	type SessionInfo,
 	SessionManager,
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
@@ -289,10 +294,113 @@ function summaryOf(sessionId: string, entry: Entry): SessionSummary {
 	};
 }
 
+interface SessionFileIdentity {
+	id: string;
+	cwd: string;
+}
+
+type ScannedSessionFile =
+	| { path: string; ok: true; identity: SessionFileIdentity }
+	| { path: string; ok: false; error: Error };
+
+/** Mirror pi's default cwd→session-directory mapping at the one boundary that must detect errors pi's
+ * `SessionManager.list()` intentionally degrades to an empty/partial list. Pinned by disk-backed tests. */
+function defaultSessionDirectory(cwd: string): string {
+	const resolvedCwd = resolve(cwd);
+	const safePath = `--${resolvedCwd.replace(/^[/\\]/, "").replace(/[/\\:]/g, "-")}--`;
+	return join(resolve(getAgentDir()), "sessions", safePath);
+}
+
+function hasErrorCode(error: unknown, code: string): boolean {
+	return typeof error === "object" && error !== null && Reflect.get(error, "code") === code;
+}
+
+/** Read only far enough to identify a pi transcript. Malformed physical lines before the header are
+ * skipped like pi; a parsed non-session first entry, no header, or any I/O failure stays a hard error. */
+async function readSessionFileIdentity(path: string): Promise<SessionFileIdentity> {
+	const input = createReadStream(path, { encoding: "utf8" });
+	const lines = createInterface({ input, crlfDelay: Number.POSITIVE_INFINITY });
+	try {
+		for await (const line of lines) {
+			if (!line.trim()) continue;
+			let entry: unknown;
+			try {
+				entry = JSON.parse(line);
+			} catch {
+				continue;
+			}
+			if (typeof entry !== "object" || entry === null) {
+				throw new Error("first parsed entry is not an object");
+			}
+			const id = Reflect.get(entry, "id");
+			if (Reflect.get(entry, "type") !== "session" || typeof id !== "string") {
+				throw new Error("first parsed entry is not a session header");
+			}
+			const headerCwd = Reflect.get(entry, "cwd");
+			return { id, cwd: typeof headerCwd === "string" ? headerCwd : "" };
+		}
+		throw new Error("session header is missing");
+	} catch (error) {
+		throw new Error(`Session transcript is unreadable or malformed: ${path}`, { cause: error });
+	} finally {
+		lines.close();
+		input.destroy();
+	}
+}
+
+/** Enumerate every physical transcript in pi's one encoded-cwd directory without swallowing errors. */
+async function scanSessionFiles(cwd: string): Promise<ScannedSessionFile[]> {
+	const dir = defaultSessionDirectory(cwd);
+	let names: string[];
+	try {
+		names = await readdir(dir);
+	} catch (error) {
+		if (hasErrorCode(error, "ENOENT")) return [];
+		throw new Error(`Session directory is unreadable: ${dir}`, { cause: error });
+	}
+	const scanned: ScannedSessionFile[] = [];
+	// Sequential on purpose: a long-lived workspace can have hundreds of transcripts, and opening every
+	// header at once would turn the safety check itself into an EMFILE failure.
+	for (const name of names) {
+		if (!name.endsWith(".jsonl")) continue;
+		const path = join(dir, name);
+		try {
+			scanned.push({ path, ok: true, identity: await readSessionFileIdentity(path) });
+		} catch (error) {
+			scanned.push({
+				path,
+				ok: false,
+				error: error instanceof Error ? error : new Error(String(error)),
+			});
+		}
+	}
+	return scanned;
+}
+
+/**
+ * Pi's list is presentation-friendly: directory/read/parse failures become an empty or partial list. At
+ * membership and deletion boundaries that would mean "absent", so preflight every header and verify pi
+ * returned every physical file. Only a successful result is authoritative.
+ */
+async function listSessionInfosStrict(cwd: string): Promise<SessionInfo[]> {
+	const scanned = await scanSessionFiles(cwd);
+	const broken = scanned.find((file) => !file.ok);
+	if (broken && !broken.ok) throw broken.error;
+	const infos = await SessionManager.list(cwd);
+	const listedByPath = new Map(infos.map((info) => [resolve(info.path), info]));
+	const omitted = scanned.find((file) => {
+		if (!file.ok) return false;
+		const listed = listedByPath.get(resolve(file.path));
+		return !listed || listed.id !== file.identity.id || listed.cwd !== file.identity.cwd;
+	});
+	if (omitted) throw new Error(`Session transcript could not be listed: ${omitted.path}`);
+	return infos;
+}
+
 /**
  * A workspace's chat sessions — live (in-memory) unioned with on-disk ones pi persisted under `cwd`. Live
  * wins on id. This is the domain state a reconnecting/second client hydrates from; the disk half is what
- * survives a host restart.
+ * survives a host restart. The disk list throws rather than reporting false absence on an unreadable file.
  */
 export async function listSessions(workspaceId: string, cwd: string): Promise<SessionSummary[]> {
 	const live: SessionSummary[] = [];
@@ -302,31 +410,25 @@ export async function listSessions(workspaceId: string, cwd: string): Promise<Se
 		live.push(summaryOf(sessionId, entry));
 		liveIds.add(sessionId);
 	}
-	let disk: SessionSummary[] = [];
-	try {
-		const infos = await SessionManager.list(cwd);
-		// `list(cwd)` reads one encoded-cwd dir, but pi's encoding (`[/\:]`→`-`) can map distinct cwds to the
-		// same dir, so match on the session's true recorded `cwd` to disambiguate; live ones are already above.
-		disk = infos
-			.filter(
-				(info) =>
-					info.cwd === cwd && !liveIds.has(info.id) && !isSessionDeleted(info.id, workspaceId),
-			)
-			.map((info) => ({
-				sessionId: info.id,
-				workspaceId,
-				title: info.name ?? "Chat",
-				// Placeholders until the session is opened (disk metadata doesn't carry model/thinking).
-				model: null,
-				thinkingLevel: "medium" as ThinkingLevel,
-				isStreaming: false,
-				messageCount: info.messageCount,
-				updatedAt: info.modified.getTime(),
-				live: false,
-			}));
-	} catch {
-		// No sessions dir for this cwd yet — only the live ones.
-	}
+	const infos = await listSessionInfosStrict(cwd);
+	// One encoded-cwd dir can alias distinct cwds, so disambiguate on the recorded header cwd; live wins.
+	const disk: SessionSummary[] = infos
+		.filter(
+			(info) =>
+				info.cwd === cwd && !liveIds.has(info.id) && !isSessionDeleted(info.id, workspaceId),
+		)
+		.map((info) => ({
+			sessionId: info.id,
+			workspaceId,
+			title: info.name ?? "Chat",
+			// Placeholders until the session is opened (disk metadata doesn't carry model/thinking).
+			model: null,
+			thinkingLevel: "medium" as ThinkingLevel,
+			isStreaming: false,
+			messageCount: info.messageCount,
+			updatedAt: info.modified.getTime(),
+			live: false,
+		}));
 	return [...live, ...disk];
 }
 
@@ -352,7 +454,9 @@ function attachDiskSession(sessionId: string, workspaceId: string, cwd: string):
 
 async function openDiskSession(sessionId: string, workspaceId: string, cwd: string): Promise<void> {
 	if (isSessionDeleted(sessionId, workspaceId)) throw new Error(`Unknown session: ${sessionId}`);
-	const info = (await SessionManager.list(cwd)).find((i) => i.id === sessionId && i.cwd === cwd);
+	const info = (await listSessionInfosStrict(cwd)).find(
+		(candidate) => candidate.id === sessionId && candidate.cwd === cwd,
+	);
 	if (!info) throw new Error(`Unknown session: ${sessionId}`);
 	if (sessions.has(sessionId)) return; // attached while we listed
 	const modelRuntime = await getPiRuntime();
@@ -402,7 +506,9 @@ export async function ensureSessionAttached(
 		if (live.workspaceId !== workspaceId) throw new Error(`Unknown session: ${sessionId}`);
 		return true;
 	}
-	const known = (await SessionManager.list(cwd)).some((i) => i.id === sessionId && i.cwd === cwd);
+	const known = (await listSessionInfosStrict(cwd)).some(
+		(candidate) => candidate.id === sessionId && candidate.cwd === cwd,
+	);
 	if (!known) return false;
 	await attachDiskSession(sessionId, workspaceId, cwd);
 	// Attached-but-not-registered is not "absent": reporting it as such is exactly the silent fork this
@@ -743,19 +849,28 @@ export async function deleteSession(
 	try {
 		await attaching.get(sessionId)?.catch(() => {});
 		const entry = sessions.get(sessionId);
-		if (entry?.workspaceId === workspaceId) {
+		if (entry && entry.workspaceId !== workspaceId) {
+			throw new Error(`Unknown session: ${sessionId}`);
+		}
+		let path: string | undefined;
+		if (entry) {
 			liveEntry = entry;
 			// Stop any writer before moving its transcript, but keep the entry registered until that move
 			// succeeds. A trash failure must leave the client-visible runtime addressable, not half-deleted.
 			if (entry.session.isStreaming) await entry.session.abort();
-		}
-		let path: string | undefined;
-		try {
-			path = (await SessionManager.list(cwd)).find(
-				(i) => i.id === sessionId && i.cwd === cwd,
+			const manager = entry.session.sessionManager;
+			if (manager.getSessionId() !== sessionId || manager.getCwd() !== cwd) {
+				throw new Error(`Session transcript scope mismatch: ${sessionId}`);
+			}
+			// A live manager is the authority on its exact file — never rediscover it through pi's lossy list.
+			path = manager.getSessionFile();
+			if (manager.isPersisted() && !path) {
+				throw new Error(`Persisted session has no transcript path: ${sessionId}`);
+			}
+		} else {
+			path = (await listSessionInfosStrict(cwd)).find(
+				(candidate) => candidate.id === sessionId && candidate.cwd === cwd,
 			)?.path;
-		} catch {
-			// No sessions dir for this cwd — the idempotent domain deletion still converges to clients.
 		}
 		if (path) await trashFile(path);
 	} catch (error) {
