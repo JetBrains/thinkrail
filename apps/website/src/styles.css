@@ -28,6 +28,9 @@
 	/* dark (the app's default) */
 	--chrome: #171719;
 	--editor-bg: #171719;
+	/* The workspace/content surface (app semantic token container-workspace-bg = --background).
+	   The central body and the active tabs share it so active tabs merge into the content. */
+	--container-workspace-bg: #09090b;
 	--elevated: #2b2d30;
 	--hover: #393b40;
 	--input: #272830;
@@ -60,6 +63,7 @@
 [data-theme="darcula"] {
 	--chrome: #3c3f41;
 	--editor-bg: #2b2b2b;
+	--container-workspace-bg: #3c3f41;
 	--elevated: #45494a;
 	--hover: #4c5052;
 	--input: #45494a;
@@ -82,6 +86,7 @@
 [data-theme="light"] {
 	--chrome: #f2f3f5;
 	--editor-bg: #ffffff;
+	--container-workspace-bg: #f2f3f5;
 	--elevated: #ffffff;
 	--hover: #e9eaee;
 	--input: #ffffff;
@@ -115,6 +120,7 @@
 [data-theme="gruvbox"] {
 	--chrome: #282828;
 	--editor-bg: #1d2021;
+	--container-workspace-bg: #282828;
 	--elevated: #3c3836;
 	--hover: #504945;
 	--input: #3c3836;
@@ -585,7 +591,6 @@ code {
 	font-size: 12.5px;
 	font-family: var(--font-mono);
 	color: var(--muted);
-	border-right: 1px solid var(--border);
 	white-space: nowrap;
 	position: relative;
 	flex: none;
@@ -603,21 +608,14 @@ code {
 	font-size: 12px;
 }
 
+/* Active tab = the content surface, no border or indicator — it merges into the editor body. */
 .tab.active {
 	color: var(--text);
-	background: var(--editor-bg);
-}
-
-.tab.active::after {
-	content: "";
-	position: absolute;
-	inset: 0 0 auto 0;
-	height: 2px;
-	background: var(--accent);
+	background: var(--container-workspace-bg);
 }
 
 .tab.active .i {
-	color: var(--accent);
+	color: var(--text);
 }
 
 /* The scrolling editor pane */
@@ -626,7 +624,7 @@ code {
 	flex: 1;
 	min-height: 0;
 	overflow-y: auto;
-	background: var(--editor-bg);
+	background: var(--container-workspace-bg);
 	scroll-behavior: smooth;
 }
 
@@ -817,7 +815,7 @@ p.hero-lede {
 	align-items: stretch;
 	margin: 26px 0 10px;
 	max-width: 100%;
-	background: var(--input);
+	background: var(--container-workspace-bg);
 	border: 1px solid var(--border2);
 	border-radius: 8px;
 	overflow: hidden;
@@ -909,10 +907,9 @@ html.install-tabs-ready .install-tabs {
 	gap: 7px;
 	min-height: 34px;
 	padding: 7px 13px 8px;
+	/* -1px so the active tab's surface overlaps the strip divider and merges into the content. */
 	margin-bottom: -1px;
-	border: 1px solid transparent;
-	border-bottom-color: var(--border);
-	border-radius: 7px 7px 0 0;
+	border: 0;
 	background: transparent;
 	color: var(--muted);
 	font-family: var(--font-mono);
@@ -927,19 +924,8 @@ html.install-tabs-ready .install-tabs {
 
 .install-tab[aria-selected="true"] {
 	z-index: 1;
-	border-color: var(--border);
-	border-bottom-color: var(--input);
-	background: var(--input);
+	background: var(--container-workspace-bg);
 	color: var(--text);
-}
-
-/* Full-width top accent bar, matching .tab.active::after (the top-nav source of truth). */
-.install-tab[aria-selected="true"]::before {
-	content: "";
-	position: absolute;
-	inset: 0 0 auto 0;
-	height: 2px;
-	background: var(--accent);
 }
 
 .install-tab:focus-visible,
@@ -993,7 +979,7 @@ html.install-tabs-ready .install-frame .install-line {
 	overflow: hidden;
 	border: 1px solid var(--border2);
 	border-radius: 8px;
-	background: var(--input);
+	background: var(--container-workspace-bg);
 }
 
 html.install-tabs-ready .install-frame .windows-shell-picker {
