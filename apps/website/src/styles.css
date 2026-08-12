@@ -302,15 +302,15 @@ code {
 .wordmark-logo {
 	display: inline-flex;
 	align-items: center;
-	height: 32px;
+	width: 32px;
 	flex: none;
 	color: var(--accent);
 }
 
 .wordmark-logo svg {
 	display: block;
-	height: 100%;
-	width: auto;
+	width: 100%;
+	height: auto;
 }
 
 .wordmark {
