@@ -1,7 +1,7 @@
 {
 	"$schema": "./colors.schema.json",
 	"metadata": {
-		"version": "1.0.0",
+		"version": "1.1.0",
 		"note": "The semantic colour layer. Palettes live in themes/bundled/*.theme.json; this file says what each palette entry is FOR, and is the only place a derivation is written. A role's `from` names a theme manifest key; the CSS variable that key writes to is derived (kebab-case), not tabulated. See COLOR.md."
 	},
 
@@ -47,8 +47,6 @@
 		"control-bg": { "from": "input", "publish": true },
 		"control-bg-hovered": { "from": "hover", "publish": true },
 		"control-bg-selected": { "from": "hover", "publish": true },
-		"control-primary-bg": { "from": "accent", "publish": true },
-		"control-primary-text": { "from": "onAccent", "publish": true },
 		"control-border-default": { "from": "border", "publish": true },
 		"control-border-active": { "from": "borderStrong", "publish": true },
 		"control-disabled-bg": { "from": "input", "publish": true },
@@ -131,6 +129,24 @@
 			"dark": "0 8px 28px rgba(0, 0, 0, 0.4)",
 			"light": "0 8px 28px rgba(0, 0, 0, 0.14)",
 			"publish": false
+		},
+		"control-primary-bg": {
+			"note": "primary button/control fill — a theme-independent brand constant (identical in every theme), not a per-theme accent derivation; see COLOR.md",
+			"dark": "#8dff4f",
+			"light": "#8dff4f",
+			"publish": true
+		},
+		"control-primary-bg-hovered": {
+			"note": "primary button/control hover fill (shared brand constant)",
+			"dark": "#59d915",
+			"light": "#59d915",
+			"publish": true
+		},
+		"control-primary-text": {
+			"note": "text/icons on the primary fill (shared brand constant)",
+			"dark": "#0a0a0a",
+			"light": "#0a0a0a",
+			"publish": true
 		}
 	}
 }

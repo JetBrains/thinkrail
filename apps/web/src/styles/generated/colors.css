@@ -1,5 +1,5 @@
 /*
- * GENERATED — do not edit. Source: `src/styles/colors.json` (v1.0.0).
+ * GENERATED — do not edit. Source: `src/styles/colors.json` (v1.1.0).
  * Regenerate with `bun run colors:generate`; `colors:check` fails when this file is stale.
  *
  * The semantic roles, then the Tailwind utility map. The palette they read is written to the
@@ -22,8 +22,6 @@
 	--control-bg: var(--input);
 	--control-bg-hovered: var(--hover);
 	--control-bg-selected: var(--hover);
-	--control-primary-bg: var(--accent);
-	--control-primary-text: var(--on-accent);
 	--control-border-default: var(--border);
 	--control-border-active: var(--border-strong);
 	--control-disabled-bg: var(--input);
@@ -62,6 +60,9 @@
 	--shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
 	--shadow-md: 0 4px 16px rgba(0, 0, 0, 0.35);
 	--shadow-lg: 0 8px 28px rgba(0, 0, 0, 0.4);
+	--control-primary-bg: #8dff4f;
+	--control-primary-bg-hovered: #59d915;
+	--control-primary-text: #0a0a0a;
 }
 :root[data-theme-appearance="light"] {
 	--sunken: rgba(0, 0, 0, 0.05);
@@ -69,6 +70,9 @@
 	--shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.1);
 	--shadow-md: 0 4px 16px rgba(0, 0, 0, 0.12);
 	--shadow-lg: 0 8px 28px rgba(0, 0, 0, 0.14);
+	--control-primary-bg: #8dff4f;
+	--control-primary-bg-hovered: #59d915;
+	--control-primary-text: #0a0a0a;
 }
 
 @theme inline {
@@ -87,8 +91,6 @@
 	--color-control-bg: var(--control-bg);
 	--color-control-bg-hovered: var(--control-bg-hovered);
 	--color-control-bg-selected: var(--control-bg-selected);
-	--color-control-primary-bg: var(--control-primary-bg);
-	--color-control-primary-text: var(--control-primary-text);
 	--color-control-border-default: var(--control-border-default);
 	--color-control-border-active: var(--control-border-active);
 	--color-control-disabled-bg: var(--control-disabled-bg);
@@ -114,4 +116,7 @@
 	--color-bubble-user-border: var(--bubble-user-border);
 	--color-sunken: var(--sunken);
 	--color-overlay: var(--overlay);
+	--color-control-primary-bg: var(--control-primary-bg);
+	--color-control-primary-bg-hovered: var(--control-primary-bg-hovered);
+	--color-control-primary-text: var(--control-primary-text);
 }

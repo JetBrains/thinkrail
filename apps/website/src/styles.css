@@ -42,10 +42,15 @@
 	--text: #dfe1e5;
 	--muted: #a8adb5;
 	--hint: #71757c;
-	--accent: #8c81ff;
-	--on-accent: #000000;
+	--accent: #8dff4f;
+	--on-accent: #0a0a0a;
 	--bubble: #6b57ff;
-	--green: #6ad859;
+	--green: #41cb66;
+	/* Primary button = a shared, theme-independent brand constant (mirrors the app's
+	   control-primary-* tokens); defined once here so every theme inherits it. */
+	--control-primary-bg: #8dff4f;
+	--control-primary-bg-hovered: #59d915;
+	--control-primary-text: #0a0a0a;
 	--gold: #ffd54b;
 	--red: #ff4b75;
 	--blue: #6ac8ff;
@@ -76,7 +81,7 @@
 	--text: #a9b7c6;
 	--muted: #9fabb5;
 	--hint: #8b959e;
-	--accent: #8c81ff;
+	--accent: #8dff4f;
 	--sx-kw: #cc7832;
 	--sx-str: #6a8759;
 	--sx-num: #6897bb;
@@ -100,8 +105,8 @@
 	--text: #1a1a1e;
 	--muted: #5a5f6a;
 	--hint: #667085;
-	--accent: #6b57ff;
-	--green: #1a7f37;
+	--accent: #2e7d16;
+	--green: #41cb66;
 	--gold: #946300;
 	--red: #d02533;
 	--blue: #2265cf;
@@ -117,9 +122,9 @@
 	color-scheme: light;
 }
 
-/* Hero uses the same brand violet in both themes */
+/* Hero keeps the same brand accent in both light and dark themes */
 [data-theme="light"] .hero {
-	--accent: #8c81ff;
+	--accent: #8dff4f;
 }
 
 [data-theme="gruvbox"] {
@@ -135,9 +140,9 @@
 	--text: #ebdbb2;
 	--muted: #a89984;
 	--hint: #928374;
-	--accent: #fe8019;
+	--accent: #8dff4f;
 	--bubble: #fe8019;
-	--green: #b8bb26;
+	--green: #41cb66;
 	--gold: #fabd2f;
 	--red: #fb4934;
 	--blue: #83a598;
@@ -1091,13 +1096,14 @@ p.hero-platforms {
 }
 
 .btn-primary {
-	background: var(--accent);
-	border-color: var(--accent);
-	color: var(--on-accent);
+	background: var(--control-primary-bg);
+	border-color: var(--control-primary-bg);
+	color: var(--control-primary-text);
 }
 
 .btn-primary:hover {
-	background: color-mix(in srgb, var(--accent) 88%, black);
+	background: var(--control-primary-bg-hovered);
+	border-color: var(--control-primary-bg-hovered);
 }
 
 /* ── why.md ─────────────────────────────────────────────────────────────── */
