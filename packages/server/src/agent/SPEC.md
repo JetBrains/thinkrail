@@ -132,7 +132,10 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     distinct cwds; `cwd` omitted on a double-archive skips only the disk purge);
     **`deleteSession(sessionId, workspaceId, cwd)`** (mark it deleted before any await so an in-flight disk
     attach cannot register afterward; dispose it if live in this workspace, move its one matching-cwd
-    transcript to the OS trash via `trashFile`, then publish `SessionDeletedPayload` for client convergence);
+    transcript to the OS trash via `trashFile`, then publish `SessionDeletedPayload` for client convergence;
+    the cross-platform trash operation is the deletion boundary — if it fails, the request throws, the
+    tombstone is rolled back, the transcript stays on disk, and nothing is published; there is deliberately
+    no permanent-unlink fallback behind a recoverable UI action);
     `setSessionPublisher` + `setSessionDeletedPublisher` + `setSessionManagerFactory` seams.
   - `oneshot` — one-shot LLM completions **without** an `AgentSession` (no tools/extensions/disk):
     `completeOnce(request)` picks a model from the shared runtime's authenticated set and dispatches a
@@ -277,7 +280,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   + `/compat` subpaths, value-imported **only** inside `registerBundledRuntime`'s dynamic imports); `pi-web-access` + `pi-visualize` + `pi-spec-graph` +
   `pi-thinkrail-workflow` + `pi-todos` (the bundled extensions — loaded by path, never value-imported here; the
   compiled binary's value-imports live in `apps/cli`'s generated build module); `typebox` (the
-  `ask_user_question` parameter schema);
+  `ask_user_question` parameter schema); `trash` (the cross-platform OS recycle-bin implementation;
+  called with globbing disabled and allowed to throw — never degraded to `unlink`);
   `contracts` (`PiEvent`/`Model`/`ThinkingLevel`/`ImageContent`/`SessionStats`/`SlashCommandInfo`/`ExtUi*`/
   `AskUserQuestion*`/`ProviderStatus*`); `@thinkrail/shared/jbcentral` (the proxy-URL predicate); Node.
 - **Forbidden:** `host`; sibling features (the `cwd` is passed in, not looked up via `persistence`).

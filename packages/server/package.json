@@ -25,6 +25,7 @@
 		"pi-visualize": "workspace:*",
 		"pi-web-access": "0.13.0",
 		"posthog-node": "5.46.1",
+		"trash": "10.1.1",
 		"typebox": "catalog:"
 	},
 	"devDependencies": {

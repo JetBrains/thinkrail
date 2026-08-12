@@ -754,7 +754,7 @@ export async function deleteSession(
 		} catch {
 			// No sessions dir for this cwd — the idempotent domain deletion still converges to clients.
 		}
-		if (path) trashFile(path);
+		if (path) await trashFile(path);
 	} catch (error) {
 		// A failed disk mutation did not complete the domain delete; allow a retry/re-open in this host.
 		if (isSessionDeleted(sessionId, workspaceId)) deletedSessions.delete(sessionId);
