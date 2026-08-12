@@ -894,7 +894,8 @@ html.install-tabs-ready .install-tabs {
 	display: flex;
 	align-items: flex-end;
 	gap: 2px;
-	padding: 0 4px;
+	/* No left padding: the first tab sits flush with the frame edge. */
+	padding: 0 4px 0 0;
 	border-bottom: 1px solid var(--border);
 }
 
@@ -976,6 +977,12 @@ html.install-tabs-ready .install-frame {
 html.install-tabs-ready .install-frame .install-line {
 	margin: 0;
 	border: 0;
+	border-radius: 0;
+}
+
+/* The command <code> otherwise inherits the global code radius; the outer frame
+   provides the only corner rounding, so drop it here. */
+.install-frame .install-line > code {
 	border-radius: 0;
 }
 
