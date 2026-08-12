@@ -100,15 +100,23 @@ export function setSkillAdmissionResolver(
 	skillAdmissionResolver = resolver;
 }
 
+function hasDeletionTombstone(sessionId: string): boolean {
+	return deletedSessions.has(sessionId);
+}
+
 function mustGet(sessionId: string): AgentSession {
+	// A live entry deliberately remains registered while its transcript move is pending so trash failure
+	// can restore the same runtime. It is not command-addressable in that window: accepting a new turn
+	// after deletion began could append behind the move and lose or recreate the supposedly deleted chat.
+	if (hasDeletionTombstone(sessionId)) throw new Error(`Unknown session: ${sessionId}`);
 	const entry = sessions.get(sessionId);
 	if (!entry) throw new Error(`Unknown session: ${sessionId}`);
 	return entry.session;
 }
 
-/** Whether a session is live in this manager — the wire's cheap liveness guard for reply-style methods. */
+/** Whether a session is live and command-addressable — false while a delete transaction owns it. */
 export function hasSession(sessionId: string): boolean {
-	return sessions.has(sessionId);
+	return sessions.has(sessionId) && !hasDeletionTombstone(sessionId);
 }
 
 /** The workspace a live session belongs to — the host's session→workspace lookup (e.g. auto-rename). */
@@ -755,14 +763,21 @@ export function isSessionStreaming(sessionId: string): boolean {
 	return mustGet(sessionId).isStreaming;
 }
 
-/** Remove one session: stop forwarding its events, settle any open dialog, and dispose it. */
-export function removeSession(sessionId: string): void {
+function disposeSession(sessionId: string): void {
 	const entry = sessions.get(sessionId);
 	if (!entry) return;
 	cancelExtUiForSession(sessionId);
 	entry.unsubscribe();
 	entry.session.dispose();
 	sessions.delete(sessionId);
+}
+
+/** Remove one session: stop forwarding its events, settle any open dialog, and dispose it. */
+export function removeSession(sessionId: string): void {
+	// `session.dispose` is a live-session command too. Letting it race a pending recoverable delete would
+	// leave no runtime to retain if the OS-trash operation fails.
+	if (hasDeletionTombstone(sessionId)) throw new Error(`Unknown session: ${sessionId}`);
+	disposeSession(sessionId);
 }
 
 /** Dispose every session — called on host shutdown. */
@@ -808,7 +823,10 @@ export async function removeWorkspaceSessions(workspaceId: string, cwd?: string)
 		if (!entry) continue;
 		// Abort a streaming turn before disposing — a mid-stream dispose drops it less cleanly.
 		if (entry.session.isStreaming) await entry.session.abort().catch(() => {});
-		removeSession(sessionId);
+		// Archival tears down the whole workspace, so it must dispose unconditionally — never via the
+		// guarded `removeSession`, which rejects a chat whose recoverable delete is mid-trash and would
+		// abort this loop, stranding its siblings and the disk purge below.
+		disposeSession(sessionId);
 	}
 	if (cwd) await purgeDiskSessions(cwd);
 }
@@ -880,7 +898,7 @@ export async function deleteSession(
 		throw error;
 	}
 	// Only disposal after the recoverable disk move is committed. If another path already removed this
-	// exact entry, `removeSession` is an idempotent no-op; never dispose a replacement entry by mistake.
-	if (liveEntry && sessions.get(sessionId) === liveEntry) removeSession(sessionId);
+	// exact entry, disposal is an idempotent no-op; never dispose a replacement entry by mistake.
+	if (liveEntry && sessions.get(sessionId) === liveEntry) disposeSession(sessionId);
 	publishDeleted({ workspaceId, sessionId });
 }

@@ -663,12 +663,22 @@ test("a malformed detached transcript is never treated as authoritative absence"
 	}
 });
 
-test("a trash failure retains the live chat runtime and rolls back its tombstone", async () => {
+test("a pending delete blocks live commands, then trash failure restores the same runtime", async () => {
 	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	let reportTrashStarted: () => void = () => {};
+	const trashStarted = new Promise<void>((resolve) => {
+		reportTrashStarted = resolve;
+	});
+	let failTrash: () => void = () => {};
+	const trashOutcome = new Promise<void>((_resolve, reject) => {
+		failTrash = () => reject(new Error("recycle bin unavailable"));
+	});
 	setTrashImplementationForTests(async () => {
-		throw new Error("recycle bin unavailable");
+		reportTrashStarted();
+		await trashOutcome;
 	});
 	let sessionId: string | undefined;
+	let deleting: Promise<void> | undefined;
 	try {
 		fauxA.setResponses([fauxAssistantMessage("STILL_HERE")]);
 		const cwd = tmpCwd("trpi-delete-failure-");
@@ -682,16 +692,78 @@ test("a trash failure retains the live chat runtime and rolls back its tombstone
 		const info = (await SessionManager.list(cwd)).find((item) => item.id === session.sessionId);
 		if (!info) throw new Error("expected the session transcript to exist");
 
-		await expect(deleteSession(session.sessionId, "ws-delete-failure", cwd)).rejects.toThrow(
-			"recycle bin unavailable",
+		deleting = deleteSession(session.sessionId, "ws-delete-failure", cwd);
+		await trashStarted;
+		// The entry remains registered for rollback, but the tombstone makes it unaddressable for the
+		// full transaction. A second client cannot append a turn or dispose the rollback target.
+		expect(hasSession(session.sessionId)).toBe(false);
+		await expect(promptSession(session.sessionId, "must not be accepted")).rejects.toThrow(
+			`Unknown session: ${session.sessionId}`,
 		);
+		expect(() => removeSession(session.sessionId)).toThrow(`Unknown session: ${session.sessionId}`);
+		expect(readFileSync(info.path, "utf8")).not.toContain("must not be accepted");
+
+		failTrash();
+		await expect(deleting).rejects.toThrow("recycle bin unavailable");
 		expect(hasSession(session.sessionId)).toBe(true);
 		expect(readFileSync(info.path, "utf8")).toContain("persist before failed deletion");
 		const restored = await getSessionMessages(session.sessionId, "ws-delete-failure", cwd);
 		expect(restored.summary.live).toBe(true);
 		expect(restored.messages.some((message) => message.role === "assistant")).toBe(true);
+
+		// Rollback removes the gate as well as retaining the entry: the same runtime accepts later work.
+		fauxA.appendResponses([fauxAssistantMessage("AFTER_ROLLBACK")]);
+		await promptSession(session.sessionId, "accepted after rollback");
+		expect(readFileSync(info.path, "utf8")).toContain("accepted after rollback");
 	} finally {
-		if (sessionId) removeSession(sessionId);
+		failTrash();
+		await deleting?.catch(() => {});
+		if (sessionId && hasSession(sessionId)) removeSession(sessionId);
+		setTrashImplementationForTests(undefined);
+		setSessionManagerFactory(() => SessionManager.inMemory());
+	}
+});
+
+test("archival teardown is not blocked by a chat whose recoverable delete is mid-trash", async () => {
+	// Regression: the delete tombstone makes the retained entry reject `removeSession`, so archival must
+	// dispose unconditionally. Otherwise one in-flight chat delete would abort the loop and strand the
+	// workspace's other sessions + the disk purge.
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	let reportTrashStarted: () => void = () => {};
+	const trashStarted = new Promise<void>((resolve) => {
+		reportTrashStarted = resolve;
+	});
+	let failTrash: () => void = () => {};
+	const trashOutcome = new Promise<void>((_resolve, reject) => {
+		failTrash = () => reject(new Error("recycle bin unavailable"));
+	});
+	setTrashImplementationForTests(async () => {
+		reportTrashStarted();
+		await trashOutcome;
+	});
+	let deleting: Promise<void> | undefined;
+	try {
+		fauxA.setResponses([fauxAssistantMessage("ARCHIVE_DURING_DELETE")]);
+		const cwd = tmpCwd("trpi-archive-during-delete-");
+		const doomed = await createSession({
+			cwd,
+			workspaceId: "ws-archive-during-delete",
+			model: toWireModel(fauxA.getModel()),
+		});
+		await promptSession(doomed.sessionId, "persist before archive");
+		const info = (await SessionManager.list(cwd)).find((item) => item.id === doomed.sessionId);
+		if (!info) throw new Error("expected the session transcript to exist");
+
+		deleting = deleteSession(doomed.sessionId, "ws-archive-during-delete", cwd);
+		await trashStarted; // tombstone set, entry retained, trash blocked mid-flight
+
+		// The whole-workspace teardown must run to completion despite the pending per-chat delete guard.
+		await removeWorkspaceSessions("ws-archive-during-delete", cwd);
+		expect(hasSession(doomed.sessionId)).toBe(false);
+		expect(existsSync(info.path)).toBe(false); // the disk purge ran; the loop was not aborted
+	} finally {
+		failTrash();
+		await deleting?.catch(() => {});
 		setTrashImplementationForTests(undefined);
 		setSessionManagerFactory(() => SessionManager.inMemory());
 	}

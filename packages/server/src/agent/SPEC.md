@@ -129,18 +129,23 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     healed by the restart repair); `getSessionWorkspaceId(sessionId)` (the live session→workspace
     lookup the host's auto-rename hook keys on); `removeSession`/`disposeAllSessions`;
     **`removeWorkspaceSessions(workspaceId, cwd?)`** (the **archive teardown**: abort a streaming turn,
-    `removeSession` every live session for the workspace, then delete pi's on-disk transcripts rooted at
+    then dispose every live session for the workspace **unconditionally** — bypassing the per-chat delete
+    guard that `removeSession` enforces, so a chat whose recoverable delete is mid-trash cannot abort the
+    teardown loop and strand its siblings — then delete pi's on-disk transcripts rooted at
     the worktree `cwd` — pi's `SessionManager` is append-only, so purge = `list(cwd)` then `rm` the files
     whose recorded `cwd` matches, never `rm -rf` the encoded dir since pi's cwd→dir encoding can alias
     distinct cwds; `cwd` omitted on a double-archive skips only the disk purge);
     **`deleteSession(sessionId, workspaceId, cwd)`** (mark it deleted before any await so an in-flight disk
-    attach cannot register afterward; abort a live turn if needed but retain the live entry, resolve a live
-    transcript from that session's own `SessionManager` (never a lossy directory listing), otherwise use the
-    same strict disk lookup above, move the exact matching-cwd transcript to the OS trash via `trashFile`,
-    then dispose the live entry and publish `SessionDeletedPayload` for client convergence; only an exact
-    trashed file or a successfully established absence counts as deletion. Any lookup or trash failure
-    throws, rolls back the tombstone, leaves the transcript/live entry in place, and publishes nothing;
-    there is deliberately no permanent-unlink fallback behind a recoverable UI action);
+    attach cannot register afterward; that tombstone also makes a retained live entry non-addressable to
+    **every session command, including `session.dispose`, for the full delete transaction**, so another
+    client cannot append a turn behind the pending trash move or destroy the rollback target; abort a live
+    turn if needed but retain the live entry, resolve a live transcript from that session's own
+    `SessionManager` (never a lossy directory listing), otherwise use the same strict disk lookup above,
+    move the exact matching-cwd transcript to the OS trash via `trashFile`, then dispose the live entry and
+    publish `SessionDeletedPayload` for client convergence; only an exact trashed file or a successfully
+    established absence counts as deletion. Any lookup or trash failure throws, rolls back the tombstone,
+    restores command access to the same transcript/live entry, and publishes nothing; there is deliberately
+    no permanent-unlink fallback behind a recoverable UI action);
     `setSessionPublisher` + `setSessionDeletedPublisher` + `setSessionManagerFactory` seams.
   - `oneshot` — one-shot LLM completions **without** an `AgentSession` (no tools/extensions/disk):
     `completeOnce(request)` picks a model from the shared runtime's authenticated set and dispatches a
