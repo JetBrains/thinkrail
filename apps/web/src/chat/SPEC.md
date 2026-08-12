@@ -163,7 +163,12 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   persisted transcript so a reconnecting/second client renders identically to the live path (same `raw`
   result shape). When supplied, the live summary's `lastSettlement` is authoritative; otherwise only the
   final conversational assistant can synthesize an error/length turn. Compacted historical length attempts
-  followed by later messages remain history, not a stale current warning. It also
+  followed by later messages remain history, not a stale current warning. One retry-presentation rule on
+  both paths: pi persists a superseded auto-retry attempt ("keep in session for history") that the live
+  reducer dropped on `auto_retry_start`, so hydration hides an errored assistant message followed by
+  another assistant message before any user message (`isRetriedAttempt`); a terminal failure — errored
+  assistant followed by a user message or nothing — stays visible, its failure reported by the trailing
+  settlement-derived error turn. It also
   returns `turnIdByMessageIndex` (message-position → minted turn id) — the jump anchor map a
   history-search "jump to message" deep link (`chatLocationRequest`, see `store/SPEC.md`) resolves
   against; entries are `null` for a `toolResult`/`custom` message (never its own turn) and for a

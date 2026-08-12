@@ -246,7 +246,9 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   - `imageGuard` — the oversized-image guard: an inline extension (`oversizedImageGuard`, one of
     `buildResourceLoader`'s shared factories) hooked on pi's **`context` event** (fired before every LLM
     call, live sessions included). It sniffs each image block's pixel dimensions straight from the base64
-    header bytes (PNG/JPEG/GIF/WebP — no codec, never strips what it can't sniff) and replaces any block
+    header bytes (PNG/JPEG/GIF/WebP — no codec, never strips what it can't sniff; **bounded work per
+    pass**: only a 256KiB decoded prefix is ever materialized — a JPEG whose SOF lies beyond it sniffs as
+    unknown, not stripped — and each block is sniffed exactly once per pass) and replaces any block
     exceeding the provider cap — **8000px per side, dropping to 2000px once the whole context carries more
     than 20 images** (Anthropic's rules; generous enough to be harmless elsewhere) — with a text note
     carrying the W×H and a re-attach hint. This is what un-bricks a session poisoned by an oversized image

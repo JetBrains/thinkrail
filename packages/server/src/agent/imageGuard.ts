@@ -85,13 +85,24 @@ function webpDimensions(b: Buffer): Dimensions | undefined {
 	return undefined;
 }
 
+/** How many decoded bytes the sniffer may look at. PNG/GIF/WebP dimensions sit at fixed offsets in the
+ * first ~30 bytes; only JPEG walks marker segments, and its metadata segments (EXIF, thumbnails) cap at
+ * 64KiB each — 256KiB of prefix covers real-world files with several of them. The bound is the point:
+ * the guard runs on pi's `context` hook before EVERY LLM call in the in-process host, so decoding whole
+ * multi-MB images there would be an unbounded allocation per turn. A JPEG whose SOF lies beyond the
+ * bound sniffs as undefined — "couldn't sniff", never stripped blind. */
+const MAX_SNIFF_BYTES = 256 * 1024;
+// base64 quantum is 4 chars → 3 bytes; keep the prefix on a 4-char boundary so the slice decodes clean.
+const MAX_SNIFF_BASE64_CHARS = Math.ceil(MAX_SNIFF_BYTES / 3) * 4;
+
 /** Sniff an image's pixel dimensions from its base64 data (PNG / JPEG / GIF / WebP header bytes — no
- * codec, no decode). Undefined for unrecognized or malformed data: the guard never strips blind. */
+ * codec, and only a bounded prefix is ever decoded). Undefined for unrecognized or malformed data: the
+ * guard never strips blind. */
 export function imageDimensions(base64: string): Dimensions | undefined {
 	if (!base64) return undefined;
 	let bytes: Buffer;
 	try {
-		bytes = Buffer.from(base64, "base64");
+		bytes = Buffer.from(base64.slice(0, MAX_SNIFF_BASE64_CHARS), "base64");
 	} catch {
 		return undefined;
 	}
@@ -121,42 +132,45 @@ export function guardOversizedImages(messages: AgentMessage[]): AgentMessage[] |
 		return Array.isArray(content) ? (content as ContentBlock[]) : undefined;
 	};
 
+	// One bounded sniff per image block per pass, cached by block identity — the hook fires on every LLM
+	// call, so re-decoding per predicate (count / detect / note text) would multiply the work.
+	const sniffed = new Map<ContentBlock, Dimensions | undefined>();
 	let imageCount = 0;
 	for (const message of messages) {
-		for (const block of blocksOf(message) ?? []) if (isImageBlock(block)) imageCount++;
+		for (const block of blocksOf(message) ?? []) {
+			if (isImageBlock(block)) {
+				imageCount++;
+				sniffed.set(block, imageDimensions(block.data));
+			}
+		}
 	}
 	if (imageCount === 0) return undefined;
 	const cap = imageCount > MANY_IMAGE_THRESHOLD ? MANY_IMAGE_EDGE_LIMIT : SINGLE_IMAGE_EDGE_LIMIT;
 
+	const exceeds = (block: ContentBlock): boolean => {
+		const d = sniffed.get(block);
+		return d !== undefined && (d.width > cap || d.height > cap);
+	};
+
 	let changed = false;
 	const guarded = messages.map((message) => {
 		const blocks = blocksOf(message);
-		if (!blocks?.some((b) => isImageBlock(b) && exceeds(b.data, cap))) return message;
+		if (!blocks?.some(exceeds)) return message;
 		changed = true;
-		const content = blocks.map((block) =>
-			isImageBlock(block) && exceeds(block.data, cap)
-				? {
-						type: "text",
-						text: `[image removed: ${dims(block.data)} exceeds the provider's ${cap}px image-dimension limit — ask the user to re-attach a smaller version if it is still needed]`,
-					}
-				: block,
-		);
+		const content = blocks.map((block) => {
+			if (!exceeds(block)) return block;
+			const d = sniffed.get(block);
+			return {
+				type: "text",
+				text: `[image removed: ${d ? `${d.width}×${d.height}` : "unknown size"} exceeds the provider's ${cap}px image-dimension limit — ask the user to re-attach a smaller version if it is still needed]`,
+			};
+		});
 		// Object.assign keeps the concrete message variant (its type is `message & {content}`), which
 		// widens back to AgentMessage without a lossy double-cast.
 		return Object.assign({}, message, { content }) as AgentMessage;
 	});
 	return changed ? guarded : undefined;
 }
-
-const exceeds = (base64: string, cap: number): boolean => {
-	const d = imageDimensions(base64);
-	return d !== undefined && (d.width > cap || d.height > cap);
-};
-
-const dims = (base64: string): string => {
-	const d = imageDimensions(base64);
-	return d ? `${d.width}×${d.height}` : "unknown size";
-};
 
 /** The inline pi extension: registered in `buildResourceLoader`'s shared factories, so every session —
  * live or reopened — gets its outgoing context guarded on each LLM call. */

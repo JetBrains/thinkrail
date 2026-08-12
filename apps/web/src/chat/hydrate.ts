@@ -20,7 +20,8 @@ export interface HydratedRuntime {
 	 * which becomes a visible turn but is never a search hit) — the jump anchor map a
 	 * history-search "jump to message" deep link (`chatLocationRequest`) resolves against. A message that
 	 * ended in `stopReason: "error"` maps to its own assistant turn's id, never the synthesized error
-	 * turn's (the error turn has no message index of its own).
+	 * turn's (the error turn has no message index of its own). A retried (superseded) failed attempt
+	 * renders no turn at all, so its slot is `null` like a control message's.
 	 */
 	turnIdByMessageIndex: (string | null)[];
 }
@@ -41,7 +42,7 @@ export function messagesToRuntime(
 	const toolResults: Record<string, ToolResultState> = {};
 	const askAnswers: HydratedRuntime["askAnswers"] = {};
 	const turnIdByMessageIndex: HydratedRuntime["turnIdByMessageIndex"] = [];
-	for (const message of messages) {
+	for (const [index, message] of messages.entries()) {
 		// Exactly one push per message, in order — keeps the map aligned to `messages` regardless of which
 		// branch below fires (a user/assistant message sets it to its own turn's id; every other message
 		// leaves it `null`).
@@ -54,8 +55,16 @@ export function messagesToRuntime(
 				turns.push({ kind: "user", id: turnId, message });
 			}
 		} else if (message.role === "assistant") {
-			turnId = crypto.randomUUID();
-			turns.push({ kind: "assistant", id: turnId, message, streaming: false });
+			if (message.stopReason === "error" && isRetriedAttempt(messages, index)) {
+				// A superseded auto-retry attempt: pi keeps it in the session file for history but removed it
+				// from the live context (`_prepareRetry`), and the live reducer drops its turn on
+				// `auto_retry_start`. Hide it here too — same presentation rule on both paths — or a reload
+				// would resurrect the failed partial next to the retried reply (turnId stays null). Its
+				// failure text never surfaces either: only the trailing terminal below reports a failure.
+			} else {
+				turnId = crypto.randomUUID();
+				turns.push({ kind: "assistant", id: turnId, message, streaming: false });
+			}
 		} else if (message.role === "compactionSummary") {
 			// Only successful compactions persist an entry. It becomes a visible done record, but no jump
 			// anchor: history search indexes user/assistant text only, so this slot remains `null`.
@@ -95,4 +104,23 @@ export function messagesToRuntime(
 	if (failure) turns.push({ kind: "error", id: crypto.randomUUID(), text: failure });
 
 	return { turns, toolResults, askAnswers, turnIdByMessageIndex };
+}
+
+/**
+ * Was the errored assistant message at `index` superseded by an auto-retry? pi's `_prepareRetry`
+ * persists the failed attempt ("keep in session for history") but trims it from the live context and
+ * re-streams the reply as a new assistant message — with no user input in between. So a failed attempt
+ * followed by another assistant message before any user message was retried; a failed attempt followed
+ * by a user message (or nothing) is the run's terminal failure and stays visible (the trailing
+ * settlement-derived error turn reports it) — exactly what the live reducer leaves on screen
+ * (`auto_retry_start` drops the attempt, settlement keeps the last one). Ambiguity resolves toward
+ * showing, never hiding.
+ */
+function isRetriedAttempt(messages: TranscriptMessage[], index: number): boolean {
+	for (let i = index + 1; i < messages.length; i++) {
+		const role = messages[i]?.role;
+		if (role === "assistant") return true;
+		if (role === "user") return false;
+	}
+	return false;
 }

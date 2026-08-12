@@ -674,7 +674,8 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 			// re-running the turn (the retry re-streams it as a brand-new message) — while KEEPING it in the
 			// session file for history. Mirror the trim (same superseded-attempt rule as the overflow-
 			// compaction path above), or the client renders the reply twice: the frozen failed partial plus
-			// the retried copy.
+			// the retried copy. Hydration applies the same presentation rule to the persisted copy
+			// (`chat/hydrate.ts` `isRetriedAttempt`), so live and reloaded clients agree.
 			// Show a live countdown over the back-off; cleared on auto_retry_end (or final settlement).
 			// Replace-or-append per source: the event fires once per attempt, and the two retry flows
 			// (turn vs summarization) may overlap — each keeps exactly one indicator.

@@ -116,6 +116,38 @@ test("an explicit live null suppresses a stale persisted failure while a resumed
 	expect(turns.map((turn) => turn.kind)).toEqual(["assistant"]);
 });
 
+test("a persisted failed attempt superseded by a successful retry hydrates as one assistant turn", () => {
+	// pi's `_prepareRetry` keeps the failed attempt in the session file ("keep in session for history")
+	// while trimming it from the live context; the live reducer drops its turn on `auto_retry_start`.
+	// Hydration must agree, or a reload resurrects the failed partial + a bogus error turn.
+	const { turns, turnIdByMessageIndex } = messagesToRuntime([
+		{ role: "user", content: "hi", timestamp: 1 },
+		{
+			role: "assistant",
+			content: [{ type: "text", text: "partial…" }],
+			stopReason: "error",
+			errorMessage: "fetch failed",
+		},
+		{ role: "assistant", content: [{ type: "text", text: "the real reply" }], stopReason: "stop" },
+	] as unknown as Message[]);
+	expect(turns.map((t) => t.kind)).toEqual(["user", "assistant"]);
+	expect(turnIdByMessageIndex).toEqual([turns[0]?.id ?? null, null, turns[1]?.id ?? null]);
+});
+
+test("exhausted retries hydrate as the final attempt + its error turn; earlier attempts stay hidden", () => {
+	// Attempts 1..N-1 are each followed by another assistant message (the next attempt) ⇒ superseded.
+	// The final attempt is followed by nothing (or a user message) ⇒ terminal — visible, and the
+	// trailing settlement-derived error turn reports its failure, matching the live reducer.
+	const { turns } = messagesToRuntime([
+		{ role: "user", content: "hi", timestamp: 1 },
+		{ role: "assistant", content: [], stopReason: "error", errorMessage: "attempt 1" },
+		{ role: "assistant", content: [], stopReason: "error", errorMessage: "attempt 2" },
+	] as unknown as Message[]);
+	expect(turns.map((t) => t.kind)).toEqual(["user", "assistant", "error"]);
+	const err = turns.find((t) => t.kind === "error");
+	expect(err?.kind === "error" && err.text).toContain("attempt 2");
+});
+
 test("turnIdByMessageIndex maps each message's position to its own turn id, null for non-turn messages, and the assistant's id (not the injected error turn's) when the message ended in an error", () => {
 	const { turns, turnIdByMessageIndex } = messagesToRuntime([
 		{ role: "user", content: "hi", timestamp: 1 },

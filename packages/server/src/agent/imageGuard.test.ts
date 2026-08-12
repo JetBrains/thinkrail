@@ -112,6 +112,33 @@ describe("imageDimensions", () => {
 		});
 	});
 
+	test("sniffs from a bounded prefix — a multi-MB payload after the header is never a problem", () => {
+		// The guard runs on every LLM call; only the header region is decoded, so trailing image data
+		// (the actual pixels) beyond the 256KiB sniff bound must not affect the result.
+		const big = Buffer.concat([pngBytes(3024, 1964), Buffer.alloc(4 * 1024 * 1024, 0xab)]);
+		expect(imageDimensions(big.toString("base64"))).toEqual({ width: 3024, height: 1964 });
+	});
+
+	test("a JPEG whose SOF lies beyond the sniff bound reads as undefined — never stripped blind", () => {
+		// SOI + a chain of max-size APP1 segments pushing the SOF past 256KiB of decoded bytes.
+		const filler = Buffer.alloc(0xffff + 2);
+		filler[0] = 0xff;
+		filler[1] = 0xe1; // APP1
+		filler.writeUInt16BE(0xffff, 2);
+		const sof = Buffer.alloc(9);
+		sof[0] = 0xff;
+		sof[1] = 0xc0;
+		sof.writeUInt16BE(7, 2);
+		sof.writeUInt16BE(100, 5);
+		sof.writeUInt16BE(200, 7);
+		const jpeg = Buffer.concat([
+			Buffer.from([0xff, 0xd8]),
+			...Array.from({ length: 5 }, () => filler), // ~320KiB of metadata before the SOF
+			sof,
+		]);
+		expect(imageDimensions(jpeg.toString("base64"))).toBeUndefined();
+	});
+
 	test("returns undefined for unrecognized bytes and invalid base64", () => {
 		expect(imageDimensions(Buffer.from("not an image at all").toString("base64"))).toBeUndefined();
 		expect(imageDimensions("!!!not-base64!!!")).toBeUndefined();

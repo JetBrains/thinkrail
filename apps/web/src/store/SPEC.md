@@ -175,7 +175,10 @@ snapshots plus device-local attention, terminal catalogs, and one **per-session 
   attempt's assistant message from the live context before re-running the turn (the retry re-streams it
   as a new message) while *keeping it in the session file*, so the reducer drops the superseded failed
   assistant turn (`removeSupersededAssistant`, the same rule as the overflow-compaction path) —
-  otherwise the client renders the reply twice (frozen failed partial + retried copy). Closed
+  otherwise the client renders the reply twice (frozen failed partial + retried copy). Hydration applies
+  the same presentation rule to the persisted copy (`chat/hydrate.ts` hides retried attempts — an
+  errored assistant followed by another assistant before any user message), so live and reloaded clients
+  agree. Closed
   chats are reopenable: the workbench close command first publishes the shared placement removal and only
   after host acceptance invokes **`closeChatToHistory`**, which **keeps the runtime + session alive** and
   records it in **`closedChatsByWorkspace`** (`ClosedChat[]`, per workspace, most-recent-first) and clears
