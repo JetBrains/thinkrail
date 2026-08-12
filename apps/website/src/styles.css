@@ -44,7 +44,6 @@
 	--hint: #71757c;
 	--accent: #8dff4f;
 	--on-accent: #0a0a0a;
-	--bubble: #6b57ff;
 	--green: #41cb66;
 	/* Primary button = a shared, theme-independent brand constant (mirrors the app's
 	   control-primary-* tokens); defined once here so every theme inherits it. */
@@ -141,7 +140,6 @@
 	--muted: #a89984;
 	--hint: #928374;
 	--accent: #8dff4f;
-	--bubble: #fe8019;
 	--green: #41cb66;
 	--gold: #fabd2f;
 	--red: #fb4934;
@@ -1183,8 +1181,8 @@ p.hero-platforms {
 .chat-msg.user {
 	align-self: flex-end;
 	max-width: 85%;
-	background: color-mix(in srgb, var(--bubble, var(--accent)) 12%, transparent);
-	border: 1px solid color-mix(in srgb, var(--bubble, var(--accent)) 35%, transparent);
+	background: color-mix(in srgb, var(--accent) 12%, transparent);
+	border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
 	border-radius: 4px;
 	padding: 10px 14px;
 	font-size: 14px;
