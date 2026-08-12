@@ -207,8 +207,8 @@ export interface TerminalTabsPush {
 // trash), triggered from the history / closed-chats list.
 // v35: `session.deleted` broadcasts permanent deletion so every client converges and stale hydration can
 // no longer restore the removed chat.
-// v36: `review.close` is an atomic Clear that publishes the fresh open snapshot; clients no longer follow it
-// with an initiating-only `review.get` fold.
+// v36: `review.close` atomically archives non-draft records and publishes the fresh open snapshot; clients
+// no longer follow it with an initiating-only `review.get` fold.
 export const PROTOCOL_VERSION = 36;
 
 /**
@@ -831,7 +831,7 @@ export interface WsMethodMap {
 	// Mark one file's review finished (`path`: the comment's file, or "" for the whole-change-set
 	// bucket). Rejected while the file still has unresolved comments; a new comment re-opens the file.
 	"review.fileDone": { params: { workspaceId: string; path: string }; result: Ack };
-	// Atomic Clear: replace the current review and publish the fresh open snapshot to every client.
+	// Atomic Clear: archive non-draft records, discard drafts, and publish a fresh open snapshot.
 	"review.close": { params: { workspaceId: string }; result: Ack };
 	// List all templates (global + project-scoped). `workspaceId` needed to resolve the project dir;
 	// omitted → global templates only.

@@ -431,8 +431,9 @@ a project picker, the prompt hero, and the reused
   (`SendAllReviewsButton`, `testid: review-send-all`, over `allDraftIds`; no ids passed — the host's
   "all drafts" is the batch, so the count can't race a concurrent edit); the header shows **whenever the
   review has files** and also carries a **Clear** (`testid: review-clear`) — a destructive `ConfirmPopover`
-  that calls the server-atomic `review.close` Clear; the host replaces the review and publishes the fresh
-  empty snapshot, so the initiating and sibling clients all converge through `review.changed`. The review-level
+  that calls the server-atomic `review.close` Clear; the host archives non-draft records, discards drafts,
+  replaces the active review, and publishes the fresh empty snapshot, so the initiating and sibling clients
+  all converge through `review.changed`. V1 has no archive browser. The review-level
   (overall-note) composer was removed for
   now (the `review` comment kind stays in the model, UI-less). The `review.get` hydration read is **owned by `RightPanel`**
   (`useWorkspaceReview`, the `useWorkspaceSpecs` pattern — the read also re-anchors server-side): the

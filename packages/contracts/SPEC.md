@@ -263,8 +263,9 @@ of the host.
   since review state and pi transcripts both outlive the host — so it must be HYDRATED, not opened as
   new; opening it as new shows a blank conversation for comments already marked sent / **`fileDone`**
   (mark a fully-resolved file's review finished; rejected while anything is unresolved — a new
-  comment re-opens the file) / **`close`** (the atomic Clear: replace the current review and publish the
-  fresh open snapshot to every client) — plus
+  comment re-opens the file) / **`close`** (the atomic Clear: archive the current review's non-draft
+  records, discard drafts, replace the active review, and publish the fresh open snapshot to every client)
+  — plus
   **`template.*`** — prompt-template CRUD
   (**`template.list`**, **`template.get`**
   — `scope` optional, project wins over global, **`template.save`**, **`template.delete`**) — all

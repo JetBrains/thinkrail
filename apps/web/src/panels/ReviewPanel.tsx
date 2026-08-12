@@ -152,7 +152,7 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 						open={clearing}
 						onOpenChange={setClearing}
 						title="Clear this review?"
-						description="Archives every comment and starts a fresh review. Unsent drafts are discarded."
+						description="Archives sent and completed comments and starts a fresh review. Unsent drafts are discarded."
 						confirmLabel="Clear"
 						destructive
 						confirmTestId="review-clear-confirm"
@@ -163,7 +163,7 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 							<button
 								type="button"
 								data-testid="review-clear"
-								title="Clear review — archive all comments"
+								title="Clear review — archive sent comments"
 								aria-label="Clear review"
 								className="flex shrink-0 items-center gap-xs px-xs tr-text-metadata text-text-subtle hover:text-feedback-error"
 							>
