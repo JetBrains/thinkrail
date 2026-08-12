@@ -240,6 +240,19 @@ if (installPicker) {
 	const platformPanels = document.querySelectorAll<HTMLElement>("[data-install-panel]");
 	const shellTabs = document.querySelectorAll<HTMLButtonElement>("[data-windows-shell]");
 	const shellPanels = document.querySelectorAll<HTMLElement>("[data-windows-shell-panel]");
+	const copyButton = installPicker.querySelector<HTMLElement>(".copy-btn-tabbar");
+
+	// Point the single tab-bar copy button at the command currently on screen:
+	// visible OS panel -> its visible Windows shell panel (if any) -> the command <code>.
+	const updateCopyTarget = () => {
+		if (!copyButton) return;
+		const osPanel = Array.from(platformPanels).find((panel) => !panel.hidden);
+		const shellPanel = osPanel?.querySelector<HTMLElement>(
+			"[data-windows-shell-panel]:not([hidden])",
+		);
+		const code = (shellPanel ?? osPanel)?.querySelector(".install-line code");
+		copyButton.dataset.copy = code?.textContent?.trim() ?? "";
+	};
 	let selectedPlatform: InstallPlatform = detectedPlatform ?? "linux";
 	const initialShell: WindowsShell = "powershell";
 
@@ -269,6 +282,7 @@ if (installPicker) {
 			panel.hidden = platformFrom(panel.dataset.installPanel) !== platform;
 		}
 		updateDetectionNote();
+		updateCopyTarget();
 	};
 
 	const selectShell = (shell: WindowsShell) => {
@@ -280,6 +294,7 @@ if (installPicker) {
 		for (const panel of shellPanels) {
 			panel.hidden = windowsShellFrom(panel.dataset.windowsShellPanel) !== shell;
 		}
+		updateCopyTarget();
 	};
 
 	const nextTab = (
@@ -329,9 +344,6 @@ if (installPicker) {
 		);
 	}
 
-	for (const marker of document.querySelectorAll<HTMLElement>("[data-detected-platform]")) {
-		marker.hidden = platformFrom(marker.dataset.detectedPlatform) !== detectedPlatform;
-	}
 	selectShell(initialShell);
 	selectPlatform(selectedPlatform);
 	document.documentElement.classList.add("install-tabs-ready");

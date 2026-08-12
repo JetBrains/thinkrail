@@ -863,6 +863,18 @@ p.hero-lede {
 	display: none;
 }
 
+/* The single copy button lives in the OS tab bar, pushed into the empty space
+   on the right and vertically centred against the tabs. */
+.install-tabs .copy-btn {
+	align-self: center;
+	margin-left: auto;
+	width: 30px;
+	height: 28px;
+	border-left: 0;
+	border-radius: 7px;
+	font-size: 14px;
+}
+
 /* OS tabs attach to the command surface like editor tabs. Without JS the controls stay hidden and all
    labelled instruction panels remain visible; main.ts adds install-tabs-ready only after wiring them. */
 .install-picker {
@@ -930,27 +942,6 @@ html.install-tabs-ready .install-tabs {
 .windows-shell-tab:focus-visible {
 	outline: 2px solid var(--accent);
 	outline-offset: -3px;
-}
-
-.detected-marker:not([hidden]) {
-	display: inline-flex;
-	align-items: center;
-	gap: 6px;
-}
-
-.detected-dot {
-	width: 5px;
-	height: 5px;
-	border-radius: 999px;
-	background: var(--accent);
-	box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent);
-}
-
-.detected-label {
-	color: var(--accent);
-	font-size: 9px;
-	letter-spacing: 0.45px;
-	text-transform: uppercase;
 }
 
 .install-panel[hidden],
@@ -1864,10 +1855,6 @@ html.anim .terminal.armed [data-out] {
 		flex: 1;
 		justify-content: center;
 		padding-inline: 7px;
-	}
-
-	.detected-label {
-		display: none;
 	}
 
 	html.install-tabs-ready .windows-shell-tabs {
