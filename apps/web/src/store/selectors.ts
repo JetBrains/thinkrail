@@ -6,7 +6,7 @@ import type {
 	Workspace,
 } from "@thinkrail/contracts";
 import { isAbsolutePath, normalizePath } from "../lib";
-import type { EditorTab, TerminalTab } from "./appStore";
+import type { ClosedChat, EditorTab, TerminalTab } from "./appStore";
 
 interface ActiveWorkspaceState {
 	activeWorkspaceId: string | null;
@@ -97,6 +97,29 @@ export function selectHistoryTarget(state: {
 	// opened one — the best "which chat did they mean" answer available without an MRU we don't track.
 	const chat = active?.kind === "chat" ? active : tabs.findLast((t) => t.kind === "chat");
 	return chat ? { workspaceId, tabId: chat.id, sessionId: chat.sessionId } : null;
+}
+
+/**
+ * Chat membership this client currently associates with one workspace: open tabs plus history rows,
+ * deduplicated. Snapshot this before an authoritative `session.list` read; its result may safely delete a
+ * baseline id the host omitted without touching a chat created while that older read was in flight.
+ */
+export function selectWorkspaceSessionIds(
+	state: {
+		tabsByWorkspace: Record<string, EditorTab[]>;
+		closedChatsByWorkspace: Record<string, ClosedChat[]>;
+	},
+	workspaceId: string,
+): string[] {
+	const sessionIds = new Set(
+		(state.tabsByWorkspace[workspaceId] ?? [])
+			.filter((tab) => tab.kind === "chat")
+			.map((tab) => tab.sessionId),
+	);
+	for (const chat of state.closedChatsByWorkspace[workspaceId] ?? []) {
+		sessionIds.add(chat.sessionId);
+	}
+	return [...sessionIds];
 }
 
 /**

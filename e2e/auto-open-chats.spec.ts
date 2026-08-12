@@ -170,6 +170,53 @@ test("trashing a chat converges to a second client", async ({ page, context }) =
 	await page2.close();
 });
 
+test("a client that misses chat deletion while offline reconciles it after reconnect", async ({
+	page,
+	browser,
+}) => {
+	await openFixtureProject(page);
+
+	const doomed = seedWorkspaceSession(repoCwd(), {
+		name: "offline doomed chat",
+		messages: [{ role: "user", text: "offline doomed transcript", timestamp: BASE_TS }],
+	});
+	setMtime(doomed.path, BASE_TS);
+
+	await enterDefaultWorkspace(page);
+	await expect(page.getByText("offline doomed transcript")).toBeVisible();
+
+	// A separate browser context can lose network independently while the first client performs the delete.
+	const context2 = await browser.newContext();
+	const page2 = await context2.newPage();
+	await page2.goto(page.url());
+	await expect(page2.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+	await page2.getByTestId("project-expand").first().click();
+	await defaultWorkspaceRow(page2).click();
+	await expect(page2.getByText("offline doomed transcript")).toBeVisible();
+
+	await context2.setOffline(true);
+	await expect(page2.getByTestId("connection-status")).toHaveAttribute(
+		"data-status",
+		"disconnected",
+	);
+
+	const chatTab = page.locator('[data-testid="editor-tab"][data-kind="chat"]');
+	await chatTab.getByTestId("editor-tab-close").click();
+	await page.getByTestId("chat-history").click();
+	await page
+		.getByTestId("closed-chat-row")
+		.filter({ hasText: "offline doomed chat" })
+		.getByTestId("closed-chat-delete")
+		.click();
+	await expect.poll(() => existsSync(doomed.path)).toBe(false);
+
+	await context2.setOffline(false);
+	await expect(page2.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+	await expect(page2.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(0);
+	await expect(page2.getByTestId("workspace-ready")).toBeVisible();
+	await context2.close();
+});
+
 test("with no TODOs anywhere, the most recent disk chat opens as the fallback", async ({
 	page,
 }) => {

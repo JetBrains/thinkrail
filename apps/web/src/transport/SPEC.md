@@ -34,13 +34,16 @@ The single WebSocket client to the host, and its app-wide singleton.
   endpoint the markdown viewer points relative `<img>`s at, targeting the same host the transport dials); `wireTransport.ts` (`initTransport`/
   `getTransport` singleton; routes `server.welcome`, **`project.updated`**, `pi.event`, `pi.extensionUi`,
   **`session.deleted`**, **the `workspace.created`/`updated`/`removed` lifecycle trio, and
-  `workspace.fsChanged`** into the store —
-  welcome's open + recent project views via `installProjectSnapshot`, project snapshots via
+  `workspace.fsChanged`** into the store — and folds every connection transition through
+  `setStatus`, whose connected generation gives active-workspace hydration a distinct trigger on every
+  reconnect; welcome's open + recent project views via `installProjectSnapshot`, project snapshots via
   `applyProjectUpdated`, `pi.event` via `handlePiEvent(event, sessionId)`, `pi.extensionUi` via `applyExtUi(request)`,
   `workspace.created` via `addWorkspace(workspace)`, `workspace.updated` via `updateWorkspace(workspace)`,
   `workspace.removed` via `applyWorkspaceRemoved(projectId, id)`, `session.deleted` via the idempotent
-  `deleteChat(workspaceId, sessionId)` tombstone fold, `workspace.fsChanged` via `noteFsChanged(payload)`,
-  and **`settings.changed`** (+ the `config` field in `server.welcome`) via
+  `deleteChat(workspaceId, sessionId)` tombstone fold (an online fast path; because this event channel is
+  deliberately not replayed, `CenterTabs` repairs any deletion missed while disconnected from the next
+  authoritative `session.list`), `workspace.fsChanged` via `noteFsChanged(payload)`, and
+  **`settings.changed`** (+ the `config` field in `server.welcome`) via
   `applyConfig(config)` — the server-synced app config (theme, …), applied on connect + on every broadcast
   so clients converge; all subscriptions happen once at init, never in component effects);
   `errorText.ts` (**`errorText(err, fallback?)`** — normalizes a rejected `request` (the host's error

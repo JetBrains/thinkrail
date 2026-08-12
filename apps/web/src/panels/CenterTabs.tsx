@@ -26,6 +26,7 @@ import {
 	isExternalWorkspace,
 	selectActiveWorkspace,
 	selectContextProject,
+	selectWorkspaceSessionIds,
 	toast,
 	useAppStore,
 } from "../store";
@@ -143,6 +144,8 @@ function ChatHistoryMenu({
  */
 export function CenterTabs() {
 	const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
+	const connectionStatus = useAppStore((s) => s.status);
+	const connectionGeneration = useAppStore((s) => s.connectionGeneration);
 	const activeWorkspace = useAppStore(selectActiveWorkspace);
 	const contextProject = useAppStore(selectContextProject);
 	const tabsByWorkspace = useAppStore((s) => s.tabsByWorkspace);
@@ -167,7 +170,8 @@ export function CenterTabs() {
 	const closedChats = activeWorkspaceId
 		? (closedChatsByWorkspace[activeWorkspaceId] ?? NO_CLOSED)
 		: NO_CLOSED;
-	// Hydrate-on-connect: when a workspace becomes active, pull its sessions from the host. Live ones (still
+	// Hydrate-on-connect: when a workspace becomes active OR its transport reconnects, pull its sessions
+	// from the host. The list also repairs any session-deletion event missed while offline. Live ones (still
 	// in host memory) auto-restore as tabs, and so do disk-only ones carrying unfinished TODOs (work in
 	// progress must survive a host restart as open tabs, not history entries) — the newest
 	// `AUTO_OPEN_LIMIT` of them (see the const). Everything else goes to chat-history, one click away. If
@@ -178,8 +182,12 @@ export function CenterTabs() {
 	// stays deterministic: `hydrateSession` takes focus only while the workspace has no active tab, and
 	// that is decided when a store write lands, not when its request goes out.
 	useEffect(() => {
-		if (!activeWorkspaceId) return;
+		if (!activeWorkspaceId || connectionStatus !== "connected" || connectionGeneration === 0)
+			return;
 		const workspaceId = activeWorkspaceId;
+		// Capture membership BEFORE the list read. Reconciliation may remove only these ids, so a chat
+		// created while this request is in flight cannot be deleted by its older response.
+		const baselineSessionIds = selectWorkspaceSessionIds(useAppStore.getState(), workspaceId);
 		let cancelled = false;
 		// Split into request + apply so a batch can have its reads in flight together while the *writes*
 		// still land in a chosen order (focus follows the first write, not the first response). The guarded
@@ -203,6 +211,12 @@ export function CenterTabs() {
 		void getTransport()
 			.request("session.list", { workspaceId })
 			.then(async (summaries) => {
+				if (cancelled) return;
+				useAppStore.getState().reconcileWorkspaceSessions(
+					workspaceId,
+					baselineSessionIds,
+					summaries.map((summary) => summary.sessionId),
+				);
 				// Not "disk-only" any more: past the cap a *live* session lands here too — this is simply
 				// everything the pass chose not to auto-open.
 				const toHistory: typeof summaries = [];
@@ -252,7 +266,7 @@ export function CenterTabs() {
 		return () => {
 			cancelled = true;
 		};
-	}, [activeWorkspaceId]);
+	}, [activeWorkspaceId, connectionGeneration, connectionStatus]);
 
 	// Jump-to-message deep link from history search (`chatLocationRequest`, see `store/SPEC.md`): open,
 	// reopen, or activate the target chat in this workspace. `requestChatLocation` already set

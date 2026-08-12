@@ -332,7 +332,10 @@ a project picker, the prompt hero, and the reused
   **chat-history** dropdown (recently-closed + disk-only chats, shown only when non-empty); each row has
   a one-click trash action (`session.delete` → idempotent `store.deleteChat`, no confirm); the
   `session.deleted` broadcast drives the same fold in every connected client. On
-  workspace-activate it **hydrates**: `session.list` → **live** sessions auto-restore as tabs
+  workspace-activate **and on every transport reconnect** it **hydrates**: `session.list` first reconciles
+  the client membership snapshot captured when the read began (a baseline id absent from the authoritative
+  host result goes through the normal tombstone fold, while a chat created during the read is outside that
+  baseline and survives), then **live** sessions auto-restore as tabs
   (`session.getMessages` → `messagesToRuntime` → `store.hydrateSession`), and so do **disk-only sessions
   carrying unfinished TODOs** (`SessionSummary.openTodos > 0` — work in progress survives a host restart
   as open tabs, hydrated with the disk-attach tick baseline), **capped at the newest `AUTO_OPEN_LIMIT`**:

@@ -16,6 +16,7 @@ import {
 	selectLastOpenChatSession,
 	selectSkillsStale,
 	selectWorkspaceNavTick,
+	selectWorkspaceSessionIds,
 	selectWorkspaceTick,
 } from "./selectors";
 
@@ -82,6 +83,8 @@ const assistantText = (text: string) =>
 
 beforeEach(() => {
 	useAppStore.setState({
+		status: "connecting",
+		connectionGeneration: 0,
 		sessions: {},
 		tabsByWorkspace: {},
 		activeTabByWorkspace: {},
@@ -109,6 +112,17 @@ function rt(sessionId: string): SessionRuntime {
 	if (!runtime) throw new Error(`no runtime for ${sessionId}`);
 	return runtime;
 }
+
+test("each connected status advances the reconnect generation atomically", () => {
+	const store = useAppStore.getState();
+	store.setStatus("connected");
+	expect(useAppStore.getState()).toMatchObject({ status: "connected", connectionGeneration: 1 });
+	store.setStatus("disconnected");
+	expect(useAppStore.getState()).toMatchObject({ status: "disconnected", connectionGeneration: 1 });
+	store.setStatus("connecting");
+	store.setStatus("connected");
+	expect(useAppStore.getState()).toMatchObject({ status: "connected", connectionGeneration: 2 });
+});
 
 test("selectLastOpenChatSession: active chat tab first, then the most recent chat tab, else null", () => {
 	const store = useAppStore.getState();
@@ -639,6 +653,24 @@ test("deleteChat removes history/runtime state and falls back when deleting the 
 	expect(st.activeTabByWorkspace.ws1).toBe("ws1:b");
 	expect(st.navTickByWorkspace.ws1).toBe(beforeNav + 1);
 	expect(st.sessions.c).toBeUndefined();
+});
+
+test("session-list reconciliation removes missed deletions without deleting a chat created mid-read", () => {
+	const store = useAppStore.getState();
+	useAppStore.setState({ activeWorkspaceId: "ws1" });
+	store.openChatSession("ws1", "stale", null, "medium");
+	const baseline = selectWorkspaceSessionIds(useAppStore.getState(), "ws1");
+
+	// This chat was created after session.list began, so an older empty response cannot speak about it.
+	store.openChatSession("ws1", "newcomer", null, "medium");
+	store.reconcileWorkspaceSessions("ws1", baseline, []);
+
+	const state = useAppStore.getState();
+	expect(state.sessions.stale).toBeUndefined();
+	expect(state.deletedSessionsByWorkspace.ws1?.stale).toBe(true);
+	expect(state.tabsByWorkspace.ws1?.some((tab) => tab.id === "ws1:stale")).toBe(false);
+	expect(state.sessions.newcomer).toBeDefined();
+	expect(state.activeTabByWorkspace.ws1).toBe("ws1:newcomer");
 });
 
 test("a deletion that beats getMessages prevents its late hydrate from restoring the chat", () => {

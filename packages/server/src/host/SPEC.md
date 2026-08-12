@@ -205,7 +205,9 @@ channel fan-out, and the process-boot wrapper both launchers share.
   The two new channels are `ws.subscribe`d in the WS `open` handler alongside `workspace.updated`.
 - **Session-deletion fan-out:** `createServer` installs the agent module's deletion publisher and
   broadcasts each workspace-scoped `SessionDeletedPayload` on `session.deleted`; the WS `open` handler
-  subscribes every client so permanent domain deletion converges beyond the initiating page.
+  subscribes every client so permanent domain deletion converges beyond the initiating page. It remains a
+  low-latency event, not a durable queue: a reconnecting client's active-workspace `session.list` is the
+  authoritative read-side repair for an event missed while its socket was down.
 - **Public surface (barrel):** `createServer`, `CreateServerOptions`, `RunningServer`, `bootHost`,
   `BootHostOptions`, `BootedHost`.
 - **Allowed deps:** `contracts` (`PROTOCOL_VERSION`, `WS_CHANNELS`); `shared` (`freePort`, `shellEnv` — for

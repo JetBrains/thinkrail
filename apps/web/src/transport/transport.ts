@@ -19,9 +19,10 @@ const DEFAULT_TIMEOUT_MS = 60_000;
  *
  * Most push channels carry a *snapshot* — the newest value is the whole truth, so handing it to a late
  * subscriber is exactly right and is why `latest` exists. These channels carry **events**: terminal data is
- * an append-only byte stream, terminal exit is a one-time announcement, and session deletion is retained by
- * the store as its own tombstone. Replaying one re-delivers something that already happened rather than a
- * current snapshot (for terminal data that visibly paints output twice).
+ * an append-only byte stream, terminal exit is a one-time announcement, and session deletion is folded into
+ * a store tombstone when witnessed (a reconnecting active workspace repairs a missed event from authoritative
+ * `session.list`). Replaying one re-delivers something that already happened rather than a current snapshot
+ * (for terminal data that visibly paints output twice).
  */
 const NON_REPLAYABLE_CHANNELS: ReadonlySet<string> = new Set([
 	WS_CHANNELS.terminalData,

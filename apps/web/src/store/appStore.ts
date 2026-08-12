@@ -520,6 +520,9 @@ function reduceExtUi(
 
 interface AppState {
 	status: ConnectionStatus;
+	/** Monotonic connection-open generation. Advances with every `connected` status so consumers can
+	 * distinguish a reconnect from the previous open socket even though both settle on the same status. */
+	connectionGeneration: number;
 	protocolVersion: number | null;
 	/** Open projects shown in the left rail, newest first. */
 	projects: Project[];
@@ -816,6 +819,16 @@ interface AppState {
 	closeChatToHistory: (sessionId: string) => void;
 	/** Tombstone a server-deleted chat and drop every client-side surface/state bucket in one write. */
 	deleteChat: (workspaceId: string, sessionId: string) => void;
+	/**
+	 * Reconcile a `session.list` result against the local membership captured when that read began. Only
+	 * baseline ids absent from the authoritative result are deleted, so a session created while the read
+	 * was in flight cannot be removed by its older response.
+	 */
+	reconcileWorkspaceSessions: (
+		workspaceId: string,
+		baselineSessionIds: readonly string[],
+		authoritativeSessionIds: readonly string[],
+	) => void;
 	/** Reopen a chat from history (its runtime is still live, so the full transcript returns instantly). */
 	reopenChat: (sessionId: string) => void;
 	/**
@@ -1021,6 +1034,67 @@ function bumpNav(s: AppState, workspaceId: string): Record<string, number> {
 	return { ...s.navTickByWorkspace, [workspaceId]: selectWorkspaceNavTick(s, workspaceId) + 1 };
 }
 
+/**
+ * The immutable chat-deletion fold shared by a direct `session.deleted` event and reconnect membership
+ * reconciliation. Returning the original state makes both paths idempotent without duplicating cleanup.
+ */
+function withoutChat(s: AppState, workspaceId: string, sessionId: string): AppState {
+	const alreadyDeleted = isSessionDeleted(s, workspaceId, sessionId);
+	const tabs = s.tabsByWorkspace[workspaceId] ?? [];
+	const tab = tabs.find(
+		(candidate) => candidate.kind === "chat" && candidate.sessionId === sessionId,
+	);
+	const closed = s.closedChatsByWorkspace[workspaceId] ?? [];
+	const inHistory = closed.some((chat) => chat.sessionId === sessionId);
+	const hasRuntime = s.sessions[sessionId] !== undefined;
+	const hasSkillBaseline = Object.hasOwn(s.skillsSyncedTickBySession, sessionId);
+	const targetsLocation =
+		s.chatLocationRequest?.workspaceId === workspaceId &&
+		s.chatLocationRequest.sessionId === sessionId;
+	if (alreadyDeleted && !tab && !inHistory && !hasRuntime && !hasSkillBaseline && !targetsLocation)
+		return s;
+
+	const remaining = tab ? tabs.filter((candidate) => candidate.id !== tab.id) : tabs;
+	const wasActive = !!tab && s.activeTabByWorkspace[workspaceId] === tab.id;
+	return {
+		...s,
+		...(!alreadyDeleted
+			? {
+					deletedSessionsByWorkspace: {
+						...s.deletedSessionsByWorkspace,
+						[workspaceId]: {
+							...(s.deletedSessionsByWorkspace[workspaceId] ?? {}),
+							[sessionId]: true as const,
+						},
+					},
+				}
+			: {}),
+		...(tab ? { tabsByWorkspace: { ...s.tabsByWorkspace, [workspaceId]: remaining } } : {}),
+		...(wasActive
+			? {
+					activeTabByWorkspace: {
+						...s.activeTabByWorkspace,
+						[workspaceId]: remaining.at(-1)?.id ?? null,
+					},
+					navTickByWorkspace: bumpNav(s, workspaceId),
+				}
+			: {}),
+		...(inHistory
+			? {
+					closedChatsByWorkspace: {
+						...s.closedChatsByWorkspace,
+						[workspaceId]: closed.filter((chat) => chat.sessionId !== sessionId),
+					},
+				}
+			: {}),
+		...(hasRuntime ? { sessions: omitKey(s.sessions, sessionId) } : {}),
+		...(hasSkillBaseline
+			? { skillsSyncedTickBySession: omitKey(s.skillsSyncedTickBySession, sessionId) }
+			: {}),
+		...(targetsLocation ? { chatLocationRequest: null } : {}),
+	};
+}
+
 function sameSpecGraph(prev: SpecGraphNode[] | undefined, next: SpecGraphNode[]): boolean {
 	if (!prev || prev.length !== next.length) return false;
 	return prev.every((node, i) => {
@@ -1124,6 +1198,7 @@ function nextTerminalTitle(list: TerminalTab[]): string {
 
 export const useAppStore = create<AppState>((set, get) => ({
 	status: "connecting",
+	connectionGeneration: 0,
 	protocolVersion: null,
 	projects: [],
 	recentProjects: [],
@@ -1163,7 +1238,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 	analyticsEnabled: DEFAULT_CONFIG.analyticsEnabled,
 	terminalReplayKb: DEFAULT_CONFIG.terminalReplayKb,
 	toasts: [],
-	setStatus: (status) => set({ status }),
+	setStatus: (status) =>
+		set((state) => ({
+			status,
+			connectionGeneration:
+				status === "connected" ? state.connectionGeneration + 1 : state.connectionGeneration,
+		})),
 	setWelcome: (protocolVersion) => set({ protocolVersion }),
 	installProjectSnapshot: (projects, recentProjects) =>
 		set((state) => {
@@ -1621,66 +1701,15 @@ export const useAppStore = create<AppState>((set, get) => ({
 				},
 			};
 		}),
-	deleteChat: (workspaceId, sessionId) =>
+	deleteChat: (workspaceId, sessionId) => set((s) => withoutChat(s, workspaceId, sessionId)),
+	reconcileWorkspaceSessions: (workspaceId, baselineSessionIds, authoritativeSessionIds) =>
 		set((s) => {
-			const alreadyDeleted = isSessionDeleted(s, workspaceId, sessionId);
-			const tabs = s.tabsByWorkspace[workspaceId] ?? [];
-			const tab = tabs.find((t) => t.kind === "chat" && t.sessionId === sessionId);
-			const closed = s.closedChatsByWorkspace[workspaceId] ?? [];
-			const inHistory = closed.some((c) => c.sessionId === sessionId);
-			const hasRuntime = s.sessions[sessionId] !== undefined;
-			const hasSkillBaseline = Object.hasOwn(s.skillsSyncedTickBySession, sessionId);
-			const targetsLocation =
-				s.chatLocationRequest?.workspaceId === workspaceId &&
-				s.chatLocationRequest.sessionId === sessionId;
-			if (
-				alreadyDeleted &&
-				!tab &&
-				!inHistory &&
-				!hasRuntime &&
-				!hasSkillBaseline &&
-				!targetsLocation
-			)
-				return {};
-
-			const remaining = tab ? tabs.filter((t) => t.id !== tab.id) : tabs;
-			const wasActive = !!tab && s.activeTabByWorkspace[workspaceId] === tab.id;
-			return {
-				...(alreadyDeleted
-					? {}
-					: {
-							deletedSessionsByWorkspace: {
-								...s.deletedSessionsByWorkspace,
-								[workspaceId]: {
-									...(s.deletedSessionsByWorkspace[workspaceId] ?? {}),
-									[sessionId]: true,
-								},
-							},
-						}),
-				...(tab ? { tabsByWorkspace: { ...s.tabsByWorkspace, [workspaceId]: remaining } } : {}),
-				...(wasActive
-					? {
-							activeTabByWorkspace: {
-								...s.activeTabByWorkspace,
-								[workspaceId]: remaining.at(-1)?.id ?? null,
-							},
-							navTickByWorkspace: bumpNav(s, workspaceId),
-						}
-					: {}),
-				...(inHistory
-					? {
-							closedChatsByWorkspace: {
-								...s.closedChatsByWorkspace,
-								[workspaceId]: closed.filter((c) => c.sessionId !== sessionId),
-							},
-						}
-					: {}),
-				...(hasRuntime ? { sessions: omitKey(s.sessions, sessionId) } : {}),
-				...(hasSkillBaseline
-					? { skillsSyncedTickBySession: omitKey(s.skillsSyncedTickBySession, sessionId) }
-					: {}),
-				...(targetsLocation ? { chatLocationRequest: null } : {}),
-			};
+			const authoritative = new Set(authoritativeSessionIds);
+			let next = s;
+			for (const sessionId of baselineSessionIds) {
+				if (!authoritative.has(sessionId)) next = withoutChat(next, workspaceId, sessionId);
+			}
+			return next;
 		}),
 	reopenChat: (sessionId) =>
 		set((s) => {

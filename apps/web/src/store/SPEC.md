@@ -16,7 +16,10 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
 
 ## Boundary
 
-- **Owns:** `appStore.ts` — connection/projects/workspaces state + setters. **`projects`** is the open
+- **Owns:** `appStore.ts` — connection/projects/workspaces state + setters. Connection state includes a
+  monotonic **connected generation**: `setStatus("connected")` advances it in the same write that installs
+  the status, giving reconnect hydration an edge even when the visible status returns to the same value.
+  **`projects`** is the open
   rail, while **`recentProjects`** is the last-opened-ordered set of every known open + closed project.
   **`installProjectSnapshot(projects, recentProjects)`** atomically installs both `server.welcome` views;
   **`applyProjectUpdated(project)`** is the one full-snapshot updater for `project.updated` pushes and
@@ -121,9 +124,12 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   that chat's tab/history row/runtime + skill baseline (choosing the normal active-tab fallback) and records
   a page-lifetime tombstone. **`noteClosedChats`** and **`hydrateSession`** reject tombstoned session ids, so
   stale `session.list` / `session.getMessages` results already in flight cannot recreate a deleted chat;
-  the tombstone survives workspace teardown because an older read can still settle afterward. Otherwise
-  **`hydrateSession`** rebuilds a runtime + tab from a host `SessionSummary` + converted transcript on
-  connect — the live summary's `lastSettlement` is authoritative when present; otherwise only a failure on
+  the tombstone survives workspace teardown because an older read can still settle afterward. The
+  active-workspace hydration pass snapshots **`selectWorkspaceSessionIds`** before each `session.list`; when
+  that authoritative read lands, **`reconcileWorkspaceSessions`** applies the same tombstone fold to every
+  baseline id absent from the host result, repairing deletion events missed while disconnected without
+  deleting a session created after the read began. Otherwise **`hydrateSession`** rebuilds a runtime + tab
+  from a host `SessionSummary` + converted transcript on connect — the live summary's `lastSettlement` is authoritative when present; otherwise only a failure on
   the persisted transcript's final conversational message is current (historical `length` attempts followed
   by later work must not become stale warnings). Hydration is a no-op if a runtime already exists, so a
   live/ahead chat is never clobbered. The
@@ -314,7 +320,8 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   it is measured against — the client-side mirror of the host's one resolution), **`selectDiffTabTargetRef`**
   (that ref *as an open diff tab's live dimension*: the target for a branch-scope tab, `""` for a
   commit/uncommitted one whose sides can't move — derived here, never re-assembled in a panel),
-  `selectWorkspaceTick` (the sync-baseline snapshot);
+  `selectWorkspaceTick` (the sync-baseline snapshot), `selectWorkspaceSessionIds` (the deduplicated chat
+  tab + history membership used as a reconnect-reconciliation baseline);
   `matchesWorktreePath` (line an agent-reported path — relative or absolute — up against a worktree-relative
   one; shared by the Changes deep link and the spec classifier. The suffix rule is for **absolute reports
   only** and is anchored at a separator: unanchored, `/wt/src/a-foo.ts` would match `src/foo.ts`; applied to
