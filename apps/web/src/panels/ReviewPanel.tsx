@@ -132,6 +132,10 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 		}
 	};
 	const hasDrafts = snapshot.comments.some((c) => c.status === "draft");
+	// Clear (archive the review + start fresh) follows the RECORDS, not the file rows: finishing every
+	// reviewed file empties `files` while resolved/sent records live on, and that is exactly when the user
+	// wants to archive. Gating Clear on `files.length` stranded them with no way to close the review.
+	const hasComments = snapshot.comments.length > 0;
 	const toggleFile = (file: ReviewFileSummary) => {
 		const isOpen = expanded.has(file.path);
 		const next = new Set(expanded);
@@ -145,7 +149,7 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 
 	return (
 		<div className="flex h-full min-h-0 flex-col" data-testid="review-panel">
-			{files.length > 0 && (
+			{hasComments && (
 				<div className="flex h-7 shrink-0 items-center justify-end gap-sm border-border-default border-b px-sm">
 					{hasDrafts && <SendAllReviewsButton workspaceId={workspaceId} />}
 					<ConfirmPopover
@@ -177,7 +181,9 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 			<div className="min-h-0 flex-1 overflow-auto">
 				{files.length === 0 ? (
 					<p data-testid="review-empty" className="px-sm py-xs tr-text-metadata text-text-subtle">
-						No review comments yet. Select lines in a file or diff and click the comment icon.
+						{hasComments
+							? "All reviewed files are finished — Clear to archive them and start a fresh review."
+							: "No review comments yet. Select lines in a file or diff and click the comment icon."}
 					</p>
 				) : (
 					<ul>

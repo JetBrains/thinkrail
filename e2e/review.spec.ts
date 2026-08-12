@@ -839,10 +839,14 @@ test("resolved comments sink into a muted Resolved section (TODO Done style)", a
 	const fileRow = page.getByTestId("review-file-row").filter({ hasText: "script.ts" });
 	await expect(fileRow).toContainText("2 resolved");
 	// Everything resolved surfaces the Done finisher INLINE in the row (after the counts) —
-	// finishing empties the review.
+	// finishing empties the accordion.
 	await page.getByTestId("review-file-done").click();
 	await expect(page.getByTestId("review-file-row")).toHaveCount(0);
 	await expect(page.getByTestId("review-empty")).toBeVisible();
+	// …but the resolved records live on, so Clear stays available to archive them and start fresh —
+	// the header follows records, not file rows (Send all is gone: nothing draftable).
+	await expect(page.getByTestId("review-clear")).toBeVisible();
+	await expect(page.getByTestId("review-send-all")).toHaveCount(0);
 });
 
 test("Clear replaces the review for every connected client", async ({ page, browser }) => {

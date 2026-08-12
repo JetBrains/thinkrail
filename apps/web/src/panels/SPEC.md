@@ -432,11 +432,16 @@ a project picker, the prompt hero, and the reused
   carries the same per-file `Send review (N)` (`testid: review-panel-send`; `path: null` covers the
   anchorless whole-change-set bucket), the panel header a **`Send all (N)`** across every file
   (`SendAllReviewsButton`, `testid: review-send-all`, over `allDraftIds`; no ids passed — the host's
-  "all drafts" is the batch, so the count can't race a concurrent edit); the header shows **whenever the
-  review has files** and also carries a **Clear** (`testid: review-clear`) — a destructive `ConfirmPopover`
-  that calls the server-atomic `review.close` Clear; the host archives non-draft records, discards drafts,
-  replaces the active review, and publishes the fresh empty snapshot, so the initiating and sibling clients
-  all converge through `review.changed`. V1 has no archive browser. The review-level
+  "all drafts" is the batch, so the count can't race a concurrent edit). **The header (and its Clear)
+  follows the review's RECORDS, not its file rows**: it shows whenever the review holds ANY comment, so
+  finishing every reviewed file — which empties the accordion while resolved/sent records live on — still
+  leaves a way to close the review (the earlier files-gated header stranded a fully-finished review with
+  no Clear). `Send all` stays gated on drafts; **Clear** (`testid: review-clear`) is a destructive
+  `ConfirmPopover` that calls the server-atomic `review.close` Clear; the host archives non-draft records,
+  discards drafts, replaces the active review, and publishes the fresh empty snapshot, so the initiating
+  and sibling clients all converge through `review.changed`. The empty body distinguishes the two empties:
+  **records remain but every file is done** ("…finished — Clear to archive…") vs a **truly empty** review
+  ("No review comments yet…"). V1 has no archive browser. The review-level
   (overall-note) composer was removed for
   now (the `review` comment kind stays in the model, UI-less). The `review.get` hydration read is **owned by `RightPanel`**
   (`useWorkspaceReview`, the `useWorkspaceSpecs` pattern — the read also re-anchors server-side): the
