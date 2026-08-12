@@ -226,7 +226,7 @@ code {
 	padding: 8px 14px;
 	background: var(--accent);
 	color: var(--on-accent);
-	border-radius: 6px;
+	border-radius: 4px;
 	transition: top 120ms ease;
 }
 
@@ -350,7 +350,7 @@ code {
 	gap: 7px;
 	padding: 6px 8px;
 	border: 0;
-	border-radius: 6px;
+	border-radius: 4px;
 	background: transparent;
 	color: var(--muted);
 	font: inherit;
@@ -372,7 +372,7 @@ code {
 	width: 32px;
 	height: 32px;
 	border: 1px solid var(--border2);
-	border-radius: 7px;
+	border-radius: 4px;
 	background: transparent;
 	color: var(--muted);
 	cursor: pointer;
@@ -467,7 +467,7 @@ code {
 	align-items: center;
 	gap: 6px;
 	padding: 5px 8px;
-	border-radius: 6px;
+	border-radius: 4px;
 	color: var(--muted);
 	white-space: nowrap;
 	overflow: hidden;
@@ -499,7 +499,7 @@ code {
 	padding: 12px;
 	background: var(--elevated);
 	border: 1px solid var(--border2);
-	border-radius: 12px;
+	border-radius: 4px;
 	opacity: 1;
 	transform: translateY(0);
 	transition:
@@ -547,7 +547,7 @@ code {
 	margin-top: 12px;
 	padding: 10px 18px;
 	border: 1px solid var(--border2);
-	border-radius: 8px;
+	border-radius: 4px;
 	background: transparent;
 	color: var(--text);
 	font-size: 14px;
@@ -717,7 +717,7 @@ code {
 	line-height: 1.7;
 	background: color-mix(in srgb, var(--elevated) 55%, var(--editor-bg));
 	border: 1px solid var(--border2);
-	border-radius: 10px;
+	border-radius: 4px;
 	padding: 16px 18px;
 	overflow-x: auto;
 	margin: 18px 0;
@@ -774,7 +774,7 @@ code {
 	font-size: 11px;
 	letter-spacing: 0.4px;
 	padding: 3px 10px;
-	border-radius: 999px;
+	border-radius: 4px;
 	border: 1px solid var(--border2);
 	color: var(--muted);
 }
@@ -817,7 +817,7 @@ p.hero-lede {
 	max-width: 100%;
 	background: var(--container-workspace-bg);
 	border: 1px solid var(--border2);
-	border-radius: 8px;
+	border-radius: 4px;
 	overflow: hidden;
 }
 
@@ -872,7 +872,7 @@ p.hero-lede {
 	width: 30px;
 	height: 28px;
 	border-left: 0;
-	border-radius: 7px;
+	border-radius: 4px;
 	font-size: 14px;
 }
 
@@ -978,7 +978,7 @@ html.install-tabs-ready .install-frame .install-line {
 .windows-shell-picker {
 	overflow: hidden;
 	border: 1px solid var(--border2);
-	border-radius: 8px;
+	border-radius: 4px;
 	background: var(--container-workspace-bg);
 }
 
@@ -1001,7 +1001,7 @@ html.install-tabs-ready .windows-shell-tabs {
 	min-height: 27px;
 	padding: 5px 10px;
 	border: 1px solid var(--border2);
-	border-radius: 5px;
+	border-radius: 4px;
 	background: transparent;
 	color: var(--hint);
 	font-family: var(--font-mono);
@@ -1062,7 +1062,7 @@ p.hero-platforms {
 	align-items: center;
 	gap: 9px;
 	padding: 10px 18px;
-	border-radius: 8px;
+	border-radius: 4px;
 	border: 1px solid var(--border2);
 	color: var(--text);
 	font-size: 14px;
@@ -1123,7 +1123,7 @@ p.hero-platforms {
 
 .feature-card {
 	border: 1px solid var(--border2);
-	border-radius: 10px;
+	border-radius: 4px;
 	padding: 16px 18px;
 	background: color-mix(in srgb, var(--elevated) 40%, var(--editor-bg));
 }
@@ -1149,7 +1149,7 @@ p.hero-platforms {
 .chat-demo {
 	position: relative;
 	border: 1px solid var(--border2);
-	border-radius: 12px;
+	border-radius: 4px;
 	background: color-mix(in srgb, var(--elevated) 30%, var(--editor-bg));
 	padding: 20px;
 	margin: 22px 0;
@@ -1163,7 +1163,7 @@ p.hero-platforms {
 	max-width: 85%;
 	background: color-mix(in srgb, var(--bubble, var(--accent)) 12%, transparent);
 	border: 1px solid color-mix(in srgb, var(--bubble, var(--accent)) 35%, transparent);
-	border-radius: 10px;
+	border-radius: 4px;
 	padding: 10px 14px;
 	font-size: 14px;
 }
@@ -1229,7 +1229,7 @@ html.anim .chat-demo [data-step].on {
 
 .chat-composer {
 	border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border2));
-	border-radius: 10px;
+	border-radius: 4px;
 	background: var(--input);
 	padding: 12px 14px;
 	display: flex;
@@ -1254,7 +1254,7 @@ html.anim .chat-demo [data-step].on {
 	gap: 6px;
 	font-size: 12px;
 	padding: 5px 10px;
-	border-radius: 7px;
+	border-radius: 4px;
 	background: var(--elevated);
 	border: 1px solid var(--border2);
 	color: var(--muted);
@@ -1277,7 +1277,7 @@ html.anim .chat-demo [data-step].on {
 	justify-content: center;
 	width: 30px;
 	height: 30px;
-	border-radius: 8px;
+	border-radius: 4px;
 	background: var(--accent);
 	color: var(--on-accent);
 }
@@ -1286,7 +1286,7 @@ html.anim .chat-demo [data-step].on {
 
 .spec-tree {
 	border: 1px solid var(--border2);
-	border-radius: 10px;
+	border-radius: 4px;
 	overflow: hidden;
 	margin: 20px 0;
 	font-size: 13.5px;
@@ -1351,7 +1351,7 @@ html.anim .chat-demo [data-step].on {
 
 .install-block .line-copy {
 	cursor: copy;
-	border-radius: 5px;
+	border-radius: 4px;
 	margin: 0 -4px;
 	padding: 1px 4px;
 }
@@ -1459,7 +1459,7 @@ p.footer-fineprint {
 	align-items: center;
 	gap: 7px;
 	padding: 4.5px 8px;
-	border-radius: 6px;
+	border-radius: 4px;
 	color: var(--muted);
 	white-space: nowrap;
 	font-family: var(--font-mono);
@@ -1533,7 +1533,7 @@ p.footer-fineprint {
 .terminal-tab {
 	font-size: 11.5px;
 	padding: 3px 10px;
-	border-radius: 5px;
+	border-radius: 4px;
 	background: var(--elevated);
 	color: var(--muted);
 }
@@ -1744,7 +1744,7 @@ html:not(.anim) .term-caret {
 	padding: 8px;
 	background: var(--elevated);
 	border: 1px solid var(--border2);
-	border-radius: 12px;
+	border-radius: 4px;
 	pointer-events: none;
 	opacity: 0;
 	transform: translateY(8px);
