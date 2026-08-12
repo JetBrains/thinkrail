@@ -202,8 +202,7 @@ if (terminal && termScreen) {
 			gen,
 		);
 		if (gen !== generation) return;
-		await drawLines(TERMINAL_LOGO, "term-out term-logo", 60, gen);
-		if (gen !== generation) return;
+		// Stop at the completed/ready install state — the logo plays only on a terminal click (replayLogo).
 		animating = false;
 		initialDone = true;
 	};
