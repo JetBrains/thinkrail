@@ -575,13 +575,15 @@ code {
 	min-height: 0; /* grid items default to min-height:auto — without this the row grows to content */
 }
 
-/* The tab strip is the header surface; no bottom divider, so the active tab (workspace surface)
-   merges into the editor body below. Inactive tabs stay transparent and read as this strip. */
+/* Header-surface strip with a full-width bottom divider; the active tab overlaps it (below) so its
+   workspace surface merges into the editor body. overflow-x:clip contains the tabs horizontally while
+   letting that 1px vertical merge show. Inactive tabs stay transparent and read as this strip. */
 .tabstrip {
 	display: flex;
 	align-items: stretch;
-	overflow: hidden;
+	overflow-x: clip;
 	background: var(--container-header-bg);
+	border-bottom: 1px solid var(--border);
 	flex: none;
 }
 
@@ -602,6 +604,7 @@ code {
 	position: relative;
 	flex: none;
 	text-decoration: none;
+	border-right: 1px solid var(--border);
 }
 
 .tab:hover {
@@ -619,6 +622,9 @@ code {
 .tab.active {
 	color: var(--text);
 	background: var(--container-workspace-bg);
+	/* Overlap + cover the strip's bottom divider so the active tab merges into the content below. */
+	margin-bottom: -1px;
+	border-bottom: 1px solid var(--container-workspace-bg);
 }
 
 .tab.active .i {
@@ -901,12 +907,13 @@ p.hero-lede {
 html.install-tabs-ready .install-tabs {
 	display: flex;
 	align-items: flex-end;
-	gap: 2px;
+	gap: 0;
 	/* No left padding: the first tab sits flush with the frame edge. */
 	padding: 0 4px 0 0;
-	/* Header surface for the strip + the empty space to the right of the tabs; no bottom divider so
-	   the active tab (workspace surface) merges into the command block below. */
+	/* Header surface for the strip + the empty space to the right of the tabs, with a full-width
+	   bottom divider; the active tab overlaps it (below) to merge into the command block. */
 	background: var(--container-header-bg);
+	border-bottom: 1px solid var(--border);
 }
 
 .install-tab {
@@ -919,6 +926,7 @@ html.install-tabs-ready .install-tabs {
 	/* -1px so the active tab's surface overlaps the strip divider and merges into the content. */
 	margin-bottom: -1px;
 	border: 0;
+	border-right: 1px solid var(--border);
 	background: transparent;
 	color: var(--muted);
 	font-family: var(--font-mono);
@@ -935,6 +943,8 @@ html.install-tabs-ready .install-tabs {
 	z-index: 1;
 	background: var(--container-workspace-bg);
 	color: var(--text);
+	/* Cover the strip's bottom divider under the active tab so it merges into the command block. */
+	border-bottom: 1px solid var(--container-workspace-bg);
 }
 
 .install-tab:focus-visible,
