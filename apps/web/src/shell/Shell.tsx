@@ -19,6 +19,7 @@ import { applyTheme, writeThemeHint } from "../themes";
 import type { ConnectionStatus } from "../transport";
 import { BrandLogo } from "./BrandLogo";
 import { useGlobalHotkeys } from "./useGlobalHotkeys";
+import { openReviewLabel, useOpenBranchReview } from "./useOpenBranchReview";
 
 const STATUS_LABEL: Record<ConnectionStatus, string> = {
 	connected: "Connected",
@@ -37,6 +38,7 @@ export function Shell() {
 	const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
 	const activeWorkspace = useAppStore(selectActiveWorkspace);
 	const contextProject = useAppStore(selectContextProject);
+	const openReview = useOpenBranchReview(activeWorkspace, status);
 	const hasActiveWorkspace = activeWorkspaceId != null;
 	// The single owner of the theme DOM side-effect: apply the store's (host-owned) theme + cache it as the
 	// next load's first-paint hint. The store is fed by transport (welcome / settings.changed).
@@ -85,6 +87,15 @@ export function Shell() {
 											· from {activeWorkspace.baseBranch}
 										</span>
 									)}
+									{openReview ? (
+										<span
+											data-testid="scope-review"
+											data-kind={openReview.kind}
+											className="shrink-0"
+										>
+											· {openReviewLabel(openReview)}
+										</span>
+									) : null}
 								</div>
 							) : null}
 						</div>

@@ -66,7 +66,7 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
    worktree model; and an **existing worktree** the user explicitly attaches in place
    (`kind: "external"`), which ThinkRail may forget but never mutates (see
    [[submodule-server-workspaces]]). The shell is built first,
-   `pi` connected last. Provider-backed PR / Checks stay V2; workspace-local Review is V1.
+   `pi` connected last. Provider-backed PR / Checks stay V2 beyond a best-effort open GitHub PR or GitLab MR number in active-workspace metadata; workspace-local Review is V1.
 7. **Auth is external.** Tailscale ACLs / device identity are the auth; the app carries an `owner` field,
    not a login UI.
 8. **Hydrate-then-stream (every client reconstructs from the host).** A client never relies on having

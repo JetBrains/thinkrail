@@ -105,6 +105,12 @@ export interface Workspace {
 	skillOverrides?: Record<string, "on" | "off">;
 }
 
+/** Minimal open code-review metadata for the active workspace branch. */
+export interface OpenBranchReview {
+	kind: "pull-request" | "merge-request";
+	number: number;
+}
+
 /** One unattached checkout from `git worktree list`, shown in the existing-worktree chooser. */
 export type ExistingWorktreeCandidate =
 	| { path: string; branch: string; status: "available" }

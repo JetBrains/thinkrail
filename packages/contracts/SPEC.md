@@ -116,6 +116,7 @@ of the host.
   non-removable and non-renamable server-side; **`kind: "external"`** marks an explicitly attached,
   user-owned worktree ThinkRail may forget but must never rename or reclaim; absent = a ThinkRail-managed
   worktree workspace — an explicit wire field, never an id convention),
+  **`OpenBranchReview`** (the optional open review reference for the active branch: PR vs MR + number; no status/actions),
   **`ExistingWorktreeCandidate`** (a `workspace.listExisting` row: absolute `path` + `branch`, or a
   `detached` row the chooser disables), `Session` (chat tab),
   `FileNode` (file-tree node), `TabStatus`, `Git*`/diff types — incl. **`GitDiffScope`** (what the Changes
@@ -217,6 +218,7 @@ of the host.
   **`workspace.listExisting`** (the selected project's unattached Git worktrees, with detached rows
   disabled by status) / **`workspace.openExisting`** (revalidate + register one branch-backed checkout as
   `kind: "external"`, emitting the ordinary `workspace.created`, without mutating Git or disk) /
+  **`workspace.openReview`** (the active branch's optional `OpenBranchReview` metadata) /
   **`project.setTrust`** (persist a project's trust grant → the updated `Project`; gates its committed
   cross-agent skill aliases) /
   **`skill.list`** (a pre-session, skill-only `SlashCommandInfo[]` preview for a `projectId`, resolved from
