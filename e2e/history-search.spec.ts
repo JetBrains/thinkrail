@@ -217,7 +217,8 @@ test("Cmd/Ctrl+Enter from the overlay sends pending image attachments with the r
 		);
 	});
 	await expect(thumbnails).toBeVisible();
-	await expect(thumbnails).toContainText("image/png");
+	// The attachment chip shows the file's NAME (file-chip rendering; the mime type is no longer shown).
+	await expect(thumbnails).toContainText("pixel.png");
 
 	// Recall a prompt (same navigation as above: query "fix", cycle scope to `all`) and insert-and-send.
 	await input.press("Control+r");
