@@ -828,7 +828,9 @@ p.hero-lede {
 
 .install-line {
 	display: flex;
-	align-items: stretch;
+	/* Fixed 56px command row; content vertically centred (the copy button stretches for its divider). */
+	height: 56px;
+	align-items: center;
 	margin: 26px 0 10px;
 	max-width: 100%;
 	background: var(--container-workspace-bg);
@@ -852,6 +854,7 @@ p.hero-lede {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
+	align-self: stretch;
 	width: 44px;
 	flex: none;
 	border: none;
@@ -897,7 +900,9 @@ p.hero-lede {
 
 html.install-tabs-ready .install-tabs {
 	display: flex;
-	align-items: flex-end;
+	/* Fixed 56px header row; tabs stretch to it and centre their own content. */
+	height: 56px;
+	align-items: stretch;
 	gap: 0;
 	/* No left padding: the first tab sits flush with the frame edge. */
 	padding: 0 4px 0 0;
