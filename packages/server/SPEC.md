@@ -24,9 +24,10 @@ and runs the `pi` agent in-process via `createAgentSession`. Launched in-process
   and installs SIGINT/SIGTERM graceful-shutdown handlers around `createServer`), both re-exported from
   `host/`; plus `registerBundledRuntime` (+ its types, re-exported from `agent/`) — the compiled-binary
   seam by which a launcher that cannot path-load the bundled pi extensions (no `node_modules` inside a
-  `bun build --compile` binary) injects them as value-imported factories + a staged skills dir, and
-  which registers pi's statically-bundled provider flows (the OAuth flows + the Bedrock module) that pi
-  otherwise reaches through binary-hostile variable-specifier dynamic imports (see the agent SPEC). The
+  `bun build --compile` binary) injects them as value-imported factories + a staged skills dir, injects
+  the staged macOS/Windows OS-trash helper paths, and registers pi's statically-bundled provider flows
+  (the OAuth flows + the Bedrock module) that pi otherwise reaches through binary-hostile
+  variable-specifier dynamic imports (see the agent SPEC). The
   package also exposes the **`@thinkrail/server/agent` subpath export** (the `agent` barrel): the
   server-side session surface for the **headless workflow-test harness** (`e2e/workflows/`), which
   drives real in-process sessions through the production wiring without booting the HTTP host — a

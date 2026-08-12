@@ -239,9 +239,9 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
       compiled binary lacks). The workspace packages' `pi.skills` manifests aren't auto-discovered for
       file-path entries — their `skills/` dirs (`pi-spec-graph`, `pi-thinkrail-workflow`, `pi-todos`) are
       wired via **`additionalSkillPaths`**.
-    - **Compiled binary:** the launcher awaits the **`registerBundledRuntime({ factories, skillsDir })`
-      seam** before the first session — the same bundled extensions as **value-imported default-export
-      factories** (pi gives `extensionFactories` full API parity with path loading; what's lost —
+    - **Compiled binary:** the launcher awaits the **`registerBundledRuntime({ factories, skillsDir,
+      trashHelpers })` seam** before the first session — the same bundled extensions as
+      **value-imported default-export factories** (pi gives `extensionFactories` full API parity with path loading; what's lost —
       file-relative `baseDir`, per-reload re-evaluation — none of them use) plus a staged on-disk
       skills dir (pi reads `SKILL.md` via plain fs, so skills must live on the real filesystem). The
       seam also performs the **binary-only pi registrations**: pi hides Node-only provider code behind
@@ -254,11 +254,14 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
       imports inside the seam** — literal specifiers are statically bundled by `bun build --compile`,
       while dev (which never calls the seam) never loads the flow modules or the AWS SDK. Registration
       lands in the same `pi-ai` instance pi consults at login time because the catalog pins one exact
-      `pi-ai` version repo-wide (one store entry → one bundled module instance). The chat-trash wrapper
-      also statically includes `@stroncium/procfs`'s `processMountinfo` parser: `trash`'s Linux path reaches
-      it through a template-literal CommonJS `require`, which source runs can resolve from `node_modules`
-      but a single-file Bun binary cannot discover. This is an inclusion seam only — `trash` still owns
-      OS-specific recycle-bin behavior.
+      `pi-ai` version repo-wide (one store entry → one bundled module instance). Chat trash has two
+      artifact seams behind the same registration: the wrapper statically installs `@stroncium/procfs`'s
+      `processMountinfo` parser because `trash`'s Linux path reaches it through a binary-opaque
+      template-literal CommonJS `require`; and the launcher stages `trash`'s `macos-trash` /
+      `windows-trash.exe` helpers to real executable paths and injects them as `trashHelpers`, because the
+      package's internal `new URL(…, import.meta.url)` points inside `/$bunfs/` after compilation. The
+      wrapper executes an injected helper on macOS/Windows and otherwise delegates to `trash`; source mode stays on
+      `trash` entirely. No platform degrades to permanent unlink.
     Both modes append `extensionFactories`: a **headless-search policy** (a `tool_call` hook defaulting
     `web_search`'s `workflow` to `"none"`, since pi-web-access would otherwise open a browser curator our
     `rpc` host can't render) **and** `askUserQuestionExtension` (registers the `ask_user_question` tool).

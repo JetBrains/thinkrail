@@ -37,6 +37,7 @@ import {
 	candidateCompatibilitySkillRoots,
 	discoverCompatibilitySkillSources,
 } from "./skillSources";
+import { type BundledTrashHelpers, setBundledTrashHelpers } from "./trash";
 
 /** A bundled extension entry's default export — the pi factory shape the loader invokes. */
 export type BundledExtensionFactory = ExtensionFactory;
@@ -46,6 +47,8 @@ export interface BundledExtensions {
 	factories: BundledExtensionFactory[];
 	/** A real on-disk dir of staged skill roots (each `<name>/SKILL.md`) for `additionalSkillPaths`. */
 	skillsDir: string;
+	/** Real executable paths staged from `trash`'s macOS/Windows helper sidecars. */
+	trashHelpers: BundledTrashHelpers;
 }
 
 let bundled: BundledExtensions | undefined;
@@ -65,6 +68,7 @@ let bundled: BundledExtensions | undefined;
  */
 export async function registerBundledRuntime(extensions: BundledExtensions): Promise<void> {
 	bundled = extensions;
+	setBundledTrashHelpers(extensions.trashHelpers);
 	const [{ registerBunOAuthFlows }, { bedrockProviderModule }, { setBedrockProviderModule }] =
 		await Promise.all([
 			import("@earendil-works/pi-ai/bun-oauth"),

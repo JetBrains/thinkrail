@@ -1,8 +1,9 @@
 #!/usr/bin/env bun
 // Entry point for the COMPILED single-file binary (`bun run build:binary`). Bun's `--compile` bundles the
-// host *and* transparently embeds the `bun-pty` native lib — two things it can't serve from inside the
-// binary are the web UI (a directory of files) and the bundled pi extensions' skills (pi reads SKILL.md
-// via plain fs). So we embed both (`web-assets.generated`, `bundled-extensions.generated`) and, on
+// host *and* transparently embeds the `bun-pty` native lib — three things must leave `/$bunfs/`: the web
+// UI (a directory of files), the bundled pi extensions' skills (pi reads SKILL.md via plain fs), and
+// `trash`'s macOS/Windows helper executables. We embed them (`web-assets.generated`,
+// `bundled-extensions.generated`, `runtime-assets.generated`) and, on
 // startup, stage them to per-build cache dirs, point the host at them (`THINKRAIL_STATIC_DIR` + the
 // server's `registerBundledRuntime` seam — which also injects the extensions themselves as value-imported
 // factories, since a binary has no `node_modules` to path-load them from, and registers pi's statically-
@@ -14,7 +15,7 @@
 // Run-from-source enters through `index.ts` and never touches this file. (Image-read needs no photon wasm
 // here: the agent's read tool is configured to send images raw — see server `buildSessionSettings`.)
 
-import { existsSync, mkdirSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { parseSubcommand } from "./args";
 import {
@@ -23,6 +24,7 @@ import {
 	embeddedSkillFiles,
 } from "./bundled-extensions.generated";
 import { stagingRoot } from "./paths";
+import { embeddedRuntimeAssets, runtimeAssetsVersion } from "./runtime-assets.generated";
 import { embeddedWebAssets, webAssetsVersion } from "./web-assets.generated";
 
 /**
@@ -61,10 +63,19 @@ async function stage(
 if (parseSubcommand(Bun.argv.slice(2)) === undefined) {
 	const staticDir = await stage("web", webAssetsVersion, embeddedWebAssets);
 	const skillsDir = await stage("skills", bundledSkillsVersion, embeddedSkillFiles);
+	const runtimeDir = await stage("runtime", runtimeAssetsVersion, embeddedRuntimeAssets);
+	const macosTrash = join(runtimeDir, "macos-trash");
+	const windowsTrash = join(runtimeDir, "windows-trash.exe");
+	// The macOS helper is a native executable extracted through ordinary file writes (mode 0644).
+	if (process.platform !== "win32") chmodSync(macosTrash, 0o755);
 	// Respect an explicit override (e.g. pointing at a dev build); otherwise serve the staged UI.
 	process.env.THINKRAIL_STATIC_DIR ??= staticDir;
 	const { registerBundledRuntime } = await import("@thinkrail/server");
-	await registerBundledRuntime({ factories: bundledExtensionFactories, skillsDir });
+	await registerBundledRuntime({
+		factories: bundledExtensionFactories,
+		skillsDir,
+		trashHelpers: { macos: macosTrash, windows: windowsTrash },
+	});
 }
 const { launch } = await import("./bootstrap");
 await launch("binary");

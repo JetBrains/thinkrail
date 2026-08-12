@@ -1,5 +1,7 @@
 /// <reference path="./procfs.d.ts" />
 
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import procfsParsers from "@stroncium/procfs/lib/parsers";
 import processMountinfo from "@stroncium/procfs/lib/parsers/processMountinfo";
 import trash from "trash";
@@ -16,10 +18,38 @@ export type TrashImplementation = (
 	options?: { readonly glob?: boolean },
 ) => Promise<void>;
 
+export interface BundledTrashHelpers {
+	readonly macos: string;
+	readonly windows: string;
+}
+
+let bundledHelpers: BundledTrashHelpers | undefined;
+
+/** Compiled-runtime seam: helpers must be staged to real files before the host accepts requests. */
+export function setBundledTrashHelpers(helpers: BundledTrashHelpers): void {
+	bundledHelpers = helpers;
+}
+
+const execFileAsync = promisify(execFile);
+
+function defaultTrashImplementation(): TrashImplementation {
+	const helper =
+		process.platform === "darwin"
+			? bundledHelpers?.macos
+			: process.platform === "win32"
+				? bundledHelpers?.windows
+				: undefined;
+	if (!helper) return trash;
+	return async (input) => {
+		const paths = typeof input === "string" ? [input] : [...input];
+		await Promise.all(paths.map((path) => execFileAsync(helper, [path])));
+	};
+}
+
 /** Move one literal path to the OS trash. Failures propagate; a recoverable action never falls back to unlink. */
 export async function trashFile(
 	path: string,
-	implementation: TrashImplementation = trash,
+	implementation: TrashImplementation = defaultTrashImplementation(),
 ): Promise<void> {
 	await implementation(path, { glob: false });
 }

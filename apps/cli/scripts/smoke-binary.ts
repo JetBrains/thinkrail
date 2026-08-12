@@ -341,6 +341,14 @@ try {
 	// the artifact (registerBundledRuntime), reusing the live RPC socket for the push-channel frames.
 	await assertOAuthLoginReachesAuthUrl(rpcSocket);
 
+	// Native trash sidecars must be staged from the artifact to real paths before the server accepts the
+	// delete RPC. The host platform executes one; asserting both keeps cross-compiled targets complete.
+	for (const helper of ["macos-trash", "windows-trash.exe"]) {
+		if (globSync(join(cacheDir, "thinkrail", "runtime", "*", helper)).length === 0) {
+			fail(`native trash helper "${helper}" was not staged under ${cacheDir}`);
+		}
+	}
+
 	// The bundled extensions' skills must be staged to the real filesystem (pi reads SKILL.md via fs).
 	// Full inventory — pi-spec-graph's skill + the whole pi-thinkrail-workflow family (keep in sync with
 	// the family table in packages/pi-thinkrail-workflow/skills/SPEC.md). `choosing-a-workflow` matters
