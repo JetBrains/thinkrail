@@ -933,7 +933,7 @@ html.install-tabs-ready .install-tabs {
 .install-tab[aria-selected="true"]::before {
 	content: "";
 	position: absolute;
-	inset: -1px 0 auto 0;
+	inset: 0 0 auto 0;
 	height: 2px;
 	background: var(--accent);
 }
@@ -965,10 +965,18 @@ html.install-tabs-ready p.install-fallback-heading {
 	margin: 8px 0 16px;
 }
 
-html.install-tabs-ready .install-picker-hero > .install-panel > .install-line {
+/* One border-default frame around the whole OS-tabs + command component. overflow:hidden
+   clips the tab-bar / command corners to the 4px radius; inner boxes drop their own borders. */
+html.install-tabs-ready .install-frame {
+	border: 1px solid var(--border);
+	border-radius: 4px;
+	overflow: hidden;
+}
+
+html.install-tabs-ready .install-frame .install-line {
 	margin: 0;
-	border-top: 0;
-	border-radius: 0 0 8px 8px;
+	border: 0;
+	border-radius: 0;
 }
 
 .windows-shell-picker {
@@ -978,9 +986,9 @@ html.install-tabs-ready .install-picker-hero > .install-panel > .install-line {
 	background: var(--input);
 }
 
-html.install-tabs-ready .install-picker-hero .windows-shell-picker {
-	border-top: 0;
-	border-radius: 0 0 8px 8px;
+html.install-tabs-ready .install-frame .windows-shell-picker {
+	border: 0;
+	border-radius: 0;
 }
 
 html.install-tabs-ready .windows-shell-tabs {
