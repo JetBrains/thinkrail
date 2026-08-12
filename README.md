@@ -130,13 +130,18 @@ bun run typecheck   # tsc across all packages
 bun run test        # unit tests (bun test, per package)
 ```
 
-End-to-end tests drive the real web UI against a booted host on an isolated state dir:
+End-to-end tests drive the real web UI against isolated hosts. The no-agent gate builds once and
+uses a machine-adaptive number of independent shards (half the available CPUs, capped at eight):
 
 ```bash
-bunx playwright install chromium   # one-time
-bun run e2e          # no-agent suite (fast, no auth)
-bun run e2e:full     # everything, including @agent specs (needs pi authenticated)
-bun run e2e:agent    # only the @agent specs
+bunx playwright install chromium                    # one-time
+bun run e2e                                         # complete no-agent gate
+bun run e2e -- e2e/changes.spec.ts                  # focused iteration
+bun run e2e -- --last-failed                        # repair loop
+bun run e2e:serial                                  # one-host debugging fallback
+bun run e2e -- --shards=12                          # explicit 1–16 override
+bun run e2e:full                                    # everything; needs pi auth
+bun run e2e:agent                                   # only @agent; remains serial
 ```
 
 ## Specification-driven development
