@@ -186,7 +186,23 @@ test("a client that misses chat deletion while offline reconciles it after recon
 	await expect(page.getByText("offline doomed transcript")).toBeVisible();
 
 	// A separate browser context can lose network independently while the first client performs the delete.
+	// Chromium's offline emulation does not close an already-open WebSocket, so retain that socket from an
+	// init script: after network is blocked the test closes it explicitly, preventing its automatic retry
+	// from reconnecting until the context comes back online.
 	const context2 = await browser.newContext();
+	await context2.addInitScript(() => {
+		const NativeWebSocket = window.WebSocket;
+		class TrackedWebSocket extends NativeWebSocket {
+			constructor(url: string | URL, protocols?: string | string[]) {
+				super(url, protocols);
+				Object.defineProperty(window, "__thinkrailE2eSocket", {
+					configurable: true,
+					value: this,
+				});
+			}
+		}
+		window.WebSocket = TrackedWebSocket;
+	});
 	const page2 = await context2.newPage();
 	await page2.goto(page.url());
 	await expect(page2.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
@@ -195,6 +211,10 @@ test("a client that misses chat deletion while offline reconciles it after recon
 	await expect(page2.getByText("offline doomed transcript")).toBeVisible();
 
 	await context2.setOffline(true);
+	await page2.evaluate(() => {
+		const socket = Object.getOwnPropertyDescriptor(window, "__thinkrailE2eSocket")?.value;
+		if (socket instanceof WebSocket) socket.close();
+	});
 	await expect(page2.getByTestId("connection-status")).toHaveAttribute(
 		"data-status",
 		"disconnected",
