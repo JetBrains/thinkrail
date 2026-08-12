@@ -338,6 +338,12 @@
 									<button type="button" class="install-tab" role="tab" id="hero-install-macos-tab" aria-controls="hero-install-macos" aria-selected="false" tabindex="-1" data-install-platform="macos">macOS</button>
 									<button type="button" class="install-tab" role="tab" id="hero-install-linux-tab" aria-controls="hero-install-linux" aria-selected="true" data-install-platform="linux">Linux</button>
 									<button type="button" class="install-tab" role="tab" id="hero-install-windows-tab" aria-controls="hero-install-windows" aria-selected="false" tabindex="-1" data-install-platform="windows">Windows</button>
+									<!-- Windows shell switcher, inline in the tab bar — shown (via JS) only while the Windows tab is active, so switching OS never changes the component height. -->
+									<div class="windows-shell-tabs" role="tablist" aria-label="Choose your Windows shell" hidden>
+										<button type="button" class="windows-shell-tab" role="tab" id="hero-shell-powershell-tab" aria-controls="hero-shell-powershell" aria-selected="true" data-windows-shell="powershell">PowerShell</button>
+										<button type="button" class="windows-shell-tab" role="tab" id="hero-shell-cmd-tab" aria-controls="hero-shell-cmd" aria-selected="false" tabindex="-1" data-windows-shell="cmd">Command Prompt</button>
+										<button type="button" class="windows-shell-tab" role="tab" id="hero-shell-wsl-tab" aria-controls="hero-shell-wsl" aria-selected="false" tabindex="-1" data-windows-shell="wsl">WSL</button>
+									</div>
 									<button type="button" class="copy-btn copy-btn-tabbar" data-copy="" aria-label="Copy install command">
 										<svg class="i" aria-hidden="true"><use href="#i-copy" /></svg>
 										<svg class="i i-done" aria-hidden="true"><use href="#i-check" /></svg>
@@ -358,11 +364,6 @@
 								<div class="install-panel" id="hero-install-windows" role="tabpanel" aria-labelledby="hero-install-windows-tab" data-install-panel="windows">
 									<p class="install-fallback-heading">Windows</p>
 									<div class="windows-shell-picker">
-										<div class="windows-shell-tabs" role="tablist" aria-label="Choose your Windows shell">
-											<button type="button" class="windows-shell-tab" role="tab" id="hero-shell-powershell-tab" aria-controls="hero-shell-powershell" aria-selected="true" data-windows-shell="powershell">PowerShell</button>
-											<button type="button" class="windows-shell-tab" role="tab" id="hero-shell-cmd-tab" aria-controls="hero-shell-cmd" aria-selected="false" tabindex="-1" data-windows-shell="cmd">Command Prompt</button>
-											<button type="button" class="windows-shell-tab" role="tab" id="hero-shell-wsl-tab" aria-controls="hero-shell-wsl" aria-selected="false" tabindex="-1" data-windows-shell="wsl">WSL</button>
-										</div>
 										<div class="windows-shell-panel" id="hero-shell-powershell" role="tabpanel" aria-labelledby="hero-shell-powershell-tab" data-windows-shell-panel="powershell">
 											<p class="install-fallback-heading">PowerShell</p>
 											<div class="install-line">

@@ -381,6 +381,8 @@ if (installPicker) {
 	const platformPanels = document.querySelectorAll<HTMLElement>("[data-install-panel]");
 	const shellTabs = document.querySelectorAll<HTMLButtonElement>("[data-windows-shell]");
 	const shellPanels = document.querySelectorAll<HTMLElement>("[data-windows-shell-panel]");
+	// The Windows shell switcher lives inline in the tab bar; it shows only while Windows is active.
+	const shellSwitcher = installPicker.querySelector<HTMLElement>(".windows-shell-tabs");
 	const copyButton = installPicker.querySelector<HTMLElement>(".copy-btn-tabbar");
 
 	// The command currently on screen is the single source of truth for both the copy button and the
@@ -423,6 +425,7 @@ if (installPicker) {
 		for (const panel of platformPanels) {
 			panel.hidden = platformFrom(panel.dataset.installPanel) !== platform;
 		}
+		if (shellSwitcher) shellSwitcher.hidden = platform !== "windows";
 		updateDetectionNote();
 		syncActiveCommand();
 	};

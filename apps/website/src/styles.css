@@ -996,11 +996,13 @@ html.install-tabs-ready .install-frame .windows-shell-picker {
 	border-radius: 0;
 }
 
-html.install-tabs-ready .windows-shell-tabs {
+/* Inline in the tab bar, next to the Windows tab — visible only when the Windows tab is active
+   (JS toggles [hidden]). Vertically centred + compact so it never grows the tab-bar height. */
+html.install-tabs-ready .windows-shell-tabs:not([hidden]) {
 	display: flex;
-	gap: 5px;
-	padding: 8px 10px;
-	border-bottom: 1px solid var(--border);
+	align-self: center;
+	gap: 4px;
+	margin-left: 8px;
 }
 
 .windows-shell-tab {
@@ -1880,12 +1882,7 @@ html:not(.anim) .term-caret {
 		padding-inline: 7px;
 	}
 
-	html.install-tabs-ready .windows-shell-tabs {
-		padding-inline: 7px;
-	}
-
 	.windows-shell-tab {
-		flex: 1;
 		padding-inline: 5px;
 		font-size: 9.5px;
 	}
