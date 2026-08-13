@@ -313,14 +313,6 @@ code {
 	height: auto;
 }
 
-.wordmark {
-	font-family: var(--font-display);
-	font-weight: 400;
-	font-size: 13px;
-	color: var(--accent);
-	white-space: nowrap;
-}
-
 .scope {
 	display: flex;
 	align-items: center;
