@@ -108,6 +108,25 @@ test("createWorkspace branches off a locally-present remote ref without a networ
 	expect(gitOut(ws.worktreePath, "rev-parse", "--abbrev-ref", "HEAD")).toBe(ws.branch);
 });
 
+test("createWorkspace leaves the new branch with no upstream", async () => {
+	// Cutting from a remote-tracking base would, by git's default (`autoSetupMerge=true`), set the branch's
+	// upstream to `origin/main` — pointing the workspace terminal's `git push`/`git pull` at the *base*
+	// branch. `--no-track` is what keeps the upstream unset until the user pushes the branch themselves.
+	const remoteRepo = join(dataDir, "remote.git");
+	git(repo, "init", "--bare", remoteRepo);
+	git(repo, "remote", "add", "origin", remoteRepo);
+	git(repo, "push", "origin", "main");
+	git(repo, "fetch", "origin");
+
+	const ws = await createWorkspace("p1", undefined, "origin/main");
+	expect(gitOut(repo, "config", "--get", `branch.${ws.branch}.merge`)).toBe("");
+	expect(gitOut(repo, "config", "--get", `branch.${ws.branch}.remote`)).toBe("");
+	// Only the *upstream* is withheld — the branch still starts at the base's tip.
+	expect(gitOut(ws.worktreePath, "rev-parse", "HEAD")).toBe(
+		gitOut(repo, "rev-parse", "origin/main"),
+	);
+});
+
 test("listExistingWorktrees shows unattached branch and detached checkouts only", async () => {
 	const external = join(dataDir, "existing auth checkout");
 	git(repo, "worktree", "add", external, "-b", "feature/auth", "main");
