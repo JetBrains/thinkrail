@@ -126,6 +126,13 @@
 	--accent: #8dff4f;
 }
 
+/* Light theme: the hero logo (title) and the JetBrains InnovationHub tag use dark-primary
+   (--control-primary-bg-hovered = #59d915) instead of the hero's light-primary accent. */
+[data-theme="light"] .hero-title,
+[data-theme="light"] .hero-kicker .pill-accent {
+	--accent: var(--control-primary-bg-hovered);
+}
+
 [data-theme="gruvbox"] {
 	--chrome: #282828;
 	--editor-bg: #1d2021;
