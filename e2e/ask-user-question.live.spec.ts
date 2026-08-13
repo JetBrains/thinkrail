@@ -62,7 +62,28 @@ test("single-select: focus, roving keys, and Enter resolve the tool", {
 	await page.keyboard.press("Space");
 	await expect(options.nth(1)).toHaveAttribute("data-selected", "true");
 	await expect(card.getByTestId("ask-submit")).toBeEnabled();
+
+	// Navigating THROUGH Other must not spend the answer: End lands in its input ready to type, but it is
+	// typed text — never focus — that makes Other the pick, so the chosen row survives the round trip.
+	await page.keyboard.press("End");
+	await expect(card.getByTestId("ask-custom")).toBeFocused();
+	await expect(card.getByTestId("ask-custom-row")).toHaveAttribute("data-selected", "false");
+	await expect(options.nth(1)).toHaveAttribute("data-selected", "true");
+	await page.keyboard.press("ArrowUp");
+	await expect(options.last()).toBeFocused();
+	await expect(card.getByTestId("ask-custom-row")).toHaveAttribute("data-selected", "false");
+	await expect(options.nth(1)).toHaveAttribute("data-selected", "true");
+	await expect(card.getByTestId("ask-submit")).toBeEnabled();
+
+	// Back onto the chosen row (Home, then one step down — option count is agent-authored) and confirm.
+	await page.keyboard.press("Home");
+	await page.keyboard.press("ArrowDown");
+	await expect(options.nth(1)).toBeFocused();
 	await page.keyboard.press("Enter");
+
+	// Answering unmounts the row that held focus, so the composer takes it back — the next keystroke is a
+	// message, not a keypress into `<body>`.
+	await expect(page.getByTestId("chat-input")).toBeFocused();
 
 	// The record marks EXACTLY the chosen row selected (every option renders in the record, so a plain
 	// text-contains assertion would pass vacuously) — and it's the second row, selected by keyboard.
@@ -196,14 +217,16 @@ test("freeform: a typed answer via 'Type your own answer' resolves the tool", {
 	await expect(card).toBeVisible({ timeout: 90_000 });
 
 	// Every question offers the free-text row; Up from the first authored choice wraps directly into its
-	// input and activates it, ready to type. Enter then confirms the non-empty custom answer in place.
+	// input, ready to type. Typing — not the focus that got there — is what makes it the answer. Enter
+	// then confirms the non-empty custom answer in place.
 	const custom = card.getByTestId("ask-custom");
 	await expect(custom).toBeVisible();
 	await expect(card.getByTestId("ask-option").first()).toBeFocused();
 	await page.keyboard.press("ArrowUp");
 	await expect(custom).toBeFocused();
-	await expect(card.getByTestId("ask-custom-row")).toHaveAttribute("data-selected", "true");
+	await expect(card.getByTestId("ask-custom-row")).toHaveAttribute("data-selected", "false");
 	await page.keyboard.type("my-own-e2e-answer");
+	await expect(card.getByTestId("ask-custom-row")).toHaveAttribute("data-selected", "true");
 	await expect(card.getByTestId("ask-submit")).toBeEnabled();
 	await page.keyboard.press("Enter");
 
@@ -225,6 +248,9 @@ test("skip: declining resolves the tool as a skipped record", { tag: "@agent" },
 
 	await page.keyboard.press("Shift+Escape");
 
+	// Declining is a reply too — the card hands focus back rather than stranding it on `<body>`.
+	await expect(page.getByTestId("chat-input")).toBeFocused();
+
 	const skipped = page.locator('[data-testid="ask-user-question"][data-tone="skipped"]').first();
 	await expect(skipped).toBeVisible({ timeout: 30_000 });
 	await expect(skipped).toContainText("skipped");
@@ -245,6 +271,17 @@ test("multi-question: page arrows, Tab-to-note, and Enter reach review before su
 	// Two questions + a synthetic "Review & submit" tab.
 	const tabs = card.getByTestId("ask-tab");
 	await expect(tabs).toHaveCount(3);
+
+	// A real tablist: every chip controls the shared question panel, which the active chip labels.
+	const panel = card.getByRole("tabpanel");
+	await expect(tabs.nth(0)).toHaveAttribute(
+		"aria-controls",
+		(await panel.getAttribute("id")) ?? "",
+	);
+	await expect(panel).toHaveAttribute(
+		"aria-labelledby",
+		(await tabs.nth(0).getAttribute("id")) ?? "",
+	);
 
 	// Capture Q1, select its focused choice, then Tab to the explicit Add note control and press Enter.
 	// Shift+Enter keeps a newline; Escape and Enter both finish without losing text and restore focus.
@@ -325,10 +362,10 @@ test("multi-question: page arrows, Tab-to-note, and Enter reach review before su
 			item.locator('[data-testid="ask-review-option"][data-selected="true"]'),
 		).toContainText(labels[0] ?? "");
 	}
-	// Every question answered → both question chips carry their answered marker. The review heading owns
-	// the keyboard cursor, so Enter submits without another Tab traversal.
+	// Every question answered → both question chips carry their answered marker. Review lands the keyboard
+	// on the real Submit button, so Enter submits without another Tab traversal.
 	await expect(card.locator('[data-testid="ask-tab"][data-answered="true"]')).toHaveCount(2);
-	await expect(card.getByTestId("ask-review-title")).toBeFocused();
+	await expect(card.getByTestId("ask-submit")).toBeFocused();
 	await page.keyboard.press("Enter");
 	const record = answeredRecord(page);
 	await expect(record).toBeVisible({ timeout: 60_000 });

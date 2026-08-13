@@ -202,6 +202,19 @@ export function choiceKeyAction(key: string, index: number, count: number): Choi
 	return { type: "none" };
 }
 
+/**
+ * How typed text in the mandatory "Other" row moves the question's state. **Text, never focus, is what
+ * makes Other the answer:** ↑/↓/Home/End wrap *through* the row, so activating on focus would clear a
+ * single-select pick and paint an empty row as chosen just for passing over it. Emptying the field hands
+ * the row back (`deriveAnswer` ignores blank text either way, so a checked-looking empty row is a lie).
+ * Multi-select keeps its explicit checkbox for excluding text it should not submit. Pure.
+ */
+export function customTextPatch(text: string): Partial<QState> {
+	return text.trim()
+		? { customText: text, customActive: true, option: null }
+		: { customText: text, customActive: false };
+}
+
 /** Note editor keys: plain Enter and Escape finish; Shift+Enter stays available for a newline. */
 export function noteKeyAction(
 	key: string,
@@ -225,12 +238,17 @@ export type QuestionFocusTarget =
 	| "non-editing"
 	| "empty-composer"
 	| "draft-composer"
-	| "editing";
+	| "editing"
+	| "modal";
 
 /** Whether attention may move focus for the currently focused surface. Pure policy, DOM adapter below. */
 export function shouldClaimQuestionFocus(target: QuestionFocusTarget): boolean {
 	return target === "none" || target === "non-editing" || target === "empty-composer";
 }
+
+// Tab↔panel wiring ids. Several cards can be on screen at once, so both are qualified by the tool call.
+const panelDomId = (toolCallId: string) => `ask-panel-${toolCallId}`;
+const tabDomId = (toolCallId: string, page: number | "review") => `ask-tab-${toolCallId}-${page}`;
 
 /** A per-mounted-chat, per-tool-call one-shot attention registry (WeakMap lets closed chats disappear). */
 export function createQuestionAttentionClaim(): (scope: object, toolCallId: string) => boolean {
@@ -250,11 +268,19 @@ export function createQuestionAttentionClaim(): (scope: object, toolCallId: stri
 const claimQuestionAttention = createQuestionAttentionClaim();
 // Enough time for a closing Radix menu/focus scope to release focus after it reopens a chat.
 const ATTENTION_SETTLE_FRAMES = 30;
+/**
+ * Surfaces that own focus for as long as they are open — a dialog, a menu, or another choice list (which
+ * includes a *second* questionnaire mid-answer). A card revealing itself behind one never takes focus.
+ */
+const MODAL_SURFACES = '[role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"]';
 
 function focusTargetKind(active: Element | null, card: HTMLElement): QuestionFocusTarget {
 	if (!active || active === document.body) return "none";
 	if (card.contains(active)) return "non-editing";
 	if (!(active instanceof HTMLElement)) return "editing";
+	// An *open* dialog/menu is answered by leaving it alone: its own focus scope would fight back for as
+	// long as the settle loop retries, and an untrapped popover would simply lose focus mid-interaction.
+	if (active.closest(MODAL_SURFACES)) return "modal";
 	if (active.closest(".monaco-editor, .xterm")) return "editing";
 	if (active.isContentEditable || active.closest('[contenteditable="true"]')) return "editing";
 	const control = active.closest("input, textarea, select, iframe");
@@ -390,6 +416,16 @@ export function AskUserQuestionCard({
 
 	const reply = (r: AskUserQuestionResult) => {
 		if (!actions) return;
+		// Answering unmounts the form, and with it whatever the user was standing on — focus would revert to
+		// `<body>` and swallow every following keystroke, right after a keyboard-only questionnaire. So the
+		// composer takes it back, while the card is still mounted, on the two conditions that make it a
+		// hand-off rather than a hijack: the card still holds focus, and that focus is *visible* — the same
+		// `:focus-visible` signal every ring in this card is drawn from, i.e. the user got here by keyboard.
+		// A tap/click answer leaves focus alone, so touch keeps its soft keyboard down.
+		const held = document.activeElement;
+		if (held && cardRef.current?.contains(held) && held.matches(":focus-visible")) {
+			actions.focusComposer();
+		}
 		setSubmitted(true);
 		// Un-latch on a failed send (host rejected the session / transport down) so the user can retry.
 		actions.answerQuestion(toolCallId, r).catch(() => setSubmitted(false));
@@ -450,7 +486,7 @@ export function AskUserQuestionCard({
 		);
 	};
 
-	const confirmCustom = () => confirmQuestion({ ...state, customActive: true, option: null });
+	const confirmCustom = () => confirmQuestion({ ...state, ...customTextPatch(state.customText) });
 
 	const onCardKeyDown = (event: KeyboardEvent<HTMLElement>) => {
 		if (
@@ -500,6 +536,8 @@ export function AskUserQuestionCard({
 						{questions.map((question, i) => (
 							<TabChip
 								key={question.question}
+								id={tabDomId(toolCallId, i)}
+								controls={panelDomId(toolCallId)}
 								label={question.header || `Q${i + 1}`}
 								active={tab === i}
 								answered={answeredIndices.has(i)}
@@ -507,6 +545,8 @@ export function AskUserQuestionCard({
 							/>
 						))}
 						<TabChip
+							id={tabDomId(toolCallId, "review")}
+							controls={panelDomId(toolCallId)}
 							label="Review & submit"
 							active={onReview}
 							answered={false}
@@ -515,19 +555,31 @@ export function AskUserQuestionCard({
 					</div>
 				) : null}
 
-				<div className="flex flex-col gap-md p-md">
+				{/* The questions' shared body IS the tablist's panel. Activation is automatic (a chip's
+				    arrow/click switches page outright), and focus follows into the panel rather than staying
+				    on the chip — the page, not the chip, is what the user came to act on. */}
+				<div
+					{...(multipleQuestions
+						? {
+								role: "tabpanel",
+								id: panelDomId(toolCallId),
+								"aria-labelledby": tabDomId(toolCallId, onReview ? "review" : idx),
+							}
+						: {})}
+					className="flex flex-col gap-md p-md"
+				>
 					{onReview ? (
 						<ReviewView
 							questions={questions}
 							answers={answers}
 							submitEnabled={canSubmit}
 							onJump={setTab}
-							onSubmit={() => reply({ answers, cancelled: false })}
 						/>
 					) : (
 						<QuestionBody
 							question={q}
 							state={state}
+							pageKeys={multipleQuestions}
 							// Picking an authored option deactivates "Other" but keeps its text (cheap to re-activate).
 							onSelect={(label, cursor) =>
 								patch(idx, { cursor, option: label, customActive: false })
@@ -544,10 +596,7 @@ export function AskUserQuestionCard({
 								if (cursor !== state.cursor) patch(idx, { cursor });
 							}}
 							onConfirmChoice={confirmChoice}
-							onCustomText={(text) =>
-								patch(idx, { customText: text, customActive: true, option: null })
-							}
-							onCustomActivate={() => patch(idx, { customActive: true, option: null })}
+							onCustomText={(text) => patch(idx, customTextPatch(text))}
 							onToggleCustom={() => patch(idx, { customActive: !state.customActive })}
 							onConfirmCustom={confirmCustom}
 							onOpenNote={(label, cursor) =>
@@ -592,6 +641,11 @@ export function AskUserQuestionCard({
 								<button
 									type="button"
 									data-testid="ask-submit"
+									// The review page's keyboard landing point is the real Submit control: Enter and
+									// Space activate it natively and AT announces a button, where a paragraph wearing
+									// `aria-keyshortcuts` announced static text. A review with nothing answered has
+									// no Submit to land on and hands the page focus to its "Unanswered" nudge instead.
+									data-ask-page-focus={onReview && canSubmit ? "true" : undefined}
 									onClick={() => reply({ answers, cancelled: false })}
 									disabled={!canSubmit}
 									className="rounded-[var(--radius-md)] bg-control-primary-bg px-md py-1.5 tr-text-action text-control-primary-text outline-none hover:opacity-90 focus-visible:ring-2 focus-visible:ring-primary-soft disabled:cursor-not-allowed disabled:bg-control-disabled-bg disabled:text-control-disabled-text"
@@ -690,11 +744,15 @@ function ComposingCard({ count }: { count: number }) {
 }
 
 function TabChip({
+	id,
+	controls,
 	label,
 	active,
 	answered,
 	onClick,
 }: {
+	id: string;
+	controls: string;
 	label: string;
 	active: boolean;
 	answered: boolean;
@@ -704,6 +762,8 @@ function TabChip({
 		<button
 			type="button"
 			role="tab"
+			id={id}
+			aria-controls={controls}
 			aria-selected={active}
 			tabIndex={active ? 0 : -1}
 			data-testid="ask-tab"
@@ -773,12 +833,12 @@ function ModeHint({
 function QuestionBody({
 	question,
 	state,
+	pageKeys,
 	onSelect,
 	onToggleMulti,
 	onCursor,
 	onConfirmChoice,
 	onCustomText,
-	onCustomActivate,
 	onToggleCustom,
 	onConfirmCustom,
 	onOpenNote,
@@ -787,12 +847,13 @@ function QuestionBody({
 }: {
 	question: AskUserQuestionItem;
 	state: QState;
+	/** Whether ←/→ page across questions here — only a multi-question card advertises them to AT. */
+	pageKeys: boolean;
 	onSelect: (label: string, cursor: number) => void;
 	onToggleMulti: (label: string, cursor: number) => void;
 	onCursor: (cursor: number) => void;
 	onConfirmChoice: (label: string, cursor: number) => void;
 	onCustomText: (text: string) => void;
-	onCustomActivate: () => void;
 	onToggleCustom: () => void;
 	onConfirmCustom: () => void;
 	onOpenNote: (label: string, cursor: number) => void;
@@ -863,9 +924,16 @@ function QuestionBody({
 				</p>
 			</div>
 			<div className={cn("grid gap-sm", anyPreview && "md:grid-cols-2")}>
-				<fieldset
+				{/* A listbox, not a radiogroup: this card's keys ARE the listbox pattern — a roving cursor that
+				    moves without committing, Space to select, Enter to confirm — where a radiogroup's arrows
+				    select as they move. `aria-selected` per row then means what the indicator draws, and each
+				    row is announced with its position in the set. (The mandatory Other row rides inside the
+				    list as a text field; AT tolerates the non-`option` child and announces it for what it is.) */}
+				<div
+					role="listbox"
+					aria-multiselectable={!!question.multiSelect}
 					aria-label={question.question}
-					className="m-0 flex min-w-0 flex-col gap-sm border-0 p-0"
+					className="flex min-w-0 flex-col gap-sm"
 				>
 					{question.options.map((option, index) => {
 						const selected = question.multiSelect
@@ -885,6 +953,7 @@ function QuestionBody({
 									cursor={ownsCursor}
 									pageFocus={ownsCursor && !customOwnsPageFocus}
 									multi={!!question.multiSelect}
+									pageKeys={pageKeys}
 									onFocus={() => onCursor(index)}
 									onKeyDown={(event) => onChoiceKeyDown(event, option.label, index)}
 									onClick={() =>
@@ -948,7 +1017,6 @@ function QuestionBody({
 						active={state.customActive}
 						text={state.customText}
 						pageFocus={question.options.length === 0 || customOwnsPageFocus}
-						onActivate={onCustomActivate}
 						onToggle={onToggleCustom}
 						onText={onCustomText}
 						onMove={(key) => {
@@ -957,7 +1025,7 @@ function QuestionBody({
 						}}
 						onConfirm={onConfirmCustom}
 					/>
-				</fieldset>
+				</div>
 
 				{anyPreview && previewSource?.preview ? (
 					<div
@@ -984,6 +1052,7 @@ function OptionRow({
 	cursor,
 	pageFocus,
 	multi,
+	pageKeys,
 	onFocus,
 	onKeyDown,
 	onClick,
@@ -996,6 +1065,7 @@ function OptionRow({
 	cursor: boolean;
 	pageFocus: boolean;
 	multi: boolean;
+	pageKeys: boolean;
 	onFocus: () => void;
 	onKeyDown: (event: KeyboardEvent<HTMLButtonElement>) => void;
 	onClick: () => void;
@@ -1005,8 +1075,13 @@ function OptionRow({
 		<button
 			ref={buttonRef}
 			type="button"
-			aria-pressed={selected}
-			aria-keyshortcuts="ArrowUp ArrowDown Home End Space Enter ArrowLeft ArrowRight Shift+Escape"
+			// A selectable option, not a toggle button: `aria-pressed` announced an exclusive pick as
+			// "toggle button, pressed", and said nothing about the set it belongs to. `option` +
+			// `aria-selected` inside the listbox is the role pair for a cursor that moves without
+			// committing, and it carries the row's position in the choices with it.
+			role="option"
+			aria-selected={selected}
+			aria-keyshortcuts={`ArrowUp ArrowDown Home End Space Enter${pageKeys ? " ArrowLeft ArrowRight" : ""} Shift+Escape`}
 			tabIndex={cursor ? 0 : -1}
 			data-testid="ask-option"
 			data-selected={selected}
@@ -1051,9 +1126,10 @@ function OptionRow({
 /**
  * The mandatory "Other" choice, styled as one more option row so it reads native: the same indicator as
  * its siblings (radio on single-select, checkbox on multi-select) plus an inline free-text field. The
- * row is a <label>, so clicking anywhere focuses the input; focusing/typing activates it (on
- * single-select that clears the radio pick — exclusive; on multi-select the checked options stay —
- * additive). On multi-select the checkbox itself is a separate toggle, so the typed text can be
+ * row is a <label>, so clicking anywhere focuses the input; **typed text** activates it (on single-select
+ * that clears the radio pick — exclusive; on multi-select the checked options stay — additive), while
+ * mere focus does not: ↑/↓/Home/End wrap through this row, and a pass-over must not spend the answer
+ * (`customTextPatch`). On multi-select the checkbox itself is a separate toggle, so the typed text can be
  * excluded without deleting it.
  */
 function OtherOptionRow({
@@ -1062,7 +1138,6 @@ function OtherOptionRow({
 	active,
 	text,
 	pageFocus,
-	onActivate,
 	onToggle,
 	onText,
 	onMove,
@@ -1073,7 +1148,6 @@ function OtherOptionRow({
 	active: boolean;
 	text: string;
 	pageFocus: boolean;
-	onActivate: () => void;
 	onToggle: () => void;
 	onText: (text: string) => void;
 	onMove: (key: "ArrowUp" | "ArrowDown") => void;
@@ -1094,6 +1168,9 @@ function OtherOptionRow({
 				<button
 					type="button"
 					data-testid="ask-custom-toggle"
+					// State lives in the name rather than `aria-checked`: a real `<input type="checkbox">` here
+					// would become the wrapping <label>'s associated control and steal it from the text field,
+					// and `aria-checked` is not a button's to claim. Crude, but it says the true thing.
 					aria-label={active ? "Exclude your own answer" : "Include your own answer"}
 					onClick={(e) => {
 						// The checkbox purely toggles — never let the label's default (focus the input) re-activate.
@@ -1116,7 +1193,6 @@ function OtherOptionRow({
 				aria-keyshortcuts="ArrowUp ArrowDown Enter Shift+Escape"
 				value={text}
 				placeholder="type your own answer…"
-				onFocus={onActivate}
 				onChange={(event) => onText(event.target.value)}
 				onKeyDown={(event) => {
 					if (
@@ -1194,13 +1270,11 @@ function ReviewView({
 	answers,
 	submitEnabled,
 	onJump,
-	onSubmit,
 }: {
 	questions: AskUserQuestionItem[];
 	answers: AskUserQuestionAnswer[];
 	submitEnabled: boolean;
 	onJump: (index: number) => void;
-	onSubmit: () => void;
 }) {
 	const byIndex = new Map(answers.map((a) => [a.questionIndex, a]));
 	const unanswered = questions.map((q, i) => ({ q, i })).filter(({ i }) => !byIndex.has(i));
@@ -1208,25 +1282,7 @@ function ReviewView({
 		<div className="flex flex-col gap-sm">
 			<div className="flex items-start gap-sm">
 				<MessageCircleQuestion className="mt-0.5 size-4 shrink-0 text-text-muted" />
-				<p
-					tabIndex={-1}
-					data-testid="ask-review-title"
-					data-ask-page-focus="true"
-					aria-keyshortcuts="Enter"
-					onKeyDown={(event) => {
-						if (
-							event.key === "Enter" &&
-							submitEnabled &&
-							!event.altKey &&
-							!event.ctrlKey &&
-							!event.metaKey
-						) {
-							event.preventDefault();
-							onSubmit();
-						}
-					}}
-					className="rounded-[var(--radius-sm)] tr-title-dialog text-text-default outline-none focus-visible:ring-2 focus-visible:ring-primary-soft"
-				>
+				<p data-testid="ask-review-title" className="tr-title-dialog text-text-default">
 					Review your answers
 				</p>
 			</div>
@@ -1242,6 +1298,9 @@ function ReviewView({
 				<button
 					type="button"
 					data-testid="ask-unanswered"
+					// With nothing answered there is no enabled Submit to land on, so the page's keyboard
+					// target is the nudge back to the first gap — Enter goes there rather than nowhere.
+					data-ask-page-focus={submitEnabled ? undefined : "true"}
 					onClick={() => onJump(unanswered[0]?.i ?? 0)}
 					className="self-start rounded-[var(--radius-sm)] text-feedback-warning tr-text-metadata outline-none hover:underline focus-visible:ring-2 focus-visible:ring-primary-soft"
 				>

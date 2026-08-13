@@ -120,15 +120,23 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
 
 - **`ChatActions`** — a React context (provided by `ChatView`, `null` standalone): how a renderer talks
   **back** to the agent without importing store/transport. Today: `answerQuestion(toolCallId, result)` —
-  it rejects when the host refuses (unknown/answered/superseded call), and the caller owns the failure UX.
+  it rejects when the host refuses (unknown/answered/superseded call), and the caller owns the failure UX —
+  plus `focusComposer()`, for a renderer that resolves *itself*: it unmounts the control the user was
+  standing on, and focus would otherwise fall to `<body>` and swallow every following keystroke (the same
+  stranding the history overlay's dismiss refocus avoids). Only the card's own reply path calls it, and
+  only while the card still holds focus.
 - **`askState`** — the questionnaire lifecycle seam: the pure `deriveAskStates(turns, askAnswers)` +
   `AskStatesContext`/`useAskState` (provided by `ChatView`, `null` standalone). The ask tool is **ack +
   terminate** (its tool result is just an ack; the reply arrives later as an `ask-user-answers` message),
   so "answered / superseded / awaiting" is a fact about the transcript, not a tool status — derived once
   per runtime snapshot and consumed by the card via context, keeping it props-driven everywhere else.
   The same seam supplies an opaque **per-mounted-ChatView focus scope**: an awaiting card claims attention
-  once within that scope (so Virtuoso remounts cannot steal focus), while closing/reopening the chat creates
-  a fresh scope and may focus the still-pending question again. It carries no store or transport state.
+  once within that scope (so Virtuoso remounts cannot steal focus), while a fresh mount creates a new scope
+  and may focus the still-pending question again. "Fresh mount" is broader than closing/reopening the chat:
+  `CenterTabs` renders only the active tab's body, so **every switch back to the chat tab** — from a file,
+  a diff, another chat — is a new scope and re-claims attention for a question still waiting. That is the
+  intended read (you returned to the chat that needs you), not just a side effect. It carries no store or
+  transport state.
 - **Hydration** (`hydrate.ts`) — the pure
   `messagesToRuntime(TranscriptMessage[], lastSettlement?)` converter (read-side counterpart of the event
   reducer): rebuilds `{ turns, toolResults, askAnswers, turnIdByMessageIndex }` (a `HydratedRuntime`) from a

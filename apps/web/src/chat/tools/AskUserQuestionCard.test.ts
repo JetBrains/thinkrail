@@ -3,6 +3,7 @@ import type { AskUserQuestionAnswer, AskUserQuestionItem } from "@thinkrail/cont
 import {
 	choiceKeyAction,
 	createQuestionAttentionClaim,
+	customTextPatch,
 	deriveAnswer,
 	deriveRecapState,
 	noteKeyAction,
@@ -93,12 +94,37 @@ describe("keyboard interaction", () => {
 		expect(claim(reopenedMount, "ask-1")).toBe(true);
 	});
 
-	it("focuses from inert/empty-composer targets but preserves active editing", () => {
+	it("focuses from inert/empty-composer targets but preserves active editing and open modals", () => {
 		expect(shouldClaimQuestionFocus("none")).toBe(true);
 		expect(shouldClaimQuestionFocus("non-editing")).toBe(true);
 		expect(shouldClaimQuestionFocus("empty-composer")).toBe(true);
 		expect(shouldClaimQuestionFocus("draft-composer")).toBe(false);
 		expect(shouldClaimQuestionFocus("editing")).toBe(false);
+		expect(shouldClaimQuestionFocus("modal")).toBe(false);
+	});
+});
+
+describe("customTextPatch", () => {
+	it("typed text claims the answer, taking it off the authored pick (exclusive single-select)", () => {
+		expect(customTextPatch("mine")).toEqual({
+			customText: "mine",
+			customActive: true,
+			option: null,
+		});
+	});
+
+	it("does NOT activate on blank text, so passing through Other keeps the current pick", () => {
+		// The ↑/↓/Home/End cursor wraps through the Other row; activating there would clear `option` and
+		// paint an empty row as chosen. Only text does that — and emptying the field hands the row back.
+		expect(customTextPatch("")).toEqual({ customText: "", customActive: false });
+		expect(customTextPatch("   ")).toEqual({ customText: "   ", customActive: false });
+	});
+
+	it("round-trips with deriveAnswer: blank text is never an answer, typed text always is", () => {
+		const passedOver = state({ option: "A", ...customTextPatch("") });
+		expect(deriveAnswer(q(), 0, passedOver)).toMatchObject({ kind: "option", answer: "A" });
+		const typed = state({ option: "A", ...customTextPatch("mine") });
+		expect(deriveAnswer(q(), 0, typed)).toMatchObject({ kind: "custom", answer: "mine" });
 	});
 });
 

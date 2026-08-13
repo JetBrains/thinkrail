@@ -588,6 +588,7 @@ export default function ChatView({
 				getTransport()
 					.request("session.answerQuestion", { sessionId, toolCallId, result })
 					.then(() => undefined),
+			focusComposer: () => composerRef.current?.refocus(),
 		}),
 		[sessionId],
 	);

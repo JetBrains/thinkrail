@@ -49,23 +49,45 @@ registration runs once when the chat module mounts. Unregistered tools fall back
   - **Attention without hostile focus theft** — once its arguments are complete, an awaiting card is
     revealed with an assertive visual “needs you” treatment plus a polite assistive-tech announcement.
     Per active-chat mount it focuses the selected choice (including Other) or first authored choice once;
-    a virtualized remount never reclaims focus, while deliberately reopening the waiting chat does. It
-    reveals but does **not** move focus away from Monaco, xterm, content-editable/form fields, or a non-empty
-    composer draft; the empty composer left focused after Send is safe to hand off.
+    a virtualized remount never reclaims focus, while a fresh `ChatView` mount does (see `chat/SPEC.md` —
+    that means any switch back to the chat tab, not only reopening the chat). It reveals but does **not**
+    move focus away from Monaco, xterm, content-editable/form fields, a non-empty composer draft, or a
+    surface that **owns focus while it is open** — a dialog, a menu, another choice list (a second
+    questionnaire mid-answer): out-waiting a modal focus scope either loses the fight or yanks an untrapped
+    popover out from under the user, so the card does not enter it. The empty
+    composer left focused after Send is safe to hand off. The mirror image holds on the way out: replying
+    or declining unmounts the focused control, so the card hands focus **back to the composer**
+    (`ChatActions.focusComposer`) instead of stranding it on `<body>` — but only when it still holds focus
+    *and* that focus is `:focus-visible`, the platform's own "arrived by keyboard" signal (the one every
+    ring in this card is drawn from). A tap/click answer leaves focus alone, so touch keeps its keyboard down.
   - **Claude-style local keyboard selector** — one authored choice is in the Tab order; Up/Down wraps
     through every authored choice **and Other**, Home/End jumps to the first/Other target, Space
     selects/toggles an authored choice, and Enter confirms (single-select chooses the focused option;
     multi-select confirms its non-empty set), advancing to the next question/review or directly submitting
-    a one-question call. Reaching Other focuses and activates its text input immediately; typing can start
-    at once, Up/Down leaves or wraps, and Enter confirms non-empty text. The review heading is the final
-    page's keyboard landing point and Enter there submits the batch. On multi-question cards Left/Right
-    moves without wrapping across question pages and the final review page; text inputs retain those keys.
+    a one-question call. Reaching Other focuses its text input, ready to type — but **text, not focus, is
+    what makes Other the answer** (`customTextPatch`): the cursor wraps *through* that row, so activating on
+    arrival would clear a single-select pick and paint an empty row as chosen just for passing over it.
+    Typing claims the answer (exclusively on single-select, additively on multi-select), emptying the field
+    hands it back, multi-select keeps its explicit checkbox for excluding text it should not submit, Up/Down
+    leaves or wraps, and Enter confirms non-empty text. The **Submit button** is the review page's keyboard
+    landing point — Enter/Space activate the real control natively, where a heading wearing
+    `aria-keyshortcuts` announced static text; a review with nothing answered has no enabled Submit and
+    lands on its “Unanswered” nudge instead. On multi-question cards Left/Right moves without wrapping
+    across question pages and the final review page; text inputs retain those keys. The question chips are
+    a real `tablist` over the shared question `tabpanel` (each chip `aria-controls` it, the active chip
+    labels it) with **automatic activation** — an arrow/click switches the page outright and focus follows
+    *into* the panel rather than staying on the chip, since the page is what the user came to act on.
     A selected single-choice note remains an explicit secondary control: Tab reaches Add/Edit note and
     Enter opens it. In the editor Enter finishes and returns focus to the choice, Shift+Enter remains the
     multiline escape hatch, and plain Escape also returns **without discarding typed text**. `Shift+Escape`
     is the deliberate card-local skip gesture; plain Escape outside a note never declines. Tab still reaches
-    Other, Skip, and footer actions. A compact visible shortcut legend + semantic selected state make the
-    interaction discoverable. Bare-letter/number shortcuts and global chords are deliberately absent so
+    Other, Skip, and footer actions. A compact visible shortcut legend makes the interaction discoverable,
+    and the choices are a **`listbox` of `option`s with `aria-selected`** — never `aria-pressed`, which
+    announced an exclusive pick as a toggle button and said nothing about the set. Listbox is the pattern
+    whose *keys* these are (a cursor that moves without committing, Space to select, Enter to confirm),
+    where a radiogroup's arrows select as they move; `aria-multiselectable` carries single vs multi, and
+    each row is announced with its position in the choices.
+    Bare-letter/number shortcuts and global chords are deliberately absent so
     browser extensions, custom text, and explicit decline stay safe.
   - **Recommended-reason affordance** — a recommended option (label suffix `(Recommended)` **or** a
     non-empty `recommendedReason` — a reason *implies* recommended, defensively) renders its rationale
