@@ -47,14 +47,20 @@ registration runs once when the chat module mounts. Unregistered tools fall back
     once no longer awaiting), since react-virtuoso unmounts off-screen rows. This is the pattern the
     activity fold's expansion state reuses.
   - **Attention without hostile focus theft** — once its arguments are complete, an awaiting card is
-    revealed with an assertive visual “needs you” treatment plus a polite assistive-tech announcement.
+    revealed with an assertive visual “needs you” treatment plus a polite assistive-tech announcement. The
+    spoken half is an **always-mounted live region filled a frame later by the same one-shot claim**: a
+    region inserted together with its text is announced unreliably, and a virtualized remount must not
+    re-announce a question the user has already been told about.
     Per active-chat mount it focuses the selected choice (including Other) or first authored choice once;
     a virtualized remount never reclaims focus, while a fresh `ChatView` mount does (see `chat/SPEC.md` —
     that means any switch back to the chat tab, not only reopening the chat). It reveals but does **not**
     move focus away from Monaco, xterm, content-editable/form fields, a non-empty composer draft, or a
     surface that **owns focus while it is open** — a dialog, a menu, another choice list (a second
     questionnaire mid-answer): out-waiting a modal focus scope either loses the fight or yanks an untrapped
-    popover out from under the user, so the card does not enter it. The empty
+    popover out from under the user, so the card does not enter it. A **coarse pointer never gives up
+    focus** at all: on a phone there is no keyboard flow to hand off to, and focusing a row (the Other input
+    especially) raises the soft keyboard over someone who was reading — the reveal + scroll-into-view *are*
+    the attention treatment there. (Page changes are exempt: those follow a tap the user just made.) The empty
     composer left focused after Send is safe to hand off. The mirror image holds on the way out: replying
     or declining unmounts the focused control, so the card hands focus **back to the composer**
     (`ChatActions.focusComposer`) instead of stranding it on `<body>` — but only when it still holds focus
@@ -77,10 +83,17 @@ registration runs once when the chat module mounts. Unregistered tools fall back
     a real `tablist` over the shared question `tabpanel` (each chip `aria-controls` it, the active chip
     labels it) with **automatic activation** — an arrow/click switches the page outright and focus follows
     *into* the panel rather than staying on the chip, since the page is what the user came to act on.
+    **A confirm gesture is never a silent no-op**: Enter with nothing to confirm (an empty multi-select set,
+    an untouched Other row with no pick above it) says “Choose an option first” beside the action it was
+    aiming at, clearing as soon as the question becomes answerable. From an Other row that *does* have a
+    pick above it, Enter confirms that pick — the gesture always means "confirm what this question has".
     A selected single-choice note remains an explicit secondary control: Tab reaches Add/Edit note and
-    Enter opens it. In the editor Enter finishes and returns focus to the choice, Shift+Enter remains the
-    multiline escape hatch, and plain Escape also returns **without discarding typed text**. `Shift+Escape`
-    is the deliberate card-local skip gesture; plain Escape outside a note never declines. Tab still reaches
+    Enter opens it (the legend only promises `Tab note` once a choice exists to hang one on). In the editor
+    Enter finishes and returns focus to the choice, Shift+Enter remains the multiline escape hatch, and
+    Escape also returns **without discarding typed text** — **including `Shift+Escape`**, which the open
+    editor consumes rather than letting the card's skip gesture throw away the note mid-sentence.
+    `Shift+Escape` is otherwise the deliberate card-local skip; plain Escape outside a note never declines.
+    Tab still reaches
     Other, Skip, and footer actions. A compact visible shortcut legend makes the interaction discoverable,
     and the choices are a **`listbox` of `option`s with `aria-selected`** — never `aria-pressed`, which
     announced an exclusive pick as a toggle button and said nothing about the set. Listbox is the pattern

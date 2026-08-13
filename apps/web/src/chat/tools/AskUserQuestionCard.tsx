@@ -215,14 +215,18 @@ export function customTextPatch(text: string): Partial<QState> {
 		: { customText: text, customActive: false };
 }
 
-/** Note editor keys: plain Enter and Escape finish; Shift+Enter stays available for a newline. */
+/**
+ * Note editor keys: Enter and Escape finish; Shift+Enter stays available for a newline. **Escape finishes
+ * with Shift held too** — the card reads `Shift+Escape` as "skip the questionnaire", and the innermost
+ * open thing must close first, or the gesture would throw away the note the user is still typing.
+ */
 export function noteKeyAction(
 	key: string,
 	shiftKey: boolean,
 	isComposing: boolean,
 ): "finish" | "none" {
 	if (isComposing) return "none";
-	if ((key === "Escape" && !shiftKey) || (key === "Enter" && !shiftKey)) return "finish";
+	if (key === "Escape" || (key === "Enter" && !shiftKey)) return "finish";
 	return "none";
 }
 
@@ -241,8 +245,18 @@ export type QuestionFocusTarget =
 	| "editing"
 	| "modal";
 
-/** Whether attention may move focus for the currently focused surface. Pure policy, DOM adapter below. */
-export function shouldClaimQuestionFocus(target: QuestionFocusTarget): boolean {
+/**
+ * Whether attention may move focus, given what holds it and what kind of pointer this is. Pure policy,
+ * DOM adapters below. A **coarse pointer never gives up focus**: on a phone there is no keyboard flow to
+ * hand off to, and focusing a row (the Other input especially) raises the soft keyboard and shoves the
+ * viewport at someone who was reading. The reveal + scroll-into-view still happen — that is the whole
+ * attention treatment on touch. (Page changes are exempt: those *follow* a tap the user just made.)
+ */
+export function shouldClaimQuestionFocus(
+	target: QuestionFocusTarget,
+	coarsePointer: boolean,
+): boolean {
+	if (coarsePointer) return false;
 	return target === "none" || target === "non-editing" || target === "empty-composer";
 }
 
@@ -289,6 +303,11 @@ function focusTargetKind(active: Element | null, card: HTMLElement): QuestionFoc
 		return control.value.length === 0 ? "empty-composer" : "draft-composer";
 	}
 	return "editing";
+}
+
+/** Touch/pen as the *primary* pointer — i.e. a phone or tablet, not a laptop that happens to have a screen. */
+function hasCoarsePointer(): boolean {
+	return window.matchMedia("(pointer: coarse)").matches;
 }
 
 function isTextEntryTarget(target: EventTarget | null): boolean {
@@ -358,12 +377,23 @@ export function AskUserQuestionCard({
 	const [submitted, setSubmitted] = useState(
 		() => cardStateCache.get(toolCallId)?.submitted ?? false,
 	);
+	// Set once by the attention claim below (never cached): the spoken half of "your input is needed".
+	const [announced, setAnnounced] = useState(false);
+	// A confirm gesture that had nothing to confirm — shown briefly so Enter is never a silent no-op.
+	const [needsChoice, setNeedsChoice] = useState(false);
 	const previousTab = useRef(tab);
 
 	useEffect(() => {
 		if (awaiting) cardStateCache.set(toolCallId, { states, tab, submitted });
 		else cardStateCache.delete(toolCallId);
 	}, [toolCallId, awaiting, states, tab, submitted]);
+
+	// The "pick something first" nudge is transient: it answers one keystroke, then gets out of the way.
+	useEffect(() => {
+		if (!needsChoice) return;
+		const timer = setTimeout(() => setNeedsChoice(false), 2500);
+		return () => clearTimeout(timer);
+	}, [needsChoice]);
 
 	// A user-driven page change hands focus to that page's selected/first choice (or review heading).
 	// Initial attention is handled separately below so its focus-theft guard can make the decision.
@@ -387,7 +417,7 @@ export function AskUserQuestionCard({
 			const card = cardRef.current;
 			if (!card) return;
 			const kind = focusTargetKind(document.activeElement, card);
-			if (!shouldClaimQuestionFocus(kind)) return;
+			if (!shouldClaimQuestionFocus(kind, hasCoarsePointer())) return;
 			focusQuestionAttention(card);
 			if (card.contains(document.activeElement)) return;
 			// A menu's modal focus scope can reject focus until its close finishes. Retry only inside this
@@ -397,6 +427,10 @@ export function AskUserQuestionCard({
 		};
 		frame = requestAnimationFrame(() => {
 			if (!claimQuestionAttention(focusScope, toolCallId)) return;
+			// The same one-shot governs the spoken announcement: filling an already-mounted live region a
+			// frame after reveal is what makes it announce at all (a region inserted *with* its text is
+			// unreliable), and spending the claim here means a Virtuoso remount cannot say it again.
+			setAnnounced(true);
 			const card = cardRef.current;
 			if (!card) return;
 			card.scrollIntoView({ block: "nearest" });
@@ -469,10 +503,18 @@ export function AskUserQuestionCard({
 	const canSubmit =
 		!!actions && (onReview || !multipleQuestions ? answers.length > 0 : answeredIndices.has(idx));
 
+	// Confirm advances (or submits) only what it can actually derive; the write is the *value* the decision
+	// was made from, not a `prev => …` update, so what lands can never disagree with what we advanced on.
 	const confirmQuestion = (nextState: QState) => {
 		const nextStates = { ...states, [idx]: nextState };
 		const nextAnswers = deriveAnswers(questions, nextStates);
-		if (!nextAnswers.some((answer) => answer.questionIndex === idx)) return;
+		if (!nextAnswers.some((answer) => answer.questionIndex === idx)) {
+			// Nothing to confirm — an empty multi-select set, or Enter in an untouched Other row. Say so
+			// instead of swallowing the keystroke, and keep the partial state exactly as the user left it.
+			setNeedsChoice(true);
+			return;
+		}
+		setNeedsChoice(false);
 		setStates(nextStates);
 		if (multipleQuestions) setTab(Math.min(idx + 1, reviewTab));
 		else reply({ answers: nextAnswers, cancelled: false });
@@ -517,7 +559,7 @@ export function AskUserQuestionCard({
 
 	return (
 		<div className="flex flex-col gap-xs motion-safe:animate-reveal">
-			<AttentionLine />
+			<AttentionLine announced={announced} />
 			<section
 				ref={cardRef}
 				data-testid="ask-user-question"
@@ -617,14 +659,31 @@ export function AskUserQuestionCard({
 							question={onReview ? undefined : q}
 							review={onReview}
 							multipleQuestions={multipleQuestions}
+							// Read off the derived answers rather than re-deriving "is a valid option picked?":
+							// `kind === "option"` is exactly the state that renders an Add/Edit note control.
+							noteAvailable={
+								!onReview && answers.some((a) => a.questionIndex === idx && a.kind === "option")
+							}
 						/>
 						<div className="flex items-center justify-end gap-md">
+							{/* Sits beside the action the keystroke was aiming at, so the answer to "why did
+							    nothing happen?" is where the user is already looking. It clears the moment the
+							    question becomes answerable (the complaint is stale), and times out otherwise. */}
+							{needsChoice && !onReview && !answeredIndices.has(idx) ? (
+								<span
+									role="status"
+									data-testid="ask-needs-choice"
+									className="shrink-0 whitespace-nowrap text-feedback-warning tr-text-metadata"
+								>
+									Choose an option first
+								</span>
+							) : null}
 							<button
 								type="button"
 								data-testid="ask-skip"
 								onClick={() => reply({ answers: [], cancelled: true })}
 								disabled={!actions}
-								className="rounded-[var(--radius-sm)] px-xs text-text-muted tr-text-ui outline-none hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary-soft disabled:text-control-disabled-text"
+								className="shrink-0 rounded-[var(--radius-sm)] px-xs text-text-muted tr-text-ui outline-none hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary-soft disabled:text-control-disabled-text"
 							>
 								Skip
 							</button>
@@ -633,7 +692,7 @@ export function AskUserQuestionCard({
 									type="button"
 									data-testid="ask-continue"
 									onClick={() => setTab(Math.min(tab + 1, reviewTab))}
-									className="rounded-[var(--radius-md)] bg-control-primary-bg px-md py-1.5 tr-text-action text-control-primary-text outline-none hover:opacity-90 focus-visible:ring-2 focus-visible:ring-primary-soft"
+									className="shrink-0 whitespace-nowrap rounded-[var(--radius-md)] bg-control-primary-bg px-md py-1.5 tr-text-action text-control-primary-text outline-none hover:opacity-90 focus-visible:ring-2 focus-visible:ring-primary-soft"
 								>
 									Next →
 								</button>
@@ -648,7 +707,7 @@ export function AskUserQuestionCard({
 									data-ask-page-focus={onReview && canSubmit ? "true" : undefined}
 									onClick={() => reply({ answers, cancelled: false })}
 									disabled={!canSubmit}
-									className="rounded-[var(--radius-md)] bg-control-primary-bg px-md py-1.5 tr-text-action text-control-primary-text outline-none hover:opacity-90 focus-visible:ring-2 focus-visible:ring-primary-soft disabled:cursor-not-allowed disabled:bg-control-disabled-bg disabled:text-control-disabled-text"
+									className="shrink-0 whitespace-nowrap rounded-[var(--radius-md)] bg-control-primary-bg px-md py-1.5 tr-text-action text-control-primary-text outline-none hover:opacity-90 focus-visible:ring-2 focus-visible:ring-primary-soft disabled:cursor-not-allowed disabled:bg-control-disabled-bg disabled:text-control-disabled-text"
 								>
 									Submit
 								</button>
@@ -661,17 +720,22 @@ export function AskUserQuestionCard({
 	);
 }
 
-/** The active card's visual + assistive-tech announcement that this turn now needs the user. */
-function AttentionLine() {
+/**
+ * The active card's visual + assistive-tech announcement that this turn now needs the user. The visible
+ * line is plain text and always renders; the spoken half is a **separate, always-mounted live region**
+ * that the attention claim fills one frame later, exactly once per mounted chat — so it is announced when
+ * it appears (a live region inserted together with its text often is not) and stays quiet through every
+ * Virtuoso remount as the user scrolls past a question they already know about.
+ */
+function AttentionLine({ announced }: { announced: boolean }) {
 	return (
-		<div
-			role="status"
-			aria-live="polite"
-			className="flex items-center gap-xs text-primary tr-text-action"
-		>
+		<div className="flex items-center gap-xs text-primary tr-text-action">
 			<MessageCircleQuestion className="size-3.5 shrink-0" />
 			<span>Your input is needed</span>
 			<span className="text-text-muted tr-text-metadata">· Agent is waiting</span>
+			<span role="status" aria-live="polite" className="sr-only">
+				{announced ? "Your input is needed — the agent is waiting." : ""}
+			</span>
 		</div>
 	);
 }
@@ -793,10 +857,13 @@ function ModeHint({
 	question,
 	review,
 	multipleQuestions,
+	noteAvailable,
 }: {
 	question: AskUserQuestionItem | undefined;
 	review: boolean;
 	multipleQuestions: boolean;
+	/** Whether an Add/Edit note control is actually on this page — it only exists once a choice is picked. */
+	noteAvailable: boolean;
 }) {
 	if (review) {
 		return (
@@ -823,7 +890,7 @@ function ModeHint({
 			<span>↑↓ move incl. Other</span>
 			<span>· Space {multiSelect ? "toggle" : "select"}</span>
 			<span>· Enter confirm</span>
-			<span>· Tab {!multiSelect ? "note/actions" : "actions"}</span>
+			<span>· Tab {noteAvailable ? "note/actions" : "actions"}</span>
 			<span>· Shift+Esc skip</span>
 			{multipleQuestions ? <span>· ←→ questions</span> : null}
 		</span>
@@ -865,6 +932,10 @@ function QuestionBody({
 	const focusNoteAfterRender = useRef(false);
 	const otherIndex = question.options.length;
 	const choiceCount = otherIndex + 1;
+	// The roving Tab stop stays on an **authored** choice even while focus sits in the Other input (which is
+	// natively tabbable and needs no stop of its own) — otherwise the choice list would have no tab stop at
+	// all and Tab could never get back into it. Clamped because a card can mount mid-stream, with a cached
+	// cursor from more options than the final args carry.
 	const cursor = Math.min(Math.max(state.cursor, 0), Math.max(otherIndex - 1, 0));
 	const customOwnsPageFocus =
 		state.customActive && (!question.multiSelect || state.multi.length === 0);
@@ -1206,7 +1277,10 @@ function OtherOptionRow({
 						onMove(event.key);
 						return;
 					}
-					if (event.key === "Enter" && !event.nativeEvent.isComposing && text.trim().length > 0) {
+					// Enter confirms whatever the question currently has: the typed text, or — from an
+					// untouched Other row — the choice still selected above it. Unconditional, so the card
+					// answers the keystroke either way (with nothing to confirm it says so).
+					if (event.key === "Enter" && !event.nativeEvent.isComposing) {
 						event.preventDefault();
 						onConfirm();
 					}

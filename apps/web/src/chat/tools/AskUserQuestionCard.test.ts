@@ -5,6 +5,7 @@ import {
 	createQuestionAttentionClaim,
 	customTextPatch,
 	deriveAnswer,
+	deriveAnswers,
 	deriveRecapState,
 	noteKeyAction,
 	parseQuestions,
@@ -80,8 +81,14 @@ describe("keyboard interaction", () => {
 		expect(noteKeyAction("Enter", false, false)).toBe("finish");
 		expect(noteKeyAction("Escape", false, false)).toBe("finish");
 		expect(noteKeyAction("Enter", true, false)).toBe("none");
-		expect(noteKeyAction("Escape", true, false)).toBe("none");
 		expect(noteKeyAction("Enter", false, true)).toBe("none");
+	});
+
+	it("closes the note on Shift+Escape rather than letting it skip the questionnaire", () => {
+		// The card reads Shift+Escape as "decline"; the open editor must consume it first, or the gesture
+		// throws away the note being typed along with every answer.
+		expect(noteKeyAction("Escape", true, false)).toBe("finish");
+		expect(noteKeyAction("Escape", true, true)).toBe("none"); // still never mid-composition
 	});
 
 	it("claims attention once per tool call and mounted-chat scope", () => {
@@ -95,12 +102,18 @@ describe("keyboard interaction", () => {
 	});
 
 	it("focuses from inert/empty-composer targets but preserves active editing and open modals", () => {
-		expect(shouldClaimQuestionFocus("none")).toBe(true);
-		expect(shouldClaimQuestionFocus("non-editing")).toBe(true);
-		expect(shouldClaimQuestionFocus("empty-composer")).toBe(true);
-		expect(shouldClaimQuestionFocus("draft-composer")).toBe(false);
-		expect(shouldClaimQuestionFocus("editing")).toBe(false);
-		expect(shouldClaimQuestionFocus("modal")).toBe(false);
+		expect(shouldClaimQuestionFocus("none", false)).toBe(true);
+		expect(shouldClaimQuestionFocus("non-editing", false)).toBe(true);
+		expect(shouldClaimQuestionFocus("empty-composer", false)).toBe(true);
+		expect(shouldClaimQuestionFocus("draft-composer", false)).toBe(false);
+		expect(shouldClaimQuestionFocus("editing", false)).toBe(false);
+		expect(shouldClaimQuestionFocus("modal", false)).toBe(false);
+	});
+
+	it("never moves focus on a coarse pointer, whatever holds it (no soft keyboard on reveal)", () => {
+		expect(shouldClaimQuestionFocus("none", true)).toBe(false);
+		expect(shouldClaimQuestionFocus("non-editing", true)).toBe(false);
+		expect(shouldClaimQuestionFocus("empty-composer", true)).toBe(false);
 	});
 });
 
@@ -237,6 +250,21 @@ describe("deriveAnswer", () => {
 			selected: ["A"],
 		});
 		expect(deriveAnswer(q({ multiSelect: true }), 0, state({ multi: ["Gone"] }))).toBeNull();
+	});
+});
+
+describe("deriveAnswers", () => {
+	const questions = [q({ question: "First?" }), q({ question: "Second?", multiSelect: true })];
+
+	it("collects only the answerable questions, keyed by their own index", () => {
+		expect(deriveAnswers(questions, { 1: state({ multi: ["B"] }) })).toEqual([
+			{ questionIndex: 1, question: "Second?", kind: "multi", answer: null, selected: ["B"] },
+		]);
+	});
+
+	it("treats a missing entry as a fresh state, so a sparse map is never a partial answer", () => {
+		expect(deriveAnswers(questions, {})).toEqual([]);
+		expect(deriveAnswers(questions, { 0: state({ option: "A" }) })).toHaveLength(1);
 	});
 });
 

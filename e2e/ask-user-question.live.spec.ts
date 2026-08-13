@@ -50,6 +50,8 @@ test("single-select: focus, roving keys, and Enter resolve the tool", {
 	await expect(options.first()).toBeFocused();
 	await expect(card.getByTestId("ask-shortcuts")).toContainText("↑↓ move");
 	await expect(card.getByTestId("ask-shortcuts")).toContainText("Enter confirm");
+	// Nothing is picked yet, so there is no note control to promise — the legend offers "Tab actions".
+	await expect(card.getByTestId("ask-shortcuts")).toContainText("Tab actions");
 
 	// Submit is disabled until something is chosen (scenario "nothing selected"), Skip is always available.
 	await expect(card.getByTestId("ask-submit")).toBeDisabled();
@@ -146,10 +148,19 @@ test("multi-select: several options can be checked and submitted", { tag: "@agen
 
 	const options = card.getByTestId("ask-option");
 	await expect(options.first()).toBeFocused();
+
+	// Confirming an empty multi-select set has nothing to confirm — the card says so rather than
+	// swallowing the keystroke, and stays open with the set untouched.
+	await page.keyboard.press("Enter");
+	await expect(card.getByTestId("ask-needs-choice")).toBeVisible();
+	await expect(card.locator('[data-testid="ask-option"][data-selected="true"]')).toHaveCount(0);
+	await expect(card).toBeVisible();
+
 	await page.keyboard.press("Space");
 	await page.keyboard.press("ArrowDown");
 	await page.keyboard.press("Space");
 	await expect(card.locator('[data-testid="ask-option"][data-selected="true"]')).toHaveCount(2);
+	await expect(card.getByTestId("ask-needs-choice")).toHaveCount(0);
 
 	// Multi-select Enter confirms the built set; it does not toggle the cursor again.
 	await page.keyboard.press("Enter");
@@ -284,7 +295,8 @@ test("multi-question: page arrows, Tab-to-note, and Enter reach review before su
 	);
 
 	// Capture Q1, select its focused choice, then Tab to the explicit Add note control and press Enter.
-	// Shift+Enter keeps a newline; Escape and Enter both finish without losing text and restore focus.
+	// Shift+Enter keeps a newline; Shift+Escape, Escape and Enter all finish the editor without losing
+	// text and restore focus to the choice — and Shift+Escape stops there rather than skipping the card.
 	const questionTexts: string[] = [];
 	const optionLabels: string[][] = [];
 	await expect(tabs.nth(0)).toHaveAttribute("data-active", "true");
@@ -304,6 +316,18 @@ test("multi-question: page arrows, Tab-to-note, and Enter reach review before su
 	await page.keyboard.type("first line");
 	await page.keyboard.press("Shift+Enter");
 	await page.keyboard.type("second line");
+
+	// Shift+Escape is the card's skip gesture, but an open editor consumes it first — closing the note,
+	// never throwing away the questionnaire and the text being typed into it.
+	await page.keyboard.press("Shift+Escape");
+	await expect(note).toHaveCount(0);
+	await expect(card).toBeVisible();
+	await expect(firstChoice).toBeFocused();
+	await page.keyboard.press("Tab");
+	await expect(noteToggle).toBeFocused();
+	await page.keyboard.press("Enter");
+	await expect(note).toHaveValue("first line\nsecond line");
+
 	await page.keyboard.press("Escape");
 	await expect(firstChoice).toBeFocused();
 	await expect(note).toHaveCount(0);
