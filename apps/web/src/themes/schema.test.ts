@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { DEFAULT_CONFIG } from "@thinkrail/contracts";
+import { loadColors } from "../../scripts/colors";
 import {
 	ANSI_COLOR_KEYS,
 	parseThemeManifest,
@@ -133,6 +134,39 @@ test("hovered text never drops below the visibility floor", () => {
 				contrast(theme.colors[key as keyof typeof FLOORS], theme.colors.hover),
 				`${theme.id}: ${key} on hover`,
 			).toBeGreaterThanOrEqual(HOVER_FLOOR);
+		}
+	}
+});
+
+/*
+ * The green primary/success system must stay legible where it is a RESTING FOREGROUND — every theme,
+ * and Light + High Contrast Light in particular, where a bright green on white fails 4.5:1.
+ *  - `onAccent` (text/icons) sits on the `accent` fill.
+ *  - the success foreground is the `feedback-success` semantic token — a per-appearance value in
+ *    colors.json (dark #41cb66 / light #1a7f37); the success TINTS keep the `success` palette base.
+ * Success text is not a control label, so `input` is excluded (as `accent` is in the FLOORS check).
+ */
+const SUCCESS_SURFACES = RESTING.filter((surface) => surface !== "input");
+
+test("onAccent reaches 4.5:1 on the accent/primary background", () => {
+	for (const theme of bundledThemes()) {
+		expect(
+			contrast(theme.colors.onAccent, theme.colors.accent),
+			`${theme.id}: onAccent on accent`,
+		).toBeGreaterThanOrEqual(4.5);
+	}
+});
+
+test("feedback-success foreground reaches 4.5:1 on its resting surfaces", () => {
+	const successFg = loadColors().effects["feedback-success"];
+	if (!successFg) throw new Error("colors.json is missing the feedback-success effect");
+	for (const theme of bundledThemes()) {
+		const fg = successFg[theme.appearance];
+		for (const surface of SUCCESS_SURFACES) {
+			expect(
+				contrast(fg, theme.colors[surface]),
+				`${theme.id}: feedback-success on ${surface}`,
+			).toBeGreaterThanOrEqual(4.5);
 		}
 	}
 });

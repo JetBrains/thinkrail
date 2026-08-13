@@ -64,7 +64,6 @@
 
 		"feedback-info": { "from": "info", "publish": true },
 		"feedback-info-subtle": { "from": "info", "alpha": "wash", "publish": true },
-		"feedback-success": { "from": "success", "publish": true },
 		"feedback-success-subtle": { "from": "success", "alpha": "wash", "publish": true },
 		"feedback-success-muted": { "from": "success", "alpha": "muted", "publish": true },
 		"feedback-error": { "from": "danger", "publish": true },
@@ -146,6 +145,12 @@
 			"note": "text/icons on the primary fill (shared brand constant)",
 			"dark": "#0a0a0a",
 			"light": "#0a0a0a",
+			"publish": true
+		},
+		"feedback-success": {
+			"note": "Success FOREGROUND (text/icons) — a per-appearance accessible constant. Dark keeps the #41cb66 success hue (≥4.5:1 on dark reading surfaces); light needs a darker green (#1a7f37) to clear 4.5:1 on white/#f2f3f5. The success-subtle/-muted TINTS still derive from the `success` palette key (#41cb66), so the success base is unchanged where it is not small foreground text.",
+			"dark": "#41cb66",
+			"light": "#1a7f37",
 			"publish": true
 		}
 	}
