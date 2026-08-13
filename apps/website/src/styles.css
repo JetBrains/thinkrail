@@ -131,11 +131,15 @@
 	--accent: #8dff4f;
 }
 
-/* Light theme: the hero logo (title) and the JetBrains InnovationHub tag use dark-primary
-   (--control-primary-bg-hovered = #59d915) instead of the hero's light-primary accent. */
-[data-theme="light"] .hero-title,
-[data-theme="light"] .hero-kicker .pill-accent {
+/* Light theme: the hero logo (title) uses dark-primary (--control-primary-bg-hovered = #59d915)
+   instead of the hero's light-primary accent. */
+[data-theme="light"] .hero-title {
 	--accent: var(--control-primary-bg-hovered);
+}
+
+/* Light theme: the JetBrains InnovationHub tag is black (text-default), not the accent green. */
+[data-theme="light"] .hero-kicker .pill-accent {
+	--accent: var(--text);
 }
 
 [data-theme="gruvbox"] {
