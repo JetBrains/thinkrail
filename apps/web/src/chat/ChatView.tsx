@@ -232,6 +232,9 @@ export default function ChatView({
 	const { followOutput, handleAtBottom, showScrollButton, scrollToBottom, containerProps } =
 		useChatScroll(virtuosoRef);
 	const composerRef = useRef<ComposerHandle>(null);
+	// One identity per mounted chat view: question cards use it to focus once across Virtuoso remounts,
+	// while deliberately closing/reopening the chat gets a fresh scope and may focus the pending card.
+	const askFocusScope = useRef<object>({}).current;
 
 	// The Ctrl+R history-recall overlay's integration edge (store/transport) — see `chat/SPEC.md`'s
 	// boundary section for why this hook, not this component's body, owns that edge.
@@ -563,6 +566,10 @@ export default function ChatView({
 		() => deriveAskStates(runtime.turns, runtime.askAnswers),
 		[runtime.turns, runtime.askAnswers],
 	);
+	const askContext = useMemo(
+		() => ({ states: askStates, focusScope: askFocusScope }),
+		[askStates, askFocusScope],
+	);
 
 	// The plan's glance state — "working or waiting on you?" — derived from session state (streaming +
 	// any awaiting questionnaire), never stored, so the TODO strip can't claim "in work" while the
@@ -598,7 +605,7 @@ export default function ChatView({
 
 	return (
 		<ChatActionsContext.Provider value={chatActions}>
-			<AskStatesContext.Provider value={askStates}>
+			<AskStatesContext.Provider value={askContext}>
 				<div className="flex h-full min-h-0 flex-col bg-container-workspace-bg">
 					{/* The plan popover is anchored to the whole header, so it hangs flush under it at the chat's
 					    left edge; the strip in the header's left slot is the trigger. */}

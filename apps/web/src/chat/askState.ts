@@ -55,13 +55,25 @@ export function deriveAskStates(
 	return states;
 }
 
+/** The questionnaire data supplied by one mounted ChatView. */
+export interface AskContextValue {
+	states: Record<string, AskState>;
+	/** Opaque mount identity: Virtuoso remounts reuse it; closing/reopening the chat creates a new one. */
+	focusScope: object;
+}
+
 /**
- * The per-chat ask states, provided by `ChatView` (derived from the session runtime). `null` when a
- * renderer is used without one (standalone/extracted) — the card then treats every call as awaiting.
+ * The per-chat ask seam, provided by `ChatView`. `null` for a standalone/extracted renderer, where the
+ * card treats calls as awaiting and falls back to its own local focus scope.
  */
-export const AskStatesContext = createContext<Record<string, AskState> | null>(null);
+export const AskStatesContext = createContext<AskContextValue | null>(null);
 
 /** The transcript-derived state for one `ask_user_question` call, or `undefined` outside a provider. */
 export function useAskState(toolCallId: string): AskState | undefined {
-	return useContext(AskStatesContext)?.[toolCallId];
+	return useContext(AskStatesContext)?.states[toolCallId];
+}
+
+/** The current mounted-chat focus scope, or `null` for a standalone renderer. */
+export function useAskFocusScope(): object | null {
+	return useContext(AskStatesContext)?.focusScope ?? null;
 }
