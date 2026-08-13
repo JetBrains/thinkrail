@@ -1,13 +1,22 @@
 import { expect, test } from "bun:test";
 import {
 	cssColorToHex,
+	hasPlatformModifier,
 	isAbsolutePath,
 	isMarkdownPath,
 	normalizePath,
+	platformShortcutLabel,
 	projectRelativePath,
 	shallowEqualArrays,
 	stripFrontmatter,
 } from "./utils";
+
+test("platform shortcuts use Ctrl outside an Apple browser environment", () => {
+	expect(platformShortcutLabel("B")).toBe("Ctrl+B");
+	expect(hasPlatformModifier({ ctrlKey: true, metaKey: false })).toBe(true);
+	expect(hasPlatformModifier({ ctrlKey: false, metaKey: true })).toBe(false);
+	expect(hasPlatformModifier({ ctrlKey: true, metaKey: true })).toBe(false);
+});
 
 test("isMarkdownPath matches .md/.markdown case-insensitively, nothing else", () => {
 	expect(isMarkdownPath("README.md")).toBe(true);

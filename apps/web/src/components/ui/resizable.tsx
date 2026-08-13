@@ -1,6 +1,11 @@
 import { GripVertical } from "lucide-react";
 import type { ComponentProps } from "react";
-import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
+import {
+	type ImperativePanelHandle,
+	Panel,
+	PanelGroup,
+	PanelResizeHandle,
+} from "react-resizable-panels";
 import { cn } from "@/lib";
 
 export function ResizablePanelGroup({ className, ...props }: ComponentProps<typeof PanelGroup>) {
@@ -12,6 +17,7 @@ export function ResizablePanelGroup({ className, ...props }: ComponentProps<type
 	);
 }
 
+export type { ImperativePanelHandle };
 export const ResizablePanel = Panel;
 
 /**

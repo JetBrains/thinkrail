@@ -28,12 +28,13 @@ later, the mobile single-view-with-switcher).
   degradation drops the connection label to its still-labelled status dot below `sm`, then drops the
   base and project prefix before it drops active workspace/branch identity; the full logo stays visible.
   **Active workspace**
-  → the resizable 3 columns (projects | center | right-over-terminals). **No active workspace**
-  (`activeWorkspaceId == null` — fresh install / after archiving the last one) → the projects rail (kept
-  resizable, `resize-left` preserved) beside the `panels/WelcomePanel`; the center/right/terminal surface
-  is not mounted. The welcome-state group uses its own `autoSaveId` so it doesn't clobber the 3-column
-  layout's saved sizes. Mounts the `panels/Toaster` once (outside both layout branches) so notifications
-  show over either state. **Owns the theme DOM side-effect** — the single place that applies the store's
+  → the resizable 3 columns (projects | center | right-over-terminals), with both outer regions following
+  the collapse contract below. **No active workspace** (`activeWorkspaceId == null` — fresh install /
+  after archiving the last one) → the same collapsible projects region beside the `panels/WelcomePanel`;
+  the center/right/terminal surface is not mounted. The welcome-state group uses its own `autoSaveId` so
+  it doesn't clobber the 3-column layout's saved sizes. Mounts the `panels/Toaster` once (outside both
+  layout branches) so notifications show over either state. **Owns the theme DOM side-effect** — the
+  single place that applies the store's
   (host-owned) opaque `theme` id: a `useEffect` on `store.theme` calls the `themes` module's atomic
   `applyTheme(theme)` + `writeThemeHint(theme)` (the localStorage first-paint cache). The value flows
   store ← transport (welcome /
@@ -43,7 +44,8 @@ later, the mobile single-view-with-switcher).
 - **Public surface:** `Shell`.
 - **Allowed deps:** `panels`, `store` (status + theme + project/workspace context + the active-chat
   selector and `requestHistoryOpen`), `transport`, `contracts` (types only), `components/ui`
-  (resizable), `components/ErrorBoundary`, `constants` (branding), `themes` (`applyTheme`/`writeThemeHint`).
+  (resizable), `components/ErrorBoundary`, `constants` (branding), `lib` (platform shortcut semantics),
+  `themes` (`applyTheme`/`writeThemeHint`).
 - **Forbidden:** `server`/`shared`/`pi`; being imported by `panels`/`store`/`transport`.
 
 ## Error resilience (why panels can't blank the app)
@@ -58,6 +60,35 @@ per-tab boundary (`resetKeys={[active.id]}`) so one bad tab keeps the tab strip 
 detects failed dynamic imports (`isChunkLoadError`) and steers those to a page **reload** (re-fetches
 the chunk) rather than an in-place retry. Each region degrades independently — never the whole app.
 
+## Collapsible side regions
+
+Only the two **outer** regions collapse: Projects on the left, and the complete workspace stack
+(Specs/Files/Changes/Review over terminals) on the right. The terminal split has no independent collapse
+mode. An expanded region has only its ordinary resize divider—no extra button. Dragging inward past the
+existing minimum snaps it closed; reopening restores its last expanded width.
+
+A collapsed panel is zero-sized inside its resizable group while the shell reserves a fixed **28px
+full-height reopen rail** outside the group. This keeps the affordance a stable control width instead of a
+viewport-dependent percentage without unregistering the panel or losing the resize library's remembered
+size. The rail is one native button: the side-appropriate Lucide open-panel icon at the top, a quiet
+vertical `Projects` / `Workspace` label, an ordinary horizontal accessible name, shortcut tooltip,
+hover treatment, and visible focus ring. Click, Enter, or Space reopens and returns focus inside. The
+expanded divider is unavailable while collapsed; the rail is the sole pointer affordance. The hidden
+divider stays registered with the resize library so a pointer-driven collapse still receives its matching
+pointer-up and does not poison the next drag, but it is removed from keyboard focus and hit-testing. Both
+sides may be collapsed together.
+
+Collapsed content stays mounted but is `inert` and `aria-hidden`: no focus can remain in an invisible
+region, while collapsing the right side does not tear down its terminal/session surface. The shell owns
+all panel handles, collapse/focus state, rails, and local persistence; panels remain arrangement-agnostic.
+This is never Zustand or wire state. Project Home/Welcome carries the same left behavior under its existing
+separate saved layout and has no right region.
+
+Local shell persistence combines each existing `autoSaveId` (layout + collapsed state + nested
+right/terminal proportions) with the pre-drag expanded width captured when a pointer resize crosses the
+collapse threshold. Reopen and reload therefore restore the width from before that collapse, not merely
+the minimum. Nothing syncs the layout between browsers.
+
 ## Global chords (why a key handler lives this high up)
 
 A chord that must work "wherever the user is" cannot be an element's `onKeyDown` — that only fires while
@@ -66,11 +97,24 @@ place that owns such chords: a single window listener in the **capture** phase, 
 before any component does and can both `preventDefault` (deny the browser) and `stopPropagation` (deny
 duplicate handling downstream).
 
-Today that's **`Ctrl+R` → chat history search**. Previously handled only on the composer textarea, so
-with focus anywhere else — the file tree, Monaco, a diff, the transcript, bare `<body>` — the browser
-reloaded the app instead. It is deliberately *not* a browser-reserved chord (unlike `Ctrl+T`/`Ctrl+W`/
-`Ctrl+N`), so swallowing it works. Routing goes through the store (`selectHistoryTarget` →
-`requestHistoryOpen`), never a ref: the chord fires far outside the chat subtree entirely.
+The command set is **`Ctrl+R` → chat history search**, **`Mod+B` → Projects**, and **`Mod+J` → the
+right workspace region** (`Mod` = Cmd on macOS, Ctrl on Windows/Linux). The two region commands are one
+focus-aware command each, not separate focus and visibility toggles:
+
+- collapsed → expand to the remembered width and restore the last valid focus inside;
+- expanded with focus elsewhere → restore focus inside without resizing;
+- expanded with focus inside → collapse and restore the last valid focus outside.
+
+Fallbacks are the region's active/primary control and the active center surface. A disappearing rail or
+collapsed divider never strands focus, and the right command is an app-owned no-op when no workspace
+exists. Rail activation follows the first transition too. Shell-local element/imperative refs route these
+commands; unlike history search, no store request is involved.
+
+`Ctrl+R` was previously handled only on the composer textarea, so with focus anywhere else — the file
+tree, Monaco, a diff, the transcript, bare `<body>` — the browser reloaded the app instead. It is
+deliberately *not* a browser-reserved chord (unlike `Ctrl+T`/`Ctrl+W`/`Ctrl+N`), so swallowing it works.
+Routing goes through the store (`selectHistoryTarget` → `requestHistoryOpen`), never a ref: the chord fires
+far outside the chat subtree entirely.
 
 Because `CenterTabs` mounts one tab body at a time, "which chat" and "is it even mounted" are the same
 question. `selectHistoryTarget` answers it: the active tab when that's a chat, else the workspace's most
@@ -85,11 +129,13 @@ active layout — on a Cyrillic layout the R key produces `к` — so a `key`-ba
 `preventDefault()` and the browser reloaded the app, defeating the whole point of the hook. `e.code` is
 layout-independent, and it agrees with the terminal one layer down: xterm resolves its own chords through
 `keyCode`, which browsers derive from the US layout. The same rule binds every letter chord in the app —
-today that's this one plus the history overlay's `Cmd/Ctrl+S`.
+the three global commands above plus the history overlay's `Cmd/Ctrl+S`.
 
 Two carve-outs, both load-bearing:
-- **Terminals.** A keydown from inside `.xterm` passes straight through — `Ctrl+R` there is the shell's
-  reverse-i-search and belongs to the PTY. (`.xterm` is xterm's own root class, not a hook of ours.)
+- **Terminals.** `Ctrl+R` from inside `.xterm` passes straight through: reverse-i-search belongs to the PTY
+  (`.xterm` is xterm's own root class, not a hook of ours). `Mod+B` / `Mod+J` remain app-owned there so
+  panel control is global; on Windows/Linux that means readline/tmux Ctrl+B and line-feed Ctrl+J do not
+  reach the PTY.
 - **Reload stays reachable.** `Ctrl+Shift+R` (hard reload), `Cmd+R` (macOS), `F5` and the browser's own
   reload button are all untouched. Swallowing a reload chord is only acceptable while another one works.
 

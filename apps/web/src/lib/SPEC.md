@@ -28,7 +28,9 @@ Tiny UI helpers shared across components.
   `chat/` is type-only),
   **`relativeTime()`** (`just now` / `5m ago` / `2d ago` — shared by chat history, the tab strip's closed
   chats, and the Changes scope menu's commit rows; it lives here because `chat/` may not import from
-  `panels/`, which is what let three private twins of it accumulate) and **`copyText()`**
+  `panels/`, which is what let three private twins of it accumulate), **`platformShortcutLabel()`** +
+  **`hasPlatformModifier()`** (one Apple-vs-other definition for shortcut chrome and global handlers), and
+  **`copyText()`**
   (clipboard write reporting whether it landed — one place for the *degradation*: an insecure context
   (plain-http remote access) or a denied permission has no clipboard, and every caller's answer is the same
   — do nothing loud, the text stays visible/selectable). Also the shared
@@ -38,7 +40,7 @@ Tiny UI helpers shared across components.
   identity/palettes never live in `lib`.
 - **Public surface (barrel):** `cn`, `isMarkdownPath`, `stripFrontmatter`, `cssColorToHex`,
   `normalizePath`, `isAbsolutePath`, `projectRelativePath`, `shallowEqualArrays`, `userText`,
-  `relativeTime`, `copyText`.
+  `relativeTime`, `platformShortcutLabel`, `hasPlatformModifier`, `copyText`.
 - **Allowed deps:** `clsx`, `tailwind-merge`; `@thinkrail/contracts` (types only — `userText`'s
   `UserMessage` parameter); `shiki`/`@shikijs/*` (the per-file shiki modules only — never reachable
   through the barrel).

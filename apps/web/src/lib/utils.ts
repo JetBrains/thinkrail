@@ -131,6 +131,22 @@ export function stripFrontmatter(text: string): string {
 	return match ? text.slice(match[0].length) : text;
 }
 
+const APPLE_PLATFORM = /Mac|iPhone|iPad|iPod/;
+
+function isApplePlatform(): boolean {
+	return typeof navigator !== "undefined" && APPLE_PLATFORM.test(navigator.platform ?? "");
+}
+
+/** The platform's primary application modifier: Cmd on Apple devices, Ctrl everywhere else. */
+export function hasPlatformModifier(event: Pick<KeyboardEvent, "ctrlKey" | "metaKey">): boolean {
+	return isApplePlatform() ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
+}
+
+/** Human-readable primary-modifier shortcut, kept in lockstep with `hasPlatformModifier`. */
+export function platformShortcutLabel(key: string): string {
+	return isApplePlatform() ? `⌘${key}` : `Ctrl+${key}`;
+}
+
 /**
  * Tiny relative-time formatter (`just now` / `5m ago` / `3h ago` / `2d ago`) — shared by every "when did
  * this happen" line (chat history, the tab strip's closed chats, the Changes scope menu's commits) so they
