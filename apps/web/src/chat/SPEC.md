@@ -126,6 +126,9 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   terminate** (its tool result is just an ack; the reply arrives later as an `ask-user-answers` message),
   so "answered / superseded / awaiting" is a fact about the transcript, not a tool status — derived once
   per runtime snapshot and consumed by the card via context, keeping it props-driven everywhere else.
+  The same seam supplies an opaque **per-mounted-ChatView focus scope**: an awaiting card claims attention
+  once within that scope (so Virtuoso remounts cannot steal focus), while closing/reopening the chat creates
+  a fresh scope and may focus the still-pending question again. It carries no store or transport state.
 - **Hydration** (`hydrate.ts`) — the pure
   `messagesToRuntime(TranscriptMessage[], lastSettlement?)` converter (read-side counterpart of the event
   reducer): rebuilds `{ turns, toolResults, askAnswers, turnIdByMessageIndex }` (a `HydratedRuntime`) from a
