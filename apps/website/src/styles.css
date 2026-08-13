@@ -45,6 +45,9 @@
 	--accent: #8dff4f;
 	--on-accent: #0a0a0a;
 	--green: #41cb66;
+	/* Link color token: primary at 60% opacity — a touch darker than the bright primary on the
+	   dark surfaces (light theme keeps the full, already-dark accent below). */
+	--link: color-mix(in srgb, var(--accent) 60%, transparent);
 	/* Primary button = a shared, theme-independent brand constant (mirrors the app's
 	   control-primary-* tokens); defined once here so every theme inherits it. */
 	--control-primary-bg: #8dff4f;
@@ -105,6 +108,8 @@
 	--muted: #5a5f6a;
 	--hint: #667085;
 	--accent: #2e7d16;
+	/* The light accent is already dark/readable; links use it at full strength (60% would be too faint on white). */
+	--link: var(--accent);
 	--green: #41cb66;
 	--gold: #946300;
 	--red: #d02533;
@@ -207,7 +212,7 @@ svg.i.i-fill {
 }
 
 a {
-	color: var(--accent);
+	color: var(--link);
 	text-decoration: none;
 	transition: color 150ms ease-out;
 }
