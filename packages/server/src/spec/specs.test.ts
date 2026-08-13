@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { evictSpecIndex, projectHasSpecs, specGraph } from "./specs";
+import { evictSpecIndex, projectHasSpecs, saveTypeCard, specGraph } from "./specs";
 
 let dataDir: string;
 let worktree: string;
@@ -113,4 +113,64 @@ test("evictSpecIndex drops the cached index; a later read rebuilds cleanly", () 
 
 	evictSpecIndex("ws1");
 	expect(specGraph("ws1").nodes.map((n) => n.id)).toEqual(["root-spec"]);
+});
+
+test("the snapshot carries the type registry: built-ins plus a project card with a relative path", () => {
+	writeSpec("SPEC.md", "id: root-spec\ntype: goal-and-requirements\ntitle: Root");
+	mkdirSync(join(worktree, ".pi", "spec-types"), { recursive: true });
+	writeFileSync(
+		join(worktree, ".pi", "spec-types", "runbook.md"),
+		"---\nname: runbook\ndescription: Ops steps.\nlifecycle: durable\n---\n",
+	);
+
+	const { types } = specGraph("ws1");
+	const names = types.map((t) => t.name);
+	expect(names).toContain("module-design");
+	expect(names).toContain("charter");
+	expect(names).toContain("decision");
+	expect(types.find((t) => t.name === "task-spec")?.lifecycle).toBe("ephemeral");
+	// Built-ins are embedded (no file) — the wire omits their path.
+	expect(Object.hasOwn(types.find((t) => t.name === "module-design") ?? {}, "path")).toBe(false);
+
+	const runbook = types.find((t) => t.name === "runbook");
+	expect(runbook?.origin).toBe("project");
+	expect(runbook?.path).toBe(".pi/spec-types/runbook.md"); // worktree-relative
+});
+
+test("projectHasSpecs respects a custom ephemeral type card", () => {
+	const root = mkdtempSync(join(tmpdir(), "trpi-proj-eph-"));
+	try {
+		mkdirSync(join(root, ".pi", "spec-types"), { recursive: true });
+		writeFileSync(
+			join(root, ".pi", "spec-types", "scratch.md"),
+			"---\nname: scratch\ndescription: Ephemeral notes.\nlifecycle: ephemeral\n---\n",
+		);
+		writeFileSync(
+			join(root, "NOTE.md"),
+			"---\nid: n1\ntype: scratch\ntitle: Note\n---\n\n## Body\n",
+		);
+		// The only spec is of a custom ephemeral type — must not signal "set up".
+		expect(projectHasSpecs(root)).toBe(false);
+
+		// An unknown type counts as durable (the safe default).
+		writeFileSync(
+			join(root, "OTHER.md"),
+			"---\nid: n2\ntype: mystery\ntitle: Other\n---\n\n## Body\n",
+		);
+		expect(projectHasSpecs(root)).toBe(true);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test("saveTypeCard writes a project card, rejects bad slugs / non-cards / name mismatch", () => {
+	const content = "---\nname: runbook\ndescription: Ops steps.\n---\n\nWhen to use.\n";
+	expect(saveTypeCard("ws1", "runbook", content)).toEqual({ path: ".pi/spec-types/runbook.md" });
+	expect(specGraph("ws1").types.find((t) => t.name === "runbook")?.origin).toBe("project");
+
+	expect(() => saveTypeCard("ws1", "../evil", content)).toThrow("lowercase slug");
+	expect(() => saveTypeCard("ws1", "Runbook", content)).toThrow("lowercase slug");
+	expect(() => saveTypeCard("ws1", "runbook", "no frontmatter")).toThrow("not a valid type card");
+	expect(() => saveTypeCard("ws1", "other", content)).toThrow("must match");
+	expect(() => saveTypeCard("nope", "runbook", content)).toThrow("Unknown workspace");
 });

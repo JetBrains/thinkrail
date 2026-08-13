@@ -30,7 +30,8 @@ export function useWorkspaceSpecs(workspaceId: string | null): {
 		(id) => getTransport().request("spec.graph", { workspaceId: id }),
 		{
 			onResult: (result, id) => {
-				useAppStore.getState().setWorkspaceSpecs(id, result.nodes);
+				// `?? []` tolerates a drifted (older) host whose snapshot predates the type registry.
+				useAppStore.getState().setWorkspaceSpecs(id, result.nodes, result.types ?? []);
 				setFailedFor(null);
 			},
 			onFailure: (id) => setFailedFor(id),

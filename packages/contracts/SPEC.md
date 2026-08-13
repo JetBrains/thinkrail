@@ -154,9 +154,11 @@ of the host.
   (persisted host-side as `config.json`, delivered in `server.welcome`, mutated via `settings.update`).
   Contracts deliberately exports no theme enum/list/labels: a future manifest can mint an id unknown when
   the host was built, and a client missing it resolves its own bundled default;
-  **`SpecGraphNode`/`SpecGraphSnapshot`** — the
+  **`SpecGraphNode`/`SpecGraphSnapshot`/`SpecTypeInfo`** — the
   Specs-viewer read DTOs, **mirrored** (like `PiEvent`), never imported from `pi-spec-graph` — the wire
-  carries only what the panel renders (`type`/`status` stay `string`: tolerate whatever is on disk);
+  carries only what the panel renders (`type`/`status` stay `string`: tolerate whatever is on disk;
+  the snapshot also carries the registered *type cards* — name/title/description/lifecycle/origin —
+  so the viewer badges types and dims ephemeral specs without re-deriving the registry);
   **`TodoItem`/`TodoGroupItem`/`TodoPlan`** + the **`TodoStatus`/`TodoOrigin`** unions — the in-chat plan
   DTOs, **mirrored** from `pi-todos/core` (never imported), carrying the chat's per-session TODO list.
   `TodoGroupItem` additionally carries **`status: TodoGroupStatus`** — the group's *task* lifecycle

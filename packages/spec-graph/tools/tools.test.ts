@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type {
@@ -8,7 +8,7 @@ import type {
 	ExtensionContext,
 	ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
-import { LINK_KINDS, SLICE_DIRECTIONS, SPEC_STATUSES, SPEC_TYPES } from "../core/index.ts";
+import { LINK_KINDS, SLICE_DIRECTIONS } from "../core/index.ts";
 import { registerSpecTools } from "./index.ts";
 
 // Capture the registered tool defs via a minimal fake ExtensionAPI, then drive their `execute`
@@ -46,12 +46,13 @@ function paramEnum(toolName: string, prop: string): readonly string[] {
 }
 
 // Pin each finite-vocabulary param to its core tuple: guards against a literal list being re-hardcoded
-// in the tools layer instead of derived from core (the single source of truth).
+// in the tools layer instead of derived from core (the single source of truth). `spec_create`'s
+// type/status are deliberately open strings — the registry, not a frozen enum, is the authoring gate.
 test("finite-vocabulary param schemas derive their enum from the core tuples", () => {
-	expect(paramEnum("spec_create", "type")).toEqual([...SPEC_TYPES]);
-	expect(paramEnum("spec_create", "status")).toEqual([...SPEC_STATUSES]);
 	expect(paramEnum("spec_graph", "direction")).toEqual([...SLICE_DIRECTIONS]);
 	expect(paramEnum("spec_graph", "edge")).toEqual([...LINK_KINDS]);
+	expect(paramEnum("spec_create", "type")).toEqual([]);
+	expect(paramEnum("spec_create", "status")).toEqual([]);
 });
 
 /** The human-readable text of a tool result's first content block. */
@@ -122,13 +123,14 @@ async function seedGraph(root: string): Promise<void> {
 	);
 }
 
-test("registers exactly the seven spec tools", () => {
+test("registers exactly the eight spec tools", () => {
 	expect([...tools.keys()].sort()).toEqual([
 		"spec_create",
 		"spec_delete",
 		"spec_get",
 		"spec_graph",
 		"spec_grep",
+		"spec_types",
 		"spec_update",
 		"spec_validate",
 	]);
@@ -320,7 +322,7 @@ test("spec_create writes canonical frontmatter order with inline arrays into nes
 	});
 });
 
-test("spec_create scaffolds body headings by type (and none for an unknown type)", async () => {
+test("spec_create scaffolds body headings from the type card's sections", async () => {
 	await withRoot(async (root) => {
 		const cases: Array<[string, string, string[]]> = [
 			[
@@ -337,12 +339,114 @@ test("spec_create scaffolds body headings by type (and none for an unknown type)
 			const file = readFileSync(join(root, path), "utf8");
 			for (const h of headings) expect(file).toContain(h);
 		}
-		await run(
+	});
+});
+
+test("spec_create rejects an unregistered type, listing the registered ones", async () => {
+	await withRoot(async (root) => {
+		const res = await run(
 			"spec_create",
 			{ path: "weird.md", id: "weird", type: "made-up-type", title: "W" },
 			root,
 		);
-		expect(readFileSync(join(root, "weird.md"), "utf8")).not.toContain("## ");
+		expect(isError(res)).toBe(true);
+		expect(text(res)).toContain("module-design");
+		expect(existsSync(join(root, "weird.md"))).toBe(false);
+	});
+});
+
+test("spec_create validates status against the type card's vocabulary", async () => {
+	await withRoot(async (root) => {
+		// The built-in decision card narrows statuses to proposed | accepted | superseded.
+		const bad = await run(
+			"spec_create",
+			{ path: "d1.md", id: "d1", type: "decision", title: "D", status: "draft" },
+			root,
+		);
+		expect(isError(bad)).toBe(true);
+		expect(text(bad)).toContain("proposed | accepted | superseded");
+		const ok = await run(
+			"spec_create",
+			{ path: "d1.md", id: "d1", type: "decision", title: "D", status: "proposed" },
+			root,
+		);
+		expect(isError(ok)).toBe(false);
+		expect(readFileSync(join(root, "d1.md"), "utf8")).toContain("## Options considered");
+	});
+});
+
+// ---------------------------------------------------------------------------
+// spec_types — the registry surface: listing, one card in full, project overrides
+// ---------------------------------------------------------------------------
+
+test("spec_types lists the built-ins and reads one card in full", async () => {
+	await withRoot(async (root) => {
+		const listRes = await run("spec_types", {}, root);
+		const d = listRes.details as {
+			types: Array<{ name: string; lifecycle: string; origin: string }>;
+		};
+		expect(d.types.map((t) => t.name)).toEqual([
+			"goal-and-requirements",
+			"architecture-design",
+			"module-design",
+			"submodule-design",
+			"task-spec",
+			"charter",
+			"decision",
+		]);
+		expect(d.types.find((t) => t.name === "task-spec")?.lifecycle).toBe("ephemeral");
+		expect(d.types.every((t) => t.origin === "builtin")).toBe(true);
+
+		const cardRes = await run("spec_types", { name: "decision" }, root);
+		expect(isError(cardRes)).toBe(false);
+		expect(text(cardRes)).toContain("proposed");
+		expect(text(cardRes)).toContain("Quality bar");
+
+		expect(isError(await run("spec_types", { name: "nope" }, root))).toBe(true);
+	});
+});
+
+test("a project card in .pi/spec-types/ registers a new type and overrides a built-in", async () => {
+	await withRoot(async (root) => {
+		const dir = join(root, ".pi", "spec-types");
+		mkdirSync(dir, { recursive: true });
+		// A custom type whose Template (fenced) drives the scaffold.
+		writeFileSync(
+			join(dir, "runbook.md"),
+			[
+				"---",
+				"name: runbook",
+				"description: Operational steps for one recurring situation.",
+				"lifecycle: durable",
+				"---",
+				"",
+				"## Template",
+				"",
+				"```markdown",
+				"## Situation",
+				"",
+				"## Steps",
+				"```",
+			].join("\n"),
+			"utf8",
+		);
+		// An override of the built-in task-spec card.
+		writeFileSync(
+			join(dir, "task-spec.md"),
+			"---\nname: task-spec\ndescription: Our own task-spec flavor.\nlifecycle: ephemeral\n---\n",
+			"utf8",
+		);
+
+		const d = (await run("spec_types", {}, root)).details as {
+			types: Array<{ name: string; origin: string }>;
+		};
+		expect(d.types.find((t) => t.name === "task-spec")?.origin).toBe("project");
+		expect(d.types.find((t) => t.name === "runbook")?.origin).toBe("project");
+
+		await run("spec_create", { path: "rb.md", id: "rb", type: "runbook", title: "RB" }, root);
+		const file = readFileSync(join(root, "rb.md"), "utf8");
+		expect(file).toContain("## Situation");
+		expect(file).toContain("## Steps");
 	});
 });
 

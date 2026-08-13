@@ -1,3 +1,4 @@
+import type { SpecTypeInfo } from "@thinkrail/contracts";
 import {
 	BookOpen,
 	Box,
@@ -7,11 +8,13 @@ import {
 	FileText,
 	ListChecks,
 	Network,
+	Plus,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { cn } from "../lib";
 import { useAppStore } from "../store";
 import { openFileInTab } from "./openTabs";
+import { SpecTypeDialog } from "./SpecTypeDialog";
 import { buildSpecTree, type SpecTreeNode, specRoleLabel, specRoleTag } from "./specTree";
 
 /**
@@ -37,8 +40,10 @@ export function SpecsPanel({
 	failed?: boolean;
 }) {
 	const nodes = useAppStore((s) => s.specsByWorkspace[workspaceId]) ?? null;
+	const types = useAppStore((s) => s.specTypesByWorkspace[workspaceId]) ?? null;
 	const activeTabId = useAppStore((state) => state.activeTabByWorkspace[workspaceId] ?? null);
 	const specRequest = useAppStore((s) => s.specRequest);
+	const [typeDialogOpen, setTypeDialogOpen] = useState(false);
 
 	// A chat deep-link targeting this workspace: open the requested spec as a rendered doc tab, then clear
 	// the request. The path arrives as pi reported it (possibly absolute) — `openFileInTab` canonicalizes it
@@ -51,6 +56,7 @@ export function SpecsPanel({
 	}, [specRequest, workspaceId]);
 
 	const roots = useMemo(() => (nodes ? buildSpecTree(nodes) : null), [nodes]);
+	const typeByName = useMemo(() => new Map((types ?? []).map((t) => [t.name, t])), [types]);
 
 	if (failed && !nodes)
 		return (
@@ -60,20 +66,98 @@ export function SpecsPanel({
 		);
 	if (nodes === null || roots === null)
 		return <p className="px-xs py-xs tr-text-metadata text-text-muted">Loading…</p>;
-	if (nodes.length === 0)
-		return <p className="px-xs py-xs tr-text-metadata text-text-muted">No specs</p>;
 	return (
-		<ul className="flex flex-col">
-			{roots.map((root) => (
-				<SpecNodeRow
-					key={root.node.id}
-					tree={root}
-					workspaceId={workspaceId}
-					activeTabId={activeTabId}
-					depth={0}
-				/>
-			))}
-		</ul>
+		<div className="flex flex-col gap-xs">
+			{nodes.length === 0 ? (
+				<p className="px-xs py-xs tr-text-metadata text-text-muted">No specs</p>
+			) : (
+				<ul className="flex flex-col">
+					{roots.map((root) => (
+						<SpecNodeRow
+							key={root.node.id}
+							tree={root}
+							workspaceId={workspaceId}
+							activeTabId={activeTabId}
+							typeByName={typeByName}
+							depth={0}
+						/>
+					))}
+				</ul>
+			)}
+			{types !== null && (
+				<SpecTypesLegend types={types} onNewType={() => setTypeDialogOpen(true)} />
+			)}
+			<SpecTypeDialog
+				open={typeDialogOpen}
+				workspaceId={workspaceId}
+				existing={types ?? []}
+				onOpenChange={setTypeDialogOpen}
+			/>
+		</div>
+	);
+}
+
+/**
+ * The registry legend: the registered type cards (title, lifecycle, origin) plus the "New type" entry
+ * into the type constructor. Sourced from the same `spec.graph` snapshot as the tree, so a card the
+ * agent (or the constructor) just wrote appears on the next refetch.
+ */
+function SpecTypesLegend({ types, onNewType }: { types: SpecTypeInfo[]; onNewType: () => void }) {
+	const [expanded, setExpanded] = useState(false);
+	const Chevron = expanded ? ChevronDown : ChevronRight;
+	return (
+		<div
+			data-testid="spec-types-legend"
+			className="flex flex-col border-border-default border-t pt-xs"
+		>
+			<div className="flex h-7 items-center">
+				<button
+					type="button"
+					data-testid="spec-types-toggle"
+					aria-expanded={expanded}
+					onClick={() => setExpanded((v) => !v)}
+					className="flex min-w-0 flex-1 items-center gap-xs rounded-[var(--radius-sm)] px-xs text-left text-text-muted tr-text-eyebrow outline-none transition-colors hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+				>
+					<Chevron className="size-3.5 shrink-0" />
+					Spec types ({types.length})
+				</button>
+				<button
+					type="button"
+					data-testid="spec-type-new"
+					aria-label="New spec type"
+					title="New spec type — define what a kind of spec is for and what it should contain"
+					onClick={onNewType}
+					className="flex size-7 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+				>
+					<Plus className="size-3.5" />
+				</button>
+			</div>
+			{expanded && (
+				<ul className="flex flex-col">
+					{types.map((t) => (
+						<li
+							key={t.name}
+							data-testid="spec-type-row"
+							data-type-name={t.name}
+							data-type-origin={t.origin}
+							className="flex h-6 items-center gap-xs px-xs"
+							title={t.description}
+						>
+							<span className="min-w-0 flex-1 truncate tr-text-metadata text-text-muted">
+								{t.title}
+							</span>
+							<span className="shrink-0 tr-text-eyebrow text-text-subtle">
+								{t.lifecycle === "ephemeral"
+									? "ephemeral"
+									: t.origin === "project"
+										? "project"
+										: null}
+							</span>
+						</li>
+					))}
+				</ul>
+			)}
+		</div>
 	);
 }
 
@@ -98,11 +182,14 @@ function SpecNodeRow({
 	tree,
 	workspaceId,
 	activeTabId,
+	typeByName,
 	depth,
 }: {
 	tree: SpecTreeNode;
 	workspaceId: string;
 	activeTabId: string | null;
+	/** The snapshot's registered type cards, by name — titles, descriptions, and the lifecycle dim. */
+	typeByName: Map<string, SpecTypeInfo>;
 	depth: number;
 }) {
 	const { node, children } = tree;
@@ -110,7 +197,9 @@ function SpecNodeRow({
 	const tabId = `${workspaceId}:${node.path}`;
 	const isActive = activeTabId === tabId;
 	const isMainSpec = depth === 0 && node.type === "goal-and-requirements";
-	const role = specRoleLabel(node.type);
+	const typeInfo = typeByName.get(node.type);
+	const isEphemeral = typeInfo?.lifecycle === "ephemeral";
+	const role = typeInfo?.title ?? specRoleLabel(node.type);
 	const trailingRole = isMainSpec ? "Main spec" : specRoleTag(node.type);
 	const DocumentIcon = specRoleIcon(node.type);
 	const Chevron = expanded ? ChevronDown : ChevronRight;
@@ -145,12 +234,13 @@ function SpecNodeRow({
 					data-spec-id={node.id}
 					data-spec-type={node.type}
 					data-spec-role={trailingRole}
+					data-spec-lifecycle={isEphemeral ? "ephemeral" : "durable"}
 					data-main-spec={isMainSpec ? "true" : undefined}
 					data-active={isActive}
 					data-depth={depth}
 					aria-current={isActive ? "page" : undefined}
 					aria-label={`Open ${node.title}. ${isMainSpec ? "Main spec" : role}`}
-					title={`${node.title}\n${node.id} · ${node.type}`}
+					title={`${node.title}\n${node.id} · ${node.type}${typeInfo ? `\n${typeInfo.description}` : ""}${isEphemeral ? "\n(ephemeral — serves one piece of work, not ground truth)" : ""}`}
 					onClick={() => void openFileInTab(workspaceId, node.path, "preview")}
 					onDoubleClick={() => void openFileInTab(workspaceId, node.path, "keep")}
 					className="flex h-7 min-w-0 flex-1 items-center gap-xs rounded-[var(--radius-sm)] pr-xs text-left outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
@@ -167,6 +257,7 @@ function SpecNodeRow({
 						className={cn(
 							"min-w-0 flex-1 truncate tr-text-ui transition-colors",
 							isActive ? "text-text-default" : "text-text-muted group-hover:text-text-default",
+							isEphemeral && "italic text-text-subtle",
 						)}
 					>
 						{node.title}
@@ -190,6 +281,7 @@ function SpecNodeRow({
 							tree={child}
 							workspaceId={workspaceId}
 							activeTabId={activeTabId}
+							typeByName={typeByName}
 							depth={depth + 1}
 						/>
 					))}

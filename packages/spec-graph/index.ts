@@ -1,5 +1,5 @@
 // pi-spec-graph extension entry — the public surface loaded by vanilla pi (`pi install`) and by
-// thinkrail (`additionalExtensionPaths`). Registers the seven spec tools and the project-wide
+// thinkrail (`additionalExtensionPaths`). Registers the eight spec tools and the project-wide
 // `before_agent_start` rule. The concept/schema skill is delivered via the package's `pi.skills`
 // manifest (vanilla pi) or `additionalSkillPaths` (thinkrail); see SPEC.md "Knowledge delivery".
 

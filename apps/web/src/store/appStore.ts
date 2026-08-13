@@ -14,6 +14,7 @@ import type {
 	SessionSummary,
 	SlashCommandInfo,
 	SpecGraphNode,
+	SpecTypeInfo,
 	TerminalTabInfo,
 	ThemeId,
 	ThinkingLevel,
@@ -647,6 +648,12 @@ interface AppState {
 	 */
 	specsByWorkspace: Record<string, SpecGraphNode[]>;
 	/**
+	 * Each workspace's registered spec types (the snapshot's type cards) — stored by the same
+	 * `setWorkspaceSpecs` write that lands the nodes (one fetch, one atomic store action). The Specs
+	 * panel renders badges/dimming and the type constructor lists existing types from here.
+	 */
+	specTypesByWorkspace: Record<string, SpecTypeInfo[]>;
+	/**
 	 * Each workspace's review snapshot (the open review + its comments). Seeded by the ReviewPanel's
 	 * `review.get` read (`setWorkspaceReview`) and converged by `review.changed` pushes
 	 * (`applyReviewChanged`) — full snapshots, idempotent under replay; never an optimistic mutation.
@@ -919,8 +926,8 @@ interface AppState {
 	clearSpecRequest: () => void;
 	/** Drop the view request once the panel has flipped, so re-activating a workspace can't replay it. */
 	clearRightTabRequest: () => void;
-	/** Record a workspace's fetched spec-graph snapshot (`useWorkspaceSpecs`' read lands here). */
-	setWorkspaceSpecs: (workspaceId: string, nodes: SpecGraphNode[]) => void;
+	/** Record a workspace's fetched spec-graph snapshot — nodes + type cards, atomically (`useWorkspaceSpecs`' read lands here). */
+	setWorkspaceSpecs: (workspaceId: string, nodes: SpecGraphNode[], types: SpecTypeInfo[]) => void;
 	/** Record a workspace's review snapshot (the ReviewPanel's `review.get` read lands here). */
 	setWorkspaceReview: (workspaceId: string, snapshot: ReviewSnapshot) => void;
 	/** Ask the file's pane to focus a review comment (open the tab first — the pane consumes this). */
@@ -1222,6 +1229,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	changesRequest: null,
 	specRequest: null,
 	specsByWorkspace: {},
+	specTypesByWorkspace: {},
 	reviewsByWorkspace: {},
 	reviewFocusRequest: null,
 	changesView: "list",
@@ -1321,6 +1329,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 			fsChangesByWorkspace: omitKey(state.fsChangesByWorkspace, workspaceId),
 			skillChangeTickByWorkspace: omitKey(state.skillChangeTickByWorkspace, workspaceId),
 			specsByWorkspace: omitKey(state.specsByWorkspace, workspaceId),
+			specTypesByWorkspace: omitKey(state.specTypesByWorkspace, workspaceId),
 			diffScopeByWorkspace: omitKey(state.diffScopeByWorkspace, workspaceId),
 			reviewsByWorkspace: omitKey(state.reviewsByWorkspace, workspaceId),
 		}));
@@ -1964,12 +1973,18 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set({ specRequest: { workspaceId, path }, rightTabRequest: { workspaceId, tab: "specs" } }),
 	clearSpecRequest: () => set({ specRequest: null }),
 	clearRightTabRequest: () => set({ rightTabRequest: null }),
-	setWorkspaceSpecs: (workspaceId, nodes) =>
-		set((s) =>
-			sameSpecGraph(s.specsByWorkspace[workspaceId], nodes)
-				? {}
-				: { specsByWorkspace: { ...s.specsByWorkspace, [workspaceId]: nodes } },
-		),
+	setWorkspaceSpecs: (workspaceId, nodes, types) =>
+		set((s) => {
+			const sameNodes = sameSpecGraph(s.specsByWorkspace[workspaceId], nodes);
+			const sameTypes =
+				JSON.stringify(s.specTypesByWorkspace[workspaceId]) === JSON.stringify(types);
+			return {
+				...(sameNodes ? {} : { specsByWorkspace: { ...s.specsByWorkspace, [workspaceId]: nodes } }),
+				...(sameTypes
+					? {}
+					: { specTypesByWorkspace: { ...s.specTypesByWorkspace, [workspaceId]: types } }),
+			};
+		}),
 	requestReviewFocus: (workspaceId, commentId) =>
 		set({ reviewFocusRequest: { workspaceId, commentId } }),
 	clearReviewFocus: () => set({ reviewFocusRequest: null }),

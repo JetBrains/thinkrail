@@ -38,22 +38,9 @@ export const REQUIRED_FIELDS = [FIELDS.id, FIELDS.type, FIELDS.title] as const;
 export const IDENTITY_FIELDS = [FIELDS.id, FIELDS.type] as const;
 
 /**
- * The spec `type` values the extension can author (used by `spec_create`). The read model does *not*
- * enforce this set — on-disk files may carry any `type` and are still indexed — so it's an authoring
- * vocabulary, not a validation gate.
+ * The default `status` lifecycle values the extension can author. Optional and unenforced by the read
+ * model; a type card's `statuses` overrides this vocabulary for its own specs (see `types.ts`).
  */
-export const SPEC_TYPES = [
-	"goal-and-requirements",
-	"architecture-design",
-	"module-design",
-	"submodule-design",
-	"task-spec",
-] as const;
-
-/** A spec `type` the extension can author (see {@link SPEC_TYPES}). */
-export type SpecType = (typeof SPEC_TYPES)[number];
-
-/** The `status` lifecycle values the extension can author. Optional and unenforced, like {@link SPEC_TYPES}. */
 export const SPEC_STATUSES = ["draft", "active", "stale", "done", "deprecated"] as const;
 
 /** A spec `status` the extension can author (see {@link SPEC_STATUSES}). */
@@ -114,8 +101,9 @@ function toFrontmatter(loaded: unknown): Frontmatter | null {
  * fence-interior line so CRLF-authored files parse cleanly: the `yaml` lib normalizes interior `\r\n`
  * breaks, but the final line's `\r` has no following `\n` and would otherwise corrupt the last scalar or
  * make a flow list throw. Without a leading/closing fence, `fmText` is null and `body` is the whole file.
+ * Shared with the type-card parser (`types.ts`), which parses the fence interior as full YAML.
  */
-function splitFrontmatter(content: string): { fmText: string | null; body: string } {
+export function splitFrontmatter(content: string): { fmText: string | null; body: string } {
 	const normalized = content.startsWith("\ufeff") ? content.slice(1) : content;
 	const lines = normalized.split("\n");
 	if (lines[0]?.trim() !== FENCE) return { fmText: null, body: content };
