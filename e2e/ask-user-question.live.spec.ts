@@ -187,8 +187,17 @@ test("multi-select: the free-text row is mandatory and additive — checks + typ
 	// Issue #50: the "Other" free-text option must be offered on EVERY question — multi-select no
 	// longer suppresses it. It renders as a native option row with its own checkbox.
 	const custom = card.getByTestId("ask-custom");
+	const customRow = card.getByTestId("ask-custom-row");
 	await expect(custom).toBeVisible();
-	await expect(card.getByTestId("ask-custom-row")).toHaveAttribute("data-selected", "false");
+	await expect(customRow).toHaveAttribute("data-selected", "false");
+
+	// Clicking the row's own chrome must put the caret in the field, NOT flip the checkbox. `<button>` is a
+	// labelable element, so without the explicit `htmlFor` the label's implicit control is the multi-select
+	// include/exclude toggle sitting above the input — tapping "Other" would check an empty row and never
+	// focus anything, which on touch is the only way in.
+	await customRow.getByText("Other", { exact: true }).click();
+	await expect(custom).toBeFocused();
+	await expect(customRow).toHaveAttribute("data-selected", "false");
 
 	// Check two options AND type a custom answer — typing checks the "Other" row (native checkbox) and
 	// must not clear the other checks (additive, not exclusive).

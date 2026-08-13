@@ -64,11 +64,17 @@ registration runs once when the chat module mounts. Unregistered tools fall back
     especially) raises the soft keyboard over someone who was reading — the reveal + scroll-into-view *are*
     the attention treatment there. A **page change** follows a tap, so it may focus — except into a text
     field on a coarse pointer (`shouldFocusPageTarget`), which would raise that same keyboard. The empty
-    composer left focused after Send is safe to hand off. The mirror image holds on the way out: replying
-    or declining unmounts the focused control, so the card hands focus **back to the composer**
+    composer left focused after Send is safe to hand off. The retry window that out-waits a closing focus
+    scope **yields to the user**: the first real `pointerdown`/`keydown` after the reveal ends the claim, so
+    a later retry can never pull focus back out from under a click the user made while it was still trying.
+    The mirror image holds on the way out: replying or declining unmounts the focused control, so the card
+    hands focus **back to the composer**
     (`ChatActions.focusComposer`) instead of stranding it on `<body>` — but only when it still holds focus
     *and* that focus is `:focus-visible`, the platform's own "arrived by keyboard" signal (the one every
     ring in this card is drawn from). A tap/click answer leaves focus alone, so touch keeps its keyboard down.
+    A **failed send undoes the hand-off with the latch**: the form comes back interactive, and since the
+    one-shot claim is long spent and could neither re-focus nor re-announce, the card takes focus back itself
+    rather than reappearing with the keyboard parked in the composer and nothing to say it had returned.
   - **Claude-style local keyboard selector** — one authored choice is in the Tab order; Up/Down wraps
     through every authored choice **and Other**, Home/End jumps to the first/Other target, Space
     selects/toggles an authored choice, and Enter confirms (single-select chooses the focused option;
@@ -78,7 +84,11 @@ registration runs once when the chat module mounts. Unregistered tools fall back
     arrival would clear a single-select pick and paint an empty row as chosen just for passing over it.
     Typing claims the answer (exclusively on single-select, additively on multi-select), emptying the field
     hands it back, multi-select keeps its explicit checkbox for excluding text it should not submit, Up/Down
-    leaves or wraps, and Enter confirms non-empty text. The **Submit button** is the review page's keyboard
+    leaves or wraps, and Enter confirms non-empty text. The row is a `<label>` **explicitly bound to its
+    input via `htmlFor`** — `<button>` is a labelable element too, so on multi-select the implicit control
+    would be the include/exclude toggle above the input in tree order, and clicking the row's chrome would
+    flip an empty checkbox instead of putting the caret in the field (on touch, the only way in).
+    The **Submit button** is the review page's keyboard
     landing point — Enter/Space activate the real control natively, where a heading wearing
     `aria-keyshortcuts` announced static text; a review with nothing answered has no enabled Submit and
     lands on its “Unanswered” nudge instead. On multi-question cards Left/Right moves without wrapping
@@ -89,8 +99,18 @@ registration runs once when the chat module mounts. Unregistered tools fall back
     **A confirm gesture is never a silent no-op**: Enter with nothing to confirm (an empty multi-select set,
     an untouched Other row with no pick above it) says “Choose an option first” beside the action it was
     aiming at, clearing as soon as the question becomes answerable, and spoken through the same live-region
-    pattern as the attention line. From an Other row that *does* have a pick above it, Enter confirms that
-    pick — the gesture always means "confirm what this question has".
+    pattern as the attention line. The complaint belongs to the **question that raised it**
+    (`nudgeShowsOnPage`) — paging on inside its short life must not leave a warning on a question the user
+    never tried to confirm — and each gesture is stamped, so a *second* fruitless Enter empties the region
+    for a frame before refilling it: an unchanged live-region string is silence, which is the very no-op the
+    nudge exists to end.
+    Both Enter paths route through one reducer (`confirmStateFor`), so "confirm what this question has"
+    cannot mean two things. From an Other row that *does* have a pick above it, Enter confirms that pick.
+    From the Other row it commits the state **exactly as it stands** and never re-derives activation from the
+    text: typing already keeps `customActive` in step keystroke by keystroke, so re-patching at confirm time
+    could only contradict the row on screen — resurrecting multi-select text the user explicitly unchecked, or
+    submitting text left over from an earlier edit while the card still paints the option picked after it.
+    What is confirmed always matches what is drawn.
     A selected single-choice note remains an explicit secondary control: Tab reaches Add/Edit note and
     Enter opens it (the legend only promises `Tab note` once a choice exists to hang one on). In the editor
     Enter finishes and returns focus to the choice, Shift+Enter remains the multiline escape hatch, and

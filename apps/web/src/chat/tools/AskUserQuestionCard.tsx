@@ -12,7 +12,7 @@ import {
 	Pencil,
 	SkipForward,
 } from "lucide-react";
-import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import { type KeyboardEvent, useEffect, useId, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib";
 import { useAskFocusScope, useAskState } from "../askState";
 import { useChatActions } from "../ChatActions";
@@ -70,8 +70,8 @@ export function readRecommendation(option: {
 	return { text, recommended: recommended || !!reason, reason };
 }
 
-/** Per-question local UI state. */
-interface QState {
+/** Per-question local UI state. Already public through `deriveAnswer`/`confirmStateFor`. */
+export interface QState {
 	/** Selected single-select option label. */
 	option: string | null;
 	/** Free-text ("Type your own answer") value + whether it's the active answer. */
@@ -215,6 +215,34 @@ export function customTextPatch(text: string): Partial<QState> {
 		: { customText: text, customActive: false };
 }
 
+/** Where a confirm gesture came from: a choice row (with the focused label) or the Other row. */
+export type ConfirmSource = { kind: "choice"; label: string; cursor: number } | { kind: "custom" };
+
+/**
+ * The question state a confirm gesture commits — the single place both Enter paths agree on what "confirm
+ * what this question has" means.
+ *
+ * From a **choice row**: single-select chooses the focused label as it confirms (and drops Other); a
+ * multi-select confirms the set it already has, since Space, not Enter, is its toggle.
+ *
+ * From the **Other row**: the state exactly as it stands. Deliberately *not* re-derived from the text via
+ * `customTextPatch` — `onCustomText` already keeps `customActive` in step with every keystroke, so
+ * re-patching here could only ever contradict the row the user is looking at: it would resurrect
+ * multi-select text they had explicitly unchecked (the one thing that checkbox is for), and on single-select
+ * it would submit text left over from an earlier edit while the card still paints the option picked after
+ * it. Text — never focus, and never a stale value — is what makes Other the answer. Pure.
+ */
+export function confirmStateFor(
+	state: QState,
+	multiSelect: boolean,
+	source: ConfirmSource,
+): QState {
+	if (source.kind === "custom") return state;
+	return multiSelect
+		? { ...state, cursor: source.cursor }
+		: { ...state, cursor: source.cursor, option: source.label, customActive: false };
+}
+
 /**
  * Note editor keys: Enter and Escape finish; Shift+Enter stays available for a newline. **Escape finishes
  * with Shift held too** — the card reads `Shift+Escape` as "skip the questionnaire", and the innermost
@@ -228,6 +256,28 @@ export function noteKeyAction(
 	if (isComposing) return "none";
 	if (key === "Escape" || (key === "Enter" && !shiftKey)) return "finish";
 	return "none";
+}
+
+/** A confirm gesture that had nothing to confirm, stamped so a repeat is a distinct state (see below). */
+export interface ChoiceNudge {
+	/** The question that raised it — the complaint belongs to that page and travels with it, not the card. */
+	question: number;
+	/** Bumped per gesture: a *second* fruitless confirm must re-arm the timer and re-announce. */
+	seq: number;
+}
+
+/**
+ * Whether the "choose an option first" complaint belongs on the page currently shown. Scoped to the
+ * question that raised it: paging on within its 2.5s life must not carry the complaint to a question the
+ * user never tried to confirm. Pure.
+ */
+export function nudgeShowsOnPage(
+	nudge: ChoiceNudge | null,
+	page: number,
+	onReview: boolean,
+	answered: boolean,
+): boolean {
+	return !!nudge && !onReview && nudge.question === page && !answered;
 }
 
 /** Left/Right page navigation across real questions plus the synthetic review page; edges clamp. */
@@ -390,10 +440,14 @@ export function AskUserQuestionCard({
 	// Set once by the attention claim below (never cached): the spoken half of "your input is needed".
 	const [announced, setAnnounced] = useState(false);
 	// A confirm gesture that had nothing to confirm — shown briefly so Enter is never a silent no-op.
-	const [needsChoice, setNeedsChoice] = useState(false);
+	const [nudge, setNudge] = useState<ChoiceNudge | null>(null);
 	// The nudge's spoken half, a frame behind the visible one — same reason as the attention line's.
-	const [needsChoiceSpoken, setNeedsChoiceSpoken] = useState(false);
+	const [nudgeSpoken, setNudgeSpoken] = useState(false);
+	const nudgeSeq = useRef(0);
 	const previousTab = useRef(tab);
+	// Set when a failed send un-latches the form: the reply had already handed focus to the composer, so
+	// the card has to take it back — its one-shot attention claim is long spent and cannot do it.
+	const reclaimFocusAfterFailedSend = useRef(false);
 
 	useEffect(() => {
 		if (awaiting) cardStateCache.set(toolCallId, { states, tab, submitted });
@@ -401,18 +455,29 @@ export function AskUserQuestionCard({
 	}, [toolCallId, awaiting, states, tab, submitted]);
 
 	// The "pick something first" nudge is transient: it answers one keystroke, then gets out of the way.
+	// Keyed on the whole `nudge` object, so a repeat gesture (new `seq`) re-enters here: the region is
+	// emptied for a frame and refilled, and only that *change* makes a screen reader speak the second
+	// keystroke — an identical live-region string is silence, which is the no-op this nudge exists to end.
+	// Re-arming the timeout on the same pass is what keeps the complaint alive as long as it is being made.
 	useEffect(() => {
-		if (!needsChoice) {
-			setNeedsChoiceSpoken(false);
-			return;
-		}
-		const frame = requestAnimationFrame(() => setNeedsChoiceSpoken(true));
-		const timer = setTimeout(() => setNeedsChoice(false), 2500);
+		setNudgeSpoken(false);
+		if (!nudge) return;
+		const frame = requestAnimationFrame(() => setNudgeSpoken(true));
+		const timer = setTimeout(() => setNudge(null), 2500);
 		return () => {
 			cancelAnimationFrame(frame);
 			clearTimeout(timer);
 		};
-	}, [needsChoice]);
+	}, [nudge]);
+
+	// A send that failed put the form back; focus went to the composer at reply time, so bring it back to
+	// the choice the user was standing on — otherwise the card silently reappears with nobody on it.
+	useEffect(() => {
+		if (!reclaimFocusAfterFailedSend.current || submitted) return;
+		reclaimFocusAfterFailedSend.current = false;
+		const card = cardRef.current;
+		if (card) focusQuestionAttention(card);
+	});
 
 	// A user-driven page change hands focus to that page's selected/first choice (or review heading).
 	// Initial attention is handled separately below so its focus-theft guard can make the decision.
@@ -432,9 +497,18 @@ export function AskUserQuestionCard({
 		if (!awaiting || streaming || questions.length === 0 || submitted) return;
 		let frame: number | null = null;
 		let attempts = 0;
+		// The retry window below exists to out-wait a *closing focus scope*, never the user. Any real input
+		// during it means focus is where they just put it, and a later retry would yank it back out from
+		// under the click/keystroke they were making — so the first genuine gesture ends the claim.
+		let userTookOver = false;
+		const yieldToUser = () => {
+			userTookOver = true;
+		};
+		window.addEventListener("pointerdown", yieldToUser, { capture: true, once: true });
+		window.addEventListener("keydown", yieldToUser, { capture: true, once: true });
 		const settleFocus = () => {
 			const card = cardRef.current;
-			if (!card) return;
+			if (!card || userTookOver) return;
 			const kind = focusTargetKind(document.activeElement, card);
 			if (!shouldClaimQuestionFocus(kind, hasCoarsePointer())) return;
 			focusQuestionAttention(card);
@@ -457,6 +531,8 @@ export function AskUserQuestionCard({
 		});
 		return () => {
 			if (frame != null) cancelAnimationFrame(frame);
+			window.removeEventListener("pointerdown", yieldToUser, { capture: true });
+			window.removeEventListener("keydown", yieldToUser, { capture: true });
 		};
 	}, [awaiting, focusScope, questions.length, streaming, submitted, toolCallId]);
 
@@ -476,12 +552,15 @@ export function AskUserQuestionCard({
 		// `:focus-visible` signal every ring in this card is drawn from, i.e. the user got here by keyboard.
 		// A tap/click answer leaves focus alone, so touch keeps its soft keyboard down.
 		const held = document.activeElement;
-		if (held && cardRef.current?.contains(held) && held.matches(":focus-visible")) {
-			actions.focusComposer();
-		}
+		const handedOff = !!held && !!cardRef.current?.contains(held) && held.matches(":focus-visible");
+		if (handedOff) actions.focusComposer();
 		setSubmitted(true);
-		// Un-latch on a failed send (host rejected the session / transport down) so the user can retry.
-		actions.answerQuestion(toolCallId, r).catch(() => setSubmitted(false));
+		// Un-latch on a failed send (host rejected the session / transport down) so the user can retry — and
+		// undo the hand-off with it, or the form returns with the keyboard parked in the composer.
+		actions.answerQuestion(toolCallId, r).catch(() => {
+			reclaimFocusAfterFailedSend.current = handedOff;
+			setSubmitted(false);
+		});
 	};
 
 	// Answered (here or on another client) / legacy-resolved → a compact, read-only record.
@@ -522,7 +601,7 @@ export function AskUserQuestionCard({
 	const canSubmit =
 		!!actions && (onReview || !multipleQuestions ? answers.length > 0 : answeredIndices.has(idx));
 	// Derived once: the visible nudge and its live region must never disagree about whether it is showing.
-	const nudgeVisible = needsChoice && !onReview && !answeredIndices.has(idx);
+	const nudgeVisible = nudgeShowsOnPage(nudge, idx, onReview, answeredIndices.has(idx));
 
 	// Confirm advances (or submits) only what it can actually derive; the write is the *value* the decision
 	// was made from, not a `prev => …` update, so what lands can never disagree with what we advanced on.
@@ -532,24 +611,23 @@ export function AskUserQuestionCard({
 		if (!nextAnswers.some((answer) => answer.questionIndex === idx)) {
 			// Nothing to confirm — an empty multi-select set, or Enter in an untouched Other row. Say so
 			// instead of swallowing the keystroke, and keep the partial state exactly as the user left it.
-			setNeedsChoice(true);
+			// A fresh `seq` every time, so the Nth fruitless keystroke is answered as visibly as the first.
+			nudgeSeq.current += 1;
+			setNudge({ question: idx, seq: nudgeSeq.current });
 			return;
 		}
-		setNeedsChoice(false);
+		setNudge(null);
 		setStates(nextStates);
 		if (multipleQuestions) setTab(Math.min(idx + 1, reviewTab));
 		else reply({ answers: nextAnswers, cancelled: false });
 	};
 
-	const confirmChoice = (label: string, cursor: number) => {
-		confirmQuestion(
-			q.multiSelect
-				? { ...state, cursor }
-				: { ...state, cursor, option: label, customActive: false },
-		);
-	};
+	// Both Enter paths route through one reducer, so "confirm what this question has" cannot mean two things.
+	const confirmChoice = (label: string, cursor: number) =>
+		confirmQuestion(confirmStateFor(state, !!q.multiSelect, { kind: "choice", label, cursor }));
 
-	const confirmCustom = () => confirmQuestion({ ...state, ...customTextPatch(state.customText) });
+	const confirmCustom = () =>
+		confirmQuestion(confirmStateFor(state, !!q.multiSelect, { kind: "custom" }));
 
 	const onCardKeyDown = (event: KeyboardEvent<HTMLElement>) => {
 		if (
@@ -694,7 +772,7 @@ export function AskUserQuestionCard({
 							    the accessibility tree once that region has the text, so never both at once. */}
 							{nudgeVisible ? (
 								<span
-									aria-hidden={needsChoiceSpoken || undefined}
+									aria-hidden={nudgeSpoken || undefined}
 									data-testid="ask-needs-choice"
 									className="shrink-0 whitespace-nowrap text-feedback-warning tr-text-metadata"
 								>
@@ -703,7 +781,7 @@ export function AskUserQuestionCard({
 							) : null}
 							{/* Out of flow (`sr-only` is absolute), so an empty region costs no flex gap. */}
 							<span role="status" aria-live="polite" className="sr-only">
-								{nudgeVisible && needsChoiceSpoken ? "Choose an option first." : ""}
+								{nudgeVisible && nudgeSpoken ? "Choose an option first." : ""}
 							</span>
 							<button
 								type="button"
@@ -1241,7 +1319,10 @@ function OptionRow({
 /**
  * The mandatory "Other" choice, styled as one more option row so it reads native: the same indicator as
  * its siblings (radio on single-select, checkbox on multi-select) plus an inline free-text field. The
- * row is a <label>, so clicking anywhere focuses the input; **typed text** activates it (on single-select
+ * row is a <label> **explicitly bound to the input** (`htmlFor`), which is what makes clicking anywhere in
+ * it focus the field: a `<button>` is a labelable element too, so on multi-select the implicit control
+ * would be the include/exclude toggle *above* the input in tree order — clicking the row's padding or the
+ * word "Other" would flip the checkbox and never focus the field at all. **Typed text** activates it (on single-select
  * that clears the radio pick — exclusive; on multi-select the checked options stay — additive), while
  * mere focus does not: ↑/↓/Home/End wrap through this row, and a pass-over must not spend the answer
  * (`customTextPatch`). On multi-select the checkbox itself is a separate toggle, so the typed text can be
@@ -1268,8 +1349,10 @@ function OtherOptionRow({
 	onMove: (key: "ArrowUp" | "ArrowDown") => void;
 	onConfirm: () => void;
 }) {
+	const inputId = useId();
 	return (
 		<label
+			htmlFor={inputId}
 			data-testid="ask-custom-row"
 			data-selected={active}
 			className={cn(
@@ -1302,6 +1385,7 @@ function OtherOptionRow({
 			<span className="tr-text-ui text-text-default">Other</span>
 			<input
 				ref={inputRef}
+				id={inputId}
 				data-testid="ask-custom"
 				data-ask-page-focus={pageFocus || undefined}
 				aria-label="Other answer"

@@ -2,12 +2,14 @@ import { describe, expect, it } from "bun:test";
 import type { AskUserQuestionAnswer, AskUserQuestionItem } from "@thinkrail/contracts";
 import {
 	choiceKeyAction,
+	confirmStateFor,
 	createQuestionAttentionClaim,
 	customTextPatch,
 	deriveAnswer,
 	deriveAnswers,
 	deriveRecapState,
 	noteKeyAction,
+	nudgeShowsOnPage,
 	parseQuestions,
 	questionPageForKey,
 	readAskResult,
@@ -124,6 +126,90 @@ describe("keyboard interaction", () => {
 		expect(shouldFocusPageTarget(true, true)).toBe(false);
 		expect(shouldFocusPageTarget(true, false)).toBe(true);
 		expect(shouldFocusPageTarget(false, false)).toBe(true);
+	});
+});
+
+describe("confirmStateFor", () => {
+	it("single-select: a choice-row confirm chooses the focused label and drops Other", () => {
+		expect(
+			confirmStateFor(state({ customText: "typed", customActive: true }), false, {
+				kind: "choice",
+				label: "B",
+				cursor: 1,
+			}),
+		).toMatchObject({ option: "B", customActive: false, customText: "typed", cursor: 1 });
+	});
+
+	it("multi-select: a choice-row confirm commits the set it has — Space toggles, Enter does not", () => {
+		expect(
+			confirmStateFor(state({ multi: ["A"] }), true, { kind: "choice", label: "B", cursor: 1 }),
+		).toMatchObject({ multi: ["A"], option: null, cursor: 1 });
+	});
+
+	it("Other-row confirm commits the state as it stands, never re-derived from the text", () => {
+		// The regression this pins: confirming through `customTextPatch(state.customText)` re-activates the
+		// row for ANY non-empty text, which is how a row painted unselected comes to supply the answer.
+		const leftover = state({ option: "A", customText: "stale", customActive: false });
+		expect(confirmStateFor(leftover, false, { kind: "custom" })).toEqual(leftover);
+		const excluded = state({ multi: ["A"], customText: "excluded", customActive: false });
+		expect(confirmStateFor(excluded, true, { kind: "custom" })).toEqual(excluded);
+	});
+
+	it("round-trips with deriveAnswer: the confirmed answer always matches the painted row", () => {
+		const single = q();
+		const multi = q({ multiSelect: true });
+		// single-select: text typed, then an authored option picked — the pick is painted, so the pick wins.
+		const afterPick = state({ option: "A", customText: "stale", customActive: false });
+		expect(
+			deriveAnswer(single, 0, confirmStateFor(afterPick, false, { kind: "custom" })),
+		).toMatchObject({ kind: "option", answer: "A" });
+		// multi-select: text typed then explicitly UNCHECKED — the checkbox's whole purpose is honoured.
+		const afterUncheck = state({ multi: ["A"], customText: "excluded", customActive: false });
+		expect(deriveAnswer(multi, 0, confirmStateFor(afterUncheck, true, { kind: "custom" }))).toEqual(
+			{
+				questionIndex: 0,
+				question: "Which?",
+				kind: "multi",
+				answer: null,
+				selected: ["A"],
+			},
+		);
+		// ...while text the user is actually standing behind still confirms as the answer.
+		const typed = state({ ...customTextPatch("mine") });
+		expect(
+			deriveAnswer(single, 0, confirmStateFor(typed, false, { kind: "custom" })),
+		).toMatchObject({
+			kind: "custom",
+			answer: "mine",
+		});
+		// ...and an untouched Other row with a pick above it still confirms that pick.
+		const untouched = state({ option: "A" });
+		expect(
+			deriveAnswer(single, 0, confirmStateFor(untouched, false, { kind: "custom" })),
+		).toMatchObject({ kind: "option", answer: "A" });
+		// ...and nothing at all is still unanswerable, so the "choose an option first" nudge still fires.
+		expect(deriveAnswer(multi, 0, confirmStateFor(state(), true, { kind: "custom" }))).toBeNull();
+	});
+});
+
+describe("nudgeShowsOnPage", () => {
+	const nudge = { question: 1, seq: 3 };
+
+	it("shows only on the question that raised it", () => {
+		expect(nudgeShowsOnPage(nudge, 1, false, false)).toBe(true);
+		// Paging on within the nudge's 2.5s life must not carry the complaint to a question the user never
+		// tried to confirm — it would sit there as a warning they cannot explain.
+		expect(nudgeShowsOnPage(nudge, 0, false, false)).toBe(false);
+		expect(nudgeShowsOnPage(nudge, 2, false, false)).toBe(false);
+	});
+
+	it("clears once that question is answerable, and never shows on review", () => {
+		expect(nudgeShowsOnPage(nudge, 1, false, true)).toBe(false);
+		expect(nudgeShowsOnPage(nudge, 1, true, false)).toBe(false);
+	});
+
+	it("is absent with no outstanding gesture", () => {
+		expect(nudgeShowsOnPage(null, 0, false, false)).toBe(false);
 	});
 });
 
