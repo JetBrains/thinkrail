@@ -39,6 +39,10 @@ in two halves that share this one `SPEC.md` (written in the first, extended by t
     and leaving it must clear that), and floor-gating it would silently drop the update exactly when a user
     toggles the setting seconds after a check ran. An **interval-only** edit does not sweep — it changes
     cadence, not what any pair's state means, and a settings save must not become a fleet-wide network round.
+    A forced sweep that lands ON TOP OF a check already in flight (started under the OLD mode) is not
+    satisfied by that in-flight promise — its snapshot will describe a mode that is no longer current — so
+    it chains one follow-up check onto it instead, running once the in-flight one settles; the in-flight
+    de-dupe still holds throughout (the follow-up is sequenced, never concurrent).
   - The **jittered backstop**: a self-rescheduling `setTimeout` (never `setInterval` — this repo has none,
     and a self-rescheduling one-shot is what lets the jitter differ every round) whose delay is
     `intervalMs * (1 + JITTER_FRACTION * draw)`, `draw` ∈ `[0, 1)`, `intervalMs` from the host-injected

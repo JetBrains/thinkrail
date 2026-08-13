@@ -246,6 +246,45 @@ test("a changed MODE sweeps every project at once — even inside the anti-thras
 	expect(calls.toSorted()).toEqual(["p1", "p2"]);
 });
 
+test("a changed MODE sweeps again once an OLD-mode check already in flight settles, rather than being satisfied by it", async () => {
+	// The bug this guards: the in-flight de-dupe returned the ALREADY-RUNNING check's promise unconditionally
+	// — including for a forced (`ignoreFloor`) mode-change sweep. That in-flight check started under the OLD
+	// mode, so its published snapshot describes a mode that is no longer current, and nothing else corrects
+	// it once it settles.
+	saveProjects([project("p1")]);
+	const calls: string[] = [];
+	let resolveCheck: (() => void) | undefined;
+	startRemoteChecks({
+		checkProject: async (id) => {
+			calls.push(id);
+			if (calls.length === 1) {
+				// Only the FIRST call hangs — the follow-up sweep must actually complete so the test can
+				// observe it, rather than deadlocking on a second unresolved deferred.
+				await new Promise<void>((resolve) => {
+					resolveCheck = resolve;
+				});
+			}
+		},
+		setTimer: () => 0,
+		clearTimer: () => {},
+	});
+
+	checkNow("p1");
+	await Promise.resolve(); // let checkProject start and suspend on its own still-pending deferred
+	expect(calls).toEqual(["p1"]);
+
+	// The mode change lands while that check is still in flight.
+	configureRemoteChecks({ ...DEFAULT_CONFIG, gitRemoteCheck: "off" });
+	await flushMicrotasks();
+	expect(calls).toEqual(["p1"]); // not yet — still waiting on the in-flight check to settle
+
+	resolveCheck?.();
+	await flushMicrotasks();
+
+	// The forced sweep's follow-up ran once the in-flight check cleared — a second invocation, not zero.
+	expect(calls).toEqual(["p1", "p1"]);
+});
+
 test("an interval-only change rearms but does NOT sweep — a settings save is not a fleet-wide network round", async () => {
 	saveProjects([project("p1")]);
 	const fake = fakeScheduler();

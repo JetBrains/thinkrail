@@ -259,8 +259,16 @@ export function checkNow(projectId: string): Promise<void> {
 function requestCheck(projectId: string, opts: { ignoreFloor?: boolean } = {}): Promise<void> {
 	const state = stateFor(projectId);
 	// Never bypassed, whatever the caller asked for: two concurrent checks of one project would duplicate
-	// the network round AND race each other's published snapshot.
-	if (state.inFlight) return state.inFlight;
+	// the network round AND race each other's published snapshot. A FORCED request (a mode change) landing
+	// on top of a check that started under the OLD mode is not simply satisfied by that in-flight promise,
+	// though — its snapshot will describe the mode that is no longer current. Chain one follow-up onto it
+	// instead of returning it bare, so the forced sweep still runs, just after the in-flight one settles
+	// (by which point `state.inFlight` is clear again, so this can never stack more than one deep).
+	if (state.inFlight) {
+		return opts.ignoreFloor
+			? state.inFlight.then(() => requestCheck(projectId, opts))
+			: state.inFlight;
+	}
 
 	const now = nowFn();
 	if (
