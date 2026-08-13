@@ -98,7 +98,9 @@
 	--chrome: #f2f3f5;
 	--editor-bg: #ffffff;
 	--container-workspace-bg: #ffffff;
-	--container-header-bg: #ffffff;
+	/* Surrounding-interface surface (inactive tabs): a touch off the white central body so the
+	   active tab (= workspace bg) reads distinct from inactive ones, as on the dark theme. */
+	--container-header-bg: #f2f3f5;
 	--elevated: #ffffff;
 	--hover: #e9eaee;
 	--input: #ffffff;
