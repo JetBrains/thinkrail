@@ -13,6 +13,7 @@ import {
 	readAskResult,
 	readRecommendation,
 	shouldClaimQuestionFocus,
+	shouldFocusPageTarget,
 	splitRecommended,
 } from "./AskUserQuestionCard";
 
@@ -114,6 +115,15 @@ describe("keyboard interaction", () => {
 		expect(shouldClaimQuestionFocus("none", true)).toBe(false);
 		expect(shouldClaimQuestionFocus("non-editing", true)).toBe(false);
 		expect(shouldClaimQuestionFocus("empty-composer", true)).toBe(false);
+	});
+
+	it("lets a page change take focus everywhere except into a text field on touch", () => {
+		// A page change follows a tap the user just made, so it may move focus on touch — but landing in the
+		// Other input would raise the soft keyboard the reveal path takes such care never to raise.
+		expect(shouldFocusPageTarget(false, true)).toBe(true);
+		expect(shouldFocusPageTarget(true, true)).toBe(false);
+		expect(shouldFocusPageTarget(true, false)).toBe(true);
+		expect(shouldFocusPageTarget(false, false)).toBe(true);
 	});
 });
 

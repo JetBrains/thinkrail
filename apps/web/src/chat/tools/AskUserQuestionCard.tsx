@@ -260,6 +260,15 @@ export function shouldClaimQuestionFocus(
 	return target === "none" || target === "non-editing" || target === "empty-composer";
 }
 
+/**
+ * Whether a **page change** may focus that page's landing target. It follows a gesture the user just made,
+ * so unlike the initial claim it may move focus on touch — except into a text field, which raises the soft
+ * keyboard the reveal path avoids (page away from a typed-in Other row and back, and that is the target).
+ */
+export function shouldFocusPageTarget(textEntryTarget: boolean, coarsePointer: boolean): boolean {
+	return !(textEntryTarget && coarsePointer);
+}
+
 // Tab↔panel wiring ids. Several cards can be on screen at once, so both are qualified by the tool call.
 const panelDomId = (toolCallId: string) => `ask-panel-${toolCallId}`;
 const tabDomId = (toolCallId: string, page: number | "review") => `ask-tab-${toolCallId}-${page}`;
@@ -320,9 +329,10 @@ function isTextEntryTarget(target: EventTarget | null): boolean {
 }
 
 function focusCurrentQuestionPage(card: HTMLElement): void {
-	card
-		.querySelector<HTMLElement>('[data-ask-page-focus="true"]:not([disabled])')
-		?.focus({ preventScroll: true });
+	const target = card.querySelector<HTMLElement>('[data-ask-page-focus="true"]:not([disabled])');
+	if (!target) return;
+	if (!shouldFocusPageTarget(isTextEntryTarget(target), hasCoarsePointer())) return;
+	target.focus({ preventScroll: true });
 }
 
 function focusQuestionAttention(card: HTMLElement): void {
@@ -381,6 +391,8 @@ export function AskUserQuestionCard({
 	const [announced, setAnnounced] = useState(false);
 	// A confirm gesture that had nothing to confirm — shown briefly so Enter is never a silent no-op.
 	const [needsChoice, setNeedsChoice] = useState(false);
+	// The nudge's spoken half, a frame behind the visible one — same reason as the attention line's.
+	const [needsChoiceSpoken, setNeedsChoiceSpoken] = useState(false);
 	const previousTab = useRef(tab);
 
 	useEffect(() => {
@@ -390,9 +402,16 @@ export function AskUserQuestionCard({
 
 	// The "pick something first" nudge is transient: it answers one keystroke, then gets out of the way.
 	useEffect(() => {
-		if (!needsChoice) return;
+		if (!needsChoice) {
+			setNeedsChoiceSpoken(false);
+			return;
+		}
+		const frame = requestAnimationFrame(() => setNeedsChoiceSpoken(true));
 		const timer = setTimeout(() => setNeedsChoice(false), 2500);
-		return () => clearTimeout(timer);
+		return () => {
+			cancelAnimationFrame(frame);
+			clearTimeout(timer);
+		};
 	}, [needsChoice]);
 
 	// A user-driven page change hands focus to that page's selected/first choice (or review heading).
@@ -502,6 +521,8 @@ export function AskUserQuestionCard({
 	const showContinue = multipleQuestions && !onReview;
 	const canSubmit =
 		!!actions && (onReview || !multipleQuestions ? answers.length > 0 : answeredIndices.has(idx));
+	// Derived once: the visible nudge and its live region must never disagree about whether it is showing.
+	const nudgeVisible = needsChoice && !onReview && !answeredIndices.has(idx);
 
 	// Confirm advances (or submits) only what it can actually derive; the write is the *value* the decision
 	// was made from, not a `prev => …` update, so what lands can never disagree with what we advanced on.
@@ -668,16 +689,22 @@ export function AskUserQuestionCard({
 						<div className="flex items-center justify-end gap-md">
 							{/* Sits beside the action the keystroke was aiming at, so the answer to "why did
 							    nothing happen?" is where the user is already looking. It clears the moment the
-							    question becomes answerable (the complaint is stale), and times out otherwise. */}
-							{needsChoice && !onReview && !answeredIndices.has(idx) ? (
+							    question becomes answerable (the complaint is stale), and times out otherwise.
+							    Spoken by the region below, not by announcing itself: the visible copy yields
+							    the accessibility tree once that region has the text, so never both at once. */}
+							{nudgeVisible ? (
 								<span
-									role="status"
+									aria-hidden={needsChoiceSpoken || undefined}
 									data-testid="ask-needs-choice"
 									className="shrink-0 whitespace-nowrap text-feedback-warning tr-text-metadata"
 								>
 									Choose an option first
 								</span>
 							) : null}
+							{/* Out of flow (`sr-only` is absolute), so an empty region costs no flex gap. */}
+							<span role="status" aria-live="polite" className="sr-only">
+								{nudgeVisible && needsChoiceSpoken ? "Choose an option first." : ""}
+							</span>
 							<button
 								type="button"
 								data-testid="ask-skip"
@@ -726,13 +753,19 @@ export function AskUserQuestionCard({
  * that the attention claim fills one frame later, exactly once per mounted chat — so it is announced when
  * it appears (a live region inserted together with its text often is not) and stays quiet through every
  * Virtuoso remount as the user scrolls past a question they already know about.
+ *
+ * **Exactly one copy is in the accessibility tree**: the visible line goes `aria-hidden` once the region
+ * carries the text, so the line is read once — and a remount, where the claim is spent and the region
+ * stays empty, still exposes it.
  */
 function AttentionLine({ announced }: { announced: boolean }) {
 	return (
 		<div className="flex items-center gap-xs text-primary tr-text-action">
-			<MessageCircleQuestion className="size-3.5 shrink-0" />
-			<span>Your input is needed</span>
-			<span className="text-text-muted tr-text-metadata">· Agent is waiting</span>
+			<span aria-hidden={announced || undefined} className="flex items-center gap-xs">
+				<MessageCircleQuestion className="size-3.5 shrink-0" />
+				<span>Your input is needed</span>
+				<span className="text-text-muted tr-text-metadata">· Agent is waiting</span>
+			</span>
 			<span role="status" aria-live="polite" className="sr-only">
 				{announced ? "Your input is needed — the agent is waiting." : ""}
 			</span>
@@ -939,6 +972,12 @@ function QuestionBody({
 	const cursor = Math.min(Math.max(state.cursor, 0), Math.max(otherIndex - 1, 0));
 	const customOwnsPageFocus =
 		state.customActive && (!question.multiSelect || state.multi.length === 0);
+	// The one choice a note can hang on. A label that no longer exists in the args (picked mid-stream, then
+	// renamed) owns nothing — the staleness `deriveAnswer` filters, so control and answer agree.
+	const noteIndex = question.multiSelect
+		? -1
+		: question.options.findIndex((option) => option.label === state.option);
+	const noteOption = noteIndex < 0 ? undefined : question.options[noteIndex];
 	// Previews are a single-select affordance (the pane follows `state.option`); a multi-select question
 	// authored with previews anyway renders without the pane rather than with one that never updates.
 	const anyPreview = !question.multiSelect && question.options.some((option) => option.preview);
@@ -995,25 +1034,30 @@ function QuestionBody({
 				</p>
 			</div>
 			<div className={cn("grid gap-sm", anyPreview && "md:grid-cols-2")}>
-				{/* A listbox, not a radiogroup: this card's keys ARE the listbox pattern — a roving cursor that
-				    moves without committing, Space to select, Enter to confirm — where a radiogroup's arrows
-				    select as they move. `aria-selected` per row then means what the indicator draws, and each
-				    row is announced with its position in the set. (The mandatory Other row rides inside the
-				    list as a text field; AT tolerates the non-`option` child and announces it for what it is.) */}
-				<div
-					role="listbox"
-					aria-multiselectable={!!question.multiSelect}
-					aria-label={question.question}
-					className="flex min-w-0 flex-col gap-sm"
-				>
-					{question.options.map((option, index) => {
-						const selected = question.multiSelect
-							? state.multi.includes(option.label)
-							: state.option === option.label;
-						const ownsCursor = index === cursor;
-						return (
-							<div key={option.label} className="flex flex-col gap-xs">
+				<div className="flex min-w-0 flex-col gap-sm">
+					{/* A listbox, not a radiogroup: this card's keys ARE the listbox pattern — a roving cursor
+					    that moves without committing, Space to select, Enter to confirm — where a radiogroup's
+					    arrows select as they move. `aria-selected` per row then means what the indicator draws,
+					    and each row is announced with its position in the set.
+
+					    It owns **nothing but `option`s** — a `listbox` may only own `option`/`group`, and a
+					    stray textarea/button/input inside one is skipped by some screen readers and corrupts
+					    the announced set — so the note editor and the Other row are siblings below it.
+					    Movement runs through `choiceRefs`, not DOM containment, so the keys are unaffected. */}
+					<div
+						role="listbox"
+						aria-multiselectable={!!question.multiSelect}
+						aria-label={question.question}
+						className="flex flex-col gap-sm"
+					>
+						{question.options.map((option, index) => {
+							const selected = question.multiSelect
+								? state.multi.includes(option.label)
+								: state.option === option.label;
+							const ownsCursor = index === cursor;
+							return (
 								<OptionRow
+									key={option.label}
 									buttonRef={(node) => {
 										choiceRefs.current[index] = node;
 									}}
@@ -1033,49 +1077,49 @@ function QuestionBody({
 											: onSelect(option.label, index)
 									}
 								/>
-								{selected && !question.multiSelect ? (
-									<div className="pl-[calc(1.125rem+var(--spacing-sm))]">
-										{state.noteFor === option.label ? (
-											<textarea
-												ref={noteRef}
-												data-testid="ask-note"
-												aria-label={`Note for ${splitRecommended(option.label).text}`}
-												aria-keyshortcuts="Enter Shift+Enter Escape"
-												rows={2}
-												value={state.notes[option.label] ?? ""}
-												placeholder="Add a note for the model…"
-												onChange={(event) => onNote(option.label, event.target.value)}
-												onKeyDown={(event) => {
-													if (
-														noteKeyAction(
-															event.key,
-															event.shiftKey,
-															event.nativeEvent.isComposing,
-														) === "finish"
-													) {
-														event.preventDefault();
-														event.stopPropagation();
-														finishNote(index);
-													}
-												}}
-												className="w-full resize-none rounded-[var(--radius-sm)] border border-control-border-default bg-control-bg px-sm py-xs text-text-default tr-text-metadata outline-none focus-visible:border-control-border-active focus-visible:ring-2 focus-visible:ring-primary-soft"
-											/>
-										) : (
-											<button
-												type="button"
-												data-testid="ask-note-toggle"
-												onClick={() => openNote(option.label, index)}
-												className="flex items-center gap-xs rounded-[var(--radius-sm)] text-text-muted tr-text-metadata outline-none hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary-soft"
-											>
-												<Pencil className="size-3" />
-												{state.notes[option.label]?.trim() ? "Edit note" : "Add note"}
-											</button>
-										)}
-									</div>
-								) : null}
-							</div>
-						);
-					})}
+							);
+						})}
+					</div>
+
+					{/* The selected single-select choice's note, indented to its label. Only one choice can own
+					    one, and `aria-label` names it — what AT gets in place of adjacency. */}
+					{noteOption ? (
+						<div className="pl-[calc(1.125rem+var(--spacing-sm))]">
+							{state.noteFor === noteOption.label ? (
+								<textarea
+									ref={noteRef}
+									data-testid="ask-note"
+									aria-label={`Note for ${splitRecommended(noteOption.label).text}`}
+									aria-keyshortcuts="Enter Shift+Enter Escape"
+									rows={2}
+									value={state.notes[noteOption.label] ?? ""}
+									placeholder="Add a note for the model…"
+									onChange={(event) => onNote(noteOption.label, event.target.value)}
+									onKeyDown={(event) => {
+										if (
+											noteKeyAction(event.key, event.shiftKey, event.nativeEvent.isComposing) ===
+											"finish"
+										) {
+											event.preventDefault();
+											event.stopPropagation();
+											finishNote(noteIndex);
+										}
+									}}
+									className="w-full resize-none rounded-[var(--radius-sm)] border border-control-border-default bg-control-bg px-sm py-xs text-text-default tr-text-metadata outline-none focus-visible:border-control-border-active focus-visible:ring-2 focus-visible:ring-primary-soft"
+								/>
+							) : (
+								<button
+									type="button"
+									data-testid="ask-note-toggle"
+									onClick={() => openNote(noteOption.label, noteIndex)}
+									className="flex items-center gap-xs rounded-[var(--radius-sm)] text-text-muted tr-text-metadata outline-none hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary-soft"
+								>
+									<Pencil className="size-3" />
+									{state.notes[noteOption.label]?.trim() ? "Edit note" : "Add note"}
+								</button>
+							)}
+						</div>
+					) : null}
 
 					{/* The "Other" option is MANDATORY — offered on every question (issue #50) — and looks native:
 					    one more option row (radio on single-select, checkbox on multi-select) with the free-text

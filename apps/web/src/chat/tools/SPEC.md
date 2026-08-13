@@ -50,7 +50,9 @@ registration runs once when the chat module mounts. Unregistered tools fall back
     revealed with an assertive visual “needs you” treatment plus a polite assistive-tech announcement. The
     spoken half is an **always-mounted live region filled a frame later by the same one-shot claim**: a
     region inserted together with its text is announced unreliably, and a virtualized remount must not
-    re-announce a question the user has already been told about.
+    re-announce a question the user has already been told about. **Exactly one copy is in the accessibility
+    tree**: the visible line goes `aria-hidden` once the region carries the text, so a remount (region
+    deliberately empty) still exposes the line.
     Per active-chat mount it focuses the selected choice (including Other) or first authored choice once;
     a virtualized remount never reclaims focus, while a fresh `ChatView` mount does (see `chat/SPEC.md` —
     that means any switch back to the chat tab, not only reopening the chat). It reveals but does **not**
@@ -60,7 +62,8 @@ registration runs once when the chat module mounts. Unregistered tools fall back
     popover out from under the user, so the card does not enter it. A **coarse pointer never gives up
     focus** at all: on a phone there is no keyboard flow to hand off to, and focusing a row (the Other input
     especially) raises the soft keyboard over someone who was reading — the reveal + scroll-into-view *are*
-    the attention treatment there. (Page changes are exempt: those follow a tap the user just made.) The empty
+    the attention treatment there. A **page change** follows a tap, so it may focus — except into a text
+    field on a coarse pointer (`shouldFocusPageTarget`), which would raise that same keyboard. The empty
     composer left focused after Send is safe to hand off. The mirror image holds on the way out: replying
     or declining unmounts the focused control, so the card hands focus **back to the composer**
     (`ChatActions.focusComposer`) instead of stranding it on `<body>` — but only when it still holds focus
@@ -85,8 +88,9 @@ registration runs once when the chat module mounts. Unregistered tools fall back
     *into* the panel rather than staying on the chip, since the page is what the user came to act on.
     **A confirm gesture is never a silent no-op**: Enter with nothing to confirm (an empty multi-select set,
     an untouched Other row with no pick above it) says “Choose an option first” beside the action it was
-    aiming at, clearing as soon as the question becomes answerable. From an Other row that *does* have a
-    pick above it, Enter confirms that pick — the gesture always means "confirm what this question has".
+    aiming at, clearing as soon as the question becomes answerable, and spoken through the same live-region
+    pattern as the attention line. From an Other row that *does* have a pick above it, Enter confirms that
+    pick — the gesture always means "confirm what this question has".
     A selected single-choice note remains an explicit secondary control: Tab reaches Add/Edit note and
     Enter opens it (the legend only promises `Tab note` once a choice exists to hang one on). In the editor
     Enter finishes and returns focus to the choice, Shift+Enter remains the multiline escape hatch, and
@@ -99,7 +103,11 @@ registration runs once when the chat module mounts. Unregistered tools fall back
     announced an exclusive pick as a toggle button and said nothing about the set. Listbox is the pattern
     whose *keys* these are (a cursor that moves without committing, Space to select, Enter to confirm),
     where a radiogroup's arrows select as they move; `aria-multiselectable` carries single vs multi, and
-    each row is announced with its position in the choices.
+    each row is announced with its position in the choices. It owns **nothing but `option`s** (a `listbox`
+    may only own `option`/`group`; a stray input/textarea/button inside one is skipped by some screen
+    readers and corrupts the announced set), so the **Other row and the note editor are siblings below the
+    list** — hence the note rendering under the list rather than its own row, named by `aria-label` instead
+    of adjacency. Movement is driven by the choice refs, not DOM containment, so the keys are unaffected.
     Bare-letter/number shortcuts and global chords are deliberately absent so
     browser extensions, custom text, and explicit decline stay safe.
   - **Recommended-reason affordance** — a recommended option (label suffix `(Recommended)` **or** a
