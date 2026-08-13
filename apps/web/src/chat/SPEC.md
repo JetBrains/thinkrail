@@ -490,10 +490,18 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
 - **Plain `↑` recall + history button** — `Composer`'s `recentPrompts` prop (`ChatView`: this chat's own
   user-turn texts via `turnAnchorText`, newest first, deduped **keeping the newest occurrence** — the same
   recency-first ranking rule as the server history index, the atuin/fzf convention) backs a lightweight
-  recall session (`recallIdx`) gated so it can never eat a draft: `↑` only steps in when the field is
+  recall session (`recallIdxRef`) gated so it can never eat a draft: `↑` only steps in when the field is
   **empty** or a recall is already active (older → higher index), `↓` steps newer (past the newest
   restores `""`), any diverging edit or a submit exits the session, and the recalled text lands with the
-  caret at its end. A `History`-icon button (`data-testid="history-open"`, `aria-label="Search history"`,
+  caret at its end. The session index is a **ref, never state**: nothing renders from it, and stepping
+  writes the index *here* while the draft goes through `onChange` to the **parent's** store, so as state
+  the two could commit in separate passes. In that window the textarea already showed the recalled text
+  while still carrying the previous render's handlers and their stale index — a second `↑` re-recalled the
+  same entry instead of stepping, and an edit failed to end the session, so the next `↑`/`↓` stepped from
+  the live index and **overwrote what the user had just typed** (the loss `replaceDraft` guards against on
+  the insert paths, arriving through the keyboard path instead). A ref reads at its last written value, so
+  commit ordering cannot enter into it. Handlers take **one snapshot per event** — the ref cannot change
+  inside a synchronous handler, and one read stays narrowable where repeated `.current` reads do not. A `History`-icon button (`data-testid="history-open"`, `aria-label="Search history"`,
   always rendered next to send) calls the same `openHistory` the global `Ctrl+R` reaches — the tap path
   on mobile, a discoverability affordance on desktop.
 - **Chat TODO plan** — the chat's `pi-todos` list surfaced **only in the chat** (engine:
