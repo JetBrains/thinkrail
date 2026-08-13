@@ -370,12 +370,6 @@ if (installPicker) {
 		userAgent: browserNavigator.userAgent,
 		maxTouchPoints: browserNavigator.maxTouchPoints,
 	});
-	const platformLabel: Record<InstallPlatform, string> = {
-		macos: "macOS",
-		linux: "Linux",
-		windows: "Windows",
-	};
-
 	const platformTabs = document.querySelectorAll<HTMLButtonElement>("[data-install-platform]");
 	const platformPanels = document.querySelectorAll<HTMLElement>("[data-install-panel]");
 	const shellTabs = document.querySelectorAll<HTMLButtonElement>("[data-windows-shell]");
@@ -398,21 +392,6 @@ if (installPicker) {
 	let selectedPlatform: InstallPlatform = detectedPlatform ?? "linux";
 	const initialShell: WindowsShell = "powershell";
 
-	const updateDetectionNote = () => {
-		for (const note of document.querySelectorAll<HTMLElement>("[data-install-detection-note]")) {
-			if (selectedPlatform === "windows") {
-				note.textContent =
-					detectedPlatform === "windows"
-						? "Windows detected — choose your shell."
-						: "Choose your Windows shell.";
-			} else if (detectedPlatform) {
-				note.textContent = `Detected ${platformLabel[detectedPlatform]}. You can switch at any time.`;
-			} else {
-				note.textContent = "Choose your OS. You can switch at any time.";
-			}
-		}
-	};
-
 	const selectPlatform = (platform: InstallPlatform) => {
 		selectedPlatform = platform;
 		for (const tab of platformTabs) {
@@ -424,7 +403,6 @@ if (installPicker) {
 			panel.hidden = platformFrom(panel.dataset.installPanel) !== platform;
 		}
 		if (shellSwitcher) shellSwitcher.hidden = platform !== "windows";
-		updateDetectionNote();
 		syncActiveCommand();
 	};
 
