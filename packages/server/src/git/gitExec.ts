@@ -91,14 +91,17 @@ export const BACKGROUND_FETCH_TIMEOUT_MS = 15_000;
  * would then fail for reasons unrelated to the caller's intent (e.g. passing `REMOTE_ENV`). Still no `raw`:
  * byte-exact reads stay on the sync runner.
  *
- * When a deadline is set, the child is spawned `detached` (its own session/process group) purely so the
- * deadline can kill the whole **group**, not just the immediate pid: `git`'s http transport forks a
- * `git-remote-http` helper (itself forking again) that inherits the stdout/stderr pipes, and
+ * When a deadline is set (on POSIX), the child is spawned `detached` (its own session/process group)
+ * purely so the deadline can kill the whole **group**, not just the immediate pid: `git`'s http transport
+ * forks a `git-remote-http` helper (itself forking again) that inherits the stdout/stderr pipes, and
  * `proc.kill()` alone only signals the top `git` process — verified empirically to leave the helper
  * running, still holding the pipes open, so the read side of this function hung forever even after the
  * "killed" child was gone. Killing `-pid` (the negative pid = the whole group, valid because `detached`
  * makes this child its own group leader) reaps the helper too, which is what lets the stdout/stderr reads
- * below actually see EOF. No deadline, no detach: `timeoutMs` stays optional so a purely local,
+ * below actually see EOF. Windows has no such group-kill: `-pid` is a POSIX-only signal target, and
+ * `process.kill` throws for it there — so the deadline instead runs `taskkill /T`, which walks the
+ * parent→child PID tree Windows already tracks and needs no `detached` spawn flag to work. No deadline, no
+ * `detached` (POSIX) / no `taskkill` (Windows): `timeoutMs` stays optional so a purely local,
  * no-network `gitAsync` call (should one ever be added) isn't forced to invent a duration for something
  * that cannot hang, rather than because any *current* caller relies on staying undetached — every
  * network-bound caller today (`git.ts`'s `prefetchBranch`, `workspaces`' create-time fallback fetch, both
@@ -111,23 +114,32 @@ export async function gitAsync(
 	opts: { timeoutMs?: number; env?: Record<string, string | undefined> } = {},
 ): Promise<{ ok: boolean; out: string; err: string }> {
 	const hasDeadline = opts.timeoutMs !== undefined;
+	const isWindows = process.platform === "win32";
 	const proc = Bun.spawn(gitArgv(cwd, args), {
 		stdout: "pipe",
 		stderr: "pipe",
-		...(hasDeadline ? { detached: true } : {}),
+		...(hasDeadline && !isWindows ? { detached: true } : {}),
 		...(opts.env ? { env: { ...process.env, ...opts.env } } : {}),
 	});
 
-	// A network-bound child must not outlive its deadline: kill its whole group, so the socket, any forked
+	// A network-bound child must not outlive its deadline: kill its whole tree, so the socket, any forked
 	// transport helper, and the scheduler's slot are all released. `timedOut` is what turns the resulting
 	// non-zero exit into an honest message. The kill can race the child's own natural exit (it may finish
-	// between the timer firing and the signal landing) — `process.kill` throws `ESRCH` for a group that's
-	// already gone, which must not become an uncaught exception in a timer callback.
+	// between the timer firing and the signal landing) — both branches below must tolerate that race
+	// silently rather than let it become an uncaught exception in a timer callback.
 	let timedOut = false;
 	const timer = !hasDeadline
 		? null
 		: setTimeout(() => {
 				timedOut = true;
+				if (isWindows) {
+					// `/T` kills the process tree (the parent-child PIDs Windows already tracks), which is
+					// this platform's stand-in for the POSIX group-kill below — fire-and-forget, exactly
+					// like `process.kill`: a target that already exited just makes `taskkill` itself fail,
+					// which nothing here awaits or inspects.
+					Bun.spawn(["taskkill", "/pid", String(proc.pid), "/T", "/F"]);
+					return;
+				}
 				try {
 					process.kill(-proc.pid, "SIGTERM");
 				} catch {
