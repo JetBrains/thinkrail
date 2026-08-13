@@ -139,9 +139,10 @@
 	--accent: var(--control-primary-bg-hovered);
 }
 
-/* Light theme: the JetBrains InnovationHub tag is black (text-default), not the accent green. */
+/* Light theme: the JetBrains InnovationHub tag is black (text-default) with no background fill. */
 [data-theme="light"] .hero-kicker .pill-accent {
 	--accent: var(--text);
+	background: transparent;
 }
 
 [data-theme="gruvbox"] {
