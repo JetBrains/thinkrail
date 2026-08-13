@@ -15,7 +15,7 @@ save / delete `.md` files, surfacing pi's own frontmatter (`description`, `argum
 Consumed by the `template.*` host handlers (Task B3); this module owns no WS surface itself — `cwd` is
 passed in by the caller (a resolved workspace), never looked up here.
 
-## pi facts (pinned against pi v0.80.6 — `@earendil-works/pi-coding-agent`)
+## pi facts (pinned against pi v0.84.1 — `@earendil-works/pi-coding-agent`)
 
 Verified by reading `dist/core/prompt-templates.js` (`loadTemplateFromFile` / `loadTemplatesFromDir` /
 `loadPromptTemplates`), `dist/core/resource-loader.js` (`dedupePrompts`, `updatePromptsFromPaths`), and

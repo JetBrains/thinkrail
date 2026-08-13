@@ -53,10 +53,11 @@ test("nudges exactly the project's workspaces whose diff base is the moved ref, 
 
 	nudgeBaseRefWorkspaces("p1", "origin/main");
 
-	// Pathless (an invalidation, not data — no `.git` path may reach a client), never truncated.
+	// Pathless (an invalidation, not data — no `.git` path may reach a client), never truncated or
+	// skill-relevant.
 	expect(frames).toEqual([
-		{ workspaceId: "w-base", paths: [], truncated: false },
-		{ workspaceId: "w-repointed", paths: [], truncated: false },
+		{ workspaceId: "w-base", paths: [], truncated: false, skillChange: "none" },
+		{ workspaceId: "w-repointed", paths: [], truncated: false, skillChange: "none" },
 	]);
 });
 

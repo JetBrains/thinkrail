@@ -1,8 +1,8 @@
-import { mkdirSync, realpathSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, realpathSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import { TodoStore } from "pi-todos/core";
-import { enterDefaultWorkspace, openFixtureProject } from "./fixtures/app";
+import { defaultWorkspaceRow, enterDefaultWorkspace, openFixtureProject } from "./fixtures/app";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { seedWorkspaceSession } from "./fixtures/sessions";
 
@@ -94,6 +94,147 @@ test("a disk chat with unfinished TODOs auto-opens (scrolled to its latest messa
 	await expect(
 		page.getByTestId("closed-chat-item").filter({ hasText: "release notes chat" }),
 	).toHaveCount(1);
+});
+
+test("a closed chat can be moved to trash from history", async ({ page }) => {
+	await openFixtureProject(page);
+
+	const doomed = seedWorkspaceSession(repoCwd(), {
+		name: "trash this chat",
+		messages: [{ role: "user", text: "remove this transcript", timestamp: BASE_TS }],
+	});
+	setMtime(doomed.path, BASE_TS);
+	const searchDoomed = seedWorkspaceSession(repoCwd(), {
+		name: "search trash chat",
+		messages: [{ role: "user", text: "delete this from search", timestamp: BASE_TS + 10_000 }],
+	});
+	setMtime(searchDoomed.path, BASE_TS + 10_000);
+	const kept = seedWorkspaceSession(repoCwd(), {
+		name: "keep this chat",
+		messages: [{ role: "user", text: "keep this transcript", timestamp: BASE_TS + 50_000 }],
+	});
+	setMtime(kept.path, BASE_TS + 50_000);
+
+	await enterDefaultWorkspace(page);
+	await expect(page.getByText("keep this transcript")).toBeVisible();
+	await page.getByTestId("chat-history").click();
+	const row = page.getByTestId("closed-chat-row").filter({ hasText: "trash this chat" });
+	await row.getByTestId("closed-chat-delete").click();
+
+	await expect.poll(() => existsSync(doomed.path)).toBe(false);
+	await page.getByTestId("chat-history").click();
+	await expect(
+		page.getByTestId("closed-chat-row").filter({ hasText: "trash this chat" }),
+	).toHaveCount(0);
+	await page.keyboard.press("Escape");
+	await expect(page.getByText("remove this transcript")).toHaveCount(0);
+
+	await page.getByTestId("chat-input").press("Control+r");
+	await page.getByTestId("history-query").fill("delete this from search");
+	const searchRow = page
+		.locator('[data-testid="history-item"][data-kind="prompt"]')
+		.filter({ hasText: "delete this from search" });
+	await searchRow.getByTestId("history-delete-chat").click();
+	await expect(page.getByTestId("history-overlay")).toHaveCount(0);
+	await expect.poll(() => existsSync(searchDoomed.path)).toBe(false);
+});
+
+test("trashing a chat converges to a second client", async ({ page, context }) => {
+	await openFixtureProject(page);
+
+	const doomed = seedWorkspaceSession(repoCwd(), {
+		name: "shared doomed chat",
+		messages: [{ role: "user", text: "shared doomed transcript", timestamp: BASE_TS }],
+	});
+	setMtime(doomed.path, BASE_TS);
+
+	await enterDefaultWorkspace(page);
+	await expect(page.getByText("shared doomed transcript")).toBeVisible();
+
+	const page2 = await context.newPage();
+	await page2.goto("/");
+	await expect(page2.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+	await page2.getByTestId("project-expand").first().click();
+	await defaultWorkspaceRow(page2).click();
+	await expect(page2.getByText("shared doomed transcript")).toBeVisible();
+
+	const chatTab = page.locator('[data-testid="editor-tab"][data-kind="chat"]');
+	await chatTab.getByTestId("editor-tab-close").click();
+	await page.getByTestId("chat-history").click();
+	const row = page.getByTestId("closed-chat-row").filter({ hasText: "shared doomed chat" });
+	await row.getByTestId("closed-chat-delete").click();
+
+	await expect.poll(() => existsSync(doomed.path)).toBe(false);
+	await expect(page2.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(0);
+	await expect(page2.getByTestId("workspace-ready")).toBeVisible();
+	await page2.close();
+});
+
+test("a client that misses chat deletion while offline reconciles it after reconnect", async ({
+	page,
+	browser,
+}) => {
+	await openFixtureProject(page);
+
+	const doomed = seedWorkspaceSession(repoCwd(), {
+		name: "offline doomed chat",
+		messages: [{ role: "user", text: "offline doomed transcript", timestamp: BASE_TS }],
+	});
+	setMtime(doomed.path, BASE_TS);
+
+	await enterDefaultWorkspace(page);
+	await expect(page.getByText("offline doomed transcript")).toBeVisible();
+
+	// A separate browser context can lose network independently while the first client performs the delete.
+	// Chromium's offline emulation does not close an already-open WebSocket, so retain that socket from an
+	// init script: after network is blocked the test closes it explicitly, preventing its automatic retry
+	// from reconnecting until the context comes back online.
+	const context2 = await browser.newContext();
+	await context2.addInitScript(() => {
+		const NativeWebSocket = window.WebSocket;
+		class TrackedWebSocket extends NativeWebSocket {
+			constructor(url: string | URL, protocols?: string | string[]) {
+				super(url, protocols);
+				Object.defineProperty(window, "__thinkrailE2eSocket", {
+					configurable: true,
+					value: this,
+				});
+			}
+		}
+		window.WebSocket = TrackedWebSocket;
+	});
+	const page2 = await context2.newPage();
+	await page2.goto(page.url());
+	await expect(page2.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+	await page2.getByTestId("project-expand").first().click();
+	await defaultWorkspaceRow(page2).click();
+	await expect(page2.getByText("offline doomed transcript")).toBeVisible();
+
+	await context2.setOffline(true);
+	await page2.evaluate(() => {
+		const socket = Object.getOwnPropertyDescriptor(window, "__thinkrailE2eSocket")?.value;
+		if (socket instanceof WebSocket) socket.close();
+	});
+	await expect(page2.getByTestId("connection-status")).toHaveAttribute(
+		"data-status",
+		"disconnected",
+	);
+
+	const chatTab = page.locator('[data-testid="editor-tab"][data-kind="chat"]');
+	await chatTab.getByTestId("editor-tab-close").click();
+	await page.getByTestId("chat-history").click();
+	await page
+		.getByTestId("closed-chat-row")
+		.filter({ hasText: "offline doomed chat" })
+		.getByTestId("closed-chat-delete")
+		.click();
+	await expect.poll(() => existsSync(doomed.path)).toBe(false);
+
+	await context2.setOffline(false);
+	await expect(page2.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+	await expect(page2.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(0);
+	await expect(page2.getByTestId("workspace-ready")).toBeVisible();
+	await context2.close();
 });
 
 test("with no TODOs anywhere, the most recent disk chat opens as the fallback", async ({

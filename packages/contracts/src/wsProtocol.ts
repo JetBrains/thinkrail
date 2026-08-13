@@ -15,6 +15,7 @@ import type {
 	HistorySearchResult,
 	JbcentralConnectResult,
 	LoginReply,
+	OpenBranchReview,
 	Project,
 	ProjectPathStatus,
 	ProviderStatusReport,
@@ -198,7 +199,19 @@ export interface TerminalTabsPush {
 // v31: `workspace.watchReady` orders a fresh watcher's conservative startup wildcard before web clients
 // capture a session skill-load baseline; `startupNudge` lets a replayed response restore a push lost with
 // its socket before that baseline is captured.
-export const PROTOCOL_VERSION = 31;
+// v32: `agent_settled` is the automatic-run terminal and carries final assistant metadata;
+// `SessionSummary.lastSettlement` closes live reconnect gaps after Pi rebuilds context.
+// v33: `WorkspaceFsChangedPayload.skillChange` separates detected/unknown skill evidence from generic path
+// truncation, so a large non-skill build cannot masquerade as a skill edit while over-cap skill paths remain
+// detectable.
+// v34: `session.delete` — remove a chat for good (dispose if live, then move its transcript to the OS
+// trash), triggered from the history / closed-chats list.
+// v35: `session.deleted` broadcasts permanent deletion so every client converges and stale hydration can
+// no longer restore the removed chat.
+// v36: `review.close` atomically archives non-draft records and publishes the fresh open snapshot; clients
+// no longer follow it with an initiating-only `review.get` fold.
+// v37: `workspace.openReview` returns the active branch's optional GitHub PR / GitLab MR number.
+export const PROTOCOL_VERSION = 37;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a
@@ -225,6 +238,12 @@ export interface ServerWelcome {
 export interface WorkspaceRemoved {
 	projectId: string;
 	id: string;
+}
+
+/** A permanent chat deletion, broadcast so every client's projection drops the session. */
+export interface SessionDeletedPayload {
+	workspaceId: string;
+	sessionId: string;
 }
 
 /** Request/response methods. `session.*` drives the pi engine. */
@@ -256,6 +275,7 @@ export const WS_METHODS = {
 	workspaceListExisting: "workspace.listExisting",
 	workspaceOpenExisting: "workspace.openExisting",
 	workspaceList: "workspace.list",
+	workspaceOpenReview: "workspace.openReview",
 	workspaceRemove: "workspace.remove",
 	workspaceDiffStats: "workspace.diffStats",
 	// Per-workspace per-skill enable/disable override (over the project baseline).
@@ -308,6 +328,8 @@ export const WS_METHODS = {
 	sessionFollowUp: "session.followUp",
 	sessionAbort: "session.abort",
 	sessionDispose: "session.dispose",
+	// Delete a chat for good: dispose it if live, then move its transcript to the OS trash (recoverable).
+	sessionDelete: "session.delete",
 	sessionSetModel: "session.setModel",
 	sessionSetThinkingLevel: "session.setThinkingLevel",
 	sessionCompact: "session.compact",
@@ -380,6 +402,9 @@ export const WS_CHANNELS = {
 	projectUpdated: "project.updated",
 	piEvent: "pi.event",
 	piExtensionUi: "pi.extensionUi",
+	// Permanent chat deletion is shared domain state. This event carries the owning workspace + session id;
+	// clients retain a tombstone so an older session.list/getMessages response cannot resurrect the chat.
+	sessionDeleted: "session.deleted",
 	// In-app login flow updates (a `LoginPush` per frame), keyed by loginId. Session-less — a login runs on
 	// the Welcome screen before any session exists, so this is the sibling of pi.extensionUi, not scoped to one.
 	providerLogin: "provider.login",
@@ -545,6 +570,10 @@ export interface WsMethodMap {
 		result: Workspace;
 	};
 	"workspace.list": { params: { projectId: string }; result: Workspace[] };
+	"workspace.openReview": {
+		params: { workspaceId: string };
+		result: OpenBranchReview | null;
+	};
 	"workspace.remove": { params: { id: string }; result: Ack };
 	"workspace.diffStats": { params: { id: string }; result: DiffStats };
 	// Per-workspace per-skill override over the project baseline; `null` clears it. Echoes the `Workspace`.
@@ -680,6 +709,7 @@ export interface WsMethodMap {
 	};
 	"session.abort": { params: { sessionId: string }; result: Ack };
 	"session.dispose": { params: { sessionId: string }; result: Ack };
+	"session.delete": { params: { workspaceId: string; sessionId: string }; result: Ack };
 	"session.setModel": { params: { sessionId: string; model: WireModel }; result: Ack };
 	"session.setThinkingLevel": { params: { sessionId: string; level: ThinkingLevel }; result: Ack };
 	"session.compact": { params: { sessionId: string; instructions?: string }; result: Ack };
@@ -808,7 +838,7 @@ export interface WsMethodMap {
 	// Mark one file's review finished (`path`: the comment's file, or "" for the whole-change-set
 	// bucket). Rejected while the file still has unresolved comments; a new comment re-opens the file.
 	"review.fileDone": { params: { workspaceId: string; path: string }; result: Ack };
-	// Archive the open review (the next touch starts a fresh one).
+	// Atomic Clear: archive non-draft records, discard drafts, and publish a fresh open snapshot.
 	"review.close": { params: { workspaceId: string }; result: Ack };
 	// List all templates (global + project-scoped). `workspaceId` needed to resolve the project dir;
 	// omitted → global templates only.

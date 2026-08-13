@@ -53,10 +53,13 @@ of the host.
   - `@earendil-works/pi-agent-core`: `AgentEvent`, `AgentMessage`, `ThinkingLevel` (the
     `off`-inclusive one);
   - the local render union **`PiEvent`** — the real superset `AgentSessionEvent` lives in the Node-only
-    `pi-coding-agent`, so it's **mirrored** here (the `agent_end.willRetry` + `queue_update` /
-    `compaction_*` / `auto_retry_*` / `summarization_retry_*` / `session_info_changed` /
-    `thinking_level_changed` members, plus `bash_execution_update` — mirrored for union fidelity only;
-    the host never calls `executeBash`, so the UI never receives it);
+    `pi-coding-agent`, so it's **mirrored** here (the `agent_end.willRetry` + `agent_settled` /
+    `queue_update` / `compaction_*` / `auto_retry_*` / `summarization_retry_*` /
+    `session_info_changed` / `thinking_level_changed` members, plus `bash_execution_update` — mirrored
+    for union fidelity only; the host never calls `executeBash`, so the UI never receives it).
+    `agent_settled` is a host projection carrying the final attempt's reported terminal metadata
+    (`stopReason` + optional `errorMessage`): `agent_end.willRetry` covers provider auto-retry only and
+    is not an automatic-work terminal when compaction or a queued continuation follows;
   - **`SessionEventPayload`** (`{ sessionId, event: PiEvent }`) — the `pi.event` push frame.
   - the cheap-win mirrors (declared in the Node-only `pi-coding-agent`): **`SessionStats`** + **`ContextUsage`**
     (tokens/cost/context bar — display only) and **`SlashCommandInfo`** + **`SlashCommandSourceInfo`** (the
@@ -67,8 +70,11 @@ of the host.
     distinguishes an in-memory session (auto-restored) from a disk-only one (surfaced in chat-history,
     re-opened on demand — except one carrying unfinished TODOs, which a client auto-opens). The optional
     **`openTodos`** (count of non-`done` items in the chat's TODO plan) is populated only by
-    `session.list` (the host decorates via the todos module); absent = unknown, treated as 0 — an
-    additive optional field, so no protocol-version bump. `session.getMessages` returns `{ summary, messages }` (the transcript is
+    `session.list` (the host decorates via the todos module); absent = unknown, treated as 0. A live
+    summary's optional **`lastSettlement`** retains the host-observed terminal (`null` = the live run is
+    active or settled without an assistant) so reconnect can surface a final failure Pi removed from its rebuilt context; absent
+    means this host process has not observed a settlement and the persisted transcript is authoritative.
+    `session.getMessages` returns `{ summary, messages }` (the transcript is
     **`TranscriptMessage[]`** — the pi-canonical `Message` union widened with **`WireCustomMessage`**, a
     type-only mirror of pi-coding-agent's Node-only `CustomMessage`, so extension-injected messages like
     the ask replies cross the wire; the summary reflects the now-live session after a disk re-open).
@@ -110,6 +116,7 @@ of the host.
   non-removable and non-renamable server-side; **`kind: "external"`** marks an explicitly attached,
   user-owned worktree ThinkRail may forget but must never rename or reclaim; absent = a ThinkRail-managed
   worktree workspace — an explicit wire field, never an id convention),
+  **`OpenBranchReview`** (the optional open review reference for the active branch: PR vs MR + number; no status/actions),
   **`ExistingWorktreeCandidate`** (a `workspace.listExisting` row: absolute `path` + `branch`, or a
   `detached` row the chooser disables), `Session` (chat tab),
   `FileNode` (file-tree node), `TabStatus`, `Git*`/diff types — incl. **`GitDiffScope`** (what the Changes
@@ -211,6 +218,7 @@ of the host.
   **`workspace.listExisting`** (the selected project's unattached Git worktrees, with detached rows
   disabled by status) / **`workspace.openExisting`** (revalidate + register one branch-backed checkout as
   `kind: "external"`, emitting the ordinary `workspace.created`, without mutating Git or disk) /
+  **`workspace.openReview`** (the active branch's optional `OpenBranchReview` metadata) /
   **`project.setTrust`** (persist a project's trust grant → the updated `Project`; gates its committed
   cross-agent skill aliases) /
   **`skill.list`** (a pre-session, skill-only `SlashCommandInfo[]` preview for a `projectId`, resolved from
@@ -236,7 +244,7 @@ of the host.
   per-skill `decision` + `group` — for a `workspaceId`) / **`project.skills`** (the same, project-scoped, for
   the pre-session manager) / **`session.reloadResources`** (re-scan skills + rebuild the system prompt for one
   running session; rejected while streaming) /
-  `session.*` — `create`/`prompt`/`steer`/`followUp`/`abort`/`dispose`/`setModel`/
+  `session.*` — `create`/`prompt`/`steer`/`followUp`/`abort`/`dispose`/**`delete`**/`setModel`/
   `setThinkingLevel`/`compact`/`getStats`/`getCommands`/`extUiReply`/**`answerQuestion`** (the inline
   `ask_user_question` reply, correlated by tool call id)/**`list`**/**`getMessages`** (the
   read side) / **`settings.update`** (merge + persist a partial `AppConfig`, returns the merged
@@ -257,7 +265,9 @@ of the host.
   since review state and pi transcripts both outlive the host — so it must be HYDRATED, not opened as
   new; opening it as new shows a blank conversation for comments already marked sent / **`fileDone`**
   (mark a fully-resolved file's review finished; rejected while anything is unresolved — a new
-  comment re-opens the file) / **`close`** — plus
+  comment re-opens the file) / **`close`** (the atomic Clear: archive the current review's non-draft
+  records, discard drafts, replace the active review, and publish the fresh open snapshot to every client)
+  — plus
   **`template.*`** — prompt-template CRUD
   (**`template.list`**, **`template.get`**
   — `scope` optional, project wins over global, **`template.save`**, **`template.delete`**) — all
@@ -266,6 +276,8 @@ of the host.
   (open records) and **`recentProjects`** (all known records, open + closed) / **`project.updated`** — the
   full persisted `Project` snapshot after open/reopen/close, including `closed` membership, so every client
   atomically converges its rail + Recents without optimistic removal / `pi.event` / `pi.extensionUi` /
+  **`session.deleted`** (workspace + session id; a non-replayable domain event broadcast after permanent
+  deletion so every client removes the chat and blocks stale hydration) /
   **`settings.changed`** (the full `AppConfig`, broadcast so every client
   converges) / **`provider.login`** — the session-less in-app login stream (a `LoginPush`
   per frame, keyed by `loginId`; the sibling of `pi.extensionUi`, since a login runs on the Welcome screen
@@ -283,12 +295,14 @@ of the host.
   state changed (emitted by the server's `reviews` publisher on every mutation — UI edits, agent
   `resolve_comment` calls, re-anchoring — so all clients converge, same pattern as the trio) /
   **`workspace.fsChanged`** — the worktree
-  change-notifier push (**`WorkspaceFsChangedPayload`**: `{ workspaceId, paths, truncated }`,
-  worktree-relative deduped paths, capped — `truncated` means path uncertainty remains (an observed batch
-  was incomplete, or a fresh watcher's registration window may have hidden an event) and must be treated as
-  a wildcard; a pathless non-truncated frame is a whole-workspace invalidation such as repo-metadata drift);
-  an **invalidation nudge, not data**: clients re-read via the existing read methods, so a
-  duplicate/replayed frame is harmless.
+  change-notifier push (**`WorkspaceFsChangedPayload`**: `{ workspaceId, paths, truncated, skillChange }`,
+  worktree-relative deduped paths, capped — `truncated` means the generic path list is incomplete and must
+  be treated as a wildcard; `skillChange: "none" | "detected" | "unknown"` is an **independent semantic
+  fact**, accumulated before that cap, so a concrete non-skill overflow stays `none`, a skill path omitted
+  after the cap stays `detected`, and only a pathless platform/startup uncertainty is `unknown`; a pathless
+  non-truncated/`none` frame is a whole-workspace invalidation such as repo-metadata drift); an
+  **invalidation nudge, not data**: clients re-read via the existing read methods, so a duplicate/replayed
+  frame is harmless.
   The `WsMethodMap` typed request/result map +
   `WsParams`/`WsResult` helpers, and `PROTOCOL_VERSION`. Request ids are also the reconnect idempotency key:
   an unresolved client replays the same frame/id, and the host returns the one cached result for
@@ -306,10 +320,10 @@ of the host.
 
 - **Mirrors are not version-pinned in comments.** A shape re-declared here because its real home is
   Node-only carries *what* it mirrors, never *which pi version it was last checked against*: those
-  markers had to be hand-edited across several files on every bump, nothing verified them, and they
-  missed real drift anyway — **`PiEvent` is not exhaustive** (`agent_settled`, `entry_appended`), and the
-  host's relay cast means those still reach clients. Re-audit a mirror when a bump's changelog touches
-  it, not because a comment names a version.
+  markers had to be hand-edited across several files on every bump and nothing verified them. A
+  UI-relevant lifecycle member must be explicit here (especially the host-enriched `agent_settled`);
+  UI-irrelevant session events such as `entry_appended` may remain unmodelled and ignored. Re-audit a
+  mirror when a bump's changelog touches it, not because a comment names a version.
 - **Type-only, from the package roots, always** (type-only imports are erased by
   `verbatimModuleSyntax`, so the web bundle stays provider-free; the pi-ai provider/API subpaths
   statically import the Node SDKs — never touch them). The `/base` entries existed only in 0.79.8–0.79.9.

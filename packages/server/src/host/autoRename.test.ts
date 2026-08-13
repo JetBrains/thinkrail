@@ -268,9 +268,10 @@ test("isPromptCommitted: only a user message_end has the prompt in the transcrip
 	expect(isPromptCommitted({ type: "turn_start" } as PiEvent)).toBe(false);
 });
 
-test("isSettledTurn: only a no-retry agent_end settles a turn", () => {
+test("isSettledTurn: only agent_settled closes automatic work", () => {
+	expect(isSettledTurn({ type: "agent_settled", terminal: null })).toBe(true);
 	expect(isSettledTurn({ type: "agent_end", messages: [], willRetry: false } as PiEvent)).toBe(
-		true,
+		false,
 	);
 	expect(isSettledTurn({ type: "agent_end", messages: [], willRetry: true } as PiEvent)).toBe(
 		false,

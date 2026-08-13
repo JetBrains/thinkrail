@@ -30,7 +30,7 @@ styles/generated/typography.css   GENERATED, committed, never edited by hand
 
 `bun test` adds the guard rails: `styles/typography.test.ts` (source + generated output) and
 `styles/typographyUsage.test.ts` (adoption). `e2e/typography.spec.ts` asserts *computed* styles on the
-real surfaces (wordmark, hero, dialog/card titles, entity rows, branch metadata, eyebrow, Monaco, xterm,
+real surfaces (hero, dialog/card titles, entity rows, branch metadata, eyebrow, Monaco, xterm,
 both markdown surfaces, the `<body>` base).
 
 > **On the schema.** `typography.schema.json` is the contract an editor reads via `$schema` — it gives
@@ -73,14 +73,15 @@ The rules, all enforced by `typography:validate`:
 - aliases still emit their own semantic CSS class, so `.tr-title-card` and `.tr-title-dialog` are
   separate classes backed by one definition.
 
-`textStyles` groups: **brand** (`wordmark`, `hero`) · **heading** (`xl`, `lg`, `md`, `sm` — the shared
-document heading scale) · **title** (`dialog`, `card`→dialog, `section`, `compact`, `entity`→body.reading)
+`textStyles` groups: **brand** (`hero` — the Welcome text identity; the shell logo is supplied vector
+artwork) · **heading** (`xl`, `lg`, `md`, `sm` — the shared document heading scale) · **title**
+(`dialog`, `card`→dialog, `section`, `compact`, `entity`→body.reading)
 · **ui** (`default`, `metadata`, `eyebrow`, `labelPill`→eyebrow, `action`→title.compact,
 `emphasis`→title.compact) · **body** (`reading`) · **code** (`text` — the base 13px code style, `document`, `otp`, `textSmall` — an 11px code style for
 inline code in table cells). `proseSystems` holds one entry per markdown surface, almost entirely aliases
 into the above. Dead aliases are not retained: prose points directly to the semantic style it uses.
 
-**20 canonical definitions + 30 aliases = 50 styles.**
+**19 canonical definitions + 30 aliases = 49 styles.**
 
 One prose rule is deliberately *not* a semantic style: `<strong>` / `<b>` gets **weight only**
 (`--tr-font-weight-medium`), emitted by the generator into each prose system. A complete style there
@@ -112,7 +113,7 @@ The generator derives one class per semantic style, mechanically:
 
 | Source id | Generated class |
 |---|---|
-| `brand.wordmark` / `brand.hero` | `.tr-brand-wordmark` / `.tr-brand-hero` |
+| `brand.hero` | `.tr-brand-hero` |
 | `heading.xl` · `heading.lg` · `heading.md` · `heading.sm` | `.tr-heading-xl` · `.tr-heading-lg` · `.tr-heading-md` · `.tr-heading-sm` |
 | `title.dialog` · `title.card` · `title.section` · `title.compact` · `title.entity` | `.tr-title-dialog` · `.tr-title-card` · `.tr-title-section` · `.tr-title-compact` · `.tr-title-entity` |
 | `ui.default` · `ui.metadata` | `.tr-text-ui` · `.tr-text-metadata` |

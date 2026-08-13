@@ -103,7 +103,12 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   `Split|Inline`, `List|Tree`) is the shared `ToggleSegment`. The **file-style tree row** (chevron/spacer
   lead, folder/file icon, truncated label, trailing slot; `min-w-0` so a row can shrink when it shares a
   flex line with a trailing control) is the shared **`TreeRow`**, used by both
-  `FileTree` and `ChangesTree` so the two trees stay identical; the **`+N −M` diff-count badge** is the
+  `FileTree` and `ChangesTree` so the two trees stay identical. Both trees **compact a single-directory
+  run into one slash-joined row** (`apps/web/src`): the run continues only while a directory has exactly
+  one child and that child is another directory, and the compact row expands/collapses the deepest
+  directory as one unit. `ChangesTree` evaluates this against the changed-file tree; `FileTree` resolves
+  only visible compact runs through its existing client-side directory reads, so the wire remains a plain
+  immediate-directory listing. The **`+N −M` diff-count badge** is the
   shared **`DiffStatBadge`**, used by the project-rail worktree stats and the Changes tree's per-file /
   per-folder counts. `ChangesTree`'s tree build + `+/−` aggregation + shared status glyphs live in the pure
   **`changesModel.ts`** (unit-tested; no store/transport — `ChangesTree` is presentational, fed `changes` +
@@ -324,8 +329,13 @@ a project picker, the prompt hero, and the reused
   **`doc`** tabs (`DocTab` — inline rendered markdown, no file on disk) via its own
   `DocPane`→`MarkdownPreview`; used for the plan-as-markdown snapshot (see the `chat` module). `CenterTabs`
   closing a chat tab routes to `store.closeChatToHistory` (keeps the session alive) and shows a
-  **chat-history** dropdown (recently-closed + disk-only chats, shown only when non-empty). On
-  workspace-activate it **hydrates**: `session.list` → **live** sessions auto-restore as tabs
+  **chat-history** dropdown (recently-closed + disk-only chats, shown only when non-empty); each row has
+  a one-click trash action (`session.delete` → idempotent `store.deleteChat`, no confirm); the
+  `session.deleted` broadcast drives the same fold in every connected client. On
+  workspace-activate **and on every transport reconnect** it **hydrates**: `session.list` first reconciles
+  the client membership snapshot captured when the read began (a baseline id absent from the authoritative
+  host result goes through the normal tombstone fold, while a chat created during the read is outside that
+  baseline and survives), then **live** sessions auto-restore as tabs
   (`session.getMessages` → `messagesToRuntime` → `store.hydrateSession`), and so do **disk-only sessions
   carrying unfinished TODOs** (`SessionSummary.openTodos > 0` — work in progress survives a host restart
   as open tabs, hydrated with the disk-attach tick baseline), **capped at the newest `AUTO_OPEN_LIMIT`**:
@@ -366,6 +376,18 @@ a project picker, the prompt hero, and the reused
 
 ## Get right
 
+- **One selected-tab grammar across the workspace:** `CenterTabs`, `RightPanel`, and `TerminalsPanel`
+  all use the same persistent state: `control-bg-selected` behind the whole selectable tab,
+  `text-default`, and a short **2px `primary` marker on the content edge**. Inactive tabs stay
+  transparent with muted text; hover uses `control-bg-hovered`; keyboard focus keeps its separate focus
+  ring. The marker is a shape cue, not merely a text-colour change, so selection remains obvious when a
+  high-contrast theme makes neighbouring surfaces equal. Compound center/terminal tabs apply the state to
+  the wrapper so label + close affordance read as one tab; right-rail labels add only compact horizontal
+  padding, never height. Typography/weight never changes. The strips deliberately keep native button
+  semantics rather than advertise the ARIA tabs pattern: they do not yet implement roving focus,
+  arrow/Home/End navigation, or `tabpanel` relationships, and the center/terminal strips also carry
+  auxiliary close/new actions. Introduce `tablist` / `tab` / `aria-selected` only as a complete pattern;
+  `data-active` remains the selection and test/automation contract in the meantime.
 - `RightPanel` tabs are **Specs | All files | Changes | Review** (Specs leftmost and the **default** — specs are
   the project's ground truth, so the rail leads with them). The Review tab carries a **pending-draft
   count badge** (store-derived from `reviewsByWorkspace`).
@@ -410,7 +432,16 @@ a project picker, the prompt hero, and the reused
   carries the same per-file `Send review (N)` (`testid: review-panel-send`; `path: null` covers the
   anchorless whole-change-set bucket), the panel header a **`Send all (N)`** across every file
   (`SendAllReviewsButton`, `testid: review-send-all`, over `allDraftIds`; no ids passed — the host's
-  "all drafts" is the batch, so the count can't race a concurrent edit). The review-level
+  "all drafts" is the batch, so the count can't race a concurrent edit). **The header (and its Clear)
+  follows the review's RECORDS, not its file rows**: it shows whenever the review holds ANY comment, so
+  finishing every reviewed file — which empties the accordion while resolved/sent records live on — still
+  leaves a way to close the review (the earlier files-gated header stranded a fully-finished review with
+  no Clear). `Send all` stays gated on drafts; **Clear** (`testid: review-clear`) is a destructive
+  `ConfirmPopover` that calls the server-atomic `review.close` Clear; the host archives non-draft records,
+  discards drafts, replaces the active review, and publishes the fresh empty snapshot, so the initiating
+  and sibling clients all converge through `review.changed`. The empty body distinguishes the two empties:
+  **records remain but every file is done** ("…finished — Clear to archive…") vs a **truly empty** review
+  ("No review comments yet…"). V1 has no archive browser. The review-level
   (overall-note) composer was removed for
   now (the `review` comment kind stays in the model, UI-less). The `review.get` hydration read is **owned by `RightPanel`**
   (`useWorkspaceReview`, the `useWorkspaceSpecs` pattern — the read also re-anchors server-side): the
@@ -547,10 +578,13 @@ a project picker, the prompt hero, and the reused
   the caller owns *what to do* with the outcome (`onResult` / `onFailure` / `onSwitch`). Centralized because
   each site was otherwise re-implementing the **stale-response guard**: an answer in flight when the caller
   moves on must not land in the new workspace's view (reads are generation-stamped — latest wins, abandoned
-  ones stay silent). A `null` workspaceId reads nothing, which is also how a *paused* read is expressed (a
-  collapsed `FileTree` dir), so no tick has to be threaded down as a prop.
-  Its users — `FileTree` (root + each expanded dir), `ChangesPanel` (`git.status`), `useWorkspaceSpecs`
-  (`spec.graph`) — plus `FilePane`/`DiffPane`, which follow the same tick contract per open tab. Agent edits,
+  ones stay silent). A `null` workspaceId reads nothing, which is also how a component expresses a
+  *paused* read. A visible `FileTree` directory probes while collapsed only as far as needed to identify
+  its compact single-directory run; descendants below the run's deepest directory mount and read only
+  when that compact row is expanded. No tick has to be threaded down as a prop.
+  Its users — `FileTree` (root + each visible directory chain), `ChangesPanel` (`git.status`),
+  `useWorkspaceSpecs` (`spec.graph`) — plus `FilePane`/`DiffPane`, which follow the same tick contract per
+  open tab. Agent edits,
   terminal commands, and Finder changes all land without a manual step.
   Three shapes keep its effect's dependency list **honest** (no exhaustive-deps exemption anywhere in it):
   the fs tick is consumed as an **event** (`useAppStore.subscribe`) rather than selected into the component —
@@ -573,8 +607,11 @@ a project picker, the prompt hero, and the reused
   caller's `read` closure, which the hook re-captures every render, so the value a re-read uses is by
   construction the one the key names). It is threaded to `read` (and `reload`) as an argument for a caller that
   would rather branch on it than close over the parameter; ignoring it — as `ChangesPanel` does, its `scope`
-  being an object the key merely names — is expected. Refetches **preserve view state**: `FileTree` re-reads the root + every
-  expanded dir (rows keyed by path; vanished dirs drop out via their parent), `ChangesPanel` re-reads
+  being an object the key merely names — is expected. Refetches **preserve view state**: `FileTree` re-reads
+  the root + the directory probes backing each visible compact row and expanded branch. Expansion lives
+  above individual rows and is keyed by every directory path a compact row represents, so shortening or
+  lengthening a chain cannot hide descendants that were visible before the refetch; vanished dirs drop out
+  via their parent. `ChangesPanel` re-reads
   `git.status` (list-only — the diff renders in the center tab, not under the list), `SpecsPanel`
   refetches without remounting (expansion survives), and `FilePane`/`DiffPane` re-read an
   open tab's content when the workspace ticked past the tab's loaded tick (live while visible;
@@ -744,9 +781,10 @@ a project picker, the prompt hero, and the reused
 - **Changes: List | Tree.** A header toggle (`store.changesView`, app-wide — persisted in the store, not
   per workspace, so it survives workspace switches) switches the flat **List** and a folder **Tree**
   (`ChangesTree`), both built from the same `git.status` list. The Tree is styled exactly like the
-  All-files tree (shared `TreeRow`); folders **default expanded** (change sets are small); **no single-child
-  folder compaction** — one row per segment, matching `FileTree`. **Status is shown on the file name, not
-  a letter glyph** (the git-decoration convention — `changesModel.statusNameClass`, shared by both views):
+  All-files tree (shared `TreeRow`); folders **default expanded** (change sets are small), and a
+  single-directory run is one slash-joined compact row (based on the changed-file tree, regardless of
+  unchanged siblings on disk), matching `FileTree`. **Status is shown on the file name, not a letter glyph**
+  (the git-decoration convention — `changesModel.statusNameClass`, shared by both views):
   added / untracked → green, deleted → red + strikethrough, renamed → blue, modified → plain. Each file
   and folder also shows a `+N −M` badge (shared `DiffStatBadge`) — per-file counts come from `git.status`
   (`GitFileChange.added/removed`, from `git diff --numstat`; untracked files count their whole content as
@@ -894,7 +932,10 @@ a project picker, the prompt hero, and the reused
   re-measure, non-Latin glyphs render into cells sized for the fallback font and the PTY holds the wrong
   cols/rows; the panel drives `relayout()` itself so it knows when to re-`fit()`. Its pre-bind output buffer is
   a bounded waiting state: successful bind filters it to the adopted PTY, while permanent creation failure
-  clears it and stops accepting page-wide terminal frames. PTY sizing distinguishes desired, in-flight, and
+  clears it and stops accepting page-wide terminal frames. **Historical replay is input-inert:** the PTY id
+  remains unadopted until xterm's replay callback, which rechecks attach freshness before binding and draining
+  genuinely live frames; replies xterm synthesizes for recorded terminal queries can therefore never enter the
+  live shell. PTY sizing distinguishes desired, in-flight, and
   host-acknowledged grids; only a successful `terminal.resize` advances the acknowledgement, so reconnect
   replay cannot leave a full-screen app permanently sized to a request the host never applied.
 - Heavy deps (Monaco / shiki / xterm) load via `React.lazy(() => import())` to stay out of the eager bundle.

@@ -21,6 +21,7 @@ import {
 	type TerminalDeliveryResult,
 } from "./outputBatcher";
 import { createOutputRecorder, type OutputRecorder } from "./outputRecorder";
+import { terminalShellArgs } from "./shellArgs";
 import { hasChildProcesses } from "./shellBusy";
 
 /** Push one addressed frame and report whether it was accepted and whether another may follow. */
@@ -186,7 +187,7 @@ function spawnForTab(
 	if (!ws) throw new Error(`Unknown workspace: ${workspaceId}`);
 
 	const shell = process.env.SHELL ?? "/bin/bash";
-	const pty = spawn(shell, [], {
+	const pty = spawn(shell, terminalShellArgs(process.platform), {
 		name: "xterm-256color",
 		cwd: ws.worktreePath,
 		cols: size.cols ?? DEFAULT_PTY_SIZE.cols,

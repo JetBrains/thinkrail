@@ -1,5 +1,5 @@
 import type { HistoryScope, MessageHit, PromptHit } from "@thinkrail/contracts";
-import { Check, CornerUpRight, Save } from "lucide-react";
+import { Check, CornerUpRight, Save, Trash2 } from "lucide-react";
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
 	DropdownMenu,
@@ -82,6 +82,37 @@ function Highlight({ text, query }: { text: string; query: string }) {
 	);
 }
 
+function DeleteChatButton({
+	workspaceId,
+	sessionId,
+	isSelected,
+	onDeleteChat,
+}: {
+	workspaceId: string | undefined;
+	sessionId: string;
+	isSelected: boolean;
+	onDeleteChat: (workspaceId: string, sessionId: string) => void;
+}) {
+	if (!workspaceId) return null;
+	return (
+		<button
+			type="button"
+			data-testid="history-delete-chat"
+			aria-label="Move chat to trash"
+			title="Move chat to trash"
+			onClick={(event) => {
+				event.stopPropagation();
+				onDeleteChat(workspaceId, sessionId);
+			}}
+			className={`flex shrink-0 items-center justify-center rounded-[var(--radius-sm)] p-xs text-text-muted opacity-0 transition hover:bg-container-elevated-bg hover:text-feedback-error group-hover:opacity-100 ${
+				isSelected ? "opacity-100" : ""
+			}`}
+		>
+			<Trash2 className="size-3.5" />
+		</button>
+	);
+}
+
 function PromptRow({
 	hit,
 	query,
@@ -91,6 +122,7 @@ function PromptRow({
 	onPick,
 	onSaveAsTemplate,
 	onOpenMessage,
+	onDeleteChat,
 }: {
 	hit: PromptHit;
 	query: string;
@@ -100,6 +132,7 @@ function PromptRow({
 	onPick: () => void;
 	onSaveAsTemplate: () => void;
 	onOpenMessage: (target: ChatLocationRequest) => void;
+	onDeleteChat: (workspaceId: string, sessionId: string) => void;
 }) {
 	const firstLine = hit.text.split("\n")[0] ?? hit.text;
 	const showChip = (scope.kind === "project" || scope.kind === "all") && !!hit.workspaceId;
@@ -190,6 +223,12 @@ function PromptRow({
 					</button>
 				</>
 			) : null}
+			<DeleteChatButton
+				workspaceId={hit.workspaceId}
+				sessionId={hit.sessionId}
+				isSelected={isSelected}
+				onDeleteChat={onDeleteChat}
+			/>
 		</div>
 	);
 }
@@ -199,41 +238,53 @@ function MessageRow({
 	query,
 	isSelected,
 	onPick,
+	onDeleteChat,
 }: {
 	hit: MessageHit;
 	query: string;
 	isSelected: boolean;
 	onPick: () => void;
+	onDeleteChat: (workspaceId: string, sessionId: string) => void;
 }) {
 	const unmapped = !hit.workspaceId;
 	return (
-		<button
-			type="button"
+		<div
 			data-testid="history-item"
 			data-kind="message"
 			data-selected={isSelected}
-			onClick={onPick}
-			disabled={unmapped}
-			className={`flex w-full flex-col gap-0.5 rounded-[var(--radius-sm)] border-l-2 px-sm py-xs text-left tr-text-ui disabled:cursor-default ${
+			className={`group flex w-full items-center gap-xs rounded-[var(--radius-sm)] border-l-2 pr-xs tr-text-ui ${
 				isSelected
 					? "border-l-primary bg-control-bg-selected text-text-default"
 					: "border-l-transparent text-text-muted"
 			}`}
 		>
-			<span className="flex items-center gap-xs text-text-muted tr-text-metadata">
-				<span className="truncate">
-					{hit.sessionTitle || hit.cwd.split("/").pop() || "session"}
+			<button
+				type="button"
+				onClick={onPick}
+				disabled={unmapped}
+				className="flex min-w-0 flex-1 flex-col gap-0.5 px-sm py-xs text-left disabled:cursor-default"
+			>
+				<span className="flex items-center gap-xs text-text-muted tr-text-metadata">
+					<span className="truncate">
+						{hit.sessionTitle || hit.cwd.split("/").pop() || "session"}
+					</span>
+					<span>·</span>
+					<span>{hit.role}</span>
+					<span>·</span>
+					<span>{relativeTime(hit.timestamp)}</span>
+					{unmapped ? <span>· not a ThinkRail workspace</span> : null}
 				</span>
-				<span>·</span>
-				<span>{hit.role}</span>
-				<span>·</span>
-				<span>{relativeTime(hit.timestamp)}</span>
-				{unmapped ? <span>· not a ThinkRail workspace</span> : null}
-			</span>
-			<span className="overflow-hidden whitespace-nowrap text-ellipsis">
-				<Highlight text={hit.snippet} query={query} />
-			</span>
-		</button>
+				<span className="overflow-hidden whitespace-nowrap text-ellipsis">
+					<Highlight text={hit.snippet} query={query} />
+				</span>
+			</button>
+			<DeleteChatButton
+				workspaceId={hit.workspaceId}
+				sessionId={hit.sessionId}
+				isSelected={isSelected}
+				onDeleteChat={onDeleteChat}
+			/>
+		</div>
 	);
 }
 
@@ -329,6 +380,8 @@ export interface HistoryOverlayProps {
 	 * Cmd/Ctrl+S while that row is the keyboard selection. Opens `TemplateEditorDialog` body-prefilled;
 	 * `ChatView` owns the dialog, this overlay only reports the hit. */
 	onSaveAsTemplate: (hit: PromptHit) => void;
+	/** Move the hit's whole chat to trash; only mapped hits render this action. */
+	onDeleteChat: (workspaceId: string, sessionId: string) => void;
 	/** R2's mouse path: a direct scope pick from the badge's dropdown menu. The `Ctrl+R` keyboard path
 	 * (`cycleScope`, routed from the shell through `ChatView`) is unaffected — both just set the same
 	 * underlying scope state (`useHistorySearch.ts`'s `setScope`/`cycleScope` reset the results selection
@@ -352,6 +405,7 @@ export function HistoryOverlay({
 	onInsertAndSend,
 	onOpenMessage,
 	onSaveAsTemplate,
+	onDeleteChat,
 	onSetScope,
 }: HistoryOverlayProps) {
 	const { open, stage, query, scope, result, selected, error } = state;
@@ -519,6 +573,7 @@ export function HistoryOverlay({
 									onPick={() => onInsert(hit)}
 									onSaveAsTemplate={() => onSaveAsTemplate(hit)}
 									onOpenMessage={onOpenMessage}
+									onDeleteChat={onDeleteChat}
 								/>
 							))}
 						</div>
@@ -541,6 +596,7 @@ export function HistoryOverlay({
 										const target = jumpTarget(hit);
 										if (target) onOpenMessage(target);
 									}}
+									onDeleteChat={onDeleteChat}
 								/>
 							))}
 						</div>

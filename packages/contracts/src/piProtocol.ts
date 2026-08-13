@@ -20,7 +20,7 @@ export type {
 } from "@earendil-works/pi-ai";
 
 import type { AgentEvent, AgentMessage, ThinkingLevel } from "@earendil-works/pi-agent-core";
-import type { ImageContent, Message, Model, TextContent } from "@earendil-works/pi-ai";
+import type { ImageContent, Message, Model, StopReason, TextContent } from "@earendil-works/pi-ai";
 
 /**
  * A model **as it crosses the wire**: an **allowlist** of exactly the fields the UI renders — identity
@@ -62,12 +62,18 @@ export interface RefreshedModels {
 
 // The unified render union the UI switches on. The real superset (`AgentSessionEvent`) is declared in the
 // Node-only `pi-coding-agent` (it pulls node:fs), so it's MIRRORED here type-only, derived from the
-// imported `AgentEvent`. The members below are what `session.subscribe` emits. The mirror is NOT
-// exhaustive and the host relays with a cast, so pi events absent here still reach clients — today
-// `agent_settled` and `entry_appended` (tracked as issues).
+// imported `AgentEvent`. The members below are what `session.subscribe` emits, except the host enriches
+// `agent_settled` with the final attempt's reported terminal metadata. UI-irrelevant session events such
+// as `entry_appended` are deliberately absent and ignored.
+export interface AgentSettlement {
+	stopReason: StopReason;
+	errorMessage?: string;
+}
+
 export type PiEvent =
 	| Exclude<AgentEvent, { type: "agent_end" }>
 	| { type: "agent_end"; messages: AgentMessage[]; willRetry: boolean }
+	| { type: "agent_settled"; terminal: AgentSettlement | null }
 	| { type: "queue_update"; steering: readonly string[]; followUp: readonly string[] }
 	| { type: "compaction_start"; reason: "manual" | "threshold" | "overflow" }
 	| { type: "session_info_changed"; name: string | undefined }
@@ -161,6 +167,8 @@ export interface SessionSummary {
 	 * client can auto-open chats with work in progress); absent elsewhere = unknown, treat as 0.
 	 */
 	openTodos?: number;
+	/** Latest live terminal; null while active/no-assistant, retained across reconnect if context omits it. */
+	lastSettlement?: AgentSettlement | null;
 }
 
 export type SlashCommandSource = "extension" | "prompt" | "skill";

@@ -6,7 +6,7 @@ import type {
 	Workspace,
 } from "@thinkrail/contracts";
 import { isAbsolutePath, normalizePath } from "../lib";
-import type { EditorTab, TerminalTab } from "./appStore";
+import type { ClosedChat, EditorTab, TerminalTab } from "./appStore";
 
 interface ActiveWorkspaceState {
 	activeWorkspaceId: string | null;
@@ -100,6 +100,29 @@ export function selectHistoryTarget(state: {
 }
 
 /**
+ * Chat membership this client currently associates with one workspace: open tabs plus history rows,
+ * deduplicated. Snapshot this before an authoritative `session.list` read; its result may safely delete a
+ * baseline id the host omitted without touching a chat created while that older read was in flight.
+ */
+export function selectWorkspaceSessionIds(
+	state: {
+		tabsByWorkspace: Record<string, EditorTab[]>;
+		closedChatsByWorkspace: Record<string, ClosedChat[]>;
+	},
+	workspaceId: string,
+): string[] {
+	const sessionIds = new Set(
+		(state.tabsByWorkspace[workspaceId] ?? [])
+			.filter((tab) => tab.kind === "chat")
+			.map((tab) => tab.sessionId),
+	);
+	for (const chat of state.closedChatsByWorkspace[workspaceId] ?? []) {
+		sessionIds.add(chat.sessionId);
+	}
+	return [...sessionIds];
+}
+
+/**
  * The catalog entry for a model ref, matched by `{provider,id}`. A session's own `model` is the snapshot
  * it was created with, while `models` is refreshed live — so anything reading host-computed facts off a
  * model (today `thinkingLevels`, which drives the effort picker's disabled rows) must read them here,
@@ -160,11 +183,6 @@ export function selectDiffTabTargetRef(
 	tab: { workspaceId: string; scope: GitDiffScope },
 ): string {
 	return tab.scope.kind === "branch" ? selectDiffBaseRef(state, tab.workspaceId) : "";
-}
-
-/** Whether a worktree-relative path is inside a skill directory — the auto-detect trigger for a reload. */
-export function isSkillPath(path: string): boolean {
-	return /(^|\/)\.(claude|github|gemini|pi|agents)\/skills(\/|$)/.test(path);
 }
 
 /**

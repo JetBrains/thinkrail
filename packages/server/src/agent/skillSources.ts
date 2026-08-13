@@ -4,6 +4,17 @@ import { join, resolve } from "node:path";
 
 export type CompatibilitySkillProvider = "claude" | "codex" | "github-copilot" | "gemini";
 
+const PROJECT_SKILL_PATH = /^\.(claude|github|gemini|pi|agents)\/skills(?:\/|$)/;
+
+/**
+ * Whether a worktree-relative path belongs to one of the project skill roots the session loader sees:
+ * ThinkRail's three compatibility aliases plus Pi's two native roots. Kept here, beside skill discovery,
+ * then injected into the watcher by the host so generic filesystem batching never duplicates this policy.
+ */
+export function isProjectSkillPath(relativePath: string): boolean {
+	return PROJECT_SKILL_PATH.test(relativePath.replaceAll("\\", "/"));
+}
+
 /** One conventional, existing skill root that another Agent Skills-compatible harness owns. */
 export interface CompatibilitySkillSource {
 	path: string;

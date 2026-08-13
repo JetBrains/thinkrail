@@ -28,7 +28,14 @@ export async function openChatInTab(workspaceId: string, sessionId: string): Pro
 			result: { summary, messages },
 			syncedTick,
 		} = await getSessionMessagesWithSkillBaseline({ sessionId, workspaceId });
-		useAppStore.getState().hydrateSession(summary, messagesToRuntime(messages), true, syncedTick);
+		useAppStore
+			.getState()
+			.hydrateSession(
+				summary,
+				messagesToRuntime(messages, summary.lastSettlement),
+				true,
+				syncedTick,
+			);
 	} catch (err) {
 		toast.error(errorText(err), "Couldn't open the chat");
 	}

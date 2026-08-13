@@ -152,12 +152,15 @@ entrypoint honors it (including `packages/server/src/dev.ts`, which parses no ar
 
 `bun run build:binary` produces a **standalone `thinkrail` executable** — one self-contained file per
 platform — via `bun build --compile`. Bun bundles the host *and* transparently embeds the `bun-pty` native
-lib; the extra steps are the **web UI** (a directory the host normally serves) and the **bundled pi
-extensions** (which the server path-loads out of `node_modules` in dev — impossible inside a binary):
+lib; the extra steps are the **web UI** (a directory the host normally serves), the **bundled pi
+extensions** (which the server path-loads out of `node_modules` in dev — impossible inside a binary),
+and `trash`'s **native helper sidecars** (which macOS/Windows must execute from real filesystem paths):
 
-- `scripts/build-binary.ts` writes two **transient** generated modules, runs
-  `bun build --compile --target=<host|--target>` on `src/compiled-entry.ts`, then deletes them (so the
-  working tree + `tsc` stay clean); each has a committed `.d.ts` type contract `tsc` resolves against
+- `scripts/build-binary.ts` writes three **transient** generated modules, runs
+  `bun build --compile --no-compile-autoload-bunfig --target=<host|--target>` on
+  `src/compiled-entry.ts`, then deletes them (so the artifact cannot execute a project-local
+  `bunfig.toml` preload before ThinkRail boots, and the working tree + `tsc` stay clean); each generated
+  module has a committed `.d.ts` type contract `tsc` resolves against
   when the `.ts` is absent:
   - `src/web-assets.generated.ts` — enumerates `apps/web/dist`: a Bun file-attribute import per asset +
     a `{ route, data }[]` manifest + a content-hash version.
@@ -169,13 +172,16 @@ extensions** (which the server path-loads out of `node_modules` in dev — impos
     wires via `additionalSkillPaths` — parity, not a superset). Its `.d.ts` types the factories via the
     server's exported `BundledExtensionFactory`, so `cli` still never imports
     `@earendil-works/pi-coding-agent`.
-- `src/compiled-entry.ts` is the binary's entry: on startup it stages the embedded web + skills files to
-  per-build cache dirs (`$XDG_CACHE_HOME`/`~/.cache`/temp; files written straight into the versioned dir,
+  - `src/runtime-assets.generated.ts` — embeds `trash`'s `macos-trash` and `windows-trash.exe` helper
+    binaries, resolved from the server package's dependency context, as a content-hashed manifest.
+- `src/compiled-entry.ts` is the binary's entry: on startup it stages the embedded web + skills +
+  runtime-helper files to per-build cache dirs (`$XDG_CACHE_HOME`/`~/.cache`/temp; files written straight into the versioned dir,
   then a sibling `<dir>.complete` marker written **last** — readiness is gated on the marker, so a killed
   first run leaves an incomplete cache that's re-extracted next launch. **No stage-then-rename**: Bun's
   `renameSync` of a fresh non-empty dir `EPERM`s on Windows, so the marker replaces the directory-rename
-  publish), sets `THINKRAIL_STATIC_DIR`, then **awaits** the server's **`registerBundledRuntime`** seam — which
-  injects the factories + staged skills dir **and** performs pi's binary-only registrations (the
+  publish), makes the macOS helper executable, sets `THINKRAIL_STATIC_DIR`, then **awaits** the server's
+  **`registerBundledRuntime`** seam — which injects the factories + staged skills dir + real trash-helper
+  paths **and** performs pi's binary-only registrations (the
   statically-bundled OAuth flows + the Bedrock provider module, replacing pi's binary-hostile dynamic
   imports — see the server agent SPEC) — then hands off to `index.ts`. (`bun-pty` self-extracts
   automatically; **no photon wasm** — the agent's read tool is set to send images raw, server-side.
@@ -186,12 +192,17 @@ extensions** (which the server path-loads out of `node_modules` in dev — impos
 - **Verify by booting the artifact** (not just building it): extension wiring regressions surface only at
   runtime — e.g. path-loading broke silently for every extension added after the binary build first landed.
   `scripts/smoke-binary.ts` (root: `bun run smoke:binary`, after `build:binary`) boots the built binary
-  against throwaway data/agent/cache dirs and asserts: `/health` answers, `/` serves the staged UI, the
-  bundled skills staged to the cache dir, **an OAuth sign-in reaches its auth URL** (a WS
+  against throwaway data/agent/cache dirs and asserts: a project-local `bunfig.toml` preload does **not**
+  execute, `/health` answers, `/` serves the staged UI, the bundled skills staged to the cache dir,
+  **an OAuth sign-in reaches its auth URL** (a WS
   `provider.loginStart` for the Codex provider must answer the method select and push an `authUrl`
   frame — offline and credential-free, since pi's flow only does PKCE + a local callback server before
   notifying the URL; this pins the statically-registered OAuth flows, which can only break inside the
-  artifact — the frames are hand-rolled JSON, keeping `contracts` out of the cli), and SIGTERM exits 0. CI builds + smokes the binary on every PR
+  artifact — the frames are hand-rolled JSON, keeping `contracts` out of the cli), **moves a seeded pi
+  transcript through `session.delete` into the OS trash** (pinning the static `processMountinfo` parser
+  inclusion that `trash`'s Linux implementation otherwise reaches through a binary-opaque CommonJS
+  require), verifies both macOS/Windows helpers were staged from the artifact, and SIGTERM exits 0. CI
+  builds + smokes the binary on every PR
   (its host target — the generation/bundling/staging logic is platform-independent). What it can't cover
   without provider auth: the factories registering inside a live session (that's `e2e:agent` territory,
   run-from-source). The smoke's **broad-net sibling** is `bun run e2e:binary` (root
@@ -205,13 +216,15 @@ extensions** (which the server path-loads out of `node_modules` in dev — impos
 - **Owns:** `src/args.ts` (pure `parseArgs(argv, env) → CliOptions` + `parseSubcommand` + `USAGE`),
   `src/index.ts` (the run-from-source `bootstrap()`: shell env → server → browser open → signal handlers),
   and the binary build + its boot smoke (`scripts/build-binary.ts`, `scripts/smoke-binary.ts`,
-  `src/compiled-entry.ts`, `src/web-assets.generated.*`, `src/bundled-extensions.generated.*`),
+  `src/compiled-entry.ts`, `src/web-assets.generated.*`, `src/bundled-extensions.generated.*`,
+  `src/runtime-assets.generated.*`),
   `src/version.ts` (the release version stamped in at build time), `src/update.ts` (the `update`
   subcommand), `src/uninstall.ts` (the `uninstall` subcommand), `src/paths.ts` (the installed layout:
   `install.json` + the staging cache root), `src/powershell.ts` (the Windows PowerShell seam), and
   `src/jbcentral.ts` (the `jbcentral` subcommand — JetBrains Central CLI proxy wiring).
 - **Allowed deps:** `@thinkrail/server` (`createServer`, `registerBundledRuntime`, `dataDir` — the
-  uninstaller has to name the app state dir, and must name the *same* one the host uses),
+  uninstaller has to name the app state dir, and must name the *same* one the host uses — plus the
+  test-only `history-test-fixtures` subpath in the artifact smoke to seed a real pi transcript),
   `@thinkrail/shared/shellEnv` (`resolveShellEnv`), Bun/Node; the generated build module may
   value-import the bundled extension packages' entries (resolved via the server package — build-time
   only, deleted after compile).

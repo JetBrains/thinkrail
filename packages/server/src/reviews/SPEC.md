@@ -18,8 +18,13 @@ re-anchoring, and package rendering. Design + user-confirmed decisions: [[task-r
 
 ## Model (mirrors the wire DTOs in `contracts`)
 
-- **One open `Review` per workspace** (auto-created lazily on the first read/comment; `review.close`
-  archives it and the next touch starts a fresh one). `Review.fileSessions` pins each review KEY to
+- **One open `Review` per workspace** (auto-created lazily on the first read/comment). Wire
+  **`review.close` is the Clear operation**: under the host's workspace review lock, `clearReview`
+  first persists the current review's non-draft records as a closed snapshot under
+  `reviews/archive/<workspaceId>/<reviewId>.json`, then replaces the active snapshot with a fresh open
+  review and publishes only that fresh snapshot — clients never converge on an intermediate closed copy.
+  Drafts are discarded; sent/resolved/dismissed records survive. V1 keeps no archive browser, but an
+  in-flight agent can still resolve a sent archived comment by id. `Review.fileSessions` pins each review KEY to
   its chat (key → sessionId): one chat per file for the review's life — the file's first send creates
   it, every later send (single or batch) follows up into it. The key is the comment's path, or the
   **empty string** for anchorless whole-change-set remarks, pinned exactly like a file (`reviewSessionKey`)
@@ -45,8 +50,9 @@ re-anchoring, and package rendering. Design + user-confirmed decisions: [[task-r
   delete a remark whose id an agent chat already quotes;
   `sessionId` links the chat the comment was sent into — its file's review chat. **A comment is a
   record once SENT**: a draft — the user's own unsent scratch — can still be deleted
-  (`review.commentDelete`, draft-only, rejected otherwise), but a sent comment is never deleted, and
-  the review offers no rollback of worktree changes (the old `git.revertFile` Reject is gone); the way
+  (`review.commentDelete`, draft-only, rejected otherwise), but a sent comment is never deleted — Clear
+  moves that record into the closed archive before replacing the active review — and the review offers no
+  rollback of worktree changes (the old `git.revertFile` Reject is gone); the way
   to push back on a change is to say so in the comment.
 - **`ReviewAnchor` = `path` + `side` + `contentHash` + an ordered `selectors` fallback chain**
   (`lineRange`, `textQuote` with exact/prefix/suffix, `structural` as a V2 slot; the `diffHunk` member
@@ -95,8 +101,8 @@ batch spanning several keys sends each group separately and answers with all of 
 running unseen; whatever received the package becomes the key's pin) → `markSent` → prompt. The whole sequence is **serialized per
 workspace together with every review mutation** (`host`'s `withReviewLock`): the draft/session check
 happens *before* the awaited session creation, so in that gap two concurrent sends would both see
-"drafts, no session" and fork the review — and a concurrent `close` would invalidate the package
-already built, leaving the agent with comment ids no open review contains.
+"drafts, no session" and fork the review — and a concurrent `review.close` Clear would invalidate the
+package already built, leaving the agent with comment ids no open review contains.
 **The prompt is fired DETACHED** (`fireReviewPrompt`): the handler returns the
 moment the session exists so the client opens the chat immediately — awaiting the ack meant sitting
 out pi's 10s acceptance window on every send. Because `markSent` runs synchronously (before the turn is
@@ -109,21 +115,25 @@ send is unpinned unless another comment still backs it. A fault AFTER acceptance
 (the package *was* delivered) and rides the event stream, leaving the `sent` state correct. The
 rollback runs DETACHED (after the send's lock released) and fully synchronously, so — like
 `reanchorWorkspace` — it stays correct unlocked, and it reads with `load` (never `ensureSnapshot`): a
-`close`/archive that lands first makes it a clean no-op instead of resurrecting an empty open review. The **`resolve_comment`** capability is an agent-module custom tool
+`review.close` Clear that lands first makes it a clean no-op against the fresh review instead of
+resurrecting the cleared comments. The **`resolve_comment`** capability is an agent-module custom tool
 (`agent/reviewTool.ts`, registered on every session like `ask_user_question`) whose execution is
-delegated back here through a host-installed seam — the agent module stays dependency-free.
+delegated back here through a host-installed seam — the agent module stays dependency-free. Resolution
+searches the active snapshots first, then closed archives, so a tool call already in flight when Clear
+lands can still finish its record; archived updates persist without publishing an inactive snapshot.
 
 ## Boundary
 
-- **Owns:** `reviews/<workspaceId>.json` under the data dir (via `persistence.dataDir`; the id
-  becomes the FILENAME, so every file touch refuses ids with path segments — `/^[\w-]+$/` — or a
+- **Owns:** active `reviews/<workspaceId>.json` plus closed record archives at
+  `reviews/archive/<workspaceId>/<reviewId>.json` under the data dir (via `persistence.dataDir`; ids
+  become path segments, so every file touch refuses ids with path segments — `/^[\w-]+$/` — or a
   wire-supplied `../config`-style string would aim reads/writes/unlinks outside the reviews dir:
   defense in depth behind the handlers' own lookups), comment CRUD +
   status/lifecycle transitions, anchor capture + re-anchoring (pure, unit-tested `anchoring.ts`),
   package rendering (pure `packageRender.ts`), and the `review.changed` publisher seam
   (`setReviewPublisher`, installed by `host` — full-snapshot pushes, idempotent under last-value replay).
 - **Public surface (barrel):** `getReviewSnapshot`, `addComment`, `updateComment`, `deleteComment`
-  (draft-only), `closeReview`, `markCommentsSent`, `rollbackSend` (undo `markCommentsSent` on a
+  (draft-only), `clearReview`, `markCommentsSent`, `rollbackSend` (undo `markCommentsSent` on a
   pre-turn send rejection), `markFileDone`, `fileReviewSession` + `reviewSessionKey`/`REVIEW_LEVEL_KEY` (the
   per-key chat pin), `resolveCommentFromAgent`, `reanchorWorkspace`, `sendableComments`,
   `buildSendPackage`, `removeWorkspaceReviews`, `setReviewPublisher` (+ the pure
@@ -137,7 +147,10 @@ delegated back here through a host-installed seam — the agent module stays dep
 ## Get right
 
 - **Statuses converge via the push, never optimism** — every mutation (UI edit, agent resolve, a
-  reanchor that changed states) emits one full `review.changed` snapshot; clients fold it.
+  reanchor that changed states) emits one full `review.changed` snapshot; clients fold it. Clear emits
+  exactly the fresh open snapshot (never the archived review), so every connected client empties together.
+  The closed archive is written first; a failure cannot replace the active review without preserving its
+  non-draft records, and retrying is idempotent by review id.
 - Sends **re-anchor first**, so the package's line numbers are true at send time — and are **serialized
   per workspace with every mutation**, so nothing can close or re-send out from under a
   check-then-mark. A package that quotes a comment id is a promise the id still exists.
@@ -153,5 +166,7 @@ delegated back here through a host-installed seam — the agent module stays dep
   over it. The failure surfaces on `review.get` (the panel says so) instead of silently discarding every
   comment. The one exception is the cross-workspace scan behind an agent resolve: a damaged *sibling*
   is logged and skipped, never allowed to fail a resolve belonging to a healthy review.
-- An **unknown/duplicate agent resolve fails loud** (error text back to the model), never silently.
-- Workspace removal purges the review file (`removeWorkspaceReviews`, called by the archive handler).
+- An **unknown/duplicate agent resolve fails loud** (error text back to the model), never silently. A
+  resolve that arrives after Clear updates the archived record in place and emits no active-review push.
+- Workspace removal purges both the active review and its archive directory (`removeWorkspaceReviews`,
+  called by the workspace-archive handler).

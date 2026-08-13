@@ -53,8 +53,8 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
 4. **Transport endpoint is a parameter.** Defaults to same-origin (`location.host`); a remote client
    points it at the host's Tailscale MagicDNS name.
 5. **UI = panels + shell.** Layout-agnostic, store-driven panels (project→workspace nav, file tree,
-   Monaco editor, changes/diff, terminal, chat, composer); the **center is a tabbed area holding file
-   tabs + chat tabs**. The shell arranges panels by layout mode: desktop multi-pane /
+   Monaco editor, changes/diff, workspace-local review, terminal, chat, composer); the **center is a
+   tabbed area holding file tabs + chat tabs**. The shell arranges panels by layout mode: desktop multi-pane /
    mobile single-view-with-switcher. Both modes share the same panels and store.
 6. **Workspaces are git worktrees (V1).** project (git repo) → workspace (`git worktree` on its own
    branch/cwd, under `~/.thinkrail/worktrees`) → {chats, files, terminals}. **Two deliberate
@@ -66,7 +66,7 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
    worktree model; and an **existing worktree** the user explicitly attaches in place
    (`kind: "external"`), which ThinkRail may forget but never mutates (see
    [[submodule-server-workspaces]]). The shell is built first,
-   `pi` connected last. Real PR / Checks / Review stay V2.
+   `pi` connected last. Provider-backed PR / Checks stay V2 beyond a best-effort open GitHub PR or GitLab MR number in active-workspace metadata; workspace-local Review is V1.
 7. **Auth is external.** Tailscale ACLs / device identity are the auth; the app carries an `owner` field,
    not a login UI.
 8. **Hydrate-then-stream (every client reconstructs from the host).** A client never relies on having
@@ -76,7 +76,9 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
    second tab, a phone, or a **host restart** all rebuild the same view: `session.list` unions the host's
    in-memory sessions (auto-restored as tabs) with pi's **on-disk** sessions (surfaced in chat-history,
    re-opened on demand via `session.getMessages`, which attaches the persisted session back into the host).
-   The client is a **stateless projection**, never a second source of truth.
+   The client is a **stateless projection**, never a second source of truth. An automatic agent run
+   remains active through retries, compaction, and queued continuations: pi's `agent_end` is only an
+   attempt boundary and may precede more work; `agent_settled` is the authoritative transition to idle.
 9. **Domain state vs. view state.** *Domain* state — projects, workspaces, **sessions + their
    transcripts**, git — is backend-owned, shared across all clients, and persistent; every client hydrates
    it from the host. *View* state — which sessions are open as tabs, the active tab, composer drafts, panel
@@ -139,4 +141,4 @@ The workflow **product layer** (a runtime/engine, configurable pipelines) — th
 rule, no runtime machinery); the spec-graph **product layer** beyond the read-only viewer (drift detection, pre-build
 approval, living graph) — the pi-side spec-graph *capability* ships in V1 as a bundled extension
 (`module-spec-graph`), and the V1 viewer is a read-only Specs tab over a `spec.graph` wire read;
-self-improvement, automations, per-step model routing, cost ledger.
+provider-backed PR / Checks, self-improvement, automations, per-step model routing, cost ledger.

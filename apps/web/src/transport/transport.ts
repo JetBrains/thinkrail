@@ -18,14 +18,16 @@ const DEFAULT_TIMEOUT_MS = 60_000;
  * Channels whose last payload must NOT be replayed to a new subscriber.
  *
  * Most push channels carry a *snapshot* — the newest value is the whole truth, so handing it to a late
- * subscriber is exactly right and is why `latest` exists. These two carry **events**: `terminal.data` is an
- * append-only byte stream and `terminal.exit` is a one-time announcement. Replaying either re-delivers
- * something that already happened, which for a terminal means painting a chunk of output twice — visible as
- * stale text reappearing when a tab re-attaches to the shell it detached earlier.
+ * subscriber is exactly right and is why `latest` exists. These channels carry **events**: terminal data is
+ * an append-only byte stream, terminal exit is a one-time announcement, and session deletion is folded into
+ * a store tombstone when witnessed (a reconnecting active workspace repairs a missed event from authoritative
+ * `session.list`). Replaying one re-delivers something that already happened rather than a current snapshot
+ * (for terminal data that visibly paints output twice).
  */
 const NON_REPLAYABLE_CHANNELS: ReadonlySet<string> = new Set([
 	WS_CHANNELS.terminalData,
 	WS_CHANNELS.terminalExit,
+	WS_CHANNELS.sessionDeleted,
 ]);
 
 /** 16 random bytes as hex. `getRandomValues` works in an insecure context, unlike `randomUUID`. */

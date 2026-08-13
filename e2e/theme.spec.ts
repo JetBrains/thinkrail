@@ -1,5 +1,9 @@
 import { expect, type Page, test } from "@playwright/test";
-import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
+import {
+	createWorkspaceViaDialog,
+	enterDefaultWorkspace,
+	openFixtureProject,
+} from "./fixtures/app";
 
 interface ThemeOption {
 	id: string;
@@ -121,4 +125,78 @@ test("Monaco opens files and re-themes under every discovered manifest", async (
 
 	await pickTheme(page, defaultTheme ?? "");
 	await expect(page.getByTestId("editor-pane")).toContainText("plain-text-fixture");
+});
+
+// Break caught: selected tabs regressing to a text-colour-only state in a high-contrast theme. The
+// assertion runs against the built UI and checks the one user-visible contract across all three strips:
+// semantic selected fill + a 2px content-edge marker, while retaining honest native-button semantics.
+test("selected workspace tabs keep their surface and edge marker in high contrast", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await enterDefaultWorkspace(page);
+
+	const options = await readThemeOptions(page);
+	const highContrast = options.find((option) => option.contrast === "high");
+	expect(highContrast).toBeDefined();
+	await pickTheme(page, highContrast?.id ?? "");
+
+	await page.getByTestId("tab-files").click();
+	const files = page.getByTestId("file-node");
+	await files.filter({ hasText: "README.md" }).dblclick();
+	await files.filter({ hasText: "notes.txt" }).click();
+	await expect(page.getByTestId("editor-tab")).toHaveCount(2);
+
+	await page.getByTestId("terminal-add").click();
+	await expect(page.getByTestId("terminal-tab")).toHaveCount(2);
+
+	for (const strip of [
+		page.getByTestId("center-tab-strip"),
+		page.getByTestId("right-tab-strip"),
+		page.getByTestId("terminal-panel"),
+	]) {
+		await expect(strip.locator('[role="tablist"], [role="tab"], [aria-selected]')).toHaveCount(0);
+	}
+
+	const state = await page.evaluate(() => {
+		const center = document.querySelector<HTMLElement>(
+			'[data-testid="editor-tab"][data-active="true"]',
+		);
+		const right = document.querySelector<HTMLElement>(
+			'[data-testid="right-tab-strip"] [data-active="true"]',
+		);
+		const terminalButton = document.querySelector<HTMLElement>(
+			'[data-testid="terminal-tab"][data-active="true"]',
+		);
+		const terminal = terminalButton?.parentElement;
+		if (!center || !right || !terminal) throw new Error("Missing an active workspace tab surface");
+
+		const resolveColor = (property: string): string => {
+			const probe = document.createElement("div");
+			probe.style.backgroundColor = `var(${property})`;
+			document.body.append(probe);
+			const color = getComputedStyle(probe).backgroundColor;
+			probe.remove();
+			return color;
+		};
+
+		return {
+			expectedFill: resolveColor("--control-bg-selected"),
+			expectedMarker: resolveColor("--primary"),
+			tabs: [center, right, terminal].map((element) => {
+				const marker = getComputedStyle(element, "::after");
+				return {
+					fill: getComputedStyle(element).backgroundColor,
+					marker: marker.backgroundColor,
+					markerHeight: marker.height,
+				};
+			}),
+		};
+	});
+
+	for (const tab of state.tabs) {
+		expect(tab.fill).toBe(state.expectedFill);
+		expect(tab.marker).toBe(state.expectedMarker);
+		expect(tab.markerHeight).toBe("2px");
+	}
 });

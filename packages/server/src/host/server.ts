@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { join, normalize } from "node:path";
 import type {
 	ServerWelcome,
+	SessionDeletedPayload,
 	TerminalTabsPush,
 	WorkspaceFsChangedPayload,
 } from "@thinkrail/contracts";
@@ -10,8 +11,10 @@ import { errorCodeOf } from "@thinkrail/shared/codedError";
 import {
 	disposeAllSessions,
 	getSessionWorkspaceId,
+	isProjectSkillPath,
 	setExtUiPublisher,
 	setReviewCommentHandler,
+	setSessionDeletedPublisher,
 	setSessionPublisher,
 	setSkillAdmissionResolver,
 } from "../agent";
@@ -40,7 +43,12 @@ import {
 	setTerminalPublisher,
 	setTerminalTabsPublisher,
 } from "../terminal";
-import { setRepoMetaPublisher, setWatchPublisher, stopAllWatches } from "../watch";
+import {
+	setRepoMetaPublisher,
+	setSkillPathClassifier,
+	setWatchPublisher,
+	stopAllWatches,
+} from "../watch";
 import { getWorkspace, refreshUserOwnedWorkspace, setWorkspacePublisher } from "../workspaces";
 import {
 	isPromptCommitted,
@@ -192,6 +200,7 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 				// listens on.
 				ws.subscribe(WS_CHANNELS.piEvent);
 				ws.subscribe(WS_CHANNELS.piExtensionUi);
+				ws.subscribe(WS_CHANNELS.sessionDeleted);
 				ws.subscribe(WS_CHANNELS.providerLogin);
 				ws.subscribe(WS_CHANNELS.projectUpdated);
 				ws.subscribe(WS_CHANNELS.terminalTabs);
@@ -409,6 +418,7 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 		reanchorWorkspace(payload.workspaceId);
 	};
 	setWatchPublisher(publishFsChanged);
+	setSkillPathClassifier(isProjectSkillPath);
 	// The same frame, publishable from the `git.prefetch` handler: the app's own background fetch moves
 	// `refs/remotes/…` in the project repo's shared `.git` — a location no worktree watcher can see — so the
 	// handler nudges the workspaces whose diff base that ref is (see `fsNudge.ts`).
@@ -429,7 +439,7 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 	//      badge) correctly see nothing of interest.
 	setRepoMetaPublisher((workspaceId) => {
 		refreshUserOwnedWorkspace(workspaceId);
-		publishFsChanged({ workspaceId, paths: [], truncated: false });
+		publishFsChanged({ workspaceId, paths: [], truncated: false, skillChange: "none" });
 	});
 
 	// Fan `review.changed` snapshots out to every client (the reviews module stays channel-ignorant),
@@ -457,11 +467,21 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 		setAnalyticsSending(config.analyticsEnabled);
 	});
 
+	// Permanent session deletion is shared domain state: every connected client drops the chat and records
+	// a tombstone before any older hydration response can land.
+	setSessionDeletedPublisher((payload: SessionDeletedPayload) => {
+		server.publish(
+			WS_CHANNELS.sessionDeleted,
+			JSON.stringify({ channel: WS_CHANNELS.sessionDeleted, data: payload }),
+		);
+	});
+
 	// Stream each in-process AgentSession's events to subscribed clients over the pi.event channel, and
 	// tee the best-effort workspace auto-rename off two points, fire-and-forget (`void` — the hooks never
 	// reject, and this closure's slot is sync by design): the **first prompt landing** (a user
 	// `message_end`, before the model responds) gets an instant non-agentic name, and a **settled turn**
-	// (agent_end, no retry) refines it with the agentic namer and locks it. The `workspace.updated` push is
+	// (`agent_settled`, after retries/compaction/continuations) refines it with the agentic namer and locks it.
+	// The `workspace.updated` push is
 	// self-emitted by `renameWorkspace` (via the lifecycle publisher above) — the tee just triggers it.
 	setSessionPublisher((payload) => {
 		server.publish(

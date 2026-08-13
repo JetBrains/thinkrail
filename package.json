@@ -8,14 +8,14 @@
 			"packages/*"
 		],
 		"catalog": {
-			"@earendil-works/pi-agent-core": "0.82.1",
-			"@earendil-works/pi-ai": "0.82.1",
-			"@earendil-works/pi-coding-agent": "0.82.1",
+			"@earendil-works/pi-agent-core": "0.84.1",
+			"@earendil-works/pi-ai": "0.84.1",
+			"@earendil-works/pi-coding-agent": "0.84.1",
 			"@fontsource-variable/geist": "5.3.0",
 			"@fontsource-variable/jetbrains-mono": "5.3.0",
 			"@fontsource-variable/orbitron": "5.3.0",
 			"@types/bun": "1.3.14",
-			"typebox": "1.1.38",
+			"typebox": "1.3.7",
 			"typescript": "6.0.3"
 		}
 	},
@@ -33,7 +33,8 @@
 		"lint": "biome check .",
 		"format": "biome check --write .",
 		"prepare": "husky",
-		"e2e": "playwright test --grep-invert @agent",
+		"e2e": "bun e2e/run.ts",
+		"e2e:serial": "bun e2e/run.ts --serial",
 		"e2e:binary": "playwright test -c playwright.binary.config.ts",
 		"test:workflows": "playwright test -c playwright.workflows.config.ts",
 		"e2e:full": "playwright test",

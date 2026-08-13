@@ -24,6 +24,7 @@ import {
 	clampThinkingForModel,
 	compactSession,
 	createSession,
+	deleteSession,
 	ensureSessionAttached,
 	followUpSession,
 	getDefaultModel,
@@ -58,6 +59,7 @@ import {
 	resolveLogin,
 	startLogin,
 } from "../auth";
+import { findOpenBranchReview } from "../branch-review";
 import { selectDirectory } from "../dialog";
 import { listAvailableEditors, openEditor, revealInFileManager } from "../editors";
 import { readDir, readFile } from "../fs";
@@ -78,7 +80,7 @@ import {
 import {
 	addComment,
 	buildSendPackage,
-	closeReview,
+	clearReview,
 	deleteComment,
 	fileReviewSession,
 	getReviewSnapshot,
@@ -301,6 +303,10 @@ const handlers: Record<string, Handler> = {
 		return openExistingWorktree(p.projectId, p.path);
 	},
 	"workspace.list": (params) => listWorkspaces((params as { projectId: string }).projectId),
+	"workspace.openReview": (params) => {
+		const ws = getWorkspace((params as { workspaceId: string }).workspaceId);
+		return findOpenBranchReview(ws.worktreePath, ws.branch);
+	},
 	"workspace.remove": (params) => {
 		const id = (params as { id: string }).id;
 		// Non-blocking archive: drop the record now (gone from `workspace.list` immediately) + the fast
@@ -513,7 +519,7 @@ const handlers: Record<string, Handler> = {
 		return { ok: true } as const;
 	},
 	// session.* — the pi engine. A thrown/failed call returns a `{ ok:false, error }` WS response;
-	// streaming faults arrive as `pi.event`s (the error/agent_end variants), not here.
+	// streaming faults arrive as `pi.event`s and surface at `agent_settled`, not here.
 	"session.create": async (params) => {
 		const p = params as {
 			workspaceId: string;
@@ -566,6 +572,11 @@ const handlers: Record<string, Handler> = {
 	},
 	"session.dispose": (params) => {
 		removeSession((params as { sessionId: string }).sessionId);
+		return { ok: true } as const;
+	},
+	"session.delete": async (params) => {
+		const p = params as { workspaceId: string; sessionId: string };
+		await deleteSession(p.sessionId, p.workspaceId, getWorkspace(p.workspaceId).worktreePath);
 		return { ok: true } as const;
 	},
 	"session.setModel": async (params) => {
@@ -741,7 +752,7 @@ const handlers: Record<string, Handler> = {
 	"review.close": (params) => {
 		const p = params as { workspaceId: string };
 		return withReviewLock(p.workspaceId, async () => {
-			closeReview(p.workspaceId);
+			clearReview(p.workspaceId);
 			return { ok: true } as const;
 		});
 	},

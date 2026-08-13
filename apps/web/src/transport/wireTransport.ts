@@ -5,6 +5,7 @@ import type {
 	Project,
 	ReviewChangedPayload,
 	ServerWelcome,
+	SessionDeletedPayload,
 	SessionEventPayload,
 	Workspace,
 	WorkspaceFsChangedPayload,
@@ -57,6 +58,11 @@ export function initTransport(): WsTransport {
 
 	transport.subscribe(WS_CHANNELS.piExtensionUi, (data) => {
 		useAppStore.getState().applyExtUi(data as ExtUiRequest);
+	});
+
+	transport.subscribe(WS_CHANNELS.sessionDeleted, (data) => {
+		const { workspaceId, sessionId } = data as SessionDeletedPayload;
+		useAppStore.getState().deleteChat(workspaceId, sessionId);
 	});
 
 	transport.subscribe(WS_CHANNELS.providerLogin, (data) => {

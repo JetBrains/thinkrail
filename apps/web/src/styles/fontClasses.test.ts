@@ -7,7 +7,7 @@ import { join } from "node:path";
  * arbitrary value: Tailwind resolves `font-*` as a WEIGHT, emitting
  * `font-weight: var(--font-mono)` — invalid, dropped by the browser, so the element keeps the
  * inherited proportional face while the class list claims otherwise. It sat in 28 call sites
- * undetected (tool cards, keycaps, the header branch line, the brand wordmark).
+ * undetected (including tool cards, keycaps, and the header branch line).
  *
  * Components must not name a family at all: they use a generated semantic class (`tr-code-text`,
  * `tr-code-document`, …). Where a family string is unavoidable — the mapping layers and the Monaco/xterm/

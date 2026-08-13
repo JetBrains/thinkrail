@@ -16,6 +16,7 @@
 	"dependencies": {
 		"@earendil-works/pi-ai": "catalog:",
 		"@earendil-works/pi-coding-agent": "catalog:",
+		"@stroncium/procfs": "1.2.1",
 		"@thinkrail/contracts": "workspace:*",
 		"@thinkrail/shared": "workspace:*",
 		"bun-pty": "0.4.10",
@@ -25,6 +26,7 @@
 		"pi-visualize": "workspace:*",
 		"pi-web-access": "0.13.0",
 		"posthog-node": "5.46.1",
+		"trash": "10.1.1",
 		"typebox": "catalog:"
 	},
 	"devDependencies": {

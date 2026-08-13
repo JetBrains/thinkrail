@@ -50,10 +50,10 @@ describe("typography source", () => {
 		}
 	});
 
-	it("holds 20 canonical definitions and 30 aliases (50 styles)", () => {
+	it("holds 19 canonical definitions and 30 aliases (49 styles)", () => {
 		const styles = allStyles(typography);
-		expect(styles).toHaveLength(50);
-		expect(styles.filter((s) => !s.ref)).toHaveLength(20);
+		expect(styles).toHaveLength(49);
+		expect(styles.filter((s) => !s.ref)).toHaveLength(19);
 		expect(styles.filter((s) => s.ref)).toHaveLength(30);
 		// Both markdown surfaces are almost entirely aliases — that is the point of the reference
 		// mechanism: two scales, one set of underlying definitions.

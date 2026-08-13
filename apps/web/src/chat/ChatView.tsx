@@ -422,6 +422,20 @@ export default function ChatView({
 		setSaveAsTemplateHit(hit);
 	};
 
+	const onDeleteHistoryChat = async (targetWorkspaceId: string, targetSessionId: string) => {
+		try {
+			await getTransport().request("session.delete", {
+				workspaceId: targetWorkspaceId,
+				sessionId: targetSessionId,
+			});
+			// Close before the atomic removal: deleting this very chat unmounts ChatView.
+			closeHistory();
+			useAppStore.getState().deleteChat(targetWorkspaceId, targetSessionId);
+		} catch (err) {
+			toast.error(errorText(err), "Couldn't delete the chat");
+		}
+	};
+
 	// Picking a `source: "prompt"` row: fetch the real file (never `commands`' frozen snapshot), split off
 	// the frontmatter (`templateText.ts`'s shared `stripFrontmatter` — pi's own parser is server-only, but
 	// the boundary rule is pinned to match it exactly), parse the body into slots, and hand the result to
@@ -685,6 +699,7 @@ export default function ChatView({
 							onInsertAndSend={onInsertAndSendHit}
 							onOpenMessage={openMessage}
 							onSaveAsTemplate={onSaveAsTemplateHit}
+							onDeleteChat={(wsId, id) => void onDeleteHistoryChat(wsId, id)}
 						/>
 						<Composer
 							ref={composerRef}

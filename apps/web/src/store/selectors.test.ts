@@ -4,7 +4,6 @@ import type { EditorTab } from "./appStore";
 import {
 	isDefaultWorkspace,
 	isExternalWorkspace,
-	isSkillPath,
 	isUserOwnedWorkspace,
 	matchesWorktreePath,
 	selectActiveWorkspace,
@@ -76,27 +75,6 @@ test("context project falls back to the selected Project Home", () => {
 			workspaces,
 		}),
 	).toBe(projects[0]);
-});
-
-test("isSkillPath matches every alias' skills dir, and only a real skills dir", () => {
-	for (const yes of [
-		".claude/skills/foo/SKILL.md",
-		".github/skills/x.md",
-		".gemini/skills",
-		".agents/skills/z",
-		"nested/dir/.pi/skills/y.md",
-	]) {
-		expect(isSkillPath(yes)).toBe(true);
-	}
-	for (const no of [
-		"README.md",
-		".claude/settings.json", // an alias dir, but not its skills
-		".claudeskills/x", // no `/skills` segment
-		"src/claude/skills/x", // "claude" without the leading dot
-		"skills/x", // bare skills, no alias parent
-	]) {
-		expect(isSkillPath(no)).toBe(false);
-	}
 });
 
 test("selectSkillsStale is a strict tick comparison, defaulting missing ticks to 0", () => {

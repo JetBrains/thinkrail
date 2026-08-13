@@ -10,6 +10,7 @@ import {
 } from "../store";
 import { getTransport } from "../transport";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { workspaceTabStateClass } from "./tabState";
 
 const TerminalInstance = lazy(() => import("./TerminalInstance"));
 
@@ -97,7 +98,7 @@ export function TerminalsPanel() {
 		<div data-testid="terminal-panel" className="flex h-full min-h-0 flex-col">
 			<div className="flex h-7 shrink-0 items-center gap-xs border-b border-border-default pr-xs pl-sm">
 				<span className="shrink-0 tr-text-eyebrow text-text-muted">Terminal</span>
-				<div className="flex min-w-0 flex-1 items-center gap-px overflow-x-auto">
+				<div className="flex h-full min-w-0 flex-1 items-stretch gap-px overflow-x-auto">
 					{tabs.map((tab) => (
 						<TerminalTabButton
 							key={tab.tabKey}
@@ -168,11 +169,7 @@ function TerminalTabButton({
 }) {
 	return (
 		<div
-			className={`group flex shrink-0 items-center gap-xs rounded-[var(--radius-sm)] pr-xs pl-sm tr-text-ui ${
-				active
-					? "bg-control-bg text-text-default hover:bg-control-bg-hovered"
-					: "text-text-muted hover:bg-control-bg-hovered"
-			}`}
+			className={`group flex shrink-0 items-center gap-xs rounded-[var(--radius-sm)] pr-xs pl-sm tr-text-ui ${workspaceTabStateClass(active)}`}
 		>
 			<button
 				type="button"

@@ -16,17 +16,25 @@ function change(path: string, over: Partial<GitFileChange> = {}): GitFileChange 
 	return { path, status: "modified", added: 1, removed: 0, ...over };
 }
 
-test("buildChangesTree nests files under their folders", () => {
+test("buildChangesTree compacts single-directory runs and stops before files", () => {
 	const tree = buildChangesTree([
 		change("apps/web/a.ts"),
 		change("apps/web/b.ts"),
 		change("packages/server/c.ts"),
 	]);
-	expect(tree.map((n) => n.name)).toEqual(["apps", "packages"]);
-	const apps = tree[0] as ChangeTreeDir;
-	const web = apps.children[0] as ChangeTreeDir;
-	expect(web.name).toBe("web");
-	expect(web.children.map((n) => n.name)).toEqual(["a.ts", "b.ts"]);
+	expect(tree.map((n) => n.name)).toEqual(["apps/web", "packages/server"]);
+	const appsWeb = tree[0] as ChangeTreeDir;
+	expect(appsWeb.path).toBe("apps/web");
+	expect(appsWeb.children.map((n) => n.name)).toEqual(["a.ts", "b.ts"]);
+	const packagesServer = tree[1] as ChangeTreeDir;
+	expect(packagesServer.children.map((n) => n.name)).toEqual(["c.ts"]);
+});
+
+test("buildChangesTree stops compaction at a branching directory", () => {
+	const tree = buildChangesTree([change("src/client/a.ts"), change("src/server/b.ts")]);
+	const src = tree[0] as ChangeTreeDir;
+	expect(src.name).toBe("src");
+	expect(src.children.map((n) => n.name)).toEqual(["client", "server"]);
 });
 
 test("buildChangesTree aggregates +/- counts up into folders", () => {

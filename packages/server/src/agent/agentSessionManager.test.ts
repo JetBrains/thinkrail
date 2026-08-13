@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, jest, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -9,11 +9,12 @@ import {
 } from "@earendil-works/pi-ai";
 import { createFauxCore, fauxAssistantMessage } from "@earendil-works/pi-ai/providers/faux";
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
-import type { ExtUiRequest } from "@thinkrail/contracts";
+import type { AgentSettlement, ExtUiRequest } from "@thinkrail/contracts";
 import {
 	buildSessionSettings,
 	clampThinkingForModel,
 	createSession,
+	deleteSession,
 	disposeAllSessions,
 	ensureSessionAttached,
 	followUpSession,
@@ -28,11 +29,13 @@ import {
 	refreshAvailableModels,
 	removeSession,
 	removeWorkspaceSessions,
+	setSessionDeletedPublisher,
 	setSessionManagerFactory,
 	setSessionPublisher,
 	toWireModel,
 } from "./agentSessionManager";
 import { configurePiRuntime } from "./piRuntime";
+import { setTrashImplementationForTests } from "./trash";
 import {
 	cancelExtUiForSession,
 	createWebUiContext,
@@ -169,6 +172,42 @@ test("two sessions in two worktrees stream independently; disposing one leaves t
 
 	expect(seen(b.sessionId)).toContain("BRAVO_AGAIN");
 	expect((events.get(a.sessionId) ?? []).length).toBe(aEventsBefore);
+});
+
+test("agent_settled carries the final attempt's terminal metadata", async () => {
+	fauxA.setResponses([
+		fauxAssistantMessage("incomplete", {
+			stopReason: "length",
+			errorMessage: "response truncated",
+		}),
+	]);
+	const cwd = tmpCwd("trpi-settled-");
+	const session = await createSession({
+		cwd,
+		workspaceId: "ws-settled",
+		model: toWireModel(fauxA.getModel()),
+	});
+
+	await promptSession(session.sessionId, "hello");
+
+	const settled = (events.get(session.sessionId) ?? []).find(
+		(
+			event,
+		): event is Record<string, unknown> & {
+			type: "agent_settled";
+			terminal: AgentSettlement | null;
+		} =>
+			typeof event === "object" &&
+			event !== null &&
+			"type" in event &&
+			event.type === "agent_settled",
+	);
+	expect(settled?.terminal).toEqual({
+		stopReason: "length",
+		errorMessage: "response truncated",
+	});
+	const hydrated = await getSessionMessages(session.sessionId, "ws-settled", cwd);
+	expect(hydrated.summary.lastSettlement).toEqual(settled?.terminal);
 });
 
 test("buildSessionSettings disables image autoResize (in-memory, so the read tool sends images raw)", () => {
@@ -535,6 +574,263 @@ test("disk-reopen: a disposed session is re-listed from disk and re-opened with 
 		).toHaveLength(1);
 		removeSession(s.sessionId);
 	} finally {
+		setSessionManagerFactory(() => SessionManager.inMemory());
+	}
+});
+
+test("deleteSession tombstones its id so a stale transcript cannot reattach in this host", async () => {
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	setTrashImplementationForTests(async (input) => {
+		const paths = typeof input === "string" ? [input] : input;
+		for (const path of paths) rmSync(path, { force: true });
+	});
+	try {
+		fauxA.setResponses([fauxAssistantMessage("DELETE_ME")]);
+		const cwd = tmpCwd("trpi-delete-");
+		const session = await createSession({
+			cwd,
+			workspaceId: "ws-delete",
+			model: toWireModel(fauxA.getModel()),
+		});
+		await promptSession(session.sessionId, "persist before deletion");
+		const info = (await SessionManager.list(cwd)).find((item) => item.id === session.sessionId);
+		if (!info) throw new Error("expected the session transcript to exist");
+		const staleTranscript = readFileSync(info.path);
+		// A live session's own manager still knows this exact file even when directory listing would skip its
+		// temporarily malformed header. Deletion must move that file, not treat the skipped entry as absent.
+		writeFileSync(info.path, "temporarily malformed\n");
+
+		await deleteSession(session.sessionId, "ws-delete", cwd);
+		expect(hasSession(session.sessionId)).toBe(false);
+		expect(existsSync(info.path)).toBe(false);
+
+		// Model a disk-open that began before deletion: its stale path/data must not register after the delete.
+		writeFileSync(info.path, staleTranscript);
+		await expect(getSessionMessages(session.sessionId, "ws-delete", cwd)).rejects.toThrow(
+			`Unknown session: ${session.sessionId}`,
+		);
+		rmSync(info.path, { force: true });
+	} finally {
+		setTrashImplementationForTests(undefined);
+		setSessionManagerFactory(() => SessionManager.inMemory());
+	}
+});
+
+test("a malformed detached transcript is never treated as authoritative absence", async () => {
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	const published: string[] = [];
+	let trashCalls = 0;
+	setSessionDeletedPublisher(({ sessionId }) => published.push(sessionId));
+	setTrashImplementationForTests(async () => {
+		trashCalls++;
+	});
+	let sessionId: string | undefined;
+	try {
+		fauxA.setResponses([fauxAssistantMessage("DETACHED_CORRUPT")]);
+		const cwd = tmpCwd("trpi-delete-corrupt-");
+		const session = await createSession({
+			cwd,
+			workspaceId: "ws-delete-corrupt",
+			model: toWireModel(fauxA.getModel()),
+		});
+		sessionId = session.sessionId;
+		await promptSession(session.sessionId, "persist before corruption");
+		const info = (await SessionManager.list(cwd)).find((item) => item.id === session.sessionId);
+		if (!info) throw new Error("expected the session transcript to exist");
+		const transcript = readFileSync(info.path);
+		removeSession(session.sessionId); // host restart: only the disk lookup can identify it now
+		writeFileSync(info.path, "not a pi transcript\n");
+
+		// Both the reconnect membership read and explicit deletion fail closed. Neither may turn pi's
+		// presentation-friendly skipped entry into a durable "this chat is absent" decision.
+		await expect(listSessions("ws-delete-corrupt", cwd)).rejects.toThrow("unreadable or malformed");
+		await expect(deleteSession(session.sessionId, "ws-delete-corrupt", cwd)).rejects.toThrow(
+			"unreadable or malformed",
+		);
+		expect(trashCalls).toBe(0);
+		expect(published).toEqual([]);
+		expect(existsSync(info.path)).toBe(true);
+
+		// Restoring the bytes makes the same id attachable again: failed deletion rolled its tombstone back.
+		writeFileSync(info.path, transcript);
+		const restored = await getSessionMessages(session.sessionId, "ws-delete-corrupt", cwd);
+		expect(restored.summary.live).toBe(true);
+	} finally {
+		if (sessionId) removeSession(sessionId);
+		setSessionDeletedPublisher(() => {});
+		setTrashImplementationForTests(undefined);
+		setSessionManagerFactory(() => SessionManager.inMemory());
+	}
+});
+
+test("a pending delete blocks live commands, then trash failure restores the same runtime", async () => {
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	let reportTrashStarted: () => void = () => {};
+	const trashStarted = new Promise<void>((resolve) => {
+		reportTrashStarted = resolve;
+	});
+	let failTrash: () => void = () => {};
+	const trashOutcome = new Promise<void>((_resolve, reject) => {
+		failTrash = () => reject(new Error("recycle bin unavailable"));
+	});
+	setTrashImplementationForTests(async () => {
+		reportTrashStarted();
+		await trashOutcome;
+	});
+	let sessionId: string | undefined;
+	let deleting: Promise<void> | undefined;
+	try {
+		fauxA.setResponses([fauxAssistantMessage("STILL_HERE")]);
+		const cwd = tmpCwd("trpi-delete-failure-");
+		const session = await createSession({
+			cwd,
+			workspaceId: "ws-delete-failure",
+			model: toWireModel(fauxA.getModel()),
+		});
+		sessionId = session.sessionId;
+		await promptSession(session.sessionId, "persist before failed deletion");
+		const info = (await SessionManager.list(cwd)).find((item) => item.id === session.sessionId);
+		if (!info) throw new Error("expected the session transcript to exist");
+
+		deleting = deleteSession(session.sessionId, "ws-delete-failure", cwd);
+		await trashStarted;
+		// The entry remains registered for rollback, but the tombstone makes it unaddressable for the
+		// full transaction. A second client cannot append a turn or dispose the rollback target.
+		expect(hasSession(session.sessionId)).toBe(false);
+		await expect(promptSession(session.sessionId, "must not be accepted")).rejects.toThrow(
+			`Unknown session: ${session.sessionId}`,
+		);
+		expect(() => removeSession(session.sessionId)).toThrow(`Unknown session: ${session.sessionId}`);
+		expect(readFileSync(info.path, "utf8")).not.toContain("must not be accepted");
+
+		failTrash();
+		await expect(deleting).rejects.toThrow("recycle bin unavailable");
+		expect(hasSession(session.sessionId)).toBe(true);
+		expect(readFileSync(info.path, "utf8")).toContain("persist before failed deletion");
+		const restored = await getSessionMessages(session.sessionId, "ws-delete-failure", cwd);
+		expect(restored.summary.live).toBe(true);
+		expect(restored.messages.some((message) => message.role === "assistant")).toBe(true);
+
+		// Rollback removes the gate as well as retaining the entry: the same runtime accepts later work.
+		fauxA.appendResponses([fauxAssistantMessage("AFTER_ROLLBACK")]);
+		await promptSession(session.sessionId, "accepted after rollback");
+		expect(readFileSync(info.path, "utf8")).toContain("accepted after rollback");
+	} finally {
+		failTrash();
+		await deleting?.catch(() => {});
+		if (sessionId && hasSession(sessionId)) removeSession(sessionId);
+		setTrashImplementationForTests(undefined);
+		setSessionManagerFactory(() => SessionManager.inMemory());
+	}
+});
+
+test("concurrent deletes of one chat coalesce into a single owned transaction", async () => {
+	// Regression (Air): two clients trashing the same chat must not run rival transactions. A loser's
+	// rollback could otherwise clear the winner's tombstone mid-move, re-opening the chat to a new turn
+	// that the winner's move then loses or that recreates the deleted file.
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	let trashCalls = 0;
+	let reportTrashStarted: () => void = () => {};
+	const trashStarted = new Promise<void>((resolve) => {
+		reportTrashStarted = resolve;
+	});
+	let failTrash: () => void = () => {};
+	const trashOutcome = new Promise<void>((_resolve, reject) => {
+		failTrash = () => reject(new Error("recycle bin unavailable"));
+	});
+	setTrashImplementationForTests(async () => {
+		trashCalls++;
+		reportTrashStarted();
+		await trashOutcome;
+	});
+	let sessionId: string | undefined;
+	let first: Promise<void> | undefined;
+	let second: Promise<void> | undefined;
+	try {
+		fauxA.setResponses([fauxAssistantMessage("COALESCE_ME")]);
+		const cwd = tmpCwd("trpi-delete-coalesce-");
+		const session = await createSession({
+			cwd,
+			workspaceId: "ws-delete-coalesce",
+			model: toWireModel(fauxA.getModel()),
+		});
+		sessionId = session.sessionId;
+		await promptSession(session.sessionId, "persist before concurrent delete");
+		const info = (await SessionManager.list(cwd)).find((item) => item.id === session.sessionId);
+		if (!info) throw new Error("expected the session transcript to exist");
+
+		// Two clients trash the same chat at once — the second joins the first: one trash, one owner.
+		first = deleteSession(session.sessionId, "ws-delete-coalesce", cwd);
+		second = deleteSession(session.sessionId, "ws-delete-coalesce", cwd);
+		await trashStarted;
+		expect(trashCalls).toBe(1);
+
+		// The tombstone holds throughout the single pending move: no live command slips through.
+		await expect(promptSession(session.sessionId, "must not be accepted")).rejects.toThrow(
+			`Unknown session: ${session.sessionId}`,
+		);
+
+		// The sole owner's trash fails → both callers reject, and the tombstone it installed is rolled back,
+		// so the same runtime is addressable again — never left un-openable by a loser's stale clear.
+		failTrash();
+		await expect(first).rejects.toThrow("recycle bin unavailable");
+		await expect(second).rejects.toThrow("recycle bin unavailable");
+		expect(hasSession(session.sessionId)).toBe(true);
+		expect(readFileSync(info.path, "utf8")).toContain("persist before concurrent delete");
+		expect(readFileSync(info.path, "utf8")).not.toContain("must not be accepted");
+		fauxA.appendResponses([fauxAssistantMessage("AFTER_ROLLBACK")]);
+		await promptSession(session.sessionId, "accepted after rollback");
+		expect(readFileSync(info.path, "utf8")).toContain("accepted after rollback");
+	} finally {
+		failTrash();
+		await Promise.allSettled([first, second]);
+		if (sessionId && hasSession(sessionId)) removeSession(sessionId);
+		setTrashImplementationForTests(undefined);
+		setSessionManagerFactory(() => SessionManager.inMemory());
+	}
+});
+
+test("archival teardown is not blocked by a chat whose recoverable delete is mid-trash", async () => {
+	// Regression: the delete tombstone makes the retained entry reject `removeSession`, so archival must
+	// dispose unconditionally. Otherwise one in-flight chat delete would abort the loop and strand the
+	// workspace's other sessions + the disk purge.
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	let reportTrashStarted: () => void = () => {};
+	const trashStarted = new Promise<void>((resolve) => {
+		reportTrashStarted = resolve;
+	});
+	let failTrash: () => void = () => {};
+	const trashOutcome = new Promise<void>((_resolve, reject) => {
+		failTrash = () => reject(new Error("recycle bin unavailable"));
+	});
+	setTrashImplementationForTests(async () => {
+		reportTrashStarted();
+		await trashOutcome;
+	});
+	let deleting: Promise<void> | undefined;
+	try {
+		fauxA.setResponses([fauxAssistantMessage("ARCHIVE_DURING_DELETE")]);
+		const cwd = tmpCwd("trpi-archive-during-delete-");
+		const doomed = await createSession({
+			cwd,
+			workspaceId: "ws-archive-during-delete",
+			model: toWireModel(fauxA.getModel()),
+		});
+		await promptSession(doomed.sessionId, "persist before archive");
+		const info = (await SessionManager.list(cwd)).find((item) => item.id === doomed.sessionId);
+		if (!info) throw new Error("expected the session transcript to exist");
+
+		deleting = deleteSession(doomed.sessionId, "ws-archive-during-delete", cwd);
+		await trashStarted; // tombstone set, entry retained, trash blocked mid-flight
+
+		// The whole-workspace teardown must run to completion despite the pending per-chat delete guard.
+		await removeWorkspaceSessions("ws-archive-during-delete", cwd);
+		expect(hasSession(doomed.sessionId)).toBe(false);
+		expect(existsSync(info.path)).toBe(false); // the disk purge ran; the loop was not aborted
+	} finally {
+		failTrash();
+		await deleting?.catch(() => {});
+		setTrashImplementationForTests(undefined);
 		setSessionManagerFactory(() => SessionManager.inMemory());
 	}
 });

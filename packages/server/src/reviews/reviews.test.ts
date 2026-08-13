@@ -11,12 +11,12 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { ReviewChangedPayload, Workspace } from "@thinkrail/contracts";
+import type { ReviewChangedPayload, ReviewSnapshot, Workspace } from "@thinkrail/contracts";
 import { saveWorkspaces } from "../persistence";
 import {
 	addComment,
 	buildSendPackage,
-	closeReview,
+	clearReview,
 	deleteComment,
 	fileReviewSession,
 	getReviewSnapshot,
@@ -113,6 +113,16 @@ function addInline(body = "fix this") {
 		},
 		body,
 	});
+}
+
+function archiveDir(): string {
+	return join(dataDir, "reviews", "archive", WS_ID);
+}
+
+function archivedSnapshots(): ReviewSnapshot[] {
+	return readdirSync(archiveDir())
+		.filter((file) => file.endsWith(".json"))
+		.map((file) => JSON.parse(readFileSync(join(archiveDir(), file), "utf8")) as ReviewSnapshot);
 }
 
 test("add fills contentHash + textQuote, publishes a full snapshot", () => {
@@ -226,18 +236,18 @@ test("rollbackSend is a no-op for a session that never sent these comments (faul
 	expect(getReviewSnapshot(WS_ID).comments[0]?.status).toBe("sent");
 });
 
-test("rollbackSend after close is a clean no-op — it never resurrects the closed review", () => {
-	// The rollback fires DETACHED, so a close can land first; reading with `load` (not `ensureSnapshot`)
-	// keeps it from writing a fresh empty open review over the closed one.
+test("rollbackSend after clear is a clean no-op — it never resurrects cleared comments", () => {
+	// The rollback fires DETACHED, so a clear can land first; reading with `load` (not `ensureSnapshot`)
+	// makes it inspect the fresh review and leave the discarded comment behind.
 	const comment = addInline();
 	markCommentsSent(WS_ID, [comment.id], "sess-file");
-	closeReview(WS_ID);
+	clearReview(WS_ID);
 	const before = pushes.length;
 	rollbackSend(WS_ID, [comment.id], "sess-file");
-	expect(pushes.length).toBe(before); // no read-through, no write, no push
-	// On disk the review is still closed until the next touch starts a fresh one.
+	expect(pushes.length).toBe(before); // no matching comment → no write or extra push
 	const onDisk = JSON.parse(readFileSync(join(dataDir, "reviews", `${WS_ID}.json`), "utf8"));
-	expect(onDisk.review.status).toBe("closed");
+	expect(onDisk.review.status).toBe("open");
+	expect(onDisk.comments).toEqual([]);
 });
 
 test("a review-level remark pins its own bucket chat, so a second one continues the discussion", () => {
@@ -264,13 +274,34 @@ test("agent resolve: sent → resolved with note; unknown/duplicate fail loud", 
 	expect(() => resolveCommentFromAgent("rc_nope")).toThrow("Unknown review comment");
 });
 
-test("close archives; the next touch starts a fresh review", () => {
-	const comment = addInline();
-	closeReview(WS_ID);
-	const fresh = getReviewSnapshot(WS_ID);
+test("clear archives records, discards drafts, and publishes only the fresh snapshot", () => {
+	const draft = addInline("unsent scratch");
+	const sent = addInline("agent record");
+	markCommentsSent(WS_ID, [sent.id], "sess1");
+	const before = pushes.length;
+	const fresh = clearReview(WS_ID);
+
 	expect(fresh.review.status).toBe("open");
 	expect(fresh.comments).toHaveLength(0);
-	expect(fresh.review.id).not.toBe(comment.reviewId);
+	expect(fresh.review.id).not.toBe(draft.reviewId);
+	expect(pushes.slice(before)).toEqual([{ workspaceId: WS_ID, ...fresh }]);
+	expect(getReviewSnapshot(WS_ID)).toEqual(fresh);
+
+	const [archived] = archivedSnapshots();
+	expect(archived?.review).toMatchObject({ id: sent.reviewId, status: "closed" });
+	expect(typeof archived?.review.closedAt).toBe("number");
+	expect(archived?.comments.map((comment) => comment.id)).toEqual([sent.id]);
+
+	// A resolve already in flight when Clear landed still finishes the archived record, without pushing
+	// that inactive snapshot over the fresh one clients now render.
+	const beforeResolve = pushes.length;
+	expect(resolveCommentFromAgent(sent.id, "fixed after clear").status).toBe("resolved");
+	expect(pushes).toHaveLength(beforeResolve);
+	expect(archivedSnapshots()[0]?.comments[0]).toMatchObject({
+		id: sent.id,
+		status: "resolved",
+		resolveNote: "fixed after clear",
+	});
 });
 
 test("delete is draft-only: an unsent remark goes, a sent one is a record", () => {
@@ -283,9 +314,14 @@ test("delete is draft-only: an unsent remark goes, a sent one is a record", () =
 	expect(() => deleteComment(WS_ID, "rc_nope")).toThrow(/Unknown/);
 });
 
-test("purge removes the workspace's review state", () => {
-	addInline();
+test("purge removes the workspace's active review and archives", () => {
+	const sent = addInline();
+	markCommentsSent(WS_ID, [sent.id], "sess1");
+	clearReview(WS_ID);
+	expect(statSync(archiveDir()).isDirectory()).toBe(true);
+
 	removeWorkspaceReviews(WS_ID);
+	expect(() => statSync(archiveDir())).toThrow();
 	expect(getReviewSnapshot(WS_ID).comments).toHaveLength(0);
 });
 
@@ -295,6 +331,19 @@ test("a path-segment workspace id is refused by every file touch — no traversa
 		expect(() => removeWorkspaceReviews(evil)).toThrow(/Invalid workspace id/);
 		expect(() => getReviewSnapshot(evil)).toThrow(/Invalid workspace id/);
 	}
+});
+
+test("clear refuses an unsafe persisted review id instead of escaping the archive directory", () => {
+	const sent = addInline();
+	markCommentsSent(WS_ID, [sent.id], "sess1");
+	const activeFile = join(dataDir, "reviews", `${WS_ID}.json`);
+	const corrupted = JSON.parse(readFileSync(activeFile, "utf8")) as ReviewSnapshot;
+	corrupted.review.id = "../escape";
+	writeFileSync(activeFile, `${JSON.stringify(corrupted)}\n`);
+
+	expect(() => clearReview(WS_ID)).toThrow(/Invalid review id/);
+	expect((JSON.parse(readFileSync(activeFile, "utf8")) as ReviewSnapshot).comments).toHaveLength(1);
+	expect(() => statSync(join(dataDir, "reviews", "archive", "escape.json"))).toThrow();
 });
 
 test("a base-side anchor is captured from the BASE blob and never re-anchored", () => {
@@ -417,6 +466,7 @@ test("a DAMAGED review file is refused, never replaced — the comments stay on 
 	// `ensureSnapshot` write a fresh empty one over it — every comment gone, silently.
 	writeFileSync(file, intact.slice(0, Math.floor(intact.length / 2)));
 	expect(() => getReviewSnapshot(WS_ID)).toThrow(/damaged/);
+	expect(() => clearReview(WS_ID)).toThrow(/damaged/);
 	expect(readFileSync(file, "utf8")).not.toContain('"comments": []');
 	// Repairing it by hand brings the review back untouched.
 	writeFileSync(file, intact);

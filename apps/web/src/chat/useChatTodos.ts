@@ -1,4 +1,4 @@
-import type { SessionEventPayload, TodoPlan } from "@thinkrail/contracts";
+import type { PiEvent, SessionEventPayload, TodoPlan } from "@thinkrail/contracts";
 import { TODO_NUDGE_PREFIX, WS_CHANNELS } from "@thinkrail/contracts";
 import { useEffect, useState } from "react";
 import { useAppStore } from "../store";
@@ -6,6 +6,10 @@ import { errorText, getSessionMessagesWithSkillBaseline, getTransport } from "..
 import { messagesToRuntime } from "./hydrate";
 import { planToMarkdown } from "./planMarkdown";
 import { sessionGlance, shouldNudgeOnAdd } from "./planView";
+
+export function shouldRefreshTodos(event: PiEvent): boolean {
+	return event.type === "tool_execution_end" || event.type === "agent_settled";
+}
 
 export interface ChatTodos {
 	/** The chat's plan (loose items + groups), or null while the first load is in flight. */
@@ -63,9 +67,7 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 		const unsubscribe = getTransport().subscribe(WS_CHANNELS.piEvent, (payload) => {
 			const event = payload as SessionEventPayload;
 			if (event.sessionId !== sessionId) return;
-			if (event.event.type === "tool_execution_end" || event.event.type === "agent_end") {
-				scheduleRefetch();
-			}
+			if (shouldRefreshTodos(event.event)) scheduleRefetch();
 		});
 		return () => {
 			cancelled = true;
@@ -170,7 +172,12 @@ async function nudgeAgent(workspaceId: string, sessionId: string, title: string)
 			} = await getSessionMessagesWithSkillBaseline({ sessionId, workspaceId });
 			useAppStore
 				.getState()
-				.hydrateSession(summary, messagesToRuntime(messages), false, syncedTick);
+				.hydrateSession(
+					summary,
+					messagesToRuntime(messages, summary.lastSettlement),
+					false,
+					syncedTick,
+				);
 			await getTransport().request("session.prompt", { sessionId, text });
 		} catch (err) {
 			console.warn("todo nudge skipped:", errorText(err));

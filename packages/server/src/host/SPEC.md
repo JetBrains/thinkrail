@@ -48,14 +48,17 @@ channel fan-out, and the process-boot wrapper both launchers share.
   record of work that finished and drops only its answer,
   the **`provider.login`** channel publish (the `auth` module's session-less login-frame bridge, wired like
   `pi.extensionUi`) and the `provider.*` login handlers, the **`watch` wiring** (inject the
-  `workspace.fsChanged` publish callback into `watch`; expose **`workspace.watchReady`** as the typed
-  preflight that awaits a fresh watcher's conservative startup nudge before a web skill-loading flow
+  `workspace.fsChanged` publish callback into `watch` and inject `agent`'s project-skill path classifier so
+  each capped batch carries independent `skillChange: none|detected|unknown` evidence; expose
+  **`workspace.watchReady`** as the typed preflight that awaits a fresh watcher's conservative startup nudge
+  before a web skill-loading flow
   captures its baseline and reports whether the watcher was already known ready (the client's replay-safe
   conservative fallback); plus the **repo-metadata** callback (`setRepoMetaPublisher`) fanned out to **two**
   convergences for a git-metadata write in a watched worktree:
   `refreshUserOwnedWorkspace` (**re-sync a user-owned workspace's folder-truth branch** — host-mediated,
   since `watch` has no `workspaces` edge, and self-publishing through the workspace-lifecycle tee) **and** a
-  pathless `fsChanged` frame (`paths: []`, `truncated: false`) so the clients' `HEAD`-relative reads
+  pathless, skill-neutral `fsChanged` frame (`paths: []`, `truncated: false`, `skillChange: "none"`) so the
+  clients' `HEAD`-relative reads
   (`git.status`, an `uncommitted`-scope diff tab) re-read when a terminal `commit`/`reset` moves a ref;
   the same publish also feeds the **fsNudge seam** (`fsNudge.ts`: `setFsNudgePublisher` +
   `nudgeBaseRefWorkspaces`), the host mediation the `git.prefetch` handler triggers when the app's own
@@ -123,7 +126,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
     set dedupes re-fired prompt-commits. This is why a long first turn no longer leaves the workspace as
     `workspace-N` for minutes.
   - **Agentic (refine):** `maybeAutoRenameWorkspace(sessionId, workspaceId)` on every **settled** turn
-    (`isSettledTurn(event)`, exported: `agent_end` with `willRetry: false`). It asks assist for a
+    (`isSettledTurn(event)`, exported: `agent_settled` — never `agent_end`, which is attempt-level and can
+    precede compaction/retry even when `willRetry` is false). It asks assist for a
     human-readable name (cheap model), re-checks the workspace (exists, not `renamed`) after the await,
     then calls `renameWorkspace` in the same tick — upgrading the provisional naive name into the final
     name (and its derived branch) and **locking** it (`renamed: true`). Best-effort by contract: every failure path resolves `null` and
@@ -153,8 +157,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
   check-then-mark straddling an `await createSession(…)`, the review layer's only non-atomic gap.
   **`withReviewLock` covers every review mutation the WIRE exposes, not just sends**, because two different things fall
   into that gap: a second *send* reads the same "drafts, no session yet" and forks the review, and a
-  *mutation* invalidates the package already built — a `review.close` landing there strands the
-  package: the mark re-creates a fresh empty review and links the chat to *that*, leaving comment ids
+  *mutation* invalidates the package already built — a `review.close` Clear landing there strands the
+  package: the mark sees a fresh empty review and links the chat to *that*, leaving comment ids
   the agent can never `resolve_comment`. One queue per workspace, so a mutation issued mid-send simply
   happens after it.
   The package prompt is fired **detached** after the mark, so the lock only ever holds session
@@ -199,6 +203,11 @@ channel fan-out, and the process-boot wrapper both launchers share.
   is the **single** place workspace membership changes reach the wire — create/rename/archive all flow
   through it, so every client (including the initiator) converges by reacting, never by per-client optimism.
   The two new channels are `ws.subscribe`d in the WS `open` handler alongside `workspace.updated`.
+- **Session-deletion fan-out:** `createServer` installs the agent module's deletion publisher and
+  broadcasts each workspace-scoped `SessionDeletedPayload` on `session.deleted`; the WS `open` handler
+  subscribes every client so permanent domain deletion converges beyond the initiating page. It remains a
+  low-latency event, not a durable queue: a reconnecting client's active-workspace `session.list` is the
+  authoritative read-side repair for an event missed while its socket was down.
 - **Public surface (barrel):** `createServer`, `CreateServerOptions`, `RunningServer`, `bootHost`,
   `BootHostOptions`, `BootedHost`.
 - **Allowed deps:** `contracts` (`PROTOCOL_VERSION`, `WS_CHANNELS`); `shared` (`freePort`, `shellEnv` — for
@@ -210,8 +219,9 @@ channel fan-out, and the process-boot wrapper both launchers share.
 
 - WS commands return values directly; only events + extension-UI + **`project.updated`** (published from
   the `projects` module's injected publisher) + the workspace lifecycle trio
-  (`workspace.created`/`updated`/`removed`, published from the `workspaces` module's injected publisher)
-  use push channels. Every **broadcast** push channel a client should hear must be `ws.subscribe`d in the WS
+  (`workspace.created`/`updated`/`removed`, published from the `workspaces` module's injected publisher) +
+  **`session.deleted`** (published from the agent module's injected publisher) use push channels. Every
+  **broadcast** push channel a client should hear must be `ws.subscribe`d in the WS
   `open` handler — a publish on an unsubscribed topic reaches nobody, silently. Two channels are deliberately
   **not** subscribed and not broadcast: `terminal.data`, `terminal.exit` and `terminal.detached` are sent with
   `ws.send` to the single *attached* client (see [[submodule-server-terminal]]). Adding a terminal-style

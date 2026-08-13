@@ -29,6 +29,9 @@ tabs**. A tab's shell outlives every client that looks at it.
 
 ## Decisions
 
+- **macOS PTYs start the user's shell in login mode (`-l`)** to match Terminal.app and the platform's
+  terminal convention; other platforms keep a plain interactive shell. The PTY itself supplies
+  interactivity, so no explicit `-i` is needed.
 - **A shell is keyed by `(workspaceId, tabKey)`**, never by a socket, a client, or a component. `tabKey` is
   durable and client-supplied; PTY ids are per-run and **never persisted** (attaching to an id that outlived
   its process is Theia's `Couldn't attach - can't find terminal with id`).

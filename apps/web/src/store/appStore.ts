@@ -25,13 +25,13 @@ import type {
 import { DEFAULT_CONFIG, isAskUserAnswersMessage, isControlMessage } from "@thinkrail/contracts";
 import { create } from "zustand";
 import type { LoginState } from "../auth";
+import { assistantFailureText } from "../chat/assistantFailure";
 import type { HydratedRuntime } from "../chat/hydrate";
 import type { ChatTurn, ExtUiDialogRequest, ToolResultState } from "../chat/types";
 import { shallowEqualArrays, userText } from "../lib";
 import type { ConnectionStatus } from "../transport";
 import {
 	type HistoryTarget,
-	isSkillPath,
 	selectActiveWorkspaceProjectId,
 	selectWorkspaceNavTick,
 	selectWorkspaceTick,
@@ -216,6 +216,8 @@ export interface SessionRuntime {
 	/** `ask_user_question` replies keyed by tool call id (from `ask-user-answers` custom messages). */
 	askAnswers: Record<string, AskUserQuestionResult>;
 	currentAssistantId: string | null;
+	/** Latest assistant turn observed in the current attempt; scopes overflow-recovery removal. */
+	attemptAssistantId: string | null;
 	isStreaming: boolean;
 	/** This chat's model + thinking level (display only; `pi` owns them). */
 	model: WireModel | null;
@@ -241,6 +243,7 @@ function newRuntime(model: WireModel | null, thinkingLevel: ThinkingLevel): Sess
 		toolResults: {},
 		askAnswers: {},
 		currentAssistantId: null,
+		attemptAssistantId: null,
 		isStreaming: false,
 		model,
 		thinkingLevel,
@@ -268,6 +271,21 @@ export const EMPTY_RUNTIME: SessionRuntime = newRuntime(null, "medium");
 function clearTurnStreaming(turns: ChatTurn[]): ChatTurn[] {
 	if (!turns.some((t) => t.kind === "assistant" && t.streaming)) return turns;
 	return turns.map((t) => (t.kind === "assistant" && t.streaming ? { ...t, streaming: false } : t));
+}
+
+/** Drop the failed assistant attempt Pi removed from its rebuilt context before an overflow retry. */
+function removeSupersededAssistant(
+	turns: ChatTurn[],
+	attemptAssistantId: string | null,
+): ChatTurn[] {
+	if (!attemptAssistantId) return turns;
+	const index = turns.findIndex(
+		(turn) =>
+			turn.id === attemptAssistantId &&
+			turn.kind === "assistant" &&
+			assistantFailureText(turn.message) !== null,
+	);
+	return index < 0 ? turns : [...turns.slice(0, index), ...turns.slice(index + 1)];
 }
 
 type RetrySource = Extract<ChatTurn, { kind: "retry" }>["source"];
@@ -305,7 +323,7 @@ function clearRetryTurns(rt: SessionRuntime, source: RetrySource): SessionRuntim
 export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionRuntime {
 	switch (event.type) {
 		case "agent_start":
-			return { ...rt, isStreaming: true };
+			return { ...rt, isStreaming: true, attemptAssistantId: null };
 		case "message_start": {
 			// The assistant turn is created lazily on the first message_update (from its `partial`
 			// snapshot) — here we just reserve its id. A new assistant message also finalizes the previous
@@ -314,6 +332,7 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 				return {
 					...rt,
 					currentAssistantId: crypto.randomUUID(),
+					attemptAssistantId: null,
 					turns: clearTurnStreaming(rt.turns),
 				};
 			// A USER message: composer sends append it optimistically (skip the echo — the last turn is
@@ -355,6 +374,7 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 			return {
 				...rt,
 				currentAssistantId: streaming ? id : null,
+				attemptAssistantId: streaming ? rt.attemptAssistantId : id,
 				turns: rt.turns.some((t) => t.id === id)
 					? rt.turns.map((t) => (t.id === id ? turn : t))
 					: [...rt.turns, turn],
@@ -371,7 +391,7 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 			}
 			// The message's true terminal: pi forwards only *streaming* variants as `message_update` (the
 			// LLM-level done/error become this event), so without it the turn would stay flagged streaming
-			// until `agent_end` — seconds or minutes later when tools run. Adopt the final message too: it
+			// until final `agent_settled` — seconds or minutes later when tools run. Adopt the final message too: it
 			// carries `stopReason`, which the renderers use to spot dead (aborted/errored) tool calls.
 			if (event.message.role !== "assistant" || !rt.currentAssistantId) return rt;
 			const id = rt.currentAssistantId;
@@ -379,6 +399,7 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 			return {
 				...rt,
 				currentAssistantId: null,
+				attemptAssistantId: id,
 				turns: rt.turns.some((t) => t.id === id)
 					? rt.turns.map((t) => (t.id === id ? turn : t))
 					: [...rt.turns, turn],
@@ -408,35 +429,34 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 					[event.toolCallId]: { status: event.isError ? "error" : "done", raw: event.result },
 				},
 			};
-		case "agent_end": {
-			if (event.willRetry) return rt; // auto-retry / compaction follows — stay streaming
-			// Did the run terminally fail? pi ends an errored turn (retries exhausted / non-retryable, e.g. a
-			// nonexistent model 404-ing) with `willRetry: false` and a last assistant message carrying
-			// `stopReason: "error"` + the provider's `errorMessage`. Surface that as a visible error turn
-			// instead of a misleading "✓ Done" — otherwise a bad model just looks like nothing happened.
-			const lastAssistant = [...event.messages]
-				.reverse()
-				.find((m): m is Extract<typeof m, { role: "assistant" }> => m.role === "assistant");
-			const closer: ChatTurn =
-				lastAssistant?.stopReason === "error"
-					? {
-							kind: "error",
-							id: crypto.randomUUID(),
-							text: lastAssistant.errorMessage || "The agent run ended in an error.",
-						}
-					: // `endedAt` timestamps the turn end so the round summary (shown right here) can measure the
-						// turn's duration — user-submit → agent_end — without waiting for the next user turn.
-						{ kind: "system", id: crypto.randomUUID(), text: "✓ Done", endedAt: Date.now() };
+		case "agent_end":
+			// Attempt-level only: provider retry, compaction/recovery, or queued work may still follow even
+			// when `willRetry` is false. `agent_settled` is the one automatic-work terminal.
+			return rt;
+		case "agent_settled": {
+			const failure = assistantFailureText(event.terminal);
+			const closer: ChatTurn = failure
+				? { kind: "error", id: crypto.randomUUID(), text: failure }
+				: // `endedAt` measures the whole automatic run — prompt through retries/compaction/continuations.
+					{ kind: "system", id: crypto.randomUUID(), text: "✓ Done", endedAt: Date.now() };
 			return {
 				...rt,
-				// Drop any lingering retry countdown + sweep any turn still flagged streaming; the run concluded.
-				turns: [...clearTurnStreaming(rt.turns).filter((t) => t.kind !== "retry"), closer],
+				turns: [...clearTurnStreaming(rt.turns).filter((turn) => turn.kind !== "retry"), closer],
 				isStreaming: false,
 				currentAssistantId: null,
+				attemptAssistantId: null,
 			};
 		}
+		case "compaction_end":
+			return event.reason === "overflow" && event.willRetry
+				? {
+						...rt,
+						turns: removeSupersededAssistant(rt.turns, rt.attemptAssistantId),
+						attemptAssistantId: null,
+					}
+				: rt;
 		case "auto_retry_start":
-			// Show a live countdown over the back-off; cleared on auto_retry_end (or the final agent_end).
+			// Show a live countdown over the back-off; cleared on auto_retry_end (or final settlement).
 			// Replace-or-append per source: the event fires once per attempt, and the two retry flows
 			// (turn vs summarization) may overlap — each keeps exactly one indicator.
 			return appendRetryTurn(rt, "turn", event);
@@ -500,6 +520,9 @@ function reduceExtUi(
 
 interface AppState {
 	status: ConnectionStatus;
+	/** Monotonic connection-open generation. Advances with every `connected` status so consumers can
+	 * distinguish a reconnect from the previous open socket even though both settle on the same status. */
+	connectionGeneration: number;
 	protocolVersion: number | null;
 	/** Open projects shown in the left rail, newest first. */
 	projects: Project[];
@@ -538,6 +561,9 @@ interface AppState {
 	navTickByWorkspace: Record<string, number>;
 	/** Chat tabs the user closed, per workspace (most-recent-first) — reopenable while their runtime lives. */
 	closedChatsByWorkspace: Record<string, ClosedChat[]>;
+	/** Page-lifetime deletion tombstones. They order async session reads behind `session.deleted`, preventing
+	 * an older list/transcript response from restoring a permanently removed chat. */
+	deletedSessionsByWorkspace: Record<string, Record<string, true>>;
 	/** Terminals are workspace-scoped too; their instances stay mounted (hidden) to preserve buffers. */
 	terminalsByWorkspace: Record<string, TerminalTab[]>;
 	activeTerminalByWorkspace: Record<string, string | null>;
@@ -640,9 +666,10 @@ interface AppState {
 	 */
 	fsChangesByWorkspace: Record<string, { tick: number; paths: string[]; truncated: boolean }>;
 	/**
-	 * Per workspace, the `fsChangesByWorkspace` tick of the most recent *skill-relevant* batch — a change
-	 * under a `.claude|.github|.gemini|.pi|.agents/skills` dir, or a truncated wildcard we can't inspect.
-	 * Folded alongside the fs signal in `noteFsChanged`; compared against a session's
+	 * Per workspace, the `fsChangesByWorkspace` tick of the most recent *skill-relevant* batch — host
+	 * evidence is `detected` for a concrete project-skill path or `unknown` for a truly pathless event;
+	 * generic path-list truncation with `skillChange: "none"` is deliberately irrelevant. Folded alongside
+	 * the fs signal in `noteFsChanged`; compared against a session's
 	 * `skillsSyncedTickBySession` to derive the Skills-reload badge (`selectSkillsStale`). Accumulated (not
 	 * overwritten by a later non-skill batch), so a genuine pending skill change is never lost.
 	 */
@@ -790,6 +817,18 @@ interface AppState {
 	closeChatRuntime: (sessionId: string) => void;
 	/** Close a chat tab to history: remove the tab but keep its runtime + session alive for reopening. */
 	closeChatToHistory: (sessionId: string) => void;
+	/** Tombstone a server-deleted chat and drop every client-side surface/state bucket in one write. */
+	deleteChat: (workspaceId: string, sessionId: string) => void;
+	/**
+	 * Reconcile a `session.list` result against the local membership captured when that read began. Only
+	 * baseline ids absent from the authoritative result are deleted, so a session created while the read
+	 * was in flight cannot be removed by its older response.
+	 */
+	reconcileWorkspaceSessions: (
+		workspaceId: string,
+		baselineSessionIds: readonly string[],
+		authoritativeSessionIds: readonly string[],
+	) => void;
 	/** Reopen a chat from history (its runtime is still live, so the full transcript returns instantly). */
 	reopenChat: (sessionId: string) => void;
 	/**
@@ -933,6 +972,15 @@ function omitKey<T>(record: Record<string, T>, key: string): Record<string, T> {
 	return rest;
 }
 
+/** Whether this page has already observed permanent deletion of a workspace chat. */
+function isSessionDeleted(
+	state: Pick<AppState, "deletedSessionsByWorkspace">,
+	workspaceId: string,
+	sessionId: string,
+): boolean {
+	return state.deletedSessionsByWorkspace[workspaceId]?.[sessionId] === true;
+}
+
 /**
  * Merge a partial into one diff tab of the **active** workspace — the shared body of every per-tab diff
  * view toggle (layout, rendered, hide-whitespace), so adding a toggle is one line instead of another copy
@@ -984,6 +1032,67 @@ function sameSpecNode(a: SpecGraphNode, b: SpecGraphNode): boolean {
  */
 function bumpNav(s: AppState, workspaceId: string): Record<string, number> {
 	return { ...s.navTickByWorkspace, [workspaceId]: selectWorkspaceNavTick(s, workspaceId) + 1 };
+}
+
+/**
+ * The immutable chat-deletion fold shared by a direct `session.deleted` event and reconnect membership
+ * reconciliation. Returning the original state makes both paths idempotent without duplicating cleanup.
+ */
+function withoutChat(s: AppState, workspaceId: string, sessionId: string): AppState {
+	const alreadyDeleted = isSessionDeleted(s, workspaceId, sessionId);
+	const tabs = s.tabsByWorkspace[workspaceId] ?? [];
+	const tab = tabs.find(
+		(candidate) => candidate.kind === "chat" && candidate.sessionId === sessionId,
+	);
+	const closed = s.closedChatsByWorkspace[workspaceId] ?? [];
+	const inHistory = closed.some((chat) => chat.sessionId === sessionId);
+	const hasRuntime = s.sessions[sessionId] !== undefined;
+	const hasSkillBaseline = Object.hasOwn(s.skillsSyncedTickBySession, sessionId);
+	const targetsLocation =
+		s.chatLocationRequest?.workspaceId === workspaceId &&
+		s.chatLocationRequest.sessionId === sessionId;
+	if (alreadyDeleted && !tab && !inHistory && !hasRuntime && !hasSkillBaseline && !targetsLocation)
+		return s;
+
+	const remaining = tab ? tabs.filter((candidate) => candidate.id !== tab.id) : tabs;
+	const wasActive = !!tab && s.activeTabByWorkspace[workspaceId] === tab.id;
+	return {
+		...s,
+		...(!alreadyDeleted
+			? {
+					deletedSessionsByWorkspace: {
+						...s.deletedSessionsByWorkspace,
+						[workspaceId]: {
+							...(s.deletedSessionsByWorkspace[workspaceId] ?? {}),
+							[sessionId]: true as const,
+						},
+					},
+				}
+			: {}),
+		...(tab ? { tabsByWorkspace: { ...s.tabsByWorkspace, [workspaceId]: remaining } } : {}),
+		...(wasActive
+			? {
+					activeTabByWorkspace: {
+						...s.activeTabByWorkspace,
+						[workspaceId]: remaining.at(-1)?.id ?? null,
+					},
+					navTickByWorkspace: bumpNav(s, workspaceId),
+				}
+			: {}),
+		...(inHistory
+			? {
+					closedChatsByWorkspace: {
+						...s.closedChatsByWorkspace,
+						[workspaceId]: closed.filter((chat) => chat.sessionId !== sessionId),
+					},
+				}
+			: {}),
+		...(hasRuntime ? { sessions: omitKey(s.sessions, sessionId) } : {}),
+		...(hasSkillBaseline
+			? { skillsSyncedTickBySession: omitKey(s.skillsSyncedTickBySession, sessionId) }
+			: {}),
+		...(targetsLocation ? { chatLocationRequest: null } : {}),
+	};
 }
 
 function sameSpecGraph(prev: SpecGraphNode[] | undefined, next: SpecGraphNode[]): boolean {
@@ -1089,6 +1198,7 @@ function nextTerminalTitle(list: TerminalTab[]): string {
 
 export const useAppStore = create<AppState>((set, get) => ({
 	status: "connecting",
+	connectionGeneration: 0,
 	protocolVersion: null,
 	projects: [],
 	recentProjects: [],
@@ -1100,6 +1210,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	previewTabByWorkspace: {},
 	navTickByWorkspace: {},
 	closedChatsByWorkspace: {},
+	deletedSessionsByWorkspace: {},
 	terminalsByWorkspace: {},
 	activeTerminalByWorkspace: {},
 	sessions: {},
@@ -1127,7 +1238,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 	analyticsEnabled: DEFAULT_CONFIG.analyticsEnabled,
 	terminalReplayKb: DEFAULT_CONFIG.terminalReplayKb,
 	toasts: [],
-	setStatus: (status) => set({ status }),
+	setStatus: (status) =>
+		set((state) => ({
+			status,
+			connectionGeneration:
+				status === "connected" ? state.connectionGeneration + 1 : state.connectionGeneration,
+		})),
 	setWelcome: (protocolVersion) => set({ protocolVersion }),
 	installProjectSnapshot: (projects, recentProjects) =>
 		set((state) => {
@@ -1320,9 +1436,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((s) => {
 			const prev = s.fsChangesByWorkspace[payload.workspaceId];
 			const tick = (prev?.tick ?? 0) + 1;
-			// A skill-dir change (or a truncated wildcard we can't inspect) advances the workspace's
-			// skill-change tick, flagging every session that loaded skills before it (selectSkillsStale).
-			const skillChanged = payload.truncated || payload.paths.some(isSkillPath);
+			// The host classifies skill evidence before its generic path cap, so a large concrete non-skill
+			// batch cannot masquerade as a resource change and an over-cap skill path is not lost.
+			const skillChanged = payload.skillChange !== "none";
 			return {
 				fsChangesByWorkspace: {
 					...s.fsChangesByWorkspace,
@@ -1404,6 +1520,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				previewTabByWorkspace: omitKey(s.previewTabByWorkspace, workspaceId),
 				navTickByWorkspace: omitKey(s.navTickByWorkspace, workspaceId),
 				closedChatsByWorkspace: omitKey(s.closedChatsByWorkspace, workspaceId),
+				// Deletion tombstones deliberately survive: an older read can still settle after teardown.
 				// Dropping the terminals unmounts their instances, which close the PTYs server-side.
 				terminalsByWorkspace: omitKey(s.terminalsByWorkspace, workspaceId),
 				activeTerminalByWorkspace: omitKey(s.activeTerminalByWorkspace, workspaceId),
@@ -1584,6 +1701,16 @@ export const useAppStore = create<AppState>((set, get) => ({
 				},
 			};
 		}),
+	deleteChat: (workspaceId, sessionId) => set((s) => withoutChat(s, workspaceId, sessionId)),
+	reconcileWorkspaceSessions: (workspaceId, baselineSessionIds, authoritativeSessionIds) =>
+		set((s) => {
+			const authoritative = new Set(authoritativeSessionIds);
+			let next = s;
+			for (const sessionId of baselineSessionIds) {
+				if (!authoritative.has(sessionId)) next = withoutChat(next, workspaceId, sessionId);
+			}
+			return next;
+		}),
 	reopenChat: (sessionId) =>
 		set((s) => {
 			const wsId = s.activeWorkspaceId;
@@ -1616,7 +1743,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 					.filter((t): t is ChatTab => t.kind === "chat")
 					.map((t) => t.sessionId),
 			]);
-			const fresh = entries.filter((e) => !known.has(e.sessionId) && !s.sessions[e.sessionId]);
+			const fresh = entries.filter(
+				(e) =>
+					!isSessionDeleted(s, workspaceId, e.sessionId) &&
+					!known.has(e.sessionId) &&
+					!s.sessions[e.sessionId],
+			);
 			if (fresh.length === 0) return {};
 			return {
 				closedChatsByWorkspace: {
@@ -1628,6 +1760,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		}),
 	hydrateSession: (summary, hydrated, activate = false, syncedTick) =>
 		set((s) => {
+			if (isSessionDeleted(s, summary.workspaceId, summary.sessionId)) return {};
 			if (s.sessions[summary.sessionId]) return {}; // a live/ahead runtime wins — never clobber it
 			const wsId = summary.workspaceId;
 			const runtime: SessionRuntime = {
@@ -1709,6 +1842,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				// The send never started a run — clear streaming so the composer + loader don't hang.
 				isStreaming: false,
 				currentAssistantId: null,
+				attemptAssistantId: null,
 				turns: [...clearTurnStreaming(rt.turns), { kind: "error", id: crypto.randomUUID(), text }],
 			})),
 		),

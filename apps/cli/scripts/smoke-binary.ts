@@ -11,6 +11,7 @@
 import { existsSync, globSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { defaultSessionDirFor, writeFixtureSession } from "@thinkrail/server/history-test-fixtures";
 
 const binary = resolve(process.argv[2] ?? join(import.meta.dir, "..", "dist", "thinkrail"));
 if (!existsSync(binary)) {
@@ -22,6 +23,8 @@ const tmp = mkdtempSync(join(tmpdir(), "thinkrail-smoke-"));
 const cacheDir = join(tmp, "cache");
 const homeDir = join(tmp, "home");
 const projectDir = join(tmp, "project");
+const dataDir = join(tmp, "data");
+const agentDir = join(tmp, "pi-agent");
 
 function fail(message: string): never {
 	console.error(`smoke FAILED: ${message}`);
@@ -40,6 +43,17 @@ function within<T>(promise: Promise<T>, ms: number, what: string): Promise<T> {
 
 mkdirSync(homeDir, { recursive: true });
 
+// A compiled artifact must not execute startup config from the project it is launched inside. A malicious
+// or merely incompatible Bun preload would otherwise run before ThinkRail can establish any boundary.
+const autoloadDir = join(tmp, "autoload-project");
+const preloadMarker = join(autoloadDir, "preload-ran");
+mkdirSync(autoloadDir, { recursive: true });
+writeFileSync(join(autoloadDir, "bunfig.toml"), 'preload = ["./preload.ts"]\n');
+writeFileSync(
+	join(autoloadDir, "preload.ts"),
+	`import { writeFileSync } from "node:fs"; writeFileSync(${JSON.stringify(preloadMarker)}, "ran");\n`,
+);
+
 // The install-management subcommands must run *without* the boot path: they never serve the UI or open a
 // session, and `uninstall` deleting the very cache it had just re-extracted would be a nasty surprise. Only
 // the artifact can show this (the branch lives in `compiled-entry`), and `--help` touches nothing on disk.
@@ -56,8 +70,10 @@ mkdirSync(homeDir, { recursive: true });
 		},
 		stdout: "pipe",
 		stderr: "inherit",
+		cwd: autoloadDir,
 	});
 	if (run.exitCode !== 0) fail(`\`uninstall --help\` exited ${run.exitCode}`);
+	if (existsSync(preloadMarker)) fail("compiled binary executed a project-local bunfig preload");
 	if (!run.stdout.toString().includes("thinkrail uninstall")) {
 		fail("`uninstall --help` printed no usage");
 	}
@@ -74,6 +90,31 @@ writeFileSync(
 );
 const gitInit = Bun.spawnSync(["git", "-C", projectDir, "init", "-b", "main"]);
 if (gitInit.exitCode !== 0) fail("could not initialise the portable-skill smoke project");
+const gitAdd = Bun.spawnSync(["git", "-C", projectDir, "add", "."]);
+if (gitAdd.exitCode !== 0) fail("could not stage the portable-skill smoke project");
+const gitCommit = Bun.spawnSync([
+	"git",
+	"-C",
+	projectDir,
+	"-c",
+	"user.name=ThinkRail Smoke",
+	"-c",
+	"user.email=smoke@thinkrail.invalid",
+	"commit",
+	"--quiet",
+	"-m",
+	"seed smoke project",
+]);
+if (gitCommit.exitCode !== 0) fail("could not commit the portable-skill smoke project");
+
+// A real transcript drives the binary-only Linux trash path. `trash` loads processMountinfo through a
+// template-literal CommonJS require; without the server's static inclusion seam this exact RPC fails only
+// inside the artifact, even though source e2e stays green.
+const doomedTranscript = writeFixtureSession(defaultSessionDirFor(agentDir, projectDir), {
+	cwd: projectDir,
+	name: "compiled trash probe",
+	messages: [{ role: "user", text: "move this transcript to trash", timestamp: Date.now() }],
+});
 
 // 24262 is only the scan start: the CLI free-picks past a taken port and we read the actually served
 // URL from stdout below — so concurrent runs (other worktrees, dev hosts, e2e suites) never collide.
@@ -82,8 +123,8 @@ const proc = Bun.spawn([binary, "--no-open", "--port", "24262"], {
 		...process.env,
 		// Full isolation: never touch the runner/dev machine's real state, and force a fresh
 		// cache so the binary's staging path (web assets + skills) is exercised from scratch.
-		THINKRAIL_DATA_DIR: join(tmp, "data"),
-		PI_CODING_AGENT_DIR: join(tmp, "pi-agent"),
+		THINKRAIL_DATA_DIR: dataDir,
+		PI_CODING_AGENT_DIR: agentDir,
 		XDG_CACHE_HOME: cacheDir,
 		HOME: homeDir,
 		CLAUDE_CONFIG_DIR: join(homeDir, ".claude"),
@@ -246,6 +287,20 @@ try {
 		"project.open",
 	)) as { id?: string };
 	if (!project.id) fail("project.open returned no project id");
+	const workspaces = (await within(
+		rpc(rpcSocket, "workspace.list", { projectId: project.id }),
+		10_000,
+		"workspace.list",
+	)) as { id?: string; kind?: string }[];
+	const workspaceId = workspaces.find((workspace) => workspace.kind === "default")?.id;
+	if (!workspaceId) fail("workspace.list returned no Default workspace");
+	await within(
+		rpc(rpcSocket, "session.delete", { sessionId: doomedTranscript.id, workspaceId }),
+		10_000,
+		"session.delete compiled trash probe",
+	);
+	if (existsSync(doomedTranscript.path)) fail("session.delete left the seeded transcript on disk");
+
 	// Project-scoped aliases are gated behind trust — grant it so the compiled skill.list surfaces the
 	// committed `.claude/skills` alias below (personal/bundled skills would load regardless).
 	await within(
@@ -286,6 +341,14 @@ try {
 	// the artifact (registerBundledRuntime), reusing the live RPC socket for the push-channel frames.
 	await assertOAuthLoginReachesAuthUrl(rpcSocket);
 
+	// Native trash sidecars must be staged from the artifact to real paths before the server accepts the
+	// delete RPC. The host platform executes one; asserting both keeps cross-compiled targets complete.
+	for (const helper of ["macos-trash", "windows-trash.exe"]) {
+		if (globSync(join(cacheDir, "thinkrail", "runtime", "*", helper)).length === 0) {
+			fail(`native trash helper "${helper}" was not staged under ${cacheDir}`);
+		}
+	}
+
 	// The bundled extensions' skills must be staged to the real filesystem (pi reads SKILL.md via fs).
 	// Full inventory — pi-spec-graph's skill + the whole pi-thinkrail-workflow family (keep in sync with
 	// the family table in packages/pi-thinkrail-workflow/skills/SPEC.md). `choosing-a-workflow` matters
@@ -319,7 +382,7 @@ try {
 	}
 
 	console.log(
-		`smoke OK: ${binary} booted at ${url}, served the UI + staged skills + portable alias, OAuth reached its auth URL, exited cleanly.`,
+		`smoke OK: ${binary} booted at ${url}, served the UI + staged skills + portable alias, trashed a transcript, OAuth reached its auth URL, exited cleanly.`,
 	);
 } catch (err) {
 	proc.kill("SIGKILL");

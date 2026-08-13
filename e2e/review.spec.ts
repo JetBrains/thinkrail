@@ -1,7 +1,7 @@
 import { execSync } from "node:child_process";
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { expect, type Page, test } from "@playwright/test";
+import { type Browser, expect, type Page, test } from "@playwright/test";
 import { createWorkspaceViaDialog, openFixtureProject, worktreeRows } from "./fixtures/app";
 import { E2E_DATA_DIR } from "./fixtures/paths";
 
@@ -27,6 +27,18 @@ async function openDiff(page: Page): Promise<void> {
 	await page.getByTestId("tab-changes").click();
 	await page.getByTestId("change-item").filter({ hasText: "script.ts" }).click();
 	await expect(page.getByTestId("diff-pane")).toContainText("three = 3");
+}
+
+/** Open a second browser client on this suite's managed workspace, with its Review panel visible. */
+async function openReviewClient(browser: Browser): Promise<Page> {
+	const context = await browser.newContext();
+	const page = await context.newPage();
+	await page.goto("/");
+	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+	await page.getByTestId("project-item").first().click();
+	await worktreeRows(page).first().click();
+	await page.getByTestId("tab-review").click();
+	return page;
 }
 
 /** Select one line in the diff's worktree side: click into it, then Home + Shift+End. */
@@ -827,10 +839,36 @@ test("resolved comments sink into a muted Resolved section (TODO Done style)", a
 	const fileRow = page.getByTestId("review-file-row").filter({ hasText: "script.ts" });
 	await expect(fileRow).toContainText("2 resolved");
 	// Everything resolved surfaces the Done finisher INLINE in the row (after the counts) —
-	// finishing empties the review.
+	// finishing empties the accordion.
 	await page.getByTestId("review-file-done").click();
 	await expect(page.getByTestId("review-file-row")).toHaveCount(0);
 	await expect(page.getByTestId("review-empty")).toBeVisible();
+	// …but the resolved records live on, so Clear stays available to archive them and start fresh —
+	// the header follows records, not file rows (Send all is gone: nothing draftable).
+	await expect(page.getByTestId("review-clear")).toBeVisible();
+	await expect(page.getByTestId("review-send-all")).toHaveCount(0);
+});
+
+test("Clear replaces the review for every connected client", async ({ page, browser }) => {
+	await openDiff(page);
+	await composeComment(page, "one = 1", "Discard this draft with the review.");
+	await page.getByTestId("review-composer-save").click();
+	await page.getByTestId("tab-review").click();
+
+	const page2 = await openReviewClient(browser);
+	await expect(page2.getByTestId("review-file-row")).toHaveCount(1);
+
+	await page.getByTestId("review-clear").click();
+	await expect(page.getByTestId("confirm-popover")).toContainText("Unsent drafts are discarded");
+	await expect(page.getByTestId("review-file-row")).toHaveCount(1);
+	await page.getByTestId("review-clear-confirm").click();
+
+	await expect(page.getByTestId("review-empty")).toBeVisible();
+	await expect(page2.getByTestId("review-empty")).toBeVisible();
+	await expect(page.getByTestId("review-clear")).toHaveCount(0);
+	await expect(page2.getByTestId("review-clear")).toHaveCount(0);
+	await expect(persistedComments(page)).resolves.toEqual([]);
+	await page2.context().close();
 });
 
 test("a draft is server truth: a second client converges by push, and a cold reload re-hydrates it", async ({
@@ -844,19 +882,13 @@ test("a draft is server truth: a second client converges by push, and a cold rel
 
 	// A SECOND client on the same workspace: the existing draft hydrates, and a draft added by client 1
 	// AFTERWARDS arrives by `review.changed` push — no reload, no optimism, both screens agree.
-	const ctx = await browser.newContext();
-	const page2 = await ctx.newPage();
-	await page2.goto("/");
-	await expect(page2.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
-	await page2.getByTestId("project-item").first().click();
-	await worktreeRows(page2).first().click();
-	await page2.getByTestId("tab-review").click();
+	const page2 = await openReviewClient(browser);
 	await expect(page2.getByTestId("review-file-row")).toContainText("script.ts");
 	await expect(page2.getByTestId("review-pending-badge")).toHaveText("1");
 	await composeComment(page, "two = 2", "Second remark.");
 	await page.getByTestId("review-composer-save").click();
 	await expect(page2.getByTestId("review-pending-badge")).toHaveText("2");
-	await ctx.close();
+	await page2.context().close();
 
 	// A cold reload of client 1: nothing lived only in the client, the review hydrates back whole.
 	await page.reload();

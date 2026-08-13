@@ -4,6 +4,7 @@ import {
 	History,
 	MessageSquarePlus,
 	RotateCcw,
+	Trash2,
 	X,
 } from "lucide-react";
 import { lazy, Suspense, useEffect, useMemo } from "react";
@@ -25,6 +26,7 @@ import {
 	isExternalWorkspace,
 	selectActiveWorkspace,
 	selectContextProject,
+	selectWorkspaceSessionIds,
 	toast,
 	useAppStore,
 } from "../store";
@@ -38,6 +40,7 @@ import { DiffPane } from "./DiffPane";
 import { FilePane } from "./FilePane";
 import { openChatInTab } from "./openChat";
 import { type ReviewFlag, reviewFlags } from "./reviewModel";
+import { workspaceTabStateClass } from "./tabState";
 
 // The chat view is heavy — load it only when its tab is first shown (protects first paint). File panes
 // lazy-load their own Monaco / markdown chunks inside `FilePane`.
@@ -86,9 +89,11 @@ const NO_CLOSED: ClosedChat[] = [];
 function ChatHistoryMenu({
 	closedChats,
 	onReopen,
+	onDelete,
 }: {
 	closedChats: ClosedChat[];
 	onReopen: (sessionId: string) => void;
+	onDelete: (sessionId: string) => void;
 }) {
 	return (
 		<DropdownMenu>
@@ -103,18 +108,29 @@ function ChatHistoryMenu({
 			<DropdownMenuContent align="end" className="min-w-[16rem]">
 				<DropdownMenuLabel>Recently closed</DropdownMenuLabel>
 				{closedChats.map((c) => (
-					<DropdownMenuItem
-						key={c.sessionId}
-						data-testid="closed-chat-item"
-						data-session-id={c.sessionId}
-						onSelect={() => onReopen(c.sessionId)}
-					>
-						<span className="flex-1 truncate">{c.title}</span>
-						<span className="shrink-0 text-text-muted tr-text-metadata">
-							{relativeTime(c.closedAt)}
-						</span>
-						<RotateCcw className="size-3.5 shrink-0 text-text-muted" />
-					</DropdownMenuItem>
+					<div key={c.sessionId} data-testid="closed-chat-row" className="flex items-center">
+						<DropdownMenuItem
+							data-testid="closed-chat-item"
+							data-session-id={c.sessionId}
+							onSelect={() => onReopen(c.sessionId)}
+							className="min-w-0 flex-1"
+						>
+							<span className="flex-1 truncate">{c.title}</span>
+							<span className="shrink-0 text-text-muted tr-text-metadata">
+								{relativeTime(c.closedAt)}
+							</span>
+							<RotateCcw className="size-3.5 shrink-0 text-text-muted" />
+						</DropdownMenuItem>
+						<DropdownMenuItem
+							data-testid="closed-chat-delete"
+							aria-label={`Move ${c.title} to trash`}
+							title="Move chat to trash"
+							onSelect={() => onDelete(c.sessionId)}
+							className="shrink-0 px-xs text-text-muted focus:text-feedback-error"
+						>
+							<Trash2 className="size-3.5" />
+						</DropdownMenuItem>
+					</div>
 				))}
 			</DropdownMenuContent>
 		</DropdownMenu>
@@ -128,6 +144,8 @@ function ChatHistoryMenu({
  */
 export function CenterTabs() {
 	const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
+	const connectionStatus = useAppStore((s) => s.status);
+	const connectionGeneration = useAppStore((s) => s.connectionGeneration);
 	const activeWorkspace = useAppStore(selectActiveWorkspace);
 	const contextProject = useAppStore(selectContextProject);
 	const tabsByWorkspace = useAppStore((s) => s.tabsByWorkspace);
@@ -152,7 +170,8 @@ export function CenterTabs() {
 	const closedChats = activeWorkspaceId
 		? (closedChatsByWorkspace[activeWorkspaceId] ?? NO_CLOSED)
 		: NO_CLOSED;
-	// Hydrate-on-connect: when a workspace becomes active, pull its sessions from the host. Live ones (still
+	// Hydrate-on-connect: when a workspace becomes active OR its transport reconnects, pull its sessions
+	// from the host. The list also repairs any session-deletion event missed while offline. Live ones (still
 	// in host memory) auto-restore as tabs, and so do disk-only ones carrying unfinished TODOs (work in
 	// progress must survive a host restart as open tabs, not history entries) — the newest
 	// `AUTO_OPEN_LIMIT` of them (see the const). Everything else goes to chat-history, one click away. If
@@ -163,8 +182,12 @@ export function CenterTabs() {
 	// stays deterministic: `hydrateSession` takes focus only while the workspace has no active tab, and
 	// that is decided when a store write lands, not when its request goes out.
 	useEffect(() => {
-		if (!activeWorkspaceId) return;
+		if (!activeWorkspaceId || connectionStatus !== "connected" || connectionGeneration === 0)
+			return;
 		const workspaceId = activeWorkspaceId;
+		// Capture membership BEFORE the list read. Reconciliation may remove only these ids, so a chat
+		// created while this request is in flight cannot be deleted by its older response.
+		const baselineSessionIds = selectWorkspaceSessionIds(useAppStore.getState(), workspaceId);
 		let cancelled = false;
 		// Split into request + apply so a batch can have its reads in flight together while the *writes*
 		// still land in a chosen order (focus follows the first write, not the first response). The guarded
@@ -179,13 +202,21 @@ export function CenterTabs() {
 			// conservatively stale); a disk attach reloaded against current disk → the guarded start tick.
 			const tick = live ? undefined : loaded.syncedTick;
 			const { summary, messages } = loaded.result;
-			useAppStore.getState().hydrateSession(summary, messagesToRuntime(messages), false, tick);
+			useAppStore
+				.getState()
+				.hydrateSession(summary, messagesToRuntime(messages, summary.lastSettlement), false, tick);
 		};
 		const hydrateFromHost = async (sessionId: string, live: boolean) =>
 			applyHydrate(await fetchMessages(sessionId), live);
 		void getTransport()
 			.request("session.list", { workspaceId })
 			.then(async (summaries) => {
+				if (cancelled) return;
+				useAppStore.getState().reconcileWorkspaceSessions(
+					workspaceId,
+					baselineSessionIds,
+					summaries.map((summary) => summary.sessionId),
+				);
 				// Not "disk-only" any more: past the cap a *live* session lands here too — this is simply
 				// everything the pass chose not to auto-open.
 				const toHistory: typeof summaries = [];
@@ -235,7 +266,7 @@ export function CenterTabs() {
 		return () => {
 			cancelled = true;
 		};
-	}, [activeWorkspaceId]);
+	}, [activeWorkspaceId, connectionGeneration, connectionStatus]);
 
 	// Jump-to-message deep link from history search (`chatLocationRequest`, see `store/SPEC.md`): open,
 	// reopen, or activate the target chat in this workspace. `requestChatLocation` already set
@@ -268,7 +299,9 @@ export function CenterTabs() {
 				if (cancelled) return;
 				// The target may already be live in another client; without proof of a disk attach, preserve
 				// the existing conservative no-baseline behavior.
-				useAppStore.getState().hydrateSession(summary, messagesToRuntime(messages), true);
+				useAppStore
+					.getState()
+					.hydrateSession(summary, messagesToRuntime(messages, summary.lastSettlement), true);
 			})
 			.catch((err) => {
 				if (cancelled) return;
@@ -287,6 +320,16 @@ export function CenterTabs() {
 	const onReopenChat = async (sessionId: string) => {
 		if (!activeWorkspaceId) return;
 		await openChatInTab(activeWorkspaceId, sessionId);
+	};
+
+	const onDeleteChat = async (sessionId: string) => {
+		if (!activeWorkspaceId) return;
+		try {
+			await getTransport().request("session.delete", { workspaceId: activeWorkspaceId, sessionId });
+			useAppStore.getState().deleteChat(activeWorkspaceId, sessionId);
+		} catch (err) {
+			toast.error(errorText(err), "Couldn't delete the chat");
+		}
 	};
 
 	const startChat = async () => {
@@ -378,7 +421,7 @@ export function CenterTabs() {
 				data-testid="center-tab-strip"
 				className="flex h-panel-header-row shrink-0 items-stretch border-border-muted border-b bg-container-workspace-bg"
 			>
-				<div role="tablist" className="flex flex-1 items-stretch overflow-x-auto overflow-y-hidden">
+				<div className="flex flex-1 items-stretch overflow-x-auto overflow-y-hidden">
 					{openTabs.map((tab) => {
 						const isActive = tab.id === activeTabId;
 						const isPreview = tab.id === previewTabId;
@@ -389,11 +432,7 @@ export function CenterTabs() {
 								data-active={isActive}
 								data-preview={isPreview}
 								data-kind={tab.kind}
-								className={`group flex items-center gap-xs border-border-default border-r pr-xs pl-sm tr-text-ui ${
-									isActive
-										? "bg-container-workspace-bg text-text-default"
-										: "text-text-muted hover:bg-control-bg-hovered"
-								}`}
+								className={`group flex items-center gap-xs border-border-default border-r pr-xs pl-sm tr-text-ui ${workspaceTabStateClass(isActive)}`}
 							>
 								<button
 									type="button"
@@ -439,7 +478,11 @@ export function CenterTabs() {
 					) : null}
 				</div>
 				{closedChats.length > 0 ? (
-					<ChatHistoryMenu closedChats={closedChats} onReopen={(id) => void onReopenChat(id)} />
+					<ChatHistoryMenu
+						closedChats={closedChats}
+						onReopen={(id) => void onReopenChat(id)}
+						onDelete={(id) => void onDeleteChat(id)}
+					/>
 				) : null}
 			</div>
 			<div data-testid="editor-pane" className="min-h-0 flex-1">

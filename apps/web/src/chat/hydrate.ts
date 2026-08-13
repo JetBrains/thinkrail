@@ -1,6 +1,11 @@
-import type { AskUserAnswersDetails, TranscriptMessage } from "@thinkrail/contracts";
+import type {
+	AgentSettlement,
+	AskUserAnswersDetails,
+	TranscriptMessage,
+} from "@thinkrail/contracts";
 import { isAskUserAnswersMessage, isControlMessage } from "@thinkrail/contracts";
 import { userText } from "../lib";
+import { assistantFailureText } from "./assistantFailure";
 import type { ChatTurn, ToolResultState } from "./types";
 
 /** The runtime slice a transcript hydrates: what `hydrateSession` seeds a fresh `SessionRuntime` with. */
@@ -27,7 +32,10 @@ export interface HydratedRuntime {
  * become turns: the ones we know (`ask-user-answers`) index into `askAnswers` — the questionnaire card is
  * their rendering — and unknown customTypes are ignored.
  */
-export function messagesToRuntime(messages: TranscriptMessage[]): HydratedRuntime {
+export function messagesToRuntime(
+	messages: TranscriptMessage[],
+	lastSettlement?: AgentSettlement | null,
+): HydratedRuntime {
 	const turns: ChatTurn[] = [];
 	const toolResults: Record<string, ToolResultState> = {};
 	const askAnswers: HydratedRuntime["askAnswers"] = {};
@@ -47,17 +55,6 @@ export function messagesToRuntime(messages: TranscriptMessage[]): HydratedRuntim
 		} else if (message.role === "assistant") {
 			turnId = crypto.randomUUID();
 			turns.push({ kind: "assistant", id: turnId, message, streaming: false });
-			// A persisted turn that ended in a provider/model error carries `stopReason: "error"` + the
-			// provider's `errorMessage`. Re-surface it as an error turn so a reopened chat shows the failure,
-			// matching the live path (the reducer's terminal-error `agent_end`). `turnId` stays the
-			// assistant message's own id — the error turn below is synthesized, not a message of its own.
-			if (message.stopReason === "error") {
-				turns.push({
-					kind: "error",
-					id: crypto.randomUUID(),
-					text: message.errorMessage || "The agent run ended in an error.",
-				});
-			}
 		} else if (message.role === "toolResult") {
 			// Mirror the live `tool_execution_end` result shape (`{ content, details }`) so renderers read the
 			// same value whether streamed or hydrated (e.g. the `ask_user_question` card reads its ack — or a
@@ -72,5 +69,19 @@ export function messagesToRuntime(messages: TranscriptMessage[]): HydratedRuntim
 		}
 		turnIdByMessageIndex.push(turnId);
 	}
+
+	// A compacted transcript can retain old `length` attempts even though later work completed. Only the
+	// latest settlement is a current failure; when the live host has not observed one, the last persisted
+	// assistant is the best available terminal. The synthesized error has no transcript index of its own.
+	const lastConversationMessage = messages.findLast(
+		(message) => message.role === "user" || message.role === "assistant",
+	);
+	const persistedTerminal =
+		lastConversationMessage?.role === "assistant" ? lastConversationMessage : null;
+	const failure = assistantFailureText(
+		lastSettlement === undefined ? persistedTerminal : lastSettlement,
+	);
+	if (failure) turns.push({ kind: "error", id: crypto.randomUUID(), text: failure });
+
 	return { turns, toolResults, askAnswers, turnIdByMessageIndex };
 }

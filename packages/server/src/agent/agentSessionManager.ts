@@ -1,19 +1,26 @@
-import { rmSync } from "node:fs";
+import { createReadStream, rmSync } from "node:fs";
+import { readdir } from "node:fs/promises";
+import { join, resolve } from "node:path";
+import { createInterface } from "node:readline";
 // Value imports of PURE catalog helpers (data-only projections over `Model`) — the only root
 // value-imports the module boundary allows; dispatch stays on the shared `ModelRuntime` (SPEC §Allowed deps).
 import { clampThinkingLevel, getSupportedThinkingLevels } from "@earendil-works/pi-ai";
 import {
 	type AgentSession,
 	createAgentSession,
+	getAgentDir,
+	type SessionInfo,
 	SessionManager,
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import type {
+	AgentSettlement,
 	AskUserQuestionResult,
 	ImageContent,
 	Model,
 	PiEvent,
 	RefreshedModels,
+	SessionDeletedPayload,
 	SessionEventPayload,
 	SessionStats,
 	SessionSummary,
@@ -32,6 +39,7 @@ import {
 } from "./piRuntime";
 import { repairDanglingToolCalls } from "./sessionRepair";
 import type { SkillAdmissionContext } from "./skillAdmission";
+import { trashFile } from "./trash";
 import { cancelExtUiForSession, createWebUiContext, notifyExtUi } from "./webUiContext";
 
 interface Entry {
@@ -39,9 +47,23 @@ interface Entry {
 	unsubscribe: () => void;
 	/** The workspace this session belongs to — so `listSessions` can report a workspace's sessions. */
 	workspaceId: string;
+	/** Latest live terminal; undefined before observation, null while active or with no assistant. */
+	lastSettlement: AgentSettlement | null | undefined;
 }
 
 const sessions = new Map<string, Entry>();
+// Permanent for this host lifetime. A process restart naturally clears it; by then the trashed transcript
+// is absent, or the user deliberately restored it from the OS trash.
+const deletedSessions = new Map<string, string>();
+
+// In-flight delete transactions, keyed by session id. A second trash click on the same chat (another tab
+// or another client) joins the running transaction instead of starting a rival one — so the tombstone is
+// installed and cleared by exactly one owner, never cleared by a loser while the winner's move is pending.
+const deletingSessions = new Map<string, { workspaceId: string; done: Promise<void> }>();
+
+function isSessionDeleted(sessionId: string, workspaceId: string): boolean {
+	return deletedSessions.get(sessionId) === workspaceId;
+}
 
 // `SessionEventPayload` is a wire type — it lives in `@thinkrail/contracts`; re-exported so the
 // `../agent` barrel keeps exposing it.
@@ -50,6 +72,11 @@ export type { SessionEventPayload };
 let publish: (payload: SessionEventPayload) => void = () => {};
 export function setSessionPublisher(fn: (payload: SessionEventPayload) => void): void {
 	publish = fn;
+}
+
+let publishDeleted: (payload: SessionDeletedPayload) => void = () => {};
+export function setSessionDeletedPublisher(fn: (payload: SessionDeletedPayload) => void): void {
+	publishDeleted = fn;
 }
 
 // Per-session persistence. Overridable so tests can use `SessionManager.inMemory()` (no disk).
@@ -78,15 +105,23 @@ export function setSkillAdmissionResolver(
 	skillAdmissionResolver = resolver;
 }
 
+function hasDeletionTombstone(sessionId: string): boolean {
+	return deletedSessions.has(sessionId);
+}
+
 function mustGet(sessionId: string): AgentSession {
+	// A live entry deliberately remains registered while its transcript move is pending so trash failure
+	// can restore the same runtime. It is not command-addressable in that window: accepting a new turn
+	// after deletion began could append behind the move and lose or recreate the supposedly deleted chat.
+	if (hasDeletionTombstone(sessionId)) throw new Error(`Unknown session: ${sessionId}`);
 	const entry = sessions.get(sessionId);
 	if (!entry) throw new Error(`Unknown session: ${sessionId}`);
 	return entry.session;
 }
 
-/** Whether a session is live in this manager — the wire's cheap liveness guard for reply-style methods. */
+/** Whether a session is live and command-addressable — false while a delete transaction owns it. */
 export function hasSession(sessionId: string): boolean {
-	return sessions.has(sessionId);
+	return sessions.has(sessionId) && !hasDeletionTombstone(sessionId);
 }
 
 /** The workspace a live session belongs to — the host's session→workspace lookup (e.g. auto-rename). */
@@ -186,14 +221,49 @@ async function registerSession(
 	workspaceId: string,
 ): Promise<CreateSessionResult> {
 	const { sessionId } = session;
-	const unsubscribe = session.subscribe((event) => publish({ sessionId, event: event as PiEvent }));
+	let terminal: AgentSettlement | null = null;
+	const unsubscribe = session.subscribe((event) => {
+		if (event.type === "agent_start") {
+			const entry = sessions.get(sessionId);
+			if (entry) entry.lastSettlement = null;
+		}
+		if (event.type === "agent_end") {
+			const assistant = [...event.messages]
+				.reverse()
+				.find((message) => message.role === "assistant");
+			terminal = assistant
+				? {
+						stopReason: assistant.stopReason,
+						...(assistant.errorMessage !== undefined
+							? { errorMessage: assistant.errorMessage }
+							: {}),
+					}
+				: null;
+		}
+		const projected: PiEvent =
+			event.type === "agent_settled" ? { type: "agent_settled", terminal } : (event as PiEvent);
+		if (event.type === "agent_settled") {
+			const entry = sessions.get(sessionId);
+			if (entry) entry.lastSettlement = terminal;
+		}
+		publish({ sessionId, event: projected });
+		if (event.type === "agent_settled") terminal = null;
+	});
 	// `rpc` mode = dialog-capable, non-TUI: extension `uiContext` dialogs bridge to the browser over WS.
 	await session.bindExtensions({
 		mode: "rpc",
 		uiContext: createWebUiContext(sessionId),
 		onError: (error) => notifyExtUi(sessionId, `Extension error: ${error.error}`, "error"),
 	});
-	sessions.set(sessionId, { session, unsubscribe, workspaceId });
+	// A delete can land while disk re-open is awaiting extension binding. Never register that stale open
+	// behind the deletion; otherwise the trashed transcript returns as a live host session.
+	if (isSessionDeleted(sessionId, workspaceId)) {
+		cancelExtUiForSession(sessionId);
+		unsubscribe();
+		session.dispose();
+		throw new Error(`Unknown session: ${sessionId}`);
+	}
+	sessions.set(sessionId, { session, unsubscribe, workspaceId, lastSettlement: undefined });
 	return {
 		sessionId,
 		model: session.model ? toWireModel(session.model as unknown as Model<string>) : null,
@@ -233,44 +303,145 @@ function summaryOf(sessionId: string, entry: Entry): SessionSummary {
 		messageCount: session.messages.length,
 		updatedAt: Date.now(),
 		live: true,
+		...(entry.lastSettlement !== undefined ? { lastSettlement: entry.lastSettlement } : {}),
 	};
+}
+
+interface SessionFileIdentity {
+	id: string;
+	cwd: string;
+}
+
+type ScannedSessionFile =
+	| { path: string; ok: true; identity: SessionFileIdentity }
+	| { path: string; ok: false; error: Error };
+
+/** Mirror pi's default cwd→session-directory mapping at the one boundary that must detect errors pi's
+ * `SessionManager.list()` intentionally degrades to an empty/partial list. Pinned by disk-backed tests. */
+function defaultSessionDirectory(cwd: string): string {
+	const resolvedCwd = resolve(cwd);
+	const safePath = `--${resolvedCwd.replace(/^[/\\]/, "").replace(/[/\\:]/g, "-")}--`;
+	return join(resolve(getAgentDir()), "sessions", safePath);
+}
+
+function hasErrorCode(error: unknown, code: string): boolean {
+	return typeof error === "object" && error !== null && Reflect.get(error, "code") === code;
+}
+
+/** Read only far enough to identify a pi transcript. Malformed physical lines before the header are
+ * skipped like pi; a parsed non-session first entry, no header, or any I/O failure stays a hard error. */
+async function readSessionFileIdentity(path: string): Promise<SessionFileIdentity> {
+	const input = createReadStream(path, { encoding: "utf8" });
+	const lines = createInterface({ input, crlfDelay: Number.POSITIVE_INFINITY });
+	try {
+		for await (const line of lines) {
+			if (!line.trim()) continue;
+			let entry: unknown;
+			try {
+				entry = JSON.parse(line);
+			} catch {
+				continue;
+			}
+			if (typeof entry !== "object" || entry === null) {
+				throw new Error("first parsed entry is not an object");
+			}
+			const id = Reflect.get(entry, "id");
+			if (Reflect.get(entry, "type") !== "session" || typeof id !== "string") {
+				throw new Error("first parsed entry is not a session header");
+			}
+			const headerCwd = Reflect.get(entry, "cwd");
+			return { id, cwd: typeof headerCwd === "string" ? headerCwd : "" };
+		}
+		throw new Error("session header is missing");
+	} catch (error) {
+		throw new Error(`Session transcript is unreadable or malformed: ${path}`, { cause: error });
+	} finally {
+		lines.close();
+		input.destroy();
+	}
+}
+
+/** Enumerate every physical transcript in pi's one encoded-cwd directory without swallowing errors. */
+async function scanSessionFiles(cwd: string): Promise<ScannedSessionFile[]> {
+	const dir = defaultSessionDirectory(cwd);
+	let names: string[];
+	try {
+		names = await readdir(dir);
+	} catch (error) {
+		if (hasErrorCode(error, "ENOENT")) return [];
+		throw new Error(`Session directory is unreadable: ${dir}`, { cause: error });
+	}
+	const scanned: ScannedSessionFile[] = [];
+	// Sequential on purpose: a long-lived workspace can have hundreds of transcripts, and opening every
+	// header at once would turn the safety check itself into an EMFILE failure.
+	for (const name of names) {
+		if (!name.endsWith(".jsonl")) continue;
+		const path = join(dir, name);
+		try {
+			scanned.push({ path, ok: true, identity: await readSessionFileIdentity(path) });
+		} catch (error) {
+			scanned.push({
+				path,
+				ok: false,
+				error: error instanceof Error ? error : new Error(String(error)),
+			});
+		}
+	}
+	return scanned;
+}
+
+/**
+ * Pi's list is presentation-friendly: directory/read/parse failures become an empty or partial list. At
+ * membership and deletion boundaries that would mean "absent", so preflight every header and verify pi
+ * returned every physical file. Only a successful result is authoritative.
+ */
+async function listSessionInfosStrict(cwd: string): Promise<SessionInfo[]> {
+	const scanned = await scanSessionFiles(cwd);
+	const broken = scanned.find((file) => !file.ok);
+	if (broken && !broken.ok) throw broken.error;
+	const infos = await SessionManager.list(cwd);
+	const listedByPath = new Map(infos.map((info) => [resolve(info.path), info]));
+	const omitted = scanned.find((file) => {
+		if (!file.ok) return false;
+		const listed = listedByPath.get(resolve(file.path));
+		return !listed || listed.id !== file.identity.id || listed.cwd !== file.identity.cwd;
+	});
+	if (omitted) throw new Error(`Session transcript could not be listed: ${omitted.path}`);
+	return infos;
 }
 
 /**
  * A workspace's chat sessions — live (in-memory) unioned with on-disk ones pi persisted under `cwd`. Live
  * wins on id. This is the domain state a reconnecting/second client hydrates from; the disk half is what
- * survives a host restart.
+ * survives a host restart. The disk list throws rather than reporting false absence on an unreadable file.
  */
 export async function listSessions(workspaceId: string, cwd: string): Promise<SessionSummary[]> {
 	const live: SessionSummary[] = [];
 	const liveIds = new Set<string>();
 	for (const [sessionId, entry] of sessions) {
-		if (entry.workspaceId !== workspaceId) continue;
+		if (entry.workspaceId !== workspaceId || isSessionDeleted(sessionId, workspaceId)) continue;
 		live.push(summaryOf(sessionId, entry));
 		liveIds.add(sessionId);
 	}
-	let disk: SessionSummary[] = [];
-	try {
-		const infos = await SessionManager.list(cwd);
-		// `list(cwd)` reads one encoded-cwd dir, but pi's encoding (`[/\:]`→`-`) can map distinct cwds to the
-		// same dir, so match on the session's true recorded `cwd` to disambiguate; live ones are already above.
-		disk = infos
-			.filter((info) => info.cwd === cwd && !liveIds.has(info.id))
-			.map((info) => ({
-				sessionId: info.id,
-				workspaceId,
-				title: info.name ?? "Chat",
-				// Placeholders until the session is opened (disk metadata doesn't carry model/thinking).
-				model: null,
-				thinkingLevel: "medium" as ThinkingLevel,
-				isStreaming: false,
-				messageCount: info.messageCount,
-				updatedAt: info.modified.getTime(),
-				live: false,
-			}));
-	} catch {
-		// No sessions dir for this cwd yet — only the live ones.
-	}
+	const infos = await listSessionInfosStrict(cwd);
+	// One encoded-cwd dir can alias distinct cwds, so disambiguate on the recorded header cwd; live wins.
+	const disk: SessionSummary[] = infos
+		.filter(
+			(info) =>
+				info.cwd === cwd && !liveIds.has(info.id) && !isSessionDeleted(info.id, workspaceId),
+		)
+		.map((info) => ({
+			sessionId: info.id,
+			workspaceId,
+			title: info.name ?? "Chat",
+			// Placeholders until the session is opened (disk metadata doesn't carry model/thinking).
+			model: null,
+			thinkingLevel: "medium" as ThinkingLevel,
+			isStreaming: false,
+			messageCount: info.messageCount,
+			updatedAt: info.modified.getTime(),
+			live: false,
+		}));
 	return [...live, ...disk];
 }
 
@@ -281,6 +452,8 @@ const attaching = new Map<string, Promise<void>>();
 
 /** Re-open a persisted session from disk into the manager (restart survival), keyed by its stable id. */
 function attachDiskSession(sessionId: string, workspaceId: string, cwd: string): Promise<void> {
+	if (isSessionDeleted(sessionId, workspaceId))
+		return Promise.reject(new Error(`Unknown session: ${sessionId}`));
 	if (sessions.has(sessionId)) return Promise.resolve();
 	let pending = attaching.get(sessionId);
 	if (!pending) {
@@ -293,7 +466,10 @@ function attachDiskSession(sessionId: string, workspaceId: string, cwd: string):
 }
 
 async function openDiskSession(sessionId: string, workspaceId: string, cwd: string): Promise<void> {
-	const info = (await SessionManager.list(cwd)).find((i) => i.id === sessionId && i.cwd === cwd);
+	if (isSessionDeleted(sessionId, workspaceId)) throw new Error(`Unknown session: ${sessionId}`);
+	const info = (await listSessionInfosStrict(cwd)).find(
+		(candidate) => candidate.id === sessionId && candidate.cwd === cwd,
+	);
 	if (!info) throw new Error(`Unknown session: ${sessionId}`);
 	if (sessions.has(sessionId)) return; // attached while we listed
 	const modelRuntime = await getPiRuntime();
@@ -334,6 +510,7 @@ export async function ensureSessionAttached(
 	workspaceId: string,
 	cwd: string,
 ): Promise<boolean> {
+	if (isSessionDeleted(sessionId, workspaceId)) return false;
 	// Scope to the requested workspace (like `getSessionMessages`): a live session registered under a
 	// different workspace must not be promptable through this one — a caller could otherwise route a
 	// review package (and its source fragments) into an unrelated chat and pin comments to it.
@@ -342,7 +519,9 @@ export async function ensureSessionAttached(
 		if (live.workspaceId !== workspaceId) throw new Error(`Unknown session: ${sessionId}`);
 		return true;
 	}
-	const known = (await SessionManager.list(cwd)).some((i) => i.id === sessionId && i.cwd === cwd);
+	const known = (await listSessionInfosStrict(cwd)).some(
+		(candidate) => candidate.id === sessionId && candidate.cwd === cwd,
+	);
 	if (!known) return false;
 	await attachDiskSession(sessionId, workspaceId, cwd);
 	// Attached-but-not-registered is not "absent": reporting it as such is exactly the silent fork this
@@ -361,11 +540,13 @@ export async function getSessionMessages(
 	workspaceId: string,
 	cwd: string,
 ): Promise<{ summary: SessionSummary; messages: TranscriptMessage[] }> {
+	if (isSessionDeleted(sessionId, workspaceId)) throw new Error(`Unknown session: ${sessionId}`);
 	let entry = sessions.get(sessionId);
 	// Scope the read to the requested workspace — a client can't pull a session from a different one.
 	if (entry && entry.workspaceId !== workspaceId) throw new Error(`Unknown session: ${sessionId}`);
 	if (!entry) {
 		await attachDiskSession(sessionId, workspaceId, cwd);
+		if (isSessionDeleted(sessionId, workspaceId)) throw new Error(`Unknown session: ${sessionId}`);
 		entry = sessions.get(sessionId);
 		if (!entry) throw new Error(`Unknown session: ${sessionId}`);
 	}
@@ -587,14 +768,21 @@ export function isSessionStreaming(sessionId: string): boolean {
 	return mustGet(sessionId).isStreaming;
 }
 
-/** Remove one session: stop forwarding its events, settle any open dialog, and dispose it. */
-export function removeSession(sessionId: string): void {
+function disposeSession(sessionId: string): void {
 	const entry = sessions.get(sessionId);
 	if (!entry) return;
 	cancelExtUiForSession(sessionId);
 	entry.unsubscribe();
 	entry.session.dispose();
 	sessions.delete(sessionId);
+}
+
+/** Remove one session: stop forwarding its events, settle any open dialog, and dispose it. */
+export function removeSession(sessionId: string): void {
+	// `session.dispose` is a live-session command too. Letting it race a pending recoverable delete would
+	// leave no runtime to retain if the OS-trash operation fails.
+	if (hasDeletionTombstone(sessionId)) throw new Error(`Unknown session: ${sessionId}`);
+	disposeSession(sessionId);
 }
 
 /** Dispose every session — called on host shutdown. */
@@ -605,6 +793,7 @@ export function disposeAllSessions(): void {
 		entry.session.dispose();
 	}
 	sessions.clear();
+	deletedSessions.clear();
 }
 
 /**
@@ -639,7 +828,10 @@ export async function removeWorkspaceSessions(workspaceId: string, cwd?: string)
 		if (!entry) continue;
 		// Abort a streaming turn before disposing — a mid-stream dispose drops it less cleanly.
 		if (entry.session.isStreaming) await entry.session.abort().catch(() => {});
-		removeSession(sessionId);
+		// Archival tears down the whole workspace, so it must dispose unconditionally — never via the
+		// guarded `removeSession`, which rejects a chat whose recoverable delete is mid-trash and would
+		// abort this loop, stranding its siblings and the disk purge below.
+		disposeSession(sessionId);
 	}
 	if (cwd) await purgeDiskSessions(cwd);
 }
@@ -659,4 +851,84 @@ async function purgeDiskSessions(cwd: string): Promise<void> {
 	for (const info of infos) {
 		if (info.cwd === cwd) rmSync(info.path, { force: true });
 	}
+}
+
+/**
+ * Delete ONE chat for good (the history/closed-chats list's trash action): abort it if streaming, move its
+ * transcript to the OS trash, then dispose its live runtime only after that recoverable deletion boundary
+ * succeeds. The chat is usually a CLOSED one, so the file is resolved from disk
+ * with the same cwd+id disambiguation `getSessionMessages` uses — and only a file whose recorded `cwd`
+ * matches this workspace is touched, so a stray/foreign id disposes nothing and trashes nothing.
+ *
+ * **Single-flighted per session id.** Concurrent trash clicks on one chat must not run rival transactions:
+ * two owners of the shared tombstone would let the loser's failure roll it back while the winner's move is
+ * still pending, briefly re-opening the chat to new turns. A duplicate call for the same id joins the
+ * running transaction (same workspace) or is rejected as unknown (a foreign workspace naming this id).
+ */
+export function deleteSession(sessionId: string, workspaceId: string, cwd: string): Promise<void> {
+	const inFlight = deletingSessions.get(sessionId);
+	if (inFlight) {
+		// A session id belongs to exactly one workspace; a different one naming it isn't this client's chat.
+		if (inFlight.workspaceId !== workspaceId)
+			return Promise.reject(new Error(`Unknown session: ${sessionId}`));
+		return inFlight.done;
+	}
+	// `runDeleteTransaction` installs the tombstone synchronously (before its first await), so the entry is
+	// registered here before the promise suspends and any concurrent caller can only observe it in flight.
+	const done = runDeleteTransaction(sessionId, workspaceId, cwd).finally(() =>
+		deletingSessions.delete(sessionId),
+	);
+	deletingSessions.set(sessionId, { workspaceId, done });
+	return done;
+}
+
+async function runDeleteTransaction(
+	sessionId: string,
+	workspaceId: string,
+	cwd: string,
+): Promise<void> {
+	// Win before any await: a disk re-open already in flight will see this before it can register, and a
+	// later one is rejected at its entry point. Only clear on failure what THIS transaction installed — a
+	// pre-existing tombstone from an earlier successful deletion must survive a later spurious re-delete.
+	const installedTombstone = !deletedSessions.has(sessionId);
+	deletedSessions.set(sessionId, workspaceId);
+	let liveEntry: Entry | undefined;
+	try {
+		await attaching.get(sessionId)?.catch(() => {});
+		const entry = sessions.get(sessionId);
+		if (entry && entry.workspaceId !== workspaceId) {
+			throw new Error(`Unknown session: ${sessionId}`);
+		}
+		let path: string | undefined;
+		if (entry) {
+			liveEntry = entry;
+			// Stop any writer before moving its transcript, but keep the entry registered until that move
+			// succeeds. A trash failure must leave the client-visible runtime addressable, not half-deleted.
+			if (entry.session.isStreaming) await entry.session.abort();
+			const manager = entry.session.sessionManager;
+			if (manager.getSessionId() !== sessionId || manager.getCwd() !== cwd) {
+				throw new Error(`Session transcript scope mismatch: ${sessionId}`);
+			}
+			// A live manager is the authority on its exact file — never rediscover it through pi's lossy list.
+			path = manager.getSessionFile();
+			if (manager.isPersisted() && !path) {
+				throw new Error(`Persisted session has no transcript path: ${sessionId}`);
+			}
+		} else {
+			path = (await listSessionInfosStrict(cwd)).find(
+				(candidate) => candidate.id === sessionId && candidate.cwd === cwd,
+			)?.path;
+		}
+		if (path) await trashFile(path);
+	} catch (error) {
+		// The deletion boundary did not complete: retain any live entry, allow disk re-attach/retry, and
+		// publish nothing. The client that received the failure still has a usable chat runtime. Single-flight
+		// makes this the sole owner, so it clears only the tombstone it just installed.
+		if (installedTombstone) deletedSessions.delete(sessionId);
+		throw error;
+	}
+	// Only disposal after the recoverable disk move is committed. If another path already removed this
+	// exact entry, disposal is an idempotent no-op; never dispose a replacement entry by mistake.
+	if (liveEntry && sessions.get(sessionId) === liveEntry) disposeSession(sessionId);
+	publishDeleted({ workspaceId, sessionId });
 }

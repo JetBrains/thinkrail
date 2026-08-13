@@ -1,14 +1,22 @@
-// The per-workspace review store + lifecycle (see SPEC.md). One open review per workspace, persisted as
-// `reviews/<workspaceId>.json` under the data dir. Every mutation — UI edits, agent resolves, a
+// The per-workspace review store + lifecycle (see SPEC.md). One open review per workspace is persisted as
+// `reviews/<workspaceId>.json`; Clear preserves non-draft records under `reviews/archive/…`. Every active
+// mutation — UI edits, agent resolves, a
 // re-anchor that changed states — persists then emits ONE full `review.changed` snapshot through the
 // host-installed publisher, so all clients (the initiator too) converge on the push, never optimism.
 
 import { randomUUID } from "node:crypto";
-import { mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { isAbsolute, join, relative, resolve } from "node:path";
+import {
+	type Dirent,
+	mkdirSync,
+	readdirSync,
+	readFileSync,
+	renameSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import type {
 	GitDiffScope,
-	Review,
 	ReviewAnchor,
 	ReviewChangedPayload,
 	ReviewComment,
@@ -31,13 +39,33 @@ function reviewsDir(): string {
 	return join(dataDir(), "reviews");
 }
 
+const SAFE_ID = /^[\w-]+$/;
+
+function assertSafeId(id: string, kind: "workspace" | "review"): void {
+	if (!SAFE_ID.test(id)) throw new Error(`Invalid ${kind} id: ${id}`);
+}
+
 function reviewFile(workspaceId: string): string {
 	// The id becomes a FILENAME, so it must never carry path segments: real workspace ids are UUIDs,
 	// and a wire-supplied `../config`-style string would aim every read/write/unlink in this module
 	// outside the reviews dir (e.g. at the data dir's own config). Refusing here covers ALL file
 	// touches at once — defense in depth behind the handlers' own lookups.
-	if (!/^[\w-]+$/.test(workspaceId)) throw new Error(`Invalid workspace id: ${workspaceId}`);
+	assertSafeId(workspaceId, "workspace");
 	return join(reviewsDir(), `${workspaceId}.json`);
+}
+
+function archiveRoot(): string {
+	return join(reviewsDir(), "archive");
+}
+
+function archiveWorkspaceDir(workspaceId: string): string {
+	assertSafeId(workspaceId, "workspace");
+	return join(archiveRoot(), workspaceId);
+}
+
+function archiveReviewFile(workspaceId: string, reviewId: string): string {
+	assertSafeId(reviewId, "review");
+	return join(archiveWorkspaceDir(workspaceId), `${reviewId}.json`);
 }
 
 /**
@@ -49,8 +77,7 @@ function reviewFile(workspaceId: string): string {
  * discard every comment the review held. Throwing surfaces it to the client (`review.get` fails, the
  * panel says so) and leaves the file on disk to be recovered by hand.
  */
-function load(workspaceId: string): ReviewSnapshot | null {
-	const file = reviewFile(workspaceId);
+function readSnapshot(file: string): ReviewSnapshot | null {
 	let raw: string;
 	try {
 		raw = readFileSync(file, "utf8");
@@ -65,6 +92,10 @@ function load(workspaceId: string): ReviewSnapshot | null {
 	}
 }
 
+function load(workspaceId: string): ReviewSnapshot | null {
+	return readSnapshot(reviewFile(workspaceId));
+}
+
 /**
  * Persist a snapshot **atomically**: write a sibling temp file, then rename it over the target (a rename
  * within one directory is atomic). A plain in-place write can be interrupted — by a host crash, a full
@@ -72,9 +103,8 @@ function load(workspaceId: string): ReviewSnapshot | null {
  * {@link load} then refuses to read it rather than replacing it. The temp file is named per-process so
  * two hosts sharing a data dir can't tread on each other's write, and is removed on failure.
  */
-function save(workspaceId: string, snapshot: ReviewSnapshot): void {
-	mkdirSync(reviewsDir(), { recursive: true });
-	const file = reviewFile(workspaceId);
+function saveFile(file: string, snapshot: ReviewSnapshot): void {
+	mkdirSync(dirname(file), { recursive: true });
 	const tmp = `${file}.${process.pid}.tmp`;
 	try {
 		writeFileSync(tmp, `${JSON.stringify(snapshot, null, "\t")}\n`);
@@ -83,6 +113,39 @@ function save(workspaceId: string, snapshot: ReviewSnapshot): void {
 		rmSync(tmp, { force: true });
 		throw err;
 	}
+}
+
+function save(workspaceId: string, snapshot: ReviewSnapshot): void {
+	saveFile(reviewFile(workspaceId), snapshot);
+}
+
+function saveArchive(workspaceId: string, snapshot: ReviewSnapshot): void {
+	saveFile(archiveReviewFile(workspaceId, snapshot.review.id), snapshot);
+}
+
+function archivedReviewFiles(): string[] {
+	let workspaceDirs: Dirent[];
+	try {
+		workspaceDirs = readdirSync(archiveRoot(), { withFileTypes: true });
+	} catch (err) {
+		if ((err as NodeJS.ErrnoException).code === "ENOENT") return [];
+		throw err;
+	}
+	const files: string[] = [];
+	for (const workspace of workspaceDirs) {
+		if (!workspace.isDirectory() || !SAFE_ID.test(workspace.name)) continue;
+		const dir = join(archiveRoot(), workspace.name);
+		try {
+			for (const review of readdirSync(dir, { withFileTypes: true })) {
+				if (review.isFile() && review.name.endsWith(".json")) files.push(join(dir, review.name));
+			}
+		} catch (err) {
+			console.warn(
+				`review archive ${workspace.name}: ${err instanceof Error ? err.message : String(err)}`,
+			);
+		}
+	}
+	return files;
 }
 
 function persistAndPublish(workspaceId: string, snapshot: ReviewSnapshot): void {
@@ -103,11 +166,8 @@ function readWorktreeFile(worktreePath: string, path: string): string | null {
 	}
 }
 
-/** The open review for a workspace, created lazily (a closed review stays on disk until the next touch
- * replaces the file with the fresh one — V1 keeps no archive browser). */
-function ensureSnapshot(workspaceId: string): ReviewSnapshot {
-	const existing = load(workspaceId);
-	if (existing && existing.review.status === "open") return existing;
+/** Build a fresh open review against the workspace's current branch range; persistence is the caller's. */
+function freshSnapshot(workspaceId: string): ReviewSnapshot {
 	const ws = getWorkspace(workspaceId);
 	// The review is made against the ORIGINAL SIDE OF THE DIFF the user is reviewing, pinned to a full
 	// oid. That is the branch range's `originalRef` — the **fork point** (`merge-base` of the diff target
@@ -120,14 +180,36 @@ function ensureSnapshot(workspaceId: string): ReviewSnapshot {
 	// surface over an unreadable base would cost far more than it saves.
 	const ref = resolveDiffRange(ws).originalRef ?? diffBaseRef(ws);
 	const base = resolveCommitOid(ws.worktreePath, ref);
-	const review: Review = {
-		id: `rev_${randomUUID().slice(0, 8)}`,
-		workspaceId,
-		status: "open",
-		baseSha: base ?? ref,
-		createdAt: Date.now(),
+	return {
+		review: {
+			id: `rev_${randomUUID().slice(0, 8)}`,
+			workspaceId,
+			status: "open",
+			baseSha: base ?? ref,
+			createdAt: Date.now(),
+		},
+		comments: [],
 	};
-	const snapshot: ReviewSnapshot = { review, comments: [] };
+}
+
+function archiveRecords(workspaceId: string, snapshot: ReviewSnapshot): void {
+	const archived: ReviewSnapshot = {
+		review: {
+			...snapshot.review,
+			status: "closed",
+			closedAt: snapshot.review.closedAt ?? Date.now(),
+		},
+		comments: snapshot.comments.filter((comment) => comment.status !== "draft"),
+	};
+	if (archived.comments.length > 0) saveArchive(workspaceId, archived);
+}
+
+/** The open review for a workspace, created lazily. Old closed snapshots are archived on first touch. */
+function ensureSnapshot(workspaceId: string): ReviewSnapshot {
+	const existing = load(workspaceId);
+	if (existing?.review.status === "open") return existing;
+	const snapshot = freshSnapshot(workspaceId);
+	if (existing) archiveRecords(workspaceId, existing);
 	save(workspaceId, snapshot);
 	return snapshot;
 }
@@ -329,13 +411,18 @@ export function deleteComment(workspaceId: string, id: string): void {
 	persistAndPublish(workspaceId, snapshot);
 }
 
-/** Archive the open review; the next touch starts a fresh one. */
-export function closeReview(workspaceId: string): void {
-	const snapshot = load(workspaceId);
-	if (snapshot?.review.status !== "open") return;
-	snapshot.review.status = "closed";
-	snapshot.review.closedAt = Date.now();
-	persistAndPublish(workspaceId, snapshot);
+/**
+ * Clear a review as one shared-state mutation: refuse damaged state, archive every non-draft record before
+ * replacing the active file, and publish only the fresh snapshot so every client empties together.
+ */
+export function clearReview(workspaceId: string): ReviewSnapshot {
+	const existing = load(workspaceId);
+	const fresh = freshSnapshot(workspaceId);
+	// Archive first: a later active-write failure can leave a duplicate closed snapshot, never a lost
+	// record. Retrying overwrites the same review-id path before writing a new fresh active snapshot.
+	if (existing) archiveRecords(workspaceId, existing);
+	persistAndPublish(workspaceId, fresh);
+	return fresh;
 }
 
 /**
@@ -417,8 +504,8 @@ export function markCommentsSent(
  * was accepted, or a concurrent resolve/edit already moved these comments on).
  *
  * Reads with {@link load}, never {@link ensureSnapshot}: this runs DETACHED, after the send's lock is
- * released, so a `review.close`/archive can land first — and rolling back a review that no longer exists
- * must be a clean no-op, not a resurrection of an empty open review over the closed one. Fully
+ * released, so a `review.close` Clear can archive the records and install a fresh active review first —
+ * rollback must then be a clean no-op against that fresh state, never reach into the archive. Fully
  * synchronous (no `await` between read and write), so like `reanchorWorkspace` it stays correct without
  * the lock.
  */
@@ -454,15 +541,32 @@ export function fileReviewSession(workspaceId: string, key: string): string | un
 	return ensureSnapshot(workspaceId).review.fileSessions?.[key];
 }
 
+function applyAgentResolution(
+	snapshot: ReviewSnapshot,
+	commentId: string,
+	note?: string,
+): ReviewComment | null {
+	const comment = snapshot.comments.find((candidate) => candidate.id === commentId);
+	if (!comment) return null;
+	if (comment.status === "resolved") throw new Error(`Comment ${commentId} is already resolved.`);
+	if (comment.status !== "sent")
+		throw new Error(`Comment ${commentId} was not sent to a session (status: ${comment.status}).`);
+	comment.status = "resolved";
+	comment.resolvedBy = "agent";
+	comment.resolvedAt = Date.now();
+	if (note?.trim()) comment.resolveNote = note.trim();
+	return comment;
+}
+
 /**
- * The agent's `resolve_comment` landing (via the host-installed seam). The comment must exist (in any
- * workspace's open review — the tool only holds the id) and be `sent`; anything else fails loud so the
- * model corrects itself instead of silently "resolving" nothing.
+ * The agent's `resolve_comment` landing (via the host-installed seam). The tool only holds the comment id,
+ * so search active reviews first and then archives (Clear can land while an agent turn is still in flight).
+ * Anything other than `sent` fails loud so the model corrects itself instead of silently resolving nothing.
  */
 export function resolveCommentFromAgent(commentId: string, note?: string): ReviewComment {
 	let files: string[] = [];
 	try {
-		files = readdirSync(reviewsDir()).filter((f) => f.endsWith(".json"));
+		files = readdirSync(reviewsDir()).filter((file) => file.endsWith(".json"));
 	} catch {
 		// no reviews dir yet
 	}
@@ -479,24 +583,32 @@ export function resolveCommentFromAgent(commentId: string, note?: string): Revie
 			continue;
 		}
 		if (snapshot?.review.status !== "open") continue;
-		const comment = snapshot.comments.find((c) => c.id === commentId);
+		const comment = applyAgentResolution(snapshot, commentId, note);
 		if (!comment) continue;
-		if (comment.status === "resolved") throw new Error(`Comment ${commentId} is already resolved.`);
-		if (comment.status !== "sent")
-			throw new Error(
-				`Comment ${commentId} was not sent to a session (status: ${comment.status}).`,
-			);
-		comment.status = "resolved";
-		comment.resolvedBy = "agent";
-		comment.resolvedAt = Date.now();
-		if (note?.trim()) comment.resolveNote = note.trim();
 		persistAndPublish(workspaceId, snapshot);
+		return comment;
+	}
+
+	for (const file of archivedReviewFiles()) {
+		let snapshot: ReviewSnapshot | null = null;
+		try {
+			snapshot = readSnapshot(file);
+		} catch (err) {
+			console.warn(`review archive ${file}: ${err instanceof Error ? err.message : String(err)}`);
+			continue;
+		}
+		if (snapshot?.review.status !== "closed") continue;
+		const comment = applyAgentResolution(snapshot, commentId, note);
+		if (!comment) continue;
+		// Archived state is not the active review: persist the record update, but publish no UI snapshot.
+		saveFile(file, snapshot);
 		return comment;
 	}
 	throw new Error(`Unknown review comment: ${commentId}. Use an id from the review package.`);
 }
 
-/** Purge a workspace's review file (workspace archive). */
+/** Purge a workspace's active review + closed archives (workspace archive). */
 export function removeWorkspaceReviews(workspaceId: string): void {
 	rmSync(reviewFile(workspaceId), { force: true });
+	rmSync(archiveWorkspaceDir(workspaceId), { recursive: true, force: true });
 }

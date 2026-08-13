@@ -10,6 +10,15 @@ import {
 	worktreeRows,
 } from "./fixtures/app";
 
+const ESC = "\u001b";
+const CURSOR_POSITION_REPLY = new RegExp(`^${ESC}\\[\\d+;\\d+R$`);
+const CURSOR_POSITION_QUERY_COMMAND = [
+	'python3 -c "import os,select,termios,tty;',
+	"old=termios.tcgetattr(0); tty.setraw(0); os.write(1,b'\\x1b[6n');",
+	"ready=select.select([0],[],[],2)[0]; reply=os.read(0,64) if ready else b'NO_REPLY';",
+	"termios.tcsetattr(0,termios.TCSADRAIN,old); print('TR_DSR_CONSUMED='+repr(reply))\"",
+].join(" ");
+
 test("a workspace opens a terminal automatically, rooted in the worktree, with working I/O", async ({
 	page,
 }) => {
@@ -134,6 +143,47 @@ test("a shell survives a trip to Project Home and back", async ({ page }) => {
 	// And it is genuinely the same process, not a repainted picture of a dead one.
 	await runInTerminal(page, 'echo "AGAIN=$TR_SURVIVOR"');
 	await expect(visibleTerminalScreen(page)).toContainText("AGAIN=alive");
+});
+
+test("historical terminal queries do not become input on remount", async ({ page }) => {
+	const writes: string[] = [];
+	await page.routeWebSocket(/\/ws(\?|$)/, (ws) => {
+		const server = ws.connectToServer();
+		ws.onMessage((message) => {
+			const text = message.toString();
+			try {
+				const frame = JSON.parse(text) as {
+					method?: string;
+					params?: { data?: string };
+				};
+				if (frame.method === "terminal.write" && frame.params?.data) writes.push(frame.params.data);
+			} catch {
+				// Forward non-JSON frames unchanged.
+			}
+			server.send(message);
+		});
+		server.onMessage((message) => ws.send(message));
+	});
+
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await waitTerminalReady(page);
+
+	// The application consumes this live answer; only the historical query remains in the recording.
+	await runInTerminal(page, CURSOR_POSITION_QUERY_COMMAND);
+	await expect(visibleTerminalScreen(page)).toContainText("TR_DSR_CONSUMED");
+	await expect.poll(() => writes.some((data) => CURSOR_POSITION_REPLY.test(data))).toBe(true);
+	writes.length = 0;
+
+	await page.getByTestId("project-item").first().click();
+	await worktreeRows(page).first().getByRole("button").first().click();
+	await waitTerminalReady(page);
+	await expect(visibleTerminalScreen(page)).toContainText("TR_DSR_CONSUMED");
+	expect(writes.filter((data) => CURSOR_POSITION_REPLY.test(data))).toEqual([]);
+
+	// Gating ends with replay: a genuinely live query still round-trips.
+	await runInTerminal(page, CURSOR_POSITION_QUERY_COMMAND);
+	await expect.poll(() => writes.some((data) => CURSOR_POSITION_REPLY.test(data))).toBe(true);
 });
 
 // The race the attach redesign exists for. Leaving and re-entering faster than one round trip used to find an
