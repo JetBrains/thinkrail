@@ -8,7 +8,7 @@ const buttonVariants = cva(
 		variants: {
 			variant: {
 				default:
-					"bg-control-primary-bg text-control-primary-text hover:opacity-90 disabled:bg-control-disabled-bg disabled:text-control-disabled-text",
+					"bg-control-primary-bg text-control-primary-text hover:bg-control-primary-bg-hovered disabled:bg-control-disabled-bg disabled:text-control-disabled-text",
 				destructive:
 					"bg-feedback-error text-text-on-primary hover:opacity-90 disabled:bg-control-disabled-bg disabled:text-control-disabled-text",
 				outline:

@@ -155,6 +155,33 @@ const USES: Use[] = TS_FILES.flatMap((f) =>
 	})),
 );
 
+/**
+ * WCAG relative luminance + contrast ratio. Kept local: `themes/schema.test.ts` has the same helper
+ * for MANIFEST contrast, but that module is not allowed to import `scripts/colors`, so the assertions
+ * that read a resolved semantic value (the `feedback-success` effect) live here in the colour pipeline
+ * instead — which is why the tiny helper is duplicated rather than shared across the boundary.
+ */
+function luminance(hex: string): number {
+	const channels = [1, 3, 5].map((start) => Number.parseInt(hex.slice(start, start + 2), 16) / 255);
+	const [red = 0, green = 0, blue = 0] = channels.map((value) =>
+		value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4,
+	);
+	return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+}
+function contrast(a: string, b: string): number {
+	const [lighter = 0, darker = 0] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+	return (lighter + 0.05) / (darker + 0.05);
+}
+
+interface BundledTheme {
+	readonly id: string;
+	readonly appearance: "light" | "dark";
+	readonly colors: Record<string, string>;
+}
+const BUNDLED_THEMES: BundledTheme[] = readdirSync(join(SRC, "themes/bundled"))
+	.filter((f) => f.endsWith(".theme.json"))
+	.map((f) => JSON.parse(read(join(SRC, "themes/bundled", f))) as BundledTheme);
+
 describe("the published token set", () => {
 	it("points every utility at a variable that exists", () => {
 		const dangling = [...PUBLISHED_TARGET.entries()]
@@ -269,6 +296,44 @@ describe("raw colour values", () => {
 				.filter(({ line }) => /#[0-9a-fA-F]{3,8}\b|\brgba?\(|\bhsla?\(/.test(line))
 				.map(({ line, i }) => `${rel(f)}:${i + 1}: ${line.trim().slice(0, 80)}`),
 		);
+		expect(bad).toEqual([]);
+	});
+});
+
+/**
+ * The green primary/success system must stay legible where it is a RESTING FOREGROUND — every bundled
+ * theme, Light and High Contrast Light in particular (a bright green on white fails 4.5:1):
+ *  - `onAccent` (text/icons) sits on the `accent`/primary fill;
+ *  - the success foreground is the `feedback-success` semantic token — a per-appearance value in
+ *    `colors.json` (dark #41cb66 / light #1a7f37); the success TINTS keep the `success` palette base.
+ */
+describe("the green primary/success system stays legible as a resting foreground", () => {
+	// Success text is not a control label, so `input` is excluded (mirrors the accent/input carve-out
+	// in `themes/schema.test.ts`); success text sits on the reading surfaces.
+	const SUCCESS_SURFACES = ["background", "content", "sidebar", "header", "elevated"] as const;
+
+	it("keeps onAccent at 4.5:1 on the accent/primary background in every theme", () => {
+		const bad = BUNDLED_THEMES.filter(
+			(t) => contrast(t.colors.onAccent, t.colors.accent) < 4.5,
+		).map(
+			(t) =>
+				`${t.id}: onAccent on accent = ${contrast(t.colors.onAccent, t.colors.accent).toFixed(2)}`,
+		);
+		expect(bad).toEqual([]);
+	});
+
+	it("keeps the feedback-success foreground at 4.5:1 on its resting surfaces in every theme", () => {
+		const successFg = COLORS.effects["feedback-success"];
+		if (!successFg) throw new Error("colors.json is missing the feedback-success effect");
+		const bad: string[] = [];
+		for (const theme of BUNDLED_THEMES) {
+			const fg = successFg[theme.appearance];
+			for (const surface of SUCCESS_SURFACES) {
+				const ratio = contrast(fg, theme.colors[surface] ?? "#000000");
+				if (ratio < 4.5)
+					bad.push(`${theme.id}: feedback-success on ${surface} = ${ratio.toFixed(2)}`);
+			}
+		}
 		expect(bad).toEqual([]);
 	});
 });

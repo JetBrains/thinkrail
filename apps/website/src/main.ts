@@ -26,9 +26,14 @@ const tabstrip = document.querySelector<HTMLElement>(".tabstrip");
 const tabRows: HTMLAnchorElement[] = [];
 
 if (tabstrip) {
+	// The tree is hierarchical and may point several rows at the same section (e.g. a FEATURES parent
+	// and its first child both target #worktrees). The tab strip holds exactly ONE navigational tab per
+	// unique section target, so scroll-spy can only ever light one tab per section — first row wins.
+	const seenTargets = new Set<string>();
 	for (const row of treeRows) {
 		const href = row.getAttribute("href");
-		if (!href) continue;
+		if (!href || seenTargets.has(href)) continue;
+		seenTargets.add(href);
 		const tab = document.createElement("a");
 		tab.className = "tab";
 		tab.href = href;
@@ -584,6 +589,7 @@ if (mockElements.length > 0) {
 	// Create a shared tooltip element with text and CTA
 	const tooltip = document.createElement("div");
 	tooltip.className = "mock-tooltip";
+	tooltip.id = "mock-tooltip";
 	tooltip.setAttribute("role", "tooltip");
 
 	// Text message (updated dynamically)
@@ -680,26 +686,53 @@ if (mockElements.length > 0) {
 		const hint = target.dataset.mockHint;
 		if (!hint) return;
 
+		// Reset the previously-open trigger's expanded/description state when switching regions.
+		if (currentTarget && currentTarget !== target) {
+			currentTarget.setAttribute("aria-expanded", "false");
+			currentTarget.removeAttribute("aria-describedby");
+		}
 		currentTarget = target;
 		text.textContent = hint;
 		tooltip.classList.add("visible");
+		target.setAttribute("aria-expanded", "true");
+		target.setAttribute("aria-describedby", tooltip.id);
 		positionTooltip(target);
 	};
 
 	const hideTooltip = () => {
 		tooltip.classList.remove("visible");
+		if (currentTarget) {
+			currentTarget.setAttribute("aria-expanded", "false");
+			currentTarget.removeAttribute("aria-describedby");
+		}
 		currentTarget = null;
 	};
 
 	for (const el of mockElements) {
-		// Re-enable pointer events so the disabled region is clickable.
+		// Re-enable pointer events so the disabled region is interactive.
 		el.style.pointerEvents = "auto";
-		// Click toggles the tooltip for this region; the disabled control never navigates.
+		// Keyboard-accessible TOGGLE (not a navigation target): a focusable button that opens the callout;
+		// the GitHub CTA inside the tooltip stays the only navigation action. Enter/Space toggle, Escape
+		// closes (below). Pointer behaviour and positioning are unchanged.
+		el.tabIndex = 0;
+		el.setAttribute("role", "button");
+		el.setAttribute("aria-haspopup", "dialog");
+		el.setAttribute("aria-expanded", "false");
+		el.setAttribute("aria-controls", tooltip.id);
+		const toggle = () => {
+			if (currentTarget === el) hideTooltip();
+			else showTooltip(el);
+		};
 		el.addEventListener("click", (e) => {
 			e.preventDefault();
 			e.stopPropagation();
-			if (currentTarget === el) hideTooltip();
-			else showTooltip(el);
+			toggle();
+		});
+		el.addEventListener("keydown", (e) => {
+			if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") {
+				e.preventDefault(); // Space would otherwise scroll the page.
+				toggle();
+			}
 		});
 	}
 
@@ -711,8 +744,12 @@ if (mockElements.length > 0) {
 		hideTooltip();
 	});
 
-	// Escape closes it too.
+	// Escape closes it too, and returns focus to the trigger so keyboard users are not stranded.
 	document.addEventListener("keydown", (e) => {
-		if (e.key === "Escape" && currentTarget) hideTooltip();
+		if (e.key === "Escape" && currentTarget) {
+			const trigger = currentTarget;
+			hideTooltip();
+			trigger.focus();
+		}
 	});
 }
