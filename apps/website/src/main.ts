@@ -606,8 +606,11 @@ if (mockElements.length > 0) {
 
 	const GAP = 8; // Gap between trigger and tooltip
 	const MARGIN = 8; // Viewport margin
+	// Shared offset for rail-anchored placements: distance below the header AND gap from the panel edge.
+	const RAIL_OFFSET = 12;
 	const titlebar = document.querySelector(".titlebar");
 	const railRight = document.getElementById("rail-right");
+	const railLeft = document.querySelector(".rail-left");
 	const statusbar = document.querySelector(".statusbar");
 
 	const positionTooltip = (trigger: HTMLElement) => {
@@ -623,16 +626,24 @@ if (mockElements.length > 0) {
 		const isTopRegion =
 			trigger.classList.contains("tabstrip") || trigger.classList.contains("rail-tabs");
 		if (isTopRegion && titlebar && railRight) {
-			// Top regions (editor tabs + rail tabs): 12px below titlebar, 12px to the left of right rail
+			// Right rail: RAIL_OFFSET below the header, RAIL_OFFSET left of the right rail's edge.
 			const titlebarRect = titlebar.getBoundingClientRect();
 			const railRect = railRight.getBoundingClientRect();
-			left = railRect.left - tooltipRect.width - 12;
-			top = titlebarRect.bottom + 12;
+			left = railRect.left - tooltipRect.width - RAIL_OFFSET;
+			top = titlebarRect.bottom + RAIL_OFFSET;
+		} else if (trigger.classList.contains("rail-left-nav") && titlebar && railLeft) {
+			// Left Projects/sidebar panel: the mirror of the right-rail placement — RAIL_OFFSET below the
+			// header, RAIL_OFFSET to the RIGHT of the left rail's edge, so it sits in the header/left-panel
+			// corner instead of floating inside the content. Anchored to the live panel boundary.
+			const titlebarRect = titlebar.getBoundingClientRect();
+			const railLeftRect = railLeft.getBoundingClientRect();
+			left = railLeftRect.right + RAIL_OFFSET;
+			top = titlebarRect.bottom + RAIL_OFFSET;
 		} else if (trigger.classList.contains("term-screen") && statusbar) {
-			// Terminal: to the left of terminal, 12px above statusbar
+			// Terminal: to the left of terminal, RAIL_OFFSET above the statusbar.
 			const statusbarRect = statusbar.getBoundingClientRect();
-			left = triggerRect.left - tooltipRect.width - 12;
-			top = statusbarRect.top - tooltipRect.height - 12;
+			left = triggerRect.left - tooltipRect.width - RAIL_OFFSET;
+			top = statusbarRect.top - tooltipRect.height - RAIL_OFFSET;
 		} else {
 			// Left sidebar and others: right of trigger (original behavior)
 			left = triggerRect.right + GAP;
