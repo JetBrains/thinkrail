@@ -12,9 +12,9 @@ import {
 	Pencil,
 	SkipForward,
 } from "lucide-react";
-import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib";
-import { useAskFocusScope, useAskState } from "../askState";
+import { useAskState } from "../askState";
 import { useChatActions } from "../ChatActions";
 import { Markdown } from "../Markdown";
 import type { ToolRenderProps } from "../toolRegistry";
@@ -79,8 +79,6 @@ interface QState {
 	customActive: boolean;
 	/** Selected labels for a multi-select question. */
 	multi: string[];
-	/** The authored choice that owns the roving Tab stop. */
-	cursor: number;
 	/** Per-option free-text notes. */
 	notes: Record<string, string>;
 	/** Which option's note editor is open, if any. */
@@ -92,7 +90,6 @@ const emptyQState = (): QState => ({
 	customText: "",
 	customActive: false,
 	multi: [],
-	cursor: 0,
 	notes: {},
 	noteFor: null,
 });
@@ -135,16 +132,6 @@ export function deriveAnswer(
 	return null;
 }
 
-/** Derive every currently answerable question from a sparse card-state map. Pure. */
-export function deriveAnswers(
-	questions: AskUserQuestionItem[],
-	states: Record<number, QState>,
-): AskUserQuestionAnswer[] {
-	return questions
-		.map((question, index) => deriveAnswer(question, index, states[index] ?? emptyQState()))
-		.filter((answer): answer is AskUserQuestionAnswer => answer != null);
-}
-
 /** Extract the structured result from a finished tool call (`{ content, details }` or the result itself). */
 export function readAskResult(raw: unknown): AskUserQuestionResult | null {
 	const isResult = (v: unknown): v is AskUserQuestionResult =>
@@ -184,110 +171,6 @@ export function deriveRecapState(
 	};
 }
 
-export type ChoiceKeyAction =
-	| { type: "move"; index: number }
-	| { type: "select" }
-	| { type: "confirm" }
-	| { type: "none" };
-
-/** Claude-style choice key reducer. The count includes the synthetic final Other input target. */
-export function choiceKeyAction(key: string, index: number, count: number): ChoiceKeyAction {
-	if (count <= 0) return { type: "none" };
-	if (key === "ArrowDown") return { type: "move", index: (index + 1) % count };
-	if (key === "ArrowUp") return { type: "move", index: (index - 1 + count) % count };
-	if (key === "Home") return { type: "move", index: 0 };
-	if (key === "End") return { type: "move", index: count - 1 };
-	if (key === " " || key === "Spacebar") return { type: "select" };
-	if (key === "Enter") return { type: "confirm" };
-	return { type: "none" };
-}
-
-/** Note editor keys: plain Enter and Escape finish; Shift+Enter stays available for a newline. */
-export function noteKeyAction(
-	key: string,
-	shiftKey: boolean,
-	isComposing: boolean,
-): "finish" | "none" {
-	if (isComposing) return "none";
-	if ((key === "Escape" && !shiftKey) || (key === "Enter" && !shiftKey)) return "finish";
-	return "none";
-}
-
-/** Left/Right page navigation across real questions plus the synthetic review page; edges clamp. */
-export function questionPageForKey(key: string, current: number, last: number): number | null {
-	if (key === "ArrowLeft") return Math.max(0, current - 1);
-	if (key === "ArrowRight") return Math.min(last, current + 1);
-	return null;
-}
-
-export type QuestionFocusTarget =
-	| "none"
-	| "non-editing"
-	| "empty-composer"
-	| "draft-composer"
-	| "editing";
-
-/** Whether attention may move focus for the currently focused surface. Pure policy, DOM adapter below. */
-export function shouldClaimQuestionFocus(target: QuestionFocusTarget): boolean {
-	return target === "none" || target === "non-editing" || target === "empty-composer";
-}
-
-/** A per-mounted-chat, per-tool-call one-shot attention registry (WeakMap lets closed chats disappear). */
-export function createQuestionAttentionClaim(): (scope: object, toolCallId: string) => boolean {
-	const claims = new WeakMap<object, Set<string>>();
-	return (scope, toolCallId) => {
-		let ids = claims.get(scope);
-		if (!ids) {
-			ids = new Set<string>();
-			claims.set(scope, ids);
-		}
-		if (ids.has(toolCallId)) return false;
-		ids.add(toolCallId);
-		return true;
-	};
-}
-
-const claimQuestionAttention = createQuestionAttentionClaim();
-// Enough time for a closing Radix menu/focus scope to release focus after it reopens a chat.
-const ATTENTION_SETTLE_FRAMES = 30;
-
-function focusTargetKind(active: Element | null, card: HTMLElement): QuestionFocusTarget {
-	if (!active || active === document.body) return "none";
-	if (card.contains(active)) return "non-editing";
-	if (!(active instanceof HTMLElement)) return "editing";
-	if (active.closest(".monaco-editor, .xterm")) return "editing";
-	if (active.isContentEditable || active.closest('[contenteditable="true"]')) return "editing";
-	const control = active.closest("input, textarea, select, iframe");
-	if (!control) return "non-editing";
-	if (control instanceof HTMLTextAreaElement && control.dataset.testid === "chat-input") {
-		return control.value.length === 0 ? "empty-composer" : "draft-composer";
-	}
-	return "editing";
-}
-
-function isTextEntryTarget(target: EventTarget | null): boolean {
-	return (
-		target instanceof HTMLElement &&
-		(!!target.closest("input, textarea, select") ||
-			target.isContentEditable ||
-			!!target.closest('[contenteditable="true"]'))
-	);
-}
-
-function focusCurrentQuestionPage(card: HTMLElement): void {
-	card
-		.querySelector<HTMLElement>('[data-ask-page-focus="true"]:not([disabled])')
-		?.focus({ preventScroll: true });
-}
-
-function focusQuestionAttention(card: HTMLElement): void {
-	const selected = card.querySelector<HTMLElement>(
-		'[data-testid="ask-option"][data-selected="true"], [data-testid="ask-custom-row"][data-selected="true"] input',
-	);
-	if (selected) selected.focus({ preventScroll: true });
-	else focusCurrentQuestionPage(card);
-}
-
 // ---- the card ----
 
 /**
@@ -311,10 +194,6 @@ export function AskUserQuestionCard({
 }: ToolRenderProps) {
 	const actions = useChatActions();
 	const ask = useAskState(toolCallId);
-	const providedFocusScope = useAskFocusScope();
-	const localFocusScope = useRef<object>({}).current;
-	const focusScope = providedFocusScope ?? localFocusScope;
-	const cardRef = useRef<HTMLElement>(null);
 	const questions = useMemo(() => parseQuestions(args), [args]);
 	// The reply, wherever it lives: the transcript's ask-user-answers message (ack + terminate design), or
 	// the tool result itself (legacy blocking-era transcripts, validation errors, restart-repaired declines).
@@ -332,60 +211,19 @@ export function AskUserQuestionCard({
 	const [submitted, setSubmitted] = useState(
 		() => cardStateCache.get(toolCallId)?.submitted ?? false,
 	);
-	const previousTab = useRef(tab);
 
 	useEffect(() => {
 		if (awaiting) cardStateCache.set(toolCallId, { states, tab, submitted });
 		else cardStateCache.delete(toolCallId);
 	}, [toolCallId, awaiting, states, tab, submitted]);
 
-	// A user-driven page change hands focus to that page's selected/first choice (or review heading).
-	// Initial attention is handled separately below so its focus-theft guard can make the decision.
-	useEffect(() => {
-		if (previousTab.current === tab) return;
-		previousTab.current = tab;
-		const frame = requestAnimationFrame(() => {
-			if (cardRef.current) focusCurrentQuestionPage(cardRef.current);
-		});
-		return () => cancelAnimationFrame(frame);
-	}, [tab]);
-
-	// Claim attention exactly once per mounted chat + call. The claim happens inside scheduled work so
-	// React StrictMode's setup/cleanup replay cannot spend it while cancelling the first frame. Marking it
-	// before the editing check remains deliberate: a protected draft must not be surprised later.
-	useEffect(() => {
-		if (!awaiting || streaming || questions.length === 0 || submitted) return;
-		let frame: number | null = null;
-		let attempts = 0;
-		const settleFocus = () => {
-			const card = cardRef.current;
-			if (!card) return;
-			const kind = focusTargetKind(document.activeElement, card);
-			if (!shouldClaimQuestionFocus(kind)) return;
-			focusQuestionAttention(card);
-			if (card.contains(document.activeElement)) return;
-			// A menu's modal focus scope can reject focus until its close finishes. Retry only inside this
-			// one attention claim, always rechecking that the user has not started editing in the meantime.
-			attempts += 1;
-			if (attempts < ATTENTION_SETTLE_FRAMES) frame = requestAnimationFrame(settleFocus);
-		};
-		frame = requestAnimationFrame(() => {
-			if (!claimQuestionAttention(focusScope, toolCallId)) return;
-			const card = cardRef.current;
-			if (!card) return;
-			card.scrollIntoView({ block: "nearest" });
-			settleFocus();
-		});
-		return () => {
-			if (frame != null) cancelAnimationFrame(frame);
-		};
-	}, [awaiting, focusScope, questions.length, streaming, submitted, toolCallId]);
-
 	const stateFor = (qi: number): QState => states[qi] ?? emptyQState();
 	const patch = (qi: number, next: Partial<QState>) =>
 		setStates((prev) => ({ ...prev, [qi]: { ...(prev[qi] ?? emptyQState()), ...next } }));
 
-	const answers = deriveAnswers(questions, states);
+	const answers = questions
+		.map((q, i) => deriveAnswer(q, i, stateFor(i)))
+		.filter((a): a is AskUserQuestionAnswer => a != null);
 	const answeredIndices = new Set(answers.map((a) => a.questionIndex));
 
 	const reply = (r: AskUserQuestionResult) => {
@@ -419,7 +257,7 @@ export function AskUserQuestionCard({
 		);
 	}
 
-	const multipleQuestions = questions.length > 1;
+	const multi = questions.length > 1;
 	const reviewTab = questions.length; // synthetic "Review & submit" tab index
 	const onReview = tab >= reviewTab;
 	const idx = Math.min(tab, questions.length - 1);
@@ -429,74 +267,21 @@ export function AskUserQuestionCard({
 
 	// A multi-question questionnaire always advances through its synthetic review step; only that step
 	// submits. Single-question cards retain their direct Submit action.
-	const showContinue = multipleQuestions && !onReview;
+	const showContinue = multi && !onReview;
 	const canSubmit =
-		!!actions && (onReview || !multipleQuestions ? answers.length > 0 : answeredIndices.has(idx));
-
-	const confirmQuestion = (nextState: QState) => {
-		const nextStates = { ...states, [idx]: nextState };
-		const nextAnswers = deriveAnswers(questions, nextStates);
-		if (!nextAnswers.some((answer) => answer.questionIndex === idx)) return;
-		setStates(nextStates);
-		if (multipleQuestions) setTab(Math.min(idx + 1, reviewTab));
-		else reply({ answers: nextAnswers, cancelled: false });
-	};
-
-	const confirmChoice = (label: string, cursor: number) => {
-		confirmQuestion(
-			q.multiSelect
-				? { ...state, cursor }
-				: { ...state, cursor, option: label, customActive: false },
-		);
-	};
-
-	const confirmCustom = () => confirmQuestion({ ...state, customActive: true, option: null });
-
-	const onCardKeyDown = (event: KeyboardEvent<HTMLElement>) => {
-		if (
-			event.key === "Escape" &&
-			event.shiftKey &&
-			!event.altKey &&
-			!event.ctrlKey &&
-			!event.metaKey
-		) {
-			event.preventDefault();
-			event.stopPropagation();
-			reply({ answers: [], cancelled: true });
-			return;
-		}
-		if (
-			!multipleQuestions ||
-			event.altKey ||
-			event.ctrlKey ||
-			event.metaKey ||
-			isTextEntryTarget(event.target)
-		)
-			return;
-		const next = questionPageForKey(event.key, tab, reviewTab);
-		if (next == null) return;
-		event.preventDefault();
-		if (next !== tab) setTab(next);
-	};
+		!!actions && (onReview || !multi ? answers.length > 0 : answeredIndices.has(idx));
 
 	return (
 		<div className="flex flex-col gap-xs motion-safe:animate-reveal">
-			<AttentionLine />
-			<section
-				ref={cardRef}
+			<WaitingLine />
+			{/* Awaiting an answer — the subtle primary-tinted accent ring is the "needs you" cue. */}
+			<div
 				data-testid="ask-user-question"
 				data-tone="active"
-				aria-label="Question from agent"
-				aria-keyshortcuts="Shift+Escape"
-				onKeyDown={onCardKeyDown}
-				className="overflow-hidden rounded-[var(--radius-lg)] border border-primary bg-clip-padding bg-container-elevated-bg ring-2 ring-primary-soft"
+				className="overflow-hidden rounded-[var(--radius-lg)] border border-primary-muted bg-clip-padding bg-container-elevated-bg ring-1 ring-primary-soft"
 			>
-				{multipleQuestions ? (
-					<div
-						role="tablist"
-						aria-label="Questions"
-						className="flex items-center gap-xs overflow-x-auto border-border-default border-b px-md py-sm"
-					>
+				{multi ? (
+					<div className="flex items-center gap-xs overflow-x-auto border-border-default border-b px-md py-sm">
 						{questions.map((question, i) => (
 							<TabChip
 								key={question.question}
@@ -517,65 +302,41 @@ export function AskUserQuestionCard({
 
 				<div className="flex flex-col gap-md p-md">
 					{onReview ? (
-						<ReviewView
-							questions={questions}
-							answers={answers}
-							submitEnabled={canSubmit}
-							onJump={setTab}
-							onSubmit={() => reply({ answers, cancelled: false })}
-						/>
+						<ReviewView questions={questions} answers={answers} onJump={setTab} />
 					) : (
 						<QuestionBody
 							question={q}
 							state={state}
 							// Picking an authored option deactivates "Other" but keeps its text (cheap to re-activate).
-							onSelect={(label, cursor) =>
-								patch(idx, { cursor, option: label, customActive: false })
-							}
-							onToggleMulti={(label, cursor) =>
-								patch(idx, {
-									cursor,
+							onSelect={(label) => patch(tab, { option: label, customActive: false })}
+							onToggleMulti={(label) =>
+								patch(tab, {
 									multi: state.multi.includes(label)
-										? state.multi.filter((item) => item !== label)
+										? state.multi.filter((l) => l !== label)
 										: [...state.multi, label],
 								})
 							}
-							onCursor={(cursor) => {
-								if (cursor !== state.cursor) patch(idx, { cursor });
-							}}
-							onConfirmChoice={confirmChoice}
 							onCustomText={(text) =>
-								patch(idx, { customText: text, customActive: true, option: null })
+								patch(tab, { customText: text, customActive: true, option: null })
 							}
-							onCustomActivate={() => patch(idx, { customActive: true, option: null })}
-							onToggleCustom={() => patch(idx, { customActive: !state.customActive })}
-							onConfirmCustom={confirmCustom}
-							onOpenNote={(label, cursor) =>
-								patch(idx, {
-									cursor,
-									option: label,
-									customActive: false,
-									noteFor: label,
-								})
+							onCustomActivate={() => patch(tab, { customActive: true, option: null })}
+							onToggleCustom={() => patch(tab, { customActive: !state.customActive })}
+							onToggleNote={(label) =>
+								patch(tab, { noteFor: state.noteFor === label ? null : label })
 							}
-							onCloseNote={() => patch(idx, { noteFor: null })}
-							onNote={(label, text) => patch(idx, { notes: { ...state.notes, [label]: text } })}
+							onNote={(label, text) => patch(tab, { notes: { ...state.notes, [label]: text } })}
 						/>
 					)}
 
-					<div className="flex flex-col gap-sm sm:flex-row sm:items-center sm:justify-between">
-						<ModeHint
-							question={onReview ? undefined : q}
-							review={onReview}
-							multipleQuestions={multipleQuestions}
-						/>
-						<div className="flex items-center justify-end gap-md">
+					<div className="flex items-center justify-between gap-sm">
+						<ModeHint question={onReview ? undefined : q} review={onReview} />
+						<div className="flex items-center gap-md">
 							<button
 								type="button"
 								data-testid="ask-skip"
 								onClick={() => reply({ answers: [], cancelled: true })}
 								disabled={!actions}
-								className="rounded-[var(--radius-sm)] px-xs text-text-muted tr-text-ui outline-none hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary-soft disabled:text-control-disabled-text"
+								className="text-text-muted tr-text-ui hover:text-text-default disabled:text-control-disabled-text"
 							>
 								Skip
 							</button>
@@ -584,7 +345,7 @@ export function AskUserQuestionCard({
 									type="button"
 									data-testid="ask-continue"
 									onClick={() => setTab(Math.min(tab + 1, reviewTab))}
-									className="rounded-[var(--radius-md)] bg-control-primary-bg px-md py-1.5 tr-text-action text-control-primary-text outline-none hover:opacity-90 focus-visible:ring-2 focus-visible:ring-primary-soft"
+									className="rounded-[var(--radius-md)] bg-control-primary-bg px-md py-1.5 tr-text-action text-control-primary-text hover:opacity-90"
 								>
 									Next →
 								</button>
@@ -594,7 +355,7 @@ export function AskUserQuestionCard({
 									data-testid="ask-submit"
 									onClick={() => reply({ answers, cancelled: false })}
 									disabled={!canSubmit}
-									className="rounded-[var(--radius-md)] bg-control-primary-bg px-md py-1.5 tr-text-action text-control-primary-text outline-none hover:opacity-90 focus-visible:ring-2 focus-visible:ring-primary-soft disabled:cursor-not-allowed disabled:bg-control-disabled-bg disabled:text-control-disabled-text"
+									className="rounded-[var(--radius-md)] bg-control-primary-bg px-md py-1.5 tr-text-action text-control-primary-text hover:opacity-90 disabled:cursor-not-allowed disabled:bg-control-disabled-bg disabled:text-control-disabled-text"
 								>
 									Submit
 								</button>
@@ -602,24 +363,14 @@ export function AskUserQuestionCard({
 						</div>
 					</div>
 				</div>
-			</section>
+			</div>
 		</div>
 	);
 }
 
-/** The active card's visual + assistive-tech announcement that this turn now needs the user. */
-function AttentionLine() {
-	return (
-		<div
-			role="status"
-			aria-live="polite"
-			className="flex items-center gap-xs text-primary tr-text-action"
-		>
-			<MessageCircleQuestion className="size-3.5 shrink-0" />
-			<span>Your input is needed</span>
-			<span className="text-text-muted tr-text-metadata">· Agent is waiting</span>
-		</div>
-	);
+/** "Agent is waiting for your input" — the small status line above the active card. */
+function WaitingLine() {
+	return <div className="text-text-muted tr-text-metadata">Agent is waiting for your input</div>;
 }
 
 /**
@@ -650,14 +401,16 @@ function SupersededRecord({ questions }: { questions: AskUserQuestionItem[] }) {
 /** The card frame used for the transient "answer sent" state (no interactive body). */
 function WaitingCard({ children }: { children: React.ReactNode }) {
 	return (
-		<div
-			data-testid="ask-user-question"
-			data-tone="pending"
-			role="status"
-			className="flex items-center gap-xs rounded-[var(--radius-lg)] border border-border-default bg-container-elevated-bg px-md py-sm text-text-muted tr-text-metadata"
-		>
-			<MessageCircleQuestion className="size-3.5 shrink-0" />
-			{children}
+		<div className="flex flex-col gap-xs">
+			<WaitingLine />
+			<div
+				data-testid="ask-user-question"
+				data-tone="pending"
+				className="flex items-center gap-xs rounded-[var(--radius-lg)] border border-border-default bg-container-elevated-bg px-md py-sm text-text-muted tr-text-metadata"
+			>
+				<MessageCircleQuestion className="size-3.5 shrink-0" />
+				{children}
+			</div>
 		</div>
 	);
 }
@@ -703,15 +456,12 @@ function TabChip({
 	return (
 		<button
 			type="button"
-			role="tab"
-			aria-selected={active}
-			tabIndex={active ? 0 : -1}
 			data-testid="ask-tab"
 			data-active={active}
 			data-answered={answered}
 			onClick={onClick}
 			className={cn(
-				"flex shrink-0 items-center gap-xs whitespace-nowrap rounded-full px-sm py-0.5 tr-text-metadata outline-none focus-visible:ring-2 focus-visible:ring-primary-soft",
+				"flex shrink-0 items-center gap-xs whitespace-nowrap rounded-full px-sm py-0.5 tr-text-metadata",
 				active ? "bg-primary-subtle text-primary" : "text-text-muted hover:bg-control-bg-hovered",
 			)}
 		>
@@ -728,44 +478,30 @@ function TabChip({
 	);
 }
 
-/** Compact, context-aware shortcut legend at the bottom of the active card. */
+/** Footer mode hint — reflects how many choices the current question takes. */
 function ModeHint({
 	question,
 	review,
-	multipleQuestions,
 }: {
 	question: AskUserQuestionItem | undefined;
 	review: boolean;
-	multipleQuestions: boolean;
 }) {
 	if (review) {
 		return (
-			<span
-				data-testid="ask-shortcuts"
-				className="flex items-center gap-xs text-text-muted tr-text-metadata"
-			>
-				<ListChecks className="size-3.5 shrink-0" />
-				Review · ←→ questions · Enter submit · Shift+Esc skip · Tab actions
+			<span className="flex items-center gap-xs text-text-muted tr-text-metadata">
+				<ListChecks className="size-3.5 shrink-0" /> Review your answers
 			</span>
 		);
 	}
-	const multiSelect = !!question?.multiSelect;
+	const multi = !!question?.multiSelect;
 	return (
-		<span
-			data-testid="ask-shortcuts"
-			className="flex flex-wrap items-center gap-xs text-text-muted tr-text-metadata"
-		>
-			{multiSelect ? (
+		<span className="flex items-center gap-xs text-text-muted tr-text-metadata">
+			{multi ? (
 				<ListChecks className="size-3.5 shrink-0" />
 			) : (
 				<CircleDot className="size-3.5 shrink-0" />
 			)}
-			<span>↑↓ move incl. Other</span>
-			<span>· Space {multiSelect ? "toggle" : "select"}</span>
-			<span>· Enter confirm</span>
-			<span>· Tab {!multiSelect ? "note/actions" : "actions"}</span>
-			<span>· Shift+Esc skip</span>
-			{multipleQuestions ? <span>· ←→ questions</span> : null}
+			{multi ? "Select one or more" : "Select one"}
 		</span>
 	);
 }
@@ -775,84 +511,29 @@ function QuestionBody({
 	state,
 	onSelect,
 	onToggleMulti,
-	onCursor,
-	onConfirmChoice,
 	onCustomText,
 	onCustomActivate,
 	onToggleCustom,
-	onConfirmCustom,
-	onOpenNote,
-	onCloseNote,
+	onToggleNote,
 	onNote,
 }: {
 	question: AskUserQuestionItem;
 	state: QState;
-	onSelect: (label: string, cursor: number) => void;
-	onToggleMulti: (label: string, cursor: number) => void;
-	onCursor: (cursor: number) => void;
-	onConfirmChoice: (label: string, cursor: number) => void;
+	onSelect: (label: string) => void;
+	onToggleMulti: (label: string) => void;
 	onCustomText: (text: string) => void;
 	onCustomActivate: () => void;
 	onToggleCustom: () => void;
-	onConfirmCustom: () => void;
-	onOpenNote: (label: string, cursor: number) => void;
-	onCloseNote: () => void;
+	onToggleNote: (label: string) => void;
 	onNote: (label: string, text: string) => void;
 }) {
-	const choiceRefs = useRef<Array<HTMLElement | null>>([]);
-	const noteRef = useRef<HTMLTextAreaElement>(null);
-	const focusNoteAfterRender = useRef(false);
-	const otherIndex = question.options.length;
-	const choiceCount = otherIndex + 1;
-	const cursor = Math.min(Math.max(state.cursor, 0), Math.max(otherIndex - 1, 0));
-	const customOwnsPageFocus =
-		state.customActive && (!question.multiSelect || state.multi.length === 0);
 	// Previews are a single-select affordance (the pane follows `state.option`); a multi-select question
 	// authored with previews anyway renders without the pane rather than with one that never updates.
-	const anyPreview = !question.multiSelect && question.options.some((option) => option.preview);
+	const anyPreview = !question.multiSelect && question.options.some((o) => o.preview);
 	// Side-by-side preview shows the selected option's preview, else the first option that carries one.
 	const previewSource =
-		question.options.find((option) => option.label === state.option && option.preview) ??
-		question.options.find((option) => option.preview);
-
-	// Focus only in response to an explicit open action. Unlike mount-time autofocus, this does not steal
-	// focus when Virtuoso remounts a card whose cached note editor was already open.
-	useEffect(() => {
-		if (!focusNoteAfterRender.current || !noteRef.current) return;
-		focusNoteAfterRender.current = false;
-		noteRef.current.focus({ preventScroll: true });
-	});
-
-	const openNote = (label: string, index: number) => {
-		focusNoteAfterRender.current = true;
-		onOpenNote(label, index);
-	};
-
-	const focusChoice = (index: number) => {
-		if (index < otherIndex) onCursor(index);
-		choiceRefs.current[index]?.focus({ preventScroll: true });
-	};
-
-	const finishNote = (index: number) => {
-		onCloseNote();
-		requestAnimationFrame(() => choiceRefs.current[index]?.focus({ preventScroll: true }));
-	};
-
-	const onChoiceKeyDown = (
-		event: KeyboardEvent<HTMLButtonElement>,
-		label: string,
-		index: number,
-	) => {
-		if (event.altKey || event.ctrlKey || event.metaKey) return;
-		const action = choiceKeyAction(event.key, index, choiceCount);
-		if (action.type === "none") return;
-		event.preventDefault();
-		if (action.type === "move") focusChoice(action.index);
-		else if (action.type === "select") {
-			if (question.multiSelect) onToggleMulti(label, index);
-			else onSelect(label, index);
-		} else if (action.type === "confirm") onConfirmChoice(label, index);
-	};
+		question.options.find((o) => o.label === state.option && o.preview) ??
+		question.options.find((o) => o.preview);
 
 	return (
 		<div className="flex flex-col gap-md">
@@ -863,72 +544,43 @@ function QuestionBody({
 				</p>
 			</div>
 			<div className={cn("grid gap-sm", anyPreview && "md:grid-cols-2")}>
-				<fieldset
-					aria-label={question.question}
-					className="m-0 flex min-w-0 flex-col gap-sm border-0 p-0"
-				>
-					{question.options.map((option, index) => {
+				<div className="flex flex-col gap-sm">
+					{question.options.map((opt) => {
 						const selected = question.multiSelect
-							? state.multi.includes(option.label)
-							: state.option === option.label;
-						const ownsCursor = index === cursor;
+							? state.multi.includes(opt.label)
+							: state.option === opt.label;
 						return (
-							<div key={option.label} className="flex flex-col gap-xs">
+							<div key={opt.label} className="flex flex-col gap-xs">
 								<OptionRow
-									buttonRef={(node) => {
-										choiceRefs.current[index] = node;
-									}}
-									label={option.label}
-									description={option.description}
-									recommendedReason={option.recommendedReason}
+									label={opt.label}
+									description={opt.description}
+									recommendedReason={opt.recommendedReason}
 									selected={selected}
-									cursor={ownsCursor}
-									pageFocus={ownsCursor && !customOwnsPageFocus}
 									multi={!!question.multiSelect}
-									onFocus={() => onCursor(index)}
-									onKeyDown={(event) => onChoiceKeyDown(event, option.label, index)}
 									onClick={() =>
-										question.multiSelect
-											? onToggleMulti(option.label, index)
-											: onSelect(option.label, index)
+										question.multiSelect ? onToggleMulti(opt.label) : onSelect(opt.label)
 									}
 								/>
 								{selected && !question.multiSelect ? (
 									<div className="pl-[calc(1.125rem+var(--spacing-sm))]">
-										{state.noteFor === option.label ? (
-											<textarea
-												ref={noteRef}
+										{state.noteFor === opt.label ? (
+											<FocusTextarea
 												data-testid="ask-note"
-												aria-label={`Note for ${splitRecommended(option.label).text}`}
-												aria-keyshortcuts="Enter Shift+Enter Escape"
 												rows={2}
-												value={state.notes[option.label] ?? ""}
+												value={state.notes[opt.label] ?? ""}
 												placeholder="Add a note for the model…"
-												onChange={(event) => onNote(option.label, event.target.value)}
-												onKeyDown={(event) => {
-													if (
-														noteKeyAction(
-															event.key,
-															event.shiftKey,
-															event.nativeEvent.isComposing,
-														) === "finish"
-													) {
-														event.preventDefault();
-														event.stopPropagation();
-														finishNote(index);
-													}
-												}}
+												onChange={(e) => onNote(opt.label, e.target.value)}
 												className="w-full resize-none rounded-[var(--radius-sm)] border border-control-border-default bg-control-bg px-sm py-xs text-text-default tr-text-metadata outline-none focus-visible:border-control-border-active focus-visible:ring-2 focus-visible:ring-primary-soft"
 											/>
 										) : (
 											<button
 												type="button"
 												data-testid="ask-note-toggle"
-												onClick={() => openNote(option.label, index)}
-												className="flex items-center gap-xs rounded-[var(--radius-sm)] text-text-muted tr-text-metadata outline-none hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary-soft"
+												onClick={() => onToggleNote(opt.label)}
+												className="flex items-center gap-xs text-text-muted tr-text-metadata hover:text-text-muted"
 											>
 												<Pencil className="size-3" />
-												{state.notes[option.label]?.trim() ? "Edit note" : "Add note"}
+												{state.notes[opt.label]?.trim() ? "Edit note" : "Add note"}
 											</button>
 										)}
 									</div>
@@ -941,23 +593,14 @@ function QuestionBody({
 					    one more option row (radio on single-select, checkbox on multi-select) with the free-text
 					    field inline. Single-select: exclusive with the authored options; multi-select: additive. */}
 					<OtherOptionRow
-						inputRef={(node) => {
-							choiceRefs.current[otherIndex] = node;
-						}}
 						multi={!!question.multiSelect}
 						active={state.customActive}
 						text={state.customText}
-						pageFocus={question.options.length === 0 || customOwnsPageFocus}
 						onActivate={onCustomActivate}
 						onToggle={onToggleCustom}
 						onText={onCustomText}
-						onMove={(key) => {
-							const action = choiceKeyAction(key, otherIndex, choiceCount);
-							if (action.type === "move") focusChoice(action.index);
-						}}
-						onConfirm={onConfirmCustom}
 					/>
-				</fieldset>
+				</div>
 
 				{anyPreview && previewSource?.preview ? (
 					<div
@@ -976,47 +619,29 @@ function QuestionBody({
 }
 
 function OptionRow({
-	buttonRef,
 	label,
 	description,
 	recommendedReason,
 	selected,
-	cursor,
-	pageFocus,
 	multi,
-	onFocus,
-	onKeyDown,
 	onClick,
 }: {
-	buttonRef: (node: HTMLButtonElement | null) => void;
 	label: string;
 	description: string;
 	recommendedReason?: string | undefined;
 	selected: boolean;
-	cursor: boolean;
-	pageFocus: boolean;
 	multi: boolean;
-	onFocus: () => void;
-	onKeyDown: (event: KeyboardEvent<HTMLButtonElement>) => void;
 	onClick: () => void;
 }) {
 	const { text, recommended, reason } = readRecommendation({ label, recommendedReason });
 	return (
 		<button
-			ref={buttonRef}
 			type="button"
-			aria-pressed={selected}
-			aria-keyshortcuts="ArrowUp ArrowDown Home End Space Enter ArrowLeft ArrowRight Shift+Escape"
-			tabIndex={cursor ? 0 : -1}
 			data-testid="ask-option"
 			data-selected={selected}
-			data-cursor={cursor}
-			data-ask-page-focus={pageFocus || undefined}
-			onFocus={onFocus}
-			onKeyDown={onKeyDown}
 			onClick={onClick}
 			className={cn(
-				"flex items-start gap-sm rounded-[var(--radius-md)] border px-md py-sm text-left outline-none transition-colors focus-visible:border-control-border-active focus-visible:ring-2 focus-visible:ring-primary-soft",
+				"flex items-start gap-sm rounded-[var(--radius-md)] border px-md py-sm text-left transition-colors",
 				selected
 					? "border-primary bg-primary-subtle"
 					: "border-border-default hover:bg-control-bg-hovered",
@@ -1057,34 +682,26 @@ function OptionRow({
  * excluded without deleting it.
  */
 function OtherOptionRow({
-	inputRef,
 	multi,
 	active,
 	text,
-	pageFocus,
 	onActivate,
 	onToggle,
 	onText,
-	onMove,
-	onConfirm,
 }: {
-	inputRef: (node: HTMLInputElement | null) => void;
 	multi: boolean;
 	active: boolean;
 	text: string;
-	pageFocus: boolean;
 	onActivate: () => void;
 	onToggle: () => void;
 	onText: (text: string) => void;
-	onMove: (key: "ArrowUp" | "ArrowDown") => void;
-	onConfirm: () => void;
 }) {
 	return (
 		<label
 			data-testid="ask-custom-row"
 			data-selected={active}
 			className={cn(
-				"flex cursor-text items-center gap-sm rounded-[var(--radius-md)] border px-md py-sm transition-colors focus-within:border-control-border-active focus-within:ring-2 focus-within:ring-primary-soft",
+				"flex cursor-text items-center gap-sm rounded-[var(--radius-md)] border px-md py-sm transition-colors",
 				active
 					? "border-primary bg-primary-subtle"
 					: "border-border-default hover:bg-control-bg-hovered",
@@ -1100,7 +717,7 @@ function OtherOptionRow({
 						e.preventDefault();
 						onToggle();
 					}}
-					className="flex items-center rounded-[var(--radius-sm)] outline-none focus-visible:ring-2 focus-visible:ring-primary-soft"
+					className="flex items-center"
 				>
 					<Indicator selected={active} multi className="mt-0" />
 				</button>
@@ -1109,32 +726,11 @@ function OtherOptionRow({
 			)}
 			<span className="tr-text-ui text-text-default">Other</span>
 			<input
-				ref={inputRef}
 				data-testid="ask-custom"
-				data-ask-page-focus={pageFocus || undefined}
-				aria-label="Other answer"
-				aria-keyshortcuts="ArrowUp ArrowDown Enter Shift+Escape"
 				value={text}
 				placeholder="type your own answer…"
 				onFocus={onActivate}
-				onChange={(event) => onText(event.target.value)}
-				onKeyDown={(event) => {
-					if (
-						(event.key === "ArrowUp" || event.key === "ArrowDown") &&
-						!event.shiftKey &&
-						!event.altKey &&
-						!event.ctrlKey &&
-						!event.metaKey
-					) {
-						event.preventDefault();
-						onMove(event.key);
-						return;
-					}
-					if (event.key === "Enter" && !event.nativeEvent.isComposing && text.trim().length > 0) {
-						event.preventDefault();
-						onConfirm();
-					}
-				}}
+				onChange={(e) => onText(e.target.value)}
 				className="min-w-0 flex-1 border-none bg-transparent tr-text-ui text-text-default outline-none placeholder:text-text-muted"
 			/>
 		</label>
@@ -1189,18 +785,25 @@ function Indicator({
 	);
 }
 
+/**
+ * Inputs that focus themselves once on mount — the note editor is revealed only when the user clicks "Add
+ * note", so focusing is expected, not a surprise steal. Done with a mount effect rather than the
+ * `autoFocus` attribute (an a11y smell outside a modal — biome `noAutofocus`).
+ */
+function FocusTextarea(props: React.ComponentProps<"textarea">) {
+	const ref = useRef<HTMLTextAreaElement>(null);
+	useEffect(() => ref.current?.focus(), []);
+	return <textarea ref={ref} {...props} />;
+}
+
 function ReviewView({
 	questions,
 	answers,
-	submitEnabled,
 	onJump,
-	onSubmit,
 }: {
 	questions: AskUserQuestionItem[];
 	answers: AskUserQuestionAnswer[];
-	submitEnabled: boolean;
 	onJump: (index: number) => void;
-	onSubmit: () => void;
 }) {
 	const byIndex = new Map(answers.map((a) => [a.questionIndex, a]));
 	const unanswered = questions.map((q, i) => ({ q, i })).filter(({ i }) => !byIndex.has(i));
@@ -1208,27 +811,7 @@ function ReviewView({
 		<div className="flex flex-col gap-sm">
 			<div className="flex items-start gap-sm">
 				<MessageCircleQuestion className="mt-0.5 size-4 shrink-0 text-text-muted" />
-				<p
-					tabIndex={-1}
-					data-testid="ask-review-title"
-					data-ask-page-focus="true"
-					aria-keyshortcuts="Enter"
-					onKeyDown={(event) => {
-						if (
-							event.key === "Enter" &&
-							submitEnabled &&
-							!event.altKey &&
-							!event.ctrlKey &&
-							!event.metaKey
-						) {
-							event.preventDefault();
-							onSubmit();
-						}
-					}}
-					className="rounded-[var(--radius-sm)] tr-title-dialog text-text-default outline-none focus-visible:ring-2 focus-visible:ring-primary-soft"
-				>
-					Review your answers
-				</p>
+				<p className="tr-title-dialog text-text-default">Review your answers</p>
 			</div>
 			<ul className="flex flex-col gap-md">
 				{questions.map((q, i) => (
@@ -1243,7 +826,7 @@ function ReviewView({
 					type="button"
 					data-testid="ask-unanswered"
 					onClick={() => onJump(unanswered[0]?.i ?? 0)}
-					className="self-start rounded-[var(--radius-sm)] text-feedback-warning tr-text-metadata outline-none hover:underline focus-visible:ring-2 focus-visible:ring-primary-soft"
+					className="self-start text-feedback-warning tr-text-metadata hover:underline"
 				>
 					⚠ Unanswered: {unanswered.map(({ q, i }) => q.header || `Q${i + 1}`).join(", ")}
 				</button>

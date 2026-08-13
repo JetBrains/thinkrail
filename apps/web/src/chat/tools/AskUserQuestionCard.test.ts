@@ -1,16 +1,11 @@
 import { describe, expect, it } from "bun:test";
 import type { AskUserQuestionAnswer, AskUserQuestionItem } from "@thinkrail/contracts";
 import {
-	choiceKeyAction,
-	createQuestionAttentionClaim,
 	deriveAnswer,
 	deriveRecapState,
-	noteKeyAction,
 	parseQuestions,
-	questionPageForKey,
 	readAskResult,
 	readRecommendation,
-	shouldClaimQuestionFocus,
 	splitRecommended,
 } from "./AskUserQuestionCard";
 
@@ -29,7 +24,6 @@ const state = (over: Partial<Parameters<typeof deriveAnswer>[2]> = {}) => ({
 	customText: "",
 	customActive: false,
 	multi: [] as string[],
-	cursor: 0,
 	notes: {} as Record<string, string>,
 	noteFor: null as string | null,
 	...over,
@@ -43,62 +37,6 @@ describe("parseQuestions", () => {
 		expect(parseQuestions({})).toEqual([]);
 		expect(parseQuestions({ questions: "nope" })).toEqual([]);
 		expect(parseQuestions({ questions: [{ question: "x" }] })).toEqual([]); // no options[]
-	});
-});
-
-describe("keyboard interaction", () => {
-	it("wraps authored-choice movement and supports Home/End", () => {
-		expect(choiceKeyAction("ArrowDown", 2, 3)).toEqual({ type: "move", index: 0 });
-		expect(choiceKeyAction("ArrowUp", 0, 3)).toEqual({ type: "move", index: 2 });
-		expect(choiceKeyAction("Home", 2, 3)).toEqual({ type: "move", index: 0 });
-		expect(choiceKeyAction("End", 0, 3)).toEqual({ type: "move", index: 2 });
-	});
-
-	it("maps Space and Enter without consuming bare letter or number keys", () => {
-		expect(choiceKeyAction(" ", 0, 2)).toEqual({ type: "select" });
-		expect(choiceKeyAction("Enter", 0, 2)).toEqual({ type: "confirm" });
-		expect(choiceKeyAction("N", 0, 2)).toEqual({ type: "none" });
-		expect(choiceKeyAction("n", 0, 2)).toEqual({ type: "none" });
-		expect(choiceKeyAction("1", 0, 2)).toEqual({ type: "none" });
-	});
-
-	it("includes Other as the final wrapping choice target", () => {
-		expect(choiceKeyAction("ArrowDown", 2, 4)).toEqual({ type: "move", index: 3 });
-		expect(choiceKeyAction("End", 0, 4)).toEqual({ type: "move", index: 3 });
-		expect(choiceKeyAction("ArrowDown", 3, 4)).toEqual({ type: "move", index: 0 });
-	});
-
-	it("clamps Left/Right across questions plus review", () => {
-		expect(questionPageForKey("ArrowLeft", 0, 2)).toBe(0);
-		expect(questionPageForKey("ArrowRight", 0, 2)).toBe(1);
-		expect(questionPageForKey("ArrowRight", 2, 2)).toBe(2);
-		expect(questionPageForKey("ArrowDown", 1, 2)).toBeNull();
-	});
-
-	it("finishes notes on Enter/Escape but preserves Shift+Enter and IME composition", () => {
-		expect(noteKeyAction("Enter", false, false)).toBe("finish");
-		expect(noteKeyAction("Escape", false, false)).toBe("finish");
-		expect(noteKeyAction("Enter", true, false)).toBe("none");
-		expect(noteKeyAction("Escape", true, false)).toBe("none");
-		expect(noteKeyAction("Enter", false, true)).toBe("none");
-	});
-
-	it("claims attention once per tool call and mounted-chat scope", () => {
-		const claim = createQuestionAttentionClaim();
-		const firstMount = {};
-		const reopenedMount = {};
-		expect(claim(firstMount, "ask-1")).toBe(true);
-		expect(claim(firstMount, "ask-1")).toBe(false);
-		expect(claim(firstMount, "ask-2")).toBe(true);
-		expect(claim(reopenedMount, "ask-1")).toBe(true);
-	});
-
-	it("focuses from inert/empty-composer targets but preserves active editing", () => {
-		expect(shouldClaimQuestionFocus("none")).toBe(true);
-		expect(shouldClaimQuestionFocus("non-editing")).toBe(true);
-		expect(shouldClaimQuestionFocus("empty-composer")).toBe(true);
-		expect(shouldClaimQuestionFocus("draft-composer")).toBe(false);
-		expect(shouldClaimQuestionFocus("editing")).toBe(false);
 	});
 });
 

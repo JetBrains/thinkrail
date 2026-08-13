@@ -46,27 +46,7 @@ registration runs once when the chat module mounts. Unregistered tools fall back
   - **Per-call UI state survives virtualization** — a module-level cache keyed by `toolCallId` (dropped
     once no longer awaiting), since react-virtuoso unmounts off-screen rows. This is the pattern the
     activity fold's expansion state reuses.
-  - **Attention without hostile focus theft** — once its arguments are complete, an awaiting card is
-    revealed with an assertive visual “needs you” treatment plus a polite assistive-tech announcement.
-    Per active-chat mount it focuses the selected choice (including Other) or first authored choice once;
-    a virtualized remount never reclaims focus, while deliberately reopening the waiting chat does. It
-    reveals but does **not** move focus away from Monaco, xterm, content-editable/form fields, or a non-empty
-    composer draft; the empty composer left focused after Send is safe to hand off.
-  - **Claude-style local keyboard selector** — one authored choice is in the Tab order; Up/Down wraps
-    through every authored choice **and Other**, Home/End jumps to the first/Other target, Space
-    selects/toggles an authored choice, and Enter confirms (single-select chooses the focused option;
-    multi-select confirms its non-empty set), advancing to the next question/review or directly submitting
-    a one-question call. Reaching Other focuses and activates its text input immediately; typing can start
-    at once, Up/Down leaves or wraps, and Enter confirms non-empty text. The review heading is the final
-    page's keyboard landing point and Enter there submits the batch. On multi-question cards Left/Right
-    moves without wrapping across question pages and the final review page; text inputs retain those keys.
-    A selected single-choice note remains an explicit secondary control: Tab reaches Add/Edit note and
-    Enter opens it. In the editor Enter finishes and returns focus to the choice, Shift+Enter remains the
-    multiline escape hatch, and plain Escape also returns **without discarding typed text**. `Shift+Escape`
-    is the deliberate card-local skip gesture; plain Escape outside a note never declines. Tab still reaches
-    Other, Skip, and footer actions. A compact visible shortcut legend + semantic selected state make the
-    interaction discoverable. Bare-letter/number shortcuts and global chords are deliberately absent so
-    browser extensions, custom text, and explicit decline stay safe.
+  - Awaiting an answer, the card carries a subtle primary-tinted accent ring (the "needs you" accent).
   - **Recommended-reason affordance** — a recommended option (label suffix `(Recommended)` **or** a
     non-empty `recommendedReason` — a reason *implies* recommended, defensively) renders its rationale
     **inline** as a `Why: …` block inside the option card (below the description; `Why:` in the accent
