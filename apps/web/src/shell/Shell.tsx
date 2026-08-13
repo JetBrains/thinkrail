@@ -51,7 +51,7 @@ export function Shell() {
 		<div data-testid="shell" className="grid h-full grid-rows-[auto_1fr]">
 			<header className="flex items-center justify-between border-b border-border-default bg-container-header-bg px-lg py-sm">
 				<div className="flex min-w-0 items-center gap-md">
-					<span aria-hidden="true" className="inline-flex w-9 shrink-0 items-center text-primary">
+					<span aria-hidden="true" className="inline-flex w-6 shrink-0 items-center text-primary">
 						<svg
 							viewBox="0 0 556.36 449.2"
 							fill="currentColor"

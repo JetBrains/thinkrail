@@ -302,7 +302,7 @@ code {
 .wordmark-logo {
 	display: inline-flex;
 	align-items: center;
-	width: 32px;
+	width: 24px;
 	flex: none;
 	color: var(--accent);
 }
