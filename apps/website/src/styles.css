@@ -1899,6 +1899,12 @@ html:not(.anim) .term-caret {
 
 	html.install-tabs-ready .install-tabs {
 		padding-inline: 0;
+		/* Too narrow to keep the shell switcher inline with the OS tabs: let it wrap onto a
+		   second row below them (see the .windows-shell-tabs override) instead of clipping.
+		   height:auto lets the strip grow by that row; the OS-tab row keeps its 44px. */
+		flex-wrap: wrap;
+		height: auto;
+		min-height: 44px;
 	}
 
 	.install-tab {
@@ -1907,7 +1913,20 @@ html:not(.anim) .term-caret {
 		padding-inline: 7px;
 	}
 
+	/* Second row: a full-width band on the active container-workspace-bg surface, directly under
+	   the OS tabs and inside the same frame. flex-basis:100% forces the wrap; the segments share the
+	   width (flex:1) so every shell stays reachable with no horizontal scroll or clipping. */
+	html.install-tabs-ready .windows-shell-tabs:not([hidden]) {
+		flex-basis: 100%;
+		align-self: stretch;
+		margin-left: 0;
+		border: 0;
+		border-top: 1px solid var(--border);
+		border-radius: 0;
+	}
+
 	.windows-shell-tab {
+		flex: 1;
 		padding-inline: 5px;
 		font-size: 9.5px;
 	}
