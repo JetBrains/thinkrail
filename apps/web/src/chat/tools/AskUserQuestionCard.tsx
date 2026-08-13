@@ -247,14 +247,21 @@ export function confirmStateFor(
  * Note editor keys: Enter and Escape finish; Shift+Enter stays available for a newline. **Escape finishes
  * with Shift held too** — the card reads `Shift+Escape` as "skip the questionnaire", and the innermost
  * open thing must close first, or the gesture would throw away the note the user is still typing.
+ *
+ * **Escape belongs to the editor even mid-IME-composition** — as `"consume"` rather than `"finish"`. There
+ * the IME owns the key (it cancels the composition) so the note must stay open, but the gesture still may
+ * not reach the card: declining not to *finish* while also declining to *swallow* would let `Shift+Escape`
+ * bubble out and take the whole questionnaire down with the text being composed — the exact loss the
+ * Shift-held rule above exists to prevent, through the one door left open.
  */
 export function noteKeyAction(
 	key: string,
 	shiftKey: boolean,
 	isComposing: boolean,
-): "finish" | "none" {
+): "finish" | "consume" | "none" {
+	if (key === "Escape") return isComposing ? "consume" : "finish";
 	if (isComposing) return "none";
-	if (key === "Escape" || (key === "Enter" && !shiftKey)) return "finish";
+	if (key === "Enter" && !shiftKey) return "finish";
 	return "none";
 }
 
@@ -630,6 +637,10 @@ export function AskUserQuestionCard({
 		confirmQuestion(confirmStateFor(state, !!q.multiSelect, { kind: "custom" }));
 
 	const onCardKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+		// A keystroke the IME is currently composing is never a card gesture — it belongs to the text being
+		// written. The note editor consumes its own Escape (`noteKeyAction`), but the Other field has no inner
+		// guard, and skipping is destructive enough that it must not fire off a key the user aimed at an IME.
+		if (event.nativeEvent.isComposing) return;
 		if (
 			event.key === "Escape" &&
 			event.shiftKey &&
@@ -1174,14 +1185,20 @@ function QuestionBody({
 									placeholder="Add a note for the model…"
 									onChange={(event) => onNote(noteOption.label, event.target.value)}
 									onKeyDown={(event) => {
-										if (
-											noteKeyAction(event.key, event.shiftKey, event.nativeEvent.isComposing) ===
-											"finish"
-										) {
-											event.preventDefault();
-											event.stopPropagation();
-											finishNote(noteIndex);
-										}
+										const action = noteKeyAction(
+											event.key,
+											event.shiftKey,
+											event.nativeEvent.isComposing,
+										);
+										if (action === "none") return;
+										// Stopping propagation first is the whole point: the editor owns this gesture
+										// either way, so it can never reach the card's `Shift+Escape` skip.
+										event.stopPropagation();
+										// Mid-composition the key is the IME's — no `preventDefault`, so it still
+										// cancels the composition, and the note stays open with its text intact.
+										if (action === "consume") return;
+										event.preventDefault();
+										finishNote(noteIndex);
 									}}
 									className="w-full resize-none rounded-[var(--radius-sm)] border border-control-border-default bg-control-bg px-sm py-xs text-text-default tr-text-metadata outline-none focus-visible:border-control-border-active focus-visible:ring-2 focus-visible:ring-primary-soft"
 								/>

@@ -91,7 +91,17 @@ describe("keyboard interaction", () => {
 		// The card reads Shift+Escape as "decline"; the open editor must consume it first, or the gesture
 		// throws away the note being typed along with every answer.
 		expect(noteKeyAction("Escape", true, false)).toBe("finish");
-		expect(noteKeyAction("Escape", true, true)).toBe("none"); // still never mid-composition
+	});
+
+	it("keeps Escape inside the editor mid-composition — consumed, not finished, and never bubbled", () => {
+		// The IME owns the key there, so the note must NOT close; but returning "none" would also decline to
+		// swallow it, and `Shift+Escape` would bubble to the card's skip and take the questionnaire down with
+		// the composition. "consume" is what closes that door — the one hole in the Shift-held rule above.
+		expect(noteKeyAction("Escape", true, true)).toBe("consume");
+		expect(noteKeyAction("Escape", false, true)).toBe("consume");
+		// Enter mid-composition stays inert: nothing above the editor claims it, so there is nothing to eat.
+		expect(noteKeyAction("Enter", false, true)).toBe("none");
+		expect(noteKeyAction("Enter", true, true)).toBe("none");
 	});
 
 	it("claims attention once per tool call and mounted-chat scope", () => {

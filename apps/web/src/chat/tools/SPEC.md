@@ -76,7 +76,9 @@ registration runs once when the chat module mounts. Unregistered tools fall back
     one-shot claim is long spent and could neither re-focus nor re-announce, the card takes focus back itself
     rather than reappearing with the keyboard parked in the composer and nothing to say it had returned.
   - **Claude-style local keyboard selector** — one authored choice is in the Tab order; Up/Down wraps
-    through every authored choice **and Other**, Home/End jumps to the first/Other target, Space
+    through every authored choice **and Other**, Home/End jumps to the first/Other target *from a choice
+    row* (inside the Other field they stay caret keys, exactly as ←/→ do — a free-text field keeps the keys
+    that move through text, and only ↑/↓ lift out of it), Space
     selects/toggles an authored choice, and Enter confirms (single-select chooses the focused option;
     multi-select confirms its non-empty set), advancing to the next question/review or directly submitting
     a one-question call. Reaching Other focuses its text input, ready to type — but **text, not focus, is
@@ -116,6 +118,11 @@ registration runs once when the chat module mounts. Unregistered tools fall back
     Enter finishes and returns focus to the choice, Shift+Enter remains the multiline escape hatch, and
     Escape also returns **without discarding typed text** — **including `Shift+Escape`**, which the open
     editor consumes rather than letting the card's skip gesture throw away the note mid-sentence.
+    That holds **mid-IME-composition too**, where Escape is *consumed rather than finishing*: the IME owns
+    the key (it cancels the composition, so the note stays open) but the gesture still must not reach the
+    card — declining to finish while also declining to swallow would let `Shift+Escape` bubble out and take
+    the questionnaire down with the text being composed. The card's skip therefore also **ignores any
+    keystroke the IME is composing**, which covers the Other field, whose free text has no inner guard.
     `Shift+Escape` is otherwise the deliberate card-local skip; plain Escape outside a note never declines.
     Tab still reaches
     Other, Skip, and footer actions. A compact visible shortcut legend makes the interaction discoverable,
