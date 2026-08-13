@@ -4,7 +4,7 @@ import {
 	parseSessionEntries,
 	type SessionEntry,
 } from "@earendil-works/pi-coding-agent";
-import { isControlMessage, isTranscriptMessageRole } from "@thinkrail/contracts";
+import { isControlMessage, isRetriedAttempt, isTranscriptMessageRole } from "@thinkrail/contracts";
 
 /** One searchable message from a session transcript (see SPEC.md for the messageIndex invariant). */
 export interface HistoryEntry {
@@ -74,22 +74,24 @@ export function extractSession(jsonl: string): ExtractedSession | null {
 	}
 	const { messages } = buildSessionContext(entries);
 
+	// Indexing against the wire's own role policy is what keeps a hit's `messageIndex` aligned with the
+	// client's `turnIdByMessageIndex`: a role the host strips (branch summaries) must not consume a slot
+	// here, and one it sends must — a `compactionSummary` does, without ever becoming a searchable entry
+	// (the role check below). Filtering FIRST (not a running counter) so `isRetriedAttempt` sees the
+	// same adjacency the client renders on hydrate.
+	const renderable = messages.filter((message) => isTranscriptMessageRole(message.role));
 	const out: HistoryEntry[] = [];
-	let messageIndex = 0;
-	for (const message of messages) {
-		// Indexing against the wire's own role policy is what keeps a hit's `messageIndex` aligned with the
-		// client's `turnIdByMessageIndex`: a role the host strips (branch summaries) must not consume a slot
-		// here, and one it sends must — a `compactionSummary` does, without ever becoming a searchable entry
-		// (the role check below).
-		if (!isTranscriptMessageRole(message.role)) continue;
-		const index = messageIndex++;
+	for (const [index, message] of renderable.entries()) {
 		if (message.role !== "user" && message.role !== "assistant") continue;
 		const text = textOf(message.content);
 		if (!text.trim()) continue;
 		// Internal control traffic: the pi-todos wake-nudge is hidden from the transcript on hydrate, so it
-		// must not surface as a recallable/insertable prompt. The index was already consumed above, so
-		// skipping only the text keeps every later hit's anchor aligned.
+		// must not surface as a recallable/insertable prompt. The index slot is still consumed (it is the
+		// loop position), so every later hit's anchor stays aligned.
 		if (message.role === "user" && isControlMessage(text)) continue;
+		// A superseded auto-retry attempt renders no turn on hydrate (its jump anchor is null), so its text
+		// must not surface as a searchable/jumpable hit either — same shared reading as the client's.
+		if (isRetriedAttempt(renderable, index)) continue;
 		out.push({
 			text,
 			role: message.role,

@@ -744,6 +744,29 @@ export function isControlMessage(text: string): boolean {
 	return text.startsWith(TODO_NUDGE_PREFIX);
 }
 
+/**
+ * True when the message at `index` is a superseded auto-retry attempt: an assistant message that ended
+ * in `stopReason: "error"` with another assistant message following before any user message. pi's
+ * `_prepareRetry` persists the failed attempt ("keep in session for history") while trimming it from
+ * the live context, so every presenter of the persisted transcript needs the same reading — the
+ * client's hydration hides its turn, and the host's history indexer must not surface its text as a
+ * searchable/jumpable hit (its jump anchor is null). A failed attempt followed by a user message (or
+ * nothing) is the run's terminal failure and stays visible. Ambiguity resolves toward showing.
+ */
+export function isRetriedAttempt(
+	messages: readonly { role: string; stopReason?: string }[],
+	index: number,
+): boolean {
+	const message = messages[index];
+	if (message?.role !== "assistant" || message.stopReason !== "error") return false;
+	for (let i = index + 1; i < messages.length; i++) {
+		const role = messages[i]?.role;
+		if (role === "assistant") return true;
+		if (role === "user") return false;
+	}
+	return false;
+}
+
 /** History-search scope — the overlay's cycle: this chat → workspace → project → everywhere. */
 export type HistoryScope =
 	| { kind: "chat"; sessionId: string }

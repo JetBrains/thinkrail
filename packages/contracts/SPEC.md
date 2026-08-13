@@ -27,7 +27,10 @@ of the host.
   `DEFAULT_CONFIG`, `MAX_HISTORY_LIMIT`, `MAX_HISTORY_QUERY_LENGTH`, `TODO_NUDGE_PREFIX` +
   **`isControlMessage(text)`** (the one shared reading of that marker — the client hides such sends on
   hydrate, the host skips them in the history index and does not count them as `message_sent`; both
-  sides agree here rather than each re-deriving `startsWith`) from `domain`; **`isTranscriptMessageRole(role)`**
+  sides agree here rather than each re-deriving `startsWith`) + **`isRetriedAttempt(messages, index)`**
+  (the one shared reading of pi's persisted-but-superseded auto-retry attempts — the client's hydration
+  hides their turns, the host's history indexer skips their text; both consume the index slot so jump
+  anchors stay aligned) from `domain`; **`isTranscriptMessageRole(role)`**
   from `piProtocol` (the one definition of which roles a transcript carries: the host filters
   `session.getMessages` by it *and* `history` counts `messageIndex` by it, so two copies differing by a role
   would silently shift every later jump anchor); `export *` (value) of `wsProtocol`

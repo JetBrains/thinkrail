@@ -206,7 +206,8 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   edge — an oversized image in history 400s every later turn once the provider's >20-image 2000px cap
   kicks in, and pi's own resizer is deliberately off server-side), within-bounds images pass through
   byte-identical, undecodable files fall back to raw (the server's `imageGuard` extension is the second
-  line of defense), and the pending chip shows `mime · W×H` (`composer-image` testid +
+  line of defense), and the pending chip shows `filename · W×H` (the picked file's name; mime text appears only in the
+  hydrated-turn fallback when no name survived) (`composer-image` testid +
   `data-width`/`data-height` — the `e2e/composer-images.spec.ts` hooks) — and `openHistory` on its
   imperative handle → `onHistoryOpen`) plus its props-driven **slash-completion
   primitive** (filter/menu/caret + Up/Down, Enter/Tab, Escape), reused by `panels/NewWorkspaceDialog` so

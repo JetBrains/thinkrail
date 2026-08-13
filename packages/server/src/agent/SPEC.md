@@ -245,7 +245,10 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     unit-tested against `SessionManager.inMemory`.
   - `imageGuard` — the oversized-image guard: an inline extension (`oversizedImageGuard`, one of
     `buildResourceLoader`'s shared factories) hooked on pi's **`context` event** (fired before every LLM
-    call, live sessions included). It sniffs each image block's pixel dimensions straight from the base64
+    call, live sessions included). **Anthropic-family only**: the caps are Anthropic's model-level rules,
+    so the handler gates on the context's active model (`isAnthropicFamilyModel` — native
+    `anthropic`/`anthropic-messages`, or a Claude model id through Bedrock/Vertex/aggregators; unknown
+    model ⇒ no-op) and every other provider's image context passes through untouched. It sniffs each image block's pixel dimensions straight from the base64
     header bytes (PNG/JPEG/GIF/WebP — no codec, never strips what it can't sniff; **bounded work per
     pass**: only a 256KiB decoded prefix is ever materialized — a JPEG whose SOF lies beyond it sniffs as
     unknown, not stripped — and each block is sniffed exactly once per pass) and replaces any block

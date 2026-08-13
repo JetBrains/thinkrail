@@ -3,6 +3,7 @@ import type { AgentMessage, ImageContent } from "@thinkrail/contracts";
 import {
 	guardOversizedImages,
 	imageDimensions,
+	isAnthropicFamilyModel,
 	MANY_IMAGE_EDGE_LIMIT,
 	MANY_IMAGE_THRESHOLD,
 	oversizedImageGuard,
@@ -225,24 +226,65 @@ describe("guardOversizedImages", () => {
 	});
 });
 
+// ---- the provider gate ----
+
+describe("isAnthropicFamilyModel", () => {
+	test("matches native Anthropic and Claude-through-a-front, and nothing else", () => {
+		expect(isAnthropicFamilyModel({ provider: "anthropic", api: "anthropic-messages" })).toBe(true);
+		expect(
+			isAnthropicFamilyModel({ provider: "amazon-bedrock", id: "anthropic.claude-sonnet" }),
+		).toBe(true);
+		expect(
+			isAnthropicFamilyModel({ provider: "openai", api: "openai-responses", id: "gpt-5" }),
+		).toBe(false);
+		expect(isAnthropicFamilyModel({ provider: "google", id: "gemini-3-pro" })).toBe(false);
+		// No model ⇒ no known policy ⇒ never strip.
+		expect(isAnthropicFamilyModel(undefined)).toBe(false);
+	});
+});
+
 // ---- the extension wiring ----
 
-test("oversizedImageGuard registers a context handler that returns replaced messages", async () => {
-	let handler: ((event: { type: "context"; messages: AgentMessage[] }) => unknown) | undefined;
+type ContextHandler = (
+	event: { type: "context"; messages: AgentMessage[] },
+	ctx: { model: { api?: string; provider?: string; id?: string } | undefined },
+) => unknown;
+
+function registeredHandler(): ContextHandler {
+	let handler: ContextHandler | undefined;
 	const pi = {
-		on: (event: string, h: typeof handler) => {
+		on: (event: string, h: ContextHandler) => {
 			if (event === "context") handler = h;
 		},
 	};
 	oversizedImageGuard(pi as never);
-	expect(handler).toBeDefined();
+	if (!handler) throw new Error("no context handler registered");
+	return handler;
+}
 
-	const clean = await handler?.({ type: "context", messages: [user("hello")] });
+const anthropicCtx = { model: { provider: "anthropic", api: "anthropic-messages", id: "claude" } };
+
+test("oversizedImageGuard registers a context handler that returns replaced messages", async () => {
+	const handler = registeredHandler();
+
+	const clean = await handler({ type: "context", messages: [user("hello")] }, anthropicCtx);
 	expect(clean).toBeUndefined();
 
-	const dirty = (await handler?.({
-		type: "context",
-		messages: [user([image(pngBytes(9000, 100))])],
-	})) as { messages: AgentMessage[] };
+	const dirty = (await handler(
+		{ type: "context", messages: [user([image(pngBytes(9000, 100))])] },
+		anthropicCtx,
+	)) as { messages: AgentMessage[] };
 	expect(dirty?.messages).toBeDefined();
+});
+
+test("the guard is a no-op for a non-Anthropic model — the caps are Anthropic's, not the provider's", async () => {
+	const handler = registeredHandler();
+	const oversized = { type: "context" as const, messages: [user([image(pngBytes(9000, 100))])] };
+
+	expect(
+		await handler(oversized, {
+			model: { provider: "openai", api: "openai-responses", id: "gpt-5" },
+		}),
+	).toBeUndefined();
+	expect(await handler(oversized, { model: undefined })).toBeUndefined();
 });

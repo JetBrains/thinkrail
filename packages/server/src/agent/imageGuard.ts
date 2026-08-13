@@ -7,10 +7,12 @@
 // transforms the OUTGOING context instead: on pi's `context` event (fired before every LLM call, live
 // sessions included — a stuck chat unsticks on its very next message) it sniffs each image's dimensions
 // straight from the base64 header bytes and replaces violating image blocks with a text note. The
-// session file and the visible transcript stay untouched. The caps are Anthropic's, but generous enough
-// to be harmless for every other provider; the count-aware cap also self-heals the read-tool case — a
-// raw 3000px file read is legal while the context holds ≤20 images and degrades to a note (not a brick)
-// once the same session crosses 21.
+// session file and the visible transcript stay untouched. The caps are Anthropic's model-level rules,
+// so the guard fires ONLY for the Anthropic model family (the `context` handler's ctx.model — native
+// `anthropic-messages` api / `anthropic` provider, or a Claude model served through Bedrock/Vertex);
+// other providers keep their full image context untouched. The count-aware cap also self-heals the
+// read-tool case — a raw 3000px file read is legal while the context holds ≤20 images and degrades to
+// a note (not a brick) once the same session crosses 21.
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import type { AgentMessage } from "@thinkrail/contracts";
@@ -172,10 +174,24 @@ export function guardOversizedImages(messages: AgentMessage[]): AgentMessage[] |
 	return changed ? guarded : undefined;
 }
 
+/** Does this model enforce Anthropic's image-dimension rules? Native Anthropic (api/provider), plus
+ * Claude models reached through an aggregator or cloud front (Bedrock/Vertex/OpenRouter expose them
+ * under their own provider ids — the model id still names claude). Undefined model ⇒ false: without a
+ * known policy the guard must not strip anything. */
+export function isAnthropicFamilyModel(
+	model: { api?: string; provider?: string; id?: string } | undefined,
+): boolean {
+	if (!model) return false;
+	if (model.provider === "anthropic" || model.api === "anthropic-messages") return true;
+	return /claude/i.test(model.id ?? "");
+}
+
 /** The inline pi extension: registered in `buildResourceLoader`'s shared factories, so every session —
- * live or reopened — gets its outgoing context guarded on each LLM call. */
+ * live or reopened — gets its outgoing context guarded on each LLM call. The dimension caps are
+ * Anthropic's, so the guard is a no-op for every other model family. */
 export function oversizedImageGuard(pi: ExtensionAPI): void {
-	pi.on("context", (event) => {
+	pi.on("context", (event, ctx) => {
+		if (!isAnthropicFamilyModel(ctx.model)) return undefined;
 		const messages = guardOversizedImages(event.messages);
 		return messages ? { messages } : undefined;
 	});
