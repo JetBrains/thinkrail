@@ -112,6 +112,9 @@
 	--muted: #5a5f6a;
 	--hint: #667085;
 	--accent: #2e7d16;
+	/* Foreground ON the accent fill (`.skip-link`, `.send-btn`). The root value is for the bright dark
+	   accent; near-black on this dark green is 3.8:1, so light takes white (5.2:1) as the app does. */
+	--on-accent: #ffffff;
 	/* The light accent is already dark/readable; links use it at full strength (60% would be too faint on white). */
 	--link: var(--accent);
 	/* `--green` is a FOREGROUND here (done/activity icons, the +N badge), so it takes the light theme's
