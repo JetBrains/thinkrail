@@ -121,8 +121,9 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   disk-only sessions (from `session.list`) there too — idempotently (skips live/open/already-listed) — so a
   chat that survived a host restart is reopenable. **`deleteChat(workspaceId, sessionId)`** is the idempotent
   fold for both a confirmed local `session.delete` and the `session.deleted` broadcast: it atomically drops
-  that chat's tab/history row/runtime + skill baseline (choosing the normal active-tab fallback) and records
-  a page-lifetime tombstone. **`noteClosedChats`** and **`hydrateSession`** reject tombstoned session ids, so
+  **every tab the chat owns** — its transcript tab *and* its plan page (both carry the `sessionId`; a plan
+  page for a deleted chat would have nothing to read) — plus its history row/runtime + skill baseline
+  (choosing the normal active-tab fallback), and records a page-lifetime tombstone. **`noteClosedChats`** and **`hydrateSession`** reject tombstoned session ids, so
   stale `session.list` / `session.getMessages` results already in flight cannot recreate a deleted chat;
   the tombstone survives workspace teardown because an older read can still settle afterward. The
   active-workspace hydration pass snapshots **`selectWorkspaceSessionIds`** before each `session.list`; when

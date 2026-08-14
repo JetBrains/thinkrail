@@ -1055,9 +1055,12 @@ function bumpNav(s: AppState, workspaceId: string): Record<string, number> {
 function withoutChat(s: AppState, workspaceId: string, sessionId: string): AppState {
 	const alreadyDeleted = isSessionDeleted(s, workspaceId, sessionId);
 	const tabs = s.tabsByWorkspace[workspaceId] ?? [];
-	const tab = tabs.find(
-		(candidate) => candidate.kind === "chat" && candidate.sessionId === sessionId,
+	// A chat owns two tabs: its transcript and (optionally) its plan page — both die with the session.
+	const owned = tabs.filter(
+		(candidate) =>
+			(candidate.kind === "chat" || candidate.kind === "plan") && candidate.sessionId === sessionId,
 	);
+	const tab = owned[0];
 	const closed = s.closedChatsByWorkspace[workspaceId] ?? [];
 	const inHistory = closed.some((chat) => chat.sessionId === sessionId);
 	const hasRuntime = s.sessions[sessionId] !== undefined;
@@ -1068,8 +1071,10 @@ function withoutChat(s: AppState, workspaceId: string, sessionId: string): AppSt
 	if (alreadyDeleted && !tab && !inHistory && !hasRuntime && !hasSkillBaseline && !targetsLocation)
 		return s;
 
-	const remaining = tab ? tabs.filter((candidate) => candidate.id !== tab.id) : tabs;
-	const wasActive = !!tab && s.activeTabByWorkspace[workspaceId] === tab.id;
+	const ownedIds = new Set(owned.map((candidate) => candidate.id));
+	const remaining = tab ? tabs.filter((candidate) => !ownedIds.has(candidate.id)) : tabs;
+	const activeId = s.activeTabByWorkspace[workspaceId];
+	const wasActive = !!activeId && ownedIds.has(activeId);
 	return {
 		...s,
 		...(!alreadyDeleted
