@@ -39,26 +39,39 @@ V1 (the chat-plan UX this feeds: [[submodule-web-chat]]'s "Chat TODO plan").
 Reconciles are **serialized per workspace** (a promise chain) so two quick `todo_*` ends can't race the
 index mid-commit; the whole path is best-effort and never throws into the event stream.
 
-On `in_progress` it snapshots the worktree's **uncommitted** changed-path set + the current `HEAD` sha
-(a baseline, **persisted** in a host-owned sidecar next to the todos JSON —
-`.thinkrail/context/todos/<sessionId>.baselines.json`, read-modify-write like the store — so a host
-restart mid-item changes nothing; `head` is recorded for future window-commit attribution, unused today).
-On `done`:
+On `in_progress` it **opens the item's work window**: a baseline of the worktree's **uncommitted**
+changed-path set + the current `HEAD` sha, **persisted** in a host-owned sidecar next to the todos JSON
+(`.thinkrail/context/todos/<sessionId>.baselines.json`, read-modify-write like the store) — so a host
+restart mid-item changes nothing; `head` is recorded for future window-commit attribution, unused today.
+A window opening while **another chat** already has one records `shared: true` and marks that other
+window shared too (`markOtherSessionWindowsShared`) — the flag is **sticky**, because "was this window
+exclusive for its whole life?" is what the gate needs and can't be re-derived once the other closed.
+(Two items of *one* plan can't overlap: `pi-todos` keeps exactly one item `in_progress` and a demoted
+item's window is dropped — pinned by a test, since the gate leans on it.) On `done`:
 
-- **Commit the item's work.** `git.gitCommitAll` stages everything except `.thinkrail/` (`git add -A -- .
-  ':!.thinkrail'` — the host's todos JSON is never swept into the user's history), commits it
-  `--no-verify` (the bookkeeping commit must not run/fail the user's hooks; author/committer stay the
-  user's own config — it's their branch) with a `todo: <title>` subject + a `ThinkRail-Todo:
-  <sessionId>/<todoId>` trailer (recoverable/squashable by tooling). The item gets **one `commit`
-  artifact** (the sha, `label` = the item title) and **nothing else**: the commit is self-sufficient —
-  its file list is *derived*, never denormalized into the JSON (see the `listTodos` decoration below).
-- **Commit gate (safety on the user's branch).** Commit only when **no foreign dirt remains**: every path
-  already dirty at the item's baseline must be clean again by `done` (or the baseline was empty; a
-  *missing* baseline — an item that predates the sidecar — counts as empty). Foreign dirt present → **no
-  commit**; fall back to the live-diff `change` path-list artifacts (branch scope) — `change` survives
-  **only** as this fallback. This quietly disables auto-commit in a Default workspace holding the user's
-  WIP, which is the intended guard. Because each committed item leaves the uncommitted set, sequential
-  commits attribute overlapping items cleanly with no extra bookkeeping.
+- **Commit the item's delta.** `git.gitCommitPaths` commits **exactly the delta paths** — the item's own
+  work, never "everything currently dirty" — `--no-verify` (the bookkeeping commit must not run/fail the
+  user's hooks; author/committer stay the user's own config — it's their branch) with a `todo: <title>`
+  subject + a `ThinkRail-Todo: <sessionId>/<todoId>` trailer (recoverable/squashable by tooling). It
+  preserves the user's index across any failure (see [[submodule-server-git]]). The item gets **one
+  `commit` artifact** (the sha, `label` = the item title) and **nothing else**: the commit is
+  self-sufficient — its file list is *derived*, never denormalized into the JSON (see the `listTodos`
+  decoration below).
+- **Commit gate (safety on the user's branch).** A commit may only contain work the item can be *proven*
+  to own, so all four must hold — else **no commit**, and the live-diff `change` path-list artifacts stand
+  in (branch scope; `change` survives **only** as this fallback):
+  1. **A recorded baseline.** No baseline = no observed window (an item flipped straight to `done`, a plan
+     predating the sidecar), and then every dirty path in the worktree merely *looks* like the item's
+     delta. Reportable, never committable.
+  2. **No foreign dirt left** — every path dirty at the baseline is clean again by `done`. This is what
+     quietly disables auto-commit in a Default workspace holding the user's WIP, the intended guard.
+  3. **A window never shared** (`shared` unset) and no other chat mid-work right now — concurrent windows
+     share one worktree, so their dirt can't be split between them.
+  4. **A non-empty delta.**
+
+  Each committed item leaves the uncommitted set, so the memoized changed-path read is **dropped after
+  every commit** — otherwise a second item reconciled in the same pass would inherit the first's
+  already-committed paths as its own delta.
 - **Merge + replace-on-redo.** The agent's `file`/`spec` artifacts are always kept. A `done` item already
   carrying a change set with **no fresh baseline** is a steady-state no-op (idempotent); a re-opened,
   re-worked item (fresh baseline present) has its old `commit`/`change` artifacts **replaced** with the
@@ -68,8 +81,11 @@ The host's own on-disk state (anything under `WORKSPACE_INTERNAL_DIR` = `.thinkr
 JSON under `context/todos/`) is filtered out of every change set — writing a todo shows up in `git status`
 but is never a change the step *produced*. The pi-free `TodoStore` never touches git; `commit`/`change`
 are host-only, while the agent attaches `file`/`spec` itself through the `todo_*` tools (see
-[[module-pi-todos]]). Known limitation (accepted): an agent that commits *itself* mid-item leaves an empty
-delta at `done` → no artifacts.
+[[module-pi-todos]]). Known limitations (accepted): an agent that commits *itself* mid-item leaves an empty
+delta at `done` → no artifacts; and a writer this mechanism cannot see — the user editing through a
+terminal or an external editor mid-window, or a chat with no plan at all — is indistinguishable from agent
+work in `git status`, so its edits can land in the item's commit (the app's own editor is read-only, and
+anything already dirty when the window opened is caught by gate 2).
 
 **`listTodos` decoration — unfolding the commit.** The wire DTO's `commit` artifact carries a derived
 **`files`** list — full `GitFileChange[]` rows (path + status + `+/−` line counts), read through
@@ -81,9 +97,18 @@ days, far longer than a chat plan's ephemeral life; we deliberately pin nothing)
 that absence is the client's signal to degrade the affordance silently (no chip, never a broken diff
 tab). The same decoration pass is where `groupStatus` already ships, so the pattern has one home.
 
+**The read barrier.** `listTodos` first awaits the workspace's in-flight reconciles
+(`settleChangeArtifacts` — the same per-workspace chain). A client's only refresh signal is the `pi.event`
+a `todo_*` tool end publishes, and the reconcile is enqueued *synchronously with that publish* but settles
+later (it commits) — so without the barrier a commit slower than the client's refetch debounce would hand
+back a `done` item with no change set, leaving an open plan page promising an affordance it doesn't show
+until some unrelated event. Awaiting makes the read **causally after** the write it was triggered by;
+it resolves immediately when nothing is in flight, and never rejects.
+
 ## Boundary
 
-- **Owns / public surface (barrel):** `listTodos({workspaceId, sessionId}) → TodoPlan`,
+- **Owns / public surface (barrel):** `listTodos({workspaceId, sessionId}) → Promise<TodoPlan>` (async
+  only for the read barrier above),
   `countOpenTodos({workspaceId, sessionId}) → number` + its pure rule `openTodoCount(plan)` (unfinished =
   any status but `done`, loose + grouped — the `SessionSummary.openTodos` decoration the host's
   `session.list` handler attaches so a client can auto-open chats with work in progress; a session with
@@ -93,7 +118,7 @@ tab). The same decoration pass is where `groupStatus` already ships, so the patt
   `removeTodo(...) → { ok:true }` (idempotent). **Mapping only** — no plan logic; `TodoStore` owns disk.
 - **Allowed deps:** `workspaces` (worktree-path lookup via `getWorkspace`, which throws on unknown);
   `git` (`gitStatus` — the uncommitted changed-path set + the commit-scope DTO decoration;
-  `gitCommitAll` — the per-done-item commit; `gitHeadSha` — the baseline's head);
+  `gitCommitPaths` — the per-done-item delta commit; `gitHeadSha` — the baseline's head);
   `contracts` (DTOs + `PiEvent` for `isTodoToolEnd`); `@thinkrail/shared/paths` (`WORKSPACE_INTERNAL_DIR`
   — the app-state prefix filtered out of change sets); **`pi-todos/core`** (the pi-free read/write model — a sanctioned host-side
   value-import of the extension package, the same pattern as `spec` → `pi-spec-graph/core`).

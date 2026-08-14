@@ -20,24 +20,48 @@ function workspace(workspaceId: string): Workspace {
 }
 
 /**
- * Commit the worktree's current changes as one commit, **excluding** the host's own `.thinkrail/` state
- * (the todos JSON etc. — never sweep the app's bookkeeping into the user's history), with `--no-verify`
- * so the host's commit never runs (or is failed by) the user's hooks. Returns the new commit's sha, or
- * `null` when there was nothing to commit (all dirt was foreign/excluded) or a git op failed.
- * Author/committer stay the user's own git config — it's their branch. Best-effort bookkeeping for the
- * TODO change-set feature; the caller (todos/artifacts) never lets it throw. The commit stores only the
- * sha — its change list is derived on demand via `gitStatus` at the `commit:{sha}` scope (sha-immutable,
- * cacheable; see the todos module's `listTodos` decoration).
+ * Commit **exactly `paths`** (worktree-relative) as one commit, with `--no-verify` so the host's commit
+ * never runs (or is failed by) the user's hooks. Returns the new commit's sha, or `null` when there was
+ * nothing to commit or a git op failed. Author/committer stay the user's own git config — it's their
+ * branch. Best-effort bookkeeping for the TODO change-set feature; the caller (todos/artifacts) never
+ * lets it throw. The commit stores only the sha — its change list is derived on demand via `gitStatus`
+ * at the `commit:{sha}` scope (sha-immutable, cacheable; see the todos module's `listTodos` decoration).
+ *
+ * **Only the named paths are committed** — never "whatever is dirty now": the caller passes the set it
+ * proved belongs to the item (and, being the caller's filtered delta, it never contains the host's own
+ * `.thinkrail/` state). Anything that lands in the worktree between the caller's `gitStatus` and this
+ * call is therefore left alone rather than swept into someone else's commit.
+ *
+ * **The user's index is preserved.** Staging is fallible (a missing identity, a signing failure), so the
+ * index tree is snapshotted first (`write-tree`) and restored (`read-tree`) on every failure path — a
+ * skipped commit leaves the user's staging area exactly as it was. An index with unmerged entries can't
+ * be snapshotted (`write-tree` fails), and a half-merged worktree is nothing to auto-commit anyway, so
+ * that bails out untouched too. On success, `commit -- <paths>` moves only those paths' entries; the
+ * user's other staged work stays staged.
  */
-export function gitCommitAll(workspaceId: string, message: string): { sha: string } | null {
+export function gitCommitPaths(
+	workspaceId: string,
+	message: string,
+	paths: string[],
+): { sha: string } | null {
+	if (paths.length === 0) return null;
 	const cwd = workspace(workspaceId).worktreePath;
-	// Stage everything except `.thinkrail` (`:!` = exclude pathspec); `.` is the required inclusive spec.
-	if (!git(cwd, ["add", "-A", "--", ".", ":!.thinkrail"]).ok) return null;
-	// `git diff --cached --quiet` exits 0 (ok) when the index matches HEAD — i.e. nothing to commit.
-	if (git(cwd, ["diff", "--cached", "--quiet"]).ok) return null;
-	if (!git(cwd, ["commit", "--no-verify", "-m", message]).ok) return null;
+	// Snapshot the index so any later failure can put it back byte-for-byte. Fails on unmerged entries
+	// (a conflicted merge in flight) — bail before touching anything.
+	const saved = git(cwd, ["write-tree"]);
+	if (!saved.ok || !saved.out) return null;
+	const restore = (): null => {
+		git(cwd, ["read-tree", saved.out]);
+		return null;
+	};
+	// `-A` over an explicit pathspec so a deleted path is staged as a deletion, not skipped.
+	if (!git(cwd, ["add", "-A", "--", ...paths]).ok) return restore();
+	// `git diff --cached --quiet -- <paths>` exits 0 (ok) when those paths match HEAD — nothing to commit.
+	if (git(cwd, ["diff", "--cached", "--quiet", "--", ...paths]).ok) return restore();
+	// Pathspec-scoped commit: the item's paths only, whatever else the user may have had staged.
+	if (!git(cwd, ["commit", "--no-verify", "-m", message, "--", ...paths]).ok) return restore();
 	const head = git(cwd, ["rev-parse", "HEAD"]);
-	if (!head.ok) return null;
+	if (!head.ok) return null; // committed — the index is already correct for those paths
 	return { sha: head.out };
 }
 
