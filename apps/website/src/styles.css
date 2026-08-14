@@ -74,18 +74,20 @@
 	color-scheme: dark;
 }
 
+/* `--elevated`, `--text`, `--muted` and `--hint` here had drifted from the app manifest, which put
+   `--text` on `--elevated` (the mock callout) at 4.46:1. Resynced to the app's values. */
 [data-theme="darcula"] {
 	--chrome: #3c3f41;
 	--container-workspace-bg: #3c3f41;
 	--container-header-bg: #2b2b2b;
-	--elevated: #45494a;
+	--elevated: #3c3f41;
 	--hover: #4c5052;
 	--input: #45494a;
 	--border: #323232;
 	--border2: #4b4f52;
-	--text: #a9b7c6;
-	--muted: #9fabb5;
-	--hint: #8b959e;
+	--text: #abb9c7;
+	--muted: #aeb8c1;
+	--hint: #969fa7;
 	--accent: #8dff4f;
 	--sx-kw: #cc7832;
 	--sx-str: #6a8759;
