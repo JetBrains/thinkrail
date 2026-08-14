@@ -41,6 +41,7 @@
 	--font-sans: var(--tr-font-family-interface);
 	--font-mono: var(--tr-font-family-code);
 
+	--spacing-2xs: var(--space-2xs);
 	--spacing-xs: var(--space-xs);
 	--spacing-sm: var(--space-sm);
 	--spacing-md: var(--space-md);
