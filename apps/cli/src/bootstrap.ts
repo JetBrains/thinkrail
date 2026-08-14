@@ -6,6 +6,7 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { type BuildKind, bootHost } from "@thinkrail/server";
+import { printStartupMark } from "@thinkrail/shared/startupMark";
 import { type CliOptions, parseArgs, parseSubcommand, USAGE } from "./args";
 import { runUninstall } from "./uninstall";
 import { runUpdate } from "./update";
@@ -87,6 +88,7 @@ async function bootstrap(build: BuildKind): Promise<void> {
 	// `localhost`/`0.0.0.0`/`::` are bind hosts, not addresses to open — point the browser at localhost.
 	const openHost = options.host === "0.0.0.0" || options.host === "::" ? "localhost" : options.host;
 	const url = `http://${openHost}:${port}`;
+	printStartupMark({ status: "host ready", endpoint: url });
 	console.log(`thinkrail → ${url}`);
 	if (options.open) openBrowser(url);
 }
