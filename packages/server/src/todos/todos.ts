@@ -29,20 +29,23 @@ function storeFor(workspaceId: string, sessionId: string): TodoStore {
 }
 
 /**
- * A commit's recorded changes (path + status + `+/−`), memoized **by sha** — the sha names an immutable
- * object, so a successful resolution can never go stale. Only successes are cached: a transient git
+ * A commit's recorded changes (path + status + `+/−`), memoized **by workspace + sha** — the sha names
+ * an immutable object, so a successful resolution can never go stale *within the repository that holds
+ * it*. Resolvability is repository-local, though: two clones can hold the same sha while only one still
+ * has the object (the other rewrote and pruned it), so a hit from one workspace must never satisfy
+ * another's resolution check — hence the composite key. Only successes are cached: a transient git
  * failure (or a GC'd/unknown sha — `gitStatus` throws `UNKNOWN_COMMIT`) resolves to `undefined` now and
- * retries on the next list. Session-independent by construction, so one host-wide map is correct across
- * workspaces too (a sha collision across repos names the same object).
+ * retries on the next list. Session-independent, so one host-wide map is still correct.
  */
 const commitFilesCache = new Map<string, GitFileChange[]>();
 
 function resolveCommitFiles(workspaceId: string, sha: string): GitFileChange[] | undefined {
-	const hit = commitFilesCache.get(sha);
+	const key = `${workspaceId}\u0000${sha}`;
+	const hit = commitFilesCache.get(key);
 	if (hit) return hit;
 	try {
 		const files = gitStatus(workspaceId, { kind: "commit", sha }).changes;
-		commitFilesCache.set(sha, files);
+		commitFilesCache.set(key, files);
 		return files;
 	} catch {
 		return undefined; // unknown sha / git failure — ship the artifact bare (the client degrades)

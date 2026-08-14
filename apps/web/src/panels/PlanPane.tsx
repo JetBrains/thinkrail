@@ -1,5 +1,6 @@
 import type { GitFileChange, TodoGroupItem, TodoItem } from "@thinkrail/contracts";
-import { Copy, Download, GitCommitHorizontal } from "lucide-react";
+import { ChevronDown, ChevronRight, Copy, Download, GitCommitHorizontal } from "lucide-react";
+import { useState } from "react";
 import { planToMarkdown } from "../chat/planMarkdown";
 import {
 	changeSetStat,
@@ -57,7 +58,11 @@ function FileRow({ file, onOpen }: { file: GitFileChange; onOpen: () => void }) 
 	);
 }
 
-/** A done item's change set, unfolded: the sha chip (→ Changes panel) + summary, then the file rows. */
+/**
+ * A done item's change set as a **collapsible disclosure**, collapsed by default so a long plan stays
+ * compact. The chevron/`N files` summary toggles the file rows; the sha chip stays a separate button
+ * that routes the Changes panel and never toggles the disclosure (and vice versa).
+ */
 function ChangeSetBlock({
 	item,
 	workspaceId,
@@ -67,57 +72,80 @@ function ChangeSetBlock({
 	workspaceId: string;
 	onOpenCommit: (sha: string) => void;
 }) {
+	const [expanded, setExpanded] = useState(false);
 	const set = itemChangeSet(item);
 	if (!set) return null;
-	if (set.kind === "paths") {
-		// The no-commit fallback: live branch-scope diffs; no counts (they would drift with the worktree).
-		return (
-			<ul className="mt-xs flex flex-col" data-testid="plan-change-set" data-kind="paths">
-				{set.paths.map((path) => (
-					<FileRow
-						key={path}
-						file={{ path, status: "modified" }}
-						onOpen={() => void openDiffInTab(workspaceId, { kind: "branch" }, path, "preview")}
-					/>
-				))}
-			</ul>
-		);
-	}
-	const { count, added, removed } = changeSetStat(set.files);
+	const Chevron = expanded ? ChevronDown : ChevronRight;
+	const stat = set.kind === "commit" ? changeSetStat(set.files) : null;
+	const count = set.kind === "paths" ? set.paths.length : (stat?.count ?? 0);
 	return (
-		<div className="mt-xs" data-testid="plan-change-set" data-kind="commit">
+		<div
+			className="mt-xs"
+			data-testid="plan-change-set"
+			data-kind={set.kind}
+			data-expanded={expanded}
+		>
 			<div className="flex items-center gap-sm px-xs">
 				<button
 					type="button"
-					data-testid="plan-commit-chip"
-					onClick={() => onOpenCommit(set.sha)}
-					title="Open this step's commit in the Changes panel"
-					className="flex shrink-0 items-center gap-xs rounded-[var(--radius-sm)] px-xs py-[1px] tr-code-text text-text-subtle hover:bg-control-bg-hovered hover:text-text-default"
+					data-testid="plan-change-set-toggle"
+					aria-expanded={expanded}
+					onClick={() => setExpanded((v) => !v)}
+					title={expanded ? "Hide changed files" : "Show changed files"}
+					className="flex min-w-0 items-center gap-xs rounded-[var(--radius-sm)] px-xs py-2xs text-left hover:bg-control-bg-hovered"
 				>
-					<GitCommitHorizontal className="size-3.5" />
-					{set.sha.slice(0, 7)}
+					<Chevron className="size-3.5 shrink-0 text-text-muted" />
+					<span className="shrink-0 tr-text-metadata text-text-subtle">
+						{count} {count === 1 ? "file" : "files"}
+					</span>
 				</button>
-				<span className="shrink-0 tr-text-metadata text-text-subtle">
-					{count} {count === 1 ? "file" : "files"}
-				</span>
-				<DiffStatBadge added={added} removed={removed} />
+				{set.kind === "commit" ? (
+					<>
+						<button
+							type="button"
+							data-testid="plan-commit-chip"
+							onClick={() => onOpenCommit(set.sha)}
+							title="Open this step's commit in the Changes panel"
+							className="flex shrink-0 items-center gap-xs rounded-[var(--radius-sm)] px-xs py-2xs tr-code-text text-text-subtle hover:bg-control-bg-hovered hover:text-text-default"
+						>
+							<GitCommitHorizontal className="size-3.5" />
+							{set.sha.slice(0, 7)}
+						</button>
+						<DiffStatBadge added={stat?.added ?? 0} removed={stat?.removed ?? 0} />
+					</>
+				) : null}
 			</div>
-			<ul className="flex flex-col">
-				{set.files.map((file) => (
-					<FileRow
-						key={file.path}
-						file={file}
-						onOpen={() =>
-							void openDiffInTab(
-								workspaceId,
-								{ kind: "commit", sha: set.sha },
-								file.path,
-								"preview",
-							)
-						}
-					/>
-				))}
-			</ul>
+			{expanded ? (
+				set.kind === "paths" ? (
+					// The no-commit fallback: live branch-scope diffs; no counts (they'd drift with the worktree).
+					<ul className="flex flex-col">
+						{set.paths.map((path) => (
+							<FileRow
+								key={path}
+								file={{ path, status: "modified" }}
+								onOpen={() => void openDiffInTab(workspaceId, { kind: "branch" }, path, "preview")}
+							/>
+						))}
+					</ul>
+				) : (
+					<ul className="flex flex-col">
+						{set.files.map((file) => (
+							<FileRow
+								key={file.path}
+								file={file}
+								onOpen={() =>
+									void openDiffInTab(
+										workspaceId,
+										{ kind: "commit", sha: set.sha },
+										file.path,
+										"preview",
+									)
+								}
+							/>
+						))}
+					</ul>
+				)
+			) : null}
 		</div>
 	);
 }
@@ -135,7 +163,7 @@ function ItemBlock({
 	return (
 		<li data-testid="plan-item" data-status={item.status} className="py-xs">
 			<div className="flex items-start gap-sm">
-				<span className="mt-[2px]">
+				<span className="mt-2xs">
 					<StatusIcon status={item.status} glance="working" />
 				</span>
 				<div className="min-w-0 flex-1">
