@@ -20,6 +20,7 @@ import {
 } from "pi-todos/core";
 import { gitStatus } from "../git";
 import { getWorkspace } from "../workspaces";
+import { settleChangeArtifacts } from "./artifacts";
 
 /** The store rooted at a workspace's worktree for one chat session. `TodoStore` is stateless (re-reads
  * the file every op), so a fresh instance per call is free — no cache. `getWorkspace` throws on unknown. */
@@ -63,8 +64,16 @@ function toWireItem(workspaceId: string, item: StoredItem): TodoItem {
 	return { ...item, artifacts };
 }
 
-/** The chat's whole TODO plan (loose items + named groups). */
-export function listTodos(params: { workspaceId: string; sessionId: string }): TodoPlan {
+/**
+ * The chat's whole TODO plan (loose items + named groups). **Awaits the workspace's in-flight change-set
+ * reconcile first** ({@link settleChangeArtifacts}), so a read triggered by the `todo_*` event that started
+ * that reconcile can't observe a `done` item before its commit artifact is stored.
+ */
+export async function listTodos(params: {
+	workspaceId: string;
+	sessionId: string;
+}): Promise<TodoPlan> {
+	await settleChangeArtifacts(params.workspaceId);
 	const plan = storeFor(params.workspaceId, params.sessionId).read();
 	// Decorate on the way out: each group with its derived task status (the rule lives in `pi-todos`,
 	// which owns plan semantics, and reaches the client on the DTO so `apps/web` — which can't import the

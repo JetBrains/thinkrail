@@ -109,19 +109,27 @@ ref off the workspace-create critical path.
   **`readBlobAt(worktreePath, ref, path)`** → the file's byte-exact content at a ref, or `null` when the
   read produced none (the diff sides degrade that to `""`; the `reviews` module uses it to capture and
   render a base-side anchor's own content);
-  **`gitCommitAll(workspaceId, message)`** → `{ sha } | null` — commit the worktree's current
-  changes as one commit for the TODO change-set feature (see [[submodule-server-todos]]): stage everything
-  **except** `.thinkrail/` (`git add -A -- . ':!.thinkrail'` — the host's own bookkeeping is never swept
-  into the user's history), commit `--no-verify` (the host's commit must not run/fail the user's hooks;
-  author/committer stay the user's git config — it's their branch), and return the new sha. Returns `null`
-  when there was nothing to commit (all dirt was foreign/excluded, detected via `git diff --cached
-  --quiet`) or any git op failed — the caller (`todos/artifacts`) treats that as "fall back to path-list
-  artifacts" and never lets it throw. It is the one git primitive that **writes** the user's branch; the
-  caller serializes it per workspace.
+  **`gitCommitPaths(workspaceId, message, paths)`** → `{ sha } | null` — commit **exactly `paths`** as one
+  commit for the TODO change-set feature (see [[submodule-server-todos]]): stage them (`git add -A --
+  <paths>`, so a deletion stages as one), then `git commit --no-verify -- <paths>` (the host's commit must
+  not run/fail the user's hooks; author/committer stay the user's git config — it's their branch), and
+  return the new sha. **Only the named paths** — never "whatever is dirty now": the caller passes the set
+  it proved belongs to the item (and, being its filtered delta, it never contains `.thinkrail/`), so dirt
+  that appears between the caller's `gitStatus` and this call cannot be swept in, and the user's other
+  staged work stays staged rather than riding along. **The index is preserved across failure:** the index
+  tree is snapshotted (`write-tree`) before staging and restored (`read-tree`) on every failure path, so a
+  skipped commit leaves the user's staging area byte-for-byte as it was — staging succeeds but committing
+  is fallible (an unset identity, an unavailable signing key), and a best-effort feature must not leave
+  the user's next commit carrying files they never staged. An index that **can't** be snapshotted
+  (unmerged entries — a conflicted merge in flight) bails out untouched; a half-merged worktree is nothing
+  to auto-commit anyway. Returns `null` for an empty path set, when those paths had nothing to commit
+  (`git diff --cached --quiet -- <paths>`), or on any git failure — the caller (`todos/artifacts`) treats
+  that as "fall back to path-list artifacts" and never lets it throw. It is the one git primitive that
+  **writes** the user's branch; the caller serializes it per workspace.
   **`gitHeadSha(workspaceId)`** → `string | null` — `rev-parse HEAD` (`null` on an unborn HEAD), recorded
   into the todos baseline sidecar at `in_progress`.
 - **Public surface (barrel):** `git`, `gitAsync`, `gitStatus`, `gitDiffFile`, `readBlobAt`,
-  `gitCommitAll`, `gitHeadSha`, `listCommits`,
+  `gitCommitPaths`, `gitHeadSha`, `listCommits`,
   `resolveDiffRange`, `changedFileArgs`, `diffBaseRef`, `resolveCommitOid`, `DiffRange`, `isSafeRef`,
   `assertSafeRef`, `listBranches`, `resolveDefaultBranch`, `tryCurrentBranch`, `currentBranch`,
   `canonicalPath`, `prefetchBranch`.

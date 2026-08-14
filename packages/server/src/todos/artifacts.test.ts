@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { WORKSPACE_TODOS_DIR } from "@thinkrail/shared/paths";
 import { STORE_DIR, storeRel, TodoStore } from "pi-todos/core";
 import { reconcileChangeArtifacts } from "./artifacts";
-import { readBaselines } from "./baselines";
+import { readBaselines, writeBaselines } from "./baselines";
 
 const SESSION = "sess-artifacts";
 // The store's own file — a git-visible app-state path the reconcile must never attribute as a change.
@@ -69,12 +69,25 @@ test("baselines persist on disk — a fresh process (new read) still sees the wi
 	}
 });
 
-test("no baseline (direct pending→done) falls back to the whole current change set", () => {
+test("no baseline (direct pending→done) reports the current set but NEVER commits it", () => {
 	const { store, root } = tempStore();
 	try {
 		const todo = store.add({ title: "step" });
 		store.update(todo.id, { status: "done" });
-		reconcileChangeArtifacts(store, root, SESSION, () => ["x.ts", "y.ts"]);
+		// With no observed window, every dirty path merely *looks* like this item's work — x.ts/y.ts could be
+		// the user's WIP or a plan that predates the sidecar. Reportable, never committable.
+		let called = false;
+		reconcileChangeArtifacts(
+			store,
+			root,
+			SESSION,
+			() => ["x.ts", "y.ts"],
+			() => {
+				called = true;
+				return { sha: "must-not-happen" };
+			},
+		);
+		expect(called).toBe(false);
 		expect(store.get(todo.id)?.artifacts).toEqual([
 			{ kind: "change", path: "x.ts" },
 			{ kind: "change", path: "y.ts" },
@@ -156,23 +169,174 @@ test("done with no changes beyond the baseline attaches nothing", () => {
 	}
 });
 
-test("done commits the window: attaches one commit artifact — the sha, no denormalized files", () => {
+test("done commits the window: one commit artifact (the sha), and only the item's delta paths", () => {
 	const { store, root } = tempStore();
 	try {
 		const todo = store.add({ title: "step" });
+		store.update(todo.id, { status: "in_progress" });
+		reconcileChangeArtifacts(store, root, SESSION, () => ["already.ts"]); // baseline: foreign dirt
 		store.update(todo.id, { status: "done" });
+		// already.ts went clean again; the item's own work is src/foo.ts. The commit must name exactly that —
+		// not "everything currently dirty" (which is what could absorb another window's work).
+		const seen: string[][] = [];
 		reconcileChangeArtifacts(
 			store,
 			root,
 			SESSION,
 			() => ["src/foo.ts"],
-			() => ({
-				sha: "abc1234def",
-			}),
+			({ paths, title, todoId }) => {
+				seen.push(paths);
+				expect(title).toBe("step");
+				expect(todoId).toBe(todo.id);
+				return { sha: "abc1234def" };
+			},
 		);
+		expect(seen).toEqual([["src/foo.ts"]]);
 		expect(store.get(todo.id)?.artifacts).toEqual([
 			{ kind: "commit", sha: "abc1234def", label: "step" },
 		]);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+// Two items of ONE plan can't overlap — `pi-todos` keeps exactly one `in_progress` (the rest are demoted,
+// and a demoted item's window is dropped). This pins that assumption, since the commit gate leans on it:
+// only *other chats* can share the worktree.
+test("one plan never has two open windows — starting an item demotes the previous one", () => {
+	const { store, root } = tempStore();
+	try {
+		const first = store.add({ title: "first" });
+		const second = store.add({ title: "second" });
+		store.update(first.id, { status: "in_progress" });
+		reconcileChangeArtifacts(store, root, SESSION, () => []);
+		store.update(second.id, { status: "in_progress" });
+		reconcileChangeArtifacts(store, root, SESSION, () => []);
+
+		expect(store.get(first.id)?.status).toBe("pending");
+		expect(Object.keys(readBaselines(root, SESSION))).toEqual([second.id]);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test("commit gate: another CHAT's open window in the same worktree → no commit, path-list fallback", () => {
+	const { store, root } = tempStore();
+	try {
+		// A second chat in this workspace is mid-item: its sidecar records an open window.
+		const sibling = new TodoStore(root, "sess-other");
+		const siblingTodo = sibling.add({ title: "their step" });
+		sibling.update(siblingTodo.id, { status: "in_progress" });
+		reconcileChangeArtifacts(sibling, root, "sess-other", () => []);
+
+		const todo = store.add({ title: "step" });
+		store.update(todo.id, { status: "in_progress" });
+		reconcileChangeArtifacts(store, root, SESSION, () => []);
+		store.update(todo.id, { status: "done" });
+		let called = false;
+		reconcileChangeArtifacts(
+			store,
+			root,
+			SESSION,
+			() => ["mine.ts"],
+			() => {
+				called = true;
+				return { sha: "nope" };
+			},
+		);
+		expect(called).toBe(false);
+		expect(store.get(todo.id)?.artifacts).toEqual([{ kind: "change", path: "mine.ts" }]);
+
+		// Once the other chat's window closes, the same shape commits.
+		sibling.update(siblingTodo.id, { status: "done" });
+		reconcileChangeArtifacts(sibling, root, "sess-other", () => []); // drops its baseline
+		store.update(todo.id, { status: "in_progress" });
+		reconcileChangeArtifacts(store, root, SESSION, () => []);
+		store.update(todo.id, { status: "done" });
+		reconcileChangeArtifacts(
+			store,
+			root,
+			SESSION,
+			() => ["mine.ts"],
+			() => ({ sha: "sha-exclusive" }),
+		);
+		expect(store.get(todo.id)?.artifacts).toEqual([
+			{ kind: "commit", sha: "sha-exclusive", label: "step" },
+		]);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test("commit gate: a window that overlapped another chat is never committed, even after the other closes", () => {
+	const { store, root } = tempStore();
+	try {
+		// Our window opens first, alone — it records itself exclusive…
+		const todo = store.add({ title: "step" });
+		store.update(todo.id, { status: "in_progress" });
+		reconcileChangeArtifacts(store, root, SESSION, () => []);
+		expect(readBaselines(root, SESSION)[todo.id]?.shared).toBeUndefined();
+
+		// …then a second chat starts an item beside it, which retroactively marks ours shared.
+		const sibling = new TodoStore(root, "sess-other");
+		const theirs = sibling.add({ title: "their step" });
+		sibling.update(theirs.id, { status: "in_progress" });
+		reconcileChangeArtifacts(sibling, root, "sess-other", () => []);
+		expect(readBaselines(root, SESSION)[todo.id]?.shared).toBe(true);
+
+		// Their window closes before ours does, so a "nothing open now" check would wave ours through — the
+		// sticky flag is what remembers that the work interleaved.
+		sibling.update(theirs.id, { status: "done" });
+		reconcileChangeArtifacts(sibling, root, "sess-other", () => []);
+		store.update(todo.id, { status: "done" });
+		let called = false;
+		reconcileChangeArtifacts(
+			store,
+			root,
+			SESSION,
+			() => ["a.ts"],
+			() => {
+				called = true;
+				return { sha: "nope" };
+			},
+		);
+		expect(called).toBe(false);
+		expect(store.get(todo.id)?.artifacts).toEqual([{ kind: "change", path: "a.ts" }]);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test("two committable items in one pass: the second's delta is re-read, never the first's committed paths", () => {
+	const { store, root } = tempStore();
+	try {
+		const first = store.add({ title: "first" });
+		const second = store.add({ title: "second" });
+		store.update(first.id, { status: "done" });
+		store.update(second.id, { status: "done" });
+		// Two exclusive windows recorded in earlier passes, both reaching this pass already `done` — the state a
+		// host restart between the two reconciles leaves behind.
+		writeBaselines(root, SESSION, {
+			[first.id]: { paths: [], head: null },
+			[second.id]: { paths: [], head: null },
+		});
+
+		// After the first commit the worktree holds only b.ts; a memo kept across the commit would hand the
+		// second item a.ts as well — i.e. attribute already-committed work to it.
+		let reads = 0;
+		const committed: string[][] = [];
+		reconcileChangeArtifacts(
+			store,
+			root,
+			SESSION,
+			() => (++reads === 1 ? ["a.ts", "b.ts"] : ["b.ts"]),
+			({ paths }) => {
+				committed.push(paths);
+				return { sha: `sha-${committed.length}` };
+			},
+		);
+		expect(reads).toBe(2); // re-read after the commit, not memoized across it
+		expect(committed).toEqual([["a.ts", "b.ts"], ["b.ts"]]);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}
@@ -227,6 +391,8 @@ test("re-done replaces the old commit/change artifacts, keeping the agent's spec
 			title: "step",
 			artifacts: [{ kind: "spec", path: "SPEC.md", specId: "s1" }],
 		});
+		store.update(todo.id, { status: "in_progress" });
+		reconcileChangeArtifacts(store, root, SESSION, () => []); // window (clean start)
 		store.update(todo.id, { status: "done" });
 		reconcileChangeArtifacts(
 			store,
