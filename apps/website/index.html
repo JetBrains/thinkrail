@@ -263,7 +263,7 @@
 			<div class="cols">
 				<!-- ══ Left rail: projects ══ -->
 				<aside class="rail-left" aria-label="Projects">
-					<div class="rail-left-nav" data-mock-hint="Want the real thing?">
+					<div class="rail-left-nav" data-mock-hint="Want the real thing?" data-mock-label="Projects panel — a static mock">
 						<div class="rail-heading">Projects <svg class="i" aria-hidden="true"><use href="#i-plus" /></svg></div>
 						<div class="tree">
 							<div class="tree-row active">
@@ -334,10 +334,14 @@
 							</p>
 							<div class="install-picker install-picker-hero" data-install-picker>
 								<div class="install-frame">
-								<div class="install-tabs" role="tablist" aria-label="Choose your operating system">
-									<button type="button" class="install-tab" role="tab" id="hero-install-macos-tab" aria-controls="hero-install-macos" aria-selected="false" tabindex="-1" data-install-platform="macos">macOS</button>
-									<button type="button" class="install-tab" role="tab" id="hero-install-linux-tab" aria-controls="hero-install-linux" aria-selected="true" data-install-platform="linux">Linux</button>
-									<button type="button" class="install-tab" role="tab" id="hero-install-windows-tab" aria-controls="hero-install-windows" aria-selected="false" tabindex="-1" data-install-platform="windows">Windows</button>
+								<!-- The strip is layout only: a `tablist` may contain nothing but `tab`s, so the OS tabs get
+								     their own tablist and the shell switcher is its sibling, not its child. -->
+								<div class="install-tabs">
+									<div class="install-os-tabs" role="tablist" aria-label="Choose your operating system">
+										<button type="button" class="install-tab" role="tab" id="hero-install-macos-tab" aria-controls="hero-install-macos" aria-selected="false" tabindex="-1" data-install-platform="macos">macOS</button>
+										<button type="button" class="install-tab" role="tab" id="hero-install-linux-tab" aria-controls="hero-install-linux" aria-selected="true" data-install-platform="linux">Linux</button>
+										<button type="button" class="install-tab" role="tab" id="hero-install-windows-tab" aria-controls="hero-install-windows" aria-selected="false" tabindex="-1" data-install-platform="windows">Windows</button>
+									</div>
 									<!-- Windows shell switcher, inline in the tab bar — shown (via JS) only while the Windows tab is active, so switching OS never changes the component height. -->
 									<div class="windows-shell-tabs" role="tablist" aria-label="Choose your Windows shell" hidden>
 										<button type="button" class="windows-shell-tab" role="tab" id="hero-shell-powershell-tab" aria-controls="hero-shell-powershell" aria-selected="true" data-windows-shell="powershell">PowerShell</button>
@@ -655,7 +659,7 @@
 
 				<!-- ══ Right rail: file tree + terminal ══ -->
 				<aside class="rail-right" id="rail-right" aria-label="Files and terminal">
-					<div class="rail-tabs" data-mock-hint="Want the real thing?">
+					<div class="rail-tabs" data-mock-hint="Want the real thing?" data-mock-label="Files and terminal tabs — a static mock">
 						<span class="rail-tab dim" title="In the app: the worktree's spec graph">Specs</span>
 						<span class="rail-tab active">All files</span>
 						<span class="rail-tab dim" title="In the app: the live git diff">Changes</span>
@@ -675,6 +679,9 @@
 					<div class="terminal">
 						<div class="terminal-head">
 							<span class="terminal-label">Terminal</span>
+							<!-- The logo replay is also bound to a click anywhere on the terminal; this is the
+							     discoverable, keyboard-reachable affordance for it. -->
+							<button type="button" class="term-replay" data-term-replay hidden>Replay logo</button>
 						</div>
 						<pre class="term-screen" id="term-screen"><span class="term-line"><span class="term-prompt">❯</span> curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash</span><span class="term-out">⬇ thinkrail latest (macos-arm64) · sha256 verified ✓
 ✓ installed — starting ThinkRail …</span></pre>

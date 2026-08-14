@@ -2,6 +2,7 @@
 // complete with JS disabled, and every animation is gated on prefers-reduced-motion.
 
 import { initAnalytics } from "./analytics";
+import { deriveEditorTabs } from "./editorTabs";
 import { initGtm } from "./gtm";
 import { detectInstallPlatform, type InstallPlatform } from "./installPlatform";
 
@@ -26,21 +27,23 @@ const tabstrip = document.querySelector<HTMLElement>(".tabstrip");
 const tabRows: HTMLAnchorElement[] = [];
 
 if (tabstrip) {
-	// The tree is hierarchical and may point several rows at the same section (e.g. a FEATURES parent
-	// and its first child both target #worktrees). The tab strip holds exactly ONE navigational tab per
-	// unique section target, so scroll-spy can only ever light one tab per section — first row wins.
-	const seenTargets = new Set<string>();
-	for (const row of treeRows) {
-		const href = row.getAttribute("href");
-		if (!href || seenTargets.has(href)) continue;
-		seenTargets.add(href);
+	// One tab per unique target — see `deriveEditorTabs`, which owns that rule and is tested.
+	const iconFor = new Map(
+		treeRows.map((row) => [row.getAttribute("href"), row.querySelector("svg.i")] as const),
+	);
+	for (const { href, label } of deriveEditorTabs(
+		treeRows.map((row) => ({
+			href: row.getAttribute("href"),
+			label: row.textContent?.trim() ?? "",
+		})),
+	)) {
 		const tab = document.createElement("a");
 		tab.className = "tab";
 		tab.href = href;
 		// Copy the row's leading icon (SVG sprite) so tabs match the tree glyphs.
-		const icon = row.querySelector("svg.i");
+		const icon = iconFor.get(href);
 		if (icon) tab.appendChild(icon.cloneNode(true));
-		tab.appendChild(document.createTextNode(row.textContent?.trim() ?? ""));
+		tab.appendChild(document.createTextNode(label));
 		tabstrip.appendChild(tab);
 		tabRows.push(tab);
 	}
@@ -235,11 +238,25 @@ if (terminal && termScreen) {
 		animating = false;
 	};
 
+	// The logo's font size is derived from the rail's width, so a resize has to re-derive it or the
+	// banner stays sized for the old width (the rail is a drawer under 1180px).
+	window.addEventListener("resize", fitLogo);
+
 	terminal.addEventListener("click", () => {
 		void replayLogo();
 	});
+	// The click-anywhere replay is pointer-only and invisible; the head button is the keyboard-reachable,
+	// discoverable version of it. Revealed once the install sequence has finished, since that is exactly
+	// when `replayLogo` starts accepting input.
+	const replayButton = terminal.querySelector<HTMLButtonElement>("[data-term-replay]");
+	replayButton?.addEventListener("click", (event) => {
+		event.stopPropagation(); // The terminal's own handler would otherwise fire it twice.
+		void replayLogo();
+	});
 	onInstallSelection((selection) => {
-		void runInstall(selection);
+		void runInstall(selection).then(() => {
+			if (replayButton && initialDone) replayButton.hidden = false;
+		});
 	});
 }
 
@@ -617,7 +634,6 @@ if (mockElements.length > 0) {
 	const titlebar = document.querySelector(".titlebar");
 	const railRight = document.getElementById("rail-right");
 	const railLeft = document.querySelector(".rail-left");
-	const statusbar = document.querySelector(".statusbar");
 
 	const positionTooltip = (trigger: HTMLElement) => {
 		const triggerRect = trigger.getBoundingClientRect();
@@ -628,28 +644,19 @@ if (mockElements.length > 0) {
 		let left: number;
 		let top: number;
 
-		// Customize placement per region
-		const isTopRegion =
-			trigger.classList.contains("tabstrip") || trigger.classList.contains("rail-tabs");
-		if (isTopRegion && titlebar && railRight) {
-			// Right rail: RAIL_OFFSET below the header, RAIL_OFFSET left of the right rail's edge.
+		// Placement per region. Only `.rail-tabs` and `.rail-left-nav` carry a hint; both anchor to their
+		// panel's live edge so the callout sits in the header/panel corner rather than inside the content.
+		if (trigger.classList.contains("rail-tabs") && titlebar && railRight) {
 			const titlebarRect = titlebar.getBoundingClientRect();
 			const railRect = railRight.getBoundingClientRect();
 			left = railRect.left - tooltipRect.width - RAIL_OFFSET;
 			top = titlebarRect.bottom + RAIL_OFFSET;
 		} else if (trigger.classList.contains("rail-left-nav") && titlebar && railLeft) {
-			// Left Projects/sidebar panel: the mirror of the right-rail placement — RAIL_OFFSET below the
-			// header, RAIL_OFFSET to the RIGHT of the left rail's edge, so it sits in the header/left-panel
-			// corner instead of floating inside the content. Anchored to the live panel boundary.
+			// The mirror of the above, offset to the RIGHT of the left rail's edge.
 			const titlebarRect = titlebar.getBoundingClientRect();
 			const railLeftRect = railLeft.getBoundingClientRect();
 			left = railLeftRect.right + RAIL_OFFSET;
 			top = titlebarRect.bottom + RAIL_OFFSET;
-		} else if (trigger.classList.contains("term-screen") && statusbar) {
-			// Terminal: to the left of terminal, RAIL_OFFSET above the statusbar.
-			const statusbarRect = statusbar.getBoundingClientRect();
-			left = triggerRect.left - tooltipRect.width - RAIL_OFFSET;
-			top = statusbarRect.top - tooltipRect.height - RAIL_OFFSET;
 		} else {
 			// Left sidebar and others: right of trigger (original behavior)
 			left = triggerRect.right + GAP;
@@ -716,7 +723,13 @@ if (mockElements.length > 0) {
 		// closes (below). Pointer behaviour and positioning are unchanged.
 		el.tabIndex = 0;
 		el.setAttribute("role", "button");
-		el.setAttribute("aria-haspopup", "dialog");
+		// The name is applied WITH the role, not in the markup: a bare `<div>` does not support
+		// `aria-label`, and the button only exists once this script runs. Without it, a `role="button"`
+		// wrapping a whole panel is announced as its entire flattened subtree.
+		const label = el.dataset.mockLabel;
+		if (label) el.setAttribute("aria-label", label);
+		// No `aria-haspopup`: the popup is a `tooltip`, which is not one of its allowed values.
+		// `aria-expanded` + `aria-describedby` (set on open) are the disclosure contract.
 		el.setAttribute("aria-expanded", "false");
 		el.setAttribute("aria-controls", tooltip.id);
 		const toggle = () => {
@@ -751,5 +764,11 @@ if (mockElements.length > 0) {
 			hideTooltip();
 			trigger.focus();
 		}
+	});
+
+	// The callout is click-persistent and anchored to live panel edges, so a resize (or the right rail
+	// becoming a drawer under 1180px) would otherwise strand it at a stale position.
+	window.addEventListener("resize", () => {
+		if (currentTarget) positionTooltip(currentTarget);
 	});
 }

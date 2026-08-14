@@ -29,7 +29,6 @@
 
 	/* dark (the app's default) */
 	--chrome: #171719;
-	--editor-bg: #171719;
 	/* The workspace/content surface (app semantic token container-workspace-bg = --background).
 	   The central body and the active tabs share it so active tabs merge into the content. */
 	--container-workspace-bg: #09090b;
@@ -77,7 +76,6 @@
 
 [data-theme="darcula"] {
 	--chrome: #3c3f41;
-	--editor-bg: #2b2b2b;
 	--container-workspace-bg: #3c3f41;
 	--container-header-bg: #2b2b2b;
 	--elevated: #45494a;
@@ -101,7 +99,6 @@
 
 [data-theme="light"] {
 	--chrome: #f2f3f5;
-	--editor-bg: #ffffff;
 	--container-workspace-bg: #ffffff;
 	/* Surrounding-interface surface (inactive tabs): a touch off the white central body so the
 	   active tab (= workspace bg) reads distinct from inactive ones, as on the dark theme. */
@@ -155,7 +152,6 @@
 
 [data-theme="gruvbox"] {
 	--chrome: #282828;
-	--editor-bg: #1d2021;
 	--container-workspace-bg: #282828;
 	--container-header-bg: #1d2021;
 	--elevated: #3c3836;
@@ -779,7 +775,7 @@ code {
 	font-family: var(--font-mono);
 	font-size: 13px;
 	line-height: 1.7;
-	background: color-mix(in srgb, var(--elevated) 55%, var(--editor-bg));
+	background: color-mix(in srgb, var(--elevated) 55%, var(--container-workspace-bg));
 	border: 1px solid var(--border2);
 	border-radius: 4px;
 	padding: 16px 18px;
@@ -958,6 +954,12 @@ html.install-tabs-ready .install-tabs {
 	   bottom divider; the active tab overlaps it (below) to merge into the command block. */
 	background: var(--container-header-bg);
 	border-bottom: 1px solid var(--border);
+}
+
+/* The OS tabs' own `role="tablist"` — a sibling of the shell switcher, not its parent. */
+html.install-tabs-ready .install-os-tabs {
+	display: flex;
+	align-items: stretch;
 }
 
 .install-tab {
@@ -1182,7 +1184,7 @@ p.hero-platforms {
 	border: 1px solid var(--border2);
 	border-radius: 4px;
 	padding: 16px 18px;
-	background: color-mix(in srgb, var(--elevated) 40%, var(--editor-bg));
+	background: color-mix(in srgb, var(--elevated) 40%, var(--container-workspace-bg));
 }
 
 .feature-card h3 {
@@ -1207,7 +1209,7 @@ p.hero-platforms {
 	position: relative;
 	border: 1px solid var(--border2);
 	border-radius: 4px;
-	background: color-mix(in srgb, var(--elevated) 30%, var(--editor-bg));
+	background: color-mix(in srgb, var(--elevated) 30%, var(--container-workspace-bg));
 	padding: 20px;
 	margin: 22px 0;
 	display: flex;
@@ -1587,6 +1589,24 @@ p.footer-fineprint {
 	color: var(--hint);
 }
 
+/* Keyboard-reachable trigger for the logo replay (the click-anywhere binding is pointer-only). */
+.term-replay:not([hidden]) {
+	margin-left: auto;
+	padding: 2px 8px;
+	border: 1px solid var(--border2);
+	border-radius: 4px;
+	background: transparent;
+	color: var(--muted);
+	font-family: var(--font-mono);
+	font-size: 10.5px;
+	cursor: pointer;
+}
+
+.term-replay:hover {
+	color: var(--text);
+	background: var(--hover);
+}
+
 .terminal-tab {
 	font-size: 11.5px;
 	padding: 3px 10px;
@@ -1926,6 +1946,11 @@ html:not(.anim) .term-caret {
 		flex-wrap: wrap;
 		height: auto;
 		min-height: 44px;
+	}
+
+	/* The OS-tab group fills row 1 (the switcher wraps below), so its tabs can share the width. */
+	html.install-tabs-ready .install-os-tabs {
+		flex: 1;
 	}
 
 	.install-tab {
