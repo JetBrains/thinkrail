@@ -1,7 +1,7 @@
 {
 	"$schema": "./colors.schema.json",
 	"metadata": {
-		"version": "1.0.0",
+		"version": "1.1.0",
 		"note": "The semantic colour layer. Palettes live in themes/bundled/*.theme.json; this file says what each palette entry is FOR, and is the only place a derivation is written. A role's `from` names a theme manifest key; the CSS variable that key writes to is derived (kebab-case), not tabulated. See COLOR.md."
 	},
 
@@ -48,6 +48,11 @@
 		"control-bg-hovered": { "from": "hover", "publish": true },
 		"control-bg-selected": { "from": "hover", "publish": true },
 		"control-primary-bg": { "from": "accent", "publish": true },
+		"control-primary-bg-hovered": {
+			"from": "accentHover",
+			"publish": true,
+			"note": "the primary button's hover fill — its own manifest key so a theme owns the hover step instead of the button fading with an opacity utility"
+		},
 		"control-primary-text": { "from": "onAccent", "publish": true },
 		"control-border-default": { "from": "border", "publish": true },
 		"control-border-active": { "from": "borderStrong", "publish": true },

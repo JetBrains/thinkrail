@@ -30,7 +30,10 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   idempotent, cross-project cwd reuse is rejected; persist + emit `created` with `kind: "external"`, a
   directory-basename display name, `renamed: true`, and the repo default as its initial review target —
   **no Git or checkout mutation**), `createWorkspace` (**async**; off `baseRef` when given — branched with `worktree add -b`, never a detached
-  remote checkout; off the repo `HEAD` otherwise; **remote-ref freshness is prefetched off this critical
+  remote checkout, and **`--no-track`**: a remote-tracking base would otherwise become the new branch's
+  upstream (git's `autoSetupMerge` default), aiming the workspace terminal's `git push`/`git pull` at the
+  *base* branch — the workspace branch's upstream is the user's to set on first push, never ours;
+  off the repo `HEAD` otherwise; **remote-ref freshness is prefetched off this critical
   path** — the New-Workspace dialog `git.prefetch`es the base in the background, so create only `git
   fetch`es as a cheap fallback when the local remote-tracking ref is missing entirely — that fallback runs
   via `gitAsync` (network must not block the event loop) with the branch passed after `--`;

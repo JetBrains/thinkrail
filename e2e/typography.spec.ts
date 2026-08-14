@@ -7,7 +7,7 @@ import {
 	visibleTerminalScreen,
 	waitTerminalReady,
 } from "./fixtures/app";
-import { CODE_FACE, INTERFACE_FACE } from "./fixtures/typography";
+import { BRAND_FACE, CODE_FACE, INTERFACE_FACE } from "./fixtures/typography";
 
 /**
  * Computed-style verification: the generated typography actually renders on the real surfaces, and the
@@ -48,11 +48,11 @@ async function typeOf(locator: import("@playwright/test").Locator): Promise<Type
 test("welcome hero renders the generated brand style", async ({ page }) => {
 	await openAppFresh(page);
 	await openFixtureProject(page);
-	expect(await typeOf(page.getByTestId("welcome-title"))).toMatchObject({
-		size: "44px",
-		weight: "800",
-		lineHeight: "55px",
-	});
+	// The welcome hero is the brand/display face (Orbitron @ 400); assert the family too so the brand
+	// typography stays pinned now that the header wordmark is an inline SVG rather than live text.
+	const welcomeTitle = await typeOf(page.getByTestId("welcome-title"));
+	expect(welcomeTitle).toMatchObject({ size: "44px", weight: "400", lineHeight: "55px" });
+	expect(welcomeTitle.family).toMatch(BRAND_FACE);
 });
 
 test("dialog title and card title share one typography", async ({ page }) => {

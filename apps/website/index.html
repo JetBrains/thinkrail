@@ -189,9 +189,24 @@
 				<path d="M22 4h-4" />
 				<circle cx="4" cy="20" r="2" />
 			</symbol>
-			<symbol id="i-corner-down-right" viewBox="0 0 24 24">
-				<path d="m15 10 5 5-5 5" />
-				<path d="M4 4v7a4 4 0 0 0 4 4h12" />
+			<symbol id="i-git-branch" viewBox="0 0 24 24">
+				<path d="M15 6a9 9 0 0 0-9 9V3" />
+				<circle cx="18" cy="6" r="3" />
+				<circle cx="6" cy="18" r="3" />
+			</symbol>
+			<symbol id="i-square-pen" viewBox="0 0 24 24">
+				<path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+				<path d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z" />
+			</symbol>
+			<symbol id="i-message-square" viewBox="0 0 24 24">
+				<path d="M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z" />
+			</symbol>
+			<symbol id="i-file-text" viewBox="0 0 24 24">
+				<path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z" />
+				<path d="M14 2v5a1 1 0 0 0 1 1h5" />
+				<path d="M10 9H8" />
+				<path d="M16 13H8" />
+				<path d="M16 17H8" />
 			</symbol>
 			<symbol id="i-blocks" viewBox="0 0 24 24">
 				<path d="M10 22V7a1 1 0 0 0-1-1H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5a1 1 0 0 0-1-1H2" />
@@ -209,7 +224,7 @@
 		<div class="window">
 			<!-- ══ Title bar ══ -->
 			<header class="titlebar">
-				<span class="wordmark">ThinkRail</span>
+				<span class="wordmark-logo" aria-hidden="true"><svg viewBox="0 0 556.36 449.2" fill="currentColor" aria-hidden="true"><path d="m 460.1 294.06 l -2.04 -3.26 c 7.4 -6.37 13.71 -13.31 18.99 -20.72 c 15.49 -21.7 22.25 -47.43 22.13 -74.72 l -0.07 -15.38 c 0.64 -6.21 0.89 -9.98 0.89 -9.98 l -0.02 -71.65 c -0.02 -54.32 -44.07 -98.35 -98.39 -98.35 h -61.59 v 31.11 c 0 4.91 3.98 8.89 8.89 8.89 l 50.02 0.78 c 34.18 0.39 61.81 27.98 62.22 62.17 l 1.07 88.19 c 0.43 28.75 -0.16 67.01 -62.89 86.49 l 104.13 171.57 h 52.92 l -55.98 -90.56 Z m -85.96 -44.06 c 30.95 0 56.02 -25.11 55.98 -56.05 l -0.12 -82.65 c 0 -22.81 -18.49 -41.3 -41.3 -41.3 h -208.7 v 31.775 c 0 4.543 3.682 8.225 8.225 8.225 h 186.645 c 8.356 0 15.13 6.774 15.13 15.13 v 63.87 c 0 9.542 -7.808 17.35 -17.35 17.35 h -60.79 c -57.12 0 -81.27 15.75 -88.22 21.54 c -0.9 0.76 -2.28 0.12 -2.29 -1.07 l -0.921 -79.961 c -0.044 -3.801 -3.138 -6.859 -6.938 -6.859 h -33.491 v 309.2 h 40 v -127.96 c 0 -43.97 24.37 -71.24 79.74 -71.24 Z m -233.57 -180 h -140.57 v 40 h 110 v 339.2 h 40 v -369.77 c 0 -5.21 -4.22 -9.43 -9.43 -9.43 Z m 169.43 -38.12 v -31.88 h -310 v 40 h 301.88 c 4.49 0 8.12 -3.64 8.12 -8.12 Z m 41.9 248.12 h -63.24 c -21.87 0 -39.61 17.74 -39.61 39.61 v 129.59 h 40.06 l 0.62 -108.59 c 0.06 -11.4 9.32 -20.61 20.72 -20.61 h 23.39 c 3.84 0 7.42 1.95 9.5 5.18 l 79.72 124.02 h 45.34 l -96.56 -158.01 c -4.25 -6.95 -11.8 -11.19 -19.94 -11.19 Z" /></svg></span>
 				<div class="scope">
 					<span class="scope-crumbs">
 						<span class="scope-project">thinkrail</span>
@@ -248,7 +263,7 @@
 			<div class="cols">
 				<!-- ══ Left rail: projects ══ -->
 				<aside class="rail-left" aria-label="Projects">
-					<div class="rail-left-nav" data-mock-hint="The real experience starts inside the app.">
+					<div class="rail-left-nav" data-mock-hint="Want the real thing?" data-mock-label="Projects panel — a static mock">
 						<div class="rail-heading">Projects <svg class="i" aria-hidden="true"><use href="#i-plus" /></svg></div>
 						<div class="tree">
 							<div class="tree-row active">
@@ -297,14 +312,9 @@
 
 				<!-- ══ Center: tab strip + the scrolling "editor" ══ -->
 				<div class="center">
-					<nav class="tabstrip" aria-label="Editor tabs" data-mock-hint="The real experience starts inside the app.">
-						<span class="tab active"><svg class="i" aria-hidden="true"><use href="#i-file" /></svg>README.md<i class="tab-x"></i></span>
-						<span class="tab"><svg class="i" aria-hidden="true"><use href="#i-file" /></svg>CHANGELOG.md<i class="tab-x"></i></span>
-						<span class="tab"><svg class="i" aria-hidden="true"><use href="#i-file" /></svg>diff.patch<i class="tab-x"></i></span>
-						<span class="tab"><svg class="i" aria-hidden="true"><use href="#i-book" /></svg>SPEC.md<i class="tab-x"></i></span>
-						<span class="tab"><svg class="i" aria-hidden="true"><use href="#i-file" /></svg>architecture.md<i class="tab-x"></i></span>
-						<span class="tab"><svg class="i" aria-hidden="true"><use href="#i-file" /></svg>session.tsx<i class="tab-x"></i></span>
-					</nav>
+					<!-- Editor tabs mirror the right-rail file tree (Table of Contents). JS fills
+					     them from `.filetree a.ft-row` so the two nav lists can never drift. -->
+					<nav class="tabstrip" aria-label="Editor tabs"></nav>
 
 					<main class="editor" id="editor-scroll" aria-label="Page content">
 						<!-- ── README.md ─ hero ── -->
@@ -323,19 +333,21 @@
 								intent lives in a <strong>spec graph the agent actually reads</strong>.
 							</p>
 							<div class="install-picker install-picker-hero" data-install-picker>
-								<div class="install-tabs" role="tablist" aria-label="Choose your operating system">
-									<button type="button" class="install-tab" role="tab" id="hero-install-macos-tab" aria-controls="hero-install-macos" aria-selected="false" tabindex="-1" data-install-platform="macos">
-										macOS
-										<span class="detected-marker" data-detected-platform="macos" hidden><span class="detected-dot" aria-hidden="true"></span><span class="detected-label">detected</span></span>
-									</button>
-									<button type="button" class="install-tab" role="tab" id="hero-install-linux-tab" aria-controls="hero-install-linux" aria-selected="true" data-install-platform="linux">
-										Linux
-										<span class="detected-marker" data-detected-platform="linux" hidden><span class="detected-dot" aria-hidden="true"></span><span class="detected-label">detected</span></span>
-									</button>
-									<button type="button" class="install-tab" role="tab" id="hero-install-windows-tab" aria-controls="hero-install-windows" aria-selected="false" tabindex="-1" data-install-platform="windows">
-										Windows
-										<span class="detected-marker" data-detected-platform="windows" hidden><span class="detected-dot" aria-hidden="true"></span><span class="detected-label">detected</span></span>
-									</button>
+								<div class="install-frame">
+								<!-- The strip is layout only: a `tablist` may contain nothing but `tab`s, so the OS tabs get
+								     their own tablist and the shell switcher is its sibling, not its child. -->
+								<div class="install-tabs">
+									<div class="install-os-tabs" role="tablist" aria-label="Choose your operating system">
+										<button type="button" class="install-tab" role="tab" id="hero-install-macos-tab" aria-controls="hero-install-macos" aria-selected="false" tabindex="-1" data-install-platform="macos">macOS</button>
+										<button type="button" class="install-tab" role="tab" id="hero-install-linux-tab" aria-controls="hero-install-linux" aria-selected="true" data-install-platform="linux">Linux</button>
+										<button type="button" class="install-tab" role="tab" id="hero-install-windows-tab" aria-controls="hero-install-windows" aria-selected="false" tabindex="-1" data-install-platform="windows">Windows</button>
+									</div>
+									<!-- Windows shell switcher, inline in the tab bar — shown (via JS) only while the Windows tab is active, so switching OS never changes the component height. -->
+									<div class="windows-shell-tabs" role="tablist" aria-label="Choose your Windows shell" hidden>
+										<button type="button" class="windows-shell-tab" role="tab" id="hero-shell-powershell-tab" aria-controls="hero-shell-powershell" aria-selected="true" data-windows-shell="powershell">PowerShell</button>
+										<button type="button" class="windows-shell-tab" role="tab" id="hero-shell-cmd-tab" aria-controls="hero-shell-cmd" aria-selected="false" tabindex="-1" data-windows-shell="cmd">Command Prompt</button>
+										<button type="button" class="windows-shell-tab" role="tab" id="hero-shell-wsl-tab" aria-controls="hero-shell-wsl" aria-selected="false" tabindex="-1" data-windows-shell="wsl">WSL</button>
+									</div>
 								</div>
 								<div class="install-panel" id="hero-install-macos" role="tabpanel" aria-labelledby="hero-install-macos-tab" data-install-panel="macos">
 									<p class="install-fallback-heading">macOS</p>
@@ -360,11 +372,6 @@
 								<div class="install-panel" id="hero-install-windows" role="tabpanel" aria-labelledby="hero-install-windows-tab" data-install-panel="windows">
 									<p class="install-fallback-heading">Windows</p>
 									<div class="windows-shell-picker">
-										<div class="windows-shell-tabs" role="tablist" aria-label="Choose your Windows shell">
-											<button type="button" class="windows-shell-tab" role="tab" id="hero-shell-powershell-tab" aria-controls="hero-shell-powershell" aria-selected="true" data-windows-shell="powershell">PowerShell</button>
-											<button type="button" class="windows-shell-tab" role="tab" id="hero-shell-cmd-tab" aria-controls="hero-shell-cmd" aria-selected="false" tabindex="-1" data-windows-shell="cmd">Command Prompt</button>
-											<button type="button" class="windows-shell-tab" role="tab" id="hero-shell-wsl-tab" aria-controls="hero-shell-wsl" aria-selected="false" tabindex="-1" data-windows-shell="wsl">WSL</button>
-										</div>
 										<div class="windows-shell-panel" id="hero-shell-powershell" role="tabpanel" aria-labelledby="hero-shell-powershell-tab" data-windows-shell-panel="powershell">
 											<p class="install-fallback-heading">PowerShell</p>
 											<div class="install-line">
@@ -397,7 +404,7 @@
 										</div>
 									</div>
 								</div>
-								<p class="install-detection-note" data-install-detection-note>Choose your OS. You can switch at any time.</p>
+								</div>
 							</div>
 							<p class="hero-platforms">
 								One self-contained binary. macOS (Apple Silicon) · Linux arm64 / x64 · Windows x64.
@@ -652,7 +659,7 @@
 
 				<!-- ══ Right rail: file tree + terminal ══ -->
 				<aside class="rail-right" id="rail-right" aria-label="Files and terminal">
-					<div class="rail-tabs" data-mock-hint="The real experience starts inside the app.">
+					<div class="rail-tabs" data-mock-hint="Want the real thing?" data-mock-label="Files and terminal tabs — a static mock">
 						<span class="rail-tab dim" title="In the app: the worktree's spec graph">Specs</span>
 						<span class="rail-tab active">All files</span>
 						<span class="rail-tab dim" title="In the app: the live git diff">Changes</span>
@@ -662,19 +669,22 @@
 						<a class="ft-row file" href="#readme"><svg class="i" aria-hidden="true"><use href="#i-file" /></svg>README.md</a>
 						<a class="ft-row file depth-1" href="#why"><svg class="i" aria-hidden="true"><use href="#i-circle-help" /></svg>WHY ThinkRail</a>
 						<a class="ft-row file depth-1" href="#worktrees"><svg class="i" aria-hidden="true"><use href="#i-blocks" /></svg>FEATURES</a>
-						<a class="ft-row file depth-2" href="#worktrees"><svg class="i" aria-hidden="true"><use href="#i-corner-down-right" /></svg>worktrees</a>
-						<a class="ft-row file depth-2" href="#editor"><svg class="i" aria-hidden="true"><use href="#i-corner-down-right" /></svg>editor</a>
-						<a class="ft-row file depth-2" href="#agent-chat"><svg class="i" aria-hidden="true"><use href="#i-corner-down-right" /></svg>agent-chat</a>
-						<a class="ft-row file depth-2" href="#specs"><svg class="i" aria-hidden="true"><use href="#i-corner-down-right" /></svg>specs</a>
+						<a class="ft-row file depth-2" href="#worktrees"><svg class="i" aria-hidden="true"><use href="#i-git-branch" /></svg>worktrees</a>
+						<a class="ft-row file depth-2" href="#editor"><svg class="i" aria-hidden="true"><use href="#i-square-pen" /></svg>editor</a>
+						<a class="ft-row file depth-2" href="#agent-chat"><svg class="i" aria-hidden="true"><use href="#i-message-square" /></svg>agent-chat</a>
+						<a class="ft-row file depth-2" href="#specs"><svg class="i" aria-hidden="true"><use href="#i-file-text" /></svg>specs</a>
 						<a class="ft-row file depth-1" href="#install"><svg class="i" aria-hidden="true"><use href="#i-square-terminal" /></svg>INSTALL</a>
 						<a class="ft-row file depth-1" href="#contributing"><svg class="i" aria-hidden="true"><use href="#i-git-pull-request" /></svg>CONTRIBUTING</a>
 					</nav>
 					<div class="terminal">
 						<div class="terminal-head">
 							<span class="terminal-label">Terminal</span>
+							<!-- The logo replay is also bound to a click anywhere on the terminal; this is the
+							     discoverable, keyboard-reachable affordance for it. -->
+							<button type="button" class="term-replay" data-term-replay hidden>Replay logo</button>
 						</div>
-						<pre class="term-screen" id="term-screen" data-mock-hint="The real experience starts inside the app."><span class="term-line"><span class="term-prompt">❯</span> <span class="term-cmd" data-type="curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash"></span><span class="term-caret"></span></span><span class="term-out" data-out>⬇ thinkrail latest (macos-arm64) · sha256 verified ✓
-✓ installed: ~/.local/bin/thinkrail</span><span class="term-line" data-out><span class="term-prompt">❯</span> <span class="term-cmd2">thinkrail</span></span><span class="term-out" data-out>opening http://localhost:24242 …</span></pre>
+						<pre class="term-screen" id="term-screen"><span class="term-line"><span class="term-prompt">❯</span> curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash</span><span class="term-out">⬇ thinkrail latest (macos-arm64) · sha256 verified ✓
+✓ installed — starting ThinkRail …</span></pre>
 					</div>
 				</aside>
 				<div class="rail-backdrop" id="rail-backdrop" hidden></div>

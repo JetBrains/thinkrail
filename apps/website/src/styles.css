@@ -11,6 +11,7 @@
 @import "@fontsource-variable/geist/wght-italic.css";
 @import "@fontsource-variable/jetbrains-mono";
 @import "@fontsource-variable/jetbrains-mono/wght-italic.css";
+@import "@fontsource-variable/orbitron";
 
 /* ── Theme palettes ─────────────────────────────────────────────────────── */
 
@@ -18,13 +19,22 @@
 	--font-sans: "Geist Variable", "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 	--font-mono:
 		"JetBrains Mono Variable", "JetBrains Mono", "Fira Code", "SF Mono", "Cascadia Code", monospace;
-	/* The display role, mirroring the app's `brand` family — an alias of the interface face, not a
-	   second typeface. */
-	--font-display: var(--font-sans);
+	/* The display role, mirroring the app's `brand` family — Orbitron (self-hosted above), a distinct
+	   display face used by the brand elements (wordmark + hero heading). Orbitron is latin-only, so the
+	   next fallback is the interface face (Geist) rather than a system font, matching the app.
+	   See src/fonts.test.ts (kept in step with apps/web/src/styles/typography.json). */
+	--font-display:
+		"Orbitron Variable", "Orbitron", "Geist Variable", "Geist", -apple-system, BlinkMacSystemFont,
+		"Segoe UI", sans-serif;
 
 	/* dark (the app's default) */
 	--chrome: #171719;
-	--editor-bg: #171719;
+	/* The workspace/content surface (app semantic token container-workspace-bg = --background).
+	   The central body and the active tabs share it so active tabs merge into the content. */
+	--container-workspace-bg: #09090b;
+	/* The header/tab-strip surface (app semantic token container-header-bg = --header). Inactive
+	   tabs and the empty tab-bar space read as this; the active tab uses --container-workspace-bg. */
+	--container-header-bg: #18181b;
 	--elevated: #2b2d30;
 	--hover: #393b40;
 	--input: #272830;
@@ -33,10 +43,20 @@
 	--text: #dfe1e5;
 	--muted: #a8adb5;
 	--hint: #71757c;
-	--accent: #8c81ff;
-	--on-accent: #000000;
-	--bubble: #6b57ff;
-	--green: #6ad859;
+	--accent: #8dff4f;
+	--on-accent: #0a0a0a;
+	--green: #41cb66;
+	/* Link color token: primary at 60% opacity — a touch darker than the bright primary on the
+	   dark surfaces (light theme keeps the full, already-dark accent below). */
+	--link: color-mix(in srgb, var(--accent) 60%, transparent);
+	/* Focus ring. Declared here so `var(--accent)` resolves against the ROOT accent: per-theme, but out
+	   of reach of `.hero`'s override — which rendered a 1.27:1 ring on white. Same mechanism as --link. */
+	--focus-ring: var(--accent);
+	/* Primary button = a shared, theme-independent brand constant (mirrors the app's
+	   control-primary-* tokens); defined once here so every theme inherits it. */
+	--control-primary-bg: #8dff4f;
+	--control-primary-bg-hovered: #59d915;
+	--control-primary-text: #0a0a0a;
 	--gold: #ffd54b;
 	--red: #ff4b75;
 	--blue: #6ac8ff;
@@ -54,18 +74,21 @@
 	color-scheme: dark;
 }
 
+/* `--elevated`, `--text`, `--muted` and `--hint` here had drifted from the app manifest, which put
+   `--text` on `--elevated` (the mock callout) at 4.46:1. Resynced to the app's values. */
 [data-theme="darcula"] {
 	--chrome: #3c3f41;
-	--editor-bg: #2b2b2b;
-	--elevated: #45494a;
+	--container-workspace-bg: #3c3f41;
+	--container-header-bg: #2b2b2b;
+	--elevated: #3c3f41;
 	--hover: #4c5052;
 	--input: #45494a;
 	--border: #323232;
 	--border2: #4b4f52;
-	--text: #a9b7c6;
-	--muted: #9fabb5;
-	--hint: #8b959e;
-	--accent: #8c81ff;
+	--text: #abb9c7;
+	--muted: #aeb8c1;
+	--hint: #969fa7;
+	--accent: #8dff4f;
 	--sx-kw: #cc7832;
 	--sx-str: #6a8759;
 	--sx-num: #6897bb;
@@ -78,7 +101,10 @@
 
 [data-theme="light"] {
 	--chrome: #f2f3f5;
-	--editor-bg: #ffffff;
+	--container-workspace-bg: #ffffff;
+	/* Surrounding-interface surface (inactive tabs): a touch off the white central body so the
+	   active tab (= workspace bg) reads distinct from inactive ones, as on the dark theme. */
+	--container-header-bg: #f2f3f5;
 	--elevated: #ffffff;
 	--hover: #e9eaee;
 	--input: #ffffff;
@@ -87,7 +113,15 @@
 	--text: #1a1a1e;
 	--muted: #5a5f6a;
 	--hint: #667085;
-	--accent: #6b57ff;
+	--accent: #2e7d16;
+	/* Foreground ON the accent fill (`.skip-link`, `.send-btn`). The root value is for the bright dark
+	   accent; near-black on this dark green is 3.8:1, so light takes white (5.2:1) as the app does. */
+	--on-accent: #ffffff;
+	/* The light accent is already dark/readable; links use it at full strength (60% would be too faint on white). */
+	--link: var(--accent);
+	/* `--green` is a FOREGROUND here (done/activity icons, the +N badge), so it takes the light theme's
+	   own success value rather than the dark-theme #41cb66 — which reads 2.1:1 on white. Copied from
+	   `apps/web/src/themes/bundled/light.theme.json`, like the rest of this block. */
 	--green: #1a7f37;
 	--gold: #946300;
 	--red: #d02533;
@@ -104,14 +138,27 @@
 	color-scheme: light;
 }
 
-/* Hero uses the same brand violet in both themes */
+/* Hero keeps the same brand accent in both light and dark themes */
 [data-theme="light"] .hero {
-	--accent: #8c81ff;
+	--accent: #8dff4f;
+}
+
+/* Light theme: the hero logo (title) uses dark-primary (--control-primary-bg-hovered = #59d915)
+   instead of the hero's light-primary accent. */
+[data-theme="light"] .hero-title {
+	--accent: var(--control-primary-bg-hovered);
+}
+
+/* Light theme: the JetBrains InnovationHub tag is black (text-default) with no background fill. */
+[data-theme="light"] .hero-kicker .pill-accent {
+	--accent: var(--text);
+	background: transparent;
 }
 
 [data-theme="gruvbox"] {
 	--chrome: #282828;
-	--editor-bg: #1d2021;
+	--container-workspace-bg: #282828;
+	--container-header-bg: #1d2021;
 	--elevated: #3c3836;
 	--hover: #504945;
 	--input: #3c3836;
@@ -120,9 +167,8 @@
 	--text: #ebdbb2;
 	--muted: #a89984;
 	--hint: #928374;
-	--accent: #fe8019;
-	--bubble: #fe8019;
-	--green: #b8bb26;
+	--accent: #8dff4f;
+	--green: #41cb66;
 	--gold: #fabd2f;
 	--red: #fb4934;
 	--blue: #83a598;
@@ -182,7 +228,7 @@ svg.i.i-fill {
 }
 
 a {
-	color: var(--accent);
+	color: var(--link);
 	text-decoration: none;
 	transition: color 150ms ease-out;
 }
@@ -217,7 +263,7 @@ code {
 	padding: 8px 14px;
 	background: var(--accent);
 	color: var(--on-accent);
-	border-radius: 6px;
+	border-radius: 4px;
 	transition: top 120ms ease;
 }
 
@@ -226,7 +272,7 @@ code {
 }
 
 :focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--focus-ring);
 	outline-offset: 1px;
 }
 
@@ -279,12 +325,20 @@ code {
 	background: #28c840;
 }
 
-.wordmark {
-	font-family: var(--font-display);
-	font-weight: 700;
-	font-size: 13px;
+/* Brand logomark left of the wordmark. The span controls the size; the SVG scales to it and
+   follows the primary accent via currentColor. */
+.wordmark-logo {
+	display: inline-flex;
+	align-items: center;
+	width: 24px;
+	flex: none;
 	color: var(--accent);
-	white-space: nowrap;
+}
+
+.wordmark-logo svg {
+	display: block;
+	width: 100%;
+	height: auto;
 }
 
 .scope {
@@ -341,7 +395,7 @@ code {
 	gap: 7px;
 	padding: 6px 8px;
 	border: 0;
-	border-radius: 6px;
+	border-radius: 4px;
 	background: transparent;
 	color: var(--muted);
 	font: inherit;
@@ -363,7 +417,7 @@ code {
 	width: 32px;
 	height: 32px;
 	border: 1px solid var(--border2);
-	border-radius: 7px;
+	border-radius: 4px;
 	background: transparent;
 	color: var(--muted);
 	cursor: pointer;
@@ -458,7 +512,7 @@ code {
 	align-items: center;
 	gap: 6px;
 	padding: 5px 8px;
-	border-radius: 6px;
+	border-radius: 4px;
 	color: var(--muted);
 	white-space: nowrap;
 	overflow: hidden;
@@ -490,7 +544,7 @@ code {
 	padding: 12px;
 	background: var(--elevated);
 	border: 1px solid var(--border2);
-	border-radius: 12px;
+	border-radius: 4px;
 	opacity: 1;
 	transform: translateY(0);
 	transition:
@@ -538,7 +592,7 @@ code {
 	margin-top: 12px;
 	padding: 10px 18px;
 	border: 1px solid var(--border2);
-	border-radius: 8px;
+	border-radius: 4px;
 	background: transparent;
 	color: var(--text);
 	font-size: 14px;
@@ -560,17 +614,31 @@ code {
 	min-height: 0; /* grid items default to min-height:auto — without this the row grows to content */
 }
 
+/* Header-surface strip that SCROLLS, like the app's own tab strip: the tabs are navigation and overflow
+   below ~1500px, so every one must stay reachable. The 1px divider lives on the TABS (plus a filler for
+   the trailing space) — on the strip it would sit outside the scrollport, where the active tab cannot
+   paint over it to merge into the content. Inactive tabs stay transparent and read as this strip. */
 .tabstrip {
 	display: flex;
 	align-items: stretch;
-	overflow: hidden;
-	border-bottom: 1px solid var(--border);
-	background: var(--chrome);
+	overflow-x: auto;
+	overflow-y: hidden;
+	background: var(--container-header-bg);
 	flex: none;
+	/* Navigated by click/swipe/shift-wheel; keyboard focus can now scroll a clipped tab into view. */
+	scrollbar-width: none;
 }
 
 .tabstrip::-webkit-scrollbar {
 	display: none;
+}
+
+/* Continues the tabs' divider past the last tab. Grows to fill, shrinks to 0 on overflow. */
+.tabstrip::after {
+	content: "";
+	flex: 1 1 0;
+	min-width: 0;
+	border-bottom: 1px solid var(--border);
 }
 
 .tab {
@@ -582,10 +650,13 @@ code {
 	font-size: 12.5px;
 	font-family: var(--font-mono);
 	color: var(--muted);
-	border-right: 1px solid var(--border);
 	white-space: nowrap;
 	position: relative;
 	flex: none;
+	text-decoration: none;
+	border-right: 1px solid var(--border);
+	/* Each tab draws its own segment of the strip's bottom divider — see `.tabstrip`. */
+	border-bottom: 1px solid var(--border);
 }
 
 .tab:hover {
@@ -594,68 +665,22 @@ code {
 	background: var(--hover);
 }
 
-/* Tabs inside disabled mock chrome have no hover state */
-[data-mock-hint] .tab:hover {
-	text-decoration: none;
-	color: var(--muted);
-	background: transparent;
-}
-
 .tab .i {
 	color: var(--hint);
 	font-size: 12px;
 }
 
+/* Active tab = the content surface, no border or indicator — it merges into the editor body. Its own
+   divider segment becomes the content colour, which is what produces the merge now that the divider is
+   per-tab rather than a strip border the tab had to overhang. */
 .tab.active {
 	color: var(--text);
-	background: var(--editor-bg);
-}
-
-.tab.active::after {
-	content: "";
-	position: absolute;
-	inset: 0 0 auto 0;
-	height: 2px;
-	background: var(--accent);
+	background: var(--container-workspace-bg);
+	border-bottom-color: var(--container-workspace-bg);
 }
 
 .tab.active .i {
-	color: var(--accent);
-}
-
-.tab-x {
-	width: 8px;
-	height: 8px;
-	position: relative;
-	opacity: 0;
-}
-
-.tab:hover .tab-x {
-	opacity: 0.6;
-}
-
-/* No close button on disabled tabs */
-[data-mock-hint] .tab:hover .tab-x {
-	opacity: 0;
-}
-
-.tab-x::before,
-.tab-x::after {
-	content: "";
-	position: absolute;
-	inset: 50% auto auto 50%;
-	width: 9px;
-	height: 1.4px;
-	background: currentColor;
-	transform-origin: center;
-}
-
-.tab-x::before {
-	transform: translate(-50%, -50%) rotate(45deg);
-}
-
-.tab-x::after {
-	transform: translate(-50%, -50%) rotate(-45deg);
+	color: var(--text);
 }
 
 /* The scrolling editor pane */
@@ -664,7 +689,7 @@ code {
 	flex: 1;
 	min-height: 0;
 	overflow-y: auto;
-	background: var(--editor-bg);
+	background: var(--container-workspace-bg);
 	scroll-behavior: smooth;
 }
 
@@ -699,7 +724,7 @@ code {
 }
 
 .file-section h2 {
-	font-family: var(--font-display);
+	font-family: var(--font-sans);
 	font-weight: 700;
 	font-size: clamp(26px, 4vw, 34px);
 	line-height: 1.15;
@@ -755,9 +780,9 @@ code {
 	font-family: var(--font-mono);
 	font-size: 13px;
 	line-height: 1.7;
-	background: color-mix(in srgb, var(--elevated) 55%, var(--editor-bg));
+	background: color-mix(in srgb, var(--elevated) 55%, var(--container-workspace-bg));
 	border: 1px solid var(--border2);
-	border-radius: 10px;
+	border-radius: 4px;
 	padding: 16px 18px;
 	overflow-x: auto;
 	margin: 18px 0;
@@ -814,7 +839,7 @@ code {
 	font-size: 11px;
 	letter-spacing: 0.4px;
 	padding: 3px 10px;
-	border-radius: 999px;
+	border-radius: 4px;
 	border: 1px solid var(--border2);
 	color: var(--muted);
 }
@@ -827,7 +852,7 @@ code {
 
 .hero-title {
 	font-family: var(--font-display);
-	font-weight: 800;
+	font-weight: 400;
 	font-size: clamp(52px, 9vw, 96px);
 	line-height: 0.98;
 	letter-spacing: 0.5px;
@@ -837,7 +862,7 @@ code {
 
 /* p.<class> ties with `.file-section p` on specificity and wins by source order — no !important. */
 p.hero-tagline {
-	font-family: var(--font-display);
+	font-family: var(--font-sans);
 	font-weight: 700;
 	font-size: clamp(20px, 3.4vw, 30px);
 	color: var(--text);
@@ -852,12 +877,14 @@ p.hero-lede {
 
 .install-line {
 	display: flex;
-	align-items: stretch;
+	/* Fixed 44px command row; content vertically centred (the copy button stretches for its divider). */
+	height: 44px;
+	align-items: center;
 	margin: 26px 0 10px;
 	max-width: 100%;
-	background: var(--input);
+	background: var(--container-workspace-bg);
 	border: 1px solid var(--border2);
-	border-radius: 8px;
+	border-radius: 4px;
 	overflow: hidden;
 }
 
@@ -876,6 +903,7 @@ p.hero-lede {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
+	align-self: stretch;
 	width: 44px;
 	flex: none;
 	border: none;
@@ -921,10 +949,22 @@ p.hero-lede {
 
 html.install-tabs-ready .install-tabs {
 	display: flex;
-	align-items: flex-end;
-	gap: 2px;
-	padding: 0 4px;
-	border-bottom: 1px solid var(--border2);
+	/* Fixed 44px header row; tabs stretch to it and centre their own content. */
+	height: 44px;
+	align-items: stretch;
+	gap: 0;
+	/* No left padding: the first tab sits flush with the frame edge. */
+	padding: 0 4px 0 0;
+	/* Header surface for the strip + the empty space to the right of the tabs, with a full-width
+	   bottom divider; the active tab overlaps it (below) to merge into the command block. */
+	background: var(--container-header-bg);
+	border-bottom: 1px solid var(--border);
+}
+
+/* The OS tabs' own `role="tablist"` — a sibling of the shell switcher, not its parent. */
+html.install-tabs-ready .install-os-tabs {
+	display: flex;
+	align-items: stretch;
 }
 
 .install-tab {
@@ -934,14 +974,14 @@ html.install-tabs-ready .install-tabs {
 	gap: 7px;
 	min-height: 34px;
 	padding: 7px 13px 8px;
+	/* -1px so the active tab's surface overlaps the strip divider and merges into the content. */
 	margin-bottom: -1px;
-	border: 1px solid transparent;
-	border-bottom-color: var(--border2);
-	border-radius: 7px 7px 0 0;
+	border: 0;
+	border-right: 1px solid var(--border);
 	background: transparent;
-	color: var(--hint);
+	color: var(--muted);
 	font-family: var(--font-mono);
-	font-size: 11.5px;
+	font-size: 12.5px;
 	cursor: pointer;
 }
 
@@ -952,48 +992,16 @@ html.install-tabs-ready .install-tabs {
 
 .install-tab[aria-selected="true"] {
 	z-index: 1;
-	border-color: var(--border2);
-	border-bottom-color: var(--input);
-	background: var(--input);
+	background: var(--container-workspace-bg);
 	color: var(--text);
-}
-
-.install-tab[aria-selected="true"]::before {
-	content: "";
-	position: absolute;
-	top: -1px;
-	left: 9px;
-	right: 9px;
-	height: 2px;
-	border-radius: 2px;
-	background: var(--accent);
+	/* Cover the strip's bottom divider under the active tab so it merges into the command block. */
+	border-bottom: 1px solid var(--container-workspace-bg);
 }
 
 .install-tab:focus-visible,
 .windows-shell-tab:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--focus-ring);
 	outline-offset: -3px;
-}
-
-.detected-marker:not([hidden]) {
-	display: inline-flex;
-	align-items: center;
-	gap: 6px;
-}
-
-.detected-dot {
-	width: 5px;
-	height: 5px;
-	border-radius: 999px;
-	background: var(--accent);
-	box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent);
-}
-
-.detected-label {
-	color: var(--accent);
-	font-size: 9px;
-	letter-spacing: 0.45px;
-	text-transform: uppercase;
 }
 
 .install-panel[hidden],
@@ -1017,78 +1025,85 @@ html.install-tabs-ready p.install-fallback-heading {
 	margin: 8px 0 16px;
 }
 
-html.install-tabs-ready .install-picker-hero > .install-panel > .install-line {
+/* One border-default frame around the whole OS-tabs + command component. overflow:hidden
+   clips the tab-bar / command corners to the 4px radius; inner boxes drop their own borders. */
+html.install-tabs-ready .install-frame {
+	border: 1px solid var(--border);
+	border-radius: 4px;
+	overflow: hidden;
+}
+
+html.install-tabs-ready .install-frame .install-line {
 	margin: 0;
-	border-top: 0;
-	border-radius: 0 0 8px 8px;
+	border: 0;
+	border-radius: 0;
+}
+
+/* The command <code> otherwise inherits the global code radius; the outer frame
+   provides the only corner rounding, so drop it here. */
+.install-frame .install-line > code {
+	border-radius: 0;
 }
 
 .windows-shell-picker {
 	overflow: hidden;
 	border: 1px solid var(--border2);
-	border-radius: 8px;
-	background: var(--input);
+	border-radius: 4px;
+	background: var(--container-workspace-bg);
 }
 
-html.install-tabs-ready .install-picker-hero .windows-shell-picker {
-	border-top: 0;
-	border-radius: 0 0 8px 8px;
+html.install-tabs-ready .install-frame .windows-shell-picker {
+	border: 0;
+	border-radius: 0;
 }
 
-html.install-tabs-ready .windows-shell-tabs {
-	display: flex;
-	gap: 5px;
-	padding: 8px 10px;
-	border-bottom: 1px solid var(--border);
+/* Inline next to the active Windows tab, shown only while Windows is active (JS toggles [hidden]).
+   Compact segmented control: one shared border/container on the container-workspace-bg surface (it
+   belongs to the active tab state), options are segments not chips. Centred + short so the tab-bar
+   height stays stable across OS. */
+html.install-tabs-ready .windows-shell-tabs:not([hidden]) {
+	display: inline-flex;
+	align-self: center;
+	margin-left: 8px;
+	border: 1px solid var(--border);
+	border-radius: 4px;
+	overflow: hidden;
+	background: var(--container-workspace-bg);
 }
 
 .windows-shell-tab {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	min-height: 27px;
-	padding: 5px 10px;
-	border: 1px solid var(--border2);
-	border-radius: 5px;
+	min-height: 24px;
+	padding: 4px 9px;
+	border: 0;
+	border-right: 1px solid var(--border);
 	background: transparent;
-	color: var(--hint);
+	color: var(--muted);
 	font-family: var(--font-mono);
 	font-size: 10.5px;
 	line-height: 1;
 	cursor: pointer;
 }
 
+.windows-shell-tab:last-child {
+	border-right: 0;
+}
+
 .windows-shell-tab:hover {
 	color: var(--text);
-	background: var(--hover);
 }
 
 .windows-shell-tab[aria-selected="true"] {
-	border-color: color-mix(in srgb, var(--accent) 45%, var(--border2));
-	background: color-mix(in srgb, var(--accent) 9%, transparent);
-	color: var(--accent);
+	background: var(--hover);
+	color: var(--text);
 }
 
 html.install-tabs-ready .windows-shell-picker .install-line {
 	margin: 0;
 	border: 0;
 	border-radius: 0;
-}
-
-p.install-detection-note {
-	display: flex;
-	align-items: center;
-	gap: 7px;
-	margin: 8px 2px 0;
-	color: var(--hint);
-	font-family: var(--font-mono);
-	font-size: 11px;
-	line-height: 1.4;
-}
-
-p.install-detection-note::before {
-	content: "↳";
-	color: var(--accent);
 }
 
 p.hero-platforms {
@@ -1110,7 +1125,7 @@ p.hero-platforms {
 	align-items: center;
 	gap: 9px;
 	padding: 10px 18px;
-	border-radius: 8px;
+	border-radius: 4px;
 	border: 1px solid var(--border2);
 	color: var(--text);
 	font-size: 14px;
@@ -1123,13 +1138,14 @@ p.hero-platforms {
 }
 
 .btn-primary {
-	background: var(--accent);
-	border-color: var(--accent);
-	color: var(--on-accent);
+	background: var(--control-primary-bg);
+	border-color: var(--control-primary-bg);
+	color: var(--control-primary-text);
 }
 
 .btn-primary:hover {
-	background: color-mix(in srgb, var(--accent) 88%, black);
+	background: var(--control-primary-bg-hovered);
+	border-color: var(--control-primary-bg-hovered);
 }
 
 /* ── why.md ─────────────────────────────────────────────────────────────── */
@@ -1171,9 +1187,9 @@ p.hero-platforms {
 
 .feature-card {
 	border: 1px solid var(--border2);
-	border-radius: 10px;
+	border-radius: 4px;
 	padding: 16px 18px;
-	background: color-mix(in srgb, var(--elevated) 40%, var(--editor-bg));
+	background: color-mix(in srgb, var(--elevated) 40%, var(--container-workspace-bg));
 }
 
 .feature-card h3 {
@@ -1197,8 +1213,8 @@ p.hero-platforms {
 .chat-demo {
 	position: relative;
 	border: 1px solid var(--border2);
-	border-radius: 12px;
-	background: color-mix(in srgb, var(--elevated) 30%, var(--editor-bg));
+	border-radius: 4px;
+	background: color-mix(in srgb, var(--elevated) 30%, var(--container-workspace-bg));
 	padding: 20px;
 	margin: 22px 0;
 	display: flex;
@@ -1209,9 +1225,9 @@ p.hero-platforms {
 .chat-msg.user {
 	align-self: flex-end;
 	max-width: 85%;
-	background: color-mix(in srgb, var(--bubble, var(--accent)) 12%, transparent);
-	border: 1px solid color-mix(in srgb, var(--bubble, var(--accent)) 35%, transparent);
-	border-radius: 10px;
+	background: color-mix(in srgb, var(--accent) 12%, transparent);
+	border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+	border-radius: 4px;
 	padding: 10px 14px;
 	font-size: 14px;
 }
@@ -1277,7 +1293,7 @@ html.anim .chat-demo [data-step].on {
 
 .chat-composer {
 	border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border2));
-	border-radius: 10px;
+	border-radius: 4px;
 	background: var(--input);
 	padding: 12px 14px;
 	display: flex;
@@ -1302,7 +1318,7 @@ html.anim .chat-demo [data-step].on {
 	gap: 6px;
 	font-size: 12px;
 	padding: 5px 10px;
-	border-radius: 7px;
+	border-radius: 4px;
 	background: var(--elevated);
 	border: 1px solid var(--border2);
 	color: var(--muted);
@@ -1325,7 +1341,7 @@ html.anim .chat-demo [data-step].on {
 	justify-content: center;
 	width: 30px;
 	height: 30px;
-	border-radius: 8px;
+	border-radius: 4px;
 	background: var(--accent);
 	color: var(--on-accent);
 }
@@ -1334,7 +1350,7 @@ html.anim .chat-demo [data-step].on {
 
 .spec-tree {
 	border: 1px solid var(--border2);
-	border-radius: 10px;
+	border-radius: 4px;
 	overflow: hidden;
 	margin: 20px 0;
 	font-size: 13.5px;
@@ -1399,7 +1415,7 @@ html.anim .chat-demo [data-step].on {
 
 .install-block .line-copy {
 	cursor: copy;
-	border-radius: 5px;
+	border-radius: 4px;
 	margin: 0 -4px;
 	padding: 1px 4px;
 }
@@ -1507,7 +1523,7 @@ p.footer-fineprint {
 	align-items: center;
 	gap: 7px;
 	padding: 4.5px 8px;
-	border-radius: 6px;
+	border-radius: 4px;
 	color: var(--muted);
 	white-space: nowrap;
 	font-family: var(--font-mono);
@@ -1558,8 +1574,8 @@ p.footer-fineprint {
 	flex: none;
 	display: flex;
 	flex-direction: column;
-	height: 300px;
-	max-height: 38vh;
+	height: 375px;
+	max-height: 47vh;
 }
 
 .terminal-head {
@@ -1578,10 +1594,28 @@ p.footer-fineprint {
 	color: var(--hint);
 }
 
+/* Keyboard-reachable trigger for the logo replay (the click-anywhere binding is pointer-only). */
+.term-replay:not([hidden]) {
+	margin-left: auto;
+	padding: 2px 8px;
+	border: 1px solid var(--border2);
+	border-radius: 4px;
+	background: transparent;
+	color: var(--muted);
+	font-family: var(--font-mono);
+	font-size: 10.5px;
+	cursor: pointer;
+}
+
+.term-replay:hover {
+	color: var(--text);
+	background: var(--hover);
+}
+
 .terminal-tab {
 	font-size: 11.5px;
 	padding: 3px 10px;
-	border-radius: 5px;
+	border-radius: 4px;
 	background: var(--elevated);
 	color: var(--muted);
 }
@@ -1618,13 +1652,27 @@ p.footer-fineprint {
 	font-weight: 600;
 }
 
-.term-cmd,
-.term-cmd2 {
+.term-cmd {
 	color: var(--text);
 }
 
 .term-out {
 	display: block;
+	color: var(--hint);
+}
+
+/* The logo banner: wide ASCII, so it never wraps and its font is sized by JS (--term-logo-fs) to fit
+   the narrow terminal without altering any character. */
+.term-logo {
+	white-space: pre;
+	word-break: normal;
+	font-size: var(--term-logo-fs, 6px);
+	line-height: 1.05;
+	color: var(--muted);
+}
+
+.term-cta {
+	margin-top: 6px;
 	color: var(--hint);
 }
 
@@ -1640,10 +1688,6 @@ p.footer-fineprint {
 
 html:not(.anim) .term-caret {
 	display: none;
-}
-
-html.anim .terminal.armed [data-out] {
-	visibility: hidden;
 }
 
 @keyframes caret-blink {
@@ -1779,10 +1823,10 @@ html.anim .terminal.armed [data-out] {
 	flex-direction: column;
 	align-items: flex-start;
 	text-align: left;
-	padding: 12px;
+	padding: 8px;
 	background: var(--elevated);
 	border: 1px solid var(--border2);
-	border-radius: 12px;
+	border-radius: 4px;
 	pointer-events: none;
 	opacity: 0;
 	transform: translateY(8px);
@@ -1791,58 +1835,41 @@ html.anim .terminal.armed [data-out] {
 		transform 200ms ease-out;
 	z-index: 1001;
 	box-shadow: 0 8px 24px rgb(0 0 0 / 0.35);
-	max-width: calc(100vw - 32px);
-}
-
-.mock-tooltip-icon {
-	width: 24px;
-	height: 24px;
-	color: var(--text);
-	flex-shrink: 0;
-	fill: none;
-	stroke: currentColor;
-	stroke-width: 2;
-	stroke-linecap: round;
-	stroke-linejoin: round;
+	/* Width follows the widest child: the nowrap CTA button. The text (which
+	   wraps) is narrower, so the popover sizes to the button, not the sentence. */
+	width: min-content;
+	max-width: min(240px, calc(100vw - 32px));
 }
 
 .mock-tooltip-text {
-	margin-top: 12px;
-	font-size: 15px;
+	/* s14 — next smaller level on the ThinkRail type scale (no 15 exists). */
+	font-size: 14px;
 	line-height: 1.5;
 	color: var(--text);
-	white-space: nowrap;
 }
 
 .mock-tooltip-cta {
-	margin-top: 16px;
+	margin-top: 8px;
 }
 
-/* Secondary outlined button for tooltip CTA */
-.mock-tooltip-cta a {
-	display: inline-flex;
-	align-items: center;
+/* CTA reuses the shared `.btn` label typography/treatment; only sizing is tuned down here. */
+.mock-tooltip-cta .btn {
 	justify-content: center;
-	gap: 9px;
-	padding: 10px 18px;
-	border-radius: 8px;
-	border: 1px solid var(--border2);
-	background: transparent;
-	color: var(--text);
-	font-size: 14px;
-	font-weight: 500;
-	text-decoration: none;
+	gap: 6px;
+	padding: 6px 10px;
+	/* s13 — one level below the s14 body text, keeping the prior proportion. */
+	font-size: 13px;
+	white-space: nowrap;
 	pointer-events: auto;
 }
 
-.mock-tooltip-cta a:hover {
-	background: var(--hover);
+.mock-tooltip-cta .btn:hover {
 	border-color: var(--muted);
 }
 
 .mock-tooltip-cta .i {
-	width: 16px;
-	height: 16px;
+	width: 14px;
+	height: 14px;
 	fill: currentColor;
 }
 
@@ -1918,6 +1945,17 @@ html.anim .terminal.armed [data-out] {
 
 	html.install-tabs-ready .install-tabs {
 		padding-inline: 0;
+		/* Too narrow to keep the shell switcher inline with the OS tabs: let it wrap onto a
+		   second row below them (see the .windows-shell-tabs override) instead of clipping.
+		   height:auto lets the strip grow by that row; the OS-tab row keeps its 44px. */
+		flex-wrap: wrap;
+		height: auto;
+		min-height: 44px;
+	}
+
+	/* The OS-tab group fills row 1 (the switcher wraps below), so its tabs can share the width. */
+	html.install-tabs-ready .install-os-tabs {
+		flex: 1;
 	}
 
 	.install-tab {
@@ -1926,12 +1964,16 @@ html.anim .terminal.armed [data-out] {
 		padding-inline: 7px;
 	}
 
-	.detected-label {
-		display: none;
-	}
-
-	html.install-tabs-ready .windows-shell-tabs {
-		padding-inline: 7px;
+	/* Second row: a full-width band on the active container-workspace-bg surface, directly under
+	   the OS tabs and inside the same frame. flex-basis:100% forces the wrap; the segments share the
+	   width (flex:1) so every shell stays reachable with no horizontal scroll or clipping. */
+	html.install-tabs-ready .windows-shell-tabs:not([hidden]) {
+		flex-basis: 100%;
+		align-self: stretch;
+		margin-left: 0;
+		border: 0;
+		border-top: 1px solid var(--border);
+		border-radius: 0;
 	}
 
 	.windows-shell-tab {

@@ -130,11 +130,11 @@ function withOffsets(segments: SlotSegment[]): (SlotSegment & { start: number })
 function highlightTint(state: SlotHighlightState): string {
 	switch (state) {
 		case "unfilled":
-			return "rounded-[2px] bg-primary-soft";
+			return "rounded-[var(--radius-xs)] bg-primary-soft";
 		case "active":
-			return "rounded-[2px] bg-primary-muted";
+			return "rounded-[var(--radius-xs)] bg-primary-muted";
 		case "filled":
-			return "rounded-[2px] bg-primary-subtle";
+			return "rounded-[var(--radius-xs)] bg-primary-subtle";
 		case "plain":
 			return "";
 	}
@@ -842,7 +842,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							aria-label={isStreaming ? "Steer" : "Send"}
 							onClick={() => submit(isStreaming ? "steer" : "send")}
 							disabled={!value.trim() && images.length === 0}
-							className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-control-primary-bg text-control-primary-text hover:opacity-90 disabled:pointer-events-none disabled:bg-control-disabled-bg disabled:text-control-disabled-text"
+							className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-control-primary-bg text-control-primary-text hover:bg-control-primary-bg-hovered disabled:pointer-events-none disabled:bg-control-disabled-bg disabled:text-control-disabled-text"
 						>
 							<ArrowUp className="size-4" />
 						</button>

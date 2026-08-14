@@ -86,20 +86,22 @@ describe("typography source", () => {
 			regular: 400,
 			medium: 500,
 			semibold: 600,
-			brand: 800,
+			brand: 400,
 		});
 		// Each self-hosted face LEADS its own stack — behind a system font it would never render. The
 		// face names stay in the JSON alone, so swapping a family is a one-file change.
-		for (const id of ["interface", "code"]) {
+		for (const id of ["interface", "code", "brand"]) {
 			const family = resolveFamily(typography, id);
 			expect(family.selfHosted ?? [], `${id} self-hosted`).not.toEqual([]);
 			expect(family.stack[0], `${id} leads with its bundled face`).not.toMatch(
 				/^(?:-apple-system|sans-serif|serif|monospace)$/,
 			);
 		}
-		// The brand family is an ALIAS of interface — the stack is never copied.
-		expect(isRef(typography.fontFamilies.brand)).toBe(true);
-		expect(resolveFamily(typography, "brand")).toEqual(resolveFamily(typography, "interface"));
+		// The brand family is its own self-hosted display face (Orbitron), no longer an alias of
+		// interface — the display/brand role is deliberately distinct from the interface face.
+		expect(isRef(typography.fontFamilies.brand)).toBe(false);
+		expect(resolveFamily(typography, "brand").stack[0]).toBe("Orbitron Variable");
+		expect(resolveFamily(typography, "brand")).not.toEqual(resolveFamily(typography, "interface"));
 		// One reading line-height: no 1.65 anywhere in the system.
 		expect(Object.values(typography.lineHeights)).not.toContain(1.65);
 	});

@@ -91,6 +91,14 @@ The module set: `transport` / `store` / branded `shell`; `ProjectTree`; `FileTre
   `bg-[var(--elevated)]`; and a tint is a token on the four-step alpha scale, not a `/40` modifier.
   `src/styles/COLOR.md` is the system; `src/styles/colorUsage.test.ts` is the adoption guard (Tailwind
   drops an unknown utility silently, so an unpublished token renders as nothing at all).
+- **A radius or spacing utility names a scale step, never a raw pixel length** — `rounded-[var(--radius-md)]`
+  and `p-md` / `py-0.5`, not `rounded-[7px]` or `py-[3px]`. Two scales are legitimate and both are
+  token-backed: the project family (`--radius-xs/sm/md/lg`, `--space-xs…xl`) and Tailwind's numeric steps
+  for the sub-`--space-xs` tier the project family does not cover. `src/styles/spacingUsage.test.ts` is
+  that adoption guard, and it exists because this class of drift is **invisible**: unlike a colour
+  utility, an arbitrary length always renders, so an off-scale value looks correct in review and passes
+  every other gate. Lengths that are not scale steps at all — `max-w-[78ch]`, `w-[320px]`,
+  `max-h-[40vh]`, a measured `pl-[calc(…)]` indent — stay allowed; they are layout constraints, not rhythm.
 - **`src/themes` is the theme contract and catalog; `src/styles/tokens.css` is structural.** A bundled
   theme is one strict, complete `*.theme.json` manifest: appearance/contrast metadata + semantic UI
   colors + all 16 ANSI colors + a semantic syntax palette. Selected-text foreground overrides are the

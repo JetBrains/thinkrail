@@ -255,7 +255,8 @@ function diffStats(ws: Workspace): DiffStats | undefined {
 /**
  * Create a workspace = a `git worktree` on its own fresh branch, under the data dir. `baseRef` is the base
  * the branch is cut from (the New-Workspace picker): `worktree add -b <branch> <baseRef>` cuts a *local*
- * branch from it — never a detached remote checkout. Omitted → branch off the repo's current `HEAD`.
+ * branch from it — never a detached remote checkout, and **never tracking the base** (`--no-track`, see
+ * below). Omitted → branch off the repo's current `HEAD`.
  *
  * Freshness for a remote ref (`origin/<b>`) is kept off this critical path: the New-Workspace dialog
  * `prefetchBranch`es it in the background when it opens, so the local remote-tracking ref is already
@@ -303,12 +304,18 @@ export async function createWorkspace(
 
 	const worktreePath = join(dataDir(), "worktrees", project.slug, branch);
 	mkdirSync(dirname(worktreePath), { recursive: true });
+	// `--no-track`: for a remote-tracking base (`origin/main` from the picker) git's default
+	// (`autoSetupMerge=true`) would set the new branch's upstream to it, so the workspace's own terminal —
+	// a real shell in this worktree — would have `git push` land the feature work on *main* and `git pull`
+	// merge main back in. The branch is the workspace's; its upstream is the user's to set when they first
+	// push it, not ours to guess at creation.
 	const added = git(project.path, [
 		"worktree",
 		"add",
 		worktreePath,
 		"-b",
 		branch,
+		"--no-track",
 		"--end-of-options",
 		baseBranch,
 	]);

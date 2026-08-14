@@ -609,10 +609,10 @@ export function NewWorkspaceDialog({
 						data-testid="create-workspace"
 						disabled={creating}
 						onClick={() => void create()}
-						className="flex h-8 shrink-0 items-center gap-sm rounded-[var(--radius-md)] bg-control-primary-bg px-md tr-text-action text-control-primary-text outline-none transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-primary disabled:bg-control-disabled-bg disabled:text-control-disabled-text"
+						className="flex h-8 shrink-0 items-center gap-sm rounded-[var(--radius-md)] bg-control-primary-bg px-md tr-text-action text-control-primary-text outline-none transition-colors hover:bg-control-primary-bg-hovered focus-visible:ring-2 focus-visible:ring-primary disabled:bg-control-disabled-bg disabled:text-control-disabled-text"
 					>
 						{isolated ? "Create" : "Start"}
-						<span className="inline-flex h-4 min-w-4 items-center justify-center rounded-[3px] bg-on-primary-soft px-1 tr-code-text">
+						<span className="inline-flex h-4 min-w-4 items-center justify-center rounded-[var(--radius-sm)] bg-on-primary-soft px-1 tr-code-text">
 							↵
 						</span>
 					</button>
@@ -654,7 +654,7 @@ function TargetOption({
 			data-testid={testid}
 			data-active={active}
 			className={cn(
-				"flex h-7 cursor-pointer items-center gap-sm rounded-[7px] px-md tr-text-ui transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary",
+				"flex h-7 cursor-pointer items-center gap-sm rounded-[var(--radius-md)] px-md tr-text-ui transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary",
 				active ? "bg-primary-subtle text-primary" : "text-text-muted hover:text-text-default",
 			)}
 		>
@@ -685,7 +685,7 @@ function ProjectPicker({
 				data-open={open}
 				className={`${PILL} max-w-[180px]`}
 			>
-				<span className="flex size-[18px] shrink-0 items-center justify-center rounded-[5px] bg-primary">
+				<span className="flex size-[18px] shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-primary">
 					<Box className="size-3 text-text-on-primary" />
 				</span>
 				<span className="truncate">{current}</span>

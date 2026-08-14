@@ -381,7 +381,8 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   `border border-transparent` of the same width so the content box lines up,
   `whitespace-pre-wrap break-words` — spelled out explicitly since a `<div>`, unlike a `<textarea>`,
   doesn't soft-wrap this way by default) so each `SlotSegment`'s tint span
-  (`data-testid="slot-highlight"` + `data-slot-state`, `rounded-[2px]` `bg-[var(--primary-20/40/10)]` for
+  (`data-testid="slot-highlight"` + `data-slot-state`, `rounded-[var(--radius-xs)]` — the text-run radius
+  tier — with `bg-primary-soft`/`-muted`/`-subtle` for
   unfilled/active/filled, no tint for plain, every span `text-transparent` so only the real textarea text
   above shows through) lands exactly under its own characters. **Scroll sync**: the textarea's `onScroll`
   copies its `scrollLeft`/`scrollTop` onto the backdrop's outer `overflow-hidden` layer **imperatively**
