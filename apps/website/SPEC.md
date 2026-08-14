@@ -20,6 +20,9 @@ is interactive: the active tab **follows the currently visible section via the s
 **clicking a tab scrolls to its section**. The strip holds **exactly one navigational tab per unique
 section target**: the tree may stay hierarchical and repeat a target across rows, but duplicate
 targets collapse to a single tab, so scroll-spy always activates exactly one tab per section. The
+strip **scrolls** (`overflow-x: auto`, scrollbar hidden) — the tabs overflow below ~1500px and every one
+must stay reachable. Its bottom divider is drawn **per tab**, not on the strip: a strip border sits
+outside the scrollport, where the active tab cannot paint over it to merge into the content. The
 status bar is a plain copyright footer, not a live line counter.
 
 Not part of the product: nothing in the app depends on it, and it ships to GitHub Pages, not in the
@@ -45,6 +48,10 @@ binary.
   `apps/web/src/themes/bundled/*.theme.json` (dark = default, darcula, light, gruvbox) into the site's
   own CSS custom properties under `[data-theme]`; the site never reaches into `apps/web` at build time
   (the app's tokens assume the theme engine's runtime swap).
+- **A colour with a contrast floor gets a `:root` token, never the region-inherited `--accent`.**
+  `.hero` re-points `--accent` for its artwork, so descendants reading it inherit a value chosen for dark
+  backgrounds. `--link` and `--focus-ring` are declared once on `:root` as `var(--accent)`, which resolves
+  against the *root* accent — per-theme, but out of reach of a region override.
 - All marketing copy is static DOM text; JS only *enhances* (scroll-spy, the derived editor-tab strip
   and its scroll-spy/click navigation, terminal typing, chat streaming replay, theme switcher, copy
   buttons, star count, install-platform selection). The page must read complete with JS disabled (the

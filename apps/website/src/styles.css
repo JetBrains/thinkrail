@@ -50,6 +50,9 @@
 	/* Link color token: primary at 60% opacity — a touch darker than the bright primary on the
 	   dark surfaces (light theme keeps the full, already-dark accent below). */
 	--link: color-mix(in srgb, var(--accent) 60%, transparent);
+	/* Focus ring. Declared here so `var(--accent)` resolves against the ROOT accent: per-theme, but out
+	   of reach of `.hero`'s override — which rendered a 1.27:1 ring on white. Same mechanism as --link. */
+	--focus-ring: var(--accent);
 	/* Primary button = a shared, theme-independent brand constant (mirrors the app's
 	   control-primary-* tokens); defined once here so every theme inherits it. */
 	--control-primary-bg: #8dff4f;
@@ -268,7 +271,7 @@ code {
 }
 
 :focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--focus-ring);
 	outline-offset: 1px;
 }
 
@@ -610,20 +613,31 @@ code {
 	min-height: 0; /* grid items default to min-height:auto — without this the row grows to content */
 }
 
-/* Header-surface strip with a full-width bottom divider; the active tab overlaps it (below) so its
-   workspace surface merges into the editor body. overflow-x:clip contains the tabs horizontally while
-   letting that 1px vertical merge show. Inactive tabs stay transparent and read as this strip. */
+/* Header-surface strip that SCROLLS, like the app's own tab strip: the tabs are navigation and overflow
+   below ~1500px, so every one must stay reachable. The 1px divider lives on the TABS (plus a filler for
+   the trailing space) — on the strip it would sit outside the scrollport, where the active tab cannot
+   paint over it to merge into the content. Inactive tabs stay transparent and read as this strip. */
 .tabstrip {
 	display: flex;
 	align-items: stretch;
-	overflow-x: clip;
+	overflow-x: auto;
+	overflow-y: hidden;
 	background: var(--container-header-bg);
-	border-bottom: 1px solid var(--border);
 	flex: none;
+	/* Navigated by click/swipe/shift-wheel; keyboard focus can now scroll a clipped tab into view. */
+	scrollbar-width: none;
 }
 
 .tabstrip::-webkit-scrollbar {
 	display: none;
+}
+
+/* Continues the tabs' divider past the last tab. Grows to fill, shrinks to 0 on overflow. */
+.tabstrip::after {
+	content: "";
+	flex: 1 1 0;
+	min-width: 0;
+	border-bottom: 1px solid var(--border);
 }
 
 .tab {
@@ -640,6 +654,8 @@ code {
 	flex: none;
 	text-decoration: none;
 	border-right: 1px solid var(--border);
+	/* Each tab draws its own segment of the strip's bottom divider — see `.tabstrip`. */
+	border-bottom: 1px solid var(--border);
 }
 
 .tab:hover {
@@ -653,13 +669,13 @@ code {
 	font-size: 12px;
 }
 
-/* Active tab = the content surface, no border or indicator — it merges into the editor body. */
+/* Active tab = the content surface, no border or indicator — it merges into the editor body. Its own
+   divider segment becomes the content colour, which is what produces the merge now that the divider is
+   per-tab rather than a strip border the tab had to overhang. */
 .tab.active {
 	color: var(--text);
 	background: var(--container-workspace-bg);
-	/* Overlap + cover the strip's bottom divider so the active tab merges into the content below. */
-	margin-bottom: -1px;
-	border-bottom: 1px solid var(--container-workspace-bg);
+	border-bottom-color: var(--container-workspace-bg);
 }
 
 .tab.active .i {
@@ -977,7 +993,7 @@ html.install-tabs-ready .install-tabs {
 
 .install-tab:focus-visible,
 .windows-shell-tab:focus-visible {
-	outline: 2px solid var(--accent);
+	outline: 2px solid var(--focus-ring);
 	outline-offset: -3px;
 }
 
