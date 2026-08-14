@@ -130,11 +130,11 @@ function withOffsets(segments: SlotSegment[]): (SlotSegment & { start: number })
 function highlightTint(state: SlotHighlightState): string {
 	switch (state) {
 		case "unfilled":
-			return "rounded-[2px] bg-primary-soft";
+			return "rounded-[var(--radius-xs)] bg-primary-soft";
 		case "active":
-			return "rounded-[2px] bg-primary-muted";
+			return "rounded-[var(--radius-xs)] bg-primary-muted";
 		case "filled":
-			return "rounded-[2px] bg-primary-subtle";
+			return "rounded-[var(--radius-xs)] bg-primary-subtle";
 		case "plain":
 			return "";
 	}

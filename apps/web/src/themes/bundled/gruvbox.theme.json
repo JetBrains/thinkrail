@@ -8,8 +8,9 @@
 	"contrast": "normal",
 	"colors": {
 		"accent": "#8dff4f",
+		"accentHover": "#59d915",
 		"onAccent": "#0a0a0a",
-		"bubbleAccent": "#fe8019",
+		"bubbleAccent": "#8dff4f",
 		"background": "#282828",
 		"header": "#1d2021",
 		"content": "#1d2021",

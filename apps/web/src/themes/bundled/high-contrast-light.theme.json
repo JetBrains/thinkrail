@@ -7,9 +7,10 @@
 	"appearance": "light",
 	"contrast": "high",
 	"colors": {
-		"accent": "#2e7d16",
+		"accent": "#125c19",
+		"accentHover": "#0d4a12",
 		"onAccent": "#ffffff",
-		"bubbleAccent": "#0f4a85",
+		"bubbleAccent": "#125c19",
 		"background": "#ffffff",
 		"header": "#ffffff",
 		"content": "#ffffff",
@@ -28,7 +29,7 @@
 		"editorSelection": "#0f4a85",
 		"editorSelectionForeground": "#ffffff",
 		"info": "#006bbd",
-		"success": "#41cb66",
+		"success": "#116329",
 		"danger": "#b5200d",
 		"warning": "#855900"
 	},

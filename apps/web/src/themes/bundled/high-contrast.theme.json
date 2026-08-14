@@ -8,8 +8,9 @@
 	"contrast": "high",
 	"colors": {
 		"accent": "#8dff4f",
+		"accentHover": "#59d915",
 		"onAccent": "#0a0a0a",
-		"bubbleAccent": "#f38518",
+		"bubbleAccent": "#8dff4f",
 		"background": "#000000",
 		"header": "#000000",
 		"content": "#000000",

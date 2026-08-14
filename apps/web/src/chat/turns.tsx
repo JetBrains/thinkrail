@@ -243,7 +243,7 @@ function ErrorTurn({ text }: { text: string }) {
 			data-role="error"
 			className="flex items-start gap-sm rounded-[var(--radius-md)] border border-feedback-error-muted bg-clip-padding bg-feedback-error-subtle px-md py-sm text-feedback-error tr-text-ui"
 		>
-			<TriangleAlert className="mt-[2px] size-4 shrink-0" />
+			<TriangleAlert className="mt-0.5 size-4 shrink-0" />
 			<span className="min-w-0 whitespace-pre-wrap break-words">{text}</span>
 		</div>
 	);
@@ -405,7 +405,7 @@ function ArtifactList({
 						data-testid={`${testid}-list-item`}
 						onClick={() => onOpen(path)}
 						title={path}
-						className="flex w-full items-center gap-xs rounded-[var(--radius-sm)] px-xs py-[2px] text-left hover:bg-control-bg-hovered"
+						className="flex w-full items-center gap-xs rounded-[var(--radius-sm)] px-xs py-0.5 text-left hover:bg-control-bg-hovered"
 					>
 						<Icon className="size-3 shrink-0 text-text-muted" />
 						<span className="min-w-0 flex-1 truncate text-text-muted">

@@ -47,6 +47,13 @@
 		"control-bg": { "from": "input", "publish": true },
 		"control-bg-hovered": { "from": "hover", "publish": true },
 		"control-bg-selected": { "from": "hover", "publish": true },
+		"control-primary-bg": { "from": "accent", "publish": true },
+		"control-primary-bg-hovered": {
+			"from": "accentHover",
+			"publish": true,
+			"note": "the primary button's hover fill — its own manifest key so a theme owns the hover step instead of the button fading with an opacity utility"
+		},
+		"control-primary-text": { "from": "onAccent", "publish": true },
 		"control-border-default": { "from": "border", "publish": true },
 		"control-border-active": { "from": "borderStrong", "publish": true },
 		"control-disabled-bg": { "from": "input", "publish": true },
@@ -64,6 +71,7 @@
 
 		"feedback-info": { "from": "info", "publish": true },
 		"feedback-info-subtle": { "from": "info", "alpha": "wash", "publish": true },
+		"feedback-success": { "from": "success", "publish": true },
 		"feedback-success-subtle": { "from": "success", "alpha": "wash", "publish": true },
 		"feedback-success-muted": { "from": "success", "alpha": "muted", "publish": true },
 		"feedback-error": { "from": "danger", "publish": true },
@@ -128,30 +136,6 @@
 			"dark": "0 8px 28px rgba(0, 0, 0, 0.4)",
 			"light": "0 8px 28px rgba(0, 0, 0, 0.14)",
 			"publish": false
-		},
-		"control-primary-bg": {
-			"note": "primary button/control fill — a theme-independent brand constant (identical in every theme), not a per-theme accent derivation; see COLOR.md",
-			"dark": "#8dff4f",
-			"light": "#8dff4f",
-			"publish": true
-		},
-		"control-primary-bg-hovered": {
-			"note": "primary button/control hover fill (shared brand constant)",
-			"dark": "#59d915",
-			"light": "#59d915",
-			"publish": true
-		},
-		"control-primary-text": {
-			"note": "text/icons on the primary fill (shared brand constant)",
-			"dark": "#0a0a0a",
-			"light": "#0a0a0a",
-			"publish": true
-		},
-		"feedback-success": {
-			"note": "Success FOREGROUND (text/icons) — a per-appearance accessible constant. Dark keeps the #41cb66 success hue (≥4.5:1 on dark reading surfaces); light needs a darker green (#1a7f37) to clear 4.5:1 on white/#f2f3f5. The success-subtle/-muted TINTS still derive from the `success` palette key (#41cb66), so the success base is unchanged where it is not small foreground text.",
-			"dark": "#41cb66",
-			"light": "#1a7f37",
-			"publish": true
 		}
 	}
 }

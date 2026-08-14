@@ -22,6 +22,9 @@
 	--control-bg: var(--input);
 	--control-bg-hovered: var(--hover);
 	--control-bg-selected: var(--hover);
+	--control-primary-bg: var(--accent);
+	--control-primary-bg-hovered: var(--accent-hover); /* the primary button's hover fill — its own manifest key so a theme owns the hover step instead of the button fading with an opacity utility */
+	--control-primary-text: var(--on-accent);
 	--control-border-default: var(--border);
 	--control-border-active: var(--border-strong);
 	--control-disabled-bg: var(--input);
@@ -35,6 +38,7 @@
 	--on-primary-soft: color-mix(in srgb, var(--on-accent) 20%, transparent);
 	--feedback-info: var(--info);
 	--feedback-info-subtle: color-mix(in srgb, var(--info) 12%, transparent);
+	--feedback-success: var(--success);
 	--feedback-success-subtle: color-mix(in srgb, var(--success) 12%, transparent);
 	--feedback-success-muted: color-mix(in srgb, var(--success) 40%, transparent);
 	--feedback-error: var(--danger);
@@ -59,10 +63,6 @@
 	--shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
 	--shadow-md: 0 4px 16px rgba(0, 0, 0, 0.35);
 	--shadow-lg: 0 8px 28px rgba(0, 0, 0, 0.4);
-	--control-primary-bg: #8dff4f;
-	--control-primary-bg-hovered: #59d915;
-	--control-primary-text: #0a0a0a;
-	--feedback-success: #41cb66;
 }
 :root[data-theme-appearance="light"] {
 	--sunken: rgba(0, 0, 0, 0.05);
@@ -70,10 +70,6 @@
 	--shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.1);
 	--shadow-md: 0 4px 16px rgba(0, 0, 0, 0.12);
 	--shadow-lg: 0 8px 28px rgba(0, 0, 0, 0.14);
-	--control-primary-bg: #8dff4f;
-	--control-primary-bg-hovered: #59d915;
-	--control-primary-text: #0a0a0a;
-	--feedback-success: #1a7f37;
 }
 
 @theme inline {
@@ -92,6 +88,9 @@
 	--color-control-bg: var(--control-bg);
 	--color-control-bg-hovered: var(--control-bg-hovered);
 	--color-control-bg-selected: var(--control-bg-selected);
+	--color-control-primary-bg: var(--control-primary-bg);
+	--color-control-primary-bg-hovered: var(--control-primary-bg-hovered);
+	--color-control-primary-text: var(--control-primary-text);
 	--color-control-border-default: var(--control-border-default);
 	--color-control-border-active: var(--control-border-active);
 	--color-control-disabled-bg: var(--control-disabled-bg);
@@ -105,6 +104,7 @@
 	--color-on-primary-soft: var(--on-primary-soft);
 	--color-feedback-info: var(--feedback-info);
 	--color-feedback-info-subtle: var(--feedback-info-subtle);
+	--color-feedback-success: var(--feedback-success);
 	--color-feedback-success-subtle: var(--feedback-success-subtle);
 	--color-feedback-success-muted: var(--feedback-success-muted);
 	--color-feedback-error: var(--feedback-error);
@@ -116,8 +116,4 @@
 	--color-bubble-user-border: var(--bubble-user-border);
 	--color-sunken: var(--sunken);
 	--color-overlay: var(--overlay);
-	--color-control-primary-bg: var(--control-primary-bg);
-	--color-control-primary-bg-hovered: var(--control-primary-bg-hovered);
-	--color-control-primary-text: var(--control-primary-text);
-	--color-feedback-success: var(--feedback-success);
 }

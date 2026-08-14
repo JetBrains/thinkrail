@@ -56,6 +56,13 @@ to the code canvas in every theme. Every bundled manifest ships `header` equal t
 split changed no pixel — it made a knob exist. The same move is what any future divergence needs: a role
 can only vary between themes if the manifest has a key for it.
 
+`accentHover` is the second instance: the primary button needed a hover *fill* rather than a faded
+resting fill, and the alpha scale cannot express one (a tint of the accent is translucent, not darker).
+The alternative — pinning the primary button to a brand constant outside the palette — would have made
+it the one control a theme cannot restyle, and would have let it drift from `accent` (the same colour it
+had always been) on any theme that tunes its accent. So the accent is a **pair**: `accent` resting,
+`accentHover` hovered, `onAccent` the label on both.
+
 **The manifest→variable name is derived, not mapped.** A key writes to its kebab-cased name —
 `borderStrong` → `--border-strong`, `editorSelection` → `--editor-selection`. `runtime.ts` applies that
 rule when it writes the palette to the document root, and `scripts/colors.ts` applies the same rule when
@@ -71,8 +78,18 @@ a key that does not exist fails the same gate.
 **A manifest must also be legible, not merely complete.** `schema.test.ts` enforces WCAG AA on every
 resting surface (`background`, `content`, `sidebar`, `header`, `elevated`, `input`) and a lower 3.0
 floor on the transient `hover` surface — the latter being our line rather than the standard's, so that
-a theme borrowed from elsewhere keeps its signature colours. A new manifest that reads poorly fails to
-merge; see [`styles/COLOR.md`](../styles/COLOR.md) for the reasoning.
+a theme borrowed from elsewhere keeps its signature colours. `accent` and `success` are exempt from
+`input` alone: neither is ever rendered as text on a control. Separately, `onAccent` must clear AA on
+**both** accent fills (`accent` and `accentHover`), so a theme cannot darken its hover step far enough
+to swallow the primary button's own label. A new manifest that reads poorly fails to merge; see
+[`styles/COLOR.md`](../styles/COLOR.md) for the reasoning.
+
+**A `contrast: "high"` manifest is held to AAA (7.0) resting and full AA (4.5) even on hover**, `hint`
+excepted. High contrast is the entire reason those two themes exist, so the ordinary AA floor is the
+wrong gate for them: it lets one decay into a merely-adequate theme while every check stays green. That
+is not hypothetical — when the palette went green, High Contrast Light's `accent` fell from 8.98 to 5.17
+and its `success` from 7.39 to 5.08, and nothing failed. The stricter floor is what makes "high contrast"
+a property the suite enforces rather than a label in the manifest.
 
 Bundled files are discovered by a build-time glob rather than named in a code catalog, and validated
 all-or-nothing at bootstrap. The files are our own, so any invalid or duplicate manifest — or a missing

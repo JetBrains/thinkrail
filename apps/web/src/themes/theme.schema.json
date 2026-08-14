@@ -60,6 +60,7 @@
 			"additionalProperties": false,
 			"required": [
 				"accent",
+				"accentHover",
 				"onAccent",
 				"bubbleAccent",
 				"background",
@@ -86,6 +87,7 @@
 			],
 			"properties": {
 				"accent": { "$ref": "#/$defs/hexColor" },
+				"accentHover": { "$ref": "#/$defs/hexColor" },
 				"onAccent": { "$ref": "#/$defs/hexColor" },
 				"bubbleAccent": { "$ref": "#/$defs/hexColor" },
 				"background": { "$ref": "#/$defs/hexColor" },
