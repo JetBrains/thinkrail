@@ -199,9 +199,32 @@ export interface SpecGraphNode {
 	tags: string[];
 }
 
+/**
+ * A registered spec type (a *type card*), as the Specs viewer renders badges/legend and the type
+ * constructor lists existing types. Mirrored from `pi-spec-graph`'s resolved card (never imported).
+ */
+export interface SpecTypeInfo {
+	/** The slug specs carry in `type`. */
+	name: string;
+	/** Display name (host falls back to `name`). */
+	title: string;
+	/** When to choose this type — the card's choose-signal. */
+	description: string;
+	/** Durable specs are ground truth; ephemeral ones serve a piece of work (rendered dimmed/apart). */
+	lifecycle: "durable" | "ephemeral";
+	/** Which registry layer resolved the card. */
+	origin: "project" | "user" | "builtin";
+	/** Expected top-level headings (the authoring scaffold). */
+	sections: string[];
+	/** Worktree-relative card path for project cards; absent for built-ins (embedded, no file). */
+	path?: string;
+}
+
 /** The whole-graph snapshot `spec.graph` returns; the client derives the tree. */
 export interface SpecGraphSnapshot {
 	nodes: SpecGraphNode[];
+	/** The registered spec types, in display order (built-ins first, customs after). */
+	types: SpecTypeInfo[];
 }
 
 /** Lifecycle of a backlog item (mirrors `pi-todos`' core vocabulary; the extension is never imported). */

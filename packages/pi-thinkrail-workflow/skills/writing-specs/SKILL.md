@@ -11,6 +11,10 @@ stays with the referencing skill. Graph mechanics — frontmatter, link kinds, t
 the spec-graph skill's ground; this concept carries the quality bar the family holds on top of them,
 and is where the family's rules for specs and the spec graph accrue.
 
+Before drafting a spec, **read its type's card** (`spec_types` with the type name): the card carries
+that type's when-to-use, expected structure, and quality bar. A card *refines* this bar for one type;
+it never overrides it.
+
 ## Short
 
 - Small enough to read in one sitting. Target signal, not completeness.

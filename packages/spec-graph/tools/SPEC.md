@@ -10,15 +10,16 @@ tags: [spec-graph, pi-extension, v1]
 
 ## Responsibility
 
-The seven `pi` custom tools that expose the spec model to the agent — `spec_grep`, `spec_get`,
-`spec_graph`, `spec_create`, `spec_update`, `spec_delete`, `spec_validate`. Each is a **thin wrapper** over
+The eight `pi` custom tools that expose the spec model to the agent — `spec_grep`, `spec_get`,
+`spec_graph`, `spec_types`, `spec_create`, `spec_update`, `spec_delete`, `spec_validate`. Each is a **thin wrapper** over
 `core/`: parse the typebox params, call a `core/` function, format a text result + structured `details`.
 None edit prose.
 
 ## Boundary
 
-- **Owns:** tool registration, param schemas, and result formatting; the per-root `SpecIndex` cache and the
-  `spec_create` scaffold headings (`shared.ts`).
+- **Owns:** tool registration, param schemas, and result formatting; the per-root `SpecIndex` +
+  `SpecTypeRegistry` caches (`shared.ts`). Scaffolding is card-driven: `spec_create` builds the body
+  from the card's `## Template` (preferred) or its `sections` headings.
 - **Public surface:** the `index.ts` **barrel** exporting `registerSpecTools(pi)`; the extension entry
   (`../index.ts`) is the only caller.
 - **Allowed deps:** `core/` (via its barrel), `@earendil-works/pi-coding-agent` (types + `registerTool`),
@@ -29,9 +30,11 @@ None edit prose.
 ## Leaves
 
 One leaf per tool (`grep.ts` → `spec_grep`, and so on), each wrapping the corresponding `core/` function
-and depending on `shared.ts` (the index cache + result/scaffold helpers), which depends on `core/`. Leaves
-don't depend on each other; `index.ts` composes them. `spec_create`/`spec_update`/`spec_delete` write the
-file; the other four are read-only.
+and depending on `shared.ts` (the index/registry caches + result/scaffold helpers), which depends on
+`core/`. Leaves don't depend on each other; `index.ts` composes them. `spec_create`/`spec_update`/
+`spec_delete` write the file; the other five are read-only. `spec_types` lists the registered type
+cards (name, title, description, lifecycle, origin) or, given a `name`, returns the one card in full —
+how the agent reads a card (built-ins included) before authoring.
 
 ## Invariants
 
@@ -42,10 +45,13 @@ file; the other four are read-only.
   place by `core`'s `updateFrontmatterText`, so comments, nested/unknown fields, field order, and the
   file's line endings are preserved.
 - Frontmatter field keys the tools read/write come from `core`'s `FIELDS` registry, and params over a
-  finite vocabulary use `StringEnum` seeded by the `core/` tuple (`spec_create.type` ← `SPEC_TYPES`,
-  `spec_create.status` ← `SPEC_STATUSES`, `spec_graph.direction` ← `SLICE_DIRECTIONS`,
-  `spec_graph.edge` ← `LINK_KINDS`) — never re-typed literals, so a `core` rename flows here with no edit
-  (pinned by `tools/tools.test.ts`).
+  finite vocabulary use `StringEnum` seeded by the `core/` tuple (`spec_graph.direction` ←
+  `SLICE_DIRECTIONS`, `spec_graph.edge` ← `LINK_KINDS`) — never re-typed literals, so a `core` rename
+  flows here with no edit (pinned by `tools/tools.test.ts`). `spec_create.type` and
+  `spec_create.status` are **registry-validated at execute time** (open strings in the schema): the
+  type must be a registered card, the status must sit in the card's `statuses` (falling back to
+  `SPEC_STATUSES`), and the rejection message lists what is allowed — the registry, not a frozen
+  enum, is the authoring gate.
 - The spec root is `ctx.cwd`; one `SpecIndex` is reused per root (freshness handled in `core/` — see
   `module-spec-graph`). `spec_update` reads via `recordForId` to reuse the scan's cached read; write tools
   just write, and the next read picks the change up.

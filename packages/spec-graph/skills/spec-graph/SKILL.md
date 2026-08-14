@@ -60,13 +60,39 @@ description: "The project's specs are its ground truth: durable documents descri
 - A file is a spec when its frontmatter carries `id` and `type`.
 - `status` tracks a spec's lifecycle: `draft` (being written) → `active` (in force), then `stale` (drifting
   from the code), `done`, or `deprecated`. It's optional, but keep it current as a spec firms up or ages.
-- Types:
-  - `goal-and-requirements` — the product goal and scope; the root of the graph.
-  - `architecture-design` — system-wide topology, cross-cutting decisions, and invariants.
-  - `module-design` — a package or module's responsibility and boundary.
-  - `submodule-design` — the same, for a directory-level module inside a package.
-  - `task-spec` — a temporary working document for a piece of work; not durable, and removed once the
-    work lands.
+  A type card may narrow the vocabulary for its own type (e.g. `decision`: proposed → accepted →
+  superseded).
+
+## Spec types (type cards)
+
+A spec's `type` names a **type card** — one markdown file defining what that kind of spec is for,
+when to choose it, and what it should contain. Types are not a fixed list: they resolve through a
+registry — the project's **`.pi/spec-types/*.md`** (committed, the team's shared vocabulary) wins
+over the built-ins on a name clash.
+
+- **Run `spec_types` to see what's registered**; every card carries a description that says when to
+  choose it.
+- **Read the card before authoring a spec of its type** (`spec_types` with `name`) — the same norm as
+  reading a skill before its task. The card's body carries the when-to-use and the quality bar;
+  `spec_create` scaffolds the body from the card.
+- Every type declares a **lifecycle**: `durable` specs are the ground truth — contracts, decisions,
+  boundaries, kept honest as code changes. `ephemeral` specs serve one piece of work and end by
+  **promotion**: their settled decisions fold into the durable specs that own them, then they retire.
+  Durable specs win on any conflict. An ephemeral spec's *location* is a default, never a rule —
+  keeping one in-repo doesn't make it authoritative.
+- A type card **refines the global rules for one type; it never overrides them** — the boundary,
+  say-once, and lean-spec rules above hold for every spec regardless of type.
+- Defining a new type = dropping a card in `.pi/spec-types/`: frontmatter `name` + `description`
+  (required), plus optional `lifecycle` (default `durable`), `home` (location hint), `sections`
+  (expected headings — also the scaffold), `fields`, `statuses`, `links` (expectations over the
+  built-in link kinds); body = when to use, quality bar, and an optional `## Template` block that
+  scaffolding prefers over `sections`.
+
+The built-ins: `goal-and-requirements` (the root: product goal and scope), `architecture-design`
+(system-wide decisions and invariants), `module-design` / `submodule-design` (a module's
+responsibility and boundary, fractal), `task-spec` (ephemeral working doc for one piece of work),
+`charter` (the project's declared stance on specs — how authoritative, what agents read first),
+`decision` (an ADR: one hard-to-reverse decision, append-only history).
 
 ## Tools
 
@@ -75,6 +101,7 @@ Read:
 - `spec_get` — a spec's frontmatter, its resolved links, and its path. Read the body with the normal
   `read` tool using that path.
 - `spec_graph` — a bounded slice of the graph: a subtree, ancestors, or a node's neighbors, to a depth.
+- `spec_types` — the registered spec types, or one type card in full (read it before authoring).
 
 Manage:
 - `spec_create` — a new spec with scaffolded frontmatter and headings.

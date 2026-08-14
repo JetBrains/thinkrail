@@ -94,7 +94,7 @@ import {
 	updateComment,
 } from "../reviews";
 import { updateConfig } from "../settings";
-import { evictSpecIndex, projectHasSpecs, specGraph } from "../spec";
+import { evictSpecIndex, projectHasSpecs, saveTypeCard, specGraph } from "../spec";
 import {
 	deleteTemplate,
 	getTemplate,
@@ -368,6 +368,10 @@ const handlers: Record<string, Handler> = {
 		const p = params as { workspaceId: string };
 		void ensureWatch(p.workspaceId);
 		return specGraph(p.workspaceId);
+	},
+	"spec.saveTypeCard": (params) => {
+		const p = params as { workspaceId: string; name: string; content: string };
+		return saveTypeCard(p.workspaceId, p.name, p.content);
 	},
 	"todo.list": (params) => listTodos(params as { workspaceId: string; sessionId: string }),
 	"todo.add": (params) =>

@@ -211,7 +211,9 @@ export interface TerminalTabsPush {
 // v36: `review.close` atomically archives non-draft records and publishes the fresh open snapshot; clients
 // no longer follow it with an initiating-only `review.get` fold.
 // v37: `workspace.openReview` returns the active branch's optional GitHub PR / GitLab MR number.
-export const PROTOCOL_VERSION = 37;
+// v38: `spec.graph` carries the registered spec types (`SpecTypeInfo[]`); `spec.saveTypeCard` writes one
+// project type card into the worktree's `.pi/spec-types/` (scoped — deliberately not a general fs write).
+export const PROTOCOL_VERSION = 38;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a
@@ -300,6 +302,9 @@ export const WS_METHODS = {
 	fsReadDir: "fs.readDir",
 	fsReadFile: "fs.readFile",
 	specGraph: "spec.graph",
+	// Save (create or overwrite) one project spec-type card as `.pi/spec-types/<name>.md`. Scoped by
+	// design: the host validates the name slug and that the content parses as a card — not a file write.
+	specSaveTypeCard: "spec.saveTypeCard",
 	// A chat's TODO list (pi-todos), scoped by `sessionId`. Read + the user's write ops (the agent writes
 	// the same per-session file via its own todo_* tools in-session; these are the UI's editing path).
 	todoList: "todo.list",
@@ -608,6 +613,10 @@ export interface WsMethodMap {
 	"fs.readDir": { params: { workspaceId: string; path: string }; result: FileNode[] };
 	"fs.readFile": { params: { workspaceId: string; path: string }; result: { content: string } };
 	"spec.graph": { params: { workspaceId: string }; result: SpecGraphSnapshot };
+	"spec.saveTypeCard": {
+		params: { workspaceId: string; name: string; content: string };
+		result: { path: string };
+	};
 	"todo.list": {
 		params: { workspaceId: string; sessionId: string };
 		result: TodoPlan;

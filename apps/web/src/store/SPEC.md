@@ -260,6 +260,9 @@ components. The **Skills-reload badge** rides the same tick without a separate s
   with the workspace in `applyWorkspaceRemoved`. `setWorkspaceSpecs` **keeps the previous array identity when
   the re-read found no change** — most fs ticks touch no spec, and a fresh identity would invalidate
   `ChatView`'s matcher memo and re-derive every open chat's whole transcript about once a second.
+  The same action atomically lands the snapshot's **`specTypesByWorkspace`** (the registered type
+  cards) — one fetch, one write; the Specs panel renders type badges/dimming and the type constructor
+  lists existing types from it (same identity-preserving guard, same drop on workspace removal).
   **`openDoc(tab)`** opens
   (or refreshes + focuses) an ephemeral **`DocTab`** — inline rendered-markdown content, never backed by a
   file on disk (no fs re-read / source toggle) — used for on-demand snapshots like the plan-as-markdown

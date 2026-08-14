@@ -12,7 +12,9 @@ tags: [spec-graph, pi-extension, v1]
 The pi-free spec model: the is-a-spec rule, frontmatter parse/serialize and in-place edit (via the
 `yaml` library, with link/metadata lists inline), the derived graph (parent tree +
 `depends-on`/`references`/`implements` DAG + reverse edges), the on-demand in-memory read index, content
-grep with metadata filters, bounded graph slices, and structural validation. Imports **no
+grep with metadata filters, bounded graph slices, structural validation, and the **spec-type model**
+(the is-a-card rule, the card parser, the built-in cards, and the revalidate-on-read registry — see
+`module-spec-graph` *Spec types*). Imports **no
 `@earendil-works/*`**, so it is unit-testable on its own (`core/core.test.ts`).
 
 ## Boundary
@@ -28,11 +30,14 @@ grep with metadata filters, bounded graph slices, and structural validation. Imp
 ## Leaves & the dependency graph
 
 Acyclic and one-way: `parse` is the root, `graph` builds on it, and `query`/`validate`/`store` build on
-`graph`. The barrel re-exports the leaves and adds no logic.
+`graph`; `types` builds on `parse` (+ the `builtins` constants) and nothing builds on it inside `core`
+— the graph stays registry-independent. The barrel re-exports the leaves and adds no logic.
 
 | leaf | owns | depends on |
 | --- | --- | --- |
 | `parse.ts` | file → `{ frontmatter, body }`; the is-a-spec rule; frontmatter parse (lossy read dialect) + serialize; the `updateFrontmatterText` lossless in-place edit; the `FIELDS` field registry and the finite-vocabulary tuples | — |
+| `types.ts` | the spec-type model: `SpecTypeCard`, the is-a-card rule, the full-YAML card parse (own reader — cards carry nested maps the spec dialect drops), `## Template` extraction, and `SpecTypeRegistry` (project dir + extra dirs + built-ins; precedence by `name`; per-file `(mtimeMs, size)` revalidation; `lifecycleOf` with the durable default) | `parse` (fence split only) |
+| `builtins.ts` | the seven built-in cards as full markdown card texts (string constants — bundle-safe, parsed by `types`' card parser) | — |
 | `graph.ts` | files → nodes + edges (parent tree, DAG + reverse); duplicate-id tracking | `parse` |
 | `query.ts` | content grep with metadata filters; bounded graph slices | `parse`, `graph` |
 | `validate.ts` | dangling links, duplicate ids, parent cycles | `parse`, `graph` |
@@ -45,8 +50,11 @@ Acyclic and one-way: `parse` is the root, `graph` builds on it, and `query`/`val
   memoizes the graph, and never serves a stale one.
 - On a duplicate `id`, the first file seen wins the node slot; the duplicate set is recorded for `validate`.
 - `SpecNode.type` stays `string`: the read model indexes whatever is on disk, so it tolerates any `type`;
-  the `SPEC_TYPES` vocabulary constrains only the `spec_create` authoring surface, never the graph.
-- Finite vocabularies (`SPEC_TYPES`, `SPEC_STATUSES`, `SLICE_DIRECTIONS`, `LINK_KINDS`, `IDENTITY_FIELDS`)
+  the type registry constrains only the `spec_create` authoring surface, never the graph.
+- The registry never influences graph construction or the is-a-spec rule; unknown `type` values
+  resolve to `lifecycle: durable`.
+- Finite vocabularies (`SPEC_STATUSES`, `SPEC_LIFECYCLES`, `TYPE_CARD_ORIGINS`, `SLICE_DIRECTIONS`,
+  `LINK_KINDS`, `IDENTITY_FIELDS`)
   and frontmatter field names (the `FIELDS` registry) are single-sourced `as const` — no duplicated literal lists, so a
   rename is a one-line change. `core/` stays typebox-free; only `tools/` wraps the tuples in `StringEnum`.
 - Reads coerce frontmatter to a scalar/string-array dialect (lossy — nested maps and comments are

@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
 	buildGraph,
+	builtinTypeCards,
 	FIELD_ORDER,
 	FIELDS,
 	graphSlice,
@@ -14,12 +15,14 @@ import {
 	LIST_FIELDS,
 	LIST_LINK_FIELDS,
 	parseFile,
+	parseTypeCard,
 	REQUIRED_FIELDS,
 	SINGLE_LINK_FIELDS,
 	SLICE_DIRECTIONS,
+	SPEC_LIFECYCLES,
 	SPEC_STATUSES,
-	SPEC_TYPES,
 	SpecIndex,
+	SpecTypeRegistry,
 	serializeFrontmatter,
 	updateFrontmatterText,
 	validateGraph,
@@ -33,14 +36,116 @@ test("the finite-vocabulary tuples carry exactly their members", () => {
 	expect([...IDENTITY_FIELDS]).toEqual(["id", "type"]);
 	expect([...LINK_KINDS]).toEqual(["parent", "depends-on", "references", "implements"]);
 	expect([...SLICE_DIRECTIONS]).toEqual(["subtree", "ancestors", "neighbors"]);
-	expect([...SPEC_TYPES]).toEqual([
+	expect([...SPEC_STATUSES]).toEqual(["draft", "active", "stale", "done", "deprecated"]);
+	expect([...SPEC_LIFECYCLES]).toEqual(["durable", "ephemeral"]);
+});
+
+// ---------------------------------------------------------------------------
+// type cards — the is-a-card rule, defaults, template extraction, the built-ins
+// ---------------------------------------------------------------------------
+
+test("parseTypeCard: the is-a-card rule is name + description; lifecycle defaults to durable", () => {
+	expect(parseTypeCard("no frontmatter")).toBeNull();
+	expect(parseTypeCard("---\nname: x\n---\nbody")).toBeNull(); // no description
+	expect(parseTypeCard("---\nid: x\ntype: y\ntitle: T\n---\n")).toBeNull(); // a spec, not a card
+
+	const card = parseTypeCard("---\nname: x\ndescription: A thing.\n---\n\nWhen to use.\n");
+	expect(card).not.toBeNull();
+	expect(card?.name).toBe("x");
+	expect(card?.title).toBe("x"); // falls back to name
+	expect(card?.lifecycle).toBe("durable"); // the safe default
+	expect(card?.body).toContain("When to use.");
+});
+
+test("parseTypeCard reads the full-YAML core: nested links, sections, statuses", () => {
+	const card = parseTypeCard(
+		[
+			"---",
+			"name: decision",
+			"title: Decision record",
+			"description: One decision.",
+			"lifecycle: durable",
+			"home: docs/decisions/",
+			"sections: [Context, Decision]",
+			"statuses: [proposed, accepted]",
+			"links:",
+			"  parent: module-design",
+			"---",
+			"",
+		].join("\n"),
+	);
+	expect(card?.sections).toEqual(["Context", "Decision"]);
+	expect(card?.statuses).toEqual(["proposed", "accepted"]);
+	expect(card?.links).toEqual({ parent: "module-design" }); // nested map survives (own reader)
+	expect(card?.home).toBe("docs/decisions/");
+});
+
+test("parseTypeCard extracts the Template block (fence interior preferred)", () => {
+	const fenced = parseTypeCard(
+		"---\nname: x\ndescription: D.\n---\n\n## Template\n\n```markdown\n## A\n\n## B\n```\n\n## After\n",
+	);
+	expect(fenced?.template).toBe("## A\n\n## B\n");
+	const raw = parseTypeCard("---\nname: x\ndescription: D.\n---\n\n## Template\n\nplain stub\n");
+	expect(raw?.template).toBe("plain stub\n");
+	expect(parseTypeCard("---\nname: x\ndescription: D.\n---\nbody")?.template).toBeUndefined();
+});
+
+test("the built-ins parse: seven cards, task-spec ephemeral, decision's statuses narrowed", () => {
+	const builtins = builtinTypeCards();
+	expect(builtins.map((c) => c.name)).toEqual([
 		"goal-and-requirements",
 		"architecture-design",
 		"module-design",
 		"submodule-design",
 		"task-spec",
+		"charter",
+		"decision",
 	]);
-	expect([...SPEC_STATUSES]).toEqual(["draft", "active", "stale", "done", "deprecated"]);
+	for (const c of builtins) expect(c.origin).toBe("builtin");
+	expect(builtins.find((c) => c.name === "task-spec")?.lifecycle).toBe("ephemeral");
+	expect(builtins.find((c) => c.name === "decision")?.statuses).toEqual([
+		"proposed",
+		"accepted",
+		"superseded",
+	]);
+});
+
+test("SpecTypeRegistry: project layer wins on name, customs append sorted, reads revalidate", () => {
+	const root = mkdtempSync(join(tmpdir(), "spec-types-"));
+	try {
+		const registry = new SpecTypeRegistry(root);
+		// No project dir: pure built-ins, unknown types default durable.
+		expect(registry.cards()).toHaveLength(7);
+		expect(registry.lifecycleOf("task-spec")).toBe("ephemeral");
+		expect(registry.lifecycleOf("made-up")).toBe("durable");
+
+		// Cards added after the first read are picked up (revalidate-on-read).
+		const dir = join(root, ".pi", "spec-types");
+		mkdirSync(dir, { recursive: true });
+		writeFileSync(
+			join(dir, "task-spec.md"),
+			"---\nname: task-spec\ndescription: Override.\n---\n",
+			"utf8",
+		);
+		writeFileSync(join(dir, "zeta.md"), "---\nname: zeta\ndescription: Custom.\n---\n", "utf8");
+		writeFileSync(join(dir, "notes.md"), "just prose, not a card", "utf8");
+
+		const cards = registry.cards();
+		expect(cards).toHaveLength(8); // 7 built-ins (one overridden) + zeta; notes.md skipped
+		const override = registry.get("task-spec");
+		expect(override?.origin).toBe("project");
+		expect(override?.description).toBe("Override.");
+		expect(override?.lifecycle).toBe("durable"); // the override omitted lifecycle → default
+		expect(cards[cards.length - 1]?.name).toBe("zeta"); // customs after built-ins
+		expect(cards.findIndex((c) => c.name === "task-spec")).toBe(4); // override keeps the builtin slot
+
+		// Deleting the override reverts to the built-in on the next read.
+		rmSync(join(dir, "task-spec.md"));
+		expect(registry.get("task-spec")?.origin).toBe("builtin");
+		expect(registry.lifecycleOf("task-spec")).toBe("ephemeral");
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
 });
 
 test("FIELDS is the single source for field names and the field tuples derive from it", () => {

@@ -655,8 +655,16 @@ a project picker, the prompt hero, and the reused
   "No specs" empty state — offline and empty are different answers. The tree build (`specTree.ts`)
   assumes a well-formed graph — **parent cycles are `spec_validate`'s problem, not the viewer's** (cycle
   members are unreachable from any root and simply don't render) — but the walk is **visited-guarded**,
-  so a malformed graph can never hang or loop the UI. Tree only in this slice — no cross-edge display,
-  no editing, no validation badges, no graph canvas.
+  so a malformed graph can never hang or loop the UI. Rows are **type-aware** from the snapshot's
+  registry (`specTypesByWorkspace`): the tooltip carries the card's description, and a spec whose
+  type is `lifecycle: ephemeral` renders dimmed/italic (`data-spec-lifecycle`) — working docs read as
+  not-ground-truth at a glance. Below the tree sits a collapsed **types legend**
+  (`data-testid="spec-types-legend"`): the registered cards (title, ephemeral/project markers,
+  description tooltip) plus the **type-constructor** entry — `SpecTypeDialog`, a guided form (field
+  hints are the card schema's meaning, with a live markdown preview) that saves via the scoped
+  `spec.saveTypeCard` command; the fs-tick refetch folds the new card back into the snapshot.
+  Creation-only in P1 (editing an existing card = the file, or overwrite by name). Tree only in this
+  slice — no cross-edge display, no spec editing, no validation badges, no graph canvas.
 - `SpecsPanel` is a compact **document-first tree**: spec nodes are container **and** document, so the
   controls make both roles explicit. Hierarchy uses fixed per-depth indentation + chevrons, deliberately
   **without connector rails or branch elbows** (persistent lines overloaded the narrow rail). The padded

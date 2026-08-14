@@ -11,9 +11,10 @@ tags: [spec-graph, pi-extension, v1]
 ## Responsibility
 
 `pi-spec-graph` is a portable pi-package that teaches the `pi` agent the project's **spec-graph** and lets
-it search, navigate, and manage specs. It ships a **skill**, seven **`spec_*` custom tools**, and a
-project-wide **`before_agent_start` rule**. It depends on nothing in this monorepo, so it runs under
-vanilla `pi`; thinkrail bundles it into every session.
+it search, navigate, and manage specs. It ships a **skill**, eight **`spec_*` custom tools**, a
+project-wide **`before_agent_start` rule**, and the **spec-type registry** — user-definable spec types
+as *type cards*. It depends on nothing in this monorepo, so it runs under vanilla `pi`; thinkrail
+bundles it into every session.
 
 It manages the frontmatter schema the repo's specs use — a file is a spec once its frontmatter carries
 `id` and `type`; the schema itself is documented in the skill. Frontmatter is handled with the `yaml`
@@ -23,8 +24,9 @@ comments / nested fields, and writes back the original line ending (LF or CRLF).
 
 ## Boundary
 
-- **Owns:** the spec model (the is-a-spec rule, the derived graph, the read index, validation), the seven
-  tools, and the skill + `before_agent_start` rule.
+- **Owns:** the spec model (the is-a-spec rule, the derived graph, the read index, validation), the
+  spec-type model (the is-a-card rule, the registry, the built-in cards), the eight tools, and the
+  skill + `before_agent_start` rule.
 - **Public surface:** the extension entry `index.ts` (default `ExtensionFactory`) and the `pi` manifest in
   `package.json` (`{ extensions: ["./index.ts"], skills: ["./skills"] }`) — how vanilla `pi` (`pi install`)
   and thinkrail (`additionalExtensionPaths` / `additionalSkillPaths`) load it — plus the **`pi-spec-graph/core`
@@ -54,11 +56,43 @@ reused per root (keyed by cwd) so the cache pays off across an agent's calls. Th
 an edit landing within the same mtime tick *and* keeping byte length identical (negligible; a content hash
 is the sanctioned escalation).
 
+## Spec types (type cards)
+
+A spec's `type` names a **type card**: one markdown file — human-first prose plus a small
+machine-readable frontmatter core — that defines what that kind of spec is for and what it should
+contain (the skills model, applied to specs). A file is a card once its frontmatter carries `name` +
+`description`; optional fields: `title`, `lifecycle` (`durable` | `ephemeral`, **default `durable`**),
+`home` (default location hint, never enforced), `sections` (expected headings — also the `spec_create`
+scaffold), `fields`, `statuses` (per-type status vocabulary; defaults to the global one), and `links`
+(expectations over the **built-in** link kinds only — cards declare no new edge kinds). Body: when to
+use it, the quality bar, and an optional `## Template` block that `spec_create` scaffolds from in
+preference to `sections`. Card frontmatter is parsed as **full YAML** by its own reader (cards may
+carry nested maps, e.g. `links`), never the lossy spec dialect; cards carry no `id`/`type`, so the
+spec index never mistakes them for specs.
+
+The **registry** resolves types in precedence layers, highest wins on `name`: the project's
+**`.pi/spec-types/*.md`** (committed, pi's native project dir) → *(P2)* the user's
+`~/.pi/agent/spec-types/` → the **seven built-ins** (the five original types — `task-spec` is
+`ephemeral`, the rest `durable` — plus `charter`, the project's spec-stance declaration, and
+`decision`, a MADR-shaped ADR proving per-type `statuses`). Built-ins ship as full markdown card texts
+**embedded as string constants in `core/`** and parsed by the same card parser — not as package `.md`
+files — because `core` is value-imported by thinkrail's server and bundled into its compiled binary,
+where `import.meta.url`-relative file resolution would break. Like the spec set, the registry is a
+derived read model: revalidated per read by `(mtimeMs, size)` over the project dir.
+
+`lifecycle` is the durable/ephemeral axis: durable specs are the ground truth; ephemeral ones serve a
+piece of work and end by *promotion* (their settled decisions fold into the durable specs that own
+them), then retire. Location (`home`) is a default, never a rule — an ephemeral spec may live
+in-repo; commitment does not change authority. Unknown on-disk types stay indexed and count as
+**durable** (the safe default consumers like `projectHasSpecs` inherit).
+
 ## Tools
 
 Read — `spec_grep` (content search, narrowable by metadata), `spec_get` (a node's frontmatter, resolved
-links, and path — no body), `spec_graph` (a bounded subtree/ancestors/neighbors slice). Manage —
-`spec_create`, `spec_update` (frontmatter only), `spec_delete`, `spec_validate`. Per-tool usage lives in
+links, and path — no body), `spec_graph` (a bounded subtree/ancestors/neighbors slice), `spec_types`
+(the registered type cards: the list, or one card in full — the agent reads the card before authoring
+a spec of that type). Manage — `spec_create` (type/status validated against the registry, body
+scaffolded from the card), `spec_update` (frontmatter only), `spec_delete`, `spec_validate`. Per-tool usage lives in
 the skill and in each tool's `description`; **none edit prose** — prose is written/edited with pi's normal
 `read`/`write`/`edit`.
 
@@ -89,8 +123,13 @@ revalidate-on-read `SpecIndex` the agent tools use.
   state — `pi` owns state — and never serves a stale graph.
 - Tools never edit prose; `spec_update` is frontmatter-only, lossless (preserves comments / nested
   fields), and never un-specs a file.
+- **Graph construction is registry-independent**: the registry constrains authoring (`spec_create`) and
+  informs consumers (lifecycle, UI), never which edges exist or which files are specs.
+- Built-in cards are bundle-safe (string constants in `core/`, no runtime file resolution).
 
 ## Non-goals
 
 UI in this package (thinkrail's Specs viewer consumes `core/` from the outside), semantic/embedding
-search, a related-code frontmatter field, orphan-directory detection, and moving/renaming specs.
+search, a related-code frontmatter field, orphan-directory detection, moving/renaming specs, custom
+link kinds declared by type cards (supersession is `references` + prose for now), and hard schema
+validation of specs against their cards (checks stay advisory, and land post-P1).
