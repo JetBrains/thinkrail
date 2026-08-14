@@ -1292,7 +1292,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 					...s.workspaces,
 					// The push replaces the record (so a field the server *dropped* clears here too), except for
 					// `diffStats`: the persisted snapshot carries no computed stats, and a bare replace would wipe
-					// the +/− badge until the next list.
+					// the list-computed aggregate until the next list.
 					[workspace.projectId]: list.map((w) =>
 						w.id === workspace.id
 							? { ...workspace, ...(w.diffStats ? { diffStats: w.diffStats } : {}) }

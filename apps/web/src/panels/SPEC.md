@@ -51,7 +51,9 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   in place. Each **workspace row** is **two-line**: the display
   `name` on top with the git **branch on a second line beneath it** (muted, monospace), rendered only when
   it differs from the name (so pristine/legacy `workspace-N` rows stay a single compact line) — the display
-  name is decoupled from the git branch (see [[submodule-server-workspaces]]). The **Default workspace**
+  name is decoupled from the git branch (see [[submodule-server-workspaces]]). Workspace rows deliberately
+  show **no `+N −M` change badge**: the left rail is for navigation and identity; change detail stays in
+  the dedicated Changes views. The **Default workspace**
   (`kind === "default"` — the project folder itself) renders **pinned first** (the server pins it in
   `workspace.list`; `addWorkspace` appends created worktree rows after it), with a **`House` icon** in
   place of the `GitBranch` glyph and **no Remove item** (non-removable — the server enforces it; the menu
@@ -108,9 +110,9 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   one child and that child is another directory, and the compact row expands/collapses the deepest
   directory as one unit. `ChangesTree` evaluates this against the changed-file tree; `FileTree` resolves
   only visible compact runs through its existing client-side directory reads, so the wire remains a plain
-  immediate-directory listing. The **`+N −M` diff-count badge** is the
-  shared **`DiffStatBadge`**, used by the project-rail worktree stats and the Changes tree's per-file /
-  per-folder counts. `ChangesTree`'s tree build + `+/−` aggregation + shared status glyphs live in the pure
+  immediate-directory listing. The **`+N −M` diff-count badge** is the shared **`DiffStatBadge`**, used
+  only inside Changes: the flat list's file rows and the tree's per-file / per-folder counts.
+  `ChangesTree`'s tree build + `+/−` aggregation + shared status glyphs live in the pure
   **`changesModel.ts`** (unit-tested; no store/transport — `ChangesTree` is presentational, fed `changes` +
   `onOpen`/`isActive` by `ChangesPanel`), together with the **diff-tab identity + scope vocabulary**:
   `scopeKey` / `diffTabId(workspaceId, scope, path)` / `diffTabName` / `scopeLabel` and the `splitPath`
@@ -636,9 +638,8 @@ a project picker, the prompt hero, and the reused
   stale — stamp, so neither effect sees any drift and the pane keeps the old target's diff under the new
   target's label indefinitely. Dropping the superseded read costs nothing: the read that superseded it is
   the one the user is waiting for. Panels are mounted only for the active workspace,
-  so scoping is natural; a degraded watcher just means back to read-on-demand. Deliberately **not**
-  live (deferred): the project-rail workspace diffStats badges; editable-file conflict handling waits
-  for `fs.writeFile` (the viewer is read-only today).
+  so scoping is natural; a degraded watcher just means back to read-on-demand. Editable-file conflict
+  handling waits for `fs.writeFile` (the viewer is read-only today).
 - **`useWorkspaceSpecs` owns the `spec.graph` read** (one fetcher, one definition of "this file is a spec"):
   the snapshot lands in the store (`specsByWorkspace`), not panel state, because the chat's turn divider
   needs the same answer to route its chips. It is called by **`RightPanel`**, not by `SpecsPanel` — the

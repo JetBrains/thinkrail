@@ -103,7 +103,6 @@ Children:
 | Workspace Row | inline row in `ProjectTree` | `workspace-item` | A workspace (git worktree); two-line: name + branch |
 | — Workspace Name | inline `<span>` | `workspace-name` | Display name |
 | — Workspace Branch | inline `<span>` | `workspace-branch` | Git branch (muted, proportional metadata; hidden if it equals the name) |
-| — Diff-Stat Badge | `panels/DiffStatBadge.tsx` → `DiffStatBadge` | — | `+N −M` per-worktree change counts |
 | — Workspace Actions Menu | `MoreVertical` Dropdown Menu | `workspace-menu` / `workspace-actions` | Open in (`workspace-open-in`) / Copy path / Reveal / Remove workspace |
 | — Remove-Workspace Item | menu item in the actions menu | `workspace-remove` | Opens a Confirm Dialog; not shown on the Default workspace |
 

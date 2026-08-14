@@ -40,7 +40,7 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   `workspace.list` rather than seeding a partial one-row list; else add-if-absent / merge-if-present,
   idempotent with the creating client's own post-create re-list); **`updateWorkspace(ws)`** folds a
   `workspace.updated` snapshot in: **replace** the record by `id` in `workspaces[ws.projectId]`, carrying
-  over only the locally-computed `diffStats` badge (the snapshot is the persisted record, which has none).
+  over only the list-computed `diffStats` aggregate (the snapshot is the persisted record, which has none).
   The push is authoritative, so a *replace* — never a merge: a merge could not clear an **optional field the
   host dropped** (`diffBase` re-pointed back to the creation base, the last `skillOverrides` entry removed),
   leaving the client labelling and keying reads off a value the host no longer has; a project never fetched or an id absent from its list is a **no-op** — the next

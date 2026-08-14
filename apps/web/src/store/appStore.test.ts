@@ -1054,7 +1054,7 @@ test("updateWorkspace applies a pushed snapshot authoritatively: dropped fields 
 	expect(ws?.diffStats).toEqual({ added: 3, removed: 1 }); // locally computed — survives the replace
 });
 
-test("updateWorkspace applies the pushed snapshot by id, keeping the computed diffStats badge", () => {
+test("updateWorkspace applies the pushed snapshot by id, keeping the computed diffStats aggregate", () => {
 	useAppStore.setState({
 		workspaces: {
 			p1: [

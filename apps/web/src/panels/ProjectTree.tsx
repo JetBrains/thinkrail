@@ -43,7 +43,6 @@ import {
 import { errorText, getTransport } from "../transport";
 import { AddProjectMenu } from "./AddProjectMenu";
 import { ConfirmDialog } from "./ConfirmDialog";
-import { DiffStatBadge } from "./DiffStatBadge";
 import { ExistingWorktreeDialog } from "./ExistingWorktreeDialog";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
 import { useOpenProject } from "./useOpenProject";
@@ -527,7 +526,6 @@ function WorkspaceRow({
 	onReveal: () => void;
 	onRemove: () => void;
 }) {
-	const stats = workspace.diffStats;
 	// Default is non-removable; external is removable from ThinkRail but its user-owned checkout is not.
 	// Icons make the three ownership modes legible without adding another text badge to the compact row.
 	const isDefault = isDefaultWorkspace(workspace);
@@ -581,11 +579,6 @@ function WorkspaceRow({
 						)}
 					</span>
 				</button>
-				<DiffStatBadge
-					added={stats?.added ?? 0}
-					removed={stats?.removed ?? 0}
-					className="self-start group-hover:hidden"
-				/>
 				<DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
 					<DropdownMenuTrigger
 						data-testid="workspace-menu"
