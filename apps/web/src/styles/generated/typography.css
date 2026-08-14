@@ -20,14 +20,14 @@
 	/* Font families */
 	--tr-font-family-interface: "Geist Variable", Geist, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 	--tr-font-family-code: "JetBrains Mono Variable", "JetBrains Mono", "Fira Code", "SF Mono", "Cascadia Code", monospace;
-	--tr-font-family-brand: "Geist Variable", Geist, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+	--tr-font-family-brand: "Orbitron Variable", Orbitron, "Geist Variable", Geist, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 
 	/* Font weights */
 	--tr-font-weight-light: 370;
 	--tr-font-weight-regular: 400;
 	--tr-font-weight-medium: 500;
 	--tr-font-weight-semibold: 600;
-	--tr-font-weight-brand: 800;
+	--tr-font-weight-brand: 400;
 
 	/* Font sizes (px) */
 	--tr-font-size-s10: 10px;

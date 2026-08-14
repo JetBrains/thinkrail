@@ -13,9 +13,17 @@ The project's public website — a single landing page whose creative conceit is
 IDE**: a faithful HTML/CSS recreation of the ThinkRail shell (title bar, project rail, tab strip,
 files rail, terminal, status bar) whose center "editor" is the normally-scrolling page content. Each
 section poses as a file of a `website` workspace (`README.md`, `why.md`, `features/*.md`,
-`install.sh`, `CONTRIBUTING.md`); the file tree's selection reacts to scroll (scroll-spy) like the
-editor is switching files. The tab strip is decorative — it does not react to scroll — and the status
-bar is a plain copyright footer, not a live line counter.
+`install.sh`, `CONTRIBUTING.md`). The **file tree is the source of truth for the page's navigation
+structure**, and its selection reacts to scroll (scroll-spy) like the editor is switching files. The
+top editor **tab strip is derived from that file-tree navigation** — not a hand-maintained list — and
+is interactive: the active tab **follows the currently visible section via the same scroll-spy**, and
+**clicking a tab scrolls to its section**. The strip holds **exactly one navigational tab per unique
+section target**: the tree may stay hierarchical and repeat a target across rows, but duplicate
+targets collapse to a single tab, so scroll-spy always activates exactly one tab per section. The
+strip **scrolls** (`overflow-x: auto`, scrollbar hidden) — the tabs overflow below ~1500px and every one
+must stay reachable. Its bottom divider is drawn **per tab**, not on the strip: a strip border sits
+outside the scrollport, where the active tab cannot paint over it to merge into the content. The
+status bar is a plain copyright footer, not a live line counter.
 
 Not part of the product: nothing in the app depends on it, and it ships to GitHub Pages, not in the
 binary.
@@ -32,15 +40,23 @@ binary.
   app's.
 - **Fonts are self-hosted; the site makes no external font request.** Packages and stacks are copied
   from the app's `typography.json`, not imported — and `src/fonts.test.ts` reads that JSON at test time
-  and fails on drift, which is what makes copying safe. `--font-display` aliases `--font-sans`,
-  mirroring the app's `brand` family.
+  and fails on drift, which is what makes copying safe. `--font-display` mirrors the app's `brand`
+  family — **Orbitron** (`@fontsource-variable/orbitron`, self-hosted), a distinct display face for the
+  brand elements (wordmark + hero heading), falling back to `--font-sans`; section headings and the
+  tagline are the interface face (`--font-sans`), matching the app.
 - **Brand values are copied, not imported.** Theme palettes are lifted at authoring time from
   `apps/web/src/themes/bundled/*.theme.json` (dark = default, darcula, light, gruvbox) into the site's
   own CSS custom properties under `[data-theme]`; the site never reaches into `apps/web` at build time
   (the app's tokens assume the theme engine's runtime swap).
-- All marketing copy is static DOM text; JS only *enhances* (scroll-spy, terminal typing, chat
-  streaming replay, theme switcher, copy buttons, star count, install-platform selection). The page
-  must read complete with JS disabled, and animations are skipped under `prefers-reduced-motion`.
+- **A colour with a contrast floor gets a `:root` token, never the region-inherited `--accent`.**
+  `.hero` re-points `--accent` for its artwork, so descendants reading it inherit a value chosen for dark
+  backgrounds. `--link` and `--focus-ring` are declared once on `:root` as `var(--accent)`, which resolves
+  against the *root* accent — per-theme, but out of reach of a region override.
+- All marketing copy is static DOM text; JS only *enhances* (scroll-spy, the derived editor-tab strip
+  and its scroll-spy/click navigation, terminal typing, chat streaming replay, theme switcher, copy
+  buttons, star count, install-platform selection). The page must read complete with JS disabled (the
+  editor tabs are a JS-built navigation affordance over content that is already reachable by scrolling
+  and via the file tree), and animations are skipped under `prefers-reduced-motion`.
 - The hero's install command has **macOS / Linux / Windows** tabs. Browser hints choose only the
   initial supported desktop OS; they never hide alternatives or claim to detect an ambiguous mobile
   platform. Windows adds **PowerShell / Command Prompt / WSL** tabs: native shells use `install.ps1`

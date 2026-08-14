@@ -75,7 +75,7 @@ export function RightPanel() {
 						{draftCount > 0 && (
 							<span
 								data-testid="review-pending-badge"
-								className="ml-[3px] inline-flex min-w-4 items-center justify-center rounded-full bg-primary px-[3px] tr-text-label-pill text-text-on-primary"
+								className="ml-0.5 inline-flex min-w-4 items-center justify-center rounded-full bg-primary px-0.5 tr-text-label-pill text-text-on-primary"
 							>
 								{draftCount}
 							</span>

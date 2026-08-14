@@ -133,7 +133,7 @@ workspace is active. **One hero heading** (`welcome-title`, the topbar's brand s
 the wordmark is the empty-state identity, a project's own name is the identity once one is open (so no
 separate project eyebrow). **No pitch prose in any state** — the marketing paragraph was removed as
 unread; the screen is heading → banners → **one-to-three cards** (icon top-left,
-label + explainer bottom-left; the primary is a filled-violet card carrying the stable `welcome-cta`
+label + explainer bottom-left; the primary is a filled-primary card carrying the stable `welcome-cta`
 hook, others quiet `welcome-action`s). Welcome is **the mode fork**: with a project shown it always pairs
 **"Start building"** (isolated worktree) with **"Work in project folder"** (the Default workspace) so the
 two working modes are a visible choice, not a hidden default. The cards by state: **no projects** →
@@ -494,7 +494,7 @@ a project picker, the prompt hero, and the reused
   DRAFT's body is **editable in place** until it's sent — the same input surface as the composer's
   field (`--input-bg`, primary focus ring; blur / Cmd+Enter saves via `review.commentUpdate`, Esc
   reverts, empty reverts — never deletes) — and carries Send + Delete (draft-only); sent/outdated cards are
-  passive read-only markers (plain text, no field). Status shows as the head dot (violet draft / blue
+  passive read-only markers (plain text, no field). Status shows as the head dot (primary draft / info
   sent).
   **Monaco**: `attachReviewThreads` view zones below the anchor lines — Monaco pushes the following
   lines apart; zone heights track the rendered card via a **ResizeObserver**, not a one-shot measure:
@@ -529,7 +529,7 @@ a project picker, the prompt hero, and the reused
   boundary-only end block is replaced by its previous stamped sibling), falling back to
   `previewAnchor`'s phrase search for unstamped content. The sidebar remains the full-detail surface. **Review presence is self-announcing and
   PER-FILE**: a center tab (file or diff) whose path is still in review wears a `Review` flag with
-  **two states** (`ReviewTabFlag`, over the one `reviewFlags` derivation) — violet
+  **two states** (`ReviewTabFlag`, over the one `reviewFlags` derivation) — accent
   (`tr-text-eyebrow text-primary`) while the file holds an **unsent draft**, muted (`text-text-subtle`)
   once only **sent** comments remain; resolved/dismissed drop it entirely. Two states, not
   present-or-absent, because *"in review"* and *"there is something to send"* are different facts, and

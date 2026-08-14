@@ -132,7 +132,7 @@ Children:
 | Welcome Heading | inline hero heading | `welcome-title` | Project name, or `PRODUCT_NAME` when no project |
 | Provider Warning Banner | `panels/ProviderWarningBanner.tsx` → `ProviderWarningBanner` | — | Gold banner shown only when no provider is connected |
 | Project Skills Notice | `panels/ProjectSkillsNotice.tsx` → `ProjectSkillsNotice` | — | Pre-workspace trust surface for committed skills |
-| Primary Card (CTA) | `Card` in `WelcomePanel` | `welcome-cta` | Filled-violet primary action |
+| Primary Card (CTA) | `Card` in `WelcomePanel` | `welcome-cta` | Filled-primary action |
 | Action Card | `Card` in `WelcomePanel` | `welcome-action` | Quiet secondary actions |
 
 ---

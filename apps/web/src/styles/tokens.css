@@ -12,7 +12,9 @@
 	 */
 	--space-base: 13px;
 
-	/* Shape + motion */
+	/* Shape + motion. `xs` is the text-run tier: the corner on a tint that sits BEHIND running text
+	   (a `<mark>` search hit, a composer slot placeholder), where `sm` would read as a chip. */
+	--radius-xs: 2px;
 	--radius-sm: 4px;
 	--radius-md: 8px;
 	--radius-lg: 12px;

@@ -71,7 +71,7 @@ function Highlight({ text, query }: { text: string; query: string }) {
 		<>
 			{parts.map(({ text: part, key }) =>
 				terms.includes(part.toLowerCase()) ? (
-					<mark key={key} className="rounded-[2px] bg-primary-soft text-text-default">
+					<mark key={key} className="rounded-[var(--radius-xs)] bg-primary-soft text-text-default">
 						{part}
 					</mark>
 				) : (

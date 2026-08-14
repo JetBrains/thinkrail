@@ -250,7 +250,7 @@ const Card = forwardRef<HTMLButtonElement, CardProps>(function Card(
 			) : null}
 			<span
 				className={cn(
-					"flex size-9 items-center justify-center rounded-[10px]",
+					"flex size-9 items-center justify-center rounded-[var(--radius-md)]",
 					primary ? "bg-primary text-text-on-primary" : "bg-control-bg-selected text-text-muted",
 				)}
 			>
