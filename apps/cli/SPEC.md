@@ -201,11 +201,15 @@ and `trash`'s **native helper sidecars** (which macOS/Windows must execute from 
   artifact — the frames are hand-rolled JSON, keeping `contracts` out of the cli), **moves a seeded pi
   transcript through `session.delete` into the OS trash** (pinning the static `processMountinfo` parser
   inclusion that `trash`'s Linux implementation otherwise reaches through a binary-opaque CommonJS
-  require), verifies both macOS/Windows helpers were staged from the artifact, and SIGTERM exits 0. CI
-  builds + smokes the binary on every PR
-  (its host target — the generation/bundling/staging logic is platform-independent). What it can't cover
-  without provider auth: the factories registering inside a live session (that's `e2e:agent` territory,
-  run-from-source). The smoke's **broad-net sibling** is `bun run e2e:binary` (root
+  require; the fixture is seeded at the **host-reported `worktreePath`**, never the smoke's own temp path,
+  because the host stores git's symlink-resolved root — macOS `/var` → `/private/var`, Windows' 8.3 `TEMP`
+  — so a fixture written at an unresolved path lands in an encoded session dir the host never scans, and
+  the delete then truthfully no-ops while the file stays put), verifies both macOS/Windows helpers were
+  staged from the artifact, and SIGTERM exits 0. CI builds + smokes the binary on every PR (its host
+  target — the generation/bundling/staging logic is platform-independent, but a Linux-only smoke cannot
+  see path-canonicalization or real-OS-trash divergence: those first surface on the release matrix's
+  macOS/Windows runners). What it can't cover without provider auth: the factories registering inside a
+  live session (that's `e2e:agent` territory, run-from-source). The smoke's **broad-net sibling** is `bun run e2e:binary` (root
   `playwright.binary.config.ts`): the whole no-agent e2e suite executed against this binary — also in CI
   on every PR. And `bun run check:seams` (root `scripts/check-binary-seams.ts`) is the build-time canary
   for the seam class: it fails when a pi bump introduces a new bundler-opaque dynamic import the server's

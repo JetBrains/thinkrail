@@ -107,15 +107,6 @@ const gitCommit = Bun.spawnSync([
 ]);
 if (gitCommit.exitCode !== 0) fail("could not commit the portable-skill smoke project");
 
-// A real transcript drives the binary-only Linux trash path. `trash` loads processMountinfo through a
-// template-literal CommonJS require; without the server's static inclusion seam this exact RPC fails only
-// inside the artifact, even though source e2e stays green.
-const doomedTranscript = writeFixtureSession(defaultSessionDirFor(agentDir, projectDir), {
-	cwd: projectDir,
-	name: "compiled trash probe",
-	messages: [{ role: "user", text: "move this transcript to trash", timestamp: Date.now() }],
-});
-
 // 24262 is only the scan start: the CLI free-picks past a taken port and we read the actually served
 // URL from stdout below — so concurrent runs (other worktrees, dev hosts, e2e suites) never collide.
 const proc = Bun.spawn([binary, "--no-open", "--port", "24262"], {
@@ -291,9 +282,30 @@ try {
 		rpc(rpcSocket, "workspace.list", { projectId: project.id }),
 		10_000,
 		"workspace.list",
-	)) as { id?: string; kind?: string }[];
-	const workspaceId = workspaces.find((workspace) => workspace.kind === "default")?.id;
+	)) as { id?: string; kind?: string; worktreePath?: string }[];
+	const defaultWorkspace = workspaces.find((workspace) => workspace.kind === "default");
+	const workspaceId = defaultWorkspace?.id;
 	if (!workspaceId) fail("workspace.list returned no Default workspace");
+
+	// A real transcript drives the binary-only Linux trash path. `trash` loads processMountinfo through a
+	// template-literal CommonJS require; without the server's static inclusion seam this exact RPC fails only
+	// inside the artifact, even though source e2e stays green.
+	//
+	// Seed it against the **host-reported** worktree path, never our own `projectDir` string: the host stores
+	// git's symlink-resolved root, and a handed-in temp path is only incidentally canonical (macOS resolves
+	// `/var` → `/private/var`, Windows' `TEMP` is the 8.3 `RUNNER~1` form of `runneradmin`). `session.delete`
+	// matches a transcript on that exact cwd — both the encoded session dir *and* the file's header — so
+	// seeding from an unresolved path strands the file in a directory the host never scans, and the delete
+	// then truthfully reports "nothing in this workspace matched" while the file stays put. Same contract as
+	// e2e's `seedWorkspaceSession(worktreePath, …)`.
+	const worktreePath = defaultWorkspace?.worktreePath;
+	if (!worktreePath) fail("workspace.list returned no worktreePath for the Default workspace");
+	const doomedTranscript = writeFixtureSession(defaultSessionDirFor(agentDir, worktreePath), {
+		cwd: worktreePath,
+		name: "compiled trash probe",
+		messages: [{ role: "user", text: "move this transcript to trash", timestamp: Date.now() }],
+	});
+
 	await within(
 		rpc(rpcSocket, "session.delete", { sessionId: doomedTranscript.id, workspaceId }),
 		10_000,
