@@ -26,8 +26,19 @@ const projectDir = join(tmp, "project");
 const dataDir = join(tmp, "data");
 const agentDir = join(tmp, "pi-agent");
 
+/** Kills the spawned host once it exists; a no-op for the failures that happen before it is up. */
+let killHost: () => void = () => {};
+
 function fail(message: string): never {
 	console.error(`smoke FAILED: ${message}`);
+	// `process.exit` unwinds nothing — the `finally` at the bottom never runs — so the host has to be
+	// killed right here. Left alive it outlives the smoke: CI reports "Terminate orphan process: pid (…)
+	// (thinkrail-…)", and locally it keeps the inherited stdout pipe open, so a piped invocation hangs
+	// forever after the failure has already been printed.
+	killHost();
+	// The throwaway dirs are deliberately KEPT on failure — they are the post-mortem (which encoded
+	// session dir a transcript landed in, what got staged). A CI runner discards them with the job.
+	console.error(`smoke state kept for inspection: ${tmp}`);
 	process.exit(1);
 }
 
@@ -126,6 +137,7 @@ const proc = Bun.spawn([binary, "--no-open", "--port", "24262"], {
 	stdout: "pipe",
 	stderr: "inherit",
 });
+killHost = () => proc.kill("SIGKILL");
 
 async function connectRpc(baseUrl: string): Promise<WebSocket> {
 	const socket = new WebSocket(`${baseUrl.replace(/^http/, "ws")}/ws`);
@@ -397,9 +409,10 @@ try {
 		`smoke OK: ${binary} booted at ${url}, served the UI + staged skills + portable alias, trashed a transcript, OAuth reached its auth URL, exited cleanly.`,
 	);
 } catch (err) {
-	proc.kill("SIGKILL");
+	// `fail` kills the host itself, so every exit path — thrown or asserted — sheds the process.
 	fail(err instanceof Error ? err.message : String(err));
 } finally {
+	// Success only: `fail` exits before this can run, and keeps `tmp` on purpose for the post-mortem.
 	rpcSocket?.close();
 	rmSync(tmp, { recursive: true, force: true });
 }
