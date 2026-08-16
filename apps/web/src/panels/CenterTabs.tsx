@@ -194,8 +194,14 @@ export function CenterTabs() {
 		// wrapper single-flights watcher readiness, then captures each load's conservative start tick.
 		const fetchMessages = (sessionId: string) =>
 			getSessionMessagesWithSkillBaseline({ sessionId, workspaceId })
-				// A session that failed to load is skipped; the others still hydrate.
-				.catch(() => null);
+				// One session failing must not cost the others their hydrate — but it must not read as "no such
+				// chat" either, so it says so and lands in chat-history below instead of vanishing until the
+				// next reconnect. Silent after the effect is cancelled: leaving the workspace cancels its
+				// in-flight reads, and an archived workspace's reads fail by design.
+				.catch((err: unknown) => {
+					if (!cancelled) toast.error(errorText(err), "Couldn't load this chat");
+					return null;
+				});
 		const applyHydrate = (loaded: Awaited<ReturnType<typeof fetchMessages>>, live: boolean) => {
 			if (!loaded || cancelled) return;
 			// A live restore reused the server's already-loaded resources → no baseline (stays
@@ -239,8 +245,14 @@ export function CenterTabs() {
 				}
 				if (cancelled) return;
 				// All reads start now; applying them newest-first keeps focus deterministic (see above).
-				const inFlight = toOpen.map((s) => ({ live: s.live, result: fetchMessages(s.sessionId) }));
-				for (const { live, result } of inFlight) applyHydrate(await result, live);
+				const inFlight = toOpen.map((s) => ({ summary: s, result: fetchMessages(s.sessionId) }));
+				/** Auto-opens whose transcript never arrived — history entries, not silent absences. */
+				const failed: typeof summaries = [];
+				for (const { summary, result } of inFlight) {
+					const loaded = await result;
+					if (loaded) applyHydrate(loaded, summary.live);
+					else failed.push(summary);
+				}
 				if (cancelled) return;
 				// Fallback: nothing opened (and nothing was deliberately closed) → open the newest disk chat.
 				const state = useAppStore.getState();
@@ -251,10 +263,11 @@ export function CenterTabs() {
 					const newest = toHistory.shift(); // `ordered` kept them newest-first
 					if (newest) await hydrateFromHost(newest.sessionId, newest.live);
 				}
-				if (!cancelled && toHistory.length > 0) {
+				const toList = [...toHistory, ...failed];
+				if (!cancelled && toList.length > 0) {
 					useAppStore.getState().noteClosedChats(
 						workspaceId,
-						toHistory.map((s) => ({
+						toList.map((s) => ({
 							sessionId: s.sessionId,
 							title: s.title,
 							closedAt: s.updatedAt,
@@ -262,7 +275,10 @@ export function CenterTabs() {
 					);
 				}
 			})
-			.catch(() => {});
+			.catch((err: unknown) => {
+				// Same rule as a single transcript above: a failed list leaves the center empty, so say why.
+				if (!cancelled) toast.error(errorText(err), "Couldn't load this workspace's chats");
+			});
 		return () => {
 			cancelled = true;
 		};

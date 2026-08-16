@@ -354,7 +354,12 @@ a project picker, the prompt hero, and the reused
   lands focused without ever stealing an existing selection (e2e: `auto-open-chats.spec.ts`). Reopening restores a live runtime's tab, or for a disk-only chat re-opens it
   on the host (`getMessages`) + hydrates — so a reload, a second tab, or a host restart all rebuild from the
   host. A rejected new-chat `session.create` or history-reopen `getMessages` raises a `store.toast.error`
-  (the click would otherwise do nothing, silently; a failed reopen stays in history for a retry).
+  (the click would otherwise do nothing, silently; a failed reopen stays in history for a retry). **A
+  hydrate read that fails does the same** — an auto-open whose `getMessages` rejects, or a `session.list`
+  that rejects outright — because a swallowed read is indistinguishable from a workspace with no chats;
+  the failed session becomes a history entry (clickable for a retry) instead of vanishing until the next
+  reconnect. Both toasts fall silent once the pass is cancelled: leaving a workspace cancels its reads,
+  and an archived workspace's reads fail by design.
   `CenterTabs` also resolves the history-search **`chatLocationRequest`** deep link (see `store/SPEC.md`):
   once its workspace is active, it focuses an already-open tab, `reopenChat`s a live-but-closed one, or
   fetches + hydrates a disk-only one — the reopen flow's two cases above, plus a third case for an
