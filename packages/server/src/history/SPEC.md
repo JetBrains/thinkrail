@@ -32,7 +32,9 @@ to preserve).
   `migrateSessionEntries` → `buildSessionContext` (follow the current leaf, apply the latest compaction,
   drop summarized/abandoned entries) — then indexes the resolved messages, filtered to the same renderable
   roles `getSessionMessages` sends. So `messageIndex` matches the client's `turnIdByMessageIndex` exactly
-  (no raw-file-order drift), and abandoned/summarized text never becomes a hit. The internal
+  (no raw-file-order drift), and abandoned/summarized text never becomes a hit — the compaction summary is
+  sent (it renders the client's compaction marker), so it consumes an index slot without being searchable.
+  The internal
   `TODO_NUDGE_PREFIX` control message (hidden from the transcript on hydrate) is skipped after its index
   slot is consumed, so alignment holds. Entry text is **full, never truncated** — a hit's `text` is what
   recall inserts and what the overlay's preview presents as the whole prompt, so a cap would silently

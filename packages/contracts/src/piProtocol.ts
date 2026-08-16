@@ -342,5 +342,19 @@ export interface WireCustomMessage<T = unknown> {
 	timestamp: number;
 }
 
+/**
+ * MIRROR of pi-coding-agent's `CompactionSummaryMessage` (Node-only package, so re-declared type-only for
+ * the wire, like `WireCustomMessage` above): the entry pi leaves in a resolved transcript where compaction
+ * replaced earlier messages with `summary`. It is the only record of that gap — pi drops the summarized
+ * messages themselves — so the client renders it as the transcript's compaction marker.
+ */
+export interface WireCompactionSummary {
+	role: "compactionSummary";
+	summary: string;
+	/** Context size before the pass, as pi measured it. */
+	tokensBefore: number;
+	timestamp: number;
+}
+
 /** A transcript message as `session.getMessages` reports it: pi-canonical + custom messages. */
-export type TranscriptMessage = Message | WireCustomMessage;
+export type TranscriptMessage = Message | WireCustomMessage | WireCompactionSummary;

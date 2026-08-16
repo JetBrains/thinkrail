@@ -28,7 +28,13 @@ export interface ExtractedSession {
 /** The roles the host surfaces to the client (`getSessionMessages`'s filter) — the exact set the client's
  * `messagesToRuntime` folds into `turnIdByMessageIndex`. Indexing against the same set is what keeps a
  * hit's `messageIndex` aligned with the jump anchor the client resolves it against. */
-const RENDERABLE_ROLES = new Set(["user", "assistant", "toolResult", "custom"]);
+const RENDERABLE_ROLES = new Set([
+	"user",
+	"assistant",
+	"toolResult",
+	"custom",
+	"compactionSummary",
+]);
 
 function textOf(content: unknown): string {
 	if (typeof content === "string") return content;
@@ -82,8 +88,9 @@ export function extractSession(jsonl: string): ExtractedSession | null {
 	const out: HistoryEntry[] = [];
 	let messageIndex = 0;
 	for (const message of messages) {
-		// Non-renderable context messages (compaction/branch summaries) are stripped by the host before
-		// the client sees them, so they must not consume an index slot here either.
+		// Non-renderable context messages (branch summaries) are stripped by the host before the client
+		// sees them, so they must not consume an index slot here either. A `compactionSummary` is sent, so
+		// it does consume one — it just never becomes a searchable entry (the role check below).
 		if (!RENDERABLE_ROLES.has(message.role)) continue;
 		const index = messageIndex++;
 		if (message.role !== "user" && message.role !== "assistant") continue;

@@ -551,8 +551,10 @@ export async function getSessionMessages(
 		if (!entry) throw new Error(`Unknown session: ${sessionId}`);
 	}
 	// `custom` rides along for the ask-user-answers pairing (the card reads `details.toolCallId`); the
-	// web renders only the customTypes it knows and ignores the rest.
-	const renderable = new Set(["user", "assistant", "toolResult", "custom"]);
+	// web renders only the customTypes it knows and ignores the rest. `compactionSummary` rides along
+	// because pi resolves a compacted session to the summary plus what followed it — dropping the summary
+	// too would leave the client a transcript that begins mid-conversation with nothing to explain why.
+	const renderable = new Set(["user", "assistant", "toolResult", "custom", "compactionSummary"]);
 	const messages = entry.session.messages.filter((m) =>
 		renderable.has(m.role),
 	) as TranscriptMessage[];

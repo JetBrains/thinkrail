@@ -211,7 +211,9 @@ export interface TerminalTabsPush {
 // v36: `review.close` atomically archives non-draft records and publishes the fresh open snapshot; clients
 // no longer follow it with an initiating-only `review.get` fold.
 // v37: `workspace.openReview` returns the active branch's optional GitHub PR / GitLab MR number.
-export const PROTOCOL_VERSION = 37;
+// v38: `session.getMessages` keeps pi's `compactionSummary` messages, so a hydrated transcript can say
+// where compaction replaced earlier messages instead of starting mid-conversation.
+export const PROTOCOL_VERSION = 38;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a

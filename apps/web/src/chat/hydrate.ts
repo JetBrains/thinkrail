@@ -63,6 +63,15 @@ export function messagesToRuntime(
 				status: message.isError ? "error" : "done",
 				raw: { content: message.content, details: message.details },
 			};
+		} else if (message.role === "compactionSummary") {
+			// Its own turn, but no anchor: history search indexes user/assistant text only, so this slot stays
+			// `null` like every other non-conversation message.
+			turns.push({
+				kind: "compaction",
+				id: crypto.randomUUID(),
+				summary: message.summary,
+				tokensBefore: message.tokensBefore,
+			});
 		} else if (isAskUserAnswersMessage(message)) {
 			// The shared guard validates the details shape (not just the tag) — a malformed reply is ignored.
 			askAnswers[message.details.toolCallId] = message.details.result;

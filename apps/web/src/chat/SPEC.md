@@ -22,12 +22,15 @@ a future `packages/chat-ui`). Built-in tool renderers live in the child
 ## Rendering model — rows and progressive disclosure
 
 The transcript is pi-canonical turns (`ChatTurn` in `types.ts`: user/assistant are pi messages; `system`,
-`error`, `retry` are web-local notices), but the list renders **derived rows, not raw turns** — folding
+`error`, `retry` are web-local notices; `compaction` marks where pi replaced earlier messages with a
+summary — hydration-only, since a live transcript still holds everything it streamed), but the list renders
+**derived rows, not raw turns** — folding
 spans assistant-message boundaries (pi emits one assistant message per tool round), so a per-turn item
 model can't group. The pure **`deriveRows(turns, toolResults, isStreaming, isSpec?)`** (`rows.ts`) walks
 blocks in order into rows; `ChatTurnView` dispatches on row kind:
 
-- `user` / `system` / `retry` — 1:1 renderers. A user message that IS a review context package
+- `user` / `system` / `retry` / `compaction` — 1:1 renderers (`CompactionTurn` is a labelled rule that
+  opens pi's summary on click, so a reloaded long chat explains its gap instead of starting mid-conversation). A user message that IS a review context package
   (`reviewPackage.ts` recognizes the `<review …>` header + `<comment …>` items the server's
   `packageRender` emits — the parser is the read half of that format, pinned in unit tests against the
   renderer's verbatim output) renders as a **compact card**: the one-sentence
