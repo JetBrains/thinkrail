@@ -50,7 +50,7 @@ export function ChatTurnView({
 		case "error":
 			return <ErrorTurn text={row.text} />;
 		case "compaction":
-			return <CompactionTurn summary={row.summary} tokensBefore={row.tokensBefore} />;
+			return <CompactionTurn id={row.id} summary={row.summary} tokensBefore={row.tokensBefore} />;
 		case "retry":
 			return (
 				<RetryIndicator
@@ -240,14 +240,24 @@ function SystemTurn({ text }: { text: string }) {
  * reloaded long chat simply starts mid-conversation, which reads as lost history. The summary is what pi
  * kept of those messages, so it opens on click rather than being hidden outright.
  */
-function CompactionTurn({ summary, tokensBefore }: { summary: string; tokensBefore: number }) {
-	const [open, setOpen] = useState(false);
+function CompactionTurn({
+	id,
+	summary,
+	tokensBefore,
+}: {
+	id: string;
+	summary: string;
+	tokensBefore: number;
+}) {
+	// The shared fold cache, like every other manual open/close in the transcript: a summary is long
+	// enough to scroll past, and Virtuoso unmounting the row must not collapse what the reader opened.
+	const [open, toggle] = useFold(id);
 	return (
 		<div data-testid="chat-compaction" className="flex flex-col gap-sm">
 			<button
 				type="button"
 				aria-expanded={open}
-				onClick={() => setOpen(!open)}
+				onClick={toggle}
 				className="flex items-center gap-sm text-text-muted tr-text-metadata hover:text-text-default"
 			>
 				<span className="h-px flex-1 bg-border-default" />

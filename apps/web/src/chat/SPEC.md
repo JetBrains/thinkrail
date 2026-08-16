@@ -138,7 +138,9 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   followed by later messages remain history, not a stale current warning. It also
   returns `turnIdByMessageIndex` (message-position → minted turn id) — the jump anchor map a
   history-search "jump to message" deep link (`chatLocationRequest`, see `store/SPEC.md`) resolves
-  against; entries are `null` for a `toolResult`/`custom` message (never its own turn), and a message that
+  against; entries are `null` for a `toolResult`/`custom` message (never its own turn) and for a
+  `compactionSummary` (its own turn, but never a search hit — the host's index consumes the same slot, so
+  the two stay aligned), and a message that
   ended in `stopReason: "error"` maps to its own assistant turn's id, never the synthesized error turn's.
   `custom` messages never become turns: known ones (`ask-user-answers`) index into `askAnswers`; unknown
   customTypes are ignored. No store/transport/shiki.

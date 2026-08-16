@@ -77,7 +77,11 @@ of the host.
     `session.getMessages` returns `{ summary, messages }` (the transcript is
     **`TranscriptMessage[]`** — the pi-canonical `Message` union widened with **`WireCustomMessage`**, a
     type-only mirror of pi-coding-agent's Node-only `CustomMessage`, so extension-injected messages like
-    the ask replies cross the wire; the summary reflects the now-live session after a disk re-open).
+    the ask replies cross the wire, and with **`WireCompactionSummary`** (protocol v38), the same kind of
+    mirror for the entry pi leaves where compaction replaced earlier messages: it is the only record that
+    a gap exists — pi drops the summarized messages themselves — so the client can mark it instead of
+    rendering a transcript that begins mid-conversation; the summary reflects the now-live session after a
+    disk re-open).
   - the **extension-UI frames** **`ExtUiRequest`** / **`ExtUiResponse`** — our wire shape for pi's in-process
     `uiContext` calls (`select`/`confirm`/`input`/`editor` round-trip; `notify`/`setStatus`/`setWidget`/
     `setTitle`/`dismiss` are fire-and-forget), carried on the `pi.extensionUi` channel.
