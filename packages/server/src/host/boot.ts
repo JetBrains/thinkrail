@@ -2,6 +2,7 @@ import { findFreePort } from "@thinkrail/shared/freePort";
 import { resolveShellEnv } from "@thinkrail/shared/shellEnv";
 import { settleSessionsForShutdown } from "../agent";
 import { shutdownAnalytics } from "../analytics";
+import { installCrashLog } from "./crashLog";
 import { type CreateServerOptions, createServer, type RunningServer } from "./server";
 
 export interface BootHostOptions {
@@ -40,6 +41,9 @@ export interface BootedHost {
  * before exiting.
  */
 export async function bootHost(options: BootHostOptions): Promise<BootedHost> {
+	// First thing: from here on a fatal fault leaves a report behind (in-process pi means any such fault is
+	// the whole host's, and this is the only trace it gets).
+	installCrashLog(options.appVersion);
 	// Must precede any AgentSession creation; createServer makes sessions lazily, so here is early enough.
 	resolveShellEnv();
 
