@@ -23,17 +23,38 @@ test("a run from source says so, and a stack-less throw still reports what it wa
 });
 
 // Formatting must not throw: it runs before the record reaches stderr or the file, so a value that
-// resists rendering would destroy the report instead of appearing in it.
-test("a value that cannot be serialized is still reported", () => {
+// resists rendering would destroy the report instead of appearing in it. Every rendering step is hostile
+// in some case — classification included — so each one degrades rather than escaping.
+test("a value that resists rendering is still reported", () => {
 	const cyclic: { self?: unknown } = {};
 	cyclic.self = cyclic;
-	expect(formatCrashRecord("uncaughtException", cyclic, AT, 1)).toContain("unserializable");
-	expect(formatCrashRecord("unhandledRejection", { big: 1n }, AT, 1)).toContain("unserializable");
+	expect(formatCrashRecord("uncaughtException", cyclic, AT, 1)).toContain("Unrenderable throw:");
+	expect(formatCrashRecord("unhandledRejection", { big: 1n }, AT, 1)).toContain(
+		"Unrenderable throw:",
+	);
 
-	// No prototype ⇒ no `toString` either, so even the fallback rendering throws.
-	const hostile = Object.assign(Object.create(null), { big: 1n }) as object;
-	expect(formatCrashRecord("uncaughtException", hostile, AT, 1)).toContain(
-		"Non-Error thrown (unserializable object)",
+	// An Error whose `stack` accessor throws: classification succeeded, the read did not.
+	const badStack = new Error("hostile");
+	Object.defineProperty(badStack, "stack", {
+		get() {
+			throw new Error("no stack for you");
+		},
+	});
+	expect(formatCrashRecord("uncaughtException", badStack, AT, 1)).toContain(
+		"Unrenderable throw: Error: hostile",
+	);
+
+	// No prototype ⇒ no `toString` to borrow, so even the fallback rendering throws.
+	const noProto = Object.assign(Object.create(null), { big: 1n }) as object;
+	expect(formatCrashRecord("uncaughtException", noProto, AT, 1)).toContain(
+		"Unrenderable throw (object)",
+	);
+
+	// A revoked Proxy traps every operation, `instanceof` included — the type is all that survives.
+	const { proxy, revoke } = Proxy.revocable({}, {});
+	revoke();
+	expect(formatCrashRecord("unhandledRejection", proxy, AT, 1)).toContain(
+		"Unrenderable throw (object)",
 	);
 });
 

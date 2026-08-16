@@ -29,23 +29,26 @@ export function formatCrashRecord(
 /**
  * What was thrown, as text that can always be produced.
  *
- * Anything can be thrown or rejected with, and both obvious ways to render an unknown value can throw in
- * turn: `JSON.stringify` on a cycle or a BigInt, `String()` on a null-prototype object or a hostile
- * `toString`. A crash reporter that throws while reporting destroys the very fault it exists to record —
- * and it would throw from inside the handler, before anything reached stderr or the file — so every step
- * here degrades instead, down to naming the type alone.
+ * Anything can be thrown or rejected with, and every step of rendering an unknown value can itself throw:
+ * `instanceof` and any property read trap on a revoked `Proxy`, `stack` may be an accessor that throws,
+ * `JSON.stringify` rejects cycles and BigInts, and `String()` has neither `toString` nor a prototype to
+ * borrow one from on a null-prototype object. A crash reporter that throws while reporting destroys the
+ * very fault it exists to record — and it would throw from inside the handler, before anything reached
+ * stderr or the file — so classification and every read sit inside the guard, degrading to the type alone.
  */
 function describe(error: unknown): string {
-	if (error instanceof Error) return error.stack ?? `${error.name}: ${error.message}`;
-	if (typeof error === "string") return `Non-Error thrown: ${error}`;
 	try {
+		if (error instanceof Error) return error.stack || `${error.name}: ${error.message}`;
+		if (typeof error === "string") return `Non-Error thrown: ${error}`;
 		return `Non-Error thrown: ${JSON.stringify(error) ?? String(error)}`;
 	} catch {
-		try {
-			return `Non-Error thrown (unserializable): ${String(error)}`;
-		} catch {
-			return `Non-Error thrown (unserializable ${typeof error})`;
-		}
+		// Fall through: whatever this is, it resists the ordinary renderings.
+	}
+	try {
+		return `Unrenderable throw: ${String(error)}`;
+	} catch {
+		// `typeof` is the one operator left that cannot trap.
+		return `Unrenderable throw (${typeof error})`;
 	}
 }
 
