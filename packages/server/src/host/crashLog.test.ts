@@ -50,6 +50,13 @@ test("a value that resists rendering is still reported", () => {
 		"Unrenderable throw (object)",
 	);
 
+	// A `stack` that is not a string at all: returning it would move the coercion outside the guard.
+	const proxyStack = new Error("proxy stack");
+	const revocable = Proxy.revocable({}, {});
+	revocable.revoke();
+	Object.defineProperty(proxyStack, "stack", { value: revocable.proxy });
+	expect(formatCrashRecord("uncaughtException", proxyStack, AT, 1)).toContain("Error: proxy stack");
+
 	// A revoked Proxy traps every operation, `instanceof` included — the type is all that survives.
 	const { proxy, revoke } = Proxy.revocable({}, {});
 	revoke();

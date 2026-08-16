@@ -38,7 +38,12 @@ export function formatCrashRecord(
  */
 function describe(error: unknown): string {
 	try {
-		if (error instanceof Error) return error.stack || `${error.name}: ${error.message}`;
+		if (error instanceof Error) {
+			// `stack` is typed `string | undefined` but is whatever the thrower left there; anything else
+			// would only be coerced later, by the caller's interpolation, outside this guard.
+			const { stack } = error;
+			return typeof stack === "string" && stack ? stack : `${error.name}: ${error.message}`;
+		}
 		if (typeof error === "string") return `Non-Error thrown: ${error}`;
 		return `Non-Error thrown: ${JSON.stringify(error) ?? String(error)}`;
 	} catch {
