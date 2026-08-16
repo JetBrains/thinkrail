@@ -23,11 +23,30 @@ export function formatCrashRecord(
 	appVersion?: string,
 ): string {
 	const build = appVersion ?? "source";
-	const detail =
-		error instanceof Error
-			? (error.stack ?? `${error.name}: ${error.message}`)
-			: `Non-Error thrown: ${typeof error === "string" ? error : (JSON.stringify(error) ?? String(error))}`;
-	return `[${at.toISOString()}] ${kind} (thinkrail ${build}, up ${Math.round(uptimeSeconds)}s)\n${detail}\n\n`;
+	return `[${at.toISOString()}] ${kind} (thinkrail ${build}, up ${Math.round(uptimeSeconds)}s)\n${describe(error)}\n\n`;
+}
+
+/**
+ * What was thrown, as text that can always be produced.
+ *
+ * Anything can be thrown or rejected with, and both obvious ways to render an unknown value can throw in
+ * turn: `JSON.stringify` on a cycle or a BigInt, `String()` on a null-prototype object or a hostile
+ * `toString`. A crash reporter that throws while reporting destroys the very fault it exists to record —
+ * and it would throw from inside the handler, before anything reached stderr or the file — so every step
+ * here degrades instead, down to naming the type alone.
+ */
+function describe(error: unknown): string {
+	if (error instanceof Error) return error.stack ?? `${error.name}: ${error.message}`;
+	if (typeof error === "string") return `Non-Error thrown: ${error}`;
+	try {
+		return `Non-Error thrown: ${JSON.stringify(error) ?? String(error)}`;
+	} catch {
+		try {
+			return `Non-Error thrown (unserializable): ${String(error)}`;
+		} catch {
+			return `Non-Error thrown (unserializable ${typeof error})`;
+		}
+	}
 }
 
 let installed = false;

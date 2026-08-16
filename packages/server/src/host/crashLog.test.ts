@@ -22,6 +22,21 @@ test("a run from source says so, and a stack-less throw still reports what it wa
 	expect(record).toContain("Non-Error thrown: just a string");
 });
 
+// Formatting must not throw: it runs before the record reaches stderr or the file, so a value that
+// resists rendering would destroy the report instead of appearing in it.
+test("a value that cannot be serialized is still reported", () => {
+	const cyclic: { self?: unknown } = {};
+	cyclic.self = cyclic;
+	expect(formatCrashRecord("uncaughtException", cyclic, AT, 1)).toContain("unserializable");
+	expect(formatCrashRecord("unhandledRejection", { big: 1n }, AT, 1)).toContain("unserializable");
+
+	// No prototype ⇒ no `toString` either, so even the fallback rendering throws.
+	const hostile = Object.assign(Object.create(null), { big: 1n }) as object;
+	expect(formatCrashRecord("uncaughtException", hostile, AT, 1)).toContain(
+		"Non-Error thrown (unserializable object)",
+	);
+});
+
 // The wiring, in a real process: installing a handler suppresses Bun's own report, so the point is that
 // BOTH the file and stderr get the fault, and that the process still dies rather than serving on broken.
 const dirs: string[] = [];
