@@ -93,3 +93,35 @@ test("a transcript that fails to load says so and stays in history", async ({ pa
 		page.getByTestId("closed-chat-item").filter({ hasText: "the unreadable chat" }),
 	).toHaveCount(1);
 });
+
+// The never-empty fallback: a workspace whose only chat is an ordinary disk chat opens it without any
+// TODO to justify it. That summary leaves `toHistory` before its read, so a failure has to put it back —
+// or the one chat the workspace has would be in neither list and reachable from nowhere.
+test("a failed never-empty fallback keeps its chat reachable too", async ({ page }) => {
+	let onlyId = "";
+	await failGetMessagesFor(page, () => onlyId);
+	await openFixtureProject(page);
+
+	const only = seedWorkspaceSession(repoCwd(), {
+		name: "the only chat",
+		messages: [{ role: "user", text: "the only transcript", timestamp: BASE_TS }],
+	});
+	onlyId = only.id;
+	utimesSync(only.path, new Date(BASE_TS), new Date(BASE_TS));
+
+	await expect(defaultWorkspaceRow(page)).toBeVisible();
+	await enterDefaultWorkspace(page);
+
+	await expect(
+		page
+			.locator('[data-testid="toast"][data-variant="error"]')
+			.filter({ hasText: "transcript read failed" }),
+	).toBeVisible();
+
+	// Nothing opened, so the history list is only reachable once a chat exists — but the entry is there.
+	await page.getByTestId("start-chat").click();
+	await page.getByTestId("chat-history").click();
+	await expect(
+		page.getByTestId("closed-chat-item").filter({ hasText: "the only chat" }),
+	).toHaveCount(1);
+});

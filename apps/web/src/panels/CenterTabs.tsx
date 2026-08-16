@@ -212,8 +212,6 @@ export function CenterTabs() {
 				.getState()
 				.hydrateSession(summary, messagesToRuntime(messages, summary.lastSettlement), false, tick);
 		};
-		const hydrateFromHost = async (sessionId: string, live: boolean) =>
-			applyHydrate(await fetchMessages(sessionId), live);
 		void getTransport()
 			.request("session.list", { workspaceId })
 			.then(async (summaries) => {
@@ -261,7 +259,13 @@ export function CenterTabs() {
 				);
 				if (!hasChatTab && !sawKnown && toHistory.length > 0) {
 					const newest = toHistory.shift(); // `ordered` kept them newest-first
-					if (newest) await hydrateFromHost(newest.sessionId, newest.live);
+					if (newest) {
+						// Taken out of `toHistory` before its read, so a failure has to put it back — otherwise the
+						// one chat a never-empty workspace has would be in neither list and reachable from nowhere.
+						const loaded = await fetchMessages(newest.sessionId);
+						if (loaded) applyHydrate(loaded, newest.live);
+						else failed.push(newest);
+					}
 				}
 				const toList = [...toHistory, ...failed];
 				if (!cancelled && toList.length > 0) {
