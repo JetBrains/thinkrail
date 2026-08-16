@@ -1,5 +1,6 @@
 import type { WsMethodName, WsParams, WsResult, WsServerMessage } from "@thinkrail/contracts";
 import { WS_CHANNELS } from "@thinkrail/contracts";
+import { randomId } from "../lib";
 import { RequestError } from "./requestError";
 
 export type ConnectionStatus = "connecting" | "connected" | "disconnected";
@@ -19,33 +20,28 @@ const DEFAULT_TIMEOUT_MS = 60_000;
  *
  * Most push channels carry a *snapshot* — the newest value is the whole truth, so handing it to a late
  * subscriber is exactly right and is why `latest` exists. These channels carry **events**: terminal data is
- * an append-only byte stream, terminal exit is a one-time announcement, and session deletion is folded into
- * a store tombstone when witnessed (a reconnecting active workspace repairs a missed event from authoritative
- * `session.list`). Replaying one re-delivers something that already happened rather than a current snapshot
- * (for terminal data that visibly paints output twice).
+ * an append-only byte stream, terminal exit and takeover detachment are one-time announcements, and session
+ * deletion is folded into a store tombstone when witnessed (a reconnecting active workspace repairs a missed
+ * event from authoritative `session.list`). Replaying one re-delivers something that already happened rather
+ * than a current snapshot (for terminal data that visibly paints output twice).
  */
 const NON_REPLAYABLE_CHANNELS: ReadonlySet<string> = new Set([
 	WS_CHANNELS.terminalData,
 	WS_CHANNELS.terminalExit,
+	WS_CHANNELS.terminalDetached,
 	WS_CHANNELS.sessionDeleted,
 ]);
-
-/** 16 random bytes as hex. `getRandomValues` works in an insecure context, unlike `randomUUID`. */
-function randomId(): string {
-	const bytes = crypto.getRandomValues(new Uint8Array(16));
-	return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
-}
 
 let clientId: string | undefined;
 
 /**
  * This page's identity to the host, sent as `?client=` on the socket URL.
  *
- * It deliberately spans **reconnects but not reloads**. The host uses it to own per-client resources that must
- * not die on a hiccup — today a workspace's PTYs, whose shells hold real running work. Keying those to the
- * *socket* would mean a dropped connection (the transport reconnects on its own, below) silently orphaned
- * every shell; keying them to a value that also survived a reload would mean they could never be reaped at
- * all. One id for the life of the document is exactly the middle.
+ * It deliberately spans **reconnects but not reloads**. The host uses it to correlate replayed requests and
+ * route the output stream for terminals this page has attached. The terminal tab and shell are host-owned and
+ * survive either event; after a reload the new page identity simply takes over that durable `tabKey`. One id
+ * for the life of the document prevents a reconnect from duplicating replies without letting a new document
+ * inherit the prior page's replay cache or stream routing.
  *
  * Minted on first use and **never at import time**, and not via `crypto.randomUUID`: that is a
  * secure-context-only API, undefined over plain http on anything but localhost — which is precisely how a
@@ -55,7 +51,7 @@ let clientId: string | undefined;
  * has to be unique per document, so plain random bytes are enough.
  */
 function pageClientId(): string {
-	if (clientId === undefined) clientId = crypto.randomUUID?.() ?? randomId();
+	if (clientId === undefined) clientId = randomId("client");
 	return clientId;
 }
 

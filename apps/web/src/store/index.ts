@@ -1,4 +1,4 @@
-/** App store (Zustand): connection, projects/workspaces, workspace-scoped tabs + terminals, and a
- * per-session chat runtime (`sessions` keyed by `sessionId`) so several chats stream concurrently. */
+/** App store (Zustand): connection/projects, accepted workbench layouts + local attention, resource
+ * caches/catalogs, and per-session chat runtimes so several chats stream concurrently. */
 export * from "./appStore";
 export * from "./selectors";

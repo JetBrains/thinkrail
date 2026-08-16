@@ -248,7 +248,7 @@ test("Ctrl+R dismisses an open mention menu instead of overlapping it", async ({
 // (never sent to) doesn't do; seed one via `seedWorkspaceSession` on a real workspace `worktreePath` (see
 // the comment at its first use in `history-jump.spec.ts` for why that path, not some arbitrary string, is
 // the seed target) and open it. Simplest way in: the `chat-history` / `closed-chat-item` reopen flow
-// (`CenterTabs.tsx`) rather than the search-and-jump flow `history-jump.spec.ts` already covers — a
+// (`WorkspaceWorkbench.tsx`) rather than the search-and-jump flow `history-jump.spec.ts` already covers — a
 // disk-only session surfaces there the moment its workspace becomes active. No `historyIndex` revalidation
 // wait is needed here (contrast the 2.1s waits in `history-jump.spec.ts`): `session.list` reads pi's
 // `SessionManager.list` straight off disk on every call, it isn't behind the throttled `HistoryIndex`
@@ -256,8 +256,16 @@ test("Ctrl+R dismisses an open mention menu instead of overlapping it", async ({
 test("plain ArrowUp/ArrowDown recall steps through this chat's own prior prompts, a diverging edit exits the session, and the history button opens the overlay", async ({
 	page,
 }) => {
+	// Workspace creation + a cold session-list/hydration round trip can exhaust the 30s default when all
+	// no-agent shards contend. Keep the assertions bounded individually, but give the full journey room.
+	test.setTimeout(60_000);
 	await openFixtureProject(page);
 	const workspace = await createWorkspaceViaDialog(page);
+	// Tear down the active workbench before writing the disk-only session. Otherwise its already-in-flight
+	// `session.list` can discover and hydrate the fixture just before navigation, turning the supposedly
+	// closed chat live and leaving the reloaded client's History menu with nothing to reopen.
+	await page.reload();
+	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 	// No explicit `id`: this test never references the seeded session by id again (it reopens via the
 	// `chat-history` → `closed-chat-item` UI flow below), so the default fresh-per-call id is enough —
 	// and, unlike a fixed literal id, survives a Playwright retry within the same `webServer` lifetime.
@@ -277,10 +285,8 @@ test("plain ArrowUp/ArrowDown recall steps through this chat's own prior prompts
 	});
 
 	// A reload doesn't auto-restore the active project/workspace (see `history-jump.spec.ts`) — re-pick both
-	// so `CenterTabs`'s hydrate-on-connect effect re-lists this workspace's sessions from a cold client and
+	// so `WorkspaceWorkbench`'s hydrate-on-connect effect re-lists this workspace's sessions from a cold client and
 	// discovers the disk-only seeded one.
-	await page.reload();
-	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 	await page.getByTestId("project-item").first().click();
 	await worktreeRows(page).first().click();
 	await expect(activeWorktreeRow(page)).toHaveCount(1);
@@ -359,6 +365,10 @@ test("a recall step immediately followed by a full-value replace never doubles t
 	test.setTimeout(60_000);
 	await openFixtureProject(page);
 	const workspace = await createWorkspaceViaDialog(page);
+	// Seed only after the active workbench has been torn down; an in-flight list from that workbench must
+	// not hydrate this disk fixture and convert the closed-chat setup into a live-session setup.
+	await page.reload();
+	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 	// No explicit `id`: this test loops many repeated recall/replace cycles and is meant to be re-run
 	// under `--repeat-each` to prove the race stays closed. A fixed literal id would collide with an
 	// in-memory session entry from an earlier repeat's (differently-`workspaceId`'d) run within the same
@@ -371,8 +381,6 @@ test("a recall step immediately followed by a full-value replace never doubles t
 		],
 	});
 
-	await page.reload();
-	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 	await page.getByTestId("project-item").first().click();
 	await worktreeRows(page).first().click();
 	await expect(activeWorktreeRow(page)).toHaveCount(1);
@@ -416,6 +424,8 @@ test("a prompt repeated earlier in the chat recalls at its most recent position,
 }) => {
 	await openFixtureProject(page);
 	const workspace = await createWorkspaceViaDialog(page);
+	await page.reload();
+	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 	// No explicit `id` — same reasoning as the recall test above: this test never references the seeded
 	// session by id, so the default fresh-per-call id (survives a same-process retry) is enough.
 	seedWorkspaceSession(workspace.worktreePath, {
@@ -429,8 +439,6 @@ test("a prompt repeated earlier in the chat recalls at its most recent position,
 		],
 	});
 
-	await page.reload();
-	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 	await page.getByTestId("project-item").first().click();
 	await worktreeRows(page).first().click();
 	await expect(activeWorktreeRow(page)).toHaveCount(1);
@@ -440,6 +448,9 @@ test("a prompt repeated earlier in the chat recalls at its most recent position,
 
 	await page.getByTestId("chat-history").click();
 	await page.getByTestId("closed-chat-item").first().click();
+	// The menu starts disk hydration asynchronously; wait for the selected chat's transcript rather than
+	// mistaking the previously visible live chat's composer for the reopen receipt.
+	await expect(page.getByTestId("chat-message").filter({ hasText: "alpha" }).first()).toBeVisible();
 	const input = page.getByTestId("chat-input");
 	await expect(input).toBeVisible();
 	await expect(input).toHaveValue("");
@@ -455,11 +466,9 @@ test("a prompt repeated earlier in the chat recalls at its most recent position,
 
 // A9's mobile-discoverability half: `HistoryOverlay` sizes itself with `left-sm right-sm` insets (see
 // `HistoryOverlay.tsx`) rather than a fixed pixel width, specifically so it can't overflow a narrow
-// container. The app's three-pane layout (`shell/Shell.tsx`) isn't itself the "mobile single-view shell"
-// `architecture.md` describes — that's a separate, not-yet-built concern — so this only isolates what IS
-// this task's concern: the overlay's own sizing at a narrow (~390px, a small-phone width) viewport. Resize
-// only for the check itself (after the normal desktop-sized setup) so a squeezed three-pane layout can't
-// make the setup flow itself flaky.
+// container. The recursive desktop workbench is not itself the future mobile single-view projection, so
+// this isolates the overlay's own sizing at a narrow (~390px, small-phone) viewport. Resize only for the
+// check itself (after normal desktop-sized setup) so a compressed workbench cannot make setup flaky.
 test("the history overlay stays inside the viewport and its query stays focusable at a narrow (~390px) width", async ({
 	page,
 }) => {

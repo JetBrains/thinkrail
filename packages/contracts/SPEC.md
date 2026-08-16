@@ -147,8 +147,10 @@ of the host.
   hint on this result));
   the **theme/config selection** — **`ThemeId`** is an open string on the wire, because the host persists
   an opaque selection while the independently shipped web client owns the available manifest catalog;
-  **`AppConfig`** (`{ theme, analyticsEnabled }` — an extensible bag; `analyticsEnabled` is the
-  anonymous-usage-analytics switch, default `true` — it is the **only** analytics fact on the wire:
+  **`AppConfig`** (`{ theme, analyticsEnabled, terminalReplayKb, layout }` — an extensible bag; `layout` is the
+  **`LayoutSettings`** selection (`defaultPresetId`, named portable `customPresets`, and
+  `maxSideGroups`, default 6); `analyticsEnabled` is the anonymous-usage-analytics switch, default `true`
+  — it is the **only** analytics fact on the wire:
   the installation id stays server-side by design, see `submodule-server-analytics`) carries it with the
   **`DEFAULT_CONFIG`** fallback
   (persisted host-side as `config.json`, delivered in `server.welcome`, mutated via `settings.update`).
@@ -191,7 +193,19 @@ of the host.
   **`TemplateInfo`** (metadata only: name, optional `description`/`argumentHint`, `scope`, `filePath` —
   what `template.list` returns; deliberately body-free so a listing never ships every file's full text),
   and **`Template`** (`TemplateInfo` + full `content` — frontmatter + body — the by-name
-  `template.get`/`template.save` shape).
+  `template.get`/`template.save` shape);
+  **workbench layout DTOs** — a versioned **`WorkspaceLayoutDocument`** (stable center split/group and
+  side/group/tab references, normalized geometry, preview identities, folds/visibility, and singleton-tool
+  restore targets; explicitly no active/focused tab; virtual-document references name a registered resolver
+  and durable source identity, never inline client-only content), **`WorkspaceLayoutSnapshot`**
+  (`workspaceId` +
+  monotonic `revision` + document), **`LayoutReplaceParams`** (complete document + client-generated
+  `mutationId`), **`LayoutChangedPayload`** (snapshot + echoed origin `mutationId`), and portable
+  **`LayoutPreset`** / **`LayoutSettings`**. The mutation id is correlation metadata, not durable document
+  state. A tab `id` is an opaque stable placement key—including for singleton tools—not semantic identity;
+  the kind-specific path/scope/session/source/tabKey/tool fields define the resource and prevent aliases from
+  duplicating it. Resource references carry placement identity only; their domain DTO remains authoritative
+  for lifetime.
 - **wsProtocol.ts** — `WS_METHODS` (`project.*` — incl. **`project.close`** (mark the stable record
   closed without deleting associated state), **`project.inspect`** (classify a path) + **`project.init`**
   (`git init` + commit, then open) + **`project.hasSpecs`** (lazy per-project "contains a registered
@@ -247,8 +261,12 @@ of the host.
   `session.*` — `create`/`prompt`/`steer`/`followUp`/`abort`/`dispose`/**`delete`**/`setModel`/
   `setThinkingLevel`/`compact`/`getStats`/`getCommands`/`extUiReply`/**`answerQuestion`** (the inline
   `ask_user_question` reply, correlated by tool call id)/**`list`**/**`getMessages`** (the
-  read side) / **`settings.update`** (merge + persist a partial `AppConfig`, returns the merged
-  config) / **`history.search`** (the prompt-recall + conversation-search read; results capped,
+  read side) / **`layout.get`** (hydrate one workspace snapshot, or `null` before first seeding) /
+  **`layout.replace`** (validate and atomically replace one complete structural document, serializing writes
+  per workspace; last valid arrival wins and the assigned snapshot echoes the request's mutation id) /
+  **`settings.update`** (merge + persist a top-level partial `AppConfig`; when present, `layout` is one
+  complete validated `LayoutSettings` value rather than a nested patch; returns the merged config) /
+  **`history.search`** (the prompt-recall + conversation-search read; results capped,
   recency-ordered; the messages section is assistant-only — a user-role hit surfaces as a jumpable
   `PromptHit` instead, never a separate `MessageHit`) / the **`review.*` set** — **`get`** (the open
   review + comments, lazily created; re-anchored on read) / **`commentAdd`**/**`commentUpdate`**/
@@ -279,7 +297,9 @@ of the host.
   **`session.deleted`** (workspace + session id; a non-replayable domain event broadcast after permanent
   deletion so every client removes the chat and blocks stale hydration) /
   **`settings.changed`** (the full `AppConfig`, broadcast so every client
-  converges) / **`provider.login`** — the session-less in-app login stream (a `LoginPush`
+  converges) / **`layout.changed`** (the full accepted `WorkspaceLayoutSnapshot` plus origin mutation id;
+  idempotent by monotonic revision and broadcast to every client) / **`provider.login`** — the session-less
+  in-app login stream (a `LoginPush`
   per frame, keyed by `loginId`; the sibling of `pi.extensionUi`, since a login runs on the Welcome screen
   before any session exists) / `terminal.data` + **`terminal.exit`** + **`terminal.detached`** (the only
   **addressed** channels — sent to the single *attached* client rather than broadcast, so a shell's bytes never

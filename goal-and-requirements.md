@@ -29,9 +29,11 @@ The shell is built first, `pi` connected last:
   project (the project folder itself), offered as an explicit choice on the project's Welcome so
   newcomers aren't lost in the worktree model, and any **existing worktree** the user attaches in place
   from the project menu (ThinkRail uses its cwd, never touches its checkout).
-- **Center**: a tabbed area — Monaco file tabs + (once `pi` lands) chat tabs.
-- **Right**: an All-files tree of the active worktree + a Changes (git diff) tab; terminals below,
-  scoped to the worktree.
+- **Desktop workbench**: a recursively splittable center for files, diffs, registered documents, chats, and terminals,
+  bounded to four visible groups; Projects / Specs / All files / Changes / Review live in movable,
+  independently foldable vertical side groups. Terminal tabs may move between center and sides. Each
+  workspace's structural layout is host-persisted and shared across clients, while active selection/focus
+  remains local so clients do not steal one another's attention.
 - A workspace-local **Review** surface for the current worktree: GitHub-style anchored file/diff drafts
   are collected without starting the agent, then sent as structured context into per-file `pi` chats;
   sent records persist and the agent can resolve them. This is local review, not PR-provider integration.
@@ -43,8 +45,8 @@ The shell is built first, `pi` connected last:
 - Multiple chat sessions per workspace, streaming concurrently (#5).
 - A bundled **spec-graph** pi extension (`pi-spec-graph`): the agent searches, navigates, and manages
   the project's specs via `spec_*` tools + a skill.
-- A read-only **Specs** tab in the right rail (left of All files / Changes): the active worktree's
-  spec-graph rendered as its `parent` tree, backed by the same `pi-spec-graph` core model host-side;
+- A read-only **Specs** side tool: the active worktree's spec-graph rendered as its `parent` tree, backed
+  by the same `pi-spec-graph` core model host-side;
   opening a node opens the spec file as an editor tab. Viewer only — no editing, drift detection, or
   graph canvas.
 - ThinkRail branding: **green accent** (`#8dff4f` on the dark-family themes, `#2e7d16` on the light

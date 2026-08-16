@@ -66,7 +66,12 @@ export function ProjectTree() {
 			.catch(() => {});
 	}, []);
 
-	const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+	// The Projects view is rendered by both Project Home and the workspace layout, so crossing that boundary remounts
+	// this component. Seed the selected project open: a project-row click promises to reveal its workspaces,
+	// and that promise must survive the hand-off to Project Home rather than collapsing on the new instance.
+	const [expanded, setExpanded] = useState<Set<string>>(
+		() => new Set(selectedProjectId ? [selectedProjectId] : []),
+	);
 	// The project a New-Workspace dialog is open for (null = closed). The "+" opens it instead of
 	// creating a workspace directly.
 	const [dialogProjectId, setDialogProjectId] = useState<string | null>(null);

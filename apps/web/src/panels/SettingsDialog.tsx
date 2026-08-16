@@ -1,6 +1,7 @@
 import {
 	GitBranch,
 	KeyRound,
+	LayoutPanelTop,
 	LayoutTemplate,
 	type LucideIcon,
 	Palette,
@@ -8,6 +9,7 @@ import {
 	SlidersHorizontal,
 	SquareTerminal,
 } from "lucide-react";
+import type { ReactNode } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib";
 import { SettingsSection, useAppStore } from "@/store";
@@ -23,6 +25,7 @@ const SECTIONS: { id: SettingsSection; label: string; icon: LucideIcon }[] = [
 	{ id: SettingsSection.Providers, label: "Providers", icon: KeyRound },
 	{ id: SettingsSection.Github, label: "GitHub", icon: GitBranch },
 	{ id: SettingsSection.Appearance, label: "Appearance", icon: Palette },
+	{ id: SettingsSection.Layout, label: "Layout", icon: LayoutPanelTop },
 	{ id: SettingsSection.Terminal, label: "Terminal", icon: SquareTerminal },
 	{ id: SettingsSection.Templates, label: "Templates", icon: LayoutTemplate },
 	{ id: SettingsSection.Privacy, label: "Privacy", icon: ShieldCheck },
@@ -35,7 +38,7 @@ const SOON: { label: string; icon: LucideIcon }[] = [{ label: "General", icon: S
  * sections. Store-driven: the top-bar gear and the Welcome provider-warning both open it via `openSettings`,
  * deep-linking to a section. On mobile the rail collapses to a horizontal segmented strip above the content.
  */
-export function SettingsDialog() {
+export function SettingsDialog({ layoutSettings }: { layoutSettings: ReactNode }) {
 	const open = useAppStore((s) => s.settingsOpen);
 	const section = useAppStore((s) => s.settingsSection);
 
@@ -99,6 +102,8 @@ export function SettingsDialog() {
 							<ProvidersSettings />
 						) : section === SettingsSection.Github ? (
 							<GithubSettings />
+						) : section === SettingsSection.Layout ? (
+							layoutSettings
 						) : section === SettingsSection.Terminal ? (
 							<TerminalSettings />
 						) : section === SettingsSection.Templates ? (

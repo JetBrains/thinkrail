@@ -1,12 +1,8 @@
 import { ChevronRight, GitBranch, Settings } from "lucide-react";
 import { useEffect, useRef } from "react";
-import { ErrorBoundary } from "../components/ErrorBoundary";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "../components/ui/resizable";
-import { CenterTabs } from "../panels/CenterTabs";
 import { ProjectTree } from "../panels/ProjectTree";
-import { RightPanel } from "../panels/RightPanel";
 import { SettingsDialog } from "../panels/SettingsDialog";
-import { TerminalsPanel } from "../panels/TerminalsPanel";
 import { Toaster } from "../panels/Toaster";
 import { WelcomePanel } from "../panels/WelcomePanel";
 import {
@@ -19,9 +15,11 @@ import { applyTheme, writeThemeHint } from "../themes";
 import type { ConnectionStatus } from "../transport";
 import { BrandLogo } from "./BrandLogo";
 import { CollapsedPanelRail } from "./CollapsedPanelRail";
+import { LayoutSettings } from "./LayoutSettings";
 import { useCollapsibleRegion } from "./useCollapsibleRegion";
 import { useGlobalHotkeys } from "./useGlobalHotkeys";
 import { openReviewLabel, useOpenBranchReview } from "./useOpenBranchReview";
+import { WorkspaceWorkbench } from "./WorkspaceWorkbench";
 
 const STATUS_LABEL: Record<ConnectionStatus, string> = {
 	connected: "Connected",
@@ -43,17 +41,10 @@ export function Shell() {
 	const openReview = useOpenBranchReview(activeWorkspace, status);
 	const hasActiveWorkspace = activeWorkspaceId != null;
 
-	// Welcome and workspace layouts deliberately keep separate saved left sizes, so each gets its own
-	// collapse/focus memory too. The right region only exists in the workspace layout.
-	const workspaceCenterRef = useRef<HTMLElement>(null);
+	// Project Home keeps its own simple two-column layout. Active workspaces hand all arrangement to
+	// `WorkspaceWorkbench`; its structural state is host-synchronized rather than react-panel local storage.
 	const welcomeCenterRef = useRef<HTMLDivElement>(null);
-	const workspaceProjects = useCollapsibleRegion(workspaceCenterRef, "workspace-left");
 	const welcomeProjects = useCollapsibleRegion(welcomeCenterRef, "welcome-left");
-	const workspaceRight = useCollapsibleRegion<HTMLDivElement>(
-		workspaceCenterRef,
-		"workspace-right",
-	);
-	const activeProjects = hasActiveWorkspace ? workspaceProjects : welcomeProjects;
 
 	// The single owner of the theme DOM side-effect: apply the store's (host-owned) theme + cache it as the
 	// next load's first-paint hint. The store is fed by transport (welcome / settings.changed).
@@ -62,10 +53,30 @@ export function Shell() {
 		applyTheme(theme);
 		writeThemeHint(theme);
 	}, [theme]);
-	// App-wide chords the browser would otherwise take: history plus the two focus-aware side regions.
+	// App-wide chords the browser would otherwise take: history plus the two workbench side toggles.
 	useGlobalHotkeys({
-		onProjects: activeProjects.focusOrCollapse,
-		...(hasActiveWorkspace ? { onWorkspace: workspaceRight.focusOrCollapse } : {}),
+		onProjects: hasActiveWorkspace
+			? () => {
+					if (!activeWorkspaceId) return;
+					useAppStore.getState().enqueueLayoutIntent({
+						kind: "toggle-side",
+						workspaceId: activeWorkspaceId,
+						side: "left",
+					});
+				}
+			: welcomeProjects.focusOrCollapse,
+		...(hasActiveWorkspace
+			? {
+					onWorkspace: () => {
+						if (!activeWorkspaceId) return;
+						useAppStore.getState().enqueueLayoutIntent({
+							kind: "toggle-side",
+							workspaceId: activeWorkspaceId,
+							side: "right",
+						});
+					},
+				}
+			: {}),
 	});
 	return (
 		<div data-testid="shell" className="grid h-full grid-rows-[auto_1fr]">
@@ -143,130 +154,11 @@ export function Shell() {
 						<Settings className="size-4" />
 					</button>
 				</div>
-				<SettingsDialog />
+				<SettingsDialog layoutSettings={<LayoutSettings />} />
 			</header>
-			{hasActiveWorkspace ? (
-				<div
-					data-testid="workspace-shell-layout"
-					data-left-collapsed={workspaceProjects.collapsed}
-					data-right-collapsed={workspaceRight.collapsed}
-					className="flex h-full min-h-0 min-w-0"
-				>
-					{workspaceProjects.collapsed ? (
-						<CollapsedPanelRail
-							ref={workspaceProjects.railRef}
-							side="left"
-							label="Projects"
-							shortcutKey="B"
-							onOpen={workspaceProjects.openAndFocus}
-						/>
-					) : null}
-					<ResizablePanelGroup
-						direction="horizontal"
-						autoSaveId="thinkrail-shell"
-						className="min-h-0 min-w-0 flex-1"
-					>
-						<ResizablePanel
-							ref={workspaceProjects.panelRef}
-							id="left"
-							order={1}
-							defaultSize={18}
-							minSize={12}
-							collapsedSize={0}
-							collapsible
-							onCollapse={workspaceProjects.onCollapse}
-							onExpand={workspaceProjects.onExpand}
-						>
-							<aside
-								ref={workspaceProjects.contentRef}
-								data-testid="left-nav"
-								tabIndex={-1}
-								aria-hidden={workspaceProjects.collapsed || undefined}
-								inert={workspaceProjects.collapsed ? true : undefined}
-								className="h-full overflow-auto bg-container-sidebar-bg p-md outline-none"
-							>
-								<ProjectTree />
-							</aside>
-						</ResizablePanel>
-						<ResizableHandle
-							direction="horizontal"
-							data-testid="resize-left"
-							aria-hidden={workspaceProjects.collapsed}
-							tabIndex={workspaceProjects.collapsed ? -1 : 0}
-							onDragging={workspaceProjects.onDragging}
-							{...(workspaceProjects.collapsed ? { className: "hidden" } : {})}
-						/>
-						<ResizablePanel id="center" order={2} defaultSize={52} minSize={28}>
-							<main
-								ref={workspaceCenterRef}
-								data-testid="center-tabs"
-								tabIndex={-1}
-								className="h-full min-h-0 bg-container-content-bg outline-none"
-							>
-								<ErrorBoundary label="Editor" resetKeys={[activeWorkspaceId]}>
-									<CenterTabs />
-								</ErrorBoundary>
-							</main>
-						</ResizablePanel>
-						<ResizableHandle
-							direction="horizontal"
-							data-testid="resize-right"
-							aria-hidden={workspaceRight.collapsed}
-							tabIndex={workspaceRight.collapsed ? -1 : 0}
-							onDragging={workspaceRight.onDragging}
-							{...(workspaceRight.collapsed ? { className: "hidden" } : {})}
-						/>
-						<ResizablePanel
-							ref={workspaceRight.panelRef}
-							id="right"
-							order={3}
-							defaultSize={30}
-							minSize={16}
-							collapsedSize={0}
-							collapsible
-							onCollapse={workspaceRight.onCollapse}
-							onExpand={workspaceRight.onExpand}
-						>
-							<div
-								ref={workspaceRight.contentRef}
-								data-testid="right-stack"
-								tabIndex={-1}
-								aria-hidden={workspaceRight.collapsed || undefined}
-								inert={workspaceRight.collapsed ? true : undefined}
-								className="h-full min-h-0 outline-none"
-							>
-								<ResizablePanelGroup direction="vertical" autoSaveId="thinkrail-right">
-									<ResizablePanel id="right-files" order={1} defaultSize={60} minSize={20}>
-										<div
-											data-testid="right-panel"
-											className="h-full min-h-0 bg-container-sidebar-bg"
-										>
-											<ErrorBoundary label="Files" resetKeys={[activeWorkspaceId]}>
-												<RightPanel />
-											</ErrorBoundary>
-										</div>
-									</ResizablePanel>
-									<ResizableHandle direction="vertical" data-testid="resize-terminals" />
-									<ResizablePanel id="right-terminals" order={2} defaultSize={40} minSize={15}>
-										<div className="h-full min-h-0 bg-container-terminal-bg">
-											<ErrorBoundary label="Terminals" resetKeys={[activeWorkspaceId]}>
-												<TerminalsPanel />
-											</ErrorBoundary>
-										</div>
-									</ResizablePanel>
-								</ResizablePanelGroup>
-							</div>
-						</ResizablePanel>
-					</ResizablePanelGroup>
-					{workspaceRight.collapsed ? (
-						<CollapsedPanelRail
-							ref={workspaceRight.railRef}
-							side="right"
-							label="Workspace"
-							shortcutKey="J"
-							onOpen={workspaceRight.openAndFocus}
-						/>
-					) : null}
+			{hasActiveWorkspace && activeWorkspaceId ? (
+				<div data-testid="workspace-shell-layout" className="h-full min-h-0 min-w-0">
+					<WorkspaceWorkbench key={activeWorkspaceId} workspaceId={activeWorkspaceId} />
 				</div>
 			) : (
 				// No active workspace — the separately-persisted Welcome layout has only the Projects region.

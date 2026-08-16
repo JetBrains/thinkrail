@@ -12,8 +12,8 @@ pi agent in design discussions.
 - Every region lists, where applicable: **canonical name** (the heading), **implementation name** (the
   React component / file), **`data-testid`** hook (the app's stable identity anchors), **parent**,
   **children**, **position**, and **responsibility**.
-- The layout is a desktop three-column shell today; the mobile single-view shell is designed but not yet
-  built, so this reference describes the desktop arrangement.
+- The active-workspace layout is a synchronized desktop workbench with recursive center groups and
+  movable side groups. The mobile single-view shell is designed but not yet built.
 
 The document proceeds top-down: Application Layout → each region → shared primitives → glossary.
 
@@ -27,21 +27,21 @@ mutually-exclusive states.
 - **App Shell** — the root frame (`Shell`).
   - **Top Bar** (`<header>`) — always present.
   - **Body** — one of two states:
-    - **Active-Workspace Layout** — the resizable three-column IDE (shown when a workspace is active).
-    - **Welcome Layout** — the projects rail beside the Welcome screen (shown when no workspace is active).
+    - **Workspace Workbench** — the host-synchronized IDE arrangement for an active workspace.
+    - **Welcome Layout** — the projects rail beside the Welcome screen when no workspace is active.
   - **Toaster** — app-wide notification host, mounted once over either state.
 
 | Canonical name | Implementation | `data-testid` | Notes |
 |---|---|---|---|
 | App Shell | `shell/Shell.tsx` → `Shell` | `shell` | Composition root; owns the theme DOM side-effect + global hotkeys |
 | Top Bar | `<header>` inside `Shell` | — | ⚠ Naming note below |
-| Active-Workspace Layout | `ResizablePanelGroup` (`autoSaveId="thinkrail-shell"`) | — | Three columns |
+| Workspace Workbench | `shell/WorkspaceWorkbench.tsx` + `shell/layout/Workbench.tsx` | `workbench` | Recursive center and independently stacked sides |
 | Welcome Layout | `ResizablePanelGroup` (`autoSaveId="thinkrail-shell-welcome"`) | — | Projects rail + Welcome |
 | Toaster | `panels/Toaster.tsx` → `Toaster` | — | See Shared Primitives |
 
 **⚠ Naming note (Top Bar):** the code has no component or named prop for the header — it is an inline
 `<header>` element in `Shell.tsx`. This reference calls it the **Top Bar**. Do not confuse it with the
-**Chat Header** (a per-chat-tab bar) or a **Panel Header** (per right-rail/terminal panel).
+**Chat Header** (a per-chat-tab bar) or a **Group Header** (a workbench tab strip).
 
 ---
 
@@ -72,22 +72,22 @@ alternative used in prose.
 
 ---
 
-# Left Sidebar (Projects Rail)
+# Projects Tool
 
-The leftmost column. Lists projects and, expanded beneath each, its workspaces.
+The singleton Projects tool, initially in the left side. Its Projects Rail view lists projects and, expanded beneath each, their workspaces.
 
-- **Canonical name:** Projects Rail (a.k.a. Left Nav / Left Sidebar).
-- **Implementation:** `panels/ProjectTree.tsx` → `ProjectTree`, wrapped in an `<aside>` in `Shell`.
-- **`data-testid`:** the `<aside>` wrapper is `left-nav`.
-- **Parent:** App Shell (present in both body states — the left column of both layouts).
-- **Position:** Left column, full height, resizable; `defaultSize=18%`, `minSize=12%`.
+- **Canonical name:** Projects Tool; **Projects Rail** names its navigation view.
+- **Implementation:** `panels/ProjectTree.tsx` → `ProjectTree`, rendered by the shell's Projects tool.
+- **`data-testid`:** the tool body wrapper is `left-nav`.
+- **Parent:** Workspace Workbench (a movable singleton side tool), or Welcome Layout.
+- **Position:** Initially in the left side; its containing group can resize, fold, hide, or move.
 - **Responsibility:** open a repo, select a project (a "project home" gesture that deselects any active
   workspace), close a project, expand/collapse to reveal workspaces, create/select/remove workspaces, and
   open a workspace in an external editor / file manager.
 
-**⚠ Naming note (Projects Rail):** three names co-exist — the component is `ProjectTree`, the wrapper's
-`data-testid` is `left-nav`, and specs say "the projects rail". Canonical = **Projects Rail**;
-alternatives = "Project Tree" (component), "Left Nav" (testid).
+**⚠ Naming note (Projects Tool):** legacy names still coexist — the component is `ProjectTree`, its
+navigation view is the **Projects Rail**, and the compatibility test id is `left-nav`. Neither “Left Nav”
+nor “Left Sidebar” describes durable placement because the tool can move.
 
 Children:
 
@@ -115,7 +115,7 @@ Copy path / Reveal menu as any worktree.
 # Welcome Screen
 
 Shown in the Welcome Layout's right column when no workspace is active (fresh install, or after archiving
-the last workspace). Mutually exclusive with the Center/Right/Terminal surface.
+the last workspace). Mutually exclusive with the Workspace Workbench.
 
 - **Canonical name:** Welcome Panel (a.k.a. Welcome Screen).
 - **Implementation:** `panels/WelcomePanel.tsx` → `WelcomePanel`.
@@ -136,39 +136,40 @@ Children:
 
 ---
 
-# Center Tabbed Area
+# Center Workbench
 
-The middle column — a tab strip over a pane that shows the active tab's body. Present only in the
-Active-Workspace Layout.
+The central work area is a recursive tree of one to four tab groups. Each group has its own **Group
+Header** (tab strip plus group controls), selection, preview slot, and body; horizontal or vertical
+separators resize adjacent groups.
 
-- **Canonical name:** Center Tabs (a.k.a. Center Tabbed Area / Editor Area).
-- **Implementation:** `panels/CenterTabs.tsx` → `CenterTabs`, wrapped in a `<main>` in `Shell`.
-- **`data-testid`:** the `<main>` wrapper is `center-tabs`.
-- **Parent:** App Shell (Active-Workspace Layout, `id="center"`; `defaultSize=52%`, `minSize=28%`).
-- **Position:** Center column, full height.
-- **Responsibility:** hosts a mix of **File tabs**, **Chat tabs**, **Diff tabs**, and ephemeral **Doc
-  tabs**; owns the preview-vs-keep tab model; auto-opens/hydrates chats on workspace entry.
+- **Canonical name:** Center Workbench (a.k.a. Center Tabbed Area / Editor Area).
+- **Implementation:** `shell/layout/Workbench.tsx` (topology and container chrome), integrated by
+  `shell/WorkspaceWorkbench.tsx` (feature bodies and synchronization).
+- **`data-testid`:** compatibility wrapper `center-tabs`; leaves are `center-group`, Group Headers are
+  `center-tab-strip` (a legacy name), and split separators are `center-split-resize`.
+- **Parent:** Workspace Workbench.
+- **Responsibility:** hosts **File**, **Chat**, **Diff**, rehydratable **Document**, and **Terminal** tabs;
+  owns recursive placement, per-group preview/keep semantics, movement, overflow, and focus recovery.
 
-**⚠ Naming note (tab element):** every tab in the strip carries `data-testid="editor-tab"` regardless of
-its kind (file / chat / diff / doc). This reference calls the strip element a **Tab** and distinguishes
-kinds by the store's tab types (`FileTab` / `chat` / `DiffTab` / `DocTab`). "Editor tab" is the testid,
-not the kind.
+**⚠ Naming note (tab element):** file/chat/diff/document tabs carry `data-testid="editor-tab"`; terminal
+placements carry `terminal-tab`. The resource kind is also available through `data-kind`. "Editor tab" is
+a compatibility test hook, not the kind.
 
 Children:
 
 | Canonical name | Implementation | `data-testid` | Responsibility |
 |---|---|---|---|
-| Tab Strip | inline row in `CenterTabs` | — | The row of tabs + actions |
-| Tab | inline button in `CenterTabs` | `editor-tab` (`data-preview`) | One open tab; italic label = preview slot |
-| — Tab Close | inline "×" | `editor-tab-close` | Close a tab |
-| New-Chat Button | inline `MessageSquarePlus` action | `new-chat` | Open a fresh chat tab |
-| Chat-History Menu | `ChatHistoryMenu` (inside `CenterTabs`) | `chat-history` | Dropdown of recently-closed / disk-only chats |
-| — Closed-Chat Item | inline row | `closed-chat-item` | Reopen a closed chat |
-| Editor Pane | inline body in `CenterTabs` | `editor-pane` | The active tab's body |
-| Workspace-Ready Receipt | inline empty state in `CenterTabs` | `workspace-ready` | Persistent creation/orientation receipt when no tab is open |
+| Center Group | `CenterGroupView` in `Workbench` | `center-group` | One leaf: tab strip + locally selected body |
+| Group Header | `TabStrip` plus injected group controls in `Workbench` | `center-tab-strip` | Fixed one-row chrome containing the ARIA tablist, scrolling, searchable overflow, and group actions |
+| Tab | `WorkbenchTab` | `editor-tab` / `terminal-tab` | One canonical placement; `data-preview` marks a preview |
+| — Tab Close | inline `X` action | `editor-tab-close` | Close the placement (not the underlying durable resource) |
+| New-Chat Button | injected center action | `new-chat` | Open a fresh chat tab |
+| Chat-History Menu | `shell/WorkspaceChatHistory.tsx` | `chat-history` | Reopen or delete closed/disk-only chats |
+| Editor Pane | injected selected body | `editor-pane` | Locally selected center body |
+| Workspace-Ready Receipt | injected empty state | `workspace-ready` | Orientation receipt when a final center leaf is empty |
 | — Start-Chat Action | inline action | `start-chat` | New chat from the empty receipt |
 
-Tab-body components (the four tab kinds):
+Tab-body components:
 
 | Canonical name | Implementation | Tab kind | Responsibility |
 |---|---|---|---|
@@ -179,7 +180,8 @@ Tab-body components (the four tab kinds):
 | — Monaco Diff | `panels/MonacoDiff.tsx` → `MonacoDiff` (lazy) | — | Read-only two-side diff |
 | — Rendered Diff | `panels/RenderedDiff.tsx` → `RenderedDiff` (lazy) | — | Rich markdown diff (`<ins>`/`<del>`) |
 | Chat View | `chat/ChatView.tsx` → `ChatView` (lazy) | `chat` | The agent conversation (its own section below) |
-| Doc Pane | `DocPane` (inside `CenterTabs`) | `DocTab` | Ephemeral rendered markdown, no file on disk |
+| Document Pane | `WorkspaceWorkbench` reference renderer | `document` | Rehydratable virtual documents such as TODO plans |
+| Terminal Body | `panels/TerminalWorkbench.tsx` → `TerminalWorkbenchBody` | `terminal` | Visibility-gated xterm surface |
 
 ---
 
@@ -190,7 +192,7 @@ The agent conversation, rendered inside a Chat tab in the Center Tabbed Area.
 - **Canonical name:** Chat View.
 - **Implementation:** `chat/ChatView.tsx` → `ChatView` (the only app-integration piece; wires store +
   transport). All the renderers below it are presentational/props-driven.
-- **Parent:** Center Tabs (a `chat` tab body).
+- **Parent:** Center Workbench (a selected `chat` tab body).
 - **Position:** Fills the Editor Pane. Vertically: Chat Header (top) → Message List (middle, scrolls) →
   Composer (bottom).
 - **Responsibility:** render pi's canonical message / content-block model as folded rows; own the
@@ -308,122 +310,73 @@ Children / associated surfaces:
   `ChatPlanContent` = the Plan Popover body) + `chat/TodoList.tsx` → `TodoList`.
 - **Parent:** Chat Header (strip) → Popover (body).
 - **Responsibility:** surface the chat's `pi-todos` plan (group-first, status-ordered). There is no
-  right-panel Todo tab — the plan lives in the conversation.
+  side-tool Todo tab — the plan lives in the conversation.
 
 ---
 
-# Right Rail
+# Side Workbench
 
-The right column. A tab bar over one of three feature panels, stacked above the Terminal Panel. Present
-only in the Active-Workspace Layout.
+The left and right sides are independently resizable regions. Each side contains an ordered vertical
+stack of tab groups; groups can resize, fold to a 27px row, move, and disappear when empty. Hiding a side
+leaves a compact restore rail. Side arrangement is workspace-shared; selection and focus are browser-local.
 
-- **Canonical name:** Right Rail (a.k.a. Right Panel).
-- **Implementation:** `panels/RightPanel.tsx` → `RightPanel`.
-- **`data-testid`:** the wrapper `div` is `right-panel`.
-- **Parent:** App Shell (Active-Workspace Layout, `id="right"`; `defaultSize=30%`, `minSize=16%`). The
-  right column is itself a vertical `ResizablePanelGroup` (`autoSaveId="thinkrail-right"`): Right Rail on
-  top (`right-files`, 60%), Terminal Panel below (`right-terminals`, 40%).
-- **Position:** Right column, upper section.
-- **Responsibility:** browse the active worktree — Specs, All files, and Changes.
+- **Canonical names:** Left Side, Right Side, Side Group, Hidden-Side Rail.
+- **Implementation:** `shell/layout/Workbench.tsx` (`SideStack`, `SideGroupView`).
+- **`data-testid`:** `left-stack`, `right-stack`, `left-layout-rail`, `right-layout-rail`,
+  `side-group-fold`, and side-specific group resize handles.
+- **Parent:** Workspace Workbench.
+- **Responsibility:** arrange singleton shell tools and terminals without coupling feature panels to
+  their position. Files, diffs, chats, and documents remain center-only; terminals can cross domains.
 
-**⚠ Naming note (Right Rail vs Right Panel):** the component and testid are `RightPanel`/`right-panel`,
-but the shell reserves the `id="right"` column for the rail-over-terminals stack. Canonical =
-**Right Rail** for the tabbed browse section; alternative = "Right Panel" (component name).
+Every Side Group has a **Group Header**; folding retains that header as a 27px row while its linked
+body stays native-hidden and unmounted. Initial Balanced placement puts Projects on the left, Specs and
+All files in the first right group, then Changes and Review in the second; the default terminal catalog
+joins that last group. This is startup behavior, not a fixed hierarchy.
 
-## Right Rail Tab Bar
+## Side Tools
 
-- **Implementation:** inline tab row in `RightPanel` (`TabButton`).
-- **Parent:** Right Rail.
-- **Position:** Slim top bar of the Right Rail.
-- **Tabs (order fixed; Specs is leftmost and the default):**
-
-| Canonical name | `data-testid` | Panel shown |
+| Canonical name | `data-testid` | Implementation / responsibility |
 |---|---|---|
-| Specs tab | `tab-specs` | Specs Panel |
-| All-files tab | `tab-files` | All Files Panel |
-| Changes tab | `tab-changes` | Changes Panel |
-| Specs Refresh | `specs-refresh` | (Specs only) re-reads the spec graph |
+| Projects | `tab-projects`, body `left-nav` | `panels/ProjectTree.tsx`; projects and workspaces |
+| Specs | `tab-specs` | `panels/SpecsPanel.tsx`; read-only spec graph, with `specs-refresh` |
+| All files | `tab-files` | `panels/FileTree.tsx`; worktree file tree |
+| Changes | `tab-changes` | `panels/ChangesPanel.tsx`; scoped git changes and diff opens |
+| Review | `tab-review` | `panels/ReviewPanel.tsx`; review accordion and send actions |
 
-## Specs Panel
+`WorkspaceWorkbench` owns the long-lived Specs and Review reads so badges, review flags, and artifact
+classification remain current even while those tool bodies are not selected.
 
-- **Canonical name:** Specs Panel.
-- **Implementation:** `panels/SpecsPanel.tsx` → `SpecsPanel` (read-only spec-graph tree). The `spec.graph`
-  read is owned by `RightPanel` via `panels/useWorkspaceSpecs.ts`.
-- **Parent:** Right Rail (Specs tab).
-- **Children:** Spec Node rows (`spec-node`, with `spec-toggle` chevron + `spec-role` trailing label).
-- **Empty / error states:** "No specs" empty state, and a distinct error hint (`specs-error`).
-- **Responsibility:** read-only `parent`-tree viewer of the project's specs; single-click previews,
-  double-click keeps.
+## Changes Tool
 
-## All Files Panel
-
-- **Canonical name:** All Files Panel (a.k.a. File Tree).
-- **Implementation:** `panels/FileTree.tsx` → `FileTree`.
-- **Parent:** Right Rail (All-files tab).
-- **Children:** Tree Rows (`panels/TreeRow.tsx` → `TreeRow`, shared with the Changes Tree).
-- **Responsibility:** the worktree file tree; live-refreshes on fs changes; single-click previews,
-  double-click keeps a file tab.
-
-## Changes Panel
-
-- **Canonical name:** Changes Panel.
-- **Implementation:** `panels/ChangesPanel.tsx` → `ChangesPanel`.
-- **Parent:** Right Rail (Changes tab).
-- **Position:** Right Rail body under a **Changes Header** (the scope pill + target-branch pill +
-  List\|Tree toggle).
-- **Responsibility:** the git diff of the active worktree vs a target branch/scope; clicking a file opens
-  its diff as a Center Diff tab.
-
-Children:
+The Changes body keeps its own feature toolbar: scope menu, target-branch picker, and List\|Tree toggle.
+Rows open center diff tabs. `ChangesPanel` remains arrangement-agnostic; only its side placement changed.
 
 | Canonical name | Implementation | `data-testid` | Responsibility |
 |---|---|---|---|
-| Changes Scope Menu | `panels/ChangesScopeMenu.tsx` → `ChangesScopeMenu` | — | Scope pill (All changes / Uncommitted / a commit) |
-| Branch Picker | `panels/BranchPicker.tsx` → `BranchPicker` | — | Target-branch combobox (shared with New Workspace Dialog) |
-| Changes View Toggle | `panels/ToggleSegment.tsx` → `ToggleSegment` | `changes-view-toggle` | List \| Tree |
-| Changes List | inline flat list in `ChangesPanel` | `change-item` (`change-path-dir`/`-base`) | Flat changed-files list |
-| Changes Tree | `panels/ChangesTree.tsx` → `ChangesTree` | — | Folder tree of changed files (shared `TreeRow`) |
-| — Diff-Stat Badge | `panels/DiffStatBadge.tsx` → `DiffStatBadge` | — | Per-file / per-folder `+N −M` |
-| Change-Row Actions | `panels/ChangeRowActions.tsx` → `ChangeRowActions` | — | Per-row `⌄` + right-click menu (View / Copy path) |
-| Empty state | inline | `changes-empty` | "No changes in this scope." |
-| Error state | inline | `changes-error` (+ `changes-retry`) | Failed read + Retry |
-
-**⚠ Naming note (Changes Header):** there is no `ChangesHeader` component — the header controls (scope
-menu, branch picker, view toggle) live inline in `ChangesPanel`. This reference calls that row the
-**Changes Header**; it has no single implementation name.
+| Changes View Toggle | `panels/ToggleSegment.tsx` | `changes-view-toggle` | List \| Tree |
+| Changes List Row | inline in `ChangesPanel` | `change-item` | Flat changed-file row |
+| Changes Tree | `panels/ChangesTree.tsx` | — | Folder tree of changed files |
+| Diff-Stat Badge | `panels/DiffStatBadge.tsx` | — | Per-file / per-folder `+N −M` |
+| Empty state | inline | `changes-empty` | No changes in this scope |
+| Error state | inline | `changes-error` / `changes-retry` | Failed read + Retry |
 
 ---
 
-# Terminal Panel
+# Terminal Placement
 
-The lower-right section — a tab strip of shell terminals for the active worktree.
+A terminal is a movable resource tab, not a permanently lower-right panel. It may occupy a center group
+or any side group. The selected terminal in each visible, expanded group mounts; inactive, folded, or
+hidden terminal placements do not attach. One terminal identity has at most one mounted body per browser.
 
-- **Canonical name:** Terminal Panel.
-- **Implementation:** `panels/TerminalsPanel.tsx` → `TerminalsPanel`; each terminal instance is
-  `panels/TerminalInstance.tsx` → `TerminalInstance` (lazy, xterm).
-- **`data-testid`:** the wrapper is `terminal-panel`.
-- **Parent:** App Shell (Active-Workspace Layout, right column, `id="right-terminals"`).
-- **Position:** Right column, lower section (below the Right Rail).
-- **Responsibility:** host one or more terminals scoped to the active worktree; all instances stay
-  mounted, only the active one is shown; landing on a terminal-less workspace opens one automatically.
+- **Implementation:** `panels/TerminalWorkbench.tsx` integrates the host catalog and close flow;
+  `panels/TerminalInstance.tsx` is the lazy xterm body.
+- **`data-testid`:** placement `terminal-tab`, compatibility body wrapper `terminal-panel`, instance
+  `terminal-instance`, and add action `terminal-add`.
+- **Responsibility:** preserve host-owned shell identity while layout controls placement and visibility.
+  Closing retains the explicit busy-process confirmation flow.
 
-Children:
-
-| Canonical name | Implementation | `data-testid` | Responsibility |
-|---|---|---|---|
-| Terminal Label | inline `<span>` ("Terminal") | — | The eyebrow label |
-| Terminal Tab | `TerminalTabButton` (inside `TerminalsPanel`) | — | One terminal tab |
-| Add-Terminal Button | inline "+" | `terminal-add` | New terminal |
-| Terminal Instance | `TerminalInstance` | — | The xterm terminal surface |
-| Empty state | inline | `terminals-empty` | "No terminals yet — press + to open one." |
-
-**⚠ Naming note (Terminal Panel vs Bottom Terminal):** the request's example calls this a "Bottom Terminal
-Area"/"Bottom Terminal". In ThinkRail it is **right-lower**, not bottom, so the canonical name is
-**Terminal Panel** (matching `TerminalsPanel`/`terminal-panel`). It is not a global bottom bar.
-
-**⚠ Naming note (Status Bar):** ThinkRail has **no dedicated status bar** component. The closest surfaces
-are the Top Bar's Connection Status pill and the Chat Header's Session Stats Bar. There is no bottom
-status bar; do not use "Status Bar" as a region name.
+**⚠ Naming note (Status Bar):** ThinkRail has **no dedicated status bar component**. The closest surfaces
+are the Top Bar's Connection Status and the Chat Header's Session Stats Bar.
 
 ---
 
@@ -442,6 +395,8 @@ status bar; do not use "Status Bar" as a region name.
 | Providers | `panels/ProvidersSettings.tsx` → `ProvidersSettings` | In-app provider auth (+ `panels/JetBrainsAiCard.tsx` → `JetBrainsAiCard`) |
 | GitHub | `panels/GithubSettings.tsx` → `GithubSettings` | Local GitHub connection status |
 | Appearance | `panels/AppearanceSettings.tsx` → `AppearanceSettings` | Theme picker |
+| Layout | `shell/LayoutSettings.tsx` → `LayoutSettings` (injected into the dialog) | Default/apply/capture workbench presets and side-group limit |
+| Terminal | `panels/TerminalSettings.tsx` → `TerminalSettings` | Terminal replay budget |
 | Templates | `panels/TemplatesSettings.tsx` → `TemplatesSettings` | Global / project prompt templates (`template-row`, `template-starters`) |
 | Privacy | `panels/PrivacySettings.tsx` → `PrivacySettings` | Anonymous-usage-analytics toggle |
 | General | dimmed nav item | "Soon" placeholder |
@@ -505,7 +460,7 @@ its alternatives in parentheses.
 
 - **App Shell** — the root frame (`Shell`).
 - **Top Bar** — the app-wide header (no component name; inline `<header>`).
-- **Active-Workspace Layout** / **Welcome Layout** — the two body states.
+- **Workspace Workbench** / **Welcome Layout** — the two body states.
 - **Toaster** — the app-wide toast host.
 
 **Top Bar**
@@ -515,9 +470,9 @@ its alternatives in parentheses.
 - **Connection Status** — the connected/connecting/disconnected pill.
 - **Settings Button** — opens the Settings Dialog.
 
-**Left**
+**Projects**
 
-- **Projects Rail** (alts: Project Tree, Left Nav) — the projects → workspaces column.
+- **Projects Tool** — the movable singleton; **Projects Rail** (alt: Project Tree; legacy test id: Left Nav) is its projects → workspaces view.
 - **Project Row**, **Workspace Row**, **Default Workspace** — rail rows.
 - **Add-Project Menu**, **Add-Workspace Button**, **Remove-Workspace Button**.
 - **Diff-Stat Badge** — the `+N −M` badge.
@@ -530,12 +485,12 @@ its alternatives in parentheses.
 
 **Center**
 
-- **Center Tabs** (alts: Center Tabbed Area, Editor Area).
-- **Tab Strip**, **Tab** (testid `editor-tab`), **Tab Close**.
-- Tab kinds: **File tab**, **Chat tab**, **Diff tab**, **Doc tab**.
+- **Center Workbench** (alts: Center Tabbed Area, Editor Area).
+- **Center Group**, **Group Header**, **Tab Strip**, **Tab**, **Tab Close**, **Split Separator**.
+- Tab kinds: **File tab**, **Chat tab**, **Diff tab**, **Document tab**, **Terminal tab**.
 - **Editor Pane**, **Workspace-Ready Receipt**.
 - **File Pane** (**Code Editor** / **Markdown Preview**), **Diff Pane** (**Monaco Diff** /
-  **Rendered Diff**), **Doc Pane**.
+  **Rendered Diff**), **Document Pane**, **Terminal Body**.
 - **Chat-History Menu**, **New-Chat Button**.
 
 **Chat**
@@ -555,23 +510,23 @@ its alternatives in parentheses.
   **Save-as-Template Action**.
 - **Chat Plan** — **Plan Strip** + **Plan Popover** + **Todo List**.
 
-**Right**
+**Sides**
 
-- **Right Rail** (alt: Right Panel) — the tabbed browse column.
-- **Right Rail Tab Bar** — **Specs tab**, **All-files tab**, **Changes tab**.
-- **Specs Panel**, **All Files Panel** (alt: File Tree), **Changes Panel**.
+- **Left Side**, **Right Side**, **Side Group**, **Hidden-Side Rail**.
+- Singleton tools: **Projects**, **Specs**, **All files**, **Changes**, **Review**.
+- **Specs Panel**, **All Files Panel** (alt: File Tree), **Changes Panel**, **Review Panel**.
 - **Changes Header** (no component): **Changes Scope Menu**, **Branch Picker**, **Changes View Toggle**.
 - **Changes List** / **Changes Tree**, **Change-Row Actions**, **Tree Row**, **Diff-Stat Badge**.
 
 **Terminal**
 
-- **Terminal Panel** (not "bottom terminal" — it is right-lower). **Terminal Tab**, **Terminal
-  Instance**, **Add-Terminal Button**.
+- **Terminal Placement**, **Terminal Tab**, **Terminal Instance**, **Add-Terminal Button**. A terminal
+  may live in a center or side group; it is not a fixed lower-right region.
 
 **Settings**
 
-- **Settings Dialog** with sections: **Providers**, **GitHub**, **Appearance**, **Templates**,
-  **Privacy**, **General**.
+- **Settings Dialog** with sections: **Providers**, **GitHub**, **Appearance**, **Layout**,
+  **Terminal**, **Templates**, **Privacy**.
 
 **Shared primitives**
 
@@ -587,4 +542,4 @@ its alternatives in parentheses.
   the Dropdown Menu (the **Row Actions Menu**). Name the surface, not just "context menu".
 - **Drawer** — none exists (mobile shell not yet built).
 - **Toolbar** — no component; slim control rows are inline **Panel Headers**.
-- **Bottom Terminal** — the terminals are the right-lower **Terminal Panel**.
+- **Bottom Terminal** — no fixed region exists; say **Terminal Placement** and name its group.
