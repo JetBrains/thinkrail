@@ -41,12 +41,12 @@ convention; their boundary is held by convention + spec. Sibling edges live here
 | `themes` | validated single-file manifests, bundled catalog + atomic token application | yes | [themes/SPEC.md](src/themes/SPEC.md) |
 | `lib` | `cn()` + the shared UI/path/array primitives + highlighting | yes | [lib/SPEC.md](src/lib/SPEC.md) |
 
-Leaf utilities without their own spec: `constants/` (branding) and `styles/` — which holds the two
-design-system SOURCES (`typography.json`, `colors.json`), their generated CSS, and the structural token
-contract; per-theme palettes belong to `themes`. Each system is specced beside its source:
-[TYPOGRAPHY.md](src/styles/TYPOGRAPHY.md) and [COLOR.md](src/styles/COLOR.md).
+Leaf utilities without their own spec: `constants/` (branding) and `styles/` — which holds the three
+design-system SOURCES (`typography.json`, `colors.json`, `spacing.json`), their generated CSS, and the
+structural token contract; per-theme palettes belong to `themes`. Each system is specced beside its source:
+[TYPOGRAPHY.md](src/styles/TYPOGRAPHY.md), [COLOR.md](src/styles/COLOR.md) and [SPACING.md](src/styles/SPACING.md).
 Outside `src/`, **[`scripts/`](scripts/SPEC.md)** is the build-time generator module — it runs under Bun,
-never ships, and turns those two JSON sources into `styles/generated/`.
+never ships, and turns those three JSON sources into `styles/generated/`.
 `index.html` names the product and links the local, symbol-only SVG favicon derived from the same
 ThinkRail artwork as the shell logo (compact enough for browser-tab sizes and light/dark browser chrome).
 `main.tsx` is the entry/composition root — it synchronously builds the bundled theme catalog, then
@@ -81,7 +81,7 @@ The module set: `transport` / `store` / branded `shell`; `ProjectTree`; `FileTre
 - **Tailwind v4 utilities, mapped to the design tokens** (`src/index.css` `@theme inline`). Components
   use utilities for colour, spacing, borders and layout (`bg-container-header-bg`, `text-primary`,
   `border-border-default`,
-  `px-lg`) and a **generated semantic typography class** for type (`tr-text-ui`, `tr-title-dialog`,
+  `px-16`) and a **generated semantic typography class** for type (`tr-text-ui`, `tr-title-dialog`,
   `tr-code-text`, …) — **never inline `style` objects, never raw hex.** Responsive (`md:` …) and states (`hover:` / `focus-visible:`) come
   from Tailwind (inline styles can't express them, and the responsive shell needs them).
 - **The colour and type systems are this app's, not the monorepo's.** `apps/website` keeps its own
@@ -91,14 +91,19 @@ The module set: `transport` / `store` / branded `shell`; `ProjectTree`; `FileTre
   `bg-[var(--elevated)]`; and a tint is a token on the four-step alpha scale, not a `/40` modifier.
   `src/styles/COLOR.md` is the system; `src/styles/colorUsage.test.ts` is the adoption guard (Tailwind
   drops an unknown utility silently, so an unpublished token renders as nothing at all).
-- **A radius or spacing utility names a scale step, never a raw pixel length** — `rounded-[var(--radius-md)]`
-  and `p-md` / `py-0.5`, not `rounded-[7px]` or `py-[3px]`. Two scales are legitimate and both are
-  token-backed: the project family (`--radius-xs/sm/md/lg`, `--space-xs…xl`) and Tailwind's numeric steps
-  for the sub-`--space-xs` tier the project family does not cover. `src/styles/spacingUsage.test.ts` is
-  that adoption guard, and it exists because this class of drift is **invisible**: unlike a colour
-  utility, an arbitrary length always renders, so an off-scale value looks correct in review and passes
-  every other gate. Lengths that are not scale steps at all — `max-w-[78ch]`, `w-[320px]`,
-  `max-h-[40vh]`, a measured `pl-[calc(…)]` indent — stay allowed; they are layout constraints, not rhythm.
+- **A spacing utility names a canonical numeric step; a radius utility names a `--radius-*` token; neither
+  is a raw pixel length** — `p-8` / `gap-4` / `py-12` and `rounded-[var(--radius-md)]`, not `p-md`,
+  `py-1`, `py-[3px]` or `rounded-[7px]`. Spacing is **one canonical vocabulary**: `styles/spacing.json`
+  declares the steps `0/2/4/8/12/16/24` (the step name IS its pixel value), generated into
+  `styles/generated/spacing.css` which sets `--spacing: 1px` so a bare number resolves to that many
+  pixels — replacing Tailwind's built-in 0.25rem base, so nothing falls back to Tailwind's numeric
+  scale. Because that base is shared, **sizing** utilities (`w`/`h`/`size`/inset/translate) are number =
+  px too (`w-16`=16px), but which px a box is is a layout constraint, not rhythm, and is not gated.
+  `src/styles/spacingUsage.test.ts` is the adoption guard for `p`/`m`/`gap` (canonical step or the
+  bracket escape hatch only), and it exists because this class of drift is **invisible**: unlike a colour
+  utility, an arbitrary length always renders. Lengths that are not scale steps — `max-w-[78ch]`,
+  `w-[320px]`, `pr-[2rem]` (a reserved geometry), a measured `pl-[calc(…)]` indent — stay allowed on the
+  bracket escape hatch; they are layout constraints, not rhythm.
 - **`src/themes` is the theme contract and catalog; `src/styles/tokens.css` is structural.** A bundled
   theme is one strict, complete `*.theme.json` manifest: appearance/contrast metadata + semantic UI
   colors + all 16 ANSI colors + a semantic syntax palette. Selected-text foreground overrides are the
@@ -108,8 +113,9 @@ The module set: `transport` / `store` / branded `shell`; `ProjectTree`; `FileTre
   Manifests are self-contained (no inheritance), contain canonical color data only, and cannot alter
   layout/type/motion or inject CSS/code. The engine derives repetitive tints/effects and atomically
   writes the mapped custom properties before changing `[data-theme]`; `@theme inline` keeps every utility
-  pointed at the live variables, so components remain unchanged. `tokens.css` retains the spacing basis,
-  radii, motion and generic derived formulas — **no typography at all** (not a value and not an alias onto
+  pointed at the live variables, so components remain unchanged. `tokens.css` retains radii, motion and
+  generic derived formulas — **no spacing** (the numeric scale is `spacing.json` → `generated/spacing.css`)
+  and **no typography at all** (not a value and not an alias onto
   one; the `--font` / `--font-mono` / `--font-accent` / `--font-mono-size` / `--line-height` aliases are
   gone, because a second name for a value is what drifts) and no named theme blocks.
 - The selected id is **server-synced** (`AppConfig.theme`, host-owned and opaque): it arrives in
@@ -171,6 +177,10 @@ The module set: `transport` / `store` / branded `shell`; `ProjectTree`; `FileTre
   code-only mono, the two prose systems, and how to add or change a style — is specced in
   [src/styles/TYPOGRAPHY.md](src/styles/TYPOGRAPHY.md)** (`web-typography`); check changes against it. The
   generator that turns it into CSS is [scripts/SPEC.md](scripts/SPEC.md).
+- **The spacing system — `spacing.json` as the single source of the canonical numeric scale
+  (`0/2/4/8/12/16/24`), the `--spacing: 1px` number = px mechanism, why sizing shares it, and how to add
+  or change a step — is specced in [src/styles/SPACING.md](src/styles/SPACING.md)** (`web-spacing`); check
+  changes against it. Its generator is also [scripts/SPEC.md](scripts/SPEC.md).
 - **Icons: `lucide-react`. Components: shadcn/ui** (Radix primitives), copy-in under `src/components/ui/`
   and themed with our token utilities (`cn()` in `src/lib/utils.ts`) — never shadcn's default oklch
   palette. Use these for accessible menus / dialogs / tooltips.

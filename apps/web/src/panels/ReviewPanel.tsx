@@ -107,12 +107,12 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 
 	if (failed && !snapshot) {
 		return (
-			<p data-testid="review-failed" className="px-sm py-xs tr-text-metadata text-text-subtle">
+			<p data-testid="review-failed" className="px-8 py-4 tr-text-metadata text-text-subtle">
 				Couldn't load the review — check the connection and switch back to retry.
 			</p>
 		);
 	}
-	if (!snapshot) return <p className="px-sm py-xs tr-text-metadata text-text-subtle">Loading…</p>;
+	if (!snapshot) return <p className="px-8 py-4 tr-text-metadata text-text-subtle">Loading…</p>;
 
 	const files = fileSummaries(snapshot.comments, snapshot.review.doneFiles);
 	const finishFile = async (path: string | null) => {
@@ -150,7 +150,7 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 	return (
 		<div className="flex h-full min-h-0 flex-col" data-testid="review-panel">
 			{hasComments && (
-				<div className="flex h-7 shrink-0 items-center justify-end gap-sm border-border-default border-b px-sm">
+				<div className="flex h-28 shrink-0 items-center justify-end gap-8 border-border-default border-b px-8">
 					{hasDrafts && <SendAllReviewsButton workspaceId={workspaceId} />}
 					<ConfirmPopover
 						open={clearing}
@@ -169,9 +169,9 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 								data-testid="review-clear"
 								title="Clear review — archive sent comments"
 								aria-label="Clear review"
-								className="flex shrink-0 items-center gap-xs px-xs tr-text-metadata text-text-subtle hover:text-feedback-error"
+								className="flex shrink-0 items-center gap-4 px-4 tr-text-metadata text-text-subtle hover:text-feedback-error"
 							>
-								<Trash2 className="size-3.5" />
+								<Trash2 className="size-14" />
 								Clear
 							</button>
 						</PopoverTrigger>
@@ -180,7 +180,7 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 			)}
 			<div className="min-h-0 flex-1 overflow-auto">
 				{files.length === 0 ? (
-					<p data-testid="review-empty" className="px-sm py-xs tr-text-metadata text-text-subtle">
+					<p data-testid="review-empty" className="px-8 py-4 tr-text-metadata text-text-subtle">
 						{hasComments
 							? "All reviewed files are finished — Clear to archive them and start a fresh review."
 							: "No review comments yet. Select lines in a file or diff and click the comment icon."}
@@ -203,13 +203,13 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 										<button
 											type="button"
 											data-testid="review-file-row"
-											className="flex min-w-0 flex-1 items-center gap-sm px-sm py-xs text-left tr-text-ui"
+											className="flex min-w-0 flex-1 items-center gap-8 px-8 py-4 text-left tr-text-ui"
 											onClick={() => toggleFile(file)}
 										>
 											{isOpen ? (
-												<ChevronDown className="size-3.5 shrink-0 text-text-subtle" />
+												<ChevronDown className="size-14 shrink-0 text-text-subtle" />
 											) : (
-												<ChevronRight className="size-3.5 shrink-0 text-text-subtle" />
+												<ChevronRight className="size-14 shrink-0 text-text-subtle" />
 											)}
 											<span className="min-w-0 flex-1 truncate text-text-muted">
 												{file.path ?? "Whole change set"}
@@ -231,9 +231,9 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 												title="Done — finish this file's review"
 												aria-label="Done — finish this file's review"
 												onClick={() => void finishFile(file.path)}
-												className="flex shrink-0 items-center py-xs pr-sm pl-xs text-text-subtle hover:text-feedback-success"
+												className="flex shrink-0 items-center py-4 pr-8 pl-4 text-text-subtle hover:text-feedback-success"
 											>
-												<CheckCircle2 className="size-3.5" />
+												<CheckCircle2 className="size-14" />
 											</button>
 										)}
 									</div>
@@ -287,9 +287,9 @@ function FileSection({
 	const drafts = fileComments.filter((c) => c.status === "draft");
 	const resolved = fileComments.filter((c) => c.status === "resolved");
 	return (
-		<div className="px-xs pb-xs pl-md">
+		<div className="px-4 pb-4 pl-12">
 			{drafts.length > 0 && (
-				<div className="flex items-center justify-end gap-xs px-xs py-xs">
+				<div className="flex items-center justify-end gap-4 px-4 py-4">
 					<SendReviewButton workspaceId={workspaceId} path={path} testid="review-panel-send" />
 				</div>
 			)}
@@ -424,10 +424,12 @@ function CommentRow({
 					!isDraft && comment.sessionId ? onOpenChat(comment.sessionId) : onNavigate()
 				}
 				title={!isDraft && comment.sessionId ? "Open the discussion" : "Show in file"}
-				className="flex w-full items-start gap-sm rounded-[var(--radius-sm)] px-xs py-xs text-left hover:bg-control-bg-hovered"
+				className="flex w-full items-start gap-8 rounded-[var(--radius-sm)] px-4 py-4 text-left hover:bg-control-bg-hovered"
 			>
 				{ordinal !== undefined ? (
-					<span className="w-4 shrink-0 text-center tr-code-text text-text-subtle">{ordinal}.</span>
+					<span className="w-16 shrink-0 text-center tr-code-text text-text-subtle">
+						{ordinal}.
+					</span>
 				) : isDraft ? (
 					<PlanStatusIcon kind="pending" />
 				) : (
@@ -435,7 +437,7 @@ function CommentRow({
 				)}
 				<span className="min-w-0 flex-1">
 					<span className="line-clamp-2 block tr-text-ui text-text-default">{comment.body}</span>
-					<span className="flex items-center gap-xs">
+					<span className="flex items-center gap-4">
 						{ref && <span className="tr-code-text text-text-subtle">{ref}</span>}
 						{comment.anchorState === "outdated" && (
 							<span className="tr-text-eyebrow text-text-subtle">outdated</span>
@@ -445,7 +447,7 @@ function CommentRow({
 			</button>
 			{/* Hover-revealed, like the worktree row's Remove (ProjectTree): rows stay quiet until pointed
 			    at; keyboard focus and an open confirm keep them visible. */}
-			<span className="absolute top-xs right-sm flex items-center gap-xs opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 has-[[data-state=open]]:opacity-100">
+			<span className="absolute top-4 right-8 flex items-center gap-4 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 has-[[data-state=open]]:opacity-100">
 				{isDraft && (
 					<>
 						<button
@@ -456,7 +458,7 @@ function CommentRow({
 							onClick={onSend}
 							className="text-text-subtle hover:text-text-default"
 						>
-							<Send className="size-3.5" />
+							<Send className="size-14" />
 						</button>
 						{/* Drafts only: an unsent remark is the user's own scratch — once sent it is a record. */}
 						<ConfirmPopover
@@ -476,7 +478,7 @@ function CommentRow({
 									title="Delete draft"
 									className="text-text-subtle hover:text-feedback-error"
 								>
-									<Trash2 className="size-3.5" />
+									<Trash2 className="size-14" />
 								</button>
 							</PopoverTrigger>
 						</ConfirmPopover>
@@ -490,7 +492,7 @@ function CommentRow({
 						onClick={onNavigate}
 						className="text-text-subtle hover:text-text-default"
 					>
-						<FileText className="size-3.5" />
+						<FileText className="size-14" />
 					</button>
 				)}
 				{comment.status === "sent" && (
@@ -501,7 +503,7 @@ function CommentRow({
 						onClick={() => void update({ status: "resolved" })}
 						className="text-text-subtle hover:text-feedback-success"
 					>
-						<CheckCircle2 className="size-3.5" />
+						<CheckCircle2 className="size-14" />
 					</button>
 				)}
 			</span>
@@ -522,7 +524,7 @@ function ResolvedRow({
 	return (
 		<div
 			data-testid="review-comment-resolved"
-			className="group relative flex items-center gap-sm rounded-[var(--radius-sm)] px-xs py-xs"
+			className="group relative flex items-center gap-8 rounded-[var(--radius-sm)] px-4 py-4"
 		>
 			<PlanStatusIcon kind="done" />
 			<span
@@ -531,7 +533,7 @@ function ResolvedRow({
 			>
 				{comment.body}
 			</span>
-			<span className="flex shrink-0 items-center gap-xs opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+			<span className="flex shrink-0 items-center gap-4 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
 				{comment.sessionId && (
 					<button
 						type="button"
@@ -540,7 +542,7 @@ function ResolvedRow({
 						onClick={() => comment.sessionId && onOpenChat(comment.sessionId)}
 						className="text-text-subtle hover:text-text-default"
 					>
-						<MessageSquare className="size-3.5" />
+						<MessageSquare className="size-14" />
 					</button>
 				)}
 			</span>
@@ -553,6 +555,6 @@ function ResolvedRow({
 function GlanceGlyph({ glance }: { glance: ReturnType<typeof sessionGlance> }) {
 	const { Icon, className, label } = glanceIcon(glance);
 	return (
-		<Icon data-glance={glance} aria-label={label} className={cn("size-4 shrink-0", className)} />
+		<Icon data-glance={glance} aria-label={label} className={cn("size-16 shrink-0", className)} />
 	);
 }

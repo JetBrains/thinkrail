@@ -14,7 +14,7 @@ import { copyText } from "@/lib";
  * (folders) must reserve the same gutter — otherwise their `+N −M` badges sit further right than the file
  * rows' and the column stops lining up.
  */
-export const ROW_MENU_SLOT = "mr-xs size-5 shrink-0";
+export const ROW_MENU_SLOT = "mr-4 size-20 shrink-0";
 
 /**
  * A changed-file row's **action menu** — one definition behind two triggers: a hover/focus-revealed `⌄`
@@ -67,7 +67,7 @@ export function ChangeRowActions({
 					aria-label={`Actions for ${path}`}
 					className={`${ROW_MENU_SLOT} flex items-center justify-center rounded-[var(--radius-sm)] text-text-muted opacity-0 outline-none transition hover:bg-container-elevated-bg hover:text-text-default focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-primary group-hover:opacity-100 data-[state=open]:opacity-100`}
 				>
-					<ChevronDown className="size-4" />
+					<ChevronDown className="size-16" />
 				</DropdownMenuTrigger>
 			</div>
 			<DropdownMenuContent align="end" data-testid="change-row-actions">

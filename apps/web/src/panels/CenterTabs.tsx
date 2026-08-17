@@ -101,9 +101,9 @@ function ChatHistoryMenu({
 				data-testid="chat-history"
 				aria-label="Reopen a closed chat"
 				title="View chat history"
-				className="flex shrink-0 items-center border-border-default border-l px-sm text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
+				className="flex shrink-0 items-center border-border-default border-l px-8 text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
 			>
-				<History className="size-4" />
+				<History className="size-16" />
 			</DropdownMenuTrigger>
 			<DropdownMenuContent align="end" className="min-w-[16rem]">
 				<DropdownMenuLabel>Recently closed</DropdownMenuLabel>
@@ -119,16 +119,16 @@ function ChatHistoryMenu({
 							<span className="shrink-0 text-text-muted tr-text-metadata">
 								{relativeTime(c.closedAt)}
 							</span>
-							<RotateCcw className="size-3.5 shrink-0 text-text-muted" />
+							<RotateCcw className="size-14 shrink-0 text-text-muted" />
 						</DropdownMenuItem>
 						<DropdownMenuItem
 							data-testid="closed-chat-delete"
 							aria-label={`Move ${c.title} to trash`}
 							title="Move chat to trash"
 							onSelect={() => onDelete(c.sessionId)}
-							className="shrink-0 px-xs text-text-muted focus:text-feedback-error"
+							className="shrink-0 px-4 text-text-muted focus:text-feedback-error"
 						>
-							<Trash2 className="size-3.5" />
+							<Trash2 className="size-14" />
 						</DropdownMenuItem>
 					</div>
 				))}
@@ -363,11 +363,11 @@ export function CenterTabs() {
 	const isDefault = activeWorkspace != null && isDefaultWorkspace(activeWorkspace);
 	const isExternal = activeWorkspace != null && isExternalWorkspace(activeWorkspace);
 	const placeholder = (
-		<div className="flex h-full flex-col items-center justify-center gap-md px-lg text-center text-text-muted">
+		<div className="flex h-full flex-col items-center justify-center gap-12 px-16 text-center text-text-muted">
 			{activeWorkspace ? (
 				<div
 					data-testid="workspace-ready"
-					className="flex max-w-[440px] flex-col items-center gap-xs"
+					className="flex max-w-[440px] flex-col items-center gap-4"
 				>
 					<span className="tr-text-eyebrow text-text-muted">
 						{isDefault ? "Default workspace" : isExternal ? "Existing worktree" : "Workspace ready"}
@@ -375,8 +375,8 @@ export function CenterTabs() {
 					<h2 className="max-w-full truncate tr-title-entity text-text-default">
 						{isDefault ? (contextProject?.name ?? activeWorkspace.name) : activeWorkspace.name}
 					</h2>
-					<p className="flex max-w-full items-center gap-xs text-text-muted tr-text-metadata">
-						<GitBranch className="size-3.5 shrink-0" />
+					<p className="flex max-w-full items-center gap-4 text-text-muted tr-text-metadata">
+						<GitBranch className="size-14 shrink-0" />
 						{isDefault || isExternal ? (
 							<span className="truncate">on {activeWorkspace.branch}</span>
 						) : (
@@ -388,7 +388,7 @@ export function CenterTabs() {
 							</>
 						)}
 					</p>
-					<p className="mt-xs text-text-muted tr-text-ui">
+					<p className="mt-4 text-text-muted tr-text-ui">
 						{isDefault
 							? "Chats, changes, and terminals run directly in your project folder."
 							: "Files, chats, changes, and terminals are scoped to this workspace."}
@@ -402,9 +402,9 @@ export function CenterTabs() {
 					type="button"
 					data-testid="start-chat"
 					onClick={() => void startChat()}
-					className="flex items-center gap-xs rounded-[var(--radius-md)] border border-border-default bg-container-elevated-bg px-md py-xs tr-text-ui text-text-default hover:bg-control-bg-hovered"
+					className="flex items-center gap-4 rounded-[var(--radius-md)] border border-border-default bg-container-elevated-bg px-12 py-4 tr-text-ui text-text-default hover:bg-control-bg-hovered"
 				>
-					<MessageSquarePlus className="size-4" /> New chat
+					<MessageSquarePlus className="size-16" /> New chat
 				</button>
 			) : null}
 		</div>
@@ -432,11 +432,11 @@ export function CenterTabs() {
 								data-active={isActive}
 								data-preview={isPreview}
 								data-kind={tab.kind}
-								className={`group flex items-center gap-xs border-border-default border-r pr-xs pl-sm tr-text-ui ${workspaceTabStateClass(isActive)}`}
+								className={`group flex items-center gap-4 border-border-default border-r pr-4 pl-8 tr-text-ui ${workspaceTabStateClass(isActive)}`}
 							>
 								<button
 									type="button"
-									className="flex max-w-[180px] items-center gap-xs py-xs"
+									className="flex max-w-[180px] items-center gap-4 py-4"
 									title={isPreview ? "Preview — double-click to keep" : undefined}
 									// A click on the tab that is BOTH active and in preview keeps it: the one promote
 									// gesture a touch device can perform (a double tap is the browser's zoom), and a
@@ -446,7 +446,7 @@ export function CenterTabs() {
 									onDoubleClick={() => setActiveTab(tab.id, "keep")}
 								>
 									{tab.kind === "diff" ? (
-										<GitCompareArrows className="size-3.5 shrink-0 text-text-muted" />
+										<GitCompareArrows className="size-14 shrink-0 text-text-muted" />
 									) : null}
 									<span className={`truncate ${isPreview ? "italic" : ""}`}>{tab.name}</span>
 									{(tab.kind === "file" || tab.kind === "diff") && (
@@ -458,9 +458,9 @@ export function CenterTabs() {
 									data-testid="editor-tab-close"
 									aria-label={`Close ${tab.name}`}
 									onClick={() => onCloseTab(tab)}
-									className="rounded-[var(--radius-sm)] p-0.5 text-text-muted opacity-0 hover:bg-control-bg-hovered hover:text-text-default group-hover:opacity-100"
+									className="rounded-[var(--radius-sm)] p-2 text-text-muted opacity-0 hover:bg-control-bg-hovered hover:text-text-default group-hover:opacity-100"
 								>
-									<X className="size-3.5" />
+									<X className="size-14" />
 								</button>
 							</div>
 						);
@@ -471,9 +471,9 @@ export function CenterTabs() {
 							data-testid="new-chat"
 							aria-label="New chat"
 							onClick={() => void startChat()}
-							className="flex items-center px-sm text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+							className="flex items-center px-8 text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 						>
-							<MessageSquarePlus className="size-4" />
+							<MessageSquarePlus className="size-16" />
 						</button>
 					) : null}
 				</div>

@@ -96,7 +96,7 @@ export function TerminalsPanel() {
 
 	return (
 		<div data-testid="terminal-panel" className="flex h-full min-h-0 flex-col">
-			<div className="flex h-7 shrink-0 items-center gap-xs border-b border-border-default pr-xs pl-sm">
+			<div className="flex h-28 shrink-0 items-center gap-4 border-b border-border-default pr-4 pl-8">
 				<span className="shrink-0 tr-text-eyebrow text-text-muted">Terminal</span>
 				<div className="flex h-full min-w-0 flex-1 items-stretch gap-px overflow-x-auto">
 					{tabs.map((tab) => (
@@ -115,16 +115,16 @@ export function TerminalsPanel() {
 					aria-label="New terminal"
 					disabled={!activeWorkspaceId}
 					onClick={() => activeWorkspaceId && addTerminal(activeWorkspaceId)}
-					className="flex size-5 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted hover:bg-control-bg-hovered hover:text-text-default disabled:text-control-disabled-text"
+					className="flex size-20 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted hover:bg-control-bg-hovered hover:text-text-default disabled:text-control-disabled-text"
 				>
-					<Plus className="size-4" />
+					<Plus className="size-16" />
 				</button>
 			</div>
 			<div className="relative min-h-0 flex-1">
 				{!activeWorkspaceId ? (
-					<p className="px-sm py-xs tr-text-metadata text-text-muted">Select a workspace.</p>
+					<p className="px-8 py-4 tr-text-metadata text-text-muted">Select a workspace.</p>
 				) : tabs.length === 0 ? (
-					<p data-testid="terminals-empty" className="px-sm py-xs tr-text-metadata text-text-muted">
+					<p data-testid="terminals-empty" className="px-8 py-4 tr-text-metadata text-text-muted">
 						No terminals yet — press + to open one.
 					</p>
 				) : null}
@@ -169,14 +169,14 @@ function TerminalTabButton({
 }) {
 	return (
 		<div
-			className={`group flex shrink-0 items-center gap-xs rounded-[var(--radius-sm)] pr-xs pl-sm tr-text-ui ${workspaceTabStateClass(active)}`}
+			className={`group flex shrink-0 items-center gap-4 rounded-[var(--radius-sm)] pr-4 pl-8 tr-text-ui ${workspaceTabStateClass(active)}`}
 		>
 			<button
 				type="button"
 				data-testid="terminal-tab"
 				data-active={active}
 				onClick={onSelect}
-				className="max-w-[120px] truncate py-xs"
+				className="max-w-[120px] truncate py-4"
 			>
 				{tab.title}
 			</button>
@@ -185,9 +185,9 @@ function TerminalTabButton({
 				data-testid="terminal-tab-close"
 				aria-label={`Close ${tab.title}`}
 				onClick={onClose}
-				className="rounded-[var(--radius-sm)] p-0.5 text-text-muted opacity-0 hover:bg-container-elevated-bg hover:text-text-default group-hover:opacity-100"
+				className="rounded-[var(--radius-sm)] p-2 text-text-muted opacity-0 hover:bg-container-elevated-bg hover:text-text-default group-hover:opacity-100"
 			>
-				<X className="size-3" />
+				<X className="size-12" />
 			</button>
 		</div>
 	);

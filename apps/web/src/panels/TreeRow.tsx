@@ -10,7 +10,7 @@ import type { MouseEvent, ReactNode } from "react";
  * `kind` drives both the lead (dirs get a chevron reflecting `expanded`, files get a spacer) and the icon
  * (folder vs file). Callers own behaviour (`onClick`/`onDoubleClick`/`onContextMenu` — the Changes tree hangs
  * its row action menu off the last one) and the right-hand `trailing` slot (e.g. status glyph +
- * `DiffStatBadge`). Indentation is the caller's nested `pl-md` lists, not this row.
+ * `DiffStatBadge`). Indentation is the caller's nested `pl-12` lists, not this row.
  *
  * `highlight` says **who paints** the hover/selected band. `"self"` (the default, what the All-files tree
  * wants) is this row; `"wrapper"` is for a row nested inside something that owns a wider band — the Changes
@@ -61,21 +61,21 @@ export function TreeRow({
 			// `min-w-0` so the row can shrink below its label's width when it shares a flex line with a
 			// trailing control (the Changes tree's row-menu slot) — otherwise a long file name pushes that
 			// control out and the `+N −M` column stops lining up with the folder rows'.
-			className={`flex h-6 w-full min-w-0 items-center gap-xs rounded-[var(--radius-sm)] px-xs text-left tr-text-ui text-text-muted ${
+			className={`flex h-24 w-full min-w-0 items-center gap-4 rounded-[var(--radius-sm)] px-4 text-left tr-text-ui text-text-muted ${
 				highlight === "self"
 					? `hover:bg-control-bg-hovered ${active ? "bg-control-bg-selected" : ""}`
 					: ""
 			}`}
 		>
 			{kind === "dir" ? (
-				<Chevron className="size-3.5 shrink-0 text-text-muted" />
+				<Chevron className="size-14 shrink-0 text-text-muted" />
 			) : (
-				<span className="size-3.5 shrink-0" />
+				<span className="size-14 shrink-0" />
 			)}
 			{kind === "dir" ? (
-				<Folder className="size-4 shrink-0 text-text-muted" />
+				<Folder className="size-16 shrink-0 text-text-muted" />
 			) : (
-				<FileIcon className="size-4 shrink-0 text-text-muted" />
+				<FileIcon className="size-16 shrink-0 text-text-muted" />
 			)}
 			<span className={`min-w-0 flex-1 truncate ${labelClassName ?? ""}`}>{label}</span>
 			{trailing}

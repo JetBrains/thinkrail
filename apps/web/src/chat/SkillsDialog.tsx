@@ -181,22 +181,22 @@ export function SkillsDialog({
 				{/* Sticky section header (VSCode-style): pins while the group is in view, then the next
 				    group's header pushes it out. The first-party leads (ThinkRail, Pi) sit at the scroll top
 				    (`top-0`), above the all-plugins master; every other header pins below the master at
-				    `top-8` when plugins exist. No `overflow-hidden` ancestor (would clip sticky); an opaque
+				    `top-32` when plugins exist. No `overflow-hidden` ancestor (would clip sticky); an opaque
 				    bg keeps rows from bleeding through. */}
 				<div
 					className={cn(
-						"sticky z-10 flex items-center gap-sm border-border-default border-y bg-container-header-bg px-sm py-1.5",
-						hasPlugins && !isLeadingKey(group.key) ? "top-8" : "top-0",
+						"sticky z-10 flex items-center gap-8 border-border-default border-y bg-container-header-bg px-8 py-4",
+						hasPlugins && !isLeadingKey(group.key) ? "top-32" : "top-0",
 					)}
 				>
 					{group.isPlugin ? (
-						<Puzzle className="size-3.5 shrink-0 text-text-muted" aria-hidden />
+						<Puzzle className="size-14 shrink-0 text-text-muted" aria-hidden />
 					) : null}
 					<span className="tr-text-eyebrow text-text-default">{group.label}</span>
 					<span className="min-w-0 flex-1 truncate text-text-muted tr-text-metadata">
 						{group.hint}
 					</span>
-					<span className="shrink-0 rounded-full bg-control-bg-selected px-1.5 text-text-muted tr-text-metadata">
+					<span className="shrink-0 rounded-full bg-control-bg-selected px-4 text-text-muted tr-text-metadata">
 						{group.items.length}
 					</span>
 					<Toggle
@@ -207,7 +207,7 @@ export function SkillsDialog({
 					/>
 				</div>
 				{/* Indent + left rail nests the skills visually under their group/plugin header. */}
-				<div className="ml-sm divide-y divide-border-default border-border-default border-l">
+				<div className="ml-8 divide-y divide-border-default border-border-default border-l">
 					{group.items.map((entry) => (
 						<SkillRow
 							key={`${group.key}:${entry.name}`}
@@ -234,9 +234,10 @@ export function SkillsDialog({
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent data-testid="skills-dialog" className="max-w-[560px] gap-md p-md">
-				{/* pr-8 reserves room for the DialogContent's absolute close (X) so it can't overlap Reload. */}
-				<div className="flex items-center justify-between gap-sm pr-8">
+			<DialogContent data-testid="skills-dialog" className="max-w-[560px] gap-12 p-12">
+				{/* Reserved room for the DialogContent's absolute close (X) so it can't overlap Reload — a
+				    geometry constraint (the button's reach), not layout rhythm, so it stays off the spacing scale. */}
+				<div className="flex items-center justify-between gap-8 pr-[2rem]">
 					<DialogTitle className="tr-text-ui text-text-default">Skills</DialogTitle>
 					{workspace ? (
 						<Button
@@ -251,7 +252,7 @@ export function SkillsDialog({
 							}
 							onClick={() => void reload()}
 						>
-							<RefreshCw className="size-3.5" />
+							<RefreshCw className="size-14" />
 							Reload
 						</Button>
 					) : null}
@@ -260,7 +261,7 @@ export function SkillsDialog({
 				{workspace?.stale ? (
 					<div
 						data-testid="skills-stale"
-						className="rounded-[var(--radius-md)] border border-border-default bg-container-elevated-bg px-md py-sm text-text-muted tr-text-metadata"
+						className="rounded-[var(--radius-md)] border border-border-default bg-container-elevated-bg px-12 py-8 text-text-muted tr-text-metadata"
 					>
 						This worktree's skills changed on disk —{" "}
 						<span className="text-text-default">Reload</span> to apply them to this chat.
@@ -270,7 +271,7 @@ export function SkillsDialog({
 				{untrustedCount > 0 ? (
 					<div
 						data-testid="skills-trust-all"
-						className="flex items-center gap-sm rounded-[var(--radius-md)] border border-border-default border-l-[3px] border-l-feedback-warning bg-feedback-warning-subtle px-md py-sm"
+						className="flex items-center gap-8 rounded-[var(--radius-md)] border border-border-default border-l-[3px] border-l-feedback-warning bg-feedback-warning-subtle px-12 py-8"
 					>
 						<span className="min-w-0 flex-1 tr-text-ui text-text-default">
 							{untrustedCount} project skill{untrustedCount === 1 ? "" : "s"} off until you trust
@@ -294,19 +295,19 @@ export function SkillsDialog({
 
 				<div className="max-h-[50vh] overflow-y-auto">
 					{entries === null ? (
-						<p className="px-sm py-md text-text-muted tr-text-ui">Loading skills…</p>
+						<p className="px-8 py-12 text-text-muted tr-text-ui">Loading skills…</p>
 					) : entries.length === 0 ? (
-						<p className="px-sm py-md text-text-muted tr-text-ui">No skills discovered.</p>
+						<p className="px-8 py-12 text-text-muted tr-text-ui">No skills discovered.</p>
 					) : (
 						<>
 							{/* First-party skills (ThinkRail + Pi) lead, above the all-plugins master. */}
 							{leadingGroups.map(renderGroup)}
 							{/* Once the first-party groups scroll past, the all-plugins master pins at the scroll top
-							    (higher z, fixed h-8); plugin/other headers stick below it at `top-8` — a two-level sticky. */}
+							    (higher z, fixed h-32); plugin/other headers stick below it at `top-32` — a two-level sticky. */}
 							{hasPlugins ? (
 								<div
 									data-testid="skills-all-plugins"
-									className="sticky top-0 z-20 flex h-8 items-center gap-sm border-border-default border-y bg-container-header-bg px-sm"
+									className="sticky top-0 z-20 flex h-32 items-center gap-8 border-border-default border-y bg-container-header-bg px-8"
 								>
 									<span className="min-w-0 flex-1 tr-text-eyebrow text-text-default">
 										All plugins
@@ -348,7 +349,7 @@ function Toggle({
 			disabled={busy}
 			onClick={onClick}
 			className={cn(
-				"shrink-0 rounded-[var(--radius-sm)] border px-sm py-0.5 tr-text-metadata transition-colors disabled:bg-control-disabled-bg disabled:text-control-disabled-text",
+				"shrink-0 rounded-[var(--radius-sm)] border px-8 py-2 tr-text-metadata transition-colors disabled:bg-control-disabled-bg disabled:text-control-disabled-text",
 				on
 					? "border-primary-muted bg-clip-padding bg-primary-subtle text-primary"
 					: "border-border-default text-text-muted hover:bg-control-bg-hovered",
@@ -386,7 +387,7 @@ function SkillRow({
 			data-testid="skill-row"
 			data-skill={entry.name}
 			data-decision={entry.decision}
-			className="flex items-center gap-sm py-1.5 pr-sm pl-md hover:bg-control-bg-hovered"
+			className="flex items-center gap-8 py-4 pr-8 pl-12 hover:bg-control-bg-hovered"
 		>
 			<span className="flex min-w-0 flex-1 flex-col">
 				<span className="truncate tr-text-ui text-text-default">{entry.name}</span>
@@ -396,7 +397,7 @@ function SkillRow({
 			</span>
 			{entry.decision === "pending-ack" ? (
 				<Button size="sm" data-testid="skill-ack" disabled={busy} onClick={onAcknowledge}>
-					<ShieldCheck className="size-3.5" />
+					<ShieldCheck className="size-14" />
 					Enable
 				</Button>
 			) : entry.decision === "untrusted" ? (
@@ -416,7 +417,7 @@ function SkillRow({
 					disabled={busy}
 					onClick={() => onToggle(!loaded)}
 					className={cn(
-						"shrink-0 rounded-[var(--radius-sm)] border px-sm py-0.5 tr-text-metadata transition-colors disabled:bg-control-disabled-bg disabled:text-control-disabled-text",
+						"shrink-0 rounded-[var(--radius-sm)] border px-8 py-2 tr-text-metadata transition-colors disabled:bg-control-disabled-bg disabled:text-control-disabled-text",
 						loaded
 							? "border-primary-muted bg-clip-padding bg-primary-subtle text-primary"
 							: "border-border-default text-text-muted hover:bg-control-bg-hovered",

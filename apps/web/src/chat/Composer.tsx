@@ -588,7 +588,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 			{mentionOpen ? (
 				<div
 					data-testid="mention-menu"
-					className="absolute bottom-full left-sm mb-xs max-h-[40vh] w-[min(28rem,90%)] overflow-y-auto rounded-[var(--radius-md)] border border-border-default bg-container-elevated-bg p-xs shadow-[var(--shadow-md)]"
+					className="absolute bottom-full left-8 mb-4 max-h-[40vh] w-[min(28rem,90%)] overflow-y-auto rounded-[var(--radius-md)] border border-border-default bg-container-elevated-bg p-4 shadow-[var(--shadow-md)]"
 				>
 					{mentionCandidates.map((candidate, index) => (
 						<button
@@ -596,12 +596,12 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							type="button"
 							data-testid="mention-item"
 							onClick={() => pickMention(candidate)}
-							className={`flex w-full items-center gap-sm rounded-[var(--radius-sm)] px-sm py-xs text-left tr-text-ui ${index === mentionActiveIndex ? "bg-control-bg-selected text-text-default" : "text-text-muted"}`}
+							className={`flex w-full items-center gap-8 rounded-[var(--radius-sm)] px-8 py-4 text-left tr-text-ui ${index === mentionActiveIndex ? "bg-control-bg-selected text-text-default" : "text-text-muted"}`}
 						>
 							{candidate.kind === "dir" ? (
-								<FolderIcon className="size-3.5 shrink-0" />
+								<FolderIcon className="size-14 shrink-0" />
 							) : (
-								<FileIcon className="size-3.5 shrink-0" />
+								<FileIcon className="size-14 shrink-0" />
 							)}
 							<span className="truncate">{candidate.path}</span>
 						</button>
@@ -612,7 +612,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 					commands={slashCompletion.matches}
 					activeIndex={slashCompletion.activeIndex}
 					onSelect={slashCompletion.pick}
-					className="absolute bottom-full left-sm mb-xs"
+					className="absolute bottom-full left-8 mb-4"
 					// The nudge is about having NO templates at all — never about the current query matching
 					// none — so it keys on the owner's confirmed-empty listing, not on the visible matches.
 					footer={
@@ -629,9 +629,9 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 									replaceDraft("");
 									onManageTemplates();
 								}}
-								className="flex w-full items-center gap-sm rounded-[var(--radius-sm)] border-border-default border-t px-sm py-xs text-left text-text-muted tr-text-metadata hover:bg-control-bg-hovered hover:text-text-default"
+								className="flex w-full items-center gap-8 rounded-[var(--radius-sm)] border-border-default border-t px-8 py-4 text-left text-text-muted tr-text-metadata hover:bg-control-bg-hovered hover:text-text-default"
 							>
-								<Sparkles className="size-3 shrink-0" />
+								<Sparkles className="size-12 shrink-0" />
 								<span className="truncate">
 									No prompt templates yet — add starters in Settings → Templates
 								</span>
@@ -646,34 +646,34 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 					type="button"
 					data-testid="slot-hint"
 					onClick={() => stepSlot(1)}
-					className="absolute bottom-full left-sm mb-xs rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-sm py-xs text-text-muted tr-text-metadata shadow-[var(--shadow-md)] hover:bg-control-bg-hovered hover:text-text-default"
+					className="absolute bottom-full left-8 mb-4 rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-8 py-4 text-text-muted tr-text-metadata shadow-[var(--shadow-md)] hover:bg-control-bg-hovered hover:text-text-default"
 				>
 					slot {slotIdx + 1}/{slots.length} · ⇥ next · esc done
 				</button>
 			) : null}
 
 			{images.length > 0 ? (
-				<div className="flex flex-wrap gap-xs px-sm pt-sm" data-testid="composer-images">
+				<div className="flex flex-wrap gap-4 px-8 pt-8" data-testid="composer-images">
 					{images.map((img) => (
 						<span
 							key={img.id}
-							className="flex items-center gap-xs rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-sm py-xs text-text-default tr-text-metadata"
+							className="flex items-center gap-4 rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-8 py-4 text-text-default tr-text-metadata"
 						>
-							<FileIcon className="size-3" /> {img.content.mimeType}
+							<FileIcon className="size-12" /> {img.content.mimeType}
 							<button
 								type="button"
 								aria-label="Remove image"
 								onClick={() => setImages((prev) => prev.filter((p) => p.id !== img.id))}
 								className="text-text-muted hover:text-text-default"
 							>
-								<X className="size-3" />
+								<X className="size-12" />
 							</button>
 						</span>
 					))}
 				</div>
 			) : null}
 
-			<div className="flex flex-col gap-sm p-sm">
+			<div className="flex flex-col gap-8 p-8">
 				{/* The input's border AND background live here (the textarea below is `bg-transparent` + has no
 				 * border), so the backdrop's tint spans, painted behind the textarea, show through. The 1px
 				 * border is on this wrapper so `bg-clip-padding` (background-clip: padding-box) clips the fill to
@@ -693,7 +693,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							aria-hidden
 							className="pointer-events-none absolute inset-0 overflow-hidden rounded-[var(--radius-md)]"
 						>
-							{/* Mirrors the textarea's box model EXACTLY (same px-md py-sm padding, tr-text-ui
+							{/* Mirrors the textarea's box model EXACTLY (same px-12 py-8 padding, tr-text-ui
 							 * font size/line-height, a transparent border of the same width so the content box
 							 * lines up) plus `whitespace-pre-wrap break-words` — a native textarea soft-wraps
 							 * this way by default (its own UA stylesheet), but a plain <div> does not, so this
@@ -701,8 +701,8 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							 * The mirrored content overflows the `overflow-hidden` parent, whose scroll offsets
 							 * the textarea's `onScroll` sets imperatively (see `attachBackdrop`). The border now
 							 * lives on the wrapper (this backdrop already sits inside it), so the mirror needs only
-							 * the shared `px-md py-sm` padding to line its content box up with the textarea. */}
-							<div className="w-full whitespace-pre-wrap break-words px-md py-sm tr-text-ui">
+							 * the shared `px-12 py-8` padding to line its content box up with the textarea. */}
+							<div className="w-full whitespace-pre-wrap break-words px-12 py-8 tr-text-ui">
 								{withOffsets(highlightSegments(value, slots, slotIdx)).map((seg) => (
 									<span
 										key={seg.start}
@@ -795,11 +795,11 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 						// `relative` keeps the textarea a positioned participant so it paints ABOVE the absolute
 						// slot-highlight backdrop (its earlier DOM sibling) — otherwise a static textarea paints
 						// under the backdrop and the native caret/selection get dimmed by the active-slot tint.
-						className="relative min-h-[108px] w-full resize-none rounded-[var(--radius-md)] bg-transparent px-md py-sm tr-text-ui text-text-default outline-none placeholder:text-text-muted"
+						className="relative min-h-[108px] w-full resize-none rounded-[var(--radius-md)] bg-transparent px-12 py-8 tr-text-ui text-text-default outline-none placeholder:text-text-muted"
 					/>
 				</div>
-				<div className="flex flex-wrap items-center gap-sm">
-					<div className="flex min-w-0 flex-1 flex-wrap items-center gap-sm">
+				<div className="flex flex-wrap items-center gap-8">
+					<div className="flex min-w-0 flex-1 flex-wrap items-center gap-8">
 						<ModelSelector
 							models={models}
 							current={currentModel}
@@ -813,7 +813,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							onSelect={onSelectThinking}
 						/>
 					</div>
-					<div className="flex shrink-0 items-center gap-sm">
+					<div className="flex shrink-0 items-center gap-8">
 						{/* Always rendered — the tap path to history recall on mobile, and a discoverability
 						 * affordance for `Ctrl+R` on desktop; both open the exact same overlay via `onHistoryOpen`. */}
 						<button
@@ -821,9 +821,9 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							data-testid="history-open"
 							aria-label="Search history"
 							onClick={openHistory}
-							className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] border border-border-default bg-container-elevated-bg text-text-default hover:bg-control-bg-hovered"
+							className="flex size-32 shrink-0 items-center justify-center rounded-[var(--radius-md)] border border-border-default bg-container-elevated-bg text-text-default hover:bg-control-bg-hovered"
 						>
-							<History className="size-3.5" />
+							<History className="size-14" />
 						</button>
 						{isStreaming ? (
 							<button
@@ -831,9 +831,9 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 								data-testid="chat-abort"
 								aria-label="Stop"
 								onClick={onAbort}
-								className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] border border-border-default bg-container-elevated-bg text-text-default hover:bg-control-bg-hovered"
+								className="flex size-32 shrink-0 items-center justify-center rounded-[var(--radius-md)] border border-border-default bg-container-elevated-bg text-text-default hover:bg-control-bg-hovered"
 							>
-								<Square className="size-3.5" />
+								<Square className="size-14" />
 							</button>
 						) : null}
 						<button
@@ -842,9 +842,9 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							aria-label={isStreaming ? "Steer" : "Send"}
 							onClick={() => submit(isStreaming ? "steer" : "send")}
 							disabled={!value.trim() && images.length === 0}
-							className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-control-primary-bg text-control-primary-text hover:bg-control-primary-bg-hovered disabled:pointer-events-none disabled:bg-control-disabled-bg disabled:text-control-disabled-text"
+							className="flex size-32 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-control-primary-bg text-control-primary-text hover:bg-control-primary-bg-hovered disabled:pointer-events-none disabled:bg-control-disabled-bg disabled:text-control-disabled-text"
 						>
-							<ArrowUp className="size-4" />
+							<ArrowUp className="size-16" />
 						</button>
 					</div>
 				</div>

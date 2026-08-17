@@ -117,11 +117,11 @@ export function JetBrainsAiCard({
 			data-testid="jetbrains-ai-card"
 			data-wired={wired}
 			data-installed={installed}
-			className="flex flex-col gap-sm rounded-[var(--radius-lg)] border border-border-default bg-control-bg p-md"
+			className="flex flex-col gap-8 rounded-[var(--radius-lg)] border border-border-default bg-control-bg p-12"
 		>
-			<div className="flex items-center gap-md">
-				<span className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-primary-subtle text-primary">
-					<Zap className="size-4" />
+			<div className="flex items-center gap-12">
+				<span className="flex size-32 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-primary-subtle text-primary">
+					<Zap className="size-16" />
 				</span>
 				<div className="flex min-w-0 flex-col">
 					<span className="tr-text-ui text-text-default">JetBrains AI</span>
@@ -138,7 +138,7 @@ export function JetBrainsAiCard({
 							disabled={busy}
 							onClick={() => void disconnect()}
 						>
-							<LogOut className="size-3.5" />
+							<LogOut className="size-14" />
 							Disconnect
 						</Button>
 					) : !showInstall ? (
@@ -148,7 +148,7 @@ export function JetBrainsAiCard({
 							disabled={busy}
 							onClick={() => void connect()}
 						>
-							{busy ? <Loader2 className="size-3.5 animate-spin" /> : <Zap className="size-3.5" />}
+							{busy ? <Loader2 className="size-14 animate-spin" /> : <Zap className="size-14" />}
 							Connect
 						</Button>
 					) : null}
@@ -157,16 +157,16 @@ export function JetBrainsAiCard({
 
 			{wired ? (
 				<p
-					className="flex items-center gap-xs text-feedback-success tr-text-metadata"
+					className="flex items-center gap-4 text-feedback-success tr-text-metadata"
 					data-testid="jetbrains-connected"
 				>
-					<Check className="size-3.5 shrink-0" />
+					<Check className="size-14 shrink-0" />
 					Connected — Claude and GPT route through JetBrains AI.
 				</p>
 			) : null}
 
 			{showInstall ? (
-				<div className="flex flex-col gap-xs" data-testid="jetbrains-needs-install">
+				<div className="flex flex-col gap-4" data-testid="jetbrains-needs-install">
 					<p className="text-text-muted tr-text-metadata">
 						{install?.shell === "powershell"
 							? "Install the JetBrains Central CLI (central) in PowerShell, then Recheck:"
@@ -187,14 +187,14 @@ export function JetBrainsAiCard({
 			) : null}
 
 			{showLogin ? (
-				<div className="flex flex-col gap-xs" data-testid="jetbrains-needs-login">
+				<div className="flex flex-col gap-4" data-testid="jetbrains-needs-login">
 					<p className="text-text-muted tr-text-metadata">
 						{loginLaunched
 							? "Complete sign-in in your browser, then Connect. If nothing opened, run this in a terminal:"
 							: "Sign in to JetBrains AI, then Connect. You can also run this in a terminal:"}
 					</p>
 					<CopyableCommand command={LOGIN_CMD} />
-					<div className="flex gap-sm">
+					<div className="flex gap-8">
 						<Button
 							variant="outline"
 							size="sm"
@@ -203,9 +203,9 @@ export function JetBrainsAiCard({
 							onClick={() => void signIn()}
 						>
 							{signingIn ? (
-								<Loader2 className="size-3.5 animate-spin" />
+								<Loader2 className="size-14 animate-spin" />
 							) : (
-								<ExternalLink className="size-3.5" />
+								<ExternalLink className="size-14" />
 							)}
 							Sign in to JetBrains
 						</Button>
@@ -215,7 +215,7 @@ export function JetBrainsAiCard({
 							disabled={busy}
 							onClick={() => void connect()}
 						>
-							{busy ? <Loader2 className="size-3.5 animate-spin" /> : null}
+							{busy ? <Loader2 className="size-14 animate-spin" /> : null}
 							Connect
 						</Button>
 					</div>
@@ -223,7 +223,7 @@ export function JetBrainsAiCard({
 			) : null}
 
 			{!wired && result?.kind === "error" ? (
-				<div className="flex flex-col gap-xs" data-testid="jetbrains-error">
+				<div className="flex flex-col gap-4" data-testid="jetbrains-error">
 					<p className="break-words text-feedback-error tr-text-metadata">{errorMsg}</p>
 					<Button
 						variant="ghost"
@@ -251,7 +251,7 @@ function CopyableCommand({ command }: { command: string }) {
 		setTimeout(() => setCopied(false), 1500);
 	};
 	return (
-		<div className="flex items-center gap-sm rounded-[var(--radius-md)] border border-border-default bg-container-workspace-bg px-sm py-xs">
+		<div className="flex items-center gap-8 rounded-[var(--radius-md)] border border-border-default bg-container-workspace-bg px-8 py-4">
 			<code className="min-w-0 flex-1 select-all break-all tr-code-text text-text-default">
 				{command}
 			</code>
@@ -261,12 +261,12 @@ function CopyableCommand({ command }: { command: string }) {
 				aria-label={`Copy: ${command}`}
 				title="Copy"
 				onClick={() => void copy()}
-				className="flex size-6 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
+				className="flex size-24 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
 			>
 				{copied ? (
-					<Check className="size-3.5 text-feedback-success" />
+					<Check className="size-14 text-feedback-success" />
 				) : (
-					<Copy className="size-3.5" />
+					<Copy className="size-14" />
 				)}
 			</button>
 		</div>

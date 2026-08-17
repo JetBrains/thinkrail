@@ -54,14 +54,14 @@ export function SpecsPanel({
 
 	if (failed && !nodes)
 		return (
-			<p data-testid="specs-error" className="px-xs py-xs tr-text-metadata text-text-muted">
+			<p data-testid="specs-error" className="px-4 py-4 tr-text-metadata text-text-muted">
 				Couldn't load specs — Refresh to retry.
 			</p>
 		);
 	if (nodes === null || roots === null)
-		return <p className="px-xs py-xs tr-text-metadata text-text-muted">Loading…</p>;
+		return <p className="px-4 py-4 tr-text-metadata text-text-muted">Loading…</p>;
 	if (nodes.length === 0)
-		return <p className="px-xs py-xs tr-text-metadata text-text-muted">No specs</p>;
+		return <p className="px-4 py-4 tr-text-metadata text-text-muted">No specs</p>;
 	return (
 		<ul className="flex flex-col">
 			{roots.map((root) => (
@@ -119,7 +119,7 @@ function SpecNodeRow({
 		<li>
 			<div
 				className={cn(
-					"group flex h-7 min-w-0 items-stretch rounded-[var(--radius-sm)] transition-colors",
+					"group flex h-28 min-w-0 items-stretch rounded-[var(--radius-sm)] transition-colors",
 					isActive
 						? "bg-primary-subtle ring-1 ring-primary-muted ring-inset"
 						: "hover:bg-control-bg-hovered",
@@ -132,12 +132,12 @@ function SpecNodeRow({
 						aria-label={expanded ? `Collapse ${node.title}` : `Expand ${node.title}`}
 						aria-expanded={expanded}
 						onClick={() => setExpanded((value) => !value)}
-						className="flex w-5 shrink-0 items-center justify-center self-stretch rounded-[var(--radius-sm)] text-text-muted outline-none transition-colors hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+						className="flex w-20 shrink-0 items-center justify-center self-stretch rounded-[var(--radius-sm)] text-text-muted outline-none transition-colors hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
 					>
-						<Chevron className="size-3.5" />
+						<Chevron className="size-14" />
 					</button>
 				) : (
-					<span className="w-5 shrink-0" />
+					<span className="w-20 shrink-0" />
 				)}
 				<button
 					type="button"
@@ -153,11 +153,11 @@ function SpecNodeRow({
 					title={`${node.title}\n${node.id} · ${node.type}`}
 					onClick={() => void openFileInTab(workspaceId, node.path, "preview")}
 					onDoubleClick={() => void openFileInTab(workspaceId, node.path, "keep")}
-					className="flex h-7 min-w-0 flex-1 items-center gap-xs rounded-[var(--radius-sm)] pr-xs text-left outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+					className="flex h-28 min-w-0 flex-1 items-center gap-4 rounded-[var(--radius-sm)] pr-4 text-left outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
 				>
 					<DocumentIcon
 						className={cn(
-							"size-3.5 shrink-0 transition-colors",
+							"size-14 shrink-0 transition-colors",
 							isMainSpec || isActive
 								? "text-primary"
 								: "text-text-muted group-hover:text-text-muted",
@@ -174,7 +174,7 @@ function SpecNodeRow({
 					<span
 						data-testid="spec-role"
 						className={cn(
-							"max-w-16 shrink-0 truncate text-right tr-text-eyebrow",
+							"max-w-64 shrink-0 truncate text-right tr-text-eyebrow",
 							isMainSpec || isActive ? "text-primary" : "text-text-subtle",
 						)}
 					>
@@ -183,7 +183,7 @@ function SpecNodeRow({
 				</button>
 			</div>
 			{children.length > 0 && expanded && (
-				<ul className="flex flex-col pl-md">
+				<ul className="flex flex-col pl-12">
 					{children.map((child) => (
 						<SpecNodeRow
 							key={child.node.id}

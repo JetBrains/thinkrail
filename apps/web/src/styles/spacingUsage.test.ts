@@ -5,26 +5,33 @@ import { normalizeEol } from "../../scripts/generatedFiles";
 
 /**
  * The SHAPE + SPACING adoption guard — the third sibling of `colorUsage.test.ts` and
- * `typographyUsage.test.ts`, and the one that was missing. Colour and typography each have a JSON
- * source, a generator and a usage guard; radius and spacing had a source (`styles/tokens.css`) and
- * nothing watching the call sites, so 15 hand-written pixel values had already drifted in — including a
- * `rounded-[7px]` and a `rounded-[10px]` sitting 1–2px off `--radius-md` and `--radius-lg`. Nothing
- * could see them: unlike a colour utility, an arbitrary length always renders, so the drift is invisible
- * in review and in every gate.
+ * `typographyUsage.test.ts`. Colour, typography, radius and spacing each have a JSON/token source and a
+ * usage guard that fails on drift; unlike a colour utility, an off-scale length always RENDERS, so its
+ * drift is invisible in review and in every other gate.
  *
- * Two scales are legitimate here, and both are token-backed:
- *  - the PROJECT steps — `--radius-xs/sm/md/lg` (as `rounded-[var(--radius-md)]`, because `--radius-*`
- *    collides with a Tailwind namespace) and the `--space-*` family (as `p-md`, `gap-sm`, via the
- *    `--spacing-*` aliases in `index.css`);
- *  - Tailwind's own NUMERIC steps (`py-0.5`, `px-1`, `gap-1.5`) — a 4px-based scale, already the
- *    established idiom for the sub-`--space-xs` tier where the project family has no step.
- * What is banned is the third option: a raw pixel length written at the call site, which belongs to
- * neither scale and can sit anywhere between two steps.
+ * SPACING IS ONE CANONICAL NUMERIC VOCABULARY. `styles/spacing.json` declares the steps — `0`, `2`,
+ * `4`, `8`, `12`, `16`, `24` — where the step name IS its pixel value. Every `p`/`m`/`gap` utility must
+ * spend one of those steps (`p-8`, `gap-4`, `py-12`); the value flows from `--spacing: 1px` in
+ * `generated/spacing.css`, which makes a bare number resolve to that many pixels and replaces Tailwind's
+ * built-in 0.25rem base — so nothing falls back to Tailwind's own numeric scale.
  *
- * A LENGTH THAT IS NOT A SCALE STEP IS STILL ALLOWED, deliberately: `max-w-[78ch]`, `w-[320px]`,
- * `max-h-[40vh]` and `pl-[calc(0.875rem+var(--spacing-sm))]` are layout constraints and measured
- * indents, not rhythm. Only the utilities whose whole job is a step off the scale are policed, and only
- * when they carry a bare pixel value.
+ * What is banned:
+ *  - the legacy t-shirt aliases (`p-xs`, `gap-sm`, …) — they no longer exist;
+ *  - any OFF-SCALE number on a spacing utility (`p-6`, `py-1`, `gap-0.5`) — it lands between steps, so
+ *    the next person copies it instead of the step it was reaching for;
+ *  - a raw pixel length at the call site (`py-[3px]`) — belongs to no scale;
+ *  - re-spelling a step through an arbitrary value (`p-[var(--space-8)]` / `p-[8px]`) — the numeric
+ *    utility is the one way to name it.
+ *
+ * SIZING IS OUT OF SCOPE HERE, deliberately. Tailwind v4 shares the `--spacing` base between spacing
+ * and sizing, so `w`/`h`/`size`/inset/translate also resolve as number = px — but which px a box is is a
+ * layout constraint, not rhythm, and is not policed by this gate.
+ *
+ * A LENGTH THAT IS NOT A SCALE STEP IS STILL ALLOWED on a spacing utility through the BRACKET escape
+ * hatch, for measured/optical/geometry values that are not rhythm: `pr-[2rem]` (a close-button reserve),
+ * `pl-[1.6em]` (an em-relative list indent) and `pl-[calc(0.875rem+var(--space-8))]` (an icon-aligned
+ * indent) are constraints, not steps. Only the bare-suffix form of a spacing utility is policed, and the
+ * two arbitrary forms that re-spell a step (`[<n>px]`, `[var(--space…)]`).
  */
 
 const SRC = new URL("..", import.meta.url).pathname;
@@ -53,10 +60,22 @@ function sourceFiles(dir = SRC): string[] {
 const FILES = sourceFiles();
 const TS_FILES = FILES.filter((f) => /\.tsx?$/.test(f));
 const TOKENS = join(SRC, "styles/tokens.css");
+const SPACING_JSON = join(SRC, "styles/spacing.json");
 
-/** `p`, `px`, `mt`, `gap-y`, … — the utilities that spend a step of the spacing scale. */
+/** The canonical steps, read from the single source so the gate and the tokens cannot drift. */
+const STEPS = new Set(
+	Object.keys((JSON.parse(read(SPACING_JSON)) as { steps: Record<string, string> }).steps),
+);
+/** The retired t-shirt names — rejected outright so they can never creep back. */
+const TSHIRT = new Set(["xs", "sm", "md", "lg", "xl"]);
+
+/**
+ * `p`, `px`, `mt`, `gap-y`, … — the utilities that spend a step of the spacing scale (NOT the sizing
+ * utilities, which share the base but are not rhythm). Ordered longest-first so alternation matches the
+ * whole prefix (`gap-x`, not `gap` + a stray `x`).
+ */
 const SPACING_PREFIX =
-	"p|px|py|pt|pb|pl|pr|ps|pe|m|mx|my|mt|mb|ml|mr|ms|me|gap|gap-x|gap-y|space-x|space-y";
+	"px|py|pt|pb|pl|pr|ps|pe|p|mx|my|mt|mb|ml|mr|ms|me|m|gap-x|gap-y|gap|space-x|space-y";
 /** A responsive/state prefix (`sm:`, `hover:`, `group-hover:`) may precede any of them. */
 const VARIANT = String.raw`(?:[a-z-]+(?:\[[^\]]*\])?:)*`;
 
@@ -100,19 +119,50 @@ describe("radius at a call site", () => {
 });
 
 describe("spacing at a call site", () => {
-	it("names a scale step, never a raw pixel length", () => {
-		// `p-md` (project family) and `py-0.5` (Tailwind numeric) are both steps. `py-[3px]` is neither:
-		// it lands between them, so the next person copies 3px instead of the step it was reaching for.
+	it("names a canonical spacing step, never a t-shirt alias or off-scale number", () => {
+		// `p-8` / `gap-4` (steps) pass; `p-xs` (legacy alias) and `p-6` / `py-1` / `gap-0.5` (off-scale)
+		// do not. The bracket escape hatch (`pr-[2rem]`) is not a bare suffix, so it is not matched here.
+		// Keyword suffixes (`auto`, `px` hairline, `full`, `reverse`) are not rhythm and stay fine; a bare
+		// number must be a declared step, and the retired t-shirt names are rejected outright.
+		const bad = hits(
+			new RegExp(String.raw`(?<![\w-])${VARIANT}-?(?:${SPACING_PREFIX})-([a-z0-9.]+)`, "g"),
+		).filter((h) => {
+			const suffix = h.slice(h.lastIndexOf("-") + 1);
+			if (TSHIRT.has(suffix)) return true;
+			if (/^\d/.test(suffix)) return !STEPS.has(suffix);
+			return false;
+		});
+		expect(bad).toEqual([]);
+	});
+
+	it("never spells a spacing length as a raw pixel value", () => {
+		// `py-[3px]` lands between steps; `pr-[2rem]` / `pl-[1.6em]` / `pl-[calc(…)]` are measured
+		// constraints, not px rhythm, so only a bare `px` length in the brackets is banned.
 		expect(
-			hits(new RegExp(String.raw`(?<![\w-])${VARIANT}(?:${SPACING_PREFIX})-\[-?[\d.]+px\]`, "g")),
+			hits(new RegExp(String.raw`(?<![\w-])${VARIANT}-?(?:${SPACING_PREFIX})-\[-?[\d.]+px\]`, "g")),
 		).toEqual([]);
 	});
 
-	it("never reaches a spacing token through an arbitrary value", () => {
-		// `p-[var(--space-md)]` re-spells `p-md` and hides the step behind a variable; the aliases in
-		// `index.css` exist precisely so the utility can name it.
+	it("never re-spells a step through a --space arbitrary value", () => {
+		// `p-[var(--space-8)]` re-spells `p-8` and hides the step behind a variable; the numeric utility
+		// is the one way to name it. Composed measured indents (`pl-[calc(…+var(--space-8))]`) are fine —
+		// the ban is only the DIRECT `-[var(--space…` re-spelling.
 		expect(
-			hits(new RegExp(String.raw`(?<![\w-])${VARIANT}(?:${SPACING_PREFIX})-\[var\(--space`, "g")),
+			hits(new RegExp(String.raw`(?<![\w-])${VARIANT}-?(?:${SPACING_PREFIX})-\[var\(--space`, "g")),
 		).toEqual([]);
+	});
+
+	it("declares no spacing step nothing consumes", () => {
+		// A step earns its place by being spent — as a `p`/`m`/`gap` utility or a raw `--space-<n>` token
+		// in hand-written CSS. The scan EXCLUDES `spacing.json`, or each step's own declaration would
+		// count as its consumer and the check would be vacuous.
+		const utility = new RegExp(String.raw`(?<![\w-])-?(?:${SPACING_PREFIX})-(\d+)\b`, "g");
+		const used = new Set<string>();
+		for (const f of FILES.filter((f) => f !== SPACING_JSON)) {
+			const src = code(f);
+			for (const m of src.matchAll(utility)) used.add(m[1] as string);
+			for (const m of src.matchAll(/--space-(\d+)\b/g)) used.add(m[1] as string);
+		}
+		expect([...STEPS].filter((step) => !used.has(step))).toEqual([]);
 	});
 });

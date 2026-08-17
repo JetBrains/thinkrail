@@ -7,13 +7,13 @@ import { highlightCode } from "@/lib/highlighter";
  * The chat prose skin: `tr-prose-chat` (the generated markdown typography for a chat bubble — see
  * `typography.json` → `proseSystems.chat`) plus chat-bubble *spacing*, link colour, and table borders
  * (`border-muted` on every cell + `border-collapse`, so the outer frame and every row/column separator
- * are single lines; header/background are otherwise unchanged) and cell padding (`px-sm py-xs` on every
+ * are single lines; header/background are otherwise unchanged) and cell padding (`px-8 py-4` on every
  * `th`/`td`, headers left-aligned). Typography is
  * never declared here; the document skin (`MarkdownPreview`) wears `tr-prose-doc`, which is the same
  * element set at a document scale.
  */
 const CHAT_PROSE =
-	"tr-prose-chat max-w-none break-words [&_a]:text-primary [&_a]:underline [&_li]:my-0.5 [&_ol]:my-sm [&_ol]:list-decimal [&_ol]:pl-lg [&_p]:my-sm [&_table]:border-collapse [&_td]:border [&_td]:border-border-muted [&_td]:px-sm [&_td]:py-xs [&_th]:border [&_th]:border-border-muted [&_th]:px-sm [&_th]:py-xs [&_th]:text-left [&_ul]:my-sm [&_ul]:list-disc [&_ul]:pl-lg";
+	"tr-prose-chat max-w-none break-words [&_a]:text-primary [&_a]:underline [&_li]:my-2 [&_ol]:my-8 [&_ol]:list-decimal [&_ol]:pl-16 [&_p]:my-8 [&_table]:border-collapse [&_td]:border [&_td]:border-border-muted [&_td]:px-8 [&_td]:py-4 [&_th]:border [&_th]:border-border-muted [&_th]:px-8 [&_th]:py-4 [&_th]:text-left [&_ul]:my-8 [&_ul]:list-disc [&_ul]:pl-16";
 
 /**
  * Render GFM markdown with shiki-highlighted fenced code blocks. Presentational — no app/store deps.
@@ -73,13 +73,13 @@ function CodeBlock({
 	if (!lang) {
 		if (!code.includes("\n")) {
 			return (
-				<code className="rounded-[var(--radius-sm)] bg-container-elevated-bg px-1 py-0.5">
+				<code className="rounded-[var(--radius-sm)] bg-container-elevated-bg px-4 py-2">
 					{children}
 				</code>
 			);
 		}
 		return (
-			<pre className="overflow-auto rounded-[var(--radius-sm)] bg-container-elevated-bg p-sm">
+			<pre className="overflow-auto rounded-[var(--radius-sm)] bg-container-elevated-bg p-8">
 				{code}
 			</pre>
 		);
@@ -106,14 +106,14 @@ function ShikiBlock({ code, lang }: { code: string; lang: string }) {
 
 	if (html === null) {
 		return (
-			<pre className="overflow-auto rounded-[var(--radius-sm)] bg-container-elevated-bg p-sm text-text-default">
+			<pre className="overflow-auto rounded-[var(--radius-sm)] bg-container-elevated-bg p-8 text-text-default">
 				{code}
 			</pre>
 		);
 	}
 	return (
 		<div
-			className="overflow-auto rounded-[var(--radius-sm)] [&_pre]:!m-0 [&_pre]:!bg-container-elevated-bg [&_pre]:p-sm"
+			className="overflow-auto rounded-[var(--radius-sm)] [&_pre]:!m-0 [&_pre]:!bg-container-elevated-bg [&_pre]:p-8"
 			// biome-ignore lint/security/noDangerouslySetInnerHtml: shiki output is escaped, themed markup
 			dangerouslySetInnerHTML={{ __html: html }}
 		/>

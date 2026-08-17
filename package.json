@@ -49,7 +49,9 @@
 		"typography:validate": "bun --filter @thinkrail/web typography:validate",
 		"typography:check": "bun --filter @thinkrail/web typography:check",
 		"colors:generate": "bun --filter @thinkrail/web colors:generate",
-		"colors:check": "bun --filter @thinkrail/web colors:check"
+		"colors:check": "bun --filter @thinkrail/web colors:check",
+		"spacing:generate": "bun --filter @thinkrail/web spacing:generate",
+		"spacing:check": "bun --filter @thinkrail/web spacing:check"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.5.0",

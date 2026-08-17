@@ -69,32 +69,32 @@ export function Shell() {
 	});
 	return (
 		<div data-testid="shell" className="grid h-full grid-rows-[auto_1fr]">
-			<header className="flex items-center justify-between border-b border-border-default bg-container-header-bg px-lg py-sm">
-				<div className="flex min-w-0 items-center gap-md">
+			<header className="flex items-center justify-between border-b border-border-default bg-container-header-bg px-16 py-8">
+				<div className="flex min-w-0 items-center gap-12">
 					<BrandLogo />
 					{contextProject ? (
 						<div
 							data-testid="scope-context"
 							data-context={activeWorkspace ? "workspace" : "project-home"}
-							className="min-w-0 border-border-default border-l pl-md leading-tight"
+							className="min-w-0 border-border-default border-l pl-12 leading-tight"
 						>
-							<div className="flex min-w-0 items-center gap-xs tr-text-ui">
-								<span className="hidden min-w-0 items-center gap-xs sm:flex">
+							<div className="flex min-w-0 items-center gap-4 tr-text-ui">
+								<span className="hidden min-w-0 items-center gap-4 sm:flex">
 									<span
 										data-testid="scope-project"
 										className="max-w-[160px] truncate text-text-muted"
 									>
 										{contextProject.name}
 									</span>
-									<ChevronRight className="size-3 shrink-0 text-text-muted" />
+									<ChevronRight className="size-12 shrink-0 text-text-muted" />
 								</span>
 								<span data-testid="scope-name" className="max-w-[220px] truncate text-text-default">
 									{activeWorkspace?.name ?? "Project home"}
 								</span>
 							</div>
 							{activeWorkspace ? (
-								<div className="mt-0.5 flex min-w-0 items-center gap-xs text-text-muted tr-text-metadata">
-									<GitBranch className="size-3 shrink-0" />
+								<div className="mt-2 flex min-w-0 items-center gap-4 text-text-muted tr-text-metadata">
+									<GitBranch className="size-12 shrink-0" />
 									<span data-testid="scope-branch" className="truncate">
 										{activeWorkspace.branch}
 									</span>
@@ -119,15 +119,15 @@ export function Shell() {
 						</div>
 					) : null}
 				</div>
-				<div className="flex shrink-0 items-center gap-md">
+				<div className="flex shrink-0 items-center gap-12">
 					<span
 						data-testid="connection-status"
 						data-status={status}
 						role="status"
 						aria-label={STATUS_LABEL[status]}
-						className="inline-flex items-center gap-sm tr-text-ui text-text-muted"
+						className="inline-flex items-center gap-8 tr-text-ui text-text-muted"
 					>
-						<span aria-hidden="true" className={`size-2 rounded-full ${STATUS_DOT[status]}`} />
+						<span aria-hidden="true" className={`size-8 rounded-full ${STATUS_DOT[status]}`} />
 						<span aria-hidden="true" className="hidden sm:inline">
 							{STATUS_LABEL[status]}
 						</span>
@@ -138,9 +138,9 @@ export function Shell() {
 						aria-label="Settings"
 						title="Settings"
 						onClick={() => useAppStore.getState().openSettings()}
-						className="flex size-7 items-center justify-center rounded-[var(--radius-sm)] text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
+						className="flex size-28 items-center justify-center rounded-[var(--radius-sm)] text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
 					>
-						<Settings className="size-4" />
+						<Settings className="size-16" />
 					</button>
 				</div>
 				<SettingsDialog />
@@ -183,7 +183,7 @@ export function Shell() {
 								tabIndex={-1}
 								aria-hidden={workspaceProjects.collapsed || undefined}
 								inert={workspaceProjects.collapsed ? true : undefined}
-								className="h-full overflow-auto bg-container-sidebar-bg p-md outline-none"
+								className="h-full overflow-auto bg-container-sidebar-bg p-12 outline-none"
 							>
 								<ProjectTree />
 							</aside>
@@ -306,7 +306,7 @@ export function Shell() {
 								tabIndex={-1}
 								aria-hidden={welcomeProjects.collapsed || undefined}
 								inert={welcomeProjects.collapsed ? true : undefined}
-								className="h-full overflow-auto bg-container-sidebar-bg p-md outline-none"
+								className="h-full overflow-auto bg-container-sidebar-bg p-12 outline-none"
 							>
 								<ProjectTree />
 							</aside>

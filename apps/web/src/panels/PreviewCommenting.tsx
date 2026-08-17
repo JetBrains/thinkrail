@@ -267,7 +267,7 @@ export function PreviewCommenting({
 						onClick={openComposer}
 						className="review-add-icon review-add-icon-float"
 					>
-						<MessageSquarePlus className="size-3.5" />
+						<MessageSquarePlus className="size-14" />
 					</button>,
 					document.body,
 				)

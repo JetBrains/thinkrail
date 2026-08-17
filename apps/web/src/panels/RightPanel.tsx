@@ -54,9 +54,9 @@ export function RightPanel() {
 		<div className="flex h-full min-h-0 flex-col">
 			<div
 				data-testid="right-tab-strip"
-				className="flex h-panel-header-row shrink-0 items-center border-b border-border-default px-sm"
+				className="flex h-panel-header-row shrink-0 items-center border-b border-border-default px-8"
 			>
-				<div className="flex h-full items-stretch gap-xs">
+				<div className="flex h-full items-stretch gap-4">
 					<TabButton testid="tab-specs" active={tab === "specs"} onClick={() => setTab("specs")}>
 						Specs
 					</TabButton>
@@ -75,7 +75,7 @@ export function RightPanel() {
 						{draftCount > 0 && (
 							<span
 								data-testid="review-pending-badge"
-								className="ml-0.5 inline-flex min-w-4 items-center justify-center rounded-full bg-primary px-0.5 tr-text-label-pill text-text-on-primary"
+								className="ml-2 inline-flex min-w-16 items-center justify-center rounded-full bg-primary px-2 tr-text-label-pill text-text-on-primary"
 							>
 								{draftCount}
 							</span>
@@ -91,21 +91,21 @@ export function RightPanel() {
 						onClick={reloadSpecs}
 						className="ml-auto text-text-muted hover:text-text-muted"
 					>
-						<RefreshCw className="size-3.5" />
+						<RefreshCw className="size-14" />
 					</button>
 				)}
 			</div>
 			<div className="min-h-0 flex-1 overflow-auto">
 				{!activeWorkspaceId ? (
-					<p className="p-sm tr-text-metadata text-text-muted">
+					<p className="p-8 tr-text-metadata text-text-muted">
 						Select a workspace to browse files.
 					</p>
 				) : tab === "specs" ? (
-					<div className="p-xs">
+					<div className="p-4">
 						<SpecsPanel workspaceId={activeWorkspaceId} failed={specsFailed} />
 					</div>
 				) : tab === "files" ? (
-					<div className="p-xs">
+					<div className="p-4">
 						{/* Expansion paths belong to one workspace; remount before another can reuse them. */}
 						<FileTree key={activeWorkspaceId} workspaceId={activeWorkspaceId} />
 					</div>
@@ -136,7 +136,7 @@ function TabButton({
 			data-testid={testid}
 			data-active={active}
 			onClick={onClick}
-			className={`flex h-full items-center px-xs tr-text-eyebrow ${workspaceTabStateClass(active)}`}
+			className={`flex h-full items-center px-4 tr-text-eyebrow ${workspaceTabStateClass(active)}`}
 		>
 			{children}
 		</button>
