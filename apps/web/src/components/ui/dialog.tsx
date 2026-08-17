@@ -31,7 +31,7 @@ function DialogContent({
 			<DialogOverlay />
 			<DialogPrimitive.Content
 				className={cn(
-					"-translate-x-1/2 -translate-y-1/2 fixed top-1/2 left-1/2 z-50 flex w-full max-w-[28rem] flex-col gap-lg rounded-[var(--radius-lg)] border border-border-default bg-container-elevated-bg p-lg text-text-default shadow-[var(--shadow-lg)]",
+					"-translate-x-1/2 -translate-y-1/2 fixed top-1/2 left-1/2 z-50 flex w-full max-w-[28rem] flex-col gap-lg rounded-[var(--radius-md)] border border-border-default bg-container-elevated-bg p-lg text-text-default shadow-[var(--shadow-lg)]",
 					className,
 				)}
 				{...props}

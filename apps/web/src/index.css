@@ -269,11 +269,12 @@
 	display: flex;
 	gap: 4px;
 }
+/* A 6px status circle. Full radius (a pill/circle, not a scale step) via the shared `rounded-full`
+   utility on the node — see ReviewThreadCard.tsx / reviewWidgets.ts. */
 .review-thread-dot {
 	flex-shrink: 0;
 	width: 6px;
 	height: 6px;
-	border-radius: 9999px;
 }
 .review-thread-dot-draft {
 	background: var(--primary);

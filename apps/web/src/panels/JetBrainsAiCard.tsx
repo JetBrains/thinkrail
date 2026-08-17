@@ -117,7 +117,7 @@ export function JetBrainsAiCard({
 			data-testid="jetbrains-ai-card"
 			data-wired={wired}
 			data-installed={installed}
-			className="flex flex-col gap-sm rounded-[var(--radius-lg)] border border-border-default bg-control-bg p-md"
+			className="flex flex-col gap-sm rounded-[var(--radius-md)] border border-border-default bg-control-bg p-md"
 		>
 			<div className="flex items-center gap-md">
 				<span className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-primary-subtle text-primary">

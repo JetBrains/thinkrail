@@ -97,6 +97,18 @@ describe("radius at a call site", () => {
 			.filter((step) => !used.has(step));
 		expect(orphans).toEqual([]);
 	});
+
+	// The scale is a small primitive geometry, capped at 6px: exactly `xs`/`sm`/`md`, nothing above 6px,
+	// and no `lg` (the removed 12px step). `rounded-full` is a pill, not a scale step, so it is exempt —
+	// the 6px cap governs normal UI surfaces, not intentional circles/pills.
+	it("declares exactly xs/sm/md, none above 6px, and no lg", () => {
+		const steps = [...read(TOKENS).matchAll(/^\s*--radius-([a-z0-9]+)\s*:\s*(\d+)px\s*;/gm)].map(
+			(m) => [m[1] as string, Number(m[2])] as const,
+		);
+		expect(steps.map(([name]) => name).sort()).toEqual(["md", "sm", "xs"]);
+		expect(steps.map(([name]) => name)).not.toContain("lg");
+		expect(steps.filter(([, px]) => px > 6)).toEqual([]);
+	});
 });
 
 describe("spacing at a call site", () => {

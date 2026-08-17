@@ -151,7 +151,7 @@ export function ProvidersSettings() {
 					{subscriptionRows.length > 0 ? (
 						<section
 							data-testid="providers-subscriptions"
-							className="flex flex-col gap-sm rounded-[var(--radius-lg)] border border-primary-muted bg-clip-padding bg-primary-subtle p-md"
+							className="flex flex-col gap-sm rounded-[var(--radius-md)] border border-primary-muted bg-clip-padding bg-primary-subtle p-md"
 						>
 							<div className="flex flex-col gap-0.5">
 								<h4 className="tr-title-compact text-text-default">Sign in with a subscription</h4>
