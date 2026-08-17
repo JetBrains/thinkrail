@@ -358,3 +358,25 @@ export interface WireCompactionSummary {
 
 /** A transcript message as `session.getMessages` reports it: pi-canonical + custom messages. */
 export type TranscriptMessage = Message | WireCustomMessage | WireCompactionSummary;
+
+/**
+ * The pi message roles a transcript carries — the ONE definition of that policy, read through the guard
+ * below (the `isControlMessage` pattern).
+ *
+ * Not a display preference: the host filters `session.getMessages` by this set, and `history`'s search
+ * index counts message positions by it, so a hit's `messageIndex` lines up with the client's
+ * `turnIdByMessageIndex` only while both use the *same* set. Two copies differing by one role would shift
+ * every later jump anchor, with nothing to fail — which is why the policy cannot live in either module.
+ */
+const TRANSCRIPT_MESSAGE_ROLES: ReadonlySet<string> = new Set([
+	"user",
+	"assistant",
+	"toolResult",
+	"custom",
+	"compactionSummary",
+]);
+
+/** True when a pi message's role is one a transcript carries (see {@link TRANSCRIPT_MESSAGE_ROLES}). */
+export function isTranscriptMessageRole(role: string): boolean {
+	return TRANSCRIPT_MESSAGE_ROLES.has(role);
+}

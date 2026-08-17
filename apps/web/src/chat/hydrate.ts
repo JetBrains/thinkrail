@@ -16,7 +16,8 @@ export interface HydratedRuntime {
 	askAnswers: Record<string, AskUserAnswersDetails["result"]>;
 	/**
 	 * Parallel to `messages`: `turnIdByMessageIndex[i]` is the turn id minted for `messages[i]` (`null` for
-	 * a `toolResult`/`custom` message, which never becomes its own turn) — the jump anchor map a
+	 * a `toolResult`/`custom` message, which never becomes its own turn, and for a `compactionSummary`,
+	 * which becomes a turn but is never a search hit) — the jump anchor map a
 	 * history-search "jump to message" deep link (`chatLocationRequest`) resolves against. A message that
 	 * ended in `stopReason: "error"` maps to its own assistant turn's id, never the synthesized error
 	 * turn's (the error turn has no message index of its own).

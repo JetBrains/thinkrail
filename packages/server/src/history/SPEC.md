@@ -30,8 +30,9 @@ to preserve).
   metadata. Pi session files are **trees** (abandoned branches) that compaction rewrites, so it resolves
   the file the way pi does before the client renders it — `parseSessionEntries` →
   `migrateSessionEntries` → `buildSessionContext` (follow the current leaf, apply the latest compaction,
-  drop summarized/abandoned entries) — then indexes the resolved messages, filtered to the same renderable
-  roles `getSessionMessages` sends. So `messageIndex` matches the client's `turnIdByMessageIndex` exactly
+  drop summarized/abandoned entries) — then indexes the resolved messages, filtered through contracts'
+  **`isTranscriptMessageRole`**, the very guard `getSessionMessages` sends by (one policy, not a local copy
+  of it). So `messageIndex` matches the client's `turnIdByMessageIndex` exactly
   (no raw-file-order drift), and abandoned/summarized text never becomes a hit — the compaction summary is
   sent (it renders the client's compaction marker), so it consumes an index slot without being searchable.
   The internal
