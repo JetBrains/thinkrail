@@ -194,7 +194,7 @@
 	overflow-wrap: break-word;
 	padding: 8px 12px;
 	border-radius: var(--radius-md);
-	border: 1px solid var(--border-default);
+	border: 1px solid var(--control-border-default);
 	background: var(--control-bg);
 	color: var(--text);
 	/* Typography comes from the generated `tr-text-ui` class on the node. */
@@ -203,10 +203,10 @@
 .review-composer-input::placeholder {
 	color: var(--text-subtle);
 }
+/* Active/editing is a NEUTRAL border strengthen (control-border-active), not an accent border. */
 .review-composer-input:focus-visible {
 	outline: none;
-	border-color: var(--primary);
-	box-shadow: 0 0 0 2px var(--primary-soft);
+	border-color: var(--control-border-active);
 }
 .review-composer-row {
 	display: flex;
@@ -295,14 +295,15 @@
 	color: var(--text);
 }
 /* A DRAFT's body is editable in place — the same input surface as the composer's field (input-bg,
-   border2, radius-md, primary focus ring). Auto-grown by its controller; wraps, never scrolls. */
+   control-border-default, radius-md, neutral control-border-active while editing). Auto-grown by its
+   controller; wraps, never scrolls. */
 .review-thread-edit {
 	width: 100%;
 	min-height: 2.2em;
 	box-sizing: border-box;
 	margin: 0;
 	padding: 8px 12px;
-	border: 1px solid var(--border-default);
+	border: 1px solid var(--control-border-default);
 	border-radius: var(--radius-md);
 	resize: none;
 	overflow-x: hidden;
@@ -312,10 +313,10 @@
 	overflow-wrap: break-word;
 	transition: border-color 0.15s;
 }
+/* Active/editing is a NEUTRAL border strengthen (control-border-active), not an accent border. */
 .review-thread-edit:focus-visible {
 	outline: none;
-	border-color: var(--primary);
-	box-shadow: 0 0 0 2px var(--primary-soft);
+	border-color: var(--control-border-active);
 }
 .review-thread-action {
 	display: flex;
