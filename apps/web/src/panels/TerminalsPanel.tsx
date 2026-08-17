@@ -98,7 +98,7 @@ export function TerminalsPanel() {
 		<div data-testid="terminal-panel" className="flex h-full min-h-0 flex-col">
 			<div
 				data-testid="terminal-header"
-				className="flex h-28 shrink-0 items-center gap-4 border-b border-border-default pr-4 pl-8"
+				className="flex h-panel-header-row shrink-0 items-center gap-4 border-b border-border-default pr-4 pl-12"
 			>
 				<span className="shrink-0 tr-text-eyebrow text-text-muted">Terminal</span>
 				{/* overflow-y-hidden is REQUIRED, not cosmetic: a bare overflow-x-auto promotes overflow-y to

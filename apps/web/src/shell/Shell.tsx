@@ -76,7 +76,9 @@ export function Shell() {
 						<div
 							data-testid="scope-context"
 							data-context={activeWorkspace ? "workspace" : "project-home"}
-							className="min-w-0 border-border-default border-l pl-12 leading-tight"
+							/* Single horizontal row: context › name · branch · origin, vertically centred; each group keeps
+							   its own semantic type/colour and truncates under width (existing sm:/md: responsive hides). */
+							className="flex min-w-0 items-center gap-8 border-border-default border-l pl-12 leading-tight"
 						>
 							<div className="flex min-w-0 items-center gap-4 tr-text-ui">
 								<span className="hidden min-w-0 items-center gap-4 sm:flex">
@@ -93,7 +95,7 @@ export function Shell() {
 								</span>
 							</div>
 							{activeWorkspace ? (
-								<div className="mt-2 flex min-w-0 items-center gap-4 text-text-muted tr-text-metadata">
+								<div className="flex min-w-0 items-center gap-4 text-text-muted tr-text-metadata">
 									<GitBranch className="size-12 shrink-0" />
 									<span data-testid="scope-branch" className="truncate">
 										{activeWorkspace.branch}

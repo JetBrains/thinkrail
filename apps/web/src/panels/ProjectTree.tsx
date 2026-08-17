@@ -236,7 +236,7 @@ export function ProjectTree() {
 
 	return (
 		<nav className="flex flex-col gap-8">
-			<header className="flex h-28 items-center justify-between pr-4 pl-8">
+			<header className="flex h-panel-header-row items-center justify-between pr-4 pl-12">
 				<span className="tr-text-eyebrow text-text-muted">Projects</span>
 				<AddProjectMenu
 					recentProjects={recentProjects}

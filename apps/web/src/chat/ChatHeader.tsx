@@ -23,7 +23,7 @@ export function ChatHeader({
 	return (
 		<div
 			data-testid="chat-toolbar"
-			className="flex h-panel-header-row shrink-0 items-center gap-12 overflow-clip border-border-muted border-b bg-container-workspace-bg px-8"
+			className="flex h-panel-header-row shrink-0 items-center gap-12 overflow-clip border-border-muted border-b bg-container-workspace-bg px-12"
 		>
 			<div className="flex min-w-0 flex-1 items-center overflow-clip">{left}</div>
 			<div className="flex min-w-0 items-center justify-end gap-12 overflow-clip">
