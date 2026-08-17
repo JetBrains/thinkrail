@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { createPtySizeSync, type PtyGrid } from "./ptySizeSync";
+import { createPtySizeSync, type PtyGrid, runAfterTerminalRelayout } from "./ptySizeSync";
 
 function deferred() {
 	let resolve: (value?: unknown) => void = () => {};
@@ -12,6 +12,37 @@ function deferred() {
 }
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+describe("terminal attach layout", () => {
+	test("starts only after web-font relayout settles", async () => {
+		const fontLayout = deferred();
+		let started = false;
+		const startup = runAfterTerminalRelayout(
+			() => fontLayout.promise,
+			() => {
+				started = true;
+			},
+		);
+
+		await tick();
+		expect(started).toBe(false);
+		fontLayout.resolve();
+		await startup;
+		expect(started).toBe(true);
+	});
+
+	test("a relayout failure still starts with the fallback measurement", async () => {
+		let started = false;
+		await runAfterTerminalRelayout(
+			() => Promise.reject(new Error("font failed")),
+			() => {
+				started = true;
+			},
+		);
+
+		expect(started).toBe(true);
+	});
+});
 
 describe("PTY size synchronization", () => {
 	test("a grid is acknowledged only after the host request succeeds", async () => {
