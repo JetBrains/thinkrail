@@ -5,7 +5,13 @@ import { join } from "node:path";
 import { WORKSPACE_TODOS_DIR } from "@thinkrail/shared/paths";
 import { STORE_DIR, storeRel, TodoStore } from "pi-todos/core";
 import { reconcileChangeArtifacts } from "./artifacts";
-import { readBaselines, writeBaselines } from "./baselines";
+import {
+	dropItemBaseline,
+	otherSessionWindows,
+	readBaselines,
+	removeSessionBaselines,
+	writeBaselines,
+} from "./baselines";
 
 const SESSION = "sess-artifacts";
 // The store's own file — a git-visible app-state path the reconcile must never attribute as a change.
@@ -421,6 +427,50 @@ test("re-done replaces the old commit/change artifacts, keeping the agent's spec
 			{ kind: "spec", path: "SPEC.md", specId: "s1" },
 			{ kind: "commit", sha: "sha2", label: "step" },
 		]);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test("an orphan baseline (its item removed from the plan) is pruned by the next reconcile", () => {
+	const { store, root } = tempStore();
+	try {
+		const todo = store.add({ title: "step" });
+		store.update(todo.id, { status: "in_progress" });
+		reconcileChangeArtifacts(store, root, SESSION, () => []);
+		expect(readBaselines(root, SESSION)[todo.id]).toBeDefined();
+
+		// The item is removed while in_progress (a user pruning the plan) — its window must not outlive it,
+		// or every later chat in this worktree would read it as "open" and fall back forever.
+		store.remove(todo.id);
+		reconcileChangeArtifacts(store, root, SESSION, () => []);
+		expect(readBaselines(root, SESSION)[todo.id]).toBeUndefined();
+		expect(otherSessionWindows(root, "sess-other")).toBe(false);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test("dropItemBaseline closes one removed item's window; removeSessionBaselines drops the whole sidecar", () => {
+	const { root } = tempStore();
+	try {
+		writeBaselines(root, SESSION, {
+			t1: { paths: [], head: null },
+			t2: { paths: ["a.ts"], head: "h1" },
+		});
+		// The UI's todo.remove path: only the removed item's window closes.
+		dropItemBaseline(root, SESSION, "t1");
+		expect(Object.keys(readBaselines(root, SESSION))).toEqual(["t2"]);
+		dropItemBaseline(root, SESSION, "absent"); // idempotent no-op
+		expect(Object.keys(readBaselines(root, SESSION))).toEqual(["t2"]);
+
+		// The session.delete path: the deleted chat's sidecar dies with it — no permanently open foreign
+		// window haunting the workspace's overlap checks.
+		expect(otherSessionWindows(root, "sess-other")).toBe(true);
+		removeSessionBaselines(root, SESSION);
+		expect(existsSync(join(root, WORKSPACE_TODOS_DIR, `${SESSION}.baselines.json`))).toBe(false);
+		expect(otherSessionWindows(root, "sess-other")).toBe(false);
+		removeSessionBaselines(root, SESSION); // idempotent no-op
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}

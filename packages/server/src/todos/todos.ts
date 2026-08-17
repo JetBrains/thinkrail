@@ -21,6 +21,7 @@ import {
 import { gitStatus } from "../git";
 import { getWorkspace } from "../workspaces";
 import { settleChangeArtifacts } from "./artifacts";
+import { dropItemBaseline, removeSessionBaselines } from "./baselines";
 
 /** The store rooted at a workspace's worktree for one chat session. `TodoStore` is stateless (re-reads
  * the file every op), so a fresh instance per call is free — no cache. `getWorkspace` throws on unknown. */
@@ -113,6 +114,16 @@ export function openTodoCount(plan: StoredPlan): number {
 	return flatItems(plan).filter((item) => item.status !== "done").length;
 }
 
+/**
+ * Drop a deleted chat's baseline sidecar — its open work windows must die with the session, or every
+ * later overlap check in the workspace would see a permanently "open" foreign window and force sibling
+ * chats into the path-list fallback forever. Best-effort and idempotent (see `baselines.ts`); the
+ * `session.delete` handler calls it after the delete transaction commits.
+ */
+export function removeSessionTodoWindows(params: { workspaceId: string; sessionId: string }): void {
+	removeSessionBaselines(getWorkspace(params.workspaceId).worktreePath, params.sessionId);
+}
+
 /** Append one item to the chat's list. */
 export function addTodo(params: {
 	workspaceId: string;
@@ -156,6 +167,11 @@ export function updateTodo(params: {
 export function removeTodo(params: { workspaceId: string; sessionId: string; id: string }): {
 	ok: true;
 } {
-	storeFor(params.workspaceId, params.sessionId).remove(params.id);
+	const root = getWorkspace(params.workspaceId).worktreePath;
+	new TodoStore(root, params.sessionId).remove(params.id);
+	// This mutation happens outside a reconcile (no `todo_*` tool end fires for a UI edit), so close the
+	// removed item's work window here — an orphan baseline would read as "open" in every later overlap
+	// check and permanently force sibling chats into the path-list fallback.
+	dropItemBaseline(root, params.sessionId, params.id);
 	return { ok: true } as const;
 }

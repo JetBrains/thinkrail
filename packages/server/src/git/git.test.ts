@@ -671,6 +671,30 @@ test("a failed commit restores the index — the user's staging area is never le
 	expect(stagedPaths()).toEqual(["mine.ts"]);
 });
 
+test("a failed commit preserves index-only state — an intent-to-add entry survives byte-for-byte", () => {
+	seedWorkspace();
+	writeFileSync(join(repo, "impl.ts"), "export {};\n");
+	writeFileSync(join(repo, "intent.txt"), "later\n");
+	// Index-only state with no tree representation: a tree round-trip (write-tree/read-tree) would
+	// silently drop it — the regression this test pins is that the index FILE is restored verbatim.
+	git(repo, "add", "-N", "--", "intent.txt");
+	git(repo, "config", "commit.gpgsign", "true");
+	git(repo, "config", "gpg.program", join(dataDir, "no-such-gpg"));
+
+	const head = gitHeadSha("w1");
+	expect(gitCommitPaths("w1", "todo: unsignable", ["impl.ts"])).toBeNull();
+	expect(gitHeadSha("w1")).toBe(head ?? ""); // no commit landed
+	// The intent-to-add entry is still registered in the index…
+	const tracked = new TextDecoder()
+		.decode(
+			Bun.spawnSync(["git", "-C", repo, "ls-files", "--", "intent.txt"], { stdout: "pipe" }).stdout,
+		)
+		.trim();
+	expect(tracked).toBe("intent.txt");
+	// …and the item's path was unstaged again (intent-to-add itself never counts as staged content).
+	expect(stagedPaths()).toEqual([]);
+});
+
 test("gitCommitPaths refuses to commit over a conflicted index (unmerged entries)", () => {
 	seedWorkspace();
 	// Build a real conflict: two branches editing the same line, merged with no resolution.
