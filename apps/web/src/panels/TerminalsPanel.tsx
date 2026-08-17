@@ -96,9 +96,18 @@ export function TerminalsPanel() {
 
 	return (
 		<div data-testid="terminal-panel" className="flex h-full min-h-0 flex-col">
-			<div className="flex h-28 shrink-0 items-center gap-4 border-b border-border-default pr-4 pl-8">
+			<div
+				data-testid="terminal-header"
+				className="flex h-28 shrink-0 items-center gap-4 border-b border-border-default pr-4 pl-8"
+			>
 				<span className="shrink-0 tr-text-eyebrow text-text-muted">Terminal</span>
-				<div className="flex h-full min-w-0 flex-1 items-stretch gap-px overflow-x-auto">
+				{/* overflow-y-hidden is REQUIRED, not cosmetic: a bare overflow-x-auto promotes overflow-y to
+				    `auto` (CSS spec), so the horizontal tab scroller would grow a vertical scrollbar inside the
+				    fixed-height header. Matches the center tab strip's scroller (CenterTabs). */}
+				<div
+					data-testid="terminal-tab-strip"
+					className="flex h-full min-w-0 flex-1 items-stretch gap-px overflow-x-auto overflow-y-hidden"
+				>
 					{tabs.map((tab) => (
 						<TerminalTabButton
 							key={tab.tabKey}

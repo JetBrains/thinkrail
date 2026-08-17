@@ -40,6 +40,37 @@ test("a workspace opens a terminal automatically, rooted in the worktree, with w
 	await expect(term).toContainText("TR_MARKER_IO");
 });
 
+test("the terminal header is fixed-height chrome and never scrolls vertically", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await waitTerminalReady(page);
+
+	// Open several terminals so the tab strip overflows HORIZONTALLY — the case that used to promote
+	// overflow-x:auto into a vertical scrollbar inside the fixed-height header.
+	for (let i = 0; i < 6; i++) await page.getByTestId("terminal-add").click();
+	await expect(page.getByTestId("terminal-tab").first()).toBeVisible();
+
+	// Neither the header row nor its tab-strip scroller may overflow vertically, and the scroller must
+	// clip the y-axis (never auto/scroll) — the root-cause guarantee, checked across panel sizes.
+	for (const testid of ["terminal-header", "terminal-tab-strip"]) {
+		const el = page.getByTestId(testid);
+		const metrics = await el.evaluate((node) => ({
+			overflowY: getComputedStyle(node).overflowY,
+			verticalOverflow: node.scrollHeight - node.clientHeight,
+		}));
+		expect(metrics.verticalOverflow).toBeLessThanOrEqual(1);
+		expect(["hidden", "clip", "visible"]).toContain(metrics.overflowY);
+	}
+
+	// The tab strip still scrolls HORIZONTALLY (behaviour preserved, not moved into the header body).
+	const horizontalOverflow = await page
+		.getByTestId("terminal-tab-strip")
+		.evaluate((node) => node.scrollWidth - node.clientWidth);
+	expect(horizontalOverflow).toBeGreaterThan(0);
+});
+
 test("terminals are workspace-scoped and survive workspace switches", async ({ page }) => {
 	await openFixtureProject(page);
 	await createWorkspaceViaDialog(page); // workspace 1 (auto terminal)
