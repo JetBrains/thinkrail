@@ -47,7 +47,11 @@ A window opening while **another chat** already has one records `shared: true` a
 window shared too (`markOtherSessionWindowsShared`) — the flag is **sticky**, because "was this window
 exclusive for its whole life?" is what the gate needs and can't be re-derived once the other closed.
 (Two items of *one* plan can't overlap: `pi-todos` keeps exactly one item `in_progress` and a demoted
-item's window is dropped — pinned by a test, since the gate leans on it.) On `done`:
+item's window is dropped — pinned by a test, since the gate leans on it.) **Windows never outlive their
+owner**: a baseline whose item has vanished from the plan is pruned at the top of every reconcile, the
+UI's `todo.remove` drops the removed item's baseline directly (no `todo_*` tool end fires for a UI edit),
+and `session.delete` removes the chat's whole sidecar (`removeSessionTodoWindows`) — an orphan would read
+as a permanently open foreign window and force every sibling chat into the fallback forever. On `done`:
 
 - **Commit the item's delta.** `git.gitCommitPaths` commits **exactly the delta paths** — the item's own
   work, never "everything currently dirty" — `--no-verify` (the bookkeeping commit must not run/fail the
@@ -90,7 +94,9 @@ anything already dirty when the window opened is caught by gate 2).
 **`listTodos` decoration — unfolding the commit.** The wire DTO's `commit` artifact carries a derived
 **`files`** list — full `GitFileChange[]` rows (path + status + `+/−` line counts), read through
 `git.gitStatus` at the **`commit:{sha}` scope** (the exact rows the Changes panel renders there, one
-derivation) — memoized in-memory **by sha** — immutable, so the cache never staleness-checks; only
+derivation) — memoized in-memory **by workspace + sha** (resolvability is repository-local: two clones
+can share a sha while only one still has the object, so one workspace's hit must never satisfy another's
+resolution check) — immutable, so the cache never staleness-checks; only
 successful resolutions are cached, a transient git failure (or `UNKNOWN_COMMIT`) retries on the next
 list. An **unresolvable sha** (GC'd after a history rewrite — reflog keeps rewritten commits alive ~90
 days, far longer than a chat plan's ephemeral life; we deliberately pin nothing) yields **no `files`** —

@@ -115,6 +115,31 @@ function otherOwners(root: string, sessionId: string): string[] {
 	}
 }
 
+/**
+ * Drop one item's baseline (if any) — called when a plan mutation removes the item outside a reconcile
+ * (the UI's `todo.remove`), so the deleted item's work window closes with it. Read-modify-write like the
+ * store; a missing sidecar or absent id is a no-op.
+ */
+export function dropItemBaseline(root: string, sessionId: string, id: string): void {
+	const items = readBaselines(root, sessionId);
+	if (items[id] === undefined) return;
+	delete items[id];
+	writeBaselines(root, sessionId, items);
+}
+
+/**
+ * Remove a session's whole sidecar — called when the chat itself is deleted, so its open windows die with
+ * it instead of haunting every later overlap check as a permanently "open" foreign window (which would
+ * force sibling chats into the path-list fallback forever). Best-effort, idempotent, never throws.
+ */
+export function removeSessionBaselines(root: string, sessionId: string): void {
+	try {
+		rmSync(baselinePath(root, sessionId), { force: true });
+	} catch {
+		// an unremovable sidecar keeps erring toward the fallback — never fail the caller's delete
+	}
+}
+
 /** Write a session's baselines atomically; an empty map removes the sidecar instead of leaving `{}`. */
 export function writeBaselines(
 	root: string,

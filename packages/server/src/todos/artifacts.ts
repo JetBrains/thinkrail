@@ -193,7 +193,15 @@ export function reconcileChangeArtifacts(
 	let othersOpen: boolean | null = null;
 	const otherChatWorking = (): boolean => (othersOpen ??= otherSessionWindows(root, sessionId));
 
-	for (const todo of flatten(plan)) {
+	const items = flatten(plan);
+	// Prune orphans first: a baseline whose item no longer exists (removed from the plan, replanned away)
+	// is a work window nobody can ever close — left behind, it would read as "open" in every later overlap
+	// check and permanently force other chats into the path-list fallback.
+	const liveIds = new Set(items.map((t) => t.id));
+	for (const id of Object.keys(baselines)) {
+		if (!liveIds.has(id)) dropBaseline(id);
+	}
+	for (const todo of items) {
 		if (todo.status === "in_progress") {
 			if (!baselines[todo.id]) {
 				// Opening a window: record whether it already shares the worktree with another chat, and if so
