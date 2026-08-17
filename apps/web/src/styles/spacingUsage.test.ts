@@ -10,10 +10,11 @@ import { normalizeEol } from "../../scripts/generatedFiles";
  * drift is invisible in review and in every other gate.
  *
  * SPACING IS ONE CANONICAL NUMERIC VOCABULARY. `styles/spacing.json` declares the steps — `0`, `2`,
- * `4`, `8`, `12`, `16`, `24` — where the step name IS its pixel value. Every `p`/`m`/`gap` utility must
- * spend one of those steps (`p-8`, `gap-4`, `py-12`); the value flows from `--spacing: 1px` in
- * `generated/spacing.css`, which makes a bare number resolve to that many pixels and replaces Tailwind's
- * built-in 0.25rem base — so nothing falls back to Tailwind's own numeric scale.
+ * `4`, `8`, `12`, `16`, `24`, `32`, `40`, `64` — where the step name IS its pixel value. Every
+ * `p`/`m`/`gap` utility must spend one of those steps (`p-8`, `gap-4`, `py-12`); the value flows from
+ * `--spacing: 1px` in `generated/spacing.css`, which makes a bare number resolve to that many pixels and
+ * replaces Tailwind's built-in 0.25rem base — so nothing falls back to Tailwind's own numeric scale. The
+ * scale is a DEFINED primitive set, not an inventory of usage: a step may exist with no consumers yet.
  *
  * What is banned:
  *  - the legacy t-shirt aliases (`p-xs`, `gap-sm`, …) — they no longer exist;
@@ -152,17 +153,12 @@ describe("spacing at a call site", () => {
 		).toEqual([]);
 	});
 
-	it("declares no spacing step nothing consumes", () => {
-		// A step earns its place by being spent — as a `p`/`m`/`gap` utility or a raw `--space-<n>` token
-		// in hand-written CSS. The scan EXCLUDES `spacing.json`, or each step's own declaration would
-		// count as its consumer and the check would be vacuous.
-		const utility = new RegExp(String.raw`(?<![\w-])-?(?:${SPACING_PREFIX})-(\d+)\b`, "g");
-		const used = new Set<string>();
-		for (const f of FILES.filter((f) => f !== SPACING_JSON)) {
-			const src = code(f);
-			for (const m of src.matchAll(utility)) used.add(m[1] as string);
-			for (const m of src.matchAll(/--space-(\d+)\b/g)) used.add(m[1] as string);
-		}
-		expect([...STEPS].filter((step) => !used.has(step))).toEqual([]);
+	it("treats the scale as a DEFINED primitive set — a step may exist with no consumers", () => {
+		// The spacing scale is intentionally defined, NOT an inventory derived from current usage: reserved
+		// primitives exist ahead of any consumer. So there is deliberately no orphan/reachability check
+		// here — re-adding one would reject a reserved step (`32`/`40`/`64` currently have no call sites).
+		// This pins that those reserved primitives stay declared and every step is a bare-integer px value.
+		for (const step of ["32", "40", "64"]) expect(STEPS.has(step)).toBe(true);
+		expect([...STEPS].every((step) => /^\d+$/.test(step))).toBe(true);
 	});
 });

@@ -24,11 +24,15 @@ styles/spacingUsage.test.ts    the adoption guard
 
 ## The scale
 
-`spacing.json` declares the steps **`0 · 2 · 4 · 8 · 12 · 16 · 24`**. The **step name IS its pixel
-value** — `"8": "8px"` — so an instruction that names a number maps to exactly one token and one family
-of utilities. `0` is the identity step (no spacing). Adding a step (a `6`, say) is a deliberate design
-decision, not a mechanical one — the audit found 6px used four ways, each resolved into an existing role
-rather than minting a new step.
+`spacing.json` declares the steps **`0 · 2 · 4 · 8 · 12 · 16 · 24 · 32 · 40 · 64`**. The **step name IS
+its pixel value** — `"8": "8px"` — so an instruction that names a number maps to exactly one token and
+one family of utilities. `0` is the identity step (no spacing).
+
+The scale is an **intentionally defined primitive set, not an inventory of current usage**: a step may
+exist ahead of any consumer. `32`/`40`/`64` are reserved primitives with no call sites yet — they are
+canonical, not orphans, and are not removed for lack of use. Conversely, adding a step (a `6`, say) is a
+deliberate design decision, not a mechanical one — the audit found 6px used four ways, each resolved
+into an existing role rather than minting a new step.
 
 `spacing.json` is the source; nothing restates a length. The generated `--space-<n>` custom properties
 are read directly by the few hand-written CSS surfaces that cannot use a utility (the Monaco review
@@ -66,8 +70,8 @@ steps from `spacing.json` so the two cannot drift:
 - the **bracket escape hatch** carries measured/optical/geometry values that are not steps: `pr-[2rem]`
   (a close-button reserve), `pl-[1.6em]` (an em-relative list indent), `pl-[calc(0.875rem+var(--space-8))]`
   (an icon-aligned indent). These are layout constraints, deliberately outside the scale;
-- every declared step must be **consumed** (as a utility or a `--space-<n>` token), so a dead step cannot
-  linger.
+- the scale is a defined primitive set, so a step is **not** required to have a consumer — the gate has no
+  orphan/reachability check that could reject a reserved primitive (`32`/`40`/`64`).
 
 Like the colour and typography guards, this one exists because the drift is **invisible**: unlike an
 unknown colour utility (which Tailwind drops, rendering nothing), an off-scale length always renders, so
@@ -78,4 +82,5 @@ it looks correct in review and passes every other gate.
 Edit `spacing.json`, run `bun run spacing:generate`, commit the regenerated `styles/generated/spacing.css`.
 That is the whole change — the utilities (`p-<n>`, `gap-<n>`, …) and the raw `--space-<n>` tokens both
 follow from the source. A step name must equal its pixel value (`validate()` enforces `"<n>": "<n>px"`).
-Removing a step that is still consumed, or adding one nothing uses, fails the gate.
+A new step needs no consumer to be valid — a reserved primitive can be added ahead of use. Removing a
+step that call sites still spend, however, breaks those utilities (they become off-scale).

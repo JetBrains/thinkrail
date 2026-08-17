@@ -94,7 +94,7 @@ The module set: `transport` / `store` / branded `shell`; `ProjectTree`; `FileTre
 - **A spacing utility names a canonical numeric step; a radius utility names a `--radius-*` token; neither
   is a raw pixel length** — `p-8` / `gap-4` / `py-12` and `rounded-[var(--radius-md)]`, not `p-md`,
   `py-1`, `py-[3px]` or `rounded-[7px]`. Spacing is **one canonical vocabulary**: `styles/spacing.json`
-  declares the steps `0/2/4/8/12/16/24` (the step name IS its pixel value), generated into
+  declares the steps `0/2/4/8/12/16/24/32/40/64` (the step name IS its pixel value), generated into
   `styles/generated/spacing.css` which sets `--spacing: 1px` so a bare number resolves to that many
   pixels — replacing Tailwind's built-in 0.25rem base, so nothing falls back to Tailwind's numeric
   scale. Because that base is shared, **sizing** utilities (`w`/`h`/`size`/inset/translate) are number =
@@ -178,7 +178,7 @@ The module set: `transport` / `store` / branded `shell`; `ProjectTree`; `FileTre
   [src/styles/TYPOGRAPHY.md](src/styles/TYPOGRAPHY.md)** (`web-typography`); check changes against it. The
   generator that turns it into CSS is [scripts/SPEC.md](scripts/SPEC.md).
 - **The spacing system — `spacing.json` as the single source of the canonical numeric scale
-  (`0/2/4/8/12/16/24`), the `--spacing: 1px` number = px mechanism, why sizing shares it, and how to add
+  (`0/2/4/8/12/16/24/32/40/64`), the `--spacing: 1px` number = px mechanism, why sizing shares it, and how to add
   or change a step — is specced in [src/styles/SPACING.md](src/styles/SPACING.md)** (`web-spacing`); check
   changes against it. Its generator is also [scripts/SPEC.md](scripts/SPEC.md).
 - **Icons: `lucide-react`. Components: shadcn/ui** (Radix primitives), copy-in under `src/components/ui/`
