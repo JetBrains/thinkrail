@@ -22,12 +22,15 @@ a future `packages/chat-ui`). Built-in tool renderers live in the child
 ## Rendering model — rows and progressive disclosure
 
 The transcript is pi-canonical turns (`ChatTurn` in `types.ts`: user/assistant are pi messages; `system`,
-`error`, `retry` are web-local notices), but the list renders **derived rows, not raw turns** — folding
+`error`, `retry` are web-local notices; `compaction` marks where pi replaced earlier messages with a
+summary — hydration-only, since a live transcript still holds everything it streamed), but the list renders
+**derived rows, not raw turns** — folding
 spans assistant-message boundaries (pi emits one assistant message per tool round), so a per-turn item
 model can't group. The pure **`deriveRows(turns, toolResults, isStreaming, isSpec?)`** (`rows.ts`) walks
 blocks in order into rows; `ChatTurnView` dispatches on row kind:
 
-- `user` / `system` / `retry` — 1:1 renderers. A user message that IS a review context package
+- `user` / `system` / `retry` / `compaction` — 1:1 renderers (`CompactionTurn` is a labelled rule that
+  opens pi's summary on click, so a reloaded long chat explains its gap instead of starting mid-conversation). A user message that IS a review context package
   (`reviewPackage.ts` recognizes the `<review …>` header + `<comment …>` items the server's
   `packageRender` emits — the parser is the read half of that format, pinned in unit tests against the
   renderer's verbatim output) renders as a **compact card**: the one-sentence
@@ -135,7 +138,9 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   followed by later messages remain history, not a stale current warning. It also
   returns `turnIdByMessageIndex` (message-position → minted turn id) — the jump anchor map a
   history-search "jump to message" deep link (`chatLocationRequest`, see `store/SPEC.md`) resolves
-  against; entries are `null` for a `toolResult`/`custom` message (never its own turn), and a message that
+  against; entries are `null` for a `toolResult`/`custom` message (never its own turn) and for a
+  `compactionSummary` (its own turn, but never a search hit — the host's index consumes the same slot, so
+  the two stay aligned), and a message that
   ended in `stopReason: "error"` maps to its own assistant turn's id, never the synthesized error turn's.
   `custom` messages never become turns: known ones (`ask-user-answers`) index into `askAnswers`; unknown
   customTypes are ignored. No store/transport/shiki.

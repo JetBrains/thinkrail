@@ -75,7 +75,7 @@ the host from env via `bootHost` for dev/e2e.
 
 `host` is the **only composition root** — it wires each feature's handlers into the WS registry.
 
-- `host` → `projects`, `workspaces`, `git`, `github`, `branch-review`, `fs`, `spec`, `todos`, `reviews`, `watch`, `terminal`, `dialog`, `editors`, `agent`, `auth`, `assist`, `settings`, `history`, `templates`, `analytics`
+- `host` → `projects`, `workspaces`, `git`, `github`, `branch-review`, `fs`, `spec`, `todos`, `reviews`, `watch`, `terminal`, `dialog`, `editors`, `agent`, `auth`, `assist`, `settings`, `history`, `templates`, `analytics`, `persistence` (`dataDir`, for the crash report)
 - `workspaces` → `projects`, `git`, `persistence`
 - `branch-review` → `git`
 - `projects` → `git` (shared runner), `persistence`
