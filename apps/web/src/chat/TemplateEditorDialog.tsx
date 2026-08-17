@@ -21,7 +21,7 @@ import { assembleTemplate, stripFrontmatter } from "./templateText";
 const SYNTAX_HINT = `$1, $ARGUMENTS, \${1:-default} — pi prompt-template syntax`;
 
 const INPUT_CLASS =
-	"w-full rounded-[var(--radius-md)] border border-control-border-default bg-control-bg px-md py-sm tr-text-ui text-text-default outline-none transition-colors placeholder:text-text-muted focus-visible:border-control-border-active focus-visible:ring-2 focus-visible:ring-primary-soft disabled:bg-control-disabled-bg disabled:text-control-disabled-text";
+	"w-full rounded-[var(--radius-sm)] border border-control-border-default bg-control-bg px-md py-sm tr-text-ui text-text-default outline-none transition-colors placeholder:text-text-muted focus-visible:border-control-border-active focus-visible:ring-2 focus-visible:ring-primary-soft disabled:bg-control-disabled-bg disabled:text-control-disabled-text";
 
 /**
  * Mirrors the server's `isValidTemplateName` (`packages/server/src/templates/templates.ts`) exactly — a
@@ -325,7 +325,7 @@ function ScopeOption({
 			disabled={disabled}
 			onClick={onSelect}
 			className={cn(
-				"flex-1 rounded-[var(--radius-md)] border px-md py-sm text-left tr-text-ui outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:bg-control-disabled-bg disabled:text-control-disabled-text",
+				"flex-1 rounded-[var(--radius-sm)] border px-md py-sm text-left tr-text-ui outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:bg-control-disabled-bg disabled:text-control-disabled-text",
 				active
 					? "border-primary-muted bg-clip-padding bg-primary-subtle text-text-default"
 					: "border-border-default text-text-muted hover:bg-control-bg-hovered hover:text-text-default",

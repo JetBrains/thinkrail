@@ -98,16 +98,16 @@ describe("radius at a call site", () => {
 		expect(orphans).toEqual([]);
 	});
 
-	// The scale is a small primitive geometry, capped at 6px: exactly `xs`/`sm`/`md`, nothing above 6px,
-	// and no `lg` (the removed 12px step). `rounded-full` is a pill, not a scale step, so it is exempt —
-	// the 6px cap governs normal UI surfaces, not intentional circles/pills.
-	it("declares exactly xs/sm/md, none above 6px, and no lg", () => {
+	// The scale is a small primitive geometry, capped at 8px: exactly `xs`/`sm`/`md`/`lg` (2/4/6/8px).
+	// `sm` (4px) is the default corner; `md` (6px) is the outer corner for surfaces nesting 4px children;
+	// `lg` (8px) is the exception for large standalone elevated surfaces. Nothing above 8px. `rounded-full`
+	// (a pill/circle) is not a scale step, so it is exempt — the 8px cap governs normal UI surfaces only.
+	it("declares exactly xs/sm/md/lg, none above 8px", () => {
 		const steps = [...read(TOKENS).matchAll(/^\s*--radius-([a-z0-9]+)\s*:\s*(\d+)px\s*;/gm)].map(
 			(m) => [m[1] as string, Number(m[2])] as const,
 		);
-		expect(steps.map(([name]) => name).sort()).toEqual(["md", "sm", "xs"]);
-		expect(steps.map(([name]) => name)).not.toContain("lg");
-		expect(steps.filter(([, px]) => px > 6)).toEqual([]);
+		expect(steps.map(([name]) => name).sort()).toEqual(["lg", "md", "sm", "xs"]);
+		expect(steps.filter(([, px]) => px > 8)).toEqual([]);
 	});
 });
 

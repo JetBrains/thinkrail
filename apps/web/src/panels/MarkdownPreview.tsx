@@ -50,7 +50,7 @@ const DOCUMENT_PROSE = [
 	// Code blocks — spacing only; size/leading come from the doc prose system.
 	"[&_pre]:my-md",
 	// Images.
-	"[&_img]:my-md [&_img]:max-w-full [&_img]:rounded-[var(--radius-md)]",
+	"[&_img]:my-md [&_img]:max-w-full [&_img]:rounded-[var(--radius-sm)]",
 ].join(" ");
 
 /**
