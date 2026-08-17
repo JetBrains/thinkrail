@@ -43,7 +43,7 @@ test("panel header rows align without making the chat toolbar scrollable", async
 	if (!center || !right) throw new Error("tab strip has no bounding box");
 
 	expect(center.y).toBe(right.y);
-	expect(center.height).toBe(28);
+	expect(center.height).toBe(32);
 	expect(right.height).toBe(center.height);
 
 	await page.getByTestId("tab-changes").click();
@@ -58,7 +58,7 @@ test("panel header rows align without making the chat toolbar scrollable", async
 	if (!chatBox || !changesBox) throw new Error("panel toolbar has no bounding box");
 
 	expect(chatBox.y).toBe(changesBox.y);
-	expect(chatBox.height).toBe(28);
+	expect(chatBox.height).toBe(32);
 	expect(changesBox.height).toBe(chatBox.height);
 });
 

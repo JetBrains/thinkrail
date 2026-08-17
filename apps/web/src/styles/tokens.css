@@ -23,8 +23,9 @@
 	--transition-normal: 200ms ease;
 
 	/* Shared chrome geometry — a panel header ROW HEIGHT, not layout rhythm, so it lives here and not on
-	 * the spacing scale. Exposed to Tailwind as `--spacing-panel-header-row` in `index.css`. */
-	--panel-header-row-height: 28px;
+	 * the spacing scale. The single source for every panel/content header height (`h-panel-header-row`).
+	 * Exposed to Tailwind as `--spacing-panel-header-row` in `index.css`. */
+	--panel-header-row-height: 32px;
 }
 
 /*
