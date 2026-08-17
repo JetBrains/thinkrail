@@ -12,6 +12,7 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { FileChip } from "./FileChip";
 import { type AttachedImage, fileToAttachedImage } from "./imageAttachment";
 import { ModelSelector } from "./ModelSelector";
 import {
@@ -226,6 +227,11 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	const ref = useRef<HTMLTextAreaElement>(null);
 	const [caret, setCaret] = useState(0);
 	const [images, setImages] = useState<PendingImage[]>([]);
+	// How many picked files are still decoding/downscaling in `addFiles` — the attach pipeline is async
+	// (30–140ms measured, wider on mobile), and a send landing inside that window would go WITHOUT the
+	// image (which would then attach itself to the NEXT message). While non-zero: placeholder chips render
+	// below, the send button disables, and `submitText` refuses to fire.
+	const [pendingImages, setPendingImages] = useState(0);
 	const [mentionActiveIndex, setMentionActiveIndex] = useState(0);
 	const [mentionDismissed, setMentionDismissed] = useState(false);
 	// The plain `↑`-recall session: `null` when inactive; otherwise an index into `recentPrompts` (0 =
@@ -331,6 +337,9 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	// with the text and are cleared with the draft in the same step (and any recall or template slot
 	// session ends with the send). No-op when both the (trimmed) text and the image list are empty.
 	const submitText = (raw: string, behavior: SubmitBehavior) => {
+		// Never send while an attachment is still decoding — it would silently miss this message and
+		// stray onto the next one. The draft stays put; the user re-sends once the chip appears.
+		if (pendingImages > 0) return;
 		const text = raw.trim();
 		if (!text && images.length === 0) return;
 		onSubmit(
@@ -417,18 +426,31 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	const addFiles = async (files: File[]) => {
 		const picked = files.filter((f) => f.type.startsWith("image/"));
 		if (picked.length === 0) return;
-		// Downscaled at attach time (≤1568px long edge) — an oversized image in history 400s every
-		// subsequent turn once the provider's many-image cap kicks in. See imageAttachment.ts.
-		const attached = await Promise.all(picked.map(fileToAttachedImage));
-		setImages((prev) => [
-			...prev,
-			...attached.map((a, i) => ({
-				id: crypto.randomUUID(),
-				// A clipboard paste often arrives as a generic "image.png" — still better than a mime type.
-				name: picked[i]?.name || "image",
-				...a,
-			})),
-		]);
+		setPendingImages((n) => n + picked.length);
+		try {
+			// Downscaled/re-encoded at attach time (≤1568px long edge, provider-accepted type, ≤5MB) — an
+			// oversized image in history 400s every subsequent turn. See imageAttachment.ts. `allSettled`,
+			// not `all`: a single unreadable file must not discard siblings that decoded fine (and the
+			// callers invoke this as `void addFiles(...)` — a rejection here would be unhandled).
+			const settled = await Promise.allSettled(picked.map(fileToAttachedImage));
+			setImages((prev) => [
+				...prev,
+				...settled.flatMap((result, i) =>
+					result.status === "fulfilled"
+						? [
+								{
+									id: crypto.randomUUID(),
+									// A clipboard paste often arrives as a generic "image.png" — still better than a mime type.
+									name: picked[i]?.name || "image",
+									...result.value,
+								},
+							]
+						: [],
+				),
+			]);
+		} finally {
+			setPendingImages((n) => n - picked.length);
+		}
 	};
 
 	const submit = (behavior: SubmitBehavior) => {
@@ -653,28 +675,43 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 				</button>
 			) : null}
 
-			{images.length > 0 ? (
+			{images.length > 0 || pendingImages > 0 ? (
 				<div className="flex flex-wrap gap-xs px-sm pt-sm" data-testid="composer-images">
 					{images.map((img) => (
-						<span
+						<FileChip
 							key={img.id}
 							data-testid="composer-image"
 							data-width={img.width}
 							data-height={img.height}
-							className="flex items-center gap-xs rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-sm py-xs text-text-default tr-text-metadata"
-						>
-							<FileIcon className="size-3" /> {img.name}
-							{img.width && img.height ? ` · ${img.width}×${img.height}` : null}
-							<button
-								type="button"
-								aria-label="Remove image"
-								onClick={() => setImages((prev) => prev.filter((p) => p.id !== img.id))}
-								className="text-text-muted hover:text-text-default"
-							>
-								<X className="size-3" />
-							</button>
-						</span>
+							data-mime={img.content.mimeType}
+							label={
+								<>
+									{img.name}
+									{img.width && img.height ? ` · ${img.width}×${img.height}` : null}
+								</>
+							}
+							trailing={
+								<button
+									type="button"
+									aria-label="Remove image"
+									onClick={() => setImages((prev) => prev.filter((p) => p.id !== img.id))}
+									className="text-text-muted hover:text-text-default"
+								>
+									<X className="size-3" />
+								</button>
+							}
+						/>
 					))}
+					{pendingImages > 0 ? (
+						<FileChip
+							data-testid="composer-image-pending"
+							label={
+								<span className="text-text-muted">
+									{pendingImages === 1 ? "Attaching…" : `Attaching ${pendingImages}…`}
+								</span>
+							}
+						/>
+					) : null}
 				</div>
 			) : null}
 
@@ -849,7 +886,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							data-testid="chat-send"
 							aria-label={isStreaming ? "Steer" : "Send"}
 							onClick={() => submit(isStreaming ? "steer" : "send")}
-							disabled={!value.trim() && images.length === 0}
+							disabled={pendingImages > 0 || (!value.trim() && images.length === 0)}
 							className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-control-primary-bg text-control-primary-text hover:bg-control-primary-bg-hovered disabled:pointer-events-none disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text"
 						>
 							<ArrowUp className="size-4" />

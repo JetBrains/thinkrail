@@ -6,7 +6,9 @@
 // no image codec (the same photon/WASM bundling problem that disabled autoResize), so the guard
 // transforms the OUTGOING context instead: on pi's `context` event (fired before every LLM call, live
 // sessions included — a stuck chat unsticks on its very next message) it sniffs each image's dimensions
-// straight from the base64 header bytes and replaces violating image blocks with a text note. The
+// straight from the base64 header bytes, measures its byte size from the base64 length (the provider
+// also caps an image at 5MB — IMAGE_MAX_BYTES, shared with the composer's attach-time ladder), and
+// replaces violating image blocks with a text note. The
 // session file and the visible transcript stay untouched. The caps are Anthropic's model-level rules,
 // so the guard fires ONLY for the Anthropic model family (the `context` handler's ctx.model — native
 // `anthropic-messages` api / `anthropic` provider, or a Claude model served through Bedrock/Vertex);
@@ -15,7 +17,7 @@
 // a note (not a brick) once the same session crosses 21.
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import type { AgentMessage } from "@thinkrail/contracts";
+import { type AgentMessage, base64ByteLength, IMAGE_MAX_BYTES } from "@thinkrail/contracts";
 
 /** Anthropic's per-side cap for requests carrying 20 images or fewer. */
 export const SINGLE_IMAGE_EDGE_LIMIT = 8000;
@@ -123,10 +125,18 @@ type ContentBlock = { type: string } & Record<string, unknown>;
 const isImageBlock = (block: ContentBlock): block is ContentBlock & { data: string } =>
 	block.type === "image" && typeof block.data === "string";
 
+const REMOVAL_HINT = "ask the user to re-attach a smaller version if it is still needed";
+
 /**
- * Replace every image block that exceeds the provider's per-side cap with a text note carrying its
- * dimensions (copy-on-write — the input is never mutated). The cap is count-aware: 8000px normally,
- * 2000px when the whole context carries more than 20 images. Returns undefined when nothing changed.
+ * Replace every image block that violates a provider limit with a text note naming the violated rule
+ * (copy-on-write — the input is never mutated). Three rules, applied in order:
+ * 1. bytes — anything over IMAGE_MAX_BYTES (5MB) is stripped, sniffable or not;
+ * 2. the 8000px hard per-side cap;
+ * 3. the count-aware 2000px cap — and because stripping changes the very count that selects the cap,
+ *    2000px violators are stripped LARGEST-FIRST only until the surviving image count is back at the
+ *    20-image threshold; the rest are then legal under the 8000px cap and stay (18 small + 3 at
+ *    2500px ⇒ one stripped, not three).
+ * Returns undefined when nothing changed.
  */
 export function guardOversizedImages(messages: AgentMessage[]): AgentMessage[] | undefined {
 	const blocksOf = (m: AgentMessage): ContentBlock[] | undefined => {
@@ -137,41 +147,74 @@ export function guardOversizedImages(messages: AgentMessage[]): AgentMessage[] |
 	// One bounded sniff per image block per pass, cached by block identity — the hook fires on every LLM
 	// call, so re-decoding per predicate (count / detect / note text) would multiply the work.
 	const sniffed = new Map<ContentBlock, Dimensions | undefined>();
-	let imageCount = 0;
+	const imageBlocks: (ContentBlock & { data: string })[] = [];
 	for (const message of messages) {
 		for (const block of blocksOf(message) ?? []) {
 			if (isImageBlock(block)) {
-				imageCount++;
+				imageBlocks.push(block);
 				sniffed.set(block, imageDimensions(block.data));
 			}
 		}
 	}
-	if (imageCount === 0) return undefined;
-	const cap = imageCount > MANY_IMAGE_THRESHOLD ? MANY_IMAGE_EDGE_LIMIT : SINGLE_IMAGE_EDGE_LIMIT;
+	if (imageBlocks.length === 0) return undefined;
 
-	const exceeds = (block: ContentBlock): boolean => {
+	// The removal note per stripped block — membership doubles as the strip decision.
+	const notes = new Map<ContentBlock, string>();
+	for (const block of imageBlocks) {
+		const bytes = base64ByteLength(block.data);
+		if (bytes > IMAGE_MAX_BYTES) {
+			const mb = (bytes / (1024 * 1024)).toFixed(1);
+			notes.set(
+				block,
+				`[image removed: ${mb}MB exceeds the provider's ${IMAGE_MAX_BYTES / (1024 * 1024)}MB image size limit — ${REMOVAL_HINT}]`,
+			);
+			continue;
+		}
 		const d = sniffed.get(block);
-		return d !== undefined && (d.width > cap || d.height > cap);
-	};
+		if (d && (d.width > SINGLE_IMAGE_EDGE_LIMIT || d.height > SINGLE_IMAGE_EDGE_LIMIT)) {
+			notes.set(
+				block,
+				`[image removed: ${d.width}×${d.height} exceeds the provider's ${SINGLE_IMAGE_EDGE_LIMIT}px image-dimension limit — ${REMOVAL_HINT}]`,
+			);
+		}
+	}
 
-	let changed = false;
+	// The stricter cap only applies while the request still carries more than the threshold — each strip
+	// lowers the count, so strip largest-first and stop the moment the survivors fit under the threshold
+	// (the rest become legal under the 8000px cap already enforced above).
+	let surviving = imageBlocks.length - notes.size;
+	if (surviving > MANY_IMAGE_THRESHOLD) {
+		const longEdge = (b: ContentBlock) => {
+			const d = sniffed.get(b);
+			return d ? Math.max(d.width, d.height) : 0;
+		};
+		const strictViolators = imageBlocks
+			.filter((b) => !notes.has(b) && longEdge(b) > MANY_IMAGE_EDGE_LIMIT)
+			.sort((a, b) => longEdge(b) - longEdge(a));
+		for (const block of strictViolators) {
+			if (surviving <= MANY_IMAGE_THRESHOLD) break;
+			const d = sniffed.get(block);
+			notes.set(
+				block,
+				`[image removed: ${d?.width}×${d?.height} exceeds the provider's ${MANY_IMAGE_EDGE_LIMIT}px image-dimension limit for requests carrying more than ${MANY_IMAGE_THRESHOLD} images — ${REMOVAL_HINT}]`,
+			);
+			surviving--;
+		}
+	}
+	if (notes.size === 0) return undefined;
+
 	const guarded = messages.map((message) => {
 		const blocks = blocksOf(message);
-		if (!blocks?.some(exceeds)) return message;
-		changed = true;
+		if (!blocks?.some((b) => notes.has(b))) return message;
 		const content = blocks.map((block) => {
-			if (!exceeds(block)) return block;
-			const d = sniffed.get(block);
-			return {
-				type: "text",
-				text: `[image removed: ${d ? `${d.width}×${d.height}` : "unknown size"} exceeds the provider's ${cap}px image-dimension limit — ask the user to re-attach a smaller version if it is still needed]`,
-			};
+			const note = notes.get(block);
+			return note ? { type: "text", text: note } : block;
 		});
 		// Object.assign keeps the concrete message variant (its type is `message & {content}`), which
 		// widens back to AgentMessage without a lossy double-cast.
 		return Object.assign({}, message, { content }) as AgentMessage;
 	});
-	return changed ? guarded : undefined;
+	return guarded;
 }
 
 /** Does this model enforce Anthropic's image-dimension rules? Native Anthropic (api/provider), plus

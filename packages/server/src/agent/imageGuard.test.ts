@@ -51,6 +51,35 @@ function gifBytes(width: number, height: number): Buffer {
 	return b;
 }
 
+function webpRiff(chunk: string): Buffer {
+	const b = Buffer.alloc(30);
+	b.write("RIFF", 0, "ascii");
+	b.writeUInt32LE(22, 4);
+	b.write("WEBP", 8, "ascii");
+	b.write(chunk, 12, "ascii");
+	b.writeUInt32LE(10, 16);
+	return b;
+}
+
+function webpVp8Bytes(width: number, height: number): Buffer {
+	// Lossy: 3-byte frame tag at 20, sync code 0x9D 0x01 0x2A, then 14-bit LE width / height.
+	const b = webpRiff("VP8 ");
+	b[23] = 0x9d;
+	b[24] = 0x01;
+	b[25] = 0x2a;
+	b.writeUInt16LE(width, 26);
+	b.writeUInt16LE(height, 28);
+	return b;
+}
+
+function webpVp8lBytes(width: number, height: number): Buffer {
+	// Lossless: signature 0x2F at 20, then 14-bit width-1 / height-1 packed little-endian.
+	const b = webpRiff("VP8L");
+	b[20] = 0x2f;
+	b.writeUInt32LE((width - 1) | ((height - 1) << 14), 21);
+	return b;
+}
+
 function webpBytes(width: number, height: number): Buffer {
 	const b = Buffer.alloc(30);
 	b.write("RIFF", 0, "ascii");
@@ -111,6 +140,33 @@ describe("imageDimensions", () => {
 			width: 2600,
 			height: 2200,
 		});
+	});
+
+	test("reads lossy WebP (VP8) frame dimensions", () => {
+		expect(imageDimensions(webpVp8Bytes(3200, 1400).toString("base64"))).toEqual({
+			width: 3200,
+			height: 1400,
+		});
+		// A missing sync code reads as undefined — never a bogus size.
+		const noSync = webpVp8Bytes(3200, 1400);
+		noSync[23] = 0x00;
+		expect(imageDimensions(noSync.toString("base64"))).toBeUndefined();
+	});
+
+	test("reads lossless WebP (VP8L) packed dimensions", () => {
+		expect(imageDimensions(webpVp8lBytes(9000, 123).toString("base64"))).toEqual({
+			width: 9000,
+			height: 123,
+		});
+		// 14-bit boundary values survive the bit packing.
+		expect(imageDimensions(webpVp8lBytes(16384, 1).toString("base64"))).toEqual({
+			width: 16384,
+			height: 1,
+		});
+		// A wrong signature byte reads as undefined.
+		const badSig = webpVp8lBytes(9000, 123);
+		badSig[20] = 0x30;
+		expect(imageDimensions(badSig.toString("base64"))).toBeUndefined();
 	});
 
 	test("sniffs from a bounded prefix — a multi-MB payload after the header is never a problem", () => {
@@ -216,6 +272,49 @@ describe("guardOversizedImages", () => {
 	test("leaves an image with unsniffable bytes untouched (never strips blind)", () => {
 		const messages = [user([image(Buffer.from("mystery-format"))])];
 		expect(guardOversizedImages(messages)).toBeUndefined();
+	});
+
+	test("strips an image over the 5MB byte ceiling — dimensions within bounds, even unsniffable", () => {
+		// A dimensionally-tiny image whose payload is huge (the 12MB-GIF class), and an unsniffable
+		// format over the ceiling — the byte rule needs no dimensions, so both are stripped.
+		const hugeGif = Buffer.concat([gifBytes(1280, 960), Buffer.alloc(6 * 1024 * 1024, 0xab)]);
+		const hugeMystery = Buffer.concat([
+			Buffer.from("mystery-format"),
+			Buffer.alloc(6 * 1024 * 1024, 0xcd),
+		]);
+		const guarded = guardOversizedImages([user([image(hugeGif, "image/gif"), image(hugeMystery)])]);
+		expect(guarded).toBeDefined();
+		const content = (guarded?.[0] as { content: { type: string; text?: string }[] }).content;
+		expect(content.every((b) => b.type === "text")).toBe(true);
+		expect(content[0]?.text).toContain("5MB image size limit");
+		expect(content[1]?.text).toContain("5MB image size limit");
+	});
+
+	test("keeps an image at the byte ceiling boundary", () => {
+		const atLimit = Buffer.concat([
+			gifBytes(100, 100),
+			Buffer.alloc(5 * 1024 * 1024 - gifBytes(100, 100).length, 0xab),
+		]);
+		expect(guardOversizedImages([user([image(atLimit, "image/gif")])])).toBeUndefined();
+	});
+
+	test("re-evaluates the count-aware cap as it strips: largest-first, only down to the threshold", () => {
+		// 18 small + 3 over 2000px ⇒ 21 images select the strict cap, but stripping ONE (the largest)
+		// brings the request to 20, where the 8000px cap applies — the other two are legal and stay.
+		const small = image(pngBytes(500, 500));
+		const messages: AgentMessage[] = [
+			toolResult(Array.from({ length: 18 }, () => small)),
+			user([image(pngBytes(2600, 100)), image(pngBytes(2500, 100)), image(pngBytes(2400, 100))]),
+		];
+		const guarded = guardOversizedImages(messages);
+		expect(guarded).toBeDefined();
+		const tr = (guarded?.[0] as { content: { type: string }[] }).content;
+		expect(tr.every((b) => b.type === "image")).toBe(true);
+		const u = (guarded?.[1] as { content: { type: string; text?: string }[] }).content;
+		expect(u[0]?.type).toBe("text"); // the largest (2600px) goes…
+		expect(u[0]?.text).toContain("2600×100");
+		expect(u[1]?.type).toBe("image"); // …the other two survive under the now-lifted cap
+		expect(u[2]?.type).toBe("image");
 	});
 
 	test("does not mutate the input messages", () => {

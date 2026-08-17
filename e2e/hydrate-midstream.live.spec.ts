@@ -7,7 +7,7 @@ import { createWorkspaceViaDialog, openFixtureProject, worktreeRows } from "./fi
 // `session.getMessages` returns only COMMITTED messages (pi keeps the in-flight partial in
 // `streamingMessage`, pushing it to the transcript at message_end), and the reducer's adopt-by-mint
 // path builds the live turn once — but a pi bump or a hydration change could silently break either
-// half, and the symptom (a duplicated reply) is exactly the class of bug users report as "дубляж".
+// half, and the symptom (a duplicated reply) is exactly the class of bug users report as duplication.
 test("a reload mid-stream does not duplicate the streaming assistant message", {
 	tag: "@agent",
 }, async ({ page }) => {

@@ -45,10 +45,22 @@ export function Markdown({
 			<ReactMarkdown
 				remarkPlugins={remarkPlugins ? [remarkGfm, ...remarkPlugins] : [remarkGfm]}
 				rehypePlugins={rehypePlugins}
-				components={{ code: CodeBlock, a: Anchor, ...components }}
+				components={{ code: CodeBlock, a: Anchor, table: Table, ...components }}
 			>
 				{text}
 			</ReactMarkdown>
+		</div>
+	);
+}
+
+/** A GFM table in its own horizontal scroller: the chat transcript scrolls only vertically (the
+ * Virtuoso scroller is `overflow-x-hidden`), so like code blocks and tool cards, a table wider than
+ * the bubble must scroll inside its own block — without the wrapper the overflow would simply be
+ * clipped and unreachable. The `[&_table]` skin selectors still apply (descendant selectors). */
+function Table({ children }: { children?: ReactNode }) {
+	return (
+		<div className="overflow-x-auto">
+			<table>{children}</table>
 		</div>
 	);
 }

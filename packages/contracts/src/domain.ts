@@ -745,8 +745,28 @@ export function isControlMessage(text: string): boolean {
 }
 
 /**
+ * The provider's per-image byte ceiling (Anthropic's 5MB API limit — pi's own resizer names the same
+ * number). Shared contract: the web composer re-encodes an attachment down under it at attach time,
+ * and the host's `imageGuard` strips any historical image block still over it (self-healing a session
+ * poisoned before the composer-side fix, or via another route).
+ */
+export const IMAGE_MAX_BYTES = 5 * 1024 * 1024;
+
+/**
+ * Decoded byte length of a base64 string without decoding it: 3 bytes per 4-char quantum, minus
+ * padding. Both image-size guards (composer + host) measure wire payloads with this same reading.
+ */
+export function base64ByteLength(base64: string): number {
+	if (base64.length === 0) return 0;
+	const padding = base64.endsWith("==") ? 2 : base64.endsWith("=") ? 1 : 0;
+	return Math.floor((base64.length * 3) / 4) - padding;
+}
+
+/**
  * True when the message at `index` is a superseded auto-retry attempt: an assistant message that ended
- * in `stopReason: "error"` with another assistant message following before any user message. pi's
+ * in `stopReason: "error"` with the retried assistant message *immediately* following — exactly the
+ * shape pi's `_prepareRetry` produces (it trims the failed attempt from the live context and re-runs
+ * the turn straight away, so nothing can land between the two). pi's
  * `_prepareRetry` persists the failed attempt ("keep in session for history") while trimming it from
  * the live context, so every presenter of the persisted transcript needs the same reading — the
  * client's hydration hides its turn, and the host's history indexer must not surface its text as a
@@ -759,12 +779,7 @@ export function isRetriedAttempt(
 ): boolean {
 	const message = messages[index];
 	if (message?.role !== "assistant" || message.stopReason !== "error") return false;
-	for (let i = index + 1; i < messages.length; i++) {
-		const role = messages[i]?.role;
-		if (role === "assistant") return true;
-		if (role === "user") return false;
-	}
-	return false;
+	return messages[index + 1]?.role === "assistant";
 }
 
 /** History-search scope — the overlay's cycle: this chat → workspace → project → everywhere. */

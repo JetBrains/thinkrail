@@ -252,9 +252,13 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     header bytes (PNG/JPEG/GIF/WebP — no codec, never strips what it can't sniff; **bounded work per
     pass**: only a 256KiB decoded prefix is ever materialized — a JPEG whose SOF lies beyond it sniffs as
     unknown, not stripped — and each block is sniffed exactly once per pass) and replaces any block
-    exceeding the provider cap — **8000px per side, dropping to 2000px once the whole context carries more
-    than 20 images** (Anthropic's rules; generous enough to be harmless elsewhere) — with a text note
-    carrying the W×H and a re-attach hint. This is what un-bricks a session poisoned by an oversized image
+    violating a provider rule with a text note naming the violated rule plus a re-attach hint. Three
+    rules, in order: the **5MB per-image byte ceiling** (`IMAGE_MAX_BYTES` + `base64ByteLength`, shared
+    with the composer via `contracts` — measured from the base64 length, so it applies even to
+    unsniffable formats); the **8000px per-side hard cap**; and the **count-aware 2000px cap** once the
+    whole context carries more than 20 images — stripping changes the very count that selects that cap,
+    so 2000px violators are stripped **largest-first only until the survivors fit back under the
+    threshold** (18 small + 3 at 2500px ⇒ one stripped, the other two stay legal under 8000px). This is what un-bricks a session poisoned by an oversized image
     (history is re-sent every turn, so one bad image 400s forever): sessions are append-only and the host
     has no image codec (the autoResize tradeoff above), so the guard transforms the **outgoing context
     only** — session file and transcript stay untouched, and a stuck chat recovers on its very next

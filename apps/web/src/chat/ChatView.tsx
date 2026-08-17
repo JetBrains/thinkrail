@@ -660,7 +660,8 @@ export default function ChatView({
 							context={listContext}
 							components={CHAT_LIST_COMPONENTS}
 							// `overflow-x-hidden` on the scroller: the chat only ever scrolls vertically — wide
-							// content (code, diffs) scrolls inside its own block, never the whole transcript.
+							// content (code, diffs, GFM tables — see Markdown's `Table` wrapper) scrolls inside its
+							// own block, never the whole transcript.
 							className="min-h-0 flex-1 overflow-x-hidden"
 							// Any chat opens at the latest message (a fresh mount would otherwise land mid-transcript);
 							// the jump-to-message deep link overrides post-mount with its centered scrollToIndex.

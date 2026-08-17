@@ -99,6 +99,7 @@
       "devDependencies": {
         "@earendil-works/pi-agent-core": "catalog:",
         "@earendil-works/pi-ai": "catalog:",
+        "@types/bun": "catalog:",
         "typescript": "catalog:",
       },
     },

@@ -66,3 +66,38 @@ test("pasting a small image leaves its dimensions untouched", async ({ page }) =
 	await expect(chip).toHaveAttribute("data-width", "640");
 	await expect(chip).toHaveAttribute("data-height", "480");
 });
+
+test("pasting a within-bounds BMP re-encodes it to a provider-accepted type", async ({ page }) => {
+	await openChatComposer(page);
+
+	// A hand-built 24bpp BMP, 64×48 — within every pixel bound, but `image/bmp` is not a type the
+	// provider accepts, so the attach pipeline must re-encode it (as PNG) instead of passing it raw.
+	await page.getByTestId("chat-input").evaluate(async (el) => {
+		const w = 64;
+		const h = 48;
+		const rowSize = Math.ceil((w * 3) / 4) * 4;
+		const size = 54 + rowSize * h;
+		const view = new DataView(new ArrayBuffer(size));
+		view.setUint8(0, 0x42); // 'B'
+		view.setUint8(1, 0x4d); // 'M'
+		view.setUint32(2, size, true);
+		view.setUint32(10, 54, true); // pixel data offset
+		view.setUint32(14, 40, true); // BITMAPINFOHEADER
+		view.setInt32(18, w, true);
+		view.setInt32(22, h, true);
+		view.setUint16(26, 1, true); // planes
+		view.setUint16(28, 24, true); // bpp
+		view.setUint32(34, rowSize * h, true);
+		const file = new File([view.buffer], "shot.bmp", { type: "image/bmp" });
+		const dt = new DataTransfer();
+		dt.items.add(file);
+		el.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true }));
+	});
+
+	const chip = page.getByTestId("composer-image");
+	await expect(chip).toHaveCount(1);
+	await expect(chip).toHaveAttribute("data-width", "64");
+	await expect(chip).toHaveAttribute("data-height", "48");
+	await expect(chip).toHaveAttribute("data-mime", "image/png");
+	await expect(chip).toContainText("shot.bmp");
+});

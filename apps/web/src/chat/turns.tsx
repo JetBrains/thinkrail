@@ -5,7 +5,6 @@ import {
 	ChevronRight,
 	Clock,
 	FileDiff,
-	FileIcon,
 	FileText,
 	FoldVertical,
 	RotateCw,
@@ -22,6 +21,7 @@ import {
 	userText,
 } from "@/lib";
 import { ActivityGroup } from "./ActivityGroup";
+import { FileChip } from "./FileChip";
 import { useFold, useSelection } from "./foldState";
 import { Markdown } from "./Markdown";
 import { parseReviewPackage, type ReviewPackageItem, reviewPackageLabel } from "./reviewPackage";
@@ -138,15 +138,15 @@ function AttachmentChip({ label, img }: { label: string; img: ImageContent }) {
 	const [open, setOpen] = useState(false);
 	return (
 		<>
-			<button
-				type="button"
+			<FileChip
 				data-testid="chat-attachment-chip"
 				title="View image"
+				// The chip text is the accessible name's base; the aria-label adds the action so a screen
+				// reader hears "View attachment image.png", not a bare mime type on the hydrated fallback.
+				aria-label={`View attachment ${label}`}
 				onClick={() => setOpen(true)}
-				className="flex items-center gap-xs whitespace-nowrap rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-sm py-xs text-text-default tr-text-metadata transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary"
-			>
-				<FileIcon className="size-3" /> {label}
-			</button>
+				label={label}
+			/>
 			<Dialog open={open} onOpenChange={setOpen}>
 				<DialogContent
 					data-testid="chat-attachment-dialog"
@@ -156,9 +156,11 @@ function AttachmentChip({ label, img }: { label: string; img: ImageContent }) {
 						<DialogTitle>{label}</DialogTitle>
 					</DialogHeader>
 					<div className="min-h-0 flex-1 overflow-auto">
+						{/* alt="" on purpose: the dialog title already announces the label (which can be a bare
+						 mime type on hydrated turns) — repeating it as alt text reads out "image/png" twice. */}
 						<img
 							src={`data:${img.mimeType};base64,${img.data}`}
-							alt={label}
+							alt=""
 							className="max-h-[80vh] max-w-full rounded-[var(--radius-sm)]"
 						/>
 					</div>
