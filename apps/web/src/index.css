@@ -355,3 +355,15 @@
 	padding-left: 10px;
 	margin-left: -10px;
 }
+
+/* High Contrast only: a DISABLED primary button keeps a visible outline in the theme's semantic
+   primary colour, so it stays perceivable against the muted disabled fill (which reads as an
+   unbordered block at high contrast). Scoped to the primary-control fill class so it reaches every
+   primary button — the `Button` "default" variant and the hand-rolled ones alike — while leaving
+   enabled primary buttons and every non-primary/enabled control untouched. `data-theme-contrast="high"`
+   is stamped on the document root by the theme engine (themes/runtime.ts) for both High Contrast
+   themes; the colour resolves through the semantic `--primary` token (no hardcode, no new role), and
+   border-box (Tailwind preflight) means the 1px border adds no layout shift. */
+[data-theme-contrast="high"] .bg-control-primary-bg:disabled {
+	border: 1px solid var(--primary);
+}
