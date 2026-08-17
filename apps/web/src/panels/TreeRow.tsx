@@ -61,7 +61,7 @@ export function TreeRow({
 			// `min-w-0` so the row can shrink below its label's width when it shares a flex line with a
 			// trailing control (the Changes tree's row-menu slot) — otherwise a long file name pushes that
 			// control out and the `+N −M` column stops lining up with the folder rows'.
-			className={`flex h-24 w-full min-w-0 items-center gap-4 rounded-[var(--radius-sm)] px-4 text-left tr-text-ui text-text-muted ${
+			className={`flex h-24 w-full min-w-0 items-center gap-4 rounded-[var(--radius-sm)] px-12 text-left tr-text-ui text-text-muted ${
 				highlight === "self"
 					? `hover:bg-control-bg-hovered ${active ? "bg-control-bg-selected" : ""}`
 					: ""

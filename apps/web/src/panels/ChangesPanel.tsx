@@ -273,7 +273,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 												// No background of its own: the WRAPPER paints the row's hover/selected band, which has
 												// to span the trailing ⌄ slot too. Two painters would make the row read as cut off at
 												// this button's edge (and hide that the wrapper stopped painting).
-												className="flex min-w-0 flex-1 items-center gap-8 px-8 py-4 text-left tr-text-ui"
+												className="flex min-w-0 flex-1 items-center gap-8 px-12 py-4 text-left tr-text-ui"
 											>
 												{/* The full relative path: a muted directory prefix, a bright basename — and the dir
 												    yields **completely** before the basename gives up a pixel, because the name is what

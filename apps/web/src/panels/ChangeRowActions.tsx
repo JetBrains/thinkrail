@@ -14,7 +14,7 @@ import { copyText } from "@/lib";
  * (folders) must reserve the same gutter — otherwise their `+N −M` badges sit further right than the file
  * rows' and the column stops lining up.
  */
-export const ROW_MENU_SLOT = "mr-4 size-20 shrink-0";
+export const ROW_MENU_SLOT = "mr-12 size-20 shrink-0";
 
 /**
  * A changed-file row's **action menu** — one definition behind two triggers: a hover/focus-revealed `⌄`

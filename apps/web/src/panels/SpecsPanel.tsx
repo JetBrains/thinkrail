@@ -119,7 +119,9 @@ function SpecNodeRow({
 		<li>
 			<div
 				className={cn(
-					"group flex h-28 min-w-0 items-stretch rounded-[var(--radius-sm)] transition-colors",
+					// pl-12 sets the 12px root content edge on the band itself (full-bleed bg); the nested `pl-12`
+					// list is the separate per-level indent, so a nested row composes to 12 + 12·depth.
+					"group flex h-28 min-w-0 items-stretch rounded-[var(--radius-sm)] pl-12 transition-colors",
 					isActive
 						? "bg-primary-subtle ring-1 ring-primary-muted ring-inset"
 						: "hover:bg-control-bg-hovered",
@@ -153,7 +155,7 @@ function SpecNodeRow({
 					title={`${node.title}\n${node.id} · ${node.type}`}
 					onClick={() => void openFileInTab(workspaceId, node.path, "preview")}
 					onDoubleClick={() => void openFileInTab(workspaceId, node.path, "keep")}
-					className="flex h-28 min-w-0 flex-1 items-center gap-4 rounded-[var(--radius-sm)] pr-4 text-left outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+					className="flex h-28 min-w-0 flex-1 items-center gap-4 rounded-[var(--radius-sm)] pr-12 text-left outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
 				>
 					<DocumentIcon
 						className={cn(
