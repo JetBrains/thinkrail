@@ -104,6 +104,11 @@ of the host.
     is a **host-owned pi custom tool** (server `agent/askUserQuestion` — see its SPEC for the design
     rationale); the chat renders the questionnaire **inline** and replies via `session.answerQuestion`
     (correlated by the tool call id; rejected loud when the call is unknown/answered/superseded).
+  - the **`start_new_chat`** wire types — **`StartNewChatArgs`** (`{ title?, prompt }`: what the agent
+    authors when the user asks to continue work in a new chat) and **`StartNewChatDetails`**
+    (`{ sessionId }`: the created chat, in the tool result's `details`). The capability is a host-owned
+    pi custom tool (server `agent/startNewChat`); the created session reaches clients via the
+    `session.created` broadcast above, and the web renders the call through its registered tool card.
 - **domain.ts** — app entities: `Project` (git repo + unique `slug` + optional **`closed: true`** — the
   persisted open-rail membership bit; absence means open for backward compatibility, and closing never
   changes the project's id or deletes its workspace associations — plus the skill-trust fields **`trusted`**
@@ -284,7 +289,12 @@ of the host.
   full persisted `Project` snapshot after open/reopen/close, including `closed` membership, so every client
   atomically converges its rail + Recents without optimistic removal / `pi.event` / `pi.extensionUi` /
   **`session.deleted`** (workspace + session id; a non-replayable domain event broadcast after permanent
-  deletion so every client removes the chat and blocks stale hydration) /
+  deletion so every client removes the chat and blocks stale hydration) / **`session.created`**
+  (**`SessionCreatedPayload`** — the new chat's full `SessionSummary`; a non-replayable domain event,
+  broadcast when the **host** creates a session outside any client's request — today the agent-called
+  `start_new_chat` tool — so every client converges: the push precedes the new session's `pi.event`
+  stream by per-socket FIFO, letting a client build the runtime before the kickoff prompt's
+  `message_start` arrives; client-request creates still converge via the `session.create` response) /
   **`settings.changed`** (the full `AppConfig`, broadcast so every client
   converges) / **`provider.login`** — the session-less in-app login stream (a `LoginPush`
   per frame, keyed by `loginId`; the sibling of `pi.extensionUi`, since a login runs on the Welcome screen

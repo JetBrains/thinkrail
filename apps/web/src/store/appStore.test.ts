@@ -811,6 +811,70 @@ test("hydrateSession(activate) reopens a disk-only chat: builds it, focuses it, 
 	expect(st.activeTabByWorkspace.ws1).toBe("ws1:disk1"); // focused, despite an existing active tab
 });
 
+const createdSummary = (over: Partial<SessionSummary> = {}): SessionSummary => ({
+	sessionId: "new1",
+	workspaceId: "ws1",
+	title: "Implement X",
+	model: null,
+	thinkingLevel: "medium",
+	isStreaming: false,
+	messageCount: 0,
+	updatedAt: 42,
+	live: true,
+	...over,
+});
+
+test("applySessionCreated in the active workspace opens + focuses the new chat tab (a navigation)", () => {
+	const store = useAppStore.getState();
+	useAppStore.setState({ activeWorkspaceId: "ws1" });
+	store.openChatSession("ws1", "other", null, "medium"); // the origin chat the user was in
+	const navBefore = useAppStore.getState().navTickByWorkspace.ws1 ?? 0;
+
+	store.applySessionCreated(createdSummary());
+
+	const st = useAppStore.getState();
+	expect(st.sessions.new1).toBeDefined(); // runtime exists before the kickoff's pi events land
+	const tab = st.tabsByWorkspace.ws1?.find((t) => t.kind === "chat" && t.sessionId === "new1");
+	expect(tab?.name).toBe("Implement X");
+	expect(st.activeTabByWorkspace.ws1).toBe("ws1:new1"); // focused — the user asked the agent for it
+	expect((st.navTickByWorkspace.ws1 ?? 0) > navBefore).toBe(true);
+});
+
+test("applySessionCreated in a non-active workspace records a runtime-alive history row, never a tab", () => {
+	const store = useAppStore.getState();
+	useAppStore.setState({ activeWorkspaceId: "ws2" }); // this client is elsewhere
+
+	store.applySessionCreated(createdSummary());
+
+	const st = useAppStore.getState();
+	expect(st.sessions.new1).toBeDefined(); // events still fold from message one
+	expect(st.tabsByWorkspace.ws1 ?? []).toHaveLength(0); // no unrequested tab
+	expect(st.activeTabByWorkspace.ws1).toBeUndefined();
+	expect(st.closedChatsByWorkspace.ws1).toEqual([
+		{ sessionId: "new1", title: "Implement X", closedAt: 42 },
+	]);
+});
+
+test("applySessionCreated is idempotent and tombstone-checked", () => {
+	const store = useAppStore.getState();
+	useAppStore.setState({ activeWorkspaceId: "ws1" });
+
+	// Idempotent: a second fold (event replayed by any path) must not clobber the runtime or dup the tab.
+	store.applySessionCreated(createdSummary());
+	store.appendUserMessage("new1", "kickoff");
+	store.applySessionCreated(createdSummary());
+	let st = useAppStore.getState();
+	expect(st.sessions.new1?.turns).toHaveLength(1);
+	expect(st.tabsByWorkspace.ws1?.filter((t) => t.kind === "chat")).toHaveLength(1);
+
+	// Tombstoned: a deleted session id can never be resurrected by a stale creation event.
+	store.deleteChat("ws1", "late");
+	store.applySessionCreated(createdSummary({ sessionId: "late" }));
+	st = useAppStore.getState();
+	expect(st.sessions.late).toBeUndefined();
+	expect(st.closedChatsByWorkspace.ws1 ?? []).toHaveLength(0);
+});
+
 test("clearWorkspaceTabs drops both open and closed chat runtimes + clears history", () => {
 	const store = useAppStore.getState();
 	useAppStore.setState({ activeWorkspaceId: "ws1" });

@@ -122,13 +122,22 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   chat that survived a host restart is reopenable. **`deleteChat(workspaceId, sessionId)`** is the idempotent
   fold for both a confirmed local `session.delete` and the `session.deleted` broadcast: it atomically drops
   that chat's tab/history row/runtime + skill baseline (choosing the normal active-tab fallback) and records
-  a page-lifetime tombstone. **`noteClosedChats`** and **`hydrateSession`** reject tombstoned session ids, so
+  a page-lifetime tombstone. **`noteClosedChats`**, **`hydrateSession`** and **`applySessionCreated`** reject tombstoned session ids, so
   stale `session.list` / `session.getMessages` results already in flight cannot recreate a deleted chat;
   the tombstone survives workspace teardown because an older read can still settle afterward. The
   active-workspace hydration pass snapshots **`selectWorkspaceSessionIds`** before each `session.list`; when
   that authoritative read lands, **`reconcileWorkspaceSessions`** applies the same tombstone fold to every
   baseline id absent from the host result, repairing deletion events missed while disconnected without
-  deleting a session created after the read began. Otherwise **`hydrateSession`** rebuilds a runtime + tab
+  deleting a session created after the read began. **`applySessionCreated(summary)`** is the `session.created` fold (a host-created chat — the agent's
+  `start_new_chat` handoff, pushed before the new session's first `pi.event`): idempotent (an existing
+  runtime wins) and tombstone-checked, it always builds the empty runtime — the kickoff prompt arrives
+  as the stream's `message_start`, the host-fired-user-message fold — and anchors the skill-sync tick to
+  the current workspace tick (the session just loaded current disk skills, `openChatSession`'s rule).
+  The TAB is per-client view state: iff the payload's workspace is this client's **active workspace**,
+  the tab opens and takes focus (a navigation — nav tick bumped; the user asked the agent for this
+  chat); any other client records a `closedChatsByWorkspace` history row instead (the
+  `closeChatToHistory` runtime-alive shape — discoverable, reopenable live, no tab spam).
+  Otherwise **`hydrateSession`** rebuilds a runtime + tab
   from a host `SessionSummary` + converted transcript on connect — the live summary's `lastSettlement` is authoritative when present; otherwise only a failure on
   the persisted transcript's final conversational message is current (historical `length` attempts followed
   by later work must not become stale warnings). Hydration is a no-op if a runtime already exists, so a

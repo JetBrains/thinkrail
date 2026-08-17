@@ -326,6 +326,21 @@ export interface AskUserAnswersDetails {
 }
 
 /**
+ * The `start_new_chat` tool-call arguments (what the agent authors when the user asks to hand work off
+ * to a fresh chat). The kickoff `prompt` must be self-contained — the new session shares the worktree
+ * but has no memory of the calling conversation; `title` names the new chat's tab.
+ */
+export interface StartNewChatArgs {
+	title?: string;
+	prompt: string;
+}
+
+/** The `start_new_chat` tool result's `details`: the chat it created. */
+export interface StartNewChatDetails {
+	sessionId: string;
+}
+
+/**
  * MIRROR of pi-coding-agent's `CustomMessage` (that package is Node-only, so the shape is re-declared
  * type-only for the wire; pi exports it from `core/messages`, not the package root, so it is not
  * mechanically checkable the way `PiEvent` is):

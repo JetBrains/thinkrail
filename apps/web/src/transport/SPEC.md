@@ -42,7 +42,11 @@ The single WebSocket client to the host, and its app-wide singleton.
   `workspace.removed` via `applyWorkspaceRemoved(projectId, id)`, `session.deleted` via the idempotent
   `deleteChat(workspaceId, sessionId)` tombstone fold (an online fast path; because this event channel is
   deliberately not replayed, `CenterTabs` repairs any deletion missed while disconnected from the next
-  authoritative `session.list`), `workspace.fsChanged` via `noteFsChanged(payload)`, and
+  authoritative `session.list`), **`session.created`** via the idempotent
+  `applySessionCreated(summary)` fold (a host-created chat — the agent's `start_new_chat` handoff;
+  an **event** channel like `session.deleted`, in `NON_REPLAYABLE_CHANNELS` — replaying a past creation
+  to a late subscriber could resurrect a since-deleted chat; a client that missed it while disconnected
+  converges from the next authoritative `session.list`), `workspace.fsChanged` via `noteFsChanged(payload)`, and
   **`settings.changed`** (+ the `config` field in `server.welcome`) via
   `applyConfig(config)` — the server-synced app config (theme, …), applied on connect + on every broadcast
   so clients converge; all subscriptions happen once at init, never in component effects);
@@ -62,6 +66,7 @@ The single WebSocket client to the host, and its app-wide singleton.
 - **Allowed deps:** `contracts` (method maps, `WS_CHANNELS`, `Project` for welcome + `project.updated`, `SessionEventPayload`
   for `pi.event`, `ExtUiRequest` for `pi.extensionUi`, `Workspace` for `workspace.created`/`updated`,
   `WorkspaceRemoved` for `workspace.removed`, `SessionDeletedPayload` for `session.deleted`,
+  `SessionCreatedPayload` for `session.created`,
   `WorkspaceFsChangedPayload` for `workspace.fsChanged`,
   `AppConfig` for `server.welcome`'s config + `settings.changed`); `store`
   (welcome + event routing — a runtime edge owned by the parent graph); the browser `WebSocket`.

@@ -195,6 +195,18 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `ensureWorkspaceScratchDir` before creating the session — the Default workspace's gitignored
   `.thinkrail/context/` lands in the user's repo only when a chat actually starts there (and a
   worktree's deleted scratch dir self-heals). Host-composed — no new module edges.
+- **Agent-initiated chats are host-composed** (`startNewChatFromOrigin` in `handlers.ts`, installed into
+  `agent`'s `setStartNewChatHandler` seam by `createServer` — the `resolve_comment` seam pattern): the
+  `start_new_chat` tool's request resolves the origin's workspace (`getSessionWorkspaceId` →
+  `getWorkspace`), then mirrors the `session.create` handler — `ensureWorkspaceScratchDir` →
+  `createSession` (origin's model/effort + the tool's `title`) → the same `chat_started` track — then
+  **broadcasts `session.created`** (the new chat's live `SessionSummary`) **before** awaiting the
+  kickoff prompt's accept-ack (`ackSend(promptSession(…))`), so on every socket the push precedes the
+  new session's `pi.event` stream and clients build the runtime before the prompt's `message_start`
+  lands. A pre-accept rejection propagates as the TOOL call's error (the calling agent reports it
+  in-conversation); a post-accept fault rides the new chat's event stream, like any send. The
+  `session.created` publish is a `createServer` closure beside the `session.deleted` one; the channel is
+  `ws.subscribe`d in the WS `open` handler with the rest.
 - **Project lifecycle fan-out:** `createServer` installs the `projects` module's publisher and maps every
   authoritative open/reopen/close snapshot to **`project.updated`**. The WS `open` handler subscribes to
   that channel and hydrates two views in `server.welcome`: `projects` (open records only) and

@@ -70,7 +70,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     `refresh()`, and on login/logout), and being the one read makes it the same universe everywhere —
     picker, default and `resolveWireModel` cannot disagree.
   - `agentSessionManager` — sessions keyed by `session.sessionId` (each `Entry` also tracks its
-    `workspaceId`), `createSession({ cwd, workspaceId, model?, thinkingLevel? })` → `createAgentSession(...)`
+    `workspaceId`), `createSession({ cwd, workspaceId, model?, thinkingLevel?, title? })` → `createAgentSession(...)`
+    (`title` → pi's `setSessionName`, so a handoff chat's tab is named at birth)
     with a per-session `SessionManager` **and a `buildSessionSettings(cwd)` settings manager** (the user's
     real settings + an in-memory `images.autoResize:false` override — never persisted — so the `read` tool
     sends image files **raw**, bypassing pi's photon/WASM resizer that the single-file binary can't bundle;
@@ -203,6 +204,19 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     WS bridge; and like every blocking ask-extension it inherits the restart hole. The LLM-facing contract
     (TypeBox schema, validation, envelope — mirroring rpiv's so the model behaves the same) stays
     re-implemented here so we own it and avoid the package's pi-tui/i18n peer deps.
+  - `startNewChat` — the host-owned **`start_new_chat`** pi custom tool (`createStartNewChatTool`,
+    registered on every session via `startNewChatExtension` in `extensions`, like `ask_user_question` /
+    `resolve_comment`): the "ok, implement in a new session" handoff. The agent calls it with
+    `{ title?, prompt }`; `execute` reads its own session id from `ctx.sessionManager.getSessionId()`
+    and the caller's current `ctx.model`/`ctx.thinkingLevel`, then delegates through the host-installed
+    **`setStartNewChatHandler`** seam (the `resolve_comment` delegation pattern — this module gains no
+    dep): the host creates the sibling session in the same workspace (inheriting model + effort),
+    broadcasts `session.created`, and fires the kickoff prompt, returning `{ sessionId }`
+    (`StartNewChatDetails`) or throwing loud — a rejected kickoff is the TOOL's error, reported by the
+    calling agent in-conversation, never a silent empty chat. The description teaches the context
+    contract: the new session has no memory of the calling one, so the prompt must be self-contained —
+    prefer pointing at a task-spec / handoff doc under `.thinkrail/context/`; call at most once per user
+    request and never in response to a kickoff prompt this tool produced.
   - `sessionRepair` — `repairDanglingToolCalls(sessionManager)`: the restart safety net (rationale under
     the manager bullet above). Pure over pi's `SessionManager` (compaction-aware via
     `buildSessionContext`; idempotent; appends at the leaf, where orphans sit by construction) —
@@ -292,7 +306,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   `configurePiRuntime`/`getPiRuntime`; `completeOnce`/`pickModel` +
   `OneShotRequest`/`OneShotResult`/`ModelTier`; the `webUiContext` seams; the `askUserQuestion` pure
   helpers (`validateQuestionnaire`/`buildQuestionnaireResponse`/`assessAnswerability`/
-  `buildAnswersMessage`); `repairDanglingToolCalls`; the skill catalog helpers
+  `buildAnswersMessage`); the **`setStartNewChatHandler`** seam + `StartNewChatRequest`/`StartNewChatOutcome`
+  (host wires the `start_new_chat` tool's execution); `repairDanglingToolCalls`; the skill catalog helpers
   `listSkillCommands(cwd, admission)` (filtered, pre-session autocomplete) / `listSkillCatalog(cwd, admission)`
   (unfiltered, the manager's `skills.state`) / `listProjectAliasSkillNames(cwd)` (present-alias count) /
   `isProjectSkillPath(relativePath)` (watch-classification predicate);

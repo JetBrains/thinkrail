@@ -8,6 +8,7 @@ import { BashCard } from "./BashCard";
 import { EditCard } from "./EditCard";
 import { ReadCard } from "./ReadCard";
 import { ResolveCommentCard } from "./ResolveCommentCard";
+import { StartNewChatCard } from "./StartNewChatCard";
 import { strArg } from "./toolHelpers";
 import "./visualize/register";
 import "./web/register";
@@ -30,6 +31,14 @@ registerToolRenderer("write", WriteCard, {
 // Routine: the sidebar carries resolution state; the card is the in-transcript trace.
 registerToolRenderer("resolve_comment", ResolveCommentCard, {
 	summary: ({ args }) => strArg(args, "commentId"),
+});
+
+// The handoff receipt (host-owned `start_new_chat` tool — capability: server `agent` + host compose).
+// PRIMARY: starting a new chat is a user-visible outcome, never activity-fold plumbing; the tab itself
+// opens via the `session.created` store fold, so the card stays passive.
+registerToolRenderer("start_new_chat", StartNewChatCard, {
+	prominence: "primary",
+	summary: ({ args }) => strArg(args, "title") || "New chat",
 });
 
 // The inline clarifying-questions questionnaire (host-owned `ask_user_question` tool). Registered with

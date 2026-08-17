@@ -837,6 +837,14 @@ interface AppState {
 	 */
 	noteClosedChats: (workspaceId: string, entries: ClosedChat[]) => void;
 	/**
+	 * The `session.created` fold — a HOST-created chat (the agent's `start_new_chat` handoff), pushed
+	 * before the new session's first `pi.event`. Idempotent (an existing runtime wins) + tombstone-checked.
+	 * Always builds the empty runtime (the kickoff prompt arrives as the stream's host-fired
+	 * `message_start`); the TAB is per-client view state — the active-workspace client opens + focuses it
+	 * (the user asked the agent for this chat), any other client records a runtime-alive history row.
+	 */
+	applySessionCreated: (summary: SessionSummary) => void;
+	/**
 	 * Rebuild a chat's runtime + tab from the host's report on connect — a no-op if a runtime already exists.
 	 * Drops the session from chat-history (it's open now). `activate` focuses the tab (a user-driven reopen);
 	 * otherwise it only takes focus if the workspace has none yet (auto-restore must not steal focus).
@@ -1756,6 +1764,45 @@ export const useAppStore = create<AppState>((set, get) => ({
 					// Newest-first; disk entries carry their last-modified time as `closedAt`.
 					[workspaceId]: [...existing, ...fresh].sort((a, b) => b.closedAt - a.closedAt),
 				},
+			};
+		}),
+	applySessionCreated: (summary) =>
+		set((s) => {
+			const wsId = summary.workspaceId;
+			const sessionId = summary.sessionId;
+			if (isSessionDeleted(s, wsId, sessionId)) return {};
+			if (s.sessions[sessionId]) return {};
+			const base = {
+				sessions: { ...s.sessions, [sessionId]: newRuntime(summary.model, summary.thinkingLevel) },
+				// The session just loaded the current on-disk skills (`openChatSession`'s anchoring rule).
+				skillsSyncedTickBySession: {
+					...s.skillsSyncedTickBySession,
+					[sessionId]: selectWorkspaceTick(s, wsId),
+				},
+			};
+			if (s.activeWorkspaceId !== wsId) {
+				// Not this client's context: a runtime-alive history row (the `closeChatToHistory` shape) —
+				// discoverable and reopenable live, never an unrequested tab.
+				const entry: ClosedChat = { sessionId, title: summary.title, closedAt: summary.updatedAt };
+				return {
+					...base,
+					closedChatsByWorkspace: {
+						...s.closedChatsByWorkspace,
+						[wsId]: [entry, ...(s.closedChatsByWorkspace[wsId] ?? [])],
+					},
+				};
+			}
+			const id = `${wsId}:${sessionId}`;
+			const tab: ChatTab = { kind: "chat", id, workspaceId: wsId, name: summary.title, sessionId };
+			const tabs = s.tabsByWorkspace[wsId] ?? [];
+			return {
+				...base,
+				tabsByWorkspace: tabs.some((t) => t.id === id)
+					? s.tabsByWorkspace
+					: { ...s.tabsByWorkspace, [wsId]: [...tabs, tab] },
+				activeTabByWorkspace: { ...s.activeTabByWorkspace, [wsId]: id },
+				// Taking focus IS a navigation — the user asked the agent for this chat.
+				navTickByWorkspace: bumpNav(s, wsId),
 			};
 		}),
 	hydrateSession: (summary, hydrated, activate = false, syncedTick) =>

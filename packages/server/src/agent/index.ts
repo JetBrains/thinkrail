@@ -20,4 +20,10 @@ export {
 export * from "./sessionRepair";
 export type { SkillAdmissionContext, SkillDecision, SkillFacts } from "./skillAdmission";
 export { isProjectSkillPath } from "./skillSources";
+export {
+	START_NEW_CHAT_TOOL_NAME,
+	type StartNewChatOutcome,
+	type StartNewChatRequest,
+	setStartNewChatHandler,
+} from "./startNewChat";
 export * from "./webUiContext";

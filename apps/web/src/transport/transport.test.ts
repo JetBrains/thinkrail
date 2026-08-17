@@ -70,6 +70,41 @@ afterEach(() => {
 	globalThis.WebSocket = originalWebSocket;
 });
 
+describe("WsTransport channel replay classification", () => {
+	test("event channels (session created/deleted, terminal data/exit) are never replayed to a late subscriber", async () => {
+		const transport = new WsTransport({ url: "ws://test/ws" });
+		transport.connect();
+		const socket = TestWebSocket.instances[0];
+		if (!socket) throw new Error("expected a socket");
+		socket.open();
+
+		// A snapshot channel replays its last value to a late subscriber; an EVENT channel must not — a
+		// replayed `session.created` could resurrect a since-deleted chat, a replayed deletion re-fires
+		// a tombstone fold, replayed terminal bytes paint twice.
+		socket.message(JSON.stringify({ channel: "settings.changed", data: { theme: "t" } }));
+		for (const channel of [
+			"session.created",
+			"session.deleted",
+			"terminal.data",
+			"terminal.exit",
+		]) {
+			socket.message(JSON.stringify({ channel, data: { marker: channel } }));
+		}
+
+		const seen: string[] = [];
+		transport.subscribe("settings.changed", () => seen.push("settings.changed"));
+		for (const channel of [
+			"session.created",
+			"session.deleted",
+			"terminal.data",
+			"terminal.exit",
+		]) {
+			transport.subscribe(channel, () => seen.push(channel));
+		}
+		expect(seen).toEqual(["settings.changed"]); // only the snapshot replays
+	});
+});
+
 describe("WsTransport reconnect delivery", () => {
 	test("replays an unresolved frame under the same id and resolves from the replacement socket", async () => {
 		const statuses: string[] = [];

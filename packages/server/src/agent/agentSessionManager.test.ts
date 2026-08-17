@@ -19,6 +19,7 @@ import {
 	ensureSessionAttached,
 	followUpSession,
 	getDefaultModel,
+	getLiveSessionSummary,
 	getSessionCommands,
 	getSessionMessages,
 	getSessionStats,
@@ -482,6 +483,20 @@ test("createSession rejects an unknown/unavailable model ref (no arbitrary baseU
 	await expect(
 		createSession({ cwd: tmpCwd("trpi-bad-"), workspaceId: "ws-bad", model: bogus }),
 	).rejects.toThrow(/Unknown or unavailable model/);
+});
+
+test("createSession(title) names the chat at birth; getLiveSessionSummary reads the live summary", async () => {
+	const s = await createSession({
+		cwd: tmpCwd("trpi-title-"),
+		workspaceId: "ws-t",
+		title: "Implement X",
+	});
+	const summary = getLiveSessionSummary(s.sessionId);
+	expect(summary?.title).toBe("Implement X");
+	expect(summary?.workspaceId).toBe("ws-t");
+	expect(summary?.live).toBe(true);
+	expect(getLiveSessionSummary("no-such-session")).toBeUndefined();
+	removeSession(s.sessionId);
 });
 
 test("getSessionStats + getSessionCommands read live session info (cheap wins #3, #2)", async () => {

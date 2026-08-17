@@ -17,6 +17,7 @@ import {
 	setSessionDeletedPublisher,
 	setSessionPublisher,
 	setSkillAdmissionResolver,
+	setStartNewChatHandler,
 } from "../agent";
 import {
 	type AnalyticsOptions,
@@ -57,7 +58,7 @@ import {
 	maybeNaiveNameWorkspace,
 } from "./autoRename";
 import { setFsNudgePublisher } from "./fsNudge";
-import { handleRequest } from "./handlers";
+import { handleRequest, startNewChatFromOrigin } from "./handlers";
 import { trackLoginOutcome } from "./loginAnalytics";
 import { RequestReplayCache } from "./requestReplayCache";
 import { terminalDeliveryForSendStatus } from "./terminalSend";
@@ -201,6 +202,7 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 				ws.subscribe(WS_CHANNELS.piEvent);
 				ws.subscribe(WS_CHANNELS.piExtensionUi);
 				ws.subscribe(WS_CHANNELS.sessionDeleted);
+				ws.subscribe(WS_CHANNELS.sessionCreated);
 				ws.subscribe(WS_CHANNELS.providerLogin);
 				ws.subscribe(WS_CHANNELS.projectUpdated);
 				ws.subscribe(WS_CHANNELS.terminalTabs);
@@ -475,6 +477,18 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 			JSON.stringify({ channel: WS_CHANNELS.sessionDeleted, data: payload }),
 		);
 	});
+
+	// The agent-side `start_new_chat` tool's execution — host-composed session creation (the
+	// `resolve_comment` seam pattern), broadcasting the new chat before its kickoff prompt fires so every
+	// client's runtime exists when the first `pi.event` lands.
+	setStartNewChatHandler((request) =>
+		startNewChatFromOrigin(request, (payload) => {
+			server.publish(
+				WS_CHANNELS.sessionCreated,
+				JSON.stringify({ channel: WS_CHANNELS.sessionCreated, data: payload }),
+			);
+		}),
+	);
 
 	// Stream each in-process AgentSession's events to subscribed clients over the pi.event channel, and
 	// tee the best-effort workspace auto-rename off two points, fire-and-forget (`void` — the hooks never

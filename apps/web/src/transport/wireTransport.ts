@@ -5,6 +5,7 @@ import type {
 	Project,
 	ReviewChangedPayload,
 	ServerWelcome,
+	SessionCreatedPayload,
 	SessionDeletedPayload,
 	SessionEventPayload,
 	Workspace,
@@ -63,6 +64,13 @@ export function initTransport(): WsTransport {
 	transport.subscribe(WS_CHANNELS.sessionDeleted, (data) => {
 		const { workspaceId, sessionId } = data as SessionDeletedPayload;
 		useAppStore.getState().deleteChat(workspaceId, sessionId);
+	});
+
+	// A host-created chat (the agent's `start_new_chat` handoff) — published before the new session's
+	// first `pi.event`, so folding it here is what makes that stream land in a live runtime.
+	transport.subscribe(WS_CHANNELS.sessionCreated, (data) => {
+		const { summary } = data as SessionCreatedPayload;
+		useAppStore.getState().applySessionCreated(summary);
 	});
 
 	transport.subscribe(WS_CHANNELS.providerLogin, (data) => {

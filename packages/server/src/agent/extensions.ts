@@ -37,6 +37,7 @@ import {
 	candidateCompatibilitySkillRoots,
 	discoverCompatibilitySkillSources,
 } from "./skillSources";
+import { startNewChatExtension } from "./startNewChat";
 import { type BundledTrashHelpers, setBundledTrashHelpers } from "./trash";
 
 /** A bundled extension entry's default export — the pi factory shape the loader invokes. */
@@ -247,7 +248,12 @@ export async function buildResourceLoader(
 	settingsManager: SettingsManager,
 	getAdmission: () => SkillAdmissionContext,
 ): Promise<ResourceLoader> {
-	const sharedFactories = [headlessSearchPolicy, askUserQuestionExtension, reviewToolExtension];
+	const sharedFactories = [
+		headlessSearchPolicy,
+		askUserQuestionExtension,
+		reviewToolExtension,
+		startNewChatExtension,
+	];
 	const skillInputs = resolveSkillInputs(cwd, getAdmission);
 	const common = {
 		cwd,

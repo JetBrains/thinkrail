@@ -53,6 +53,12 @@ registration runs once when the chat module mounts. Unregistered tools fall back
     color). Shown up front for every recommended option, not gated on selection: more discoverable than
     a tooltip and, being ordinary visible text, it reads on touch and for AT without a popover.
     **Active card only** — the resolved record shows selections only, no rationale.
+- **`StartNewChatCard`** — the in-transcript receipt for the host-owned `start_new_chat` handoff tool
+  (capability: the server's `agent/startNewChat` + the host compose — see [[submodule-server-agent]]):
+  the new chat's title + the kickoff prompt it was started with. **Primary** — a handoff is a
+  user-visible outcome, not plumbing, so it escapes the activity fold (the collapsed header's summary is
+  the new chat's title). The card is deliberately passive: the tab itself opens + focuses via the
+  `session.created` store fold, so the card carries no interactive Open action.
 - **`visualize/`** — `VisualizationCard` dispatches on `args.type` to `DiagramCard` (mermaid → themed
   SVG via the **lazy-loaded** `mermaid`, source fallback on parse error) and `ComparisonCard` (option
   cards with pros/cons + `recommended` highlight); shared `MermaidView` re-renders on `[data-theme]`

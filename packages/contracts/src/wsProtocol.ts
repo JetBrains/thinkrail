@@ -213,7 +213,9 @@ export interface TerminalTabsPush {
 // v37: `workspace.openReview` returns the active branch's optional GitHub PR / GitLab MR number.
 // v38: `session.getMessages` keeps pi's `compactionSummary` messages, so a hydrated transcript can say
 // where compaction replaced earlier messages instead of starting mid-conversation.
-export const PROTOCOL_VERSION = 38;
+// v39: `session.created` broadcasts a host-created chat (the agent-called `start_new_chat` tool) so every
+// client converges on it before the new session's `pi.event` stream begins.
+export const PROTOCOL_VERSION = 39;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a
@@ -246,6 +248,16 @@ export interface WorkspaceRemoved {
 export interface SessionDeletedPayload {
 	workspaceId: string;
 	sessionId: string;
+}
+
+/**
+ * A chat the HOST created outside any client's request — today the agent-called `start_new_chat` tool.
+ * Broadcast BEFORE the kickoff prompt fires, so on each socket the push precedes the new session's
+ * `pi.event` stream and a client can build the runtime before the prompt's `message_start` arrives.
+ * (Client-request creates don't broadcast — they converge via the `session.create` response.)
+ */
+export interface SessionCreatedPayload {
+	summary: SessionSummary;
 }
 
 /** Request/response methods. `session.*` drives the pi engine. */
@@ -407,6 +419,10 @@ export const WS_CHANNELS = {
 	// Permanent chat deletion is shared domain state. This event carries the owning workspace + session id;
 	// clients retain a tombstone so an older session.list/getMessages response cannot resurrect the chat.
 	sessionDeleted: "session.deleted",
+	// A host-created chat (`SessionCreatedPayload`) — the agent-called `start_new_chat` tool. A domain
+	// EVENT like `session.deleted` (never replayed to late subscribers), published before the new session's
+	// first `pi.event` so clients can build the runtime in time.
+	sessionCreated: "session.created",
 	// In-app login flow updates (a `LoginPush` per frame), keyed by loginId. Session-less — a login runs on
 	// the Welcome screen before any session exists, so this is the sibling of pi.extensionUi, not scoped to one.
 	providerLogin: "provider.login",

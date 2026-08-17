@@ -11,6 +11,7 @@ import type {
 	ReviewCommentKind,
 	ReviewCommentStatus,
 	ReviewSendResult,
+	SessionCreatedPayload,
 	TemplateScope,
 	ThinkingLevel,
 	TodoStatus,
@@ -28,9 +29,11 @@ import {
 	ensureSessionAttached,
 	followUpSession,
 	getDefaultModel,
+	getLiveSessionSummary,
 	getSessionCommands,
 	getSessionMessages,
 	getSessionStats,
+	getSessionWorkspaceId,
 	hasSession,
 	listAvailableModels,
 	listProjectAliasSkillNames,
@@ -44,6 +47,8 @@ import {
 	removeSession,
 	removeWorkspaceSessions,
 	resolveExtUi,
+	type StartNewChatOutcome,
+	type StartNewChatRequest,
 	setSessionModel,
 	setSessionThinkingLevel,
 	steerSession,
@@ -170,6 +175,46 @@ async function archiveTeardown(ws: Workspace): Promise<void> {
 function trackSend(mode: SendMode, text: string): void {
 	if (isControlMessage(text)) return;
 	track({ name: "message_sent", params: { mode } });
+}
+
+/**
+ * The `start_new_chat` tool's host compose (`agent`'s `setStartNewChatHandler` seam — wired by
+ * `createServer` with the `session.created` publish): the "implement in a new session" handoff. Mirrors
+ * the `session.create` handler — resolve the origin's workspace, seed the scratch dir, create the
+ * sibling session (origin's model/effort, the tool's `title`), track — then BROADCAST the new chat
+ * before awaiting the kickoff prompt's accept-ack, so on every socket the `session.created` push
+ * precedes the new session's `pi.event` stream (clients build the runtime before the prompt's
+ * `message_start` lands). Unlike review sends this is NOT detached: a tool call taking a few seconds is
+ * normal, and a pre-accept rejection propagating as the tool's error puts the failure in front of the
+ * user via the calling agent — never a silent empty chat. A post-accept fault rides the new chat's
+ * event stream, like any send.
+ */
+export async function startNewChatFromOrigin(
+	request: StartNewChatRequest,
+	publishSessionCreated: (payload: SessionCreatedPayload) => void,
+): Promise<StartNewChatOutcome> {
+	const workspaceId = getSessionWorkspaceId(request.originSessionId);
+	if (!workspaceId)
+		throw new Error("start_new_chat: the calling session is not attached to a workspace.");
+	const ws = getWorkspace(workspaceId);
+	ensureWorkspaceScratchDir(ws);
+	const created = await createSession({
+		cwd: ws.worktreePath,
+		workspaceId,
+		...(request.model ? { model: request.model } : {}),
+		...(request.thinkingLevel ? { thinkingLevel: request.thinkingLevel } : {}),
+		...(request.title ? { title: request.title } : {}),
+	});
+	if (created.model) {
+		track({
+			name: "chat_started",
+			params: bucketProviderModel(created.model.provider, created.model.id),
+		});
+	}
+	const summary = getLiveSessionSummary(created.sessionId);
+	if (summary) publishSessionCreated({ summary });
+	await ackSend(promptSession(created.sessionId, request.prompt));
+	return { sessionId: created.sessionId, title: summary?.title ?? request.title ?? "Chat" };
 }
 
 /**

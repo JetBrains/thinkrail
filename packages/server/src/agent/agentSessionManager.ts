@@ -170,9 +170,11 @@ export interface CreateSessionInput {
 	cwd: string;
 	/** The workspace id, kept alongside the session so it can be listed back per workspace. */
 	workspaceId: string;
-	/** A wire model reference (`{provider,id}` + display metadata, no `baseUrl`) — re-resolved host-side. */
-	model?: WireModel;
+	/** A wire model reference (`{provider,id}` is all that's read, no `baseUrl`) — re-resolved host-side. */
+	model?: Pick<WireModel, "provider" | "id">;
 	thinkingLevel?: ThinkingLevel;
+	/** Optional display name for the chat (pi `setSessionName`) — the handoff tool names tabs at birth. */
+	title?: string;
 }
 
 /** The resolved session + the model/thinking it starts with (pi picks defaults from auth + settings). */
@@ -288,7 +290,15 @@ export async function createSession(input: CreateSessionInput): Promise<CreateSe
 		...(input.model ? { model: await resolveWireModel(input.model) } : {}),
 		...(input.thinkingLevel ? { thinkingLevel: input.thinkingLevel } : {}),
 	});
+	if (input.title) session.setSessionName(input.title);
 	return registerSession(session, input.workspaceId);
+}
+
+/** A LIVE session's current summary, or undefined when the id isn't live — the `session.created`
+ * broadcast's read (the host publishes right after `createSession`, before the kickoff prompt fires). */
+export function getLiveSessionSummary(sessionId: string): SessionSummary | undefined {
+	const entry = sessions.get(sessionId);
+	return entry ? summaryOf(sessionId, entry) : undefined;
 }
 
 /** A live session's summary (drawn from the running `AgentSession`). */
