@@ -58,6 +58,16 @@
 		"control-border-active": { "from": "borderStrong", "publish": true },
 		"control-disabled-bg": { "from": "input", "publish": true },
 		"control-disabled-text": { "from": "disabled", "alpha": "strong", "publish": true },
+		"control-primary-disabled-bg": {
+			"from": "primaryDisabled",
+			"publish": true,
+			"note": "the DISABLED primary button fill — its own role (and manifest key) so it is decoupled from the shared neutral control-disabled-bg and never repurposes it; solid, no opacity"
+		},
+		"control-primary-disabled-text": {
+			"from": "onPrimaryDisabled",
+			"publish": true,
+			"note": "label + icon colour on a disabled primary button; paired with control-primary-disabled-bg, separate from the neutral control-disabled-text"
+		},
 
 		"border-default": { "from": "borderStrong", "publish": true },
 		"border-muted": { "from": "border", "publish": true },

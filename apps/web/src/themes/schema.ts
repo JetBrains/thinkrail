@@ -18,6 +18,8 @@ export const THEME_COLOR_KEYS = [
 	"muted",
 	"hint",
 	"disabled",
+	"primaryDisabled",
+	"onPrimaryDisabled",
 	"selection",
 	"selectionForeground",
 	"editorSelection",

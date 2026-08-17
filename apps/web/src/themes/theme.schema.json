@@ -76,6 +76,8 @@
 				"muted",
 				"hint",
 				"disabled",
+				"primaryDisabled",
+				"onPrimaryDisabled",
 				"selection",
 				"selectionForeground",
 				"editorSelection",
@@ -103,6 +105,8 @@
 				"muted": { "$ref": "#/$defs/hexColor" },
 				"hint": { "$ref": "#/$defs/hexColor" },
 				"disabled": { "$ref": "#/$defs/hexColor" },
+				"primaryDisabled": { "$ref": "#/$defs/hexColor" },
+				"onPrimaryDisabled": { "$ref": "#/$defs/hexColor" },
 				"selection": { "$ref": "#/$defs/hexColor" },
 				"selectionForeground": {
 					"oneOf": [{ "$ref": "#/$defs/hexColor" }, { "type": "null" }]

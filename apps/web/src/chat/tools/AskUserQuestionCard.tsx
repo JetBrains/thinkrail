@@ -355,7 +355,7 @@ export function AskUserQuestionCard({
 									data-testid="ask-submit"
 									onClick={() => reply({ answers, cancelled: false })}
 									disabled={!canSubmit}
-									className="rounded-[var(--radius-md)] bg-control-primary-bg px-md py-1.5 tr-text-action text-control-primary-text hover:bg-control-primary-bg-hovered disabled:cursor-not-allowed disabled:bg-control-disabled-bg disabled:text-control-disabled-text"
+									className="rounded-[var(--radius-md)] bg-control-primary-bg px-md py-1.5 tr-text-action text-control-primary-text hover:bg-control-primary-bg-hovered disabled:cursor-not-allowed disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text"
 								>
 									Submit
 								</button>

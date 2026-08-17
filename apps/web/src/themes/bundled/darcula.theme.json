@@ -24,6 +24,8 @@
 		"muted": "#aeb8c1",
 		"hint": "#969fa7",
 		"disabled": "#aeb8c1",
+		"primaryDisabled": "#71717a",
+		"onPrimaryDisabled": "#000000",
 		"selection": "#214283",
 		"selectionForeground": null,
 		"editorSelection": "#214283",

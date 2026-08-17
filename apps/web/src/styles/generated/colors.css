@@ -29,6 +29,8 @@
 	--control-border-active: var(--border-strong);
 	--control-disabled-bg: var(--input);
 	--control-disabled-text: color-mix(in srgb, var(--disabled) 60%, transparent);
+	--control-primary-disabled-bg: var(--primary-disabled); /* the DISABLED primary button fill — its own role (and manifest key) so it is decoupled from the shared neutral control-disabled-bg and never repurposes it; solid, no opacity */
+	--control-primary-disabled-text: var(--on-primary-disabled); /* label + icon colour on a disabled primary button; paired with control-primary-disabled-bg, separate from the neutral control-disabled-text */
 	--border-default: var(--border-strong);
 	--border-muted: var(--border);
 	--primary: var(--accent);
@@ -95,6 +97,8 @@
 	--color-control-border-active: var(--control-border-active);
 	--color-control-disabled-bg: var(--control-disabled-bg);
 	--color-control-disabled-text: var(--control-disabled-text);
+	--color-control-primary-disabled-bg: var(--control-primary-disabled-bg);
+	--color-control-primary-disabled-text: var(--control-primary-disabled-text);
 	--color-border-default: var(--border-default);
 	--color-border-muted: var(--border-muted);
 	--color-primary: var(--primary);
