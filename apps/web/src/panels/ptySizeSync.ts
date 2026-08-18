@@ -15,22 +15,11 @@ export interface PtySizeSync {
 const sameGrid = (left: PtyGrid | null, right: PtyGrid): boolean =>
 	left?.cols === right.cols && left.rows === right.rows;
 
-/**
- * Run terminal startup only after the web-font addon has remeasured xterm's character cell.
- *
- * The construction-time grid may use a fallback font. Attaching an existing PTY at that transient width
- * triggers a shell redraw before replay has bound, and a later corrective resize can erase replayed rows.
- * A relayout failure degrades to the caller's normal fit/start path rather than leaving the terminal inert.
- */
 export async function runAfterTerminalRelayout(
 	relayout: () => Promise<unknown>,
 	start: () => void,
 ): Promise<void> {
-	try {
-		await relayout();
-	} catch {
-		// The construction-time measurement remains the fallback when web-font loading fails.
-	}
+	await relayout().catch(() => undefined);
 	start();
 }
 

@@ -38,7 +38,6 @@ interface TerminalEntry {
 	output: OutputBatcher;
 	/** The rolling window replayed into a fresh xterm on attach. */
 	recorder: OutputRecorder;
-	/** Last grid applied to the PTY; prevents no-op resizes from waking an interactive shell to redraw. */
 	grid: PtyGrid;
 }
 

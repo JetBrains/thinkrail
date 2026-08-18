@@ -37,6 +37,10 @@ tabs**. A tab's shell outlives every client that looks at it.
   its process is Theia's `Couldn't attach - can't find terminal with id`).
 - **`attachTerminal` is idempotent get-or-create** — the only way a PTY is born. No separate liveness call, so
   there is no window in which a client holds the only pointer to a running shell.
+- **PTY resizing is change-only.** Each live entry tracks the grid applied at spawn or by the last successful
+  resize. Attach and explicit resize call `IPty.resize` only when that grid changes, and failed calls do not
+  advance the tracked state. Even a same-grid resize can wake the shell through `SIGWINCH`; a redraw emitted
+  after the attach snapshot can overwrite freshly replayed rows.
 - **Ownership is the host's owner, not the browser page.** Any client may attach; consistent with `history`,
   `todos` and `templates`, which already assume a single-owner host. Consequence: shells survive a reload, a
   closed browser and a different browser.

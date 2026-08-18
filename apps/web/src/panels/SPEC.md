@@ -936,8 +936,11 @@ a project picker, the prompt hero, and the reused
   so the Cyrillic/CJK file lands *after* xterm has measured the character cell (which it does once, at
   construction, and never again — unlike Monaco, which re-measures an untrusted early reading). Without the
   re-measure, non-Latin glyphs render into cells sized for the fallback font and the PTY holds the wrong
-  cols/rows; the panel drives `relayout()` itself so it knows when to re-`fit()`. Its pre-bind output buffer is
-  a bounded waiting state: successful bind filters it to the adopted PTY, while permanent creation failure
+  cols/rows. Initial attach therefore waits for `relayout()`, performs a final `fit()`, and only then captures
+  the PTY grid; relayout failure falls back to the construction-time measurement rather than stranding the
+  pane. This ordering also prevents a fallback-width attach followed by a corrective resize from producing
+  post-snapshot shell redraws that can erase replayed rows. Its pre-bind output buffer is a bounded waiting
+  state: successful bind filters it to the adopted PTY, while permanent creation failure
   clears it and stops accepting page-wide terminal frames. **Historical replay is input-inert:** the PTY id
   remains unadopted until xterm's replay callback, which rechecks attach freshness before binding and draining
   genuinely live frames; replies xterm synthesizes for recorded terminal queries can therefore never enter the

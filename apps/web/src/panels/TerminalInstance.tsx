@@ -387,11 +387,6 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 				});
 		};
 		reattachRef.current = attach;
-		// Our code font ships as per-alphabet woff2 subsets (`font-display: swap`), and xterm measures its
-		// character cell only at construction. Wait for the addon to replace that fallback measurement before
-		// attach captures the PTY grid: resizing a live shell from the transient width and back emits prompt
-		// redraw bytes after the replay snapshot, which can erase a replayed stdout row. Failure still starts
-		// with the construction-time fit, so a broken font can never strand the terminal.
 		void runAfterTerminalRelayout(
 			() => webFonts.relayout(),
 			() => {
