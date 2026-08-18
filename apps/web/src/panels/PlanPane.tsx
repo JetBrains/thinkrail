@@ -26,6 +26,7 @@ import { cn } from "../lib";
 import { selectChatTitle, useAppStore } from "../store";
 import { errorText } from "../transport";
 import { DiffStatBadge } from "./DiffStatBadge";
+import { openChatInTab } from "./openChat";
 import { openDiffInTab } from "./openTabs";
 import { PlanReviewList, ReviewActions } from "./PlanReview";
 import { FileRow } from "./planFileRow";
@@ -195,6 +196,7 @@ function ItemBlock({
 	onApprove,
 	onAskFix,
 	onStartReview,
+	reviewerSessionId,
 }: {
 	item: TodoItem;
 	workspaceId: string;
@@ -202,6 +204,7 @@ function ItemBlock({
 	onApprove: (id: string) => Promise<void>;
 	onAskFix: (id: string, feedback: string) => Promise<void>;
 	onStartReview: (id: string) => Promise<void>;
+	reviewerSessionId?: string | undefined;
 }) {
 	const reviewed = reviewSettled(item);
 	const reviewing = item.review?.reviewing === true;
@@ -232,12 +235,29 @@ function ItemBlock({
 					/>
 				</span>
 				<div className="min-w-0 flex-1">
-					<div
-						className={
-							item.status === "done" ? "tr-text-ui text-text-muted" : "tr-text-ui text-text-default"
-						}
-					>
-						{item.title}
+					<div className="flex items-baseline gap-sm">
+						<span
+							className={
+								item.status === "done"
+									? "tr-text-ui text-text-muted"
+									: "tr-text-ui text-text-default"
+							}
+						>
+							{item.title}
+						</span>
+						{reviewing ? (
+							<button
+								type="button"
+								data-testid="plan-item-reviewing"
+								title="Open the reviewer's chat to watch the process"
+								onClick={() =>
+									reviewerSessionId && void openChatInTab(workspaceId, reviewerSessionId)
+								}
+								className="shrink-0 tr-text-metadata text-primary underline-offset-2 hover:underline"
+							>
+								Reviewing…
+							</button>
+						) : null}
 					</div>
 					{item.note ? <div className="tr-text-metadata text-text-subtle">{item.note}</div> : null}
 					{item.status === "done" && item.summary ? (
@@ -269,6 +289,7 @@ function GroupSection({
 	onApprove,
 	onAskFix,
 	onStartReview,
+	reviewerSessionId,
 }: {
 	group: TodoGroupItem;
 	workspaceId: string;
@@ -276,6 +297,7 @@ function GroupSection({
 	onApprove: (id: string) => Promise<void>;
 	onAskFix: (id: string, feedback: string) => Promise<void>;
 	onStartReview: (id: string) => Promise<void>;
+	reviewerSessionId?: string | undefined;
 }) {
 	const { done, total } = groupProgress(group);
 	return (
@@ -296,6 +318,7 @@ function GroupSection({
 						onApprove={onApprove}
 						onAskFix={onAskFix}
 						onStartReview={onStartReview}
+						reviewerSessionId={reviewerSessionId}
 					/>
 				))}
 			</ul>
@@ -479,6 +502,7 @@ export default function PlanPane({
 								onApprove={plan.approve}
 								onAskFix={plan.askFix}
 								onStartReview={startReview}
+								reviewerSessionId={data.reviewerSessionId}
 							/>
 						))}
 						{loose.length > 0 ? (
@@ -498,6 +522,7 @@ export default function PlanPane({
 											onApprove={plan.approve}
 											onAskFix={plan.askFix}
 											onStartReview={startReview}
+											reviewerSessionId={data.reviewerSessionId}
 										/>
 									))}
 								</ul>

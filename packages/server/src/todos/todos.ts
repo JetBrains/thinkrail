@@ -154,6 +154,8 @@ export async function listTodos(params: {
 		})),
 	};
 	if (plan.summary) wire.summary = plan.summary;
+	const reviewer = readReviewMeta(root, params.sessionId).reviewerSessionId;
+	if (reviewer) wire.reviewerSessionId = reviewer;
 	return wire;
 }
 

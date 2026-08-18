@@ -326,6 +326,8 @@ export interface TodoPlan {
 	 * rewrites it at the next completion.
 	 */
 	summary?: string;
+	/** The plan's dedicated reviewer chat (set once Start review ran) — the Reviewing label opens it. */
+	reviewerSessionId?: string;
 }
 
 export type GitFileStatus = "added" | "modified" | "deleted" | "renamed" | "untracked";
