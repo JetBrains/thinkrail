@@ -5,6 +5,7 @@ import {
 	Clock,
 	FileDiff,
 	FileText,
+	FoldVertical,
 	RotateCw,
 	TriangleAlert,
 	Wrench,
@@ -16,8 +17,10 @@ import { useFold, useSelection } from "./foldState";
 import { Markdown } from "./Markdown";
 import { parseReviewPackage, type ReviewPackageItem, reviewPackageLabel } from "./reviewPackage";
 import type { ChatRow, TurnDividerData } from "./rows";
+import { formatTokens } from "./SessionStatsBar";
 import { ToolCard } from "./ToolCard";
 import { getToolChrome, getToolRenderer } from "./toolRegistry";
+import type { CompactionState } from "./types";
 
 /**
  * Render one derived chat row (see `rows.ts` — the transcript renders rows, not raw turns, so routine
@@ -48,6 +51,8 @@ export function ChatTurnView({
 			return <SystemTurn text={row.text} />;
 		case "error":
 			return <ErrorTurn text={row.text} />;
+		case "compaction":
+			return <CompactionNotice {...row} />;
 		case "retry":
 			return (
 				<RetryIndicator
@@ -245,6 +250,58 @@ function ErrorTurn({ text }: { text: string }) {
 		>
 			<TriangleAlert className="mt-0.5 size-4 shrink-0" />
 			<span className="min-w-0 whitespace-pre-wrap break-words">{text}</span>
+		</div>
+	);
+}
+
+/** The compaction lifecycle notice (see SPEC §Rendering model). Running carries its own spinner —
+ * the beat can fall outside the streaming window, where the footer indicator is absent. */
+function CompactionNotice({
+	status,
+	detail,
+	tokensBefore,
+	tokensAfter,
+	resuming,
+}: CompactionState) {
+	if (status === "failed") {
+		return (
+			<div
+				data-testid="compaction-notice"
+				data-status="failed"
+				className="flex items-start gap-sm rounded-[var(--radius-md)] border border-feedback-error-muted bg-clip-padding bg-feedback-error-subtle px-md py-sm text-feedback-error tr-text-ui"
+			>
+				<TriangleAlert className="mt-0.5 size-4 shrink-0" />
+				<span className="min-w-0 whitespace-pre-wrap break-words">
+					{detail || "Compaction failed."}
+				</span>
+			</div>
+		);
+	}
+	const label =
+		status === "running"
+			? "Compacting context…"
+			: status === "cancelled"
+				? "Compaction cancelled"
+				: resuming
+					? "Context compacted — resuming…"
+					: "Context compacted";
+	const tokens =
+		tokensBefore != null && tokensAfter != null
+			? `${formatTokens(tokensBefore)} → ${formatTokens(tokensAfter)} tokens`
+			: null;
+	return (
+		<div
+			data-testid="compaction-notice"
+			data-status={status}
+			className="flex items-center justify-center gap-sm text-text-muted tr-text-metadata"
+		>
+			{status === "running" ? (
+				<RotateCw className="size-3 shrink-0 animate-spin" />
+			) : (
+				<FoldVertical className="size-3 shrink-0" />
+			)}
+			<span>{label}</span>
+			{tokens ? <span>({tokens})</span> : null}
 		</div>
 	);
 }

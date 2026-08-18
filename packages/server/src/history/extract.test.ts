@@ -277,10 +277,9 @@ describe("extractSession", () => {
 		]);
 	});
 
-	test("respects compaction — summarized-away messages are dropped and the summary isn't indexed", () => {
-		// u0/a0 precede firstKeptEntryId (u1) so compaction drops them; the compaction summary is a
-		// non-renderable message (no index slot); the kept question + post-compaction answer index from 0,
-		// matching the client's post-compaction transcript.
+	test("respects compaction — summarized-away messages are dropped; the record consumes a slot but is no hit", () => {
+		// u0/a0 precede firstKeptEntryId (u1) so compaction drops them; the renderable compactionSummary
+		// consumes index slot 0 without becoming a hit.
 		const jsonl = [
 			header(),
 			line({
@@ -326,8 +325,8 @@ describe("extractSession", () => {
 			}),
 		].join("\n");
 		expect(entriesOf(jsonl)).toEqual([
-			{ text: "kept question", role: "user", timestamp: 300, messageIndex: 0 },
-			{ text: "post-compaction answer", role: "assistant", timestamp: 400, messageIndex: 1 },
+			{ text: "kept question", role: "user", timestamp: 300, messageIndex: 1 },
+			{ text: "post-compaction answer", role: "assistant", timestamp: 400, messageIndex: 2 },
 		]);
 	});
 

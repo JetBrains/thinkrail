@@ -29,6 +29,7 @@ import type {
 	TranscriptMessage,
 	WireModel,
 } from "@thinkrail/contracts";
+import { TRANSCRIPT_ROLES } from "@thinkrail/contracts";
 import { ANSWERABILITY_ERRORS, assessAnswerability, buildAnswersMessage } from "./askUserQuestion";
 import { buildResourceLoader, toSkillCommands } from "./extensions";
 import {
@@ -550,9 +551,7 @@ export async function getSessionMessages(
 		entry = sessions.get(sessionId);
 		if (!entry) throw new Error(`Unknown session: ${sessionId}`);
 	}
-	// `custom` rides along for the ask-user-answers pairing (the card reads `details.toolCallId`); the
-	// web renders only the customTypes it knows and ignores the rest.
-	const renderable = new Set(["user", "assistant", "toolResult", "custom"]);
+	const renderable = new Set<string>(TRANSCRIPT_ROLES);
 	const messages = entry.session.messages.filter((m) =>
 		renderable.has(m.role),
 	) as TranscriptMessage[];

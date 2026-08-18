@@ -455,6 +455,16 @@ export const WS_CHANNELS = {
 export type WsMethod = (typeof WS_METHODS)[keyof typeof WS_METHODS];
 export type WsChannel = (typeof WS_CHANNELS)[keyof typeof WS_CHANNELS];
 
+/** The roles `session.getMessages` sends — the one source for the server's transcript read AND the
+ * history index, which must match or `messageIndex` jump anchors shift (see the contracts SPEC). */
+export const TRANSCRIPT_ROLES = [
+	"user",
+	"assistant",
+	"toolResult",
+	"custom",
+	"compactionSummary",
+] as const satisfies readonly TranscriptMessage["role"][];
+
 /**
  * The `customType` of the transcript message that carries an `ask_user_question` reply back to the agent
  * (host-injected via pi's `sendCustomMessage`, starting/steering a turn). Both ends key on it: the host

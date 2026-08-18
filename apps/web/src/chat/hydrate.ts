@@ -55,6 +55,15 @@ export function messagesToRuntime(
 		} else if (message.role === "assistant") {
 			turnId = crypto.randomUUID();
 			turns.push({ kind: "assistant", id: turnId, message, streaming: false });
+		} else if (message.role === "compactionSummary") {
+			// Always `done` — only successful compactions persist an entry.
+			turnId = crypto.randomUUID();
+			turns.push({
+				kind: "compaction",
+				id: turnId,
+				status: "done",
+				tokensBefore: message.tokensBefore,
+			});
 		} else if (message.role === "toolResult") {
 			// Mirror the live `tool_execution_end` result shape (`{ content, details }`) so renderers read the
 			// same value whether streamed or hydrated (e.g. the `ask_user_question` card reads its ack — or a

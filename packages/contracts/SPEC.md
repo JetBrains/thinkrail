@@ -59,7 +59,11 @@ of the host.
     for union fidelity only; the host never calls `executeBash`, so the UI never receives it).
     `agent_settled` is a host projection carrying the final attempt's reported terminal metadata
     (`stopReason` + optional `errorMessage`): `agent_end.willRetry` covers provider auto-retry only and
-    is not an automatic-work terminal when compaction or a queued continuation follows;
+    is not an automatic-work terminal when compaction or a queued continuation follows.
+    `compaction_end.result` is typed as **`CompactionEndResult`** — an allowlist mirror of pi's
+    Node-only `CompactionResult` carrying exactly what the compaction notice renders
+    (`tokensBefore`/`estimatedTokensAfter`); wire data is untrusted, so the reducer guards the field
+    shapes rather than assuming them;
   - **`SessionEventPayload`** (`{ sessionId, event: PiEvent }`) — the `pi.event` push frame.
   - the cheap-win mirrors (declared in the Node-only `pi-coding-agent`): **`SessionStats`** + **`ContextUsage`**
     (tokens/cost/context bar — display only) and **`SlashCommandInfo`** + **`SlashCommandSourceInfo`** (the
@@ -77,7 +81,16 @@ of the host.
     `session.getMessages` returns `{ summary, messages }` (the transcript is
     **`TranscriptMessage[]`** — the pi-canonical `Message` union widened with **`WireCustomMessage`**, a
     type-only mirror of pi-coding-agent's Node-only `CustomMessage`, so extension-injected messages like
-    the ask replies cross the wire; the summary reflects the now-live session after a disk re-open).
+    the ask replies cross the wire, and with **`WireCompactionMessage`** (mirror of the Node-only
+    `CompactionSummaryMessage`: `summary`/`tokensBefore`/`timestamp`), the resolved-context record of a
+    compaction — pi's compacted context places it before the kept tail, and forwarding it is what makes
+    a compaction survive reload/reopen instead of being live-only (hydrate-then-stream); the summary
+    reflects the now-live session after a disk re-open). The role universe a host may send is pinned by
+    the runtime **`TRANSCRIPT_ROLES`** constant (in `wsProtocol`, the value-bearing half): the single
+    source for the server's two read-side filters (`getSessionMessages` and the history index), whose
+    alignment is what keeps a history hit's `messageIndex` valid against the client's
+    `turnIdByMessageIndex` — a role added to one side but not the other would silently shift every jump
+    anchor, so both import this constant instead of re-declaring the set.
   - the **extension-UI frames** **`ExtUiRequest`** / **`ExtUiResponse`** — our wire shape for pi's in-process
     `uiContext` calls (`select`/`confirm`/`input`/`editor` round-trip; `notify`/`setStatus`/`setWidget`/
     `setTitle`/`dismiss` are fire-and-forget), carried on the `pi.extensionUi` channel.

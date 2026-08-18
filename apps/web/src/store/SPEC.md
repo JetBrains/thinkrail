@@ -114,7 +114,17 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   through **`reduceSessionEvent`** at `agent_settled`, using the host-projected final terminal metadata:
   `stopReason: "error"` carries Pi's `errorMessage`, and `stopReason: "length"` becomes an actionable
   truncation error — neither may become "✓ Done". `agent_end` is attempt-level and never clears
-  `isStreaming`; settlement alone finishes retries, compaction, and queued continuations. Closed
+  `isStreaming`; settlement alone finishes retries, compaction, and queued continuations. The
+  **compaction lifecycle is a first-class turn**: `compaction_start` appends a `compaction` turn
+  (`running`), `compaction_end` settles the trailing running one in place (success → `done` +
+  tokens-before/after from the typed `CompactionEndResult`, guarded — wire data is untrusted; `aborted`
+  → `cancelled`; `errorMessage` → `failed` carrying the message, e.g. pi's one-shot overflow-recovery
+  cap — a failed compaction must be visible, never swallowed) or appends the settled turn when no
+  running one exists (reconnect mid-compaction). A successful `compaction_end` with `willRetry: true`
+  additionally marks the turn `resuming` (pi continues the same run) and still removes the superseded
+  assistant attempt. The reducer relies on pi's guarantee that every emitted `compaction_start` is
+  paired with a `compaction_end` (both success and failure paths emit it), the same trust every other
+  event pair gets. Closed
   chats are reopenable: **`closeChatToHistory`** removes a chat tab but **keeps its runtime + session
   alive**, recording it in **`closedChatsByWorkspace`** (`ClosedChat[]`, per workspace, most-recent-first);
   **`reopenChat`** restores the tab with full state (the runtime never left); **`noteClosedChats`** records

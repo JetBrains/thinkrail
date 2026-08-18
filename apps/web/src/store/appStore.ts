@@ -27,7 +27,7 @@ import { create } from "zustand";
 import type { LoginState } from "../auth";
 import { assistantFailureText } from "../chat/assistantFailure";
 import type { HydratedRuntime } from "../chat/hydrate";
-import type { ChatTurn, ExtUiDialogRequest, ToolResultState } from "../chat/types";
+import type { ChatTurn, CompactionState, ExtUiDialogRequest, ToolResultState } from "../chat/types";
 import { shallowEqualArrays, userText } from "../lib";
 import type { ConnectionStatus } from "../transport";
 import {
@@ -288,6 +288,31 @@ function removeSupersededAssistant(
 	return index < 0 ? turns : [...turns.slice(0, index), ...turns.slice(index + 1)];
 }
 
+function compactionOutcome(event: Extract<PiEvent, { type: "compaction_end" }>): CompactionState {
+	if (event.aborted) return { status: "cancelled" };
+	if (event.errorMessage) return { status: "failed", detail: event.errorMessage };
+	const tokensBefore = event.result?.tokensBefore;
+	const tokensAfter = event.result?.estimatedTokensAfter;
+	return {
+		status: "done",
+		...(typeof tokensBefore === "number" ? { tokensBefore } : {}),
+		...(typeof tokensAfter === "number" ? { tokensAfter } : {}),
+		...(event.willRetry ? { resuming: true } : {}),
+	};
+}
+
+/** Settle the trailing running compaction turn in place (same id — fold stability), or append the
+ * settled notice when none is running (client connected mid-compaction). */
+function settleCompactionTurn(
+	turns: ChatTurn[],
+	event: Extract<PiEvent, { type: "compaction_end" }>,
+): ChatTurn[] {
+	const outcome = compactionOutcome(event);
+	const index = turns.findLastIndex((t) => t.kind === "compaction" && t.status === "running");
+	if (index < 0) return [...turns, { kind: "compaction", id: crypto.randomUUID(), ...outcome }];
+	return turns.map((t, i) => (i === index ? { kind: "compaction", id: t.id, ...outcome } : t));
+}
+
 type RetrySource = Extract<ChatTurn, { kind: "retry" }>["source"];
 
 /** Replace-or-append the one live retry countdown of a source (turn vs summarization flows overlap). */
@@ -447,14 +472,21 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 				attemptAssistantId: null,
 			};
 		}
-		case "compaction_end":
+		case "compaction_start":
+			return {
+				...rt,
+				turns: [...rt.turns, { kind: "compaction", id: crypto.randomUUID(), status: "running" }],
+			};
+		case "compaction_end": {
+			const settled = settleCompactionTurn(rt.turns, event);
 			return event.reason === "overflow" && event.willRetry
 				? {
 						...rt,
-						turns: removeSupersededAssistant(rt.turns, rt.attemptAssistantId),
+						turns: removeSupersededAssistant(settled, rt.attemptAssistantId),
 						attemptAssistantId: null,
 					}
-				: rt;
+				: { ...rt, turns: settled };
+		}
 		case "auto_retry_start":
 			// Show a live countdown over the back-off; cleared on auto_retry_end (or final settlement).
 			// Replace-or-append per source: the event fires once per attempt, and the two retry flows

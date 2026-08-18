@@ -81,8 +81,8 @@ export type PiEvent =
 	| {
 			type: "compaction_end";
 			reason: "manual" | "threshold" | "overflow";
-			// `CompactionResult` lives in the Node-only pi-coding-agent; the UI doesn't read it.
-			result: unknown;
+			/** Present on success, absent on failure/abort. See {@link CompactionEndResult}. */
+			result: CompactionEndResult | undefined;
 			aborted: boolean;
 			willRetry: boolean;
 			errorMessage?: string;
@@ -115,6 +115,12 @@ export type PiEvent =
 	// Streamed output of `session.executeBash` (pi ≥0.82.0) — mirrored for union fidelity only: this host
 	// never calls `executeBash` (terminals are real PTYs), so the UI never receives it and ignores it.
 	| { type: "bash_execution_update"; id?: string; delta: string };
+
+/** Allowlist MIRROR of pi-coding-agent's Node-only `CompactionResult` — the fields the notice renders. */
+export interface CompactionEndResult {
+	tokensBefore: number;
+	estimatedTokensAfter: number;
+}
 
 /** The `pi.event` push frame: a session's event tagged with its id. */
 export interface SessionEventPayload {
@@ -342,5 +348,14 @@ export interface WireCustomMessage<T = unknown> {
 	timestamp: number;
 }
 
-/** A transcript message as `session.getMessages` reports it: pi-canonical + custom messages. */
-export type TranscriptMessage = Message | WireCustomMessage;
+/** MIRROR of pi-coding-agent's Node-only `CompactionSummaryMessage` — the compaction record
+ * `session.getMessages` forwards so a reload can still render it (see the contracts SPEC). */
+export interface WireCompactionMessage {
+	role: "compactionSummary";
+	summary: string;
+	tokensBefore: number;
+	timestamp: number;
+}
+
+/** A transcript message as `session.getMessages` reports it: pi-canonical + custom + compaction records. */
+export type TranscriptMessage = Message | WireCustomMessage | WireCompactionMessage;

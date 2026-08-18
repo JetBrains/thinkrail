@@ -31,7 +31,9 @@ to preserve).
   the file the way pi does before the client renders it — `parseSessionEntries` →
   `migrateSessionEntries` → `buildSessionContext` (follow the current leaf, apply the latest compaction,
   drop summarized/abandoned entries) — then indexes the resolved messages, filtered to the same renderable
-  roles `getSessionMessages` sends. So `messageIndex` matches the client's `turnIdByMessageIndex` exactly
+  roles `getSessionMessages` sends (**the shared `TRANSCRIPT_ROLES` constant from `contracts`** — one
+  source for both filters, so a role added to the read side, e.g. `compactionSummary`, can never shift
+  the index's anchors). So `messageIndex` matches the client's `turnIdByMessageIndex` exactly
   (no raw-file-order drift), and abandoned/summarized text never becomes a hit. The internal
   `TODO_NUDGE_PREFIX` control message (hidden from the transcript on hydrate) is skipped after its index
   slot is consumed, so alignment holds. Entry text is **full, never truncated** — a hit's `text` is what

@@ -116,6 +116,21 @@ test("an explicit live null suppresses a stale persisted failure while a resumed
 	expect(turns.map((turn) => turn.kind)).toEqual(["assistant"]);
 });
 
+test("a persisted compactionSummary hydrates a done compaction notice at its canonical position, consuming its index slot", () => {
+	const { turns, turnIdByMessageIndex } = messagesToRuntime([
+		// pi's compacted context: the record FIRST, then the kept tail.
+		{ role: "compactionSummary", summary: "earlier work", tokensBefore: 268_909, timestamp: 1 },
+		{ role: "user", content: "continue", timestamp: 2 },
+		{ role: "assistant", content: [{ type: "text", text: "done" }] },
+	] as unknown as TranscriptMessage[]);
+
+	expect(turns.map((t) => t.kind)).toEqual(["compaction", "user", "assistant"]);
+	expect(turns[0]).toMatchObject({ kind: "compaction", status: "done", tokensBefore: 268_909 });
+	expect(turnIdByMessageIndex).toHaveLength(3);
+	expect(turnIdByMessageIndex[0]).toBe(turns[0]?.id);
+	expect(turnIdByMessageIndex[1]).toBe(turns[1]?.id);
+});
+
 test("turnIdByMessageIndex maps each message's position to its own turn id, null for non-turn messages, and the assistant's id (not the injected error turn's) when the message ended in an error", () => {
 	const { turns, turnIdByMessageIndex } = messagesToRuntime([
 		{ role: "user", content: "hi", timestamp: 1 },

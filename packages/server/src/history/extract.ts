@@ -4,7 +4,7 @@ import {
 	parseSessionEntries,
 	type SessionEntry,
 } from "@earendil-works/pi-coding-agent";
-import { isControlMessage } from "@thinkrail/contracts";
+import { isControlMessage, TRANSCRIPT_ROLES } from "@thinkrail/contracts";
 
 /** One searchable message from a session transcript (see SPEC.md for the messageIndex invariant). */
 export interface HistoryEntry {
@@ -25,10 +25,8 @@ export interface ExtractedSession {
 	entries: HistoryEntry[];
 }
 
-/** The roles the host surfaces to the client (`getSessionMessages`'s filter) — the exact set the client's
- * `messagesToRuntime` folds into `turnIdByMessageIndex`. Indexing against the same set is what keeps a
- * hit's `messageIndex` aligned with the jump anchor the client resolves it against. */
-const RENDERABLE_ROLES = new Set(["user", "assistant", "toolResult", "custom"]);
+/** Index against exactly what `getSessionMessages` sends, or `messageIndex` anchors drift. */
+const RENDERABLE_ROLES = new Set<string>(TRANSCRIPT_ROLES);
 
 function textOf(content: unknown): string {
 	if (typeof content === "string") return content;
@@ -82,8 +80,8 @@ export function extractSession(jsonl: string): ExtractedSession | null {
 	const out: HistoryEntry[] = [];
 	let messageIndex = 0;
 	for (const message of messages) {
-		// Non-renderable context messages (compaction/branch summaries) are stripped by the host before
-		// the client sees them, so they must not consume an index slot here either.
+		// Non-renderable context messages are stripped by the host before the client sees them, so they
+		// must not consume an index slot here either.
 		if (!RENDERABLE_ROLES.has(message.role)) continue;
 		const index = messageIndex++;
 		if (message.role !== "user" && message.role !== "assistant") continue;
