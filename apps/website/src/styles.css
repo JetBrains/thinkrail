@@ -1339,8 +1339,11 @@ html.anim .chat-demo [data-step].on {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	width: 30px;
 	height: 30px;
+	/* Fixed square: width mirrors the height and flex never shrinks it, so the icon button keeps
+	   its shape when the composer row gets tight on mobile. */
+	width: 30px;
+	flex: none;
 	border-radius: 4px;
 	background: var(--accent);
 	color: var(--on-accent);
@@ -1405,6 +1408,7 @@ html.anim .chat-demo [data-step].on {
 	letter-spacing: 0.8px;
 	text-transform: uppercase;
 	color: var(--hint);
+	white-space: nowrap;
 }
 
 .spec-badge.badge-accent {
@@ -1701,7 +1705,7 @@ html:not(.anim) .term-caret {
 .statusbar {
 	display: flex;
 	align-items: center;
-	justify-content: flex-end;
+	justify-content: flex-start;
 	gap: 18px;
 	padding: 5px 16px;
 	border-top: 1px solid var(--border2);
@@ -1914,6 +1918,12 @@ html:not(.anim) .term-caret {
 	.nav-toggle {
 		display: inline-flex;
 	}
+
+	/* Mobile header: the theme switcher sits at the far right, after every other action
+	   (GitHub link, file-tree toggle). Order-only — behaviour and styling are unchanged. */
+	.titlebar-right .theme-toggle {
+		order: 1;
+	}
 }
 
 @media (max-width: 840px) {
@@ -1989,6 +1999,93 @@ html:not(.anim) .term-caret {
 	.hero-ctas .btn {
 		flex: 1;
 		justify-content: center;
+	}
+
+	/* Windows active: the shell switcher wraps to its own row, so the active Windows tab must keep
+	   the structural divider above that row (it should merge into content only when the command
+	   block sits directly below, as on macOS/Linux). Restore it with the border-default token. */
+	html.install-tabs-ready .install-tabs:has(.windows-shell-tabs:not([hidden]))
+		.install-tab[aria-selected="true"] {
+		border-bottom-color: var(--border);
+	}
+
+	/* Give the depth-0 "main spec" row more room for its label so the badge never wraps. */
+	.spec-row.depth-0 {
+		padding-left: 8px;
+	}
+
+	/* Demo: compact so the whole frame fits a phone viewport at once — no internal scroll, no
+	   scale(), no smaller type. Only whitespace shrinks: outer/inner padding, inter-event gaps and
+	   text leading (line-height). Font sizes + families are the shared semantic values, untouched. */
+	.chat-demo {
+		padding: 12px;
+		gap: 8px;
+		margin: 14px 0;
+	}
+
+	.chat-msg.user {
+		/* Full width on a phone: fewer wrapped lines, so shorter, without changing the type. */
+		max-width: 100%;
+		padding: 7px 11px;
+		line-height: 1.4;
+	}
+
+	.chat-msg.assistant,
+	.chat-msg.assistant p,
+	.chat-msg.assistant ol {
+		line-height: 1.4;
+	}
+
+	.chat-msg.assistant p {
+		margin-bottom: 6px;
+	}
+
+	.chat-msg.assistant ol {
+		margin: 6px 0;
+	}
+
+	.chat-msg.assistant li {
+		margin: 3px 0;
+	}
+
+	.chat-done {
+		padding-top: 8px;
+	}
+
+	.chat-composer {
+		padding: 10px 12px;
+		gap: 8px;
+	}
+
+	/* Keep the Send button inside the composer's content area with the same inset as the left:
+	   let the row wrap when the chips get too wide (on very narrow phones) instead of overflowing
+	   and shoving the fixed-square button past the right edge. The button never shrinks. */
+	.composer-row {
+		flex-wrap: wrap;
+		row-gap: 8px;
+	}
+
+	/* Footer grows to two lines instead of clipping: the copyright/InnovationHub content stays on
+	   line 1 and "Apache License 2.0" always starts on line 2. Both lines are left-aligned and
+	   share the same left edge; the 6px flex gap preserves the vertical spacing between them. */
+	.statusbar {
+		white-space: normal;
+		overflow: visible;
+		justify-content: flex-start;
+	}
+
+	.sb-item {
+		flex-wrap: wrap;
+		justify-content: flex-start;
+		width: 100%;
+	}
+
+	.sb-sep {
+		display: none;
+	}
+
+	.sb-license {
+		flex-basis: 100%;
 	}
 }
 
