@@ -10,6 +10,7 @@ import type {
 	WorkspaceFsChangedPayload,
 	WorkspaceSkillChange,
 } from "@thinkrail/contracts";
+import { userText } from "../lib";
 import { type FileTab, type SessionRuntime, toast, useAppStore } from "./appStore";
 import {
 	selectDiffScope,
@@ -71,6 +72,11 @@ const assistantStart = {
 	type: "message_start",
 	message: { role: "assistant" },
 } as unknown as PiEvent;
+const userStart = (text: string) =>
+	({
+		type: "message_start",
+		message: { role: "user", content: [{ type: "text", text }], timestamp: 1 },
+	}) as unknown as PiEvent;
 // A streaming `text` update carries the cumulative `partial` snapshot (the assistant message so far).
 const assistantText = (text: string) =>
 	({
@@ -168,11 +174,6 @@ test("pi events route to the right session runtime; chats stay independent", () 
 test("a host-fired USER message folds into the transcript; the composer's optimistic twin doesn't duplicate", () => {
 	const store = useAppStore.getState();
 	store.openChatSession("ws1", "a", null, "medium");
-	const userStart = (text: string) =>
-		({
-			type: "message_start",
-			message: { role: "user", content: [{ type: "text", text }], timestamp: 1 },
-		}) as unknown as PiEvent;
 
 	// Host-fired (a review send's package): no optimistic append happened — the event builds the turn.
 	store.handlePiEvent(userStart("<review pkg>"), "a");
@@ -187,6 +188,29 @@ test("a host-fired USER message folds into the transcript; the composer's optimi
 	// A control message (a pi-todos nudge) stays hidden, like in hydration.
 	store.handlePiEvent(userStart("[thinkrail:todo-nudge] plan changed"), "a");
 	expect(rt("a").turns.filter((t) => t.kind === "user")).toHaveLength(2);
+});
+
+test("Pi's expanded skill echo replaces its matching optimistic slash command in place", () => {
+	const expanded =
+		'<skill name="review" location="/repo/.pi/skills/review/SKILL.md">\nReferences are relative to /repo/.pi/skills/review.\n\n# Review\n\nInspect the diff.\n</skill>\n\nFocus on src/app.ts.';
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "skill", null, "medium");
+	store.appendUserMessage("skill", "/skill:review Focus on src/app.ts.");
+	const optimistic = rt("skill").turns[0];
+	if (optimistic?.kind !== "user") throw new Error("optimistic turn missing");
+
+	store.handlePiEvent(userStart(expanded), "skill");
+	const turns = rt("skill").turns;
+	expect(turns).toHaveLength(1);
+	const canonical = turns[0];
+	expect(canonical?.id).toBe(optimistic.id);
+	expect(canonical?.kind === "user" && userText(canonical.message.content)).toBe(expanded);
+
+	// A different raw command cannot be swallowed just because the next event is some expanded skill.
+	store.openChatSession("ws1", "mismatch", null, "medium");
+	store.appendUserMessage("mismatch", "/skill:other Focus on src/app.ts.");
+	store.handlePiEvent(userStart(expanded), "mismatch");
+	expect(rt("mismatch").turns.filter((turn) => turn.kind === "user")).toHaveLength(2);
 });
 
 test("an assistant turn is built (and replaced, not duplicated) from message_update partials", () => {

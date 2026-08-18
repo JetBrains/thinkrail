@@ -25,7 +25,10 @@ Tiny UI helpers shared across components.
   store's snapshot-identity guard and `ErrorBoundary`'s reset keys), **`userText()`** (a user
   message's plain text — shared by `chat`'s transcript hydration/renderer and `store`'s live event
   fold, so "same message" means the same thing everywhere; it lives here because `store`'s edge to
-  `chat/` is type-only),
+  `chat/` is type-only), **`parseSkillInvocation()`** + **`matchesSkillInvocationCommand()`** (the
+  anchored browser-side mirror of Pi's canonical expanded `<skill>` user-message grammar, shared by
+  `chat`'s compact renderer and `store`'s optimistic-echo reconciliation; malformed/quoted blocks fail
+  closed),
   **`relativeTime()`** (`just now` / `5m ago` / `2d ago` — shared by chat history, the tab strip's closed
   chats, and the Changes scope menu's commit rows; it lives here because `chat/` may not import from
   `panels/`, which is what let three private twins of it accumulate), **`platformShortcutLabel()`** +
@@ -40,7 +43,8 @@ Tiny UI helpers shared across components.
   identity/palettes never live in `lib`.
 - **Public surface (barrel):** `cn`, `isMarkdownPath`, `stripFrontmatter`, `cssColorToHex`,
   `normalizePath`, `isAbsolutePath`, `projectRelativePath`, `shallowEqualArrays`, `userText`,
-  `relativeTime`, `platformShortcutLabel`, `hasPlatformModifier`, `copyText`.
+  `parseSkillInvocation`, `matchesSkillInvocationCommand`, `relativeTime`, `platformShortcutLabel`,
+  `hasPlatformModifier`, `copyText`.
 - **Allowed deps:** `clsx`, `tailwind-merge`; `@thinkrail/contracts` (types only — `userText`'s
   `UserMessage` parameter); `shiki`/`@shikijs/*` (the per-file shiki modules only — never reachable
   through the barrel).

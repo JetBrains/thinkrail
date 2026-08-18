@@ -28,7 +28,12 @@ import type { LoginState } from "../auth";
 import { assistantFailureText } from "../chat/assistantFailure";
 import type { HydratedRuntime } from "../chat/hydrate";
 import type { ChatTurn, ExtUiDialogRequest, ToolResultState } from "../chat/types";
-import { shallowEqualArrays, userText } from "../lib";
+import {
+	matchesSkillInvocationCommand,
+	parseSkillInvocation,
+	shallowEqualArrays,
+	userText,
+} from "../lib";
 import type { ConnectionStatus } from "../transport";
 import {
 	type HistoryTarget,
@@ -359,7 +364,17 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 				const text = userText(message.content);
 				if (isControlMessage(text)) return rt;
 				const last = rt.turns[rt.turns.length - 1];
-				if (last?.kind === "user" && userText(last.message.content) === text) return rt;
+				if (last?.kind === "user") {
+					const optimisticText = userText(last.message.content);
+					if (optimisticText === text) return rt;
+					const invocation = parseSkillInvocation(text);
+					if (invocation && matchesSkillInvocationCommand(optimisticText, invocation)) {
+						return {
+							...rt,
+							turns: [...rt.turns.slice(0, -1), { kind: "user", id: last.id, message }],
+						};
+					}
+				}
 				return {
 					...rt,
 					turns: [...rt.turns, { kind: "user", id: crypto.randomUUID(), message }],

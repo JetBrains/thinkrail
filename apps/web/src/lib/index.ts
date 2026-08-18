@@ -1,2 +1,3 @@
 /** UI helpers shared by components — `cn()` (clsx + tailwind-merge). */
+export * from "./skillInvocation";
 export * from "./utils";
