@@ -266,7 +266,14 @@ test("side groups expose broad per-panel above and below split targets", async (
 	await expect(groups.nth(2).getByTestId("tab-files")).toBeVisible();
 
 	changesGroup = groups.filter({ has: page.getByTestId("tab-changes") });
-	await changesGroup.getByTestId("side-group-fold").click();
+	await expect(page.getByTestId("workspace-workbench")).toHaveAttribute(
+		"data-layout-status",
+		"settled",
+	);
+	const foldChanges = changesGroup.getByTestId("side-group-fold");
+	// dnd-kit captures clicks briefly after pointer teardown to suppress the drag's synthetic click.
+	// Once persistence has settled, use the same button's keyboard path instead of racing that guard.
+	await foldChanges.press("Enter");
 	await expect(changesGroup).toHaveAttribute("data-folded", "true");
 	const foldedAboveTarget = changesGroup.locator('[data-drop-label="Create right group above"]');
 	await dragTabToTarget(page, page.getByTestId("tab-files"), foldedAboveTarget);

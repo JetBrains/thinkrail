@@ -521,7 +521,11 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	}
 
 	return (
-		<>
+		<div
+			data-testid="workspace-workbench"
+			data-layout-status={pendingLayoutWrites > 0 ? "saving" : "settled"}
+			className="contents"
+		>
 			<Workbench
 				document={document}
 				attention={attention}
@@ -673,6 +677,6 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				}
 			/>
 			{terminalClose.confirmation}
-		</>
+		</div>
 	);
 }
