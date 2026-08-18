@@ -14,7 +14,7 @@ export function BrandLogo() {
 			width="32"
 			height="32"
 			viewBox="0 -53.5 557 557"
-			className="size-8 shrink-0 text-primary"
+			className="size-[32px] shrink-0 text-primary"
 			xmlns="http://www.w3.org/2000/svg"
 		>
 			<path
