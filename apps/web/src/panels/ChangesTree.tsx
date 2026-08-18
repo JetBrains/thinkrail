@@ -1,7 +1,8 @@
 import type { GitFileChange } from "@thinkrail/contracts";
 import { useState } from "react";
 import type { TabIntent } from "../store";
-import { ChangeRowActions, ROW_MENU_SLOT } from "./ChangeRowActions";
+import { ChangeFileRow } from "./ChangeFileRow";
+import { ROW_MENU_SLOT } from "./ChangeRowActions";
 import { buildChangesTree, type ChangeTreeNode, statusNameClass } from "./changesModel";
 import { DiffStatBadge } from "./DiffStatBadge";
 import { TreeRow } from "./TreeRow";
@@ -46,31 +47,32 @@ function ChangeNodeRow({
 	const [expanded, setExpanded] = useState(true);
 
 	if (node.kind === "file") {
+		const active = isActive(node.path);
 		return (
-			<li>
-				<ChangeRowActions
-					path={node.path}
-					active={isActive(node.path)}
-					onView={() => onOpen(node.path, "preview")}
-				>
-					{({ onContextMenu }) => (
-						<TreeRow
-							testid="change-node"
-							onContextMenu={onContextMenu}
-							kind="file"
-							// The wrapper paints the band (it has to cover the trailing ⌄ slot); this row paints none.
-							highlight="wrapper"
-							active={isActive(node.path)}
-							dataStatus={node.status}
-							label={node.name}
-							labelClassName={statusNameClass(node.status)}
-							onClick={() => onOpen(node.path, "preview")}
-							onDoubleClick={() => onOpen(node.path, "keep")}
-							trailing={<DiffStatBadge added={node.added} removed={node.removed} />}
-						/>
-					)}
-				</ChangeRowActions>
-			</li>
+			<ChangeFileRow
+				path={node.path}
+				active={active}
+				added={node.added}
+				removed={node.removed}
+				onOpen={onOpen}
+			>
+				{({ onClick, onDoubleClick, onContextMenu, badge }) => (
+					<TreeRow
+						testid="change-node"
+						onContextMenu={onContextMenu}
+						kind="file"
+						// The wrapper paints the band (it has to cover the trailing ⌄ slot); this row paints none.
+						highlight="wrapper"
+						active={active}
+						dataStatus={node.status}
+						label={node.name}
+						labelClassName={statusNameClass(node.status)}
+						onClick={onClick}
+						onDoubleClick={onDoubleClick}
+						trailing={badge}
+					/>
+				)}
+			</ChangeFileRow>
 		);
 	}
 

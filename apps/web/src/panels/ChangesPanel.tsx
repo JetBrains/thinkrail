@@ -1,4 +1,4 @@
-import type { GitStatus } from "@thinkrail/contracts";
+import type { GitFileChange, GitStatus } from "@thinkrail/contracts";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
 	matchesWorktreePath,
@@ -13,11 +13,10 @@ import {
 import { errorText, getTransport, wsErrorCode } from "../transport";
 import { BranchPicker } from "./BranchPicker";
 import { useBranchList } from "./branches";
-import { ChangeRowActions } from "./ChangeRowActions";
+import { ChangeFileRow } from "./ChangeFileRow";
 import { ChangesScopeMenu } from "./ChangesScopeMenu";
 import { ChangesTree } from "./ChangesTree";
 import { diffTabId, isDiffTabId, scopeKey, splitPath, statusNameClass } from "./changesModel";
-import { DiffStatBadge } from "./DiffStatBadge";
 import { openDiffInTab } from "./openTabs";
 import { ToggleSegment } from "./ToggleSegment";
 import { useWorkspaceRead } from "./useWorkspaceRead";
@@ -253,68 +252,84 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 					<ChangesTree changes={status.changes} onOpen={openDiff} isActive={isActive} />
 				) : (
 					<ul>
-						{status.changes.map((change) => {
-							const { dir, base } = splitPath(change.path);
-							return (
-								<li key={change.path}>
-									<ChangeRowActions
-										path={change.path}
-										active={isActive(change.path)}
-										onView={() => openDiff(change.path, "preview")}
-									>
-										{({ onContextMenu }) => (
-											<button
-												type="button"
-												onContextMenu={onContextMenu}
-												data-testid="change-item"
-												data-status={change.status}
-												data-active={isActive(change.path) ? true : undefined}
-												onClick={() => openDiff(change.path, "preview")}
-												onDoubleClick={() => openDiff(change.path, "keep")}
-												title={change.path}
-												// No background of its own: the WRAPPER paints the row's hover/selected band, which has
-												// to span the trailing ⌄ slot too. Two painters would make the row read as cut off at
-												// this button's edge (and hide that the wrapper stopped painting).
-												className="flex min-w-0 flex-1 items-center gap-8 px-4 py-4 text-left tr-text-ui"
-											>
-												{/* The full relative path: a muted directory prefix, a bright basename — and the dir
-												    yields **completely** before the basename gives up a pixel, because the name is what
-												    a user scans. That ordering is structural, not a ratio: the dir is the only shrinkable
-												    item, so it absorbs the entire deficit, down to zero width if the name needs the whole
-												    row. (A shrink *ratio* — this was `shrink-[20]` vs `shrink` — only approximates it:
-												    flex splits the deficit in proportion to factor × basis, so the basename always loses a
-												    slice. That slice was sub-pixel at the old type scale and ~2px at 14px, which is how a
-												    12-character `shortName.ts` started rendering with an ellipsis.) */}
-												<span className="flex min-w-0 flex-1 items-baseline">
-													{dir ? (
-														<span
-															data-testid="change-path-dir"
-															className="min-w-0 shrink truncate text-text-muted"
-														>
-															{dir}
-														</span>
-													) : null}
-													{/* `shrink-0` **plus** `max-w-full`: flex never steals width from the name, but
-													    max-width still clamps it to the row, so a long ROOT-level basename (no dir prefix
-													    to absorb anything) truncates instead of pushing the +/− badge out of the panel —
-													    the same rule DiffPane's header chip follows. */}
-													<span
-														data-testid="change-path-base"
-														className={`max-w-full shrink-0 truncate ${statusNameClass(change.status) || "text-text-muted"}`}
-													>
-														{base}
-													</span>
-												</span>
-												<DiffStatBadge added={change.added ?? 0} removed={change.removed ?? 0} />
-											</button>
-										)}
-									</ChangeRowActions>
-								</li>
-							);
-						})}
+						{status.changes.map((change) => (
+							<ChangeListRow
+								key={change.path}
+								change={change}
+								active={isActive(change.path)}
+								onOpen={openDiff}
+							/>
+						))}
 					</ul>
 				)}
 			</div>
 		</div>
+	);
+}
+
+/**
+ * One flat-list changed-file row: the full relative path (a muted directory prefix + the status-coloured
+ * basename) and the `+/−` badge, inside the shared {@link ChangeFileRow} shell. The folder view's
+ * counterpart is `ChangesTree`'s `ChangeNodeRow`; both spend the same gestures, menu and badge, and differ
+ * only in this body.
+ */
+function ChangeListRow({
+	change,
+	active,
+	onOpen,
+}: {
+	change: GitFileChange;
+	active: boolean;
+	onOpen: (path: string, intent: TabIntent) => void;
+}) {
+	const { dir, base } = splitPath(change.path);
+	return (
+		<ChangeFileRow
+			path={change.path}
+			active={active}
+			added={change.added ?? 0}
+			removed={change.removed ?? 0}
+			onOpen={onOpen}
+		>
+			{({ onClick, onDoubleClick, onContextMenu, badge }) => (
+				<button
+					type="button"
+					onContextMenu={onContextMenu}
+					data-testid="change-item"
+					data-status={change.status}
+					data-active={active ? true : undefined}
+					onClick={onClick}
+					onDoubleClick={onDoubleClick}
+					title={change.path}
+					// No background of its own: the ChangeFileRow wrapper paints the row's hover/selected band,
+					// which has to span the trailing action slot too (two painters would read as cut off here).
+					className="flex min-w-0 flex-1 items-center gap-8 px-4 py-4 text-left tr-text-ui"
+				>
+					{/* The full relative path: a muted directory prefix, a bright basename. The dir is the only
+					    shrinkable item, so it yields COMPLETELY (down to zero width) before the basename — the name
+					    is what a user scans — gives up a pixel. */}
+					<span className="flex min-w-0 flex-1 items-baseline">
+						{dir ? (
+							<span
+								data-testid="change-path-dir"
+								className="min-w-0 shrink truncate text-text-muted"
+							>
+								{dir}
+							</span>
+						) : null}
+						{/* `shrink-0` + `max-w-full`: flex never steals width from the name, but max-width still
+						    clamps it to the row, so a long root-level basename truncates instead of pushing the
+						    +/− badge out of the panel. */}
+						<span
+							data-testid="change-path-base"
+							className={`max-w-full shrink-0 truncate ${statusNameClass(change.status) || "text-text-muted"}`}
+						>
+							{base}
+						</span>
+					</span>
+					{badge}
+				</button>
+			)}
+		</ChangeFileRow>
 	);
 }
