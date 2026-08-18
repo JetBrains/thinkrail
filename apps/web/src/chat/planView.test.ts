@@ -4,6 +4,7 @@ import type { AskState } from "./askState";
 import {
 	flatItems,
 	groupProgress,
+	itemChangeSet,
 	planGlance,
 	planSections,
 	planSummary,
@@ -134,4 +135,57 @@ test("sessionGlance derives the glance straight from a runtime (deriveAskStates 
 		"waiting_question",
 	);
 	expect(sessionGlance({ isStreaming: false, turns: [], askAnswers: {} })).toBe("waiting");
+});
+
+// --- itemChangeSet: the one derivation behind the "N files" chip + the markdown review map ---
+
+test("itemChangeSet: a commit artifact with decorated files wins over any change rows", () => {
+	const done: TodoItem = {
+		...item("step", "done"),
+		artifacts: [
+			{ kind: "spec", path: "SPEC.md", specId: "s1" }, // agent's own artifacts are not a change set
+			{
+				kind: "commit",
+				sha: "abc123",
+				files: [
+					{ path: "a.ts", status: "modified", added: 2, removed: 1 },
+					{ path: "b.ts", status: "added", added: 5 },
+				],
+			},
+			{ kind: "change", path: "stale.ts" }, // a leftover fallback row must not shadow the commit
+		],
+	};
+	expect(itemChangeSet(done)).toEqual({
+		kind: "commit",
+		sha: "abc123",
+		files: [
+			{ path: "a.ts", status: "modified", added: 2, removed: 1 },
+			{ path: "b.ts", status: "added", added: 5 },
+		],
+	});
+});
+
+test("itemChangeSet: a commit without decorated files (unresolvable sha) degrades to null — no affordance", () => {
+	const done: TodoItem = {
+		...item("step", "done"),
+		artifacts: [{ kind: "commit", sha: "deadbeef" }],
+	};
+	expect(itemChangeSet(done)).toBeNull();
+});
+
+test("itemChangeSet: change rows alone are the paths fallback; file/spec alone are nothing", () => {
+	const fallback: TodoItem = {
+		...item("step", "done"),
+		artifacts: [
+			{ kind: "change", path: "a.ts" },
+			{ kind: "change", path: "b.ts" },
+		],
+	};
+	expect(itemChangeSet(fallback)).toEqual({ kind: "paths", paths: ["a.ts", "b.ts"] });
+	const agentOnly: TodoItem = {
+		...item("doc", "done"),
+		artifacts: [{ kind: "file", path: "README.md" }],
+	};
+	expect(itemChangeSet(agentOnly)).toBeNull();
+	expect(itemChangeSet(item("bare", "done"))).toBeNull();
 });

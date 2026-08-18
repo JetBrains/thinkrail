@@ -121,8 +121,9 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   disk-only sessions (from `session.list`) there too — idempotently (skips live/open/already-listed) — so a
   chat that survived a host restart is reopenable. **`deleteChat(workspaceId, sessionId)`** is the idempotent
   fold for both a confirmed local `session.delete` and the `session.deleted` broadcast: it atomically drops
-  that chat's tab/history row/runtime + skill baseline (choosing the normal active-tab fallback) and records
-  a page-lifetime tombstone. **`noteClosedChats`** and **`hydrateSession`** reject tombstoned session ids, so
+  **every tab the chat owns** — its transcript tab *and* its plan page (both carry the `sessionId`; a plan
+  page for a deleted chat would have nothing to read) — plus its history row/runtime + skill baseline
+  (choosing the normal active-tab fallback), and records a page-lifetime tombstone. **`noteClosedChats`** and **`hydrateSession`** reject tombstoned session ids, so
   stale `session.list` / `session.getMessages` results already in flight cannot recreate a deleted chat;
   the tombstone survives workspace teardown because an older read can still settle afterward. The
   active-workspace hydration pass snapshots **`selectWorkspaceSessionIds`** before each `session.list`; when
@@ -262,8 +263,10 @@ components. The **Skills-reload badge** rides the same tick without a separate s
   `ChatView`'s matcher memo and re-derive every open chat's whole transcript about once a second.
   **`openDoc(tab)`** opens
   (or refreshes + focuses) an ephemeral **`DocTab`** — inline rendered-markdown content, never backed by a
-  file on disk (no fs re-read / source toggle) — used for on-demand snapshots like the plan-as-markdown
-  export. **`DiffTab`** is a read-only Monaco diff of one
+  file on disk (no fs re-read / source toggle) — or a **`PlanTab`** (`kind: "plan"`, id
+  `${workspaceId}:plan:${sessionId}` — one page per chat, re-open focuses): the chat plan's live
+  review-map page, rendered by `panels/PlanPane` from the session's plan data (nothing content-bearing
+  in the tab itself, so there is no snapshot to go stale). **`DiffTab`** is a read-only Monaco diff of one
 changed file over **one diff scope** (id `${workspaceId}:diff:${scopeKey}:${path}` — one tab per *(file,
 scope)*: **the scope is part of a tab's identity**, because a tab's content must never change meaning
 because the rail's scope flipped underneath it; the tab carries its own `scope`, which is also what
@@ -303,7 +306,7 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   fires outside the chat subtree entirely (see `shell/SPEC.md`'s "Global chords"). The target comes from
   **`selectHistoryTarget`** (active chat tab, else the workspace's newest chat) and the action **activates
   that tab atomically** with the request — one `set`, because `CenterTabs` mounts one tab body at a time,
-  so a request for an off-screen chat would never be consumed. The `EditorTab` (`FileTab` | `ChatTab` | `DocTab` | `DiffTab`) + `TerminalTab` + `ClosedChat` +
+  so a request for an off-screen chat would never be consumed. The `EditorTab` (`FileTab` | `ChatTab` | `DocTab` | `DiffTab` | `PlanTab`) + `TerminalTab` + `ClosedChat` +
   `SessionRuntime` types. (Chat *render* types + renderers live in the `chat` module.) The pure context
   selectors in `selectors.ts` resolve the active `Workspace`, its owning project id, and the shell's context
   project from those canonical ids and collections; derived active-project state is never stored separately.

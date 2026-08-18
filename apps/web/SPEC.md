@@ -93,7 +93,10 @@ The module set: `transport` / `store` / branded `shell`; `ProjectTree`; `FileTre
   drops an unknown utility silently, so an unpublished token renders as nothing at all).
 - **A radius or spacing utility names a scale step, never a raw pixel length** — `rounded-[var(--radius-md)]`
   and `p-md` / `py-0.5`, not `rounded-[7px]` or `py-[3px]`. Two scales are legitimate and both are
-  token-backed: the project family (`--radius-xs/sm/md/lg`, `--space-xs…xl`) and Tailwind's numeric steps
+  token-backed: the project family (`--radius-xs/sm/md/lg` — a small primitive geometry capped at 8px:
+  `sm` (4px) is the default corner, `md` (6px) the outer corner for surfaces nesting 4px children, `lg`
+  (8px) the exception for large standalone elevated surfaces (dialogs, user-message bubbles) — and
+  `--space-xs…xl`) and Tailwind's numeric steps
   for the sub-`--space-xs` tier the project family does not cover. `src/styles/spacingUsage.test.ts` is
   that adoption guard, and it exists because this class of drift is **invisible**: unlike a colour
   utility, an arbitrary length always renders, so an off-scale value looks correct in review and passes

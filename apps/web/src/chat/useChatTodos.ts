@@ -1,10 +1,9 @@
 import type { PiEvent, SessionEventPayload, TodoPlan } from "@thinkrail/contracts";
 import { TODO_NUDGE_PREFIX, WS_CHANNELS } from "@thinkrail/contracts";
 import { useEffect, useState } from "react";
-import { useAppStore } from "../store";
+import { selectChatTitle, useAppStore } from "../store";
 import { errorText, getSessionMessagesWithSkillBaseline, getTransport } from "../transport";
 import { messagesToRuntime } from "./hydrate";
-import { planToMarkdown } from "./planMarkdown";
 import { sessionGlance, shouldNudgeOnAdd } from "./planView";
 
 export function shouldRefreshTodos(event: PiEvent): boolean {
@@ -22,8 +21,11 @@ export interface ChatTodos {
 	add: (title: string) => Promise<void>;
 	/** Remove an item. Optimistic — the row disappears immediately and is restored if the request fails. */
 	remove: (id: string) => Promise<void>;
-	/** Compile the current plan to a temporary markdown snapshot and open it in a center `doc` tab. */
-	openMarkdown: () => void;
+	/** Open (or focus) the chat's live plan page — a center `plan` tab (markdown is its export). */
+	openPlan: () => void;
+	/** Open an item's change set (the plan's "N files" chip): `{sha}` → the Changes panel at that commit's
+	 * scope (durable done-time diff); `{path}` → that file's live diff tab at the branch scope. */
+	openChanges: (target: { sha: string } | { path: string }) => void;
 }
 
 /**
@@ -125,23 +127,35 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 		}
 	};
 
-	const openMarkdown = () => {
-		if (!data) return;
-		const tabs = useAppStore.getState().tabsByWorkspace[workspaceId] ?? [];
-		const chatTab = tabs.find((t) => t.kind === "chat" && t.sessionId === sessionId);
-		const title = (chatTab?.name ?? "Chat").trim() || "Chat";
-		useAppStore.getState().openDoc({
-			kind: "doc",
-			// Keyed per chat, so re-clicking refreshes the same tab rather than piling up snapshots.
-			id: `${workspaceId}:doc:todo:${sessionId}`,
+	const openPlan = () => {
+		const state = useAppStore.getState();
+		const title = selectChatTitle(state, workspaceId, sessionId);
+		state.openDoc({
+			kind: "plan",
+			// Keyed per chat, so re-clicking focuses the same page rather than piling up tabs.
+			id: `${workspaceId}:plan:${sessionId}`,
 			workspaceId,
-			name: `TODO · ${title}`,
-			content: planToMarkdown(data, title),
-			docPath: "TODO.md",
+			name: `Plan · ${title}`,
+			sessionId,
 		});
 	};
 
-	return { data, failed, add, remove, openMarkdown };
+	const openChanges = (target: { sha: string } | { path: string }) => {
+		const store = useAppStore.getState();
+		if ("sha" in target) {
+			// The commit is the change set: point the panel's scope at it and reveal Changes — the panel
+			// lists the commit's files itself, each opening its diff at that scope.
+			store.setDiffScope(workspaceId, { kind: "commit", sha: target.sha });
+			store.requestRightTab(workspaceId, "changes");
+			return;
+		}
+		// Path-list fallback: a live diff — pin the scope back to branch so the deep link can't inherit a
+		// commit scope a previous chip click left behind, then route the one-path intent.
+		store.setDiffScope(workspaceId, { kind: "branch" });
+		store.requestChangesView(workspaceId, target.path);
+	};
+
+	return { data, failed, add, remove, openPlan, openChanges };
 }
 
 /**

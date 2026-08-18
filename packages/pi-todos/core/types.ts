@@ -17,21 +17,27 @@ export const TODO_ORIGINS = ["agent", "user"] as const;
 export type TodoOrigin = (typeof TODO_ORIGINS)[number];
 
 /**
- * What an artifact points at: a source `file`, a `change` (its diff vs the workspace base branch), or a
- * `spec` (a spec-graph node). All three are addressed by a worktree-relative `path` — the diff of a
- * `change` is computed live at click time, never stored here.
+ * What an artifact points at: a source `file`, a `change` (its diff vs the workspace base branch), a
+ * `spec` (a spec-graph node), or a `commit` (the sha the item's work was recorded as when it flipped
+ * `done` — the host commits per done item). `file`/`change`/`spec` are addressed by a worktree-relative
+ * `path`; a `commit` carries a `sha` instead (it opens the Changes panel at that commit's scope). The
+ * diff of a `change` is computed live at click time (at the commit scope when the item also has a
+ * `commit`, else the branch scope) — never stored here.
  */
-export const TODO_ARTIFACT_KINDS = ["file", "change", "spec"] as const;
+export const TODO_ARTIFACT_KINDS = ["file", "change", "spec", "commit"] as const;
 export type TodoArtifactKind = (typeof TODO_ARTIFACT_KINDS)[number];
 
 /** A link from an item to what the work produced. `path` is worktree-relative (the nav address). */
 export interface TodoArtifact {
 	kind: TodoArtifactKind;
-	path: string;
+	/** Worktree-relative nav address — present for `file`/`change`/`spec`; a `commit` uses `sha` instead. */
+	path?: string;
 	/** Display text; the UI falls back to the path's basename when absent. */
 	label?: string;
 	/** For `spec` only: the durable spec-graph id (survives a file move); `path` is what opens a tab. */
 	specId?: string;
+	/** For `commit` only: the sha the item's changes were committed as (opens at the `commit:{sha}` scope). */
+	sha?: string;
 }
 
 /** One backlog item. `id`/timestamps are store-assigned. */
@@ -73,10 +79,11 @@ export interface TodoPlan {
 
 /**
  * The on-disk file shape (`.thinkrail/context/todos/<sessionId>.json`). `version` guards migrations. `3` added
- * item `artifacts`; a `2` file (no artifacts) reads cleanly and is upgraded to `3` on the next write.
+ * item `artifacts`; `4` added the `commit` artifact kind (sha, optional `path`). An older file reads cleanly
+ * (sanitize-on-read drops nothing valid) and is upgraded on the next write.
  */
 export interface TodoFile {
-	version: 3;
+	version: 4;
 	todos: Todo[];
 	groups: TodoGroup[];
 }

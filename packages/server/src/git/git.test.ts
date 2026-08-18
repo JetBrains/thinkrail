@@ -5,7 +5,9 @@ import { join } from "node:path";
 import type { Workspace } from "@thinkrail/contracts";
 import { changedFileArgs, diffBaseRef, resolveDiffRange } from "./diffScope";
 import {
+	gitCommitPaths,
 	gitDiffFile,
+	gitHeadSha,
 	gitStatus,
 	listBranches,
 	listCommits,
@@ -585,4 +587,157 @@ test("a failed diff throws — a broken read is never reported as a clean worktr
 	seedWorkspace({ diffBase: "no-such-branch" });
 	writeFileSync(join(repo, "dirty.txt"), "dirty\n");
 	expect(() => gitStatus("w1")).toThrow(/Could not read the changed files/);
+});
+
+// --- gitCommitPaths / gitHeadSha (the TODO change-set primitives) ---
+
+/** The paths currently staged (index vs HEAD) — how the index-preservation tests observe git's state. */
+function stagedPaths(): string[] {
+	return new TextDecoder()
+		.decode(
+			Bun.spawnSync(["git", "-C", repo, "diff", "--cached", "--name-only"], { stdout: "pipe" })
+				.stdout,
+		)
+		.split("\n")
+		.filter(Boolean);
+}
+
+test("gitCommitPaths commits EXACTLY the named paths and returns the sha; commit scope unfolds it", () => {
+	seedWorkspace();
+	writeFileSync(join(repo, "impl.ts"), "export {};\n");
+	// Dirt the caller did NOT name: another item's work (or the user's), plus the host's own state. Neither
+	// may ride along — that's the whole point of the path-scoped commit.
+	writeFileSync(join(repo, "other.ts"), "export const other = 1;\n");
+	mkdirSync(join(repo, ".thinkrail", "context"), { recursive: true });
+	writeFileSync(join(repo, ".thinkrail", "context", "todos.json"), "{}");
+
+	const before = gitHeadSha("w1");
+	const committed = gitCommitPaths("w1", "todo: step\n\nThinkRail-Todo: s/t1", ["impl.ts"]);
+	expect(committed).not.toBeNull();
+	expect(committed?.sha).not.toBe(before);
+	expect(gitHeadSha("w1")).toBe(committed?.sha ?? "");
+	// The commit records only the named path…
+	const unfolded = gitStatus("w1", { kind: "commit", sha: committed?.sha ?? "" });
+	expect(unfolded.changes.map((c) => c.path)).toEqual(["impl.ts"]);
+	// …and everything unnamed stays uncommitted in the worktree, unstaged.
+	const status = gitStatus("w1", { kind: "uncommitted" });
+	expect(status.changes.map((c) => c.path).sort()).toEqual([
+		".thinkrail/context/todos.json",
+		"other.ts",
+	]);
+	expect(stagedPaths()).toEqual([]);
+});
+
+test("gitCommitPaths stages a deletion, and returns null for an empty set or paths with nothing to commit", () => {
+	seedWorkspace();
+	expect(gitCommitPaths("w1", "todo: nothing named", [])).toBeNull();
+	expect(gitCommitPaths("w1", "todo: clean path", ["README.md"])).toBeNull();
+
+	rmSync(join(repo, "README.md"));
+	const committed = gitCommitPaths("w1", "todo: drop the readme", ["README.md"]);
+	expect(committed).not.toBeNull();
+	expect(gitStatus("w1", { kind: "commit", sha: committed?.sha ?? "" }).changes[0]).toMatchObject({
+		path: "README.md",
+		status: "deleted",
+	});
+});
+
+test("gitCommitPaths leaves the user's own staged work staged (never in the item's commit)", () => {
+	seedWorkspace();
+	writeFileSync(join(repo, "impl.ts"), "export {};\n");
+	writeFileSync(join(repo, "mine.ts"), "export const mine = 1;\n");
+	git(repo, "add", "--", "mine.ts"); // the user staged this deliberately
+
+	const committed = gitCommitPaths("w1", "todo: step", ["impl.ts"]);
+	expect(gitStatus("w1", { kind: "commit", sha: committed?.sha ?? "" }).changes.map((c) => c.path)) //
+		.toEqual(["impl.ts"]);
+	expect(stagedPaths()).toEqual(["mine.ts"]);
+});
+
+test("gitCommitPaths treats paths literally — a pathspec-magic filename never expands beyond itself", () => {
+	seedWorkspace();
+	// A tracked file whose NAME is a valid pathspec: without --literal-pathspecs, `:(top)*` expands to
+	// "everything from the repo top" and sweeps the unrelated dirt + the host's own state into the commit.
+	const magic = ":(top)*";
+	writeFileSync(join(repo, magic), "the item's own work\n");
+	writeFileSync(join(repo, "other.ts"), "export const other = 1;\n"); // unrelated concurrent edit
+	mkdirSync(join(repo, ".thinkrail", "context"), { recursive: true });
+	writeFileSync(join(repo, ".thinkrail", "context", "todos.json"), "{}"); // excluded app state
+
+	const committed = gitCommitPaths("w1", "todo: magic name", [magic]);
+	expect(committed).not.toBeNull();
+	// The commit holds exactly the literally-named file…
+	expect(
+		gitStatus("w1", { kind: "commit", sha: committed?.sha ?? "" }).changes.map((c) => c.path),
+	).toEqual([magic]);
+	// …and the unrelated dirt + app state stay uncommitted, unstaged.
+	expect(
+		gitStatus("w1", { kind: "uncommitted" })
+			.changes.map((c) => c.path)
+			.sort(),
+	).toEqual([".thinkrail/context/todos.json", "other.ts"]);
+	expect(stagedPaths()).toEqual([]);
+});
+
+test("a failed commit restores the index — the user's staging area is never left mutated", () => {
+	seedWorkspace();
+	writeFileSync(join(repo, "impl.ts"), "export {};\n");
+	writeFileSync(join(repo, "mine.ts"), "export const mine = 1;\n");
+	git(repo, "add", "--", "mine.ts");
+	// Make the commit itself fail the way a real checkout does (signing configured but unavailable), so the
+	// `add` has already mutated the index by the time the failure lands.
+	git(repo, "config", "commit.gpgsign", "true");
+	git(repo, "config", "gpg.program", join(dataDir, "no-such-gpg"));
+
+	const head = gitHeadSha("w1");
+	expect(gitCommitPaths("w1", "todo: unsignable", ["impl.ts"])).toBeNull();
+	expect(gitHeadSha("w1")).toBe(head ?? ""); // no commit landed
+	// The item's path is NOT staged and the user's staged file still is — exactly the pre-call index.
+	expect(stagedPaths()).toEqual(["mine.ts"]);
+});
+
+test("a failed commit preserves index-only state — an intent-to-add entry survives byte-for-byte", () => {
+	seedWorkspace();
+	writeFileSync(join(repo, "impl.ts"), "export {};\n");
+	writeFileSync(join(repo, "intent.txt"), "later\n");
+	// Index-only state with no tree representation: a tree round-trip (write-tree/read-tree) would
+	// silently drop it — the regression this test pins is that the index FILE is restored verbatim.
+	git(repo, "add", "-N", "--", "intent.txt");
+	git(repo, "config", "commit.gpgsign", "true");
+	git(repo, "config", "gpg.program", join(dataDir, "no-such-gpg"));
+
+	const head = gitHeadSha("w1");
+	expect(gitCommitPaths("w1", "todo: unsignable", ["impl.ts"])).toBeNull();
+	expect(gitHeadSha("w1")).toBe(head ?? ""); // no commit landed
+	// The intent-to-add entry is still registered in the index…
+	const tracked = new TextDecoder()
+		.decode(
+			Bun.spawnSync(["git", "-C", repo, "ls-files", "--", "intent.txt"], { stdout: "pipe" }).stdout,
+		)
+		.trim();
+	expect(tracked).toBe("intent.txt");
+	// …and the item's path was unstaged again (intent-to-add itself never counts as staged content).
+	expect(stagedPaths()).toEqual([]);
+});
+
+test("gitCommitPaths refuses to commit over a conflicted index (unmerged entries)", () => {
+	seedWorkspace();
+	// Build a real conflict: two branches editing the same line, merged with no resolution.
+	writeFileSync(join(repo, "conflict.txt"), "base\n");
+	git(repo, "add", "-A");
+	git(repo, "commit", "-m", "add conflict.txt");
+	git(repo, "switch", "-c", "side");
+	writeFileSync(join(repo, "conflict.txt"), "side\n");
+	git(repo, "add", "-A");
+	git(repo, "commit", "-m", "side edit");
+	git(repo, "switch", "main");
+	writeFileSync(join(repo, "conflict.txt"), "main\n");
+	git(repo, "add", "-A");
+	git(repo, "commit", "-m", "main edit");
+	Bun.spawnSync(["git", "-C", repo, "merge", "side"], { stdout: "ignore", stderr: "ignore" });
+
+	writeFileSync(join(repo, "impl.ts"), "export {};\n");
+	const head = gitHeadSha("w1");
+	expect(gitCommitPaths("w1", "todo: mid-merge", ["impl.ts"])).toBeNull();
+	expect(gitHeadSha("w1")).toBe(head ?? "");
 });

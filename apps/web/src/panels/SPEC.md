@@ -329,7 +329,20 @@ a project picker, the prompt hero, and the reused
   `from <base>` to claim. It is neither one-time nor dismissible, so it also helps
   after the last tab closes without introducing onboarding state. `CenterTabs` also renders ephemeral
   **`doc`** tabs (`DocTab` — inline rendered markdown, no file on disk) via its own
-  `DocPane`→`MarkdownPreview`; used for the plan-as-markdown snapshot (see the `chat` module). `CenterTabs`
+  `DocPane`→`MarkdownPreview`, and **`plan`** tabs (`PlanTab`) via the lazy **`PlanPane`** — the chat
+  plan's **live review-map page**: the session's TODO plan document-scale (groups as sections, items
+  with status glyphs), each done item carrying a **collapsible** change set — a disclosure whose
+  summary line (sha chip + `N files` + `DiffStatBadge`) toggles the commit's `GitFileChange[]` rows
+  (the DTO decoration), **collapsed by default** so a long plan stays compact; the chevron/summary is
+  the toggle while the sha chip stays a separate button (routing the Changes panel, never toggling).
+  Expanded, the file rows are clickable (`statusNameClass`-colored name + the shared
+  `DiffStatBadge`) opening Monaco diff tabs at the item's `commit:{sha}` scope (`openDiffInTab`,
+  preview intent; the path-list fallback opens at branch scope, no counts — they'd drift), a sha chip
+  routing the Changes panel to that commit (`useChatTodos.openChanges`), and header export actions —
+  **Copy** (clipboard) / **Save .md** (browser download) — both compiling through `chat/planMarkdown`.
+  Live by construction: it reads through the same `useChatTodos` hook as the plan popup (per-mount
+  fetch + `pi.event` refetch), so it can never show a stale snapshot the way the old compiled-markdown
+  `doc` route did. `CenterTabs`
   closing a chat tab routes to `store.closeChatToHistory` (keeps the session alive) and shows a
   **chat-history** dropdown (recently-closed + disk-only chats, shown only when non-empty); each row has
   a one-click trash action (`session.delete` → idempotent `store.deleteChat`, no confirm); the

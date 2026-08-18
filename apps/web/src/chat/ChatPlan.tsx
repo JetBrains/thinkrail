@@ -80,7 +80,7 @@ export function ChatPlanContent({ plan, glance }: { plan: ChatTodos; glance: Pla
 			className="flex max-h-[calc(var(--radix-popover-content-available-height)*0.5)] w-[24rem] flex-col overflow-hidden rounded-t-none border-t-0 bg-container-content-bg p-0"
 		>
 			<div className="shrink-0 border-border-muted border-b">
-				<TodoAddRow onAdd={plan.add} onOpenMarkdown={plan.openMarkdown} />
+				<TodoAddRow onAdd={plan.add} onOpenPlan={plan.openPlan} />
 			</div>
 			<div className="min-h-0 flex-1 overflow-auto p-xs">
 				{empty ? (
@@ -88,7 +88,12 @@ export function ChatPlanContent({ plan, glance }: { plan: ChatTodos; glance: Pla
 						No TODOs yet — the agent adds its plan here, or add one above.
 					</p>
 				) : (
-					<TodoRows plan={plan.data} onRemove={plan.remove} glance={glance} />
+					<TodoRows
+						plan={plan.data}
+						onRemove={plan.remove}
+						glance={glance}
+						onOpenChanges={plan.openChanges}
+					/>
 				)}
 			</div>
 		</PopoverContent>

@@ -110,7 +110,14 @@ import {
 	resizeTerminal,
 	writeTerminal,
 } from "../terminal";
-import { addTodo, countOpenTodos, listTodos, removeTodo, updateTodo } from "../todos";
+import {
+	addTodo,
+	countOpenTodos,
+	listTodos,
+	removeSessionTodoWindows,
+	removeTodo,
+	updateTodo,
+} from "../todos";
 import { ensureWatch, stopWatch } from "../watch";
 import {
 	createWorkspace,
@@ -577,6 +584,9 @@ const handlers: Record<string, Handler> = {
 	"session.delete": async (params) => {
 		const p = params as { workspaceId: string; sessionId: string };
 		await deleteSession(p.sessionId, p.workspaceId, getWorkspace(p.workspaceId).worktreePath);
+		// The chat is gone — close its TODO work windows too, or an orphan baseline sidecar would read as a
+		// permanently open foreign window and force every sibling chat into the path-list fallback forever.
+		removeSessionTodoWindows(p);
 		return { ok: true } as const;
 	},
 	"session.setModel": async (params) => {

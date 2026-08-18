@@ -107,7 +107,21 @@ export interface DiffTab {
 	/** The workspace fs tick the contents were loaded at — same live-refresh contract as `FileTab`. */
 	loadedTick?: number;
 }
-export type EditorTab = FileTab | ChatTab | DocTab | DiffTab;
+/**
+ * The chat plan's **live review-map page** (a center tab): renders the session's TODO plan from the
+ * host (live — the pane refetches off `pi.event` like the plan popup) with per-item change sets and
+ * click-through navigation to diffs/Changes. Markdown is an *export* of this page (`planMarkdown`),
+ * never its source — the page replaced the old static `doc`-snapshot route.
+ */
+export interface PlanTab {
+	kind: "plan";
+	/** `${workspaceId}:plan:${sessionId}` — one plan page per chat; re-opening focuses it. */
+	id: string;
+	workspaceId: string;
+	name: string;
+	sessionId: string;
+}
+export type EditorTab = FileTab | ChatTab | DocTab | DiffTab | PlanTab;
 
 /**
  * How an open/reveal treats the workspace's single **preview slot**. `preview` is a light "I'm just
@@ -748,7 +762,7 @@ interface AppState {
 	openTab: (tab: EditorTab, intent: TabIntent) => void;
 	/** Open (or refresh + focus, if already open) an ephemeral rendered-markdown `doc` tab. Re-invoking
 	 * with the same id replaces its content so a "compile current state" action always shows the latest. */
-	openDoc: (tab: DocTab) => void;
+	openDoc: (tab: DocTab | PlanTab) => void;
 	closeTab: (id: string) => void;
 	/** Activate a tab. `intent: "keep"` also promotes it out of the preview slot — one-way: nothing ever
 	 * demotes a kept tab back to preview. */
@@ -1041,9 +1055,12 @@ function bumpNav(s: AppState, workspaceId: string): Record<string, number> {
 function withoutChat(s: AppState, workspaceId: string, sessionId: string): AppState {
 	const alreadyDeleted = isSessionDeleted(s, workspaceId, sessionId);
 	const tabs = s.tabsByWorkspace[workspaceId] ?? [];
-	const tab = tabs.find(
-		(candidate) => candidate.kind === "chat" && candidate.sessionId === sessionId,
+	// A chat owns two tabs: its transcript and (optionally) its plan page — both die with the session.
+	const owned = tabs.filter(
+		(candidate) =>
+			(candidate.kind === "chat" || candidate.kind === "plan") && candidate.sessionId === sessionId,
 	);
+	const tab = owned[0];
 	const closed = s.closedChatsByWorkspace[workspaceId] ?? [];
 	const inHistory = closed.some((chat) => chat.sessionId === sessionId);
 	const hasRuntime = s.sessions[sessionId] !== undefined;
@@ -1054,8 +1071,10 @@ function withoutChat(s: AppState, workspaceId: string, sessionId: string): AppSt
 	if (alreadyDeleted && !tab && !inHistory && !hasRuntime && !hasSkillBaseline && !targetsLocation)
 		return s;
 
-	const remaining = tab ? tabs.filter((candidate) => candidate.id !== tab.id) : tabs;
-	const wasActive = !!tab && s.activeTabByWorkspace[workspaceId] === tab.id;
+	const ownedIds = new Set(owned.map((candidate) => candidate.id));
+	const remaining = tab ? tabs.filter((candidate) => !ownedIds.has(candidate.id)) : tabs;
+	const activeId = s.activeTabByWorkspace[workspaceId];
+	const wasActive = !!activeId && ownedIds.has(activeId);
 	return {
 		...s,
 		...(!alreadyDeleted

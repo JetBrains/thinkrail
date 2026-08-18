@@ -15,7 +15,16 @@ import {
 import { useState } from "react";
 import { cn } from "../lib";
 import { PlanStatusIcon, SectionLabel } from "./planKit";
-import { groupProgress, type PlanGlance, planSections } from "./planView";
+import {
+	groupProgress,
+	type ItemChangeSet,
+	itemChangeSet,
+	type PlanGlance,
+	planSections,
+} from "./planView";
+
+/** Where a change-set chip click lands: the item's commit (Changes at `commit:{sha}`) or one file's diff. */
+export type ChangeTarget = { sha: string } | { path: string };
 
 // Presentational TODO rendering for the in-chat plan popup (SPEC §Chat TODO plan). Props-driven (no transport) —
 // the caller supplies the plan + edit callbacks (see `useChatTodos`) and the glance state (see
@@ -58,7 +67,8 @@ function statusLabel(status: TodoStatus, glance: PlanGlance): string {
 	return status === "in_progress" ? glanceIcon(glance).label : STATUS_LABEL[status];
 }
 
-function StatusIcon({ status, glance }: { status: TodoStatus; glance: PlanGlance }) {
+/** An item's status glyph (glance-aware for the in_progress step) — shared with the plan page. */
+export function StatusIcon({ status, glance }: { status: TodoStatus; glance: PlanGlance }) {
 	if (status === "in_progress") {
 		const { Icon, className } = glanceIcon(glance);
 		return <Icon data-glance={glance} className={cn("size-4 shrink-0", className)} />;
@@ -66,13 +76,13 @@ function StatusIcon({ status, glance }: { status: TodoStatus; glance: PlanGlance
 	return <PlanStatusIcon kind={status === "done" ? "done" : "pending"} />;
 }
 
-/** The add-a-TODO input row, with an "open as markdown" action on the right. */
+/** The add-a-TODO input row, with an "open the plan page" action on the right. */
 export function TodoAddRow({
 	onAdd,
-	onOpenMarkdown,
+	onOpenPlan,
 }: {
 	onAdd: (title: string) => Promise<void>;
-	onOpenMarkdown?: () => void;
+	onOpenPlan?: () => void;
 }) {
 	const [draft, setDraft] = useState("");
 	const submit = async () => {
@@ -98,13 +108,13 @@ export function TodoAddRow({
 				placeholder="Add a TODO for the agent…"
 				className="min-w-0 flex-1 bg-transparent tr-text-ui text-text-default outline-none placeholder:text-text-muted"
 			/>
-			{onOpenMarkdown ? (
+			{onOpenPlan ? (
 				<button
 					type="button"
-					data-testid="todo-open-markdown"
-					onClick={onOpenMarkdown}
-					aria-label="Open as markdown"
-					title="Open the plan as a markdown tab"
+					data-testid="todo-open-plan"
+					onClick={onOpenPlan}
+					aria-label="Open the plan page"
+					title="Open the plan as a page — review each step's changes"
 					className="flex size-6 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted hover:bg-control-bg-hovered hover:text-text-default focus-visible:opacity-100"
 				>
 					<FileText className="size-3.5" />
@@ -120,10 +130,12 @@ function GroupBlock({
 	group,
 	glance,
 	onRemove,
+	onOpenChanges,
 }: {
 	group: TodoGroupItem;
 	glance: PlanGlance;
 	onRemove: (id: string) => void;
+	onOpenChanges?: ((target: ChangeTarget) => void) | undefined;
 }) {
 	const status = group.status;
 	const { done, total } = groupProgress(group);
@@ -154,7 +166,13 @@ function GroupBlock({
 			</div>
 			<ul className="ml-md flex flex-col border-border-default border-l pl-sm">
 				{group.todos.map((todo) => (
-					<TodoRow key={todo.id} todo={todo} glance={glance} onRemove={() => onRemove(todo.id)} />
+					<TodoRow
+						key={todo.id}
+						todo={todo}
+						glance={glance}
+						onRemove={() => onRemove(todo.id)}
+						onOpenChanges={onOpenChanges}
+					/>
 				))}
 			</ul>
 		</div>
@@ -166,16 +184,24 @@ function LooseList({
 	items,
 	glance,
 	onRemove,
+	onOpenChanges,
 }: {
 	items: TodoItem[];
 	glance: PlanGlance;
 	onRemove: (id: string) => void;
+	onOpenChanges?: ((target: ChangeTarget) => void) | undefined;
 }) {
 	if (items.length === 0) return null;
 	return (
 		<ul className="flex flex-col">
 			{items.map((todo) => (
-				<TodoRow key={todo.id} todo={todo} glance={glance} onRemove={() => onRemove(todo.id)} />
+				<TodoRow
+					key={todo.id}
+					todo={todo}
+					glance={glance}
+					onRemove={() => onRemove(todo.id)}
+					onOpenChanges={onOpenChanges}
+				/>
 			))}
 		</ul>
 	);
@@ -191,30 +217,34 @@ export function TodoRows({
 	plan,
 	onRemove,
 	glance = "working",
+	onOpenChanges,
 }: {
 	plan: TodoPlan;
 	onRemove: (id: string) => void;
 	glance?: PlanGlance;
+	/** Opens an item's change set: its commit in the Changes panel, or one fallback path's diff tab. */
+	onOpenChanges?: ((target: ChangeTarget) => void) | undefined;
 }) {
 	const s = planSections(plan);
 	const hasTodo = s.pendingGroups.length > 0 || s.pendingLoose.length > 0;
 	const hasDone = s.doneGroups.length > 0 || s.doneLoose.length > 0;
+	const rowProps = { glance, onOpenChanges };
 	return (
 		<>
 			{s.activeGroups.map((group) => (
-				<GroupBlock key={group.id} group={group} glance={glance} onRemove={onRemove} />
+				<GroupBlock key={group.id} group={group} onRemove={onRemove} {...rowProps} />
 			))}
-			<LooseList items={s.activeLoose} glance={glance} onRemove={onRemove} />
+			<LooseList items={s.activeLoose} onRemove={onRemove} {...rowProps} />
 			{hasTodo ? <SectionLabel label="To do" /> : null}
 			{s.pendingGroups.map((group) => (
-				<GroupBlock key={group.id} group={group} glance={glance} onRemove={onRemove} />
+				<GroupBlock key={group.id} group={group} onRemove={onRemove} {...rowProps} />
 			))}
-			<LooseList items={s.pendingLoose} glance={glance} onRemove={onRemove} />
+			<LooseList items={s.pendingLoose} onRemove={onRemove} {...rowProps} />
 			{hasDone ? <SectionLabel label="Done" /> : null}
 			{s.doneGroups.map((group) => (
-				<DoneGroup key={group.id} group={group} glance={glance} onRemove={onRemove} />
+				<DoneGroup key={group.id} group={group} onRemove={onRemove} {...rowProps} />
 			))}
-			<LooseList items={s.doneLoose} glance={glance} onRemove={onRemove} />
+			<LooseList items={s.doneLoose} onRemove={onRemove} {...rowProps} />
 		</>
 	);
 }
@@ -228,10 +258,12 @@ function DoneGroup({
 	group,
 	glance,
 	onRemove,
+	onOpenChanges,
 }: {
 	group: TodoGroupItem;
 	glance: PlanGlance;
 	onRemove: (id: string) => void;
+	onOpenChanges?: ((target: ChangeTarget) => void) | undefined;
 }) {
 	const [expanded, setExpanded] = useState(false);
 	const Chevron = expanded ? ChevronDown : ChevronRight;
@@ -254,7 +286,71 @@ function DoneGroup({
 			{expanded ? (
 				<ul className="ml-md flex flex-col border-border-default border-l pl-sm">
 					{group.todos.map((todo) => (
-						<TodoRow key={todo.id} todo={todo} glance={glance} onRemove={() => onRemove(todo.id)} />
+						<TodoRow
+							key={todo.id}
+							todo={todo}
+							glance={glance}
+							onRemove={() => onRemove(todo.id)}
+							onOpenChanges={onOpenChanges}
+						/>
+					))}
+				</ul>
+			) : null}
+		</div>
+	);
+}
+
+/**
+ * The quiet "N files" affordance on a row that carries a host change set (`itemChangeSet`): committed →
+ * one click opens the Changes panel at the item's `commit:{sha}` scope (the panel lists the commit's
+ * files itself); path-list fallback → a single path deep-links its live diff directly, several expand an
+ * inline path list, each row one diff. Absent when the item has no change set — including a commit whose
+ * sha no longer resolves (the DTO ships no `files`) — or when the caller wired no handler.
+ */
+function ChangeSetChip({
+	set,
+	onOpen,
+}: {
+	set: ItemChangeSet;
+	onOpen: (target: ChangeTarget) => void;
+}) {
+	const [expanded, setExpanded] = useState(false);
+	const count = set.kind === "commit" ? set.files.length : set.paths.length;
+	const open = () => {
+		if (set.kind === "commit") return onOpen({ sha: set.sha });
+		if (set.paths.length === 1 && set.paths[0]) return onOpen({ path: set.paths[0] });
+		setExpanded((v) => !v);
+	};
+	return (
+		<div className="min-w-0">
+			<button
+				type="button"
+				data-testid="todo-changes-chip"
+				data-kind={set.kind}
+				onClick={open}
+				title={
+					set.kind === "commit"
+						? `Review this step's changes (commit ${set.sha.slice(0, 7)})`
+						: "Review this step's changed files"
+				}
+				className="tr-text-metadata text-text-subtle underline-offset-2 hover:text-text-default hover:underline"
+			>
+				{count} {count === 1 ? "file" : "files"}
+			</button>
+			{expanded && set.kind === "paths" ? (
+				<ul className="mt-xs flex flex-col gap-xs">
+					{set.paths.map((path) => (
+						<li key={path}>
+							<button
+								type="button"
+								data-testid="todo-change-path"
+								onClick={() => onOpen({ path })}
+								title={path}
+								className="block max-w-full truncate tr-text-metadata text-text-subtle hover:text-text-default hover:underline"
+							>
+								{path}
+							</button>
+						</li>
 					))}
 				</ul>
 			) : null}
@@ -266,11 +362,14 @@ function TodoRow({
 	todo,
 	glance,
 	onRemove,
+	onOpenChanges,
 }: {
 	todo: TodoItem;
 	glance: PlanGlance;
 	onRemove: () => void;
+	onOpenChanges?: ((target: ChangeTarget) => void) | undefined;
 }) {
+	const changeSet = onOpenChanges ? itemChangeSet(todo) : null;
 	return (
 		<li
 			data-testid="todo-row"
@@ -291,6 +390,9 @@ function TodoRow({
 				</div>
 				{todo.note ? (
 					<div className="truncate text-text-muted tr-text-metadata">{todo.note}</div>
+				) : null}
+				{changeSet && onOpenChanges ? (
+					<ChangeSetChip set={changeSet} onOpen={onOpenChanges} />
 				) : null}
 			</div>
 			{todo.origin === "user" ? (

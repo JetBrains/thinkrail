@@ -55,3 +55,54 @@ test("an empty plan renders a placeholder", () => {
 		["# TODO — c", "", "Progress: 0/0", "", "_No items yet._", ""].join("\n"),
 	);
 });
+
+test("a committed done item renders sha + summary + status-lettered file rows with ± counts", () => {
+	const done: TodoItem = {
+		...item("Implement foo", "done"),
+		// The commit artifact's `files` is the host's `todo.list` decoration (derived from git, never stored).
+		artifacts: [
+			{
+				kind: "commit",
+				sha: "abc1234def567",
+				label: "Implement foo",
+				files: [
+					{ path: "src/foo.ts", status: "modified", added: 28, removed: 3 },
+					{ path: "src/bar baz.ts", status: "added", added: 12 },
+				],
+			},
+		],
+	};
+	const plan: TodoPlan = { todos: [done], groups: [] };
+	expect(planToMarkdown(plan, "c")).toBe(
+		[
+			"# TODO — c",
+			"",
+			"Progress: 1/1",
+			"",
+			"- [x] Implement foo — `abc1234` · 2 files · +40 −3",
+			"    - `M` src/foo.ts · +28 −3",
+			"    - `A` src/bar baz.ts · +12",
+			"",
+		].join("\n"),
+	);
+});
+
+test("a fallback done item (change artifacts, no commit) lists bare paths — no drifting counts", () => {
+	const done: TodoItem = {
+		...item("Fix bar", "done"),
+		artifacts: [{ kind: "change", path: "src/bar.ts" }],
+	};
+	expect(planToMarkdown({ todos: [done], groups: [] }, "c")).toBe(
+		["# TODO — c", "", "Progress: 1/1", "", "- [x] Fix bar", "    - src/bar.ts", ""].join("\n"),
+	);
+});
+
+test("a commit artifact without decorated files (unresolvable sha) degrades to a plain row", () => {
+	const done: TodoItem = {
+		...item("Old step", "done"),
+		artifacts: [{ kind: "commit", sha: "deadbeef", label: "Old step" }],
+	};
+	expect(planToMarkdown({ todos: [done], groups: [] }, "c")).toBe(
+		["# TODO — c", "", "Progress: 1/1", "", "- [x] Old step", ""].join("\n"),
+	);
+});
