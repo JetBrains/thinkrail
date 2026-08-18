@@ -2,6 +2,7 @@ import { existsSync, readFileSync, rmSync } from "node:fs";
 import { expect, test } from "@playwright/test";
 import {
 	createWorkspaceViaDialog,
+	loadPersistedWorkspaces,
 	openFixtureProject,
 	openWorkspaceMenu,
 	waitTerminalReady,
@@ -50,7 +51,7 @@ test("Copy path copies the worktree's absolute path to the clipboard", async ({
 	expect(copied).toContain("/worktrees/sample-project/");
 });
 
-test("the Default workspace's kebab menu offers Open in / Copy path but no Remove", async ({
+test("the Default workspace's kebab menu offers Open in / Copy path but no Rename or Remove", async ({
 	page,
 }) => {
 	await openFixtureProject(page);
@@ -58,7 +59,61 @@ test("the Default workspace's kebab menu offers Open in / Copy path but no Remov
 	await openWorkspaceMenu(row);
 	await expect(page.getByTestId("workspace-open-in")).toBeVisible();
 	await expect(page.getByTestId("workspace-copy-path")).toBeVisible();
+	// Default is non-renamable server-side, so the row hides Rename to match.
+	await expect(page.getByTestId("workspace-rename")).toHaveCount(0);
 	await expect(page.getByTestId("workspace-remove")).toHaveCount(0);
+});
+
+test("Rename edits the workspace name inline and persists via workspace.rename", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const created = await createWorkspaceViaDialog(page);
+	await settleAfterCreate(page);
+	const row = worktreeRows(page).first();
+
+	await openWorkspaceMenu(row);
+	await page.getByTestId("workspace-rename").click();
+
+	// The name becomes editable in place (same testid), prefilled with the current name and selected so it
+	// can be replaced immediately — no dialog, and the input carries no chrome of its own.
+	const input = row.getByTestId("workspace-name");
+	await expect(input).toBeFocused();
+	await expect(input).toHaveValue(created.name);
+	const selectedAll = await input.evaluate(
+		(el: HTMLInputElement) => el.selectionStart === 0 && el.selectionEnd === el.value.length,
+	);
+	expect(selectedAll).toBe(true);
+
+	await input.fill("Renamed Space");
+	// Clicking anywhere outside the row item saves.
+	await page.getByTestId("project-name").first().click();
+
+	// No client optimism: the label only reflects the host's `workspace.updated` echo, so a changed label
+	// already proves the round-trip. The persisted record confirms the server actually renamed.
+	await expect(row.getByTestId("workspace-name")).toHaveText("Renamed Space");
+	await expect
+		.poll(() => loadPersistedWorkspaces().find((w) => w.id === created.id)?.name)
+		.toBe("Renamed Space");
+});
+
+test("Rename with an empty value restores the previous name and sends nothing", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const created = await createWorkspaceViaDialog(page);
+	await settleAfterCreate(page);
+	const row = worktreeRows(page).first();
+
+	await openWorkspaceMenu(row);
+	await page.getByTestId("workspace-rename").click();
+	const input = row.getByTestId("workspace-name");
+	await expect(input).toBeFocused();
+	await input.fill("   "); // whitespace only → treated as empty
+	await page.getByTestId("project-name").first().click();
+
+	await expect(row.getByTestId("workspace-name")).toHaveText(created.name);
+	expect(loadPersistedWorkspaces().find((w) => w.id === created.id)?.name).toBe(created.name);
 });
 
 test("right-click opens the workspace's kebab menu without activating it", async ({ page }) => {

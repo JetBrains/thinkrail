@@ -338,7 +338,11 @@ of the host.
   (turn a plugin / source tier / `@plugins` on/off at the baseline) / **`workspace.setSkillOverride`**
   (per-workspace on/off/clear → the `Workspace`) / **`workspace.setDiffBase`** (re-point the diff target,
   `null` clears it back to the creation base — echoes the updated `Workspace` **and** broadcasts
-  `workspace.updated`, so every client converges on the push) / **`workspace.watchReady`** (await the
+  `workspace.updated`, so every client converges on the push) / **`workspace.rename`** (deliberate user
+  rename of a worktree workspace — sets the display `name`, derives its branch, and **locks** it
+  (`renamed: true`) so the auto-namer never overrides it; echoes the updated `Workspace` **and**
+  broadcasts `workspace.updated`, same convergence as `setDiffBase`; throws for a `default`/`external`
+  kind or an empty name) / **`workspace.watchReady`** (await the
   fresh watcher's conservative startup nudge before a skill-loading client captures its freshness baseline;
   `{ startupNudge }` is true unless the watcher was already known ready, so a replayed response can supply
   the client's conservative fallback when the event push was lost or startup failed; an optional

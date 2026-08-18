@@ -150,6 +150,7 @@ import {
 	listWorkspaces,
 	openExistingWorktree,
 	reclaimWorktree,
+	renameWorkspace,
 	setWorkspaceDiffBase,
 	setWorkspaceSkillOverride,
 	workspaceDiffStats,
@@ -333,6 +334,12 @@ const handlers: Record<string, Handler> = {
 			void archiveTeardown(ws);
 		}
 		return { ok: true } as const;
+	},
+	// Deliberate user rename. `renameWorkspace` self-emits `workspace.updated` (it locks `renamed: true`
+	// so the auto-namer leaves the name alone) and throws for an unknown id / non-worktree kind / empty name.
+	"workspace.rename": (params) => {
+		const p = params as { id: string; name: string };
+		return renameWorkspace(p.id, p.name, { lock: true });
 	},
 	"workspace.diffStats": (params) => workspaceDiffStats((params as { id: string }).id),
 	"workspace.openIn": (params) => {

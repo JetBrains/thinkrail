@@ -105,7 +105,7 @@ export function stagePlainFolder(): string {
 	return E2E_PLAIN_DIR;
 }
 
-function loadPersistedWorkspaces(): Workspace[] {
+export function loadPersistedWorkspaces(): Workspace[] {
 	try {
 		return JSON.parse(readFileSync(join(E2E_DATA_DIR, "workspaces.json"), "utf8")) as Workspace[];
 	} catch {

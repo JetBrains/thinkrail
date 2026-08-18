@@ -130,6 +130,9 @@ export const WS_METHODS = {
 	workspaceList: "workspace.list",
 	workspaceOpenReview: "workspace.openReview",
 	workspaceRemove: "workspace.remove",
+	// Deliberate user rename of a worktree workspace — sets the display name + derives its branch and locks
+	// it (`renamed: true`) so the auto-namer never overrides it. Broadcasts `workspace.updated`.
+	workspaceRename: "workspace.rename",
 	workspaceDiffStats: "workspace.diffStats",
 	workspaceSetSkillOverride: "workspace.setSkillOverride",
 	workspaceSetDiffBase: "workspace.setDiffBase",
@@ -339,6 +342,11 @@ export interface WsMethodMap {
 		result: OpenBranchReview | null;
 	};
 	"workspace.remove": { params: { id: string }; result: Ack };
+	// Deliberate user rename: sets the display `name` and derives the branch, locking it (`renamed: true`)
+	// so the auto-namer leaves it alone. Echoes the updated `Workspace` **and** broadcasts
+	// `workspace.updated`, so every client converges on the push (like `workspace.setDiffBase`). Throws for
+	// an unknown id, a non-worktree kind (default/external), or an empty name.
+	"workspace.rename": { params: { id: string; name: string }; result: Workspace };
 	"workspace.diffStats": { params: { id: string }; result: DiffStats };
 	"workspace.setSkillOverride": {
 		params: { id: string; name: string; override: "on" | "off" | null };

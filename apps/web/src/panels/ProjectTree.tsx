@@ -7,6 +7,7 @@ import {
 	RiGitBranchLine as GitBranch,
 	RiHome2Line as House,
 	RiMore2Line as MoreVertical,
+	RiPencilLine as Pencil,
 	RiAddLine as Plus,
 	RiFolderFill,
 	RiFolderLine,
@@ -17,7 +18,14 @@ import {
 	RiCloseLine as X,
 } from "@remixicon/react";
 import type { EditorInfo, Project, Workspace } from "@thinkrail/contracts";
-import { type MouseEvent, useCallback, useEffect, useRef, useState } from "react";
+import {
+	type KeyboardEvent,
+	type MouseEvent,
+	useCallback,
+	useEffect,
+	useRef,
+	useState,
+} from "react";
 import { Button } from "@/components/ui/button";
 import {
 	ContextMenu,
@@ -189,6 +197,17 @@ export function ProjectTree() {
 			.catch((err) => toast.error(errorText(err, "Failed to reveal workspace")));
 	};
 
+	// Event-driven like remove/reveal: fire the RPC and let the host's `workspace.updated` push drive
+	// convergence (`applyWorkspaceUpdated` replaces the record). No client-side optimism — the server owns
+	// the display name and derives the branch from it, so the echo is the source of truth.
+	const renameWorkspace = (workspace: Workspace, name: string) => {
+		void getTransport()
+			.request("workspace.rename", { id: workspace.id, name })
+			.catch((err) => toast.error(errorText(err, "Failed to rename workspace")));
+	};
+
+	// Lossless and event-driven: the host marks the stable project record closed, then project.updated
+	// removes it from every client's rail. A rejected request emits no event, so the row stays and we toast.
 	const closeProject = (project: Project) => {
 		pendingCloseFocusProjectIdRef.current = project.id;
 		void getTransport()
@@ -265,6 +284,7 @@ export function ProjectTree() {
 											onOpenIn={(editor) => openWorkspaceIn(ws, editor)}
 											onCopyPath={() => void copyText(ws.worktreePath)}
 											onReveal={() => revealWorkspace(ws)}
+											onRename={(name) => renameWorkspace(ws, name)}
 											onRemove={() => removeWorkspace(ws.id)}
 										/>
 									))}
@@ -489,6 +509,7 @@ function WorkspaceRow({
 	onOpenIn,
 	onCopyPath,
 	onReveal,
+	onRename,
 	onRemove,
 }: {
 	workspace: Workspace;
@@ -498,6 +519,7 @@ function WorkspaceRow({
 	onOpenIn: (editor: EditorInfo) => void;
 	onCopyPath: () => void;
 	onReveal: () => void;
+	onRename: (name: string) => void;
 	onRemove: () => void;
 }) {
 	const isDefault = isDefaultWorkspace(workspace);
@@ -520,6 +542,55 @@ function WorkspaceRow({
 		setMenuOpen(true);
 	};
 	const [confirmOpen, setConfirmOpen] = useState(false);
+
+	// Inline rename is client-owned *editing* state; the name itself stays server-owned (the row re-renders
+	// from `workspace.name` the moment editing ends, and a successful rename converges via the
+	// `workspace.updated` push). Only worktree workspaces are renamable — default/external throw server-side.
+	const nameRef = useRef<HTMLInputElement>(null);
+	const [editing, setEditing] = useState(false);
+	// Set when Escape cancels, so the ensuing blur restores the previous name instead of saving.
+	const cancelNextBlurRef = useRef(false);
+	// Set when the menu closes *into* rename, so `onCloseAutoFocus` skips returning focus to the kebab —
+	// otherwise Radix's focus-return fires after our rAF and immediately blurs (thus commits) the input.
+	const enterRenameRef = useRef(false);
+
+	// Enter edit mode: focus + select-all so the current name can be replaced immediately (the input is
+	// uncontrolled, seeded via `defaultValue`). Focus in a rAF so it lands after Radix returns focus to the
+	// (now-closed) menu trigger.
+	useEffect(() => {
+		if (!editing) return;
+		const el = nameRef.current;
+		if (!el) return;
+		const raf = requestAnimationFrame(() => {
+			el.focus();
+			el.select();
+		});
+		return () => cancelAnimationFrame(raf);
+	}, [editing]);
+
+	// Blur = clicking outside the editable name (including outside the row) commits. Empty/whitespace or an
+	// unchanged value sends nothing — the server-owned name restored by the `!editing` render stands.
+	const commitRename = () => {
+		if (cancelNextBlurRef.current) {
+			cancelNextBlurRef.current = false;
+			setEditing(false);
+			return;
+		}
+		const next = (nameRef.current?.value ?? "").trim();
+		setEditing(false);
+		if (next && next !== workspace.name) onRename(next);
+	};
+
+	const onNameKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+		if (event.key === "Enter") {
+			event.preventDefault(); // single line: commit rather than insert a newline
+			nameRef.current?.blur();
+		} else if (event.key === "Escape") {
+			event.preventDefault();
+			cancelNextBlurRef.current = true;
+			nameRef.current?.blur();
+		}
+	};
 	return (
 		<li>
 			<fieldset
@@ -541,12 +612,34 @@ function WorkspaceRow({
 						className={`${isTwoLine ? "mt-2 " : ""}size-14 shrink-0 ${isActive ? "text-primary" : "text-text-muted"}`}
 					/>
 					<span className="flex min-w-0 flex-1 flex-col">
-						<span
-							data-testid="workspace-name"
-							className={`truncate tr-text-ui leading-tight ${isActive ? "text-primary" : "text-text-muted"}`}
-						>
-							{workspace.name}
-						</span>
+						{editing ? (
+							// A bare, chrome-less input so the row keeps the label's exact typography token, color, and
+							// metrics in place: no border/background/ring/padding/extra container (`border-0
+							// bg-transparent p-0 outline-none`) — only the caret/selection signals editability. Seeded
+							// uncontrolled via `defaultValue`, focused + selected by the ref effect. Clicks stopPropagation
+							// so the caret lands instead of the row selecting.
+							<input
+								ref={nameRef}
+								data-testid="workspace-name"
+								data-editing
+								type="text"
+								spellCheck={false}
+								aria-label="Workspace name"
+								defaultValue={workspace.name}
+								onMouseDown={(event) => event.stopPropagation()}
+								onClick={(event) => event.stopPropagation()}
+								onKeyDown={onNameKeyDown}
+								onBlur={commitRename}
+								className={`w-full min-w-0 truncate border-0 bg-transparent p-0 tr-text-ui leading-tight outline-none ${isActive ? "text-primary" : "text-text-muted"}`}
+							/>
+						) : (
+							<span
+								data-testid="workspace-name"
+								className={`truncate tr-text-ui leading-tight ${isActive ? "text-primary" : "text-text-muted"}`}
+							>
+								{workspace.name}
+							</span>
+						)}
 						{isTwoLine && (
 							<span
 								data-testid="workspace-branch"
@@ -565,7 +658,15 @@ function WorkspaceRow({
 					>
 						<MoreVertical className="size-14" />
 					</DropdownMenuTrigger>
-					<DropdownMenuContent align="end" data-testid="workspace-actions">
+					<DropdownMenuContent
+						align="end"
+						data-testid="workspace-actions"
+						onCloseAutoFocus={(event) => {
+							if (!enterRenameRef.current) return;
+							enterRenameRef.current = false;
+							event.preventDefault(); // let the inline input keep focus instead of the kebab
+						}}
+					>
 						{editors.length > 0 && (
 							<DropdownMenuSub>
 								<DropdownMenuSubTrigger data-testid="workspace-open-in">
@@ -584,6 +685,18 @@ function WorkspaceRow({
 									))}
 								</DropdownMenuSubContent>
 							</DropdownMenuSub>
+						)}
+						{!isDefault && !isExternal && (
+							<DropdownMenuItem
+								data-testid="workspace-rename"
+								onSelect={() => {
+									enterRenameRef.current = true;
+									setEditing(true);
+								}}
+							>
+								<Pencil />
+								Rename
+							</DropdownMenuItem>
 						)}
 						<DropdownMenuItem data-testid="workspace-copy-path" onSelect={onCopyPath}>
 							<Copy />

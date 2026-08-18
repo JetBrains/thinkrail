@@ -53,12 +53,23 @@ treatment.
   workspace row's hover-revealed **kebab menu** (`MoreVertical`, controlled `DropdownMenu`) — right-clicking
   anywhere on the row opens that exact menu at the kebab without selecting/activating the workspace, while
   the kebab remains the touch and keyboard-focus path. Its actions are a `DropdownMenuSub` **"Open in"**
-  (rendered only when at least one editor was detected), **Copy path**, **Reveal in file manager**, and
+  (rendered only when at least one editor was detected), (worktrees only) **Rename**, **Copy path**,
+  **Reveal in file manager**, and
   (worktrees only) **Remove workspace** — worded **Remove from ThinkRail** on an external row, whose
   confirm promises the checkout and its branch stay untouched. "Open in" comes from the
   host-wide `editor.list`;
   GUI entries call `workspace.openIn`, while terminal-kind Vim activates the workspace and runs through
   `addTerminal`'s one-shot `initialCommand`. Copy writes `worktreePath`; Reveal calls `workspace.reveal`.
+  **Rename** (worktrees only — hidden for default/external, which the server refuses) edits the name
+  **inline in the row**, not in a dialog: it swaps the `workspace-name` label for a bare, chrome-less
+  `<input>` in the same slot — same typography token / semantic color / row height, no
+  border/background/focus-ring/padding/extra container (`border-0 bg-transparent p-0 outline-none`), only
+  the caret/selection signals editability. Seeded uncontrolled from the current name and selected on
+  entry. Blur (clicking outside the input) commits; Enter commits, Escape cancels; an empty/whitespace or
+  unchanged value sends nothing and the server-owned name returns with the non-editing re-render. A
+  committed change fires `workspace.rename` and converges via the host's `workspace.updated` push (no
+  client-side optimism, same discipline as Remove); a rejected request toasts and the row keeps the
+  server's name.
   Remove is styled destructive and opens a centered `ConfirmDialog`; confirming fires
   `workspace.remove` and lets every client react to the host's `workspace.removed` push via the store's
   `applyWorkspaceRemoved`; a rejected request (no event will come) surfaces an error toast, leaving the row
