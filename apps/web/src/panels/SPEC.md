@@ -102,7 +102,11 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   `MonacoDiff`), `TerminalsPanel` + lazy `TerminalInstance`. The Monaco plumbing both editors share —
   worker wiring, the local loader, the token-driven `thinkrail` theme + the `[data-theme]` re-theme
   observer — lives once in `monacoSetup.ts`; the slim header view-toggle segment (`Preview|Source`,
-  `Split|Inline`, `List|Tree`) is the shared `ToggleSegment`. The **file-style tree row** (chevron/spacer
+  `Split|Inline`, `List|Tree`) is the shared `ToggleSegment` — whose active segment reuses the tab
+  grammar's `control-bg-selected` (below), never a container surface, so the selected fill survives the
+  high-contrast themes where `container-elevated-bg` collapses onto the toolbar surface.
+  The `ChangesPanel` secondary toolbar paints **no surface of its own**: like the right-panel tab strip
+  it shows the panel's `container-sidebar-bg`, so the two chrome rows read as one continuous surface. The **file-style tree row** (chevron/spacer
   lead, folder/file icon, truncated label, trailing slot; `min-w-0` so a row can shrink when it shares a
   flex line with a trailing control) is the shared **`TreeRow`**, used by both
   `FileTree` and `ChangesTree` so the two trees stay identical. Both trees **compact a single-directory
@@ -380,7 +384,10 @@ a project picker, the prompt hero, and the reused
 
 - **One selected-tab grammar across the workspace:** `CenterTabs`, `RightPanel`, and `TerminalsPanel`
   all use the same persistent state: `control-bg-selected` behind the whole selectable tab,
-  `text-default`, and a short **2px `primary` marker on the content edge**. Inactive tabs stay
+  `text-default`, and a short **2px `primary` marker on the content edge**. The shared `ToggleSegment`
+  (List|Tree, Split|Inline, Preview|Source) borrows the same `control-bg-selected` fill + `text-default`
+  for its active segment (no content-edge marker — a slim toggle, not a tab), so "selected" reads the
+  same everywhere and never derives a parallel surface token. Inactive tabs stay
   transparent with muted text; hover uses `control-bg-hovered`; keyboard focus keeps its separate focus
   ring. The marker is a shape cue, not merely a text-colour change, so selection remains obvious when a
   high-contrast theme makes neighbouring surfaces equal. Compound center/terminal tabs apply the state to
