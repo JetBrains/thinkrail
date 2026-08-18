@@ -26,8 +26,9 @@ Exposed through explicit subpath exports, not a barrel.
   probing; reviewed version bounds and the global opaque PI-extension path; `add pi` / `remove pi` /
   `login` / `update --install` actions; the per-OS official install plan; and the transactional exact cleanup
   of ThinkRail's legacy `models.json` fields.
-- **Allowed deps:** Bun/Node runtime (`@types/bun`); `contracts` **types** (`JbcentralInstall`, the wire shape
-  `jbcentralInstall` returns — kept in the wire so the server can carry it to the card verbatim).
+- **Allowed deps:** Bun/Node runtime (`@types/bun`); `proper-lockfile` for bounded cross-process ownership of
+  legacy `models.json` edits; `contracts` **types** (`JbcentralInstall`, the wire shape `jbcentralInstall`
+  returns — kept in the wire so the server can carry it to the card verbatim).
 - **Forbidden:** importing `server` / `web` / any `pi` package; being imported by `web` (it carries
   Bun/Node code that must not reach the browser bundle).
 
@@ -78,9 +79,11 @@ Exposed through explicit subpath exports, not a barrel.
   succeeds and removes a provider's fields only when they jointly match ThinkRail's exact former pair:
   `apiKey === "wire-proxy"` and the complete loopback URL grammar ThinkRail emitted for that provider
   (`anthropic` and `openai` have distinct fixed suffixes). A generic loopback `/wire/…` URL, a partial match,
-  or any unrelated field is preserved. The edit is compare-and-swap guarded, atomically published with the
-  original permissions, and leaves the existing `.bak` untouched. Repeated concurrent changes return a typed
-  conflict outcome rather than overwriting the file. The transaction can restore only the exact
+  or any unrelated field is preserved. Cleanup and rollback take the same bounded `proper-lockfile`
+  interprocess lock on `models.json` before reading, validating, and publishing; the in-process queue is only
+  an additional ordering guard. Under that writer lock, the edit is compare-and-swap guarded, atomically
+  published with the original permissions, and leaves the existing `.bak` untouched. Repeated uncoordinated
+  changes still return a typed conflict outcome rather than overwriting the file. The transaction can restore only the exact
   fields it removed, and only while the file still matches its committed state; it never restores a whole
   backup.
 

@@ -68,7 +68,9 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     answer-question, compaction, review sends via the manager surface, one-shot assist calls, session creation
     and disk attachment, model list/default/refresh/clamp/set, provider status/login/logout, and Central
     actions. Reconciliation takes exclusive admission; a request can run wholly before or wholly after the
-    boundary, never across a mixed generation.
+    boundary, never across a mixed generation. **`abortSession` is the deliberate control-plane exception:**
+    it can only cancel an already-running old-generation turn, so it bypasses closed runtime admission and
+    remains available while reconciliation drains. It cannot start work or select/mutate a runtime.
 
     A candidate is built from public PI inputs (`ModelRuntime.create` plus the public resource-loader/session-
     services APIs), with the reviewed Central artifact path supplied as an external extension when desired.
@@ -109,8 +111,9 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     `SessionSummary.lastSettlement` for reconnect after Pi removed a failed attempt from its rebuilt
     context; a new `agent_start` exposes explicit `null` (no current terminal) so an older persisted failure
     cannot reappear mid-run, while disk sessions remain transcript-authoritative.
-    All manager entrypoints participate in runtime admission (including read-like operations whose result
-    selects later work). `prompt`/`steer`/`followUp` (with images) / `abort` /
+    All manager entrypoints that can start work or consume/mutate runtime state participate in runtime
+    admission (including read-like operations whose result selects later work); `abort` is the cancellation-only
+    exception above. `prompt`/`steer`/`followUp` (with images) /
     — **both `promptSession` and `followUpSession` resolve the delivery mode against the session's
     LIVE `isStreaming`, never the caller's belief about it**: `prompt()` throws mid-turn (so it falls
     back to `steer`), and pi's `followUp()` only *enqueues* into a queue that a run already in flight

@@ -3,6 +3,7 @@ import { open, readFile, rename, stat, unlink } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join } from "node:path";
 import type { JbcentralInstall } from "@thinkrail/contracts";
+import { lock } from "proper-lockfile";
 
 export type ParseEnv = Record<string, string | undefined>;
 
@@ -344,7 +345,10 @@ export function launchJbcentralLogin(
 
 const LEGACY_API_KEY = "wire-proxy";
 const MAX_MODELS_WRITE_ATTEMPTS = 5;
+const MODELS_LOCK_STALE_MS = 10_000;
 const modelsFileLocks = new Map<string, Promise<void>>();
+
+class ModelsFileLockConflictError extends Error {}
 
 export interface LegacyModelsDependencies {
 	env?: ParseEnv;
@@ -417,7 +421,7 @@ function parseModelsFile(content: string): JsonRecord | null {
 
 function matchesLegacyBaseUrl(providerId: LegacyProviderId, value: unknown): value is string {
 	if (typeof value !== "string") return false;
-	const route = providerId === "anthropic" ? "claude-code/anthropic" : "pi/openai/v1";
+	const route = providerId === "anthropic" ? "pi/anthropic" : "pi/openai/v1";
 	const match = new RegExp(
 		`^http://127\\.0\\.0\\.1:(\\d{1,5})/wire/[^/?#\\s]+/${route}$`,
 		"u",
@@ -502,7 +506,9 @@ async function atomicWriteIfUnchanged(
 	path: string,
 	expected: ModelsFileSnapshot,
 	content: string,
+	assertLock: () => void,
 ): Promise<"committed" | "conflict"> {
+	assertLock();
 	const current = await readModelsSnapshot(path);
 	if (!current || current.content !== expected.content || current.mode !== expected.mode)
 		return "conflict";
@@ -528,6 +534,7 @@ async function atomicWriteIfUnchanged(
 		) {
 			return "conflict";
 		}
+		assertLock();
 		await rename(tempPath, path);
 		await syncParentDirectory(path);
 		return "committed";
@@ -541,21 +548,47 @@ async function atomicWriteIfUnchanged(
 	}
 }
 
-async function withModelsFileLock<T>(path: string, operation: () => Promise<T>): Promise<T> {
+async function withModelsFileLock<T>(
+	path: string,
+	operation: (assertLock: () => void) => Promise<T>,
+): Promise<T> {
 	const previous = modelsFileLocks.get(path) ?? Promise.resolve();
-	let release: (() => void) | undefined;
+	let releaseInProcess: (() => void) | undefined;
 	const gate = new Promise<void>((resolve) => {
-		release = resolve;
+		releaseInProcess = resolve;
 	});
 	const tail = previous.then(() => gate);
 	modelsFileLocks.set(path, tail);
 	await previous;
+
+	let compromised = false;
+	let releaseInterprocess: (() => Promise<void>) | undefined;
 	try {
-		return await operation();
+		releaseInterprocess = await lock(path, {
+			realpath: false,
+			stale: MODELS_LOCK_STALE_MS,
+			update: MODELS_LOCK_STALE_MS / 4,
+			retries: { retries: 20, factor: 1, minTimeout: 25, maxTimeout: 100, randomize: true },
+			onCompromised: () => {
+				compromised = true;
+			},
+		});
+		const assertLock = (): void => {
+			if (compromised) throw new ModelsFileLockConflictError();
+		};
+		assertLock();
+		return await operation(assertLock);
 	} finally {
-		release?.();
+		await releaseInterprocess?.().catch(() => undefined);
+		releaseInProcess?.();
 		if (modelsFileLocks.get(path) === tail) modelsFileLocks.delete(path);
 	}
+}
+
+function modelsWriteFailure(error: unknown): "conflict" | "io-error" {
+	return error instanceof ModelsFileLockConflictError || errorCode(error) === "ELOCKED"
+		? "conflict"
+		: "io-error";
 }
 
 /**
@@ -567,39 +600,49 @@ export async function cleanupLegacyJbcentralModels(
 	deps: LegacyModelsDependencies = {},
 ): Promise<LegacyCleanupResult> {
 	const path = jbcentralModelsPath(deps.env ?? process.env);
-	return withModelsFileLock(path, async () => {
-		for (let attempt = 1; attempt <= MAX_MODELS_WRITE_ATTEMPTS; attempt += 1) {
-			let snapshot: ModelsFileSnapshot | null;
-			let config: JsonRecord | null;
-			try {
-				snapshot = await readModelsSnapshot(path);
-				if (!snapshot) return { outcome: "unchanged" };
-				config = parseModelsFile(snapshot.content);
-			} catch (error) {
-				return {
-					outcome: "failed",
-					reason: error instanceof SyntaxError ? "invalid-json" : "io-error",
-				};
-			}
-			if (!config) return { outcome: "unchanged" };
-			const changes = legacyChanges(config);
-			if (changes.length === 0) return { outcome: "unchanged" };
-			applyLegacyCleanup(config, changes);
-			const content = `${JSON.stringify(config, null, 2)}\n`;
+	// Skipping an absent file is safe even if one appears immediately afterward: no stale snapshot is
+	// published. Avoid creating the agent directory merely to own a migration lock.
+	if (!existsSync(path)) return { outcome: "unchanged" };
+	try {
+		return await withModelsFileLock(path, async (assertLock) => {
+			for (let attempt = 1; attempt <= MAX_MODELS_WRITE_ATTEMPTS; attempt += 1) {
+				let snapshot: ModelsFileSnapshot | null;
+				let config: JsonRecord | null;
+				try {
+					assertLock();
+					snapshot = await readModelsSnapshot(path);
+					if (!snapshot) return { outcome: "unchanged" };
+					config = parseModelsFile(snapshot.content);
+				} catch (error) {
+					return {
+						outcome: "failed",
+						reason: error instanceof SyntaxError ? "invalid-json" : modelsWriteFailure(error),
+					};
+				}
+				if (!config) return { outcome: "unchanged" };
+				const changes = legacyChanges(config);
+				if (changes.length === 0) return { outcome: "unchanged" };
+				applyLegacyCleanup(config, changes);
+				const content = `${JSON.stringify(config, null, 2)}\n`;
 
-			try {
-				await deps.beforeCommit?.({ operation: "cleanup", attempt, path });
-				if ((await atomicWriteIfUnchanged(path, snapshot, content)) === "conflict") continue;
-			} catch {
-				return { outcome: "failed", reason: "io-error" };
-			}
+				try {
+					await deps.beforeCommit?.({ operation: "cleanup", attempt, path });
+					if ((await atomicWriteIfUnchanged(path, snapshot, content, assertLock)) === "conflict") {
+						continue;
+					}
+				} catch (error) {
+					return { outcome: "failed", reason: modelsWriteFailure(error) };
+				}
 
-			const receipt: LegacyCleanupReceipt = { changedProviderCount: changes.length };
-			legacyReceipts.set(receipt, { path, changes });
-			return { outcome: "cleaned", receipt };
-		}
-		return { outcome: "failed", reason: "conflict" };
-	});
+				const receipt: LegacyCleanupReceipt = { changedProviderCount: changes.length };
+				legacyReceipts.set(receipt, { path, changes });
+				return { outcome: "cleaned", receipt };
+			}
+			return { outcome: "failed", reason: "conflict" };
+		});
+	} catch (error) {
+		return { outcome: "failed", reason: modelsWriteFailure(error) };
+	}
 }
 
 /** Restore only this invocation's removed pairs when both fields still have the post-cleanup state. */
@@ -609,55 +652,67 @@ export async function rollbackLegacyJbcentralCleanup(
 ): Promise<LegacyRollbackResult> {
 	const internal = legacyReceipts.get(receipt);
 	if (!internal) return { outcome: "failed", reason: "invalid-receipt" };
+	if (!existsSync(internal.path)) {
+		legacyReceipts.delete(receipt);
+		return { outcome: "unchanged", skippedProviderCount: internal.changes.length };
+	}
 
-	return withModelsFileLock(internal.path, async () => {
-		for (let attempt = 1; attempt <= MAX_MODELS_WRITE_ATTEMPTS; attempt += 1) {
-			let snapshot: ModelsFileSnapshot | null;
-			let config: JsonRecord | null;
-			try {
-				snapshot = await readModelsSnapshot(internal.path);
-				if (!snapshot) {
+	try {
+		return await withModelsFileLock(internal.path, async (assertLock) => {
+			for (let attempt = 1; attempt <= MAX_MODELS_WRITE_ATTEMPTS; attempt += 1) {
+				let snapshot: ModelsFileSnapshot | null;
+				let config: JsonRecord | null;
+				try {
+					assertLock();
+					snapshot = await readModelsSnapshot(internal.path);
+					if (!snapshot) {
+						legacyReceipts.delete(receipt);
+						return { outcome: "unchanged", skippedProviderCount: internal.changes.length };
+					}
+					config = parseModelsFile(snapshot.content);
+				} catch (error) {
+					return {
+						outcome: "failed",
+						reason: error instanceof SyntaxError ? "invalid-json" : modelsWriteFailure(error),
+					};
+				}
+				if (!config) {
 					legacyReceipts.delete(receipt);
 					return { outcome: "unchanged", skippedProviderCount: internal.changes.length };
 				}
-				config = parseModelsFile(snapshot.content);
-			} catch (error) {
-				return {
-					outcome: "failed",
-					reason: error instanceof SyntaxError ? "invalid-json" : "io-error",
-				};
-			}
-			if (!config) {
-				legacyReceipts.delete(receipt);
-				return { outcome: "unchanged", skippedProviderCount: internal.changes.length };
-			}
-			const counts = applyLegacyRollback(config, internal.changes);
-			if (counts.restored === 0) {
-				legacyReceipts.delete(receipt);
-				return { outcome: "unchanged", skippedProviderCount: counts.skipped };
-			}
-			const content = `${JSON.stringify(config, null, 2)}\n`;
-
-			try {
-				await deps.beforeCommit?.({ operation: "rollback", attempt, path: internal.path });
-				if ((await atomicWriteIfUnchanged(internal.path, snapshot, content)) === "conflict") {
-					continue;
+				const counts = applyLegacyRollback(config, internal.changes);
+				if (counts.restored === 0) {
+					legacyReceipts.delete(receipt);
+					return { outcome: "unchanged", skippedProviderCount: counts.skipped };
 				}
-			} catch {
-				return { outcome: "failed", reason: "io-error" };
-			}
+				const content = `${JSON.stringify(config, null, 2)}\n`;
 
-			legacyReceipts.delete(receipt);
-			return counts.skipped === 0
-				? { outcome: "rolled-back", restoredProviderCount: counts.restored }
-				: {
-						outcome: "partially-rolled-back",
-						restoredProviderCount: counts.restored,
-						skippedProviderCount: counts.skipped,
-					};
-		}
-		return { outcome: "failed", reason: "conflict" };
-	});
+				try {
+					await deps.beforeCommit?.({ operation: "rollback", attempt, path: internal.path });
+					if (
+						(await atomicWriteIfUnchanged(internal.path, snapshot, content, assertLock)) ===
+						"conflict"
+					) {
+						continue;
+					}
+				} catch (error) {
+					return { outcome: "failed", reason: modelsWriteFailure(error) };
+				}
+
+				legacyReceipts.delete(receipt);
+				return counts.skipped === 0
+					? { outcome: "rolled-back", restoredProviderCount: counts.restored }
+					: {
+							outcome: "partially-rolled-back",
+							restoredProviderCount: counts.restored,
+							skippedProviderCount: counts.skipped,
+						};
+			}
+			return { outcome: "failed", reason: "conflict" };
+		});
+	} catch (error) {
+		return { outcome: "failed", reason: modelsWriteFailure(error) };
+	}
 }
 
 /** The official per-OS Central install plan shown by the guided UI. */

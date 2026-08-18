@@ -81,8 +81,10 @@ ourselves and never surface a credential value over the wire.
     reach the reviewed version; all actions use the resolved absolute executable.
 
     One process-wide single-flight serializes connect/disconnect/update/reconciliation across browser clients.
-    An action that begins while work is active closes admission, lets already accepted automatic work finish at
-    `agent_settled`, reports `pending`, then applies in the background. If that background completion is
+    An action that begins while work is active closes admission to new runtime work, lets already accepted
+    automatic work finish at `agent_settled`, reports `pending`, then applies in the background. The
+    cancellation-only `session.abort` control path remains available during that drain, so a hung provider or
+    tool call cannot make reconciliation permanently uninterruptible. If that background completion is
     model-blocked, the shared host status retains only the affected session ids so every client can link the
     user to a safe resolution. Opposite concurrent actions do not run side effects in parallel. A recovery
     admission seal survives failed repair attempts and opens only after a coherent generation is applied.

@@ -308,7 +308,7 @@ describe("native Central auth transaction", () => {
 	test("rolls back only this connect's legacy fields when candidate loading fails", async () => {
 		const modelsPath = join(agentDir, "models.json");
 		const legacyProvider = {
-			baseUrl: "http://127.0.0.1:19516/wire/test-token/claude-code/anthropic",
+			baseUrl: "http://127.0.0.1:19516/wire/test-token/pi/anthropic",
 			apiKey: "wire-proxy",
 			keep: "untouched",
 		};

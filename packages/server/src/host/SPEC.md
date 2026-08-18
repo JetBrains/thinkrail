@@ -15,7 +15,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
 
 ## Boundary
 
-- **Owns:** `server.ts` (`createServer` → `Bun.serve` with `/health`, `/ws` upgrade, a
+- **Owns:** `server.ts` (async `createServer` first awaits Central runtime initialization, then creates
+  `Bun.serve` with `/health`, `/ws` upgrade, a
   **`GET /files/<workspaceId>/<relpath>`** route streaming a worktree file's raw bytes (via `fs`'s
   `resolveWorktreeFile` — path-contained; bad id/escape/miss → 404; Bun infers the content-type) so the
   markdown viewer's relative `<img>`s resolve, static serving with
@@ -92,9 +93,9 @@ channel fan-out, and the process-boot wrapper both launchers share.
   appended to `<dataDir>/logs/crash.log` and echoed to stderr, then `exit(1)`: in-process pi means such a
   fault is the whole host's, and a launcher started without a terminal otherwise loses its only trace.
   Never a recovery, and never installed under `NODE_ENV=test` — a unit-test process reports its own
-  faults); `boot.ts` (`bootHost` → install that report first, resolve the login-shell PATH, initialize
-  Central's excluded/applied runtime generation before any model/session read, pick the port per `portMode`
-  (`"exact"` vs `"free"`), start `createServer`, and
+  faults); `boot.ts` (`bootHost` → install that report first, resolve the login-shell PATH, pre-warm the same
+  Central initialization single-flight before choosing a port, then await `createServer` (which enforces the
+  bootstrap for every embedder), and
   install SIGINT/SIGTERM handlers that **settle before exit**: `settleSessionsForShutdown()` — abort
   streaming sessions and wait bounded, so pi persists their "Operation aborted" tool results and
   transcripts land paired — concurrently with an awaited `shutdownAnalytics()` (bounded queue drain;

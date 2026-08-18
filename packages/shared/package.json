@@ -15,10 +15,12 @@
 		"test": "bun test"
 	},
 	"dependencies": {
-		"@thinkrail/contracts": "workspace:*"
+		"@thinkrail/contracts": "workspace:*",
+		"proper-lockfile": "catalog:"
 	},
 	"devDependencies": {
 		"@types/bun": "catalog:",
+		"@types/proper-lockfile": "catalog:",
 		"typescript": "catalog:"
 	}
 }

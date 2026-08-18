@@ -19,10 +19,11 @@ and runs the `pi` agent in-process via `createAgentSession`. Launched in-process
 - **Owns:** the HTTP+WS server, static serving, the WS dispatch registry, server-side feature services
   (project/workspace/git/fs/terminal + the in-process `AgentSession` manager), and `~/.thinkrail`
   persistence.
-- **Public surface:** `createServer(options) → RunningServer` (`{ port, stop }`) and `bootHost(options)
-  → BootedHost` (the process-boot wrapper: resolves the login-shell PATH, initializes the safe native-Central
-  runtime generation, picks the port per `portMode`, and installs SIGINT/SIGTERM graceful-shutdown handlers
-  around `createServer`), both re-exported from
+- **Public surface:** `createServer(options) → Promise<RunningServer>` (`{ port, stop }`) — the public
+  factory awaits the safe native-Central runtime generation before binding a socket or exposing handlers, so
+  every embedder gets the same bootstrap invariant — and `bootHost(options) → BootedHost` (the process-boot
+  wrapper: resolves the login-shell PATH, pre-warms the same single-flight before choosing a port, awaits
+  `createServer`, and installs SIGINT/SIGTERM graceful-shutdown handlers), both re-exported from
   `host/`; plus `registerBundledRuntime` (+ its types, re-exported from `agent/`) — the compiled-binary
   seam by which a launcher that cannot path-load the bundled pi extensions (no `node_modules` inside a
   `bun build --compile` binary) injects them as value-imported factories + a staged skills dir, injects

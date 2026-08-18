@@ -7,6 +7,7 @@ import { createFauxCore, fauxAssistantMessage } from "@earendil-works/pi-ai/prov
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
 import { defaultSessionDirFor, writeFixtureSession } from "../history/testFixtures";
 import {
+	abortSession,
 	createSession,
 	disposeAllSessions,
 	getSessionMessages,
@@ -15,6 +16,7 @@ import {
 	reconcilePiRuntimeGeneration,
 	resetPiRuntimeReconciliationForTests,
 	setSessionManagerFactory,
+	setSessionPublisher,
 	toWireModel,
 	usePiRuntime,
 } from "./agentSessionManager";
@@ -76,6 +78,7 @@ beforeEach(async () => {
 
 afterEach(() => {
 	disposeAllSessions();
+	setSessionPublisher(() => {});
 	resetPiRuntimeReconciliationForTests();
 	configurePiRuntimeFactory();
 	configurePiRuntime(null);
@@ -213,6 +216,35 @@ describe("PI runtime generation reconciliation", () => {
 		expect((await reconciliation).outcome).toBe("applied");
 		expect(factoryCalls).toBe(1);
 	});
+
+	test("keeps cancellation available while reconciliation drains an accepted turn", async () => {
+		const session = await liveSession();
+		faux.appendResponses([fauxAssistantMessage("x".repeat(100_000))]);
+		const candidate = await runtimeWithFaux();
+		configurePiRuntimeFactory(async () => candidate);
+
+		let reportStarted: (() => void) | undefined;
+		const started = new Promise<void>((resolve) => {
+			reportStarted = resolve;
+		});
+		setSessionPublisher(({ sessionId, event }) => {
+			if (sessionId === session.sessionId && event.type === "agent_start") reportStarted?.();
+		});
+		const turn = promptSession(session.sessionId, "abort this accepted turn");
+		await started;
+		let reportPending: (() => void) | undefined;
+		const pending = new Promise<void>((resolve) => {
+			reportPending = resolve;
+		});
+		const reconciliation = reconcilePiRuntimeGeneration([], {
+			onPending: () => reportPending?.(),
+		});
+		await pending;
+
+		await abortSession(session.sessionId);
+		await turn;
+		expect((await reconciliation).outcome).toBe("applied");
+	}, 5_000);
 
 	test("rejects every new runtime consumer while a candidate boundary is held", async () => {
 		let releaseFactory: (() => void) | undefined;

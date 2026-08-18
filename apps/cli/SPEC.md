@@ -18,13 +18,13 @@ its URL. It is a thin launcher — all engine logic lives in `packages/server`.
 1. Parse argv + env into options (`src/args.ts`, a pure function); `--help` prints usage and exits.
 2. `bootHost()` first resolves the shell environment (a GUI- or `npx`-launched process must still find
    `git`, Central, and user tools on PATH; ThinkRail embeds PI and never requires a `pi` executable), then
-   initializes the safe native-Central runtime generation before any `AgentSession` or model/auth read
-   (sessions are created lazily, on a WS request).
+   awaits the public `createServer()` factory, which initializes the safe native-Central runtime generation
+   before binding or permitting any `AgentSession` or model/auth read.
 3. Resolve the static dir (`THINKRAIL_STATIC_DIR`, else the built web app shipped beside the bin) and
    warn if it's missing.
 4. Resolve a free listen port at or above the requested one (`findFreePort` — `Bun.serve` won't report a
-   busy port), then `createServer({ port, host, staticDir, projectPath? })` to embed the host in this Bun
-   process.
+   busy port), then await `createServer({ port, host, staticDir, projectPath? })` to embed the host in this
+   Bun process.
 5. Resolve the actual port, log the URL, then open the browser at it (cross-platform: `open` / `start` /
    `xdg-open`, best-effort), unless `--no-open`.
 6. SIGINT / SIGTERM → `server.stop()` (disposes agent sessions + PTYs, closes the socket), then exit.

@@ -25,7 +25,12 @@ import {
 	shutdownAnalytics,
 	track,
 } from "../analytics";
-import { cancelAllLogins, setJbcentralAppliedPublisher, setLoginPublisher } from "../auth";
+import {
+	cancelAllLogins,
+	initializeJbcentralRuntime,
+	setJbcentralAppliedPublisher,
+	setLoginPublisher,
+} from "../auth";
 import { resolveWorktreeFile } from "../fs";
 import {
 	getProjects,
@@ -112,8 +117,12 @@ const CLIENT_REPLAY_RETENTION_MS = 60_000;
 /** Ids arrive from the wire, so an `ack`/`resume` list is filtered rather than trusted to hold strings. */
 const isRequestId = (id: unknown): id is string => typeof id === "string";
 
-/** Boot the engine host: Bun.serve HTTP+WS, /health, optional static SPA, and the server.welcome push. */
-export function createServer(options: CreateServerOptions = {}): RunningServer {
+/** Boot the engine host only after the safe Central runtime generation is established. */
+export async function createServer(options: CreateServerOptions = {}): Promise<RunningServer> {
+	// This belongs to the public factory, not only the CLI wrapper: every embedder must exclude an
+	// incompatible global Central artifact before Bun exposes a handler that can read PI state.
+	await initializeJbcentralRuntime();
+
 	const {
 		port = 24242,
 		host = "localhost",

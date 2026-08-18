@@ -12,6 +12,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { lock } from "proper-lockfile";
 import {
 	cleanupLegacyJbcentralModels,
 	inspectJbcentral,
@@ -313,7 +314,7 @@ describe("legacy models cleanup", () => {
 			customTopLevel: { keep: true },
 			providers: {
 				anthropic: {
-					baseUrl: "http://127.0.0.1:19516/wire/test-token/claude-code/anthropic",
+					baseUrl: "http://127.0.0.1:19516/wire/test-token/pi/anthropic",
 					apiKey: "wire-proxy",
 					models: [{ id: "keep-model" }],
 				},
@@ -346,12 +347,12 @@ describe("legacy models cleanup", () => {
 
 	test("requires the exact key and provider-specific complete URL grammar", async () => {
 		const candidates = [
-			{ baseUrl: "http://127.0.0.1:19516/wire/token/pi/anthropic", apiKey: "wire-proxy" },
-			{ baseUrl: "http://localhost:19516/wire/token/claude-code/anthropic", apiKey: "wire-proxy" },
-			{ baseUrl: "http://127.0.0.1:19516/wire/token/claude-code/anthropic/", apiKey: "wire-proxy" },
-			{ baseUrl: "http://127.0.0.1:65536/wire/token/claude-code/anthropic", apiKey: "wire-proxy" },
+			{ baseUrl: "http://127.0.0.1:19516/wire/token/claude-code/anthropic", apiKey: "wire-proxy" },
+			{ baseUrl: "http://localhost:19516/wire/token/pi/anthropic", apiKey: "wire-proxy" },
+			{ baseUrl: "http://127.0.0.1:19516/wire/token/pi/anthropic/", apiKey: "wire-proxy" },
+			{ baseUrl: "http://127.0.0.1:65536/wire/token/pi/anthropic", apiKey: "wire-proxy" },
 			{ baseUrl: "http://127.0.0.1:19516/wire/token/pi/openai/v1", apiKey: "wire-proxy" },
-			{ baseUrl: "http://127.0.0.1:19516/wire/token/claude-code/anthropic", apiKey: "user-key" },
+			{ baseUrl: "http://127.0.0.1:19516/wire/token/pi/anthropic", apiKey: "user-key" },
 			{ baseUrl: "https://api.anthropic.test", apiKey: "wire-proxy" },
 		];
 		for (const candidate of candidates) {
@@ -368,7 +369,7 @@ describe("legacy models cleanup", () => {
 		writeModels({
 			providers: {
 				anthropic: {
-					baseUrl: "http://127.0.0.1:19516/wire/token/claude-code/anthropic",
+					baseUrl: "http://127.0.0.1:19516/wire/token/pi/anthropic",
 					apiKey: "wire-proxy",
 				},
 			},
@@ -396,7 +397,7 @@ describe("legacy models cleanup", () => {
 		writeModels({
 			providers: {
 				anthropic: {
-					baseUrl: "http://127.0.0.1:19516/wire/token/claude-code/anthropic",
+					baseUrl: "http://127.0.0.1:19516/wire/token/pi/anthropic",
 					apiKey: "wire-proxy",
 				},
 			},
@@ -419,7 +420,7 @@ describe("legacy models cleanup", () => {
 		writeModels({
 			providers: {
 				anthropic: {
-					baseUrl: "http://127.0.0.1:19516/wire/token/claude-code/anthropic",
+					baseUrl: "http://127.0.0.1:19516/wire/token/pi/anthropic",
 					apiKey: "wire-proxy",
 					keep: true,
 				},
@@ -443,7 +444,7 @@ describe("legacy models cleanup", () => {
 			providers: {
 				anthropic: {
 					keep: true,
-					baseUrl: "http://127.0.0.1:19516/wire/token/claude-code/anthropic",
+					baseUrl: "http://127.0.0.1:19516/wire/token/pi/anthropic",
 					apiKey: "wire-proxy",
 				},
 				openai: {
@@ -463,7 +464,7 @@ describe("legacy models cleanup", () => {
 		writeModels({
 			providers: {
 				anthropic: {
-					baseUrl: "http://127.0.0.1:19516/wire/token/claude-code/anthropic",
+					baseUrl: "http://127.0.0.1:19516/wire/token/pi/anthropic",
 					apiKey: "wire-proxy",
 				},
 				openai: {
@@ -502,11 +503,32 @@ describe("legacy models cleanup", () => {
 		expect(readFileSync(modelsPath, "utf8")).toBe("not-json\n");
 	});
 
+	test("waits for the shared interprocess writer lock before reading and publishing", async () => {
+		writeModels({
+			providers: {
+				anthropic: {
+					baseUrl: "http://127.0.0.1:19516/wire/token/pi/anthropic",
+					apiKey: "wire-proxy",
+				},
+			},
+		});
+		const release = await lock(modelsPath, { realpath: false });
+		let settled = false;
+		const cleanup = cleanupLegacyJbcentralModels({ env: env() }).then((result) => {
+			settled = true;
+			return result;
+		});
+		await new Promise((resolve) => setTimeout(resolve, 50));
+		expect(settled).toBe(false);
+		await release();
+		expect((await cleanup).outcome).toBe("cleaned");
+	});
+
 	test("serializes concurrent cleanup calls", async () => {
 		writeModels({
 			providers: {
 				anthropic: {
-					baseUrl: "http://127.0.0.1:19516/wire/token/claude-code/anthropic",
+					baseUrl: "http://127.0.0.1:19516/wire/token/pi/anthropic",
 					apiKey: "wire-proxy",
 				},
 			},

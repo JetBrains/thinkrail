@@ -45,15 +45,16 @@ export async function bootHost(options: BootHostOptions): Promise<BootedHost> {
 	// First thing: from here on a fatal fault leaves a report behind (in-process pi means any such fault is
 	// the whole host's, and this is the only trace it gets).
 	installCrashLog(options.appVersion);
-	// Must precede any AgentSession creation; createServer makes sessions lazily, so here is early enough.
 	resolveShellEnv();
+	// Pre-warm before selecting a free port so the version probe cannot leave a long bind race. The public
+	// createServer factory awaits the same single-flight, which keeps this invariant unavoidable for embedders.
 	await initializeJbcentralRuntime();
 
 	const requested = options.port;
 	const port =
 		options.portMode === "free" ? await findFreePort(requested, options.host) : requested;
 
-	const server = createServer({
+	const server = await createServer({
 		port,
 		host: options.host,
 		...(options.staticDir ? { staticDir: options.staticDir } : {}),

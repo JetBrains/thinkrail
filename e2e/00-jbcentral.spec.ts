@@ -179,7 +179,7 @@ test("cleans only exact historical legacy fields and preserves unrelated model c
 			...baselineProviders,
 			anthropic: {
 				...baselineProviders.anthropic,
-				baseUrl: "http://127.0.0.1:4567/wire/e2e-token/claude-code/anthropic",
+				baseUrl: "http://127.0.0.1:4567/wire/e2e-token/pi/anthropic",
 				apiKey: "wire-proxy",
 				keep: "anthropic-field",
 			},
@@ -190,7 +190,7 @@ test("cleans only exact historical legacy fields and preserves unrelated model c
 				keep: "openai-field",
 			},
 			lookalike: {
-				baseUrl: "http://127.0.0.1:4567/wire/e2e-token/pi/anthropic",
+				baseUrl: "http://127.0.0.1:4567/wire/e2e-token/claude-code/anthropic",
 				apiKey: "wire-proxy",
 			},
 		},
@@ -216,7 +216,7 @@ test("cleans only exact historical legacy fields and preserves unrelated model c
 			anthropic: expectedAnthropic,
 			openai: expectedOpenai,
 			lookalike: {
-				baseUrl: "http://127.0.0.1:4567/wire/e2e-token/pi/anthropic",
+				baseUrl: "http://127.0.0.1:4567/wire/e2e-token/claude-code/anthropic",
 				apiKey: "wire-proxy",
 			},
 		},

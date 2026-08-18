@@ -998,8 +998,9 @@ export function compactSession(sessionId: string, instructions?: string): Promis
 	});
 }
 
+/** Cancellation-only control path: remains available while reconciliation drains old-generation work. */
 export function abortSession(sessionId: string): Promise<void> {
-	return withPiRuntimeAdmission(() => mustGet(sessionId).abort());
+	return mustGet(sessionId).abort();
 }
 
 export function setSessionModel(sessionId: string, model: WireModel): Promise<void> {
