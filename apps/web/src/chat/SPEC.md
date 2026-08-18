@@ -30,7 +30,13 @@ model can't group. The pure **`deriveRows(turns, toolResults, isStreaming, isSpe
 blocks in order into rows; `ChatTurnView` dispatches on row kind:
 
 - `user` / `system` / `retry` / `compaction` — 1:1 renderers (`CompactionTurn` is a labelled rule that
-  opens pi's summary on click, so a reloaded long chat explains its gap instead of starting mid-conversation). A user message that IS a review context package
+  opens pi's summary on click, so a reloaded long chat explains its gap instead of starting mid-conversation).
+  A user message that is Pi's canonical expanded skill block (`<skill name="…" location="…">`) renders
+  as one **collapsed skill-invocation card** rather than exposing the full `SKILL.md`: the skill name is
+  always visible, any request supplied after `/skill:<name>` stays visible as ordinary user text beneath
+  it, and disclosure reveals the exact persisted instructions as Markdown. Parsing comes from `lib`'s
+  anchored Pi-format mirror (browser code cannot value-import Pi); the disclosure rides the shared fold
+  cache, so a manual choice survives virtualization. A user message that IS a review context package
   (`reviewPackage.ts` recognizes the `<review …>` header + `<comment …>` items the server's
   `packageRender` emits — the parser is the read half of that format, pinned in unit tests against the
   renderer's verbatim output) renders as a **compact card**: the one-sentence
