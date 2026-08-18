@@ -194,7 +194,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 				// The toolbar holds the scope selector and the target-branch picker as well as the List|Tree
 				// segments, so it is named for what it is, not for the one control it used to hold.
 				aria-label="Changes scope and view"
-				className="flex h-panel-header-row shrink-0 items-center gap-4 overflow-clip border-border-default border-b bg-container-header-bg px-8"
+				className="flex h-panel-header-row shrink-0 items-center gap-4 overflow-clip border-border-default border-b bg-container-header-bg px-12"
 			>
 				<div className="mr-auto flex min-w-0 items-center gap-4">
 					{/* Keyed ON PURPOSE (do not "clean up") by the menu's full identity — workspace **and** target ref:
@@ -235,7 +235,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 					onClick={() => setChangesView("tree")}
 				/>
 			</div>
-			<div className="min-h-0 flex-1 overflow-auto">
+			<div className="min-h-0 flex-1 overflow-auto p-12">
 				{status === null && error !== null ? (
 					<div data-testid="changes-error" className="flex flex-col items-start gap-4 px-8 py-4">
 						<p className="tr-text-metadata text-feedback-error">
@@ -282,7 +282,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 												// No background of its own: the WRAPPER paints the row's hover/selected band, which has
 												// to span the trailing ⌄ slot too. Two painters would make the row read as cut off at
 												// this button's edge (and hide that the wrapper stopped painting).
-												className="flex min-w-0 flex-1 items-center gap-8 px-8 py-4 text-left tr-text-ui"
+												className="flex min-w-0 flex-1 items-center gap-8 px-4 py-4 text-left tr-text-ui"
 											>
 												{/* The full relative path: a muted directory prefix, a bright basename — and the dir
 												    yields **completely** before the basename gives up a pixel, because the name is what

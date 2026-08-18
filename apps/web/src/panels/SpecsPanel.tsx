@@ -82,7 +82,7 @@ export function SpecsPanel({
 	return (
 		<div className="flex min-h-0 flex-col">
 			{onRefresh ? (
-				<div className="flex h-28 shrink-0 items-center justify-end border-border-muted border-b px-4">
+				<div className="flex h-panel-header-row shrink-0 items-center justify-end border-border-muted border-b px-12">
 					<button
 						type="button"
 						data-testid="specs-refresh"
@@ -141,7 +141,7 @@ function SpecNodeRow({
 		<li>
 			<div
 				className={cn(
-					"group flex h-28 min-w-0 items-stretch rounded-[var(--radius-sm)] transition-colors",
+					"group flex h-28 min-w-0 items-stretch rounded-[var(--radius-sm)] px-4 transition-colors",
 					isActive
 						? "bg-primary-subtle ring-1 ring-primary-muted ring-inset"
 						: "hover:bg-control-bg-hovered",
@@ -175,7 +175,7 @@ function SpecNodeRow({
 					title={`${node.title}\n${node.id} · ${node.type}`}
 					onClick={() => void openFileInTab(workspaceId, node.path, "preview")}
 					onDoubleClick={() => void openFileInTab(workspaceId, node.path, "keep")}
-					className="flex h-28 min-w-0 flex-1 items-center gap-4 rounded-[var(--radius-sm)] pr-4 text-left outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+					className="flex h-28 min-w-0 flex-1 items-center gap-4 rounded-[var(--radius-sm)] text-left outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
 				>
 					<DocumentIcon
 						className={cn(

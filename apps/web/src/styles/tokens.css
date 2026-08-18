@@ -30,7 +30,7 @@
 
 	/* Shared chrome geometry — a panel header ROW HEIGHT, not layout rhythm, so it lives here and not on
 	 * the spacing scale. Exposed to Tailwind as `--spacing-panel-header-row` in `index.css`. */
-	--panel-header-row-height: 28px;
+	--panel-header-row-height: 32px;
 }
 
 /*

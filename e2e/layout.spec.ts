@@ -103,7 +103,7 @@ test("workbench strips and feature toolbars keep one-row geometry with ARIA tabs
 	const centerStrip = page.getByTestId("center-tab-strip");
 	const rightStrip = page.getByTestId("right-tab-strip");
 	for (const strip of [centerStrip, rightStrip]) {
-		await expect(strip).toHaveCSS("height", "28px");
+		await expect(strip).toHaveCSS("height", "32px");
 		await expect(strip.getByRole("tablist")).toHaveCount(1);
 		const active = strip.locator('[role="tab"][aria-selected="true"]');
 		await expect(active).toHaveCount(1);
@@ -119,9 +119,9 @@ test("workbench strips and feature toolbars keep one-row geometry with ARIA tabs
 	await expect(centerScroller).toHaveCSS("overflow-y", "hidden");
 
 	await page.getByTestId("tab-changes").click();
-	await expect(page.getByTestId("chat-toolbar")).toHaveCSS("height", "28px");
+	await expect(page.getByTestId("chat-toolbar")).toHaveCSS("height", "32px");
 	await expect(page.getByTestId("chat-toolbar")).toHaveCSS("overflow-x", "clip");
-	await expect(page.getByTestId("changes-view-toggle")).toHaveCSS("height", "28px");
+	await expect(page.getByTestId("changes-view-toggle")).toHaveCSS("height", "32px");
 });
 
 test("ARIA tabs use roving keyboard focus, recover after close, and expose keyboard separators", async ({

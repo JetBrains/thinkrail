@@ -69,7 +69,7 @@ export function FilePane({ tab }: { tab: FileTab }) {
 					data-testid="file-review-toolbar"
 					role="toolbar"
 					aria-label="Review actions"
-					className="flex h-32 shrink-0 items-center justify-end gap-4 border-border-default border-b bg-container-header-bg px-8"
+					className="flex h-32 shrink-0 items-center justify-end gap-4 border-border-default border-b bg-container-header-bg px-12"
 				>
 					<SendReviewButton workspaceId={tab.workspaceId} path={tab.path} />
 				</div>
@@ -86,7 +86,7 @@ export function FilePane({ tab }: { tab: FileTab }) {
 				role="toolbar"
 				aria-label="Markdown view mode"
 				// `justify-end`: header actions are right-aligned, matching the DiffPane / Changes toolbars.
-				className="flex h-32 shrink-0 items-center justify-end gap-4 border-border-default border-b bg-container-header-bg px-8"
+				className="flex h-32 shrink-0 items-center justify-end gap-4 border-border-default border-b bg-container-header-bg px-12"
 			>
 				<SendReviewButton workspaceId={tab.workspaceId} path={tab.path} />
 				<ToggleSegment
