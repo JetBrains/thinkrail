@@ -146,18 +146,18 @@ of the host.
   flow updates: `authUrl` / `deviceCode` / `select` / `prompt` / `progress` / `success` / `error`, which
   **accumulate** client-side, never a credential value), **`LoginPush`** (the `provider.login` frame,
   `{ loginId, providerId, frame }`) and **`LoginReply`** (`{ loginId, value }` — the browser's answer to a
-  `select`/`prompt`); the JetBrains AI wire (protocol v41) — **`JbcentralStatus`**, nested on
-  `ProviderStatusReport`, is the
-  closed host-authored lifecycle: `absent`, `outdated`, `supported`, `configured`, `unreviewed`,
-  `malformed-version`, `probe-failed`, `configuring`, `pending`, `blocked`, or `recovery-required`; only parseable safe
-  versions, closed probe/failure reasons, and the current action appear where relevant. **`JbcentralInstall`**
-  carries the host's per-OS `{platform,shell,command}` official install plan. **`JbcentralActionResult`** is
-  the closed `applied` / `pending` / `blocked` / `failed` union; failure reasons distinguish installation,
-  version probe/support, Central action/postcondition, exact legacy cleanup, candidate/reattachment, and
-  recovery classes without carrying messages. A blocked result/status may carry only `affectedSessionIds`
-  so every client can direct the user to those existing chats; it has no free-form child/loader message. Raw stdout/stderr, generated extension
-  content or paths, proxy URLs/secrets, diagnostics, and raw PI models
-  are structurally absent; server and web map codes to their own generic copy);
+  `select`/`prompt`); the JetBrains AI wire (protocol v42) — **`JbcentralStatus`**, nested on
+  `ProviderStatusReport`, is the closed host-authored lifecycle: `absent`, `outdated`, `supported`,
+  `configured`, `unreviewed`, `malformed-version`, `probe-failed`, `configuring`, `restart-required`, or
+  `load-failed`; only parseable safe versions, closed probe/failure reasons, and the current action appear
+  where relevant. `restart-required` means Central's global artifact state differs from the state applied to
+  this process at boot; no live runtime reconciliation is attempted. **`JbcentralInstall`** carries the
+  host's per-OS `{platform,shell,command}` official install plan. **`JbcentralActionResult`** is the closed
+  `applied` / `restart-required` / `failed` union; failure reasons distinguish installation, version
+  probe/support, Central action, and artifact postcondition without carrying messages. There are no pending,
+  blocked-session, recovery, migration, candidate, or reattachment outcomes. Raw stdout/stderr, generated
+  extension content or paths, proxy URLs/secrets, diagnostics, affected-session ids, and raw PI models are
+  structurally absent; server and web map codes to their own generic copy);
   the **theme/config selection** — **`ThemeId`** is an open string on the wire, because the host persists
   an opaque selection while the independently shipped web client owns the available manifest catalog;
   **`AppConfig`** (`{ theme, analyticsEnabled, terminalReplayKb, layout }` — an extensible bag; `layout` is the

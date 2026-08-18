@@ -24,10 +24,9 @@ Exposed through explicit subpath exports, not a barrel.
   `@thinkrail/shared/codedError` → `CodedError` + `errorCodeOf()`;
   `@thinkrail/shared/jbcentral` → the native Central CLI adapter: absolute executable/version/status
   probing; reviewed version bounds and the global opaque PI-extension path; `add pi` / `remove pi` /
-  `login` / `update --install` actions; the per-OS official install plan; and the transactional exact cleanup
-  of ThinkRail's legacy `models.json` fields.
-- **Allowed deps:** Bun/Node runtime (`@types/bun`); `proper-lockfile` for bounded cross-process ownership of
-  legacy `models.json` edits; `contracts` **types** (`JbcentralInstall`, the wire shape `jbcentralInstall`
+  `login` / `update --install` actions; and the per-OS official install plan. It never edits PI model or
+  credential configuration.
+- **Allowed deps:** Bun/Node runtime (`@types/bun`); `contracts` **types** (`JbcentralInstall`, the wire shape `jbcentralInstall`
   returns — kept in the wire so the server can carry it to the card verbatim).
 - **Forbidden:** importing `server` / `web` / any `pi` package; being imported by `web` (it carries
   Bun/Node code that must not reach the browser bundle).
@@ -75,22 +74,12 @@ Exposed through explicit subpath exports, not a barrel.
   stdout/stderr is ignored. No child output is logged or returned, and only exit success plus safe
   postconditions map to a closed adapter outcome.
 
-  The same module owns migration of the old ThinkRail writer. Cleanup runs only after native `add pi`
-  succeeds and removes a provider's fields only when they jointly match ThinkRail's exact former pair:
-  `apiKey === "wire-proxy"` and the complete loopback URL grammar ThinkRail emitted for that provider
-  (`anthropic` and `openai` have distinct fixed suffixes). A generic loopback `/wire/…` URL, a partial match,
-  or any unrelated field is preserved. Cleanup and rollback take a bounded `proper-lockfile` interprocess
-  lock on `models.json` before reading, validating, and publishing; the in-process queue is an additional
-  ordering guard for cooperating writers, not the CAS itself. Publication also claims the current target by
-  atomically moving it aside, validates the claimed bytes, and installs the fully synced replacement with a
-  no-replace hard link. An uncoordinated writer that wins the target path is therefore preserved and causes a
-  retry or typed conflict instead of being overwritten after validation. The original permissions are
-  retained and the existing `.bak` remains untouched. The transaction can restore only the exact fields it
-  removed, and only while the file still matches its committed state; it never restores a whole backup.
+  The adapter deliberately has no migration path for the previous unpublished integration: it never reads or
+  edits `models.json`, `auth.json`, backups, or any unrelated PI state.
 
   **Install guidance is per-OS and single-sourced:** `jbcentralInstall(platform)` returns the official host-OS
   plan carried to the card; a remote browser never guesses its own OS. **The server's `auth` module is the sole
-  caller** and composes these host-local actions with `agent`'s runtime-generation coordinator.
+  caller** and composes these host-local actions with the Central state applied to the process at boot.
 
 ## Get right (shellEnv)
 
@@ -114,8 +103,8 @@ Exposed through explicit subpath exports, not a barrel.
   embedded PI runtime, including when `PI_CODING_AGENT_DIR` points elsewhere and no `pi` command exists.
 - **Never return or throw raw child/loader data.** Adapter errors are closed codes with no free-form child
   text. The caller may report generic guidance only.
-- **Legacy migration is field-transactional.** Preserve unrelated providers/fields and the existing `.bak`;
-  on later activation failure, conditionally restore only this invocation's removed fields.
+- **No legacy migration.** This is the first supported native integration; the adapter never touches prior
+  provider overrides or maintains backup/rollback machinery.
 
 ## Get right (freePort)
 

@@ -274,12 +274,12 @@ a project picker, the prompt hero, and the reused
   keeping ThinkRail's embedded PI — a state machine over the typed `JbcentralStatus` +
   `provider.jbcentral*`: absent (official host-OS install guidance + Recheck), outdated (guided Update),
   unreviewed/invalid version (safe guidance, no native action), sign-in required (launch Central sign-in +
-  Retry), ready (Connect), configuring (the initiating request is in flight), pending (global configuration
-  changed but runtime reconciliation is waiting for accepted work to settle), connected (Disconnect),
-  model-blocked (change models or delete the named sessions without revealing provider config), and generic
-  error (Retry/Recheck). Pending actions that later block retain those affected ids in host status, so links
-  work across clients rather than existing only in the initiating response. Update/connect/disconnect state
-  is host-authoritative and shared across clients; every
+  Retry), ready (Connect), configuring (a synchronous Central action is in flight), connected (Disconnect),
+  restart-required (the global configuration changed successfully and the process must restart to apply it),
+  load-failed (Central was excluded at boot, other providers remain usable, and the user may Disconnect or
+  regenerate then restart), and generic action error (Retry/Recheck). There is no pending reconciliation,
+  affected-chat list, blocked state, or recovery mode. Update/connect/disconnect state is host-authoritative
+  and shared across clients; every
   mutation re-reads `provider.status`. Copy never promises only Claude/GPT, never asks for standalone PI,
   never renders child output/diagnostics/artifact content/paths/proxy data/secrets/raw models, and maps only
   closed reason codes to ThinkRail-authored text. **`GithubSettings`** (the "Local GitHub" block — `github.authStatus()`

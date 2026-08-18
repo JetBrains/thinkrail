@@ -15,7 +15,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
 
 ## Boundary
 
-- **Owns:** `server.ts` (async `createServer` first awaits Central runtime initialization, then creates
+- **Owns:** `server.ts` (async `createServer` first initializes the process's immutable Central-aware runtime,
+  falling back to plain PI on a closed Central load failure, then creates
   `Bun.serve` with `/health`, `/ws` upgrade, a
   **`GET /files/<workspaceId>/<relpath>`** route streaming a worktree file's raw bytes (via `fs`'s
   `resolveWorktreeFile` — path-contained; bad id/escape/miss → 404; Bun infers the content-type) so the
@@ -85,7 +86,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
   login-publisher tee's terminal `success` frames with the method (`oauth`/`api-key`) looked up from
   `loginAnalytics.ts` — the loginId→method map the `provider.loginStart` handler records (and
   `provider.loginCancel` clears; an unknown loginId tracks nothing, fails closed) — +
-  `provider.jbcentralConnect`→`applied` (central; pending/blocked/error never count) — per
+  a successful `provider.jbcentralConnect`→`restart-required` (failed actions never count) — per
   `submodule-server-analytics`,
   feature modules never track), and
   `stop()` → agent-session cleanup, then `persistTerminalSessions()` **before** `closeAllTerminals()`, then
@@ -94,7 +95,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
   fault is the whole host's, and a launcher started without a terminal otherwise loses its only trace.
   Never a recovery, and never installed under `NODE_ENV=test` — a unit-test process reports its own
   faults); `boot.ts` (`bootHost` → install that report first, resolve the login-shell PATH, pre-warm the same
-  Central initialization single-flight before choosing a port, then await `createServer` (which enforces the
+  Central-aware runtime initialization before choosing a port, then await `createServer` (which enforces the
   bootstrap for every embedder), and
   install SIGINT/SIGTERM handlers that **settle before exit**: `settleSessionsForShutdown()` — abort
   streaming sessions and wait bounded, so pi persists their "Operation aborted" tool results and

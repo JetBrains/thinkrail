@@ -23,12 +23,12 @@ ourselves and never surface a credential value over the wire.
   - `providerStatus` — `getProviderStatus()` → the wire `ProviderStatusReport`: per-provider `configured`
     (pi's `hasAuth`-family truth, so env-var auth counts) + auth `kind` (oauth / api-key / env /
     other) + display name + the in-app-login capability flags **`canOAuth`/`canApiKey`**,
-    configured-first. It **revalidates on every read through `agent`'s admission coordinator**: the current
-    generation refreshes local config/auth availability with network disabled, so an external PI login is
-    visible without mutating a runtime concurrently with cutover. Central is not inferred from model URLs:
-    status comes from `shared/jbcentral`'s executable/version/artifact postconditions plus the coordinator's
-    active-or-pending generation state. An external global add/remove discovered here schedules the same
-    serialized reconciliation path as an in-app action; until it applies, the report is truthfully pending.
+    configured-first. It **revalidates on every read through `agent`'s single runtime facade**: local
+    config/auth availability refreshes with network disabled, so an external PI login becomes visible without
+    reconstructing the runtime. Central is not inferred from model URLs: status combines
+    `shared/jbcentral`'s executable/version/artifact postconditions with the Central state applied at host
+    boot. If the global artifact later differs, status reports `restart-required`; it never mutates the live
+    runtime or starts background reconciliation.
     Assembly is a pure `buildProviderReport(sources)` over a narrow sources slice, unit-tested with
     fixture data.
     - **OAuth-capable ids are first-class rows.** The id universe unions model-catalog providers,
@@ -69,43 +69,42 @@ ourselves and never surface a credential value over the wire.
       dialog flow subsumes it and also serves multi-prompt providers.)
     - `setLoginPublisher(fn)` — the server→client push seam (defaults to a no-op).
   - `jbcentral` — the in-app **JetBrains AI** native flow. It composes `shared/jbcentral`'s host-local adapter
-    with the narrow `agent` runtime-generation coordinator; it never reaches manager internals. Connect is a
-    staged transaction: compatible Central → exclusive admission and an `agent_settled` drain → `add pi`
-    success and artifact postcondition → exact legacy cleanup → candidate generation validation →
-    cutover/reattachment, all before admission reopens. A later failure restores only
-    this invocation's cleanup fields when its compare-and-swap still holds, retains the old generation, and
-    does not run `remove pi` as compensation unless ownership could be proven. Disconnect serializes
-    `remove pi`, validates that every live session's exact persisted `{provider,id}` survives, and blocks or
-    restores Central configuration rather than permit PI's fallback. Login launches `central login` only
-    after the same exact-version preflight; update invokes `central update --install` so an older release can
-    reach the reviewed version; all actions use the resolved absolute executable.
+    with `agent`'s one-time runtime initialization seam; it never reaches manager internals. Host boot probes
+    Central before model work and asks `agent` to load the configured opaque artifact into the process's
+    single runtime. If that extension load fails, boot retries without it, leaves other providers usable, and
+    records a closed `load-failed` status; a failure of the plain runtime still fails startup.
 
-    One process-wide single-flight serializes connect/disconnect/update/reconciliation across browser clients.
-    An action that begins while work is active closes admission to new runtime work, lets already accepted
-    automatic work finish at `agent_settled`, reports `pending`, then applies in the background. The
-    cancellation-only `session.abort` control path remains available during that drain, so a hung provider or
-    tool call cannot make reconciliation permanently uninterruptible. If that background completion is
-    model-blocked, the shared host status retains only the affected session ids so every client can link the
-    user to a safe resolution. Opposite concurrent actions do not run side effects in parallel. A recovery
-    admission seal survives failed repair attempts and opens only after a coherent generation is applied.
-    Status and action results use only the closed contracts taxonomy—never child output, extension contents,
-    diagnostics, proxy data, raw models, or arbitrary thrown messages.
+    Connect performs the exact-version preflight, runs `central add pi`, validates artifact existence, and
+    returns `restart-required`. Disconnect runs `central remove pi`, validates artifact absence, and likewise
+    requires restart when the active process was booted with Central. Neither action changes the live runtime,
+    drains work, reattaches sessions, preflights live models, compensates, rolls back, or migrates prior
+    configuration. A Central-only transcript that is unavailable after restart fails exact model resolution;
+    PI fallback is never allowed. Login launches `central login` after the same version preflight. Update
+    invokes `central update --install`; if an artifact existed before update, it then runs `central add pi` to
+    regenerate it with the newly reviewed version and requires restart. Every action uses the resolved absolute
+    executable.
+
+    One process-wide single-flight serializes connect/disconnect/update across browser clients. Actions are
+    awaited directly—there is no background pending state. Artifact drift is reported as `restart-required`
+    and never reconciled inside the process. Status and action results use only the closed contracts
+    taxonomy—never child output, extension contents, diagnostics, proxy data, raw models, or arbitrary thrown
+    messages.
 - **Public surface (barrel):** `getProviderStatus`, `buildProviderReport` (+ `ProviderStatusSources`);
   `startLogin`, `resolveLogin`, `cancelLogin`, `cancelAllLogins`, `logoutProvider`,
   `setLoginPublisher`; `initializeJbcentralRuntime`, `getJbcentralStatus`, `connectJbcentral`,
-  `disconnectJbcentral`, `updateJbcentral`, `jbcentralLogin`, and the applied-transition publisher seam.
+  `disconnectJbcentral`, `updateJbcentral`, `jbcentralLogin`, and the successful-action publisher seam.
 - **Allowed deps:** `contracts` (wire types); `shared/jbcentral`; the **`agent` barrel** for the shared
-  runtime/auth facade and narrow generation coordinator; `@earendil-works/pi-ai` (auth interaction **types** only).
-- **Forbidden:** reaching into `agent` internals (runtime/auth and reconciliation only through its barrel); importing `host` or
+  runtime/auth facade and one-time runtime initialization; `@earendil-works/pi-ai` (auth interaction **types** only).
+- **Forbidden:** reaching into `agent` internals (runtime/auth and initialization only through its barrel); importing `host` or
   any other sibling; deep-importing pi's TUI (`modes/interactive/*`) for its private provider constants;
   ever putting a credential **value** on the wire.
 
 ## Get right
 
 - **`loginStart` must not `await` the flow** — return the handle, run `login()` detached.
-- **All runtime/auth reads and writes take coordinator admission.** Pi's login/logout synchronizes its own
-  provider locally; status still refreshes the admitted current generation so external credential changes
-  become visible. Central artifact drift never mutates the live runtime directly—it schedules reconciliation.
+- **All runtime/auth reads and writes use the process's single runtime facade.** Pi's login/logout synchronizes
+  its own provider locally; status refreshes that same runtime so external credential changes become visible.
+  Central artifact drift never mutates the live runtime—it requires restart.
 - **API keys persist only through `login(id, "api_key", interaction)`** — `setRuntimeApiKey` is a
   session-lifetime overlay and would silently drop the key on host restart. The interaction is the real
   dialog bridge, never a canned auto-answer (a canned one can only serve single-prompt providers).
@@ -116,5 +115,4 @@ ourselves and never surface a credential value over the wire.
 ## Consumed by
 
 `host` (wires all `provider.*` handlers + the `provider.login` channel publish); `agent` does **not** depend
-on `auth` (the edge is one-way: `auth` → `agent` through admitted runtime callbacks and the generation
-boundary).
+on `auth` (the edge is one-way: `auth` → `agent` through the single runtime facade and initialization seam).

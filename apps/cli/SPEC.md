@@ -18,8 +18,9 @@ its URL. It is a thin launcher — all engine logic lives in `packages/server`.
 1. Parse argv + env into options (`src/args.ts`, a pure function); `--help` prints usage and exits.
 2. `bootHost()` first resolves the shell environment (a GUI- or `npx`-launched process must still find
    `git`, Central, and user tools on PATH; ThinkRail embeds PI and never requires a `pi` executable), then
-   awaits the public `createServer()` factory, which initializes the safe native-Central runtime generation
-   before binding or permitting any `AgentSession` or model/auth read.
+   awaits the public `createServer()` factory, which initializes one Central-aware process runtime (or a
+   plain fallback after a closed Central load failure) before binding or permitting any `AgentSession` or
+   model/auth read.
 3. Resolve the static dir (`THINKRAIL_STATIC_DIR`, else the built web app shipped beside the bin) and
    warn if it's missing.
 4. Resolve a free listen port at or above the requested one (`findFreePort` — `Bun.serve` won't report a
