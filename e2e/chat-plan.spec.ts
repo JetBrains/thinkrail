@@ -2,8 +2,8 @@ import { expect, test } from "@playwright/test";
 import { openWorkspaceChat } from "./fixtures/app";
 
 // The chat's TODO plan surfaced inline: a strip in the chat header opens a popup over the chat with the
-// plan (which lives only in the chat — there is no right-panel Todo tab). No-agent — it starts a chat (no
-// prompt) and drives the user's editing path; the agent maintaining the plan is the @agent spec
+// plan (there is no dedicated Todo side tool; Open the plan page creates a live center document). No-agent —
+// it starts a chat (no prompt) and drives the user's editing path; the agent maintaining the plan is the @agent spec
 // (todos-plan.live.spec.ts).
 test("the chat plan opens as a popup from the header strip and takes a user item", async ({
 	page,

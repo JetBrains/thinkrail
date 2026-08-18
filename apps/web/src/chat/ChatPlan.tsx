@@ -6,8 +6,9 @@ import { glanceIcon, TodoAddRow, TodoRows } from "./TodoList";
 import type { ChatTodos } from "./useChatTodos";
 
 // The chat's TODO plan surfaced inline (SPEC §Chat TODO plan): a strip in the chat header (progress + what's
-// happening now) opens a popup over the chat with the plan — which lives only in the chat (there is no
-// right-panel Todo tab). The `Popover` is composed in `ChatView`, anchored to the **chat header** (not
+// happening now) opens a popup over the chat with the plan — there is no dedicated Todo side tool;
+// “Open as Markdown” creates a registered center document instead. The `Popover` is composed in
+// `ChatView`, anchored to the **chat header** (not
 // the strip), so the popup's
 // left edge sits at the chat's left edge and its top hangs flush under the header (see ChatView). These
 // two pieces are the trigger's contents and the popup body.

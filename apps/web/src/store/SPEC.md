@@ -10,8 +10,8 @@ tags: [v1]
 
 ## Responsibility
 
-The single Zustand store: connection status, welcome, projects/workspaces, the **workspace-scoped**
-editor tabs + terminals (switching workspaces swaps both), and a **per-session chat runtime** for each live
+The single Zustand store: connection status, projects/workspaces, accepted host-synchronized workbench
+snapshots plus device-local attention, terminal catalogs, and one **per-session chat runtime** for every live
 `AgentSession` (so several chats stream concurrently).
 
 ## Boundary
@@ -27,7 +27,8 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   removes the row when `closed === true`. Both actions reconcile stale navigation too: only when this
   client's selected project or active workspace belongs to a record no longer open, they clear the active
   workspace and select the first remaining project's Home (or `null` when none remain), while deliberately
-  retaining every workspace/tab/terminal/session map for lossless reopen. Other-client opens never steal
+  retaining every workspace layout/attention/resource-render/terminal/session map for lossless reopen.
+  Other-client opens never steal
   navigation, and a background close never moves it. All project response call sites use the same updater,
   so the open and recent copies cannot drift. The two explicit navigation transitions remain:
   **`selectProject(projectId)`** enters that Project Home (`selectedProjectId` set + `activeWorkspaceId`
@@ -45,59 +46,93 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   host dropped** (`diffBase` re-pointed back to the creation base, the last `skillOverrides` entry removed),
   leaving the client labelling and keying reads off a value the host no longer has; a project never fetched or an id absent from its list is a **no-op** — the next
   `workspace.list` reconciles; **`applyWorkspaceRemoved(projectId, id)`** is the **entire** removal
-  reaction (`removeWorkspace` drops the row + `clearWorkspaceTabs` drops its tabs/terminals/chat runtimes,
+  reaction (`removeWorkspace` drops the row + `clearWorkspaceState` drops its
+  layout/attention/terminal maps and chat runtimes,
   and **if it was this client's active workspace** → `selectProject(projectId)` (shell falls back to its
   owning Project Home) + a neutral toast that reads right for both the initiator and an observer); the
   primitive **`removeWorkspace(projectId, id)`** just drops the row (unknown project/id is a no-op);
-  `tabsByWorkspace` /
-  `activeTabByWorkspace` (`openTab`/`closeTab`/`setActiveTab`/`clearWorkspaceTabs`, plus
-  **`setFileTabView(id, view)`** — a markdown `FileTab`'s `view` (`"rendered"`|`"source"`) lives on the tab
-  so the rendered↔source choice survives tab switches; absent = rendered);
-  **`previewTabByWorkspace`** — the id of the workspace's **preview tab**, the one reusable slot a light
-  open lands in (rendered italic; the gesture map per surface is `panels/SPEC.md`'s). It is keyed like
-  `activeTabByWorkspace` *on purpose*: "at most one preview tab per workspace" is then structural rather
-  than a rule each writer must remember, and the `EditorTab` union stays pure data (no `preview?` flag to
-  sweep-and-clear on every open). Both openers carry a **`TabIntent`** (`"preview"` | `"keep"`):
-  **`openTab(tab, intent)`** focuses an already-open id rather than duplicating it, and a `preview` open
-  **replaces the slot's tab at its index** so the strip never reshuffles under the cursor, while a `keep`
-  appends and releases the slot if it pointed there; **`setActiveTab(id, intent?)`** activates, and
-  `"keep"` also promotes — **one-way**, so a plain activation (or a `keep` aimed at some other tab) never
-  demotes a kept tab back to preview. The slot is released by `closeTab`, `clearWorkspaceTabs`, and
-  `applyWorkspaceRemoved` (via `omitKey`), so a stale id can never outlive its tab. Alongside it,
-  **`navTickByWorkspace`** counts **center-area navigations** per workspace — rendered by nothing, it exists
-  so a slow read can tell it was overtaken. A click is instant and an `fs.readFile` is not, so
-  `panels/openTabs.ts` records this count when it starts a read and **drops a `preview` that lands after the
-  count has moved** (otherwise the file steals focus back from wherever the user went, and claims the preview
-  slot from it) — and it takes that count at **request** time (`noteNavigation`, as the read starts), so a
-  browse is ordered by when the user asked for it, not by when the host happened to answer. It is bumped
-  *inside* every action that moves the active tab — `openDoc`, `setActiveTab`,
-  `openChatSession`, `reopenChat`, `deleteChat`,
-  `requestHistoryOpen`, `hydrateSession` **only when it actually takes focus** (a background
-  auto-restore must not supersede a read the user is waiting on), and `closeTab` /
-  `closeChatToHistory` **only when the closed tab was the active one** (closing some other tab in the strip
-  leaves the user where they were; counting it would discard a browse in flight and the clicked file would
-  never open) — plus **`noteNavigation(workspaceId)`**
-  for an intent whose focus change hasn't reached the store yet (starting a chat, whose tab appears only once
-  `session.create` returns). **`openTab` is the one deliberate exception and must stay uncounted**: it *is*
-  the read completion being ordered, so counting it would make an earlier read's own commit look like user
-  navigation and invalidate the later request — two browse clicks in a row would leave the FIRST click's file
-  open. (Pinned by "every center navigation bumps the workspace's nav tick, and none of them bypass it" in
-  `appStore.test.ts`, which asserts both branches of `openTab` leave the count alone.)
-  Living here rather than in `panels` is the whole point: **no focus transition can
-  bypass it**, which a module-local counter demonstrably did (it missed close/reopen/doc/new-chat).
-  `clearWorkspaceTabs` releases the key with the rest. **Chat tabs and
-  `DocTab`s never enter it** — a chat is an explicit creation with a live session behind it, and a
-  `DocTab`'s content exists only in the store (no file backs it), so a silent replace would destroy it
-  with nothing to reopen. There is deliberately **no keyboard shortcut**: gestures only.
-  `terminalsByWorkspace`
-  / `activeTerminalByWorkspace` — a **mirror of host state, never the authority**: the host owns the tab list
-  and keys shells by `(workspaceId, tabKey)`, so this store can never hold the only record of a running shell.
-  `setWorkspaceTerminals` adopts a `terminal.list` result or a `terminal.tabs` broadcast, keeping a local tab the
-  host omits **only while its own attach is genuinely in flight** (`TerminalTab.attachPending`, cleared by
-  `settleTerminalAttach`) — any other omitted tab has really gone, and preserving it would let its instance
-  re-attach and resurrect both the tab and a shell; `addTerminal` only mints a `tabKey` — the instance's attach is what registers it host-side — and
-  takes an optional `initialCommand` consumed once, only when attach reports it `created` the shell (the
-  workspace row's "Open in Vim"); `closeTerminalTab` drops the row after `terminal.close` confirms. The
+  **workspace layout state** — `layoutSnapshotsByWorkspace` holds the latest accepted
+  `WorkspaceLayoutSnapshot` for each workspace; `installLayoutSnapshot` is a revision-aware whole-value
+  replacement (older/duplicate revisions are inert), while one atomic optimistic-commit action installs the
+  shell integration's next complete document and appends a pending write carrying both its correlation
+  `mutationId` and captured `expectedRevision`. The first write expects the accepted revision (or `null` for
+  absence); each dependent write expects the revision its predecessor will produce. The browser sends those
+  full snapshots to `layout.replace` serially per workspace while projecting all of them immediately; if one
+  write rejects or conflicts, dependent later projections are rolled back before they ever reach the host, so
+  a queued snapshot cannot resurrect the rejected base. Accepted state and the latest optimistic projection
+  remain distinct, so an acknowledgement removes its matching pending entry without rolling back a newer
+  projection. Correlation settlement is independent of revision installation: even an acknowledgement whose
+  snapshot is already older than the accepted base clears its mutation id without reinstalling that document.
+  If that matching broadcast settles optimism but its request response is then lost, the accepted snapshot is
+  still success—no false rollback or save error. A nonmatching accepted write advances the canonical base; it
+  does not rewrite captured expectations or erase optimistic snapshots still awaiting host order. A typed
+  conflict installs the returned current snapshot (including authoritative absence), cancels the conflicting
+  mutation and every dependent projection, and advances the projection epoch; if a newer accepted broadcast
+  overtook the response in transit, the revision-aware fold preserves that newer authority instead of
+  regressing to the conflict-time snapshot or absence. A conflict is expected synchronization, not a generic
+  save failure, and never triggers an automatic stale-document resend.
+  Components never splice group/tab arrays independently. Installing an accepted document also reconciles
+  browser-local resource projections without changing attention: a peer-restored chat placement immediately
+  restores its render-cache identity/label and removes duplicate closed-history membership, then hydrates its
+  runtime in the background if needed; a removed-but-live chat enters history
+  while its runtime
+  remains; tombstoned or authoritatively absent references queue structural cleanup instead of hydrating.
+  An empty pre-hydration cache never counts as absence: each resource catalog/read must be current for the
+  connection generation before it can trigger pruning. Any rejected write drops dependent optimism,
+  restores the latest accepted snapshot, advances the projection epoch (remounting uncontrolled resize
+  geometry and cancelling any newer draft based on the rejected projection), and surfaces only unexpected
+  failures through the generic save-error path.
+  `clearWorkspaceTabs` removes the snapshot and all associated local state when the workspace itself
+  disappears. A page-lifetime `removedWorkspaceIds` tombstone then rejects stale layout, catalog, session,
+  cache, and workspace-list arrivals, so an already-in-flight read cannot recreate the removed workspace.
+
+  **Browser-local resource render state** is keyed by workspace + canonical resource id, never embedded in
+  the shared layout reference: loaded file/diff content and ticks, editor view modes, live chat runtimes, and
+  any resolved legacy-document markdown stay local caches over their domain sources. Shared placement ids stay
+  stable, but a placement id that is already owned by another semantic browser cache falls back to a distinct
+  collision-safe cache id; hydration must never overwrite that other resource's metadata. A virtual document is
+  legal only when its shared reference names a registered resolver plus durable source identity; `todo-plan`
+  resolves by session to the live `PlanPane` over the host-owned TODO plan. Arbitrary inline markdown cannot
+  enter the layout.
+
+  **Device-local layout attention** is separate: selected tab per stable group, last-focused center group,
+  last-focused group per side, and per-group navigation clocks keyed by host/workspace. Selection/focus
+  mutations never alter or publish
+  the shared document. Installing a structural snapshot reconciles attention deterministically to the nearest
+  surviving tab/group. Navigation clocks advance at request time for every local focus-changing open and
+  for an explicit re-selection of the already-active center tab (that click still supersedes older work); that
+  stamp travels with the layout intent, so accepting the resulting open/select never increments the same
+  group a second time. If structural reconciliation removed the stamped group, the completion reroutes and
+  advances its surviving destination exactly once. A slow preview completion is discarded if a newer
+  navigation overtook it. Preview identity itself is structural
+  and shared per center group; `preview` replaces only that group's slot, while `keep` promotes it one-way.
+  A coalesced preview→keep gesture carries `claimPreview` on its single final open intent so the kept tab
+  replaces that slot without publishing an intermediate structural snapshot.
+  Arrangement-agnostic open intents enter the store, but only the shell layout integration resolves them
+  against local last focus and commits placement. `syncLegacySelection` mirrors the selected workbench
+  resource into the temporary file/chat/terminal render-cache projection without incrementing navigation,
+  atomically clearing the incompatible editor/terminal mirror (and clearing both while the selected resource
+  has no cache yet); its reactive selector returns the matched cache/catalog key (not only a readiness
+  boolean), so replacing a canonical cache id with a stable shared placement id retriggers the mirror.
+  this keeps migration-era feature selectors coherent after initial or remote hydration without making cache
+  state a second placement authority. Reopening an existing canonical resource changes attention
+  only unless its non-identity metadata changed; for example, pi's `setTitle` updates a queued open in place
+  (retargeting a cache alias to the stable placement id when needed) or emits a non-activating refresh for an
+  actually placed chat. A structurally accepted close is never undone
+  by a late title event; that event instead repairs the retained cache/history label without stealing focus.
+
+  **`terminalsByWorkspace` remains a mirror of terminal domain state, never placement authority.** The host
+  owns terminal existence and keys shells by `(workspaceId, tabKey)`; the layout snapshot merely references a
+  tab key at one eligible location. `setWorkspaceTerminals` adopts `terminal.list` / `terminal.tabs`, retaining
+  an omitted local tab only while its own attach is genuinely in flight. `addTerminal` mints a durable key
+  and may attach a captured center-group destination to its placement intent (it never edits topology itself),
+  so Group Header creation still works with no terminal body mounted; attach registers the key host-side and
+  consumes any initial command only for a newly created shell. Confirmed
+  close removes the domain tab and queues a resource-removal intent; the shell layout integration prunes
+  every stale placement through the next whole-document commit. A stale layout reference never reattaches or
+  recreates an absent catalog entry. There is no workspace-global
+  `activeTerminal`: each browser's selected tab per group decides which terminal body mounts, while the host's
+  existing exclusive attach/takeover contract decides which client controls a given PTY. The
   **per-session chat state** — `sessions: Record<sessionId, SessionRuntime>`, where a `SessionRuntime` holds
   one chat's `turns` (pi-canonical) / `toolResults` / `askAnswers` (the `ask-user-answers` replies keyed
   by tool call id — indexed by the reducer and hydration, never turned into bubbles) /
@@ -106,7 +141,7 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   `thinkingLevel` / `stats` / `commands` / `draft` and its **extension-UI state** (`pendingExtUi` (typed by
   `chat`'s `ExtUiDialogRequest`) + `extUiQueue` (overlapping dialogs FIFO so none orphans its server
   promise) + `extUiStatus` / `extUiWidget`). `openChatSession` creates a runtime; `closeChatRuntime` /
-  `clearWorkspaceTabs` drop it; per-session mutators (`appendUserMessage` / **`appendErrorTurn`** / `setStats` / `setCommands` /
+  `clearWorkspaceState` drop it; per-session mutators (`appendUserMessage` / **`appendErrorTurn`** / `setStats` / `setCommands` /
   `setCurrentModel` / `setThinkingLevel` / `setChatDraft` / `clearPendingExtUi`) take a `sessionId`.
   **`appendErrorTurn(sessionId, text)`** appends an `error` turn for a **rejected** turn-driving wire call
   (`session.prompt`/`steer`/`followUp`/`create`) — e.g. `prompt()` throwing "no API key" / a bad model —
@@ -115,22 +150,36 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   `stopReason: "error"` carries Pi's `errorMessage`, and `stopReason: "length"` becomes an actionable
   truncation error — neither may become "✓ Done". `agent_end` is attempt-level and never clears
   `isStreaming`; settlement alone finishes retries, compaction, and queued continuations. Closed
-  chats are reopenable: **`closeChatToHistory`** removes a chat tab but **keeps its runtime + session
-  alive**, recording it in **`closedChatsByWorkspace`** (`ClosedChat[]`, per workspace, most-recent-first);
-  **`reopenChat`** restores the tab with full state (the runtime never left); **`noteClosedChats`** records
+  chats are reopenable: the workbench close command first publishes the shared placement removal and only
+  after host acceptance invokes **`closeChatToHistory`**, which **keeps the runtime + session alive** and
+  records it in **`closedChatsByWorkspace`** (`ClosedChat[]`, per workspace, most-recent-first) and clears
+  any pending jump/history-open request for that session. File, diff, and registered-document render caches
+  follow the same acceptance-before-removal order; once no layout
+  write is pending, the shell reclaims only caches absent from both accepted placement and queued opens,
+  without advancing user-navigation clocks. A newer remote restoration keeps or rehydrates them instead of
+  losing the placement. **`reopenChat(workspaceId, …)`** restores
+  runtime/history membership in its captured workspace even after another workspace becomes active; the shell layout integration adds
+  placement to the locally chosen center group through the one structural commit path. **`noteClosedChats`** records
   disk-only sessions (from `session.list`) there too — idempotently (skips live/open/already-listed) — so a
   chat that survived a host restart is reopenable. **`deleteChat(workspaceId, sessionId)`** is the idempotent
   fold for both a confirmed local `session.delete` and the `session.deleted` broadcast: it atomically drops
-  **every tab the chat owns** — its transcript tab *and* its plan page (both carry the `sessionId`; a plan
-  page for a deleted chat would have nothing to read) — plus its history row/runtime + skill baseline
-  (choosing the normal active-tab fallback), and records a page-lifetime tombstone. **`noteClosedChats`** and **`hydrateSession`** reject tombstoned session ids, so
+  every tab the chat owns — its transcript, live plan page, and any dependent legacy document cache — plus
+  its history row/runtime + skill baseline, records a page-lifetime tombstone, removes queued opens for the
+  chat or its dependent documents, and queues a resource-removal intent. The shell layout integration
+  removes every matching chat placement and session-backed plan reference through its pure mutation path,
+  then reconciles local attention before publishing the complete document. Until then the tombstone renders
+  no body, so a stale shared reference cannot recreate or hydrate the session. **`noteClosedChats`** and
+  **`hydrateSession`** reject tombstoned session ids, so
   stale `session.list` / `session.getMessages` results already in flight cannot recreate a deleted chat;
   the tombstone survives workspace teardown because an older read can still settle afterward. The
   active-workspace hydration pass snapshots **`selectWorkspaceSessionIds`** before each `session.list`; when
   that authoritative read lands, **`reconcileWorkspaceSessions`** applies the same tombstone fold to every
   baseline id absent from the host result, repairing deletion events missed while disconnected without
-  deleting a session created after the read began. Otherwise **`hydrateSession`** rebuilds a runtime + tab
-  from a host `SessionSummary` + converted transcript on connect — the live summary's `lastSettlement` is authoritative when present; otherwise only a failure on
+  deleting a session created after the read began or advancing a user-navigation clock. Otherwise
+  **`hydrateSession`** rebuilds browser-local
+  runtime/render state from a host `SessionSummary` + converted transcript on connect; placement comes only
+  from the accepted layout, the bounded live/unfinished auto-open policy, or an explicit reopen commit — the
+  live summary's `lastSettlement` is authoritative when present; otherwise only a failure on
   the persisted transcript's final conversational message is current (historical `length` attempts followed
   by later work must not become stale warnings). Hydration is a no-op if a runtime already exists, so a
   live/ahead chat is never clobbered. The
@@ -166,7 +215,7 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   `provider.login` frame (creating `activeLogin` if the frame arrived first; ignoring frames for a different
   live login), **`clearLoginInput()`** drops the live input the instant a reply is sent (no double-submit),
   and **`clearLogin()`** dismisses it. The **settings surface** state — **`settingsOpen`** +
-  **`settingsSection`** (a const-object enum: `Providers`/`Github`/`Appearance`/`Templates`/`Privacy`) with
+  **`settingsSection`** (a const-object enum: `Providers`/`Github`/`Appearance`/`Layout`/`Terminal`/`Templates`/`Privacy`) with
   **`openSettings(section?)`** (deep-links to a section, defaults to Providers) / **`closeSettings()`** /
   **`setSettingsSection()`** — lives here so the top-bar gear AND the Welcome provider warning open Settings
   to a section without prop-drilling through the shell. The **theme** state — **`theme: ThemeId`** (the
@@ -174,9 +223,10 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   (folds the server-synced `AppConfig` in from
   `server.welcome` / the `settings.changed` broadcast) — lives here too; it's a **pure value only** (the
   theme-application side-effect is the shell's, keyed off `theme`), and defaults to
-  `DEFAULT_CONFIG.theme` until the welcome arrives. **`analyticsEnabled: boolean`** rides the same
-  `applyConfig` fold (host-owned, defaults to `DEFAULT_CONFIG.analyticsEnabled` until the welcome
-  arrives) — the Privacy toggle's read side. The
+  `DEFAULT_CONFIG.theme` until the welcome arrives. **`layoutSettings: LayoutSettings`** and
+  **`analyticsEnabled: boolean`** ride the same `applyConfig` fold (host-owned, defaulted from
+  `DEFAULT_CONFIG`) — the Layout and Privacy sections' read sides. Layout settings are not a second copy of
+  any workspace document: they carry only the portable preset catalog/default and group limit. The
   **toast queue** — **`toasts: Toast[]`** (oldest-first) with **`pushToast(toast) → id`** / **`dismissToast(id)`**
   and the ergonomic **`toast.error/success/info(message, title?)`** helper (wraps `pushToast` so a non-React
   call site — a `.catch` in a fire-and-forget wire call — can fire one) — lives here so any surface can raise
@@ -218,7 +268,7 @@ components. The **Skills-reload badge** rides the same tick without a separate s
   `openChatSession`, a disk-only `hydrateSession` attach, and **`markSkillsSynced(sessionId, syncedTick)`** on
   a successful reload (`markSkillsSynced` is **monotonic** — `Math.max`, so an out-of-order reload completion
   can't move the baseline backward — and a **no-op for a disposed session**, so a late completion can't
-  resurrect an entry dropped by `closeChatRuntime`/`clearWorkspaceTabs`). A **live** `hydrateSession` restore
+  resurrect an entry dropped by `closeChatRuntime`/`clearWorkspaceState`). A **live** `hydrateSession` restore
   reuses the server session's already-loaded skills (`getMessages` returns only the transcript, no reload)
   which the client can't date, so it advances **nothing** — the chat stays *conservatively stale* if a skill
   change has been observed, never falsely clearing. That
@@ -230,34 +280,22 @@ components. The **Skills-reload badge** rides the same tick without a separate s
   The selector
   **`selectSkillsStale(state, workspaceId, sessionId)`** = `skillChangeTick > syncedTick` — store-derived
   (survives `ChatView`'s tab-switch remount) and per-session (a sibling/newer chat that loaded the current
-  skills is not flagged; a reload clears only its own). Also **`updateFileTabContent(id, content,
+  skills is not flagged; a reload clears only its own). Also **`updateFileTabContent(workspaceId, id, content,
   tick)`** — a `FileTab` carries the `tick` its content was loaded at, so `FilePane` detects staleness
   (`workspaceTick > tab.loadedTick`) across tab switches, and its diff twin
-  **`updateDiffTabContent(id, original, modified, tick, loadedTarget)`** — a `DiffTab` follows the same
+  **`updateDiffTabContent(workspaceId, id, original, modified, tick, loadedTarget)`** — a `DiffTab` follows the same
   staleness contract in `DiffPane`, in **two** dimensions: the fs tick and the review target the two sides were
-  read against, written together so neither can outlive the content it describes. The transient **`rightTabRequest`** +
-  **`requestRightTab(workspaceId, tab)`** are the ONE intent for "show a right-panel view" (`RightPanelTab`
-  lives here, since the intent does): `RightPanel` watches that single field instead of inferring a flip from
-  each path request, and **consumes** it (`clearRightTabRequest`) — an unconsumed flip would re-fire on every
-  re-activation of the workspace, moving the tab the user has since chosen; which is what lets a divider chip reveal a view while merely expanding its own artifact
-  list — no path picked yet. The transient **`changesRequest`** +
-  **`requestChangesView(workspaceId, path)`** are a UI deep-link intent (a chat turn-divider asking the
-  right panel to surface a file in its Changes view — highlight the row **and open its diff tab** when
-  the file is in the current diff; a path no longer in the diff degrades to highlight-only); the panels
-  watch it, scoped by workspace. It also carries **`navTick`**, the center-navigation count stamped **at the
-  click**: `ChangesPanel` cannot resolve the reported path until `git.status` lands (and this chip is usually
-  what *reveals* that view, so it is a fresh mount's read), so the click and the open sit a round trip apart.
-  Whatever the user does with the center in that window is the later navigation and wins — an overtaken deep
-  link degrades to the highlight rather than yanking focus off the tab they picked. Without the stamp the
-  arriving open would mark *itself* as the navigation and always win. Its Specs
-  twin **`specRequest`** + **`requestSpecView(workspaceId, path)`** **opens the
-  rendered spec** and needs no stamp: it opens the reported path immediately, with no list to resolve first.
-  Both path intents set `rightTabRequest` **in the same action**: the panel is never asked to surface a path
-  in a view it was not also told to show.
-  Two separate fields, never one: the panel that can show a *gitignored* spec is not the git-derived one, and
-  that confusion is exactly the bug the split fixes. Both path intents are **consumed** by whoever handles
-  them (**`clearSpecRequest`** / **`clearChangesRequest`**) — each opens a center tab, so a replay (a
-  remount, a git-status re-read) would steal the user's tab. **`specsByWorkspace`** +
+  read against, written together so neither can outlive the content it describes. The transient
+  A **`reveal-tool` `LayoutIntent`** is the arrangement-agnostic request to reveal/focus a singleton
+  side tool; the shell layout integration consumes it and resolves the tool's current saved location.
+  **`changesRequest`** and **`specRequest`** add an optional path/item target to that reveal and carry a
+  browser-local request-time center destination without exposing layout concerns to feature views. Async
+  resolution carries the local
+  destination group's navigation-clock stamp captured at click time: if later attention overtakes it, the
+  tool may still highlight the item but the stale completion cannot steal focus. Both intents are consumed
+  after handling so remount/re-read cannot replay a structural open. Two fields remain necessary because a
+  gitignored spec belongs to the spec graph, not the git-derived Changes view.
+  **`specsByWorkspace`** +
   **`setWorkspaceSpecs`** hold each workspace's `spec.graph` snapshot (fetched by `panels`'
   `useWorkspaceSpecs`, kept fresh on the workspace fs tick) so
   the chat's turn divider can classify a written path as a spec off the very snapshot the Specs panel
@@ -265,15 +303,13 @@ components. The **Skills-reload badge** rides the same tick without a separate s
   with the workspace in `applyWorkspaceRemoved`. `setWorkspaceSpecs` **keeps the previous array identity when
   the re-read found no change** — most fs ticks touch no spec, and a fresh identity would invalidate
   `ChatView`'s matcher memo and re-derive every open chat's whole transcript about once a second.
-  **`openDoc(tab)`** opens
-  (or refreshes + focuses) an ephemeral **`DocTab`** — inline rendered-markdown content, never backed by a
-  file on disk (no fs re-read / source toggle) — or a **`PlanTab`** (`kind: "plan"`, id
-  `${workspaceId}:plan:${sessionId}` — one page per chat, re-open focuses): the chat plan's live
-  review-map page, rendered by `panels/PlanPane` from the session's plan data (nothing content-bearing
-  in the tab itself, so there is no snapshot to go stale). **`DiffTab`** is a read-only Monaco diff of one
+  **`openDoc(tab)`** caches and places either a resolved **`DocTab`** or a **`PlanTab`** (`kind: "plan"`,
+  id `${workspaceId}:plan:${sessionId}` — one page per chat, re-open focuses). The shared layout conversion
+  keeps only resolver kind + durable session identity, never cached content. `PlanPane` reads the host-owned
+  plan live, so the page has no snapshot to go stale. **`DiffTab`** is a read-only Monaco diff of one
 changed file over **one diff scope** (id `${workspaceId}:diff:${scopeKey}:${path}` — one tab per *(file,
 scope)*: **the scope is part of a tab's identity**, because a tab's content must never change meaning
-because the rail's scope flipped underneath it; the tab carries its own `scope`, which is also what
+because the Changes tool's scope flipped underneath it; the tab carries its own `scope`, which is also what
 `DiffPane` re-reads with, never the panel's current one).
 **What a tab's identity fixes is *which scope* it shows — the kind, plus the sha for a commit scope.** A
 branch-scope tab means "this file vs the workspace's **current** review target", and that target moving —
@@ -283,52 +319,59 @@ belong in the tab id (a branch name pins nothing — only a commit sha is immuta
 id). What it *does* require is that the tab re-read when the target moves: `selectDiffTabTargetRef` is that
 second live dimension (see `panels/SPEC.md`'s live-refresh contract) — and that the tab **records the target
 its content was actually read against** (`DiffTab.loadedTarget`, required, written by every content write).
-Panes mount only while their tab is active, so without that record a tab whose target moved while it sat in the
-background would mount with the new target already in hand, conclude nothing changed, and show the *old*
-target's diff under the new target's label; the persisted value is what the mount compares against. Its per-tab view state: `view` split|inline via
+Panes mount only while their resource is locally selected, so without that record a diff whose target moved
+while it sat in the background would mount with the new target already in hand, conclude nothing changed, and show the *old*
+target's diff under the new target's label; the cached value is what the mount compares against. Its
+per-resource view state: `view` split|inline via
 **`setDiffTabView`**, split the default; a markdown diff's `rendered` flag via **`setDiffTabRendered`**
 (swaps raw lines for compiled documents — `DiffPane` offers it for markdown paths only); and
 `ignoreWhitespace` via **`setDiffTabIgnoreWhitespace`** (Monaco's `ignoreTrimWhitespace`). All three go
-through one internal `patchDiffTab(state, id, patch)` helper — locate-the-active-workspace's-tab-and-merge
-lives once, so a new per-tab diff toggle is a one-liner, not another copy. Opened by `ChangesPanel`.
+through one internal `patchDiffRenderState(state, workspaceId, id, patch)` helper — locate-the-resource-cache
+and merge lives once, so a new per-diff toggle is a one-liner, not another copy. Opened by `ChangesPanel`.
 **`diffScopeByWorkspace`** + **`setDiffScope(workspaceId, scope)`** hold *what* each workspace's Changes
 panel is diffing (read through **`selectDiffScope`**, which defaults to the shared, referentially stable
 `BRANCH_SCOPE`); keyed **per workspace**, not app-wide like `changesView`, because a scope belongs to that
 branch's review — a commit sha means nothing in another worktree — and dropped with the workspace in
 `applyWorkspaceRemoved`. The transient **`chatLocationRequest`** — the history-search jump
-  deep link; the requester activates the target project+workspace, `CenterTabs` opens/hydrates the target
+  deep link; the requester activates the target project+workspace, the workbench shell integration
+  opens/hydrates the target
   chat, `ChatView` consumes + clears — is **`ChatLocationRequest { workspaceId, projectId, sessionId,
-  messageIndex, anchorText }`**, set by **`requestChatLocation(req)`** (which sets `selectedProjectId` +
+  messageIndex, anchorText, navigation? }`**, set by **`requestChatLocation(req)`** (which captures and
+  advances an already-hydrated destination group's local clock *before* switching workspaces, and sets `selectedProjectId` +
   `activeWorkspaceId` **atomically**, the same invariant `activateWorkspace` upholds, since the target chat
   can live in a different project/workspace than the one the search ran from — the caller
   `useHistorySearch.openMessage` loads the destination project's workspaces first when absent) and cleared
   by **`clearChatLocation()`**; the target's anchor resolves against the runtime's `turnIdByMessageIndex`
   (see `chat/SPEC.md`'s hydration bullet), falling back to the newest `anchorText` match when absent.
-  The sibling transient **`historyOpenRequest { sessionId }`** — set by **`requestHistoryOpen(target)`**,
+  The sibling transient **`historyOpenRequest { id, sessionId }`** — set by **`requestHistoryOpen(target)`**,
   cleared by **`clearHistoryOpen()`** — carries the shell's app-wide `Ctrl+R` to a chat, which opens (or,
   when already open, re-scopes) its history overlay; it goes through the store precisely because the chord
   fires outside the chat subtree entirely (see `shell/SPEC.md`'s "Global chords"). The target comes from
-  **`selectHistoryTarget`** (active chat tab, else the workspace's newest chat) and the action **activates
-  that tab atomically** with the request — one `set`, because `CenterTabs` mounts one tab body at a time,
-  so a request for an off-screen chat would never be consumed. The `EditorTab` (`FileTab` | `ChatTab` | `DocTab` | `DiffTab` | `PlanTab`) + `TerminalTab` + `ClosedChat` +
-  `SessionRuntime` types. (Chat *render* types + renderers live in the `chat` module.) The pure context
+  **`selectHistoryTarget`** (the locally selected chat, else the workspace's newest chat) and the action
+  atomically queues the workbench selection with the request; the request id correlates overtaken cleanup,
+  and the intent carries the chat resource so a cache/placement id alias (including an id collision resolved
+  by placement-only minting) still selects semantically. That selection deliberately does not focus the tab,
+  because the mounted history query owns focus. The shell updates the group's local attention so the target
+  body mounts and consumes the request without publishing a structural snapshot. The `EditorTab` (`FileTab`
+  | `ChatTab` | `DocTab` | `DiffTab` | `PlanTab`) + `TerminalTab` + `ClosedChat` + `SessionRuntime` types.
+  (Chat *render* types + renderers live in the `chat` module.) The pure context
   selectors in `selectors.ts` resolve the active `Workspace`, its owning project id, and the shell's context
   project from those canonical ids and collections; derived active-project state is never stored separately.
 - **Public surface (barrel):** `useAppStore`; `selectActiveWorkspace`, `selectWorkspaceById` (the
   one lookup for "the workspace with this id" — `selectActiveWorkspace` is it applied to the active id, and
   `openFileInTab`/`ChatView` read the worktree root through it),
-  `selectWorkspaceTerminals` / `selectActiveTerminalId` (the active workspace's terminal tabs and which one is
-  showing — the panel mounts an instance for **that one only**, since mounting attaches and attachment is
-  exclusive; the flatten/visibility helpers a mount-everything panel needed are gone),
+  `selectWorkspaceTerminals` (the host-owned terminal catalog; the layout visibility gate derives mounted
+  identities from its supplied document + local attention, while host attachment remains exclusive per terminal),
   `selectActiveWorkspaceProjectId`, `selectHistoryTarget` + `HistoryTarget` (the shell's `Ctrl+R` routing
-  target: the active chat tab, or the workspace's newest chat when a file/diff/doc tab is active),
-  `selectContextProject`, `selectSkillsStale`, **`selectDiffScope` + `BRANCH_SCOPE`** (what a workspace's
+  target: the locally selected chat resource, or the workspace's newest chat otherwise),
+  `selectContextProject`, `selectAttentionCenterTab` (the selected resource in local last center focus),
+  `selectSkillsStale`, **`selectDiffScope` + `BRANCH_SCOPE`** (what a workspace's
   Changes panel is diffing, defaulting to the shared branch-scope constant), **`selectDiffBaseRef`** (the ref
   it is measured against — the client-side mirror of the host's one resolution), **`selectDiffTabTargetRef`**
   (that ref *as an open diff tab's live dimension*: the target for a branch-scope tab, `""` for a
   commit/uncommitted one whose sides can't move — derived here, never re-assembled in a panel),
   `selectWorkspaceTick` (the sync-baseline snapshot), `selectWorkspaceSessionIds` (the deduplicated chat
-  tab + history membership used as a reconnect-reconciliation baseline);
+  layout-reference + history membership used as a reconnect-reconciliation baseline);
   `matchesWorktreePath` (line an agent-reported path — relative or absolute — up against a worktree-relative
   one; shared by the Changes deep link and the spec classifier. The suffix rule is for **absolute reports
   only** and is anchored at a separator: unanchored, `/wt/src/a-foo.ts` would match `src/foo.ts`; applied to
@@ -338,10 +381,12 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   is the snapshot it was created with, so host-computed facts on it, today `thinkingLevels`, are read
   through this; callers fall back to the snapshot when the ref has left the catalog);
   `toast` (the fire-from-anywhere helper),
-  `Toast` (type), `EditorTab` (`FileTab`/`ChatTab`/`DocTab`), `TerminalTab`, `ClosedChat`, `SessionRuntime` +
+  `Toast` (type), `WorkspaceLayoutSnapshot`/attention selectors and actions, resource render-state types
+  (file/diff/virtual-document/plan/chat), `TerminalTab`, `ClosedChat`, `SessionRuntime` +
   `EMPTY_RUNTIME` (ChatView's pre-creation fallback), `ChatLocationRequest` (type), `reduceSessionEvent`.
 - **Allowed deps:** `contracts` (`Project`/`Workspace`/`Model`/`ThinkingLevel`/`SessionStats`/
-  `SlashCommandInfo`/`ExtUiRequest`/`LoginPush`/`WorkspaceFsChangedPayload`/`AppConfig`/`ThemeId`;
+  `SlashCommandInfo`/`ExtUiRequest`/`LoginPush`/`WorkspaceFsChangedPayload`/`WorkspaceLayoutSnapshot`/
+  `LayoutChangedPayload`/`AppConfig`/`ThemeId`;
   `DEFAULT_CONFIG` for the pre-welcome default; `PiEvent`/`LoginFrame`, **type-only**); `lib` (the shared
   path + array + canonical-message primitives — `normalizePath`/`isAbsolutePath` for
   `matchesWorktreePath`, `shallowEqualArrays` for the snapshot-identity guard, `userText` plus the skill

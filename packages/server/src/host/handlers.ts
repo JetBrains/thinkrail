@@ -5,6 +5,7 @@ import type {
 	GitDiffScope,
 	HistoryScope,
 	ImageContent,
+	LayoutReplaceParams,
 	LoginReply,
 	ReviewAnchor,
 	ReviewComment,
@@ -68,6 +69,12 @@ import { gitDiffFile, gitStatus, listBranches, listCommits, prefetchBranch } fro
 import { githubAuthStatus, githubRefresh } from "../github";
 import { clampLimit, getHistoryIndex } from "../history";
 import {
+	getWorkspaceLayout,
+	removeWorkspaceLayout,
+	replaceWorkspaceLayout,
+	validateLayoutSettings,
+} from "../layout";
+import {
 	acknowledgeProjectSkills,
 	closeProject,
 	initProject,
@@ -94,7 +101,7 @@ import {
 	sendableComments,
 	updateComment,
 } from "../reviews";
-import { updateConfig } from "../settings";
+import { getConfig, updateConfig } from "../settings";
 import { evictSpecIndex, projectHasSpecs, specGraph } from "../spec";
 import {
 	deleteTemplate,
@@ -326,6 +333,7 @@ const handlers: Record<string, Handler> = {
 		// helper also refuses path-segment ids — two layers). An unknown id is an idempotent no-op ack.
 		const ws = forgetWorkspace(id);
 		if (ws) {
+			removeWorkspaceLayout(ws.id); // structural view state must not outlive its workspace
 			evictSpecIndex(ws.id); // the archived worktree's spec parse cache must not outlive it
 			removeWorkspaceReviews(ws.id); // the review file must not outlive its workspace either
 			stopWatch(ws.id); // fast: stop the change notifier before the worktree dir is reclaimed
@@ -687,9 +695,24 @@ const handlers: Record<string, Handler> = {
 	"provider.jbcentralDisconnect": () => disconnectJbcentral(),
 	"provider.jbcentralLogin": () => jbcentralLogin(),
 	"provider.jbcentralUpdate": () => updateJbcentral(),
+	// Read or replace the one host-synchronized workbench document for a registered workspace.
+	"layout.get": (params) => {
+		const { workspaceId } = params as { workspaceId: string };
+		getWorkspace(workspaceId);
+		return getWorkspaceLayout(workspaceId);
+	},
+	"layout.replace": (params) => {
+		const replacement = params as LayoutReplaceParams;
+		getWorkspace(replacement.workspaceId);
+		return replaceWorkspaceLayout(replacement, getConfig().layout.maxSideGroups);
+	},
 	// Merge + persist a partial into the server-synced app config (theme, …); the broadcast is fired by
 	// `updateConfig`'s injected publisher (wired in `createServer`), so every client converges.
-	"settings.update": (params) => updateConfig((params as { config: Partial<AppConfig> }).config),
+	"settings.update": (params) => {
+		const config = (params as { config: Partial<AppConfig> }).config;
+		if (config.layout !== undefined) validateLayoutSettings(config.layout);
+		return updateConfig(config);
+	},
 	// Prompt recall + conversation search over pi's session files. Scope mapping is resolved here (host
 	// owns the registries); the index itself stays registry-free (see history/SPEC.md).
 	// Uses listWorkspaceRecords (diffStats-free registry read) to avoid blocking on git per keystroke.

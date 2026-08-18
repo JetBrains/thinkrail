@@ -270,8 +270,14 @@ test("sidebar: an accordion — the active reviewed file's section auto-unfolds;
 	// Re-activating the reviewed file AUTO-opens the Review tab with the file's section unfolded.
 	await page.getByTestId("tab-files").click();
 	await page.getByTestId("file-node").filter({ hasText: "notes.txt" }).click();
+	await expect(page.locator('[data-testid="editor-tab"][data-active="true"]')).toContainText(
+		"notes.txt",
+	);
 	await page.getByTestId("tab-changes").click();
 	await page.getByTestId("change-item").filter({ hasText: "script.ts" }).click();
+	await expect(page.locator('[data-testid="editor-tab"][data-active="true"]')).toContainText(
+		"script.ts",
+	);
 	await expect(page.getByTestId("tab-review")).toHaveAttribute("data-active", "true");
 	const section = page.locator('[data-testid="review-file-section"][data-path="script.ts"]');
 	await expect(section).toHaveAttribute("data-expanded", "true");
@@ -291,6 +297,10 @@ test("sidebar: an accordion — the active reviewed file's section auto-unfolds;
 	// Return to the reviewed diff for the rest of the flow.
 	await page.getByTestId("tab-changes").click();
 	await page.getByTestId("change-item").filter({ hasText: "script.ts" }).click();
+	await expect(page.locator('[data-testid="editor-tab"][data-active="true"]')).toContainText(
+		"script.ts",
+	);
+	await expect(page.getByTestId("tab-review")).toHaveAttribute("data-active", "true");
 
 	// No in-panel editing: rows are navigation. Clicking one opens the FILE focused on the comment.
 	await expect(page.getByTestId("review-comment-edit-input")).toHaveCount(0);
@@ -743,18 +753,33 @@ test("the diff's ORIGINAL (left) side is its own anchor space — base, never re
 		"notes.txt",
 	);
 	await page.getByTestId("tab-review").click();
-	// The FILE row first (a file reviewed purely on its pre-change content), then the comment row.
-	await page.getByTestId("review-file-row").filter({ hasText: "README.md" }).click();
+	const reviewSection = page
+		.getByTestId("review-file-section")
+		.filter({ has: page.getByTestId("review-file-row").filter({ hasText: "README.md" }) });
+	const reviewFileRow = reviewSection.getByTestId("review-file-row");
+	// Side groups are independent, so Review may have stayed mounted and unfolded while All files was used.
+	// Fold first when necessary; the following unfold is the FILE-row navigation under test.
+	if ((await reviewSection.getAttribute("data-expanded")) === "true") {
+		await reviewFileRow.click();
+		await expect(reviewSection).toHaveAttribute("data-expanded", "false");
+	}
+	await reviewFileRow.click();
 	await expect(
 		page.locator('[data-testid="editor-tab"][data-active="true"][data-kind="diff"]'),
 	).toContainText("README.md");
 	await page.getByTestId("tab-files").click();
 	await page.getByTestId("file-node").filter({ hasText: "notes.txt" }).click();
+	await expect(page.locator('[data-testid="editor-tab"][data-active="true"]')).toContainText(
+		"notes.txt",
+	);
 	await page.getByTestId("tab-review").click();
-	// The rail tab switch remounted the panel folded — unfold the row again (which is itself the
-	// base-side navigation under test: it reopens the DIFF), then drill into the comment.
-	await page.getByTestId("review-file-row").filter({ hasText: "README.md" }).click();
-	await page.getByTestId("review-comment-open").first().click();
+	// The panel follows an already-active reviewed surface by unfolding its row; otherwise unfold it here.
+	// Either path must expose the comment navigation without accidentally toggling an open row closed.
+	if ((await reviewSection.getAttribute("data-expanded")) !== "true") {
+		await reviewSection.getByTestId("review-file-row").click();
+	}
+	await expect(reviewSection).toHaveAttribute("data-expanded", "true");
+	await reviewSection.getByTestId("review-comment-open").first().click();
 	await expect(
 		page.locator('[data-testid="editor-tab"][data-active="true"][data-kind="diff"]'),
 	).toContainText("README.md");
@@ -769,7 +794,10 @@ test("the diff's ORIGINAL (left) side is its own anchor space — base, never re
 	await page.getByTestId("tab-files").click();
 	await page.getByTestId("file-node").filter({ hasText: "notes.txt" }).click();
 	await page.getByTestId("tab-review").click();
-	await page.getByTestId("review-file-row").filter({ hasText: "README.md" }).click();
+	if ((await reviewSection.getAttribute("data-expanded")) !== "true") {
+		await reviewSection.getByTestId("review-file-row").click();
+	}
+	await reviewSection.getByTestId("review-comment-open").first().click();
 	await expect(
 		page.locator('[data-testid="editor-tab"][data-active="true"][data-kind="diff"]'),
 	).toContainText("README.md");

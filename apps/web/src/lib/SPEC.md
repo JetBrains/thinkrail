@@ -32,20 +32,34 @@ Tiny UI helpers shared across components.
   **`relativeTime()`** (`just now` / `5m ago` / `2d ago` — shared by chat history, the tab strip's closed
   chats, and the Changes scope menu's commit rows; it lives here because `chat/` may not import from
   `panels/`, which is what let three private twins of it accumulate), **`platformShortcutLabel()`** +
-  **`hasPlatformModifier()`** (one Apple-vs-other definition for shortcut chrome and global handlers), and
+  **`hasPlatformModifier()`** (one Apple-vs-other definition for shortcut chrome and global handlers; both
+  default to the browser-reported platform but accept an explicit platform string so non-browser callers and
+  tests never inherit a host runtime's synthetic `navigator` accidentally), and
   **`copyText()`**
   (clipboard write reporting whether it landed — one place for the *degradation*: an insecure context
   (plain-http remote access) or a denied permission has no clipboard, and every caller's answer is the same
-  — do nothing loud, the text stays visible/selectable). Also the shared
+  — do nothing loud, the text stays visible/selectable), **`randomId()`** (16 random bytes through
+  `getRandomValues`, which remains available to a plain-HTTP remote client),
+  **`DOUBLE_CLICK_SETTLE_MS`** (the one click→double-click arbitration window shared by cached and
+  host-read tab opens), and the
+  **`LayoutAttention`** device-local overlay shared by store, shell, and the headless layout child, with
+  own-property-safe `readLayoutSelection()` / `readLayoutNavigationClock()` accessors for untrusted
+  tuple-keyed maps. Also the shared
   Shiki highlighter, **kept out of the barrel** so the eager `@/lib` import stays shiki-free:
   `highlighter.ts` loads the curated grammars + JS regex engine and renders with `themes`' one generic
   CSS-variable registration. It is imported per-file (`@/lib/highlighter`) from lazy chunks only; theme
-  identity/palettes never live in `lib`.
+  identity/palettes never live in `lib`. Collision-safe browser identity composition lives here too:
+  **`tupleKey()`** length-prefixes independent strings, **`parseTupleKey()`** reads only its requested
+  namespace, and **`layoutResourceIdentity()`** gives every shared placement/cache alias one semantic
+  resource key, so delimiters and stable noncanonical placement ids cannot split or alias identities.
 - **Public surface (barrel):** `cn`, `isMarkdownPath`, `stripFrontmatter`, `cssColorToHex`,
-  `normalizePath`, `isAbsolutePath`, `projectRelativePath`, `shallowEqualArrays`, `userText`,
-  `parseSkillInvocation`, `matchesSkillInvocationCommand`, `relativeTime`, `platformShortcutLabel`,
-  `hasPlatformModifier`, `copyText`.
-- **Allowed deps:** `clsx`, `tailwind-merge`; `@thinkrail/contracts` (types only — `userText`'s
-  `UserMessage` parameter); `shiki`/`@shikijs/*` (the per-file shiki modules only — never reachable
+  `normalizePath`, `isAbsolutePath`, `projectRelativePath` (canonical worktree-relative POSIX identity;
+  collapses in-root `.`/`..` aliases but preserves an attempted leading escape for host rejection),
+  `shallowEqualArrays`, `userText`, `parseSkillInvocation`, `matchesSkillInvocationCommand`,
+  `relativeTime`, `platformShortcutLabel`, `hasPlatformModifier`, `copyText`, `randomId`,
+  `DOUBLE_CLICK_SETTLE_MS`, `tupleKey`, `parseTupleKey`, `layoutResourceIdentity`,
+  `readLayoutSelection`, `readLayoutNavigationClock`, and the `LayoutAttention` type.
+- **Allowed deps:** `clsx`, `tailwind-merge`; `@thinkrail/contracts` (types only — `userText` and
+  shared-layout resource parameters); `shiki`/`@shikijs/*` (the per-file shiki modules only — never reachable
   through the barrel).
 - **Forbidden:** every app-internal module — this is a leaf.

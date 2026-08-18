@@ -54,15 +54,20 @@ export function useWorkspaceRead<T>(
 	handlers: WorkspaceReadHandlers<T>,
 	readKey?: string,
 ): { reload: () => void } {
-	const latest = useRef({ read, handlers });
-	latest.current = { read, handlers };
+	const latest = useRef({ read, handlers, workspaceId, readKey });
+	latest.current = { read, handlers, workspaceId, readKey };
 	// Stamps each read. A newer read — or a switch/unmount — invalidates the ones before it, so a slow
 	// response can tell it is stale without a per-call-site cancellation flag.
 	const generation = useRef(0);
 
 	const runRead = useCallback((id: string, key: string | undefined) => {
+		if (useAppStore.getState().removedWorkspaceIds[id]) return;
 		const mine = ++generation.current;
-		const live = () => generation.current === mine;
+		const live = () =>
+			generation.current === mine &&
+			latest.current.workspaceId === id &&
+			latest.current.readKey === key &&
+			!useAppStore.getState().removedWorkspaceIds[id];
 		latest.current
 			.read(id, key)
 			.then((value) => {

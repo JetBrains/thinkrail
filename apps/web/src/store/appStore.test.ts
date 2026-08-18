@@ -8,10 +8,21 @@ import type {
 	WireModel,
 	Workspace,
 	WorkspaceFsChangedPayload,
+	WorkspaceLayoutDocument,
 	WorkspaceSkillChange,
 } from "@thinkrail/contracts";
 import { userText } from "../lib";
-import { type FileTab, type SessionRuntime, toast, useAppStore } from "./appStore";
+import {
+	captureCenterNavigation,
+	chatTabId,
+	type FileTab,
+	isCenterNavigationCurrent,
+	layoutOpenOptionsForNavigation,
+	type SessionRuntime,
+	shouldAdvanceAcceptedNavigation,
+	toast,
+	useAppStore,
+} from "./appStore";
 import {
 	selectDiffScope,
 	selectLastOpenChatSession,
@@ -92,7 +103,15 @@ beforeEach(() => {
 		status: "connecting",
 		connectionGeneration: 0,
 		sessions: {},
+		layoutSnapshotsByWorkspace: {},
+		layoutDocumentsByWorkspace: {},
+		layoutAttentionByWorkspace: {},
+		layoutPendingByWorkspace: {},
+		layoutRemoteEpochByWorkspace: {},
+		layoutIntents: [],
 		tabsByWorkspace: {},
+		terminalsByWorkspace: {},
+		activeTerminalByWorkspace: {},
 		activeTabByWorkspace: {},
 		previewTabByWorkspace: {},
 		navTickByWorkspace: {},
@@ -104,6 +123,7 @@ beforeEach(() => {
 		projects: [],
 		recentProjects: [],
 		workspaces: {},
+		removedWorkspaceIds: {},
 		selectedProjectId: null,
 		activeWorkspaceId: null,
 		activeLogin: null,
@@ -613,6 +633,103 @@ test("applyExtUi routes a dialog to its session; the reply clears only that one"
 	expect(rt("a").pendingExtUi).toBeNull();
 });
 
+test("setTitle refreshes shared chat metadata without requesting activation", () => {
+	const store = useAppStore.getState();
+	const cacheId = chatTabId("ws1", "a");
+	const placementId = "legacy-chat-placement";
+	store.openChatSession("ws1", "a", null, "medium");
+	useAppStore.setState({
+		layoutIntents: [],
+		layoutDocumentsByWorkspace: {
+			ws1: {
+				version: 1,
+				center: {
+					kind: "group",
+					id: "center",
+					tabs: [{ kind: "chat", id: placementId, name: "Chat", sessionId: "a" }],
+				},
+				left: { visible: false, width: 0.2, groups: [] },
+				right: { visible: false, width: 0.2, groups: [] },
+				toolRestoreTargets: {},
+			},
+		},
+	});
+
+	store.applyExtUi({ id: "title-1", sessionId: "a", kind: "setTitle", title: "Migration plan" });
+	const state = useAppStore.getState();
+	expect(state.tabsByWorkspace.ws1?.find((tab) => tab.id === cacheId)?.name).toBe("Migration plan");
+	expect(state.layoutIntents).toHaveLength(1);
+	expect(state.layoutIntents[0]).toMatchObject({
+		kind: "open",
+		workspaceId: "ws1",
+		intent: "keep",
+		activate: false,
+		tab: { id: placementId, name: "Migration plan", sessionId: "a" },
+	});
+
+	const staleDocument = state.layoutDocumentsByWorkspace.ws1;
+	if (!staleDocument) throw new Error("missing title layout fixture");
+	useAppStore.setState({
+		layoutIntents: [],
+		layoutDocumentsByWorkspace: {
+			ws1: {
+				...staleDocument,
+				center: {
+					kind: "group",
+					id: "center",
+					tabs: [{ kind: "chat", id: placementId, name: "Stale", sessionId: "a" }],
+				},
+			},
+		},
+	});
+	store.applyExtUi({ id: "title-1b", sessionId: "a", kind: "setTitle", title: "Migration plan" });
+	expect(useAppStore.getState().layoutIntents[0]).toMatchObject({
+		kind: "open",
+		tab: { id: placementId, name: "Migration plan", sessionId: "a" },
+	});
+
+	// A queued cache-alias open must be retargeted to the stable placement id too; otherwise processing the
+	// alias would focus the semantic chat but deliberately preserve the stale shared metadata.
+	const cache = useAppStore.getState().tabsByWorkspace.ws1?.find((tab) => tab.id === cacheId);
+	if (!cache) throw new Error("missing title cache fixture");
+	useAppStore.setState({ layoutIntents: [] });
+	store.openTab(cache, "keep", true, { activate: false });
+	expect(useAppStore.getState().layoutIntents[0]).toMatchObject({ tab: { id: cacheId } });
+	store.applyExtUi({ id: "title-1c", sessionId: "a", kind: "setTitle", title: "Migration plan" });
+	expect(useAppStore.getState().layoutIntents[0]).toMatchObject({
+		kind: "open",
+		tab: { id: placementId, name: "Migration plan", sessionId: "a" },
+	});
+});
+
+test("setTitle cannot restore a cache whose structural close is already accepted", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", null, "medium");
+	useAppStore.setState({
+		layoutIntents: [],
+		layoutDocumentsByWorkspace: {
+			ws1: {
+				version: 1,
+				center: { kind: "group", id: "center", tabs: [] },
+				left: { visible: false, width: 0.2, groups: [] },
+				right: { visible: false, width: 0.2, groups: [] },
+				toolRestoreTargets: {},
+			},
+		},
+	});
+	store.applyExtUi({ id: "title-2", sessionId: "a", kind: "setTitle", title: "Closed title" });
+	expect(useAppStore.getState().layoutIntents).toEqual([]);
+	expect(useAppStore.getState().tabsByWorkspace.ws1?.[0]?.name).toBe("Closed title");
+});
+
+test("setTitle repairs the title of a still-live chat in local history", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", null, "medium");
+	store.closeChatToHistory("a", true, "ws1");
+	store.applyExtUi({ id: "title-3", sessionId: "a", kind: "setTitle", title: "Finished title" });
+	expect(useAppStore.getState().closedChatsByWorkspace.ws1?.[0]?.title).toBe("Finished title");
+});
+
 test("a second dialog for a busy session queues instead of orphaning the first", () => {
 	const store = useAppStore.getState();
 	store.openChatSession("ws1", "a", null, "medium");
@@ -639,6 +756,16 @@ test("closing a chat moves it to history with its runtime kept; reopening restor
 	useAppStore.setState({ activeWorkspaceId: "ws1" });
 	store.openChatSession("ws1", "a", null, "medium");
 	store.handlePiEvent(agentStart, "a"); // give the runtime live state to prove it survives close
+	useAppStore.setState({
+		chatLocationRequest: {
+			workspaceId: "ws1",
+			projectId: "p1",
+			sessionId: "a",
+			messageIndex: 0,
+			anchorText: "target",
+		},
+		historyOpenRequest: { id: "history-a", sessionId: "a" },
+	});
 
 	store.closeChatToHistory("a");
 	let st = useAppStore.getState();
@@ -646,13 +773,45 @@ test("closing a chat moves it to history with its runtime kept; reopening restor
 	expect(st.closedChatsByWorkspace.ws1?.map((c) => c.sessionId)).toEqual(["a"]);
 	expect(st.sessions.a).toBeDefined(); // runtime NOT disposed
 	expect(st.sessions.a?.isStreaming).toBe(true);
+	expect(st.chatLocationRequest).toBeNull();
+	expect(st.historyOpenRequest).toBeNull();
 
-	store.reopenChat("a");
+	const activeAfterClose = st.activeTabByWorkspace.ws1;
+	const placedId = "legacy:chat:a";
+	store.restorePlacedChatCache("ws1", placedId, "a", "Restored chat");
+	st = useAppStore.getState();
+	expect(st.tabsByWorkspace.ws1?.some((tab) => tab.id === placedId)).toBe(true);
+	expect(st.closedChatsByWorkspace.ws1 ?? []).toHaveLength(0);
+	expect(st.activeTabByWorkspace.ws1).toBe(activeAfterClose);
+	store.restorePlacedChatCache("ws1", placedId, "a", "Peer-renamed chat");
+	st = useAppStore.getState();
+	expect(st.tabsByWorkspace.ws1?.find((tab) => tab.id === placedId)?.name).toBe(
+		"Peer-renamed chat",
+	);
+	store.closeChatToHistory("a");
+	expect(useAppStore.getState().closedChatsByWorkspace.ws1?.[0]?.title).toBe("Peer-renamed chat");
+
+	store.reopenChat("ws1", "a");
 	st = useAppStore.getState();
 	expect(st.tabsByWorkspace.ws1?.some((t) => t.kind === "chat" && t.sessionId === "a")).toBe(true);
-	expect(st.activeTabByWorkspace.ws1).toBe("ws1:a");
+	expect(st.activeTabByWorkspace.ws1).toBe(chatTabId("ws1", "a"));
 	expect(st.closedChatsByWorkspace.ws1 ?? []).toHaveLength(0); // removed from history on reopen
 	expect(st.sessions.a?.isStreaming).toBe(true); // full transcript/state intact
+});
+
+test("reopening a chat targets its captured workspace after the user switches away", () => {
+	const store = useAppStore.getState();
+	useAppStore.setState({ activeWorkspaceId: "ws1" });
+	store.openChatSession("ws1", "captured", null, "medium");
+	store.closeChatToHistory("captured");
+	useAppStore.setState({ activeWorkspaceId: "ws2" });
+	store.reopenChat("ws1", "captured", { activate: false });
+	const state = useAppStore.getState();
+	expect(
+		state.tabsByWorkspace.ws1?.some((tab) => tab.kind === "chat" && tab.sessionId === "captured"),
+	).toBe(true);
+	expect(state.tabsByWorkspace.ws2).toBeUndefined();
+	expect(state.activeWorkspaceId).toBe("ws2");
 });
 
 test("deleteChat removes history/runtime state and falls back when deleting the active tab", () => {
@@ -674,7 +833,7 @@ test("deleteChat removes history/runtime state and falls back when deleting the 
 	store.deleteChat("ws1", "c");
 	st = useAppStore.getState();
 	expect(st.tabsByWorkspace.ws1?.some((t) => t.kind === "chat" && t.sessionId === "c")).toBe(false);
-	expect(st.activeTabByWorkspace.ws1).toBe("ws1:b");
+	expect(st.activeTabByWorkspace.ws1).toBe(chatTabId("ws1", "b"));
 	expect(st.navTickByWorkspace.ws1).toBe(beforeNav + 1);
 	expect(st.sessions.c).toBeUndefined();
 });
@@ -692,9 +851,95 @@ test("session-list reconciliation removes missed deletions without deleting a ch
 	const state = useAppStore.getState();
 	expect(state.sessions.stale).toBeUndefined();
 	expect(state.deletedSessionsByWorkspace.ws1?.stale).toBe(true);
-	expect(state.tabsByWorkspace.ws1?.some((tab) => tab.id === "ws1:stale")).toBe(false);
+	expect(
+		state.tabsByWorkspace.ws1?.some((tab) => tab.kind === "chat" && tab.sessionId === "stale"),
+	).toBe(false);
 	expect(state.sessions.newcomer).toBeDefined();
-	expect(state.activeTabByWorkspace.ws1).toBe("ws1:newcomer");
+	expect(state.activeTabByWorkspace.ws1).toBe(chatTabId("ws1", "newcomer"));
+});
+
+test("authoritative session reconciliation never impersonates user navigation", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "missing", null, "medium");
+	const baseline = selectWorkspaceSessionIds(useAppStore.getState(), "ws1");
+	const before = useAppStore.getState().navTickByWorkspace.ws1 ?? 0;
+	store.reconcileWorkspaceSessions("ws1", baseline, []);
+	const state = useAppStore.getState();
+	expect(state.activeTabByWorkspace.ws1).toBeNull();
+	expect(state.navTickByWorkspace.ws1 ?? 0).toBe(before);
+});
+
+test("session deletion drops queued chat and live-plan opens before pruning placement", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "queued", null, "medium");
+	store.openDoc({
+		kind: "plan",
+		id: "queued-plan",
+		workspaceId: "ws1",
+		name: "Queued plan",
+		sessionId: "queued",
+	});
+	store.deleteChat("ws1", "queued", false);
+	const afterDeletion = useAppStore.getState();
+	const intents = afterDeletion.layoutIntents;
+	expect(afterDeletion.tabsByWorkspace.ws1 ?? []).toHaveLength(0);
+	expect(
+		intents.some(
+			(intent) =>
+				intent.kind === "open" &&
+				(intent.tab.kind === "chat" || intent.tab.kind === "plan") &&
+				intent.tab.sessionId === "queued",
+		),
+	).toBe(false);
+	expect(intents.at(-1)).toMatchObject({
+		kind: "remove-session",
+		workspaceId: "ws1",
+		sessionId: "queued",
+	});
+});
+
+test("a deletion that beats session.create prevents its late response from restoring the chat", () => {
+	const store = useAppStore.getState();
+
+	store.deleteChat("ws1", "late");
+	store.openChatSession("ws1", "late", null, "medium");
+	store.openTab(
+		{
+			kind: "chat",
+			id: "late-cache",
+			workspaceId: "ws1",
+			name: "Late cache",
+			sessionId: "late",
+		},
+		"keep",
+		false,
+	);
+	store.openDoc({
+		kind: "doc",
+		id: "late-todo",
+		workspaceId: "ws1",
+		name: "Late TODO",
+		content: "# Late",
+		docPath: "TODO.md",
+		sourceId: "late",
+	});
+	store.requestChatLocation({
+		workspaceId: "ws1",
+		projectId: "p1",
+		sessionId: "late",
+		messageIndex: 0,
+		anchorText: "late",
+	});
+	store.requestHistoryOpen({ workspaceId: "ws1", sessionId: "late", tabId: "late" });
+
+	const state = useAppStore.getState();
+	expect(state.sessions.late).toBeUndefined();
+	expect(state.tabsByWorkspace.ws1 ?? []).toHaveLength(0);
+	expect(
+		state.layoutIntents.some((intent) => intent.kind === "open" && intent.workspaceId === "ws1"),
+	).toBe(false);
+	expect(state.chatLocationRequest).toBeNull();
+	expect(state.historyOpenRequest).toBeNull();
 });
 
 test("a deletion that beats getMessages prevents its late hydrate from restoring the chat", () => {
@@ -806,6 +1051,63 @@ test("noteClosedChats surfaces disk-only sessions in history, skipping live/open
 	expect(history).toHaveLength(2);
 });
 
+test("opening a chat never steals another resource's canonical cache id", () => {
+	const collidingId = chatTabId("ws1", "collision-session");
+	const file: FileTab = {
+		kind: "file",
+		id: collidingId,
+		workspaceId: "ws1",
+		name: "collision.ts",
+		path: "collision.ts",
+		content: "kept",
+	};
+	useAppStore.setState({ tabsByWorkspace: { ws1: [file] }, layoutIntents: [] });
+	useAppStore.getState().openChatSession("ws1", "collision-session", null, "medium");
+	const tabs = useAppStore.getState().tabsByWorkspace.ws1 ?? [];
+	const openedChat = tabs.find((tab) => tab.kind === "chat");
+
+	expect(tabs.find((tab) => tab.kind === "file")).toEqual(file);
+	expect(openedChat?.sessionId).toBe("collision-session");
+	expect(openedChat?.id).not.toBe(file.id);
+	expect(useAppStore.getState().layoutIntents.at(-1)).toMatchObject({
+		kind: "open",
+		tab: { id: openedChat?.id, sessionId: "collision-session" },
+	});
+});
+
+test("restoring a stable chat placement never steals another resource's cache id", () => {
+	const file = fileTab("ws1", "stable-placement-id");
+	useAppStore.setState({ tabsByWorkspace: { ws1: [file] } });
+	useAppStore.getState().restorePlacedChatCache("ws1", file.id, "collision-session", "Chat");
+	const tabs = useAppStore.getState().tabsByWorkspace.ws1 ?? [];
+	const restoredFile = tabs.find((tab) => tab.kind === "file");
+	const restoredChat = tabs.find((tab) => tab.kind === "chat");
+
+	expect(restoredFile).toEqual(file);
+	expect(restoredChat?.sessionId).toBe("collision-session");
+	expect(restoredChat?.id).not.toBe(file.id);
+});
+
+test("hydrateSession preserves the stable id of an already-restored shared placement", () => {
+	const store = useAppStore.getState();
+	const summary: SessionSummary = {
+		sessionId: "legacy-session",
+		workspaceId: "ws1",
+		title: "Restored",
+		model: null,
+		thinkingLevel: "medium",
+		isStreaming: false,
+		messageCount: 0,
+		updatedAt: 1,
+		live: true,
+	};
+	store.restorePlacedChatCache("ws1", "legacy-placement-id", summary.sessionId, summary.title);
+	store.hydrateSession(summary, { turns: [], toolResults: {}, askAnswers: {} }, false);
+	const chats = useAppStore.getState().tabsByWorkspace.ws1?.filter((tab) => tab.kind === "chat");
+	expect(chats).toHaveLength(1);
+	expect(chats?.[0]?.id).toBe("legacy-placement-id");
+});
+
 test("hydrateSession(activate) reopens a disk-only chat: builds it, focuses it, and drops it from history", () => {
 	const store = useAppStore.getState();
 	useAppStore.setState({ activeWorkspaceId: "ws1" });
@@ -832,7 +1134,7 @@ test("hydrateSession(activate) reopens a disk-only chat: builds it, focuses it, 
 	const st = useAppStore.getState();
 	expect(st.sessions.disk1).toBeDefined(); // runtime built from the re-opened session
 	expect(st.closedChatsByWorkspace.ws1 ?? []).toHaveLength(0); // left history (it's open now)
-	expect(st.activeTabByWorkspace.ws1).toBe("ws1:disk1"); // focused, despite an existing active tab
+	expect(st.activeTabByWorkspace.ws1).toBe(chatTabId("ws1", "disk1")); // focused, despite an existing active tab
 });
 
 test("clearWorkspaceTabs drops both open and closed chat runtimes + clears history", () => {
@@ -878,6 +1180,34 @@ test("requestChatLocation sets the jump deep link AND switches project+workspace
 	expect(st.chatLocationRequest).toBeNull();
 	expect(st.activeWorkspaceId).toBe("ws2"); // clearing the request never reverts the navigation
 	expect(st.selectedProjectId).toBe("p2");
+});
+
+test("requestChatLocation captures an already-hydrated destination before switching workspaces", () => {
+	useAppStore.setState({
+		activeWorkspaceId: "ws1",
+		layoutAttentionByWorkspace: {
+			ws2: {
+				selectedByGroup: { destination: "chat" },
+				lastFocusedCenterGroupId: "destination",
+				lastFocusedSideGroupId: {},
+				navigationClockByGroup: { destination: 4 },
+			},
+		},
+	});
+	useAppStore.getState().requestChatLocation({
+		workspaceId: "ws2",
+		projectId: "p2",
+		sessionId: "session",
+		messageIndex: 1,
+		anchorText: "target",
+	});
+	expect(useAppStore.getState().chatLocationRequest?.navigation).toEqual({
+		groupId: "destination",
+		clock: 5,
+	});
+	expect(
+		useAppStore.getState().layoutAttentionByWorkspace.ws2?.navigationClockByGroup.destination,
+	).toBe(5);
 });
 
 // ---- project.updated: open/recent projections + per-client navigation fallback -------------------
@@ -1161,18 +1491,106 @@ test("applyWorkspaceRemoved drops the row, clears its tabs, and returns the acti
 			w1: [{ kind: "file", id: "w1:a", workspaceId: "w1", name: "a", path: "a", content: "" }],
 		},
 		activeTabByWorkspace: { w1: "w1:a" },
+		terminalsByWorkspace: {
+			w1: [{ tabKey: "terminal-before-removal", workspaceId: "w1", title: "Terminal" }],
+		},
+		changesRequest: { workspaceId: "w1", path: "a", navTick: 0, navigation: null },
+		specRequest: { workspaceId: "w1", path: "SPEC.md", navigation: null },
+		chatLocationRequest: {
+			workspaceId: "w1",
+			projectId: "p1",
+			sessionId: "removed-chat",
+			messageIndex: 0,
+			anchorText: "removed",
+		},
+		historyOpenRequest: { id: "history", sessionId: "removed-chat" },
+		reviewFocusRequest: { workspaceId: "w1", commentId: "comment" },
+		closedChatsByWorkspace: {
+			w1: [{ sessionId: "removed-chat", title: "Removed", closedAt: 1 }],
+		},
 		toasts: [],
+	});
+	let cleanupSubscriberAttempted = false;
+	const unsubscribe = useAppStore.subscribe((state, previous) => {
+		if (
+			cleanupSubscriberAttempted ||
+			!previous.terminalsByWorkspace.w1 ||
+			state.terminalsByWorkspace.w1
+		) {
+			return;
+		}
+		cleanupSubscriberAttempted = true;
+		state.setWorkspaceTerminals("w1", [{ tabKey: "late-terminal", title: "Late terminal" }]);
 	});
 
 	useAppStore.getState().applyWorkspaceRemoved("p1", "w1");
+	unsubscribe();
 
 	const s = useAppStore.getState();
+	expect(cleanupSubscriberAttempted).toBe(true);
 	expect(s.workspaces.p1).toEqual([]);
 	expect(s.tabsByWorkspace.w1).toBeUndefined(); // clearWorkspaceTabs dropped its tabs
 	expect(s.activeWorkspaceId).toBeNull(); // shell falls back to the project Welcome
 	expect(s.selectedProjectId).toBe("p1"); // specifically the removed workspace's owning Project Home
 	expect(s.toasts).toHaveLength(1);
 	expect(s.toasts[0]?.message).toContain("add-login-flow"); // the removed workspace's name
+	expect(s.changesRequest).toBeNull();
+	expect(s.specRequest).toBeNull();
+	expect(s.chatLocationRequest).toBeNull();
+	expect(s.historyOpenRequest).toBeNull();
+	expect(s.reviewFocusRequest).toBeNull();
+
+	const lateDocument: WorkspaceLayoutDocument = {
+		version: 1,
+		center: { kind: "group", id: "center", tabs: [] },
+		left: { visible: false, width: 0.2, groups: [] },
+		right: { visible: false, width: 0.2, groups: [] },
+		toolRestoreTargets: {},
+	};
+	s.installLayoutSnapshot({ workspaceId: "w1", revision: 1, document: lateDocument });
+	s.beginLayoutCommit("w1", lateDocument, "late-write");
+	s.setLayoutAttention("w1", {
+		selectedByGroup: {},
+		lastFocusedCenterGroupId: "center",
+		lastFocusedSideGroupId: {},
+		navigationClockByGroup: { center: 0 },
+	});
+	s.openTab({
+		kind: "file",
+		id: "late-file",
+		workspaceId: "w1",
+		name: "late",
+		path: "late",
+		content: "",
+	});
+	s.setWorkspaceTerminals("w1", [{ tabKey: "late-terminal", title: "Late terminal" }]);
+	s.closeTerminalTab("w1", "late-terminal");
+	s.setWorkspaceSpecs("w1", []);
+	s.noteFsChanged({ workspaceId: "w1", paths: ["late"], truncated: false, skillChange: "none" });
+	s.requestToolView("w1", "files");
+	s.reconcileWorkspaceSessions("w1", ["removed-chat"], []);
+	s.noteClosedChats("w1", [{ sessionId: "late-chat", title: "Late", closedAt: 2 }]);
+	s.requestChatLocation({
+		workspaceId: "w1",
+		projectId: "p1",
+		sessionId: "late-chat",
+		messageIndex: 0,
+		anchorText: "late",
+	});
+	s.activateWorkspace(pushedWorkspace());
+	s.setWorkspaces("p1", [pushedWorkspace()]);
+	const afterLateArrivals = useAppStore.getState();
+	expect(afterLateArrivals.layoutDocumentsByWorkspace.w1).toBeUndefined();
+	expect(afterLateArrivals.layoutAttentionByWorkspace.w1).toBeUndefined();
+	expect(afterLateArrivals.layoutIntents).toEqual([]);
+	expect(afterLateArrivals.tabsByWorkspace.w1).toBeUndefined();
+	expect(afterLateArrivals.closedChatsByWorkspace.w1).toBeUndefined();
+	expect(afterLateArrivals.terminalsByWorkspace.w1).toBeUndefined();
+	expect(afterLateArrivals.specsByWorkspace.w1).toBeUndefined();
+	expect(afterLateArrivals.fsChangesByWorkspace.w1).toBeUndefined();
+	expect(afterLateArrivals.chatLocationRequest).toBeNull();
+	expect(afterLateArrivals.activeWorkspaceId).toBeNull();
+	expect(afterLateArrivals.workspaces.p1).toEqual([]);
 });
 
 test("applyWorkspaceRemoved on a non-active workspace drops the row silently (no toast, active untouched)", () => {
@@ -1207,24 +1625,35 @@ test("applyWorkspaceRemoved drops the removed workspace's cached spec graph", ()
 	expect(s.specsByWorkspace.other).toEqual([]); // a sibling's snapshot is untouched
 });
 
-// --- the right-panel deep links (chat turn-divider chips) ------------------------------------------
+// --- workbench tool deep links (chat turn-divider chips) ------------------------------------------
 
-test("requestChangesView / requestSpecView are independent, workspace-scoped intents", () => {
-	useAppStore.setState({ changesRequest: null, specRequest: null, rightTabRequest: null });
+test("requestChangesView / requestSpecView pair independent path requests with reveal intents", () => {
+	useAppStore.setState({ changesRequest: null, specRequest: null, layoutIntents: [] });
 
 	useAppStore.getState().requestChangesView("w1", "src/a.ts");
-	expect(useAppStore.getState().rightTabRequest).toEqual({ workspaceId: "w1", tab: "changes" });
 	useAppStore.getState().requestSpecView("w1", ".thinkrail/context/TASK-x.md");
 
 	const s = useAppStore.getState();
-	// `navTick` stamps the center-navigation count at the click; nothing has navigated here, so it's 0.
-	expect(s.changesRequest).toEqual({ workspaceId: "w1", path: "src/a.ts", navTick: 0 });
-	// The spec intent is a separate field, so a spec chip can never be mistaken for a changes chip (which
-	// would flip the right panel to a view that can't show a gitignored spec).
-	expect(s.specRequest).toEqual({ workspaceId: "w1", path: ".thinkrail/context/TASK-x.md" });
-	// The path intent and the flip are one action: the panel is never asked to surface a path in a view it
-	// was not also told to show.
-	expect(s.rightTabRequest).toEqual({ workspaceId: "w1", tab: "specs" });
+	// The request itself advances and stamps navigation before its tool can mount.
+	expect(s.changesRequest).toEqual({
+		workspaceId: "w1",
+		path: "src/a.ts",
+		navTick: 1,
+		navigation: null,
+	});
+	// The spec intent is a separate field, so a spec chip can never be mistaken for a Changes deep link.
+	expect(s.specRequest).toEqual({
+		workspaceId: "w1",
+		path: ".thinkrail/context/TASK-x.md",
+		navigation: null,
+	});
+	// Each path request atomically carries the shell-owned reveal command for the tool that can render it.
+	expect(
+		s.layoutIntents.map(({ kind, workspaceId, ...intent }) => ({ kind, workspaceId, ...intent })),
+	).toMatchObject([
+		{ kind: "reveal-tool", workspaceId: "w1", tool: "changes" },
+		{ kind: "reveal-tool", workspaceId: "w1", tool: "specs" },
+	]);
 
 	// A fresh object each call, so re-clicking the same chip re-fires the watching effects.
 	const first = useAppStore.getState().specRequest;
@@ -1233,23 +1662,21 @@ test("requestChangesView / requestSpecView are independent, workspace-scoped int
 	expect(useAppStore.getState().specRequest).toEqual(first);
 });
 
-test("requestRightTab flips a view without surfacing any path", () => {
-	// The divider's chips use this when they expand their own list: the panel follows the side the user
-	// chose, but nothing is opened or highlighted (no path was picked yet).
-	useAppStore.setState({ rightTabRequest: null, changesRequest: null, specRequest: null });
+test("requestToolView reveals a tool without fabricating a path request", () => {
+	useAppStore.setState({ layoutIntents: [], changesRequest: null, specRequest: null });
 
-	useAppStore.getState().requestRightTab("w1", "specs");
+	useAppStore.getState().requestToolView("w1", "specs");
 
-	const s = useAppStore.getState();
-	expect(s.rightTabRequest).toEqual({ workspaceId: "w1", tab: "specs" });
-	expect(s.specRequest).toBeNull();
-	expect(s.changesRequest).toBeNull();
+	const first = useAppStore.getState().layoutIntents[0];
+	expect(first).toMatchObject({ kind: "reveal-tool", workspaceId: "w1", tool: "specs" });
+	expect(useAppStore.getState().specRequest).toBeNull();
+	expect(useAppStore.getState().changesRequest).toBeNull();
 
-	// A fresh object each call, so re-choosing the same side after a manual tab switch still flips back.
-	const first = s.rightTabRequest;
-	useAppStore.getState().requestRightTab("w1", "specs");
-	expect(useAppStore.getState().rightTabRequest).not.toBe(first);
-	expect(useAppStore.getState().rightTabRequest).toEqual(first);
+	// Re-choosing the same tool remains a fresh command after a manual arrangement change.
+	useAppStore.getState().requestToolView("w1", "specs");
+	const second = useAppStore.getState().layoutIntents[1];
+	expect(second).toMatchObject({ kind: "reveal-tool", workspaceId: "w1", tool: "specs" });
+	expect(second?.id).not.toBe(first?.id);
 });
 
 test("clearSpecRequest consumes the spec intent once — it opens a tab, so it must not replay", () => {
@@ -1268,7 +1695,8 @@ test("clearSpecRequest consumes the spec intent once — it opens a tab, so it m
 	expect(useAppStore.getState().changesRequest).toEqual({
 		workspaceId: "w1",
 		path: "src/a.ts",
-		navTick: 0,
+		navTick: 2,
+		navigation: null,
 	});
 });
 
@@ -1276,18 +1704,18 @@ test("clearSpecRequest consumes the spec intent once — it opens a tab, so it m
 // `git.status` first, and the chip is usually what reveals that view, so the open happens a fresh mount's
 // round trip after the click. Stamping the nav count at the click is what lets the panel tell that the user
 // moved the center on in between — an overtaken deep link degrades to the row highlight instead of yanking
-// focus off whatever they picked. (`specRequest` needs no stamp: it opens the reported path immediately.)
+// focus off whatever they picked. Specs carry the same destination stamp across their reveal/mount delay.
 test("the Changes deep link stamps the nav count at the click, so a later navigation still wins", () => {
-	useAppStore.setState({ activeWorkspaceId: "ws1", changesRequest: null, rightTabRequest: null });
+	useAppStore.setState({ activeWorkspaceId: "ws1", changesRequest: null, layoutIntents: [] });
 	const s = () => useAppStore.getState();
 
 	// A couple of navigations before the chip, so a stamp of "whatever it is now" is distinguishable from 0.
 	s().openTab(fileTab("ws1", "a.ts"), "keep");
 	s().setActiveTab("ws1:a.ts");
-	const atClick = selectWorkspaceNavTick(s(), "ws1");
+	const beforeClick = selectWorkspaceNavTick(s(), "ws1");
 
 	s().requestChangesView("ws1", "src/b.ts");
-	expect(s().changesRequest?.navTick).toBe(atClick);
+	expect(s().changesRequest?.navTick).toBe(beforeClick + 1);
 
 	// Nothing has moved the center since, so the request is still current: the panel may open its diff.
 	expect(selectWorkspaceNavTick(s(), "ws1")).toBe(s().changesRequest?.navTick);
@@ -1296,6 +1724,129 @@ test("the Changes deep link stamps the nav count at the click, so a later naviga
 	// stamp no longer matches and the deep link has lost the race.
 	s().setActiveTab("ws1:a.ts");
 	expect(selectWorkspaceNavTick(s(), "ws1")).not.toBe(s().changesRequest?.navTick);
+});
+
+test("legacy selection reconciliation does not count as user navigation", () => {
+	useAppStore.setState({
+		tabsByWorkspace: { ws1: [fileTab("ws1", "a.ts"), fileTab("ws1", "b.ts")] },
+		activeTabByWorkspace: { ws1: "ws1:a.ts" },
+		navTickByWorkspace: { ws1: 7 },
+	});
+	useAppStore.getState().syncLegacySelection("ws1", { kind: "editor", tabId: "ws1:b.ts" });
+	expect(useAppStore.getState().activeTabByWorkspace.ws1).toBe("ws1:b.ts");
+	expect(useAppStore.getState().activeTerminalByWorkspace.ws1).toBeNull();
+	expect(useAppStore.getState().navTickByWorkspace.ws1).toBe(7);
+
+	useAppStore.setState({
+		terminalsByWorkspace: {
+			ws1: [{ tabKey: "terminal", workspaceId: "ws1", title: "Terminal" }],
+		},
+	});
+	useAppStore.getState().syncLegacySelection("ws1", {
+		kind: "terminal",
+		tabKey: "terminal",
+	});
+	expect(useAppStore.getState().activeTabByWorkspace.ws1).toBeNull();
+	expect(useAppStore.getState().activeTerminalByWorkspace.ws1).toBe("terminal");
+	useAppStore.getState().syncLegacySelection("ws1", null);
+	expect(useAppStore.getState().activeTabByWorkspace.ws1).toBeNull();
+	expect(useAppStore.getState().activeTerminalByWorkspace.ws1).toBeNull();
+	expect(useAppStore.getState().navTickByWorkspace.ws1).toBe(7);
+});
+
+test("deferred center navigation clocks are isolated by destination group", () => {
+	useAppStore.setState({
+		activeWorkspaceId: "ws1",
+		layoutAttentionByWorkspace: {
+			ws1: {
+				selectedByGroup: { a: "file-a", b: "file-b" },
+				lastFocusedCenterGroupId: "a",
+				lastFocusedSideGroupId: {},
+				navigationClockByGroup: { a: 4, b: 9 },
+			},
+		},
+	});
+
+	const passive = captureCenterNavigation(useAppStore.getState(), "ws1");
+	expect(passive).toEqual({ groupId: "a", clock: 4 });
+	const fromA = useAppStore.getState().beginCenterNavigation("ws1");
+	expect(fromA).toEqual({ groupId: "a", clock: 5 });
+	expect(isCenterNavigationCurrent(useAppStore.getState(), "ws1", fromA)).toBe(true);
+	useAppStore.setState({ activeWorkspaceId: "ws2" });
+	expect(layoutOpenOptionsForNavigation(useAppStore.getState(), "ws1", fromA)).toEqual({
+		targetGroupId: "a",
+		activate: false,
+		navigation: fromA,
+	});
+	useAppStore.setState({ activeWorkspaceId: "ws1" });
+
+	useAppStore.getState().beginCenterNavigation("ws1", "b");
+	expect(isCenterNavigationCurrent(useAppStore.getState(), "ws1", fromA)).toBe(true);
+	expect(layoutOpenOptionsForNavigation(useAppStore.getState(), "ws1", fromA)).toEqual({
+		targetGroupId: "a",
+		activate: false,
+		navigation: fromA,
+	});
+	const withOtherGroupFocused = useAppStore.getState().layoutAttentionByWorkspace.ws1;
+	if (!withOtherGroupFocused) throw new Error("missing attention fixture");
+	expect(shouldAdvanceAcceptedNavigation(withOtherGroupFocused, fromA)).toBe(false);
+
+	useAppStore.getState().beginCenterNavigation("ws1", "a");
+	expect(isCenterNavigationCurrent(useAppStore.getState(), "ws1", fromA)).toBe(false);
+
+	const withoutA = useAppStore.getState().layoutAttentionByWorkspace.ws1;
+	if (!withoutA) throw new Error("missing attention fixture");
+	const onlyB = {
+		...withoutA,
+		navigationClockByGroup: { b: withoutA.navigationClockByGroup.b ?? 0 },
+	};
+	useAppStore.setState({ layoutAttentionByWorkspace: { ws1: onlyB } });
+	expect(layoutOpenOptionsForNavigation(useAppStore.getState(), "ws1", fromA)).toEqual({
+		targetGroupId: "a",
+		navigation: fromA,
+	});
+	expect(shouldAdvanceAcceptedNavigation(onlyB, fromA)).toBe(true);
+	const rerouted = useAppStore.getState().beginCenterNavigation("ws1", "removed-group");
+	expect(rerouted?.groupId).toBe("b");
+	expect(
+		Object.hasOwn(
+			useAppStore.getState().layoutAttentionByWorkspace.ws1?.navigationClockByGroup ?? {},
+			"removed-group",
+		),
+	).toBe(false);
+});
+
+test("a request-time center navigation is not counted again when its chat cache lands", () => {
+	useAppStore.setState({
+		activeWorkspaceId: "ws1",
+		layoutAttentionByWorkspace: {
+			ws1: {
+				selectedByGroup: {},
+				lastFocusedCenterGroupId: "center",
+				lastFocusedSideGroupId: {},
+				navigationClockByGroup: { center: 3 },
+			},
+		},
+		navTickByWorkspace: { ws1: 7 },
+	});
+	const navigation = useAppStore.getState().beginCenterNavigation("ws1");
+	const afterRequest = useAppStore.getState().navTickByWorkspace.ws1;
+	useAppStore
+		.getState()
+		.openChatSession(
+			"ws1",
+			"session-requested",
+			null,
+			"medium",
+			undefined,
+			layoutOpenOptionsForNavigation(useAppStore.getState(), "ws1", navigation),
+		);
+
+	expect(useAppStore.getState().navTickByWorkspace.ws1).toBe(afterRequest);
+	expect(useAppStore.getState().layoutIntents.at(-1)).toMatchObject({
+		kind: "open",
+		navigation,
+	});
 });
 
 test("clearChangesRequest consumes the Changes intent once — it opens a diff tab, so it must not replay", () => {
@@ -1309,7 +1860,11 @@ test("clearChangesRequest consumes the Changes intent once — it opens a diff t
 	useAppStore.getState().requestSpecView("w1", "docs/SPEC.md");
 	useAppStore.getState().clearChangesRequest();
 	expect(useAppStore.getState().changesRequest).toBeNull();
-	expect(useAppStore.getState().specRequest).toEqual({ workspaceId: "w1", path: "docs/SPEC.md" });
+	expect(useAppStore.getState().specRequest).toEqual({
+		workspaceId: "w1",
+		path: "docs/SPEC.md",
+		navigation: null,
+	});
 });
 
 const specNode = (over: Partial<SpecGraphNode> = {}): SpecGraphNode => ({
@@ -1606,7 +2161,7 @@ test("diff tabs: openTab dedupes by id + activates; view + contents update in pl
 
 	// A live re-read replaces both sides and advances **both** live dimensions: the fs tick and the review
 	// target the fresh content was read against (which is what lets a background tab detect a moved target).
-	s().updateDiffTabContent(tab.id, "old2", "new2", 5, "origin/release");
+	s().updateDiffTabContent("ws1", tab.id, "old2", "new2", 5, "origin/release");
 	const updated = s().tabsByWorkspace.ws1?.[0];
 	expect(updated?.kind).toBe("diff");
 	if (updated?.kind === "diff") {
@@ -1615,6 +2170,36 @@ test("diff tabs: openTab dedupes by id + activates; view + contents update in pl
 		expect(updated.loadedTick).toBe(5);
 		expect(updated.loadedTarget).toBe("origin/release");
 	}
+});
+
+test("live content updates are scoped when two workspaces reuse an opaque cache id", () => {
+	useAppStore.setState({
+		tabsByWorkspace: {
+			ws1: [
+				{
+					kind: "file",
+					id: "legacy-placement",
+					workspaceId: "ws1",
+					name: "one",
+					path: "one",
+					content: "one",
+				},
+			],
+			ws2: [
+				{
+					kind: "file",
+					id: "legacy-placement",
+					workspaceId: "ws2",
+					name: "two",
+					path: "two",
+					content: "two",
+				},
+			],
+		},
+	});
+	useAppStore.getState().updateFileTabContent("ws2", "legacy-placement", "fresh", 4);
+	expect(useAppStore.getState().tabsByWorkspace.ws1?.[0]?.content).toBe("one");
+	expect(useAppStore.getState().tabsByWorkspace.ws2?.[0]?.content).toBe("fresh");
 });
 
 test("the diff scope is per workspace, defaults to the branch, and is dropped with the workspace", () => {
@@ -1826,9 +2411,22 @@ test("skills badge: a LIVE restore stays conservatively stale; a disk attach anc
 	expect(isStale("ws1", "disk1")).toBe(false);
 });
 
+test("explicitly passive hydration never becomes navigation just because the cache has no active tab", () => {
+	const store = useAppStore.getState();
+	store.hydrateSession(
+		summaryFor("passive", true),
+		{ turns: [], toolResults: {}, askAnswers: {} },
+		false,
+		undefined,
+		{ activate: false },
+	);
+	expect(useAppStore.getState().activeTabByWorkspace.ws1).toBeUndefined();
+	expect(useAppStore.getState().navTickByWorkspace.ws1).toBeUndefined();
+});
+
 // ── Preview tabs ────────────────────────────────────────────────────────────────────────────────────
-// One reusable "I'm just browsing" slot per workspace (`previewTabByWorkspace`), opened and released by
-// the `TabIntent` the surfaces pass. See `apps/web/src/panels/SPEC.md` for the gesture map.
+// Before workbench hydration, the legacy cache keeps one workspace preview hint. Once a layout document
+// exists, structural per-group preview slots are authoritative and cache entries must not evict one another.
 
 function fileTab(workspaceId: string, name: string): FileTab {
 	return { kind: "file", id: `${workspaceId}:${name}`, workspaceId, name, path: name, content: "" };
@@ -1846,6 +2444,25 @@ test("a preview open replaces the previous preview tab at its index (the strip n
 	expect((s.tabsByWorkspace.ws1 ?? []).map((t) => t.name)).toEqual(["a.ts", "d.ts", "c.ts"]);
 	expect(s.previewTabByWorkspace.ws1).toBe("ws1:d.ts");
 	expect(s.activeTabByWorkspace.ws1).toBe("ws1:d.ts");
+});
+
+test("hydrated per-group previews never evict one another from the render cache", () => {
+	const document: WorkspaceLayoutDocument = {
+		version: 1,
+		center: { kind: "group", id: "center-a", tabs: [] },
+		left: { visible: false, width: 0.18, groups: [] },
+		right: { visible: false, width: 0.28, groups: [] },
+		toolRestoreTargets: {},
+	};
+	useAppStore.setState({ layoutDocumentsByWorkspace: { ws1: document } });
+	const store = useAppStore.getState();
+	store.openTab(fileTab("ws1", "a.ts"), "preview");
+	store.openTab(fileTab("ws1", "b.ts"), "preview");
+
+	expect((useAppStore.getState().tabsByWorkspace.ws1 ?? []).map((tab) => tab.name)).toEqual([
+		"a.ts",
+		"b.ts",
+	]);
 });
 
 test("a preview open of an already-kept tab focuses it without demoting it or moving the slot", () => {
@@ -1903,7 +2520,7 @@ test("the slot is per workspace — clearWorkspaceTabs releases only its own", (
 	expect(s.previewTabByWorkspace.ws2).toBe("ws2:b.ts");
 });
 
-test("chat tabs and doc tabs never enter the preview slot", () => {
+test("chat, document, and plan tabs never enter the preview slot", () => {
 	useAppStore.setState({ activeWorkspaceId: "ws1" });
 	const store = useAppStore.getState();
 	store.openTab(fileTab("ws1", "a.ts"), "preview");
@@ -1916,11 +2533,31 @@ test("chat tabs and doc tabs never enter the preview slot", () => {
 		name: "Plan",
 		content: "# plan",
 		docPath: "plan.md",
+		sourceId: "s1",
+	});
+	store.openTab(
+		{
+			kind: "chat",
+			id: "direct-chat",
+			workspaceId: "ws1",
+			name: "Direct chat",
+			sessionId: "s2",
+		},
+		"preview",
+	);
+	store.openDoc({
+		kind: "plan",
+		id: "ws1:live-plan",
+		workspaceId: "ws1",
+		name: "Live plan",
+		sessionId: "s3",
 	});
 
 	const s = useAppStore.getState();
-	expect(s.previewTabByWorkspace.ws1).toBe("ws1:a.ts"); // still the file, untouched by either open
-	expect(s.tabsByWorkspace.ws1).toHaveLength(3);
+	// Still the file: even callers that pass `preview` directly are hardened to a kept chat open.
+	expect(s.previewTabByWorkspace.ws1).toBe("ws1:a.ts");
+	expect(s.tabsByWorkspace.ws1).toHaveLength(5);
+	expect(s.layoutIntents.at(-1)).toMatchObject({ kind: "open", intent: "keep" });
 });
 
 test("a keep on an already-open tab releases ITS workspace's slot, never the active one's", () => {
@@ -1974,11 +2611,12 @@ test("every center navigation bumps the workspace's nav tick, and none of them b
 			name: "Plan",
 			content: "# p",
 			docPath: "plan.md",
+			sourceId: "s1",
 		}),
 	);
 	bumps("openChatSession", () => s().openChatSession("ws1", "sess", null, "medium"));
 	bumps("closeChatToHistory", () => s().closeChatToHistory("sess"));
-	bumps("reopenChat", () => s().reopenChat("sess"));
+	bumps("reopenChat", () => s().reopenChat("ws1", "sess"));
 	// Closing the ACTIVE tab hands focus to a neighbour, so it counts. Closing an inactive one does not —
 	// that case is its own test below, since it's a distinct rule rather than another entry in this list.
 	s().setActiveTab("ws1:a.ts");
@@ -1987,6 +2625,7 @@ test("every center navigation bumps the workspace's nav tick, and none of them b
 	bumps("requestHistoryOpen", () =>
 		s().requestHistoryOpen({ sessionId: "sess", workspaceId: "ws1", tabId: "ws1:sess" }),
 	);
+	expect(s().layoutIntents.at(-1)).toMatchObject({ kind: "select", focus: false });
 	expect(missed).toEqual([]);
 
 	// A background auto-restore is NOT a navigation: it takes no focus, so it must not supersede a read the
@@ -2016,6 +2655,128 @@ test("every center navigation bumps the workspace's nav tick, and none of them b
 // user isn't looking at leaves focus exactly where it was, so it must not count.
 // The finding this pins: bumped unconditionally, closing any unrelated tab while a browse was in flight made
 // that read look overtaken, and the file the user clicked never opened at all.
+test("history selection resolves a cache alias to its stable shared placement id", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "history-alias", null, "medium");
+	const cache = useAppStore
+		.getState()
+		.tabsByWorkspace.ws1?.find((tab) => tab.kind === "chat" && tab.sessionId === "history-alias");
+	if (!cache) throw new Error("missing history cache fixture");
+	useAppStore.setState({
+		layoutIntents: [],
+		layoutDocumentsByWorkspace: {
+			ws1: {
+				version: 1,
+				center: {
+					kind: "group",
+					id: "history-group",
+					tabs: [
+						{
+							kind: "chat",
+							id: "legacy-history-placement",
+							name: "History",
+							sessionId: "history-alias",
+						},
+					],
+				},
+				left: { visible: false, width: 0.2, groups: [] },
+				right: { visible: false, width: 0.2, groups: [] },
+				toolRestoreTargets: {},
+			},
+		},
+		layoutAttentionByWorkspace: {
+			ws1: {
+				selectedByGroup: { "history-group": "legacy-history-placement" },
+				lastFocusedCenterGroupId: "history-group",
+				lastFocusedSideGroupId: {},
+				navigationClockByGroup: { "history-group": 0 },
+			},
+		},
+	});
+	store.requestHistoryOpen({
+		workspaceId: "ws1",
+		sessionId: "history-alias",
+		tabId: cache.id,
+	});
+	expect(useAppStore.getState().layoutIntents.at(-1)).toMatchObject({
+		kind: "select",
+		tabId: "legacy-history-placement",
+		resource: { kind: "chat", sessionId: "history-alias" },
+		focus: false,
+	});
+});
+
+test("history selection never uses a colliding cache id as shared placement identity", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "history-collision", null, "medium");
+	const chat = useAppStore
+		.getState()
+		.tabsByWorkspace.ws1?.find(
+			(tab) => tab.kind === "chat" && tab.sessionId === "history-collision",
+		);
+	if (!chat) throw new Error("missing colliding history cache fixture");
+	const collidingId = "opaque-collision";
+	useAppStore.setState({
+		layoutIntents: [],
+		tabsByWorkspace: { ws1: [{ ...chat, id: collidingId }] },
+		layoutDocumentsByWorkspace: {
+			ws1: {
+				version: 1,
+				center: {
+					kind: "split",
+					id: "history-split",
+					direction: "horizontal",
+					weights: [0.5, 0.5],
+					children: [
+						{ kind: "group", id: "history-origin", tabs: [] },
+						{
+							kind: "group",
+							id: "history-collision-group",
+							tabs: [{ kind: "file", id: collidingId, name: "other.ts", path: "other.ts" }],
+						},
+					],
+				},
+				left: { visible: false, width: 0.2, groups: [] },
+				right: { visible: false, width: 0.2, groups: [] },
+				toolRestoreTargets: {},
+			},
+		},
+		layoutAttentionByWorkspace: {
+			ws1: {
+				selectedByGroup: { "history-collision-group": collidingId },
+				lastFocusedCenterGroupId: "history-origin",
+				lastFocusedSideGroupId: {},
+				navigationClockByGroup: { "history-origin": 0, "history-collision-group": 0 },
+			},
+		},
+	});
+	store.requestHistoryOpen({
+		workspaceId: "ws1",
+		sessionId: "history-collision",
+		tabId: collidingId,
+	});
+	const state = useAppStore.getState();
+	expect(state.layoutIntents.at(-1)).toMatchObject({
+		kind: "select",
+		resource: { kind: "chat", sessionId: "history-collision" },
+		navigation: { groupId: "history-origin", clock: 1 },
+	});
+	expect(state.layoutAttentionByWorkspace.ws1?.lastFocusedCenterGroupId).toBe("history-origin");
+	expect(state.layoutAttentionByWorkspace.ws1?.navigationClockByGroup["history-origin"]).toBe(1);
+	expect(
+		state.layoutAttentionByWorkspace.ws1?.navigationClockByGroup["history-collision-group"],
+	).toBe(0);
+});
+
+test("an accepted background close removes the cache from its captured workspace", () => {
+	const store = useAppStore.getState();
+	store.openTab(fileTab("ws1", "a.ts"), "keep");
+	useAppStore.setState({ activeWorkspaceId: "ws2" });
+	store.closeTab("ws1:a.ts", false, false, "ws1");
+	expect(useAppStore.getState().tabsByWorkspace.ws1).toEqual([]);
+	expect(useAppStore.getState().tabsByWorkspace.ws2).toBeUndefined();
+});
+
 test("a close that moves no focus is not a navigation — it can't discard a browse in flight", () => {
 	useAppStore.setState({ activeWorkspaceId: "ws1" });
 	const s = () => useAppStore.getState();
@@ -2039,6 +2800,33 @@ test("a close that moves no focus is not a navigation — it can't discard a bro
 	// ...and closing what IS active still counts, since focus has to move somewhere.
 	s().closeTab("ws1:b.ts");
 	expect(tick()).toBeGreaterThan(before);
+});
+
+test("terminal creation can capture a center-group destination without creating a second authority", () => {
+	useAppStore.setState({
+		layoutAttentionByWorkspace: {
+			w1: {
+				selectedByGroup: {},
+				lastFocusedCenterGroupId: "center-a",
+				lastFocusedSideGroupId: {},
+				navigationClockByGroup: { "center-a": 1, "center-b": 3 },
+			},
+		},
+	});
+	useAppStore.getState().addTerminal("w1", undefined, "center-b");
+	const state = useAppStore.getState();
+	expect(state.terminalsByWorkspace.w1).toHaveLength(1);
+	expect(state.layoutIntents).toHaveLength(1);
+	expect(state.layoutIntents[0]).toMatchObject({
+		kind: "place-terminal",
+		workspaceId: "w1",
+		targetGroupId: "center-b",
+	});
+	expect(state.layoutAttentionByWorkspace.w1).toMatchObject({
+		lastFocusedCenterGroupId: "center-b",
+		navigationClockByGroup: { "center-a": 1, "center-b": 4 },
+	});
+	expect(state.navTickByWorkspace.w1).toBe(1);
 });
 
 test("catalog authority falls with the list it describes — only an awaited refresh sets it", () => {

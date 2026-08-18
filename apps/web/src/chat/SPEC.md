@@ -70,8 +70,8 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   Errored *routine* steps get **no special treatment** (deliberate — agents often recover; `ErrorTurn`
   and primary error-auto-expand are the safety nets).
 - `divider` — the round-end summary (`TurnDivider` + pure `turnDivider` deriver), anchored the instant a
-  round ends: elapsed time, tool-call count, and the round's written files as **two chips split the way the
-  right panel is** — "N specs" and "N files changed". The split is a **partition** (a path lands on exactly
+  round ends: elapsed time, tool-call count, and the round's written files as **two chips split by owning
+  tool** — “N specs” and “N files changed”. The split is a **partition** (a path lands on exactly
   one side, never counted twice) computed in the deriver from the injected `isSpec` predicate — the store's
   `specPathMatcher` over the workspace's spec graph, plus `spec_create`'s target, which is a spec by
   construction even before the graph snapshot catches up. Why it matters: a spec is often **gitignored**
@@ -87,9 +87,10 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
 - The two chips are a **switch, not two independent folds**: at most one list is open, choosing the other
   side replaces it, and re-choosing the open one clears the selection. That invariant is *structural* — the
   divider stores the **selected key** (`useSelection`, one entry per divider row), so no state exists in
-  which both are expanded. Expanding also **reveals the owning right-panel view** (`onReveal` →
-  `requestRightTab`) without surfacing any path, which is what makes the pair read as switching between
-  Specs and Changes; closing is "never mind" and leaves the panel where the user last sent it.
+  which both are expanded. Expanding also **reveals the owning singleton side tool** (`onReveal` → the
+  store's arrangement-agnostic tool-reveal intent) without surfacing any path, which is what makes the pair
+  read as switching between Specs and Changes; closing is “never mind” and leaves the tool where the user
+  last sent it.
 
 Row/step ids are stable across streaming snapshots (first step's `toolCallId`, or message-anchored index —
 pi appends, never reorders), so fold state survives re-derivation and virtualization: **every fold surface
@@ -152,18 +153,20 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   customTypes are ignored. No store/transport/shiki.
 - **Jump-to-message** (`chatLocationRequest` — set by `useHistorySearch.ts`'s `openMessage` on Enter over
   a mapped message hit; see `store/SPEC.md` for the store-level request/clear contract and
-  `CenterTabs.tsx`'s open/reopen/hydrate half) — `ChatView` is the sole consumer. Once `rows.length > 0`,
+  the workbench shell integration's open/reopen/hydrate half) — `ChatView` is the sole consumer. Once
+  `rows.length > 0`,
   it resolves the request's `messageIndex` via `runtime.turnIdByMessageIndex` (present only on a
   *hydrated* runtime — a live/already-open session's runtime, built by the event reducer, never carries
-  one), falling back to scanning `turns` for the first whose own text contains `anchorText`'s prefix — the
+  one), falling back to scanning `turns` for the newest whose own text contains `anchorText`'s prefix — the
   same fallback also covers a hydrated map entry whose turn no longer contains the anchor (e.g. the
   transcript changed underneath it). The resolved turn maps to a row via the pure **`rowIndexForTurn(rows,
   turnId)`** (`rows.ts`) — a turn's own row for `user`/`system`/`error`/`retry`, or its first `:text:` row
   for `assistant` (whose turns dissolve into `markdown`/`tool`/`activity` rows, never a row of their own)
   — then `virtuosoRef.scrollToIndex({ align: "center" })` plus a transient `flashRowId` (rendered as
   `data-flash` + a `bg-primary-subtle` transition on the row wrapper, cleared after 1600ms) draw the
-  eye to it. Either resolving a row or giving up (toasted as "couldn't locate the message") always clears
-  the request — `ChatView` is its only consumer, so an unresolved request must never linger.
+  eye to it. Either resolving a row or giving up (toasted as "couldn't locate the message") clears that
+  exact still-current request; an older effect may not clear a newer jump. `ChatView` is its only terminal
+  consumer, so an unresolved current request must never linger.
 - **Open at the latest message** — the chat `Virtuoso` mounts with `initialTopMostItemIndex = { index:
   last row, align: "end" }`, so every freshly shown transcript (new tab, reopen from history, auto-open,
   reload) starts at the bottom instead of mid-scroll; jump-to-message (above) runs post-mount and
@@ -199,7 +202,7 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   session's model through `store`'s `selectCatalogModel` before passing it down, rather than reading the
   session's own snapshot, so a `model.refresh` that changes what a model supports changes the offered
   levels with it), `SessionStatsBar`, `ChatHeader` (the fixed, single-line **28px panel-header row** —
-  the same structural geometry as the center/right tab strips and the Changes toolbar; it never scrolls,
+  the same structural geometry as workbench Group Headers and the Changes toolbar; it never scrolls,
   and constrained widths clip/truncate TODO + status/usage text while preserving the trailing Skills
   action. Its `left` slot carries the plan strip; its **Skills** button is the presentational **`SkillsButton`**
   primitive — a `BookOpen` pill, badged when a skill dir changed on disk — also shared with
@@ -373,8 +376,8 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   its mirroring to take effect), propagating each into its same-group siblings; only **then** does it strip whatever markers are
   still untouched (`stripUntouchedSlots`), and always clears the session — sent **or** queued
   (steer/followUp), same rule. Switching tabs needs no
-  explicit cleanup: `panels/CenterTabs.tsx` mounts only the active tab's component, so leaving a chat tab
-  unmounts `Composer` (and its session) while the store's `draft` text itself persists. **Hint chip**:
+  explicit cleanup: the workbench visibility gate mounts only a group's locally selected body, so leaving a
+  chat tab unmounts `Composer` (and its session) while the store's `draft` text itself persists. **Hint chip**:
   while a session is active (and the menu is not, so the two absolutely-positioned overlays never share
   the same anchor rect), a small pill above the textarea — `slot {slotIdx+1}/{n} · ⇥ next · esc done`
   (`data-testid="slot-hint"`) — clickable, tap steps to the next slot (same mirroring rule as `Tab`), the
@@ -496,8 +499,8 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
     action file-tree clicks use) — at the **`keep`** intent deliberately, since an explicit "open in editor"
     must not land in the preview slot a later browse click would silently replace (see `panels/SPEC.md`'s
     Preview tabs bullet) — then `store.closeSettings()`. **Global rows are dialog-only** — a deliberate
-    asymmetry, not an oversight: file tabs are worktree-scoped (`tabsByWorkspace` is keyed by workspace
-    id), but a global template lives under the host's agent dir, outside any worktree, so there's no
+    asymmetry, not an oversight: file layout references are worktree-scoped, but a global template lives
+    under the host's agent dir, outside any worktree, so there is no
     worktree-relative path to open it at.
 - **Plain `↑` recall + history button** — `Composer`'s `recentPrompts` prop (`ChatView`: this chat's own
   user-turn texts via `turnAnchorText`, newest first, deduped **keeping the newest occurrence** — the same
@@ -512,7 +515,9 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   [[module-pi-todos]]; host read/write: [[submodule-server-todos]]):
   `useChatTodos` (the `todo.*` data hook — fetch + live `pi.event` refetch + edits + the add-nudge + the
   `openMarkdown` snapshot action; tool completion refreshes immediately and `agent_settled` supplies the
-  final refresh), `planView` (pure derivations over the DTO: `groupProgress`,
+  final refresh; overlapping list reads are latest-wins and connection-generation stamped, accepted adds
+  fold by item id, and a failed optimistic removal re-reads authority rather than restoring a stale whole-plan
+  capture over concurrent edits), `planView` (pure derivations over the DTO: `groupProgress`,
   `planSummary`, `planGlance`/`sessionGlance`, `planSections`, and `shouldNudgeOnAdd`. A group's *status* is
   **not** derived here — the host computes it and ships it on `TodoGroupItem.status`, so the rule has one
   home; a user edit therefore re-reads the plan rather than patching it locally, see `useChatTodos`), `TodoList` (the
@@ -526,8 +531,8 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   (no separate "Your requests" header — they're placed by status). **A row whose item carries a host
   change set grows a quiet "N files" chip** (`itemChangeSet` in `planView` — the one derivation shared
   with the markdown snapshot below, so the two can never disagree): a **committed** item's chip opens the
-  Changes panel at its `commit:{sha}` scope via `useChatTodos.openChanges` (`setDiffScope` +
-  `requestRightTab` — the panel lists the commit's files itself; N = the DTO's host-derived
+  Changes panel at its `commit:{sha}` scope via `useChatTodos.openChanges` (`setDiffScope` + a
+  shell `reveal-tool` intent — the panel lists the commit's files itself; N = the DTO's host-derived
   `commit.files`); the **path-list fallback** deep-links a single path's live diff directly (pinning the
   scope back to `branch` first, so it can't inherit a commit scope a previous click left behind) or
   expands an inline path list. A commit artifact whose sha no longer resolves ships **no `files`** → no
@@ -543,10 +548,12 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   `ChatPlanContent` — a header strip that opens the plan in a `Popover` over the chat; `ChatView` composes
   the `Popover` anchored to the header, so the popup hangs flush under it at the chat's left edge). There
   is no right-panel Todo tab — the plan lives in the conversation; the plan *page* is a center tab, a
-  document-scale view of the same plan, not a panel. (An earlier design compiled the plan to a static
-  markdown `doc` tab with a custom `thinkrail-diff:` link scheme — replaced: a snapshot lies the moment
-  the agent flips a status, and markdown can't carry the Changes-panel affordances; the page is live and
-  markdown is demoted to its export.)
+  document-scale view of the same plan, not a panel. Shared layout persists that page as a registered
+  `todo-plan` document reference (resolver kind + session identity, never plan content), so another client
+  can hydrate the same live page from the host-owned TODO plan. (An earlier design compiled the plan to a
+  static markdown `doc` tab with a custom `thinkrail-diff:` link scheme — replaced: a snapshot lies the
+  moment the agent flips a status, and markdown can't carry the Changes-panel affordances; the page is live
+  and markdown is demoted to its export.)
   **The glance state** keeps the plan honest as the user's status window: `planGlance(isStreaming,
   askStates)` — derived from session state in `ChatView`, **never stored**, so the agent can't make it
   lie — renders the `in_progress` step as working (dot), **waiting for your answer**
@@ -579,7 +586,8 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   also **extend** the render with extra `remarkPlugins` + `components`, e.g. the file view's GitHub
   alert callouts), the view types
   (`types.ts`,
-  incl. `ToolResultState` + `ExtUiDialogRequest`), and `ChatView` (lazy-mounted by `panels/CenterTabs`;
+  incl. `ToolResultState` + `ExtUiDialogRequest`), and `ChatView` (lazy-mounted by the shell workbench
+  resource renderer;
   it wires `SkillsDialog` + the header Skills trigger, resolving the owning `projectId` from the store and
   reading the reload badge from the store selector `selectSkillsStale(state, workspaceId, sessionId)` —
   per-session and store-derived, so it survives the tab-switch remount; a successful reload calls
@@ -607,7 +615,7 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
 - **`ChatView`** is the primary app-integration file: wires this session's runtime
   (`store.sessions[sessionId]`), the transport calls, the `ChatActions` + `AskStates` contexts, the
   divider's deep links (`onOpenChange` → `requestChangesView`, `onOpenSpec` → `requestSpecView`; each
-  receives the single path the user picked) plus its view switch (`onReveal` → `requestRightTab`), and the
+  receives the single path the user picked) plus its view switch (`onReveal` → the tool-reveal intent), and the
   `isSpec` classifier it builds from the store's `specsByWorkspace` snapshot (subscribed as the stored array
   — a stable ref — and memoized into a matcher here, never a fresh Set inside the selector) — together with
   **`useHistorySearch.ts`** (the Ctrl+R history-recall overlay's store/transport edge) and

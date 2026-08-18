@@ -384,7 +384,10 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 					else finishAttach();
 				})
 				.catch(() => {
-					if (disposed) return;
+					if (disposed || attachGeneration !== startedAt || prebind !== attemptPrebind) {
+						attemptPrebind.stop();
+						return;
+					}
 					// Reconnects replay this request, so this is a real host refusal or deadline rather than an
 					// ambiguous dropped response. Stop pre-bind intake: this failed pane must not retain every other
 					// terminal's addressed output for the rest of its life.

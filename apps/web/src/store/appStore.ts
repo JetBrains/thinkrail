@@ -3,6 +3,9 @@ import type {
 	AskUserQuestionResult,
 	ExtUiRequest,
 	GitDiffScope,
+	LayoutChangedPayload,
+	LayoutSettings,
+	LayoutToolId,
 	LoginFrame,
 	LoginPush,
 	PiEvent,
@@ -21,6 +24,8 @@ import type {
 	WireModel,
 	Workspace,
 	WorkspaceFsChangedPayload,
+	WorkspaceLayoutDocument,
+	WorkspaceLayoutSnapshot,
 } from "@thinkrail/contracts";
 import { DEFAULT_CONFIG, isAskUserAnswersMessage, isControlMessage } from "@thinkrail/contracts";
 import { create } from "zustand";
@@ -29,23 +34,30 @@ import { assistantFailureText } from "../chat/assistantFailure";
 import type { HydratedRuntime } from "../chat/hydrate";
 import type { ChatTurn, ExtUiDialogRequest, ToolResultState } from "../chat/types";
 import {
+	type LayoutAttention,
+	layoutResourceIdentity,
 	matchesSkillInvocationCommand,
 	parseSkillInvocation,
+	randomId,
+	readLayoutNavigationClock,
 	shallowEqualArrays,
+	tupleKey,
 	userText,
 } from "../lib";
 import type { ConnectionStatus } from "../transport";
 import {
 	type HistoryTarget,
 	selectActiveWorkspaceProjectId,
+	selectLayoutResourcePlacement,
 	selectWorkspaceNavTick,
+	selectWorkspaceSessionIds,
 	selectWorkspaceTick,
 } from "./selectors";
 
 /** A center tab. File tabs (Monaco) and chat tabs share the strip, discriminated by `kind`. */
 export interface FileTab {
 	kind: "file";
-	id: string; // `${workspaceId}:${path}` — stable, so re-opening a file focuses its tab
+	id: string; // collision-safe `(workspaceId, path)` identity
 	workspaceId: string;
 	name: string;
 	path: string;
@@ -58,15 +70,15 @@ export interface FileTab {
 }
 export interface ChatTab {
 	kind: "chat";
-	id: string; // `${workspaceId}:${sessionId}` — the AgentSession id is the one id model
+	id: string; // collision-safe `(workspaceId, sessionId)` identity; sessionId remains pi's one session id
 	workspaceId: string;
 	name: string;
 	sessionId: string;
 }
 /**
- * An **ephemeral** rendered-markdown tab — content only, never backed by a file on disk (so no fs
- * re-read / source toggle). Used for on-demand snapshots like the chat's TODO plan compiled to markdown.
- * `docPath` is a synthetic `.md` name (for the preview's link/heading resolution + a readable label).
+ * Browser-local resolved content for a registered virtual document — never backed by a worktree file (so
+ * no fs re-read / source toggle). Shared placement strips this cache to its rehydratable resolver identity;
+ * `docPath` is a synthetic `.md` path used for link resolution and a readable label.
  */
 export interface DocTab {
 	kind: "doc";
@@ -75,6 +87,8 @@ export interface DocTab {
 	name: string;
 	content: string;
 	docPath: string;
+	/** Stable resolver source identity; shared layout persists this reference, never `content`. */
+	sourceId: string;
 }
 /**
  * A read-only diff of one changed file over one **diff scope** (opened from the Changes panel; one tab per
@@ -86,7 +100,7 @@ export interface DocTab {
 export type DiffTabView = "split" | "inline";
 export interface DiffTab {
 	kind: "diff";
-	// `${workspaceId}:diff:${scopeKey}:${path}` — stable, so re-clicking a file in the same scope focuses its
+	// Collision-safe `(workspaceId, scopeKey, path)` identity — stable, so re-clicking a file in the same scope focuses its
 	// tab, while a different scope of that file is a different tab (its content can't change meaning
 	// because the rail's scope flipped underneath it).
 	id: string;
@@ -128,33 +142,139 @@ export interface PlanTab {
 }
 export type EditorTab = FileTab | ChatTab | DocTab | DiffTab | PlanTab;
 
+export function chatTabId(workspaceId: string, sessionId: string): string {
+	return tupleKey("chat", workspaceId, sessionId);
+}
+
+function editorResourceIdentity(tab: EditorTab): string {
+	if (tab.kind === "doc") {
+		return tupleKey("layout-resource", "document", "todo-plan", tab.sourceId);
+	}
+	if (tab.kind === "plan") {
+		return tupleKey("layout-resource", "document", "todo-plan", tab.sessionId);
+	}
+	return layoutResourceIdentity(tab);
+}
+
+function editorSessionId(tab: EditorTab): string | null {
+	if (tab.kind === "chat" || tab.kind === "plan") return tab.sessionId;
+	return tab.kind === "doc" ? tab.sourceId : null;
+}
+
 /**
- * How an open/reveal treats the workspace's single **preview slot**. `preview` is a light "I'm just
- * browsing" open (a tree click, a link follow) that reuses the slot; `keep` is a deliberate open (a
- * double click) that takes a tab of its own. See `previewTabByWorkspace`.
+ * Preserve an existing semantic cache id; otherwise use the preferred id only if another resource does not
+ * already own it. Shared placement ids are opaque, so this guard is what lets them coexist with the
+ * browser's canonical tuple ids without metadata replacement or duplicate React keys.
+ */
+function availableEditorTabId(tabs: readonly EditorTab[], tab: EditorTab): string {
+	const identity = editorResourceIdentity(tab);
+	const existing = tabs.find((candidate) => editorResourceIdentity(candidate) === identity);
+	if (existing) return existing.id;
+	if (!tabs.some((candidate) => candidate.id === tab.id)) return tab.id;
+	let fallback = randomId("editor-cache");
+	while (tabs.some((candidate) => candidate.id === fallback)) fallback = randomId("editor-cache");
+	return fallback;
+}
+
+/**
+ * How an open/reveal treats its destination center group's structural preview slot. `preview` is a light
+ * browse (tree click/link follow); `keep` is deliberate. The shell model—not the resource cache—applies it.
  */
 export type TabIntent = "preview" | "keep";
 
+export interface PendingLayoutWrite {
+	mutationId: string;
+	/** Captured base: `null` creates from absence; a number replaces that exact accepted revision. */
+	expectedRevision: number | null;
+	document: WorkspaceLayoutDocument;
+}
+
+/** A browser-local destination and its request-time navigation clock for one deferred center open. */
+export interface CenterNavigationStamp {
+	groupId: string;
+	clock: number;
+}
+
+export interface LayoutOpenOptions {
+	targetGroupId?: string;
+	activate?: boolean;
+	/** The request-time navigation already counted by the caller; retained for settlement-time arbitration. */
+	navigation?: CenterNavigationStamp | null;
+	/** Automatic restoration can suppress an accepted structural selection from counting as navigation. */
+	countNavigation?: boolean;
+	/** A click upgraded to a double click replaces the destination group's preview slot but lands kept. */
+	claimPreview?: boolean;
+}
+
+/** Arrangement-agnostic requests consumed by the shell-owned workbench integration. */
+export type LayoutIntent =
+	| {
+			id: string;
+			kind: "open";
+			workspaceId: string;
+			tab: EditorTab;
+			intent: TabIntent;
+			targetGroupId?: string;
+			activate?: boolean;
+			/** A coalesced preview→keep gesture still claims the structural preview slot. */
+			claimPreview?: boolean;
+			/** Request-time navigation retained for accepted-focus arbitration without counting it twice. */
+			navigation?: CenterNavigationStamp | null;
+			/** Automatic restoration may focus without superseding an earlier user navigation. */
+			countNavigation?: boolean;
+	  }
+	| { id: string; kind: "close"; workspaceId: string; tabId: string }
+	| {
+			id: string;
+			kind: "select";
+			workspaceId: string;
+			tabId: string;
+			/** Semantic fallback when the browser cache id differs from an opaque shared placement id. */
+			resource?: EditorTab;
+			keep?: boolean;
+			/** Another control (for example history search) may own focus after selection. */
+			focus?: boolean;
+			/** Correlates a deferred history-open selection with the still-current overlay request. */
+			historyRequestId?: string;
+			/** Request-time navigation retained so accepted selection does not count it twice. */
+			navigation?: CenterNavigationStamp | null;
+			countNavigation?: boolean;
+	  }
+	| { id: string; kind: "reveal-tool"; workspaceId: string; tool: LayoutToolId }
+	| { id: string; kind: "remove-session"; workspaceId: string; sessionId: string }
+	| {
+			id: string;
+			kind: "place-terminal";
+			workspaceId: string;
+			tabKey: string;
+			title: string;
+			targetGroupId?: string;
+			navigation?: CenterNavigationStamp | null;
+			countNavigation?: boolean;
+	  }
+	| { id: string; kind: "close-terminal"; workspaceId: string; tabKey: string }
+	| { id: string; kind: "select-terminal"; workspaceId: string; tabKey: string }
+	| { id: string; kind: "toggle-side"; workspaceId: string; side: "left" | "right" };
+export type LayoutIntentInput = LayoutIntent extends infer Intent
+	? Intent extends { id: string }
+		? Omit<Intent, "id">
+		: never
+	: never;
+
 /**
  * A section of the settings dialog (a const-object "enum", the codebase convention). Extensible — the live
- * sections are providers, github, appearance (the theme picker), templates (prompt-template manager),
- * and privacy (the analytics toggle).
+ * sections are providers, GitHub, appearance, layout, terminal, templates, and privacy.
  */
 export const SettingsSection = {
 	Providers: "providers",
 	Github: "github",
 	Appearance: "appearance",
+	Layout: "layout",
 	Terminal: "terminal",
 	Templates: "templates",
 	Privacy: "privacy",
 } as const;
 export type SettingsSection = (typeof SettingsSection)[keyof typeof SettingsSection];
-
-/**
- * The right panel's views. The id lives here, not in `panels`, because the *intent* to show one is store
- * state (`rightTabRequest`) that chat raises and the panel obeys — `RightPanel` reads the union back.
- */
-export type RightPanelTab = "specs" | "files" | "changes" | "review";
 
 /** A transient notification. `error` persists until dismissed; `success`/`info` auto-dismiss (the Toaster
  * owns the timer). `title` is optional — a bare `message` is the common case. */
@@ -213,6 +333,8 @@ export interface ChatLocationRequest {
 	sessionId: string;
 	messageIndex: number;
 	anchorText: string;
+	/** Destination and local clock captured before a cross-workspace switch when already hydrated. */
+	navigation?: CenterNavigationStamp | null;
 }
 
 /**
@@ -553,39 +675,36 @@ interface AppState {
 	 * distinguish a reconnect from the previous open socket even though both settle on the same status. */
 	connectionGeneration: number;
 	protocolVersion: number | null;
-	/** Open projects shown in the left rail, newest first. */
+	/** Open projects shown in the Projects tool, newest first. */
 	projects: Project[];
 	/** Every known project (open + closed) shown under Add project → Recents, newest first. */
 	recentProjects: Project[];
 	workspaces: Record<string, Workspace[]>;
+	/** Permanent local tombstones keep late layout/session reads from recreating removed workspace state. */
+	removedWorkspaceIds: Record<string, true>;
 	selectedProjectId: string | null;
 	activeWorkspaceId: string | null;
-	/** Center tabs belong to a workspace — switching workspaces swaps the visible tab set. */
+	/** Latest accepted host snapshot and the optimistic projection currently rendered. */
+	layoutSnapshotsByWorkspace: Record<string, WorkspaceLayoutSnapshot>;
+	layoutDocumentsByWorkspace: Record<string, WorkspaceLayoutDocument>;
+	layoutAttentionByWorkspace: Record<string, LayoutAttention>;
+	layoutPendingByWorkspace: Record<string, PendingLayoutWrite[]>;
+	/** Incremented when a nonmatching accepted document or rollback replaces the rendered projection. */
+	layoutRemoteEpochByWorkspace: Record<string, number>;
+	layoutIntents: LayoutIntent[];
+	/** Center resource render caches belong to a workspace — layout documents own placement/order. */
 	tabsByWorkspace: Record<string, EditorTab[]>;
 	activeTabByWorkspace: Record<string, string | null>;
 	/**
-	 * The workspace's **preview tab** — the one reusable slot a light open lands in (rendered italic; see
-	 * `panels/SPEC.md`). Keyed like `activeTabByWorkspace`, so "at most one preview tab per workspace" is
-	 * structural rather than a rule every writer has to remember, and the `EditorTab` union stays pure data.
-	 * Absent = this workspace has no preview tab.
+	 * Pre-layout compatibility hint for the legacy array cache. Once a layout document is hydrated, previews
+	 * never replace cache entries across groups: each center group's actual preview id lives in
+	 * `WorkspaceLayoutDocument`, and the cache remains render data rather than placement authority.
 	 */
 	previewTabByWorkspace: Record<string, string>;
 	/**
-	 * Monotonic count of **center-area navigations** per workspace. Rendered by nothing: it exists so a
-	 * **slow read can tell it was overtaken**. A click is instant and an `fs.readFile` is not, so
-	 * `panels/openTabs.ts` records this count when it starts a read and drops a `preview` that lands after
-	 * the count has moved — otherwise the file would steal focus back from wherever the user went, and claim
-	 * the preview slot from it. It lives here rather than in that module so **no focus transition can bypass
-	 * it**: `openDoc`/`setActiveTab`/`closeTab`/`openChatSession`/`closeChatToHistory`/`reopenChat`/
-	 * `requestHistoryOpen` all bump it, `hydrateSession` only when it actually takes focus, and
-	 * `noteNavigation` covers an intent whose focus change hasn't reached the store yet.
-	 *
-	 * **`openTab` deliberately does NOT bump it** — it *is* the read completion being ordered, so counting it
-	 * would make an earlier read's own commit look like user navigation and drop the later one. Two browse
-	 * clicks in a row is exactly that case: clicking an unopened file writes no store state, so both reads
-	 * would record the same count and the first to land would invalidate the second, leaving the *first*
-	 * click's file open. `openTabs.ts` therefore bumps this at **request** time and is the only caller of
-	 * `openTab`; a request and a completion are different events and only the request counts as navigating.
+	 * Compatibility workspace-wide navigation clock for callers that can run before layout attention exists.
+	 * Once hydrated, deferred opens use `LayoutAttention.navigationClockByGroup` and request-time destination
+	 * stamps, so activity in one center group does not invalidate another group's preview.
 	 */
 	navTickByWorkspace: Record<string, number>;
 	/** Chat tabs the user closed, per workspace (most-recent-first) — reopenable while their runtime lives. */
@@ -593,7 +712,7 @@ interface AppState {
 	/** Page-lifetime deletion tombstones. They order async session reads behind `session.deleted`, preventing
 	 * an older list/transcript response from restoring a permanently removed chat. */
 	deletedSessionsByWorkspace: Record<string, Record<string, true>>;
-	/** Terminals are workspace-scoped too; their instances stay mounted (hidden) to preserve buffers. */
+	/** Terminal domain catalogs are workspace-scoped; placement visibility decides which bodies mount. */
 	terminalsByWorkspace: Record<string, TerminalTab[]>;
 	activeTerminalByWorkspace: Record<string, string | null>;
 	/** One runtime per live chat (keyed by `sessionId`) — many can stream at once; switching is a swap. */
@@ -623,32 +742,26 @@ interface AppState {
 	 */
 	modelsFresh: boolean;
 	/**
-	 * Which right-panel view to show, when something outside it asks (a chat turn-divider chip). The panel
-	 * watches this ONE field, so "flip to a view" is a single concept rather than a side effect read off
-	 * each path intent below — a chip that only *reveals* a view (expanding its artifact list) needs no path
-	 * at all. Workspace-scoped, so a request from another workspace's chat can't move the active panel; a
-	 * fresh object each call so identical re-requests still fire, and **consumed** by the panel that obeys it
-	 * (`clearRightTabRequest`) — an unconsumed flip would re-fire whenever the workspace is re-activated,
-	 * moving the tab the user has since chosen.
-	 */
-	rightTabRequest: { workspaceId: string; tab: RightPanelTab } | null;
-	/**
-	 * A request to surface a file in the right-panel Changes view (e.g. a chat turn-divider's "files
-	 * changed" chip). `ChangesPanel` highlights the file's row AND opens its diff tab (a path no longer in
-	 * the diff degrades to highlight-only), then **consumes** the request (`clearChangesRequest`) — it
-	 * opens a center tab, so a replay on a git-status re-read would steal the user's tab. Travels with a
-	 * `rightTabRequest` for the flip. A fresh object each call so identical re-requests still fire.
+	 * A request to surface a file in the Changes tool (e.g. a chat turn-divider's "files changed"
+	 * chip). `ChangesPanel` highlights the file's row AND opens its diff tab (a path no longer in the diff
+	 * degrades to highlight-only), then **consumes** the request (`clearChangesRequest`) — it opens a center
+	 * tab, so a replay on a git-status re-read would steal the user's tab. The same atomic action emits the
+	 * shell-owned reveal-tool intent. A fresh object each call so identical re-requests still fire.
 	 *
-	 * `navTick` stamps the center-navigation count **as the chip was clicked**. The panel cannot act on the
-	 * request until `git.status` resolves the path against the diff, so the click and the open are a round
-	 * trip apart; without the stamp the open would mark itself as the navigation on arrival and override
-	 * whatever the user did in between. See `ChangesPanel`.
+	 * The destination-group clock and compatibility `navTick` are stamped **as the chip is clicked**. The
+	 * panel cannot act until `git.status` resolves the path, so without request-time routing the delayed open
+	 * could land in a different group or override a newer navigation. See `ChangesPanel`.
 	 */
-	changesRequest: { workspaceId: string; path: string; navTick: number } | null;
+	changesRequest: {
+		workspaceId: string;
+		path: string;
+		navTick: number;
+		navigation: CenterNavigationStamp | null;
+	} | null;
 	/**
 	 * A history-search "jump to message" deep link, set by `requestChatLocation` and consumed by
-	 * `CenterTabs` (open/hydrate the target chat tab) then `ChatView` (scroll to the anchored turn, then
-	 * clear it) — a fresh object each call so identical re-requests (e.g. the same hit clicked twice)
+	 * `WorkspaceWorkbench` (open/hydrate the target chat tab) then `ChatView` (scroll to the anchored
+	 * turn, then clear it) — a fresh object each call so identical re-requests (e.g. the same hit clicked twice)
 	 * still fire.
 	 */
 	chatLocationRequest: ChatLocationRequest | null;
@@ -659,15 +772,19 @@ interface AppState {
 	 * the file tree, an editor, the transcript — and this is how it reaches the one mounted `ChatView`.
 	 * A fresh object each call so a repeated chord still fires.
 	 */
-	historyOpenRequest: { sessionId: string } | null;
+	historyOpenRequest: { id: string; sessionId: string } | null;
 	/**
-	 * A request to surface a spec in the right-panel Specs view (e.g. a chat turn-divider's "specs" chip).
-	 * The panels watch it and **open the rendered spec** — unlike a diff, a spec doc has nothing to preview
-	 * short of opening it, and the tree row lights up on its own (rows key off the active tab id). Travels
-	 * with a `rightTabRequest` for the flip, and is **consumed** once handled (it opens a center tab, so a
-	 * replay would steal the user's tab). A fresh object each call so identical re-requests still fire.
+	 * A request to surface a spec in the Specs tool (e.g. a chat turn-divider's "specs" chip). The panel
+	 * watches it and **opens the rendered spec** — unlike a diff, a spec doc has nothing to preview short of
+	 * opening it, and the tree row lights up on its own (rows key off the active tab id). The same atomic
+	 * action emits the shell-owned reveal-tool intent; the path request is **consumed** once handled because
+	 * replay would steal the user's center tab. A fresh object each call lets identical re-requests fire.
 	 */
-	specRequest: { workspaceId: string; path: string } | null;
+	specRequest: {
+		workspaceId: string;
+		path: string;
+		navigation: CenterNavigationStamp | null;
+	} | null;
 	/**
 	 * Each workspace's spec-graph snapshot (`spec.graph`), fetched by the Specs panel and kept here so the
 	 * chat can classify a written path as a spec without a second read — the ONE definition of "this file is
@@ -727,6 +844,8 @@ interface AppState {
 	analyticsEnabled: boolean;
 	/** How much terminal output the host keeps for replay, in KiB (host-owned; same `applyConfig` fold). */
 	terminalReplayKb: number;
+	/** Host-owned preset/default/side-limit settings. */
+	layoutSettings: LayoutSettings;
 	/** Transient notifications, oldest-first (the Toaster renders + times them out). At-most a handful live
 	 * at once; a failed wire call that has no better home (no chat tab to host an error turn) lands here. */
 	toasts: Toast[];
@@ -768,25 +887,54 @@ interface AppState {
 	selectProject: (projectId: string) => void;
 	/** Enter a workspace and select its owning project in one state transition. */
 	activateWorkspace: (workspace: Pick<Workspace, "id" | "projectId">) => void;
-	/**
-	 * Open a center tab — an already-open id focuses instead of duplicating. `intent: "preview"` puts it in
-	 * the workspace's preview slot, **replacing the previous preview tab at its index** so the strip doesn't
-	 * reshuffle under the cursor; `intent: "keep"` appends a normal tab and releases the slot if it pointed
-	 * at this id. Chat tabs and `openDoc` never take the slot (see `previewTabByWorkspace`).
-	 */
-	openTab: (tab: EditorTab, intent: TabIntent) => void;
-	/** Open (or refresh + focus, if already open) an ephemeral rendered-markdown `doc` tab. Re-invoking
-	 * with the same id replaces its content so a "compile current state" action always shows the latest. */
+	installLayoutSnapshot: (snapshot: WorkspaceLayoutSnapshot, mutationId?: string) => void;
+	applyLayoutChanged: (payload: LayoutChangedPayload) => void;
+	beginLayoutCommit: (
+		workspaceId: string,
+		document: WorkspaceLayoutDocument,
+		mutationId: string,
+	) => void;
+	rejectLayoutCommit: (workspaceId: string, mutationId: string) => void;
+	applyLayoutConflict: (
+		workspaceId: string,
+		mutationId: string,
+		current: WorkspaceLayoutSnapshot | null,
+	) => void;
+	setLayoutAttention: (workspaceId: string, attention: LayoutAttention) => void;
+	/** Mirror a selected workbench resource into the temporary legacy render-cache projection without
+	 * counting structural reconciliation as user navigation. */
+	syncLegacySelection: (
+		workspaceId: string,
+		selection: { kind: "editor"; tabId: string } | { kind: "terminal"; tabKey: string } | null,
+	) => void;
+	enqueueLayoutIntent: (intent: LayoutIntentInput) => string;
+	consumeLayoutIntent: (id: string) => void;
+	/** Cache a center resource and queue its arrangement-agnostic open. The shell owns actual placement,
+	 * per-group preview replacement, and attention; options preserve a deferred request's destination. */
+	openTab: (
+		tab: EditorTab,
+		intent: TabIntent,
+		syncLayout?: boolean,
+		options?: LayoutOpenOptions,
+	) => void;
+	/** Cache and open a registered center document or live plan page. Shared placement keeps only its
+	 * resolver identity, never inline markdown. */
 	openDoc: (tab: DocTab | PlanTab) => void;
-	closeTab: (id: string) => void;
+	closeTab: (
+		id: string,
+		syncLayout?: boolean,
+		countNavigation?: boolean,
+		workspaceId?: string,
+	) => void;
 	/** Activate a tab. `intent: "keep"` also promotes it out of the preview slot — one-way: nothing ever
 	 * demotes a kept tab back to preview. */
-	setActiveTab: (id: string, intent?: TabIntent) => void;
-	/**
-	 * Record a center-area navigation whose focus change hasn't reached the store yet — starting a chat,
-	 * whose tab only appears once `session.create` returns. Supersedes any read in flight for the workspace
-	 * (see `navTickByWorkspace`), so a file the user has navigated away from can't activate itself on arrival.
-	 */
+	setActiveTab: (id: string, intent?: TabIntent, syncLayout?: boolean) => void;
+	/** Advance the last-focused center group's local clock at request time and return its destination stamp. */
+	beginCenterNavigation: (
+		workspaceId: string,
+		preferredGroupId?: string,
+	) => CenterNavigationStamp | null;
+	/** Advance the compatibility workspace clock for a focus change already represented in local attention. */
 	noteNavigation: (workspaceId: string) => void;
 	/** Set a markdown file tab's view mode (rendered ↔ source); kept on the tab so it survives tab switches. */
 	setFileTabView: (id: string, view: "rendered" | "source") => void;
@@ -811,15 +959,16 @@ interface AppState {
 	 * (which the reload did not load) stays past the baseline and keeps the badge lit.
 	 */
 	markSkillsSynced: (sessionId: string, syncedTick: number) => void;
-	/** Replace a file tab's content after a live re-read, recording the fs tick it was loaded at. The tab
-	 * is located across workspaces by its (globally unique) id; a closed tab is a no-op. */
-	updateFileTabContent: (id: string, content: string, tick: number) => void;
+	/** Replace a file tab's content after a live re-read, recording the fs tick it was loaded at. Shared
+	 * placement ids are only workspace-local, so the captured workspace participates in the lookup. */
+	updateFileTabContent: (workspaceId: string, id: string, content: string, tick: number) => void;
 	/**
 	 * Replace a diff tab's two sides after a live re-read (see `DiffPane`), recording the fs tick **and** the
 	 * review target the fresh content was read against — the two dimensions a diff tab is live in, written
 	 * together so neither can outlive the content it describes.
 	 */
 	updateDiffTabContent: (
+		workspaceId: string,
 		id: string,
 		original: string,
 		modified: string,
@@ -827,12 +976,12 @@ interface AppState {
 		loadedTarget: string,
 	) => void;
 	clearWorkspaceTabs: (workspaceId: string) => void;
-	addTerminal: (workspaceId: string, initialCommand?: string) => void;
+	addTerminal: (workspaceId: string, initialCommand?: string, targetGroupId?: string) => void;
 	setWorkspaceTerminals: (workspaceId: string, tabs: TerminalTabInfo[]) => void;
 	settleTerminalAttach: (workspaceId: string, tabKey: string) => void;
 	consumeTerminalInitialCommand: (workspaceId: string, tabKey: string) => void;
-	closeTerminalTab: (workspaceId: string, tabKey: string) => void;
-	setActiveTerminalTab: (workspaceId: string, tabKey: string) => void;
+	closeTerminalTab: (workspaceId: string, tabKey: string, syncLayout?: boolean) => void;
+	setActiveTerminalTab: (workspaceId: string, tabKey: string, syncLayout?: boolean) => void;
 	openChatSession: (
 		workspaceId: string,
 		sessionId: string,
@@ -841,13 +990,20 @@ interface AppState {
 		/** Skills sync baseline — the workspace tick captured after `workspace.watchReady` and *before*
 		 * `session.create`; omit to anchor at call time (fine when there's no async load in between). */
 		syncedTick?: number,
+		/** Request-time destination/activation arbitration for a deferred create. */
+		options?: LayoutOpenOptions,
 	) => void;
 	/** Drop a chat's runtime on tab close (the `AgentSession` is disposed over the wire by the caller). */
 	closeChatRuntime: (sessionId: string) => void;
 	/** Close a chat tab to history: remove the tab but keep its runtime + session alive for reopening. */
-	closeChatToHistory: (sessionId: string) => void;
+	closeChatToHistory: (
+		sessionId: string,
+		syncLayout?: boolean,
+		workspaceId?: string,
+		countNavigation?: boolean,
+	) => void;
 	/** Tombstone a server-deleted chat and drop every client-side surface/state bucket in one write. */
-	deleteChat: (workspaceId: string, sessionId: string) => void;
+	deleteChat: (workspaceId: string, sessionId: string, countNavigation?: boolean) => void;
 	/**
 	 * Reconcile a `session.list` result against the local membership captured when that read began. Only
 	 * baseline ids absent from the authoritative result are deleted, so a session created while the read
@@ -859,7 +1015,14 @@ interface AppState {
 		authoritativeSessionIds: readonly string[],
 	) => void;
 	/** Reopen a chat from history (its runtime is still live, so the full transcript returns instantly). */
-	reopenChat: (sessionId: string) => void;
+	reopenChat: (workspaceId: string, sessionId: string, options?: LayoutOpenOptions) => void;
+	/** Reconcile the legacy render cache to an authoritative shared chat placement, without navigating. */
+	restorePlacedChatCache: (
+		workspaceId: string,
+		tabId: string,
+		sessionId: string,
+		title: string,
+	) => void;
 	/**
 	 * Record disk-only sessions (from `session.list`) in chat-history so they can be reopened on demand.
 	 * Skips any already live, open as a tab, or already listed — so it's idempotent across re-hydration.
@@ -878,6 +1041,7 @@ interface AppState {
 		 * passed **only** for a disk-only attach (which reloads resources against current disk). Omit for a
 		 * live restore (transcript only, no reload): the baseline is left unset so the chat stays stale. */
 		syncedTick?: number,
+		options?: LayoutOpenOptions,
 	) => void;
 	appendUserMessage: (sessionId: string, text: string) => void;
 	/**
@@ -921,9 +1085,9 @@ interface AppState {
 	setSettingsSection: (section: SettingsSection) => void;
 	/** Fold the server-synced app config in (from `server.welcome` / the `settings.changed` broadcast). */
 	applyConfig: (config: AppConfig) => void;
-	/** Ask the right panel to show one of its views — no path, just the flip (a chip revealing its list). */
-	requestRightTab: (workspaceId: string, tab: RightPanelTab) => void;
-	/** Ask the right panel to surface `path` in its Changes view (deep-link from chat); flips to it too. */
+	/** Reveal a singleton workbench tool — no path, just the tool (a chip revealing its list). */
+	requestToolView: (workspaceId: string, tool: LayoutToolId) => void;
+	/** Reveal Changes and surface `path` in it (deep-link from chat). */
 	requestChangesView: (workspaceId: string, path: string) => void;
 	/** Drop the Changes deep-link once handled (it opens a diff tab — it must fire exactly once). */
 	clearChangesRequest: () => void;
@@ -936,18 +1100,16 @@ interface AppState {
 	clearChatLocation: () => void;
 	/**
 	 * Ask a chat to open its history-search overlay (the shell's global `Ctrl+R`). Activates the target
-	 * tab **atomically** with the request: the chord fires over any tab, and `CenterTabs` mounts one tab
+	 * tab **atomically** with the request: the chord fires over any tab, and the workbench mounts one tab
 	 * body at a time, so a request for a chat that isn't on screen would never be consumed.
 	 */
 	requestHistoryOpen: (target: HistoryTarget) => void;
 	/** Dismiss the history-open request once `ChatView` has acted on it. */
 	clearHistoryOpen: () => void;
-	/** Ask the right panel to open `path` in its Specs view (deep-link from chat); flips to it too. */
+	/** Reveal Specs and open `path` in its rendered-document view (deep-link from chat). */
 	requestSpecView: (workspaceId: string, path: string) => void;
 	/** Drop the spec deep-link once a panel has acted on it (it opens a tab — it must fire exactly once). */
 	clearSpecRequest: () => void;
-	/** Drop the view request once the panel has flipped, so re-activating a workspace can't replay it. */
-	clearRightTabRequest: () => void;
 	/** Record a workspace's fetched spec-graph snapshot (`useWorkspaceSpecs`' read lands here). */
 	setWorkspaceSpecs: (workspaceId: string, nodes: SpecGraphNode[]) => void;
 	/** Record a workspace's review snapshot (the ReviewPanel's `review.get` read lands here). */
@@ -955,7 +1117,7 @@ interface AppState {
 	/** Ask the file's pane to focus a review comment (open the tab first — the pane consumes this). */
 	requestReviewFocus: (workspaceId: string, commentId: string) => void;
 	/** Drop the focus request once a pane has acted on it (it scrolls — it must fire exactly once). */
-	clearReviewFocus: () => void;
+	clearReviewFocus: (commentId?: string) => void;
 	/** Fold a `review.changed` push in — the same full snapshot every client converges on. */
 	applyReviewChanged: (payload: ReviewChangedPayload) => void;
 	/** Enqueue a toast; returns its id so a caller can dismiss it early. An identical live toast (same
@@ -999,6 +1161,24 @@ function reconcileProjectNavigation(
 function omitKey<T>(record: Record<string, T>, key: string): Record<string, T> {
 	const { [key]: _dropped, ...rest } = record;
 	return rest;
+}
+
+function appendLayoutIntent(intents: LayoutIntent[], input: LayoutIntentInput): LayoutIntent[] {
+	return [...intents, { ...input, id: randomId("layout-intent") } as LayoutIntent];
+}
+
+function layoutOpenIntentFields(options: LayoutOpenOptions) {
+	return {
+		...(options.targetGroupId ? { targetGroupId: options.targetGroupId } : {}),
+		...(options.activate === false ? { activate: false } : {}),
+		...(Object.hasOwn(options, "navigation") ? { navigation: options.navigation } : {}),
+		...(options.countNavigation !== undefined ? { countNavigation: options.countNavigation } : {}),
+		...(options.claimPreview ? { claimPreview: true } : {}),
+	};
+}
+
+function navigationCountedAtRequest(options: LayoutOpenOptions): boolean {
+	return Object.hasOwn(options, "navigation");
 }
 
 /** Whether this page has already observed permanent deletion of a workspace chat. */
@@ -1049,33 +1229,173 @@ function sameSpecNode(a: SpecGraphNode, b: SpecGraphNode): boolean {
 }
 
 /**
- * Whether a re-read produced the same graph. The Specs read refetches on every worktree fs tick, and most
- * ticks change no spec at all — keeping the previous array identity on those makes the refetch free for
- * `ChatView`, whose `isSpec` memo (and with it `deriveRows` over the whole transcript, for every open chat)
- * would otherwise be invalidated about once a second during any file activity.
- */
-/**
- * Advance a workspace's center-navigation count (see `navTickByWorkspace`). Every action that moves the
- * active tab folds this into its own `set`, so the bump is atomic with the focus change it describes and
- * a caller can't forget it separately.
+ * Advance a workspace's compatibility center-navigation count. New deferred opens additionally use the
+ * destination group's local clock; this scalar remains while legacy render-cache actions are migrated.
  */
 function bumpNav(s: AppState, workspaceId: string): Record<string, number> {
 	return { ...s.navTickByWorkspace, [workspaceId]: selectWorkspaceNavTick(s, workspaceId) + 1 };
+}
+
+function bumpLayoutProjectionEpoch(s: AppState, workspaceId: string): Record<string, number> {
+	return {
+		...s.layoutRemoteEpochByWorkspace,
+		[workspaceId]: (s.layoutRemoteEpochByWorkspace[workspaceId] ?? 0) + 1,
+	};
+}
+
+function nextExpectedLayoutRevision(state: AppState, workspaceId: string): number | null {
+	const predecessor = state.layoutPendingByWorkspace[workspaceId]?.at(-1);
+	if (predecessor) {
+		return predecessor.expectedRevision === null ? 1 : predecessor.expectedRevision + 1;
+	}
+	return state.layoutSnapshotsByWorkspace[workspaceId]?.revision ?? null;
+}
+
+function advanceCenterNavigation(
+	s: AppState,
+	workspaceId: string,
+	preferredGroupId?: string,
+): {
+	stamp: CenterNavigationStamp | null;
+	patch: Pick<AppState, "navTickByWorkspace" | "layoutAttentionByWorkspace">;
+} {
+	const attention = s.layoutAttentionByWorkspace[workspaceId];
+	if (!attention) {
+		return {
+			stamp: null,
+			patch: {
+				navTickByWorkspace: bumpNav(s, workspaceId),
+				layoutAttentionByWorkspace: s.layoutAttentionByWorkspace,
+			},
+		};
+	}
+	const fallbackGroupId =
+		readLayoutNavigationClock(attention, attention.lastFocusedCenterGroupId) !== undefined
+			? attention.lastFocusedCenterGroupId
+			: (Object.keys(attention.navigationClockByGroup).find(
+					(candidate) => readLayoutNavigationClock(attention, candidate) !== undefined,
+				) ?? attention.lastFocusedCenterGroupId);
+	const groupId =
+		preferredGroupId && readLayoutNavigationClock(attention, preferredGroupId) !== undefined
+			? preferredGroupId
+			: fallbackGroupId;
+	const clock = (readLayoutNavigationClock(attention, groupId) ?? 0) + 1;
+	return {
+		stamp: { groupId, clock },
+		patch: {
+			navTickByWorkspace: bumpNav(s, workspaceId),
+			layoutAttentionByWorkspace: {
+				...s.layoutAttentionByWorkspace,
+				[workspaceId]: {
+					...attention,
+					lastFocusedCenterGroupId: groupId,
+					navigationClockByGroup: Object.assign(
+						Object.create(null),
+						attention.navigationClockByGroup,
+						{ [groupId]: clock },
+					) as Record<string, number>,
+				},
+			},
+		},
+	};
+}
+
+/** Capture the current center destination without superseding an earlier user navigation. */
+export function captureCenterNavigation(
+	state: { layoutAttentionByWorkspace: Record<string, LayoutAttention> },
+	workspaceId: string,
+): CenterNavigationStamp | null {
+	const attention = state.layoutAttentionByWorkspace[workspaceId];
+	if (!attention) return null;
+	const groupId = attention.lastFocusedCenterGroupId;
+	return {
+		groupId,
+		clock: readLayoutNavigationClock(attention, groupId) ?? 0,
+	};
+}
+
+export function layoutOpenOptionsForNavigation(
+	state: {
+		layoutAttentionByWorkspace: Record<string, LayoutAttention>;
+		activeWorkspaceId?: string | null;
+	},
+	workspaceId: string,
+	stamp: CenterNavigationStamp | null,
+): LayoutOpenOptions {
+	if (!stamp) {
+		return state.activeWorkspaceId !== undefined && state.activeWorkspaceId !== workspaceId
+			? { activate: false, navigation: stamp }
+			: { navigation: stamp };
+	}
+	const attention = state.layoutAttentionByWorkspace[workspaceId];
+	const clock = attention ? readLayoutNavigationClock(attention, stamp.groupId) : undefined;
+	const destinationSurvived = clock !== undefined;
+	const workspaceStillActive =
+		state.activeWorkspaceId === undefined || state.activeWorkspaceId === workspaceId;
+	const activate =
+		workspaceStillActive &&
+		(!destinationSurvived ||
+			(clock === stamp.clock && attention?.lastFocusedCenterGroupId === stamp.groupId));
+	return {
+		targetGroupId: stamp.groupId,
+		...(activate ? {} : { activate: false }),
+		navigation: stamp,
+	};
+}
+
+/**
+ * Whether accepting a structural focus must advance its destination clock. A surviving request group was
+ * already advanced at request time; a removed group cannot carry that clock forward, so its rerouted
+ * destination advances once when the resource actually lands.
+ */
+export function shouldAdvanceAcceptedNavigation(
+	attention: LayoutAttention,
+	navigation: CenterNavigationStamp | null | undefined,
+): boolean {
+	if (navigation === undefined || navigation === null) return true;
+	return readLayoutNavigationClock(attention, navigation.groupId) === undefined;
+}
+
+/** A removed destination deliberately reads as current: the shell reroutes it to current last focus. */
+export function isCenterNavigationCurrent(
+	state: { layoutAttentionByWorkspace: Record<string, LayoutAttention> },
+	workspaceId: string,
+	stamp: CenterNavigationStamp | null,
+): boolean {
+	if (!stamp) return true;
+	const attention = state.layoutAttentionByWorkspace[workspaceId];
+	const clock = attention ? readLayoutNavigationClock(attention, stamp.groupId) : undefined;
+	return clock === undefined || clock === stamp.clock;
+}
+
+function layoutIntentTargetsSession(
+	intent: LayoutIntent,
+	workspaceId: string,
+	sessionId: string,
+): boolean {
+	if (intent.workspaceId !== workspaceId) return false;
+	if (intent.kind === "open") return editorSessionId(intent.tab) === sessionId;
+	if (intent.kind === "select" && intent.resource) {
+		return editorSessionId(intent.resource) === sessionId;
+	}
+	return false;
 }
 
 /**
  * The immutable chat-deletion fold shared by a direct `session.deleted` event and reconnect membership
  * reconciliation. Returning the original state makes both paths idempotent without duplicating cleanup.
  */
-function withoutChat(s: AppState, workspaceId: string, sessionId: string): AppState {
+function withoutChat(
+	s: AppState,
+	workspaceId: string,
+	sessionId: string,
+	countNavigation: boolean,
+): AppState {
+	if (s.removedWorkspaceIds[workspaceId]) return s;
 	const alreadyDeleted = isSessionDeleted(s, workspaceId, sessionId);
 	const tabs = s.tabsByWorkspace[workspaceId] ?? [];
-	// A chat owns two tabs: its transcript and (optionally) its plan page — both die with the session.
-	const owned = tabs.filter(
-		(candidate) =>
-			(candidate.kind === "chat" || candidate.kind === "plan") && candidate.sessionId === sessionId,
-	);
-	const tab = owned[0];
+	// A chat owns its transcript plus any registered legacy document or live plan page.
+	const sessionTabs = tabs.filter((candidate) => editorSessionId(candidate) === sessionId);
 	const closed = s.closedChatsByWorkspace[workspaceId] ?? [];
 	const inHistory = closed.some((chat) => chat.sessionId === sessionId);
 	const hasRuntime = s.sessions[sessionId] !== undefined;
@@ -1083,34 +1403,68 @@ function withoutChat(s: AppState, workspaceId: string, sessionId: string): AppSt
 	const targetsLocation =
 		s.chatLocationRequest?.workspaceId === workspaceId &&
 		s.chatLocationRequest.sessionId === sessionId;
-	if (alreadyDeleted && !tab && !inHistory && !hasRuntime && !hasSkillBaseline && !targetsLocation)
+	const targetsHistory = s.historyOpenRequest?.sessionId === sessionId;
+	const hasStaleLayoutIntent = s.layoutIntents.some((intent) =>
+		layoutIntentTargetsSession(intent, workspaceId, sessionId),
+	);
+	if (
+		alreadyDeleted &&
+		sessionTabs.length === 0 &&
+		!inHistory &&
+		!hasRuntime &&
+		!hasSkillBaseline &&
+		!targetsLocation &&
+		!targetsHistory &&
+		!hasStaleLayoutIntent
+	) {
 		return s;
+	}
 
-	const ownedIds = new Set(owned.map((candidate) => candidate.id));
-	const remaining = tab ? tabs.filter((candidate) => !ownedIds.has(candidate.id)) : tabs;
-	const activeId = s.activeTabByWorkspace[workspaceId];
-	const wasActive = !!activeId && ownedIds.has(activeId);
+	const removedTabIds = new Set(sessionTabs.map((candidate) => candidate.id));
+	const remaining =
+		sessionTabs.length > 0 ? tabs.filter((candidate) => !removedTabIds.has(candidate.id)) : tabs;
+	const wasActive =
+		s.activeTabByWorkspace[workspaceId] !== null &&
+		removedTabIds.has(s.activeTabByWorkspace[workspaceId] ?? "");
+	const survivingLayoutIntents = hasStaleLayoutIntent
+		? s.layoutIntents.filter(
+				(intent) => !layoutIntentTargetsSession(intent, workspaceId, sessionId),
+			)
+		: s.layoutIntents;
 	return {
 		...s,
+		layoutIntents: alreadyDeleted
+			? survivingLayoutIntents
+			: appendLayoutIntent(survivingLayoutIntents, {
+					kind: "remove-session",
+					workspaceId,
+					sessionId,
+				}),
 		...(!alreadyDeleted
 			? {
-					deletedSessionsByWorkspace: {
-						...s.deletedSessionsByWorkspace,
-						[workspaceId]: {
-							...(s.deletedSessionsByWorkspace[workspaceId] ?? {}),
-							[sessionId]: true as const,
+					deletedSessionsByWorkspace: Object.assign(
+						Object.create(null),
+						s.deletedSessionsByWorkspace,
+						{
+							[workspaceId]: Object.assign(
+								Object.create(null),
+								s.deletedSessionsByWorkspace[workspaceId],
+								{ [sessionId]: true as const },
+							) as Record<string, true>,
 						},
-					},
+					) as Record<string, Record<string, true>>,
 				}
 			: {}),
-		...(tab ? { tabsByWorkspace: { ...s.tabsByWorkspace, [workspaceId]: remaining } } : {}),
+		...(sessionTabs.length > 0
+			? { tabsByWorkspace: { ...s.tabsByWorkspace, [workspaceId]: remaining } }
+			: {}),
 		...(wasActive
 			? {
 					activeTabByWorkspace: {
 						...s.activeTabByWorkspace,
 						[workspaceId]: remaining.at(-1)?.id ?? null,
 					},
-					navTickByWorkspace: bumpNav(s, workspaceId),
+					navTickByWorkspace: countNavigation ? bumpNav(s, workspaceId) : s.navTickByWorkspace,
 				}
 			: {}),
 		...(inHistory
@@ -1126,9 +1480,16 @@ function withoutChat(s: AppState, workspaceId: string, sessionId: string): AppSt
 			? { skillsSyncedTickBySession: omitKey(s.skillsSyncedTickBySession, sessionId) }
 			: {}),
 		...(targetsLocation ? { chatLocationRequest: null } : {}),
+		...(targetsHistory ? { historyOpenRequest: null } : {}),
 	};
 }
 
+/**
+ * Whether a re-read produced the same graph. The Specs read refetches on every worktree fs tick, and most
+ * ticks change no spec at all — keeping the previous array identity on those makes the refetch free for
+ * `ChatView`, whose `isSpec` memo (and with it `deriveRows` over the whole transcript, for every open chat)
+ * would otherwise be invalidated about once a second during any file activity.
+ */
 function sameSpecGraph(prev: SpecGraphNode[] | undefined, next: SpecGraphNode[]): boolean {
 	if (!prev || prev.length !== next.length) return false;
 	return prev.every((node, i) => {
@@ -1237,20 +1598,26 @@ export const useAppStore = create<AppState>((set, get) => ({
 	projects: [],
 	recentProjects: [],
 	workspaces: {},
+	removedWorkspaceIds: Object.create(null) as Record<string, true>,
 	selectedProjectId: null,
 	activeWorkspaceId: null,
+	layoutSnapshotsByWorkspace: {},
+	layoutDocumentsByWorkspace: {},
+	layoutAttentionByWorkspace: {},
+	layoutPendingByWorkspace: {},
+	layoutRemoteEpochByWorkspace: {},
+	layoutIntents: [],
 	tabsByWorkspace: {},
 	activeTabByWorkspace: {},
 	previewTabByWorkspace: {},
 	navTickByWorkspace: {},
 	closedChatsByWorkspace: {},
-	deletedSessionsByWorkspace: {},
+	deletedSessionsByWorkspace: Object.create(null) as Record<string, Record<string, true>>,
 	terminalsByWorkspace: {},
 	activeTerminalByWorkspace: {},
 	sessions: {},
 	models: [],
 	templatesVersion: 0,
-	rightTabRequest: null,
 	modelsRefreshing: false,
 	modelsFresh: false,
 	changesRequest: null,
@@ -1271,6 +1638,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	theme: DEFAULT_CONFIG.theme,
 	analyticsEnabled: DEFAULT_CONFIG.analyticsEnabled,
 	terminalReplayKb: DEFAULT_CONFIG.terminalReplayKb,
+	layoutSettings: DEFAULT_CONFIG.layout,
 	toasts: [],
 	setStatus: (status) =>
 		set((state) => ({
@@ -1301,9 +1669,15 @@ export const useAppStore = create<AppState>((set, get) => ({
 			};
 		}),
 	setWorkspaces: (projectId, workspaces) =>
-		set((s) => ({ workspaces: { ...s.workspaces, [projectId]: workspaces } })),
+		set((s) => ({
+			workspaces: {
+				...s.workspaces,
+				[projectId]: workspaces.filter((workspace) => !s.removedWorkspaceIds[workspace.id]),
+			},
+		})),
 	addWorkspace: (workspace) =>
 		set((s) => {
+			if (s.removedWorkspaceIds[workspace.id]) return {};
 			const list = s.workspaces[workspace.projectId];
 			// Unlisted project → no-op: reconcile on its next `workspace.list` rather than seed a partial
 			// one-row list. Otherwise upsert by id (merge if somehow already present).
@@ -1347,17 +1721,35 @@ export const useAppStore = create<AppState>((set, get) => ({
 		const s = get();
 		const wasActive = s.activeWorkspaceId === workspaceId;
 		const name = s.workspaces[projectId]?.find((w) => w.id === workspaceId)?.name;
+		// Install finality FIRST. Zustand subscribers run synchronously after each write; without this first
+		// transaction, a terminal/dialog subscriber reacting to cleanup could recreate a workspace-scoped map
+		// in the gap before the tombstone existed.
+		set((state) => {
+			const removedSessions = new Set(selectWorkspaceSessionIds(state, workspaceId));
+			return {
+				removedWorkspaceIds: Object.assign(Object.create(null), state.removedWorkspaceIds, {
+					[workspaceId]: true,
+				}) as Record<string, true>,
+				fsChangesByWorkspace: omitKey(state.fsChangesByWorkspace, workspaceId),
+				skillChangeTickByWorkspace: omitKey(state.skillChangeTickByWorkspace, workspaceId),
+				specsByWorkspace: omitKey(state.specsByWorkspace, workspaceId),
+				diffScopeByWorkspace: omitKey(state.diffScopeByWorkspace, workspaceId),
+				reviewsByWorkspace: omitKey(state.reviewsByWorkspace, workspaceId),
+				changesRequest:
+					state.changesRequest?.workspaceId === workspaceId ? null : state.changesRequest,
+				specRequest: state.specRequest?.workspaceId === workspaceId ? null : state.specRequest,
+				chatLocationRequest:
+					state.chatLocationRequest?.workspaceId === workspaceId ? null : state.chatLocationRequest,
+				historyOpenRequest:
+					state.historyOpenRequest && removedSessions.has(state.historyOpenRequest.sessionId)
+						? null
+						: state.historyOpenRequest,
+				reviewFocusRequest:
+					state.reviewFocusRequest?.workspaceId === workspaceId ? null : state.reviewFocusRequest,
+			};
+		});
 		s.removeWorkspace(projectId, workspaceId);
 		s.clearWorkspaceTabs(workspaceId); // drops the row's tabs + terminals + chat runtimes
-		// Drop the live-refresh signal + the cached spec graph too — a removed workspace's records must not
-		// linger (the worktree is gone; a same-id workspace can never come back).
-		set((state) => ({
-			fsChangesByWorkspace: omitKey(state.fsChangesByWorkspace, workspaceId),
-			skillChangeTickByWorkspace: omitKey(state.skillChangeTickByWorkspace, workspaceId),
-			specsByWorkspace: omitKey(state.specsByWorkspace, workspaceId),
-			diffScopeByWorkspace: omitKey(state.diffScopeByWorkspace, workspaceId),
-			reviewsByWorkspace: omitKey(state.reviewsByWorkspace, workspaceId),
-		}));
 		if (wasActive) {
 			s.selectProject(projectId); // atomically fall back to the removed workspace's Project Home
 			toast.info(`Workspace "${name ?? "?"}" was removed`);
@@ -1365,79 +1757,381 @@ export const useAppStore = create<AppState>((set, get) => ({
 	},
 	selectProject: (selectedProjectId) => set({ selectedProjectId, activeWorkspaceId: null }),
 	activateWorkspace: (workspace) =>
-		set({ selectedProjectId: workspace.projectId, activeWorkspaceId: workspace.id }),
-	openTab: (tab, intent) =>
+		set((state) =>
+			state.removedWorkspaceIds[workspace.id]
+				? {}
+				: { selectedProjectId: workspace.projectId, activeWorkspaceId: workspace.id },
+		),
+	installLayoutSnapshot: (snapshot, mutationId) =>
+		set((state) => {
+			const workspaceId = snapshot.workspaceId;
+			if (state.removedWorkspaceIds[workspaceId]) return {};
+			const current = state.layoutSnapshotsByWorkspace[workspaceId];
+			const pending = state.layoutPendingByWorkspace[workspaceId] ?? [];
+			const matched = mutationId
+				? pending.findIndex((write) => write.mutationId === mutationId)
+				: -1;
+			// An acknowledgement for a later queued write proves every predecessor was already ordered before it
+			// by the host. Settle the whole accepted prefix so an out-of-order/lost earlier response cannot
+			// project an obsolete mutation back over the newest accepted document.
+			const remaining = matched >= 0 ? pending.slice(matched + 1) : pending;
+			const newer = !current || snapshot.revision > current.revision;
+			const accepted = newer ? snapshot : current;
+			if (!accepted) return {};
+			const projected = remaining.at(-1)?.document ?? accepted.document;
+			return {
+				layoutSnapshotsByWorkspace: {
+					...state.layoutSnapshotsByWorkspace,
+					[workspaceId]: accepted,
+				},
+				layoutDocumentsByWorkspace: {
+					...state.layoutDocumentsByWorkspace,
+					[workspaceId]: projected,
+				},
+				layoutPendingByWorkspace: {
+					...state.layoutPendingByWorkspace,
+					[workspaceId]: remaining,
+				},
+				layoutRemoteEpochByWorkspace:
+					newer && matched < 0
+						? bumpLayoutProjectionEpoch(state, workspaceId)
+						: state.layoutRemoteEpochByWorkspace,
+			};
+		}),
+	applyLayoutChanged: (payload) =>
+		get().installLayoutSnapshot(payload.snapshot, payload.mutationId),
+	beginLayoutCommit: (workspaceId, document, mutationId) =>
+		set((state) =>
+			state.removedWorkspaceIds[workspaceId]
+				? {}
+				: {
+						layoutDocumentsByWorkspace: {
+							...state.layoutDocumentsByWorkspace,
+							[workspaceId]: document,
+						},
+						layoutPendingByWorkspace: {
+							...state.layoutPendingByWorkspace,
+							[workspaceId]: [
+								...(state.layoutPendingByWorkspace[workspaceId] ?? []),
+								{
+									mutationId,
+									expectedRevision: nextExpectedLayoutRevision(state, workspaceId),
+									document,
+								},
+							],
+						},
+					},
+		),
+	rejectLayoutCommit: (workspaceId, mutationId) =>
+		set((state) => {
+			const pending = state.layoutPendingByWorkspace[workspaceId] ?? [];
+			const rejectedIndex = pending.findIndex((write) => write.mutationId === mutationId);
+			if (rejectedIndex < 0) return {};
+			const remaining = pending.slice(0, rejectedIndex);
+			const fallback = remaining.at(-1)?.document;
+			const accepted = state.layoutSnapshotsByWorkspace[workspaceId];
+			if (!accepted) {
+				return {
+					layoutPendingByWorkspace: {
+						...state.layoutPendingByWorkspace,
+						[workspaceId]: remaining,
+					},
+					layoutDocumentsByWorkspace: fallback
+						? {
+								...state.layoutDocumentsByWorkspace,
+								[workspaceId]: fallback,
+							}
+						: omitKey(state.layoutDocumentsByWorkspace, workspaceId),
+					layoutRemoteEpochByWorkspace: bumpLayoutProjectionEpoch(state, workspaceId),
+				};
+			}
+			return {
+				layoutPendingByWorkspace: {
+					...state.layoutPendingByWorkspace,
+					[workspaceId]: remaining,
+				},
+				layoutDocumentsByWorkspace: {
+					...state.layoutDocumentsByWorkspace,
+					[workspaceId]: remaining.at(-1)?.document ?? accepted.document,
+				},
+				layoutRemoteEpochByWorkspace: bumpLayoutProjectionEpoch(state, workspaceId),
+			};
+		}),
+	applyLayoutConflict: (workspaceId, mutationId, current) =>
+		set((state) => {
+			if (state.removedWorkspaceIds[workspaceId]) return {};
+			const pending = state.layoutPendingByWorkspace[workspaceId] ?? [];
+			const conflictingIndex = pending.findIndex((write) => write.mutationId === mutationId);
+			if (conflictingIndex < 0) return {};
+			const remaining = pending.slice(0, conflictingIndex);
+			const expectedRevision = pending[conflictingIndex]?.expectedRevision;
+			const alreadyAccepted = state.layoutSnapshotsByWorkspace[workspaceId];
+			// A later accepted broadcast can overtake the conflict response in transit. Preserve that newer
+			// authority instead of regressing to the snapshot (or absence) observed when the host checked.
+			const accepted = current
+				? !alreadyAccepted || current.revision >= alreadyAccepted.revision
+					? current
+					: alreadyAccepted
+				: alreadyAccepted &&
+						(expectedRevision === null ||
+							(expectedRevision !== undefined && alreadyAccepted.revision > expectedRevision))
+					? alreadyAccepted
+					: null;
+			const projected = remaining.at(-1)?.document ?? accepted?.document;
+			return {
+				layoutSnapshotsByWorkspace: accepted
+					? { ...state.layoutSnapshotsByWorkspace, [workspaceId]: accepted }
+					: omitKey(state.layoutSnapshotsByWorkspace, workspaceId),
+				layoutDocumentsByWorkspace: projected
+					? { ...state.layoutDocumentsByWorkspace, [workspaceId]: projected }
+					: omitKey(state.layoutDocumentsByWorkspace, workspaceId),
+				layoutPendingByWorkspace: {
+					...state.layoutPendingByWorkspace,
+					[workspaceId]: remaining,
+				},
+				layoutRemoteEpochByWorkspace: bumpLayoutProjectionEpoch(state, workspaceId),
+			};
+		}),
+	setLayoutAttention: (workspaceId, attention) =>
+		set((state) =>
+			state.removedWorkspaceIds[workspaceId]
+				? {}
+				: {
+						layoutAttentionByWorkspace: {
+							...state.layoutAttentionByWorkspace,
+							[workspaceId]: attention,
+						},
+					},
+		),
+	syncLegacySelection: (workspaceId, selection) =>
+		set((state) => {
+			if (state.removedWorkspaceIds[workspaceId]) return {};
+			if (selection?.kind === "terminal") {
+				if (
+					!state.terminalsByWorkspace[workspaceId]?.some(
+						(terminal) => terminal.tabKey === selection.tabKey,
+					)
+				) {
+					return {};
+				}
+				if (
+					state.activeTerminalByWorkspace[workspaceId] === selection.tabKey &&
+					state.activeTabByWorkspace[workspaceId] === null
+				) {
+					return {};
+				}
+				return {
+					activeTerminalByWorkspace: {
+						...state.activeTerminalByWorkspace,
+						[workspaceId]: selection.tabKey,
+					},
+					activeTabByWorkspace: { ...state.activeTabByWorkspace, [workspaceId]: null },
+				};
+			}
+			if (selection?.kind === "editor") {
+				if (!state.tabsByWorkspace[workspaceId]?.some((tab) => tab.id === selection.tabId)) {
+					return {};
+				}
+				if (
+					state.activeTabByWorkspace[workspaceId] === selection.tabId &&
+					state.activeTerminalByWorkspace[workspaceId] === null
+				) {
+					return {};
+				}
+				return {
+					activeTabByWorkspace: {
+						...state.activeTabByWorkspace,
+						[workspaceId]: selection.tabId,
+					},
+					activeTerminalByWorkspace: {
+						...state.activeTerminalByWorkspace,
+						[workspaceId]: null,
+					},
+				};
+			}
+			if (
+				state.activeTabByWorkspace[workspaceId] === null &&
+				state.activeTerminalByWorkspace[workspaceId] === null
+			) {
+				return {};
+			}
+			return {
+				activeTabByWorkspace: { ...state.activeTabByWorkspace, [workspaceId]: null },
+				activeTerminalByWorkspace: {
+					...state.activeTerminalByWorkspace,
+					[workspaceId]: null,
+				},
+			};
+		}),
+	enqueueLayoutIntent: (intent) => {
+		const id = randomId("layout-intent");
+		set((state) =>
+			state.removedWorkspaceIds[intent.workspaceId]
+				? {}
+				: { layoutIntents: [...state.layoutIntents, { ...intent, id } as LayoutIntent] },
+		);
+		return id;
+	},
+	consumeLayoutIntent: (id) =>
+		set((state) => ({ layoutIntents: state.layoutIntents.filter((intent) => intent.id !== id) })),
+	openTab: (tab, intent, syncLayout = true, options = {}) =>
 		set((s) => {
 			const wsId = tab.workspaceId;
+			const sessionId = editorSessionId(tab);
+			if (
+				s.removedWorkspaceIds[wsId] ||
+				(sessionId !== null && isSessionDeleted(s, wsId, sessionId))
+			) {
+				return {};
+			}
 			const tabs = s.tabsByWorkspace[wsId] ?? [];
+			const resolvedId = availableEditorTabId(tabs, tab);
+			const resolvedTab = resolvedId === tab.id ? tab : { ...tab, id: resolvedId };
+			const previewCompatible = resolvedTab.kind === "file" || resolvedTab.kind === "diff";
+			const effectiveIntent = previewCompatible ? intent : "keep";
+			const claimPreview = previewCompatible && options.claimPreview === true;
 			const preview = s.previewTabByWorkspace[wsId];
-			const activeTabByWorkspace = { ...s.activeTabByWorkspace, [wsId]: tab.id };
+			const activeTabByWorkspace =
+				options.activate === false
+					? s.activeTabByWorkspace
+					: { ...s.activeTabByWorkspace, [wsId]: resolvedTab.id };
+			const openIntent: LayoutIntentInput = {
+				kind: "open",
+				workspaceId: wsId,
+				tab: resolvedTab,
+				intent: effectiveIntent,
+				...layoutOpenIntentFields(claimPreview ? options : { ...options, claimPreview: false }),
+			};
 			// Already open: focus it. A `keep` promotes it; a `preview` deliberately leaves every tab's state
 			// alone, so re-clicking a kept tab in the tree never demotes it and never steals the slot.
-			if (tabs.some((t) => t.id === tab.id)) {
+			const existingIndex = tabs.findIndex((candidate) => candidate.id === resolvedTab.id);
+			if (existingIndex >= 0) {
+				const existing = tabs[existingIndex];
 				return {
+					...(syncLayout
+						? {
+								layoutIntents: appendLayoutIntent(s.layoutIntents, openIntent),
+							}
+						: {}),
+					tabsByWorkspace:
+						existing === resolvedTab
+							? s.tabsByWorkspace
+							: { ...s.tabsByWorkspace, [wsId]: tabs.with(existingIndex, resolvedTab) },
 					activeTabByWorkspace,
 					previewTabByWorkspace:
-						intent === "keep" && preview === tab.id
+						effectiveIntent === "keep" &&
+						(preview === resolvedTab.id || (claimPreview && preview !== undefined))
 							? omitKey(s.previewTabByWorkspace, wsId)
 							: s.previewTabByWorkspace,
 				};
 			}
-			// A preview open reuses the outgoing tab's position, so browsing a tree swaps one tab in place
-			// instead of reshuffling the strip under the cursor.
-			const at = intent === "preview" && preview ? tabs.findIndex((t) => t.id === preview) : -1;
+			// Before layout hydration, preserve the retired one-strip cache behavior. A hydrated workbench must
+			// append instead: replacing this workspace-wide hint would evict another center group's preview body.
+			const at =
+				!s.layoutDocumentsByWorkspace[wsId] &&
+				(effectiveIntent === "preview" || claimPreview) &&
+				preview
+					? tabs.findIndex((t) => t.id === preview)
+					: -1;
 			return {
+				...(syncLayout
+					? {
+							layoutIntents: appendLayoutIntent(s.layoutIntents, openIntent),
+						}
+					: {}),
 				tabsByWorkspace: {
 					...s.tabsByWorkspace,
-					[wsId]: at === -1 ? [...tabs, tab] : tabs.with(at, tab),
+					[wsId]: at === -1 ? [...tabs, resolvedTab] : tabs.with(at, resolvedTab),
 				},
 				activeTabByWorkspace,
 				previewTabByWorkspace:
-					intent === "preview"
-						? { ...s.previewTabByWorkspace, [wsId]: tab.id }
-						: s.previewTabByWorkspace,
+					effectiveIntent === "preview"
+						? { ...s.previewTabByWorkspace, [wsId]: resolvedTab.id }
+						: claimPreview && preview
+							? omitKey(s.previewTabByWorkspace, wsId)
+							: s.previewTabByWorkspace,
 			};
 		}),
 	openDoc: (tab) =>
 		set((s) => {
+			const sessionId = editorSessionId(tab);
+			if (
+				s.removedWorkspaceIds[tab.workspaceId] ||
+				(sessionId !== null && isSessionDeleted(s, tab.workspaceId, sessionId))
+			) {
+				return {};
+			}
 			const tabs = s.tabsByWorkspace[tab.workspaceId] ?? [];
-			const exists = tabs.some((t) => t.id === tab.id);
+			const existing = tabs.find(
+				(candidate) => editorResourceIdentity(candidate) === editorResourceIdentity(tab),
+			);
+			const id = availableEditorTabId(tabs, tab);
+			const resolvedTab = id === tab.id ? tab : { ...tab, id };
+			const navigation = advanceCenterNavigation(s, tab.workspaceId);
 			return {
+				...navigation.patch,
+				layoutIntents: appendLayoutIntent(s.layoutIntents, {
+					kind: "open",
+					workspaceId: tab.workspaceId,
+					tab: resolvedTab,
+					intent: "keep",
+					...(navigation.stamp ? { targetGroupId: navigation.stamp.groupId } : {}),
+					navigation: navigation.stamp,
+				}),
 				tabsByWorkspace: {
 					...s.tabsByWorkspace,
-					[tab.workspaceId]: exists ? tabs.map((t) => (t.id === tab.id ? tab : t)) : [...tabs, tab],
+					[tab.workspaceId]: existing
+						? tabs.map((candidate) => (candidate === existing ? resolvedTab : candidate))
+						: [...tabs, resolvedTab],
 				},
-				activeTabByWorkspace: { ...s.activeTabByWorkspace, [tab.workspaceId]: tab.id },
-				navTickByWorkspace: bumpNav(s, tab.workspaceId),
+				activeTabByWorkspace: { ...s.activeTabByWorkspace, [tab.workspaceId]: resolvedTab.id },
 			};
 		}),
-	closeTab: (id) =>
+	closeTab: (id, syncLayout = true, countNavigation = true, workspaceId) =>
 		set((s) => {
-			const wsId = s.activeWorkspaceId;
-			if (!wsId) return {};
+			const wsId = workspaceId ?? s.activeWorkspaceId;
+			if (!wsId || s.removedWorkspaceIds[wsId]) return {};
 			const tabs = (s.tabsByWorkspace[wsId] ?? []).filter((t) => t.id !== id);
 			const wasActive = s.activeTabByWorkspace[wsId] === id;
 			return {
+				...(syncLayout
+					? {
+							layoutIntents: appendLayoutIntent(s.layoutIntents, {
+								kind: "close",
+								workspaceId: wsId,
+								tabId: id,
+							}),
+						}
+					: {}),
 				tabsByWorkspace: { ...s.tabsByWorkspace, [wsId]: tabs },
 				activeTabByWorkspace: {
 					...s.activeTabByWorkspace,
 					[wsId]: wasActive ? (tabs.at(-1)?.id ?? null) : (s.activeTabByWorkspace[wsId] ?? null),
 				},
-				// Only a close that actually moves focus is a navigation. Closing some other tab in the strip
-				// leaves the user exactly where they were, so counting it would discard a browse still in
-				// flight — the clicked file would never open.
-				navTickByWorkspace: wasActive ? bumpNav(s, wsId) : s.navTickByWorkspace,
+				// Only an accepted user close that actually moves focus is navigation. Structural cache
+				// reconciliation suppresses this compatibility bump.
+				navTickByWorkspace: wasActive && countNavigation ? bumpNav(s, wsId) : s.navTickByWorkspace,
 				// A closed tab must never leave a dangling slot id behind.
 				...(s.previewTabByWorkspace[wsId] === id
 					? { previewTabByWorkspace: omitKey(s.previewTabByWorkspace, wsId) }
 					: {}),
 			};
 		}),
-	setActiveTab: (id, intent) =>
+	setActiveTab: (id, intent, syncLayout = true) =>
 		set((s) => {
 			const wsId = s.activeWorkspaceId;
 			if (!wsId) return {};
 			return {
+				...(syncLayout
+					? {
+							layoutIntents: appendLayoutIntent(s.layoutIntents, {
+								kind: "select",
+								workspaceId: wsId,
+								tabId: id,
+								...(intent === "keep" ? { keep: true } : {}),
+							}),
+						}
+					: {}),
 				activeTabByWorkspace: { ...s.activeTabByWorkspace, [wsId]: id },
 				navTickByWorkspace: bumpNav(s, wsId),
 				...(intent === "keep" && s.previewTabByWorkspace[wsId] === id
@@ -1445,7 +2139,20 @@ export const useAppStore = create<AppState>((set, get) => ({
 					: {}),
 			};
 		}),
-	noteNavigation: (workspaceId) => set((s) => ({ navTickByWorkspace: bumpNav(s, workspaceId) })),
+	beginCenterNavigation: (workspaceId, preferredGroupId) => {
+		let stamp: CenterNavigationStamp | null = null;
+		set((s) => {
+			if (s.removedWorkspaceIds[workspaceId]) return {};
+			const advanced = advanceCenterNavigation(s, workspaceId, preferredGroupId);
+			stamp = advanced.stamp;
+			return advanced.patch;
+		});
+		return stamp;
+	},
+	noteNavigation: (workspaceId) =>
+		set((s) =>
+			s.removedWorkspaceIds[workspaceId] ? {} : { navTickByWorkspace: bumpNav(s, workspaceId) },
+		),
 	setFileTabView: (id, view) =>
 		set((s) => {
 			const wsId = s.activeWorkspaceId;
@@ -1465,9 +2172,14 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((s) => patchDiffTab(s, id, { ignoreWhitespace })),
 	setChangesView: (view) => set({ changesView: view }),
 	setDiffScope: (workspaceId, scope) =>
-		set((s) => ({ diffScopeByWorkspace: { ...s.diffScopeByWorkspace, [workspaceId]: scope } })),
+		set((s) =>
+			s.removedWorkspaceIds[workspaceId]
+				? {}
+				: { diffScopeByWorkspace: { ...s.diffScopeByWorkspace, [workspaceId]: scope } },
+		),
 	noteFsChanged: (payload) =>
 		set((s) => {
+			if (s.removedWorkspaceIds[payload.workspaceId]) return {};
 			const prev = s.fsChangesByWorkspace[payload.workspaceId];
 			const tick = (prev?.tick ?? 0) + 1;
 			// The host classifies skill evidence before its generic path cap, so a large concrete non-skill
@@ -1500,37 +2212,35 @@ export const useAppStore = create<AppState>((set, get) => ({
 				skillsSyncedTickBySession: { ...s.skillsSyncedTickBySession, [sessionId]: synced },
 			};
 		}),
-	updateFileTabContent: (id, content, tick) =>
+	updateFileTabContent: (workspaceId, id, content, tick) =>
 		set((s) => {
-			for (const [wsId, tabs] of Object.entries(s.tabsByWorkspace)) {
-				if (!tabs.some((t) => t.id === id && t.kind === "file")) continue;
-				return {
-					tabsByWorkspace: {
-						...s.tabsByWorkspace,
-						[wsId]: tabs.map((t) =>
-							t.id === id && t.kind === "file" ? { ...t, content, loadedTick: tick } : t,
-						),
-					},
-				};
-			}
-			return {};
+			if (s.removedWorkspaceIds[workspaceId]) return {};
+			const tabs = s.tabsByWorkspace[workspaceId] ?? [];
+			if (!tabs.some((tab) => tab.id === id && tab.kind === "file")) return {};
+			return {
+				tabsByWorkspace: {
+					...s.tabsByWorkspace,
+					[workspaceId]: tabs.map((tab) =>
+						tab.id === id && tab.kind === "file" ? { ...tab, content, loadedTick: tick } : tab,
+					),
+				},
+			};
 		}),
-	updateDiffTabContent: (id, original, modified, tick, loadedTarget) =>
+	updateDiffTabContent: (workspaceId, id, original, modified, tick, loadedTarget) =>
 		set((s) => {
-			for (const [wsId, tabs] of Object.entries(s.tabsByWorkspace)) {
-				if (!tabs.some((t) => t.id === id && t.kind === "diff")) continue;
-				return {
-					tabsByWorkspace: {
-						...s.tabsByWorkspace,
-						[wsId]: tabs.map((t) =>
-							t.id === id && t.kind === "diff"
-								? { ...t, original, modified, loadedTick: tick, loadedTarget }
-								: t,
-						),
-					},
-				};
-			}
-			return {};
+			if (s.removedWorkspaceIds[workspaceId]) return {};
+			const tabs = s.tabsByWorkspace[workspaceId] ?? [];
+			if (!tabs.some((tab) => tab.id === id && tab.kind === "diff")) return {};
+			return {
+				tabsByWorkspace: {
+					...s.tabsByWorkspace,
+					[workspaceId]: tabs.map((tab) =>
+						tab.id === id && tab.kind === "diff"
+							? { ...tab, original, modified, loadedTick: tick, loadedTarget }
+							: tab,
+					),
+				},
+			};
 		}),
 	clearWorkspaceTabs: (workspaceId) =>
 		set((s) => {
@@ -1538,34 +2248,40 @@ export const useAppStore = create<AppState>((set, get) => ({
 			// AgentSessions are freed on host shutdown).
 			const sessions = { ...s.sessions };
 			const skillsSyncedTickBySession = { ...s.skillsSyncedTickBySession };
-			for (const tab of s.tabsByWorkspace[workspaceId] ?? []) {
-				if (tab.kind === "chat") {
-					delete sessions[tab.sessionId];
-					delete skillsSyncedTickBySession[tab.sessionId];
-				}
-			}
-			for (const closed of s.closedChatsByWorkspace[workspaceId] ?? []) {
-				delete sessions[closed.sessionId];
-				delete skillsSyncedTickBySession[closed.sessionId];
+			for (const sessionId of selectWorkspaceSessionIds(s, workspaceId)) {
+				delete sessions[sessionId];
+				delete skillsSyncedTickBySession[sessionId];
 			}
 			return {
+				layoutSnapshotsByWorkspace: omitKey(s.layoutSnapshotsByWorkspace, workspaceId),
+				layoutDocumentsByWorkspace: omitKey(s.layoutDocumentsByWorkspace, workspaceId),
+				layoutAttentionByWorkspace: omitKey(s.layoutAttentionByWorkspace, workspaceId),
+				layoutPendingByWorkspace: omitKey(s.layoutPendingByWorkspace, workspaceId),
+				layoutRemoteEpochByWorkspace: omitKey(s.layoutRemoteEpochByWorkspace, workspaceId),
+				layoutIntents: s.layoutIntents.filter((intent) => intent.workspaceId !== workspaceId),
 				tabsByWorkspace: omitKey(s.tabsByWorkspace, workspaceId),
 				activeTabByWorkspace: omitKey(s.activeTabByWorkspace, workspaceId),
 				previewTabByWorkspace: omitKey(s.previewTabByWorkspace, workspaceId),
 				navTickByWorkspace: omitKey(s.navTickByWorkspace, workspaceId),
 				closedChatsByWorkspace: omitKey(s.closedChatsByWorkspace, workspaceId),
 				// Deletion tombstones deliberately survive: an older read can still settle after teardown.
-				// Dropping the terminals unmounts their instances, which close the PTYs server-side.
+				// Dropping terminal catalogs unmounts browser bodies; workspace cleanup remains host-owned.
 				terminalsByWorkspace: omitKey(s.terminalsByWorkspace, workspaceId),
 				activeTerminalByWorkspace: omitKey(s.activeTerminalByWorkspace, workspaceId),
 				sessions,
 				skillsSyncedTickBySession,
 			};
 		}),
-	addTerminal: (workspaceId, initialCommand) =>
+	// Create one attach-pending domain tab and ask the layout engine to place it. A center Group Header
+	// captures its group so terminal creation remains available even when no terminal body is mounted.
+	addTerminal: (workspaceId, initialCommand, targetGroupId) =>
 		set((s) => {
+			if (s.removedWorkspaceIds[workspaceId]) return {};
 			const list = s.terminalsByWorkspace[workspaceId] ?? [];
-			const tabKey = crypto.randomUUID();
+			const navigation = targetGroupId
+				? advanceCenterNavigation(s, workspaceId, targetGroupId)
+				: null;
+			const tabKey = randomId("terminal");
 			const tab: TerminalTab = {
 				tabKey,
 				workspaceId,
@@ -1575,6 +2291,14 @@ export const useAppStore = create<AppState>((set, get) => ({
 			};
 			// No create call: mounting the instance attaches, and attach is what registers the tab host-side.
 			return {
+				...(navigation?.patch ?? {}),
+				layoutIntents: appendLayoutIntent(s.layoutIntents, {
+					kind: "place-terminal",
+					workspaceId,
+					tabKey,
+					title: tab.title,
+					...(targetGroupId ? { targetGroupId, navigation: navigation?.stamp ?? null } : {}),
+				}),
 				terminalsByWorkspace: { ...s.terminalsByWorkspace, [workspaceId]: [...list, tab] },
 				activeTerminalByWorkspace: { ...s.activeTerminalByWorkspace, [workspaceId]: tabKey },
 			};
@@ -1589,6 +2313,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	 */
 	setWorkspaceTerminals: (workspaceId, tabs) =>
 		set((s) => {
+			if (s.removedWorkspaceIds[workspaceId]) return {};
 			const local = s.terminalsByWorkspace[workspaceId] ?? [];
 			const known = new Set(tabs.map((tab) => tab.tabKey));
 			const pending = local.filter((tab) => !known.has(tab.tabKey) && tab.attachPending);
@@ -1618,6 +2343,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	/** The tab's attach landed: the host knows about it, so it is no longer exempt from an authoritative list. */
 	settleTerminalAttach: (workspaceId, tabKey) =>
 		set((s) => {
+			if (s.removedWorkspaceIds[workspaceId]) return {};
 			const list = s.terminalsByWorkspace[workspaceId] ?? [];
 			if (!list.some((t) => t.tabKey === tabKey && t.attachPending)) return s;
 			return {
@@ -1640,6 +2366,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	 */
 	consumeTerminalInitialCommand: (workspaceId, tabKey) =>
 		set((s) => {
+			if (s.removedWorkspaceIds[workspaceId]) return {};
 			const list = s.terminalsByWorkspace[workspaceId] ?? [];
 			if (!list.some((t) => t.tabKey === tabKey && t.initialCommand)) return s;
 			return {
@@ -1653,11 +2380,21 @@ export const useAppStore = create<AppState>((set, get) => ({
 				},
 			};
 		}),
-	closeTerminalTab: (workspaceId, tabKey) =>
+	closeTerminalTab: (workspaceId, tabKey, syncLayout = true) =>
 		set((s) => {
+			if (s.removedWorkspaceIds[workspaceId]) return {};
 			const list = (s.terminalsByWorkspace[workspaceId] ?? []).filter((t) => t.tabKey !== tabKey);
 			const wasActive = s.activeTerminalByWorkspace[workspaceId] === tabKey;
 			return {
+				...(syncLayout
+					? {
+							layoutIntents: appendLayoutIntent(s.layoutIntents, {
+								kind: "close-terminal",
+								workspaceId,
+								tabKey,
+							}),
+						}
+					: {}),
 				terminalsByWorkspace: { ...s.terminalsByWorkspace, [workspaceId]: list },
 				activeTerminalByWorkspace: {
 					...s.activeTerminalByWorkspace,
@@ -1667,22 +2404,62 @@ export const useAppStore = create<AppState>((set, get) => ({
 				},
 			};
 		}),
-	setActiveTerminalTab: (workspaceId, tabKey) =>
-		set((s) => ({
-			activeTerminalByWorkspace: { ...s.activeTerminalByWorkspace, [workspaceId]: tabKey },
-		})),
-	openChatSession: (workspaceId, sessionId, model, thinkingLevel, syncedTick) =>
+	setActiveTerminalTab: (workspaceId, tabKey, syncLayout = true) =>
+		set((s) =>
+			s.removedWorkspaceIds[workspaceId]
+				? {}
+				: {
+						...(syncLayout
+							? {
+									layoutIntents: appendLayoutIntent(s.layoutIntents, {
+										kind: "select-terminal",
+										workspaceId,
+										tabKey,
+									}),
+								}
+							: {}),
+						activeTerminalByWorkspace: { ...s.activeTerminalByWorkspace, [workspaceId]: tabKey },
+					},
+		),
+	openChatSession: (workspaceId, sessionId, model, thinkingLevel, syncedTick, options = {}) =>
 		set((s) => {
-			const id = `${workspaceId}:${sessionId}`;
-			const tab: ChatTab = { kind: "chat", id, workspaceId, name: "Chat", sessionId };
+			if (s.removedWorkspaceIds[workspaceId] || isSessionDeleted(s, workspaceId, sessionId)) {
+				return {};
+			}
 			const tabs = s.tabsByWorkspace[workspaceId] ?? [];
+			const existing = tabs.find(
+				(candidate): candidate is ChatTab =>
+					candidate.kind === "chat" && candidate.sessionId === sessionId,
+			);
+			const preferred: ChatTab = existing ?? {
+				kind: "chat",
+				id: chatTabId(workspaceId, sessionId),
+				workspaceId,
+				name: "Chat",
+				sessionId,
+			};
+			const id = existing?.id ?? availableEditorTabId(tabs, preferred);
+			const tab: ChatTab = id === preferred.id ? preferred : { ...preferred, id };
 			const fresh = !s.sessions[sessionId];
 			return {
-				tabsByWorkspace: tabs.some((t) => t.id === id)
+				layoutIntents: appendLayoutIntent(s.layoutIntents, {
+					kind: "open",
+					workspaceId,
+					tab,
+					intent: "keep",
+					...layoutOpenIntentFields(options),
+				}),
+				tabsByWorkspace: existing
 					? s.tabsByWorkspace
 					: { ...s.tabsByWorkspace, [workspaceId]: [...tabs, tab] },
-				activeTabByWorkspace: { ...s.activeTabByWorkspace, [workspaceId]: id },
-				navTickByWorkspace: bumpNav(s, workspaceId),
+				activeTabByWorkspace:
+					options.activate === false
+						? s.activeTabByWorkspace
+						: { ...s.activeTabByWorkspace, [workspaceId]: id },
+				navTickByWorkspace:
+					options.activate === false || navigationCountedAtRequest(options)
+						? s.navTickByWorkspace
+						: bumpNav(s, workspaceId),
 				// Keep any existing runtime (idempotent); otherwise start a fresh one.
 				sessions: fresh
 					? { ...s.sessions, [sessionId]: newRuntime(model, thinkingLevel) }
@@ -1708,20 +2485,33 @@ export const useAppStore = create<AppState>((set, get) => ({
 				skillsSyncedTickBySession: omitKey(s.skillsSyncedTickBySession, sessionId),
 			};
 		}),
-	closeChatToHistory: (sessionId) =>
+	closeChatToHistory: (sessionId, syncLayout = true, workspaceId, countNavigation = true) =>
 		set((s) => {
-			const wsId = s.activeWorkspaceId;
-			if (!wsId) return {};
+			const wsId = workspaceId ?? s.activeWorkspaceId;
+			if (!wsId || s.removedWorkspaceIds[wsId]) return {};
 			const tabs = s.tabsByWorkspace[wsId] ?? [];
 			const tab = tabs.find((t) => t.kind === "chat" && t.sessionId === sessionId);
 			if (!tab) return {};
 			const remaining = tabs.filter((t) => t.id !== tab.id);
 			const wasActive = s.activeTabByWorkspace[wsId] === tab.id;
 			const entry: ClosedChat = { sessionId, title: tab.name, closedAt: Date.now() };
+			const targetsLocation =
+				s.chatLocationRequest?.workspaceId === wsId &&
+				s.chatLocationRequest.sessionId === sessionId;
+			const targetsHistory = s.historyOpenRequest?.sessionId === sessionId;
 			return {
+				...(syncLayout
+					? {
+							layoutIntents: appendLayoutIntent(s.layoutIntents, {
+								kind: "close",
+								workspaceId: wsId,
+								tabId: tab.id,
+							}),
+						}
+					: {}),
 				tabsByWorkspace: { ...s.tabsByWorkspace, [wsId]: remaining },
-				// Same rule as `closeTab`: only a close that moves focus counts as a navigation.
-				navTickByWorkspace: wasActive ? bumpNav(s, wsId) : s.navTickByWorkspace,
+				// Accepted user closes count; shared-layout/cache reconciliation does not impersonate one.
+				navTickByWorkspace: wasActive && countNavigation ? bumpNav(s, wsId) : s.navTickByWorkspace,
 				activeTabByWorkspace: {
 					...s.activeTabByWorkspace,
 					[wsId]: wasActive
@@ -1733,43 +2523,127 @@ export const useAppStore = create<AppState>((set, get) => ({
 					...s.closedChatsByWorkspace,
 					[wsId]: [entry, ...(s.closedChatsByWorkspace[wsId] ?? [])],
 				},
+				...(targetsLocation ? { chatLocationRequest: null } : {}),
+				...(targetsHistory ? { historyOpenRequest: null } : {}),
 			};
 		}),
-	deleteChat: (workspaceId, sessionId) => set((s) => withoutChat(s, workspaceId, sessionId)),
+	deleteChat: (workspaceId, sessionId, countNavigation = true) =>
+		set((s) => withoutChat(s, workspaceId, sessionId, countNavigation)),
 	reconcileWorkspaceSessions: (workspaceId, baselineSessionIds, authoritativeSessionIds) =>
 		set((s) => {
+			if (s.removedWorkspaceIds[workspaceId]) return {};
 			const authoritative = new Set(authoritativeSessionIds);
 			let next = s;
 			for (const sessionId of baselineSessionIds) {
-				if (!authoritative.has(sessionId)) next = withoutChat(next, workspaceId, sessionId);
+				if (!authoritative.has(sessionId)) {
+					next = withoutChat(next, workspaceId, sessionId, false);
+				}
 			}
 			return next;
 		}),
-	reopenChat: (sessionId) =>
+	reopenChat: (wsId, sessionId, options = {}) =>
 		set((s) => {
-			const wsId = s.activeWorkspaceId;
-			if (!wsId) return {};
+			if (s.removedWorkspaceIds[wsId] || isSessionDeleted(s, wsId, sessionId)) return {};
 			const closed = s.closedChatsByWorkspace[wsId] ?? [];
 			const entry = closed.find((c) => c.sessionId === sessionId);
 			if (!entry) return {};
-			const id = `${wsId}:${sessionId}`;
-			const tab: ChatTab = { kind: "chat", id, workspaceId: wsId, name: entry.title, sessionId };
 			const tabs = s.tabsByWorkspace[wsId] ?? [];
+			const existing = tabs.find(
+				(candidate): candidate is ChatTab =>
+					candidate.kind === "chat" && candidate.sessionId === sessionId,
+			);
+			const preferred: ChatTab = {
+				kind: "chat",
+				id: existing?.id ?? chatTabId(wsId, sessionId),
+				workspaceId: wsId,
+				name: entry.title,
+				sessionId,
+			};
+			const id = existing?.id ?? availableEditorTabId(tabs, preferred);
+			const tab: ChatTab = id === preferred.id ? preferred : { ...preferred, id };
 			return {
+				layoutIntents: appendLayoutIntent(s.layoutIntents, {
+					kind: "open",
+					workspaceId: wsId,
+					tab,
+					intent: "keep",
+					...layoutOpenIntentFields(options),
+				}),
 				// The runtime is still live in `sessions`, so the reopened tab shows the full transcript.
-				tabsByWorkspace: tabs.some((t) => t.id === id)
-					? s.tabsByWorkspace
+				tabsByWorkspace: existing
+					? existing.name === tab.name
+						? s.tabsByWorkspace
+						: {
+								...s.tabsByWorkspace,
+								[wsId]: tabs.map((candidate) => (candidate === existing ? tab : candidate)),
+							}
 					: { ...s.tabsByWorkspace, [wsId]: [...tabs, tab] },
-				activeTabByWorkspace: { ...s.activeTabByWorkspace, [wsId]: id },
-				navTickByWorkspace: bumpNav(s, wsId),
+				activeTabByWorkspace:
+					options.activate === false
+						? s.activeTabByWorkspace
+						: { ...s.activeTabByWorkspace, [wsId]: id },
+				navTickByWorkspace:
+					options.activate === false || navigationCountedAtRequest(options)
+						? s.navTickByWorkspace
+						: bumpNav(s, wsId),
 				closedChatsByWorkspace: {
 					...s.closedChatsByWorkspace,
 					[wsId]: closed.filter((c) => c.sessionId !== sessionId),
 				},
 			};
 		}),
+	restorePlacedChatCache: (workspaceId, tabId, sessionId, title) =>
+		set((s) => {
+			if (s.removedWorkspaceIds[workspaceId] || isSessionDeleted(s, workspaceId, sessionId)) {
+				return {};
+			}
+			const tabs = s.tabsByWorkspace[workspaceId] ?? [];
+			const placed = tabs.find(
+				(tab): tab is ChatTab => tab.kind === "chat" && tab.sessionId === sessionId,
+			);
+			const idAvailable = (candidateId: string) =>
+				!tabs.some((candidate) => candidate !== placed && candidate.id === candidateId);
+			const canonicalId = chatTabId(workspaceId, sessionId);
+			const available = [tabId, placed?.id, canonicalId].find(
+				(candidateId): candidateId is string =>
+					candidateId !== undefined && idAvailable(candidateId),
+			);
+			let id = available ?? randomId("chat-cache");
+			while (!idAvailable(id)) id = randomId("chat-cache");
+			const closed = s.closedChatsByWorkspace[workspaceId] ?? [];
+			const inHistory = closed.some((chat) => chat.sessionId === sessionId);
+			const metadataChanged = placed?.name !== title || placed.id !== id;
+			if (placed && !inHistory && !metadataChanged) return {};
+			const tab: ChatTab = { kind: "chat", id, workspaceId, name: title, sessionId };
+			const retargeted = placed !== undefined && placed.id !== id;
+			return {
+				tabsByWorkspace: placed
+					? metadataChanged
+						? {
+								...s.tabsByWorkspace,
+								[workspaceId]: tabs.map((candidate) => (candidate === placed ? tab : candidate)),
+							}
+						: s.tabsByWorkspace
+					: { ...s.tabsByWorkspace, [workspaceId]: [...tabs, tab] },
+				closedChatsByWorkspace: inHistory
+					? {
+							...s.closedChatsByWorkspace,
+							[workspaceId]: closed.filter((chat) => chat.sessionId !== sessionId),
+						}
+					: s.closedChatsByWorkspace,
+				activeTabByWorkspace:
+					retargeted && s.activeTabByWorkspace[workspaceId] === placed?.id
+						? { ...s.activeTabByWorkspace, [workspaceId]: id }
+						: s.activeTabByWorkspace,
+				previewTabByWorkspace:
+					retargeted && s.previewTabByWorkspace[workspaceId] === placed?.id
+						? { ...s.previewTabByWorkspace, [workspaceId]: id }
+						: s.previewTabByWorkspace,
+			};
+		}),
 	noteClosedChats: (workspaceId, entries) =>
 		set((s) => {
+			if (s.removedWorkspaceIds[workspaceId]) return {};
 			const existing = s.closedChatsByWorkspace[workspaceId] ?? [];
 			const known = new Set([
 				...existing.map((c) => c.sessionId),
@@ -1792,9 +2666,14 @@ export const useAppStore = create<AppState>((set, get) => ({
 				},
 			};
 		}),
-	hydrateSession: (summary, hydrated, activate = false, syncedTick) =>
+	hydrateSession: (summary, hydrated, activate = false, syncedTick, options = {}) =>
 		set((s) => {
-			if (isSessionDeleted(s, summary.workspaceId, summary.sessionId)) return {};
+			if (
+				s.removedWorkspaceIds[summary.workspaceId] ||
+				isSessionDeleted(s, summary.workspaceId, summary.sessionId)
+			) {
+				return {};
+			}
 			if (s.sessions[summary.sessionId]) return {}; // a live/ahead runtime wins — never clobber it
 			const wsId = summary.workspaceId;
 			const runtime: SessionRuntime = {
@@ -1807,18 +2686,35 @@ export const useAppStore = create<AppState>((set, get) => ({
 					? { turnIdByMessageIndex: hydrated.turnIdByMessageIndex }
 					: {}),
 			};
-			const id = `${wsId}:${summary.sessionId}`;
-			const tab: ChatTab = {
+			const tabs = s.tabsByWorkspace[wsId] ?? [];
+			const existing = tabs.find(
+				(candidate): candidate is ChatTab =>
+					candidate.kind === "chat" && candidate.sessionId === summary.sessionId,
+			);
+			const preferred: ChatTab = {
 				kind: "chat",
-				id,
+				id: existing?.id ?? chatTabId(wsId, summary.sessionId),
 				workspaceId: wsId,
 				name: summary.title,
 				sessionId: summary.sessionId,
 			};
-			const tabs = s.tabsByWorkspace[wsId] ?? [];
+			const id = existing?.id ?? availableEditorTabId(tabs, preferred);
+			const tab: ChatTab = id === preferred.id ? preferred : { ...preferred, id };
 			const hasActive = s.activeTabByWorkspace[wsId] != null;
+			const takesFocus = options.activate !== false && (activate || !hasActive);
 			const closed = s.closedChatsByWorkspace[wsId] ?? [];
 			return {
+				...(activate
+					? {
+							layoutIntents: appendLayoutIntent(s.layoutIntents, {
+								kind: "open",
+								workspaceId: wsId,
+								tab,
+								intent: "keep",
+								...layoutOpenIntentFields(options),
+							}),
+						}
+					: {}),
 				sessions: { ...s.sessions, [summary.sessionId]: runtime },
 				// Advance the sync baseline ONLY when this restore actually (re)loaded resources against current
 				// disk — a disk-only attach, where the caller passes its post-readiness request-start tick. A LIVE
@@ -1834,18 +2730,25 @@ export const useAppStore = create<AppState>((set, get) => ({
 							},
 						}
 					: {}),
-				tabsByWorkspace: tabs.some((t) => t.id === id)
-					? s.tabsByWorkspace
+				tabsByWorkspace: existing
+					? existing.name === tab.name
+						? s.tabsByWorkspace
+						: {
+								...s.tabsByWorkspace,
+								[wsId]: tabs.map((candidate) => (candidate === existing ? tab : candidate)),
+							}
 					: { ...s.tabsByWorkspace, [wsId]: [...tabs, tab] },
 				// Focus on an explicit reopen; otherwise only if the workspace has no active tab yet (auto-restore
 				// must not steal focus). Keyed to the summary's workspace, not the active one.
-				activeTabByWorkspace:
-					activate || !hasActive
-						? { ...s.activeTabByWorkspace, [wsId]: id }
-						: s.activeTabByWorkspace,
+				activeTabByWorkspace: takesFocus
+					? { ...s.activeTabByWorkspace, [wsId]: id }
+					: s.activeTabByWorkspace,
 				// Only a hydrate that TOOK focus is a navigation; a background auto-restore must not
 				// supersede a read the user is waiting on.
-				navTickByWorkspace: activate || !hasActive ? bumpNav(s, wsId) : s.navTickByWorkspace,
+				navTickByWorkspace:
+					takesFocus && !navigationCountedAtRequest(options)
+						? bumpNav(s, wsId)
+						: s.navTickByWorkspace,
 				// It's open now, so it leaves history (if it was a disk-only entry there).
 				closedChatsByWorkspace: closed.some((c) => c.sessionId === summary.sessionId)
 					? {
@@ -1917,18 +2820,67 @@ export const useAppStore = create<AppState>((set, get) => ({
 			// `setTitle` renames the session's chat tab (it lives in exactly one workspace), not the runtime.
 			if (request.kind === "setTitle") {
 				for (const [wsId, tabs] of Object.entries(s.tabsByWorkspace)) {
-					if (tabs.some((t) => t.kind === "chat" && t.sessionId === request.sessionId)) {
-						return {
-							tabsByWorkspace: {
-								...s.tabsByWorkspace,
-								[wsId]: tabs.map((t) =>
-									t.kind === "chat" && t.sessionId === request.sessionId
-										? { ...t, name: request.title }
-										: t,
-								),
-							},
-						};
-					}
+					const chat = tabs.find(
+						(tab): tab is ChatTab => tab.kind === "chat" && tab.sessionId === request.sessionId,
+					);
+					if (!chat) continue;
+					const cacheChanged = chat.name !== request.title;
+					const renamed = cacheChanged ? { ...chat, name: request.title } : chat;
+					const matchesQueuedOpen = (
+						intent: LayoutIntent,
+					): intent is Extract<LayoutIntent, { kind: "open" }> =>
+						intent.kind === "open" &&
+						intent.workspaceId === wsId &&
+						intent.tab.kind === "chat" &&
+						intent.tab.sessionId === chat.sessionId;
+					const queuedOpen = s.layoutIntents.find(matchesQueuedOpen);
+					const placement = selectLayoutResourcePlacement(s, wsId, chat);
+					const queuedChanged = queuedOpen !== undefined && queuedOpen.tab.name !== request.title;
+					const placementChanged = placement !== null && placement.tab.name !== request.title;
+					if (!cacheChanged && !queuedChanged && !placementChanged) continue;
+					return {
+						layoutIntents: queuedOpen
+							? queuedChanged || placementChanged
+								? s.layoutIntents.map((intent) =>
+										matchesQueuedOpen(intent)
+											? {
+													...intent,
+													tab: {
+														...intent.tab,
+														...(placementChanged && placement ? { id: placement.tabId } : {}),
+														name: request.title,
+													},
+												}
+											: intent,
+									)
+								: s.layoutIntents
+							: placementChanged && placement
+								? appendLayoutIntent(s.layoutIntents, {
+										kind: "open",
+										workspaceId: wsId,
+										tab: { ...renamed, id: placement.tabId },
+										intent: "keep",
+										activate: false,
+									})
+								: s.layoutIntents,
+						tabsByWorkspace: cacheChanged
+							? {
+									...s.tabsByWorkspace,
+									[wsId]: tabs.map((tab) => (tab.id === chat.id ? renamed : tab)),
+								}
+							: s.tabsByWorkspace,
+					};
+				}
+				for (const [wsId, chats] of Object.entries(s.closedChatsByWorkspace)) {
+					if (!chats.some((chat) => chat.sessionId === request.sessionId)) continue;
+					return {
+						closedChatsByWorkspace: {
+							...s.closedChatsByWorkspace,
+							[wsId]: chats.map((chat) =>
+								chat.sessionId === request.sessionId ? { ...chat, title: request.title } : chat,
+							),
+						},
+					};
 				}
 				return {};
 			}
@@ -1965,56 +2917,157 @@ export const useAppStore = create<AppState>((set, get) => ({
 			theme: config.theme,
 			analyticsEnabled: config.analyticsEnabled,
 			terminalReplayKb: config.terminalReplayKb,
+			layoutSettings: config.layout ?? DEFAULT_CONFIG.layout,
 		}),
-	requestRightTab: (workspaceId, tab) => set({ rightTabRequest: { workspaceId, tab } }),
+	requestToolView: (workspaceId, tool) =>
+		set((state) =>
+			state.removedWorkspaceIds[workspaceId]
+				? {}
+				: {
+						layoutIntents: appendLayoutIntent(state.layoutIntents, {
+							kind: "reveal-tool",
+							workspaceId,
+							tool,
+						}),
+					},
+		),
 	// The path intent and the flip always travel together — one action, so no call site can send half of it.
 	// The nav count is stamped here, at the click, because that is when the user navigated — the panel only
 	// gets to act on this a `git.status` round trip later.
 	requestChangesView: (workspaceId, path) =>
-		set((s) => ({
-			changesRequest: { workspaceId, path, navTick: selectWorkspaceNavTick(s, workspaceId) },
-			rightTabRequest: { workspaceId, tab: "changes" },
-		})),
+		set((s) => {
+			if (s.removedWorkspaceIds[workspaceId]) return {};
+			const advanced = advanceCenterNavigation(s, workspaceId);
+			return {
+				layoutIntents: appendLayoutIntent(s.layoutIntents, {
+					kind: "reveal-tool",
+					workspaceId,
+					tool: "changes",
+				}),
+				changesRequest: {
+					workspaceId,
+					path,
+					navTick: selectWorkspaceNavTick(s, workspaceId) + 1,
+					navigation: advanced.stamp,
+				},
+				...advanced.patch,
+			};
+		}),
 	clearChangesRequest: () => set({ changesRequest: null }),
 	// Activate project + workspace together (the same atomicity `activateWorkspace` upholds) so a jump into
 	// another project can never leave `selectedProjectId` on the source while `activeWorkspaceId` points
 	// elsewhere. The caller (`useHistorySearch.openMessage`) ensures the target project's workspaces are
 	// loaded first, so `selectActiveWorkspace` can resolve `activeWorkspaceId`.
 	requestChatLocation: (req) =>
-		set({
-			chatLocationRequest: req,
-			selectedProjectId: req.projectId,
-			activeWorkspaceId: req.workspaceId,
+		set((state) => {
+			if (
+				state.removedWorkspaceIds[req.workspaceId] ||
+				isSessionDeleted(state, req.workspaceId, req.sessionId)
+			) {
+				return {};
+			}
+			const hydrated = state.layoutAttentionByWorkspace[req.workspaceId] !== undefined;
+			const advanced = hydrated ? advanceCenterNavigation(state, req.workspaceId) : null;
+			return {
+				...(advanced?.patch ?? {}),
+				chatLocationRequest: {
+					...req,
+					...(advanced ? { navigation: advanced.stamp } : {}),
+				},
+				selectedProjectId: req.projectId,
+				activeWorkspaceId: req.workspaceId,
+			};
 		}),
 	clearChatLocation: () => set({ chatLocationRequest: null }),
 	requestHistoryOpen: (target) =>
-		set((s) => ({
-			historyOpenRequest: { sessionId: target.sessionId },
-			activeTabByWorkspace: { ...s.activeTabByWorkspace, [target.workspaceId]: target.tabId },
-			navTickByWorkspace: bumpNav(s, target.workspaceId),
-		})),
+		set((s) => {
+			if (
+				s.removedWorkspaceIds[target.workspaceId] ||
+				isSessionDeleted(s, target.workspaceId, target.sessionId)
+			) {
+				return {};
+			}
+			const cache = s.tabsByWorkspace[target.workspaceId]?.find(
+				(candidate): candidate is ChatTab =>
+					candidate.kind === "chat" && candidate.sessionId === target.sessionId,
+			);
+			const resource: ChatTab =
+				cache ??
+				({
+					kind: "chat",
+					id: target.tabId,
+					workspaceId: target.workspaceId,
+					name: "Chat",
+					sessionId: target.sessionId,
+				} satisfies ChatTab);
+			const resourcePlacement = selectLayoutResourcePlacement(s, target.workspaceId, resource);
+			const navigation = advanceCenterNavigation(
+				s,
+				target.workspaceId,
+				resourcePlacement?.area === "center" ? resourcePlacement.groupId : undefined,
+			);
+			const historyRequestId = randomId("history-open");
+			return {
+				...navigation.patch,
+				layoutIntents: appendLayoutIntent(s.layoutIntents, {
+					kind: "select",
+					workspaceId: target.workspaceId,
+					tabId: resourcePlacement?.tabId ?? target.tabId,
+					resource,
+					focus: false,
+					historyRequestId,
+					navigation: navigation.stamp,
+				}),
+				historyOpenRequest: { id: historyRequestId, sessionId: target.sessionId },
+				activeTabByWorkspace: cache
+					? { ...s.activeTabByWorkspace, [target.workspaceId]: cache.id }
+					: s.activeTabByWorkspace,
+			};
+		}),
 	clearHistoryOpen: () => set({ historyOpenRequest: null }),
 	requestSpecView: (workspaceId, path) =>
-		set({ specRequest: { workspaceId, path }, rightTabRequest: { workspaceId, tab: "specs" } }),
+		set((s) => {
+			if (s.removedWorkspaceIds[workspaceId]) return {};
+			const advanced = advanceCenterNavigation(s, workspaceId);
+			return {
+				layoutIntents: appendLayoutIntent(s.layoutIntents, {
+					kind: "reveal-tool",
+					workspaceId,
+					tool: "specs",
+				}),
+				specRequest: { workspaceId, path, navigation: advanced.stamp },
+				...advanced.patch,
+			};
+		}),
 	clearSpecRequest: () => set({ specRequest: null }),
-	clearRightTabRequest: () => set({ rightTabRequest: null }),
 	setWorkspaceSpecs: (workspaceId, nodes) =>
 		set((s) =>
-			sameSpecGraph(s.specsByWorkspace[workspaceId], nodes)
+			s.removedWorkspaceIds[workspaceId] || sameSpecGraph(s.specsByWorkspace[workspaceId], nodes)
 				? {}
 				: { specsByWorkspace: { ...s.specsByWorkspace, [workspaceId]: nodes } },
 		),
 	requestReviewFocus: (workspaceId, commentId) =>
-		set({ reviewFocusRequest: { workspaceId, commentId } }),
-	clearReviewFocus: () => set({ reviewFocusRequest: null }),
+		set((state) =>
+			state.removedWorkspaceIds[workspaceId]
+				? {}
+				: { reviewFocusRequest: { workspaceId, commentId } },
+		),
+	clearReviewFocus: (commentId) =>
+		set((state) =>
+			commentId !== undefined && state.reviewFocusRequest?.commentId !== commentId
+				? {}
+				: { reviewFocusRequest: null },
+		),
 	setWorkspaceReview: (workspaceId, snapshot) =>
 		set((s) =>
+			s.removedWorkspaceIds[workspaceId] ||
 			sameReviewSnapshot(s.reviewsByWorkspace[workspaceId], snapshot)
 				? {}
 				: { reviewsByWorkspace: { ...s.reviewsByWorkspace, [workspaceId]: snapshot } },
 		),
 	applyReviewChanged: (payload) =>
 		set((s) => {
+			if (s.removedWorkspaceIds[payload.workspaceId]) return {};
 			const next = { review: payload.review, comments: payload.comments };
 			return sameReviewSnapshot(s.reviewsByWorkspace[payload.workspaceId], next)
 				? {}

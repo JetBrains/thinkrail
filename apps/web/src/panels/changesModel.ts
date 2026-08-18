@@ -1,4 +1,5 @@
 import type { GitCommit, GitDiffScope, GitFileChange, GitFileStatus } from "@thinkrail/contracts";
+import { tupleKey } from "../lib";
 import { extendFolderChain, startFolderChain } from "./folderChains";
 
 /**
@@ -38,7 +39,7 @@ export function scopeKey(scope: GitDiffScope): string {
  * existing tab).
  */
 export function diffTabId(workspaceId: string, scope: GitDiffScope, path: string): string {
-	return `${workspaceId}:diff:${scopeKey(scope)}:${path}`;
+	return tupleKey("diff", workspaceId, scopeKey(scope), path);
 }
 
 /**
@@ -83,11 +84,6 @@ export function splitPath(path: string): { dir: string; base: string } {
 	return cut < 0
 		? { dir: "", base: path }
 		: { dir: path.slice(0, cut + 1), base: path.slice(cut + 1) };
-}
-
-/** Whether `tabId` is a diff tab of `workspaceId` — the shared prefix of every `diffTabId` there. */
-export function isDiffTabId(workspaceId: string, tabId: string | null | undefined): boolean {
-	return tabId?.startsWith(`${workspaceId}:diff:`) ?? false;
 }
 
 export interface ChangeTreeFile {

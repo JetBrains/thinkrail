@@ -248,8 +248,8 @@ export default function ChatView({
 	} = useHistorySearch(sessionId, workspaceId, projectId);
 
 	// The history-search "jump to message" deep link this session is the target of, if any — cleared by
-	// this effect below once it has resolved (or failed to resolve) a row to scroll to. `CenterTabs` is the
-	// other consumer: it opens/hydrates the target chat's tab but never clears the request (see its own
+	// this effect below once it has resolved (or failed to resolve) a row to scroll to.
+	// `WorkspaceWorkbench` is the other consumer: it opens/hydrates the target chat's tab but never clears the request (see its own
 	// effect's jsdoc).
 	const chatLocationRequest = useAppStore((s) => s.chatLocationRequest);
 	const [flashRowId, setFlashRowId] = useState<string | null>(null);
@@ -475,9 +475,15 @@ export default function ChatView({
 	// view, and flash it briefly. `rows.length > 0` guards against running before the transcript is ready
 	// (a fresh tab renders zero rows for one tick). Always clears the request — this is its only consumer.
 	useEffect(() => {
-		if (!chatLocationRequest || chatLocationRequest.sessionId !== sessionId || rows.length === 0) {
+		if (
+			!chatLocationRequest ||
+			chatLocationRequest.workspaceId !== workspaceId ||
+			chatLocationRequest.sessionId !== sessionId ||
+			rows.length === 0
+		) {
 			return;
 		}
+		if (useAppStore.getState().chatLocationRequest !== chatLocationRequest) return;
 		const { messageIndex, anchorText } = chatLocationRequest;
 		const prefix = anchorText.slice(0, 40);
 		const mappedId = runtime.turnIdByMessageIndex?.[messageIndex];
@@ -499,7 +505,7 @@ export default function ChatView({
 		virtuosoRef.current?.scrollToIndex({ index, align: "center" });
 		setFlashRowId(rows[index]?.id ?? null);
 		useAppStore.getState().clearChatLocation();
-	}, [chatLocationRequest, sessionId, rows, runtime.turnIdByMessageIndex, turns]);
+	}, [chatLocationRequest, sessionId, rows, runtime.turnIdByMessageIndex, turns, workspaceId]);
 
 	// Consume the shell's global `Ctrl+R` (`store.historyOpenRequest`), the chord's only handler app-wide —
 	// it fires with focus anywhere, so it can't be a key handler in the composer or the overlay. Already
@@ -510,6 +516,7 @@ export default function ChatView({
 	const historyOverlayOpen = historyState.open;
 	useEffect(() => {
 		if (historyOpenRequest?.sessionId !== sessionId) return;
+		if (useAppStore.getState().historyOpenRequest !== historyOpenRequest) return;
 		useAppStore.getState().clearHistoryOpen();
 		if (historyOverlayOpen) cycleScope();
 		else composerRef.current?.openHistory();
@@ -548,11 +555,11 @@ export default function ChatView({
 		[workspaceId],
 	);
 
-	// A chip expanding its artifact list asks for the owning view alongside — no path, so nothing is opened
-	// or highlighted: the user is choosing which side of the round to look at, and the panel follows.
+	// A chip expanding its artifact list asks the workbench to reveal the owning tool — no path, so nothing
+	// is opened or highlighted: the user is choosing which side of the round to inspect.
 	const onReveal = useCallback(
-		(tab: "specs" | "changes") => {
-			useAppStore.getState().requestRightTab(workspaceId, tab);
+		(tool: "specs" | "changes") => {
+			useAppStore.getState().requestToolView(workspaceId, tool);
 		},
 		[workspaceId],
 	);

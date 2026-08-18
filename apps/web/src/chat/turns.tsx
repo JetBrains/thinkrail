@@ -425,8 +425,8 @@ function formatElapsed(ms: number): string {
 }
 
 /**
- * One kind of artifact a round produced: the paths, how to name them, which right-panel view owns them, and
- * where a click sends the user. `TurnDivider` builds one per side (specs / changed files) so the two are
+ * One kind of artifact a round produced: the paths, how to name them, which side tool owns them, and
+ * where a click sends the user. `TurnDivider` builds one per kind (specs / changed files) so the two are
  * described once instead of being spelled out in parallel across chip and list.
  */
 interface ArtifactGroup {
@@ -438,7 +438,7 @@ interface ArtifactGroup {
 	label: (count: number) => string;
 	expanded: boolean;
 	onOpen: (path: string) => void;
-	/** Show the right-panel view that owns this kind (the flip that rides along with expanding). */
+	/** Reveal the side tool that owns this kind (the action that rides along with expanding). */
 	reveal: () => void;
 }
 
@@ -448,7 +448,7 @@ interface ArtifactGroup {
  * disclosure: the round's set expands as a list right here in the transcript, each row the same deep link.
  * The two chips are **alternatives, not independent folds** — opening one closes the other, and clicking the
  * open one closes it (nothing selected), so the divider never grows two lists at once. Expanding also
- * reveals the right-panel view that owns the kind, which is what makes the chip read as a switch between
+ * reveals the side tool that owns the kind, which is what makes the chip read as a switch between
  * Specs and Changes rather than two unrelated toggles.
  *
  * Why the list lives in the chat and not as a highlight over the panels: the set belongs to *this round*,
@@ -482,7 +482,7 @@ function ArtifactChip({
 					if (first) onOpen(first); // its own deep link already reveals the owning view
 					return;
 				}
-				// Reveal the owning view when opening; a close is "never mind" and leaves the panel alone.
+				// Reveal the owning view when opening; a close is "never mind" and leaves the tool alone.
 				if (!expanded) reveal();
 				onSelect();
 			}}
@@ -544,12 +544,12 @@ function ArtifactList({
 
 /**
  * A subtle round-end divider (rendered right when the turn finishes, below its "✓ Done" marker): tool-call
- * count, then the round's written artifacts as **two chips split the way the right panel is** — "N specs"
- * (deep-links the Specs panel, opening the rendered spec — via `onOpenSpec`) and "N files changed"
- * (deep-links the Changes panel to the file: flips to the tab, highlights its row, and opens its diff tab
- * in the center — via `onOpenChange`) — and elapsed wall-clock. A single artifact deep-links outright;
+ * count, then the round's written artifacts as two ownership-routed chips — "N specs" (reveals the Specs
+ * tool and opens the rendered spec via `onOpenSpec`) and "N files changed" (reveals the Changes tool,
+ * highlights its row, and opens its diff tab in the center via `onOpenChange`) — and elapsed wall-clock.
+ * A single artifact deep-links outright;
  * several make the chip a **single-choice** disclosure (see `ArtifactChip`) whose list replaces the other
- * side's rather than joining it, keyed off `id` (the divider row's id). Presentational — the store touches
+ * kind's rather than joining it, keyed off `id` (the divider row's id). Presentational — the store touches
  * live in `ChatView`, which supplies the open + reveal handlers. The data comes from the pure `turnDivider`
  * deriver in `rows.ts`, which owns the spec/code partition.
  */
@@ -566,14 +566,14 @@ export function TurnDivider({
 	workspaceRoot?: string | undefined;
 	onOpenSpec: (path: string) => void;
 	onOpenChange: (path: string) => void;
-	/** Show the right-panel view that owns a side, without surfacing any particular path. */
+	/** Reveal the side tool that owns a kind, without surfacing any particular path. */
 	onReveal: (tab: "specs" | "changes") => void;
 }) {
 	const { elapsedMs, toolCount, specs, changedFiles } = data;
-	// ONE selection per divider, not a fold per side: the two lists are alternatives, so "at most one open"
+	// ONE selection per divider, not a fold per kind: the two lists are alternatives, so "at most one open"
 	// is structural — there is no state where both are expanded.
 	const [selected, select] = useSelection(`${id}:artifacts`);
-	const sides: ArtifactGroup[] = [
+	const allGroups: ArtifactGroup[] = [
 		{
 			id: "specs",
 			icon: FileText,
@@ -593,7 +593,7 @@ export function TurnDivider({
 			reveal: () => onReveal("changes"),
 		},
 	];
-	const groups = sides.filter((group) => group.paths.length > 0);
+	const groups = allGroups.filter((group) => group.paths.length > 0);
 
 	if (toolCount === 0 && groups.length === 0 && (elapsedMs == null || elapsedMs < 1000)) {
 		// Nothing worth noting between these turns — just a hairline rule.

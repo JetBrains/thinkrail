@@ -16,6 +16,8 @@ import type {
 	JbcentralActionResult,
 	JbcentralConnectResult,
 	JbcentralLoginResult,
+	LayoutReplaceParams,
+	LayoutReplaceResult,
 	LoginReply,
 	OpenBranchReview,
 	Project,
@@ -34,6 +36,7 @@ import type {
 	TodoPlan,
 	TodoStatus,
 	Workspace,
+	WorkspaceLayoutSnapshot,
 } from "./domain";
 import type {
 	AskUserAnswersDetails,
@@ -218,9 +221,12 @@ export interface TerminalTabsPush {
 // v39: the TODO review map — `TodoItem.artifacts` (mirrored `TodoArtifact`, incl. the host-owned `commit`
 // kind) rides `todo.list`, whose decoration also derives a commit artifact's `files` from git (absent =
 // unresolvable sha, degrade silently).
-// v40: JetBrains Central adds typed lifecycle/action states plus connect, disconnect, update, and login
+// v40: host-synchronized workspace workbench layouts — versioned full-document `layout.get` /
+// exact-base `layout.replace`, monotonic revisions, typed accepted/conflict results, `layout.changed`
+// broadcasts, and layout preset settings. Conflicts carry current state and never persist the stale document.
+// v41: JetBrains Central adds typed lifecycle/action states plus connect, disconnect, update, and login
 // methods.
-export const PROTOCOL_VERSION = 40;
+export const PROTOCOL_VERSION = 41;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a
@@ -381,6 +387,9 @@ export const WS_METHODS = {
 	providerJbcentralDisconnect: "provider.jbcentralDisconnect",
 	providerJbcentralLogin: "provider.jbcentralLogin",
 	providerJbcentralUpdate: "provider.jbcentralUpdate",
+	// One canonical structural workbench document per workspace.
+	layoutGet: "layout.get",
+	layoutReplace: "layout.replace",
 	// Persist a partial change to the server-synced app settings (e.g. the theme). The host merges, saves
 	// `config.json`, and broadcasts `settings.changed` — the caller converges on that push, not optimism.
 	settingsUpdate: "settings.update",
@@ -455,6 +464,8 @@ export const WS_CHANNELS = {
 	// The server-synced app settings changed (carries the full `AppConfig`), broadcast to every client so
 	// they converge — the initiator applies on this push too, never optimistically.
 	settingsChanged: "settings.changed",
+	// One accepted, persisted full workbench snapshot; all clients fold by monotonic revision.
+	layoutChanged: "layout.changed",
 	// A workspace's review state changed (a `ReviewChangedPayload` — the full snapshot). Emitted on every
 	// mutation: UI edits, agent `resolve_comment` calls, re-anchoring. All clients converge on it — the
 	// initiator too, never optimistically (the workspace-trio pattern).
@@ -779,8 +790,13 @@ export interface WsMethodMap {
 	"provider.jbcentralDisconnect": { params: Record<string, never>; result: JbcentralActionResult };
 	"provider.jbcentralLogin": { params: Record<string, never>; result: JbcentralLoginResult };
 	"provider.jbcentralUpdate": { params: Record<string, never>; result: JbcentralActionResult };
-	// Merge a partial into the server-synced app settings, persist it, and broadcast `settings.changed`.
-	// Returns the merged, persisted `AppConfig`.
+	// Hydrate one complete workspace layout, then replace only from the exact accepted base revision.
+	"layout.get": {
+		params: { workspaceId: string };
+		result: WorkspaceLayoutSnapshot | null;
+	};
+	"layout.replace": { params: LayoutReplaceParams; result: LayoutReplaceResult };
+	// Merge a top-level partial into server-synced settings. A supplied layout is one complete value.
 	"settings.update": { params: { config: Partial<AppConfig> }; result: AppConfig };
 	// Prompt recall + full-text conversation search over pi's persisted sessions (and live ones — pi
 	// appends as messages complete). Server-side index; results capped (default 50/section), true totals.

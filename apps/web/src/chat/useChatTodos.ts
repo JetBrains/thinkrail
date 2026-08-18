@@ -1,7 +1,8 @@
 import type { PiEvent, SessionEventPayload, TodoPlan } from "@thinkrail/contracts";
 import { TODO_NUDGE_PREFIX, WS_CHANNELS } from "@thinkrail/contracts";
-import { useEffect, useState } from "react";
-import { selectChatTitle, useAppStore } from "../store";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { tupleKey } from "../lib";
+import { isConnectedGeneration, selectChatTitle, useAppStore } from "../store";
 import { errorText, getSessionMessagesWithSkillBaseline, getTransport } from "../transport";
 import { messagesToRuntime } from "./hydrate";
 import { sessionGlance, shouldNudgeOnAdd } from "./planView";
@@ -29,8 +30,8 @@ export interface ChatTodos {
 }
 
 /**
- * The chat's TODO list as shared state (SPEC §Chat TODO plan): the single data source for the in-chat plan
- * popup. Reads `todo.list` for `sessionId`, refetches live off that session's `pi.event`s (any tool end /
+ * The chat's TODO list as shared state (SPEC §Chat TODO plan): the data source shared by the in-chat plan
+ * popup and live plan page. Reads `todo.list` for `sessionId`, refetches off that session's `pi.event`s (any tool end /
  * settled turn, debounced) so the agent's writes surface without a manual refresh, and exposes the user's
  * edit ops. Adding an item nudges the agent to pick it up, except while it's waiting on the user (see
  * {@link nudgeAgent}).
@@ -38,10 +39,32 @@ export interface ChatTodos {
 export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos {
 	const [data, setData] = useState<TodoPlan | null>(null);
 	const [failed, setFailed] = useState(false);
+	const status = useAppStore((state) => state.status);
+	const connectionGeneration = useAppStore((state) => state.connectionGeneration);
+	const identity = tupleKey("chat-todos", workspaceId, sessionId);
+	const currentIdentity = useRef(identity);
+	const readGeneration = useRef(0);
+	const initializedIdentity = useRef<string | null>(null);
+	currentIdentity.current = identity;
+	const live = useCallback(
+		(expectedIdentity: string) => {
+			const state = useAppStore.getState();
+			return (
+				currentIdentity.current === expectedIdentity &&
+				!state.removedWorkspaceIds[workspaceId] &&
+				!state.deletedSessionsByWorkspace[workspaceId]?.[sessionId]
+			);
+		},
+		[sessionId, workspaceId],
+	);
 
 	useEffect(() => {
+		if (status !== "connected" || connectionGeneration === 0) return;
 		let cancelled = false;
+		const effectIdentity = identity;
+		const effectConnectionGeneration = connectionGeneration;
 		const load = (reset: boolean) => {
+			const mine = ++readGeneration.current;
 			if (reset) {
 				setData(null);
 				setFailed(false);
@@ -49,16 +72,31 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 			getTransport()
 				.request("todo.list", { workspaceId, sessionId })
 				.then((plan) => {
-					if (!cancelled) {
+					if (
+						!cancelled &&
+						readGeneration.current === mine &&
+						isConnectedGeneration(useAppStore.getState(), effectConnectionGeneration) &&
+						live(effectIdentity)
+					) {
 						setData(plan);
 						setFailed(false);
 					}
 				})
 				.catch(() => {
-					if (!cancelled && reset) setFailed(true);
+					if (
+						!cancelled &&
+						reset &&
+						readGeneration.current === mine &&
+						isConnectedGeneration(useAppStore.getState(), effectConnectionGeneration) &&
+						live(effectIdentity)
+					) {
+						setFailed(true);
+					}
 				});
 		};
-		load(true);
+		const reset = initializedIdentity.current !== identity;
+		initializedIdentity.current = identity;
+		load(reset);
 		// A turn can end many tools in quick succession; coalesce the live refetches into one trailing
 		// call so we don't fire a `todo.list` round-trip (and a popover re-render) per tool end.
 		let refetch: ReturnType<typeof setTimeout> | undefined;
@@ -73,18 +111,30 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 		});
 		return () => {
 			cancelled = true;
+			readGeneration.current += 1;
 			if (refetch) clearTimeout(refetch);
 			unsubscribe();
 		};
-	}, [workspaceId, sessionId]);
+	}, [connectionGeneration, identity, live, sessionId, status, workspaceId]);
 
 	const add = async (rawTitle: string) => {
 		const title = rawTitle.trim();
 		if (!title) return;
 		// Let a rejection propagate (no local update, no nudge) so the caller can keep the typed text.
+		const requestIdentity = identity;
 		const todo = await getTransport().request("todo.add", { workspaceId, sessionId, title });
-		// A user add is always loose (never grouped).
-		setData((prev) => (prev ? { ...prev, todos: [...prev.todos, todo] } : prev));
+		if (!live(requestIdentity)) return;
+		readGeneration.current += 1;
+		// A user add is always loose (never grouped). A concurrent authoritative refetch may already contain
+		// the accepted item, so fold by id rather than appending a duplicate.
+		setData((prev) =>
+			prev &&
+			![...prev.todos, ...prev.groups.flatMap((group) => group.todos)].some(
+				(candidate) => candidate.id === todo.id,
+			)
+				? { ...prev, todos: [...prev.todos, todo] }
+				: prev,
+		);
 		void nudgeAgent(workspaceId, sessionId, title);
 	};
 
@@ -95,34 +145,53 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 	 * reading `1/1`, or keep an active spinner, until some unrelated `pi.event` refetch happened to land.
 	 * A failed re-read leaves the optimistic view in place; the live refetch reconciles it later.
 	 */
-	const reloadPlan = async () => {
+	const reloadPlan = async (): Promise<boolean> => {
+		const requestIdentity = identity;
+		const requestState = useAppStore.getState();
+		const requestConnectionGeneration =
+			requestState.status === "connected" ? requestState.connectionGeneration : null;
+		const mine = ++readGeneration.current;
 		try {
 			const plan = await getTransport().request("todo.list", { workspaceId, sessionId });
+			const current = useAppStore.getState();
+			if (
+				requestConnectionGeneration !== null &&
+				current.connectionGeneration !== requestConnectionGeneration &&
+				readGeneration.current === mine &&
+				live(requestIdentity)
+			) {
+				return reloadPlan();
+			}
+			if (readGeneration.current !== mine || !live(requestIdentity)) return false;
 			setData(plan);
+			return true;
 		} catch {
-			// keep what's on screen — the next pi.event-driven refetch will reconcile
+			// Keep what's on screen — the next pi.event-driven refetch will reconcile.
+			return false;
 		}
 	};
 
 	const remove = async (id: string) => {
-		let prev: TodoPlan | null = null;
-		setData((current) => {
-			prev = current;
-			return current
+		const requestIdentity = identity;
+		setData((current) =>
+			current
 				? {
 						todos: current.todos.filter((t) => t.id !== id),
 						groups: current.groups
 							.map((g) => ({ ...g, todos: g.todos.filter((t) => t.id !== id) }))
 							.filter((g) => g.todos.length > 0),
 					}
-				: current;
-		});
+				: current,
+		);
 		try {
 			await getTransport().request("todo.remove", { workspaceId, sessionId, id });
-			await reloadPlan(); // the surviving groups' derived status is the host's to recompute
+			if (live(requestIdentity)) {
+				await reloadPlan(); // the surviving groups' derived status is the host's to recompute
+			}
 		} catch (err) {
-			// Roll the optimistic removal back so the UI doesn't diverge from disk on a failed request.
-			setData(prev);
+			// Never restore a whole captured plan over concurrent edits. Re-read the host to recover the failed
+			// item; if that read also fails, the next pi.event-driven refresh converges without stale overwrite.
+			if (live(requestIdentity)) await reloadPlan();
 			console.warn("todo remove failed:", errorText(err));
 		}
 	};
@@ -146,7 +215,7 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 			// The commit is the change set: point the panel's scope at it and reveal Changes — the panel
 			// lists the commit's files itself, each opening its diff at that scope.
 			store.setDiffScope(workspaceId, { kind: "commit", sha: target.sha });
-			store.requestRightTab(workspaceId, "changes");
+			store.enqueueLayoutIntent({ kind: "reveal-tool", workspaceId, tool: "changes" });
 			return;
 		}
 		// Path-list fallback: a live diff — pin the scope back to branch so the deep link can't inherit a
@@ -169,7 +238,14 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
  * it off to work the new item and forget to return to its own question (the reported bug).
  */
 async function nudgeAgent(workspaceId: string, sessionId: string, title: string): Promise<void> {
-	const session = useAppStore.getState().sessions[sessionId];
+	const initial = useAppStore.getState();
+	if (
+		initial.removedWorkspaceIds[workspaceId] ||
+		initial.deletedSessionsByWorkspace[workspaceId]?.[sessionId]
+	) {
+		return;
+	}
+	const session = initial.sessions[sessionId];
 	if (session && !shouldNudgeOnAdd(sessionGlance(session))) return;
 	const streaming = session?.isStreaming ?? false;
 	const text = `${TODO_NUDGE_PREFIX}A TODO was added to the list: "${title}". Read the TODO list with todo_list and work any pending items, marking each done with todo_update as you finish.`;
@@ -184,14 +260,30 @@ async function nudgeAgent(workspaceId: string, sessionId: string, title: string)
 				result: { summary, messages },
 				syncedTick,
 			} = await getSessionMessagesWithSkillBaseline({ sessionId, workspaceId });
-			useAppStore
-				.getState()
-				.hydrateSession(
-					summary,
-					messagesToRuntime(messages, summary.lastSettlement),
-					false,
-					syncedTick,
-				);
+			const current = useAppStore.getState();
+			if (
+				current.removedWorkspaceIds[workspaceId] ||
+				current.deletedSessionsByWorkspace[workspaceId]?.[sessionId]
+			) {
+				return;
+			}
+			current.hydrateSession(
+				summary,
+				messagesToRuntime(messages, summary.lastSettlement),
+				false,
+				summary.live ? undefined : syncedTick,
+				{ activate: false },
+			);
+			const hydrated = useAppStore.getState();
+			const recovered = hydrated.sessions[sessionId];
+			if (
+				hydrated.removedWorkspaceIds[workspaceId] ||
+				hydrated.deletedSessionsByWorkspace[workspaceId]?.[sessionId] ||
+				!recovered ||
+				!shouldNudgeOnAdd(sessionGlance(recovered))
+			) {
+				return;
+			}
 			await getTransport().request("session.prompt", { sessionId, text });
 		} catch (err) {
 			console.warn("todo nudge skipped:", errorText(err));
