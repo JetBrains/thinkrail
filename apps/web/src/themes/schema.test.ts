@@ -99,8 +99,8 @@ test("high-contrast manifests provide legible selected-text foregrounds", () => 
  *
  * HOVER is deliberately held to a lower bar. These themes lift the row background toward the text
  * colour on hover, which eats contrast exactly where rows are interactive. Requiring the full 4.5 there
- * would force Darcula's purple to lavender and Gruvbox's orange to pale orange — the signature colours
- * of the themes they are named after. WCAG has no "transient state" allowance, so this tier is OUR
+ * would force a theme's signature accent toward a washed-out tint just to survive the hovered row.
+ * WCAG has no "transient state" allowance, so this tier is OUR
  * judgement, written down: hovered text must still be comfortably visible (3.0), never merely present.
  *
  * `accent` and `success` are excluded from `input` on purpose: no component renders accent- or

@@ -150,9 +150,9 @@ because one tier is our judgement rather than the standard's:
 - on the transient HOVER surface the floor is **3.0**, not 4.5.
 
 WCAG has no "transient state" allowance, so the hover tier is a line we drew deliberately. These themes
-lift the row background toward the text colour on hover, and holding that to 4.5 would have forced
-Darcula's purple to lavender and Gruvbox's orange to pale orange — the signature colours of the themes
-they are named after. 3.0 keeps hovered text comfortably visible while leaving the themes recognisable.
+lift the row background toward the text colour on hover, and holding that to 4.5 would have forced a
+theme's signature accent toward a washed-out tint just to survive the hovered row. 3.0 keeps hovered
+text comfortably visible while leaving the themes recognisable.
 Revisit it if strict AA across every state ever becomes a requirement.
 
 `themes/runtime.test.ts` pins application; `themes/shiki.test.ts` pins the syntax-variable map. See [`themes/SPEC.md`](../themes/SPEC.md) for the manifest itself and

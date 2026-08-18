@@ -1,8 +1,8 @@
 {
 	"$schema": "../theme.schema.json",
 	"schemaVersion": 2,
-	"id": "high-contrast",
-	"label": "High Contrast",
+	"id": "high-contrast-dark",
+	"label": "High Contrast Dark",
 	"order": 50,
 	"appearance": "dark",
 	"contrast": "high",
