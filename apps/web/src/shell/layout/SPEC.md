@@ -51,10 +51,12 @@ publishing.
   with equal halves. User creation/resize requires each child to remain at least 320 px wide and 180 px high.
   Losing a leaf's final tab removes that leaf and promotes its sibling; one final empty leaf always remains.
 - **Sides:** left/right are ordered vertical stacks. Projects, Specs, All files, Changes, and Review are
-  singleton side-only tools; terminals alone may cross between center and sides. During a compatible tab
-  drag, every side group exposes broad upper/lower targets below its tab strip; they create a group immediately
-  before/after that group, including at interior boundaries. Folded rows divide their compact height between
-  the same two targets. Empty groups disappear, and an empty side auto-hides. Expanded bodies have a 120 px
+  singleton side-only tools; terminals alone may cross between center and sides. Dragging an outer side
+  separator through its minimum hides that side through the same shared visibility transaction as its
+  keyboard/menu command, retains the last expanded width, and exposes the hidden-side restore rail. During a
+  compatible tab drag, every side group exposes broad upper/lower targets below its tab strip; they create a
+  group immediately before/after that group, including at interior boundaries. Folded rows divide their
+  compact height between the same two targets. Empty groups disappear, and an empty side auto-hides. Expanded bodies have a 120 px
   normal minimum; independently folded groups occupy 27 px and retain their normalized expanded weights.
   Closing a singleton keeps its local feature state and restore target; a View/deep-link reveal restores or
   unfolds it in place and focuses the requested item.

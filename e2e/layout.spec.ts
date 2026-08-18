@@ -50,6 +50,18 @@ async function dragHandle(page: Page, handle: Locator, x: number, y: number): Pr
 	await page.mouse.up();
 }
 
+async function dragSideClosed(page: Page, side: "left" | "right"): Promise<void> {
+	const workbenchBox = await page.getByTestId("workbench").boundingBox();
+	if (!workbenchBox) throw new Error("workbench has no bounding box");
+	const targetX = side === "left" ? workbenchBox.x + 1 : workbenchBox.x + workbenchBox.width - 1;
+	await dragHandle(
+		page,
+		page.getByTestId(`resize-${side}`),
+		targetX,
+		workbenchBox.y + workbenchBox.height / 2,
+	);
+}
+
 async function dragTabToTarget(page: Page, tab: Locator, target: Locator): Promise<number> {
 	const tabBox = await tab.boundingBox();
 	if (!tabBox) throw new Error("dragged tab has no bounding box");
@@ -162,6 +174,42 @@ test("outer side widths publish on pointer-up and restore after reload", async (
 	await reenterDefaultAfterReload(page);
 	await expect.poll(() => width(page.getByTestId("right-stack"))).toBeGreaterThan(before + 50);
 	expect(Math.abs((await width(page.getByTestId("right-stack"))) - resized)).toBeLessThan(24);
+});
+
+test("dragging outer separators hides both sides and preserves their restore state", async ({
+	page,
+}) => {
+	await openDefaultWorkbench(page);
+	const leftWidth = await width(page.getByTestId("left-stack"));
+	const rightWidth = await width(page.getByTestId("right-stack"));
+
+	await dragSideClosed(page, "left");
+	await expect(page.getByTestId("left-layout-rail")).toBeVisible();
+	await expect(page.getByTestId("left-stack")).toHaveCount(0);
+
+	await dragSideClosed(page, "right");
+	await expect(page.getByTestId("right-layout-rail")).toBeVisible();
+	await expect(page.getByTestId("right-stack")).toHaveCount(0);
+	await waitForLayoutSettled(page);
+
+	await reenterDefaultAfterReload(page);
+	await expect(page.getByTestId("left-layout-rail")).toBeVisible();
+	await expect(page.getByTestId("right-layout-rail")).toBeVisible();
+
+	await page.getByRole("button", { name: "Show left side" }).click();
+	await waitForLayoutSettled(page);
+	await page.getByRole("button", { name: "Show right side" }).click();
+	await waitForLayoutSettled(page);
+
+	await expect(page.getByTestId("left-stack")).toBeVisible();
+	await expect(page.getByTestId("right-stack")).toBeVisible();
+	await expect
+		.poll(async () => Math.abs((await width(page.getByTestId("left-stack"))) - leftWidth))
+		.toBeLessThan(24);
+	await expect
+		.poll(async () => Math.abs((await width(page.getByTestId("right-stack"))) - rightWidth))
+		.toBeLessThan(24);
+	await waitTerminalReady(page);
 });
 
 test("a terminal can move to its own side group; resize, fold, and visibility gate its one body", async ({

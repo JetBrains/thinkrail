@@ -1886,15 +1886,28 @@ export function Workbench({
 		(sizes) => {
 			let index = 0;
 			let next = document;
+			const collapsedSides: LayoutSide[] = [];
 			if (leftVisible) {
-				next = resizeSideRegion(next, "left", (sizes[index] ?? outerCurrent[index] ?? 18) / 100);
+				const size = sizes[index] ?? outerCurrent[index] ?? 18;
+				if (size <= Number.EPSILON) collapsedSides.push("left");
+				else next = resizeSideRegion(next, "left", size / 100);
 				index += 1;
 			}
 			index += 1;
 			if (rightVisible) {
-				next = resizeSideRegion(next, "right", (sizes[index] ?? outerCurrent[index] ?? 28) / 100);
+				const size = sizes[index] ?? outerCurrent[index] ?? 28;
+				if (size <= Number.EPSILON) collapsedSides.push("right");
+				else next = resizeSideRegion(next, "right", size / 100);
 			}
-			if (next !== document) onCommit(next);
+			if (collapsedSides.length === 0) {
+				if (next !== document) onCommit(next);
+				return;
+			}
+			let result: LayoutMutationResult = { document: next };
+			for (const side of collapsedSides) {
+				result = hideSide(result.document, side, attentionRef.current);
+			}
+			apply(result);
 		},
 		onRemoteGestureCanceled,
 	);
@@ -2041,7 +2054,14 @@ export function Workbench({
 				>
 					{leftVisible ? (
 						<>
-							<ResizablePanel id="layout-left" order={1} defaultSize={outerCurrent[0]} minSize={8}>
+							<ResizablePanel
+								id="layout-left"
+								order={1}
+								defaultSize={outerCurrent[0]}
+								minSize={8}
+								collapsedSize={0}
+								collapsible
+							>
 								<SideStack
 									side="left"
 									region={document.left}
@@ -2092,6 +2112,8 @@ export function Workbench({
 								order={3}
 								defaultSize={outerCurrent[outerCurrent.length - 1]}
 								minSize={8}
+								collapsedSize={0}
+								collapsible
 							>
 								<SideStack
 									side="right"
