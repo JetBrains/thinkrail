@@ -440,10 +440,10 @@ function CommentRow({
 						{comment.author === "agent" && (
 							<span
 								data-testid="review-comment-agent"
-								title="Filed by the plan's reviewer agent"
+								title="Filed by ThinkRail's reviewer agent — not by you"
 								className="flex items-center gap-2xs tr-text-eyebrow text-text-subtle"
 							>
-								<Bot className="size-3" /> agent
+								<Bot className="size-3" /> ThinkRail
 							</span>
 						)}
 						{ref && <span className="tr-code-text text-text-subtle">{ref}</span>}
