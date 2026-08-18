@@ -198,7 +198,10 @@ export function useWorkspaceChatCatalogReconciliation(
 			);
 		};
 		const fetchMessages = (sessionId: string) =>
-			getSessionMessagesWithSkillBaseline({ sessionId, workspaceId }).catch(() => null);
+			getSessionMessagesWithSkillBaseline({ sessionId, workspaceId }).catch((error: unknown) => {
+				if (live()) toast.error(errorText(error), "Couldn't load this chat");
+				return null;
+			});
 		void getTransport()
 			.request("session.list", { workspaceId })
 			.then(async (summaries) => {
@@ -308,7 +311,9 @@ export function useWorkspaceChatCatalogReconciliation(
 					})),
 				);
 			})
-			.catch(() => {});
+			.catch((error: unknown) => {
+				if (live()) toast.error(errorText(error), "Couldn't load this workspace's chats");
+			});
 		return () => {
 			current = false;
 		};

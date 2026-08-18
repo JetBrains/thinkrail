@@ -39,6 +39,7 @@ export type ChatRow =
 	| { kind: "user"; id: string; message: UserMessage }
 	| { kind: "system"; id: string; text: string }
 	| { kind: "error"; id: string; text: string }
+	| { kind: "compaction"; id: string; summary: string; tokensBefore: number }
 	| {
 			kind: "retry";
 			id: string;
@@ -135,6 +136,14 @@ export function deriveRows(
 					break;
 				case "error":
 					rows.push({ kind: "error", id: turn.id, text: turn.text });
+					break;
+				case "compaction":
+					rows.push({
+						kind: "compaction",
+						id: turn.id,
+						summary: turn.summary,
+						tokensBefore: turn.tokensBefore,
+					});
 					break;
 				case "retry":
 					rows.push({

@@ -352,28 +352,30 @@ a project picker, the prompt hero, and the reused
   a one-click trash action (`session.delete` → idempotent `store.deleteChat`, no confirm); the
   `session.deleted` broadcast drives the same fold in every connected client. On workspace activation and
   every reconnect, `session.list` first reconciles the client membership snapshot (runtime/cache identities
-  plus placed chat/TODO-document references) captured when the read began, so a baseline session now absent from the
-  authoritative result goes through the normal tombstone and placement-prune folds while a chat created
-  during the read survives. Chats already referenced by the accepted layout
-  hydrate through `session.getMessages` → `messagesToRuntime` → `store.hydrateSession`. Of the remaining
-  sessions, up to the newest four that are live or carry unfinished TODOs auto-open into shared placement;
-  only the first successful hydration may activate, while later successes populate in the background. The
-  batch captures one request-time destination/clock before transcript reads leave, so navigation during a
-  slow restore suppresses even that first activation without discarding placement. The automatic activation
-  may update selection but does not advance a user-navigation clock, so it cannot supersede an earlier user
-  request that is still in flight. If no chat is placed or
-  already known and none meets that rule, the newest disk chat is the fallback. Failed
-  auto-opens and every remaining summary enter local history. Live hydration deliberately carries no
-  current-disk skill baseline; only disk-only attachment receives its captured `syncedTick`.
+  plus placed chat/TODO-document references) captured when the read began, so a baseline session now absent
+  from the authoritative result goes through the normal tombstone and placement-prune folds while a chat
+  created during the read survives. Chats already referenced by the accepted layout hydrate through
+  `session.getMessages` → `messagesToRuntime` → `store.hydrateSession`. Of the remaining sessions, up to the
+  newest four that are live or carry unfinished TODOs auto-open into shared placement; only the first
+  successful hydration may activate, while later successes populate in the background. The batch captures
+  one request-time destination/clock before transcript reads leave, so navigation during a slow restore
+  suppresses even that first activation without discarding placement. The automatic activation may update
+  selection but does not advance a user-navigation clock, so it cannot supersede an earlier user request that
+  is still in flight. If no chat is placed or already known and none meets that rule, the newest disk chat is
+  the fallback. Failed auto-opens and every remaining summary enter local history. A failed transcript read
+  raises an error toast and leaves that summary retryable in history; a failed `session.list` also raises an
+  error instead of presenting an unexplained empty workspace. Both toasts fall silent once the reconciliation
+  pass is cancelled, disconnected, or archived. Live hydration deliberately carries no current-disk skill
+  baseline; only disk-only attachment receives its captured `syncedTick`.
   The same placement reconciliation runs incrementally for accepted `layout.changed` snapshots: remotely
   added chat references repair local cache/history and hydrate without taking focus, while remotely removed
   live chats move into this browser's history after pending layout writes settle and keep their runtime.
   Missing/deleted referenced sessions are pruned through the ordinary layout commit, and
   `session.deleted` drives the same idempotent runtime/history/placement fold in every client. Reopening a
   history row adds its existing session identity to the request-time center destination captured from that
-  Group Header (including an empty group); a rejected read
-  leaves the row in history and raises an error toast.
-  The workbench shell integration also resolves the history-search **`chatLocationRequest`** deep link (see `store/SPEC.md`):
+  Group Header (including an empty group); a rejected read leaves the row in history and raises an error
+  toast. The workbench shell integration also resolves the history-search **`chatLocationRequest`** deep link
+  (see `store/SPEC.md`):
   once its workspace is active, it focuses an already-open tab, `reopenChat`s a live-but-closed one, or
   fetches + hydrates a disk-only one — the reopen flow's two cases above, plus a third case for an
   already-open tab — leaving `ChatView` to consume the request for the scroll + flash (`chat/SPEC.md`'s

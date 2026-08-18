@@ -214,11 +214,11 @@ export interface TerminalTabsPush {
 // v36: `review.close` atomically archives non-draft records and publishes the fresh open snapshot; clients
 // no longer follow it with an initiating-only `review.get` fold.
 // v37: `workspace.openReview` returns the active branch's optional GitHub PR / GitLab MR number.
-// v38: host-synchronized workspace workbench layouts — versioned full-document `layout.get` /
-// `layout.replace`, monotonic revisions, `layout.changed` broadcasts, and layout preset settings.
-// v39: `layout.replace` adds exact-base `expectedRevision` concurrency and returns a typed accepted/conflict
-// result; conflicts carry the current snapshot (including absence) and never persist or broadcast the stale
-// full document.
+// v38: `session.getMessages` keeps pi's `compactionSummary` messages, so a hydrated transcript can say
+// where compaction replaced earlier messages instead of starting mid-conversation.
+// v39: host-synchronized workspace workbench layouts — versioned full-document `layout.get` /
+// exact-base `layout.replace`, monotonic revisions, typed accepted/conflict results, `layout.changed`
+// broadcasts, and layout preset settings. Conflicts carry current state and never persist the stale document.
 export const PROTOCOL_VERSION = 39;
 
 /**

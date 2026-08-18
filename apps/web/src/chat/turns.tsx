@@ -16,6 +16,7 @@ import { useFold, useSelection } from "./foldState";
 import { Markdown } from "./Markdown";
 import { parseReviewPackage, type ReviewPackageItem, reviewPackageLabel } from "./reviewPackage";
 import type { ChatRow, TurnDividerData } from "./rows";
+import { formatTokens } from "./SessionStatsBar";
 import { ToolCard } from "./ToolCard";
 import { getToolChrome, getToolRenderer } from "./toolRegistry";
 
@@ -48,6 +49,8 @@ export function ChatTurnView({
 			return <SystemTurn text={row.text} />;
 		case "error":
 			return <ErrorTurn text={row.text} />;
+		case "compaction":
+			return <CompactionTurn id={row.id} summary={row.summary} tokensBefore={row.tokensBefore} />;
 		case "retry":
 			return (
 				<RetryIndicator
@@ -228,6 +231,47 @@ function SystemTurn({ text }: { text: string }) {
 			className="text-center text-text-muted tr-text-metadata"
 		>
 			{text}
+		</div>
+	);
+}
+
+/**
+ * The compaction boundary: a rule where pi replaced earlier messages with a summary. Without it a
+ * reloaded long chat simply starts mid-conversation, which reads as lost history. The summary is what pi
+ * kept of those messages, so it opens on click rather than being hidden outright.
+ */
+function CompactionTurn({
+	id,
+	summary,
+	tokensBefore,
+}: {
+	id: string;
+	summary: string;
+	tokensBefore: number;
+}) {
+	// The shared fold cache, like every other manual open/close in the transcript: a summary is long
+	// enough to scroll past, and Virtuoso unmounting the row must not collapse what the reader opened.
+	const [open, toggle] = useFold(id);
+	return (
+		<div data-testid="chat-compaction" className="flex flex-col gap-sm">
+			<button
+				type="button"
+				aria-expanded={open}
+				onClick={toggle}
+				className="flex items-center gap-sm text-text-muted tr-text-metadata hover:text-text-default"
+			>
+				<span className="h-px flex-1 bg-border-default" />
+				{open ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
+				<span>
+					Earlier messages summarized ({formatTokens(tokensBefore)} tokens of context compacted)
+				</span>
+				<span className="h-px flex-1 bg-border-default" />
+			</button>
+			{open ? (
+				<div className="tr-text-reading text-text-muted">
+					<Markdown text={summary} />
+				</div>
+			) : null}
 		</div>
 	);
 }
