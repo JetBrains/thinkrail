@@ -107,12 +107,12 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 
 	if (failed && !snapshot) {
 		return (
-			<p data-testid="review-failed" className="px-8 py-4 tr-text-metadata text-text-subtle">
+			<p data-testid="review-failed" className="px-4 py-4 tr-text-metadata text-text-subtle">
 				Couldn't load the review — check the connection and switch back to retry.
 			</p>
 		);
 	}
-	if (!snapshot) return <p className="px-8 py-4 tr-text-metadata text-text-subtle">Loading…</p>;
+	if (!snapshot) return <p className="px-4 py-4 tr-text-metadata text-text-subtle">Loading…</p>;
 
 	const files = fileSummaries(snapshot.comments, snapshot.review.doneFiles);
 	const finishFile = async (path: string | null) => {
@@ -179,10 +179,10 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 				</div>
 			)}
 			{/* The unified content container (below the toolbar, aligned at px-12): 12px on all four sides is
-			    the only outer edge; file rows carry px-8 internally. */}
+			    the only outer edge; file rows carry px-4 internally. */}
 			<div className="min-h-0 flex-1 overflow-auto p-12">
 				{files.length === 0 ? (
-					<p data-testid="review-empty" className="px-8 py-4 tr-text-metadata text-text-subtle">
+					<p data-testid="review-empty" className="px-4 py-4 tr-text-metadata text-text-subtle">
 						{hasComments
 							? "All reviewed files are finished — Clear to archive them and start a fresh review."
 							: "No review comments yet. Select lines in a file or diff and click the comment icon."}
@@ -205,7 +205,7 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 										<button
 											type="button"
 											data-testid="review-file-row"
-											className="flex min-w-0 flex-1 items-center gap-8 px-8 py-4 text-left tr-text-ui"
+											className="flex min-w-0 flex-1 items-center gap-8 px-4 py-4 text-left tr-text-ui"
 											onClick={() => toggleFile(file)}
 										>
 											{isOpen ? (
@@ -233,7 +233,7 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 												title="Done — finish this file's review"
 												aria-label="Done — finish this file's review"
 												onClick={() => void finishFile(file.path)}
-												className="flex shrink-0 items-center py-4 pr-8 pl-4 text-text-subtle hover:text-feedback-success"
+												className="flex shrink-0 items-center py-4 pr-4 pl-4 text-text-subtle hover:text-feedback-success"
 											>
 												<CheckCircle2 className="size-14" />
 											</button>

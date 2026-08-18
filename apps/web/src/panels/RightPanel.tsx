@@ -102,14 +102,14 @@ export function RightPanel() {
 					</p>
 				) : tab === "specs" ? (
 					// The unified content container: 12px on all four sides is the ONLY outer content-edge spacing;
-					// rows carry px-8 internally, so content sits 12+8 from the panel edge and the hover band spans
+					// rows carry px-4 internally, so content sits 12+4 from the panel edge and the hover band spans
 					// this container's content width (inset 12), consistent with All Files / Changes / Review.
 					<div className="p-12">
 						<SpecsPanel workspaceId={activeWorkspaceId} failed={specsFailed} />
 					</div>
 				) : tab === "files" ? (
 					// The unified content container: 12px on all four sides (the only outer edge); TreeRow carries
-					// px-8 internally, so content sits 12+8 from the panel edge (matches the other right-rail views).
+					// px-4 internally, so content sits 12+4 from the panel edge (matches the other right-rail views).
 					<div className="p-12">
 						{/* Expansion paths belong to one workspace; remount before another can reuse them. */}
 						<FileTree key={activeWorkspaceId} workspaceId={activeWorkspaceId} />
