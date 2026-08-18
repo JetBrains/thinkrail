@@ -404,7 +404,7 @@ export function renderReviewPackage(
 				]
 			: []),
 		"",
-		"How to review: read the diffs (e.g. `git show <sha>`) and the surrounding code; judge intent-match, correctness, tests, and honesty of the claims — not style. For EACH concrete finding call add_review_comment (path, lines, what's wrong + what to do). Then finish with exactly ONE review_verdict for this todoId: approve (clean) or request_changes (findings must be addressed).",
+		"FIRST read the reviewing-changes skill and follow it exactly — it defines the review order (intent match, scope drift, verifying the verification claim, hallucinated APIs), how to file findings (add_review_comment, one per problem, severity-prefixed, evidence-cited), and the single review_verdict that ends this review.",
 	];
 	return lines.join("\n");
 }
