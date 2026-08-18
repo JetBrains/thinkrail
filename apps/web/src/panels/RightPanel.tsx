@@ -5,7 +5,7 @@ import { ChangesPanel } from "./ChangesPanel";
 import { FileTree } from "./FileTree";
 import { ReviewPanel, selectActiveReviewedPath } from "./ReviewPanel";
 import { SpecsPanel } from "./SpecsPanel";
-import { TabButton } from "./TabButton";
+import { workspaceTabStateClass } from "./tabState";
 import { useWorkspaceReview } from "./useWorkspaceReview";
 import { useWorkspaceSpecs } from "./useWorkspaceSpecs";
 
@@ -121,5 +121,29 @@ export function RightPanel() {
 				)}
 			</div>
 		</div>
+	);
+}
+
+function TabButton({
+	testid,
+	active,
+	onClick,
+	children,
+}: {
+	testid: string;
+	active: boolean;
+	onClick: () => void;
+	children: React.ReactNode;
+}) {
+	return (
+		<button
+			type="button"
+			data-testid={testid}
+			data-active={active}
+			onClick={onClick}
+			className={`flex h-full items-center px-4 tr-text-eyebrow ${workspaceTabStateClass(active)}`}
+		>
+			{children}
+		</button>
 	);
 }
