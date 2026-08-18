@@ -193,12 +193,13 @@ snapshots plus device-local attention, terminal catalogs, and one **per-session 
   **`modelsRefreshing`** — the awaited `model.refresh` in-flight flag — and **`modelsFresh`**, the
   *provenance* of that list: true only while it holds the installed result of an awaited forced refresh,
   which `NewWorkspaceDialog` needs before it may substitute a model the catalog lacks. It lives here,
-  beside the list, precisely **because `models` is app-wide**: `setModels` (a `model.list` snapshot, whose
-  handler answers from before the detached refresh it starts) **drops** it in the same write, so authority
+  beside the list, precisely **because `models` is app-wide**: `setModelsForProviderVersion` (a guarded
+  `model.list` snapshot, whose handler answers from before the detached refresh it starts) **drops** it in the same write, so authority
   falls with the list any consumer replaced — held as one consumer's local flag it would outlive its
-  subject and confirm a removed model that `create()` then rejects. `beginModelsRefresh` /
-  `finishModelsRefresh(RefreshedModels|null)` are the atomic pair (finish lands the list, sets provenance,
-  and clears the in-flight flag in one write; `null` = failed refresh — keep the current list *and* its
+  subject and confirm a removed model that `create()` then rejects. `beginModelsRefresh` captures and
+  returns the current provider version; `finishModelsRefresh(version, RefreshedModels|null)` lands only a
+  matching reply (list + provenance + cleared in-flight flag in one write; `null` = failed refresh — keep
+  the current list *and* its
   provenance, since nothing was installed). Provenance comes from the **host's** `complete`, never from
   "a reply arrived": the host caps how long it waits for pi, so a reply can carry the registry as it
   stands while the pass that would settle it still runs — such a list is installed (it *is* current) but
@@ -207,7 +208,8 @@ snapshots plus device-local attention, terminal catalogs, and one **per-session 
   a flag an earlier consumer set can otherwise straddle the activation and let an inherited list pass as
   this opening's own truth before its own `model.list` reply lands. **`providerVersion`** is the monotonic,
   data-free `provider.changed` generation observed from the host; **`noteProviderChanged()`** atomically
-  increments it and clears `models` + freshness, so neither a picker nor an older async model-list reply can
+  increments it and clears `models`, freshness, and any old refresh spinner. Both `model.list` and
+  `model.refresh` replies install through version-guarded store actions, so no picker or older async reply can
   offer a removed runtime generation. Transport owns the guarded re-read; the Providers settings pane observes
   the version and re-reads status. Other catalog transport work lives in `chat/useModelCatalog`, not here (the
   store→transport edge stays type-only). The **in-app login** state

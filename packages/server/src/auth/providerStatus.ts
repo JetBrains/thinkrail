@@ -6,7 +6,7 @@ import type {
 	ProviderStatusReport,
 } from "@thinkrail/contracts";
 import { jbcentralInstall } from "@thinkrail/shared/jbcentral";
-import { usePiRuntime } from "../agent";
+import { settledAvailableModels, usePiRuntime } from "../agent";
 import { getJbcentralStatus } from "./jbcentral";
 
 /**
@@ -16,7 +16,7 @@ import { getJbcentralStatus } from "./jbcentral";
 export interface ProviderStatusSources {
 	/** Provider ids with at least one registered model. Raw models and endpoints never leave the host. */
 	modelProviderIds: Set<string>;
-	/** Providers with ≥1 model whose auth resolves (the registry's `getAvailable()` truth). */
+	/** Providers with ≥1 model in the registry's last settled availability snapshot. */
 	availableProviders: Set<string>;
 	/** Providers holding credentials in auth.json (`listCredentials()`), even model-less ones. */
 	credentialProviders: string[];
@@ -131,32 +131,47 @@ export function buildProviderReport(sources: ProviderStatusSources): ProviderSta
 
 /**
  * The `provider.status` read. **Revalidates on every call** — `runtime.refresh()` (pi 0.82 folded the
- * old `reloadConfig()` into it) reloads models.json and recomposes providers (it does NOT touch
- * auth.json itself), and its availability refresh re-runs the per-provider auth checks against pi's
- * credential store, which reads auth.json fresh (under a lock) on every access — so a `pi` `/login`
- * (or a terminal `central` re-wire) shows up on the next read without restarting the host. Called with
- * no options so `allowNetwork` resolves to the runtime's ambient default — OFF (see `piRuntime`).
- * (Accepted micro-risk: refreshing the shared runtime concurrent with a streaming session — the same
- * thing pi's TUI does on `/login`.)
+ * old `reloadConfig()` into it) reloads models.json and recomposes only the pre-opaque provider allowlist
+ * (it does NOT touch auth.json itself), and its availability refresh re-runs auth checks only for those
+ * providers against pi's credential store, which reads auth.json fresh (under a lock) on every access —
+ * so a `pi` `/login` shows up on the next read without restarting the host. The runtime's ambient network
+ * default remains OFF (see `piRuntime`). (Accepted micro-risk: refreshing the shared runtime concurrent
+ * with a streaming session — the same thing pi's TUI does on `/login`.)
  */
 export async function getProviderStatus(): Promise<ProviderStatusReport> {
 	const jbcentral = await getJbcentralStatus();
 	const install = jbcentralInstall(process.platform);
-	return usePiRuntime(async (runtime) => {
-		await runtime.refresh();
+	return usePiRuntime(async (runtime, generation) => {
+		const providerStatusIds = [...generation.providerStatusIds];
+		try {
+			await runtime.refresh({ providers: providerStatusIds });
+		} catch {
+			throw new Error("Provider status refresh failed");
+		}
 
-		const available = await runtime.getAvailable();
+		const providerStatusIdSet = new Set(providerStatusIds);
+		const visibleProviders = providerStatusIds.flatMap((id) => {
+			const provider = runtime.getProvider(id);
+			return provider ? [provider] : [];
+		});
+		const available = settledAvailableModels(runtime).filter((model) =>
+			providerStatusIdSet.has(model.provider),
+		);
 		const credentials = await runtime.listCredentials();
+		const visibleCredentials = credentials.filter((credential) =>
+			providerStatusIdSet.has(credential.providerId),
+		);
 		const credentialTypes = new Map(
-			credentials.map((credential) => [credential.providerId, credential.type]),
+			visibleCredentials.map((credential) => [credential.providerId, credential.type]),
 		);
 
 		return buildProviderReport({
-			modelProviderIds: new Set(runtime.getModels().map((model) => model.provider)),
+			modelProviderIds: new Set(
+				providerStatusIds.filter((providerId) => runtime.getModels(providerId).length > 0),
+			),
 			availableProviders: new Set(available.map((model) => model.provider)),
-			credentialProviders: credentials.map((credential) => credential.providerId),
-			oauthProviders: runtime
-				.getProviders()
+			credentialProviders: visibleCredentials.map((credential) => credential.providerId),
+			oauthProviders: visibleProviders
 				.filter((provider) => provider.auth.oauth)
 				.map((provider) => ({
 					id: provider.id,

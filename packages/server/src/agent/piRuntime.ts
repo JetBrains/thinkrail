@@ -9,6 +9,8 @@ import {
 export interface PiRuntimeGeneration {
 	readonly id: number;
 	readonly runtime: ModelRuntime;
+	/** Provider ids present before opaque extensions load; the auth UI may inspect only this allowlist. */
+	readonly providerStatusIds: ReadonlySet<string>;
 	/** Opaque extensions applied once to this generation's shared provider runtime. */
 	readonly additionalExtensionPaths: readonly string[];
 	/** Opaque paths that session loaders must not execute again (including inactive Central artifacts). */
@@ -25,9 +27,19 @@ let nextGenerationId = 1;
 let activeGeneration: Promise<PiRuntimeGeneration> | null = null;
 let configuredExtensionPaths: readonly string[] = [];
 let configuredSessionExtensionExclusions: readonly string[] = [];
-let runtimeFactory: (additionalExtensionPaths: readonly string[]) => Promise<ModelRuntime> =
+interface PreparedRuntime {
+	runtime: ModelRuntime;
+	providerStatusIds: ReadonlySet<string>;
+}
+let runtimeFactory: (additionalExtensionPaths: readonly string[]) => Promise<PreparedRuntime> =
 	createRuntimeWithExtensions;
 let generationInitializer: PiRuntimeGenerationInitializer = () => {};
+
+function captureProviderStatusIds(runtime: ModelRuntime): ReadonlySet<string> {
+	// A few narrow unit fakes predate runtime generations and implement only the method under test. Empty is
+	// the privacy-safe status allowlist for those fakes; every real ModelRuntime implements `getProviders`.
+	return new Set(runtime.getProviders?.().map((provider) => provider.id) ?? []);
+}
 
 /** Override the shared runtime — tests inject a faux-backed one so no auth/network is needed. */
 export function configurePiRuntime(rt: ModelRuntime | null): void {
@@ -37,6 +49,7 @@ export function configurePiRuntime(rt: ModelRuntime | null): void {
 		? Promise.resolve({
 				id: nextGenerationId++,
 				runtime: rt,
+				providerStatusIds: captureProviderStatusIds(rt),
 				additionalExtensionPaths: [],
 				excludedSessionExtensionPaths: [],
 			})
@@ -47,7 +60,16 @@ export function configurePiRuntime(rt: ModelRuntime | null): void {
 export function configurePiRuntimeFactory(
 	factory?: (additionalExtensionPaths: readonly string[]) => Promise<ModelRuntime>,
 ): void {
-	runtimeFactory = factory ?? createRuntimeWithExtensions;
+	runtimeFactory = factory
+		? async (additionalExtensionPaths) => {
+				const runtime = await factory(additionalExtensionPaths);
+				await generationInitializer(runtime);
+				return {
+					runtime,
+					providerStatusIds: captureProviderStatusIds(runtime),
+				};
+			}
+		: createRuntimeWithExtensions;
 }
 
 /**
@@ -61,15 +83,9 @@ export function configurePiRuntimeGenerationInitializer(
 	generationInitializer = initializer ?? (() => {});
 }
 
-/** Configure the lazy bootstrap generation before any runtime consumer is admitted. */
-export function configurePiRuntimeExtensionPaths(paths: readonly string[]): void {
-	if (activeGeneration) throw new Error("PI runtime already initialized");
-	configuredExtensionPaths = [...new Set(paths)];
-}
-
 /**
  * Declare opaque paths that ordinary session loaders must never execute. This is separate from the active
- * generation paths so an incompatible or recovery-blocked global artifact is excluded without being loaded.
+ * generation paths so an absent, incompatible, or failed global artifact stays excluded from every session.
  */
 export function configurePiRuntimeSessionExtensionExclusions(paths: readonly string[]): void {
 	if (activeGeneration) throw new Error("PI runtime already initialized");
@@ -134,10 +150,13 @@ async function advanceExtensionCacheGeneration(): Promise<void> {
  */
 async function createRuntimeWithExtensions(
 	additionalExtensionPaths: readonly string[],
-): Promise<ModelRuntime> {
+): Promise<PreparedRuntime> {
 	await advanceExtensionCacheGeneration();
 	const runtime = await createRuntimeOfflineByDefault();
 	await generationInitializer(runtime);
+	// The auth surface may inspect only providers that existed before an opaque extension ran. This keeps
+	// Central's provider configuration private without inferring ownership from model URLs or provider names.
+	const providerStatusIds = captureProviderStatusIds(runtime);
 	// Jiti's on-disk transpilation cache is independent of PI's extension factory cache and is keyed by
 	// path. Central replaces that path in place, so force Jiti's documented rebuild mode only for this
 	// candidate load; restore the caller's environment immediately afterward.
@@ -176,18 +195,20 @@ async function createRuntimeWithExtensions(
 	) {
 		throw new Error("PI runtime extension loading failed");
 	}
-	return runtime;
+	return { runtime, providerStatusIds };
 }
 
-function createGeneration(paths: readonly string[]): Promise<PiRuntimeGeneration> {
+async function createGeneration(paths: readonly string[]): Promise<PiRuntimeGeneration> {
 	const additionalExtensionPaths = [...new Set(paths)];
 	const excludedSessionExtensionPaths = [...configuredSessionExtensionExclusions];
-	return runtimeFactory(additionalExtensionPaths).then((runtime) => ({
+	const prepared = await runtimeFactory(additionalExtensionPaths);
+	return {
 		id: nextGenerationId++,
-		runtime,
+		runtime: prepared.runtime,
+		providerStatusIds: prepared.providerStatusIds,
 		additionalExtensionPaths,
 		excludedSessionExtensionPaths,
-	}));
+	};
 }
 
 /** The active generation, built lazily so test/e2e environment overrides are honored. */
@@ -360,13 +381,12 @@ function runCatalogRefresh(runtime: CatalogRefreshRuntime, force: boolean): Prom
 					`model catalog refresh timed out after ${CATALOG_REFRESH_TIMEOUT_MS}ms; serving cached catalogs`,
 				);
 			} else if (result.errors.size > 0) {
-				console.warn(
-					`model catalog refresh: provider(s) failed: ${[...result.errors.keys()].join(", ")}`,
-				);
+				// Provider ids and errors may belong to an opaque extension; log only a closed count.
+				console.warn(`model catalog refresh: ${result.errors.size} provider(s) failed`);
 			}
 		})
-		.catch((err) => {
-			console.warn(`model catalog refresh failed: ${err}`);
+		.catch(() => {
+			console.warn("model catalog refresh failed");
 		})
 		.finally(() => clearTimeout(timer));
 }

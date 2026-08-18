@@ -285,10 +285,17 @@ export function stopJbcentralRuntime(): void {
 export async function getJbcentralStatus(): Promise<JbcentralStatus> {
 	await initializeJbcentralRuntime();
 	if (transientAction || settledSequence < requestedSequence) return configuringStatus();
-	if (loadFailure) return loadFailure;
 
 	const inspection = await inspectJbcentral();
-	if (inspectionConfigured(inspection) !== appliedConfigured) {
+	const configured = inspectionConfigured(inspection);
+	if (loadFailure) {
+		// A missed watcher event can still change the desired generation after a failed candidate. Keep the
+		// closed failure only while it describes the latest artifact state; otherwise schedule fresh work.
+		if (configured === loadFailure.configured) return loadFailure;
+		void requestRuntimeRebuild();
+		return configuringStatus();
+	}
+	if (configured !== appliedConfigured) {
 		void requestRuntimeRebuild();
 		return configuringStatus();
 	}
@@ -319,10 +326,14 @@ async function disconnect(): Promise<JbcentralActionResult> {
 	publishChanged();
 	try {
 		const inspection = await inspectJbcentral();
-		const preflightFailure = inspectionFailure(inspection);
-		if (preflightFailure) return preflightFailure;
-		const actionFailure = mapCliFailure(await runJbcentralAction("remove"));
-		if (actionFailure) return failed(actionFailure);
+		// An already-absent artifact is the complete Disconnect postcondition. Rebuild plain PI directly—even
+		// if Central itself was removed or became unsupported—so Retry can repair a failed plain candidate.
+		if (inspection.artifactExists) {
+			const preflightFailure = inspectionFailure(inspection);
+			if (preflightFailure) return preflightFailure;
+			const actionFailure = mapCliFailure(await runJbcentralAction("remove"));
+			if (actionFailure) return failed(actionFailure);
+		}
 		const rebuilt = await requestRuntimeRebuild("disconnect");
 		return rebuilt.outcome === "applied" ? { outcome: "applied" } : failed(rebuilt.reason);
 	} finally {

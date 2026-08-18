@@ -32,6 +32,7 @@ import {
 	setJbcentralChangedPublisher,
 	updateJbcentral,
 } from "./jbcentral";
+import { getProviderStatus } from "./providerStatus";
 
 function syntheticExtension(modelId: string): string {
 	return `
@@ -195,6 +196,9 @@ describe("watched native Central runtime", () => {
 		expect(existsSync(artifactPath)).toBe(true);
 		expect((await getJbcentralStatus()).state).toBe("configured");
 		expect((await listAvailableModels()).map((model) => model.id)).toContain("central-model");
+		expect((await getProviderStatus()).providers.map((provider) => provider.id)).not.toContain(
+			"central-test",
+		);
 		expect(commandLog()).toContain("add pi");
 	});
 
@@ -287,6 +291,26 @@ describe("watched native Central runtime", () => {
 		configurePiRuntimeFactory();
 		expect(await disconnectJbcentral()).toEqual({ outcome: "applied" });
 		expect((await getJbcentralStatus()).state).toBe("supported");
+	});
+
+	test("retries a failed plain candidate after Central itself disappears", async () => {
+		expect(await connectJbcentral()).toEqual({ outcome: "applied" });
+		configurePiRuntimeFactory(async () => {
+			throw new Error("synthetic-private-plain-runtime-diagnostic");
+		});
+		expect(await disconnectJbcentral()).toEqual({
+			outcome: "failed",
+			reason: "candidate-failed",
+		});
+		expect(await getJbcentralStatus()).toMatchObject({
+			state: "load-failed",
+			configured: false,
+		});
+
+		configurePiRuntimeFactory();
+		process.env.PATH = "";
+		expect(await disconnectJbcentral()).toEqual({ outcome: "applied" });
+		expect(await getJbcentralStatus()).toEqual({ state: "absent" });
 	});
 
 	test("falls back to a plain runtime when the configured extension fails at boot", async () => {

@@ -111,9 +111,11 @@ test("the process-local initializer applies to every fresh runtime generation", 
 		expect(first.generation.runtime.getRegisteredProviderIds()).toContain(
 			"generation-initializer-probe",
 		);
+		expect(first.generation.providerStatusIds).toContain("generation-initializer-probe");
 		expect(second.generation.runtime.getRegisteredProviderIds()).toContain(
 			"generation-initializer-probe",
 		);
+		expect(second.generation.providerStatusIds).toContain("generation-initializer-probe");
 		expect(calls).toBe(2);
 	} finally {
 		configurePiRuntime(null);
@@ -132,8 +134,15 @@ test("candidate generation reloads an opaque extension replaced at the same path
 	mkdirSync(agentDir, { recursive: true });
 	process.env.PI_CODING_AGENT_DIR = agentDir;
 	try {
-		writeFileSync(extensionPath, "export default function syntheticExtension() {}\n");
-		expect((await preparePiRuntimeGeneration([extensionPath])).outcome).toBe("prepared");
+		writeFileSync(
+			extensionPath,
+			'export default function syntheticExtension(pi) { pi.registerProvider("opaque-probe", { name: "Opaque" }); }\n',
+		);
+		const initial = await preparePiRuntimeGeneration([extensionPath]);
+		expect(initial.outcome).toBe("prepared");
+		if (initial.outcome !== "prepared") return;
+		expect(initial.generation.runtime.getRegisteredProviderIds()).toContain("opaque-probe");
+		expect(initial.generation.providerStatusIds).not.toContain("opaque-probe");
 		writeFileSync(extensionPath, 'throw new Error("private replacement diagnostic");\n');
 		expect(await preparePiRuntimeGeneration([extensionPath])).toEqual({
 			outcome: "failed",

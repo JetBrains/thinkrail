@@ -29,7 +29,9 @@ ourselves and never surface a credential value over the wire.
     postconditions with the synchronizer's latest desired/applied generation. Watcher drift schedules a rebuild;
     status is `configuring` until the newest candidate applies and `load-failed` when it cannot apply.
     Assembly is a pure `buildProviderReport(sources)` over a narrow sources slice, unit-tested with
-    fixture data.
+    fixture data. Its runtime reads are restricted to the generation's provider-id allowlist captured before
+    the opaque Central extension loads (after invariant host registrations): Central-owned provider objects,
+    auth capabilities, credentials, and details never become ordinary provider rows or cross the wire.
     - **OAuth-capable ids are first-class rows.** The id universe unions model-catalog providers,
       stored-credential providers (`listCredentials()`), **and** providers whose `Provider.auth.oauth`
       is present — an OAuth id can differ from any model-provider id (`openai-codex` ≠ `openai`), and a
@@ -75,8 +77,10 @@ ourselves and never surface a credential value over the wire.
     the UI and unrelated providers remain usable; failure of that plain runtime still fails startup.
 
     Connect performs the exact-version preflight, runs `central add pi`, validates artifact existence, and
-    awaits the same rebuild path the watcher uses. Disconnect runs `central remove pi`, validates artifact
-    absence, and rebuilds a plain current runtime. Login launches `central login` after the version preflight;
+    awaits the same rebuild path the watcher uses. Disconnect runs `central remove pi` and validates absence
+    when the artifact exists; an already-absent artifact is the complete postcondition and rebuilds plain PI
+    directly even if Central itself is now absent/unsupported (so Retry can repair a failed plain candidate).
+    Login launches `central login` after the version preflight;
     update invokes `central update --install` and rechecks status. Every action uses the resolved absolute
     executable. No action edits prior model configuration, preflights live chat models, compensates, or rolls
     back Central's global state.

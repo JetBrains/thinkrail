@@ -281,7 +281,8 @@ a project picker, the prompt hero, and the reused
   retain an older runtime—including Central after Disconnect—and the card says its state applies to new chats.
   Update/connect/disconnect state is host-authoritative and shared across clients; every mutation re-reads
   `provider.status`, while `provider.changed` invalidations from watched external changes trigger the same
-  re-read plus model-list invalidation. Copy never promises only Claude/GPT, never asks for standalone PI,
+  re-read plus model-list invalidation. Status reads are request-sequenced so an older response cannot replace
+  a newer watched/action result. Copy never promises only Claude/GPT, never asks for standalone PI,
   never renders child output/diagnostics/artifact content/paths/proxy data/secrets/raw models, and maps only
   closed reason codes to ThinkRail-authored text. **`GithubSettings`** (the "Local GitHub" block — `github.authStatus()`
   Connected + login / Not connected + Refresh); **`AppearanceSettings`** (the **theme picker** — the

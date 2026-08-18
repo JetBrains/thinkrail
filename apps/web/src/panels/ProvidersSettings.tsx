@@ -1,6 +1,6 @@
 import type { ProviderAuthKind, ProviderStatus, ProviderStatusReport } from "@thinkrail/contracts";
 import { Boxes, Check, KeyRound, Lock, LogIn, LogOut, RefreshCw } from "lucide-react";
-import { type ReactNode, useCallback, useEffect, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { LoginDialog } from "@/auth";
 import { Button } from "@/components/ui/button";
 import { toast, useAppStore } from "@/store";
@@ -34,17 +34,26 @@ export function ProvidersSettings() {
 	const [showAllKeys, setShowAllKeys] = useState(false);
 	const activeLogin = useAppStore((s) => s.activeLogin);
 	const providerVersion = useAppStore((s) => s.providerVersion);
+	const loadSequence = useRef(0);
 
 	/** Re-reads provider status. Never rejects — a failed read renders the pane's error banner instead. */
 	const load = useCallback(async () => {
+		const sequence = ++loadSequence.current;
+		const providerVersion = useAppStore.getState().providerVersion;
+		const isCurrent = () =>
+			sequence === loadSequence.current &&
+			providerVersion === useAppStore.getState().providerVersion;
 		setRefreshing(true);
 		try {
-			setReport(await getTransport().request("provider.status", {}));
+			const next = await getTransport().request("provider.status", {});
+			if (!isCurrent()) return;
+			setReport(next);
 			setFailed(false);
 		} catch {
+			if (!isCurrent()) return;
 			setFailed(true);
 		} finally {
-			setRefreshing(false);
+			if (sequence === loadSequence.current) setRefreshing(false);
 		}
 	}, []);
 

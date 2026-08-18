@@ -53,6 +53,9 @@ test("connects and follows external add, replacement, and remove without a host 
 	await expect(page.getByTestId("settings-dialog")).not.toContainText(
 		"E2E_PROVIDER_CONFIG_SENTINEL",
 	);
+	await expect(
+		page.locator('[data-testid="provider-row"][data-provider="e2e-central"]'),
+	).toHaveCount(0);
 
 	// No Refresh click: provider.changed drives the open card to the host's watched state.
 	rmSync(E2E_CENTRAL_ARTIFACT, { force: true });

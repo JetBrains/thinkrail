@@ -77,10 +77,7 @@ export function initTransport(): WsTransport {
 		const providerVersion = useAppStore.getState().providerVersion;
 		getTransport()
 			.request("model.list", {})
-			.then((models) => {
-				const state = useAppStore.getState();
-				if (state.providerVersion === providerVersion) state.setModels(models);
-			})
+			.then((models) => useAppStore.getState().setModelsForProviderVersion(providerVersion, models))
 			.catch(() => {});
 	});
 

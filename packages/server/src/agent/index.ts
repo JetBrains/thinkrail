@@ -14,7 +14,6 @@ export * from "./oneshot";
 export {
 	activatePiRuntimeGeneration,
 	configurePiRuntime,
-	configurePiRuntimeExtensionPaths,
 	configurePiRuntimeFactory,
 	configurePiRuntimeGenerationInitializer,
 	configurePiRuntimeSessionExtensionExclusions,
@@ -23,6 +22,7 @@ export {
 	type PiRuntimeGenerationInitializer,
 	type PreparePiRuntimeGenerationResult,
 	preparePiRuntimeGeneration,
+	settledAvailableModels,
 } from "./piRuntime";
 export {
 	RESOLVE_COMMENT_TOOL_NAME,

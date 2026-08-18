@@ -49,8 +49,9 @@ The single WebSocket client to the host, and its app-wide singleton.
   `deleteChat(workspaceId, sessionId)` tombstone fold (an online fast path; because this event channel is
   deliberately not replayed, workbench hydration repairs any deletion missed while disconnected from the next
   authoritative `session.list`), `provider.changed` via the atomic store invalidation
-  `noteProviderChanged()` plus a `model.list` re-read guarded by that monotonic provider version (an older
-  reply cannot restore a removed generation's models; provider settings observes the same version and re-reads
+  `noteProviderChanged()` plus a `model.list` re-read installed through the store's monotonic provider-version
+  guard (the model-catalog hook uses the same guarded write for every list/refresh, so an older reply cannot
+  restore a removed generation's models; provider settings observes the same version and re-reads
   `provider.status`), `layout.changed` via a revision-aware store fold (older or duplicate
   documents are not reinstalled, though their echoed mutation ids still settle matching pending writes;
   mutation ids distinguish this client's acknowledgements from remote commits,

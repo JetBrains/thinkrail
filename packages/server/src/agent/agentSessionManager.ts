@@ -57,25 +57,15 @@ interface Entry {
 
 const sessions = new Map<string, Entry>();
 
-/** Execute ordinary manager work. Runtime generation swaps never close admission or wait for live work. */
-export async function withPiRuntimeAdmission<T>(operation: () => Promise<T> | T): Promise<T> {
-	return await operation();
-}
-
-function withPiRuntimeAdmissionSync<T>(operation: () => T): T {
-	return operation();
-}
-
-function startAdmittedPiRuntimeTask(operation: () => Promise<unknown>): void {
-	void operation().catch(() => undefined);
-}
-
 /** Public auth/dev seam: capture the current runtime for the callback's complete async lifetime. */
 export async function usePiRuntime<T>(
-	operation: (runtime: PiRuntimeGeneration["runtime"]) => Promise<T> | T,
+	operation: (
+		runtime: PiRuntimeGeneration["runtime"],
+		generation: PiRuntimeGeneration,
+	) => Promise<T> | T,
 ): Promise<T> {
 	const generation = await getPiRuntimeGeneration();
-	return operation(generation.runtime);
+	return operation(generation.runtime, generation);
 }
 
 // Permanent for this host lifetime. A process restart naturally clears it; by then the trashed transcript
@@ -165,16 +155,14 @@ export function getSessionWorkspaceId(sessionId: string): string | undefined {
  * the session is streaming (pi's reload rebuilds the runtime; mid-turn would desync) — the caller retries
  * after the turn. Throws for an unknown session.
  */
-export function reloadSessionResources(sessionId: string): Promise<void> {
-	return withPiRuntimeAdmission(async () => {
-		const session = mustGet(sessionId);
-		if (session.isStreaming) {
-			throw new Error(
-				"Can't reload skills while the session is streaming — try again after the turn.",
-			);
-		}
-		await session.reload();
-	});
+export async function reloadSessionResources(sessionId: string): Promise<void> {
+	const session = mustGet(sessionId);
+	if (session.isStreaming) {
+		throw new Error(
+			"Can't reload skills while the session is streaming — try again after the turn.",
+		);
+	}
+	await session.reload();
 }
 
 /**
@@ -333,27 +321,25 @@ async function registerSession(
 }
 
 /** Create an in-process AgentSession rooted in `cwd`; its events stream out tagged with the session id. */
-export function createSession(input: CreateSessionInput): Promise<CreateSessionResult> {
-	return withPiRuntimeAdmission(async () => {
-		const generation = await getPiRuntimeGeneration();
-		const settingsManager = buildSessionSettings(input.cwd);
-		const { session } = await createAgentSession({
-			cwd: input.cwd,
-			modelRuntime: generation.runtime,
-			sessionManager: sessionManagerFactory(input.cwd),
+export async function createSession(input: CreateSessionInput): Promise<CreateSessionResult> {
+	const generation = await getPiRuntimeGeneration();
+	const settingsManager = buildSessionSettings(input.cwd);
+	const { session } = await createAgentSession({
+		cwd: input.cwd,
+		modelRuntime: generation.runtime,
+		sessionManager: sessionManagerFactory(input.cwd),
+		settingsManager,
+		resourceLoader: await buildResourceLoader(
+			input.cwd,
 			settingsManager,
-			resourceLoader: await buildResourceLoader(
-				input.cwd,
-				settingsManager,
-				() => skillAdmissionResolver(input.workspaceId),
-				generation.excludedSessionExtensionPaths,
-			),
-			// Re-resolve the wire ref to the real model (with baseUrl) host-side — never the client's baseUrl.
-			...(input.model ? { model: resolveWireModel(generation.runtime, input.model) } : {}),
-			...(input.thinkingLevel ? { thinkingLevel: input.thinkingLevel } : {}),
-		});
-		return registerSession(session, input.workspaceId, generation);
+			() => skillAdmissionResolver(input.workspaceId),
+			generation.excludedSessionExtensionPaths,
+		),
+		// Re-resolve the wire ref to the real model (with baseUrl) host-side — never the client's baseUrl.
+		...(input.model ? { model: resolveWireModel(generation.runtime, input.model) } : {}),
+		...(input.thinkingLevel ? { thinkingLevel: input.thinkingLevel } : {}),
 	});
+	return registerSession(session, input.workspaceId, generation);
 }
 
 /** A live session's summary (drawn from the running `AgentSession`). */
@@ -512,7 +498,7 @@ async function listSessionsInternal(workspaceId: string, cwd: string): Promise<S
 }
 
 export function listSessions(workspaceId: string, cwd: string): Promise<SessionSummary[]> {
-	return withPiRuntimeAdmission(() => listSessionsInternal(workspaceId, cwd));
+	return listSessionsInternal(workspaceId, cwd);
 }
 
 // In-flight disk re-opens, deduped by session id: concurrent `getSessionMessages` for the same disk session
@@ -635,7 +621,7 @@ export function ensureSessionAttached(
 	workspaceId: string,
 	cwd: string,
 ): Promise<boolean> {
-	return withPiRuntimeAdmission(() => ensureSessionAttachedInternal(sessionId, workspaceId, cwd));
+	return ensureSessionAttachedInternal(sessionId, workspaceId, cwd);
 }
 
 /**
@@ -672,7 +658,7 @@ export function getSessionMessages(
 	workspaceId: string,
 	cwd: string,
 ): Promise<{ summary: SessionSummary; messages: TranscriptMessage[] }> {
-	return withPiRuntimeAdmission(() => getSessionMessagesInternal(sessionId, workspaceId, cwd));
+	return getSessionMessagesInternal(sessionId, workspaceId, cwd);
 }
 
 /**
@@ -684,35 +670,31 @@ export function getSessionMessages(
  * answering live and answering after a restart are the same code path. Resolves at turn end — the WS
  * handler acks acceptance via `ackSend`, mirroring prompt/steer/followUp.
  */
-export function answerQuestion(
+export async function answerQuestion(
 	sessionId: string,
 	toolCallId: string,
 	result: AskUserQuestionResult,
 ): Promise<void> {
-	return withPiRuntimeAdmission(async () => {
-		const session = mustGet(sessionId);
-		const verdict = assessAnswerability(session.messages, toolCallId);
-		if (!verdict.ok) throw new Error(`${ANSWERABILITY_ERRORS[verdict.reason]}: ${toolCallId}`);
-		await session.sendCustomMessage(buildAnswersMessage(toolCallId, verdict.args, result), {
-			triggerTurn: true,
-		});
+	const session = mustGet(sessionId);
+	const verdict = assessAnswerability(session.messages, toolCallId);
+	if (!verdict.ok) throw new Error(`${ANSWERABILITY_ERRORS[verdict.reason]}: ${toolCallId}`);
+	await session.sendCustomMessage(buildAnswersMessage(toolCallId, verdict.args, result), {
+		triggerTurn: true,
 	});
 }
 
 /** Send a turn. `prompt()` throws while streaming, so fall back to `steer()` then. */
-export function promptSession(
+export async function promptSession(
 	sessionId: string,
 	text: string,
 	images?: ImageContent[],
 ): Promise<void> {
-	return withPiRuntimeAdmission(async () => {
-		const session = mustGet(sessionId);
-		if (session.isStreaming) {
-			await session.steer(text, images);
-			return;
-		}
-		await session.prompt(text, images ? { images } : undefined);
-	});
+	const session = mustGet(sessionId);
+	if (session.isStreaming) {
+		await session.steer(text, images);
+		return;
+	}
+	await session.prompt(text, images ? { images } : undefined);
 }
 
 export function steerSession(
@@ -720,7 +702,7 @@ export function steerSession(
 	text: string,
 	images?: ImageContent[],
 ): Promise<void> {
-	return withPiRuntimeAdmission(() => mustGet(sessionId).steer(text, images));
+	return mustGet(sessionId).steer(text, images);
 }
 
 /**
@@ -734,26 +716,22 @@ export function steerSession(
  * which is idle by construction after a re-attach. Parking there is the worst outcome of all — the
  * comments are already marked sent, so the review reads as delivered to an agent that never saw it.
  */
-export function followUpSession(
+export async function followUpSession(
 	sessionId: string,
 	text: string,
 	images?: ImageContent[],
 ): Promise<void> {
-	return withPiRuntimeAdmission(async () => {
-		const session = mustGet(sessionId);
-		if (session.isStreaming) {
-			await session.followUp(text, images);
-			return;
-		}
-		await session.prompt(text, images ? { images } : undefined);
-	});
+	const session = mustGet(sessionId);
+	if (session.isStreaming) {
+		await session.followUp(text, images);
+		return;
+	}
+	await session.prompt(text, images ? { images } : undefined);
 }
 
 /** Trigger compaction; progress/result still arrive as `compaction_*` events. */
-export function compactSession(sessionId: string, instructions?: string): Promise<void> {
-	return withPiRuntimeAdmission(async () => {
-		await mustGet(sessionId).compact(instructions);
-	});
+export async function compactSession(sessionId: string, instructions?: string): Promise<void> {
+	await mustGet(sessionId).compact(instructions);
 }
 
 /** Cancellation control path for a live session. */
@@ -761,61 +739,55 @@ export function abortSession(sessionId: string): Promise<void> {
 	return mustGet(sessionId).abort();
 }
 
-export function setSessionModel(sessionId: string, model: WireModel): Promise<void> {
-	return withPiRuntimeAdmission(async () => {
-		// Re-resolve against this chat's captured generation. A model offered only to newer chats must not
-		// inject a provider object from another runtime into this session.
-		const entry = mustGetEntry(sessionId);
-		await entry.session.setModel(resolveWireModel(entry.generation.runtime, model));
-	});
+export async function setSessionModel(sessionId: string, model: WireModel): Promise<void> {
+	// Re-resolve against this chat's captured generation. A model offered only to newer chats must not
+	// inject a provider object from another runtime into this session.
+	const entry = mustGetEntry(sessionId);
+	await entry.session.setModel(resolveWireModel(entry.generation.runtime, model));
 }
 
 export function setSessionThinkingLevel(sessionId: string, level: ThinkingLevel): void {
-	withPiRuntimeAdmissionSync(() => mustGet(sessionId).setThinkingLevel(level));
+	mustGet(sessionId).setThinkingLevel(level);
 }
 
 /** Token/cost stats for the session (display only — `pi` owns the numbers). */
 export function getSessionStats(sessionId: string): SessionStats {
-	return withPiRuntimeAdmissionSync(() => {
-		const session = mustGet(sessionId);
-		const stats = session.getSessionStats();
-		const contextUsage = stats.contextUsage ?? session.getContextUsage();
-		return {
-			sessionId: stats.sessionId,
-			totalMessages: stats.totalMessages,
-			tokens: {
-				input: stats.tokens.input,
-				output: stats.tokens.output,
-				cacheRead: stats.tokens.cacheRead,
-				cacheWrite: stats.tokens.cacheWrite,
-				total: stats.tokens.total,
-			},
-			cost: stats.cost,
-			...(contextUsage ? { contextUsage } : {}),
-		};
-	});
+	const session = mustGet(sessionId);
+	const stats = session.getSessionStats();
+	const contextUsage = stats.contextUsage ?? session.getContextUsage();
+	return {
+		sessionId: stats.sessionId,
+		totalMessages: stats.totalMessages,
+		tokens: {
+			input: stats.tokens.input,
+			output: stats.tokens.output,
+			cacheRead: stats.tokens.cacheRead,
+			cacheWrite: stats.tokens.cacheWrite,
+			total: stats.tokens.total,
+		},
+		cost: stats.cost,
+		...(contextUsage ? { contextUsage } : {}),
+	};
 }
 
 // Slash commands / skills available in the session — built from the same three sources pi's own rpc mode
 // uses (pi's own `modes/rpc` `get_commands`).
 export function getSessionCommands(sessionId: string): SlashCommandInfo[] {
-	return withPiRuntimeAdmissionSync(() => {
-		const session = mustGet(sessionId);
-		const extension = session.extensionRunner.getRegisteredCommands().map((command) => ({
-			name: command.invocationName,
-			source: "extension" as const,
-			sourceInfo: command.sourceInfo,
-			...(command.description !== undefined ? { description: command.description } : {}),
-		}));
-		const prompt = session.promptTemplates.map((template) => ({
-			name: template.name,
-			description: template.description,
-			source: "prompt" as const,
-			sourceInfo: template.sourceInfo,
-		}));
-		const skill = toSkillCommands(session.resourceLoader.getSkills().skills);
-		return [...extension, ...prompt, ...skill];
-	});
+	const session = mustGet(sessionId);
+	const extension = session.extensionRunner.getRegisteredCommands().map((command) => ({
+		name: command.invocationName,
+		source: "extension" as const,
+		sourceInfo: command.sourceInfo,
+		...(command.description !== undefined ? { description: command.description } : {}),
+	}));
+	const prompt = session.promptTemplates.map((template) => ({
+		name: template.name,
+		description: template.description,
+		source: "prompt" as const,
+		sourceInfo: template.sourceInfo,
+	}));
+	const skill = toSkillCommands(session.resourceLoader.getSkills().skills);
+	return [...extension, ...prompt, ...skill];
 }
 
 /** Models with configured auth, for the model picker (cheap win #1). Redacted to `WireModel` — the raw
@@ -823,12 +795,10 @@ export function getSessionCommands(sessionId: string): SlashCommandInfo[] {
  * Also fires the detached catalog refresh (issue #98): the read below is `settledAvailableModels` — pi's
  * last settled snapshot, so it truly never awaits the network — and a later `model.list` picks up whatever
  * the refresh landed. */
-export function listAvailableModels(): Promise<WireModel[]> {
-	return withPiRuntimeAdmission(async () => {
-		const runtime = await getPiRuntime();
-		startAdmittedPiRuntimeTask(() => refreshCatalogs(runtime));
-		return readAvailableWireModels(runtime);
-	});
+export async function listAvailableModels(): Promise<WireModel[]> {
+	const runtime = await getPiRuntime();
+	void refreshCatalogs(runtime);
+	return readAvailableWireModels(runtime);
 }
 
 /** `model.refresh` (the picker's freshness affordance): AWAIT the catalog refresh, then serve the
@@ -840,12 +810,10 @@ export function listAvailableModels(): Promise<WireModel[]> {
  * **`complete`** travels with the list because the wait is capped: it says whether the pass this call
  * awaited actually settled. Only a `true` makes the list the host's verdict — the client keys catalog
  * authority (`modelsFresh`, hence whether a missing model may be declared gone) on exactly this. */
-export function refreshAvailableModels(force = false): Promise<RefreshedModels> {
-	return withPiRuntimeAdmission(async () => {
-		const runtime = await getPiRuntime();
-		const { completed } = await refreshCatalogs(runtime, { force });
-		return { models: readAvailableWireModels(runtime), complete: completed };
-	});
+export async function refreshAvailableModels(force = false): Promise<RefreshedModels> {
+	const runtime = await getPiRuntime();
+	const { completed } = await refreshCatalogs(runtime, { force });
+	return { models: readAvailableWireModels(runtime), complete: completed };
 }
 
 /** The one snapshot→wire read both list paths share (redaction happens here, in `toWireModel`). */
@@ -866,14 +834,12 @@ export interface DefaultModelResult {
  * pi's answer via `thinking_level_changed`). Re-resolves the ref host-side like every other inbound
  * model ref, so an unavailable one throws rather than being guessed at.
  */
-export function clampThinkingForModel(
+export async function clampThinkingForModel(
 	ref: Pick<WireModel, "provider" | "id">,
 	level: ThinkingLevel,
 ): Promise<ThinkingLevel> {
-	return withPiRuntimeAdmission(async () => {
-		const generation = await getPiRuntimeGeneration();
-		return clampThinkingLevel(resolveWireModel(generation.runtime, ref), level);
-	});
+	const generation = await getPiRuntimeGeneration();
+	return clampThinkingLevel(resolveWireModel(generation.runtime, ref), level);
 }
 
 /**
@@ -887,25 +853,23 @@ export function clampThinkingForModel(
  * model can't do as selected (e.g. a `high` saved from a reasoning model while the default is a
  * non-reasoning one — pi would silently clamp the created session to `off` otherwise).
  */
-export function getDefaultModel(): Promise<DefaultModelResult> {
-	return withPiRuntimeAdmission(async () => {
-		const available = settledAvailableModels(await getPiRuntime());
-		const settings = SettingsManager.create(process.cwd());
-		const provider = settings.getDefaultProvider();
-		const modelId = settings.getDefaultModel();
-		const pinned =
-			provider && modelId
-				? available.find((model) => model.provider === provider && model.id === modelId)
-				: undefined;
-		const resolved = (pinned ?? available[0] ?? null) as Model<string> | null;
-		const saved = settings.getDefaultThinkingLevel() ?? "medium";
-		const thinkingLevel = resolved ? clampThinkingLevel(resolved, saved) : saved;
-		return { model: resolved ? toWireModel(resolved) : null, thinkingLevel };
-	});
+export async function getDefaultModel(): Promise<DefaultModelResult> {
+	const available = settledAvailableModels(await getPiRuntime());
+	const settings = SettingsManager.create(process.cwd());
+	const provider = settings.getDefaultProvider();
+	const modelId = settings.getDefaultModel();
+	const pinned =
+		provider && modelId
+			? available.find((model) => model.provider === provider && model.id === modelId)
+			: undefined;
+	const resolved = (pinned ?? available[0] ?? null) as Model<string> | null;
+	const saved = settings.getDefaultThinkingLevel() ?? "medium";
+	const thinkingLevel = resolved ? clampThinkingLevel(resolved, saved) : saved;
+	return { model: resolved ? toWireModel(resolved) : null, thinkingLevel };
 }
 
 export function isSessionStreaming(sessionId: string): boolean {
-	return withPiRuntimeAdmissionSync(() => mustGet(sessionId).isStreaming);
+	return mustGet(sessionId).isStreaming;
 }
 
 function disposeSession(sessionId: string): void {
@@ -919,12 +883,10 @@ function disposeSession(sessionId: string): void {
 
 /** Remove one session: stop forwarding its events, settle any open dialog, and dispose it. */
 export function removeSession(sessionId: string): void {
-	withPiRuntimeAdmissionSync(() => {
-		// `session.dispose` is a live-session command too. Letting it race a pending recoverable delete would
-		// leave no runtime to retain if the OS-trash operation fails.
-		if (hasDeletionTombstone(sessionId)) throw new Error(`Unknown session: ${sessionId}`);
-		disposeSession(sessionId);
-	});
+	// `session.dispose` is a live-session command too. Letting it race a pending recoverable delete would
+	// leave no runtime to retain if the OS-trash operation fails.
+	if (hasDeletionTombstone(sessionId)) throw new Error(`Unknown session: ${sessionId}`);
+	disposeSession(sessionId);
 }
 
 /** Dispose every session — called on host shutdown. */
@@ -979,7 +941,7 @@ async function removeWorkspaceSessionsInternal(workspaceId: string, cwd?: string
 }
 
 export function removeWorkspaceSessions(workspaceId: string, cwd?: string): Promise<void> {
-	return withPiRuntimeAdmission(() => removeWorkspaceSessionsInternal(workspaceId, cwd));
+	return removeWorkspaceSessionsInternal(workspaceId, cwd);
 }
 
 /**

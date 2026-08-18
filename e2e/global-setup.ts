@@ -65,9 +65,9 @@ export default function globalSetup(): void {
 		const src = join(userAgentDir, file);
 		if (existsSync(src)) copyFileSync(src, join(E2E_PI_AGENT_DIR, file));
 	}
-	// Keep a pristine snapshot of the seeded models.json: native Central migration may remove exact legacy
-	// fields, so `resetState` restores the isolated baseline per test. No file means the dev authed via
-	// auth.json only — reset then just clears any test-written models.json.
+	// Keep a pristine snapshot of the seeded models.json so `resetState` restores the isolated provider
+	// baseline per test. Central never edits this file. No file means the dev authed via auth.json only —
+	// reset then just clears any test-written models.json.
 	const modelsSeedSrc = join(userAgentDir, "models.json");
 	if (existsSync(modelsSeedSrc)) copyFileSync(modelsSeedSrc, E2E_PI_MODELS_SEED);
 	else rmSync(E2E_PI_MODELS_SEED, { force: true });
