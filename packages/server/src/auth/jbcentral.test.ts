@@ -11,7 +11,6 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
-import { createFauxCore, fauxAssistantMessage } from "@earendil-works/pi-ai/providers/faux";
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
 import {
 	configurePiRuntime,
@@ -20,10 +19,8 @@ import {
 	disposeAllSessions,
 	getSessionMessages,
 	listAvailableModels,
-	promptSession,
-	resetPiRuntimeReconciliationForTests,
 	setSessionManagerFactory,
-	toWireModel,
+	usePiRuntime,
 } from "../agent";
 import {
 	connectJbcentral,
@@ -32,36 +29,31 @@ import {
 	initializeJbcentralRuntime,
 	jbcentralLogin,
 	resetJbcentralStateForTests,
+	setJbcentralChangedPublisher,
 	updateJbcentral,
 } from "./jbcentral";
-import { getProviderStatus } from "./providerStatus";
 
-const syntheticExtension = `
-const model = (id) => ({
-  id,
-  name: id,
+function syntheticExtension(modelId: string): string {
+	return `
+const model = {
+  id: ${JSON.stringify(modelId)},
+  name: ${JSON.stringify(modelId)},
   reasoning: false,
   input: ["text"],
   cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
   contextWindow: 100000,
   maxTokens: 4096,
-});
+};
 export default function syntheticCentralExtension(pi) {
   pi.registerProvider("central-test", {
     api: "openai-completions",
     baseUrl: "https://synthetic-central.invalid",
     apiKey: "synthetic-test-key",
-    models: [{ ...model("central-model"), api: "openai-completions" }],
-  });
-  pi.registerProvider("legacy-faux", {
-    api: "legacy-faux",
-    baseUrl: "https://synthetic-legacy.invalid",
-    apiKey: "synthetic-test-key",
-    streamSimple() { throw new Error("synthetic test provider never dispatches"); },
-    models: [{ ...model("legacy-model"), api: "legacy-faux" }],
+    models: [{ ...model, api: "openai-completions" }],
   });
 }
 `;
+}
 
 const fakeCentral = `#!/bin/sh
 set -eu
@@ -70,6 +62,8 @@ case "$1" in
   --version)
     if [ -f "$THINKRAIL_CENTRAL_TEST_CONTROL/unreviewed" ]; then
       printf 'central 1.7.0 (independently-authored test metadata)\\n'
+    elif [ -f "$THINKRAIL_CENTRAL_TEST_CONTROL/outdated" ]; then
+      printf 'central 1.6.1 (independently-authored test metadata)\\n'
     else
       printf 'central 1.6.2 (independently-authored test metadata)\\n'
     fi
@@ -87,6 +81,7 @@ case "$1" in
     rm -f "$HOME/.pi/agent/extensions/jetbrains-central.ts"
     ;;
   update)
+    rm -f "$THINKRAIL_CENTRAL_TEST_CONTROL/outdated"
     ;;
   login)
     ;;
@@ -95,41 +90,6 @@ case "$1" in
     ;;
 esac
 `;
-
-function modelDef(id: string) {
-	return {
-		id,
-		name: id,
-		reasoning: false,
-		input: ["text"] as ("text" | "image")[],
-		cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-		contextWindow: 100_000,
-		maxTokens: 4096,
-	};
-}
-
-const legacyFaux = createFauxCore({
-	provider: "legacy-faux",
-	api: "legacy-faux",
-	models: [modelDef("legacy-model")],
-	tokensPerSecond: 2_000,
-});
-
-async function legacyRuntime(): Promise<ModelRuntime> {
-	const runtime = await ModelRuntime.create({
-		credentials: new InMemoryCredentialStore(),
-		modelsPath: null,
-		allowModelNetwork: false,
-	});
-	runtime.registerProvider("legacy-faux", {
-		api: legacyFaux.api,
-		baseUrl: "http://legacy-faux.test",
-		apiKey: "faux",
-		streamSimple: legacyFaux.streamSimple,
-		models: [{ ...modelDef("legacy-model"), api: legacyFaux.api }],
-	});
-	return runtime;
-}
 
 let root: string;
 let home: string;
@@ -152,11 +112,27 @@ function commandLog(): string[] {
 }
 
 async function pollStatus(state: string): Promise<void> {
-	for (let attempt = 0; attempt < 200; attempt += 1) {
+	for (let attempt = 0; attempt < 300; attempt += 1) {
 		if ((await getJbcentralStatus()).state === state) return;
-		await new Promise((resolve) => setTimeout(resolve, 5));
+		await new Promise((resolve) => setTimeout(resolve, 10));
 	}
 	throw new Error(`Central status did not reach ${state}`);
+}
+
+async function waitFor(predicate: () => boolean | Promise<boolean>): Promise<void> {
+	for (let attempt = 0; attempt < 300; attempt += 1) {
+		if (await predicate()) return;
+		await new Promise((resolve) => setTimeout(resolve, 10));
+	}
+	throw new Error("condition was not reached");
+}
+
+async function emptyRuntime(): Promise<ModelRuntime> {
+	return ModelRuntime.create({
+		credentials: new InMemoryCredentialStore(),
+		modelsPath: null,
+		allowModelNetwork: false,
+	});
 }
 
 beforeEach(async () => {
@@ -170,7 +146,6 @@ beforeEach(async () => {
 		THINKRAIL_CENTRAL_TEST_EXTENSION_SOURCE: process.env.THINKRAIL_CENTRAL_TEST_EXTENSION_SOURCE,
 	};
 	await resetJbcentralStateForTests();
-	resetPiRuntimeReconciliationForTests();
 	configurePiRuntimeFactory();
 	configurePiRuntime(null);
 
@@ -186,7 +161,7 @@ beforeEach(async () => {
 	mkdirSync(home, { recursive: true });
 	mkdirSync(agentDir, { recursive: true });
 	mkdirSync(controlDir, { recursive: true });
-	writeFileSync(extensionSource, syntheticExtension);
+	writeFileSync(extensionSource, syntheticExtension("central-model"));
 	writeFileSync(join(binDir, "central"), fakeCentral);
 	chmodSync(join(binDir, "central"), 0o755);
 
@@ -204,7 +179,6 @@ beforeEach(async () => {
 afterEach(async () => {
 	disposeAllSessions();
 	await resetJbcentralStateForTests();
-	resetPiRuntimeReconciliationForTests();
 	configurePiRuntimeFactory();
 	configurePiRuntime(null);
 	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
@@ -215,195 +189,147 @@ afterEach(async () => {
 	rmSync(root, { recursive: true, force: true });
 });
 
-describe("native Central auth transaction", () => {
-	test("connect uses the global opaque artifact with a custom PI agent dir", async () => {
+describe("watched native Central runtime", () => {
+	test("connect loads the global opaque artifact with a custom PI agent dir", async () => {
 		expect(await connectJbcentral()).toEqual({ outcome: "applied" });
 		expect(existsSync(artifactPath)).toBe(true);
 		expect((await getJbcentralStatus()).state).toBe("configured");
 		expect((await listAvailableModels()).map((model) => model.id)).toContain("central-model");
 		expect(commandLog()).toContain("add pi");
-		expect(commandLog().some((line) => line.includes(" pi ") && line !== "add pi")).toBe(false);
 	});
 
-	test("an accepted turn settles before Central add executes and the caller receives pending", async () => {
-		configurePiRuntime(await legacyRuntime());
-		legacyFaux.setResponses([fauxAssistantMessage("initial")]);
-		const session = await createSession({
-			cwd: root,
-			workspaceId: "workspace-pending",
-			model: toWireModel(legacyFaux.getModel()),
-		});
-		await promptSession(session.sessionId, "initial turn");
-
-		let releaseTurn: (() => void) | undefined;
-		const turnRelease = new Promise<void>((resolve) => {
-			releaseTurn = resolve;
-		});
-		legacyFaux.appendResponses([
-			async () => {
-				await turnRelease;
-				return fauxAssistantMessage("settled before Central mutation");
-			},
-		]);
-		const turn = promptSession(session.sessionId, "active turn");
-		const connect = connectJbcentral();
-		expect(await connect).toEqual({ outcome: "pending" });
-		expect(commandLog()).not.toContain("add pi");
-		releaseTurn?.();
-		await turn;
-		await pollStatus("configured");
-		expect(commandLog()).toContain("add pi");
-		const hydrated = await getSessionMessages(session.sessionId, "workspace-pending", root);
-		expect(hydrated.summary.sessionId).toBe(session.sessionId);
-		expect(hydrated.summary.model).toMatchObject({
-			provider: "legacy-faux",
-			id: "legacy-model",
-		});
-	});
-
-	test("disconnect blocks exact Central-only models, compensates add, and restores a fresh generation", async () => {
+	test("disconnect affects new work while an existing Central chat keeps its generation", async () => {
 		expect(await connectJbcentral()).toEqual({ outcome: "applied" });
-		const centralModel = (await listAvailableModels()).find(
-			(model) => model.id === "central-model",
-		);
+		const centralModel = (await listAvailableModels()).find((model) => model.id === "central-model");
 		if (!centralModel) throw new Error("synthetic Central model missing");
 		const session = await createSession({
 			cwd: root,
-			workspaceId: "workspace-blocked",
+			workspaceId: "workspace-existing",
 			model: centralModel,
 		});
 
-		expect(await disconnectJbcentral()).toEqual({
-			outcome: "blocked",
-			reason: "model-unavailable",
-			affectedSessionIds: [session.sessionId],
+		expect(await disconnectJbcentral()).toEqual({ outcome: "applied" });
+		expect((await getJbcentralStatus()).state).toBe("supported");
+		expect((await listAvailableModels()).map((model) => model.id)).not.toContain("central-model");
+		const hydrated = await getSessionMessages(session.sessionId, "workspace-existing", root);
+		expect(hydrated.summary.model).toMatchObject({
+			provider: "central-test",
+			id: "central-model",
 		});
-		expect(existsSync(artifactPath)).toBe(true);
-		expect(commandLog().slice(-2)).toEqual(["remove pi", "add pi"]);
-		expect(await getJbcentralStatus()).toEqual({
-			state: "blocked",
-			action: "disconnect",
-			reason: "model-unavailable",
-			affectedSessionIds: [session.sessionId],
-		});
-		expect((await listAvailableModels()).map((model) => model.id)).toContain("central-model");
 	});
 
-	test("does not run login or update for an unreviewed Central version", async () => {
+	test("watches external add, replacement, and remove", async () => {
+		mkdirSync(join(home, ".pi", "agent", "extensions"), { recursive: true });
+		writeFileSync(artifactPath, syntheticExtension("external-one"));
+		await pollStatus("configured");
+		expect((await listAvailableModels()).map((model) => model.id)).toContain("external-one");
+
+		writeFileSync(artifactPath, syntheticExtension("external-two"));
+		await waitFor(async () =>
+			(await listAvailableModels()).some((model) => model.id === "external-two"),
+		);
+		expect((await listAvailableModels()).map((model) => model.id)).not.toContain("external-one");
+
+		rmSync(artifactPath);
+		await pollStatus("supported");
+		expect((await listAvailableModels()).map((model) => model.id)).not.toContain("external-two");
+	});
+
+	test("rejects a stale candidate when the watched artifact changes again", async () => {
+		const stale = await emptyRuntime();
+		const newest = await emptyRuntime();
+		let releaseFirst: (() => void) | undefined;
+		const firstRelease = new Promise<void>((resolve) => {
+			releaseFirst = resolve;
+		});
+		let reportFirst: (() => void) | undefined;
+		const firstStarted = new Promise<void>((resolve) => {
+			reportFirst = resolve;
+		});
+		let calls = 0;
+		configurePiRuntimeFactory(async () => {
+			calls += 1;
+			if (calls === 1) {
+				reportFirst?.();
+				await firstRelease;
+				return stale;
+			}
+			return newest;
+		});
+
+		mkdirSync(join(home, ".pi", "agent", "extensions"), { recursive: true });
+		writeFileSync(artifactPath, syntheticExtension("stale"));
+		await firstStarted;
+		writeFileSync(artifactPath, syntheticExtension("newest"));
+		releaseFirst?.();
+		await waitFor(() => usePiRuntime((runtime) => runtime === newest));
+		expect((await getJbcentralStatus()).state).toBe("configured");
+		expect(await usePiRuntime((runtime) => runtime === stale)).toBe(false);
+	});
+
+	test("retains the current runtime on candidate failure and Disconnect repairs it", async () => {
+		const current = await usePiRuntime((runtime) => runtime);
+		configurePiRuntimeFactory(async () => {
+			throw new Error("synthetic-private-loader-diagnostic");
+		});
+		mkdirSync(join(home, ".pi", "agent", "extensions"), { recursive: true });
+		writeFileSync(artifactPath, syntheticExtension("broken-candidate"));
+		await pollStatus("load-failed");
+		expect(await usePiRuntime((runtime) => runtime === current)).toBe(true);
+		expect(await getJbcentralStatus()).toEqual({
+			state: "load-failed",
+			configured: true,
+			reason: "candidate-failed",
+		});
+
+		configurePiRuntimeFactory();
+		expect(await disconnectJbcentral()).toEqual({ outcome: "applied" });
+		expect((await getJbcentralStatus()).state).toBe("supported");
+	});
+
+	test("falls back to a plain runtime when the configured extension fails at boot", async () => {
+		await resetJbcentralStateForTests();
+		configurePiRuntime(null);
+		mkdirSync(join(home, ".pi", "agent", "extensions"), { recursive: true });
+		writeFileSync(artifactPath, "this is not valid TypeScript {{{");
+
+		await initializeJbcentralRuntime();
+		expect(await getJbcentralStatus()).toMatchObject({
+			state: "load-failed",
+			configured: true,
+			reason: "candidate-failed",
+		});
+		expect(Array.isArray(await listAvailableModels())).toBe(true);
+	});
+
+	test("single-flights in-app actions and publishes closed invalidations", async () => {
+		control("add-wait", true);
+		let invalidations = 0;
+		setJbcentralChangedPublisher(() => {
+			invalidations += 1;
+		});
+		const first = connectJbcentral();
+		const second = connectJbcentral();
+		expect(first).toBe(second);
+		await waitFor(() => commandLog().includes("add pi"));
+		control("add-wait", false);
+		expect(await first).toEqual({ outcome: "applied" });
+		expect(commandLog().filter((line) => line === "add pi")).toHaveLength(1);
+		expect(invalidations).toBeGreaterThan(0);
+	});
+
+	test("keeps version/login/update outcomes closed", async () => {
 		control("unreviewed", true);
 		expect(await jbcentralLogin()).toEqual({ outcome: "failed", reason: "unsupported-version" });
 		expect(await updateJbcentral()).toEqual({ outcome: "failed", reason: "unsupported-version" });
-		expect(commandLog()).not.toContain("login");
-		expect(commandLog()).not.toContain("update --install");
-	});
+		control("unreviewed", false);
+		control("outdated", true);
+		expect(await updateJbcentral()).toEqual({ outcome: "applied" });
+		expect(commandLog()).toContain("update --install");
 
-	test("maps child failure to a closed reason without exposing output", async () => {
 		control("add-fail", true);
-		const result = await connectJbcentral();
-		expect(result).toEqual({ outcome: "failed", reason: "central-action-failed" });
-		expect(JSON.stringify(result)).not.toContain("synthetic-sensitive-child-output");
-		expect(existsSync(artifactPath)).toBe(false);
-	});
-
-	test("rolls back only this connect's legacy fields when candidate loading fails", async () => {
-		const modelsPath = join(agentDir, "models.json");
-		const legacyProvider = {
-			baseUrl: "http://127.0.0.1:19516/wire/test-token/pi/anthropic",
-			apiKey: "wire-proxy",
-			keep: "untouched",
-		};
-		writeFileSync(
-			modelsPath,
-			`${JSON.stringify({ providers: { anthropic: legacyProvider }, keepTopLevel: true }, null, 2)}\n`,
-		);
-		const privateDiagnostic = "synthetic-private-extension-diagnostic";
-		writeFileSync(extensionSource, `throw new Error("${privateDiagnostic}");\n`);
-
-		const result = await connectJbcentral();
-		expect(result).toEqual({ outcome: "failed", reason: "candidate-failed" });
-		expect(JSON.stringify(result)).not.toContain(privateDiagnostic);
-		expect(JSON.parse(readFileSync(modelsPath, "utf8"))).toEqual({
-			providers: { anthropic: legacyProvider },
-			keepTopLevel: true,
-		});
-	});
-
-	test("fails closed on invalid legacy JSON after add and exposes only a typed reason", async () => {
-		const modelsPath = join(agentDir, "models.json");
-		writeFileSync(modelsPath, "not-json\n");
-		expect(await connectJbcentral()).toEqual({
-			outcome: "failed",
-			reason: "legacy-cleanup-invalid",
-		});
-		expect(readFileSync(modelsPath, "utf8")).toBe("not-json\n");
-		expect(await getJbcentralStatus()).toEqual({
-			state: "recovery-required",
-			action: "connect",
-			reason: "legacy-cleanup-invalid",
-		});
-		await expect(listAvailableModels()).rejects.toThrow("reconciliation is pending");
-
-		writeFileSync(modelsPath, "{}\n");
-		expect(await connectJbcentral()).toEqual({ outcome: "applied" });
-		expect((await listAvailableModels()).map((model) => model.id)).toContain("central-model");
-	});
-
-	test("serializes opposite actions through their complete reconciliations", async () => {
-		control("add-wait", true);
-		const connect = connectJbcentral();
-		for (let attempt = 0; attempt < 100 && !commandLog().includes("add pi"); attempt += 1) {
-			await new Promise((resolve) => setTimeout(resolve, 5));
-		}
-		const disconnect = disconnectJbcentral();
-		await new Promise((resolve) => setTimeout(resolve, 20));
-		expect(commandLog()).not.toContain("remove pi");
-		control("add-wait", false);
-		expect(await connect).toEqual({ outcome: "applied" });
-		expect(await disconnect).toEqual({ outcome: "applied" });
-		expect(commandLog().filter((line) => line === "add pi" || line === "remove pi")).toEqual([
-			"add pi",
-			"remove pi",
-		]);
-	});
-
-	test("a failed disconnect compensation seals runtime consumers but keeps recovery status visible", async () => {
-		expect(await connectJbcentral()).toEqual({ outcome: "applied" });
-		const centralModel = (await listAvailableModels()).find(
-			(model) => model.id === "central-model",
-		);
-		if (!centralModel) throw new Error("synthetic Central model missing");
-		await createSession({ cwd: root, workspaceId: "workspace-recovery", model: centralModel });
-		control("add-fail", true);
-
-		expect(await disconnectJbcentral()).toEqual({
-			outcome: "failed",
-			reason: "recovery-failed",
-		});
-		expect(await getJbcentralStatus()).toEqual({
-			state: "recovery-required",
-			action: "disconnect",
-			reason: "recovery-failed",
-		});
-		await expect(listAvailableModels()).rejects.toThrow("reconciliation is pending");
-		expect(await getProviderStatus()).toMatchObject({
-			providers: [],
-			jbcentral: { state: "recovery-required", reason: "recovery-failed" },
-		});
-
-		// A failed repair must not accidentally open the prior generation just because its boundary ended.
-		expect(await connectJbcentral()).toEqual({
-			outcome: "failed",
-			reason: "central-action-failed",
-		});
-		expect(await getJbcentralStatus()).toEqual({
-			state: "recovery-required",
-			action: "disconnect",
-			reason: "recovery-failed",
-		});
-		await expect(listAvailableModels()).rejects.toThrow("reconciliation is pending");
-
-		control("add-fail", false);
-		expect(await connectJbcentral()).toEqual({ outcome: "applied" });
-		expect((await listAvailableModels()).map((model) => model.id)).toContain("central-model");
+		const failed = await connectJbcentral();
+		expect(failed).toEqual({ outcome: "failed", reason: "central-action-failed" });
+		expect(JSON.stringify(failed)).not.toContain("synthetic-sensitive-child-output");
 	});
 });

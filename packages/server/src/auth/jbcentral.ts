@@ -8,73 +8,68 @@ import type {
 } from "@thinkrail/contracts";
 import {
 	type JbcentralActionResult as CliActionResult,
-	cleanupLegacyJbcentralModels,
 	inspectJbcentral,
 	type JbcentralInspection,
-	type LegacyCleanupReceipt,
-	type LegacyCleanupResult,
+	jbcentralExtensionPath,
 	launchJbcentralLogin,
-	rollbackLegacyJbcentralCleanup,
 	runJbcentralAction,
+	watchJbcentralArtifact,
 } from "@thinkrail/shared/jbcentral";
 import {
-	configurePiRuntimeExtensionPaths,
+	activatePiRuntimeGeneration,
 	configurePiRuntimeSessionExtensionExclusions,
-	type PiRuntimeReconciliationBoundary,
-	type PiRuntimeReconciliationResult,
-	withPiRuntimeReconciliationBoundary,
+	preparePiRuntimeGeneration,
 } from "../agent";
 
-interface ActionExecution {
-	response: Promise<JbcentralActionResult>;
-	completion: Promise<void>;
+const REBUILD_DEBOUNCE_MS = 75;
+
+type RebuildResult =
+	| { outcome: "applied"; configured: boolean }
+	| { outcome: "failed"; reason: "candidate-failed"; configured: boolean };
+
+interface RebuildWaiter {
+	sequence: number;
+	resolve: (result: RebuildResult) => void;
 }
 
-interface ActionFlight {
-	response: Promise<JbcentralActionResult>;
-	completion: Promise<void>;
-}
-
-let transientStatus: JbcentralStatus | null = null;
-let recoveryStatus: JbcentralStatus | null = null;
 let appliedConfigured = false;
+let loadFailure: Extract<JbcentralStatus, { state: "load-failed" }> | null = null;
+let transientAction: JbcentralAction | null = null;
 let bootstrapped = false;
 let bootstrapTask: Promise<void> | null = null;
+let stopArtifactWatcher: (() => void) | null = null;
+let stopped = false;
+
+let requestedSequence = 0;
+let settledSequence = 0;
+let latestRequestAction: JbcentralAction | undefined;
+let rebuildDeadline = 0;
+let rebuildTimer: ReturnType<typeof setTimeout> | null = null;
+let rebuildTask: Promise<void> | null = null;
+const rebuildWaiters: RebuildWaiter[] = [];
+
 let actionTail = Promise.resolve();
-const actionFlights = new Map<JbcentralAction, ActionFlight>();
-let driftTask: Promise<void> | null = null;
+const actionFlights = new Map<JbcentralAction, Promise<JbcentralActionResult>>();
 let loginTask: Promise<JbcentralLoginResult> | null = null;
 let publishApplied: () => void = () => {};
+let publishChanged: () => void = () => {};
 
-/** Host composition seam: analytics may observe only the closed `applied` transition. */
+/** Host composition seam: analytics may observe only a successful in-app Connect. */
 export function setJbcentralAppliedPublisher(publisher: () => void): void {
 	publishApplied = publisher;
 }
 
-function completed(result: JbcentralActionResult): ActionExecution {
-	return { response: Promise.resolve(result), completion: Promise.resolve() };
+/** Host composition seam: broadcast a data-free provider/model invalidation. */
+export function setJbcentralChangedPublisher(publisher: () => void): void {
+	publishChanged = publisher;
 }
 
 function failed(reason: JbcentralActionFailureReason): JbcentralActionResult {
 	return { outcome: "failed", reason };
 }
 
-function setRecovery(action: JbcentralAction, reason: JbcentralActionFailureReason): void {
-	transientStatus = null;
-	recoveryStatus = { state: "recovery-required", action, reason };
-}
-
-function setBlocked(
-	action: Exclude<JbcentralAction, "update">,
-	affectedSessionIds: string[],
-): void {
-	transientStatus = {
-		state: "blocked",
-		action,
-		reason: "model-unavailable",
-		affectedSessionIds,
-	};
-	recoveryStatus = null;
+function inspectionConfigured(inspection: JbcentralInspection): boolean {
+	return inspection.status.state === "supported" && inspection.status.configured;
 }
 
 function mapInspectionStatus(inspection: JbcentralInspection): JbcentralStatus {
@@ -125,382 +120,277 @@ function mapCliFailure(result: CliActionResult): JbcentralActionFailureReason | 
 	}
 }
 
-function mapCleanupFailure(result: LegacyCleanupResult): JbcentralActionFailureReason | null {
-	if (result.outcome !== "failed") return null;
-	switch (result.reason) {
-		case "invalid-json":
-			return "legacy-cleanup-invalid";
-		case "conflict":
-			return "legacy-cleanup-conflict";
-		case "io-error":
-			return "legacy-cleanup-failed";
+function configuringStatus(): JbcentralStatus {
+	const action = transientAction ?? latestRequestAction;
+	return { state: "configuring", ...(action ? { action } : {}) };
+}
+
+function settleRebuildWaiters(sequence: number, result: RebuildResult): void {
+	for (let index = rebuildWaiters.length - 1; index >= 0; index -= 1) {
+		const waiter = rebuildWaiters[index];
+		if (!waiter || waiter.sequence > sequence) continue;
+		rebuildWaiters.splice(index, 1);
+		waiter.resolve(result);
 	}
 }
 
-async function rollbackCleanup(receipt: LegacyCleanupReceipt | undefined): Promise<boolean> {
-	if (!receipt) return true;
-	const result = await rollbackLegacyJbcentralCleanup(receipt);
-	return result.outcome === "rolled-back";
+function waitForRebuild(sequence: number): Promise<RebuildResult> {
+	return new Promise((resolve) => rebuildWaiters.push({ sequence, resolve }));
 }
 
-async function restoreCentralArtifact(): Promise<boolean> {
-	return (await runJbcentralAction("add")).outcome === "succeeded";
+function scheduleRebuildDrain(): void {
+	if (stopped || !bootstrapped || rebuildTask || rebuildTimer) return;
+	const delay = Math.max(0, rebuildDeadline - Date.now());
+	rebuildTimer = setTimeout(() => {
+		rebuildTimer = null;
+		startRebuildDrain();
+	}, delay);
 }
 
-function mapReconciliationFailure(
-	result: Exclude<PiRuntimeReconciliationResult, { outcome: "applied" | "blocked" }>,
-): JbcentralActionFailureReason {
-	return result.reason;
-}
+async function runRebuildDrain(): Promise<void> {
+	while (!stopped && settledSequence < requestedSequence) {
+		const delay = rebuildDeadline - Date.now();
+		if (delay > 0) await new Promise<void>((resolve) => setTimeout(resolve, delay));
+		if (stopped) return;
 
-function startBoundary(
-	action: "connect" | "disconnect",
-	operation: (boundary: PiRuntimeReconciliationBoundary) => Promise<JbcentralActionResult>,
-): ActionExecution {
-	let reportPending: (() => void) | undefined;
-	const pending = new Promise<JbcentralActionResult>((resolve) => {
-		reportPending = () => resolve({ outcome: "pending" });
-	});
-	const boundary = withPiRuntimeReconciliationBoundary(
-		async (reconciliation) => {
-			try {
-				return await operation(reconciliation);
-			} catch (error) {
-				// An unclassified failure cannot prove either global state or the candidate generation coherent.
-				reconciliation.keepAdmissionClosed();
-				throw error;
-			}
-		},
-		{
-			onPending: () => {
-				transientStatus = { state: "pending", action };
-				reportPending?.();
-			},
-		},
-	);
-	const finalResult = boundary.catch(() => {
-		setRecovery(action, "reattach-failed");
-		return failed("reattach-failed");
-	});
-	return {
-		response: Promise.race([finalResult, pending]),
-		completion: finalResult.then(() => undefined),
-	};
-}
-
-async function beginConnect({
-	invokeCentral,
-}: {
-	invokeCentral: boolean;
-}): Promise<ActionExecution> {
-	const priorRecovery = recoveryStatus;
-	const finishPreflightFailure = (result: JbcentralActionResult): JbcentralActionResult => {
-		transientStatus = null;
-		// A failed repair attempt must not erase the recovery seal/status that admitted it.
-		if (priorRecovery) recoveryStatus = priorRecovery;
-		return result;
-	};
-	transientStatus = { state: "configuring", action: "connect" };
-	recoveryStatus = null;
-	return startBoundary("connect", async (boundary) => {
+		const sequence = requestedSequence;
+		const action = latestRequestAction;
 		const inspection = await inspectJbcentral();
-		const preflightFailure = inspectionFailure(inspection);
-		if (preflightFailure) return finishPreflightFailure(preflightFailure);
-		if (inspection.status.state !== "supported") {
-			return finishPreflightFailure(failed("unsupported-version"));
-		}
+		const configured = inspectionConfigured(inspection);
+		const prepared = await preparePiRuntimeGeneration(
+			configured ? [inspection.extensionPath] : [],
+		);
 
-		if (invokeCentral) {
-			const actionFailure = mapCliFailure(await runJbcentralAction("add"));
-			if (actionFailure) return finishPreflightFailure(failed(actionFailure));
-		}
+		// A newer filesystem/action observation owns the current pointer. This candidate was built against an
+		// older observation and is discarded without becoming visible.
+		if (stopped) return;
+		if (sequence !== requestedSequence) continue;
 
-		const cleanup = await cleanupLegacyJbcentralModels();
-		const cleanupFailure = mapCleanupFailure(cleanup);
-		if (cleanupFailure) {
-			setRecovery("connect", cleanupFailure);
-			boundary.keepAdmissionClosed();
-			return failed(cleanupFailure);
-		}
-		const receipt = cleanup.outcome === "cleaned" ? cleanup.receipt : undefined;
-		const result = await boundary.replaceGeneration([inspection.extensionPath]);
-		if (result.outcome === "applied") {
-			appliedConfigured = true;
-			transientStatus = null;
-			recoveryStatus = null;
-			if (invokeCentral) publishApplied();
-			return { outcome: "applied" };
-		}
-
-		const rolledBack = await rollbackCleanup(receipt);
-		if (!rolledBack) {
-			setRecovery("connect", "recovery-failed");
-			boundary.keepAdmissionClosed();
-			return failed("recovery-failed");
-		}
-		if (result.outcome === "blocked") {
-			setBlocked("connect", result.affectedSessionIds);
-			return {
-				outcome: "blocked",
-				reason: "model-unavailable",
-				affectedSessionIds: result.affectedSessionIds,
+		settledSequence = sequence;
+		if (prepared.outcome === "prepared") {
+			activatePiRuntimeGeneration(prepared.generation);
+			appliedConfigured = configured;
+			loadFailure = null;
+			latestRequestAction = undefined;
+			settleRebuildWaiters(sequence, { outcome: "applied", configured });
+		} else {
+			loadFailure = {
+				state: "load-failed",
+				configured,
+				reason: "candidate-failed",
+				...(action ? { action } : {}),
 			};
+			settleRebuildWaiters(sequence, {
+				outcome: "failed",
+				reason: "candidate-failed",
+				configured,
+			});
 		}
-		const reason = mapReconciliationFailure(result);
-		setRecovery("connect", reason);
-		return failed(reason);
-	});
-}
-
-async function beginDisconnect({
-	invokeCentral,
-}: {
-	invokeCentral: boolean;
-}): Promise<ActionExecution> {
-	const priorRecovery = recoveryStatus;
-	const finishPreflightFailure = (result: JbcentralActionResult): JbcentralActionResult => {
-		transientStatus = null;
-		if (priorRecovery) recoveryStatus = priorRecovery;
-		return result;
-	};
-	transientStatus = { state: "configuring", action: "disconnect" };
-	recoveryStatus = null;
-	return startBoundary("disconnect", async (boundary) => {
-		const inspection = await inspectJbcentral();
-		const preflightFailure = inspectionFailure(inspection);
-		if (preflightFailure) return finishPreflightFailure(preflightFailure);
-		if (inspection.status.state !== "supported") {
-			return finishPreflightFailure(failed("unsupported-version"));
-		}
-
-		if (invokeCentral) {
-			const actionFailure = mapCliFailure(await runJbcentralAction("remove"));
-			if (actionFailure) {
-				let repaired = false;
-				const afterFailure = await inspectJbcentral();
-				if (
-					appliedConfigured &&
-					afterFailure.status.state === "supported" &&
-					!afterFailure.status.configured
-				) {
-					if (!(await restoreCentralArtifact())) {
-						setRecovery("disconnect", "recovery-failed");
-						boundary.keepAdmissionClosed();
-						return failed("recovery-failed");
-					}
-					const restored = await boundary.replaceGeneration([inspection.extensionPath]);
-					if (restored.outcome !== "applied") {
-						setRecovery("disconnect", "recovery-failed");
-						boundary.keepAdmissionClosed();
-						return failed("recovery-failed");
-					}
-					repaired = true;
-				}
-				transientStatus = null;
-				if (priorRecovery && !repaired) recoveryStatus = priorRecovery;
-				return failed(actionFailure);
-			}
-		}
-
-		const result = await boundary.replaceGeneration([]);
-		if (result.outcome === "applied") {
-			appliedConfigured = false;
-			transientStatus = null;
-			recoveryStatus = null;
-			return { outcome: "applied" };
-		}
-
-		if (!(await restoreCentralArtifact())) {
-			setRecovery("disconnect", "recovery-failed");
-			boundary.keepAdmissionClosed();
-			return failed("recovery-failed");
-		}
-		const restored = await boundary.replaceGeneration([inspection.extensionPath]);
-		if (restored.outcome !== "applied") {
-			setRecovery("disconnect", "recovery-failed");
-			boundary.keepAdmissionClosed();
-			return failed("recovery-failed");
-		}
-		appliedConfigured = true;
-		if (result.outcome === "blocked") {
-			setBlocked("disconnect", result.affectedSessionIds);
-			return {
-				outcome: "blocked",
-				reason: "model-unavailable",
-				affectedSessionIds: result.affectedSessionIds,
-			};
-		}
-		transientStatus = null;
-		recoveryStatus = null;
-		return failed(mapReconciliationFailure(result));
-	});
-}
-
-async function beginUpdate(): Promise<ActionExecution> {
-	const priorRecovery = recoveryStatus;
-	const finishUpdate = (result: JbcentralActionResult): ActionExecution => {
-		transientStatus = null;
-		// Updating the CLI does not reconcile a sealed runtime; preserve any pre-existing recovery state.
-		if (priorRecovery) recoveryStatus = priorRecovery;
-		return completed(result);
-	};
-	transientStatus = { state: "configuring", action: "update" };
-	const before = await inspectJbcentral();
-	if (before.status.state === "supported") return finishUpdate({ outcome: "applied" });
-	if (before.status.state !== "outdated") {
-		return finishUpdate(inspectionFailure(before) ?? failed("unsupported-version"));
+		publishChanged();
 	}
-
-	const actionFailure = mapCliFailure(await runJbcentralAction("update"));
-	if (actionFailure) return finishUpdate(failed(actionFailure));
-	const after = await inspectJbcentral();
-	const postflightFailure = inspectionFailure(after);
-	return finishUpdate(postflightFailure ?? { outcome: "applied" });
 }
 
-function scheduleAction(
-	action: JbcentralAction,
-	begin: () => Promise<ActionExecution>,
-): Promise<JbcentralActionResult> {
-	const existing = actionFlights.get(action);
-	if (existing) return existing.response;
+function startRebuildDrain(): void {
+	if (stopped || !bootstrapped || rebuildTask) return;
+	const task = runRebuildDrain();
+	rebuildTask = task;
+	void task.finally(() => {
+		if (rebuildTask === task) rebuildTask = null;
+		if (!stopped && settledSequence < requestedSequence) scheduleRebuildDrain();
+	});
+}
 
-	const started = actionTail.then(begin);
-	const response = started
-		.then((execution) => execution.response)
-		.catch(() => {
-			if (action === "update") {
-				transientStatus = null;
-				return failed("central-action-failed");
-			}
-			setRecovery(action, "recovery-failed");
-			return failed("recovery-failed");
+function requestRuntimeRebuild(action?: JbcentralAction): Promise<RebuildResult> {
+	if (stopped) {
+		return Promise.resolve({
+			outcome: "failed",
+			reason: "candidate-failed",
+			configured: appliedConfigured,
 		});
-	const completion = started
-		.then((execution) => execution.completion)
-		.catch(() => undefined)
-		.then(() => undefined);
-	const flight = { response, completion };
-	actionFlights.set(action, flight);
-	actionTail = completion;
-	void completion.then(() => {
-		if (actionFlights.get(action) === flight) actionFlights.delete(action);
-	});
-	return response;
+	}
+	const sequence = ++requestedSequence;
+	latestRequestAction = action;
+	loadFailure = null;
+	rebuildDeadline = Date.now() + REBUILD_DEBOUNCE_MS;
+	if (rebuildTimer) {
+		clearTimeout(rebuildTimer);
+		rebuildTimer = null;
+	}
+	publishChanged();
+	scheduleRebuildDrain();
+	return waitForRebuild(sequence);
 }
 
-/** Initialize the active PI generation from safe Central postconditions before any chat/runtime read. */
+async function prepareInitialRuntime(inspection: JbcentralInspection): Promise<void> {
+	const configured = inspectionConfigured(inspection);
+	const prepared = await preparePiRuntimeGeneration(
+		configured ? [inspection.extensionPath] : [],
+	);
+	if (prepared.outcome === "prepared") {
+		activatePiRuntimeGeneration(prepared.generation);
+		appliedConfigured = configured;
+		return;
+	}
+	if (!configured) throw new Error("PI runtime initialization failed");
+
+	const plain = await preparePiRuntimeGeneration([]);
+	if (plain.outcome !== "prepared") throw new Error("PI runtime initialization failed");
+	activatePiRuntimeGeneration(plain.generation);
+	appliedConfigured = false;
+	loadFailure = {
+		state: "load-failed",
+		configured: true,
+		action: "connect",
+		reason: "candidate-failed",
+	};
+}
+
+/** Initialize watching plus the current PI generation before any chat/runtime read. */
 export function initializeJbcentralRuntime(): Promise<void> {
 	if (bootstrapTask) return bootstrapTask;
+	stopped = false;
 	bootstrapTask = (async () => {
+		const extensionPath = jbcentralExtensionPath();
+		configurePiRuntimeSessionExtensionExclusions([extensionPath]);
+		stopArtifactWatcher = watchJbcentralArtifact(() => {
+			void requestRuntimeRebuild();
+		});
+
 		const inspection = await inspectJbcentral();
-		// Always exclude the reviewed global identity from ordinary session discovery. Unsupported or
-		// recovery-blocked artifacts must not execute merely because the default PI agent dir can see them.
-		configurePiRuntimeSessionExtensionExclusions([inspection.extensionPath]);
-		configurePiRuntimeExtensionPaths([]);
-		if (inspection.status.state !== "supported" || !inspection.status.configured) {
-			appliedConfigured = false;
-			bootstrapped = true;
-			return;
+		await prepareInitialRuntime(inspection);
+		bootstrapped = true;
+
+		// If the watcher observed drift while the initial candidate was loading, settle the newest observation
+		// before the public server factory binds its socket.
+		if (settledSequence < requestedSequence) {
+			scheduleRebuildDrain();
+			await waitForRebuild(requestedSequence);
 		}
-
-		await withPiRuntimeReconciliationBoundary(async (boundary) => {
-			const cleanup = await cleanupLegacyJbcentralModels();
-			const cleanupFailure = mapCleanupFailure(cleanup);
-			if (cleanupFailure) {
-				setRecovery("connect", cleanupFailure);
-				boundary.keepAdmissionClosed();
-				return;
-			}
-			const receipt = cleanup.outcome === "cleaned" ? cleanup.receipt : undefined;
-			const reconciled = await boundary.replaceGeneration([inspection.extensionPath]);
-			if (reconciled.outcome === "applied") {
-				appliedConfigured = true;
-				return;
-			}
-
-			const rolledBack = await rollbackCleanup(receipt);
-			if (!rolledBack) {
-				setRecovery("connect", "recovery-failed");
-				boundary.keepAdmissionClosed();
-				return;
-			}
-			setRecovery(
-				"connect",
-				reconciled.outcome === "failed" ? reconciled.reason : "candidate-failed",
-			);
-		});
-		bootstrapped = true;
-	})().catch(async () => {
-		bootstrapped = true;
-		setRecovery("connect", "recovery-failed");
-		await withPiRuntimeReconciliationBoundary(async (boundary) => {
-			boundary.keepAdmissionClosed();
-		});
-	});
+	})();
 	return bootstrapTask;
 }
 
-function scheduleExternalDrift(configured: boolean): void {
-	if (driftTask || transientStatus || recoveryStatus) return;
-	const action = configured ? "connect" : "disconnect";
-	const response = scheduleAction(action, () =>
-		configured ? beginConnect({ invokeCentral: false }) : beginDisconnect({ invokeCentral: false }),
-	);
-	const flight = actionFlights.get(action);
-	driftTask = (flight?.completion ?? response.then(() => undefined)).finally(() => {
-		driftTask = null;
-	});
+/** Stop future watcher/rebuild work. A candidate already loading is discarded when it returns. */
+export function stopJbcentralRuntime(): void {
+	stopped = true;
+	stopArtifactWatcher?.();
+	stopArtifactWatcher = null;
+	if (rebuildTimer) clearTimeout(rebuildTimer);
+	rebuildTimer = null;
+	const result: RebuildResult = {
+		outcome: "failed",
+		reason: "candidate-failed",
+		configured: appliedConfigured,
+	};
+	settleRebuildWaiters(Number.POSITIVE_INFINITY, result);
 }
 
-/** Closed status projection plus external artifact drift detection through the same reconcile path. */
+/** Closed status projection with a pull-side repair if a filesystem event was missed. */
 export async function getJbcentralStatus(): Promise<JbcentralStatus> {
 	await initializeJbcentralRuntime();
-	if (transientStatus) return transientStatus;
-	if (recoveryStatus) return recoveryStatus;
+	if (transientAction || settledSequence < requestedSequence) return configuringStatus();
+	if (loadFailure) return loadFailure;
 
 	const inspection = await inspectJbcentral();
-	if (
-		bootstrapped &&
-		inspection.status.state === "supported" &&
-		inspection.status.configured !== appliedConfigured
-	) {
-		scheduleExternalDrift(inspection.status.configured);
-		return (
-			transientStatus ?? {
-				state: "pending",
-				action: inspection.status.configured ? "connect" : "disconnect",
-			}
-		);
+	if (inspectionConfigured(inspection) !== appliedConfigured) {
+		void requestRuntimeRebuild();
+		return configuringStatus();
 	}
 	return mapInspectionStatus(inspection);
 }
 
-export async function resetJbcentralStateForTests(): Promise<void> {
-	await actionTail;
-	await driftTask;
-	transientStatus = null;
-	recoveryStatus = null;
-	appliedConfigured = false;
-	bootstrapped = false;
-	bootstrapTask = null;
-	actionTail = Promise.resolve();
-	actionFlights.clear();
-	driftTask = null;
-	loginTask = null;
-	publishApplied = () => {};
+async function connect(): Promise<JbcentralActionResult> {
+	transientAction = "connect";
+	publishChanged();
+	try {
+		const inspection = await inspectJbcentral();
+		const preflightFailure = inspectionFailure(inspection);
+		if (preflightFailure) return preflightFailure;
+		const actionFailure = mapCliFailure(await runJbcentralAction("add"));
+		if (actionFailure) return failed(actionFailure);
+		const rebuilt = await requestRuntimeRebuild("connect");
+		if (rebuilt.outcome === "failed") return failed(rebuilt.reason);
+		publishApplied();
+		return { outcome: "applied" };
+	} finally {
+		transientAction = null;
+		publishChanged();
+	}
+}
+
+async function disconnect(): Promise<JbcentralActionResult> {
+	transientAction = "disconnect";
+	publishChanged();
+	try {
+		const inspection = await inspectJbcentral();
+		const preflightFailure = inspectionFailure(inspection);
+		if (preflightFailure) return preflightFailure;
+		const actionFailure = mapCliFailure(await runJbcentralAction("remove"));
+		if (actionFailure) return failed(actionFailure);
+		const rebuilt = await requestRuntimeRebuild("disconnect");
+		return rebuilt.outcome === "applied" ? { outcome: "applied" } : failed(rebuilt.reason);
+	} finally {
+		transientAction = null;
+		publishChanged();
+	}
+}
+
+async function update(): Promise<JbcentralActionResult> {
+	transientAction = "update";
+	publishChanged();
+	try {
+		const before = await inspectJbcentral();
+		if (before.status.state === "supported") return { outcome: "applied" };
+		if (before.status.state !== "outdated") {
+			return inspectionFailure(before) ?? failed("unsupported-version");
+		}
+
+		const updateFailure = mapCliFailure(await runJbcentralAction("update"));
+		if (updateFailure) return failed(updateFailure);
+		const afterUpdate = await inspectJbcentral();
+		const postflightFailure = inspectionFailure(afterUpdate);
+		if (postflightFailure) return postflightFailure;
+
+		if (before.artifactExists) {
+			const addFailure = mapCliFailure(await runJbcentralAction("add"));
+			if (addFailure) return failed(addFailure);
+		}
+		const rebuilt = await requestRuntimeRebuild("update");
+		return rebuilt.outcome === "applied" ? { outcome: "applied" } : failed(rebuilt.reason);
+	} finally {
+		transientAction = null;
+		publishChanged();
+	}
+}
+
+function scheduleAction(
+	action: JbcentralAction,
+	operation: () => Promise<JbcentralActionResult>,
+): Promise<JbcentralActionResult> {
+	const existing = actionFlights.get(action);
+	if (existing) return existing;
+
+	const task = actionTail
+		.then(operation)
+		.catch((): JbcentralActionResult => failed("central-action-failed"));
+	actionFlights.set(action, task);
+	actionTail = task.then(() => undefined);
+	void task.finally(() => {
+		if (actionFlights.get(action) === task) actionFlights.delete(action);
+	});
+	return task;
 }
 
 export function connectJbcentral(): Promise<JbcentralConnectResult> {
-	return scheduleAction("connect", () => beginConnect({ invokeCentral: true }));
+	return scheduleAction("connect", connect);
 }
 
 export function disconnectJbcentral(): Promise<JbcentralActionResult> {
-	return scheduleAction("disconnect", () => beginDisconnect({ invokeCentral: true }));
+	return scheduleAction("disconnect", disconnect);
 }
 
 export function updateJbcentral(): Promise<JbcentralActionResult> {
-	return scheduleAction("update", beginUpdate);
+	return scheduleAction("update", update);
 }
 
 export function jbcentralLogin(): Promise<JbcentralLoginResult> {
@@ -524,8 +414,30 @@ export function jbcentralLogin(): Promise<JbcentralLoginResult> {
 		.catch((): JbcentralLoginResult => ({ outcome: "failed", reason: "launch-failed" }));
 	loginTask = task;
 	actionTail = task.then(() => undefined);
-	void task.then(() => {
+	void task.finally(() => {
 		if (loginTask === task) loginTask = null;
 	});
 	return task;
+}
+
+export async function resetJbcentralStateForTests(): Promise<void> {
+	stopJbcentralRuntime();
+	await Promise.allSettled([actionTail, rebuildTask]);
+	appliedConfigured = false;
+	loadFailure = null;
+	transientAction = null;
+	bootstrapped = false;
+	bootstrapTask = null;
+	stopped = false;
+	requestedSequence = 0;
+	settledSequence = 0;
+	latestRequestAction = undefined;
+	rebuildDeadline = 0;
+	rebuildTask = null;
+	rebuildWaiters.splice(0);
+	actionTail = Promise.resolve();
+	actionFlights.clear();
+	loginTask = null;
+	publishApplied = () => {};
+	publishChanged = () => {};
 }

@@ -35,7 +35,7 @@ describe("buildProviderReport", () => {
 	});
 
 	test("Central lifecycle flows through without model or endpoint inference", () => {
-		const jbcentral = { state: "pending" as const, action: "connect" as const };
+		const jbcentral = { state: "configuring" as const, action: "connect" as const };
 		expect(buildProviderReport(sources({ jbcentral })).jbcentral).toEqual(jbcentral);
 	});
 

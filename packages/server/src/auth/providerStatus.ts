@@ -6,7 +6,7 @@ import type {
 	ProviderStatusReport,
 } from "@thinkrail/contracts";
 import { jbcentralInstall } from "@thinkrail/shared/jbcentral";
-import { PiRuntimeReconciliationPendingError, usePiRuntime } from "../agent";
+import { usePiRuntime } from "../agent";
 import { getJbcentralStatus } from "./jbcentral";
 
 /**
@@ -142,40 +142,33 @@ export function buildProviderReport(sources: ProviderStatusSources): ProviderSta
 export async function getProviderStatus(): Promise<ProviderStatusReport> {
 	const jbcentral = await getJbcentralStatus();
 	const install = jbcentralInstall(process.platform);
-	try {
-		return await usePiRuntime(async (runtime) => {
-			await runtime.refresh();
+	return usePiRuntime(async (runtime) => {
+		await runtime.refresh();
 
-			const available = await runtime.getAvailable();
-			const credentials = await runtime.listCredentials();
-			const credentialTypes = new Map(
-				credentials.map((credential) => [credential.providerId, credential.type]),
-			);
+		const available = await runtime.getAvailable();
+		const credentials = await runtime.listCredentials();
+		const credentialTypes = new Map(
+			credentials.map((credential) => [credential.providerId, credential.type]),
+		);
 
-			return buildProviderReport({
-				modelProviderIds: new Set(runtime.getModels().map((model) => model.provider)),
-				availableProviders: new Set(available.map((model) => model.provider)),
-				credentialProviders: credentials.map((credential) => credential.providerId),
-				oauthProviders: runtime
-					.getProviders()
-					.filter((provider) => provider.auth.oauth)
-					.map((provider) => ({
-						id: provider.id,
-						name: provider.auth.oauth?.name ?? provider.name,
-					})),
-				credentialType: (id) => credentialTypes.get(id),
-				providerAuth: (id) => runtime.getProviderAuthStatus(id),
-				apiKeyLogin: (id) => Boolean(runtime.getProvider(id)?.auth.apiKey?.login),
-				displayName: (id) => runtime.getProvider(id)?.name ?? id,
-				hasAuth: (id) => runtime.getProviderAuthStatus(id).configured,
-				jbcentral,
-				jbcentralInstall: install,
-			});
+		return buildProviderReport({
+			modelProviderIds: new Set(runtime.getModels().map((model) => model.provider)),
+			availableProviders: new Set(available.map((model) => model.provider)),
+			credentialProviders: credentials.map((credential) => credential.providerId),
+			oauthProviders: runtime
+				.getProviders()
+				.filter((provider) => provider.auth.oauth)
+				.map((provider) => ({
+					id: provider.id,
+					name: provider.auth.oauth?.name ?? provider.name,
+				})),
+			credentialType: (id) => credentialTypes.get(id),
+			providerAuth: (id) => runtime.getProviderAuthStatus(id),
+			apiKeyLogin: (id) => Boolean(runtime.getProvider(id)?.auth.apiKey?.login),
+			displayName: (id) => runtime.getProvider(id)?.name ?? id,
+			hasAuth: (id) => runtime.getProviderAuthStatus(id).configured,
+			jbcentral,
+			jbcentralInstall: install,
 		});
-	} catch (error) {
-		if (!(error instanceof PiRuntimeReconciliationPendingError)) throw error;
-		// Admission may have closed after the first status read. Re-read the closed Central lifecycle so this
-		// response cannot pair an empty provider snapshot with a stale pre-action state.
-		return { providers: [], jbcentral: await getJbcentralStatus(), jbcentralInstall: install };
-	}
+	});
 }

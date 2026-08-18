@@ -7,20 +7,22 @@ import { createFauxCore, fauxAssistantMessage } from "@earendil-works/pi-ai/prov
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
 import { defaultSessionDirFor, writeFixtureSession } from "../history/testFixtures";
 import {
-	abortSession,
 	createSession,
 	disposeAllSessions,
 	getSessionMessages,
 	listAvailableModels,
 	promptSession,
-	reconcilePiRuntimeGeneration,
-	resetPiRuntimeReconciliationForTests,
 	setSessionManagerFactory,
-	setSessionPublisher,
+	setSessionModel,
 	toWireModel,
 	usePiRuntime,
 } from "./agentSessionManager";
-import { configurePiRuntime, configurePiRuntimeFactory } from "./piRuntime";
+import {
+	activatePiRuntimeGeneration,
+	configurePiRuntime,
+	configurePiRuntimeFactory,
+	preparePiRuntimeGeneration,
+} from "./piRuntime";
 
 function modelDef(id: string) {
 	return {
@@ -35,9 +37,9 @@ function modelDef(id: string) {
 }
 
 const faux = createFauxCore({
-	provider: "reconcile-faux",
-	api: "reconcile-faux",
-	models: [modelDef("reconcile-model")],
+	provider: "generation-faux",
+	api: "generation-faux",
+	models: [modelDef("generation-model")],
 	tokensPerSecond: 2_000,
 });
 
@@ -48,12 +50,12 @@ async function runtimeWithFaux(includeModel = true): Promise<ModelRuntime> {
 		allowModelNetwork: false,
 	});
 	if (includeModel) {
-		runtime.registerProvider("reconcile-faux", {
+		runtime.registerProvider("generation-faux", {
 			api: faux.api,
-			baseUrl: "http://reconcile-faux.test",
+			baseUrl: "http://generation-faux.test",
 			apiKey: "faux",
 			streamSimple: faux.streamSimple,
-			models: [{ ...modelDef("reconcile-model"), api: faux.api }],
+			models: [{ ...modelDef("generation-model"), api: faux.api }],
 		});
 	}
 	return runtime;
@@ -67,19 +69,16 @@ let priorOffline: string | undefined;
 beforeEach(async () => {
 	priorAgentDir = process.env.PI_CODING_AGENT_DIR;
 	priorOffline = process.env.PI_OFFLINE;
-	agentDir = mkdtempSync(join(tmpdir(), "thinkrail-reconcile-agent-"));
-	cwd = mkdtempSync(join(tmpdir(), "thinkrail-reconcile-cwd-"));
+	agentDir = mkdtempSync(join(tmpdir(), "thinkrail-generation-agent-"));
+	cwd = mkdtempSync(join(tmpdir(), "thinkrail-generation-cwd-"));
 	process.env.PI_CODING_AGENT_DIR = agentDir;
 	process.env.PI_OFFLINE = "1";
-	resetPiRuntimeReconciliationForTests();
 	configurePiRuntime(await runtimeWithFaux());
 	setSessionManagerFactory(() => SessionManager.inMemory(cwd));
 });
 
 afterEach(() => {
 	disposeAllSessions();
-	setSessionPublisher(() => {});
-	resetPiRuntimeReconciliationForTests();
 	configurePiRuntimeFactory();
 	configurePiRuntime(null);
 	setSessionManagerFactory((sessionCwd) => SessionManager.create(sessionCwd));
@@ -92,97 +91,53 @@ afterEach(() => {
 });
 
 async function liveSession() {
-	faux.setResponses([fauxAssistantMessage("BEFORE_RECONCILE")]);
+	faux.setResponses([fauxAssistantMessage("BEFORE_GENERATION_SWAP")]);
 	const session = await createSession({
 		cwd,
-		workspaceId: "workspace-reconcile",
+		workspaceId: "workspace-generation",
 		model: toWireModel(faux.getModel()),
 	});
 	await promptSession(session.sessionId, "persist this turn");
 	return session;
 }
 
-describe("PI runtime generation reconciliation", () => {
-	test("reattaches a live transcript under the same id and exact model", async () => {
+async function activateRuntime(runtime: ModelRuntime): Promise<void> {
+	configurePiRuntimeFactory(async () => runtime);
+	const prepared = await preparePiRuntimeGeneration([]);
+	if (prepared.outcome !== "prepared") throw new Error("candidate was not prepared");
+	activatePiRuntimeGeneration(prepared.generation);
+}
+
+describe("PI runtime generations", () => {
+	test("publishes a candidate for new work while a live chat retains its old runtime", async () => {
 		const session = await liveSession();
-		const candidate = await runtimeWithFaux();
-		configurePiRuntimeFactory(async () => candidate);
-
-		const result = await reconcilePiRuntimeGeneration([]);
-		expect(result.outcome).toBe("applied");
-		const hydrated = await getSessionMessages(session.sessionId, "workspace-reconcile", cwd);
-		expect(hydrated.summary.sessionId).toBe(session.sessionId);
-		expect(hydrated.summary.model).toMatchObject({
-			provider: "reconcile-faux",
-			id: "reconcile-model",
-		});
-		expect(JSON.stringify(hydrated.messages)).toContain("BEFORE_RECONCILE");
-		expect(await usePiRuntime((runtime) => runtime === candidate)).toBe(true);
-	});
-
-	test("a disk reattach rejects a missing persisted model instead of accepting PI fallback", async () => {
-		setSessionManagerFactory((sessionCwd) => SessionManager.create(sessionCwd));
-		const session = await liveSession();
-		disposeAllSessions();
-		configurePiRuntime(await runtimeWithFaux(false));
-
-		await expect(getSessionMessages(session.sessionId, "workspace-reconcile", cwd)).rejects.toThrow(
-			"The chat's saved model is unavailable.",
-		);
-	});
-
-	test("a legacy disk transcript with no persisted model may use the configured default", async () => {
-		const fixture = writeFixtureSession(defaultSessionDirFor(agentDir, cwd), {
-			cwd,
-			messages: [{ role: "user", text: "legacy transcript", timestamp: 1_700_000_000_000 }],
-		});
-
-		const hydrated = await getSessionMessages(fixture.id, "workspace-reconcile", cwd);
-		expect(hydrated.summary.live).toBe(true);
-		expect(JSON.stringify(hydrated.messages)).toContain("legacy transcript");
-		expect(hydrated.summary.model).toMatchObject({
-			provider: "reconcile-faux",
-			id: "reconcile-model",
-		});
-	});
-
-	test("blocks when an exact persisted model is absent and never activates fallback", async () => {
-		const session = await liveSession();
-		const oldRuntime = await usePiRuntime((runtime) => runtime);
 		const candidate = await runtimeWithFaux(false);
-		configurePiRuntimeFactory(async () => candidate);
+		await activateRuntime(candidate);
 
-		expect(await reconcilePiRuntimeGeneration([])).toEqual({
-			outcome: "blocked",
-			affectedSessionIds: [session.sessionId],
-		});
-		expect(await usePiRuntime((runtime) => runtime === oldRuntime)).toBe(true);
-		const hydrated = await getSessionMessages(session.sessionId, "workspace-reconcile", cwd);
+		expect(await usePiRuntime((runtime) => runtime === candidate)).toBe(true);
+		expect(await listAvailableModels()).toEqual([]);
+		faux.appendResponses([fauxAssistantMessage("AFTER_GENERATION_SWAP")]);
+		await promptSession(session.sessionId, "old generation remains usable");
+		const hydrated = await getSessionMessages(session.sessionId, "workspace-generation", cwd);
+		expect(JSON.stringify(hydrated.messages)).toContain("AFTER_GENERATION_SWAP");
 		expect(hydrated.summary.model).toMatchObject({
-			provider: "reconcile-faux",
-			id: "reconcile-model",
+			provider: "generation-faux",
+			id: "generation-model",
 		});
 	});
 
-	test("candidate construction failure leaves the old generation usable", async () => {
+	test("resolves live-chat model changes against that chat's retained generation", async () => {
 		const session = await liveSession();
-		const oldRuntime = await usePiRuntime((runtime) => runtime);
-		configurePiRuntimeFactory(async () => {
-			throw new Error("synthetic loader diagnostic must not escape");
-		});
+		const model = toWireModel(faux.getModel());
+		await activateRuntime(await runtimeWithFaux(false));
 
-		expect(await reconcilePiRuntimeGeneration([])).toEqual({
-			outcome: "failed",
-			reason: "candidate-failed",
-		});
-		expect(await usePiRuntime((runtime) => runtime === oldRuntime)).toBe(true);
-		faux.appendResponses([fauxAssistantMessage("AFTER_FAILED_RECONCILE")]);
-		await promptSession(session.sessionId, "still usable");
-		const hydrated = await getSessionMessages(session.sessionId, "workspace-reconcile", cwd);
-		expect(JSON.stringify(hydrated.messages)).toContain("AFTER_FAILED_RECONCILE");
+		await expect(setSessionModel(session.sessionId, model)).resolves.toBeUndefined();
+		await expect(
+			createSession({ cwd, workspaceId: "workspace-new", model }),
+		).rejects.toThrow("Unknown or unavailable model");
 	});
 
-	test("marks pending, drains accepted work through settlement, then builds the candidate", async () => {
+	test("does not wait for an accepted old-generation turn before activating a candidate", async () => {
 		const session = await liveSession();
 		let releaseTurn: (() => void) | undefined;
 		const turnRelease = new Promise<void>((resolve) => {
@@ -191,84 +146,53 @@ describe("PI runtime generation reconciliation", () => {
 		faux.appendResponses([
 			async () => {
 				await turnRelease;
-				return fauxAssistantMessage("A deliberately controlled accepted turn");
+				return fauxAssistantMessage("OLD_TURN_SETTLED");
 			},
 		]);
-		let factoryCalls = 0;
-		const candidate = await runtimeWithFaux();
-		configurePiRuntimeFactory(async () => {
-			factoryCalls += 1;
-			return candidate;
-		});
-
-		const turn = promptSession(session.sessionId, "finish before applying");
-		let pending = false;
-		const reconciliation = reconcilePiRuntimeGeneration([], {
-			onPending: () => {
-				pending = true;
-			},
-		});
-		await new Promise((resolve) => setTimeout(resolve, 5));
-		expect(pending).toBe(true);
-		expect(factoryCalls).toBe(0);
+		const turn = promptSession(session.sessionId, "keep running during swap");
+		const candidate = await runtimeWithFaux(false);
+		await activateRuntime(candidate);
+		expect(await usePiRuntime((runtime) => runtime === candidate)).toBe(true);
 		releaseTurn?.();
 		await turn;
-		expect((await reconciliation).outcome).toBe("applied");
-		expect(factoryCalls).toBe(1);
 	});
 
-	test("keeps cancellation available while reconciliation drains an accepted turn", async () => {
+	test("a disk reattach rejects a missing persisted model instead of accepting PI fallback", async () => {
+		setSessionManagerFactory((sessionCwd) => SessionManager.create(sessionCwd));
 		const session = await liveSession();
-		faux.appendResponses([fauxAssistantMessage("x".repeat(100_000))]);
-		const candidate = await runtimeWithFaux();
-		configurePiRuntimeFactory(async () => candidate);
+		disposeAllSessions();
+		configurePiRuntime(await runtimeWithFaux(false));
 
-		let reportStarted: (() => void) | undefined;
-		const started = new Promise<void>((resolve) => {
-			reportStarted = resolve;
-		});
-		setSessionPublisher(({ sessionId, event }) => {
-			if (sessionId === session.sessionId && event.type === "agent_start") reportStarted?.();
-		});
-		const turn = promptSession(session.sessionId, "abort this accepted turn");
-		await started;
-		let reportPending: (() => void) | undefined;
-		const pending = new Promise<void>((resolve) => {
-			reportPending = resolve;
-		});
-		const reconciliation = reconcilePiRuntimeGeneration([], {
-			onPending: () => reportPending?.(),
-		});
-		await pending;
+		await expect(
+			getSessionMessages(session.sessionId, "workspace-generation", cwd),
+		).rejects.toThrow("The chat's saved model is unavailable.");
+	});
 
-		await abortSession(session.sessionId);
-		await turn;
-		expect((await reconciliation).outcome).toBe("applied");
-	}, 5_000);
+	test("a legacy disk transcript with no persisted model may use the current default", async () => {
+		const fixture = writeFixtureSession(defaultSessionDirFor(agentDir, cwd), {
+			cwd,
+			messages: [{ role: "user", text: "legacy transcript", timestamp: 1_700_000_000_000 }],
+		});
 
-	test("rejects every new runtime consumer while a candidate boundary is held", async () => {
-		let releaseFactory: (() => void) | undefined;
-		const factoryRelease = new Promise<void>((resolve) => {
-			releaseFactory = resolve;
+		const hydrated = await getSessionMessages(fixture.id, "workspace-generation", cwd);
+		expect(hydrated.summary.live).toBe(true);
+		expect(JSON.stringify(hydrated.messages)).toContain("legacy transcript");
+		expect(hydrated.summary.model).toMatchObject({
+			provider: "generation-faux",
+			id: "generation-model",
 		});
-		let factoryStarted: (() => void) | undefined;
-		const started = new Promise<void>((resolve) => {
-			factoryStarted = resolve;
-		});
-		const candidate = await runtimeWithFaux();
+	});
+
+	test("candidate construction failure leaves the current generation unchanged", async () => {
+		const current = await usePiRuntime((runtime) => runtime);
 		configurePiRuntimeFactory(async () => {
-			factoryStarted?.();
-			await factoryRelease;
-			return candidate;
+			throw new Error("synthetic loader diagnostic must not escape");
 		});
 
-		const reconciliation = reconcilePiRuntimeGeneration([]);
-		await started;
-		await expect(listAvailableModels()).rejects.toThrow("reconciliation is pending");
-		await expect(createSession({ cwd, workspaceId: "blocked-during-boundary" })).rejects.toThrow(
-			"reconciliation is pending",
-		);
-		releaseFactory?.();
-		expect((await reconciliation).outcome).toBe("applied");
+		expect(await preparePiRuntimeGeneration([])).toEqual({
+			outcome: "failed",
+			reason: "candidate-failed",
+		});
+		expect(await usePiRuntime((runtime) => runtime === current)).toBe(true);
 	});
 });

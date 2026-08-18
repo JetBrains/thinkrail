@@ -410,7 +410,13 @@ export type JbcentralStatus =
 	| { state: "malformed-version" }
 	| { state: "probe-failed"; reason: JbcentralProbeFailureReason }
 	| { state: "configuring"; action?: JbcentralAction }
-	| { state: "load-failed"; action?: JbcentralAction; reason: "candidate-failed" };
+	| {
+			state: "load-failed";
+			/** Whether the latest observed global artifact state requested Central in the new generation. */
+			configured: boolean;
+			action?: JbcentralAction;
+			reason: "candidate-failed";
+	  };
 
 /** The `provider.status` result: configured providers first, then the rest alphabetically. */
 export interface ProviderStatusReport {

@@ -33,11 +33,9 @@ import { isTranscriptMessageRole } from "@thinkrail/contracts";
 import { ANSWERABILITY_ERRORS, assessAnswerability, buildAnswersMessage } from "./askUserQuestion";
 import { buildResourceLoader, toSkillCommands } from "./extensions";
 import {
-	activatePiRuntimeGeneration,
 	getPiRuntime,
 	getPiRuntimeGeneration,
 	type PiRuntimeGeneration,
-	preparePiRuntimeGeneration,
 	refreshCatalogs,
 	settledAvailableModels,
 } from "./piRuntime";
@@ -48,93 +46,36 @@ import { cancelExtUiForSession, createWebUiContext, notifyExtUi } from "./webUiC
 
 interface Entry {
 	session: AgentSession;
+	/** Runtime generation captured when this session was created or attached. */
+	generation: PiRuntimeGeneration;
 	unsubscribe: () => void;
 	/** The workspace this session belongs to — so `listSessions` can report a workspace's sessions. */
 	workspaceId: string;
 	/** Latest live terminal; undefined before observation, null while active or with no assistant. */
 	lastSettlement: AgentSettlement | null | undefined;
-	/** True only after the session's canonical `agent_settled` boundary. */
-	settled: boolean;
 }
 
 const sessions = new Map<string, Entry>();
-const settlementWaiters = new Set<() => void>();
 
-function notifySettlementWaiters(): void {
-	for (const resolve of settlementWaiters) resolve();
-	settlementWaiters.clear();
-}
-
-function allSessionsSettled(): boolean {
-	return [...sessions.values()].every((entry) => entry.settled && !entry.session.isStreaming);
-}
-
-async function waitForAllSessionsSettled(): Promise<void> {
-	while (!allSessionsSettled()) {
-		await new Promise<void>((resolve) => settlementWaiters.add(resolve));
-	}
-}
-
-export class PiRuntimeReconciliationPendingError extends Error {
-	constructor() {
-		super("PI runtime reconciliation is pending");
-		this.name = "PiRuntimeReconciliationPendingError";
-	}
-}
-
-let runtimeAdmissionOpen = true;
-let activeRuntimeAdmissions = 0;
-let managerEpoch = 0;
-const runtimeAdmissionWaiters = new Set<() => void>();
-
-function acquireRuntimeAdmission(): () => void {
-	if (!runtimeAdmissionOpen) throw new PiRuntimeReconciliationPendingError();
-	activeRuntimeAdmissions += 1;
-	let released = false;
-	return () => {
-		if (released) return;
-		released = true;
-		activeRuntimeAdmissions -= 1;
-		if (activeRuntimeAdmissions === 0) {
-			for (const resolve of runtimeAdmissionWaiters) resolve();
-			runtimeAdmissionWaiters.clear();
-		}
-	};
-}
-
-async function waitForRuntimeAdmissions(): Promise<void> {
-	if (activeRuntimeAdmissions === 0) return;
-	await new Promise<void>((resolve) => runtimeAdmissionWaiters.add(resolve));
-}
-
+/** Execute ordinary manager work. Runtime generation swaps never close admission or wait for live work. */
 export async function withPiRuntimeAdmission<T>(operation: () => Promise<T> | T): Promise<T> {
-	const release = acquireRuntimeAdmission();
-	try {
-		return await operation();
-	} finally {
-		release();
-	}
+	return await operation();
 }
 
 function withPiRuntimeAdmissionSync<T>(operation: () => T): T {
-	const release = acquireRuntimeAdmission();
-	try {
-		return operation();
-	} finally {
-		release();
-	}
+	return operation();
 }
 
 function startAdmittedPiRuntimeTask(operation: () => Promise<unknown>): void {
-	const release = acquireRuntimeAdmission();
-	void operation().then(release, release);
+	void operation().catch(() => undefined);
 }
 
-/** Public auth/dev seam: keep a runtime lease for the callback's complete async lifetime. */
-export function usePiRuntime<T>(
+/** Public auth/dev seam: capture the current runtime for the callback's complete async lifetime. */
+export async function usePiRuntime<T>(
 	operation: (runtime: PiRuntimeGeneration["runtime"]) => Promise<T> | T,
 ): Promise<T> {
-	return withPiRuntimeAdmission(async () => operation((await getPiRuntimeGeneration()).runtime));
+	const generation = await getPiRuntimeGeneration();
+	return operation(generation.runtime);
 }
 
 // Permanent for this host lifetime. A process restart naturally clears it; by then the trashed transcript
@@ -194,14 +135,18 @@ function hasDeletionTombstone(sessionId: string): boolean {
 	return deletedSessions.has(sessionId);
 }
 
-function mustGet(sessionId: string): AgentSession {
+function mustGetEntry(sessionId: string): Entry {
 	// A live entry deliberately remains registered while its transcript move is pending so trash failure
 	// can restore the same runtime. It is not command-addressable in that window: accepting a new turn
 	// after deletion began could append behind the move and lose or recreate the supposedly deleted chat.
 	if (hasDeletionTombstone(sessionId)) throw new Error(`Unknown session: ${sessionId}`);
 	const entry = sessions.get(sessionId);
 	if (!entry) throw new Error(`Unknown session: ${sessionId}`);
-	return entry.session;
+	return entry;
+}
+
+function mustGet(sessionId: string): AgentSession {
+	return mustGetEntry(sessionId).session;
 }
 
 /** Whether a session is live and command-addressable — false while a delete transaction owns it. */
@@ -314,21 +259,21 @@ interface PreparedSessionEntry {
 async function prepareSessionEntry(
 	session: AgentSession,
 	workspaceId: string,
+	generation: PiRuntimeGeneration,
 	lastSettlement: AgentSettlement | null | undefined = undefined,
 ): Promise<PreparedSessionEntry> {
 	const { sessionId } = session;
 	let terminal: AgentSettlement | null = null;
 	const entry: Entry = {
 		session,
+		generation,
 		unsubscribe: () => {},
 		workspaceId,
 		lastSettlement,
-		settled: !session.isStreaming,
 	};
 	entry.unsubscribe = session.subscribe((event) => {
 		if (event.type === "agent_start") {
 			entry.lastSettlement = null;
-			entry.settled = false;
 		}
 		if (event.type === "agent_end") {
 			const assistant = [...event.messages]
@@ -345,11 +290,7 @@ async function prepareSessionEntry(
 		}
 		const projected: PiEvent =
 			event.type === "agent_settled" ? { type: "agent_settled", terminal } : (event as PiEvent);
-		if (event.type === "agent_settled") {
-			entry.lastSettlement = terminal;
-			entry.settled = true;
-			notifySettlementWaiters();
-		}
+		if (event.type === "agent_settled") entry.lastSettlement = terminal;
 		if (sessions.get(sessionId) === entry) publish({ sessionId, event: projected });
 		if (event.type === "agent_settled") terminal = null;
 	});
@@ -384,8 +325,9 @@ async function prepareSessionEntry(
 async function registerSession(
 	session: AgentSession,
 	workspaceId: string,
+	generation: PiRuntimeGeneration,
 ): Promise<CreateSessionResult> {
-	const prepared = await prepareSessionEntry(session, workspaceId);
+	const prepared = await prepareSessionEntry(session, workspaceId, generation);
 	sessions.set(session.sessionId, prepared.entry);
 	return prepared.result;
 }
@@ -410,192 +352,8 @@ export function createSession(input: CreateSessionInput): Promise<CreateSessionR
 			...(input.model ? { model: resolveWireModel(generation.runtime, input.model) } : {}),
 			...(input.thinkingLevel ? { thinkingLevel: input.thinkingLevel } : {}),
 		});
-		return registerSession(session, input.workspaceId);
+		return registerSession(session, input.workspaceId, generation);
 	});
-}
-
-export type PiRuntimeReconciliationResult =
-	| { outcome: "applied"; generationId: number }
-	| { outcome: "blocked"; affectedSessionIds: string[] }
-	| { outcome: "failed"; reason: "candidate-failed" | "reattach-failed" };
-
-let reconciliationTail = Promise.resolve();
-
-async function prepareReplacementEntry(
-	sessionId: string,
-	oldEntry: Entry,
-	generation: PiRuntimeGeneration,
-): Promise<PreparedSessionEntry> {
-	const cwd = oldEntry.session.sessionManager.getCwd();
-	const currentModel = oldEntry.session.model as Model<string> | undefined;
-	const model = currentModel
-		? resolveWireModel(generation.runtime, {
-				provider: currentModel.provider,
-				id: currentModel.id,
-			})
-		: undefined;
-	const settingsManager = buildSessionSettings(cwd);
-	const created = await createAgentSession({
-		cwd,
-		modelRuntime: generation.runtime,
-		sessionManager: oldEntry.session.sessionManager,
-		settingsManager,
-		resourceLoader: await buildResourceLoader(
-			cwd,
-			settingsManager,
-			() => skillAdmissionResolver(oldEntry.workspaceId),
-			generation.excludedSessionExtensionPaths,
-		),
-		...(model ? { model } : {}),
-		thinkingLevel: oldEntry.session.thinkingLevel,
-	});
-	if (created.session.sessionId !== sessionId || (currentModel && created.modelFallbackMessage)) {
-		created.session.dispose();
-		throw new Error("replacement session identity mismatch");
-	}
-	return prepareSessionEntry(created.session, oldEntry.workspaceId, oldEntry.lastSettlement);
-}
-
-export interface PiRuntimeReconciliationBoundary {
-	replaceGeneration: (
-		additionalExtensionPaths: readonly string[],
-	) => Promise<PiRuntimeReconciliationResult>;
-	/** Keep all runtime consumers blocked after an incomplete recovery. A later boundary may repair it. */
-	keepAdmissionClosed: () => void;
-}
-
-function modelIdentity(model: Pick<Model<string>, "provider" | "id">): string {
-	return `${model.provider}\u0000${model.id}`;
-}
-
-async function replaceGenerationWhileClosed(
-	additionalExtensionPaths: readonly string[],
-	startingEpoch: number,
-): Promise<PiRuntimeReconciliationResult> {
-	try {
-		const preparedGeneration = await preparePiRuntimeGeneration(additionalExtensionPaths);
-		if (preparedGeneration.outcome === "failed") return preparedGeneration;
-		const generation = preparedGeneration.generation;
-		if (managerEpoch !== startingEpoch) return { outcome: "failed", reason: "reattach-failed" };
-		const liveEntries = [...sessions.entries()];
-		const available = new Set(settledAvailableModels(generation.runtime).map(modelIdentity));
-		const affectedSessionIds = liveEntries
-			.filter(([, entry]) => {
-				const model = entry.session.model;
-				return model && !available.has(modelIdentity(model));
-			})
-			.map(([sessionId]) => sessionId);
-		if (affectedSessionIds.length > 0) return { outcome: "blocked", affectedSessionIds };
-
-		const replacements: Array<{
-			sessionId: string;
-			oldEntry: Entry;
-			prepared: PreparedSessionEntry;
-		}> = [];
-		try {
-			for (const [sessionId, oldEntry] of liveEntries) {
-				replacements.push({
-					sessionId,
-					oldEntry,
-					prepared: await prepareReplacementEntry(sessionId, oldEntry, generation),
-				});
-			}
-		} catch {
-			for (const replacement of replacements) {
-				replacement.prepared.entry.unsubscribe();
-				replacement.prepared.entry.session.dispose();
-			}
-			return { outcome: "failed", reason: "reattach-failed" };
-		}
-
-		if (managerEpoch !== startingEpoch) {
-			for (const replacement of replacements) {
-				replacement.prepared.entry.unsubscribe();
-				replacement.prepared.entry.session.dispose();
-			}
-			return { outcome: "failed", reason: "reattach-failed" };
-		}
-
-		// No await below: all live entries and the active generation change as one event-loop cutover.
-		activatePiRuntimeGeneration(generation);
-		for (const replacement of replacements) {
-			sessions.set(replacement.sessionId, replacement.prepared.entry);
-		}
-		for (const replacement of replacements) {
-			cancelExtUiForSession(replacement.sessionId);
-			try {
-				replacement.oldEntry.unsubscribe();
-				replacement.oldEntry.session.dispose();
-			} catch {
-				// The replacement is already active; old-generation cleanup is best-effort and host-local.
-			}
-		}
-		notifySettlementWaiters();
-		return { outcome: "applied", generationId: generation.id };
-	} catch {
-		return { outcome: "failed", reason: "reattach-failed" };
-	}
-}
-
-async function runReconciliationBoundary<T>(
-	operation: (boundary: PiRuntimeReconciliationBoundary) => Promise<T>,
-	onPending?: () => void,
-): Promise<T> {
-	// A recovery seal survives failed repair attempts. Only a successfully applied replacement proves a
-	// coherent generation is active again; the operation may still re-seal afterward if compensation fails.
-	let keepClosed = !runtimeAdmissionOpen;
-	runtimeAdmissionOpen = false;
-	const startingEpoch = managerEpoch;
-	try {
-		if (activeRuntimeAdmissions > 0 || !allSessionsSettled()) onPending?.();
-		await waitForRuntimeAdmissions();
-		await waitForAllSessionsSettled();
-		return await operation({
-			replaceGeneration: async (paths) => {
-				const result = await replaceGenerationWhileClosed(paths, startingEpoch);
-				if (result.outcome === "applied") keepClosed = false;
-				return result;
-			},
-			keepAdmissionClosed: () => {
-				keepClosed = true;
-			},
-		});
-	} finally {
-		if (!keepClosed) runtimeAdmissionOpen = true;
-	}
-}
-
-export function resetPiRuntimeReconciliationForTests(): void {
-	runtimeAdmissionOpen = true;
-	activeRuntimeAdmissions = 0;
-	for (const resolve of runtimeAdmissionWaiters) resolve();
-	runtimeAdmissionWaiters.clear();
-	reconciliationTail = Promise.resolve();
-}
-
-export function withPiRuntimeReconciliationBoundary<T>(
-	operation: (boundary: PiRuntimeReconciliationBoundary) => Promise<T>,
-	options: { onPending?: () => void } = {},
-): Promise<T> {
-	const task = reconciliationTail.then(() =>
-		runReconciliationBoundary(operation, options.onPending),
-	);
-	reconciliationTail = task.then(
-		() => undefined,
-		() => undefined,
-	);
-	return task;
-}
-
-/** Serialize a generation-only change; Central actions use the broader boundary above. */
-export function reconcilePiRuntimeGeneration(
-	additionalExtensionPaths: readonly string[],
-	options: { onPending?: () => void } = {},
-): Promise<PiRuntimeReconciliationResult> {
-	return withPiRuntimeReconciliationBoundary(
-		(boundary) => boundary.replaceGeneration(additionalExtensionPaths),
-		options,
-	);
 }
 
 /** A live session's summary (drawn from the running `AgentSession`). */
@@ -834,7 +592,7 @@ async function openDiskSession(sessionId: string, workspaceId: string, cwd: stri
 		session.dispose();
 		return;
 	}
-	await registerSession(session, workspaceId);
+	await registerSession(session, workspaceId, generation);
 }
 
 /**
@@ -998,16 +756,17 @@ export function compactSession(sessionId: string, instructions?: string): Promis
 	});
 }
 
-/** Cancellation-only control path: remains available while reconciliation drains old-generation work. */
+/** Cancellation control path for a live session. */
 export function abortSession(sessionId: string): Promise<void> {
 	return mustGet(sessionId).abort();
 }
 
 export function setSessionModel(sessionId: string, model: WireModel): Promise<void> {
 	return withPiRuntimeAdmission(async () => {
-		// Re-resolve the wire ref to the real model host-side (pi's setModel uses baseUrl verbatim).
-		const generation = await getPiRuntimeGeneration();
-		await mustGet(sessionId).setModel(resolveWireModel(generation.runtime, model));
+		// Re-resolve against this chat's captured generation. A model offered only to newer chats must not
+		// inject a provider object from another runtime into this session.
+		const entry = mustGetEntry(sessionId);
+		await entry.session.setModel(resolveWireModel(entry.generation.runtime, model));
 	});
 }
 
@@ -1156,7 +915,6 @@ function disposeSession(sessionId: string): void {
 	entry.unsubscribe();
 	entry.session.dispose();
 	sessions.delete(sessionId);
-	notifySettlementWaiters();
 }
 
 /** Remove one session: stop forwarding its events, settle any open dialog, and dispose it. */
@@ -1171,7 +929,6 @@ export function removeSession(sessionId: string): void {
 
 /** Dispose every session — called on host shutdown. */
 export function disposeAllSessions(): void {
-	managerEpoch += 1;
 	for (const [sessionId, entry] of sessions) {
 		cancelExtUiForSession(sessionId);
 		entry.unsubscribe();
@@ -1179,7 +936,6 @@ export function disposeAllSessions(): void {
 	}
 	sessions.clear();
 	deletedSessions.clear();
-	notifySettlementWaiters();
 }
 
 /**
@@ -1264,18 +1020,15 @@ export function deleteSession(sessionId: string, workspaceId: string, cwd: strin
 		return inFlight.done;
 	}
 
-	const releaseAdmission = acquireRuntimeAdmission();
 	// `runDeleteTransaction` installs the tombstone synchronously (before its first await), so the entry is
 	// registered here before the promise suspends and any concurrent caller can only observe it in flight.
 	const transaction = runDeleteTransaction(sessionId, workspaceId, cwd);
 	const done = transaction.then(
 		() => {
 			deletingSessions.delete(sessionId);
-			releaseAdmission();
 		},
 		(error: unknown) => {
 			deletingSessions.delete(sessionId);
-			releaseAdmission();
 			throw error;
 		},
 	);

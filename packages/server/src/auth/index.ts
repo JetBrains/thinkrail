@@ -8,6 +8,8 @@ export {
 	initializeJbcentralRuntime,
 	jbcentralLogin,
 	setJbcentralAppliedPublisher,
+	setJbcentralChangedPublisher,
+	stopJbcentralRuntime,
 	updateJbcentral,
 } from "./jbcentral";
 export {

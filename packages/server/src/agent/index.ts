@@ -12,10 +12,15 @@ export {
 } from "./extensions";
 export * from "./oneshot";
 export {
+	activatePiRuntimeGeneration,
 	configurePiRuntime,
 	configurePiRuntimeExtensionPaths,
 	configurePiRuntimeFactory,
 	configurePiRuntimeSessionExtensionExclusions,
+	getPiRuntimeGeneration,
+	preparePiRuntimeGeneration,
+	type PreparePiRuntimeGenerationResult,
+	type PiRuntimeGeneration,
 } from "./piRuntime";
 export {
 	RESOLVE_COMMENT_TOOL_NAME,

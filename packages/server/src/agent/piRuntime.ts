@@ -202,7 +202,7 @@ export async function preparePiRuntimeGeneration(
 	}
 }
 
-/** Commit a generation only after every replacement session is ready. */
+/** Atomically publish a prepared generation for pre-session reads and future sessions. */
 export function activatePiRuntimeGeneration(generation: PiRuntimeGeneration): void {
 	configuredExtensionPaths = generation.additionalExtensionPaths;
 	configuredSessionExtensionExclusions = generation.excludedSessionExtensionPaths;
