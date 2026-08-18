@@ -253,9 +253,9 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     pass**: only a 256KiB decoded prefix is ever materialized — a JPEG whose SOF lies beyond it sniffs as
     unknown, not stripped — and each block is sniffed exactly once per pass) and replaces any block
     violating a provider rule with a text note naming the violated rule plus a re-attach hint. Three
-    rules, in order: the **5MB per-image byte ceiling** (`IMAGE_MAX_BYTES` + `base64ByteLength`, shared
-    with the composer via `contracts` — measured from the base64 length, so it applies even to
-    unsniffable formats); the **8000px per-side hard cap**; and the **count-aware 2000px cap** once the
+    rules, in order: the **4.5MB encoded-base64 payload ceiling** (`IMAGE_MAX_BASE64_BYTES`, shared
+    with the composer via `contracts` — pi's own headroom under Anthropic's 5MB API limit, compared
+    against `data.length` since the wire carries base64, so it applies even to unsniffable formats); the **8000px per-side hard cap**; and the **count-aware 2000px cap** once the
     whole context carries more than 20 images — stripping changes the very count that selects that cap,
     so 2000px violators are stripped **largest-first only until the survivors fit back under the
     threshold** (18 small + 3 at 2500px ⇒ one stripped, the other two stay legal under 8000px). This is what un-bricks a session poisoned by an oversized image

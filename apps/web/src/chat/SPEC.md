@@ -207,7 +207,9 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   edge — an oversized image in history 400s every later turn once the provider's >20-image 2000px cap
   kicks in, and pi's own resizer is deliberately off server-side). An image passes through
   byte-identical only when within pixel bounds **and** a provider-accepted type (png/jpeg/gif/webp)
-  **and** under the provider's **5MB byte ceiling** (`IMAGE_MAX_BYTES`, shared via `contracts`);
+  **and** under the provider's **4.5MB encoded-base64 ceiling** (`IMAGE_MAX_BASE64_BYTES`, shared via
+  `contracts` — pi's own headroom under Anthropic's 5MB API limit; the wire carries base64, so the
+  ceiling is measured on `data.length`, with `base64EncodedLength` sizing a raw File before encoding);
   anything else re-encodes through canvas, walking a **JPEG quality ladder** while the encoding
   exceeds the ceiling (a within-bounds multi-MB GIF or a small BMP would 400 the request just like an
   oversized side). Undecodable files fall back to raw (the server's `imageGuard` extension is the

@@ -7,7 +7,7 @@
 // transforms the OUTGOING context instead: on pi's `context` event (fired before every LLM call, live
 // sessions included — a stuck chat unsticks on its very next message) it sniffs each image's dimensions
 // straight from the base64 header bytes, measures its byte size from the base64 length (the provider
-// also caps an image at 5MB — IMAGE_MAX_BYTES, shared with the composer's attach-time ladder), and
+// also caps an image at 4.5MB of base64 — IMAGE_MAX_BASE64_BYTES, shared with the composer's attach-time ladder), and
 // replaces violating image blocks with a text note. The
 // session file and the visible transcript stay untouched. The caps are Anthropic's model-level rules,
 // so the guard fires ONLY for the Anthropic model family (the `context` handler's ctx.model — native
@@ -17,7 +17,7 @@
 // a note (not a brick) once the same session crosses 21.
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { type AgentMessage, base64ByteLength, IMAGE_MAX_BYTES } from "@thinkrail/contracts";
+import { type AgentMessage, IMAGE_MAX_BASE64_BYTES } from "@thinkrail/contracts";
 
 /** Anthropic's per-side cap for requests carrying 20 images or fewer. */
 export const SINGLE_IMAGE_EDGE_LIMIT = 8000;
@@ -130,7 +130,8 @@ const REMOVAL_HINT = "ask the user to re-attach a smaller version if it is still
 /**
  * Replace every image block that violates a provider limit with a text note naming the violated rule
  * (copy-on-write — the input is never mutated). Three rules, applied in order:
- * 1. bytes — anything over IMAGE_MAX_BYTES (5MB) is stripped, sniffable or not;
+ * 1. bytes — anything whose base64 payload (`data.length` — what the wire actually carries) exceeds
+ *    IMAGE_MAX_BASE64_BYTES (4.5MB, pi's own headroom under Anthropic's 5MB) is stripped, sniffable or not;
  * 2. the 8000px hard per-side cap;
  * 3. the count-aware 2000px cap — and because stripping changes the very count that selects the cap,
  *    2000px violators are stripped LARGEST-FIRST only until the surviving image count is back at the
@@ -161,12 +162,12 @@ export function guardOversizedImages(messages: AgentMessage[]): AgentMessage[] |
 	// The removal note per stripped block — membership doubles as the strip decision.
 	const notes = new Map<ContentBlock, string>();
 	for (const block of imageBlocks) {
-		const bytes = base64ByteLength(block.data);
-		if (bytes > IMAGE_MAX_BYTES) {
-			const mb = (bytes / (1024 * 1024)).toFixed(1);
+		// base64 is ASCII: string length IS the encoded byte length — the size the provider sees.
+		if (block.data.length > IMAGE_MAX_BASE64_BYTES) {
+			const mb = (block.data.length / (1024 * 1024)).toFixed(1);
 			notes.set(
 				block,
-				`[image removed: ${mb}MB exceeds the provider's ${IMAGE_MAX_BYTES / (1024 * 1024)}MB image size limit — ${REMOVAL_HINT}]`,
+				`[image removed: ${mb}MB of base64 exceeds the provider's ${IMAGE_MAX_BASE64_BYTES / (1024 * 1024)}MB image payload limit — ${REMOVAL_HINT}]`,
 			);
 			continue;
 		}

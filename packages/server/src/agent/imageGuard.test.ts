@@ -274,7 +274,7 @@ describe("guardOversizedImages", () => {
 		expect(guardOversizedImages(messages)).toBeUndefined();
 	});
 
-	test("strips an image over the 5MB byte ceiling — dimensions within bounds, even unsniffable", () => {
+	test("strips an image over the 4.5MB encoded-base64 ceiling — dimensions within bounds, even unsniffable", () => {
 		// A dimensionally-tiny image whose payload is huge (the 12MB-GIF class), and an unsniffable
 		// format over the ceiling — the byte rule needs no dimensions, so both are stripped.
 		const hugeGif = Buffer.concat([gifBytes(1280, 960), Buffer.alloc(6 * 1024 * 1024, 0xab)]);
@@ -286,15 +286,31 @@ describe("guardOversizedImages", () => {
 		expect(guarded).toBeDefined();
 		const content = (guarded?.[0] as { content: { type: string; text?: string }[] }).content;
 		expect(content.every((b) => b.type === "text")).toBe(true);
-		expect(content[0]?.text).toContain("5MB image size limit");
-		expect(content[1]?.text).toContain("5MB image size limit");
+		expect(content[0]?.text).toContain("4.5MB image payload limit");
+		expect(content[1]?.text).toContain("4.5MB image payload limit");
 	});
 
-	test("keeps an image at the byte ceiling boundary", () => {
+	test("strips an image whose DECODED size is under Anthropic's 5MB but whose base64 exceeds pi's 4.5MB cap", () => {
+		// 3.6MiB decoded → 4.8MiB of base64: the wire carries base64, so this payload is rejected by the
+		// provider even though its raw byte size looks legal — the ceiling must be measured encoded.
+		const decoded = Buffer.concat([
+			gifBytes(100, 100),
+			Buffer.alloc(Math.round(3.6 * 1024 * 1024) - gifBytes(100, 100).length, 0xab),
+		]);
+		expect(decoded.length).toBeLessThan(5 * 1024 * 1024);
+		expect(decoded.toString("base64").length).toBeGreaterThan(4.5 * 1024 * 1024);
+		const guarded = guardOversizedImages([user([image(decoded, "image/gif")])]);
+		const content = (guarded?.[0] as { content: { type: string; text?: string }[] }).content;
+		expect(content[0]?.text).toContain("4.5MB image payload limit");
+	});
+
+	test("keeps an image exactly at the encoded-base64 ceiling boundary", () => {
+		// 3.375MiB decoded is divisible by 3 → exactly 4.5MiB of base64, the last legal size.
 		const atLimit = Buffer.concat([
 			gifBytes(100, 100),
-			Buffer.alloc(5 * 1024 * 1024 - gifBytes(100, 100).length, 0xab),
+			Buffer.alloc(3.375 * 1024 * 1024 - gifBytes(100, 100).length, 0xab),
 		]);
+		expect(atLimit.toString("base64").length).toBe(4.5 * 1024 * 1024);
 		expect(guardOversizedImages([user([image(atLimit, "image/gif")])])).toBeUndefined();
 	});
 

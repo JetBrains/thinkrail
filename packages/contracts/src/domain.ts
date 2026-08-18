@@ -745,21 +745,23 @@ export function isControlMessage(text: string): boolean {
 }
 
 /**
- * The provider's per-image byte ceiling (Anthropic's 5MB API limit — pi's own resizer names the same
- * number). Shared contract: the web composer re-encodes an attachment down under it at attach time,
- * and the host's `imageGuard` strips any historical image block still over it (self-healing a session
- * poisoned before the composer-side fix, or via another route).
+ * The provider's per-image payload ceiling, measured in ENCODED base64 bytes: pi's own resizer caps
+ * `Buffer.byteLength(base64)` at 4.5MB as headroom below Anthropic's 5MB API limit — the wire carries
+ * base64, which inflates raw bytes by 4/3, so an image whose *decoded* size looks fine can still
+ * overflow the request. Shared contract: the web composer re-encodes an attachment down under it at
+ * attach time, and the host's `imageGuard` strips any historical image block still over it
+ * (self-healing a session poisoned before the composer-side fix, or via another route). Both layers
+ * compare `data.length` directly — base64 is ASCII, so string length IS the encoded byte length.
  */
-export const IMAGE_MAX_BYTES = 5 * 1024 * 1024;
+export const IMAGE_MAX_BASE64_BYTES = 4.5 * 1024 * 1024;
 
 /**
- * Decoded byte length of a base64 string without decoding it: 3 bytes per 4-char quantum, minus
- * padding. Both image-size guards (composer + host) measure wire payloads with this same reading.
+ * Encoded base64 length of a payload of `byteLength` raw bytes (4 chars per 3-byte quantum, padded):
+ * the composer's raw pass-through path sizes a File against IMAGE_MAX_BASE64_BYTES with this same
+ * reading before it ever encodes.
  */
-export function base64ByteLength(base64: string): number {
-	if (base64.length === 0) return 0;
-	const padding = base64.endsWith("==") ? 2 : base64.endsWith("=") ? 1 : 0;
-	return Math.floor((base64.length * 3) / 4) - padding;
+export function base64EncodedLength(byteLength: number): number {
+	return Math.ceil(byteLength / 3) * 4;
 }
 
 /**

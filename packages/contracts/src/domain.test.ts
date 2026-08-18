@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { base64ByteLength, IMAGE_MAX_BYTES, isRetriedAttempt } from "./domain";
+import { base64EncodedLength, IMAGE_MAX_BASE64_BYTES, isRetriedAttempt } from "./domain";
 
 // The shared presentation/measurement contracts live here (next to isControlMessage), used by both the
 // web client and the host — so their behavior is pinned where it's defined, not only transitively
@@ -37,15 +37,14 @@ describe("isRetriedAttempt", () => {
 	});
 });
 
-describe("base64ByteLength", () => {
-	test("counts decoded bytes across padding variants without decoding", () => {
-		for (const text of ["", "a", "ab", "abc", "abcd", "hello world!", "\x00\x01\x02\xff"]) {
-			const bytes = Buffer.from(text, "binary");
-			expect(base64ByteLength(bytes.toString("base64"))).toBe(bytes.length);
+describe("image payload ceiling", () => {
+	test("base64EncodedLength matches the real encoded length across quantum boundaries", () => {
+		for (const n of [0, 1, 2, 3, 4, 5, 100, 3 * 1024]) {
+			expect(base64EncodedLength(n)).toBe(Buffer.alloc(n).toString("base64").length);
 		}
 	});
 
-	test("the shared provider ceiling is Anthropic's 5MB per-image limit", () => {
-		expect(IMAGE_MAX_BYTES).toBe(5 * 1024 * 1024);
+	test("the shared ceiling is pi's 4.5MB encoded-base64 cap (headroom under Anthropic's 5MB API limit)", () => {
+		expect(IMAGE_MAX_BASE64_BYTES).toBe(4.5 * 1024 * 1024);
 	});
 });

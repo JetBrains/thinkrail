@@ -428,7 +428,8 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		if (picked.length === 0) return;
 		setPendingImages((n) => n + picked.length);
 		try {
-			// Downscaled/re-encoded at attach time (≤1568px long edge, provider-accepted type, ≤5MB) — an
+			// Downscaled/re-encoded at attach time (≤1568px long edge, provider-accepted type, ≤4.5MB of
+			// base64) — an
 			// oversized image in history 400s every subsequent turn. See imageAttachment.ts. `allSettled`,
 			// not `all`: a single unreadable file must not discard siblings that decoded fine (and the
 			// callers invoke this as `void addFiles(...)` — a rejection here would be unhandled).

@@ -7,12 +7,16 @@
 // long edge, beyond which it downsamples anyway) stays under every limit while losing nothing the model
 // would actually see. Two more attach-time rules ride along: a media type outside png/jpeg/gif/webp
 // (BMP, AVIF, HEIC…) is re-encoded even when within pixel bounds (the provider rejects the raw type),
-// and anything over the provider's 5MB per-image byte ceiling (IMAGE_MAX_BYTES — e.g. a multi-MB
+// and anything over the provider's 4.5MB encoded-base64 ceiling (IMAGE_MAX_BASE64_BYTES — e.g. a multi-MB
 // animated GIF that is dimensionally tiny) is re-encoded down a JPEG quality ladder. The server-side
 // `imageGuard` extension is the second line of defense for images that predate this or arrive by
 // other routes.
 
-import { base64ByteLength, IMAGE_MAX_BYTES, type ImageContent } from "@thinkrail/contracts";
+import {
+	base64EncodedLength,
+	IMAGE_MAX_BASE64_BYTES,
+	type ImageContent,
+} from "@thinkrail/contracts";
 
 /** Claude's standard-tier long-edge; larger images are downsampled provider-side anyway. */
 export const MAX_ATTACHMENT_EDGE = 1568;
@@ -22,8 +26,9 @@ export const MAX_ATTACHMENT_EDGE = 1568;
  * `image/bmp` would 400 the request outright. */
 const PROVIDER_ACCEPTED = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
 
-/** The JPEG quality ladder for images whose encoding lands over IMAGE_MAX_BYTES: tried top-down, the
- * first rung under the ceiling wins. At ≤1568px even the bottom rung is far below 5MB in practice; if
+/** The JPEG quality ladder for images whose encoding lands over IMAGE_MAX_BASE64_BYTES: tried
+ * top-down, the first rung under the ceiling wins. At ≤1568px even the bottom rung is far below the
+ * ceiling in practice; if
  * an adversarial image still exceeds it, the bottom rung is sent and the server-side `imageGuard`
  * remains the last line of defense. */
 const JPEG_QUALITY_LADDER = [0.9, 0.8, 0.7, 0.6, 0.5];
@@ -82,7 +87,8 @@ function dataUrlToContent(dataUrl: string): ImageContent {
  * Turn a picked/pasted/dropped file into a composer attachment, downscaled to MAX_ATTACHMENT_EDGE when
  * its long edge exceeds it. An image passes through byte-identical (no re-encode, no quality loss)
  * only when ALL of: within pixel bounds, a provider-accepted media type (png/jpeg/gif/webp), and under
- * the provider's IMAGE_MAX_BYTES ceiling — a within-bounds 12MB GIF or a small BMP is every bit as
+ * the provider's IMAGE_MAX_BASE64_BYTES ceiling (measured on the ENCODED base64 the wire actually
+ * carries — pi caps it at 4.5MB, headroom under Anthropic's 5MB) — a within-bounds 12MB GIF or a small BMP is every bit as
  * session-poisoning as an 8000px side. Anything else goes through canvas: re-encoded in its own format
  * when canvas supports it (else PNG), then walked down the JPEG quality ladder while the encoding
  * exceeds the byte ceiling. A file the browser can't decode falls back to the raw bytes — attaching
@@ -98,7 +104,11 @@ export async function fileToAttachedImage(file: File): Promise<AttachedImage> {
 	try {
 		const { width, height } = fitWithin(bitmap.width, bitmap.height, MAX_ATTACHMENT_EDGE);
 		const withinPixels = width === bitmap.width && height === bitmap.height;
-		if (withinPixels && PROVIDER_ACCEPTED.has(file.type) && file.size <= IMAGE_MAX_BYTES) {
+		if (
+			withinPixels &&
+			PROVIDER_ACCEPTED.has(file.type) &&
+			base64EncodedLength(file.size) <= IMAGE_MAX_BASE64_BYTES
+		) {
 			return { content: await fileToRawContent(file), width, height };
 		}
 		const canvas = document.createElement("canvas");
@@ -110,7 +120,7 @@ export async function fileToAttachedImage(file: File): Promise<AttachedImage> {
 		const mimeType = CANVAS_ENCODABLE.has(file.type) ? file.type : "image/png";
 		let content = dataUrlToContent(canvas.toDataURL(mimeType));
 		for (const quality of JPEG_QUALITY_LADDER) {
-			if (base64ByteLength(content.data) <= IMAGE_MAX_BYTES) break;
+			if (content.data.length <= IMAGE_MAX_BASE64_BYTES) break;
 			content = dataUrlToContent(canvas.toDataURL("image/jpeg", quality));
 		}
 		return { content, width, height };
