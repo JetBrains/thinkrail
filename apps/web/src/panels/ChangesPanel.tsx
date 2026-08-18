@@ -226,8 +226,9 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 					onClick={() => setChangesView("tree")}
 				/>
 			</div>
-			{/* pt-12: 12px between the Changes toolbar and the first change row (top content spacing). */}
-			<div className="min-h-0 flex-1 overflow-auto pt-12">
+			{/* The unified content container (below the toolbar, which is already aligned at px-12): 12px on
+			    all four sides is the only outer edge; rows carry px-8 internally. */}
+			<div className="min-h-0 flex-1 overflow-auto p-12">
 				{status === null && error !== null ? (
 					<div data-testid="changes-error" className="flex flex-col items-start gap-4 px-8 py-4">
 						<p className="tr-text-metadata text-feedback-error">
@@ -274,7 +275,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 												// No background of its own: the WRAPPER paints the row's hover/selected band, which has
 												// to span the trailing ⌄ slot too. Two painters would make the row read as cut off at
 												// this button's edge (and hide that the wrapper stopped painting).
-												className="flex min-w-0 flex-1 items-center gap-8 px-12 py-4 text-left tr-text-ui"
+												className="flex min-w-0 flex-1 items-center gap-8 px-8 py-4 text-left tr-text-ui"
 											>
 												{/* The full relative path: a muted directory prefix, a bright basename — and the dir
 												    yields **completely** before the basename gives up a pixel, because the name is what

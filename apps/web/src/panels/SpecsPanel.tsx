@@ -54,14 +54,14 @@ export function SpecsPanel({
 
 	if (failed && !nodes)
 		return (
-			<p data-testid="specs-error" className="px-4 py-4 tr-text-metadata text-text-muted">
+			<p data-testid="specs-error" className="px-8 py-4 tr-text-metadata text-text-muted">
 				Couldn't load specs — Refresh to retry.
 			</p>
 		);
 	if (nodes === null || roots === null)
-		return <p className="px-4 py-4 tr-text-metadata text-text-muted">Loading…</p>;
+		return <p className="px-8 py-4 tr-text-metadata text-text-muted">Loading…</p>;
 	if (nodes.length === 0)
-		return <p className="px-4 py-4 tr-text-metadata text-text-muted">No specs</p>;
+		return <p className="px-8 py-4 tr-text-metadata text-text-muted">No specs</p>;
 	return (
 		<ul className="flex flex-col">
 			{roots.map((root) => (
@@ -119,9 +119,10 @@ function SpecNodeRow({
 		<li>
 			<div
 				className={cn(
-					// pl-12 sets the 12px root content edge on the band itself (full-bleed bg); the nested `pl-12`
-					// list is the separate per-level indent, so a nested row composes to 12 + 12·depth.
-					"group flex h-28 min-w-0 items-stretch rounded-[var(--radius-sm)] pl-12 transition-colors",
+					// px-8 is the item's internal padding (the band spans the p-12 container's content width and
+					// paints under this padding); the nested `pl-12` list is the separate per-level indent, so a
+					// nested row composes to 12 (container) + 12·depth (nesting) + 8 (item).
+					"group flex h-28 min-w-0 items-stretch rounded-[var(--radius-sm)] px-8 transition-colors",
 					isActive
 						? "bg-primary-subtle ring-1 ring-primary-muted ring-inset"
 						: "hover:bg-control-bg-hovered",
@@ -155,7 +156,7 @@ function SpecNodeRow({
 					title={`${node.title}\n${node.id} · ${node.type}`}
 					onClick={() => void openFileInTab(workspaceId, node.path, "preview")}
 					onDoubleClick={() => void openFileInTab(workspaceId, node.path, "keep")}
-					className="flex h-28 min-w-0 flex-1 items-center gap-4 rounded-[var(--radius-sm)] pr-12 text-left outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+					className="flex h-28 min-w-0 flex-1 items-center gap-4 rounded-[var(--radius-sm)] text-left outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
 				>
 					<DocumentIcon
 						className={cn(

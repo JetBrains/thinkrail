@@ -101,14 +101,16 @@ export function RightPanel() {
 						Select a workspace to browse files.
 					</p>
 				) : tab === "specs" ? (
-					// 12px top (below the tab strip) + 4px bottom; the row owns the 12px horizontal content edge,
-					// so its hover/selected band stays full-bleed to the panel edge (see SpecNodeRow).
-					<div className="pt-12 pb-4">
+					// The unified content container: 12px on all four sides is the ONLY outer content-edge spacing;
+					// rows carry px-8 internally, so content sits 12+8 from the panel edge and the hover band spans
+					// this container's content width (inset 12), consistent with All Files / Changes / Review.
+					<div className="p-12">
 						<SpecsPanel workspaceId={activeWorkspaceId} failed={specsFailed} />
 					</div>
 				) : tab === "files" ? (
-					// 12px top (below the tab strip) + 4px bottom; TreeRow owns the 12px horizontal edge (full-bleed).
-					<div className="pt-12 pb-4">
+					// The unified content container: 12px on all four sides (the only outer edge); TreeRow carries
+					// px-8 internally, so content sits 12+8 from the panel edge (matches the other right-rail views).
+					<div className="p-12">
 						{/* Expansion paths belong to one workspace; remount before another can reuse them. */}
 						<FileTree key={activeWorkspaceId} workspaceId={activeWorkspaceId} />
 					</div>

@@ -150,7 +150,7 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 	return (
 		<div className="flex h-full min-h-0 flex-col" data-testid="review-panel">
 			{hasComments && (
-				<div className="flex h-28 shrink-0 items-center justify-end gap-8 border-border-default border-b px-8">
+				<div className="flex h-28 shrink-0 items-center justify-end gap-8 border-border-default border-b px-12">
 					{hasDrafts && <SendAllReviewsButton workspaceId={workspaceId} />}
 					<ConfirmPopover
 						open={clearing}
@@ -178,8 +178,9 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 					</ConfirmPopover>
 				</div>
 			)}
-			{/* pt-12: 12px between the Review toolbar and the first section (top content spacing). */}
-			<div className="min-h-0 flex-1 overflow-auto pt-12">
+			{/* The unified content container (below the toolbar, aligned at px-12): 12px on all four sides is
+			    the only outer edge; file rows carry px-8 internally. */}
+			<div className="min-h-0 flex-1 overflow-auto p-12">
 				{files.length === 0 ? (
 					<p data-testid="review-empty" className="px-8 py-4 tr-text-metadata text-text-subtle">
 						{hasComments
