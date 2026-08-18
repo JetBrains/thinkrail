@@ -25,6 +25,13 @@ import { createTerminalPrebindBuffer } from "./terminalPrebindBuffer";
 const RESIZE_DEBOUNCE_MS = 60;
 
 /**
+ * Extra vertical leading between terminal rows, in px, applied through xterm's own `lineHeight`
+ * multiplier (derived from the code font size so it stays this many pixels regardless of the token).
+ * xterm owns row spacing while the typography tokens own the font, so this is not a parallel type style.
+ */
+const TERMINAL_ROW_EXTRA_PX = 2;
+
+/**
  * Fire-and-forget terminal writes. Reconnect replay + host request deduplication still executes a submitted
  * write at most once; callers merely have no useful UI to show for a true host rejection.
  */
@@ -160,15 +167,19 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 		const host = hostRef.current;
 		if (!host) return;
 
+		const codeFontSize = Number.parseFloat(cssVar("--tr-font-size-s13") ?? "") || 13;
 		const term = new XTerm({
 			allowProposedApi: true,
 			cursorBlink: true,
 			// Font family + size are the primitives behind `code.text` (typography.json → textStyles.code):
 			// both come from the same tokens the CSS emits, so the terminal can never drift from code text.
-			// Row height stays xterm's own `lineHeight` mechanism (default 1.0) — the semantic token owns the
-			// font, xterm owns line spacing, so we deliberately do not feed it a CSS line-height.
-			fontSize: Number.parseFloat(cssVar("--tr-font-size-s13") ?? "") || 13,
+			// Row spacing stays xterm's own `lineHeight` mechanism (the semantic token owns the font, xterm
+			// owns line spacing, so we deliberately do not feed it a CSS line-height): a small +2px of leading
+			// derived from the font size, NOT the 1.5 `code` line-height token (which would be ~6px, far too
+			// airy for a terminal).
+			fontSize: codeFontSize,
 			fontFamily: cssVar("--tr-font-family-code") ?? "monospace",
+			lineHeight: (codeFontSize + TERMINAL_ROW_EXTRA_PX) / codeFontSize,
 			theme: readTheme(),
 			scrollback: 5000,
 		});
