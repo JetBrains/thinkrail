@@ -274,13 +274,14 @@ a project picker, the prompt hero, and the reused
   keeping ThinkRail's embedded PI — a state machine over the typed `JbcentralStatus` +
   `provider.jbcentral*`: absent (official host-OS install guidance + Recheck), outdated (guided Update),
   unreviewed/invalid version (safe guidance, no native action), sign-in required (launch Central sign-in +
-  Retry), ready (Connect), configuring (a synchronous Central action is in flight), connected (Disconnect),
-  restart-required (the global configuration changed successfully and the process must restart to apply it),
-  load-failed (Central was excluded at boot, other providers remain usable, and the user may Disconnect or
-  regenerate then restart), and generic action error (Retry/Recheck). There is no pending reconciliation,
-  affected-chat list, blocked state, or recovery mode. Update/connect/disconnect state is host-authoritative
-  and shared across clients; every
-  mutation re-reads `provider.status`. Copy never promises only Claude/GPT, never asks for standalone PI,
+  Retry), ready (Connect), configuring (a Central action or watched candidate rebuild is in flight),
+  connected (the current runtime for new work applied Central; Disconnect), load-failed (the last runtime or
+  boot-time plain fallback remains usable; Retry or Disconnect), and generic action error (Retry/Recheck).
+  There is no restart prompt, affected-chat list, blocked state, or recovery mode. Existing live chats may
+  retain an older runtime—including Central after Disconnect—and the card says its state applies to new chats.
+  Update/connect/disconnect state is host-authoritative and shared across clients; every mutation re-reads
+  `provider.status`, while `provider.changed` invalidations from watched external changes trigger the same
+  re-read plus model-list invalidation. Copy never promises only Claude/GPT, never asks for standalone PI,
   never renders child output/diagnostics/artifact content/paths/proxy data/secrets/raw models, and maps only
   closed reason codes to ThinkRail-authored text. **`GithubSettings`** (the "Local GitHub" block — `github.authStatus()`
   Connected + login / Not connected + Refresh); **`AppearanceSettings`** (the **theme picker** — the

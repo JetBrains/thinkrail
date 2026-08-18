@@ -20,10 +20,11 @@ and runs the `pi` agent in-process via `createAgentSession`. Launched in-process
   (project/workspace/git/fs/terminal + the in-process `AgentSession` manager), and `~/.thinkrail`
   persistence.
 - **Public surface:** `createServer(options) → Promise<RunningServer>` (`{ port, stop }`) — the public
-  factory initializes the process's immutable Central-aware PI runtime before binding a socket or exposing
-  handlers—falling back to a plain runtime on a closed Central load failure—so every embedder gets the same
-  bootstrap invariant — and `bootHost(options) → BootedHost` (the process-boot wrapper: resolves the
-  login-shell PATH, pre-warms the same initialization before choosing a port, awaits
+  factory starts Central artifact watching and applies the initial current PI runtime before binding a socket
+  or exposing handlers—falling back to a plain runtime with closed `load-failed` status when the configured
+  Central extension fails—so every embedder gets the same bootstrap invariant — and
+  `bootHost(options) → BootedHost` (the process-boot wrapper: resolves the login-shell PATH, pre-warms the
+  same initialization before choosing a port, awaits
   `createServer`, and installs SIGINT/SIGTERM graceful-shutdown handlers), both re-exported from
   `host/`; plus `registerBundledRuntime` (+ its types, re-exported from `agent/`) — the compiled-binary
   seam by which a launcher that cannot path-load the bundled pi extensions (no `node_modules` inside a
@@ -63,7 +64,7 @@ internals**. The edges between them are owned here (see the dependency graph), n
 | `reviews` | draft review comments on files/diffs: store + anchoring + context-package render | [reviews/SPEC.md](src/reviews/SPEC.md) |
 | `watch` | per-worktree fs watcher → debounced `workspace.fsChanged` invalidation push | [watch/SPEC.md](src/watch/SPEC.md) |
 | `terminal` | workspace-scoped `bun-pty` terminals | [terminal/SPEC.md](src/terminal/SPEC.md) |
-| `agent` | in-process pi sessions + one process-lifetime shared runtime + one-shot completions | [agent/SPEC.md](src/agent/SPEC.md) |
+| `agent` | in-process pi sessions + current/retained runtime generations + one-shot completions | [agent/SPEC.md](src/agent/SPEC.md) |
 | `auth` | provider status/login plus native JetBrains Central orchestration | [auth/SPEC.md](src/auth/SPEC.md) |
 | `assist` | ad-hoc one-shot tasks (workspace naming, …) on a cheap model, best-effort | [assist/SPEC.md](src/assist/SPEC.md) |
 | `analytics` | anonymous usage analytics: closed event set → PostHog sink (privacy contract in its spec) | [analytics/SPEC.md](src/analytics/SPEC.md) |
@@ -93,8 +94,8 @@ the host from env via `bootHost` for dev/e2e.
   agent-side `resolve_comment` tool delegates back through a seam
   `host` installs (`agent.setReviewCommentHandler` → `reviews.resolveCommentFromAgent`)
 - `assist` → `agent` (the one-shot completion primitive)
-- `auth` → `agent` (the shared runtime/auth facade plus one-time Central-aware initialization; one-way, `agent` never imports `auth`)
-- `agent` → (no internal deps — only the pi runtime; auth passes the optional opaque Central path through its public initialization seam)
+- `auth` → `agent` (the current runtime/auth facade plus candidate prepare/activate; one-way, `agent` never imports `auth`)
+- `agent` → (no internal deps — only the pi runtime; auth passes desired opaque Central paths through its public generation seam)
 - `persistence`, `dialog`, `github`, `history`, `templates` → (leaves)
 
 Rules: features never import `host`, and never each other except the edges above. The graph is acyclic.
@@ -103,8 +104,9 @@ own never import `host` either: they expose a **publisher-injection seam** (`set
 `setSessionPublisher`, `setLoginPublisher`, `projects`' `setProjectPublisher` for the full-snapshot
 `project.updated` lifecycle, `workspaces`' `setWorkspacePublisher` for the
 `workspace.created`/`updated`/`removed` lifecycle trio, `settings`' `setSettingsPublisher` for
-`settings.changed`, `layout`'s full-snapshot publisher for `layout.changed`, and auth's successful Central
-action analytics publisher) that `host` installs at `createServer` — so channel/analytics wiring lives only in
+`settings.changed`, `layout`'s full-snapshot publisher for `layout.changed`, and auth's Central action
+analytics + `provider.changed` invalidation publishers) that `host` installs at `createServer` — so
+channel/analytics wiring lives only in
 `host`.
 For layout writes, `host` passes `settings.getConfig().layout.maxSideGroups` into the `layout` validator;
 for layout-setting writes it runs the complete nested value through `layout.validateLayoutSettings` before calling `settings`.

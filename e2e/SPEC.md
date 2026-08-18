@@ -45,11 +45,13 @@ argv/exit/postcondition surface ThinkRail invokes (`--version`, `add pi`, `remov
 materializes a test-owned synthetic PI extension written solely against PI's public API; no Central artifact,
 source fragment, output string, route, constant, binary, or secret is copied. Browser scenarios cover
 absent/outdated/malformed/unreviewed probes, update, sign-in/retry, native add/remove, synchronous-action
-serialization, restart-required state after actions or external artifact drift, and boot fallback after a
-closed synthetic-extension load failure. Unit coverage owns action single-flight, boot with and without the
-opaque extension, and exact-model no-fallback after restart without Central. There is no legacy migration,
-live generation cutover, busy-turn drain, reattachment, compensation, affected-chat blocking, or recovery
-seal to test. Sentinel values in synthetic child output, extension diagnostics, and provider routing fields
+serialization, watched external add/change/remove, successful current-generation cutover for new chats, old
+live-chat coexistence after Disconnect, and boot/runtime retention after a closed synthetic-extension load
+failure. Unit coverage owns action single-flight, watcher debounce/coalescing, stale-candidate rejection, boot
+with and without the opaque extension, and exact-model no-fallback for new or reattached chats after Central
+is removed. There is no legacy migration, busy-turn drain, reattachment of live chats, compensation,
+affected-chat blocking, or recovery seal to test. Sentinel values in synthetic child output, extension
+diagnostics, and provider routing fields
 are asserted absent from the closed results and rendered settings surface; structural DTO allowlists and
 generic host mapping keep those classes out of WS frames, analytics, logs, and persistence.
 

@@ -148,16 +148,17 @@ of the host.
   `{ loginId, providerId, frame }`) and **`LoginReply`** (`{ loginId, value }` — the browser's answer to a
   `select`/`prompt`); the JetBrains AI wire (protocol v42) — **`JbcentralStatus`**, nested on
   `ProviderStatusReport`, is the closed host-authored lifecycle: `absent`, `outdated`, `supported`,
-  `configured`, `unreviewed`, `malformed-version`, `probe-failed`, `configuring`, `restart-required`, or
-  `load-failed`; only parseable safe versions, closed probe/failure reasons, and the current action appear
-  where relevant. `restart-required` means Central's global artifact state differs from the state applied to
-  this process at boot; no live runtime reconciliation is attempted. **`JbcentralInstall`** carries the
-  host's per-OS `{platform,shell,command}` official install plan. **`JbcentralActionResult`** is the closed
-  `applied` / `restart-required` / `failed` union; failure reasons distinguish installation, version
-  probe/support, Central action, and artifact postcondition without carrying messages. There are no pending,
-  blocked-session, recovery, migration, candidate, or reattachment outcomes. Raw stdout/stderr, generated
-  extension content or paths, proxy URLs/secrets, diagnostics, affected-session ids, and raw PI models are
-  structurally absent; server and web map codes to their own generic copy);
+  `configured`, `unreviewed`, `malformed-version`, `probe-failed`, `configuring`, or `load-failed`; only
+  parseable safe versions, closed probe/failure reasons, and the current action appear where relevant.
+  `configuring` covers both a reviewed CLI action and the coalesced candidate rebuild for the newest watched
+  artifact state; `configured` means the **current runtime for new work** applied that artifact. Historical
+  live sessions may retain an older runtime and are deliberately outside this status. **`JbcentralInstall`**
+  carries the host's per-OS `{platform,shell,command}` official install plan. **`JbcentralActionResult`** is
+  the closed `applied` / `failed` union; failure reasons distinguish installation, version probe/support,
+  Central action, artifact postcondition, and closed runtime-load failure without carrying messages. There
+  are no pending, restart, blocked-session, recovery, migration, compensation, or reattachment outcomes. Raw
+  stdout/stderr, generated extension content or paths, proxy URLs/secrets, diagnostics, affected-session ids,
+  and raw PI models are structurally absent; server and web map codes to their own generic copy);
   the **theme/config selection** — **`ThemeId`** is an open string on the wire, because the host persists
   an opaque selection while the independently shipped web client owns the available manifest catalog;
   **`AppConfig`** (`{ theme, analyticsEnabled, terminalReplayKb, layout }` — an extensible bag; `layout` is the
@@ -323,7 +324,10 @@ of the host.
   idempotent by monotonic revision and broadcast to every client) / **`provider.login`** — the session-less
   in-app login stream (a `LoginPush`
   per frame, keyed by `loginId`; the sibling of `pi.extensionUi`, since a login runs on the Welcome screen
-  before any session exists) / `terminal.data` + **`terminal.exit`** + **`terminal.detached`** (the only
+  before any session exists) / **`provider.changed`** — a data-free invalidation broadcast after a watched
+  Central state/rebuild result changes the host-authoritative provider status or current model generation;
+  clients re-read `provider.status` and invalidate `model.list`, so no raw provider/model data rides the push /
+  `terminal.data` + **`terminal.exit`** + **`terminal.detached`** (the only
   **addressed** channels — sent to the single *attached* client rather than broadcast, so a shell's bytes never
   reach another browser; `terminal.data` may carry `truncated` when the host had to drop held output,
   `terminal.detached` says another client took the tab over) / the **workspace lifecycle

@@ -23,9 +23,9 @@ Exposed through explicit subpath exports, not a barrel.
   `WORKSPACE_CONTEXT_DIR`, `WORKSPACE_TODOS_DIR`);
   `@thinkrail/shared/codedError` → `CodedError` + `errorCodeOf()`;
   `@thinkrail/shared/jbcentral` → the native Central CLI adapter: absolute executable/version/status
-  probing; reviewed version bounds and the global opaque PI-extension path; `add pi` / `remove pi` /
-  `login` / `update --install` actions; and the per-OS official install plan. It never edits PI model or
-  credential configuration.
+  probing; reviewed version bounds and the global opaque PI-extension path; an artifact-location watcher;
+  `add pi` / `remove pi` / `login` / `update --install` actions; and the per-OS official install plan. It
+  never edits PI model or credential configuration.
 - **Allowed deps:** Bun/Node runtime (`@types/bun`); `contracts` **types** (`JbcentralInstall`, the wire shape `jbcentralInstall`
   returns — kept in the wire so the server can carry it to the card verbatim).
 - **Forbidden:** importing `server` / `web` / any `pi` package; being imported by `web` (it carries
@@ -72,14 +72,18 @@ Exposed through explicit subpath exports, not a barrel.
   is exactly `1.6.2`; lower versions require update, higher versions are unreviewed, and malformed output is
   unsupported. Human presentation output is never parsed. Version stdout is bounded in memory; action
   stdout/stderr is ignored. No child output is logged or returned, and only exit success plus safe
-  postconditions map to a closed adapter outcome.
+  postconditions map to a closed adapter outcome. `watchJbcentralArtifact(onChange)` observes only that
+  reviewed location and reports invalidation events for add, remove, and replacement; it handles a not-yet-
+  existing extension directory by re-arming from the nearest existing parent. It never opens or fingerprints
+  the generated file. The caller debounces events and rechecks existence through the ordinary inspection API.
 
   The adapter deliberately has no migration path for the previous unpublished integration: it never reads or
   edits `models.json`, `auth.json`, backups, or any unrelated PI state.
 
   **Install guidance is per-OS and single-sourced:** `jbcentralInstall(platform)` returns the official host-OS
   plan carried to the card; a remote browser never guesses its own OS. **The server's `auth` module is the sole
-  caller** and composes these host-local actions with the Central state applied to the process at boot.
+  caller** and composes these host-local actions and watcher invalidations with `agent`'s runtime-generation
+  seam.
 
 ## Get right (shellEnv)
 
@@ -101,6 +105,9 @@ Exposed through explicit subpath exports, not a barrel.
   or serve the generated extension.
 - **No standalone PI dependency.** Central writes global PI configuration; ThinkRail loads its path into the
   embedded PI runtime, including when `PI_CODING_AGENT_DIR` points elsewhere and no `pi` command exists.
+  Watcher events are hints only: every rebuild re-inspects version + existence, and in-app actions explicitly
+  request the same rebuild after their postcondition, so a dropped/coalesced filesystem event cannot lose a
+  state transition.
 - **Never return or throw raw child/loader data.** Adapter errors are closed codes with no free-form child
   text. The caller may report generic guidance only.
 - **No legacy migration.** This is the first supported native integration; the adapter never touches prior

@@ -11,8 +11,9 @@ tags: [v1, pi]
 
 ## Responsibility
 
-The in-process `pi` engine: one process-lifetime shared model/auth runtime, the lifecycle of
-`AgentSession`s (one per chat tab, rooted in a workspace's worktree), Pi resource/skill loading (including portable
+The in-process `pi` engine: a current shared model/auth runtime generation for pre-session work and future
+chats, the lifecycle of `AgentSession`s (one per chat tab, rooted in a workspace's worktree and retaining the
+runtime generation they were created with), Pi resource/skill loading (including portable
 cross-agent skill discovery + a pre-session skill catalog), the **extension-UI bridge** that turns pi's
 in-process `uiContext` dialog calls into WS frames, the host-owned **`ask_user_question`** tool + its
 answer-injection path, and the **restart repair** that keeps re-opened transcripts provider-valid.
@@ -20,11 +21,11 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
 ## Boundary
 
 - **Owns:**
-  - `piRuntime` (the process's shared `ModelRuntime` — pi's canonical model/auth facade for
+  - `piRuntime` (the current shared `ModelRuntime` generation — pi's canonical model/auth facade for
     catalogs, credentials, availability, login/logout, and request dispatch). Sibling consumers use the
-    `usePiRuntime()` callback rather than receiving the runtime directly; host boot initializes it before any
-    model work, and tests configure its factory before initialization rather than swapping a runtime underneath
-    live sessions. The runtime is created
+    `usePiRuntime()` callback to capture the current generation rather than receiving a mutable singleton;
+    host boot initializes it before any model work, while later Central artifact changes prepare and atomically
+    activate a fresh generation. Tests configure the factory before initialization. Every runtime is created
     with **ambient network OFF** —
     `allowModelNetwork: false` **plus a scoped `PI_OFFLINE` around construction** (pi 0.81 derives the
     runtime's ambient-network default from that env at construction; the option now gates only the
@@ -63,18 +64,17 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     `provider.status` + in-app login — lives in the sibling `auth` module (which consumes the shared
     `usePiRuntime` callback), **not** here.
 
-    Runtime initialization owns the process's immutable Central decision. Given the reviewed opaque artifact
-    path, it first builds a runtime and applies that extension once through PI's public headless loader. The
-    path is the only artifact fact this module receives; it never reads, parses, hashes, snapshots, logs,
-    copies, or serves the file. If Central extension/loader/provider setup fails, the failed runtime is
-    discarded and initialization retries without Central. Raw diagnostics collapse to a closed `load-failed`
-    outcome and never reach `pi.extensionUi`, the wire, logs, analytics, persistence, or snapshots. Failure of
-    the plain retry remains a host-startup failure.
+    Candidate preparation takes only the reviewed opaque Central path set, builds a fresh runtime, and applies
+    those extensions once through PI's public headless loader. The path is the only artifact fact this module
+    receives; it never reads, parses, hashes, snapshots, logs, copies, or serves the file. Extension/loader/
+    provider failures discard the candidate and collapse to a closed `load-failed` outcome; raw diagnostics
+    never reach `pi.extensionUi`, the wire, logs, analytics, persistence, or snapshots. Auth owns file watching,
+    coalescing, and stale-candidate rejection; agent only prepares and activates a generation.
 
-    Every model, auth, and session operation then uses that same runtime for the process lifetime. Central
-    actions cannot mutate or replace it; a global artifact change requires host restart. Session creation and
-    disk attachment always resolve a persisted `{provider,id}` exactly against the active runtime—missing is
-    an error, and PI's `createAgentSession` fallback is never allowed to choose a different model.
+    Activation changes the current pointer for pre-session reads and future session creation; it never mutates,
+    drains, or recreates existing sessions. A live session keeps its original runtime generation. A disk session
+    attached after activation resolves its persisted `{provider,id}` exactly against the new current runtime—
+    missing is an error, and PI's `createAgentSession` fallback is never allowed to choose a different model.
 
     Every models **read** goes through **`settledAvailableModels(runtime)`** — pi's
     `getAvailableSnapshot()`, **never `getAvailable()`**: that one awaits `refreshAvailability()`, which
@@ -82,8 +82,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     would hand `model.list` (whose contract is to answer without touching the network), `model.default` and
     every inbound model-ref check an unbounded wait, and would escape the refresh deadline one line after
     applying it. The snapshot is what pi's last *settled* pass concluded (written at `create()`, after every
-    `refresh()`, and on login/logout), and being the one read makes it the same universe everywhere —
-    picker, default and `resolveWireModel` cannot disagree.
+    `refresh()`, and on login/logout), and being the one read makes the picker, default, and model resolution
+    agree within a generation.
   - `agentSessionManager` — sessions keyed by `session.sessionId` (each `Entry` also tracks its
     `workspaceId`), `createSession({ cwd, workspaceId, model?, thinkingLevel? })` → `createAgentSession(...)`
     with a per-session `SessionManager` **and a `buildSessionSettings(cwd)` settings manager** (the user's
@@ -97,8 +97,9 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     `SessionSummary.lastSettlement` for reconnect after Pi removed a failed attempt from its rebuilt
     context; a new `agent_start` exposes explicit `null` (no current terminal) so an older persisted failure
     cannot reappear mid-run, while disk sessions remain transcript-authoritative.
-    All manager entrypoints that consume or mutate model state use the same process runtime; `abort` remains
-    available as the cancellation control path. `prompt`/`steer`/`followUp` (with images) /
+    New-session and pre-session entrypoints capture the current generation; operations on a live session use
+    that session's retained runtime. `abort` remains available as the cancellation control path.
+    `prompt`/`steer`/`followUp` (with images) /
     — **both `promptSession` and `followUpSession` resolve the delivery mode against the session's
     LIVE `isStreaming`, never the caller's belief about it**: `prompt()` throws mid-turn (so it falls
     back to `steer`), and pi's `followUp()` only *enqueues* into a queue that a run already in flight
@@ -113,9 +114,11 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     model). **Models cross the wire as `WireModel` (never pi's raw `Model`):** `toWireModel` projects a
     `Model` onto the wire's **allowlist** (see `WireModel`) — so `baseUrl`, `headers`, extension/provider
     routing data, and any other field are excluded by
-    default — and the inbound side (`createSession`/`setModel`) **re-resolves** the ref by `{provider,id}`
-    via `resolveWireModel` against **`settledAvailableModels`** (the one settled read above — the picker's
-    exact universe, so a ref the picker offered always resolves) — pi uses `Model.baseUrl` verbatim, so a client's baseUrl
+    default — and the inbound side re-resolves the ref by `{provider,id}` via `resolveWireModel` against
+    **`settledAvailableModels`**: `createSession` uses the current generation, while `setModel` uses that live
+    session's retained runtime. Therefore a model newly shown in the global picker can be unavailable to an
+    older live chat and fails with a closed model-unavailable error rather than crossing generations. Pi uses
+    `Model.baseUrl` verbatim, so a client's baseUrl
     is never trusted (blocks disclosure *and* arbitrary-URL injection). The **hydration read side** —
     `listSessions(workspaceId, cwd)` (live sessions
     **unioned with on-disk** ones pi persisted under `cwd`, live winning on id → `SessionSummary[]` tagged
@@ -228,13 +231,13 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     the manager bullet above). Pure over pi's `SessionManager` (compaction-aware via
     `buildSessionContext`; idempotent; appends at the leaf, where orphans sit by construction) —
     unit-tested against `SessionManager.inMemory`.
-  - `extensions` — Pi resource wiring. Runtime initialization loads the reviewed external Central path once
+  - `extensions` — Pi resource wiring. Candidate generation loads the reviewed external Central path once
     through a headless `DefaultResourceLoader` to apply provider registrations, without inspecting it.
     `buildResourceLoader(cwd, settingsManager, excludedPaths)` then resolves Pi's normal settings/package +
     `.pi` / `.agents` extension set, removes that exact opaque identity **before loading**, and explicitly loads
-    the remaining paths: sessions use the provider objects already owned by the process runtime, so arbitrary
-    Central factory/errors/UI cannot reach `pi.extensionUi`. The Central identity is always excluded from
-    session discovery—even if the global artifact changes after boot—so a process cannot mix Central states.
+    the remaining paths: sessions use the provider objects already owned by their retained generation, so
+    arbitrary Central factory/errors/UI cannot reach `pi.extensionUi`. The Central identity is always excluded
+    from session discovery—even if the global artifact changes—so a session cannot mutate its generation.
     All other user extensions
     retain normal discovery. The loader then adds
     automatic **portable cross-agent skill aliases**, then loads the five bundled extensions — **`pi-web-access`**
@@ -319,8 +322,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     its types are on the barrel.
 - **Public surface (barrel):** the manager operations (incl. `answerQuestion` +
   `settleSessionsForShutdown`) + `CreateSessionInput`/`CreateSessionResult` + `SessionEventPayload`;
-  the single runtime facade (`usePiRuntime`, one-time Central-aware initialization, and its closed
-  `load-failed` outcome—no manager internals) plus `configurePiRuntime`/factory test seams;
+  the runtime-generation facade (`usePiRuntime`, candidate prepare/activate, current generation id, and the
+  closed `load-failed` outcome—no manager internals) plus `configurePiRuntime`/factory test seams;
   `completeOnce`/`pickModel` +
   `OneShotRequest`/`OneShotResult`/`ModelTier`; the `webUiContext` seams; the `askUserQuestion` pure
   helpers (`validateQuestionnaire`/`buildQuestionnaireResponse`/`assessAnswerability`/
@@ -345,8 +348,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   `contracts` (`PiEvent`/`Model`/`ThinkingLevel`/`ImageContent`/`SessionStats`/`SlashCommandInfo`/`ExtUi*`/
   `AskUserQuestion*`/`ProviderStatus*`); Node.
 - **Forbidden:** `host`; sibling features (the `cwd` is passed in, not looked up via `persistence`);
-  Central process/filesystem knowledge—the caller supplies only the optional opaque extension path at
-  initialization.
+  Central process/filesystem knowledge—the caller supplies only the desired opaque extension paths for a
+  candidate.
 
 ## Get right
 
@@ -359,9 +362,10 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   derivable from the transcript alone (that's what makes restarts free); reply validity is
   `assessAnswerability`'s verdict, computed from `session.messages`, and rejections fail the WS request
   loud.
-- Share exactly one process-lifetime `ModelRuntime` (every session receives it as
-  `createAgentSession`'s `modelRuntime`); give each session its own `SessionManager`; `dispose()` on removal.
-  `AgentSession.reload()` is resource-only and Central configuration changes require host restart.
+- Share one **current** `ModelRuntime` for pre-session reads and new sessions. Every session receives and
+  retains its generation as `createAgentSession`'s `modelRuntime`; give each its own `SessionManager` and
+  `dispose()` it on removal. Old runtimes remain reachable only through old live sessions and become
+  collectible with them; `AgentSession.reload()` is resource-only and never changes generations.
 - **A `pi` `Model` must never cross the wire raw** — provider/extension configuration may carry secrets in
   `baseUrl`, headers, auth, or provider closures. Every model-bearing frame (`model.list`/`model.refresh`/`model.default`, the
   `session.create` result, `SessionSummary.model`) goes through `toWireModel` — the list paths share the
