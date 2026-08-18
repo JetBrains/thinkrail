@@ -76,7 +76,7 @@ export function Shell() {
 						<div
 							data-testid="scope-context"
 							data-context={activeWorkspace ? "workspace" : "project-home"}
-							className="flex min-w-0 items-center gap-xs border-border-default border-l pl-md leading-tight tr-text-ui"
+							className="flex min-w-0 items-center gap-xs leading-tight tr-text-ui"
 						>
 							<span className="hidden min-w-0 items-center gap-xs sm:flex">
 								<span

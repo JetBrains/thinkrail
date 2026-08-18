@@ -14,8 +14,10 @@ later, the mobile single-view-with-switcher).
 
 ## Boundary
 
-- **Owns:** `Shell.tsx` — the topbar (the full supplied ThinkRail vector logo, rendered through the
-  semantic `text-primary` colour so it remains legible in every theme; a compact store-derived
+- **Owns:** `Shell.tsx` — the topbar (the icon-only ThinkRail mark — the same vector served as
+  `public/favicon.svg`, inlined at 32×32 and rendered through the
+  semantic `text-primary` colour so it remains legible in every theme, with no divider between it and
+  the location context; a compact store-derived
   **location context**; the connection-status pill; and a Settings gear that opens the store-driven
   `panels/SettingsDialog` via
   `store.openSettings()` — open state lives in the store, not local, so other surfaces (the Welcome
@@ -24,10 +26,10 @@ later, the mobile single-view-with-switcher).
   single line — `project / workspace display name  branch · from baseBranch` with an optional plain ` · PR #N` (GitHub) or ` · MR !N` (GitLab) suffix.
   The whole row shares one typography token (`tr-text-ui` per [[web-typography]]); only colour distinguishes
   the parts — project + workspace name in the strong `text-text-default`, the branch and its trailing metadata/separators in the secondary `text-text-muted`; a selected
-  project with no active workspace renders `project / Project home`; no project leaves the logo alone.
+  project with no active workspace renders `project / Project home`; no project leaves the icon alone.
   It follows the existing workspace lifecycle snapshots, so auto-renames update live. Responsive
   degradation drops the connection label to its still-labelled status dot below `sm`, then drops the
-  base and project prefix before it drops active workspace/branch identity; the full logo stays visible.
+  base and project prefix before it drops active workspace/branch identity; the icon stays visible.
   **Active workspace**
   → the resizable 3 columns (projects | center | right-over-terminals), with both outer regions following
   the collapse contract below. **No active workspace** (`activeWorkspaceId == null` — fresh install /

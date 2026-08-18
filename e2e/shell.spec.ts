@@ -26,15 +26,15 @@ test("renders the branded shell and, with no workspace, the Welcome screen", asy
 	) as { colors: { accent: string } };
 	expect(primary.toLowerCase()).toBe(manifest.colors.accent);
 
-	// The top-left identity is the supplied vector wordmark, not the former text treatment. Its paths
-	// inherit the semantic theme colour and its intrinsic aspect ratio remains intact at the 18px target.
+	// The top-left identity is the icon-only ThinkRail mark (the same vector as the favicon), not a
+	// wordmark. Its path inherits the semantic theme colour and it renders as a 32×32 square.
 	const logo = page.getByTestId("brand-logo");
 	await expect(logo).toBeVisible();
 	await expect(logo).toHaveAttribute("aria-label", "ThinkRail");
 	const logoBox = await logo.boundingBox();
 	expect(logoBox).not.toBeNull();
-	expect(logoBox?.height).toBeCloseTo(18, 0);
-	expect((logoBox?.width ?? 0) / (logoBox?.height ?? 1)).toBeCloseTo(3210 / 450, 1);
+	expect(logoBox?.height).toBeCloseTo(32, 0);
+	expect(logoBox?.width).toBeCloseTo(32, 0);
 	const logoColors = await logo.evaluate((element) => ({
 		color: getComputedStyle(element).color,
 		fill: getComputedStyle(element.querySelector("path") ?? element).fill,
