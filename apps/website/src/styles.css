@@ -1705,7 +1705,7 @@ html:not(.anim) .term-caret {
 .statusbar {
 	display: flex;
 	align-items: center;
-	justify-content: flex-end;
+	justify-content: flex-start;
 	gap: 18px;
 	padding: 5px 16px;
 	border-top: 1px solid var(--border2);
