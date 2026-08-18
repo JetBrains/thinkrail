@@ -54,7 +54,7 @@ export function RightPanel() {
 		<div className="flex h-full min-h-0 flex-col">
 			<div
 				data-testid="right-tab-strip"
-				className="flex h-panel-header-row shrink-0 items-center border-b border-border-default px-sm"
+				className="flex h-panel-header-row shrink-0 items-center border-b border-border-default"
 			>
 				<div className="flex h-full items-stretch gap-xs">
 					<TabButton testid="tab-specs" active={tab === "specs"} onClick={() => setTab("specs")}>
@@ -136,7 +136,7 @@ function TabButton({
 			data-testid={testid}
 			data-active={active}
 			onClick={onClick}
-			className={`flex h-full items-center px-xs tr-text-eyebrow ${workspaceTabStateClass(active)}`}
+			className={`flex h-full items-center px-md tr-text-eyebrow ${workspaceTabStateClass(active)}`}
 		>
 			{children}
 		</button>

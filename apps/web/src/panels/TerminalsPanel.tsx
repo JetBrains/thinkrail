@@ -96,7 +96,7 @@ export function TerminalsPanel() {
 
 	return (
 		<div data-testid="terminal-panel" className="flex h-full min-h-0 flex-col">
-			<div className="flex h-7 shrink-0 items-center gap-xs border-b border-border-default pr-xs pl-sm">
+			<div className="flex h-7 shrink-0 items-center gap-xs border-b border-border-default">
 				<span className="shrink-0 tr-text-eyebrow text-text-muted">Terminal</span>
 				<div className="flex h-full min-w-0 flex-1 items-stretch gap-px overflow-x-auto">
 					{tabs.map((tab) => (
@@ -169,7 +169,7 @@ function TerminalTabButton({
 }) {
 	return (
 		<div
-			className={`group flex shrink-0 items-center gap-xs rounded-[var(--radius-sm)] pr-xs pl-sm tr-text-ui ${workspaceTabStateClass(active)}`}
+			className={`group flex shrink-0 items-center gap-xs px-md tr-text-ui ${workspaceTabStateClass(active)}`}
 		>
 			<button
 				type="button"

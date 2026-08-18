@@ -432,7 +432,7 @@ export function CenterTabs() {
 								data-active={isActive}
 								data-preview={isPreview}
 								data-kind={tab.kind}
-								className={`group flex items-center gap-xs border-border-default border-r pr-xs pl-sm tr-text-ui ${workspaceTabStateClass(isActive)}`}
+								className={`group flex items-center gap-xs border-border-default border-r px-md tr-text-ui ${workspaceTabStateClass(isActive)}`}
 							>
 								<button
 									type="button"

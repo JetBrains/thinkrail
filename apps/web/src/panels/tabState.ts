@@ -1,9 +1,10 @@
 /**
  * One persistent selected-tab treatment for every workspace strip. The surface adds area while the
- * short content-edge marker adds a shape cue that survives themes whose neighbouring surfaces match.
+ * bottom marker — spanning the tab's full width (`inset-x-0`), flush with the selected background — adds
+ * a shape cue that survives themes whose neighbouring surfaces match.
  */
 const ACTIVE_WORKSPACE_TAB =
-	"relative bg-control-bg-selected text-text-default after:pointer-events-none after:absolute after:right-xs after:bottom-0 after:left-xs after:z-10 after:h-[2px] after:rounded-full after:bg-primary after:content-['']";
+	"relative bg-control-bg-selected text-text-default after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:z-10 after:h-[2px] after:rounded-full after:bg-primary after:content-['']";
 
 const INACTIVE_WORKSPACE_TAB = "text-text-muted hover:bg-control-bg-hovered";
 

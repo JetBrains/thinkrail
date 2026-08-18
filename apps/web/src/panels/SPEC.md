@@ -384,15 +384,17 @@ a project picker, the prompt hero, and the reused
 
 - **One selected-tab grammar across the workspace:** `CenterTabs`, `RightPanel`, and `TerminalsPanel`
   all use the same persistent state: `control-bg-selected` behind the whole selectable tab,
-  `text-default`, and a short **2px `primary` marker on the content edge**. The shared `ToggleSegment`
+  `text-default`, and a **2px `primary` marker spanning the tab's full width** on the bottom edge
+  (`after:inset-x-0`, flush with the selected fill — no horizontal inset). The shared `ToggleSegment`
   (List|Tree, Split|Inline, Preview|Source) borrows the same `control-bg-selected` fill + `text-default`
   for its active segment (no content-edge marker — a slim toggle, not a tab), so "selected" reads the
   same everywhere and never derives a parallel surface token. Inactive tabs stay
   transparent with muted text; hover uses `control-bg-hovered`; keyboard focus keeps its separate focus
   ring. The marker is a shape cue, not merely a text-colour change, so selection remains obvious when a
   high-contrast theme makes neighbouring surfaces equal. Compound center/terminal tabs apply the state to
-  the wrapper so label + close affordance read as one tab; right-rail labels add only compact horizontal
-  padding, never height. Typography/weight never changes. The strips deliberately keep native button
+  the wrapper so label + close affordance read as one tab. Each tab carries **`px-md` (12px) internal
+  horizontal padding** and the strips start flush at the panel edge (no outer horizontal inset), so the
+  selected fill and its full-width marker read edge-to-edge. Typography/weight never changes. The strips deliberately keep native button
   semantics rather than advertise the ARIA tabs pattern: they do not yet implement roving focus,
   arrow/Home/End navigation, or `tabpanel` relationships, and the center/terminal strips also carry
   auxiliary close/new actions. Introduce `tablist` / `tab` / `aria-selected` only as a complete pattern;
