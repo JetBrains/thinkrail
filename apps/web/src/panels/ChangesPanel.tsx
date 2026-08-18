@@ -226,7 +226,8 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 					onClick={() => setChangesView("tree")}
 				/>
 			</div>
-			<div className="min-h-0 flex-1 overflow-auto">
+			{/* pt-12: 12px between the Changes toolbar and the first change row (top content spacing). */}
+			<div className="min-h-0 flex-1 overflow-auto pt-12">
 				{status === null && error !== null ? (
 					<div data-testid="changes-error" className="flex flex-col items-start gap-4 px-8 py-4">
 						<p className="tr-text-metadata text-feedback-error">

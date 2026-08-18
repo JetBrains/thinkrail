@@ -101,14 +101,14 @@ export function RightPanel() {
 						Select a workspace to browse files.
 					</p>
 				) : tab === "specs" ? (
-					// Vertical padding only: the row itself owns the 12px horizontal content edge, so its
-					// hover/selected band stays full-bleed to the panel edge (see SpecNodeRow).
-					<div className="py-4">
+					// 12px top (below the tab strip) + 4px bottom; the row owns the 12px horizontal content edge,
+					// so its hover/selected band stays full-bleed to the panel edge (see SpecNodeRow).
+					<div className="pt-12 pb-4">
 						<SpecsPanel workspaceId={activeWorkspaceId} failed={specsFailed} />
 					</div>
 				) : tab === "files" ? (
-					// Vertical padding only: TreeRow owns the 12px horizontal content edge (band stays full-bleed).
-					<div className="py-4">
+					// 12px top (below the tab strip) + 4px bottom; TreeRow owns the 12px horizontal edge (full-bleed).
+					<div className="pt-12 pb-4">
 						{/* Expansion paths belong to one workspace; remount before another can reuse them. */}
 						<FileTree key={activeWorkspaceId} workspaceId={activeWorkspaceId} />
 					</div>

@@ -178,7 +178,8 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 					</ConfirmPopover>
 				</div>
 			)}
-			<div className="min-h-0 flex-1 overflow-auto">
+			{/* pt-12: 12px between the Review toolbar and the first section (top content spacing). */}
+			<div className="min-h-0 flex-1 overflow-auto pt-12">
 				{files.length === 0 ? (
 					<p data-testid="review-empty" className="px-8 py-4 tr-text-metadata text-text-subtle">
 						{hasComments
