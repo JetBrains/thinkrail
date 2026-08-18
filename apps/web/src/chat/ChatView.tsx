@@ -643,7 +643,11 @@ export default function ChatView({
 							data={rows}
 							context={listContext}
 							components={CHAT_LIST_COMPONENTS}
-							className="min-h-0 flex-1"
+							// overflow-x-clip makes the chat viewport VERTICAL-ONLY: Virtuoso's scroller sets overflow-y
+							// auto but leaves overflow-x unset, which CSS then computes to `auto`, so any too-wide child
+							// would grow a horizontal scrollbar on the whole chat. Clip keeps it off; a code block's own
+							// `overflow-auto` still scrolls inside its container, never propagating here.
+							className="min-h-0 flex-1 overflow-x-clip"
 							// Any chat opens at the latest message (a fresh mount would otherwise land mid-transcript);
 							// the jump-to-message deep link overrides post-mount with its centered scrollToIndex.
 							initialTopMostItemIndex={{ index: Math.max(rows.length - 1, 0), align: "end" }}
