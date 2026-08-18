@@ -116,7 +116,10 @@ ref off the workspace-create critical path.
   return the new sha. **Only the named paths** — never "whatever is dirty now": the caller passes the set
   it proved belongs to the item (and, being its filtered delta, it never contains `.thinkrail/`), so dirt
   that appears between the caller's `gitStatus` and this call cannot be swept in, and the user's other
-  staged work stays staged rather than riding along. **The index is preserved across failure:** the
+  staged work stays staged rather than riding along. The paths are **literal filenames, never pathspecs**:
+  every path-consuming command runs `--literal-pathspecs`, so a tracked file whose *name* is pathspec
+  magic or a glob (`:(top)*`) can't expand beyond the proved delta and defeat the exact-path guarantee or
+  the `.thinkrail/` exclusion. **The index is preserved across failure:** the
   checkout's real index **file** (`rev-parse --git-path index` — per-worktree in a linked worktree) is
   snapshotted byte-for-byte before staging and written back on every failure path, so a skipped commit
   leaves the user's staging area exactly as it was — *including index-only state a tree round-trip would

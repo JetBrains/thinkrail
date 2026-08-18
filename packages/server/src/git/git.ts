@@ -39,6 +39,12 @@ function workspace(workspaceId: string): Workspace {
  * `read-tree` would silently unstage it). An index with unmerged entries (a conflicted merge in flight)
  * bails out before touching anything — a half-merged worktree is nothing to auto-commit. On success,
  * `commit -- <paths>` moves only those paths' entries; the user's other staged work stays staged.
+ *
+ * **Paths are literal, never pathspecs.** `paths` are *filenames* reported by `git status`, but a git
+ * pathspec interprets magic (`:(top)…`, `:!…`) and glob characters — a tracked file literally named
+ * `:(top)*` would otherwise expand to "everything from the repo top", defeating the exact-path guarantee
+ * (and the `.thinkrail/` exclusion) above. Every path-consuming command here runs with
+ * `--literal-pathspecs`, so a filename is only ever itself.
  */
 export function gitCommitPaths(
 	workspaceId: string,
@@ -70,12 +76,16 @@ export function gitCommitPaths(
 		}
 		return null;
 	};
+	// Every command that consumes `paths` runs `--literal-pathspecs`: they are filenames from `git status`,
+	// and pathspec magic/globs in a filename (`:(top)*`) must not expand beyond the proved delta (see above).
 	// `-A` over an explicit pathspec so a deleted path is staged as a deletion, not skipped.
-	if (!git(cwd, ["add", "-A", "--", ...paths]).ok) return restore();
+	if (!git(cwd, ["--literal-pathspecs", "add", "-A", "--", ...paths]).ok) return restore();
 	// `git diff --cached --quiet -- <paths>` exits 0 (ok) when those paths match HEAD — nothing to commit.
-	if (git(cwd, ["diff", "--cached", "--quiet", "--", ...paths]).ok) return restore();
+	if (git(cwd, ["--literal-pathspecs", "diff", "--cached", "--quiet", "--", ...paths]).ok)
+		return restore();
 	// Pathspec-scoped commit: the item's paths only, whatever else the user may have had staged.
-	if (!git(cwd, ["commit", "--no-verify", "-m", message, "--", ...paths]).ok) return restore();
+	if (!git(cwd, ["--literal-pathspecs", "commit", "--no-verify", "-m", message, "--", ...paths]).ok)
+		return restore();
 	const head = git(cwd, ["rev-parse", "HEAD"]);
 	if (!head.ok) return null; // committed — the index is already correct for those paths
 	return { sha: head.out };

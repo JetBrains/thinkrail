@@ -654,6 +654,31 @@ test("gitCommitPaths leaves the user's own staged work staged (never in the item
 	expect(stagedPaths()).toEqual(["mine.ts"]);
 });
 
+test("gitCommitPaths treats paths literally — a pathspec-magic filename never expands beyond itself", () => {
+	seedWorkspace();
+	// A tracked file whose NAME is a valid pathspec: without --literal-pathspecs, `:(top)*` expands to
+	// "everything from the repo top" and sweeps the unrelated dirt + the host's own state into the commit.
+	const magic = ":(top)*";
+	writeFileSync(join(repo, magic), "the item's own work\n");
+	writeFileSync(join(repo, "other.ts"), "export const other = 1;\n"); // unrelated concurrent edit
+	mkdirSync(join(repo, ".thinkrail", "context"), { recursive: true });
+	writeFileSync(join(repo, ".thinkrail", "context", "todos.json"), "{}"); // excluded app state
+
+	const committed = gitCommitPaths("w1", "todo: magic name", [magic]);
+	expect(committed).not.toBeNull();
+	// The commit holds exactly the literally-named file…
+	expect(
+		gitStatus("w1", { kind: "commit", sha: committed?.sha ?? "" }).changes.map((c) => c.path),
+	).toEqual([magic]);
+	// …and the unrelated dirt + app state stay uncommitted, unstaged.
+	expect(
+		gitStatus("w1", { kind: "uncommitted" })
+			.changes.map((c) => c.path)
+			.sort(),
+	).toEqual([".thinkrail/context/todos.json", "other.ts"]);
+	expect(stagedPaths()).toEqual([]);
+});
+
 test("a failed commit restores the index — the user's staging area is never left mutated", () => {
 	seedWorkspace();
 	writeFileSync(join(repo, "impl.ts"), "export {};\n");
