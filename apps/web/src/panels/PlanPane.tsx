@@ -36,8 +36,10 @@ import { FileRow } from "./planFileRow";
  * compact. The chevron/`N files` summary toggles the file rows; the sha chip stays a separate button
  * that routes the Changes panel and never toggles the disclosure (and vice versa). **Review happens
  * right here, next to the changes**: expanding an unsettled reviewable item reveals a `Start review`
- * button which unfolds the shared verdict pair (`ReviewActions` — Approve / Ask to fix) under the file
- * rows; approving settles the item (circled Verified glyph) and the affordance disappears.
+ * button which OPENS the step's changes for reading — the Changes panel at the commit's scope (or the
+ * first fallback path's live diff) — and unfolds the shared verdict pair (`ReviewActions` — Approve /
+ * Ask to fix) under the file rows; approving settles the item (circled Verified glyph) and the
+ * affordance disappears. The click must visibly start the review, not merely reveal a verdict button.
  */
 function ChangeSetBlock({
 	item,
@@ -100,7 +102,15 @@ function ChangeSetBlock({
 					<button
 						type="button"
 						data-testid="plan-start-review"
-						onClick={() => setReviewing(true)}
+						onClick={() => {
+							setReviewing(true);
+							// Starting a review OPENS the changes — the Changes panel at this step's commit scope
+							// (its files, each a click to its diff), or the first fallback path's live diff. A
+							// verdict button alone is not a review; the diff must land on screen.
+							if (set.kind === "commit") onOpenCommit(set.sha);
+							else if (set.paths[0])
+								void openDiffInTab(workspaceId, { kind: "branch" }, set.paths[0], "preview");
+						}}
 						className="ml-auto shrink-0 rounded-[var(--radius-sm)] border border-border-default px-sm py-2xs tr-text-ui text-text-default hover:bg-control-bg-hovered"
 					>
 						Start review

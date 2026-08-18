@@ -125,6 +125,9 @@ test("a reviewable step reads summary-first in Review mode and Approve records t
 	await expect(codeItem).toHaveAttribute("data-reviewed", "false");
 	await codeItem.getByTestId("plan-change-set-toggle").click();
 	await codeItem.getByTestId("plan-start-review").click();
+	// Starting the review visibly OPENS the changes: the right rail lands on Changes at this step's
+	// commit scope, listing its files — a verdict button alone is not a review.
+	await expect(page.getByTestId("change-item").filter({ hasText: "flood.ts" })).toBeVisible();
 	await codeItem.getByTestId("review-approve").click();
 
 	// Approved → the step's glyph becomes the circled Verified check, the counter flips, the inline
