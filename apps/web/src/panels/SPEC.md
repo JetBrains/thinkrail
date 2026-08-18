@@ -331,8 +331,11 @@ a project picker, the prompt hero, and the reused
   **`doc`** tabs (`DocTab` — inline rendered markdown, no file on disk) via its own
   `DocPane`→`MarkdownPreview`, and **`plan`** tabs (`PlanTab`) via the lazy **`PlanPane`** — the chat
   plan's **live review-map page**: the session's TODO plan document-scale (groups as sections, items
-  with status glyphs), each done item unfolding its change set — the commit's `GitFileChange[]` rows
-  (the DTO decoration) as clickable file rows (`statusNameClass`-colored name + the shared
+  with status glyphs), each done item carrying a **collapsible** change set — a disclosure whose
+  summary line (sha chip + `N files` + `DiffStatBadge`) toggles the commit's `GitFileChange[]` rows
+  (the DTO decoration), **collapsed by default** so a long plan stays compact; the chevron/summary is
+  the toggle while the sha chip stays a separate button (routing the Changes panel, never toggling).
+  Expanded, the file rows are clickable (`statusNameClass`-colored name + the shared
   `DiffStatBadge`) opening Monaco diff tabs at the item's `commit:{sha}` scope (`openDiffInTab`,
   preview intent; the path-list fallback opens at branch scope, no counts — they'd drift), a sha chip
   routing the Changes panel to that commit (`useChatTodos.openChanges`), and header export actions —
