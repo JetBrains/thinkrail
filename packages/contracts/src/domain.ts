@@ -398,12 +398,7 @@ export type JbcentralActionFailureReason =
 	| "central-action-failed"
 	| "artifact-missing"
 	| "artifact-present"
-	| "legacy-cleanup-invalid"
-	| "legacy-cleanup-failed"
-	| "legacy-cleanup-conflict"
-	| "candidate-failed"
-	| "reattach-failed"
-	| "recovery-failed";
+	| "candidate-failed";
 
 /** Closed JetBrains AI lifecycle. No child output, paths, model data, or loader diagnostics are permitted. */
 export type JbcentralStatus =
@@ -414,15 +409,8 @@ export type JbcentralStatus =
 	| { state: "unreviewed"; version: string }
 	| { state: "malformed-version" }
 	| { state: "probe-failed"; reason: JbcentralProbeFailureReason }
-	| { state: "configuring"; action: JbcentralAction }
-	| { state: "pending"; action: Exclude<JbcentralAction, "update"> }
-	| {
-			state: "blocked";
-			action: Exclude<JbcentralAction, "update">;
-			reason: "model-unavailable";
-			affectedSessionIds: string[];
-	  }
-	| { state: "recovery-required"; action: JbcentralAction; reason: JbcentralActionFailureReason };
+	| { state: "configuring"; action?: JbcentralAction }
+	| { state: "load-failed"; action?: JbcentralAction; reason: "candidate-failed" };
 
 /** The `provider.status` result: configured providers first, then the rest alphabetically. */
 export interface ProviderStatusReport {
@@ -435,8 +423,6 @@ export interface ProviderStatusReport {
 
 export type JbcentralActionResult =
 	| { outcome: "applied" }
-	| { outcome: "pending" }
-	| { outcome: "blocked"; reason: "model-unavailable"; affectedSessionIds: string[] }
 	| { outcome: "failed"; reason: JbcentralActionFailureReason };
 
 /** Kept as the connect method's named result type; all Central mutations share this closed union. */

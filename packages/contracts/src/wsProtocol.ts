@@ -226,7 +226,9 @@ export interface TerminalTabsPush {
 // broadcasts, and layout preset settings. Conflicts carry current state and never persist the stale document.
 // v41: JetBrains Central adds typed lifecycle/action states plus connect, disconnect, update, and login
 // methods.
-export const PROTOCOL_VERSION = 41;
+// v42: Central changes are applied through watched runtime generations; restart/recovery/blocked outcomes are
+// removed, `provider.changed` invalidates provider/model reads, and live chats retain their own generation.
+export const PROTOCOL_VERSION = 42;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a
@@ -426,6 +428,9 @@ export const WS_CHANNELS = {
 	// In-app login flow updates (a `LoginPush` per frame), keyed by loginId. Session-less — a login runs on
 	// the Welcome screen before any session exists, so this is the sibling of pi.extensionUi, not scoped to one.
 	providerLogin: "provider.login",
+	// Data-free Central/provider invalidation. Clients re-read provider.status and model.list; this event is
+	// deliberately non-replayable because reconnect reads repair any missed transition.
+	providerChanged: "provider.changed",
 	// Every terminal channel is addressed to the ONE client currently attached to that PTY, never broadcast: a
 	// shell's bytes are tokens, keys and private paths, and a second browser filtering them out client-side is
 	// not isolation. Which client that is can change (attach is exclusive with takeover) — what never happens
