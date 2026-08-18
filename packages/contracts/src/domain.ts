@@ -210,6 +210,33 @@ export type TodoStatus = "pending" | "in_progress" | "done";
 export type TodoOrigin = "agent" | "user";
 
 /**
+ * What an item's artifact points at — mirrors `pi-todos`' core vocabulary. `file`/`change`/`spec` are
+ * addressed by a worktree-relative `path`; a `commit` carries the `sha` its work was recorded as (the host
+ * commits per done item) and opens the Changes panel at the `commit:{sha}` scope.
+ */
+export type TodoArtifactKind = "file" | "change" | "spec" | "commit";
+
+/** A link from a TODO item to what its work produced (files/specs by the agent; changes/commit by the host). */
+export interface TodoArtifact {
+	kind: TodoArtifactKind;
+	/** Worktree-relative nav address — present for `file`/`change`/`spec`; a `commit` uses `sha` instead. */
+	path?: string;
+	/** Display text; the UI falls back to the path's basename when absent. */
+	label?: string;
+	/** For `spec` only: the durable spec-graph id. */
+	specId?: string;
+	/** For `commit` only: the sha the item's changes were committed as. */
+	sha?: string;
+	/**
+	 * For `commit` only — **host-derived, never stored**: the commit's recorded changes (path + status +
+	 * `+/−` line counts), resolved from git by `todo.list`'s decoration (memoized by sha — immutable, so
+	 * the cache never staleness-checks). Absent when the sha no longer resolves (a GC'd history rewrite) —
+	 * the client's signal to degrade the affordance silently.
+	 */
+	files?: GitFileChange[];
+}
+
+/**
  * One item of a chat's TODO plan, as the chat's plan popup renders it. Mirrored from `pi-todos`' core
  * `Todo` (never imported — the extension package stays out of the wire). The plan is scoped to a chat
  * session.
@@ -220,6 +247,8 @@ export interface TodoItem {
 	status: TodoStatus;
 	origin: TodoOrigin;
 	note?: string;
+	/** Links to what the work produced — the host attaches `change`/`commit` on `done` (see the todos module). */
+	artifacts?: TodoArtifact[];
 	createdAt: string;
 	updatedAt: string;
 }

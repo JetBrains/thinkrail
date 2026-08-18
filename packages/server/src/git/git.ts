@@ -1,4 +1,4 @@
-import { readFileSync, realpathSync, statSync } from "node:fs";
+import { readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { isAbsolute, relative, resolve } from "node:path";
 import type {
 	BranchList,
@@ -17,6 +17,85 @@ function workspace(workspaceId: string): Workspace {
 	const ws = loadWorkspaces().find((w) => w.id === workspaceId);
 	if (!ws) throw new Error(`Unknown workspace: ${workspaceId}`);
 	return ws;
+}
+
+/**
+ * Commit **exactly `paths`** (worktree-relative) as one commit, with `--no-verify` so the host's commit
+ * never runs (or is failed by) the user's hooks. Returns the new commit's sha, or `null` when there was
+ * nothing to commit or a git op failed. Author/committer stay the user's own git config — it's their
+ * branch. Best-effort bookkeeping for the TODO change-set feature; the caller (todos/artifacts) never
+ * lets it throw. The commit stores only the sha — its change list is derived on demand via `gitStatus`
+ * at the `commit:{sha}` scope (sha-immutable, cacheable; see the todos module's `listTodos` decoration).
+ *
+ * **Only the named paths are committed** — never "whatever is dirty now": the caller passes the set it
+ * proved belongs to the item (and, being the caller's filtered delta, it never contains the host's own
+ * `.thinkrail/` state). Anything that lands in the worktree between the caller's `gitStatus` and this
+ * call is therefore left alone rather than swept into someone else's commit.
+ *
+ * **The user's index is preserved.** Staging is fallible (a missing identity, a signing failure), so the
+ * index **file** is snapshotted byte-for-byte first and written back on every failure path — a skipped
+ * commit leaves the user's staging area exactly as it was, *including index-only state* a tree round-trip
+ * would drop (an intent-to-add entry from `git add -N` has no tree representation, so `write-tree`/
+ * `read-tree` would silently unstage it). An index with unmerged entries (a conflicted merge in flight)
+ * bails out before touching anything — a half-merged worktree is nothing to auto-commit. On success,
+ * `commit -- <paths>` moves only those paths' entries; the user's other staged work stays staged.
+ *
+ * **Paths are literal, never pathspecs.** `paths` are *filenames* reported by `git status`, but a git
+ * pathspec interprets magic (`:(top)…`, `:!…`) and glob characters — a tracked file literally named
+ * `:(top)*` would otherwise expand to "everything from the repo top", defeating the exact-path guarantee
+ * (and the `.thinkrail/` exclusion) above. Every path-consuming command here runs with
+ * `--literal-pathspecs`, so a filename is only ever itself.
+ */
+export function gitCommitPaths(
+	workspaceId: string,
+	message: string,
+	paths: string[],
+): { sha: string } | null {
+	if (paths.length === 0) return null;
+	const cwd = workspace(workspaceId).worktreePath;
+	// A conflicted index is nothing to auto-commit over — bail before touching anything.
+	const unmerged = git(cwd, ["ls-files", "-u"]);
+	if (!unmerged.ok || unmerged.out) return null;
+	// The checkout's real index file (per-worktree in a linked worktree — hence `--git-path`, never a
+	// hardcoded `.git/index`). Snapshot its exact bytes so any later failure can put it back verbatim.
+	const indexOut = git(cwd, ["rev-parse", "--git-path", "index"]);
+	if (!indexOut.ok || !indexOut.out) return null;
+	const indexPath = isAbsolute(indexOut.out) ? indexOut.out : resolve(cwd, indexOut.out);
+	let saved: Buffer | null = null;
+	try {
+		saved = readFileSync(indexPath);
+	} catch {
+		saved = null; // no index yet (fresh checkout) — restore = remove
+	}
+	const restore = (): null => {
+		try {
+			if (saved === null) rmSync(indexPath, { force: true });
+			else writeFileSync(indexPath, saved);
+		} catch {
+			// best-effort: an unwritable index leaves git's own state as the failure left it
+		}
+		return null;
+	};
+	// Every command that consumes `paths` runs `--literal-pathspecs`: they are filenames from `git status`,
+	// and pathspec magic/globs in a filename (`:(top)*`) must not expand beyond the proved delta (see above).
+	// `-A` over an explicit pathspec so a deleted path is staged as a deletion, not skipped.
+	if (!git(cwd, ["--literal-pathspecs", "add", "-A", "--", ...paths]).ok) return restore();
+	// `git diff --cached --quiet -- <paths>` exits 0 (ok) when those paths match HEAD — nothing to commit.
+	if (git(cwd, ["--literal-pathspecs", "diff", "--cached", "--quiet", "--", ...paths]).ok)
+		return restore();
+	// Pathspec-scoped commit: the item's paths only, whatever else the user may have had staged.
+	if (!git(cwd, ["--literal-pathspecs", "commit", "--no-verify", "-m", message, "--", ...paths]).ok)
+		return restore();
+	const head = git(cwd, ["rev-parse", "HEAD"]);
+	if (!head.ok) return null; // committed — the index is already correct for those paths
+	return { sha: head.out };
+}
+
+/** The worktree's current `HEAD` sha (`null` on an unborn HEAD) — the todos baseline's window anchor. */
+export function gitHeadSha(workspaceId: string): string | null {
+	const cwd = workspace(workspaceId).worktreePath;
+	const head = git(cwd, ["rev-parse", "--verify", "--quiet", "HEAD"]);
+	return head.ok && head.out ? head.out : null;
 }
 
 function lines(out: string): string[] {

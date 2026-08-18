@@ -124,16 +124,39 @@ export interface DiffTab {
 	/** The workspace fs tick the contents were loaded at — same live-refresh contract as `FileTab`. */
 	loadedTick?: number;
 }
-export type EditorTab = FileTab | ChatTab | DocTab | DiffTab;
+/**
+ * The chat plan's **live review-map page** (a center tab): renders the session's TODO plan from the
+ * host (live — the pane refetches off `pi.event` like the plan popup) with per-item change sets and
+ * click-through navigation to diffs/Changes. Markdown is an *export* of this page (`planMarkdown`),
+ * never its source — the page replaced the old static `doc`-snapshot route.
+ */
+export interface PlanTab {
+	kind: "plan";
+	/** `${workspaceId}:plan:${sessionId}` — one plan page per chat; re-opening focuses it. */
+	id: string;
+	workspaceId: string;
+	name: string;
+	sessionId: string;
+}
+export type EditorTab = FileTab | ChatTab | DocTab | DiffTab | PlanTab;
 
 export function chatTabId(workspaceId: string, sessionId: string): string {
 	return tupleKey("chat", workspaceId, sessionId);
 }
 
 function editorResourceIdentity(tab: EditorTab): string {
-	return tab.kind === "doc"
-		? tupleKey("layout-resource", "document", "todo-plan", tab.sourceId)
-		: layoutResourceIdentity(tab);
+	if (tab.kind === "doc") {
+		return tupleKey("layout-resource", "document", "todo-plan", tab.sourceId);
+	}
+	if (tab.kind === "plan") {
+		return tupleKey("layout-resource", "document", "todo-plan", tab.sessionId);
+	}
+	return layoutResourceIdentity(tab);
+}
+
+function editorSessionId(tab: EditorTab): string | null {
+	if (tab.kind === "chat" || tab.kind === "plan") return tab.sessionId;
+	return tab.kind === "doc" ? tab.sourceId : null;
 }
 
 /**
@@ -882,9 +905,9 @@ interface AppState {
 		syncLayout?: boolean,
 		options?: LayoutOpenOptions,
 	) => void;
-	/** Cache and open a resolved virtual document. Re-invoking with the same id refreshes local render data;
-	 * the shell publishes only its registered resolver identity, never inline markdown. */
-	openDoc: (tab: DocTab) => void;
+	/** Cache and open a registered center document or live plan page. Shared placement keeps only its
+	 * resolver identity, never inline markdown. */
+	openDoc: (tab: DocTab | PlanTab) => void;
 	closeTab: (
 		id: string,
 		syncLayout?: boolean,
@@ -1339,17 +1362,9 @@ function layoutIntentTargetsSession(
 	sessionId: string,
 ): boolean {
 	if (intent.workspaceId !== workspaceId) return false;
-	if (intent.kind === "open") {
-		return (
-			(intent.tab.kind === "chat" && intent.tab.sessionId === sessionId) ||
-			(intent.tab.kind === "doc" && intent.tab.sourceId === sessionId)
-		);
-	}
+	if (intent.kind === "open") return editorSessionId(intent.tab) === sessionId;
 	if (intent.kind === "select" && intent.resource) {
-		return (
-			(intent.resource.kind === "chat" && intent.resource.sessionId === sessionId) ||
-			(intent.resource.kind === "doc" && intent.resource.sourceId === sessionId)
-		);
+		return editorSessionId(intent.resource) === sessionId;
 	}
 	return false;
 }
@@ -1367,11 +1382,8 @@ function withoutChat(
 	if (s.removedWorkspaceIds[workspaceId]) return s;
 	const alreadyDeleted = isSessionDeleted(s, workspaceId, sessionId);
 	const tabs = s.tabsByWorkspace[workspaceId] ?? [];
-	const sessionTabs = tabs.filter(
-		(candidate) =>
-			(candidate.kind === "chat" && candidate.sessionId === sessionId) ||
-			(candidate.kind === "doc" && candidate.sourceId === sessionId),
-	);
+	// A chat owns its transcript plus any registered legacy document or live plan page.
+	const sessionTabs = tabs.filter((candidate) => editorSessionId(candidate) === sessionId);
 	const closed = s.closedChatsByWorkspace[workspaceId] ?? [];
 	const inHistory = closed.some((chat) => chat.sessionId === sessionId);
 	const hasRuntime = s.sessions[sessionId] !== undefined;
@@ -1953,10 +1965,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 	openTab: (tab, intent, syncLayout = true, options = {}) =>
 		set((s) => {
 			const wsId = tab.workspaceId;
+			const sessionId = editorSessionId(tab);
 			if (
 				s.removedWorkspaceIds[wsId] ||
-				((tab.kind === "chat" || tab.kind === "doc") &&
-					isSessionDeleted(s, wsId, tab.kind === "chat" ? tab.sessionId : tab.sourceId))
+				(sessionId !== null && isSessionDeleted(s, wsId, sessionId))
 			) {
 				return {};
 			}
@@ -2030,9 +2042,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 		}),
 	openDoc: (tab) =>
 		set((s) => {
+			const sessionId = editorSessionId(tab);
 			if (
 				s.removedWorkspaceIds[tab.workspaceId] ||
-				isSessionDeleted(s, tab.workspaceId, tab.sourceId)
+				(sessionId !== null && isSessionDeleted(s, tab.workspaceId, sessionId))
 			) {
 				return {};
 			}

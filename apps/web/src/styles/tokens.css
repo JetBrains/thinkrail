@@ -28,6 +28,8 @@
 	--transition-normal: 200ms ease;
 
 	/* General spacing (one calc family — tracks --space-base) */
+	/* 2xs: hairline insets — chip padding, icon baseline nudges */
+	--space-2xs: calc(var(--space-base) * 0.15);
 	--space-xs: calc(var(--space-base) * 0.31);
 	--space-sm: calc(var(--space-base) * 0.62);
 	--space-md: calc(var(--space-base) * 0.92);

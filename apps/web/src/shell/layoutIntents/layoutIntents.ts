@@ -58,6 +58,15 @@ export function toLayoutTab(tab: EditorTab): LayoutCenterTab | null {
 				docPath: tab.docPath,
 			};
 		}
+		case "plan":
+			return {
+				kind: "document",
+				id: tab.id,
+				name: tab.name,
+				documentKind: "todo-plan",
+				sourceId: tab.sessionId,
+				docPath: "TODO.md",
+			};
 	}
 }
 

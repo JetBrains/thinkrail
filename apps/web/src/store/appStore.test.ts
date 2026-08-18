@@ -845,17 +845,15 @@ test("authoritative session reconciliation never impersonates user navigation", 
 	expect(state.navTickByWorkspace.ws1 ?? 0).toBe(before);
 });
 
-test("session deletion drops queued chat and dependent-document opens before pruning placement", () => {
+test("session deletion drops queued chat and live-plan opens before pruning placement", () => {
 	const store = useAppStore.getState();
 	store.openChatSession("ws1", "queued", null, "medium");
 	store.openDoc({
-		kind: "doc",
-		id: "queued-todo",
+		kind: "plan",
+		id: "queued-plan",
 		workspaceId: "ws1",
-		name: "Queued TODO",
-		content: "# Queued",
-		docPath: "TODO.md",
-		sourceId: "queued",
+		name: "Queued plan",
+		sessionId: "queued",
 	});
 	store.deleteChat("ws1", "queued", false);
 	const afterDeletion = useAppStore.getState();
@@ -865,8 +863,8 @@ test("session deletion drops queued chat and dependent-document opens before pru
 		intents.some(
 			(intent) =>
 				intent.kind === "open" &&
-				((intent.tab.kind === "chat" && intent.tab.sessionId === "queued") ||
-					(intent.tab.kind === "doc" && intent.tab.sourceId === "queued")),
+				(intent.tab.kind === "chat" || intent.tab.kind === "plan") &&
+				intent.tab.sessionId === "queued",
 		),
 	).toBe(false);
 	expect(intents.at(-1)).toMatchObject({
@@ -2498,7 +2496,7 @@ test("the slot is per workspace — clearWorkspaceTabs releases only its own", (
 	expect(s.previewTabByWorkspace.ws2).toBe("ws2:b.ts");
 });
 
-test("chat tabs and doc tabs never enter the preview slot", () => {
+test("chat, document, and plan tabs never enter the preview slot", () => {
 	useAppStore.setState({ activeWorkspaceId: "ws1" });
 	const store = useAppStore.getState();
 	store.openTab(fileTab("ws1", "a.ts"), "preview");
@@ -2523,11 +2521,18 @@ test("chat tabs and doc tabs never enter the preview slot", () => {
 		},
 		"preview",
 	);
+	store.openDoc({
+		kind: "plan",
+		id: "ws1:live-plan",
+		workspaceId: "ws1",
+		name: "Live plan",
+		sessionId: "s3",
+	});
 
 	const s = useAppStore.getState();
 	// Still the file: even callers that pass `preview` directly are hardened to a kept chat open.
 	expect(s.previewTabByWorkspace.ws1).toBe("ws1:a.ts");
-	expect(s.tabsByWorkspace.ws1).toHaveLength(4);
+	expect(s.tabsByWorkspace.ws1).toHaveLength(5);
 	expect(s.layoutIntents.at(-1)).toMatchObject({ kind: "open", intent: "keep" });
 });
 

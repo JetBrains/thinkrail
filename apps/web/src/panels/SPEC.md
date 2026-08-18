@@ -338,16 +338,24 @@ a project picker, the prompt hero, and the reused
   changes, and terminals run directly in your project folder.” An **external workspace** reads
   **“Existing worktree”** with `on <branch>` for the same reason — ThinkRail did not cut it, so there is no
   `from <base>` to claim. It is neither one-time nor dismissible, so it also helps
-  after the last tab closes without introducing onboarding state. The workbench resource renderer also
-  handles registered **virtual-document** tabs via `DocPane`→`MarkdownPreview`; these write no file but carry a
-  resolver kind plus durable source identity so every client can rehydrate shared placement. The existing
-  TODO-markdown view is a live `todo-plan` document keyed by session (see the `chat` module), never inline
-  markdown smuggled into the layout. `TerminalWorkbench` owns one visibility-gated terminal body per semantic
-  terminal identity and the host-atomic close flow. A busy close remains one correlated request through its
-  confirmation and forced retry; dialog auto-close cannot release that request, authoritative catalog removal
-  dismisses stale confirmation, and a rejected force clears exactly that request with an error so a later
-  close can start cleanly. The workbench
-  close command for a chat routes to `store.closeChatToHistory` (keeps the session alive) and shows a
+  after the last tab closes without introducing onboarding state. The workbench resource renderer handles
+  registered **`plan`** tabs (`PlanTab`) via the lazy **`PlanPane`** — the chat plan's **live review-map
+  page**. Shared layout stores only the `todo-plan` resolver kind + session identity, never inline plan
+  content, so every client can rehydrate the same page. It renders the session's TODO plan document-scale
+  (groups as sections, items with status glyphs), each done item carrying a **collapsible** change set — a
+  disclosure whose summary line (sha chip + `N files` + `DiffStatBadge`) toggles the commit's
+  `GitFileChange[]` rows, **collapsed by default** so a long plan stays compact; the chevron/summary is the
+  toggle while the sha chip stays a separate button (routing the Changes panel, never toggling). Expanded,
+  file rows open Monaco diff tabs at the item's `commit:{sha}` scope (`openDiffInTab`, preview intent; the
+  path-list fallback opens at branch scope, no counts because they would drift), and header **Copy** / **Save
+  .md** actions compile through `chat/planMarkdown`. Live by construction, it reads through the same
+  `useChatTodos` hook as the plan popup (per-mount fetch + `pi.event` refetch), so it cannot show a stale
+  snapshot. `TerminalWorkbench` owns one visibility-gated terminal body per semantic terminal identity and
+  the host-atomic close flow. A busy close remains one correlated request through confirmation and forced
+  retry; dialog auto-close cannot release that request, authoritative catalog removal dismisses stale
+  confirmation, and a rejected force clears exactly that request with an error so a later close can start
+  cleanly. The workbench close command for a chat routes to `store.closeChatToHistory` (keeps the session
+  alive) and shows a
   **chat-history** dropdown (recently-closed + disk-only chats, shown only when non-empty); each row has
   a one-click trash action (`session.delete` → idempotent `store.deleteChat`, no confirm); the
   `session.deleted` broadcast drives the same fold in every connected client. On workspace activation and
@@ -814,7 +822,7 @@ a project picker, the prompt hero, and the reused
   identity; its label is italic and carries `data-preview="true"`. Single-clicking a file/spec/change row or
   following a rendered-document/chat artifact link opens into the browser's last-focused destination group
   as preview. Double-click keeps; clicking an already active preview keeps as the touch path. An explicit
-  Settings/open-as-file action starts kept. Chat and registered virtual-document tabs never enter preview.
+  Settings/open-as-file action starts kept. Chat and registered plan/document tabs never enter preview.
   The strip and
   context/command surfaces also expose a keyboard-operable Keep Preview command.
 

@@ -1,14 +1,11 @@
 import type {
 	LayoutCenterTab,
-	LayoutDocumentTab,
 	LayoutTab,
 	LayoutToolId,
 	WorkspaceLayoutDocument,
 } from "@thinkrail/contracts";
 import { GitBranch, MessageSquarePlus, SquareTerminal } from "lucide-react";
 import { lazy, type ReactNode, Suspense, useCallback, useEffect, useMemo, useState } from "react";
-import { planToMarkdown } from "../chat/planMarkdown";
-import { useChatTodos } from "../chat/useChatTodos";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { type LayoutAttention, layoutResourceIdentity } from "../lib";
 import { ChangesPanel } from "../panels/ChangesPanel";
@@ -62,51 +59,9 @@ import { useTerminalPlacementReconciliation } from "./terminalReconciliation";
 import { WorkspaceChatHistory } from "./WorkspaceChatHistory";
 
 const ChatView = lazy(() => import("../chat/ChatView"));
-const MarkdownPreview = lazy(() => import("../panels/MarkdownPreview"));
+const PlanPane = lazy(() => import("../panels/PlanPane"));
 
 const NO_EDITOR_TABS: EditorTab[] = [];
-
-function TodoDocumentBody({ workspaceId, tab }: { workspaceId: string; tab: LayoutDocumentTab }) {
-	const todos = useChatTodos(workspaceId, tab.sourceId);
-	const title = tab.name.replace(/^TODO · /, "");
-	const content = todos.data ? planToMarkdown(todos.data, title) : null;
-	useEffect(() => {
-		if (content === null) return;
-		const state = useAppStore.getState();
-		const currentDocument = state.layoutDocumentsByWorkspace[workspaceId];
-		const placed = currentDocument ? findPlacedResource(currentDocument, tab) : undefined;
-		if (placed?.kind !== "document") return;
-		state.openTab(
-			{
-				kind: "doc",
-				id: placed.id,
-				workspaceId,
-				name: placed.name,
-				content,
-				docPath: placed.docPath,
-				sourceId: placed.sourceId,
-			},
-			"keep",
-			false,
-			{ activate: false },
-		);
-	}, [content, tab, workspaceId]);
-	if (todos.failed) {
-		return (
-			<div className="flex h-full items-center justify-center px-lg text-center tr-text-ui text-feedback-error">
-				The TODO plan could not be restored. Close and reopen this document to retry.
-			</div>
-		);
-	}
-	if (!todos.data) {
-		return (
-			<div className="flex h-full items-center justify-center text-text-muted">
-				Loading TODO plan…
-			</div>
-		);
-	}
-	return <MarkdownPreview content={content ?? ""} workspaceId={workspaceId} path={tab.docPath} />;
-}
 
 function MissingResource({ label }: { label: string }) {
 	return (
@@ -376,11 +331,11 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				);
 			}
 			if (tab.kind === "document") {
-				if (deletedSessions?.[tab.sourceId]) return <MissingResource label="document" />;
+				if (deletedSessions?.[tab.sourceId]) return <MissingResource label="plan" />;
 				return (
-					<ErrorBoundary label="document" resetKeys={[workspaceId, tab.id]}>
-						<Suspense fallback={<MissingResource label="document" />}>
-							<TodoDocumentBody workspaceId={workspaceId} tab={tab} />
+					<ErrorBoundary label="plan" resetKeys={[workspaceId, tab.id]}>
+						<Suspense fallback={<MissingResource label="plan" />}>
+							<PlanPane workspaceId={workspaceId} sessionId={tab.sourceId} />
 						</Suspense>
 					</ErrorBoundary>
 				);

@@ -679,6 +679,9 @@ test("remote closures reconcile chat history and cached file reopening", async (
 	await defaultWorkspaceRow(peer).click();
 	const peerChat = peer.locator('[data-testid="editor-tab"][data-kind="chat"]');
 	await expect(peerChat).toHaveCount(1);
+	// A shared tab can render before this browser has hydrated its local chat cache. Closing at that point
+	// removes the shared placement but has no local cache entry to move into History.
+	await expect(peer.getByTestId("chat-input")).toBeVisible();
 	await peerChat.hover();
 	await peerChat.getByTestId("editor-tab-close").click();
 
