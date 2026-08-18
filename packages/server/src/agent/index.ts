@@ -16,9 +16,11 @@ export {
 	configurePiRuntime,
 	configurePiRuntimeExtensionPaths,
 	configurePiRuntimeFactory,
+	configurePiRuntimeGenerationInitializer,
 	configurePiRuntimeSessionExtensionExclusions,
 	getPiRuntimeGeneration,
 	type PiRuntimeGeneration,
+	type PiRuntimeGenerationInitializer,
 	type PreparePiRuntimeGenerationResult,
 	preparePiRuntimeGeneration,
 } from "./piRuntime";

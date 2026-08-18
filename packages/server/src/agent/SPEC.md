@@ -64,9 +64,12 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     `provider.status` + in-app login — lives in the sibling `auth` module (which consumes the shared
     `usePiRuntime` callback), **not** here.
 
-    Candidate preparation takes only the reviewed opaque Central path set, builds a fresh runtime, and applies
-    those extensions once through PI's public headless loader. The path is the only artifact fact this module
-    receives; it never reads, parses, hashes, snapshots, logs, copies, or serves the file. Extension/loader/
+    Candidate preparation takes only the reviewed opaque Central path set, builds a fresh runtime, applies the
+    composition root's invariant generation initializer (the source-mode e2e host uses it for its gated fake
+    providers), and then applies those extensions once through PI's public headless loader. The initializer must
+    be configured before the first generation and runs for every candidate, so a Central add/remove/replace can
+    never drop process-local provider registrations. The path is the only artifact fact this module receives;
+    it never reads, parses, hashes, snapshots, logs, copies, or serves the file. Initializer/extension/loader/
     provider failures discard the candidate and collapse to a closed `load-failed` outcome; raw diagnostics
     never reach `pi.extensionUi`, the wire, logs, analytics, persistence, or snapshots. Auth owns file watching,
     coalescing, and stale-candidate rejection; agent only prepares and activates a generation.
@@ -323,7 +326,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
 - **Public surface (barrel):** the manager operations (incl. `answerQuestion` +
   `settleSessionsForShutdown`) + `CreateSessionInput`/`CreateSessionResult` + `SessionEventPayload`;
   the runtime-generation facade (`usePiRuntime`, candidate prepare/activate, current generation id, and the
-  closed `load-failed` outcome—no manager internals) plus `configurePiRuntime`/factory test seams;
+  closed `load-failed` outcome—no manager internals) plus `configurePiRuntime`/factory test seams and the
+  pre-bootstrap `configurePiRuntimeGenerationInitializer` composition seam;
   `completeOnce`/`pickModel` +
   `OneShotRequest`/`OneShotResult`/`ModelTier`; the `webUiContext` seams; the `askUserQuestion` pure
   helpers (`validateQuestionnaire`/`buildQuestionnaireResponse`/`assessAnswerability`/

@@ -8,6 +8,7 @@ import { buildResourceLoader } from "./extensions";
 import {
 	type CatalogRefreshRuntime,
 	configurePiRuntime,
+	configurePiRuntimeGenerationInitializer,
 	getPiRuntime,
 	preparePiRuntimeGeneration,
 	refreshCatalogs,
@@ -88,6 +89,38 @@ test("a session loader excludes an opaque generation artifact but preserves othe
 		if (priorAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
 		else process.env.PI_CODING_AGENT_DIR = priorAgentDir;
 		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test("the process-local initializer applies to every fresh runtime generation", async () => {
+	const agentDir = mkdtempSync(join(tmpdir(), "trpi-generation-initializer-"));
+	const priorAgentDir = process.env.PI_CODING_AGENT_DIR;
+	process.env.PI_CODING_AGENT_DIR = agentDir;
+	configurePiRuntime(null);
+	let calls = 0;
+	configurePiRuntimeGenerationInitializer((runtime) => {
+		calls += 1;
+		runtime.registerProvider("generation-initializer-probe", { name: "Generation initializer" });
+	});
+	try {
+		const first = await preparePiRuntimeGeneration([]);
+		const second = await preparePiRuntimeGeneration([]);
+		expect(first.outcome).toBe("prepared");
+		expect(second.outcome).toBe("prepared");
+		if (first.outcome !== "prepared" || second.outcome !== "prepared") return;
+		expect(first.generation.runtime.getRegisteredProviderIds()).toContain(
+			"generation-initializer-probe",
+		);
+		expect(second.generation.runtime.getRegisteredProviderIds()).toContain(
+			"generation-initializer-probe",
+		);
+		expect(calls).toBe(2);
+	} finally {
+		configurePiRuntime(null);
+		configurePiRuntimeGenerationInitializer();
+		if (priorAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
+		else process.env.PI_CODING_AGENT_DIR = priorAgentDir;
+		rmSync(agentDir, { recursive: true, force: true });
 	}
 });
 

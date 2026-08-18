@@ -19,12 +19,15 @@ export type PreparePiRuntimeGenerationResult =
 	| { outcome: "prepared"; generation: PiRuntimeGeneration }
 	| { outcome: "failed"; reason: "candidate-failed" };
 
+export type PiRuntimeGenerationInitializer = (runtime: ModelRuntime) => void | Promise<void>;
+
 let nextGenerationId = 1;
 let activeGeneration: Promise<PiRuntimeGeneration> | null = null;
 let configuredExtensionPaths: readonly string[] = [];
 let configuredSessionExtensionExclusions: readonly string[] = [];
 let runtimeFactory: (additionalExtensionPaths: readonly string[]) => Promise<ModelRuntime> =
 	createRuntimeWithExtensions;
+let generationInitializer: PiRuntimeGenerationInitializer = () => {};
 
 /** Override the shared runtime — tests inject a faux-backed one so no auth/network is needed. */
 export function configurePiRuntime(rt: ModelRuntime | null): void {
@@ -45,6 +48,17 @@ export function configurePiRuntimeFactory(
 	factory?: (additionalExtensionPaths: readonly string[]) => Promise<ModelRuntime>,
 ): void {
 	runtimeFactory = factory ?? createRuntimeWithExtensions;
+}
+
+/**
+ * Configure process-local registrations that every fresh runtime generation needs. The composition root must
+ * install this before bootstrap; otherwise generations could expose different provider capabilities.
+ */
+export function configurePiRuntimeGenerationInitializer(
+	initializer?: PiRuntimeGenerationInitializer,
+): void {
+	if (activeGeneration) throw new Error("PI runtime already initialized");
+	generationInitializer = initializer ?? (() => {});
 }
 
 /** Configure the lazy bootstrap generation before any runtime consumer is admitted. */
@@ -123,6 +137,7 @@ async function createRuntimeWithExtensions(
 ): Promise<ModelRuntime> {
 	await advanceExtensionCacheGeneration();
 	const runtime = await createRuntimeOfflineByDefault();
+	await generationInitializer(runtime);
 	// Jiti's on-disk transpilation cache is independent of PI's extension factory cache and is keyed by
 	// path. Central replaces that path in place, so force Jiti's documented rebuild mode only for this
 	// candidate load; restore the caller's environment immediately afterward.
