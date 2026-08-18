@@ -101,8 +101,10 @@ export function TerminalsPanel() {
 				className="flex h-panel-header-row shrink-0 items-center gap-4 border-b border-border-default pr-12 pl-12"
 			>
 				{/* The terminals ARE the tabs — same shared `TabButton` pattern as the right-rail strip, no separate
-				    "Terminal" eyebrow that would duplicate the single tab. A lone terminal shows "Terminal"; once a
-				    second exists each shows its stored "Terminal N" title.
+				    "Terminal" eyebrow that would duplicate the single tab. The strip has three states, driven purely
+				    by the tab count: none open → the default "Terminal" label (e.g. the last tab was just closed —
+				    never an empty strip); one open → a single "Terminal" tab; two or more → each tab's stored
+				    "Terminal N" title.
 				    overflow-y-hidden is REQUIRED, not cosmetic: a bare overflow-x-auto promotes overflow-y to `auto`
 				    (CSS spec), so the horizontal tab scroller would grow a vertical scrollbar inside the fixed-height
 				    header. Matches the center tab strip's scroller (CenterTabs). */}
@@ -110,22 +112,28 @@ export function TerminalsPanel() {
 					data-testid="terminal-tab-strip"
 					className="flex h-full min-w-0 flex-1 items-stretch gap-4 overflow-x-auto overflow-y-hidden"
 				>
-					{tabs.map((tab) => {
-						const label = tabs.length === 1 ? "Terminal" : tab.title;
-						return (
-							<TabButton
-								key={tab.tabKey}
-								testid="terminal-tab"
-								active={tab.tabKey === activeTerminalId}
-								onClick={() => setActiveTerminalTab(tab.workspaceId, tab.tabKey)}
-								onClose={() => closeTab(tab, false)}
-								closeTestid="terminal-tab-close"
-								closeLabel={`Close ${label}`}
-							>
-								{label}
-							</TabButton>
-						);
-					})}
+					{tabs.length === 0 ? (
+						<span className="flex h-full items-center tr-text-eyebrow text-text-muted">
+							Terminal
+						</span>
+					) : (
+						tabs.map((tab) => {
+							const label = tabs.length === 1 ? "Terminal" : tab.title;
+							return (
+								<TabButton
+									key={tab.tabKey}
+									testid="terminal-tab"
+									active={tab.tabKey === activeTerminalId}
+									onClick={() => setActiveTerminalTab(tab.workspaceId, tab.tabKey)}
+									onClose={() => closeTab(tab, false)}
+									closeTestid="terminal-tab-close"
+									closeLabel={`Close ${label}`}
+								>
+									{label}
+								</TabButton>
+							);
+						})
+					)}
 				</div>
 				<button
 					type="button"

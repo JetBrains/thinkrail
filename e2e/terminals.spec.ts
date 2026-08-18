@@ -635,6 +635,8 @@ test("closing a tab with a running process asks first", async ({ page }) => {
 
 	await page.getByTestId("terminal-close-busy-confirm").click();
 	await expect(page.getByTestId("terminal-tab")).toHaveCount(0);
+	// With no tabs the header returns to the default "Terminal" label — never an empty strip.
+	await expect(page.getByTestId("terminal-header")).toContainText("Terminal");
 });
 
 // An idle prompt has nothing to lose, so it must not train people to click through the dialog above.
