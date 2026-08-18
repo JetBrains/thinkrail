@@ -1,6 +1,6 @@
 import type { TerminalTabsPush } from "@thinkrail/contracts";
 import { WS_CHANNELS } from "@thinkrail/contracts";
-import { Plus, X } from "lucide-react";
+import { Plus } from "lucide-react";
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import {
 	selectActiveTerminalId,
@@ -10,7 +10,7 @@ import {
 } from "../store";
 import { getTransport } from "../transport";
 import { ConfirmDialog } from "./ConfirmDialog";
-import { workspaceTabStateClass } from "./tabState";
+import { TabButton } from "./TabButton";
 
 const TerminalInstance = lazy(() => import("./TerminalInstance"));
 
@@ -98,25 +98,34 @@ export function TerminalsPanel() {
 		<div data-testid="terminal-panel" className="flex h-full min-h-0 flex-col">
 			<div
 				data-testid="terminal-header"
-				className="flex h-panel-header-row shrink-0 items-center gap-4 border-b border-border-default pr-4 pl-12"
+				className="flex h-panel-header-row shrink-0 items-center gap-4 border-b border-border-default pr-12 pl-12"
 			>
-				<span className="shrink-0 tr-text-eyebrow text-text-muted">Terminal</span>
-				{/* overflow-y-hidden is REQUIRED, not cosmetic: a bare overflow-x-auto promotes overflow-y to
-				    `auto` (CSS spec), so the horizontal tab scroller would grow a vertical scrollbar inside the
-				    fixed-height header. Matches the center tab strip's scroller (CenterTabs). */}
+				{/* The terminals ARE the tabs — same shared `TabButton` pattern as the right-rail strip, no separate
+				    "Terminal" eyebrow that would duplicate the single tab. A lone terminal shows "Terminal"; once a
+				    second exists each shows its stored "Terminal N" title.
+				    overflow-y-hidden is REQUIRED, not cosmetic: a bare overflow-x-auto promotes overflow-y to `auto`
+				    (CSS spec), so the horizontal tab scroller would grow a vertical scrollbar inside the fixed-height
+				    header. Matches the center tab strip's scroller (CenterTabs). */}
 				<div
 					data-testid="terminal-tab-strip"
-					className="flex h-full min-w-0 flex-1 items-stretch gap-px overflow-x-auto overflow-y-hidden"
+					className="flex h-full min-w-0 flex-1 items-stretch gap-4 overflow-x-auto overflow-y-hidden"
 				>
-					{tabs.map((tab) => (
-						<TerminalTabButton
-							key={tab.tabKey}
-							tab={tab}
-							active={tab.tabKey === activeTerminalId}
-							onSelect={() => setActiveTerminalTab(tab.workspaceId, tab.tabKey)}
-							onClose={() => closeTab(tab, false)}
-						/>
-					))}
+					{tabs.map((tab) => {
+						const label = tabs.length === 1 ? "Terminal" : tab.title;
+						return (
+							<TabButton
+								key={tab.tabKey}
+								testid="terminal-tab"
+								active={tab.tabKey === activeTerminalId}
+								onClick={() => setActiveTerminalTab(tab.workspaceId, tab.tabKey)}
+								onClose={() => closeTab(tab, false)}
+								closeTestid="terminal-tab-close"
+								closeLabel={`Close ${label}`}
+							>
+								{label}
+							</TabButton>
+						);
+					})}
 				</div>
 				<button
 					type="button"
@@ -161,43 +170,6 @@ export function TerminalsPanel() {
 					if (confirmBusy) closeTab(confirmBusy, true);
 				}}
 			/>
-		</div>
-	);
-}
-
-function TerminalTabButton({
-	tab,
-	active,
-	onSelect,
-	onClose,
-}: {
-	tab: TerminalTab;
-	active: boolean;
-	onSelect: () => void;
-	onClose: () => void;
-}) {
-	return (
-		<div
-			className={`group flex shrink-0 items-center gap-4 rounded-[var(--radius-sm)] pr-4 pl-8 tr-text-ui ${workspaceTabStateClass(active)}`}
-		>
-			<button
-				type="button"
-				data-testid="terminal-tab"
-				data-active={active}
-				onClick={onSelect}
-				className="max-w-[120px] truncate py-4"
-			>
-				{tab.title}
-			</button>
-			<button
-				type="button"
-				data-testid="terminal-tab-close"
-				aria-label={`Close ${tab.title}`}
-				onClick={onClose}
-				className="rounded-[var(--radius-sm)] p-2 text-text-muted opacity-0 hover:bg-container-elevated-bg hover:text-text-default group-hover:opacity-100"
-			>
-				<X className="size-12" />
-			</button>
 		</div>
 	);
 }

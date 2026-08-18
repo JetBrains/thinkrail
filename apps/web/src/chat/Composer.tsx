@@ -588,7 +588,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 			{mentionOpen ? (
 				<div
 					data-testid="mention-menu"
-					className="absolute bottom-full left-8 mb-4 max-h-[40vh] w-[min(28rem,90%)] overflow-y-auto rounded-[var(--radius-md)] border border-border-default bg-container-elevated-bg p-4 shadow-[var(--shadow-md)]"
+					className="absolute bottom-full left-12 mb-4 max-h-[40vh] w-[min(28rem,90%)] overflow-y-auto rounded-[var(--radius-md)] border border-border-default bg-container-elevated-bg p-4 shadow-[var(--shadow-md)]"
 				>
 					{mentionCandidates.map((candidate, index) => (
 						<button
@@ -612,7 +612,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 					commands={slashCompletion.matches}
 					activeIndex={slashCompletion.activeIndex}
 					onSelect={slashCompletion.pick}
-					className="absolute bottom-full left-8 mb-4"
+					className="absolute bottom-full left-12 mb-4"
 					// The nudge is about having NO templates at all — never about the current query matching
 					// none — so it keys on the owner's confirmed-empty listing, not on the visible matches.
 					footer={
@@ -646,14 +646,14 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 					type="button"
 					data-testid="slot-hint"
 					onClick={() => stepSlot(1)}
-					className="absolute bottom-full left-8 mb-4 rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-8 py-4 text-text-muted tr-text-metadata shadow-[var(--shadow-md)] hover:bg-control-bg-hovered hover:text-text-default"
+					className="absolute bottom-full left-12 mb-4 rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-8 py-4 text-text-muted tr-text-metadata shadow-[var(--shadow-md)] hover:bg-control-bg-hovered hover:text-text-default"
 				>
 					slot {slotIdx + 1}/{slots.length} · ⇥ next · esc done
 				</button>
 			) : null}
 
 			{images.length > 0 ? (
-				<div className="flex flex-wrap gap-4 px-8 pt-8" data-testid="composer-images">
+				<div className="flex flex-wrap gap-4 px-12 pt-12" data-testid="composer-images">
 					{images.map((img) => (
 						<span
 							key={img.id}
@@ -673,7 +673,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 				</div>
 			) : null}
 
-			<div className="p-8">
+			<div className="p-12">
 				{/* The UNIFIED composer surface: the message input is the main content and the controls
 				 * (model / thinking / history / send) are a FOOTER inside the SAME border — one visual entity, not
 				 * an input box with a separate control strip below it. 12px internal padding all round (textarea
