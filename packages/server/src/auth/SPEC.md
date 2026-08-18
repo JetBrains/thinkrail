@@ -100,8 +100,9 @@ ourselves and never surface a credential value over the wire.
 - **Public surface (barrel):** `getProviderStatus`, `buildProviderReport` (+ `ProviderStatusSources`);
   `startLogin`, `resolveLogin`, `cancelLogin`, `cancelAllLogins`, `logoutProvider`,
   `setLoginPublisher`; `initializeJbcentralRuntime`, `stopJbcentralRuntime`, `getJbcentralStatus`,
-  `connectJbcentral`, `disconnectJbcentral`, `updateJbcentral`, `jbcentralLogin`, and the successful-action /
-  runtime-changed publisher seams.
+  `connectJbcentral`, `disconnectJbcentral`, `updateJbcentral`, `jbcentralLogin`, the successful-action /
+  runtime-changed publisher seams, and the explicit `resetJbcentralStateForTests` lifecycle seam used by
+  sibling host tests.
 - **Allowed deps:** `contracts` (wire types); `shared/jbcentral`; the **`agent` barrel** for the current
   runtime/auth facade plus candidate prepare/activate; `@earendil-works/pi-ai` (auth interaction **types** only).
 - **Forbidden:** reaching into `agent` internals (runtime and generation changes only through its barrel); importing `host` or

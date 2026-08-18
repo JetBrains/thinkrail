@@ -14,6 +14,7 @@ const ACTION_TIMEOUT_MS = 120_000;
 const UPDATE_TIMEOUT_MS = 300_000;
 const MAX_VERSION_OUTPUT_BYTES = 4_096;
 const WATCH_RETRY_MS = 250;
+const WATCH_EXISTENCE_POLL_MS = 250;
 
 const JBCENTRAL_INSTALL_BASE =
 	"https://jetbrains-central-cli.s3.eu-west-1.amazonaws.com/central/stable";
@@ -385,9 +386,9 @@ function nodeWatchDirectory(path: string, onInvalidate: () => void): WatchHandle
 }
 
 /**
- * Observe only Central's reviewed artifact location. The watcher reports invalidation nudges; it never opens
- * the artifact. If its directory does not exist yet, it watches the nearest existing parent and re-arms as
- * the directory tree appears.
+ * Observe only Central's reviewed artifact location. Filesystem events report invalidation nudges, while a
+ * cheap existence poll repairs dropped add/remove events; neither path opens the artifact. If its directory
+ * does not exist yet, the watcher follows the nearest existing parent and re-arms as the tree appears.
  */
 export function watchJbcentralArtifact(
 	onInvalidate: () => void,
@@ -399,6 +400,8 @@ export function watchJbcentralArtifact(
 	let watchedDirectory: string | null = null;
 	let handle: WatchHandle | null = null;
 	let rearmTimer: ReturnType<typeof setTimeout> | null = null;
+	let pollTimer: ReturnType<typeof setTimeout> | null = null;
+	let artifactExists = pathExists(extensionPath, deps);
 
 	const closeHandle = (): void => {
 		try {
@@ -420,6 +423,9 @@ export function watchJbcentralArtifact(
 
 	const invalidate = (): void => {
 		if (stopped) return;
+		// Fold the latest existence into the poll baseline so one filesystem event and its later poll do not
+		// report the same add/remove transition twice. Events are still hints; the consumer re-inspects.
+		artifactExists = pathExists(extensionPath, deps);
 		try {
 			onInvalidate();
 		} catch {
@@ -441,11 +447,26 @@ export function watchJbcentralArtifact(
 		}
 	};
 
+	const pollExistence = (): void => {
+		if (stopped) return;
+		const nextArtifactExists = pathExists(extensionPath, deps);
+		if (nextArtifactExists !== artifactExists) {
+			artifactExists = nextArtifactExists;
+			invalidate();
+		}
+		pollTimer = setTimeout(pollExistence, WATCH_EXISTENCE_POLL_MS);
+		pollTimer.unref?.();
+	};
+
 	arm();
+	pollTimer = setTimeout(pollExistence, WATCH_EXISTENCE_POLL_MS);
+	pollTimer.unref?.();
 	return () => {
 		stopped = true;
 		if (rearmTimer) clearTimeout(rearmTimer);
+		if (pollTimer) clearTimeout(pollTimer);
 		rearmTimer = null;
+		pollTimer = null;
 		closeHandle();
 	};
 }

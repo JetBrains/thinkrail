@@ -74,8 +74,9 @@ Exposed through explicit subpath exports, not a barrel.
   stdout/stderr is ignored. No child output is logged or returned, and only exit success plus safe
   postconditions map to a closed adapter outcome. `watchJbcentralArtifact(onChange)` observes only that
   reviewed location and reports invalidation events for add, remove, and replacement; it handles a not-yet-
-  existing extension directory by re-arming from the nearest existing parent. It never opens or fingerprints
-  the generated file. The caller debounces events and rechecks existence through the ordinary inspection API.
+  existing extension directory by re-arming from the nearest existing parent, and an existence-only poll
+  repairs dropped add/remove filesystem events. It never opens or fingerprints the generated file. The caller
+  debounces events and rechecks existence through the ordinary inspection API.
 
   The adapter deliberately has no migration path for the previous unpublished integration: it never reads or
   edits `models.json`, `auth.json`, backups, or any unrelated PI state.

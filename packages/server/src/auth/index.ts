@@ -7,6 +7,7 @@ export {
 	getJbcentralStatus,
 	initializeJbcentralRuntime,
 	jbcentralLogin,
+	resetJbcentralStateForTests,
 	setJbcentralAppliedPublisher,
 	setJbcentralChangedPublisher,
 	stopJbcentralRuntime,

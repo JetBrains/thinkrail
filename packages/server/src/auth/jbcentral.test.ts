@@ -302,6 +302,8 @@ describe("watched native Central runtime", () => {
 			outcome: "failed",
 			reason: "candidate-failed",
 		});
+		// The watcher/poll may coalesce one final removal hint behind the action-owned rebuild.
+		await pollStatus("load-failed");
 		expect(await getJbcentralStatus()).toMatchObject({
 			state: "load-failed",
 			configured: false,

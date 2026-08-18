@@ -248,6 +248,40 @@ describe("Central artifact watcher", () => {
 		callbacks.get("/users/test/.pi/agent/extensions")?.();
 		expect(invalidations).toBe(2);
 	});
+
+	test("repairs a dropped add/remove event by polling artifact existence only", async () => {
+		const extensionPath = "/users/test/.pi/agent/extensions/jetbrains-central.ts";
+		const existing = new Set([
+			"/users/test",
+			"/users/test/.pi",
+			"/users/test/.pi/agent",
+			"/users/test/.pi/agent/extensions",
+		]);
+		let invalidations = 0;
+		const stop = watchJbcentralArtifact(
+			() => {
+				invalidations += 1;
+			},
+			adapterDeps({
+				exists: (path) => existing.has(path),
+				// Deliberately retain but never invoke the filesystem callback.
+				watchDirectory: () => ({ close: () => {} }),
+			}),
+		);
+
+		const waitForInvalidations = async (expected: number): Promise<void> => {
+			const deadline = Date.now() + 1_000;
+			while (invalidations < expected && Date.now() < deadline) {
+				await new Promise((resolve) => setTimeout(resolve, 20));
+			}
+		};
+		existing.add(extensionPath);
+		await waitForInvalidations(1);
+		existing.delete(extensionPath);
+		await waitForInvalidations(2);
+		expect(invalidations).toBe(2);
+		stop();
+	});
 });
 
 describe("Central paths and install guidance", () => {
