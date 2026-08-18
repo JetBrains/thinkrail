@@ -1,30 +1,38 @@
 import type {
-	LayoutChangedPayload,
 	LayoutReplaceParams,
+	LayoutReplaceResult,
 	WorkspaceLayoutDocument,
 	WorkspaceLayoutSnapshot,
 } from "@thinkrail/contracts";
-import { type LayoutAttention, tupleKey } from "../lib";
-import { isConnectedGeneration, toast, useAppStore } from "../store";
-import { errorText, getTransport } from "../transport";
+import { useEffect, useRef } from "react";
+import { type LayoutAttention, tupleKey } from "../../lib";
+import { isConnectedGeneration, toast, useAppStore } from "../../store";
+import { errorText, getTransport } from "../../transport";
 import {
 	createLayoutId,
 	instantiateLayoutPreset,
 	minimumSideGroupLimit,
 	reconcileAttention,
 	resolveLayoutPreset,
-} from "./layout";
+} from "../layout";
 
 const hydration = new Map<string, Promise<WorkspaceLayoutDocument>>();
 /** Network writes are serialized per workspace; optimistic projections still install immediately. */
 const commitQueues = new Map<string, Promise<void>>();
-type LayoutReplaceRequester = (params: LayoutReplaceParams) => Promise<LayoutChangedPayload>;
+type LayoutReplaceRequester = (params: LayoutReplaceParams) => Promise<LayoutReplaceResult>;
 let layoutReplaceRequesterForTests: LayoutReplaceRequester | null = null;
 
 class SupersededLayoutCommitError extends Error {
 	constructor() {
 		super("The layout write was superseded by an earlier rollback");
 		this.name = "SupersededLayoutCommitError";
+	}
+}
+
+class LayoutCommitConflictError extends Error {
+	constructor() {
+		super("The shared workspace layout changed before this update was saved");
+		this.name = "LayoutCommitConflictError";
 	}
 }
 
@@ -35,11 +43,11 @@ class SupersededLayoutHydrationError extends Error {
 	}
 }
 
-export function isSupersededLayoutHydration(error: unknown): boolean {
+function isSupersededLayoutHydration(error: unknown): boolean {
 	return error instanceof SupersededLayoutHydrationError;
 }
 
-function requestLayoutReplace(params: LayoutReplaceParams): Promise<LayoutChangedPayload> {
+function requestLayoutReplace(params: LayoutReplaceParams): Promise<LayoutReplaceResult> {
 	return (
 		layoutReplaceRequesterForTests?.(params) ?? getTransport().request("layout.replace", params)
 	);
@@ -111,6 +119,10 @@ function loadAttention(workspaceId: string): LayoutAttention | undefined {
 	}
 }
 
+function sameAttention(first: LayoutAttention, second: LayoutAttention): boolean {
+	return JSON.stringify(first) === JSON.stringify(second);
+}
+
 export function persistLayoutAttention(workspaceId: string, attention: LayoutAttention): void {
 	try {
 		localStorage.setItem(attentionStorageKey(workspaceId), JSON.stringify(attention));
@@ -119,7 +131,7 @@ export function persistLayoutAttention(workspaceId: string, attention: LayoutAtt
 	}
 }
 
-export function installAttentionForDocument(
+function installAttentionForDocument(
 	workspaceId: string,
 	document: WorkspaceLayoutDocument,
 	previousDocument?: WorkspaceLayoutDocument,
@@ -147,27 +159,47 @@ export async function commitWorkspaceLayout(
 	const operation = prior
 		.catch(() => {})
 		.then(async () => {
-			const queued = useAppStore
+			const pending = useAppStore
 				.getState()
-				.layoutPendingByWorkspace[workspaceId]?.some(
+				.layoutPendingByWorkspace[workspaceId]?.find(
 					(candidate) => candidate.mutationId === mutationId,
 				);
 			// Rejecting an earlier full snapshot rolls back every dependent projection after it. Those later
 			// writes must never reach the host and resurrect state that the browser already rolled back.
-			if (!queued) throw new SupersededLayoutCommitError();
+			if (!pending) throw new SupersededLayoutCommitError();
 			try {
 				const current = useAppStore.getState();
 				if (current.removedWorkspaceIds[workspaceId]) {
 					throw new Error("Workspace has been removed");
 				}
-				const payload = await requestLayoutReplace({ workspaceId, mutationId, document });
+				const result = await requestLayoutReplace({
+					workspaceId,
+					mutationId,
+					expectedRevision: pending.expectedRevision,
+					document,
+				});
 				const settled = useAppStore.getState();
 				if (settled.removedWorkspaceIds[workspaceId]) {
 					throw new Error("Workspace has been removed");
 				}
-				settled.applyLayoutChanged(payload);
-				return payload.snapshot;
+				if (result.status === "conflict") {
+					const stillPending = settled.layoutPendingByWorkspace[workspaceId]?.some(
+						(candidate) => candidate.mutationId === mutationId,
+					);
+					if (!stillPending) {
+						const accepted = settled.layoutSnapshotsByWorkspace[workspaceId];
+						if (accepted) return accepted;
+					}
+					if (result.current && result.current.workspaceId !== workspaceId) {
+						throw new Error("Layout conflict snapshot did not match the requested workspace");
+					}
+					settled.applyLayoutConflict(workspaceId, mutationId, result.current);
+					throw new LayoutCommitConflictError();
+				}
+				settled.applyLayoutChanged(result.payload);
+				return result.payload.snapshot;
 			} catch (error) {
+				if (error instanceof LayoutCommitConflictError) throw error;
 				const state = useAppStore.getState();
 				const stillPending = state.layoutPendingByWorkspace[workspaceId]?.some(
 					(candidate) => candidate.mutationId === mutationId,
@@ -263,6 +295,57 @@ export function hydrateWorkspaceLayout(workspaceId: string): Promise<WorkspaceLa
 		});
 	hydration.set(hydrationKey, request);
 	return request;
+}
+
+export function useWorkspaceLayoutSynchronization(workspaceId: string): void {
+	const status = useAppStore((state) => state.status);
+	const connectionGeneration = useAppStore((state) => state.connectionGeneration);
+	const document = useAppStore((state) => state.layoutDocumentsByWorkspace[workspaceId]);
+	const attention = useAppStore((state) => state.layoutAttentionByWorkspace[workspaceId]);
+	const previousDocument = useRef<WorkspaceLayoutDocument | undefined>(undefined);
+
+	useEffect(() => {
+		if (status !== "connected" || connectionGeneration === 0) return;
+		void hydrateWorkspaceLayout(workspaceId).catch((error) => {
+			const state = useAppStore.getState();
+			if (
+				!isSupersededLayoutHydration(error) &&
+				isConnectedGeneration(state, connectionGeneration) &&
+				!state.removedWorkspaceIds[workspaceId]
+			) {
+				toast.error(errorText(error), "Couldn't load the workspace layout");
+			}
+		});
+	}, [connectionGeneration, status, workspaceId]);
+
+	useEffect(() => {
+		if (!document) return;
+		if (!previousDocument.current) {
+			previousDocument.current = document;
+			installAttentionForDocument(workspaceId, document);
+			return;
+		}
+		const state = useAppStore.getState();
+		const next = reconcileAttention(
+			document,
+			state.layoutAttentionByWorkspace[workspaceId],
+			previousDocument.current,
+		);
+		previousDocument.current = document;
+		if (
+			!state.layoutAttentionByWorkspace[workspaceId] ||
+			!sameAttention(next, state.layoutAttentionByWorkspace[workspaceId])
+		) {
+			state.setLayoutAttention(workspaceId, next);
+			persistLayoutAttention(workspaceId, next);
+		}
+	}, [document, workspaceId]);
+
+	useEffect(() => {
+		if (attention && !useAppStore.getState().removedWorkspaceIds[workspaceId]) {
+			persistLayoutAttention(workspaceId, attention);
+		}
+	}, [attention, workspaceId]);
 }
 
 export function resetLayoutSyncForTests(): void {

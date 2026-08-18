@@ -85,8 +85,10 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
    **sessions + their transcripts**, terminals, git — is backend-owned, shared, and persistent; every
    client hydrates it from the host. Workspace **placement state is deliberately shared too**: one
    versioned host document owns center/side topology, open resource references, tab order, preview
-   identities, folds/visibility, and normalized geometry, and valid full snapshots converge by monotonic
-   revision with last arrival winning. That is placement only, never resource lifetime. *Attention and
+   identities, folds/visibility, and normalized geometry. Valid full snapshots converge by monotonic
+   revision, but replacement is optimistic-concurrency guarded: a client names its exact accepted revision
+   (or create-only absence), and a stale full replacement conflicts with the current snapshot instead of
+   making the last arrival win. That is placement only, never resource lifetime. *Attention and
    drafts* — selected tab per group, last-focused group, uncommitted pointer/resize drafts, composer drafts — remain
    per-client (ephemeral or local reload persistence), so one browser cannot steal another's focus.
    Corollary: closing a file/chat placement is a shared view action, not a domain dispose — the session

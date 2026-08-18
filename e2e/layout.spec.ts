@@ -4,6 +4,7 @@ import {
 	defaultWorkspaceRow,
 	enterDefaultWorkspace,
 	openFixtureProject,
+	pressPlatformShortcut,
 	waitTerminalReady,
 } from "./fixtures/app";
 
@@ -160,7 +161,7 @@ test("a terminal can move to its own side group; resize, fold, and visibility ga
 	page,
 }) => {
 	await openDefaultWorkbench(page);
-	await page.keyboard.press("Control+b");
+	await pressPlatformShortcut(page, "b");
 	await expect(page.getByTestId("left-layout-rail")).toBeVisible();
 	const terminalTab = page.getByTestId("terminal-tab");
 	const terminalBox = await terminalTab.boundingBox();
@@ -282,11 +283,11 @@ test("Mod+B and Mod+J hide and restore synchronized sides, including after reloa
 }) => {
 	await openDefaultWorkbench(page);
 
-	await page.keyboard.press("Control+b");
+	await pressPlatformShortcut(page, "b");
 	await expect(page.getByTestId("left-layout-rail")).toBeVisible();
 	await expect(page.getByTestId("left-nav")).toHaveCount(0);
 
-	await page.keyboard.press("Control+j");
+	await pressPlatformShortcut(page, "j");
 	await expect(page.getByTestId("right-layout-rail")).toBeVisible();
 	await expect(page.getByTestId("right-stack")).toHaveCount(0);
 	await expect(page.getByTestId("terminal-instance")).toHaveCount(0);
@@ -295,8 +296,8 @@ test("Mod+B and Mod+J hide and restore synchronized sides, including after reloa
 	await expect(page.getByTestId("left-layout-rail")).toBeVisible();
 	await expect(page.getByTestId("right-layout-rail")).toBeVisible();
 
-	await page.keyboard.press("Control+b");
-	await page.keyboard.press("Control+j");
+	await pressPlatformShortcut(page, "b");
+	await pressPlatformShortcut(page, "j");
 	await expect(page.getByTestId("left-nav")).toBeVisible();
 	await expect(page.getByTestId("right-stack")).toBeVisible();
 	await waitTerminalReady(page);
@@ -705,14 +706,14 @@ test("layout survives a transport reconnect and remains writable", async ({ page
 	});
 
 	await openDefaultWorkbench(page);
-	await page.keyboard.press("Control+b");
+	await pressPlatformShortcut(page, "b");
 	await expect(page.getByTestId("left-layout-rail")).toBeVisible();
 	await socket?.close();
 	await expect.poll(() => socketsOpened).toBeGreaterThan(1);
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 	await expect(page.getByTestId("left-layout-rail")).toBeVisible();
 
-	await page.keyboard.press("Control+b");
+	await pressPlatformShortcut(page, "b");
 	await expect(page.getByTestId("left-nav")).toBeVisible();
 });
 
@@ -738,7 +739,7 @@ test("a nonmatching remote revision cancels an active drag and both clients conv
 	await page.mouse.move(box.x + box.width / 2 + 12, box.y + box.height / 2 + 8, { steps: 4 });
 	await expect(page.locator('[data-drop-label="Split right"]')).toBeVisible();
 
-	await page2.keyboard.press("Control+b");
+	await pressPlatformShortcut(page2, "b");
 	await expect(page2.getByTestId("left-layout-rail")).toBeVisible();
 	await expect(
 		page.getByTestId("toast").getByText("The shared layout changed. Your drag was canceled."),
@@ -771,7 +772,7 @@ test("a nonmatching remote revision cancels an active resize without publishing 
 	await page.mouse.down();
 	await page.mouse.move(handleBox.x - 60, handleBox.y + handleBox.height / 2, { steps: 5 });
 
-	await page2.keyboard.press("Control+j");
+	await pressPlatformShortcut(page2, "j");
 	await expect(page2.getByTestId("right-layout-rail")).toBeVisible();
 	await expect(
 		page.getByTestId("toast").getByText("The shared layout changed. Your drag was canceled."),
@@ -779,7 +780,7 @@ test("a nonmatching remote revision cancels an active resize without publishing 
 	await page.mouse.up();
 	await expect(page.getByTestId("right-layout-rail")).toBeVisible();
 
-	await page2.keyboard.press("Control+j");
+	await pressPlatformShortcut(page2, "j");
 	await expect(page2.getByTestId("right-panel")).toBeVisible();
 	await expect(page.getByTestId("right-panel")).toBeVisible();
 	await expect

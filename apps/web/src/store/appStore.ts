@@ -159,6 +159,8 @@ export type TabIntent = "preview" | "keep";
 
 export interface PendingLayoutWrite {
 	mutationId: string;
+	/** Captured base: `null` creates from absence; a number replaces that exact accepted revision. */
+	expectedRevision: number | null;
 	document: WorkspaceLayoutDocument;
 }
 
@@ -858,6 +860,11 @@ interface AppState {
 		mutationId: string,
 	) => void;
 	rejectLayoutCommit: (workspaceId: string, mutationId: string) => void;
+	applyLayoutConflict: (
+		workspaceId: string,
+		mutationId: string,
+		current: WorkspaceLayoutSnapshot | null,
+	) => void;
 	setLayoutAttention: (workspaceId: string, attention: LayoutAttention) => void;
 	/** Mirror a selected workbench resource into the temporary legacy render-cache projection without
 	 * counting structural reconciliation as user navigation. */
@@ -1199,6 +1206,14 @@ function bumpLayoutProjectionEpoch(s: AppState, workspaceId: string): Record<str
 		...s.layoutRemoteEpochByWorkspace,
 		[workspaceId]: (s.layoutRemoteEpochByWorkspace[workspaceId] ?? 0) + 1,
 	};
+}
+
+function nextExpectedLayoutRevision(state: AppState, workspaceId: string): number | null {
+	const predecessor = state.layoutPendingByWorkspace[workspaceId]?.at(-1);
+	if (predecessor) {
+		return predecessor.expectedRevision === null ? 1 : predecessor.expectedRevision + 1;
+	}
+	return state.layoutSnapshotsByWorkspace[workspaceId]?.revision ?? null;
 }
 
 function advanceCenterNavigation(
@@ -1774,7 +1789,11 @@ export const useAppStore = create<AppState>((set, get) => ({
 							...state.layoutPendingByWorkspace,
 							[workspaceId]: [
 								...(state.layoutPendingByWorkspace[workspaceId] ?? []),
-								{ mutationId, document },
+								{
+									mutationId,
+									expectedRevision: nextExpectedLayoutRevision(state, workspaceId),
+									document,
+								},
 							],
 						},
 					},
@@ -1810,6 +1829,41 @@ export const useAppStore = create<AppState>((set, get) => ({
 				layoutDocumentsByWorkspace: {
 					...state.layoutDocumentsByWorkspace,
 					[workspaceId]: remaining.at(-1)?.document ?? accepted.document,
+				},
+				layoutRemoteEpochByWorkspace: bumpLayoutProjectionEpoch(state, workspaceId),
+			};
+		}),
+	applyLayoutConflict: (workspaceId, mutationId, current) =>
+		set((state) => {
+			if (state.removedWorkspaceIds[workspaceId]) return {};
+			const pending = state.layoutPendingByWorkspace[workspaceId] ?? [];
+			const conflictingIndex = pending.findIndex((write) => write.mutationId === mutationId);
+			if (conflictingIndex < 0) return {};
+			const remaining = pending.slice(0, conflictingIndex);
+			const expectedRevision = pending[conflictingIndex]?.expectedRevision;
+			const alreadyAccepted = state.layoutSnapshotsByWorkspace[workspaceId];
+			// A later accepted broadcast can overtake the conflict response in transit. Preserve that newer
+			// authority instead of regressing to the snapshot (or absence) observed when the host checked.
+			const accepted = current
+				? !alreadyAccepted || current.revision >= alreadyAccepted.revision
+					? current
+					: alreadyAccepted
+				: alreadyAccepted &&
+						(expectedRevision === null ||
+							(expectedRevision !== undefined && alreadyAccepted.revision > expectedRevision))
+					? alreadyAccepted
+					: null;
+			const projected = remaining.at(-1)?.document ?? accepted?.document;
+			return {
+				layoutSnapshotsByWorkspace: accepted
+					? { ...state.layoutSnapshotsByWorkspace, [workspaceId]: accepted }
+					: omitKey(state.layoutSnapshotsByWorkspace, workspaceId),
+				layoutDocumentsByWorkspace: projected
+					? { ...state.layoutDocumentsByWorkspace, [workspaceId]: projected }
+					: omitKey(state.layoutDocumentsByWorkspace, workspaceId),
+				layoutPendingByWorkspace: {
+					...state.layoutPendingByWorkspace,
+					[workspaceId]: remaining,
 				},
 				layoutRemoteEpochByWorkspace: bumpLayoutProjectionEpoch(state, workspaceId),
 			};

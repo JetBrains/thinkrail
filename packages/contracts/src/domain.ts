@@ -553,18 +553,25 @@ export interface WorkspaceLayoutSnapshot {
 	document: WorkspaceLayoutDocument;
 }
 
-/** Client-authored full replacement. `mutationId` correlates optimism; it is never persisted in the doc. */
+/** Client-authored full replacement. `mutationId` correlates optimism; it is not the concurrency token. */
 export interface LayoutReplaceParams {
 	workspaceId: string;
 	mutationId: string;
+	/** `null` creates only while absent; a number replaces only that exact current revision. */
+	expectedRevision: number | null;
 	document: WorkspaceLayoutDocument;
 }
 
-/** Accepted replacement broadcast/response. */
+/** Accepted replacement broadcast and accepted-result payload. */
 export interface LayoutChangedPayload {
 	snapshot: WorkspaceLayoutSnapshot;
 	mutationId: string;
 }
+
+/** Expected synchronization result for a full-document replacement. */
+export type LayoutReplaceResult =
+	| { status: "accepted"; payload: LayoutChangedPayload }
+	| { status: "conflict"; current: WorkspaceLayoutSnapshot | null };
 
 /** Resource-free center shape captured by a portable preset. */
 export interface LayoutPresetCenterGroup {

@@ -54,17 +54,23 @@ snapshots plus device-local attention, terminal catalogs, and one **per-session 
   **workspace layout state** — `layoutSnapshotsByWorkspace` holds the latest accepted
   `WorkspaceLayoutSnapshot` for each workspace; `installLayoutSnapshot` is a revision-aware whole-value
   replacement (older/duplicate revisions are inert), while one atomic optimistic-commit action installs the
-  shell layout module's next complete document and records its mutation id in the ordered pending writes.
-  The browser sends those full snapshots to `layout.replace` serially per workspace while projecting all of
-  them immediately; if one write rejects, dependent later projections are rolled back before they ever reach
-  the host, so a queued snapshot cannot resurrect the rejected base. Accepted state and the latest optimistic
-  projection remain distinct, so an acknowledgement removes its
-  matching pending entry without rolling back a newer projection. Correlation settlement is independent of
-  revision installation: even an acknowledgement whose snapshot is already older than the accepted base
-  clears its mutation id without reinstalling that document. If that matching broadcast settles optimism but
-  its request response is then lost, the accepted snapshot is still success—no false rollback or save error.
-  A nonmatching accepted write advances the
-  canonical base; it does not erase optimistic snapshots that are still awaiting their send/host order.
+  shell integration's next complete document and appends a pending write carrying both its correlation
+  `mutationId` and captured `expectedRevision`. The first write expects the accepted revision (or `null` for
+  absence); each dependent write expects the revision its predecessor will produce. The browser sends those
+  full snapshots to `layout.replace` serially per workspace while projecting all of them immediately; if one
+  write rejects or conflicts, dependent later projections are rolled back before they ever reach the host, so
+  a queued snapshot cannot resurrect the rejected base. Accepted state and the latest optimistic projection
+  remain distinct, so an acknowledgement removes its matching pending entry without rolling back a newer
+  projection. Correlation settlement is independent of revision installation: even an acknowledgement whose
+  snapshot is already older than the accepted base clears its mutation id without reinstalling that document.
+  If that matching broadcast settles optimism but its request response is then lost, the accepted snapshot is
+  still success—no false rollback or save error. A nonmatching accepted write advances the canonical base; it
+  does not rewrite captured expectations or erase optimistic snapshots still awaiting host order. A typed
+  conflict installs the returned current snapshot (including authoritative absence), cancels the conflicting
+  mutation and every dependent projection, and advances the projection epoch; if a newer accepted broadcast
+  overtook the response in transit, the revision-aware fold preserves that newer authority instead of
+  regressing to the conflict-time snapshot or absence. A conflict is expected synchronization, not a generic
+  save failure, and never triggers an automatic stale-document resend.
   Components never splice group/tab arrays independently. Installing an accepted document also reconciles
   browser-local resource projections without changing attention: a peer-restored chat placement immediately
   restores its render-cache identity/label and removes duplicate closed-history membership, then hydrates its
@@ -72,10 +78,10 @@ snapshots plus device-local attention, terminal catalogs, and one **per-session 
   while its runtime
   remains; tombstoned or authoritatively absent references queue structural cleanup instead of hydrating.
   An empty pre-hydration cache never counts as absence: each resource catalog/read must be current for the
-  connection generation before it can trigger pruning. A rejected write
-  drops dependent optimism, restores the latest accepted snapshot, advances the projection epoch (remounting
-  uncontrolled resize geometry and cancelling any newer draft based on the rejected projection), and
-  surfaces the failure.
+  connection generation before it can trigger pruning. Any rejected write drops dependent optimism,
+  restores the latest accepted snapshot, advances the projection epoch (remounting uncontrolled resize
+  geometry and cancelling any newer draft based on the rejected projection), and surfaces only unexpected
+  failures through the generic save-error path.
   `clearWorkspaceTabs` removes the snapshot and all associated local state when the workspace itself
   disappears. A page-lifetime `removedWorkspaceIds` tombstone then rejects stale layout, catalog, session,
   cache, and workspace-list arrivals, so an already-in-flight read cannot recreate the removed workspace.

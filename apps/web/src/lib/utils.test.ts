@@ -14,11 +14,20 @@ import {
 	tupleKey,
 } from "./utils";
 
-test("platform shortcuts use Ctrl outside an Apple browser environment", () => {
-	expect(platformShortcutLabel("B")).toBe("Ctrl+B");
-	expect(hasPlatformModifier({ ctrlKey: true, metaKey: false })).toBe(true);
-	expect(hasPlatformModifier({ ctrlKey: false, metaKey: true })).toBe(false);
-	expect(hasPlatformModifier({ ctrlKey: true, metaKey: true })).toBe(false);
+test("platform shortcuts use Ctrl on non-Apple platforms", () => {
+	const platform = "Linux x86_64";
+	expect(platformShortcutLabel("B", platform)).toBe("Ctrl+B");
+	expect(hasPlatformModifier({ ctrlKey: true, metaKey: false }, platform)).toBe(true);
+	expect(hasPlatformModifier({ ctrlKey: false, metaKey: true }, platform)).toBe(false);
+	expect(hasPlatformModifier({ ctrlKey: true, metaKey: true }, platform)).toBe(false);
+});
+
+test("platform shortcuts use Command on Apple platforms", () => {
+	const platform = "MacIntel";
+	expect(platformShortcutLabel("B", platform)).toBe("⌘B");
+	expect(hasPlatformModifier({ ctrlKey: false, metaKey: true }, platform)).toBe(true);
+	expect(hasPlatformModifier({ ctrlKey: true, metaKey: false }, platform)).toBe(false);
+	expect(hasPlatformModifier({ ctrlKey: true, metaKey: true }, platform)).toBe(false);
 });
 
 test("isMarkdownPath matches .md/.markdown case-insensitively, nothing else", () => {

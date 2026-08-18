@@ -22,8 +22,10 @@ let repo: string;
 const savedDataDir = process.env.THINKRAIL_DATA_DIR;
 
 function git(cwd: string, ...args: string[]): void {
-	const result = Bun.spawnSync(["git", "-C", cwd, ...args], { stdout: "ignore", stderr: "ignore" });
-	if (!result.success) throw new Error(`git ${args.join(" ")} failed`);
+	const result = Bun.spawnSync(["git", "-C", cwd, ...args], { stdout: "ignore", stderr: "pipe" });
+	if (result.success) return;
+	const stderr = result.stderr.toString().trim();
+	throw new Error(`git ${args.join(" ")} failed${stderr ? `: ${stderr}` : ""}`);
 }
 
 beforeEach(() => {
@@ -32,11 +34,19 @@ beforeEach(() => {
 	repo = join(dataDir, "repo");
 	mkdirSync(repo);
 	git(repo, "init", "-b", "main");
-	git(repo, "config", "user.email", "t@thinkrail.test");
-	git(repo, "config", "user.name", "test");
 	writeFileSync(join(repo, "README.md"), "# repo\n");
 	git(repo, "add", "-A");
-	git(repo, "commit", "-m", "init");
+	git(
+		repo,
+		"-c",
+		"user.email=t@thinkrail.test",
+		"-c",
+		"user.name=ThinkRail Test",
+		"commit",
+		"--allow-empty",
+		"-m",
+		"init",
+	);
 	writeFileSync(
 		join(dataDir, "projects.json"),
 		JSON.stringify([{ id: "p1", name: "repo", path: repo, slug: "repo", lastOpened: 1 }]),

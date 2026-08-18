@@ -217,18 +217,27 @@ export function stripFrontmatter(text: string): string {
 
 const APPLE_PLATFORM = /Mac|iPhone|iPad|iPod/;
 
-function isApplePlatform(): boolean {
-	return typeof navigator !== "undefined" && APPLE_PLATFORM.test(navigator.platform ?? "");
+function browserPlatform(): string {
+	return typeof navigator === "undefined" ? "" : (navigator.platform ?? "");
+}
+
+function isApplePlatform(platform: string): boolean {
+	return APPLE_PLATFORM.test(platform);
 }
 
 /** The platform's primary application modifier: Cmd on Apple devices, Ctrl everywhere else. */
-export function hasPlatformModifier(event: Pick<KeyboardEvent, "ctrlKey" | "metaKey">): boolean {
-	return isApplePlatform() ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
+export function hasPlatformModifier(
+	event: Pick<KeyboardEvent, "ctrlKey" | "metaKey">,
+	platform = browserPlatform(),
+): boolean {
+	return isApplePlatform(platform)
+		? event.metaKey && !event.ctrlKey
+		: event.ctrlKey && !event.metaKey;
 }
 
 /** Human-readable primary-modifier shortcut, kept in lockstep with `hasPlatformModifier`. */
-export function platformShortcutLabel(key: string): string {
-	return isApplePlatform() ? `⌘${key}` : `Ctrl+${key}`;
+export function platformShortcutLabel(key: string, platform = browserPlatform()): string {
+	return isApplePlatform(platform) ? `⌘${key}` : `Ctrl+${key}`;
 }
 
 /**

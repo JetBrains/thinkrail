@@ -29,7 +29,9 @@ Tiny UI helpers shared across components.
   **`relativeTime()`** (`just now` / `5m ago` / `2d ago` — shared by chat history, the tab strip's closed
   chats, and the Changes scope menu's commit rows; it lives here because `chat/` may not import from
   `panels/`, which is what let three private twins of it accumulate), **`platformShortcutLabel()`** +
-  **`hasPlatformModifier()`** (one Apple-vs-other definition for shortcut chrome and global handlers), and
+  **`hasPlatformModifier()`** (one Apple-vs-other definition for shortcut chrome and global handlers; both
+  default to the browser-reported platform but accept an explicit platform string so non-browser callers and
+  tests never inherit a host runtime's synthetic `navigator` accidentally), and
   **`copyText()`**
   (clipboard write reporting whether it landed — one place for the *degradation*: an insecure context
   (plain-http remote access) or a denied permission has no clipboard, and every caller's answer is the same

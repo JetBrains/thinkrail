@@ -14,6 +14,12 @@ import {
 } from "./paths";
 import { fixtureRepoHealthy, seedFixtureRepo } from "./repo";
 
+/** Press the primary application modifier the page itself reports: Command on Apple, Control elsewhere. */
+export async function pressPlatformShortcut(page: Page, key: string): Promise<void> {
+	const apple = await page.evaluate(() => /Mac|iPhone|iPad|iPod/.test(navigator.platform ?? ""));
+	await page.keyboard.press(`${apple ? "Meta" : "Control"}+${key}`);
+}
+
 /**
  * Reset to a pristine slate: clear app state + any worktrees + pi's persisted sessions, and restore the
  * fixture repo to just `main`. The host reads these files per-request, so tests are isolated despite

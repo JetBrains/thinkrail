@@ -5,6 +5,7 @@ import { join } from "node:path";
 import type {
 	LayoutChangedPayload,
 	LayoutPreset,
+	LayoutReplaceResult,
 	LayoutSettings,
 	LayoutSideGroup,
 	WorkspaceLayoutDocument,
@@ -365,19 +366,34 @@ describe("workspace layout validation", () => {
 });
 
 describe("workspace layout persistence and ordering", () => {
-	test("serializes writes, persists monotonically, and publishes in revision order", async () => {
+	function accepted(result: LayoutReplaceResult): LayoutChangedPayload {
+		if (result.status === "conflict") throw new Error("expected accepted layout replacement");
+		return result.payload;
+	}
+
+	test("serializes dependent writes with the revision produced by their predecessor", async () => {
 		const seen: LayoutChangedPayload[] = [];
 		setLayoutPublisher((payload) => seen.push(payload));
 		const first = replaceWorkspaceLayout(
-			{ workspaceId: "ws", mutationId: "first", document: document("first.ts") },
+			{
+				workspaceId: "ws",
+				mutationId: "first",
+				expectedRevision: null,
+				document: document("first.ts"),
+			},
 			6,
 		);
 		const second = replaceWorkspaceLayout(
-			{ workspaceId: "ws", mutationId: "second", document: document("second.ts") },
+			{
+				workspaceId: "ws",
+				mutationId: "second",
+				expectedRevision: 1,
+				document: document("second.ts"),
+			},
 			6,
 		);
-		const results = await Promise.all([first, second]);
-		expect(results.map((result) => result.snapshot.revision)).toEqual([1, 2]);
+		const payloads = (await Promise.all([first, second])).map(accepted);
+		expect(payloads.map((payload) => payload.snapshot.revision)).toEqual([1, 2]);
 		expect(seen.map((payload) => [payload.snapshot.revision, payload.mutationId])).toEqual([
 			[1, "first"],
 			[2, "second"],
@@ -389,9 +405,107 @@ describe("workspace layout persistence and ordering", () => {
 		expect(persisted.revision).toBe(2);
 	});
 
+	test("two clients replacing the same revision accept exactly one and return current on conflict", async () => {
+		accepted(
+			await replaceWorkspaceLayout(
+				{
+					workspaceId: "ws",
+					mutationId: "seed",
+					expectedRevision: null,
+					document: document("seed.ts"),
+				},
+				6,
+			),
+		);
+		const seen: LayoutChangedPayload[] = [];
+		setLayoutPublisher((payload) => seen.push(payload));
+
+		const [winner, loser] = await Promise.all([
+			replaceWorkspaceLayout(
+				{
+					workspaceId: "ws",
+					mutationId: "client-a",
+					expectedRevision: 1,
+					document: document("client-a.ts"),
+				},
+				6,
+			),
+			replaceWorkspaceLayout(
+				{
+					workspaceId: "ws",
+					mutationId: "client-b",
+					expectedRevision: 1,
+					document: document("client-b.ts"),
+				},
+				6,
+			),
+		]);
+
+		expect(winner).toEqual({
+			status: "accepted",
+			payload: {
+				snapshot: { workspaceId: "ws", revision: 2, document: document("client-a.ts") },
+				mutationId: "client-a",
+			},
+		});
+		expect(loser).toEqual({
+			status: "conflict",
+			current: { workspaceId: "ws", revision: 2, document: document("client-a.ts") },
+		});
+		expect(seen).toEqual([
+			{
+				snapshot: { workspaceId: "ws", revision: 2, document: document("client-a.ts") },
+				mutationId: "client-a",
+			},
+		]);
+		expect(getWorkspaceLayout("ws")).toEqual({
+			workspaceId: "ws",
+			revision: 2,
+			document: document("client-a.ts"),
+		});
+		const persisted = JSON.parse(
+			readFileSync(join(dataDir, "layouts", "ws.json"), "utf8"),
+		) as WorkspaceLayoutSnapshot;
+		const current = getWorkspaceLayout("ws");
+		if (!current) throw new Error("accepted layout disappeared");
+		expect(persisted).toEqual(current);
+	});
+
+	test("first creation requires an expected absent revision", async () => {
+		const seen: LayoutChangedPayload[] = [];
+		setLayoutPublisher((payload) => seen.push(payload));
+		await expect(
+			replaceWorkspaceLayout(
+				{
+					workspaceId: "ws",
+					mutationId: "numeric-create",
+					expectedRevision: 0,
+					document: document("stale.ts"),
+				},
+				6,
+			),
+		).resolves.toEqual({ status: "conflict", current: null });
+		expect(getWorkspaceLayout("ws")).toBeNull();
+		expect(seen).toEqual([]);
+
+		const created = await replaceWorkspaceLayout(
+			{
+				workspaceId: "ws",
+				mutationId: "create",
+				expectedRevision: null,
+				document: document("created.ts"),
+			},
+			6,
+		);
+		expect(accepted(created).snapshot.revision).toBe(1);
+	});
+
 	test("encodes legacy workspace ids instead of letting them escape the layout directory", async () => {
 		const workspaceId = "../legacy workspace";
-		await replaceWorkspaceLayout({ workspaceId, mutationId: "safe-path", document: document() }, 6);
+		await replaceWorkspaceLayout(
+			{ workspaceId, mutationId: "safe-path", expectedRevision: null, document: document() },
+			6,
+		);
 		resetLayoutsForTests();
 		expect(getWorkspaceLayout(workspaceId)?.workspaceId).toBe(workspaceId);
 		const file = `~${Buffer.from(workspaceId).toString("base64url")}.json`;
@@ -402,11 +516,21 @@ describe("workspace layout persistence and ordering", () => {
 
 	test("recovers a corrupt primary from the last-known-good snapshot", async () => {
 		await replaceWorkspaceLayout(
-			{ workspaceId: "ws", mutationId: "first", document: document("first.ts") },
+			{
+				workspaceId: "ws",
+				mutationId: "first",
+				expectedRevision: null,
+				document: document("first.ts"),
+			},
 			6,
 		);
 		await replaceWorkspaceLayout(
-			{ workspaceId: "ws", mutationId: "second", document: document("second.ts") },
+			{
+				workspaceId: "ws",
+				mutationId: "second",
+				expectedRevision: 1,
+				document: document("second.ts"),
+			},
 			6,
 		);
 		writeFileSync(join(dataDir, "layouts", "ws.json"), "{broken");
@@ -432,7 +556,12 @@ describe("workspace layout persistence and ordering", () => {
 		expect(getWorkspaceLayout("ws")).toEqual(backup);
 		await expect(
 			replaceWorkspaceLayout(
-				{ workspaceId: "ws", mutationId: "older-host", document: document("overwrite.ts") },
+				{
+					workspaceId: "ws",
+					mutationId: "older-host",
+					expectedRevision: 4,
+					document: document("overwrite.ts"),
+				},
 				6,
 			),
 		).rejects.toThrow("read-only");
@@ -442,7 +571,7 @@ describe("workspace layout persistence and ordering", () => {
 
 	test("a workspace removal cancels a queued write before it can resurrect persistence", async () => {
 		const pending = replaceWorkspaceLayout(
-			{ workspaceId: "ws", mutationId: "racing", document: document() },
+			{ workspaceId: "ws", mutationId: "racing", expectedRevision: null, document: document() },
 			6,
 		);
 		removeWorkspaceLayout("ws");
@@ -452,7 +581,7 @@ describe("workspace layout persistence and ordering", () => {
 
 	test("removes primary, backup, and cache with the workspace", async () => {
 		await replaceWorkspaceLayout(
-			{ workspaceId: "ws", mutationId: "first", document: document() },
+			{ workspaceId: "ws", mutationId: "first", expectedRevision: null, document: document() },
 			6,
 		);
 		removeWorkspaceLayout("ws");

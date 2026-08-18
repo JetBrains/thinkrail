@@ -30,9 +30,27 @@ must not inherit desktop docking accidentally.
 
 ## Internal modules
 
-`layout/` is a bounded child module with an `index.ts` barrel as its only public surface; its contract is
-[[submodule-web-shell-layout]]. `Shell` supplies accepted shared state, local attention, commit/error
-callbacks, and resource/tool render callbacks. The child never imports feature panels or talks to the wire.
+Every child is a directory module with `index.ts` as its public surface:
+
+- `layout/` ([[submodule-web-shell-layout]]) is the pure workbench engine and renderer. It never imports
+  feature panels, store/transport runtime, or persistence.
+- `layoutSync/` ([[submodule-web-shell-layout-sync]]) owns host hydration, conflict-aware optimistic commits,
+  and attention persistence/reconciliation.
+- `layoutIntents/` ([[submodule-web-shell-layout-intents]]) owns consume-once intent routing into pure layout
+  transactions.
+- `chatReconciliation/` ([[submodule-web-shell-chat-reconciliation]]) owns session/placement/cache/history
+  convergence and chat deep-link orchestration.
+- `terminalReconciliation/` ([[submodule-web-shell-terminal-reconciliation]]) owns catalog/placement
+  convergence without owning PTY lifetime.
+- `legacySelection/` ([[submodule-web-shell-legacy-selection]]) is the sole temporary adapter from workbench
+  attention to migration-era active editor/terminal/preview mirrors.
+
+The sibling dependency graph is: `layoutSync → layout`; `chatReconciliation → layout + layoutSync`;
+`terminalReconciliation → layout`; `layoutIntents → layout + chatReconciliation +
+terminalReconciliation`; `legacySelection` reaches store selectors/actions only; and
+`WorkspaceWorkbench` composes every orchestration barrel with `layout`, panels, and render callbacks. Siblings
+import only through these barrels. Tests live with the orchestration module that owns the behavior rather than
+making store tests import shell runtime synchronization.
 
 ## Composition
 
@@ -54,9 +72,13 @@ component mutates `[data-theme]`.
 
 The durable workbench grammar, synchronization behavior, and acceptance contract are owned by
 [[submodule-web-shell-layout]]. In particular, the shell—not feature panels—routes open intents to the
-browser's last-focused center group and folds accepted revisions into the workbench. A nonmatching remote
-commit cancels any uncommitted pointer gesture before replacement; an acknowledgement matching the local
-optimistic base does not cancel a newer gesture begun on that document. Browser-local attention is persisted
+browser's last-focused center group and folds accepted revisions into the workbench. Every replacement names
+its exact accepted base revision (or create-only absence); a typed stale-base conflict installs the returned
+current snapshot, unless a newer accepted broadcast already overtook the response, rolls back that optimistic
+mutation and all dependents, and never automatically resends the stale full document. A nonmatching remote
+commit cancels any uncommitted pointer gesture before replacement;
+an acknowledgement matching the local optimistic base does not cancel a newer gesture begun on that document.
+Browser-local attention is persisted
 best-effort under a host-endpoint/workspace-qualified key, treated as untrusted on read, and structurally
 validated before reconciliation. Every asynchronous reconciliation/hydration effect verifies that its
 captured layout document and transient request are still the current store objects before installing cache

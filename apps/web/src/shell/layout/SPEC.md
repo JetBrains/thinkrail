@@ -122,7 +122,10 @@ Pointer drag/resize drafts remain local and emit one snapshot only on drop/point
 revision whose mutation id does not match this client's optimistic base cancels the draft, makes release
 inert, and lets the parent explain the cancellation; the same projection epoch invalidates a pending
 preview-click settle timer before it can publish from the replaced document. A matching acknowledgement
-advances the accepted revision without cancelling a newer draft begun on that document.
+advances the accepted revision without cancelling a newer draft begun on that document. The parent
+`layoutSync` module supplies exact-base optimistic concurrency: a stale replacement conflict installs host
+current state and advances the same projection epoch, while this pure module remains unaware of transport,
+persistence, and optimistic queues.
 
 The terminal visibility gate mounts a body only for a terminal locally selected in an expanded visible group.
 Several distinct terminal identities may mount concurrently; the same identity has one body per browser, and

@@ -3,6 +3,7 @@ import type {
 	LayoutChangedPayload,
 	LayoutPreset,
 	LayoutReplaceParams,
+	LayoutReplaceResult,
 	LayoutSettings,
 	LayoutToolId,
 	WorkspaceLayoutDocument,
@@ -654,18 +655,29 @@ export function getWorkspaceLayout(workspaceId: string): WorkspaceLayoutSnapshot
 export function replaceWorkspaceLayout(
 	params: LayoutReplaceParams,
 	configuredLimit: number,
-): Promise<LayoutChangedPayload> {
+): Promise<LayoutReplaceResult> {
 	if (!nonEmptyString(params.mutationId, 200))
 		return Promise.reject(new Error("Invalid layout mutation id"));
+	if (
+		params.expectedRevision !== null &&
+		(!Number.isSafeInteger(params.expectedRevision) || params.expectedRevision < 0)
+	) {
+		return Promise.reject(new Error("Invalid expected layout revision"));
+	}
 	const prior = queues.get(params.workspaceId) ?? Promise.resolve();
 	const removalEpoch = removalEpochs.get(params.workspaceId) ?? 0;
 	const operation = prior
 		.catch(() => {})
-		.then(() => {
+		.then((): LayoutReplaceResult => {
 			if ((removalEpochs.get(params.workspaceId) ?? 0) !== removalEpoch) {
 				throw new Error("Workspace layout was removed before the write completed");
 			}
 			const current = getWorkspaceLayout(params.workspaceId);
+			const revisionMatches =
+				params.expectedRevision === null
+					? current === null
+					: current?.revision === params.expectedRevision;
+			if (!revisionMatches) return { status: "conflict", current };
 			if (futureProtected.has(params.workspaceId)) {
 				throw new Error("Workspace layout is read-only because it was written by a newer host");
 			}
@@ -682,7 +694,7 @@ export function replaceWorkspaceLayout(
 			cache.set(params.workspaceId, snapshot);
 			const payload: LayoutChangedPayload = { snapshot, mutationId: params.mutationId };
 			publishLayout?.(payload);
-			return payload;
+			return { status: "accepted", payload };
 		});
 	const tail = operation.then(
 		() => {},

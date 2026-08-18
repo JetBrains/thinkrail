@@ -21,7 +21,8 @@ of the host.
   registries, and the protocol version. Including **`WsErrorCode`** — the closed set of failures the *host
   names* (`WsResponse.errorCode`, today only `UNKNOWN_COMMIT`), so a client can react to one specific failure
   instead of pattern-matching an error message. A failure earns a code only when a client behaves differently
-  for it; everything else stays a plain `error` string.
+  for it; everything else stays a plain `error` string. Expected method-specific synchronization outcomes,
+  such as a stale layout replacement, remain typed method results rather than generic WS failures.
 - **Public surface (`index.ts`):** `export type *` of `piProtocol` + `domain`; the value re-exports
   `DEFAULT_CONFIG`, `MAX_HISTORY_LIMIT`, `MAX_HISTORY_QUERY_LENGTH`, `TODO_NUDGE_PREFIX` +
   **`isControlMessage(text)`** (the one shared reading of that marker — the client hides such sends on
@@ -200,9 +201,11 @@ of the host.
   and durable source identity, never inline client-only content), **`WorkspaceLayoutSnapshot`**
   (`workspaceId` +
   monotonic `revision` + document), **`LayoutReplaceParams`** (complete document + client-generated
-  `mutationId`), **`LayoutChangedPayload`** (snapshot + echoed origin `mutationId`), and portable
-  **`LayoutPreset`** / **`LayoutSettings`**. The mutation id is correlation metadata, not durable document
-  state. A tab `id` is an opaque stable placement key—including for singleton tools—not semantic identity;
+  `mutationId` + explicit `expectedRevision`, where `null` is create-only and a number is exact
+  replace-only), **`LayoutReplaceResult`** (discriminated accepted payload or conflict carrying the current
+  snapshot, including `null`), **`LayoutChangedPayload`** (snapshot + echoed origin `mutationId`), and
+  portable **`LayoutPreset`** / **`LayoutSettings`**. The mutation id is correlation metadata, not the
+  concurrency token or durable document state. A tab `id` is an opaque stable placement key—including for singleton tools—not semantic identity;
   the kind-specific path/scope/session/source/tabKey/tool fields define the resource and prevent aliases from
   duplicating it. Resource references carry placement identity only; their domain DTO remains authoritative
   for lifetime.
@@ -262,8 +265,10 @@ of the host.
   `setThinkingLevel`/`compact`/`getStats`/`getCommands`/`extUiReply`/**`answerQuestion`** (the inline
   `ask_user_question` reply, correlated by tool call id)/**`list`**/**`getMessages`** (the
   read side) / **`layout.get`** (hydrate one workspace snapshot, or `null` before first seeding) /
-  **`layout.replace`** (validate and atomically replace one complete structural document, serializing writes
-  per workspace; last valid arrival wins and the assigned snapshot echoes the request's mutation id) /
+  **`layout.replace`** (inside the per-workspace serialization queue, compare `expectedRevision` with the
+  current snapshot immediately before validation/persistence; accept and atomically replace one complete
+  document only on equality, otherwise return a typed conflict with the current snapshot and do not persist,
+  increment, or broadcast; accepted snapshots echo the request's mutation id) /
   **`settings.update`** (merge + persist a top-level partial `AppConfig`; when present, `layout` is one
   complete validated `LayoutSettings` value rather than a nested patch; returns the merged config) /
   **`history.search`** (the prompt-recall + conversation-search read; results capped,

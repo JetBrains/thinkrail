@@ -14,8 +14,8 @@ import type {
 	HistoryScope,
 	HistorySearchResult,
 	JbcentralConnectResult,
-	LayoutChangedPayload,
 	LayoutReplaceParams,
+	LayoutReplaceResult,
 	LoginReply,
 	OpenBranchReview,
 	Project,
@@ -216,7 +216,10 @@ export interface TerminalTabsPush {
 // v37: `workspace.openReview` returns the active branch's optional GitHub PR / GitLab MR number.
 // v38: host-synchronized workspace workbench layouts — versioned full-document `layout.get` /
 // `layout.replace`, monotonic revisions, `layout.changed` broadcasts, and layout preset settings.
-export const PROTOCOL_VERSION = 38;
+// v39: `layout.replace` adds exact-base `expectedRevision` concurrency and returns a typed accepted/conflict
+// result; conflicts carry the current snapshot (including absence) and never persist or broadcast the stale
+// full document.
+export const PROTOCOL_VERSION = 39;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a
@@ -781,12 +784,12 @@ export interface WsMethodMap {
 	"provider.jbcentralDisconnect": { params: Record<string, never>; result: Ack };
 	// Launch `jbcentral login` (its browser sign-in) on the host, best-effort.
 	"provider.jbcentralLogin": { params: Record<string, never>; result: { launched: boolean } };
-	// Hydrate/replace one complete workspace layout. Revisions order accepted values but are not CAS guards.
+	// Hydrate one complete workspace layout, then replace only from the exact accepted base revision.
 	"layout.get": {
 		params: { workspaceId: string };
 		result: WorkspaceLayoutSnapshot | null;
 	};
-	"layout.replace": { params: LayoutReplaceParams; result: LayoutChangedPayload };
+	"layout.replace": { params: LayoutReplaceParams; result: LayoutReplaceResult };
 	// Merge a top-level partial into server-synced settings. A supplied layout is one complete value.
 	"settings.update": { params: { config: Partial<AppConfig> }; result: AppConfig };
 	// Prompt recall + full-text conversation search over pi's persisted sessions (and live ones — pi

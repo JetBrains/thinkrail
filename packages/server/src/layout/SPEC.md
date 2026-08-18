@@ -17,7 +17,8 @@ atomically persist, monotonically revision, replace, and broadcast complete docu
 
 - **Owns:** structural validation and safety bounds; per-workspace accepted document + revision; known-schema
   migration; last-known-good recovery; a per-workspace serial queue that makes request arrival,
-  persistence, and revision order identical; the layout read/replace handlers; and publisher injection for
+  expected-revision comparison, persistence, and revision order identical; the layout read/replace handlers;
+  and publisher injection for
   the full-snapshot `layout.changed` channel, including the request's origin mutation id (correlation
   metadata only, never persisted in the document).
 - **Public surface (`index.ts`):** read/replace operations, document + portable-preset validators, pure
@@ -37,10 +38,13 @@ copy, but an older host never overwrites it implicitly. Persisted settings norma
 custom presets and, when the selected custom preset is lost, restores the contracts default preset **and its
 default side-group capacity** so the fallback cannot become structurally inapplicable.
 
-A valid replacement is accepted regardless of the sender's observed revision: the last arrival wins.
+A replacement is accepted only when `expectedRevision` matches the current snapshot inside the serialized
+workspace queue: `null` matches absence only, and a number matches that exact revision only. A mismatch
+returns a typed conflict carrying the current snapshot (including `null`) and does not validate/persist the
+stale document, increment the revision, or broadcast. `mutationId` remains correlation metadata only.
 Configured side limits use `max(limit, acceptedCount)` per side, so grandfathered overages survive but cannot
-increase. The module serializes the replacement, assigns the next revision, persists before broadcasting,
-and cancels queued writes when workspace cleanup wins the race. It enforces one final empty center leaf, normalized split/side weights,
+increase. On acceptance the module assigns the next revision, persists before broadcasting, and cancels
+queued writes when workspace cleanup wins the race. It enforces one final empty center leaf, normalized split/side weights,
 outer side widths that leave a center region, canonical worktree-relative POSIX file/diff/document paths
 (backslashes, absolute paths, and Windows drive-absolute forms are rejected), opaque placement ids (including
 singleton-tool ids), and one semantic placement per resource; it never mutates a
