@@ -134,11 +134,21 @@ export function reviewableItems(plan: TodoPlan): TodoItem[] {
 	return flatItems(plan).filter((t) => t.review !== undefined);
 }
 
+/**
+ * Whether an item's review is SETTLED: approved, with nothing new landed since the approval (no
+ * unreviewed delta). The one derivation behind the circled “Verified” glyph, the reviewed counter,
+ * and the review card hiding its actions — an approved item that grew a fresh revision drops back out.
+ */
+export function reviewSettled(item: TodoItem): boolean {
+	const r = item.review;
+	return r !== undefined && r.state === "reviewed" && (r.unreviewedShas?.length ?? 0) === 0;
+}
+
 /** reviewed / total across the reviewable items — the `R/K reviewed` counter, separate from done/total. */
 export function reviewProgress(plan: TodoPlan): { reviewed: number; total: number } {
 	const items = reviewableItems(plan);
 	return {
-		reviewed: items.filter((t) => t.review?.state === "reviewed").length,
+		reviewed: items.filter(reviewSettled).length,
 		total: items.length,
 	};
 }

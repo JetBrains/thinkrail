@@ -4,6 +4,7 @@ import {
 	ChevronDown,
 	ChevronRight,
 	Circle,
+	CircleCheck,
 	CircleDot,
 	CirclePause,
 	FileText,
@@ -21,6 +22,7 @@ import {
 	itemChangeSet,
 	type PlanGlance,
 	planSections,
+	reviewSettled,
 } from "./planView";
 
 /** Where a change-set chip click lands: the item's commit (Changes at `commit:{sha}`) or one file's diff. */
@@ -67,12 +69,24 @@ function statusLabel(status: TodoStatus, glance: PlanGlance): string {
 	return status === "in_progress" ? glanceIcon(glance).label : STATUS_LABEL[status];
 }
 
-/** An item's status glyph (glance-aware for the in_progress step) — shared with the plan page. */
-export function StatusIcon({ status, glance }: { status: TodoStatus; glance: PlanGlance }) {
+/** An item's status glyph (glance-aware for the in_progress step) — shared with the plan page.
+ * A done item whose review is SETTLED (`reviewSettled`) upgrades the bare check to a **circled** one —
+ * the at-a-glance “Verified” state (callers put the word on the hover title). */
+export function StatusIcon({
+	status,
+	glance,
+	reviewed = false,
+}: {
+	status: TodoStatus;
+	glance: PlanGlance;
+	reviewed?: boolean;
+}) {
 	if (status === "in_progress") {
 		const { Icon, className } = glanceIcon(glance);
 		return <Icon data-glance={glance} className={cn("size-4 shrink-0", className)} />;
 	}
+	if (status === "done" && reviewed)
+		return <CircleCheck data-reviewed="true" className="size-4 shrink-0 text-feedback-success" />;
 	return <PlanStatusIcon kind={status === "done" ? "done" : "pending"} />;
 }
 
@@ -370,14 +384,16 @@ function TodoRow({
 	onOpenChanges?: ((target: ChangeTarget) => void) | undefined;
 }) {
 	const changeSet = onOpenChanges ? itemChangeSet(todo) : null;
+	const reviewed = reviewSettled(todo);
 	return (
 		<li
 			data-testid="todo-row"
 			data-status={todo.status}
+			data-reviewed={reviewed}
 			className="group flex items-center gap-sm rounded-[var(--radius-sm)] px-xs py-xs hover:bg-control-bg-hovered"
 		>
-			<span className="shrink-0" title={statusLabel(todo.status, glance)}>
-				<StatusIcon status={todo.status} glance={glance} />
+			<span className="shrink-0" title={reviewed ? "Verified" : statusLabel(todo.status, glance)}>
+				<StatusIcon status={todo.status} glance={glance} reviewed={reviewed} />
 			</span>
 			<div className="min-w-0 flex-1">
 				<div

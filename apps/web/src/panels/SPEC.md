@@ -335,10 +335,18 @@ a project picker, the prompt hero, and the reused
   summary line (sha chip + `N files` + `DiffStatBadge`) toggles the commit's `GitFileChange[]` rows
   (the DTO decoration), **collapsed by default** so a long plan stays compact; the chevron/summary is
   the toggle while the sha chip stays a separate button (routing the Changes panel, never toggling).
-  Expanded, the file rows are clickable (`statusNameClass`-colored name + the shared
-  `DiffStatBadge`) opening Monaco diff tabs at the item's `commit:{sha}` scope (`openDiffInTab`,
+  Expanded, the file rows are clickable (`planFileRow.tsx`'s shared `FileRow` — its own module so
+  PlanPane → PlanReview stays a one-way import, never a cycle) opening Monaco diff tabs at the item's
+  `commit:{sha}` scope (`openDiffInTab`,
   preview intent; the path-list fallback opens at branch scope, no counts — they'd drift), a sha chip
-  routing the Changes panel to that commit (`useChatTodos.openChanges`), and header export actions —
+  routing the Changes panel to that commit (`useChatTodos.openChanges`), **and the review verdict
+  right there, next to the changes**: an unsettled reviewable item's expanded disclosure grows a
+  `Start review` button (`plan-start-review`) that unfolds the shared `ReviewActions` pair (Approve /
+  Ask to fix — one component with the Review-mode card, so the two surfaces can never drift) under the
+  file rows; approving settles the item — its status glyph upgrades to the **circled Verified check**
+  (`StatusIcon reviewed`, hover "Verified", `data-reviewed` on the row; `planView.reviewSettled` is the
+  one derivation — approved AND no unreviewed delta, so a fresh revision drops the item back out of
+  both the glyph and the reviewed counter) — and header export actions —
   **Copy** (clipboard) / **Save .md** (browser download) — both compiling through `chat/planMarkdown`.
   Live by construction: it reads through the same `useChatTodos` hook as the plan popup (per-mount
   fetch + `pi.event` refetch), so it can never show a stale snapshot the way the old compiled-markdown

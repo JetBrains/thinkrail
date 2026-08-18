@@ -9,11 +9,11 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { VerificationBadge } from "../chat/planKit";
-import { changeSetStat, itemRevisions, reviewableItems } from "../chat/planView";
+import { changeSetStat, itemRevisions, reviewableItems, reviewSettled } from "../chat/planView";
 import { cn } from "../lib";
 import { DiffStatBadge } from "./DiffStatBadge";
 import { openDiffInTab } from "./openTabs";
-import { FileRow } from "./PlanPane";
+import { FileRow } from "./planFileRow";
 
 // The plan page's REVIEW mode (SPEC §Plan page / task-todo-review-workflow): the plan's reviewable
 // items — exactly those the host decorated with `review` (reviewable ≡ carries a host change set) —
@@ -109,6 +109,46 @@ function RevisionBlock({
 	);
 }
 
+/**
+ * The review verdict pair — **Approve** + **Ask to fix** — shared by the Review-mode card and the
+ * plan page's inline per-change-set review (the actions live NEXT TO the changes, both surfaces one
+ * component so they can never drift).
+ */
+export function ReviewActions({
+	itemId,
+	onApprove,
+	onAskFix,
+}: {
+	itemId: string;
+	onApprove: (id: string) => Promise<void>;
+	onAskFix: (id: string, feedback: string) => Promise<void>;
+}) {
+	const [busy, setBusy] = useState(false);
+	const approve = async () => {
+		if (busy) return;
+		setBusy(true);
+		try {
+			await onApprove(itemId);
+		} finally {
+			setBusy(false);
+		}
+	};
+	return (
+		<div className="mt-md flex items-start gap-sm" data-testid="review-actions">
+			<button
+				type="button"
+				data-testid="review-approve"
+				disabled={busy}
+				onClick={() => void approve()}
+				className="rounded-[var(--radius-sm)] bg-primary px-sm py-xs tr-text-ui text-text-on-primary hover:opacity-90 disabled:opacity-50"
+			>
+				Approve
+			</button>
+			<AskFixForm onSend={(feedback) => onAskFix(itemId, feedback)} />
+		</div>
+	);
+}
+
 /** The Ask-to-fix affordance: a button that unfolds into a feedback textarea + Send/Cancel. */
 function AskFixForm({ onSend }: { onSend: (feedback: string) => Promise<void> }) {
 	const [open, setOpen] = useState(false);
@@ -189,7 +229,6 @@ function ReviewCard({
 	onAskFix: (id: string, feedback: string) => Promise<void>;
 }) {
 	const review = item.review;
-	const [busy, setBusy] = useState(false);
 	if (!review) return null;
 	const revisions = itemRevisions(item);
 	const unreviewed = new Set(review.unreviewedShas ?? []);
@@ -197,17 +236,8 @@ function ReviewCard({
 	const fallbackPaths = (item.artifacts ?? []).flatMap((a) =>
 		a.kind === "change" && a.path ? [a.path] : [],
 	);
-	const settled = review.state === "reviewed" && !hasDelta;
+	const settled = reviewSettled(item);
 	const fixing = review.state === "changes_requested" && item.status !== "done" && !hasDelta;
-	const approve = async () => {
-		if (busy) return;
-		setBusy(true);
-		try {
-			await onApprove(item.id);
-		} finally {
-			setBusy(false);
-		}
-	};
 	return (
 		<section
 			className="mb-lg rounded-[var(--radius-md)] border border-border-default p-md"
@@ -313,19 +343,8 @@ function ReviewCard({
 							))}
 						</ul>
 					) : null}
-					{!settled || hasDelta ? (
-						<div className="mt-md flex items-start gap-sm">
-							<button
-								type="button"
-								data-testid="review-approve"
-								disabled={busy}
-								onClick={() => void approve()}
-								className="rounded-[var(--radius-sm)] bg-primary px-sm py-xs tr-text-ui text-text-on-primary hover:opacity-90 disabled:opacity-50"
-							>
-								Approve
-							</button>
-							<AskFixForm onSend={(feedback) => onAskFix(item.id, feedback)} />
-						</div>
+					{!settled ? (
+						<ReviewActions itemId={item.id} onApprove={onApprove} onAskFix={onAskFix} />
 					) : null}
 				</div>
 			</div>

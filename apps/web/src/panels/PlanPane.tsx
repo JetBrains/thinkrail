@@ -1,4 +1,4 @@
-import type { GitFileChange, TodoGroupItem, TodoItem } from "@thinkrail/contracts";
+import type { TodoGroupItem, TodoItem } from "@thinkrail/contracts";
 import { ChevronDown, ChevronRight, Copy, Download, GitCommitHorizontal } from "lucide-react";
 import { useState } from "react";
 import { VerificationBadge } from "../chat/planKit";
@@ -11,16 +11,16 @@ import {
 	planSections,
 	planSummary,
 	reviewProgress,
-	statusLetter,
+	reviewSettled,
 } from "../chat/planView";
 import { StatusIcon } from "../chat/TodoList";
 import { useChatTodos } from "../chat/useChatTodos";
 import { cn } from "../lib";
 import { selectChatTitle, useAppStore } from "../store";
-import { statusNameClass } from "./changesModel";
 import { DiffStatBadge } from "./DiffStatBadge";
 import { openDiffInTab } from "./openTabs";
-import { PlanReviewList } from "./PlanReview";
+import { PlanReviewList, ReviewActions } from "./PlanReview";
+import { FileRow } from "./planFileRow";
 
 // The chat plan's live review-map page — a center `plan` tab (see `store`'s `PlanTab`): the session's
 // TODO plan rendered document-scale, each done item unfolding into the change set its work produced.
@@ -31,59 +31,35 @@ import { PlanReviewList } from "./PlanReview";
 // fallback), the sha chip points the Changes panel at the commit. Markdown is this page's *export*
 // (`planMarkdown` → copy / save-as-.md), never its source.
 
-/** `git status`-style one-letter marker (`planView.statusLetter`), colored like the Changes tree. */
-function FileStatusLetter({ status }: { status: GitFileChange["status"] }) {
-	return (
-		<span className={`w-4 shrink-0 text-center tr-text-metadata ${statusNameClass(status)}`}>
-			{statusLetter(status)}
-		</span>
-	);
-}
-
-/** One changed file: status letter + path + `+/−`, clicking opens its diff tab at `scope`. Shared with
- * the Review mode (`PlanReview`), so both modes' file rows read identically. */
-export function FileRow({ file, onOpen }: { file: GitFileChange; onOpen: () => void }) {
-	return (
-		<li>
-			<button
-				type="button"
-				data-testid="plan-file-row"
-				onClick={onOpen}
-				title={file.path}
-				className="flex w-full min-w-0 items-center gap-sm rounded-[var(--radius-sm)] px-xs py-xs text-left hover:bg-control-bg-hovered"
-			>
-				<FileStatusLetter status={file.status} />
-				<span
-					className={`min-w-0 flex-1 truncate tr-text-ui text-text-muted ${statusNameClass(file.status)}`}
-				>
-					{file.path}
-				</span>
-				<DiffStatBadge added={file.added ?? 0} removed={file.removed ?? 0} />
-			</button>
-		</li>
-	);
-}
-
 /**
  * A done item's change set as a **collapsible disclosure**, collapsed by default so a long plan stays
  * compact. The chevron/`N files` summary toggles the file rows; the sha chip stays a separate button
- * that routes the Changes panel and never toggles the disclosure (and vice versa).
+ * that routes the Changes panel and never toggles the disclosure (and vice versa). **Review happens
+ * right here, next to the changes**: expanding an unsettled reviewable item reveals a `Start review`
+ * button which unfolds the shared verdict pair (`ReviewActions` — Approve / Ask to fix) under the file
+ * rows; approving settles the item (circled Verified glyph) and the affordance disappears.
  */
 function ChangeSetBlock({
 	item,
 	workspaceId,
 	onOpenCommit,
+	onApprove,
+	onAskFix,
 }: {
 	item: TodoItem;
 	workspaceId: string;
 	onOpenCommit: (sha: string) => void;
+	onApprove: (id: string) => Promise<void>;
+	onAskFix: (id: string, feedback: string) => Promise<void>;
 }) {
 	const [expanded, setExpanded] = useState(false);
+	const [reviewing, setReviewing] = useState(false);
 	const set = itemChangeSet(item);
 	if (!set) return null;
 	const Chevron = expanded ? ChevronDown : ChevronRight;
 	const stat = set.kind === "commit" ? changeSetStat(set.files) : null;
 	const count = set.kind === "paths" ? set.paths.length : (stat?.count ?? 0);
+	const needsReview = item.review !== undefined && !reviewSettled(item);
 	return (
 		<div
 			className="mt-xs"
@@ -120,6 +96,16 @@ function ChangeSetBlock({
 						<DiffStatBadge added={stat?.added ?? 0} removed={stat?.removed ?? 0} />
 					</>
 				) : null}
+				{expanded && needsReview && !reviewing ? (
+					<button
+						type="button"
+						data-testid="plan-start-review"
+						onClick={() => setReviewing(true)}
+						className="ml-auto shrink-0 rounded-[var(--radius-sm)] border border-border-default px-sm py-2xs tr-text-ui text-text-default hover:bg-control-bg-hovered"
+					>
+						Start review
+					</button>
+				) : null}
 			</div>
 			{expanded ? (
 				set.kind === "paths" ? (
@@ -152,25 +138,39 @@ function ChangeSetBlock({
 					</ul>
 				)
 			) : null}
+			{expanded && reviewing && needsReview ? (
+				<ReviewActions itemId={item.id} onApprove={onApprove} onAskFix={onAskFix} />
+			) : null}
 		</div>
 	);
 }
 
-/** One plan item: status glyph + title + note, then its change set (done items that produced one). */
+/** One plan item: status glyph + title + note, then its change set (done items that produced one).
+ * A settled review upgrades the check to the circled **Verified** glyph (hover says so). */
 function ItemBlock({
 	item,
 	workspaceId,
 	onOpenCommit,
+	onApprove,
+	onAskFix,
 }: {
 	item: TodoItem;
 	workspaceId: string;
 	onOpenCommit: (sha: string) => void;
+	onApprove: (id: string) => Promise<void>;
+	onAskFix: (id: string, feedback: string) => Promise<void>;
 }) {
+	const reviewed = reviewSettled(item);
 	return (
-		<li data-testid="plan-item" data-status={item.status} className="py-xs">
+		<li
+			data-testid="plan-item"
+			data-status={item.status}
+			data-reviewed={reviewed}
+			className="py-xs"
+		>
 			<div className="flex items-start gap-sm">
-				<span className="mt-2xs">
-					<StatusIcon status={item.status} glance="working" />
+				<span className="mt-2xs" title={reviewed ? "Verified" : undefined}>
+					<StatusIcon status={item.status} glance="working" reviewed={reviewed} />
 				</span>
 				<div className="min-w-0 flex-1">
 					<div
@@ -189,7 +189,13 @@ function ItemBlock({
 					{item.status === "done" && item.verification ? (
 						<VerificationBadge verification={item.verification} />
 					) : null}
-					<ChangeSetBlock item={item} workspaceId={workspaceId} onOpenCommit={onOpenCommit} />
+					<ChangeSetBlock
+						item={item}
+						workspaceId={workspaceId}
+						onOpenCommit={onOpenCommit}
+						onApprove={onApprove}
+						onAskFix={onAskFix}
+					/>
 				</div>
 			</div>
 		</li>
@@ -200,10 +206,14 @@ function GroupSection({
 	group,
 	workspaceId,
 	onOpenCommit,
+	onApprove,
+	onAskFix,
 }: {
 	group: TodoGroupItem;
 	workspaceId: string;
 	onOpenCommit: (sha: string) => void;
+	onApprove: (id: string) => Promise<void>;
+	onAskFix: (id: string, feedback: string) => Promise<void>;
 }) {
 	const { done, total } = groupProgress(group);
 	return (
@@ -221,6 +231,8 @@ function GroupSection({
 						item={item}
 						workspaceId={workspaceId}
 						onOpenCommit={onOpenCommit}
+						onApprove={onApprove}
+						onAskFix={onAskFix}
 					/>
 				))}
 			</ul>
@@ -382,6 +394,8 @@ export default function PlanPane({
 								group={group}
 								workspaceId={workspaceId}
 								onOpenCommit={onOpenCommit}
+								onApprove={plan.approve}
+								onAskFix={plan.askFix}
 							/>
 						))}
 						{loose.length > 0 ? (
@@ -398,6 +412,8 @@ export default function PlanPane({
 											item={item}
 											workspaceId={workspaceId}
 											onOpenCommit={onOpenCommit}
+											onApprove={plan.approve}
+											onAskFix={plan.askFix}
 										/>
 									))}
 								</ul>

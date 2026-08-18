@@ -116,11 +116,26 @@ test("a reviewable step reads summary-first in Review mode and Approve records t
 	// The newest (only) revision unfolds for an unreviewed item — its file rows are the grouped diff.
 	await expect(card.getByTestId("plan-file-row").filter({ hasText: "flood.ts" })).toBeVisible();
 
-	// Approve → the card settles, the counter flips, and the decision is persisted host-side (sidecar).
-	await card.getByTestId("review-approve").click();
+	// Approve happens NEXT TO THE CHANGES: back in Plan mode, expanding the step's change set reveals a
+	// Start review button, which unfolds the verdict pair right under the file rows.
+	await pane.getByTestId("plan-mode-plan").click();
+	const codeItem = pane
+		.getByTestId("plan-item")
+		.filter({ hasText: "Implement FloodWait handling" });
+	await expect(codeItem).toHaveAttribute("data-reviewed", "false");
+	await codeItem.getByTestId("plan-change-set-toggle").click();
+	await codeItem.getByTestId("plan-start-review").click();
+	await codeItem.getByTestId("review-approve").click();
+
+	// Approved → the step's glyph becomes the circled Verified check, the counter flips, the inline
+	// affordance disappears, and the Review-mode card settles too.
+	await expect(codeItem).toHaveAttribute("data-reviewed", "true");
+	await expect(codeItem.locator('[data-reviewed="true"][class*="lucide"]')).toBeVisible();
+	await expect(codeItem.getByTestId("plan-start-review")).toHaveCount(0);
+	await expect(pane.getByTestId("plan-review-progress")).toContainText("1/1 reviewed");
+	await pane.getByTestId("plan-mode-review").click();
 	await expect(card).toHaveAttribute("data-state", "reviewed");
 	await expect(card.getByTestId("review-approve")).toHaveCount(0);
-	await expect(pane.getByTestId("plan-review-progress")).toContainText("1/1 reviewed");
 	const sidecar = join(todosDir, `${sessionId}.reviews.json`);
 	expect(existsSync(sidecar)).toBe(true);
 	const record = JSON.parse(readFileSync(sidecar, "utf8")).items.t_code;

@@ -530,7 +530,10 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   "Tests ✓" element — check glyph for a named check, warning glyph for an honest "not verified", the
   split derived by `planView.verificationStatus`, ONE home; the badge's title labels it self-reported —
   never a host-run gate); the plan page shows both full-width, and the Review mode is summary-first
-  (see `panels/SPEC.md`). **A row whose item carries a host
+  (see `panels/SPEC.md`). A row whose review is **settled** (`planView.reviewSettled` — approved and
+  nothing landed since) upgrades its done check to the **circled Verified glyph**
+  (`StatusIcon reviewed`, hover "Verified", `data-reviewed`) — the at-a-glance "this step was
+  reviewed" state, popup and plan page alike. **A row whose item carries a host
   change set grows a quiet "N files" chip** (`itemChangeSet` in `planView` — the one derivation shared
   with the markdown snapshot below, so the two can never disagree): a **committed** item's chip opens the
   Changes panel at its `commit:{sha}` scope via `useChatTodos.openChanges` (`setDiffScope` +
