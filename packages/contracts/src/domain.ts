@@ -248,11 +248,17 @@ export interface TodoItem {
 	origin: TodoOrigin;
 	note?: string;
 	/**
-	 * The agent's completion note (what changed / why / verification performed — the verification line is
-	 * self-reported by construction). Skill-mandated for done steps that changed code, tool-optional: a
-	 * reviewable item without one renders a quiet placeholder, never blocks.
+	 * The agent's completion note (what changed / why — the decisions the diff can't show).
+	 * Skill-mandated for done steps that changed code, tool-optional: a reviewable item without one
+	 * renders a quiet placeholder, never blocks.
 	 */
 	summary?: string;
+	/**
+	 * The verification line, separate from the prose so clients render it as a status badge: the exact
+	 * check run + result (`"bun test — 34 pass"`) or `"not verified"`. Self-reported by construction —
+	 * the UI labels it as the agent's own claim, never as a host-run gate.
+	 */
+	verification?: string;
 	/** Links to what the work produced — the host attaches `change`/`commit` on `done` (see the todos module). */
 	artifacts?: TodoArtifact[];
 	/**

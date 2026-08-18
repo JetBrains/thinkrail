@@ -26,6 +26,11 @@ export interface ChatTodos {
 	/** Open an item's change set (the plan's "N files" chip): `{sha}` → the Changes panel at that commit's
 	 * scope (durable done-time diff); `{path}` → that file's live diff tab at the branch scope. */
 	openChanges: (target: { sha: string } | { path: string }) => void;
+	/** Approve a reviewable item (`todo.review`) — records `reviewed` + the watermark, then re-reads. */
+	approve: (id: string) => Promise<void>;
+	/** Ask-to-fix (`todo.requestFix`) — records `changes_requested` and fires the feedback package into
+	 * this chat (the host composes it); rejects on failure so the caller keeps the typed feedback. */
+	askFix: (id: string, feedback: string) => Promise<void>;
 }
 
 /**
@@ -155,7 +160,17 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 		store.requestChangesView(workspaceId, target.path);
 	};
 
-	return { data, failed, add, remove, openPlan, openChanges };
+	const approve = async (id: string) => {
+		await getTransport().request("todo.review", { workspaceId, sessionId, id });
+		await reloadPlan(); // the review decoration is host-derived — never patch it locally
+	};
+
+	const askFix = async (id: string, feedback: string) => {
+		await getTransport().request("todo.requestFix", { workspaceId, sessionId, id, feedback });
+		await reloadPlan();
+	};
+
+	return { data, failed, add, remove, openPlan, openChanges, approve, askFix };
 }
 
 /**

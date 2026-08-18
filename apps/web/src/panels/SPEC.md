@@ -342,7 +342,28 @@ a project picker, the prompt hero, and the reused
   **Copy** (clipboard) / **Save .md** (browser download) — both compiling through `chat/planMarkdown`.
   Live by construction: it reads through the same `useChatTodos` hook as the plan popup (per-mount
   fetch + `pi.event` refetch), so it can never show a stale snapshot the way the old compiled-markdown
-  `doc` route did. `CenterTabs`
+  `doc` route did.
+  **The plan page's Review mode** (`PlanReview.tsx`, the TODO→review workflow — see
+  [[submodule-server-todos]] §Review workflow + the wire DTOs in [[module-contracts]]): when the plan has
+  reviewable items (`reviewProgress.total > 0` — host-gated by `TodoItem.review` presence), the header
+  grows a **`Plan | Review (n)`** segmented toggle plus a second counter (`… · r/k reviewed`, execution
+  and review progress stay separate); the mode is only reachable while reviewables exist (a re-plan that
+  empties them falls back to Plan rather than stranding an empty mode). Review mode is **summary-first**:
+  each reviewable item is a card — state glyph + title + `Revision N` badge + state label → the agent's
+  completion `summary` (italic "No summary provided." placeholder — advisory, never a block) → the
+  verification line as the shared `VerificationBadge` (`chat/planKit`) — and on a DONE reviewable item
+  with no line at all, an explicit "No verification reported." gap (silence must be visible; a
+  re-opened item mid-fix shows nothing) → the `changes_requested` feedback quote → the item's **revisions** (`itemRevisions`, newest first, each a
+  collapsible commit block: sha chip → Changes panel, `DiffStatBadge`, `FileRow`s → commit-scope Monaco
+  diffs — the newest unfolds when it's the thing to review; ones in `review.unreviewedShas` are tagged
+  **"changed since review"**, so a fix cycle re-reviews only its delta, never the original diff again) →
+  the path-list fallback rows (branch scope) → **Approve** (`todo.review`) and **Ask to fix** (a
+  fold-out feedback textarea → `todo.requestFix`; failure keeps the typed text). Cards order: awaiting
+  the user (unreviewed / fresh delta), then awaited fixes (`changes_requested`, with a "Fix in
+  progress…" hint while the item is re-opened), then reviewed history — a settled reviewed card hides
+  its actions. The header also shows the agent's plan-level completion note
+  (`planCompletionSummary`-gated `plan-overall-summary`). `FileRow` is exported by `PlanPane` and shared,
+  so both modes' file rows read identically. `CenterTabs`
   closing a chat tab routes to `store.closeChatToHistory` (keeps the session alive) and shows a
   **chat-history** dropdown (recently-closed + disk-only chats, shown only when non-empty); each row has
   a one-click trash action (`session.delete` → idempotent `store.deleteChat`, no confirm); the

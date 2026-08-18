@@ -51,10 +51,16 @@ export interface Todo {
 	note?: string;
 	/**
 	 * The agent's completion note, set when the item flips `done` (skill-mandated for steps that changed
-	 * code, tool-optional): what changed, why if relevant, and what verification was performed. The
-	 * review card renders it above the change set; verification stays self-reported by construction.
+	 * code, tool-optional): what changed and why — the decisions the diff can't show. The review card
+	 * renders it above the change set.
 	 */
 	summary?: string;
+	/**
+	 * The verification line, separate from the prose so the UI can render it as a status badge: the exact
+	 * check run and its result (`"bun test src/todos — 34 pass"`) or the honest `"not verified"`.
+	 * Self-reported by construction — the display labels it as the agent's own claim.
+	 */
+	verification?: string;
 	/** Links to what the work produced (files/specs by the agent; changes by the host on `done`). */
 	artifacts?: TodoArtifact[];
 	/** ISO-8601 creation / last-mutation timestamps (store-managed). */
@@ -134,6 +140,8 @@ export interface TodoPatch {
 	note?: string;
 	/** The completion summary (empty string clears it) — see {@link Todo.summary}. */
 	summary?: string;
+	/** The verification line (empty string clears it) — see {@link Todo.verification}. */
+	verification?: string;
 	/** Replace the item's artifacts wholesale; `[]` clears them. */
 	artifacts?: TodoArtifact[];
 }
@@ -144,6 +152,7 @@ export interface WriteItem {
 	status?: TodoStatus;
 	note?: string;
 	summary?: string;
+	verification?: string;
 	artifacts?: TodoArtifact[];
 }
 

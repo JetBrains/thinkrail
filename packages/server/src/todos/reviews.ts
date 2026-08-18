@@ -53,7 +53,10 @@ function isRecord(raw: unknown): raw is TodoReviewRecord {
 }
 
 /** Read a session's review records; a missing or corrupt file reads as none (never throws). */
-export function readReviewRecords(root: string, sessionId: string): Record<string, TodoReviewRecord> {
+export function readReviewRecords(
+	root: string,
+	sessionId: string,
+): Record<string, TodoReviewRecord> {
 	try {
 		const parsed: unknown = JSON.parse(readFileSync(reviewsPath(root, sessionId), "utf8"));
 		if (typeof parsed !== "object" || parsed === null) return {};

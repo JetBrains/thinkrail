@@ -531,13 +531,16 @@ test("item summary: set with done, cleared by empty string, sanitized on read", 
 		const todo = store(root).add({ title: "Implement FloodWait handling" });
 		store(root).update(todo.id, {
 			status: "done",
-			summary: "Added throttling and fallback for failed batch sends. Tests pass.",
+			summary: "Added throttling and fallback for failed batch sends.",
+			verification: "bun test src/todos — 34 pass",
 		});
 		expect(store(root).get(todo.id)?.summary).toBe(
-			"Added throttling and fallback for failed batch sends. Tests pass.",
+			"Added throttling and fallback for failed batch sends.",
 		);
-		store(root).update(todo.id, { summary: "" });
+		expect(store(root).get(todo.id)?.verification).toBe("bun test src/todos — 34 pass");
+		store(root).update(todo.id, { summary: "", verification: "" });
 		expect(store(root).get(todo.id)?.summary).toBeUndefined();
+		expect(store(root).get(todo.id)?.verification).toBeUndefined();
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}

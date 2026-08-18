@@ -164,6 +164,8 @@ function sanitize(raw: unknown): Todo | null {
 	};
 	if (typeof o.note === "string" && o.note) todo.note = decodeIfAgent(o.note, origin);
 	if (typeof o.summary === "string" && o.summary) todo.summary = decodeIfAgent(o.summary, origin);
+	if (typeof o.verification === "string" && o.verification)
+		todo.verification = decodeIfAgent(o.verification, origin);
 	const artifacts = sanitizeArtifacts(o.artifacts, origin);
 	if (artifacts) todo.artifacts = artifacts;
 	return todo;
@@ -192,6 +194,7 @@ function makeTodo(
 	note?: string,
 	artifacts?: TodoArtifact[],
 	summary?: string,
+	verification?: string,
 ): Todo {
 	const now = nowIso();
 	const todo: Todo = {
@@ -204,6 +207,7 @@ function makeTodo(
 	};
 	if (note) todo.note = decodeIfAgent(note, origin);
 	if (summary) todo.summary = decodeIfAgent(summary, origin);
+	if (verification) todo.verification = decodeIfAgent(verification, origin);
 	const clean = sanitizeArtifacts(artifacts, origin);
 	if (clean) todo.artifacts = clean;
 	return todo;
@@ -241,7 +245,8 @@ export class TodoStore {
 			: [];
 		const plan: TodoPlan = { todos, groups };
 		// Plan-level summary: agent-authored always (written via todo_plan_summary), so decode escapes.
-		if (typeof file?.summary === "string" && file.summary) plan.summary = decodeEscapes(file.summary);
+		if (typeof file?.summary === "string" && file.summary)
+			plan.summary = decodeEscapes(file.summary);
 		return plan;
 	}
 
@@ -360,6 +365,10 @@ export class TodoStore {
 			if (patch.summary) todo.summary = decodeIfAgent(patch.summary, todo.origin);
 			else delete todo.summary;
 		}
+		if (patch.verification !== undefined) {
+			if (patch.verification) todo.verification = decodeIfAgent(patch.verification, todo.origin);
+			else delete todo.verification;
+		}
 		if (patch.artifacts !== undefined) {
 			const clean = sanitizeArtifacts(patch.artifacts, todo.origin);
 			if (clean) todo.artifacts = clean;
@@ -394,13 +403,29 @@ export class TodoStore {
 	 */
 	replaceAll(plan: WritePlan): TodoPlan {
 		const freshLoose = (plan.todos ?? []).map((w) =>
-			makeTodo(w.title, w.status ?? "pending", "agent", w.note, w.artifacts, w.summary),
+			makeTodo(
+				w.title,
+				w.status ?? "pending",
+				"agent",
+				w.note,
+				w.artifacts,
+				w.summary,
+				w.verification,
+			),
 		);
 		const freshGroups: TodoGroup[] = (plan.groups ?? []).map((g) => ({
 			id: freshId("g"),
 			title: decodeEscapes(g.title),
 			todos: g.todos.map((w) =>
-				makeTodo(w.title, w.status ?? "pending", "agent", w.note, w.artifacts, w.summary),
+				makeTodo(
+					w.title,
+					w.status ?? "pending",
+					"agent",
+					w.note,
+					w.artifacts,
+					w.summary,
+					w.verification,
+				),
 			),
 		}));
 		const current = this.read();

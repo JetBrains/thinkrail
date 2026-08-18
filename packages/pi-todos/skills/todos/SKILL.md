@@ -64,18 +64,38 @@ Steps are **verifiable** and ≈ commit-sized: "easy to check off as you go", no
 
 ## Completion summaries (the review trail)
 
-- **A step that changed code gets a summary when you mark it done** — pass `summary` on the same
-   `todo_update` call that sets `status: done`: 1–3 short sentences covering **what changed**, **why**
-   (when it isn't obvious), and **what verification you performed** (tests/typecheck run, or "not
-   verified"). The user reviews your work from this summary + the diff — write it for them, not for
-   yourself. Research/analysis/verification-only steps that produced no code changes need no summary.
+The user reviews your work from the summary + the diff. The diff shows *what*; the summary must carry
+everything the diff cannot show — intent, decisions, and honesty about verification. Write it for the
+reviewer, not for yourself.
+
+- **A step that changed code gets a summary AND a verification when you mark it done** — pass both
+   on the same `todo_update` call that sets `status: done`. `summary`: 1–3 short sentences covering
+   **what changed** and **why** — especially decisions that are NOT visible in the diff (a rejected
+   alternative, a constraint you worked around). Research/analysis/verification-only steps that
+   produced no code changes need neither.
+- **Verification is its own field, named, never claimed.** Pass `verification` with the exact check
+   you ran and its result ("`bun test src/todos` — 34 pass", "typecheck green") — or the honest
+   **"not verified"**; the UI renders it as a status badge on the review card, so a vague or missing
+   line is visible at a glance. Never write "tests pass" for tests you didn't run. And never make a
+   check pass by weakening it — if you changed, skipped, or deleted a test as part of the step, the
+   summary must say so explicitly: a reviewer who finds it themselves stops trusting every other
+   summary.
+- **Disclose scope drift.** Anything you touched beyond the step's own ask — an adjacent refactor, a
+   drive-by rename, a new dependency — goes in the summary ("also touched X because Y"). The
+   signature failure of agent changes is solving the asked problem *plus* neighbors; undisclosed
+   extras are what reviewers distrust most.
+- **Point at the risk.** When one part of the change deserves the reviewer's closest look — a
+   contract/API change, tricky concurrency, an area you're least sure of — name it in one clause
+   ("closest look: the rollback path").
 - **When the last open item flips done, write the overall plan summary** with `todo_plan_summary`
    (the `todo_update` result nudges you at exactly that moment): 2–4 sentences across all tasks — a
-   handoff note, not a step list.
+   handoff note, not a step list. Include what was verified end-to-end and anything left undone or
+   deferred — an omission here reads as "nothing left", so say it if something is.
 - **Fix requests re-open the SAME item.** When the user asks for a fix on a reviewed step (you'll
    receive the original step, its summary, its change set, and their feedback), flip **that exact item**
    (by id) back to `in_progress`, make the fix, and mark it `done` with a **fresh summary** describing
-   the fix. Never open a new item for a fix — the revision must attach to the step it revises.
+   the fix — the fix, not the original work (the user re-reviews only the new delta). Never open a new
+   item for a fix — the revision must attach to the step it revises.
 
 ## Invariants
 

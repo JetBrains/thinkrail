@@ -173,6 +173,14 @@ of the host.
   artifact additionally carries **`files?: GitFileChange[]`** (path + status + `+/−` — the same rows
   the Changes panel renders at the commit scope) — host-derived from git by `todo.list`'s decoration
   (same one-home rationale), never stored; absent = the sha no longer resolves, degrade silently.
+  `TodoItem.summary` / `TodoPlan.summary` are the agent's completion notes (per step / whole plan, as
+  stored) and `TodoItem.verification` the separate self-reported check line (exact command + result, or
+  "not verified" — clients render it as a badge labeled as the agent's own claim, never a host gate); **`TodoItem.review?: TodoReviewInfo`** (+ the **`TodoReviewState`** union) is the host-derived
+  review decoration, present only on reviewable items (those with a host change set): `state`
+  (`unreviewed`/`reviewed`/`changes_requested` — `unreviewed` = no stored record), `revision` (commit
+  count — 1 TODO = N commits), `unreviewedShas` (commits since the user's watermark — the "changed since
+  review" delta), `feedback` + `at`. Review state lives in a host sidecar, never the agent-writable plan;
+  see [[submodule-server-todos]].
   **history-search read DTOs** — **`HistoryScope`** (the overlay's cycle: this chat → workspace →
   project → everywhere); **`PromptHit`** (a recalled prompt; carries optional `messageIndex` +
   `anchorText` — the kept-newest occurrence's jump anchor) and **`MessageHit`** (a full-text
@@ -210,7 +218,9 @@ of the host.
   never eagerly for every project) / `workspace.*` / `fs.*` / `git.*` / **`spec.graph`**
   (the Specs-viewer whole-graph read, per workspace) / **`todo.*`** — **`list`**/**`add`**/**`update`**/
   **`remove`**, the chat's per-session TODO plan (keyed by `workspaceId` + `sessionId`; `add` tags the
-  item `origin:"user"`) / **`terminal.*`** — **`attach`** (idempotent get-or-create keyed by
+  item `origin:"user"`), plus the review ops **`review`** (approve: record `reviewed` + the sha
+  watermark) and **`requestFix`** (record `changes_requested` + feedback, then the host fires the fix
+  package into the item's own chat — detached, rolled back on a pre-turn rejection) / **`terminal.*`** — **`attach`** (idempotent get-or-create keyed by
   `(workspaceId, tabKey)`, returning `created` + the `replay` to repaint; the only way a PTY is born, and it
   replaced `create`+`alive`) / **`list`** (the host owns the tab list) / `write` / `resize` /
   **`close`** (by `tabKey`, refusing a busy shell unless `force`) / `model.list` + **`model.refresh`** (awaits the host's

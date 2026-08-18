@@ -102,7 +102,12 @@ channel fan-out, and the process-boot wrapper both launchers share.
   workspace's `skillOverrides` when workspace-scoped) and pass it into agent's `listSkillCommands`/
   `listSkillCatalog`; `session.list` decorates agent's `listSessions` summaries with
   `openTodos: countOpenTodos(…)` per session (a host-only composition of `agent` + `todos` — `agent`
-  stays todos-free; a failed count omits the field, never fails the list); `project.setTrust`
+  stays todos-free; a failed count omits the field, never fails the list); **`todo.requestFix`** is the
+  same kind of composition (`todos` records + renders the fix package, `agent` delivers): the package is
+  fired **detached** into the item's own chat via `followUpSession` (`fireTodoFixPrompt`, the
+  `fireReviewPrompt` pattern) — a pre-turn rejection rolls the review record back (`rollbackTodoFix`) and
+  surfaces as an extension-UI notice, so an undelivered fix request never strands as `changes_requested`;
+  `project.setTrust`
   acknowledges the aliases present at grant via agent's
   `listProjectAliasSkillNames`; `project.acknowledgeSkills` / `project.setSkillEnabled` /
   `project.setGroupEnabled` / `project.aliasSkills` / `workspace.setSkillOverride` mutate/read the persisted

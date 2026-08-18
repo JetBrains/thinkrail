@@ -27,14 +27,32 @@ export type ItemChangeSet =
 
 export function itemChangeSet(item: TodoItem): ItemChangeSet | null {
 	const artifacts = item.artifacts ?? [];
-	const commit = artifacts.find((a) => a.kind === "commit" && !!a.sha);
-	if (commit?.sha) {
-		return commit.files && commit.files.length > 0
-			? { kind: "commit", sha: commit.sha, files: commit.files }
-			: null;
-	}
+	// Fallback `change` paths, when present, are the item's LATEST delta (a redo that couldn't commit
+	// keeps its committed history but the live paths are what changed since) — they win over commits.
 	const paths = artifacts.flatMap((a) => (a.kind === "change" && a.path ? [a.path] : []));
-	return paths.length > 0 ? { kind: "paths", paths } : null;
+	if (paths.length > 0) return { kind: "paths", paths };
+	// Commits accumulate per fix cycle (revision history) — the newest resolvable one is "the" change set
+	// here; per-revision rendering is {@link itemRevisions}. Unresolvable shas degrade silently.
+	const commits = itemRevisions(item);
+	for (let i = commits.length - 1; i >= 0; i--) {
+		const rev = commits[i];
+		if (rev?.files && rev.files.length > 0)
+			return { kind: "commit", sha: rev.sha, files: rev.files };
+	}
+	return null;
+}
+
+/** One committed revision of an item's work — `files` absent when the sha no longer resolves. */
+export interface ItemRevision {
+	sha: string;
+	files?: GitFileChange[];
+}
+
+/** The item's commit artifacts in order (oldest→newest) — its revision history (1 TODO = N commits). */
+export function itemRevisions(item: TodoItem): ItemRevision[] {
+	return (item.artifacts ?? []).flatMap((a) =>
+		a.kind === "commit" && a.sha ? [{ sha: a.sha, ...(a.files ? { files: a.files } : {}) }] : [],
+	);
 }
 
 /** `git status`-style one-letter file marker — the one status→letter mapping (page rows + the export). */
@@ -93,6 +111,48 @@ export function planSummary(plan: TodoPlan): {
 		total: all.length,
 		current: all.find((t) => t.status === "in_progress"),
 	};
+}
+
+/**
+ * Classify an agent's self-reported verification line for the status badge — the ONE home of the
+ * heuristic (popup, plan page, review card, export all read it): an explicit "not verified" /
+ * "unverified" / "no verification" claim renders as unverified (warning glyph); anything else that
+ * names a check renders as verified-as-claimed (check glyph). Absence of the field is the caller's
+ * case (no badge — and on a reviewable item, a visible gap).
+ */
+export function verificationStatus(verification: string): "claimed" | "unverified" {
+	return /\b(not\s+verified|unverified|no\s+verification)\b/i.test(verification)
+		? "unverified"
+		: "claimed";
+}
+
+/**
+ * The reviewable items of a plan, in plan order — exactly those the host decorated with `review`
+ * (reviewable ≡ carries a host change set; the gate has ONE home, server-side). The Review mode's list.
+ */
+export function reviewableItems(plan: TodoPlan): TodoItem[] {
+	return flatItems(plan).filter((t) => t.review !== undefined);
+}
+
+/** reviewed / total across the reviewable items — the `R/K reviewed` counter, separate from done/total. */
+export function reviewProgress(plan: TodoPlan): { reviewed: number; total: number } {
+	const items = reviewableItems(plan);
+	return {
+		reviewed: items.filter((t) => t.review?.state === "reviewed").length,
+		total: items.length,
+	};
+}
+
+/**
+ * The plan-level completion summary, gated on the plan actually being complete: the agent writes it when
+ * the last item flips done, and a re-opened plan (new items, a reset step) hides it until the agent
+ * rewrites it at the next completion — so the page never shows a stale "all done" note over open work.
+ */
+export function planCompletionSummary(plan: TodoPlan): string | undefined {
+	if (!plan.summary) return undefined;
+	const all = flatItems(plan);
+	if (all.length === 0 || all.some((t) => t.status !== "done")) return undefined;
+	return plan.summary;
 }
 
 /**

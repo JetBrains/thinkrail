@@ -30,7 +30,13 @@ const parameters = Type.Object({
 	summary: Type.Optional(
 		Type.String({
 			description:
-				"Completion summary, set together with status=done when the step changed code: 1–3 short sentences — what changed, why if relevant, and what verification you performed. Empty string clears it.",
+				"Completion summary, set together with status=done when the step changed code: 1–3 short sentences — what changed, why (decisions not visible in the diff), and any scope drift (things touched beyond this step). Verification goes in the separate verification field, not here. Empty string clears it.",
+		}),
+	),
+	verification: Type.Optional(
+		Type.String({
+			description:
+				'Verification line, set together with status=done: the EXACT check you ran and its result ("bun test src/todos — 34 pass", "typecheck green") — or "not verified" when you ran nothing. Never claim a check you did not run. Empty string clears it.',
 		}),
 	),
 });
@@ -63,6 +69,7 @@ export function registerTodoUpdate(pi: ExtensionAPI): void {
 			if (params.title !== undefined) patch.title = params.title;
 			if (params.note !== undefined) patch.note = params.note;
 			if (params.summary !== undefined) patch.summary = params.summary;
+			if (params.verification !== undefined) patch.verification = params.verification;
 			const store = storeFor(ctx);
 			const result = store.update(params.id, patch);
 			if (!result) return errorResult(`No TODO with id "${params.id}".`);

@@ -1,21 +1,26 @@
 import type { GitFileChange, TodoGroupItem, TodoItem } from "@thinkrail/contracts";
 import { ChevronDown, ChevronRight, Copy, Download, GitCommitHorizontal } from "lucide-react";
 import { useState } from "react";
+import { VerificationBadge } from "../chat/planKit";
 import { planToMarkdown } from "../chat/planMarkdown";
 import {
 	changeSetStat,
 	groupProgress,
 	itemChangeSet,
+	planCompletionSummary,
 	planSections,
 	planSummary,
+	reviewProgress,
 	statusLetter,
 } from "../chat/planView";
 import { StatusIcon } from "../chat/TodoList";
 import { useChatTodos } from "../chat/useChatTodos";
+import { cn } from "../lib";
 import { selectChatTitle, useAppStore } from "../store";
 import { statusNameClass } from "./changesModel";
 import { DiffStatBadge } from "./DiffStatBadge";
 import { openDiffInTab } from "./openTabs";
+import { PlanReviewList } from "./PlanReview";
 
 // The chat plan's live review-map page — a center `plan` tab (see `store`'s `PlanTab`): the session's
 // TODO plan rendered document-scale, each done item unfolding into the change set its work produced.
@@ -35,8 +40,9 @@ function FileStatusLetter({ status }: { status: GitFileChange["status"] }) {
 	);
 }
 
-/** One changed file: status letter + path + `+/−`, clicking opens its diff tab at `scope`. */
-function FileRow({ file, onOpen }: { file: GitFileChange; onOpen: () => void }) {
+/** One changed file: status letter + path + `+/−`, clicking opens its diff tab at `scope`. Shared with
+ * the Review mode (`PlanReview`), so both modes' file rows read identically. */
+export function FileRow({ file, onOpen }: { file: GitFileChange; onOpen: () => void }) {
 	return (
 		<li>
 			<button
@@ -175,6 +181,14 @@ function ItemBlock({
 						{item.title}
 					</div>
 					{item.note ? <div className="tr-text-metadata text-text-subtle">{item.note}</div> : null}
+					{item.status === "done" && item.summary ? (
+						<div data-testid="plan-item-summary" className="tr-text-ui text-text-muted">
+							{item.summary}
+						</div>
+					) : null}
+					{item.status === "done" && item.verification ? (
+						<VerificationBadge verification={item.verification} />
+					) : null}
 					<ChangeSetBlock item={item} workspaceId={workspaceId} onOpenCommit={onOpenCommit} />
 				</div>
 			</div>
@@ -235,6 +249,7 @@ export default function PlanPane({
 	const plan = useChatTodos(workspaceId, sessionId);
 	const title = useAppStore((s) => selectChatTitle(s, workspaceId, sessionId));
 	const pushToast = useAppStore((s) => s.pushToast);
+	const [mode, setMode] = useState<"plan" | "review">("plan");
 
 	if (plan.data === null) {
 		return (
@@ -249,6 +264,8 @@ export default function PlanPane({
 	const groups = [...sections.activeGroups, ...sections.pendingGroups, ...sections.doneGroups];
 	const loose = [...sections.activeLoose, ...sections.pendingLoose, ...sections.doneLoose];
 	const empty = groups.length === 0 && loose.length === 0;
+	const review = reviewProgress(data);
+	const overallSummary = planCompletionSummary(data);
 	const onOpenCommit = (sha: string) => plan.openChanges({ sha });
 	const exportMarkdown = () => planToMarkdown(data, title);
 
@@ -260,8 +277,45 @@ export default function PlanPane({
 						<h1 className="truncate tr-title-section text-text-default">Plan · {title}</h1>
 						<div data-testid="plan-progress" className="tr-text-metadata text-text-subtle">
 							{done}/{total} done
+							{review.total > 0 ? (
+								<span data-testid="plan-review-progress">
+									{" · "}
+									{review.reviewed}/{review.total} reviewed
+								</span>
+							) : null}
 						</div>
 					</div>
+					{review.total > 0 ? (
+						<div
+							className="flex shrink-0 items-center rounded-[var(--radius-sm)] border border-border-default"
+							role="tablist"
+							aria-label="Plan or review"
+						>
+							{(
+								[
+									{ id: "plan", label: "Plan" },
+									{ id: "review", label: `Review (${review.total - review.reviewed})` },
+								] as const
+							).map((tab) => (
+								<button
+									key={tab.id}
+									type="button"
+									role="tab"
+									data-testid={`plan-mode-${tab.id}`}
+									aria-selected={mode === tab.id}
+									onClick={() => setMode(tab.id)}
+									className={cn(
+										"px-sm py-xs tr-text-ui",
+										mode === tab.id
+											? "bg-control-bg-hovered text-text-default"
+											: "text-text-muted hover:text-text-default",
+									)}
+								>
+									{tab.label}
+								</button>
+							))}
+						</div>
+					) : null}
 					<button
 						type="button"
 						data-testid="plan-copy-markdown"
@@ -298,7 +352,25 @@ export default function PlanPane({
 						<Download className="size-3.5" /> Save .md
 					</button>
 				</header>
-				{empty ? (
+				{overallSummary ? (
+					<p
+						data-testid="plan-overall-summary"
+						className="mb-lg rounded-[var(--radius-md)] bg-container-elevated-bg p-md tr-text-ui text-text-default"
+					>
+						{overallSummary}
+					</p>
+				) : null}
+				{/* Review mode is only reachable while reviewable items exist — if they vanish (a re-plan), the
+				    toggle disappears and the page falls back to the plan rather than stranding an empty mode. */}
+				{mode === "review" && review.total > 0 ? (
+					<PlanReviewList
+						plan={data}
+						workspaceId={workspaceId}
+						onOpenCommit={onOpenCommit}
+						onApprove={plan.approve}
+						onAskFix={plan.askFix}
+					/>
+				) : empty ? (
 					<p className="text-text-subtle tr-text-ui">
 						No items yet — the agent adds its plan here.
 					</p>

@@ -241,8 +241,7 @@ function reviewableItem(params: { workspaceId: string; sessionId: string; id: st
 	const root = getWorkspace(params.workspaceId).worktreePath;
 	const item = new TodoStore(root, params.sessionId).get(params.id);
 	if (!item) throw new Error(`No TODO with id "${params.id}".`);
-	if (!isReviewable(item))
-		throw new Error(`TODO "${params.id}" has no change set to review.`);
+	if (!isReviewable(item)) throw new Error(`TODO "${params.id}" has no change set to review.`);
 	return { root, item };
 }
 
@@ -251,11 +250,9 @@ function reviewableItem(params: { workspaceId: string; sessionId: string; id: st
  * a commit appended by a later fix cycle reads as the unreviewed delta. Rejected (throws → `{ok:false}`
  * on the wire) for an unknown or non-reviewable item.
  */
-export function approveTodoReview(params: {
-	workspaceId: string;
-	sessionId: string;
-	id: string;
-}): { ok: true } {
+export function approveTodoReview(params: { workspaceId: string; sessionId: string; id: string }): {
+	ok: true;
+} {
 	const { root, item } = reviewableItem(params);
 	putReviewRecord(root, params.sessionId, params.id, {
 		state: "reviewed",
@@ -295,7 +292,12 @@ export function rollbackTodoFix(
 	params: { workspaceId: string; sessionId: string; id: string },
 	previous: TodoReviewRecord | undefined,
 ): void {
-	dropReviewRecord(getWorkspace(params.workspaceId).worktreePath, params.sessionId, params.id, previous);
+	dropReviewRecord(
+		getWorkspace(params.workspaceId).worktreePath,
+		params.sessionId,
+		params.id,
+		previous,
+	);
 }
 
 /**
@@ -318,6 +320,7 @@ export function renderFixPackage(item: StoredItem, feedback: string): string {
 		"",
 		...(item.note ? [`Step note: ${item.note}`] : []),
 		...(item.summary ? [`Your completion summary: ${item.summary}`] : []),
+		...(item.verification ? [`Your verification claim: ${item.verification}`] : []),
 		`Change set under review: ${changeSet}`,
 		"",
 		"User feedback:",

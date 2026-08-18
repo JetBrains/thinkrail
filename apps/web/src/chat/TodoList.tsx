@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "../lib";
-import { PlanStatusIcon, SectionLabel } from "./planKit";
+import { PlanStatusIcon, SectionLabel, VerificationBadge } from "./planKit";
 import {
 	groupProgress,
 	type ItemChangeSet,
@@ -390,6 +390,18 @@ function TodoRow({
 				</div>
 				{todo.note ? (
 					<div className="truncate text-text-muted tr-text-metadata">{todo.note}</div>
+				) : null}
+				{todo.status === "done" && todo.summary ? (
+					<div
+						data-testid="todo-summary"
+						className="line-clamp-2 text-text-subtle tr-text-metadata"
+						title={todo.summary}
+					>
+						{todo.summary}
+					</div>
+				) : null}
+				{todo.status === "done" && todo.verification ? (
+					<VerificationBadge verification={todo.verification} />
 				) : null}
 				{changeSet && onOpenChanges ? (
 					<ChangeSetChip set={changeSet} onOpen={onOpenChanges} />

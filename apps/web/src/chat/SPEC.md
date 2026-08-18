@@ -506,8 +506,15 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   [[module-pi-todos]]; host read/write: [[submodule-server-todos]]):
   `useChatTodos` (the `todo.*` data hook — fetch + live `pi.event` refetch + edits + the add-nudge + the
   `openMarkdown` snapshot action; tool completion refreshes immediately and `agent_settled` supplies the
-  final refresh), `planView` (pure derivations over the DTO: `groupProgress`,
-  `planSummary`, `planGlance`/`sessionGlance`, `planSections`, and `shouldNudgeOnAdd`. A group's *status* is
+  final refresh; plus the review ops `approve` (`todo.review`) and `askFix` (`todo.requestFix`) — both
+  re-read the plan, since the review decoration is host-derived and never patched locally), `planView`
+  (pure derivations over the DTO: `groupProgress`,
+  `planSummary`, `planGlance`/`sessionGlance`, `planSections`, `shouldNudgeOnAdd`, and the review-trail
+  set — `itemRevisions` (the commit history, 1 TODO = N commits), `reviewableItems`/`reviewProgress`
+  (host-gated by `TodoItem.review` presence — the reviewable rule has ONE home, server-side), and
+  `planCompletionSummary` (the plan-level note gated on "everything done", so a re-opened plan never
+  shows a stale all-done note). `itemChangeSet`'s precedence: live `change` paths win (a fallback redo's
+  latest delta), else the NEWEST resolvable commit. A group's *status* is
   **not** derived here — the host computes it and ships it on `TodoGroupItem.status`, so the rule has one
   home; a user edit therefore re-reads the plan rather than patching it locally, see `useChatTodos`), `TodoList` (the
   **status-ordered, group-first** rendering (`planSections`) — group = task: the **in-progress** task
@@ -517,7 +524,13 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   one collapse over all of Done). Finished *steps* stay inline in their (active/pending)
   group; only whole done tasks move to Done. Each group is a header row (derived status icon + title +
   done/total badge), the `active` group emphasized; the user's loose items carry a per-row `user` badge
-  (no separate "Your requests" header — they're placed by status). **A row whose item carries a host
+  (no separate "Your requests" header — they're placed by status). A done item's agent-authored
+  `summary` (what/why — the decisions the diff can't show) renders as a clamped muted line under the
+  title (`todo-summary`), and its `verification` as the shared **`VerificationBadge`** (`planKit`; the
+  "Tests ✓" element — check glyph for a named check, warning glyph for an honest "not verified", the
+  split derived by `planView.verificationStatus`, ONE home; the badge's title labels it self-reported —
+  never a host-run gate); the plan page shows both full-width, and the Review mode is summary-first
+  (see `panels/SPEC.md`). **A row whose item carries a host
   change set grows a quiet "N files" chip** (`itemChangeSet` in `planView` — the one derivation shared
   with the markdown snapshot below, so the two can never disagree): a **committed** item's chip opens the
   Changes panel at its `commit:{sha}` scope via `useChatTodos.openChanges` (`setDiffScope` +

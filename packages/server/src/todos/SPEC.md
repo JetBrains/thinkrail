@@ -76,10 +76,14 @@ as a permanently open foreign window and force every sibling chat into the fallb
   Each committed item leaves the uncommitted set, so the memoized changed-path read is **dropped after
   every commit** — otherwise a second item reconciled in the same pass would inherit the first's
   already-committed paths as its own delta.
-- **Merge + replace-on-redo.** The agent's `file`/`spec` artifacts are always kept. A `done` item already
+- **Merge + append-on-redo.** The agent's `file`/`spec` artifacts are always kept. A `done` item already
   carrying a change set with **no fresh baseline** is a steady-state no-op (idempotent); a re-opened,
-  re-worked item (fresh baseline present) has its old `commit`/`change` artifacts **replaced** with the
-  new ones (the old commit stays in branch history regardless).
+  re-worked item (fresh baseline present) gets its new `commit` **appended** to the existing ones — the
+  artifact list is the item's **revision history** (1 TODO = N commits is first-class; each fix cycle is
+  one more commit, and the review watermark below diffs against the list) — while old `change` path-lists
+  are replaced (a live delta has no history to keep). A redo that lands in the path-list fallback also
+  **drops the item's review record** (→ `unreviewed`): a live-path delta can't be watermarked by sha, so
+  "review only the new delta" honestly degrades to reviewing the change set afresh.
 
 The host's own on-disk state (anything under `WORKSPACE_INTERNAL_DIR` = `.thinkrail/…`, e.g. the todos
 JSON under `context/todos/`) is filtered out of every change set — writing a todo shows up in `git status`
@@ -103,6 +107,31 @@ days, far longer than a chat plan's ephemeral life; we deliberately pin nothing)
 that absence is the client's signal to degrade the affordance silently (no chip, never a broken diff
 tab). The same decoration pass is where `groupStatus` already ships, so the pattern has one home.
 
+**The review workflow (`reviews.ts` + the ops in `todos.ts`).** A completed item that carries a host
+change set is **reviewable** — the gate is that artifact presence, so research/verification steps never
+demand review and no LLM attribution is involved. The user's decision lives in a second host-owned
+sidecar, `.thinkrail/context/todos/<sessionId>.reviews.json` (read-modify-write, atomic, same lifecycle
+as the baselines: `todo.remove` prunes the item's record, `session.delete` removes the file; orphan
+records are inert either way) — deliberately **not** the agent-writable todos JSON: an agent re-plan must
+never flip a review decision. A record is `reviewed` or `changes_requested` plus **`reviewedShas`, the
+watermark**: the item's commit shas at the moment the user acted. `unreviewed` is the absence of a record.
+The same `listTodos` decoration pass ships `TodoItem.review` (state, `revision` = commit count,
+`unreviewedShas` = commits appended since the watermark — the "changed since review" delta the UI
+re-reviews instead of the original diff — and the `feedback` echo) and `TodoPlan.summary` (the plan-level
+completion note, agent-authored via `todo_plan_summary`; item `summary` rides the item DTO as stored).
+
+- **`approveTodoReview`** records `reviewed` + the current shas as the watermark (throws on unknown or
+  non-reviewable ids → `{ ok:false }` on the wire).
+- **`requestTodoFix`** records `changes_requested` + the feedback + the watermark and renders the
+  **fix package** (`renderFixPackage`, pure): the original step (title/note), its completion summary, the
+  change-set *reference* (short shas / paths — never the full diff; the agent reads content with its own
+  tools), the feedback verbatim, and the instruction to re-open **this exact item** — the revision must
+  attach to the step it revises (the todos skill mirrors this from the agent's side). The **send is
+  composed in `host`** (this module never imports `agent`): `followUpSession` into the item's **own chat**
+  (per-session plan/windows force it), fired detached with the review-send pattern — a pre-turn rejection
+  calls **`rollbackTodoFix`** (restores the record the request replaced) and surfaces in the chat, so an
+  undelivered fix request never strands as `changes_requested`.
+
 **The read barrier.** `listTodos` first awaits the workspace's in-flight reconciles
 (`settleChangeArtifacts` — the same per-workspace chain). A client's only refresh signal is the `pi.event`
 a `todo_*` tool end publishes, and the reconcile is enqueued *synchronously with that publish* but settles
@@ -121,7 +150,10 @@ it resolves immediately when nothing is in flight, and never rejects.
   no todo file counts 0),
   `addTodo(...) → TodoItem` (validates a non-empty title; tags `origin: "user"`),
   `updateTodo(...) → TodoItem` (throws on unknown id → a `{ ok:false }` WS response),
-  `removeTodo(...) → { ok:true }` (idempotent). **Mapping only** — no plan logic; `TodoStore` owns disk.
+  `removeTodo(...) → { ok:true }` (idempotent),
+  `approveTodoReview(...)` / `requestTodoFix(...) → { pkg, previous }` / `rollbackTodoFix(...)` + the
+  pure `renderFixPackage` (the review ops; the send itself is `host`'s composition), and the
+  `TodoReviewRecord` type. **Mapping only** — no plan logic; `TodoStore` owns disk.
 - **Allowed deps:** `workspaces` (worktree-path lookup via `getWorkspace`, which throws on unknown);
   `git` (`gitStatus` — the uncommitted changed-path set + the commit-scope DTO decoration;
   `gitCommitPaths` — the per-done-item delta commit; `gitHeadSha` — the baseline's head);

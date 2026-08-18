@@ -88,7 +88,11 @@ test("review sidecar: put/read round-trip, rollback restore, corrupt file reads 
 	expect(putReviewRecord(repo, SESSION, "t_1", record)).toBeUndefined();
 	expect(readReviewRecords(repo, SESSION)).toEqual({ t_1: record });
 	// Replace returns the previous record; rollback (drop with previous) restores it.
-	const next = { state: "reviewed" as const, reviewedShas: ["abc", "def"], at: "2026-01-02T00:00:00Z" };
+	const next = {
+		state: "reviewed" as const,
+		reviewedShas: ["abc", "def"],
+		at: "2026-01-02T00:00:00Z",
+	};
 	expect(putReviewRecord(repo, SESSION, "t_1", next)).toEqual(record);
 	dropReviewRecord(repo, SESSION, "t_1", record);
 	expect(readReviewRecords(repo, SESSION)).toEqual({ t_1: record });

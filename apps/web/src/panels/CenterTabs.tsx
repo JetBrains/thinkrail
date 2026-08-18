@@ -454,6 +454,9 @@ export function CenterTabs() {
 								data-active={isActive}
 								data-preview={isPreview}
 								data-kind={tab.kind}
+								// A chat tab's session id — what lets e2e seed that session's on-disk plan
+								// (plan-review.spec.ts) without a UI detour.
+								data-session-id={tab.kind === "chat" ? tab.sessionId : undefined}
 								className={`group flex items-center gap-xs border-border-default border-r pr-xs pl-sm tr-text-ui ${workspaceTabStateClass(isActive)}`}
 							>
 								<button
