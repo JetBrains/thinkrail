@@ -149,8 +149,8 @@ export const E2E_PI_AGENT_DIR = join(E2E_DATA_DIR, "pi-agent");
 
 /**
  * A pristine snapshot of the seeded `models.json`, captured in global setup so per-test reset can restore
- * it. Native Central connect removes exact historical ThinkRail proxy fields from this shared agent-dir
- * file; restoring the isolated baseline keeps later `@agent` runs independent. Absent when the user has no
+ * it after any provider test. Central never edits this shared agent-dir file; restoring the isolated baseline
+ * keeps later `@agent` runs independent. Absent when the user has no
  * `models.json` (auth via `auth.json` only); reset then just clears any test-written copy instead.
  */
 export const E2E_PI_MODELS_SEED = join(E2E_DATA_DIR, "pi-agent-models.seed.json");

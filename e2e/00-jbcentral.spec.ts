@@ -1,10 +1,10 @@
 import { existsSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { isDeepStrictEqual } from "node:util";
 import { expect, type Page, test } from "@playwright/test";
 import { createWorkspaceViaDialog, openAppFresh, openFixtureProject } from "./fixtures/app";
 import {
 	E2E_CENTRAL_ARTIFACT,
+	E2E_CENTRAL_EXTENSION_SOURCE,
 	E2E_CENTRAL_LOG,
 	E2E_CENTRAL_STATE,
 	E2E_FAKE_BIN_DIR,
@@ -35,7 +35,7 @@ function assertOnlyReviewedArgv(): void {
 }
 
 /** Native global configuration: no standalone pi executable and no proxy/model reconstruction. */
-test("connects, reconciles external artifact drift, and disconnects through the native Central surface", async ({
+test("connects and follows external add, replacement, and remove without a host restart", async ({
 	page,
 }) => {
 	await openAppFresh(page);
@@ -54,15 +54,18 @@ test("connects, reconciles external artifact drift, and disconnects through the 
 		"E2E_PROVIDER_CONFIG_SENTINEL",
 	);
 
-	// An out-of-band global removal uses the same serialized runtime-generation path. Refresh may observe
-	// pending first; the card polls until the host-authoritative supported state lands.
+	// No Refresh click: provider.changed drives the open card to the host's watched state.
 	rmSync(E2E_CENTRAL_ARTIFACT, { force: true });
-	await page.getByTestId("providers-refresh").click();
 	await waitForCentralState(page, "supported");
 	await expect(page.getByTestId("jetbrains-connect")).toBeVisible();
 
-	await page.getByTestId("jetbrains-connect").click();
+	const replacement = readFileSync(E2E_CENTRAL_EXTENSION_SOURCE, "utf8")
+		.replaceAll("e2e-central-model", "e2e-central-model-v2")
+		.replace("Synthetic JetBrains AI model", "Synthetic JetBrains AI model v2");
+	writeFileSync(E2E_CENTRAL_ARTIFACT, replacement);
+	await waitForCentralState(page, "configuring");
 	await waitForCentralState(page, "configured");
+
 	await page.getByTestId("jetbrains-disconnect").click();
 	await waitForCentralState(page, "supported");
 	expect(existsSync(E2E_CENTRAL_ARTIFACT)).toBe(false);
@@ -153,86 +156,22 @@ test("surfaces missing-artifact and candidate failures as closed UI states, then
 	writeFileSync(E2E_CENTRAL_STATE, "candidate-error");
 	await page.getByTestId("jetbrains-connect").click();
 	await expect.poll(() => existsSync(E2E_CENTRAL_ARTIFACT)).toBe(true);
-	await waitForCentralState(page, "recovery-required");
-	await expect(page.getByTestId("jetbrains-error")).toContainText("previous runtime was retained");
+	await waitForCentralState(page, "load-failed");
+	await expect(page.getByTestId("jetbrains-load-failed")).toContainText(
+		"previous runtime remains available",
+	);
 	await expect(page.getByTestId("settings-dialog")).not.toContainText(
 		"E2E_EXTENSION_DIAGNOSTIC_SENTINEL",
 	);
 
 	writeFileSync(E2E_CENTRAL_STATE, "");
-	await page.getByTestId("jetbrains-connect").click();
+	await page.getByTestId("jetbrains-retry").click();
 	await waitForCentralState(page, "configured");
 	await page.getByTestId("jetbrains-disconnect").click();
 	await waitForCentralState(page, "supported");
 });
 
-test("cleans only exact historical legacy fields and preserves unrelated model configuration", async ({
-	page,
-}) => {
-	await openAppFresh(page);
-	const modelsPath = join(E2E_PI_AGENT_DIR, "models.json");
-	const baseline = existsSync(modelsPath) ? JSON.parse(readFileSync(modelsPath, "utf8")) : {};
-	const baselineProviders = baseline.providers ?? {};
-	const staged = {
-		...baseline,
-		providers: {
-			...baselineProviders,
-			anthropic: {
-				...baselineProviders.anthropic,
-				baseUrl: "http://127.0.0.1:4567/wire/e2e-token/pi/anthropic",
-				apiKey: "wire-proxy",
-				keep: "anthropic-field",
-			},
-			openai: {
-				...baselineProviders.openai,
-				baseUrl: "http://127.0.0.1:4567/wire/e2e-token/pi/openai/v1",
-				apiKey: "wire-proxy",
-				keep: "openai-field",
-			},
-			lookalike: {
-				baseUrl: "http://127.0.0.1:4567/wire/e2e-token/claude-code/anthropic",
-				apiKey: "wire-proxy",
-			},
-		},
-		keepTopLevel: true,
-	};
-	writeFileSync(modelsPath, `${JSON.stringify(staged, null, 2)}\n`);
-	await openProviders(page);
-	await waitForCentralState(page, "supported");
-	await page.getByTestId("jetbrains-connect").click();
-	await waitForCentralState(page, "configured");
-
-	const expectedAnthropic = { ...baselineProviders.anthropic, keep: "anthropic-field" };
-	delete expectedAnthropic.baseUrl;
-	delete expectedAnthropic.apiKey;
-	const expectedOpenai = { ...baselineProviders.openai, keep: "openai-field" };
-	delete expectedOpenai.baseUrl;
-	delete expectedOpenai.apiKey;
-	const migrated = JSON.parse(readFileSync(modelsPath, "utf8"));
-	const expected = {
-		...baseline,
-		providers: {
-			...baselineProviders,
-			anthropic: expectedAnthropic,
-			openai: expectedOpenai,
-			lookalike: {
-				baseUrl: "http://127.0.0.1:4567/wire/e2e-token/claude-code/anthropic",
-				apiKey: "wire-proxy",
-			},
-		},
-		keepTopLevel: true,
-	};
-	// The isolated baseline can contain real provider credentials copied for @agent coverage. Never let an
-	// assertion formatter print either object into Playwright output if migration regresses.
-	if (!isDeepStrictEqual(migrated, expected)) {
-		throw new Error("legacy migration did not preserve the isolated models baseline");
-	}
-
-	await page.getByTestId("jetbrains-disconnect").click();
-	await waitForCentralState(page, "supported");
-});
-
-test("blocks disconnect with no fallback and links to the exact affected chat", async ({
+test("disconnect removes Central from new chats while an existing live chat keeps its model", async ({
 	page,
 }) => {
 	await openFixtureProject(page);
@@ -246,38 +185,31 @@ test("blocks disconnect with no fallback and links to the exact affected chat", 
 	await createWorkspaceViaDialog(page);
 	await page.getByTestId("model-selector").click();
 	await page.locator('[data-testid="model-option"][data-model-id="e2e-central-model"]').click();
+	await expect(page.getByTestId("model-selector")).toContainText("Synthetic JetBrains AI model");
 
 	await openProviders(page);
-	await waitForCentralState(page, "configured");
 	await page.getByTestId("jetbrains-disconnect").click();
-	await expect(page.getByTestId("jetbrains-model-blocked")).toBeVisible();
-	await waitForCentralState(page, "blocked");
-	expect(existsSync(E2E_CENTRAL_ARTIFACT)).toBe(true);
-	// Remount the card to prove the affected ids live in host status, not only the initiating response.
+	await waitForCentralState(page, "supported");
+	expect(existsSync(E2E_CENTRAL_ARTIFACT)).toBe(false);
 	await page.keyboard.press("Escape");
-	await expect(page.getByTestId("settings-dialog")).toBeHidden();
-	await openProviders(page);
-	await waitForCentralState(page, "blocked");
-	await expect(page.getByTestId("jetbrains-model-blocked")).toBeVisible();
-	await page.getByTestId("jetbrains-affected-chat").click();
-	await expect(page.getByTestId("settings-dialog")).toBeHidden();
+	await expect(page.getByTestId("model-selector")).toContainText("Synthetic JetBrains AI model");
+
+	await page.getByTestId("add-workspace").first().click();
+	const dialog = page.getByTestId("new-workspace-dialog");
+	await expect(dialog).toBeVisible();
+	await dialog.getByTestId("model-selector").click();
+	await expect(
+		page.locator('[data-testid="model-option"][data-model-id="e2e-central-model"]'),
+	).toHaveCount(0);
+	await page.keyboard.press("Escape");
+	await page.keyboard.press("Escape");
+
+	// Dispose the retained session so this shared host does not carry the test's old generation onward.
 	const activeChat = page.locator(
 		'[data-testid="editor-tab"][data-kind="chat"][data-active="true"]',
 	);
-	await expect(activeChat).toBeVisible();
-
-	// Leave this stateful host usable for every later spec in the lane: remove the deliberate blocker, then
-	// finish the disconnect instead of letting the next test's fixture reset look like hostile artifact drift.
 	await activeChat.getByTestId("editor-tab-close").click();
 	await page.getByTestId("chat-history").click();
-	const closedChat = page.getByTestId("closed-chat-row").first();
-	await closedChat.getByTestId("closed-chat-delete").click();
-	// Selecting Delete closes the dropdown immediately while its callback intentionally detaches the async
-	// request. This is the only history entry, so the trigger disappearing—not the unmounted menu row—is the
-	// durable signal that the host acknowledged deletion and the store removed the chat.
+	await page.getByTestId("closed-chat-row").first().getByTestId("closed-chat-delete").click();
 	await expect(page.getByTestId("chat-history")).toHaveCount(0);
-	await openProviders(page);
-	await waitForCentralState(page, "blocked");
-	await page.getByTestId("jetbrains-disconnect").click();
-	await waitForCentralState(page, "supported");
 });

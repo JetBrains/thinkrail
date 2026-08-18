@@ -44,10 +44,8 @@ function resetState(): void {
 	writeFileSync(E2E_CENTRAL_STATE, "");
 	rmSync(E2E_CENTRAL_LOG, { force: true });
 
-	// Restore the seeded models.json: native Central connect removes exact historical ThinkRail proxy fields
-	// from this shared file. Re-seed it (or clear a test-written one when the dev authed via auth.json only)
-	// and leave any user-owned `.bak` untouched; the next provider.status re-reads the restored registry, so
-	// a later @agent test retains its isolated baseline.
+	// Restore the seeded models.json (or clear a test-written one when auth came only from auth.json) so a
+	// later @agent test retains its isolated provider baseline. Central never edits this file.
 	const modelsPath = join(E2E_PI_AGENT_DIR, "models.json");
 	if (existsSync(E2E_PI_MODELS_SEED)) copyFileSync(E2E_PI_MODELS_SEED, modelsPath);
 	else rmSync(modelsPath, { force: true });

@@ -320,6 +320,15 @@ describe("watched native Central runtime", () => {
 		expect(invalidations).toBeGreaterThan(0);
 	});
 
+	test("regenerates an existing artifact after updating Central", async () => {
+		expect(await connectJbcentral()).toEqual({ outcome: "applied" });
+		control("outdated", true);
+		expect(await updateJbcentral()).toEqual({ outcome: "applied" });
+		const actions = commandLog().filter((invocation) => invocation !== "--version");
+		expect(actions.slice(-2)).toEqual(["update --install", "add pi"]);
+		expect((await getJbcentralStatus()).state).toBe("configured");
+	});
+
 	test("keeps version/login/update outcomes closed", async () => {
 		control("unreviewed", true);
 		expect(await jbcentralLogin()).toEqual({ outcome: "failed", reason: "unsupported-version" });
