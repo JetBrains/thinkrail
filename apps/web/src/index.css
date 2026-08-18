@@ -193,7 +193,7 @@
 	overflow-y: auto;
 	overflow-wrap: break-word;
 	padding: 8px 12px;
-	border-radius: var(--radius-md);
+	border-radius: var(--radius-sm);
 	border: 1px solid var(--border-default);
 	background: var(--control-bg);
 	color: var(--text);
@@ -215,7 +215,7 @@
 /* Typography comes from the generated `tr-text-action` class on the node. */
 .review-composer-btn {
 	padding: 2px var(--space-sm);
-	border-radius: var(--radius-md);
+	border-radius: var(--radius-sm);
 	border: 1px solid var(--border-default);
 	background: var(--container-elevated-bg);
 	color: var(--text);
@@ -269,11 +269,12 @@
 	display: flex;
 	gap: 4px;
 }
+/* A 6px status circle. Full radius (a pill/circle, not a scale step) via the shared `rounded-full`
+   utility on the node — see ReviewThreadCard.tsx / reviewWidgets.ts. */
 .review-thread-dot {
 	flex-shrink: 0;
 	width: 6px;
 	height: 6px;
-	border-radius: 9999px;
 }
 .review-thread-dot-draft {
 	background: var(--primary);
@@ -295,7 +296,7 @@
 	color: var(--text);
 }
 /* A DRAFT's body is editable in place — the same input surface as the composer's field (input-bg,
-   border2, radius-md, primary focus ring). Auto-grown by its controller; wraps, never scrolls. */
+   border2, radius-sm, primary focus ring). Auto-grown by its controller; wraps, never scrolls. */
 .review-thread-edit {
 	width: 100%;
 	min-height: 2.2em;
@@ -303,7 +304,7 @@
 	margin: 0;
 	padding: 8px 12px;
 	border: 1px solid var(--border-default);
-	border-radius: var(--radius-md);
+	border-radius: var(--radius-sm);
 	resize: none;
 	overflow-x: hidden;
 	overflow-y: hidden;

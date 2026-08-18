@@ -12,12 +12,18 @@
 	 */
 	--space-base: 13px;
 
-	/* Shape + motion. `xs` is the text-run tier: the corner on a tint that sits BEHIND running text
-	   (a `<mark>` search hit, a composer slot placeholder), where `sm` would read as a chip. */
+	/* Shape + motion. A four-step primitive scale, `sm` (4px) is the DEFAULT corner for ordinary
+	   standalone controls (buttons, inputs, rows, tabs, tool cards). `xs` (2px) is the text-run tier:
+	   a corner on a tint that sits BEHIND running text (a `<mark>` search hit, a composer slot
+	   placeholder), where `sm` would read as a chip. `md` (6px) is the OUTER corner when a surface
+	   nests `sm` (4px) children and needs the extra step to read correctly — chosen by design, not a
+	   runtime `child + 2px`. `lg` (8px) is reserved for large, visually independent elevated surfaces
+	   (dialogs, user-message bubbles, the AskUserQuestion outer card); it is the exception, never the
+	   default for a card. Nothing above 8px. `rounded-full` (a pill/circle) is not on this scale. */
 	--radius-xs: 2px;
 	--radius-sm: 4px;
-	--radius-md: 8px;
-	--radius-lg: 12px;
+	--radius-md: 6px;
+	--radius-lg: 8px;
 	--transition-fast: 120ms ease;
 	--transition-normal: 200ms ease;
 

@@ -119,7 +119,7 @@ export function LoginDialog({
 
 						{state.deviceCode ? (
 							<div
-								className="flex flex-col gap-xs rounded-[var(--radius-md)] border border-border-default bg-control-bg p-md"
+								className="flex flex-col gap-xs rounded-[var(--radius-sm)] border border-border-default bg-control-bg p-md"
 								data-testid="login-device-code"
 							>
 								<span className="text-text-muted tr-text-metadata">
@@ -153,7 +153,7 @@ export function LoginDialog({
 										data-testid="login-option"
 										data-option={option.id}
 										onClick={() => onReply(option.id)}
-										className="rounded-[var(--radius-md)] border border-control-border-default bg-control-bg px-md py-sm text-left tr-text-ui text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary"
+										className="rounded-[var(--radius-sm)] border border-control-border-default bg-control-bg px-md py-sm text-left tr-text-ui text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary"
 									>
 										{option.label}
 									</button>
@@ -179,7 +179,7 @@ export function LoginDialog({
 												submitPrompt();
 											}
 										}}
-										className="min-w-0 flex-1 rounded-[var(--radius-md)] border border-control-border-default bg-control-bg px-sm py-xs tr-text-ui text-text-default outline-none placeholder:text-text-muted focus-visible:border-control-border-active focus-visible:ring-2 focus-visible:ring-primary-soft"
+										className="min-w-0 flex-1 rounded-[var(--radius-sm)] border border-control-border-default bg-control-bg px-sm py-xs tr-text-ui text-text-default outline-none placeholder:text-text-muted focus-visible:border-control-border-active focus-visible:ring-2 focus-visible:ring-primary-soft"
 									/>
 									<Button data-testid="login-submit" onClick={submitPrompt}>
 										Submit
