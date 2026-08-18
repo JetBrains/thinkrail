@@ -1339,8 +1339,11 @@ html.anim .chat-demo [data-step].on {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	width: 30px;
 	height: 30px;
+	/* Fixed square: width mirrors the height and flex never shrinks it, so the icon button keeps
+	   its shape when the composer row gets tight on mobile. */
+	width: 30px;
+	flex: none;
 	border-radius: 4px;
 	background: var(--accent);
 	color: var(--on-accent);
@@ -1405,6 +1408,7 @@ html.anim .chat-demo [data-step].on {
 	letter-spacing: 0.8px;
 	text-transform: uppercase;
 	color: var(--hint);
+	white-space: nowrap;
 }
 
 .spec-badge.badge-accent {
@@ -1914,6 +1918,12 @@ html:not(.anim) .term-caret {
 	.nav-toggle {
 		display: inline-flex;
 	}
+
+	/* Mobile header: the theme switcher sits at the far right, after every other action
+	   (GitHub link, file-tree toggle). Order-only — behaviour and styling are unchanged. */
+	.titlebar-right .theme-toggle {
+		order: 1;
+	}
 }
 
 @media (max-width: 840px) {
@@ -1989,6 +1999,40 @@ html:not(.anim) .term-caret {
 	.hero-ctas .btn {
 		flex: 1;
 		justify-content: center;
+	}
+
+	/* Windows active: the shell switcher wraps to its own row, so the active Windows tab must keep
+	   the structural divider above that row (it should merge into content only when the command
+	   block sits directly below, as on macOS/Linux). Restore it with the border-default token. */
+	html.install-tabs-ready .install-tabs:has(.windows-shell-tabs:not([hidden]))
+		.install-tab[aria-selected="true"] {
+		border-bottom-color: var(--border);
+	}
+
+	/* Give the depth-0 "main spec" row more room for its label so the badge never wraps. */
+	.spec-row.depth-0 {
+		padding-left: 8px;
+	}
+
+	/* Footer grows to two lines instead of clipping: the copyright/InnovationHub content stays on
+	   line 1 and "Apache License 2.0" always starts on line 2. */
+	.statusbar {
+		white-space: normal;
+		overflow: visible;
+	}
+
+	.sb-item {
+		flex-wrap: wrap;
+		justify-content: flex-end;
+		width: 100%;
+	}
+
+	.sb-sep {
+		display: none;
+	}
+
+	.sb-license {
+		flex-basis: 100%;
 	}
 }
 
