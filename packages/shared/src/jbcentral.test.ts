@@ -6,6 +6,7 @@ import {
 	mkdtempSync,
 	readdirSync,
 	readFileSync,
+	renameSync,
 	rmSync,
 	statSync,
 	writeFileSync,
@@ -391,6 +392,48 @@ describe("legacy models cleanup", () => {
 			providers: { anthropic: {} },
 			concurrentWriter: { preserved: true },
 		});
+	});
+
+	test("does not overwrite an uncoordinated writer that publishes after the target is claimed", async () => {
+		writeModels({
+			providers: {
+				anthropic: {
+					baseUrl: "http://127.0.0.1:19516/wire/token/pi/anthropic",
+					apiKey: "wire-proxy",
+				},
+			},
+		});
+		const concurrentConfig = { providers: { custom: { baseUrl: "https://user.example" } } };
+		let writes = 0;
+		const result = await cleanupLegacyJbcentralModels({
+			env: env(),
+			afterTargetClaimed: () => {
+				if (writes > 0) return;
+				writes += 1;
+				writeModels(concurrentConfig);
+			},
+		});
+		expect(result).toEqual({ outcome: "unchanged" });
+		expect(writes).toBe(1);
+		expect(readModels()).toEqual(concurrentConfig);
+		expect(existsSync(join(agentDir, ".models.json.thinkrail-claim"))).toBe(false);
+	});
+
+	test("recovers a claimed target before continuing an interrupted transaction", async () => {
+		writeModels({
+			providers: {
+				anthropic: {
+					baseUrl: "http://127.0.0.1:19516/wire/token/pi/anthropic",
+					apiKey: "wire-proxy",
+				},
+			},
+		});
+		const claimPath = join(agentDir, ".models.json.thinkrail-claim");
+		renameSync(modelsPath, claimPath);
+
+		expect((await cleanupLegacyJbcentralModels({ env: env() })).outcome).toBe("cleaned");
+		expect(readModels()).toEqual({ providers: { anthropic: {} } });
+		expect(existsSync(claimPath)).toBe(false);
 	});
 
 	test("fails closed after repeated CAS conflicts without removing the legacy pair", async () => {

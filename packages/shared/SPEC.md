@@ -79,13 +79,14 @@ Exposed through explicit subpath exports, not a barrel.
   succeeds and removes a provider's fields only when they jointly match ThinkRail's exact former pair:
   `apiKey === "wire-proxy"` and the complete loopback URL grammar ThinkRail emitted for that provider
   (`anthropic` and `openai` have distinct fixed suffixes). A generic loopback `/wire/…` URL, a partial match,
-  or any unrelated field is preserved. Cleanup and rollback take the same bounded `proper-lockfile`
-  interprocess lock on `models.json` before reading, validating, and publishing; the in-process queue is only
-  an additional ordering guard. Under that writer lock, the edit is compare-and-swap guarded, atomically
-  published with the original permissions, and leaves the existing `.bak` untouched. Repeated uncoordinated
-  changes still return a typed conflict outcome rather than overwriting the file. The transaction can restore only the exact
-  fields it removed, and only while the file still matches its committed state; it never restores a whole
-  backup.
+  or any unrelated field is preserved. Cleanup and rollback take a bounded `proper-lockfile` interprocess
+  lock on `models.json` before reading, validating, and publishing; the in-process queue is an additional
+  ordering guard for cooperating writers, not the CAS itself. Publication also claims the current target by
+  atomically moving it aside, validates the claimed bytes, and installs the fully synced replacement with a
+  no-replace hard link. An uncoordinated writer that wins the target path is therefore preserved and causes a
+  retry or typed conflict instead of being overwritten after validation. The original permissions are
+  retained and the existing `.bak` remains untouched. The transaction can restore only the exact fields it
+  removed, and only while the file still matches its committed state; it never restores a whole backup.
 
   **Install guidance is per-OS and single-sourced:** `jbcentralInstall(platform)` returns the official host-OS
   plan carried to the card; a remote browser never guesses its own OS. **The server's `auth` module is the sole

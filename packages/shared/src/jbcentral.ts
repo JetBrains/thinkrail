@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { open, readFile, rename, stat, unlink } from "node:fs/promises";
+import { link, open, readFile, rename, stat, unlink } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join } from "node:path";
 import type { JbcentralInstall } from "@thinkrail/contracts";
@@ -350,13 +350,16 @@ const modelsFileLocks = new Map<string, Promise<void>>();
 
 class ModelsFileLockConflictError extends Error {}
 
+interface LegacyModelsCommitContext {
+	operation: "cleanup" | "rollback";
+	attempt: number;
+	path: string;
+}
+
 export interface LegacyModelsDependencies {
 	env?: ParseEnv;
-	beforeCommit?: (context: {
-		operation: "cleanup" | "rollback";
-		attempt: number;
-		path: string;
-	}) => Promise<void> | void;
+	beforeCommit?: (context: LegacyModelsCommitContext) => Promise<void> | void;
+	afterTargetClaimed?: (context: LegacyModelsCommitContext) => Promise<void> | void;
 }
 
 /** Opaque rollback capability. Legacy URLs remain only inside this module's in-memory WeakMap. */
@@ -502,22 +505,43 @@ async function syncParentDirectory(path: string): Promise<void> {
 	}
 }
 
+function modelsClaimPath(path: string): string {
+	return join(dirname(path), `.${basename(path)}.thinkrail-claim`);
+}
+
+async function linkIfAbsent(source: string, target: string): Promise<"linked" | "occupied"> {
+	try {
+		await link(source, target);
+		return "linked";
+	} catch (error) {
+		if (errorCode(error) === "EEXIST") return "occupied";
+		throw error;
+	}
+}
+
+async function recoverClaimedModelsTarget(path: string): Promise<void> {
+	const claimPath = modelsClaimPath(path);
+	if (!existsSync(claimPath)) return;
+	await linkIfAbsent(claimPath, path);
+	await syncParentDirectory(path);
+	await unlink(claimPath);
+}
+
 async function atomicWriteIfUnchanged(
 	path: string,
 	expected: ModelsFileSnapshot,
 	content: string,
 	assertLock: () => void,
+	afterTargetClaimed?: () => Promise<void> | void,
 ): Promise<"committed" | "conflict"> {
-	assertLock();
-	const current = await readModelsSnapshot(path);
-	if (!current || current.content !== expected.content || current.mode !== expected.mode)
-		return "conflict";
-
 	const tempPath = join(
 		dirname(path),
 		`.${basename(path)}.thinkrail-${process.pid}-${crypto.randomUUID()}.tmp`,
 	);
+	const claimPath = modelsClaimPath(path);
 	let handle: Awaited<ReturnType<typeof open>> | undefined;
+	let targetClaimed = false;
+	let replacementPublished = false;
 	try {
 		handle = await open(tempPath, "wx", expected.mode);
 		await handle.chmod(expected.mode);
@@ -526,24 +550,50 @@ async function atomicWriteIfUnchanged(
 		await handle.close();
 		handle = undefined;
 
-		const immediatelyBeforeRename = await readModelsSnapshot(path);
-		if (
-			!immediatelyBeforeRename ||
-			immediatelyBeforeRename.content !== expected.content ||
-			immediatelyBeforeRename.mode !== expected.mode
-		) {
+		assertLock();
+		try {
+			// Move whichever version currently owns the target path into our transaction claim. Unlike a
+			// check-then-rename replacement, this preserves an uncoordinated writer that won the last race.
+			await rename(path, claimPath);
+			targetClaimed = true;
+		} catch (error) {
+			if (errorCode(error) === "ENOENT") return "conflict";
+			throw error;
+		}
+
+		const claimed = await readModelsSnapshot(claimPath);
+		if (!claimed || claimed.content !== expected.content || claimed.mode !== expected.mode) {
 			return "conflict";
 		}
+
+		await afterTargetClaimed?.();
 		assertLock();
-		await rename(tempPath, path);
+		if ((await linkIfAbsent(tempPath, path)) === "occupied") return "conflict";
+		replacementPublished = true;
 		await syncParentDirectory(path);
 		return "committed";
 	} finally {
 		await handle?.close();
+		if (targetClaimed && !replacementPublished) {
+			try {
+				await linkIfAbsent(claimPath, path);
+				await syncParentDirectory(path);
+			} catch {
+				// Keep the claim as a recovery journal when restoration itself fails.
+				targetClaimed = false;
+			}
+		}
 		try {
 			await unlink(tempPath);
 		} catch {
 			// Best-effort temp cleanup must not overwrite the commit/conflict outcome.
+		}
+		if (targetClaimed) {
+			try {
+				await unlink(claimPath);
+			} catch {
+				// A stale claim is recovered under the same writer lock on the next transaction.
+			}
 		}
 	}
 }
@@ -601,10 +651,11 @@ export async function cleanupLegacyJbcentralModels(
 ): Promise<LegacyCleanupResult> {
 	const path = jbcentralModelsPath(deps.env ?? process.env);
 	// Skipping an absent file is safe even if one appears immediately afterward: no stale snapshot is
-	// published. Avoid creating the agent directory merely to own a migration lock.
-	if (!existsSync(path)) return { outcome: "unchanged" };
+	// published. A crash claim must still enter the lock so it can restore the target first.
+	if (!existsSync(path) && !existsSync(modelsClaimPath(path))) return { outcome: "unchanged" };
 	try {
 		return await withModelsFileLock(path, async (assertLock) => {
+			await recoverClaimedModelsTarget(path);
 			for (let attempt = 1; attempt <= MAX_MODELS_WRITE_ATTEMPTS; attempt += 1) {
 				let snapshot: ModelsFileSnapshot | null;
 				let config: JsonRecord | null;
@@ -626,8 +677,13 @@ export async function cleanupLegacyJbcentralModels(
 				const content = `${JSON.stringify(config, null, 2)}\n`;
 
 				try {
-					await deps.beforeCommit?.({ operation: "cleanup", attempt, path });
-					if ((await atomicWriteIfUnchanged(path, snapshot, content, assertLock)) === "conflict") {
+					const context: LegacyModelsCommitContext = { operation: "cleanup", attempt, path };
+					await deps.beforeCommit?.(context);
+					if (
+						(await atomicWriteIfUnchanged(path, snapshot, content, assertLock, () =>
+							deps.afterTargetClaimed?.(context),
+						)) === "conflict"
+					) {
 						continue;
 					}
 				} catch (error) {
@@ -652,13 +708,14 @@ export async function rollbackLegacyJbcentralCleanup(
 ): Promise<LegacyRollbackResult> {
 	const internal = legacyReceipts.get(receipt);
 	if (!internal) return { outcome: "failed", reason: "invalid-receipt" };
-	if (!existsSync(internal.path)) {
+	if (!existsSync(internal.path) && !existsSync(modelsClaimPath(internal.path))) {
 		legacyReceipts.delete(receipt);
 		return { outcome: "unchanged", skippedProviderCount: internal.changes.length };
 	}
 
 	try {
 		return await withModelsFileLock(internal.path, async (assertLock) => {
+			await recoverClaimedModelsTarget(internal.path);
 			for (let attempt = 1; attempt <= MAX_MODELS_WRITE_ATTEMPTS; attempt += 1) {
 				let snapshot: ModelsFileSnapshot | null;
 				let config: JsonRecord | null;
@@ -688,10 +745,16 @@ export async function rollbackLegacyJbcentralCleanup(
 				const content = `${JSON.stringify(config, null, 2)}\n`;
 
 				try {
-					await deps.beforeCommit?.({ operation: "rollback", attempt, path: internal.path });
+					const context: LegacyModelsCommitContext = {
+						operation: "rollback",
+						attempt,
+						path: internal.path,
+					};
+					await deps.beforeCommit?.(context);
 					if (
-						(await atomicWriteIfUnchanged(internal.path, snapshot, content, assertLock)) ===
-						"conflict"
+						(await atomicWriteIfUnchanged(internal.path, snapshot, content, assertLock, () =>
+							deps.afterTargetClaimed?.(context),
+						)) === "conflict"
 					) {
 						continue;
 					}
