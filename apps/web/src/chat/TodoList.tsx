@@ -8,6 +8,7 @@ import {
 	CircleDot,
 	CirclePause,
 	FileText,
+	LoaderCircle,
 	MessageCircleQuestion,
 	Plus,
 	Trash2,
@@ -76,11 +77,18 @@ export function StatusIcon({
 	status,
 	glance,
 	reviewed = false,
+	reviewing = false,
 }: {
 	status: TodoStatus;
 	glance: PlanGlance;
 	reviewed?: boolean;
+	/** The reviewer agent has this item's review in flight — the row-level pulse (no expansion needed). */
+	reviewing?: boolean;
 }) {
+	if (reviewing)
+		return (
+			<LoaderCircle data-reviewing="true" className="size-4 shrink-0 animate-spin text-primary" />
+		);
 	if (status === "in_progress") {
 		const { Icon, className } = glanceIcon(glance);
 		return <Icon data-glance={glance} className={cn("size-4 shrink-0", className)} />;
@@ -385,15 +393,25 @@ function TodoRow({
 }) {
 	const changeSet = onOpenChanges ? itemChangeSet(todo) : null;
 	const reviewed = reviewSettled(todo);
+	const reviewing = todo.review?.reviewing === true;
 	return (
 		<li
 			data-testid="todo-row"
 			data-status={todo.status}
 			data-reviewed={reviewed}
+			data-reviewing={reviewing}
 			className="group flex items-center gap-sm rounded-[var(--radius-sm)] px-xs py-xs hover:bg-control-bg-hovered"
 		>
-			<span className="shrink-0" title={reviewed ? "Verified" : statusLabel(todo.status, glance)}>
-				<StatusIcon status={todo.status} glance={glance} reviewed={reviewed} />
+			<span
+				className="shrink-0"
+				title={reviewing ? "Reviewing…" : reviewed ? "Verified" : statusLabel(todo.status, glance)}
+			>
+				<StatusIcon
+					status={todo.status}
+					glance={glance}
+					reviewed={reviewed}
+					reviewing={reviewing}
+				/>
 			</span>
 			<div className="min-w-0 flex-1">
 				<div

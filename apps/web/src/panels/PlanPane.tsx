@@ -24,6 +24,7 @@ import { StatusIcon } from "../chat/TodoList";
 import { useChatTodos } from "../chat/useChatTodos";
 import { cn } from "../lib";
 import { selectChatTitle, useAppStore } from "../store";
+import { errorText } from "../transport";
 import { DiffStatBadge } from "./DiffStatBadge";
 import { openDiffInTab } from "./openTabs";
 import { PlanReviewList, ReviewActions } from "./PlanReview";
@@ -124,14 +125,13 @@ function ChangeSetBlock({
 						<button
 							type="button"
 							data-testid="plan-start-review"
-							onClick={() => {
-								// Fire the AGENT review, and OPEN the changes so it's watchable — the Changes panel
-								// at this step's commit scope, or the first fallback path's live diff.
-								void onStartReview(item.id);
-								if (set.kind === "commit") onOpenCommit(set.sha);
-								else if (set.paths[0])
-									void openDiffInTab(workspaceId, { kind: "branch" }, set.paths[0], "preview");
-							}}
+							onClick={() =>
+								// Fire the AGENT review — and stay right here: the row pulses Reviewing…, findings
+								// land in the Review tab. NO navigation (reviewer-flagged UX). A failed start must
+								// be VISIBLE — the toast is the caller's only signal (the detached path's notice
+								// lands in the reviewer chat nobody has open).
+								onStartReview(item.id)
+							}
 							className="shrink-0 rounded-[var(--radius-sm)] border border-border-default px-sm py-2xs tr-text-ui text-text-default hover:bg-control-bg-hovered"
 						>
 							Start review
@@ -204,16 +204,32 @@ function ItemBlock({
 	onStartReview: (id: string) => Promise<void>;
 }) {
 	const reviewed = reviewSettled(item);
+	const reviewing = item.review?.reviewing === true;
 	return (
 		<li
 			data-testid="plan-item"
 			data-status={item.status}
 			data-reviewed={reviewed}
+			data-reviewing={reviewing}
 			className="py-xs"
 		>
 			<div className="flex items-start gap-sm">
-				<span className="mt-2xs" title={reviewed ? "Verified" : undefined}>
-					<StatusIcon status={item.status} glance="working" reviewed={reviewed} />
+				<span
+					className="mt-2xs"
+					title={
+						reviewing
+							? "Reviewing — the reviewer agent is reading this step"
+							: reviewed
+								? "Verified"
+								: undefined
+					}
+				>
+					<StatusIcon
+						status={item.status}
+						glance="working"
+						reviewed={reviewed}
+						reviewing={reviewing}
+					/>
 				</span>
 				<div className="min-w-0 flex-1">
 					<div
@@ -326,6 +342,25 @@ export default function PlanPane({
 	const review = reviewProgress(data);
 	const overallSummary = planCompletionSummary(data);
 	const onOpenCommit = (sha: string) => plan.openChanges({ sha });
+	// Start review stays ON this page — the only signals are the row's Reviewing… pulse and a toast
+	// (success AND failure: the detached error notice lands in a chat nobody has open).
+	const startReview = async (id: string): Promise<void> =>
+		plan.startReview(id).then(
+			() => {
+				pushToast({
+					variant: "success",
+					title: "Review started",
+					message: "The reviewer agent is reading this step — findings land in the Review tab.",
+				});
+			},
+			(err) => {
+				pushToast({
+					variant: "error",
+					title: "Review didn't start",
+					message: errorText(err),
+				});
+			},
+		);
 	const exportMarkdown = () => planToMarkdown(data, title);
 
 	return (
@@ -443,7 +478,7 @@ export default function PlanPane({
 								onOpenCommit={onOpenCommit}
 								onApprove={plan.approve}
 								onAskFix={plan.askFix}
-								onStartReview={plan.startReview}
+								onStartReview={startReview}
 							/>
 						))}
 						{loose.length > 0 ? (
@@ -462,7 +497,7 @@ export default function PlanPane({
 											onOpenCommit={onOpenCommit}
 											onApprove={plan.approve}
 											onAskFix={plan.askFix}
-											onStartReview={plan.startReview}
+											onStartReview={startReview}
 										/>
 									))}
 								</ul>
