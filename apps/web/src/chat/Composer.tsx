@@ -588,7 +588,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 			{mentionOpen ? (
 				<div
 					data-testid="mention-menu"
-					className="absolute bottom-full left-12 mb-4 max-h-[40vh] w-[min(28rem,90%)] overflow-y-auto rounded-[var(--radius-md)] border border-border-default bg-container-elevated-bg p-4 shadow-[var(--shadow-md)]"
+					className="absolute bottom-full left-8 mb-4 max-h-[40vh] w-[min(28rem,90%)] overflow-y-auto rounded-[var(--radius-md)] border border-border-default bg-container-elevated-bg p-4 shadow-[var(--shadow-md)]"
 				>
 					{mentionCandidates.map((candidate, index) => (
 						<button
@@ -612,7 +612,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 					commands={slashCompletion.matches}
 					activeIndex={slashCompletion.activeIndex}
 					onSelect={slashCompletion.pick}
-					className="absolute bottom-full left-12 mb-4"
+					className="absolute bottom-full left-8 mb-4"
 					// The nudge is about having NO templates at all — never about the current query matching
 					// none — so it keys on the owner's confirmed-empty listing, not on the visible matches.
 					footer={
@@ -646,14 +646,14 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 					type="button"
 					data-testid="slot-hint"
 					onClick={() => stepSlot(1)}
-					className="absolute bottom-full left-12 mb-4 rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-8 py-4 text-text-muted tr-text-metadata shadow-[var(--shadow-md)] hover:bg-control-bg-hovered hover:text-text-default"
+					className="absolute bottom-full left-8 mb-4 rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-8 py-4 text-text-muted tr-text-metadata shadow-[var(--shadow-md)] hover:bg-control-bg-hovered hover:text-text-default"
 				>
 					slot {slotIdx + 1}/{slots.length} · ⇥ next · esc done
 				</button>
 			) : null}
 
 			{images.length > 0 ? (
-				<div className="flex flex-wrap gap-4 px-12 pt-12" data-testid="composer-images">
+				<div className="flex flex-wrap gap-4 px-8 pt-8" data-testid="composer-images">
 					{images.map((img) => (
 						<span
 							key={img.id}
@@ -673,187 +673,179 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 				</div>
 			) : null}
 
-			<div className="p-12">
-				{/* The UNIFIED composer surface: the message input is the main content and the controls
-				 * (model / thinking / history / send) are a FOOTER inside the SAME border — one visual entity, not
-				 * an input box with a separate control strip below it. 12px internal padding all round (textarea
-				 * px-12 py-12 + footer px-12 pb-12).
-				 *
-				 * The input's border AND background live on this wrapper (the textarea is `bg-transparent` + has no
-				 * border), so the backdrop's tint spans, painted behind the textarea, show through. The 1px border
-				 * is here so `bg-clip-padding` (background-clip: padding-box) clips the fill to *inside* the border.
-				 * Border colour: `control-border-default` at rest, `control-border-active` while the TEXTAREA is
-				 * edited — via `has-[textarea:focus]`, NOT `focus-within`: the footer now holds focusable controls
-				 * that carry their own accent focus ring, and a plain `focus-within` would light this border under
-				 * them too, doubling the neutral border with their ring. Scoping to the textarea keeps the active
-				 * border the textarea's single focus outline, exactly as before. The fill is clipped by
-				 * `bg-clip-padding` + `rounded` and the slot backdrop clips itself (its own `overflow-hidden`), so
-				 * this wrapper needs no `overflow-hidden`. */}
-				<div className="relative flex flex-col rounded-[var(--radius-md)] border border-control-border-default bg-control-bg bg-clip-padding transition-colors has-[textarea:focus]:border-control-border-active">
-					{/* Input area — the relative box the slot-highlight backdrop (absolute inset-0) is scoped to, so
-					    it covers only the textarea, not the footer below. */}
-					<div className="relative">
-						{slots ? (
-							<div
-								ref={attachBackdrop}
-								data-testid="slot-backdrop"
-								aria-hidden
-								className="pointer-events-none absolute inset-0 overflow-hidden rounded-[var(--radius-md)]"
-							>
-								{/* Mirrors the textarea's box model EXACTLY (same px-12 py-12 padding, tr-text-ui
-								 * font size/line-height, a transparent border of the same width so the content box
-								 * lines up) plus `whitespace-pre-wrap break-words` — a native textarea soft-wraps
-								 * this way by default (its own UA stylesheet), but a plain <div> does not, so this
-								 * has to be spelled out explicitly for the two to wrap identical text identically.
-								 * The mirrored content overflows the `overflow-hidden` parent, whose scroll offsets
-								 * the textarea's `onScroll` sets imperatively (see `attachBackdrop`). The border now
-								 * lives on the wrapper (this backdrop already sits inside it), so the mirror needs only
-								 * the shared `px-12 py-12` padding to line its content box up with the textarea. */}
-								<div className="w-full whitespace-pre-wrap break-words px-12 py-12 tr-text-ui">
-									{withOffsets(highlightSegments(value, slots, slotIdx)).map((seg) => (
-										<span
-											key={seg.start}
-											data-testid={seg.state === "plain" ? undefined : "slot-highlight"}
-											data-slot-state={seg.state === "plain" ? undefined : seg.state}
-											className={`text-transparent ${highlightTint(seg.state)}`}
-										>
-											{seg.text}
-										</span>
-									))}
-								</div>
+			<div className="flex flex-col gap-8 p-8">
+				{/* The input's border AND background live here (the textarea below is `bg-transparent` + has no
+				 * border), so the backdrop's tint spans, painted behind the textarea, show through. The 1px
+				 * border is on this wrapper so `bg-clip-padding` (background-clip: padding-box) clips the fill to
+				 * *inside* the border — the fill can't bleed past the rounded border, and the border stays fully
+				 * visible. Border colour: `control-border-default` at rest, `control-border-active` via
+				 * `focus-within` while the textarea is being edited (the textarea is the only focusable child) —
+				 * never an accent border. **Composer-specific:** the active border is the *single* focus outline;
+				 * unlike other controls it carries NO accent focus ring (the textarea below has none), so the
+				 * neutral border + accent ring never double up here. The fill is clipped by `bg-clip-padding` +
+				 * `rounded` and the slot backdrop clips itself (its own `overflow-hidden` below), so this wrapper
+				 * needs no `overflow-hidden`. */}
+				<div className="relative rounded-[var(--radius-md)] border border-control-border-default bg-control-bg bg-clip-padding transition-colors focus-within:border-control-border-active">
+					{slots ? (
+						<div
+							ref={attachBackdrop}
+							data-testid="slot-backdrop"
+							aria-hidden
+							className="pointer-events-none absolute inset-0 overflow-hidden rounded-[var(--radius-md)]"
+						>
+							{/* Mirrors the textarea's box model EXACTLY (same px-12 py-8 padding, tr-text-ui
+							 * font size/line-height, a transparent border of the same width so the content box
+							 * lines up) plus `whitespace-pre-wrap break-words` — a native textarea soft-wraps
+							 * this way by default (its own UA stylesheet), but a plain <div> does not, so this
+							 * has to be spelled out explicitly for the two to wrap identical text identically.
+							 * The mirrored content overflows the `overflow-hidden` parent, whose scroll offsets
+							 * the textarea's `onScroll` sets imperatively (see `attachBackdrop`). The border now
+							 * lives on the wrapper (this backdrop already sits inside it), so the mirror needs only
+							 * the shared `px-12 py-8` padding to line its content box up with the textarea. */}
+							<div className="w-full whitespace-pre-wrap break-words px-12 py-8 tr-text-ui">
+								{withOffsets(highlightSegments(value, slots, slotIdx)).map((seg) => (
+									<span
+										key={seg.start}
+										data-testid={seg.state === "plain" ? undefined : "slot-highlight"}
+										data-slot-state={seg.state === "plain" ? undefined : seg.state}
+										className={`text-transparent ${highlightTint(seg.state)}`}
+									>
+										{seg.text}
+									</span>
+								))}
 							</div>
-						) : null}
-						<textarea
-							ref={ref}
-							data-testid="chat-input"
-							value={value}
-							onScroll={(e) => {
-								const backdrop = backdropRef.current;
-								if (backdrop) {
-									backdrop.scrollLeft = e.currentTarget.scrollLeft;
-									backdrop.scrollTop = e.currentTarget.scrollTop;
-								}
-							}}
-							onChange={(e) => {
-								const next = e.target.value;
-								const nextCaret = e.target.selectionStart;
-								// A genuine user edit (typing/pasting/deleting — never fired by the recall/insert paths
-								// themselves, since those set the controlled `value` prop directly rather than mutating the
-								// DOM node) that diverges from the recalled entry exits the recall session.
-								if (recallIdx !== null && next !== recentPrompts[recallIdx]) setRecallIdx(null);
-								if (slots) {
-									const { editStart, removedLen, insertedLen } = diffValues(value, next, nextCaret);
-									if (editStart === 0 && removedLen === value.length) {
-										// The edit consumed the entire prior value (a select-all-and-type/delete, or
-										// Playwright's `fill()`) — re-tracking a now-meaningless collapsed range set would
-										// serve no purpose, so the session just ends instead.
-										setSlots(null);
-									} else {
-										const editEnd = editStart + removedLen;
-										const active = slots[slotIdx];
-										// Still typing at the exact end of the actively-selected slot should keep extending
-										// it. `shiftSlots`' boundary rule otherwise treats a zero-width insert exactly at a
-										// slot's `end` as landing just *after* it (the right default in general — text typed
-										// after a filled value shouldn't retroactively join it), which would otherwise
-										// truncate a multi-character fill to whatever was typed in the very first keystroke.
-										// Growing IS filling (and editing): the extension is user-typed content, so `filled`
-										// AND `edited` are set here too — the `touches` check below can't do it (a
-										// zero-width insert at `end` doesn't overlap the range), and without it the FIRST
-										// keystroke into an untouched slot at its end boundary (ArrowRight collapses the
-										// marker selection exactly there, then the user types) would leave the slot
-										// untouched — `stripUntouchedSlots` would then delete the marker together with
-										// everything typed into it on send. `edited: true` (never set by the parser) is
-										// what makes this slot a mirror source, so a user fill propagates to its group-mates
-										// while an untouched `${N:-default}` stays independent (see `slotSession.ts`).
-										const growing =
-											removedLen === 0 &&
-											insertedLen > 0 &&
-											active !== undefined &&
-											active.end === editStart;
-										const shifted = shiftSlots(slots, editStart, removedLen, insertedLen).map(
-											(slot, i) => {
-												const grown =
-													growing && i === slotIdx
-														? { ...slot, end: slot.end + insertedLen, filled: true, edited: true }
-														: slot;
-												const original = slots[i];
-												return original && touches(original, editStart, editEnd)
-													? { ...grown, filled: true, edited: true }
-													: grown;
-											},
-										);
-										setSlots(shifted);
-									}
-								}
-								onChange(next);
-								setCaret(nextCaret);
-							}}
-							onKeyUp={(e) => setCaret(e.currentTarget.selectionStart)}
-							onClick={(e) => setCaret(e.currentTarget.selectionStart)}
-							onKeyDown={onKeyDown}
-							onPaste={onPaste}
-							onDrop={onDrop}
-							rows={4}
-							placeholder={
-								isStreaming
-									? "Enter to steer · Cmd/Ctrl+Enter to queue · @ files · / commands"
-									: "Message the agent…  (@ files · / commands · Enter to send)"
+						</div>
+					) : null}
+					<textarea
+						ref={ref}
+						data-testid="chat-input"
+						value={value}
+						onScroll={(e) => {
+							const backdrop = backdropRef.current;
+							if (backdrop) {
+								backdrop.scrollLeft = e.currentTarget.scrollLeft;
+								backdrop.scrollTop = e.currentTarget.scrollTop;
 							}
-							// `relative` keeps the textarea a positioned participant so it paints ABOVE the absolute
-							// slot-highlight backdrop (its earlier DOM sibling) — otherwise a static textarea paints
-							// under the backdrop and the native caret/selection get dimmed by the active-slot tint.
-							className="relative min-h-[108px] w-full resize-none rounded-[var(--radius-md)] bg-transparent px-12 py-12 tr-text-ui text-text-default outline-none placeholder:text-text-muted"
+						}}
+						onChange={(e) => {
+							const next = e.target.value;
+							const nextCaret = e.target.selectionStart;
+							// A genuine user edit (typing/pasting/deleting — never fired by the recall/insert paths
+							// themselves, since those set the controlled `value` prop directly rather than mutating the
+							// DOM node) that diverges from the recalled entry exits the recall session.
+							if (recallIdx !== null && next !== recentPrompts[recallIdx]) setRecallIdx(null);
+							if (slots) {
+								const { editStart, removedLen, insertedLen } = diffValues(value, next, nextCaret);
+								if (editStart === 0 && removedLen === value.length) {
+									// The edit consumed the entire prior value (a select-all-and-type/delete, or
+									// Playwright's `fill()`) — re-tracking a now-meaningless collapsed range set would
+									// serve no purpose, so the session just ends instead.
+									setSlots(null);
+								} else {
+									const editEnd = editStart + removedLen;
+									const active = slots[slotIdx];
+									// Still typing at the exact end of the actively-selected slot should keep extending
+									// it. `shiftSlots`' boundary rule otherwise treats a zero-width insert exactly at a
+									// slot's `end` as landing just *after* it (the right default in general — text typed
+									// after a filled value shouldn't retroactively join it), which would otherwise
+									// truncate a multi-character fill to whatever was typed in the very first keystroke.
+									// Growing IS filling (and editing): the extension is user-typed content, so `filled`
+									// AND `edited` are set here too — the `touches` check below can't do it (a
+									// zero-width insert at `end` doesn't overlap the range), and without it the FIRST
+									// keystroke into an untouched slot at its end boundary (ArrowRight collapses the
+									// marker selection exactly there, then the user types) would leave the slot
+									// untouched — `stripUntouchedSlots` would then delete the marker together with
+									// everything typed into it on send. `edited: true` (never set by the parser) is
+									// what makes this slot a mirror source, so a user fill propagates to its group-mates
+									// while an untouched `${N:-default}` stays independent (see `slotSession.ts`).
+									const growing =
+										removedLen === 0 &&
+										insertedLen > 0 &&
+										active !== undefined &&
+										active.end === editStart;
+									const shifted = shiftSlots(slots, editStart, removedLen, insertedLen).map(
+										(slot, i) => {
+											const grown =
+												growing && i === slotIdx
+													? { ...slot, end: slot.end + insertedLen, filled: true, edited: true }
+													: slot;
+											const original = slots[i];
+											return original && touches(original, editStart, editEnd)
+												? { ...grown, filled: true, edited: true }
+												: grown;
+										},
+									);
+									setSlots(shifted);
+								}
+							}
+							onChange(next);
+							setCaret(nextCaret);
+						}}
+						onKeyUp={(e) => setCaret(e.currentTarget.selectionStart)}
+						onClick={(e) => setCaret(e.currentTarget.selectionStart)}
+						onKeyDown={onKeyDown}
+						onPaste={onPaste}
+						onDrop={onDrop}
+						rows={4}
+						placeholder={
+							isStreaming
+								? "Enter to steer · Cmd/Ctrl+Enter to queue · @ files · / commands"
+								: "Message the agent…  (@ files · / commands · Enter to send)"
+						}
+						// `relative` keeps the textarea a positioned participant so it paints ABOVE the absolute
+						// slot-highlight backdrop (its earlier DOM sibling) — otherwise a static textarea paints
+						// under the backdrop and the native caret/selection get dimmed by the active-slot tint.
+						className="relative min-h-[108px] w-full resize-none rounded-[var(--radius-sm)] bg-transparent px-12 py-8 tr-text-ui text-text-default outline-none placeholder:text-text-muted"
+					/>
+				</div>
+				<div className="flex flex-wrap items-center gap-8">
+					<div className="flex min-w-0 flex-1 flex-wrap items-center gap-8">
+						<ModelSelector
+							models={models}
+							current={currentModel}
+							refreshing={modelsRefreshing}
+							onRefresh={onRefreshModels}
+							onSelect={onSelectModel}
+						/>
+						<ThinkingSelector
+							level={thinkingLevel}
+							levels={currentModel?.thinkingLevels ?? []}
+							onSelect={onSelectThinking}
 						/>
 					</div>
-					<div className="flex flex-wrap items-center gap-8 px-12 pb-12">
-						<div className="flex min-w-0 flex-1 flex-wrap items-center gap-8">
-							<ModelSelector
-								models={models}
-								current={currentModel}
-								refreshing={modelsRefreshing}
-								onRefresh={onRefreshModels}
-								onSelect={onSelectModel}
-							/>
-							<ThinkingSelector
-								level={thinkingLevel}
-								levels={currentModel?.thinkingLevels ?? []}
-								onSelect={onSelectThinking}
-							/>
-						</div>
-						<div className="flex shrink-0 items-center gap-8">
-							{/* Always rendered — the tap path to history recall on mobile, and a discoverability
-							 * affordance for `Ctrl+R` on desktop; both open the exact same overlay via `onHistoryOpen`. */}
+					<div className="flex shrink-0 items-center gap-8">
+						{/* Always rendered — the tap path to history recall on mobile, and a discoverability
+						 * affordance for `Ctrl+R` on desktop; both open the exact same overlay via `onHistoryOpen`. */}
+						<button
+							type="button"
+							data-testid="history-open"
+							aria-label="Search history"
+							onClick={openHistory}
+							className="flex size-32 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg text-text-default hover:bg-control-bg-hovered"
+						>
+							<History className="size-14" />
+						</button>
+						{isStreaming ? (
 							<button
 								type="button"
-								data-testid="history-open"
-								aria-label="Search history"
-								onClick={openHistory}
-								className="flex size-32 shrink-0 items-center justify-center rounded-[var(--radius-md)] border border-border-default bg-container-elevated-bg text-text-default hover:bg-control-bg-hovered"
+								data-testid="chat-abort"
+								aria-label="Stop"
+								onClick={onAbort}
+								className="flex size-32 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg text-text-default hover:bg-control-bg-hovered"
 							>
-								<History className="size-14" />
+								<Square className="size-14" />
 							</button>
-							{isStreaming ? (
-								<button
-									type="button"
-									data-testid="chat-abort"
-									aria-label="Stop"
-									onClick={onAbort}
-									className="flex size-32 shrink-0 items-center justify-center rounded-[var(--radius-md)] border border-border-default bg-container-elevated-bg text-text-default hover:bg-control-bg-hovered"
-								>
-									<Square className="size-14" />
-								</button>
-							) : null}
-							<button
-								type="button"
-								data-testid="chat-send"
-								aria-label={isStreaming ? "Steer" : "Send"}
-								onClick={() => submit(isStreaming ? "steer" : "send")}
-								disabled={!value.trim() && images.length === 0}
-								className="flex size-32 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-control-primary-bg text-control-primary-text hover:bg-control-primary-bg-hovered disabled:pointer-events-none disabled:bg-control-disabled-bg disabled:text-control-disabled-text"
-							>
-								<ArrowUp className="size-16" />
-							</button>
-						</div>
+						) : null}
+						<button
+							type="button"
+							data-testid="chat-send"
+							aria-label={isStreaming ? "Steer" : "Send"}
+							onClick={() => submit(isStreaming ? "steer" : "send")}
+							disabled={!value.trim() && images.length === 0}
+							className="flex size-32 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-control-primary-bg text-control-primary-text hover:bg-control-primary-bg-hovered disabled:pointer-events-none disabled:bg-control-disabled-bg disabled:text-control-disabled-text"
+						>
+							<ArrowUp className="size-16" />
+						</button>
 					</div>
 				</div>
 			</div>

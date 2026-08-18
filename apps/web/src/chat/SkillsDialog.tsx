@@ -235,9 +235,8 @@ export function SkillsDialog({
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent data-testid="skills-dialog" className="max-w-[560px] gap-12 p-12">
-				{/* Reserved room for the DialogContent's absolute close (X) so it can't overlap Reload — a
-				    geometry constraint (the button's reach), not layout rhythm, so it stays off the spacing scale. */}
-				<div className="flex items-center justify-between gap-8 pr-[2rem]">
+				{/* pr-32 reserves room for the DialogContent's absolute close (X) so it can't overlap Reload. */}
+				<div className="flex items-center justify-between gap-8 pr-32">
 					<DialogTitle className="tr-text-ui text-text-default">Skills</DialogTitle>
 					{workspace ? (
 						<Button
@@ -261,7 +260,7 @@ export function SkillsDialog({
 				{workspace?.stale ? (
 					<div
 						data-testid="skills-stale"
-						className="rounded-[var(--radius-md)] border border-border-default bg-container-elevated-bg px-12 py-8 text-text-muted tr-text-metadata"
+						className="rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-12 py-8 text-text-muted tr-text-metadata"
 					>
 						This worktree's skills changed on disk —{" "}
 						<span className="text-text-default">Reload</span> to apply them to this chat.
@@ -271,7 +270,7 @@ export function SkillsDialog({
 				{untrustedCount > 0 ? (
 					<div
 						data-testid="skills-trust-all"
-						className="flex items-center gap-8 rounded-[var(--radius-md)] border border-border-default border-l-[3px] border-l-feedback-warning bg-feedback-warning-subtle px-12 py-8"
+						className="flex items-center gap-8 rounded-[var(--radius-sm)] border border-border-default border-l-[3px] border-l-feedback-warning bg-feedback-warning-subtle px-12 py-8"
 					>
 						<span className="min-w-0 flex-1 tr-text-ui text-text-default">
 							{untrustedCount} project skill{untrustedCount === 1 ? "" : "s"} off until you trust

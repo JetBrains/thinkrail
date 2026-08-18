@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { stripFrontmatter } from "@/lib/utils";
 import { Markdown, type MarkdownRehypePlugins } from "../chat/Markdown";
 import { alertComponents, remarkGithubAlerts } from "./markdownAlerts";
@@ -50,7 +51,7 @@ const DOCUMENT_PROSE = [
 	// Code blocks — spacing only; size/leading come from the doc prose system.
 	"[&_pre]:my-12",
 	// Images.
-	"[&_img]:my-12 [&_img]:max-w-full [&_img]:rounded-[var(--radius-md)]",
+	"[&_img]:my-12 [&_img]:max-w-full [&_img]:rounded-[var(--radius-sm)]",
 ].join(" ");
 
 /**
@@ -67,12 +68,13 @@ export function MarkdownDocument({
 	workspaceId: string;
 	path: string;
 }) {
+	const components = useMemo(() => documentComponents({ workspaceId, path }), [path, workspaceId]);
 	return (
 		<Markdown
 			text={stripFrontmatter(content)}
 			className={DOCUMENT_PROSE}
 			remarkPlugins={[remarkGithubAlerts, remarkHeadingIds]}
-			components={{ ...alertComponents, ...documentComponents({ workspaceId, path }) }}
+			components={{ ...alertComponents, ...components }}
 		/>
 	);
 }
@@ -162,6 +164,7 @@ export default function MarkdownPreview({
 	path: string;
 	review?: EditorReview;
 }) {
+	const components = useMemo(() => documentComponents({ workspaceId, path }), [path, workspaceId]);
 	if (!review) {
 		return (
 			<div
@@ -183,7 +186,7 @@ export default function MarkdownPreview({
 		className: DOCUMENT_PROSE,
 		remarkPlugins: [remarkGithubAlerts, remarkHeadingIds],
 		rehypePlugins: [[sourceLineRehype, { offset: stampOffset }]] as MarkdownRehypePlugins,
-		components: { ...alertComponents, ...documentComponents({ workspaceId, path }) },
+		components: { ...alertComponents, ...components },
 	});
 	const threadInserts: FlowInsert[] = review.threads.map((thread) => ({
 		key: thread.id,

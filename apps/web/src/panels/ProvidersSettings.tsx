@@ -151,7 +151,7 @@ export function ProvidersSettings() {
 					{subscriptionRows.length > 0 ? (
 						<section
 							data-testid="providers-subscriptions"
-							className="flex flex-col gap-8 rounded-[var(--radius-lg)] border border-primary-muted bg-clip-padding bg-primary-subtle p-12"
+							className="flex flex-col gap-8 rounded-[var(--radius-sm)] border border-primary-muted bg-clip-padding bg-primary-subtle p-12"
 						>
 							<div className="flex flex-col gap-2">
 								<h4 className="tr-title-compact text-text-default">Sign in with a subscription</h4>
@@ -273,9 +273,9 @@ function ConnectedCard({
 			data-testid="provider-row"
 			data-provider={provider.id}
 			data-configured="true"
-			className="flex items-center gap-12 rounded-[var(--radius-md)] border border-border-default bg-control-bg px-12 py-8"
+			className="flex items-center gap-12 rounded-[var(--radius-sm)] border border-border-default bg-control-bg px-12 py-8"
 		>
-			<span className="flex size-32 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-feedback-success-subtle text-feedback-success">
+			<span className="flex size-32 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-feedback-success-subtle text-feedback-success">
 				<Check className="size-16" />
 			</span>
 			<div className="flex min-w-0 flex-col">
@@ -335,10 +335,10 @@ function ProviderActionRow({
 			data-testid="provider-signin-row"
 			data-provider={provider.id}
 			data-configured="false"
-			className="flex flex-col gap-4 rounded-[var(--radius-md)] border border-border-default bg-control-bg px-12 py-8"
+			className="flex flex-col gap-4 rounded-[var(--radius-sm)] border border-border-default bg-control-bg px-12 py-8"
 		>
 			<div className="flex items-center gap-8 tr-text-ui">
-				<span className="flex size-32 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-control-bg-selected text-text-muted">
+				<span className="flex size-32 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-control-bg-selected text-text-muted">
 					<Boxes className="size-16" />
 				</span>
 				<span className="min-w-0 flex-1 truncate text-text-default">{provider.name}</span>

@@ -55,7 +55,7 @@ export function TerminalSettings() {
 							data-active={active}
 							onClick={() => select(kb)}
 							className={cn(
-								"flex items-center gap-8 rounded-[var(--radius-md)] border px-12 py-8 text-left tr-text-ui outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary",
+								"flex items-center gap-8 rounded-[var(--radius-sm)] border px-12 py-8 text-left tr-text-ui outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary",
 								active
 									? "border-primary-muted bg-clip-padding bg-primary-subtle text-text-default"
 									: "border-border-default text-text-muted hover:bg-control-bg-hovered hover:text-text-default",

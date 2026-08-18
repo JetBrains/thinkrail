@@ -117,10 +117,10 @@ export function JetBrainsAiCard({
 			data-testid="jetbrains-ai-card"
 			data-wired={wired}
 			data-installed={installed}
-			className="flex flex-col gap-8 rounded-[var(--radius-lg)] border border-border-default bg-control-bg p-12"
+			className="flex flex-col gap-8 rounded-[var(--radius-sm)] border border-border-default bg-control-bg p-12"
 		>
 			<div className="flex items-center gap-12">
-				<span className="flex size-32 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-primary-subtle text-primary">
+				<span className="flex size-32 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-primary-subtle text-primary">
 					<Zap className="size-16" />
 				</span>
 				<div className="flex min-w-0 flex-col">
@@ -251,7 +251,7 @@ function CopyableCommand({ command }: { command: string }) {
 		setTimeout(() => setCopied(false), 1500);
 	};
 	return (
-		<div className="flex items-center gap-8 rounded-[var(--radius-md)] border border-border-default bg-container-workspace-bg px-8 py-4">
+		<div className="flex items-center gap-8 rounded-[var(--radius-sm)] border border-border-default bg-container-workspace-bg px-8 py-4">
 			<code className="min-w-0 flex-1 select-all break-all tr-code-text text-text-default">
 				{command}
 			</code>

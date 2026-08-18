@@ -42,10 +42,10 @@
 	--font-sans: var(--tr-font-family-interface);
 	--font-mono: var(--tr-font-family-code);
 
-	/* The numeric spacing scale itself is generated into `styles/generated/spacing.css` from
-	 * `styles/spacing.json` (its own `@theme inline` block, flattened in with this one). This block
-	 * carries only chrome geometry that is NOT part of the layout-rhythm scale: the panel header row
-	 * height, exposed as a `--spacing-*` key so `h-panel-header-row` reads it. */
+	/* The numeric spacing scale is generated into `styles/generated/spacing.css` from `spacing.json`
+	 * (its own `@theme inline` block, flattened in with this one). This block carries only chrome
+	 * geometry that is NOT layout rhythm: the panel header row height, exposed so `h-panel-header-row`
+	 * reads it. */
 	--spacing-panel-header-row: var(--panel-header-row-height);
 
 	/* A block appearing in place (e.g. the ask-question card's atomic reveal once its args are final). */
@@ -171,9 +171,9 @@
 	display: flex;
 	flex-direction: column;
 	align-items: stretch;
-	gap: var(--space-8);
-	margin-left: var(--space-12);
-	padding: var(--space-8);
+	gap: 6px;
+	margin-left: 12px;
+	padding: 8px;
 	border: 1px solid var(--border-default);
 	border-radius: var(--radius-md);
 	background: var(--container-header-bg);
@@ -192,8 +192,8 @@
 	overflow-x: hidden;
 	overflow-y: auto;
 	overflow-wrap: break-word;
-	padding: var(--space-8) var(--space-12);
-	border-radius: var(--radius-md);
+	padding: 8px 12px;
+	border-radius: var(--radius-sm);
 	border: 1px solid var(--border-default);
 	background: var(--control-bg);
 	color: var(--text);
@@ -210,12 +210,12 @@
 }
 .review-composer-row {
 	display: flex;
-	gap: var(--space-8);
+	gap: 6px;
 }
 /* Typography comes from the generated `tr-text-action` class on the node. */
 .review-composer-btn {
-	padding: var(--space-2) var(--space-8);
-	border-radius: var(--radius-md);
+	padding: 2px var(--space-8);
+	border-radius: var(--radius-sm);
 	border: 1px solid var(--border-default);
 	background: var(--container-elevated-bg);
 	color: var(--text);
@@ -250,10 +250,10 @@
 	display: flex;
 	flex-direction: column;
 	align-items: stretch;
-	gap: var(--space-8);
-	margin: var(--space-4) 0 var(--space-4) var(--space-12);
+	gap: 6px;
+	margin: var(--space-4) 0 var(--space-4) 12px;
 	max-width: 560px;
-	padding: var(--space-8);
+	padding: 8px;
 	border: 1px solid var(--border-default);
 	border-radius: var(--radius-md);
 	background: var(--container-header-bg);
@@ -262,18 +262,19 @@
 	display: flex;
 	align-items: center;
 	gap: var(--space-8);
-	padding: 0 var(--space-4);
+	padding: 0 4px;
 }
 .review-thread-actions {
 	margin-left: auto;
 	display: flex;
-	gap: var(--space-4);
+	gap: 4px;
 }
+/* A 6px status circle. Full radius (a pill/circle, not a scale step) via the shared `rounded-full`
+   utility on the node — see ReviewThreadCard.tsx / reviewWidgets.ts. */
 .review-thread-dot {
 	flex-shrink: 0;
 	width: 6px;
 	height: 6px;
-	border-radius: 9999px;
 }
 .review-thread-dot-draft {
 	background: var(--primary);
@@ -290,20 +291,20 @@
 .review-thread-body {
 	margin: 0;
 	min-width: 0;
-	padding: 0 var(--space-4);
+	padding: 0 4px;
 	overflow-wrap: break-word;
 	color: var(--text);
 }
 /* A DRAFT's body is editable in place — the same input surface as the composer's field (input-bg,
-   border2, radius-md, primary focus ring). Auto-grown by its controller; wraps, never scrolls. */
+   border2, radius-sm, primary focus ring). Auto-grown by its controller; wraps, never scrolls. */
 .review-thread-edit {
 	width: 100%;
 	min-height: 2.2em;
 	box-sizing: border-box;
 	margin: 0;
-	padding: var(--space-8) var(--space-12);
+	padding: 8px 12px;
 	border: 1px solid var(--border-default);
-	border-radius: var(--radius-md);
+	border-radius: var(--radius-sm);
 	resize: none;
 	overflow-x: hidden;
 	overflow-y: hidden;
@@ -341,7 +342,7 @@
 
 /* The preview's in-flow composer + the commented-region mark (parity with Monaco's decorations). */
 .review-composer-flow {
-	margin: var(--space-8) 0 var(--space-8) var(--space-12);
+	margin: 8px 0 8px 12px;
 	max-width: 560px;
 }
 /* The commented region in the preview: a thin LEFT RAIL only (the gutter-rail half of Monaco's

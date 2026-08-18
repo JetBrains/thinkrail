@@ -6,8 +6,9 @@ import { glanceIcon, TodoAddRow, TodoRows } from "./TodoList";
 import type { ChatTodos } from "./useChatTodos";
 
 // The chat's TODO plan surfaced inline (SPEC §Chat TODO plan): a strip in the chat header (progress + what's
-// happening now) opens a popup over the chat with the plan — which lives only in the chat (there is no
-// right-panel Todo tab). The `Popover` is composed in `ChatView`, anchored to the **chat header** (not
+// happening now) opens a popup over the chat with the plan — there is no dedicated Todo side tool;
+// “Open as Markdown” creates a registered center document instead. The `Popover` is composed in
+// `ChatView`, anchored to the **chat header** (not
 // the strip), so the popup's
 // left edge sits at the chat's left edge and its top hangs flush under the header (see ChatView). These
 // two pieces are the trigger's contents and the popup body.
@@ -80,7 +81,7 @@ export function ChatPlanContent({ plan, glance }: { plan: ChatTodos; glance: Pla
 			className="flex max-h-[calc(var(--radix-popover-content-available-height)*0.5)] w-[24rem] flex-col overflow-hidden rounded-t-none border-t-0 bg-container-content-bg p-0"
 		>
 			<div className="shrink-0 border-border-muted border-b">
-				<TodoAddRow onAdd={plan.add} onOpenMarkdown={plan.openMarkdown} />
+				<TodoAddRow onAdd={plan.add} onOpenPlan={plan.openPlan} />
 			</div>
 			<div className="min-h-0 flex-1 overflow-auto p-4">
 				{empty ? (
@@ -88,7 +89,12 @@ export function ChatPlanContent({ plan, glance }: { plan: ChatTodos; glance: Pla
 						No TODOs yet — the agent adds its plan here, or add one above.
 					</p>
 				) : (
-					<TodoRows plan={plan.data} onRemove={plan.remove} glance={glance} />
+					<TodoRows
+						plan={plan.data}
+						onRemove={plan.remove}
+						glance={glance}
+						onOpenChanges={plan.openChanges}
+					/>
 				)}
 			</div>
 		</PopoverContent>

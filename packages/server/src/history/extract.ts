@@ -4,14 +4,14 @@ import {
 	parseSessionEntries,
 	type SessionEntry,
 } from "@earendil-works/pi-coding-agent";
-import { isControlMessage } from "@thinkrail/contracts";
+import { isControlMessage, isTranscriptMessageRole } from "@thinkrail/contracts";
 
 /** One searchable message from a session transcript (see SPEC.md for the messageIndex invariant). */
 export interface HistoryEntry {
 	text: string;
 	role: "user" | "assistant";
 	timestamp: number;
-	/** Position among renderable messages (user/assistant/toolResult/custom) — `session.getMessages` order. */
+	/** Position among the roles `isTranscriptMessageRole` admits — `session.getMessages` order. */
 	messageIndex: number;
 }
 
@@ -24,11 +24,6 @@ export interface ExtractedSession {
 	title?: string;
 	entries: HistoryEntry[];
 }
-
-/** The roles the host surfaces to the client (`getSessionMessages`'s filter) — the exact set the client's
- * `messagesToRuntime` folds into `turnIdByMessageIndex`. Indexing against the same set is what keeps a
- * hit's `messageIndex` aligned with the jump anchor the client resolves it against. */
-const RENDERABLE_ROLES = new Set(["user", "assistant", "toolResult", "custom"]);
 
 function textOf(content: unknown): string {
 	if (typeof content === "string") return content;
@@ -57,9 +52,9 @@ function textOf(content: unknown): string {
  * it — `parseSessionEntries` → `migrateSessionEntries` → `buildSessionContext` (follow the current leaf,
  * apply the latest compaction, drop summarized/abandoned entries), then index the resolved messages.
  * `leafId` is left undefined so pi picks the current leaf as the last entry, exactly as
- * `SessionManager._buildIndex` does on load — and the resolved array is filtered to the same
- * `RENDERABLE_ROLES` the host's `getSessionMessages` sends, so every entry's `messageIndex` lines up with
- * the client's `turnIdByMessageIndex` (the jump anchor). Entry text is full, never truncated — it's what
+ * `SessionManager._buildIndex` does on load — and the resolved array is filtered through the wire's own
+ * `isTranscriptMessageRole`, the same guard `getSessionMessages` sends by (one policy, not a copy of it),
+ * so every entry's `messageIndex` lines up with the client's `turnIdByMessageIndex` (the jump anchor). Entry text is full, never truncated — it's what
  * recall inserts and what the overlay presents as the whole prompt (see SPEC.md). Tolerant:
  * `parseSessionEntries` skips non-JSON/malformed lines; a v1/v2 file is migrated first so it resolves
  * like any current session.
@@ -82,9 +77,11 @@ export function extractSession(jsonl: string): ExtractedSession | null {
 	const out: HistoryEntry[] = [];
 	let messageIndex = 0;
 	for (const message of messages) {
-		// Non-renderable context messages (compaction/branch summaries) are stripped by the host before
-		// the client sees them, so they must not consume an index slot here either.
-		if (!RENDERABLE_ROLES.has(message.role)) continue;
+		// Indexing against the wire's own role policy is what keeps a hit's `messageIndex` aligned with the
+		// client's `turnIdByMessageIndex`: a role the host strips (branch summaries) must not consume a slot
+		// here, and one it sends must — a `compactionSummary` does, without ever becoming a searchable entry
+		// (the role check below).
+		if (!isTranscriptMessageRole(message.role)) continue;
 		const index = messageIndex++;
 		if (message.role !== "user" && message.role !== "assistant") continue;
 		const text = textOf(message.content);

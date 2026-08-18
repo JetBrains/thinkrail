@@ -31,22 +31,22 @@ convention; their boundary is held by convention + spec. Sibling edges live here
 | module | owns | barrel | spec |
 | --- | --- | --- | --- |
 | `transport` | the WS client + its singleton/store wiring | yes | [transport/SPEC.md](src/transport/SPEC.md) |
-| `store` | Zustand: connection, projects/workspaces, workspace-scoped tabs + terminals | yes | [store/SPEC.md](src/store/SPEC.md) |
+| `store` | Zustand: domain projections, accepted workspace-layout snapshots, local attention, chat runtimes | yes | [store/SPEC.md](src/store/SPEC.md) |
 | `panels` | layout-agnostic, store-driven feature views | no | [panels/SPEC.md](src/panels/SPEC.md) |
 | `chat` | pi conversation UI primitives: content-block renderers + the tool-renderer registry | no | [chat/SPEC.md](src/chat/SPEC.md) |
 | `auth` | in-app provider login: the presentational OAuth dialog + its client-side state reducer | yes | [auth/SPEC.md](src/auth/SPEC.md) |
-| `shell` | the responsive frame + composition of panels | no | [shell/SPEC.md](src/shell/SPEC.md) |
+| `shell` | the responsive frame + synchronized workbench composition (with bounded child `layout/`) | no | [shell/SPEC.md](src/shell/SPEC.md) |
 | `components` | the app's single `ErrorBoundary` primitive (contains the `ui/` sub-module) | no | [components/SPEC.md](src/components/SPEC.md) |
 | `components/ui` | shadcn primitives, themed with our tokens | no | [components/ui/SPEC.md](src/components/ui/SPEC.md) |
 | `themes` | validated single-file manifests, bundled catalog + atomic token application | yes | [themes/SPEC.md](src/themes/SPEC.md) |
 | `lib` | `cn()` + the shared UI/path/array primitives + highlighting | yes | [lib/SPEC.md](src/lib/SPEC.md) |
 
-Leaf utilities without their own spec: `constants/` (branding) and `styles/` — which holds the three
-design-system SOURCES (`typography.json`, `colors.json`, `spacing.json`), their generated CSS, and the
-structural token contract; per-theme palettes belong to `themes`. Each system is specced beside its source:
-[TYPOGRAPHY.md](src/styles/TYPOGRAPHY.md), [COLOR.md](src/styles/COLOR.md) and [SPACING.md](src/styles/SPACING.md).
+Leaf utilities without their own spec: `constants/` (branding) and `styles/` — which holds the two
+design-system SOURCES (`typography.json`, `colors.json`), their generated CSS, and the structural token
+contract; per-theme palettes belong to `themes`. Each system is specced beside its source:
+[TYPOGRAPHY.md](src/styles/TYPOGRAPHY.md) and [COLOR.md](src/styles/COLOR.md).
 Outside `src/`, **[`scripts/`](scripts/SPEC.md)** is the build-time generator module — it runs under Bun,
-never ships, and turns those three JSON sources into `styles/generated/`.
+never ships, and turns those two JSON sources into `styles/generated/`.
 `index.html` names the product and links the local, symbol-only SVG favicon derived from the same
 ThinkRail artwork as the shell logo (compact enough for browser-tab sizes and light/dark browser chrome).
 `main.tsx` is the entry/composition root — it synchronously builds the bundled theme catalog, then
@@ -56,14 +56,15 @@ screen, not a blank root).
 
 ### Dependency graph
 
-- `shell` → `panels`, `store`, `transport`, `contracts` (type-only), `components/ui`, `components` (`ErrorBoundary` around each mounted region), `constants`, `lib` (platform shortcut semantics), `themes` (the single owner of the atomic `applyTheme` DOM effect, driven by `store.theme`)
-- `panels` → `store`, `transport`, `components/ui`, `components` (`ErrorBoundary` — `CenterTabs`'s per-tab boundary), `lib`, `contracts`, `constants` (`WelcomePanel`'s wordmark), `chat` (`CenterTabs` lazy-mounts `chat/ChatView`; `NewWorkspaceDialog` eagerly reuses `chat/ModelSelector`+`ThinkingSelector`+`useModelCatalog` — these are shiki-free, so the eager import stays split-safe; `TemplatesSettings` reuses `chat/TemplateEditorDialog` for its New/Edit flows — see `panels/SPEC.md`'s `TemplatesSettings` paragraph), `auth` (`ProvidersSettings` mounts `auth/LoginDialog`), `themes` (`AppearanceSettings` consumes the live catalog; code surfaces consume generic theme variables/syntax mapping)
+- `shell` → child `shell/layout`, `panels`, `chat` (app-integration render/hydration only), `store`, `transport`, `contracts` (type-only), `components/ui`, `components` (`ErrorBoundary` around each mounted region), `constants`, `lib` (platform shortcut semantics), `themes` (the single owner of the atomic `applyTheme` DOM effect, driven by `store.theme`)
+- `shell/layout` → `contracts` (types only), `lib` (attention/id primitives), and React / `react-resizable-panels` / `@dnd-kit/core`; the parent injects store state, commit callbacks, and feature renderers, so the child has no feature-module runtime edge
+- `panels` → `store`, `transport`, `components/ui`, `components` (`ErrorBoundary` for feature bodies), `lib`, `contracts`, `constants` (`WelcomePanel`'s wordmark), `chat` (`NewWorkspaceDialog` eagerly reuses `chat/ModelSelector`+`ThinkingSelector`+`useModelCatalog` — these are shiki-free, so the eager import stays split-safe; `TemplatesSettings` reuses `chat/TemplateEditorDialog` for its New/Edit flows — see `panels/SPEC.md`'s `TemplatesSettings` paragraph), `auth` (`ProvidersSettings` mounts `auth/LoginDialog`), `themes` (`AppearanceSettings` consumes the live catalog; code surfaces consume generic theme variables/syntax mapping)
 - `chat` → `contracts` (pi message types, **type-only**), `components/ui`, `lib`; `store` + `transport`
   (**app-integration files only** — the renderers stay store-free; see `chat/SPEC.md` for the current set)
 - `auth` → `components/ui` (the dialog is store/transport-free — the panel integrates it; the state types need no imports)
 - `store` → `transport` (**type-only** — `ConnectionStatus`), `chat` (**type-only** — `ChatTurn`/`ToolResultState`), `auth` (**type-only** — `LoginState`; the `foldLoginFrame` reducer lives in `store`, like `reduceExtUi`), `contracts`, `lib` (the shared path/array primitives — a leaf, so no cycle)
 - `transport` → `contracts`, `store` (welcome routing; the `store → transport` back-edge is type-only, so
-  the runtime graph is acyclic)
+  the runtime graph is acyclic), `lib` (plain-HTTP-safe random page identity)
 - `components` (`ErrorBoundary`) → `lib` only (`shallowEqualArrays` for its reset keys — a leaf, so any region can still wrap in it); `components/ui` → `lib`
 - `lib` → `themes` (the lazy highlighter uses the one generic CSS-variable Shiki registration)
 - `themes` → `constants` (the branding storage prefix scopes the first-paint hint)
@@ -71,17 +72,17 @@ screen, not a blank root).
 
 Rules: a panel never imports another panel sideways; nothing imports `shell` (it's the composition root).
 
-The module set: `transport` / `store` / branded `shell`; `ProjectTree`; `FileTree` + `RightPanel`;
-`CenterTabs` + lazy `MonacoEditor`/`MonacoDiff`; `ChangesPanel` (list → center diff tab); `TerminalsPanel` + lazy
-`TerminalInstance`. The `chat` module — `ChatView` + content-block renderers + the tool-renderer registry
-— plus the full `Composer` (model/effort/@-mentions).
+The module set: `transport` / `store` / branded `shell` + its headless `shell/layout` child;
+layout-agnostic Project/File/Specs/Changes/Review renderers; lazy Monaco file/diff bodies and xterm terminal
+bodies; and the `chat` module (`ChatView`, content-block renderers, tool registry, and full Composer). The
+workbench owns strips/groups around those bodies, never the panels themselves.
 
 ## Styling & theming
 
 - **Tailwind v4 utilities, mapped to the design tokens** (`src/index.css` `@theme inline`). Components
   use utilities for colour, spacing, borders and layout (`bg-container-header-bg`, `text-primary`,
   `border-border-default`,
-  `px-16`) and a **generated semantic typography class** for type (`tr-text-ui`, `tr-title-dialog`,
+  `px-lg`) and a **generated semantic typography class** for type (`tr-text-ui`, `tr-title-dialog`,
   `tr-code-text`, …) — **never inline `style` objects, never raw hex.** Responsive (`md:` …) and states (`hover:` / `focus-visible:`) come
   from Tailwind (inline styles can't express them, and the responsive shell needs them).
 - **The colour and type systems are this app's, not the monorepo's.** `apps/website` keeps its own
@@ -91,19 +92,17 @@ The module set: `transport` / `store` / branded `shell`; `ProjectTree`; `FileTre
   `bg-[var(--elevated)]`; and a tint is a token on the four-step alpha scale, not a `/40` modifier.
   `src/styles/COLOR.md` is the system; `src/styles/colorUsage.test.ts` is the adoption guard (Tailwind
   drops an unknown utility silently, so an unpublished token renders as nothing at all).
-- **A spacing utility names a canonical numeric step; a radius utility names a `--radius-*` token; neither
-  is a raw pixel length** — `p-8` / `gap-4` / `py-12` and `rounded-[var(--radius-md)]`, not `p-md`,
-  `py-1`, `py-[3px]` or `rounded-[7px]`. Spacing is **one canonical vocabulary**: `styles/spacing.json`
-  declares the steps `0/2/4/8/12/16/24/32/40/64` (the step name IS its pixel value), generated into
-  `styles/generated/spacing.css` which sets `--spacing: 1px` so a bare number resolves to that many
-  pixels — replacing Tailwind's built-in 0.25rem base, so nothing falls back to Tailwind's numeric
-  scale. Because that base is shared, **sizing** utilities (`w`/`h`/`size`/inset/translate) are number =
-  px too (`w-16`=16px), but which px a box is is a layout constraint, not rhythm, and is not gated.
-  `src/styles/spacingUsage.test.ts` is the adoption guard for `p`/`m`/`gap` (canonical step or the
-  bracket escape hatch only), and it exists because this class of drift is **invisible**: unlike a colour
-  utility, an arbitrary length always renders. Lengths that are not scale steps — `max-w-[78ch]`,
-  `w-[320px]`, `pr-[2rem]` (a reserved geometry), a measured `pl-[calc(…)]` indent — stay allowed on the
-  bracket escape hatch; they are layout constraints, not rhythm.
+- **A radius or spacing utility names a scale step, never a raw pixel length** — `rounded-[var(--radius-md)]`
+  and `p-md` / `py-0.5`, not `rounded-[7px]` or `py-[3px]`. Two scales are legitimate and both are
+  token-backed: the project family (`--radius-xs/sm/md/lg` — a small primitive geometry capped at 8px:
+  `sm` (4px) is the default corner, `md` (6px) the outer corner for surfaces nesting 4px children, `lg`
+  (8px) the exception for large standalone elevated surfaces (dialogs, user-message bubbles) — and
+  `--space-xs…xl`) and Tailwind's numeric steps
+  for the sub-`--space-xs` tier the project family does not cover. `src/styles/spacingUsage.test.ts` is
+  that adoption guard, and it exists because this class of drift is **invisible**: unlike a colour
+  utility, an arbitrary length always renders, so an off-scale value looks correct in review and passes
+  every other gate. Lengths that are not scale steps at all — `max-w-[78ch]`, `w-[320px]`,
+  `max-h-[40vh]`, a measured `pl-[calc(…)]` indent — stay allowed; they are layout constraints, not rhythm.
 - **`src/themes` is the theme contract and catalog; `src/styles/tokens.css` is structural.** A bundled
   theme is one strict, complete `*.theme.json` manifest: appearance/contrast metadata + semantic UI
   colors + all 16 ANSI colors + a semantic syntax palette. Selected-text foreground overrides are the
@@ -113,9 +112,8 @@ The module set: `transport` / `store` / branded `shell`; `ProjectTree`; `FileTre
   Manifests are self-contained (no inheritance), contain canonical color data only, and cannot alter
   layout/type/motion or inject CSS/code. The engine derives repetitive tints/effects and atomically
   writes the mapped custom properties before changing `[data-theme]`; `@theme inline` keeps every utility
-  pointed at the live variables, so components remain unchanged. `tokens.css` retains radii, motion and
-  generic derived formulas — **no spacing** (the numeric scale is `spacing.json` → `generated/spacing.css`)
-  and **no typography at all** (not a value and not an alias onto
+  pointed at the live variables, so components remain unchanged. `tokens.css` retains the spacing basis,
+  radii, motion and generic derived formulas — **no typography at all** (not a value and not an alias onto
   one; the `--font` / `--font-mono` / `--font-accent` / `--font-mono-size` / `--line-height` aliases are
   gone, because a second name for a value is what drifts) and no named theme blocks.
 - The selected id is **server-synced** (`AppConfig.theme`, host-owned and opaque): it arrives in
@@ -177,10 +175,6 @@ The module set: `transport` / `store` / branded `shell`; `ProjectTree`; `FileTre
   code-only mono, the two prose systems, and how to add or change a style — is specced in
   [src/styles/TYPOGRAPHY.md](src/styles/TYPOGRAPHY.md)** (`web-typography`); check changes against it. The
   generator that turns it into CSS is [scripts/SPEC.md](scripts/SPEC.md).
-- **The spacing system — `spacing.json` as the single source of the canonical numeric scale
-  (`0/2/4/8/12/16/24/32/40/64`), the `--spacing: 1px` number = px mechanism, why sizing shares it, and how to add
-  or change a step — is specced in [src/styles/SPACING.md](src/styles/SPACING.md)** (`web-spacing`); check
-  changes against it. Its generator is also [scripts/SPEC.md](scripts/SPEC.md).
 - **Icons: `lucide-react`. Components: shadcn/ui** (Radix primitives), copy-in under `src/components/ui/`
   and themed with our token utilities (`cn()` in `src/lib/utils.ts`) — never shadcn's default oklch
   palette. Use these for accessible menus / dialogs / tooltips.

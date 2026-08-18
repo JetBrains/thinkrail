@@ -4,7 +4,7 @@ type: architecture-design
 status: active
 title: ThinkRail — top-level architecture
 parent: goal-and-requirements
-covers: [client-host-split, cli-entrypoint, wire-contract, transport-endpoint, ui-shell-panels, git-worktrees, remote-tailscale, hydrate-then-stream, domain-vs-view-state]
+covers: [client-host-split, cli-entrypoint, wire-contract, transport-endpoint, ui-shell-panels, git-worktrees, remote-tailscale, hydrate-then-stream, domain-vs-view-state, shared-workspace-layout]
 tags: [v1, architecture]
 ---
 
@@ -53,9 +53,11 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
 4. **Transport endpoint is a parameter.** Defaults to same-origin (`location.host`); a remote client
    points it at the host's Tailscale MagicDNS name.
 5. **UI = panels + shell.** Layout-agnostic, store-driven panels (project→workspace nav, file tree,
-   Monaco editor, changes/diff, workspace-local review, terminal, chat, composer); the **center is a
-   tabbed area holding file tabs + chat tabs**. The shell arranges panels by layout mode: desktop multi-pane /
-   mobile single-view-with-switcher. Both modes share the same panels and store.
+   Monaco editor, changes/diff, workspace-local review, terminal, chat, composer) never know their
+   arrangement. The desktop shell owns a host-synchronized IDE workbench: a recursively split center plus
+   vertically stacked side groups, with terminal tabs eligible in either domain. A future mobile shell may
+   project the same panels differently; desktop docking does not define that projection. Detail:
+   [[submodule-web-shell-layout]].
 6. **Workspaces are git worktrees (V1).** project (git repo) → workspace (`git worktree` on its own
    branch/cwd, under `~/.thinkrail/worktrees`) → {chats, files, terminals}. **Two deliberate
    exceptions, both `kind`-marked on the wire and both *user-owned* — never renamed or reclaimed by
@@ -79,13 +81,19 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
    The client is a **stateless projection**, never a second source of truth. An automatic agent run
    remains active through retries, compaction, and queued continuations: pi's `agent_end` is only an
    attempt boundary and may precede more work; `agent_settled` is the authoritative transition to idle.
-9. **Domain state vs. view state.** *Domain* state — projects, workspaces, **sessions + their
-   transcripts**, git — is backend-owned, shared across all clients, and persistent; every client hydrates
-   it from the host. *View* state — which sessions are open as tabs, the active tab, composer drafts, panel
-   sizes — is **per-client** and lives only in that client (ephemeral, or localStorage for reload-restore);
-   it is never sent to the backend (that would couple clients to each other). Corollary: **closing a tab is
-   a view action, not a domain dispose** — a session stays alive for other clients; disposing/deleting a
-   session is a separate, explicit domain action.
+9. **Domain state, shared placement, and local attention.** *Domain* state — projects, workspaces,
+   **sessions + their transcripts**, terminals, git — is backend-owned, shared, and persistent; every
+   client hydrates it from the host. Workspace **placement state is deliberately shared too**: one
+   versioned host document owns center/side topology, open resource references, tab order, preview
+   identities, folds/visibility, and normalized geometry. Valid full snapshots converge by monotonic
+   revision, but replacement is optimistic-concurrency guarded: a client names its exact accepted revision
+   (or create-only absence), and a stale full replacement conflicts with the current snapshot instead of
+   making the last arrival win. That is placement only, never resource lifetime. *Attention and
+   drafts* — selected tab per group, last-focused group, uncommitted pointer/resize drafts, composer drafts — remain
+   per-client (ephemeral or local reload persistence), so one browser cannot steal another's focus.
+   Corollary: closing a file/chat placement is a shared view action, not a domain dispose — the session
+   remains; terminal close retains its separate explicit PTY-lifetime semantics. Detail:
+   [[submodule-server-layout]] and [[submodule-web-shell-layout]].
 10. **Dependencies pin exact versions.** Every dependency in every manifest pins an **exact** version — no
     ranges (`^` `~` `>` `<` `.x` `*`). Rationale: `pi` ships breaking releases daily, so a floating range is
     a live wire; more broadly, a silent minor/patch bump is the classic irreproducible-build trap. Exact

@@ -6,7 +6,7 @@ import { defaultWorkspaceRow, enterDefaultWorkspace, openFixtureProject } from "
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { seedWorkspaceSession } from "./fixtures/sessions";
 
-// Auto-open on workspace entry: `CenterTabs`' hydrate-on-activate no longer sends every disk-only
+// Auto-open on workspace entry: `WorkspaceWorkbench`'s hydrate-on-activate no longer sends every disk-only
 // session to history. A disk chat with unfinished TODO items (the `SessionSummary.openTodos` decoration,
 // counted host-side from `.thinkrail/context/todos/<sessionId>.json`) auto-opens as a tab — work in
 // progress must survive a host restart as an open chat, not a history entry. And when nothing at all

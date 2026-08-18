@@ -17,11 +17,11 @@ function isInTerminal(target: EventTarget | null): boolean {
 /**
  * The shell's one capture-phase listener for app-wide chords.
  *
- * - `Mod+B` → focus Projects, or collapse it when focus is already inside.
- * - `Mod+J` → the same command for the complete right workspace region.
+ * - `Mod+B` → toggle the active workbench's left side (Project Home keeps its local focus/collapse rail).
+ * - `Mod+J` → toggle the active workbench's right side.
  * - `Ctrl+R` → chat history search rather than browser reload (except inside xterm).
  *
- * Letter chords match `code`, not the layout-dependent produced character. Panel commands intentionally
+ * Letter chords match `code`, not the layout-dependent produced character. Layout commands intentionally
  * win inside xterm; history does not, because Ctrl+R is the shell's reverse-i-search there.
  */
 export function useGlobalHotkeys(actions: GlobalHotkeyActions): void {

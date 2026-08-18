@@ -377,7 +377,7 @@ function TemplateRow({
 				data-testid="template-row"
 				data-name={template.name}
 				data-scope={template.scope}
-				className="group flex items-center gap-8 rounded-[var(--radius-md)] border border-border-default bg-control-bg px-12 py-8"
+				className="group flex items-center gap-8 rounded-[var(--radius-sm)] border border-border-default bg-control-bg px-12 py-8"
 			>
 				<div className="flex min-w-0 flex-1 flex-col">
 					<span className="truncate tr-text-ui text-text-default">{template.name}</span>

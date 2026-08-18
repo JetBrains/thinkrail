@@ -9,135 +9,111 @@ tags: [v1, ui]
 
 ## Responsibility
 
-The responsive frame and UI composition root: arranges panels into the 3-column desktop layout (and,
-later, the mobile single-view-with-switcher).
+The responsive frame and UI composition root: top-level app chrome, active-project/workspace routing,
+theme application, global shortcuts, region error isolation, and composition of layout-agnostic panels into
+the host-synchronized desktop workbench. A future mobile shell may project the same panels differently; it
+must not inherit desktop docking accidentally.
 
 ## Boundary
 
-- **Owns:** `Shell.tsx` — the topbar (the full supplied ThinkRail vector logo, rendered through the
-  semantic `text-primary` colour so it remains legible in every theme; a compact store-derived
-  **location context**; the connection-status pill; and a Settings gear that opens the store-driven
-  `panels/SettingsDialog` via
-  `store.openSettings()` — open state lives in the store, not local, so other surfaces (the Welcome
-  provider warning) can open it too) over a body that branches on whether a workspace is active. The
-  location context makes scope persistent rather than rail-dependent: an **active workspace** renders two
-  lines — `project / workspace display name`, then the git `branch · from baseBranch` metadata line with an optional plain ` · PR #N` (GitHub) or ` · MR !N` (GitLab) suffix
-  (proportional `tr-text-metadata text-text-subtle` per [[web-typography]]); a selected
-  project with no active workspace renders `project / Project home`; no project leaves the logo alone.
-  It follows the existing workspace lifecycle snapshots, so auto-renames update live. Responsive
-  degradation drops the connection label to its still-labelled status dot below `sm`, then drops the
-  base and project prefix before it drops active workspace/branch identity; the full logo stays visible.
-  **Active workspace**
-  → the resizable 3 columns (projects | center | right-over-terminals), with both outer regions following
-  the collapse contract below. **No active workspace** (`activeWorkspaceId == null` — fresh install /
-  after archiving the last one) → the same collapsible projects region beside the `panels/WelcomePanel`;
-  the center/right/terminal surface is not mounted. The welcome-state group uses its own `autoSaveId` so
-  it doesn't clobber the 3-column layout's saved sizes. Mounts the `panels/Toaster` once (outside both
-  layout branches) so notifications show over either state. **Owns the theme DOM side-effect** — the
-  single place that applies the store's
-  (host-owned) opaque `theme` id: a `useEffect` on `store.theme` calls the `themes` module's atomic
-  `applyTheme(theme)` + `writeThemeHint(theme)` (the localStorage first-paint cache). The value flows
-  store ← transport (welcome /
-  `settings.changed`); the shell just performs the swap, so no other component touches `[data-theme]`.
-  **Owns the app-wide keyboard chords** — `useGlobalHotkeys.ts`, mounted once by `Shell`. See
-  "Global chords" below.
+- **Owns:** `Shell` as the one composition root; the topbar and persistent location context; active-workspace
+  versus Project Home/Welcome branching; the single Settings and Toaster mounts; the theme DOM side effect;
+  global keyboard chords; the injected Layout settings section (built-ins, custom-preset CRUD, default,
+  apply, and side-group limit); and the integration of `layout/` with store, transport, panel renderers,
+  and region error boundaries.
 - **Public surface:** `Shell`.
-- **Allowed deps:** `panels`, `store` (status + theme + project/workspace context + the active-chat
-  selector and `requestHistoryOpen`), `transport`, `contracts` (types only), `components/ui`
-  (resizable), `components/ErrorBoundary`, `constants` (branding), `lib` (platform shortcut semantics),
-  `themes` (`applyTheme`/`writeThemeHint`).
-- **Forbidden:** `server`/`shared`/`pi`; being imported by `panels`/`store`/`transport`.
+- **Allowed deps:** child `layout`; `panels`; `chat` app-integration hydration/rendering; `store`,
+  `transport`, contracts (types only), `components/ui`, `components/ErrorBoundary`, `constants`, `lib`, and
+  `themes`.
+- **Forbidden:** server/shared/pi imports; being imported by panels/store/transport; putting arrangement
+  knowledge into a feature panel.
 
-## Error resilience (why panels can't blank the app)
+## Internal modules
 
-Panels render (and lazily import) untrusted-shaped data; a throw during render or a failed lazy chunk
-(e.g. a stale Vite dep → 504) would otherwise propagate to the React root and unmount the **whole**
-tree, leaving the bare gray `--bg-dark` background. So the shell wraps each independently-mounted
-region — **center (`CenterTabs`)**, **right (`RightPanel`)**, **terminals (`TerminalsPanel`)** — in its
-own `components/ErrorBoundary`, keyed with `resetKeys={[activeWorkspaceId]}` so switching workspace
-clears a stuck error. A **last-resort boundary wraps `<Shell />` in `main.tsx`**. `CenterTabs` adds a
-per-tab boundary (`resetKeys={[active.id]}`) so one bad tab keeps the tab strip usable. The boundary
-detects failed dynamic imports (`isChunkLoadError`) and steers those to a page **reload** (re-fetches
-the chunk) rather than an in-place retry. Each region degrades independently — never the whole app.
+Every child is a directory module with `index.ts` as its public surface:
 
-## Collapsible side regions
+- `layout/` ([[submodule-web-shell-layout]]) is the pure workbench engine and renderer. It never imports
+  feature panels, store/transport runtime, or persistence.
+- `layoutSync/` ([[submodule-web-shell-layout-sync]]) owns host hydration, conflict-aware optimistic commits,
+  and attention persistence/reconciliation.
+- `layoutIntents/` ([[submodule-web-shell-layout-intents]]) owns consume-once intent routing into pure layout
+  transactions.
+- `chatReconciliation/` ([[submodule-web-shell-chat-reconciliation]]) owns session/placement/cache/history
+  convergence and chat deep-link orchestration.
+- `terminalReconciliation/` ([[submodule-web-shell-terminal-reconciliation]]) owns catalog/placement
+  convergence without owning PTY lifetime.
+- `legacySelection/` ([[submodule-web-shell-legacy-selection]]) is the sole temporary adapter from workbench
+  attention to migration-era active editor/terminal/preview mirrors.
 
-Only the two **outer** regions collapse: Projects on the left, and the complete workspace stack
-(Specs/Files/Changes/Review over terminals) on the right. The terminal split has no independent collapse
-mode. An expanded region has only its ordinary resize divider—no extra button. Dragging inward past the
-existing minimum snaps it closed; reopening restores its last expanded width.
+The sibling dependency graph is: `layoutSync → layout`; `chatReconciliation → layout + layoutSync`;
+`terminalReconciliation → layout`; `layoutIntents → layout + chatReconciliation +
+terminalReconciliation`; `legacySelection` reaches store selectors/actions only; and
+`WorkspaceWorkbench` composes every orchestration barrel with `layout`, panels, and render callbacks. Siblings
+import only through these barrels. Tests live with the orchestration module that owns the behavior rather than
+making store tests import shell runtime synchronization.
 
-A collapsed panel is zero-sized inside its resizable group while the shell reserves a fixed **28px
-full-height reopen rail** outside the group. This keeps the affordance a stable control width instead of a
-viewport-dependent percentage without unregistering the panel or losing the resize library's remembered
-size. The rail is one native button: the side-appropriate Lucide open-panel icon at the top, a quiet
-vertical `Projects` / `Workspace` label, an ordinary horizontal accessible name, shortcut tooltip,
-hover treatment, and visible focus ring. Click, Enter, or Space reopens and returns focus inside. The
-expanded divider is unavailable while collapsed; the rail is the sole pointer affordance. The hidden
-divider stays registered with the resize library so a pointer-driven collapse still receives its matching
-pointer-up and does not poison the next drag, but it is removed from keyboard focus and hit-testing. Both
-sides may be collapsed together.
+## Composition
 
-Collapsed content stays mounted but is `inert` and `aria-hidden`: no focus can remain in an invisible
-region, while collapsing the right side does not tear down its terminal/session surface. The shell owns
-all panel handles, collapse/focus state, rails, and local persistence; panels remain arrangement-agnostic.
-This is never Zustand or wire state. Project Home/Welcome carries the same left behavior under its existing
-separate saved layout and has no right region.
+The topbar keeps ThinkRail identity, connection state, Settings, and a compact location context. An active
+workspace shows project/workspace plus branch/base/review metadata with progressive responsive degradation.
+A selected project without an active workspace shows Project Home. No selected project leaves the logo
+alone.
 
-Local shell persistence combines each existing `autoSaveId` (layout + collapsed state + nested
-right/terminal proportions) with the pre-drag expanded width captured when a pointer resize crosses the
-collapse threshold. Reopen and reload therefore restore the width from before that collapse, not merely
-the minimum. Nothing syncs the layout between browsers.
+With an active workspace, `Shell` mounts the synchronized workbench from `layout/`; the workbench owns all
+center/side geometry and visibility. Without one, it mounts the existing Welcome surface beside the
+projects navigator using separate client-local geometry—there is no workspace layout document to mutate.
+Toasts mount once above both branches.
 
-## Global chords (why a key handler lives this high up)
+The shell is also the sole theme side-effect owner: store receives the host-selected opaque theme through
+transport; shell applies it atomically through `themes` and writes the local first-paint hint. No other
+component mutates `[data-theme]`.
 
-A chord that must work "wherever the user is" cannot be an element's `onKeyDown` — that only fires while
-that element holds focus, and outside it the *browser* gets the keystroke. `useGlobalHotkeys` is the one
-place that owns such chords: a single window listener in the **capture** phase, so it sees the keystroke
-before any component does and can both `preventDefault` (deny the browser) and `stopPropagation` (deny
-duplicate handling downstream).
+## Workbench behavior
 
-The command set is **`Ctrl+R` → chat history search**, **`Mod+B` → Projects**, and **`Mod+J` → the
-right workspace region** (`Mod` = Cmd on macOS, Ctrl on Windows/Linux). The two region commands are one
-focus-aware command each, not separate focus and visibility toggles:
+The durable workbench grammar, synchronization behavior, and acceptance contract are owned by
+[[submodule-web-shell-layout]]. In particular, the shell—not feature panels—routes open intents to the
+browser's last-focused center group and folds accepted revisions into the workbench. Every replacement names
+its exact accepted base revision (or create-only absence); a typed stale-base conflict installs the returned
+current snapshot, unless a newer accepted broadcast already overtook the response, rolls back that optimistic
+mutation and all dependents, and never automatically resends the stale full document. A nonmatching remote
+commit cancels any uncommitted pointer gesture before replacement;
+an acknowledgement matching the local optimistic base does not cancel a newer gesture begun on that document.
+Browser-local attention is persisted
+best-effort under a host-endpoint/workspace-qualified key, treated as untrusted on read, and structurally
+validated before reconciliation. Every asynchronous reconciliation/hydration effect verifies that its
+captured layout document and transient request are still the current store objects before installing cache
+state or committing a follow-up. Authoritative layout, session, terminal, and resource reads are also
+connection-generation stamped: a replay from an older socket cannot overwrite the fresh reconnect pass, and
+coalescing keys include the generation where a newer pass must proceed independently. Chat-location
+processing pauses behind optimistic writes, so an accepted
+close can clear its request before a stale jump reopens the chat. A peer-restored chat placement repairs this
+browser's render cache and history membership without selecting the tab; placed-chat hydration rechecks the
+semantic placement after the read before installing its cache, and resource hydration otherwise remains a
+separate background concern.
 
-- collapsed → expand to the remembered width and restore the last valid focus inside;
-- expanded with focus elsewhere → restore focus inside without resizing;
-- expanded with focus inside → collapse and restore the last valid focus outside.
+Project/file/change/review/chat/terminal views receive only resource identity, visibility, and container
+bounds. Moving a view cannot change its module dependencies or make it inspect the layout tree. A visible
+terminal is mounted through the layout visibility gate; hidden terminal tabs stay unmounted.
 
-Fallbacks are the region's active/primary control and the active center surface. A disappearing rail or
-collapsed divider never strands focus, and the right command is an app-owned no-op when no workspace
-exists. Rail activation follows the first transition too. Shell-local element/imperative refs route these
-commands; unlike history search, no store request is involved.
+## Error resilience
 
-`Ctrl+R` was previously handled only on the composer textarea, so with focus anywhere else — the file
-tree, Monaco, a diff, the transcript, bare `<body>` — the browser reloaded the app instead. It is
-deliberately *not* a browser-reserved chord (unlike `Ctrl+T`/`Ctrl+W`/`Ctrl+N`), so swallowing it works.
-Routing goes through the store (`selectHistoryTarget` → `requestHistoryOpen`), never a ref: the chord fires
-far outside the chat subtree entirely.
+Every independently mounted workbench resource body—including documents, terminals, and singleton tools—has
+its own keyed region boundary, so one bad lazy panel cannot blank its containing workbench chrome, sibling
+groups, or the shell. Switching
+workspace or resource resets stuck region errors. Failed dynamic chunks offer a page reload rather than retrying the same stale module.
+`main.tsx` retains the last-resort boundary around `Shell`.
 
-Because `CenterTabs` mounts one tab body at a time, "which chat" and "is it even mounted" are the same
-question. `selectHistoryTarget` answers it: the active tab when that's a chat, else the workspace's most
-recently opened one — and `requestHistoryOpen` **activates that tab atomically with the request**, so the
-`ChatView` that mounts is the one that consumes it. Resolving to "no target" over a file/diff tab would
-have been worse than the bug: the chord is swallowed there too, so it would silently do *nothing* over
-Monaco, a diff, or the file tree — the very places this handler exists for. Only a workspace with **no**
-chat tab at all has nothing to open; there the chord is purely swallowed (still never a reload).
+## Global chords
 
-**Matched by the physical key (`e.code`), never the produced character (`e.key`).** `e.key` depends on the
-active layout — on a Cyrillic layout the R key produces `к` — so a `key`-based guard bailed out before
-`preventDefault()` and the browser reloaded the app, defeating the whole point of the hook. `e.code` is
-layout-independent, and it agrees with the terminal one layer down: xterm resolves its own chords through
-`keyCode`, which browsers derive from the US layout. The same rule binds every letter chord in the app —
-the three global commands above plus the history overlay's `Cmd/Ctrl+S`.
+`useGlobalHotkeys` remains the one capture-phase owner of app-wide chords. It routes commands through the
+workbench command surface rather than imperative feature-panel refs:
 
-Two carve-outs, both load-bearing:
-- **Terminals.** `Ctrl+R` from inside `.xterm` passes straight through: reverse-i-search belongs to the PTY
-  (`.xterm` is xterm's own root class, not a hook of ours). `Mod+B` / `Mod+J` remain app-owned there so
-  panel control is global; on Windows/Linux that means readline/tmux Ctrl+B and line-feed Ctrl+J do not
-  reach the PTY.
-- **Reload stays reachable.** `Ctrl+Shift+R` (hard reload), `Cmd+R` (macOS), `F5` and the browser's own
-  reload button are all untouched. Swallowing a reload chord is only acceptable while another one works.
+- `Ctrl+R` opens chat history for the locally selected chat, or the workspace's most-recent chat fallback;
+- `Mod+B` toggles the left side; restoring it focuses its last local group/tab or recreates an eligible
+  singleton tool from its saved restore target when the side is empty;
+- `Mod+J` does the same for the right side.
 
-The shell is the natural owner: it is the composition root, mounted exactly once for the app's lifetime,
-and it already owns the other app-scoped DOM side-effect (the theme).
+Letter chords match physical `KeyboardEvent.code`, never layout-dependent `key`. Terminal `Ctrl+R` still
+belongs to xterm; the two layout chords remain app-owned there. `Ctrl+Shift+R`, macOS `Cmd+R`, F5, and the
+browser reload control remain untouched. All arrangement operations beyond these shortcuts are exposed by
+the layout command/menu system described in [[submodule-web-shell-layout]].

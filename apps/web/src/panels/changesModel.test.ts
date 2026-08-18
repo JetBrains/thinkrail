@@ -5,7 +5,6 @@ import {
 	type ChangeTreeDir,
 	diffTabId,
 	diffTabName,
-	isDiffTabId,
 	scopeKey,
 	scopeLabel,
 	scopeTitle,
@@ -71,12 +70,8 @@ test("scopeKey + diffTabId: the scope is part of a diff tab's identity", () => {
 	// One file, two scopes → two ids (a tab's content must never change meaning under it).
 	const branch = diffTabId("ws1", { kind: "branch" }, "src/a.ts");
 	const commit = diffTabId("ws1", { kind: "commit", sha: "abc123" }, "src/a.ts");
-	expect(branch).toBe("ws1:diff:branch:src/a.ts");
+	expect(branch).toBe("diff:3:ws16:branch8:src/a.ts");
 	expect(commit).not.toBe(branch);
-	// Both stay recognizable as diff tabs of that workspace (the prefix rule), and not of another.
-	expect(isDiffTabId("ws1", branch)).toBe(true);
-	expect(isDiffTabId("ws1", commit)).toBe(true);
-	expect(isDiffTabId("ws2", commit)).toBe(false);
 });
 
 test("diffTabName tags every non-default scope so two tabs of one file are distinguishable", () => {

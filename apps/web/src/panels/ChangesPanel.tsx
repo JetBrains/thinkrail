@@ -1,7 +1,10 @@
-import type { GitFileChange, GitStatus } from "@thinkrail/contracts";
+import type { GitStatus } from "@thinkrail/contracts";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+	type CenterNavigationStamp,
+	isCenterNavigationCurrent,
 	matchesWorktreePath,
+	selectActiveEditorTab,
 	selectDiffBaseRef,
 	selectDiffScope,
 	selectWorkspaceById,
@@ -13,10 +16,11 @@ import {
 import { errorText, getTransport, wsErrorCode } from "../transport";
 import { BranchPicker } from "./BranchPicker";
 import { useBranchList } from "./branches";
-import { ChangeFileRow } from "./ChangeFileRow";
+import { ChangeRowActions } from "./ChangeRowActions";
 import { ChangesScopeMenu } from "./ChangesScopeMenu";
 import { ChangesTree } from "./ChangesTree";
-import { diffTabId, isDiffTabId, scopeKey, splitPath, statusNameClass } from "./changesModel";
+import { scopeKey, splitPath, statusNameClass } from "./changesModel";
+import { DiffStatBadge } from "./DiffStatBadge";
 import { openDiffInTab } from "./openTabs";
 import { ToggleSegment } from "./ToggleSegment";
 import { useWorkspaceRead } from "./useWorkspaceRead";
@@ -58,7 +62,10 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 	// it joins the scope in the read key: re-pointing the target (which arrives as a `workspace.updated`
 	// broadcast, never optimistically) re-reads the list exactly like a scope switch.
 	const baseRef = useAppStore((s) => selectDiffBaseRef(s, workspaceId));
-	const activeTabId = useAppStore((s) => s.activeTabByWorkspace[workspaceId] ?? null);
+	const activeDiffTab = useAppStore((state) => {
+		const tab = selectActiveEditorTab(state, workspaceId);
+		return tab?.kind === "diff" ? tab : null;
+	});
 
 	// The changed-file list, re-read on the workspace's fs tick *and* on a scope/target change (the `readKey`); a
 	// switch clears the list and its deep-link highlight, a failed re-read keeps the last good list (a failed
@@ -125,9 +132,9 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 	// either way. Stable per workspace + scope so the deep-link effect below can depend on it without
 	// re-firing per render.
 	const openDiff = useCallback(
-		(path: string, intent: TabIntent) => {
+		(path: string, intent: TabIntent, navigation?: CenterNavigationStamp | null) => {
 			setHighlighted(path);
-			void openDiffInTab(workspaceId, scope, path, intent);
+			void openDiffInTab(workspaceId, scope, path, intent, navigation);
 		},
 		[workspaceId, scope],
 	);
@@ -151,11 +158,14 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 	// read that lands after the count moved.
 	useEffect(() => {
 		if (!status || changesRequest?.workspaceId !== workspaceId) return;
+		if (useAppStore.getState().changesRequest !== changesRequest) return;
 		const want = changesRequest.path;
 		const match = status.changes.find((c) => matchesWorktreePath(want, c.path));
-		const overtaken =
-			selectWorkspaceNavTick(useAppStore.getState(), workspaceId) !== changesRequest.navTick;
-		if (match && !overtaken) openDiff(match.path, "preview");
+		const currentState = useAppStore.getState();
+		const overtaken = changesRequest.navigation
+			? !isCenterNavigationCurrent(currentState, workspaceId, changesRequest.navigation)
+			: selectWorkspaceNavTick(currentState, workspaceId) !== changesRequest.navTick;
+		if (match && !overtaken) openDiff(match.path, "preview", changesRequest.navigation);
 		else setHighlighted(match ? match.path : want);
 		useAppStore.getState().clearChangesRequest();
 	}, [changesRequest, status, workspaceId, openDiff]);
@@ -164,16 +174,16 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 	// soon as a diff tab of this workspace is the active center tab, so closing that tab later doesn't
 	// resurrect a stale highlight.
 	useEffect(() => {
-		if (isDiffTabId(workspaceId, activeTabId)) setHighlighted(null);
-	}, [activeTabId, workspaceId]);
+		if (activeDiffTab) setHighlighted(null);
+	}, [activeDiffTab]);
 
 	// Exactly one row is ever selected: while a diff tab of this workspace is active, that tab is the sole
 	// signal (an active tab matches exactly one path); only when none is open does the deep-link highlight
 	// apply. This can't show two rows at once — unlike OR-ing the two signals, where a stale highlight plus
 	// a different active tab would both read as selected.
 	const isActive = (path: string) =>
-		isDiffTabId(workspaceId, activeTabId)
-			? activeTabId === diffTabId(workspaceId, scope, path)
+		activeDiffTab
+			? activeDiffTab.path === path && scopeKey(activeDiffTab.scope) === scopeKey(scope)
 			: highlighted === path;
 
 	return (
@@ -184,7 +194,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 				// The toolbar holds the scope selector and the target-branch picker as well as the List|Tree
 				// segments, so it is named for what it is, not for the one control it used to hold.
 				aria-label="Changes scope and view"
-				className="flex h-panel-header-row shrink-0 items-center gap-4 overflow-clip border-border-default border-b bg-container-header-bg px-12"
+				className="flex h-panel-header-row shrink-0 items-center gap-4 overflow-clip border-border-default border-b bg-container-header-bg px-8"
 			>
 				<div className="mr-auto flex min-w-0 items-center gap-4">
 					{/* Keyed ON PURPOSE (do not "clean up") by the menu's full identity — workspace **and** target ref:
@@ -225,11 +235,9 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 					onClick={() => setChangesView("tree")}
 				/>
 			</div>
-			{/* The unified content container (below the toolbar, which is already aligned at px-12): 12px on
-			    all four sides is the only outer edge; rows carry px-4 internally. */}
-			<div className="min-h-0 flex-1 overflow-auto p-12">
+			<div className="min-h-0 flex-1 overflow-auto">
 				{status === null && error !== null ? (
-					<div data-testid="changes-error" className="flex flex-col items-start gap-4 px-4 py-4">
+					<div data-testid="changes-error" className="flex flex-col items-start gap-4 px-8 py-4">
 						<p className="tr-text-metadata text-feedback-error">
 							Could not read the changes: {error}
 						</p>
@@ -243,93 +251,77 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 						</button>
 					</div>
 				) : status === null ? (
-					<p className="px-4 py-4 tr-text-metadata text-text-muted">Loading…</p>
+					<p className="px-8 py-4 tr-text-metadata text-text-muted">Loading…</p>
 				) : status.changes.length === 0 ? (
-					<p data-testid="changes-empty" className="px-4 py-4 tr-text-metadata text-text-muted">
+					<p data-testid="changes-empty" className="px-8 py-4 tr-text-metadata text-text-muted">
 						No changes in this scope.
 					</p>
 				) : changesView === "tree" ? (
 					<ChangesTree changes={status.changes} onOpen={openDiff} isActive={isActive} />
 				) : (
 					<ul>
-						{status.changes.map((change) => (
-							<ChangeListRow
-								key={change.path}
-								change={change}
-								active={isActive(change.path)}
-								onOpen={openDiff}
-							/>
-						))}
+						{status.changes.map((change) => {
+							const { dir, base } = splitPath(change.path);
+							return (
+								<li key={change.path}>
+									<ChangeRowActions
+										path={change.path}
+										active={isActive(change.path)}
+										onView={() => openDiff(change.path, "preview")}
+									>
+										{({ onContextMenu }) => (
+											<button
+												type="button"
+												onContextMenu={onContextMenu}
+												data-testid="change-item"
+												data-status={change.status}
+												data-active={isActive(change.path) ? true : undefined}
+												onClick={() => openDiff(change.path, "preview")}
+												onDoubleClick={() => openDiff(change.path, "keep")}
+												title={change.path}
+												// No background of its own: the WRAPPER paints the row's hover/selected band, which has
+												// to span the trailing ⌄ slot too. Two painters would make the row read as cut off at
+												// this button's edge (and hide that the wrapper stopped painting).
+												className="flex min-w-0 flex-1 items-center gap-8 px-8 py-4 text-left tr-text-ui"
+											>
+												{/* The full relative path: a muted directory prefix, a bright basename — and the dir
+												    yields **completely** before the basename gives up a pixel, because the name is what
+												    a user scans. That ordering is structural, not a ratio: the dir is the only shrinkable
+												    item, so it absorbs the entire deficit, down to zero width if the name needs the whole
+												    row. (A shrink *ratio* — this was `shrink-[20]` vs `shrink` — only approximates it:
+												    flex splits the deficit in proportion to factor × basis, so the basename always loses a
+												    slice. That slice was sub-pixel at the old type scale and ~2px at 14px, which is how a
+												    12-character `shortName.ts` started rendering with an ellipsis.) */}
+												<span className="flex min-w-0 flex-1 items-baseline">
+													{dir ? (
+														<span
+															data-testid="change-path-dir"
+															className="min-w-0 shrink truncate text-text-muted"
+														>
+															{dir}
+														</span>
+													) : null}
+													{/* `shrink-0` **plus** `max-w-full`: flex never steals width from the name, but
+													    max-width still clamps it to the row, so a long ROOT-level basename (no dir prefix
+													    to absorb anything) truncates instead of pushing the +/− badge out of the panel —
+													    the same rule DiffPane's header chip follows. */}
+													<span
+														data-testid="change-path-base"
+														className={`max-w-full shrink-0 truncate ${statusNameClass(change.status) || "text-text-muted"}`}
+													>
+														{base}
+													</span>
+												</span>
+												<DiffStatBadge added={change.added ?? 0} removed={change.removed ?? 0} />
+											</button>
+										)}
+									</ChangeRowActions>
+								</li>
+							);
+						})}
 					</ul>
 				)}
 			</div>
 		</div>
-	);
-}
-
-/**
- * One flat-list changed-file row: the full relative path (a muted directory prefix + the status-coloured
- * basename) and the `+/−` badge, inside the shared {@link ChangeFileRow} shell. The folder view's
- * counterpart is `ChangesTree`'s `ChangeNodeRow`; both spend the same gestures, menu and badge, and differ
- * only in this body.
- */
-function ChangeListRow({
-	change,
-	active,
-	onOpen,
-}: {
-	change: GitFileChange;
-	active: boolean;
-	onOpen: (path: string, intent: TabIntent) => void;
-}) {
-	const { dir, base } = splitPath(change.path);
-	return (
-		<ChangeFileRow
-			path={change.path}
-			active={active}
-			added={change.added ?? 0}
-			removed={change.removed ?? 0}
-			onOpen={onOpen}
-		>
-			{({ onClick, onDoubleClick, onContextMenu, badge }) => (
-				<button
-					type="button"
-					onContextMenu={onContextMenu}
-					data-testid="change-item"
-					data-status={change.status}
-					data-active={active ? true : undefined}
-					onClick={onClick}
-					onDoubleClick={onDoubleClick}
-					title={change.path}
-					// No background of its own: the ChangeFileRow wrapper paints the row's hover/selected band,
-					// which has to span the trailing action slot too (two painters would read as cut off here).
-					className="flex min-w-0 flex-1 items-center gap-8 px-4 py-4 text-left tr-text-ui"
-				>
-					{/* The full relative path: a muted directory prefix, a bright basename. The dir is the only
-					    shrinkable item, so it yields COMPLETELY (down to zero width) before the basename — the name
-					    is what a user scans — gives up a pixel. */}
-					<span className="flex min-w-0 flex-1 items-baseline">
-						{dir ? (
-							<span
-								data-testid="change-path-dir"
-								className="min-w-0 shrink truncate text-text-muted"
-							>
-								{dir}
-							</span>
-						) : null}
-						{/* `shrink-0` + `max-w-full`: flex never steals width from the name, but max-width still
-						    clamps it to the row, so a long root-level basename truncates instead of pushing the
-						    +/− badge out of the panel. */}
-						<span
-							data-testid="change-path-base"
-							className={`max-w-full shrink-0 truncate ${statusNameClass(change.status) || "text-text-muted"}`}
-						>
-							{base}
-						</span>
-					</span>
-					{badge}
-				</button>
-			)}
-		</ChangeFileRow>
 	);
 }

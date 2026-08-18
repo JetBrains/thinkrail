@@ -15,7 +15,7 @@ import { cssColorToHex } from "@/lib";
 import { useAppStore } from "../store";
 import { onThemeSwap } from "../themes";
 import { getTransport } from "../transport";
-import { createPtySizeSync } from "./ptySizeSync";
+import { createPtySizeSync, runAfterTerminalRelayout } from "./ptySizeSync";
 import { createTerminalPrebindBuffer } from "./terminalPrebindBuffer";
 
 /**
@@ -25,11 +25,11 @@ import { createTerminalPrebindBuffer } from "./terminalPrebindBuffer";
 const RESIZE_DEBOUNCE_MS = 60;
 
 /**
- * Extra vertical leading between terminal rows, in px, applied through xterm's own `lineHeight`
- * multiplier (derived from the code font size so it stays this many pixels regardless of the token).
- * xterm owns row spacing while the typography tokens own the font, so this is not a parallel type style.
+ * Deadline on the pre-attach web-font relayout: `relayout()` stays *pending* (not rejected) while a font
+ * request stalls, so an unbounded wait would leave the pane blank with no shell. Generous enough for a cold
+ * cache over a slow remote link; see the panels SPEC for the fallback semantics.
  */
-const TERMINAL_ROW_EXTRA_PX = 2;
+const RELAYOUT_TIMEOUT_MS = 4000;
 
 /**
  * Fire-and-forget terminal writes. Reconnect replay + host request deduplication still executes a submitted
@@ -167,19 +167,15 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 		const host = hostRef.current;
 		if (!host) return;
 
-		const codeFontSize = Number.parseFloat(cssVar("--tr-font-size-s13") ?? "") || 13;
 		const term = new XTerm({
 			allowProposedApi: true,
 			cursorBlink: true,
 			// Font family + size are the primitives behind `code.text` (typography.json → textStyles.code):
 			// both come from the same tokens the CSS emits, so the terminal can never drift from code text.
-			// Row spacing stays xterm's own `lineHeight` mechanism (the semantic token owns the font, xterm
-			// owns line spacing, so we deliberately do not feed it a CSS line-height): a small +2px of leading
-			// derived from the font size, NOT the 1.5 `code` line-height token (which would be ~6px, far too
-			// airy for a terminal).
-			fontSize: codeFontSize,
+			// Row height stays xterm's own `lineHeight` mechanism (default 1.0) — the semantic token owns the
+			// font, xterm owns line spacing, so we deliberately do not feed it a CSS line-height.
+			fontSize: Number.parseFloat(cssVar("--tr-font-size-s13") ?? "") || 13,
 			fontFamily: cssVar("--tr-font-family-code") ?? "monospace",
-			lineHeight: (codeFontSize + TERMINAL_ROW_EXTRA_PX) / codeFontSize,
 			theme: readTheme(),
 			scrollback: 5000,
 		});
@@ -317,22 +313,6 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 
 		let disposed = false;
 
-		// Our code font ships as per-alphabet woff2 subsets (`font-display: swap`), so the Cyrillic/CJK file
-		// is only fetched once such a glyph is first drawn. xterm measures the character cell exactly once, at
-		// construction, against whatever had loaded by then — and never re-measures (unlike Monaco, which
-		// treats an early measurement as untrusted). Left alone, non-Latin text renders into cells sized for
-		// the fallback font (drifting glyphs, a misplaced cursor) and the PTY holds the wrong cols/rows. The
-		// addon re-measures once `document.fonts.ready` resolves; we await that ourselves rather than letting
-		// its constructor fire it, so we know when to re-fit and push the corrected size to the shell.
-		void webFonts
-			.relayout()
-			.then(() => {
-				if (!disposed) applyFit();
-			})
-			.catch(() => {
-				// A font that never resolves must not break the terminal — the construction-time fit stands.
-			});
-
 		/**
 		 * Ask the host for this tab's shell.
 		 *
@@ -404,7 +384,10 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 					else finishAttach();
 				})
 				.catch(() => {
-					if (disposed) return;
+					if (disposed || attachGeneration !== startedAt || prebind !== attemptPrebind) {
+						attemptPrebind.stop();
+						return;
+					}
 					// Reconnects replay this request, so this is a real host refusal or deadline rather than an
 					// ambiguous dropped response. Stop pre-bind intake: this failed pane must not retain every other
 					// terminal's addressed output for the rest of its life.
@@ -414,7 +397,20 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 				});
 		};
 		reattachRef.current = attach;
-		attach();
+		void runAfterTerminalRelayout(
+			() => webFonts.relayout(),
+			() => {
+				if (disposed) return;
+				applyFit();
+				attach();
+			},
+			{
+				timeoutMs: RELAYOUT_TIMEOUT_MS,
+				// dispose() nulls the addon's terminal, so the timed-out relayout's eventual settlement skips its
+				// re-measuring fontFamily toggle instead of re-laying-out an already-attached terminal.
+				onTimeout: () => webFonts.dispose(),
+			},
+		);
 
 		const resizeObserver = new ResizeObserver(scheduleFit);
 		resizeObserver.observe(host);
@@ -469,11 +465,7 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 			data-visible="true"
 			className="absolute inset-0"
 		>
-			{/* 12px inset on all four sides of the terminal content. Padding lives on the xterm mount host
-			    (border-box, so `h-full w-full` never overflows): FitAddon derives cols/rows from this host's
-			    CONTENT box, which already excludes the padding, so the grid recalculates against the inset area
-			    and the viewport/scrollbar sit 12px inside the panel edge. The header owns its own spacing. */}
-			<div ref={hostRef} className="h-full w-full p-12" />
+			<div ref={hostRef} className="h-full w-full" />
 			{detached ? (
 				<div className="absolute inset-0 flex flex-col items-center justify-center gap-8 bg-overlay">
 					<p className="tr-text-metadata text-text-muted">This terminal is open somewhere else.</p>

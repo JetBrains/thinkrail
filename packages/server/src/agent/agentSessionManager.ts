@@ -29,6 +29,7 @@ import type {
 	TranscriptMessage,
 	WireModel,
 } from "@thinkrail/contracts";
+import { isTranscriptMessageRole } from "@thinkrail/contracts";
 import { ANSWERABILITY_ERRORS, assessAnswerability, buildAnswersMessage } from "./askUserQuestion";
 import { buildResourceLoader, toSkillCommands } from "./extensions";
 import {
@@ -532,7 +533,7 @@ export async function ensureSessionAttached(
 }
 
 /**
- * A session's transcript (pi-canonical user/assistant/toolResult messages) + its current summary. Re-opens
+ * A session's transcript (the roles `isTranscriptMessageRole` admits) + its current summary. Re-opens
  * the session from disk first if it isn't live, so a reopened chat is continuable and its summary accurate.
  */
 export async function getSessionMessages(
@@ -550,11 +551,12 @@ export async function getSessionMessages(
 		entry = sessions.get(sessionId);
 		if (!entry) throw new Error(`Unknown session: ${sessionId}`);
 	}
-	// `custom` rides along for the ask-user-answers pairing (the card reads `details.toolCallId`); the
-	// web renders only the customTypes it knows and ignores the rest.
-	const renderable = new Set(["user", "assistant", "toolResult", "custom"]);
+	// Which roles travel is the wire's policy, not this function's: `history`'s search index counts
+	// positions by the same guard, and a set restated here could drift from it by one role and shift every
+	// later jump anchor (see `isTranscriptMessageRole`). `custom` carries the ask-user-answers pairing;
+	// `compactionSummary` is pi's marker for what compaction summarized away.
 	const messages = entry.session.messages.filter((m) =>
-		renderable.has(m.role),
+		isTranscriptMessageRole(m.role),
 	) as TranscriptMessage[];
 	return { summary: summaryOf(sessionId, entry), messages };
 }

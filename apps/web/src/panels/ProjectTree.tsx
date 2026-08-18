@@ -66,7 +66,12 @@ export function ProjectTree() {
 			.catch(() => {});
 	}, []);
 
-	const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+	// The Projects view is rendered by both Project Home and the workspace layout, so crossing that boundary remounts
+	// this component. Seed the selected project open: a project-row click promises to reveal its workspaces,
+	// and that promise must survive the hand-off to Project Home rather than collapsing on the new instance.
+	const [expanded, setExpanded] = useState<Set<string>>(
+		() => new Set(selectedProjectId ? [selectedProjectId] : []),
+	);
 	// The project a New-Workspace dialog is open for (null = closed). The "+" opens it instead of
 	// creating a workspace directly.
 	const [dialogProjectId, setDialogProjectId] = useState<string | null>(null);
@@ -236,7 +241,7 @@ export function ProjectTree() {
 
 	return (
 		<nav className="flex flex-col gap-8">
-			<header className="flex h-panel-header-row items-center justify-between pr-4 pl-12">
+			<header className="flex h-28 items-center justify-between pr-4 pl-8">
 				<span className="tr-text-eyebrow text-text-muted">Projects</span>
 				<AddProjectMenu
 					recentProjects={recentProjects}
@@ -280,8 +285,7 @@ export function ProjectTree() {
 								onRestoreFocus={() => focusProjectNameOrAdd(project.id)}
 							/>
 							{isExpanded && list !== undefined && (
-								// 4px above the first workspace (project → workspace) and 4px between workspace blocks.
-								<ul className="mt-4 flex flex-col gap-4">
+								<ul className="flex flex-col">
 									{list.map((ws) => (
 										<WorkspaceRow
 											key={ws.id}
@@ -562,8 +566,8 @@ function WorkspaceRow({
 					<Icon className={`size-16 shrink-0 ${isActive ? "text-primary" : "text-text-muted"}`} />
 					{/* Name on top, the git branch on a second line beneath it — the display name is decoupled
 					    from the branch, so surface both without crowding one line. The branch line is hidden when
-					    they coincide, so pristine/legacy rows stay a single compact line. 2px between the two. */}
-					<span className="flex min-w-0 flex-1 flex-col gap-2">
+					    they coincide, so pristine/legacy rows stay a single compact line. */}
+					<span className="flex min-w-0 flex-1 flex-col">
 						<span
 							data-testid="workspace-name"
 							className={`truncate tr-text-ui leading-tight ${isActive ? "text-primary" : "text-text-muted"}`}

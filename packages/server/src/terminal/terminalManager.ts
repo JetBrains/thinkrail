@@ -21,6 +21,7 @@ import {
 	type TerminalDeliveryResult,
 } from "./outputBatcher";
 import { createOutputRecorder, type OutputRecorder } from "./outputRecorder";
+import { type PtyGrid, resizePtyIfChanged } from "./ptyGrid";
 import { terminalShellArgs } from "./shellArgs";
 import { hasChildProcesses } from "./shellBusy";
 
@@ -37,6 +38,7 @@ interface TerminalEntry {
 	output: OutputBatcher;
 	/** The rolling window replayed into a fresh xterm on attach. */
 	recorder: OutputRecorder;
+	grid: PtyGrid;
 }
 
 /** A tab, which exists whether or not a shell is currently running behind it. */
@@ -187,11 +189,14 @@ function spawnForTab(
 	if (!ws) throw new Error(`Unknown workspace: ${workspaceId}`);
 
 	const shell = process.env.SHELL ?? "/bin/bash";
+	const grid = {
+		cols: size.cols ?? DEFAULT_PTY_SIZE.cols,
+		rows: size.rows ?? DEFAULT_PTY_SIZE.rows,
+	};
 	const pty = spawn(shell, terminalShellArgs(process.platform), {
 		name: "xterm-256color",
 		cwd: ws.worktreePath,
-		cols: size.cols ?? DEFAULT_PTY_SIZE.cols,
-		rows: size.rows ?? DEFAULT_PTY_SIZE.rows,
+		...grid,
 		env: ptyEnv(),
 	});
 
@@ -218,6 +223,7 @@ function spawnForTab(
 		attachedClient: clientKey,
 		output,
 		recorder,
+		grid,
 	};
 	terminals.set(id, entry);
 	ptyByTab.set(tabIndex(workspaceId, tabKey), id);
@@ -294,7 +300,10 @@ export function attachTerminal(
 		}
 		existing.attachedClient = clientKey;
 		if (options.cols !== undefined && options.rows !== undefined) {
-			existing.pty.resize(options.cols, options.rows);
+			resizePtyIfChanged(existing.pty, existing.grid, {
+				cols: options.cols,
+				rows: options.rows,
+			});
 		}
 		const replay = existing.recorder.snapshot();
 		// The replay already shows everything the batcher is holding, so delivering that afterwards would paint
@@ -363,7 +372,7 @@ export function resizeTerminal(id: string, cols: number, rows: number, caller: s
 		announceDisplaced(id, caller);
 		return;
 	}
-	entry.pty.resize(cols, rows);
+	resizePtyIfChanged(entry.pty, entry.grid, { cols, rows });
 }
 
 function disposeTerminalEntry(id: string, entry: TerminalEntry): void {

@@ -7,8 +7,8 @@ import { useWorkspaceRead } from "./useWorkspaceRead";
  * Own the active workspace's `spec.graph` snapshot in the store, kept current by `useWorkspaceRead` (so the
  * re-read triggers and the stale-response guard are the shared ones, not a third copy).
  *
- * It lives in a hook called by the always-mounted `RightPanel`, NOT inside `SpecsPanel`, because the
- * snapshot is app-wide: the chat's turn divider classifies a round's written files as specs with it
+ * It lives in a hook called by `WorkspaceWorkbench`, NOT inside `SpecsPanel`, because the snapshot is
+ * app-wide: the chat's turn divider classifies a round's written files as specs with it
  * (`specPathMatcher`). `SpecsPanel` only exists while its tab is showing, so owning the read there would
  * mean a user sitting on Changes silently un-teaches the chat what a spec is — and every spec the agent
  * writes gets counted as a changed file, deep-linking to the git view that cannot show a gitignored one.

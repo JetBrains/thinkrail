@@ -87,7 +87,11 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `provider.jbcentralConnect`→connected (central) — per `submodule-server-analytics`,
   feature modules never track), and
   `stop()` → agent-session cleanup, then `persistTerminalSessions()` **before** `closeAllTerminals()`, then
-  socket close); `boot.ts` (`bootHost` → resolve the
+  socket close); `crashLog.ts` (`installCrashLog` — the `uncaughtException`/`unhandledRejection` report
+  appended to `<dataDir>/logs/crash.log` and echoed to stderr, then `exit(1)`: in-process pi means such a
+  fault is the whole host's, and a launcher started without a terminal otherwise loses its only trace.
+  Never a recovery, and never installed under `NODE_ENV=test` — a unit-test process reports its own
+  faults); `boot.ts` (`bootHost` → install that report first, resolve the
   login-shell PATH, pick the port per `portMode` (`"exact"` vs `"free"`), start `createServer`, and
   install SIGINT/SIGTERM handlers that **settle before exit**: `settleSessionsForShutdown()` — abort
   streaming sessions and wait bounded, so pi persists their "Operation aborted" tool results and
@@ -211,7 +215,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
 - **Public surface (barrel):** `createServer`, `CreateServerOptions`, `RunningServer`, `bootHost`,
   `BootHostOptions`, `BootedHost`.
 - **Allowed deps:** `contracts` (`PROTOCOL_VERSION`, `WS_CHANNELS`); `shared` (`freePort`, `shellEnv` — for
-  `boot.ts`); the feature modules it composes (per the parent dependency graph, incl. `fs`'s
+  `boot.ts`); `persistence` (`dataDir` — where `crashLog.ts` writes); the feature modules it composes (per the parent dependency graph, incl. `fs`'s
   `resolveWorktreeFile` for the `/files` route); Bun/Node.
 - **Forbidden:** being imported by any feature module; importing `web`/`cli`/`desktop`.
 

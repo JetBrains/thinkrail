@@ -64,7 +64,7 @@ export function ReviewThreadCard({
 		>
 			<div className="review-thread-head">
 				<span
-					className={`review-thread-dot review-thread-dot-${thread.status === "sent" ? "sent" : "draft"}`}
+					className={`review-thread-dot rounded-full review-thread-dot-${thread.status === "sent" ? "sent" : "draft"}`}
 				/>
 				<span className="review-thread-label tr-text-eyebrow">
 					{thread.anchorState === "outdated" ? `${thread.status} · outdated` : thread.status}

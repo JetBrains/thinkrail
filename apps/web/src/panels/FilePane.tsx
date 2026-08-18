@@ -18,7 +18,7 @@ const loading = (
 );
 
 /**
- * The center pane for a file tab. Non-markdown files render Monaco directly; markdown files open
+ * The Editor Pane body for a file tab. Non-markdown files render Monaco directly; markdown files open
  * **rendered by default** with a `Preview | Source` toggle in a slim header (the choice lives on the
  * tab, `store.setFileTabView`, so it survives tab switches).
  *
@@ -48,8 +48,9 @@ export function FilePane({ tab }: { tab: FileTab }) {
 		read: () =>
 			getTransport().request("fs.readFile", { workspaceId: tab.workspaceId, path: tab.path }),
 		applyFresh: ({ content }, tick) =>
-			useAppStore.getState().updateFileTabContent(tab.id, content, tick),
-		keepCurrent: (tick) => useAppStore.getState().updateFileTabContent(tab.id, tab.content, tick),
+			useAppStore.getState().updateFileTabContent(tab.workspaceId, tab.id, content, tick),
+		keepCurrent: (tick) =>
+			useAppStore.getState().updateFileTabContent(tab.workspaceId, tab.id, tab.content, tick),
 	});
 
 	const editor = (
@@ -68,7 +69,7 @@ export function FilePane({ tab }: { tab: FileTab }) {
 					data-testid="file-review-toolbar"
 					role="toolbar"
 					aria-label="Review actions"
-					className="flex h-panel-header-row shrink-0 items-center justify-end gap-4 border-border-default border-b bg-container-header-bg px-12"
+					className="flex h-32 shrink-0 items-center justify-end gap-4 border-border-default border-b bg-container-header-bg px-8"
 				>
 					<SendReviewButton workspaceId={tab.workspaceId} path={tab.path} />
 				</div>
@@ -85,7 +86,7 @@ export function FilePane({ tab }: { tab: FileTab }) {
 				role="toolbar"
 				aria-label="Markdown view mode"
 				// `justify-end`: header actions are right-aligned, matching the DiffPane / Changes toolbars.
-				className="flex h-panel-header-row shrink-0 items-center justify-end gap-4 border-border-default border-b bg-container-header-bg px-12"
+				className="flex h-32 shrink-0 items-center justify-end gap-4 border-border-default border-b bg-container-header-bg px-8"
 			>
 				<SendReviewButton workspaceId={tab.workspaceId} path={tab.path} />
 				<ToggleSegment

@@ -1,5 +1,6 @@
 import type {
 	AskUserQuestionResult,
+	GitFileChange,
 	TodoGroupItem,
 	TodoItem,
 	TodoPlan,
@@ -10,6 +11,59 @@ import type { ChatTurn } from "./types";
 // Pure derivations for the chat TODO plan's rendering (SPEC §Chat TODO plan): the group-as-task view
 // (group = one user ask, items = its steps) and the glance state ("is the system working or waiting on
 // me?"). Presentational modules consume these via props; nothing here touches the store or transport.
+
+/**
+ * An item's host-attached change set, resolved for rendering (SPEC §Chat TODO plan) — the one derivation
+ * shared by the plan popup's "N files" chip, the plan page's review rows, and the markdown export, so
+ * they can never disagree on what an item produced:
+ * - `commit` — the item's work was committed; `files` is the host-derived change list (path + status +
+ *   `+/−`, rides the DTO). A commit artifact **without** `files` is an unresolvable sha (GC'd rewrite) →
+ *   degrade silently: `null`, no affordance, never a broken diff tab.
+ * - `paths` — the no-commit fallback: live-diff `change` paths (branch scope).
+ */
+export type ItemChangeSet =
+	| { kind: "commit"; sha: string; files: GitFileChange[] }
+	| { kind: "paths"; paths: string[] };
+
+export function itemChangeSet(item: TodoItem): ItemChangeSet | null {
+	const artifacts = item.artifacts ?? [];
+	const commit = artifacts.find((a) => a.kind === "commit" && !!a.sha);
+	if (commit?.sha) {
+		return commit.files && commit.files.length > 0
+			? { kind: "commit", sha: commit.sha, files: commit.files }
+			: null;
+	}
+	const paths = artifacts.flatMap((a) => (a.kind === "change" && a.path ? [a.path] : []));
+	return paths.length > 0 ? { kind: "paths", paths } : null;
+}
+
+/** `git status`-style one-letter file marker — the one status→letter mapping (page rows + the export). */
+export function statusLetter(status: GitFileChange["status"]): string {
+	switch (status) {
+		case "added":
+		case "untracked":
+			return "A";
+		case "deleted":
+			return "D";
+		case "renamed":
+			return "R";
+		default:
+			return "M";
+	}
+}
+
+/** A commit change set's totals — the one summary derivation (the page's header row + the export). */
+export function changeSetStat(files: GitFileChange[]): {
+	count: number;
+	added: number;
+	removed: number;
+} {
+	return {
+		count: files.length,
+		added: files.reduce((sum, f) => sum + (f.added ?? 0), 0),
+		removed: files.reduce((sum, f) => sum + (f.removed ?? 0), 0),
+	};
+}
 
 /** done / total across a group's steps — the header badge ("2/3"). */
 export function groupProgress(group: TodoGroupItem): { done: number; total: number } {

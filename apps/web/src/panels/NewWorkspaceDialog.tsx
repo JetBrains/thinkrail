@@ -84,7 +84,7 @@ export function reconcileModel(
 
 /** A shared pill-trigger look for the project + branch pickers (mockup `.pill`). */
 const PILL =
-	"flex h-32 min-w-0 items-center gap-8 rounded-[var(--radius-md)] border border-control-border-default bg-clip-padding bg-control-bg px-8 tr-text-ui text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:border-control-border-active data-[open=true]:bg-control-bg-selected";
+	"flex h-32 min-w-0 items-center gap-8 rounded-[var(--radius-sm)] border border-control-border-default bg-clip-padding bg-control-bg px-8 tr-text-ui text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:border-control-border-active data-[open=true]:bg-control-bg-selected";
 
 /**
  * The start-working surface: a **target control** chooses where the work runs — an isolated worktree
@@ -513,7 +513,7 @@ export function NewWorkspaceDialog({
 				{selectedProject && selectedProject.trusted !== true && aliasSkills.length > 0 ? (
 					<div
 						data-testid="ws-trust-notice"
-						className="flex w-full items-center gap-8 rounded-[var(--radius-md)] border border-border-default border-l-[3px] border-l-feedback-warning bg-feedback-warning-subtle px-12 py-8 text-left"
+						className="flex w-full items-center gap-8 rounded-[var(--radius-sm)] border border-border-default border-l-[3px] border-l-feedback-warning bg-feedback-warning-subtle px-12 py-8 text-left"
 					>
 						<TriangleAlert className="size-16 shrink-0 text-feedback-warning" />
 						<span className="min-w-0 flex-1 tr-text-ui text-text-default">
@@ -537,7 +537,7 @@ export function NewWorkspaceDialog({
 					{promptNote ? (
 						<p
 							data-testid="ws-prompt-note"
-							className="mb-4 flex items-start gap-8 rounded-[var(--radius-md)] border border-primary-muted bg-clip-padding bg-primary-subtle px-12 py-8 text-left text-text-muted tr-text-metadata leading-snug"
+							className="mb-4 flex items-start gap-8 rounded-[var(--radius-sm)] border border-primary-muted bg-clip-padding bg-primary-subtle px-12 py-8 text-left text-text-muted tr-text-metadata leading-snug"
 						>
 							<Sparkles className="mt-2 size-14 shrink-0 text-primary" />
 							<span>{promptNote}</span>
@@ -609,7 +609,7 @@ export function NewWorkspaceDialog({
 						data-testid="create-workspace"
 						disabled={creating}
 						onClick={() => void create()}
-						className="flex h-32 shrink-0 items-center gap-8 rounded-[var(--radius-md)] bg-control-primary-bg px-12 tr-text-action text-control-primary-text outline-none transition-colors hover:bg-control-primary-bg-hovered focus-visible:ring-2 focus-visible:ring-primary disabled:bg-control-disabled-bg disabled:text-control-disabled-text"
+						className="flex h-32 shrink-0 items-center gap-8 rounded-[var(--radius-sm)] bg-control-primary-bg px-12 tr-text-action text-control-primary-text outline-none transition-colors hover:bg-control-primary-bg-hovered focus-visible:ring-2 focus-visible:ring-primary disabled:bg-control-disabled-bg disabled:text-control-disabled-text"
 					>
 						{isolated ? "Create" : "Start"}
 						<span className="inline-flex h-16 min-w-16 items-center justify-center rounded-[var(--radius-sm)] bg-on-primary-soft px-4 tr-code-text">
@@ -654,7 +654,7 @@ function TargetOption({
 			data-testid={testid}
 			data-active={active}
 			className={cn(
-				"flex h-28 cursor-pointer items-center gap-8 rounded-[var(--radius-md)] px-12 tr-text-ui transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary",
+				"flex h-28 cursor-pointer items-center gap-8 rounded-[var(--radius-sm)] px-12 tr-text-ui transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary",
 				active ? "bg-primary-subtle text-primary" : "text-text-muted hover:text-text-default",
 			)}
 		>
