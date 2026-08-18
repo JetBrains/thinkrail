@@ -14,6 +14,8 @@ function deferred() {
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 describe("terminal attach layout", () => {
+	const neverTimeOut = { timeoutMs: 60_000, onTimeout: () => {} };
+
 	test("starts only after web-font relayout settles", async () => {
 		const fontLayout = deferred();
 		let started = false;
@@ -22,6 +24,7 @@ describe("terminal attach layout", () => {
 			() => {
 				started = true;
 			},
+			neverTimeOut,
 		);
 
 		await tick();
@@ -38,9 +41,42 @@ describe("terminal attach layout", () => {
 			() => {
 				started = true;
 			},
+			neverTimeOut,
 		);
 
 		expect(started).toBe(true);
+	});
+
+	test("a never-settling relayout is bounded: disables the late relayout, then starts", async () => {
+		const calls: string[] = [];
+		await runAfterTerminalRelayout(
+			() => new Promise(() => {}),
+			() => calls.push("start"),
+			{ timeoutMs: 1, onTimeout: () => calls.push("disable-late-relayout") },
+		);
+
+		expect(calls).toEqual(["disable-late-relayout", "start"]);
+	});
+
+	test("a relayout that settles in time never triggers the timeout path", async () => {
+		let timedOut = false;
+		let started = false;
+		await runAfterTerminalRelayout(
+			() => Promise.resolve(),
+			() => {
+				started = true;
+			},
+			{
+				timeoutMs: 1,
+				onTimeout: () => {
+					timedOut = true;
+				},
+			},
+		);
+		await new Promise((resolve) => setTimeout(resolve, 10));
+
+		expect(started).toBe(true);
+		expect(timedOut).toBe(false);
 	});
 });
 

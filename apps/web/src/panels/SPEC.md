@@ -937,8 +937,13 @@ a project picker, the prompt hero, and the reused
   construction, and never again — unlike Monaco, which re-measures an untrusted early reading). Without the
   re-measure, non-Latin glyphs render into cells sized for the fallback font and the PTY holds the wrong
   cols/rows. Initial attach therefore waits for `relayout()`, performs a final `fit()`, and only then captures
-  the PTY grid; relayout failure falls back to the construction-time measurement rather than stranding the
-  pane. This ordering also prevents a fallback-width attach followed by a corrective resize from producing
+  the PTY grid. The wait is **bounded by a deadline**, because `relayout()` in the pinned addon awaits
+  `document.fonts.ready` plus a `FontFace.load()` per registered face — one stalled font response keeps it
+  *pending* (not rejected) indefinitely, and an unbounded wait would leave the pane blank with no shell.
+  Relayout failure or deadline expiry falls back to the construction-time measurement rather than stranding
+  the pane; on expiry the stale relayout is neutralized first (disposing the addon skips its re-measuring
+  `fontFamily` toggle), so a font that finishes loading late cannot re-lay-out an already-attached terminal.
+  This ordering also prevents a fallback-width attach followed by a corrective resize from producing
   post-snapshot shell redraws that can erase replayed rows. Its pre-bind output buffer is a bounded waiting
   state: successful bind filters it to the adopted PTY, while permanent creation failure
   clears it and stops accepting page-wide terminal frames. **Historical replay is input-inert:** the PTY id

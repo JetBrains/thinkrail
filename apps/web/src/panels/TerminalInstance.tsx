@@ -25,6 +25,13 @@ import { createTerminalPrebindBuffer } from "./terminalPrebindBuffer";
 const RESIZE_DEBOUNCE_MS = 60;
 
 /**
+ * Deadline on the pre-attach web-font relayout: `relayout()` stays *pending* (not rejected) while a font
+ * request stalls, so an unbounded wait would leave the pane blank with no shell. Generous enough for a cold
+ * cache over a slow remote link; see the panels SPEC for the fallback semantics.
+ */
+const RELAYOUT_TIMEOUT_MS = 4000;
+
+/**
  * Fire-and-forget terminal writes. Reconnect replay + host request deduplication still executes a submitted
  * write at most once; callers merely have no useful UI to show for a true host rejection.
  */
@@ -393,6 +400,12 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 				if (disposed) return;
 				applyFit();
 				attach();
+			},
+			{
+				timeoutMs: RELAYOUT_TIMEOUT_MS,
+				// dispose() nulls the addon's terminal, so the timed-out relayout's eventual settlement skips its
+				// re-measuring fontFamily toggle instead of re-laying-out an already-attached terminal.
+				onTimeout: () => webFonts.dispose(),
 			},
 		);
 
