@@ -494,7 +494,7 @@ test("artifact sanitize is per-kind: a commit needs a sha, every other kind a pa
 	}
 });
 
-test("a version-3 file (pre-commit-kind) reads cleanly and upgrades to 4 on the next write", () => {
+test("a version-3 file (pre-commit-kind) reads cleanly and upgrades to the current version on the next write", () => {
 	const root = tempRoot();
 	try {
 		const file = join(root, storeRel(SESSION));
@@ -519,7 +519,45 @@ test("a version-3 file (pre-commit-kind) reads cleanly and upgrades to 4 on the 
 		);
 		expect(store(root).get("t_old")?.artifacts).toEqual([{ kind: "change", path: "a.ts" }]);
 		store(root).add({ title: "new" }); // any write upgrades the file version
-		expect(JSON.parse(readFileSync(file, "utf8")).version).toBe(4);
+		expect(JSON.parse(readFileSync(file, "utf8")).version).toBe(5);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test("item summary: set with done, cleared by empty string, sanitized on read", () => {
+	const root = tempRoot();
+	try {
+		const todo = store(root).add({ title: "Implement FloodWait handling" });
+		store(root).update(todo.id, {
+			status: "done",
+			summary: "Added throttling and fallback for failed batch sends. Tests pass.",
+		});
+		expect(store(root).get(todo.id)?.summary).toBe(
+			"Added throttling and fallback for failed batch sends. Tests pass.",
+		);
+		store(root).update(todo.id, { summary: "" });
+		expect(store(root).get(todo.id)?.summary).toBeUndefined();
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test("plan summary: setSummary round-trips, empty clears, survives item edits, dropped by replaceAll", () => {
+	const root = tempRoot();
+	try {
+		const todo = store(root).add({ title: "step" });
+		store(root).setSummary("All tasks landed; e2e suite green.");
+		expect(store(root).read().summary).toBe("All tasks landed; e2e suite green.");
+		// An unrelated item edit keeps the plan summary.
+		store(root).update(todo.id, { status: "done" });
+		expect(store(root).read().summary).toBe("All tasks landed; e2e suite green.");
+		// A fresh plan (todo_write) is new work — the old overall summary does not carry over.
+		store(root).replaceAll({ groups: [{ title: "next task", todos: [{ title: "a" }] }] });
+		expect(store(root).read().summary).toBeUndefined();
+		store(root).setSummary("v2");
+		store(root).setSummary("   ");
+		expect(store(root).read().summary).toBeUndefined();
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}

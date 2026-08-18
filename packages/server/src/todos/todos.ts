@@ -9,6 +9,7 @@ import type {
 	TodoArtifact,
 	TodoItem,
 	TodoPlan,
+	TodoReviewInfo,
 	TodoStatus,
 } from "@thinkrail/contracts";
 import {
@@ -22,6 +23,13 @@ import { gitStatus } from "../git";
 import { getWorkspace } from "../workspaces";
 import { settleChangeArtifacts } from "./artifacts";
 import { dropItemBaseline, removeSessionBaselines } from "./baselines";
+import {
+	dropReviewRecord,
+	putReviewRecord,
+	readReviewRecords,
+	removeSessionReviews,
+	type TodoReviewRecord,
+} from "./reviews";
 
 /** The store rooted at a workspace's worktree for one chat session. `TodoStore` is stateless (re-reads
  * the file every op), so a fresh instance per call is free — no cache. `getWorkspace` throws on unknown. */
@@ -58,14 +66,54 @@ function resolveCommitFiles(workspaceId: string, sha: string): GitFileChange[] |
  * `files` (the review map's "N files" + per-file links come from here, never from denormalized JSON).
  * An unresolvable sha ships the artifact without `files` — the client's degrade signal.
  */
-function toWireItem(workspaceId: string, item: StoredItem): TodoItem {
+function toWireItem(
+	workspaceId: string,
+	item: StoredItem,
+	record: TodoReviewRecord | undefined,
+): TodoItem {
 	if (!item.artifacts) return item;
 	const artifacts = item.artifacts.map((a): TodoArtifact => {
 		if (a.kind !== "commit" || !a.sha) return a;
 		const files = resolveCommitFiles(workspaceId, a.sha);
 		return files ? { ...a, files } : a;
 	});
-	return { ...item, artifacts };
+	const review = reviewInfo(item, record);
+	return review ? { ...item, artifacts, review } : { ...item, artifacts };
+}
+
+/** The item's commit shas, oldest→newest — the revision history the review watermark diffs against. */
+function commitShas(item: StoredItem): string[] {
+	return (item.artifacts ?? []).flatMap((a) => (a.kind === "commit" && a.sha ? [a.sha] : []));
+}
+
+/** True when the item carries a host change set — the deterministic "reviewable" gate. */
+function isReviewable(item: StoredItem): boolean {
+	return (item.artifacts ?? []).some(
+		(a) => (a.kind === "commit" && a.sha) || (a.kind === "change" && a.path),
+	);
+}
+
+/**
+ * The review decoration for one item — present only on reviewable items (those with a host change set),
+ * so research/verification steps never demand review. `unreviewed` is the absence of a stored record;
+ * `unreviewedShas` (only once a record exists) are the commits appended since the user last acted — the
+ * "changed since review" delta the revision view shows.
+ */
+function reviewInfo(
+	item: StoredItem,
+	record: TodoReviewRecord | undefined,
+): TodoReviewInfo | undefined {
+	if (!isReviewable(item)) return undefined;
+	const shas = commitShas(item);
+	const info: TodoReviewInfo = { state: record?.state ?? "unreviewed", revision: shas.length };
+	if (record) {
+		const seen = new Set(record.reviewedShas);
+		const unreviewed = shas.filter((sha) => !seen.has(sha));
+		if (unreviewed.length > 0) info.unreviewedShas = unreviewed;
+		if (record.state === "changes_requested" && record.feedback) info.feedback = record.feedback;
+		info.at = record.at;
+	}
+	return info;
 }
 
 /**
@@ -78,18 +126,23 @@ export async function listTodos(params: {
 	sessionId: string;
 }): Promise<TodoPlan> {
 	await settleChangeArtifacts(params.workspaceId);
-	const plan = storeFor(params.workspaceId, params.sessionId).read();
+	const root = getWorkspace(params.workspaceId).worktreePath;
+	const plan = new TodoStore(root, params.sessionId).read();
+	const records = readReviewRecords(root, params.sessionId);
 	// Decorate on the way out: each group with its derived task status (the rule lives in `pi-todos`,
 	// which owns plan semantics, and reaches the client on the DTO so `apps/web` — which can't import the
-	// package — never re-derives it), and each `commit` artifact with its derived `files` (see above).
-	return {
-		todos: plan.todos.map((t) => toWireItem(params.workspaceId, t)),
+	// package — never re-derives it), each `commit` artifact with its derived `files` (see above), and
+	// each reviewable item with its review state (host sidecar — never the agent-writable plan file).
+	const wire: TodoPlan = {
+		todos: plan.todos.map((t) => toWireItem(params.workspaceId, t, records[t.id])),
 		groups: plan.groups.map((group) => ({
 			...group,
-			todos: group.todos.map((t) => toWireItem(params.workspaceId, t)),
+			todos: group.todos.map((t) => toWireItem(params.workspaceId, t, records[t.id])),
 			status: groupStatus(group),
 		})),
 	};
+	if (plan.summary) wire.summary = plan.summary;
+	return wire;
 }
 
 /**
@@ -121,7 +174,9 @@ export function openTodoCount(plan: StoredPlan): number {
  * `session.delete` handler calls it after the delete transaction commits.
  */
 export function removeSessionTodoWindows(params: { workspaceId: string; sessionId: string }): void {
-	removeSessionBaselines(getWorkspace(params.workspaceId).worktreePath, params.sessionId);
+	const root = getWorkspace(params.workspaceId).worktreePath;
+	removeSessionBaselines(root, params.sessionId);
+	removeSessionReviews(root, params.sessionId);
 }
 
 /** Append one item to the chat's list. */
@@ -171,7 +226,106 @@ export function removeTodo(params: { workspaceId: string; sessionId: string; id:
 	new TodoStore(root, params.sessionId).remove(params.id);
 	// This mutation happens outside a reconcile (no `todo_*` tool end fires for a UI edit), so close the
 	// removed item's work window here — an orphan baseline would read as "open" in every later overlap
-	// check and permanently force sibling chats into the path-list fallback.
+	// check and permanently force sibling chats into the path-list fallback. The review record goes with
+	// it (orphan records are inert, but the lifecycle stays symmetric with the baselines sidecar).
 	dropItemBaseline(root, params.sessionId, params.id);
+	dropReviewRecord(root, params.sessionId, params.id);
 	return { ok: true } as const;
+}
+
+/** A stored item by id, with its workspace root — shared lookup of the review ops below. */
+function reviewableItem(params: { workspaceId: string; sessionId: string; id: string }): {
+	root: string;
+	item: StoredItem;
+} {
+	const root = getWorkspace(params.workspaceId).worktreePath;
+	const item = new TodoStore(root, params.sessionId).get(params.id);
+	if (!item) throw new Error(`No TODO with id "${params.id}".`);
+	if (!isReviewable(item))
+		throw new Error(`TODO "${params.id}" has no change set to review.`);
+	return { root, item };
+}
+
+/**
+ * Approve a reviewable item: record `reviewed` plus the watermark — the item's current commit shas, so
+ * a commit appended by a later fix cycle reads as the unreviewed delta. Rejected (throws → `{ok:false}`
+ * on the wire) for an unknown or non-reviewable item.
+ */
+export function approveTodoReview(params: {
+	workspaceId: string;
+	sessionId: string;
+	id: string;
+}): { ok: true } {
+	const { root, item } = reviewableItem(params);
+	putReviewRecord(root, params.sessionId, params.id, {
+		state: "reviewed",
+		reviewedShas: commitShas(item),
+		at: new Date().toISOString(),
+	});
+	return { ok: true } as const;
+}
+
+/**
+ * Record an ask-to-fix: `changes_requested` + the feedback + the watermark, and render the context
+ * package the host fires into the item's own chat (title/note, the completion summary, the change-set
+ * reference — never the full diff; the agent reads the worktree/commits with its own tools — and the
+ * feedback verbatim, plus the re-open-this-item instruction). Returns the package and the record it
+ * replaced so the host can roll back when the send is rejected pre-turn.
+ */
+export function requestTodoFix(params: {
+	workspaceId: string;
+	sessionId: string;
+	id: string;
+	feedback: string;
+}): { pkg: string; previous: TodoReviewRecord | undefined } {
+	const feedback = params.feedback.trim();
+	if (!feedback) throw new Error("Fix feedback must not be empty.");
+	const { root, item } = reviewableItem(params);
+	const previous = putReviewRecord(root, params.sessionId, params.id, {
+		state: "changes_requested",
+		reviewedShas: commitShas(item),
+		feedback,
+		at: new Date().toISOString(),
+	});
+	return { pkg: renderFixPackage(item, feedback), previous };
+}
+
+/** Undo {@link requestTodoFix}'s record after a pre-turn send rejection (restores what it replaced). */
+export function rollbackTodoFix(
+	params: { workspaceId: string; sessionId: string; id: string },
+	previous: TodoReviewRecord | undefined,
+): void {
+	dropReviewRecord(getWorkspace(params.workspaceId).worktreePath, params.sessionId, params.id, previous);
+}
+
+/**
+ * The ask-to-fix context package — one structured user message. References, never bulk: the change set
+ * is named by sha/paths (the agent reads content with its own tools), the feedback is quoted verbatim,
+ * and the instruction pins the fix to THIS item id (the revision must attach to the step it revises —
+ * see the todos skill's "Fix requests re-open the SAME item").
+ */
+export function renderFixPackage(item: StoredItem, feedback: string): string {
+	const shas = commitShas(item);
+	const paths = (item.artifacts ?? []).flatMap((a) =>
+		a.kind === "change" && a.path ? [a.path] : [],
+	);
+	const changeSet =
+		shas.length > 0
+			? `commit${shas.length === 1 ? "" : "s"} ${shas.map((s) => s.slice(0, 12)).join(", ")}${paths.length > 0 ? `; uncommitted paths: ${paths.join(", ")}` : ""}`
+			: `changed paths: ${paths.join(", ")}`;
+	const lines = [
+		`The user reviewed your completed step ${item.id} ("${item.title}") and asked for a fix.`,
+		"",
+		...(item.note ? [`Step note: ${item.note}`] : []),
+		...(item.summary ? [`Your completion summary: ${item.summary}`] : []),
+		`Change set under review: ${changeSet}`,
+		"",
+		"User feedback:",
+		'"""',
+		feedback,
+		'"""',
+		"",
+		`Address the feedback on THIS step: flip ${item.id} back to in_progress (todo_update), make the fix, then mark it done with a fresh summary describing the fix. Do not create a new item for it.`,
+	];
+	return lines.join("\n");
 }

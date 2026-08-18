@@ -390,7 +390,7 @@ test("commit gate: foreign dirt resolved by done → commit proceeds", () => {
 	}
 });
 
-test("re-done replaces the old commit/change artifacts, keeping the agent's spec/file artifacts", () => {
+test("re-done APPENDS the new commit (revision history), keeping the agent's spec/file artifacts", () => {
 	const { store, root } = tempStore();
 	try {
 		const todo = store.add({
@@ -412,7 +412,8 @@ test("re-done replaces the old commit/change artifacts, keeping the agent's spec
 			{ kind: "commit", sha: "sha1", label: "step" },
 		]);
 
-		// Re-open and re-work: a fresh baseline exists at the second done, so the old change set is replaced.
+		// Re-open and re-work: a fresh baseline exists at the second done, so a NEW commit is appended —
+		// the artifact list is the item's revision history (the review watermark diffs against it).
 		store.update(todo.id, { status: "in_progress" });
 		reconcileChangeArtifacts(store, root, SESSION, () => []); // baseline (clean start)
 		store.update(todo.id, { status: "done" });
@@ -425,6 +426,7 @@ test("re-done replaces the old commit/change artifacts, keeping the agent's spec
 		);
 		expect(store.get(todo.id)?.artifacts).toEqual([
 			{ kind: "spec", path: "SPEC.md", specId: "s1" },
+			{ kind: "commit", sha: "sha1", label: "step" },
 			{ kind: "commit", sha: "sha2", label: "step" },
 		]);
 	} finally {

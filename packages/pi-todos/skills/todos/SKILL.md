@@ -62,6 +62,21 @@ Steps are **verifiable** and ≈ commit-sized: "easy to check off as you go", no
    (including items the user just added), either do them or clearly say what's left and why — don't go
    idle silently leaving fresh items untouched.
 
+## Completion summaries (the review trail)
+
+- **A step that changed code gets a summary when you mark it done** — pass `summary` on the same
+   `todo_update` call that sets `status: done`: 1–3 short sentences covering **what changed**, **why**
+   (when it isn't obvious), and **what verification you performed** (tests/typecheck run, or "not
+   verified"). The user reviews your work from this summary + the diff — write it for them, not for
+   yourself. Research/analysis/verification-only steps that produced no code changes need no summary.
+- **When the last open item flips done, write the overall plan summary** with `todo_plan_summary`
+   (the `todo_update` result nudges you at exactly that moment): 2–4 sentences across all tasks — a
+   handoff note, not a step list.
+- **Fix requests re-open the SAME item.** When the user asks for a fix on a reviewed step (you'll
+   receive the original step, its summary, its change set, and their feedback), flip **that exact item**
+   (by id) back to `in_progress`, make the fix, and mark it `done` with a **fresh summary** describing
+   the fix. Never open a new item for a fix — the revision must attach to the step it revises.
+
 ## Invariants
 
 - **Done stays.** Completing a step = `todo_update` → `done`. **Never delete a done item** — it's the
@@ -78,7 +93,10 @@ Steps are **verifiable** and ≈ commit-sized: "easy to check off as you go", no
 
 - `todo_list` — read the current plan (the source of truth; re-read to catch the user's edits).
 - `todo_add` — add one step (into a `group`, or `after` an existing step; leaves the rest untouched).
-- `todo_update` — progress one step (`in_progress` on start, `done` when finished; done stays).
+- `todo_update` — progress one step (`in_progress` on start, `done` when finished — with a `summary`
+  when the step changed code; done stays).
 - `todo_remove` — delete one item (only when the user asks).
 - `todo_write` — lay out a fresh plan (groups only — one per task; replaces your open items; use once,
   at the start).
+- `todo_plan_summary` — after the last item is done: a short overall summary of what the plan
+  accomplished.

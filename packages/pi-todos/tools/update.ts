@@ -1,7 +1,8 @@
-// todo_update — change an item's status / title / note. This is how the agent progresses its plan
-// (pending → in_progress → done) as it works. The store keeps "exactly one in_progress" true by
-// auto-demoting the previous one (reported here as "paused"), and a `done` flip suggests the task's
-// next open step — in-band feedback so status discipline doesn't ride on model memory.
+// todo_update — change an item's status / title / note / completion summary. This is how the agent
+// progresses its plan (pending → in_progress → done) as it works. The store keeps "exactly one
+// in_progress" true by auto-demoting the previous one (reported here as "paused"), and a `done` flip
+// suggests the task's next open step — or, when the whole plan just completed, asks for the overall
+// summary (`todo_plan_summary`) — in-band feedback so discipline doesn't ride on model memory.
 
 import { StringEnum } from "@earendil-works/pi-ai/compat";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
@@ -26,12 +27,25 @@ const parameters = Type.Object({
 	),
 	title: Type.Optional(Type.String({ description: "New title." })),
 	note: Type.Optional(Type.String({ description: "New note (empty string clears it)." })),
+	summary: Type.Optional(
+		Type.String({
+			description:
+				"Completion summary, set together with status=done when the step changed code: 1–3 short sentences — what changed, why if relevant, and what verification you performed. Empty string clears it.",
+		}),
+	),
 });
 
 /** The first open (non-done) step in the group containing `id`, or undefined (loose / none left). */
 function nextOpenStep(plan: TodoPlan, id: string): Todo | undefined {
 	const group = plan.groups.find((g) => g.todos.some((t) => t.id === id));
 	return group?.todos.find((t) => t.status !== "done");
+}
+
+/** Plan-complete nudge: every item everywhere is done — ask for the overall summary, once per flip. */
+function planCompleteNudge(plan: TodoPlan): string | undefined {
+	const items = [...plan.todos, ...plan.groups.flatMap((g) => g.todos)];
+	if (items.length === 0 || items.some((t) => t.status !== "done")) return undefined;
+	return "plan complete — write a short overall summary with todo_plan_summary (what was done, across all tasks).";
 }
 
 export function registerTodoUpdate(pi: ExtensionAPI): void {
@@ -48,6 +62,7 @@ export function registerTodoUpdate(pi: ExtensionAPI): void {
 			if (params.status !== undefined) patch.status = params.status;
 			if (params.title !== undefined) patch.title = params.title;
 			if (params.note !== undefined) patch.note = params.note;
+			if (params.summary !== undefined) patch.summary = params.summary;
 			const store = storeFor(ctx);
 			const result = store.update(params.id, patch);
 			if (!result) return errorResult(`No TODO with id "${params.id}".`);
@@ -62,6 +77,7 @@ export function registerTodoUpdate(pi: ExtensionAPI): void {
 				next ? `next: ${next.id} "${next.title}" — mark it in_progress when you start.` : undefined,
 				// The next-step hint already covers the "nothing in_progress" state; don't double-nudge.
 				next ? undefined : consistencyNudge(plan),
+				params.status === "done" ? planCompleteNudge(plan) : undefined,
 			);
 			return textResult(text, { todo, paused });
 		},

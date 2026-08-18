@@ -247,10 +247,44 @@ export interface TodoItem {
 	status: TodoStatus;
 	origin: TodoOrigin;
 	note?: string;
+	/**
+	 * The agent's completion note (what changed / why / verification performed — the verification line is
+	 * self-reported by construction). Skill-mandated for done steps that changed code, tool-optional: a
+	 * reviewable item without one renders a quiet placeholder, never blocks.
+	 */
+	summary?: string;
 	/** Links to what the work produced — the host attaches `change`/`commit` on `done` (see the todos module). */
 	artifacts?: TodoArtifact[];
+	/**
+	 * The item's review decoration — **host-derived on `todo.list`, present only on reviewable items**
+	 * (those carrying a host change set). Review state is user-owned and host-stored (a sidecar, never the
+	 * agent-writable plan file), so an agent re-plan can't flip a review decision.
+	 */
+	review?: TodoReviewInfo;
 	createdAt: string;
 	updatedAt: string;
+}
+
+/** A reviewable item's review lifecycle. Absence of a stored record reads as `unreviewed`. */
+export type TodoReviewState = "unreviewed" | "reviewed" | "changes_requested";
+
+/**
+ * The review decoration on a reviewable TODO item (see {@link TodoItem.review}). `revision` counts the
+ * item's commit artifacts (1 TODO = N commits is first-class — each fix cycle appends one);
+ * `unreviewedShas` are the commits the user hasn't acted on yet (the "delta since feedback" the revision
+ * view shows — empty/absent when the user has seen everything). `feedback` echoes the last ask-to-fix
+ * text while the item is `changes_requested`.
+ */
+export interface TodoReviewInfo {
+	state: TodoReviewState;
+	/** Count of the item's commit artifacts — “Revision N”. 0 for path-list-fallback change sets. */
+	revision: number;
+	/** Commit shas recorded after the user's last review action — the unreviewed delta. */
+	unreviewedShas?: string[];
+	/** The user's last fix request, while state is `changes_requested`. */
+	feedback?: string;
+	/** ISO timestamp of the last review action (approve / ask-to-fix); absent while `unreviewed`. */
+	at?: string;
 }
 
 /**
@@ -276,6 +310,12 @@ export interface TodoGroupItem {
 export interface TodoPlan {
 	todos: TodoItem[];
 	groups: TodoGroupItem[];
+	/**
+	 * The agent's overall completion summary (`todo_plan_summary`), written when the whole plan is done.
+	 * Clients show it only while every item stays `done` — a re-opened plan hides it until the agent
+	 * rewrites it at the next completion.
+	 */
+	summary?: string;
 }
 
 export type GitFileStatus = "added" | "modified" | "deleted" | "renamed" | "untracked";

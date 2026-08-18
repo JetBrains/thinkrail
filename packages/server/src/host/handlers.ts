@@ -112,10 +112,14 @@ import {
 } from "../terminal";
 import {
 	addTodo,
+	approveTodoReview,
 	countOpenTodos,
 	listTodos,
 	removeSessionTodoWindows,
 	removeTodo,
+	requestTodoFix,
+	rollbackTodoFix,
+	type TodoReviewRecord,
 	updateTodo,
 } from "../todos";
 import { ensureWatch, stopWatch } from "../watch";
@@ -210,6 +214,32 @@ function fireReviewPrompt(
 			// The rollback/notify itself failed — nothing left to do but log; a detached fire has no one
 			// to throw to, and letting it surface as an unhandled rejection would be worse.
 			console.warn(`review send rollback failed: ${err instanceof Error ? err.message : err}`);
+		});
+}
+
+/**
+ * Fire an ask-to-fix package into the item's own chat DETACHED (the `fireReviewPrompt` pattern): the
+ * handler acks immediately, and a pre-turn rejection (bad model, missing key) restores the review record
+ * it replaced (`rollbackTodoFix`) and surfaces inside the chat — so the item stays retryable instead of
+ * stranding as `changes_requested` for a fix the agent never heard about. A fault AFTER acceptance is a
+ * real turn fault and rides the event stream; the record stays correct.
+ */
+function fireTodoFixPrompt(
+	p: { workspaceId: string; sessionId: string; id: string },
+	pkg: string,
+	previous: TodoReviewRecord | undefined,
+): void {
+	void ackSend(followUpSession(p.sessionId, pkg))
+		.then(undefined, (err) => {
+			rollbackTodoFix(p, previous);
+			notifyExtUi(
+				p.sessionId,
+				`Fix request send failed: ${err instanceof Error ? err.message : String(err)}`,
+				"error",
+			);
+		})
+		.catch((err) => {
+			console.warn(`todo fix rollback failed: ${err instanceof Error ? err.message : err}`);
 		});
 }
 
@@ -392,6 +422,26 @@ const handlers: Record<string, Handler> = {
 		),
 	"todo.remove": (params) =>
 		removeTodo(params as { workspaceId: string; sessionId: string; id: string }),
+	"todo.review": (params) =>
+		approveTodoReview(params as { workspaceId: string; sessionId: string; id: string }),
+	// Ask-to-fix: record `changes_requested` + the watermark, then fire the context package into the
+	// item's OWN chat (the plan, work windows, and artifact reconcile are all per-session, so a foreign
+	// session could not attach the fix to the item). `followUpSession` rides a followUp while the agent
+	// streams and a prompt when idle; the send is DETACHED like review sends (the handler acks the moment
+	// the record + session exist), and a pre-turn rejection rolls the record back and surfaces inside the
+	// chat as an extension-UI notice — a fix request the agent never received must not strand as
+	// `changes_requested` with no fix coming.
+	"todo.requestFix": async (params) => {
+		const p = params as { workspaceId: string; sessionId: string; id: string; feedback: string };
+		const ws = getWorkspace(p.workspaceId);
+		const { pkg, previous } = requestTodoFix(p);
+		if (!(await ensureSessionAttached(p.sessionId, p.workspaceId, ws.worktreePath))) {
+			rollbackTodoFix(p, previous);
+			throw new Error("This plan's chat is no longer on disk — can't send the fix request.");
+		}
+		fireTodoFixPrompt(p, pkg, previous);
+		return { ok: true } as const;
+	},
 	// `scope` selects what is diffed (branch / uncommitted / one commit; omitted = branch). A scope naming a
 	// commit that no longer exists rejects — the panel resets its scope on that rejection.
 	"git.status": (params) => {

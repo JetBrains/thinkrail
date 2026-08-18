@@ -49,6 +49,12 @@ export interface Todo {
 	origin: TodoOrigin;
 	/** A short secondary line — an origin hint or a note. */
 	note?: string;
+	/**
+	 * The agent's completion note, set when the item flips `done` (skill-mandated for steps that changed
+	 * code, tool-optional): what changed, why if relevant, and what verification was performed. The
+	 * review card renders it above the change set; verification stays self-reported by construction.
+	 */
+	summary?: string;
 	/** Links to what the work produced (files/specs by the agent; changes by the host on `done`). */
 	artifacts?: TodoArtifact[];
 	/** ISO-8601 creation / last-mutation timestamps (store-managed). */
@@ -75,17 +81,25 @@ export interface TodoGroup {
 export interface TodoPlan {
 	todos: Todo[];
 	groups: TodoGroup[];
+	/**
+	 * The agent's overall completion summary (`todo_plan_summary`), written when the whole plan is done.
+	 * Stored verbatim across later edits; the UI shows it only while every item is `done` (a re-opened
+	 * plan hides it until the agent rewrites it at the next completion), so no clearing logic exists.
+	 */
+	summary?: string;
 }
 
 /**
  * The on-disk file shape (`.thinkrail/context/todos/<sessionId>.json`). `version` guards migrations. `3` added
- * item `artifacts`; `4` added the `commit` artifact kind (sha, optional `path`). An older file reads cleanly
- * (sanitize-on-read drops nothing valid) and is upgraded on the next write.
+ * item `artifacts`; `4` added the `commit` artifact kind (sha, optional `path`); `5` added the item + plan
+ * `summary` fields. An older file reads cleanly (sanitize-on-read drops nothing valid) and is upgraded on
+ * the next write.
  */
 export interface TodoFile {
-	version: 4;
+	version: 5;
 	todos: Todo[];
 	groups: TodoGroup[];
+	summary?: string;
 }
 
 /**
@@ -118,6 +132,8 @@ export interface TodoPatch {
 	title?: string;
 	status?: TodoStatus;
 	note?: string;
+	/** The completion summary (empty string clears it) — see {@link Todo.summary}. */
+	summary?: string;
 	/** Replace the item's artifacts wholesale; `[]` clears them. */
 	artifacts?: TodoArtifact[];
 }
@@ -127,6 +143,7 @@ export interface WriteItem {
 	title: string;
 	status?: TodoStatus;
 	note?: string;
+	summary?: string;
 	artifacts?: TodoArtifact[];
 }
 

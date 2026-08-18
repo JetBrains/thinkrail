@@ -81,7 +81,7 @@ export function groupStatus(group: TodoGroup): TodoGroupStatus {
 	return "pending";
 }
 
-const CURRENT_VERSION = 4 as const;
+const CURRENT_VERSION = 5 as const;
 
 const STATUS_SET: ReadonlySet<string> = new Set(TODO_STATUSES);
 const ORIGIN_SET: ReadonlySet<string> = new Set(TODO_ORIGINS);
@@ -163,6 +163,7 @@ function sanitize(raw: unknown): Todo | null {
 		updatedAt: typeof o.updatedAt === "string" ? o.updatedAt : now,
 	};
 	if (typeof o.note === "string" && o.note) todo.note = decodeIfAgent(o.note, origin);
+	if (typeof o.summary === "string" && o.summary) todo.summary = decodeIfAgent(o.summary, origin);
 	const artifacts = sanitizeArtifacts(o.artifacts, origin);
 	if (artifacts) todo.artifacts = artifacts;
 	return todo;
@@ -190,6 +191,7 @@ function makeTodo(
 	origin: TodoOrigin,
 	note?: string,
 	artifacts?: TodoArtifact[],
+	summary?: string,
 ): Todo {
 	const now = nowIso();
 	const todo: Todo = {
@@ -201,6 +203,7 @@ function makeTodo(
 		updatedAt: now,
 	};
 	if (note) todo.note = decodeIfAgent(note, origin);
+	if (summary) todo.summary = decodeIfAgent(summary, origin);
 	const clean = sanitizeArtifacts(artifacts, origin);
 	if (clean) todo.artifacts = clean;
 	return todo;
@@ -236,7 +239,23 @@ export class TodoStore {
 		const groups = Array.isArray(file?.groups)
 			? file.groups.map(sanitizeGroup).filter((g): g is TodoGroup => g !== null)
 			: [];
-		return { todos, groups };
+		const plan: TodoPlan = { todos, groups };
+		// Plan-level summary: agent-authored always (written via todo_plan_summary), so decode escapes.
+		if (typeof file?.summary === "string" && file.summary) plan.summary = decodeEscapes(file.summary);
+		return plan;
+	}
+
+	/**
+	 * Set (or clear, with an empty string) the plan-level completion summary — the agent's overall
+	 * handoff note, written when the whole plan is done (`todo_plan_summary`). Stored verbatim across
+	 * later edits; display gating ("only while everything is done") is the reader's job.
+	 */
+	setSummary(summary: string): void {
+		const plan = this.read();
+		const text = decodeEscapes(summary.trim());
+		if (text) plan.summary = text;
+		else delete plan.summary;
+		this.write(plan);
 	}
 
 	/** Every item in display order (groups first, the user's loose lane last) — see {@link flatItems}. */
@@ -337,6 +356,10 @@ export class TodoStore {
 			if (patch.note) todo.note = decodeIfAgent(patch.note, todo.origin);
 			else delete todo.note;
 		}
+		if (patch.summary !== undefined) {
+			if (patch.summary) todo.summary = decodeIfAgent(patch.summary, todo.origin);
+			else delete todo.summary;
+		}
 		if (patch.artifacts !== undefined) {
 			const clean = sanitizeArtifacts(patch.artifacts, todo.origin);
 			if (clean) todo.artifacts = clean;
@@ -371,13 +394,13 @@ export class TodoStore {
 	 */
 	replaceAll(plan: WritePlan): TodoPlan {
 		const freshLoose = (plan.todos ?? []).map((w) =>
-			makeTodo(w.title, w.status ?? "pending", "agent", w.note, w.artifacts),
+			makeTodo(w.title, w.status ?? "pending", "agent", w.note, w.artifacts, w.summary),
 		);
 		const freshGroups: TodoGroup[] = (plan.groups ?? []).map((g) => ({
 			id: freshId("g"),
 			title: decodeEscapes(g.title),
 			todos: g.todos.map((w) =>
-				makeTodo(w.title, w.status ?? "pending", "agent", w.note, w.artifacts),
+				makeTodo(w.title, w.status ?? "pending", "agent", w.note, w.artifacts, w.summary),
 			),
 		}));
 		const current = this.read();
@@ -417,6 +440,7 @@ export class TodoStore {
 			todos: plan.todos,
 			groups: plan.groups.filter((g) => g.todos.length > 0),
 		};
+		if (plan.summary) file.summary = plan.summary;
 		mkdirSync(dirname(this.file), { recursive: true });
 		const tmp = `${this.file}.${randomUUID().slice(0, 8)}.tmp`;
 		writeFileSync(tmp, `${JSON.stringify(file, null, 2)}\n`, "utf8");

@@ -29,6 +29,7 @@ import {
 	readBaselines,
 	writeBaselines,
 } from "./baselines";
+import { dropReviewRecord } from "./reviews";
 
 /**
  * Commit a done item's work — **exactly `paths`**, the delta the reconcile proved the item owns; returns
@@ -159,8 +160,13 @@ function hasChangeSet(artifacts: TodoArtifact[] | undefined): boolean {
  * exactly like agent work in `git status`, and is the one accepted hole — see SPEC §Change artifacts.
  *
  * Idempotency & re-do: a `done` item already carrying a change set and with **no fresh baseline** is a
- * steady-state no-op. If it was re-opened and re-worked (so a fresh baseline exists), its old `commit`/
- * `change` artifacts are **replaced** with the new ones (the agent's `file`/`spec` artifacts are kept).
+ * steady-state no-op. If it was re-opened and re-worked (so a fresh baseline exists), a new **commit is
+ * APPENDED** to the item's existing commit artifacts — the artifact list is the item's revision history
+ * (1 TODO = N commits is first-class; the review watermark diffs against it) — while old `change`
+ * path-lists are replaced (a live path delta has no history to keep). A redo that lands in the path-list
+ * fallback also **drops the item's review record** (reset to `unreviewed`): a live-path delta can't be
+ * watermarked by sha, so "review only the new delta" degrades to reviewing the change set afresh. The
+ * agent's `file`/`spec` artifacts are always kept.
  *
  * `getChangedPaths` is called lazily and memoized — but the memo is **dropped after each commit**, since
  * committing empties the uncommitted set the next item's delta is measured against (without that, a second
@@ -233,8 +239,9 @@ export function reconcileChangeArtifacts(
 		// is the whole current set and it may only ever be *reported* (path-list), never committed.
 		const deltaPaths = base ? now.filter((p) => !base.paths.includes(p)) : now;
 		if (deltaPaths.length === 0) continue;
-		// Re-do replaces the old change set; keep the agent's own file/spec artifacts as the merge base.
-		const preserved = existing.filter((a) => a.kind !== "change" && a.kind !== "commit");
+		// Re-do: commits ACCUMULATE (the revision history the review watermark diffs against); stale `change`
+		// path-lists are replaced. The agent's own file/spec artifacts are always kept.
+		const preserved = existing.filter((a) => a.kind !== "change");
 		// The gate (see above): a window never shared with another chat, and no other chat mid-work right now.
 		// `shared` is what covers an overlap that has already closed; the live re-check is the cheap backstop
 		// for a sidecar this host never opened itself (a best-effort mark that failed, a stale file).
@@ -252,9 +259,12 @@ export function reconcileChangeArtifacts(
 			});
 			continue;
 		}
-		// Fallback: path-list `change` artifacts for the delta (opened live at branch scope).
+		// Fallback: path-list `change` artifacts for the delta (opened live at branch scope). A path delta
+		// can't be watermarked by sha, so any prior review decision is reset (→ unreviewed) — the honest
+		// degrade for "review only the new delta" when there is no committed revision to diff against.
 		const changes = deltaPaths.map((path): TodoArtifact => ({ kind: "change", path }));
 		store.update(todo.id, { artifacts: [...preserved, ...changes] });
+		dropReviewRecord(root, sessionId, todo.id);
 	}
 	if (baselinesDirty) writeBaselines(root, sessionId, baselines);
 }

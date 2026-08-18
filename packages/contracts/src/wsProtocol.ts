@@ -216,7 +216,10 @@ export interface TerminalTabsPush {
 // v39: the TODO review map — `TodoItem.artifacts` (mirrored `TodoArtifact`, incl. the host-owned `commit`
 // kind) rides `todo.list`, whose decoration also derives a commit artifact's `files` from git (absent =
 // unresolvable sha, degrade silently).
-export const PROTOCOL_VERSION = 39;
+// v40: the TODO review workflow — `TodoItem.summary` + `TodoPlan.summary` (agent-authored completion
+// notes) and `TodoItem.review` (host-derived review decoration) ride `todo.list`; `todo.review` approves a
+// reviewable item, `todo.requestFix` records changes_requested + sends the feedback package into the chat.
+export const PROTOCOL_VERSION = 40;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a
@@ -311,6 +314,8 @@ export const WS_METHODS = {
 	todoAdd: "todo.add",
 	todoUpdate: "todo.update",
 	todoRemove: "todo.remove",
+	todoReview: "todo.review",
+	todoRequestFix: "todo.requestFix",
 	gitStatus: "git.status",
 	gitDiffFile: "git.diffFile",
 	// The workspace branch's own commits (`<diff base>..HEAD`, newest first) — the scope menu's commit list,
@@ -633,6 +638,17 @@ export interface WsMethodMap {
 		result: TodoItem;
 	};
 	"todo.remove": { params: { workspaceId: string; sessionId: string; id: string }; result: Ack };
+	// Approve a reviewable item: records `reviewed` + the commit shas the user had in front of them (the
+	// review watermark). Rejected for an item with no host change set. The client refetches `todo.list`.
+	"todo.review": { params: { workspaceId: string; sessionId: string; id: string }; result: Ack };
+	// Ask-to-fix: records `changes_requested` + the feedback + the watermark, then composes the context
+	// package (original step, its summary, its change set, the feedback verbatim — never the full diff) and
+	// sends it into the item's OWN chat session (followUp while streaming, prompt when idle — re-attached
+	// from disk when not live), fired detached like review sends. Rejected for a non-reviewable item.
+	"todo.requestFix": {
+		params: { workspaceId: string; sessionId: string; id: string; feedback: string };
+		result: Ack;
+	};
 	// `scope` (default `{ kind: "branch" }`) selects **what** is diffed; see `GitDiffScope`. An unresolvable
 	// scope (a commit that a rebase/reset removed) is REJECTED — the panel treats that as "reset the scope"
 	// rather than staying wedged on a dead sha.
