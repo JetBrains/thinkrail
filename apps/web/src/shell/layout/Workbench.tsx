@@ -1374,6 +1374,11 @@ function SideGroupView({
 					aria-label={group.folded ? "Expand group" : "Fold group"}
 					aria-expanded={!group.folded}
 					onClick={onFold}
+					onKeyDown={(event) => {
+						if (event.key !== "Enter" && event.key !== " ") return;
+						event.preventDefault();
+						onFold();
+					}}
 					className="flex w-7 shrink-0 items-center justify-center border-border-muted border-b border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 				>
 					<ChevronDown

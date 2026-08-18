@@ -14,6 +14,13 @@ async function openDefaultWorkbench(page: Page): Promise<void> {
 	await waitTerminalReady(page);
 }
 
+async function waitForLayoutSettled(page: Page): Promise<void> {
+	await expect(page.getByTestId("workspace-workbench")).toHaveAttribute(
+		"data-layout-status",
+		"settled",
+	);
+}
+
 async function openKeptFiles(page: Page, names: string[]): Promise<void> {
 	await page.getByTestId("tab-files").click();
 	for (const name of names) {
@@ -213,7 +220,7 @@ test("a terminal can move to its own side group; resize, fold, and visibility ga
 	await expect(page.getByTestId("terminal-instance")).toHaveCount(0);
 
 	await terminalGroup.getByTestId("side-group-fold").focus();
-	await page.keyboard.press("Enter");
+	await page.keyboard.press("Space");
 	await expect(terminalGroup).toHaveAttribute("data-folded", "false");
 	await waitTerminalReady(page);
 	await expect(page.getByTestId("terminal-instance")).toHaveCount(1);
@@ -266,10 +273,7 @@ test("side groups expose broad per-panel above and below split targets", async (
 	await expect(groups.nth(2).getByTestId("tab-files")).toBeVisible();
 
 	changesGroup = groups.filter({ has: page.getByTestId("tab-changes") });
-	await expect(page.getByTestId("workspace-workbench")).toHaveAttribute(
-		"data-layout-status",
-		"settled",
-	);
+	await waitForLayoutSettled(page);
 	const foldChanges = changesGroup.getByTestId("side-group-fold");
 	// dnd-kit captures clicks briefly after pointer teardown to suppress the drag's synthetic click.
 	// Once persistence has settled, use the same button's keyboard path instead of racing that guard.
@@ -679,13 +683,17 @@ test("remote closures reconcile chat history and cached file reopening", async (
 	await peerChat.getByTestId("editor-tab-close").click();
 
 	await expect(chat).toHaveCount(0);
-	await expect(page.getByTestId("chat-history")).toBeVisible();
-	await page.getByTestId("chat-history").click();
+	const history = page.getByTestId("chat-history");
+	await expect(history).toBeVisible();
+	await waitForLayoutSettled(page);
+	await history.press("Enter");
 	await expect(page.getByTestId("closed-chat-row")).toHaveCount(1);
 	await page.keyboard.press("Escape");
 
-	await expect(peer.getByTestId("chat-history")).toBeVisible();
-	await peer.getByTestId("chat-history").click();
+	await waitForLayoutSettled(peer);
+	const peerHistory = peer.getByTestId("chat-history");
+	await expect(peerHistory).toBeVisible();
+	await peerHistory.press("Enter");
 	await peer.getByTestId("closed-chat-item").click();
 	await expect(chat).toHaveCount(1);
 	await expect(page.getByTestId("chat-history")).toHaveCount(0);
