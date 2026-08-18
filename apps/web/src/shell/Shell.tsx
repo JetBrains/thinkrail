@@ -76,15 +76,16 @@ export function Shell() {
 						<div
 							data-testid="scope-context"
 							data-context={activeWorkspace ? "workspace" : "project-home"}
-							/* Single horizontal row: context › name · branch · origin, vertically centred; each group keeps
-							   its own semantic type/colour and truncates under width (existing sm:/md: responsive hides). */
+							/* Single horizontal row: context › name · branch · origin, vertically centred. Every piece shares
+							   the workspace-name typography (tr-text-ui); only semantic COLOUR distinguishes them (strong for
+							   project/workspace, muted for branch/separators). Truncates under width (existing sm:/md: hides). */
 							className="flex min-w-0 items-center gap-8 border-border-default border-l pl-12 leading-tight"
 						>
 							<div className="flex min-w-0 items-center gap-4 tr-text-ui">
 								<span className="hidden min-w-0 items-center gap-4 sm:flex">
 									<span
 										data-testid="scope-project"
-										className="max-w-[160px] truncate text-text-muted"
+										className="max-w-[160px] truncate text-text-default"
 									>
 										{contextProject.name}
 									</span>
@@ -95,7 +96,7 @@ export function Shell() {
 								</span>
 							</div>
 							{activeWorkspace ? (
-								<div className="flex min-w-0 items-center gap-4 text-text-muted tr-text-metadata">
+								<div className="flex min-w-0 items-center gap-4 text-text-muted tr-text-ui">
 									<GitBranch className="size-12 shrink-0" />
 									<span data-testid="scope-branch" className="truncate">
 										{activeWorkspace.branch}
