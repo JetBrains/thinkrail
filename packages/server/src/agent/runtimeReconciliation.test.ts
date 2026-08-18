@@ -132,9 +132,9 @@ describe("PI runtime generations", () => {
 		await activateRuntime(await runtimeWithFaux(false));
 
 		await expect(setSessionModel(session.sessionId, model)).resolves.toBeUndefined();
-		await expect(
-			createSession({ cwd, workspaceId: "workspace-new", model }),
-		).rejects.toThrow("Unknown or unavailable model");
+		await expect(createSession({ cwd, workspaceId: "workspace-new", model })).rejects.toThrow(
+			"Unknown or unavailable model",
+		);
 	});
 
 	test("does not wait for an accepted old-generation turn before activating a candidate", async () => {

@@ -157,9 +157,7 @@ async function runRebuildDrain(): Promise<void> {
 		const action = latestRequestAction;
 		const inspection = await inspectJbcentral();
 		const configured = inspectionConfigured(inspection);
-		const prepared = await preparePiRuntimeGeneration(
-			configured ? [inspection.extensionPath] : [],
-		);
+		const prepared = await preparePiRuntimeGeneration(configured ? [inspection.extensionPath] : []);
 
 		// A newer filesystem/action observation owns the current pointer. This candidate was built against an
 		// older observation and is discarded without becoming visible.
@@ -223,9 +221,7 @@ function requestRuntimeRebuild(action?: JbcentralAction): Promise<RebuildResult>
 
 async function prepareInitialRuntime(inspection: JbcentralInspection): Promise<void> {
 	const configured = inspectionConfigured(inspection);
-	const prepared = await preparePiRuntimeGeneration(
-		configured ? [inspection.extensionPath] : [],
-	);
+	const prepared = await preparePiRuntimeGeneration(configured ? [inspection.extensionPath] : []);
 	if (prepared.outcome === "prepared") {
 		activatePiRuntimeGeneration(prepared.generation);
 		appliedConfigured = configured;

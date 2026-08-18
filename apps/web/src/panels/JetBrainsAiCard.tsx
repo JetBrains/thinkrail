@@ -24,42 +24,33 @@ import { getTransport } from "@/transport";
 const LOGIN_CMD = "central login";
 
 type Notice =
-	| { kind: "blocked"; action: Exclude<JbcentralAction, "update">; sessionIds: string[] }
 	| { kind: "failed"; action: JbcentralAction; reason: JbcentralActionFailureReason }
 	| { kind: "transport-failed"; action: JbcentralAction }
 	| { kind: "login-launched" }
 	| { kind: "login-failed" };
 
-/**
- * Guided native JetBrains AI configuration. The host's closed `JbcentralStatus` is the authority; local state
- * remembers only the initiating action and the closed result that a later status read cannot represent (for
- * example, a disconnect blocked by live sessions). No Central child output or extension data reaches here.
- */
+/** Guided native JetBrains AI configuration over the host's closed Central lifecycle. */
 export function JetBrainsAiCard({
 	status,
 	install,
 	onChanged,
-	onOpenChat,
 }: {
 	status: JbcentralStatus;
 	install: JbcentralInstall;
 	onChanged: () => void | Promise<void>;
-	onOpenChat: (sessionId: string) => void | Promise<void>;
 }) {
 	const [busyAction, setBusyAction] = useState<JbcentralAction | null>(null);
 	const [notice, setNotice] = useState<Notice | null>(null);
 	const [signingIn, setSigningIn] = useState(false);
 
-	// Pending reconciliation can finish after the initiating request has returned. Poll only while the host
-	// says work remains; every poll still goes through the ordinary provider.status authority.
+	// A watched rebuild can outlive the invalidation that started this read. Poll only while applying; the
+	// provider.changed push handles transitions that begin while the status is otherwise settled.
 	useEffect(() => {
-		if (status.state !== "pending" && status.state !== "configuring") return;
+		if (status.state !== "configuring") return;
 		const timer = setInterval(() => void onChanged(), 500);
 		return () => clearInterval(timer);
 	}, [status.state, onChanged]);
 
-	// A completed host transition supersedes transient success/login guidance, but blocked/failure receipts
-	// remain useful until the user retries an action.
 	useEffect(() => {
 		if (status.state === "configured") {
 			setNotice((current) =>
@@ -79,13 +70,7 @@ export function JetBrainsAiCard({
 						: action === "disconnect"
 							? await getTransport().request("provider.jbcentralDisconnect", {})
 							: await getTransport().request("provider.jbcentralUpdate", {});
-				if (result.outcome === "blocked") {
-					setNotice(
-						action === "update"
-							? { kind: "failed", action, reason: "recovery-failed" }
-							: { kind: "blocked", action, sessionIds: result.affectedSessionIds },
-					);
-				} else if (result.outcome === "failed") {
+				if (result.outcome === "failed") {
 					setNotice({ kind: "failed", action, reason: result.reason });
 				}
 				await onChanged();
@@ -115,17 +100,9 @@ export function JetBrainsAiCard({
 
 	const visibleState = busyAction ? "configuring" : status.state;
 	const installed = status.state !== "absent";
-	const configured =
-		status.state === "configured" || (status.state === "blocked" && status.action === "disconnect");
+	const configured = status.state === "configured";
 	const primaryAction = actionForStatus(status);
-	const blockedSessionIds =
-		notice?.kind === "blocked"
-			? notice.sessionIds
-			: status.state === "blocked"
-				? status.affectedSessionIds
-				: null;
-	const blockedAction =
-		notice?.kind === "blocked" ? notice.action : status.state === "blocked" ? status.action : null;
+	const retryAction = status.state === "load-failed" ? retryActionFor(status) : null;
 
 	return (
 		<section
@@ -145,12 +122,26 @@ export function JetBrainsAiCard({
 						Use models made available through your JetBrains subscription.
 					</span>
 				</div>
-				<div className="ml-auto shrink-0">
+				<div className="ml-auto flex shrink-0 items-center gap-xs">
 					{busyAction ? (
 						<Button size="sm" disabled data-testid="jetbrains-configuring">
 							<Loader2 className="size-3.5 animate-spin" />
 							{actionLabel(busyAction)}…
 						</Button>
+					) : status.state === "load-failed" && retryAction ? (
+						<>
+							<Button
+								size="sm"
+								data-testid="jetbrains-retry"
+								onClick={() => void runAction(retryAction)}
+							>
+								<RefreshCw className="size-3.5" />
+								Retry
+							</Button>
+							{status.configured ? (
+								<ActionButton action="disconnect" onAction={() => void runAction("disconnect")} />
+							) : null}
+						</>
 					) : primaryAction ? (
 						<ActionButton action={primaryAction} onAction={() => void runAction(primaryAction)} />
 					) : needsRecheck(status) ? (
@@ -168,30 +159,10 @@ export function JetBrainsAiCard({
 			</div>
 
 			<StatusBody status={status} install={install} onChanged={onChanged} />
-
-			{blockedSessionIds ? (
-				<div className="flex flex-col gap-xs" data-testid="jetbrains-model-blocked">
-					<p className="flex items-start gap-xs text-feedback-warning tr-text-metadata">
-						<AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
-						{blockedAction ? actionLabel(blockedAction) : "This action"} is blocked because these
-						chats use a model that would no longer be available. Choose another model or delete the
-						chats, then retry.
-					</p>
-					<div className="flex flex-wrap gap-xs">
-						{blockedSessionIds.map((sessionId, index) => (
-							<Button
-								key={sessionId}
-								variant="outline"
-								size="sm"
-								data-testid="jetbrains-affected-chat"
-								onClick={() => void onOpenChat(sessionId)}
-							>
-								Open affected chat {index + 1}
-							</Button>
-						))}
-					</div>
-				</div>
-			) : null}
+			<p className="text-text-subtle tr-text-metadata">
+				Changes apply to new chats. A live chat keeps the model runtime it started with until its
+				host session ends or ThinkRail restarts.
+			</p>
 
 			{notice?.kind === "failed" || notice?.kind === "transport-failed" ? (
 				<div className="flex flex-col gap-xs" data-testid="jetbrains-error">
@@ -283,7 +254,7 @@ function StatusBody({
 		case "supported":
 			return (
 				<p className="text-text-muted tr-text-metadata" data-testid="jetbrains-ready">
-					Central is ready. Connect to make its JetBrains AI models available to ThinkRail.
+					Central is ready. Connect to make its JetBrains AI models available to new chats.
 				</p>
 			);
 		case "configured":
@@ -293,7 +264,7 @@ function StatusBody({
 					data-testid="jetbrains-connected"
 				>
 					<Check className="size-3.5 shrink-0" />
-					Connected — Central's JetBrains AI models are available to ThinkRail.
+					Connected — Central's JetBrains AI models are available to new chats.
 				</p>
 			);
 		case "unreviewed":
@@ -319,31 +290,20 @@ function StatusBody({
 			return (
 				<p className="flex items-center gap-xs text-text-muted tr-text-metadata">
 					<Loader2 className="size-3.5 animate-spin" />
-					Central is {actionProgress(status.action)}. Keep ThinkRail open.
+					{status.action
+						? `Central is ${actionProgress(status.action)}. Keep ThinkRail open.`
+						: "ThinkRail is applying the latest Central configuration."}
 				</p>
 			);
-		case "pending":
-			return (
-				<p
-					className="flex items-center gap-xs text-text-muted tr-text-metadata"
-					data-testid="jetbrains-pending"
-				>
-					<Loader2 className="size-3.5 animate-spin" />
-					Waiting for accepted agent work to settle, then{" "}
-					{status.action === "connect" ? "connecting" : "disconnecting"}.
-				</p>
-			);
-		case "blocked":
-			// The detailed status, affected-session links, and retry action render at card level.
-			return null;
-		case "recovery-required":
+		case "load-failed":
 			return (
 				<p
 					className="flex items-start gap-xs text-feedback-error tr-text-metadata"
-					data-testid="jetbrains-recovery-required"
+					data-testid="jetbrains-load-failed"
 				>
 					<AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
-					Central configuration needs repair before model actions can resume. Retry the action.
+					ThinkRail couldn't prepare the updated model runtime. The previous runtime remains
+					available; retry, or disconnect Central to rebuild without it.
 				</p>
 			);
 	}
@@ -384,12 +344,15 @@ function actionForStatus(status: JbcentralStatus): JbcentralAction | null {
 			return "disconnect";
 		case "outdated":
 			return "update";
-		case "blocked":
-		case "recovery-required":
-			return status.action;
 		default:
 			return null;
 	}
+}
+
+function retryActionFor(
+	status: Extract<JbcentralStatus, { state: "load-failed" }>,
+): JbcentralAction {
+	return status.configured ? "connect" : "disconnect";
 }
 
 function needsRecheck(status: JbcentralStatus): boolean {
@@ -425,16 +388,8 @@ function failureText(action: JbcentralAction, reason: JbcentralActionFailureReas
 		case "artifact-missing":
 		case "artifact-present":
 			return "Central finished, but ThinkRail couldn't confirm the configuration. Recheck and retry.";
-		case "legacy-cleanup-invalid":
-		case "legacy-cleanup-failed":
-		case "legacy-cleanup-conflict":
-			return "ThinkRail couldn't safely migrate an earlier configuration. Review the host configuration and retry.";
 		case "candidate-failed":
 			return "ThinkRail couldn't prepare the updated model runtime. The previous runtime was retained.";
-		case "reattach-failed":
-			return "ThinkRail couldn't preserve every live chat in the updated runtime. Change models or delete the affected chats and retry.";
-		case "recovery-failed":
-			return "Automatic recovery didn't complete. Retry the action before using model features.";
 	}
 }
 

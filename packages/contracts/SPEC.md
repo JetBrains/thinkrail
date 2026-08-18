@@ -151,8 +151,10 @@ of the host.
   `configured`, `unreviewed`, `malformed-version`, `probe-failed`, `configuring`, or `load-failed`; only
   parseable safe versions, closed probe/failure reasons, and the current action appear where relevant.
   `configuring` covers both a reviewed CLI action and the coalesced candidate rebuild for the newest watched
-  artifact state; `configured` means the **current runtime for new work** applied that artifact. Historical
-  live sessions may retain an older runtime and are deliberately outside this status. **`JbcentralInstall`**
+  artifact state; `configured` means the **current runtime for new work** applied that artifact.
+  `load-failed.configured` says whether the latest observed global state requested Central, so the client can
+  offer the closed Retry/Disconnect actions without receiving an artifact path. Historical live sessions may
+  retain an older runtime and are deliberately outside this status. **`JbcentralInstall`**
   carries the host's per-OS `{platform,shell,command}` official install plan. **`JbcentralActionResult`** is
   the closed `applied` / `failed` union; failure reasons distinguish installation, version probe/support,
   Central action, artifact postcondition, and closed runtime-load failure without carrying messages. There

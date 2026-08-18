@@ -205,8 +205,12 @@ snapshots plus device-local attention, terminal catalogs, and one **per-session 
   drops authority, since concluding a model is gone from it is exactly the mistake. **`dropModelsFreshness`** is the third writer: authority is
   given up *without* replacing the list, which is what a consumer activating must do **synchronously** —
   a flag an earlier consumer set can otherwise straddle the activation and let an inherited list pass as
-  this opening's own truth before its own `model.list` reply lands. The transport work lives in
-  `chat/useModelCatalog`, not here (the store→transport edge stays type-only). The **in-app login** state
+  this opening's own truth before its own `model.list` reply lands. **`providerVersion`** is the monotonic,
+  data-free `provider.changed` generation observed from the host; **`noteProviderChanged()`** atomically
+  increments it and clears `models` + freshness, so neither a picker nor an older async model-list reply can
+  offer a removed runtime generation. Transport owns the guarded re-read; the Providers settings pane observes
+  the version and re-reads status. Other catalog transport work lives in `chat/useModelCatalog`, not here (the
+  store→transport edge stays type-only). The **in-app login** state
   **`activeLogin: LoginState | null`** (type from `auth`) is **flat + session-less** (a login runs on the
   Welcome screen before any session exists — routing it through a session runtime would drop its frames):
   the pure **`foldLoginFrame`** reducer lives here (as `reduceExtUi`/`reduceSessionEvent` do — `auth` stays

@@ -3,10 +3,9 @@ import { Boxes, Check, KeyRound, Lock, LogIn, LogOut, RefreshCw } from "lucide-r
 import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { LoginDialog } from "@/auth";
 import { Button } from "@/components/ui/button";
-import { selectKnownChatLocation, selectWorkspaceById, toast, useAppStore } from "@/store";
+import { toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
 import { JetBrainsAiCard } from "./JetBrainsAiCard";
-import { openChatInTab } from "./openChat";
 
 /** Human label per auth kind (a configured provider's source suffix). */
 const KIND_LABEL: Record<ProviderAuthKind, string> = {
@@ -34,6 +33,7 @@ export function ProvidersSettings() {
 	const [busyProvider, setBusyProvider] = useState<string | null>(null);
 	const [showAllKeys, setShowAllKeys] = useState(false);
 	const activeLogin = useAppStore((s) => s.activeLogin);
+	const providerVersion = useAppStore((s) => s.providerVersion);
 
 	/** Re-reads provider status. Never rejects — a failed read renders the pane's error banner instead. */
 	const load = useCallback(async () => {
@@ -51,6 +51,10 @@ export function ProvidersSettings() {
 	useEffect(() => {
 		void load();
 	}, [load]);
+
+	useEffect(() => {
+		if (providerVersion > 0) void load();
+	}, [providerVersion, load]);
 
 	// A settled login (success) mutated auth.json + refreshed the registry host-side — re-read so the pane
 	// reflects the new provider even while the terminal dialog is still up (closing it reveals the change).
@@ -89,22 +93,6 @@ export function ProvidersSettings() {
 		},
 		[load],
 	);
-
-	const openAffectedChat = useCallback(async (sessionId: string) => {
-		const store = useAppStore.getState();
-		const location = selectKnownChatLocation(store, sessionId);
-		const workspace = location ? selectWorkspaceById(store, location.workspaceId) : null;
-		if (!location || !workspace) {
-			toast.error(
-				"This chat is active in another client. Delete it there or change its model, then retry.",
-				"Couldn't open the affected chat",
-			);
-			return;
-		}
-		store.closeSettings();
-		store.activateWorkspace(workspace);
-		await openChatInTab(location.workspaceId, sessionId);
-	}, []);
 
 	const providers = report?.providers ?? [];
 	const configured = providers.filter((p) => p.configured);
@@ -194,7 +182,6 @@ export function ProvidersSettings() {
 							status={report.jbcentral}
 							install={report.jbcentralInstall}
 							onChanged={load}
-							onOpenChat={openAffectedChat}
 						/>
 					) : null}
 

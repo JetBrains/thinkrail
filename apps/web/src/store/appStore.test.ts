@@ -2861,6 +2861,20 @@ test("catalog authority falls with the list it describes — only an awaited ref
 	expect(s().modelsFresh).toBe(true);
 });
 
+test("a provider invalidation atomically clears stale models and advances its generation", () => {
+	const s = () => useAppStore.getState();
+	const listed = [
+		{ id: "central-model", name: "central-model", provider: "central" },
+	] as WireModel[];
+	s().finishModelsRefresh({ models: listed, complete: true });
+	const before = s().providerVersion;
+
+	s().noteProviderChanged();
+	expect(s().providerVersion).toBe(before + 1);
+	expect(s().models).toEqual([]);
+	expect(s().modelsFresh).toBe(false);
+});
+
 test("a refresh whose wait was capped installs its list but claims no authority", () => {
 	const s = () => useAppStore.getState();
 	const listed = [{ id: "opus-5", name: "opus-5", provider: "anthropic" }] as WireModel[];

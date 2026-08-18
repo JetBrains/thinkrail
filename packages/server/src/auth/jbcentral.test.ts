@@ -200,7 +200,9 @@ describe("watched native Central runtime", () => {
 
 	test("disconnect affects new work while an existing Central chat keeps its generation", async () => {
 		expect(await connectJbcentral()).toEqual({ outcome: "applied" });
-		const centralModel = (await listAvailableModels()).find((model) => model.id === "central-model");
+		const centralModel = (await listAvailableModels()).find(
+			(model) => model.id === "central-model",
+		);
 		if (!centralModel) throw new Error("synthetic Central model missing");
 		const session = await createSession({
 			cwd: root,

@@ -719,6 +719,8 @@ interface AppState {
 	sessions: Record<string, SessionRuntime>;
 	/** Models with configured auth (cheap win #1) — fetched once, shared by every chat's picker. */
 	models: WireModel[];
+	/** Monotonic host-provider invalidation folded from `provider.changed`; orders async catalog/status reads. */
+	providerVersion: number;
 	/** Bare invalidation counter for the composer's `/`-menu template cache (`chat/ChatView.tsx`) — the
 	 * Templates settings panel (Task B6) bumps it after a `template.save`/`delete`; the store holds only
 	 * the counter, never fetches (see `chat/SPEC.md`'s Template slots bullet). */
@@ -1052,6 +1054,8 @@ interface AppState {
 	appendErrorTurn: (sessionId: string, text: string) => void;
 	handlePiEvent: (event: PiEvent, sessionId: string) => void;
 	setModels: (models: WireModel[]) => void;
+	/** Atomically invalidate model choices and advance the provider generation observed by settings. */
+	noteProviderChanged: () => void;
 	bumpTemplatesVersion: () => void;
 	/** Atomic begin/finish of the awaited catalog refresh — `finish` lands the new list (null = failed
 	 * refresh: keep the current list, and with it its provenance) and clears the flag in ONE write. The
@@ -1617,6 +1621,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	activeTerminalByWorkspace: {},
 	sessions: {},
 	models: [],
+	providerVersion: 0,
 	templatesVersion: 0,
 	modelsRefreshing: false,
 	modelsFresh: false,
@@ -2788,6 +2793,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((s) => withRuntime(s, sessionId, (rt) => reduceSessionEvent(rt, event))),
 	// A `model.list` snapshot: current, but never authoritative — installing it drops `modelsFresh`.
 	setModels: (models) => set({ models, modelsFresh: false }),
+	noteProviderChanged: () =>
+		set((s) => ({ models: [], modelsFresh: false, providerVersion: s.providerVersion + 1 })),
 	bumpTemplatesVersion: () => set((s) => ({ templatesVersion: s.templatesVersion + 1 })),
 	beginModelsRefresh: () => set({ modelsRefreshing: true }),
 	dropModelsFreshness: () => set({ modelsFresh: false }),

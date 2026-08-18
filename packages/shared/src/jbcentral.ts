@@ -255,7 +255,12 @@ export async function inspectJbcentral(
 
 	const version = parseJbcentralVersion(result.stdout);
 	if (!version) {
-		return { executablePath, extensionPath, artifactExists, status: { state: "malformed-version" } };
+		return {
+			executablePath,
+			extensionPath,
+			artifactExists,
+			status: { state: "malformed-version" },
+		};
 	}
 
 	const reviewed = parseJbcentralVersion(`central ${REVIEWED_CENTRAL_VERSION}`);

@@ -18,9 +18,9 @@ export {
 	configurePiRuntimeFactory,
 	configurePiRuntimeSessionExtensionExclusions,
 	getPiRuntimeGeneration,
-	preparePiRuntimeGeneration,
-	type PreparePiRuntimeGenerationResult,
 	type PiRuntimeGeneration,
+	type PreparePiRuntimeGenerationResult,
+	preparePiRuntimeGeneration,
 } from "./piRuntime";
 export {
 	RESOLVE_COMMENT_TOOL_NAME,

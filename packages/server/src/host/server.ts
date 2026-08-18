@@ -30,7 +30,9 @@ import {
 	cancelAllLogins,
 	initializeJbcentralRuntime,
 	setJbcentralAppliedPublisher,
+	setJbcentralChangedPublisher,
 	setLoginPublisher,
+	stopJbcentralRuntime,
 } from "../auth";
 import { resolveWorktreeFile } from "../fs";
 import { normalizeStoredLayoutSettings, setLayoutPublisher } from "../layout";
@@ -221,6 +223,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				ws.subscribe(WS_CHANNELS.piExtensionUi);
 				ws.subscribe(WS_CHANNELS.sessionDeleted);
 				ws.subscribe(WS_CHANNELS.providerLogin);
+				ws.subscribe(WS_CHANNELS.providerChanged);
 				ws.subscribe(WS_CHANNELS.projectUpdated);
 				ws.subscribe(WS_CHANNELS.terminalTabs);
 				ws.subscribe(WS_CHANNELS.workspaceCreated);
@@ -555,6 +558,12 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	setJbcentralAppliedPublisher(() => {
 		track({ name: "provider_login", params: { provider: "jbcentral", method: "central" } });
 	});
+	setJbcentralChangedPublisher(() => {
+		server.publish(
+			WS_CHANNELS.providerChanged,
+			JSON.stringify({ channel: WS_CHANNELS.providerChanged, data: {} }),
+		);
+	});
 
 	// Boot analytics before any trackable action can occur (fire-and-forget by contract — a failure in
 	// here can never block or crash the host). The persisted flag gates sending; the analytics module
@@ -591,6 +600,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			// (best-effort by contract — stop never waits on the network).
 			void shutdownAnalytics();
 			cancelAllLogins();
+			stopJbcentralRuntime();
 			stopAllWatches();
 			disposeAllSessions();
 			// Drop the pending abandoned-client reapers before killing the PTYs they would have killed, so no
@@ -608,6 +618,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			closeAllTerminals();
 			setLayoutPublisher(null);
 			setSettingsPublisher(null);
+			setJbcentralAppliedPublisher(() => {});
+			setJbcentralChangedPublisher(() => {});
 			server.stop(true);
 		},
 	};
