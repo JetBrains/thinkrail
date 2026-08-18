@@ -20,9 +20,10 @@ later, the mobile single-view-with-switcher).
   `panels/SettingsDialog` via
   `store.openSettings()` — open state lives in the store, not local, so other surfaces (the Welcome
   provider warning) can open it too) over a body that branches on whether a workspace is active. The
-  location context makes scope persistent rather than rail-dependent: an **active workspace** renders two
-  lines — `project / workspace display name`, then the git `branch · from baseBranch` metadata line with an optional plain ` · PR #N` (GitHub) or ` · MR !N` (GitLab) suffix
-  (proportional `tr-text-metadata text-text-subtle` per [[web-typography]]); a selected
+  location context makes scope persistent rather than rail-dependent: an **active workspace** renders a
+  single line — `project / workspace display name  branch · from baseBranch` with an optional plain ` · PR #N` (GitHub) or ` · MR !N` (GitLab) suffix.
+  The whole row shares one typography token (`tr-text-ui` per [[web-typography]]); only colour distinguishes
+  the parts — project + workspace name in the strong `text-text-default`, the branch and its trailing metadata/separators in the secondary `text-text-muted`; a selected
   project with no active workspace renders `project / Project home`; no project leaves the logo alone.
   It follows the existing workspace lifecycle snapshots, so auto-renames update live. Responsive
   degradation drops the connection label to its still-labelled status dot below `sm`, then drops the
