@@ -134,7 +134,11 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   the persisted transcript's final conversational message is current (historical `length` attempts followed
   by later work must not become stale warnings). Hydration is a no-op if a runtime already exists, so a
   live/ahead chat is never clobbered. The
-  pure **`reduceSessionEvent`** folds a `PiEvent` into a runtime; **`handlePiEvent(event,
+  pure **`reduceSessionEvent`** folds a `PiEvent` into a runtime. Composer user messages enter
+  optimistically: an equal Pi `message_start` echo is ignored, while Pi's canonical expanded `<skill>`
+  echo **replaces** the immediately preceding matching raw `/skill:<name> …` turn in place (same turn id),
+  so live and hydrated transcripts both contain one canonical skill invocation; a malformed or mismatched
+  block appends normally. **`handlePiEvent(event,
   sessionId)`** and **`applyExtUi(request)`** route by id via the `withRuntime` helper (a no-op for an
   unknown session). The host-wide **`models`** list stays global (not per session), plus
   **`modelsRefreshing`** — the awaited `model.refresh` in-flight flag — and **`modelsFresh`**, the
@@ -339,8 +343,9 @@ branch's review — a commit sha means nothing in another worktree — and dropp
 - **Allowed deps:** `contracts` (`Project`/`Workspace`/`Model`/`ThinkingLevel`/`SessionStats`/
   `SlashCommandInfo`/`ExtUiRequest`/`LoginPush`/`WorkspaceFsChangedPayload`/`AppConfig`/`ThemeId`;
   `DEFAULT_CONFIG` for the pre-welcome default; `PiEvent`/`LoginFrame`, **type-only**); `lib` (the shared
-  path + array primitives — `normalizePath`/`isAbsolutePath` for `matchesWorktreePath`, `shallowEqualArrays`
-  for the snapshot-identity guard; a leaf, so the edge adds no cycle); `chat`
+  path + array + canonical-message primitives — `normalizePath`/`isAbsolutePath` for
+  `matchesWorktreePath`, `shallowEqualArrays` for the snapshot-identity guard, `userText` plus the skill
+  invocation parser/matcher for user-message echo reconciliation; a leaf, so the edge adds no cycle); `chat`
   (`ChatTurn`/`ToolResultState`, **type-only**); `auth` (`LoginState`, **type-only**); `transport`
   (`ConnectionStatus`, **type-only**); `zustand`.
 - **Forbidden:** `server`/`shared`/`pi`; importing `panels`/`shell` or transport runtime.

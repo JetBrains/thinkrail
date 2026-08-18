@@ -1,5 +1,6 @@
 import type { UserMessage } from "@thinkrail/contracts";
 import {
+	BookOpen,
 	ChevronDown,
 	ChevronRight,
 	Clock,
@@ -10,7 +11,13 @@ import {
 	Wrench,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { cn, projectRelativePath, userText } from "@/lib";
+import {
+	cn,
+	parseSkillInvocation,
+	projectRelativePath,
+	type SkillInvocation,
+	userText,
+} from "@/lib";
 import { ActivityGroup } from "./ActivityGroup";
 import { useFold, useSelection } from "./foldState";
 import { Markdown } from "./Markdown";
@@ -97,18 +104,38 @@ export function ChatTurnView({
 	}
 }
 
-/** The user bubble. A review send's context package renders as a compact card — the "Sent N review
- * comments on <file>" line with the COMMENT rows right under it (a send is one message per file, so a
- * file level would always hold exactly one entry — the summary already names the file); each comment
- * unfolds to its full text + the quoted fragment — instead of the structured XML the agent needs.
- * Everything is parsed from the message itself (the transcript IS the history), so any old chat
- * unfolds the same way; the folds survive virtualization via the shared cache. */
+const USER_BUBBLE =
+	"max-w-[85%] whitespace-pre-wrap rounded-[var(--radius-lg)] border border-bubble-user-border bg-clip-padding bg-bubble-user-bg px-md py-sm tr-text-reading text-text-muted";
+
+/** The user bubble. Pi's canonical expanded skill block renders as a compact, collapsed invocation with
+ * any user-supplied request kept visible beneath it. A review send's context package renders as a compact
+ * card — the "Sent N review comments on <file>" line with the COMMENT rows right under it (a send is one
+ * message per file, so a file level would always hold exactly one entry — the summary already names the
+ * file); each comment unfolds to its full text + the quoted fragment — instead of the structured XML the
+ * agent needs. Everything is parsed from the message itself (the transcript IS the history), so any old
+ * chat unfolds the same way; the folds survive virtualization via the shared cache. */
 function UserTurn({ id, message }: { id: string; message: UserMessage }) {
 	const text = userText(message.content);
+	const skill = parseSkillInvocation(text);
+	if (skill) {
+		return (
+			<div data-testid="chat-message" data-role="user" className="flex justify-end">
+				<div className="flex w-full flex-col items-end gap-xs">
+					<SkillInvocationCard foldId={`${id}:skill`} invocation={skill} />
+					{skill.userMessage ? (
+						<div data-testid="skill-user-request" className={USER_BUBBLE}>
+							{skill.userMessage}
+						</div>
+					) : null}
+				</div>
+			</div>
+		);
+	}
+
 	const review = parseReviewPackage(text);
 	return (
 		<div data-testid="chat-message" data-role="user" className="flex justify-end">
-			<div className="max-w-[85%] whitespace-pre-wrap rounded-[var(--radius-lg)] border border-bubble-user-border bg-clip-padding bg-bubble-user-bg px-md py-sm tr-text-reading text-text-muted">
+			<div className={USER_BUBBLE}>
 				{review ? (
 					<div data-testid="review-package-card" className="whitespace-normal">
 						<span data-testid="review-package-summary" className="block text-text-default">
@@ -124,6 +151,59 @@ function UserTurn({ id, message }: { id: string; message: UserMessage }) {
 					text
 				)}
 			</div>
+		</div>
+	);
+}
+
+/** Pi expands `/skill:<name>` before persistence; this disclosure keeps that canonical payload available
+ * without making the full SKILL.md the transcript's default surface. */
+function SkillInvocationCard({
+	foldId,
+	invocation,
+}: {
+	foldId: string;
+	invocation: SkillInvocation;
+}) {
+	const [expanded, toggle] = useFold(foldId);
+	return (
+		<div
+			data-testid="skill-invocation-card"
+			data-expanded={expanded}
+			className="max-w-[85%] overflow-hidden rounded-[var(--radius-lg)] border border-bubble-user-border bg-clip-padding bg-bubble-user-bg"
+		>
+			<button
+				type="button"
+				data-testid="skill-invocation-toggle"
+				aria-expanded={expanded}
+				aria-label={`${expanded ? "Hide" : "Show"} instructions for ${invocation.name}`}
+				onClick={toggle}
+				className="flex w-full items-center gap-xs px-md py-sm text-left outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary"
+			>
+				<BookOpen size={14} className="shrink-0 text-text-muted" aria-hidden="true" />
+				<span className="shrink-0 tr-text-ui text-text-muted">Skill</span>
+				<span className="shrink-0 text-text-subtle" aria-hidden="true">
+					·
+				</span>
+				<span
+					data-testid="skill-invocation-name"
+					className="min-w-0 flex-1 truncate tr-code-text text-text-default"
+				>
+					{invocation.name}
+				</span>
+				{expanded ? (
+					<ChevronDown size={14} className="shrink-0 text-text-muted" aria-hidden="true" />
+				) : (
+					<ChevronRight size={14} className="shrink-0 text-text-muted" aria-hidden="true" />
+				)}
+			</button>
+			{expanded ? (
+				<div
+					data-testid="skill-invocation-content"
+					className="border-bubble-user-border border-t px-md py-sm text-text-muted"
+				>
+					<Markdown text={invocation.content} />
+				</div>
+			) : null}
 		</div>
 	);
 }
