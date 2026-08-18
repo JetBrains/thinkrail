@@ -134,7 +134,11 @@ export function stripFrontmatter(text: string): string {
 const APPLE_PLATFORM = /Mac|iPhone|iPad|iPod/;
 
 function isApplePlatform(): boolean {
-	return typeof navigator !== "undefined" && APPLE_PLATFORM.test(navigator.platform ?? "");
+	return (
+		typeof window !== "undefined" &&
+		typeof navigator !== "undefined" &&
+		APPLE_PLATFORM.test(navigator.platform ?? "")
+	);
 }
 
 /** The platform's primary application modifier: Cmd on Apple devices, Ctrl everywhere else. */

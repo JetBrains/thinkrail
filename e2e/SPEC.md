@@ -37,11 +37,24 @@ this runner: concurrent provider turns would alter rate limits, cost, and determ
 suite remains a distinct artifact gate. Its unsharded namespace does not overlap adaptive lanes, but a
 binary run and `e2e:serial` still run sequentially in the same worktree.
 
+JetBrains Central coverage uses a stateful, independently authored fake executable implementing only the
+argv/exit/postcondition surface ThinkRail invokes (`--version`, `add pi`, `remove pi`, `login`,
+`update --install`). It
+materializes a test-owned synthetic PI extension written solely against PI's public API; no Central artifact,
+source fragment, output string, route, constant, binary, or secret is copied. Browser scenarios cover
+absent/outdated/malformed/unreviewed probes, update, sign-in/retry, native add/remove, external artifact drift,
+missing-artifact/candidate failures with repair, exact legacy cleanup, and exact-model disconnect blocking with
+a host-persisted affected-chat link and no fallback. Unit coverage owns busy-turn settlement, admission races, opposite-action
+serialization, stable-id reattachment, cleanup CAS/rollback, and failed-compensation sealing. Sentinel values
+in synthetic child output, extension diagnostics, and provider routing fields are asserted absent from the
+closed results and rendered settings surface; structural DTO allowlists and generic host mapping keep those
+classes out of WS frames, analytics, logs, and persistence.
+
 ## Isolation contract
 
 Every concurrent lane derives a distinct data dir, HOME, pi-agent dir, fixture repository, binary cache,
-restart artifacts, picker/editor/provider control files, host/restart/binary ports, and JetBrains proxy
-port. Port allocation remains stable and collision-safe across worktrees: the registry claim distinguishes
+restart artifacts, picker/editor/provider control files, host/restart/binary ports, and Central fixture
+artifacts. Port allocation remains stable and collision-safe across worktrees: the registry claim distinguishes
 a lane's logical key while checking staleness against the real worktree path. Legacy plain-path claims are
 still valid.
 
@@ -61,6 +74,7 @@ No path may fall back to `~/.thinkrail`, the developer's HOME/config trees, or t
 ## Verification policy
 
 During iteration, run the affected specs and use Playwright's last-failed mode. Before handoff, every
-app-affecting change runs the complete `bun run e2e` no-agent gate. Binary-only regressions remain covered by
-`e2e:binary`; real agent behavior remains covered by explicitly selected `@agent` suites rather than a fake
-agent.
+app-affecting change runs the complete `bun run e2e` no-agent gate. Binary-only regressions remain covered by `e2e:binary`: a synthetic opaque external extension loads in the
+compiled single-file host with no `pi` executable on `PATH`, for default and custom
+`PI_CODING_AGENT_DIR`. Real Central acceptance remains authorized and external; real agent behavior remains
+covered by explicitly selected `@agent` suites rather than a fake agent.

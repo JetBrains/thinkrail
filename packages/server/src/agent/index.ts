@@ -11,7 +11,12 @@ export {
 	registerBundledRuntime,
 } from "./extensions";
 export * from "./oneshot";
-export * from "./piRuntime";
+export {
+	configurePiRuntime,
+	configurePiRuntimeExtensionPaths,
+	configurePiRuntimeFactory,
+	configurePiRuntimeSessionExtensionExclusions,
+} from "./piRuntime";
 export {
 	RESOLVE_COMMENT_TOOL_NAME,
 	type ResolveCommentOutcome,

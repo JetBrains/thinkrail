@@ -22,11 +22,10 @@ Exposed through explicit subpath exports, not a barrel.
   `@thinkrail/shared/paths` → the worktree-relative path conventions (`WORKSPACE_INTERNAL_DIR`,
   `WORKSPACE_CONTEXT_DIR`, `WORKSPACE_TODOS_DIR`);
   `@thinkrail/shared/codedError` → `CodedError` + `errorCodeOf()`;
-  `@thinkrail/shared/jbcentral` → the full jbcentral protocol: `isJbcentralProxyUrl()` (read) +
-  `isJbcentralInstalled()` / `wireJbcentral()` / `unwireJbcentral()` / `launchJbcentralLogin()` (write) + the
-  pure transforms/consts they compose (`buildProxyUrls`, `apply`/`removeJbcentralOverrides`,
-  `resolveProxyPort`, `jbcentralInstall` (the single source of truth for the per-OS install one-liner),
-  `probeJbcentralSecret`, …).
+  `@thinkrail/shared/jbcentral` → the native Central CLI adapter: absolute executable/version/status
+  probing; reviewed version bounds and the global opaque PI-extension path; `add pi` / `remove pi` /
+  `login` / `update --install` actions; the per-OS official install plan; and the transactional exact cleanup
+  of ThinkRail's legacy `models.json` fields.
 - **Allowed deps:** Bun/Node runtime (`@types/bun`); `contracts` **types** (`JbcentralInstall`, the wire shape
   `jbcentralInstall` returns — kept in the wire so the server can carry it to the card verbatim).
 - **Forbidden:** importing `server` / `web` / any `pi` package; being imported by `web` (it carries
@@ -66,20 +65,28 @@ Exposed through explicit subpath exports, not a barrel.
   from the *home* state dir `~/.thinkrail` (server `persistence`). (The `.gitignore` *body* the host seeds
   into the scratch dir — a lone `*` — is a one-off inlined at that call site, not a path, so it lives
   there, not here.)
-- **/jbcentral** — the **single home for the JetBrains Central CLI proxy protocol**, both read and write, so
-  they can't silently diverge (a co-located drift test asserts `buildProxyUrls` output satisfies
-  `isJbcentralProxyUrl`). **Read:** `isJbcentralProxyUrl(url)` (loopback host + `/wire/` path) — how the
-  server's provider-status report detects a wired provider. **Write:** `wireJbcentral(env)` (probe the proxy
-  secret via `central proxy start`, resolve the port, override anthropic/openai `baseUrl` in `models.json`
-  → a `WireOutcome`: `connected` / `needs-install` / `needs-login` / `error`), `unwireJbcentral(env)` (undo),
-  `isJbcentralInstalled()` (`Bun.which`), `launchJbcentralLogin()` (best-effort spawn of `central login`),
-  plus the pure transforms + probe. **Install guidance is per-OS and single-sourced:** `jbcentralInstall(platform)`
-  returns the `{platform, shell, command}` one-liner (macOS/Linux → `install.sh` curl pipe; Windows →
-  `install.ps1` PowerShell) off the `central/` S3 path (post-rebrand, not the old `jbcentral/`); the server
-  carries it to the web card over the wire (`ProviderStatusReport.jbcentralInstall`) so the browser never
-  hard-codes (or guesses) the command.
-  **The server's `auth` module is its sole caller:** the in-app "Connect JetBrains AI" flow composes
-  `wireJbcentral`/`unwireJbcentral` and adds `modelRegistry.refresh()`.
+- **/jbcentral** — the **single Central process/filesystem boundary**. It resolves Central by absolute path,
+  parses a bounded `central --version` result into an exact reviewed compatibility verdict, exposes the
+  global opaque artifact path (`~/.pi/agent/extensions/jetbrains-central.ts`) and existence only, and invokes
+  only the reviewed argv: `add pi`, `remove pi`, `login`, and `update --install`. The initial supported range
+  is exactly `1.6.2`; lower versions require update, higher versions are unreviewed, and malformed output is
+  unsupported. Human presentation output is never parsed. Version stdout is bounded in memory; action
+  stdout/stderr is ignored. No child output is logged or returned, and only exit success plus safe
+  postconditions map to a closed adapter outcome.
+
+  The same module owns migration of the old ThinkRail writer. Cleanup runs only after native `add pi`
+  succeeds and removes a provider's fields only when they jointly match ThinkRail's exact former pair:
+  `apiKey === "wire-proxy"` and the complete loopback URL grammar ThinkRail emitted for that provider
+  (`anthropic` and `openai` have distinct fixed suffixes). A generic loopback `/wire/…` URL, a partial match,
+  or any unrelated field is preserved. The edit is compare-and-swap guarded, atomically published with the
+  original permissions, and leaves the existing `.bak` untouched. Repeated concurrent changes return a typed
+  conflict outcome rather than overwriting the file. The transaction can restore only the exact
+  fields it removed, and only while the file still matches its committed state; it never restores a whole
+  backup.
+
+  **Install guidance is per-OS and single-sourced:** `jbcentralInstall(platform)` returns the official host-OS
+  plan carried to the card; a remote browser never guesses its own OS. **The server's `auth` module is the sole
+  caller** and composes these host-local actions with `agent`'s runtime-generation coordinator.
 
 ## Get right (shellEnv)
 
@@ -92,14 +99,19 @@ Exposed through explicit subpath exports, not a barrel.
 
 ## Get right (jbcentral)
 
-- **Detect + invoke central by absolute path (`resolveJbcentralBin`), never by bare command.** Two traps,
-  both of which caused an "installed but the in-app Recheck does nothing" bug: (1) `Bun.which(cmd)` with no
-  options reads the PATH **snapshotted at process start**, not the live `process.env.PATH` — so we pass
-  `process.env.PATH` explicitly; (2) the installer drops `central` in `~/.local/bin` and does **not** add
-  that to PATH (it only prints a hint) — so we fall back to that location. `probeJbcentralSecret` /
-  `launchJbcentralLogin` then run the resolved absolute path, so wiring/login work even when it's off PATH.
-- **Back up `models.json` to `.bak` only once** (when no `.bak` exists) — a connect→disconnect→connect cycle
-  must not overwrite the user's pristine pre-jbcentral backup with an intermediate managed state.
+- **Detect + invoke Central by absolute path (`resolveJbcentralBin`), never by bare command.** Pass the live
+  `process.env.PATH` to lookup and retain the official `~/.local/bin/central` fallback, because a long-running
+  host must see a just-installed executable without restart.
+- **Confidential-source-informed, public-surface-only.** Tracked artifacts contain only reviewed argv,
+  compatibility bounds, the opaque path, typed outcomes, and independently authored fakes. Never copy or
+  paraphrase Central source/output, and never read, parse, hash, snapshot, copy, log, upload, persist elsewhere,
+  or serve the generated extension.
+- **No standalone PI dependency.** Central writes global PI configuration; ThinkRail loads its path into the
+  embedded PI runtime, including when `PI_CODING_AGENT_DIR` points elsewhere and no `pi` command exists.
+- **Never return or throw raw child/loader data.** Adapter errors are closed codes with no free-form child
+  text. The caller may report generic guidance only.
+- **Legacy migration is field-transactional.** Preserve unrelated providers/fields and the existing `.bak`;
+  on later activation failure, conditionally restore only this invocation's removed fields.
 
 ## Get right (freePort)
 

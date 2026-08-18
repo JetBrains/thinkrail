@@ -3,13 +3,13 @@ import { Boxes, Check, KeyRound, Lock, LogIn, LogOut, RefreshCw } from "lucide-r
 import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { LoginDialog } from "@/auth";
 import { Button } from "@/components/ui/button";
-import { toast, useAppStore } from "@/store";
+import { selectKnownChatLocation, selectWorkspaceById, toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
 import { JetBrainsAiCard } from "./JetBrainsAiCard";
+import { openChatInTab } from "./openChat";
 
 /** Human label per auth kind (a configured provider's source suffix). */
 const KIND_LABEL: Record<ProviderAuthKind, string> = {
-	central: "JetBrains AI proxy",
 	oauth: "OAuth subscription",
 	"api-key": "API key",
 	env: "environment",
@@ -25,7 +25,7 @@ const MAX_REST_NAMES = 5;
  * The Providers section of the Settings dialog — the in-app model-provider auth surface (moved here from the
  * old Welcome strip). One `provider.status` fetch on mount (every read revalidates host-side), plus in-app
  * auth: Sign-in (OAuth subscriptions), inline API-key entry, and Sign-out — each re-reads status when it
- * settles, so an external `pi` `/login` (or a terminal `central` re-wire) shows up on Refresh too.
+ * settles, so an external `pi` `/login` (or a terminal Central configuration change) shows up on Refresh too.
  */
 export function ProvidersSettings() {
 	const [report, setReport] = useState<ProviderStatusReport | null>(null);
@@ -89,6 +89,22 @@ export function ProvidersSettings() {
 		},
 		[load],
 	);
+
+	const openAffectedChat = useCallback(async (sessionId: string) => {
+		const store = useAppStore.getState();
+		const location = selectKnownChatLocation(store, sessionId);
+		const workspace = location ? selectWorkspaceById(store, location.workspaceId) : null;
+		if (!location || !workspace) {
+			toast.error(
+				"This chat is active in another client. Delete it there or change its model, then retry.",
+				"Couldn't open the affected chat",
+			);
+			return;
+		}
+		store.closeSettings();
+		store.activateWorkspace(workspace);
+		await openChatInTab(location.workspaceId, sessionId);
+	}, []);
 
 	const providers = report?.providers ?? [];
 	const configured = providers.filter((p) => p.configured);
@@ -173,12 +189,14 @@ export function ProvidersSettings() {
 						</section>
 					) : null}
 
-					<JetBrainsAiCard
-						wired={report?.jbcentralWired ?? false}
-						installed={report?.jbcentralInstalled ?? false}
-						install={report?.jbcentralInstall}
-						onChanged={load}
-					/>
+					{report ? (
+						<JetBrainsAiCard
+							status={report.jbcentral}
+							install={report.jbcentralInstall}
+							onChanged={load}
+							onOpenChat={openAffectedChat}
+						/>
+					) : null}
 
 					{apiKeyRows.length > 0 ? (
 						<Group title="Add an API key">

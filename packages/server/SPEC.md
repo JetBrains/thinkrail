@@ -20,8 +20,9 @@ and runs the `pi` agent in-process via `createAgentSession`. Launched in-process
   (project/workspace/git/fs/terminal + the in-process `AgentSession` manager), and `~/.thinkrail`
   persistence.
 - **Public surface:** `createServer(options) → RunningServer` (`{ port, stop }`) and `bootHost(options)
-  → BootedHost` (the process-boot wrapper: resolves the login-shell PATH, picks the port per `portMode`,
-  and installs SIGINT/SIGTERM graceful-shutdown handlers around `createServer`), both re-exported from
+  → BootedHost` (the process-boot wrapper: resolves the login-shell PATH, initializes the safe native-Central
+  runtime generation, picks the port per `portMode`, and installs SIGINT/SIGTERM graceful-shutdown handlers
+  around `createServer`), both re-exported from
   `host/`; plus `registerBundledRuntime` (+ its types, re-exported from `agent/`) — the compiled-binary
   seam by which a launcher that cannot path-load the bundled pi extensions (no `node_modules` inside a
   `bun build --compile` binary) injects them as value-imported factories + a staged skills dir, injects
@@ -33,7 +34,7 @@ and runs the `pi` agent in-process via `createAgentSession`. Launched in-process
   drives real in-process sessions through the production wiring without booting the HTTP host — a
   deliberate second entry that avoids evaluating `host` (Bun-only: `Bun.serve`, `bun-pty`) under the
   node-run e2e worker. Not for `apps/*` use — the web/CLI boundary rules are unchanged.
-- **Allowed deps:** `contracts` (types + WS constants), `shared` (`shellEnv`), `bun-pty`,
+- **Allowed deps:** `contracts` (types + WS constants), `shared` (`shellEnv` + the Central adapter), `bun-pty`,
   `@earendil-works/pi-coding-agent` + `@earendil-works/pi-ai` (runtime), Bun/Node.
 - **Forbidden:** importing `web`/`cli`/`desktop`; being bundled into the browser.
 
@@ -59,8 +60,8 @@ internals**. The edges between them are owned here (see the dependency graph), n
 | `reviews` | draft review comments on files/diffs: store + anchoring + context-package render | [reviews/SPEC.md](src/reviews/SPEC.md) |
 | `watch` | per-worktree fs watcher → debounced `workspace.fsChanged` invalidation push | [watch/SPEC.md](src/watch/SPEC.md) |
 | `terminal` | workspace-scoped `bun-pty` terminals | [terminal/SPEC.md](src/terminal/SPEC.md) |
-| `agent` | in-process pi `AgentSession`s + the shared pi runtime + one-shot completions | [agent/SPEC.md](src/agent/SPEC.md) |
-| `auth` | provider status (`provider.status`) + in-app login (OAuth / API key / logout) | [auth/SPEC.md](src/auth/SPEC.md) |
+| `agent` | in-process pi sessions + shared runtime generations/reconciliation + one-shot completions | [agent/SPEC.md](src/agent/SPEC.md) |
+| `auth` | provider status/login plus native JetBrains Central orchestration | [auth/SPEC.md](src/auth/SPEC.md) |
 | `assist` | ad-hoc one-shot tasks (workspace naming, …) on a cheap model, best-effort | [assist/SPEC.md](src/assist/SPEC.md) |
 | `analytics` | anonymous usage analytics: closed event set → PostHog sink (privacy contract in its spec) | [analytics/SPEC.md](src/analytics/SPEC.md) |
 | `dialog` | the host's native folder picker | [dialog/SPEC.md](src/dialog/SPEC.md) |
@@ -89,8 +90,8 @@ the host from env via `bootHost` for dev/e2e.
   agent-side `resolve_comment` tool delegates back through a seam
   `host` installs (`agent.setReviewCommentHandler` → `reviews.resolveCommentFromAgent`)
 - `assist` → `agent` (the one-shot completion primitive)
-- `auth` → `agent` (`getPiRuntime` — the shared `AuthStorage` + `ModelRegistry`; one-way, `agent` never imports `auth`)
-- `agent` → (no internal deps — only the pi runtime)
+- `auth` → `agent` (the shared runtime/auth facade plus the narrow runtime-generation coordinator; one-way, `agent` never imports `auth`)
+- `agent` → (no internal deps — only the pi runtime; Central paths and desired state are passed in through its public coordinator)
 - `persistence`, `dialog`, `github`, `history`, `templates` → (leaves)
 
 Rules: features never import `host`, and never each other except the edges above. The graph is acyclic.
@@ -98,8 +99,9 @@ Rules: features never import `host`, and never each other except the edges above
 own never import `host` either: they expose a **publisher-injection seam** (`setTerminalPublisher`,
 `setSessionPublisher`, `setLoginPublisher`, `projects`' `setProjectPublisher` for the full-snapshot
 `project.updated` lifecycle, `workspaces`' `setWorkspacePublisher` for the
-`workspace.created`/`updated`/`removed` lifecycle trio, and `settings`' `setSettingsPublisher` for
-`settings.changed`) that `host` installs at `createServer` — so the channel wiring lives only in `host`.
+`workspace.created`/`updated`/`removed` lifecycle trio, `settings`' `setSettingsPublisher` for
+`settings.changed`, and auth's applied-only Central analytics publisher) that `host` installs at
+`createServer` — so channel/analytics wiring lives only in `host`.
 `history` stays registry-free (never imports `projects`/`workspaces`); `host` injects the scope filter
 + labels from the registries at the handler layer (`history.search` handler). `templates` stays
 registry-free too — it takes a plain `cwd`, never a `workspaceId`; the `template.*` handler resolves

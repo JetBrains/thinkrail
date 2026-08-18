@@ -49,8 +49,8 @@ of the host.
     client→host params carry it inert) — the shape a model takes **on the wire**
     (`model.list`/`model.refresh`/`model.default`, the `session.create` result + params,
     `session.setModel` params, `SessionSummary.model`). An **allowlist** of exactly what the UI renders, *not*
-    an `Omit`: `Model.baseUrl` carries the jbcentral proxy secret (`.../wire/<SECRET>/...`) when JetBrains AI
-    is wired and `headers` can carry auth, and an allowlist **fails closed** — a future `Model` field (secret
+    an `Omit`: extension/provider `Model.baseUrl` and `headers` can carry routing credentials, and an allowlist
+    **fails closed** — a future `Model` field (secret
     or not) is excluded by default. The host re-resolves the real `Model` from `{provider,id}` — so a client
     can neither read the secret nor inject a `baseUrl` for the agent to call (see the `agent` module SPEC);
   - `@earendil-works/pi-agent-core`: `AgentEvent`, `AgentMessage`, `ThinkingLevel` (the
@@ -139,19 +139,24 @@ of the host.
   place** — collapsing them into one field would make a re-pointed target lie about where the branch came
   from; **`ProviderStatus`/`ProviderStatusReport`**
   — the auth-provider status rows the Welcome strip renders (per-provider `configured` + auth `kind`:
-  oauth / api-key / env / central / other — never credential values; plus `canOAuth`/`canApiKey`/`canLogout`,
+  oauth / api-key / env / other — never credential values; plus `canOAuth`/`canApiKey`/`canLogout`,
   which gate the strip's in-app Sign-in / Sign-out affordances — `canLogout` is true only for a removable
-  auth.json credential, false for env / central / models.json auth the host can't unset); the **in-app login wire** — **`LoginFrame`** (the streamed
+  auth.json credential, false for env / runtime / models.json auth the host can't unset); the **in-app login wire** — **`LoginFrame`** (the streamed
   flow updates: `authUrl` / `deviceCode` / `select` / `prompt` / `progress` / `success` / `error`, which
   **accumulate** client-side, never a credential value), **`LoginPush`** (the `provider.login` frame,
   `{ loginId, providerId, frame }`) and **`LoginReply`** (`{ loginId, value }` — the browser's answer to a
-  `select`/`prompt`); the JetBrains AI wire — **`ProviderStatusReport.jbcentralInstalled`** (is the
-  `central` CLI on the host) alongside `jbcentralWired` and **`jbcentralInstall`** (**`JbcentralInstall`**:
-  the host's per-OS `{platform, shell, command}` install one-liner — for the *host's* OS, not the browser's,
-  so a remote/phone client still shows the command for the machine running the host), and
-  **`JbcentralConnectResult`** (the in-app connect state machine: `connected` / `needs-install` /
-  `needs-login` / `error` (+`message`); the `needs-install` command comes from `jbcentralInstall`, not a
-  hint on this result));
+  `select`/`prompt`); the JetBrains AI wire (protocol v40) — **`JbcentralStatus`**, nested on
+  `ProviderStatusReport`, is the
+  closed host-authored lifecycle: `absent`, `outdated`, `supported`, `configured`, `unreviewed`,
+  `malformed-version`, `probe-failed`, `configuring`, `pending`, `blocked`, or `recovery-required`; only parseable safe
+  versions, closed probe/failure reasons, and the current action appear where relevant. **`JbcentralInstall`**
+  carries the host's per-OS `{platform,shell,command}` official install plan. **`JbcentralActionResult`** is
+  the closed `applied` / `pending` / `blocked` / `failed` union; failure reasons distinguish installation,
+  version probe/support, Central action/postcondition, exact legacy cleanup, candidate/reattachment, and
+  recovery classes without carrying messages. A blocked result/status may carry only `affectedSessionIds`
+  so every client can direct the user to those existing chats; it has no free-form child/loader message. Raw stdout/stderr, generated extension
+  content or paths, proxy URLs/secrets, diagnostics, and raw PI models
+  are structurally absent; server and web map codes to their own generic copy);
   the **theme/config selection** — **`ThemeId`** is an open string on the wire, because the host persists
   an opaque selection while the independently shipped web client owns the available manifest catalog;
   **`AppConfig`** (`{ theme, analyticsEnabled }` — an extensible bag; `analyticsEnabled` is the
@@ -224,8 +229,9 @@ of the host.
   `"api_key"`, issue #97 — both auth routes ride one channel; a flow can take minutes and must
   not sit on the request nor block the WS pump) / **`loginReply`** — answers a live `select`/`prompt`,
   correlated by `loginId` / **`loginCancel`** / **`logout`** /
-  the **JetBrains AI** trio **`jbcentralConnect`** (wire Claude+GPT via the jbcentral proxy → a
-  `JbcentralConnectResult`) / **`jbcentralDisconnect`** / **`jbcentralLogin`** (launch `central login`)) /
+  the **JetBrains AI** set **`jbcentralConnect`** / **`jbcentralDisconnect`** /
+  **`jbcentralUpdate`** / **`jbcentralLogin`** (native global Central actions returning
+  `JbcentralActionResult`; none accepts an executable, artifact path, output, URL, or secret from the client)) /
   **`workspace.listExisting`** (the selected project's unattached Git worktrees, with detached rows
   disabled by status) / **`workspace.openExisting`** (revalidate + register one branch-backed checkout as
   `kind: "external"`, emitting the ordinary `workspace.created`, without mutating Git or disk) /

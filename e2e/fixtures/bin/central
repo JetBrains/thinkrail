@@ -1,28 +1,81 @@
 #!/bin/sh
-# e2e stub for the JetBrains Central CLI (`central`). Deterministic: no network, no real proxy/daemon.
-# Mirrors ONLY the surface ThinkRail's jbcentral integration invokes (see packages/shared/src/jbcentral.ts).
-#
-# Outcome is controlled by the file named in $CENTRAL_STUB_STATE (E2E_CENTRAL_STATE), read live per call so a
-# test can drive the card's not-signed-in / error branches without restarting the shared host:
-#   absent/empty  -> signed in     (prints the persistent secret, exit 0)
-#   "needs-login" -> not signed in (empty secret, exit 0)  -> the card's "Sign in to JetBrains" state
-#   "error"       -> hard failure  (stderr + exit 1)        -> the card's error state
-if [ "$1" = "proxy" ] && [ "$2" = "start" ]; then
-	state=""
-	[ -n "$CENTRAL_STUB_STATE" ] && [ -f "$CENTRAL_STUB_STATE" ] && state=$(cat "$CENTRAL_STUB_STATE")
-	if [ "$state" = "needs-login" ]; then
-		# `--return-key` with no JetBrains session prints nothing → the host reads it as not-logged-in.
-		exit 0
-	fi
-	if [ "$state" = "error" ]; then
-		echo "stub central: proxy start failed" >&2
-		exit 1
-	fi
-	# `--return-key`: print ONLY the persistent proxy secret (a URL-safe path segment).
-	echo "e2efakesecret0123456789abcdef01"
+# Independently authored, stateful fake for the reviewed JetBrains Central CLI surface. It intentionally
+# models only argv, exit status, and the opaque global extension postcondition used by ThinkRail tests.
+set -eu
+
+state=""
+if [ -n "${CENTRAL_STUB_STATE:-}" ] && [ -f "$CENTRAL_STUB_STATE" ]; then
+	state=$(cat "$CENTRAL_STUB_STATE")
+fi
+if [ -n "${CENTRAL_STUB_LOG:-}" ]; then
+	printf '%s\n' "$*" >> "$CENTRAL_STUB_LOG"
+fi
+
+artifact="$HOME/.pi/agent/extensions/jetbrains-central.ts"
+
+if [ "$1" = "--version" ]; then
+	case "$state" in
+		outdated) printf 'central 1.5.0 (synthetic test metadata)\n' ;;
+		unreviewed) printf 'central 1.7.0 (synthetic test metadata)\n' ;;
+		malformed) printf 'synthetic malformed version\n' ;;
+		probe-error)
+			printf 'E2E_CENTRAL_CHILD_SENTINEL_probe\n' >&2
+			exit 7
+			;;
+		*) printf 'central 1.6.2 (synthetic test metadata)\n' ;;
+	esac
 	exit 0
 fi
+
+if [ "$1" = "add" ] && [ "${2:-}" = "pi" ]; then
+	case "$state" in
+		needs-login|add-error)
+			printf 'E2E_CENTRAL_CHILD_SENTINEL_add\n' >&2
+			exit 9
+			;;
+		missing-artifact)
+			rm -f "$artifact"
+			exit 0
+			;;
+		slow-add) sleep 1 ;;
+	esac
+	mkdir -p "$(dirname "$artifact")"
+	if [ "$state" = "candidate-error" ]; then
+		cp "$CENTRAL_STUB_BAD_EXTENSION_SOURCE" "$artifact"
+	else
+		cp "$CENTRAL_STUB_EXTENSION_SOURCE" "$artifact"
+	fi
+	exit 0
+fi
+
+if [ "$1" = "remove" ] && [ "${2:-}" = "pi" ]; then
+	if [ "$state" = "remove-error" ]; then
+		printf 'E2E_CENTRAL_CHILD_SENTINEL_remove\n' >&2
+		exit 11
+	fi
+	if [ "$state" != "remove-leaves-artifact" ]; then
+		rm -f "$artifact"
+	fi
+	exit 0
+fi
+
 if [ "$1" = "login" ]; then
+	if [ "$state" = "login-error" ]; then
+		exit 12
+	fi
+	# A successful synthetic login makes a previous needs-login control ready for retry.
+	if [ "$state" = "needs-login" ]; then
+		: > "$CENTRAL_STUB_STATE"
+	fi
 	exit 0
 fi
-exit 0
+
+if [ "$1" = "update" ] && [ "${2:-}" = "--install" ]; then
+	if [ "$state" = "update-error" ]; then
+		exit 13
+	fi
+	: > "$CENTRAL_STUB_STATE"
+	exit 0
+fi
+
+exit 8

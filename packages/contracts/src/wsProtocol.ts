@@ -13,7 +13,9 @@ import type {
 	GitStatus,
 	HistoryScope,
 	HistorySearchResult,
+	JbcentralActionResult,
 	JbcentralConnectResult,
+	JbcentralLoginResult,
 	LoginReply,
 	OpenBranchReview,
 	Project,
@@ -216,7 +218,9 @@ export interface TerminalTabsPush {
 // v39: the TODO review map — `TodoItem.artifacts` (mirrored `TodoArtifact`, incl. the host-owned `commit`
 // kind) rides `todo.list`, whose decoration also derives a commit artifact's `files` from git (absent =
 // unresolvable sha, degrade silently).
-export const PROTOCOL_VERSION = 39;
+// v40: JetBrains Central adds typed lifecycle/action states plus connect, disconnect, update, and login
+// methods.
+export const PROTOCOL_VERSION = 40;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a
@@ -360,7 +364,7 @@ export const WS_METHODS = {
 	// pi's own clamp for a `{model, desired-level}` pair. The pre-session picker has no session to ask,
 	// and re-deriving pi's clamp client-side would give that one path a policy of its own.
 	modelClampThinking: "model.clampThinking",
-	// Auth-provider status (the Welcome strip): per-provider configured + auth kind, jbcentral wiring.
+	// Auth-provider status (the Welcome strip): per-provider configured + auth kind, Central lifecycle.
 	// Every read revalidates host-side (auth + registry reload), so a Refresh is just a re-request.
 	providerStatus: "provider.status",
 	// In-app provider auth (the Welcome strip's Sign-in). loginStart kicks off pi's login flow (OAuth or
@@ -372,11 +376,11 @@ export const WS_METHODS = {
 	providerLoginReply: "provider.loginReply",
 	providerLoginCancel: "provider.loginCancel",
 	providerLogout: "provider.logout",
-	// In-app JetBrains AI (jbcentral proxy) wiring: connect routes Claude+GPT via your JetBrains plan (writes
-	// models.json + refreshes the registry), disconnect undoes it, login launches `jbcentral login` (browser).
+	// Native JetBrains AI setup through Central's reviewed PI commands; the browser receives closed states only.
 	providerJbcentralConnect: "provider.jbcentralConnect",
 	providerJbcentralDisconnect: "provider.jbcentralDisconnect",
 	providerJbcentralLogin: "provider.jbcentralLogin",
+	providerJbcentralUpdate: "provider.jbcentralUpdate",
 	// Persist a partial change to the server-synced app settings (e.g. the theme). The host merges, saves
 	// `config.json`, and broadcasts `settings.changed` — the caller converges on that push, not optimism.
 	settingsUpdate: "settings.update",
@@ -770,12 +774,11 @@ export interface WsMethodMap {
 	"provider.loginCancel": { params: { loginId: string }; result: Ack };
 	// Removes a provider's stored credentials (auth.json) and refreshes the registry.
 	"provider.logout": { params: { providerId: string }; result: Ack };
-	// Wire Claude+GPT through the local jbcentral proxy (JetBrains AI). Returns a small state machine —
-	// connected / needs-install / needs-login / error — the JetBrains AI card walks the user through.
+	// Native Central PI actions. Results and status are closed unions: no Central/extension output crosses.
 	"provider.jbcentralConnect": { params: Record<string, never>; result: JbcentralConnectResult };
-	"provider.jbcentralDisconnect": { params: Record<string, never>; result: Ack };
-	// Launch `jbcentral login` (its browser sign-in) on the host, best-effort.
-	"provider.jbcentralLogin": { params: Record<string, never>; result: { launched: boolean } };
+	"provider.jbcentralDisconnect": { params: Record<string, never>; result: JbcentralActionResult };
+	"provider.jbcentralLogin": { params: Record<string, never>; result: JbcentralLoginResult };
+	"provider.jbcentralUpdate": { params: Record<string, never>; result: JbcentralActionResult };
 	// Merge a partial into the server-synced app settings, persist it, and broadcast `settings.changed`.
 	// Returns the merged, persisted `AppConfig`.
 	"settings.update": { params: { config: Partial<AppConfig> }; result: AppConfig };

@@ -22,16 +22,13 @@ ourselves and never surface a credential value over the wire.
 - **Owns:**
   - `providerStatus` — `getProviderStatus()` → the wire `ProviderStatusReport`: per-provider `configured`
     (pi's `hasAuth`-family truth, so env-var auth counts) + auth `kind` (oauth / api-key / env /
-    **central** / other) + display name + the in-app-login capability flags **`canOAuth`/`canApiKey`**,
-    configured-first. It **revalidates on every read**: a no-options `runtime.refresh()` (pi 0.82 folded
-    the old `reloadConfig()` into it; `allowNetwork` resolves to the runtime's ambient default — OFF)
-    reloads models.json and recomposes providers (it does **not** touch auth.json itself), and its availability refresh
-    re-runs the per-provider auth checks against pi's credential store — which reads auth.json fresh
-    (under a lock) on every access, so no separate credentials reload exists or is needed. A `pi`
-    `/login` (or a terminal `central` re-wire) — or an in-app mutation below — thus shows up on the next
-    read without a host restart (accepted micro-risk: refreshing the shared runtime concurrent with a streaming session —
-    same as pi's TUI on `/login`). jbcentral wiring is detected from the runtime's **effective** model
-    `baseUrl`s via `shared/jbcentral`'s `isJbcentralProxyUrl` — never a separate `models.json` read.
+    other) + display name + the in-app-login capability flags **`canOAuth`/`canApiKey`**,
+    configured-first. It **revalidates on every read through `agent`'s admission coordinator**: the current
+    generation refreshes local config/auth availability with network disabled, so an external PI login is
+    visible without mutating a runtime concurrently with cutover. Central is not inferred from model URLs:
+    status comes from `shared/jbcentral`'s executable/version/artifact postconditions plus the coordinator's
+    active-or-pending generation state. An external global add/remove discovered here schedules the same
+    serialized reconciliation path as an in-app action; until it applies, the report is truthfully pending.
     Assembly is a pure `buildProviderReport(sources)` over a narrow sources slice, unit-tested with
     fixture data.
     - **OAuth-capable ids are first-class rows.** The id universe unions model-catalog providers,
@@ -45,8 +42,9 @@ ourselves and never surface a credential value over the wire.
       creds — bedrock/vertex/azure — and OAuth+key providers — github-copilot — just work; the
       hand-maintained exclusion sets are gone; `openai-codex` reports `false` because pi's provider has
       no key auth, not because we said so). `canLogout` = the id has a stored
-      **auth.json** credential (`credentialProviders`) — the only auth the host can remove; env / central
-      (models.json) / models.json-keyed auth report `false` (Sign-out would no-op, so the strip hides it).
+      **auth.json** credential (`credentialProviders`) — the only auth the host can remove; env / models.json-
+      keyed auth report `false` (Sign-out would no-op, so the strip hides it). Central is represented only by
+      the dedicated closed lifecycle, never inferred or attached to a provider row.
   - `providerLogin` — the in-app credential **writes**, session-less (a login runs on the Welcome screen
     before any session exists), so a `loginId`-keyed sibling of `agent/webUiContext`:
     - `startLogin(providerId, type = "oauth")` → `{ loginId }` **synchronously**; `runtime.login(id,
@@ -70,29 +68,42 @@ ourselves and never surface a credential value over the wire.
       canned interaction answering exactly one secret prompt — is gone with `provider.setApiKey`: the
       dialog flow subsumes it and also serves multi-prompt providers.)
     - `setLoginPublisher(fn)` — the server→client push seam (defaults to a no-op).
-  - `jbcentral` — the in-app **JetBrains AI** (jbcentral proxy) wiring, composing `@thinkrail/shared/jbcentral`
-    (which owns the protocol) and adding the one live-runtime step the standalone CLI can't:
-    `connectJbcentral()` (`wireJbcentral` → on success a no-options `runtime.refresh()` → a `JbcentralConnectResult`:
-    connected / needs-install / needs-login / error), `disconnectJbcentral()` (`unwireJbcentral` + refresh),
-    `jbcentralLogin()` (best-effort `central login` browser launch). `providerStatus` also surfaces
-    `jbcentralInstalled` (via `isJbcentralInstalled`) **and `jbcentralInstall`** (the host's per-OS install
-    one-liner, via `jbcentralInstall(process.platform)`) so the card knows its state — and shows the right
-    command for the host's OS — from the one status read.
+  - `jbcentral` — the in-app **JetBrains AI** native flow. It composes `shared/jbcentral`'s host-local adapter
+    with the narrow `agent` runtime-generation coordinator; it never reaches manager internals. Connect is a
+    staged transaction: compatible Central → exclusive admission and an `agent_settled` drain → `add pi`
+    success and artifact postcondition → exact legacy cleanup → candidate generation validation →
+    cutover/reattachment, all before admission reopens. A later failure restores only
+    this invocation's cleanup fields when its compare-and-swap still holds, retains the old generation, and
+    does not run `remove pi` as compensation unless ownership could be proven. Disconnect serializes
+    `remove pi`, validates that every live session's exact persisted `{provider,id}` survives, and blocks or
+    restores Central configuration rather than permit PI's fallback. Login launches `central login` only
+    after the same exact-version preflight; update invokes `central update --install` so an older release can
+    reach the reviewed version; all actions use the resolved absolute executable.
+
+    One process-wide single-flight serializes connect/disconnect/update/reconciliation across browser clients.
+    An action that begins while work is active closes admission, lets already accepted automatic work finish at
+    `agent_settled`, reports `pending`, then applies in the background. If that background completion is
+    model-blocked, the shared host status retains only the affected session ids so every client can link the
+    user to a safe resolution. Opposite concurrent actions do not run side effects in parallel. A recovery
+    admission seal survives failed repair attempts and opens only after a coherent generation is applied.
+    Status and action results use only the closed contracts taxonomy—never child output, extension contents,
+    diagnostics, proxy data, raw models, or arbitrary thrown messages.
 - **Public surface (barrel):** `getProviderStatus`, `buildProviderReport` (+ `ProviderStatusSources`);
   `startLogin`, `resolveLogin`, `cancelLogin`, `cancelAllLogins`, `logoutProvider`,
-  `setLoginPublisher`; `connectJbcentral`, `disconnectJbcentral`, `jbcentralLogin`.
-- **Allowed deps:** `contracts` (wire types); `shared/jbcentral`; the **`agent` barrel** for
-  `getPiRuntime()` (the shared `ModelRuntime`); `@earendil-works/pi-ai` (auth interaction **types** only).
-- **Forbidden:** reaching into `agent` internals (only `getPiRuntime` via its barrel); importing `host` or
+  `setLoginPublisher`; `initializeJbcentralRuntime`, `getJbcentralStatus`, `connectJbcentral`,
+  `disconnectJbcentral`, `updateJbcentral`, `jbcentralLogin`, and the applied-transition publisher seam.
+- **Allowed deps:** `contracts` (wire types); `shared/jbcentral`; the **`agent` barrel** for the shared
+  runtime/auth facade and narrow generation coordinator; `@earendil-works/pi-ai` (auth interaction **types** only).
+- **Forbidden:** reaching into `agent` internals (runtime/auth and reconciliation only through its barrel); importing `host` or
   any other sibling; deep-importing pi's TUI (`modes/interactive/*`) for its private provider constants;
   ever putting a credential **value** on the wire.
 
 ## Get right
 
 - **`loginStart` must not `await` the flow** — return the handle, run `login()` detached.
-- **Writes refresh themselves** (pi's `login`/`logout` refresh availability internally) — but the status
-  read still `refresh()`es (which reloads models.json), or external changes (a terminal `pi /login`, a
-  `central` re-wire) stay invisible until restart.
+- **All runtime/auth reads and writes take coordinator admission.** Pi's login/logout synchronizes its own
+  provider locally; status still refreshes the admitted current generation so external credential changes
+  become visible. Central artifact drift never mutates the live runtime directly—it schedules reconciliation.
 - **API keys persist only through `login(id, "api_key", interaction)`** — `setRuntimeApiKey` is a
   session-lifetime overlay and would silently drop the key on host restart. The interaction is the real
   dialog bridge, never a canned auto-answer (a canned one can only serve single-prompt providers).
@@ -103,4 +114,5 @@ ourselves and never surface a credential value over the wire.
 ## Consumed by
 
 `host` (wires all `provider.*` handlers + the `provider.login` channel publish); `agent` does **not** depend
-on `auth` (the edge is one-way: `auth` → `agent` for `getPiRuntime`).
+on `auth` (the edge is one-way: `auth` → `agent` through admitted runtime callbacks and the generation
+boundary).

@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 import {
 	activeWorktreeRow,
 	createWorkspaceViaDialog,
@@ -25,6 +25,30 @@ import { seedExternalCwdSessions, seedWorkspaceSession } from "./fixtures/sessio
 // reply. Querying "fix" instead matches both entries (a direct substring of the prompt, and a
 // case-insensitive substring of "Fixed" in the reply) and otherwise exercises the exact same scenario the
 // brief describes — see task-A7-report.md for the full writeup.
+
+async function closeAutoOpenedChat(page: Page): Promise<void> {
+	const tab = page.locator('[data-testid="editor-tab"][data-kind="chat"]');
+	await tab.getByTestId("editor-tab-close").click();
+	await expect(tab).toHaveCount(0);
+}
+
+async function openChatHistory(page: Page): Promise<void> {
+	const history = page.getByTestId("chat-history");
+	await expect(history).toBeVisible({ timeout: 20_000 });
+	await history.click();
+}
+
+async function settleSubmittedTurn(page: Page): Promise<void> {
+	const abort = page.getByTestId("chat-abort");
+	const settled = page
+		.locator('[data-testid="chat-message"][data-role="system"]')
+		.filter({ hasText: "Done" })
+		.last()
+		.or(page.locator('[data-testid="chat-message"][data-role="error"]').last());
+	await expect(abort.or(settled).first()).toBeVisible({ timeout: 20_000 });
+	if (await abort.isVisible()) await abort.click();
+	await expect(settled).toBeVisible({ timeout: 20_000 });
+}
 
 test("Ctrl+R opens history recall, cycles scope to all, zooms to messages, inserts a prompt, and Esc preserves the draft", async ({
 	page,
@@ -101,12 +125,12 @@ test("Ctrl+R opens history recall, cycles scope to all, zooms to messages, inser
 	await expect(overlay).toBeHidden();
 	await expect(input).toHaveValue("my draft");
 
-	// Cmd/Ctrl+Enter on a selected prompt hit inserts AND submits, reusing the composer's own send path —
-	// cheap to cover with no agent: `onSubmit` appends the user message optimistically *before* the (here,
-	// rejected — no auth in this suite) transport call, so the sent text lands in the transcript regardless
-	// of what the host does next. Re-open + re-navigate to the same prompt hit rather than reusing the
-	// overlay instance closed by the Enter-insert above. `ControlOrMeta` is Playwright's cross-platform
-	// modifier alias (Meta on macOS, Control elsewhere) — it matches the app's own check on both the
+	// Cmd/Ctrl+Enter on a selected prompt hit inserts AND submits, reusing the composer's own send path.
+	// `onSubmit` appends the user message optimistically, so this assertion needs no provider result; the
+	// turn is stopped below as soon as the send path is covered. Re-open + re-navigate to the same hit
+	// rather than reusing the overlay instance closed by the Enter-insert above. `ControlOrMeta` is the
+	// cross-platform modifier alias (Meta on macOS, Control elsewhere) — it matches the app's own check on
+	// both the
 	// Composer's and the overlay's key handlers (`e.metaKey || e.ctrlKey`), so this exercises the same
 	// gesture a real user would make on either platform.
 	await input.press("Control+r");
@@ -123,6 +147,9 @@ test("Ctrl+R opens history recall, cycles scope to all, zooms to messages, inser
 			.locator('[data-testid="chat-message"][data-role="user"]')
 			.filter({ hasText: "fix the flaky watcher test" }),
 	).toBeVisible();
+	// The host outlives browser tests. Settle the turn before resetState removes its transcript; otherwise a
+	// later session append can recreate that path without its header in the next test's reused workspace.
+	await settleSubmittedTurn(page);
 });
 
 test("Cmd/Ctrl+Enter from the overlay sends pending image attachments with the recalled prompt and clears them", async ({
@@ -186,8 +213,8 @@ test("Cmd/Ctrl+Enter from the overlay sends pending image attachments with the r
 	await expect(thumbnails).toBeHidden();
 
 	// And the wire request really carried the attachment (the frame may land a beat after the UI
-	// updates — poll). The request itself is rejected by the unauthenticated host, which is fine: the
-	// payload already proves the image went with the text.
+	// updates — poll). Whether the host accepts or rejects it is immaterial: the payload proves the image
+	// went with the text.
 	await expect(() => {
 		const prompt = sentFrames.find(
 			(f) => f.includes('"session.prompt"') && f.includes("fix the flaky watcher test"),
@@ -196,6 +223,9 @@ test("Cmd/Ctrl+Enter from the overlay sends pending image attachments with the r
 		expect(prompt).toContain('"images"');
 		expect(prompt).toContain('"image/png"');
 	}).toPass({ timeout: 5000 });
+	// As above, settle before this test's state is removed; ending at the optimistic UI write is not
+	// isolation when the e2e host is shared across tests.
+	await settleSubmittedTurn(page);
 });
 
 test("empty query in chat scope shows the empty state for a session with no history yet", async ({
@@ -258,6 +288,7 @@ test("plain ArrowUp/ArrowDown recall steps through this chat's own prior prompts
 }) => {
 	await openFixtureProject(page);
 	const workspace = await createWorkspaceViaDialog(page);
+	await closeAutoOpenedChat(page);
 	// No explicit `id`: this test never references the seeded session by id again (it reopens via the
 	// `chat-history` → `closed-chat-item` UI flow below), so the default fresh-per-call id is enough —
 	// and, unlike a fixed literal id, survives a Playwright retry within the same `webServer` lifetime.
@@ -284,11 +315,8 @@ test("plain ArrowUp/ArrowDown recall steps through this chat's own prior prompts
 	await page.getByTestId("project-item").first().click();
 	await worktreeRows(page).first().click();
 	await expect(activeWorktreeRow(page)).toHaveCount(1);
-	// The create's auto-opened chat (live in the host) auto-restores — wait for it so the restore
-	// can't land mid-flow and steal the center while the closed chat below is being reopened.
-	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 
-	await page.getByTestId("chat-history").click();
+	await openChatHistory(page);
 	await page.getByTestId("closed-chat-item").first().click();
 	const input = page.getByTestId("chat-input");
 	await expect(input).toBeVisible();
@@ -359,6 +387,7 @@ test("a recall step immediately followed by a full-value replace never doubles t
 	test.setTimeout(60_000);
 	await openFixtureProject(page);
 	const workspace = await createWorkspaceViaDialog(page);
+	await closeAutoOpenedChat(page);
 	// No explicit `id`: this test loops many repeated recall/replace cycles and is meant to be re-run
 	// under `--repeat-each` to prove the race stays closed. A fixed literal id would collide with an
 	// in-memory session entry from an earlier repeat's (differently-`workspaceId`'d) run within the same
@@ -376,15 +405,17 @@ test("a recall step immediately followed by a full-value replace never doubles t
 	await page.getByTestId("project-item").first().click();
 	await worktreeRows(page).first().click();
 	await expect(activeWorktreeRow(page)).toHaveCount(1);
-	// The create's auto-opened chat (live in the host) auto-restores — wait for it so the restore
-	// can't land mid-flow and steal the center while the closed chat below is being reopened.
-	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 
-	await page.getByTestId("chat-history").click();
+	await openChatHistory(page);
 	await page.getByTestId("closed-chat-item").first().click();
 	const input = page.getByTestId("chat-input");
 	await expect(input).toBeVisible();
 	await expect(input).toHaveValue("");
+	await expect(
+		page
+			.locator('[data-testid="chat-message"][data-role="user"]')
+			.filter({ hasText: "write a test for the jitter" }),
+	).toHaveCount(1, { timeout: 20_000 });
 
 	// Throttle the main thread so any reintroduced deferred-callback gap (RAF or otherwise) would widen
 	// enough to be caught reliably within a handful of iterations — this is what let the old RAF-based
@@ -416,6 +447,7 @@ test("a prompt repeated earlier in the chat recalls at its most recent position,
 }) => {
 	await openFixtureProject(page);
 	const workspace = await createWorkspaceViaDialog(page);
+	await closeAutoOpenedChat(page);
 	// No explicit `id` — same reasoning as the recall test above: this test never references the seeded
 	// session by id, so the default fresh-per-call id (survives a same-process retry) is enough.
 	seedWorkspaceSession(workspace.worktreePath, {
@@ -434,15 +466,15 @@ test("a prompt repeated earlier in the chat recalls at its most recent position,
 	await page.getByTestId("project-item").first().click();
 	await worktreeRows(page).first().click();
 	await expect(activeWorktreeRow(page)).toHaveCount(1);
-	// The create's auto-opened chat (live in the host) auto-restores — wait for it so the restore
-	// can't land mid-flow and steal the center while the closed chat below is being reopened.
-	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 
-	await page.getByTestId("chat-history").click();
+	await openChatHistory(page);
 	await page.getByTestId("closed-chat-item").first().click();
 	const input = page.getByTestId("chat-input");
 	await expect(input).toBeVisible();
 	await expect(input).toHaveValue("");
+	await expect(
+		page.locator('[data-testid="chat-message"][data-role="user"]').filter({ hasText: "alpha" }),
+	).toHaveCount(2, { timeout: 20_000 });
 
 	await input.press("ArrowUp");
 	await expect(input).toHaveValue("alpha");

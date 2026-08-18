@@ -19,10 +19,12 @@ import { createRequire } from "node:module";
 import { dirname, join, resolve, sep } from "node:path";
 import {
 	createSyntheticSourceInfo,
+	DefaultPackageManager,
 	DefaultResourceLoader,
 	type ExtensionAPI,
 	type ExtensionFactory,
 	getAgentDir,
+	type PathMetadata,
 	type ResourceDiagnostic,
 	type ResourceLoader,
 	SettingsManager,
@@ -246,28 +248,69 @@ export async function buildResourceLoader(
 	cwd: string,
 	settingsManager: SettingsManager,
 	getAdmission: () => SkillAdmissionContext,
+	excludedExtensionPaths: readonly string[] = [],
 ): Promise<ResourceLoader> {
 	const sharedFactories = [headlessSearchPolicy, askUserQuestionExtension, reviewToolExtension];
 	const skillInputs = resolveSkillInputs(cwd, getAdmission);
+	const agentDir = getAgentDir();
 	const common = {
 		cwd,
-		agentDir: getAgentDir(),
+		agentDir,
 		settingsManager,
 		...skillInputs,
 	};
+
+	// Central's global artifact can also sit inside PI's default auto-discovery directory. Resolve PI's
+	// ordinary enabled extension paths first, remove only the caller-supplied opaque identities, then feed
+	// the remaining paths back as explicit resources with auto-discovery disabled. This prevents the Central
+	// factory (and any UI/hooks it may contain) from executing once per session while preserving every other
+	// user/project extension. No excluded file is opened or inspected here.
+	const excluded = new Set(excludedExtensionPaths.map((path) => resolve(path)));
+	const discoveredExtensionPaths: string[] = [];
+	const discoveredMetadata = new Map<string, PathMetadata>();
+	if (excluded.size > 0) {
+		await settingsManager.reload();
+		const resolvedResources = await new DefaultPackageManager({
+			cwd,
+			agentDir,
+			settingsManager,
+		}).resolve();
+		for (const resource of resolvedResources.extensions) {
+			if (!resource.enabled || excluded.has(resolve(resource.path))) continue;
+			discoveredExtensionPaths.push(resource.path);
+			discoveredMetadata.set(resolve(resource.path), resource.metadata);
+		}
+	}
+
+	const additionalExtensionPaths = [
+		...(bundled ? [] : resolveDevPaths().extensionPaths),
+		...discoveredExtensionPaths,
+	];
 	const loader = new DefaultResourceLoader(
 		bundled
 			? {
 					...common,
+					...(excluded.size > 0 ? { noExtensions: true, additionalExtensionPaths } : {}),
 					extensionFactories: [...bundled.factories, ...sharedFactories],
 				}
 			: {
 					...common,
-					additionalExtensionPaths: resolveDevPaths().extensionPaths,
+					...(excluded.size > 0 ? { noExtensions: true } : {}),
+					additionalExtensionPaths,
 					extensionFactories: sharedFactories,
 				},
 	);
 	await loader.reload();
+
+	// Explicitly re-fed paths otherwise look like temporary CLI resources. Restore PI's resolved provenance
+	// so extension commands/tools keep their original user/project source metadata.
+	for (const extension of loader.getExtensions().extensions) {
+		const metadata = discoveredMetadata.get(resolve(extension.resolvedPath));
+		if (!metadata) continue;
+		extension.sourceInfo = createSyntheticSourceInfo(extension.path, metadata);
+		for (const command of extension.commands.values()) command.sourceInfo = extension.sourceInfo;
+		for (const tool of extension.tools.values()) tool.sourceInfo = extension.sourceInfo;
+	}
 	return loader;
 }
 

@@ -1,14 +1,21 @@
 // Dev/e2e entry: boot the host from env. The polished `thinkrail` bin lives in apps/cli.
 import type { Provider } from "@earendil-works/pi-ai";
 import type { OAuthCredentials, OAuthLoginCallbacks } from "@earendil-works/pi-ai/oauth";
+import { resolveShellEnv } from "@thinkrail/shared/shellEnv";
+import { initializeJbcentralRuntime } from "./auth";
 import { bootHost } from "./host";
+
+// The e2e provider fixtures below touch the shared runtime before `bootHost`; establish Central's bootstrap
+// generation first (bootHost repeats both calls idempotently for the ordinary production path).
+resolveShellEnv();
+await initializeJbcentralRuntime();
 
 // e2e-only: register deterministic fake pi providers so the in-app login flows are drivable end-to-end
 // without a real provider or browser — `e2e-oauth` (OAuth: select → open URL / paste code → success) and
 // `e2e-apikey` (interactive API-key entry: one secret prompt → success, issue #97). Gated by
 // THINKRAIL_E2E_FAKE_OAUTH; this file is the dev/e2e entry and never ships (apps/cli is the prod bin).
 if (process.env.THINKRAIL_E2E_FAKE_OAUTH === "1") {
-	const { getPiRuntime } = await import("./agent");
+	const { usePiRuntime } = await import("./agent");
 	const fakeOauth = {
 		name: "E2E Test Provider",
 		async login(callbacks: OAuthLoginCallbacks): Promise<OAuthCredentials> {
@@ -39,7 +46,7 @@ if (process.env.THINKRAIL_E2E_FAKE_OAUTH === "1") {
 	};
 	// An extension provider on the shared runtime: pi keeps extension registrations across
 	// refresh() (they're a composed overlay), so no re-register hook is needed.
-	(await getPiRuntime()).registerProvider("e2e-oauth", { oauth: fakeOauth });
+	await usePiRuntime((runtime) => runtime.registerProvider("e2e-oauth", { oauth: fakeOauth }));
 
 	// The API-key fake must be a NATIVE provider (pi 0.81 full provider extensions): only `Provider.auth`
 	// can express an interactive `apiKey.login` — the ProviderConfig path above takes a key *string*, not
@@ -87,7 +94,7 @@ if (process.env.THINKRAIL_E2E_FAKE_OAUTH === "1") {
 		stream: dummyStream,
 		streamSimple: dummyStream,
 	};
-	(await getPiRuntime()).registerNativeProvider(fakeApiKeyProvider);
+	await usePiRuntime((runtime) => runtime.registerNativeProvider(fakeApiKeyProvider));
 }
 
 const host = process.env.THINKRAIL_HOST ?? "localhost";

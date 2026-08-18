@@ -2,6 +2,7 @@ import { findFreePort } from "@thinkrail/shared/freePort";
 import { resolveShellEnv } from "@thinkrail/shared/shellEnv";
 import { settleSessionsForShutdown } from "../agent";
 import { shutdownAnalytics } from "../analytics";
+import { initializeJbcentralRuntime } from "../auth";
 import { installCrashLog } from "./crashLog";
 import { type CreateServerOptions, createServer, type RunningServer } from "./server";
 
@@ -46,6 +47,7 @@ export async function bootHost(options: BootHostOptions): Promise<BootedHost> {
 	installCrashLog(options.appVersion);
 	// Must precede any AgentSession creation; createServer makes sessions lazily, so here is early enough.
 	resolveShellEnv();
+	await initializeJbcentralRuntime();
 
 	const requested = options.port;
 	const port =

@@ -29,6 +29,12 @@ async function containsFocus(locator: import("@playwright/test").Locator): Promi
 	return locator.evaluate((element) => element.contains(document.activeElement));
 }
 
+async function primaryModifier(page: Page): Promise<"Meta" | "Control"> {
+	return (await page.evaluate(() => /Mac|iPhone|iPad|iPod/.test(navigator.platform)))
+		? "Meta"
+		: "Control";
+}
+
 test("panel header rows align without making the chat toolbar scrollable", async ({ page }) => {
 	await openFixtureProject(page);
 	await enterDefaultWorkspace(page);
@@ -86,7 +92,7 @@ test("dragging Projects through its minimum snaps to a persistent reopen rail", 
 	await dragDividerTo(page, "resize-left", 1);
 	const rail = page.getByTestId("collapsed-left-rail");
 	await expect(rail).toBeVisible();
-	await expect(rail).toHaveAccessibleName(/Open Projects \(Ctrl\+B\)/);
+	await expect(rail).toHaveAccessibleName(/Open Projects \((?:Ctrl\+B|⌘B)\)/);
 	expect(await width(page, "collapsed-left-rail")).toBeCloseTo(28, 0);
 	await expect(page.getByTestId("left-nav")).toHaveAttribute("aria-hidden", "true");
 	await expect(page.getByTestId("resize-left")).toBeHidden();
@@ -123,7 +129,7 @@ test("dragging Workspace closed keeps its terminal stack mounted and restores it
 	await dragDividerTo(page, "resize-right", viewport.width - 1);
 	const rail = page.getByTestId("collapsed-right-rail");
 	await expect(rail).toBeVisible();
-	await expect(rail).toHaveAccessibleName(/Open Workspace \(Ctrl\+J\)/);
+	await expect(rail).toHaveAccessibleName(/Open Workspace \((?:Ctrl\+J|⌘J)\)/);
 	await expect(page.getByTestId("right-stack")).toHaveAttribute("aria-hidden", "true");
 	await expect(page.getByTestId("resize-right")).toBeHidden();
 	// Collapsing the outer region must not tear down its nested files/terminal surfaces.
@@ -145,41 +151,42 @@ test("Mod+B and Mod+J focus first, then collapse, and restore both rails after r
 	// target whose focus the panel commands must remember.
 	await waitTerminalReady(page);
 	const centerTarget = page.getByTestId("start-chat");
+	const modifier = await primaryModifier(page);
 	await centerTarget.focus();
 
 	// Visible + focus elsewhere → focus Projects only. A second press while inside → collapse.
-	await page.keyboard.press("Control+b");
+	await page.keyboard.press(`${modifier}+b`);
 	expect(await containsFocus(page.getByTestId("left-nav"))).toBe(true);
 	await expect(page.getByTestId("collapsed-left-rail")).toHaveCount(0);
-	await page.keyboard.press("Control+b");
+	await page.keyboard.press(`${modifier}+b`);
 	await expect(page.getByTestId("collapsed-left-rail")).toBeVisible();
 	await expect(centerTarget).toBeFocused();
 
 	// Collapsed → expand and restore focus inside.
-	await page.keyboard.press("Control+b");
+	await page.keyboard.press(`${modifier}+b`);
 	await expect(page.getByTestId("collapsed-left-rail")).toHaveCount(0);
 	expect(await containsFocus(page.getByTestId("left-nav"))).toBe(true);
 
 	await centerTarget.focus();
-	await page.keyboard.press("Control+j");
+	await page.keyboard.press(`${modifier}+j`);
 	expect(await containsFocus(page.getByTestId("right-stack"))).toBe(true);
 	await expect(page.getByTestId("collapsed-right-rail")).toHaveCount(0);
-	await page.keyboard.press("Control+j");
+	await page.keyboard.press(`${modifier}+j`);
 	await expect(page.getByTestId("collapsed-right-rail")).toBeVisible();
 	await expect(centerTarget).toBeFocused();
-	await page.keyboard.press("Control+j");
+	await page.keyboard.press(`${modifier}+j`);
 	await expect(page.getByTestId("collapsed-right-rail")).toHaveCount(0);
 	expect(await containsFocus(page.getByTestId("right-stack"))).toBe(true);
 
-	// Layout commands intentionally win inside xterm; Ctrl+J collapses rather than sending line-feed.
+	// Layout commands intentionally win inside xterm; Mod+J collapses rather than reaching the shell.
 	await visibleTerminal(page).locator(".xterm-helper-textarea").focus();
-	await page.keyboard.press("Control+j");
+	await page.keyboard.press(`${modifier}+j`);
 	await expect(page.getByTestId("collapsed-right-rail")).toBeVisible();
 	await expect(centerTarget).toBeFocused();
 
 	// Collapse Projects too, proving the two fixed rails can coexist around a still-usable center.
-	await page.keyboard.press("Control+b");
-	await page.keyboard.press("Control+b");
+	await page.keyboard.press(`${modifier}+b`);
+	await page.keyboard.press(`${modifier}+b`);
 	await expect(page.getByTestId("collapsed-left-rail")).toBeVisible();
 	await expect(page.getByTestId("collapsed-right-rail")).toBeVisible();
 	expect(await width(page, "collapsed-left-rail")).toBeCloseTo(28, 0);

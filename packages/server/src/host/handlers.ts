@@ -58,6 +58,7 @@ import {
 	logoutProvider,
 	resolveLogin,
 	startLogin,
+	updateJbcentral,
 } from "../auth";
 import { findOpenBranchReview } from "../branch-review";
 import { selectDirectory } from "../dialog";
@@ -599,9 +600,9 @@ const handlers: Record<string, Handler> = {
 		setSessionThinkingLevel(p.sessionId, p.level);
 		return { ok: true } as const;
 	},
-	"session.compact": (params) => {
+	"session.compact": async (params) => {
 		const p = params as { sessionId: string; instructions?: string };
-		compactSession(p.sessionId, p.instructions);
+		await compactSession(p.sessionId, p.instructions);
 		return { ok: true } as const;
 	},
 	"session.getStats": (params) => getSessionStats((params as { sessionId: string }).sessionId),
@@ -680,22 +681,12 @@ const handlers: Record<string, Handler> = {
 		await logoutProvider((params as { providerId: string }).providerId);
 		return { ok: true } as const;
 	},
-	// JetBrains AI (jbcentral proxy): connect/disconnect write models.json + reload the runtime config; login
-	// launches `central login` (browser) on the host.
-	"provider.jbcentralConnect": async () => {
-		const result = await connectJbcentral();
-		// Analytics: only an actual connect counts (needs-install / needs-login / error don't). `jbcentral`
-		// is our own constant, not user input — no bucketing needed.
-		if (result.outcome === "connected") {
-			track({ name: "provider_login", params: { provider: "jbcentral", method: "central" } });
-		}
-		return result;
-	},
-	"provider.jbcentralDisconnect": async () => {
-		await disconnectJbcentral();
-		return { ok: true } as const;
-	},
+	// Native JetBrains AI setup through Central's reviewed PI commands. All methods return closed typed
+	// outcomes; child output and extension diagnostics never become handler errors or frames.
+	"provider.jbcentralConnect": () => connectJbcentral(),
+	"provider.jbcentralDisconnect": () => disconnectJbcentral(),
 	"provider.jbcentralLogin": () => jbcentralLogin(),
+	"provider.jbcentralUpdate": () => updateJbcentral(),
 	// Merge + persist a partial into the server-synced app config (theme, …); the broadcast is fired by
 	// `updateConfig`'s injected publisher (wired in `createServer`), so every client converges.
 	"settings.update": (params) => updateConfig((params as { config: Partial<AppConfig> }).config),

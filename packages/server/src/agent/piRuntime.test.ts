@@ -1,12 +1,15 @@
 import { afterEach, beforeEach, expect, jest, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ModelsRefreshOptions, ModelsRefreshResult } from "@earendil-works/pi-ai";
+import { SettingsManager } from "@earendil-works/pi-coding-agent";
+import { buildResourceLoader } from "./extensions";
 import {
 	type CatalogRefreshRuntime,
 	configurePiRuntime,
 	getPiRuntime,
+	preparePiRuntimeGeneration,
 	refreshCatalogs,
 	refreshCatalogsDetached,
 } from "./piRuntime";
@@ -42,6 +45,74 @@ function cleanup(agentDir: string): void {
 	configurePiRuntime(null);
 	rmSync(agentDir, { recursive: true, force: true });
 }
+
+test("a session loader excludes an opaque generation artifact but preserves other discovered extensions", async () => {
+	const root = mkdtempSync(join(tmpdir(), "trpi-session-extension-filter-"));
+	const agentDir = join(root, "agent");
+	const extensionsDir = join(agentDir, "extensions");
+	const centralPath = join(extensionsDir, "jetbrains-central.ts");
+	const siblingPath = join(extensionsDir, "sibling.ts");
+	const priorAgentDir = process.env.PI_CODING_AGENT_DIR;
+	const counters = globalThis as typeof globalThis & {
+		__thinkrailExcludedExtensionLoads?: number;
+		__thinkrailSiblingExtensionLoads?: number;
+	};
+	mkdirSync(extensionsDir, { recursive: true });
+	writeFileSync(
+		centralPath,
+		"export default function excluded() { globalThis.__thinkrailExcludedExtensionLoads = (globalThis.__thinkrailExcludedExtensionLoads ?? 0) + 1; }\n",
+	);
+	writeFileSync(
+		siblingPath,
+		"export default function sibling() { globalThis.__thinkrailSiblingExtensionLoads = (globalThis.__thinkrailSiblingExtensionLoads ?? 0) + 1; }\n",
+	);
+	process.env.PI_CODING_AGENT_DIR = agentDir;
+	try {
+		await buildResourceLoader(
+			root,
+			SettingsManager.create(root, agentDir, { projectTrusted: true }),
+			() => ({
+				trusted: true,
+				acknowledged: [],
+				disabled: [],
+				disabledGroups: [],
+				overrides: {},
+			}),
+			[centralPath],
+		);
+		expect(counters.__thinkrailExcludedExtensionLoads).toBeUndefined();
+		expect(counters.__thinkrailSiblingExtensionLoads).toBe(1);
+	} finally {
+		delete counters.__thinkrailExcludedExtensionLoads;
+		delete counters.__thinkrailSiblingExtensionLoads;
+		if (priorAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
+		else process.env.PI_CODING_AGENT_DIR = priorAgentDir;
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test("candidate generation reloads an opaque extension replaced at the same path", async () => {
+	const root = mkdtempSync(join(tmpdir(), "trpi-extension-generation-"));
+	const agentDir = join(root, "agent");
+	const extensionPath = join(root, "opaque-extension.ts");
+	const priorAgentDir = process.env.PI_CODING_AGENT_DIR;
+	mkdirSync(agentDir, { recursive: true });
+	process.env.PI_CODING_AGENT_DIR = agentDir;
+	try {
+		writeFileSync(extensionPath, "export default function syntheticExtension() {}\n");
+		expect((await preparePiRuntimeGeneration([extensionPath])).outcome).toBe("prepared");
+		writeFileSync(extensionPath, 'throw new Error("private replacement diagnostic");\n');
+		expect(await preparePiRuntimeGeneration([extensionPath])).toEqual({
+			outcome: "failed",
+			reason: "candidate-failed",
+		});
+	} finally {
+		configurePiRuntime(null);
+		if (priorAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
+		else process.env.PI_CODING_AGENT_DIR = priorAgentDir;
+		rmSync(root, { recursive: true, force: true });
+	}
+});
 
 test("refresh() on the shared runtime never opts into the network (provider.status must not stall on pi.dev)", async () => {
 	const { runtime, agentDir } = await isolatedRuntime();

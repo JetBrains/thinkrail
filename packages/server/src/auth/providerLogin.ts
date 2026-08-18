@@ -9,7 +9,7 @@
 
 import type { AuthInteraction, AuthPrompt, AuthType } from "@earendil-works/pi-ai";
 import type { LoginFrame, LoginPush, LoginReply } from "@thinkrail/contracts";
-import { getPiRuntime } from "../agent";
+import { usePiRuntime } from "../agent";
 
 let publish: (push: LoginPush) => void = () => {};
 /** Wired in `createServer` to push frames on the `provider.login` channel (defaults to a no-op). */
@@ -143,8 +143,7 @@ export function startLogin(providerId: string, type: AuthType = "oauth"): { logi
 
 	// pi persists the credential and refreshes its availability snapshot inside `login()` — the freshly
 	// authed provider's models appear on the next `model.list`/`provider.status` read with no extra step.
-	void getPiRuntime()
-		.then((runtime) => runtime.login(providerId, type, interaction))
+	void usePiRuntime((runtime) => runtime.login(providerId, type, interaction))
 		.then(() => {
 			if (terminate(loginId)) publishTerminal({ kind: "success" });
 		})
@@ -184,7 +183,6 @@ export function cancelAllLogins(): void {
 }
 
 /** Remove a provider's stored credentials (auth.json); pi refreshes availability internally. */
-export async function logoutProvider(providerId: string): Promise<void> {
-	const runtime = await getPiRuntime();
-	await runtime.logout(providerId);
+export function logoutProvider(providerId: string): Promise<void> {
+	return usePiRuntime((runtime) => runtime.logout(providerId));
 }

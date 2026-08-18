@@ -1,122 +1,666 @@
-// The JetBrains Central CLI (`central`) proxy integration — the single home for its wire, pinned here so
-// the **write** side (build the proxy `baseUrl`s + override `models.json`) and the **read** side
-// (`isJbcentralProxyUrl`, how the server detects a wired provider) can never silently diverge. The server's
-// in-app "Connect JetBrains AI" flow is a thin caller over `wireJbcentral`/`unwireJbcentral`, adding only its
-// own follow-up (refresh the live model registry). Server-side only (shells out + touches
-// `~/.pi/agent/models.json`).
-
 import { existsSync } from "node:fs";
-import { mkdir } from "node:fs/promises";
+import { open, readFile, rename, stat, unlink } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { basename, dirname, isAbsolute, join } from "node:path";
 import type { JbcentralInstall } from "@thinkrail/contracts";
 
-/** jbcentral strips agent-side credential headers, so any non-empty key works. */
-export const DUMMY_API_KEY = "wire-proxy";
-/** Fallback proxy port when neither `WIRE_PROXY_PORT` nor `~/.wire/config.json` supplies one. */
-export const DEFAULT_PROXY_PORT = 19516;
-
 export type ParseEnv = Record<string, string | undefined>;
-export type ProviderConfig = { baseUrl?: string; apiKey?: string } & Record<string, unknown>;
-export type ModelsConfig = { providers?: Record<string, ProviderConfig> } & Record<string, unknown>;
-export interface ProxyUrls {
-	anthropicUrl: string;
-	openaiUrl: string;
-}
 
-/** A never-empty error message (an `error` outcome must always carry something the UI can show). */
-function errorMessage(err: unknown): string {
-	const msg = err instanceof Error ? err.message : String(err);
-	return msg.trim() || "jbcentral wiring failed";
-}
+/** The only Central release whose native PI surface this build has reviewed and tested. */
+export const REVIEWED_CENTRAL_VERSION = "1.6.2" as const;
 
-/**
- * Whether a provider `baseUrl` is a jbcentral-managed proxy URL: a loopback host with a `/wire/…` path.
- * Tolerant of `undefined`/malformed input (returns `false`) — callers feed it raw registry state.
- */
-export function isJbcentralProxyUrl(url: string | undefined): boolean {
-	if (!url) return false;
-	let parsed: URL;
-	try {
-		parsed = new URL(url);
-	} catch {
-		return false;
-	}
-	const loopback =
-		parsed.hostname === "127.0.0.1" || parsed.hostname === "localhost" || parsed.hostname === "::1";
-	return loopback && parsed.pathname.startsWith("/wire/");
-}
+const CENTRAL_BIN = "central";
+const VERSION_TIMEOUT_MS = 5_000;
+const ACTION_TIMEOUT_MS = 120_000;
+const UPDATE_TIMEOUT_MS = 300_000;
+const MAX_VERSION_OUTPUT_BYTES = 4_096;
 
-/** Resolve the proxy port: `WIRE_PROXY_PORT` env > `~/.wire/config.json` proxy_port > default. Throws on a bad env value. */
-export function resolveProxyPort(env: ParseEnv, wireConfig: { proxy_port?: number }): number {
-	const fromEnv = env.WIRE_PROXY_PORT;
-	if (fromEnv !== undefined && fromEnv !== "") {
-		const parsed = Number(fromEnv);
-		if (!Number.isInteger(parsed) || parsed < 0 || parsed > 65535) {
-			throw new Error(`Invalid WIRE_PROXY_PORT: ${fromEnv}`);
-		}
-		return parsed;
-	}
-	if (typeof wireConfig.proxy_port === "number") return wireConfig.proxy_port;
-	return DEFAULT_PROXY_PORT;
-}
-
-/**
- * Build the per-provider proxy base URLs, under pi's **own** `/pi/` wire route (not Codex's or Claude
- * Code's) — the shape `central add pi` writes.
- *
- * pi passes `model.baseUrl` straight to the official SDK, which appends `/v1/messages` (anthropic) but a
- * bare `/responses` (openai). The proxy does **not** inject the backend `/v1/`, so openai's baseUrl must
- * carry it and anthropic's must not: `/pi/openai/responses` 404s, `/pi/openai/v1/responses` does not.
- * The **shape here is what `isJbcentralProxyUrl` reads** — keep in sync.
- */
-export function buildProxyUrls(port: number, secret: string): ProxyUrls {
-	const base = `http://127.0.0.1:${port}/wire/${secret}`;
-	return { anthropicUrl: `${base}/pi/anthropic`, openaiUrl: `${base}/pi/openai/v1` };
-}
-
-/** Wire the anthropic + openai providers' baseUrl/apiKey to the proxy, preserving their other fields. Mutates + returns `config`. */
-export function applyJbcentralOverrides(config: ModelsConfig, urls: ProxyUrls): ModelsConfig {
-	config.providers ??= {};
-	config.providers.anthropic = {
-		...config.providers.anthropic,
-		baseUrl: urls.anthropicUrl,
-		apiKey: DUMMY_API_KEY,
-	};
-	config.providers.openai = {
-		...config.providers.openai,
-		baseUrl: urls.openaiUrl,
-		apiKey: DUMMY_API_KEY,
-	};
-	return config;
-}
-
-/** Drop the baseUrl/apiKey we manage from anthropic + openai (removing a provider entry left empty). Mutates + returns `config`. */
-export function removeJbcentralOverrides(config: ModelsConfig): ModelsConfig {
-	if (!config.providers) return config;
-	for (const id of ["anthropic", "openai"] as const) {
-		const provider = config.providers[id];
-		if (!provider) continue;
-		delete provider.baseUrl;
-		delete provider.apiKey;
-		if (Object.keys(provider).length === 0) delete config.providers[id];
-	}
-	return config;
-}
-
-/**
- * The S3 `stable` channel that hosts the JetBrains Central CLI install scripts. Note the path is `central/`
- * (the tool rebranded jbcentral → central; the bucket path moved with it), not the old `jbcentral/`.
- */
 const JBCENTRAL_INSTALL_BASE =
 	"https://jetbrains-central-cli.s3.eu-west-1.amazonaws.com/central/stable";
 
+export type JbcentralVersionStatus =
+	| { state: "absent" }
+	| { state: "outdated"; version: string }
+	| { state: "supported"; version: typeof REVIEWED_CENTRAL_VERSION; configured: boolean }
+	| { state: "unreviewed"; version: string }
+	| { state: "malformed-version" }
+	| {
+			state: "probe-failed";
+			reason: "launch-failed" | "timed-out" | "output-too-large" | "nonzero-exit";
+	  };
+
+/** Host-private inspection. Only `status` is suitable for mapping to a wire DTO. */
+export interface JbcentralInspection {
+	executablePath: string | null;
+	extensionPath: string;
+	status: JbcentralVersionStatus;
+}
+
+export type JbcentralAction = "add" | "remove" | "update";
+
+export type JbcentralActionResult =
+	| { outcome: "succeeded" }
+	| {
+			outcome: "failed";
+			reason:
+				| "not-installed"
+				| "launch-failed"
+				| "timed-out"
+				| "nonzero-exit"
+				| "artifact-missing"
+				| "artifact-present";
+	  };
+
+export type JbcentralLoginResult =
+	| { outcome: "launched" }
+	| { outcome: "failed"; reason: "not-installed" | "launch-failed" };
+
+interface ProcessRequest {
+	argv: readonly string[];
+	captureStdout: boolean;
+	timeoutMs: number;
+	maxStdoutBytes: number;
+}
+
+type ProcessResult =
+	| { outcome: "exited"; exitCode: number; stdout: string }
+	| { outcome: "launch-failed" | "timed-out" | "output-too-large" };
+
+export interface JbcentralAdapterDependencies {
+	env?: ParseEnv;
+	which?: (command: string, path: string) => string | null;
+	exists?: (path: string) => boolean;
+	run?: (request: ProcessRequest) => Promise<ProcessResult>;
+	launchDetached?: (argv: readonly string[]) => boolean;
+}
+
+interface SemanticVersion {
+	major: number;
+	minor: number;
+	patch: number;
+	text: string;
+}
+
+function effectiveEnv(deps: JbcentralAdapterDependencies): ParseEnv {
+	return deps.env ?? process.env;
+}
+
+function pathExists(path: string, deps: JbcentralAdapterDependencies): boolean {
+	return (deps.exists ?? existsSync)(path);
+}
+
 /**
- * The per-OS install command for the JetBrains Central CLI (`central`) on a given host platform — the
- * **single source of truth** for the install one-liner, carried over the wire
- * (`ProviderStatusReport.jbcentralInstall`) so the in-app JetBrains AI card shows the right command for the
- * host's OS. macOS/Linux → the `install.sh` curl pipe; Windows → the PowerShell `install.ps1` one-liner.
+ * Central's generated PI extension is global by design. It does not follow `PI_CODING_AGENT_DIR`.
+ * The path is an opaque identity: callers may check existence and pass it to PI, but must not read it.
  */
+export function jbcentralExtensionPath(env: ParseEnv = process.env): string {
+	return join(env.HOME ?? homedir(), ".pi", "agent", "extensions", "jetbrains-central.ts");
+}
+
+/**
+ * Resolve Central from the live PATH, with the installer's default `~/.local/bin` as a fallback.
+ * The returned path is always absolute so callers never execute a bare command.
+ */
+export function resolveJbcentralBin(deps: JbcentralAdapterDependencies = {}): string | null {
+	const env = effectiveEnv(deps);
+	const path = env.PATH ?? "";
+	const which = deps.which ?? ((command, searchPath) => Bun.which(command, { PATH: searchPath }));
+	const onPath = which(CENTRAL_BIN, path);
+	if (onPath && isAbsolute(onPath)) return onPath;
+
+	const local = join(env.HOME ?? homedir(), ".local", "bin", CENTRAL_BIN);
+	return pathExists(local, deps) ? local : null;
+}
+
+export function isJbcentralInstalled(deps: JbcentralAdapterDependencies = {}): boolean {
+	return resolveJbcentralBin(deps) !== null;
+}
+
+/** Parse only Central's version prefix; trailing presentation metadata is ignored and never retained. */
+export function parseJbcentralVersion(output: string): SemanticVersion | null {
+	const match = /^central\s+(\d+)\.(\d+)\.(\d+)(?:\s|$)/u.exec(output.trim());
+	if (!match) return null;
+	const [, majorText, minorText, patchText] = match;
+	const major = Number(majorText);
+	const minor = Number(minorText);
+	const patch = Number(patchText);
+	if (![major, minor, patch].every(Number.isSafeInteger)) return null;
+	return { major, minor, patch, text: `${major}.${minor}.${patch}` };
+}
+
+function compareVersions(left: SemanticVersion, right: SemanticVersion): number {
+	return left.major - right.major || left.minor - right.minor || left.patch - right.patch;
+}
+
+async function readBounded(
+	stream: ReadableStream<Uint8Array>,
+	maxBytes: number,
+): Promise<{ outcome: "ok"; text: string } | { outcome: "output-too-large" }> {
+	const reader = stream.getReader();
+	const chunks: Uint8Array[] = [];
+	let length = 0;
+	try {
+		while (true) {
+			const { done, value } = await reader.read();
+			if (done) break;
+			length += value.byteLength;
+			if (length > maxBytes) {
+				await reader.cancel();
+				return { outcome: "output-too-large" };
+			}
+			chunks.push(value);
+		}
+	} finally {
+		reader.releaseLock();
+	}
+
+	const bytes = new Uint8Array(length);
+	let offset = 0;
+	for (const chunk of chunks) {
+		bytes.set(chunk, offset);
+		offset += chunk.byteLength;
+	}
+	return { outcome: "ok", text: new TextDecoder().decode(bytes) };
+}
+
+async function runProcess(request: ProcessRequest): Promise<ProcessResult> {
+	let processHandle: ReturnType<typeof Bun.spawn>;
+	try {
+		processHandle = Bun.spawn([...request.argv], {
+			stdin: "ignore",
+			stdout: request.captureStdout ? "pipe" : "ignore",
+			stderr: "ignore",
+			env: process.env,
+		});
+	} catch {
+		return { outcome: "launch-failed" };
+	}
+
+	let timedOut = false;
+	const timeout = setTimeout(() => {
+		timedOut = true;
+		processHandle.kill();
+	}, request.timeoutMs);
+
+	try {
+		const stdoutResult = request.captureStdout
+			? await readBounded(
+					processHandle.stdout as ReadableStream<Uint8Array>,
+					request.maxStdoutBytes,
+				)
+			: { outcome: "ok" as const, text: "" };
+		if (stdoutResult.outcome === "output-too-large") processHandle.kill();
+		const exitCode = await processHandle.exited;
+		if (timedOut) return { outcome: "timed-out" };
+		if (stdoutResult.outcome === "output-too-large") return stdoutResult;
+		return { outcome: "exited", exitCode, stdout: stdoutResult.text };
+	} finally {
+		clearTimeout(timeout);
+	}
+}
+
+function processRunner(deps: JbcentralAdapterDependencies) {
+	return deps.run ?? runProcess;
+}
+
+/** Inspect Central without retaining or exposing its raw output. */
+export async function inspectJbcentral(
+	deps: JbcentralAdapterDependencies = {},
+): Promise<JbcentralInspection> {
+	const extensionPath = jbcentralExtensionPath(effectiveEnv(deps));
+	const executablePath = resolveJbcentralBin(deps);
+	if (!executablePath) return { executablePath: null, extensionPath, status: { state: "absent" } };
+
+	let result: ProcessResult;
+	try {
+		result = await processRunner(deps)({
+			argv: [executablePath, "--version"],
+			captureStdout: true,
+			timeoutMs: VERSION_TIMEOUT_MS,
+			maxStdoutBytes: MAX_VERSION_OUTPUT_BYTES,
+		});
+	} catch {
+		return {
+			executablePath,
+			extensionPath,
+			status: { state: "probe-failed", reason: "launch-failed" },
+		};
+	}
+	if (result.outcome !== "exited") {
+		return {
+			executablePath,
+			extensionPath,
+			status: { state: "probe-failed", reason: result.outcome },
+		};
+	}
+	if (result.exitCode !== 0) {
+		return {
+			executablePath,
+			extensionPath,
+			status: { state: "probe-failed", reason: "nonzero-exit" },
+		};
+	}
+
+	const version = parseJbcentralVersion(result.stdout);
+	if (!version) return { executablePath, extensionPath, status: { state: "malformed-version" } };
+
+	const reviewed = parseJbcentralVersion(`central ${REVIEWED_CENTRAL_VERSION}`);
+	if (!reviewed) throw new Error("invalid reviewed Central version constant");
+	const comparison = compareVersions(version, reviewed);
+	if (comparison < 0) {
+		return { executablePath, extensionPath, status: { state: "outdated", version: version.text } };
+	}
+	if (comparison > 0) {
+		return {
+			executablePath,
+			extensionPath,
+			status: { state: "unreviewed", version: version.text },
+		};
+	}
+	return {
+		executablePath,
+		extensionPath,
+		status: {
+			state: "supported",
+			version: REVIEWED_CENTRAL_VERSION,
+			configured: pathExists(extensionPath, deps),
+		},
+	};
+}
+
+const ACTION_ARGS: Record<JbcentralAction, readonly string[]> = {
+	add: ["add", "pi"],
+	remove: ["remove", "pi"],
+	update: ["update", "--install"],
+};
+
+/** Run one reviewed Central action and enforce its safe artifact postcondition. */
+export async function runJbcentralAction(
+	action: JbcentralAction,
+	deps: JbcentralAdapterDependencies = {},
+): Promise<JbcentralActionResult> {
+	const executablePath = resolveJbcentralBin(deps);
+	if (!executablePath) return { outcome: "failed", reason: "not-installed" };
+
+	let result: ProcessResult;
+	try {
+		result = await processRunner(deps)({
+			argv: [executablePath, ...ACTION_ARGS[action]],
+			captureStdout: false,
+			timeoutMs: action === "update" ? UPDATE_TIMEOUT_MS : ACTION_TIMEOUT_MS,
+			maxStdoutBytes: 0,
+		});
+	} catch {
+		return { outcome: "failed", reason: "launch-failed" };
+	}
+	if (result.outcome !== "exited") {
+		return {
+			outcome: "failed",
+			reason: result.outcome === "output-too-large" ? "launch-failed" : result.outcome,
+		};
+	}
+	if (result.exitCode !== 0) return { outcome: "failed", reason: "nonzero-exit" };
+
+	const artifactExists = pathExists(jbcentralExtensionPath(effectiveEnv(deps)), deps);
+	if (action === "add" && !artifactExists) {
+		return { outcome: "failed", reason: "artifact-missing" };
+	}
+	if (action === "remove" && artifactExists) {
+		return { outcome: "failed", reason: "artifact-present" };
+	}
+	return { outcome: "succeeded" };
+}
+
+/** Launch Central's browser sign-in without letting its output or errors reach callers. */
+export function launchJbcentralLogin(
+	deps: JbcentralAdapterDependencies = {},
+): JbcentralLoginResult {
+	const executablePath = resolveJbcentralBin(deps);
+	if (!executablePath) return { outcome: "failed", reason: "not-installed" };
+
+	const launch =
+		deps.launchDetached ??
+		((argv: readonly string[]) => {
+			try {
+				Bun.spawn([...argv], {
+					stdin: "ignore",
+					stdout: "ignore",
+					stderr: "ignore",
+					env: process.env,
+				}).unref();
+				return true;
+			} catch {
+				return false;
+			}
+		});
+	try {
+		return launch([executablePath, "login"])
+			? { outcome: "launched" }
+			: { outcome: "failed", reason: "launch-failed" };
+	} catch {
+		return { outcome: "failed", reason: "launch-failed" };
+	}
+}
+
+const LEGACY_API_KEY = "wire-proxy";
+const MAX_MODELS_WRITE_ATTEMPTS = 5;
+const modelsFileLocks = new Map<string, Promise<void>>();
+
+export interface LegacyModelsDependencies {
+	env?: ParseEnv;
+	beforeCommit?: (context: {
+		operation: "cleanup" | "rollback";
+		attempt: number;
+		path: string;
+	}) => Promise<void> | void;
+}
+
+/** Opaque rollback capability. Legacy URLs remain only inside this module's in-memory WeakMap. */
+export interface LegacyCleanupReceipt {
+	readonly changedProviderCount: number;
+}
+
+export type LegacyCleanupResult =
+	| { outcome: "unchanged" }
+	| { outcome: "cleaned"; receipt: LegacyCleanupReceipt }
+	| { outcome: "failed"; reason: "invalid-json" | "io-error" | "conflict" };
+
+export type LegacyRollbackResult =
+	| { outcome: "rolled-back"; restoredProviderCount: number }
+	| {
+			outcome: "partially-rolled-back";
+			restoredProviderCount: number;
+			skippedProviderCount: number;
+	  }
+	| { outcome: "unchanged"; skippedProviderCount: number }
+	| { outcome: "failed"; reason: "invalid-receipt" | "invalid-json" | "io-error" | "conflict" };
+
+type LegacyProviderId = "anthropic" | "openai";
+interface LegacyFieldChange {
+	providerId: LegacyProviderId;
+	baseUrl: string;
+	apiKey: typeof LEGACY_API_KEY;
+}
+interface InternalLegacyReceipt {
+	path: string;
+	changes: LegacyFieldChange[];
+}
+interface ModelsFileSnapshot {
+	content: string;
+	mode: number;
+}
+
+type JsonRecord = Record<string, unknown>;
+const legacyReceipts = new WeakMap<LegacyCleanupReceipt, InternalLegacyReceipt>();
+
+export function jbcentralModelsPath(env: ParseEnv = process.env): string {
+	return join(
+		env.PI_CODING_AGENT_DIR ?? join(env.HOME ?? homedir(), ".pi", "agent"),
+		"models.json",
+	);
+}
+
+function errorCode(error: unknown): string | undefined {
+	if (typeof error !== "object" || error === null || !("code" in error)) return undefined;
+	return typeof error.code === "string" ? error.code : undefined;
+}
+
+function isJsonRecord(value: unknown): value is JsonRecord {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function parseModelsFile(content: string): JsonRecord | null {
+	if (content.trim() === "") return {};
+	const parsed: unknown = JSON.parse(content);
+	return isJsonRecord(parsed) ? parsed : null;
+}
+
+function matchesLegacyBaseUrl(providerId: LegacyProviderId, value: unknown): value is string {
+	if (typeof value !== "string") return false;
+	const route = providerId === "anthropic" ? "claude-code/anthropic" : "pi/openai/v1";
+	const match = new RegExp(
+		`^http://127\\.0\\.0\\.1:(\\d{1,5})/wire/[^/?#\\s]+/${route}$`,
+		"u",
+	).exec(value);
+	if (!match) return false;
+	const port = Number(match[1]);
+	return Number.isInteger(port) && port >= 0 && port <= 65_535;
+}
+
+function legacyChanges(config: JsonRecord): LegacyFieldChange[] {
+	if (!isJsonRecord(config.providers)) return [];
+	const changes: LegacyFieldChange[] = [];
+	for (const providerId of ["anthropic", "openai"] as const) {
+		const provider = config.providers[providerId];
+		if (!isJsonRecord(provider)) continue;
+		if (provider.apiKey !== LEGACY_API_KEY || !matchesLegacyBaseUrl(providerId, provider.baseUrl)) {
+			continue;
+		}
+		changes.push({ providerId, baseUrl: provider.baseUrl, apiKey: LEGACY_API_KEY });
+	}
+	return changes;
+}
+
+function applyLegacyCleanup(config: JsonRecord, changes: readonly LegacyFieldChange[]): void {
+	if (!isJsonRecord(config.providers)) return;
+	for (const change of changes) {
+		const provider = config.providers[change.providerId];
+		if (!isJsonRecord(provider)) continue;
+		if (provider.baseUrl !== change.baseUrl || provider.apiKey !== change.apiKey) continue;
+		delete provider.baseUrl;
+		delete provider.apiKey;
+	}
+}
+
+function applyLegacyRollback(
+	config: JsonRecord,
+	changes: readonly LegacyFieldChange[],
+): { restored: number; skipped: number } {
+	if (!isJsonRecord(config.providers)) return { restored: 0, skipped: changes.length };
+	let restored = 0;
+	let skipped = 0;
+	for (const change of changes) {
+		const provider = config.providers[change.providerId];
+		if (
+			!isJsonRecord(provider) ||
+			Object.hasOwn(provider, "baseUrl") ||
+			Object.hasOwn(provider, "apiKey")
+		) {
+			skipped += 1;
+			continue;
+		}
+		provider.baseUrl = change.baseUrl;
+		provider.apiKey = change.apiKey;
+		restored += 1;
+	}
+	return { restored, skipped };
+}
+
+async function readModelsSnapshot(path: string): Promise<ModelsFileSnapshot | null> {
+	try {
+		const [content, metadata] = await Promise.all([readFile(path, "utf8"), stat(path)]);
+		return { content, mode: metadata.mode & 0o7777 };
+	} catch (error) {
+		if (errorCode(error) === "ENOENT") return null;
+		throw error;
+	}
+}
+
+async function syncParentDirectory(path: string): Promise<void> {
+	let handle: Awaited<ReturnType<typeof open>> | undefined;
+	try {
+		handle = await open(dirname(path), "r");
+		await handle.sync();
+	} catch {
+		// Some platforms do not permit opening directories. The rename is still atomic there.
+	} finally {
+		await handle?.close();
+	}
+}
+
+async function atomicWriteIfUnchanged(
+	path: string,
+	expected: ModelsFileSnapshot,
+	content: string,
+): Promise<"committed" | "conflict"> {
+	const current = await readModelsSnapshot(path);
+	if (!current || current.content !== expected.content || current.mode !== expected.mode)
+		return "conflict";
+
+	const tempPath = join(
+		dirname(path),
+		`.${basename(path)}.thinkrail-${process.pid}-${crypto.randomUUID()}.tmp`,
+	);
+	let handle: Awaited<ReturnType<typeof open>> | undefined;
+	try {
+		handle = await open(tempPath, "wx", expected.mode);
+		await handle.chmod(expected.mode);
+		await handle.writeFile(content, "utf8");
+		await handle.sync();
+		await handle.close();
+		handle = undefined;
+
+		const immediatelyBeforeRename = await readModelsSnapshot(path);
+		if (
+			!immediatelyBeforeRename ||
+			immediatelyBeforeRename.content !== expected.content ||
+			immediatelyBeforeRename.mode !== expected.mode
+		) {
+			return "conflict";
+		}
+		await rename(tempPath, path);
+		await syncParentDirectory(path);
+		return "committed";
+	} finally {
+		await handle?.close();
+		try {
+			await unlink(tempPath);
+		} catch {
+			// Best-effort temp cleanup must not overwrite the commit/conflict outcome.
+		}
+	}
+}
+
+async function withModelsFileLock<T>(path: string, operation: () => Promise<T>): Promise<T> {
+	const previous = modelsFileLocks.get(path) ?? Promise.resolve();
+	let release: (() => void) | undefined;
+	const gate = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	const tail = previous.then(() => gate);
+	modelsFileLocks.set(path, tail);
+	await previous;
+	try {
+		return await operation();
+	} finally {
+		release?.();
+		if (modelsFileLocks.get(path) === tail) modelsFileLocks.delete(path);
+	}
+}
+
+/**
+ * Remove only the exact field pairs written by ThinkRail's retired proxy integration. The operation
+ * retries against concurrent edits, keeps unrelated JSON fields and file permissions, and never touches
+ * the historical `.bak` file.
+ */
+export async function cleanupLegacyJbcentralModels(
+	deps: LegacyModelsDependencies = {},
+): Promise<LegacyCleanupResult> {
+	const path = jbcentralModelsPath(deps.env ?? process.env);
+	return withModelsFileLock(path, async () => {
+		for (let attempt = 1; attempt <= MAX_MODELS_WRITE_ATTEMPTS; attempt += 1) {
+			let snapshot: ModelsFileSnapshot | null;
+			let config: JsonRecord | null;
+			try {
+				snapshot = await readModelsSnapshot(path);
+				if (!snapshot) return { outcome: "unchanged" };
+				config = parseModelsFile(snapshot.content);
+			} catch (error) {
+				return {
+					outcome: "failed",
+					reason: error instanceof SyntaxError ? "invalid-json" : "io-error",
+				};
+			}
+			if (!config) return { outcome: "unchanged" };
+			const changes = legacyChanges(config);
+			if (changes.length === 0) return { outcome: "unchanged" };
+			applyLegacyCleanup(config, changes);
+			const content = `${JSON.stringify(config, null, 2)}\n`;
+
+			try {
+				await deps.beforeCommit?.({ operation: "cleanup", attempt, path });
+				if ((await atomicWriteIfUnchanged(path, snapshot, content)) === "conflict") continue;
+			} catch {
+				return { outcome: "failed", reason: "io-error" };
+			}
+
+			const receipt: LegacyCleanupReceipt = { changedProviderCount: changes.length };
+			legacyReceipts.set(receipt, { path, changes });
+			return { outcome: "cleaned", receipt };
+		}
+		return { outcome: "failed", reason: "conflict" };
+	});
+}
+
+/** Restore only this invocation's removed pairs when both fields still have the post-cleanup state. */
+export async function rollbackLegacyJbcentralCleanup(
+	receipt: LegacyCleanupReceipt,
+	deps: LegacyModelsDependencies = {},
+): Promise<LegacyRollbackResult> {
+	const internal = legacyReceipts.get(receipt);
+	if (!internal) return { outcome: "failed", reason: "invalid-receipt" };
+
+	return withModelsFileLock(internal.path, async () => {
+		for (let attempt = 1; attempt <= MAX_MODELS_WRITE_ATTEMPTS; attempt += 1) {
+			let snapshot: ModelsFileSnapshot | null;
+			let config: JsonRecord | null;
+			try {
+				snapshot = await readModelsSnapshot(internal.path);
+				if (!snapshot) {
+					legacyReceipts.delete(receipt);
+					return { outcome: "unchanged", skippedProviderCount: internal.changes.length };
+				}
+				config = parseModelsFile(snapshot.content);
+			} catch (error) {
+				return {
+					outcome: "failed",
+					reason: error instanceof SyntaxError ? "invalid-json" : "io-error",
+				};
+			}
+			if (!config) {
+				legacyReceipts.delete(receipt);
+				return { outcome: "unchanged", skippedProviderCount: internal.changes.length };
+			}
+			const counts = applyLegacyRollback(config, internal.changes);
+			if (counts.restored === 0) {
+				legacyReceipts.delete(receipt);
+				return { outcome: "unchanged", skippedProviderCount: counts.skipped };
+			}
+			const content = `${JSON.stringify(config, null, 2)}\n`;
+
+			try {
+				await deps.beforeCommit?.({ operation: "rollback", attempt, path: internal.path });
+				if ((await atomicWriteIfUnchanged(internal.path, snapshot, content)) === "conflict") {
+					continue;
+				}
+			} catch {
+				return { outcome: "failed", reason: "io-error" };
+			}
+
+			legacyReceipts.delete(receipt);
+			return counts.skipped === 0
+				? { outcome: "rolled-back", restoredProviderCount: counts.restored }
+				: {
+						outcome: "partially-rolled-back",
+						restoredProviderCount: counts.restored,
+						skippedProviderCount: counts.skipped,
+					};
+		}
+		return { outcome: "failed", reason: "conflict" };
+	});
+}
+
+/** The official per-OS Central install plan shown by the guided UI. */
 export function jbcentralInstall(platform: NodeJS.Platform): JbcentralInstall {
 	if (platform === "win32") {
 		return {
@@ -130,163 +674,4 @@ export function jbcentralInstall(platform: NodeJS.Platform): JbcentralInstall {
 		shell: "bash",
 		command: `curl -fsSL ${JBCENTRAL_INSTALL_BASE}/install.sh | bash`,
 	};
-}
-
-/**
- * The JetBrains Central CLI binary name. The tool is `central` only — the legacy `jbcentral` name (and any
- * `ln -s central jbcentral` symlink) is intentionally **not** supported.
- */
-const CENTRAL_BIN = "central";
-
-/**
- * Resolve the JetBrains Central CLI binary to an absolute path, or `null` if it isn't installed. Subtleties
- * this exists for (each caused the "installed but Recheck does nothing" bug):
- *   1. `Bun.which(cmd)` with no options reads the PATH **snapshotted at process start**, not the live
- *      `process.env.PATH` — so we pass `process.env.PATH` explicitly (honors a re-resolved login PATH).
- *   2. the installer drops it in `~/.local/bin` and does NOT add that to PATH (it only prints a hint) — so
- *      we fall back to that well-known location.
- * Invoking by this absolute path also means the proxy/login calls work even when it's off PATH.
- */
-export function resolveJbcentralBin(): string | null {
-	const path = process.env.PATH ?? "";
-	const home = process.env.HOME ?? homedir();
-	const onPath = Bun.which(CENTRAL_BIN, { PATH: path });
-	if (onPath) return onPath;
-	const local = join(home, ".local", "bin", CENTRAL_BIN);
-	if (existsSync(local)) return local;
-	return null;
-}
-
-/** Whether the JetBrains Central CLI (`central`) is installed (on the live PATH or `~/.local/bin`). */
-export function isJbcentralInstalled(): boolean {
-	return resolveJbcentralBin() !== null;
-}
-
-/** The pi agent dir's models.json path (`PI_CODING_AGENT_DIR` or `~/.pi/agent`). */
-export function jbcentralModelsPath(env: ParseEnv): string {
-	const agentDir = env.PI_CODING_AGENT_DIR ?? join(homedir(), ".pi", "agent");
-	return join(agentDir, "models.json");
-}
-
-async function readJson<T>(path: string, fallback: T): Promise<T> {
-	const file = Bun.file(path);
-	if (!(await file.exists())) return fallback;
-	const text = (await file.text()).trim();
-	if (text === "") return fallback;
-	try {
-		return JSON.parse(text) as T;
-	} catch {
-		throw new Error(`${path} is not valid JSON`);
-	}
-}
-
-/** Back up the ORIGINAL models.json to `.bak` (once), then write the new one. */
-async function writeModels(path: string, config: ModelsConfig): Promise<void> {
-	const file = Bun.file(path);
-	// Only back up when no `.bak` exists yet — otherwise a connect→disconnect→connect cycle would overwrite
-	// the user's real (pre-jbcentral) models.json backup with an intermediate managed state.
-	if ((await file.exists()) && !(await Bun.file(`${path}.bak`).exists())) {
-		await Bun.write(`${path}.bak`, file);
-	}
-	await Bun.write(path, `${JSON.stringify(config, null, 2)}\n`);
-}
-
-/** Probe result: the persistent proxy secret, or *why* it's unavailable. */
-export type SecretProbe =
-	| { ok: true; secret: string }
-	| { ok: false; reason: "not-installed" | "not-logged-in" | "error"; message?: string };
-
-/**
- * Ensure the proxy daemon is running and return its persistent secret. An empty secret means the user isn't
- * signed into JetBrains AI (`central login`); a non-zero exit is a hard error (surfaced verbatim).
- */
-export async function probeJbcentralSecret(): Promise<SecretProbe> {
-	const bin = resolveJbcentralBin();
-	if (!bin) return { ok: false, reason: "not-installed" };
-	// `central proxy start --return-key` starts the daemon and prints only the persistent secret. (The old
-	// `jbcentral` also accepted `--ensure-updated`; `central` removed it, and `--return-key` alone suffices.)
-	const proxyStart = await Bun.$`${bin} proxy start --return-key`.quiet().nothrow();
-	if (proxyStart.exitCode !== 0) {
-		return { ok: false, reason: "error", message: proxyStart.stderr.toString().trim() };
-	}
-	const secret = proxyStart.stdout.toString().trim();
-	if (secret === "") return { ok: false, reason: "not-logged-in" };
-	return { ok: true, secret };
-}
-
-/** Resolve the effective proxy port from env + `~/.wire/config.json`. */
-export async function resolveWirePort(env: ParseEnv): Promise<number> {
-	const wireConfig = await readJson<{ proxy_port?: number }>(
-		join(homedir(), ".wire", "config.json"),
-		{},
-	);
-	return resolveProxyPort(env, wireConfig);
-}
-
-/** The outcome of an attempted wire — a small state machine the in-app card renders. The `needs-install`
- * variant carries no message: the card shows the per-OS command from `ProviderStatusReport.jbcentralInstall`. */
-export type WireOutcome =
-	| { outcome: "connected"; port: number; urls: ProxyUrls }
-	| { outcome: "needs-install" }
-	| { outcome: "needs-login" }
-	| { outcome: "error"; message: string };
-
-/**
- * Wire pi's `anthropic`/`openai` providers through the jbcentral proxy: probe the secret, resolve the port,
- * and override `models.json` (backing it up). Does NOT refresh a live registry or log — the caller adds that.
- */
-export async function wireJbcentral(env: ParseEnv): Promise<WireOutcome> {
-	const probe = await probeJbcentralSecret();
-	if (!probe.ok) {
-		if (probe.reason === "not-installed") return { outcome: "needs-install" };
-		if (probe.reason === "not-logged-in") return { outcome: "needs-login" };
-		return { outcome: "error", message: probe.message || "central proxy start failed" };
-	}
-	let port: number;
-	try {
-		port = await resolveWirePort(env);
-	} catch (err) {
-		return { outcome: "error", message: errorMessage(err) };
-	}
-	const path = jbcentralModelsPath(env);
-	let config: ModelsConfig;
-	try {
-		config = await readJson<ModelsConfig>(path, {});
-	} catch (err) {
-		return { outcome: "error", message: errorMessage(err) };
-	}
-	const urls = buildProxyUrls(port, probe.secret);
-	applyJbcentralOverrides(config, urls);
-	await mkdir(join(path, ".."), { recursive: true });
-	await writeModels(path, config);
-	return { outcome: "connected", port, urls };
-}
-
-/** Undo the jbcentral overrides in `models.json` (backing it up). Does NOT refresh a live registry. */
-export async function unwireJbcentral(env: ParseEnv): Promise<void> {
-	const path = jbcentralModelsPath(env);
-	const config = await readJson<ModelsConfig>(path, {});
-	removeJbcentralOverrides(config);
-	await writeModels(path, config);
-}
-
-/**
- * Best-effort launch of `central login` (its browser sign-in) as a detached child — non-blocking. Returns
- * whether it started; if `central` needs a TTY and refuses, the caller falls back to terminal guidance.
- */
-export function launchJbcentralLogin(): { launched: boolean; message?: string } {
-	const bin = resolveJbcentralBin();
-	if (!bin) return { launched: false, message: "central is not installed" };
-	try {
-		// Invoke by absolute path (it may be off PATH, e.g. ~/.local/bin); `.unref()` so the browser sign-in
-		// child doesn't keep the host's event loop alive (it outlives this call).
-		Bun.spawn([bin, "login"], {
-			stdin: "ignore",
-			stdout: "ignore",
-			stderr: "ignore",
-		}).unref();
-		return { launched: true };
-	} catch (err) {
-		return { launched: false, message: err instanceof Error ? err.message : String(err) };
-	}
 }

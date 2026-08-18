@@ -259,19 +259,26 @@ a project picker, the prompt hero, and the reused
   **store-driven two-pane shell** (left section rail + scrollable content pane; mobile collapses the rail to
   a horizontal segmented strip): `settingsOpen`/`settingsSection` live in the store so the gear AND the
   Welcome banner can open it deep-linked to a section. Live sections: **`ProvidersSettings`** (the in-app
-  provider-auth surface — Connected cards each with a **Sign-out only when `canLogout`** (env / central /
+  provider-auth surface — Connected cards each with a **Sign-out only when `canLogout`** (env /
   models.json auth shows a "Managed" tag instead, since the host can't unset it); a **"Sign in with a
   subscription"** block of `canOAuth` providers; an **"Add an API key"** group of `canApiKey`-only
   providers (capped with a "Show N more" expander) — **both routes start `provider.loginStart`**
   (`type` `"oauth"` / `"api_key"`, issue #97) into the same store-driven `auth/LoginDialog` (open the
   URL / paste a code / answer the provider's own key prompts, `provider.loginReply` — no inline key
   field); a "configured outside the app" note for rows with neither flag; and
-  the **`JetBrainsAiCard`** — route Claude+GPT through your JetBrains subscription (the jbcentral proxy) — a
-  state machine over `jbcentralWired`/`jbcentralInstalled` + `jbcentralInstall` (all from the same status
-  read) + `provider.jbcentral*`:
-  Connected (Disconnect) / ready (Connect) / not signed in (in-app `central login` + Retry) / not installed
-  (the host's per-OS copyable install command — from `jbcentralInstall`, for the *host's* OS, never the
-  browser's — + Recheck); each mutation re-reads `provider.status`) **`GithubSettings`** (the "Local GitHub" block — `github.authStatus()`
+  the **`JetBrainsAiCard`** — route Central-supported models through the user's JetBrains subscription while
+  keeping ThinkRail's embedded PI — a state machine over the typed `JbcentralStatus` +
+  `provider.jbcentral*`: absent (official host-OS install guidance + Recheck), outdated (guided Update),
+  unreviewed/invalid version (safe guidance, no native action), sign-in required (launch Central sign-in +
+  Retry), ready (Connect), configuring (the initiating request is in flight), pending (global configuration
+  changed but runtime reconciliation is waiting for accepted work to settle), connected (Disconnect),
+  model-blocked (change models or delete the named sessions without revealing provider config), and generic
+  error (Retry/Recheck). Pending actions that later block retain those affected ids in host status, so links
+  work across clients rather than existing only in the initiating response. Update/connect/disconnect state
+  is host-authoritative and shared across clients; every
+  mutation re-reads `provider.status`. Copy never promises only Claude/GPT, never asks for standalone PI,
+  never renders child output/diagnostics/artifact content/paths/proxy data/secrets/raw models, and maps only
+  closed reason codes to ThinkRail-authored text. **`GithubSettings`** (the "Local GitHub" block — `github.authStatus()`
   Connected + login / Not connected + Refresh); **`AppearanceSettings`** (the **theme picker** — the
   bundled catalog from `themes`, with the resolved active selection from `store.theme` marked; clicking
   one fires `settings.update` and the UI **converges on the `settings.changed` broadcast** (no optimistic

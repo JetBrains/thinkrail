@@ -1,16 +1,65 @@
-import { ModelRuntime } from "@earendil-works/pi-coding-agent";
+import {
+	createAgentSessionServices,
+	DefaultResourceLoader,
+	getAgentDir,
+	ModelRuntime,
+} from "@earendil-works/pi-coding-agent";
 
-/**
- * The shared pi model/auth runtime — one `ModelRuntime` for every session (pi's canonical SDK facade
- * since 0.80.8: models, credentials, availability, login/logout, and request dispatch in one object).
- * Built lazily on first use so `PI_CODING_AGENT_DIR` set before that point is honored (tests and the
- * e2e harnesses rely on this), and memoized as a promise because `ModelRuntime.create()` is async.
- */
-let runtime: Promise<ModelRuntime> | null = null;
+/** One coherent model/resource generation shared by every pre-session read and live session. */
+export interface PiRuntimeGeneration {
+	readonly id: number;
+	readonly runtime: ModelRuntime;
+	/** Opaque extensions applied once to this generation's shared provider runtime. */
+	readonly additionalExtensionPaths: readonly string[];
+	/** Opaque paths that session loaders must not execute again (including inactive Central artifacts). */
+	readonly excludedSessionExtensionPaths: readonly string[];
+}
+
+export type PreparePiRuntimeGenerationResult =
+	| { outcome: "prepared"; generation: PiRuntimeGeneration }
+	| { outcome: "failed"; reason: "candidate-failed" };
+
+let nextGenerationId = 1;
+let activeGeneration: Promise<PiRuntimeGeneration> | null = null;
+let configuredExtensionPaths: readonly string[] = [];
+let configuredSessionExtensionExclusions: readonly string[] = [];
+let runtimeFactory: (additionalExtensionPaths: readonly string[]) => Promise<ModelRuntime> =
+	createRuntimeWithExtensions;
 
 /** Override the shared runtime — tests inject a faux-backed one so no auth/network is needed. */
 export function configurePiRuntime(rt: ModelRuntime | null): void {
-	runtime = rt ? Promise.resolve(rt) : null;
+	configuredExtensionPaths = [];
+	configuredSessionExtensionExclusions = [];
+	activeGeneration = rt
+		? Promise.resolve({
+				id: nextGenerationId++,
+				runtime: rt,
+				additionalExtensionPaths: [],
+				excludedSessionExtensionPaths: [],
+			})
+		: null;
+}
+
+/** Test seam for candidate generations; production always restores the public PI factory. */
+export function configurePiRuntimeFactory(
+	factory?: (additionalExtensionPaths: readonly string[]) => Promise<ModelRuntime>,
+): void {
+	runtimeFactory = factory ?? createRuntimeWithExtensions;
+}
+
+/** Configure the lazy bootstrap generation before any runtime consumer is admitted. */
+export function configurePiRuntimeExtensionPaths(paths: readonly string[]): void {
+	if (activeGeneration) throw new Error("PI runtime already initialized");
+	configuredExtensionPaths = [...new Set(paths)];
+}
+
+/**
+ * Declare opaque paths that ordinary session loaders must never execute. This is separate from the active
+ * generation paths so an incompatible or recovery-blocked global artifact is excluded without being loaded.
+ */
+export function configurePiRuntimeSessionExtensionExclusions(paths: readonly string[]): void {
+	if (activeGeneration) throw new Error("PI runtime already initialized");
+	configuredSessionExtensionExclusions = [...new Set(paths)];
 }
 
 /**
@@ -44,17 +93,120 @@ async function createRuntimeOfflineByDefault(): Promise<ModelRuntime> {
 	}
 }
 
-/** The shared runtime, built lazily on first use (see `createRuntimeOfflineByDefault` for semantics). */
-export function getPiRuntime(): Promise<ModelRuntime> {
-	if (!runtime) {
-		const created = createRuntimeOfflineByDefault();
-		runtime = created;
-		// A failed create must not brick the host until restart — drop the memo so the next call retries.
-		created.catch(() => {
-			if (runtime === created) runtime = null;
+/**
+ * Advance PI's process-wide extension factory cache through the public ResourceLoader lifecycle before a
+ * new generation loads an opaque path. Central replaces one global file in place, so a fresh loader alone
+ * can otherwise reuse the prior factory by path. The empty loader reads no Central artifact; its second
+ * reload is PI's public cache-invalidating transition.
+ */
+async function advanceExtensionCacheGeneration(): Promise<void> {
+	const agentDir = getAgentDir();
+	const loader = new DefaultResourceLoader({
+		cwd: agentDir,
+		agentDir,
+		noExtensions: true,
+		noSkills: true,
+		noPromptTemplates: true,
+		noThemes: true,
+		noContextFiles: true,
+	});
+	await loader.reload();
+	await loader.reload();
+}
+
+/**
+ * Build a fresh runtime and apply extension-owned provider registrations through PI's public services API.
+ * Loader diagnostics are inspected only as a closed success/failure signal and are never logged or returned.
+ */
+async function createRuntimeWithExtensions(
+	additionalExtensionPaths: readonly string[],
+): Promise<ModelRuntime> {
+	await advanceExtensionCacheGeneration();
+	const runtime = await createRuntimeOfflineByDefault();
+	// Jiti's on-disk transpilation cache is independent of PI's extension factory cache and is keyed by
+	// path. Central replaces that path in place, so force Jiti's documented rebuild mode only for this
+	// candidate load; restore the caller's environment immediately afterward.
+	const priorJitiRebuild = process.env.JITI_REBUILD_FS_CACHE;
+	const priorJitiTryNative = process.env.JITI_TRY_NATIVE;
+	process.env.JITI_REBUILD_FS_CACHE = "1";
+	// Source-mode Bun otherwise asks its native ESM importer first, whose process-lifetime module cache
+	// cannot be invalidated when the same opaque path is replaced. The binary loader already disables it.
+	process.env.JITI_TRY_NATIVE = "false";
+	let services: Awaited<ReturnType<typeof createAgentSessionServices>>;
+	try {
+		services = await createAgentSessionServices({
+			cwd: getAgentDir(),
+			modelRuntime: runtime,
+			resourceLoaderOptions: {
+				// Only the explicitly reviewed opaque paths belong in the generation. In particular, an
+				// incompatible Central artifact in the default agent dir must not slip in via auto-discovery.
+				noExtensions: true,
+				additionalExtensionPaths: [...additionalExtensionPaths],
+				noSkills: true,
+				noPromptTemplates: true,
+				noThemes: true,
+				noContextFiles: true,
+			},
 		});
+	} finally {
+		if (priorJitiRebuild === undefined) delete process.env.JITI_REBUILD_FS_CACHE;
+		else process.env.JITI_REBUILD_FS_CACHE = priorJitiRebuild;
+		if (priorJitiTryNative === undefined) delete process.env.JITI_TRY_NATIVE;
+		else process.env.JITI_TRY_NATIVE = priorJitiTryNative;
+	}
+	const extensionErrors = services.resourceLoader.getExtensions().errors;
+	if (
+		extensionErrors.length > 0 ||
+		services.diagnostics.some((diagnostic) => diagnostic.type === "error")
+	) {
+		throw new Error("PI runtime extension loading failed");
 	}
 	return runtime;
+}
+
+function createGeneration(paths: readonly string[]): Promise<PiRuntimeGeneration> {
+	const additionalExtensionPaths = [...new Set(paths)];
+	const excludedSessionExtensionPaths = [...configuredSessionExtensionExclusions];
+	return runtimeFactory(additionalExtensionPaths).then((runtime) => ({
+		id: nextGenerationId++,
+		runtime,
+		additionalExtensionPaths,
+		excludedSessionExtensionPaths,
+	}));
+}
+
+/** The active generation, built lazily so test/e2e environment overrides are honored. */
+export function getPiRuntimeGeneration(): Promise<PiRuntimeGeneration> {
+	if (!activeGeneration) {
+		const created = createGeneration(configuredExtensionPaths);
+		activeGeneration = created;
+		created.catch(() => {
+			if (activeGeneration === created) activeGeneration = null;
+		});
+	}
+	return activeGeneration;
+}
+
+export async function getPiRuntime(): Promise<ModelRuntime> {
+	return (await getPiRuntimeGeneration()).runtime;
+}
+
+/** Build, but do not activate, a candidate generation. Raw PI/extension failures are discarded. */
+export async function preparePiRuntimeGeneration(
+	additionalExtensionPaths: readonly string[],
+): Promise<PreparePiRuntimeGenerationResult> {
+	try {
+		return { outcome: "prepared", generation: await createGeneration(additionalExtensionPaths) };
+	} catch {
+		return { outcome: "failed", reason: "candidate-failed" };
+	}
+}
+
+/** Commit a generation only after every replacement session is ready. */
+export function activatePiRuntimeGeneration(generation: PiRuntimeGeneration): void {
+	configuredExtensionPaths = generation.additionalExtensionPaths;
+	configuredSessionExtensionExclusions = generation.excludedSessionExtensionPaths;
+	activeGeneration = Promise.resolve(generation);
 }
 
 /** The slice of `ModelRuntime` a settled-models read needs — tests fake this, no cast required. */

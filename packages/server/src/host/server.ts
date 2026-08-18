@@ -23,8 +23,9 @@ import {
 	initializeAnalytics,
 	setAnalyticsSending,
 	shutdownAnalytics,
+	track,
 } from "../analytics";
-import { cancelAllLogins, setLoginPublisher } from "../auth";
+import { cancelAllLogins, setJbcentralAppliedPublisher, setLoginPublisher } from "../auth";
 import { resolveWorktreeFile } from "../fs";
 import {
 	getProjects,
@@ -516,13 +517,16 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 	// channel. A terminal `success` frame doubles as the `provider_login` analytics moment — the method
 	// (`oauth`/`api-key`) comes from `loginAnalytics`'s loginId→method map (recorded by the
 	// `provider.loginStart` handler), the provider id is bucketed, so a custom provider name never
-	// leaves the process. (jbcentral's `central` method is tracked in its own connect handler.)
+	// leaves the process. JetBrains AI has its own closed applied-transition publisher below.
 	setLoginPublisher((push) => {
 		server.publish(
 			WS_CHANNELS.providerLogin,
 			JSON.stringify({ channel: WS_CHANNELS.providerLogin, data: push }),
 		);
 		trackLoginOutcome(push);
+	});
+	setJbcentralAppliedPublisher(() => {
+		track({ name: "provider_login", params: { provider: "jbcentral", method: "central" } });
 	});
 
 	// Boot analytics before any trackable action can occur (fire-and-forget by contract — a failure in

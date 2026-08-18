@@ -578,6 +578,34 @@ test("disk-reopen: a disposed session is re-listed from disk and re-opened with 
 	}
 });
 
+test("deleteSession removes an empty live chat whose reserved transcript path is not materialized", async () => {
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	let trashCalls = 0;
+	setTrashImplementationForTests(async () => {
+		trashCalls++;
+	});
+	let sessionId: string | undefined;
+	try {
+		const cwd = tmpCwd("trpi-delete-empty-");
+		const session = await createSession({
+			cwd,
+			workspaceId: "ws-delete-empty",
+			model: toWireModel(fauxA.getModel()),
+		});
+		sessionId = session.sessionId;
+		const info = (await SessionManager.list(cwd)).find((item) => item.id === session.sessionId);
+		if (info) rmSync(info.path, { force: true });
+
+		await deleteSession(session.sessionId, "ws-delete-empty", cwd);
+		expect(hasSession(session.sessionId)).toBe(false);
+		expect(trashCalls).toBe(0);
+	} finally {
+		if (sessionId && hasSession(sessionId)) removeSession(sessionId);
+		setTrashImplementationForTests(undefined);
+		setSessionManagerFactory(() => SessionManager.inMemory());
+	}
+});
+
 test("deleteSession tombstones its id so a stale transcript cannot reattach in this host", async () => {
 	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
 	setTrashImplementationForTests(async (input) => {

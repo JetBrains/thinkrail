@@ -5,6 +5,9 @@ import type { Locator, Page } from "@playwright/test";
 import { expect } from "@playwright/test";
 import type { Workspace } from "@thinkrail/contracts";
 import {
+	E2E_CENTRAL_ARTIFACT,
+	E2E_CENTRAL_LOG,
+	E2E_CENTRAL_STATE,
 	E2E_DATA_DIR,
 	E2E_FIXTURE_REPO,
 	E2E_PI_AGENT_DIR,
@@ -29,12 +32,16 @@ function resetState(): void {
 	rmSync(join(E2E_DATA_DIR, "projects.json"), { force: true });
 	rmSync(join(E2E_DATA_DIR, "worktrees"), { recursive: true, force: true });
 	rmSync(join(E2E_PI_AGENT_DIR, "sessions"), { recursive: true, force: true });
+	// Central's artifact is global under HOME, not the custom PI agent dir. Reset both its public
+	// postcondition and the fake's control/log so every browser scenario starts from supported + disconnected.
+	rmSync(E2E_CENTRAL_ARTIFACT, { force: true });
+	writeFileSync(E2E_CENTRAL_STATE, "");
+	rmSync(E2E_CENTRAL_LOG, { force: true });
 
-	// Restore the seeded models.json: the JetBrains AI spec's proxy connect/disconnect rewrites this shared
-	// file (stripping the anthropic/openai auth the @agent suite resolves its pinned model through) and leaves
-	// the host disconnected. Re-seed it (or clear a test-written one when the dev authed via auth.json only)
-	// and drop the `.bak` the wire writes; the next page load's provider.status re-reads it and refreshes the
-	// registry, so a later @agent test isn't left with an empty model list.
+	// Restore the seeded models.json: native Central connect removes exact historical ThinkRail proxy fields
+	// from this shared file. Re-seed it (or clear a test-written one when the dev authed via auth.json only)
+	// and leave any user-owned `.bak` untouched; the next provider.status re-reads the restored registry, so
+	// a later @agent test retains its isolated baseline.
 	const modelsPath = join(E2E_PI_AGENT_DIR, "models.json");
 	if (existsSync(E2E_PI_MODELS_SEED)) copyFileSync(E2E_PI_MODELS_SEED, modelsPath);
 	else rmSync(modelsPath, { force: true });

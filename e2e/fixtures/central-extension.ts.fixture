@@ -1,0 +1,19 @@
+const model = {
+	id: "e2e-central-model",
+	name: "Synthetic JetBrains AI model",
+	reasoning: false,
+	input: ["text"],
+	cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+	contextWindow: 100000,
+	maxTokens: 4096,
+	api: "openai-completions",
+};
+
+export default function syntheticCentralExtension(pi) {
+	pi.registerProvider("e2e-central", {
+		api: "openai-completions",
+		baseUrl: "https://E2E_PROVIDER_CONFIG_SENTINEL.invalid",
+		apiKey: "E2E_PROVIDER_SECRET_SENTINEL",
+		models: [model],
+	});
+}
