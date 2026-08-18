@@ -238,6 +238,7 @@ function ReviewCard({
 	);
 	const settled = reviewSettled(item);
 	const fixing = review.state === "changes_requested" && item.status !== "done" && !hasDelta;
+	const reviewing = review.reviewing === true;
 	return (
 		<section
 			className="mb-lg rounded-[var(--radius-md)] border border-border-default p-md"
@@ -274,7 +275,13 @@ function ReviewCard({
 										: "text-text-subtle",
 							)}
 						>
-							{hasDelta ? "Revision to review" : STATE_LABEL[review.state]}
+							{reviewing
+								? "Reviewing…"
+								: settled && review.reviewedBy === "agent"
+									? "Reviewed · agent"
+									: hasDelta
+										? "Revision to review"
+										: STATE_LABEL[review.state]}
 						</span>
 					</div>
 					<p
@@ -343,7 +350,7 @@ function ReviewCard({
 							))}
 						</ul>
 					) : null}
-					{!settled ? (
+					{!settled && !reviewing ? (
 						<ReviewActions itemId={item.id} onApprove={onApprove} onAskFix={onAskFix} />
 					) : null}
 				</div>

@@ -107,6 +107,12 @@ channel fan-out, and the process-boot wrapper both launchers share.
   fired **detached** into the item's own chat via `followUpSession` (`fireTodoFixPrompt`, the
   `fireReviewPrompt` pattern) — a pre-turn rejection rolls the review record back (`rollbackTodoFix`) and
   surfaces as an extension-UI notice, so an undelivered fix request never strands as `changes_requested`;
+  **`todo.startReview` + `host/todoReview.ts`** compose the agent reviewer: ensure/pin the plan's
+  reviewer chat, fire the review package detached (rejection clears the `reviewing` mark), install the
+  `add_review_comment`/`review_verdict` tool seams (reviewer session → workspace → worker plan via
+  `getSessionWorkspaceId` + `workerSessionForReviewer`; non-reviewer callers get a loud error), run the
+  ONE auto fix cycle (reviewer comments → `buildSendPackage` → the worker chat) and the one auto
+  re-review off the reconcile tee (`maybeAutoReReview`);
   `project.setTrust`
   acknowledges the aliases present at grant via agent's
   `listProjectAliasSkillNames`; `project.acknowledgeSkills` / `project.setSkillEnabled` /

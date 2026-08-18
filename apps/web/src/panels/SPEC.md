@@ -341,9 +341,13 @@ a project picker, the prompt hero, and the reused
   preview intent; the path-list fallback opens at branch scope, no counts — they'd drift), a sha chip
   routing the Changes panel to that commit (`useChatTodos.openChanges`), **and the review verdict
   right there, next to the changes**: an unsettled reviewable item's expanded disclosure grows a
-  `Start review` button (`plan-start-review`) that unfolds the shared `ReviewActions` pair (Approve /
-  Ask to fix — one component with the Review-mode card, so the two surfaces can never drift) under the
-  file rows; approving settles the item — its status glyph upgrades to the **circled Verified check**
+  `Start review` button (`plan-start-review`) that fires the AGENT review (`todo.startReview` — the
+  plan's reviewer chat; the row pulses `Reviewing…` off the host-derived `review.reviewing`, and the
+  Changes panel opens at the step's scope so the review is watchable) plus a quiet `manually` toggle
+  (`plan-review-manually`) unfolding the shared `ReviewActions` pair (Approve / Ask to fix — one
+  component with the Review-mode card, so the two surfaces can never drift) under the file rows — the
+  human override at every stage; agent-authored findings appear in the Review panel badged `agent`
+  (`review-comment-agent`), and an agent-settled card reads `Reviewed · agent`; approving settles the item — its status glyph upgrades to the **circled Verified check**
   (`StatusIcon reviewed`, hover "Verified", `data-reviewed` on the row; `planView.reviewSettled` is the
   one derivation — approved AND no unreviewed delta, so a fresh revision drops the item back out of
   both the glyph and the reviewed counter) — and header export actions —

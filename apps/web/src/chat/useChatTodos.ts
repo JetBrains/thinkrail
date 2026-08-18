@@ -31,6 +31,9 @@ export interface ChatTodos {
 	/** Ask-to-fix (`todo.requestFix`) — records `changes_requested` and fires the feedback package into
 	 * this chat (the host composes it); rejects on failure so the caller keeps the typed feedback. */
 	askFix: (id: string, feedback: string) => Promise<void>;
+	/** Start the AGENT review (`todo.startReview`): the plan's reviewer chat reviews the item's change
+	 * set; findings land in the Review tab, the verdict settles the item. Re-reads for the spinner. */
+	startReview: (id: string) => Promise<void>;
 }
 
 /**
@@ -170,7 +173,12 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 		await reloadPlan();
 	};
 
-	return { data, failed, add, remove, openPlan, openChanges, approve, askFix };
+	const startReview = async (id: string) => {
+		await getTransport().request("todo.startReview", { workspaceId, sessionId, id });
+		await reloadPlan(); // the `reviewing` mark is host-derived — never patched locally
+	};
+
+	return { data, failed, add, remove, openPlan, openChanges, approve, askFix, startReview };
 }
 
 /**

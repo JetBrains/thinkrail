@@ -1,5 +1,12 @@
 import type { TodoGroupItem, TodoItem } from "@thinkrail/contracts";
-import { ChevronDown, ChevronRight, Copy, Download, GitCommitHorizontal } from "lucide-react";
+import {
+	ChevronDown,
+	ChevronRight,
+	Copy,
+	Download,
+	GitCommitHorizontal,
+	LoaderCircle,
+} from "lucide-react";
 import { useState } from "react";
 import { VerificationBadge } from "../chat/planKit";
 import { planToMarkdown } from "../chat/planMarkdown";
@@ -36,10 +43,12 @@ import { FileRow } from "./planFileRow";
  * compact. The chevron/`N files` summary toggles the file rows; the sha chip stays a separate button
  * that routes the Changes panel and never toggles the disclosure (and vice versa). **Review happens
  * right here, next to the changes**: expanding an unsettled reviewable item reveals a `Start review`
- * button which OPENS the step's changes for reading — the Changes panel at the commit's scope (or the
- * first fallback path's live diff) — and unfolds the shared verdict pair (`ReviewActions` — Approve /
- * Ask to fix) under the file rows; approving settles the item (circled Verified glyph) and the
- * affordance disappears. The click must visibly start the review, not merely reveal a verdict button.
+ * button which fires the AGENT review (`todo.startReview` — the plan's reviewer chat reads the diff,
+ * files findings as review comments, and settles the item with its verdict) and OPENS the step's
+ * changes — the Changes panel at the commit's scope (or the first fallback path's live diff) — so the
+ * review is watchable. While the verdict is pending the row shows a `Reviewing…` pulse; the manual
+ * verdict pair (`ReviewActions`) stays available under it as the human override. Approving settles the
+ * item (circled Verified glyph) and every affordance disappears.
  */
 function ChangeSetBlock({
 	item,
@@ -47,21 +56,24 @@ function ChangeSetBlock({
 	onOpenCommit,
 	onApprove,
 	onAskFix,
+	onStartReview,
 }: {
 	item: TodoItem;
 	workspaceId: string;
 	onOpenCommit: (sha: string) => void;
 	onApprove: (id: string) => Promise<void>;
 	onAskFix: (id: string, feedback: string) => Promise<void>;
+	onStartReview: (id: string) => Promise<void>;
 }) {
 	const [expanded, setExpanded] = useState(false);
-	const [reviewing, setReviewing] = useState(false);
+	const [manual, setManual] = useState(false);
 	const set = itemChangeSet(item);
 	if (!set) return null;
 	const Chevron = expanded ? ChevronDown : ChevronRight;
 	const stat = set.kind === "commit" ? changeSetStat(set.files) : null;
 	const count = set.kind === "paths" ? set.paths.length : (stat?.count ?? 0);
 	const needsReview = item.review !== undefined && !reviewSettled(item);
+	const reviewing = item.review?.reviewing === true;
 	return (
 		<div
 			className="mt-xs"
@@ -98,23 +110,42 @@ function ChangeSetBlock({
 						<DiffStatBadge added={stat?.added ?? 0} removed={stat?.removed ?? 0} />
 					</>
 				) : null}
-				{expanded && needsReview && !reviewing ? (
-					<button
-						type="button"
-						data-testid="plan-start-review"
-						onClick={() => {
-							setReviewing(true);
-							// Starting a review OPENS the changes — the Changes panel at this step's commit scope
-							// (its files, each a click to its diff), or the first fallback path's live diff. A
-							// verdict button alone is not a review; the diff must land on screen.
-							if (set.kind === "commit") onOpenCommit(set.sha);
-							else if (set.paths[0])
-								void openDiffInTab(workspaceId, { kind: "branch" }, set.paths[0], "preview");
-						}}
-						className="ml-auto shrink-0 rounded-[var(--radius-sm)] border border-border-default px-sm py-2xs tr-text-ui text-text-default hover:bg-control-bg-hovered"
+				{expanded && reviewing ? (
+					<span
+						data-testid="plan-reviewing"
+						className="ml-auto flex shrink-0 items-center gap-xs tr-text-metadata text-primary"
+						title="The reviewer agent is reading this step's changes"
 					>
-						Start review
-					</button>
+						<LoaderCircle className="size-3.5 animate-spin" /> Reviewing…
+					</span>
+				) : null}
+				{expanded && needsReview && !reviewing ? (
+					<span className="ml-auto flex shrink-0 items-center gap-xs">
+						<button
+							type="button"
+							data-testid="plan-start-review"
+							onClick={() => {
+								// Fire the AGENT review, and OPEN the changes so it's watchable — the Changes panel
+								// at this step's commit scope, or the first fallback path's live diff.
+								void onStartReview(item.id);
+								if (set.kind === "commit") onOpenCommit(set.sha);
+								else if (set.paths[0])
+									void openDiffInTab(workspaceId, { kind: "branch" }, set.paths[0], "preview");
+							}}
+							className="shrink-0 rounded-[var(--radius-sm)] border border-border-default px-sm py-2xs tr-text-ui text-text-default hover:bg-control-bg-hovered"
+						>
+							Start review
+						</button>
+						<button
+							type="button"
+							data-testid="plan-review-manually"
+							onClick={() => setManual((v) => !v)}
+							title="Judge it yourself — Approve / Ask to fix without the reviewer agent"
+							className="shrink-0 rounded-[var(--radius-sm)] px-xs py-2xs tr-text-metadata text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+						>
+							manually
+						</button>
+					</span>
 				) : null}
 			</div>
 			{expanded ? (
@@ -148,7 +179,7 @@ function ChangeSetBlock({
 					</ul>
 				)
 			) : null}
-			{expanded && reviewing && needsReview ? (
+			{expanded && manual && needsReview && !reviewing ? (
 				<ReviewActions itemId={item.id} onApprove={onApprove} onAskFix={onAskFix} />
 			) : null}
 		</div>
@@ -163,12 +194,14 @@ function ItemBlock({
 	onOpenCommit,
 	onApprove,
 	onAskFix,
+	onStartReview,
 }: {
 	item: TodoItem;
 	workspaceId: string;
 	onOpenCommit: (sha: string) => void;
 	onApprove: (id: string) => Promise<void>;
 	onAskFix: (id: string, feedback: string) => Promise<void>;
+	onStartReview: (id: string) => Promise<void>;
 }) {
 	const reviewed = reviewSettled(item);
 	return (
@@ -205,6 +238,7 @@ function ItemBlock({
 						onOpenCommit={onOpenCommit}
 						onApprove={onApprove}
 						onAskFix={onAskFix}
+						onStartReview={onStartReview}
 					/>
 				</div>
 			</div>
@@ -218,12 +252,14 @@ function GroupSection({
 	onOpenCommit,
 	onApprove,
 	onAskFix,
+	onStartReview,
 }: {
 	group: TodoGroupItem;
 	workspaceId: string;
 	onOpenCommit: (sha: string) => void;
 	onApprove: (id: string) => Promise<void>;
 	onAskFix: (id: string, feedback: string) => Promise<void>;
+	onStartReview: (id: string) => Promise<void>;
 }) {
 	const { done, total } = groupProgress(group);
 	return (
@@ -243,6 +279,7 @@ function GroupSection({
 						onOpenCommit={onOpenCommit}
 						onApprove={onApprove}
 						onAskFix={onAskFix}
+						onStartReview={onStartReview}
 					/>
 				))}
 			</ul>
@@ -406,6 +443,7 @@ export default function PlanPane({
 								onOpenCommit={onOpenCommit}
 								onApprove={plan.approve}
 								onAskFix={plan.askFix}
+								onStartReview={plan.startReview}
 							/>
 						))}
 						{loose.length > 0 ? (
@@ -424,6 +462,7 @@ export default function PlanPane({
 											onOpenCommit={onOpenCommit}
 											onApprove={plan.approve}
 											onAskFix={plan.askFix}
+											onStartReview={plan.startReview}
 										/>
 									))}
 								</ul>

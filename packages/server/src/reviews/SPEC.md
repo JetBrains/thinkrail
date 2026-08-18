@@ -44,7 +44,10 @@ re-anchoring, and package rendering. Design + user-confirmed decisions: [[task-r
   survives an unreadable base instead of vanishing with
   it. `reviewBaseRef` is how `host` reads it.
 - **`ReviewComment`**: `kind` inline/diff/file/review; `status` draft → sent → resolved (or
-  dismissed). The wire (`review.commentUpdate`) may only land the terminal manual outcomes
+  dismissed); **`author`** — the human (default, absent) or `"agent"`: the plan's reviewer agent files
+  findings through the same `addComment` (worktree-side anchors), badged in the panel and picked up by
+  the same send machinery (the TODO fix package rides `buildSendPackage`, see [[submodule-server-todos]]
+  §agent reviewer). The wire (`review.commentUpdate`) may only land the terminal manual outcomes
   (resolved/dismissed, from draft or sent); `draft`↔`sent` moves are owned exclusively by the send
   path (`markCommentsSent`/`rollbackSend`) — a client that could un-send a comment could rewrite or
   delete a remark whose id an agent chat already quotes;

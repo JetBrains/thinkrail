@@ -264,6 +264,8 @@ export interface AddCommentInput {
 	body: string;
 	/** The diff a `side: "base"` anchor was captured in — what resolves its `baseRef` (default: branch). */
 	scope?: GitDiffScope;
+	/** Who authored it — the human (default) or the plan's reviewer agent (badged in the panel). */
+	author?: "user" | "agent";
 }
 
 /**
@@ -333,6 +335,7 @@ export function addComment(input: AddCommentInput): ReviewComment {
 		body,
 		status: "draft",
 		anchorState: "anchored",
+		...(input.author === "agent" ? { author: "agent" as const } : {}),
 		createdAt: Date.now(),
 	};
 	snapshot.comments.push(comment);

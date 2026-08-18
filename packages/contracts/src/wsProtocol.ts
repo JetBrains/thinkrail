@@ -219,7 +219,10 @@ export interface TerminalTabsPush {
 // v40: the TODO review workflow — `TodoItem.summary` + `TodoPlan.summary` (agent-authored completion
 // notes) and `TodoItem.review` (host-derived review decoration) ride `todo.list`; `todo.review` approves a
 // reviewable item, `todo.requestFix` records changes_requested + sends the feedback package into the chat.
-export const PROTOCOL_VERSION = 40;
+// v41: the agent reviewer — `todo.startReview` sends an item to the plan's dedicated reviewer chat, whose
+// findings land as `author: "agent"` review comments (the Review tab) and whose `review_verdict` settles
+// the item; `TodoItem.review` grows `reviewing`/`reviewedBy`, `ReviewComment` grows `author`.
+export const PROTOCOL_VERSION = 41;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a
@@ -316,6 +319,7 @@ export const WS_METHODS = {
 	todoRemove: "todo.remove",
 	todoReview: "todo.review",
 	todoRequestFix: "todo.requestFix",
+	todoStartReview: "todo.startReview",
 	gitStatus: "git.status",
 	gitDiffFile: "git.diffFile",
 	// The workspace branch's own commits (`<diff base>..HEAD`, newest first) — the scope menu's commit list,
@@ -648,6 +652,16 @@ export interface WsMethodMap {
 	"todo.requestFix": {
 		params: { workspaceId: string; sessionId: string; id: string; feedback: string };
 		result: Ack;
+	};
+	// Start the AGENT review of a reviewable item: ensures the plan's dedicated reviewer chat (one per
+	// worker session, pinned in the review sidecar; created on first use, re-attached from disk), marks
+	// the item `reviewing`, and fires the review package detached (a pre-turn rejection clears the mark
+	// and surfaces in the reviewer chat). Findings arrive as agent-authored review comments (the Review
+	// tab); the verdict via the `review_verdict` tool. Returns the reviewer chat's id so the client can
+	// open it.
+	"todo.startReview": {
+		params: { workspaceId: string; sessionId: string; id: string };
+		result: { ok: true; reviewerSessionId: string };
 	};
 	// `scope` (default `{ kind: "branch" }`) selects **what** is diffed; see `GitDiffScope`. An unresolvable
 	// scope (a commit that a rebase/reset removed) is REJECTED — the panel treats that as "reset the scope"

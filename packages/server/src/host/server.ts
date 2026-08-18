@@ -62,6 +62,7 @@ import { handleRequest } from "./handlers";
 import { trackLoginOutcome } from "./loginAnalytics";
 import { RequestReplayCache } from "./requestReplayCache";
 import { terminalDeliveryForSendStatus } from "./terminalSend";
+import { installTodoReviewSeams, maybeAutoReReview } from "./todoReview";
 
 export interface CreateServerOptions {
 	port?: number;
@@ -455,6 +456,9 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 	setReviewCommentHandler((commentId, note) => ({
 		resolvedBody: resolveCommentFromAgent(commentId, note).body,
 	}));
+	// The agent-reviewer tool seams: `add_review_comment` (findings → the review store, badged agent) and
+	// `review_verdict` (approve / the one automated fix cycle) — see host/todoReview.ts.
+	installTodoReviewSeams();
 
 	// Broadcast a server-synced settings change (the full `AppConfig`) to every client so they converge —
 	// the initiator applies on this push too, never optimistically (the workspace-lifecycle pattern). The
@@ -500,7 +504,12 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 		// attach the sha + files). Deferred off the publish path (it runs git writes), best-effort (`void`).
 		if (isTodoToolEnd(payload.event)) {
 			const workspaceId = getSessionWorkspaceId(payload.sessionId);
-			if (workspaceId) void maybeAttachChangeArtifacts(workspaceId, payload.sessionId);
+			if (workspaceId)
+				void maybeAttachChangeArtifacts(workspaceId, payload.sessionId).then(() =>
+					// The agent-reviewer's auto RE-review (one per item): a fixed revision that just landed on a
+					// changes_requested item re-enters review once, then the human decides. Best-effort.
+					maybeAutoReReview(workspaceId, payload.sessionId),
+				);
 		}
 	});
 

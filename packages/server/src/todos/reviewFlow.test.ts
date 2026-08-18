@@ -237,3 +237,52 @@ test("renderFixPackage names changed paths for the fallback change set", () => {
 	const pkg = renderFixPackage(item, "fix it");
 	expect(pkg).toContain("changed paths: a.ts, b.ts");
 });
+
+test("reviewer sidecar meta: pin + pending marks + reverse lookup; decoration ships reviewing/reviewedBy", async () => {
+	const store = new TodoStore(repo, SESSION);
+	const { id } = committedItem(store, "step", "impl.ts");
+	// Pin the plan's reviewer chat and find the plan back from the reviewer (the verdict seam's lookup).
+	const { pinReviewerSession, reviewerSessionFor, workerSessionForReviewer, startTodoReview } =
+		await import("./todos");
+	pinReviewerSession({ workspaceId: "w1", sessionId: SESSION }, "reviewer-1");
+	expect(reviewerSessionFor({ workspaceId: "w1", sessionId: SESSION })).toBe("reviewer-1");
+	expect(workerSessionForReviewer("w1", "reviewer-1")).toBe(SESSION);
+	expect(workerSessionForReviewer("w1", "someone-else")).toBeUndefined();
+
+	// Start review marks the item in flight (the `reviewing` decoration) and renders the package.
+	const { pkg } = startTodoReview({ workspaceId: "w1", sessionId: SESSION, id });
+	expect(pkg).toContain(`plan step ${id}`);
+	expect(pkg).toContain("review_verdict");
+	let plan = await listTodos({ workspaceId: "w1", sessionId: SESSION });
+	expect(plan.todos.find((t) => t.id === id)?.review?.reviewing).toBe(true);
+
+	// An agent approve settles it, labeled, and clears the mark.
+	approveTodoReview({ workspaceId: "w1", sessionId: SESSION, id }, "agent");
+	plan = await listTodos({ workspaceId: "w1", sessionId: SESSION });
+	const review = plan.todos.find((t) => t.id === id)?.review;
+	expect(review?.state).toBe("reviewed");
+	expect(review?.reviewedBy).toBe("agent");
+	expect(review?.reviewing).toBeUndefined();
+});
+
+test("recordAgentChangesRequested stores the verdict note + autoCycles for the 1-cycle cap", async () => {
+	const store = new TodoStore(repo, SESSION);
+	const { id } = committedItem(store, "step", "impl.ts");
+	const { recordAgentChangesRequested, todoReviewRecord, startTodoReview } = await import(
+		"./todos"
+	);
+	startTodoReview({ workspaceId: "w1", sessionId: SESSION, id });
+	recordAgentChangesRequested({
+		workspaceId: "w1",
+		sessionId: SESSION,
+		id,
+		note: "propagate RetryAfter",
+		autoCycles: 1,
+	});
+	const record = todoReviewRecord({ workspaceId: "w1", sessionId: SESSION, id });
+	expect(record?.state).toBe("changes_requested");
+	expect(record?.feedback).toBe("propagate RetryAfter");
+	expect(record?.autoCycles).toBe(1);
+	const plan = await listTodos({ workspaceId: "w1", sessionId: SESSION });
+	expect(plan.todos.find((t) => t.id === id)?.review?.reviewing).toBeUndefined();
+});

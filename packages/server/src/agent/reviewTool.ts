@@ -70,7 +70,109 @@ function truncate(text: string, max: number): string {
 	return text.length > max ? `${text.slice(0, max - 1)}…` : text;
 }
 
-/** Extension factory (mirrors `askUserQuestionExtension`): registers the tool on each session's `pi`. */
+// --- The agent-reviewer capabilities (task-agent-reviewer): the plan's dedicated reviewer chat authors
+// findings as review comments and settles items with a verdict. Registered globally like
+// `resolve_comment` (a reviewer chat re-opened from disk must keep them); execution is delegated through
+// host-installed seams keyed by the calling SESSION — the host maps it to its workspace / worker plan,
+// and a non-reviewer session gets a loud error, never a silent success.
+
+export const ADD_REVIEW_COMMENT_TOOL_NAME = "add_review_comment";
+
+export const AddReviewCommentSchema = Type.Object({
+	path: Type.String({ description: "Worktree-relative path of the file the finding is about." }),
+	startLine: Type.Integer({ minimum: 1, description: "First line of the finding (1-based)." }),
+	endLine: Type.Optional(
+		Type.Integer({ minimum: 1, description: "Last line (default: startLine)." }),
+	),
+	body: Type.String({
+		description:
+			"The finding (markdown): what is wrong / risky and what to do instead. One finding per comment.",
+	}),
+});
+export type AddReviewCommentParams = Static<typeof AddReviewCommentSchema>;
+
+let addHandler: (sessionId: string, params: AddReviewCommentParams) => { commentId: string } =
+	() => {
+		throw new Error("Review comments are not available on this host.");
+	};
+
+/** Host seam: wire `add_review_comment` to the reviews module (agent-authored draft on the worktree side). */
+export function setAddReviewCommentHandler(
+	fn: (sessionId: string, params: AddReviewCommentParams) => { commentId: string },
+): void {
+	addHandler = fn;
+}
+
+export const REVIEW_VERDICT_TOOL_NAME = "review_verdict";
+
+export const ReviewVerdictSchema = Type.Object({
+	todoId: Type.String({ description: "The plan item id from the review package (e.g. t_ab12)." }),
+	verdict: Type.Union([Type.Literal("approve"), Type.Literal("request_changes")], {
+		description:
+			"approve = the change set is sound (no unresolved findings); request_changes = your comments must be addressed.",
+	}),
+	note: Type.Optional(
+		Type.String({ description: "One short line shown with the verdict (why, or what remains)." }),
+	),
+});
+export type ReviewVerdictParams = Static<typeof ReviewVerdictSchema>;
+
+let verdictHandler: (sessionId: string, params: ReviewVerdictParams) => { summary: string } =
+	() => {
+		throw new Error("Review verdicts are not available on this host.");
+	};
+
+/** Host seam: wire `review_verdict` to the todos review ops (approve / auto fix cycle). */
+export function setReviewVerdictHandler(
+	fn: (sessionId: string, params: ReviewVerdictParams) => { summary: string },
+): void {
+	verdictHandler = fn;
+}
+
+export function createAddReviewCommentTool(): ToolDefinition<typeof AddReviewCommentSchema> {
+	return {
+		name: ADD_REVIEW_COMMENT_TOOL_NAME,
+		label: "Add Review Comment",
+		description:
+			"Record ONE review finding as a comment anchored to a file + line range — it appears live in the Review panel. Reviewer chats only: use it for each concrete problem you find while reviewing a plan step's change set; discussion prose stays in the conversation.",
+		parameters: AddReviewCommentSchema,
+		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+			const p = params as AddReviewCommentParams;
+			const { commentId } = addHandler(ctx.sessionManager.getSessionId(), p);
+			return {
+				content: [
+					{
+						type: "text",
+						text: `Review comment ${commentId} recorded on ${p.path}:${p.startLine}${p.endLine && p.endLine !== p.startLine ? `-${p.endLine}` : ""}.`,
+					},
+				],
+				details: { commentId, path: p.path },
+			};
+		},
+	};
+}
+
+export function createReviewVerdictTool(): ToolDefinition<typeof ReviewVerdictSchema> {
+	return {
+		name: REVIEW_VERDICT_TOOL_NAME,
+		label: "Review Verdict",
+		description:
+			"Finish a plan-step review with exactly ONE verdict: approve (clean — the item settles as reviewed) or request_changes (your add_review_comment findings are sent to the worker to fix). Reviewer chats only, after reading the diff — never before.",
+		parameters: ReviewVerdictSchema,
+		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+			const p = params as ReviewVerdictParams;
+			const { summary } = verdictHandler(ctx.sessionManager.getSessionId(), p);
+			return {
+				content: [{ type: "text", text: summary }],
+				details: { todoId: p.todoId, verdict: p.verdict },
+			};
+		},
+	};
+}
+
+/** Extension factory (mirrors `askUserQuestionExtension`): registers the tools on each session's `pi`. */
 export function reviewToolExtension(pi: ExtensionAPI): void {
 	pi.registerTool(createResolveCommentTool());
+	pi.registerTool(createAddReviewCommentTool());
+	pi.registerTool(createReviewVerdictTool());
 }

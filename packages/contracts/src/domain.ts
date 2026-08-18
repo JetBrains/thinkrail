@@ -283,6 +283,10 @@ export type TodoReviewState = "unreviewed" | "reviewed" | "changes_requested";
  */
 export interface TodoReviewInfo {
 	state: TodoReviewState;
+	/** True while the plan's reviewer agent has this item's review in flight (verdict pending). */
+	reviewing?: boolean;
+	/** Who settled a `reviewed` state — the human's Approve or the reviewer agent's verdict. */
+	reviewedBy?: "user" | "agent";
 	/** Count of the item's commit artifacts — “Revision N”. 0 for path-list-fallback change sets. */
 	revision: number;
 	/** Commit shas recorded after the user's last review action — the unreviewed delta. */
@@ -706,6 +710,8 @@ export interface ReviewComment {
 	status: ReviewCommentStatus;
 	anchorState: ReviewAnchorState;
 	sessionId?: string;
+	/** Who authored the remark — the human (default, absent) or the plan's reviewer agent. */
+	author?: "user" | "agent";
 	resolvedBy?: "agent" | "user";
 	/** The agent's note passed to `resolve_comment` (what it did about the remark). */
 	resolveNote?: string;

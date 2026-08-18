@@ -13,9 +13,13 @@ export {
 export * from "./oneshot";
 export * from "./piRuntime";
 export {
+	type AddReviewCommentParams,
 	RESOLVE_COMMENT_TOOL_NAME,
 	type ResolveCommentOutcome,
+	type ReviewVerdictParams,
+	setAddReviewCommentHandler,
 	setReviewCommentHandler,
+	setReviewVerdictHandler,
 } from "./reviewTool";
 export * from "./sessionRepair";
 export type { SkillAdmissionContext, SkillDecision, SkillFacts } from "./skillAdmission";

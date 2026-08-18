@@ -219,8 +219,12 @@ of the host.
   (the Specs-viewer whole-graph read, per workspace) / **`todo.*`** — **`list`**/**`add`**/**`update`**/
   **`remove`**, the chat's per-session TODO plan (keyed by `workspaceId` + `sessionId`; `add` tags the
   item `origin:"user"`), plus the review ops **`review`** (approve: record `reviewed` + the sha
-  watermark) and **`requestFix`** (record `changes_requested` + feedback, then the host fires the fix
-  package into the item's own chat — detached, rolled back on a pre-turn rejection) / **`terminal.*`** — **`attach`** (idempotent get-or-create keyed by
+  watermark), **`requestFix`** (record `changes_requested` + feedback, then the host fires the fix
+  package into the item's own chat — detached, rolled back on a pre-turn rejection) and
+  **`startReview`** (the AGENT review: the plan's pinned reviewer chat gets the item's package; findings
+  arrive as `author: "agent"` review comments, the verdict via the reviewer-only `review_verdict` tool;
+  `TodoItem.review` carries `reviewing` while the verdict is pending and `reviewedBy` on an agent
+  approve) / **`terminal.*`** — **`attach`** (idempotent get-or-create keyed by
   `(workspaceId, tabKey)`, returning `created` + the `replay` to repaint; the only way a PTY is born, and it
   replaced `create`+`alive`) / **`list`** (the host owns the tab list) / `write` / `resize` /
   **`close`** (by `tabKey`, refusing a busy shell unless `force`) / `model.list` + **`model.refresh`** (awaits the host's

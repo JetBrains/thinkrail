@@ -24,10 +24,15 @@ import { getWorkspace } from "../workspaces";
 import { settleChangeArtifacts } from "./artifacts";
 import { dropItemBaseline, removeSessionBaselines } from "./baselines";
 import {
+	clearReviewPending,
 	dropReviewRecord,
+	findWorkerSessionByReviewer,
+	markReviewPending,
 	putReviewRecord,
+	readReviewMeta,
 	readReviewRecords,
 	removeSessionReviews,
+	setReviewerSession,
 	type TodoReviewRecord,
 } from "./reviews";
 
@@ -70,6 +75,7 @@ function toWireItem(
 	workspaceId: string,
 	item: StoredItem,
 	record: TodoReviewRecord | undefined,
+	reviewing: boolean,
 ): TodoItem {
 	if (!item.artifacts) return item;
 	const artifacts = item.artifacts.map((a): TodoArtifact => {
@@ -77,7 +83,7 @@ function toWireItem(
 		const files = resolveCommitFiles(workspaceId, a.sha);
 		return files ? { ...a, files } : a;
 	});
-	const review = reviewInfo(item, record);
+	const review = reviewInfo(item, record, reviewing);
 	return review ? { ...item, artifacts, review } : { ...item, artifacts };
 }
 
@@ -102,10 +108,13 @@ function isReviewable(item: StoredItem): boolean {
 function reviewInfo(
 	item: StoredItem,
 	record: TodoReviewRecord | undefined,
+	reviewing = false,
 ): TodoReviewInfo | undefined {
 	if (!isReviewable(item)) return undefined;
 	const shas = commitShas(item);
 	const info: TodoReviewInfo = { state: record?.state ?? "unreviewed", revision: shas.length };
+	if (reviewing) info.reviewing = true;
+	if (record?.state === "reviewed" && record.reviewedBy) info.reviewedBy = record.reviewedBy;
 	if (record) {
 		const seen = new Set(record.reviewedShas);
 		const unreviewed = shas.filter((sha) => !seen.has(sha));
@@ -133,11 +142,14 @@ export async function listTodos(params: {
 	// which owns plan semantics, and reaches the client on the DTO so `apps/web` — which can't import the
 	// package — never re-derives it), each `commit` artifact with its derived `files` (see above), and
 	// each reviewable item with its review state (host sidecar — never the agent-writable plan file).
+	const pending = readReviewMeta(root, params.sessionId).pending;
 	const wire: TodoPlan = {
-		todos: plan.todos.map((t) => toWireItem(params.workspaceId, t, records[t.id])),
+		todos: plan.todos.map((t) => toWireItem(params.workspaceId, t, records[t.id], t.id in pending)),
 		groups: plan.groups.map((group) => ({
 			...group,
-			todos: group.todos.map((t) => toWireItem(params.workspaceId, t, records[t.id])),
+			todos: group.todos.map((t) =>
+				toWireItem(params.workspaceId, t, records[t.id], t.id in pending),
+			),
 			status: groupStatus(group),
 		})),
 	};
@@ -250,7 +262,10 @@ function reviewableItem(params: { workspaceId: string; sessionId: string; id: st
  * a commit appended by a later fix cycle reads as the unreviewed delta. Rejected (throws → `{ok:false}`
  * on the wire) for an unknown or non-reviewable item.
  */
-export function approveTodoReview(params: { workspaceId: string; sessionId: string; id: string }): {
+export function approveTodoReview(
+	params: { workspaceId: string; sessionId: string; id: string },
+	by?: "agent",
+): {
 	ok: true;
 } {
 	const { root, item } = reviewableItem(params);
@@ -258,8 +273,138 @@ export function approveTodoReview(params: { workspaceId: string; sessionId: stri
 		state: "reviewed",
 		reviewedShas: commitShas(item),
 		at: new Date().toISOString(),
+		...(by ? { reviewedBy: by } : {}),
 	});
+	clearReviewPending(root, params.sessionId, params.id);
 	return { ok: true } as const;
+}
+
+// --- The agent reviewer (task-agent-reviewer): Start review marks the item in flight and renders the
+// reviewer package; the verdict ops below record what the reviewer decided. The SEND and the reviewer
+// session's lifecycle are `host` compositions (this module never imports `agent`).
+
+/** The plan's pinned reviewer chat, if any — host reads it before deciding create-vs-follow-up. */
+export function reviewerSessionFor(params: {
+	workspaceId: string;
+	sessionId: string;
+}): string | undefined {
+	return readReviewMeta(getWorkspace(params.workspaceId).worktreePath, params.sessionId)
+		.reviewerSessionId;
+}
+
+/** Pin the plan's reviewer chat (host calls it right after creating the session). */
+export function pinReviewerSession(
+	params: { workspaceId: string; sessionId: string },
+	reviewerId: string,
+): void {
+	setReviewerSession(getWorkspace(params.workspaceId).worktreePath, params.sessionId, reviewerId);
+}
+
+/** The worker session whose plan pinned `reviewerId` — the `review_verdict` seam's reverse lookup. */
+export function workerSessionForReviewer(
+	workspaceId: string,
+	reviewerId: string,
+): string | undefined {
+	return findWorkerSessionByReviewer(getWorkspace(workspaceId).worktreePath, reviewerId);
+}
+
+/**
+ * Start (or restart, for a revision) the agent review of one reviewable item: mark it in flight (the
+ * `reviewing` decoration) and render the reviewer package. Throws on unknown/non-reviewable ids.
+ */
+export function startTodoReview(params: { workspaceId: string; sessionId: string; id: string }): {
+	pkg: string;
+} {
+	const { root, item } = reviewableItem(params);
+	const record = readReviewRecords(root, params.sessionId)[params.id];
+	markReviewPending(root, params.sessionId, params.id);
+	return { pkg: renderReviewPackage(item, params.sessionId, record) };
+}
+
+/** Undo {@link startTodoReview}'s in-flight mark after a pre-turn send rejection. */
+export function cancelTodoReview(params: {
+	workspaceId: string;
+	sessionId: string;
+	id: string;
+}): void {
+	clearReviewPending(getWorkspace(params.workspaceId).worktreePath, params.sessionId, params.id);
+}
+
+/**
+ * Record the reviewer agent's `request_changes` verdict: `changes_requested` + the verdict note as the
+ * feedback + the watermark, `autoCycles` = auto fix cycles spent so far (the host's 1-cycle cap reads
+ * it). Clears the in-flight mark. Returns the previous record (informational; agent verdicts are never
+ * rolled back — the turn already happened).
+ */
+export function recordAgentChangesRequested(params: {
+	workspaceId: string;
+	sessionId: string;
+	id: string;
+	note?: string;
+	autoCycles: number;
+}): { item: StoredItem } {
+	const { root, item } = reviewableItem(params);
+	putReviewRecord(root, params.sessionId, params.id, {
+		state: "changes_requested",
+		reviewedShas: commitShas(item),
+		...(params.note ? { feedback: params.note } : {}),
+		at: new Date().toISOString(),
+		autoCycles: params.autoCycles,
+	});
+	clearReviewPending(root, params.sessionId, params.id);
+	return { item };
+}
+
+/** An item's stored review record — the host's auto-cycle cap reads `autoCycles` off it. */
+export function todoReviewRecord(params: {
+	workspaceId: string;
+	sessionId: string;
+	id: string;
+}): TodoReviewRecord | undefined {
+	return readReviewRecords(getWorkspace(params.workspaceId).worktreePath, params.sessionId)[
+		params.id
+	];
+}
+
+/**
+ * The reviewer package — one structured user message for the plan's reviewer chat. References, never
+ * bulk (the reviewer reads code with its own tools); on a re-review it names the unreviewed delta so
+ * only the fix gets re-read, and asks the reviewer to resolve its own addressed comments.
+ */
+export function renderReviewPackage(
+	item: StoredItem,
+	workerSessionId: string,
+	prior: TodoReviewRecord | undefined,
+): string {
+	const shas = commitShas(item);
+	const seen = new Set(prior?.reviewedShas ?? []);
+	const fresh = shas.filter((s) => !seen.has(s));
+	const paths = (item.artifacts ?? []).flatMap((a) =>
+		a.kind === "change" && a.path ? [a.path] : [],
+	);
+	const changeSet =
+		shas.length > 0
+			? `commit${shas.length === 1 ? "" : "s"} ${shas.map((s) => s.slice(0, 12)).join(", ")}${paths.length > 0 ? `; uncommitted paths: ${paths.join(", ")}` : ""}`
+			: `changed paths: ${paths.join(", ")}`;
+	const rereview = prior && fresh.length > 0 && fresh.length < shas.length;
+	const lines = [
+		`You are the REVIEWER for plan step ${item.id} ("${item.title}") of chat ${workerSessionId}. Review the change set — you did not write this code.`,
+		"",
+		...(item.note ? [`Step note: ${item.note}`] : []),
+		...(item.summary ? [`Worker's completion summary: ${item.summary}`] : []),
+		...(item.verification
+			? [`Worker's verification claim: ${item.verification} (verify the claim, don't trust it)`]
+			: ["Worker reported NO verification — weigh that in your review."]),
+		`Change set: ${changeSet}`,
+		...(rereview
+			? [
+					`RE-REVIEW: only ${fresh.map((s) => s.slice(0, 12)).join(", ")} is new since your last verdict — review only that delta, and resolve_comment each of your earlier findings the fix addressed.`,
+				]
+			: []),
+		"",
+		"How to review: read the diffs (e.g. `git show <sha>`) and the surrounding code; judge intent-match, correctness, tests, and honesty of the claims — not style. For EACH concrete finding call add_review_comment (path, lines, what's wrong + what to do). Then finish with exactly ONE review_verdict for this todoId: approve (clean) or request_changes (findings must be addressed).",
+	];
+	return lines.join("\n");
 }
 
 /**

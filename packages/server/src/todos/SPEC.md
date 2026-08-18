@@ -132,6 +132,20 @@ completion note, agent-authored via `todo_plan_summary`; item `summary` rides th
   calls **`rollbackTodoFix`** (restores the record the request replaced) and surfaces in the chat, so an
   undelivered fix request never strands as `changes_requested`.
 
+**The agent reviewer ([[submodule-server-reviews]] is the findings' home).** `todo.startReview` puts a
+reviewable item in front of the plan's **dedicated reviewer chat** — one per worker session, pinned as
+`reviewerSessionId` in the same sidecar (created on first use by `host`, re-attached from disk). This
+module owns the state + packages: `startTodoReview` (marks the item's in-flight `pending` mark — the
+DTO's `reviewing` — and renders `renderReviewPackage`: refs + the worker's summary/verification claims
+to VERIFY, a re-review names only the unreviewed delta), `cancelTodoReview` (pre-turn rejection),
+`approveTodoReview(…, "agent")` (labeled `reviewedBy`), `recordAgentChangesRequested` (verdict note as
+feedback + `autoCycles` — the host's **1-auto-cycle cap**: cycle 0's verdict auto-sends the reviewer's
+comments to the worker (autoCycles 1), the fixed revision auto-re-reviews once (trigger requires
+autoCycles === 1 + a fresh delta), and that verdict records autoCycles 2 — terminal, the human decides),
+and `workerSessionForReviewer` (the verdict seam's reverse lookup, enumerating sidecars). The reviewer's
+findings are **agent-authored review comments** in the reviews module (`author: "agent"`), never a
+parallel store; orchestration/sends live in `host/todoReview.ts`.
+
 **The read barrier.** `listTodos` first awaits the workspace's in-flight reconciles
 (`settleChangeArtifacts` — the same per-workspace chain). A client's only refresh signal is the `pi.event`
 a `todo_*` tool end publishes, and the reconcile is enqueued *synchronously with that publish* but settles

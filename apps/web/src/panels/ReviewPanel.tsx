@@ -1,5 +1,6 @@
 import type { ReviewComment } from "@thinkrail/contracts";
 import {
+	Bot,
 	CheckCircle2,
 	ChevronDown,
 	ChevronRight,
@@ -436,6 +437,15 @@ function CommentRow({
 				<span className="min-w-0 flex-1">
 					<span className="line-clamp-2 block tr-text-ui text-text-default">{comment.body}</span>
 					<span className="flex items-center gap-xs">
+						{comment.author === "agent" && (
+							<span
+								data-testid="review-comment-agent"
+								title="Filed by the plan's reviewer agent"
+								className="flex items-center gap-2xs tr-text-eyebrow text-text-subtle"
+							>
+								<Bot className="size-3" /> agent
+							</span>
+						)}
 						{ref && <span className="tr-code-text text-text-subtle">{ref}</span>}
 						{comment.anchorState === "outdated" && (
 							<span className="tr-text-eyebrow text-text-subtle">outdated</span>
