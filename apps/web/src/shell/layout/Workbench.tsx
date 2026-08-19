@@ -482,7 +482,7 @@ function TabStrip({
 				type="button"
 				aria-label="Scroll tabs left"
 				onClick={() => scroller.current?.scrollBy({ left: -180, behavior: "smooth" })}
-				className="flex w-24 shrink-0 items-center justify-center border-border-muted border-r text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+				className="flex w-32 shrink-0 items-center justify-center border-border-muted border-r text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 			>
 				<ChevronLeft className="size-14" />
 			</button>
@@ -569,14 +569,14 @@ function TabStrip({
 				type="button"
 				aria-label="Scroll tabs right"
 				onClick={() => scroller.current?.scrollBy({ left: 180, behavior: "smooth" })}
-				className="flex w-24 shrink-0 items-center justify-center border-border-muted border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+				className="flex w-32 shrink-0 items-center justify-center border-border-muted border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 			>
 				<ChevronRight className="size-14" />
 			</button>
 			<Popover open={overflowOpen} onOpenChange={setOverflowOpen}>
 				<PopoverTrigger
 					aria-label="Search open tabs"
-					className="flex w-28 shrink-0 items-center justify-center border-border-muted border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+					className="flex w-32 shrink-0 items-center justify-center border-border-muted border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 				>
 					<MoreHorizontal className="size-16" />
 				</PopoverTrigger>
@@ -1109,7 +1109,7 @@ function CenterGroupView({
 							aria-label="New chat"
 							title="New chat"
 							onClick={() => onNewChat(group.id)}
-							className="flex w-28 shrink-0 items-center justify-center text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+							className="flex w-32 shrink-0 items-center justify-center text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 						>
 							<MessageSquarePlus className="size-16" />
 						</button>
@@ -1379,7 +1379,7 @@ function SideGroupView({
 						event.preventDefault();
 						onFold();
 					}}
-					className="flex w-28 shrink-0 items-center justify-center border-border-muted border-b border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+					className="flex w-32 shrink-0 items-center justify-center border-border-muted border-b border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 				>
 					<ChevronDown
 						className={`size-14 transition-transform ${group.folded ? "-rotate-90" : ""}`}
