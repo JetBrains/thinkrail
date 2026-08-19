@@ -301,6 +301,16 @@ function compactionOutcome(event: Extract<PiEvent, { type: "compaction_end" }>):
 	};
 }
 
+/** Drop `resuming` from compaction turns — the run settled, nothing is resuming anymore. */
+function clearCompactionResuming(turns: ChatTurn[]): ChatTurn[] {
+	if (!turns.some((t) => t.kind === "compaction" && t.resuming)) return turns;
+	return turns.map((t) => {
+		if (t.kind !== "compaction" || !t.resuming) return t;
+		const { resuming, ...rest } = t;
+		return rest;
+	});
+}
+
 /** Settle the trailing running compaction turn in place (same id — fold stability), or append the
  * settled notice when none is running (client connected mid-compaction). */
 function settleCompactionTurn(
@@ -466,7 +476,12 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 					{ kind: "system", id: crypto.randomUUID(), text: "✓ Done", endedAt: Date.now() };
 			return {
 				...rt,
-				turns: [...clearTurnStreaming(rt.turns).filter((turn) => turn.kind !== "retry"), closer],
+				turns: [
+					...clearCompactionResuming(clearTurnStreaming(rt.turns)).filter(
+						(turn) => turn.kind !== "retry",
+					),
+					closer,
+				],
 				isStreaming: false,
 				currentAssistantId: null,
 				attemptAssistantId: null,

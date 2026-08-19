@@ -121,8 +121,8 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   → `cancelled`; `errorMessage` → `failed` carrying the message, e.g. pi's one-shot overflow-recovery
   cap — a failed compaction must be visible, never swallowed) or appends the settled turn when no
   running one exists (reconnect mid-compaction). A successful `compaction_end` with `willRetry: true`
-  additionally marks the turn `resuming` (pi continues the same run) and still removes the superseded
-  assistant attempt. The reducer relies on pi's guarantee that every emitted `compaction_start` is
+  additionally marks the turn `resuming` (pi continues the same run; settlement clears the flag — a
+  settled transcript never claims ongoing work) and still removes the superseded assistant attempt. The reducer relies on pi's guarantee that every emitted `compaction_start` is
   paired with a `compaction_end` (both success and failure paths emit it), the same trust every other
   event pair gets. Closed
   chats are reopenable: **`closeChatToHistory`** removes a chat tab but **keeps its runtime + session

@@ -10,6 +10,7 @@ import type {
 	WorkspaceFsChangedPayload,
 	WorkspaceSkillChange,
 } from "@thinkrail/contracts";
+import type { ChatTurn } from "../chat/types";
 import { type FileTab, type SessionRuntime, toast, useAppStore } from "./appStore";
 import {
 	selectDiffScope,
@@ -519,7 +520,9 @@ const compactionEnd = (over: Partial<Extract<PiEvent, { type: "compaction_end" }
 		...over,
 	}) as PiEvent;
 const compactionTurns = (sessionId: string) =>
-	rt(sessionId).turns.filter((turn) => turn.kind === "compaction");
+	rt(sessionId).turns.filter(
+		(turn): turn is Extract<ChatTurn, { kind: "compaction" }> => turn.kind === "compaction",
+	);
 
 test("compaction lifecycle: a running notice settles in place (same id) with the token figures", () => {
 	const store = useAppStore.getState();
@@ -582,6 +585,8 @@ test("the incident sequence: truncated response → compacting → compacted-res
 	store.handlePiEvent(agentSettled(), "a");
 	expect(rt("a").turns.at(-1)).toMatchObject({ kind: "system", text: "✓ Done" });
 	expect(rt("a").isStreaming).toBe(false);
+	// Settlement releases the "— resuming…" label — the record must not claim ongoing work forever.
+	expect(compactionTurns("a")[0]?.resuming).toBeUndefined();
 });
 
 test("a failed compaction settles into a visible, actionable notice — and a cancelled one into a muted record", () => {
