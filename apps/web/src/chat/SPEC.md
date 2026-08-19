@@ -56,7 +56,11 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   a failed turn can't look like nothing happened. Live settlement and transcript hydration share the
   same assistant-failure classifier, so reload cannot turn the latest unresolved failure into success;
   recovered historical `length` attempts followed by later work are not re-labeled as current failures.
-- `markdown` — a non-empty assistant text block (react-markdown + remark-gfm + shiki).
+- `markdown` — a non-empty assistant text block (react-markdown + remark-gfm + shiki). A fenced
+  ```mermaid block renders as a themed diagram via `tools/visualize`'s `MermaidView` (fullscreen
+  pan-zoom, error → source fallback) — uniform across every `Markdown` surface (chat, file/specs
+  preview); until mounted it renders as highlighted source, so static contexts (`RenderedDiff`'s
+  `renderToStaticMarkup`) degrade to code exactly like shiki blocks do.
 - `tool` — a **primary** tool call: the collapsible `ToolCard` frame (collapsed unless registered
   `defaultExpanded`; errors auto-expand; a manual toggle wins), or a `"bare"` renderer that owns its
   frame. A `"bare"` call on a dead message (`stopReason` aborted/error — pi never executes those calls)
@@ -609,7 +613,8 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   from *any* consumer. `model.list` answers from *before* the
   detached refresh it triggers, so it is never a basis for concluding a model is gone);
   `react-markdown` / `remark-gfm` / `shiki` (via `lib/highlighter`); `mermaid`
-  (**lazy, `tools/visualize` only**); `react-virtuoso`; `lucide-react`; `components/ui`; `lib`.
+  (**lazy, `tools/visualize` only** — `Markdown` consumes the `MermaidView` *component*, never the
+  package); `react-virtuoso`; `lucide-react`; `components/ui`; `lib`.
 - **Forbidden:** value-importing any `pi` package; a **presentational** renderer importing
   `store`/`transport` (only the app-integration files enumerated above may — keep the renderers reusable).
 - **`ChatView`** is the primary app-integration file: wires this session's runtime
