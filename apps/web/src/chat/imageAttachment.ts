@@ -8,11 +8,13 @@
 // would actually see. Two more attach-time rules ride along: a media type outside png/jpeg/gif/webp
 // (BMP, AVIF, HEIC…) is re-encoded even when within pixel bounds (the provider rejects the raw type),
 // and anything over the provider's 4.5MB encoded-base64 ceiling (IMAGE_MAX_BASE64_BYTES — e.g. a multi-MB
-// animated GIF that is dimensionally tiny) is re-encoded down a JPEG quality ladder. The server-side
-// `imageGuard` extension is the second line of defense for images that predate this or arrive by
-// other routes.
+// animated GIF that is dimensionally tiny) is re-encoded down a JPEG quality ladder. An undecodable
+// file with a provider-unsupported type is refused outright (null) — raw pass-through would poison the
+// session. The server-side `imageGuard` extension is the second line of defense for images that
+// predate these rules or arrive by other routes.
 
 import {
+	ACCEPTED_IMAGE_TYPES,
 	base64EncodedLength,
 	IMAGE_MAX_BASE64_BYTES,
 	type ImageContent,
@@ -21,10 +23,10 @@ import {
 /** Claude's standard-tier long-edge; larger images are downsampled provider-side anyway. */
 export const MAX_ATTACHMENT_EDGE = 1568;
 
-/** The media types the provider accepts as-is; anything else (BMP, AVIF, HEIC…) must be re-encoded
- * even when its pixel size is already within bounds — pi sends the attachment verbatim, so a raw
- * `image/bmp` would 400 the request outright. */
-const PROVIDER_ACCEPTED = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
+/** The media types the provider accepts as-is (shared with the host's `imageGuard` via contracts);
+ * anything else (BMP, AVIF, HEIC…) must be re-encoded even when its pixel size is already within
+ * bounds — pi sends the attachment verbatim, so a raw `image/bmp` would 400 the request outright. */
+const PROVIDER_ACCEPTED = new Set(ACCEPTED_IMAGE_TYPES);
 
 /** The JPEG quality ladder for images whose encoding lands over IMAGE_MAX_BASE64_BYTES: tried
  * top-down, the first rung under the ceiling wins. At ≤1568px even the bottom rung is far below the
@@ -91,14 +93,20 @@ function dataUrlToContent(dataUrl: string): ImageContent {
  * carries — pi caps it at 4.5MB, headroom under Anthropic's 5MB) — a within-bounds 12MB GIF or a small BMP is every bit as
  * session-poisoning as an 8000px side. Anything else goes through canvas: re-encoded in its own format
  * when canvas supports it (else PNG), then walked down the JPEG quality ladder while the encoding
- * exceeds the byte ceiling. A file the browser can't decode falls back to the raw bytes — attaching
- * must never fail here; the server-side guard still protects the session.
+ * exceeds the byte ceiling.
+ *
+ * Returns `null` when the file cannot be attached safely: the browser can't decode it AND its media
+ * type is provider-unsupported — there is nothing to re-encode from, and sending the raw bytes (the
+ * old fallback) would 400 the request and, once persisted, every later turn. A decode failure on an
+ * ACCEPTED type still falls back to the raw bytes (the provider may well decode what the browser
+ * can't; the server-side guard still bounds its size).
  */
-export async function fileToAttachedImage(file: File): Promise<AttachedImage> {
+export async function fileToAttachedImage(file: File): Promise<AttachedImage | null> {
 	let bitmap: ImageBitmap;
 	try {
 		bitmap = await createImageBitmap(file);
 	} catch {
+		if (!PROVIDER_ACCEPTED.has(file.type)) return null;
 		return { content: await fileToRawContent(file) };
 	}
 	try {
@@ -115,7 +123,9 @@ export async function fileToAttachedImage(file: File): Promise<AttachedImage> {
 		canvas.width = width;
 		canvas.height = height;
 		const ctx = canvas.getContext("2d");
-		if (!ctx) return { content: await fileToRawContent(file) };
+		// No 2d context (headless/limits): raw is safe only for a type the provider accepts.
+		if (!ctx)
+			return PROVIDER_ACCEPTED.has(file.type) ? { content: await fileToRawContent(file) } : null;
 		ctx.drawImage(bitmap, 0, 0, width, height);
 		const mimeType = CANVAS_ENCODABLE.has(file.type) ? file.type : "image/png";
 		let content = dataUrlToContent(canvas.toDataURL(mimeType));

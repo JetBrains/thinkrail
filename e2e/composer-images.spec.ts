@@ -101,3 +101,30 @@ test("pasting a within-bounds BMP re-encodes it to a provider-accepted type", as
 	await expect(chip).toHaveAttribute("data-mime", "image/png");
 	await expect(chip).toContainText("shot.bmp");
 });
+
+test("an undecodable provider-unsupported file is refused with an error chip, never attached raw", async ({
+	page,
+}) => {
+	await openChatComposer(page);
+
+	// Garbage bytes labeled image/heic: Chromium can't decode it, and the provider rejects the media
+	// type outright — the old raw fallback would poison the session, so the composer must refuse it
+	// and say so (silently dropping the pick would read as a successful attach).
+	await page.getByTestId("chat-input").evaluate(async (el) => {
+		const file = new File([new Uint8Array([0x00, 0x01, 0x02, 0x03, 0x04])], "photo.heic", {
+			type: "image/heic",
+		});
+		const dt = new DataTransfer();
+		dt.items.add(file);
+		el.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true }));
+	});
+
+	const error = page.getByTestId("composer-image-error");
+	await expect(error).toHaveCount(1);
+	await expect(error).toContainText("photo.heic");
+	await expect(page.getByTestId("composer-image")).toHaveCount(0);
+
+	// Dismissible — the strip returns to empty.
+	await error.getByRole("button", { name: "Dismiss" }).click();
+	await expect(error).toHaveCount(0);
+});

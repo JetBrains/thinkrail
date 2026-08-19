@@ -304,6 +304,58 @@ describe("guardOversizedImages", () => {
 		expect(content[0]?.text).toContain("4.5MB image payload limit");
 	});
 
+	test("strips a provider-unsupported media type even when small and within bounds — legacy HEIC/BMP heals", () => {
+		// The composer refuses these now, but sessions poisoned before that rule (or fed by another
+		// client) re-send the block every turn — the guard is what un-bricks them.
+		const guarded = guardOversizedImages([
+			user([
+				image(Buffer.from("tiny-heic-payload"), "image/heic"),
+				image(gifBytes(100, 100), "image/gif"),
+			]),
+		]);
+		expect(guarded).toBeDefined();
+		const content = (guarded?.[0] as { content: { type: string; text?: string }[] }).content;
+		expect(content[0]?.type).toBe("text");
+		expect(content[0]?.text).toContain("media type image/heic is not supported");
+		expect(content[1]?.type).toBe("image");
+	});
+
+	test("strips largest-first down to the request-wide 24MB image budget — each image alone is legal", () => {
+		// Seven ~4.2MiB-of-base64 images: every one passes the 4.5MiB per-image ceiling, but the sum
+		// (~29.4MiB) exceeds the 24MiB aggregate budget — the largest two go, five stay (~21MiB).
+		const mib = 1024 * 1024;
+		const gif = (decodedBytes: number) =>
+			image(
+				Buffer.concat([
+					gifBytes(100, 100),
+					Buffer.alloc(decodedBytes - gifBytes(100, 100).length, 0xab),
+				]),
+				"image/gif",
+			);
+		const blocks = [3.1, 3.1, 3.1, 3.1, 3.1, 3.2, 3.3].map((m) => gif(Math.round(m * mib)));
+		const guarded = guardOversizedImages([user(blocks)]);
+		expect(guarded).toBeDefined();
+		const content = (guarded?.[0] as { content: { type: string; text?: string }[] }).content;
+		const stripped = content.filter((b) => b.type === "text");
+		const kept = content.filter((b) => b.type === "image");
+		expect(stripped.length).toBe(2);
+		expect(kept.length).toBe(5);
+		for (const note of stripped) expect(note.text).toContain("over the 24MB budget");
+		// Largest-first: the 3.3MiB and 3.2MiB blocks are the ones stripped — all five 3.1MiB stay.
+		const keptSizes = kept.map((b) => (b as { data?: string }).data?.length ?? 0);
+		for (const size of keptSizes)
+			expect(size).toBeLessThanOrEqual(Math.ceil((3.1 * mib) / 3) * 4 + 8);
+	});
+
+	test("keeps a request whose aggregate image payload is under the budget", () => {
+		const mib = 1024 * 1024;
+		const small = image(
+			Buffer.concat([gifBytes(100, 100), Buffer.alloc(3 * mib, 0xab)]),
+			"image/gif",
+		);
+		expect(guardOversizedImages([user([small, small, small])])).toBeUndefined();
+	});
+
 	test("keeps an image exactly at the encoded-base64 ceiling boundary", () => {
 		// 3.375MiB decoded is divisible by 3 → exactly 4.5MiB of base64, the last legal size.
 		const atLimit = Buffer.concat([

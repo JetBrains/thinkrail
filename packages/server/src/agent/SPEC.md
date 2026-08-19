@@ -252,13 +252,19 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     header bytes (PNG/JPEG/GIF/WebP — no codec, never strips what it can't sniff; **bounded work per
     pass**: only a 256KiB decoded prefix is ever materialized — a JPEG whose SOF lies beyond it sniffs as
     unknown, not stripped — and each block is sniffed exactly once per pass) and replaces any block
-    violating a provider rule with a text note naming the violated rule plus a re-attach hint. Three
-    rules, in order: the **4.5MB encoded-base64 payload ceiling** (`IMAGE_MAX_BASE64_BYTES`, shared
+    violating a provider rule with a text note naming the violated rule plus a re-attach hint. Five
+    rules, in order: the **provider-accepted media types** (`ACCEPTED_IMAGE_TYPES`, shared with the
+    composer via `contracts` — pi forwards an image's media type verbatim, so a legacy `image/heic`
+    block 400s the whole request; stripping it heals sessions poisoned before the composer refused such
+    files); the **4.5MB encoded-base64 payload ceiling** (`IMAGE_MAX_BASE64_BYTES`, shared
     with the composer via `contracts` — pi's own headroom under Anthropic's 5MB API limit, compared
-    against `data.length` since the wire carries base64, so it applies even to unsniffable formats); the **8000px per-side hard cap**; and the **count-aware 2000px cap** once the
+    against `data.length` since the wire carries base64, so it applies even to unsniffable formats); the **8000px per-side hard cap**; the **count-aware 2000px cap** once the
     whole context carries more than 20 images — stripping changes the very count that selects that cap,
     so 2000px violators are stripped **largest-first only until the survivors fit back under the
-    threshold** (18 small + 3 at 2500px ⇒ one stripped, the other two stay legal under 8000px). This is what un-bricks a session poisoned by an oversized image
+    threshold** (18 small + 3 at 2500px ⇒ one stripped, the other two stay legal under 8000px); and the
+    **request-wide `REQUEST_IMAGE_BASE64_BUDGET`** (24MB of base64, headroom under Anthropic's 32MB
+    per-request cap — several per-image-legal blocks can still overflow the whole request), enforced by
+    stripping survivors **largest-first until the aggregate fits**. This is what un-bricks a session poisoned by an oversized image
     (history is re-sent every turn, so one bad image 400s forever): sessions are append-only and the host
     has no image codec (the autoResize tradeoff above), so the guard transforms the **outgoing context
     only** — session file and transcript stay untouched, and a stuck chat recovers on its very next

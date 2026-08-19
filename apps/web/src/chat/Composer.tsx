@@ -1,4 +1,9 @@
-import type { SlashCommandInfo, ThinkingLevel, WireModel } from "@thinkrail/contracts";
+import {
+	REQUEST_IMAGE_BASE64_BUDGET,
+	type SlashCommandInfo,
+	type ThinkingLevel,
+	type WireModel,
+} from "@thinkrail/contracts";
 import { ArrowUp, FileIcon, FolderIcon, History, Sparkles, Square, X } from "lucide-react";
 import {
 	type ClipboardEvent,
@@ -232,6 +237,10 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	// image (which would then attach itself to the NEXT message). While non-zero: placeholder chips render
 	// below, the send button disables, and `submitText` refuses to fire.
 	const [pendingImages, setPendingImages] = useState(0);
+	// Files that could NOT be attached (undecodable + provider-unsupported type, or over the request-wide
+	// image budget) — surfaced as dismissible error chips in the attachment strip; silently dropping a
+	// pick would read as a successful attach.
+	const [attachErrors, setAttachErrors] = useState<{ id: string; text: string }[]>([]);
 	const [mentionActiveIndex, setMentionActiveIndex] = useState(0);
 	const [mentionDismissed, setMentionDismissed] = useState(false);
 	// The plain `↑`-recall session: `null` when inactive; otherwise an index into `recentPrompts` (0 =
@@ -349,6 +358,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		);
 		onChange("");
 		setImages([]);
+		setAttachErrors([]);
 		recallIdxRef.current = null;
 		setSlots(null);
 	};
@@ -434,21 +444,41 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 			// not `all`: a single unreadable file must not discard siblings that decoded fine (and the
 			// callers invoke this as `void addFiles(...)` — a rejection here would be unhandled).
 			const settled = await Promise.allSettled(picked.map(fileToAttachedImage));
-			setImages((prev) => [
-				...prev,
-				...settled.flatMap((result, i) =>
-					result.status === "fulfilled"
-						? [
-								{
-									id: crypto.randomUUID(),
-									// A clipboard paste often arrives as a generic "image.png" — still better than a mime type.
-									name: picked[i]?.name || "image",
-									...result.value,
-								},
-							]
-						: [],
-				),
-			]);
+			// Accept/refuse decisions happen HERE, not inside a state updater (updaters must stay pure and
+			// run deferred). The budget baseline is the batch state at call time — a chip removed during
+			// the decode window only makes the check conservative, never over-budget. One message's image
+			// batch must fit the request-wide budget: the provider caps the WHOLE request, and a persisted
+			// over-budget turn is rejected forever (the host guard heals history, but never sending is cheaper).
+			let used = images.reduce((sum, p) => sum + p.content.data.length, 0);
+			const additions: PendingImage[] = [];
+			const errors: { id: string; text: string }[] = [];
+			settled.forEach((result, i) => {
+				const name = picked[i]?.name || "image";
+				if (result.status !== "fulfilled" || result.value === null) {
+					errors.push({
+						id: crypto.randomUUID(),
+						text: `Couldn't attach ${name} — unsupported image format`,
+					});
+					return;
+				}
+				const size = result.value.content.data.length;
+				if (used + size > REQUEST_IMAGE_BASE64_BUDGET) {
+					errors.push({
+						id: crypto.randomUUID(),
+						text: `Couldn't attach ${name} — message image limit reached`,
+					});
+					return;
+				}
+				used += size;
+				additions.push({
+					id: crypto.randomUUID(),
+					// A clipboard paste often arrives as a generic "image.png" — still better than a mime type.
+					name,
+					...result.value,
+				});
+			});
+			if (additions.length > 0) setImages((prev) => [...prev, ...additions]);
+			if (errors.length > 0) setAttachErrors((prev) => [...prev, ...errors]);
 		} finally {
 			setPendingImages((n) => n - picked.length);
 		}
@@ -676,8 +706,25 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 				</button>
 			) : null}
 
-			{images.length > 0 || pendingImages > 0 ? (
+			{images.length > 0 || pendingImages > 0 || attachErrors.length > 0 ? (
 				<div className="flex flex-wrap gap-xs px-sm pt-sm" data-testid="composer-images">
+					{attachErrors.map((err) => (
+						<span
+							key={err.id}
+							data-testid="composer-image-error"
+							className="flex items-center gap-xs whitespace-nowrap rounded-[var(--radius-sm)] border border-feedback-error-muted bg-clip-padding bg-feedback-error-subtle px-sm py-xs text-feedback-error tr-text-metadata"
+						>
+							{err.text}
+							<button
+								type="button"
+								aria-label="Dismiss"
+								onClick={() => setAttachErrors((prev) => prev.filter((p) => p.id !== err.id))}
+								className="hover:opacity-80"
+							>
+								<X className="size-3" />
+							</button>
+						</span>
+					))}
 					{images.map((img) => (
 						<FileChip
 							key={img.id}

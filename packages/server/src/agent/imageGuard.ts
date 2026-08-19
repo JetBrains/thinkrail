@@ -7,7 +7,9 @@
 // transforms the OUTGOING context instead: on pi's `context` event (fired before every LLM call, live
 // sessions included — a stuck chat unsticks on its very next message) it sniffs each image's dimensions
 // straight from the base64 header bytes, measures its byte size from the base64 length (the provider
-// also caps an image at 4.5MB of base64 — IMAGE_MAX_BASE64_BYTES, shared with the composer's attach-time ladder), and
+// also caps an image at 4.5MB of base64 — IMAGE_MAX_BASE64_BYTES, shared with the composer's attach-time
+// ladder — the whole request at 32MB — REQUEST_IMAGE_BASE64_BUDGET keeps 24MB of it for images — and
+// rejects media types outside png/jpeg/gif/webp — ACCEPTED_IMAGE_TYPES), and
 // replaces violating image blocks with a text note. The
 // session file and the visible transcript stay untouched. The caps are Anthropic's model-level rules,
 // so the guard fires ONLY for the Anthropic model family (the `context` handler's ctx.model — native
@@ -17,7 +19,12 @@
 // a note (not a brick) once the same session crosses 21.
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { type AgentMessage, IMAGE_MAX_BASE64_BYTES } from "@thinkrail/contracts";
+import {
+	ACCEPTED_IMAGE_TYPES,
+	type AgentMessage,
+	IMAGE_MAX_BASE64_BYTES,
+	REQUEST_IMAGE_BASE64_BUDGET,
+} from "@thinkrail/contracts";
 
 /** Anthropic's per-side cap for requests carrying 20 images or fewer. */
 export const SINGLE_IMAGE_EDGE_LIMIT = 8000;
@@ -129,14 +136,20 @@ const REMOVAL_HINT = "ask the user to re-attach a smaller version if it is still
 
 /**
  * Replace every image block that violates a provider limit with a text note naming the violated rule
- * (copy-on-write — the input is never mutated). Three rules, applied in order:
- * 1. bytes — anything whose base64 payload (`data.length` — what the wire actually carries) exceeds
+ * (copy-on-write — the input is never mutated). Five rules, applied in order:
+ * 1. media type — anything outside ACCEPTED_IMAGE_TYPES (BMP, AVIF, HEIC…) is stripped: pi forwards
+ *    the type verbatim and the provider rejects the whole request (heals sessions poisoned before the
+ *    composer refused such files);
+ * 2. bytes — anything whose base64 payload (`data.length` — what the wire actually carries) exceeds
  *    IMAGE_MAX_BASE64_BYTES (4.5MB, pi's own headroom under Anthropic's 5MB) is stripped, sniffable or not;
- * 2. the 8000px hard per-side cap;
- * 3. the count-aware 2000px cap — and because stripping changes the very count that selects the cap,
+ * 3. the 8000px hard per-side cap;
+ * 4. the count-aware 2000px cap — and because stripping changes the very count that selects the cap,
  *    2000px violators are stripped LARGEST-FIRST only until the surviving image count is back at the
  *    20-image threshold; the rest are then legal under the 8000px cap and stay (18 small + 3 at
- *    2500px ⇒ one stripped, not three).
+ *    2500px ⇒ one stripped, not three);
+ * 5. the request-wide REQUEST_IMAGE_BASE64_BUDGET (24MB, headroom under Anthropic's 32MB per-request
+ *    cap) — several images each under the per-image ceiling can still overflow the whole request, so
+ *    survivors are stripped LARGEST-FIRST until the aggregate encoded payload fits.
  * Returns undefined when nothing changed.
  */
 export function guardOversizedImages(messages: AgentMessage[]): AgentMessage[] | undefined {
@@ -162,6 +175,14 @@ export function guardOversizedImages(messages: AgentMessage[]): AgentMessage[] |
 	// The removal note per stripped block — membership doubles as the strip decision.
 	const notes = new Map<ContentBlock, string>();
 	for (const block of imageBlocks) {
+		const mimeType = (block as { mimeType?: unknown }).mimeType;
+		if (typeof mimeType === "string" && !ACCEPTED_IMAGE_TYPES.includes(mimeType)) {
+			notes.set(
+				block,
+				`[image removed: media type ${mimeType} is not supported by the provider (accepted: ${ACCEPTED_IMAGE_TYPES.join(", ")}) — ${REMOVAL_HINT}]`,
+			);
+			continue;
+		}
 		// base64 is ASCII: string length IS the encoded byte length — the size the provider sees.
 		if (block.data.length > IMAGE_MAX_BASE64_BYTES) {
 			const mb = (block.data.length / (1024 * 1024)).toFixed(1);
@@ -200,6 +221,24 @@ export function guardOversizedImages(messages: AgentMessage[]): AgentMessage[] |
 				`[image removed: ${d?.width}×${d?.height} exceeds the provider's ${MANY_IMAGE_EDGE_LIMIT}px image-dimension limit for requests carrying more than ${MANY_IMAGE_THRESHOLD} images — ${REMOVAL_HINT}]`,
 			);
 			surviving--;
+		}
+	}
+
+	// Rule 5: the whole request must fit — per-image-legal blocks can still sum past the provider's
+	// request cap, and a persisted overflow rejects every later turn. Largest-first keeps the most
+	// images for the budget spent.
+	const survivors = imageBlocks.filter((b) => !notes.has(b));
+	let totalBytes = survivors.reduce((sum, b) => sum + b.data.length, 0);
+	if (totalBytes > REQUEST_IMAGE_BASE64_BUDGET) {
+		const bySize = [...survivors].sort((a, b) => b.data.length - a.data.length);
+		for (const block of bySize) {
+			if (totalBytes <= REQUEST_IMAGE_BASE64_BUDGET) break;
+			const mb = (block.data.length / (1024 * 1024)).toFixed(1);
+			notes.set(
+				block,
+				`[image removed: ${mb}MB of base64 pushed the request's total image payload over the ${REQUEST_IMAGE_BASE64_BUDGET / (1024 * 1024)}MB budget (the provider caps the whole request) — ${REMOVAL_HINT}]`,
+			);
+			totalBytes -= block.data.length;
 		}
 	}
 	if (notes.size === 0) return undefined;

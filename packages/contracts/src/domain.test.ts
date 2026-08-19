@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { base64EncodedLength, IMAGE_MAX_BASE64_BYTES, isRetriedAttempt } from "./domain";
+import {
+	ACCEPTED_IMAGE_TYPES,
+	base64EncodedLength,
+	IMAGE_MAX_BASE64_BYTES,
+	isRetriedAttempt,
+	REQUEST_IMAGE_BASE64_BUDGET,
+} from "./domain";
 
 // The shared presentation/measurement contracts live here (next to isControlMessage), used by both the
 // web client and the host — so their behavior is pinned where it's defined, not only transitively
@@ -46,5 +52,21 @@ describe("image payload ceiling", () => {
 
 	test("the shared ceiling is pi's 4.5MB encoded-base64 cap (headroom under Anthropic's 5MB API limit)", () => {
 		expect(IMAGE_MAX_BASE64_BYTES).toBe(4.5 * 1024 * 1024);
+	});
+
+	test("the request-wide image budget leaves headroom under Anthropic's 32MB per-request cap", () => {
+		expect(REQUEST_IMAGE_BASE64_BUDGET).toBe(24 * 1024 * 1024);
+		expect(REQUEST_IMAGE_BASE64_BUDGET).toBeLessThan(32 * 1024 * 1024);
+		// The budget must admit at least a few ceiling-sized images — otherwise the per-image ceiling is dead.
+		expect(REQUEST_IMAGE_BASE64_BUDGET).toBeGreaterThan(IMAGE_MAX_BASE64_BYTES * 4);
+	});
+
+	test("the provider-accepted media types are exactly png/jpeg/gif/webp", () => {
+		expect([...ACCEPTED_IMAGE_TYPES].sort()).toEqual([
+			"image/gif",
+			"image/jpeg",
+			"image/png",
+			"image/webp",
+		]);
 	});
 });

@@ -765,6 +765,28 @@ export function base64EncodedLength(byteLength: number): number {
 }
 
 /**
+ * The image media types the provider accepts verbatim. pi forwards an attachment's media type as-is,
+ * so anything else (BMP, AVIF, HEIC…) 400s the request outright — and once persisted, every later
+ * turn. Shared contract: the composer re-encodes (or refuses) anything outside this set at attach
+ * time, and the host's `imageGuard` strips legacy blocks that predate that rule.
+ */
+export const ACCEPTED_IMAGE_TYPES: readonly string[] = [
+	"image/png",
+	"image/jpeg",
+	"image/gif",
+	"image/webp",
+];
+
+/**
+ * The request-wide budget for encoded image payload, in base64 bytes. Anthropic caps a whole Messages
+ * request at 32MB, and history is re-sent every turn — several images each under the per-image ceiling
+ * can still push the request past the limit *permanently*. 24MB keeps ~25% headroom for text, tool
+ * results, and JSON framing. Shared contract: the composer bounds one message's batch at attach time,
+ * and the host's `imageGuard` strips history largest-first until the whole request fits.
+ */
+export const REQUEST_IMAGE_BASE64_BUDGET = 24 * 1024 * 1024;
+
+/**
  * True when the message at `index` is a superseded auto-retry attempt: an assistant message that ended
  * in `stopReason: "error"` with the retried assistant message *immediately* following — exactly the
  * shape pi's `_prepareRetry` produces (it trims the failed attempt from the live context and re-runs

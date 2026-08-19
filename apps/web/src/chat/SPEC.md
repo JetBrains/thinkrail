@@ -212,8 +212,14 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   ceiling is measured on `data.length`, with `base64EncodedLength` sizing a raw File before encoding);
   anything else re-encodes through canvas, walking a **JPEG quality ladder** while the encoding
   exceeds the ceiling (a within-bounds multi-MB GIF or a small BMP would 400 the request just like an
-  oversized side). Undecodable files fall back to raw (the server's `imageGuard` extension is the
-  second line of defense). While files are still decoding, a placeholder chip renders
+  oversized side). An undecodable file falls back to raw **only when its media type is
+  provider-accepted** (`ACCEPTED_IMAGE_TYPES`, shared via `contracts`); undecodable + unsupported
+  (HEIC…) is **refused** (`fileToAttachedImage` → `null`) — raw pass-through would 400 every later
+  turn — and surfaced as a dismissible error chip (`composer-image-error` testid) in the attachment
+  strip, cleared on send. One message's batch is also bounded by the request-wide
+  **`REQUEST_IMAGE_BASE64_BUDGET`** (24MB of base64, headroom under Anthropic's 32MB per-request cap):
+  files that would push the batch over it are refused with the same error-chip surface. The server's
+  `imageGuard` extension is the second line of defense for history. While files are still decoding, a placeholder chip renders
   (`composer-image-pending` testid) and sends are held (`submitText` refuses, the send button
   disables) — a send mid-decode would otherwise go without the image and strand it on the next
   message. The pending chip shows `filename · W×H` (the picked file's name; mime text appears only in the
