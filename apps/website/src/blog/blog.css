@@ -221,10 +221,15 @@ body {
 .blog-post-card-meta {
 	display: flex;
 	align-items: center;
-	gap: var(--space-md);
+	gap: var(--space-sm);
 	margin-bottom: var(--space-sm);
 	font-size: var(--text-sm);
 	color: var(--blog-text-hint);
+}
+
+.blog-post-card-meta time::after {
+	content: "·";
+	margin-left: var(--space-sm);
 }
 
 .blog-post-card-excerpt {
@@ -270,6 +275,17 @@ body {
 .blog-post-date {
 	font-size: var(--text-sm);
 	color: var(--blog-text-hint);
+}
+
+.blog-post-reading-time {
+	font-size: var(--text-sm);
+	color: var(--blog-text-hint);
+}
+
+/* Separator dot between date and reading time */
+.blog-post-date::after {
+	content: "·";
+	margin: 0 var(--space-sm);
 }
 
 .blog-post-tags {

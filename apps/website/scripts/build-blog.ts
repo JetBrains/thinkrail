@@ -52,6 +52,27 @@ const SUPPORTED_LANGUAGES = [
 // Theme for syntax highlighting (matches the blog's dark theme)
 const SHIKI_THEME = "github-dark";
 
+// Average reading speed in words per minute
+const WORDS_PER_MINUTE = 200;
+
+/**
+ * Calculates estimated reading time in minutes from markdown content
+ */
+function calculateReadingTime(content: string): number {
+	// Strip markdown syntax for more accurate word count
+	const text = content
+		.replace(/```[\s\S]*?```/g, "") // Remove code blocks
+		.replace(/`[^`]+`/g, "") // Remove inline code
+		.replace(/!?\[[^\]]*\]\([^)]*\)/g, "") // Remove links and images
+		.replace(/[#*_~>-]/g, "") // Remove markdown symbols
+		.replace(/\s+/g, " ") // Normalize whitespace
+		.trim();
+
+	const wordCount = text.split(/\s+/).filter((word) => word.length > 0).length;
+	const minutes = Math.ceil(wordCount / WORDS_PER_MINUTE);
+	return Math.max(1, minutes); // At least 1 minute
+}
+
 let highlighter: Highlighter | null = null;
 
 /**
@@ -118,6 +139,7 @@ interface PostManifestEntry {
 	coverImage: string | null;
 	tags: string[];
 	url: string;
+	readingTime: number; // in minutes
 }
 
 /**
@@ -134,7 +156,7 @@ async function discoverPosts(): Promise<string[]> {
 async function parsePost(
 	postDir: string,
 	hl: Highlighter,
-): Promise<{ frontmatter: PostFrontmatter; content: string; html: string }> {
+): Promise<{ frontmatter: PostFrontmatter; content: string; html: string; readingTime: number }> {
 	const mdPath = join(postDir, "index.md");
 	const raw = await readFile(mdPath, "utf-8");
 	const { data, content } = matter(raw);
@@ -159,7 +181,10 @@ async function parsePost(
 	// Convert Markdown to HTML with syntax highlighting
 	const html = await markedWithShiki.parse(content);
 
-	return { frontmatter, content, html };
+	// Calculate reading time
+	const readingTime = calculateReadingTime(content);
+
+	return { frontmatter, content, html, readingTime };
 }
 
 /**
@@ -191,6 +216,7 @@ async function generatePostPage(
 	html: string,
 	template: string,
 	allPosts: PostManifestEntry[],
+	readingTime: number,
 ): Promise<string> {
 	// Find previous and next posts for navigation
 	const currentIndex = allPosts.findIndex((p) => p.slug === frontmatter.slug);
@@ -218,10 +244,14 @@ async function generatePostPage(
 		? `<div class="blog-post-tags">${frontmatter.tags.map((t) => `<span class="blog-tag">${t}</span>`).join("")}</div>`
 		: "";
 
+	// Format reading time
+	const readingTimeText = `${readingTime} min read`;
+
 	// Replace template placeholders
 	return template
 		.replace(/\{\{title\}\}/g, frontmatter.title)
 		.replace(/\{\{date\}\}/g, formattedDate)
+		.replace(/\{\{readingTime\}\}/g, readingTimeText)
 		.replace(/\{\{tags\}\}/g, tagsHtml)
 		.replace(/\{\{content\}\}/g, html)
 		.replace(/\{\{navigation\}\}/g, navHtml);
@@ -249,13 +279,14 @@ async function build(): Promise<void> {
 		dir: string;
 		frontmatter: PostFrontmatter;
 		html: string;
+		readingTime: number;
 	}> = [];
 
 	for (const dir of postDirs) {
 		try {
-			const { frontmatter, html } = await parsePost(dir, hl);
+			const { frontmatter, html, readingTime } = await parsePost(dir, hl);
 			const resolvedHtml = resolveImagePaths(html, frontmatter.slug);
-			posts.push({ dir, frontmatter, html: resolvedHtml });
+			posts.push({ dir, frontmatter, html: resolvedHtml, readingTime });
 		} catch (err) {
 			console.error(`   ⚠️  Skipping ${basename(dir)}: ${err}`);
 		}
@@ -277,6 +308,7 @@ async function build(): Promise<void> {
 			: null,
 		tags: p.frontmatter.tags || [],
 		url: `./${p.frontmatter.slug}.html`,
+		readingTime: p.readingTime,
 	}));
 
 	// Write manifest
@@ -316,7 +348,13 @@ async function build(): Promise<void> {
 
 	// Generate HTML pages for each post
 	for (const post of posts) {
-		const pageHtml = await generatePostPage(post.frontmatter, post.html, template, manifest);
+		const pageHtml = await generatePostPage(
+			post.frontmatter,
+			post.html,
+			template,
+			manifest,
+			post.readingTime,
+		);
 		const outputPath = join(OUTPUT_DIR, `${post.frontmatter.slug}.html`);
 		await writeFile(outputPath, pageHtml);
 
@@ -361,6 +399,7 @@ async function build(): Promise<void> {
 				<h2 class="blog-post-card-title">${post.title}</h2>
 				<div class="blog-post-card-meta">
 					<time>${formattedDate}</time>
+					<span class="blog-post-card-reading-time">${post.readingTime} min read</span>
 				</div>
 				${post.excerpt ? `<p class="blog-post-card-excerpt">${post.excerpt}</p>` : ""}
 				${tagsHtml}

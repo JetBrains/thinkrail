@@ -444,6 +444,18 @@ code {
 	display: block;
 }
 
+.blog-btn {
+	color: var(--muted);
+}
+
+.blog-btn:hover {
+	text-decoration: none;
+}
+
+.blog-label {
+	font-size: 13px;
+}
+
 .gh-btn {
 	color: var(--muted);
 }
