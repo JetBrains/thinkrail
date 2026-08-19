@@ -272,8 +272,9 @@ a project picker, the prompt hero, and the reused
   field); a "configured outside the app" note for rows with neither flag; and
   the **`JetBrainsAiCard`** — route Central-supported models through the user's JetBrains subscription while
   keeping ThinkRail's embedded PI — a state machine over the typed `JbcentralStatus` +
-  `provider.jbcentral*`: absent (official host-OS install guidance + Recheck), outdated (guided Update),
-  unreviewed/invalid version (safe guidance, no native action), sign-in required (launch Central sign-in +
+  `provider.jbcentral*`: absent (official host-OS install guidance + Recheck), outdated — below the host's
+  minimum supported Central (guided Update), invalid/unverifiable version (safe guidance, no native action;
+  a version *above* the minimum is simply ready, never gated), sign-in required (launch Central sign-in +
   Retry), ready (Connect), configuring (a Central action or watched candidate rebuild is in flight),
   connected (the current runtime for new work applied Central; Disconnect), load-failed (the last runtime or
   boot-time plain fallback remains usable; Retry or Disconnect), and generic action error (Retry/Recheck).

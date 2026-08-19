@@ -44,7 +44,8 @@ argv/exit/postcondition surface ThinkRail invokes (`--version`, `add pi`, `remov
 `update --install`). It
 materializes a test-owned synthetic PI extension written solely against PI's public API; no Central artifact,
 source fragment, output string, route, constant, binary, or secret is copied. Browser scenarios cover
-absent/outdated/malformed/unreviewed probes, update, sign-in/retry, native add/remove, synchronous-action
+absent/outdated/malformed probes plus an above-minimum version staying ready, update, sign-in/retry, native
+add/remove, synchronous-action
 serialization, watched external add/change/remove, successful current-generation cutover for new chats, old
 live-chat coexistence after Disconnect, and boot/runtime retention after a closed synthetic-extension load
 failure. Unit coverage owns action single-flight, watcher debounce/coalescing, stale-candidate rejection, boot

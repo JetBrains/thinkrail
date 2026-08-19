@@ -148,7 +148,7 @@ of the host.
   `{ loginId, providerId, frame }`) and **`LoginReply`** (`{ loginId, value }` — the browser's answer to a
   `select`/`prompt`); the JetBrains AI wire (protocol v42) — **`JbcentralStatus`**, nested on
   `ProviderStatusReport`, is the closed host-authored lifecycle: `absent`, `outdated`, `supported`,
-  `configured`, `unreviewed`, `malformed-version`, `probe-failed`, `configuring`, or `load-failed`; only
+  `configured`, `malformed-version`, `probe-failed`, `configuring`, or `load-failed`; only
   parseable safe versions, closed probe/failure reasons, and the current action appear where relevant.
   `configuring` covers both a reviewed CLI action and the coalesced candidate rebuild for the newest watched
   artifact state; `configured` means the **current runtime for new work** applied that artifact.

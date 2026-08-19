@@ -61,10 +61,12 @@ set -eu
 printf '%s\\n' "$*" >> "$THINKRAIL_CENTRAL_TEST_LOG"
 case "$1" in
   --version)
-    if [ -f "$THINKRAIL_CENTRAL_TEST_CONTROL/unreviewed" ]; then
-      printf 'central 1.7.0 (independently-authored test metadata)\\n'
+    if [ -f "$THINKRAIL_CENTRAL_TEST_CONTROL/malformed" ]; then
+      printf 'synthetic-sensitive-version-output\\n'
     elif [ -f "$THINKRAIL_CENTRAL_TEST_CONTROL/outdated" ]; then
-      printf 'central 1.6.1 (independently-authored test metadata)\\n'
+      printf 'central 1.3.9 (independently-authored test metadata)\\n'
+    elif [ -f "$THINKRAIL_CENTRAL_TEST_CONTROL/newer" ]; then
+      printf 'central 1.7.0 (independently-authored test metadata)\\n'
     else
       printf 'central 1.6.2 (independently-authored test metadata)\\n'
     fi
@@ -355,11 +357,18 @@ describe("watched native Central runtime", () => {
 		expect((await getJbcentralStatus()).state).toBe("configured");
 	});
 
+	test("treats a version above the minimum as supported", async () => {
+		control("newer", true);
+		expect((await getJbcentralStatus()).state).toBe("supported");
+		expect(await connectJbcentral()).toEqual({ outcome: "applied" });
+		expect((await getJbcentralStatus()).state).toBe("configured");
+	});
+
 	test("keeps version/login/update outcomes closed", async () => {
-		control("unreviewed", true);
+		control("malformed", true);
 		expect(await jbcentralLogin()).toEqual({ outcome: "failed", reason: "unsupported-version" });
 		expect(await updateJbcentral()).toEqual({ outcome: "failed", reason: "unsupported-version" });
-		control("unreviewed", false);
+		control("malformed", false);
 		control("outdated", true);
 		expect(await updateJbcentral()).toEqual({ outcome: "applied" });
 		expect(commandLog()).toContain("update --install");

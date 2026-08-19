@@ -78,8 +78,6 @@ function mapInspectionStatus(inspection: JbcentralInspection): JbcentralStatus {
 			return { state: "absent" };
 		case "outdated":
 			return { state: "outdated", version: inspection.status.version };
-		case "unreviewed":
-			return { state: "unreviewed", version: inspection.status.version };
 		case "malformed-version":
 			return { state: "malformed-version" };
 		case "probe-failed":
@@ -96,7 +94,6 @@ function inspectionFailure(inspection: JbcentralInspection): JbcentralActionResu
 		case "absent":
 			return failed("not-installed");
 		case "outdated":
-		case "unreviewed":
 		case "malformed-version":
 			return failed("unsupported-version");
 		case "probe-failed":
@@ -404,7 +401,6 @@ export function jbcentralLogin(): Promise<JbcentralLoginResult> {
 				case "absent":
 					return { outcome: "failed", reason: "not-installed" };
 				case "outdated":
-				case "unreviewed":
 				case "malformed-version":
 					return { outcome: "failed", reason: "unsupported-version" };
 				case "probe-failed":

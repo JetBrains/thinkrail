@@ -5,8 +5,8 @@ import type { JbcentralInstall } from "@thinkrail/contracts";
 
 export type ParseEnv = Record<string, string | undefined>;
 
-/** The only Central release whose native PI surface this build has reviewed and tested. */
-export const REVIEWED_CENTRAL_VERSION = "1.6.2" as const;
+/** The oldest Central release that carries the native PI surface (`central add pi`). */
+export const MINIMUM_CENTRAL_VERSION = "1.4.0" as const;
 
 const CENTRAL_BIN = "central";
 const VERSION_TIMEOUT_MS = 5_000;
@@ -16,14 +16,12 @@ const MAX_VERSION_OUTPUT_BYTES = 4_096;
 const WATCH_RETRY_MS = 250;
 const WATCH_EXISTENCE_POLL_MS = 250;
 
-const JBCENTRAL_INSTALL_BASE =
-	"https://jetbrains-central-cli.s3.eu-west-1.amazonaws.com/central/stable";
+const JBCENTRAL_INSTALL_BASE = "https://central-cli.labs.jb.gg";
 
 export type JbcentralVersionStatus =
 	| { state: "absent" }
 	| { state: "outdated"; version: string }
-	| { state: "supported"; version: typeof REVIEWED_CENTRAL_VERSION; configured: boolean }
-	| { state: "unreviewed"; version: string }
+	| { state: "supported"; version: string; configured: boolean }
 	| { state: "malformed-version" }
 	| {
 			state: "probe-failed";
@@ -261,23 +259,14 @@ export async function inspectJbcentral(
 		};
 	}
 
-	const reviewed = parseJbcentralVersion(`central ${REVIEWED_CENTRAL_VERSION}`);
-	if (!reviewed) throw new Error("invalid reviewed Central version constant");
-	const comparison = compareVersions(version, reviewed);
-	if (comparison < 0) {
+	const minimum = parseJbcentralVersion(`central ${MINIMUM_CENTRAL_VERSION}`);
+	if (!minimum) throw new Error("invalid minimum Central version constant");
+	if (compareVersions(version, minimum) < 0) {
 		return {
 			executablePath,
 			extensionPath,
 			artifactExists,
 			status: { state: "outdated", version: version.text },
-		};
-	}
-	if (comparison > 0) {
-		return {
-			executablePath,
-			extensionPath,
-			artifactExists,
-			status: { state: "unreviewed", version: version.text },
 		};
 	}
 	return {
@@ -286,7 +275,7 @@ export async function inspectJbcentral(
 		artifactExists,
 		status: {
 			state: "supported",
-			version: REVIEWED_CENTRAL_VERSION,
+			version: version.text,
 			configured: artifactExists,
 		},
 	};

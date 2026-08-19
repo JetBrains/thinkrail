@@ -66,11 +66,14 @@ Exposed through explicit subpath exports, not a barrel.
   into the scratch dir — a lone `*` — is a one-off inlined at that call site, not a path, so it lives
   there, not here.)
 - **/jbcentral** — the **single Central process/filesystem boundary**. It resolves Central by absolute path,
-  parses a bounded `central --version` result into an exact reviewed compatibility verdict, exposes the
+  parses a bounded `central --version` result into a compatibility verdict, exposes the
   global opaque artifact path (`~/.pi/agent/extensions/jetbrains-central.ts`) and existence only, and invokes
-  only the reviewed argv: `add pi`, `remove pi`, `login`, and `update --install`. The initial supported range
-  is exactly `1.6.2`; lower versions require update, higher versions are unreviewed, and malformed output is
-  unsupported. Human presentation output is never parsed. Version stdout is bounded in memory; action
+  only the reviewed argv: `add pi`, `remove pi`, `login`, and `update --install`. Support is a **minimum
+  version only** (`MINIMUM_CENTRAL_VERSION`, `1.4.0` — the first Central release carrying the native PI
+  surface): anything at or above it is supported, lower versions require update, and malformed output is
+  unsupported. There is deliberately **no upper bound** — a newer Central is assumed forward-compatible with
+  the four argv this adapter invokes, and gating on it would strand users behind every Central release.
+  Human presentation output is never parsed. Version stdout is bounded in memory; action
   stdout/stderr is ignored. No child output is logged or returned, and only exit success plus safe
   postconditions map to a closed adapter outcome. `watchJbcentralArtifact(onChange)` observes only that
   reviewed location and reports invalidation events for add, remove, and replacement; it handles a not-yet-

@@ -153,7 +153,7 @@ async function createRuntimeWithExtensions(
 			cwd: getAgentDir(),
 			modelRuntime: runtime,
 			resourceLoaderOptions: {
-				// No auto-discovery: an unreviewed Central artifact in the default agent dir must not slip in.
+				// No auto-discovery: an unopted-in Central artifact in the default agent dir must not slip in.
 				noExtensions: true,
 				additionalExtensionPaths: [...additionalExtensionPaths],
 				noSkills: true,

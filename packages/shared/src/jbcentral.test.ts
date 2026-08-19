@@ -9,8 +9,8 @@ import {
 	jbcentralExtensionPath,
 	jbcentralInstall,
 	launchJbcentralLogin,
+	MINIMUM_CENTRAL_VERSION,
 	parseJbcentralVersion,
-	REVIEWED_CENTRAL_VERSION,
 	resolveJbcentralBin,
 	runJbcentralAction,
 	watchJbcentralArtifact,
@@ -28,7 +28,7 @@ function adapterDeps(overrides: JbcentralAdapterDependencies = {}): JbcentralAda
 }
 
 describe("Central version inspection", () => {
-	test("parses the reviewed public version prefix without retaining build metadata", () => {
+	test("parses the public version prefix without retaining build metadata", () => {
 		expect(parseJbcentralVersion("central 1.6.2 (test build metadata)\n")).toEqual({
 			major: 1,
 			minor: 6,
@@ -40,7 +40,7 @@ describe("Central version inspection", () => {
 		expect(parseJbcentralVersion("prefix central 1.6.2")).toBeNull();
 	});
 
-	test("accepts exactly the reviewed version and reports artifact presence", async () => {
+	test("accepts the minimum version and reports artifact presence", async () => {
 		const requests: string[][] = [];
 		const extensionPath = "/users/test/.pi/agent/extensions/jetbrains-central.ts";
 		const deps = adapterDeps({
@@ -50,7 +50,7 @@ describe("Central version inspection", () => {
 				return {
 					outcome: "exited",
 					exitCode: 0,
-					stdout: `central ${REVIEWED_CENTRAL_VERSION} (synthetic metadata)`,
+					stdout: `central ${MINIMUM_CENTRAL_VERSION} (synthetic metadata)`,
 				};
 			},
 		});
@@ -58,12 +58,12 @@ describe("Central version inspection", () => {
 			executablePath: CENTRAL_BIN,
 			extensionPath,
 			artifactExists: true,
-			status: { state: "supported", version: "1.6.2", configured: true },
+			status: { state: "supported", version: "1.4.0", configured: true },
 		});
 		expect(requests).toEqual([[CENTRAL_BIN, "--version"]]);
 	});
 
-	test("classifies older, newer, malformed, absent, and failed probes without raw output", async () => {
+	test("classifies below-minimum, newer, malformed, absent, and failed probes without raw output", async () => {
 		async function inspectOutput(stdout: string, exitCode = 0) {
 			return inspectJbcentral(
 				adapterDeps({
@@ -72,13 +72,14 @@ describe("Central version inspection", () => {
 			);
 		}
 
-		expect((await inspectOutput("central 1.6.1 (synthetic)")).status).toEqual({
+		expect((await inspectOutput("central 1.3.9 (synthetic)")).status).toEqual({
 			state: "outdated",
-			version: "1.6.1",
+			version: "1.3.9",
 		});
-		expect((await inspectOutput("central 1.6.3 (synthetic)")).status).toEqual({
-			state: "unreviewed",
-			version: "1.6.3",
+		expect((await inspectOutput("central 1.7.0 (synthetic)")).status).toEqual({
+			state: "supported",
+			version: "1.7.0",
+			configured: false,
 		});
 		const secretOutput = "synthetic-sensitive-version-output";
 		const malformed = await inspectOutput(secretOutput);
@@ -326,7 +327,7 @@ describe("Central paths and install guidance", () => {
 	});
 
 	test("returns official per-OS install plans", () => {
-		const base = "https://jetbrains-central-cli.s3.eu-west-1.amazonaws.com/central/stable";
+		const base = "https://central-cli.labs.jb.gg";
 		expect(jbcentralInstall("darwin")).toEqual({
 			platform: "darwin",
 			shell: "bash",

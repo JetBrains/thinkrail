@@ -79,9 +79,7 @@ test("connects and follows external add, replacement, and remove without a host 
 	await expect(card).toHaveAttribute("data-configured", "false");
 });
 
-test("guides absent, outdated, unreviewed, malformed, and failed Central version states", async ({
-	page,
-}) => {
+test("guides absent, outdated, malformed, and failed Central version states", async ({ page }) => {
 	await openAppFresh(page);
 	const central = join(E2E_FAKE_BIN_DIR, "central");
 	const hidden = join(E2E_FAKE_BIN_DIR, "central.hidden");
@@ -100,14 +98,15 @@ test("guides absent, outdated, unreviewed, malformed, and failed Central version
 	writeFileSync(E2E_CENTRAL_STATE, "outdated");
 	await page.getByTestId("providers-refresh").click();
 	await waitForCentralState(page, "outdated");
-	await expect(page.getByTestId("jetbrains-outdated")).toContainText("1.5.0");
+	await expect(page.getByTestId("jetbrains-outdated")).toContainText("1.3.9");
 	await page.getByTestId("jetbrains-update").click();
 	await waitForCentralState(page, "supported");
 
-	writeFileSync(E2E_CENTRAL_STATE, "unreviewed");
+	// Any version at or above the minimum is usable — a newer Central needs no extra guidance.
+	writeFileSync(E2E_CENTRAL_STATE, "newer");
 	await page.getByTestId("providers-refresh").click();
-	await waitForCentralState(page, "unreviewed");
-	await expect(page.getByTestId("jetbrains-unreviewed")).toContainText("1.7.0");
+	await waitForCentralState(page, "supported");
+	await expect(page.getByTestId("jetbrains-connect")).toBeVisible();
 
 	writeFileSync(E2E_CENTRAL_STATE, "malformed");
 	await page.getByTestId("providers-refresh").click();

@@ -406,7 +406,6 @@ export type JbcentralStatus =
 	| { state: "outdated"; version: string }
 	| { state: "supported"; version: string }
 	| { state: "configured"; version: string }
-	| { state: "unreviewed"; version: string }
 	| { state: "malformed-version" }
 	| { state: "probe-failed"; reason: JbcentralProbeFailureReason }
 	| { state: "configuring"; action?: JbcentralAction }

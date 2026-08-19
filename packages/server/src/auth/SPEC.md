@@ -76,7 +76,7 @@ ourselves and never surface a credential value over the wire.
     Central candidate fails at initial boot, auth records `load-failed` and asks agent for a plain runtime so
     the UI and unrelated providers remain usable; failure of that plain runtime still fails startup.
 
-    Connect performs the exact-version preflight, runs `central add pi`, validates artifact existence, and
+    Connect performs the minimum-version preflight, runs `central add pi`, validates artifact existence, and
     awaits the same rebuild path the watcher uses. Disconnect runs `central remove pi` and validates absence
     when the artifact exists; an already-absent artifact is the complete postcondition and rebuilds plain PI
     directly even if Central itself is now absent/unsupported (so Retry can repair a failed plain candidate).

@@ -158,10 +158,6 @@ export function JetBrainsAiCard({
 			</div>
 
 			<StatusBody status={status} install={install} onChanged={onChanged} />
-			<p className="text-text-subtle tr-text-metadata">
-				Changes apply to new chats. A live chat keeps the model runtime it started with until its
-				host session ends or ThinkRail restarts.
-			</p>
 
 			{notice?.kind === "failed" || notice?.kind === "transport-failed" ? (
 				<div className="flex flex-col gap-xs" data-testid="jetbrains-error">
@@ -228,8 +224,7 @@ function StatusBody({
 			return (
 				<div className="flex flex-col gap-xs" data-testid="jetbrains-needs-install">
 					<p className="text-text-muted tr-text-metadata">
-						PI is included with ThinkRail. Install only the JetBrains Central CLI on the host, then
-						Recheck.
+						Install the JetBrains Central CLI (central), then Recheck:
 					</p>
 					<CopyableCommand command={install.command} />
 					<Button
@@ -247,7 +242,8 @@ function StatusBody({
 		case "outdated":
 			return (
 				<p className="text-feedback-warning tr-text-metadata" data-testid="jetbrains-outdated">
-					Central {status.version} is older than the reviewed version. Update it before connecting.
+					Central {status.version} is older than the minimum ThinkRail supports. Update it before
+					connecting.
 				</p>
 			);
 		case "supported":
@@ -264,13 +260,6 @@ function StatusBody({
 				>
 					<Check className="size-3.5 shrink-0" />
 					Connected — Central's JetBrains AI models are available to new chats.
-				</p>
-			);
-		case "unreviewed":
-			return (
-				<p className="text-feedback-warning tr-text-metadata" data-testid="jetbrains-unreviewed">
-					Central {status.version} is newer than the version reviewed with ThinkRail. Update
-					ThinkRail or Recheck later before connecting.
 				</p>
 			);
 		case "malformed-version":
@@ -355,11 +344,7 @@ function retryActionFor(
 }
 
 function needsRecheck(status: JbcentralStatus): boolean {
-	return (
-		status.state === "unreviewed" ||
-		status.state === "malformed-version" ||
-		status.state === "probe-failed"
-	);
+	return status.state === "malformed-version" || status.state === "probe-failed";
 }
 
 function actionLabel(action: JbcentralAction): string {

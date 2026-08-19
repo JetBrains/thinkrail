@@ -15,8 +15,8 @@ artifact="$HOME/.pi/agent/extensions/jetbrains-central.ts"
 
 if [ "$1" = "--version" ]; then
 	case "$state" in
-		outdated) printf 'central 1.5.0 (synthetic test metadata)\n' ;;
-		unreviewed) printf 'central 1.7.0 (synthetic test metadata)\n' ;;
+		outdated) printf 'central 1.3.9 (synthetic test metadata)\n' ;;
+		newer) printf 'central 1.7.0 (synthetic test metadata)\n' ;;
 		malformed) printf 'synthetic malformed version\n' ;;
 		probe-error)
 			printf 'E2E_CENTRAL_CHILD_SENTINEL_probe\n' >&2
