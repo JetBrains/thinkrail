@@ -87,6 +87,22 @@ const ANSI_TOKENS = [
 	["brightWhite", "--ansi-bright-white"],
 ] as const;
 
+/**
+ * xterm's per-cell contrast FLOOR, from the active theme's own contrast metadata.
+ *
+ * Vite prints its `(client)` env tag with the ANSI **dim** attribute (SGR 2) over the DEFAULT foreground
+ * — no ansi colour at all — and xterm renders dim as the foreground at 50% opacity over the background.
+ * With xterm's default `minimumContrastRatio` of **1** (correction disabled) that dimmed text — and any
+ * ansi colour close to the terminal background, e.g. `black` on the near-black dark canvas — has no
+ * legibility floor. A floor makes xterm lift the *resolved* foreground (the dimmed one included) to meet a
+ * ratio against the live background, per theme, without touching the `--ansi-*` palette. High-contrast
+ * themes ask for a stronger floor; dim cells target `ratio / 2` inside xterm, so this is also where dim
+ * `(client)` gets the most correction.
+ */
+function contrastFloor(): number {
+	return document.documentElement.dataset.themeContrast === "high" ? 7 : 4.5;
+}
+
 /** xterm theme from the live CSS tokens (no raw hex; falls back to xterm defaults if a token is unset). */
 function readTheme(): ITheme {
 	const theme: ITheme = {};
@@ -170,6 +186,9 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 			fontSize: Number.parseFloat(cssVar("--tr-font-size-s13") ?? "") || 13,
 			fontFamily: cssVar("--tr-font-family-code") ?? "monospace",
 			theme: readTheme(),
+			// A legibility floor for every cell (see `contrastFloor`) — fixes Vite's dim `(client)`, `black`
+			// on the near-black canvas, and any ansi colour too close to the terminal background.
+			minimumContrastRatio: contrastFloor(),
 			scrollback: 5000,
 		});
 		const fit = new FitAddon();
@@ -410,6 +429,9 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 
 		const stopThemeWatch = onThemeSwap(() => {
 			term.options.theme = readTheme();
+			// The floor tracks the theme's contrast level (normal 4.5 / high 7); updating it clears xterm's
+			// contrast cache so the new palette is re-corrected against the new background.
+			term.options.minimumContrastRatio = contrastFloor();
 		});
 
 		return () => {

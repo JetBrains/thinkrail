@@ -947,7 +947,14 @@ a project picker, the prompt hero, and the reused
   genuinely live frames; replies xterm synthesizes for recorded terminal queries can therefore never enter the
   live shell. PTY sizing distinguishes desired, in-flight, and
   host-acknowledged grids; only a successful `terminal.resize` advances the acknowledgement, so reconnect
-  replay cannot leave a full-screen app permanently sized to a request the host never applied. The **12px
+  replay cannot leave a full-screen app permanently sized to a request the host never applied. The 16 ANSI
+  slots come from the theme's `--ansi-*` domain palette (never the semantic UI text tokens); on top of it
+  xterm runs a **`minimumContrastRatio` legibility floor** driven by the theme's contrast metadata (normal
+  `4.5`, high `7`). xterm's default of `1` disables correction, which left ANSI **dim** text — e.g. Vite's
+  `(client)` tag, which is `dim` over the *default foreground*, not an ansi colour — and colours close to
+  the terminal background (`black` on the near-black dark canvas) with no floor; the ratio lifts the
+  resolved foreground (dim cells target `ratio / 2`) against the live background without editing the
+  palette. The **12px
   content inset** lives on the xterm **mount host's own box** (absolutely positioned, `inset-md` on every
   side) rather than as padding on it — FitAddon derives cols/rows from that host's measured size, so
   padding would overcount the grid and clip the last row/column; insetting the box keeps the measured
