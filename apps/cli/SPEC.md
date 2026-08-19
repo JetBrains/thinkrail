@@ -16,13 +16,17 @@ its URL. It is a thin launcher — all engine logic lives in `packages/server`.
 ## Flow
 
 1. Parse argv + env into options (`src/args.ts`, a pure function); `--help` prints usage and exits.
-2. `resolveShellEnv()` first (a GUI- or `npx`-launched process must still find `pi`/`git` on PATH); it
-   runs once, before any `AgentSession` (sessions are created lazily, on a WS request).
+2. `bootHost()` first resolves the shell environment (a GUI- or `npx`-launched process must still find
+   `git`, Central, and user tools on PATH; ThinkRail embeds PI and never requires a `pi` executable), then
+   awaits the public `createServer()` factory, which starts Central artifact watching and publishes the
+   initial current runtime (or a plain fallback with closed load-failure status) before binding or permitting
+   any `AgentSession` or model/auth read. Later watched changes rotate the current runtime for new chats;
+   existing chats keep their captured generation.
 3. Resolve the static dir (`THINKRAIL_STATIC_DIR`, else the built web app shipped beside the bin) and
    warn if it's missing.
 4. Resolve a free listen port at or above the requested one (`findFreePort` — `Bun.serve` won't report a
-   busy port), then `createServer({ port, host, staticDir, projectPath? })` to embed the host in this Bun
-   process.
+   busy port), then await `createServer({ port, host, staticDir, projectPath? })` to embed the host in this
+   Bun process.
 5. Resolve the actual port; on interactive stdout render the shared recursive ThinkRail startup mark
    with honest `host ready` status + the resolved endpoint, then retain the stable
    `thinkrail → <url>` line and open the browser there (cross-platform: `open` / `start` / `xdg-open`,
@@ -197,6 +201,9 @@ and `trash`'s **native helper sidecars** (which macOS/Windows must execute from 
   `scripts/smoke-binary.ts` (root: `bun run smoke:binary`, after `build:binary`) boots the built binary
   against throwaway data/agent/cache dirs and asserts: a project-local `bunfig.toml` preload does **not**
   execute, `/health` answers, `/` serves the staged UI, the bundled skills staged to the cache dir,
+  **an external synthetic PI extension loads by absolute path** through the compiled artifact's public PI
+  loader with no `pi` executable on `PATH`, under both the default and a custom `PI_CODING_AGENT_DIR`
+  (test-owned source only; no Central-generated artifact is committed, copied, read, or snapshotted),
   **an OAuth sign-in reaches its auth URL** (a WS
   `provider.loginStart` for the Codex provider must answer the method select and push an `authUrl`
   frame — offline and credential-free, since pi's flow only does PKCE + a local callback server before
@@ -227,8 +234,8 @@ and `trash`'s **native helper sidecars** (which macOS/Windows must execute from 
   `src/runtime-assets.generated.*`),
   `src/version.ts` (the release version stamped in at build time), `src/update.ts` (the `update`
   subcommand), `src/uninstall.ts` (the `uninstall` subcommand), `src/paths.ts` (the installed layout:
-  `install.json` + the staging cache root), `src/powershell.ts` (the Windows PowerShell seam), and
-  `src/jbcentral.ts` (the `jbcentral` subcommand — JetBrains Central CLI proxy wiring).
+  `install.json` + the staging cache root), and `src/powershell.ts` (the Windows PowerShell seam). Central
+  integration remains a server/auth feature; the launcher has no Central subcommand or protocol implementation.
 - **Allowed deps:** `@thinkrail/server` (`createServer`, `registerBundledRuntime`, `dataDir` — the
   uninstaller has to name the app state dir, and must name the *same* one the host uses — plus the
   test-only `history-test-fixtures` subpath in the artifact smoke to seed a real pi transcript),

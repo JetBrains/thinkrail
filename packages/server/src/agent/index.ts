@@ -11,7 +11,19 @@ export {
 	registerBundledRuntime,
 } from "./extensions";
 export * from "./oneshot";
-export * from "./piRuntime";
+export {
+	activatePiRuntimeGeneration,
+	configurePiRuntime,
+	configurePiRuntimeFactory,
+	configurePiRuntimeGenerationInitializer,
+	configurePiRuntimeSessionExtensionExclusions,
+	getPiRuntimeGeneration,
+	type PiRuntimeGeneration,
+	type PiRuntimeGenerationInitializer,
+	type PreparePiRuntimeGenerationResult,
+	preparePiRuntimeGeneration,
+	settledAvailableModels,
+} from "./piRuntime";
 export {
 	RESOLVE_COMMENT_TOOL_NAME,
 	type ResolveCommentOutcome,

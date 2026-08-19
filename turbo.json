@@ -1,6 +1,6 @@
 {
 	"$schema": "https://turbo.build/schema.json",
-	"globalPassThroughEnv": ["THINKRAIL_*", "PI_CODING_AGENT_DIR", "WIRE_PROXY_PORT"],
+	"globalPassThroughEnv": ["THINKRAIL_*", "PI_CODING_AGENT_DIR"],
 	"tasks": {
 		"build": {
 			"dependsOn": ["^build"],

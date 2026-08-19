@@ -88,6 +88,18 @@ describe("WsTransport channel replay", () => {
 		transport.subscribe(WS_CHANNELS.terminalDetached, (payload) => received.push(payload));
 		expect(received).toEqual([]);
 	});
+
+	test("does not replay a provider invalidation to a late settings pane", () => {
+		const transport = new WsTransport({ url: "ws://localhost:24242/ws" });
+		transport.connect();
+		const socket = TestWebSocket.instances[0];
+		socket?.open();
+		socket?.message(JSON.stringify({ channel: WS_CHANNELS.providerChanged, data: {} }));
+
+		const received: unknown[] = [];
+		transport.subscribe(WS_CHANNELS.providerChanged, (payload) => received.push(payload));
+		expect(received).toEqual([]);
+	});
 });
 
 describe("WsTransport reconnect delivery", () => {

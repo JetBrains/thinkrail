@@ -2949,12 +2949,12 @@ test("catalog authority falls with the list it describes — only an awaited ref
 
 	// A `model.list` snapshot is current but never authoritative (its handler answers from before the
 	// detached refresh it starts).
-	s().setModels(listed);
+	s().setModelsForProviderVersion(s().providerVersion, listed);
 	expect(s().modelsFresh).toBe(false);
 
 	// The installed result of an awaited forced refresh that SETTLED is.
-	s().beginModelsRefresh();
-	s().finishModelsRefresh({ models: refreshed, complete: true });
+	const settledVersion = s().beginModelsRefresh();
+	s().finishModelsRefresh(settledVersion, { models: refreshed, complete: true });
 	expect(s().models).toBe(refreshed);
 	expect(s().modelsRefreshing).toBe(false);
 	expect(s().modelsFresh).toBe(true);
@@ -2962,32 +2962,53 @@ test("catalog authority falls with the list it describes — only an awaited ref
 	// The finding this pins: authority is a property of the SHARED list, so the next `model.list` install
 	// — this picker reopening, or any other consumer mounting — drops it in the same write. Held as a
 	// consumer's local flag, it outlived the list and a removed model reached `create()`.
-	s().setModels(listed);
+	s().setModelsForProviderVersion(s().providerVersion, listed);
 	expect(s().models).toBe(listed);
 	expect(s().modelsFresh).toBe(false);
 
 	// A FAILED refresh installs nothing, so it changes neither the list nor its provenance.
-	s().finishModelsRefresh({ models: refreshed, complete: true });
-	s().beginModelsRefresh();
-	s().finishModelsRefresh(null);
+	s().finishModelsRefresh(s().providerVersion, { models: refreshed, complete: true });
+	const failedVersion = s().beginModelsRefresh();
+	s().finishModelsRefresh(failedVersion, null);
 	expect(s().models).toBe(refreshed);
 	expect(s().modelsFresh).toBe(true);
+});
+
+test("a provider invalidation rejects every stale model reply", () => {
+	const s = () => useAppStore.getState();
+	const listed = [
+		{ id: "central-model", name: "central-model", provider: "central" },
+	] as WireModel[];
+	const before = s().beginModelsRefresh();
+	s().finishModelsRefresh(before, { models: listed, complete: true });
+
+	s().noteProviderChanged();
+	expect(s().providerVersion).toBe(before + 1);
+	expect(s().models).toEqual([]);
+	expect(s().modelsFresh).toBe(false);
+	expect(s().modelsRefreshing).toBe(false);
+
+	// Replies issued against the removed generation cannot restore either a list or its authority.
+	s().setModelsForProviderVersion(before, listed);
+	s().finishModelsRefresh(before, { models: listed, complete: true });
+	expect(s().models).toEqual([]);
+	expect(s().modelsFresh).toBe(false);
 });
 
 test("a refresh whose wait was capped installs its list but claims no authority", () => {
 	const s = () => useAppStore.getState();
 	const listed = [{ id: "opus-5", name: "opus-5", provider: "anthropic" }] as WireModel[];
 	const unsettled = [{ id: "opus-6", name: "opus-6", provider: "anthropic" }] as WireModel[];
-	s().beginModelsRefresh();
-	s().finishModelsRefresh({ models: listed, complete: true });
+	const settledVersion = s().beginModelsRefresh();
+	s().finishModelsRefresh(settledVersion, { models: listed, complete: true });
 	expect(s().modelsFresh).toBe(true);
 
 	// The finding this pins: the host caps how long it waits for pi, so a reply can carry the registry as it
 	// stands while the pass that would settle it is still running (`complete: false`). Rendering it is right;
 	// treating it as the host's verdict is what would let `NewWorkspaceDialog` substitute off a list nothing
 	// confirmed — so it must also DROP any authority the previous list had.
-	s().beginModelsRefresh();
-	s().finishModelsRefresh({ models: unsettled, complete: false });
+	const unsettledVersion = s().beginModelsRefresh();
+	s().finishModelsRefresh(unsettledVersion, { models: unsettled, complete: false });
 	expect(s().models).toBe(unsettled);
 	expect(s().modelsRefreshing).toBe(false);
 	expect(s().modelsFresh).toBe(false);
@@ -2996,8 +3017,8 @@ test("a refresh whose wait was capped installs its list but claims no authority"
 test("authority can be given up without replacing the list (a consumer activating)", () => {
 	const s = () => useAppStore.getState();
 	const refreshed = [{ id: "opus-6", name: "opus-6", provider: "anthropic" }] as WireModel[];
-	s().beginModelsRefresh();
-	s().finishModelsRefresh({ models: refreshed, complete: true });
+	const providerVersion = s().beginModelsRefresh();
+	s().finishModelsRefresh(providerVersion, { models: refreshed, complete: true });
 	expect(s().modelsFresh).toBe(true);
 
 	// The finding this pins: a consumer activating inherits the list a *previous* consumer made

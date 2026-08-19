@@ -70,6 +70,16 @@ export function initTransport(): WsTransport {
 		useAppStore.getState().applyLoginFrame(data as LoginPush);
 	});
 
+	transport.subscribe(WS_CHANNELS.providerChanged, () => {
+		// Clear stale choices now; the monotonic version stops an older model.list reply overwriting this.
+		useAppStore.getState().noteProviderChanged();
+		const providerVersion = useAppStore.getState().providerVersion;
+		getTransport()
+			.request("model.list", {})
+			.then((models) => useAppStore.getState().setModelsForProviderVersion(providerVersion, models))
+			.catch(() => {});
+	});
+
 	// The workspace lifecycle trio — every client (including the initiator) converges by reacting to these,
 	// never a per-client optimistic mutation. `created`/`updated` carry the full snapshot; `removed` the ids.
 	transport.subscribe(WS_CHANNELS.workspaceCreated, (data) => {

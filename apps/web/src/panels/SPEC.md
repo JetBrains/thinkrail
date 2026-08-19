@@ -263,19 +263,47 @@ a project picker, the prompt hero, and the reused
   **store-driven two-pane shell** (left section rail + scrollable content pane; mobile collapses the rail to
   a horizontal segmented strip): `settingsOpen`/`settingsSection` live in the store so the gear AND the
   Welcome banner can open it deep-linked to a section. Live sections: **`ProvidersSettings`** (the in-app
-  provider-auth surface — Connected cards each with a **Sign-out only when `canLogout`** (env / central /
+  provider-auth surface — Connected cards each with a **Sign-out only when `canLogout`** (env /
   models.json auth shows a "Managed" tag instead, since the host can't unset it); a **"Sign in with a
   subscription"** block of `canOAuth` providers; an **"Add an API key"** group of `canApiKey`-only
   providers (capped with a "Show N more" expander) — **both routes start `provider.loginStart`**
   (`type` `"oauth"` / `"api_key"`, issue #97) into the same store-driven `auth/LoginDialog` (open the
   URL / paste a code / answer the provider's own key prompts, `provider.loginReply` — no inline key
   field); a "configured outside the app" note for rows with neither flag; and
-  the **`JetBrainsAiCard`** — route Claude+GPT through your JetBrains subscription (the jbcentral proxy) — a
-  state machine over `jbcentralWired`/`jbcentralInstalled` + `jbcentralInstall` (all from the same status
-  read) + `provider.jbcentral*`:
-  Connected (Disconnect) / ready (Connect) / not signed in (in-app `central login` + Retry) / not installed
-  (the host's per-OS copyable install command — from `jbcentralInstall`, for the *host's* OS, never the
-  browser's — + Recheck); each mutation re-reads `provider.status`) **`GithubSettings`** (the "Local GitHub" block — `github.authStatus()`
+  the **`JetBrainsAiCard`** — route Central-supported models through the user's JetBrains subscription while
+  keeping ThinkRail's embedded PI — a state machine over the typed `JbcentralStatus` +
+  `provider.jbcentral*`: absent (official host-OS install guidance + Recheck), outdated — below the host's
+  minimum supported Central (guided Update), invalid/unverifiable version (safe guidance, no native action;
+  a version *above* the minimum is simply ready, never gated), **signed out** — the card
+  **states it and offers only Sign in**: the primary action *replaces* Connect rather than sitting beside it,
+  and on `supported` the signed-out line replaces the "Central is ready" claim instead of annotating it. The
+  rule is that the card never advertises an action that cannot succeed — connecting without credentials
+  fails — so the prerequisite becomes the offer, and Connect returns once the host reports credentials.
+  **Signed out renders as one state, whatever the configuration underneath:** the body says only that Central
+  is signed out — never paired with a "Connected" line that would contradict it — and **Sign in is the only
+  action**, Disconnect withheld along with Connect. Once authenticated, a configured status whose proxy is
+  positively observed stopped likewise replaces the success claim with “Central's proxy is not running” and
+  offers only **Start proxy**; after it starts, Connected + Disconnect return. The prerequisite order is
+  therefore Sign in → Start proxy → ordinary connected controls, never competing actions. Unknown proxy
+  health does not manufacture a demand. A broken session asks for the one thing that resolves its current
+  prerequisite rather than pairing a fix with an unrelated choice or success message.
+  **Signing in is one button, never a menu:** ThinkRail launches Central's flow on the host, and the
+  `central login` command appears *only* where that launch failed — printing it beside a working button makes
+  the user choose between two routes to the same place. Because the flow opens on the **host's** browser, the
+  launched confirmation says so and names Refresh as the next step, since Connect is not on screen yet. The
+  *reactive* guidance survives for the case the probe cannot see: credentials present, action refused
+  anyway —, sign-in required (launch Central sign-in +
+  Retry), ready (Connect), configuring (a Central action or watched candidate rebuild is in flight),
+  connected (the current runtime for new work applied Central; Disconnect), load-failed (the last runtime or
+  boot-time plain fallback remains usable; Retry or Disconnect), and generic action error (Retry/Recheck).
+  There is no restart prompt, affected-chat list, blocked state, or recovery mode. Existing live chats may
+  retain an older runtime—including Central after Disconnect—and the card says its state applies to new chats.
+  Update/connect/disconnect state is host-authoritative and shared across clients; every mutation re-reads
+  `provider.status`, while `provider.changed` invalidations from watched external changes trigger the same
+  re-read plus model-list invalidation. Status reads are request-sequenced so an older response cannot replace
+  a newer watched/action result. Copy never promises only Claude/GPT, never asks for standalone PI,
+  never renders child output/diagnostics/artifact content/paths/proxy data/secrets/raw models, and maps only
+  closed reason codes to ThinkRail-authored text. **`GithubSettings`** (the "Local GitHub" block — `github.authStatus()`
   Connected + login / Not connected + Refresh); **`AppearanceSettings`** (the **theme picker** — the
   bundled catalog from `themes`, with the resolved active selection from `store.theme` marked; clicking
   one fires `settings.update` and the UI **converges on the `settings.changed` broadcast** (no optimistic

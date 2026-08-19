@@ -15,7 +15,9 @@ channel fan-out, and the process-boot wrapper both launchers share.
 
 ## Boundary
 
-- **Owns:** `server.ts` (`createServer` → `Bun.serve` with `/health`, `/ws` upgrade, a
+- **Owns:** `server.ts` (async `createServer` first asks auth to start Central artifact watching and publish
+  the initial current PI runtime, falling back to plain PI with closed `load-failed` state when needed, then creates
+  `Bun.serve` with `/health`, `/ws` upgrade, a
   **`GET /files/<workspaceId>/<relpath>`** route streaming a worktree file's raw bytes (via `fs`'s
   `resolveWorktreeFile` — path-contained; bad id/escape/miss → 404; Bun infers the content-type) so the
   markdown viewer's relative `<img>`s resolve, static serving with
@@ -47,7 +49,9 @@ channel fan-out, and the process-boot wrapper both launchers share.
   unaffected. Neither limit can cost exactly-once — one refuses work that has not started, the other keeps the
   record of work that finished and drops only its answer,
   the **`provider.login`** channel publish (the `auth` module's session-less login-frame bridge, wired like
-  `pi.extensionUi`) and the `provider.*` login handlers, the **`watch` wiring** (inject the
+  `pi.extensionUi`), the **`provider.changed`** invalidation broadcast after auth changes the Central status or
+  current runtime generation (clients re-read status/models), and the `provider.*` login handlers, the
+  **`watch` wiring** (inject the
   `workspace.fsChanged` publish callback into `watch` and inject `agent`'s project-skill path classifier so
   each capped batch carries independent `skillChange: none|detected|unknown` evidence; expose
   **`workspace.watchReady`** as the typed preflight that awaits a fresh watcher's conservative startup nudge
@@ -70,7 +74,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `ensureWatch(workspaceId)` from the
   workspace-read handlers (`fs.*`, `git.status`/`git.diffFile`, `spec.graph`) — a read is the "a client is
   looking" signal; `stopWatch` in `workspace.remove`'s fast path beside `evictSpecIndex`;
-  `stopAllWatches()` in `stop()`), `cancelAllLogins()` in `stop()` before the socket close,
+  `stopAllWatches()` in `stop()`), `stopJbcentralRuntime()` and `cancelAllLogins()` in `stop()` before the
+  socket close,
   an optional boot-time `openProject(projectPath)` (best-effort — a launcher convenience), the
   **analytics wiring** (`initializeAnalytics` at boot from the launcher-threaded `analytics` option —
   keys/channel/mute + the initial `getConfig().analyticsEnabled`; a `setAnalyticsSending` sync teed
@@ -84,15 +89,17 @@ channel fan-out, and the process-boot wrapper both launchers share.
   login-publisher tee's terminal `success` frames with the method (`oauth`/`api-key`) looked up from
   `loginAnalytics.ts` — the loginId→method map the `provider.loginStart` handler records (and
   `provider.loginCancel` clears; an unknown loginId tracks nothing, fails closed) — +
-  `provider.jbcentralConnect`→connected (central) — per `submodule-server-analytics`,
+  a successful `provider.jbcentralConnect`→`applied` (failed actions never count) — per
+  `submodule-server-analytics`,
   feature modules never track), and
   `stop()` → agent-session cleanup, then `persistTerminalSessions()` **before** `closeAllTerminals()`, then
   socket close); `crashLog.ts` (`installCrashLog` — the `uncaughtException`/`unhandledRejection` report
   appended to `<dataDir>/logs/crash.log` and echoed to stderr, then `exit(1)`: in-process pi means such a
   fault is the whole host's, and a launcher started without a terminal otherwise loses its only trace.
   Never a recovery, and never installed under `NODE_ENV=test` — a unit-test process reports its own
-  faults); `boot.ts` (`bootHost` → install that report first, resolve the
-  login-shell PATH, pick the port per `portMode` (`"exact"` vs `"free"`), start `createServer`, and
+  faults); `boot.ts` (`bootHost` → install that report first, resolve the login-shell PATH, pre-warm the same
+  Central watcher/runtime initialization before choosing a port, then await `createServer` (which idempotently enforces the
+  bootstrap for every embedder), and
   install SIGINT/SIGTERM handlers that **settle before exit**: `settleSessionsForShutdown()` — abort
   streaming sessions and wait bounded, so pi persists their "Operation aborted" tool results and
   transcripts land paired — concurrently with an awaited `shutdownAnalytics()` (bounded queue drain;
@@ -224,7 +231,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
 - WS commands return values directly; only events + extension-UI + **`project.updated`** (published from
   the `projects` module's injected publisher) + the workspace lifecycle trio
   (`workspace.created`/`updated`/`removed`, published from the `workspaces` module's injected publisher) +
-  **`session.deleted`** (published from the agent module's injected publisher) use push channels. Every
+  **`session.deleted`** (published from the agent module's injected publisher) + **`provider.changed`**
+  (published from auth's Central/runtime invalidation seam) use push channels. Every
   **broadcast** push channel a client should hear must be `ws.subscribe`d in the WS
   `open` handler — a publish on an unsubscribed topic reaches nobody, silently. Two channels are deliberately
   **not** subscribed and not broadcast: `terminal.data`, `terminal.exit` and `terminal.detached` are sent with

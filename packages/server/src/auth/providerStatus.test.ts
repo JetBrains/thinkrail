@@ -2,17 +2,15 @@ import { describe, expect, test } from "bun:test";
 import type { JbcentralInstall } from "@thinkrail/contracts";
 import { buildProviderReport, type ProviderStatusSources } from "./providerStatus";
 
-/** A fixed per-OS install command — threaded straight through the report (not derived here). */
 const INSTALL: JbcentralInstall = {
 	platform: "linux",
 	shell: "bash",
 	command: "curl -fsSL https://example/install.sh | bash",
 };
 
-/** Fixture sources: everything empty/unconfigured unless overridden. */
 function sources(overrides: Partial<ProviderStatusSources> = {}): ProviderStatusSources {
 	return {
-		modelProviders: new Map(),
+		modelProviderIds: new Set(),
 		availableProviders: new Set(),
 		credentialProviders: [],
 		oauthProviders: [],
@@ -21,66 +19,30 @@ function sources(overrides: Partial<ProviderStatusSources> = {}): ProviderStatus
 		apiKeyLogin: () => true,
 		displayName: (id) => id,
 		hasAuth: () => false,
-		jbcentralInstalled: false,
+		jbcentral: { state: "absent" },
 		jbcentralInstall: INSTALL,
 		...overrides,
 	};
 }
 
-const PROXY_URL = "http://127.0.0.1:19516/wire/s/claude-code/anthropic";
-
 describe("buildProviderReport", () => {
-	test("empty runtime → no providers, not wired", () => {
+	test("empty runtime carries the closed Central state and install plan", () => {
 		expect(buildProviderReport(sources())).toEqual({
 			providers: [],
-			jbcentralWired: false,
-			jbcentralInstalled: false,
+			jbcentral: { state: "absent" },
 			jbcentralInstall: INSTALL,
 		});
 	});
 
-	test("the host's per-OS install command flows through from the sources", () => {
-		const win: JbcentralInstall = {
-			platform: "win32",
-			shell: "powershell",
-			command: "irm https://example/install.ps1 | iex",
-		};
-		expect(buildProviderReport(sources({ jbcentralInstall: win })).jbcentralInstall).toEqual(win);
+	test("Central lifecycle flows through without model or endpoint inference", () => {
+		const jbcentral = { state: "configuring" as const, action: "connect" as const };
+		expect(buildProviderReport(sources({ jbcentral })).jbcentral).toEqual(jbcentral);
 	});
 
-	test("jbcentralInstalled flows through from the sources", () => {
-		expect(buildProviderReport(sources({ jbcentralInstalled: true })).jbcentralInstalled).toBe(
-			true,
-		);
-	});
-
-	test("jbcentral-wired provider reports kind central and flips jbcentralWired", () => {
+	test("stored credentials map to oauth/api-key kinds and remain removable", () => {
 		const report = buildProviderReport(
 			sources({
-				modelProviders: new Map([
-					["anthropic", [PROXY_URL]],
-					["google", ["https://generativelanguage.googleapis.com"]],
-				]),
-				// The dummy `wire-proxy` key makes the provider available in the real registry.
-				availableProviders: new Set(["anthropic"]),
-				providerAuth: (id) => (id === "anthropic" ? { source: "models_json_key" } : {}),
-				displayName: (id) => (id === "anthropic" ? "Anthropic" : "Google"),
-			}),
-		);
-		expect(report.jbcentralWired).toBe(true);
-		expect(report.providers).toEqual([
-			{ id: "anthropic", name: "Anthropic", configured: true, kind: "central", canApiKey: true },
-			{ id: "google", name: "Google", configured: false, canApiKey: true },
-		]);
-	});
-
-	test("stored credentials map to oauth / api-key kinds", () => {
-		const report = buildProviderReport(
-			sources({
-				modelProviders: new Map([
-					["anthropic", ["https://api.anthropic.com"]],
-					["openai", ["https://api.openai.com"]],
-				]),
+				modelProviderIds: new Set(["anthropic", "openai"]),
 				availableProviders: new Set(["anthropic", "openai"]),
 				credentialProviders: ["anthropic", "openai"],
 				credentialType: (id) => (id === "anthropic" ? "oauth" : "api_key"),
@@ -88,22 +50,34 @@ describe("buildProviderReport", () => {
 				hasAuth: () => true,
 			}),
 		);
-		expect(report.providers.map((p) => [p.id, p.kind])).toEqual([
-			["anthropic", "oauth"],
-			["openai", "api-key"],
+		expect(
+			report.providers.map((provider) => [provider.id, provider.kind, provider.canLogout]),
+		).toEqual([
+			["anthropic", "oauth", true],
+			["openai", "api-key", true],
 		]);
-		expect(report.jbcentralWired).toBe(false);
 	});
 
-	test("env-var auth counts as configured (pi reports source without configured)", () => {
+	test("environment and models.json sources remain generic provider auth", () => {
 		const report = buildProviderReport(
 			sources({
-				modelProviders: new Map([["groq", ["https://api.groq.com"]]]),
-				availableProviders: new Set(["groq"]), // hasConfiguredAuth sees the env key
-				providerAuth: () => ({ source: "environment", label: "GROQ_API_KEY" }),
+				modelProviderIds: new Set(["custom", "groq"]),
+				availableProviders: new Set(["custom", "groq"]),
+				providerAuth: (id) =>
+					id === "groq"
+						? { source: "environment", label: "GROQ_API_KEY" }
+						: { source: "models_json_key" },
 			}),
 		);
 		expect(report.providers).toEqual([
+			{
+				id: "custom",
+				name: "custom",
+				configured: true,
+				kind: "api-key",
+				detail: "models.json",
+				canApiKey: true,
+			},
 			{
 				id: "groq",
 				name: "groq",
@@ -115,77 +89,35 @@ describe("buildProviderReport", () => {
 		]);
 	});
 
-	test("models.json keyed provider gets an api-key kind with a models.json hint", () => {
-		const report = buildProviderReport(
-			sources({
-				modelProviders: new Map([["custom", ["https://llm.example.com"]]]),
-				availableProviders: new Set(["custom"]),
-				providerAuth: () => ({ source: "models_json_key" }),
-			}),
-		);
-		expect(report.providers[0]).toEqual({
-			id: "custom",
-			name: "custom",
-			configured: true,
-			kind: "api-key",
-			detail: "models.json",
-			canApiKey: true,
-		});
-	});
-
-	test("a model-less credential provider still shows, via hasAuth (no canApiKey — pi doesn't know it)", () => {
+	test("a model-less stored credential remains visible without inventing login support", () => {
 		const report = buildProviderReport(
 			sources({
 				credentialProviders: ["mystery"],
 				credentialType: () => "api_key",
 				providerAuth: () => ({ source: "stored" }),
 				hasAuth: (id) => id === "mystery",
-				// A leftover credential for a provider pi no longer registers: `getProvider(id)` is undefined,
-				// so the interactive key flow can't be offered — only Sign-out remains.
 				apiKeyLogin: () => false,
 			}),
 		);
 		expect(report.providers).toEqual([
-			// It has an auth.json credential → removable in-app (canLogout).
 			{ id: "mystery", name: "mystery", configured: true, kind: "api-key", canLogout: true },
 		]);
 	});
 
-	test("orders configured first, alphabetical within each group", () => {
-		const report = buildProviderReport(
-			sources({
-				modelProviders: new Map([
-					["zai", ["https://z.ai"]],
-					["anthropic", ["https://api.anthropic.com"]],
-					["google", ["https://g.example"]],
-					["openai", ["https://api.openai.com"]],
-				]),
-				availableProviders: new Set(["zai", "openai"]),
-				providerAuth: () => ({ source: "models_json_key" }),
-			}),
-		);
-		expect(report.providers.map((p) => p.id)).toEqual(["openai", "zai", "anthropic", "google"]);
-	});
-});
-
-describe("in-app login capability flags", () => {
-	test("OAuth providers appear as their own rows, canOAuth, named from the oauth registry", () => {
-		// openai-codex / github-copilot have no model rows until authed — and their ids differ from any
-		// model-provider id — so they only surface because the id universe unions the oauth provider ids.
+	test("OAuth-only providers appear under their own login ids and labels", () => {
 		const report = buildProviderReport(
 			sources({
 				oauthProviders: [
-					{ id: "openai-codex", name: "ChatGPT Plus/Pro (Codex Subscription)" },
+					{ id: "openai-codex", name: "ChatGPT Subscription" },
 					{ id: "github-copilot", name: "GitHub Copilot" },
 				],
-				apiKeyLogin: () => false, // this test is about row surfacing/naming, not the key flag
+				apiKeyLogin: () => false,
 			}),
 		);
-		// Sorted by display name: "ChatGPT…" (C) before "GitHub Copilot" (G).
 		expect(report.providers).toEqual([
 			{
 				id: "openai-codex",
-				name: "ChatGPT Plus/Pro (Codex Subscription)",
+				name: "ChatGPT Subscription",
 				configured: false,
 				canOAuth: true,
 			},
@@ -198,97 +130,34 @@ describe("in-app login capability flags", () => {
 		]);
 	});
 
-	test("multi-field credential providers get canApiKey — the dialog carries the whole interaction (#97)", () => {
-		// Pre-#97, hand-maintained sets suppressed these because the inline field posted ONE string. The
-		// interactive login channel parks every prompt the provider asks, so pi's metadata is the only gate.
+	test("pi-owned API-key capability supports multi-prompt providers", () => {
 		const report = buildProviderReport(
 			sources({
-				modelProviders: new Map([
-					["amazon-bedrock", ["https://bedrock.aws"]],
-					["google-vertex", ["https://vertex.google"]],
-					["azure-openai-responses", ["https://azure.openai"]],
-					["openai", ["https://api.openai.com"]],
-				]),
+				modelProviderIds: new Set(["amazon-bedrock", "google-vertex", "azure-openai-responses"]),
 			}),
 		);
-		const canApiKey = Object.fromEntries(report.providers.map((p) => [p.id, p.canApiKey ?? false]));
-		expect(canApiKey).toEqual({
+		expect(
+			Object.fromEntries(report.providers.map((provider) => [provider.id, provider.canApiKey])),
+		).toEqual({
 			"amazon-bedrock": true,
-			"google-vertex": true,
 			"azure-openai-responses": true,
-			openai: true,
+			"google-vertex": true,
 		});
 	});
 
-	test("canApiKey requires pi's api-key login support (openai-codex has model rows but no key auth)", () => {
+	test("configured providers sort first and alphabetically within each group", () => {
 		const report = buildProviderReport(
 			sources({
-				modelProviders: new Map([["openai-codex", ["https://chatgpt.com/backend-api/codex"]]]),
-				oauthProviders: [{ id: "openai-codex", name: "OpenAI Codex" }],
-				apiKeyLogin: () => false, // pi's openai-codex provider is OAuth-only
+				modelProviderIds: new Set(["zai", "anthropic", "google", "openai"]),
+				availableProviders: new Set(["zai", "openai"]),
+				providerAuth: () => ({ source: "models_json_key" }),
 			}),
 		);
-		expect(report.providers[0]).toEqual({
-			id: "openai-codex",
-			name: "OpenAI Codex",
-			configured: false,
-			canOAuth: true,
-		});
-	});
-
-	test("a provider with OAuth AND pi api-key login offers both routes (github-copilot)", () => {
-		// pi's own metadata says copilot supports interactive key entry — the old OAUTH_ONLY set
-		// suppressed a real capability; flags now derive from `Provider.auth` alone (#97).
-		const report = buildProviderReport(
-			sources({
-				modelProviders: new Map([["github-copilot", ["https://api.githubcopilot.com"]]]),
-				oauthProviders: [{ id: "github-copilot", name: "GitHub Copilot" }],
-			}),
-		);
-		expect(report.providers[0]).toEqual({
-			id: "github-copilot",
-			name: "GitHub Copilot",
-			configured: false,
-			canOAuth: true,
-			canApiKey: true,
-		});
-	});
-
-	test("canLogout marks only providers with a stored auth.json credential (not env / models.json)", () => {
-		const report = buildProviderReport(
-			sources({
-				modelProviders: new Map([
-					["anthropic", ["https://api.anthropic.com"]],
-					["groq", ["https://api.groq.com"]],
-				]),
-				availableProviders: new Set(["anthropic", "groq"]),
-				// anthropic has an auth.json credential; groq is configured via an env var only.
-				credentialProviders: ["anthropic"],
-				credentialType: (id) => (id === "anthropic" ? "api_key" : undefined),
-				providerAuth: (id) =>
-					id === "anthropic"
-						? { source: "stored" }
-						: { source: "environment", label: "GROQ_API_KEY" },
-			}),
-		);
-		const canLogout = Object.fromEntries(report.providers.map((p) => [p.id, p.canLogout ?? false]));
-		expect(canLogout).toEqual({ anthropic: true, groq: false });
-	});
-
-	test("a dual provider (anthropic) reports both canOAuth and canApiKey, keeping its registry name", () => {
-		const report = buildProviderReport(
-			sources({
-				modelProviders: new Map([["anthropic", ["https://api.anthropic.com"]]]),
-				oauthProviders: [{ id: "anthropic", name: "Anthropic (Claude Pro/Max)" }],
-				displayName: (id) => (id === "anthropic" ? "Anthropic" : id),
-			}),
-		);
-		expect(report.providers[0]).toEqual({
-			id: "anthropic",
-			name: "Anthropic",
-			configured: false,
-			canOAuth: true,
-			canApiKey: true,
-		});
+		expect(report.providers.map((provider) => provider.id)).toEqual([
+			"openai",
+			"zai",
+			"anthropic",
+			"google",
+		]);
 	});
 });

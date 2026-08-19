@@ -5,6 +5,9 @@ import type { Locator, Page } from "@playwright/test";
 import { expect } from "@playwright/test";
 import type { Workspace } from "@thinkrail/contracts";
 import {
+	E2E_CENTRAL_ARTIFACT,
+	E2E_CENTRAL_LOG,
+	E2E_CENTRAL_STATE,
 	E2E_DATA_DIR,
 	E2E_FIXTURE_REPO,
 	E2E_PI_AGENT_DIR,
@@ -13,6 +16,11 @@ import {
 	E2E_PLAIN_DIR,
 } from "./paths";
 import { fixtureRepoHealthy, seedFixtureRepo } from "./repo";
+
+/** A recursive delete that tolerates a concurrent writer inside the tree (ENOTEMPTY / EBUSY on macOS). */
+function removeTree(path: string): void {
+	rmSync(path, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
+}
 
 /** Press the primary application modifier the page itself reports: Command on Apple, Control elsewhere. */
 export async function pressPlatformShortcut(page: Page, key: string): Promise<void> {
@@ -33,14 +41,17 @@ export async function pressPlatformShortcut(page: Page, key: string): Promise<vo
  */
 function resetState(): void {
 	rmSync(join(E2E_DATA_DIR, "projects.json"), { force: true });
-	rmSync(join(E2E_DATA_DIR, "worktrees"), { recursive: true, force: true });
-	rmSync(join(E2E_PI_AGENT_DIR, "sessions"), { recursive: true, force: true });
+	// Retry the recursive wipes: the reset runs concurrently with the host, so a session file written into a
+	// directory while the walk is inside it surfaces as ENOTEMPTY — a false red in an unrelated spec rather
+	// than a product failure. `force` covers a missing path, not a racing writer; only retries do.
+	removeTree(join(E2E_DATA_DIR, "worktrees"));
+	removeTree(join(E2E_PI_AGENT_DIR, "sessions"));
+	// Central's artifact is global under HOME — reset it + the fake's control/log to supported+disconnected.
+	rmSync(E2E_CENTRAL_ARTIFACT, { force: true });
+	writeFileSync(E2E_CENTRAL_STATE, "");
+	rmSync(E2E_CENTRAL_LOG, { force: true });
 
-	// Restore the seeded models.json: the JetBrains AI spec's proxy connect/disconnect rewrites this shared
-	// file (stripping the anthropic/openai auth the @agent suite resolves its pinned model through) and leaves
-	// the host disconnected. Re-seed it (or clear a test-written one when the dev authed via auth.json only)
-	// and drop the `.bak` the wire writes; the next page load's provider.status re-reads it and refreshes the
-	// registry, so a later @agent test isn't left with an empty model list.
+	// Restore (or clear) models.json so a later @agent test keeps its isolated provider baseline.
 	const modelsPath = join(E2E_PI_AGENT_DIR, "models.json");
 	if (existsSync(E2E_PI_MODELS_SEED)) copyFileSync(E2E_PI_MODELS_SEED, modelsPath);
 	else rmSync(modelsPath, { force: true });

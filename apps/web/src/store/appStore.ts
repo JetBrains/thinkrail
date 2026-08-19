@@ -766,6 +766,8 @@ interface AppState {
 	sessions: Record<string, SessionRuntime>;
 	/** Models with configured auth (cheap win #1) — fetched once, shared by every chat's picker. */
 	models: WireModel[];
+	/** Monotonic host-provider invalidation folded from `provider.changed`; orders async catalog/status reads. */
+	providerVersion: number;
 	/** Bare invalidation counter for the composer's `/`-menu template cache (`chat/ChatView.tsx`) — the
 	 * Templates settings panel (Task B6) bumps it after a `template.save`/`delete`; the store holds only
 	 * the counter, never fetches (see `chat/SPEC.md`'s Template slots bullet). */
@@ -1098,14 +1100,17 @@ interface AppState {
 	 */
 	appendErrorTurn: (sessionId: string, text: string) => void;
 	handlePiEvent: (event: PiEvent, sessionId: string) => void;
-	setModels: (models: WireModel[]) => void;
+	/** Install a model-list reply only if no newer provider invalidation has landed. */
+	setModelsForProviderVersion: (providerVersion: number, models: WireModel[]) => void;
+	/** Atomically invalidate model choices and advance the provider generation observed by settings. */
+	noteProviderChanged: () => void;
 	bumpTemplatesVersion: () => void;
 	/** Atomic begin/finish of the awaited catalog refresh — `finish` lands the new list (null = failed
 	 * refresh: keep the current list, and with it its provenance) and clears the flag in ONE write. The
 	 * host's `complete` decides provenance: a capped wait can answer with a list that is current but not
 	 * settled, and only a settled one is authority. */
-	beginModelsRefresh: () => void;
-	finishModelsRefresh: (result: RefreshedModels | null) => void;
+	beginModelsRefresh: () => number;
+	finishModelsRefresh: (providerVersion: number, result: RefreshedModels | null) => void;
 	/** Give up authority without replacing the list — a consumer activating can't yet know whether the
 	 * list it inherited still matches the host registry. */
 	dropModelsFreshness: () => void;
@@ -1664,6 +1669,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	activeTerminalByWorkspace: {},
 	sessions: {},
 	models: [],
+	providerVersion: 0,
 	templatesVersion: 0,
 	modelsRefreshing: false,
 	modelsFresh: false,
@@ -2834,17 +2840,33 @@ export const useAppStore = create<AppState>((set, get) => ({
 	handlePiEvent: (event, sessionId) =>
 		set((s) => withRuntime(s, sessionId, (rt) => reduceSessionEvent(rt, event))),
 	// A `model.list` snapshot: current, but never authoritative — installing it drops `modelsFresh`.
-	setModels: (models) => set({ models, modelsFresh: false }),
+	setModelsForProviderVersion: (providerVersion, models) =>
+		set((s) => (s.providerVersion === providerVersion ? { models, modelsFresh: false } : s)),
+	noteProviderChanged: () =>
+		set((s) => ({
+			models: [],
+			modelsFresh: false,
+			modelsRefreshing: false,
+			providerVersion: s.providerVersion + 1,
+		})),
 	bumpTemplatesVersion: () => set((s) => ({ templatesVersion: s.templatesVersion + 1 })),
-	beginModelsRefresh: () => set({ modelsRefreshing: true }),
+	beginModelsRefresh: () => {
+		const providerVersion = get().providerVersion;
+		set({ modelsRefreshing: true });
+		return providerVersion;
+	},
 	dropModelsFreshness: () => set({ modelsFresh: false }),
 	// The only writer of `modelsFresh: true` — and only for a list that actually arrived AND settled.
-	finishModelsRefresh: (result) =>
-		set((s) => ({
-			modelsRefreshing: false,
-			models: result?.models ?? s.models,
-			modelsFresh: result ? result.complete : s.modelsFresh,
-		})),
+	finishModelsRefresh: (providerVersion, result) =>
+		set((s) =>
+			s.providerVersion === providerVersion
+				? {
+						modelsRefreshing: false,
+						models: result?.models ?? s.models,
+						modelsFresh: result ? result.complete : s.modelsFresh,
+					}
+				: s,
+		),
 	setCurrentModel: (sessionId, model) =>
 		set((s) => withRuntime(s, sessionId, (rt) => ({ ...rt, model }))),
 	setThinkingLevel: (sessionId, level) =>

@@ -31,14 +31,16 @@ The single WebSocket client to the host, and its app-wide singleton.
   response can, and the request it named is already gone from `pending`, so nothing would replay or re-ack it;
   `resume` repairs them all at once by restating the truth rather than confirming the confirmations —, channel
   `subscribe` with last-value replay for snapshots; append-only terminal data and the one-shot terminal
-  exit/detach + session-deletion channels are never cached or replayed to late subscribers, reconnect/backoff;
+  exit/detach + session-deletion + `provider.changed` invalidation channels are never cached or replayed to
+  late subscribers, reconnect/backoff;
   `inferUrl` defaults to
   same-origin; **`httpBase()`** derives the host's HTTP origin
   from the WS `url` — for building host HTTP URLs like the `/files/<workspaceId>/<path>` worktree-file
   endpoint the markdown viewer points relative `<img>`s at, targeting the same host the transport dials); `wireTransport.ts` (`initTransport`/
   `getTransport` singleton; routes `server.welcome`, **`project.updated`**, `pi.event`, `pi.extensionUi`,
-  **`session.deleted`**, **`layout.changed`**, **the `workspace.created`/`updated`/`removed` lifecycle trio, and
-  `workspace.fsChanged`** into the store — and folds every connection transition through
+  **`session.deleted`**, **`provider.changed`**, **`layout.changed`**, **the
+  `workspace.created`/`updated`/`removed` lifecycle trio, and `workspace.fsChanged`** into the store — and
+  folds every connection transition through
   `setStatus`, whose connected generation gives active-workspace hydration a distinct trigger on every
   reconnect; welcome's open + recent project views via `installProjectSnapshot`, project snapshots via
   `applyProjectUpdated`, `pi.event` via `handlePiEvent(event, sessionId)`, `pi.extensionUi` via `applyExtUi(request)`,
@@ -46,7 +48,11 @@ The single WebSocket client to the host, and its app-wide singleton.
   `workspace.removed` via `applyWorkspaceRemoved(projectId, id)`, `session.deleted` via the idempotent
   `deleteChat(workspaceId, sessionId)` tombstone fold (an online fast path; because this event channel is
   deliberately not replayed, workbench hydration repairs any deletion missed while disconnected from the next
-  authoritative `session.list`), `layout.changed` via a revision-aware store fold (older or duplicate
+  authoritative `session.list`), `provider.changed` via the atomic store invalidation
+  `noteProviderChanged()` plus a `model.list` re-read installed through the store's monotonic provider-version
+  guard (the model-catalog hook uses the same guarded write for every list/refresh, so an older reply cannot
+  restore a removed generation's models; provider settings observes the same version and re-reads
+  `provider.status`), `layout.changed` via a revision-aware store fold (older or duplicate
   documents are not reinstalled, though their echoed mutation ids still settle matching pending writes;
   mutation ids distinguish this client's acknowledgements from remote commits,
   and the shell layout integration cancels an in-progress pointer draft only for a nonmatching accepted
@@ -73,6 +79,7 @@ The single WebSocket client to the host, and its app-wide singleton.
 - **Allowed deps:** `contracts` (method maps, `WS_CHANNELS`, `Project` for welcome + `project.updated`, `SessionEventPayload`
   for `pi.event`, `ExtUiRequest` for `pi.extensionUi`, `Workspace` for `workspace.created`/`updated`,
   `WorkspaceRemoved` for `workspace.removed`, `SessionDeletedPayload` for `session.deleted`,
+  `provider.changed`,
   `WorkspaceFsChangedPayload` for `workspace.fsChanged`, `LayoutChangedPayload` for `layout.changed`,
   `AppConfig` for `server.welcome`'s config + `settings.changed`); `store`
   (welcome + event routing — a runtime edge owned by the parent graph); `lib` (plain-HTTP-safe random page

@@ -343,7 +343,7 @@ export interface BranchList {
 
 /** Local `gh` CLI auth status (read-only, shelled server-side) for the New-Workspace + Settings surfaces. */
 /** How a model provider is authenticated — drives the status row's label, never carries secrets. */
-export type ProviderAuthKind = "oauth" | "api-key" | "env" | "central" | "other";
+export type ProviderAuthKind = "oauth" | "api-key" | "env" | "other";
 
 /** One model provider's auth status, as the host reports it (read-only; no credential values). */
 export interface ProviderStatus {
@@ -351,9 +351,9 @@ export interface ProviderStatus {
 	id: string;
 	/** Human display name, e.g. `Anthropic`. */
 	name: string;
-	/** Whether the provider is usable (any auth form: stored, env var, models.json, proxy). */
+	/** Whether the provider is usable (any auth form: stored, env var, models.json, or runtime). */
 	configured: boolean;
-	/** The auth source kind, when configured. `central` = routed through the JetBrains Central proxy. */
+	/** The auth source kind, when configured. Central configuration is reported only by `JbcentralStatus`. */
 	kind?: ProviderAuthKind;
 	/** Optional human hint for the source (e.g. the env var name, or `models.json`). */
 	detail?: string;
@@ -362,8 +362,8 @@ export interface ProviderStatus {
 	/** Interactive API-key login is available (`provider.loginStart` with `type: "api_key"`) — pi's
 	 * provider-owned truth (`Provider.auth.apiKey.login`), multi-prompt providers included. */
 	canApiKey?: boolean;
-	/** The provider has a removable `auth.json` credential (`provider.logout`) — false for env / central /
-	 * models.json auth, which the host can't unset (so the strip shows no Sign-out for those). */
+	/** The provider has a removable `auth.json` credential (`provider.logout`) — false for env / models.json
+	 * auth, which the host can't unset (so the strip shows no Sign-out for those). */
 	canLogout?: boolean;
 }
 
@@ -383,28 +383,72 @@ export interface JbcentralInstall {
 	command: string;
 }
 
+export type JbcentralAction = "connect" | "disconnect" | "start-proxy" | "update";
+
+export type JbcentralProbeFailureReason =
+	| "launch-failed"
+	| "timed-out"
+	| "output-too-large"
+	| "nonzero-exit";
+
+export type JbcentralActionFailureReason =
+	| "not-installed"
+	| "unsupported-version"
+	| "version-probe-failed"
+	| "central-action-failed"
+	| "artifact-missing"
+	| "artifact-present"
+	| "candidate-failed";
+
+/** Closed JetBrains AI lifecycle. No child output, paths, model data, or loader diagnostics are permitted. */
+export type JbcentralStatus =
+	| { state: "absent" }
+	| { state: "outdated"; version: string }
+	/**
+	 * `signedOut` is a *positive* observation of Central holding no credentials — an unavailable or
+	 * unreadable probe reports `false`, so the UI never demands a sign-in it cannot substantiate.
+	 */
+	| { state: "supported"; version: string; signedOut: boolean }
+	| {
+			state: "configured";
+			version: string;
+			signedOut: boolean;
+			/** Positive observation only: unavailable/unrecognized proxy status reports `false`. */
+			proxyStopped: boolean;
+	  }
+	| { state: "malformed-version" }
+	| { state: "probe-failed"; reason: JbcentralProbeFailureReason }
+	| { state: "configuring"; action?: JbcentralAction }
+	| {
+			state: "load-failed";
+			/** Whether the latest observed global artifact state requested Central in the new generation. */
+			configured: boolean;
+			action?: JbcentralAction;
+			reason: "candidate-failed";
+	  };
+
 /** The `provider.status` result: configured providers first, then the rest alphabetically. */
 export interface ProviderStatusReport {
 	providers: ProviderStatus[];
-	/** Whether any provider's effective baseUrl routes through the jbcentral proxy (JetBrains AI is wired). */
-	jbcentralWired: boolean;
-	/** Whether the `central` CLI is installed on the host (drives the in-app JetBrains AI card's state). */
-	jbcentralInstalled: boolean;
-	/** The host's per-OS install command for the JetBrains Central CLI — rendered by the card when not
-	 * installed (reflects the host's OS, not the browser's). */
+	jbcentral: JbcentralStatus;
+	/** The host's per-OS install command for the JetBrains Central CLI — rendered by the card when absent or
+	 * outdated (reflects the host's OS, not the browser's). */
 	jbcentralInstall: JbcentralInstall;
 }
 
-/**
- * The outcome of an in-app `provider.jbcentralConnect` attempt — a small state machine the JetBrains AI card
- * walks the user through: connected, or the reason it couldn't (install the CLI / sign in / a hard error).
- */
-export interface JbcentralConnectResult {
-	outcome: "connected" | "needs-install" | "needs-login" | "error";
-	/** The failure detail when `outcome === "error"`. The `needs-install` case carries no message — the card
-	 * renders the per-OS command from `ProviderStatusReport.jbcentralInstall`. */
-	message?: string;
-}
+export type JbcentralActionResult =
+	| { outcome: "applied" }
+	| { outcome: "failed"; reason: JbcentralActionFailureReason };
+
+/** Kept as the connect method's named result type; all Central mutations share this closed union. */
+export type JbcentralConnectResult = JbcentralActionResult;
+
+export type JbcentralLoginResult =
+	| { outcome: "launched" }
+	| {
+			outcome: "failed";
+			reason: "not-installed" | "unsupported-version" | "version-probe-failed" | "launch-failed";
+	  };
 
 /**
  * A single update in an in-app OAuth login flow, pushed host→client on the `provider.login` channel
