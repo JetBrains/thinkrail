@@ -232,6 +232,15 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	const ref = useRef<HTMLTextAreaElement>(null);
 	const [caret, setCaret] = useState(0);
 	const [images, setImages] = useState<PendingImage[]>([]);
+	// The synchronous source of truth for the attachment list — every write goes through `commitImages`,
+	// so an async `addFiles` batch always budgets against the LATEST list, not its render's snapshot
+	// (two overlapping pastes must not each admit a full budget; decision blocks are synchronous JS, so
+	// reads of this ref cannot interleave mid-decision).
+	const imagesRef = useRef<PendingImage[]>([]);
+	const commitImages = (next: PendingImage[]) => {
+		imagesRef.current = next;
+		setImages(next);
+	};
 	// How many picked files are still decoding/downscaling in `addFiles` — the attach pipeline is async
 	// (30–140ms measured, wider on mobile), and a send landing inside that window would go WITHOUT the
 	// image (which would then attach itself to the NEXT message). While non-zero: placeholder chips render
@@ -357,7 +366,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 			behavior,
 		);
 		onChange("");
-		setImages([]);
+		commitImages([]);
 		setAttachErrors([]);
 		recallIdxRef.current = null;
 		setSlots(null);
@@ -445,11 +454,11 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 			// callers invoke this as `void addFiles(...)` — a rejection here would be unhandled).
 			const settled = await Promise.allSettled(picked.map(fileToAttachedImage));
 			// Accept/refuse decisions happen HERE, not inside a state updater (updaters must stay pure and
-			// run deferred). The budget baseline is the batch state at call time — a chip removed during
-			// the decode window only makes the check conservative, never over-budget. One message's image
+			// run deferred) — against `imagesRef`, the always-current list, so overlapping batches see each
+			// other's admissions. One message's image
 			// batch must fit the request-wide budget: the provider caps the WHOLE request, and a persisted
 			// over-budget turn is rejected forever (the host guard heals history, but never sending is cheaper).
-			let used = images.reduce((sum, p) => sum + p.content.data.length, 0);
+			let used = imagesRef.current.reduce((sum, p) => sum + p.content.data.length, 0);
 			const additions: PendingImage[] = [];
 			const errors: { id: string; text: string }[] = [];
 			settled.forEach((result, i) => {
@@ -477,7 +486,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 					...result.value,
 				});
 			});
-			if (additions.length > 0) setImages((prev) => [...prev, ...additions]);
+			if (additions.length > 0) commitImages([...imagesRef.current, ...additions]);
 			if (errors.length > 0) setAttachErrors((prev) => [...prev, ...errors]);
 		} finally {
 			setPendingImages((n) => n - picked.length);
@@ -742,7 +751,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 								<button
 									type="button"
 									aria-label="Remove image"
-									onClick={() => setImages((prev) => prev.filter((p) => p.id !== img.id))}
+									onClick={() => commitImages(imagesRef.current.filter((p) => p.id !== img.id))}
 									className="text-text-muted hover:text-text-default"
 								>
 									<X className="size-3" />
