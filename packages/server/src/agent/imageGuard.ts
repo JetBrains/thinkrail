@@ -134,6 +134,10 @@ const isImageBlock = (block: ContentBlock): block is ContentBlock & { data: stri
 
 const REMOVAL_HINT = "ask the user to re-attach a smaller version if it is still needed";
 
+/** Byte count → the "NMB" text the removal notes carry (one decimal for measurements, exact for limits). */
+const mb = (bytes: number) => `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
+const mbLimit = (bytes: number) => `${bytes / (1024 * 1024)}MB`;
+
 /**
  * Replace every image block that violates a provider limit with a text note naming the violated rule
  * (copy-on-write — the input is never mutated). Five rules, applied in order:
@@ -185,10 +189,9 @@ export function guardOversizedImages(messages: AgentMessage[]): AgentMessage[] |
 		}
 		// base64 is ASCII: string length IS the encoded byte length — the size the provider sees.
 		if (block.data.length > IMAGE_MAX_BASE64_BYTES) {
-			const mb = (block.data.length / (1024 * 1024)).toFixed(1);
 			notes.set(
 				block,
-				`[image removed: ${mb}MB of base64 exceeds the provider's ${IMAGE_MAX_BASE64_BYTES / (1024 * 1024)}MB image payload limit — ${REMOVAL_HINT}]`,
+				`[image removed: ${mb(block.data.length)} of base64 exceeds the provider's ${mbLimit(IMAGE_MAX_BASE64_BYTES)} image payload limit — ${REMOVAL_HINT}]`,
 			);
 			continue;
 		}
@@ -233,10 +236,9 @@ export function guardOversizedImages(messages: AgentMessage[]): AgentMessage[] |
 		const bySize = [...survivors].sort((a, b) => b.data.length - a.data.length);
 		for (const block of bySize) {
 			if (totalBytes <= REQUEST_IMAGE_BASE64_BUDGET) break;
-			const mb = (block.data.length / (1024 * 1024)).toFixed(1);
 			notes.set(
 				block,
-				`[image removed: ${mb}MB of base64 pushed the request's total image payload over the ${REQUEST_IMAGE_BASE64_BUDGET / (1024 * 1024)}MB budget (the provider caps the whole request) — ${REMOVAL_HINT}]`,
+				`[image removed: ${mb(block.data.length)} of base64 pushed the request's total image payload over the ${mbLimit(REQUEST_IMAGE_BASE64_BUDGET)} budget (the provider caps the whole request) — ${REMOVAL_HINT}]`,
 			);
 			totalBytes -= block.data.length;
 		}

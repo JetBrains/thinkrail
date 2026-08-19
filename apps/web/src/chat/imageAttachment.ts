@@ -62,27 +62,22 @@ export function fitWithin(
 /** Mime types canvas.toDataURL can (re-)encode; anything else re-encodes as PNG when resized. */
 const CANVAS_ENCODABLE = new Set(["image/png", "image/jpeg", "image/webp"]);
 
-function fileToRawContent(file: File): Promise<ImageContent> {
-	return new Promise((resolve, reject) => {
-		const reader = new FileReader();
-		reader.onerror = () => reject(reader.error ?? new Error("failed to read image"));
-		reader.onload = () => {
-			const result = String(reader.result);
-			const comma = result.indexOf(",");
-			resolve({
-				type: "image",
-				data: comma >= 0 ? result.slice(comma + 1) : result,
-				mimeType: file.type || "image/png",
-			});
-		};
-		reader.readAsDataURL(file);
-	});
-}
-
 function dataUrlToContent(dataUrl: string): ImageContent {
 	const comma = dataUrl.indexOf(",");
 	const mimeType = /^data:([^;,]+)/.exec(dataUrl)?.[1] ?? "image/png";
 	return { type: "image", data: comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl, mimeType };
+}
+
+function fileToRawContent(file: File): Promise<ImageContent> {
+	return new Promise((resolve, reject) => {
+		const reader = new FileReader();
+		reader.onerror = () => reject(reader.error ?? new Error("failed to read image"));
+		// readAsDataURL yields `data:<type>;base64,…`, but `file.type` is the trusted source (a File's
+		// data URL always carries its own type) — keep it authoritative and fall back like the parser.
+		reader.onload = () =>
+			resolve({ ...dataUrlToContent(String(reader.result)), mimeType: file.type || "image/png" });
+		reader.readAsDataURL(file);
+	});
 }
 
 /**

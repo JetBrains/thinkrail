@@ -354,12 +354,14 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	// `insertAndSubmit` both land here, so whatever initiated the send, pending images always travel
 	// with the text and are cleared with the draft in the same step (and any recall or template slot
 	// session ends with the send). No-op when both the (trimmed) text and the image list are empty.
+	// The one send-permission reading, shared by `submitText` and the send button's `disabled`: never
+	// send while an attachment is still decoding (it would silently miss this message and stray onto the
+	// next one — the draft stays put, the user re-sends once the chip appears), and never send empty.
+	const canSubmit = (raw: string) => pendingImages === 0 && (!!raw.trim() || images.length > 0);
+
 	const submitText = (raw: string, behavior: SubmitBehavior) => {
-		// Never send while an attachment is still decoding — it would silently miss this message and
-		// stray onto the next one. The draft stays put; the user re-sends once the chip appears.
-		if (pendingImages > 0) return;
+		if (!canSubmit(raw)) return;
 		const text = raw.trim();
-		if (!text && images.length === 0) return;
 		onSubmit(
 			text,
 			images.map(({ name, content }) => ({ name, content })),
@@ -718,21 +720,23 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 			{images.length > 0 || pendingImages > 0 || attachErrors.length > 0 ? (
 				<div className="flex flex-wrap gap-xs px-sm pt-sm" data-testid="composer-images">
 					{attachErrors.map((err) => (
-						<span
+						<FileChip
 							key={err.id}
 							data-testid="composer-image-error"
-							className="flex items-center gap-xs whitespace-nowrap rounded-[var(--radius-sm)] border border-feedback-error-muted bg-clip-padding bg-feedback-error-subtle px-sm py-xs text-feedback-error tr-text-metadata"
-						>
-							{err.text}
-							<button
-								type="button"
-								aria-label="Dismiss"
-								onClick={() => setAttachErrors((prev) => prev.filter((p) => p.id !== err.id))}
-								className="hover:opacity-80"
-							>
-								<X className="size-3" />
-							</button>
-						</span>
+							tone="error"
+							icon={false}
+							label={err.text}
+							trailing={
+								<button
+									type="button"
+									aria-label="Dismiss"
+									onClick={() => setAttachErrors((prev) => prev.filter((p) => p.id !== err.id))}
+									className="hover:opacity-80"
+								>
+									<X className="size-3" />
+								</button>
+							}
+						/>
 					))}
 					{images.map((img) => (
 						<FileChip
@@ -943,7 +947,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							data-testid="chat-send"
 							aria-label={isStreaming ? "Steer" : "Send"}
 							onClick={() => submit(isStreaming ? "steer" : "send")}
-							disabled={pendingImages > 0 || (!value.trim() && images.length === 0)}
+							disabled={!canSubmit(value)}
 							className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-control-primary-bg text-control-primary-text hover:bg-control-primary-bg-hovered disabled:pointer-events-none disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text"
 						>
 							<ArrowUp className="size-4" />
