@@ -28,24 +28,17 @@ export function initTransport(): WsTransport {
 
 	transport.subscribe(WS_CHANNELS.serverWelcome, (data) => {
 		const welcome = data as Partial<ServerWelcome>;
-		if (typeof welcome.protocolVersion === "number") {
-			useAppStore.getState().setWelcome(welcome.protocolVersion);
-		}
-		if (Array.isArray(welcome.projects)) {
+		// Cold navigation waits for this one complete snapshot edge; never validate a route against a
+		// protocol-only or project-only intermediate state.
+		if (typeof welcome.protocolVersion !== "number" || !Array.isArray(welcome.projects)) return;
+		useAppStore.getState().installWelcomeSnapshot(
+			welcome.protocolVersion,
+			welcome.projects,
 			// `recentProjects` is required by the current protocol; falling back keeps a stale host's open
 			// projects usable while the shell surfaces the version mismatch.
-			useAppStore
-				.getState()
-				.installProjectSnapshot(
-					welcome.projects,
-					Array.isArray(welcome.recentProjects) ? welcome.recentProjects : welcome.projects,
-				);
-		}
-		// The host's source-of-truth app config (theme, …), applied on connect. Reconciles the pre-React
-		// paint hint; the shell's theme effect performs the DOM swap.
-		if (welcome.config) {
-			useAppStore.getState().applyConfig(welcome.config);
-		}
+			Array.isArray(welcome.recentProjects) ? welcome.recentProjects : welcome.projects,
+			welcome.config,
+		);
 	});
 
 	transport.subscribe(WS_CHANNELS.projectUpdated, (data) => {

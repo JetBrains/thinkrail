@@ -195,6 +195,16 @@ export interface CenterNavigationStamp {
 	clock: number;
 }
 
+/** Exact-chat intent from the client-local route. The catalog validates membership before the shell opens
+ * the shared placement; the global compatibility tick makes any newer local center navigation cancel it. */
+export interface RouteChatTarget {
+	workspaceId: string;
+	sessionId: string;
+	navTick: number;
+	navigation: CenterNavigationStamp | null;
+	validated: boolean;
+}
+
 export interface LayoutOpenOptions {
 	targetGroupId?: string;
 	activate?: boolean;
@@ -674,6 +684,8 @@ interface AppState {
 	/** Monotonic connection-open generation. Advances with every `connected` status so consumers can
 	 * distinguish a reconnect from the previous open socket even though both settle on the same status. */
 	connectionGeneration: number;
+	/** Advances only when one complete `server.welcome` snapshot lands atomically. */
+	welcomeGeneration: number;
 	protocolVersion: number | null;
 	/** Open projects shown in the Projects tool, newest first. */
 	projects: Project[];
@@ -684,6 +696,10 @@ interface AppState {
 	removedWorkspaceIds: Record<string, true>;
 	selectedProjectId: string | null;
 	activeWorkspaceId: string | null;
+	/** Validated-but-unresolved exact-chat route intent; never backend/shared placement state. */
+	routeChatTarget: RouteChatTarget | null;
+	/** Install edge for same-workspace route targets; clearing does not retrigger catalog reconciliation. */
+	routeChatTargetGeneration: number;
 	/** Latest accepted host snapshot and the optimistic projection currently rendered. */
 	layoutSnapshotsByWorkspace: Record<string, WorkspaceLayoutSnapshot>;
 	layoutDocumentsByWorkspace: Record<string, WorkspaceLayoutDocument>;
@@ -852,7 +868,13 @@ interface AppState {
 	 * at once; a failed wire call that has no better home (no chat tab to host an error turn) lands here. */
 	toasts: Toast[];
 	setStatus: (status: ConnectionStatus) => void;
-	setWelcome: (protocolVersion: number) => void;
+	/** Install protocol, project views, optional config, and the complete-welcome edge in one write. */
+	installWelcomeSnapshot: (
+		protocolVersion: number,
+		projects: Project[],
+		recentProjects: Project[],
+		config?: AppConfig,
+	) => void;
 	/** Install the host's open + recent project views atomically and repair stale navigation. */
 	installProjectSnapshot: (projects: Project[], recentProjects: Project[]) => void;
 	/** Fold one authoritative project snapshot into both views and repair navigation after close. */
@@ -887,8 +909,18 @@ interface AppState {
 	applyWorkspaceRemoved: (projectId: string, workspaceId: string) => void;
 	/** Enter a project's home, atomically clearing any active workspace. */
 	selectProject: (projectId: string) => void;
+	/** Enter the client-local main/Welcome location. */
+	selectMain: () => void;
 	/** Enter a workspace and select its owning project in one state transition. */
 	activateWorkspace: (workspace: Pick<Workspace, "id" | "projectId">) => void;
+	/** Apply a validated route and optionally install its exact-chat target in the same local-state write. */
+	activateWorkspaceFromRoute: (
+		workspace: Pick<Workspace, "id" | "projectId">,
+		sessionId?: string,
+	) => void;
+	/** Mark the current route target present in a successful authoritative session catalog. */
+	validateRouteChatTarget: (sessionId: string) => void;
+	clearRouteChatTarget: () => void;
 	installLayoutSnapshot: (snapshot: WorkspaceLayoutSnapshot, mutationId?: string) => void;
 	applyLayoutChanged: (payload: LayoutChangedPayload) => void;
 	beginLayoutCommit: (
@@ -1136,6 +1168,16 @@ interface AppState {
 /** Newest-first project ordering, copied so a wire array is never mutated in place. */
 function sortProjects(projects: Project[]): Project[] {
 	return [...projects].sort((a, b) => b.lastOpened - a.lastOpened);
+}
+
+/** One config projection shared by startup welcome and later `settings.changed` pushes. */
+function configPatch(config: AppConfig) {
+	return {
+		theme: config.theme,
+		analyticsEnabled: config.analyticsEnabled,
+		terminalReplayKb: config.terminalReplayKb,
+		layoutSettings: config.layout ?? DEFAULT_CONFIG.layout,
+	};
 }
 
 /** Replace one full project snapshot by id, or append it when this client has not seen it yet. */
@@ -1408,6 +1450,8 @@ function withoutChat(
 	const targetsLocation =
 		s.chatLocationRequest?.workspaceId === workspaceId &&
 		s.chatLocationRequest.sessionId === sessionId;
+	const targetsRoute =
+		s.routeChatTarget?.workspaceId === workspaceId && s.routeChatTarget.sessionId === sessionId;
 	const targetsHistory = s.historyOpenRequest?.sessionId === sessionId;
 	const hasStaleLayoutIntent = s.layoutIntents.some((intent) =>
 		layoutIntentTargetsSession(intent, workspaceId, sessionId),
@@ -1419,6 +1463,7 @@ function withoutChat(
 		!hasRuntime &&
 		!hasSkillBaseline &&
 		!targetsLocation &&
+		!targetsRoute &&
 		!targetsHistory &&
 		!hasStaleLayoutIntent
 	) {
@@ -1485,6 +1530,7 @@ function withoutChat(
 			? { skillsSyncedTickBySession: omitKey(s.skillsSyncedTickBySession, sessionId) }
 			: {}),
 		...(targetsLocation ? { chatLocationRequest: null } : {}),
+		...(targetsRoute ? { routeChatTarget: null } : {}),
 		...(targetsHistory ? { historyOpenRequest: null } : {}),
 	};
 }
@@ -1599,6 +1645,7 @@ function nextTerminalTitle(list: TerminalTab[]): string {
 export const useAppStore = create<AppState>((set, get) => ({
 	status: "connecting",
 	connectionGeneration: 0,
+	welcomeGeneration: 0,
 	protocolVersion: null,
 	projects: [],
 	recentProjects: [],
@@ -1606,6 +1653,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 	removedWorkspaceIds: Object.create(null) as Record<string, true>,
 	selectedProjectId: null,
 	activeWorkspaceId: null,
+	routeChatTarget: null,
+	routeChatTargetGeneration: 0,
 	layoutSnapshotsByWorkspace: {},
 	layoutDocumentsByWorkspace: {},
 	layoutAttentionByWorkspace: {},
@@ -1652,7 +1701,18 @@ export const useAppStore = create<AppState>((set, get) => ({
 			connectionGeneration:
 				status === "connected" ? state.connectionGeneration + 1 : state.connectionGeneration,
 		})),
-	setWelcome: (protocolVersion) => set({ protocolVersion }),
+	installWelcomeSnapshot: (protocolVersion, projects, recentProjects, config) =>
+		set((state) => {
+			const openProjects = sortProjects(projects.filter((project) => project.closed !== true));
+			return {
+				protocolVersion,
+				projects: openProjects,
+				recentProjects: sortProjects(recentProjects),
+				...(config ? configPatch(config) : {}),
+				...reconcileProjectNavigation(state, openProjects),
+				welcomeGeneration: state.welcomeGeneration + 1,
+			};
+		}),
 	installProjectSnapshot: (projects, recentProjects) =>
 		set((state) => {
 			const openProjects = sortProjects(projects.filter((project) => project.closed !== true));
@@ -1746,6 +1806,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 				specRequest: state.specRequest?.workspaceId === workspaceId ? null : state.specRequest,
 				chatLocationRequest:
 					state.chatLocationRequest?.workspaceId === workspaceId ? null : state.chatLocationRequest,
+				routeChatTarget:
+					state.routeChatTarget?.workspaceId === workspaceId ? null : state.routeChatTarget,
 				historyOpenRequest:
 					state.historyOpenRequest && removedSessions.has(state.historyOpenRequest.sessionId)
 						? null
@@ -1762,12 +1824,44 @@ export const useAppStore = create<AppState>((set, get) => ({
 		}
 	},
 	selectProject: (selectedProjectId) => set({ selectedProjectId, activeWorkspaceId: null }),
+	selectMain: () =>
+		set({ selectedProjectId: null, activeWorkspaceId: null, routeChatTarget: null }),
 	activateWorkspace: (workspace) =>
 		set((state) =>
 			state.removedWorkspaceIds[workspace.id]
 				? {}
 				: { selectedProjectId: workspace.projectId, activeWorkspaceId: workspace.id },
 		),
+	activateWorkspaceFromRoute: (workspace, sessionId) =>
+		set((state) => {
+			if (state.removedWorkspaceIds[workspace.id]) return {};
+			const advanced = advanceCenterNavigation(state, workspace.id);
+			return {
+				...advanced.patch,
+				selectedProjectId: workspace.projectId,
+				activeWorkspaceId: workspace.id,
+				routeChatTarget: sessionId
+					? {
+							workspaceId: workspace.id,
+							sessionId,
+							navTick: selectWorkspaceNavTick(state, workspace.id) + 1,
+							navigation: advanced.stamp,
+							validated: false,
+						}
+					: null,
+				routeChatTargetGeneration: sessionId
+					? state.routeChatTargetGeneration + 1
+					: state.routeChatTargetGeneration,
+			};
+		}),
+	validateRouteChatTarget: (sessionId) =>
+		set((state) => {
+			const target = state.routeChatTarget;
+			if (!target || target.sessionId !== sessionId || target.validated) return state;
+			return { routeChatTarget: { ...target, validated: true } };
+		}),
+	clearRouteChatTarget: () =>
+		set((state) => (state.routeChatTarget ? { routeChatTarget: null } : state)),
 	installLayoutSnapshot: (snapshot, mutationId) =>
 		set((state) => {
 			const workspaceId = snapshot.workspaceId;
@@ -2504,6 +2598,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 			const targetsLocation =
 				s.chatLocationRequest?.workspaceId === wsId &&
 				s.chatLocationRequest.sessionId === sessionId;
+			const targetsRoute =
+				s.routeChatTarget?.workspaceId === wsId && s.routeChatTarget.sessionId === sessionId;
 			const targetsHistory = s.historyOpenRequest?.sessionId === sessionId;
 			return {
 				...(syncLayout
@@ -2530,6 +2626,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 					[wsId]: [entry, ...(s.closedChatsByWorkspace[wsId] ?? [])],
 				},
 				...(targetsLocation ? { chatLocationRequest: null } : {}),
+				...(targetsRoute ? { routeChatTarget: null } : {}),
 				...(targetsHistory ? { historyOpenRequest: null } : {}),
 			};
 		}),
@@ -2934,13 +3031,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set({ settingsOpen: true, settingsSection: section }),
 	closeSettings: () => set({ settingsOpen: false }),
 	setSettingsSection: (section) => set({ settingsSection: section }),
-	applyConfig: (config) =>
-		set({
-			theme: config.theme,
-			analyticsEnabled: config.analyticsEnabled,
-			terminalReplayKb: config.terminalReplayKb,
-			layoutSettings: config.layout ?? DEFAULT_CONFIG.layout,
-		}),
+	applyConfig: (config) => set(configPatch(config)),
 	requestToolView: (workspaceId, tool) =>
 		set((state) =>
 			state.removedWorkspaceIds[workspaceId]

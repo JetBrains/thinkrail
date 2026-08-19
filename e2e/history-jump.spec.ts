@@ -47,15 +47,10 @@ test("selecting a same-workspace message hit opens the chat and flashes the matc
 	});
 	await page.waitForTimeout(2_100);
 
-	// A reload doesn't auto-restore the active project/workspace (see `ask-restart.live.spec.ts`) — re-pick
-	// both, so `WorkspaceWorkbench`'s hydrate-on-connect effect re-lists workspace A's sessions from a cold client,
-	// the realistic "come back later" path. (Not load-bearing for the jump itself — case (c) below fetches
-	// the target session directly by id regardless of whether `session.list` ever ran for it — but this
-	// keeps the scenario honest to the brief and exercises the full reload path.)
+	// The fragment restores workspace A and its exact chat; the cold client then re-lists the workspace's
+	// sessions. The seeded session remains unopened until the jump below targets it.
 	await page.reload();
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
-	await page.getByTestId("project-item").first().click();
-	await worktreeRows(page).first().click();
 	await expect(activeWorktreeRow(page)).toHaveCount(1);
 
 	// The create's auto-opened chat (still live in the host) auto-restores after the reload — a composer

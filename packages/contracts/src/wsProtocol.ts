@@ -229,7 +229,9 @@ export interface TerminalTabsPush {
 // v42: Central changes are applied through watched runtime generations; restart/recovery/blocked outcomes are
 // removed, `provider.changed` invalidates provider/model reads, and live chats retain their own generation.
 // v43: configured Central status reports the closed proxy-stopped observation and exposes Start proxy.
-export const PROTOCOL_VERSION = 43;
+// v44: `workspace.list.includeDiffStats` can skip only the synchronous per-workspace diff-stat fan-out while
+// preserving complete authoritative membership/order for cold client-local navigation restoration.
+export const PROTOCOL_VERSION = 44;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a
@@ -596,7 +598,10 @@ export interface WsMethodMap {
 		params: { projectId: string; path: string };
 		result: Workspace;
 	};
-	"workspace.list": { params: { projectId: string }; result: Workspace[] };
+	"workspace.list": {
+		params: { projectId: string; includeDiffStats?: boolean };
+		result: Workspace[];
+	};
 	"workspace.openReview": {
 		params: { workspaceId: string };
 		result: OpenBranchReview | null;

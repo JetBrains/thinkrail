@@ -1,5 +1,6 @@
 import { expect, test, type WebSocketRoute } from "@playwright/test";
 import {
+	activeWorktreeRow,
 	createWorkspaceViaDialog,
 	openFixtureProject,
 	openTerminal,
@@ -268,9 +269,8 @@ test("a shell survives a page reload", async ({ page }) => {
 
 	await page.reload();
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
-	// A reload keeps no client state, so the rail comes back collapsed with nothing selected.
-	await page.getByTestId("project-expand").first().click();
-	await worktreeRows(page).nth(0).click();
+	// The fragment restores the workspace; the terminal panel reattaches to the original host-owned shell.
+	await expect(activeWorktreeRow(page)).toHaveCount(1);
 	await waitTerminalReady(page);
 
 	// One tab, not a second one beside a now-invisible shell.

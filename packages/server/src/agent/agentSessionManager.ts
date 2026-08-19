@@ -413,7 +413,10 @@ async function readSessionFileIdentity(path: string): Promise<SessionFileIdentit
 }
 
 /** Enumerate every physical transcript in pi's one encoded-cwd directory without swallowing errors. */
-async function scanSessionFiles(cwd: string): Promise<ScannedSessionFile[]> {
+async function scanSessionFiles(
+	cwd: string,
+	excludedPaths: ReadonlySet<string> = new Set(),
+): Promise<ScannedSessionFile[]> {
 	const dir = defaultSessionDirectory(cwd);
 	let names: string[];
 	try {
@@ -428,6 +431,9 @@ async function scanSessionFiles(cwd: string): Promise<ScannedSessionFile[]> {
 	for (const name of names) {
 		if (!name.endsWith(".jsonl")) continue;
 		const path = join(dir, name);
+		// A registered live session is authoritative from memory. Pi can truncate/rewrite its physical file;
+		// observing that tiny window must not turn a healthy live chat into a corrupt detached transcript.
+		if (excludedPaths.has(resolve(path))) continue;
 		try {
 			scanned.push({ path, ok: true, identity: await readSessionFileIdentity(path) });
 		} catch (error) {
@@ -446,8 +452,11 @@ async function scanSessionFiles(cwd: string): Promise<ScannedSessionFile[]> {
  * membership and deletion boundaries that would mean "absent", so preflight every header and verify pi
  * returned every physical file. Only a successful result is authoritative.
  */
-async function listSessionInfosStrict(cwd: string): Promise<SessionInfo[]> {
-	const scanned = await scanSessionFiles(cwd);
+async function listSessionInfosStrict(
+	cwd: string,
+	excludedPaths: ReadonlySet<string> = new Set(),
+): Promise<SessionInfo[]> {
+	const scanned = await scanSessionFiles(cwd, excludedPaths);
 	const broken = scanned.find((file) => !file.ok);
 	if (broken && !broken.ok) throw broken.error;
 	const infos = await SessionManager.list(cwd);
@@ -469,12 +478,15 @@ async function listSessionInfosStrict(cwd: string): Promise<SessionInfo[]> {
 async function listSessionsInternal(workspaceId: string, cwd: string): Promise<SessionSummary[]> {
 	const live: SessionSummary[] = [];
 	const liveIds = new Set<string>();
+	const liveFiles = new Set<string>();
 	for (const [sessionId, entry] of sessions) {
 		if (entry.workspaceId !== workspaceId || isSessionDeleted(sessionId, workspaceId)) continue;
 		live.push(summaryOf(sessionId, entry));
 		liveIds.add(sessionId);
+		const sessionFile = entry.session.sessionManager.getSessionFile();
+		if (sessionFile) liveFiles.add(resolve(sessionFile));
 	}
-	const infos = await listSessionInfosStrict(cwd);
+	const infos = await listSessionInfosStrict(cwd, liveFiles);
 	// One encoded-cwd dir can alias distinct cwds, so disambiguate on the recorded header cwd; live wins.
 	const disk: SessionSummary[] = infos
 		.filter(

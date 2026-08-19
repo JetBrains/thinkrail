@@ -918,11 +918,10 @@ test("a draft is server truth: a second client converges by push, and a cold rel
 	await expect(page2.getByTestId("review-pending-badge")).toHaveText("2");
 	await page2.context().close();
 
-	// A cold reload of client 1: nothing lived only in the client, the review hydrates back whole.
+	// A cold reload of client 1: the fragment restores the workspace, and the review hydrates back whole.
 	await page.reload();
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
-	await page.getByTestId("project-item").first().click();
-	await worktreeRows(page).first().click();
+	await expect(worktreeRows(page).first()).toHaveAttribute("data-active", "true");
 	await page.getByTestId("tab-review").click();
 	await expect(page.getByTestId("review-pending-badge")).toHaveText("2");
 	await expect(page.getByTestId("review-file-row")).toContainText("2 drafts");

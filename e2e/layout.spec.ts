@@ -81,12 +81,11 @@ async function dragTabToTarget(page: Page, tab: Locator, target: Locator): Promi
 	return targetBox.height;
 }
 
-async function reenterDefaultAfterReload(page: Page): Promise<void> {
+async function reloadDefaultWorkbench(page: Page): Promise<void> {
 	await page.reload();
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
-	await page.getByTestId("welcome-action").filter({ hasText: "Work in project folder" }).click();
-	// A persisted hidden left side intentionally removes ProjectTree (and therefore its active workspace row)
-	// from the workbench, so the center surface—not the rail—is the universal activation receipt.
+	// The workspace route restores without a rail click. A persisted hidden left side can remove ProjectTree,
+	// so the center surface—not a workspace row—is the universal activation receipt.
 	await expect(page.getByTestId("center-tabs")).toBeVisible();
 }
 
@@ -171,7 +170,7 @@ test("outer side widths publish on pointer-up and restore after reload", async (
 	await expect.poll(() => width(right)).toBeGreaterThan(before + 70);
 	const resized = await width(right);
 
-	await reenterDefaultAfterReload(page);
+	await reloadDefaultWorkbench(page);
 	await expect.poll(() => width(page.getByTestId("right-stack"))).toBeGreaterThan(before + 50);
 	expect(Math.abs((await width(page.getByTestId("right-stack"))) - resized)).toBeLessThan(24);
 });
@@ -192,7 +191,7 @@ test("dragging outer separators hides both sides and preserves their restore sta
 	await expect(page.getByTestId("right-stack")).toHaveCount(0);
 	await waitForLayoutSettled(page);
 
-	await reenterDefaultAfterReload(page);
+	await reloadDefaultWorkbench(page);
 	await expect(page.getByTestId("left-layout-rail")).toBeVisible();
 	await expect(page.getByTestId("right-layout-rail")).toBeVisible();
 
@@ -351,7 +350,7 @@ test("Mod+B and Mod+J hide and restore synchronized sides, including after reloa
 	await expect(page.getByTestId("right-stack")).toHaveCount(0);
 	await expect(page.getByTestId("terminal-instance")).toHaveCount(0);
 
-	await reenterDefaultAfterReload(page);
+	await reloadDefaultWorkbench(page);
 	await expect(page.getByTestId("left-layout-rail")).toBeVisible();
 	await expect(page.getByTestId("right-layout-rail")).toBeVisible();
 
@@ -707,7 +706,7 @@ test("a narrow viewport compresses locally without rewriting recursive topology"
 	await expect(page.getByRole("menuitem", { name: /Split right/ })).toBeDisabled();
 	await page.keyboard.press("Escape");
 
-	await reenterDefaultAfterReload(page);
+	await reloadDefaultWorkbench(page);
 	await expect(page.getByTestId("center-group")).toHaveCount(2);
 });
 

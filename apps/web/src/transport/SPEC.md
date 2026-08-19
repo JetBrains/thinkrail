@@ -42,8 +42,9 @@ The single WebSocket client to the host, and its app-wide singleton.
   `workspace.created`/`updated`/`removed` lifecycle trio, and `workspace.fsChanged`** into the store — and
   folds every connection transition through
   `setStatus`, whose connected generation gives active-workspace hydration a distinct trigger on every
-  reconnect; welcome's open + recent project views via `installProjectSnapshot`, project snapshots via
-  `applyProjectUpdated`, `pi.event` via `handlePiEvent(event, sessionId)`, `pi.extensionUi` via `applyExtUi(request)`,
+  reconnect; the complete welcome (protocol + open/recent project views + optional config) via the atomic
+  `installWelcomeSnapshot`, whose separate `welcomeGeneration` is the cold-navigation readiness edge;
+  project snapshots via `applyProjectUpdated`, `pi.event` via `handlePiEvent(event, sessionId)`, `pi.extensionUi` via `applyExtUi(request)`,
   `workspace.created` via `addWorkspace(workspace)`, `workspace.updated` via `updateWorkspace(workspace)`,
   `workspace.removed` via `applyWorkspaceRemoved(projectId, id)`, `session.deleted` via the idempotent
   `deleteChat(workspaceId, sessionId)` tombstone fold (an online fast path; because this event channel is
@@ -58,9 +59,9 @@ The single WebSocket client to the host, and its app-wide singleton.
   and the shell layout integration cancels an in-progress pointer draft only for a nonmatching accepted
   revision before rendering it),
   `workspace.fsChanged` via `noteFsChanged(payload)`, and
-  **`settings.changed`** (+ the `config` field in `server.welcome`) via
-  `applyConfig(config)` — the server-synced app config (theme, …), applied on connect + on every broadcast
-  so clients converge; all subscriptions happen once at init, never in component effects);
+  **`settings.changed`** via `applyConfig(config)` — the post-startup server-synced app config broadcast;
+  welcome config lands in the atomic install above. All subscriptions happen once at init, never in
+  component effects);
   `errorText.ts` (**`errorText(err, fallback?)`** — normalizes a rejected `request` (the host's error
   string / a timeout / a thrown non-Error) into a short, display-ready line for an error turn/notice);
   `requestError.ts` (**`RequestError`** + **`wsErrorCode(err)`** — a rejection that carries the host's named

@@ -127,9 +127,12 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     is never trusted (blocks disclosure *and* arbitrary-URL injection). The **hydration read side** —
     `listSessions(workspaceId, cwd)` (live sessions
     **unioned with on-disk** ones pi persisted under `cwd`, live winning on id → `SessionSummary[]` tagged
-    `live`; before treating that disk list as authoritative it strictly scans every transcript header and
-    verifies pi returned every file, so an unreadable/malformed/skipped file rejects the read rather than
-    masquerading as absent and being tombstoned by reconnect reconciliation) +
+    `live`; before treating the **detached** disk list as authoritative it strictly scans every transcript
+    header and verifies pi returned every file, so an unreadable/malformed/skipped file rejects the read
+    rather than masquerading as absent and being tombstoned by reconnect reconciliation. A registered live
+    session's own exact `SessionManager.getSessionFile()` path is excluded from that disk preflight: its
+    in-memory entry is already authoritative, and pi may truncate/rewrite that path while the host lists,
+    so treating the transient physical state as a detached corrupt chat would blank every chat on reload) +
     `getSessionMessages(sessionId, workspaceId, cwd)` (re-opens a disk session into the manager if
     not live, first resolving any model named by the transcript exactly in the active process runtime and
     rejecting with a closed error when that named model is unavailable—never accepting PI's silent fallback

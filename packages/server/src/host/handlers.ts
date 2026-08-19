@@ -318,7 +318,10 @@ const handlers: Record<string, Handler> = {
 		const p = params as { projectId: string; path: string };
 		return openExistingWorktree(p.projectId, p.path);
 	},
-	"workspace.list": (params) => listWorkspaces((params as { projectId: string }).projectId),
+	"workspace.list": (params) => {
+		const p = params as { projectId: string; includeDiffStats?: boolean };
+		return listWorkspaces(p.projectId, { includeDiffStats: p.includeDiffStats ?? true });
+	},
 	"workspace.openReview": (params) => {
 		const ws = getWorkspace((params as { workspaceId: string }).workspaceId);
 		return findOpenBranchReview(ws.worktreePath, ws.branch);

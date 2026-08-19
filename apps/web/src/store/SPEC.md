@@ -16,25 +16,36 @@ snapshots plus device-local attention, terminal catalogs, and one **per-session 
 
 ## Boundary
 
-- **Owns:** `appStore.ts` — connection/projects/workspaces state + setters. Connection state includes a
-  monotonic **connected generation**: `setStatus("connected")` advances it in the same write that installs
-  the status, giving reconnect hydration an edge even when the visible status returns to the same value.
-  **`projects`** is the open
-  rail, while **`recentProjects`** is the last-opened-ordered set of every known open + closed project.
-  **`installProjectSnapshot(projects, recentProjects)`** atomically installs both `server.welcome` views;
-  **`applyProjectUpdated(project)`** is the one full-snapshot updater for `project.updated` pushes and
-  authoritative project-mutation responses: it upserts/sorts Recents and either upserts/sorts the rail or
-  removes the row when `closed === true`. Both actions reconcile stale navigation too: only when this
-  client's selected project or active workspace belongs to a record no longer open, they clear the active
-  workspace and select the first remaining project's Home (or `null` when none remain), while deliberately
-  retaining every workspace layout/attention/resource-render/terminal/session map for lossless reopen.
-  Other-client opens never steal
-  navigation, and a background close never moves it. All project response call sites use the same updater,
-  so the open and recent copies cannot drift. The two explicit navigation transitions remain:
-  **`selectProject(projectId)`** enters that Project Home (`selectedProjectId` set + `activeWorkspaceId`
-  cleared in one write), while **`activateWorkspace(workspace)`** enters the workspace and selects its
-  owner (both ids set in one write). There is no generic active-workspace setter that can split that
-  invariant. It also owns the **workspace lifecycle reactions** every client runs
+- **Owns:** `appStore.ts` — connection/projects/workspaces state + setters. Connection state has two
+  monotonic edges with different meanings: `setStatus("connected")` advances **`connectionGeneration`**
+  for reconnect hydration, while **`welcomeGeneration`** advances only when one complete
+  `server.welcome` snapshot lands. **`installWelcomeSnapshot(protocolVersion, projects, recentProjects,
+  config?)`** installs protocol + both sorted project views + optional config + navigation repair and then
+  advances that readiness edge in one Zustand write; route validation never observes a protocol-only or
+  project-only intermediate state. `installProjectSnapshot` remains the project-only primitive for focused
+  callers. **`projects`** is the open rail, while **`recentProjects`** is the last-opened-ordered set of every
+  known open + closed project. **`applyProjectUpdated(project)`** is the one full-snapshot updater for
+  `project.updated` pushes and authoritative project-mutation responses: it upserts/sorts Recents and either
+  upserts/sorts the rail or removes the row when `closed === true`. Both actions reconcile stale navigation
+  too: only when this client's selected project or active workspace belongs to a record no longer open,
+  they clear the active workspace and select the first remaining project's Home (or `null` when none
+  remain), while deliberately retaining every workspace layout/attention/resource-render/terminal/session
+  map for lossless reopen. Other-client opens never steal navigation, and a background close never moves it.
+  All project response call sites use the same updater, so the open and recent copies cannot drift.
+  Explicit local transitions are **`selectMain()`**, **`selectProject(projectId)`**, and
+  **`activateWorkspace(workspace)`**; each updates its coupled scope ids atomically, and there is no generic
+  active-workspace setter that can split the invariant. Validated route restoration uses
+  **`activateWorkspaceFromRoute(workspace, sessionId?)`**: it applies the same scope ids, advances the
+  compatibility workspace navigation tick plus the current destination-group clock, and either installs a
+  transient **`routeChatTarget`** stamped with both clocks or clears an older exact target. A workspace-only
+  route carries no center-tab intent, so it retains existing browser-local attention; ordinary location
+  derivation may then canonicalize it to an already-selected chat. **`routeChatTargetGeneration`** advances
+  only on target installation (including same-workspace deep links), so consumption cannot duplicate the
+  shell reconciliation pass. `selectCurrentRouteChatTarget` is the one check that the target's workspace and
+  navigation stamp still hold. The shell's chat-reconciliation module validates/hydrates that target before
+  passive auto-open; a successful authoritative absence consumes it, while failures retain it for reconnect.
+  The store owns no URL/history/storage access — `navigation` owns serialization and drivers. It also owns
+  the **workspace lifecycle reactions** every client runs
   identically on the `workspace.created`/`updated`/`removed` pushes (no per-client optimism — the backend
   is authoritative): **`addWorkspace(ws)`** upserts a
   `workspace.created` snapshot by `id` (no-op if the project isn't listed yet — reconciles on its next
@@ -371,7 +382,8 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   `selectActiveWorkspaceProjectId`, `selectHistoryTarget` + `HistoryTarget` (the shell's `Ctrl+R` routing
   target: the locally selected chat resource, or the workspace's newest chat otherwise),
   `selectContextProject`, `selectAttentionCenterTab` (the selected resource in local last center focus),
-  `selectSkillsStale`, **`selectDiffScope` + `BRANCH_SCOPE`** (what a workspace's
+  `selectCurrentRouteChatTarget` (exact-chat intent only while its workspace and stamped navigation remain
+  current), `selectSkillsStale`, **`selectDiffScope` + `BRANCH_SCOPE`** (what a workspace's
   Changes panel is diffing, defaulting to the shared branch-scope constant), **`selectDiffBaseRef`** (the ref
   it is measured against — the client-side mirror of the host's one resolution), **`selectDiffTabTargetRef`**
   (that ref *as an open diff tab's live dimension*: the target for a branch-scope tab, `""` for a

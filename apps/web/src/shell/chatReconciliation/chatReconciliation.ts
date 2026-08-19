@@ -9,6 +9,8 @@ import {
 	type EditorTab,
 	isConnectedGeneration,
 	layoutOpenOptionsForNavigation,
+	selectAttentionCenterTab,
+	selectCurrentRouteChatTarget,
 	selectWorkspaceSessionIds,
 	shouldAdvanceAcceptedNavigation,
 	toast,
@@ -166,10 +168,30 @@ export function useWorkspaceChatCatalogReconciliation(
 	const connectionGeneration = useAppStore((state) => state.connectionGeneration);
 	const document = useAppStore((state) => state.layoutDocumentsByWorkspace[workspaceId]);
 	const layoutReady = document !== undefined;
+	const routeChatTargetGeneration = useAppStore((state) => state.routeChatTargetGeneration);
+	const routeTargetSessionId = useAppStore((state) => {
+		const target = selectCurrentRouteChatTarget(state);
+		return target?.workspaceId === workspaceId ? target.sessionId : null;
+	});
+	const routeTargetResolved = useAppStore((state) => {
+		const target = selectCurrentRouteChatTarget(state);
+		if (!target?.validated || target.workspaceId !== workspaceId) return false;
+		const selected = selectAttentionCenterTab(state, workspaceId);
+		return (
+			state.sessions[target.sessionId] !== undefined &&
+			selected?.kind === "chat" &&
+			selected.sessionId === target.sessionId
+		);
+	});
+
+	useEffect(() => {
+		if (routeTargetResolved) useAppStore.getState().clearRouteChatTarget();
+	}, [routeTargetResolved]);
 
 	useEffect(() => {
 		if (!layoutReady || status !== "connected" || connectionGeneration === 0) return;
 		const stateAtRequest = useAppStore.getState();
+		const startedRouteTargetGeneration = routeChatTargetGeneration;
 		const baselineDocument = stateAtRequest.layoutDocumentsByWorkspace[workspaceId];
 		const baselinePlacedSessionIds = baselineDocument
 			? collectAllGroups(baselineDocument)
@@ -193,6 +215,7 @@ export function useWorkspaceChatCatalogReconciliation(
 			const state = useAppStore.getState();
 			return (
 				current &&
+				state.routeChatTargetGeneration === startedRouteTargetGeneration &&
 				isConnectedGeneration(state, connectionGeneration) &&
 				!state.removedWorkspaceIds[workspaceId]
 			);
@@ -234,11 +257,64 @@ export function useWorkspaceChatCatalogReconciliation(
 								.map((tab) => tab.sessionId)
 						: [],
 				);
+				let handledRouteSessionId: string | null = null;
+				const target = selectCurrentRouteChatTarget(useAppStore.getState());
+				if (target?.workspaceId === workspaceId) {
+					const targetSummary = summaries.find((summary) => summary.sessionId === target.sessionId);
+					if (!targetSummary) {
+						// A successful catalog is authoritative absence: retain the workspace, consume only chat intent.
+						useAppStore.getState().clearRouteChatTarget();
+					} else {
+						handledRouteSessionId = target.sessionId;
+						useAppStore.getState().validateRouteChatTarget(target.sessionId);
+						const targetState = useAppStore.getState();
+						const targetOptions = layoutOpenOptionsForNavigation(
+							targetState,
+							workspaceId,
+							target.navigation,
+						);
+						const cache = targetState.tabsByWorkspace[workspaceId]?.find(
+							(tab): tab is Extract<EditorTab, { kind: "chat" }> =>
+								tab.kind === "chat" && tab.sessionId === target.sessionId,
+						);
+						if (targetState.sessions[target.sessionId]) {
+							targetState.openTab(
+								cache ?? {
+									kind: "chat",
+									id: chatTabId(workspaceId, target.sessionId),
+									workspaceId,
+									name: targetSummary.title,
+									sessionId: target.sessionId,
+								},
+								"keep",
+								true,
+								targetOptions,
+							);
+						} else {
+							const loaded = await fetchMessages(target.sessionId);
+							if (!live()) return;
+							const currentTarget = selectCurrentRouteChatTarget(useAppStore.getState());
+							if (currentTarget?.sessionId === target.sessionId && loaded) {
+								const { summary, messages } = loaded.result;
+								useAppStore
+									.getState()
+									.hydrateSession(
+										summary,
+										messagesToRuntime(messages, summary.lastSettlement),
+										true,
+										summary.live ? undefined : loaded.syncedTick,
+										targetOptions,
+									);
+							}
+						}
+					}
+				}
 				let sawKnown = false;
 				const toOpen: typeof summaries = [];
 				const toHistory: typeof summaries = [];
 				for (const summary of [...summaries].sort((a, b) => b.updatedAt - a.updatedAt)) {
-					if (placed.has(summary.sessionId)) continue;
+					if (summary.sessionId === handledRouteSessionId || placed.has(summary.sessionId))
+						continue;
 					if (useAppStore.getState().sessions[summary.sessionId]) {
 						sawKnown = true;
 						continue;
@@ -252,7 +328,12 @@ export function useWorkspaceChatCatalogReconciliation(
 						toHistory.push(summary);
 					}
 				}
-				if (placed.size === 0 && toOpen.length === 0 && !sawKnown) {
+				if (
+					handledRouteSessionId === null &&
+					placed.size === 0 &&
+					toOpen.length === 0 &&
+					!sawKnown
+				) {
 					const fallback = toHistory.shift();
 					if (fallback) toOpen.push(fallback);
 				}
@@ -287,7 +368,7 @@ export function useWorkspaceChatCatalogReconciliation(
 							tab.kind === "chat" && tab.sessionId === summary.sessionId,
 					);
 					if (!state.sessions[summary.sessionId] || !cache) continue;
-					const activate = openedCount === 0;
+					const activate = handledRouteSessionId === null && openedCount === 0;
 					openedCount += 1;
 					const routed = layoutOpenOptionsForNavigation(state, workspaceId, navigation);
 					state.enqueueLayoutIntent({
@@ -317,7 +398,7 @@ export function useWorkspaceChatCatalogReconciliation(
 		return () => {
 			current = false;
 		};
-	}, [commit, connectionGeneration, layoutReady, status, workspaceId]);
+	}, [commit, connectionGeneration, layoutReady, routeChatTargetGeneration, status, workspaceId]);
 
 	useEffect(() => {
 		if (!document || status !== "connected") return;
@@ -332,7 +413,12 @@ export function useWorkspaceChatCatalogReconciliation(
 				const state = useAppStore.getState();
 				const latestDocument = state.layoutDocumentsByWorkspace[workspaceId];
 				const currentPlacement = latestDocument ? findPlacedResource(latestDocument, tab) : null;
-				if (currentPlacement?.kind !== "chat") continue;
+				if (
+					currentPlacement?.kind !== "chat" ||
+					currentPlacement.sessionId === routeTargetSessionId
+				) {
+					continue;
+				}
 				state.restorePlacedChatCache(
 					workspaceId,
 					currentPlacement.id,
@@ -350,7 +436,7 @@ export function useWorkspaceChatCatalogReconciliation(
 		return () => {
 			current = false;
 		};
-	}, [document, status, workspaceId]);
+	}, [document, routeTargetSessionId, status, workspaceId]);
 }
 
 export function useChatLocationReconciliation(

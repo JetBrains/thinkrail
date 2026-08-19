@@ -237,7 +237,10 @@ of the host.
   closed without deleting associated state), **`project.inspect`** (classify a path) + **`project.init`**
   (`git init` + commit, then open) + **`project.hasSpecs`** (lazy per-project "contains a registered
   spec?" for the Welcome screen — a full-tree walk, so requested only for the shown project,
-  never eagerly for every project) / `workspace.*` / `fs.*` / `git.*` / **`spec.graph`**
+  never eagerly for every project) / `workspace.*` — notably **`workspace.list { projectId,
+  includeDiffStats? }`**, where omitted/true preserves the existing full rows with computed aggregates and
+  `false` returns the same authoritative membership/order without the synchronous per-workspace diff-stat
+  fan-out used nowhere by navigation restoration / `fs.*` / `git.*` / **`spec.graph`**
   (the Specs-viewer whole-graph read, per workspace) / **`todo.*`** — **`list`**/**`add`**/**`update`**/
   **`remove`**, the chat's per-session TODO plan (keyed by `workspaceId` + `sessionId`; `add` tags the
   item `origin:"user"`) / **`terminal.*`** — **`attach`** (idempotent get-or-create keyed by

@@ -204,7 +204,7 @@ test("a client that misses chat deletion while offline reconciles it after recon
 		window.WebSocket = TrackedWebSocket;
 	});
 	const page2 = await context2.newPage();
-	await page2.goto(page.url());
+	await page2.goto("/");
 	await expect(page2.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 	await page2.getByTestId("project-expand").first().click();
 	await defaultWorkspaceRow(page2).click();

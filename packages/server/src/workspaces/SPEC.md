@@ -69,8 +69,12 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   marking the name deliberate so the auto-namer never touches it again — what a user rename and the
   agentic auto-rename want; the host's **provisional naive rename** passes `lock: false` to rename name +
   branch while leaving `renamed` unset, so the settled-turn agentic pass still refines it),
-  `listWorkspaces` (with diff stats), `listWorkspaceRecords` (registry records without per-workspace git
-  diffStats — for read-only paths like history scope mapping that must not block on git spawns),
+  `listWorkspaces(projectId, { includeDiffStats? })` (complete authoritative membership/order after Default
+  ensure + user-owned folder-truth reconciliation; diff stats default **on** for compatibility, while
+  `includeDiffStats: false` skips the per-workspace `git diff --shortstat` fan-out for cold navigation —
+  automatic reload on a shared host must not synchronously diff every worktree), `listWorkspaceRecords`
+  (raw registry records without Default ensure, folder-truth reconciliation, or per-workspace git diffStats —
+  for internal read-only paths like history scope mapping that must not block on git spawns),
   `workspaceDiffStats`, **`setWorkspaceDiffBase(id, ref | null)`** — re-point the ref this workspace's diff is
   measured against (`Workspace.diffBase`), `null` (or the creation base itself, which would be a redundant
   override) clearing it; persists + **broadcasts the updated record** so every client converges on the push,

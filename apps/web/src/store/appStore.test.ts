@@ -24,6 +24,7 @@ import {
 	useAppStore,
 } from "./appStore";
 import {
+	selectCurrentRouteChatTarget,
 	selectDiffScope,
 	selectLastOpenChatSession,
 	selectSkillsStale,
@@ -102,6 +103,10 @@ beforeEach(() => {
 	useAppStore.setState({
 		status: "connecting",
 		connectionGeneration: 0,
+		welcomeGeneration: 0,
+		protocolVersion: null,
+		routeChatTarget: null,
+		routeChatTargetGeneration: 0,
 		sessions: {},
 		layoutSnapshotsByWorkspace: {},
 		layoutDocumentsByWorkspace: {},
@@ -1383,6 +1388,96 @@ test("project and workspace navigation update both scope ids atomically", () => 
 	useAppStore.getState().activateWorkspace(pushedWorkspace({ id: "w3", projectId: "p3" }));
 	expect(transitions).toEqual([["p3", "w3"]]);
 	unsubscribe();
+});
+
+// ---- navigation restore: atomic welcome + exact-chat intent --------------------------------------
+
+test("installWelcomeSnapshot lands one complete snapshot and advances its own generation", () => {
+	const p1 = project();
+	const closed = project({
+		id: "p2",
+		path: "/projects/two",
+		slug: "two",
+		lastOpened: 50,
+		closed: true,
+	});
+	let notifications = 0;
+	const unsubscribe = useAppStore.subscribe((state) => {
+		notifications += 1;
+		expect(state).toMatchObject({
+			protocolVersion: 44,
+			theme: "test-theme",
+			welcomeGeneration: 1,
+		});
+		expect(state.projects.map((candidate) => candidate.id)).toEqual(["p1"]);
+		expect(state.recentProjects.map((candidate) => candidate.id)).toEqual(["p1", "p2"]);
+	});
+
+	useAppStore.getState().installWelcomeSnapshot(44, [p1, closed], [p1, closed], {
+		theme: "test-theme",
+		analyticsEnabled: false,
+		terminalReplayKb: 256,
+	});
+	unsubscribe();
+	expect(notifications).toBe(1);
+
+	useAppStore.getState().installWelcomeSnapshot(44, [p1], [p1]);
+	expect(useAppStore.getState().welcomeGeneration).toBe(2);
+});
+
+test("installWelcomeSnapshot reconciles stale project navigation", () => {
+	const p1 = project();
+	useAppStore.setState({
+		projects: [project({ id: "p2", path: "/projects/two", slug: "two" })],
+		selectedProjectId: "p2",
+		activeWorkspaceId: null,
+	});
+
+	useAppStore.getState().installWelcomeSnapshot(44, [p1], [p1]);
+	expect(useAppStore.getState().selectedProjectId).toBe("p1");
+});
+
+test("activateWorkspaceFromRoute atomically stamps exact-chat intent", () => {
+	const workspace = pushedWorkspace();
+	useAppStore.setState({ workspaces: { p1: [workspace] }, navTickByWorkspace: { w1: 3 } });
+
+	useAppStore.getState().activateWorkspaceFromRoute(workspace, "s1");
+	expect(useAppStore.getState()).toMatchObject({
+		selectedProjectId: "p1",
+		activeWorkspaceId: "w1",
+		routeChatTarget: {
+			workspaceId: "w1",
+			sessionId: "s1",
+			navTick: 4,
+			navigation: null,
+			validated: false,
+		},
+		routeChatTargetGeneration: 1,
+	});
+
+	// A workspace-only route carries no center-tab intent: it clears only the exact target and leaves
+	// existing browser-local attention to the workbench. Clearing cannot trigger a duplicate catalog pass.
+	useAppStore.getState().activateWorkspaceFromRoute(workspace);
+	expect(useAppStore.getState().routeChatTarget).toBeNull();
+	expect(selectWorkspaceNavTick(useAppStore.getState(), "w1")).toBe(5);
+	expect(useAppStore.getState().routeChatTargetGeneration).toBe(1);
+	const before = useAppStore.getState();
+	useAppStore.getState().clearRouteChatTarget();
+	expect(useAppStore.getState()).toBe(before);
+});
+
+test("selectCurrentRouteChatTarget rejects overtaken or off-workspace intent", () => {
+	const workspace = pushedWorkspace();
+	useAppStore.setState({ workspaces: { p1: [workspace] } });
+	useAppStore.getState().activateWorkspaceFromRoute(workspace, "s1");
+	expect(selectCurrentRouteChatTarget(useAppStore.getState())?.sessionId).toBe("s1");
+
+	useAppStore.getState().noteNavigation("w1");
+	expect(selectCurrentRouteChatTarget(useAppStore.getState())).toBeNull();
+
+	useAppStore.getState().activateWorkspaceFromRoute(workspace, "s1");
+	useAppStore.getState().selectProject("p1");
+	expect(selectCurrentRouteChatTarget(useAppStore.getState())).toBeNull();
 });
 
 test("updateWorkspace applies a pushed snapshot authoritatively: dropped fields clear", () => {
