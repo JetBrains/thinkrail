@@ -6,8 +6,17 @@
 	<title>{{title}} — ThinkRail Blog</title>
 	<link rel="icon" type="image/svg+xml" href="../favicon.svg">
 	<link rel="stylesheet" href="./blog.css">
+	<script>
+		// Blocking theme init — runs before first paint to prevent FOUC.
+		// Priority: localStorage > system preference > dark default.
+		(function() {
+			var stored = localStorage.getItem('blog-theme');
+			var theme = stored || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+			document.documentElement.setAttribute('data-theme', theme);
+		})();
+	</script>
 </head>
-<body data-theme="dark">
+<body>
 	<header class="blog-header">
 		<a href="../" class="blog-logo">ThinkRail</a>
 		<nav class="blog-header-nav">
@@ -43,30 +52,17 @@
 		<p>© 2025 ThinkRail. All rights reserved.</p>
 	</footer>
 	<script>
-		// Theme toggle: respects localStorage > system preference > dark default
+		// Theme toggle handler — wired after DOM is ready.
 		(function() {
-			const toggle = document.getElementById('theme-toggle');
-			const root = document.body;
-			
-			function getPreferredTheme() {
-				const stored = localStorage.getItem('blog-theme');
-				if (stored) return stored;
-				return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
-			}
-			
-			function setTheme(theme) {
-				root.setAttribute('data-theme', theme);
-				localStorage.setItem('blog-theme', theme);
-				toggle.setAttribute('aria-label', theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme');
-			}
-			
-			// Initialize
-			setTheme(getPreferredTheme());
-			
-			// Toggle on click
+			var toggle = document.getElementById('theme-toggle');
+			var root = document.documentElement;
+
 			toggle.addEventListener('click', function() {
-				const current = root.getAttribute('data-theme');
-				setTheme(current === 'dark' ? 'light' : 'dark');
+				var current = root.getAttribute('data-theme');
+				var next = current === 'dark' ? 'light' : 'dark';
+				root.setAttribute('data-theme', next);
+				localStorage.setItem('blog-theme', next);
+				toggle.setAttribute('aria-label', next === 'dark' ? 'Switch to light theme' : 'Switch to dark theme');
 			});
 		})();
 	</script>
