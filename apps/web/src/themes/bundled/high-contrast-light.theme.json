@@ -25,7 +25,7 @@
 		"hint": "#71717a",
 		"disabled": "#a1a1aa",
 		"primaryDisabled": "#71717a",
-		"onPrimaryDisabled": "#000000",
+		"onPrimaryDisabled": "#ffffff",
 		"selection": "#0f4a85",
 		"selectionForeground": "#ffffff",
 		"editorSelection": "#0f4a85",
