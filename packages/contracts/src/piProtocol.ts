@@ -119,7 +119,7 @@ export type PiEvent =
 /** Allowlist MIRROR of pi-coding-agent's Node-only `CompactionResult` — the fields the notice renders. */
 export interface CompactionEndResult {
 	tokensBefore: number;
-	estimatedTokensAfter: number;
+	estimatedTokensAfter?: number;
 }
 
 /** The `pi.event` push frame: a session's event tagged with its id. */

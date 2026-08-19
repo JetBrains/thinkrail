@@ -74,12 +74,14 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     with a per-session `SessionManager` **and a `buildSessionSettings(cwd)` settings manager** (the user's
     real settings + an in-memory `images.autoResize:false` override — never persisted — so the `read` tool
     sends image files **raw**, bypassing pi's photon/WASM resizer that the single-file binary can't bundle;
-    the web UI downsizes user-attached images itself); a shared `registerSession` forwards each event
+    the web UI downsizes user-attached images itself); a shared `registerSession` publishes each event
     tagged with its id + `bindExtensions({ mode:'rpc', uiContext })`. The event projection retains the
     final `agent_end` assistant's reported terminal metadata and attaches it to `agent_settled`, so the
     wire has one authoritative automatic-work terminal even when compaction/retry happens between those
-    events; it forwards rather than re-derives pi's result. The live entry retains that settlement in
-    `SessionSummary.lastSettlement` for reconnect after Pi removed a failed attempt from its rebuilt
+    events; it forwards rather than re-derives pi's result. A `compaction_end` is separately projected to
+    a **fresh allowlisted event**: its `result` carries only `tokensBefore` and optional
+    `estimatedTokensAfter`, never pi's summary, entry id, usage, or extension details. The live entry retains
+    that settlement in `SessionSummary.lastSettlement` for reconnect after Pi removed a failed attempt from its rebuilt
     context; a new `agent_start` exposes explicit `null` (no current terminal) so an older persisted failure
     cannot reappear mid-run, while disk sessions remain transcript-authoritative.
     `prompt`/`steer`/`followUp` (with images) / `abort` /

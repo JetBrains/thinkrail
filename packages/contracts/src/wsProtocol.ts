@@ -222,7 +222,9 @@ export interface TerminalTabsPush {
 // v40: host-synchronized workspace workbench layouts — versioned full-document `layout.get` /
 // exact-base `layout.replace`, monotonic revisions, typed accepted/conflict results, `layout.changed`
 // broadcasts, and layout preset settings. Conflicts carry current state and never persist the stale document.
-export const PROTOCOL_VERSION = 40;
+// v41: `compaction_end.result` is a host-projected allowlist containing only token counts; pi's summary,
+// entry id, usage, and extension details never cross in the live event.
+export const PROTOCOL_VERSION = 41;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a

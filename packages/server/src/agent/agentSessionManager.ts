@@ -18,7 +18,6 @@ import type {
 	AskUserQuestionResult,
 	ImageContent,
 	Model,
-	PiEvent,
 	RefreshedModels,
 	SessionDeletedPayload,
 	SessionEventPayload,
@@ -38,6 +37,7 @@ import {
 	refreshCatalogsDetached,
 	settledAvailableModels,
 } from "./piRuntime";
+import { projectSessionEvent } from "./sessionEventProjection";
 import { repairDanglingToolCalls } from "./sessionRepair";
 import type { SkillAdmissionContext } from "./skillAdmission";
 import { trashFile } from "./trash";
@@ -241,8 +241,7 @@ async function registerSession(
 					}
 				: null;
 		}
-		const projected: PiEvent =
-			event.type === "agent_settled" ? { type: "agent_settled", terminal } : (event as PiEvent);
+		const projected = projectSessionEvent(event, terminal);
 		if (event.type === "agent_settled") {
 			const entry = sessions.get(sessionId);
 			if (entry) entry.lastSettlement = terminal;

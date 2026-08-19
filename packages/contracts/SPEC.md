@@ -66,7 +66,8 @@ of the host.
     is not an automatic-work terminal when compaction or a queued continuation follows.
     `compaction_end.result` is typed as **`CompactionEndResult`** — an allowlist mirror of pi's
     Node-only `CompactionResult` carrying exactly what the compaction notice renders
-    (`tokensBefore`/`estimatedTokensAfter`); wire data is untrusted, so the reducer guards the field
+    (`tokensBefore` + optional `estimatedTokensAfter`); the host constructs this projection rather than
+    casting pi's richer object wholesale, and wire data remains untrusted, so the reducer guards the field
     shapes rather than assuming them;
   - **`SessionEventPayload`** (`{ sessionId, event: PiEvent }`) — the `pi.event` push frame.
   - the cheap-win mirrors (declared in the Node-only `pi-coding-agent`): **`SessionStats`** + **`ContextUsage`**
