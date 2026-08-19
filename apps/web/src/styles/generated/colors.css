@@ -10,7 +10,7 @@
 	--text-default: var(--text);
 	--text-muted: var(--muted);
 	--text-subtle: var(--hint);
-	--text-disabled: color-mix(in srgb, var(--disabled) 60%, transparent);
+	--text-disabled: color-mix(in srgb, var(--text) 60%, transparent); /* disabled non-control text = the default text colour at the `strong` (60%) alpha step — a disabled element inherits its enabled semantic colour, dimmed at the token level, never a dedicated disabled palette value */
 	--text-on-primary: var(--on-accent);
 	--text-link: var(--info); /* global.css `a {}` is the only consumer; no component styles a bare link */
 	--container-workspace-bg: var(--background); /* the app surface, and with it the opened-document canvas — a document reads as part of the workspace (Monaco's EDITOR_THEME, the markdown/spec preview, the chat column, the tab strip) */
@@ -27,10 +27,11 @@
 	--control-primary-text: var(--on-accent);
 	--control-border-default: var(--border);
 	--control-border-active: var(--border-strong);
-	--control-disabled-bg: var(--input);
-	--control-disabled-text: color-mix(in srgb, var(--disabled) 60%, transparent);
-	--control-primary-disabled-bg: var(--primary-disabled); /* the DISABLED primary button fill — its own role (and manifest key) so it is decoupled from the shared neutral control-disabled-bg and never repurposes it; solid, no opacity */
-	--control-primary-disabled-text: var(--on-primary-disabled); /* label + icon colour on a disabled primary button; paired with control-primary-disabled-bg, separate from the neutral control-disabled-text */
+	--control-disabled-bg: color-mix(in srgb, var(--input) 60%, transparent); /* disabled control fill = the default control fill (`input`, i.e. control-bg) at the `strong` (60%) alpha step */
+	--control-disabled-text: color-mix(in srgb, var(--text) 60%, transparent); /* disabled control label/icon = the default control text colour (`text`, i.e. text-default) at the `strong` (60%) alpha step */
+	--control-disabled-border: color-mix(in srgb, var(--border) 60%, transparent); /* disabled control border = the default control border (`border`, i.e. control-border-default) at the `strong` (60%) alpha step */
+	--control-primary-disabled-bg: color-mix(in srgb, var(--accent) 60%, transparent); /* disabled primary button fill = the normal primary fill (`accent`, i.e. control-primary-bg) at the `strong` (60%) alpha step */
+	--control-primary-disabled-text: color-mix(in srgb, var(--on-accent) 60%, transparent); /* disabled primary button label/icon = the normal primary text (`onAccent`, i.e. control-primary-text) at the `strong` (60%) alpha step */
 	--border-default: var(--border-strong);
 	--border-muted: var(--border);
 	--primary: var(--accent);
@@ -97,6 +98,7 @@
 	--color-control-border-active: var(--control-border-active);
 	--color-control-disabled-bg: var(--control-disabled-bg);
 	--color-control-disabled-text: var(--control-disabled-text);
+	--color-control-disabled-border: var(--control-disabled-border);
 	--color-control-primary-disabled-bg: var(--control-primary-disabled-bg);
 	--color-control-primary-disabled-text: var(--control-primary-disabled-text);
 	--color-border-default: var(--border-default);
