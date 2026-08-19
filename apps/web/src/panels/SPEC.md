@@ -879,7 +879,9 @@ a project picker, the prompt hero, and the reused
   only what is *not* typography: h1/h2 section rules, a capped reading measure (~78ch) with wide
   tables/code scrolling inside it, zebra-striped bordered tables, muted accent blockquotes, crisp
   rules, and **GitHub-style alert callouts** (`> [!NOTE]`…`[!CAUTION]`, via the in-repo
-  `markdownAlerts` remark transform + a lucide/token `AlertCallout`, wired in only here — not chat) — in
+  `markdownAlerts` remark transform + a lucide/token `AlertCallout`, wired in only here — not chat), and
+  **```mermaid fences render as themed diagrams** (the shared `Markdown` primitive's mermaid path —
+  `chat/SPEC.md`; the rendered *diff* keeps the source-code degradation, like shiki) — in
   a centered reading column; strips a leading YAML frontmatter block via
   `lib.stripFrontmatter` so a spec's metadata doesn't render as a stray heading — source view still shows
   it) and source being the lazy read-only `MonacoEditor`. The choice
