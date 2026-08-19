@@ -1,6 +1,6 @@
 import type { PiEvent, SessionEventPayload, TodoPlan } from "@thinkrail/contracts";
 import { TODO_NUDGE_PREFIX, WS_CHANNELS } from "@thinkrail/contracts";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { selectChatTitle, useAppStore } from "../store";
 import { errorText, getSessionMessagesWithSkillBaseline, getTransport } from "../transport";
 import { messagesToRuntime } from "./hydrate";
@@ -40,12 +40,18 @@ export interface ChatTodos {
  * The chat's TODO list as shared state (SPEC §Chat TODO plan): the single data source for the in-chat plan
  * popup. Reads `todo.list` for `sessionId`, refetches live off that session's `pi.event`s (any tool end /
  * settled turn, debounced) so the agent's writes surface without a manual refresh, and exposes the user's
- * edit ops. Adding an item nudges the agent to pick it up, except while it's waiting on the user (see
- * {@link nudgeAgent}).
+ * edit ops. It ALSO refetches off the plan's **reviewer** session's events: the agent reviewer's verdict,
+ * findings, and stuck-review recovery all fire on that separate session, so without this the review
+ * decoration (`reviewing` → `reviewed`/`changes_requested`/`review_failed`) wouldn't surface until an
+ * unrelated worker event or a manual refresh. Adding an item nudges the agent to pick it up, except while
+ * it's waiting on the user (see {@link nudgeAgent}).
  */
 export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos {
 	const [data, setData] = useState<TodoPlan | null>(null);
 	const [failed, setFailed] = useState(false);
+	// The plan's reviewer chat id, tracked in a ref so the long-lived pi.event subscription can match its
+	// events without re-subscribing every time the plan reloads.
+	const reviewerRef = useRef<string | undefined>(undefined);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -58,6 +64,7 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 				.request("todo.list", { workspaceId, sessionId })
 				.then((plan) => {
 					if (!cancelled) {
+						reviewerRef.current = plan.reviewerSessionId;
 						setData(plan);
 						setFailed(false);
 					}
@@ -76,7 +83,9 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 		};
 		const unsubscribe = getTransport().subscribe(WS_CHANNELS.piEvent, (payload) => {
 			const event = payload as SessionEventPayload;
-			if (event.sessionId !== sessionId) return;
+			// The worker chat (the plan's owner) OR its reviewer chat — the reviewer's verdict/findings/
+			// recovery are what flip the review decoration, and they never touch the worker session.
+			if (event.sessionId !== sessionId && event.sessionId !== reviewerRef.current) return;
 			if (shouldRefreshTodos(event.event)) scheduleRefetch();
 		});
 		return () => {
@@ -106,6 +115,7 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 	const reloadPlan = async () => {
 		try {
 			const plan = await getTransport().request("todo.list", { workspaceId, sessionId });
+			reviewerRef.current = plan.reviewerSessionId;
 			setData(plan);
 		} catch {
 			// keep what's on screen — the next pi.event-driven refetch will reconcile
