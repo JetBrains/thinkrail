@@ -260,11 +260,8 @@ export async function buildResourceLoader(
 		...skillInputs,
 	};
 
-	// Central's global artifact can also sit inside PI's default auto-discovery directory. Resolve PI's
-	// ordinary enabled extension paths first, remove only the caller-supplied opaque identities, then feed
-	// the remaining paths back as explicit resources with auto-discovery disabled. This prevents the Central
-	// factory (and any UI/hooks it may contain) from executing once per session while preserving every other
-	// user/project extension. No excluded file is opened or inspected here.
+	// Re-feed PI's ordinary enabled extension paths minus the opaque identities, with auto-discovery off —
+	// the Central artifact may sit inside PI's default discovery dir. No excluded file is opened here.
 	const excluded = new Set(excludedExtensionPaths.map((path) => resolve(path)));
 	const discoveredExtensionPaths: string[] = [];
 	const discoveredMetadata = new Map<string, PathMetadata>();
@@ -302,8 +299,7 @@ export async function buildResourceLoader(
 	);
 	await loader.reload();
 
-	// Explicitly re-fed paths otherwise look like temporary CLI resources. Restore PI's resolved provenance
-	// so extension commands/tools keep their original user/project source metadata.
+	// Re-fed paths would otherwise carry temporary-CLI provenance; restore PI's resolved source metadata.
 	for (const extension of loader.getExtensions().extensions) {
 		const metadata = discoveredMetadata.get(resolve(extension.resolvedPath));
 		if (!metadata) continue;

@@ -38,14 +38,12 @@ function resetState(): void {
 	rmSync(join(E2E_DATA_DIR, "projects.json"), { force: true });
 	rmSync(join(E2E_DATA_DIR, "worktrees"), { recursive: true, force: true });
 	rmSync(join(E2E_PI_AGENT_DIR, "sessions"), { recursive: true, force: true });
-	// Central's artifact is global under HOME, not the custom PI agent dir. Reset both its public
-	// postcondition and the fake's control/log so every browser scenario starts from supported + disconnected.
+	// Central's artifact is global under HOME — reset it + the fake's control/log to supported+disconnected.
 	rmSync(E2E_CENTRAL_ARTIFACT, { force: true });
 	writeFileSync(E2E_CENTRAL_STATE, "");
 	rmSync(E2E_CENTRAL_LOG, { force: true });
 
-	// Restore the seeded models.json (or clear a test-written one when auth came only from auth.json) so a
-	// later @agent test retains its isolated provider baseline. Central never edits this file.
+	// Restore (or clear) models.json so a later @agent test keeps its isolated provider baseline.
 	const modelsPath = join(E2E_PI_AGENT_DIR, "models.json");
 	if (existsSync(E2E_PI_MODELS_SEED)) copyFileSync(E2E_PI_MODELS_SEED, modelsPath);
 	else rmSync(modelsPath, { force: true });

@@ -163,8 +163,7 @@ test("Settings → Providers offers JetBrains AI with host-authoritative Central
 	await expect(card).toBeVisible();
 	await expect(card).toContainText("JetBrains AI");
 
-	// The card follows the host's Central state: install guidance when absent, otherwise the truthful
-	// connected/ready action. The dedicated stateful Central spec exercises each transition.
+	// Branch on the host's real Central state; 00-jbcentral.spec covers each transition.
 	if ((await card.getAttribute("data-installed")) === "false") {
 		await expect(page.getByTestId("jetbrains-needs-install")).toBeVisible();
 		await expect(page.getByTestId("jetbrains-connect")).toHaveCount(0);

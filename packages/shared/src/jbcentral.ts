@@ -96,10 +96,7 @@ function pathExists(path: string, deps: JbcentralAdapterDependencies): boolean {
 	return (deps.exists ?? existsSync)(path);
 }
 
-/**
- * Central's generated PI extension is global by design. It does not follow `PI_CODING_AGENT_DIR`.
- * The path is an opaque identity: callers may check existence and pass it to PI, but must not read it.
- */
+/** Central's global artifact — ignores `PI_CODING_AGENT_DIR`; an opaque identity, never read. */
 export function jbcentralExtensionPath(env: ParseEnv = process.env): string {
 	return join(env.HOME ?? homedir(), ".pi", "agent", "extensions", "jetbrains-central.ts");
 }
@@ -423,8 +420,7 @@ export function watchJbcentralArtifact(
 
 	const invalidate = (): void => {
 		if (stopped) return;
-		// Fold the latest existence into the poll baseline so one filesystem event and its later poll do not
-		// report the same add/remove transition twice. Events are still hints; the consumer re-inspects.
+		// Fold existence into the poll baseline so an event and its later poll can't double-report a transition.
 		artifactExists = pathExists(extensionPath, deps);
 		try {
 			onInvalidate();

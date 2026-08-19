@@ -71,8 +71,7 @@ export function initTransport(): WsTransport {
 	});
 
 	transport.subscribe(WS_CHANNELS.providerChanged, () => {
-		// A generation changed (or failed to): clear stale choices immediately. The monotonic store version
-		// prevents an older model.list reply from overwriting a newer invalidation's snapshot.
+		// Clear stale choices now; the monotonic version stops an older model.list reply overwriting this.
 		useAppStore.getState().noteProviderChanged();
 		const providerVersion = useAppStore.getState().providerVersion;
 		getTransport()

@@ -284,8 +284,7 @@ async function prepareSessionEntry(
 	});
 
 	try {
-		// `rpc` mode = dialog-capable, non-TUI. Extension failures are intentionally generic: loader or
-		// provider diagnostics can contain private configuration and must never become browser frames.
+		// `rpc` mode = dialog-capable, non-TUI. Failures rethrow generic: diagnostics can carry private config.
 		await session.bindExtensions({
 			mode: "rpc",
 			uiContext: createWebUiContext(sessionId),
@@ -525,8 +524,7 @@ function persistedSessionModelRef(model: unknown): { provider: string; id: strin
 	if (typeof model !== "object" || model === null) return undefined;
 	const provider = Reflect.get(model, "provider");
 	const id = Reflect.get(model, "modelId");
-	// PI represents "no persisted model" as an object whose fields are both undefined. That is distinct
-	// from a transcript that names a model: only the latter must be resolved exactly, without fallback.
+	// PI persists "no model" as a ref whose fields are BOTH undefined — distinct from a named model.
 	if (provider === undefined && id === undefined) return undefined;
 	if (typeof provider !== "string" || !provider || typeof id !== "string" || !id) {
 		throw new Error("The chat's saved model is unavailable.");
@@ -545,9 +543,7 @@ async function openDiskSession(sessionId: string, workspaceId: string, cwd: stri
 	const settingsManager = buildSessionSettings(cwd);
 	const sessionManager = SessionManager.open(info.path);
 	const persistedModel = persistedSessionModelRef(sessionManager.buildSessionContext().model);
-	// Resolve the transcript's exact model before asking PI to create the session. PI otherwise falls back to
-	// a configured default when a restored model is missing, which would silently change provider/route.
-	// Keep unavailable-model errors closed: provider/model details from a transcript are not browser errors.
+	// Resolve the exact transcript model up front: PI's create-time fallback would silently switch providers.
 	let exactModel: Model<string> | undefined;
 	if (persistedModel) {
 		try {
@@ -740,8 +736,7 @@ export function abortSession(sessionId: string): Promise<void> {
 }
 
 export async function setSessionModel(sessionId: string, model: WireModel): Promise<void> {
-	// Re-resolve against this chat's captured generation. A model offered only to newer chats must not
-	// inject a provider object from another runtime into this session.
+	// Re-resolve host-side against this chat's retained generation — never a newer one, never the wire ref.
 	const entry = mustGetEntry(sessionId);
 	await entry.session.setModel(resolveWireModel(entry.generation.runtime, model));
 }
@@ -1035,8 +1030,7 @@ async function runDeleteTransaction(
 				(candidate) => candidate.id === sessionId && candidate.cwd === cwd,
 			)?.path;
 		}
-		// A newly-created empty live chat can have a reserved session path before PI materializes the JSONL
-		// file. There is nothing recoverable to move in that case; deleting the runtime/tombstone is complete.
+		// A new empty chat's reserved JSONL path may not exist yet — nothing recoverable to move.
 		if (path && existsSync(path)) await trashFile(path);
 	} catch (error) {
 		// The deletion boundary did not complete: retain any live entry, allow disk re-attach/retry, and

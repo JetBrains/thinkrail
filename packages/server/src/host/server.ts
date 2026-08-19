@@ -129,8 +129,7 @@ function normalizePersistedLayoutSettings(): void {
 
 /** Boot the engine host only after the safe Central runtime generation is established. */
 export async function createServer(options: CreateServerOptions = {}): Promise<RunningServer> {
-	// This belongs to the public factory, not only the CLI wrapper: every embedder must exclude an
-	// incompatible global Central artifact before Bun exposes a handler that can read PI state.
+	// In the public factory, not only the CLI: the safe generation must precede any handler.
 	await initializeJbcentralRuntime();
 	normalizePersistedLayoutSettings();
 	const {

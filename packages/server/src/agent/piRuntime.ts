@@ -36,8 +36,7 @@ let runtimeFactory: (additionalExtensionPaths: readonly string[]) => Promise<Pre
 let generationInitializer: PiRuntimeGenerationInitializer = () => {};
 
 function captureProviderStatusIds(runtime: ModelRuntime): ReadonlySet<string> {
-	// A few narrow unit fakes predate runtime generations and implement only the method under test. Empty is
-	// the privacy-safe status allowlist for those fakes; every real ModelRuntime implements `getProviders`.
+	// Optional-chained: narrow unit fakes omit `getProviders`; empty = the fail-closed allowlist.
 	return new Set(runtime.getProviders?.().map((provider) => provider.id) ?? []);
 }
 
@@ -72,10 +71,7 @@ export function configurePiRuntimeFactory(
 		: createRuntimeWithExtensions;
 }
 
-/**
- * Configure process-local registrations that every fresh runtime generation needs. The composition root must
- * install this before bootstrap; otherwise generations could expose different provider capabilities.
- */
+/** Composition seam: registrations every fresh generation must repeat — install before bootstrap. */
 export function configurePiRuntimeGenerationInitializer(
 	initializer?: PiRuntimeGenerationInitializer,
 ): void {
@@ -83,10 +79,7 @@ export function configurePiRuntimeGenerationInitializer(
 	generationInitializer = initializer ?? (() => {});
 }
 
-/**
- * Declare opaque paths that ordinary session loaders must never execute. This is separate from the active
- * generation paths so an absent, incompatible, or failed global artifact stays excluded from every session.
- */
+/** Opaque paths that session loaders must never execute, whatever the active generation holds. */
 export function configurePiRuntimeSessionExtensionExclusions(paths: readonly string[]): void {
 	if (activeGeneration) throw new Error("PI runtime already initialized");
 	configuredSessionExtensionExclusions = [...new Set(paths)];
@@ -123,12 +116,8 @@ async function createRuntimeOfflineByDefault(): Promise<ModelRuntime> {
 	}
 }
 
-/**
- * Advance PI's process-wide extension factory cache through the public ResourceLoader lifecycle before a
- * new generation loads an opaque path. Central replaces one global file in place, so a fresh loader alone
- * can otherwise reuse the prior factory by path. The empty loader reads no Central artifact; its second
- * reload is PI's public cache-invalidating transition.
- */
+/** PI's extension-factory cache is path-keyed and Central replaces its file in place; this empty
+ * loader's second `reload()` is PI's public cache-invalidating transition (it reads no artifact). */
 async function advanceExtensionCacheGeneration(): Promise<void> {
 	const agentDir = getAgentDir();
 	const loader = new DefaultResourceLoader({
@@ -144,27 +133,19 @@ async function advanceExtensionCacheGeneration(): Promise<void> {
 	await loader.reload();
 }
 
-/**
- * Build a fresh runtime and apply extension-owned provider registrations through PI's public services API.
- * Loader diagnostics are inspected only as a closed success/failure signal and are never logged or returned.
- */
 async function createRuntimeWithExtensions(
 	additionalExtensionPaths: readonly string[],
 ): Promise<PreparedRuntime> {
 	await advanceExtensionCacheGeneration();
 	const runtime = await createRuntimeOfflineByDefault();
 	await generationInitializer(runtime);
-	// The auth surface may inspect only providers that existed before an opaque extension ran. This keeps
-	// Central's provider configuration private without inferring ownership from model URLs or provider names.
+	// Captured BEFORE the opaque extensions run — the pre-opaque allowlist for `provider.status`.
 	const providerStatusIds = captureProviderStatusIds(runtime);
-	// Jiti's on-disk transpilation cache is independent of PI's extension factory cache and is keyed by
-	// path. Central replaces that path in place, so force Jiti's documented rebuild mode only for this
-	// candidate load; restore the caller's environment immediately afterward.
+	// Jiti's on-disk transpile cache is also path-keyed; force its documented rebuild mode for this load only.
 	const priorJitiRebuild = process.env.JITI_REBUILD_FS_CACHE;
 	const priorJitiTryNative = process.env.JITI_TRY_NATIVE;
 	process.env.JITI_REBUILD_FS_CACHE = "1";
-	// Source-mode Bun otherwise asks its native ESM importer first, whose process-lifetime module cache
-	// cannot be invalidated when the same opaque path is replaced. The binary loader already disables it.
+	// Bun's native ESM importer caches by path for the process lifetime; the binary loader already skips it.
 	process.env.JITI_TRY_NATIVE = "false";
 	let services: Awaited<ReturnType<typeof createAgentSessionServices>>;
 	try {
@@ -172,8 +153,7 @@ async function createRuntimeWithExtensions(
 			cwd: getAgentDir(),
 			modelRuntime: runtime,
 			resourceLoaderOptions: {
-				// Only the explicitly reviewed opaque paths belong in the generation. In particular, an
-				// incompatible Central artifact in the default agent dir must not slip in via auto-discovery.
+				// No auto-discovery: an unreviewed Central artifact in the default agent dir must not slip in.
 				noExtensions: true,
 				additionalExtensionPaths: [...additionalExtensionPaths],
 				noSkills: true,

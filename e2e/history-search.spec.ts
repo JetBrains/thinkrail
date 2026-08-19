@@ -178,8 +178,7 @@ test("Ctrl+R opens history recall, cycles scope to all, zooms to messages, inser
 			.locator('[data-testid="chat-message"][data-role="user"]')
 			.filter({ hasText: "fix the flaky watcher test" }),
 	).toBeVisible();
-	// The host outlives browser tests. Settle the turn before resetState removes its transcript; otherwise a
-	// later session append can recreate that path without its header in the next test's reused workspace.
+	// Settle before resetState removes the transcript — a later append could recreate it headerless.
 	await settleSubmittedTurn(page);
 });
 
@@ -254,8 +253,7 @@ test("Cmd/Ctrl+Enter from the overlay sends pending image attachments with the r
 		expect(prompt).toContain('"images"');
 		expect(prompt).toContain('"image/png"');
 	}).toPass({ timeout: 5000 });
-	// As above, settle before this test's state is removed; ending at the optimistic UI write is not
-	// isolation when the e2e host is shared across tests.
+	// As above: settle before this test's state is removed (the e2e host is shared across tests).
 	await settleSubmittedTurn(page);
 });
 

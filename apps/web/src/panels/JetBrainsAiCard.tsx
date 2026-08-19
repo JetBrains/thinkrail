@@ -43,8 +43,7 @@ export function JetBrainsAiCard({
 	const [notice, setNotice] = useState<Notice | null>(null);
 	const [signingIn, setSigningIn] = useState(false);
 
-	// A watched rebuild can outlive the invalidation that started this read. Poll only while applying; the
-	// provider.changed push handles transitions that begin while the status is otherwise settled.
+	// Poll only while applying; `provider.changed` pushes cover transitions that start while settled.
 	useEffect(() => {
 		if (status.state !== "configuring") return;
 		const timer = setInterval(() => void onChanged(), 500);

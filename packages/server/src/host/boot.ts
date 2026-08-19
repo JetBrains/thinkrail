@@ -46,8 +46,7 @@ export async function bootHost(options: BootHostOptions): Promise<BootedHost> {
 	// the whole host's, and this is the only trace it gets).
 	installCrashLog(options.appVersion);
 	resolveShellEnv();
-	// Pre-warm before selecting a free port so the version probe cannot leave a long bind race. The public
-	// createServer factory awaits the same single-flight, which keeps this invariant unavoidable for embedders.
+	// Pre-warm before the port pick so the version probe cannot stretch the bind race.
 	await initializeJbcentralRuntime();
 
 	const requested = options.port;

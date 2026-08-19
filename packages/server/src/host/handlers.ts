@@ -689,8 +689,7 @@ const handlers: Record<string, Handler> = {
 		await logoutProvider((params as { providerId: string }).providerId);
 		return { ok: true } as const;
 	},
-	// Native JetBrains AI setup through Central's reviewed PI commands. All methods return closed typed
-	// outcomes; child output and extension diagnostics never become handler errors or frames.
+	// Central actions: closed typed outcomes only — child output/diagnostics never become frames.
 	"provider.jbcentralConnect": () => connectJbcentral(),
 	"provider.jbcentralDisconnect": () => disconnectJbcentral(),
 	"provider.jbcentralLogin": () => jbcentralLogin(),

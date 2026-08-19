@@ -33,9 +33,7 @@ export default function globalSetup(): void {
 	// whichever shell the developer runs — so terminal specs don't depend on the host's dotfiles.
 	for (const rc of [".zshrc", ".bashrc"]) writeFileSync(join(E2E_HOME_DIR, rc), "");
 
-	// Lane-local command stubs: Central can be removed in one scenario without mutating a shared repo file
-	// under parallel sharding. Its external extensions are independent public-API fixtures, not generated
-	// Central artifacts or source-derived content.
+	// Lane-local stubs: one lane can remove Central without mutating a repo file shared across shards.
 	mkdirSync(E2E_FAKE_BIN_DIR, { recursive: true });
 	for (const command of ["central", "code"]) {
 		const target = join(E2E_FAKE_BIN_DIR, command);
@@ -65,9 +63,7 @@ export default function globalSetup(): void {
 		const src = join(userAgentDir, file);
 		if (existsSync(src)) copyFileSync(src, join(E2E_PI_AGENT_DIR, file));
 	}
-	// Keep a pristine snapshot of the seeded models.json so `resetState` restores the isolated provider
-	// baseline per test. Central never edits this file. No file means the dev authed via auth.json only —
-	// reset then just clears any test-written models.json.
+	// Snapshot the seeded models.json so `resetState` can restore the provider baseline per test.
 	const modelsSeedSrc = join(userAgentDir, "models.json");
 	if (existsSync(modelsSeedSrc)) copyFileSync(modelsSeedSrc, E2E_PI_MODELS_SEED);
 	else rmSync(E2E_PI_MODELS_SEED, { force: true });

@@ -159,8 +159,7 @@ async function runRebuildDrain(): Promise<void> {
 		const configured = inspectionConfigured(inspection);
 		const prepared = await preparePiRuntimeGeneration(configured ? [inspection.extensionPath] : []);
 
-		// A newer filesystem/action observation owns the current pointer. This candidate was built against an
-		// older observation and is discarded without becoming visible.
+		// Stale candidate: a newer observation owns the pointer.
 		if (stopped) return;
 		if (sequence !== requestedSequence) continue;
 
@@ -256,8 +255,6 @@ export function initializeJbcentralRuntime(): Promise<void> {
 		await prepareInitialRuntime(inspection);
 		bootstrapped = true;
 
-		// If the watcher observed drift while the initial candidate was loading, settle the newest observation
-		// before the public server factory binds its socket.
 		if (settledSequence < requestedSequence) {
 			scheduleRebuildDrain();
 			await waitForRebuild(requestedSequence);
@@ -289,8 +286,7 @@ export async function getJbcentralStatus(): Promise<JbcentralStatus> {
 	const inspection = await inspectJbcentral();
 	const configured = inspectionConfigured(inspection);
 	if (loadFailure) {
-		// A missed watcher event can still change the desired generation after a failed candidate. Keep the
-		// closed failure only while it describes the latest artifact state; otherwise schedule fresh work.
+		// Keep the closed failure only while it describes the latest artifact state.
 		if (configured === loadFailure.configured) return loadFailure;
 		void requestRuntimeRebuild();
 		return configuringStatus();
@@ -326,8 +322,7 @@ async function disconnect(): Promise<JbcentralActionResult> {
 	publishChanged();
 	try {
 		const inspection = await inspectJbcentral();
-		// An already-absent artifact is the complete Disconnect postcondition. Rebuild plain PI directly—even
-		// if Central itself was removed or became unsupported—so Retry can repair a failed plain candidate.
+		// An already-absent artifact is the complete postcondition; rebuild plain PI directly.
 		if (inspection.artifactExists) {
 			const preflightFailure = inspectionFailure(inspection);
 			if (preflightFailure) return preflightFailure;

@@ -54,9 +54,8 @@ function within<T>(promise: Promise<T>, ms: number, what: string): Promise<T> {
 
 mkdirSync(homeDir, { recursive: true });
 
-// Independently authored external extension + a reviewed-surface Central fake. The PATH deliberately has
-// no `pi` executable: the compiled host must load the opaque global artifact through embedded PI, for both
-// default and custom PI_CODING_AGENT_DIR layouts.
+// External extension + Central fake, on a PATH with no `pi`: the compiled host must load the global
+// artifact through embedded PI alone (default and custom PI_CODING_AGENT_DIR layouts).
 const fakeBinDir = join(tmp, "no-pi-bin");
 const centralArtifact = join(homeDir, ".pi", "agent", "extensions", "jetbrains-central.ts");
 mkdirSync(fakeBinDir, { recursive: true });

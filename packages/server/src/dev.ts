@@ -87,16 +87,14 @@ if (process.env.THINKRAIL_E2E_FAKE_OAUTH === "1") {
 		stream: dummyStream,
 		streamSimple: dummyStream,
 	};
-	// Central artifact changes replace the whole ModelRuntime. Install both gated fixtures through the
-	// generation initializer so every candidate keeps the dev host's invariant provider surface.
+	// Via the generation initializer: every candidate rebuild must keep the dev fixtures.
 	configurePiRuntimeGenerationInitializer((runtime) => {
 		runtime.registerProvider("e2e-oauth", { oauth: fakeOauth });
 		runtime.registerNativeProvider(fakeApiKeyProvider);
 	});
 }
 
-// Establish the watched generation only after the composition root has declared every invariant runtime
-// registration. bootHost repeats initialization idempotently for the ordinary production path.
+// After every invariant registration is declared; bootHost re-runs this idempotently.
 await initializeJbcentralRuntime();
 
 const host = process.env.THINKRAIL_HOST ?? "localhost";
