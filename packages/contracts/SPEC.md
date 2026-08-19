@@ -151,8 +151,8 @@ of the host.
   `configured`, `malformed-version`, `probe-failed`, `configuring`, or `load-failed`. Auth rides as a
   **`signedOut` flag on `supported`/`configured`**, and configured status also carries the closed
   **`proxyStopped`** observation; neither is a state of its own because credentials, proxy process health,
-  and configuration are independent axes. Both flags are *positive negative observations* — unavailable or
-  unreadable probes report `false`, so a client never renders a recovery demand the host did not
+  and configuration are independent axes. Both flags are *positively observed negative
+  facts* — unavailable or unreadable probes report `false`, so a client never renders a recovery demand the host did not
   substantiate. No proxy port, PID, URL, status text, or diagnostics cross the wire. Only
   parseable safe versions, closed probe/failure reasons, and the current action appear where relevant.
   `configuring` covers both a reviewed CLI action and the coalesced candidate rebuild for the newest watched

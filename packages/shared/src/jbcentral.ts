@@ -10,10 +10,10 @@ export const MINIMUM_CENTRAL_VERSION = "1.4.0" as const;
 
 const CENTRAL_BIN = "central";
 const VERSION_TIMEOUT_MS = 5_000;
-const AUTH_TIMEOUT_MS = 15_000;
+const STATUS_TIMEOUT_MS = 15_000;
 /** How long a launched `central login` must survive before it counts as actually running. */
 const LOGIN_GRACE_MS = 1_500;
-const MAX_AUTH_OUTPUT_BYTES = 16_384;
+const MAX_STATUS_OUTPUT_BYTES = 16_384;
 const ACTION_TIMEOUT_MS = 120_000;
 const UPDATE_TIMEOUT_MS = 300_000;
 const MAX_VERSION_OUTPUT_BYTES = 4_096;
@@ -348,11 +348,6 @@ export function parseJbcentralStatusObservation(output: string): JbcentralStatus
 	return { auth, proxy };
 }
 
-/** Compatibility projection for callers/tests that need only the auth axis. */
-export function parseJbcentralAuth(output: string): JbcentralAuthVerdict {
-	return parseJbcentralStatusObservation(output).auth;
-}
-
 /**
  * How long a caller may serve an observation before re-probing. Sized against the probe's cost, not against
  * how fast auth or proxy state can change: a burst of reads collapses to one child process.
@@ -374,8 +369,8 @@ export async function probeJbcentralStatus(
 		result = await processRunner(deps)({
 			argv: [executablePath, "status"],
 			captureStdout: true,
-			timeoutMs: AUTH_TIMEOUT_MS,
-			maxStdoutBytes: MAX_AUTH_OUTPUT_BYTES,
+			timeoutMs: STATUS_TIMEOUT_MS,
+			maxStdoutBytes: MAX_STATUS_OUTPUT_BYTES,
 		});
 	} catch {
 		return UNKNOWN_STATUS;

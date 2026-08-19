@@ -288,7 +288,7 @@ test("the user logs out of Central while connected: the card keeps the connectio
 	await waitForCentralState(page, "configured");
 
 	// `central logout` on the host. The artifact is untouched, so the lifecycle state stays `configured` —
-	// but the auth probe notices, and the card warns that models will now fail.
+	// but the combined status probe notices, and the card warns that models will now fail.
 	const probes = centralInvocationCount("--version");
 	writeFileSync(E2E_CENTRAL_STATE, "needs-login");
 	await reprobeCentralStatus(page);

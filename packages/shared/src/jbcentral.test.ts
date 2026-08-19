@@ -10,7 +10,6 @@ import {
 	jbcentralInstall,
 	launchJbcentralLogin,
 	MINIMUM_CENTRAL_VERSION,
-	parseJbcentralAuth,
 	parseJbcentralStatusObservation,
 	parseJbcentralVersion,
 	probeJbcentralStatus,
@@ -124,9 +123,10 @@ describe("Central status observation", () => {
 		`${ESC}[38;2;46;125;50m⣿${ESC}[m ${ESC}[1m${label.padEnd(10)}${ESC}[m ${ESC}[1;38;2;46;125;50m${value}${ESC}[m`;
 	const authRow = (value: string) => statusRow("Auth", value);
 	const proxyRow = (value: string) => statusRow("Proxy", value);
+	const parseAuth = (output: string) => parseJbcentralStatusObservation(output).auth;
 
 	test("trusts only the signed-out marker, and answers unknown when the row is absent", () => {
-		expect(parseJbcentralAuth(authRow("not connected"))).toBe("signed-out");
+		expect(parseAuth(authRow("not connected"))).toBe("signed-out");
 		// Every other rendering of the row — account, licence, managed server, unseen wording — is credentials.
 		for (const value of [
 			"JetBrains Team",
@@ -135,14 +135,12 @@ describe("Central status observation", () => {
 			"connected to production",
 			"JetBrains Team (session expired)",
 		]) {
-			expect(parseJbcentralAuth(authRow(value))).toBe("connected");
+			expect(parseAuth(authRow(value))).toBe("connected");
 		}
 		// The `Authentication can't be refreshed` warning is not the Auth row and must not be read as one.
-		expect(parseJbcentralAuth("⚠ Authentication can't be refreshed — run central logout")).toBe(
-			"unknown",
-		);
-		expect(parseJbcentralAuth("")).toBe("unknown");
-		expect(parseJbcentralAuth("synthetic unrelated output")).toBe("unknown");
+		expect(parseAuth("⚠ Authentication can't be refreshed — run central logout")).toBe("unknown");
+		expect(parseAuth("")).toBe("unknown");
+		expect(parseAuth("synthetic unrelated output")).toBe("unknown");
 	});
 
 	test("trusts only the exact stopped proxy marker", () => {
