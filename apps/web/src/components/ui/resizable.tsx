@@ -1,6 +1,7 @@
 import { GripVertical } from "lucide-react";
 import type { ComponentProps } from "react";
 import {
+	type ImperativePanelGroupHandle,
 	type ImperativePanelHandle,
 	Panel,
 	PanelGroup,
@@ -17,7 +18,7 @@ export function ResizablePanelGroup({ className, ...props }: ComponentProps<type
 	);
 }
 
-export type { ImperativePanelHandle };
+export type { ImperativePanelGroupHandle, ImperativePanelHandle };
 export const ResizablePanel = Panel;
 
 /**
@@ -36,6 +37,7 @@ export function ResizableHandle({
 	const isVertical = direction === "vertical";
 	return (
 		<PanelResizeHandle
+			aria-orientation={isVertical ? "horizontal" : "vertical"}
 			className={cn(
 				"relative flex shrink-0 items-center justify-center bg-border-default transition-colors",
 				"data-[resize-handle-state=hover]:bg-primary data-[resize-handle-state=drag]:bg-primary",

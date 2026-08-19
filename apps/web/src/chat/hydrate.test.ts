@@ -116,21 +116,6 @@ test("an explicit live null suppresses a stale persisted failure while a resumed
 	expect(turns.map((turn) => turn.kind)).toEqual(["assistant"]);
 });
 
-test("a persisted compactionSummary hydrates a done compaction notice at its canonical position, consuming its index slot", () => {
-	const { turns, turnIdByMessageIndex } = messagesToRuntime([
-		// pi's compacted context: the record FIRST, then the kept tail.
-		{ role: "compactionSummary", summary: "earlier work", tokensBefore: 268_909, timestamp: 1 },
-		{ role: "user", content: "continue", timestamp: 2 },
-		{ role: "assistant", content: [{ type: "text", text: "done" }] },
-	] as unknown as TranscriptMessage[]);
-
-	expect(turns.map((t) => t.kind)).toEqual(["compaction", "user", "assistant"]);
-	expect(turns[0]).toMatchObject({ kind: "compaction", status: "done", tokensBefore: 268_909 });
-	expect(turnIdByMessageIndex).toHaveLength(3);
-	expect(turnIdByMessageIndex[0]).toBe(turns[0]?.id);
-	expect(turnIdByMessageIndex[1]).toBe(turns[1]?.id);
-});
-
 test("turnIdByMessageIndex maps each message's position to its own turn id, null for non-turn messages, and the assistant's id (not the injected error turn's) when the message ended in an error", () => {
 	const { turns, turnIdByMessageIndex } = messagesToRuntime([
 		{ role: "user", content: "hi", timestamp: 1 },
@@ -272,4 +257,23 @@ test("unknown custom messages are ignored entirely", () => {
 	] as unknown as Message[]);
 	expect(turns).toHaveLength(0);
 	expect(Object.keys(askAnswers)).toHaveLength(0);
+});
+
+test("a compaction summary becomes its own turn without claiming a jump anchor", () => {
+	const { turns, turnIdByMessageIndex } = messagesToRuntime([
+		{ role: "user", content: "start", timestamp: 1 },
+		{ role: "compactionSummary", summary: "## Goal\nship it", tokensBefore: 148_000, timestamp: 2 },
+		{ role: "assistant", content: [{ type: "text", text: "carrying on" }] },
+	] as unknown as Message[]);
+
+	expect(turns.map((t) => t.kind)).toEqual(["user", "compaction", "assistant"]);
+	const compaction = turns[1];
+	expect(compaction).toMatchObject({
+		kind: "compaction",
+		status: "done",
+		summary: "## Goal\nship it",
+		tokensBefore: 148_000,
+	});
+	// The slot is consumed but unanchored — history search indexes user/assistant text only.
+	expect(turnIdByMessageIndex).toEqual([turns[0]?.id ?? null, null, turns[2]?.id ?? null]);
 });

@@ -55,7 +55,9 @@ test("the Welcome fork's “Work in project folder” enters the Default workspa
 	await page.getByTestId("tab-changes").click();
 	await expect(page.getByTestId("changes-empty")).toBeVisible();
 
-	// …and the auto-opened terminal is rooted in the project folder itself.
+	// …and the auto-opened terminal is rooted in the project folder itself. Changes and the terminal share
+	// a synchronized side group, so select the terminal again after inspecting Changes.
+	await page.getByTestId("terminal-tab").click();
 	await waitTerminalReady(page);
 	await runInTerminal(page, 'basename "$(pwd)"');
 	await expect(visibleTerminalScreen(page)).toContainText("sample-project");

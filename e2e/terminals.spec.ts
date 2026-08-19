@@ -81,9 +81,18 @@ test("multiple terminals per workspace keep independent buffers and can be close
 	await expect(visibleTerminalScreen(page)).toContainText("TR_ONE");
 	await expect(visibleTerminalScreen(page)).not.toContainText("TR_TWO");
 
-	// Closing a terminal removes its tab.
+	// Closing terminals removes their placements. The center Group Header remains a creation path even
+	// after the final terminal body (and its own + button) has disappeared.
 	await page.getByTestId("terminal-tab-close").nth(1).click();
 	await expect(page.getByTestId("terminal-tab")).toHaveCount(1);
+	await page.getByTestId("terminal-tab-close").click();
+	await expect(page.getByTestId("terminal-tab")).toHaveCount(0);
+	await page.getByTestId("new-terminal").first().click();
+	await expect(page.getByTestId("terminal-tab")).toHaveCount(1);
+	await expect(
+		page.getByTestId("center-group").filter({ has: page.getByTestId("terminal-tab") }),
+	).toBeVisible();
+	await waitTerminalReady(page);
 });
 
 // The reported bug: a Russian-layout user saw the terminal corrupt their input. The root cause was the PTY
@@ -114,7 +123,7 @@ test("the terminal's shell counts characters, not bytes", async ({ page }) => {
 	await expect(term).toContainText("CHARMAP=UTF-8");
 });
 
-// Regression: `TerminalsPanel` is mounted only inside the shell's `hasActiveWorkspace` branch, so clicking a
+// Regression: terminal integration is mounted only inside the shell's active-workspace branch, so clicking a
 // project row — the deliberate "project home" gesture, which clears the active workspace — unmounted every
 // terminal of *every* workspace, and each unmount closed its PTY. Anything running in one (a dev server, a
 // watch build) was silently killed by a single click, with the tabs reappearing afterwards backed by new,
@@ -601,9 +610,72 @@ test("closing a tab with a running process asks first", async ({ page }) => {
 	// Refused, and still there.
 	await expect(page.getByTestId("confirm-dialog")).toBeVisible();
 	await expect(page.getByTestId("terminal-tab")).toHaveCount(1);
+	await page.getByRole("button", { name: "Cancel" }).click();
+	await expect(page.getByTestId("confirm-dialog")).toHaveCount(0);
+	await expect(page.getByTestId("terminal-tab")).toHaveAttribute("data-active", "true");
+	await expect(page.getByTestId("terminal-instance")).toHaveCount(1);
 
+	await page.getByTestId("terminal-tab-close").first().click();
+	await expect(page.getByTestId("confirm-dialog")).toBeVisible();
 	await page.getByTestId("terminal-close-busy-confirm").click();
 	await expect(page.getByTestId("terminal-tab")).toHaveCount(0);
+});
+
+test("a rejected forced close stays correlated and permits a clean retry", async ({ page }) => {
+	let rejectNextForce = true;
+	await page.routeWebSocket(/\/ws(\?|$)/, (ws) => {
+		const server = ws.connectToServer();
+		ws.onMessage((message) => {
+			const text = message.toString();
+			try {
+				const frame = JSON.parse(text) as {
+					id?: string;
+					method?: string;
+					params?: { force?: boolean };
+				};
+				if (
+					rejectNextForce &&
+					frame.id &&
+					frame.method === "terminal.close" &&
+					frame.params?.force
+				) {
+					rejectNextForce = false;
+					ws.send(
+						JSON.stringify({
+							id: frame.id,
+							ok: true,
+							result: { closed: false, busy: true },
+						}),
+					);
+					return;
+				}
+			} catch {
+				// Forward non-JSON frames unchanged.
+			}
+			server.send(message);
+		});
+		server.onMessage((message) => ws.send(message));
+	});
+
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await waitTerminalReady(page);
+	await runInTerminal(page, "sleep 45");
+	await page.waitForTimeout(1500);
+
+	await page.getByTestId("terminal-tab-close").click();
+	await expect(page.getByTestId("confirm-dialog")).toBeVisible();
+	await page.getByTestId("terminal-close-busy-confirm").click();
+	await expect(
+		page.getByTestId("toast").getByText("The terminal refused the forced close"),
+	).toBeVisible();
+	await expect(page.getByTestId("confirm-dialog")).toHaveCount(0);
+	await expect(page.getByTestId("terminal-tab")).toHaveCount(1);
+
+	// The rejected force released exactly its own request; a new close is not silently orphaned.
+	await page.getByTestId("terminal-tab-close").click();
+	await expect(page.getByTestId("confirm-dialog")).toBeVisible();
+	await page.getByRole("button", { name: "Cancel" }).click();
 });
 
 // An idle prompt has nothing to lose, so it must not train people to click through the dialog above.

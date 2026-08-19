@@ -12,7 +12,7 @@ import {
 	SessionManager,
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
-import { TRANSCRIPT_ROLES } from "@thinkrail/contracts";
+import { isTranscriptMessageRole } from "@thinkrail/contracts";
 
 // Pins the compaction event contract the chat's visible lifecycle is built on: the web reducer's unit
 // tests replay these shapes, and this file pins that a real Pi session actually emits them.
@@ -139,7 +139,7 @@ test("threshold compaction after a completed response: visible lifecycle, no uns
 
 	// The durable record reload/reopen re-renders the notice from.
 	expect(result.messages.some((message) => message.role === "compactionSummary")).toBe(true);
-	expect(TRANSCRIPT_ROLES).toContain("compactionSummary");
+	expect(isTranscriptMessageRole("compactionSummary")).toBe(true);
 });
 
 test("a failed compaction emits a visible error end and does not loop", async () => {

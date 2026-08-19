@@ -23,8 +23,11 @@ its URL. It is a thin launcher — all engine logic lives in `packages/server`.
 4. Resolve a free listen port at or above the requested one (`findFreePort` — `Bun.serve` won't report a
    busy port), then `createServer({ port, host, staticDir, projectPath? })` to embed the host in this Bun
    process.
-5. Resolve the actual port, log the URL, then open the browser at it (cross-platform: `open` / `start` /
-   `xdg-open`, best-effort), unless `--no-open`.
+5. Resolve the actual port; on interactive stdout render the shared recursive ThinkRail startup mark
+   with honest `host ready` status + the resolved endpoint, then retain the stable
+   `thinkrail → <url>` line and open the browser there (cross-platform: `open` / `start` / `xdg-open`,
+   best-effort), unless `--no-open`. The mark is omitted for redirected output and every exit-only
+   command (`--help`, `--version`, `update`, `uninstall`).
 6. SIGINT / SIGTERM → `server.stop()` (disposes agent sessions + PTYs, closes the socket), then exit.
 
 ## Interface
@@ -229,7 +232,8 @@ and `trash`'s **native helper sidecars** (which macOS/Windows must execute from 
 - **Allowed deps:** `@thinkrail/server` (`createServer`, `registerBundledRuntime`, `dataDir` — the
   uninstaller has to name the app state dir, and must name the *same* one the host uses — plus the
   test-only `history-test-fixtures` subpath in the artifact smoke to seed a real pi transcript),
-  `@thinkrail/shared/shellEnv` (`resolveShellEnv`), Bun/Node; the generated build module may
+  `@thinkrail/shared/shellEnv` (`resolveShellEnv`) + `@thinkrail/shared/startupMark` (the shared boot
+  signature renderer), Bun/Node; the generated build module may
   value-import the bundled extension packages' entries (resolved via the server package — build-time
   only, deleted after compile).
 - **Forbidden:** reaching into the server's internals (use only its public surface), the browser/`contracts`
@@ -244,6 +248,8 @@ and `trash`'s **native helper sidecars** (which macOS/Windows must execute from 
 - The browser is the V1 client, not a fallback — the same UI can point at a remote host (the V2 path).
 - The agent runs in this process — a fatal fault takes the app down (the accepted in-process tradeoff).
 - `resolveShellEnv()` runs once, before any `AgentSession`.
+- The startup mark is a presentation of the resolved launch result, never a second readiness signal:
+  `bootHost` must return first, and the parse-stable `thinkrail → <url>` line remains unchanged beneath it.
 
 ## Later
 

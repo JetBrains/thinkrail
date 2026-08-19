@@ -18,7 +18,7 @@ export type ChatTurn =
 	| { kind: "user"; id: string; message: UserMessage }
 	| { kind: "assistant"; id: string; message: AssistantMessage; streaming: boolean }
 	| { kind: "system"; id: string; text: string; endedAt?: number }
-	/** The compaction lifecycle notice (see SPEC §Rendering model). */
+	/** The live or hydrated compaction record (see SPEC §Rendering model). */
 	| ({ kind: "compaction"; id: string } & CompactionState)
 	/** A failure notice: the run ended in an error, or the host rejected a send. `text` is the reason. */
 	| { kind: "error"; id: string; text: string }
@@ -42,6 +42,8 @@ export type ChatTurn =
 export interface CompactionState {
 	status: "running" | "done" | "failed" | "cancelled";
 	detail?: string;
+	/** Pi's durable summary of replaced messages. Present only when hydrating a compaction record. */
+	summary?: string;
 	tokensBefore?: number;
 	tokensAfter?: number;
 	resuming?: boolean;

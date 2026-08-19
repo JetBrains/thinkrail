@@ -46,8 +46,9 @@ internals**. The edges between them are owned here (see the dependency graph), n
 | module | owns | spec |
 | --- | --- | --- |
 | `host` | `Bun.serve` HTTP+WS, static SPA, the WS dispatch registry, channel publish | [host/SPEC.md](src/host/SPEC.md) |
-| `persistence` | JSON app state under the data dir (projects + workspaces + app config) | [persistence/SPEC.md](src/persistence/SPEC.md) |
-| `settings` | the server-synced app config (theme, …): read/merge/persist + broadcast seam | [settings/SPEC.md](src/settings/SPEC.md) |
+| `persistence` | JSON app state under the data dir, including workspace-layout snapshots | [persistence/SPEC.md](src/persistence/SPEC.md) |
+| `settings` | server-synced app config, including layout preset/default/side-limit settings | [settings/SPEC.md](src/settings/SPEC.md) |
+| `layout` | validated, revisioned, persisted per-workspace workbench snapshots | [layout/SPEC.md](src/layout/SPEC.md) |
 | `projects` | stable known-repo registry: open/recent views + lossless close/reopen (validate, dedupe, slug) | [projects/SPEC.md](src/projects/SPEC.md) |
 | `workspaces` | workspaces = `git worktree`s on their own branch | [workspaces/SPEC.md](src/workspaces/SPEC.md) |
 | `git` | the `git(cwd, args)` runner + worktree status/diff vs base + branch list | [git/SPEC.md](src/git/SPEC.md) |
@@ -75,11 +76,11 @@ the host from env via `bootHost` for dev/e2e.
 
 `host` is the **only composition root** — it wires each feature's handlers into the WS registry.
 
-- `host` → `projects`, `workspaces`, `git`, `github`, `branch-review`, `fs`, `spec`, `todos`, `reviews`, `watch`, `terminal`, `dialog`, `editors`, `agent`, `auth`, `assist`, `settings`, `history`, `templates`, `analytics`
+- `host` → `projects`, `workspaces`, `git`, `github`, `branch-review`, `fs`, `spec`, `todos`, `reviews`, `watch`, `terminal`, `dialog`, `editors`, `agent`, `auth`, `assist`, `settings`, `layout`, `history`, `templates`, `analytics`, `persistence` (`dataDir`, for the crash report)
 - `workspaces` → `projects`, `git`, `persistence`
 - `branch-review` → `git`
 - `projects` → `git` (shared runner), `persistence`
-- `git`, `fs`, `spec`, `watch`, `terminal`, `settings`, `analytics` → `persistence` (`spec` also → `pi-spec-graph/core`, external; `analytics` also → the pi-ai built-in provider/model catalog + `posthog-node`, external — the identity-bucketing vocabulary and the delivery SDK)
+- `git`, `fs`, `spec`, `watch`, `terminal`, `settings`, `layout`, `analytics` → `persistence` (`spec` also → `pi-spec-graph/core`, external; `analytics` also → the pi-ai built-in provider/model catalog + `posthog-node`, external — the identity-bucketing vocabulary and the delivery SDK)
 - `todos` → `workspaces` (worktree path lookup) + `pi-todos/core` (external, value-imported, pi-free)
 - `reviews` → `workspaces` (worktree path lookup), `persistence` (data dir), `git` (the review's baseSha
   resolve, plus the diff range + blob read behind a base-side anchor). The `review.send*` flows are
@@ -98,8 +99,12 @@ Rules: features never import `host`, and never each other except the edges above
 own never import `host` either: they expose a **publisher-injection seam** (`setTerminalPublisher`,
 `setSessionPublisher`, `setLoginPublisher`, `projects`' `setProjectPublisher` for the full-snapshot
 `project.updated` lifecycle, `workspaces`' `setWorkspacePublisher` for the
-`workspace.created`/`updated`/`removed` lifecycle trio, and `settings`' `setSettingsPublisher` for
-`settings.changed`) that `host` installs at `createServer` — so the channel wiring lives only in `host`.
+`workspace.created`/`updated`/`removed` lifecycle trio, `settings`' `setSettingsPublisher` for
+`settings.changed`, and `layout`'s full-snapshot publisher for `layout.changed`) that `host` installs at
+`createServer` — so the channel wiring lives only in `host`.
+For layout writes, `host` passes `settings.getConfig().layout.maxSideGroups` into the `layout` validator;
+for layout-setting writes it runs the complete nested value through `layout.validateLayoutSettings` before calling `settings`.
+Neither sibling imports the other.
 `history` stays registry-free (never imports `projects`/`workspaces`); `host` injects the scope filter
 + labels from the registries at the handler layer (`history.search` handler). `templates` stays
 registry-free too — it takes a plain `cwd`, never a `workspaceId`; the `template.*` handler resolves

@@ -277,9 +277,10 @@ describe("extractSession", () => {
 		]);
 	});
 
-	test("respects compaction — summarized-away messages are dropped; the record consumes a slot but is no hit", () => {
-		// u0/a0 precede firstKeptEntryId (u1) so compaction drops them; the renderable compactionSummary
-		// consumes index slot 0 without becoming a hit.
+	test("respects compaction — summarized-away messages are dropped and the summary isn't a hit", () => {
+		// u0/a0 precede firstKeptEntryId (u1) so compaction drops them. The summary itself is sent to the
+		// client (it renders the compaction marker), so it consumes index 0 without being searchable, and
+		// the kept question + post-compaction answer index from 1 — matching the client's transcript.
 		const jsonl = [
 			header(),
 			line({

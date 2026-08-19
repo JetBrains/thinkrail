@@ -210,6 +210,33 @@ export type TodoStatus = "pending" | "in_progress" | "done";
 export type TodoOrigin = "agent" | "user";
 
 /**
+ * What an item's artifact points at — mirrors `pi-todos`' core vocabulary. `file`/`change`/`spec` are
+ * addressed by a worktree-relative `path`; a `commit` carries the `sha` its work was recorded as (the host
+ * commits per done item) and opens the Changes panel at the `commit:{sha}` scope.
+ */
+export type TodoArtifactKind = "file" | "change" | "spec" | "commit";
+
+/** A link from a TODO item to what its work produced (files/specs by the agent; changes/commit by the host). */
+export interface TodoArtifact {
+	kind: TodoArtifactKind;
+	/** Worktree-relative nav address — present for `file`/`change`/`spec`; a `commit` uses `sha` instead. */
+	path?: string;
+	/** Display text; the UI falls back to the path's basename when absent. */
+	label?: string;
+	/** For `spec` only: the durable spec-graph id. */
+	specId?: string;
+	/** For `commit` only: the sha the item's changes were committed as. */
+	sha?: string;
+	/**
+	 * For `commit` only — **host-derived, never stored**: the commit's recorded changes (path + status +
+	 * `+/−` line counts), resolved from git by `todo.list`'s decoration (memoized by sha — immutable, so
+	 * the cache never staleness-checks). Absent when the sha no longer resolves (a GC'd history rewrite) —
+	 * the client's signal to degrade the affordance silently.
+	 */
+	files?: GitFileChange[];
+}
+
+/**
  * One item of a chat's TODO plan, as the chat's plan popup renders it. Mirrored from `pi-todos`' core
  * `Todo` (never imported — the extension package stays out of the wire). The plan is scoped to a chat
  * session.
@@ -220,6 +247,8 @@ export interface TodoItem {
 	status: TodoStatus;
 	origin: TodoOrigin;
 	note?: string;
+	/** Links to what the work produced — the host attaches `change`/`commit` on `done` (see the todos module). */
+	artifacts?: TodoArtifact[];
 	createdAt: string;
 	updatedAt: string;
 }
@@ -427,6 +456,192 @@ export interface GithubAuthStatus {
  */
 export type ThemeId = string;
 
+/** Stable singleton feature views that may live in either side region, never in the center. */
+export type LayoutToolId = "projects" | "specs" | "files" | "changes" | "review";
+
+/** A file-like resource placed in a center group. Content and editor state remain browser-local caches. */
+export interface LayoutFileTab {
+	kind: "file";
+	id: string;
+	name: string;
+	path: string;
+}
+
+/** A diff identity includes its immutable scope; loaded content and view controls remain browser-local. */
+export interface LayoutDiffTab {
+	kind: "diff";
+	id: string;
+	name: string;
+	path: string;
+	scope: GitDiffScope;
+}
+
+/** One durable pi session placed as a workbench tab. */
+export interface LayoutChatTab {
+	kind: "chat";
+	id: string;
+	name: string;
+	sessionId: string;
+}
+
+/**
+ * A registered, rehydratable virtual document. Arbitrary inline content is deliberately absent: every
+ * independently shipped client must be able to resolve a shared placement from `documentKind` + `sourceId`.
+ */
+export interface LayoutDocumentTab {
+	kind: "document";
+	id: string;
+	name: string;
+	documentKind: "todo-plan";
+	sourceId: string;
+	docPath: string;
+}
+
+/** A terminal placement references the terminal domain's durable `(workspaceId, tabKey)` identity. */
+export interface LayoutTerminalTab {
+	kind: "terminal";
+	id: string;
+	name: string;
+	tabKey: string;
+}
+
+/** A singleton side tool. */
+export interface LayoutToolTab {
+	kind: "tool";
+	/** Opaque stable placement key; `tool` is the singleton's semantic identity. */
+	id: string;
+	name: string;
+	tool: LayoutToolId;
+}
+
+export type LayoutCenterTab =
+	| LayoutFileTab
+	| LayoutDiffTab
+	| LayoutChatTab
+	| LayoutDocumentTab
+	| LayoutTerminalTab;
+export type LayoutSideTab = LayoutToolTab | LayoutTerminalTab;
+export type LayoutTab = LayoutCenterTab | LayoutSideTab;
+
+/** A center leaf. Selection is device-local; only membership/order and a file/diff preview identity are shared. */
+export interface LayoutCenterGroup {
+	kind: "group";
+	id: string;
+	tabs: LayoutCenterTab[];
+	previewTabId?: string;
+}
+
+/** Recursive binary center split. Weights are normalized positive values; children preserve visual order. */
+export interface LayoutCenterSplit {
+	kind: "split";
+	id: string;
+	direction: "horizontal" | "vertical";
+	weights: [number, number];
+	children: [LayoutCenterNode, LayoutCenterNode];
+}
+
+export type LayoutCenterNode = LayoutCenterGroup | LayoutCenterSplit;
+
+/** One independently resizable/foldable side group. */
+export interface LayoutSideGroup {
+	id: string;
+	weight: number;
+	folded: boolean;
+	tabs: LayoutSideTab[];
+}
+
+/** One outer side. `width` is a normalized workbench fraction, not a viewport-derived projection. */
+export interface LayoutSideRegion {
+	visible: boolean;
+	width: number;
+	groups: LayoutSideGroup[];
+}
+
+/** Where a closed singleton should return if its prior group still exists. */
+export interface LayoutToolRestoreTarget {
+	side: "left" | "right";
+	groupId?: string;
+	index: number;
+}
+
+/**
+ * The complete shared structural layout for one workspace. `version` is intentionally in the document so
+ * persisted values can migrate independently of the outer WS protocol version.
+ */
+export interface WorkspaceLayoutDocument {
+	version: 1;
+	center: LayoutCenterNode;
+	left: LayoutSideRegion;
+	right: LayoutSideRegion;
+	toolRestoreTargets: Partial<Record<LayoutToolId, LayoutToolRestoreTarget>>;
+}
+
+export interface WorkspaceLayoutSnapshot {
+	workspaceId: string;
+	revision: number;
+	document: WorkspaceLayoutDocument;
+}
+
+/** Client-authored full replacement. `mutationId` correlates optimism; it is not the concurrency token. */
+export interface LayoutReplaceParams {
+	workspaceId: string;
+	mutationId: string;
+	/** `null` creates only while absent; a number replaces only that exact current revision. */
+	expectedRevision: number | null;
+	document: WorkspaceLayoutDocument;
+}
+
+/** Accepted replacement broadcast and accepted-result payload. */
+export interface LayoutChangedPayload {
+	snapshot: WorkspaceLayoutSnapshot;
+	mutationId: string;
+}
+
+/** Expected synchronization result for a full-document replacement. */
+export type LayoutReplaceResult =
+	| { status: "accepted"; payload: LayoutChangedPayload }
+	| { status: "conflict"; current: WorkspaceLayoutSnapshot | null };
+
+/** Resource-free center shape captured by a portable preset. */
+export interface LayoutPresetCenterGroup {
+	kind: "group";
+	id: string;
+}
+export interface LayoutPresetCenterSplit {
+	kind: "split";
+	id: string;
+	direction: "horizontal" | "vertical";
+	weights: [number, number];
+	children: [LayoutPresetCenterNode, LayoutPresetCenterNode];
+}
+export type LayoutPresetCenterNode = LayoutPresetCenterGroup | LayoutPresetCenterSplit;
+
+export interface LayoutPresetSideGroup {
+	id: string;
+	weight: number;
+	folded: boolean;
+	tools: LayoutToolId[];
+}
+export interface LayoutPresetSideRegion {
+	visible: boolean;
+	width: number;
+	groups: LayoutPresetSideGroup[];
+}
+
+export interface LayoutPreset {
+	id: string;
+	name: string;
+	center: LayoutPresetCenterNode;
+	left: LayoutPresetSideRegion;
+	right: LayoutPresetSideRegion;
+}
+
+export interface LayoutSettings {
+	defaultPresetId: string;
+	customPresets: LayoutPreset[];
+	maxSideGroups: number;
+}
+
 /**
  * Server-synced app settings — OUR config, persisted host-side as `config.json` under the data dir and
  * delivered to every client in `server.welcome`. A small, extensible bag (theme is the first member);
@@ -449,6 +664,8 @@ export interface AppConfig {
 	 * generous by fiat. `0` disables replay entirely.
 	 */
 	terminalReplayKb: number;
+	/** Host-synchronized workbench defaults and portable custom presets. */
+	layout: LayoutSettings;
 }
 
 /** Bounds for `AppConfig.terminalReplayKb`, enforced host-side so a hand-edited config cannot exhaust memory. */
@@ -459,6 +676,11 @@ export const DEFAULT_CONFIG: AppConfig = {
 	theme: "dark",
 	analyticsEnabled: true,
 	terminalReplayKb: TERMINAL_REPLAY_KB.default,
+	layout: {
+		defaultPresetId: "balanced",
+		customPresets: [],
+		maxSideGroups: 6,
+	},
 };
 
 /**

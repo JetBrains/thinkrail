@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { join, normalize } from "node:path";
 import type {
+	LayoutChangedPayload,
 	ServerWelcome,
 	SessionDeletedPayload,
 	TerminalTabsPush,
@@ -26,6 +27,7 @@ import {
 } from "../analytics";
 import { cancelAllLogins, setLoginPublisher } from "../auth";
 import { resolveWorktreeFile } from "../fs";
+import { normalizeStoredLayoutSettings, setLayoutPublisher } from "../layout";
 import {
 	getProjects,
 	listProjects,
@@ -34,7 +36,7 @@ import {
 	setProjectPublisher,
 } from "../projects";
 import { reanchorWorkspace, resolveCommentFromAgent, setReviewPublisher } from "../reviews";
-import { getConfig, setSettingsPublisher } from "../settings";
+import { getConfig, setSettingsPublisher, updateConfig } from "../settings";
 import {
 	closeAllTerminals,
 	persistTerminalSessions,
@@ -43,6 +45,7 @@ import {
 	setTerminalPublisher,
 	setTerminalTabsPublisher,
 } from "../terminal";
+import { isTodoToolEnd, maybeAttachChangeArtifacts } from "../todos";
 import {
 	setRepoMetaPublisher,
 	setSkillPathClassifier,
@@ -110,8 +113,15 @@ const CLIENT_REPLAY_RETENTION_MS = 60_000;
 /** Ids arrive from the wire, so an `ack`/`resume` list is filtered rather than trusted to hold strings. */
 const isRequestId = (id: unknown): id is string => typeof id === "string";
 
+function normalizePersistedLayoutSettings(): void {
+	const current = getConfig().layout;
+	const normalized = normalizeStoredLayoutSettings(current);
+	if (JSON.stringify(normalized) !== JSON.stringify(current)) updateConfig({ layout: normalized });
+}
+
 /** Boot the engine host: Bun.serve HTTP+WS, /health, optional static SPA, and the server.welcome push. */
 export function createServer(options: CreateServerOptions = {}): RunningServer {
+	normalizePersistedLayoutSettings();
 	const {
 		port = 24242,
 		host = "localhost",
@@ -161,10 +171,10 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 		async fetch(req, srv) {
 			const url = new URL(req.url);
 			if (url.pathname === "/ws") {
-				// `?client=` identifies the *page*, not the socket: it survives that client's reconnects and is
-				// new on every reload, which is what lets a PTY outlive a dropped connection (the client
-				// reconnects on its own) without outliving the document that owns it. A client that sends none
-				// gets a per-socket fallback — correct isolation, just no reconnect grace.
+				// `?client=` identifies the *page*, not the socket: it survives that page's reconnects but is new
+				// on reload. It correlates replayed requests and terminal stream routing; terminal tabs/shells are
+				// host-owned and a new page takes them over by durable tabKey. A client that sends none gets a
+				// per-socket fallback — correct isolation, just no reconnect grace.
 				const clientKey = url.searchParams.get("client") ?? `anon-${randomUUID()}`;
 				return srv.upgrade(req, { data: { clientKey } })
 					? undefined
@@ -209,6 +219,7 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 				ws.subscribe(WS_CHANNELS.workspaceRemoved);
 				ws.subscribe(WS_CHANNELS.workspaceFsChanged);
 				ws.subscribe(WS_CHANNELS.settingsChanged);
+				ws.subscribe(WS_CHANNELS.layoutChanged);
 				ws.subscribe(WS_CHANNELS.reviewChanged);
 				const welcome: ServerWelcome = {
 					protocolVersion: PROTOCOL_VERSION,
@@ -455,6 +466,15 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 		resolvedBody: resolveCommentFromAgent(commentId, note).body,
 	}));
 
+	// Broadcast each accepted canonical workspace layout. The payload includes the origin mutation id so
+	// the initiating client can settle optimism without mistaking its own acknowledgement for a remote edit.
+	setLayoutPublisher((payload: LayoutChangedPayload) => {
+		server.publish(
+			WS_CHANNELS.layoutChanged,
+			JSON.stringify({ channel: WS_CHANNELS.layoutChanged, data: payload }),
+		);
+	});
+
 	// Broadcast a server-synced settings change (the full `AppConfig`) to every client so they converge —
 	// the initiator applies on this push too, never optimistically (the workspace-lifecycle pattern). The
 	// analytics service syncs off the same tee (host-mediated — `analytics` has no `settings` edge), so
@@ -494,6 +514,12 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 		} else if (isSettledTurn(payload.event)) {
 			const workspaceId = getSessionWorkspaceId(payload.sessionId);
 			if (workspaceId) void maybeAutoRenameWorkspace(payload.sessionId, workspaceId);
+		}
+		// A `todo_*` tool just mutated the plan → reconcile the item's change set (commit a done item's work,
+		// attach the sha + files). Deferred off the publish path (it runs git writes), best-effort (`void`).
+		if (isTodoToolEnd(payload.event)) {
+			const workspaceId = getSessionWorkspaceId(payload.sessionId);
+			if (workspaceId) void maybeAttachChangeArtifacts(workspaceId, payload.sessionId);
 		}
 	});
 
@@ -568,6 +594,8 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 			// the picture still exists, and a restart restores tabs from it (see `persistTerminalSessions`).
 			persistTerminalSessions();
 			closeAllTerminals();
+			setLayoutPublisher(null);
+			setSettingsPublisher(null);
 			server.stop(true);
 		},
 	};

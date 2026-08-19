@@ -11,7 +11,7 @@ import {
 } from "./fixtures/app";
 import { E2E_FIXTURE_REPO, E2E_PLAIN_DIR } from "./fixtures/paths";
 
-// The first-touch Welcome screen. It replaces the center/right/terminal surface until a workspace is
+// The first-touch Welcome screen. It replaces the workspace workbench until a workspace is
 // active — and with a project shown it is THE MODE FORK: "Start building" (isolated worktree) always
 // sits beside "Work in project folder" (the built-in Default workspace), so the two working modes are a
 // visible choice, not a hidden default. Opening a project lands here (no auto-enter). The hero heading is

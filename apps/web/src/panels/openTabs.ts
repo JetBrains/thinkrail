@@ -1,7 +1,15 @@
 import type { GitDiffScope } from "@thinkrail/contracts";
-import { projectRelativePath } from "../lib";
 import {
+	DOUBLE_CLICK_SETTLE_MS,
+	layoutResourceIdentity,
+	projectRelativePath,
+	tupleKey,
+} from "../lib";
+import {
+	type CenterNavigationStamp,
 	type EditorTab,
+	isCenterNavigationCurrent,
+	layoutOpenOptionsForNavigation,
 	selectDiffTabTargetRef,
 	selectWorkspaceById,
 	selectWorkspaceNavTick,
@@ -15,9 +23,9 @@ import { diffTabId, diffTabName } from "./changesModel";
 /**
  * The center-tab openers: one file tab, one diff tab. Shared by the file tree, the Specs panel, the
  * Changes panel, rendered-markdown relative links, and the chat's spec deep link, so every surface gets
- * identical de-dupe/focus/preview behavior. `intent` decides whether the open lands in the workspace's
- * single preview slot (`"preview"` — a click, a link follow) or takes a tab of its own (`"keep"` — a
- * double click); see `store/SPEC.md` for the slot's rules and `SPEC.md` for the gesture map.
+ * identical de-dupe/focus/preview behavior. `intent` decides whether the open lands in its destination
+ * center group's preview slot (`"preview"` — a click, a link follow) or becomes kept (`"keep"` — a double
+ * click); see `store/SPEC.md` for request-time routing and `SPEC.md` for the gesture map.
  */
 
 function baseName(path: string): string {
@@ -38,7 +46,17 @@ function baseName(path: string): string {
  * exactly what the gesture means — a double click is a preview open (which claims the slot, as every
  * IDE's does) plus a promote — and it holds at any latency.
  */
-const inFlight = new Map<string, { intent: TabIntent; requestedAt: number }>();
+const inFlight = new Map<
+	string,
+	{
+		intent: TabIntent;
+		/** The leading preview half of a double click must still replace the destination preview slot. */
+		claimPreview: boolean;
+		navigation: CenterNavigationStamp | null;
+		requestedAt: number;
+		startedAt: number;
+	}
+>();
 
 /**
  * The workspace's center-navigation count, as the store keeps it (`navTickByWorkspace`). A read records it
@@ -58,31 +76,84 @@ function navTick(workspaceId: string): number {
 async function openReadTab<T>(
 	workspaceId: string,
 	id: string,
+	resourceIdentity: string,
 	intent: TabIntent,
 	read: () => Promise<T>,
 	build: (payload: T, loadedTick: number) => EditorTab,
+	requestedNavigation?: CenterNavigationStamp | null,
 ): Promise<void> {
 	// The request itself is the navigation: it marks "this is what the user wants next". Clicking an unopened
 	// file writes no store state of its own, so without this two browses clicked in a row would record the
 	// same count, and the first read to land would invalidate the second — leaving the FIRST click's file
 	// open. The mark is what lets a later browse supersede an earlier one still in flight.
-	useAppStore.getState().noteNavigation(workspaceId);
+	const navigation =
+		requestedNavigation === undefined
+			? useAppStore.getState().beginCenterNavigation(workspaceId)
+			: requestedNavigation;
 	const store = useAppStore.getState();
-	if ((store.tabsByWorkspace[workspaceId] ?? []).some((t) => t.id === id)) {
-		store.setActiveTab(id, intent);
-		return;
-	}
+	if (store.removedWorkspaceIds[workspaceId]) return;
+	if (intent === "preview" && !isCenterNavigationCurrent(store, workspaceId, navigation)) return;
 	const pending = inFlight.get(id);
 	if (pending) {
 		// The read is already on its way — fold this call into it instead of racing a second read against it.
 		// Intent only ever moves upward: promotion is one-way, so a trailing browse can't undo a keep. The
 		// request mark moves forward too, because re-clicking the same row is not navigating away from it.
+		if (intent === "preview") pending.claimPreview = true;
 		if (intent === "keep") pending.intent = "keep";
+		pending.navigation = navigation;
 		pending.requestedAt = navTick(workspaceId);
 		return;
 	}
-	const flight = { intent, requestedAt: navTick(workspaceId) };
+	const flight = {
+		intent,
+		claimPreview: intent === "preview",
+		navigation,
+		requestedAt: navTick(workspaceId),
+		startedAt: Date.now(),
+	};
 	inFlight.set(id, flight);
+	const cached = (store.tabsByWorkspace[workspaceId] ?? []).find(
+		(tab) =>
+			(tab.kind === "file" || tab.kind === "diff") &&
+			layoutResourceIdentity(tab) === resourceIdentity,
+	);
+	if (cached) {
+		try {
+			// A cached row still receives click/click/dblclick. Give that gesture the same coalescing window as
+			// a host read so it publishes one final keep instead of three focus/placement mutations.
+			if (flight.intent === "preview") {
+				await new Promise((resolve) => setTimeout(resolve, DOUBLE_CLICK_SETTLE_MS));
+			}
+			const currentState = useAppStore.getState();
+			const latestCached = (currentState.tabsByWorkspace[workspaceId] ?? []).find(
+				(tab) =>
+					(tab.kind === "file" || tab.kind === "diff") &&
+					layoutResourceIdentity(tab) === resourceIdentity,
+			);
+			// The settle window must not resurrect a cache closed after the click or overwrite a live refresh
+			// with the object captured before that refresh. The semantic cache currently installed is the only
+			// safe source for the final placement intent.
+			if (!latestCached) return;
+			const overtaken = flight.navigation
+				? !isCenterNavigationCurrent(currentState, workspaceId, flight.navigation)
+				: navTick(workspaceId) !== flight.requestedAt;
+			if (flight.intent === "preview" && overtaken) return;
+			const options = layoutOpenOptionsForNavigation(currentState, workspaceId, flight.navigation);
+			useAppStore
+				.getState()
+				.openTab(
+					latestCached,
+					flight.intent,
+					true,
+					flight.intent === "keep" && flight.claimPreview && !overtaken
+						? { ...options, claimPreview: true }
+						: options,
+				);
+		} finally {
+			inFlight.delete(id);
+		}
+		return;
+	}
 	// Stamped BEFORE the read leaves, not after it lands: the stamp is a claim about what the content was
 	// read against, and the store can move while the request is in flight. Reading it from the store on the
 	// way back would claim a state the content never saw — a change frame arriving mid-read would be recorded
@@ -91,18 +162,40 @@ async function openReadTab<T>(
 	const loadedTick = selectWorkspaceTick(useAppStore.getState(), workspaceId);
 	try {
 		const payload = await read();
+		// Keep the completed read in the coalescing window long enough for the browser's trailing `dblclick`.
+		// I/O starts on the leading click, but no preview snapshot is published if that click becomes a keep.
+		if (flight.intent === "preview") {
+			const remaining = DOUBLE_CLICK_SETTLE_MS - (Date.now() - flight.startedAt);
+			if (remaining > 0) await new Promise((resolve) => setTimeout(resolve, remaining));
+		}
 		// Overtaken while reading — the user went somewhere else since. Drop a browse they've moved on from
 		// so the last navigation wins. A `keep` still commits: it was deliberate, and silently swallowing a
 		// tab the user explicitly asked for would be the worse surprise.
-		if (flight.intent === "preview" && navTick(workspaceId) !== flight.requestedAt) return;
-		const tab = build(payload, loadedTick);
-		useAppStore.getState().openTab(tab, intent);
-		// Upgraded mid-read (the `dblclick` behind this gesture's leading `click`) — apply the promote. Both
-		// writes land in one tick, so the strip never flashes the italic in between. `openTab` again, NOT
-		// `setActiveTab`: only `openTab` keys off `tab.workspaceId`. A slow read the user switches workspaces
-		// during would otherwise strand this one previewing and write its tab id into the workspace they
-		// moved to, whose center pane resolves no active tab and drops to the workspace receipt.
-		if (flight.intent !== intent) useAppStore.getState().openTab(tab, flight.intent);
+		const currentState = useAppStore.getState();
+		const overtaken = flight.navigation
+			? !isCenterNavigationCurrent(currentState, workspaceId, flight.navigation)
+			: navTick(workspaceId) !== flight.requestedAt;
+		if (flight.intent === "preview" && overtaken) return;
+		const installedCache = (currentState.tabsByWorkspace[workspaceId] ?? []).find(
+			(tab) =>
+				(tab.kind === "file" || tab.kind === "diff") &&
+				layoutResourceIdentity(tab) === resourceIdentity,
+		);
+		const tab = installedCache ?? build(payload, loadedTick);
+		const options = layoutOpenOptionsForNavigation(currentState, workspaceId, flight.navigation);
+		// A leading click upgraded by its dblclick publishes only the final keep intent. `claimPreview` carries
+		// the leading click's slot semantics into that one snapshot, so keeping does not append beside the tab
+		// that the gesture previewed over.
+		useAppStore
+			.getState()
+			.openTab(
+				tab,
+				flight.intent,
+				true,
+				flight.intent === "keep" && flight.claimPreview && !overtaken
+					? { ...options, claimPreview: true }
+					: options,
+			);
 	} catch {
 		// a failed read leaves tabs unchanged
 	} finally {
@@ -123,15 +216,17 @@ export function openFileInTab(
 	workspaceId: string,
 	reported: string,
 	intent: TabIntent,
+	requestedNavigation?: CenterNavigationStamp | null,
 ): Promise<void> {
 	const path = projectRelativePath(
 		reported,
 		selectWorkspaceById(useAppStore.getState(), workspaceId)?.worktreePath,
 	);
-	const id = `${workspaceId}:${path}`;
+	const id = tupleKey("file", workspaceId, path);
 	return openReadTab(
 		workspaceId,
 		id,
+		layoutResourceIdentity({ kind: "file", id, name: baseName(path), path }),
 		intent,
 		() => getTransport().request("fs.readFile", { workspaceId, path }),
 		({ content }, loadedTick) => ({
@@ -143,6 +238,7 @@ export function openFileInTab(
 			content,
 			loadedTick,
 		}),
+		requestedNavigation,
 	);
 }
 
@@ -156,8 +252,13 @@ export function openDiffInTab(
 	scope: GitDiffScope,
 	path: string,
 	intent: TabIntent,
+	requestedNavigation?: CenterNavigationStamp | null,
 ): Promise<void> {
-	const id = diffTabId(workspaceId, scope, path);
+	const canonicalPath = projectRelativePath(
+		path,
+		selectWorkspaceById(useAppStore.getState(), workspaceId)?.worktreePath,
+	);
+	const id = diffTabId(workspaceId, scope, canonicalPath);
 	// The review target as it stands *now*, before the read is issued — the value `git.diffFile` will resolve
 	// against. Read from the store after the response instead, a `workspace.setDiffBase` broadcast landing
 	// mid-read would stamp the NEW target onto contents diffed against the OLD one: no key drift for
@@ -166,15 +267,22 @@ export function openDiffInTab(
 	return openReadTab(
 		workspaceId,
 		id,
+		layoutResourceIdentity({
+			kind: "diff",
+			id,
+			name: diffTabName(scope, canonicalPath),
+			path: canonicalPath,
+			scope,
+		}),
 		intent,
-		() => getTransport().request("git.diffFile", { workspaceId, path, scope }),
+		() => getTransport().request("git.diffFile", { workspaceId, path: canonicalPath, scope }),
 		({ original, modified }, loadedTick) => ({
 			kind: "diff",
 			id,
 			workspaceId,
-			path,
+			path: canonicalPath,
 			scope,
-			name: diffTabName(scope, path),
+			name: diffTabName(scope, canonicalPath),
 			original,
 			modified,
 			loadedTick,
@@ -183,5 +291,6 @@ export function openDiffInTab(
 			// re-reads when activated.
 			loadedTarget: target,
 		}),
+		requestedNavigation,
 	);
 }

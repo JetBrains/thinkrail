@@ -77,7 +77,7 @@ test("a typed-through /name command is expanded by pi itself, not the composer's
 	await waitForDone(page);
 
 	// Reload to inspect what pi actually PERSISTED, not the client's optimistic echo: a fresh page has
-	// no in-memory runtime for this session, so `CenterTabs`'s hydrate-on-connect effect refetches
+	// no in-memory runtime for this session, so `WorkspaceWorkbench`'s hydrate-on-connect effect refetches
 	// `session.getMessages` and rebuilds the transcript from pi's own message list
 	// (`messagesToRuntime`) — the same "come back later" path `history-jump.spec.ts`/
 	// `history-search.spec.ts` use to inspect a session's durable record. A reload doesn't auto-restore

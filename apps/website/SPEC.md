@@ -137,6 +137,11 @@ reads back `deployment_cancelled`. Re-deploying that SHA *later* is fine — hen
 
 ## Assets
 
+`public/favicon.svg` is the site tab icon: a rounded tile in the brand primary green carrying the
+**header wordmark's TR mark** (same `viewBox` + paths, not redrawn) in black, centred with balanced
+padding for legibility at tab sizes. It is wired via `<link rel="icon" type="image/svg+xml">` in
+`index.html`; there is no `.ico` fallback.
+
 `public/og.png` is a capture of the site's own hero. The transcript in the `features/agent-chat.md`
 section is from a real `pi` session captured in the app while it worked on this repo. Re-capture
 method lives in the task-spec that built this module.

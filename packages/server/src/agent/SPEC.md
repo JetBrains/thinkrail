@@ -109,9 +109,11 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     `getSessionMessages(sessionId, workspaceId, cwd)` (re-opens a disk session into the manager if
     not live, then returns `{ summary, messages }` — `TranscriptMessage[]`: the pi-canonical subset **plus
     `custom` messages**, which carry the `ask-user-answers` replies the questionnaire card pairs by tool
-    call id, **plus `compactionSummary` messages** — the compaction record the chat renders as a durable
-    notice after reload; the filter is the shared `TRANSCRIPT_ROLES` constant from `contracts`, the same
-    set the `history` index aligns `messageIndex` against — never a locally re-declared role list), plus **`ensureSessionAttached(sessionId, workspaceId, cwd)`** — the same single-flighted
+    call id, **plus `compactionSummary`**, pi's durable marker for the messages compaction summarized away —
+    kept precisely because pi's resolved transcript is all that survives, so dropping it would hand the
+    client a chat that starts mid-conversation with nothing to explain the gap. Which roles those are is
+    **not decided here**: the filter is contracts' `isTranscriptMessageRole`, shared with `history`'s index
+    so the two cannot drift and shift `messageIndex`), plus **`ensureSessionAttached(sessionId, workspaceId, cwd)`** — the same single-flighted
     re-open with no transcript read, for a caller that only needs the session *promptable* again (the
     review send's follow-up into an existing chat). It answers **`false` only when the id names no transcript
     in that cwd** — the sole case a caller may recover from by starting a new chat — and **throws** on

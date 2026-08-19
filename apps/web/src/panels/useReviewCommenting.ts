@@ -106,10 +106,10 @@ export function useFileReview(
 			commenting,
 			actions,
 			focus,
-			onFocusHandled: () => useAppStore.getState().clearReviewFocus(),
+			onFocusHandled: () => useAppStore.getState().clearReviewFocus(focusId ?? undefined),
 			base: { threads: baseThreads, commenting: baseCommenting, focus: baseFocus },
 		}),
-		[threads, commenting, actions, focus, baseThreads, baseCommenting, baseFocus],
+		[threads, commenting, actions, focus, focusId, baseThreads, baseCommenting, baseFocus],
 	);
 }
 
