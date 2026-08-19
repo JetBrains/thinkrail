@@ -458,7 +458,10 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 			data-visible="true"
 			className="absolute inset-0"
 		>
-			<div ref={hostRef} className="h-full w-full" />
+			{/* The 12px content inset lives on the mount host's own box (absolute, inset on every side), not
+			    as padding on it: FitAddon derives cols/rows from the host's measured size, so padding here would
+			    overcount the grid and clip the last row/column. Insetting the box makes it the true content area. */}
+			<div ref={hostRef} className="absolute inset-md" />
 			{detached ? (
 				<div className="absolute inset-0 flex flex-col items-center justify-center gap-sm bg-overlay">
 					<p className="tr-text-metadata text-text-muted">This terminal is open somewhere else.</p>

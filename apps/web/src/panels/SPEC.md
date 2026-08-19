@@ -947,7 +947,11 @@ a project picker, the prompt hero, and the reused
   genuinely live frames; replies xterm synthesizes for recorded terminal queries can therefore never enter the
   live shell. PTY sizing distinguishes desired, in-flight, and
   host-acknowledged grids; only a successful `terminal.resize` advances the acknowledgement, so reconnect
-  replay cannot leave a full-screen app permanently sized to a request the host never applied.
+  replay cannot leave a full-screen app permanently sized to a request the host never applied. The **12px
+  content inset** lives on the xterm **mount host's own box** (absolutely positioned, `inset-md` on every
+  side) rather than as padding on it — FitAddon derives cols/rows from that host's measured size, so
+  padding would overcount the grid and clip the last row/column; insetting the box keeps the measured
+  area equal to the visible content area.
 - Heavy deps (Monaco / shiki / xterm) load via `React.lazy(() => import())` to stay out of the eager bundle.
   A lazy chunk that fails to load (or a render throw) is contained by the `components/ErrorBoundary` the
   **shell** wraps each region in (see `shell/SPEC.md`), so a single panel degrades instead of blanking the
