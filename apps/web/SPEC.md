@@ -82,7 +82,7 @@ workbench owns strips/groups around those bodies, never the panels themselves.
 - **Tailwind v4 utilities, mapped to the design tokens** (`src/index.css` `@theme inline`). Components
   use utilities for colour, spacing, borders and layout (`bg-container-header-bg`, `text-primary`,
   `border-border-default`,
-  `px-lg`) and a **generated semantic typography class** for type (`tr-text-ui`, `tr-title-dialog`,
+  `px-12`) and a **generated semantic typography class** for type (`tr-text-ui`, `tr-title-dialog`,
   `tr-code-text`, …) — **never inline `style` objects, never raw hex.** Responsive (`md:` …) and states (`hover:` / `focus-visible:`) come
   from Tailwind (inline styles can't express them, and the responsive shell needs them).
 - **The colour and type systems are this app's, not the monorepo's.** `apps/website` keeps its own
@@ -93,13 +93,15 @@ workbench owns strips/groups around those bodies, never the panels themselves.
   `src/styles/COLOR.md` is the system; `src/styles/colorUsage.test.ts` is the adoption guard (Tailwind
   drops an unknown utility silently, so an unpublished token renders as nothing at all).
 - **A radius or spacing utility names a scale step, never a raw pixel length** — `rounded-[var(--radius-md)]`
-  and `p-md` / `py-0.5`, not `rounded-[7px]` or `py-[3px]`. Two scales are legitimate and both are
-  token-backed: the project family (`--radius-xs/sm/md/lg` — a small primitive geometry capped at 8px:
-  `sm` (4px) is the default corner, `md` (6px) the outer corner for surfaces nesting 4px children, `lg`
-  (8px) the exception for large standalone elevated surfaces (dialogs, user-message bubbles) — and
-  `--space-xs…xl`) and Tailwind's numeric steps
-  for the sub-`--space-xs` tier the project family does not cover. `src/styles/spacingUsage.test.ts` is
-  that adoption guard, and it exists because this class of drift is **invisible**: unlike a colour
+  and `p-8` / `gap-12`, not `rounded-[7px]` or `py-[3px]`. Radius is the project t-shirt family
+  (`--radius-xs/sm/md/lg` — a small primitive geometry capped at 8px: `sm` (4px) is the default corner,
+  `md` (6px) the outer corner for surfaces nesting 4px children, `lg` (8px) the exception for large
+  standalone elevated surfaces (dialogs, user-message bubbles)). Spacing is **one canonical numeric
+  scale** — `0 / 2 / 4 / 8 / 12 / 16 / 24 / 32 / 40 / 64` — where the step name *is* its pixel value, so
+  `p-8` / `gap-12` / `py-4` resolve to exactly that many pixels; it is generated from a single JSON source
+  (`src/styles/spacing.json` → `src/styles/generated/spacing.css`), so no length is hand-written.
+  `src/styles/SPACING.md` (`web-spacing`) is the authoritative system; `src/styles/spacingUsage.test.ts`
+  is that adoption guard, and it exists because this class of drift is **invisible**: unlike a colour
   utility, an arbitrary length always renders, so an off-scale value looks correct in review and passes
   every other gate. Lengths that are not scale steps at all — `max-w-[78ch]`, `w-[320px]`,
   `max-h-[40vh]`, a measured `pl-[calc(…)]` indent — stay allowed; they are layout constraints, not rhythm.

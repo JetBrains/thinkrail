@@ -391,7 +391,7 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   (`Composer`'s own `slotIdx`), else `"unfilled"`/`"filled"` per its own `filled` flag; everything else is
   `"plain"` — pure offsets/slices, no empty segment for zero-gap-adjacent slots, and the tests pin
   `segments.map(s => s.text).join("") === value` in every case. The backdrop's inner mirror div matches the
-  textarea's box model **exactly** (`px-md py-sm`, the same `tr-text-ui` typography class, a
+  textarea's box model **exactly** (`px-12 py-8`, the same `tr-text-ui` typography class, a
   `border border-transparent` of the same width so the content box lines up,
   `whitespace-pre-wrap break-words` — spelled out explicitly since a `<div>`, unlike a `<textarea>`,
   doesn't soft-wrap this way by default) so each `SlotSegment`'s tint span
