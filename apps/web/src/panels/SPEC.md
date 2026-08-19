@@ -950,11 +950,15 @@ a project picker, the prompt hero, and the reused
   replay cannot leave a full-screen app permanently sized to a request the host never applied. The 16 ANSI
   slots come from the theme's `--ansi-*` domain palette (never the semantic UI text tokens); on top of it
   xterm runs a **`minimumContrastRatio` legibility floor** driven by the theme's contrast metadata (normal
-  `4.5`, high `7`). xterm's default of `1` disables correction, which left ANSI **dim** text — e.g. Vite's
-  `(client)` tag, which is `dim` over the *default foreground*, not an ansi colour — and colours close to
-  the terminal background (`black` on the near-black dark canvas) with no floor; the ratio lifts the
-  resolved foreground (dim cells target `ratio / 2`) against the live background without editing the
-  palette. The **12px
+  `4.5`, high `7`, in `panels/terminalContrast.ts`). xterm's default of `1` disables correction, which
+  left colours close to the terminal background (`black` on the near-black dark canvas) with no floor; the
+  ratio lifts the resolved foreground against the live background without editing the palette — all 16 HC
+  ANSI colours render ≥ 7:1 with hue preserved. The floor **cannot** fix ANSI **dim** (SGR 2): xterm renders
+  dim as the foreground at 50% opacity, correction never fires for the already-high-contrast default
+  foreground (Vite's `(client)` tag is dim over the *default foreground*, not an ansi colour), and 50%
+  over a light canvas caps ≈ 3.3:1. So in **high-contrast themes the dim attribute is stripped from
+  terminal output** (`stripAnsiDim`), rendering that text at full foreground contrast (≥ AA). The
+  `terminalContrast.test.ts` gate reproduces xterm's colour maths to hold both HC themes at the threshold. The **12px
   content inset** lives on the xterm **mount host's own box** (absolutely positioned, `inset-md` on every
   side) rather than as padding on it — FitAddon derives cols/rows from that host's measured size, so
   padding would overcount the grid and clip the last row/column; insetting the box keeps the measured

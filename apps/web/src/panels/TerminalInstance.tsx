@@ -16,6 +16,7 @@ import { useAppStore } from "../store";
 import { onThemeSwap } from "../themes";
 import { getTransport } from "../transport";
 import { createPtySizeSync } from "./ptySizeSync";
+import { stripAnsiDim, terminalContrastFloor } from "./terminalContrast";
 import { createTerminalPrebindBuffer } from "./terminalPrebindBuffer";
 
 /**
@@ -87,20 +88,24 @@ const ANSI_TOKENS = [
 	["brightWhite", "--ansi-bright-white"],
 ] as const;
 
+/** The active theme's high-contrast flag (written by `applyTheme`), read live so it tracks theme swaps. */
+function isHighContrast(): boolean {
+	return document.documentElement.dataset.themeContrast === "high";
+}
+
 /**
- * xterm's per-cell contrast FLOOR, from the active theme's own contrast metadata.
+ * xterm's per-cell contrast FLOOR (see `terminalContrast.terminalContrastFloor`). xterm's default of **1**
+ * disables correction, which left ANSI colours close to the terminal background (e.g. `black` on the
+ * near-black dark canvas) with no legibility floor. A floor makes xterm lift the resolved foreground to
+ * meet the ratio against the live background, per theme, without touching the `--ansi-*` palette.
  *
- * Vite prints its `(client)` env tag with the ANSI **dim** attribute (SGR 2) over the DEFAULT foreground
- * — no ansi colour at all — and xterm renders dim as the foreground at 50% opacity over the background.
- * With xterm's default `minimumContrastRatio` of **1** (correction disabled) that dimmed text — and any
- * ansi colour close to the terminal background, e.g. `black` on the near-black dark canvas — has no
- * legibility floor. A floor makes xterm lift the *resolved* foreground (the dimmed one included) to meet a
- * ratio against the live background, per theme, without touching the `--ansi-*` palette. High-contrast
- * themes ask for a stronger floor; dim cells target `ratio / 2` inside xterm, so this is also where dim
- * `(client)` gets the most correction.
+ * The one thing the floor CANNOT fix is the ANSI **dim** attribute: xterm renders dim as the foreground at
+ * 50% opacity, correction never fires for the already-high-contrast default foreground (Vite's dim
+ * `(client)` tag), and 50%-over-light caps around 3.3:1. So in high-contrast themes we additionally strip
+ * the dim attribute from terminal output (`stripAnsiDim`), rendering that text at full contrast instead.
  */
 function contrastFloor(): number {
-	return document.documentElement.dataset.themeContrast === "high" ? 7 : 4.5;
+	return terminalContrastFloor(isHighContrast());
 }
 
 /** xterm theme from the live CSS tokens (no raw hex; falls back to xterm defaults if a token is unset). */
@@ -264,6 +269,11 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 		// from its cache, so the exit would be dropped by both the inert buffer and the null id — and the pane
 		// would then go ready over a shell that is already dead.
 		let prebind = createTerminalPrebindBuffer();
+		// Terminal OUTPUT boundary: in high-contrast themes, drop the ANSI dim attribute so dimmed text (e.g.
+		// Vite's `(client)`) renders at full contrast rather than xterm's sub-AA 50%-opacity dim. Normal themes
+		// keep dim untouched. App-authored status lines below carry no dim, so they can write directly.
+		const writeOutput = (data: string, cb?: () => void): void =>
+			term.write(isHighContrast() ? stripAnsiDim(data) : data, cb);
 		const writeTruncation = (): void => term.write("\r\n[output truncated]\r\n");
 		/** Paint a batch, saying so when the host had to drop output to stay bounded. */
 		const writeFrame = (ev: TerminalDataPush): void => {
@@ -271,7 +281,7 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 			// loses its oldest output rather than growing until the host dies. Silently dropping it would look
 			// like the shell simply printed less than it did.
 			if (ev.truncated) writeTruncation();
-			term.write(ev.data);
+			writeOutput(ev.data);
 		};
 		const unsubscribe = getTransport().subscribe(WS_CHANNELS.terminalData, (payload) => {
 			const ev = payload as TerminalDataPush;
@@ -408,7 +418,7 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 					};
 					// Repaint before the PTY id becomes writable. Queries in historical output must not be answered
 					// into the live shell; genuinely live frames stay in `attemptPrebind` until this parse completes.
-					if (replay) term.write(replay, finishAttach);
+					if (replay) writeOutput(replay, finishAttach);
 					else finishAttach();
 				})
 				.catch(() => {
