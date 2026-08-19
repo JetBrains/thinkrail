@@ -26,17 +26,19 @@ ourselves and never surface a credential value over the wire.
     configured-first. It **revalidates on every read through `agent`'s current runtime facade**: local
     config/auth availability refreshes with network disabled, so an external PI login becomes visible.
     Central is not inferred from model URLs: status combines `shared/jbcentral`'s executable/version/artifact
-    postconditions with the synchronizer's latest desired/applied generation. Watcher drift schedules a rebuild;
-    status is `configuring` until the newest candidate applies and `load-failed` when it cannot apply.
+    postconditions and closed auth/proxy observations with the synchronizer's latest desired/applied generation.
+    Watcher drift schedules a rebuild; status is `configuring` until the newest candidate applies and
+    `load-failed` when it cannot apply.
 
-    **The auth verdict is cached, refreshed off the read path, and never polled.** A settled `supported`
-    reading serves the cached verdict immediately and, past `JBCENTRAL_AUTH_TTL_MS`, starts one background
-    probe; when the answer *changes* it publishes the ordinary provider invalidation, so an open card converges
-    without any client timer. Only a positively observed `signed-out` sets the wire flag — `unknown` never
-    does. A refused `central add pi` and a launched `central login` both drop the cache, because each is
-    evidence the verdict is stale; consequently a credential change made out of band inside the TTL window is
-    deliberately served stale until the next read past it. The probe never runs mid-action or while a rebuild
-    is outstanding, so it cannot delay a Connect or a candidate cutover.
+    **The auth/proxy observation is cached, refreshed off the read path, and never polled.** A settled
+    `supported` reading serves the cached result immediately and, past `JBCENTRAL_STATUS_TTL_MS`, starts one
+    background `central status` probe; when either verdict changes it publishes the ordinary provider
+    invalidation, so an open card converges without any client timer. Only positively observed negatives set
+    wire flags: `signed-out` sets `signedOut`, while a stopped proxy sets `proxyStopped` only on configured
+    status; unknown never does. A refused `central add pi`, a launched `central login`, and a Start proxy
+    attempt drop the shared cache because each can make the observation stale. An out-of-band change inside
+    the TTL window is deliberately served stale until the next read past it. The probe never runs mid-action
+    or while a rebuild is outstanding, so it cannot delay a Connect or a candidate cutover.
     Assembly is a pure `buildProviderReport(sources)` over a narrow sources slice, unit-tested with
     fixture data. Its runtime reads are restricted to the generation's provider-id allowlist captured before
     the opaque Central extension loads (after invariant host registrations): Central-owned provider objects,
@@ -93,9 +95,11 @@ ourselves and never surface a credential value over the wire.
     user is about to change it out of band; the launch is only reported as successful once the child has
     survived its grace period, so a login that cannot start surfaces as a failure with the host command as
     the fallback rather than as an invitation to finish in a browser that never opened.
-    update invokes `central update --install` and rechecks status. Every action uses the resolved absolute
-    executable. No action edits prior model configuration, preflights live chat models, compensates, or rolls
-    back Central's global state.
+    Update invokes `central update --install` and rechecks status. Start proxy invokes
+    `central proxy start --ensure-updated`, invalidates the shared status observation, and validates that a
+    fresh probe no longer positively reports stopped; it does not rebuild or reattach a PI runtime. Every
+    action uses the resolved absolute executable. No action edits prior model configuration, preflights live
+    chat models, compensates, or rolls back Central's global state.
 
     Watcher events are debounced/coalesced and each rebuild re-inspects the latest version + artifact
     postcondition. A monotonic request sequence prevents an older candidate from activating after a newer
@@ -112,7 +116,7 @@ ourselves and never surface a credential value over the wire.
 - **Public surface (barrel):** `getProviderStatus`, `buildProviderReport` (+ `ProviderStatusSources`);
   `startLogin`, `resolveLogin`, `cancelLogin`, `cancelAllLogins`, `logoutProvider`,
   `setLoginPublisher`; `initializeJbcentralRuntime`, `stopJbcentralRuntime`, `getJbcentralStatus`,
-  `connectJbcentral`, `disconnectJbcentral`, `updateJbcentral`, `jbcentralLogin`, the successful-action /
+  `connectJbcentral`, `disconnectJbcentral`, `startProxyJbcentral`, `updateJbcentral`, `jbcentralLogin`, the successful-action /
   runtime-changed publisher seams, and the explicit `resetJbcentralStateForTests` lifecycle seam used by
   sibling host tests.
 - **Allowed deps:** `contracts` (wire types); `shared/jbcentral`; the **`agent` barrel** for the current

@@ -68,23 +68,24 @@ Exposed through explicit subpath exports, not a barrel.
 - **/jbcentral** — the **single Central process/filesystem boundary**. It resolves Central by absolute path,
   parses a bounded `central --version` result into a compatibility verdict, exposes the
   global opaque artifact path (`~/.pi/agent/extensions/jetbrains-central.ts`) and existence only, and invokes
-  only the reviewed argv: `status`, `add pi`, `remove pi`, `login`, and `update --install`. Support is a **minimum
-  version only** (`MINIMUM_CENTRAL_VERSION`, `1.4.0` — the first Central release carrying the native PI
+  only the reviewed argv: `status`, `add pi`, `remove pi`, `login`, `update --install`, and
+  `proxy start --ensure-updated`. Support is a **minimum version only** (`MINIMUM_CENTRAL_VERSION`, `1.4.0` — the first Central release carrying the native PI
   surface): anything at or above it is supported, lower versions require update, and malformed output is
   unsupported. There is deliberately **no upper bound** — a newer Central is assumed forward-compatible with
   the argv this adapter invokes, and gating on it would strand users behind every Central release.
 
-  **Auth is a separate, one-directional probe.** Central exposes no machine-readable auth surface — no
-  `--json`, and `central status` exits 0 whether or not credentials exist — so the verdict comes from the
-  single negative marker on that command's styled `Auth` row: `not connected` means **signed out**, every
-  other rendering of the row (account, licence, managed-server, or a wording we have not seen) means
-  **connected**, and a missing row, non-zero exit, timeout, or oversized output means **unknown**. The
-  asymmetry is the whole design: a false sign-in demand is worse than a missed one, so only the marker we
-  positively recognise produces one. This is the *only* place presentation output is read, it is narrowed to
-  one boolean, and the text is never returned, stored, or logged — `status` prints the user's licence, company,
-  and server URL, none of which may leave the host. Every other command's output is still never parsed.
+  **Auth and proxy health are separate, one-directional observations from one status probe.** Until Central's
+  requested JSON status surface ships, `central status` exits 0 across these states and emits styled
+  presentation rows. The `Auth` verdict therefore trusts only its single negative marker: `not connected`
+  means **signed out**, every other rendering of the row (account, licence, managed-server, or wording we
+  have not seen) means **connected**, and a missing row or failed probe means **unknown**. The `Proxy`
+  verdict similarly trusts only the exact stopped marker as **stopped**; running, missing, or unrecognised
+  presentation collapses to **unknown/not-stopped**. Only those positively observed negative facts may drive
+  a recovery demand. This is the only place presentation output is read, and the shared observation never
+  returns raw text, port, PID, URL, account, licence, company, server details, or diagnostics. Swapping to
+  JSON later remains internal to this boundary; every other command's output is still never parsed.
   The probe is expensive by Central's design (a proxy health check plus a network update check, ~1.3s, and one
-  CLI analytics event per call), so `JBCENTRAL_AUTH_TTL_MS` bounds how long a caller may serve a verdict
+  CLI analytics event per call), so `JBCENTRAL_STATUS_TTL_MS` bounds how long a caller may serve an observation
   before re-probing; nothing here polls.
 
   **A spawned login is not a started login.** `central login` drives its browser handoff from a terminal UI,

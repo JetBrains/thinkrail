@@ -281,9 +281,12 @@ a project picker, the prompt hero, and the reused
   fails — so the prerequisite becomes the offer, and Connect returns once the host reports credentials.
   **Signed out renders as one state, whatever the configuration underneath:** the body says only that Central
   is signed out — never paired with a "Connected" line that would contradict it — and **Sign in is the only
-  action**, Disconnect withheld along with Connect. A broken session should ask for the one thing that
-  resolves it rather than pair the fix with an unrelated choice or a success message. Both actions and the
-  connected line return the moment credentials do, so nothing is lost — only deferred behind the fix.
+  action**, Disconnect withheld along with Connect. Once authenticated, a configured status whose proxy is
+  positively observed stopped likewise replaces the success claim with “Central's proxy is not running” and
+  offers only **Start proxy**; after it starts, Connected + Disconnect return. The prerequisite order is
+  therefore Sign in → Start proxy → ordinary connected controls, never competing actions. Unknown proxy
+  health does not manufacture a demand. A broken session asks for the one thing that resolves its current
+  prerequisite rather than pairing a fix with an unrelated choice or success message.
   **Signing in is one button, never a menu:** ThinkRail launches Central's flow on the host, and the
   `central login` command appears *only* where that launch failed — printing it beside a working button makes
   the user choose between two routes to the same place. Because the flow opens on the **host's** browser, the

@@ -149,10 +149,11 @@ of the host.
   `select`/`prompt`); the JetBrains AI wire (protocol v42) — **`JbcentralStatus`**, nested on
   `ProviderStatusReport`, is the closed host-authored lifecycle: `absent`, `outdated`, `supported`,
   `configured`, `malformed-version`, `probe-failed`, `configuring`, or `load-failed`. Auth rides as a
-  **`signedOut` flag on `supported`/`configured`**, not as a state of its own: credentials and configuration
-  are independent axes, and flattening them into the lifecycle union would make "connected but signed out"
-  unrepresentable. The flag is a *positive* observation — an unavailable or unreadable probe reports `false`,
-  so a client can never render a sign-in demand the host did not substantiate. Only
+  **`signedOut` flag on `supported`/`configured`**, and configured status also carries the closed
+  **`proxyStopped`** observation; neither is a state of its own because credentials, proxy process health,
+  and configuration are independent axes. Both flags are *positive negative observations* — unavailable or
+  unreadable probes report `false`, so a client never renders a recovery demand the host did not
+  substantiate. No proxy port, PID, URL, status text, or diagnostics cross the wire. Only
   parseable safe versions, closed probe/failure reasons, and the current action appear where relevant.
   `configuring` covers both a reviewed CLI action and the coalesced candidate rebuild for the newest watched
   artifact state; `configured` means the **current runtime for new work** applied that artifact.
@@ -254,8 +255,9 @@ of the host.
   not sit on the request nor block the WS pump) / **`loginReply`** — answers a live `select`/`prompt`,
   correlated by `loginId` / **`loginCancel`** / **`logout`** /
   the **JetBrains AI** set **`jbcentralConnect`** / **`jbcentralDisconnect`** /
-  **`jbcentralUpdate`** / **`jbcentralLogin`** (native global Central actions returning
-  `JbcentralActionResult`; none accepts an executable, artifact path, output, URL, or secret from the client)) /
+  **`jbcentralStartProxy`** / **`jbcentralUpdate`** / **`jbcentralLogin`** (native global Central actions
+  returning `JbcentralActionResult`; none accepts an executable, artifact path, output, URL, or secret from
+  the client)) /
   **`workspace.listExisting`** (the selected project's unattached Git worktrees, with detached rows
   disabled by status) / **`workspace.openExisting`** (revalidate + register one branch-backed checkout as
   `kind: "external"`, emitting the ordinary `workspace.created`, without mutating Git or disk) /
