@@ -19,12 +19,12 @@ We believe ThinkRail can make Pi more accessible without compromising its power.
 
 ThinkRail ships as a single self-contained executable. To install it, open the terminal and use one of the following commands:
 
-1. **macOS/Linux** (also Windows under Git Bash):
+1. **macOS/Linux** and **Windows** from cmd:
    ```curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash```
-2. **Windows** from cmd and PowerShell:
+2. **Windows** from PowerShell:
    ```powershell -c "irm https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1 | iex"```
 
-Once installed, run `thinkrail`. Your browser will open to a new tab where you will see a button prompting you to open your first local project. The project should already be connected to a Git repository. This is a core ThinkRail functionality: every working session operates on a separate Git branch that merges with the original repository only after the work is finished and reviewed.
+Once installed, run `thinkrail`. Your browser will open a new tab with a button prompting you to open your first local project. The project should already be connected to a Git repository. This is a core ThinkRail functionality: every working session operates on a separate Git branch that merges with the original repository only after the work is finished and reviewed.
 
 Before opening the project, you can click the gear icon in the top-right corner to access the Settings panel, where you can configure your LLM providers, GUI appearance, and other settings.
 
@@ -48,7 +48,7 @@ In the near future, we will publish several short blog posts like this one to di
 
 * **Code reviews**: Reviewing changes made by the agent in a CLI has always been troublesome. ThinkRail aims to solve this.
 
-## What can I do?
+## How to get involved?
 
 ThinkRail is in the early stages of development, and we are eager to hear your questions and comments. As we continue to build, we want to ensure it addresses the real needs of the Pi community. To help us, we invite you to:
 
@@ -56,7 +56,7 @@ ThinkRail is in the early stages of development, and we are eager to hear your q
 2. [**Visit our webpage**](https://thinkrail.ai): The ThinkRail landing page serves a dual purpose: it both describes and demonstrates the product. There you can learn more about each feature and the team behind ThinkRail.
 3. [**Browse our GitHub repository**](https://github.com/JetBrains/thinkrail)
 4. [**Take Our Survey**](https://forms.gle/es1ksqAax6hnDWCP8): Share how you use Pi, what frustrates you, and what features you would like to see in ThinkRail. Your input will directly influence our roadmap.
-5. **Join the Conversation**: You can find us on Reddit, on the [r/PiCodingAgent](https://www.reddit.com/r/PiCodingAgent/) group, and on the Pi community Discord. Say "hi" and let us know what you think about ThinkRail.
+5. **Join the Conversation**: You can find us on Reddit, on the [r/PiCodingAgent](https://www.reddit.com/r/PiCodingAgent/) group, and on the Pi community Discord server. Say "hi" and let us know what you think about ThinkRail.
 
 
 
