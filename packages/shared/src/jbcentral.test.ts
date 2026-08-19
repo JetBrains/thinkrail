@@ -11,8 +11,9 @@ import {
 	launchJbcentralLogin,
 	MINIMUM_CENTRAL_VERSION,
 	parseJbcentralAuth,
+	parseJbcentralStatusObservation,
 	parseJbcentralVersion,
-	probeJbcentralAuth,
+	probeJbcentralStatus,
 	resolveJbcentralBin,
 	runJbcentralAction,
 	watchJbcentralArtifact,
@@ -116,11 +117,13 @@ describe("Central version inspection", () => {
 	});
 });
 
-describe("Central auth probe", () => {
+describe("Central status observation", () => {
 	const ESC = String.fromCharCode(27);
 	/** Central's own rendering: an SGR-styled indicator, a padded label, an SGR-styled value. */
-	const authRow = (value: string) =>
-		`${ESC}[38;2;46;125;50m⣿${ESC}[m ${ESC}[1mAuth      ${ESC}[m ${ESC}[1;38;2;46;125;50m${value}${ESC}[m`;
+	const statusRow = (label: string, value: string) =>
+		`${ESC}[38;2;46;125;50m⣿${ESC}[m ${ESC}[1m${label.padEnd(10)}${ESC}[m ${ESC}[1;38;2;46;125;50m${value}${ESC}[m`;
+	const authRow = (value: string) => statusRow("Auth", value);
+	const proxyRow = (value: string) => statusRow("Proxy", value);
 
 	test("trusts only the signed-out marker, and answers unknown when the row is absent", () => {
 		expect(parseJbcentralAuth(authRow("not connected"))).toBe("signed-out");
@@ -142,17 +145,28 @@ describe("Central auth probe", () => {
 		expect(parseJbcentralAuth("synthetic unrelated output")).toBe("unknown");
 	});
 
-	test("reads the row out of a full styled status block, ignoring the rows around it", async () => {
+	test("trusts only the exact stopped proxy marker", () => {
+		expect(parseJbcentralStatusObservation(proxyRow("stopped"))).toEqual({
+			auth: "unknown",
+			proxy: "stopped",
+		});
+		for (const value of ["running", "running on port 19516", "starting", "stopped unexpectedly"]) {
+			expect(parseJbcentralStatusObservation(proxyRow(value)).proxy).toBe("unknown");
+		}
+		expect(parseJbcentralStatusObservation("Proxy health unavailable").proxy).toBe("unknown");
+	});
+
+	test("reads auth and proxy from one full styled status block", async () => {
 		const block = [
 			authRow("not connected"),
-			`${ESC}[38;2;46;125;50m⣿${ESC}[m ${ESC}[1mProxy     ${ESC}[m running on port 19516`,
-			`${ESC}[38;2;46;125;50m⣿${ESC}[m ${ESC}[1mVersion   ${ESC}[m 1.7.0`,
+			proxyRow("stopped"),
+			statusRow("Version", "1.7.0"),
 			"",
 			"Agents",
 			`${ESC}[38;2;198;40;40m⠤${ESC}[m ${ESC}[1mPi${ESC}[m installed · not wired`,
 		].join("\n");
 		const requests: Array<{ argv: readonly string[]; timeoutMs: number }> = [];
-		const verdict = await probeJbcentralAuth(
+		const observation = await probeJbcentralStatus(
 			adapterDeps({
 				run: async (request) => {
 					requests.push({ argv: request.argv, timeoutMs: request.timeoutMs });
@@ -160,11 +174,11 @@ describe("Central auth probe", () => {
 				},
 			}),
 		);
-		expect(verdict).toBe("signed-out");
+		expect(observation).toEqual({ auth: "signed-out", proxy: "stopped" });
 		expect(requests).toEqual([{ argv: [CENTRAL_BIN, "status"], timeoutMs: 15_000 }]);
 	});
 
-	test("never turns a failed probe into a sign-in demand", async () => {
+	test("never turns a failed probe into a recovery demand", async () => {
 		const secret = "synthetic-sensitive-status-output";
 		const failures: JbcentralAdapterDependencies[] = [
 			adapterDeps({ which: () => null, exists: () => false }),
@@ -178,7 +192,7 @@ describe("Central auth probe", () => {
 			}),
 		];
 		for (const deps of failures) {
-			expect(await probeJbcentralAuth(deps)).toBe("unknown");
+			expect(await probeJbcentralStatus(deps)).toEqual({ auth: "unknown", proxy: "unknown" });
 		}
 	});
 });
@@ -216,6 +230,39 @@ describe("Central command adapter", () => {
 		]);
 		expect(requests.every(({ captureStdout }) => !captureStdout)).toBe(true);
 		expect(requests[2]?.timeoutMs).toBeGreaterThan(requests[0]?.timeoutMs ?? 0);
+	});
+
+	test("starts the proxy through reviewed absolute argv and validates the stopped postcondition", async () => {
+		const requests: Array<{ argv: readonly string[]; captureStdout: boolean }> = [];
+		const run = async (request: Parameters<NonNullable<JbcentralAdapterDependencies["run"]>>[0]) => {
+			requests.push({ argv: request.argv, captureStdout: request.captureStdout });
+			const stdout = request.argv[1] === "status" ? "Auth JetBrains Team\nProxy running" : "";
+			return { outcome: "exited" as const, exitCode: 0, stdout };
+		};
+		expect(await runJbcentralAction("start-proxy", adapterDeps({ run }))).toEqual({
+			outcome: "succeeded",
+			observation: { auth: "connected", proxy: "unknown" },
+		});
+		expect(requests).toEqual([
+			{
+				argv: [CENTRAL_BIN, "proxy", "start", "--ensure-updated"],
+				captureStdout: false,
+			},
+			{ argv: [CENTRAL_BIN, "status"], captureStdout: true },
+		]);
+
+		expect(
+			await runJbcentralAction(
+				"start-proxy",
+				adapterDeps({
+					run: async (request) => ({
+						outcome: "exited",
+						exitCode: 0,
+						stdout: request.argv[1] === "status" ? "Proxy stopped" : "",
+					}),
+				}),
+			),
+		).toEqual({ outcome: "failed", reason: "proxy-stopped" });
 	});
 
 	test("enforces add/remove artifact postconditions", async () => {

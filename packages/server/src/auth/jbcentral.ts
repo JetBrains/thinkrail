@@ -9,12 +9,12 @@ import type {
 import {
 	type JbcentralActionResult as CliActionResult,
 	inspectJbcentral,
-	JBCENTRAL_AUTH_TTL_MS,
-	type JbcentralAuthVerdict,
 	type JbcentralInspection,
 	jbcentralExtensionPath,
+	JBCENTRAL_STATUS_TTL_MS,
+	type JbcentralStatusObservation,
 	launchJbcentralLogin,
-	probeJbcentralAuth,
+	probeJbcentralStatus,
 	runJbcentralAction,
 	watchJbcentralArtifact,
 } from "@thinkrail/shared/jbcentral";
@@ -27,11 +27,11 @@ import {
 const REBUILD_DEBOUNCE_MS = 75;
 
 /**
- * A status read never blocks on the auth probe: the cached verdict answers immediately, and the refresh it
- * kicks off publishes an invalidation only when the answer actually changed. A verdict therefore only
- * refreshes while someone is reading — nothing polls Central in the background.
+ * A status read never blocks on the Central status probe: the cached closed observation answers immediately,
+ * and the refresh publishes an invalidation only when auth/proxy facts change. It refreshes only while
+ * someone is reading — nothing polls Central in the background.
  */
-const AUTH_TTL_MS = JBCENTRAL_AUTH_TTL_MS;
+const STATUS_TTL_MS = JBCENTRAL_STATUS_TTL_MS;
 
 type RebuildResult =
 	| { outcome: "applied"; configured: boolean }
@@ -43,10 +43,10 @@ interface RebuildWaiter {
 }
 
 let appliedConfigured = false;
-let authVerdict: JbcentralAuthVerdict = "unknown";
-let authProbedAt = 0;
-let authGeneration = 0;
-let authTask: Promise<void> | null = null;
+let statusObservation: JbcentralStatusObservation = { auth: "unknown", proxy: "unknown" };
+let statusProbedAt = 0;
+let statusGeneration = 0;
+let statusTask: Promise<void> | null = null;
 let loadFailure: Extract<JbcentralStatus, { state: "load-failed" }> | null = null;
 let transientAction: JbcentralAction | null = null;
 let bootstrapped = false;
@@ -97,46 +97,55 @@ function mapInspectionStatus(inspection: JbcentralInspection): JbcentralStatus {
 		case "probe-failed":
 			return { state: "probe-failed", reason: inspection.status.reason };
 		case "supported": {
-			// Only a verdict we positively observed becomes a sign-in demand.
-			const signedOut = authVerdict === "signed-out";
+			// Only negative facts we positively observed become recovery demands.
+			const signedOut = statusObservation.auth === "signed-out";
 			return inspection.status.configured
-				? { state: "configured", version: inspection.status.version, signedOut }
+				? {
+						state: "configured",
+						version: inspection.status.version,
+						signedOut,
+						proxyStopped: statusObservation.proxy === "stopped",
+					}
 				: { state: "supported", version: inspection.status.version, signedOut };
 		}
 	}
 }
 
-/**
- * Drop the cached verdict so the next status read re-probes — after anything that can change auth. Bumping
- * the generation is what makes this hold against a probe that is already running: that probe read the world
- * as it was *before* the change, so letting it land would cache a stale answer as fresh and swallow the
- * invalidation for a whole TTL — exactly the credential change this seam exists to notice.
- */
-function invalidateAuth(): void {
-	authProbedAt = 0;
-	authGeneration += 1;
+/** Invalidate any in-flight/pre-change observation before an action that can change Central status. */
+function invalidateStatusObservation(): void {
+	statusProbedAt = 0;
+	statusGeneration += 1;
 }
 
-/**
- * Refresh the auth verdict off the read path, at most one probe in flight, and publish an invalidation only
- * when the answer changed — so an open card learns about a sign-in without any client polling.
- */
-function refreshAuthIfStale(): void {
-	if (stopped || authTask || Date.now() - authProbedAt < AUTH_TTL_MS) return;
-	const generation = authGeneration;
+function sameStatusObservation(
+	left: JbcentralStatusObservation,
+	right: JbcentralStatusObservation,
+): boolean {
+	return left.auth === right.auth && left.proxy === right.proxy;
+}
+
+/** Install one already-sanitized observation and notify clients only when its closed facts changed. */
+function applyStatusObservation(observation: JbcentralStatusObservation): void {
+	statusProbedAt = Date.now();
+	if (sameStatusObservation(observation, statusObservation)) return;
+	statusObservation = observation;
+	publishChanged();
+}
+
+/** Refresh the combined observation off the read path, at most one probe in flight and never by polling. */
+function refreshStatusIfStale(): void {
+	if (stopped || statusTask || Date.now() - statusProbedAt < STATUS_TTL_MS) return;
+	const generation = statusGeneration;
 	const task = (async () => {
-		const verdict = await probeJbcentralAuth();
-		if (stopped || generation !== authGeneration) return;
-		authProbedAt = Date.now();
-		if (verdict === authVerdict) return;
-		authVerdict = verdict;
-		publishChanged();
+		const observation = await probeJbcentralStatus();
+		if (stopped || generation !== statusGeneration) return;
+		applyStatusObservation(observation);
 	})();
-	authTask = task;
+	statusTask = task;
 	void task
 		.catch(() => {})
 		.finally(() => {
-			if (authTask === task) authTask = null;
+			if (statusTask === task) statusTask = null;
 		});
 }
 
@@ -344,7 +353,7 @@ export async function getJbcentralStatus(): Promise<JbcentralStatus> {
 		return configuringStatus();
 	}
 	// Only meaningful once Central is usable at all, and only from the settled path — never mid-action.
-	if (inspection.status.state === "supported") refreshAuthIfStale();
+	if (inspection.status.state === "supported") refreshStatusIfStale();
 	return mapInspectionStatus(inspection);
 }
 
@@ -357,8 +366,8 @@ async function connect(): Promise<JbcentralActionResult> {
 		if (preflightFailure) return preflightFailure;
 		const actionFailure = mapCliFailure(await runJbcentralAction("add"));
 		if (actionFailure) {
-			// A refused `add pi` is itself evidence about auth — re-probe rather than serve the old verdict.
-			invalidateAuth();
+			// A refused `add pi` is evidence that the cached Central observation may be stale.
+			invalidateStatusObservation();
 			return failed(actionFailure);
 		}
 		const rebuilt = await requestRuntimeRebuild("connect");
@@ -385,6 +394,31 @@ async function disconnect(): Promise<JbcentralActionResult> {
 		}
 		const rebuilt = await requestRuntimeRebuild("disconnect");
 		return rebuilt.outcome === "applied" ? { outcome: "applied" } : failed(rebuilt.reason);
+	} finally {
+		transientAction = null;
+		publishChanged();
+	}
+}
+
+async function startProxy(): Promise<JbcentralActionResult> {
+	transientAction = "start-proxy";
+	publishChanged();
+	try {
+		const inspection = await inspectJbcentral();
+		const preflightFailure = inspectionFailure(inspection);
+		if (preflightFailure) return preflightFailure;
+		if (!inspectionConfigured(inspection) || !appliedConfigured) {
+			return failed("central-action-failed");
+		}
+
+		const result = await runJbcentralAction("start-proxy");
+		invalidateStatusObservation();
+		const actionFailure = mapCliFailure(result);
+		if (actionFailure) return failed(actionFailure);
+		if (result.outcome === "succeeded" && result.observation) {
+			applyStatusObservation(result.observation);
+		}
+		return { outcome: "applied" };
 	} finally {
 		transientAction = null;
 		publishChanged();
@@ -445,6 +479,10 @@ export function disconnectJbcentral(): Promise<JbcentralActionResult> {
 	return scheduleAction("disconnect", disconnect);
 }
 
+export function startProxyJbcentral(): Promise<JbcentralActionResult> {
+	return scheduleAction("start-proxy", startProxy);
+}
+
 export function updateJbcentral(): Promise<JbcentralActionResult> {
 	return scheduleAction("update", update);
 }
@@ -463,8 +501,8 @@ export function jbcentralLogin(): Promise<JbcentralLoginResult> {
 				case "probe-failed":
 					return { outcome: "failed", reason: "version-probe-failed" };
 				case "supported":
-					// The user is about to sign in out-of-band; the current verdict is already obsolete.
-					invalidateAuth();
+					// The user is about to sign in out-of-band; the current observation is already obsolete.
+					invalidateStatusObservation();
 					return await launchJbcentralLogin();
 			}
 		})
@@ -479,12 +517,12 @@ export function jbcentralLogin(): Promise<JbcentralLoginResult> {
 
 export async function resetJbcentralStateForTests(): Promise<void> {
 	stopJbcentralRuntime();
-	await Promise.allSettled([actionTail, rebuildTask, authTask]);
+	await Promise.allSettled([actionTail, rebuildTask, statusTask]);
 	appliedConfigured = false;
-	authVerdict = "unknown";
-	authProbedAt = 0;
-	authGeneration = 0;
-	authTask = null;
+	statusObservation = { auth: "unknown", proxy: "unknown" };
+	statusProbedAt = 0;
+	statusGeneration = 0;
+	statusTask = null;
 	loadFailure = null;
 	transientAction = null;
 	bootstrapped = false;

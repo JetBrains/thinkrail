@@ -30,6 +30,7 @@ import {
 	jbcentralLogin,
 	resetJbcentralStateForTests,
 	setJbcentralChangedPublisher,
+	startProxyJbcentral,
 	updateJbcentral,
 } from "./jbcentral";
 import { getProviderStatus } from "./providerStatus";
@@ -78,6 +79,11 @@ case "$1" in
     else
       printf '\\033[1mAuth      \\033[m \\033[1mSynthetic Access\\033[m\\n'
     fi
+    if [ -f "$THINKRAIL_CENTRAL_TEST_CONTROL/proxy-stopped" ]; then
+      printf '\\033[1mProxy     \\033[m \\033[1mstopped\\033[m\\n'
+    else
+      printf '\\033[1mProxy     \\033[m \\033[1mrunning on port 19516\\033[m\\n'
+    fi
     printf 'synthetic-sensitive-child-output\\n'
     ;;
   add)
@@ -94,6 +100,15 @@ case "$1" in
     ;;
   update)
     rm -f "$THINKRAIL_CENTRAL_TEST_CONTROL/outdated"
+    ;;
+  proxy)
+    [ "$2" = "start" ]
+    [ "$3" = "--ensure-updated" ]
+    if [ -f "$THINKRAIL_CENTRAL_TEST_CONTROL/proxy-start-fail" ]; then exit 9; fi
+    while [ -f "$THINKRAIL_CENTRAL_TEST_CONTROL/proxy-start-wait" ]; do sleep 0.01; done
+    if [ ! -f "$THINKRAIL_CENTRAL_TEST_CONTROL/proxy-stays-stopped" ]; then
+      rm -f "$THINKRAIL_CENTRAL_TEST_CONTROL/proxy-stopped"
+    fi
     ;;
   login)
     ;;
@@ -118,7 +133,7 @@ function control(name: string, present: boolean): void {
 	else rmSync(path, { force: true });
 }
 
-/** How many times the host has actually run `central status` — the auth probe's cost meter. */
+/** How many times the host has actually run `central status` — the combined probe's cost meter. */
 function probeCount(): number {
 	return commandLog().filter((invocation) => invocation === "status").length;
 }
@@ -395,10 +410,49 @@ describe("watched native Central runtime", () => {
 			state: "configured",
 			version: "1.6.2",
 			signedOut: true,
+			proxyStopped: false,
 		});
 	});
 
-	test("collapses a burst of status reads into a single auth probe", async () => {
+	test("reports and starts a positively stopped proxy without rebuilding the runtime", async () => {
+		control("proxy-stopped", true);
+		expect(await connectJbcentral()).toEqual({ outcome: "applied" });
+		await waitFor(async () => {
+			const status = await getJbcentralStatus();
+			return status.state === "configured" && status.proxyStopped;
+		});
+		const runtime = await usePiRuntime((current) => current);
+
+		expect(await startProxyJbcentral()).toEqual({ outcome: "applied" });
+		expect(commandLog()).toContain("proxy start --ensure-updated");
+		expect(await getJbcentralStatus()).toEqual({
+			state: "configured",
+			version: "1.6.2",
+			signedOut: false,
+			proxyStopped: false,
+		});
+		expect(await usePiRuntime((current) => current === runtime)).toBe(true);
+	});
+
+	test("keeps Start proxy single-flighted and closed when the proxy remains stopped", async () => {
+		control("proxy-stopped", true);
+		expect(await connectJbcentral()).toEqual({ outcome: "applied" });
+		control("proxy-start-wait", true);
+		control("proxy-stays-stopped", true);
+		const first = startProxyJbcentral();
+		const second = startProxyJbcentral();
+		expect(first).toBe(second);
+		await waitFor(() => commandLog().includes("proxy start --ensure-updated"));
+		control("proxy-start-wait", false);
+		expect(await first).toEqual({ outcome: "failed", reason: "central-action-failed" });
+		expect(commandLog().filter((line) => line === "proxy start --ensure-updated")).toHaveLength(1);
+		await waitFor(async () => {
+			const status = await getJbcentralStatus();
+			return status.state === "configured" && status.proxyStopped;
+		});
+	});
+
+	test("collapses a burst of status reads into a single status probe", async () => {
 		// The probe is a ~1.3s child process that records one Central analytics event per call, so the TTL is
 		// a cost boundary, not a nicety: a panel open plus its invalidation pushes plus a Refresh must not
 		// multiply into a probe each. Without this, losing the TTL is invisible until Central bills for it.

@@ -383,7 +383,7 @@ export interface JbcentralInstall {
 	command: string;
 }
 
-export type JbcentralAction = "connect" | "disconnect" | "update";
+export type JbcentralAction = "connect" | "disconnect" | "start-proxy" | "update";
 
 export type JbcentralProbeFailureReason =
 	| "launch-failed"
@@ -409,7 +409,13 @@ export type JbcentralStatus =
 	 * unreadable probe reports `false`, so the UI never demands a sign-in it cannot substantiate.
 	 */
 	| { state: "supported"; version: string; signedOut: boolean }
-	| { state: "configured"; version: string; signedOut: boolean }
+	| {
+			state: "configured";
+			version: string;
+			signedOut: boolean;
+			/** Positive observation only: unavailable/unrecognized proxy status reports `false`. */
+			proxyStopped: boolean;
+	  }
 	| { state: "malformed-version" }
 	| { state: "probe-failed"; reason: JbcentralProbeFailureReason }
 	| { state: "configuring"; action?: JbcentralAction }

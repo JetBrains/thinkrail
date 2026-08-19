@@ -40,7 +40,7 @@ export interface JbcentralInspection {
 	status: JbcentralVersionStatus;
 }
 
-export type JbcentralAction = "add" | "remove" | "update";
+export type JbcentralAction = "add" | "remove" | "update" | "start-proxy";
 
 /**
  * Whether Central currently holds credentials. `unknown` is a first-class answer: the probe is allowed to
@@ -48,8 +48,17 @@ export type JbcentralAction = "add" | "remove" | "update";
  */
 export type JbcentralAuthVerdict = "connected" | "signed-out" | "unknown";
 
+/** Only a positively observed stopped marker is actionable; every other rendering stays non-demanding. */
+export type JbcentralProxyVerdict = "stopped" | "unknown";
+
+/** Closed observations extracted from one bounded `central status` invocation. */
+export interface JbcentralStatusObservation {
+	auth: JbcentralAuthVerdict;
+	proxy: JbcentralProxyVerdict;
+}
+
 export type JbcentralActionResult =
-	| { outcome: "succeeded" }
+	| { outcome: "succeeded"; observation?: JbcentralStatusObservation }
 	| {
 			outcome: "failed";
 			reason:
@@ -58,7 +67,8 @@ export type JbcentralActionResult =
 				| "timed-out"
 				| "nonzero-exit"
 				| "artifact-missing"
-				| "artifact-present";
+				| "artifact-present"
+				| "proxy-stopped";
 	  };
 
 export type JbcentralLoginResult =
@@ -311,42 +321,53 @@ export async function inspectJbcentral(
 
 /** Central styles its rows with SGR colour sequences; the row's text only exists once they are removed. */
 const ANSI_SGR = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g");
-/** `Auth` as a whole label followed by its value — never the `Authentication…` warning further down. */
+/** Whole status-row labels followed by their values — never similarly named warning prose. */
 const AUTH_ROW = /(?:^|\s)Auth\s+(\S.*)$/u;
+const PROXY_ROW = /(?:^|\s)Proxy\s+(\S.*)$/u;
 const SIGNED_OUT_MARKER = "not connected";
+const PROXY_STOPPED_MARKER = "stopped";
+const UNKNOWN_STATUS: JbcentralStatusObservation = { auth: "unknown", proxy: "unknown" };
 
 /**
- * Read Central's auth row out of `central status`. Strictly one-directional: only the exact signed-out
- * marker is trusted. Any other rendering — an account, licence or managed-server wording, a row that
- * moved, a styling we have not seen — answers `connected`, and a missing row answers `unknown`. Neither
- * may become a sign-in demand, because a false demand is worse than a missed one.
+ * Read only closed negative observations from `central status`. Auth remains deliberately asymmetric: a
+ * recognized row with any value besides the signed-out marker is connected. Proxy health is stricter — only
+ * the exact stopped value creates a recovery demand; running and unfamiliar values remain non-demanding.
  */
-export function parseJbcentralAuth(output: string): JbcentralAuthVerdict {
+export function parseJbcentralStatusObservation(output: string): JbcentralStatusObservation {
+	let auth: JbcentralAuthVerdict = "unknown";
+	let proxy: JbcentralProxyVerdict = "unknown";
 	for (const line of output.replace(ANSI_SGR, "").split("\n")) {
-		const row = AUTH_ROW.exec(line.replace(/\s+/gu, " ").trim());
-		if (!row?.[1]) continue;
-		return row[1].includes(SIGNED_OUT_MARKER) ? "signed-out" : "connected";
+		const normalized = line.replace(/\s+/gu, " ").trim();
+		const authRow = AUTH_ROW.exec(normalized);
+		if (authRow?.[1]) {
+			auth = authRow[1].includes(SIGNED_OUT_MARKER) ? "signed-out" : "connected";
+		}
+		const proxyRow = PROXY_ROW.exec(normalized);
+		if (proxyRow?.[1] === PROXY_STOPPED_MARKER) proxy = "stopped";
 	}
-	return "unknown";
+	return { auth, proxy };
+}
+
+/** Compatibility projection for callers/tests that need only the auth axis. */
+export function parseJbcentralAuth(output: string): JbcentralAuthVerdict {
+	return parseJbcentralStatusObservation(output).auth;
 }
 
 /**
- * How long a caller may serve a verdict before re-probing. Sized against the probe's cost, not against how
- * fast auth can change: a burst of reads (panel open, an invalidation push, a Refresh click) collapses to one
- * child process, while any later visit re-probes.
+ * How long a caller may serve an observation before re-probing. Sized against the probe's cost, not against
+ * how fast auth or proxy state can change: a burst of reads collapses to one child process.
  */
-export const JBCENTRAL_AUTH_TTL_MS = 3_000;
+export const JBCENTRAL_STATUS_TTL_MS = 3_000;
 
 /**
- * Probe whether Central holds credentials. Costly by Central's design — it health-checks the proxy, checks
- * for updates over the network (~1.3s), and records one CLI analytics event per call — so callers cache the
- * verdict and keep this off any hot path. Only the verdict escapes; the output is never returned or logged.
+ * Probe auth and proxy health once. The output may contain private account/server details, so only the closed
+ * observation escapes; raw output is never returned or logged.
  */
-export async function probeJbcentralAuth(
+export async function probeJbcentralStatus(
 	deps: JbcentralAdapterDependencies = {},
-): Promise<JbcentralAuthVerdict> {
+): Promise<JbcentralStatusObservation> {
 	const executablePath = resolveJbcentralBin(deps);
-	if (!executablePath) return "unknown";
+	if (!executablePath) return UNKNOWN_STATUS;
 
 	let result: ProcessResult;
 	try {
@@ -357,16 +378,17 @@ export async function probeJbcentralAuth(
 			maxStdoutBytes: MAX_AUTH_OUTPUT_BYTES,
 		});
 	} catch {
-		return "unknown";
+		return UNKNOWN_STATUS;
 	}
-	if (result.outcome !== "exited" || result.exitCode !== 0) return "unknown";
-	return parseJbcentralAuth(result.stdout);
+	if (result.outcome !== "exited" || result.exitCode !== 0) return UNKNOWN_STATUS;
+	return parseJbcentralStatusObservation(result.stdout);
 }
 
 const ACTION_ARGS: Record<JbcentralAction, readonly string[]> = {
 	add: ["add", "pi"],
 	remove: ["remove", "pi"],
 	update: ["update", "--install"],
+	"start-proxy": ["proxy", "start", "--ensure-updated"],
 };
 
 /** Run one reviewed Central action and enforce its safe artifact postcondition. */
@@ -402,6 +424,12 @@ export async function runJbcentralAction(
 	}
 	if (action === "remove" && artifactExists) {
 		return { outcome: "failed", reason: "artifact-present" };
+	}
+	if (action === "start-proxy") {
+		const observation = await probeJbcentralStatus(deps);
+		return observation.proxy === "stopped"
+			? { outcome: "failed", reason: "proxy-stopped" }
+			: { outcome: "succeeded", observation };
 	}
 	return { outcome: "succeeded" };
 }

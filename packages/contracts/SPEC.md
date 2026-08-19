@@ -146,7 +146,7 @@ of the host.
   flow updates: `authUrl` / `deviceCode` / `select` / `prompt` / `progress` / `success` / `error`, which
   **accumulate** client-side, never a credential value), **`LoginPush`** (the `provider.login` frame,
   `{ loginId, providerId, frame }`) and **`LoginReply`** (`{ loginId, value }` — the browser's answer to a
-  `select`/`prompt`); the JetBrains AI wire (protocol v42) — **`JbcentralStatus`**, nested on
+  `select`/`prompt`); the JetBrains AI wire (protocol v43) — **`JbcentralStatus`**, nested on
   `ProviderStatusReport`, is the closed host-authored lifecycle: `absent`, `outdated`, `supported`,
   `configured`, `malformed-version`, `probe-failed`, `configuring`, or `load-failed`. Auth rides as a
   **`signedOut` flag on `supported`/`configured`**, and configured status also carries the closed

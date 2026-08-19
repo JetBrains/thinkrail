@@ -228,7 +228,8 @@ export interface TerminalTabsPush {
 // methods.
 // v42: Central changes are applied through watched runtime generations; restart/recovery/blocked outcomes are
 // removed, `provider.changed` invalidates provider/model reads, and live chats retain their own generation.
-export const PROTOCOL_VERSION = 42;
+// v43: configured Central status reports the closed proxy-stopped observation and exposes Start proxy.
+export const PROTOCOL_VERSION = 43;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a
@@ -387,6 +388,7 @@ export const WS_METHODS = {
 	// Native JetBrains AI setup through Central's reviewed PI commands; the browser receives closed states only.
 	providerJbcentralConnect: "provider.jbcentralConnect",
 	providerJbcentralDisconnect: "provider.jbcentralDisconnect",
+	providerJbcentralStartProxy: "provider.jbcentralStartProxy",
 	providerJbcentralLogin: "provider.jbcentralLogin",
 	providerJbcentralUpdate: "provider.jbcentralUpdate",
 	// One canonical structural workbench document per workspace.
@@ -793,6 +795,7 @@ export interface WsMethodMap {
 	// Native Central PI actions. Results and status are closed unions: no Central/extension output crosses.
 	"provider.jbcentralConnect": { params: Record<string, never>; result: JbcentralConnectResult };
 	"provider.jbcentralDisconnect": { params: Record<string, never>; result: JbcentralActionResult };
+	"provider.jbcentralStartProxy": { params: Record<string, never>; result: JbcentralActionResult };
 	"provider.jbcentralLogin": { params: Record<string, never>; result: JbcentralLoginResult };
 	"provider.jbcentralUpdate": { params: Record<string, never>; result: JbcentralActionResult };
 	// Hydrate one complete workspace layout, then replace only from the exact accepted base revision.

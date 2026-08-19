@@ -59,6 +59,7 @@ import {
 	logoutProvider,
 	resolveLogin,
 	startLogin,
+	startProxyJbcentral,
 	updateJbcentral,
 } from "../auth";
 import { findOpenBranchReview } from "../branch-review";
@@ -692,6 +693,7 @@ const handlers: Record<string, Handler> = {
 	// Central actions: closed typed outcomes only — child output/diagnostics never become frames.
 	"provider.jbcentralConnect": () => connectJbcentral(),
 	"provider.jbcentralDisconnect": () => disconnectJbcentral(),
+	"provider.jbcentralStartProxy": () => startProxyJbcentral(),
 	"provider.jbcentralLogin": () => jbcentralLogin(),
 	"provider.jbcentralUpdate": () => updateJbcentral(),
 	// Read or replace the one host-synchronized workbench document for a registered workspace.

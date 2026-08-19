@@ -12,6 +12,7 @@ import {
 	ExternalLink,
 	Loader2,
 	LogOut,
+	Play,
 	RefreshCw,
 	Wrench,
 	Zap,
@@ -78,7 +79,9 @@ export function JetBrainsAiCard({
 						? await getTransport().request("provider.jbcentralConnect", {})
 						: action === "disconnect"
 							? await getTransport().request("provider.jbcentralDisconnect", {})
-							: await getTransport().request("provider.jbcentralUpdate", {});
+							: action === "start-proxy"
+								? await getTransport().request("provider.jbcentralStartProxy", {})
+								: await getTransport().request("provider.jbcentralUpdate", {});
 				if (result.outcome === "failed") {
 					setNotice({ kind: "failed", action, reason: result.reason });
 				}
@@ -229,6 +232,8 @@ function ActionButton({ action, onAction }: { action: JbcentralAction; onAction:
 				<LogOut className="size-3.5" />
 			) : action === "update" ? (
 				<Wrench className="size-3.5" />
+			) : action === "start-proxy" ? (
+				<Play className="size-3.5" />
 			) : (
 				<Zap className="size-3.5" />
 			)}
@@ -284,7 +289,15 @@ function StatusBody({
 				</p>
 			);
 		case "configured":
-			return (
+			return status.proxyStopped ? (
+				<p
+					className="flex items-start gap-xs text-feedback-warning tr-text-metadata"
+					data-testid="jetbrains-proxy-stopped"
+				>
+					<AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+					Central's proxy is not running. Start it to use JetBrains AI models.
+				</p>
+			) : (
 				<p
 					className="flex items-center gap-xs text-feedback-success tr-text-metadata"
 					data-testid="jetbrains-connected"
@@ -403,7 +416,7 @@ function actionForStatus(status: JbcentralStatus): JbcentralAction | null {
 		case "supported":
 			return "connect";
 		case "configured":
-			return "disconnect";
+			return status.proxyStopped ? "start-proxy" : "disconnect";
 		case "outdated":
 			return "update";
 		default:
@@ -422,7 +435,13 @@ function needsRecheck(status: JbcentralStatus): boolean {
 }
 
 function actionLabel(action: JbcentralAction): string {
-	return action === "connect" ? "Connect" : action === "disconnect" ? "Disconnect" : "Update";
+	return action === "connect"
+		? "Connect"
+		: action === "disconnect"
+			? "Disconnect"
+			: action === "start-proxy"
+				? "Start proxy"
+				: "Update";
 }
 
 function actionProgress(action: JbcentralAction): string {
@@ -430,7 +449,9 @@ function actionProgress(action: JbcentralAction): string {
 		? "connecting"
 		: action === "disconnect"
 			? "disconnecting"
-			: "updating";
+			: action === "start-proxy"
+				? "starting the proxy"
+				: "updating";
 }
 
 function failureText(action: JbcentralAction, reason: JbcentralActionFailureReason): string {
@@ -442,7 +463,9 @@ function failureText(action: JbcentralAction, reason: JbcentralActionFailureReas
 		case "version-probe-failed":
 			return "ThinkRail couldn't verify Central safely. Check the host installation and Recheck.";
 		case "central-action-failed":
-			return `Central couldn't ${action}. Check Central on the host and try again.`;
+			return action === "start-proxy"
+				? "Central couldn't start the proxy. Check Central on the host and try again."
+				: `Central couldn't ${action}. Check Central on the host and try again.`;
 		case "artifact-missing":
 		case "artifact-present":
 			return "Central finished, but ThinkRail couldn't confirm the configuration. Recheck and retry.";

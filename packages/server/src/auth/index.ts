@@ -10,6 +10,7 @@ export {
 	resetJbcentralStateForTests,
 	setJbcentralAppliedPublisher,
 	setJbcentralChangedPublisher,
+	startProxyJbcentral,
 	stopJbcentralRuntime,
 	updateJbcentral,
 } from "./jbcentral";
