@@ -3,6 +3,7 @@ import type { ThemeId } from "@thinkrail/contracts";
 export const THEME_COLOR_KEYS = [
 	"accent",
 	"accentHover",
+	"accentSolid",
 	"onAccent",
 	"bubbleAccent",
 	"background",

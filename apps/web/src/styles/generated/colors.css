@@ -22,7 +22,7 @@
 	--control-bg: var(--input);
 	--control-bg-hovered: var(--hover);
 	--control-bg-selected: var(--hover);
-	--control-primary-bg: var(--accent);
+	--control-primary-bg: var(--accent-solid); /* the SOLID primary button fill — its own palette source (`accentSolid`), decoupled from `accent` so a theme can brighten the opaque fill without moving the alpha-derived primary tints (primary-subtle/soft/muted) or the accent used for text/ring/border; every theme maps accentSolid to its accent except regular Light, which uses the brighter dark-theme green */
 	--control-primary-bg-hovered: var(--accent-hover); /* the primary button's hover fill — its own manifest key so a theme owns the hover step instead of the button fading with an opacity utility */
 	--control-primary-text: var(--on-accent);
 	--control-border-default: var(--border);
@@ -30,7 +30,7 @@
 	--control-disabled-bg: color-mix(in srgb, var(--input) 60%, transparent); /* disabled control fill = the default control fill (`input`, i.e. control-bg) at the `strong` (60%) alpha step */
 	--control-disabled-text: color-mix(in srgb, var(--text) 60%, transparent); /* disabled control label/icon = the default control text colour (`text`, i.e. text-default) at the `strong` (60%) alpha step */
 	--control-disabled-border: color-mix(in srgb, var(--border) 60%, transparent); /* disabled control border = the default control border (`border`, i.e. control-border-default) at the `strong` (60%) alpha step */
-	--control-primary-disabled-bg: color-mix(in srgb, var(--accent) 60%, transparent); /* disabled primary button fill = the normal primary fill (`accent`, i.e. control-primary-bg) at the `strong` (60%) alpha step */
+	--control-primary-disabled-bg: color-mix(in srgb, var(--accent) 60%, transparent); /* disabled primary button fill = the accent hue at the `strong` (60%) alpha step — kept on `accent` (the alpha-tint base), not the brightened solid `accentSolid`, so the disabled fill stays with the primary tint family */
 	--control-primary-disabled-text: color-mix(in srgb, var(--on-accent) 60%, transparent); /* disabled primary button label/icon = the normal primary text (`onAccent`, i.e. control-primary-text) at the `strong` (60%) alpha step */
 	--border-default: var(--border-strong);
 	--border-muted: var(--border);

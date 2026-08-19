@@ -9,6 +9,7 @@
 	"colors": {
 		"accent": "#8dff4f",
 		"accentHover": "#59d915",
+		"accentSolid": "#8dff4f",
 		"onAccent": "#0a0a0a",
 		"bubbleAccent": "#8dff4f",
 		"background": "#09090b",
