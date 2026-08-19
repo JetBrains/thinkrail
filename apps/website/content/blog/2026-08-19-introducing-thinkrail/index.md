@@ -3,7 +3,6 @@ title: Introducing ThinkRail
 slug: introducing-thinkrail
 date: 2026-08-19
 excerpt: ThinkRail is a web-based graphical interface for the Pi Coding Agent, designed to complement its powerful command-line workflow.
-coverImage: ./images/cover.svg
 tags:
   - announcement
   - thinkrail

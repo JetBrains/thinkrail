@@ -12,7 +12,7 @@
 		// Priority: localStorage > system preference > dark default.
 		(function() {
 			var stored = localStorage.getItem('blog-theme');
-			var theme = stored || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+			var theme = stored || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'light' : 'dark');
 			document.documentElement.setAttribute('data-theme', theme);
 		})();
 	</script>
