@@ -1,17 +1,70 @@
 /*
  * ThinkRail Blog Styles
+ * =====================
  *
- * Theme palettes are inherited from the main site (styles.css). This file defines
- * blog-specific layout and typography. To modify the color palette, edit the
- * [data-theme] blocks in styles.css or add blog-specific overrides here.
+ * This stylesheet powers the /blog section of the ThinkRail website.
+ * It uses a token-based theming system for easy customization.
  *
- * Theming guide:
- * - --blog-bg: Background color (defaults to --container-workspace-bg)
- * - --blog-text: Primary text color (defaults to --text)
- * - --blog-text-muted: Secondary text (defaults to --muted)
- * - --blog-accent: Links and highlights (defaults to --accent)
- * - --blog-code-bg: Code block background (defaults to --elevated)
- * - --blog-border: Border color (defaults to --border)
+ * ## Architecture
+ *
+ * The blog uses semantic CSS custom properties (tokens) that map to the main
+ * site's palette. This allows the blog to automatically inherit theme changes
+ * while also supporting blog-specific overrides.
+ *
+ * ## Token Reference
+ *
+ * ### Color Tokens (override in [data-theme] blocks)
+ *
+ * | Token              | Purpose                    | Default fallback     |
+ * |--------------------|----------------------------|----------------------|
+ * | --blog-bg          | Page background            | --container-workspace-bg |
+ * | --blog-header-bg   | Header/footer background   | --container-header-bg    |
+ * | --blog-text        | Primary text               | --text               |
+ * | --blog-text-muted  | Secondary text             | --muted              |
+ * | --blog-text-hint   | Tertiary text (dates, etc) | --hint               |
+ * | --blog-accent      | Links, highlights          | --accent             |
+ * | --blog-code-bg     | Code block background      | --elevated           |
+ * | --blog-border      | Borders, dividers          | --border             |
+ *
+ * ### Spacing Tokens
+ *
+ * --space-xs (0.25rem), --space-sm (0.5rem), --space-md (1rem),
+ * --space-lg (1.5rem), --space-xl (2rem), --space-2xl (3rem), --space-3xl (4rem)
+ *
+ * ### Typography Tokens
+ *
+ * --text-xs (0.75rem), --text-sm (0.875rem), --text-base (1rem),
+ * --text-lg (1.125rem), --text-xl (1.25rem), --text-2xl (1.5rem),
+ * --text-3xl (2rem), --text-4xl (2.5rem)
+ *
+ * ## Customization Examples
+ *
+ * ### Change accent color for dark theme:
+ *
+ *   [data-theme="dark"] {
+ *     --accent: #ff6b6b;  // Coral accent
+ *   }
+ *
+ * ### Add a custom theme:
+ *
+ *   [data-theme="ocean"] {
+ *     --container-workspace-bg: #0a1628;
+ *     --container-header-bg: #0d1f3c;
+ *     --text: #e0f4ff;
+ *     --muted: #8bb8d0;
+ *     --hint: #5a8aa8;
+ *     --accent: #00d4ff;
+ *     --elevated: #132d4a;
+ *     --border: #1a3a5c;
+ *     color-scheme: dark;
+ *   }
+ *
+ * ## File Structure
+ *
+ * - Fonts: Self-hosted via @fontsource-variable packages
+ * - Theme tokens: Defined in :root and [data-theme] blocks
+ * - Layout: Mobile-first responsive design
+ * - Components: Header, index cards, post content, navigation, footer
  */
 
 /* Self-hosted fonts — same as main site */
@@ -92,6 +145,21 @@
 	color-scheme: light;
 }
 
+/* System preference: auto-switch when no data-theme is set */
+@media (prefers-color-scheme: light) {
+	:root:not([data-theme]) {
+		--container-workspace-bg: #f2f3f5;
+		--container-header-bg: #ffffff;
+		--elevated: #ffffff;
+		--text: #1a1a1e;
+		--muted: #5a5f6a;
+		--hint: #667085;
+		--accent: #2e7d16;
+		--border: #dcdfe4;
+		color-scheme: light;
+	}
+}
+
 /* ── Base reset ─────────────────────────────────────────────────────────── */
 
 *,
@@ -156,6 +224,40 @@ body {
 
 .blog-header-nav a:hover {
 	color: var(--blog-accent);
+}
+
+/* Theme toggle button */
+.blog-theme-toggle {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	padding: 0;
+	border: 1px solid var(--blog-border);
+	border-radius: 0.25rem;
+	background: transparent;
+	color: var(--blog-text-muted);
+	cursor: pointer;
+	transition:
+		color var(--transition-fast),
+		border-color var(--transition-fast);
+}
+
+.blog-theme-toggle:hover {
+	color: var(--blog-accent);
+	border-color: var(--blog-accent);
+}
+
+/* Show sun in dark mode, moon in light mode */
+[data-theme="dark"] .theme-icon-moon,
+[data-theme="light"] .theme-icon-sun {
+	display: none;
+}
+
+[data-theme="dark"] .theme-icon-sun,
+[data-theme="light"] .theme-icon-moon {
+	display: block;
 }
 
 /* ── Main content ───────────────────────────────────────────────────────── */
