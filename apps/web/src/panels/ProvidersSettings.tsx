@@ -358,7 +358,7 @@ function ProviderActionRow({
 					) : null}
 					{provider.canOAuth ? (
 						<Button
-							variant="outline"
+							variant="default"
 							size="sm"
 							data-testid="provider-signin"
 							data-provider={provider.id}
