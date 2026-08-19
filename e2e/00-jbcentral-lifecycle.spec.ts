@@ -107,11 +107,70 @@ test("Central is installed but signed out: the card offers Sign in, never Connec
 	const connect = page.getByTestId("jetbrains-connect");
 	await expect(connect).toBeVisible({ timeout: 15_000 });
 	await expect(signedOutNotice(page)).toHaveCount(0);
+	// The "finish it in the browser" note dies with the demand it described — and here the lifecycle state
+	// never reaches `configured`, so only the demand clearing can retire it.
+	await expect(page.getByTestId("jetbrains-login-launched")).toHaveCount(0);
 	await connectCentral(page);
 	await waitForCentralState(page, "configured");
 	await expect(page.getByTestId("jetbrains-connected")).toBeVisible();
 	expect(existsSync(E2E_CENTRAL_ARTIFACT)).toBe(true);
 	await shot(card, GROUP, "05-connected");
+	assertOnlyReviewedArgv();
+});
+
+/**
+ * The sign-in launch that dies on arrival. The real `central login` drives its browser handoff from a
+ * terminal UI and exits immediately when it has none, so "we spawned it" is not evidence it started — and
+ * claiming otherwise sends the user to watch a browser that never opened. When the launch fails, the command
+ * to run on the host is the fallback, and it is the ONLY place that command appears.
+ */
+test("a sign-in launch that dies falls back to the command to run on the host", async ({
+	page,
+}) => {
+	await openAppFresh(page);
+	// Two independent facts at once: no credentials, and a login that refuses to start.
+	writeFileSync(E2E_CENTRAL_STATE, "needs-login login-error");
+	const card = await openProviders(page);
+	await waitForCentralState(page, "supported");
+	await reprobeCentralAuth(page);
+	await expect(signedOutNotice(page)).toBeVisible({ timeout: 15_000 });
+
+	await page.getByTestId("jetbrains-signin").click();
+	const failed = page.getByTestId("jetbrains-login-failed");
+	await expect(failed).toBeVisible({ timeout: 30_000 });
+	await expect(failed).toContainText("couldn't launch Central sign-in");
+	await expect(failed.getByTestId("jetbrains-copy-cmd")).toHaveCount(1);
+	// The optimistic "now finish it in your browser" note must NOT appear — nothing was launched.
+	await expect(page.getByTestId("jetbrains-login-launched")).toHaveCount(0);
+	await shot(card, GROUP, "13-signin-launch-failed");
+	assertOnlyReviewedArgv();
+});
+
+/**
+ * A Connect failure and a signed-out verdict arriving together. This combination is reachable precisely
+ * *because* a refused `add pi` invalidates the auth cache: the failure renders its own sign-in guidance while
+ * the fresh verdict puts Sign in in the header. Exactly one sign-in affordance may survive — the header's,
+ * since it is the settled state's own action — or the card asks the same question twice.
+ */
+test("a Connect failure that reveals a signed-out host still offers sign-in exactly once", async ({
+	page,
+}) => {
+	await openAppFresh(page);
+	// Signed in, but `add pi` refuses — so Connect is offered and then fails.
+	writeFileSync(E2E_CENTRAL_STATE, "add-error");
+	const card = await openProviders(page);
+	await waitForCentralState(page, "supported");
+	await connectCentral(page);
+	await expect(page.getByTestId("jetbrains-error")).toBeVisible();
+	await expect(page.getByTestId("jetbrains-signin")).toHaveCount(1);
+
+	// The host turns out to hold no credentials after all; the refused action already dropped the verdict.
+	writeFileSync(E2E_CENTRAL_STATE, "add-error needs-login");
+	await reprobeCentralAuth(page);
+	await expect(signedOutNotice(page)).toBeVisible({ timeout: 15_000 });
+	await expect(page.getByTestId("jetbrains-signin")).toHaveCount(1);
+	await expect(page.getByTestId("jetbrains-signin-guidance")).toHaveCount(0);
+	await shot(card, GROUP, "14-failure-plus-signed-out");
 	assertOnlyReviewedArgv();
 });
 
@@ -222,6 +281,9 @@ test("the user logs out of Central while connected: the card keeps the connectio
 	await expect(page.getByTestId("jetbrains-disconnect")).toBeVisible({ timeout: 15_000 });
 	await expect(signedOutNotice(page)).toHaveCount(0);
 	await expect(page.getByTestId("jetbrains-connected")).toBeVisible();
+	// The "finish it in the browser" note died with the demand it described, rather than sitting under a
+	// Connected line telling the user to go do something already done.
+	await expect(page.getByTestId("jetbrains-login-launched")).toHaveCount(0);
 	await expect(card).toHaveAttribute("data-state", "configured");
 	await shot(card, GROUP, "12-signed-in-again");
 

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -255,21 +255,22 @@ describe("Central command adapter", () => {
 		).toEqual({ outcome: "failed", reason: "launch-failed" });
 	});
 
-	test("launches login detached with approved argv and a generic result", () => {
+	test("launches login detached with approved argv and a generic result", async () => {
 		let argv: readonly string[] = [];
+		// A flow that really started is still running when the grace elapses — it is waiting on the browser.
 		expect(
-			launchJbcentralLogin(
+			await launchJbcentralLogin(
 				adapterDeps({
 					launchDetached: (nextArgv) => {
 						argv = nextArgv;
-						return true;
+						return { exited: new Promise<number>(() => {}) };
 					},
 				}),
 			),
 		).toEqual({ outcome: "launched" });
 		expect(argv).toEqual([CENTRAL_BIN, "login"]);
 		expect(
-			launchJbcentralLogin(
+			await launchJbcentralLogin(
 				adapterDeps({
 					launchDetached: () => {
 						throw new Error("synthetic-private-login-error");
@@ -278,6 +279,102 @@ describe("Central command adapter", () => {
 			),
 		).toEqual({ outcome: "failed", reason: "launch-failed" });
 	});
+
+	test("a login that dies immediately is a failure, not a launch", async () => {
+		// The real `central login` drives its browser handoff from a terminal UI and exits at once without a
+		// TTY. Spawning it successfully therefore proves nothing, and reporting `launched` would send the user
+		// to a browser that never opened. Every non-zero early exit is a failure...
+		for (const code of [1, 12, 127]) {
+			expect(
+				await launchJbcentralLogin(
+					adapterDeps({ launchDetached: () => ({ exited: Promise.resolve(code) }) }),
+				),
+			).toEqual({ outcome: "failed", reason: "launch-failed" });
+		}
+		// ...while an immediate *zero* exit is Central's "already signed in" short-circuit, which is success.
+		expect(
+			await launchJbcentralLogin(
+				adapterDeps({ launchDetached: () => ({ exited: Promise.resolve(0) }) }),
+			),
+		).toEqual({ outcome: "launched" });
+		// A spawn that yields no handle at all never reached the executable.
+		expect(await launchJbcentralLogin(adapterDeps({ launchDetached: () => null }))).toEqual({
+			outcome: "failed",
+			reason: "launch-failed",
+		});
+	});
+});
+
+/**
+ * The real child-process runner, driven with NO `run` dependency injected. Every other suite here replaces
+ * that seam, so the production spawn — its stdout bound, its timeout kill, and its launch failure — has no
+ * coverage at all: an injected fake can return `output-too-large` without anything proving the code that
+ * decides it exists.
+ */
+describe("Central process runner (real spawn)", () => {
+	let binDir: string;
+
+	function realDeps(script: string): JbcentralAdapterDependencies {
+		writeFileSync(
+			join(binDir, "central"),
+			`#!/bin/sh
+${script}
+`,
+		);
+		chmodSync(join(binDir, "central"), 0o755);
+		return {
+			env: { HOME: binDir, PATH: binDir },
+			exists: () => false,
+		};
+	}
+
+	beforeEach(() => {
+		binDir = mkdtempSync(join(tmpdir(), "central-runner-"));
+	});
+
+	afterEach(() => {
+		rmSync(binDir, { recursive: true, force: true });
+	});
+
+	test("parses a real child's bounded stdout", async () => {
+		const { status } = await inspectJbcentral(realDeps("printf 'central 1.7.0 (real spawn)\n'"));
+		expect(status).toEqual({ state: "supported", version: "1.7.0", configured: false });
+	});
+
+	test("a real non-zero exit and a missing executable stay closed reasons", async () => {
+		expect((await inspectJbcentral(realDeps("exit 3"))).status).toEqual({
+			state: "probe-failed",
+			reason: "nonzero-exit",
+		});
+		rmSync(join(binDir, "central"));
+		expect(
+			(await inspectJbcentral({ env: { HOME: binDir, PATH: binDir }, exists: () => false })).status,
+		).toEqual({ state: "absent" });
+	});
+
+	test("stdout at the bound parses, and past it is refused rather than buffered", async () => {
+		// Just inside the 4096-byte cap: the bound is strictly greater, so this must still parse.
+		const atBound = await inspectJbcentral(realDeps(`printf 'central 1.6.2 '; printf '%4081s' ''`));
+		expect(atBound.status).toEqual({ state: "supported", version: "1.6.2", configured: false });
+
+		// Far past it, with a *valid* version prefix — so a runner that ignored the bound would happily
+		// report `supported` off the first line instead of refusing to read an unbounded child.
+		const flood = await inspectJbcentral(
+			realDeps(`printf 'central 1.7.0 '\nyes SYNTHETIC_FLOOD | head -20000`),
+		);
+		expect(flood.status).toEqual({ state: "probe-failed", reason: "output-too-large" });
+		expect(JSON.stringify(flood)).not.toContain("SYNTHETIC_FLOOD");
+	});
+
+	test("a child that outlives the version timeout is killed, and the timeout beats its exit code", async () => {
+		// The child would exit 0 if it were ever allowed to finish, so `timed-out` winning proves both that
+		// the kill happened and that it takes precedence over the dead child's status.
+		const started = Date.now();
+		const { status } = await inspectJbcentral(realDeps("sleep 20; exit 0"));
+		expect(status).toEqual({ state: "probe-failed", reason: "timed-out" });
+		expect(Date.now() - started).toBeLessThan(12_000);
+		// The probe's own timeout is 5s, so this case cannot fit the default per-test budget.
+	}, 20_000);
 });
 
 describe("Central artifact watcher", () => {

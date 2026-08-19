@@ -89,7 +89,10 @@ ourselves and never surface a credential value over the wire.
     awaits the same rebuild path the watcher uses. Disconnect runs `central remove pi` and validates absence
     when the artifact exists; an already-absent artifact is the complete postcondition and rebuilds plain PI
     directly even if Central itself is now absent/unsupported (so Retry can repair a failed plain candidate).
-    Login launches `central login` after the version preflight;
+    Login launches `central login` after the version preflight and drops the cached auth verdict, since the
+    user is about to change it out of band; the launch is only reported as successful once the child has
+    survived its grace period, so a login that cannot start surfaces as a failure with the host command as
+    the fallback rather than as an invitation to finish in a browser that never opened.
     update invokes `central update --install` and rechecks status. Every action uses the resolved absolute
     executable. No action edits prior model configuration, preflights live chat models, compensates, or rolls
     back Central's global state.

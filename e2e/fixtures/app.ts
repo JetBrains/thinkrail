@@ -17,6 +17,11 @@ import {
 } from "./paths";
 import { fixtureRepoHealthy, seedFixtureRepo } from "./repo";
 
+/** A recursive delete that tolerates a concurrent writer inside the tree (ENOTEMPTY / EBUSY on macOS). */
+function removeTree(path: string): void {
+	rmSync(path, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
+}
+
 /** Press the primary application modifier the page itself reports: Command on Apple, Control elsewhere. */
 export async function pressPlatformShortcut(page: Page, key: string): Promise<void> {
 	const apple = await page.evaluate(() => /Mac|iPhone|iPad|iPod/.test(navigator.platform ?? ""));
@@ -36,8 +41,11 @@ export async function pressPlatformShortcut(page: Page, key: string): Promise<vo
  */
 function resetState(): void {
 	rmSync(join(E2E_DATA_DIR, "projects.json"), { force: true });
-	rmSync(join(E2E_DATA_DIR, "worktrees"), { recursive: true, force: true });
-	rmSync(join(E2E_PI_AGENT_DIR, "sessions"), { recursive: true, force: true });
+	// Retry the recursive wipes: the reset runs concurrently with the host, so a session file written into a
+	// directory while the walk is inside it surfaces as ENOTEMPTY — a false red in an unrelated spec rather
+	// than a product failure. `force` covers a missing path, not a racing writer; only retries do.
+	removeTree(join(E2E_DATA_DIR, "worktrees"));
+	removeTree(join(E2E_PI_AGENT_DIR, "sessions"));
 	// Central's artifact is global under HOME — reset it + the fake's control/log to supported+disconnected.
 	rmSync(E2E_CENTRAL_ARTIFACT, { force: true });
 	writeFileSync(E2E_CENTRAL_STATE, "");

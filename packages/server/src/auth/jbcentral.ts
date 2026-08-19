@@ -45,6 +45,7 @@ interface RebuildWaiter {
 let appliedConfigured = false;
 let authVerdict: JbcentralAuthVerdict = "unknown";
 let authProbedAt = 0;
+let authGeneration = 0;
 let authTask: Promise<void> | null = null;
 let loadFailure: Extract<JbcentralStatus, { state: "load-failed" }> | null = null;
 let transientAction: JbcentralAction | null = null;
@@ -105,9 +106,15 @@ function mapInspectionStatus(inspection: JbcentralInspection): JbcentralStatus {
 	}
 }
 
-/** Drop the cached verdict so the next status read re-probes — after anything that can change auth. */
+/**
+ * Drop the cached verdict so the next status read re-probes — after anything that can change auth. Bumping
+ * the generation is what makes this hold against a probe that is already running: that probe read the world
+ * as it was *before* the change, so letting it land would cache a stale answer as fresh and swallow the
+ * invalidation for a whole TTL — exactly the credential change this seam exists to notice.
+ */
 function invalidateAuth(): void {
 	authProbedAt = 0;
+	authGeneration += 1;
 }
 
 /**
@@ -116,9 +123,10 @@ function invalidateAuth(): void {
  */
 function refreshAuthIfStale(): void {
 	if (stopped || authTask || Date.now() - authProbedAt < AUTH_TTL_MS) return;
+	const generation = authGeneration;
 	const task = (async () => {
 		const verdict = await probeJbcentralAuth();
-		if (stopped) return;
+		if (stopped || generation !== authGeneration) return;
 		authProbedAt = Date.now();
 		if (verdict === authVerdict) return;
 		authVerdict = verdict;
@@ -457,7 +465,7 @@ export function jbcentralLogin(): Promise<JbcentralLoginResult> {
 				case "supported":
 					// The user is about to sign in out-of-band; the current verdict is already obsolete.
 					invalidateAuth();
-					return launchJbcentralLogin();
+					return await launchJbcentralLogin();
 			}
 		})
 		.catch((): JbcentralLoginResult => ({ outcome: "failed", reason: "launch-failed" }));
@@ -475,6 +483,7 @@ export async function resetJbcentralStateForTests(): Promise<void> {
 	appliedConfigured = false;
 	authVerdict = "unknown";
 	authProbedAt = 0;
+	authGeneration = 0;
 	authTask = null;
 	loadFailure = null;
 	transientAction = null;

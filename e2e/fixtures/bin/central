@@ -3,10 +3,19 @@
 # models only argv, exit status, and the opaque global extension postcondition used by ThinkRail tests.
 set -eu
 
+# The control file holds space-separated tokens, so independent axes compose: the version a probe reports,
+# whether credentials exist, and how an action fails are separate facts about a host, and a single-valued
+# control could not express combinations a user really hits (an outdated Central whose update also fails).
 state=""
 if [ -n "${CENTRAL_STUB_STATE:-}" ] && [ -f "$CENTRAL_STUB_STATE" ]; then
 	state=$(cat "$CENTRAL_STUB_STATE")
 fi
+has() {
+	case " $state " in
+	*" $1 "*) return 0 ;;
+	*) return 1 ;;
+	esac
+}
 if [ -n "${CENTRAL_STUB_LOG:-}" ]; then
 	printf '%s\n' "$*" >> "$CENTRAL_STUB_LOG"
 fi
@@ -14,23 +23,25 @@ fi
 artifact="$HOME/.pi/agent/extensions/jetbrains-central.ts"
 
 if [ "$1" = "--version" ]; then
-	case "$state" in
-		outdated) printf 'central 1.3.9 (synthetic test metadata)\n' ;;
-		newer) printf 'central 1.7.0 (synthetic test metadata)\n' ;;
-		malformed) printf 'synthetic malformed version\n' ;;
-		probe-error)
-			printf 'E2E_CENTRAL_CHILD_SENTINEL_probe\n' >&2
-			exit 7
-			;;
-		*) printf 'central 1.6.2 (synthetic test metadata)\n' ;;
-	esac
+	if has probe-error; then
+		printf 'E2E_CENTRAL_CHILD_SENTINEL_probe\n' >&2
+		exit 7
+	elif has malformed; then
+		printf 'synthetic malformed version\n'
+	elif has outdated; then
+		printf 'central 1.3.9 (synthetic test metadata)\n'
+	elif has newer; then
+		printf 'central 1.7.0 (synthetic test metadata)\n'
+	else
+		printf 'central 1.6.2 (synthetic test metadata)\n'
+	fi
 	exit 0
 fi
 
 # Only the Auth row's *shape* is modelled: a styled indicator, a padded label, a styled value. The value
 # strings are test-owned, and the extra line asserts ThinkRail never surfaces this output.
 if [ "$1" = "status" ]; then
-	if [ "$state" = "needs-login" ] || [ "$state" = "signed-out" ]; then
+	if has needs-login; then
 		printf '\033[38;2;198;40;40m\xe2\xa0\xa4\033[m \033[1mAuth      \033[m \033[1;38;2;198;40;40mnot connected\033[m\n'
 	else
 		printf '\033[38;2;46;125;50m\xe2\xa3\xbf\033[m \033[1mAuth      \033[m \033[1;38;2;46;125;50mE2E Synthetic Access\033[m\n'
@@ -40,19 +51,19 @@ if [ "$1" = "status" ]; then
 fi
 
 if [ "$1" = "add" ] && [ "${2:-}" = "pi" ]; then
-	case "$state" in
-		needs-login|add-error)
-			printf 'E2E_CENTRAL_CHILD_SENTINEL_add\n' >&2
-			exit 9
-			;;
-		missing-artifact)
-			rm -f "$artifact"
-			exit 0
-			;;
-		slow-add) sleep 1 ;;
-	esac
+	if has needs-login || has add-error; then
+		printf 'E2E_CENTRAL_CHILD_SENTINEL_add\n' >&2
+		exit 9
+	fi
+	if has missing-artifact; then
+		rm -f "$artifact"
+		exit 0
+	fi
+	if has slow-add; then
+		sleep 1
+	fi
 	mkdir -p "$(dirname "$artifact")"
-	if [ "$state" = "candidate-error" ]; then
+	if has candidate-error; then
 		cp "$CENTRAL_STUB_BAD_EXTENSION_SOURCE" "$artifact"
 	else
 		cp "$CENTRAL_STUB_EXTENSION_SOURCE" "$artifact"
@@ -61,31 +72,32 @@ if [ "$1" = "add" ] && [ "${2:-}" = "pi" ]; then
 fi
 
 if [ "$1" = "remove" ] && [ "${2:-}" = "pi" ]; then
-	if [ "$state" = "remove-error" ]; then
+	if has remove-error; then
 		printf 'E2E_CENTRAL_CHILD_SENTINEL_remove\n' >&2
 		exit 11
 	fi
-	if [ "$state" != "remove-leaves-artifact" ]; then
+	if ! has remove-leaves-artifact; then
 		rm -f "$artifact"
 	fi
 	exit 0
 fi
 
 if [ "$1" = "login" ]; then
-	if [ "$state" = "login-error" ]; then
+	if has login-error; then
 		exit 12
 	fi
 	# A successful synthetic login makes a previous needs-login control ready for retry.
-	if [ "$state" = "needs-login" ]; then
+	if has needs-login; then
 		: > "$CENTRAL_STUB_STATE"
 	fi
 	exit 0
 fi
 
 if [ "$1" = "update" ] && [ "${2:-}" = "--install" ]; then
-	if [ "$state" = "update-error" ]; then
+	if has update-error; then
 		exit 13
 	fi
+	# A successful update makes the host supported again, dropping every version-axis token.
 	: > "$CENTRAL_STUB_STATE"
 	exit 0
 fi

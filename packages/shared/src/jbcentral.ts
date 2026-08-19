@@ -11,6 +11,8 @@ export const MINIMUM_CENTRAL_VERSION = "1.4.0" as const;
 const CENTRAL_BIN = "central";
 const VERSION_TIMEOUT_MS = 5_000;
 const AUTH_TIMEOUT_MS = 15_000;
+/** How long a launched `central login` must survive before it counts as actually running. */
+const LOGIN_GRACE_MS = 1_500;
 const MAX_AUTH_OUTPUT_BYTES = 16_384;
 const ACTION_TIMEOUT_MS = 120_000;
 const UPDATE_TIMEOUT_MS = 300_000;
@@ -78,12 +80,17 @@ interface WatchHandle {
 	close(): void;
 }
 
+/** What a launched login exposes: just enough to notice it died, never its output. */
+interface LoginHandle {
+	exited: Promise<number>;
+}
+
 export interface JbcentralAdapterDependencies {
 	env?: ParseEnv;
 	which?: (command: string, path: string) => string | null;
 	exists?: (path: string) => boolean;
 	run?: (request: ProcessRequest) => Promise<ProcessResult>;
-	launchDetached?: (argv: readonly string[]) => boolean;
+	launchDetached?: (argv: readonly string[]) => LoginHandle | null;
 	watchDirectory?: (path: string, onInvalidate: () => void) => WatchHandle;
 }
 
@@ -186,26 +193,39 @@ async function runProcess(request: ProcessRequest): Promise<ProcessResult> {
 		return { outcome: "launch-failed" };
 	}
 
-	let timedOut = false;
-	const timeout = setTimeout(() => {
-		timedOut = true;
-		processHandle.kill();
-	}, request.timeoutMs);
+	// The deadline has to win the race outright, not merely fire a kill: killing the child does not close a
+	// pipe its own grandchildren still hold open (Central spawns a proxy daemon), so awaiting the read first
+	// would let a probe outlive its timeout by as long as that daemon lives — and the version probe is on the
+	// host's boot path, where an unbounded wait means no port, no UI, and no error.
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	const deadline = new Promise<ProcessResult>((resolve) => {
+		timer = setTimeout(() => {
+			processHandle.kill();
+			resolve({ outcome: "timed-out" });
+		}, request.timeoutMs);
+	});
 
-	try {
+	const completion = (async (): Promise<ProcessResult> => {
 		const stdoutResult = request.captureStdout
 			? await readBounded(
 					processHandle.stdout as ReadableStream<Uint8Array>,
 					request.maxStdoutBytes,
 				)
 			: { outcome: "ok" as const, text: "" };
-		if (stdoutResult.outcome === "output-too-large") processHandle.kill();
+		if (stdoutResult.outcome === "output-too-large") {
+			processHandle.kill();
+			return stdoutResult;
+		}
 		const exitCode = await processHandle.exited;
-		if (timedOut) return { outcome: "timed-out" };
-		if (stdoutResult.outcome === "output-too-large") return stdoutResult;
 		return { outcome: "exited", exitCode, stdout: stdoutResult.text };
+	})();
+	// A completion that loses the race still settles later; nothing may surface as an unhandled rejection.
+	completion.catch(() => {});
+
+	try {
+		return await Promise.race([completion, deadline]);
 	} finally {
-		clearTimeout(timeout);
+		clearTimeout(timer);
 	}
 }
 
@@ -386,35 +406,58 @@ export async function runJbcentralAction(
 	return { outcome: "succeeded" };
 }
 
-/** Launch Central's browser sign-in without letting its output or errors reach callers. */
-export function launchJbcentralLogin(
+/**
+ * Launch Central's browser sign-in without letting its output or errors reach callers.
+ *
+ * Spawning successfully is NOT evidence the flow started: `central login` drives its browser handoff from a
+ * terminal UI, so without a TTY it exits immediately and no sign-in ever happens. The launch therefore waits
+ * a grace period for an early non-zero exit and reports failure — a caller that trusted the spawn alone would
+ * tell the user to finish in a browser that was never opened. A flow that really started is still running
+ * when the grace elapses (it is waiting on the browser), and an "already signed in" short-circuit exits zero.
+ */
+export async function launchJbcentralLogin(
 	deps: JbcentralAdapterDependencies = {},
-): JbcentralLoginResult {
+): Promise<JbcentralLoginResult> {
 	const executablePath = resolveJbcentralBin(deps);
 	if (!executablePath) return { outcome: "failed", reason: "not-installed" };
 
 	const launch =
 		deps.launchDetached ??
 		((argv: readonly string[]) => {
-			try {
-				Bun.spawn([...argv], {
-					stdin: "ignore",
-					stdout: "ignore",
-					stderr: "ignore",
-					env: process.env,
-				}).unref();
-				return true;
-			} catch {
-				return false;
-			}
+			const processHandle = Bun.spawn([...argv], {
+				stdin: "ignore",
+				stdout: "ignore",
+				stderr: "ignore",
+				env: process.env,
+			});
+			processHandle.unref();
+			return { exited: processHandle.exited };
 		});
+
+	let handle: LoginHandle | null;
 	try {
-		return launch([executablePath, "login"])
-			? { outcome: "launched" }
-			: { outcome: "failed", reason: "launch-failed" };
+		handle = launch([executablePath, "login"]);
 	} catch {
 		return { outcome: "failed", reason: "launch-failed" };
 	}
+	if (!handle) return { outcome: "failed", reason: "launch-failed" };
+
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	const survived = Symbol("survived");
+	try {
+		const early = await Promise.race([
+			handle.exited.catch(() => 1),
+			new Promise<typeof survived>((resolve) => {
+				timer = setTimeout(() => resolve(survived), LOGIN_GRACE_MS);
+			}),
+		]);
+		if (early !== survived && early !== 0) return { outcome: "failed", reason: "launch-failed" };
+	} catch {
+		return { outcome: "failed", reason: "launch-failed" };
+	} finally {
+		if (timer !== undefined) clearTimeout(timer);
+	}
+	return { outcome: "launched" };
 }
 
 function nearestExistingDirectory(path: string, deps: JbcentralAdapterDependencies): string {

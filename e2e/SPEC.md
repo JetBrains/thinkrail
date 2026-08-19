@@ -41,7 +41,10 @@ binary run and `e2e:serial` still run sequentially in the same worktree.
 
 JetBrains Central coverage uses a stateful, independently authored fake executable implementing only the
 argv/exit/postcondition surface ThinkRail invokes (`--version`, `status`, `add pi`, `remove pi`, `login`,
-`update --install`). It
+`update --install`). Its control file holds **space-separated tokens**, because the version a probe reports,
+whether credentials exist, and how an action fails are independent facts about a host: a single-valued control
+made real combinations unrepresentable, and a state that cannot be reached is a failure mode nothing asserts
+(`update --install` refusing while the host is below the minimum needs both at once). It
 materializes a test-owned synthetic PI extension written solely against PI's public API; no Central artifact,
 source fragment, output string, route, constant, binary, or secret is copied. Browser scenarios cover
 absent/outdated/malformed probes plus an above-minimum version staying ready, update, sign-in/retry, native

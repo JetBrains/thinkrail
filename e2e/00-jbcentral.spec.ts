@@ -162,6 +162,70 @@ test("surfaces missing-artifact and candidate failures as closed UI states, then
 	await waitForCentralState(page, "supported");
 });
 
+/**
+ * Disconnect's two failure shapes, which differ in kind: a *refused* removal (non-zero exit) versus one that
+ * claims success while leaving the artifact behind. The second is the dangerous one — exit 0 is not a
+ * postcondition, and treating it as one would leave the card reporting `supported` over a Central that is
+ * still wired into every new chat.
+ */
+test("a refused removal and a removal that leaves the artifact are both closed failures", async ({
+	page,
+}) => {
+	await openAppFresh(page);
+	await openProviders(page);
+	await waitForCentralState(page, "supported");
+	await connectCentral(page);
+	await waitForCentralState(page, "configured");
+
+	writeFileSync(E2E_CENTRAL_STATE, "remove-error");
+	await page.getByTestId("jetbrains-disconnect").click();
+	await expect(page.getByTestId("jetbrains-error")).toContainText("couldn't disconnect");
+	await expect(page.getByTestId("settings-dialog")).not.toContainText("E2E_CENTRAL_CHILD_SENTINEL");
+	// The failure is honest about what is still true: Central remains configured.
+	await waitForCentralState(page, "configured");
+	expect(existsSync(E2E_CENTRAL_ARTIFACT)).toBe(true);
+
+	writeFileSync(E2E_CENTRAL_STATE, "remove-leaves-artifact");
+	await page.getByTestId("jetbrains-disconnect").click();
+	await expect(page.getByTestId("jetbrains-error")).toContainText("couldn't confirm");
+	await waitForCentralState(page, "configured");
+	expect(existsSync(E2E_CENTRAL_ARTIFACT)).toBe(true);
+
+	writeFileSync(E2E_CENTRAL_STATE, "");
+	await page.getByTestId("jetbrains-disconnect").click();
+	await waitForCentralState(page, "supported");
+	expect(existsSync(E2E_CENTRAL_ARTIFACT)).toBe(false);
+	assertOnlyReviewedArgv();
+});
+
+/**
+ * A guided Update that fails. Needs two independent facts true at once — the host is below the minimum *and*
+ * `update --install` refuses — which is why the fake's control composes tokens rather than holding one state.
+ */
+test("a failed Update leaves the outdated guidance in place instead of a false recovery", async ({
+	page,
+}) => {
+	await openAppFresh(page);
+	await openProviders(page);
+	writeFileSync(E2E_CENTRAL_STATE, "outdated update-error");
+	await page.getByTestId("providers-refresh").click();
+	await waitForCentralState(page, "outdated");
+
+	await page.getByTestId("jetbrains-update").click();
+	await expect(page.getByTestId("jetbrains-error")).toContainText("couldn't update");
+	// Still outdated, still offering Update — a refused update must not read as a completed one.
+	await waitForCentralState(page, "outdated");
+	await expect(page.getByTestId("jetbrains-outdated")).toContainText("1.3.9");
+	await expect(page.getByTestId("jetbrains-update")).toBeVisible();
+	expect(centralInvocations()).toContain("update --install");
+
+	// Dropping the refusal lets the same button recover, proving the failure was the CLI's and not a latch.
+	writeFileSync(E2E_CENTRAL_STATE, "outdated");
+	await page.getByTestId("jetbrains-update").click();
+	await waitForCentralState(page, "supported");
+	assertOnlyReviewedArgv();
+});
+
 test("disconnect removes Central from new chats while an existing live chat keeps its model", async ({
 	page,
 }) => {

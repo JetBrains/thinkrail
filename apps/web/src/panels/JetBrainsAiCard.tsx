@@ -16,7 +16,7 @@ import {
 	Wrench,
 	Zap,
 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { copyText } from "@/lib";
 import { getTransport } from "@/transport";
@@ -50,13 +50,23 @@ export function JetBrainsAiCard({
 		return () => clearInterval(timer);
 	}, [status.state, onChanged]);
 
+	/**
+	 * A sign-in note ("finish it in the browser", "we couldn't launch it") is advice about an outstanding
+	 * demand, so it must die with the demand — otherwise it outlives its own resolution. Two things end it:
+	 * reaching `configured`, and the signed-out demand clearing. The latter needs the *transition*, because
+	 * `signedOut` is equally false for a host that never demanded anything, and the reactive flow (auth
+	 * unknown, an action refused) has to keep its note.
+	 */
+	const demandedSignIn = useRef(isSignedOut(status));
 	useEffect(() => {
-		if (status.state === "configured") {
-			setNotice((current) =>
-				current?.kind === "login-launched" || current?.kind === "login-failed" ? null : current,
-			);
-		}
-	}, [status.state]);
+		const signedOut = isSignedOut(status);
+		const resolved = demandedSignIn.current && !signedOut;
+		demandedSignIn.current = signedOut;
+		if (status.state !== "configured" && !resolved) return;
+		setNotice((current) =>
+			current?.kind === "login-launched" || current?.kind === "login-failed" ? null : current,
+		);
+	}, [status]);
 
 	const runAction = useCallback(
 		async (action: JbcentralAction) => {
@@ -180,7 +190,10 @@ export function JetBrainsAiCard({
 							? failureText(notice.action, notice.reason)
 							: "ThinkRail couldn't reach the host. Recheck the connection and try again."}
 					</p>
-					{notice.action === "connect" &&
+					{/* Hedged guidance only while auth is unknown: once the host says signed out, the header
+					    already carries that action and repeating it here asks the same question twice. */}
+					{!signedOut &&
+					notice.action === "connect" &&
 					(notice.kind === "transport-failed" || notice.reason === "central-action-failed") ? (
 						<SignInGuidance signingIn={signingIn} onSignIn={() => void signIn()} />
 					) : null}

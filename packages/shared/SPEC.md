@@ -85,8 +85,21 @@ Exposed through explicit subpath exports, not a barrel.
   and server URL, none of which may leave the host. Every other command's output is still never parsed.
   The probe is expensive by Central's design (a proxy health check plus a network update check, ~1.3s, and one
   CLI analytics event per call), so `JBCENTRAL_AUTH_TTL_MS` bounds how long a caller may serve a verdict
-  before re-probing; nothing here polls. Version stdout is bounded in memory; action
-  stdout/stderr is ignored. No child output is logged or returned, and only exit success plus safe
+  before re-probing; nothing here polls.
+
+  **A spawned login is not a started login.** `central login` drives its browser handoff from a terminal UI,
+  so with no TTY it exits immediately and no sign-in happens — while the spawn itself succeeds. The launch
+  therefore waits a grace period for an early exit and reports `launch-failed` on any non-zero one, so a
+  caller can offer the command to run on the host instead of promising a browser that never opened. An
+  immediate *zero* exit is Central's "already signed in" short-circuit and counts as launched; a flow that
+  really started is still running when the grace elapses, because it is waiting on browser consent. The
+  dependency seam exposes only the child's exit — never its output.
+
+  **A timeout bounds the wait, not just the child.** Killing a child does not close a pipe its own
+  grandchildren still hold open — and Central spawns a proxy daemon — so the deadline resolves the call
+  outright rather than firing a kill and then awaiting the read. This is load-bearing because the version
+  probe sits on the host's boot path: an unbounded wait there means no port, no UI, and no error to show.
+  Version stdout is bounded in memory; action stdout/stderr is ignored. No child output is logged or returned, and only exit success plus safe
   postconditions map to a closed adapter outcome. `watchJbcentralArtifact(onChange)` observes only that
   reviewed location and reports invalidation events for add, remove, and replacement; it handles a not-yet-
   existing extension directory by re-arming from the nearest existing parent, and an existence-only poll
