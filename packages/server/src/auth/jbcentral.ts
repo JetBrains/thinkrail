@@ -9,10 +9,10 @@ import type {
 import {
 	type JbcentralActionResult as CliActionResult,
 	inspectJbcentral,
-	type JbcentralInspection,
-	jbcentralExtensionPath,
 	JBCENTRAL_STATUS_TTL_MS,
+	type JbcentralInspection,
 	type JbcentralStatusObservation,
+	jbcentralExtensionPath,
 	launchJbcentralLogin,
 	probeJbcentralStatus,
 	runJbcentralAction,

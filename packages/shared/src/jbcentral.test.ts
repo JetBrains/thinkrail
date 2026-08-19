@@ -234,7 +234,9 @@ describe("Central command adapter", () => {
 
 	test("starts the proxy through reviewed absolute argv and validates the stopped postcondition", async () => {
 		const requests: Array<{ argv: readonly string[]; captureStdout: boolean }> = [];
-		const run = async (request: Parameters<NonNullable<JbcentralAdapterDependencies["run"]>>[0]) => {
+		const run = async (
+			request: Parameters<NonNullable<JbcentralAdapterDependencies["run"]>>[0],
+		) => {
 			requests.push({ argv: request.argv, captureStdout: request.captureStdout });
 			const stdout = request.argv[1] === "status" ? "Auth JetBrains Team\nProxy running" : "";
 			return { outcome: "exited" as const, exitCode: 0, stdout };
