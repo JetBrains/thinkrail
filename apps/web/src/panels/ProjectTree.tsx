@@ -40,12 +40,14 @@ import {
 	toast,
 	useAppStore,
 } from "../store";
-import { errorText, getTransport } from "../transport";
+import { errorText, getTransport, prewarmWorkspaceSkillLoad } from "../transport";
 import { AddProjectMenu } from "./AddProjectMenu";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { ExistingWorktreeDialog } from "./ExistingWorktreeDialog";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
 import { useOpenProject } from "./useOpenProject";
+
+const PREWARM_WORKSPACE_LIMIT = 8;
 
 export function ProjectTree() {
 	const projects = useAppStore((s) => s.projects);
@@ -110,9 +112,13 @@ export function ProjectTree() {
 	}, [activeProjectId]);
 
 	const loadWorkspaces = async (projectId: string) => {
-		useAppStore
-			.getState()
-			.setWorkspaces(projectId, await getTransport().request("workspace.list", { projectId }));
+		const rows = await getTransport().request("workspace.list", { projectId });
+		const store = useAppStore.getState();
+		store.setWorkspaces(projectId, rows);
+		if (store.selectedProjectId !== projectId) return;
+		for (const workspace of rows.slice(0, PREWARM_WORKSPACE_LIMIT)) {
+			void prewarmWorkspaceSkillLoad(workspace.id).catch(() => {});
+		}
 	};
 
 	const selectProject = async (projectId: string) => {

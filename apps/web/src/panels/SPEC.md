@@ -58,8 +58,13 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   `workspace.list`; `addWorkspace` appends created worktree rows after it), with a **`House` icon** in
   place of the `GitBranch` glyph and **no Remove item** (non-removable — the server enforces it; the menu
   simply omits it) — it still gets "Open in" / Copy path / Reveal, same as any worktree. Its branch line
-  shows the folder's real current branch. The active workspace must
-  also stay visible: when `ProjectTree` mounts with an active workspace, or the active workspace's derived
+  shows the folder's real current branch. When the **selected project's** authoritative workspace list lands,
+  `ProjectTree` fire-and-forgets transport's shared skill-load preparation for at most the first eight rows:
+  the common visible set begins the conservative watcher-readiness window before a workspace click, while a
+  large registry cannot create an unbounded watcher fan-out. The list never waits for prewarm, failures stay
+  silent and retryable by the eventual chat load, and merely expanding a background project does not prewarm
+  it. The active workspace must also stay visible: when `ProjectTree` mounts with an active workspace, or the
+  active workspace's derived
   owning project changes or first becomes resolvable, it expands that parent project. A manual collapse
   remains respected while the owning project is unchanged; ordinary `workspace.updated` snapshots and
   same-project workspace switches do not force it open again. Workspace creation expands its project

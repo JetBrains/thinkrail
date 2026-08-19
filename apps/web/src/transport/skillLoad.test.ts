@@ -86,13 +86,14 @@ test("skill-load requests share startup, fold the replay fallback before the bas
 		},
 	});
 
+	const prewarming = requests.prewarmWorkspaceSkillLoad("ws1");
 	const creating = requests.createSession({ workspaceId: "ws1" });
 	const reading = requests.getSessionMessages({ workspaceId: "ws1", sessionId: "disk" });
 	expect(watchCalls).toBe(1);
 	expect(order).toEqual([]);
 
 	resolveReady({ startupNudge: true });
-	const [created, messages] = await Promise.all([creating, reading]);
+	const [, created, messages] = await Promise.all([prewarming, creating, reading]);
 	expect(created.syncedTick).toBe(1);
 	expect(messages.syncedTick).toBe(1);
 	expect(order.slice(0, 2)).toEqual(["fallback", "baseline"]);
@@ -109,4 +110,38 @@ test("skill-load requests share startup, fold the replay fallback before the bas
 	expect(reloaded.syncedTick).toBe(2);
 	expect(order.filter((step) => step === "fallback")).toHaveLength(1);
 	expect(order.at(-1)).toBe("reload");
+});
+
+test("a failed prewarm leaves the eventual session load able to retry preparation", async () => {
+	let watchCalls = 0;
+	const requests = createSkillLoadRequests({
+		watchReady: async () => {
+			watchCalls += 1;
+			if (watchCalls === 1) throw new Error("watch failed");
+			return { startupNudge: false };
+		},
+		noteFsChanged: () => {},
+		workspaceTick: () => 7,
+		createSession: async () => ({ sessionId: "created", model: null, thinkingLevel: "medium" }),
+		getSessionMessages: async ({ sessionId, workspaceId }) => ({
+			summary: {
+				sessionId,
+				workspaceId,
+				title: "Chat",
+				model: null,
+				thinkingLevel: "medium",
+				isStreaming: false,
+				messageCount: 0,
+				updatedAt: 1,
+				live: false,
+			},
+			messages: [],
+		}),
+		reloadSessionResources: async () => ({ ok: true }),
+	});
+
+	await expect(requests.prewarmWorkspaceSkillLoad("ws1")).rejects.toThrow("watch failed");
+	const loaded = await requests.getSessionMessages({ workspaceId: "ws1", sessionId: "disk" });
+	expect(watchCalls).toBe(2);
+	expect(loaded.syncedTick).toBe(7);
 });

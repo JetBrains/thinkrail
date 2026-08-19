@@ -46,6 +46,9 @@ export function createSkillLoadRequests(deps: SkillLoadDependencies) {
 	};
 
 	return {
+		async prewarmWorkspaceSkillLoad(workspaceId: string): Promise<void> {
+			await prepare(workspaceId);
+		},
 		async createSession(params: WsParams<"session.create">) {
 			const syncedTick = await prepare(params.workspaceId);
 			const result = await deps.createSession(params);
@@ -79,6 +82,7 @@ const skillLoadRequests = createSkillLoadRequests({
 	reloadSessionResources: (params) => getTransport().request("session.reloadResources", params),
 });
 
+export const prewarmWorkspaceSkillLoad = skillLoadRequests.prewarmWorkspaceSkillLoad;
 export const createSessionWithSkillBaseline = skillLoadRequests.createSession;
 export const getSessionMessagesWithSkillBaseline = skillLoadRequests.getSessionMessages;
 export const reloadSessionResourcesWithSkillBaseline = skillLoadRequests.reloadSessionResources;
