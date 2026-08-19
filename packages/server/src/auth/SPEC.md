@@ -28,6 +28,15 @@ ourselves and never surface a credential value over the wire.
     Central is not inferred from model URLs: status combines `shared/jbcentral`'s executable/version/artifact
     postconditions with the synchronizer's latest desired/applied generation. Watcher drift schedules a rebuild;
     status is `configuring` until the newest candidate applies and `load-failed` when it cannot apply.
+
+    **The auth verdict is cached, refreshed off the read path, and never polled.** A settled `supported`
+    reading serves the cached verdict immediately and, past `JBCENTRAL_AUTH_TTL_MS`, starts one background
+    probe; when the answer *changes* it publishes the ordinary provider invalidation, so an open card converges
+    without any client timer. Only a positively observed `signed-out` sets the wire flag — `unknown` never
+    does. A refused `central add pi` and a launched `central login` both drop the cache, because each is
+    evidence the verdict is stale; consequently a credential change made out of band inside the TTL window is
+    deliberately served stale until the next read past it. The probe never runs mid-action or while a rebuild
+    is outstanding, so it cannot delay a Connect or a candidate cutover.
     Assembly is a pure `buildProviderReport(sources)` over a narrow sources slice, unit-tested with
     fixture data. Its runtime reads are restricted to the generation's provider-id allowlist captured before
     the opaque Central extension loads (after invariant host registrations): Central-owned provider objects,

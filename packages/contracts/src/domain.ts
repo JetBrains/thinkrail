@@ -404,8 +404,12 @@ export type JbcentralActionFailureReason =
 export type JbcentralStatus =
 	| { state: "absent" }
 	| { state: "outdated"; version: string }
-	| { state: "supported"; version: string }
-	| { state: "configured"; version: string }
+	/**
+	 * `signedOut` is a *positive* observation of Central holding no credentials — an unavailable or
+	 * unreadable probe reports `false`, so the UI never demands a sign-in it cannot substantiate.
+	 */
+	| { state: "supported"; version: string; signedOut: boolean }
+	| { state: "configured"; version: string; signedOut: boolean }
 	| { state: "malformed-version" }
 	| { state: "probe-failed"; reason: JbcentralProbeFailureReason }
 	| { state: "configuring"; action?: JbcentralAction }

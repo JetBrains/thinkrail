@@ -274,7 +274,22 @@ a project picker, the prompt hero, and the reused
   keeping ThinkRail's embedded PI — a state machine over the typed `JbcentralStatus` +
   `provider.jbcentral*`: absent (official host-OS install guidance + Recheck), outdated — below the host's
   minimum supported Central (guided Update), invalid/unverifiable version (safe guidance, no native action;
-  a version *above* the minimum is simply ready, never gated), sign-in required (launch Central sign-in +
+  a version *above* the minimum is simply ready, never gated), **signed out** — the card
+  **states it and offers only Sign in**: the primary action *replaces* Connect rather than sitting beside it,
+  and on `supported` the signed-out line replaces the "Central is ready" claim instead of annotating it. The
+  rule is that the card never advertises an action that cannot succeed — connecting without credentials
+  fails — so the prerequisite becomes the offer, and Connect returns once the host reports credentials.
+  **Signed out renders as one state, whatever the configuration underneath:** the body says only that Central
+  is signed out — never paired with a "Connected" line that would contradict it — and **Sign in is the only
+  action**, Disconnect withheld along with Connect. A broken session should ask for the one thing that
+  resolves it rather than pair the fix with an unrelated choice or a success message. Both actions and the
+  connected line return the moment credentials do, so nothing is lost — only deferred behind the fix.
+  **Signing in is one button, never a menu:** ThinkRail launches Central's flow on the host, and the
+  `central login` command appears *only* where that launch failed — printing it beside a working button makes
+  the user choose between two routes to the same place. Because the flow opens on the **host's** browser, the
+  launched confirmation says so and names Refresh as the next step, since Connect is not on screen yet. The
+  *reactive* guidance survives for the case the probe cannot see: credentials present, action refused
+  anyway —, sign-in required (launch Central sign-in +
   Retry), ready (Connect), configuring (a Central action or watched candidate rebuild is in flight),
   connected (the current runtime for new work applied Central; Disconnect), load-failed (the last runtime or
   boot-time plain fallback remains usable; Retry or Disconnect), and generic action error (Retry/Recheck).

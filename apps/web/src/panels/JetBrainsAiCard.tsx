@@ -90,14 +90,21 @@ export function JetBrainsAiCard({
 			setNotice(
 				result.outcome === "launched" ? { kind: "login-launched" } : { kind: "login-failed" },
 			);
+			// Launching invalidated the host's auth verdict — re-read so a sign-in that already completed
+			// clears the warning without waiting for the next visit.
+			if (result.outcome === "launched") await onChanged();
 		} catch {
 			setNotice({ kind: "login-failed" });
 		} finally {
 			setSigningIn(false);
 		}
-	}, [signingIn]);
+	}, [signingIn, onChanged]);
 
 	const visibleState = busyAction ? "configuring" : status.state;
+	// Signing in is the *prerequisite*, so while Central holds no credentials it is the only action the card
+	// offers — Connect and Disconnect alike are withheld. Both return the moment credentials come back, and
+	// offering either beside a broken session asks the user to choose between fixing it and something else.
+	const signedOut = isSignedOut(status);
 	const installed = status.state !== "absent";
 	const configured = status.state === "configured";
 	const primaryAction = actionForStatus(status);
@@ -127,6 +134,13 @@ export function JetBrainsAiCard({
 							<Loader2 className="size-3.5 animate-spin" />
 							{actionLabel(busyAction)}…
 						</Button>
+					) : signedOut ? (
+						<SignInButton
+							variant="default"
+							label="Sign in"
+							signingIn={signingIn}
+							onSignIn={() => void signIn()}
+						/>
 					) : status.state === "load-failed" && retryAction ? (
 						<>
 							<Button
@@ -175,7 +189,7 @@ export function JetBrainsAiCard({
 
 			{notice?.kind === "login-launched" ? (
 				<p className="text-text-muted tr-text-metadata" data-testid="jetbrains-login-launched">
-					Complete sign-in in the browser, then Connect again.
+					Complete sign-in in the browser on the host, then Refresh.
 				</p>
 			) : notice?.kind === "login-failed" ? (
 				<div className="flex flex-col gap-xs" data-testid="jetbrains-login-failed">
@@ -219,6 +233,10 @@ function StatusBody({
 	install: JbcentralInstall;
 	onChanged: () => void | Promise<void>;
 }) {
+	// Signed out is the whole story while it lasts. The connection may still be wired, but nothing it offers
+	// works until credentials return, so the card says that instead of pairing it with a success line.
+	if (isSignedOut(status)) return <SignedOutNotice />;
+
 	switch (status.state) {
 		case "absent":
 			return (
@@ -297,31 +315,74 @@ function StatusBody({
 	}
 }
 
+/**
+ * The one way to sign in: ThinkRail launches Central's flow on the host. The `central login` command is
+ * deliberately not shown next to it — it is the fallback for a launch that *failed*, and printing it
+ * pre-emptively turns one action into a menu.
+ */
+function SignInButton({
+	signingIn,
+	onSignIn,
+	label,
+	variant,
+}: {
+	signingIn: boolean;
+	onSignIn: () => void;
+	label: string;
+	variant: "default" | "outline";
+}) {
+	return (
+		<Button
+			variant={variant}
+			size="sm"
+			data-testid="jetbrains-signin"
+			disabled={signingIn}
+			onClick={onSignIn}
+			className="self-start"
+		>
+			{signingIn ? (
+				<Loader2 className="size-3.5 animate-spin" />
+			) : (
+				<ExternalLink className="size-3.5" />
+			)}
+			{label}
+		</Button>
+	);
+}
+
+/** Offered after an action failed, when auth is a *possible* cause — hence the conditional wording. */
 function SignInGuidance({ signingIn, onSignIn }: { signingIn: boolean; onSignIn: () => void }) {
 	return (
 		<div className="flex flex-col gap-xs" data-testid="jetbrains-signin-guidance">
 			<p className="text-text-muted tr-text-metadata">
-				If Central needs authentication, sign in and then retry Connect. You can also run this on
-				the host:
+				If Central needs authentication, sign in and then retry Connect.
 			</p>
-			<CopyableCommand command={LOGIN_CMD} />
-			<Button
+			<SignInButton
 				variant="outline"
-				size="sm"
-				data-testid="jetbrains-signin"
-				disabled={signingIn}
-				onClick={onSignIn}
-				className="self-start"
-			>
-				{signingIn ? (
-					<Loader2 className="size-3.5 animate-spin" />
-				) : (
-					<ExternalLink className="size-3.5" />
-				)}
-				Sign in to JetBrains
-			</Button>
+				label="Sign in to JetBrains"
+				signingIn={signingIn}
+				onSignIn={onSignIn}
+			/>
 		</div>
 	);
+}
+
+/** Says why the header offers only Sign in; the action itself is up there, not repeated here. */
+function SignedOutNotice() {
+	return (
+		<p
+			className="flex items-start gap-xs text-feedback-warning tr-text-metadata"
+			data-testid="jetbrains-signed-out"
+		>
+			<AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+			Central is signed out. Sign in to use its JetBrains AI models.
+		</p>
+	);
+}
+
+/** Whether the host positively observed Central holding no credentials. */
+function isSignedOut(status: JbcentralStatus): boolean {
+	return (status.state === "supported" || status.state === "configured") && status.signedOut;
 }
 
 function actionForStatus(status: JbcentralStatus): JbcentralAction | null {

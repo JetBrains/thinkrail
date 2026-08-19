@@ -27,6 +27,18 @@ if [ "$1" = "--version" ]; then
 	exit 0
 fi
 
+# Only the Auth row's *shape* is modelled: a styled indicator, a padded label, a styled value. The value
+# strings are test-owned, and the extra line asserts ThinkRail never surfaces this output.
+if [ "$1" = "status" ]; then
+	if [ "$state" = "needs-login" ] || [ "$state" = "signed-out" ]; then
+		printf '\033[38;2;198;40;40m\xe2\xa0\xa4\033[m \033[1mAuth      \033[m \033[1;38;2;198;40;40mnot connected\033[m\n'
+	else
+		printf '\033[38;2;46;125;50m\xe2\xa3\xbf\033[m \033[1mAuth      \033[m \033[1;38;2;46;125;50mE2E Synthetic Access\033[m\n'
+	fi
+	printf 'E2E_CENTRAL_CHILD_SENTINEL_status\n'
+	exit 0
+fi
+
 if [ "$1" = "add" ] && [ "${2:-}" = "pi" ]; then
 	case "$state" in
 		needs-login|add-error)

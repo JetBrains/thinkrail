@@ -71,6 +71,14 @@ case "$1" in
       printf 'central 1.6.2 (independently-authored test metadata)\\n'
     fi
     ;;
+  status)
+    if [ -f "$THINKRAIL_CENTRAL_TEST_CONTROL/signed-out" ]; then
+      printf '\\033[1mAuth      \\033[m \\033[1mnot connected\\033[m\\n'
+    else
+      printf '\\033[1mAuth      \\033[m \\033[1mSynthetic Access\\033[m\\n'
+    fi
+    printf 'synthetic-sensitive-child-output\\n'
+    ;;
   add)
     if [ -f "$THINKRAIL_CENTRAL_TEST_CONTROL/add-fail" ]; then
       printf 'synthetic-sensitive-child-output\\n' >&2
@@ -355,6 +363,54 @@ describe("watched native Central runtime", () => {
 		const actions = commandLog().filter((invocation) => invocation !== "--version");
 		expect(actions.slice(-2)).toEqual(["update --install", "add pi"]);
 		expect((await getJbcentralStatus()).state).toBe("configured");
+	});
+
+	test("reports a signed-out Central off the read path, without exposing the probe's output", async () => {
+		control("signed-out", true);
+		// The first read answers immediately from the unknown verdict and only *starts* the probe: a demand
+		// is never invented, and a 1.3s child process never blocks a status read.
+		expect(await getJbcentralStatus()).toEqual({
+			state: "supported",
+			version: "1.6.2",
+			signedOut: false,
+		});
+		await waitFor(async () => {
+			const status = await getJbcentralStatus();
+			return status.state === "supported" && status.signedOut;
+		});
+		expect(commandLog()).toContain("status");
+		expect(JSON.stringify(await getJbcentralStatus())).not.toContain(
+			"synthetic-sensitive-child-output",
+		);
+
+		// The demand survives Connect — being configured says nothing about holding credentials.
+		expect(await connectJbcentral()).toEqual({ outcome: "applied" });
+		expect(await getJbcentralStatus()).toEqual({
+			state: "configured",
+			version: "1.6.2",
+			signedOut: true,
+		});
+	});
+
+	test("launching sign-in invalidates the cached verdict so the next read re-probes", async () => {
+		control("signed-out", true);
+		await waitFor(async () => {
+			const status = await getJbcentralStatus();
+			return status.state === "supported" && status.signedOut;
+		});
+		const probes = commandLog().filter((invocation) => invocation === "status").length;
+
+		// Signing in happens out-of-band, so the verdict is obsolete the moment the flow launches — without
+		// this seam the stale demand would be served for the rest of the TTL.
+		control("signed-out", false);
+		expect(await jbcentralLogin()).toEqual({ outcome: "launched" });
+		await waitFor(async () => {
+			const status = await getJbcentralStatus();
+			return status.state === "supported" && !status.signedOut;
+		});
+		expect(commandLog().filter((invocation) => invocation === "status").length).toBeGreaterThan(
+			probes,
+		);
 	});
 
 	test("treats a version above the minimum as supported", async () => {

@@ -1,38 +1,21 @@
 import { existsSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { expect, type Page, test } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 import { createWorkspaceViaDialog, openAppFresh, openFixtureProject } from "./fixtures/app";
+import {
+	assertOnlyReviewedArgv,
+	centralInvocations,
+	connectCentral,
+	openProviders,
+	waitForCentralState,
+} from "./fixtures/jbcentral";
 import {
 	E2E_CENTRAL_ARTIFACT,
 	E2E_CENTRAL_EXTENSION_SOURCE,
-	E2E_CENTRAL_LOG,
 	E2E_CENTRAL_STATE,
 	E2E_FAKE_BIN_DIR,
 	E2E_PI_AGENT_DIR,
 } from "./fixtures/paths";
-
-async function openProviders(page: Page) {
-	await page.getByTestId("open-settings").click();
-	await expect(page.getByTestId("settings-providers")).toBeVisible();
-	return page.getByTestId("jetbrains-ai-card");
-}
-
-async function waitForCentralState(page: Page, state: string) {
-	const card = page.getByTestId("jetbrains-ai-card");
-	await expect(card).toHaveAttribute("data-state", state, { timeout: 15_000 });
-	return card;
-}
-
-function centralInvocations(): string[] {
-	if (!existsSync(E2E_CENTRAL_LOG)) return [];
-	return readFileSync(E2E_CENTRAL_LOG, "utf8").trim().split("\n").filter(Boolean);
-}
-
-function assertOnlyReviewedArgv(): void {
-	for (const invocation of centralInvocations()) {
-		expect(["--version", "add pi", "remove pi", "login", "update --install"]).toContain(invocation);
-	}
-}
 
 /** Native global configuration: no standalone pi executable and no proxy/model reconstruction. */
 test("connects and follows external add, replacement, and remove without a host restart", async ({
@@ -42,7 +25,7 @@ test("connects and follows external add, replacement, and remove without a host 
 	const card = await openProviders(page);
 	await waitForCentralState(page, "supported");
 
-	await page.getByTestId("jetbrains-connect").click();
+	await connectCentral(page);
 	await waitForCentralState(page, "configured");
 	await expect(page.getByTestId("jetbrains-connected")).toBeVisible();
 	expect(existsSync(E2E_CENTRAL_ARTIFACT)).toBe(true);
@@ -122,25 +105,31 @@ test("guides absent, outdated, malformed, and failed Central version states", as
 	assertOnlyReviewedArgv();
 });
 
-test("guides Central sign-in and retries without exposing child output", async ({ page }) => {
+/**
+ * The *reactive* sign-in route, which survives because the auth probe is not omniscient: Central reports
+ * credentials, so the card offers Connect — and `add pi` fails anyway. Auth is only a possible cause here,
+ * so the guidance is hedged, and it is the one place sign-in appears without the host having demanded it.
+ */
+test("a Connect failure with credentials intact offers sign-in without exposing child output", async ({
+	page,
+}) => {
 	await openAppFresh(page);
-	writeFileSync(E2E_CENTRAL_STATE, "needs-login");
+	writeFileSync(E2E_CENTRAL_STATE, "add-error");
 	await openProviders(page);
 	await waitForCentralState(page, "supported");
+	// Nothing was demanded up front: the probe sees credentials, so Connect is the offered action.
+	await expect(page.getByTestId("jetbrains-signed-out")).toHaveCount(0);
+	await expect(page.getByTestId("jetbrains-ready")).toBeVisible();
 
-	await page.getByTestId("jetbrains-connect").click();
+	await connectCentral(page);
 	await expect(page.getByTestId("jetbrains-signin-guidance")).toBeVisible();
 	await expect(page.getByTestId("settings-dialog")).not.toContainText("E2E_CENTRAL_CHILD_SENTINEL");
 	await page.getByTestId("jetbrains-signin").click();
 	await expect(page.getByTestId("jetbrains-login-launched")).toBeVisible();
-	await expect.poll(() => readFileSync(E2E_CENTRAL_STATE, "utf8")).toBe("");
 
-	await page.getByTestId("jetbrains-connect").click();
-	await waitForCentralState(page, "configured");
-	await page.getByTestId("jetbrains-disconnect").click();
-	await waitForCentralState(page, "supported");
+	// The sign-in launch is detached, so the fake records it a beat after the UI confirms.
+	await expect.poll(() => centralInvocations(), { timeout: 10_000 }).toContain("login");
 	assertOnlyReviewedArgv();
-	expect(centralInvocations()).toContain("login");
 });
 
 test("surfaces missing-artifact and candidate failures as closed UI states, then repairs", async ({
@@ -151,12 +140,12 @@ test("surfaces missing-artifact and candidate failures as closed UI states, then
 	await waitForCentralState(page, "supported");
 
 	writeFileSync(E2E_CENTRAL_STATE, "missing-artifact");
-	await page.getByTestId("jetbrains-connect").click();
+	await connectCentral(page);
 	await expect(page.getByTestId("jetbrains-error")).toContainText("couldn't confirm");
 	await expect(page.getByTestId("settings-dialog")).not.toContainText("E2E_CENTRAL_CHILD_SENTINEL");
 
 	writeFileSync(E2E_CENTRAL_STATE, "candidate-error");
-	await page.getByTestId("jetbrains-connect").click();
+	await connectCentral(page);
 	await expect.poll(() => existsSync(E2E_CENTRAL_ARTIFACT)).toBe(true);
 	await waitForCentralState(page, "load-failed");
 	await expect(page.getByTestId("jetbrains-load-failed")).toContainText(
@@ -179,7 +168,7 @@ test("disconnect removes Central from new chats while an existing live chat keep
 	await openFixtureProject(page);
 	await openProviders(page);
 	await waitForCentralState(page, "supported");
-	await page.getByTestId("jetbrains-connect").click();
+	await connectCentral(page);
 	await waitForCentralState(page, "configured");
 	await page.keyboard.press("Escape");
 	await expect(page.getByTestId("settings-dialog")).toBeHidden();

@@ -40,7 +40,7 @@ suite remains a distinct artifact gate. Its unsharded namespace does not overlap
 binary run and `e2e:serial` still run sequentially in the same worktree.
 
 JetBrains Central coverage uses a stateful, independently authored fake executable implementing only the
-argv/exit/postcondition surface ThinkRail invokes (`--version`, `add pi`, `remove pi`, `login`,
+argv/exit/postcondition surface ThinkRail invokes (`--version`, `status`, `add pi`, `remove pi`, `login`,
 `update --install`). It
 materializes a test-owned synthetic PI extension written solely against PI's public API; no Central artifact,
 source fragment, output string, route, constant, binary, or secret is copied. Browser scenarios cover
@@ -55,6 +55,37 @@ affected-chat blocking, or recovery seal to test. Sentinel values in synthetic c
 diagnostics, and provider routing fields
 are asserted absent from the closed results and rendered settings surface; structural DTO allowlists and
 generic host mapping keep those classes out of WS frames, analytics, logs, and persistence.
+
+The Central specs share one fixture module for panel navigation, lifecycle-state waits, the argv log, and
+the out-of-band host mutations — installing/uninstalling the fake by moving it in and out of the lane's PATH
+directory, and running it directly as a user's own shell would. A host-side invocation deliberately inherits
+none of the host's PATH, so a spec can never reach a real `central`. Because that same log records both
+sides, a spec that injects a host invocation asserts *counts* rather than mere presence — that is what
+distinguishes "the app reacted to an external change" from "the app re-ran the action".
+
+A second spec covers the lifecycle a user actually walks, one test per situation: Central absent, installed
+but signed out, uninstalled while connected, PI disconnected in-app and again on the host, and a host-side
+logout. Its load-bearing assertions are the ones a state name cannot express — that an uninstall withdraws
+Central's models from new chats while the global artifact survives, so reinstalling repairs by re-probing
+instead of a second `add pi`; that a signed-out host is offered Sign in and **no Connect at all**, with the
+ready claim replaced rather than annotated; and that a logout leaves the connection intact underneath while the
+card renders one state only: the signed-out line without the contradicting "Connected" one, a single Sign in
+with Disconnect withheld as well, and both restored once the user signs back in. The reactive guidance keeps
+its own spec, driven by the case the probe cannot see: credentials present, `add pi` refused anyway.
+
+The fake models the `Auth` row's shape only — a styled indicator, a padded label, a styled value — and prints
+a sentinel line beside it that must never surface in the UI, since the real command prints the user's licence
+and server. The cached verdict shapes the suite twice, and both accommodations are deliberately the same
+thing a *user* does rather than a reach into the host. A spec that flips the host's credential state waits
+the TTL out and refreshes, so the assertion belongs to the card's copy and not to the cache. And because
+Connect is withheld while the verdict says signed out, every connect-driven scenario refreshes until the
+button appears instead of assuming it — a verdict left behind by an earlier scenario would otherwise hide it,
+exactly as it would for someone returning to the panel inside the window. Each state is also captured as a
+review PNG under `e2e/screenshots/<group>/`
+(gitignored, stable path, one element shot per state, retina). Screenshots are evidence, never the
+assertion — a state that only a picture would catch is a missing `data-testid`. Identical files across
+scenarios are a finding, not a defect: they are how the suite shows two distinct host situations rendering
+one indistinguishable card.
 
 ## Isolation contract
 

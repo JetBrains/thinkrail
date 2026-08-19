@@ -23,9 +23,9 @@ Exposed through explicit subpath exports, not a barrel.
   `WORKSPACE_CONTEXT_DIR`, `WORKSPACE_TODOS_DIR`);
   `@thinkrail/shared/codedError` → `CodedError` + `errorCodeOf()`;
   `@thinkrail/shared/jbcentral` → the native Central CLI adapter: absolute executable/version/status
-  probing; reviewed version bounds and the global opaque PI-extension path; an artifact-location watcher;
-  `add pi` / `remove pi` / `login` / `update --install` actions; and the per-OS official install plan. It
-  never edits PI model or credential configuration.
+  probing; the minimum supported version and the global opaque PI-extension path; a one-directional auth
+  verdict; an artifact-location watcher; `add pi` / `remove pi` / `login` / `update --install` actions; and
+  the per-OS official install plan. It never edits PI model or credential configuration.
 - **Allowed deps:** Bun/Node runtime (`@types/bun`); `contracts` **types** (`JbcentralInstall`, the wire shape `jbcentralInstall`
   returns — kept in the wire so the server can carry it to the card verbatim).
 - **Forbidden:** importing `server` / `web` / any `pi` package; being imported by `web` (it carries
@@ -68,12 +68,24 @@ Exposed through explicit subpath exports, not a barrel.
 - **/jbcentral** — the **single Central process/filesystem boundary**. It resolves Central by absolute path,
   parses a bounded `central --version` result into a compatibility verdict, exposes the
   global opaque artifact path (`~/.pi/agent/extensions/jetbrains-central.ts`) and existence only, and invokes
-  only the reviewed argv: `add pi`, `remove pi`, `login`, and `update --install`. Support is a **minimum
+  only the reviewed argv: `status`, `add pi`, `remove pi`, `login`, and `update --install`. Support is a **minimum
   version only** (`MINIMUM_CENTRAL_VERSION`, `1.4.0` — the first Central release carrying the native PI
   surface): anything at or above it is supported, lower versions require update, and malformed output is
   unsupported. There is deliberately **no upper bound** — a newer Central is assumed forward-compatible with
-  the four argv this adapter invokes, and gating on it would strand users behind every Central release.
-  Human presentation output is never parsed. Version stdout is bounded in memory; action
+  the argv this adapter invokes, and gating on it would strand users behind every Central release.
+
+  **Auth is a separate, one-directional probe.** Central exposes no machine-readable auth surface — no
+  `--json`, and `central status` exits 0 whether or not credentials exist — so the verdict comes from the
+  single negative marker on that command's styled `Auth` row: `not connected` means **signed out**, every
+  other rendering of the row (account, licence, managed-server, or a wording we have not seen) means
+  **connected**, and a missing row, non-zero exit, timeout, or oversized output means **unknown**. The
+  asymmetry is the whole design: a false sign-in demand is worse than a missed one, so only the marker we
+  positively recognise produces one. This is the *only* place presentation output is read, it is narrowed to
+  one boolean, and the text is never returned, stored, or logged — `status` prints the user's licence, company,
+  and server URL, none of which may leave the host. Every other command's output is still never parsed.
+  The probe is expensive by Central's design (a proxy health check plus a network update check, ~1.3s, and one
+  CLI analytics event per call), so `JBCENTRAL_AUTH_TTL_MS` bounds how long a caller may serve a verdict
+  before re-probing; nothing here polls. Version stdout is bounded in memory; action
   stdout/stderr is ignored. No child output is logged or returned, and only exit success plus safe
   postconditions map to a closed adapter outcome. `watchJbcentralArtifact(onChange)` observes only that
   reviewed location and reports invalidation events for add, remove, and replacement; it handles a not-yet-

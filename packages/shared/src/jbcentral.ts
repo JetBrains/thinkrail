@@ -10,6 +10,8 @@ export const MINIMUM_CENTRAL_VERSION = "1.4.0" as const;
 
 const CENTRAL_BIN = "central";
 const VERSION_TIMEOUT_MS = 5_000;
+const AUTH_TIMEOUT_MS = 15_000;
+const MAX_AUTH_OUTPUT_BYTES = 16_384;
 const ACTION_TIMEOUT_MS = 120_000;
 const UPDATE_TIMEOUT_MS = 300_000;
 const MAX_VERSION_OUTPUT_BYTES = 4_096;
@@ -37,6 +39,12 @@ export interface JbcentralInspection {
 }
 
 export type JbcentralAction = "add" | "remove" | "update";
+
+/**
+ * Whether Central currently holds credentials. `unknown` is a first-class answer: the probe is allowed to
+ * fail, and a failed probe must never be presented as a sign-in demand.
+ */
+export type JbcentralAuthVerdict = "connected" | "signed-out" | "unknown";
 
 export type JbcentralActionResult =
 	| { outcome: "succeeded" }
@@ -279,6 +287,60 @@ export async function inspectJbcentral(
 			configured: artifactExists,
 		},
 	};
+}
+
+/** Central styles its rows with SGR colour sequences; the row's text only exists once they are removed. */
+const ANSI_SGR = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g");
+/** `Auth` as a whole label followed by its value — never the `Authentication…` warning further down. */
+const AUTH_ROW = /(?:^|\s)Auth\s+(\S.*)$/u;
+const SIGNED_OUT_MARKER = "not connected";
+
+/**
+ * Read Central's auth row out of `central status`. Strictly one-directional: only the exact signed-out
+ * marker is trusted. Any other rendering — an account, licence or managed-server wording, a row that
+ * moved, a styling we have not seen — answers `connected`, and a missing row answers `unknown`. Neither
+ * may become a sign-in demand, because a false demand is worse than a missed one.
+ */
+export function parseJbcentralAuth(output: string): JbcentralAuthVerdict {
+	for (const line of output.replace(ANSI_SGR, "").split("\n")) {
+		const row = AUTH_ROW.exec(line.replace(/\s+/gu, " ").trim());
+		if (!row?.[1]) continue;
+		return row[1].includes(SIGNED_OUT_MARKER) ? "signed-out" : "connected";
+	}
+	return "unknown";
+}
+
+/**
+ * How long a caller may serve a verdict before re-probing. Sized against the probe's cost, not against how
+ * fast auth can change: a burst of reads (panel open, an invalidation push, a Refresh click) collapses to one
+ * child process, while any later visit re-probes.
+ */
+export const JBCENTRAL_AUTH_TTL_MS = 3_000;
+
+/**
+ * Probe whether Central holds credentials. Costly by Central's design — it health-checks the proxy, checks
+ * for updates over the network (~1.3s), and records one CLI analytics event per call — so callers cache the
+ * verdict and keep this off any hot path. Only the verdict escapes; the output is never returned or logged.
+ */
+export async function probeJbcentralAuth(
+	deps: JbcentralAdapterDependencies = {},
+): Promise<JbcentralAuthVerdict> {
+	const executablePath = resolveJbcentralBin(deps);
+	if (!executablePath) return "unknown";
+
+	let result: ProcessResult;
+	try {
+		result = await processRunner(deps)({
+			argv: [executablePath, "status"],
+			captureStdout: true,
+			timeoutMs: AUTH_TIMEOUT_MS,
+			maxStdoutBytes: MAX_AUTH_OUTPUT_BYTES,
+		});
+	} catch {
+		return "unknown";
+	}
+	if (result.outcome !== "exited" || result.exitCode !== 0) return "unknown";
+	return parseJbcentralAuth(result.stdout);
 }
 
 const ACTION_ARGS: Record<JbcentralAction, readonly string[]> = {

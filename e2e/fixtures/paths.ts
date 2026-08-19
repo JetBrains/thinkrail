@@ -132,6 +132,14 @@ export const E2E_CENTRAL_STATE = join(E2E_DATA_DIR, "central-state");
 export const E2E_CENTRAL_LOG = join(E2E_DATA_DIR, "central-invocations.log");
 
 /**
+ * Where screenshot-capturing specs write their PNGs, one subdirectory per group (`fixtures/screenshots.ts`).
+ * Deliberately repo-local (and gitignored) rather than under the per-lane data dir: these are review
+ * evidence a developer opens by hand, so the path must be the same on every run. Names are unique per
+ * scenario, so a rerun overwrites its own files in place.
+ */
+export const E2E_SCREENSHOT_DIR = join(repoRoot, "e2e", "screenshots");
+
+/**
  * Where the stub `code` (the "Open in VS Code" fake, `fixtures/bin/code`) appends each invocation's
  * argv, one line per call — so a test can assert the workspace row's "Open in" actually launched with
  * the right worktree path, without a real VS Code install. Absent until the stub first runs.

@@ -9,9 +9,12 @@ import type {
 import {
 	type JbcentralActionResult as CliActionResult,
 	inspectJbcentral,
+	JBCENTRAL_AUTH_TTL_MS,
+	type JbcentralAuthVerdict,
 	type JbcentralInspection,
 	jbcentralExtensionPath,
 	launchJbcentralLogin,
+	probeJbcentralAuth,
 	runJbcentralAction,
 	watchJbcentralArtifact,
 } from "@thinkrail/shared/jbcentral";
@@ -23,6 +26,13 @@ import {
 
 const REBUILD_DEBOUNCE_MS = 75;
 
+/**
+ * A status read never blocks on the auth probe: the cached verdict answers immediately, and the refresh it
+ * kicks off publishes an invalidation only when the answer actually changed. A verdict therefore only
+ * refreshes while someone is reading — nothing polls Central in the background.
+ */
+const AUTH_TTL_MS = JBCENTRAL_AUTH_TTL_MS;
+
 type RebuildResult =
 	| { outcome: "applied"; configured: boolean }
 	| { outcome: "failed"; reason: "candidate-failed"; configured: boolean };
@@ -33,6 +43,9 @@ interface RebuildWaiter {
 }
 
 let appliedConfigured = false;
+let authVerdict: JbcentralAuthVerdict = "unknown";
+let authProbedAt = 0;
+let authTask: Promise<void> | null = null;
 let loadFailure: Extract<JbcentralStatus, { state: "load-failed" }> | null = null;
 let transientAction: JbcentralAction | null = null;
 let bootstrapped = false;
@@ -82,11 +95,41 @@ function mapInspectionStatus(inspection: JbcentralInspection): JbcentralStatus {
 			return { state: "malformed-version" };
 		case "probe-failed":
 			return { state: "probe-failed", reason: inspection.status.reason };
-		case "supported":
+		case "supported": {
+			// Only a verdict we positively observed becomes a sign-in demand.
+			const signedOut = authVerdict === "signed-out";
 			return inspection.status.configured
-				? { state: "configured", version: inspection.status.version }
-				: { state: "supported", version: inspection.status.version };
+				? { state: "configured", version: inspection.status.version, signedOut }
+				: { state: "supported", version: inspection.status.version, signedOut };
+		}
 	}
+}
+
+/** Drop the cached verdict so the next status read re-probes — after anything that can change auth. */
+function invalidateAuth(): void {
+	authProbedAt = 0;
+}
+
+/**
+ * Refresh the auth verdict off the read path, at most one probe in flight, and publish an invalidation only
+ * when the answer changed — so an open card learns about a sign-in without any client polling.
+ */
+function refreshAuthIfStale(): void {
+	if (stopped || authTask || Date.now() - authProbedAt < AUTH_TTL_MS) return;
+	const task = (async () => {
+		const verdict = await probeJbcentralAuth();
+		if (stopped) return;
+		authProbedAt = Date.now();
+		if (verdict === authVerdict) return;
+		authVerdict = verdict;
+		publishChanged();
+	})();
+	authTask = task;
+	void task
+		.catch(() => {})
+		.finally(() => {
+			if (authTask === task) authTask = null;
+		});
 }
 
 function inspectionFailure(inspection: JbcentralInspection): JbcentralActionResult | null {
@@ -292,6 +335,8 @@ export async function getJbcentralStatus(): Promise<JbcentralStatus> {
 		void requestRuntimeRebuild();
 		return configuringStatus();
 	}
+	// Only meaningful once Central is usable at all, and only from the settled path — never mid-action.
+	if (inspection.status.state === "supported") refreshAuthIfStale();
 	return mapInspectionStatus(inspection);
 }
 
@@ -303,7 +348,11 @@ async function connect(): Promise<JbcentralActionResult> {
 		const preflightFailure = inspectionFailure(inspection);
 		if (preflightFailure) return preflightFailure;
 		const actionFailure = mapCliFailure(await runJbcentralAction("add"));
-		if (actionFailure) return failed(actionFailure);
+		if (actionFailure) {
+			// A refused `add pi` is itself evidence about auth — re-probe rather than serve the old verdict.
+			invalidateAuth();
+			return failed(actionFailure);
+		}
 		const rebuilt = await requestRuntimeRebuild("connect");
 		if (rebuilt.outcome === "failed") return failed(rebuilt.reason);
 		publishApplied();
@@ -406,6 +455,8 @@ export function jbcentralLogin(): Promise<JbcentralLoginResult> {
 				case "probe-failed":
 					return { outcome: "failed", reason: "version-probe-failed" };
 				case "supported":
+					// The user is about to sign in out-of-band; the current verdict is already obsolete.
+					invalidateAuth();
 					return launchJbcentralLogin();
 			}
 		})
@@ -420,8 +471,11 @@ export function jbcentralLogin(): Promise<JbcentralLoginResult> {
 
 export async function resetJbcentralStateForTests(): Promise<void> {
 	stopJbcentralRuntime();
-	await Promise.allSettled([actionTail, rebuildTask]);
+	await Promise.allSettled([actionTail, rebuildTask, authTask]);
 	appliedConfigured = false;
+	authVerdict = "unknown";
+	authProbedAt = 0;
+	authTask = null;
 	loadFailure = null;
 	transientAction = null;
 	bootstrapped = false;

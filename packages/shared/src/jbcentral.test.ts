@@ -10,7 +10,9 @@ import {
 	jbcentralInstall,
 	launchJbcentralLogin,
 	MINIMUM_CENTRAL_VERSION,
+	parseJbcentralAuth,
 	parseJbcentralVersion,
+	probeJbcentralAuth,
 	resolveJbcentralBin,
 	runJbcentralAction,
 	watchJbcentralArtifact,
@@ -111,6 +113,73 @@ describe("Central version inspection", () => {
 				)
 			).status,
 		).toEqual({ state: "probe-failed", reason: "launch-failed" });
+	});
+});
+
+describe("Central auth probe", () => {
+	const ESC = String.fromCharCode(27);
+	/** Central's own rendering: an SGR-styled indicator, a padded label, an SGR-styled value. */
+	const authRow = (value: string) =>
+		`${ESC}[38;2;46;125;50m⣿${ESC}[m ${ESC}[1mAuth      ${ESC}[m ${ESC}[1;38;2;46;125;50m${value}${ESC}[m`;
+
+	test("trusts only the signed-out marker, and answers unknown when the row is absent", () => {
+		expect(parseJbcentralAuth(authRow("not connected"))).toBe("signed-out");
+		// Every other rendering of the row — account, licence, managed server, unseen wording — is credentials.
+		for (const value of [
+			"JetBrains Team",
+			"logged in (AI Pro)",
+			"managed by Example Corp · https://central.example.invalid",
+			"connected to production",
+			"JetBrains Team (session expired)",
+		]) {
+			expect(parseJbcentralAuth(authRow(value))).toBe("connected");
+		}
+		// The `Authentication can't be refreshed` warning is not the Auth row and must not be read as one.
+		expect(parseJbcentralAuth("⚠ Authentication can't be refreshed — run central logout")).toBe(
+			"unknown",
+		);
+		expect(parseJbcentralAuth("")).toBe("unknown");
+		expect(parseJbcentralAuth("synthetic unrelated output")).toBe("unknown");
+	});
+
+	test("reads the row out of a full styled status block, ignoring the rows around it", async () => {
+		const block = [
+			authRow("not connected"),
+			`${ESC}[38;2;46;125;50m⣿${ESC}[m ${ESC}[1mProxy     ${ESC}[m running on port 19516`,
+			`${ESC}[38;2;46;125;50m⣿${ESC}[m ${ESC}[1mVersion   ${ESC}[m 1.7.0`,
+			"",
+			"Agents",
+			`${ESC}[38;2;198;40;40m⠤${ESC}[m ${ESC}[1mPi${ESC}[m installed · not wired`,
+		].join("\n");
+		const requests: Array<{ argv: readonly string[]; timeoutMs: number }> = [];
+		const verdict = await probeJbcentralAuth(
+			adapterDeps({
+				run: async (request) => {
+					requests.push({ argv: request.argv, timeoutMs: request.timeoutMs });
+					return { outcome: "exited", exitCode: 0, stdout: block };
+				},
+			}),
+		);
+		expect(verdict).toBe("signed-out");
+		expect(requests).toEqual([{ argv: [CENTRAL_BIN, "status"], timeoutMs: 15_000 }]);
+	});
+
+	test("never turns a failed probe into a sign-in demand", async () => {
+		const secret = "synthetic-sensitive-status-output";
+		const failures: JbcentralAdapterDependencies[] = [
+			adapterDeps({ which: () => null, exists: () => false }),
+			adapterDeps({ run: async () => ({ outcome: "timed-out" }) }),
+			adapterDeps({ run: async () => ({ outcome: "output-too-large" }) }),
+			adapterDeps({ run: async () => ({ outcome: "exited", exitCode: 3, stdout: secret }) }),
+			adapterDeps({
+				run: async () => {
+					throw new Error(secret);
+				},
+			}),
+		];
+		for (const deps of failures) {
+			expect(await probeJbcentralAuth(deps)).toBe("unknown");
+		}
 	});
 });
 

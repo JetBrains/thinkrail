@@ -148,7 +148,11 @@ of the host.
   `{ loginId, providerId, frame }`) and **`LoginReply`** (`{ loginId, value }` — the browser's answer to a
   `select`/`prompt`); the JetBrains AI wire (protocol v42) — **`JbcentralStatus`**, nested on
   `ProviderStatusReport`, is the closed host-authored lifecycle: `absent`, `outdated`, `supported`,
-  `configured`, `malformed-version`, `probe-failed`, `configuring`, or `load-failed`; only
+  `configured`, `malformed-version`, `probe-failed`, `configuring`, or `load-failed`. Auth rides as a
+  **`signedOut` flag on `supported`/`configured`**, not as a state of its own: credentials and configuration
+  are independent axes, and flattening them into the lifecycle union would make "connected but signed out"
+  unrepresentable. The flag is a *positive* observation — an unavailable or unreadable probe reports `false`,
+  so a client can never render a sign-in demand the host did not substantiate. Only
   parseable safe versions, closed probe/failure reasons, and the current action appear where relevant.
   `configuring` covers both a reviewed CLI action and the coalesced candidate rebuild for the newest watched
   artifact state; `configured` means the **current runtime for new work** applied that artifact.
