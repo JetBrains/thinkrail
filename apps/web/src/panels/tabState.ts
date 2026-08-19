@@ -3,7 +3,7 @@
  * short content-edge marker adds a shape cue that survives themes whose neighbouring surfaces match.
  */
 const ACTIVE_WORKSPACE_TAB =
-	"relative bg-control-bg-selected text-text-default after:pointer-events-none after:absolute after:right-xs after:bottom-0 after:left-xs after:z-10 after:h-[2px] after:rounded-full after:bg-primary after:content-['']";
+	"relative bg-control-bg-selected text-text-default after:pointer-events-none after:absolute after:right-4 after:bottom-0 after:left-4 after:z-10 after:h-[2px] after:rounded-full after:bg-primary after:content-['']";
 
 const INACTIVE_WORKSPACE_TAB = "text-text-muted hover:bg-control-bg-hovered";
 

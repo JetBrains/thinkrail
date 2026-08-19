@@ -282,17 +282,17 @@ function tabSearchKeywords(tab: LayoutTab): string[] {
 function tabIcon(tab: LayoutTab): ReactNode {
 	switch (tab.kind) {
 		case "file":
-			return <File className="size-3.5 shrink-0" />;
+			return <File className="size-14 shrink-0" />;
 		case "diff":
-			return <GitCompareArrows className="size-3.5 shrink-0" />;
+			return <GitCompareArrows className="size-14 shrink-0" />;
 		case "chat":
-			return <MessageSquare className="size-3.5 shrink-0" />;
+			return <MessageSquare className="size-14 shrink-0" />;
 		case "document":
-			return <ListTodo className="size-3.5 shrink-0" />;
+			return <ListTodo className="size-14 shrink-0" />;
 		case "terminal":
-			return <SquareTerminal className="size-3.5 shrink-0" />;
+			return <SquareTerminal className="size-14 shrink-0" />;
 		case "tool":
-			return <PanelsTopLeft className="size-3.5 shrink-0" />;
+			return <PanelsTopLeft className="size-14 shrink-0" />;
 	}
 }
 
@@ -482,9 +482,9 @@ function TabStrip({
 				type="button"
 				aria-label="Scroll tabs left"
 				onClick={() => scroller.current?.scrollBy({ left: -180, behavior: "smooth" })}
-				className="flex w-6 shrink-0 items-center justify-center border-border-muted border-r text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+				className="flex w-32 shrink-0 items-center justify-center border-border-muted border-r text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 			>
-				<ChevronLeft className="size-3.5" />
+				<ChevronLeft className="size-14" />
 			</button>
 			<div
 				ref={scroller}
@@ -560,7 +560,7 @@ function TabStrip({
 						id={tupleKey("dnd-insert", location.area, location.groupId, String(tabs.length), "end")}
 						target={{ kind: "insert", location, index: tabs.length }}
 						label="Insert at end"
-						className="relative h-full w-5 shrink-0"
+						className="relative h-full w-20 shrink-0"
 					/>
 				) : null}
 			</div>
@@ -569,20 +569,20 @@ function TabStrip({
 				type="button"
 				aria-label="Scroll tabs right"
 				onClick={() => scroller.current?.scrollBy({ left: 180, behavior: "smooth" })}
-				className="flex w-6 shrink-0 items-center justify-center border-border-muted border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+				className="flex w-32 shrink-0 items-center justify-center border-border-muted border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 			>
-				<ChevronRight className="size-3.5" />
+				<ChevronRight className="size-14" />
 			</button>
 			<Popover open={overflowOpen} onOpenChange={setOverflowOpen}>
 				<PopoverTrigger
 					aria-label="Search open tabs"
-					className="flex w-7 shrink-0 items-center justify-center border-border-muted border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+					className="flex w-32 shrink-0 items-center justify-center border-border-muted border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 				>
-					<MoreHorizontal className="size-4" />
+					<MoreHorizontal className="size-16" />
 				</PopoverTrigger>
 				<PopoverContent
 					align="end"
-					className="w-72 p-0"
+					className="w-288 p-0"
 					onCloseAutoFocus={(event) => {
 						const targetId = overflowFocusTarget.current;
 						if (!targetId) return;
@@ -774,7 +774,7 @@ function WorkbenchTab({
 					data-preview={preview}
 					data-kind={tab.kind === "document" ? "plan" : tab.kind}
 					data-dragging={drag.isDragging || undefined}
-					className="group relative flex min-w-24 max-w-48 shrink-0 items-center border-border-default border-r text-text-muted after:pointer-events-none after:absolute after:right-xs after:bottom-0 after:left-xs after:z-10 after:h-[2px] after:rounded-full after:content-[''] data-[active=true]:bg-control-bg-selected data-[active=true]:text-text-default data-[active=true]:after:bg-primary data-[dragging]:opacity-40"
+					className="group relative flex min-w-96 max-w-192 shrink-0 items-center border-border-default border-r text-text-muted after:pointer-events-none after:absolute after:right-4 after:bottom-0 after:left-4 after:z-10 after:h-[2px] after:rounded-full after:content-[''] data-[active=true]:bg-control-bg-selected data-[active=true]:text-text-default data-[active=true]:after:bg-primary data-[dragging]:opacity-40"
 				>
 					<div
 						ref={before.setNodeRef}
@@ -805,7 +805,7 @@ function WorkbenchTab({
 						onClick={selectFromClick}
 						onDoubleClick={selectFromDoubleClick}
 						onKeyDown={onKeyDown}
-						className="flex min-w-0 flex-1 items-center gap-xs py-xs pl-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
+						className="flex min-w-0 flex-1 items-center gap-4 py-4 pl-8 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
 					>
 						{tabIcon(tab)}
 						<span className={`truncate ${preview ? "italic" : ""}`}>{tab.name}</span>
@@ -817,9 +817,9 @@ function WorkbenchTab({
 						data-testid={tab.kind === "terminal" ? "terminal-tab-close" : "editor-tab-close"}
 						aria-label={`Close ${tab.name}`}
 						onClick={onClose}
-						className="mr-xs rounded-[var(--radius-sm)] p-0.5 opacity-0 hover:bg-control-bg-hovered group-hover:opacity-100 focus:opacity-100"
+						className="mr-4 rounded-[var(--radius-sm)] p-2 opacity-0 hover:bg-control-bg-hovered group-hover:opacity-100 focus:opacity-100"
 					>
-						<X className="size-3.5" />
+						<X className="size-14" />
 					</button>
 				</div>
 			</ContextMenuTrigger>
@@ -1109,9 +1109,9 @@ function CenterGroupView({
 							aria-label="New chat"
 							title="New chat"
 							onClick={() => onNewChat(group.id)}
-							className="flex w-7 shrink-0 items-center justify-center text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+							className="flex w-32 shrink-0 items-center justify-center text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 						>
-							<MessageSquarePlus className="size-4" />
+							<MessageSquarePlus className="size-16" />
 						</button>
 					</>
 				}
@@ -1139,13 +1139,13 @@ function CenterGroupView({
 								id={tupleKey("dnd-split", group.id, "left")}
 								target={{ kind: "split", groupId: group.id, direction: "left" }}
 								label="Split left"
-								className="absolute inset-y-1/4 left-1 w-1/5"
+								className="absolute inset-y-1/4 left-4 w-1/5"
 							/>
 							<DropZone
 								id={tupleKey("dnd-split", group.id, "right")}
 								target={{ kind: "split", groupId: group.id, direction: "right" }}
 								label="Split right"
-								className="absolute inset-y-1/4 right-1 w-1/5"
+								className="absolute inset-y-1/4 right-4 w-1/5"
 							/>
 						</>
 					) : null}
@@ -1155,13 +1155,13 @@ function CenterGroupView({
 								id={tupleKey("dnd-split", group.id, "up")}
 								target={{ kind: "split", groupId: group.id, direction: "up" }}
 								label="Split up"
-								className="absolute inset-x-1/4 top-8 h-1/5"
+								className="absolute inset-x-1/4 top-32 h-1/5"
 							/>
 							<DropZone
 								id={tupleKey("dnd-split", group.id, "down")}
 								target={{ kind: "split", groupId: group.id, direction: "down" }}
 								label="Split down"
-								className="absolute inset-x-1/4 bottom-1 h-1/5"
+								className="absolute inset-x-1/4 bottom-4 h-1/5"
 							/>
 						</>
 					) : null}
@@ -1316,7 +1316,7 @@ function SideGroupView({
 						id={tupleKey("dnd-side-group", side, group.id, "above")}
 						target={{ kind: "side-edge", side, index: groupIndex }}
 						label={`Create ${side} group above`}
-						className="absolute inset-x-1 top-1 bottom-1/2"
+						className="absolute inset-x-4 top-4 bottom-1/2"
 					/>
 				) : null}
 				{canCreateBelow ? (
@@ -1324,7 +1324,7 @@ function SideGroupView({
 						id={tupleKey("dnd-side-group", side, group.id, "below")}
 						target={{ kind: "side-edge", side, index: groupIndex + 1 }}
 						label={`Create ${side} group below`}
-						className="absolute inset-x-1 top-1/2 bottom-1"
+						className="absolute inset-x-4 top-1/2 bottom-4"
 					/>
 				) : null}
 			</div>
@@ -1379,10 +1379,10 @@ function SideGroupView({
 						event.preventDefault();
 						onFold();
 					}}
-					className="flex w-7 shrink-0 items-center justify-center border-border-muted border-b border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+					className="flex w-32 shrink-0 items-center justify-center border-border-muted border-b border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 				>
 					<ChevronDown
-						className={`size-3.5 transition-transform ${group.folded ? "-rotate-90" : ""}`}
+						className={`size-14 transition-transform ${group.folded ? "-rotate-90" : ""}`}
 					/>
 				</button>
 			</div>
@@ -1573,7 +1573,7 @@ function HiddenSideRail({
 			data-testid={`${side}-layout-rail`}
 			data-drop-label={dropEnabled ? `Create ${side} group in hidden side` : undefined}
 			data-drop-active={drop.isOver || undefined}
-			className="flex w-7 shrink-0 flex-col items-center border-border-default bg-container-sidebar-bg py-xs first:border-r last:border-l data-[drop-active]:bg-primary-subtle data-[drop-active]:ring-2 data-[drop-active]:ring-inset data-[drop-active]:ring-primary"
+			className="flex w-28 shrink-0 flex-col items-center border-border-default bg-container-sidebar-bg py-4 first:border-r last:border-l data-[drop-active]:bg-primary-subtle data-[drop-active]:ring-2 data-[drop-active]:ring-inset data-[drop-active]:ring-primary"
 		>
 			<button
 				type="button"
@@ -1581,12 +1581,12 @@ function HiddenSideRail({
 				title={showEnabled ? `Show ${side} side` : `No ${side} groups to show`}
 				disabled={!showEnabled}
 				onClick={onShow}
-				className="flex size-6 items-center justify-center rounded-[var(--radius-sm)] text-text-muted hover:bg-control-bg-hovered hover:text-text-default disabled:text-control-disabled-text disabled:hover:bg-transparent"
+				className="flex size-24 items-center justify-center rounded-[var(--radius-sm)] text-text-muted hover:bg-control-bg-hovered hover:text-text-default disabled:text-control-disabled-text disabled:hover:bg-transparent"
 			>
 				{side === "left" ? (
-					<PanelLeftOpen className="size-4" />
+					<PanelLeftOpen className="size-16" />
 				) : (
-					<PanelRightOpen className="size-4" />
+					<PanelRightOpen className="size-16" />
 				)}
 			</button>
 		</div>
@@ -2152,7 +2152,7 @@ export function Workbench({
 			</div>
 			<DragOverlay dropAnimation={null}>
 				{draggingTab ? (
-					<div className="flex max-w-56 items-center gap-xs rounded-[var(--radius-sm)] border border-primary bg-container-elevated-bg px-sm py-xs tr-text-ui text-text-default shadow-lg">
+					<div className="flex max-w-224 items-center gap-4 rounded-[var(--radius-sm)] border border-primary bg-container-elevated-bg px-8 py-4 tr-text-ui text-text-default shadow-lg">
 						{tabIcon(draggingTab)}
 						<span className="truncate">{draggingTab.name}</span>
 					</div>

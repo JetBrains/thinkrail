@@ -1,0 +1,32 @@
+/*
+ * GENERATED — do not edit. Source: `src/styles/spacing.json` (v1.1.0).
+ * Regenerate with `bun run spacing:generate`; `spacing:check` fails when this file is stale.
+ *
+ * The canonical numeric spacing tokens, then the Tailwind base. Hand-written CSS reads the raw
+ * `--space-<n>` tokens; component call sites use the numeric `p-<n>` / `gap-<n>` / `py-<n>`
+ * utilities, which resolve to N pixels through the `--spacing: 1px` base below.
+ */
+
+:root {
+	--space-0: 0px;
+	--space-2: 2px;
+	--space-4: 4px;
+	--space-8: 8px;
+	--space-12: 12px;
+	--space-16: 16px;
+	--space-24: 24px;
+	--space-32: 32px;
+	--space-40: 40px;
+	--space-64: 64px;
+}
+
+@theme inline {
+	/*
+	 * NUMBER = PX. Tailwind v4 shares one `--spacing` base between spacing (`p`/`m`/`gap`) and sizing
+	 * (`w`/`h`/`size`/inset/translate), so they cannot be split by theme. Setting it to 1px makes every
+	 * bare number resolve to that many pixels (`p-4`=4px, `w-16`=16px) and REPLACES Tailwind's built-in
+	 * 0.25rem base, so no length falls back to Tailwind's own numeric scale. The canonical spacing
+	 * VOCABULARY (which of these numbers `p`/`m`/`gap` may use) is enforced by `spacingUsage.test.ts`.
+	 */
+	--spacing: 1px;
+}
