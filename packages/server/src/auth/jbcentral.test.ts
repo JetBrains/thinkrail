@@ -464,7 +464,7 @@ describe("watched native Central runtime", () => {
 		expect(probeCount()).toBe(settled);
 	});
 
-	test("never probes auth while an action or rebuild is in flight", async () => {
+	test("never probes Central status while an action or rebuild is in flight", async () => {
 		// A status read during `configuring` returns before inspection, so no probe may start. The card polls
 		// this path twice a second while an action runs — probing here would pile 1.3s children behind a slow
 		// `add pi` and flood Central's analytics for the length of the action.

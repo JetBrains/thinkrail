@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Locator, type Page } from "@playwright/test";
-import { JBCENTRAL_AUTH_TTL_MS } from "@thinkrail/shared/jbcentral";
+import { JBCENTRAL_STATUS_TTL_MS } from "@thinkrail/shared/jbcentral";
 import {
 	E2E_CENTRAL_EXTENSION_SOURCE,
 	E2E_CENTRAL_LOG,
@@ -12,7 +12,15 @@ import {
 } from "./paths";
 
 /** The argv ThinkRail is allowed to invoke — every Central spec asserts the log holds nothing else. */
-const REVIEWED_ARGV = ["--version", "status", "add pi", "remove pi", "login", "update --install"];
+const REVIEWED_ARGV = [
+	"--version",
+	"status",
+	"add pi",
+	"remove pi",
+	"proxy start --ensure-updated",
+	"login",
+	"update --install",
+];
 
 /** Open Settings → Providers and return the JetBrains AI card. */
 export async function openProviders(page: Page): Promise<Locator> {
@@ -100,16 +108,16 @@ export async function waitForVersionProbe(after: number): Promise<void> {
 }
 
 /**
- * Make the host re-probe Central's auth after the host-side credential state was changed out of band.
+ * Make the host re-probe Central status after auth or proxy state changed out of band.
  *
- * The verdict is cached for `JBCENTRAL_AUTH_TTL_MS` and only refreshes while something is reading status, so
- * a change made inside that window is deliberately still served stale. Waiting the window out and then
+ * The observation is cached for `JBCENTRAL_STATUS_TTL_MS` and only refreshes while something reads status,
+ * so a change made inside that window is deliberately still served stale. Waiting the window out and then
  * refreshing is the same thing a user does by returning to the panel — and it keeps the assertion about the
  * card's copy rather than about the cache.
  */
-export async function reprobeCentralAuth(page: Page): Promise<void> {
+export async function reprobeCentralStatus(page: Page): Promise<void> {
 	const probes = centralInvocationCount("status");
-	await page.waitForTimeout(JBCENTRAL_AUTH_TTL_MS + 250);
+	await page.waitForTimeout(JBCENTRAL_STATUS_TTL_MS + 250);
 	await page.getByTestId("providers-refresh").click();
 	await expect
 		.poll(() => centralInvocationCount("status"), { timeout: 15_000 })

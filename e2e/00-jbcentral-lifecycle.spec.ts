@@ -6,7 +6,7 @@ import {
 	centralInvocationCount,
 	connectCentral,
 	openProviders,
-	reprobeCentralAuth,
+	reprobeCentralStatus,
 	runCentralOnHost,
 	setCentralInstalled,
 	waitForCentralState,
@@ -83,7 +83,7 @@ test("Central is installed but signed out: the card offers Sign in, never Connec
 	writeFileSync(E2E_CENTRAL_STATE, "needs-login");
 	const card = await openProviders(page);
 	await waitForCentralState(page, "supported");
-	await reprobeCentralAuth(page);
+	await reprobeCentralStatus(page);
 
 	// Signed out is stated, not implied: the "Central is ready" claim is replaced, not annotated.
 	await expect(signedOutNotice(page)).toBeVisible({ timeout: 15_000 });
@@ -118,6 +118,35 @@ test("Central is installed but signed out: the card offers Sign in, never Connec
 	assertOnlyReviewedArgv();
 });
 
+test("a configured stopped proxy offers Start proxy and returns to Connected", async ({ page }) => {
+	await openAppFresh(page);
+	writeFileSync(E2E_CENTRAL_STATE, "proxy-stopped");
+	const card = await openProviders(page);
+	await waitForCentralState(page, "supported");
+	await connectCentral(page);
+	await waitForCentralState(page, "configured");
+	await reprobeCentralStatus(page);
+
+	await expect(page.getByTestId("jetbrains-proxy-stopped")).toContainText(
+		"Central's proxy is not running",
+	);
+	await expect(page.getByTestId("jetbrains-start-proxy")).toHaveCount(1);
+	await expect(page.getByTestId("jetbrains-signin")).toHaveCount(0);
+	await expect(page.getByTestId("jetbrains-disconnect")).toHaveCount(0);
+	await expect(card).not.toContainText("E2E_CENTRAL_CHILD_SENTINEL");
+	await shot(card, GROUP, "06-proxy-stopped");
+
+	await page.getByTestId("jetbrains-start-proxy").click();
+	await expect(page.getByTestId("jetbrains-connected")).toBeVisible({ timeout: 15_000 });
+	await expect(page.getByTestId("jetbrains-disconnect")).toBeVisible();
+	expect(centralInvocationCount("proxy start --ensure-updated")).toBe(1);
+	await shot(card, GROUP, "06-proxy-started");
+
+	await page.getByTestId("jetbrains-disconnect").click();
+	await waitForCentralState(page, "supported");
+	assertOnlyReviewedArgv();
+});
+
 /**
  * The sign-in launch that dies on arrival. The real `central login` drives its browser handoff from a
  * terminal UI and exits immediately when it has none, so "we spawned it" is not evidence it started — and
@@ -132,7 +161,7 @@ test("a sign-in launch that dies falls back to the command to run on the host", 
 	writeFileSync(E2E_CENTRAL_STATE, "needs-login login-error");
 	const card = await openProviders(page);
 	await waitForCentralState(page, "supported");
-	await reprobeCentralAuth(page);
+	await reprobeCentralStatus(page);
 	await expect(signedOutNotice(page)).toBeVisible({ timeout: 15_000 });
 
 	await page.getByTestId("jetbrains-signin").click();
@@ -166,7 +195,7 @@ test("a Connect failure that reveals a signed-out host still offers sign-in exac
 
 	// The host turns out to hold no credentials after all; the refused action already dropped the verdict.
 	writeFileSync(E2E_CENTRAL_STATE, "add-error needs-login");
-	await reprobeCentralAuth(page);
+	await reprobeCentralStatus(page);
 	await expect(signedOutNotice(page)).toBeVisible({ timeout: 15_000 });
 	await expect(page.getByTestId("jetbrains-signin")).toHaveCount(1);
 	await expect(page.getByTestId("jetbrains-signin-guidance")).toHaveCount(0);
@@ -262,7 +291,7 @@ test("the user logs out of Central while connected: the card keeps the connectio
 	// but the auth probe notices, and the card warns that models will now fail.
 	const probes = centralInvocationCount("--version");
 	writeFileSync(E2E_CENTRAL_STATE, "needs-login");
-	await reprobeCentralAuth(page);
+	await reprobeCentralStatus(page);
 	await waitForVersionProbe(probes);
 	// The lifecycle state is untouched — but the card reports the signed-out fact alone, not beside a
 	// "Connected" line that would contradict it.

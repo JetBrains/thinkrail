@@ -16,6 +16,14 @@ has() {
 	*) return 1 ;;
 	esac
 }
+drop() {
+	next=""
+	for token in $state; do
+		if [ "$token" != "$1" ]; then next="$next $token"; fi
+	done
+	state=${next# }
+	printf '%s\n' "$state" > "$CENTRAL_STUB_STATE"
+}
 if [ -n "${CENTRAL_STUB_LOG:-}" ]; then
 	printf '%s\n' "$*" >> "$CENTRAL_STUB_LOG"
 fi
@@ -38,13 +46,18 @@ if [ "$1" = "--version" ]; then
 	exit 0
 fi
 
-# Only the Auth row's *shape* is modelled: a styled indicator, a padded label, a styled value. The value
+# Only the Auth/Proxy rows' *shape* is modelled: styled indicators, padded labels, and styled values. The
 # strings are test-owned, and the extra line asserts ThinkRail never surfaces this output.
 if [ "$1" = "status" ]; then
 	if has needs-login; then
 		printf '\033[38;2;198;40;40m\xe2\xa0\xa4\033[m \033[1mAuth      \033[m \033[1;38;2;198;40;40mnot connected\033[m\n'
 	else
 		printf '\033[38;2;46;125;50m\xe2\xa3\xbf\033[m \033[1mAuth      \033[m \033[1;38;2;46;125;50mE2E Synthetic Access\033[m\n'
+	fi
+	if has proxy-stopped; then
+		printf '\033[38;2;198;40;40m\xe2\xa0\xa4\033[m \033[1mProxy     \033[m \033[1;38;2;198;40;40mstopped\033[m\n'
+	else
+		printf '\033[38;2;46;125;50m\xe2\xa3\xbf\033[m \033[1mProxy     \033[m \033[1;38;2;46;125;50mrunning on port 19516\033[m\n'
 	fi
 	printf 'E2E_CENTRAL_CHILD_SENTINEL_status\n'
 	exit 0
@@ -82,13 +95,21 @@ if [ "$1" = "remove" ] && [ "${2:-}" = "pi" ]; then
 	exit 0
 fi
 
+if [ "$1" = "proxy" ] && [ "${2:-}" = "start" ] && [ "${3:-}" = "--ensure-updated" ]; then
+	if has proxy-start-error; then
+		exit 14
+	fi
+	drop proxy-stopped
+	exit 0
+fi
+
 if [ "$1" = "login" ]; then
 	if has login-error; then
 		exit 12
 	fi
-	# A successful synthetic login makes a previous needs-login control ready for retry.
+	# A successful synthetic login changes only the credential axis.
 	if has needs-login; then
-		: > "$CENTRAL_STUB_STATE"
+		drop needs-login
 	fi
 	exit 0
 fi
@@ -97,8 +118,8 @@ if [ "$1" = "update" ] && [ "${2:-}" = "--install" ]; then
 	if has update-error; then
 		exit 13
 	fi
-	# A successful update makes the host supported again, dropping every version-axis token.
-	: > "$CENTRAL_STUB_STATE"
+	# A successful update makes the host supported again without changing auth/proxy axes.
+	drop outdated
 	exit 0
 fi
 
