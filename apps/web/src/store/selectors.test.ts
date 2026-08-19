@@ -1,16 +1,24 @@
 import { expect, test } from "bun:test";
-import type { Project, WireModel, Workspace } from "@thinkrail/contracts";
+import type { Project, WireModel, Workspace, WorkspaceLayoutDocument } from "@thinkrail/contracts";
 import type { EditorTab } from "./appStore";
 import {
+	isConnectedGeneration,
 	isDefaultWorkspace,
 	isExternalWorkspace,
 	isUserOwnedWorkspace,
 	matchesWorktreePath,
+	selectActiveEditorTab,
 	selectActiveWorkspace,
 	selectActiveWorkspaceProjectId,
+	selectAttentionCenterResourceCacheKey,
+	selectAttentionCenterResourceReady,
+	selectAttentionCenterTab,
 	selectCatalogModel,
 	selectContextProject,
 	selectHistoryTarget,
+	selectLayoutResourcePlacement,
+	selectLayoutTabPlaced,
+	selectLayoutTabPlacement,
 	selectSkillsStale,
 	specPathMatcher,
 } from "./selectors";
@@ -29,6 +37,12 @@ const workspace: Workspace = {
 };
 const workspaces = { p1: [], p2: [workspace] };
 
+test("connection generations reject stale or disconnected read settlements", () => {
+	expect(isConnectedGeneration({ status: "connected", connectionGeneration: 4 }, 4)).toBe(true);
+	expect(isConnectedGeneration({ status: "connected", connectionGeneration: 5 }, 4)).toBe(false);
+	expect(isConnectedGeneration({ status: "disconnected", connectionGeneration: 4 }, 4)).toBe(false);
+});
+
 test("workspace kind predicates distinguish managed and user-owned checkouts", () => {
 	const managed = {};
 	const external = { kind: "external" as const };
@@ -39,6 +53,135 @@ test("workspace kind predicates distinguish managed and user-owned checkouts", (
 	expect(isUserOwnedWorkspace(managed)).toBe(false);
 	expect(isUserOwnedWorkspace(defaultWorkspace)).toBe(true);
 	expect(isUserOwnedWorkspace(external)).toBe(true);
+});
+
+test("layout placement lookup traverses recursive center and side groups", () => {
+	const layout: WorkspaceLayoutDocument = {
+		version: 1,
+		center: {
+			kind: "split",
+			id: "split",
+			direction: "horizontal",
+			weights: [0.5, 0.5],
+			children: [
+				{ kind: "group", id: "a", tabs: [] },
+				{
+					kind: "group",
+					id: "b",
+					tabs: [{ kind: "file", id: "legacy-file-placement", name: "a", path: "a" }],
+				},
+			],
+		},
+		left: { visible: false, width: 0.2, groups: [] },
+		right: {
+			visible: true,
+			width: 0.2,
+			groups: [
+				{
+					id: "right",
+					weight: 1,
+					folded: false,
+					tabs: [{ kind: "tool", id: "tool:files", name: "Files", tool: "files" }],
+				},
+			],
+		},
+		toolRestoreTargets: {},
+	};
+	const state = {
+		layoutDocumentsByWorkspace: { ws: layout },
+		layoutAttentionByWorkspace: {
+			ws: {
+				selectedByGroup: { b: "legacy-file-placement" },
+				lastFocusedCenterGroupId: "b",
+				lastFocusedSideGroupId: {},
+				navigationClockByGroup: { a: 0, b: 0 },
+			},
+		},
+		tabsByWorkspace: {
+			ws: [
+				{
+					kind: "file" as const,
+					id: "file:a",
+					workspaceId: "ws",
+					name: "a",
+					path: "a",
+					content: "",
+				},
+			],
+		},
+		terminalsByWorkspace: {},
+	};
+	expect(selectLayoutTabPlaced(state, "ws", "legacy-file-placement")).toBe(true);
+	expect(selectLayoutTabPlacement(state, "ws", "legacy-file-placement")).toEqual({
+		area: "center",
+		groupId: "b",
+	});
+	expect(selectLayoutTabPlaced(state, "ws", "tool:files")).toBe(true);
+	expect(selectLayoutTabPlaced(state, "ws", "missing")).toBe(false);
+	expect(selectAttentionCenterTab(state, "ws")?.id).toBe("legacy-file-placement");
+	const cachedResource = state.tabsByWorkspace.ws[0];
+	if (!cachedResource) throw new Error("missing editor cache fixture");
+	expect(selectLayoutResourcePlacement(state, "ws", cachedResource)).toEqual({
+		area: "center",
+		groupId: "b",
+		tabId: "legacy-file-placement",
+		tab: { kind: "file", id: "legacy-file-placement", name: "a", path: "a" },
+	});
+	// A synchronized placement keeps its stable id while the browser cache uses its own canonical id.
+	expect(selectAttentionCenterResourceReady(state, "ws")).toBe(true);
+	expect(selectAttentionCenterResourceCacheKey(state, "ws")).toBe("file:a");
+	state.tabsByWorkspace.ws[0] = { ...cachedResource, id: "legacy-file-placement" };
+	expect(selectAttentionCenterResourceCacheKey(state, "ws")).toBe("legacy-file-placement");
+});
+
+test("registered documents participate in legacy selection readiness", () => {
+	const layout: WorkspaceLayoutDocument = {
+		version: 1,
+		center: {
+			kind: "group",
+			id: "center",
+			tabs: [
+				{
+					kind: "document",
+					id: "shared-todo",
+					name: "TODO",
+					documentKind: "todo-plan",
+					sourceId: "session",
+					docPath: "TODO.md",
+				},
+			],
+		},
+		left: { visible: false, width: 0.2, groups: [] },
+		right: { visible: false, width: 0.2, groups: [] },
+		toolRestoreTargets: {},
+	};
+	const state = {
+		layoutDocumentsByWorkspace: { ws: layout },
+		layoutAttentionByWorkspace: {
+			ws: {
+				selectedByGroup: { center: "shared-todo" },
+				lastFocusedCenterGroupId: "center",
+				lastFocusedSideGroupId: {},
+				navigationClockByGroup: { center: 0 },
+			},
+		},
+		tabsByWorkspace: {
+			ws: [
+				{
+					kind: "doc" as const,
+					id: "local-todo",
+					workspaceId: "ws",
+					name: "TODO",
+					content: "",
+					docPath: "TODO.md",
+					sourceId: "session",
+				},
+			],
+		},
+		terminalsByWorkspace: {},
+	};
+	expect(selectAttentionCenterResourceReady(state, "ws")).toBe(true);
+	expect(selectAttentionCenterResourceCacheKey(state, "ws")).toBe("local-todo");
 });
 
 test("active workspace selectors resolve the workspace and its owning project", () => {
@@ -120,6 +263,17 @@ const fileTab: EditorTab = {
 	name: "a.ts",
 	path: "src/a.ts",
 };
+
+test("selectActiveEditorTab resolves the mirrored render-cache selection", () => {
+	const legacyPlacement: EditorTab = { ...fileTab, id: "legacy-stable-placement" };
+	const tabs = [fileTab, legacyPlacement];
+	expect(
+		selectActiveEditorTab(
+			{ tabsByWorkspace: { w2: tabs }, activeTabByWorkspace: { w2: "legacy-stable-placement" } },
+			"w2",
+		),
+	).toBe(tabs[1]);
+});
 
 test("selectHistoryTarget prefers the active chat tab", () => {
 	expect(

@@ -15,6 +15,36 @@ export interface PtySizeSync {
 const sameGrid = (left: PtyGrid | null, right: PtyGrid): boolean =>
 	left?.cols === right.cols && left.rows === right.rows;
 
+export interface TerminalRelayoutBound {
+	/** Deadline after which startup proceeds without the relayout. */
+	timeoutMs: number;
+	/** Neutralize the still-pending relayout so a late settlement cannot re-measure a live terminal. */
+	onTimeout: () => void;
+}
+
+/** Run `start` once the relayout settles or the deadline expires, whichever comes first; expiry fires `onTimeout` before `start`. */
+export async function runAfterTerminalRelayout(
+	relayout: () => Promise<unknown>,
+	start: () => void,
+	{ timeoutMs, onTimeout }: TerminalRelayoutBound,
+): Promise<void> {
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	const timedOut = await Promise.race([
+		Promise.resolve()
+			.then(relayout)
+			.then(
+				() => false,
+				() => false,
+			),
+		new Promise<boolean>((resolve) => {
+			timer = setTimeout(() => resolve(true), timeoutMs);
+		}),
+	]);
+	clearTimeout(timer);
+	if (timedOut) onTimeout();
+	start();
+}
+
 /**
  * Serializes PTY resizes while keeping desired, in-flight, and host-acknowledged grids distinct.
  *

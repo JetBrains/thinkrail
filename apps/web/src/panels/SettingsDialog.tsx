@@ -1,6 +1,7 @@
 import {
 	GitBranch,
 	KeyRound,
+	LayoutPanelTop,
 	LayoutTemplate,
 	type LucideIcon,
 	Palette,
@@ -8,6 +9,7 @@ import {
 	SlidersHorizontal,
 	SquareTerminal,
 } from "lucide-react";
+import type { ReactNode } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib";
 import { SettingsSection, useAppStore } from "@/store";
@@ -23,6 +25,7 @@ const SECTIONS: { id: SettingsSection; label: string; icon: LucideIcon }[] = [
 	{ id: SettingsSection.Providers, label: "Providers", icon: KeyRound },
 	{ id: SettingsSection.Github, label: "GitHub", icon: GitBranch },
 	{ id: SettingsSection.Appearance, label: "Appearance", icon: Palette },
+	{ id: SettingsSection.Layout, label: "Layout", icon: LayoutPanelTop },
 	{ id: SettingsSection.Terminal, label: "Terminal", icon: SquareTerminal },
 	{ id: SettingsSection.Templates, label: "Templates", icon: LayoutTemplate },
 	{ id: SettingsSection.Privacy, label: "Privacy", icon: ShieldCheck },
@@ -35,7 +38,7 @@ const SOON: { label: string; icon: LucideIcon }[] = [{ label: "General", icon: S
  * sections. Store-driven: the top-bar gear and the Welcome provider-warning both open it via `openSettings`,
  * deep-linking to a section. On mobile the rail collapses to a horizontal segmented strip above the content.
  */
-export function SettingsDialog() {
+export function SettingsDialog({ layoutSettings }: { layoutSettings: ReactNode }) {
 	const open = useAppStore((s) => s.settingsOpen);
 	const section = useAppStore((s) => s.settingsSection);
 
@@ -69,7 +72,7 @@ export function SettingsDialog() {
 									data-active={active}
 									onClick={() => useAppStore.getState().setSettingsSection(id)}
 									className={cn(
-										"flex shrink-0 items-center gap-sm rounded-[var(--radius-md)] px-md py-sm text-left tr-text-ui outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary",
+										"flex shrink-0 items-center gap-sm rounded-[var(--radius-sm)] px-md py-sm text-left tr-text-ui outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary",
 										active
 											? "bg-primary-subtle text-primary"
 											: "text-text-muted hover:bg-control-bg-hovered hover:text-text-default",
@@ -83,7 +86,7 @@ export function SettingsDialog() {
 						{SOON.map(({ label, icon: Icon }) => (
 							<span
 								key={label}
-								className="flex shrink-0 cursor-default items-center gap-sm rounded-[var(--radius-md)] px-md py-sm text-text-disabled tr-text-ui"
+								className="flex shrink-0 cursor-default items-center gap-sm rounded-[var(--radius-sm)] px-md py-sm text-text-disabled tr-text-ui"
 							>
 								<Icon className="size-4 shrink-0" />
 								{label}
@@ -99,6 +102,8 @@ export function SettingsDialog() {
 							<ProvidersSettings />
 						) : section === SettingsSection.Github ? (
 							<GithubSettings />
+						) : section === SettingsSection.Layout ? (
+							layoutSettings
 						) : section === SettingsSection.Terminal ? (
 							<TerminalSettings />
 						) : section === SettingsSection.Templates ? (

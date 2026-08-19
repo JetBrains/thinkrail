@@ -30,7 +30,9 @@ The automatic count is half the available CPU parallelism, clamped to 1–8. Dev
 select 1–16 lanes; `e2e:serial` is the stable debugging fallback. A focused invocation carrying Playwright
 arguments defaults to one lane unless its shard count is explicit, so an iteration on one spec stays cheap.
 Direct use of the Playwright config remains self-contained and builds the web app when the shard runner has
-not already done so.
+not already done so. Tests for primary-modifier chords read the page's browser-reported platform through one
+fixture helper and inject Meta on Apple or Control elsewhere; hard-coding the runner host's modifier would
+exercise the wrong product branch under browser/platform emulation.
 
 Provider-backed browser tests (`e2e:agent`) and the separate headless workflow suite are not parallelized by
 this runner: concurrent provider turns would alter rate limits, cost, and determinism. The compiled-binary
@@ -60,7 +62,9 @@ No path may fall back to `~/.thinkrail`, the developer's HOME/config trees, or t
 
 ## Verification policy
 
-During iteration, run the affected specs and use Playwright's last-failed mode. Before handoff, every
-app-affecting change runs the complete `bun run e2e` no-agent gate. Binary-only regressions remain covered by
+During iteration, run the affected specs and use Playwright's last-failed mode. Flake repairs replace
+irrelevant expensive setup with equivalent fixture state and wait for observable readiness; blanket retries,
+arbitrary sleeps, and assertion weakening are not synchronization policy. Before handoff, every app-affecting
+change runs the complete `bun run e2e` no-agent gate. Binary-only regressions remain covered by
 `e2e:binary`; real agent behavior remains covered by explicitly selected `@agent` suites rather than a fake
 agent.

@@ -72,8 +72,10 @@ function CodeBlock({
 	const code = String(children ?? "").replace(/\n$/, "");
 	if (!lang) {
 		if (!code.includes("\n")) {
+			// Inline code sits directly behind a text run → the 2px inline-highlight tier (`xs`), not the
+			// 4px default the fenced block below uses as a standalone container.
 			return (
-				<code className="rounded-[var(--radius-sm)] bg-container-elevated-bg px-1 py-0.5">
+				<code className="rounded-[var(--radius-xs)] bg-container-elevated-bg px-1 py-0.5">
 					{children}
 				</code>
 			);

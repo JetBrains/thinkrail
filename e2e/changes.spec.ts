@@ -55,9 +55,11 @@ test("Changes tab shows the active worktree's diff and swaps per workspace", asy
 	await expect(page.getByTestId("diff-toggle-inline")).toHaveAttribute("data-active", "true");
 	await expect(page.getByTestId("diff-pane")).toContainText("edited = true");
 
-	// A fresh second workspace has its own (empty) change set.
+	// A fresh second workspace has its own (empty) change set. Its new terminal is selected on creation,
+	// so choose the sibling Changes tab explicitly in the synchronized side group.
 	await createWorkspaceViaDialog(page);
 	await expect(worktreeRows(page)).toHaveCount(2);
+	await page.getByTestId("tab-changes").click();
 	await expect(page.getByTestId("changes-empty")).toBeVisible();
 });
 

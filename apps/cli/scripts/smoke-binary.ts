@@ -26,8 +26,19 @@ const projectDir = join(tmp, "project");
 const dataDir = join(tmp, "data");
 const agentDir = join(tmp, "pi-agent");
 
+/** Kills the spawned host once it exists; a no-op for the failures that happen before it is up. */
+let killHost: () => void = () => {};
+
 function fail(message: string): never {
 	console.error(`smoke FAILED: ${message}`);
+	// `process.exit` unwinds nothing — the `finally` at the bottom never runs — so the host has to be
+	// killed right here. Left alive it outlives the smoke: CI reports "Terminate orphan process: pid (…)
+	// (thinkrail-…)", and locally it keeps the inherited stdout pipe open, so a piped invocation hangs
+	// forever after the failure has already been printed.
+	killHost();
+	// The throwaway dirs are deliberately KEPT on failure — they are the post-mortem (which encoded
+	// session dir a transcript landed in, what got staged). A CI runner discards them with the job.
+	console.error(`smoke state kept for inspection: ${tmp}`);
 	process.exit(1);
 }
 
@@ -107,15 +118,6 @@ const gitCommit = Bun.spawnSync([
 ]);
 if (gitCommit.exitCode !== 0) fail("could not commit the portable-skill smoke project");
 
-// A real transcript drives the binary-only Linux trash path. `trash` loads processMountinfo through a
-// template-literal CommonJS require; without the server's static inclusion seam this exact RPC fails only
-// inside the artifact, even though source e2e stays green.
-const doomedTranscript = writeFixtureSession(defaultSessionDirFor(agentDir, projectDir), {
-	cwd: projectDir,
-	name: "compiled trash probe",
-	messages: [{ role: "user", text: "move this transcript to trash", timestamp: Date.now() }],
-});
-
 // 24262 is only the scan start: the CLI free-picks past a taken port and we read the actually served
 // URL from stdout below — so concurrent runs (other worktrees, dev hosts, e2e suites) never collide.
 const proc = Bun.spawn([binary, "--no-open", "--port", "24262"], {
@@ -135,6 +137,7 @@ const proc = Bun.spawn([binary, "--no-open", "--port", "24262"], {
 	stdout: "pipe",
 	stderr: "inherit",
 });
+killHost = () => proc.kill("SIGKILL");
 
 async function connectRpc(baseUrl: string): Promise<WebSocket> {
 	const socket = new WebSocket(`${baseUrl.replace(/^http/, "ws")}/ws`);
@@ -291,9 +294,30 @@ try {
 		rpc(rpcSocket, "workspace.list", { projectId: project.id }),
 		10_000,
 		"workspace.list",
-	)) as { id?: string; kind?: string }[];
-	const workspaceId = workspaces.find((workspace) => workspace.kind === "default")?.id;
+	)) as { id?: string; kind?: string; worktreePath?: string }[];
+	const defaultWorkspace = workspaces.find((workspace) => workspace.kind === "default");
+	const workspaceId = defaultWorkspace?.id;
 	if (!workspaceId) fail("workspace.list returned no Default workspace");
+
+	// A real transcript drives the binary-only Linux trash path. `trash` loads processMountinfo through a
+	// template-literal CommonJS require; without the server's static inclusion seam this exact RPC fails only
+	// inside the artifact, even though source e2e stays green.
+	//
+	// Seed it against the **host-reported** worktree path, never our own `projectDir` string: the host stores
+	// git's symlink-resolved root, and a handed-in temp path is only incidentally canonical (macOS resolves
+	// `/var` → `/private/var`, Windows' `TEMP` is the 8.3 `RUNNER~1` form of `runneradmin`). `session.delete`
+	// matches a transcript on that exact cwd — both the encoded session dir *and* the file's header — so
+	// seeding from an unresolved path strands the file in a directory the host never scans, and the delete
+	// then truthfully reports "nothing in this workspace matched" while the file stays put. Same contract as
+	// e2e's `seedWorkspaceSession(worktreePath, …)`.
+	const worktreePath = defaultWorkspace?.worktreePath;
+	if (!worktreePath) fail("workspace.list returned no worktreePath for the Default workspace");
+	const doomedTranscript = writeFixtureSession(defaultSessionDirFor(agentDir, worktreePath), {
+		cwd: worktreePath,
+		name: "compiled trash probe",
+		messages: [{ role: "user", text: "move this transcript to trash", timestamp: Date.now() }],
+	});
+
 	await within(
 		rpc(rpcSocket, "session.delete", { sessionId: doomedTranscript.id, workspaceId }),
 		10_000,
@@ -385,9 +409,10 @@ try {
 		`smoke OK: ${binary} booted at ${url}, served the UI + staged skills + portable alias, trashed a transcript, OAuth reached its auth URL, exited cleanly.`,
 	);
 } catch (err) {
-	proc.kill("SIGKILL");
+	// `fail` kills the host itself, so every exit path — thrown or asserted — sheds the process.
 	fail(err instanceof Error ? err.message : String(err));
 } finally {
+	// Success only: `fail` exits before this can run, and keeps `tmp` on purpose for the post-mortem.
 	rpcSocket?.close();
 	rmSync(tmp, { recursive: true, force: true });
 }

@@ -16,7 +16,8 @@ export interface HydratedRuntime {
 	askAnswers: Record<string, AskUserAnswersDetails["result"]>;
 	/**
 	 * Parallel to `messages`: `turnIdByMessageIndex[i]` is the turn id minted for `messages[i]` (`null` for
-	 * a `toolResult`/`custom` message, which never becomes its own turn) — the jump anchor map a
+	 * a `toolResult`/`custom` message, which never becomes its own turn, and for a `compactionSummary`,
+	 * which becomes a turn but is never a search hit) — the jump anchor map a
 	 * history-search "jump to message" deep link (`chatLocationRequest`) resolves against. A message that
 	 * ended in `stopReason: "error"` maps to its own assistant turn's id, never the synthesized error
 	 * turn's (the error turn has no message index of its own).
@@ -63,6 +64,15 @@ export function messagesToRuntime(
 				status: message.isError ? "error" : "done",
 				raw: { content: message.content, details: message.details },
 			};
+		} else if (message.role === "compactionSummary") {
+			// Its own turn, but no anchor: history search indexes user/assistant text only, so this slot stays
+			// `null` like every other non-conversation message.
+			turns.push({
+				kind: "compaction",
+				id: crypto.randomUUID(),
+				summary: message.summary,
+				tokensBefore: message.tokensBefore,
+			});
 		} else if (isAskUserAnswersMessage(message)) {
 			// The shared guard validates the details shape (not just the tag) — a malformed reply is ignored.
 			askAnswers[message.details.toolCallId] = message.details.result;

@@ -10,12 +10,14 @@ tags: [v1]
 
 ## Responsibility
 
-Workspace-scoped `bun-pty` terminals rooted in the worktree cwd, **and the per-workspace list of terminal
-tabs**. A tab's shell outlives every client that looks at it.
+Workspace-scoped `bun-pty` terminals rooted in the worktree cwd, and the per-workspace catalog of terminal
+identities. A tab's shell outlives every client that looks at it; workbench placement/order belongs to the
+separate layout snapshot and merely references `tabKey`.
 
 ## Boundary
 
-- **Owns:** the ordered per-workspace tab list (persisted) and the PTY behind each tab, keyed by
+- **Owns:** the persisted per-workspace terminal catalog (stable existence/metadata order, not visual
+  workbench placement) and the PTY behind each tab, keyed by
   `(workspaceId, tabKey)`; batched output on `terminal.data` plus `terminal.exit` / `terminal.detached`
   (addressed) and `terminal.tabs` (broadcast), via injected publishers; the bounded per-terminal output
   recorder replayed on attach.
@@ -37,6 +39,10 @@ tabs**. A tab's shell outlives every client that looks at it.
   its process is Theia's `Couldn't attach - can't find terminal with id`).
 - **`attachTerminal` is idempotent get-or-create** — the only way a PTY is born. No separate liveness call, so
   there is no window in which a client holds the only pointer to a running shell.
+- **PTY resizing is change-only.** Each live entry tracks the grid applied at spawn or by the last successful
+  resize. Attach and explicit resize call `IPty.resize` only when that grid changes, and failed calls do not
+  advance the tracked state. Even a same-grid resize can wake the shell through `SIGWINCH`; a redraw emitted
+  after the attach snapshot can overwrite freshly replayed rows.
 - **Ownership is the host's owner, not the browser page.** Any client may attach; consistent with `history`,
   `todos` and `templates`, which already assume a single-owner host. Consequence: shells survive a reload, a
   closed browser and a different browser.
@@ -50,7 +56,7 @@ tabs**. A tab's shell outlives every client that looks at it.
   first keystroke is what stops a tab looking live while nothing happens. The client also guards the reverse
   order with an attach generation, so a stale attach response can never clear a newer detach.
 - **Output stays addressed**, never broadcast — a frame only ever reaches a client that attached. The tab
-  *list* is the exception: which terminals exist is shared domain state (architecture #9), so every change
+  *catalog* is the exception: which terminals exist is shared domain state (architecture #9), so every change
   fans out on `terminal.tabs` as an idempotent per-workspace snapshot.
 - **A shell dies from exactly five causes:** tab closed, workspace archived, natural exit, host stop, orphan
   sweep on attach. Unmounting a view kills nothing.

@@ -258,3 +258,18 @@ test("unknown custom messages are ignored entirely", () => {
 	expect(turns).toHaveLength(0);
 	expect(Object.keys(askAnswers)).toHaveLength(0);
 });
+
+test("a compaction summary becomes its own turn without claiming a jump anchor", () => {
+	const { turns, turnIdByMessageIndex } = messagesToRuntime([
+		{ role: "user", content: "start", timestamp: 1 },
+		{ role: "compactionSummary", summary: "## Goal\nship it", tokensBefore: 148_000, timestamp: 2 },
+		{ role: "assistant", content: [{ type: "text", text: "carrying on" }] },
+	] as unknown as Message[]);
+
+	expect(turns.map((t) => t.kind)).toEqual(["user", "compaction", "assistant"]);
+	const compaction = turns[1];
+	expect(compaction?.kind === "compaction" && compaction.summary).toBe("## Goal\nship it");
+	expect(compaction?.kind === "compaction" && compaction.tokensBefore).toBe(148_000);
+	// The slot is consumed but unanchored — history search indexes user/assistant text only.
+	expect(turnIdByMessageIndex).toEqual([turns[0]?.id ?? null, null, turns[2]?.id ?? null]);
+});

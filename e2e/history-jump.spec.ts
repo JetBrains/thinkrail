@@ -8,7 +8,7 @@ import {
 import { seedExternalCwdSessions, seedWorkspaceSession } from "./fixtures/sessions";
 
 // Selecting a message hit in the Ctrl+R history overlay (A7) jumps to it: `useHistorySearch`'s
-// `openMessage` sets the store's `chatLocationRequest`; `CenterTabs` opens/hydrates the target chat;
+// `openMessage` sets the store's `chatLocationRequest`; `WorkspaceWorkbench` opens/hydrates the target chat;
 // `ChatView` scrolls to the matched row and flashes it (`[data-flash]`), then clears the request. This
 // file drives that whole path against real, disk-only (never-opened) seeded sessions — the "come back to
 // a workspace later and jump to something you remember" case the feature targets.
@@ -48,7 +48,7 @@ test("selecting a same-workspace message hit opens the chat and flashes the matc
 	await page.waitForTimeout(2_100);
 
 	// A reload doesn't auto-restore the active project/workspace (see `ask-restart.live.spec.ts`) — re-pick
-	// both, so `CenterTabs`' hydrate-on-connect effect re-lists workspace A's sessions from a cold client,
+	// both, so `WorkspaceWorkbench`'s hydrate-on-connect effect re-lists workspace A's sessions from a cold client,
 	// the realistic "come back later" path. (Not load-bearing for the jump itself — case (c) below fetches
 	// the target session directly by id regardless of whether `session.list` ever ran for it — but this
 	// keeps the scenario honest to the brief and exercises the full reload path.)

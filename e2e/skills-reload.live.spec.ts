@@ -8,7 +8,7 @@ import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
 // spends provider tokens (session create + session.reloadResources are config/fs work, no model round-trip).
 //
 // The bugs this pins: watcher startup and capped non-skill worktree churn must not look like a skill change,
-// and the badge must remain store-derived per session across CenterTabs remounts. A reload clears it for good
+// and the badge must remain store-derived per session across workbench-body remounts. A reload clears it for good
 // and a sibling chat that loaded the current skills is never flagged.
 test("skills badge: ignores capped build churn, flags a skill change, and clears per chat", {
 	tag: "@agent",

@@ -236,7 +236,7 @@ const Card = forwardRef<HTMLButtonElement, CardProps>(function Card(
 			data-testid={cta ? "welcome-cta" : "welcome-action"}
 			{...rest}
 			className={cn(
-				"relative flex h-[150px] w-[220px] flex-col items-start justify-between rounded-[var(--radius-lg)] border bg-clip-padding p-lg text-left transition-colors",
+				"relative flex h-[150px] w-[220px] flex-col items-start justify-between rounded-[var(--radius-sm)] border bg-clip-padding p-lg text-left transition-colors",
 				primary
 					? "border-primary-muted bg-primary-subtle hover:bg-primary-soft"
 					: "border-border-default bg-container-workspace-bg hover:border-primary-muted hover:bg-container-elevated-bg",
@@ -250,7 +250,7 @@ const Card = forwardRef<HTMLButtonElement, CardProps>(function Card(
 			) : null}
 			<span
 				className={cn(
-					"flex size-9 items-center justify-center rounded-[var(--radius-md)]",
+					"flex size-9 items-center justify-center rounded-[var(--radius-sm)]",
 					primary ? "bg-primary text-text-on-primary" : "bg-control-bg-selected text-text-muted",
 				)}
 			>

@@ -1,14 +1,16 @@
-import { expect, test } from "@playwright/test";
+import { realpathSync } from "node:fs";
+import { expect, type Page, test } from "@playwright/test";
 import {
-	activeWorktreeRow,
 	createWorkspaceViaDialog,
+	defaultWorkspaceRow,
+	enterDefaultWorkspace,
 	openFixtureProject,
 	openTerminal,
 	openWorkspaceChat,
 	visibleTerminal,
 	visibleTerminalScreen,
-	worktreeRows,
 } from "./fixtures/app";
+import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { seedExternalCwdSessions, seedWorkspaceSession } from "./fixtures/sessions";
 
 // No-agent (see composer.live.spec.ts for the @agent-tagged composer suite): the Ctrl+R history-recall
@@ -25,6 +27,47 @@ import { seedExternalCwdSessions, seedWorkspaceSession } from "./fixtures/sessio
 // reply. Querying "fix" instead matches both entries (a direct substring of the prompt, and a
 // case-insensitive substring of "Fixed" in the reply) and otherwise exercises the exact same scenario the
 // brief describes — see task-A7-report.md for the full writeup.
+
+type SeededMessages = Parameters<typeof seedWorkspaceSession>[1]["messages"];
+
+/**
+ * Open a disk-only chat from History without paying for a throwaway git worktree. A live Default-workspace
+ * chat supplies the active-chat baseline while the seeded session remains history-only; reloading before the
+ * disk write prevents an in-flight session list from hydrating it early. The helper returns only after the
+ * history affordance itself is ready.
+ */
+async function openSeededClosedChat(page: Page, messages: SeededMessages) {
+	await openFixtureProject(page);
+	await enterDefaultWorkspace(page);
+	await page.getByTestId("start-chat").click();
+	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
+
+	await page.reload();
+	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+	seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), { messages });
+
+	await page.getByTestId("project-item").first().click();
+	await defaultWorkspaceRow(page).click();
+	await expect(defaultWorkspaceRow(page)).toHaveAttribute("data-active", "true");
+	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
+	const history = page.getByTestId("chat-history");
+	await expect(history).toBeVisible();
+	await history.click();
+	const closedChat = page.getByTestId("closed-chat-item").first();
+	await expect(closedChat).toBeVisible();
+	await closedChat.click();
+
+	// The prior live chat's composer can remain visible while the disk session hydrates. Wait for every
+	// seeded user turn so the returned input belongs to the reopened chat and recall has its full source.
+	const userMessageCount = messages.filter((message) => message.role === "user").length;
+	await expect(page.locator('[data-testid="chat-message"][data-role="user"]')).toHaveCount(
+		userMessageCount,
+		{ timeout: 20_000 },
+	);
+	const input = page.getByTestId("chat-input");
+	await expect(input).toBeVisible();
+	return input;
+}
 
 test("Ctrl+R opens history recall, cycles scope to all, zooms to messages, inserts a prompt, and Esc preserves the draft", async ({
 	page,
@@ -245,10 +288,9 @@ test("Ctrl+R dismisses an open mention menu instead of overlapping it", async ({
 
 // A9: plain `↑`/`↓` recall (no Ctrl+R, no query typing) steps through *this chat's own* prior prompts — it
 // needs a chat whose runtime actually has prior user turns, so `openWorkspaceChat`'s brand-new session
-// (never sent to) doesn't do; seed one via `seedWorkspaceSession` on a real workspace `worktreePath` (see
-// the comment at its first use in `history-jump.spec.ts` for why that path, not some arbitrary string, is
-// the seed target) and open it. Simplest way in: the `chat-history` / `closed-chat-item` reopen flow
-// (`CenterTabs.tsx`) rather than the search-and-jump flow `history-jump.spec.ts` already covers — a
+// (never sent to) doesn't do; seed one via `seedWorkspaceSession` at the already-seeded Default workspace's
+// canonical fixture-repo cwd and open it. Simplest way in: the `chat-history` / `closed-chat-item` reopen flow
+// (`WorkspaceWorkbench.tsx`) rather than the search-and-jump flow `history-jump.spec.ts` already covers — a
 // disk-only session surfaces there the moment its workspace becomes active. No `historyIndex` revalidation
 // wait is needed here (contrast the 2.1s waits in `history-jump.spec.ts`): `session.list` reads pi's
 // `SessionManager.list` straight off disk on every call, it isn't behind the throttled `HistoryIndex`
@@ -256,55 +298,20 @@ test("Ctrl+R dismisses an open mention menu instead of overlapping it", async ({
 test("plain ArrowUp/ArrowDown recall steps through this chat's own prior prompts, a diverging edit exits the session, and the history button opens the overlay", async ({
 	page,
 }) => {
-	await openFixtureProject(page);
-	const workspace = await createWorkspaceViaDialog(page);
-	// No explicit `id`: this test never references the seeded session by id again (it reopens via the
-	// `chat-history` → `closed-chat-item` UI flow below), so the default fresh-per-call id is enough —
-	// and, unlike a fixed literal id, survives a Playwright retry within the same `webServer` lifetime.
-	seedWorkspaceSession(workspace.worktreePath, {
-		messages: [
-			{ role: "user", text: "audit the retry backoff", timestamp: 1_700_400_000_000 },
-			{ role: "assistant", text: "Audited it — looks fine.", timestamp: 1_700_400_001_000 },
-			{
-				role: "user",
-				text: "add a jittered ceiling to the backoff",
-				timestamp: 1_700_400_002_000,
-			},
-			{ role: "assistant", text: "Added the ceiling.", timestamp: 1_700_400_003_000 },
-			{ role: "user", text: "write a test for the jitter", timestamp: 1_700_400_004_000 },
-			{ role: "assistant", text: "Added a test.", timestamp: 1_700_400_005_000 },
-		],
-	});
-
-	// A reload doesn't auto-restore the active project/workspace (see `history-jump.spec.ts`) — re-pick both
-	// so `CenterTabs`'s hydrate-on-connect effect re-lists this workspace's sessions from a cold client and
-	// discovers the disk-only seeded one.
-	await page.reload();
-	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
-	await page.getByTestId("project-item").first().click();
-	await worktreeRows(page).first().click();
-	await expect(activeWorktreeRow(page)).toHaveCount(1);
-	// The create's auto-opened chat (live in the host) auto-restores — wait for it so the restore
-	// can't land mid-flow and steal the center while the closed chat below is being reopened.
-	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
-
-	await page.getByTestId("chat-history").click();
-	await page.getByTestId("closed-chat-item").first().click();
-	const input = page.getByTestId("chat-input");
-	await expect(input).toBeVisible();
+	const input = await openSeededClosedChat(page, [
+		{ role: "user", text: "audit the retry backoff", timestamp: 1_700_400_000_000 },
+		{ role: "assistant", text: "Audited it — looks fine.", timestamp: 1_700_400_001_000 },
+		{
+			role: "user",
+			text: "add a jittered ceiling to the backoff",
+			timestamp: 1_700_400_002_000,
+		},
+		{ role: "assistant", text: "Added the ceiling.", timestamp: 1_700_400_003_000 },
+		{ role: "user", text: "write a test for the jitter", timestamp: 1_700_400_004_000 },
+		{ role: "assistant", text: "Added a test.", timestamp: 1_700_400_005_000 },
+	]);
 	// The reopened chat's transcript is restored, but its *draft* is fresh — recall must start from empty.
 	await expect(input).toHaveValue("");
-	// Recall reads *this chat's own user turns* (`ChatView`'s `recentPrompts`), so it only exists once the
-	// reopened transcript has hydrated — a visible composer is not that (it renders before the session's
-	// messages arrive). Without this wait the first ArrowUp lands on an empty list and no-ops. It gets its own
-	// generous timeout: the reopen is a host round-trip (session restore), which under full-suite contention
-	// takes noticeably longer than the default expect window.
-	await expect(
-		page
-			.locator('[data-testid="chat-message"][data-role="user"]')
-			.filter({ hasText: "write a test for the jitter" }),
-	).toHaveCount(1, { timeout: 20_000 });
-
 	// Newest first: ArrowUp on the empty field recalls the latest prompt, then steps older.
 	await input.press("ArrowUp");
 	await expect(input).toHaveValue("write a test for the jitter");
@@ -357,33 +364,10 @@ test("a recall step immediately followed by a full-value replace never doubles t
 	page,
 }) => {
 	test.setTimeout(60_000);
-	await openFixtureProject(page);
-	const workspace = await createWorkspaceViaDialog(page);
-	// No explicit `id`: this test loops many repeated recall/replace cycles and is meant to be re-run
-	// under `--repeat-each` to prove the race stays closed. A fixed literal id would collide with an
-	// in-memory session entry from an earlier repeat's (differently-`workspaceId`'d) run within the same
-	// shared webServer lifetime, failing with "Unknown session" before ever reaching the code path this
-	// test exists to exercise — the default fresh-per-call id (`seedWorkspaceSession`) sidesteps that.
-	seedWorkspaceSession(workspace.worktreePath, {
-		messages: [
-			{ role: "user", text: "write a test for the jitter", timestamp: 1_700_500_000_000 },
-			{ role: "assistant", text: "Added a test.", timestamp: 1_700_500_001_000 },
-		],
-	});
-
-	await page.reload();
-	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
-	await page.getByTestId("project-item").first().click();
-	await worktreeRows(page).first().click();
-	await expect(activeWorktreeRow(page)).toHaveCount(1);
-	// The create's auto-opened chat (live in the host) auto-restores — wait for it so the restore
-	// can't land mid-flow and steal the center while the closed chat below is being reopened.
-	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
-
-	await page.getByTestId("chat-history").click();
-	await page.getByTestId("closed-chat-item").first().click();
-	const input = page.getByTestId("chat-input");
-	await expect(input).toBeVisible();
+	const input = await openSeededClosedChat(page, [
+		{ role: "user", text: "write a test for the jitter", timestamp: 1_700_500_000_000 },
+		{ role: "assistant", text: "Added a test.", timestamp: 1_700_500_001_000 },
+	]);
 	await expect(input).toHaveValue("");
 
 	// Throttle the main thread so any reintroduced deferred-callback gap (RAF or otherwise) would widen
@@ -414,34 +398,14 @@ test("a recall step immediately followed by a full-value replace never doubles t
 test("a prompt repeated earlier in the chat recalls at its most recent position, deduped to one entry", async ({
 	page,
 }) => {
-	await openFixtureProject(page);
-	const workspace = await createWorkspaceViaDialog(page);
-	// No explicit `id` — same reasoning as the recall test above: this test never references the seeded
-	// session by id, so the default fresh-per-call id (survives a same-process retry) is enough.
-	seedWorkspaceSession(workspace.worktreePath, {
-		messages: [
-			{ role: "user", text: "alpha", timestamp: 1_700_450_000_000 },
-			{ role: "assistant", text: "ok", timestamp: 1_700_450_001_000 },
-			{ role: "user", text: "beta", timestamp: 1_700_450_002_000 },
-			{ role: "assistant", text: "ok", timestamp: 1_700_450_003_000 },
-			{ role: "user", text: "alpha", timestamp: 1_700_450_004_000 },
-			{ role: "assistant", text: "ok", timestamp: 1_700_450_005_000 },
-		],
-	});
-
-	await page.reload();
-	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
-	await page.getByTestId("project-item").first().click();
-	await worktreeRows(page).first().click();
-	await expect(activeWorktreeRow(page)).toHaveCount(1);
-	// The create's auto-opened chat (live in the host) auto-restores — wait for it so the restore
-	// can't land mid-flow and steal the center while the closed chat below is being reopened.
-	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
-
-	await page.getByTestId("chat-history").click();
-	await page.getByTestId("closed-chat-item").first().click();
-	const input = page.getByTestId("chat-input");
-	await expect(input).toBeVisible();
+	const input = await openSeededClosedChat(page, [
+		{ role: "user", text: "alpha", timestamp: 1_700_450_000_000 },
+		{ role: "assistant", text: "ok", timestamp: 1_700_450_001_000 },
+		{ role: "user", text: "beta", timestamp: 1_700_450_002_000 },
+		{ role: "assistant", text: "ok", timestamp: 1_700_450_003_000 },
+		{ role: "user", text: "alpha", timestamp: 1_700_450_004_000 },
+		{ role: "assistant", text: "ok", timestamp: 1_700_450_005_000 },
+	]);
 	await expect(input).toHaveValue("");
 
 	await input.press("ArrowUp");
@@ -455,11 +419,9 @@ test("a prompt repeated earlier in the chat recalls at its most recent position,
 
 // A9's mobile-discoverability half: `HistoryOverlay` sizes itself with `left-sm right-sm` insets (see
 // `HistoryOverlay.tsx`) rather than a fixed pixel width, specifically so it can't overflow a narrow
-// container. The app's three-pane layout (`shell/Shell.tsx`) isn't itself the "mobile single-view shell"
-// `architecture.md` describes — that's a separate, not-yet-built concern — so this only isolates what IS
-// this task's concern: the overlay's own sizing at a narrow (~390px, a small-phone width) viewport. Resize
-// only for the check itself (after the normal desktop-sized setup) so a squeezed three-pane layout can't
-// make the setup flow itself flaky.
+// container. The recursive desktop workbench is not itself the future mobile single-view projection, so
+// this isolates the overlay's own sizing at a narrow (~390px, small-phone) viewport. Resize only for the
+// check itself (after normal desktop-sized setup) so a compressed workbench cannot make setup flaky.
 test("the history overlay stays inside the viewport and its query stays focusable at a narrow (~390px) width", async ({
 	page,
 }) => {

@@ -87,8 +87,8 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   against; collapsing them would make a re-pointed target lie about provenance (the `branch · from
   baseBranch` receipt). Every read of "the base" resolves through the `git` module, never inline —
   `diffStats` composes the git module's **branch-scope range** (`resolveDiffRange` +
-  `changedFileArgs(…, "--shortstat")`), so the rail badge measures exactly what the Changes panel shows
-  (merge-base semantics included — upstream commits on the base never inflate the badge) and reaches git
+  `changedFileArgs(…, "--shortstat")`), so the workspace aggregate measures exactly what the Changes panel
+  shows (merge-base semantics included — upstream commits on the base never inflate it) and reaches git
   bracketed by `--end-of-options` … `--` like every other rev this app passes. `diffStats` yields **no stats at all** (logged) when git couldn't
   answer, rather than a fabricated `+0 −0` — a failed read must not paint a dirty worktree as clean; the
   `Workspace.diffStats` field is simply absent, and `workspaceDiffStats` rejects,

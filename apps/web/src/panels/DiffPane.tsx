@@ -20,7 +20,7 @@ const loading = (
 );
 
 /**
- * The center pane for a diff tab: a slim header over the diff. A non-markdown file gets the read-only
+ * The Editor Pane body for a diff tab: a slim header over the diff. A non-markdown file gets the read-only
  * Monaco diff (the tab's own scope: base branch / HEAD / one commit) with a **Split | Inline** toggle
  * (per-tab via `store.setDiffTabView`). A markdown file gets exactly two views via a **Source | Rendered**
  * toggle (per-tab `store.setDiffTabRendered`): **Source** = the basic Monaco split diff; **Rendered** = the
@@ -67,11 +67,20 @@ export function DiffPane({ tab }: { tab: DiffTab }) {
 			// Fresh content records the target it was read against; a tick-only advance keeps the tab's existing
 			// one (nothing was re-read, so nothing new is being claimed).
 			applyFresh: ({ original, modified }, tick) =>
-				useAppStore.getState().updateDiffTabContent(tab.id, original, modified, tick, targetRef),
+				useAppStore
+					.getState()
+					.updateDiffTabContent(tab.workspaceId, tab.id, original, modified, tick, targetRef),
 			keepCurrent: (tick) =>
 				useAppStore
 					.getState()
-					.updateDiffTabContent(tab.id, tab.original, tab.modified, tick, tab.loadedTarget),
+					.updateDiffTabContent(
+						tab.workspaceId,
+						tab.id,
+						tab.original,
+						tab.modified,
+						tick,
+						tab.loadedTarget,
+					),
 		},
 		targetRef,
 		tab.loadedTarget,

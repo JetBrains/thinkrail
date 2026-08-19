@@ -345,7 +345,7 @@ export function AskUserQuestionCard({
 									type="button"
 									data-testid="ask-continue"
 									onClick={() => setTab(Math.min(tab + 1, reviewTab))}
-									className="rounded-[var(--radius-md)] bg-control-primary-bg px-md py-1.5 tr-text-action text-control-primary-text hover:bg-control-primary-bg-hovered"
+									className="rounded-[var(--radius-sm)] bg-control-primary-bg px-md py-1.5 tr-text-action text-control-primary-text hover:bg-control-primary-bg-hovered"
 								>
 									Next →
 								</button>
@@ -355,7 +355,7 @@ export function AskUserQuestionCard({
 									data-testid="ask-submit"
 									onClick={() => reply({ answers, cancelled: false })}
 									disabled={!canSubmit}
-									className="rounded-[var(--radius-md)] bg-control-primary-bg px-md py-1.5 tr-text-action text-control-primary-text hover:bg-control-primary-bg-hovered disabled:cursor-not-allowed disabled:bg-control-disabled-bg disabled:text-control-disabled-text"
+									className="rounded-[var(--radius-sm)] bg-control-primary-bg px-md py-1.5 tr-text-action text-control-primary-text hover:bg-control-primary-bg-hovered disabled:cursor-not-allowed disabled:bg-control-disabled-bg disabled:text-control-disabled-text"
 								>
 									Submit
 								</button>
@@ -434,8 +434,8 @@ function ComposingCard({ count }: { count: number }) {
 					Preparing questions…{count > 0 ? ` (${count} ready)` : ""}
 				</div>
 				<div className="flex animate-pulse flex-col gap-xs" aria-hidden="true">
-					<div className="h-8 rounded-[var(--radius-md)] bg-control-bg-selected" />
-					<div className="h-8 rounded-[var(--radius-md)] bg-control-bg-selected" />
+					<div className="h-8 rounded-[var(--radius-sm)] bg-control-bg-selected" />
+					<div className="h-8 rounded-[var(--radius-sm)] bg-control-bg-selected" />
 				</div>
 			</div>
 		</div>
@@ -605,7 +605,7 @@ function QuestionBody({
 				{anyPreview && previewSource?.preview ? (
 					<div
 						data-testid="ask-preview"
-						className="min-w-0 overflow-auto rounded-[var(--radius-md)] border border-border-default bg-control-bg px-sm py-xs tr-text-metadata"
+						className="min-w-0 overflow-auto rounded-[var(--radius-sm)] border border-border-default bg-control-bg px-sm py-xs tr-text-metadata"
 					>
 						<div className="mb-xs text-text-muted tr-text-metadata">
 							Preview · {previewSource.label}
@@ -641,7 +641,7 @@ function OptionRow({
 			data-selected={selected}
 			onClick={onClick}
 			className={cn(
-				"flex items-start gap-sm rounded-[var(--radius-md)] border px-md py-sm text-left transition-colors",
+				"flex items-start gap-sm rounded-[var(--radius-sm)] border px-md py-sm text-left transition-colors",
 				selected
 					? "border-primary bg-primary-subtle"
 					: "border-border-default hover:bg-control-bg-hovered",
@@ -701,7 +701,7 @@ function OtherOptionRow({
 			data-testid="ask-custom-row"
 			data-selected={active}
 			className={cn(
-				"flex cursor-text items-center gap-sm rounded-[var(--radius-md)] border px-md py-sm transition-colors",
+				"flex cursor-text items-center gap-sm rounded-[var(--radius-sm)] border px-md py-sm transition-colors",
 				active
 					? "border-primary bg-primary-subtle"
 					: "border-border-default hover:bg-control-bg-hovered",

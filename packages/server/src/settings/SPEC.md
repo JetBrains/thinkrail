@@ -10,8 +10,9 @@ tags: [v1]
 
 ## Responsibility
 
-The server-synced app config — OUR settings (an opaque theme selection, the analytics switch, the terminal
-replay budget), an extensible `AppConfig` bag. Reads/merges/persists it and fans changes out to every client,
+The server-synced app config — OUR settings (an opaque theme selection, the analytics switch, terminal
+replay budget, and workbench default/custom presets + side-group limit), an extensible `AppConfig` bag.
+Reads/merges/persists it and fans changes out to every client,
 so a preference set on one client follows the user to the others (architecture #9: shared domain state). The
 web client owns the available theme manifests; settings stores only the selected string id.
 
@@ -36,3 +37,10 @@ web client owns the available theme manifests; settings stores only the selected
   pattern). `getConfig()` is the same value `server.welcome` seeds on connect.
 - Theme availability/labels/palettes are not server settings concerns. An id unknown to a given web client
   remains persisted unchanged; that client owns visual fallback.
+- `settings.update` remains a top-level partial merge; a supplied `layout` field is a complete validated
+  `LayoutSettings` replacement, never a nested partial that could drop catalog/default/limit siblings.
+- Layout preset payloads are portable structure/tool placement only; settings never accepts workspace
+  resource identities in a preset. `host` runs custom payloads through `layout`'s portable-preset validator
+  before calling settings, preserving sibling boundaries without duplicating the parser. Built-in definitions
+  may evolve with the independently shipped UI, while the host preserves the selected opaque id and custom
+  payloads.

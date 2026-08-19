@@ -9,8 +9,8 @@ import { TreeRow } from "./TreeRow";
 /**
  * The Changes panel's folder view: the changed files laid out as a tree with single-directory runs
  * compacted into slash-joined rows, styled exactly like the All-files tree (shared `TreeRow`) with a
- * per-file / per-folder `+/−` badge (shared `DiffStatBadge`) mirroring the
- * project rail's worktree stats. **File** rows carry the same action menu the flat list does
+ * per-file / per-folder `+/−` badge (shared `DiffStatBadge`). **File** rows carry the same action menu the
+ * flat list does
  * (`ChangeRowActions` — hover `⌄` + right-click); folder rows get none, since nothing in that menu applies to
  * a folder. Presentational — the flat list and this view share the same `onOpen` (open/focus the file's diff
  * tab, at the gesture's `TabIntent`) and `isActive` (selected row) from `ChangesPanel`.

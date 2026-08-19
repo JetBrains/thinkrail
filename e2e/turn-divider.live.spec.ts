@@ -3,10 +3,10 @@ import { openWorkspaceChat, waitForDone } from "./fixtures/app";
 
 // Tagged @agent (see agent.live.spec.ts): drives a REAL pi agent to make a file change, then proves the
 // chat turn-divider (Task 9) — it appears the instant the turn ends (no follow-up needed), and its "files
-// changed" chip deep-links the right panel's Changes view, highlighting the edited file's row AND opening
+// changed" chip reveals the Changes tool, highlights the edited file's row, AND opens
 // its diff tab in the center (the click is the explicit ask to see the change; see panels/SPEC.md).
 // The second spec covers the divider's OTHER chip: a written spec is counted and routed as a spec, never as
-// a change — the two chips mirror the Specs/Changes tab split.
+// a change — the two chips retain Specs/Changes ownership independently of their current placement.
 
 test("turn-divider files-changed chip opens the file's diff and highlights its row in Changes", {
 	tag: "@agent",
@@ -36,7 +36,7 @@ test("turn-divider files-changed chip opens the file's diff and highlights its r
 	await expect(chip).toBeVisible({ timeout: 30_000 });
 	await expect(chip).toContainText("file changed");
 
-	// Clicking it flips the right panel to Changes, highlights notes.txt's row, and opens its diff tab in
+	// Clicking it reveals Changes, highlights notes.txt's row, and opens its diff tab in
 	// the center — the click is the user's explicit ask to see that change.
 	await chip.click();
 	await expect(page.getByTestId("tab-changes")).toHaveAttribute("data-active", "true");
@@ -140,9 +140,9 @@ test("a spec written while the Specs tab is closed still counts as a spec", {
 	test.setTimeout(150_000);
 	await openWorkspaceChat(page);
 
-	// Park the right panel on Changes, so the Specs tab body is UNMOUNTED for the whole round. The graph
+	// Select Changes in its side group, so the Specs body is UNMOUNTED for the whole round. The graph
 	// that classifies the round's artifacts has to keep tracking the worktree anyway (the read is owned by
-	// the always-mounted panel — see panels/useWorkspaceSpecs); if it stopped at the tab, a user who lives
+	// the always-mounted workbench integration — see panels/useWorkspaceSpecs); if it stopped at the tab, a user who lives
 	// in Changes would get every spec counted as a changed file, silently undoing the split.
 	await page.getByTestId("tab-changes").click();
 	await expect(page.getByTestId("tab-changes")).toHaveAttribute("data-active", "true");

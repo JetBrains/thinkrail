@@ -29,7 +29,7 @@ export function ThinkingSelector({
 				data-testid="thinking-selector"
 				data-open={open}
 				disabled={levels.length === 0}
-				className="flex h-8 items-center gap-sm rounded-[var(--radius-md)] border border-control-border-default bg-clip-padding bg-control-bg px-sm tr-text-ui text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary disabled:bg-control-disabled-bg disabled:text-control-disabled-text data-[open=true]:border-control-border-active data-[open=true]:bg-control-bg-selected"
+				className="flex h-8 items-center gap-sm rounded-[var(--radius-sm)] border border-control-border-default bg-clip-padding bg-control-bg px-sm tr-text-ui text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary disabled:bg-control-disabled-bg disabled:text-control-disabled-text data-[open=true]:border-control-border-active data-[open=true]:bg-control-bg-selected"
 			>
 				<span className="tr-text-eyebrow text-text-muted">Effort</span>
 				<span className="capitalize">{level}</span>

@@ -150,12 +150,14 @@ test("selected workspace tabs keep their surface and edge marker in high contras
 	await page.getByTestId("terminal-add").click();
 	await expect(page.getByTestId("terminal-tab")).toHaveCount(2);
 
-	for (const strip of [
+	const strips = [
 		page.getByTestId("center-tab-strip"),
 		page.getByTestId("right-tab-strip"),
-		page.getByTestId("terminal-panel"),
-	]) {
-		await expect(strip.locator('[role="tablist"], [role="tab"], [aria-selected]')).toHaveCount(0);
+		page.getByTestId("workbench-tab-strip").filter({ has: page.getByTestId("terminal-tab") }),
+	];
+	for (const strip of strips) {
+		await expect(strip.getByRole("tablist")).toHaveCount(1);
+		await expect(strip.locator('[role="tab"][aria-selected="true"]')).toHaveCount(1);
 	}
 
 	const state = await page.evaluate(() => {
@@ -165,10 +167,9 @@ test("selected workspace tabs keep their surface and edge marker in high contras
 		const right = document.querySelector<HTMLElement>(
 			'[data-testid="right-tab-strip"] [data-active="true"]',
 		);
-		const terminalButton = document.querySelector<HTMLElement>(
+		const terminal = document.querySelector<HTMLElement>(
 			'[data-testid="terminal-tab"][data-active="true"]',
 		);
-		const terminal = terminalButton?.parentElement;
 		if (!center || !right || !terminal) throw new Error("Missing an active workspace tab surface");
 
 		const resolveColor = (property: string): string => {

@@ -81,7 +81,7 @@ export function groupStatus(group: TodoGroup): TodoGroupStatus {
 	return "pending";
 }
 
-const CURRENT_VERSION = 3 as const;
+const CURRENT_VERSION = 4 as const;
 
 const STATUS_SET: ReadonlySet<string> = new Set(TODO_STATUSES);
 const ORIGIN_SET: ReadonlySet<string> = new Set(TODO_ORIGINS);
@@ -125,7 +125,8 @@ function decodeIfAgent(s: string, origin: TodoOrigin): string {
 /**
  * Coerce a parsed value into a list of valid artifacts, dropping malformed entries; returns `undefined`
  * (not `[]`) when there are none, so an item without artifacts serializes without the key. `label` is
- * decoded for agent-authored items (like `title`/`note`); `path`/`specId` are stored verbatim.
+ * decoded for agent-authored items (like `title`/`note`); `path`/`specId`/`sha` are stored verbatim. A
+ * `commit` is addressed by `sha` (dropped if it lacks one); every other kind needs a `path`.
  */
 function sanitizeArtifacts(raw: unknown, origin: TodoOrigin): TodoArtifact[] | undefined {
 	if (!Array.isArray(raw)) return undefined;
@@ -134,10 +135,13 @@ function sanitizeArtifacts(raw: unknown, origin: TodoOrigin): TodoArtifact[] | u
 		if (typeof entry !== "object" || entry === null) continue;
 		const o = entry as Record<string, unknown>;
 		if (typeof o.kind !== "string" || !ARTIFACT_KIND_SET.has(o.kind)) continue;
-		if (typeof o.path !== "string" || !o.path) continue;
-		const artifact: TodoArtifact = { kind: o.kind as TodoArtifact["kind"], path: o.path };
+		const artifact: TodoArtifact = { kind: o.kind as TodoArtifact["kind"] };
+		if (typeof o.path === "string" && o.path) artifact.path = o.path;
+		if (typeof o.sha === "string" && o.sha) artifact.sha = o.sha;
 		if (typeof o.label === "string" && o.label) artifact.label = decodeIfAgent(o.label, origin);
 		if (typeof o.specId === "string" && o.specId) artifact.specId = o.specId;
+		// A commit is addressed by its sha; every other kind by a path. Drop the entry that lacks its key.
+		if (artifact.kind === "commit" ? !artifact.sha : !artifact.path) continue;
 		out.push(artifact);
 	}
 	return out.length > 0 ? out : undefined;

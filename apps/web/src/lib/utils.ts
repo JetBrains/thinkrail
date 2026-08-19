@@ -1,10 +1,72 @@
-import type { UserMessage } from "@thinkrail/contracts";
+import type { LayoutTab, UserMessage } from "@thinkrail/contracts";
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 
 /** Merge conditional class names and de-dupe conflicting Tailwind utilities. */
 export function cn(...inputs: ClassValue[]): string {
 	return twMerge(clsx(inputs));
+}
+
+/** Window in which a leading click may still become the same browser double-click gesture. */
+export const DOUBLE_CLICK_SETTLE_MS = 250;
+
+/** Collision-safe, low-overhead key for independent string identities (never delimiter-concatenated). */
+export function tupleKey(namespace: string, ...parts: string[]): string {
+	return `${namespace}:${parts.map((part) => `${part.length}:${part}`).join("")}`;
+}
+
+/** One browser-wide semantic identity for a shared placement and any local cache alias. */
+export function layoutResourceIdentity(tab: LayoutTab): string {
+	switch (tab.kind) {
+		case "file":
+			return tupleKey("layout-resource", "file", tab.path);
+		case "diff": {
+			const reference =
+				tab.scope.kind === "commit"
+					? tab.scope.sha
+					: tab.scope.kind === "pinned"
+						? tab.scope.baseRef
+						: "";
+			return tupleKey("layout-resource", "diff", tab.path, tab.scope.kind, reference);
+		}
+		case "chat":
+			return tupleKey("layout-resource", "chat", tab.sessionId);
+		case "document":
+			return tupleKey("layout-resource", "document", tab.documentKind, tab.sourceId);
+		case "terminal":
+			return tupleKey("layout-resource", "terminal", tab.tabKey);
+		case "tool":
+			return tupleKey("layout-resource", "tool", tab.tool);
+	}
+}
+
+/** Parse a key created by {@link tupleKey}; malformed or differently-namespaced values stay opaque. */
+export function parseTupleKey(key: string, namespace: string): string[] | null {
+	const prefix = `${namespace}:`;
+	if (!key.startsWith(prefix)) return null;
+	const parts: string[] = [];
+	let offset = prefix.length;
+	while (offset < key.length) {
+		const separator = key.indexOf(":", offset);
+		if (separator < 0) return null;
+		const lengthText = key.slice(offset, separator);
+		if (!/^(0|[1-9]\d*)$/.test(lengthText)) return null;
+		const length = Number(lengthText);
+		if (!Number.isSafeInteger(length)) return null;
+		const start = separator + 1;
+		const end = start + length;
+		if (end > key.length) return null;
+		parts.push(key.slice(start, end));
+		offset = end;
+	}
+	return parts;
+}
+
+/** Random id that also works on plain-HTTP remote hosts where `crypto.randomUUID` is unavailable. */
+export function randomId(prefix = "id"): string {
+	const bytes = crypto.getRandomValues(new Uint8Array(16));
+	const value = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+	return `${prefix}-${value}`;
 }
 
 /** A user message's plain text (ignores image parts) — shared by transcript hydration, the store's
@@ -61,7 +123,27 @@ function fileName(path: string): string {
 }
 
 function trimTrailingSlashes(path: string): string {
-	return path.replace(/\/+$/, "");
+	return path === "/" || /^[A-Za-z]:\/$/.test(path) ? path : path.replace(/\/+$/, "");
+}
+
+function canonicalPosixPath(path: string): string {
+	const normalized = normalizePath(path);
+	const drive = /^[A-Za-z]:\//.exec(normalized)?.[0];
+	const absolute = normalized.startsWith("/") || drive !== undefined;
+	const body = drive ? normalized.slice(drive.length) : normalized.replace(/^\/+/, "");
+	const segments: string[] = [];
+	for (const segment of body.split("/")) {
+		if (!segment || segment === ".") continue;
+		if (segment === "..") {
+			const previous = segments.at(-1);
+			if (previous && previous !== "..") segments.pop();
+			else if (!absolute) segments.push(segment);
+			continue;
+		}
+		segments.push(segment);
+	}
+	const prefix = drive ?? (absolute ? "/" : "");
+	return `${prefix}${segments.join("/")}`;
 }
 
 /**
@@ -70,19 +152,21 @@ function trimTrailingSlashes(path: string): string {
  * host-provided root prefixes them.
  *
  * This is both the display form (tool cards, the turn divider's artifact list) and the **tab identity**
- * (`openFileInTab` keys tabs by it), so one file can never end up under two ids — which is why it belongs
- * here rather than in any one consumer.
+ * (`openFileInTab` keys tabs by it), so one file can never end up under two ids. Lexical `.`/`..` aliases
+ * collapse; a leading relative `..` remains visible so the host can reject the attempted worktree escape.
+ * That shared identity rule is why it belongs here rather than in any one consumer.
  */
 export function projectRelativePath(path: string, workspaceRoot?: string | undefined): string {
-	const normalized = normalizePath(path); // already strips a leading `./`
-	if (!normalized || !isAbsolutePath(normalized)) return normalized;
+	const canonical = canonicalPosixPath(path);
+	if (!canonical || !isAbsolutePath(canonical)) return canonical;
 
-	const root = workspaceRoot ? trimTrailingSlashes(normalizePath(workspaceRoot)) : "";
-	if (root && (normalized === root || normalized.startsWith(`${root}/`))) {
-		return normalized.slice(root.length).replace(/^\/+/, "") || fileName(normalized);
+	const root = workspaceRoot ? trimTrailingSlashes(canonicalPosixPath(workspaceRoot)) : "";
+	const rootPrefix = root.endsWith("/") ? root : `${root}/`;
+	if (root && (canonical === root || canonical.startsWith(rootPrefix))) {
+		return canonical.slice(root.length).replace(/^\/+/, "") || fileName(canonical);
 	}
 
-	return normalized;
+	return canonical;
 }
 
 let colorCanvas: CanvasRenderingContext2D | null | undefined;
@@ -133,18 +217,27 @@ export function stripFrontmatter(text: string): string {
 
 const APPLE_PLATFORM = /Mac|iPhone|iPad|iPod/;
 
-function isApplePlatform(): boolean {
-	return typeof navigator !== "undefined" && APPLE_PLATFORM.test(navigator.platform ?? "");
+function browserPlatform(): string {
+	return typeof navigator === "undefined" ? "" : (navigator.platform ?? "");
+}
+
+function isApplePlatform(platform: string): boolean {
+	return APPLE_PLATFORM.test(platform);
 }
 
 /** The platform's primary application modifier: Cmd on Apple devices, Ctrl everywhere else. */
-export function hasPlatformModifier(event: Pick<KeyboardEvent, "ctrlKey" | "metaKey">): boolean {
-	return isApplePlatform() ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
+export function hasPlatformModifier(
+	event: Pick<KeyboardEvent, "ctrlKey" | "metaKey">,
+	platform = browserPlatform(),
+): boolean {
+	return isApplePlatform(platform)
+		? event.metaKey && !event.ctrlKey
+		: event.ctrlKey && !event.metaKey;
 }
 
 /** Human-readable primary-modifier shortcut, kept in lockstep with `hasPlatformModifier`. */
-export function platformShortcutLabel(key: string): string {
-	return isApplePlatform() ? `⌘${key}` : `Ctrl+${key}`;
+export function platformShortcutLabel(key: string, platform = browserPlatform()): string {
+	return isApplePlatform(platform) ? `⌘${key}` : `Ctrl+${key}`;
 }
 
 /**
