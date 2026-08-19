@@ -5,7 +5,8 @@
 	"type": "module",
 	"scripts": {
 		"dev": "vite",
-		"build": "tsc --noEmit && vite build",
+		"build": "tsc --noEmit && vite build && bun scripts/build-blog.ts",
+		"build:blog": "bun scripts/build-blog.ts",
 		"typecheck": "tsc --noEmit",
 		"test": "bun test",
 		"preview": "vite preview"
@@ -14,6 +15,9 @@
 		"@fontsource-variable/geist": "catalog:",
 		"@fontsource-variable/jetbrains-mono": "catalog:",
 		"@fontsource-variable/orbitron": "catalog:",
+		"gray-matter": "4.0.3",
+		"marked": "18.0.10",
+		"shiki": "4.4.3",
 		"typescript": "catalog:",
 		"vite": "8.0.16"
 	}

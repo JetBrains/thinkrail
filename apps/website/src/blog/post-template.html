@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>{{title}} — ThinkRail Blog</title>
+	<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+	<link rel="stylesheet" href="./blog.css">
+</head>
+<body data-theme="dark">
+	<header class="blog-header">
+		<a href="../" class="blog-logo">ThinkRail</a>
+		<nav class="blog-header-nav">
+			<a href="./index.html">Blog</a>
+			<a href="../">Home</a>
+		</nav>
+	</header>
+
+	<main class="blog-main">
+		<article class="blog-post">
+			<header class="blog-post-header">
+				<h1 class="blog-post-title">{{title}}</h1>
+				<div class="blog-post-meta">
+					<time class="blog-post-date">{{date}}</time>
+					{{tags}}
+				</div>
+			</header>
+
+			<div class="blog-post-content">
+				{{content}}
+			</div>
+
+			{{navigation}}
+		</article>
+	</main>
+
+	<footer class="blog-footer">
+		<p>© 2025 ThinkRail. All rights reserved.</p>
+	</footer>
+</body>
+</html>
