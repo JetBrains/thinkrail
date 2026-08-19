@@ -135,6 +135,48 @@ week, and `cancel-in-progress: false` so an in-flight publish finishes. Don't ad
 deployment is keyed by `GITHUB_SHA` and the timeout cancels it, so a second attempt moments later only
 reads back `deployment_cancelled`. Re-deploying that SHA *later* is fine — hence the remedy above.
 
+## Blog
+
+The `/blog` subsite is a static blog built from Markdown posts in `content/blog/`. Each post is a
+folder containing `index.md` (with YAML frontmatter) and an optional `images/` subfolder.
+
+### Build Pipeline
+
+`scripts/build-blog.ts` runs after `vite build` and:
+1. Discovers posts in `content/blog/*/index.md`
+2. Parses frontmatter with `gray-matter`
+3. Converts Markdown to HTML with `marked` + `shiki` syntax highlighting
+4. Generates static HTML pages from `src/blog/post-template.html`
+5. Generates the index page from `src/blog/index-template.html`
+6. Copies post images to `dist/blog/images/[slug]/`
+7. Emits `dist/blog/posts.json` manifest
+
+### Dependencies (devDependencies only)
+
+- `marked` — Markdown → HTML
+- `gray-matter` — YAML frontmatter parsing
+- `shiki` — Syntax highlighting (30 languages, github-dark theme)
+
+### Theming
+
+The blog uses CSS custom properties that inherit from the main site's palette. It supports:
+- Dark theme (default)
+- Light theme (`[data-theme="light"]`)
+- System preference detection (`prefers-color-scheme`)
+- Manual toggle via sun/moon button (persists in `localStorage`)
+
+See `src/blog/blog.css` header for the complete token reference and customization examples.
+
+### Content Author Guide
+
+`content/blog/BLOG.md` documents the frontmatter schema, Markdown features, image/video embedding,
+and best practices for content authors.
+
+### Deployment
+
+The blog deploys alongside the main site via the same `site.yml` workflow. Changes to
+`apps/website/content/blog/**` trigger a rebuild and redeploy to GitHub Pages.
+
 ## Assets
 
 `public/favicon.svg` is the site tab icon: a rounded tile in the brand primary green carrying the
