@@ -28,6 +28,12 @@ import { normalizeEol } from "../../scripts/generatedFiles";
  * and sizing, so `w`/`h`/`size`/inset/translate also resolve as number = px — but which px a box is is a
  * layout constraint, not rhythm, and is not policed by this gate.
  *
+ * HANDWRITTEN CSS IS COVERED TOO. `index.css` (and any sibling `.css` under `styles/`) spends the same
+ * scale on its rhythm PROPERTIES — `gap` / `padding` / `margin` and their longhands must carry a
+ * `--space-*` token (or `0` / `auto`), never a raw `Npx`. Sizing, coordinates and box-shadow/border
+ * offsets are geometry, not rhythm, and are not scanned. A documented non-rhythm optical offset may stay
+ * raw via the `CSS_RHYTHM_EXEMPT` allowlist (currently the `.review-region` rail pair only).
+ *
  * A LENGTH THAT IS NOT A SCALE STEP IS STILL ALLOWED on a spacing utility through the BRACKET escape
  * hatch, for measured/optical/geometry values that are not rhythm: `pr-[2rem]` (a close-button reserve),
  * `pl-[1.6em]` (an em-relative list indent) and `pl-[calc(0.875rem+var(--space-8))]` (an icon-aligned
@@ -60,6 +66,7 @@ function sourceFiles(dir = SRC): string[] {
 
 const FILES = sourceFiles();
 const TS_FILES = FILES.filter((f) => /\.tsx?$/.test(f));
+const CSS_FILES = FILES.filter((f) => /\.css$/.test(f));
 const TOKENS = join(SRC, "styles/tokens.css");
 const SPACING_JSON = join(SRC, "styles/spacing.json");
 
@@ -85,6 +92,46 @@ function hits(pattern: RegExp): string[] {
 		code(f)
 			.split("\n")
 			.flatMap((line, i) => [...line.matchAll(pattern)].map((m) => `${rel(f)}:${i + 1}: ${m[0]}`)),
+	);
+}
+
+/** Strip block comments to spaces but KEEP newlines, so a reported CSS line number stays true and a
+ *  length that only appears inside prose (`A 6px status circle`) is never a false positive. */
+const cssCode = (p: string) =>
+	read(p).replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "));
+
+/**
+ * Rhythm PROPERTIES only — the handwritten-CSS twins of the `p`/`m`/`gap` utilities. Sizing
+ * (`width`/`height`/`min-*`/`max-*`), coordinates (`top`/`left`/`inset`), and `box-shadow`/`border`
+ * offsets + hairlines are deliberately NOT here: they are geometry, not rhythm, exactly as the utility
+ * scan above excludes `w`/`h`. The property must open the declaration, so `scroll-margin` / a `--custom`
+ * property name never matches.
+ */
+const CSS_RHYTHM_PROP =
+	/^\s*(gap|row-gap|column-gap|padding(?:-(?:top|right|bottom|left|inline|block)(?:-(?:start|end))?)?|margin(?:-(?:top|right|bottom|left|inline|block)(?:-(?:start|end))?)?)\s*:\s*([^;{}]+)/;
+/** A raw px length anywhere in the value (`8px`, `-10px`, `2px 12px`) — the drift the token layer removes. */
+const RAW_PX = /-?\d*\.?\d+px/;
+
+/**
+ * Documented NON-RHYTHM geometry kept raw on a rhythm property — an optical offset that is not a step.
+ * `.review-region` draws a left rail as a 2px inset box-shadow; `padding-left` clears that rail and an
+ * equal negative `margin-left` cancels it, so the rail adds ZERO layout shift. 10px is measured to the
+ * rail, off the scale, and the two must stay equal-and-opposite — not rhythm, so it is not tokenised.
+ */
+const CSS_RHYTHM_EXEMPT = new Set(["padding-left: 10px", "margin-left: -10px"]);
+
+function cssRhythmHits(): string[] {
+	return CSS_FILES.flatMap((f) =>
+		cssCode(f)
+			.split("\n")
+			.flatMap((line, i) => {
+				const m = CSS_RHYTHM_PROP.exec(line);
+				if (!m) return [];
+				const value = m[2].trim();
+				if (!RAW_PX.test(value)) return [];
+				const decl = `${m[1]}: ${value}`;
+				return CSS_RHYTHM_EXEMPT.has(decl) ? [] : [`${rel(f)}:${i + 1}: ${decl}`];
+			}),
 	);
 }
 
@@ -160,5 +207,14 @@ describe("spacing at a call site", () => {
 		// This pins that those reserved primitives stay declared and every step is a bare-integer px value.
 		for (const step of ["32", "40", "64"]) expect(STEPS.has(step)).toBe(true);
 		expect([...STEPS].every((step) => /^\d+$/.test(step))).toBe(true);
+	});
+});
+
+describe("spacing in handwritten CSS", () => {
+	it("spends a --space-* token on every rhythm property, never a raw pixel length", () => {
+		// `gap`/`padding`/`margin` are the CSS twins of `p`/`m`/`gap`: a length here is rhythm and must be a
+		// `--space-*` token (or `0`/`auto`). On-scale (`8px`) becomes its token; off-scale (`6px`) is
+		// resolved to a step first. Only documented non-rhythm geometry stays raw (`CSS_RHYTHM_EXEMPT`).
+		expect(cssRhythmHits()).toEqual([]);
 	});
 });

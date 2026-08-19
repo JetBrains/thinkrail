@@ -59,8 +59,8 @@ moves layout. `tokens.css` (structure) holds no spacing; `spacing.json` is the o
 
 ## The gate
 
-`styles/spacingUsage.test.ts` enforces the vocabulary at `p`/`m`/`gap` call sites, reading the allowed
-steps from `spacing.json` so the two cannot drift:
+`styles/spacingUsage.test.ts` enforces the vocabulary at `p`/`m`/`gap` call sites (and on the rhythm
+properties of handwritten CSS), reading the allowed steps from `spacing.json` so the two cannot drift:
 
 - a spacing utility names a **canonical step** — `p-8`, `gap-4`; the retired t-shirt aliases (`p-xs`) and
   any off-scale number (`p-6`, `py-1`, `gap-0.5`) are rejected;
@@ -71,7 +71,12 @@ steps from `spacing.json` so the two cannot drift:
   (a close-button reserve), `pl-[1.6em]` (an em-relative list indent), `pl-[calc(0.875rem+var(--space-8))]`
   (an icon-aligned indent). These are layout constraints, deliberately outside the scale;
 - the scale is a defined primitive set, so a step is **not** required to have a consumer — the gate has no
-  orphan/reachability check that could reject a reserved primitive (`32`/`40`/`64`).
+  orphan/reachability check that could reject a reserved primitive (`32`/`40`/`64`);
+- handwritten `.css` under `styles/` is covered too: `gap` / `padding` / `margin` (and longhands) must
+  carry a `--space-*` token (or `0` / `auto`), never a raw `Npx`. Sizing, coordinates and
+  box-shadow/border offsets are geometry, not rhythm, and are not scanned; a documented non-rhythm
+  optical offset may stay raw via the guard's `CSS_RHYTHM_EXEMPT` allowlist (the `.review-region` rail
+  pair — `padding-left: 10px` cancelled by `margin-left: -10px`, zero layout shift).
 
 Like the colour and typography guards, this one exists because the drift is **invisible**: unlike an
 unknown colour utility (which Tailwind drops, rendering nothing), an off-scale length always renders, so
