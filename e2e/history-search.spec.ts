@@ -347,12 +347,23 @@ test("plain ArrowUp/ArrowDown recall steps through this chat's own prior prompts
 	await input.press("ArrowDown");
 	await expect(input).toHaveValue("");
 
-	// A diverging edit (the composer's own `fill`, exactly like a real keystroke — Playwright's `fill`
-	// dispatches a native `input` event React's controlled `onChange` reacts to) exits the recall session:
-	// the next ArrowUp must not step — the value is unchanged besides the edit itself.
+	// A diverging edit exits the recall session: the next ArrowUp must not step — the value is unchanged
+	// besides the edit itself.
+	//
+	// Typed as a real keystroke, NOT `fill()`. `fill()` is a CDP select-all + `Input.insertText` driven from
+	// outside React's event batching, so its single `input` event races the controlled `value`'s round trip
+	// through the store: when the prop has not caught up, React reverts the DOM to the older draft, the edit
+	// is lost, and the session never sees anything diverging — the recalled entry is still what the field
+	// holds, so the next ArrowUp steps to the *older* prompt and overwrites it. That reverted-edit failure is
+	// an artifact of how `fill()` delivers the change (a real paste is one input event inside React's
+	// batching, and is fine), and it made this test intermittently red for a reason that had nothing to do
+	// with recall. A keypress is one event, one commit — and it is what the assertion below actually claims.
 	await input.press("ArrowUp");
 	await expect(input).toHaveValue("write a test for the jitter");
-	await input.fill("write a test for the jitter!");
+	await input.press("End");
+	await input.press("!");
+	// Confirm the edit committed before stepping, so the ArrowUp below can only be testing the session exit.
+	await expect(input).toHaveValue("write a test for the jitter!");
 	await input.press("ArrowUp");
 	await expect(input).toHaveValue("write a test for the jitter!");
 
