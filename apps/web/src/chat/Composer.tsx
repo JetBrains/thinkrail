@@ -183,7 +183,8 @@ export interface ComposerHandle {
 	/** Replace the draft and send it through the composer's own submit seam — pending image attachments
 	 * travel with the text and are cleared with the draft, exactly like a keyboard send. This is the
 	 * history overlay's ⌘/Ctrl+Enter path; a caller-side `onSubmit` would strand the composer-private
-	 * `images` state (sent without them, stale thumbnails left attached to the next message). */
+	 * `images` state (sent without them, stale thumbnails left attached to the next message). When the
+	 * send is refused (an attachment still decoding), the text lands in the draft rather than nowhere. */
 	insertAndSubmit: (text: string, behavior: SubmitBehavior) => void;
 	/** Replace the draft with a parsed template's expansion; if it produced any slots, start a slot
 	 * session selecting slot 0 (else behaves like `insertText`: caret at the end, no session). */
@@ -424,7 +425,11 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	// after `openHistory`/`slashCompletion` so nothing here forward-references a later binding.
 	useImperativeHandle(handleRef, () => ({
 		insertText: (text: string) => replaceDraft(text),
-		insertAndSubmit: (text: string, behavior: SubmitBehavior) => submitText(text, behavior),
+		// A send refused mid-decode (`canSubmit`) leaves the composer's OWN gestures holding the draft, but
+		// this text lives in the caller's overlay — parking it in the draft is what keeps a recalled prompt
+		// from vanishing when the user happens to send while an attachment is still decoding.
+		insertAndSubmit: (text: string, behavior: SubmitBehavior) =>
+			canSubmit(text) ? submitText(text, behavior) : replaceDraft(text),
 		insertTemplate: (parsed: ParsedTemplate) => {
 			const first = parsed.slots[0];
 			if (!first) {

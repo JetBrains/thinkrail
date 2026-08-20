@@ -220,9 +220,11 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   **`REQUEST_IMAGE_BASE64_BUDGET`** (24MB of base64, headroom under Anthropic's 32MB per-request cap):
   files that would push the batch over it are refused with the same error-chip surface. The server's
   `imageGuard` extension is the second line of defense for history. While files are still decoding, a placeholder chip renders
-  (`composer-image-pending` testid) and sends are held (`submitText` refuses, the send button
-  disables) — a send mid-decode would otherwise go without the image and strand it on the next
-  message. The pending chip shows `filename · W×H` (the picked file's name; mime text appears only in the
+  (`composer-image-pending` testid) and sends are held (`canSubmit` is the one reading — `submitText`
+  refuses, the send button disables) — a send mid-decode would otherwise go without the image and strand
+  it on the next message. A held send keeps its text: the composer's own gestures leave the draft in
+  place, and `insertAndSubmit` (the overlay's ⌘/Ctrl+Enter, whose text is not in the draft yet) parks it
+  there instead of dropping it. The pending chip shows `filename · W×H` (the picked file's name; mime text appears only in the
   hydrated-turn fallback when no name survived) (`composer-image` testid +
   `data-width`/`data-height`/`data-mime` — the `e2e/composer-images.spec.ts` hooks; both chip skins
   share `FileChip.tsx`). **Chips are bounded, and the label is the only part that gives way**: a chip is
