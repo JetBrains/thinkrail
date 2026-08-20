@@ -1,0 +1,81 @@
+---
+// The chrome every /blog page shares: header (logo, nav, theme toggle), footer, and the head
+// metadata a blog page needs (title, description, canonical, OG). The center is a slot.
+import BaseHead from "../components/BaseHead.astro";
+import Copyright from "../components/Copyright.astro";
+
+interface Props {
+	title: string;
+	description?: string | undefined;
+	/** Set on post pages so OG consumers see an article, not a generic website. */
+	article?: { publishedTime: Date } | undefined;
+}
+
+const { title, description, article } = Astro.props;
+const canonical = new URL(Astro.url.pathname, Astro.site);
+---
+
+<!doctype html>
+<html lang="en" data-theme="dark">
+	<head>
+		<BaseHead />
+		<title>{title}</title>
+		{description && <meta name="description" content={description} />}
+		<link rel="canonical" href={canonical} />
+		<meta property="og:type" content={article ? "article" : "website"} />
+		<meta property="og:title" content={title} />
+		{description && <meta property="og:description" content={description} />}
+		<meta property="og:url" content={canonical} />
+		<meta property="og:image" content={new URL("/og.png", Astro.site)} />
+		<meta name="twitter:card" content="summary_large_image" />
+		{article && <meta property="article:published_time" content={article.publishedTime.toISOString()} />}
+		<link rel="alternate" type="application/rss+xml" title="ThinkRail Blog" href="/blog/rss.xml" />
+	</head>
+	<body class="blog-page">
+		<header class="blog-header">
+			<a href="/" class="blog-logo">ThinkRail</a>
+			<nav class="blog-header-nav">
+				<a href="/blog/" aria-current={Astro.url.pathname === "/blog/" ? "page" : undefined}>Blog</a>
+				<a href="/">Home</a>
+				<button type="button" class="blog-theme-toggle" id="theme-toggle" aria-label="Toggle theme">
+					<svg
+						class="theme-icon-sun"
+						aria-hidden="true"
+						width="16"
+						height="16"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						><circle cx="12" cy="12" r="5"></circle><path
+							d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"
+						></path></svg
+					>
+					<svg
+						class="theme-icon-moon"
+						aria-hidden="true"
+						width="16"
+						height="16"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg
+					>
+				</button>
+			</nav>
+		</header>
+
+		<main class="blog-main">
+			<slot />
+		</main>
+
+		<footer class="blog-footer">
+			<p><Copyright /></p>
+		</footer>
+		<script>
+			import { initThemeToggle } from "../theme";
+
+			initThemeToggle();
+		</script>
+	</body>
+</html>

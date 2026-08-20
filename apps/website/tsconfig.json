@@ -2,10 +2,11 @@
 	"extends": "../../tsconfig.base.json",
 	"compilerOptions": {
 		"noEmit": true,
-		"lib": ["ES2023", "DOM", "DOM.Iterable"]
+		"lib": ["ES2023", "DOM", "DOM.Iterable"],
+		"types": ["astro/client"]
 	},
-	"include": ["src", "vite.config.ts"],
+	"include": ["src", "astro.config.ts", ".astro/types.d.ts"],
 	// Tests run under `bun test` (which provides `bun:test` natively); keep them out of the browser
-	// `tsc` build so this DOM-typed project doesn't need Bun types.
-	"exclude": ["src/**/*.test.ts"]
+	// `astro check` pass so this DOM-typed project doesn't need Bun types.
+	"exclude": ["src/**/*.test.ts", "dist"]
 }

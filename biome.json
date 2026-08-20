@@ -31,16 +31,24 @@
 			"tailwindDirectives": true
 		}
 	},
-	"html": {
-		"parser": {
-			"interpolation": true
-		}
-	},
 	"assist": {
 		"actions": {
 			"source": {
 				"organizeImports": "on"
 			}
 		}
-	}
+	},
+	"overrides": [
+		{
+			"includes": ["**/*.astro"],
+			"linter": {
+				"rules": {
+					"correctness": {
+						"noUnusedVariables": "off",
+						"noUnusedImports": "off"
+					}
+				}
+			}
+		}
+	]
 }

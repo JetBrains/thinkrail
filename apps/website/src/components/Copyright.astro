@@ -1,0 +1,9 @@
+---
+// The one copyright line, shared by the landing statusbar and the blog footer. The year is the
+// build year — the site rebuilds on every deploy, so it can never go stale by more than a deploy.
+// Kept on a single line: Astro collapses newline-adjacent whitespace, and the blog footer is a
+// plain <p> that needs the literal spaces (the landing statusbar spaces via flex gap instead).
+const year = new Date().getFullYear();
+---
+
+Copyright © {year} <a href="https://www.jetbrains.com/" target="_blank" rel="noopener noreferrer">JetBrains</a> InnovationHub <span class="sb-sep" aria-hidden="true">·</span> <span class="sb-license">Apache License 2.0</span>

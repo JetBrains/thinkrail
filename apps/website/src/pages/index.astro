@@ -1,8 +1,12 @@
+---
+import BaseHead from "../components/BaseHead.astro";
+import Copyright from "../components/Copyright.astro";
+---
+
 <!doctype html>
 <html lang="en" data-theme="dark">
 	<head>
-		<meta charset="UTF-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<BaseHead />
 		<title>ThinkRail — the worktree IDE for the pi coding agent</title>
 		<meta
 			name="description"
@@ -18,18 +22,7 @@
 		<meta property="og:url" content="https://thinkrail.ai/" />
 		<meta property="og:image" content="https://thinkrail.ai/og.png" />
 		<meta name="twitter:card" content="summary_large_image" />
-		<meta name="theme-color" content="#171719" />
-		<link rel="icon" type="image/svg+xml" href="./favicon.svg" />
-		<!-- Restore a previously picked theme before first paint (same trick the app uses). -->
-		<script>
-			try {
-				const t = localStorage.getItem("thinkrail-site-theme");
-				const theme = t ?? (window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
-				document.documentElement.setAttribute("data-theme", theme);
-			} catch (_) {}
-		</script>
-		<!-- Every face is self-hosted and bundled (src/styles.css), matching the app. No font CDN. -->
-		<link rel="stylesheet" href="/src/styles.css" />
+		<link rel="alternate" type="application/rss+xml" title="ThinkRail Blog" href="/blog/rss.xml" />
 	</head>
 	<body>
 		<svg xmlns="http://www.w3.org/2000/svg" class="sprite" aria-hidden="true">
@@ -237,7 +230,7 @@
 					</span>
 				</div>
 				<div class="titlebar-right">
-					<a class="chrome-btn blog-btn" href="./blog/" aria-label="ThinkRail Blog">
+					<a class="chrome-btn blog-btn" href="/blog/" aria-label="ThinkRail Blog">
 						<svg class="i" aria-hidden="true"><use href="#i-file-text" /></svg>
 						<span class="blog-label">Blog</span>
 					</a>
@@ -696,10 +689,12 @@
 
 			<!-- ══ Status bar ══ -->
 			<footer class="statusbar">
-				<span class="sb-item">Copyright © 2026 <a href="https://www.jetbrains.com/" target="_blank" rel="noopener noreferrer">JetBrains</a> InnovationHub<span class="sb-sep" aria-hidden="true">·</span><span class="sb-license">Apache License 2.0</span></span>
+				<span class="sb-item"><Copyright /></span>
 			</footer>
 		</div>
 
-		<script type="module" src="/src/main.ts"></script>
+		<script>
+			import "../main";
+		</script>
 	</body>
 </html>

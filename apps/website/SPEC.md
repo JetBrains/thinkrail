@@ -32,12 +32,24 @@ binary.
 
 - **Standalone leaf.** No workspace deps — it must never import `@thinkrail/contracts`, `server`,
   `shared`, or `web`. It is not on the wire and has no protocol knowledge.
-- Vite + vanilla TypeScript + hand-written CSS. No React, no Tailwind, no runtime deps at all —
-  `devDependencies` only (`vite` pinned exact, `typescript` via `catalog:`). The two
-  `@fontsource-variable/*` packages are build-time asset sources, not runtime deps: vite emits their
-  woff2 files into `dist/`. They are shared with `apps/web`, so they come from the root
+- **Astro (static output) + vanilla TypeScript + hand-written CSS.** No client-side framework
+  runtime: Astro ships zero JS by default and every interactive bit stays hand-written TS
+  (`src/main.ts`, `src/theme.ts`). No Tailwind, no runtime deps at all — `devDependencies` only
+  (`astro` + `@astrojs/*` pinned exact, `typescript` via `catalog:`). The two
+  `@fontsource-variable/*` packages are build-time asset sources, not runtime deps: the build emits
+  their woff2 files into `dist/`. They are shared with `apps/web`, so they come from the root
   `workspaces.catalog` — one pin for both apps, which is what keeps the site's faces identical to the
   app's.
+  - *Why Astro (decision, 2026-08):* the blog + planned docs fired the "bespoke SSG" tripwires
+    (RSS, OG, typed frontmatter, content DX). Astro is Vite underneath — the landing page ported
+    verbatim, `bun test` suites unchanged — and React 19 islands are available the day a page needs
+    one (none do today). Rejected: Next.js static export (ships the React runtime to static pages,
+    non-Vite culture), VitePress (Vue), Eleventy (docs features assemble-yourself — the bespoke trap
+    again), Hugo/Zola (non-TS toolchain, token/tests integration lost). The prior bespoke pipeline
+    (`scripts/build-blog.ts` + HTML string templates) is deleted.
+  - *Lint caveat:* Biome parses only `.astro` frontmatter, so `noUnusedVariables`/`noUnusedImports`
+    are disabled for `*.astro` in `biome.json` (template usage is invisible to it — every flag would
+    be a false positive). `astro check` covers the templates instead.
 - **Fonts are self-hosted; the site makes no external font request.** Packages and stacks are copied
   from the app's `typography.json`, not imported — and `src/fonts.test.ts` reads that JSON at test time
   and fails on drift, which is what makes copying safe. `--font-display` mirrors the app's `brand`
@@ -48,6 +60,13 @@ binary.
   `apps/web/src/themes/bundled/*.theme.json` (dark = default, darcula, light, gruvbox) into the site's
   own CSS custom properties under `[data-theme]`; the site never reaches into `apps/web` at build time
   (the app's tokens assume the theme engine's runtime swap).
+- **Shared page chrome is single-sourced in components.** `src/components/BaseHead.astro` is the one
+  head every page uses: charset/viewport, favicon, global stylesheet (which bundles the fonts), the
+  pre-paint theme guard, and the analytics loaders. `src/components/Copyright.astro` is the one
+  copyright line (landing statusbar + blog footer). The dark/light theme model lives in
+  `src/theme.ts` (explicit choice in `localStorage` → `prefers-color-scheme` fallback, live
+  system-follow, legacy `darcula`/`gruvbox` values normalize to dark); the inline FOUC guard in
+  BaseHead is its declared twin — a behavior change updates both.
 - **A colour with a contrast floor gets a `:root` token, never the region-inherited `--accent`.**
   `.hero` re-points `--accent` for its artwork, so descendants reading it inherit a value chosen for dark
   backgrounds. `--link` and `--focus-ring` are declared once on `:root` as `var(--accent)`, which resolves
@@ -69,9 +88,11 @@ binary.
 
 PostHog (the team's existing project, **EU** cloud). Loaded as **progressive enhancement, production
 only**: `src/analytics.ts` injects PostHog's `array.js` from the first-party proxy at runtime and
-calls `posthog.init()` **only when `location.hostname === "thinkrail.ai"`** — localhost, `vite dev`,
+calls `posthog.init()` **only when `location.hostname === "thinkrail.ai"`** — localhost, `astro dev`,
 `preview`, and the `jetbrains.github.io` apex send nothing. The prod gate + config are a pure
 `analyticsConfig(hostname)` function, unit-tested in `src/analytics.test.ts` (`bun:test`, no browser).
+**Every page — landing and blog alike — loads analytics through the one `BaseHead.astro` script that
+imports `initAnalytics()`/`initGtm()`**; no page carries its own copy of the gate or config.
 
 - **No npm dep.** We inject the CDN script at runtime rather than importing `posthog-js`, so the
   no-runtime-deps boundary holds. We also do **not** paste PostHog's minified bootstrap snippet: Biome
@@ -120,9 +141,11 @@ unit-tested in `src/gtm.test.ts`. GTM lives **only in this module** — it must 
 
 ## Deploy
 
-`.github/workflows/site.yml` builds (`bun run --filter @thinkrail/website build`) and publishes
-`apps/website/dist` to GitHub Pages on pushes to `main` that touch this module (plus manual dispatch).
-Vite `base: "./"` keeps the build servable at `/thinkrail/` and on any custom domain. One-time repo
+`.github/workflows/site.yml` builds (`bun run --filter @thinkrail/website build`, which runs
+`astro check && astro build`) and publishes `apps/website/dist` to GitHub Pages on pushes to `main`
+that touch this module (plus manual dispatch). Asset URLs are root-absolute against
+`site: "https://thinkrail.ai"` (astro.config.ts) — the `jetbrains.github.io/thinkrail` address is
+not independently servable, which is fine because it redirects to the custom domain. One-time repo
 settings: Pages → Source: GitHub Actions, and Pages → Custom domain: `thinkrail.ai` — the public
 identity. Canonical/OG URLs in `index.html` (and the README website link) point at
 `https://thinkrail.ai/`, never the `jetbrains.github.io/thinkrail` address (which redirects there).
@@ -137,44 +160,31 @@ reads back `deployment_cancelled`. Re-deploying that SHA *later* is fine — hen
 
 ## Blog
 
-The `/blog` subsite is a static blog built from Markdown posts in `content/blog/`. Each post is a
-folder containing `index.md` (with YAML frontmatter) and an optional `images/` subfolder.
+The `/blog` subsite is a typed Astro content collection over Markdown posts in `content/blog/`
+(each post: a folder with `index.md` + optional `images/`), rendered by `src/pages/blog/` through
+`src/layouts/BlogLayout.astro`.
 
-### Build Pipeline
-
-`scripts/build-blog.ts` runs after `vite build` and:
-1. Discovers posts in `content/blog/*/index.md`
-2. Parses frontmatter with `gray-matter`
-3. Converts Markdown to HTML with `marked` + `shiki` syntax highlighting
-4. Generates static HTML pages from `src/blog/post-template.html`
-5. Generates the index page from `src/blog/index-template.html`
-6. Copies post images to `dist/blog/images/[slug]/`
-
-### Dependencies (devDependencies only)
-
-- `marked` — Markdown → HTML
-- `gray-matter` — YAML frontmatter parsing
-- `shiki` — Syntax highlighting (30 languages, github-dark theme)
-
-### Theming
-
-The blog uses CSS custom properties that inherit from the main site's palette. It supports:
-- Dark theme (default)
-- Light theme (`[data-theme="light"]`)
-- System preference detection (`prefers-color-scheme`)
-- Manual toggle via sun/moon button (persists in `localStorage`)
-
-See `src/blog/blog.css` header for the complete token reference and customization examples.
-
-### Content Author Guide
-
-`content/blog/BLOG.md` documents the frontmatter schema, Markdown features, image/video embedding,
-and best practices for content authors.
-
-### Deployment
-
-The blog deploys alongside the main site via the same `site.yml` workflow. Changes to
-`apps/website/content/blog/**` trigger a rebuild and redeploy to GitHub Pages.
+- **Schema is the gate** (`src/content.config.ts`, zod): required `title`/`slug`/`date`, optional
+  `excerpt`/`draft`/`tags`. A malformed or reserved slug, a missing field, or two posts sharing a
+  slug **fails the build** — no silent green deploys. Drafts render in `astro dev` (author preview,
+  hot reload) and are excluded from production builds (`src/blogCollection.ts`, the one
+  query — newest-first, draft-filtered — that the index, post pages, and RSS all share).
+- **URLs are directory-style** (`/blog/<slug>/`), decided while the blog was unpublished so nothing
+  broke; RSS at `/blog/rss.xml` (`@astrojs/rss`). Post pages carry meta description (the excerpt),
+  canonical, OG/article tags.
+- **Code blocks**: Astro's built-in Shiki, dual `github-light`/`github-dark` themes emitted as
+  `--shiki-light`/`--shiki-dark` CSS vars (`defaultColor: false`) so the site's `[data-theme]`
+  switch — not a media query — picks the palette. Styled under `.astro-code` in `src/styles.css`.
+- **YouTube embeds must be cookieless**: authors write plain iframes; the Sätteri HAST plugin
+  `src/youTubeEmbeds.ts` (Astro 7's native Markdown processor — the unified/rehype pipeline is a
+  separate legacy package we don't carry) rewrites `youtube.com/embed` → `youtube-nocookie.com` and
+  adds `title` + `loading="lazy"` when omitted. This keeps the no-consent-banner stance intact.
+- **Theming/chrome**: blog pages share BaseHead (theme guard, fonts, analytics) and the `src/theme.ts`
+  toggle — same behavior as the landing page, one implementation.
+- **Author guide**: `content/blog/BLOG.md` documents the frontmatter schema, Markdown features,
+  embeds, and the local preview loop (`bun run dev` hot-reloads posts).
+- **Deployment**: alongside the main site via the same `site.yml` workflow; changes to
+  `apps/website/content/blog/**` trigger a rebuild.
 
 ## Assets
 

@@ -1,0 +1,64 @@
+---
+import { render } from "astro:content";
+import { type BlogPost, postPath, publishedPosts } from "../../blogCollection";
+import BlogLayout from "../../layouts/BlogLayout.astro";
+import { formatPostDate, readingTimeMinutes } from "../../postMeta";
+
+export async function getStaticPaths() {
+	const posts = await publishedPosts();
+	return posts.map((post, index) => ({
+		params: { slug: post.data.slug },
+		props: {
+			post,
+			newer: posts[index - 1] ?? null,
+			older: posts[index + 1] ?? null,
+		},
+	}));
+}
+
+interface Props {
+	post: BlogPost;
+	newer: BlogPost | null;
+	older: BlogPost | null;
+}
+
+const { post, newer, older } = Astro.props;
+const { Content } = await render(post);
+---
+
+<BlogLayout
+	title={`${post.data.title} — ThinkRail Blog`}
+	description={post.data.excerpt}
+	article={{ publishedTime: post.data.date }}
+>
+	<article class="blog-post">
+		<header class="blog-post-header">
+			<h1 class="blog-post-title">{post.data.title}</h1>
+			<div class="blog-post-meta">
+				<time class="blog-post-date" datetime={post.data.date.toISOString()}>
+					{formatPostDate(post.data.date)}
+				</time>
+				<span class="blog-post-reading-time">{readingTimeMinutes(post.body ?? "")} min read</span>
+				{
+					post.data.tags.length > 0 && (
+						<div class="blog-post-tags">
+							{post.data.tags.map((tag) => (
+								<span class="blog-tag">{tag}</span>
+							))}
+						</div>
+					)
+				}
+			</div>
+		</header>
+
+		<div class="blog-post-content">
+			<Content />
+		</div>
+
+		<nav class="blog-post-nav">
+			{newer ? <a href={postPath(newer)} class="blog-nav-prev">← {newer.data.title}</a> : <span></span>}
+			<a href="/blog/" class="blog-nav-home">All Posts</a>
+			{older ? <a href={postPath(older)} class="blog-nav-next">{older.data.title} →</a> : <span></span>}
+		</nav>
+	</article>
+</BlogLayout>

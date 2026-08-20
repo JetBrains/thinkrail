@@ -1,15 +1,9 @@
 // Progressive enhancement for the IDE-site. Everything here is optional garnish: the page reads
 // complete with JS disabled, and every animation is gated on prefers-reduced-motion.
 
-import { initAnalytics } from "./analytics";
 import { deriveEditorTabs } from "./editorTabs";
-import { initGtm } from "./gtm";
 import { detectInstallPlatform, type InstallPlatform } from "./installPlatform";
-
-// Production-only, cookieless PostHog (self-gates on hostname). See src/analytics.ts.
-initAnalytics();
-// Production-only Google Tag Manager (self-gates on hostname). See src/gtm.ts.
-initGtm();
+import { initThemeToggle } from "./theme";
 
 const motionOK = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 if (motionOK) document.documentElement.classList.add("anim");
@@ -281,73 +275,9 @@ if (motionOK && chat) {
 	player.observe(chat);
 }
 
-/* ── Theme toggle: dark/light with system preference support ───────────── */
+/* ── Theme toggle: dark/light, shared with the blog pages ─────────────────── */
 
-const themeToggle = document.getElementById("theme-toggle");
-if (themeToggle) {
-	const STORAGE_KEY = "thinkrail-site-theme";
-	const mediaQuery = window.matchMedia("(prefers-color-scheme: light)");
-
-	// Check if user has made an explicit choice. Legacy multi-theme values (darcula/gruvbox,
-	// from the old 4-theme selector) are dark palettes — migrate them to "dark" since the
-	// toggle and its icon CSS only understand dark/light.
-	const getSavedTheme = (): string | null => {
-		try {
-			const raw = localStorage.getItem(STORAGE_KEY);
-			if (raw === null) return null;
-			return raw === "light" ? "light" : "dark";
-		} catch {
-			return null;
-		}
-	};
-
-	// Get system preference
-	const getSystemTheme = (): string => (mediaQuery.matches ? "light" : "dark");
-
-	const apply = (theme: string, save: boolean) => {
-		document.documentElement.setAttribute("data-theme", theme);
-
-		// Update aria-label to describe the action
-		const nextTheme = theme === "dark" ? "light" : "dark";
-		themeToggle.setAttribute("aria-label", `Switch to ${nextTheme} theme`);
-
-		// Update theme-color meta tag
-		const chrome = getComputedStyle(document.documentElement).getPropertyValue("--chrome").trim();
-		if (chrome) {
-			document
-				.querySelector<HTMLMetaElement>('meta[name="theme-color"]')
-				?.setAttribute("content", chrome);
-		}
-
-		// Only save if this is an explicit user choice
-		if (save) {
-			try {
-				localStorage.setItem(STORAGE_KEY, theme);
-			} catch {
-				// storage unavailable (private mode)
-			}
-		}
-	};
-
-	// Initialize: prefer saved choice, fall back to system preference
-	const savedTheme = getSavedTheme();
-	const initialTheme = savedTheme ?? getSystemTheme();
-	apply(initialTheme, false);
-
-	// Toggle on click (always saves as explicit choice)
-	themeToggle.addEventListener("click", () => {
-		const current = document.documentElement.getAttribute("data-theme") ?? "dark";
-		const next = current === "dark" ? "light" : "dark";
-		apply(next, true);
-	});
-
-	// Follow system changes only if no explicit choice saved
-	mediaQuery.addEventListener("change", () => {
-		if (!getSavedTheme()) {
-			apply(getSystemTheme(), false);
-		}
-	});
-}
+initThemeToggle();
 
 /* ── Install platform + Windows shell pickers ───────────────────────────── */
 

@@ -2477,7 +2477,7 @@ body.blog-page {
 }
 
 /* Shiki syntax highlighting */
-.blog-post-content .shiki {
+.blog-post-content .astro-code {
 	margin: var(--space-lg) 0;
 	padding: var(--space-lg);
 	border: 1px solid var(--blog-border);
@@ -2489,7 +2489,7 @@ body.blog-page {
 	background: var(--blog-code-bg);
 }
 
-.blog-post-content .shiki code {
+.blog-post-content .astro-code code {
 	padding: 0;
 	background: none;
 	font-family: inherit;
@@ -2497,18 +2497,18 @@ body.blog-page {
 	line-height: inherit;
 }
 
-.blog-post-content .shiki .line {
+.blog-post-content .astro-code .line {
 	display: inline;
 }
 
 /* Shiki dual-theme: select colors based on data-theme */
-.blog-post-content .shiki,
-.blog-post-content .shiki span {
+.blog-post-content .astro-code,
+.blog-post-content .astro-code span {
 	color: var(--shiki-dark);
 }
 
-[data-theme="light"] .blog-post-content .shiki,
-[data-theme="light"] .blog-post-content .shiki span {
+[data-theme="light"] .blog-post-content .astro-code,
+[data-theme="light"] .blog-post-content .astro-code span {
 	color: var(--shiki-light);
 }
 
