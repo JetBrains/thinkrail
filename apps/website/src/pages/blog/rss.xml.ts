@@ -7,7 +7,6 @@ export async function GET(context: APIContext) {
 	return rss({
 		title: "ThinkRail Blog",
 		description: "Updates, tutorials, and insights from the ThinkRail team.",
-		// `site` is always set in astro.config.ts; APIContext types it as optional.
 		site: context.site ?? "https://thinkrail.ai",
 		items: posts.map((post) => ({
 			title: post.data.title,

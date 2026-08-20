@@ -95,11 +95,31 @@ binary.
   buttons, star count, install-platform selection). The page must read complete with JS disabled (the
   editor tabs are a JS-built navigation affordance over content that is already reachable by scrolling
   and via the file tree), and animations are skipped under `prefers-reduced-motion`.
+- **Enhancement behaviors owned by `main.ts`** (the code carries no rationale — this is it):
+  - *Terminal replay*: the hero install picker is the single source of truth for the visible command;
+    the terminal subscribes and types the command for the selected OS/shell, then the short install
+    transcript. A generation counter invalidates an in-flight sequence on OS change; clicking the
+    *finished* terminal (or its keyboard-reachable `Replay logo` button, revealed only then) replays
+    the ASCII logo + a GitHub CTA — never the install. The logo banner's characters are never
+    altered; only its font size is fitted to the rail width (re-fitted on resize).
+  - *Worktree note* (left rail): starts visible in markup (reads with JS disabled); an inline script
+    hides it pre-paint and `main.ts` reveals it after 5s — once per session (`sessionStorage`),
+    never again after Understood (`localStorage`), with a 10s inline-script fallback if `main.ts`
+    fails to load. Storage access is fully guarded (retrieving the storage object itself can throw).
+  - *Mock-callout tooltips*: `data-mock-hint` regions (right-rail tabs, the left rail's remaining
+    mock rows) open a click-persistent callout with a GitHub CTA — click-outside/Escape closes,
+    Escape restores focus. A11y contract: the trigger becomes `role="button"` with `aria-label`
+    (from `data-mock-label`), `aria-expanded` + `aria-describedby` on open — no `aria-haspopup`
+    (a `tooltip` is not an allowed popup value). The `.rail-tabs` callout anchors to the panel's
+    live edge; others place beside the trigger, clamped to the viewport and repositioned on resize.
 - The hero's install command has **macOS / Linux / Windows** tabs. Browser hints choose only the
   initial supported desktop OS; they never hide alternatives or claim to detect an ambiguous mobile
   platform. Windows adds **PowerShell / Command Prompt / WSL** tabs: native shells use `install.ps1`
   (the stable command is deliberately identical in both), while WSL uses `install.sh` and therefore
-  installs the Linux build inside that distro. Every hero panel remains in the static DOM; JS turns the
+  installs the Linux build inside that distro. ARIA structure: a `tablist` may contain nothing but
+  `tab`s, so the OS tabs form their own tablist and the Windows shell switcher is its *sibling* (its
+  own tablist), shown inline only while Windows is active so the component height never changes.
+  Every hero panel remains in the static DOM; JS turns the
   complete fallback into the tabbed view. The detailed Install section keeps its existing complete,
   mixed-platform reference rather than duplicating the picker.
 

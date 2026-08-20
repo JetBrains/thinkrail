@@ -1,12 +1,5 @@
-/*
- * ThinkRail website — "the site IS the IDE".
- * Hand-written CSS. Theme palettes are copied from apps/web/src/themes/bundled/*.theme.json
- * (see SPEC.md: values are lifted at authoring time, never imported).
- */
+/* ThinkRail website — "the site IS the IDE". Hand-written CSS; palettes copied from the app themes (SPEC.md). */
 
-/* Self-hosted variable faces — no external font request from the site at all. The packages, the stacks
-   below and `--font-display` are copied from apps/web/src/styles/typography.json (the app's source of
-   truth); `src/fonts.test.ts` reads that JSON and fails on drift. */
 @import "@fontsource-variable/geist";
 @import "@fontsource-variable/geist/wght-italic.css";
 @import "@fontsource-variable/jetbrains-mono";
@@ -19,21 +12,13 @@
 	--font-sans: "Geist Variable", "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 	--font-mono:
 		"JetBrains Mono Variable", "JetBrains Mono", "Fira Code", "SF Mono", "Cascadia Code", monospace;
-	/* The display role, mirroring the app's `brand` family — Orbitron (self-hosted above), a distinct
-	   display face used by the brand elements (wordmark + hero heading). Orbitron is latin-only, so the
-	   next fallback is the interface face (Geist) rather than a system font, matching the app.
-	   See src/fonts.test.ts (kept in step with apps/web/src/styles/typography.json). */
 	--font-display:
 		"Orbitron Variable", "Orbitron", "Geist Variable", "Geist", -apple-system, BlinkMacSystemFont,
 		"Segoe UI", sans-serif;
 
 	/* dark (the app's default) */
 	--chrome: #171719;
-	/* The workspace/content surface (app semantic token container-workspace-bg = --background).
-	   The central body and the active tabs share it so active tabs merge into the content. */
 	--container-workspace-bg: #09090b;
-	/* The header/tab-strip surface (app semantic token container-header-bg = --header). Inactive
-	   tabs and the empty tab-bar space read as this; the active tab uses --container-workspace-bg. */
 	--container-header-bg: #18181b;
 	--elevated: #2b2d30;
 	--hover: #393b40;
@@ -47,16 +32,9 @@
 	--accent-hover: #59d915;
 	--on-accent: #0a0a0a;
 	--green: #41cb66;
-	/* Link color token: primary at 60% opacity — a touch darker than the bright primary on the
-	   dark surfaces (light theme keeps the full, already-dark accent below). */
+	/* --link/--focus-ring/--control-primary-*: :root-declared — out of reach of region --accent overrides (SPEC.md). */
 	--link: color-mix(in srgb, var(--accent) 60%, transparent);
-	/* Focus ring. Declared here so `var(--accent)` resolves against the ROOT accent: per-theme, but out
-	   of reach of a region override (a `.hero` override once rendered a 1.27:1 ring on white). Same
-	   mechanism as --link. */
 	--focus-ring: var(--accent);
-	/* Primary button — mirrors the app's control-primary-* mapping PER THEME (bg = accent, hovered =
-	   accentHover, text = onAccent; see apps/web/src/styles/colors.json). Declared on :root so the
-	   values resolve against the ROOT tokens — the --link/--focus-ring mechanism. */
 	--control-primary-bg: var(--accent);
 	--control-primary-bg-hovered: var(--accent-hover);
 	--control-primary-text: var(--on-accent);
@@ -109,8 +87,6 @@
 	color-scheme: dark;
 }
 
-/* `--elevated`, `--text`, `--muted` and `--hint` here had drifted from the app manifest, which put
-   `--text` on `--elevated` (the mock callout) at 4.46:1. Resynced to the app's values. */
 [data-theme="darcula"] {
 	--chrome: #3c3f41;
 	--container-workspace-bg: #3c3f41;
@@ -137,8 +113,6 @@
 [data-theme="light"] {
 	--chrome: #f2f3f5;
 	--container-workspace-bg: #ffffff;
-	/* Surrounding-interface surface (inactive tabs): a touch off the white central body so the
-	   active tab (= workspace bg) reads distinct from inactive ones, as on the dark theme. */
 	--container-header-bg: #f2f3f5;
 	--elevated: #ffffff;
 	--hover: #e9eaee;
@@ -150,15 +124,9 @@
 	--hint: #667085;
 	--accent: #2e7d16;
 	--accent-hover: #25640f;
-	/* Foreground ON the accent fill (`.skip-link`, `.send-btn`, the primary button). The root value is
-	   for the bright dark accent; near-black on this dark green is 3.8:1, so light takes white (5.2:1)
-	   as the app does. */
 	--on-accent: #ffffff;
 	/* The light accent is already dark/readable; links use it at full strength (60% would be too faint on white). */
 	--link: var(--accent);
-	/* `--green` is a FOREGROUND here (done/activity icons, the +N badge), so it takes the light theme's
-	   own success value rather than the dark-theme #41cb66 — which reads 2.1:1 on white. Copied from
-	   `apps/web/src/themes/bundled/light.theme.json`, like the rest of this block. */
 	--green: #1a7f37;
 	--gold: #946300;
 	--red: #d02533;
@@ -298,8 +266,7 @@ code {
 
 /* ── The app window ─────────────────────────────────────────────────────── */
 
-/* Fixed + inset pins the app window to the viewport: the document itself never gains scroll
-   extent, so anchor jumps can only ever scroll the editor pane (the chrome stays put). */
+/* Fixed + inset: the document never gains scroll extent, so anchor jumps scroll only the editor pane. */
 .window {
 	position: fixed;
 	inset: 0;
@@ -345,8 +312,6 @@ code {
 	background: #28c840;
 }
 
-/* Brand logomark left of the wordmark. The span controls the size; the SVG scales to it and
-   follows the primary accent via currentColor. */
 .wordmark-logo {
 	display: inline-flex;
 	align-items: center;
@@ -428,8 +393,6 @@ code {
 	color: var(--text);
 }
 
-/* Theme toggle: a simple icon button that switches between dark and light themes.
-   Shows Sun icon in dark mode (click to switch to light), Moon in light mode (click to switch to dark). */
 .theme-toggle {
 	display: inline-flex;
 	align-items: center;
@@ -570,8 +533,6 @@ a.tree-row:hover {
 	text-decoration: none;
 }
 
-/* Docs ships later; the `Coming soon` tag carries the state, so the row is quiet via colour,
-   not opacity — the chip must stay legible. */
 .tree-row.disabled {
 	color: var(--hint);
 }
@@ -673,10 +634,6 @@ a.tree-row:hover {
 	min-height: 0; /* grid items default to min-height:auto — without this the row grows to content */
 }
 
-/* Header-surface strip that SCROLLS, like the app's own tab strip: the tabs are navigation and overflow
-   below ~1500px, so every one must stay reachable. The 1px divider lives on the TABS (plus a filler for
-   the trailing space) — on the strip it would sit outside the scrollport, where the active tab cannot
-   paint over it to merge into the content. Inactive tabs stay transparent and read as this strip. */
 .tabstrip {
 	display: flex;
 	align-items: stretch;
@@ -729,9 +686,6 @@ a.tree-row:hover {
 	font-size: 12px;
 }
 
-/* Active tab = the content surface, no border or indicator — it merges into the editor body. Its own
-   divider segment becomes the content colour, which is what produces the merge now that the divider is
-   per-tab rather than a strip border the tab had to overhang. */
 .tab.active {
 	color: var(--text);
 	background: var(--container-workspace-bg);
@@ -764,8 +718,6 @@ a.tree-row:hover {
 
 /* ── Sections: files ────────────────────────────────────────────────────── */
 
-/* One container geometry for everything the editor pane shows: the landing's sections and the
-   blog pages' content column. */
 .file-section,
 .blog-main {
 	max-width: 860px;
@@ -925,10 +877,6 @@ a.tree-row:hover {
 	color: var(--accent);
 }
 
-/* Light theme hero override (must follow the base class for specificity): the kicker pill reads as
-   plain text on white — the bright accent-tinted pill treatment is a dark-surface look. Everything
-   else in the hero (title, `pi` chip, primary button) follows the per-theme accent like the rest of
-   the page. */
 [data-theme="light"] .hero-kicker .pill-accent {
 	--accent: var(--text);
 	background: transparent;
@@ -1006,8 +954,6 @@ p.hero-lede {
 	display: none;
 }
 
-/* OS tabs attach to the command surface like editor tabs. Without JS the controls stay hidden and all
-   labelled instruction panels remain visible; main.ts adds install-tabs-ready only after wiring them. */
 .install-picker {
 	max-width: 100%;
 }
@@ -1021,6 +967,7 @@ p.hero-lede {
 	display: none;
 }
 
+/* Without JS the tab controls stay hidden and every labelled instruction panel remains visible. */
 html.install-tabs-ready .install-tabs {
 	display: flex;
 	/* Fixed 44px header row; tabs stretch to it and centre their own content. */
@@ -1029,8 +976,6 @@ html.install-tabs-ready .install-tabs {
 	gap: 0;
 	/* No left padding: the first tab sits flush with the frame edge. */
 	padding: 0 4px 0 0;
-	/* Header surface for the strip + the empty space to the right of the tabs, with a full-width
-	   bottom divider; the active tab overlaps it (below) to merge into the command block. */
 	background: var(--container-header-bg);
 	border-bottom: 1px solid var(--border);
 }
@@ -1099,8 +1044,6 @@ html.install-tabs-ready p.install-fallback-heading {
 	margin: 8px 0 16px;
 }
 
-/* One border-default frame around the whole OS-tabs + command component. overflow:hidden
-   clips the tab-bar / command corners to the 4px radius; inner boxes drop their own borders. */
 html.install-tabs-ready .install-frame {
 	border: 1px solid var(--border);
 	border-radius: 4px;
@@ -1113,8 +1056,6 @@ html.install-tabs-ready .install-frame .install-line {
 	border-radius: 0;
 }
 
-/* The command <code> otherwise inherits the global code radius; the outer frame
-   provides the only corner rounding, so drop it here. */
 .install-frame .install-line > code {
 	border-radius: 0;
 }
@@ -1131,10 +1072,6 @@ html.install-tabs-ready .install-frame .windows-shell-picker {
 	border-radius: 0;
 }
 
-/* Inline next to the active Windows tab, shown only while Windows is active (JS toggles [hidden]).
-   Compact segmented control: one shared border/container on the container-workspace-bg surface (it
-   belongs to the active tab state), options are segments not chips. Centred + short so the tab-bar
-   height stays stable across OS. */
 html.install-tabs-ready .windows-shell-tabs:not([hidden]) {
 	display: inline-flex;
 	align-self: center;
@@ -1262,8 +1199,6 @@ p.hero-platforms {
 	}
 }
 
-/* The shell's shared card surface, worn by the landing feature cards and the blog post cards
-   alike — slightly raised off the editor surface, so `--elevated` chips stay visible on it. */
 .feature-card,
 .blog-post-card {
 	border: 1px solid var(--border2);
@@ -1423,8 +1358,6 @@ html.anim .chat-demo [data-step].on {
 	align-items: center;
 	justify-content: center;
 	height: 30px;
-	/* Fixed square: width mirrors the height and flex never shrinks it, so the icon button keeps
-	   its shape when the composer row gets tight on mobile. */
 	width: 30px;
 	flex: none;
 	border-radius: 4px;
@@ -1640,9 +1573,7 @@ p.footer-fineprint {
 	color: var(--muted);
 }
 
-/* One selected-item grammar for both rails: the accent-tinted row. (`a.tree-row.selected` ties
-   with `a.tree-row:hover` on specificity and wins by source order, so — like `.ft-row.active` —
-   a selected row keeps its accent background under the pointer.) */
+/* Ties with `a.tree-row:hover`; wins by source order, so a selected row keeps its accent bg when hovered. */
 .ft-row.active,
 a.tree-row.selected {
 	background: color-mix(in srgb, var(--accent) 16%, transparent);
@@ -1753,8 +1684,6 @@ a.tree-row.selected .i {
 	color: var(--hint);
 }
 
-/* The logo banner: wide ASCII, so it never wraps and its font is sized by JS (--term-logo-fs) to fit
-   the narrow terminal without altering any character. */
 .term-logo {
 	white-space: pre;
 	word-break: normal;
@@ -1855,8 +1784,6 @@ html:not(.anim) .term-caret {
 }
 
 /* ── Mock-disabled state ────────────────────────────────────────────────── */
-/* Non-interactive elements: dimmed to --hint, no pointer events, tooltip on hover */
-
 /* Non-interactive mock elements: dimmed to --hint, pointer events blocked */
 [data-mock-hint],
 [data-mock-hint] * {
@@ -1927,8 +1854,6 @@ html:not(.anim) .term-caret {
 		transform 200ms ease-out;
 	z-index: 1001;
 	box-shadow: 0 8px 24px rgb(0 0 0 / 0.35);
-	/* Width follows the widest child: the nowrap CTA button. The text (which
-	   wraps) is narrower, so the popover sizes to the button, not the sentence. */
 	width: min-content;
 	max-width: min(240px, calc(100vw - 32px));
 }
@@ -2007,8 +1932,6 @@ html:not(.anim) .term-caret {
 		display: inline-flex;
 	}
 
-	/* Mobile header: the theme switcher sits at the far right, after every other action
-	   (GitHub link, file-tree toggle). Order-only — behaviour and styling are unchanged. */
 	.titlebar-right .theme-toggle {
 		order: 1;
 	}
@@ -2043,9 +1966,6 @@ html:not(.anim) .term-caret {
 
 	html.install-tabs-ready .install-tabs {
 		padding-inline: 0;
-		/* Too narrow to keep the shell switcher inline with the OS tabs: let it wrap onto a
-		   second row below them (see the .windows-shell-tabs override) instead of clipping.
-		   height:auto lets the strip grow by that row; the OS-tab row keeps its 44px. */
 		flex-wrap: wrap;
 		height: auto;
 		min-height: 44px;
@@ -2062,9 +1982,6 @@ html:not(.anim) .term-caret {
 		padding-inline: 7px;
 	}
 
-	/* Second row: a full-width band on the active container-workspace-bg surface, directly under
-	   the OS tabs and inside the same frame. flex-basis:100% forces the wrap; the segments share the
-	   width (flex:1) so every shell stays reachable with no horizontal scroll or clipping. */
 	html.install-tabs-ready .windows-shell-tabs:not([hidden]) {
 		flex-basis: 100%;
 		align-self: stretch;
@@ -2089,10 +2006,8 @@ html:not(.anim) .term-caret {
 		justify-content: center;
 	}
 
-	/* Windows active: the shell switcher wraps to its own row, so the active Windows tab must keep
-	   the structural divider above that row (it should merge into content only when the command
-	   block sits directly below, as on macOS/Linux). Restore it with the border-default token. */
-	html.install-tabs-ready .install-tabs:has(.windows-shell-tabs:not([hidden]))
+	html.install-tabs-ready
+		.install-tabs:has(.windows-shell-tabs:not([hidden]))
 		.install-tab[aria-selected="true"] {
 		border-bottom-color: var(--border);
 	}
@@ -2102,9 +2017,6 @@ html:not(.anim) .term-caret {
 		padding-left: 8px;
 	}
 
-	/* Demo: compact so the whole frame fits a phone viewport at once — no internal scroll, no
-	   scale(), no smaller type. Only whitespace shrinks: outer/inner padding, inter-event gaps and
-	   text leading (line-height). Font sizes + families are the shared semantic values, untouched. */
 	.chat-demo {
 		padding: 12px;
 		gap: 8px;
@@ -2145,17 +2057,11 @@ html:not(.anim) .term-caret {
 		gap: 8px;
 	}
 
-	/* Keep the Send button inside the composer's content area with the same inset as the left:
-	   let the row wrap when the chips get too wide (on very narrow phones) instead of overflowing
-	   and shoving the fixed-square button past the right edge. The button never shrinks. */
 	.composer-row {
 		flex-wrap: wrap;
 		row-gap: 8px;
 	}
 
-	/* Footer grows to two lines instead of clipping: the copyright/InnovationHub content stays on
-	   line 1 and "Apache License 2.0" always starts on line 2. Both lines are left-aligned and
-	   share the same left edge; the 6px flex gap preserves the vertical spacing between them. */
 	.statusbar {
 		white-space: normal;
 		overflow: visible;
@@ -2177,8 +2083,6 @@ html:not(.anim) .term-caret {
 	}
 }
 
-/* Typing/streaming replays are JS-gated on the same query (html.anim is never added); these cover
-   the remaining CSS-only motion. */
 @media (prefers-reduced-motion: reduce) {
 	.rail-right {
 		transition: none;
@@ -2211,12 +2115,7 @@ html:not(.anim) .term-caret {
 	}
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════
-   BLOG STYLES
-   Shared styles for /blog pages, rendered inside the IDE shell's editor pane.
-   `.blog-main` (the content column) shares the landing sections' container geometry — see
-   the grouped `.file-section, .blog-main` rule. Uses the same tokens as the main site.
-   ═══════════════════════════════════════════════════════════════════════════ */
+/* ══ BLOG STYLES — /blog pages, rendered inside the IDE shell's editor pane (SPEC.md "Blog") ══ */
 
 /* ── Blog Index ─────────────────────────────────────────────────────────── */
 
@@ -2244,8 +2143,6 @@ html:not(.anim) .term-caret {
 	gap: var(--space-xl);
 }
 
-/* Surface + border come from the shared card rule (`.feature-card, .blog-post-card`). The whole
-   card is the link; hover signals on the border alone — no underline, no movement. */
 .blog-post-card {
 	display: block;
 	padding: var(--space-lg);

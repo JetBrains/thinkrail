@@ -1,8 +1,4 @@
 ---
-// The invariant head plumbing every page shares. Page-specific metadata (title, description,
-// canonical, OG) stays in the page or layout that owns it — this component carries only what must
-// never diverge between pages: charset/viewport, the favicon, the global stylesheet (which bundles
-// the self-hosted fonts), the pre-paint theme guard, and the analytics loaders.
 import "../styles.css";
 ---
 
@@ -24,13 +20,9 @@ import "../styles.css";
 						? "light"
 						: "dark";
 		document.documentElement.setAttribute("data-theme", theme);
-	} catch {
-		/* storage unavailable — keep the server-rendered default */
-	}
+	} catch {}
 </script>
 <script>
-	// Production-only, cookieless PostHog + GTM (both self-gate on hostname). The config lives ONLY
-	// in src/analytics.ts / src/gtm.ts — unit-tested there, loaded identically on every page.
 	import { initAnalytics } from "../analytics";
 	import { initGtm } from "../gtm";
 

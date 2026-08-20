@@ -1,16 +1,9 @@
 ---
-// The IDE-shell chrome every page shares — the creative conceit that "the site IS the IDE"
-// (SPEC.md): icon sprite, skip link, title bar, project rail (with the real Landing/Blog/Docs
-// navigation), files rail + terminal, and status bar. The center column is the default slot;
-// the right rail's All-files list is the `filetree` slot.
 import Copyright from "./Copyright.astro";
 
 interface Props {
-	/** Workspace shown in the title bar: the scope crumb + `workspace/<name> · from main`. */
 	workspace: string;
-	/** Which left-rail page row is selected. */
 	nav: "landing" | "blog";
-	/** Skip-link target: the page's main content. */
 	skipHref: string;
 }
 
@@ -299,13 +292,6 @@ const { workspace, nav, skipHref } = Astro.props;
 				<p>A workspace is a <code>git worktree</code>: its own branch, files, terminals, and chats.</p>
 				<button type="button" class="rail-note-dismiss" id="rail-note-dismiss">Understood</button>
 			</div>
-			<!--
-				Card starts visible in the markup so it reads with JS disabled. This inline,
-				non-module script (always runs if JS runs at all, independent of whether the
-				main.ts bundle fetches/executes) hides it immediately to avoid a flash, then
-				main.ts takes over the reveal/dismiss lifecycle. The fallback timeout guards
-				against main.ts failing to load — the card still surfaces on its own.
-			-->
 			<script>
 				(() => {
 					const note = document.getElementById("rail-note");
@@ -337,8 +323,6 @@ const { workspace, nav, skipHref } = Astro.props;
 			<div class="terminal">
 				<div class="terminal-head">
 					<span class="terminal-label">Terminal</span>
-					<!-- The logo replay is also bound to a click anywhere on the terminal; this is the
-					     discoverable, keyboard-reachable affordance for it. -->
 					<button type="button" class="term-replay" data-term-replay hidden>Replay logo</button>
 				</div>
 				<pre class="term-screen" id="term-screen"><span class="term-line"><span class="term-prompt">❯</span> curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash</span><span class="term-out">⬇ thinkrail latest (macos-arm64) · sha256 verified ✓

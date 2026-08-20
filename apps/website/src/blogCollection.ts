@@ -2,11 +2,6 @@ import { type CollectionEntry, getCollection } from "astro:content";
 
 export type BlogPost = CollectionEntry<"blog">;
 
-/**
- * The one query the blog index, post pages, and RSS feed all share: newest-first, drafts visible in
- * `astro dev` but excluded from production builds, duplicate slugs fail the build (two posts would
- * silently fight over one URL otherwise).
- */
 export async function publishedPosts(): Promise<BlogPost[]> {
 	const posts = (await getCollection("blog")).filter(
 		(post) => !(import.meta.env.PROD && post.data.draft),

@@ -26,8 +26,6 @@ import IdeShell from "../components/IdeShell.astro";
 	</head>
 	<body>
 		<IdeShell workspace="website" nav="landing" skipHref="#readme">
-			<!-- Editor tabs mirror the right-rail file tree (Table of Contents). JS fills
-			     them from `.filetree a.ft-row` so the two nav lists can never drift. -->
 			<nav class="tabstrip" aria-label="Editor tabs"></nav>
 
 			<main class="editor" id="editor-scroll" aria-label="Page content">
@@ -48,15 +46,12 @@ import IdeShell from "../components/IdeShell.astro";
 					</p>
 					<div class="install-picker install-picker-hero" data-install-picker>
 						<div class="install-frame">
-						<!-- The strip is layout only: a `tablist` may contain nothing but `tab`s, so the OS tabs get
-						     their own tablist and the shell switcher is its sibling, not its child. -->
 						<div class="install-tabs">
 							<div class="install-os-tabs" role="tablist" aria-label="Choose your operating system">
 								<button type="button" class="install-tab" role="tab" id="hero-install-macos-tab" aria-controls="hero-install-macos" aria-selected="false" tabindex="-1" data-install-platform="macos">macOS</button>
 								<button type="button" class="install-tab" role="tab" id="hero-install-linux-tab" aria-controls="hero-install-linux" aria-selected="true" data-install-platform="linux">Linux</button>
 								<button type="button" class="install-tab" role="tab" id="hero-install-windows-tab" aria-controls="hero-install-windows" aria-selected="false" tabindex="-1" data-install-platform="windows">Windows</button>
 							</div>
-							<!-- Windows shell switcher, inline in the tab bar — shown (via JS) only while the Windows tab is active, so switching OS never changes the component height. -->
 							<div class="windows-shell-tabs" role="tablist" aria-label="Choose your Windows shell" hidden>
 								<button type="button" class="windows-shell-tab" role="tab" id="hero-shell-powershell-tab" aria-controls="hero-shell-powershell" aria-selected="true" data-windows-shell="powershell">PowerShell</button>
 								<button type="button" class="windows-shell-tab" role="tab" id="hero-shell-cmd-tab" aria-controls="hero-shell-cmd" aria-selected="false" tabindex="-1" data-windows-shell="cmd">Command Prompt</button>

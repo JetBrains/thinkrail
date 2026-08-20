@@ -1,8 +1,4 @@
 ---
-// The chrome every /blog page shares: the IDE shell (title bar, project rail with Blog selected,
-// files rail listing the published articles, terminal, status bar) plus the head metadata a blog
-// page needs (title, description, canonical, OG). The center is a slot rendered inside the same
-// scrolling "editor" pane as the landing page, in a container with the same geometry.
 import { postPath, publishedPosts } from "../blogCollection";
 import BaseHead from "../components/BaseHead.astro";
 import IdeShell from "../components/IdeShell.astro";
@@ -10,14 +6,12 @@ import IdeShell from "../components/IdeShell.astro";
 interface Props {
 	title: string;
 	description?: string | undefined;
-	/** Set on post pages so OG consumers see an article, not a generic website. */
 	article?: { publishedTime: Date } | undefined;
 }
 
 const { title, description, article } = Astro.props;
 const canonical = new URL(Astro.url.pathname, Astro.site);
 const posts = await publishedPosts();
-// Trailing-slash-insensitive: static builds report the pathname with or without it.
 const normalizePath = (path: string) => path.replace(/\/+$/, "");
 const isCurrent = (path: string) => normalizePath(Astro.url.pathname) === normalizePath(path);
 ---
