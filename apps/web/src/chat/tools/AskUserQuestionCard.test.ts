@@ -1,11 +1,21 @@
 import { describe, expect, it } from "bun:test";
 import type { AskUserQuestionAnswer, AskUserQuestionItem } from "@thinkrail/contracts";
 import {
+	choiceKeyAction,
+	confirmStateFor,
+	createQuestionAttentionClaim,
+	customTextPatch,
 	deriveAnswer,
+	deriveAnswers,
 	deriveRecapState,
+	noteKeyAction,
+	nudgeShowsOnPage,
 	parseQuestions,
+	questionPageForKey,
 	readAskResult,
 	readRecommendation,
+	shouldClaimQuestionFocus,
+	shouldFocusPageTarget,
 	splitRecommended,
 } from "./AskUserQuestionCard";
 
@@ -24,6 +34,7 @@ const state = (over: Partial<Parameters<typeof deriveAnswer>[2]> = {}) => ({
 	customText: "",
 	customActive: false,
 	multi: [] as string[],
+	cursor: 0,
 	notes: {} as Record<string, string>,
 	noteFor: null as string | null,
 	...over,
@@ -37,6 +48,202 @@ describe("parseQuestions", () => {
 		expect(parseQuestions({})).toEqual([]);
 		expect(parseQuestions({ questions: "nope" })).toEqual([]);
 		expect(parseQuestions({ questions: [{ question: "x" }] })).toEqual([]); // no options[]
+	});
+});
+
+describe("keyboard interaction", () => {
+	it("wraps authored-choice movement and supports Home/End", () => {
+		expect(choiceKeyAction("ArrowDown", 2, 3)).toEqual({ type: "move", index: 0 });
+		expect(choiceKeyAction("ArrowUp", 0, 3)).toEqual({ type: "move", index: 2 });
+		expect(choiceKeyAction("Home", 2, 3)).toEqual({ type: "move", index: 0 });
+		expect(choiceKeyAction("End", 0, 3)).toEqual({ type: "move", index: 2 });
+	});
+
+	it("maps Space and Enter without consuming bare letter or number keys", () => {
+		expect(choiceKeyAction(" ", 0, 2)).toEqual({ type: "select" });
+		expect(choiceKeyAction("Enter", 0, 2)).toEqual({ type: "confirm" });
+		expect(choiceKeyAction("N", 0, 2)).toEqual({ type: "none" });
+		expect(choiceKeyAction("n", 0, 2)).toEqual({ type: "none" });
+		expect(choiceKeyAction("1", 0, 2)).toEqual({ type: "none" });
+	});
+
+	it("includes Other as the final wrapping choice target", () => {
+		expect(choiceKeyAction("ArrowDown", 2, 4)).toEqual({ type: "move", index: 3 });
+		expect(choiceKeyAction("End", 0, 4)).toEqual({ type: "move", index: 3 });
+		expect(choiceKeyAction("ArrowDown", 3, 4)).toEqual({ type: "move", index: 0 });
+	});
+
+	it("clamps Left/Right across questions plus review", () => {
+		expect(questionPageForKey("ArrowLeft", 0, 2)).toBe(0);
+		expect(questionPageForKey("ArrowRight", 0, 2)).toBe(1);
+		expect(questionPageForKey("ArrowRight", 2, 2)).toBe(2);
+		expect(questionPageForKey("ArrowDown", 1, 2)).toBeNull();
+	});
+
+	it("finishes notes on Enter/Escape but preserves Shift+Enter and IME composition", () => {
+		expect(noteKeyAction("Enter", false, false)).toBe("finish");
+		expect(noteKeyAction("Escape", false, false)).toBe("finish");
+		expect(noteKeyAction("Enter", true, false)).toBe("none");
+		expect(noteKeyAction("Enter", false, true)).toBe("none");
+	});
+
+	it("closes the note on Shift+Escape rather than letting it skip the questionnaire", () => {
+		// The card reads Shift+Escape as "decline"; the open editor must consume it first, or the gesture
+		// throws away the note being typed along with every answer.
+		expect(noteKeyAction("Escape", true, false)).toBe("finish");
+	});
+
+	it("keeps Escape inside the editor mid-composition — consumed, not finished, and never bubbled", () => {
+		// The IME owns the key there, so the note must NOT close; but returning "none" would also decline to
+		// swallow it, and `Shift+Escape` would bubble to the card's skip and take the questionnaire down with
+		// the composition. "consume" is what closes that door — the one hole in the Shift-held rule above.
+		expect(noteKeyAction("Escape", true, true)).toBe("consume");
+		expect(noteKeyAction("Escape", false, true)).toBe("consume");
+		// Enter mid-composition stays inert: nothing above the editor claims it, so there is nothing to eat.
+		expect(noteKeyAction("Enter", false, true)).toBe("none");
+		expect(noteKeyAction("Enter", true, true)).toBe("none");
+	});
+
+	it("claims attention once per tool call and mounted-chat scope", () => {
+		const claim = createQuestionAttentionClaim();
+		const firstMount = {};
+		const reopenedMount = {};
+		expect(claim(firstMount, "ask-1")).toBe(true);
+		expect(claim(firstMount, "ask-1")).toBe(false);
+		expect(claim(firstMount, "ask-2")).toBe(true);
+		expect(claim(reopenedMount, "ask-1")).toBe(true);
+	});
+
+	it("focuses from inert/empty-composer targets but preserves active editing and open modals", () => {
+		expect(shouldClaimQuestionFocus("none", false)).toBe(true);
+		expect(shouldClaimQuestionFocus("non-editing", false)).toBe(true);
+		expect(shouldClaimQuestionFocus("empty-composer", false)).toBe(true);
+		expect(shouldClaimQuestionFocus("draft-composer", false)).toBe(false);
+		expect(shouldClaimQuestionFocus("editing", false)).toBe(false);
+		expect(shouldClaimQuestionFocus("modal", false)).toBe(false);
+	});
+
+	it("never moves focus on a coarse pointer, whatever holds it (no soft keyboard on reveal)", () => {
+		expect(shouldClaimQuestionFocus("none", true)).toBe(false);
+		expect(shouldClaimQuestionFocus("non-editing", true)).toBe(false);
+		expect(shouldClaimQuestionFocus("empty-composer", true)).toBe(false);
+	});
+
+	it("lets a page change take focus everywhere except into a text field on touch", () => {
+		// A page change follows a tap the user just made, so it may move focus on touch — but landing in the
+		// Other input would raise the soft keyboard the reveal path takes such care never to raise.
+		expect(shouldFocusPageTarget(false, true)).toBe(true);
+		expect(shouldFocusPageTarget(true, true)).toBe(false);
+		expect(shouldFocusPageTarget(true, false)).toBe(true);
+		expect(shouldFocusPageTarget(false, false)).toBe(true);
+	});
+});
+
+describe("confirmStateFor", () => {
+	it("single-select: a choice-row confirm chooses the focused label and drops Other", () => {
+		expect(
+			confirmStateFor(state({ customText: "typed", customActive: true }), false, {
+				kind: "choice",
+				label: "B",
+				cursor: 1,
+			}),
+		).toMatchObject({ option: "B", customActive: false, customText: "typed", cursor: 1 });
+	});
+
+	it("multi-select: a choice-row confirm commits the set it has — Space toggles, Enter does not", () => {
+		expect(
+			confirmStateFor(state({ multi: ["A"] }), true, { kind: "choice", label: "B", cursor: 1 }),
+		).toMatchObject({ multi: ["A"], option: null, cursor: 1 });
+	});
+
+	it("Other-row confirm commits the state as it stands, never re-derived from the text", () => {
+		// The regression this pins: confirming through `customTextPatch(state.customText)` re-activates the
+		// row for ANY non-empty text, which is how a row painted unselected comes to supply the answer.
+		const leftover = state({ option: "A", customText: "stale", customActive: false });
+		expect(confirmStateFor(leftover, false, { kind: "custom" })).toEqual(leftover);
+		const excluded = state({ multi: ["A"], customText: "excluded", customActive: false });
+		expect(confirmStateFor(excluded, true, { kind: "custom" })).toEqual(excluded);
+	});
+
+	it("round-trips with deriveAnswer: the confirmed answer always matches the painted row", () => {
+		const single = q();
+		const multi = q({ multiSelect: true });
+		// single-select: text typed, then an authored option picked — the pick is painted, so the pick wins.
+		const afterPick = state({ option: "A", customText: "stale", customActive: false });
+		expect(
+			deriveAnswer(single, 0, confirmStateFor(afterPick, false, { kind: "custom" })),
+		).toMatchObject({ kind: "option", answer: "A" });
+		// multi-select: text typed then explicitly UNCHECKED — the checkbox's whole purpose is honoured.
+		const afterUncheck = state({ multi: ["A"], customText: "excluded", customActive: false });
+		expect(deriveAnswer(multi, 0, confirmStateFor(afterUncheck, true, { kind: "custom" }))).toEqual(
+			{
+				questionIndex: 0,
+				question: "Which?",
+				kind: "multi",
+				answer: null,
+				selected: ["A"],
+			},
+		);
+		// ...while text the user is actually standing behind still confirms as the answer.
+		const typed = state({ ...customTextPatch("mine") });
+		expect(
+			deriveAnswer(single, 0, confirmStateFor(typed, false, { kind: "custom" })),
+		).toMatchObject({
+			kind: "custom",
+			answer: "mine",
+		});
+		// ...and an untouched Other row with a pick above it still confirms that pick.
+		const untouched = state({ option: "A" });
+		expect(
+			deriveAnswer(single, 0, confirmStateFor(untouched, false, { kind: "custom" })),
+		).toMatchObject({ kind: "option", answer: "A" });
+		// ...and nothing at all is still unanswerable, so the "choose an option first" nudge still fires.
+		expect(deriveAnswer(multi, 0, confirmStateFor(state(), true, { kind: "custom" }))).toBeNull();
+	});
+});
+
+describe("nudgeShowsOnPage", () => {
+	const nudge = { question: 1, seq: 3 };
+
+	it("shows only on the question that raised it", () => {
+		expect(nudgeShowsOnPage(nudge, 1, false, false)).toBe(true);
+		// Paging on within the nudge's 2.5s life must not carry the complaint to a question the user never
+		// tried to confirm — it would sit there as a warning they cannot explain.
+		expect(nudgeShowsOnPage(nudge, 0, false, false)).toBe(false);
+		expect(nudgeShowsOnPage(nudge, 2, false, false)).toBe(false);
+	});
+
+	it("clears once that question is answerable, and never shows on review", () => {
+		expect(nudgeShowsOnPage(nudge, 1, false, true)).toBe(false);
+		expect(nudgeShowsOnPage(nudge, 1, true, false)).toBe(false);
+	});
+
+	it("is absent with no outstanding gesture", () => {
+		expect(nudgeShowsOnPage(null, 0, false, false)).toBe(false);
+	});
+});
+
+describe("customTextPatch", () => {
+	it("typed text claims the answer, taking it off the authored pick (exclusive single-select)", () => {
+		expect(customTextPatch("mine")).toEqual({
+			customText: "mine",
+			customActive: true,
+			option: null,
+		});
+	});
+
+	it("does NOT activate on blank text, so passing through Other keeps the current pick", () => {
+		// The ↑/↓/Home/End cursor wraps through the Other row; activating there would clear `option` and
+		// paint an empty row as chosen. Only text does that — and emptying the field hands the row back.
+		expect(customTextPatch("")).toEqual({ customText: "", customActive: false });
+		expect(customTextPatch("   ")).toEqual({ customText: "   ", customActive: false });
+	});
+
+	it("round-trips with deriveAnswer: blank text is never an answer, typed text always is", () => {
+		const passedOver = state({ option: "A", ...customTextPatch("") });
+		expect(deriveAnswer(q(), 0, passedOver)).toMatchObject({ kind: "option", answer: "A" });
+		const typed = state({ option: "A", ...customTextPatch("mine") });
+		expect(deriveAnswer(q(), 0, typed)).toMatchObject({ kind: "custom", answer: "mine" });
 	});
 });
 
@@ -149,6 +356,21 @@ describe("deriveAnswer", () => {
 			selected: ["A"],
 		});
 		expect(deriveAnswer(q({ multiSelect: true }), 0, state({ multi: ["Gone"] }))).toBeNull();
+	});
+});
+
+describe("deriveAnswers", () => {
+	const questions = [q({ question: "First?" }), q({ question: "Second?", multiSelect: true })];
+
+	it("collects only the answerable questions, keyed by their own index", () => {
+		expect(deriveAnswers(questions, { 1: state({ multi: ["B"] }) })).toEqual([
+			{ questionIndex: 1, question: "Second?", kind: "multi", answer: null, selected: ["B"] },
+		]);
+	});
+
+	it("treats a missing entry as a fresh state, so a sparse map is never a partial answer", () => {
+		expect(deriveAnswers(questions, {})).toEqual([]);
+		expect(deriveAnswers(questions, { 0: state({ option: "A" }) })).toHaveLength(1);
 	});
 });
 

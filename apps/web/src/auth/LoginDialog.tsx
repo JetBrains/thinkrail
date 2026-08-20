@@ -179,7 +179,7 @@ export function LoginDialog({
 												submitPrompt();
 											}
 										}}
-										className="min-w-0 flex-1 rounded-[var(--radius-sm)] border border-control-border-default bg-control-bg px-sm py-xs tr-text-ui text-text-default outline-none placeholder:text-text-muted focus-visible:border-control-border-active focus-visible:ring-2 focus-visible:ring-primary-soft"
+										className="min-w-0 flex-1 rounded-[var(--radius-sm)] border border-control-border-default bg-control-bg px-sm py-xs tr-text-ui text-text-default outline-none placeholder:text-text-muted focus-visible:border-control-border-active"
 									/>
 									<Button data-testid="login-submit" onClick={submitPrompt}>
 										Submit

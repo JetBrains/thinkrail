@@ -69,7 +69,7 @@ export function ExtUiDialog({
 								onReply(text);
 							}
 						}}
-						className="rounded-[var(--radius-sm)] border border-control-border-default bg-control-bg px-sm py-xs tr-text-ui text-text-default outline-none placeholder:text-text-muted focus-visible:border-control-border-active focus-visible:ring-2 focus-visible:ring-primary-soft"
+						className="rounded-[var(--radius-sm)] border border-control-border-default bg-control-bg px-sm py-xs tr-text-ui text-text-default outline-none placeholder:text-text-muted focus-visible:border-control-border-active"
 					/>
 				) : null}
 
@@ -80,7 +80,7 @@ export function ExtUiDialog({
 						value={text}
 						rows={8}
 						onChange={(e) => setText(e.target.value)}
-						className="resize-none rounded-[var(--radius-sm)] border border-control-border-default bg-control-bg px-sm py-xs tr-code-text text-text-default outline-none focus-visible:border-control-border-active focus-visible:ring-2 focus-visible:ring-primary-soft"
+						className="resize-none rounded-[var(--radius-sm)] border border-control-border-default bg-control-bg px-sm py-xs tr-code-text text-text-default outline-none focus-visible:border-control-border-active"
 					/>
 				) : null}
 

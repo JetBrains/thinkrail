@@ -10,7 +10,7 @@
 
 import { existsSync, globSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { delimiter, dirname, join, resolve } from "node:path";
 import { defaultSessionDirFor, writeFixtureSession } from "@thinkrail/server/history-test-fixtures";
 
 const binary = resolve(process.argv[2] ?? join(import.meta.dir, "..", "dist", "thinkrail"));
@@ -53,6 +53,43 @@ function within<T>(promise: Promise<T>, ms: number, what: string): Promise<T> {
 }
 
 mkdirSync(homeDir, { recursive: true });
+
+// External extension + Central fake, on a PATH with no `pi`: the compiled host must load the global
+// artifact through embedded PI alone (default and custom PI_CODING_AGENT_DIR layouts).
+const fakeBinDir = join(tmp, "no-pi-bin");
+const centralArtifact = join(homeDir, ".pi", "agent", "extensions", "jetbrains-central.ts");
+mkdirSync(fakeBinDir, { recursive: true });
+mkdirSync(dirname(centralArtifact), { recursive: true });
+writeFileSync(
+	join(fakeBinDir, "central"),
+	'#!/bin/sh\n[ "$1" = "--version" ] || exit 8\nprintf \'central 1.6.2 (synthetic smoke metadata)\\n\'\n',
+	{ mode: 0o755 },
+);
+writeFileSync(
+	centralArtifact,
+	`const model = {
+  id: "compiled-external-model",
+  name: "Compiled external extension model",
+  reasoning: false,
+  input: ["text"],
+  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+  contextWindow: 100000,
+  maxTokens: 4096,
+  api: "openai-completions",
+};
+export default function syntheticExternalExtension(pi) {
+  pi.registerProvider("compiled-external", {
+    api: "openai-completions",
+    baseUrl: "https://compiled-extension.invalid",
+    apiKey: "synthetic-smoke-key",
+    models: [model],
+  });
+}
+`,
+);
+const noPiPath = [fakeBinDir, "/usr/bin", "/bin", "/usr/sbin", "/sbin"].join(delimiter);
+if (Bun.which("pi", { PATH: noPiPath }))
+	fail("the external-extension smoke PATH unexpectedly contains pi");
 
 // A compiled artifact must not execute startup config from the project it is launched inside. A malicious
 // or merely incompatible Bun preload would otherwise run before ThinkRail can establish any boundary.
@@ -127,11 +164,13 @@ const proc = Bun.spawn([binary, "--no-open", "--port", "24262"], {
 		// cache so the binary's staging path (web assets + skills) is exercised from scratch.
 		THINKRAIL_DATA_DIR: dataDir,
 		PI_CODING_AGENT_DIR: agentDir,
+		PI_OFFLINE: "1",
 		XDG_CACHE_HOME: cacheDir,
 		HOME: homeDir,
 		CLAUDE_CONFIG_DIR: join(homeDir, ".claude"),
 		CODEX_HOME: join(homeDir, ".codex"),
 		GEMINI_CLI_HOME: homeDir,
+		PATH: noPiPath,
 		THINKRAIL_NO_ANALYTICS: "1",
 	},
 	stdout: "pipe",
@@ -170,6 +209,73 @@ function rpc(socket: WebSocket, method: string, params: unknown): Promise<unknow
 		socket.addEventListener("message", onMessage);
 		socket.send(JSON.stringify({ id, method, params }));
 	});
+}
+
+async function readServedUrlFrom(processHandle: {
+	stdout: ReadableStream<Uint8Array>;
+}): Promise<string> {
+	const decoder = new TextDecoder();
+	let buffered = "";
+	for await (const chunk of processHandle.stdout) {
+		buffered += decoder.decode(chunk, { stream: true });
+		const match = buffered.match(/thinkrail → (http:\/\/\S+)/);
+		if (match) return match[1];
+	}
+	throw new Error(`stdout closed without a serving URL (output: ${JSON.stringify(buffered)})`);
+}
+
+/** Prove the global artifact loads when PI uses its default agent dir (the main host covers custom). */
+async function assertDefaultAgentDirExternalExtension(): Promise<void> {
+	const probeEnv = {
+		...process.env,
+		THINKRAIL_DATA_DIR: join(tmp, "default-agent-data"),
+		XDG_CACHE_HOME: join(tmp, "default-agent-cache"),
+		HOME: homeDir,
+		CLAUDE_CONFIG_DIR: join(homeDir, ".claude"),
+		CODEX_HOME: join(homeDir, ".codex"),
+		GEMINI_CLI_HOME: homeDir,
+		PI_OFFLINE: "1",
+		PATH: noPiPath,
+		THINKRAIL_NO_ANALYTICS: "1",
+	};
+	delete probeEnv.PI_CODING_AGENT_DIR;
+	const probe = Bun.spawn([binary, "--no-open", "--port", "24312"], {
+		env: probeEnv,
+		stdout: "pipe",
+		stderr: "inherit",
+	});
+	let socket: WebSocket | null = null;
+	try {
+		const url = await within(
+			Promise.race([
+				readServedUrlFrom(probe),
+				probe.exited.then((code) => {
+					throw new Error(`default-agent binary probe exited early with code ${code}`);
+				}),
+			]),
+			30_000,
+			"default-agent binary probe did not report a serving URL",
+		);
+		socket = await within(connectRpc(url), 10_000, "default-agent WebSocket connect");
+		const models = await within(rpc(socket, "model.list", {}), 20_000, "default-agent model.list");
+		if (
+			!Array.isArray(models) ||
+			!models.some(
+				(model) =>
+					typeof model === "object" &&
+					model !== null &&
+					(model as { provider?: string; id?: string }).provider === "compiled-external" &&
+					(model as { provider?: string; id?: string }).id === "compiled-external-model",
+			)
+		) {
+			fail("compiled binary did not load the global external extension with the default agent dir");
+		}
+		probe.kill("SIGTERM");
+		await within(probe.exited, 15_000, "default-agent probe shutdown");
+	} finally {
+		socket?.close();
+		if (probe.exitCode === null) probe.kill("SIGKILL");
+	}
 }
 
 /**
@@ -247,23 +353,12 @@ async function assertOAuthLoginReachesAuthUrl(socket: WebSocket): Promise<void> 
 	}
 }
 
-/** The URL from the CLI's `thinkrail → http://…` line (it may scan past a busy port). */
-async function readServedUrl(): Promise<string> {
-	const decoder = new TextDecoder();
-	let buffered = "";
-	for await (const chunk of proc.stdout) {
-		buffered += decoder.decode(chunk, { stream: true });
-		const match = buffered.match(/thinkrail → (http:\/\/\S+)/);
-		if (match) return match[1];
-	}
-	throw new Error(`stdout closed without a serving URL (output: ${JSON.stringify(buffered)})`);
-}
-
 let rpcSocket: WebSocket | null = null;
 try {
+	await assertDefaultAgentDirExternalExtension();
 	const url = await within(
 		Promise.race([
-			readServedUrl(),
+			readServedUrlFrom(proc),
 			proc.exited.then((code) => {
 				throw new Error(`binary exited early with code ${code}`);
 			}),
@@ -284,6 +379,23 @@ try {
 	// Exercise the binary's actual resource-loader mode, not only staged files: a recognized project alias
 	// and a bundled skill must coexist in the pre-session catalog, with truthful project provenance.
 	rpcSocket = await within(connectRpc(url), 10_000, "WebSocket connect");
+	const externalModels = await within(
+		rpc(rpcSocket, "model.list", {}),
+		20_000,
+		"custom-agent model.list",
+	);
+	if (
+		!Array.isArray(externalModels) ||
+		!externalModels.some(
+			(model) =>
+				typeof model === "object" &&
+				model !== null &&
+				(model as { provider?: string; id?: string }).provider === "compiled-external" &&
+				(model as { provider?: string; id?: string }).id === "compiled-external-model",
+		)
+	) {
+		fail("compiled binary did not load the global external extension with a custom agent dir");
+	}
 	const project = (await within(
 		rpc(rpcSocket, "project.open", { path: projectDir }),
 		10_000,
@@ -406,7 +518,7 @@ try {
 	}
 
 	console.log(
-		`smoke OK: ${binary} booted at ${url}, served the UI + staged skills + portable alias, trashed a transcript, OAuth reached its auth URL, exited cleanly.`,
+		`smoke OK: ${binary} booted at ${url}, loaded the external extension for default/custom agent dirs with no pi on PATH, served the UI + staged skills + portable alias, trashed a transcript, OAuth reached its auth URL, exited cleanly.`,
 	);
 } catch (err) {
 	// `fail` kills the host itself, so every exit path — thrown or asserted — sheds the process.

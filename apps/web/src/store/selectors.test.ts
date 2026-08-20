@@ -16,6 +16,7 @@ import {
 	selectCatalogModel,
 	selectContextProject,
 	selectHistoryTarget,
+	selectKnownChatLocation,
 	selectLayoutResourcePlacement,
 	selectLayoutTabPlaced,
 	selectLayoutTabPlacement,
@@ -263,6 +264,21 @@ const fileTab: EditorTab = {
 	name: "a.ts",
 	path: "src/a.ts",
 };
+
+test("selectKnownChatLocation resolves open and history chats without guessing unknown sessions", () => {
+	const state = {
+		tabsByWorkspace: { w2: [fileTab, chat1] },
+		closedChatsByWorkspace: {
+			w3: [{ sessionId: "closed-session", title: "Closed chat", closedAt: 1 }],
+		},
+	};
+	expect(selectKnownChatLocation(state, "s1")).toEqual({ workspaceId: "w2", title: "One" });
+	expect(selectKnownChatLocation(state, "closed-session")).toEqual({
+		workspaceId: "w3",
+		title: "Closed chat",
+	});
+	expect(selectKnownChatLocation(state, "other-client-session")).toBeNull();
+});
 
 test("selectActiveEditorTab resolves the mirrored render-cache selection", () => {
 	const legacyPlacement: EditorTab = { ...fileTab, id: "legacy-stable-placement" };

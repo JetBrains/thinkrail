@@ -81,8 +81,8 @@ export type PiEvent =
 	| {
 			type: "compaction_end";
 			reason: "manual" | "threshold" | "overflow";
-			// `CompactionResult` lives in the Node-only pi-coding-agent; the UI doesn't read it.
-			result: unknown;
+			/** Present on success, absent on failure/abort. See {@link CompactionEndResult}. */
+			result: CompactionEndResult | undefined;
 			aborted: boolean;
 			willRetry: boolean;
 			errorMessage?: string;
@@ -115,6 +115,12 @@ export type PiEvent =
 	// Streamed output of `session.executeBash` (pi ≥0.82.0) — mirrored for union fidelity only: this host
 	// never calls `executeBash` (terminals are real PTYs), so the UI never receives it and ignores it.
 	| { type: "bash_execution_update"; id?: string; delta: string };
+
+/** Allowlist MIRROR of pi-coding-agent's Node-only `CompactionResult` — the fields the notice renders. */
+export interface CompactionEndResult {
+	tokensBefore: number;
+	estimatedTokensAfter?: number;
+}
 
 /** The `pi.event` push frame: a session's event tagged with its id. */
 export interface SessionEventPayload {
@@ -345,8 +351,8 @@ export interface WireCustomMessage<T = unknown> {
 /**
  * MIRROR of pi-coding-agent's `CompactionSummaryMessage` (Node-only package, so re-declared type-only for
  * the wire, like `WireCustomMessage` above): the entry pi leaves in a resolved transcript where compaction
- * replaced earlier messages with `summary`. It is the only record of that gap — pi drops the summarized
- * messages themselves — so the client renders it as the transcript's compaction marker.
+ * replaced earlier messages with `summary`. It is the only durable record of that gap — pi drops the
+ * summarized messages themselves — so the client can explain it after reload.
  */
 export interface WireCompactionSummary {
 	role: "compactionSummary";
@@ -356,7 +362,7 @@ export interface WireCompactionSummary {
 	timestamp: number;
 }
 
-/** A transcript message as `session.getMessages` reports it: pi-canonical + custom messages. */
+/** A transcript message as `session.getMessages` reports it: pi-canonical + custom + compaction records. */
 export type TranscriptMessage = Message | WireCustomMessage | WireCompactionSummary;
 
 /**

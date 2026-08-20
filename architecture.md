@@ -4,21 +4,21 @@ type: architecture-design
 status: active
 title: ThinkRail — top-level architecture
 parent: goal-and-requirements
-covers: [client-host-split, cli-entrypoint, wire-contract, transport-endpoint, ui-shell-panels, git-worktrees, remote-tailscale, hydrate-then-stream, domain-vs-view-state, shared-workspace-layout]
+covers: [client-host-split, cli-entrypoint, wire-contract, transport-endpoint, ui-shell-panels, git-worktrees, remote-tailscale, hydrate-then-stream, domain-vs-view-state, shared-workspace-layout, client-local-navigation]
 tags: [v1, architecture]
 ---
 
 ## Drivers
 
 The product is built around the `pi` agent, run **in-process** (`createAgentSession`). The V1 entrypoint
-is a CLI you run that boots the engine host and opens a browser UI; Electrobun is a later launcher over
-the same host. The UI ships independently of the host and dials it over the network; a phone reaches the
-host over Tailscale.
+is a CLI you run that boots the engine host and opens a browser UI. Electrobun later supports a local-host
+profile over that same host library and a shared-client profile that dials an existing host. The UI ships
+independently of the host and dials it over the network; a phone reaches the selected host over Tailscale.
 
 ## Topology — three rings
 
 - **Engine host** (`packages/server` + `packages/shared`, launched by `apps/cli` now / `apps/desktop`
-  later): owns `pi`, session state, persistence, and serves the wire endpoint. It bundles pi extensions
+  in local-host mode later): owns `pi`, session state, persistence, and serves the wire endpoint. It bundles pi extensions
   (`pi-web-access`, `pi-visualize`, `pi-spec-graph`, `pi-thinkrail-workflow`) into every session.
 - **The wire** (`packages/contracts`): the typed, versioned protocol — the only coupling between client
   and host.
@@ -28,7 +28,7 @@ host over Tailscale.
 ```
 apps/cli        host launcher (V1): boot server + open browser   ── depends on ─▶ packages/server
 apps/web        UI client (mobile-first)                          ── depends on ─▶ packages/contracts
-apps/desktop    Electrobun host launcher (deferred)               ── depends on ─▶ packages/server, packages/contracts
+apps/desktop    Electrobun local-host launcher/shared client (deferred) ── depends on ─▶ packages/server, packages/contracts
 apps/website    public landing page (GitHub Pages)                ── standalone: no workspace deps
 packages/server createServer(): Bun.serve(HTTP+WS) + AgentSessionManager (in-process pi) ── depends on ─▶ packages/contracts, packages/shared
 packages/contracts  the wire (types-only)
@@ -46,12 +46,14 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
    only coupling. **Rule: `apps/web` depends on `packages/contracts` only** — never on `server` or
    `shared`. That single edge is what makes the UI shippable without the host.
 2. **CLI is the V1 launcher; `createServer()` is a library.** `apps/cli` is a thin launcher
-   (`resolveShellEnv` → `createServer` → open browser → signal handling). `apps/desktop` is the same
-   launcher with a native window instead of a browser.
+   (`resolveShellEnv` → `createServer` → open browser → signal handling). `apps/desktop` keeps that local
+   profile with a native window and may also run as a shared client without starting a second host; both
+   profiles use the same wire and web artifact.
 3. **The wire is versioned.** `contracts` is types-only; `server.welcome` carries a protocol version so
    an independently-shipped UI can detect host-version drift.
-4. **Transport endpoint is a parameter.** Defaults to same-origin (`location.host`); a remote client
-   points it at the host's Tailscale MagicDNS name.
+4. **Transport endpoint is a parameter.** Defaults to same-origin (`location.host`); a remote browser,
+   desktop, or mobile client points it at the selected host's Tailscale MagicDNS name. Native resume state
+   is keyed by backend profile so ids from one host are never interpreted against another.
 5. **UI = panels + shell.** Layout-agnostic, store-driven panels (project→workspace nav, file tree,
    Monaco editor, changes/diff, workspace-local review, terminal, chat, composer) never know their
    arrangement. The desktop shell owns a host-synchronized IDE workbench: a recursively split center plus
@@ -90,7 +92,11 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
    (or create-only absence), and a stale full replacement conflicts with the current snapshot instead of
    making the last arrival win. That is placement only, never resource lifetime. *Attention and
    drafts* — selected tab per group, last-focused group, uncommitted pointer/resize drafts, composer drafts — remain
-   per-client (ephemeral or local reload persistence), so one browser cannot steal another's focus.
+   per-client (ephemeral or local reload persistence), so one browser cannot steal another's focus. The active
+   client location is likewise local: one backend-relative route names main / Project Home / workspace / exact
+   chat; web stores it in a versioned fragment, while later native shells persist it per backend profile and
+   window/device. Incoming ids are validated against hydrated host state, and no backend-owned “current screen”
+   lets one client move another.
    Corollary: closing a file/chat placement is a shared view action, not a domain dispose — the session
    remains; terminal close retains its separate explicit PTY-lifetime semantics. Detail:
    [[submodule-server-layout]] and [[submodule-web-shell-layout]].

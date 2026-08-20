@@ -19,6 +19,22 @@ function user(id: string, timestamp = 0): ChatTurn {
 	return { kind: "user", id, message: { role: "user", content: "hi", timestamp } } as ChatTurn;
 }
 
+function userWithAttachment(id: string, names: string[]): ChatTurn {
+	return {
+		kind: "user",
+		id,
+		message: {
+			role: "user",
+			content: [
+				{ type: "text", text: "hi" },
+				...names.map(() => ({ type: "image" as const, data: "AA==", mimeType: "image/png" })),
+			],
+			timestamp: 0,
+		},
+		attachmentNames: names,
+	} as ChatTurn;
+}
+
 function assistant(
 	id: string,
 	blocks: Block[],
@@ -116,6 +132,12 @@ describe("deriveRows grouping", () => {
 		expect(rows[4]?.id).toBe("q1");
 	});
 
+	test("a user turn's attachmentNames pass through to its row (echo-only; hydrated turns carry none)", () => {
+		const rows = deriveRows([userWithAttachment("u1", ["shot.png"]), user("u2")], {}, false);
+		expect(rows[0]?.kind === "user" ? rows[0].attachmentNames : null).toEqual(["shot.png"]);
+		expect(rows[1]?.kind === "user" ? "attachmentNames" in rows[1] : null).toBe(false);
+	});
+
 	test("non-assistant turns (user/system/error/retry) break runs and map 1:1", () => {
 		const turns: ChatTurn[] = [
 			user("u1"),
@@ -173,6 +195,44 @@ describe("deriveRows grouping", () => {
 });
 
 // ---- streaming / live ----
+
+describe("deriveRows compaction notices", () => {
+	test("a compaction turn maps 1:1 to its own row and breaks the activity run (never folded)", () => {
+		const turns: ChatTurn[] = [
+			user("u1"),
+			assistant("a1", [tc("t1", "bash")]),
+			{ kind: "compaction", id: "c1", status: "done", tokensBefore: 268_909, tokensAfter: 12_000 },
+			assistant("a2", [tc("t2", "read")]),
+			done("s1"),
+		];
+		const rows = deriveRows(turns, {}, false);
+		expect(kinds(rows)).toEqual([
+			"user",
+			"activity",
+			"compaction",
+			"activity",
+			"system",
+			"divider",
+		]);
+		expect(rows[2]).toMatchObject({
+			kind: "compaction",
+			id: "c1",
+			status: "done",
+			tokensBefore: 268_909,
+			tokensAfter: 12_000,
+		});
+	});
+
+	test("a running compaction notice renders while the transcript streams (no dead air)", () => {
+		const turns: ChatTurn[] = [
+			user("u1"),
+			assistant("a1", [], { stopReason: "length" }),
+			{ kind: "compaction", id: "c1", status: "running" },
+		];
+		// The incident shape: an empty length-stopped message contributes no rows of its own.
+		expect(kinds(deriveRows(turns, {}, true))).toEqual(["user", "compaction"]);
+	});
+});
 
 describe("deriveRows live trailing run", () => {
 	test("the trailing run of a streaming transcript is live", () => {

@@ -16,25 +16,36 @@ snapshots plus device-local attention, terminal catalogs, and one **per-session 
 
 ## Boundary
 
-- **Owns:** `appStore.ts` — connection/projects/workspaces state + setters. Connection state includes a
-  monotonic **connected generation**: `setStatus("connected")` advances it in the same write that installs
-  the status, giving reconnect hydration an edge even when the visible status returns to the same value.
-  **`projects`** is the open
-  rail, while **`recentProjects`** is the last-opened-ordered set of every known open + closed project.
-  **`installProjectSnapshot(projects, recentProjects)`** atomically installs both `server.welcome` views;
-  **`applyProjectUpdated(project)`** is the one full-snapshot updater for `project.updated` pushes and
-  authoritative project-mutation responses: it upserts/sorts Recents and either upserts/sorts the rail or
-  removes the row when `closed === true`. Both actions reconcile stale navigation too: only when this
-  client's selected project or active workspace belongs to a record no longer open, they clear the active
-  workspace and select the first remaining project's Home (or `null` when none remain), while deliberately
-  retaining every workspace layout/attention/resource-render/terminal/session map for lossless reopen.
-  Other-client opens never steal
-  navigation, and a background close never moves it. All project response call sites use the same updater,
-  so the open and recent copies cannot drift. The two explicit navigation transitions remain:
-  **`selectProject(projectId)`** enters that Project Home (`selectedProjectId` set + `activeWorkspaceId`
-  cleared in one write), while **`activateWorkspace(workspace)`** enters the workspace and selects its
-  owner (both ids set in one write). There is no generic active-workspace setter that can split that
-  invariant. It also owns the **workspace lifecycle reactions** every client runs
+- **Owns:** `appStore.ts` — connection/projects/workspaces state + setters. Connection state has two
+  monotonic edges with different meanings: `setStatus("connected")` advances **`connectionGeneration`**
+  for reconnect hydration, while **`welcomeGeneration`** advances only when one complete
+  `server.welcome` snapshot lands. **`installWelcomeSnapshot(protocolVersion, projects, recentProjects,
+  config?)`** installs protocol + both sorted project views + optional config + navigation repair and then
+  advances that readiness edge in one Zustand write; route validation never observes a protocol-only or
+  project-only intermediate state. `installProjectSnapshot` remains the project-only primitive for focused
+  callers. **`projects`** is the open rail, while **`recentProjects`** is the last-opened-ordered set of every
+  known open + closed project. **`applyProjectUpdated(project)`** is the one full-snapshot updater for
+  `project.updated` pushes and authoritative project-mutation responses: it upserts/sorts Recents and either
+  upserts/sorts the rail or removes the row when `closed === true`. Both actions reconcile stale navigation
+  too: only when this client's selected project or active workspace belongs to a record no longer open,
+  they clear the active workspace and select the first remaining project's Home (or `null` when none
+  remain), while deliberately retaining every workspace layout/attention/resource-render/terminal/session
+  map for lossless reopen. Other-client opens never steal navigation, and a background close never moves it.
+  All project response call sites use the same updater, so the open and recent copies cannot drift.
+  Explicit local transitions are **`selectMain()`**, **`selectProject(projectId)`**, and
+  **`activateWorkspace(workspace)`**; each updates its coupled scope ids atomically, and there is no generic
+  active-workspace setter that can split the invariant. Validated route restoration uses
+  **`activateWorkspaceFromRoute(workspace, sessionId?)`**: it applies the same scope ids, advances the
+  compatibility workspace navigation tick plus the current destination-group clock, and either installs a
+  transient **`routeChatTarget`** stamped with both clocks or clears an older exact target. A workspace-only
+  route carries no center-tab intent, so it retains existing browser-local attention; ordinary location
+  derivation may then canonicalize it to an already-selected chat. **`routeChatTargetGeneration`** advances
+  only on target installation (including same-workspace deep links), so consumption cannot duplicate the
+  shell reconciliation pass. `selectCurrentRouteChatTarget` is the one check that the target's workspace and
+  navigation stamp still hold. The shell's chat-reconciliation module validates/hydrates that target before
+  passive auto-open; a successful authoritative absence consumes it, while failures retain it for reconnect.
+  The store owns no URL/history/storage access — `navigation` owns serialization and drivers. It also owns
+  the **workspace lifecycle reactions** every client runs
   identically on the `workspace.created`/`updated`/`removed` pushes (no per-client optimism — the backend
   is authoritative): **`addWorkspace(ws)`** upserts a
   `workspace.created` snapshot by `id` (no-op if the project isn't listed yet — reconciles on its next
@@ -149,7 +160,25 @@ snapshots plus device-local attention, terminal catalogs, and one **per-session 
   through **`reduceSessionEvent`** at `agent_settled`, using the host-projected final terminal metadata:
   `stopReason: "error"` carries Pi's `errorMessage`, and `stopReason: "length"` becomes an actionable
   truncation error — neither may become "✓ Done". `agent_end` is attempt-level and never clears
-  `isStreaming`; settlement alone finishes retries, compaction, and queued continuations. Closed
+  `isStreaming`; settlement alone finishes retries, compaction, and queued continuations. The
+  **compaction lifecycle is a first-class turn**: `compaction_start` appends a `compaction` turn
+  (`running`), `compaction_end` settles the trailing running one in place (success → `done` +
+  tokens-before/after from the typed `CompactionEndResult`, guarded — wire data is untrusted; `aborted`
+  → `cancelled`; `errorMessage` → `failed` carrying the message, e.g. pi's one-shot overflow-recovery
+  cap — a failed compaction must be visible, never swallowed) or appends the settled turn when no
+  running one exists (reconnect mid-compaction). A successful `compaction_end` with `willRetry: true`
+  additionally marks the turn `resuming` (pi continues the same run; settlement clears the flag — a
+  settled transcript never claims ongoing work) and still removes the superseded assistant attempt. The
+  reducer relies on pi's guarantee that every emitted `compaction_start` is paired with a
+  `compaction_end` (both success and failure paths emit it), the same trust every other event pair gets.
+  **`auto_retry_start` mirrors pi's live-context surgery**: pi's `_prepareRetry` trims the failed
+  attempt's assistant message from the live context before re-running the turn (the retry re-streams it
+  as a new message) while *keeping it in the session file*, so the reducer drops the superseded failed
+  assistant turn (`removeSupersededAssistant`, the same rule as the overflow-compaction path) —
+  otherwise the client renders the reply twice (frozen failed partial + retried copy). Hydration applies
+  the same presentation rule to the persisted copy (`chat/hydrate.ts` hides retried attempts — an
+  errored assistant followed by another assistant before any user message), so live and reloaded clients
+  agree. Closed
   chats are reopenable: the workbench close command first publishes the shared placement removal and only
   after host acceptance invokes **`closeChatToHistory`**, which **keeps the runtime + session alive** and
   records it in **`closedChatsByWorkspace`** (`ClosedChat[]`, per workspace, most-recent-first) and clears
@@ -193,20 +222,26 @@ snapshots plus device-local attention, terminal catalogs, and one **per-session 
   **`modelsRefreshing`** — the awaited `model.refresh` in-flight flag — and **`modelsFresh`**, the
   *provenance* of that list: true only while it holds the installed result of an awaited forced refresh,
   which `NewWorkspaceDialog` needs before it may substitute a model the catalog lacks. It lives here,
-  beside the list, precisely **because `models` is app-wide**: `setModels` (a `model.list` snapshot, whose
-  handler answers from before the detached refresh it starts) **drops** it in the same write, so authority
+  beside the list, precisely **because `models` is app-wide**: `setModelsForProviderVersion` (a guarded
+  `model.list` snapshot, whose handler answers from before the detached refresh it starts) **drops** it in the same write, so authority
   falls with the list any consumer replaced — held as one consumer's local flag it would outlive its
-  subject and confirm a removed model that `create()` then rejects. `beginModelsRefresh` /
-  `finishModelsRefresh(RefreshedModels|null)` are the atomic pair (finish lands the list, sets provenance,
-  and clears the in-flight flag in one write; `null` = failed refresh — keep the current list *and* its
+  subject and confirm a removed model that `create()` then rejects. `beginModelsRefresh` captures and
+  returns the current provider version; `finishModelsRefresh(version, RefreshedModels|null)` lands only a
+  matching reply (list + provenance + cleared in-flight flag in one write; `null` = failed refresh — keep
+  the current list *and* its
   provenance, since nothing was installed). Provenance comes from the **host's** `complete`, never from
   "a reply arrived": the host caps how long it waits for pi, so a reply can carry the registry as it
   stands while the pass that would settle it still runs — such a list is installed (it *is* current) but
   drops authority, since concluding a model is gone from it is exactly the mistake. **`dropModelsFreshness`** is the third writer: authority is
   given up *without* replacing the list, which is what a consumer activating must do **synchronously** —
   a flag an earlier consumer set can otherwise straddle the activation and let an inherited list pass as
-  this opening's own truth before its own `model.list` reply lands. The transport work lives in
-  `chat/useModelCatalog`, not here (the store→transport edge stays type-only). The **in-app login** state
+  this opening's own truth before its own `model.list` reply lands. **`providerVersion`** is the monotonic,
+  data-free `provider.changed` generation observed from the host; **`noteProviderChanged()`** atomically
+  increments it and clears `models`, freshness, and any old refresh spinner. Both `model.list` and
+  `model.refresh` replies install through version-guarded store actions, so no picker or older async reply can
+  offer a removed runtime generation. Transport owns the guarded re-read; the Providers settings pane observes
+  the version and re-reads status. Other catalog transport work lives in `chat/useModelCatalog`, not here (the
+  store→transport edge stays type-only). The **in-app login** state
   **`activeLogin: LoginState | null`** (type from `auth`) is **flat + session-less** (a login runs on the
   Welcome screen before any session exists — routing it through a session runtime would drop its frames):
   the pure **`foldLoginFrame`** reducer lives here (as `reduceExtUi`/`reduceSessionEvent` do — `auth` stays
@@ -365,7 +400,8 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   `selectActiveWorkspaceProjectId`, `selectHistoryTarget` + `HistoryTarget` (the shell's `Ctrl+R` routing
   target: the locally selected chat resource, or the workspace's newest chat otherwise),
   `selectContextProject`, `selectAttentionCenterTab` (the selected resource in local last center focus),
-  `selectSkillsStale`, **`selectDiffScope` + `BRANCH_SCOPE`** (what a workspace's
+  `selectCurrentRouteChatTarget` (exact-chat intent only while its workspace and stamped navigation remain
+  current), `selectSkillsStale`, **`selectDiffScope` + `BRANCH_SCOPE`** (what a workspace's
   Changes panel is diffing, defaulting to the shared branch-scope constant), **`selectDiffBaseRef`** (the ref
   it is measured against — the client-side mirror of the host's one resolution), **`selectDiffTabTargetRef`**
   (that ref *as an open diff tab's live dimension*: the target for a branch-scope tab, `""` for a

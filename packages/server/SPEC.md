@@ -19,9 +19,13 @@ and runs the `pi` agent in-process via `createAgentSession`. Launched in-process
 - **Owns:** the HTTP+WS server, static serving, the WS dispatch registry, server-side feature services
   (project/workspace/git/fs/terminal + the in-process `AgentSession` manager), and `~/.thinkrail`
   persistence.
-- **Public surface:** `createServer(options) → RunningServer` (`{ port, stop }`) and `bootHost(options)
-  → BootedHost` (the process-boot wrapper: resolves the login-shell PATH, picks the port per `portMode`,
-  and installs SIGINT/SIGTERM graceful-shutdown handlers around `createServer`), both re-exported from
+- **Public surface:** `createServer(options) → Promise<RunningServer>` (`{ port, stop }`) — the public
+  factory starts Central artifact watching and applies the initial current PI runtime before binding a socket
+  or exposing handlers—falling back to a plain runtime with closed `load-failed` status when the configured
+  Central extension fails—so every embedder gets the same bootstrap invariant — and
+  `bootHost(options) → BootedHost` (the process-boot wrapper: resolves the login-shell PATH, pre-warms the
+  same initialization before choosing a port, awaits
+  `createServer`, and installs SIGINT/SIGTERM graceful-shutdown handlers), both re-exported from
   `host/`; plus `registerBundledRuntime` (+ its types, re-exported from `agent/`) — the compiled-binary
   seam by which a launcher that cannot path-load the bundled pi extensions (no `node_modules` inside a
   `bun build --compile` binary) injects them as value-imported factories + a staged skills dir, injects
@@ -33,7 +37,7 @@ and runs the `pi` agent in-process via `createAgentSession`. Launched in-process
   drives real in-process sessions through the production wiring without booting the HTTP host — a
   deliberate second entry that avoids evaluating `host` (Bun-only: `Bun.serve`, `bun-pty`) under the
   node-run e2e worker. Not for `apps/*` use — the web/CLI boundary rules are unchanged.
-- **Allowed deps:** `contracts` (types + WS constants), `shared` (`shellEnv`), `bun-pty`,
+- **Allowed deps:** `contracts` (types + WS constants), `shared` (`shellEnv` + the Central adapter), `bun-pty`,
   `@earendil-works/pi-coding-agent` + `@earendil-works/pi-ai` (runtime), Bun/Node.
 - **Forbidden:** importing `web`/`cli`/`desktop`; being bundled into the browser.
 
@@ -60,8 +64,8 @@ internals**. The edges between them are owned here (see the dependency graph), n
 | `reviews` | draft review comments on files/diffs: store + anchoring + context-package render | [reviews/SPEC.md](src/reviews/SPEC.md) |
 | `watch` | per-worktree fs watcher → debounced `workspace.fsChanged` invalidation push | [watch/SPEC.md](src/watch/SPEC.md) |
 | `terminal` | workspace-scoped `bun-pty` terminals | [terminal/SPEC.md](src/terminal/SPEC.md) |
-| `agent` | in-process pi `AgentSession`s + the shared pi runtime + one-shot completions | [agent/SPEC.md](src/agent/SPEC.md) |
-| `auth` | provider status (`provider.status`) + in-app login (OAuth / API key / logout) | [auth/SPEC.md](src/auth/SPEC.md) |
+| `agent` | in-process pi sessions + current/retained runtime generations + one-shot completions | [agent/SPEC.md](src/agent/SPEC.md) |
+| `auth` | provider status/login plus native JetBrains Central orchestration | [auth/SPEC.md](src/auth/SPEC.md) |
 | `assist` | ad-hoc one-shot tasks (workspace naming, …) on a cheap model, best-effort | [assist/SPEC.md](src/assist/SPEC.md) |
 | `analytics` | anonymous usage analytics: closed event set → PostHog sink (privacy contract in its spec) | [analytics/SPEC.md](src/analytics/SPEC.md) |
 | `dialog` | the host's native folder picker | [dialog/SPEC.md](src/dialog/SPEC.md) |
@@ -90,8 +94,8 @@ the host from env via `bootHost` for dev/e2e.
   agent-side `resolve_comment` tool delegates back through a seam
   `host` installs (`agent.setReviewCommentHandler` → `reviews.resolveCommentFromAgent`)
 - `assist` → `agent` (the one-shot completion primitive)
-- `auth` → `agent` (`getPiRuntime` — the shared `AuthStorage` + `ModelRegistry`; one-way, `agent` never imports `auth`)
-- `agent` → (no internal deps — only the pi runtime)
+- `auth` → `agent` (the current runtime/auth facade plus candidate prepare/activate; one-way, `agent` never imports `auth`)
+- `agent` → (no internal deps — only the pi runtime; auth passes desired opaque Central paths through its public generation seam)
 - `persistence`, `dialog`, `github`, `history`, `templates` → (leaves)
 
 Rules: features never import `host`, and never each other except the edges above. The graph is acyclic.
@@ -100,8 +104,10 @@ own never import `host` either: they expose a **publisher-injection seam** (`set
 `setSessionPublisher`, `setLoginPublisher`, `projects`' `setProjectPublisher` for the full-snapshot
 `project.updated` lifecycle, `workspaces`' `setWorkspacePublisher` for the
 `workspace.created`/`updated`/`removed` lifecycle trio, `settings`' `setSettingsPublisher` for
-`settings.changed`, and `layout`'s full-snapshot publisher for `layout.changed`) that `host` installs at
-`createServer` — so the channel wiring lives only in `host`.
+`settings.changed`, `layout`'s full-snapshot publisher for `layout.changed`, and auth's Central action
+analytics + `provider.changed` invalidation publishers) that `host` installs at `createServer` — so
+channel/analytics wiring lives only in
+`host`.
 For layout writes, `host` passes `settings.getConfig().layout.maxSideGroups` into the `layout` validator;
 for layout-setting writes it runs the complete nested value through `layout.validateLayoutSettings` before calling `settings`.
 Neither sibling imports the other.

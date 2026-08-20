@@ -364,4 +364,78 @@ describe("extractSession", () => {
 			{ text: "next prompt", role: "user", timestamp: 300, messageIndex: 2 },
 		]);
 	});
+
+	test("excludes a superseded auto-retry attempt but still consumes its index slot", () => {
+		// pi persists the failed attempt (`_prepareRetry` keeps it "in session for history") but the client
+		// hydrates no turn for it (its jump anchor is null) — so its text must not become a searchable,
+		// jumpable hit that could only ever resolve to "couldn't locate the message". Same shared
+		// `isRetriedAttempt` reading as the client's hydration.
+		const jsonl = [
+			header(),
+			line({
+				type: "message",
+				id: "u0",
+				parentId: null,
+				message: { role: "user", content: "what is 2+2", timestamp: 100 },
+			}),
+			line({
+				type: "message",
+				id: "a0",
+				parentId: "u0",
+				message: {
+					role: "assistant",
+					content: [{ type: "text", text: "unique failed partial" }],
+					stopReason: "error",
+					errorMessage: "fetch failed",
+					timestamp: 200,
+				},
+			}),
+			line({
+				type: "message",
+				id: "a1",
+				parentId: "a0",
+				message: {
+					role: "assistant",
+					content: [{ type: "text", text: "the answer is 4" }],
+					stopReason: "stop",
+					timestamp: 300,
+				},
+			}),
+		].join("\n");
+		// The failed attempt (index 1) is hidden; the retried reply keeps its real position (index 2).
+		expect(entriesOf(jsonl)).toEqual([
+			{ text: "what is 2+2", role: "user", timestamp: 100, messageIndex: 0 },
+			{ text: "the answer is 4", role: "assistant", timestamp: 300, messageIndex: 2 },
+		]);
+	});
+
+	test("a terminal failed attempt (no retry after it) stays searchable", () => {
+		// Followed by a user message (or nothing) ⇒ not superseded — the turn is rendered on hydrate, so
+		// the hit stays jumpable.
+		const jsonl = [
+			header(),
+			line({
+				type: "message",
+				id: "a0",
+				parentId: null,
+				message: {
+					role: "assistant",
+					content: [{ type: "text", text: "terminal failure partial" }],
+					stopReason: "error",
+					errorMessage: "retries exhausted",
+					timestamp: 100,
+				},
+			}),
+			line({
+				type: "message",
+				id: "u0",
+				parentId: "a0",
+				message: { role: "user", content: "try again", timestamp: 200 },
+			}),
+		].join("\n");
+		expect(entriesOf(jsonl)).toEqual([
+			{ text: "terminal failure partial", role: "assistant", timestamp: 100, messageIndex: 0 },
+			{ text: "try again", role: "user", timestamp: 200, messageIndex: 1 },
+		]);
+	});
 });

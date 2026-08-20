@@ -1,4 +1,9 @@
-/** One segment of a slim header view-toggle (Preview|Source, Split|Inline) — shared by the panes. */
+/**
+ * One segment of a slim header view-toggle (Preview|Source, Split|Inline, List|Tree) — shared by the panes.
+ * The active segment reuses the workspace tabs' selected role (`control-bg-selected`) rather than a
+ * container surface, so its selected background stays visible on every toolbar surface in every theme
+ * (`container-elevated-bg` resolves equal to the surrounding surface in the high-contrast themes).
+ */
 export function ToggleSegment({
 	testid,
 	label,
@@ -18,7 +23,7 @@ export function ToggleSegment({
 			aria-pressed={active}
 			className={`rounded-[var(--radius-sm)] px-sm py-0.5 tr-text-metadata ${
 				active
-					? "bg-container-elevated-bg text-text-default"
+					? "bg-control-bg-selected text-text-default"
 					: "text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 			}`}
 			onClick={onClick}

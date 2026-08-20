@@ -156,7 +156,7 @@ export function ExistingWorktreeDialog({
 									data-testid="existing-worktree-candidate"
 									data-status={candidate.status}
 									onClick={() => void openCandidate(candidate)}
-									className="flex w-full items-start gap-md rounded-[var(--radius-sm)] border border-border-default bg-control-bg p-md text-left outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-60"
+									className="flex w-full items-start gap-md rounded-[var(--radius-sm)] border border-border-default bg-control-bg p-md text-left outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:border-control-disabled-border disabled:bg-control-disabled-bg disabled:text-control-disabled-text"
 								>
 									<div className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-container-elevated-bg text-text-muted">
 										{opening ? (

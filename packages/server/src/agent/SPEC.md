@@ -11,8 +11,9 @@ tags: [v1, pi]
 
 ## Responsibility
 
-The in-process `pi` engine: a shared model/auth runtime, the lifecycle of `AgentSession`s
-(one per chat tab, rooted in a workspace's worktree), Pi resource/skill loading (including portable
+The in-process `pi` engine: a current shared model/auth runtime generation for pre-session work and future
+chats, the lifecycle of `AgentSession`s (one per chat tab, rooted in a workspace's worktree and retaining the
+runtime generation they were created with), Pi resource/skill loading (including portable
 cross-agent skill discovery + a pre-session skill catalog), the **extension-UI bridge** that turns pi's
 in-process `uiContext` dialog calls into WS frames, the host-owned **`ask_user_question`** tool + its
 answer-injection path, and the **restart repair** that keeps re-opened transcripts provider-valid.
@@ -20,20 +21,22 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
 ## Boundary
 
 - **Owns:**
-  - `piRuntime` (one shared `ModelRuntime` — pi's canonical model/auth facade since 0.80.8: catalogs,
-    credentials, availability, login/logout, and request dispatch; `getPiRuntime()` is a lazily-memoized
-    **promise** (`ModelRuntime.create()` is async; a failed create clears the memo so the next call
-    retries), `configurePiRuntime()` for tests). Created with **ambient network OFF** —
+  - `piRuntime` (the current shared `ModelRuntime` generation — pi's canonical model/auth facade for
+    catalogs, credentials, availability, login/logout, and request dispatch). Sibling consumers use the
+    `usePiRuntime()` callback to capture the current generation rather than receiving a mutable singleton;
+    host boot initializes it before any model work, while later Central artifact changes prepare and atomically
+    activate a fresh generation. Tests configure the factory before initialization. Every runtime is created
+    with **ambient network OFF** —
     `allowModelNetwork: false` **plus a scoped `PI_OFFLINE` around construction** (pi 0.81 derives the
     runtime's ambient-network default from that env at construction; the option now gates only the
     create-time refresh — in 0.80.x it fed both; the scoped value is restored immediately, a user-set
     one untouched — pinned by `piRuntime.test.ts`): catalog reads stay local (builtins + models.json +
     the persisted models-store), because a network-enabled `refresh()` (pi 0.82 folded the old
     `reloadConfig()` into it) awaits remote pi.dev catalog
-    checks with no timeout — on the `provider.status` and jbcentral-connect paths that stalls wherever
+    checks with no timeout — on the `provider.status` and host-boot paths that stalls wherever
     egress is slow or blocked. The one deliberate opt-in to
     live catalogs is the single-flighted **`refreshCatalogs(runtime)`** (issue #98, mirroring pi's own
-    `/model`) behind two triggers: **detached** via `refreshCatalogsDetached` from `model.list` only
+    `/model`) behind two triggers: a detached task from `model.list` only
     (`listAvailableModels` fires it, then serves the current snapshot — the picker read never awaits the
     network; broader triggers — `model.default`, host boot — were considered and declined) and
     **awaited** via `model.refresh` (`refreshAvailableModels`, the picker's freshness affordance: await
@@ -54,12 +57,29 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     **caller awaits**, because the signal bounds neither pi's unsignalled `forceRefreshAvailability()`
     fan-out after it nor a forced pass queued behind a throttled one — without it one slow provider leaves
     every picker's refresh row spinning. A timed-out caller serves the registry as it stands (reporting
-    `completed: false`) while single-flight keeps tracking the unbounded pass (so it cannot start a second concurrent refresh); failures `console.warn` + swallowed, never the picker's problem; **`PI_OFFLINE`**
+    `completed: false`) while single-flight keeps tracking the unbounded pass (so it cannot start a second concurrent refresh); failures emit only a closed generic/count `console.warn` (never provider ids or errors) + are swallowed, never the picker's problem; **`PI_OFFLINE`**
     (pi's env convention) disables it — resolving as a *completed* pass, since with nothing fetchable the
     registry as it stands is the settled answer; the e2e webServer env and the manager's unit suite set it for
     hermeticity. The **provider-credential surface** over this runtime —
-    `provider.status` + in-app login — lives in the sibling `auth` module (which consumes `getPiRuntime`),
-    **not** here.
+    `provider.status` + in-app login — lives in the sibling `auth` module (which consumes the shared
+    `usePiRuntime` callback), **not** here.
+
+    Candidate preparation takes only the reviewed opaque Central path set, builds a fresh runtime, applies the
+    composition root's invariant generation initializer (the source-mode e2e host uses it for its gated fake
+    providers), records that pre-opaque provider-id allowlist for `provider.status`, and then applies the opaque
+    extensions once through PI's public headless loader. Thus auth never inspects or emits Central's provider
+    configuration, while an add/remove/replace can never drop process-local provider registrations. The
+    initializer must be configured before the first generation and runs for every candidate. The path is the
+    only artifact fact this module receives;
+    it never reads, parses, hashes, snapshots, logs, copies, or serves the file. Initializer/extension/loader/
+    provider failures discard the candidate and collapse to a closed `load-failed` outcome; raw diagnostics
+    never reach `pi.extensionUi`, the wire, logs, analytics, persistence, or snapshots. Auth owns file watching,
+    coalescing, and stale-candidate rejection; agent only prepares and activates a generation.
+
+    Activation changes the current pointer for pre-session reads and future session creation; it never mutates,
+    drains, or recreates existing sessions. A live session keeps its original runtime generation. A disk session
+    attached after activation resolves its persisted `{provider,id}` exactly against the new current runtime—
+    missing is an error, and PI's `createAgentSession` fallback is never allowed to choose a different model.
 
     Every models **read** goes through **`settledAvailableModels(runtime)`** — pi's
     `getAvailableSnapshot()`, **never `getAvailable()`**: that one awaits `refreshAvailability()`, which
@@ -67,22 +87,28 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     would hand `model.list` (whose contract is to answer without touching the network), `model.default` and
     every inbound model-ref check an unbounded wait, and would escape the refresh deadline one line after
     applying it. The snapshot is what pi's last *settled* pass concluded (written at `create()`, after every
-    `refresh()`, and on login/logout), and being the one read makes it the same universe everywhere —
-    picker, default and `resolveWireModel` cannot disagree.
+    `refresh()`, and on login/logout), and being the one read makes the picker, default, and model resolution
+    agree within a generation.
   - `agentSessionManager` — sessions keyed by `session.sessionId` (each `Entry` also tracks its
     `workspaceId`), `createSession({ cwd, workspaceId, model?, thinkingLevel? })` → `createAgentSession(...)`
     with a per-session `SessionManager` **and a `buildSessionSettings(cwd)` settings manager** (the user's
     real settings + an in-memory `images.autoResize:false` override — never persisted — so the `read` tool
     sends image files **raw**, bypassing pi's photon/WASM resizer that the single-file binary can't bundle;
-    the web UI downsizes user-attached images itself); a shared `registerSession` forwards each event
+    the web UI downsizes user-attached images itself at attach time — `apps/web`'s `chat/imageAttachment`
+    caps the long edge at 1568px — and the `imageGuard` extension below is the in-context second line of
+    defense); a shared `registerSession` publishes each event
     tagged with its id + `bindExtensions({ mode:'rpc', uiContext })`. The event projection retains the
     final `agent_end` assistant's reported terminal metadata and attaches it to `agent_settled`, so the
     wire has one authoritative automatic-work terminal even when compaction/retry happens between those
-    events; it forwards rather than re-derives pi's result. The live entry retains that settlement in
-    `SessionSummary.lastSettlement` for reconnect after Pi removed a failed attempt from its rebuilt
+    events; it forwards rather than re-derives pi's result. A `compaction_end` is separately projected to
+    a **fresh allowlisted event**: its `result` carries only `tokensBefore` and optional
+    `estimatedTokensAfter`, never pi's summary, entry id, usage, or extension details. The live entry retains
+    that settlement in `SessionSummary.lastSettlement` for reconnect after Pi removed a failed attempt from its rebuilt
     context; a new `agent_start` exposes explicit `null` (no current terminal) so an older persisted failure
     cannot reappear mid-run, while disk sessions remain transcript-authoritative.
-    `prompt`/`steer`/`followUp` (with images) / `abort` /
+    New-session and pre-session entrypoints capture the current generation; operations on a live session use
+    that session's retained runtime. `abort` remains available as the cancellation control path.
+    `prompt`/`steer`/`followUp` (with images) /
     — **both `promptSession` and `followUpSession` resolve the delivery mode against the session's
     LIVE `isStreaming`, never the caller's belief about it**: `prompt()` throws mid-turn (so it falls
     back to `steer`), and pi's `followUp()` only *enqueues* into a queue that a run already in flight
@@ -95,25 +121,34 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     session all adjust effort identically) / `getDefaultModel` (the model + thinking a fresh session resolves to — settings
     default if available, else first available — so the New-Workspace dialog shows the exact pre-session
     model). **Models cross the wire as `WireModel` (never pi's raw `Model`):** `toWireModel` projects a
-    `Model` onto the wire's **allowlist** (see `WireModel`) — so `baseUrl` (the
-    jbcentral proxy secret when JetBrains AI is wired), `headers`, and any other field are excluded by
-    default — and the inbound side (`createSession`/`setModel`) **re-resolves** the ref by `{provider,id}`
-    via `resolveWireModel` against **`settledAvailableModels`** (the one settled read above — the picker's
-    exact universe, so a ref the picker offered always resolves) — pi uses `Model.baseUrl` verbatim, so a client's baseUrl
+    `Model` onto the wire's **allowlist** (see `WireModel`) — so `baseUrl`, `headers`, extension/provider
+    routing data, and any other field are excluded by
+    default — and the inbound side re-resolves the ref by `{provider,id}` via `resolveWireModel` against
+    **`settledAvailableModels`**: `createSession` uses the current generation, while `setModel` uses that live
+    session's retained runtime. Therefore a model newly shown in the global picker can be unavailable to an
+    older live chat and fails with a closed model-unavailable error rather than crossing generations. Pi uses
+    `Model.baseUrl` verbatim, so a client's baseUrl
     is never trusted (blocks disclosure *and* arbitrary-URL injection). The **hydration read side** —
     `listSessions(workspaceId, cwd)` (live sessions
     **unioned with on-disk** ones pi persisted under `cwd`, live winning on id → `SessionSummary[]` tagged
-    `live`; before treating that disk list as authoritative it strictly scans every transcript header and
-    verifies pi returned every file, so an unreadable/malformed/skipped file rejects the read rather than
-    masquerading as absent and being tombstoned by reconnect reconciliation) +
+    `live`; before treating the **detached** disk list as authoritative it strictly scans every transcript
+    header and verifies pi returned every file, so an unreadable/malformed/skipped file rejects the read
+    rather than masquerading as absent and being tombstoned by reconnect reconciliation. A registered live
+    session's own exact `SessionManager.getSessionFile()` path is excluded from that disk preflight: its
+    in-memory entry is already authoritative, and pi may truncate/rewrite that path while the host lists,
+    so treating the transient physical state as a detached corrupt chat would blank every chat on reload) +
     `getSessionMessages(sessionId, workspaceId, cwd)` (re-opens a disk session into the manager if
-    not live, then returns `{ summary, messages }` — `TranscriptMessage[]`: the pi-canonical subset **plus
+    not live, first resolving any model named by the transcript exactly in the active process runtime and
+    rejecting with a closed error when that named model is unavailable—never accepting PI's silent fallback
+    for an existing model reference; legacy transcripts with no persisted model reference may use the
+    configured default—then returns `{ summary, messages }` —
+    `TranscriptMessage[]`: the pi-canonical subset **plus
     `custom` messages**, which carry the `ask-user-answers` replies the questionnaire card pairs by tool
-    call id, **plus `compactionSummary`**, pi's marker for the messages compaction summarized away — kept
-    precisely because pi's resolved transcript is all that survives, so dropping it would hand the client
-    a chat that starts mid-conversation with nothing to explain the gap. Which roles those are is **not
-    decided here**: the filter is contracts' `isTranscriptMessageRole`, shared with `history`'s index so the
-    two cannot drift and shift `messageIndex`), plus **`ensureSessionAttached(sessionId, workspaceId, cwd)`** — the same single-flighted
+    call id, **plus `compactionSummary`**, pi's durable marker for the messages compaction summarized away —
+    kept precisely because pi's resolved transcript is all that survives, so dropping it would hand the
+    client a chat that starts mid-conversation with nothing to explain the gap. Which roles those are is
+    **not decided here**: the filter is contracts' `isTranscriptMessageRole`, shared with `history`'s index
+    so the two cannot drift and shift `messageIndex`), plus **`ensureSessionAttached(sessionId, workspaceId, cwd)`** — the same single-flighted
     re-open with no transcript read, for a caller that only needs the session *promptable* again (the
     review send's follow-up into an existing chat). It answers **`false` only when the id names no transcript
     in that cwd** — the sole case a caller may recover from by starting a new chat — and **throws** on
@@ -152,8 +187,9 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     live transcript from that session's own `SessionManager` (never a lossy directory listing), otherwise
     use the same strict disk lookup above, move the exact matching-cwd transcript to the OS trash via
     `trashFile`, then dispose the live entry and publish `SessionDeletedPayload` for client convergence;
-    only an exact trashed file or a successfully established absence counts as deletion. Any lookup or trash
-    failure throws, rolls back the tombstone it installed, restores command access to the same
+    a newly created empty live chat whose reserved JSONL path has not materialized has nothing recoverable to
+    trash and is disposed directly. Any lookup or trash failure throws, rolls back the tombstone it installed,
+    restores command access to the same
     transcript/live entry, and publishes nothing; there is deliberately no permanent-unlink fallback behind
     a recoverable UI action);
     `setSessionPublisher` + `setSessionDeletedPublisher` + `setSessionManagerFactory` seams.
@@ -207,8 +243,43 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     the manager bullet above). Pure over pi's `SessionManager` (compaction-aware via
     `buildSessionContext`; idempotent; appends at the leaf, where orphans sit by construction) —
     unit-tested against `SessionManager.inMemory`.
-  - `extensions` — Pi resource wiring. `buildResourceLoader(cwd, settingsManager, getAdmission)` starts
-    with a `DefaultResourceLoader` (Pi's normal settings/package + `.pi` / `.agents` discovery), adds
+  - `imageGuard` — the oversized-image guard: an inline extension (`oversizedImageGuard`, one of
+    `buildResourceLoader`'s shared factories) hooked on pi's **`context` event** (fired before every LLM
+    call, live sessions included). **Anthropic-family only**: the caps are Anthropic's model-level rules,
+    so the handler gates on the context's active model (`isAnthropicFamilyModel` — native
+    `anthropic`/`anthropic-messages`, or a Claude model id through Bedrock/Vertex/aggregators; unknown
+    model ⇒ no-op) and every other provider's image context passes through untouched. It sniffs each image block's pixel dimensions straight from the base64
+    header bytes (PNG/JPEG/GIF/WebP — no codec, never strips what it can't sniff; **bounded work per
+    pass**: only a 256KiB decoded prefix is ever materialized — a JPEG whose SOF lies beyond it sniffs as
+    unknown, not stripped — and each block is sniffed exactly once per pass) and replaces any block
+    violating a provider rule with a text note naming the violated rule plus a re-attach hint. Five
+    rules, in order: the **provider-accepted media types** (`ACCEPTED_IMAGE_TYPES`, shared with the
+    composer via `contracts` — pi forwards an image's media type verbatim, so a legacy `image/heic`
+    block 400s the whole request; stripping it heals sessions poisoned before the composer refused such
+    files); the **4.5MB encoded-base64 payload ceiling** (`IMAGE_MAX_BASE64_BYTES`, shared
+    with the composer via `contracts` — pi's own headroom under Anthropic's 5MB API limit, compared
+    against `data.length` since the wire carries base64, so it applies even to unsniffable formats); the **8000px per-side hard cap**; the **count-aware 2000px cap** once the
+    whole context carries more than 20 images — stripping changes the very count that selects that cap,
+    so 2000px violators are stripped **largest-first only until the survivors fit back under the
+    threshold** (18 small + 3 at 2500px ⇒ one stripped, the other two stay legal under 8000px); and the
+    **request-wide `REQUEST_IMAGE_BASE64_BUDGET`** (24MB of base64, headroom under Anthropic's 32MB
+    per-request cap — several per-image-legal blocks can still overflow the whole request), enforced by
+    stripping survivors **largest-first until the aggregate fits**. This is what un-bricks a session poisoned by an oversized image
+    (history is re-sent every turn, so one bad image 400s forever): sessions are append-only and the host
+    has no image codec (the autoResize tradeoff above), so the guard transforms the **outgoing context
+    only** — session file and transcript stay untouched, and a stuck chat recovers on its very next
+    message. The count-aware cap also degrades a raw >2000px `read`-tool image to a note instead of a
+    brick once a session crosses 21 images. Pure core (`guardOversizedImages`, `imageDimensions`)
+    unit-tested with hand-built header bytes.
+  - `extensions` — Pi resource wiring. Candidate generation loads the reviewed external Central path once
+    through a headless `DefaultResourceLoader` to apply provider registrations, without inspecting it.
+    `buildResourceLoader(cwd, settingsManager, excludedPaths)` then resolves Pi's normal settings/package +
+    `.pi` / `.agents` extension set, removes that exact opaque identity **before loading**, and explicitly loads
+    the remaining paths: sessions use the provider objects already owned by their retained generation, so
+    arbitrary Central factory/errors/UI cannot reach `pi.extensionUi`. The Central identity is always excluded
+    from session discovery—even if the global artifact changes—so a session cannot mutate its generation.
+    All other user extensions
+    retain normal discovery. The loader then adds
     automatic **portable cross-agent skill aliases**, then loads the five bundled extensions — **`pi-web-access`**
     (`web_search` + `fetch_content`), **`pi-visualize`** (`visualize`), **`pi-spec-graph`** (the `spec_*`
     tools + its `before_agent_start` rule), **`pi-thinkrail-workflow`** (the workflow-router rule +
@@ -282,14 +353,20 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
       package's internal `new URL(…, import.meta.url)` points inside `/$bunfs/` after compilation. The
       wrapper executes an injected helper on macOS/Windows and otherwise delegates to `trash`; source mode stays on
       `trash` entirely. No platform degrades to permanent unlink.
-    Both modes append `extensionFactories`: a **headless-search policy** (a `tool_call` hook defaulting
+    In both modes, the optional Central artifact remains an external filesystem path loaded by PI's public
+    binary-capable Jiti seam; it is never bundled, staged, or copied into ThinkRail. Both modes append
+    `extensionFactories`: a **headless-search policy** (a `tool_call` hook defaulting
     `web_search`'s `workflow` to `"none"`, since pi-web-access would otherwise open a browser curator our
-    `rpc` host can't render) **and** `askUserQuestionExtension` (registers the `ask_user_question` tool).
+    `rpc` host can't render), `askUserQuestionExtension` (registers the `ask_user_question` tool), **and**
+    `oversizedImageGuard` (the context-level image-size guard, see the `imageGuard` bullet).
     Both session paths pass it as `resourceLoader`. `buildResourceLoader` stays internal; the seam +
     its types are on the barrel.
 - **Public surface (barrel):** the manager operations (incl. `answerQuestion` +
   `settleSessionsForShutdown`) + `CreateSessionInput`/`CreateSessionResult` + `SessionEventPayload`;
-  `configurePiRuntime`/`getPiRuntime`; `completeOnce`/`pickModel` +
+  the runtime-generation facade (`usePiRuntime`, candidate prepare/activate, current generation id, and the
+  closed `load-failed` outcome—no manager internals) plus `configurePiRuntime`/factory test seams and the
+  pre-bootstrap `configurePiRuntimeGenerationInitializer` composition seam;
+  `completeOnce`/`pickModel` +
   `OneShotRequest`/`OneShotResult`/`ModelTier`; the `webUiContext` seams; the `askUserQuestion` pure
   helpers (`validateQuestionnaire`/`buildQuestionnaireResponse`/`assessAnswerability`/
   `buildAnswersMessage`); `repairDanglingToolCalls`; the skill catalog helpers
@@ -311,8 +388,10 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   called with globbing disabled and allowed to throw — never degraded to `unlink`);
   `@stroncium/procfs` (directly pinned solely for the compiled Linux trash parser inclusion seam);
   `contracts` (`PiEvent`/`Model`/`ThinkingLevel`/`ImageContent`/`SessionStats`/`SlashCommandInfo`/`ExtUi*`/
-  `AskUserQuestion*`/`ProviderStatus*`); `@thinkrail/shared/jbcentral` (the proxy-URL predicate); Node.
-- **Forbidden:** `host`; sibling features (the `cwd` is passed in, not looked up via `persistence`).
+  `AskUserQuestion*`/`ProviderStatus*`); Node.
+- **Forbidden:** `host`; sibling features (the `cwd` is passed in, not looked up via `persistence`);
+  Central process/filesystem knowledge—the caller supplies only the desired opaque extension paths for a
+  candidate.
 
 ## Get right
 
@@ -325,10 +404,12 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   derivable from the transcript alone (that's what makes restarts free); reply validity is
   `assessAnswerability`'s verdict, computed from `session.messages`, and rejections fail the WS request
   loud.
-- Share one `ModelRuntime` (each session gets it as `createAgentSession`'s `modelRuntime`); give each
-  session its own `SessionManager`; `dispose()` on removal.
-- **A `pi` `Model` must never cross the wire raw** — its `baseUrl` carries the jbcentral proxy secret (and
-  `headers` can carry auth). Every model-bearing frame (`model.list`/`model.refresh`/`model.default`, the
+- Share one **current** `ModelRuntime` for pre-session reads and new sessions. Every session receives and
+  retains its generation as `createAgentSession`'s `modelRuntime`; give each its own `SessionManager` and
+  `dispose()` it on removal. Old runtimes remain reachable only through old live sessions and become
+  collectible with them; `AgentSession.reload()` is resource-only and never changes generations.
+- **A `pi` `Model` must never cross the wire raw** — provider/extension configuration may carry secrets in
+  `baseUrl`, headers, auth, or provider closures. Every model-bearing frame (`model.list`/`model.refresh`/`model.default`, the
   `session.create` result, `SessionSummary.model`) goes through `toWireModel` — the list paths share the
   one `readAvailableWireModels` read so the projection can't be bypassed by adding a caller; every inbound
   model ref (`session.create` /

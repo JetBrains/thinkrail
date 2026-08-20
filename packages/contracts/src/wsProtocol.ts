@@ -13,7 +13,9 @@ import type {
 	GitStatus,
 	HistoryScope,
 	HistorySearchResult,
+	JbcentralActionResult,
 	JbcentralConnectResult,
+	JbcentralLoginResult,
 	LayoutReplaceParams,
 	LayoutReplaceResult,
 	LoginReply,
@@ -222,7 +224,16 @@ export interface TerminalTabsPush {
 // v40: host-synchronized workspace workbench layouts — versioned full-document `layout.get` /
 // exact-base `layout.replace`, monotonic revisions, typed accepted/conflict results, `layout.changed`
 // broadcasts, and layout preset settings. Conflicts carry current state and never persist the stale document.
-export const PROTOCOL_VERSION = 40;
+// v41: JetBrains Central adds typed lifecycle/action states plus connect, disconnect, update, and login
+// methods.
+// v42: Central changes are applied through watched runtime generations; restart/recovery/blocked outcomes are
+// removed, `provider.changed` invalidates provider/model reads, and live chats retain their own generation.
+// v43: configured Central status reports the closed proxy-stopped observation and exposes Start proxy.
+// v44: `workspace.list.includeDiffStats` can skip only the synchronous per-workspace diff-stat fan-out while
+// preserving complete authoritative membership/order for cold client-local navigation restoration.
+// v45: `compaction_end.result` is a host-projected allowlist containing only token counts; pi's summary,
+// entry id, usage, and extension details never cross in the live event.
+export const PROTOCOL_VERSION = 45;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a
@@ -366,7 +377,7 @@ export const WS_METHODS = {
 	// pi's own clamp for a `{model, desired-level}` pair. The pre-session picker has no session to ask,
 	// and re-deriving pi's clamp client-side would give that one path a policy of its own.
 	modelClampThinking: "model.clampThinking",
-	// Auth-provider status (the Welcome strip): per-provider configured + auth kind, jbcentral wiring.
+	// Auth-provider status (the Welcome strip): per-provider configured + auth kind, Central lifecycle.
 	// Every read revalidates host-side (auth + registry reload), so a Refresh is just a re-request.
 	providerStatus: "provider.status",
 	// In-app provider auth (the Welcome strip's Sign-in). loginStart kicks off pi's login flow (OAuth or
@@ -378,11 +389,12 @@ export const WS_METHODS = {
 	providerLoginReply: "provider.loginReply",
 	providerLoginCancel: "provider.loginCancel",
 	providerLogout: "provider.logout",
-	// In-app JetBrains AI (jbcentral proxy) wiring: connect routes Claude+GPT via your JetBrains plan (writes
-	// models.json + refreshes the registry), disconnect undoes it, login launches `jbcentral login` (browser).
+	// Native JetBrains AI setup through Central's reviewed PI commands; the browser receives closed states only.
 	providerJbcentralConnect: "provider.jbcentralConnect",
 	providerJbcentralDisconnect: "provider.jbcentralDisconnect",
+	providerJbcentralStartProxy: "provider.jbcentralStartProxy",
 	providerJbcentralLogin: "provider.jbcentralLogin",
+	providerJbcentralUpdate: "provider.jbcentralUpdate",
 	// One canonical structural workbench document per workspace.
 	layoutGet: "layout.get",
 	layoutReplace: "layout.replace",
@@ -422,6 +434,9 @@ export const WS_CHANNELS = {
 	// In-app login flow updates (a `LoginPush` per frame), keyed by loginId. Session-less — a login runs on
 	// the Welcome screen before any session exists, so this is the sibling of pi.extensionUi, not scoped to one.
 	providerLogin: "provider.login",
+	// Data-free Central/provider invalidation. Clients re-read provider.status and model.list; this event is
+	// deliberately non-replayable because reconnect reads repair any missed transition.
+	providerChanged: "provider.changed",
 	// Every terminal channel is addressed to the ONE client currently attached to that PTY, never broadcast: a
 	// shell's bytes are tokens, keys and private paths, and a second browser filtering them out client-side is
 	// not isolation. Which client that is can change (attach is exclusive with takeover) — what never happens
@@ -585,7 +600,10 @@ export interface WsMethodMap {
 		params: { projectId: string; path: string };
 		result: Workspace;
 	};
-	"workspace.list": { params: { projectId: string }; result: Workspace[] };
+	"workspace.list": {
+		params: { projectId: string; includeDiffStats?: boolean };
+		result: Workspace[];
+	};
 	"workspace.openReview": {
 		params: { workspaceId: string };
 		result: OpenBranchReview | null;
@@ -781,12 +799,12 @@ export interface WsMethodMap {
 	"provider.loginCancel": { params: { loginId: string }; result: Ack };
 	// Removes a provider's stored credentials (auth.json) and refreshes the registry.
 	"provider.logout": { params: { providerId: string }; result: Ack };
-	// Wire Claude+GPT through the local jbcentral proxy (JetBrains AI). Returns a small state machine —
-	// connected / needs-install / needs-login / error — the JetBrains AI card walks the user through.
+	// Native Central PI actions. Results and status are closed unions: no Central/extension output crosses.
 	"provider.jbcentralConnect": { params: Record<string, never>; result: JbcentralConnectResult };
-	"provider.jbcentralDisconnect": { params: Record<string, never>; result: Ack };
-	// Launch `jbcentral login` (its browser sign-in) on the host, best-effort.
-	"provider.jbcentralLogin": { params: Record<string, never>; result: { launched: boolean } };
+	"provider.jbcentralDisconnect": { params: Record<string, never>; result: JbcentralActionResult };
+	"provider.jbcentralStartProxy": { params: Record<string, never>; result: JbcentralActionResult };
+	"provider.jbcentralLogin": { params: Record<string, never>; result: JbcentralLoginResult };
+	"provider.jbcentralUpdate": { params: Record<string, never>; result: JbcentralActionResult };
 	// Hydrate one complete workspace layout, then replace only from the exact accepted base revision.
 	"layout.get": {
 		params: { workspaceId: string };

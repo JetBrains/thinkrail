@@ -99,8 +99,8 @@ test("high-contrast manifests provide legible selected-text foregrounds", () => 
  *
  * HOVER is deliberately held to a lower bar. These themes lift the row background toward the text
  * colour on hover, which eats contrast exactly where rows are interactive. Requiring the full 4.5 there
- * would force Darcula's purple to lavender and Gruvbox's orange to pale orange — the signature colours
- * of the themes they are named after. WCAG has no "transient state" allowance, so this tier is OUR
+ * would force a theme's signature accent toward a washed-out tint just to survive the hovered row.
+ * WCAG has no "transient state" allowance, so this tier is OUR
  * judgement, written down: hovered text must still be comfortably visible (3.0), never merely present.
  *
  * `accent` and `success` are excluded from `input` on purpose: no component renders accent- or
@@ -144,7 +144,7 @@ test("every bundled manifest meets the contrast floors on every resting surface"
 });
 
 /**
- * The primary button is a palette pair, not a constant: `accent` is its resting fill,
+ * The primary button is a palette pair, not a constant: `accentSolid` is its resting fill,
  * `accentHover` its hover fill, and `onAccent` the label that sits on BOTH. A theme that darkens
  * (or brightens) its hover step far enough to swallow the label is the failure this catches — the
  * hover state is a resting foreground for as long as the pointer is there, so it takes the full
@@ -152,7 +152,7 @@ test("every bundled manifest meets the contrast floors on every resting surface"
  */
 test("the primary control's label stays legible on both its resting and hover fill", () => {
 	for (const theme of bundledThemes()) {
-		for (const fill of ["accent", "accentHover"] as const) {
+		for (const fill of ["accentSolid", "accentHover"] as const) {
 			expect(
 				contrast(theme.colors.onAccent, theme.colors[fill]),
 				`${theme.id}: onAccent on ${fill}`,

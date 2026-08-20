@@ -62,11 +62,11 @@ export function useModelCatalog(active = true): {
 		}
 		const state = useAppStore.getState();
 		if (state.modelsRefreshing) return;
-		state.beginModelsRefresh();
+		const providerVersion = state.beginModelsRefresh();
 		getTransport()
 			.request("model.refresh", { force: true })
-			.then((r) => useAppStore.getState().finishModelsRefresh(r))
-			.catch(() => useAppStore.getState().finishModelsRefresh(null));
+			.then((r) => useAppStore.getState().finishModelsRefresh(providerVersion, r))
+			.catch(() => useAppStore.getState().finishModelsRefresh(providerVersion, null));
 	}, []);
 
 	return { models, refreshing, refresh, fresh };
@@ -78,8 +78,9 @@ export function useModelCatalog(active = true): {
  * list current but never establishes freshness (see `fresh`).
  */
 function readModels(): Promise<void> {
+	const providerVersion = useAppStore.getState().providerVersion;
 	return getTransport()
 		.request("model.list", {})
-		.then((m) => useAppStore.getState().setModels(m))
+		.then((models) => useAppStore.getState().setModelsForProviderVersion(providerVersion, models))
 		.catch(() => {});
 }

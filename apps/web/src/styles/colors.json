@@ -17,7 +17,12 @@
 		"text-default": { "from": "text", "publish": true },
 		"text-muted": { "from": "muted", "publish": true },
 		"text-subtle": { "from": "hint", "publish": true },
-		"text-disabled": { "from": "disabled", "alpha": "strong", "publish": true },
+		"text-disabled": {
+			"from": "text",
+			"alpha": "strong",
+			"publish": true,
+			"note": "disabled non-control text = the default text colour at the `strong` (60%) alpha step — a disabled element inherits its enabled semantic colour, dimmed at the token level, never a dedicated disabled palette value"
+		},
 		"text-on-primary": { "from": "onAccent", "publish": true },
 		"text-link": {
 			"from": "info",
@@ -47,7 +52,11 @@
 		"control-bg": { "from": "input", "publish": true },
 		"control-bg-hovered": { "from": "hover", "publish": true },
 		"control-bg-selected": { "from": "hover", "publish": true },
-		"control-primary-bg": { "from": "accent", "publish": true },
+		"control-primary-bg": {
+			"from": "accentSolid",
+			"publish": true,
+			"note": "the SOLID primary button fill — its own palette source (`accentSolid`), decoupled from `accent` so a theme can brighten the opaque fill without moving the alpha-derived primary tints (primary-subtle/soft/muted) or the accent used for text/ring/border; every theme maps accentSolid to its accent except regular Light, which uses the brighter dark-theme green"
+		},
 		"control-primary-bg-hovered": {
 			"from": "accentHover",
 			"publish": true,
@@ -56,8 +65,36 @@
 		"control-primary-text": { "from": "onAccent", "publish": true },
 		"control-border-default": { "from": "border", "publish": true },
 		"control-border-active": { "from": "borderStrong", "publish": true },
-		"control-disabled-bg": { "from": "input", "publish": true },
-		"control-disabled-text": { "from": "disabled", "alpha": "strong", "publish": true },
+		"control-disabled-bg": {
+			"from": "input",
+			"alpha": "strong",
+			"publish": true,
+			"note": "disabled control fill = the default control fill (`input`, i.e. control-bg) at the `strong` (60%) alpha step"
+		},
+		"control-disabled-text": {
+			"from": "text",
+			"alpha": "strong",
+			"publish": true,
+			"note": "disabled control label/icon = the default control text colour (`text`, i.e. text-default) at the `strong` (60%) alpha step"
+		},
+		"control-disabled-border": {
+			"from": "border",
+			"alpha": "strong",
+			"publish": true,
+			"note": "disabled control border = the default control border (`border`, i.e. control-border-default) at the `strong` (60%) alpha step"
+		},
+		"control-primary-disabled-bg": {
+			"from": "accent",
+			"alpha": "strong",
+			"publish": true,
+			"note": "disabled primary button fill = the accent hue at the `strong` (60%) alpha step — kept on `accent` (the alpha-tint base), not the brightened solid `accentSolid`, so the disabled fill stays with the primary tint family"
+		},
+		"control-primary-disabled-text": {
+			"from": "onAccent",
+			"alpha": "strong",
+			"publish": true,
+			"note": "disabled primary button label/icon = the normal primary text (`onAccent`, i.e. control-primary-text) at the `strong` (60%) alpha step"
+		},
 
 		"border-default": { "from": "borderStrong", "publish": true },
 		"border-muted": { "from": "border", "publish": true },

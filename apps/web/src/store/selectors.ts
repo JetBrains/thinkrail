@@ -15,7 +15,7 @@ import {
 	normalizePath,
 	readLayoutSelection,
 } from "../lib";
-import type { ClosedChat, EditorTab, TerminalTab } from "./appStore";
+import type { ClosedChat, EditorTab, RouteChatTarget, TerminalTab } from "./appStore";
 
 interface ConnectionGenerationState {
 	status: string;
@@ -266,6 +266,32 @@ export function selectHistoryTarget(state: {
 	return chat ? { workspaceId, tabId: chat.id, sessionId: chat.sessionId } : null;
 }
 
+export interface KnownChatLocation {
+	workspaceId: string;
+	title: string;
+}
+
+/** Find the workspace/title this client knows for a live or history chat, without duplicating the scan. */
+export function selectKnownChatLocation(
+	state: {
+		tabsByWorkspace: Record<string, EditorTab[]>;
+		closedChatsByWorkspace: Record<string, ClosedChat[]>;
+	},
+	sessionId: string,
+): KnownChatLocation | null {
+	for (const [workspaceId, tabs] of Object.entries(state.tabsByWorkspace)) {
+		const tab = tabs.find(
+			(candidate) => candidate.kind === "chat" && candidate.sessionId === sessionId,
+		);
+		if (tab?.kind === "chat") return { workspaceId, title: tab.name };
+	}
+	for (const [workspaceId, chats] of Object.entries(state.closedChatsByWorkspace)) {
+		const chat = chats.find((candidate) => candidate.sessionId === sessionId);
+		if (chat) return { workspaceId, title: chat.title };
+	}
+	return null;
+}
+
 /**
  * Session membership this client currently associates with one workspace: chat/plan/document caches,
  * history rows, and (when available) durable chat/TODO placements, deduplicated. Snapshot this before an
@@ -427,6 +453,17 @@ export function selectWorkspaceTick(
 	workspaceId: string,
 ): number {
 	return state.fsChangesByWorkspace[workspaceId]?.tick ?? 0;
+}
+
+/** Exact-chat route intent only while its workspace remains active and no newer center navigation won. */
+export function selectCurrentRouteChatTarget(state: {
+	routeChatTarget: RouteChatTarget | null;
+	activeWorkspaceId: string | null;
+	navTickByWorkspace: Record<string, number>;
+}): RouteChatTarget | null {
+	const target = state.routeChatTarget;
+	if (!target || state.activeWorkspaceId !== target.workspaceId) return null;
+	return selectWorkspaceNavTick(state, target.workspaceId) === target.navTick ? target : null;
 }
 
 /**

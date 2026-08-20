@@ -1,5 +1,5 @@
 import { Maximize2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { onThemeSwap } from "@/themes";
 import { CodeBlock } from "../CodeBlock";
@@ -10,9 +10,18 @@ import { PanZoomView } from "./PanZoomView";
  * Render mermaid `source` to a themed SVG, re-rendering on `[data-theme]` changes. On a parse/render
  * error, falls back to showing the raw source (still copy-pasteable) — mermaid *syntax* is the model's
  * concern, so we surface it rather than swallow it. A "full screen" button opens the diagram large in a
- * `Dialog` (which brings its own close button + Esc / overlay dismissal).
+ * `Dialog` (which brings its own close button + Esc / overlay dismissal). While the SVG is pending,
+ * renders `fallback` (the markdown path passes the source block) or a default "Rendering…" line.
  */
-export function MermaidView({ source, title }: { source: string; title?: string }) {
+export function MermaidView({
+	source,
+	title,
+	fallback,
+}: {
+	source: string;
+	title?: string;
+	fallback?: ReactNode;
+}) {
 	const [svg, setSvg] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [open, setOpen] = useState(false);
@@ -52,7 +61,7 @@ export function MermaidView({ source, title }: { source: string; title?: string 
 		);
 	}
 	if (svg === null) {
-		return <span className="text-text-muted tr-text-metadata">Rendering diagram…</span>;
+		return fallback ?? <span className="text-text-muted tr-text-metadata">Rendering diagram…</span>;
 	}
 	return (
 		<div className="relative">

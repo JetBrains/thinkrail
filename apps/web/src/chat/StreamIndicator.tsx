@@ -6,7 +6,7 @@ import type { ChatTurn } from "./types";
  * visible yet: the gap between hitting send and the first token, and the pause between one assistant
  * message ending and the next starting.
  */
-export type StreamPhase = "working" | "thinking" | "running-tool" | "writing";
+export type StreamPhase = "working" | "thinking" | "running-tool" | "writing" | "compacting";
 
 export interface StreamStatus {
 	phase: StreamPhase;
@@ -25,6 +25,8 @@ export function streamStatus(turns: ChatTurn[], currentAssistantId: string | nul
 	// back to the round's trailing assistant turn ("Running bash…" during the run, not a bare "Working…").
 	// A user/system turn at the tail means a fresh post-send gap instead — no lingering stale phase.
 	const lastTurn = turns.at(-1);
+	if (lastTurn?.kind === "compaction" && lastTurn.status === "running")
+		return { phase: "compacting" };
 	const active =
 		turns.find(
 			(t): t is Extract<ChatTurn, { kind: "assistant" }> =>
@@ -48,6 +50,8 @@ export function phaseLabel({ phase, toolName }: StreamStatus): string {
 			return "Writing…";
 		case "running-tool":
 			return toolName ? `Running ${toolName}…` : "Running tool…";
+		case "compacting":
+			return "Compacting context…";
 		default:
 			return "Working…";
 	}

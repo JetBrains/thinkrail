@@ -87,32 +87,33 @@ export function Shell() {
 						<div
 							data-testid="scope-context"
 							data-context={activeWorkspace ? "workspace" : "project-home"}
-							className="min-w-0 border-border-default border-l pl-md leading-tight"
+							className="flex min-w-0 items-center gap-xs leading-tight tr-text-ui"
 						>
-							<div className="flex min-w-0 items-center gap-xs tr-text-ui">
-								<span className="hidden min-w-0 items-center gap-xs sm:flex">
-									<span
-										data-testid="scope-project"
-										className="max-w-[160px] truncate text-text-muted"
-									>
-										{contextProject.name}
-									</span>
-									<ChevronRight className="size-3 shrink-0 text-text-muted" />
+							<span className="hidden min-w-0 items-center gap-xs sm:flex">
+								<span
+									data-testid="scope-project"
+									className="max-w-[160px] truncate text-text-default"
+								>
+									{contextProject.name}
 								</span>
-								<span data-testid="scope-name" className="max-w-[220px] truncate text-text-default">
-									{activeWorkspace?.name ?? "Project home"}
-								</span>
-							</div>
+								<ChevronRight className="size-3 shrink-0 text-text-muted" />
+							</span>
+							<span data-testid="scope-name" className="max-w-[220px] truncate text-text-default">
+								{activeWorkspace?.name ?? "Project home"}
+							</span>
 							{activeWorkspace ? (
-								<div className="mt-0.5 flex min-w-0 items-center gap-xs text-text-muted tr-text-metadata">
-									<GitBranch className="size-3 shrink-0" />
-									<span data-testid="scope-branch" className="truncate">
+								<>
+									<GitBranch className="size-3 shrink-0 text-text-muted" />
+									<span data-testid="scope-branch" className="truncate text-text-muted">
 										{activeWorkspace.branch}
 									</span>
 									{/* User-owned Default/external workspaces have no ThinkRail creation provenance,
 									    so "from <base>" would make a promise the app cannot support. */}
 									{isUserOwnedWorkspace(activeWorkspace) ? null : (
-										<span data-testid="scope-base" className="hidden shrink-0 md:inline">
+										<span
+											data-testid="scope-base"
+											className="hidden shrink-0 text-text-muted md:inline"
+										>
 											· from {activeWorkspace.baseBranch}
 										</span>
 									)}
@@ -120,12 +121,12 @@ export function Shell() {
 										<span
 											data-testid="scope-review"
 											data-kind={openReview.kind}
-											className="shrink-0"
+											className="shrink-0 text-text-muted"
 										>
 											· {openReviewLabel(openReview)}
 										</span>
 									) : null}
-								</div>
+								</>
 							) : null}
 						</div>
 					) : null}

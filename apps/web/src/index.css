@@ -99,8 +99,8 @@
 .review-add-icon-holder {
 	/* Right-above the cursor point: the nudge + the ABOVE placement make the standard floating
 	   "comment here" offset (see reviewWidgets.ts / PreviewCommenting.tsx). */
-	padding-left: 8px;
-	padding-bottom: 2px;
+	padding-left: var(--space-sm);
+	padding-bottom: var(--space-2xs);
 	/* Above the view zones: a thread card sitting right where the icon floats must not intercept its
 	   click (Monaco stacks zones and content widgets in one context). */
 	position: relative;
@@ -172,9 +172,9 @@
 	display: flex;
 	flex-direction: column;
 	align-items: stretch;
-	gap: 6px;
-	margin-left: 12px;
-	padding: 8px;
+	gap: 6px; /* space-exempt: off-scale tight gap between the composer's stacked rows */
+	margin-left: var(--space-md);
+	padding: var(--space-sm);
 	border: 1px solid var(--border-default);
 	border-radius: var(--radius-md);
 	background: var(--container-header-bg);
@@ -193,9 +193,9 @@
 	overflow-x: hidden;
 	overflow-y: auto;
 	overflow-wrap: break-word;
-	padding: 8px 12px;
+	padding: var(--space-sm) var(--space-md);
 	border-radius: var(--radius-sm);
-	border: 1px solid var(--border-default);
+	border: 1px solid var(--control-border-default);
 	background: var(--control-bg);
 	color: var(--text);
 	/* Typography comes from the generated `tr-text-ui` class on the node. */
@@ -204,18 +204,18 @@
 .review-composer-input::placeholder {
 	color: var(--text-subtle);
 }
+/* Active/editing is a NEUTRAL border strengthen (control-border-active), not an accent border. */
 .review-composer-input:focus-visible {
 	outline: none;
-	border-color: var(--primary);
-	box-shadow: 0 0 0 2px var(--primary-soft);
+	border-color: var(--control-border-active);
 }
 .review-composer-row {
 	display: flex;
-	gap: 6px;
+	gap: 6px; /* space-exempt: off-scale tight gap between the composer's action buttons */
 }
 /* Typography comes from the generated `tr-text-action` class on the node. */
 .review-composer-btn {
-	padding: 2px var(--space-sm);
+	padding: var(--space-2xs) var(--space-sm);
 	border-radius: var(--radius-sm);
 	border: 1px solid var(--border-default);
 	background: var(--container-elevated-bg);
@@ -251,10 +251,10 @@
 	display: flex;
 	flex-direction: column;
 	align-items: stretch;
-	gap: 6px;
-	margin: var(--space-xs) 0 var(--space-xs) 12px;
+	gap: 6px; /* space-exempt: off-scale tight gap between the thread card's stacked rows */
+	margin: var(--space-xs) 0 var(--space-xs) var(--space-md);
 	max-width: 560px;
-	padding: 8px;
+	padding: var(--space-sm);
 	border: 1px solid var(--border-default);
 	border-radius: var(--radius-md);
 	background: var(--container-header-bg);
@@ -263,12 +263,12 @@
 	display: flex;
 	align-items: center;
 	gap: var(--space-sm);
-	padding: 0 4px;
+	padding: 0 var(--space-xs);
 }
 .review-thread-actions {
 	margin-left: auto;
 	display: flex;
-	gap: 4px;
+	gap: var(--space-xs);
 }
 /* A 6px status circle. Full radius (a pill/circle, not a scale step) via the shared `rounded-full`
    utility on the node — see ReviewThreadCard.tsx / reviewWidgets.ts. */
@@ -292,19 +292,20 @@
 .review-thread-body {
 	margin: 0;
 	min-width: 0;
-	padding: 0 4px;
+	padding: 0 var(--space-xs);
 	overflow-wrap: break-word;
 	color: var(--text);
 }
 /* A DRAFT's body is editable in place — the same input surface as the composer's field (input-bg,
-   border2, radius-sm, primary focus ring). Auto-grown by its controller; wraps, never scrolls. */
+   control-border-default, radius-sm, neutral control-border-active while editing). Auto-grown by its
+   controller; wraps, never scrolls. */
 .review-thread-edit {
 	width: 100%;
 	min-height: 2.2em;
 	box-sizing: border-box;
 	margin: 0;
-	padding: 8px 12px;
-	border: 1px solid var(--border-default);
+	padding: var(--space-sm) var(--space-md);
+	border: 1px solid var(--control-border-default);
 	border-radius: var(--radius-sm);
 	resize: none;
 	overflow-x: hidden;
@@ -314,10 +315,10 @@
 	overflow-wrap: break-word;
 	transition: border-color 0.15s;
 }
+/* Active/editing is a NEUTRAL border strengthen (control-border-active), not an accent border. */
 .review-thread-edit:focus-visible {
 	outline: none;
-	border-color: var(--primary);
-	box-shadow: 0 0 0 2px var(--primary-soft);
+	border-color: var(--control-border-active);
 }
 .review-thread-action {
 	display: flex;
@@ -343,7 +344,7 @@
 
 /* The preview's in-flow composer + the commented-region mark (parity with Monaco's decorations). */
 .review-composer-flow {
-	margin: 8px 0 8px 12px;
+	margin: var(--space-sm) 0 var(--space-sm) var(--space-md);
 	max-width: 560px;
 }
 /* The commented region in the preview: a thin LEFT RAIL only (the gutter-rail half of Monaco's
@@ -353,6 +354,6 @@
    impersonating the selection. Inset shadow, not border — zero layout shift. */
 .review-region {
 	box-shadow: inset 2px 0 0 var(--text-subtle);
-	padding-left: 10px;
-	margin-left: -10px;
+	padding-left: 10px; /* space-exempt: optical hanging indent — seats the inset rail in the gutter */
+	margin-left: -10px; /* space-exempt: optical pull matching the indent, so the rail adds zero net width */
 }

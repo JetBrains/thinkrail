@@ -25,6 +25,15 @@ import { normalizeEol } from "../../scripts/generatedFiles";
  * `max-h-[40vh]` and `pl-[calc(0.875rem+var(--spacing-sm))]` are layout constraints and measured
  * indents, not rhythm. Only the utilities whose whole job is a step off the scale are policed, and only
  * when they carry a bare pixel value.
+ *
+ * HANDWRITTEN CSS is policed the same way, from the declaration side. A rhythm property (`padding`,
+ * `margin`, `gap`, `row/column-gap`) may not carry a bare pixel length that lands on the scale — it must
+ * name the `--space-*` token, exactly as `p-md` does at a call site. `inset`/`top`/`left` and non-rhythm
+ * geometry (`width`, `height`, `border`, `box-shadow`, `transform`, `min-height`, `max-width`, …) are NOT
+ * rhythm and stay out entirely, the declaration-side twin of leaving `w-[320px]` alone. An OFF-scale
+ * rhythm value (a 2px sub-step inset, a 6px tight gap, a 10px optical indent) has no token, so it stays a
+ * raw px — but must carry a `space-exempt` marker saying why; an ON-scale value may never carry it (it
+ * has a token). The nominal step pixels are derived from the token file, so the guard tracks the scale.
  */
 
 const SRC = new URL("..", import.meta.url).pathname;
@@ -52,6 +61,7 @@ function sourceFiles(dir = SRC): string[] {
 
 const FILES = sourceFiles();
 const TS_FILES = FILES.filter((f) => /\.tsx?$/.test(f));
+const CSS_FILES = FILES.filter((f) => /\.css$/.test(f));
 const TOKENS = join(SRC, "styles/tokens.css");
 
 /** `p`, `px`, `mt`, `gap-y`, … — the utilities that spend a step of the spacing scale. */
@@ -66,6 +76,51 @@ function hits(pattern: RegExp): string[] {
 			.split("\n")
 			.flatMap((line, i) => [...line.matchAll(pattern)].map((m) => `${rel(f)}:${i + 1}: ${m[0]}`)),
 	);
+}
+
+/** The nominal px each `--space-*` step resolves to (`--space-base` × factor, rounded) — the values a
+ *  handwritten length "duplicates" when it re-types the scale by hand. Read from the token file so the
+ *  guard tracks the scale, never a copied table. */
+function spaceNominals(): Set<number> {
+	const src = read(TOKENS);
+	const base = Number.parseFloat(/--space-base:\s*([\d.]+)px/.exec(src)?.[1] ?? "");
+	const set = new Set<number>();
+	for (const m of src.matchAll(
+		/--space-[a-z0-9]+:\s*calc\(\s*var\(--space-base\)\s*\*\s*([\d.]+)\s*\)/g,
+	)) {
+		set.add(Math.round(base * Number.parseFloat(m[1])));
+	}
+	return set;
+}
+
+/** The rhythm properties — the declaration-side analog of `SPACING_PREFIX`. `inset`/`top`/`left` are
+ *  positioning geometry, not rhythm, and stay out (exactly as the call-site guard omits them). */
+const CSS_SPACING_PROP = "(?:padding|margin|gap|row-gap|column-gap)(?:-(?:top|right|bottom|left))?";
+/** A declaration opts out of the raw-px ban for a DOCUMENTED off-scale/optical value; on-scale values
+ *  can never carry it — they must name the token. */
+const CSS_EXEMPT = "space-exempt";
+
+function cssSpacing(): { onScale: string[]; unmarkedOffScale: string[] } {
+	const nominals = spaceNominals();
+	const declRe = new RegExp(String.raw`(?<![\w-])(${CSS_SPACING_PROP})\s*:\s*([^;{}]+)`, "g");
+	const onScale: string[] = [];
+	const unmarkedOffScale: string[] = [];
+	for (const f of CSS_FILES) {
+		read(f)
+			.split("\n")
+			.forEach((line, i) => {
+				const marked = line.includes(CSS_EXEMPT);
+				for (const decl of line.matchAll(declRe)) {
+					for (const px of decl[2].matchAll(/(-?\d*\.?\d+)px/g)) {
+						const n = Math.abs(Number.parseFloat(px[1]));
+						const where = `${rel(f)}:${i + 1}: ${decl[1]}: ${px[1]}px`;
+						if (nominals.has(n)) onScale.push(where);
+						else if (!marked) unmarkedOffScale.push(where);
+					}
+				}
+			});
+	}
+	return { onScale, unmarkedOffScale };
 }
 
 describe("radius at a call site", () => {
@@ -126,5 +181,19 @@ describe("spacing at a call site", () => {
 		expect(
 			hits(new RegExp(String.raw`(?<![\w-])${VARIANT}(?:${SPACING_PREFIX})-\[var\(--space`, "g")),
 		).toEqual([]);
+	});
+});
+
+describe("spacing in handwritten CSS", () => {
+	it("names a --space-* token for any value on the scale, never a bare px", () => {
+		// `padding: 8px` re-types `--space-sm` by hand and drifts free the moment the base moves;
+		// `padding: var(--space-sm)` tracks it. On-scale values can't be exempted — they have a token.
+		expect(cssSpacing().onScale).toEqual([]);
+	});
+
+	it("allows an off-scale rhythm px only with a documented `space-exempt` marker", () => {
+		// Sub-step insets and optical indents (2px, 6px, 10px) have no scale step; they stay raw px but must
+		// say why, so an undocumented off-scale length can't quietly re-appear as fake rhythm.
+		expect(cssSpacing().unmarkedOffScale).toEqual([]);
 	});
 });

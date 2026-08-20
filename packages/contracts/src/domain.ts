@@ -343,7 +343,7 @@ export interface BranchList {
 
 /** Local `gh` CLI auth status (read-only, shelled server-side) for the New-Workspace + Settings surfaces. */
 /** How a model provider is authenticated — drives the status row's label, never carries secrets. */
-export type ProviderAuthKind = "oauth" | "api-key" | "env" | "central" | "other";
+export type ProviderAuthKind = "oauth" | "api-key" | "env" | "other";
 
 /** One model provider's auth status, as the host reports it (read-only; no credential values). */
 export interface ProviderStatus {
@@ -351,9 +351,9 @@ export interface ProviderStatus {
 	id: string;
 	/** Human display name, e.g. `Anthropic`. */
 	name: string;
-	/** Whether the provider is usable (any auth form: stored, env var, models.json, proxy). */
+	/** Whether the provider is usable (any auth form: stored, env var, models.json, or runtime). */
 	configured: boolean;
-	/** The auth source kind, when configured. `central` = routed through the JetBrains Central proxy. */
+	/** The auth source kind, when configured. Central configuration is reported only by `JbcentralStatus`. */
 	kind?: ProviderAuthKind;
 	/** Optional human hint for the source (e.g. the env var name, or `models.json`). */
 	detail?: string;
@@ -362,8 +362,8 @@ export interface ProviderStatus {
 	/** Interactive API-key login is available (`provider.loginStart` with `type: "api_key"`) — pi's
 	 * provider-owned truth (`Provider.auth.apiKey.login`), multi-prompt providers included. */
 	canApiKey?: boolean;
-	/** The provider has a removable `auth.json` credential (`provider.logout`) — false for env / central /
-	 * models.json auth, which the host can't unset (so the strip shows no Sign-out for those). */
+	/** The provider has a removable `auth.json` credential (`provider.logout`) — false for env / models.json
+	 * auth, which the host can't unset (so the strip shows no Sign-out for those). */
 	canLogout?: boolean;
 }
 
@@ -383,28 +383,72 @@ export interface JbcentralInstall {
 	command: string;
 }
 
+export type JbcentralAction = "connect" | "disconnect" | "start-proxy" | "update";
+
+export type JbcentralProbeFailureReason =
+	| "launch-failed"
+	| "timed-out"
+	| "output-too-large"
+	| "nonzero-exit";
+
+export type JbcentralActionFailureReason =
+	| "not-installed"
+	| "unsupported-version"
+	| "version-probe-failed"
+	| "central-action-failed"
+	| "artifact-missing"
+	| "artifact-present"
+	| "candidate-failed";
+
+/** Closed JetBrains AI lifecycle. No child output, paths, model data, or loader diagnostics are permitted. */
+export type JbcentralStatus =
+	| { state: "absent" }
+	| { state: "outdated"; version: string }
+	/**
+	 * `signedOut` is a *positive* observation of Central holding no credentials — an unavailable or
+	 * unreadable probe reports `false`, so the UI never demands a sign-in it cannot substantiate.
+	 */
+	| { state: "supported"; version: string; signedOut: boolean }
+	| {
+			state: "configured";
+			version: string;
+			signedOut: boolean;
+			/** Positive observation only: unavailable/unrecognized proxy status reports `false`. */
+			proxyStopped: boolean;
+	  }
+	| { state: "malformed-version" }
+	| { state: "probe-failed"; reason: JbcentralProbeFailureReason }
+	| { state: "configuring"; action?: JbcentralAction }
+	| {
+			state: "load-failed";
+			/** Whether the latest observed global artifact state requested Central in the new generation. */
+			configured: boolean;
+			action?: JbcentralAction;
+			reason: "candidate-failed";
+	  };
+
 /** The `provider.status` result: configured providers first, then the rest alphabetically. */
 export interface ProviderStatusReport {
 	providers: ProviderStatus[];
-	/** Whether any provider's effective baseUrl routes through the jbcentral proxy (JetBrains AI is wired). */
-	jbcentralWired: boolean;
-	/** Whether the `central` CLI is installed on the host (drives the in-app JetBrains AI card's state). */
-	jbcentralInstalled: boolean;
-	/** The host's per-OS install command for the JetBrains Central CLI — rendered by the card when not
-	 * installed (reflects the host's OS, not the browser's). */
+	jbcentral: JbcentralStatus;
+	/** The host's per-OS install command for the JetBrains Central CLI — rendered by the card when absent or
+	 * outdated (reflects the host's OS, not the browser's). */
 	jbcentralInstall: JbcentralInstall;
 }
 
-/**
- * The outcome of an in-app `provider.jbcentralConnect` attempt — a small state machine the JetBrains AI card
- * walks the user through: connected, or the reason it couldn't (install the CLI / sign in / a hard error).
- */
-export interface JbcentralConnectResult {
-	outcome: "connected" | "needs-install" | "needs-login" | "error";
-	/** The failure detail when `outcome === "error"`. The `needs-install` case carries no message — the card
-	 * renders the per-OS command from `ProviderStatusReport.jbcentralInstall`. */
-	message?: string;
-}
+export type JbcentralActionResult =
+	| { outcome: "applied" }
+	| { outcome: "failed"; reason: JbcentralActionFailureReason };
+
+/** Kept as the connect method's named result type; all Central mutations share this closed union. */
+export type JbcentralConnectResult = JbcentralActionResult;
+
+export type JbcentralLoginResult =
+	| { outcome: "launched" }
+	| {
+			outcome: "failed";
+			reason: "not-installed" | "unsupported-version" | "version-probe-failed" | "launch-failed";
+	  };
 
 /**
  * A single update in an in-app OAuth login flow, pushed host→client on the `provider.login` channel
@@ -698,6 +742,68 @@ export const TODO_NUDGE_PREFIX = "[thinkrail:todo-nudge] ";
  */
 export function isControlMessage(text: string): boolean {
 	return text.startsWith(TODO_NUDGE_PREFIX);
+}
+
+/**
+ * The provider's per-image payload ceiling, measured in ENCODED base64 bytes: pi's own resizer caps
+ * `Buffer.byteLength(base64)` at 4.5MB as headroom below Anthropic's 5MB API limit — the wire carries
+ * base64, which inflates raw bytes by 4/3, so an image whose *decoded* size looks fine can still
+ * overflow the request. Shared contract: the web composer re-encodes an attachment down under it at
+ * attach time, and the host's `imageGuard` strips any historical image block still over it
+ * (self-healing a session poisoned before the composer-side fix, or via another route). Both layers
+ * compare `data.length` directly — base64 is ASCII, so string length IS the encoded byte length.
+ */
+export const IMAGE_MAX_BASE64_BYTES = 4.5 * 1024 * 1024;
+
+/**
+ * Encoded base64 length of a payload of `byteLength` raw bytes (4 chars per 3-byte quantum, padded):
+ * the composer's raw pass-through path sizes a File against IMAGE_MAX_BASE64_BYTES with this same
+ * reading before it ever encodes.
+ */
+export function base64EncodedLength(byteLength: number): number {
+	return Math.ceil(byteLength / 3) * 4;
+}
+
+/**
+ * The image media types the provider accepts verbatim. pi forwards an attachment's media type as-is,
+ * so anything else (BMP, AVIF, HEIC…) 400s the request outright — and once persisted, every later
+ * turn. Shared contract: the composer re-encodes (or refuses) anything outside this set at attach
+ * time, and the host's `imageGuard` strips legacy blocks that predate that rule.
+ */
+export const ACCEPTED_IMAGE_TYPES: readonly string[] = [
+	"image/png",
+	"image/jpeg",
+	"image/gif",
+	"image/webp",
+];
+
+/**
+ * The request-wide budget for encoded image payload, in base64 bytes. Anthropic caps a whole Messages
+ * request at 32MB, and history is re-sent every turn — several images each under the per-image ceiling
+ * can still push the request past the limit *permanently*. 24MB keeps ~25% headroom for text, tool
+ * results, and JSON framing. Shared contract: the composer bounds one message's batch at attach time,
+ * and the host's `imageGuard` strips history largest-first until the whole request fits.
+ */
+export const REQUEST_IMAGE_BASE64_BUDGET = 24 * 1024 * 1024;
+
+/**
+ * True when the message at `index` is a superseded auto-retry attempt: an assistant message that ended
+ * in `stopReason: "error"` with the retried assistant message *immediately* following — exactly the
+ * shape pi's `_prepareRetry` produces (it trims the failed attempt from the live context and re-runs
+ * the turn straight away, so nothing can land between the two). pi's
+ * `_prepareRetry` persists the failed attempt ("keep in session for history") while trimming it from
+ * the live context, so every presenter of the persisted transcript needs the same reading — the
+ * client's hydration hides its turn, and the host's history indexer must not surface its text as a
+ * searchable/jumpable hit (its jump anchor is null). A failed attempt followed by a user message (or
+ * nothing) is the run's terminal failure and stays visible. Ambiguity resolves toward showing.
+ */
+export function isRetriedAttempt(
+	messages: readonly { role: string; stopReason?: string }[],
+	index: number,
+): boolean {
+	const message = messages[index];
+	if (message?.role !== "assistant" || message.stopReason !== "error") return false;
+	return messages[index + 1]?.role === "assistant";
 }
 
 /** History-search scope — the overlay's cycle: this chat → workspace → project → everywhere. */

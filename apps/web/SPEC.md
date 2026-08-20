@@ -15,7 +15,7 @@ event stream as a chat-centric, multi-session IDE shell.
 
 ## Boundary
 
-- **Owns:** the browser UI — transport client, store, panels, the responsive shell, branding tokens.
+- **Owns:** the browser UI — client-local navigation, transport client, store, panels, the responsive shell, branding tokens.
 - **Public surface:** the built static bundle (`dist/`) — a deployable artifact that dials a host.
 - **Allowed deps:** `@thinkrail/contracts` (types + WS constants) ONLY; React / Zustand / Vite / etc.
 - **Forbidden:** importing `server` / `shared` / any `pi` package (value or type). Kept clean by type-only
@@ -23,13 +23,14 @@ event stream as a chat-centric, multi-session IDE shell.
 
 ## Internal modules
 
-Each is a bounded sub-module; `transport`/`store`/`lib` expose an `index.ts` **barrel** (their only public
+Each is a bounded sub-module; `navigation`/`transport`/`store`/`lib` expose an `index.ts` **barrel** (their only public
 surface). `panels`/`components/ui`/`chat` are imported **per-file by design** — barreling them would pull
 the lazily-loaded Monaco/shiki/xterm chunks into the eager bundle and break the shadcn per-primitive
 convention; their boundary is held by convention + spec. Sibling edges live here, not in the leaves.
 
 | module | owns | barrel | spec |
 | --- | --- | --- | --- |
+| `navigation` | backend-relative location model + fragment driver/validated restore | yes | [navigation/SPEC.md](src/navigation/SPEC.md) |
 | `transport` | the WS client + its singleton/store wiring | yes | [transport/SPEC.md](src/transport/SPEC.md) |
 | `store` | Zustand: domain projections, accepted workspace-layout snapshots, local attention, chat runtimes | yes | [store/SPEC.md](src/store/SPEC.md) |
 | `panels` | layout-agnostic, store-driven feature views | no | [panels/SPEC.md](src/panels/SPEC.md) |
@@ -49,13 +50,14 @@ Outside `src/`, **[`scripts/`](scripts/SPEC.md)** is the build-time generator mo
 never ships, and turns those two JSON sources into `styles/generated/`.
 `index.html` names the product and links the local, symbol-only SVG favicon derived from the same
 ThinkRail artwork as the shell logo (compact enough for browser-tab sizes and light/dark browser chrome).
-`main.tsx` is the entry/composition root — it synchronously builds the bundled theme catalog, then
-applies the cached first-paint theme hint pre-React before wrapping `<Shell />` in
+`main.tsx` is the entry/composition root — it synchronously builds the bundled theme catalog, applies the
+cached first-paint theme hint pre-React, initializes transport + client-local navigation, then wraps `<Shell />` in
 `components/ErrorBoundary` as the last-resort boundary (a crash escaping every region shows a reload
 screen, not a blank root).
 
 ### Dependency graph
 
+- `navigation` → `store`, `transport`, `contracts` (type-only); neither dependency imports it, and `main.tsx` initializes the integration
 - `shell` → child `shell/layout`, `panels`, `chat` (app-integration render/hydration only), `store`, `transport`, `contracts` (type-only), `components/ui`, `components` (`ErrorBoundary` around each mounted region), `constants`, `lib` (platform shortcut semantics), `themes` (the single owner of the atomic `applyTheme` DOM effect, driven by `store.theme`)
 - `shell/layout` → `contracts` (types only), `lib` (attention/id primitives), and React / `react-resizable-panels` / `@dnd-kit/core`; the parent injects store state, commit callbacks, and feature renderers, so the child has no feature-module runtime edge
 - `panels` → `store`, `transport`, `components/ui`, `components` (`ErrorBoundary` for feature bodies), `lib`, `contracts`, `constants` (`WelcomePanel`'s wordmark), `chat` (`NewWorkspaceDialog` eagerly reuses `chat/ModelSelector`+`ThinkingSelector`+`useModelCatalog` — these are shiki-free, so the eager import stays split-safe; `TemplatesSettings` reuses `chat/TemplateEditorDialog` for its New/Edit flows — see `panels/SPEC.md`'s `TemplatesSettings` paragraph), `auth` (`ProvidersSettings` mounts `auth/LoginDialog`), `themes` (`AppearanceSettings` consumes the live catalog; code surfaces consume generic theme variables/syntax mapping)

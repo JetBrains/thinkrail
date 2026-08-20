@@ -11,6 +11,7 @@ import type {
 	WorkspaceLayoutDocument,
 	WorkspaceSkillChange,
 } from "@thinkrail/contracts";
+import type { ChatTurn } from "../chat/types";
 import { userText } from "../lib";
 import {
 	captureCenterNavigation,
@@ -24,6 +25,7 @@ import {
 	useAppStore,
 } from "./appStore";
 import {
+	selectCurrentRouteChatTarget,
 	selectDiffScope,
 	selectLastOpenChatSession,
 	selectSkillsStale,
@@ -102,6 +104,10 @@ beforeEach(() => {
 	useAppStore.setState({
 		status: "connecting",
 		connectionGeneration: 0,
+		welcomeGeneration: 0,
+		protocolVersion: null,
+		routeChatTarget: null,
+		routeChatTargetGeneration: 0,
 		sessions: {},
 		layoutSnapshotsByWorkspace: {},
 		layoutDocumentsByWorkspace: {},
@@ -453,6 +459,85 @@ test("a lingering retry countdown is swept up only when the run settles", () => 
 	expect(rt("a").turns.some((t) => t.kind === "system" && t.text === "✓ Done")).toBe(true);
 });
 
+test("auto-retry drops the failed attempt's turn — the retried message must not render twice", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", null, "medium");
+
+	// Attempt 1: the provider stream dies mid-message (e.g. "fetch failed"). pi commits the partial
+	// assistant message with stopReason "error", ends the run with willRetry: true, then — in
+	// `_prepareRetry` — REMOVES that failed message from the transcript before re-running the turn.
+	// The reducer must mirror that removal, or the client renders the reply twice (the frozen failed
+	// partial + the retried message) while the transcript — and any reloaded client — holds one.
+	store.handlePiEvent(agentStart, "a");
+	store.handlePiEvent(assistantStart, "a");
+	store.handlePiEvent(assistantText("The answer is"), "a");
+	store.handlePiEvent(
+		{
+			type: "message_end",
+			message: {
+				role: "assistant",
+				content: [{ type: "text", text: "The answer is" }],
+				stopReason: "error",
+				errorMessage: "fetch failed",
+			},
+		} as unknown as PiEvent,
+		"a",
+	);
+	store.handlePiEvent(
+		{ type: "agent_end", willRetry: true, messages: [] } as unknown as PiEvent,
+		"a",
+	);
+	store.handlePiEvent(retryStart(1, 3, 2_000), "a");
+	expect(rt("a").turns.some((t) => t.kind === "retry")).toBe(true); // countdown shows
+
+	// Attempt 2: pi continues the run and streams the SAME reply from scratch as a new message.
+	store.handlePiEvent(agentStart, "a");
+	store.handlePiEvent(assistantStart, "a");
+	store.handlePiEvent(assistantText("The answer is 4"), "a");
+	store.handlePiEvent(
+		{
+			type: "message_end",
+			message: {
+				role: "assistant",
+				content: [{ type: "text", text: "The answer is 4" }],
+				stopReason: "stop",
+			},
+		} as unknown as PiEvent,
+		"a",
+	);
+	store.handlePiEvent(agentEnd, "a");
+	store.handlePiEvent(agentSettled(), "a"); // settlement, not agent_end, concludes the run on main's model
+
+	const after = rt("a");
+	// Exactly ONE assistant turn — the retried message; the failed attempt's copy is gone, matching
+	// what pi's transcript (and therefore a reloaded/hydrated client) shows.
+	const assistants = after.turns.filter((t) => t.kind === "assistant");
+	expect(assistants).toHaveLength(1);
+	expect(
+		assistants[0]?.kind === "assistant" &&
+			assistants[0].message.content.some((c) => c.type === "text" && c.text === "The answer is 4"),
+	).toBe(true);
+	expect(after.turns.some((t) => t.kind === "retry")).toBe(false);
+	expect(after.turns.some((t) => t.kind === "system" && t.text === "✓ Done")).toBe(true);
+});
+
+test("auto-retry with no assistant message yet (error before message_start) drops nothing", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", null, "medium");
+	store.appendUserMessage("a", "hi");
+
+	// The request failed before any assistant tokens arrived — pi's `_prepareRetry` only slices when
+	// the transcript's last message is an assistant message; the user turn must survive untouched.
+	store.handlePiEvent(agentStart, "a");
+	store.handlePiEvent(
+		{ type: "agent_end", willRetry: true, messages: [] } as unknown as PiEvent,
+		"a",
+	);
+	store.handlePiEvent(retryStart(1, 3, 2_000), "a");
+	expect(rt("a").turns.filter((t) => t.kind === "user")).toHaveLength(1);
+	expect(rt("a").turns.some((t) => t.kind === "retry")).toBe(true);
+});
+
 test("a turn that ends in a provider error surfaces the error (not a false ✓ Done)", () => {
 	const store = useAppStore.getState();
 	store.openChatSession("ws1", "a", null, "medium");
@@ -546,6 +631,118 @@ test("overflow recovery never removes an older failure when this attempt was not
 	store.handlePiEvent(recoveredOverflow, "a");
 
 	expect(rt("a").turns.filter((turn) => turn.kind === "assistant")).toHaveLength(1);
+});
+
+// Event shapes pinned against a real Pi session by packages/server/src/agent/compactionEvents.test.ts.
+const compactionStart = (reason: "manual" | "threshold" | "overflow" = "threshold"): PiEvent => ({
+	type: "compaction_start",
+	reason,
+});
+const compactionEnd = (over: Partial<Extract<PiEvent, { type: "compaction_end" }>> = {}): PiEvent =>
+	({
+		type: "compaction_end",
+		reason: "threshold",
+		result: { tokensBefore: 268_909, estimatedTokensAfter: 12_000 },
+		aborted: false,
+		willRetry: false,
+		...over,
+	}) as PiEvent;
+const compactionTurns = (sessionId: string) =>
+	rt(sessionId).turns.filter(
+		(turn): turn is Extract<ChatTurn, { kind: "compaction" }> => turn.kind === "compaction",
+	);
+
+test("compaction lifecycle: a running notice settles in place (same id) with the token figures", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", null, "medium");
+
+	store.handlePiEvent(agentStart, "a");
+	store.handlePiEvent(agentEnd, "a");
+	store.handlePiEvent(compactionStart(), "a");
+	const running = compactionTurns("a");
+	expect(running).toMatchObject([{ status: "running" }]);
+	expect(rt("a").isStreaming).toBe(true);
+	expect(rt("a").turns.filter((turn) => turn.kind === "system")).toHaveLength(0);
+
+	store.handlePiEvent(compactionEnd(), "a");
+	expect(compactionTurns("a")).toMatchObject([
+		{ id: running[0]?.id, status: "done", tokensBefore: 268_909, tokensAfter: 12_000 },
+	]);
+
+	store.handlePiEvent(agentSettled(), "a");
+	const turns = rt("a").turns;
+	expect(turns.at(-1)).toMatchObject({ kind: "system", text: "✓ Done" });
+	expect(turns.at(-2)).toMatchObject({ kind: "compaction", status: "done" });
+});
+
+test("the incident sequence: truncated response → compacting → compacted-resuming, never a misleading Done", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", null, "medium");
+
+	// A `length`-stopped, effectively-empty response (the 019f7fad incident shape).
+	store.handlePiEvent(agentStart, "a");
+	store.handlePiEvent(assistantStart, "a");
+	store.handlePiEvent(assistantText(""), "a");
+	store.handlePiEvent(
+		{
+			type: "message_end",
+			message: { role: "assistant", content: [], stopReason: "length" },
+		} as unknown as PiEvent,
+		"a",
+	);
+	store.handlePiEvent(agentEnd, "a");
+	store.handlePiEvent(compactionStart("overflow"), "a");
+	expect(compactionTurns("a")).toMatchObject([{ status: "running" }]);
+
+	// Pi recovers: the notice flips to done+resuming, the truncated attempt disappears, still live.
+	store.handlePiEvent(
+		compactionEnd({ reason: "overflow", willRetry: true, result: { tokensBefore: 268_909 } }),
+		"a",
+	);
+	expect(compactionTurns("a")).toMatchObject([
+		{ status: "done", resuming: true, tokensBefore: 268_909 },
+	]);
+	expect(rt("a").turns.filter((turn) => turn.kind === "assistant")).toHaveLength(0);
+	expect(rt("a").isStreaming).toBe(true);
+	expect(rt("a").turns.filter((turn) => turn.kind === "system")).toHaveLength(0);
+
+	store.handlePiEvent(agentStart, "a");
+	store.handlePiEvent(assistantStart, "a");
+	store.handlePiEvent(assistantText("finished the rebase"), "a");
+	store.handlePiEvent(agentEnd, "a");
+	store.handlePiEvent(agentSettled(), "a");
+	expect(rt("a").turns.at(-1)).toMatchObject({ kind: "system", text: "✓ Done" });
+	expect(rt("a").isStreaming).toBe(false);
+	// Settlement releases the "— resuming…" label — the record must not claim ongoing work forever.
+	expect(compactionTurns("a")[0]?.resuming).toBeUndefined();
+});
+
+test("a failed compaction settles into a visible, actionable notice — and a cancelled one into a muted record", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", null, "medium");
+
+	store.handlePiEvent(compactionStart("manual"), "a");
+	store.handlePiEvent(
+		compactionEnd({ reason: "manual", result: undefined, errorMessage: "Compaction failed: boom" }),
+		"a",
+	);
+	expect(compactionTurns("a")).toMatchObject([
+		{ status: "failed", detail: "Compaction failed: boom" },
+	]);
+
+	store.handlePiEvent(compactionStart("manual"), "a");
+	store.handlePiEvent(compactionEnd({ reason: "manual", result: undefined, aborted: true }), "a");
+	expect(compactionTurns("a")).toMatchObject([{ status: "failed" }, { status: "cancelled" }]);
+});
+
+test("a compaction_end with no observed start still lands a settled notice (connected mid-compaction)", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", null, "medium");
+
+	store.handlePiEvent(compactionEnd(), "a");
+	expect(compactionTurns("a")).toMatchObject([
+		{ status: "done", tokensBefore: 268_909, tokensAfter: 12_000 },
+	]);
 });
 
 test("compact-and-retry produces one completion marker at final settlement", () => {
@@ -1383,6 +1580,96 @@ test("project and workspace navigation update both scope ids atomically", () => 
 	useAppStore.getState().activateWorkspace(pushedWorkspace({ id: "w3", projectId: "p3" }));
 	expect(transitions).toEqual([["p3", "w3"]]);
 	unsubscribe();
+});
+
+// ---- navigation restore: atomic welcome + exact-chat intent --------------------------------------
+
+test("installWelcomeSnapshot lands one complete snapshot and advances its own generation", () => {
+	const p1 = project();
+	const closed = project({
+		id: "p2",
+		path: "/projects/two",
+		slug: "two",
+		lastOpened: 50,
+		closed: true,
+	});
+	let notifications = 0;
+	const unsubscribe = useAppStore.subscribe((state) => {
+		notifications += 1;
+		expect(state).toMatchObject({
+			protocolVersion: 44,
+			theme: "test-theme",
+			welcomeGeneration: 1,
+		});
+		expect(state.projects.map((candidate) => candidate.id)).toEqual(["p1"]);
+		expect(state.recentProjects.map((candidate) => candidate.id)).toEqual(["p1", "p2"]);
+	});
+
+	useAppStore.getState().installWelcomeSnapshot(44, [p1, closed], [p1, closed], {
+		theme: "test-theme",
+		analyticsEnabled: false,
+		terminalReplayKb: 256,
+	});
+	unsubscribe();
+	expect(notifications).toBe(1);
+
+	useAppStore.getState().installWelcomeSnapshot(44, [p1], [p1]);
+	expect(useAppStore.getState().welcomeGeneration).toBe(2);
+});
+
+test("installWelcomeSnapshot reconciles stale project navigation", () => {
+	const p1 = project();
+	useAppStore.setState({
+		projects: [project({ id: "p2", path: "/projects/two", slug: "two" })],
+		selectedProjectId: "p2",
+		activeWorkspaceId: null,
+	});
+
+	useAppStore.getState().installWelcomeSnapshot(44, [p1], [p1]);
+	expect(useAppStore.getState().selectedProjectId).toBe("p1");
+});
+
+test("activateWorkspaceFromRoute atomically stamps exact-chat intent", () => {
+	const workspace = pushedWorkspace();
+	useAppStore.setState({ workspaces: { p1: [workspace] }, navTickByWorkspace: { w1: 3 } });
+
+	useAppStore.getState().activateWorkspaceFromRoute(workspace, "s1");
+	expect(useAppStore.getState()).toMatchObject({
+		selectedProjectId: "p1",
+		activeWorkspaceId: "w1",
+		routeChatTarget: {
+			workspaceId: "w1",
+			sessionId: "s1",
+			navTick: 4,
+			navigation: null,
+			validated: false,
+		},
+		routeChatTargetGeneration: 1,
+	});
+
+	// A workspace-only route carries no center-tab intent: it clears only the exact target and leaves
+	// existing browser-local attention to the workbench. Clearing cannot trigger a duplicate catalog pass.
+	useAppStore.getState().activateWorkspaceFromRoute(workspace);
+	expect(useAppStore.getState().routeChatTarget).toBeNull();
+	expect(selectWorkspaceNavTick(useAppStore.getState(), "w1")).toBe(5);
+	expect(useAppStore.getState().routeChatTargetGeneration).toBe(1);
+	const before = useAppStore.getState();
+	useAppStore.getState().clearRouteChatTarget();
+	expect(useAppStore.getState()).toBe(before);
+});
+
+test("selectCurrentRouteChatTarget rejects overtaken or off-workspace intent", () => {
+	const workspace = pushedWorkspace();
+	useAppStore.setState({ workspaces: { p1: [workspace] } });
+	useAppStore.getState().activateWorkspaceFromRoute(workspace, "s1");
+	expect(selectCurrentRouteChatTarget(useAppStore.getState())?.sessionId).toBe("s1");
+
+	useAppStore.getState().noteNavigation("w1");
+	expect(selectCurrentRouteChatTarget(useAppStore.getState())).toBeNull();
+
+	useAppStore.getState().activateWorkspaceFromRoute(workspace, "s1");
+	useAppStore.getState().selectProject("p1");
+	expect(selectCurrentRouteChatTarget(useAppStore.getState())).toBeNull();
 });
 
 test("updateWorkspace applies a pushed snapshot authoritatively: dropped fields clear", () => {
@@ -2836,12 +3123,12 @@ test("catalog authority falls with the list it describes — only an awaited ref
 
 	// A `model.list` snapshot is current but never authoritative (its handler answers from before the
 	// detached refresh it starts).
-	s().setModels(listed);
+	s().setModelsForProviderVersion(s().providerVersion, listed);
 	expect(s().modelsFresh).toBe(false);
 
 	// The installed result of an awaited forced refresh that SETTLED is.
-	s().beginModelsRefresh();
-	s().finishModelsRefresh({ models: refreshed, complete: true });
+	const settledVersion = s().beginModelsRefresh();
+	s().finishModelsRefresh(settledVersion, { models: refreshed, complete: true });
 	expect(s().models).toBe(refreshed);
 	expect(s().modelsRefreshing).toBe(false);
 	expect(s().modelsFresh).toBe(true);
@@ -2849,32 +3136,53 @@ test("catalog authority falls with the list it describes — only an awaited ref
 	// The finding this pins: authority is a property of the SHARED list, so the next `model.list` install
 	// — this picker reopening, or any other consumer mounting — drops it in the same write. Held as a
 	// consumer's local flag, it outlived the list and a removed model reached `create()`.
-	s().setModels(listed);
+	s().setModelsForProviderVersion(s().providerVersion, listed);
 	expect(s().models).toBe(listed);
 	expect(s().modelsFresh).toBe(false);
 
 	// A FAILED refresh installs nothing, so it changes neither the list nor its provenance.
-	s().finishModelsRefresh({ models: refreshed, complete: true });
-	s().beginModelsRefresh();
-	s().finishModelsRefresh(null);
+	s().finishModelsRefresh(s().providerVersion, { models: refreshed, complete: true });
+	const failedVersion = s().beginModelsRefresh();
+	s().finishModelsRefresh(failedVersion, null);
 	expect(s().models).toBe(refreshed);
 	expect(s().modelsFresh).toBe(true);
+});
+
+test("a provider invalidation rejects every stale model reply", () => {
+	const s = () => useAppStore.getState();
+	const listed = [
+		{ id: "central-model", name: "central-model", provider: "central" },
+	] as WireModel[];
+	const before = s().beginModelsRefresh();
+	s().finishModelsRefresh(before, { models: listed, complete: true });
+
+	s().noteProviderChanged();
+	expect(s().providerVersion).toBe(before + 1);
+	expect(s().models).toEqual([]);
+	expect(s().modelsFresh).toBe(false);
+	expect(s().modelsRefreshing).toBe(false);
+
+	// Replies issued against the removed generation cannot restore either a list or its authority.
+	s().setModelsForProviderVersion(before, listed);
+	s().finishModelsRefresh(before, { models: listed, complete: true });
+	expect(s().models).toEqual([]);
+	expect(s().modelsFresh).toBe(false);
 });
 
 test("a refresh whose wait was capped installs its list but claims no authority", () => {
 	const s = () => useAppStore.getState();
 	const listed = [{ id: "opus-5", name: "opus-5", provider: "anthropic" }] as WireModel[];
 	const unsettled = [{ id: "opus-6", name: "opus-6", provider: "anthropic" }] as WireModel[];
-	s().beginModelsRefresh();
-	s().finishModelsRefresh({ models: listed, complete: true });
+	const settledVersion = s().beginModelsRefresh();
+	s().finishModelsRefresh(settledVersion, { models: listed, complete: true });
 	expect(s().modelsFresh).toBe(true);
 
 	// The finding this pins: the host caps how long it waits for pi, so a reply can carry the registry as it
 	// stands while the pass that would settle it is still running (`complete: false`). Rendering it is right;
 	// treating it as the host's verdict is what would let `NewWorkspaceDialog` substitute off a list nothing
 	// confirmed — so it must also DROP any authority the previous list had.
-	s().beginModelsRefresh();
-	s().finishModelsRefresh({ models: unsettled, complete: false });
+	const unsettledVersion = s().beginModelsRefresh();
+	s().finishModelsRefresh(unsettledVersion, { models: unsettled, complete: false });
 	expect(s().models).toBe(unsettled);
 	expect(s().modelsRefreshing).toBe(false);
 	expect(s().modelsFresh).toBe(false);
@@ -2883,8 +3191,8 @@ test("a refresh whose wait was capped installs its list but claims no authority"
 test("authority can be given up without replacing the list (a consumer activating)", () => {
 	const s = () => useAppStore.getState();
 	const refreshed = [{ id: "opus-6", name: "opus-6", provider: "anthropic" }] as WireModel[];
-	s().beginModelsRefresh();
-	s().finishModelsRefresh({ models: refreshed, complete: true });
+	const providerVersion = s().beginModelsRefresh();
+	s().finishModelsRefresh(providerVersion, { models: refreshed, complete: true });
 	expect(s().modelsFresh).toBe(true);
 
 	// The finding this pins: a consumer activating inherits the list a *previous* consumer made

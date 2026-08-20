@@ -15,6 +15,12 @@ export interface ChatActions {
 	 * (unknown session/call, already answered, superseded) so the card can un-latch its "sent" state.
 	 */
 	answerQuestion: (toolCallId: string, result: AskUserQuestionResult) => Promise<void>;
+	/**
+	 * Hand keyboard focus back to the prompt field. A renderer that resolves itself unmounts the control
+	 * the user was on (the questionnaire's chosen row, its Submit), which would strand focus on `<body>`
+	 * and drop every following keystroke — the same reason the history overlay's dismiss refocuses.
+	 */
+	focusComposer: () => void;
 }
 
 export const ChatActionsContext = createContext<ChatActions | null>(null);

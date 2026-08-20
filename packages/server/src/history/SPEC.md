@@ -37,7 +37,11 @@ to preserve).
   sent (it renders the client's compaction marker), so it consumes an index slot without being searchable.
   The internal
   `TODO_NUDGE_PREFIX` control message (hidden from the transcript on hydrate) is skipped after its index
-  slot is consumed, so alignment holds. Entry text is **full, never truncated** — a hit's `text` is what
+  slot is consumed, so alignment holds; a **superseded auto-retry attempt** (the shared
+  `isRetriedAttempt` reading from contracts — an errored assistant immediately followed by another
+  assistant, the adjacent shape pi's `_prepareRetry` produces,
+  which hydration renders as no turn / null anchor) is skipped the same way, so a
+  failed partial's text never becomes a hit that could only resolve to "couldn't locate the message". Entry text is **full, never truncated** — a hit's `text` is what
   recall inserts and what the overlay's preview presents as the whole prompt, so a cap would silently
   corrupt recall of long pasted-log prompts and make terms past the cutoff unsearchable (the memory
   precedent is pi itself: `SessionInfo.allMessagesText` holds every session's full text in memory). Tool

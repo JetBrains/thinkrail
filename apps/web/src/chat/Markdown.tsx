@@ -2,6 +2,7 @@ import { type ComponentProps, type ReactNode, useEffect, useState } from "react"
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { highlightCode } from "@/lib/highlighter";
+import { MermaidView } from "./tools/visualize/MermaidView";
 
 /**
  * The chat prose skin: `tr-prose-chat` (the generated markdown typography for a chat bubble — see
@@ -44,10 +45,22 @@ export function Markdown({
 			<ReactMarkdown
 				remarkPlugins={remarkPlugins ? [remarkGfm, ...remarkPlugins] : [remarkGfm]}
 				rehypePlugins={rehypePlugins}
-				components={{ code: CodeBlock, a: Anchor, ...components }}
+				components={{ code: CodeBlock, a: Anchor, table: Table, ...components }}
 			>
 				{text}
 			</ReactMarkdown>
+		</div>
+	);
+}
+
+/** A GFM table in its own horizontal scroller: the chat transcript scrolls only vertically (the
+ * Virtuoso scroller is `overflow-x-hidden`), so like code blocks and tool cards, a table wider than
+ * the bubble must scroll inside its own block — without the wrapper the overflow would simply be
+ * clipped and unreachable. The `[&_table]` skin selectors still apply (descendant selectors). */
+function Table({ children }: { children?: ReactNode }) {
+	return (
+		<div className="overflow-x-auto">
+			<table>{children}</table>
 		</div>
 	);
 }
@@ -70,6 +83,7 @@ function CodeBlock({
 }) {
 	const lang = /language-(\w+)/.exec(className ?? "")?.[1];
 	const code = String(children ?? "").replace(/\n$/, "");
+	if (lang === "mermaid") return <MermaidBlock code={code} />;
 	if (!lang) {
 		if (!code.includes("\n")) {
 			// Inline code sits directly behind a text run → the 2px inline-highlight tier (`xs`), not the
@@ -87,6 +101,30 @@ function CodeBlock({
 		);
 	}
 	return <ShikiBlock code={code} lang={lang} />;
+}
+
+/**
+ * Fenced ```mermaid → themed diagram via the visualize kit's `MermaidView` (theme-swap aware,
+ * fullscreen pan-zoom, error → source). Shows the source block until the fence text has been stable
+ * for a beat — so streaming chat deltas read as code instead of flickering parse errors — and always
+ * on the very first pass, so static rendering (`RenderedDiff`'s `renderToStaticMarkup`, where effects
+ * never run) degrades to code like every other fence. `whitespace-normal` resets the inherited
+ * `white-space: pre` from react-markdown's native `<pre>` wrapper.
+ */
+function MermaidBlock({ code }: { code: string }) {
+	const [settled, setSettled] = useState<string | null>(null);
+	useEffect(() => {
+		const timer = setTimeout(() => setSettled(code), 200);
+		return () => clearTimeout(timer);
+	}, [code]);
+
+	const source = <ShikiBlock code={code} lang="mermaid" />;
+	if (settled !== code) return source;
+	return (
+		<div className="whitespace-normal">
+			<MermaidView source={code} fallback={source} />
+		</div>
+	);
 }
 
 function ShikiBlock({ code, lang }: { code: string; lang: string }) {

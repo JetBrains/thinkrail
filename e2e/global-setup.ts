@@ -1,8 +1,12 @@
-import { copyFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import {
+	E2E_CENTRAL_BAD_EXTENSION_SOURCE,
+	E2E_CENTRAL_EXTENSION_SOURCE,
+	E2E_CENTRAL_STATE,
 	E2E_DATA_DIR,
+	E2E_FAKE_BIN_DIR,
 	E2E_FIXTURE_REPO,
 	E2E_HOME_DIR,
 	E2E_PI_AGENT_DIR,
@@ -29,6 +33,23 @@ export default function globalSetup(): void {
 	// whichever shell the developer runs — so terminal specs don't depend on the host's dotfiles.
 	for (const rc of [".zshrc", ".bashrc"]) writeFileSync(join(E2E_HOME_DIR, rc), "");
 
+	// Lane-local stubs: one lane can remove Central without mutating a repo file shared across shards.
+	mkdirSync(E2E_FAKE_BIN_DIR, { recursive: true });
+	for (const command of ["central", "code"]) {
+		const target = join(E2E_FAKE_BIN_DIR, command);
+		copyFileSync(new URL(`./fixtures/bin/${command}`, import.meta.url), target);
+		chmodSync(target, 0o755);
+	}
+	copyFileSync(
+		new URL("./fixtures/central-extension.ts.fixture", import.meta.url),
+		E2E_CENTRAL_EXTENSION_SOURCE,
+	);
+	copyFileSync(
+		new URL("./fixtures/central-extension-error.ts.fixture", import.meta.url),
+		E2E_CENTRAL_BAD_EXTENSION_SOURCE,
+	);
+	writeFileSync(E2E_CENTRAL_STATE, "");
+
 	// Isolated pi agent dir: copy the user's provider/auth config so a real provider works (the `@agent`
 	// suite needs it — auth lives across BOTH `auth.json` (OAuth providers) and `models.json` (providers
 	// configured with an apiKey)), and pin a deterministic default model — so every run uses the *same*
@@ -42,9 +63,7 @@ export default function globalSetup(): void {
 		const src = join(userAgentDir, file);
 		if (existsSync(src)) copyFileSync(src, join(E2E_PI_AGENT_DIR, file));
 	}
-	// Keep a pristine snapshot of the seeded models.json: the JetBrains AI spec mutates the shared agent-dir
-	// copy (proxy wire/unwire), so `resetState` restores it per test (see E2E_PI_MODELS_SEED). No file means
-	// the dev authed via auth.json only — reset then just clears any test-written models.json.
+	// Snapshot the seeded models.json so `resetState` can restore the provider baseline per test.
 	const modelsSeedSrc = join(userAgentDir, "models.json");
 	if (existsSync(modelsSeedSrc)) copyFileSync(modelsSeedSrc, E2E_PI_MODELS_SEED);
 	else rmSync(E2E_PI_MODELS_SEED, { force: true });

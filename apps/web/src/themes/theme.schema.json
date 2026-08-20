@@ -61,6 +61,7 @@
 			"required": [
 				"accent",
 				"accentHover",
+				"accentSolid",
 				"onAccent",
 				"bubbleAccent",
 				"background",
@@ -75,7 +76,6 @@
 				"text",
 				"muted",
 				"hint",
-				"disabled",
 				"selection",
 				"selectionForeground",
 				"editorSelection",
@@ -88,6 +88,7 @@
 			"properties": {
 				"accent": { "$ref": "#/$defs/hexColor" },
 				"accentHover": { "$ref": "#/$defs/hexColor" },
+				"accentSolid": { "$ref": "#/$defs/hexColor" },
 				"onAccent": { "$ref": "#/$defs/hexColor" },
 				"bubbleAccent": { "$ref": "#/$defs/hexColor" },
 				"background": { "$ref": "#/$defs/hexColor" },
@@ -102,7 +103,6 @@
 				"text": { "$ref": "#/$defs/hexColor" },
 				"muted": { "$ref": "#/$defs/hexColor" },
 				"hint": { "$ref": "#/$defs/hexColor" },
-				"disabled": { "$ref": "#/$defs/hexColor" },
 				"selection": { "$ref": "#/$defs/hexColor" },
 				"selectionForeground": {
 					"oneOf": [{ "$ref": "#/$defs/hexColor" }, { "type": "null" }]

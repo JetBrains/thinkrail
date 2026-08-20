@@ -774,7 +774,7 @@ function WorkbenchTab({
 					data-preview={preview}
 					data-kind={tab.kind === "document" ? "plan" : tab.kind}
 					data-dragging={drag.isDragging || undefined}
-					className="group relative flex min-w-24 max-w-48 shrink-0 items-center border-border-default border-r text-text-muted after:pointer-events-none after:absolute after:right-xs after:bottom-0 after:left-xs after:z-10 after:h-[2px] after:rounded-full after:content-[''] data-[active=true]:bg-control-bg-selected data-[active=true]:text-text-default data-[active=true]:after:bg-primary data-[dragging]:opacity-40"
+					className="group relative flex min-w-24 max-w-48 shrink-0 items-center border-border-default border-r text-text-muted after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:z-10 after:h-[2px] after:rounded-full after:content-[''] data-[active=true]:bg-control-bg-selected data-[active=true]:text-text-default data-[active=true]:after:bg-primary data-[dragging]:opacity-40"
 				>
 					<div
 						ref={before.setNodeRef}

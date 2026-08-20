@@ -1,8 +1,8 @@
-import type {
-	ImageContent,
-	SlashCommandInfo,
-	ThinkingLevel,
-	WireModel,
+import {
+	REQUEST_IMAGE_BASE64_BUDGET,
+	type SlashCommandInfo,
+	type ThinkingLevel,
+	type WireModel,
 } from "@thinkrail/contracts";
 import { ArrowUp, FileIcon, FolderIcon, History, Sparkles, Square, X } from "lucide-react";
 import {
@@ -17,6 +17,8 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { FileChip } from "./FileChip";
+import { type AttachedImage, fileToAttachedImage } from "./imageAttachment";
 import { ModelSelector } from "./ModelSelector";
 import {
 	SlashCommandMenu,
@@ -33,6 +35,7 @@ import {
 	stripUntouchedSlots,
 } from "./slotSession";
 import { ThinkingSelector } from "./ThinkingSelector";
+import type { ChatAttachment } from "./types";
 
 /** How a submit is delivered: a fresh turn, an interrupt, or a queued message after the current turn. */
 export type SubmitBehavior = "send" | "steer" | "followUp";
@@ -44,26 +47,17 @@ export interface MentionCandidate {
 	kind: "file" | "dir";
 }
 
-interface PendingImage {
+interface PendingImage extends AttachedImage {
 	id: string;
-	content: ImageContent;
+	/** The picked file's name — the chip label (pi's `ImageContent` itself carries no filename). */
+	name: string;
 }
 
-function fileToImageContent(file: File): Promise<ImageContent> {
-	return new Promise((resolve, reject) => {
-		const reader = new FileReader();
-		reader.onerror = () => reject(reader.error ?? new Error("failed to read image"));
-		reader.onload = () => {
-			const result = String(reader.result);
-			const comma = result.indexOf(",");
-			resolve({
-				type: "image",
-				data: comma >= 0 ? result.slice(comma + 1) : result,
-				mimeType: file.type || "image/png",
-			});
-		};
-		reader.readAsDataURL(file);
-	});
+/** A refused pick, rendered as a dismissible error chip: the file's name plus why it couldn't attach. */
+interface AttachError {
+	id: string;
+	name: string;
+	reason: string;
 }
 
 /** The token (non-whitespace run) ending at the caret — drives `@`-mention completion. */
@@ -161,7 +155,7 @@ interface ComposerProps {
 	onSlashActive: (active: boolean) => void;
 	onSelectModel: (model: WireModel) => void;
 	onSelectThinking: (level: ThinkingLevel) => void;
-	onSubmit: (text: string, images: ImageContent[], behavior: SubmitBehavior) => void;
+	onSubmit: (text: string, attachments: ChatAttachment[], behavior: SubmitBehavior) => void;
 	onAbort: () => void;
 	/** Opens the history-recall overlay (`ChatView` seeds it with the current draft) — the history button
 	 * and the shell's global `Ctrl+R`, via the `openHistory` handle. Optional so a standalone/storybook-style
@@ -189,7 +183,8 @@ export interface ComposerHandle {
 	/** Replace the draft and send it through the composer's own submit seam — pending image attachments
 	 * travel with the text and are cleared with the draft, exactly like a keyboard send. This is the
 	 * history overlay's ⌘/Ctrl+Enter path; a caller-side `onSubmit` would strand the composer-private
-	 * `images` state (sent without them, stale thumbnails left attached to the next message). */
+	 * `images` state (sent without them, stale thumbnails left attached to the next message). When the
+	 * send is refused (an attachment still decoding), the text lands in the draft rather than nowhere. */
 	insertAndSubmit: (text: string, behavior: SubmitBehavior) => void;
 	/** Replace the draft with a parsed template's expansion; if it produced any slots, start a slot
 	 * session selecting slot 0 (else behaves like `insertText`: caret at the end, no session). */
@@ -245,12 +240,41 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	const ref = useRef<HTMLTextAreaElement>(null);
 	const [caret, setCaret] = useState(0);
 	const [images, setImages] = useState<PendingImage[]>([]);
+	// The synchronous source of truth for the attachment list — every write goes through `commitImages`,
+	// so an async `addFiles` batch always budgets against the LATEST list, not its render's snapshot
+	// (two overlapping pastes must not each admit a full budget; decision blocks are synchronous JS, so
+	// reads of this ref cannot interleave mid-decision).
+	const imagesRef = useRef<PendingImage[]>([]);
+	const commitImages = (next: PendingImage[]) => {
+		imagesRef.current = next;
+		setImages(next);
+	};
+	// How many picked files are still decoding/downscaling in `addFiles` — the attach pipeline is async
+	// (30–140ms measured, wider on mobile), and a send landing inside that window would go WITHOUT the
+	// image (which would then attach itself to the NEXT message). While non-zero: placeholder chips render
+	// below, the send button disables, and `submitText` refuses to fire.
+	const [pendingImages, setPendingImages] = useState(0);
+	// Files that could NOT be attached (undecodable + provider-unsupported type, or over the request-wide
+	// image budget) — surfaced as dismissible error chips in the attachment strip; silently dropping a
+	// pick would read as a successful attach. Name and reason stay separate so the chip can truncate the
+	// (user-controlled) filename while keeping the reason visible.
+	const [attachErrors, setAttachErrors] = useState<AttachError[]>([]);
 	const [mentionActiveIndex, setMentionActiveIndex] = useState(0);
 	const [mentionDismissed, setMentionDismissed] = useState(false);
 	// The plain `↑`-recall session: `null` when inactive; otherwise an index into `recentPrompts` (0 =
 	// newest). Reset on a diverging edit (the textarea's `onChange` below) or a submit — see `onKeyDown`'s
 	// recall block (after the mention/slash menu) for the stepping rules.
-	const [recallIdx, setRecallIdx] = useState<number | null>(null);
+	//
+	// A **ref, not state**: nothing renders from it (only the two handlers below read it), and as state it
+	// was a staleness trap. Stepping writes two stores in one keystroke — this index here and the draft via
+	// `onChange`, which lives in the parent — and those can commit in separate passes. In between, the
+	// textarea already shows the recalled text while still carrying the *previous* render's handlers, whose
+	// captured index is stale. A gesture landing in that window read the old index: a second `↑` re-recalled
+	// the same entry instead of stepping, and an edit (a fast typist, a paste, Playwright's `fill()`) failed
+	// to end the session — so the next `↑`/`↓` stepped from the live index and overwrote what was just typed,
+	// the very loss `replaceDraft` guards against on the insert paths. A ref is read at the value it was last
+	// written, so commit timing cannot come into it.
+	const recallIdxRef = useRef<number | null>(null);
 	// The template slot session: `null` when inactive. Starts on `insertTemplate`, steps via `stepSlot`
 	// (Tab/Shift+Tab and the hint chip), re-tracked across edits in the textarea's `onChange`, and ends on
 	// `Escape`, submit, or any programmatic mutation that doesn't participate in slot tracking (recall,
@@ -327,7 +351,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	// AND any active template slot session (the inserted text has nothing to do with the tracked ranges).
 	const replaceDraft = useCallback(
 		(text: string, caret: number = text.length) => {
-			setRecallIdx(null);
+			recallIdxRef.current = null;
 			setSlots(null);
 			onChange(text);
 			focusSelection(caret);
@@ -339,17 +363,23 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	// `insertAndSubmit` both land here, so whatever initiated the send, pending images always travel
 	// with the text and are cleared with the draft in the same step (and any recall or template slot
 	// session ends with the send). No-op when both the (trimmed) text and the image list are empty.
+	// The one send-permission reading, shared by `submitText` and the send button's `disabled`: never
+	// send while an attachment is still decoding (it would silently miss this message and stray onto the
+	// next one — the draft stays put, the user re-sends once the chip appears), and never send empty.
+	const canSubmit = (raw: string) => pendingImages === 0 && (!!raw.trim() || images.length > 0);
+
 	const submitText = (raw: string, behavior: SubmitBehavior) => {
+		if (!canSubmit(raw)) return;
 		const text = raw.trim();
-		if (!text && images.length === 0) return;
 		onSubmit(
 			text,
-			images.map((i) => i.content),
+			images.map(({ name, content }) => ({ name, content })),
 			behavior,
 		);
 		onChange("");
-		setImages([]);
-		setRecallIdx(null);
+		commitImages([]);
+		setAttachErrors([]);
+		recallIdxRef.current = null;
 		setSlots(null);
 	};
 
@@ -395,7 +425,11 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	// after `openHistory`/`slashCompletion` so nothing here forward-references a later binding.
 	useImperativeHandle(handleRef, () => ({
 		insertText: (text: string) => replaceDraft(text),
-		insertAndSubmit: (text: string, behavior: SubmitBehavior) => submitText(text, behavior),
+		// A send refused mid-decode (`canSubmit`) leaves the composer's OWN gestures holding the draft, but
+		// this text lives in the caller's overlay — parking it in the draft is what keeps a recalled prompt
+		// from vanishing when the user happens to send while an attachment is still decoding.
+		insertAndSubmit: (text: string, behavior: SubmitBehavior) =>
+			canSubmit(text) ? submitText(text, behavior) : replaceDraft(text),
 		insertTemplate: (parsed: ParsedTemplate) => {
 			const first = parsed.slots[0];
 			if (!first) {
@@ -406,7 +440,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 			// A slotted insert is the one programmatic mutation that STARTS a slot session instead of
 			// ending one — but it must still exit any `↑`-recall session the way `replaceDraft` does
 			// (this path sets `value` directly, so the textarea's diverging-edit reset never fires).
-			setRecallIdx(null);
+			recallIdxRef.current = null;
 			onChange(parsed.text);
 			setSlots(parsed.slots);
 			setSlotIdx(0);
@@ -426,11 +460,46 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	const addFiles = async (files: File[]) => {
 		const picked = files.filter((f) => f.type.startsWith("image/"));
 		if (picked.length === 0) return;
-		const contents = await Promise.all(picked.map(fileToImageContent));
-		setImages((prev) => [
-			...prev,
-			...contents.map((content) => ({ id: crypto.randomUUID(), content })),
-		]);
+		setPendingImages((n) => n + picked.length);
+		try {
+			// Downscaled/re-encoded at attach time (≤1568px long edge, provider-accepted type, ≤4.5MB of
+			// base64) — an
+			// oversized image in history 400s every subsequent turn. See imageAttachment.ts. `allSettled`,
+			// not `all`: a single unreadable file must not discard siblings that decoded fine (and the
+			// callers invoke this as `void addFiles(...)` — a rejection here would be unhandled).
+			const settled = await Promise.allSettled(picked.map(fileToAttachedImage));
+			// Accept/refuse decisions happen HERE, not inside a state updater (updaters must stay pure and
+			// run deferred) — against `imagesRef`, the always-current list, so overlapping batches see each
+			// other's admissions. One message's image
+			// batch must fit the request-wide budget: the provider caps the WHOLE request, and a persisted
+			// over-budget turn is rejected forever (the host guard heals history, but never sending is cheaper).
+			let used = imagesRef.current.reduce((sum, p) => sum + p.content.data.length, 0);
+			const additions: PendingImage[] = [];
+			const errors: AttachError[] = [];
+			settled.forEach((result, i) => {
+				const name = picked[i]?.name || "image";
+				if (result.status !== "fulfilled" || result.value === null) {
+					errors.push({ id: crypto.randomUUID(), name, reason: "unsupported image format" });
+					return;
+				}
+				const size = result.value.content.data.length;
+				if (used + size > REQUEST_IMAGE_BASE64_BUDGET) {
+					errors.push({ id: crypto.randomUUID(), name, reason: "message image limit reached" });
+					return;
+				}
+				used += size;
+				additions.push({
+					id: crypto.randomUUID(),
+					// A clipboard paste often arrives as a generic "image.png" — still better than a mime type.
+					name,
+					...result.value,
+				});
+			});
+			if (additions.length > 0) commitImages([...imagesRef.current, ...additions]);
+			if (errors.length > 0) setAttachErrors((prev) => [...prev, ...errors]);
+		} finally {
+			setPendingImages((n) => n - picked.length);
+		}
 	};
 
 	const submit = (behavior: SubmitBehavior) => {
@@ -531,27 +600,30 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		// session is already active, so it can never eat a draft; `↓` only steps while a session is active.
 		// Both place the caret at the recalled text's end, matching `insertText`/`pickMention`/the slash
 		// completion's own focus-after-change pattern.
-		if (e.key === "ArrowUp" && (value === "" || recallIdx !== null) && recentPrompts.length > 0) {
+		// One snapshot for both branches: the ref cannot change inside a single synchronous handler, and
+		// reading it once keeps it narrowable (a `.current` read is not, across statements).
+		const recallAt = recallIdxRef.current;
+		if (e.key === "ArrowUp" && (value === "" || recallAt !== null) && recentPrompts.length > 0) {
 			e.preventDefault();
 			setSlots(null);
-			const next = recallIdx === null ? 0 : Math.min(recallIdx + 1, recentPrompts.length - 1);
+			const next = recallAt === null ? 0 : Math.min(recallAt + 1, recentPrompts.length - 1);
 			const text = recentPrompts[next] ?? "";
-			setRecallIdx(next);
+			recallIdxRef.current = next;
 			onChange(text);
 			focusSelection(text.length);
 			return;
 		}
-		if (e.key === "ArrowDown" && recallIdx !== null) {
+		if (e.key === "ArrowDown" && recallAt !== null) {
 			e.preventDefault();
 			setSlots(null);
-			if (recallIdx === 0) {
-				setRecallIdx(null);
+			if (recallAt === 0) {
+				recallIdxRef.current = null;
 				onChange("");
 				focusSelection(0);
 			} else {
-				const next = recallIdx - 1;
+				const next = recallAt - 1;
 				const text = recentPrompts[next] ?? "";
-				setRecallIdx(next);
+				recallIdxRef.current = next;
 				onChange(text);
 				focusSelection(text.length);
 			}
@@ -652,24 +724,63 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 				</button>
 			) : null}
 
-			{images.length > 0 ? (
+			{images.length > 0 || pendingImages > 0 || attachErrors.length > 0 ? (
 				<div className="flex flex-wrap gap-xs px-sm pt-sm" data-testid="composer-images">
-					{images.map((img) => (
-						<span
-							key={img.id}
-							className="flex items-center gap-xs rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-sm py-xs text-text-default tr-text-metadata"
-						>
-							<FileIcon className="size-3" /> {img.content.mimeType}
-							<button
-								type="button"
-								aria-label="Remove image"
-								onClick={() => setImages((prev) => prev.filter((p) => p.id !== img.id))}
-								className="text-text-muted hover:text-text-default"
-							>
-								<X className="size-3" />
-							</button>
-						</span>
+					{attachErrors.map((err) => (
+						<FileChip
+							key={err.id}
+							data-testid="composer-image-error"
+							tone="error"
+							icon={false}
+							// The filename truncates, the reason never does — the reason is the only thing the
+							// user can act on, and a phone has no tooltip to fall back to.
+							title={`Couldn't attach ${err.name} — ${err.reason}`}
+							label={`Couldn't attach ${err.name}`}
+							meta={`— ${err.reason}`}
+							trailing={
+								<button
+									type="button"
+									aria-label="Dismiss"
+									onClick={() => setAttachErrors((prev) => prev.filter((p) => p.id !== err.id))}
+									className="hover:opacity-80"
+								>
+									<X className="size-3" />
+								</button>
+							}
+						/>
 					))}
+					{images.map((img) => (
+						<FileChip
+							key={img.id}
+							data-testid="composer-image"
+							data-width={img.width}
+							data-height={img.height}
+							data-mime={img.content.mimeType}
+							title={img.name}
+							label={img.name}
+							meta={img.width && img.height ? ` · ${img.width}×${img.height}` : undefined}
+							trailing={
+								<button
+									type="button"
+									aria-label="Remove image"
+									onClick={() => commitImages(imagesRef.current.filter((p) => p.id !== img.id))}
+									className="text-text-muted hover:text-text-default"
+								>
+									<X className="size-3" />
+								</button>
+							}
+						/>
+					))}
+					{pendingImages > 0 ? (
+						<FileChip
+							data-testid="composer-image-pending"
+							label={
+								<span className="text-text-muted">
+									{pendingImages === 1 ? "Attaching…" : `Attaching ${pendingImages}…`}
+								</span>
+							}
+						/>
+					) : null}
 				</div>
 			) : null}
 
@@ -733,7 +844,10 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							// A genuine user edit (typing/pasting/deleting — never fired by the recall/insert paths
 							// themselves, since those set the controlled `value` prop directly rather than mutating the
 							// DOM node) that diverges from the recalled entry exits the recall session.
-							if (recallIdx !== null && next !== recentPrompts[recallIdx]) setRecallIdx(null);
+							const recalled = recallIdxRef.current;
+							if (recalled !== null && next !== recentPrompts[recalled]) {
+								recallIdxRef.current = null;
+							}
 							if (slots) {
 								const { editStart, removedLen, insertedLen } = diffValues(value, next, nextCaret);
 								if (editStart === 0 && removedLen === value.length) {
@@ -841,8 +955,8 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							data-testid="chat-send"
 							aria-label={isStreaming ? "Steer" : "Send"}
 							onClick={() => submit(isStreaming ? "steer" : "send")}
-							disabled={!value.trim() && images.length === 0}
-							className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-control-primary-bg text-control-primary-text hover:bg-control-primary-bg-hovered disabled:pointer-events-none disabled:bg-control-disabled-bg disabled:text-control-disabled-text"
+							disabled={!canSubmit(value)}
+							className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-control-primary-bg text-control-primary-text hover:bg-control-primary-bg-hovered disabled:pointer-events-none disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text"
 						>
 							<ArrowUp className="size-4" />
 						</button>

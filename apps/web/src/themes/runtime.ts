@@ -136,8 +136,20 @@ export function getThemes(): readonly ThemeDescriptor[] {
 	return catalog.list;
 }
 
+/**
+ * Client-side migration for renamed theme ids: an old id resolves to its current manifest so a
+ * persisted selection (localStorage hint or the host-synced config) keeps the same theme instead of
+ * falling back to the default. Removed ids (no entry here) fall through to the default via the lookup
+ * below — this is a resolution shim only, never a registry entry, so no legacy theme is kept alive.
+ */
+const RENAMED_THEME_IDS: Readonly<Record<string, ThemeId>> = {
+	// `High Contrast` → `High Contrast Dark`
+	"high-contrast": "high-contrast-dark",
+};
+
 function requireResolvedTheme(id: ThemeId): ThemeManifest {
-	const theme = catalog.byId.get(id) ?? catalog.byId.get(DEFAULT_CONFIG.theme);
+	const canonical = RENAMED_THEME_IDS[id] ?? id;
+	const theme = catalog.byId.get(canonical) ?? catalog.byId.get(DEFAULT_CONFIG.theme);
 	if (!theme) throw new Error(`The bundled default theme is missing: ${DEFAULT_CONFIG.theme}`);
 	return theme;
 }

@@ -59,6 +59,8 @@ import {
 	logoutProvider,
 	resolveLogin,
 	startLogin,
+	startProxyJbcentral,
+	updateJbcentral,
 } from "../auth";
 import { findOpenBranchReview } from "../branch-review";
 import { selectDirectory } from "../dialog";
@@ -316,7 +318,10 @@ const handlers: Record<string, Handler> = {
 		const p = params as { projectId: string; path: string };
 		return openExistingWorktree(p.projectId, p.path);
 	},
-	"workspace.list": (params) => listWorkspaces((params as { projectId: string }).projectId),
+	"workspace.list": (params) => {
+		const p = params as { projectId: string; includeDiffStats?: boolean };
+		return listWorkspaces(p.projectId, { includeDiffStats: p.includeDiffStats ?? true });
+	},
 	"workspace.openReview": (params) => {
 		const ws = getWorkspace((params as { workspaceId: string }).workspaceId);
 		return findOpenBranchReview(ws.worktreePath, ws.branch);
@@ -607,9 +612,9 @@ const handlers: Record<string, Handler> = {
 		setSessionThinkingLevel(p.sessionId, p.level);
 		return { ok: true } as const;
 	},
-	"session.compact": (params) => {
+	"session.compact": async (params) => {
 		const p = params as { sessionId: string; instructions?: string };
-		compactSession(p.sessionId, p.instructions);
+		await compactSession(p.sessionId, p.instructions);
 		return { ok: true } as const;
 	},
 	"session.getStats": (params) => getSessionStats((params as { sessionId: string }).sessionId),
@@ -688,22 +693,12 @@ const handlers: Record<string, Handler> = {
 		await logoutProvider((params as { providerId: string }).providerId);
 		return { ok: true } as const;
 	},
-	// JetBrains AI (jbcentral proxy): connect/disconnect write models.json + reload the runtime config; login
-	// launches `central login` (browser) on the host.
-	"provider.jbcentralConnect": async () => {
-		const result = await connectJbcentral();
-		// Analytics: only an actual connect counts (needs-install / needs-login / error don't). `jbcentral`
-		// is our own constant, not user input — no bucketing needed.
-		if (result.outcome === "connected") {
-			track({ name: "provider_login", params: { provider: "jbcentral", method: "central" } });
-		}
-		return result;
-	},
-	"provider.jbcentralDisconnect": async () => {
-		await disconnectJbcentral();
-		return { ok: true } as const;
-	},
+	// Central actions: closed typed outcomes only — child output/diagnostics never become frames.
+	"provider.jbcentralConnect": () => connectJbcentral(),
+	"provider.jbcentralDisconnect": () => disconnectJbcentral(),
+	"provider.jbcentralStartProxy": () => startProxyJbcentral(),
 	"provider.jbcentralLogin": () => jbcentralLogin(),
+	"provider.jbcentralUpdate": () => updateJbcentral(),
 	// Read or replace the one host-synchronized workbench document for a registered workspace.
 	"layout.get": (params) => {
 		const { workspaceId } = params as { workspaceId: string };

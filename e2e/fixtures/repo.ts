@@ -62,6 +62,27 @@ export function seedFixtureRepo(): void {
 			"",
 		].join("\n"),
 	);
+	// A markdown file with a valid mermaid fence, an invalid one, and a plain code fence, for the
+	// rendered-preview diagram suite (see e2e/markdown-mermaid.spec.ts).
+	writeFileSync(
+		join(E2E_FIXTURE_REPO, "DIAGRAM.md"),
+		[
+			"# Diagram demo",
+			"",
+			"```mermaid",
+			"flowchart TD; Start --> Finish",
+			"```",
+			"",
+			"```mermaid",
+			"flowchart TD; Start --> --> broken",
+			"```",
+			"",
+			"```bash",
+			"echo plain-fence-stays-code",
+			"```",
+			"",
+		].join("\n"),
+	);
 	// A large, highly repetitive markdown doc (hundreds of identical list rows) — the worst case
 	// for node-htmldiff's matcher — for the rendered-diff main-thread test (see e2e/changes.spec.ts):
 	// diffing this inline used to block the UI for seconds, so the suite pins that the merge stays off

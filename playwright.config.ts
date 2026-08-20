@@ -1,15 +1,19 @@
-import { delimiter } from "node:path";
+import { existsSync } from "node:fs";
+import { delimiter, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig, devices } from "@playwright/test";
 import {
+	E2E_CENTRAL_BAD_EXTENSION_SOURCE,
+	E2E_CENTRAL_EXTENSION_SOURCE,
+	E2E_CENTRAL_LOG,
 	E2E_CENTRAL_STATE,
 	E2E_DATA_DIR,
 	E2E_EDITOR_LOG,
+	E2E_FAKE_BIN_DIR,
 	E2E_HOME_DIR,
 	E2E_PI_AGENT_DIR,
 	E2E_PICK_DIR_POINTER,
 	E2E_PORT,
-	E2E_WIRE_PROXY_PORT,
 } from "./e2e/fixtures/paths";
 
 const rootDir = fileURLToPath(new URL(".", import.meta.url));
@@ -20,16 +24,19 @@ const staticDir = fileURLToPath(new URL("./apps/web/dist", import.meta.url));
 // (e2e/fixtures/portBlock.ts). Supersedes the manual THINKRAIL_E2E_PORT knob
 // (THINKRAIL_E2E_PORT_BASE pins the whole per-worktree block explicitly when ever needed).
 const PORT = E2E_PORT;
+const bunExecutable = (process.env.PATH ?? "")
+	.split(delimiter)
+	.map((directory) => join(directory, "bun"))
+	.find(existsSync);
+if (!bunExecutable) throw new Error("bun executable not found for the e2e host");
+const hostPath = [E2E_FAKE_BIN_DIR, "/usr/bin", "/bin", "/usr/sbin", "/sbin"].join(delimiter);
+if (hostPath.split(delimiter).some((directory) => existsSync(join(directory, "pi"))))
+	throw new Error("e2e host PATH must not contain pi");
 const isShardLane = process.env.THINKRAIL_E2E_LANE !== undefined;
 const hostCommand =
 	process.env.THINKRAIL_E2E_SKIP_BUILD === "1"
-		? "bun packages/server/src/dev.ts"
-		: "bun run build:web && bun packages/server/src/dev.ts";
-// A stub `central` (JetBrains Central CLI) and `code` (VS Code CLI) on the host's PATH so the JetBrains AI
-// flow and the workspace row's "Open in" are both drivable deterministically — no real CLI, network,
-// JetBrains auth, or editor install. Prepended so each wins over any real install on the dev machine.
-const fakeBinDir = fileURLToPath(new URL("./e2e/fixtures/bin", import.meta.url));
-
+		? `${JSON.stringify(bunExecutable)} packages/server/src/dev.ts`
+		: `${JSON.stringify(bunExecutable)} run build:web && ${JSON.stringify(bunExecutable)} packages/server/src/dev.ts`;
 export default defineConfig({
 	testDir: "./e2e",
 	// The headless workflow-test suite has its own config (playwright.workflows.config.ts) — no browser,
@@ -81,13 +88,12 @@ export default defineConfig({
 			// Keep the suite hermetic: `model.list` fires a detached pi.dev catalog refresh (issue #98) that
 			// must never leave the machine in tests — PI_OFFLINE is pi's own convention and our guard honors it.
 			PI_OFFLINE: "1",
-			// Put the stub `central` first on PATH (see fakeBinDir), and pin the proxy port so wiring is
-			// deterministic and never reads the dev machine's real ~/.wire/config.json.
-			PATH: `${fakeBinDir}${delimiter}${process.env.PATH ?? ""}`,
-			WIRE_PROXY_PORT: String(E2E_WIRE_PROXY_PORT),
-			// Control file the stub `central` reads live to pick its outcome (signed in / not signed in /
-			// error), letting a test drive the JetBrains AI card's non-happy branches without restarting the host.
+			// Lane-local `central` + `code` stubs: deterministic and safe under process-level sharding.
+			PATH: hostPath,
 			CENTRAL_STUB_STATE: E2E_CENTRAL_STATE,
+			CENTRAL_STUB_LOG: E2E_CENTRAL_LOG,
+			CENTRAL_STUB_EXTENSION_SOURCE: E2E_CENTRAL_EXTENSION_SOURCE,
+			CENTRAL_STUB_BAD_EXTENSION_SOURCE: E2E_CENTRAL_BAD_EXTENSION_SOURCE,
 			// Where the stub `code` appends each invocation's argv, so a test can assert "Open in VS Code"
 			// actually launched with the right worktree path.
 			THINKRAIL_E2E_EDITOR_LOG: E2E_EDITOR_LOG,

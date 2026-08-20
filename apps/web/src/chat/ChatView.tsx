@@ -1,6 +1,5 @@
 import type {
 	AskUserQuestionResult,
-	ImageContent,
 	PromptHit,
 	SlashCommandInfo,
 	TemplateInfo,
@@ -45,7 +44,7 @@ import { stripFrontmatter } from "./templateText";
 import { useModelCatalog } from "./useModelCatalog";
 import "./tools/register"; // side-effect: register the built-in pi tool renderers (bash/read/edit/write)
 import { ChatTurnView } from "./turns";
-import type { ChatTurn } from "./types";
+import type { ChatAttachment, ChatTurn } from "./types";
 import { useChatScroll } from "./useChatScroll";
 import { useChatTodos } from "./useChatTodos";
 import { useHistorySearch } from "./useHistorySearch";
@@ -232,6 +231,9 @@ export default function ChatView({
 	const { followOutput, handleAtBottom, showScrollButton, scrollToBottom, containerProps } =
 		useChatScroll(virtuosoRef);
 	const composerRef = useRef<ComposerHandle>(null);
+	// One identity per mounted chat view: question cards use it to focus once across Virtuoso remounts,
+	// while deliberately closing/reopening the chat gets a fresh scope and may focus the pending card.
+	const askFocusScope = useRef<object>({}).current;
 
 	// The Ctrl+R history-recall overlay's integration edge (store/transport) — see `chat/SPEC.md`'s
 	// boundary section for why this hook, not this component's body, owns that edge.
@@ -359,8 +361,10 @@ export default function ChatView({
 			.catch(() => {});
 	};
 
-	const onSubmit = (text: string, images: ImageContent[], behavior: SubmitBehavior) => {
-		if (text) useAppStore.getState().appendUserMessage(sessionId, text);
+	const onSubmit = (text: string, attachments: ChatAttachment[], behavior: SubmitBehavior) => {
+		if (text || attachments.length > 0)
+			useAppStore.getState().appendUserMessage(sessionId, text, attachments);
+		const images = attachments.map((a) => a.content);
 		const params = { sessionId, text, ...(images.length > 0 ? { images } : {}) };
 		const method =
 			behavior === "steer"
@@ -570,6 +574,10 @@ export default function ChatView({
 		() => deriveAskStates(runtime.turns, runtime.askAnswers),
 		[runtime.turns, runtime.askAnswers],
 	);
+	const askContext = useMemo(
+		() => ({ states: askStates, focusScope: askFocusScope }),
+		[askStates, askFocusScope],
+	);
 
 	// The plan's glance state — "working or waiting on you?" — derived from session state (streaming +
 	// any awaiting questionnaire), never stored, so the TODO strip can't claim "in work" while the
@@ -588,6 +596,7 @@ export default function ChatView({
 				getTransport()
 					.request("session.answerQuestion", { sessionId, toolCallId, result })
 					.then(() => undefined),
+			focusComposer: () => composerRef.current?.refocus(),
 		}),
 		[sessionId],
 	);
@@ -605,7 +614,7 @@ export default function ChatView({
 
 	return (
 		<ChatActionsContext.Provider value={chatActions}>
-			<AskStatesContext.Provider value={askStates}>
+			<AskStatesContext.Provider value={askContext}>
 				<div className="flex h-full min-h-0 flex-col bg-container-workspace-bg">
 					{/* The plan popover is anchored to the whole header, so it hangs flush under it at the chat's
 					    left edge; the strip in the header's left slot is the trigger. */}
@@ -650,7 +659,10 @@ export default function ChatView({
 							data={rows}
 							context={listContext}
 							components={CHAT_LIST_COMPONENTS}
-							className="min-h-0 flex-1"
+							// `overflow-x-hidden` on the scroller: the chat only ever scrolls vertically — wide
+							// content (code, diffs, GFM tables — see Markdown's `Table` wrapper) scrolls inside its
+							// own block, never the whole transcript.
+							className="min-h-0 flex-1 overflow-x-hidden"
 							// Any chat opens at the latest message (a fresh mount would otherwise land mid-transcript);
 							// the jump-to-message deep link overrides post-mount with its centered scrollToIndex.
 							initialTopMostItemIndex={{ index: Math.max(rows.length - 1, 0), align: "end" }}

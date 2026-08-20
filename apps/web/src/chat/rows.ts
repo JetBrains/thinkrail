@@ -1,7 +1,7 @@
 import type { UserMessage } from "@thinkrail/contracts";
 import { resolveProminence } from "./toolRegistry";
 import { strArg } from "./tools/toolHelpers";
-import type { ChatTurn, ToolResultState } from "./types";
+import type { ChatTurn, CompactionState, ToolResultState } from "./types";
 
 // The pure row-derivation layer behind the transcript (see SPEC.md "Rendering model"): folding spans
 // assistant-message boundaries (pi emits one assistant message per tool round), so Virtuoso renders
@@ -36,10 +36,10 @@ export type ActivityStep =
  * so they double as Virtuoso item keys and fold-state cache keys.
  */
 export type ChatRow =
-	| { kind: "user"; id: string; message: UserMessage }
+	| { kind: "user"; id: string; message: UserMessage; attachmentNames?: string[] }
 	| { kind: "system"; id: string; text: string }
 	| { kind: "error"; id: string; text: string }
-	| { kind: "compaction"; id: string; summary: string; tokensBefore: number }
+	| ({ kind: "compaction"; id: string } & CompactionState)
 	| {
 			kind: "retry";
 			id: string;
@@ -129,7 +129,12 @@ export function deriveRows(
 			flushRun();
 			switch (turn.kind) {
 				case "user":
-					rows.push({ kind: "user", id: turn.id, message: turn.message });
+					rows.push({
+						kind: "user",
+						id: turn.id,
+						message: turn.message,
+						...(turn.attachmentNames ? { attachmentNames: turn.attachmentNames } : {}),
+					});
 					break;
 				case "system":
 					rows.push({ kind: "system", id: turn.id, text: turn.text });
@@ -138,12 +143,7 @@ export function deriveRows(
 					rows.push({ kind: "error", id: turn.id, text: turn.text });
 					break;
 				case "compaction":
-					rows.push({
-						kind: "compaction",
-						id: turn.id,
-						summary: turn.summary,
-						tokensBefore: turn.tokensBefore,
-					});
+					rows.push(turn);
 					break;
 				case "retry":
 					rows.push({
