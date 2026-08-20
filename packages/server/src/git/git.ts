@@ -67,15 +67,17 @@ function lines(out: string): string[] {
 		.filter(Boolean);
 }
 
-export function listBranches(projectId: string): BranchList {
+export async function listBranches(projectId: string): Promise<BranchList> {
 	const project = loadProjects().find((p) => p.id === projectId);
 	if (!project) throw new Error(`Unknown project: ${projectId}`);
 	const repo = project.path;
 
-	const local = lines(git(repo, ["for-each-ref", "--format=%(refname:short)", "refs/heads"]).out);
-	const remote = lines(
-		git(repo, ["for-each-ref", "--format=%(refname:short)\t%(symref)", "refs/remotes/origin"]).out,
-	)
+	const [localRefs, remoteRefs] = await Promise.all([
+		gitAsync(repo, ["for-each-ref", "--format=%(refname:short)", "refs/heads"]),
+		gitAsync(repo, ["for-each-ref", "--format=%(refname:short)\t%(symref)", "refs/remotes/origin"]),
+	]);
+	const local = lines(localRefs.out);
+	const remote = lines(remoteRefs.out)
 		.map((line) => line.split("\t"))
 		.filter((parts) => !parts[1])
 		.map((parts) => parts[0] ?? "")
@@ -153,12 +155,12 @@ export function numstatPath(raw: string): string {
 	return arrow ? (arrow[1] ?? raw) : raw;
 }
 
-function numstat(
+async function numstat(
 	worktreePath: string,
 	range: DiffRange,
-): Map<string, { added: number; removed: number }> {
+): Promise<Map<string, { added: number; removed: number }>> {
 	const counts = new Map<string, { added: number; removed: number }>();
-	const out = git(worktreePath, changedFileArgs(range, "--numstat"));
+	const out = await gitAsync(worktreePath, changedFileArgs(range, "--numstat"));
 	if (!out.ok) throw diffFailure(out.err);
 	if (!out.out) return counts;
 	for (const line of out.out.split("\n")) {
@@ -196,13 +198,14 @@ function diffFailure(stderr: string): Error {
 	return new Error(`Could not read the changed files: ${stderr || "git failed"}`);
 }
 
-export function gitStatus(workspaceId: string, scope?: GitDiffScope): GitStatus {
+export async function gitStatus(workspaceId: string, scope?: GitDiffScope): Promise<GitStatus> {
 	const ws = workspace(workspaceId);
-	const range = resolveDiffRange(ws, scope);
+	const range = await resolveDiffRange(ws, scope);
 	const changes: GitFileChange[] = [];
-	const counts = numstat(ws.worktreePath, range);
-
-	const tracked = git(ws.worktreePath, changedFileArgs(range, "--name-status"));
+	const [counts, tracked] = await Promise.all([
+		numstat(ws.worktreePath, range),
+		gitAsync(ws.worktreePath, changedFileArgs(range, "--name-status")),
+	]);
 	if (!tracked.ok) throw diffFailure(tracked.err);
 	if (tracked.out) {
 		for (const line of tracked.out.split("\n")) {
@@ -214,7 +217,11 @@ export function gitStatus(workspaceId: string, scope?: GitDiffScope): GitStatus 
 	}
 
 	if (range.untracked) {
-		const untracked = git(ws.worktreePath, ["ls-files", "--others", "--exclude-standard"]);
+		const untracked = await gitAsync(ws.worktreePath, [
+			"ls-files",
+			"--others",
+			"--exclude-standard",
+		]);
 		if (untracked.ok && untracked.out) {
 			for (const path of untracked.out.split("\n")) {
 				if (!path) continue;
@@ -235,7 +242,19 @@ export function gitStatus(workspaceId: string, scope?: GitDiffScope): GitStatus 
 }
 
 export function readBlobAt(worktreePath: string, ref: string, path: string): string | null {
-	const shown = git(worktreePath, ["show", "--end-of-options", `${ref}:${path}`], { raw: true });
+	return blobFrom(
+		git(worktreePath, ["show", "--end-of-options", `${ref}:${path}`], { raw: true }),
+		ref,
+		path,
+	);
+}
+
+/** One shared read of a `git show ref:path` result, so the sync and async blob reads cannot drift. */
+function blobFrom(
+	shown: { ok: boolean; out: string; err: string },
+	ref: string,
+	path: string,
+): string | null {
 	if (shown.ok) return shown.out;
 	if (!/does not exist in|exists on disk, but not in/.test(shown.err)) {
 		console.warn(`git show ${ref}:${path} failed: ${shown.err || "unknown error"}`);
@@ -243,26 +262,31 @@ export function readBlobAt(worktreePath: string, ref: string, path: string): str
 	return null;
 }
 
-function showBlob(worktreePath: string, ref: string, path: string): string {
-	return readBlobAt(worktreePath, ref, path) ?? "";
+async function showBlob(worktreePath: string, ref: string, path: string): Promise<string> {
+	const shown = await gitAsync(worktreePath, ["show", "--end-of-options", `${ref}:${path}`], {
+		raw: true,
+	});
+	return blobFrom(shown, ref, path) ?? "";
 }
 
-export function gitDiffFile(
+export async function gitDiffFile(
 	workspaceId: string,
 	path: string,
 	scope?: GitDiffScope,
-): { original: string; modified: string } {
+): Promise<{ original: string; modified: string }> {
 	const ws = workspace(workspaceId);
-	const range = resolveDiffRange(ws, scope);
+	const range = await resolveDiffRange(ws, scope);
 
 	const abs = resolve(ws.worktreePath, path);
 	const rel = relative(ws.worktreePath, abs);
 	if (rel.startsWith("..") || isAbsolute(rel)) throw new Error("Path escapes the worktree");
 
-	const original = range.originalRef ? showBlob(ws.worktreePath, range.originalRef, path) : "";
+	const original = range.originalRef
+		? await showBlob(ws.worktreePath, range.originalRef, path)
+		: "";
 
 	if (range.modifiedRef)
-		return { original, modified: showBlob(ws.worktreePath, range.modifiedRef, path) };
+		return { original, modified: await showBlob(ws.worktreePath, range.modifiedRef, path) };
 	let modified = "";
 	try {
 		modified = readFileSync(abs, "utf8");
@@ -292,9 +316,9 @@ function plainText(raw: string): string {
 	return out;
 }
 
-export function listCommits(workspaceId: string): { commits: GitCommit[] } {
+export async function listCommits(workspaceId: string): Promise<{ commits: GitCommit[] }> {
 	const ws = workspace(workspaceId);
-	const log = git(ws.worktreePath, [
+	const log = await gitAsync(ws.worktreePath, [
 		"log",
 		`--max-count=${COMMIT_LIST_MAX}`,
 		`--format=%H%x00%h%x00%cI%x00%an%x00%s`,

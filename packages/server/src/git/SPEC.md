@@ -18,10 +18,18 @@ ref off the workspace-create critical path.
 ## Boundary
 
 - **Owns:** `git(cwd, args)` (spawn git *sync*, capture trimmed stdout/stderr + ok; `opts.raw` keeps
-  stdout byte-exact for file-content reads) and `gitAsync(cwd,
-  args)` (its async twin — `Bun.spawn`, off the event loop, for network-bound ops like `fetch` that must
-  not block the host);
-  **the scope→range resolver** — `resolveDiffRange(ws, scope?)` → `DiffRange` — **the one definition of what
+  stdout byte-exact for file-content reads) and `gitAsync(cwd, args)` (its async twin — `Bun.spawn`, off
+  the event loop, same `raw` option). **Request-path reads run through `gitAsync`** — `resolveDiffRange`,
+  `gitStatus`, `gitDiffFile`, `listCommits`, `listBranches` and the workspace badge fan-out are async, so a
+  multi-spawn read can never freeze the host's single cooperative event loop (profiled at 119–246ms of
+  frozen loop per `workspace.list` before the migration). The sync runner stays for **writers** (their
+  load→mutate→save atomicity depends on not interleaving — `gitCommitPaths`' index snapshot/restore, the
+  `workspaces` writers) and for **micro-plumbing leaf helpers** shared with those writers
+  (`currentBranch`/`tryCurrentBranch`/`resolveDefaultBranch`/`resolveCommitOid`/`readBlobAt`/`gitHeadSha`
+  — single fast local ref reads);
+  **the scope→range resolver** — `resolveDiffRange(ws, scope?)` → `Promise<DiffRange>` (async — and
+  deliberately kept the *single* implementation: its `reviews` consumers went async with it rather than
+  keeping a drift-prone sync twin) — **the one definition of what
   a `GitDiffScope` means** (`branch`: `git diff <merge-base(base, HEAD)>` + untracked, sides = **fork
   point** ↔ worktree — what the workspace changed *since diverging*, so a base that advanced underneath it
   (a fetch moving `origin/main`, upstream work landing) never surfaces as phantom changes; while the base

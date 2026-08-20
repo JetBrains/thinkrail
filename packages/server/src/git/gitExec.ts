@@ -19,6 +19,7 @@ export function git(
 export async function gitAsync(
 	cwd: string,
 	args: string[],
+	opts: { raw?: boolean } = {},
 ): Promise<{ ok: boolean; out: string; err: string }> {
 	const proc = Bun.spawn(["git", "-C", cwd, ...args], { stdout: "pipe", stderr: "pipe" });
 	const [out, err, exitCode] = await Promise.all([
@@ -26,5 +27,5 @@ export async function gitAsync(
 		new Response(proc.stderr).text(),
 		proc.exited,
 	]);
-	return { ok: exitCode === 0, out: out.trim(), err: err.trim() };
+	return { ok: exitCode === 0, out: opts.raw ? out : out.trim(), err: err.trim() };
 }

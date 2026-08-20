@@ -53,15 +53,16 @@ export function settleChangeArtifacts(workspaceId: string): Promise<void> {
 	return (commitQueues.get(workspaceId) ?? Promise.resolve()).catch(() => {});
 }
 
-function runReconcile(workspaceId: string, sessionId: string): void {
+async function runReconcile(workspaceId: string, sessionId: string): Promise<void> {
 	try {
 		const root = getWorkspace(workspaceId).worktreePath;
 		const store = new TodoStore(root, sessionId);
-		reconcileChangeArtifacts(
+		await reconcileChangeArtifacts(
 			store,
 			root,
 			sessionId,
-			() => gitStatus(workspaceId, { kind: "uncommitted" }).changes.map((c) => c.path),
+			async () =>
+				(await gitStatus(workspaceId, { kind: "uncommitted" })).changes.map((c) => c.path),
 			({ title, todoId, paths }) =>
 				gitCommitPaths(workspaceId, commitMessage(title, sessionId, todoId), paths),
 			() => gitHeadSha(workspaceId),
@@ -77,14 +78,14 @@ function hasChangeSet(artifacts: TodoArtifact[] | undefined): boolean {
 	return artifacts?.some((a) => a.kind === "change" || a.kind === "commit") ?? false;
 }
 
-export function reconcileChangeArtifacts(
+export async function reconcileChangeArtifacts(
 	store: TodoStore,
 	root: string,
 	sessionId: string,
-	getChangedPaths: () => string[],
+	getChangedPaths: () => Promise<string[]>,
 	commit?: CommitWindow,
 	getHead: () => string | null = () => null,
-): void {
+): Promise<void> {
 	const plan = store.read();
 	const baselines = readBaselines(root, sessionId);
 	let baselinesDirty = false;
@@ -94,8 +95,8 @@ export function reconcileChangeArtifacts(
 		baselinesDirty = true;
 	};
 	let changed: string[] | null = null;
-	const currentChanged = (): string[] =>
-		(changed ??= getChangedPaths().filter((p) => !isAppStatePath(p)));
+	const currentChanged = async (): Promise<string[]> =>
+		(changed ??= (await getChangedPaths()).filter((p) => !isAppStatePath(p)));
 	let othersOpen: boolean | null = null;
 	const otherChatWorking = (): boolean => (othersOpen ??= otherSessionWindows(root, sessionId));
 
@@ -109,7 +110,7 @@ export function reconcileChangeArtifacts(
 			if (!baselines[todo.id]) {
 				const shared = otherChatWorking();
 				baselines[todo.id] = {
-					paths: currentChanged(),
+					paths: await currentChanged(),
 					head: getHead(),
 					...(shared && { shared }),
 				};
@@ -126,7 +127,7 @@ export function reconcileChangeArtifacts(
 		dropBaseline(todo.id);
 		const existing = todo.artifacts ?? [];
 		if (hasChangeSet(existing) && base === undefined) continue;
-		const now = currentChanged();
+		const now = await currentChanged();
 		const deltaPaths = base ? now.filter((p) => !base.paths.includes(p)) : now;
 		if (deltaPaths.length === 0) continue;
 		const preserved = existing.filter((a) => a.kind !== "change" && a.kind !== "commit");
