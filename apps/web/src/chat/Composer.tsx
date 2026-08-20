@@ -53,6 +53,13 @@ interface PendingImage extends AttachedImage {
 	name: string;
 }
 
+/** A refused pick, rendered as a dismissible error chip: the file's name plus why it couldn't attach. */
+interface AttachError {
+	id: string;
+	name: string;
+	reason: string;
+}
+
 /** The token (non-whitespace run) ending at the caret — drives `@`-mention completion. */
 function activeToken(value: string, caret: number): { token: string; start: number } {
 	const match = /(\S+)$/.exec(value.slice(0, caret));
@@ -248,8 +255,9 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	const [pendingImages, setPendingImages] = useState(0);
 	// Files that could NOT be attached (undecodable + provider-unsupported type, or over the request-wide
 	// image budget) — surfaced as dismissible error chips in the attachment strip; silently dropping a
-	// pick would read as a successful attach.
-	const [attachErrors, setAttachErrors] = useState<{ id: string; text: string }[]>([]);
+	// pick would read as a successful attach. Name and reason stay separate so the chip can truncate the
+	// (user-controlled) filename while keeping the reason visible.
+	const [attachErrors, setAttachErrors] = useState<AttachError[]>([]);
 	const [mentionActiveIndex, setMentionActiveIndex] = useState(0);
 	const [mentionDismissed, setMentionDismissed] = useState(false);
 	// The plain `↑`-recall session: `null` when inactive; otherwise an index into `recentPrompts` (0 =
@@ -462,22 +470,16 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 			// over-budget turn is rejected forever (the host guard heals history, but never sending is cheaper).
 			let used = imagesRef.current.reduce((sum, p) => sum + p.content.data.length, 0);
 			const additions: PendingImage[] = [];
-			const errors: { id: string; text: string }[] = [];
+			const errors: AttachError[] = [];
 			settled.forEach((result, i) => {
 				const name = picked[i]?.name || "image";
 				if (result.status !== "fulfilled" || result.value === null) {
-					errors.push({
-						id: crypto.randomUUID(),
-						text: `Couldn't attach ${name} — unsupported image format`,
-					});
+					errors.push({ id: crypto.randomUUID(), name, reason: "unsupported image format" });
 					return;
 				}
 				const size = result.value.content.data.length;
 				if (used + size > REQUEST_IMAGE_BASE64_BUDGET) {
-					errors.push({
-						id: crypto.randomUUID(),
-						text: `Couldn't attach ${name} — message image limit reached`,
-					});
+					errors.push({ id: crypto.randomUUID(), name, reason: "message image limit reached" });
 					return;
 				}
 				used += size;
@@ -725,7 +727,11 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							data-testid="composer-image-error"
 							tone="error"
 							icon={false}
-							label={err.text}
+							// The filename truncates, the reason never does — the reason is the only thing the
+							// user can act on, and a phone has no tooltip to fall back to.
+							title={`Couldn't attach ${err.name} — ${err.reason}`}
+							label={`Couldn't attach ${err.name}`}
+							meta={`— ${err.reason}`}
 							trailing={
 								<button
 									type="button"
@@ -745,12 +751,9 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							data-width={img.width}
 							data-height={img.height}
 							data-mime={img.content.mimeType}
-							label={
-								<>
-									{img.name}
-									{img.width && img.height ? ` · ${img.width}×${img.height}` : null}
-								</>
-							}
+							title={img.name}
+							label={img.name}
+							meta={img.width && img.height ? ` · ${img.width}×${img.height}` : undefined}
 							trailing={
 								<button
 									type="button"

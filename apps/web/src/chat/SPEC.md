@@ -225,7 +225,13 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   message. The pending chip shows `filename · W×H` (the picked file's name; mime text appears only in the
   hydrated-turn fallback when no name survived) (`composer-image` testid +
   `data-width`/`data-height`/`data-mime` — the `e2e/composer-images.spec.ts` hooks; both chip skins
-  share `FileChip.tsx`) — and `openHistory` on its
+  share `FileChip.tsx`). **Chips are bounded, and the label is the only part that gives way**: a chip is
+  `max-w-full` and truncates its `label`, while the icon, the `meta` suffix and the trailing action are
+  shrink-free — filenames are user-controlled, and an unbounded chip would push its own Remove button
+  off a phone viewport (and be clipped by the transcript scroller's `overflow-x-hidden`). So whatever
+  must stay readable at any width goes in `meta`, not `label`: the `· W×H` size, and an attach error's
+  reason (its filename truncates — the reason is what the user can act on, and a phone has no tooltip
+  to fall back to) — and `openHistory` on its
   imperative handle → `onHistoryOpen`) plus its props-driven **slash-completion
   primitive** (filter/menu/caret + Up/Down, Enter/Tab, Escape), reused by `panels/NewWorkspaceDialog` so
   the two inputs cannot drift; `HistoryOverlay` (the history-recall/search overlay `Composer` opens —

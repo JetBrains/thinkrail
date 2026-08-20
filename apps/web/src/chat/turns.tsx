@@ -140,7 +140,9 @@ function AttachmentChip({ label, img }: { label: string; img: ImageContent }) {
 		<>
 			<FileChip
 				data-testid="chat-attachment-chip"
-				title="View image"
+				// The full label as the tooltip, not the action ("View image"): the chip truncates a long
+				// filename, and the aria-label below already carries the action for a screen reader.
+				title={label}
 				// The chip text is the accessible name's base; the aria-label adds the action so a screen
 				// reader hears "View attachment image.png", not a bare mime type on the hydrated fallback.
 				aria-label={`View attachment ${label}`}
