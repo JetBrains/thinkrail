@@ -7,13 +7,7 @@
 	},
 	"files": {
 		"ignoreUnknown": true,
-		"includes": [
-			"**",
-			"!designs",
-			"!**/.claude",
-			"!apps/web/src/styles/generated",
-			"!apps/website/src/blog/*-template.html"
-		]
+		"includes": ["**", "!designs", "!**/.claude", "!apps/web/src/styles/generated"]
 	},
 	"formatter": {
 		"enabled": true,
@@ -35,6 +29,11 @@
 	"css": {
 		"parser": {
 			"tailwindDirectives": true
+		}
+	},
+	"html": {
+		"parser": {
+			"interpolation": true
 		}
 	},
 	"assist": {
