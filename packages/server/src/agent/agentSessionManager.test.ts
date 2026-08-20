@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, expect, jest, test } from "bun:test";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import {
 	InMemoryCredentialStore,
 	type Model,
@@ -530,6 +530,34 @@ test("listSessions reports a workspace's live sessions; getSessionMessages retur
 	removeSession(s.sessionId);
 });
 
+test("listSessions ignores a live session's transient physical rewrite but stays strict for detached files", async () => {
+	const cwd = tmpCwd("trpi-live-rewrite-");
+	const liveManager = SessionManager.create(cwd);
+	setSessionManagerFactory(() => liveManager);
+	try {
+		const s = await createSession({
+			cwd,
+			workspaceId: "ws-live-rewrite",
+			model: toWireModel(fauxA.getModel()),
+		});
+		const sessionFile = liveManager.getSessionFile();
+		if (!sessionFile) throw new Error("disk-backed live session has no file path");
+		mkdirSync(dirname(sessionFile), { recursive: true });
+		// Model pi's synchronous truncate→rewrite window at its worst point: the registered runtime is still
+		// authoritative, while its exact physical path temporarily has no readable header.
+		writeFileSync(sessionFile, "");
+		expect((await listSessions("ws-live-rewrite", cwd)).map((row) => row.sessionId)).toContain(
+			s.sessionId,
+		);
+
+		removeSession(s.sessionId);
+		// Once detached, the same malformed file is no longer exempt: absence must never be inferred from it.
+		await expect(listSessions("ws-live-rewrite", cwd)).rejects.toThrow("unreadable or malformed");
+	} finally {
+		setSessionManagerFactory(() => SessionManager.inMemory());
+	}
+});
+
 test("disk-reopen: a disposed session is re-listed from disk and re-opened with its transcript (restart survival)", async () => {
 	// Disk-backed for this test (the others use in-memory): persist a real session file, then drop it from RAM.
 	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
@@ -574,6 +602,34 @@ test("disk-reopen: a disposed session is re-listed from disk and re-opened with 
 		).toHaveLength(1);
 		removeSession(s.sessionId);
 	} finally {
+		setSessionManagerFactory(() => SessionManager.inMemory());
+	}
+});
+
+test("deleteSession removes an empty live chat whose reserved transcript path is not materialized", async () => {
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	let trashCalls = 0;
+	setTrashImplementationForTests(async () => {
+		trashCalls++;
+	});
+	let sessionId: string | undefined;
+	try {
+		const cwd = tmpCwd("trpi-delete-empty-");
+		const session = await createSession({
+			cwd,
+			workspaceId: "ws-delete-empty",
+			model: toWireModel(fauxA.getModel()),
+		});
+		sessionId = session.sessionId;
+		const info = (await SessionManager.list(cwd)).find((item) => item.id === session.sessionId);
+		if (info) rmSync(info.path, { force: true });
+
+		await deleteSession(session.sessionId, "ws-delete-empty", cwd);
+		expect(hasSession(session.sessionId)).toBe(false);
+		expect(trashCalls).toBe(0);
+	} finally {
+		if (sessionId && hasSession(sessionId)) removeSession(sessionId);
+		setTrashImplementationForTests(undefined);
 		setSessionManagerFactory(() => SessionManager.inMemory());
 	}
 });

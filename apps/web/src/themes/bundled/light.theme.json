@@ -7,9 +7,10 @@
 	"appearance": "light",
 	"contrast": "normal",
 	"colors": {
-		"accent": "#6550ff",
+		"accent": "#2e7d16",
+		"accentHover": "#25640f",
 		"onAccent": "#ffffff",
-		"bubbleAccent": "#6b57ff",
+		"bubbleAccent": "#2e7d16",
 		"background": "#f2f3f5",
 		"header": "#ffffff",
 		"content": "#ffffff",

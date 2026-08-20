@@ -34,7 +34,19 @@
 			]
 		},
 		"brand": {
-			"$ref": "interface"
+			"note": "Orbitron ships LATIN ONLY, and `brand.hero` renders a project's own name — so the next fallback is the interface face (Geist covers cyrillic/cyrillic-ext/latin-ext/vietnamese and is already bundled), not a system font. A non-Latin project name then falls back within our own type system instead of to whatever the OS supplies.",
+			"stack": [
+				"Orbitron Variable",
+				"Orbitron",
+				"Geist Variable",
+				"Geist",
+				"-apple-system",
+				"BlinkMacSystemFont",
+				"Segoe UI",
+				"sans-serif"
+			],
+			"kind": "proportional",
+			"selfHosted": ["@fontsource-variable/orbitron"]
 		}
 	},
 	"fontWeights": {
@@ -42,7 +54,7 @@
 		"regular": 400,
 		"medium": 500,
 		"semibold": 600,
-		"brand": 800
+		"brand": 400
 	},
 	"fontSizes": {
 		"s10": 10,

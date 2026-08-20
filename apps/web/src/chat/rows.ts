@@ -1,7 +1,7 @@
 import type { UserMessage } from "@thinkrail/contracts";
 import { resolveProminence } from "./toolRegistry";
 import { strArg } from "./tools/toolHelpers";
-import type { ChatTurn, ToolResultState } from "./types";
+import type { ChatTurn, CompactionState, ToolResultState } from "./types";
 
 // The pure row-derivation layer behind the transcript (see SPEC.md "Rendering model"): folding spans
 // assistant-message boundaries (pi emits one assistant message per tool round), so Virtuoso renders
@@ -39,6 +39,7 @@ export type ChatRow =
 	| { kind: "user"; id: string; message: UserMessage }
 	| { kind: "system"; id: string; text: string }
 	| { kind: "error"; id: string; text: string }
+	| ({ kind: "compaction"; id: string } & CompactionState)
 	| {
 			kind: "retry";
 			id: string;
@@ -135,6 +136,9 @@ export function deriveRows(
 					break;
 				case "error":
 					rows.push({ kind: "error", id: turn.id, text: turn.text });
+					break;
+				case "compaction":
+					rows.push(turn);
 					break;
 				case "retry":
 					rows.push({

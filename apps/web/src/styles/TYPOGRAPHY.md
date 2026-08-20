@@ -44,8 +44,8 @@ both markdown surfaces, the `<body>` base).
 
 | Group | Ids |
 |---|---|
-| `fontFamilies` | `interface` (Geist Variable, all proportional UI + reading text) · `code` (JetBrains Mono Variable, code only) · `brand` → **`{ "$ref": "interface" }`** (the brand display role today *is* the interface face; swapping in a licensed face means replacing this one alias) |
-| `fontWeights` | `light` 370 · `regular` 400 · `medium` 500 · `semibold` 600 · `brand` 800 |
+| `fontFamilies` | `interface` (Geist Variable, all proportional UI + reading text) · `code` (JetBrains Mono Variable, code only) · `brand` → **Orbitron Variable** (self-hosted `@fontsource-variable/orbitron`, a distinct display face for the brand role — `wordmark` + `hero`; it was formerly a `$ref` to `interface`). Orbitron is **latin-only** and `brand.hero` renders a project's own name, so the stack falls back to the *interface* face before any system font — a non-Latin name lands on Geist (cyrillic/latin-ext/vietnamese, already bundled) rather than on whatever the OS supplies |
+| `fontWeights` | `light` 370 · `regular` 400 · `medium` 500 · `semibold` 600 · `brand` 400 |
 | `fontSizes` | `s10` `s11` `s12` `s13` `s14` `s16` `s18` `s20` `s24` `s44` (px) |
 | `lineHeights` | `compact` 1.25 · `metadata` 1.3333 (12px→16px, 18px→24px) · `ui` 1.4286 (14px→20px) · `code` 1.5 · `relaxed` 1.5385 (13px→20px) · `default` 1.6 |
 | `letterSpacings` | `normal` · `loose` 0.02em · `wide` 0.05em · `widest` 0.1em · `brand` 0.5px |
@@ -236,12 +236,11 @@ those are proportional. Validation enforces this: a monospace family on a non-co
 ## Weight policy
 
 - **370** (`light`) — ordinary UI, body, entity, metadata and status text (interface family).
-- **400** (`regular`) — monospace / code text only (`code.*`).
+- **400** (`regular` / `brand`) — monospace / code text (`code.*`) and brand display text (`brand.*`).
 - **500** — buttons (`ui.action`), in-page section titles, compact titles, inline emphasis
   (`ui.emphasis`), uppercase labels (`ui.eyebrow`/`labelPill`), chat prose h4–h6 and `strong`.
 - **600** — dialog titles, card titles, alert titles, every `heading.*`, chat prose h1–h3, document
   prose h1–h6 and table headers.
-- **800** — brand only.
 
 Disabled control colors come from `control-disabled-bg` / `control-disabled-text`; disabled non-control
 text uses `text-disabled`. Typography does not encode disabled state, and controls do not use opacity to

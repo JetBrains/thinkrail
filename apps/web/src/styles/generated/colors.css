@@ -1,5 +1,5 @@
 /*
- * GENERATED — do not edit. Source: `src/styles/colors.json` (v1.0.0).
+ * GENERATED — do not edit. Source: `src/styles/colors.json` (v1.1.0).
  * Regenerate with `bun run colors:generate`; `colors:check` fails when this file is stale.
  *
  * The semantic roles, then the Tailwind utility map. The palette they read is written to the
@@ -23,6 +23,7 @@
 	--control-bg-hovered: var(--hover);
 	--control-bg-selected: var(--hover);
 	--control-primary-bg: var(--accent);
+	--control-primary-bg-hovered: var(--accent-hover); /* the primary button's hover fill — its own manifest key so a theme owns the hover step instead of the button fading with an opacity utility */
 	--control-primary-text: var(--on-accent);
 	--control-border-default: var(--border);
 	--control-border-active: var(--border-strong);
@@ -88,6 +89,7 @@
 	--color-control-bg-hovered: var(--control-bg-hovered);
 	--color-control-bg-selected: var(--control-bg-selected);
 	--color-control-primary-bg: var(--control-primary-bg);
+	--color-control-primary-bg-hovered: var(--control-primary-bg-hovered);
 	--color-control-primary-text: var(--control-primary-text);
 	--color-control-border-default: var(--control-border-default);
 	--color-control-border-active: var(--control-border-active);

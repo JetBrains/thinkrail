@@ -32,15 +32,15 @@ import { sendReviewComment } from "./reviewSend";
 import { SendAllReviewsButton, SendReviewButton } from "./SendReviewButton";
 
 /**
- * The Review sidebar (RightPanel's Review tab) — ONE screen, an ACCORDION of the files still in
- * review (see panels/SPEC.md): each row a path + its comment counts; clicking a row unfolds its
- * comments in place AND opens the file's tab (collapsing is just a second click — it navigates
- * nowhere). The section whose file is the active center tab auto-expands (RightPanel also flips to
- * the Review tab on such an activation); an expansion never auto-collapses — folding is the user's.
- * Batch send mirrors the pane toolbars: an expanded section's strip carries the same per-file
- * `Send review (N)` (drafts-only, `SendReviewButton`) + the Done finisher, the panel header a
- * `Send all (N)` across every file — all over the shared `reviewSend` batch path. Hydration is owned
- * by `RightPanel` (`useWorkspaceReview`); every mutation converges on the store's `review.changed` fold.
+ * The side-only Review tool — ONE screen, an ACCORDION of the files still in review (see
+ * panels/SPEC.md): each row a path + its comment counts; clicking a row unfolds its comments in place
+ * AND opens the file's tab (collapsing is just a second click — it navigates nowhere). The section whose
+ * file is the active center tab auto-expands, and `WorkspaceWorkbench` reveals Review for a newly active
+ * reviewed surface; an expansion never auto-collapses — folding is the user's. Batch send mirrors the pane
+ * toolbars: an expanded section's strip carries the same per-file `Send review (N)` (drafts-only,
+ * `SendReviewButton`) + the Done finisher, the tool header a `Send all (N)` across every file — all over
+ * the shared `reviewSend` batch path. Hydration is owned by `WorkspaceWorkbench`
+ * (`useWorkspaceReview`); every mutation converges on the store's `review.changed` fold.
  */
 export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; failed: boolean }) {
 	const snapshot = useAppStore((s) => s.reviewsByWorkspace[workspaceId]);
@@ -48,8 +48,8 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 	const [sending, setSending] = useState(false);
 	const [clearing, setClearing] = useState(false);
 	// The unfolded sections, keyed like `fileSummaries` rows (`null` = the whole-change-set bucket).
-	// Seeded with the active reviewed file: the panel often MOUNTS on it (RightPanel auto-opens the
-	// Review tab on such an activation), and the adjust-on-change below only sees later changes.
+	// Seeded with the active reviewed file: the panel often mounts as the workbench reveals Review for
+	// that activation, and the adjust-on-change below only sees later changes.
 	const [expanded, setExpanded] = useState<ReadonlySet<string | null>>(
 		() => new Set(activeReviewedPath === null ? [] : [activeReviewedPath]),
 	);
@@ -339,7 +339,7 @@ function FileSection({
 }
 
 /** The active center tab's path when it is a file/diff still carrying unresolved comments — what the
- * panel's "auto" level follows (and what RightPanel's auto-flip keys on). */
+ * panel follows and what the workbench's Review reveal keys on. */
 export function selectActiveReviewedPath(
 	s: {
 		activeWorkspaceId: string | null;

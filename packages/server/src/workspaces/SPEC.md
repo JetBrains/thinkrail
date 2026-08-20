@@ -30,7 +30,10 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   idempotent, cross-project cwd reuse is rejected; persist + emit `created` with `kind: "external"`, a
   directory-basename display name, `renamed: true`, and the repo default as its initial review target —
   **no Git or checkout mutation**), `createWorkspace` (**async**; off `baseRef` when given — branched with `worktree add -b`, never a detached
-  remote checkout; off the repo `HEAD` otherwise; **remote-ref freshness is prefetched off this critical
+  remote checkout, and **`--no-track`**: a remote-tracking base would otherwise become the new branch's
+  upstream (git's `autoSetupMerge` default), aiming the workspace terminal's `git push`/`git pull` at the
+  *base* branch — the workspace branch's upstream is the user's to set on first push, never ours;
+  off the repo `HEAD` otherwise; **remote-ref freshness is prefetched off this critical
   path** — the New-Workspace dialog `git.prefetch`es the base in the background, so create only `git
   fetch`es as a cheap fallback when the local remote-tracking ref is missing entirely — that fallback runs
   via `gitAsync` (network must not block the event loop) with the branch passed after `--`;
@@ -66,8 +69,12 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   marking the name deliberate so the auto-namer never touches it again — what a user rename and the
   agentic auto-rename want; the host's **provisional naive rename** passes `lock: false` to rename name +
   branch while leaving `renamed` unset, so the settled-turn agentic pass still refines it),
-  `listWorkspaces` (with diff stats), `listWorkspaceRecords` (registry records without per-workspace git
-  diffStats — for read-only paths like history scope mapping that must not block on git spawns),
+  `listWorkspaces(projectId, { includeDiffStats? })` (complete authoritative membership/order after Default
+  ensure + user-owned folder-truth reconciliation; diff stats default **on** for compatibility, while
+  `includeDiffStats: false` skips the per-workspace `git diff --shortstat` fan-out for cold navigation —
+  automatic reload on a shared host must not synchronously diff every worktree), `listWorkspaceRecords`
+  (raw registry records without Default ensure, folder-truth reconciliation, or per-workspace git diffStats —
+  for internal read-only paths like history scope mapping that must not block on git spawns),
   `workspaceDiffStats`, **`setWorkspaceDiffBase(id, ref | null)`** — re-point the ref this workspace's diff is
   measured against (`Workspace.diffBase`), `null` (or the creation base itself, which would be a redundant
   override) clearing it; persists + **broadcasts the updated record** so every client converges on the push,
@@ -84,8 +91,8 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   against; collapsing them would make a re-pointed target lie about provenance (the `branch · from
   baseBranch` receipt). Every read of "the base" resolves through the `git` module, never inline —
   `diffStats` composes the git module's **branch-scope range** (`resolveDiffRange` +
-  `changedFileArgs(…, "--shortstat")`), so the rail badge measures exactly what the Changes panel shows
-  (merge-base semantics included — upstream commits on the base never inflate the badge) and reaches git
+  `changedFileArgs(…, "--shortstat")`), so the workspace aggregate measures exactly what the Changes panel
+  shows (merge-base semantics included — upstream commits on the base never inflate it) and reaches git
   bracketed by `--end-of-options` … `--` like every other rev this app passes. `diffStats` yields **no stats at all** (logged) when git couldn't
   answer, rather than a fabricated `+0 −0` — a failed read must not paint a dirty worktree as clean; the
   `Workspace.diffStats` field is simply absent, and `workspaceDiffStats` rejects,

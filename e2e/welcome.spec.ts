@@ -11,7 +11,7 @@ import {
 } from "./fixtures/app";
 import { E2E_FIXTURE_REPO, E2E_PLAIN_DIR } from "./fixtures/paths";
 
-// The first-touch Welcome screen. It replaces the center/right/terminal surface until a workspace is
+// The first-touch Welcome screen. It replaces the workspace workbench until a workspace is
 // active — and with a project shown it is THE MODE FORK: "Start building" (isolated worktree) always
 // sits beside "Work in project folder" (the built-in Default workspace), so the two working modes are a
 // visible choice, not a hidden default. Opening a project lands here (no auto-enter). The hero heading is
@@ -152,7 +152,7 @@ test("clicking Sign in (Settings) opens the in-app login dialog, and Cancel dism
 	await expect(dialog).toHaveCount(0);
 });
 
-test("Settings → Providers offers JetBrains AI, guiding install when the central CLI is missing", async ({
+test("Settings → Providers offers JetBrains AI with host-authoritative Central guidance", async ({
 	page,
 }) => {
 	await openAppFresh(page);
@@ -163,12 +163,11 @@ test("Settings → Providers offers JetBrains AI, guiding install when the centr
 	await expect(card).toBeVisible();
 	await expect(card).toContainText("JetBrains AI");
 
-	// The card's state depends on the host's central CLI (the e2e host has none → install guidance;
-	// a dev machine with it wired/ready shows Disconnect/Connect). Accept whichever is truthful.
+	// Branch on the host's real Central state; 00-jbcentral.spec covers each transition.
 	if ((await card.getAttribute("data-installed")) === "false") {
 		await expect(page.getByTestId("jetbrains-needs-install")).toBeVisible();
 		await expect(page.getByTestId("jetbrains-connect")).toHaveCount(0);
-	} else if ((await card.getAttribute("data-wired")) === "true") {
+	} else if ((await card.getAttribute("data-configured")) === "true") {
 		await expect(page.getByTestId("jetbrains-disconnect")).toBeVisible();
 	} else {
 		await expect(page.getByTestId("jetbrains-connect")).toBeVisible();

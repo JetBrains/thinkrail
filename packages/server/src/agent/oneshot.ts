@@ -7,7 +7,8 @@
  * model's auth itself (OAuth refresh included), so there is no separate auth-resolution step here.
  */
 import type { Api, Context, Model } from "@earendil-works/pi-ai";
-import { getPiRuntime, settledAvailableModels } from "./piRuntime";
+import { usePiRuntime } from "./agentSessionManager";
+import { type AvailableModelsRuntime, settledAvailableModels } from "./piRuntime";
 
 /** Which model a one-shot task reaches for. `cheap` = small/fast; `default` = first authenticated. */
 export type ModelTier = "cheap" | "default";
@@ -56,20 +57,26 @@ const CHEAP_MODELS: ReadonlyArray<readonly [provider: string, idPrefix: string]>
  * Reads the same settled snapshot the picker does (`settledAvailableModels`) — a background one-shot must
  * not hang on pi's unsignalled availability fan-out either.
  */
-export async function pickModel(tier: ModelTier = "cheap"): Promise<Model<Api> | null> {
-	const available = settledAvailableModels(await getPiRuntime());
+function pickModelFromRuntime(runtime: AvailableModelsRuntime, tier: ModelTier): Model<Api> | null {
+	const available = settledAvailableModels(runtime);
 	if (available.length === 0) return null;
 	if (tier === "default") return available[0] ?? null;
 	for (const [provider, prefix] of CHEAP_MODELS) {
-		const hit = available.find((m) => m.provider === provider && m.id.startsWith(prefix));
+		const hit = available.find(
+			(model) => model.provider === provider && model.id.startsWith(prefix),
+		);
 		if (hit) return hit;
 	}
 	return (
-		[...available].sort((a, b) => {
-			const byCost = a.cost.input + a.cost.output - (b.cost.input + b.cost.output);
-			return byCost !== 0 ? byCost : a.id.localeCompare(b.id);
+		[...available].sort((left, right) => {
+			const byCost = left.cost.input + left.cost.output - (right.cost.input + right.cost.output);
+			return byCost !== 0 ? byCost : left.id.localeCompare(right.id);
 		})[0] ?? null
 	);
+}
+
+export function pickModel(tier: ModelTier = "cheap"): Promise<Model<Api> | null> {
+	return usePiRuntime((runtime) => pickModelFromRuntime(runtime, tier));
 }
 
 /**
@@ -77,25 +84,26 @@ export async function pickModel(tier: ModelTier = "cheap"): Promise<Model<Api> |
  * provider's error message when auth resolution / the request fails. Callers that must not fail (the
  * assist tasks) wrap this and fall back.
  */
-export async function completeOnce(req: OneShotRequest): Promise<OneShotResult> {
-	const runtime = await getPiRuntime();
-	const model = await pickModel(req.tier);
-	if (!model) throw new Error("no-model");
+export function completeOnce(req: OneShotRequest): Promise<OneShotResult> {
+	return usePiRuntime(async (runtime) => {
+		const model = pickModelFromRuntime(runtime, req.tier ?? "cheap");
+		if (!model) throw new Error("no-model");
 
-	const context: Context = {
-		...(req.system ? { systemPrompt: req.system } : {}),
-		messages: [{ role: "user", content: req.prompt, timestamp: Date.now() }],
-	};
-	const message = await runtime.completeSimple(model, context, {
-		maxTokens: req.maxTokens ?? 256,
-		temperature: req.temperature ?? 0.2,
-		...(req.signal ? { signal: req.signal } : {}),
+		const context: Context = {
+			...(req.system ? { systemPrompt: req.system } : {}),
+			messages: [{ role: "user", content: req.prompt, timestamp: Date.now() }],
+		};
+		const message = await runtime.completeSimple(model, context, {
+			maxTokens: req.maxTokens ?? 256,
+			temperature: req.temperature ?? 0.2,
+			...(req.signal ? { signal: req.signal } : {}),
+		});
+
+		const text = message.content
+			.filter((content) => content.type === "text")
+			.map((content) => content.text)
+			.join("")
+			.trim();
+		return { text, model: { provider: String(model.provider), id: model.id } };
 	});
-
-	const text = message.content
-		.filter((c) => c.type === "text")
-		.map((c) => c.text)
-		.join("")
-		.trim();
-	return { text, model: { provider: String(model.provider), id: model.id } };
 }

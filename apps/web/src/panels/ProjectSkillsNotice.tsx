@@ -77,7 +77,7 @@ export function ProjectSkillsNotice({ projectId }: { projectId: string }) {
 		<div
 			data-testid="project-skills-notice"
 			data-state={isPending ? "pending" : "untrusted"}
-			className="mt-lg flex w-full max-w-[560px] items-center gap-sm rounded-[var(--radius-md)] border border-border-default border-l-[3px] border-l-feedback-warning bg-feedback-warning-subtle px-md py-sm text-left"
+			className="mt-lg flex w-full max-w-[560px] items-center gap-sm rounded-[var(--radius-sm)] border border-border-default border-l-[3px] border-l-feedback-warning bg-feedback-warning-subtle px-md py-sm text-left"
 		>
 			<TriangleAlert className="size-4 shrink-0 text-feedback-warning" />
 			<span className="min-w-0 flex-1 tr-text-ui text-text-default">

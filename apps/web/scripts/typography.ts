@@ -143,10 +143,10 @@ const FONTS_HEADER = (version: string) => `/*
  * font CDN satisfied none of it — it left an air-gapped host in system faces, put first paint behind a
  * third party, and contacted the CDN on every load despite the app's analytics opt-out.
  *
- * Both packages are VARIABLE (wght 100–900 / 100–800) with real italics, which is what makes the type
- * scale honest: the brand weight (800) and markdown \`<em>\` are real faces, not the browser's
- * synthetic bold/oblique. Every unicode subset stays declared — each is its own \`@font-face\` with a
- * \`unicode-range\`, so a document downloads only the ranges it renders.
+ * The bundled faces are VARIABLE fonts (the interface + code families carry real italics), which is
+ * what makes the type scale honest: every weight and markdown \`<em>\` are real faces, not the
+ * browser's synthetic bold/oblique. Every unicode subset stays declared — each is its own
+ * \`@font-face\` with a \`unicode-range\`, so a document downloads only the ranges it renders.
  */
 `;
 

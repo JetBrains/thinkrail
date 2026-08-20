@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { activeWorktreeRow, openWorkspaceChat, waitForDone, worktreeRows } from "./fixtures/app";
+import { activeWorktreeRow, openWorkspaceChat, waitForDone } from "./fixtures/app";
 
 // Tagged @agent (see agent.live.spec.ts): drives a REAL pi agent against the seeded prompt-template
 // fixtures (`e2e/fixtures/templates.ts`). The no-agent `templates-compose.spec.ts` already covers the
@@ -77,15 +77,13 @@ test("a typed-through /name command is expanded by pi itself, not the composer's
 	await waitForDone(page);
 
 	// Reload to inspect what pi actually PERSISTED, not the client's optimistic echo: a fresh page has
-	// no in-memory runtime for this session, so `CenterTabs`'s hydrate-on-connect effect refetches
+	// no in-memory runtime for this session, so `WorkspaceWorkbench`'s hydrate-on-connect effect refetches
 	// `session.getMessages` and rebuilds the transcript from pi's own message list
 	// (`messagesToRuntime`) — the same "come back later" path `history-jump.spec.ts`/
-	// `history-search.spec.ts` use to inspect a session's durable record. A reload doesn't auto-restore
-	// the active project/workspace, so re-pick both.
+	// `history-search.spec.ts` use to inspect a session's durable record. The fragment restores the
+	// workspace and exact chat without rail clicks.
 	await page.reload();
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
-	await page.getByTestId("project-item").first().click();
-	await worktreeRows(page).first().click();
 	await expect(activeWorktreeRow(page)).toHaveCount(1);
 
 	// The session is still live in the host's memory (never closed), so it auto-restores as the active

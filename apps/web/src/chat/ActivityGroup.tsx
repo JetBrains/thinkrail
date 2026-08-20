@@ -214,7 +214,7 @@ function StepHeader({
 			aria-expanded={expanded}
 			onClick={onToggle}
 			// Mobile-first hit area: ~32px touch rows, compact 22px density from `sm:` up.
-			className="flex w-full cursor-pointer select-none items-center gap-xs rounded-[var(--radius-sm)] px-xs py-sm text-left outline-none hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary sm:py-[3px]"
+			className="flex w-full cursor-pointer select-none items-center gap-xs rounded-[var(--radius-sm)] px-xs py-sm text-left outline-none hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary sm:py-0.5"
 		>
 			{icon}
 			<span className="shrink-0 text-text-default">{name}</span>

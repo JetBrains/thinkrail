@@ -78,10 +78,25 @@ test("status tracks the turn named by currentAssistantId, not merely the last tu
 	expect(streamStatus(turns, "a2")).toEqual({ phase: "writing" });
 });
 
+test("a trailing running compaction outranks assistant fallbacks — the footer names the beat", () => {
+	const turns: ChatTurn[] = [
+		assistant("a1", [{ type: "toolCall", id: "t1", name: "bash", arguments: {} }]),
+		{ kind: "compaction", id: "c1", status: "running" },
+	];
+	expect(streamStatus(turns, null)).toEqual({ phase: "compacting" });
+	// …and a settled notice releases the phase back to the normal fallbacks.
+	const settled: ChatTurn[] = [
+		assistant("a1", [{ type: "toolCall", id: "t1", name: "bash", arguments: {} }]),
+		{ kind: "compaction", id: "c1", status: "done" },
+	];
+	expect(streamStatus(settled, null)).toEqual({ phase: "working" });
+});
+
 test("phaseLabel names every phase (and falls back to a generic tool label)", () => {
 	expect(phaseLabel({ phase: "working" })).toBe("Working…");
 	expect(phaseLabel({ phase: "thinking" })).toBe("Thinking…");
 	expect(phaseLabel({ phase: "writing" })).toBe("Writing…");
 	expect(phaseLabel({ phase: "running-tool", toolName: "bash" })).toBe("Running bash…");
 	expect(phaseLabel({ phase: "running-tool" })).toBe("Running tool…");
+	expect(phaseLabel({ phase: "compacting" })).toBe("Compacting context…");
 });

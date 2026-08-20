@@ -56,7 +56,10 @@ registration runs once when the chat module mounts. Unregistered tools fall back
 - **`visualize/`** — `VisualizationCard` dispatches on `args.type` to `DiagramCard` (mermaid → themed
   SVG via the **lazy-loaded** `mermaid`, source fallback on parse error) and `ComparisonCard` (option
   cards with pros/cons + `recommended` highlight); shared `MermaidView` re-renders on `[data-theme]`
-  change and offers a full-screen pan/zoom Dialog. Registered **primary + `defaultExpanded`** — a
+  change, offers a full-screen pan/zoom Dialog, and takes an optional `fallback` node shown while the
+  SVG is pending (default: a "Rendering…" line). It is also consumed by the **parent `Markdown`
+  primitive** for fenced ```mermaid blocks — the `mermaid` *package* import stays lazy and confined to
+  `visualize/mermaid.ts`. Registered **primary + `defaultExpanded`** — a
   visualization is output *for the user*, not plumbing: it escapes the activity fold and renders open on
   completion (while its args stream it stays a slim running row). Capability: the bundled
   `pi-visualize` extension.
@@ -68,7 +71,7 @@ registration runs once when the chat module mounts. Unregistered tools fall back
 ## Boundary
 
 - **Public surface:** the side-effect `register` import + the shared `CodeBlock`/`Collapsible`/
-  `toolHelpers` for sibling renderers. No barrel (chat pulls shiki — per-file imports, as in the parent).
+  `toolHelpers` for sibling renderers + `visualize/MermaidView` for the parent `Markdown` primitive. No barrel (chat pulls shiki — per-file imports, as in the parent).
 - **Allowed deps:** parent chat primitives (`toolRegistry`, `Markdown`, `ChatActions`, `askState`);
   `contracts` (type-only + the `ASK_USER_ANSWERS_CUSTOM_TYPE` constant); `components/ui`; `lib`;
   `lucide-react`; `mermaid` (**lazy, `visualize/` only**).

@@ -97,6 +97,8 @@ test("opens and safely forgets an existing user-owned worktree", async ({ page }
 		);
 		await expect(row).toContainText("existing-worktree-fixture");
 		await expect(row).toContainText("feature/existing");
+		// Dirty-worktree counts belong in Changes, not beside workspace navigation in the left rail.
+		await expect(row).not.toContainText(/\+\d+\s+−\d+/);
 		const receipt = page.getByTestId("workspace-ready");
 		await expect(receipt).toContainText("Existing worktree");
 		await expect(receipt).toContainText("on feature/existing");

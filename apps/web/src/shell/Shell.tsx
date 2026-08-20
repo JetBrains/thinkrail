@@ -1,12 +1,8 @@
 import { ChevronRight, GitBranch, Settings } from "lucide-react";
-import { useEffect } from "react";
-import { ErrorBoundary } from "../components/ErrorBoundary";
+import { useEffect, useRef } from "react";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "../components/ui/resizable";
-import { CenterTabs } from "../panels/CenterTabs";
 import { ProjectTree } from "../panels/ProjectTree";
-import { RightPanel } from "../panels/RightPanel";
 import { SettingsDialog } from "../panels/SettingsDialog";
-import { TerminalsPanel } from "../panels/TerminalsPanel";
 import { Toaster } from "../panels/Toaster";
 import { WelcomePanel } from "../panels/WelcomePanel";
 import {
@@ -18,8 +14,12 @@ import {
 import { applyTheme, writeThemeHint } from "../themes";
 import type { ConnectionStatus } from "../transport";
 import { BrandLogo } from "./BrandLogo";
+import { CollapsedPanelRail } from "./CollapsedPanelRail";
+import { LayoutSettings } from "./LayoutSettings";
+import { useCollapsibleRegion } from "./useCollapsibleRegion";
 import { useGlobalHotkeys } from "./useGlobalHotkeys";
 import { openReviewLabel, useOpenBranchReview } from "./useOpenBranchReview";
+import { WorkspaceWorkbench } from "./WorkspaceWorkbench";
 
 const STATUS_LABEL: Record<ConnectionStatus, string> = {
 	connected: "Connected",
@@ -40,6 +40,12 @@ export function Shell() {
 	const contextProject = useAppStore(selectContextProject);
 	const openReview = useOpenBranchReview(activeWorkspace, status);
 	const hasActiveWorkspace = activeWorkspaceId != null;
+
+	// Project Home keeps its own simple two-column layout. Active workspaces hand all arrangement to
+	// `WorkspaceWorkbench`; its structural state is host-synchronized rather than react-panel local storage.
+	const welcomeCenterRef = useRef<HTMLDivElement>(null);
+	const welcomeProjects = useCollapsibleRegion(welcomeCenterRef, "welcome-left");
+
 	// The single owner of the theme DOM side-effect: apply the store's (host-owned) theme + cache it as the
 	// next load's first-paint hint. The store is fed by transport (welcome / settings.changed).
 	const theme = useAppStore((s) => s.theme);
@@ -47,8 +53,31 @@ export function Shell() {
 		applyTheme(theme);
 		writeThemeHint(theme);
 	}, [theme]);
-	// App-wide chords the browser would otherwise take (`Ctrl+R` → history search, not a reload).
-	useGlobalHotkeys();
+	// App-wide chords the browser would otherwise take: history plus the two workbench side toggles.
+	useGlobalHotkeys({
+		onProjects: hasActiveWorkspace
+			? () => {
+					if (!activeWorkspaceId) return;
+					useAppStore.getState().enqueueLayoutIntent({
+						kind: "toggle-side",
+						workspaceId: activeWorkspaceId,
+						side: "left",
+					});
+				}
+			: welcomeProjects.focusOrCollapse,
+		...(hasActiveWorkspace
+			? {
+					onWorkspace: () => {
+						if (!activeWorkspaceId) return;
+						useAppStore.getState().enqueueLayoutIntent({
+							kind: "toggle-side",
+							workspaceId: activeWorkspaceId,
+							side: "right",
+						});
+					},
+				}
+			: {}),
+	});
 	return (
 		<div data-testid="shell" className="grid h-full grid-rows-[auto_1fr]">
 			<header className="flex items-center justify-between border-b border-border-default bg-container-header-bg px-lg py-sm">
@@ -125,74 +154,74 @@ export function Shell() {
 						<Settings className="size-4" />
 					</button>
 				</div>
-				<SettingsDialog />
+				<SettingsDialog layoutSettings={<LayoutSettings />} />
 			</header>
-			{hasActiveWorkspace ? (
-				<ResizablePanelGroup
-					direction="horizontal"
-					autoSaveId="thinkrail-shell"
-					className="min-h-0"
-				>
-					<ResizablePanel id="left" order={1} defaultSize={18} minSize={12}>
-						<aside
-							data-testid="left-nav"
-							className="h-full overflow-auto bg-container-sidebar-bg p-md"
-						>
-							<ProjectTree />
-						</aside>
-					</ResizablePanel>
-					<ResizableHandle direction="horizontal" data-testid="resize-left" />
-					<ResizablePanel id="center" order={2} defaultSize={52} minSize={28}>
-						<main data-testid="center-tabs" className="h-full min-h-0 bg-container-content-bg">
-							<ErrorBoundary label="Editor" resetKeys={[activeWorkspaceId]}>
-								<CenterTabs />
-							</ErrorBoundary>
-						</main>
-					</ResizablePanel>
-					<ResizableHandle direction="horizontal" data-testid="resize-right" />
-					<ResizablePanel id="right" order={3} defaultSize={30} minSize={16}>
-						<ResizablePanelGroup direction="vertical" autoSaveId="thinkrail-right">
-							<ResizablePanel id="right-files" order={1} defaultSize={60} minSize={20}>
-								<div data-testid="right-panel" className="h-full min-h-0 bg-container-sidebar-bg">
-									<ErrorBoundary label="Files" resetKeys={[activeWorkspaceId]}>
-										<RightPanel />
-									</ErrorBoundary>
-								</div>
-							</ResizablePanel>
-							<ResizableHandle direction="vertical" data-testid="resize-terminals" />
-							<ResizablePanel id="right-terminals" order={2} defaultSize={40} minSize={15}>
-								<div className="h-full min-h-0 bg-container-terminal-bg">
-									<ErrorBoundary label="Terminals" resetKeys={[activeWorkspaceId]}>
-										<TerminalsPanel />
-									</ErrorBoundary>
-								</div>
-							</ResizablePanel>
-						</ResizablePanelGroup>
-					</ResizablePanel>
-				</ResizablePanelGroup>
+			{hasActiveWorkspace && activeWorkspaceId ? (
+				<div data-testid="workspace-shell-layout" className="h-full min-h-0 min-w-0">
+					<WorkspaceWorkbench key={activeWorkspaceId} workspaceId={activeWorkspaceId} />
+				</div>
 			) : (
-				// No active workspace — hide the center/right/terminal surface; show the Welcome screen beside the
-				// (still resizable) projects rail. A distinct autoSaveId keeps the 3-column layout's saved sizes.
-				<ResizablePanelGroup
-					direction="horizontal"
-					autoSaveId="thinkrail-shell-welcome"
-					className="min-h-0"
+				// No active workspace — the separately-persisted Welcome layout has only the Projects region.
+				<div
+					data-testid="welcome-shell-layout"
+					data-left-collapsed={welcomeProjects.collapsed}
+					className="flex h-full min-h-0 min-w-0"
 				>
-					<ResizablePanel id="left" order={1} defaultSize={18} minSize={12}>
-						<aside
-							data-testid="left-nav"
-							className="h-full overflow-auto bg-container-sidebar-bg p-md"
+					{welcomeProjects.collapsed ? (
+						<CollapsedPanelRail
+							ref={welcomeProjects.railRef}
+							side="left"
+							label="Projects"
+							shortcutKey="B"
+							onOpen={welcomeProjects.openAndFocus}
+						/>
+					) : null}
+					<ResizablePanelGroup
+						direction="horizontal"
+						autoSaveId="thinkrail-shell-welcome"
+						className="min-h-0 min-w-0 flex-1"
+					>
+						<ResizablePanel
+							ref={welcomeProjects.panelRef}
+							id="left"
+							order={1}
+							defaultSize={18}
+							minSize={12}
+							collapsedSize={0}
+							collapsible
+							onCollapse={welcomeProjects.onCollapse}
+							onExpand={welcomeProjects.onExpand}
 						>
-							<ProjectTree />
-						</aside>
-					</ResizablePanel>
-					<ResizableHandle direction="horizontal" data-testid="resize-left" />
-					<ResizablePanel id="welcome" order={2} defaultSize={82} minSize={40}>
-						<div className="h-full min-h-0 bg-container-content-bg">
-							<WelcomePanel />
-						</div>
-					</ResizablePanel>
-				</ResizablePanelGroup>
+							<aside
+								ref={welcomeProjects.contentRef}
+								data-testid="left-nav"
+								tabIndex={-1}
+								aria-hidden={welcomeProjects.collapsed || undefined}
+								inert={welcomeProjects.collapsed ? true : undefined}
+								className="h-full overflow-auto bg-container-sidebar-bg p-md outline-none"
+							>
+								<ProjectTree />
+							</aside>
+						</ResizablePanel>
+						<ResizableHandle
+							direction="horizontal"
+							data-testid="resize-left"
+							aria-hidden={welcomeProjects.collapsed}
+							tabIndex={welcomeProjects.collapsed ? -1 : 0}
+							onDragging={welcomeProjects.onDragging}
+							{...(welcomeProjects.collapsed ? { className: "hidden" } : {})}
+						/>
+						<ResizablePanel id="welcome" order={2} defaultSize={82} minSize={40}>
+							<div
+								ref={welcomeCenterRef}
+								tabIndex={-1}
+								className="h-full min-h-0 bg-container-content-bg outline-none"
+							>
+								<WelcomePanel />
+							</div>
+						</ResizablePanel>
+					</ResizablePanelGroup>
+				</div>
 			)}
 			<Toaster />
 		</div>
