@@ -1,7 +1,6 @@
 import { expect, test } from "bun:test";
 import { withReviewLock } from "./reviewLock";
 
-/** A promise plus the handle to settle it — lets a test park a "send" mid-flight. */
 function deferred<T>(): {
 	promise: Promise<T>;
 	resolve: (v: T) => void;
@@ -17,8 +16,6 @@ function deferred<T>(): {
 }
 
 test("a second send for the same workspace waits for the first to finish", async () => {
-	// The real hazard: `sendableComments` (which sees the drafts) runs BEFORE the awaited session
-	// creation, so without the lock both sends read the same "drafts, no session" state.
 	const first = deferred<string>();
 	const order: string[] = [];
 
@@ -34,7 +31,7 @@ test("a second send for the same workspace waits for the first to finish", async
 	});
 
 	await Promise.resolve();
-	expect(order).toEqual(["a:start"]); // b hasn't even read state yet
+	expect(order).toEqual(["a:start"]);
 
 	first.resolve("a");
 	expect(await a).toBe("a");
@@ -43,15 +40,12 @@ test("a second send for the same workspace waits for the first to finish", async
 });
 
 test("a MUTATION issued mid-send lands after the send's mark, never inside its await", async () => {
-	// The gap a send opens is not only visible to other sends: a `review.close` landing between "read
-	// the drafts" and `markCommentsSent` strands the package — the agent gets comment ids no open
-	// review holds, so `resolve_comment` can never complete them.
 	const creating = deferred<void>();
 	const log: string[] = [];
 
 	const send = withReviewLock("ws-mut", async () => {
 		log.push("read-drafts");
-		await creating.promise; // stands in for `await createSession(…)`
+		await creating.promise;
 		log.push("mark-sent");
 		return "sent";
 	});

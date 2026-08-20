@@ -44,7 +44,6 @@ test("an edited fragment goes outdated and keeps its snapshot", () => {
 	const edited = CONTENT.replace("const b = 2;", "const b = 99;");
 	const result = reanchor(anchor, edited);
 	expect(result.state).toBe("outdated");
-	// The anchor (incl. its creation-time exact fragment) is untouched.
 	expect(result.anchor).toBe(anchor);
 });
 
@@ -67,7 +66,6 @@ test("an ambiguous fragment is disambiguated by prefix/suffix", () => {
 });
 
 test("a truly ambiguous fragment (identical context) goes outdated", () => {
-	// Two occurrences with identical surroundings: prefix/suffix can't break the tie.
 	const dup = ["same();", "same();"].join("\n");
 	const anchor: ReviewAnchor = {
 		path: "a.ts",

@@ -17,16 +17,6 @@ import { statusNameClass } from "./changesModel";
 import { DiffStatBadge } from "./DiffStatBadge";
 import { openDiffInTab } from "./openTabs";
 
-// The chat plan's live review-map page — a center `plan` tab (see `store`'s `PlanTab`): the session's
-// TODO plan rendered document-scale, each done item unfolding into the change set its work produced.
-// Live by construction: it reads through the same `useChatTodos` hook as the plan popup (refetch off
-// `pi.event`), so it can never show a stale snapshot the way the old compiled-markdown doc did.
-// Navigation is direct handlers, not link-scheme hacks: a file row opens its Monaco diff tab (the item's
-// `commit:{sha}` scope — the durable done-time diff — or the live branch scope for the path-list
-// fallback), the sha chip points the Changes panel at the commit. Markdown is this page's *export*
-// (`planMarkdown` → copy / save-as-.md), never its source.
-
-/** `git status`-style one-letter marker (`planView.statusLetter`), colored like the Changes tree. */
 function FileStatusLetter({ status }: { status: GitFileChange["status"] }) {
 	return (
 		<span className={`w-4 shrink-0 text-center tr-text-metadata ${statusNameClass(status)}`}>
@@ -35,7 +25,6 @@ function FileStatusLetter({ status }: { status: GitFileChange["status"] }) {
 	);
 }
 
-/** One changed file: status letter + path + `+/−`, clicking opens its diff tab at `scope`. */
 function FileRow({ file, onOpen }: { file: GitFileChange; onOpen: () => void }) {
 	return (
 		<li>
@@ -58,11 +47,6 @@ function FileRow({ file, onOpen }: { file: GitFileChange; onOpen: () => void }) 
 	);
 }
 
-/**
- * A done item's change set as a **collapsible disclosure**, collapsed by default so a long plan stays
- * compact. The chevron/`N files` summary toggles the file rows; the sha chip stays a separate button
- * that routes the Changes panel and never toggles the disclosure (and vice versa).
- */
 function ChangeSetBlock({
 	item,
 	workspaceId,
@@ -117,7 +101,6 @@ function ChangeSetBlock({
 			</div>
 			{expanded ? (
 				set.kind === "paths" ? (
-					// The no-commit fallback: live branch-scope diffs; no counts (they'd drift with the worktree).
 					<ul className="flex flex-col">
 						{set.paths.map((path) => (
 							<FileRow
@@ -150,7 +133,6 @@ function ChangeSetBlock({
 	);
 }
 
-/** One plan item: status glyph + title + note, then its change set (done items that produced one). */
 function ItemBlock({
 	item,
 	workspaceId,
@@ -214,7 +196,6 @@ function GroupSection({
 	);
 }
 
-/** Trigger a browser download of the compiled markdown — the "we're a website" standard save. */
 function downloadMarkdown(markdown: string, title: string): void {
 	const blob = new Blob([markdown], { type: "text/markdown" });
 	const url = URL.createObjectURL(blob);

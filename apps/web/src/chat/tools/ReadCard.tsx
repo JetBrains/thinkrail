@@ -5,7 +5,6 @@ import { CodeBlock } from "./CodeBlock";
 import { Collapsible, countLines } from "./Collapsible";
 import { languageFromPath, numArg, resultText, strArg } from "./toolHelpers";
 
-/** Body for the `read` tool: file path + optional line range + highlighted content. */
 export function ReadCard({ args, result, status, workspaceRoot }: ToolRenderProps) {
 	const path = strArg(args, "path");
 	const displayPath = projectRelativePath(path, workspaceRoot);

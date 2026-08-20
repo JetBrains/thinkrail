@@ -3,22 +3,10 @@ import hcDark from "../themes/bundled/high-contrast-dark.theme.json";
 import hcLight from "../themes/bundled/high-contrast-light.theme.json";
 import { stripAnsiDim, terminalContrastFloor } from "./terminalContrast";
 
-/**
- * The High Contrast terminal accessibility gate.
- *
- * It reproduces xterm's exact colour pipeline (relative luminance, the reduce/increase-by-10% contrast
- * search behind `minimumContrastRatio`, and the 50%-opacity dim compositing) so the numbers here are the
- * REAL rendered contrast after xterm processing — not an approximation. It then asserts every rendered
- * terminal foreground in both High Contrast themes clears WCAG AA (4.5:1), catches the specific reason dim
- * `(client)` was failing, and proves the integration fix (`stripAnsiDim`) resolves it. A palette edit or a
- * lowered floor that dropped any cell below the threshold fails this test.
- */
-
 const AA = 4.5;
 const AAA = 7;
 const ESC = String.fromCharCode(27);
 
-// ── xterm's colour maths, ported verbatim from @xterm/xterm's `common/Color.ts` ────────────────────────
 type RGB = [number, number, number];
 const channel = (c: number) => {
 	const s = c / 255;
@@ -57,7 +45,6 @@ const increaseLuminance = (bg: RGB, fg: RGB, ratio: number): RGB => {
 	}
 	return [r, g, b];
 };
-/** xterm `rgba.ensureContrastRatio`: returns the corrected fg, or the original if it already clears `ratio`. */
 const ensureContrast = (bg: RGB, fg: RGB, ratio: number): RGB => {
 	if (contrast(bg, fg) >= ratio) return fg;
 	const darker = luminance(fg) < luminance(bg);
@@ -66,9 +53,7 @@ const ensureContrast = (bg: RGB, fg: RGB, ratio: number): RGB => {
 	const second = darker ? increaseLuminance(bg, fg, ratio) : reduceLuminance(bg, fg, ratio);
 	return contrast(bg, second) > contrast(bg, first) ? second : first;
 };
-/** The rendered foreground for a normal (non-dim) cell under `minimumContrastRatio`. */
 const rendered = (bg: RGB, fg: RGB, ratio: number) => contrast(bg, ensureContrast(bg, fg, ratio));
-/** The rendered foreground for a DIM cell xterm does NOT correct: the fg composited at 50% over bg. */
 const renderedDim = (bg: RGB, fg: RGB): number => {
 	const blended: RGB = [
 		Math.round((bg[0] + fg[0]) / 2),
@@ -109,8 +94,8 @@ describe("High Contrast terminal contrast floor", () => {
 	});
 
 	for (const { name, manifest } of HC_THEMES) {
-		const bg = toRgb(manifest.colors.sidebar); // container-terminal-bg
-		const fg = toRgb(manifest.colors.text); // default foreground
+		const bg = toRgb(manifest.colors.sidebar);
+		const fg = toRgb(manifest.colors.text);
 		const ratio = terminalContrastFloor(true);
 
 		it(`${name}: default foreground and every ANSI colour render at >= 4.5:1 (aiming 7:1)`, () => {
@@ -123,10 +108,7 @@ describe("High Contrast terminal contrast floor", () => {
 		});
 
 		it(`${name}: dim default foreground clears 4.5:1 only because the dim attribute is stripped`, () => {
-			// Uncorrected, xterm renders dim as the fg at 50% opacity — the reason `(client)` was faint.
-			// (On the light HC canvas this is ~3.3:1 and unreachable by any minimumContrastRatio.)
 			const dimContrast = renderedDim(bg, fg);
-			// stripAnsiDim removes the dim attribute, so the cell renders as the normal default foreground.
 			const stripped = stripAnsiDim(`${ESC}[2m(client)${ESC}[22m`);
 			expect(stripped.includes(`${ESC}[2m`)).toBe(false);
 			const dimFixed = stripped.includes(`${ESC}[2m`) ? dimContrast : rendered(bg, fg, ratio);
@@ -149,7 +131,7 @@ describe("stripAnsiDim", () => {
 	});
 	it("preserves the `2` inside 38;2 / 48;2 truecolor (that `2` selects RGB, not dim)", () => {
 		expect(stripAnsiDim(`${ESC}[38;2;1;2;3mX`)).toBe(`${ESC}[38;2;1;2;3mX`);
-		expect(stripAnsiDim(`${ESC}[48;2;0;0;0;2mX`)).toBe(`${ESC}[48;2;0;0;0mX`); // trailing standalone dim dropped
+		expect(stripAnsiDim(`${ESC}[48;2;0;0;0;2mX`)).toBe(`${ESC}[48;2;0;0;0mX`);
 	});
 	it("leaves an incomplete trailing sequence intact (never corrupts a split write)", () => {
 		expect(stripAnsiDim(`hello${ESC}[2`)).toBe(`hello${ESC}[2`);

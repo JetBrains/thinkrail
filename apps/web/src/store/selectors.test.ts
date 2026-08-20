@@ -128,7 +128,6 @@ test("layout placement lookup traverses recursive center and side groups", () =>
 		tabId: "legacy-file-placement",
 		tab: { kind: "file", id: "legacy-file-placement", name: "a", path: "a" },
 	});
-	// A synchronized placement keeps its stable id while the browser cache uses its own canonical id.
 	expect(selectAttentionCenterResourceReady(state, "ws")).toBe(true);
 	expect(selectAttentionCenterResourceCacheKey(state, "ws")).toBe("file:a");
 	state.tabsByWorkspace.ws[0] = { ...cachedResource, id: "legacy-file-placement" };
@@ -224,10 +223,8 @@ test("context project falls back to the selected Project Home", () => {
 test("selectSkillsStale is a strict tick comparison, defaulting missing ticks to 0", () => {
 	const stale = { skillChangeTickByWorkspace: { w: 2 }, skillsSyncedTickBySession: { s: 1 } };
 	expect(selectSkillsStale(stale, "w", "s")).toBe(true);
-	// Synced at or past the last skill change → not stale.
 	const synced = { skillChangeTickByWorkspace: { w: 2 }, skillsSyncedTickBySession: { s: 2 } };
 	expect(selectSkillsStale(synced, "w", "s")).toBe(false);
-	// A skill change with no recorded sync (→ 0) is stale; nothing recorded at all is not.
 	expect(
 		selectSkillsStale(
 			{ skillChangeTickByWorkspace: { w: 1 }, skillsSyncedTickBySession: {} },
@@ -240,9 +237,6 @@ test("selectSkillsStale is a strict tick comparison, defaulting missing ticks to
 	).toBe(false);
 });
 
-// The shell swallows Ctrl+R app-wide, so "which chat did that mean" has to be answerable from store state
-// alone — and must resolve to SOMETHING whenever the workspace has a chat at all, or the chord silently
-// dies over a file/diff tab.
 const chat1: EditorTab = {
 	kind: "chat",
 	id: "w2:s1",
@@ -302,8 +296,6 @@ test("selectHistoryTarget prefers the active chat tab", () => {
 });
 
 test("selectHistoryTarget falls back to the newest chat tab when a non-chat tab is active", () => {
-	// The regression this guards: returning null here made Ctrl+R a silent no-op over Monaco/diffs —
-	// exactly the tabs the app-wide swallow exists to cover. `chat2` is last in open order, so it wins.
 	for (const activeTabId of ["w2:src/a.ts", null]) {
 		expect(
 			selectHistoryTarget({
@@ -316,7 +308,6 @@ test("selectHistoryTarget falls back to the newest chat tab when a non-chat tab 
 });
 
 test("selectHistoryTarget is null only with no chat to open", () => {
-	// No chat tab in the workspace at all.
 	expect(
 		selectHistoryTarget({
 			activeWorkspaceId: "w2",
@@ -324,7 +315,6 @@ test("selectHistoryTarget is null only with no chat to open", () => {
 			activeTabByWorkspace: { w2: "w2:src/a.ts" },
 		}),
 	).toBeNull();
-	// No active workspace.
 	expect(
 		selectHistoryTarget({
 			activeWorkspaceId: null,
@@ -332,7 +322,6 @@ test("selectHistoryTarget is null only with no chat to open", () => {
 			activeTabByWorkspace: { w2: "w2:s1" },
 		}),
 	).toBeNull();
-	// Another workspace's chats are never reachable through the active one.
 	expect(
 		selectHistoryTarget({
 			activeWorkspaceId: "w1",
@@ -346,20 +335,14 @@ test("matchesWorktreePath accepts the relative form and an absolute report, anch
 	expect(matchesWorktreePath("src/foo.ts", "src/foo.ts")).toBe(true);
 	expect(matchesWorktreePath("/wt/src/foo.ts", "src/foo.ts")).toBe(true);
 	expect(matchesWorktreePath("C:\\wt\\src/foo.ts", "src/foo.ts")).toBe(true);
-	// Anchored: a sibling whose name merely ends with the entry must not match.
 	expect(matchesWorktreePath("/wt/src/a-foo.ts", "src/foo.ts")).toBe(false);
 	expect(matchesWorktreePath("src/other.ts", "src/foo.ts")).toBe(false);
-	// A `./`-prefixed report is the same file (the old suffix rule absorbed the prefix by accident; the
-	// anchored rule would drop it, so `normalizePath` strips it for every predicate).
 	expect(matchesWorktreePath("./src/foo.ts", "src/foo.ts")).toBe(true);
 });
 
 test("matchesWorktreePath does not let a RELATIVE report match a shorter entry by suffix", () => {
-	// The suffix rule exists to absorb an absolute report; letting it apply to relative ones made every
-	// `<module>/SPEC.md` in a repo match the ROOT `SPEC.md` entry — one spec impersonating all of them.
 	expect(matchesWorktreePath("module-b/SPEC.md", "SPEC.md")).toBe(false);
 	expect(matchesWorktreePath("packages/server/SPEC.md", "SPEC.md")).toBe(false);
-	// The absolute form of the same pair still resolves, since there the prefix IS the worktree root.
 	expect(matchesWorktreePath("/wt/ws/SPEC.md", "SPEC.md")).toBe(true);
 });
 
@@ -381,7 +364,6 @@ test("specPathMatcher recognizes a spec by graph membership, in either reported 
 	expect(isSpec(".thinkrail/context/TASK-x.md")).toBe(true);
 	expect(isSpec("/wt/ws/.thinkrail/context/TASK-x.md")).toBe(true);
 	expect(isSpec("packages/server/src/todos/todos.ts")).toBe(false);
-	// An empty graph (never fetched) classifies nothing as a spec — the single-chip fallback.
 	expect(specPathMatcher([])(".thinkrail/context/TASK-x.md")).toBe(false);
 });
 
@@ -408,8 +390,6 @@ test("selectCatalogModel matches on {provider,id} — an id alone is ambiguous a
 });
 
 test("selectCatalogModel returns the LIVE entry, not the stale ref handed to it", () => {
-	// The point of the selector: a session's model snapshot keeps whatever `thinkingLevels` it was
-	// created with, so reading them off the snapshot would miss a `model.refresh`.
 	const stale = catalogModel("anthropic", "opus-5", ["off", "low"]);
 	const live = catalogModel("anthropic", "opus-5", ["off", "low", "medium", "high"]);
 	expect(selectCatalogModel([live], stale)?.thinkingLevels).toEqual(live.thinkingLevels);

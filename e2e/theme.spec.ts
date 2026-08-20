@@ -44,8 +44,6 @@ async function pickTheme(page: Page, theme: string): Promise<void> {
 	await expect(dialog).toBeHidden();
 }
 
-// `workspace`, not `content`: the opened-document canvas rides the workspace surface, and only the
-// Changes diff stays on the recessed `content` role — see the Container row in `styles/COLOR.md`.
 async function expectEditorMatchesTheme(page: Page): Promise<void> {
 	const colors = await page
 		.locator(".monaco-editor")
@@ -64,9 +62,6 @@ async function expectEditorMatchesTheme(page: Page): Promise<void> {
 	expect(colors.actual).toBe(colors.expected);
 }
 
-// The Appearance catalog is manifest-driven. Selection is SERVER-SYNCED (config.json on the host,
-// delivered in server.welcome), so a pick survives reload. The test discovers options from the UI and
-// returns the host to its configured default without knowing the bundled-theme list.
 test("appearance switches a discovered theme and persists it across reload", async ({ page }) => {
 	await page.goto("/");
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
@@ -88,8 +83,6 @@ test("appearance switches a discovered theme and persists it across reload", asy
 	await pickTheme(page, defaultTheme ?? "");
 });
 
-// Runs against the built/minified app. Every discovered manifest must drive Monaco through the generic
-// token path; adding a JSON theme automatically adds it to this cycle without editing the test.
 test("Monaco opens files and re-themes under every discovered manifest", async ({ page }) => {
 	await openFixtureProject(page);
 	await createWorkspaceViaDialog(page);
@@ -127,9 +120,6 @@ test("Monaco opens files and re-themes under every discovered manifest", async (
 	await expect(page.getByTestId("editor-pane")).toContainText("plain-text-fixture");
 });
 
-// Break caught: selected tabs regressing to a text-colour-only state in a high-contrast theme. The
-// assertion runs against the built UI and checks the one user-visible contract across all three strips:
-// semantic selected fill + a 2px content-edge marker, while retaining honest native-button semantics.
 test("selected workspace tabs keep their surface and edge marker in high contrast", async ({
 	page,
 }) => {

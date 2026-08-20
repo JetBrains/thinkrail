@@ -4,12 +4,9 @@ import { extractSession } from "./extract";
 
 const line = (obj: unknown) => JSON.stringify(obj);
 
-/** A v3 session header — present so `migrateSessionEntries` treats the fixture as current (no migration)
- * and the hand-written `id`/`parentId` tree below is used verbatim. */
 const header = (cwd = "/tmp/x") =>
 	line({ type: "session", version: 3, id: "s1", timestamp: "2026-01-01T00:00:00.000Z", cwd });
 
-/** Unwrap the entries of a fixture that must parse (the header-shape cases assert on `null` directly). */
 const entriesOf = (jsonl: string) => {
 	const session = extractSession(jsonl);
 	expect(session).not.toBeNull();
@@ -20,7 +17,7 @@ describe("extractSession", () => {
 	test("extracts user + assistant text with getMessages-aligned messageIndex", () => {
 		const jsonl = [
 			header(),
-			line({ type: "session_info", id: "a", parentId: null, name: "My chat" }), // not a message — no index
+			line({ type: "session_info", id: "a", parentId: null, name: "My chat" }),
 			line({
 				type: "message",
 				id: "b",
@@ -72,7 +69,6 @@ describe("extractSession", () => {
 				timestamp: 200,
 				messageIndex: 1,
 			},
-			// toolResult = index 2, custom = index 3 (renderable, counted but not extracted)
 			{ text: "try again", role: "user", timestamp: 500, messageIndex: 4 },
 		]);
 	});
@@ -101,7 +97,6 @@ describe("extractSession", () => {
 			title: "Renamed chat",
 		});
 
-		// An explicit clear (empty name) after a set name means no title — pi's latest-wins rule.
 		const cleared = [
 			line({
 				type: "session",
@@ -117,17 +112,14 @@ describe("extractSession", () => {
 	});
 
 	test("rejects a file whose first parseable entry is not a session header (pi's own rule)", () => {
-		// No header at all.
 		expect(
 			extractSession(
 				line({ type: "message", id: "a", message: { role: "user", content: "x", timestamp: 1 } }),
 			),
 		).toBeNull();
-		// A header-shaped line without a string id.
 		expect(
 			extractSession(line({ type: "session", version: 3, timestamp: "2026-01-01T00:00:00.000Z" })),
 		).toBeNull();
-		// Malformed leading lines are skipped (pi's parser drops them) — the header is still found.
 		const afterGarbage = ["not json at all", header()].join("\n");
 		expect(extractSession(afterGarbage)).toMatchObject({ id: "s1", cwd: "/tmp/x" });
 	});
@@ -151,8 +143,6 @@ describe("extractSession", () => {
 		].join("\n");
 		const entries = entriesOf(jsonl);
 		expect(entries).toHaveLength(1);
-		// The whole prompt round-trips: recall inserts `text` verbatim, and a term past any would-be
-		// cutoff must stay searchable.
 		expect(entries?.[0]?.text).toBe(big);
 	});
 
@@ -165,8 +155,6 @@ describe("extractSession", () => {
 				parentId: null,
 				message: { role: "user", content: "real user msg", timestamp: 100 },
 			}),
-			// A v2 `hookMessage` migrates to role "custom" on a `message` entry — the host surfaces it as a
-			// renderable "custom" message, so it consumes an index slot (index 1) but carries no prompt text.
 			line({
 				type: "message",
 				id: "b",
@@ -205,8 +193,6 @@ describe("extractSession", () => {
 				message: { role: "assistant", content: "second", timestamp: 200 },
 			}),
 		].join("\n");
-		// The unparseable line is skipped by pi's own parser; "second" lands at messageIndex 1, right behind
-		// "first" at 0 — no gap opened by the line in between.
 		expect(entriesOf(jsonl)).toEqual([
 			{ text: "first", role: "user", timestamp: 100, messageIndex: 0 },
 			{ text: "second", role: "assistant", timestamp: 200, messageIndex: 1 },
@@ -214,10 +200,6 @@ describe("extractSession", () => {
 	});
 
 	test("indexes only the active branch — abandoned-branch messages are neither indexed nor counted", () => {
-		// Tree: u0 → a0 → {abandoned: u1x → a1x}, and the live branch u1 → a1 (both children of a0). The
-		// leaf is the last physical entry (a1), so pi resolves the path u0 → a0 → u1 → a1. The abandoned
-		// edit/reply must not appear, and the live follow-up must land at index 2 — NOT index 4 (its raw
-		// file position) — matching what the client's hydrated transcript renders.
 		const jsonl = [
 			header(),
 			line({
@@ -278,9 +260,6 @@ describe("extractSession", () => {
 	});
 
 	test("respects compaction — summarized-away messages are dropped and the summary isn't a hit", () => {
-		// u0/a0 precede firstKeptEntryId (u1) so compaction drops them. The summary itself is sent to the
-		// client (it renders the compaction marker), so it consumes index 0 without being searchable, and
-		// the kept question + post-compaction answer index from 1 — matching the client's transcript.
 		const jsonl = [
 			header(),
 			line({
@@ -357,8 +336,6 @@ describe("extractSession", () => {
 				message: { role: "user", content: "next prompt", timestamp: 300 },
 			}),
 		].join("\n");
-		// The nudge (index 1) is not surfaced, but its slot is still consumed so "next prompt" keeps its
-		// real position (index 2) — the same index the client's turnIdByMessageIndex assigns it.
 		expect(entriesOf(jsonl)).toEqual([
 			{ text: "real prompt", role: "user", timestamp: 100, messageIndex: 0 },
 			{ text: "next prompt", role: "user", timestamp: 300, messageIndex: 2 },
@@ -366,10 +343,6 @@ describe("extractSession", () => {
 	});
 
 	test("excludes a superseded auto-retry attempt but still consumes its index slot", () => {
-		// pi persists the failed attempt (`_prepareRetry` keeps it "in session for history") but the client
-		// hydrates no turn for it (its jump anchor is null) — so its text must not become a searchable,
-		// jumpable hit that could only ever resolve to "couldn't locate the message". Same shared
-		// `isRetriedAttempt` reading as the client's hydration.
 		const jsonl = [
 			header(),
 			line({
@@ -402,7 +375,6 @@ describe("extractSession", () => {
 				},
 			}),
 		].join("\n");
-		// The failed attempt (index 1) is hidden; the retried reply keeps its real position (index 2).
 		expect(entriesOf(jsonl)).toEqual([
 			{ text: "what is 2+2", role: "user", timestamp: 100, messageIndex: 0 },
 			{ text: "the answer is 4", role: "assistant", timestamp: 300, messageIndex: 2 },
@@ -410,8 +382,6 @@ describe("extractSession", () => {
 	});
 
 	test("a terminal failed attempt (no retry after it) stays searchable", () => {
-		// Followed by a user message (or nothing) ⇒ not superseded — the turn is rendered on hydrate, so
-		// the hit stays jumpable.
 		const jsonl = [
 			header(),
 			line({

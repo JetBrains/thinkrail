@@ -90,38 +90,11 @@ test("high-contrast manifests provide legible selected-text foregrounds", () => 
 	}
 });
 
-/**
- * Contrast is the property that makes a palette trustworthy rather than merely tidy, so the floors are
- * enumerated here rather than left to review.
- *
- * RESTING surfaces get the full WCAG AA floor. `elevated` and `input` matter as much as `background`:
- * every dialog, popover and card sits on the first, and every field on the second.
- *
- * HOVER is deliberately held to a lower bar. These themes lift the row background toward the text
- * colour on hover, which eats contrast exactly where rows are interactive. Requiring the full 4.5 there
- * would force a theme's signature accent toward a washed-out tint just to survive the hovered row.
- * WCAG has no "transient state" allowance, so this tier is OUR
- * judgement, written down: hovered text must still be comfortably visible (3.0), never merely present.
- *
- * `accent` and `success` are excluded from `input` on purpose: no component renders accent- or
- * success-coloured text on a control background (`colorUsage.test.ts` keeps that honest by banning
- * palette entries at call sites).
- */
 const RESTING = ["background", "content", "sidebar", "header", "elevated", "input"] as const;
-/** Body/muted text meet 4.5; the deliberately quiet hint tier remains visible at 3.0. */
 const FLOORS = { text: 4.5, muted: 4.5, hint: 3, accent: 4.5, success: 4.5 } as const;
-/** Foregrounds that are never rendered on a control background. */
 const NOT_ON_INPUT: ReadonlySet<string> = new Set(["accent", "success"]);
 const HOVER_FLOOR = 3;
 
-/**
- * A `contrast: "high"` theme is held to a HIGHER bar than the rest, because "high contrast" is the
- * whole reason it exists — a flat AA floor lets one silently decay into an ordinary theme while every
- * gate stays green, which is exactly what happened when the palette went green (High Contrast Light's
- * accent fell 8.98 → 5.17 and its success 7.39 → 5.08, both still "passing" 4.5). So: AAA (7.0) resting
- * and the full AA (4.5) even on hover. `hint` is exempt — it is a deliberately quiet tier, and raising
- * it would just merge it into `muted`.
- */
 const HIGH_CONTRAST_RESTING = 7;
 const HIGH_CONTRAST_HOVER = 4.5;
 const isHigh = (theme: { contrast: string }) => theme.contrast === "high";
@@ -143,13 +116,6 @@ test("every bundled manifest meets the contrast floors on every resting surface"
 	}
 });
 
-/**
- * The primary button is a palette pair, not a constant: `accentSolid` is its resting fill,
- * `accentHover` its hover fill, and `onAccent` the label that sits on BOTH. A theme that darkens
- * (or brightens) its hover step far enough to swallow the label is the failure this catches — the
- * hover state is a resting foreground for as long as the pointer is there, so it takes the full
- * 4.5, not the transient-hover allowance above.
- */
 test("the primary control's label stays legible on both its resting and hover fill", () => {
 	for (const theme of bundledThemes()) {
 		for (const fill of ["accentSolid", "accentHover"] as const) {

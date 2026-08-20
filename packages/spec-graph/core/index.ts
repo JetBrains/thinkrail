@@ -1,6 +1,3 @@
-// Public surface of the pi-free spec model. `tools/` imports the graph model, index, query, and
-// validation through this barrel only. Nothing here imports `@earendil-works/*`.
-
 export {
 	buildGraph,
 	LINK_KINDS,

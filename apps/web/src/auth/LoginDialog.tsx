@@ -11,13 +11,6 @@ import {
 } from "@/components/ui/dialog";
 import type { LoginState } from "./loginState";
 
-/**
- * The in-app OAuth login dialog — **presentational** (no store/transport): it renders the accumulated
- * `LoginState` and calls back. `onReply` answers a live `select`/`prompt` frame; `onCancel` aborts an
- * in-flight login; `onClose` dismisses a terminal (success/error) one. The `url` and a paste `prompt` can
- * be shown together (the browser-vs-paste race). Mount with `key={state.loginId}` for fresh local state;
- * the prompt field is uncontrolled, so it also resets each time the integrator clears the live input.
- */
 export function LoginDialog({
 	state,
 	providerName,
@@ -33,10 +26,6 @@ export function LoginDialog({
 }) {
 	const promptRef = useRef<HTMLInputElement>(null);
 
-	// Best-effort: open the device-verification page automatically in a new tab. This fires right after the
-	// user's Submit gesture on the host prompt, so it's usually inside the browser's transient-activation
-	// window (not popup-blocked); if a blocker does stop it, the clickable link below is the reliable
-	// fallback. The ref guards against re-opening on re-render / StrictMode's double-invoke.
 	const openedUrlRef = useRef<string | null>(null);
 	const deviceUri = state.deviceCode?.verificationUri;
 	useEffect(() => {
@@ -47,8 +36,6 @@ export function LoginDialog({
 
 	const submitPrompt = () => {
 		const value = promptRef.current?.value.trim() ?? "";
-		// A non-empty answer always submits; an empty one only when pi marked the prompt `allowEmpty`
-		// (e.g. Copilot's "blank for github.com") — otherwise a blank submit is a no-op, not a dead-end.
 		const allowEmpty = state.input?.kind === "prompt" && state.input.allowEmpty;
 		if (value || allowEmpty) onReply(value);
 	};
@@ -67,12 +54,10 @@ export function LoginDialog({
 				data-testid="login-dialog"
 				data-provider={state.providerId}
 				data-status={state.status}
-				// Cap height + scroll so a long URL / verbose provider error can't overflow the viewport.
 				className="max-h-[85vh] overflow-y-auto"
 			>
 				<DialogHeader>
 					<DialogTitle>
-						{/* "Connect", not "Sign in" — one dialog serves OAuth and API-key entry alike. */}
 						{state.status === "success"
 							? `${providerName} connected`
 							: state.status === "error"

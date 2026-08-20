@@ -1,6 +1,3 @@
-// Harness unit tests — the pure/deterministic parts, NO live agent and no model calls: event-log
-// queries, signal predicates, the dialog ladder's parsing, watchdog tripwires, judge/sim reply parsing,
-// and the tier-1 checks against a synthetic log. Runs first (alphabetical) under test:workflows.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -66,7 +63,6 @@ test("EventLog: tool calls, skill reads, turn count", () => {
 	expect(log.toolCalls("read")).toHaveLength(2);
 	expect(log.skillReads()).toEqual(["choosing-a-workflow", "brainstorming"]);
 	expect(log.turnCount()).toBe(1);
-	// a read that is NOT a SKILL.md is not a skill load
 	log.push(toolStart("t3", "read", { path: "/repo/README.md" }));
 	expect(log.skillReads()).toHaveLength(2);
 });
@@ -78,7 +74,6 @@ test("signals: skillRead + turnEnd; forbid wins over stop", async () => {
 		[signals.skillRead("brainstorming")],
 		[signals.skillRead("importing-a-codebase")],
 	);
-	// forbid and stop become true in the same growth — forbid must win (checked first)
 	log.push(toolStart("a", "read", { path: `${SKILLS}/importing-a-codebase/SKILL.md` }));
 	log.push(toolStart("b", "read", { path: `${SKILLS}/brainstorming/SKILL.md` }));
 	const hit = await watcher.hit;
@@ -120,8 +115,6 @@ test("dialog: a throwing script degrades to the fallback rung and records the er
 
 test("dialog: settle resolves once deliveries finish and records delivery failures", async () => {
 	const log = new EventLog();
-	// Unknown session id → the production bridge rejects the delivery; settle must still resolve,
-	// with the failure recorded on the round (appended, never clobbering a script error).
 	const { answered, detach, settle } = attachDialog("unit-session-settle", log, {
 		fallback: "pickRecommended",
 	});
@@ -144,7 +137,6 @@ test("dialog: pickRecommended, skipAll, persona reply parsing", () => {
 		QUESTIONS,
 	);
 	expect(ok?.answers[0]?.answer).toBe("JSON objects");
-	// unknown label, bad index, malformed JSON → null (falls to the deterministic rung)
 	expect(
 		parsePersonaReply('{"answers":[{"questionIndex":0,"answer":"Nope"}]}', QUESTIONS),
 	).toBeNull();
@@ -170,7 +162,7 @@ test("watchdog: budget tripwires + on-track parsing", () => {
 		onTrack: false,
 		reason: "looping",
 	});
-	expect(parseOnTrackReply("garbage").onTrack).toBe(true); // never kill a run on judge flake
+	expect(parseOnTrackReply("garbage").onTrack).toBe(true);
 });
 
 test("userSim + judge reply parsing", () => {
@@ -188,9 +180,6 @@ test("userSim + judge reply parsing", () => {
 });
 
 test("scenario: a crashed run records `crashed` and never a false pass", async () => {
-	// A missing transcript fixture throws before any session starts — no live agent, no tokens. The
-	// crash must land in the run record as a failed deterministic verdict (redirected to a temp log so
-	// this test never pollutes the local evidence trail e2e/.workflow-runs.jsonl).
 	const tmpLog = join(tmpdir(), `workflow-runlog-${Date.now()}.jsonl`);
 	process.env.THINKRAIL_WORKFLOW_RUNLOG = tmpLog;
 	try {
@@ -234,14 +223,12 @@ test("presets: fixture markdown mask/unmask round-trip", () => {
 	writeFileSync(join(dir, "src", "notes.md"), "plain");
 	writeFileSync(join(dir, "src", "index.ts"), "export {};\n");
 
-	// Masked at rest: no scannable *.md left, non-markdown untouched.
 	maskFixtureMarkdown(dir);
 	expect(existsSync(join(dir, "SPEC.md"))).toBe(false);
 	expect(existsSync(join(dir, `SPEC.md${FIXTURE_MD_SUFFIX}`))).toBe(true);
 	expect(existsSync(join(dir, "src", `notes.md${FIXTURE_MD_SUFFIX}`))).toBe(true);
 	expect(existsSync(join(dir, "src", "index.ts"))).toBe(true);
 
-	// Unmasked on replay: original names + content back, byte-identical.
 	unmaskFixtureMarkdown(dir);
 	expect(existsSync(join(dir, `SPEC.md${FIXTURE_MD_SUFFIX}`))).toBe(false);
 	expect(readFileSync(join(dir, "SPEC.md"), "utf8")).toContain("id: fixture-spec");

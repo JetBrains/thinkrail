@@ -32,10 +32,6 @@ describe("deriveEditorTabs", () => {
 	});
 });
 
-/**
- * The derivation is only correct if the real tree feeds it: every tab target must be a section that
- * exists, or a tab scrolls nowhere and scroll-spy can never activate it.
- */
 describe("the shipped file tree", () => {
 	const html = readFileSync(new URL("../index.html", import.meta.url).pathname, "utf8");
 	const rows = [

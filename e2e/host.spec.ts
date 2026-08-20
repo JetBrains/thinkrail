@@ -1,8 +1,5 @@
 import { expect, test } from "@playwright/test";
 
-// The e2e host is booted by `packages/server/src/dev.ts` via `bootHost` (portMode "exact" on the pinned
-// port, serving the built SPA from `staticDir`). These hit its HTTP surface directly — no UI driving — so
-// the shared boot path is covered against a real build, not just the unit test.
 test.describe("host HTTP surface", () => {
 	test("/health returns ok", async ({ request }) => {
 		const res = await request.get("/health");

@@ -5,17 +5,12 @@ export interface FolderChainNode {
 }
 
 export interface FolderChain {
-	/** Slash-joined names from the visible row's first directory through its current deepest directory. */
 	label: string;
-	/** Path of the current deepest directory represented by the compact row. */
 	path: string;
-	/** Every directory path represented by the row, shallowest to deepest. */
 	paths: readonly string[];
 }
 
-/** A directory row after following its run of single-directory children. */
 export interface ResolvedFolderChain<TNode extends FolderChainNode> extends FolderChain {
-	/** Immediate children of the deepest directory. */
 	children: readonly TNode[];
 }
 
@@ -29,7 +24,6 @@ function hasSingleDirectoryChild<TNode extends FolderChainNode>(
 	return children.length === 1 && children[0]?.kind === "dir";
 }
 
-/** Extend a chain by exactly one directory, or stop at a file, empty directory, or branch. */
 export function extendFolderChain<TNode extends FolderChainNode>(
 	chain: FolderChain,
 	children: readonly TNode[],
@@ -46,10 +40,6 @@ export function extendFolderChain<TNode extends FolderChainNode>(
 	};
 }
 
-/**
- * Resolve one visible directory row without walking a branching subtree. The caller supplies the directory
- * reader, keeping this presentation rule independent from transport and straightforward to unit-test.
- */
 export async function resolveFolderChain<TNode extends FolderChainNode>(
 	start: TNode,
 	readChildren: (path: string) => Promise<readonly TNode[]>,

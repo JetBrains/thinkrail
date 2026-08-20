@@ -4,7 +4,6 @@ import { type ConnectionStatus, getTransport } from "../transport";
 
 type LoadedReview = { key: string; review: OpenBranchReview | null };
 
-/** Read ephemeral open-review metadata only for the workspace currently shown in the shell. */
 export function useOpenBranchReview(
 	workspace: Workspace | null,
 	status: ConnectionStatus,

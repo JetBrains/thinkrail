@@ -4,7 +4,6 @@ import { CodeBlock } from "../CodeBlock";
 import { Collapsible, countLines } from "../Collapsible";
 import { resultText, strArg } from "../toolHelpers";
 
-/** Hostname without a leading "www.", or the raw string if it isn't a URL. */
 function hostOf(url: string): string {
 	try {
 		return new URL(url).hostname.replace(/^www\./, "");
@@ -13,7 +12,6 @@ function hostOf(url: string): string {
 	}
 }
 
-/** First URL from `fetch_content` args (`url`, or the first of `urls[]`). */
 function firstUrl(args: Record<string, unknown>): string {
 	const single = strArg(args, "url");
 	if (single) return single;
@@ -21,7 +19,6 @@ function firstUrl(args: Record<string, unknown>): string {
 	return Array.isArray(many) && typeof many[0] === "string" ? many[0] : "";
 }
 
-/** Body for the `fetch_content` tool: fetched URL + its extracted content as markdown. */
 export function WebFetchCard({ args, result, status }: ToolRenderProps) {
 	const url = firstUrl(args);
 	const label = url ? hostOf(url) : "fetch";

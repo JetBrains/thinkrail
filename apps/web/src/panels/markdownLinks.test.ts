@@ -22,7 +22,6 @@ test("resolveRelativePath resolves against the source file's directory (posix)",
 	);
 	expect(resolveRelativePath("README.md", "architecture.md")).toBe("architecture.md");
 	expect(resolveRelativePath("docs/guide.md", "./img/logo.png")).toBe("docs/img/logo.png");
-	// A leading slash is worktree-root-relative.
 	expect(resolveRelativePath("a/b/c.md", "/root.md")).toBe("root.md");
 });
 

@@ -131,7 +131,6 @@ export function findLayoutTab(document: WorkspaceLayoutDocument, tabId: string):
 	return null;
 }
 
-/** Keep an opaque shared id when free; mint a placement-only id if another semantic resource owns it. */
 export function withAvailablePlacementId<T extends LayoutTab>(
 	document: WorkspaceLayoutDocument,
 	tab: T,
@@ -898,9 +897,6 @@ export function resizeSideGroups(
 	};
 }
 
-/** Close the current semantic placement without trusting a captured opaque placement id.
- * A delayed domain close may outlive a move or id reuse; it follows the resource and never removes the
- * unrelated tab that later acquired its old id. */
 export function closePlacedResource(
 	document: WorkspaceLayoutDocument,
 	tab: LayoutTab,

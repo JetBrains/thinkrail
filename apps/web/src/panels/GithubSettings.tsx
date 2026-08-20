@@ -4,11 +4,6 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { getTransport } from "@/transport";
 
-/**
- * The "Local GitHub" settings section: the host's read-only `gh` auth status (Connected with the account
- * login, or Not connected — the same graceful degrade the New-Workspace dialog uses) + a Refresh that
- * re-probes `gh`. Fetches on mount (mounted only while its settings section is active).
- */
 export function GithubSettings() {
 	const [gh, setGh] = useState<GithubAuthStatus | null>(null);
 	const [refreshing, setRefreshing] = useState(false);

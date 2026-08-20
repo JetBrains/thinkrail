@@ -10,22 +10,12 @@ export interface TerminalCompletion {
 type PushToClient = (clientKey: string, channel: string, data: unknown) => TerminalDeliveryResult;
 
 export interface TerminalCompletionQueue {
-	/** Add one terminal's natural completion and try to deliver it now. */
 	enqueue(clientKey: string, completion: TerminalCompletion): void;
-	/** Resume this client's ordered completions after drain/reconnect. */
 	resume(clientKey: string): void;
-	/** Drop completions for one abandoned client. */
 	clearClient(clientKey: string): void;
-	/** Drop every completion during host shutdown. */
 	clear(): void;
 }
 
-/**
- * Keeps a naturally exited terminal's last output and death notice in one ordered delivery unit.
- *
- * The queue mutates only the head: once its data frame is accepted it is removed from that completion even if
- * the exit must wait for a later drain. Thus retries can neither lose the final bytes nor paint them twice.
- */
 export function createTerminalCompletionQueue(push: PushToClient): TerminalCompletionQueue {
 	const pending = new Map<string, TerminalCompletion[]>();
 
@@ -39,13 +29,13 @@ export function createTerminalCompletionQueue(push: PushToClient): TerminalCompl
 			if (completion.data) {
 				const delivery = push(clientKey, WS_CHANNELS.terminalData, completion.data);
 				if (delivery === "unavailable") return;
-				delete completion.data; // accepted: never replay these bytes
+				delete completion.data;
 				if (delivery === "backpressured") return;
 			}
 
 			const delivery = push(clientKey, WS_CHANNELS.terminalExit, completion.exit);
 			if (delivery === "unavailable") return;
-			completions.shift(); // exit accepted: this completion is done
+			completions.shift();
 			if (delivery === "backpressured") break;
 		}
 

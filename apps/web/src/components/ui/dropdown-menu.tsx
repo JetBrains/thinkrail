@@ -19,11 +19,6 @@ function DropdownMenuContent({
 			<DropdownMenuPrimitive.Content
 				sideOffset={sideOffset}
 				className={cn(
-					// Bounded + scrollable: a long menu (the Changes scope menu lists up to 200 commits) must never
-					// run its rows past the viewport edge where they are unreachable. Radix reports the space it
-					// has; we cap at 60vh so the menu never swallows the screen either. Vertical scrolling only —
-					// `overflow-y-auto` alone leaves `overflow-x` at `auto`, so a wide row (a long commit subject)
-					// would add a horizontal scrollbar to a menu whose rows are supposed to truncate.
 					menuContentClass,
 					"max-h-[min(60vh,var(--radix-dropdown-menu-content-available-height))]",
 					className,
@@ -48,12 +43,7 @@ function DropdownMenuSubTrigger({
 }: React.ComponentProps<typeof DropdownMenuPrimitive.SubTrigger>) {
 	return (
 		<DropdownMenuPrimitive.SubTrigger
-			className={cn(
-				menuItemClass,
-				// An open submenu is a persistent state, not a pointer hover — same fill as the item highlight.
-				"data-[state=open]:bg-control-bg-selected",
-				className,
-			)}
+			className={cn(menuItemClass, "data-[state=open]:bg-control-bg-selected", className)}
 			{...props}
 		>
 			{children}

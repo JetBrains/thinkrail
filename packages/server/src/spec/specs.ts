@@ -1,12 +1,7 @@
-// The Specs-viewer read: a whole-graph snapshot of a worktree's spec-graph, mapped to the wire DTOs.
-// Reads through pi-spec-graph's derived index (revalidate-on-read), so every fetch sees the current
-// filesystem; one SpecIndex is reused per worktree root so the parse cache pays off across fetches.
-
 import type { SpecGraphNode, SpecGraphSnapshot } from "@thinkrail/contracts";
 import { FIELDS, list, SpecIndex, scalar } from "pi-spec-graph/core";
 import { loadWorkspaces } from "../persistence";
 
-/** One reused index per workspace (1:1 with its worktree root; same pattern as the agent's spec tools). */
 const indexes = new Map<string, SpecIndex>();
 
 function indexFor(workspaceId: string, root: string): SpecIndex {
@@ -18,25 +13,12 @@ function indexFor(workspaceId: string, root: string): SpecIndex {
 	return index;
 }
 
-/** Drop a workspace's cached index (called by `host` on workspace removal); a later read rebuilds it. */
 export function evictSpecIndex(workspaceId: string): void {
 	indexes.delete(workspaceId);
 }
 
-/** One reused index per project root, for the project-level `hasSpecs` check below (revalidate-on-read). */
 const projectIndexes = new Map<string, SpecIndex>();
 
-/**
- * Whether a project's repo root carries any **durable** spec — a file with `id` + `type` frontmatter,
- * anywhere under the root, whose `type` is not `task-spec` — the signal the Welcome screen uses for its
- * "Set up project" suggestion. Ephemeral `task-spec`s (temp docs, e.g. in `.thinkrail/context/`) never
- * count: a scratch design doc must not make a project look already set up.
- * Uses the same derived, revalidate-on-read index as the agent's spec tools, so it's robust to any spec
- * filename/casing (not just a lowercased `goal-and-requirements.md`) and always reflects the filesystem.
- * A per-root index is reused across reads (welcome, project.list) so its parse cache skips re-reading
- * unchanged spec files — only new or changed ones are re-parsed. Defensive: a globbing/parse failure
- * degrades to `false` rather than breaking project open/list.
- */
 export function projectHasSpecs(root: string): boolean {
 	let index = projectIndexes.get(root);
 	if (!index) {
@@ -53,7 +35,6 @@ export function projectHasSpecs(root: string): boolean {
 	}
 }
 
-/** The workspace worktree's spec-graph as a flat node snapshot; the client derives the tree. */
 export function specGraph(workspaceId: string): SpecGraphSnapshot {
 	const ws = loadWorkspaces().find((w) => w.id === workspaceId);
 	if (!ws) throw new Error(`Unknown workspace: ${workspaceId}`);

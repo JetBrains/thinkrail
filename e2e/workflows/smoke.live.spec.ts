@@ -1,20 +1,8 @@
-// The live smoke scenarios — the minimum runs proving the harness's infra pieces against a REAL pi
-// agent. Not the workflow coverage itself: routing classification (including the fresh-entry
-// rule→router→worker path with abort-on-signal) lives in routing.live.spec.ts (slice 2); worker
-// flows are slice 3.
-//
-// Needs pi auth (global setup copies it into the isolated agent dir) and spends real tokens:
-//   bun run test:workflows
 import { test } from "@playwright/test";
 import { checks, defineScenario, endAllSessions, signals, workflowTest } from "./harness";
 
 test.afterAll(() => endAllSessions());
 
-// ── Smoke: mid-flow + dialog ladder + user simulator ───────────────────────────────────────────────────
-// Enters brainstorming MID-FLOW via an artifact preset (the task-spec is the workflow's spine), lets the
-// simulated user drive the conversation, and answers the agent's ask_user_question round through the
-// production bridge (persona rung; deterministic pickRecommended as the safety rung). Passes when the
-// round was asked AND the decision landed in the task-spec on disk.
 const TASK_SPEC = [
 	"---",
 	"id: task-verbose-logging",
@@ -61,8 +49,6 @@ workflowTest(
 		},
 		dialog: { fallback: "pickRecommended" },
 		stopWhen: [
-			// The decision landed on disk: an edit/write of the task-spec COMPLETED (result present — the
-			// signal must not abort the very write it waits for).
 			signals.toolCall("edit", {
 				pathEndsWith: "TASK-verbose-logging.md",
 				where: (call) => call.result !== undefined,
@@ -75,7 +61,6 @@ workflowTest(
 		watchdog: { budget: { maxTurns: 6 } },
 		expect: [
 			checks.expectToolCalled("ask_user_question"),
-			// the task-spec was actually updated (content differs from the seeded fixture)
 			checks.expectFile("TASK-verbose-logging.md", (content) => content !== TASK_SPEC),
 		],
 		judge: {
@@ -89,15 +74,11 @@ workflowTest(
 	}),
 );
 
-// ── Smoke: transcript preset — proves SessionManager.open continuation ────────────────────────────────
-// Reopens smoke 2's recorded session (fixture: transcript + workspace snapshot, cwd rewritten) and
-// asks a question answerable only from the mid-flow state — the chosen log format lives in the
-// continued conversation, proving the session really resumed rather than starting fresh.
 workflowTest(
 	defineScenario({
 		name: "transcript preset: reopened session continues mid-conversation",
 		skill: "brainstorming",
-		workspace: "empty", // replaced by the fixture's workspace snapshot
+		workspace: "empty",
 		preset: { transcript: "brainstorming-mid-flow" },
 		entry: {
 			prompt:

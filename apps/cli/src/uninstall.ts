@@ -1,12 +1,3 @@
-// `thinkrail uninstall` — the inverse of install.sh / install.ps1, and only of them: the executable, the
-// PATH edit the installer made, `install.json`, and the cache the compiled binary self-extracts into. The
-// user's app state (the data dir) is a separate question the command *asks*, and keeps by default: it
-// holds the workspace git worktrees, so deleting it can destroy uncommitted work. pi's own state (`~/.pi`:
-// auth, models, sessions) is never touched — it isn't ours to remove.
-//
-// Shape: a pure plan (`resolveUninstallTargets`) → an inspection pass that narrows it to what really
-// exists, so the printed plan is true → the prompts → the removals, each reported.
-
 import { randomUUID } from "node:crypto";
 import {
 	existsSync,
@@ -32,7 +23,6 @@ import {
 import { psQuote, runPowerShellScript, spawnDetachedPowerShell } from "./powershell";
 import { channel, version } from "./version";
 
-/** The marker block install.sh writes into a shell rc file — self-identifying, so removing it is safe. */
 export const RC_BLOCK_BEGIN = "# >>> thinkrail PATH >>>";
 export const RC_BLOCK_END = "# <<< thinkrail PATH <<<";
 
@@ -51,14 +41,11 @@ Options:
   -h, --help      Show this help.`;
 
 export interface UninstallArgs {
-	/** Skip every prompt. */
 	yes: boolean;
-	/** An explicit answer to the app-state question, or `undefined` to ask. */
 	data: "keep" | "remove" | undefined;
 	help: boolean;
 }
 
-/** Parse `uninstall`'s argv (the slice after `uninstall`). Throws on an unknown or contradictory flag. */
 export function parseUninstallArgs(argv: readonly string[]): UninstallArgs {
 	let yes = false;
 	let data: "keep" | "remove" | undefined;
@@ -81,7 +68,6 @@ export function parseUninstallArgs(argv: readonly string[]): UninstallArgs {
 	return { yes, data, help };
 }
 
-/** Answer to a `[y/N]` question: an empty (or unrecognized) answer keeps the offered default. */
 export function parseYesNo(answer: string, fallback: boolean): boolean {
 	const normalized = answer.trim().toLowerCase();
 	if (normalized === "y" || normalized === "yes") return true;
@@ -89,19 +75,12 @@ export function parseYesNo(answer: string, fallback: boolean): boolean {
 	return fallback;
 }
 
-/**
- * Ask a `[y/N]` question, reading from the interface's **line iterator** rather than `rl.question`: the
- * iterator is attached once and buffers, so an answer typed ahead of the second prompt is still read (and
- * `question`'s promise never settles on EOF at all — the command would exit silently having done nothing,
- * the one outcome an uninstall must never have). A closed stdin (Ctrl+D) counts as the default answer.
- */
 async function askYesNo(
 	rl: ReturnType<typeof createInterface>,
 	lines: AsyncIterator<string>,
 	question: string,
 	fallback: boolean,
 ): Promise<boolean> {
-	// Via the interface, not a bare write, so line editing redraws the prompt with it.
 	rl.setPrompt(question);
 	rl.prompt();
 	const next = await lines.next();
@@ -113,18 +92,10 @@ async function askYesNo(
 }
 
 export interface UninstallTargets {
-	/** Executables to remove: the recorded install, plus our own binary when it is one. Deduped. */
 	binaries: string[];
-	/** `<prefix>/bin` — the dir the installer puts on PATH. */
 	binDir: string;
-	/**
-	 * Windows: did *our* installer put `binDir` on the user PATH (`install.json`'s `path_entry_added`, for
-	 * this same prefix)? The only thing that licenses a registry PATH edit — see `removeWindowsPathEntry`.
-	 */
 	pathEntryOwned: boolean;
-	/** Shell rc files that may carry the installer's block (Unix). */
 	rcFiles: string[];
-	/** The fish `conf.d` snippet install.sh creates — deleted outright once only the block is left. */
 	fishFile: string;
 	installMetaFile: string;
 	installConfigDir: string;
@@ -137,20 +108,11 @@ export interface ResolveUninstallInput {
 	home: string;
 	env: Record<string, string | undefined>;
 	installMeta: InstallMeta;
-	/** `process.execPath` — the compiled binary when we *are* one, else the Bun/Node runtime. */
 	execPath: string;
 	dataDir: string;
 	stagingRoot: string;
 }
 
-/**
- * The paths an uninstall touches — pure, so every rule below is unit-testable.
- *
- * The prefix comes from `install.json`, else the installers' own `~/.local` default; a relative or empty
- * recorded prefix is ignored rather than trusted. Beyond that we add `process.execPath` **when it is
- * itself a `thinkrail` binary** — that is what covers a custom-prefix install whose `install.json` is
- * gone — and nothing else is ever a candidate, whatever the metadata says.
- */
 export function resolveUninstallTargets(input: ResolveUninstallInput): UninstallTargets {
 	const windows = input.platform === "win32";
 	const exeName = windows ? "thinkrail.exe" : "thinkrail";
@@ -161,8 +123,6 @@ export function resolveUninstallTargets(input: ResolveUninstallInput): Uninstall
 			: join(input.home, ".local");
 	const binDir = join(prefix, "bin");
 
-	// Only the recorded flag proves the entry is ours, and only for the prefix it was recorded against: a
-	// fallback prefix means we are not looking at the install that flag describes.
 	const pathEntryOwned =
 		windows && prefix === recordedPrefix && input.installMeta.path_entry_added === true;
 
@@ -171,9 +131,6 @@ export function resolveUninstallTargets(input: ResolveUninstallInput): Uninstall
 		binaries.push(input.execPath);
 	}
 
-	// Every rc file install.sh could have written, plus `.profile`/`.zshrc` regardless of `$SHELL` and
-	// `$ZDOTDIR` — the block is self-identifying, so scanning a file we never wrote costs nothing and
-	// catches a user who has since switched shells. (install.sh never writes one on Windows.)
 	const zdotdir = input.env.ZDOTDIR;
 	const rcFiles = windows
 		? []
@@ -200,19 +157,10 @@ export function resolveUninstallTargets(input: ResolveUninstallInput): Uninstall
 	};
 }
 
-/** `path.isAbsolute` for the *target* platform, not ours (this module is unit-tested cross-platform). */
 function isAbsolutePath(path: string, windows: boolean): boolean {
 	return windows ? /^(?:[A-Za-z]:[\\/]|\\\\[^\\/]+[\\/])/.test(path) : path.startsWith("/");
 }
 
-/**
- * Strip the installer's PATH block from an rc file's contents. Mirrors install.sh's own awk strip (drop
- * `begin`..`end` inclusive) and additionally drops the single blank line install.sh printed before the
- * block, so an uninstall leaves the file as it found it.
- *
- * `unterminated` means a `begin` marker with no `end` after it: the caller must then leave the file alone
- * — a hand-edited or truncated rc file is not worth silently rewriting.
- */
 export function stripRcPathBlock(content: string): {
 	next: string;
 	removed: boolean;
@@ -238,14 +186,6 @@ export function stripRcPathBlock(content: string): {
 	return { next: kept.join("\n"), removed, unterminated: false };
 }
 
-/**
- * Remove `$Dir` from the persistent per-user PATH — the exact inverse of install.ps1's
- * `Add-ThinkRailToUserPath`, and PowerShell for the same reasons it is: the registry value's
- * `REG_EXPAND_SZ` kind must survive (`[Environment]::SetEnvironmentVariable` would rewrite it as `REG_SZ`
- * and expand every other tool's `%VARS%`), entries must be compared both raw and expanded, and the value
- * must never cross a pipe — a non-ASCII entry would come back mangled in the console code page. Prints
- * one token: `removed`, `absent`, or `failed`.
- */
 const REMOVE_FROM_USER_PATH_PS1 = String.raw`param([Parameter(Mandatory = $true)][string]$Dir)
 $ErrorActionPreference = 'Stop'
 
@@ -311,7 +251,6 @@ try {
 
 type Outcome = "removed" | "kept" | "absent" | "failed";
 
-/** What a step acted on. Typed rather than free text: the closing advice keys off `PATH entry`. */
 type StepKind =
 	| "executable"
 	| "leftover"
@@ -354,12 +293,6 @@ function removeTree(path: string): Outcome {
 	}
 }
 
-/**
- * Remove an executable that may be *this* process. Unix unlinks a running binary happily; Windows refuses
- * to delete a locked image but does allow renaming it, so we rename it to the very `thinkrail.exe.*.old`
- * name install.ps1's own cleanup already sweeps, then let a detached PowerShell retry the delete once
- * we've exited. Either way the report says what, if anything, is left behind.
- */
 function removeExecutable(path: string): Step {
 	try {
 		unlinkSync(path);
@@ -381,7 +314,6 @@ function removeExecutable(path: string): Step {
 			);
 		}
 		const quoted = psQuote(aside);
-		// Retry for ~20s: the delete can only start succeeding once this process is gone.
 		const scheduled = spawnDetachedPowerShell(
 			`for ($i = 0; $i -lt 40; $i++) { Start-Sleep -Milliseconds 500; Remove-Item -LiteralPath ${quoted} -Force -ErrorAction SilentlyContinue; if (-not (Test-Path -LiteralPath ${quoted})) { break } }`,
 		);
@@ -396,7 +328,6 @@ function removeExecutable(path: string): Step {
 	}
 }
 
-/** Strip the installer's block from the rc files that carry it (Unix). */
 function removeRcBlocks(targets: UninstallTargets): Step[] {
 	const steps: Step[] = [];
 	for (const file of rcCandidates(targets)) {
@@ -404,7 +335,7 @@ function removeRcBlocks(targets: UninstallTargets): Step[] {
 		try {
 			content = readFileSync(file, "utf8");
 		} catch {
-			continue; // Not there (or not readable) — nothing of ours to undo.
+			continue;
 		}
 		if (!content.includes(RC_BLOCK_BEGIN)) continue;
 		const { next, removed, unterminated } = stripRcPathBlock(content);
@@ -422,7 +353,6 @@ function removeRcBlocks(targets: UninstallTargets): Step[] {
 		if (!removed) continue;
 		try {
 			if (file === targets.fishFile && next.trim() === "") {
-				// A file install.sh created for us alone: with the block gone, so is its reason to exist.
 				unlinkSync(file);
 				steps.push(step("PATH entry", file, "removed"));
 			} else {
@@ -438,14 +368,6 @@ function removeRcBlocks(targets: UninstallTargets): Step[] {
 	return steps;
 }
 
-/**
- * Remove `<prefix>\bin` from the user PATH (Windows). Gated on install.ps1 having *recorded that it added
- * that entry*: unlike install.sh's marker block, a registry PATH entry carries nothing that says it is
- * ours, and a user who already had that dir on PATH for other tools must not lose it because ThinkRail
- * happened to be installed there too. Being installed is not the same as having added the entry —
- * `-NoModifyPath`, an entry that was already present, a failed registry write and a Git-Bash install.sh
- * install all record an install without touching the Windows PATH, and legacy metadata predates the flag.
- */
 async function removeWindowsPathEntry(targets: UninstallTargets): Promise<Step> {
 	if (!targets.pathEntryOwned) {
 		return step(
@@ -478,7 +400,6 @@ async function removeWindowsPathEntry(targets: UninstallTargets): Promise<Step> 
 	return step("PATH entry", targets.binDir, "failed", "could not update HKCU\\Environment");
 }
 
-/** Sweep the `.old`/`.new` leftovers a Windows install/update pair can leave beside the exe. */
 function removeWindowsLeftovers(targets: UninstallTargets): Step[] {
 	if (process.platform !== "win32") return [];
 	let entries: string[];
@@ -492,8 +413,6 @@ function removeWindowsLeftovers(targets: UninstallTargets): Step[] {
 		if (!entry.startsWith("thinkrail.exe.")) continue;
 		if (!entry.endsWith(".old") && !entry.endsWith(".new")) continue;
 		const path = join(targets.binDir, entry);
-		// A leftover that is still locked (an older copy someone is running, or the one we just renamed
-		// ourselves out of) is not this uninstall's problem — only report the ones that went.
 		if (removeFile(path) === "removed") steps.push(step("leftover", path, "removed"));
 	}
 	return steps;
@@ -503,7 +422,6 @@ function rcCandidates(targets: UninstallTargets): string[] {
 	return targets.fishFile ? [...targets.rcFiles, targets.fishFile] : targets.rcFiles;
 }
 
-/** Which of the plan's PATH edits are really there: an rc file carrying the block, or the Windows entry. */
 function findPathEdits(targets: UninstallTargets): string[] {
 	if (process.platform === "win32") return targets.pathEntryOwned ? [targets.binDir] : [];
 	return rcCandidates(targets).filter((file) => {
@@ -515,7 +433,6 @@ function findPathEdits(targets: UninstallTargets): string[] {
 	});
 }
 
-/** The plan as printed before anything is touched — only what exists, so what it says can be trusted. */
 function describePlan(
 	targets: UninstallTargets,
 	present: { binaries: string[]; pathEdits: string[] },
@@ -548,7 +465,6 @@ function printSteps(steps: Step[]): void {
 	}
 }
 
-/** Run the `uninstall` subcommand. Returns a process exit code. */
 export async function runUninstall(
 	argv: readonly string[],
 	env: Record<string, string | undefined>,
@@ -628,11 +544,8 @@ export async function runUninstall(
 	);
 	steps.push(step("install info", targets.installMetaFile, removeFile(targets.installMetaFile)));
 	try {
-		// Ours, but only while it's empty — another tool's `~/.config/thinkrail` file is not ours to drop.
 		rmdirSync(targets.installConfigDir);
-	} catch {
-		// Missing or not empty: nothing to do either way.
-	}
+	} catch {}
 	steps.push(step("staging cache", targets.stagingRoot, removeTree(targets.stagingRoot)));
 	steps.push(
 		step(

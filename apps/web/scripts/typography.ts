@@ -1,14 +1,3 @@
-/**
- * The typography pipeline: load → validate → render CSS.
- *
- * `styles/typography.json` is the ONLY source of typography values. This module derives every CSS
- * custom property, the document base rule, every semantic class and every prose selector from it;
- * nothing downstream may invent a size, a weight, a line-height or a family. Naming is mechanical (see
- * `cssVarName` / `styleClassName` / `proseRootClassName`), so a new token, style or prose system needs no
- * code change here.
- *
- * Entry points: `generate-typography.ts` (write / --check) and `validate-typography.ts`.
- */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -19,7 +8,6 @@ export const GENERATED_PATH = join(STYLES_DIR, "generated", "typography.css");
 export const GENERATED_FONTS_PATH = join(STYLES_DIR, "generated", "fonts.css");
 const PACKAGE_JSON = join(import.meta.dir, "..", "package.json");
 
-/** `{ "$ref": "title.dialog" }` — "identical to that style". The whole reference mechanism. */
 export interface StyleRef {
 	$ref: string;
 }
@@ -27,11 +15,6 @@ export interface StyleRef {
 export interface FontFamily {
 	stack: string[];
 	kind: "proportional" | "monospace";
-	/**
-	 * The npm entry points that ship this family's faces, if we self-host it. Declared HERE so the
-	 * stack and the bundled packages cannot drift: a family named in a stack with no package behind it
-	 * renders as a silent fallback, which is invisible in review and in the browser.
-	 */
 	selfHosted?: string[];
 }
 
@@ -53,10 +36,8 @@ export interface Typography {
 	fontSizes: Record<string, number>;
 	lineHeights: Record<string, number>;
 	letterSpacings: Record<string, string>;
-	/** The `<body>` fallback for text that carries no semantic class. Always a `$ref`, never values. */
 	rootStyle: StyleRef;
 	textStyles: Record<string, Record<string, Style | StyleRef>>;
-	/** One entry per markdown surface (`chat`, `doc`); each owns the full `PROSE_SELECTORS` element set. */
 	proseSystems: Record<string, Record<string, Style | StyleRef>>;
 }
 
@@ -67,21 +48,15 @@ export function loadTypography(path = SOURCE_PATH): Typography {
 export const isRef = (value: unknown): value is StyleRef =>
 	typeof value === "object" && value !== null && "$ref" in value;
 
-/** Is `group` a prose system (rather than a `textStyles` group)? */
 export const isProseGroup = (t: Typography, group: string): boolean =>
 	group in (t.proseSystems ?? {});
 
-/** The raw entry at `<group>.<name>` — a definition or a reference. Groups span both style spaces. */
 export function rawStyle(t: Typography, id: string): Style | StyleRef | undefined {
 	const [group, name] = id.split(".");
 	if (!group || !name) return undefined;
 	return isProseGroup(t, group) ? t.proseSystems[group]?.[name] : t.textStyles?.[group]?.[name];
 }
 
-/**
- * Resolve a style id to its canonical definition — ONE hop, by design. A reference must point straight
- * at a definition (see `validate`), so there is no chain to walk and no inheritance to merge.
- */
 export function resolveStyle(t: Typography, id: string): Style {
 	const entry = rawStyle(t, id);
 	if (!entry) throw new Error(`unknown style '${id}'`);
@@ -95,7 +70,6 @@ export function resolveStyle(t: Typography, id: string): Style {
 	return target;
 }
 
-/** Resolve a font family id — the same single hop. */
 export function resolveFamily(t: Typography, id: string): FontFamily {
 	const entry = t.fontFamilies?.[id];
 	if (!entry) throw new Error(`unknown font family '${id}'`);
@@ -109,9 +83,6 @@ export function resolveFamily(t: Typography, id: string): FontFamily {
 	return target;
 }
 
-/* ── naming (the single place CSS identifiers are derived) ───────────────────────────────────── */
-
-/** `@fontsource-variable/geist/wght-italic.css` → `@fontsource-variable/geist`. */
 export const packageRoot = (entry: string) => entry.split("/").slice(0, 2).join("/");
 
 let dependencyCache: Set<string> | undefined;
@@ -125,7 +96,6 @@ function declaredDependencies(): Set<string> {
 	return dependencyCache;
 }
 
-/** The `@import`s that pull the self-hosted faces into the bundle, in declaration order. */
 export function renderFontsCss(t: Typography): string {
 	const imports = Object.values(t.fontFamilies ?? {})
 		.filter((f): f is FontFamily => !isRef(f))
@@ -156,7 +126,6 @@ export function cssVarName(t: Typography, group: string, id: string): string {
 	return `--${t.metadata.cssVarPrefix}-${group}-${kebab(id)}`;
 }
 
-/** `title.dialog` → `tr-title-dialog`; `ui.default` → `tr-text-ui`; `code.text` → `tr-code-text`. */
 export function styleClassName(t: Typography, group: string, id: string): string {
 	const p = t.metadata.classPrefix;
 	if (group === "ui") return id === "default" ? `${p}-text-ui` : `${p}-text-${kebab(id)}`;
@@ -164,22 +133,12 @@ export function styleClassName(t: Typography, group: string, id: string): string
 	return `${p}-${group}-${kebab(id)}`;
 }
 
-/** `chat` → `tr-prose-chat`; `doc` → `tr-prose-doc`. One root class per markdown surface. */
 export function proseRootClassName(t: Typography, system: string): string {
 	return `${t.metadata.classPrefix}-prose-${kebab(system)}`;
 }
 
-/**
- * The weight `<strong>`/`<b>` gets inside prose. It is deliberately NOT a semantic style: a complete
- * style would override the size and line-height of whatever element the bold text sits in (a heading, a
- * table cell), so the emitted rule sets weight alone and inherits the rest.
- */
 export const PROSE_STRONG_WEIGHT = "medium";
 
-/**
- * Which element each prose style owns, inside every prose system's root class. `body` styles the root
- * itself. Every system must define exactly this key set — that is what makes the surfaces comparable.
- */
 export const PROSE_SELECTORS: Record<string, string> = {
 	body: "",
 	h1: " h1",
@@ -194,22 +153,13 @@ export const PROSE_SELECTORS: Record<string, string> = {
 	list: " :is(ul, ol, li)",
 	tableBody: " :is(table, td)",
 	tableHeader: " th",
-	// Inline code that is a direct child of a table cell (`<td><code>` / `<th><code>`) — a fenced block
-	// in a cell is `<td><pre><code>`, whose `code` parent is `pre`, so it's excluded here and stays
-	// `codeBlock`. Same specificity as `inlineCode` but emitted after it (last in this map), so it wins
-	// for cell inline code while paragraph inline code keeps `inlineCode`.
 	tableInlineCode: " :is(td, th) > code",
 };
 
-/** The prose roles that render code, in every prose system. */
 export const PROSE_CODE_NAMES = new Set(["inlineCode", "codeBlock", "tableInlineCode"]);
 
-/* ── validation ─────────────────────────────────────────────────────────────────────────────── */
-
-/** `textStyles` ids allowed to use a monospace family — every other one must be proportional. */
 export const CODE_STYLE_IDS = new Set(["code.text", "code.document", "code.otp", "code.textSmall"]);
 
-/** Should `id` render in a monospace family? The single definition of the mono policy. */
 export function isCodeStyleId(t: Typography, id: string): boolean {
 	const [group, name] = id.split(".");
 	if (!group || !name) return false;
@@ -221,13 +171,10 @@ export interface ResolvedStyle {
 	group: string;
 	name: string;
 	style: Style;
-	/** The id this entry points at, or null when it is a canonical definition. */
 	ref: string | null;
-	/** True for a `proseSystems` entry — it owns an element selector, not a class. */
 	prose: boolean;
 }
 
-/** Every style, RESOLVED (references followed), in source order. */
 export function allStyles(t: Typography): ResolvedStyle[] {
 	const out: ResolvedStyle[] = [];
 	const push = (group: string, name: string, entry: Style | StyleRef, prose: boolean) => {
@@ -248,7 +195,6 @@ export function allStyles(t: Typography): ResolvedStyle[] {
 	return out;
 }
 
-/** Schema-shape + referential + policy validation. Returns human-readable errors (empty = valid). */
 export function validate(t: Typography): string[] {
 	const errors: string[] = [];
 	const fail = (m: string) => errors.push(m);
@@ -290,7 +236,6 @@ export function validate(t: Typography): string[] {
 			}
 		}
 	}
-	// …and the other direction: a font package nobody claims is dead weight in the bundle.
 	const claimed = new Set(
 		Object.values(t.fontFamilies ?? {})
 			.filter((f): f is FontFamily => !isRef(f))
@@ -316,7 +261,6 @@ export function validate(t: Typography): string[] {
 	for (const [id, v] of Object.entries(t.lineHeights ?? {}))
 		if (!(v > 0)) fail(`lineHeights.${id}: must be > 0`);
 
-	// Ids are `<group>.<name>`, so a group name may not mean two things.
 	for (const group of Object.keys(t.proseSystems ?? {}))
 		if (group in (t.textStyles ?? {}))
 			fail(
@@ -325,8 +269,6 @@ export function validate(t: Typography): string[] {
 	if (Object.keys(t.proseSystems ?? {}).length === 0) fail("proseSystems must not be empty");
 	if (errors.length > 0) return errors;
 
-	// References: direct only. A `$ref` must name a canonical DEFINITION — never another reference —
-	// so resolution is one lookup and there is no chain, cycle or inheritance to reason about.
 	const rawEntries: [string, Style | StyleRef][] = [
 		...Object.entries(t.textStyles ?? {}).flatMap(([group, styles]) =>
 			Object.entries(styles).map(
@@ -357,7 +299,6 @@ export function validate(t: Typography): string[] {
 					`Reference ${target.$ref} directly.`,
 			);
 	}
-	// The document base names a semantic style rather than repeating one, so `<body>` can never drift.
 	const root = t.rootStyle;
 	if (!isRef(root)) fail("rootStyle must be a $ref to a semantic style, not a set of values");
 	else if (Object.keys(root).length > 1) fail("rootStyle: a $ref may not carry other properties");
@@ -368,13 +309,11 @@ export function validate(t: Typography): string[] {
 	}
 	if (errors.length > 0) return errors;
 
-	// Ids unique across the whole style space (a duplicate would silently overwrite a class).
 	const seen = new Set<string>();
 	for (const { id } of allStyles(t)) {
 		if (seen.has(id)) fail(`duplicate style id: ${id}`);
 		seen.add(id);
 	}
-	// Generated class names must be unique too — two ids may not collapse onto one class.
 	const classes = new Map<string, string>();
 	for (const { id, group, name, prose } of allStyles(t)) {
 		if (prose) continue;
@@ -384,7 +323,6 @@ export function validate(t: Typography): string[] {
 		classes.set(cls, id);
 	}
 
-	// Two canonical definitions may not hold identical values — that is a missing $ref.
 	const byValue = new Map<string, string>();
 	for (const { id, style, ref } of allStyles(t)) {
 		if (ref) continue;
@@ -394,7 +332,6 @@ export function validate(t: Typography): string[] {
 		else byValue.set(key, id);
 	}
 
-	// Every style fully resolves, and every reference exists.
 	const REQUIRED: (keyof Style)[] = [
 		"fontFamily",
 		"fontSize",
@@ -425,7 +362,6 @@ export function validate(t: Typography): string[] {
 				if (!REQUIRED.includes(key as keyof Style)) fail(`${id}: unexpected property '${key}'`);
 	}
 
-	// Mono is code-only: no proportional role may reference a monospace family, and vice versa.
 	for (const { id, style } of allStyles(t)) {
 		if (!(style.fontFamily in (t.fontFamilies ?? {}))) continue;
 		const isMono = resolveFamily(t, style.fontFamily).kind === "monospace";
@@ -433,19 +369,15 @@ export function validate(t: Typography): string[] {
 			fail(`${id}: monospace family on a non-code semantic style`);
 		if (!isMono && isCodeStyleId(t, id)) fail(`${id}: code style must use a monospace family`);
 	}
-	// The `<body>` fallback is interface text, never a code face.
 	if (isRef(t.rootStyle) && rawStyle(t, t.rootStyle.$ref)) {
 		const rootFamily = resolveStyle(t, t.rootStyle.$ref).fontFamily;
 		if (rootFamily in (t.fontFamilies ?? {}) && resolveFamily(t, rootFamily).kind === "monospace")
 			fail("rootStyle: the document base must be proportional");
 	}
 
-	// The weight-only <strong> rule references this token directly.
 	if (!(PROSE_STRONG_WEIGHT in (t.fontWeights ?? {})))
 		fail(`fontWeights.${PROSE_STRONG_WEIGHT}: missing — the prose <strong> rule references it`);
 
-	// Every prose system owns exactly the shared element set — that is what makes the surfaces
-	// comparable, and what stops a markdown element from silently having no typography on one of them.
 	for (const [system, styles] of Object.entries(t.proseSystems ?? {})) {
 		for (const id of Object.keys(PROSE_SELECTORS))
 			if (!(id in styles)) fail(`proseSystems.${system}.${id}: missing (the element set is fixed)`);
@@ -454,14 +386,11 @@ export function validate(t: Typography): string[] {
 				fail(`proseSystems.${system}.${id}: no selector mapping — unused prose style`);
 	}
 
-	// Card title must be typographically identical to dialog title.
 	const dialog = rawStyle(t, "title.dialog") ? resolveStyle(t, "title.dialog") : undefined;
 	const card = rawStyle(t, "title.card") ? resolveStyle(t, "title.card") : undefined;
 	if (dialog && card && JSON.stringify(dialog) !== JSON.stringify(card))
 		fail("title.card must be typographically identical to title.dialog");
 
-	// A document surface must keep a visible hierarchy: h1–h4 strictly larger than its own body text,
-	// and each level no larger than the one above it. This is the rule the em-ladder used to give us.
 	const docSystem = t.proseSystems?.doc;
 	if (docSystem) {
 		const px = (name: string) => t.fontSizes[resolveStyle(t, `doc.${name}`).fontSize] ?? 0;
@@ -477,8 +406,6 @@ export function validate(t: Typography): string[] {
 
 	return errors;
 }
-
-/* ── CSS rendering ──────────────────────────────────────────────────────────────────────────── */
 
 const HEADER = (version: string) => `/*
  * GENERATED FILE — DO NOT EDIT.
@@ -534,8 +461,6 @@ export function renderCss(t: Typography): string {
 		out.push(`\t${cssVarName(t, "letter-spacing", id)}: ${v};`);
 	out.push("}\n");
 
-	// The document base. In `base` so every semantic class beats it: it is the fallback for text that
-	// carries no class, never a value a component relies on.
 	out.push(
 		`/* Document base — \`rootStyle\` (${t.rootStyle.$ref}). Any semantic class overrides it. */`,
 	);
@@ -545,7 +470,6 @@ export function renderCss(t: Typography): string {
 	out.push("\t}");
 	out.push("}\n");
 
-	// Everything below is layered so Tailwind utilities can override a single property at a call site.
 	out.push("@layer components {");
 	out.push("/* Semantic text styles — one class per style. Colour stays at the call site. */");
 	for (const [group, styles] of Object.entries(t.textStyles))
@@ -555,7 +479,6 @@ export function renderCss(t: Typography): string {
 			out.push("}");
 		}
 
-	// One prose system per markdown surface. Same element set everywhere, its own type per surface.
 	for (const [system, styles] of Object.entries(t.proseSystems)) {
 		const root = proseRootClassName(t, system);
 		out.push("");
@@ -566,10 +489,6 @@ export function renderCss(t: Typography): string {
 			out.push(declarations(t, resolveStyle(t, `${system}.${name}`)));
 			out.push("}");
 		}
-		// `<strong>` / `<b>`: WEIGHT ONLY. Family, size, line-height, tracking, transform and colour
-		// inherit from the enclosing prose element, so bold inside a heading keeps the heading's size,
-		// bold in a table cell keeps the table's size, and bold in body text keeps the body's. The
-		// (0,1,1) specificity beats preflight's `strong { font-weight: bolder }`.
 		out.push(`/* Bold: weight only — every other property inherits from the parent element. */`);
 		out.push(`.${root} :is(strong, b) {`);
 		out.push(`\tfont-weight: var(${cssVarName(t, "font-weight", PROSE_STRONG_WEIGHT)});`);

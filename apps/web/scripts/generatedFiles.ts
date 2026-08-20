@@ -1,13 +1,8 @@
-/**
- * `--check` reports drift, otherwise write. Shared by both generator CLIs so they cannot disagree on
- * what "stale" means.
- */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, relative } from "node:path";
 
 export type GeneratedFile = { path: string; content: string };
 
-/** Line endings belong to the checkout, not the content — Git rewrites them under `core.autocrlf`. */
 export const normalizeEol = (text: string): string => text.replaceAll("\r\n", "\n");
 
 const onDisk = (path: string): string => (existsSync(path) ? readFileSync(path, "utf8") : "");
@@ -15,7 +10,6 @@ const onDisk = (path: string): string => (existsSync(path) ? readFileSync(path, 
 export const isStale = ({ path, content }: GeneratedFile): boolean =>
 	normalizeEol(onDisk(path)) !== normalizeEol(content);
 
-/** Exits the process: these are CLI entry points whose status code is the interface. */
 export function writeOrCheck({
 	label,
 	version,

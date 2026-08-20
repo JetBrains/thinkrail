@@ -1,8 +1,3 @@
-// todo_update — change an item's status / title / note. This is how the agent progresses its plan
-// (pending → in_progress → done) as it works. The store keeps "exactly one in_progress" true by
-// auto-demoting the previous one (reported here as "paused"), and a `done` flip suggests the task's
-// next open step — in-band feedback so status discipline doesn't ride on model memory.
-
 import { StringEnum } from "@earendil-works/pi-ai/compat";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
@@ -28,7 +23,6 @@ const parameters = Type.Object({
 	note: Type.Optional(Type.String({ description: "New note (empty string clears it)." })),
 });
 
-/** The first open (non-done) step in the group containing `id`, or undefined (loose / none left). */
 function nextOpenStep(plan: TodoPlan, id: string): Todo | undefined {
 	const group = plan.groups.find((g) => g.todos.some((t) => t.id === id));
 	return group?.todos.find((t) => t.status !== "done");
@@ -60,7 +54,6 @@ export function registerTodoUpdate(pi: ExtensionAPI): void {
 			text = withNudges(
 				text,
 				next ? `next: ${next.id} "${next.title}" — mark it in_progress when you start.` : undefined,
-				// The next-step hint already covers the "nothing in_progress" state; don't double-nudge.
 				next ? undefined : consistencyNudge(plan),
 			);
 			return textResult(text, { todo, paused });

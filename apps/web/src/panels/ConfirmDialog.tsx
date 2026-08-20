@@ -10,13 +10,6 @@ import {
 	DialogTitle,
 } from "@/components/ui/dialog";
 
-/**
- * A small modal confirm on the `Dialog` primitive — a yes/no for an action with no stable on-screen
- * confirmation anchor (for example an initialize offer, a context-menu action, or an overflow-menu
- * action like workspace Remove). For a confirm anchored to a dedicated action control, use
- * `ConfirmPopover`. Forces a deliberate choice: `role="alertdialog"`, no ✕ (`hideClose`), Cancel takes
- * initial focus, and a `destructive` confirm shows a warning glyph.
- */
 export function ConfirmDialog({
 	open,
 	onOpenChange,

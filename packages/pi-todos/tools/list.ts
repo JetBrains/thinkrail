@@ -1,5 +1,3 @@
-// todo_list — read the current plan (loose items + named groups), optionally filtered by status.
-
 import { StringEnum } from "@earendil-works/pi-ai/compat";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
@@ -38,8 +36,6 @@ export function registerTodoList(pi: ExtensionAPI): void {
 				const status = params.status;
 				const items = store.list(status);
 				const text = items.length ? items.map(formatTodo).join("\n") : `No ${status} TODOs.`;
-				// Filter `details` to match the text, so a structured consumer doesn't get the whole plan
-				// while the text says otherwise.
 				const filtered: TodoPlan = {
 					todos: plan.todos.filter((t) => t.status === status),
 					groups: plan.groups

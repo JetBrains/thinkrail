@@ -23,7 +23,6 @@ const item = (title: string, status: TodoItem["status"] = "pending"): TodoItem =
 	updatedAt: "",
 });
 
-/** A group as the wire delivers it: `status` is host-derived (`pi-todos`' `groupStatus`, tested there). */
 const group = (
 	title: string,
 	todos: TodoItem[],
@@ -61,7 +60,7 @@ test("planSections buckets groups by the host-derived status and loose items by 
 		],
 	});
 	expect(sections.activeGroups.map((g) => g.title)).toEqual(["Active"]);
-	expect(sections.pendingGroups.map((g) => g.title)).toEqual(["Pending"]); // stays whole, done step inline
+	expect(sections.pendingGroups.map((g) => g.title)).toEqual(["Pending"]);
 	expect(sections.doneGroups.map((g) => g.title)).toEqual(["Finished"]);
 	expect(sections.pendingLoose.map((t) => t.title)).toEqual(["loose-todo"]);
 	expect(sections.doneLoose.map((t) => t.title)).toEqual(["loose-done"]);
@@ -72,13 +71,11 @@ test("stripStatus reflects the agent's state, not the checkboxes", () => {
 	const current = item("a", "in_progress");
 	const active = { done: 1, total: 3, current };
 	const allDone = { done: 3, total: 3, current: undefined };
-	const openIdle = { done: 1, total: 3, current: undefined }; // open steps, none in_progress
+	const openIdle = { done: 1, total: 3, current: undefined };
 
-	// working: always shown; label hidden when a current step's title carries it, shown when title-less.
 	expect(stripStatus("working", active)).toEqual({ show: true, showLabel: false, title: "a" });
 	expect(stripStatus("working", allDone)).toEqual({ show: true, showLabel: true });
 
-	// waiting_question: shown even when everything is done — the reported bug.
 	expect(stripStatus("waiting_question", allDone)).toEqual({ show: true, showLabel: true });
 	expect(stripStatus("waiting_question", active)).toEqual({
 		show: true,
@@ -86,7 +83,6 @@ test("stripStatus reflects the agent's state, not the checkboxes", () => {
 		title: "a",
 	});
 
-	// waiting (stopped, no question): 'Paused' only while open steps remain; clean finish shows nothing.
 	expect(stripStatus("waiting", openIdle)).toEqual({ show: true, showLabel: true });
 	expect(stripStatus("waiting", allDone)).toEqual({ show: false, showLabel: true });
 });
@@ -111,7 +107,7 @@ test("planGlance: streaming wins; an awaiting question beats plain waiting", () 
 	expect(planGlance(false, {})).toBe("waiting");
 	expect(planGlance(false, { q1: asked(false) })).toBe("waiting_question");
 	expect(planGlance(false, { q1: asked(true) })).toBe("waiting");
-	expect(planGlance(false, { q1: asked(false, true) })).toBe("waiting"); // superseded ≠ awaiting
+	expect(planGlance(false, { q1: asked(false, true) })).toBe("waiting");
 });
 
 test("shouldNudgeOnAdd: never wake an agent waiting on a question; wake it otherwise", () => {
@@ -137,13 +133,11 @@ test("sessionGlance derives the glance straight from a runtime (deriveAskStates 
 	expect(sessionGlance({ isStreaming: false, turns: [], askAnswers: {} })).toBe("waiting");
 });
 
-// --- itemChangeSet: the one derivation behind the "N files" chip + the markdown review map ---
-
 test("itemChangeSet: a commit artifact with decorated files wins over any change rows", () => {
 	const done: TodoItem = {
 		...item("step", "done"),
 		artifacts: [
-			{ kind: "spec", path: "SPEC.md", specId: "s1" }, // agent's own artifacts are not a change set
+			{ kind: "spec", path: "SPEC.md", specId: "s1" },
 			{
 				kind: "commit",
 				sha: "abc123",
@@ -152,7 +146,7 @@ test("itemChangeSet: a commit artifact with decorated files wins over any change
 					{ path: "b.ts", status: "added", added: 5 },
 				],
 			},
-			{ kind: "change", path: "stale.ts" }, // a leftover fallback row must not shadow the commit
+			{ kind: "change", path: "stale.ts" },
 		],
 	};
 	expect(itemChangeSet(done)).toEqual({

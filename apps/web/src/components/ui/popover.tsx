@@ -13,11 +13,6 @@ function PopoverContent({
 	container,
 	...props
 }: React.ComponentProps<typeof PopoverPrimitive.Content> & {
-	/**
-	 * Portal target. Defaults to `document.body`. Pass the host Dialog's content node when the popover
-	 * lives inside a Radix Dialog — otherwise `react-remove-scroll` (the Dialog's scroll lock) blocks
-	 * wheel/trackpad scrolling on body-portaled content.
-	 */
 	container?: HTMLElement | null | undefined;
 }) {
 	return (

@@ -1,9 +1,3 @@
-// Pure helpers shared by the built-in tool renderers: pull text out of an `unknown` tool result, read
-// args defensively, and infer a shiki language from a file path. Kept tiny + side-effect-free so the
-// renderers stay small and these are unit-testable on their own. Path helpers (normalize, absolute?,
-// worktree-relative display) live in `lib` — one definition for every module that touches a path.
-
-/** Best-effort plain text from a tool's `result` (an AgentToolResult-shaped value, typed `unknown`). */
 export function resultText(result: unknown): string {
 	if (result == null) return "";
 	if (typeof result === "string") return result;
@@ -26,19 +20,16 @@ export function resultText(result: unknown): string {
 	}
 }
 
-/** Read a string arg, or "" if missing / not a string. */
 export function strArg(args: Record<string, unknown>, key: string): string {
 	const v = args[key];
 	return typeof v === "string" ? v : "";
 }
 
-/** Read a number arg, or null if missing / not a number. */
 export function numArg(args: Record<string, unknown>, key: string): number | null {
 	const v = args[key];
 	return typeof v === "number" ? v : null;
 }
 
-/** A shiki language id inferred from a file extension (falls back to "" -> plain text). */
 export function languageFromPath(path: string): string {
 	const ext = path.split(".").at(-1)?.toLowerCase() ?? "";
 	const map: Record<string, string> = {

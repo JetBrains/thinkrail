@@ -174,7 +174,6 @@ describe("workspace layout model", () => {
 	test("moves terminals across domains but rejects side placement for files", () => {
 		const terminal: LayoutTerminalTab = {
 			kind: "terminal",
-			// Shared placement ids stay stable even when they predate the current browser's id convention.
 			id: "legacy-stable-terminal-placement",
 			name: "Terminal 1",
 			tabKey: "t1",

@@ -12,7 +12,6 @@ import {
 } from "@/components/ui/dialog";
 import { errorText, getTransport } from "../transport";
 
-/** Choose one checkout from Git's registry and attach it without mutating or taking ownership of it. */
 export function ExistingWorktreeDialog({
 	open,
 	projectId,
@@ -84,8 +83,6 @@ export function ExistingWorktreeDialog({
 		}
 	};
 
-	// Selecting a row commits a server mutation that cannot be rolled back safely. Keep the modal in place
-	// until that request settles rather than accepting a dismissal that a late success would contradict.
 	const handleOpenChange = (nextOpen: boolean) => {
 		if (!nextOpen && openingPath !== null) return;
 		onOpenChange(nextOpen);

@@ -12,21 +12,18 @@ import {
 	startLogin,
 } from "./providerLogin";
 
-/** Let queued microtasks/timers run so a detached `login()` continuation settles before we assert. */
 const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
 
 type LoginImpl = (providerId: string, interaction: AuthInteraction) => Promise<unknown>;
 
 interface Harness {
 	frames: LoginPush[];
-	/** Every `runtime.login` call as `[providerId, type]`. */
 	loginCalls: () => [string, AuthType][];
 	logoutCalls: () => string[];
 	lastSignal: () => AbortSignal | undefined;
 	lastInteraction: () => AuthInteraction | undefined;
 }
 
-/** Install a fake pi runtime whose `login` is `loginImpl`, and capture pushed frames + calls. */
 function install(loginImpl: LoginImpl): Harness {
 	const frames: LoginPush[] = [];
 	setLoginPublisher((push) => frames.push(push));
@@ -66,11 +63,10 @@ afterEach(() => {
 
 describe("startLogin", () => {
 	test("returns a handle synchronously (the flow runs detached, never awaited)", () => {
-		// A login() that never settles must not block startLogin from returning its loginId.
 		const { frames } = install(() => new Promise(() => {}));
 		const { loginId } = startLogin("anthropic");
 		expect(loginId).toMatch(/^login_\d+$/);
-		expect(frames).toEqual([]); // nothing pushed yet — the flow hasn't produced a frame
+		expect(frames).toEqual([]);
 	});
 
 	test("device-code flow: pushes deviceCode, then success (as an oauth login)", async () => {
@@ -96,7 +92,6 @@ describe("startLogin", () => {
 		const h = install(async (_id, i) => {
 			i.notify({ type: "progress", message: "Polling device…" });
 			i.notify({ type: "device_code", userCode: "WDJB-MJHT", verificationUri: "https://x/device" });
-			// `info` (possibly with links) renders as progress — links appended as plain URLs.
 			i.notify({ type: "info", message: "See the docs", links: [{ url: "https://docs.example" }] });
 		});
 		startLogin("github-copilot");
@@ -153,7 +148,6 @@ describe("startLogin", () => {
 		});
 		const { loginId } = startLogin("github-copilot");
 		await tick();
-		// `text` prompts carry allowEmpty so the dialog can submit a blank (github.com) answer.
 		expect(h.frames.at(-1)?.frame).toEqual({
 			kind: "prompt",
 			message: "GitHub Enterprise URL/domain (blank for github.com)",
@@ -170,7 +164,6 @@ describe("startLogin", () => {
 		let pasted: string | undefined;
 		const h = install(async (_id, i) => {
 			i.notify({ type: "auth_url", url: "https://provider/authorize?x=1" });
-			// The browser-vs-paste race: in this test the paste wins.
 			pasted = await i.prompt({ type: "manual_code", message: "Paste the authorization code" });
 		});
 		const { loginId } = startLogin("openai-codex");
@@ -189,8 +182,6 @@ describe("startLogin", () => {
 	test("pi aborting a prompt's signal (race lost) settles the parked input; a late reply is a no-op", async () => {
 		const promptAbort = new AbortController();
 		const h = install(async (_id, i) => {
-			// The manual-code prompt loses to the callback server: pi aborts the prompt's own signal and
-			// resolves the flow itself. Our parked input must settle (throw) without failing the login.
 			await i
 				.prompt({ type: "manual_code", message: "Paste code", signal: promptAbort.signal })
 				.catch(() => "callback-won");
@@ -201,7 +192,7 @@ describe("startLogin", () => {
 		promptAbort.abort();
 		await tick();
 		expect(h.frames.map((f) => f.frame.kind)).toEqual(["prompt", "success"]);
-		resolveLogin({ loginId, value: "late" }); // parked input is gone — must not throw or resurrect
+		resolveLogin({ loginId, value: "late" });
 		await tick();
 		expect(h.frames.map((f) => f.frame.kind)).toEqual(["prompt", "success"]);
 	});
@@ -225,7 +216,6 @@ describe("startLogin", () => {
 describe("cancelLogin", () => {
 	test("aborts the signal AND rejects the parked prompt — and pushes no stray terminal frame", async () => {
 		const h = install(async (_id, i) => {
-			// Parks forever unless the parked prompt is settled by cancel (which makes prompt() throw).
 			await i.prompt({ type: "text", message: "Paste code" });
 		});
 		const { loginId } = startLogin("anthropic");
@@ -234,8 +224,6 @@ describe("cancelLogin", () => {
 
 		cancelLogin(loginId);
 		await tick();
-		// The login() rejection from the thrown "Login cancelled" must NOT surface as an error frame —
-		// cancel already terminated the login, so terminate() returns undefined on the catch.
 		expect(h.frames.map((f) => f.frame.kind)).toEqual(["prompt"]);
 		expect(h.lastSignal()?.aborted).toBe(true);
 	});
@@ -248,7 +236,6 @@ describe("cancelLogin", () => {
 		await tick();
 		cancelLogin(loginId);
 		await tick();
-		// pi's detached flow may notify after we've cancelled — the guard must swallow it.
 		h.lastInteraction()?.notify({ type: "progress", message: "late progress" });
 		h.lastInteraction()?.notify({ type: "auth_url", url: "https://late" });
 		await tick();
@@ -262,7 +249,7 @@ describe("cancelLogin", () => {
 		const { loginId } = startLogin("anthropic");
 		await tick();
 		cancelLogin(loginId);
-		resolveLogin({ loginId, value: "late" }); // must not throw / must not resurrect
+		resolveLogin({ loginId, value: "late" });
 		await tick();
 		expect(h.frames.map((f) => f.frame.kind)).toEqual(["prompt"]);
 	});
@@ -287,12 +274,11 @@ describe("api-key login / logoutProvider", () => {
 	test("startLogin with type api_key drives the provider-owned key flow over the same bridge (#97)", async () => {
 		let stored: string | undefined;
 		const h = install(async (_id, i) => {
-			// The provider-owned login asks for the key; the bridge parks it as a `prompt` frame.
 			stored = await i.prompt({ type: "secret", message: "Enter your OpenAI API key" });
 		});
 		const { loginId } = startLogin("openai", "api_key");
 		await tick();
-		expect(h.loginCalls()).toEqual([["openai", "api_key"]]); // never setRuntimeApiKey — login() persists
+		expect(h.loginCalls()).toEqual([["openai", "api_key"]]);
 		expect(h.frames.at(-1)?.frame.kind).toBe("prompt");
 
 		resolveLogin({ loginId, value: "sk-abc" });

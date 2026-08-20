@@ -51,6 +51,15 @@ in agreement about the same functions.
 
 ## Invariants
 
+- **The built-in-palette reset leads the `@theme inline` block.** `colors.ts` emits
+  `--color-*: initial;` *before* our own entries so Tailwind's stock palette (`bg-red-500`,
+  `text-white`) stops being a utility at all — stock utilities compile happily otherwise: hardcoded,
+  un-themeable, and invisible in review. The order is load-bearing: a reset emitted in a later block
+  would wipe our entries too.
+- **A plain-alias role never redeclares its own palette variable.** A role whose name *is* its palette
+  key (`primary` → `--primary`) publishes the palette variable directly and emits no `:root` line:
+  `--primary: var(--primary)` is a computed-value-time self-reference (invalid), masked today only
+  because the runtime writes the palette as an inline style that outranks `:root`.
 - **The JSON is the only source.** `typography.ts` derives every emitted name mechanically, so a new
   token, style or prose system needs no change here. If adding a style requires editing this directory,
   the naming rule was wrong.

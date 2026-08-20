@@ -1,6 +1,5 @@
 export type WorkbenchSide = "left" | "right";
 
-/** Browser-local selection/focus overlay; never serialized into a workspace layout document. */
 export interface LayoutAttention {
 	selectedByGroup: Record<string, string>;
 	lastFocusedCenterGroupId: string;
@@ -8,7 +7,6 @@ export interface LayoutAttention {
 	navigationClockByGroup: Record<string, number>;
 }
 
-/** Read an untrusted group selection without consulting inherited object properties. */
 export function readLayoutSelection(
 	attention: LayoutAttention,
 	groupId: string,
@@ -18,7 +16,6 @@ export function readLayoutSelection(
 	return typeof value === "string" ? value : undefined;
 }
 
-/** Read an untrusted, tuple-keyed center clock without consulting inherited object properties. */
 export function readLayoutNavigationClock(
 	attention: LayoutAttention,
 	groupId: string,

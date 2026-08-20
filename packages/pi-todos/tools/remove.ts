@@ -1,5 +1,3 @@
-// todo_remove — drop an item from the backlog. User-owned; remove only when asked.
-
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { errorResult, storeFor, textResult } from "./shared.ts";

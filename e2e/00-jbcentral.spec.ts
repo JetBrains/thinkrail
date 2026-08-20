@@ -17,7 +17,6 @@ import {
 	E2E_PI_AGENT_DIR,
 } from "./fixtures/paths";
 
-/** Native global configuration: no standalone pi executable and no proxy/model reconstruction. */
 test("connects and follows external add, replacement, and remove without a host restart", async ({
 	page,
 }) => {
@@ -40,7 +39,6 @@ test("connects and follows external add, replacement, and remove without a host 
 		page.locator('[data-testid="provider-row"][data-provider="e2e-central"]'),
 	).toHaveCount(0);
 
-	// No Refresh click: provider.changed drives the open card to the host's watched state.
 	rmSync(E2E_CENTRAL_ARTIFACT, { force: true });
 	await waitForCentralState(page, "supported");
 	await expect(page.getByTestId("jetbrains-connect")).toBeVisible();
@@ -85,7 +83,6 @@ test("guides absent, outdated, malformed, and failed Central version states", as
 	await page.getByTestId("jetbrains-update").click();
 	await waitForCentralState(page, "supported");
 
-	// Any version at or above the minimum is usable — a newer Central needs no extra guidance.
 	writeFileSync(E2E_CENTRAL_STATE, "newer");
 	await page.getByTestId("providers-refresh").click();
 	await waitForCentralState(page, "supported");
@@ -105,11 +102,6 @@ test("guides absent, outdated, malformed, and failed Central version states", as
 	assertOnlyReviewedArgv();
 });
 
-/**
- * The *reactive* sign-in route, which survives because the auth probe is not omniscient: Central reports
- * credentials, so the card offers Connect — and `add pi` fails anyway. Auth is only a possible cause here,
- * so the guidance is hedged, and it is the one place sign-in appears without the host having demanded it.
- */
 test("a Connect failure with credentials intact offers sign-in without exposing child output", async ({
 	page,
 }) => {
@@ -117,7 +109,6 @@ test("a Connect failure with credentials intact offers sign-in without exposing 
 	writeFileSync(E2E_CENTRAL_STATE, "add-error");
 	await openProviders(page);
 	await waitForCentralState(page, "supported");
-	// Nothing was demanded up front: the probe sees credentials, so Connect is the offered action.
 	await expect(page.getByTestId("jetbrains-signed-out")).toHaveCount(0);
 	await expect(page.getByTestId("jetbrains-ready")).toBeVisible();
 
@@ -127,7 +118,6 @@ test("a Connect failure with credentials intact offers sign-in without exposing 
 	await page.getByTestId("jetbrains-signin").click();
 	await expect(page.getByTestId("jetbrains-login-launched")).toBeVisible();
 
-	// The sign-in launch is detached, so the fake records it a beat after the UI confirms.
 	await expect.poll(() => centralInvocations(), { timeout: 10_000 }).toContain("login");
 	assertOnlyReviewedArgv();
 });
@@ -162,12 +152,6 @@ test("surfaces missing-artifact and candidate failures as closed UI states, then
 	await waitForCentralState(page, "supported");
 });
 
-/**
- * Disconnect's two failure shapes, which differ in kind: a *refused* removal (non-zero exit) versus one that
- * claims success while leaving the artifact behind. The second is the dangerous one — exit 0 is not a
- * postcondition, and treating it as one would leave the card reporting `supported` over a Central that is
- * still wired into every new chat.
- */
 test("a refused removal and a removal that leaves the artifact are both closed failures", async ({
 	page,
 }) => {
@@ -181,7 +165,6 @@ test("a refused removal and a removal that leaves the artifact are both closed f
 	await page.getByTestId("jetbrains-disconnect").click();
 	await expect(page.getByTestId("jetbrains-error")).toContainText("couldn't disconnect");
 	await expect(page.getByTestId("settings-dialog")).not.toContainText("E2E_CENTRAL_CHILD_SENTINEL");
-	// The failure is honest about what is still true: Central remains configured.
 	await waitForCentralState(page, "configured");
 	expect(existsSync(E2E_CENTRAL_ARTIFACT)).toBe(true);
 
@@ -198,10 +181,6 @@ test("a refused removal and a removal that leaves the artifact are both closed f
 	assertOnlyReviewedArgv();
 });
 
-/**
- * A guided Update that fails. Needs two independent facts true at once — the host is below the minimum *and*
- * `update --install` refuses — which is why the fake's control composes tokens rather than holding one state.
- */
 test("a failed Update leaves the outdated guidance in place instead of a false recovery", async ({
 	page,
 }) => {
@@ -213,13 +192,11 @@ test("a failed Update leaves the outdated guidance in place instead of a false r
 
 	await page.getByTestId("jetbrains-update").click();
 	await expect(page.getByTestId("jetbrains-error")).toContainText("couldn't update");
-	// Still outdated, still offering Update — a refused update must not read as a completed one.
 	await waitForCentralState(page, "outdated");
 	await expect(page.getByTestId("jetbrains-outdated")).toContainText("1.3.9");
 	await expect(page.getByTestId("jetbrains-update")).toBeVisible();
 	expect(centralInvocations()).toContain("update --install");
 
-	// Dropping the refusal lets the same button recover, proving the failure was the CLI's and not a latch.
 	writeFileSync(E2E_CENTRAL_STATE, "outdated");
 	await page.getByTestId("jetbrains-update").click();
 	await waitForCentralState(page, "supported");
@@ -259,7 +236,6 @@ test("disconnect removes Central from new chats while an existing live chat keep
 	await page.keyboard.press("Escape");
 	await page.keyboard.press("Escape");
 
-	// Dispose the retained session so this shared host does not carry the test's old generation onward.
 	const activeChat = page.locator(
 		'[data-testid="editor-tab"][data-kind="chat"][data-active="true"]',
 	);

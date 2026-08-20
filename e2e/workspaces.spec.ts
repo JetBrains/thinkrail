@@ -12,8 +12,6 @@ import {
 import { E2E_DATA_DIR, E2E_FIXTURE_REPO, E2E_PICK_DIR_POINTER } from "./fixtures/paths";
 
 test("opens and safely forgets an existing user-owned worktree", async ({ page }) => {
-	// Start with a persisted project whose workspace list has never been hydrated. Opening from its context
-	// menu must still install the complete list before activation (Default + the attached row).
 	await openAppFresh(page);
 	const external = join(E2E_DATA_DIR, "existing-worktree-fixture");
 	const detached = join(E2E_DATA_DIR, "detached-worktree-fixture");
@@ -97,7 +95,6 @@ test("opens and safely forgets an existing user-owned worktree", async ({ page }
 		);
 		await expect(row).toContainText("existing-worktree-fixture");
 		await expect(row).toContainText("feature/existing");
-		// Dirty-worktree counts belong in Changes, not beside workspace navigation in the left rail.
 		await expect(row).not.toContainText(/\+\d+\s+−\d+/);
 		const receipt = page.getByTestId("workspace-ready");
 		await expect(receipt).toContainText("Existing worktree");
@@ -115,7 +112,6 @@ test("opens and safely forgets an existing user-owned worktree", async ({ page }
 		await page.getByTestId("confirm-remove").click();
 		await expect(row).toHaveCount(0);
 
-		// The ThinkRail identity is gone, but every externally-owned byte and Git registration survives.
 		expect(existsSync(external)).toBe(true);
 		expect(readFileSync(join(external, "uncommitted.txt"), "utf8")).toBe(
 			"preserve this untracked file\n",
@@ -131,17 +127,12 @@ test("opens and safely forgets an existing user-owned worktree", async ({ page }
 		}
 		try {
 			execFileSync("git", ["-C", E2E_FIXTURE_REPO, "branch", "-D", "feature/existing"]);
-		} catch {
-			// The per-test reset is the final cleanup backstop if setup failed before the branch existed.
-		}
+		} catch {}
 		execFileSync("git", ["-C", E2E_FIXTURE_REPO, "worktree", "prune"]);
 	}
 });
 
 test("an attached worktree cannot also be opened as a project", async ({ page }) => {
-	// pi keys chat transcripts by directory, so one folder must map to exactly one ThinkRail identity:
-	// otherwise the project's Default workspace would serve the attached workspace's chats as its own and
-	// purge them when either side is archived. `openExistingWorktree` guards its door; Add project guards this one.
 	await openFixtureProject(page);
 	const external = join(E2E_DATA_DIR, "claimed-worktree-fixture");
 	rmSync(external, { recursive: true, force: true });
@@ -170,12 +161,10 @@ test("an attached worktree cannot also be opened as a project", async ({ page })
 			1,
 		);
 
-		// Point the stubbed directory picker at the checkout ThinkRail now holds as a workspace.
 		writeFileSync(E2E_PICK_DIR_POINTER, external);
 		await page.getByTestId("add-project-menu").click();
 		await page.getByTestId("menu-open-project").click();
 
-		// Refused with a legible reason, and no second identity is created for the folder.
 		const error = page.getByTestId("open-error-dialog");
 		await expect(error).toBeVisible();
 		await expect(error).toContainText("already open in ThinkRail as a workspace");
@@ -189,9 +178,7 @@ test("an attached worktree cannot also be opened as a project", async ({ page })
 		}
 		try {
 			execFileSync("git", ["-C", E2E_FIXTURE_REPO, "branch", "-D", "feature/claimed"]);
-		} catch {
-			// Setup may have failed before the branch existed; the per-test reset is the backstop.
-		}
+		} catch {}
 		execFileSync("git", ["-C", E2E_FIXTURE_REPO, "worktree", "prune"]);
 	}
 });
@@ -202,33 +189,22 @@ test("creates, removes, and re-creates worktree workspaces (no branch collision)
 	await openFixtureProject(page);
 	const items = worktreeRows(page);
 
-	// Create a workspace via the New-Workspace dialog — a real git worktree appears.
 	await createWorkspaceViaDialog(page);
 	await expect(items).toHaveCount(1);
 	const worktrees = execFileSync("git", ["-C", E2E_FIXTURE_REPO, "worktree", "list"], {
 		encoding: "utf8",
 	});
 	expect(worktrees.trim().split("\n").length).toBeGreaterThanOrEqual(2);
-	// Worktrees live under a readable project-name dir, not the project id.
 	expect(worktrees).toContain("/worktrees/sample-project/");
 
-	// Remove it: the kebab menu's Remove item opens a centered confirm dialog; confirming fires
-	// `workspace.remove`, and the row disappears when the client reacts to the host's `workspace.removed`
-	// push (event-driven, not optimistic) AND the worktree is reclaimed from disk in the background (back
-	// to just `main`).
 	await openWorkspaceMenu(items.first());
 	await page.getByTestId("workspace-remove").click();
-	// The confirm is an accessible alertdialog named by its title (so screen readers announce it).
 	await expect(page.getByRole("alertdialog", { name: /Remove .+ workspace/ })).toBeVisible();
 	await page.getByTestId("confirm-remove").click();
 	await expect(items).toHaveCount(0);
 
-	// Removing the active workspace returns to the Welcome screen — not the empty IDE surface. (Regression:
-	// the remove cleared the active id to "" instead of null, so the shell still rendered a dead 3-column
-	// shell with "Select a workspace…" placeholders.)
 	await expect(page.getByTestId("welcome")).toBeVisible();
 	await expect(page.getByTestId("center-tabs")).toHaveCount(0);
-	// The worktree teardown is backgrounded server-side, so poll rather than read once.
 	await expect
 		.poll(
 			() =>
@@ -238,7 +214,6 @@ test("creates, removes, and re-creates worktree workspaces (no branch collision)
 		)
 		.toBe(1);
 
-	// Create again — must succeed despite the lingering branch (the bug was a silent no-op here).
 	await createWorkspaceViaDialog(page);
 	await expect(items).toHaveCount(1);
 });

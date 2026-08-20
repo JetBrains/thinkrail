@@ -26,7 +26,6 @@ beforeEach(() => {
 			},
 		]),
 	);
-	// The index cache is module-level and keyed by workspace id — evict so each test sees its own root.
 	evictSpecIndex("ws1");
 });
 
@@ -43,12 +42,10 @@ function writeSpec(rel: string, frontmatter: string): void {
 
 test("maps spec files to wire DTOs (title falls back to id; absent status/parent are omitted)", () => {
 	writeSpec("SPEC.md", "id: root-spec\ntype: goal-and-requirements\ntitle: Root\ntags: [v1]");
-	// No title (falls back to id), with status + parent + a depends-on list.
 	writeSpec(
 		"module-a/SPEC.md",
 		"id: mod-a\ntype: module-design\nstatus: active\nparent: root-spec\ndepends-on: [root-spec]",
 	);
-	// A plain markdown file is not a spec and never reaches the wire.
 	writeFileSync(join(worktree, "README.md"), "# not a spec\n");
 
 	const { nodes } = specGraph("ws1");
@@ -58,12 +55,11 @@ test("maps spec files to wire DTOs (title falls back to id; absent status/parent
 	expect(root?.title).toBe("Root");
 	expect(root?.path).toBe("SPEC.md");
 	expect(root?.tags).toEqual(["v1"]);
-	// exactOptionalPropertyTypes: absent scalars are omitted keys, not `undefined` values.
 	expect(Object.hasOwn(root ?? {}, "status")).toBe(false);
 	expect(Object.hasOwn(root ?? {}, "parent")).toBe(false);
 
 	const modA = nodes.find((n) => n.id === "mod-a");
-	expect(modA?.title).toBe("mod-a"); // title falls back to id
+	expect(modA?.title).toBe("mod-a");
 	expect(modA?.status).toBe("active");
 	expect(modA?.parent).toBe("root-spec");
 	expect(modA?.dependsOn).toEqual(["root-spec"]);
@@ -77,14 +73,12 @@ test("throws for an unknown workspace", () => {
 test("projectHasSpecs ignores ephemeral task-specs — only a durable spec signals 'set up'", () => {
 	const root = mkdtempSync(join(tmpdir(), "trpi-proj-test-"));
 	try {
-		// A lone scratch task-spec (as brainstorming drops in .thinkrail/context/) must not count.
 		writeFileSync(
 			join(root, "TASK-x.md"),
 			"---\nid: task-x\ntype: task-spec\ntitle: Scratch\n---\n\n## Body\n",
 		);
 		expect(projectHasSpecs(root)).toBe(false);
 
-		// A durable spec flips it to true (revalidate-on-read picks up the new file on the same root).
 		writeFileSync(
 			join(root, "SPEC.md"),
 			"---\nid: real\ntype: module-design\ntitle: Real\n---\n\n## Body\n",

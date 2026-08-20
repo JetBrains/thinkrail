@@ -9,7 +9,6 @@ import { ToggleSegment } from "./ToggleSegment";
 import { useLiveTabContent } from "./useLiveTabContent";
 import { useFileReview } from "./useReviewCommenting";
 
-// Heavy views load only when shown: Monaco for source, markdown+shiki for the rendered preview.
 const MonacoEditor = lazy(() => import("./MonacoEditor"));
 const MarkdownPreview = lazy(() => import("./MarkdownPreview"));
 
@@ -17,28 +16,10 @@ const loading = (
 	<div className="flex h-full items-center justify-center text-text-muted">Loading…</div>
 );
 
-/**
- * The Editor Pane body for a file tab. Non-markdown files render Monaco directly; markdown files open
- * **rendered by default** with a `Preview | Source` toggle in a slim header (the choice lives on the
- * tab, `store.setFileTabView`, so it survives tab switches).
- *
- * Review commenting is selection-triggered, no mode toggle (see panels/SPEC.md): selecting text in the
- * Monaco surface shows the floating comment icon → inline composer (`reviewWidgets`, wired through
- * `useReviewCommenting`); commented lines render as decorations. The rendered markdown view carries it
- * too (`PreviewCommenting` — the rendered selection maps back to source lines via `previewAnchor`).
- *
- * Live: when the workspace's fs tick moves past the tick this tab's content was loaded at, the file is
- * re-read and the tab content replaced (Monaco + preview are `content`-controlled, so they follow).
- * Visible tabs update live; a background tab catches up here on activation (only the active tab mounts).
- * A single unrelated batch is skipped by path; a failed re-read (file deleted) keeps the last content —
- * the tree/changes panels are where the deletion shows — and just advances the tab's tick.
- */
 export function FilePane({ tab }: { tab: FileTab }) {
 	const setFileTabView = useAppStore((s) => s.setFileTabView);
 	const review = useFileReview(tab.workspaceId, tab.path, "inline");
 	const reviewComments = useAppStore((s) => s.reviewsByWorkspace[tab.workspaceId]?.comments);
-	// The same gate `SendReviewButton` applies — this header exists only to host it, so a file whose
-	// review is merely in progress grows no toolbar.
 	const fileHasDraft = useMemo(
 		() => reviewFlagFor(reviewComments, tab.path) === "draft",
 		[reviewComments, tab.path],
@@ -59,8 +40,6 @@ export function FilePane({ tab }: { tab: FileTab }) {
 		</Suspense>
 	);
 
-	// Non-markdown files have no view toggles — a slim header appears only while THIS file has a
-	// pending draft, purely to host the Send-review action (same right-aligned toolbar as elsewhere).
 	if (!isMarkdownPath(tab.path)) {
 		if (!fileHasDraft) return editor;
 		return (
@@ -85,7 +64,6 @@ export function FilePane({ tab }: { tab: FileTab }) {
 				data-testid="markdown-view-toggle"
 				role="toolbar"
 				aria-label="Markdown view mode"
-				// `justify-end`: header actions are right-aligned, matching the DiffPane / Changes toolbars.
 				className="flex h-8 shrink-0 items-center justify-end gap-xs border-border-default border-b bg-container-header-bg px-sm"
 			>
 				<SendReviewButton workspaceId={tab.workspaceId} path={tab.path} />

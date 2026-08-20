@@ -12,7 +12,6 @@ import {
 	maybeNaiveNameWorkspace,
 } from "./autoRename";
 
-/** The project's worktree workspaces — `listWorkspaces` minus the always-ensured Default. */
 function worktrees(projectId = "p1") {
 	return listWorkspaces(projectId).filter((w) => w.kind !== "default");
 }
@@ -73,7 +72,6 @@ const firstTurn = async (): Promise<Message[]> => [
 	assistant("Done — added the form."),
 ];
 
-/** A runner fake returning `text`, counting invocations and capturing the prompts it was fed. */
 function fakeRunner(text: string): { calls: () => number; prompts: string[] } {
 	let calls = 0;
 	const prompts: string[] = [];
@@ -91,8 +89,8 @@ test("renames the workspace off the first settled turn and flags it", async () =
 
 	const renamed = await maybeAutoRenameWorkspace("s1", ws.id, firstTurn);
 
-	expect(renamed?.name).toBe("Add Login Flow"); // display name (Title Case)
-	expect(renamed?.branch).toBe("add-login-flow"); // derived kebab branch
+	expect(renamed?.name).toBe("Add Login Flow");
+	expect(renamed?.branch).toBe("add-login-flow");
 	expect(renamed?.renamed).toBe(true);
 	expect(renamed?.worktreePath).toBe(ws.worktreePath);
 	expect(runner.calls()).toBe(1);
@@ -118,7 +116,7 @@ test("a user-named workspace never invokes the namer", async () => {
 
 test("a failed suggestion leaves the flag unset so a later turn retries", async () => {
 	const ws = await createWorkspace("p1");
-	fakeRunner("!!! ???"); // slugs to nothing → suggestion degrades to null
+	fakeRunner("!!! ???");
 
 	expect(await maybeAutoRenameWorkspace("s1", ws.id, firstTurn)).toBeNull();
 	expect(worktrees()[0]?.renamed).toBeUndefined();
@@ -154,7 +152,6 @@ test("a retracted first prompt is never naming material — the first clean turn
 	const ws = await createWorkspace("p1");
 	const runner = fakeRunner("Fix Header Layout");
 
-	// Turn 1 was aborted (wrong workspace); turn 2 is the real task and settles cleanly.
 	const transcript = async (): Promise<Message[]> => [
 		user("refactor the billing engine"),
 		assistant("Starting on billing…", "aborted"),
@@ -211,11 +208,9 @@ test("naive-rename names the workspace instantly from the first prompt, provisio
 
 	const named = await maybeNaiveNameWorkspace("s1", ws.id, firstTurn);
 
-	// Bounded Title Case name from "add a login form to the settings page" (5-word cap); branch derived.
 	expect(named?.name).toBe("Add A Login Form To");
 	expect(named?.branch).toBe("add-a-login-form-to");
-	expect(named?.worktreePath).toBe(ws.worktreePath); // dir never moves
-	// Provisional: `renamed` stays unset so the agentic pass still refines it.
+	expect(named?.worktreePath).toBe(ws.worktreePath);
 	expect(named?.renamed).toBeUndefined();
 	expect(worktrees()[0]?.renamed).toBeUndefined();
 });
@@ -224,7 +219,6 @@ test("naive-rename fires only while the name is pristine (workspace-N)", async (
 	const ws = await createWorkspace("p1");
 	await maybeNaiveNameWorkspace("s1", ws.id, firstTurn);
 
-	// Second turn start: the branch is no longer `workspace-N`, so it never re-fires.
 	expect(await maybeNaiveNameWorkspace("s1", ws.id, firstTurn)).toBeNull();
 	expect(worktrees()[0]?.name).toBe("Add A Login Form To");
 });
@@ -244,12 +238,10 @@ test("the agentic pass refines a provisional naive name and locks it", async () 
 	expect(provisional?.name).toBe("Add A Login Form To");
 	expect(provisional?.renamed).toBeUndefined();
 
-	// Settled turn: the agentic namer still runs (renamed was unset) and upgrades + locks.
 	const refined = await maybeAutoRenameWorkspace("s1", ws.id, firstTurn);
 	expect(refined?.name).toBe("Add Login Flow");
 	expect(refined?.renamed).toBe(true);
 
-	// And the now-locked name is inert to a further turn start.
 	expect(await maybeNaiveNameWorkspace("s1", ws.id, firstTurn)).toBeNull();
 	expect(worktrees()[0]?.name).toBe("Add Login Flow");
 });
@@ -267,7 +259,6 @@ test("isPromptCommitted: only a user message_end has the prompt in the transcrip
 	expect(
 		isPromptCommitted({ type: "message_end", message: { role: "user" } } as unknown as PiEvent),
 	).toBe(true);
-	// An assistant message_end is not the prompt; agent_start/turn_start fire before the prompt lands.
 	expect(
 		isPromptCommitted({
 			type: "message_end",

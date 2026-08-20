@@ -3,21 +3,16 @@ import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
 
-// The read-only Specs viewer: the right rail's Specs tab renders the worktree's spec-graph as a
-// document-first parent tree (fixture: sample-root → sample-module, seeded in global-setup). The
-// chevron owns expansion; one click on the document row opens it through the file-tab flow.
 test("Specs tab renders the worktree's spec tree and opens a spec as an editor tab", async ({
 	page,
 }) => {
 	await openFixtureProject(page);
 	const workspace = await createWorkspaceViaDialog(page);
 
-	// Specs sits left of All files / Changes — and is the default tab.
 	const tabs = page.locator('[data-testid="tab-specs"], [data-testid="tab-files"]');
 	await expect(tabs.first()).toHaveAttribute("data-testid", "tab-specs");
 	await expect(page.getByTestId("tab-specs")).toHaveAttribute("data-active", "true");
 
-	// The parent tree: the root spec at depth 0, its child nested at depth 1.
 	const root = page.locator('[data-testid="spec-node"][data-spec-id="sample-root"]');
 	const child = page.locator('[data-testid="spec-node"][data-spec-id="sample-module"]');
 	await expect(root).toHaveAttribute("data-depth", "0");
@@ -28,8 +23,6 @@ test("Specs tab renders the worktree's spec tree and opens a spec as an editor t
 	await expect(child).toHaveAttribute("data-spec-role", "MODULE");
 	await expect(child).toContainText("MODULE");
 
-	// Lifecycle status is deliberately absent even though the fixture carries `status: active`.
-	// Hierarchy uses indentation only: no persistent rails or branch elbows.
 	expect(await child.getAttribute("data-status")).toBeNull();
 	await expect(child).not.toContainText("active");
 	await expect(page.getByTestId("spec-status")).toHaveCount(0);
@@ -42,30 +35,22 @@ test("Specs tab renders the worktree's spec tree and opens a spec as an editor t
 		await root.evaluate((element) => element.getBoundingClientRect().height),
 	).toBeLessThanOrEqual(30);
 
-	// The root is visibly a document even though it owns children: one click opens it and marks its
-	// location without changing expansion.
 	await root.click();
 	await expect(page.getByTestId("editor-pane")).toContainText("throwaway fixture project");
 	await expect(root).toHaveAttribute("data-active", "true");
 	await expect(child).toBeVisible();
 
-	// The separate chevron only collapses/expands.
 	const rootToggle = page.locator("li", { has: root }).getByTestId("spec-toggle").first();
 	await rootToggle.click();
 	await expect(child).toHaveCount(0);
 	await rootToggle.click();
 	await expect(child).toBeVisible();
 
-	// One click on the child opens its SPEC.md and moves the active-location treatment.
 	await child.click();
 	await expect(page.getByTestId("editor-pane")).toContainText("sample-root");
 	await expect(child).toHaveAttribute("data-active", "true");
 	await expect(root).toHaveAttribute("data-active", "false");
 
-	// Specs added outside the app (agent/git/editor) appear LIVE via the worktree watcher (see
-	// live-refresh.spec.ts) — the header Refresh button stays as the manual escape hatch, so it must
-	// still be present and clickable. A later root sibling plus a nested child exercise consistent
-	// indentation at sibling and grandchild depths, and the refresh must NOT collapse expansion state.
 	const worktree = workspace.worktreePath;
 	mkdirSync(join(worktree, "module-b"), { recursive: true });
 	writeFileSync(

@@ -1,7 +1,6 @@
 import { expect, test } from "bun:test";
 import { matchesSkillInvocationCommand, parseSkillInvocation } from "./skillInvocation";
 
-// Verbatim shape emitted by pi-coding-agent's `_expandSkillCommand` / parsed by `parseSkillBlock`.
 const EXPANDED =
 	'<skill name="review" location="/repo/.pi/skills/review/SKILL.md">\nReferences are relative to /repo/.pi/skills/review.\n\n# Review\n\nInspect the complete diff.\n</skill>\n\nFocus on src/app.ts.\nThen run tests.';
 

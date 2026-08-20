@@ -1,14 +1,3 @@
-// The per-session TODO store: read-modify-write a single JSON file (`.thinkrail/context/todos/<sessionId>.json`)
-// under a worktree root. The file is the source of truth — every op re-reads it, so external edits and
-// other sessions are always seen; there is no cache to stale (the list is tiny). Pi-free (node built-ins
-// only) so the host can value-import it to read *and write* the plan (the user's UI edits), the way
-// `server/src/spec` value-imports `pi-spec-graph/core`.
-//
-// The plan is loose items (standalone + user) + named groups (each with its own items). Robust by
-// construction: a missing or corrupt file reads as an empty plan rather than throwing, and
-// unknown/invalid fields are dropped on read — the store never lets a hand-edited file crash a session.
-// Writes are atomic (tmp file + rename) so a crash or a concurrent reader never sees a torn file.
-
 import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -30,51 +19,30 @@ import {
 	type WritePlan,
 } from "./types.ts";
 
-// ThinkRail's ephemeral per-worktree scratch dir. Mirrors `@thinkrail/shared`'s `WORKSPACE_CONTEXT_DIR`,
-// duplicated (not imported) on purpose: `core/` stays free of any `@thinkrail/*` dep so `pi-todos` remains
-// installable under vanilla `pi`. The host is the source of truth — keep this value in step with shared.
+// Deliberate local mirror of @thinkrail/shared's WORKSPACE_CONTEXT_DIR — core/ takes no @thinkrail/* dep (see core/SPEC.md).
 const CONTEXT_DIR = ".thinkrail/context";
 
-/** Directory (under a worktree root) holding one file per chat session's TODO list. */
 export const STORE_DIR = `${CONTEXT_DIR}/todos`;
 
-/**
- * A session id becomes a single path segment (`<sessionId>.json`), so it must not contain path
- * separators or `..` — otherwise a crafted id could escape the store dir and read/write an arbitrary
- * file. Session ids are UUID-shaped tab ids; reject anything outside that safe charset.
- */
 function assertSafeSessionId(sessionId: string): void {
 	if (!/^[A-Za-z0-9_-]+$/.test(sessionId)) {
 		throw new Error(`Invalid session id for TODO store: ${JSON.stringify(sessionId)}`);
 	}
 }
 
-/** The store file for a session, relative to a worktree root. */
 export function storeRel(sessionId: string): string {
 	assertSafeSessionId(sessionId);
 	return `${STORE_DIR}/${sessionId}.json`;
 }
 
-/** Total item count across loose items + every group. */
 export function countItems(plan: TodoPlan): number {
 	return plan.todos.length + plan.groups.reduce((n, g) => n + g.todos.length, 0);
 }
 
-/**
- * Every item in display order: the groups' steps (the agent's tasks) first, then the loose lane (the
- * user's own adds) **last** — the single flatten used across reads, updates, and rendering, so the order
- * lives in one place. Returns the stored objects by reference (callers may mutate in place before a
- * `write`). Mirrored by `apps/web`'s `planView.flatItems` (the web app can't import this package).
- */
 export function flatItems(plan: TodoPlan): Todo[] {
 	return [...plan.groups.flatMap((g) => g.todos), ...plan.todos];
 }
 
-/**
- * A group's derived task status — never stored, so it can't drift from the steps: `done` when every
- * item is done, `active` when any item is in_progress, else `pending`. The host reads it through here and
- * ships the result on the wire DTO (`TodoGroupItem.status`), so no client re-derives it.
- */
 export function groupStatus(group: TodoGroup): TodoGroupStatus {
 	if (group.todos.length > 0 && group.todos.every((t) => t.status === "done")) return "done";
 	if (group.todos.some((t) => t.status === "in_progress")) return "active";
@@ -98,36 +66,19 @@ function nowIso(): string {
 	return new Date().toISOString();
 }
 function freshId(prefix: string): string {
-	// 12 hex chars (48 bits) — ids are resolved by first match, so keep enough entropy to avoid collisions.
 	return `${prefix}_${randomUUID().replace(/-/g, "").slice(0, 12)}`;
 }
 
-/**
- * Decode literal `\uXXXX` escape sequences that a model sometimes emits *as text*: when it double-escapes
- * the backslash, a tool-call arg arrives as the literal 6-char string "Б" instead of the character
- * it denotes, so the plan renders escape gibberish instead of (e.g.) Cyrillic. Fold well-formed sequences
- * back to real characters; a normal string (no `\u`) is untouched.
- *
- * Applied **only to agent-authored text** (via {@link decodeIfAgent}) — never the user's own UI input,
- * which is stored verbatim so that a literal `A` the human types stays `A`, not `A`.
- */
 function decodeEscapes(s: string): string {
 	return s.includes("\\u")
 		? s.replace(/\\u([0-9a-fA-F]{4})/g, (_m, hex) => String.fromCharCode(Number.parseInt(hex, 16)))
 		: s;
 }
 
-/** Decode escapes for agent-authored strings only; user input is returned untouched. */
 function decodeIfAgent(s: string, origin: TodoOrigin): string {
 	return origin === "agent" ? decodeEscapes(s) : s;
 }
 
-/**
- * Coerce a parsed value into a list of valid artifacts, dropping malformed entries; returns `undefined`
- * (not `[]`) when there are none, so an item without artifacts serializes without the key. `label` is
- * decoded for agent-authored items (like `title`/`note`); `path`/`specId`/`sha` are stored verbatim. A
- * `commit` is addressed by `sha` (dropped if it lacks one); every other kind needs a `path`.
- */
 function sanitizeArtifacts(raw: unknown, origin: TodoOrigin): TodoArtifact[] | undefined {
 	if (!Array.isArray(raw)) return undefined;
 	const out: TodoArtifact[] = [];
@@ -140,14 +91,12 @@ function sanitizeArtifacts(raw: unknown, origin: TodoOrigin): TodoArtifact[] | u
 		if (typeof o.sha === "string" && o.sha) artifact.sha = o.sha;
 		if (typeof o.label === "string" && o.label) artifact.label = decodeIfAgent(o.label, origin);
 		if (typeof o.specId === "string" && o.specId) artifact.specId = o.specId;
-		// A commit is addressed by its sha; every other kind by a path. Drop the entry that lacks its key.
 		if (artifact.kind === "commit" ? !artifact.sha : !artifact.path) continue;
 		out.push(artifact);
 	}
 	return out.length > 0 ? out : undefined;
 }
 
-/** Coerce an arbitrary parsed value into a valid Todo, or drop it (return null) when unusable. */
 function sanitize(raw: unknown): Todo | null {
 	if (typeof raw !== "object" || raw === null) return null;
 	const o = raw as Record<string, unknown>;
@@ -168,7 +117,6 @@ function sanitize(raw: unknown): Todo | null {
 	return todo;
 }
 
-/** Coerce a parsed value into a valid group, dropping invalid items; drop the group if it has none. */
 function sanitizeGroup(raw: unknown): TodoGroup | null {
 	if (typeof raw !== "object" || raw === null) return null;
 	const o = raw as Record<string, unknown>;
@@ -206,21 +154,13 @@ function makeTodo(
 	return todo;
 }
 
-/**
- * A single chat session's TODO plan, stored as one JSON file under the worktree
- * (`.thinkrail/context/todos/<sessionId>.json`). One instance per (root, session); every method re-reads the
- * file, so the instance holds no mutable state and stale reads are impossible — the agent's writes and
- * the user's UI writes converge on the same file.
- */
 export class TodoStore {
-	/** Absolute path to the store file. */
 	readonly file: string;
 
 	constructor(root: string, sessionId: string) {
 		this.file = join(root, storeRel(sessionId));
 	}
 
-	/** The whole plan as stored (loose items + groups), tolerating a missing/corrupt file (→ empty). */
 	read(): TodoPlan {
 		if (!existsSync(this.file)) return { todos: [], groups: [] };
 		let parsed: unknown;
@@ -239,28 +179,19 @@ export class TodoStore {
 		return { todos, groups };
 	}
 
-	/** Every item in display order (groups first, the user's loose lane last) — see {@link flatItems}. */
 	flat(): Todo[] {
 		return flatItems(this.read());
 	}
 
-	/** Items, optionally filtered by status (flattened across loose + groups). */
 	list(status?: TodoStatus): Todo[] {
 		const all = this.flat();
 		return status ? all.filter((t) => t.status === status) : all;
 	}
 
-	/** One item by id (searching loose + groups), or undefined. */
 	get(id: string): Todo | undefined {
 		return this.flat().find((t) => t.id === id);
 	}
 
-	/**
-	 * Add one item; returns the created Todo. `input.after` (an existing item id) inserts the new item
-	 * right after that item, inheriting its lane (that group, or loose) — the surgical mid-plan insert;
-	 * an unknown id throws. Otherwise `input.group` (a title) places it in that named group — created if
-	 * new — and with neither, it's appended loose.
-	 */
 	add(input: TodoInput): Todo {
 		const todo = makeTodo(
 			input.title,
@@ -294,12 +225,6 @@ export class TodoStore {
 		return todo;
 	}
 
-	/**
-	 * Leave exactly one `in_progress` item: `keep` when given (the item a caller just started), else the
-	 * first in display order. Every other one returns to `pending`; the demoted items are returned so a
-	 * caller can report them. The single home of the linearity rule — both write paths that can introduce
-	 * an `in_progress` (`update`, `replaceAll`) go through it. Mutates `plan` in place.
-	 */
 	private keepOneInProgress(plan: TodoPlan, keep?: string): Todo[] {
 		const demoted: Todo[] = [];
 		let kept = false;
@@ -316,12 +241,6 @@ export class TodoStore {
 		return demoted;
 	}
 
-	/**
-	 * Apply a partial change to an item; returns the updated Todo plus any auto-demoted items, or
-	 * undefined if the id is unknown. Setting `in_progress` demotes every *other* in_progress item back
-	 * to `pending` in the same write (see {@link TodoStore.keepOneInProgress}, the one home of that rule),
-	 * and the demoted items are returned (`paused`) so the change stays visible.
-	 */
 	update(id: string, patch: TodoPatch): TodoUpdateResult | undefined {
 		const plan = this.read();
 		const all = flatItems(plan);
@@ -347,7 +266,6 @@ export class TodoStore {
 		return { todo, paused };
 	}
 
-	/** Remove an item (loose or grouped); returns whether it existed. Empties out a group left blank. */
 	remove(id: string): boolean {
 		const plan = this.read();
 		const before = countItems(plan);
@@ -358,17 +276,6 @@ export class TodoStore {
 		return true;
 	}
 
-	/**
-	 * Re-lay the agent's plan (`todo_write`): replace the agent's own open items with `plan` (fresh
-	 * `agent` items — loose + groups), but **preserve the user's items and any done item** — so
-	 * re-planning never drops the user's requests or the completed history. Preserved user items stay
-	 * loose; a preserved done item rejoins its group if the new plan still has one by that title, else it
-	 * falls back to loose. Kept items come after the fresh plan.
-	 *
-	 * The "exactly one in_progress" invariant is re-established over the **merged** result
-	 * ({@link TodoStore.keepOneInProgress}), so a re-plan can never leave the user's in_progress item
-	 * beside a fresh in_progress step.
-	 */
 	replaceAll(plan: WritePlan): TodoPlan {
 		const freshLoose = (plan.todos ?? []).map((w) =>
 			makeTodo(w.title, w.status ?? "pending", "agent", w.note, w.artifacts),
@@ -383,8 +290,6 @@ export class TodoStore {
 		const current = this.read();
 		const keptLoose = current.todos.filter((t) => t.origin === "user" || t.status === "done");
 		const resultLoose = [...freshLoose, ...keptLoose];
-		// Grouped survivors: user items rejoin loose (never grouped); done items rejoin their group by
-		// title if it still exists, else fall back to loose so history is never lost.
 		for (const old of current.groups) {
 			for (const t of old.todos) {
 				if (t.origin === "user") {
@@ -398,19 +303,11 @@ export class TodoStore {
 		}
 
 		const next: TodoPlan = { todos: resultLoose, groups: freshGroups };
-		// Over the MERGED plan, not just the fresh half: a *kept* user item that is in_progress would
-		// otherwise sit beside a fresh in_progress step — two at once.
 		this.keepOneInProgress(next);
 		this.write(next);
 		return next;
 	}
 
-	/**
-	 * Serialize the plan back to disk (dropping empty groups; creating `.thinkrail/context/todos/` if needed).
-	 * Atomic: write a sibling temp file then `rename` it over the target, so a crash or a concurrent
-	 * reader (this package is portable to vanilla pi, where a second process is real) never observes a
-	 * half-written file — and `read()`'s torn-file fallback (→ empty plan) can't silently drop the list.
-	 */
 	private write(plan: TodoPlan): void {
 		const file: TodoFile = {
 			version: CURRENT_VERSION,

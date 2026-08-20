@@ -1,10 +1,5 @@
 import { PRODUCT_NAME } from "../constants/branding";
 
-/**
- * The icon-only ThinkRail mark — the same vector served as `public/favicon.svg` — kept inline so its
- * fill follows the active semantic theme colour (`text-primary`) rather than the favicon's standalone
- * light/dark treatment. Rendered at the 32×32 header target.
- */
 export function BrandLogo() {
 	return (
 		<svg

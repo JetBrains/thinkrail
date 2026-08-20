@@ -1,7 +1,3 @@
-// todo_write — lay out a fresh plan as named groups (group = task, items = its steps). The agent never
-// authors loose items — that lane is the user's (their items, and any done history, are preserved by
-// TodoStore.replaceAll). The plan-first pattern: decompose up front, then flip items with todo_update.
-
 import { StringEnum } from "@earendil-works/pi-ai/compat";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";

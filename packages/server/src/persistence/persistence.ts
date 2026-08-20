@@ -1,5 +1,3 @@
-// App state under the data dir (THINKRAIL_DATA_DIR for dev/e2e isolation, else ~/.thinkrail).
-// This is OUR state, never the agent's — pi's own session files live under ~/.pi/agent.
 import { randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -45,21 +43,12 @@ export function saveWorkspaces(workspaces: Workspace[]): void {
 	writeJson("workspaces.json", workspaces);
 }
 
-/**
- * One terminal tab as written to disk, so a host restart gives its tabs back.
- *
- * `recorded` is the shell's last output window, restored as the revived tab's replay — the process is gone
- * either way (see `submodule-server-terminal`), so this is the picture, not the shell. A **PTY id is
- * deliberately never persisted**: attaching to an id that outlived its process is exactly the `Couldn't attach
- * - can't find terminal with id` failure Theia ships. Only `tabKey` is durable.
- */
 export interface PersistedTerminalTab {
 	tabKey: string;
 	title: string;
 	recorded?: string;
 }
 
-/** Terminal tabs per workspace id. */
 export type PersistedTerminalSessions = Record<string, PersistedTerminalTab[]>;
 
 export function loadTerminalSessions(): PersistedTerminalSessions {
@@ -70,7 +59,6 @@ export function saveTerminalSessions(sessions: PersistedTerminalSessions): void 
 	writeJson("terminals.json", sessions);
 }
 
-/** OUR server-synced app settings. Missing/corrupt fields fall back independently to defaults. */
 export function loadConfig(): AppConfig {
 	const raw = readJson<unknown>("config.json", {});
 	if (!raw || typeof raw !== "object" || Array.isArray(raw)) return structuredClone(DEFAULT_CONFIG);
@@ -80,8 +68,6 @@ export function loadConfig(): AppConfig {
 			? (value.layout as Record<string, unknown>)
 			: {};
 	return {
-		// Preserve unknown top-level fields so an older host does not erase a newer config extension when it
-		// updates one setting it understands.
 		...value,
 		theme: typeof value.theme === "string" ? value.theme : DEFAULT_CONFIG.theme,
 		analyticsEnabled:
@@ -140,7 +126,6 @@ function workspaceLayoutPaths(workspaceId: string): {
 	};
 }
 
-/** Read the persisted primary layout as untrusted JSON; the layout module validates/migrates it. */
 export function loadWorkspaceLayout(workspaceId: string): unknown | null {
 	const { file } = workspaceLayoutPaths(workspaceId);
 	try {
@@ -150,7 +135,6 @@ export function loadWorkspaceLayout(workspaceId: string): unknown | null {
 	}
 }
 
-/** Read the last-known-good layout copy as untrusted JSON. */
 export function loadWorkspaceLayoutBackup(workspaceId: string): unknown | null {
 	const { backup } = workspaceLayoutPaths(workspaceId);
 	try {
@@ -160,7 +144,6 @@ export function loadWorkspaceLayoutBackup(workspaceId: string): unknown | null {
 	}
 }
 
-/** Atomic per-workspace replacement: the validated previous snapshot becomes LKG before the new primary. */
 export function saveWorkspaceLayout(
 	snapshot: WorkspaceLayoutSnapshot,
 	previous: WorkspaceLayoutSnapshot | null,
@@ -180,24 +163,15 @@ export function removeWorkspaceLayout(workspaceId: string): void {
 	for (const path of [file, backup, temp, backupTemp]) {
 		try {
 			unlinkSync(path);
-		} catch {
-			// Idempotent cleanup.
-		}
+		} catch {}
 	}
 }
 
-/**
- * The install identity for anonymous analytics — SERVER-ONLY by design: it must never ride the
- * wire-broadcast `config.json` (see `submodule-server-analytics`). `id` is minted once per install
- * and never rotated (turning analytics off only stops sending); `announced` records that the one-shot
- * `app_installed` event was sent.
- */
 export interface InstallationRecord {
 	id: string;
 	announced: boolean;
 }
 
-/** Load `installation.json`, minting (and persisting) a fresh record on first read or corrupt file. */
 export function ensureInstallation(): InstallationRecord {
 	const raw = readJson<Partial<InstallationRecord>>("installation.json", {});
 	if (typeof raw.id === "string" && raw.id.length > 0) {

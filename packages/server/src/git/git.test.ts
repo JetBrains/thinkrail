@@ -49,7 +49,6 @@ afterEach(() => {
 	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
 });
 
-/** Register the repo itself as workspace `w1` (branch = base = main) for the gitDiffFile tests. */
 function seedWorkspace(extra: Partial<Workspace> = {}): void {
 	writeFileSync(
 		join(dataDir, "workspaces.json"),
@@ -68,7 +67,6 @@ function seedWorkspace(extra: Partial<Workspace> = {}): void {
 	);
 }
 
-/** A commit on a `feature` branch off `main`, so the scopes have a real range to span. Returns its oid. */
 function commitOnFeature(file: string, content: string, message: string): string {
 	writeFileSync(join(repo, file), content);
 	git(repo, "add", "-A");
@@ -101,9 +99,8 @@ test("gitDiffFile: untracked → empty original; deleted → empty modified", ()
 
 test("gitStatus attaches per-file +/- counts, incl. untracked line counts", () => {
 	seedWorkspace();
-	// Base README.md is "# repo\n" (1 line): keep it, append two lines → +2 / −0.
 	writeFileSync(join(repo, "README.md"), "# repo\nline two\nline three\n");
-	writeFileSync(join(repo, "new.txt"), "a\nb\n"); // untracked, 2 lines
+	writeFileSync(join(repo, "new.txt"), "a\nb\n");
 
 	const { changes } = gitStatus("w1");
 	const readme = changes.find((c) => c.path === "README.md");
@@ -114,13 +111,8 @@ test("gitStatus attaches per-file +/- counts, incl. untracked line counts", () =
 
 test("gitStatus omits counts for untracked binary or oversized files (matches tracked binaries)", () => {
 	seedWorkspace();
-	// A binary untracked file (NUL byte in the head) → listed, but no count — like a tracked binary, which
-	// `--numstat` reports as `-`/`-` and we skip. (Without the sniff this counted mojibake "lines".)
 	writeFileSync(join(repo, "blob.bin"), Buffer.from([0x00, 0x01, 0x02, 0x0a, 0x0a]));
-	// An oversized untracked text file (> 2 MiB) → no count, so a large artifact isn't re-read into memory
-	// on every `git.status` tick.
 	writeFileSync(join(repo, "big.txt"), `${"x".repeat(2 * 1024 * 1024 + 1)}\n`);
-	// A small text untracked file still counts, to prove only the guarded cases drop out.
 	writeFileSync(join(repo, "small.txt"), "one\ntwo\n");
 
 	const { changes } = gitStatus("w1");
@@ -162,16 +154,14 @@ test("tryCurrentBranch distinguishes a detached checkout from an invalid workspa
 
 test("listBranches surfaces origin branches and the origin default", () => {
 	const remoteRepo = join(dataDir, "remote.git");
-	git(repo, "init", "--bare", remoteRepo); // `git -C repo init --bare <path>` inits at <path>
+	git(repo, "init", "--bare", remoteRepo);
 	git(repo, "remote", "add", "origin", remoteRepo);
 	git(repo, "push", "origin", "main");
-	// Record origin's default branch so `symbolic-ref refs/remotes/origin/HEAD` resolves.
 	git(repo, "remote", "set-head", "origin", "main");
 
 	const { remote, defaultBranch } = listBranches("p1");
 	expect(remote).toContain("origin/main");
 	expect(remote).not.toContain("origin/HEAD");
-	// `origin/HEAD` shortens to a bare `origin` — it must be filtered out (the symref drop), not listed.
 	expect(remote).not.toContain("origin");
 	expect(defaultBranch).toBe("origin/main");
 });
@@ -186,13 +176,8 @@ test("prefetchBranch fetches a remote ref and no-ops on a local ref or unknown p
 	git(repo, "remote", "add", "origin", remoteRepo);
 	git(repo, "push", "origin", "main");
 
-	// A commit that only exists on the remote (pushed from a throwaway clone), so a successful prefetch is
-	// observable: origin/main advances locally only if the fetch actually ran.
 	const clone = join(dataDir, "clone");
 	git(repo, "clone", remoteRepo, clone);
-	// Pin the clone to `main` from origin/main rather than trusting its checked-out default branch — the
-	// remote's default depends on the runner's `init.defaultBranch` (may be `master` on CI), which would
-	// otherwise leave no local `main` for the push below.
 	git(clone, "checkout", "-B", "main", "origin/main");
 	git(clone, "config", "user.email", "t@thinkrail.test");
 	git(clone, "config", "user.name", "test");
@@ -208,20 +193,14 @@ test("prefetchBranch fetches a remote ref and no-ops on a local ref or unknown p
 	const remoteTip = gitOut(remoteRepo, "rev-parse", "main");
 	expect(gitOut(repo, "rev-parse", "origin/main")).not.toBe(remoteTip);
 
-	// The fetch advances the local remote-tracking ref → `moved` (the handler's fanout trigger).
 	expect(await prefetchBranch("p1", "origin/main")).toEqual({ ok: true, moved: true });
 	expect(gitOut(repo, "rev-parse", "origin/main")).toBe(remoteTip);
 
-	// Fetching again with nothing new is ok but NOT a move — no invalidation fans out for a no-op fetch.
 	expect(await prefetchBranch("p1", "origin/main")).toEqual({ ok: true, moved: false });
 
-	// A ref's *first appearance* counts as moved: siblings measuring against it were failing their reads.
 	git(repo, "update-ref", "-d", "refs/remotes/origin/main");
 	expect(await prefetchBranch("p1", "origin/main")).toEqual({ ok: true, moved: true });
 
-	// Move detection reads the FULLY-QUALIFIED remote-tracking ref: a local branch literally named
-	// `origin/main` sits earlier in git's DWIM resolution (`refs/heads/…`) and never moves on a fetch — it
-	// must not shadow the comparison into a missed nudge.
 	git(repo, "update-ref", "refs/heads/origin/main", "HEAD");
 	writeFileSync(join(clone, "remote-only-2.txt"), "more\n");
 	git(clone, "add", "-A");
@@ -230,13 +209,11 @@ test("prefetchBranch fetches a remote ref and no-ops on a local ref or unknown p
 	expect(await prefetchBranch("p1", "origin/main")).toEqual({ ok: true, moved: true });
 	git(repo, "update-ref", "-d", "refs/heads/origin/main");
 
-	// A local ref never touches the network; an unknown project can't fetch — both are quiet no-ops.
 	expect(await prefetchBranch("p1", "main")).toEqual({ ok: false, moved: false });
 	expect(await prefetchBranch("nope", "origin/main")).toEqual({ ok: false, moved: false });
 });
 
 test("gitStatus reads the Default workspace's branch live, not the persisted snapshot", () => {
-	// A default-kind record whose persisted branch is already stale (the folder moved on).
 	writeFileSync(
 		join(dataDir, "workspaces.json"),
 		JSON.stringify([
@@ -245,7 +222,7 @@ test("gitStatus reads the Default workspace's branch live, not the persisted sna
 				projectId: "p1",
 				kind: "default",
 				name: "Default",
-				branch: "main", // stale — the checkout below moves to feature/live
+				branch: "main",
 				worktreePath: repo,
 				baseBranch: "main",
 				renamed: true,
@@ -284,15 +261,10 @@ test("diffBaseRef resolves the re-pointed diff target over the creation base", (
 test("resolveDiffRange: one definition per scope (branch / uncommitted / commit)", () => {
 	const ws = { baseBranch: "main", worktreePath: repo };
 
-	// Default (and explicit `branch`): what the workspace changed since diverging from the diff base —
-	// the range starts at the MERGE-BASE of base and HEAD (here HEAD is on main, so it's main's tip oid),
-	// never at the base ref's own tip.
 	expect(resolveDiffRange(ws)).toEqual(resolveDiffRange(ws, { kind: "branch" }));
 	const branch = resolveDiffRange(ws, { kind: "branch" });
 	const forkPoint = branch.originalRef ?? "";
 	expect(forkPoint).toMatch(/^[0-9a-f]{40,}$/);
-	// `--end-of-options` brackets the revs so a flag-shaped ref can't be parsed as one; the trailing `--`
-	// closes the other side, so a rev that also names a path isn't an "ambiguous argument".
 	expect(changedFileArgs(branch, "--name-status")).toEqual([
 		"diff",
 		"--name-status",
@@ -301,9 +273,6 @@ test("resolveDiffRange: one definition per scope (branch / uncommitted / commit)
 		"--",
 	]);
 	expect(branch).toMatchObject({ untracked: true, listRevs: [forkPoint], modifiedRef: null });
-	// The re-pointed target is what a branch range spans — and a target with no merge-base to resolve
-	// (this ref doesn't exist here) FALLS BACK to the raw ref, preserving the old error surfaces: a
-	// missing base still fails the downstream diff loudly instead of reading as "no changes".
 	expect(resolveDiffRange({ ...ws, diffBase: "origin/release" }, { kind: "branch" })).toMatchObject(
 		{
 			listRevs: ["origin/release"],
@@ -311,7 +280,6 @@ test("resolveDiffRange: one definition per scope (branch / uncommitted / commit)
 		},
 	);
 
-	// Uncommitted: worktree vs HEAD, untracked files included.
 	const uncommitted = resolveDiffRange(ws, { kind: "uncommitted" });
 	expect(changedFileArgs(uncommitted, "--numstat")).toEqual([
 		"diff",
@@ -322,18 +290,14 @@ test("resolveDiffRange: one definition per scope (branch / uncommitted / commit)
 	]);
 	expect(uncommitted).toMatchObject({ untracked: true, originalRef: "HEAD", modifiedRef: null });
 
-	// One commit: `sha^` vs `sha`, both sides from history, no untracked files.
 	const sha = commitOnFeature("second.txt", "second\n", "second");
 	const commit = resolveDiffRange(ws, { kind: "commit", sha });
 	const parent = commit.originalRef ?? "";
 	expect(parent).toMatch(/^[0-9a-f]{40,}$/);
 	expect(parent).not.toBe(sha);
 	expect(commit).toMatchObject({ untracked: false, modifiedRef: sha, listRevs: [parent, sha] });
-	// An abbreviated sha resolves to the same full-oid range.
 	expect(resolveDiffRange(ws, { kind: "commit", sha: sha.slice(0, 8) })).toEqual(commit);
 
-	// Pinned: one IMMUTABLE commit vs the worktree — the review sidebar's base-side navigation. Same
-	// shape/existence validation as `commit`, but the WORKTREE is the modified side (untracked included).
 	const pinned = resolveDiffRange(ws, { kind: "pinned", baseRef: sha });
 	expect(pinned).toMatchObject({
 		untracked: true,
@@ -361,7 +325,6 @@ test("resolveDiffRange degrades a root commit to an add-style diff (no parent to
 		.trim();
 	const range = resolveDiffRange(ws, { kind: "commit", sha: root });
 	expect(range).toMatchObject({ untracked: false, originalRef: null, modifiedRef: root });
-	// `git show` (not `git diff`), since there is no `sha^` — the range's changed files are still listable.
 	expect(changedFileArgs(range, "--name-status")).toEqual([
 		"show",
 		"--format=",
@@ -401,7 +364,6 @@ test("gitStatus scopes: branch spans the base range, uncommitted only the dirty 
 test("branch scope measures from the merge-base: upstream commits on the base are never phantom changes", () => {
 	git(repo, "switch", "-c", "feature");
 	commitOnFeature("feature.txt", "feature\n", "feature work");
-	// The base advances AFTER the branch forked — upstream work landing on main (or a fetch moving it).
 	git(repo, "switch", "main");
 	writeFileSync(join(repo, "upstream.txt"), "upstream\n");
 	git(repo, "add", "-A");
@@ -409,11 +371,8 @@ test("branch scope measures from the merge-base: upstream commits on the base ar
 	git(repo, "switch", "feature");
 	seedWorkspace({ branch: "feature" });
 
-	// Tip semantics would list upstream.txt as a phantom deletion; the merge-base range shows only the
-	// workspace's own work — agreeing with listCommits' `base..HEAD`, which was always ancestry-based.
 	expect(gitStatus("w1").changes.map((c) => c.path)).toEqual(["feature.txt"]);
 	expect(listCommits("w1").commits.map((c) => c.subject)).toEqual(["feature work"]);
-	// The per-file read agrees: the original side comes from the fork point, where the file didn't exist.
 	expect(gitDiffFile("w1", "feature.txt")).toEqual({ original: "", modified: "feature\n" });
 });
 
@@ -422,7 +381,6 @@ test("gitStatus/gitDiffFile for a commit scope read only that commit, from histo
 	commitOnFeature("script.ts", "export const one = 1;\n", "add script");
 	const sha = commitOnFeature("script.ts", "export const two = 2;\n", "edit script");
 	seedWorkspace({ branch: "feature" });
-	// Worktree dirt (tracked + untracked) must not leak into a historical scope.
 	writeFileSync(join(repo, "script.ts"), "export const three = 3;\n");
 	writeFileSync(join(repo, "untracked.txt"), "nope\n");
 
@@ -444,7 +402,6 @@ test("gitStatus/listCommits measure against the re-pointed diffBase, not the cre
 	const sha = commitOnFeature("feature.txt", "feature\n", "feature-only");
 	seedWorkspace({ branch: "feature", baseBranch: "main", diffBase: "release" });
 
-	// vs `release`: only the feature commit's file (the release-only file is common to both).
 	expect(gitStatus("w1").changes.map((c) => c.path)).toEqual(["feature.txt"]);
 	const { commits } = listCommits("w1");
 	expect(commits.map((c) => c.sha)).toEqual([sha]);
@@ -452,7 +409,6 @@ test("gitStatus/listCommits measure against the re-pointed diffBase, not the cre
 	expect(commits[0]?.shortSha).toBe(sha.slice(0, commits[0]?.shortSha.length));
 	expect(commits[0]?.committedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
 
-	// vs the creation base `main`: both commits' files, newest commit first.
 	seedWorkspace({ branch: "feature", baseBranch: "main" });
 	expect(gitStatus("w1").changes.map((c) => c.path)).toEqual(["feature.txt", "released.txt"]);
 	expect(listCommits("w1").commits.map((c) => c.subject)).toEqual(["feature-only", "release-only"]);
@@ -460,34 +416,25 @@ test("gitStatus/listCommits measure against the re-pointed diffBase, not the cre
 
 test("listCommits: a subject carrying the field separator can't shift author or timestamp", () => {
 	git(repo, "switch", "-c", "feature");
-	// The separator is a control char, but `%s` is repository-controlled and can contain it — the format's
-	// field order (structured head, free-text tail) is what actually keeps the later fields in place.
 	writeFileSync(join(repo, "spoof.txt"), "spoof\n");
 	git(repo, "add", "-A");
 	git(repo, "commit", "-m", "subject\u001fnot-the-author\u001f1999-01-01T00:00:00+00:00");
 	seedWorkspace({ branch: "feature" });
 
 	const commit = listCommits("w1").commits[0];
-	expect(commit?.author).toBe("test"); // the real author, not the injected one
-	expect(commit?.committedAt).not.toContain("1999"); // a real timestamp, so no NaN relative time
+	expect(commit?.author).toBe("test");
+	expect(commit?.committedAt).not.toContain("1999");
 	expect(Number.isFinite(Date.parse(commit?.committedAt ?? ""))).toBe(true);
-	// The whole subject survives, minus the control chars we never put on the wire.
 	expect(commit?.subject).toBe("subjectnot-the-author1999-01-01T00:00:00+00:00");
 });
 
 test("an option-shaped ref reaches git as a rev, never as an option", () => {
-	// `git update-ref` accepts a name the `git branch` porcelain refuses, so this ref is reachable from any
-	// untrusted repo via `for-each-ref` → the BranchPicker. isSafeRef closes the mutation doors; the read
-	// sites' `--end-of-options` is the second line of defense for a ref already persisted.
 	const probe = join(dataDir, "pwn-probe.txt");
 	git(repo, "update-ref", `refs/heads/--output=${probe}`, "HEAD");
 	expect(isSafeRef(`--output=${probe}`)).toBe(false);
 	expect(listBranches("p1").local).toContain(`--output=${probe}`);
 
 	seedWorkspace({ diffBase: `--output=${probe}` });
-	// It reaches git as a REV (this one resolves — the crafted ref points at HEAD, hence an empty diff), never
-	// as an option: the file the "ref" names is not written. A *failed* read is asserted separately, where it
-	// throws rather than reading as a clean worktree.
 	expect(gitStatus("w1").changes).toEqual([]);
 	expect(listCommits("w1").commits).toEqual([]);
 	expect(existsSync(probe)).toBe(false);
@@ -500,8 +447,6 @@ test("isSafeRef accepts real refs and refuses anything git could re-read as more
 		"release-1.2",
 		"feature/a_b",
 		"HEAD",
-		// Long, but every component is a name git accepts — `check-ref-format` caps no length, so neither do
-		// we: such a branch is listable by `for-each-ref`, hence selectable as a base or a diff target.
 		`feature/${"a".repeat(200)}/${"b".repeat(200)}`,
 	])
 		expect(isSafeRef(ok)).toBe(true);
@@ -516,7 +461,6 @@ test("isSafeRef accepts real refs and refuses anything git could re-read as more
 		"with space",
 		"tab\there",
 		"ctrl\u001fchar",
-		// Revision metadata git itself refuses inside a ref name — `check-ref-format`'s rules, reproduced.
 		"main@{yesterday}",
 		"@{u}",
 		"@",
@@ -532,9 +476,6 @@ test("isSafeRef accepts real refs and refuses anything git could re-read as more
 
 test("listCommits: a crafted AUTHOR name can't shift the timestamp or truncate itself", () => {
 	git(repo, "switch", "-c", "feature");
-	// `%an` is free text too, and it sits *between* the structured fields and the subject — the earlier
-	// "structured fields first" framing did not protect it: an author carrying the old `\u001f` separator
-	// shifted the subject one field over and truncated the author. NUL-separated fields of fixed arity do.
 	writeFileSync(join(repo, "spoof.txt"), "spoof\n");
 	git(repo, "add", "-A");
 	git(
@@ -550,8 +491,8 @@ test("listCommits: a crafted AUTHOR name can't shift the timestamp or truncate i
 	seedWorkspace({ branch: "feature" });
 
 	const commit = listCommits("w1").commits[0];
-	expect(commit?.author).toBe("evil1999-01-01T00:00:00+00:00"); // whole name, control chars stripped
-	expect(commit?.subject).toBe("real subject"); // not shifted by the injected separators
+	expect(commit?.author).toBe("evil1999-01-01T00:00:00+00:00");
+	expect(commit?.subject).toBe("real subject");
 	expect(commit?.committedAt).not.toContain("1999");
 	expect(Number.isFinite(Date.parse(commit?.committedAt ?? ""))).toBe(true);
 });
@@ -560,8 +501,6 @@ test("plainText strips invisible deception (bidi overrides, zero-width) from rep
 	git(repo, "switch", "-c", "feature");
 	writeFileSync(join(repo, "bidi.txt"), "bidi\n");
 	git(repo, "add", "-A");
-	// A right-to-left override can make a subject *render* as something else entirely; a zero-width space
-	// hides inside a name. Both go before the wire, while ordinary non-ASCII text stays.
 	git(repo, "commit", "-m", "fix\u202egnisrever\u202c pa\u200bth — caf\u00e9 \u2713");
 	seedWorkspace({ branch: "feature" });
 
@@ -569,8 +508,6 @@ test("plainText strips invisible deception (bidi overrides, zero-width) from rep
 });
 
 test("a base ref that also names a path still lists changes (the trailing `--`)", () => {
-	// A branch and a file with the same name is an "ambiguous argument" for `git diff <rev>` — which used to
-	// fail the whole read and surface as NO CHANGES. The `--` after the revs settles it as a rev.
 	writeFileSync(join(repo, "docs"), "a file called docs\n");
 	git(repo, "add", "-A");
 	git(repo, "commit", "-m", "add a file named docs");
@@ -589,9 +526,6 @@ test("a failed diff throws — a broken read is never reported as a clean worktr
 	expect(() => gitStatus("w1")).toThrow(/Could not read the changed files/);
 });
 
-// --- gitCommitPaths / gitHeadSha (the TODO change-set primitives) ---
-
-/** The paths currently staged (index vs HEAD) — how the index-preservation tests observe git's state. */
 function stagedPaths(): string[] {
 	return new TextDecoder()
 		.decode(
@@ -605,8 +539,6 @@ function stagedPaths(): string[] {
 test("gitCommitPaths commits EXACTLY the named paths and returns the sha; commit scope unfolds it", () => {
 	seedWorkspace();
 	writeFileSync(join(repo, "impl.ts"), "export {};\n");
-	// Dirt the caller did NOT name: another item's work (or the user's), plus the host's own state. Neither
-	// may ride along — that's the whole point of the path-scoped commit.
 	writeFileSync(join(repo, "other.ts"), "export const other = 1;\n");
 	mkdirSync(join(repo, ".thinkrail", "context"), { recursive: true });
 	writeFileSync(join(repo, ".thinkrail", "context", "todos.json"), "{}");
@@ -616,10 +548,8 @@ test("gitCommitPaths commits EXACTLY the named paths and returns the sha; commit
 	expect(committed).not.toBeNull();
 	expect(committed?.sha).not.toBe(before);
 	expect(gitHeadSha("w1")).toBe(committed?.sha ?? "");
-	// The commit records only the named path…
 	const unfolded = gitStatus("w1", { kind: "commit", sha: committed?.sha ?? "" });
 	expect(unfolded.changes.map((c) => c.path)).toEqual(["impl.ts"]);
-	// …and everything unnamed stays uncommitted in the worktree, unstaged.
 	const status = gitStatus("w1", { kind: "uncommitted" });
 	expect(status.changes.map((c) => c.path).sort()).toEqual([
 		".thinkrail/context/todos.json",
@@ -646,31 +576,28 @@ test("gitCommitPaths leaves the user's own staged work staged (never in the item
 	seedWorkspace();
 	writeFileSync(join(repo, "impl.ts"), "export {};\n");
 	writeFileSync(join(repo, "mine.ts"), "export const mine = 1;\n");
-	git(repo, "add", "--", "mine.ts"); // the user staged this deliberately
+	git(repo, "add", "--", "mine.ts");
 
 	const committed = gitCommitPaths("w1", "todo: step", ["impl.ts"]);
-	expect(gitStatus("w1", { kind: "commit", sha: committed?.sha ?? "" }).changes.map((c) => c.path)) //
-		.toEqual(["impl.ts"]);
+	expect(
+		gitStatus("w1", { kind: "commit", sha: committed?.sha ?? "" }).changes.map((c) => c.path),
+	).toEqual(["impl.ts"]);
 	expect(stagedPaths()).toEqual(["mine.ts"]);
 });
 
 test("gitCommitPaths treats paths literally — a pathspec-magic filename never expands beyond itself", () => {
 	seedWorkspace();
-	// A tracked file whose NAME is a valid pathspec: without --literal-pathspecs, `:(top)*` expands to
-	// "everything from the repo top" and sweeps the unrelated dirt + the host's own state into the commit.
 	const magic = ":(top)*";
 	writeFileSync(join(repo, magic), "the item's own work\n");
-	writeFileSync(join(repo, "other.ts"), "export const other = 1;\n"); // unrelated concurrent edit
+	writeFileSync(join(repo, "other.ts"), "export const other = 1;\n");
 	mkdirSync(join(repo, ".thinkrail", "context"), { recursive: true });
-	writeFileSync(join(repo, ".thinkrail", "context", "todos.json"), "{}"); // excluded app state
+	writeFileSync(join(repo, ".thinkrail", "context", "todos.json"), "{}");
 
 	const committed = gitCommitPaths("w1", "todo: magic name", [magic]);
 	expect(committed).not.toBeNull();
-	// The commit holds exactly the literally-named file…
 	expect(
 		gitStatus("w1", { kind: "commit", sha: committed?.sha ?? "" }).changes.map((c) => c.path),
 	).toEqual([magic]);
-	// …and the unrelated dirt + app state stay uncommitted, unstaged.
 	expect(
 		gitStatus("w1", { kind: "uncommitted" })
 			.changes.map((c) => c.path)
@@ -684,15 +611,12 @@ test("a failed commit restores the index — the user's staging area is never le
 	writeFileSync(join(repo, "impl.ts"), "export {};\n");
 	writeFileSync(join(repo, "mine.ts"), "export const mine = 1;\n");
 	git(repo, "add", "--", "mine.ts");
-	// Make the commit itself fail the way a real checkout does (signing configured but unavailable), so the
-	// `add` has already mutated the index by the time the failure lands.
 	git(repo, "config", "commit.gpgsign", "true");
 	git(repo, "config", "gpg.program", join(dataDir, "no-such-gpg"));
 
 	const head = gitHeadSha("w1");
 	expect(gitCommitPaths("w1", "todo: unsignable", ["impl.ts"])).toBeNull();
-	expect(gitHeadSha("w1")).toBe(head ?? ""); // no commit landed
-	// The item's path is NOT staged and the user's staged file still is — exactly the pre-call index.
+	expect(gitHeadSha("w1")).toBe(head ?? "");
 	expect(stagedPaths()).toEqual(["mine.ts"]);
 });
 
@@ -700,29 +624,24 @@ test("a failed commit preserves index-only state — an intent-to-add entry surv
 	seedWorkspace();
 	writeFileSync(join(repo, "impl.ts"), "export {};\n");
 	writeFileSync(join(repo, "intent.txt"), "later\n");
-	// Index-only state with no tree representation: a tree round-trip (write-tree/read-tree) would
-	// silently drop it — the regression this test pins is that the index FILE is restored verbatim.
 	git(repo, "add", "-N", "--", "intent.txt");
 	git(repo, "config", "commit.gpgsign", "true");
 	git(repo, "config", "gpg.program", join(dataDir, "no-such-gpg"));
 
 	const head = gitHeadSha("w1");
 	expect(gitCommitPaths("w1", "todo: unsignable", ["impl.ts"])).toBeNull();
-	expect(gitHeadSha("w1")).toBe(head ?? ""); // no commit landed
-	// The intent-to-add entry is still registered in the index…
+	expect(gitHeadSha("w1")).toBe(head ?? "");
 	const tracked = new TextDecoder()
 		.decode(
 			Bun.spawnSync(["git", "-C", repo, "ls-files", "--", "intent.txt"], { stdout: "pipe" }).stdout,
 		)
 		.trim();
 	expect(tracked).toBe("intent.txt");
-	// …and the item's path was unstaged again (intent-to-add itself never counts as staged content).
 	expect(stagedPaths()).toEqual([]);
 });
 
 test("gitCommitPaths refuses to commit over a conflicted index (unmerged entries)", () => {
 	seedWorkspace();
-	// Build a real conflict: two branches editing the same line, merged with no resolution.
 	writeFileSync(join(repo, "conflict.txt"), "base\n");
 	git(repo, "add", "-A");
 	git(repo, "commit", "-m", "add conflict.txt");

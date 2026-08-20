@@ -1,5 +1,3 @@
-// spec_grep — regex/substring search within the spec set, narrowed by optional metadata filters.
-
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { type GrepResult, grepSpecs } from "../core/index.ts";
@@ -48,7 +46,6 @@ export function registerSpecGrep(pi: ExtensionAPI): void {
 					...(params.limit !== undefined ? { limit: params.limit } : {}),
 				});
 			} catch (err) {
-				// A malformed regex (`regex: true`) is the only way grepSpecs throws — surface it, don't crash.
 				return errorResult(`Invalid search pattern: ${(err as Error).message}`);
 			}
 			const { matches, truncated } = result;

@@ -22,9 +22,6 @@ test("a run from source says so, and a stack-less throw still reports what it wa
 	expect(record).toContain("Non-Error thrown: just a string");
 });
 
-// Formatting must not throw: it runs before the record reaches stderr or the file, so a value that
-// resists rendering would destroy the report instead of appearing in it. Every rendering step is hostile
-// in some case — classification included — so each one degrades rather than escaping.
 test("a value that resists rendering is still reported", () => {
 	const cyclic: { self?: unknown } = {};
 	cyclic.self = cyclic;
@@ -33,7 +30,6 @@ test("a value that resists rendering is still reported", () => {
 		"Unrenderable throw:",
 	);
 
-	// An Error whose `stack` accessor throws: classification succeeded, the read did not.
 	const badStack = new Error("hostile");
 	Object.defineProperty(badStack, "stack", {
 		get() {
@@ -44,20 +40,17 @@ test("a value that resists rendering is still reported", () => {
 		"Unrenderable throw: Error: hostile",
 	);
 
-	// No prototype ⇒ no `toString` to borrow, so even the fallback rendering throws.
 	const noProto = Object.assign(Object.create(null), { big: 1n }) as object;
 	expect(formatCrashRecord("uncaughtException", noProto, AT, 1)).toContain(
 		"Unrenderable throw (object)",
 	);
 
-	// A `stack` that is not a string at all: returning it would move the coercion outside the guard.
 	const proxyStack = new Error("proxy stack");
 	const revocable = Proxy.revocable({}, {});
 	revocable.revoke();
 	Object.defineProperty(proxyStack, "stack", { value: revocable.proxy });
 	expect(formatCrashRecord("uncaughtException", proxyStack, AT, 1)).toContain("Error: proxy stack");
 
-	// A revoked Proxy traps every operation, `instanceof` included — the type is all that survives.
 	const { proxy, revoke } = Proxy.revocable({}, {});
 	revoke();
 	expect(formatCrashRecord("unhandledRejection", proxy, AT, 1)).toContain(
@@ -65,8 +58,6 @@ test("a value that resists rendering is still reported", () => {
 	);
 });
 
-// The wiring, in a real process: installing a handler suppresses Bun's own report, so the point is that
-// BOTH the file and stderr get the fault, and that the process still dies rather than serving on broken.
 const dirs: string[] = [];
 
 afterAll(() => {
@@ -83,11 +74,9 @@ async function runCrashing(
 		script,
 		`import { installCrashLog } from ${JSON.stringify(join(import.meta.dir, "crashLog.ts"))};\n` +
 			`installCrashLog("9.9.9-test");\n${body}\n` +
-			// Keep the loop alive so the process can only end by the fault itself.
 			`setInterval(() => {}, 1_000);\n`,
 	);
 	const proc = Bun.spawn([process.execPath, script], {
-		// Not a test process: `bun test`'s own `NODE_ENV=test` is exactly what the installer declines on.
 		env: { ...process.env, NODE_ENV: "production", THINKRAIL_DATA_DIR: dir },
 		stdout: "ignore",
 		stderr: "pipe",

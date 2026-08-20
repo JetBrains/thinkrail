@@ -4,19 +4,12 @@ import { defaultWorkspaceRow, enterDefaultWorkspace, openFixtureProject } from "
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { seedWorkspaceSession } from "./fixtures/sessions";
 
-// Compaction is the one gap a hydrated transcript cannot explain by itself: pi resolves a compacted
-// session to its summary plus what followed, so the messages before it are simply gone from what
-// `session.getMessages` can return. Without the marker the chat just starts mid-conversation, which reads
-// as lost history — so the summary crosses the wire and renders as a rule the reader can open.
-//
-// Driven through a real compacted session file: pi's own resolver decides what survives, not a fixture.
-
 const BASE_TS = 1_700_300_000_000;
 
 const repoCwd = () => realpathSync(E2E_FIXTURE_REPO);
 
 test("a compacted transcript marks where the summarized messages were", async ({ page }) => {
-	await openFixtureProject(page); // resets state — seed after
+	await openFixtureProject(page);
 
 	const chat = seedWorkspaceSession(repoCwd(), {
 		name: "the long chat",
@@ -27,7 +20,6 @@ test("a compacted transcript marks where the summarized messages were", async ({
 			{ role: "assistant", text: "kept answer", timestamp: BASE_TS + 3_000 },
 		],
 	});
-	// A real compaction entry: everything before `firstKeptEntryId` (the third message) is summarized away.
 	appendFileSync(
 		chat.path,
 		`${JSON.stringify({
@@ -45,11 +37,9 @@ test("a compacted transcript marks where the summarized messages were", async ({
 	await expect(defaultWorkspaceRow(page)).toBeVisible();
 	await enterDefaultWorkspace(page);
 
-	// The only chat, so the hydrate fallback opens it: pi kept the later exchange and dropped the earlier.
 	await expect(page.getByText("kept question")).toBeVisible();
 	await expect(page.getByText("summarized question")).toHaveCount(0);
 
-	// …and the gap is accounted for, with pi's summary one click away.
 	const marker = page.getByTestId("chat-compaction");
 	await expect(marker).toContainText("Earlier messages summarized");
 	await expect(marker).toContainText("148k tokens");

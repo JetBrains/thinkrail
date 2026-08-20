@@ -1,14 +1,3 @@
-/**
- * Ad-hoc one-shot "assist" tasks: small, best-effort agentic helpers that run a single cheap-model
- * completion and never block or crash their caller. Each task builds a prompt, runs it through the
- * one-shot runner, parses/guards the output, and **degrades gracefully** (returns `null`) on any failure
- * — nothing authenticated, a timeout, or unusable output. The first task is workspace naming; PR-draft
- * and friends land here later.
- *
- * The runner is injectable ({@link setOneShotRunner}) so tasks unit-test against a fake — no pi, auth, or
- * network — and default to the real {@link completeOnce} primitive in the `agent` module.
- */
-
 import type {
 	AssistantMessage,
 	TextContent,
@@ -17,11 +6,8 @@ import type {
 } from "@thinkrail/contracts";
 import { completeOnce, type OneShotRequest, type OneShotResult } from "../agent";
 
-/** The first turn of a session — the raw material for a workspace name. */
 export interface WorkspaceNameTurn {
-	/** The user's opening prompt. */
 	prompt: string;
-	/** The agent's answer to it (may be empty — the prompt alone can be enough). */
 	answer: string;
 }
 
@@ -29,7 +15,6 @@ export type OneShotRunner = (req: OneShotRequest) => Promise<OneShotResult>;
 
 let runOneShot: OneShotRunner = completeOnce;
 
-/** Swap the one-shot runner (tests inject a fake; `null` restores the real primitive). */
 export function setOneShotRunner(fn: OneShotRunner | null): void {
 	runOneShot = fn ?? completeOnce;
 }
@@ -39,33 +24,17 @@ const NAME_SYSTEM =
 	'name (2-4 words, Title Case) that captures the task — e.g. "Fix Auth Redirect". Reply with the ' +
 	"name only — no quotes, no prose, no kebab-case, no slashes.";
 
-/** Max ms a name suggestion may take before we give up and let the caller keep its default. */
 const NAME_TIMEOUT_MS = 12_000;
 
-/** Longest display name we keep — long names are unwieldy; the model is asked for 2-4 words anyway. */
 const MAX_NAME_LENGTH = 60;
 
-/** Words we keep in a display name — the model is asked for 2-4; this is the hard clamp. */
 const MAX_NAME_WORDS = 5;
 
-/**
- * Naive-slug bounds. Grow the slug word-by-word to *at least* the minimum (so a run of very short words
- * still reads), then stop *before* a maximum. Tuned for branch-friendly, human-recognisable names.
- */
 const NAIVE_MIN_WORDS = 2;
 const NAIVE_MAX_WORDS = 5;
 const NAIVE_MIN_CHARS = 10;
 const NAIVE_MAX_CHARS = 40;
 
-/**
- * Derive a short **Title Case display name** straight from a raw user prompt — the **non-agentic** instant
- * name shown the moment a turn starts, before the agentic {@link suggestWorkspaceName} refinement lands.
- * Grows a word at a time: never stops before `MIN_WORDS`/`MIN_CHARS` (unless the prompt runs out of words),
- * never exceeds `MAX_WORDS`, and stops before `MAX_CHARS` once that minimum is met; each picked word is
- * Title Cased and the words are joined with spaces. Returns `null` for a blank/unusable prompt so the
- * caller keeps its default. Pure — no runner, no auth, no network; the branch is derived from this name
- * downstream by `workspaces`.
- */
 export function naiveWorkspaceName(prompt: string): string | null {
 	const words = prompt
 		.toLowerCase()
@@ -76,7 +45,7 @@ export function naiveWorkspaceName(prompt: string): string | null {
 	if (words.length === 0) return null;
 
 	const picked: string[] = [];
-	let length = 0; // running length of the joined name (word chars + single-char separators)
+	let length = 0;
 	for (const word of words) {
 		const next = length === 0 ? word.length : length + 1 + word.length;
 		const haveMinimum = picked.length >= NAIVE_MIN_WORDS && length >= NAIVE_MIN_CHARS;
@@ -90,17 +59,10 @@ export function naiveWorkspaceName(prompt: string): string | null {
 	return name.length > 0 ? name : null;
 }
 
-/** Capitalize the first character of a single (already-lowercased) word; the rest is left as-is. */
 function titleCaseWord(word: string): string {
 	return word.charAt(0).toUpperCase() + word.slice(1);
 }
 
-/**
- * Suggest a short, human-readable Title Case workspace name from a session's first turn. **Best-effort**:
- * returns `null` on any failure (nothing authenticated, timeout, empty/garbage output) so the caller keeps
- * its `workspace-N` default. Never throws. The git branch is derived from this name downstream by
- * `workspaces`.
- */
 export async function suggestWorkspaceName(turn: WorkspaceNameTurn): Promise<string | null> {
 	const prompt = buildNamePrompt(turn);
 	if (!prompt) return null;
@@ -118,7 +80,6 @@ export async function suggestWorkspaceName(turn: WorkspaceNameTurn): Promise<str
 	}
 }
 
-/** Compose the naming prompt, or `null` when there's no user prompt to name from. Clips long text. */
 function buildNamePrompt(turn: WorkspaceNameTurn): string | null {
 	const prompt = turn.prompt.trim();
 	if (!prompt) return null;
@@ -127,12 +88,6 @@ function buildNamePrompt(turn: WorkspaceNameTurn): string | null {
 	return `User request:\n${clip(prompt, 1500)}${answerPart}`;
 }
 
-/**
- * Normalize raw model output into a safe, bounded **display name**; `null` if nothing usable remains.
- * Strips wrapping quotes/backticks the model may add, drops other punctuation to spaces, collapses runs of
- * whitespace, and clamps to a few words and a max length — but **preserves the model's casing** (so
- * `Add OAuth login` survives intact). Pure. The git branch is derived from this by `workspaces`' `toBranch`.
- */
 export function toWorkspaceName(raw: string): string | null {
 	const name = raw
 		.trim()
@@ -148,19 +103,10 @@ export function toWorkspaceName(raw: string): string | null {
 	return name.length > 0 ? name : null;
 }
 
-/**
- * Extract the first **clean** `{ prompt, answer }` turn from a pi-canonical transcript, or `null` if
- * there is none. A turn is its user message plus everything up to the next user message; a turn whose
- * run was killed — its terminal assistant message stopped `"error"` or `"aborted"` — is skipped, so a
- * prompt the user retracted (or that never produced work) can't become naming material. Blank prompts
- * are skipped the same way. `answer` is the concatenated text of the clean turn's first assistant
- * message (empty if it hasn't produced text). Pure — the host composes this with `session.getMessages`.
- */
 export function extractFirstTurn(messages: TranscriptMessage[]): WorkspaceNameTurn | null {
 	for (let i = 0; i < messages.length; i += 1) {
 		const message = messages[i];
 		if (message?.role !== "user") continue;
-		// The turn's span: everything until the next user message.
 		let firstAssistant: AssistantMessage | undefined;
 		let lastAssistant: AssistantMessage | undefined;
 		let j = i + 1;

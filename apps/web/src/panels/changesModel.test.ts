@@ -63,11 +63,8 @@ test("scopeKey + diffTabId: the scope is part of a diff tab's identity", () => {
 	expect(scopeKey({ kind: "branch" })).toBe("branch");
 	expect(scopeKey({ kind: "uncommitted" })).toBe("uncommitted");
 	expect(scopeKey({ kind: "commit", sha: "abc123" })).toBe("commit:abc123");
-	// A pinned scope (the review sidebar's base-side navigation) keys off its own immutable baseRef, so a
-	// pinned diff tab is distinct from a same-file branch/commit one.
 	expect(scopeKey({ kind: "pinned", baseRef: "abc123" })).toBe("pinned:abc123");
 
-	// One file, two scopes → two ids (a tab's content must never change meaning under it).
 	const branch = diffTabId("ws1", { kind: "branch" }, "src/a.ts");
 	const commit = diffTabId("ws1", { kind: "commit", sha: "abc123" }, "src/a.ts");
 	expect(branch).toBe("diff:3:ws16:branch8:src/a.ts");
@@ -78,7 +75,6 @@ test("diffTabName tags every non-default scope so two tabs of one file are disti
 	expect(diffTabName({ kind: "branch" }, "src/a.ts")).toBe("a.ts");
 	expect(diffTabName({ kind: "uncommitted" }, "src/a.ts")).toBe("a.ts · uncommitted");
 	expect(diffTabName({ kind: "commit", sha: "abc1234567" }, "src/a.ts")).toBe("a.ts · abc1234");
-	// A pinned tab tags with its baseRef's short oid, same form as a commit tab.
 	expect(diffTabName({ kind: "pinned", baseRef: "abc1234567" }, "src/a.ts")).toBe("a.ts · abc1234");
 });
 
@@ -94,16 +90,13 @@ test("scopeLabel keeps a commit scope short (sha), with the subject in the toolt
 	];
 	expect(scopeLabel({ kind: "branch" })).toBe("All changes");
 	expect(scopeLabel({ kind: "uncommitted" })).toBe("Uncommitted");
-	// The pill never carries a commit *subject* — a sentence there squeezes the sibling target-branch pill.
 	expect(scopeLabel({ kind: "commit", sha: "abc1234567" }, commits)).toBe("abc1234");
 	expect(scopeLabel({ kind: "commit", sha: "abc1234567" })).toBe("abc1234");
-	// The subject lives in the tooltip (and the menu row), where there is room for it.
 	expect(scopeTitle({ kind: "commit", sha: "abc1234567" }, commits)).toBe(
 		"abc1234 · Fix the thing",
 	);
 	expect(scopeTitle({ kind: "commit", sha: "abc1234567" })).toBe("abc1234");
 	expect(scopeTitle({ kind: "uncommitted" })).toBe("Diff scope: Uncommitted");
-	// A pinned scope reads as its short baseRef in both the pill and the tooltip.
 	expect(scopeLabel({ kind: "pinned", baseRef: "abc1234567" })).toBe("abc1234");
 	expect(scopeTitle({ kind: "pinned", baseRef: "abc1234567" })).toBe("Diff scope: abc1234");
 });

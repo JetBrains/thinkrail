@@ -16,7 +16,6 @@ function parseShardCount(raw: string, source: string): number {
 	return count;
 }
 
-/** Consume runner-only flags and leave every Playwright argument byte-for-byte intact. */
 export function parseRunnerArgs(args: readonly string[]): RunnerArgs {
 	const playwrightArgs: string[] = [];
 	let shardOverride: number | undefined;

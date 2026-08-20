@@ -1,7 +1,6 @@
 import type { ToolRenderProps } from "../toolRegistry";
 import { resultText, strArg } from "./toolHelpers";
 
-/** Body for the `bash` tool: command on a prompt line + output. The card header/status is shared chrome. */
 export function BashCard({ args, result, status }: ToolRenderProps) {
 	const command = strArg(args, "command");
 	const output = resultText(result);

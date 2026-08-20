@@ -1,41 +1,9 @@
 #!/usr/bin/env bun
-// Canary for the compiled-binary seam (`registerBundledRuntime`, packages/server/src/agent/extensions.ts).
-//
-// pi deliberately hides Node-only provider code behind **bundler-opaque dynamic imports** (variable
-// specifiers) so browser bundles can't follow them — but `bun build --compile` can't follow them either,
-// and a single-file binary has no `node_modules` to resolve them from at runtime. That's how OAuth
-// sign-in shipped broken (`Cannot find module './openai-codex.js' from '/$bunfs/...'`): the seam only
-// fails inside the artifact, where no from-source suite can see it.
-//
-// This gate catches the *next* one at the cheapest possible point — the pi version bump itself: parse
-// the pinned pi packages' `dist` (a real TypeScript AST, so comments, strings, and multiline formatting
-// can't hide or fake a match) for dynamic `import(...)` whose specifier is not a constant string, and
-// require the findings to match the allowlist below **exactly, per occurrence** (file + normalized
-// specifier expression, as a multiset — not per file, so a bump that adds a second opaque import to an
-// already-known file, or reshapes a known one, fails instead of hiding behind the file's entry).
-//   - A NEW occurrence fails: verify it (register a static seam in `registerBundledRuntime`, or confirm
-//     it only ever receives `node:` builtin specifiers, which a compiled binary resolves at runtime),
-//     then allowlist it with that justification.
-//   - A STALE entry also fails: pi moved, removed, or reshaped the import — re-verify the seam still
-//     covers the replacement, then update the entry. Both directions keep the list honest.
-//
-// Known limitation (why the runtime layers still exist): this sees `import(...)` call sites, not data
-// flow — a new *call site* of an existing wrapper (e.g. `dynamicImport("./x.js")` in `env-api-keys.js`)
-// adds no `import(` occurrence. Reshaping the wrapper itself trips the exact match and forces
-// re-verification; what flows through an unchanged wrapper is the job of the behavioral artifact gates
-// (`smoke:binary`'s real OAuth probe + `bun run e2e:binary`).
-//
-// Scope: `@earendil-works/pi-coding-agent` + its `@earendil-works/*` dependencies (transitively) —
-// resolved from the server package's module context, i.e. exactly the instances the binary bundles.
 
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, resolve, sep } from "node:path";
 import ts from "typescript";
 
-/**
- * Known bundler-opaque dynamic imports: file → the exact specifier expressions (normalized) of every
- * opaque `import(...)` in it, plus the verified justification (see header for the update protocol).
- */
 const ALLOWLIST: Record<string, { reason: string; imports: string[] }> = {
 	"pi-ai/dist/auth/oauth/load.js": {
 		reason: "handled — registerBunOAuthFlows() registered in registerBundledRuntime",
@@ -59,7 +27,6 @@ const ALLOWLIST: Record<string, { reason: string; imports: string[] }> = {
 	},
 };
 
-/** The package root (`.../node_modules/@earendil-works/<name>`) an entry file resolved under. */
 function packageRoot(name: string, entry: string): string {
 	const marker = `${sep}@earendil-works${sep}${name}${sep}`;
 	const at = entry.lastIndexOf(marker);
@@ -67,7 +34,6 @@ function packageRoot(name: string, entry: string): string {
 	return entry.slice(0, at + marker.length - 1);
 }
 
-/** Every `.js` file under `dir`, recursively. */
 function listJsFiles(dir: string): string[] {
 	const out: string[] = [];
 	for (const entry of readdirSync(dir)) {
@@ -78,12 +44,6 @@ function listJsFiles(dir: string): string[] {
 	return out;
 }
 
-/**
- * Every opaque dynamic import's normalized specifier expression in `source`, from the AST: a call whose
- * callee is the `import` keyword and whose specifier is not a constant string. A no-substitution
- * template literal counts as constant (the bundler resolves it statically, like esbuild); a template
- * *with* substitutions, or any other expression, is opaque.
- */
 function opaqueImportsIn(fileName: string, source: string): string[] {
 	const sourceFile = ts.createSourceFile(
 		fileName,
@@ -111,10 +71,6 @@ function opaqueImportsIn(fileName: string, source: string): string[] {
 	return found.sort();
 }
 
-// Resolve pi-coding-agent from the server package (the module context the binary bundles), then walk
-// its `@earendil-works/*` dependency closure, each dep resolved from its dependent's own context — the
-// very instances that end up inside the artifact. `Bun.resolveSync`, not `createRequire().resolve`:
-// pi's exports maps carry only `types`/`import` conditions, so require-condition resolution is blocked.
 const repoRoot = resolve(import.meta.dir, "..");
 const roots = new Map<string, string>();
 const queue: { name: string; root: string }[] = [];
@@ -139,7 +95,6 @@ const found = new Map<string, string[]>();
 for (const [name, root] of roots) {
 	for (const file of listJsFiles(join(root, "dist"))) {
 		const source = readFileSync(file, "utf8");
-		// Cheap pre-filter: only AST-parse files that mention a dynamic import at all.
 		if (!/\bimport\s*\(/.test(source)) continue;
 		const imports = opaqueImportsIn(file, source);
 		if (imports.length === 0) continue;
@@ -153,8 +108,6 @@ for (const [name, root] of roots) {
 	}
 }
 
-// Exact multiset comparison per file id, across the union of found + allowlisted ids: an occurrence in
-// only one side is a drift. `unexpected` = in the tree but not allowlisted; `stale` = the reverse.
 const unexpected: string[] = [];
 const stale: string[] = [];
 for (const id of new Set([...found.keys(), ...Object.keys(ALLOWLIST)])) {

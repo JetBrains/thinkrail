@@ -4,7 +4,6 @@ import { cn } from "@/lib/utils";
 
 const MAX_MATCHES = 8;
 
-/** Optional autocomplete catalogs degrade to empty; catalog failure must never block the owning form. */
 export async function slashCommandCatalogOrEmpty(
 	load: () => Promise<SlashCommandInfo[]>,
 ): Promise<SlashCommandInfo[]> {
@@ -15,7 +14,6 @@ export async function slashCommandCatalogOrEmpty(
 	}
 }
 
-/** Slash commands are recognized only at the start of a message and before the first whitespace. */
 export function slashCommandQuery(value: string): string | null {
 	return value.startsWith("/") && !/\s/.test(value) ? value.slice(1) : null;
 }
@@ -32,7 +30,6 @@ export function matchSlashCommands(
 		.slice(0, MAX_MATCHES);
 }
 
-/** The exact text both chat and New Workspace insert for a selected command. */
 export function selectedSlashCommandValue(command: SlashCommandInfo): string {
 	return `/${command.name} `;
 }
@@ -43,7 +40,6 @@ export type SlashCompletionKeyAction =
 	| { type: "select"; index: number }
 	| { type: "dismiss" };
 
-/** Pure keyboard reducer — shared behavior without coupling callers to a particular textarea. */
 export function slashCompletionKeyAction(
 	key: string,
 	open: boolean,
@@ -66,7 +62,6 @@ interface CompletionKeyEvent {
 	stopPropagation: () => void;
 }
 
-/** Shared query, selection, dismissal, and keyboard state for slash-command inputs. */
 export function useSlashCommandCompletion({
 	value,
 	commands,
@@ -81,10 +76,6 @@ export function useSlashCommandCompletion({
 	const query = slashCommandQuery(value);
 	const matches = matchSlashCommands(value, commands);
 
-	// Reset the highlight + dismissal whenever the query or the command set changes — done during render via
-	// a tracked signal (React's "adjust state on prop change" pattern) rather than an effect, so it needs no
-	// dependency-lint suppression. The signal keys off the command *names* (a stable content identity), so an
-	// unstable `commands` array reference can neither spuriously reset nor loop.
 	const resetSignal = JSON.stringify([query, commands.map((command) => command.name)]);
 	const [lastResetSignal, setLastResetSignal] = useState(resetSignal);
 	if (lastResetSignal !== resetSignal) {
@@ -120,11 +111,6 @@ export function useSlashCommandCompletion({
 	return { activeIndex: visibleActiveIndex, dismiss, handleKeyDown, matches, open, pick };
 }
 
-/**
- * Presentational command list shared by the chat composer and New Workspace prompt. `footer` renders
- * under the rows for owner-specific affordances the list itself knows nothing about (the composer's
- * "no prompt templates yet" nudge); the New Workspace prompt passes none.
- */
 export function SlashCommandMenu({
 	commands,
 	activeIndex,

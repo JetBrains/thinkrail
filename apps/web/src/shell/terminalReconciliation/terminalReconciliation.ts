@@ -39,10 +39,6 @@ export function useTerminalPlacementReconciliation(
 		terminals: readonly TerminalTab[];
 	} | null>(null);
 
-	// A new authoritative catalog is the only deletion proof: a remote placement can arrive before that
-	// terminal's attach/list update. On the same pass, restore confirmed domain tabs that predate layout
-	// persistence (upgrade/recovery) or outlive a rejected layout write. New attach-pending tabs keep using
-	// their explicit placement intents, which deliberately reveal and mount them.
 	useEffect(() => {
 		if (
 			!document ||
@@ -116,8 +112,6 @@ export function useTerminalPlacementReconciliation(
 			commit(next);
 			return;
 		}
-		// A catalog is reconciled only once its resulting projection is settled. Marking it before the
-		// optimistic write could strand dangling placements forever if that write rolled back.
 		if (attemptedCatalog) reconciledTerminalCatalog.current = attemptedCatalog;
 	}, [
 		commit,

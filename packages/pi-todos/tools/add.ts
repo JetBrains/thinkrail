@@ -1,7 +1,3 @@
-// todo_add — add one step to the chat's TODO plan without touching the rest. The agent's items always
-// live in a group (group = task); loose items are the user's lane, so the tool requires `group` or
-// `after` — the agent structurally cannot author a loose item.
-
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import type { Todo, TodoInput } from "../core/index.ts";
@@ -50,11 +46,6 @@ export function registerTodoAdd(pi: ExtensionAPI): void {
 			}
 			const store = storeFor(ctx);
 			if (params.after !== undefined) {
-				// The insert inherits the anchor's lane, so an anchor in the *user's* lane would put an
-				// agent-origin open item there — which the next `todo_write` drops (loose keeps only user or
-				// done items), i.e. the step would show up among the user's requests and then silently
-				// vanish. Anchors must be steps inside a task. `TodoStore.add` stays permissive on purpose:
-				// the host writes the user's own lane through it.
 				const plan = store.read();
 				if (!plan.groups.some((g) => g.todos.some((t) => t.id === params.after))) {
 					const known = plan.todos.some((t) => t.id === params.after);

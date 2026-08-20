@@ -1,28 +1,18 @@
 import { expect, test } from "@playwright/test";
 import { openWorkspaceChat, waitForDone } from "./fixtures/app";
 
-// Tagged @agent (see agent.live.spec.ts): drives a REAL pi agent to make a file change, then proves the
-// chat turn-divider (Task 9) — it appears the instant the turn ends (no follow-up needed), and its "files
-// changed" chip reveals the Changes tool, highlights the edited file's row, AND opens
-// its diff tab in the center (the click is the explicit ask to see the change; see panels/SPEC.md).
-// The second spec covers the divider's OTHER chip: a written spec is counted and routed as a spec, never as
-// a change — the two chips retain Specs/Changes ownership independently of their current placement.
-
 test("turn-divider files-changed chip opens the file's diff and highlights its row in Changes", {
 	tag: "@agent",
 }, async ({ page }) => {
 	test.setTimeout(150_000);
 	await openWorkspaceChat(page);
 
-	// One turn: make a real change so the round has a "files changed" entry.
 	await page
 		.getByTestId("chat-input")
 		.fill(
 			"Use the write tool to create a new file notes.txt whose only content is the line: hello",
 		);
 	await page.getByTestId("chat-send").click();
-	// `write` is routine — it folds into an activity run. Assert the fold surfaced it by name: either the
-	// collapsed group header's tally ("N steps · write …") or a single-step run's bare step row.
 	await expect(
 		page
 			.locator('[data-testid="activity-group"], [data-testid="activity-step"]')
@@ -31,13 +21,10 @@ test("turn-divider files-changed chip opens the file's diff and highlights its r
 	).toBeVisible({ timeout: 90_000 });
 	await waitForDone(page);
 
-	// The divider closes the round the instant it ends — no follow-up turn required.
 	const chip = page.getByTestId("turn-divider-files").first();
 	await expect(chip).toBeVisible({ timeout: 30_000 });
 	await expect(chip).toContainText("file changed");
 
-	// Clicking it reveals Changes, highlights notes.txt's row, and opens its diff tab in
-	// the center — the click is the user's explicit ask to see that change.
 	await chip.click();
 	await expect(page.getByTestId("tab-changes")).toHaveAttribute("data-active", "true");
 	const row = page.getByTestId("change-item").filter({ hasText: "notes.txt" });
@@ -52,9 +39,6 @@ test("turn-divider counts a scratch task-spec as a spec and opens it from the Sp
 	test.setTimeout(150_000);
 	await openWorkspaceChat(page);
 
-	// A task-spec in the workspace's gitignored scratch dir: real work, zero git footprint. This is the
-	// regression — it used to be reported as a "changed file", deep-linking to a Changes view that
-	// structurally cannot show it (`.thinkrail/context/.gitignore` is a lone `*`).
 	await page
 		.getByTestId("chat-input")
 		.fill(
@@ -71,14 +55,11 @@ test("turn-divider counts a scratch task-spec as a spec and opens it from the Sp
 	).toBeVisible({ timeout: 90_000 });
 	await waitForDone(page);
 
-	// The round reports a spec — and NO changed file, since the scratch dir has no git footprint.
 	const specChip = page.getByTestId("turn-divider-specs").first();
 	await expect(specChip).toBeVisible({ timeout: 30_000 });
 	await expect(specChip).toContainText("1 spec");
 	await expect(page.getByTestId("turn-divider-files")).toHaveCount(0);
 
-	// Clicking it flips to Specs and opens the rendered spec (the stronger deep link: a spec doc has nothing
-	// to preview short of its content), and the tree row marks the location.
 	await specChip.click();
 	await expect(page.getByTestId("tab-specs")).toHaveAttribute("data-active", "true");
 	await expect(page.getByTestId("editor-pane")).toContainText("Divider demo");
@@ -93,7 +74,6 @@ test("a multi-artifact chip expands into the round's list instead of guessing wh
 	test.setTimeout(150_000);
 	await openWorkspaceChat(page);
 
-	// Two written files in one round: the chip can no longer stand for a single deep link.
 	await page
 		.getByTestId("chat-input")
 		.fill(
@@ -107,9 +87,6 @@ test("a multi-artifact chip expands into the round's list instead of guessing wh
 	await expect(chip).toBeVisible({ timeout: 30_000 });
 	await expect(chip).toContainText("2 files changed");
 
-	// Collapsed by default, and clicking discloses the set rather than deep-linking the first path. The
-	// owning view is revealed alongside (that is what makes the chips read as a switch), but nothing is
-	// surfaced in it yet: no diff tab, no highlighted row — the chip never picks a file for the user.
 	await expect(page.getByTestId("turn-divider-files-list")).toHaveCount(0);
 	await chip.click();
 	const list = page.getByTestId("turn-divider-files-list");
@@ -122,8 +99,6 @@ test("a multi-artifact chip expands into the round's list instead of guessing wh
 		"true",
 	);
 
-	// A row is the deep link: it flips to Changes, highlights that file — the one the user picked — and
-	// opens its diff tab in the center.
 	await list.getByTestId("turn-divider-files-list-item").filter({ hasText: "beta.txt" }).click();
 	await expect(page.getByTestId("tab-changes")).toHaveAttribute("data-active", "true");
 	await expect(page.getByTestId("diff-pane")).toBeVisible();
@@ -140,16 +115,9 @@ test("a spec written while the Specs tab is closed still counts as a spec", {
 	test.setTimeout(150_000);
 	await openWorkspaceChat(page);
 
-	// Select Changes in its side group, so the Specs body is UNMOUNTED for the whole round. The graph
-	// that classifies the round's artifacts has to keep tracking the worktree anyway (the read is owned by
-	// the always-mounted workbench integration — see panels/useWorkspaceSpecs); if it stopped at the tab, a user who lives
-	// in Changes would get every spec counted as a changed file, silently undoing the split.
 	await page.getByTestId("tab-changes").click();
 	await expect(page.getByTestId("tab-changes")).toHaveAttribute("data-active", "true");
 
-	// Written with `write` — NOT `spec_create`, whose target counts as a spec by tool name alone — so fresh
-	// graph membership is the only thing that can classify it: the snapshot has to refresh while the panel
-	// rendering it is off screen.
 	await page
 		.getByTestId("chat-input")
 		.fill(
@@ -159,8 +127,6 @@ test("a spec written while the Specs tab is closed still counts as a spec", {
 				"Do NOT use the spec_create tool — use write. Then stop.",
 		);
 	await page.getByTestId("chat-send").click();
-	// Pin the tool actually used: if the agent reached for `spec_create`, the classification would come from
-	// the tool name and this spec would pass without ever exercising the graph refresh it exists to cover.
 	await expect(
 		page
 			.locator('[data-testid="activity-group"], [data-testid="activity-step"]')
@@ -186,7 +152,6 @@ test("the two artifact chips are a switch: one list at a time, and re-clicking c
 	test.setTimeout(180_000);
 	await openWorkspaceChat(page);
 
-	// A round with several artifacts on BOTH sides, so the two chips are genuine alternatives.
 	await page
 		.getByTestId("chat-input")
 		.fill(
@@ -206,20 +171,16 @@ test("the two artifact chips are a switch: one list at a time, and re-clicking c
 	const specsList = page.getByTestId("turn-divider-specs-list");
 	const filesList = page.getByTestId("turn-divider-files-list");
 
-	// Choosing the specs side opens its list and reveals Specs.
 	await specsChip.click();
 	await expect(specsList).toBeVisible();
 	await expect(filesList).toHaveCount(0);
 	await expect(page.getByTestId("tab-specs")).toHaveAttribute("data-active", "true");
 
-	// Choosing the other side REPLACES the open list (never two at once) and follows with its own view.
 	await filesChip.click();
 	await expect(filesList).toBeVisible();
 	await expect(specsList).toHaveCount(0);
 	await expect(page.getByTestId("tab-changes")).toHaveAttribute("data-active", "true");
 
-	// Re-clicking the chosen side clears the selection: nothing expanded, and the panel is left where the
-	// user last sent it (a close is "never mind", not another navigation).
 	await filesChip.click();
 	await expect(filesList).toHaveCount(0);
 	await expect(specsList).toHaveCount(0);

@@ -1,9 +1,5 @@
-// Pure tree-build for the Specs viewer: flat `spec.graph` snapshot -> the materialized `parent` tree.
-// No React, no store, no transport — unit-testable on its own.
-
 import type { SpecGraphNode } from "@thinkrail/contracts";
 
-/** A materialized node of the `parent` tree: the spec plus its (title-sorted) children. */
 export interface SpecTreeNode {
 	node: SpecGraphNode;
 	children: SpecTreeNode[];
@@ -28,7 +24,6 @@ function isKnownSpecType(type: string): type is KnownSpecType {
 	return Object.hasOwn(SPEC_ROLES, type);
 }
 
-/** Humanize a spec type for the document-first tree; unknown wire values remain readable. */
 export function specRoleLabel(type: string): string {
 	if (isKnownSpecType(type)) return SPEC_ROLES[type].label;
 	const words = type.split(/[-_\s]+/).filter(Boolean);
@@ -36,17 +31,10 @@ export function specRoleLabel(type: string): string {
 	return words.map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(" ");
 }
 
-/** Compact trailing role for the one-line tree; the UI width-caps unknown wire values. */
 export function specRoleTag(type: string): string {
 	return isKnownSpecType(type) ? SPEC_ROLES[type].tag : specRoleLabel(type).toUpperCase();
 }
 
-/**
- * Materialize the `parent` tree from a flat snapshot: roots are nodes with no (or a dangling/self)
- * parent; roots and siblings sort by title. A well-formed graph is assumed — parent cycles are
- * `spec_validate`'s problem, not the viewer's (cycle members are unreachable from any root and simply
- * don't render) — but the walk is visited-guarded, so malformed input can never hang or loop the UI.
- */
 export function buildSpecTree(nodes: SpecGraphNode[]): SpecTreeNode[] {
 	const ids = new Set(nodes.map((n) => n.id));
 	const roots: SpecGraphNode[] = [];

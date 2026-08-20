@@ -23,22 +23,16 @@ test("Windows picker: a PowerShell FolderBrowserDialog, -Sta, owned by a top-mos
 	expect(pickers.map((p) => p.cmd[0])).toEqual(["powershell.exe", "pwsh.exe"]);
 	for (const picker of pickers) {
 		expect(picker.cmd).toContain("-Sta");
-		// The script travels base64 UTF-16LE (`-EncodedCommand`), so its C# survives the command line.
 		const flag = picker.cmd.indexOf("-EncodedCommand");
 		expect(flag).toBeGreaterThan(-1);
 		const script = Buffer.from(picker.cmd[flag + 1] ?? "", "base64").toString("utf16le");
 		expect(script).toContain("FolderBrowserDialog");
-		// Owned by a top-most form, or the dialog opens behind the browser and reads as a dead button…
 		expect(script).toContain("$owner.TopMost = $true");
 		expect(script).toContain("$d.ShowDialog($owner)");
-		// …and top-most alone leaves the browser active, so the dialog would open without the keyboard.
 		expect(script).toContain("AttachThreadInput");
 		expect(script).toContain("SetForegroundWindow($owner.Handle)");
-		// Attach and detach in pairs: leaving our input thread joined to another process' would make that
-		// app's keyboard state ours for as long as the picker lives.
 		expect(script).toContain("AttachThreadInput($me, $fg, $true)");
 		expect(script).toContain("AttachThreadInput($me, $fg, $false)");
-		// The grab is best-effort — a host that can't compile the P/Invoke still gets a dialog.
 		expect(script).toContain("} catch { }");
 	}
 });
@@ -57,7 +51,6 @@ test("a failed picker names a cause — never an empty message, never a stray CR
 	expect(pickerFailure("Add-Type : Cannot load assembly\r\n  At line:1\r\n", 1)).toBe(
 		"The folder picker failed: Add-Type : Cannot load assembly",
 	);
-	// A killed picker writes nothing to stderr — the exit code is all we have to show.
 	expect(pickerFailure("", 137)).toBe("The folder picker failed: exit 137");
 	expect(pickerFailure("   \r\n \n", 1)).toBe("The folder picker failed: exit 1");
 });
@@ -95,8 +88,6 @@ test("THINKRAIL_PICK_DIR reads its value from a file when it names one (live per
 	try {
 		writeFileSync(pointer, "/repos/alpha\n");
 		expect(await selectDirectory()).toEqual({ path: "/repos/alpha" });
-		// Rewriting the pointer switches the returned dir without touching the env — re-read per call, so
-		// one host can hand different folders to different e2e tests.
 		writeFileSync(pointer, "/repos/beta");
 		expect(await selectDirectory()).toEqual({ path: "/repos/beta" });
 	} finally {

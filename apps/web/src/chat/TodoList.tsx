@@ -23,19 +23,7 @@ import {
 	planSections,
 } from "./planView";
 
-/** Where a change-set chip click lands: the item's commit (Changes at `commit:{sha}`) or one file's diff. */
 export type ChangeTarget = { sha: string } | { path: string };
-
-// Presentational TODO rendering for the in-chat plan popup (SPEC §Chat TODO plan). Props-driven (no transport) —
-// the caller supplies the plan + edit callbacks (see `useChatTodos`) and the glance state (see
-// `planView.ts`). The plan reads as a **status flow, group-first** (`planSections`): the **in-progress**
-// task (its whole group) on top with no header, then a **To do** section (pending groups, then the
-// user's pending loose items), then a **Done** label at the very bottom with each finished task as its
-// own foldable row (collapsed) + done loose items. Finished *steps* stay inline in their group; only
-// whole done tasks move to Done. The in_progress step's icon follows the glance: working → dot, stopped on a
-// question → `?`, stopped otherwise → pause — so the list never claims "in work" while paused or
-// falsely says the user owes an answer without a pending question.
-// Status is read-only (agent-owned); the user's edit surface is add + remove.
 
 const STATUS_LABEL: Record<TodoStatus, string> = {
 	in_progress: "In progress",
@@ -43,14 +31,11 @@ const STATUS_LABEL: Record<TodoStatus, string> = {
 	done: "Done",
 };
 
-/** The in_progress glyph + hover label for a glance state (shared by the rows and the header strip). */
 export function glanceIcon(glance: PlanGlance): {
 	Icon: typeof CircleDot;
 	label: string;
 	className: string;
 } {
-	// Same glyph as the `ask_user_question` panel (`MessageCircleQuestion`), so "the agent is asking you"
-	// reads identically in the strip and in the questionnaire card.
 	if (glance === "waiting_question")
 		return {
 			Icon: MessageCircleQuestion,
@@ -62,12 +47,10 @@ export function glanceIcon(glance: PlanGlance): {
 	return { Icon: CircleDot, label: STATUS_LABEL.in_progress, className: "text-primary" };
 }
 
-/** The hover label for an item's status glyph (glance-aware for the in_progress step). */
 function statusLabel(status: TodoStatus, glance: PlanGlance): string {
 	return status === "in_progress" ? glanceIcon(glance).label : STATUS_LABEL[status];
 }
 
-/** An item's status glyph (glance-aware for the in_progress step) — shared with the plan page. */
 export function StatusIcon({ status, glance }: { status: TodoStatus; glance: PlanGlance }) {
 	if (status === "in_progress") {
 		const { Icon, className } = glanceIcon(glance);
@@ -76,7 +59,6 @@ export function StatusIcon({ status, glance }: { status: TodoStatus; glance: Pla
 	return <PlanStatusIcon kind={status === "done" ? "done" : "pending"} />;
 }
 
-/** The add-a-TODO input row, with an "open the plan page" action on the right. */
 export function TodoAddRow({
 	onAdd,
 	onOpenPlan,
@@ -90,10 +72,8 @@ export function TodoAddRow({
 		if (!title) return;
 		try {
 			await onAdd(title);
-			setDraft(""); // clear only on success, so a failed add keeps the user's text to retry
-		} catch {
-			// keep the draft; useChatTodos surfaces the failure
-		}
+			setDraft("");
+		} catch {}
 	};
 	return (
 		<div className="flex items-center gap-sm px-sm py-xs">
@@ -124,8 +104,6 @@ export function TodoAddRow({
 	);
 }
 
-/** A non-done task group (active or pending): a header row (status icon + title + done/total) with its
- * steps indented — finished steps stay inline (checked + struck through). */
 function GroupBlock({
 	group,
 	glance,
@@ -179,7 +157,6 @@ function GroupBlock({
 	);
 }
 
-/** A flat list of loose items (the user's own adds) as rows — each carries the `user` badge. */
 function LooseList({
 	items,
 	glance,
@@ -207,12 +184,6 @@ function LooseList({
 	);
 }
 
-/**
- * The plan as a **status flow** (`planSections`): the in-progress task (its whole group) first with no
- * header, then a **To do** section (pending groups, then the user's pending loose items), then the
- * collapsed **Done** section at the very bottom. Finished steps stay inline in their group. Empty: the
- * caller renders the placeholder.
- */
 export function TodoRows({
 	plan,
 	onRemove,
@@ -222,7 +193,6 @@ export function TodoRows({
 	plan: TodoPlan;
 	onRemove: (id: string) => void;
 	glance?: PlanGlance;
-	/** Opens an item's change set: its commit in the Changes panel, or one fallback path's diff tab. */
 	onOpenChanges?: ((target: ChangeTarget) => void) | undefined;
 }) {
 	const s = planSections(plan);
@@ -249,11 +219,6 @@ export function TodoRows({
 	);
 }
 
-/**
- * One finished task under the **Done** label: its own foldable row (collapsed by default) — title +
- * `N done`, expanding to its steps. Per-task, not one collapse over all of Done, so each finished task
- * is visible at a glance and opened on its own.
- */
 function DoneGroup({
 	group,
 	glance,
@@ -300,13 +265,6 @@ function DoneGroup({
 	);
 }
 
-/**
- * The quiet "N files" affordance on a row that carries a host change set (`itemChangeSet`): committed →
- * one click opens the Changes panel at the item's `commit:{sha}` scope (the panel lists the commit's
- * files itself); path-list fallback → a single path deep-links its live diff directly, several expand an
- * inline path list, each row one diff. Absent when the item has no change set — including a commit whose
- * sha no longer resolves (the DTO ships no `files`) — or when the caller wired no handler.
- */
 function ChangeSetChip({
 	set,
 	onOpen,

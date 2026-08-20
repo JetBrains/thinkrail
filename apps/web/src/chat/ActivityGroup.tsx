@@ -5,15 +5,6 @@ import type { ActivityStep } from "./rows";
 import { getToolRenderer, getToolSummary, type ToolRenderProps } from "./toolRegistry";
 import type { ToolStatus } from "./types";
 
-/**
- * A contiguous run of routine steps (thinking + routine tool calls), collapsed by default behind one
- * header ("N steps · bash ×2, read ×4"). While the run is `live` (trailing + still streaming) the header
- * is the live ticker instead: a status spinner + the current step's registered summary — richer than the
- * footer loader's phase word, but a *status* line, never a second typing-dots loader. Expanded, steps are
- * slim borderless rows that individually reveal their full renderer body. A single-step run renders its
- * step row directly (no group header wrapping one line). Errored routine steps get no special treatment
- * (deliberate — agents often recover; `ErrorTurn` and primary error-auto-expand are the safety nets).
- */
 export function ActivityGroup({
 	id,
 	steps,
@@ -74,7 +65,6 @@ export function ActivityGroup({
 	);
 }
 
-/** Collapsed-header summary: step count + per-tool-name tallies, capped with a "+k more" overflow. */
 export function summarizeSteps(steps: ActivityStep[]): string {
 	const counts = new Map<string, number>();
 	for (const step of steps) {
@@ -89,7 +79,6 @@ export function summarizeSteps(steps: ActivityStep[]): string {
 	return `${count} · ${shown}${more > 0 ? `, +${more} more` : ""}`;
 }
 
-/** The live ticker's text: the current (last) step's name + registered summary. */
 function liveTicker(steps: ActivityStep[], workspaceRoot: string | undefined): string {
 	const current = steps[steps.length - 1];
 	if (!current) return "Working…";
@@ -113,13 +102,6 @@ function toolRenderProps(
 	};
 }
 
-/**
- * One slim, borderless step row: status icon + name + registered summary; clicking reveals the step's
- * full renderer body (the same registry renderer a `ToolCard` body uses), or the thinking text.
- * `isCurrent` marks the last step of a live run — a thinking step's `streaming` flag is the *owning
- * message's*, so the spinner is additionally gated on being the current step (a thinking block three
- * tool calls back in the same streaming message is finished, and must not keep spinning).
- */
 function ActivityStepRow({
 	step,
 	isCurrent = false,
@@ -213,7 +195,6 @@ function StepHeader({
 			data-testid="activity-step-toggle"
 			aria-expanded={expanded}
 			onClick={onToggle}
-			// Mobile-first hit area: ~32px touch rows, compact 22px density from `sm:` up.
 			className="flex w-full cursor-pointer select-none items-center gap-xs rounded-[var(--radius-sm)] px-xs py-sm text-left outline-none hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary sm:py-0.5"
 		>
 			{icon}
@@ -230,7 +211,6 @@ function StepHeader({
 	);
 }
 
-/** Compact a character count: 1234 → "1.2k", 980 → "980". */
 function formatChars(n: number): string {
 	return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
 }

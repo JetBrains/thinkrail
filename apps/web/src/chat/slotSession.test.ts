@@ -9,12 +9,6 @@ import {
 	stripUntouchedSlots,
 } from "./slotSession";
 
-// slotSession parses pi's placeholder grammar into visible text + editable ranges — it never evaluates
-// it (no args exist client-side; Task B5's composer slot session drives the user through the ranges
-// returned here). See slotSession.ts for the grammar this pins against.
-
-// ---- parseTemplateSlots ----
-
 test("$1 repeated shares one group; no argumentHint falls back to argN", () => {
 	const { text, slots } = parseTemplateSlots("fix $1 then fix $1 again");
 	expect(text).toBe("fix ⟨arg1⟩ then fix ⟨arg1⟩ again");
@@ -63,10 +57,6 @@ test(`\${@:2:3} still parses to one marker slot — a length limit changes its v
 	expect(slots).toEqual([{ start: 5, end: 16, group: 0, filled: false }]);
 });
 
-// ---- pi's real $ behavior (no escape syntax exists) ----
-// An earlier version of this parser had a $$-escape branch; that was a bug — pi's own substituteArgs
-// regex (see slotSession.ts's header comment) has no $-escape alternative at all.
-
 test("a $ that never starts a recognized placeholder is a literal character, unconditionally", () => {
 	const { text, slots } = parseTemplateSlots("just $$ dollars");
 	expect(text).toBe("just $$ dollars");
@@ -79,8 +69,6 @@ test("$$1 is a literal $ immediately followed by a live $1 slot — pi has no es
 	expect(slots).toEqual([{ start: 9, end: 15, group: 0, filled: false }]);
 	expect(text.slice(slots[0]?.start, slots[0]?.end)).toBe("⟨arg1⟩");
 });
-
-// ---- group scheme: two slots share a group iff they're the same value-class (see TemplateSlot's doc) ----
 
 test("$0 and $ARGUMENTS get DISTINCT groups — $0 is its own positional slot, never an all-args alias", () => {
 	const { slots } = parseTemplateSlots("arg0=$0 all=$ARGUMENTS");
@@ -111,9 +99,6 @@ test(`\${@:2} and \${@:2:3} get DISTINCT groups too — a length limit always ma
 	expect(slots).toHaveLength(2);
 	expect(slots[0]?.group).not.toBe(slots[1]?.group);
 });
-
-// ---- fidelity: examples verbatim from pi's own bundled docs/prompt-templates.md ----
-// Catches future grammar drift against the upstream authority, not just this module's own regex.
 
 test("docs example: 'Create a React component named $1 with features: $@'", () => {
 	const { text, slots } = parseTemplateSlots("Create a React component named $1 with features: $@");
@@ -153,11 +138,9 @@ test("a hint word that strips down to nothing (a bare bracket pair) falls back t
 	expect(text).toBe("⟨arg1⟩");
 });
 
-// ---- stripUntouchedSlots ----
-
 test("stripUntouchedSlots removes an unfilled marker and collapses the doubled whitespace it leaves", () => {
 	const { text, slots } = parseTemplateSlots("a $1 b");
-	expect(text).toBe("a ⟨arg1⟩ b"); // sanity: sits between two single spaces before stripping
+	expect(text).toBe("a ⟨arg1⟩ b");
 	expect(stripUntouchedSlots(text, slots)).toBe("a b");
 });
 
@@ -168,14 +151,10 @@ test("stripUntouchedSlots leaves a filled default slot untouched", () => {
 
 test("stripUntouchedSlots strips only the unfilled slot among a mix of filled + unfilled", () => {
 	const { text, slots } = parseTemplateSlots(`\${1:-keep} then $2`);
-	// The lone marker sits at the very end behind a single (non-doubled) space, so that one space isn't
-	// collapsed — collapsing only ever fires on a *run* of 2+ spaces/tabs, never a single one.
 	expect(stripUntouchedSlots(text, slots)).toBe("keep then ");
 });
 
 test("stripUntouchedSlots preserves a blank line left by a slot alone on its own line", () => {
-	// The newline-preservation case: collapsing must target spaces/tabs only, never eat the newlines
-	// flanking a stripped slot — a naive `\s{2,}` collapse would merge the two lines into one.
 	const { text, slots } = parseTemplateSlots("line one\n$1\nline two");
 	expect(text).toBe("line one\n⟨arg1⟩\nline two");
 	expect(stripUntouchedSlots(text, slots)).toBe("line one\n\nline two");
@@ -186,8 +165,6 @@ test("stripUntouchedSlots collapses only runs of spaces/tabs, not a lone space n
 	expect(text).toBe("a ⟨arg1⟩\nb");
 	expect(stripUntouchedSlots(text, slots)).toBe("a \nb");
 });
-
-// ---- shiftSlots ----
 
 const slot = (start: number, end: number): TemplateSlot => ({
 	start,
@@ -212,8 +189,6 @@ test("shiftSlots: an edit after a slot leaves it untouched", () => {
 });
 
 test("shiftSlots: typing over a fully-selected marker resizes the slot to the typed text", () => {
-	// "⟨arg1⟩" is 6 chars, selected whole (per the design, a slot is selected on entry) and replaced by
-	// typing "index.tsx" (9 chars) — the slot grows to exactly cover the new text.
 	const [shifted] = shiftSlots([slot(5, 11)], 5, 6, 9);
 	expect(shifted).toEqual({ start: 5, end: 14, group: 1, filled: false });
 });
@@ -242,60 +217,37 @@ test("shiftSlots keeps filled/group as-is — it is purely geometric, not a fill
 	expect(shifted).toEqual({ start: 5, end: 10, group: 3, filled: true });
 });
 
-// ---- shiftSlots: zero-gap adjacent slots (regression — B5 review) ----
-// A "$1$2"-shaped template (no literal text between the placeholders) produces two slots with zero gap:
-// `first.end === second.start`. A zero-width insert (pure keystroke, no selection) landing exactly there
-// is ambiguous — it could belong to `first` (growing its end) or `second` (pushing its start along). Left
-// undifferentiated, the shipped bug always resolved it as "unaffected", which is right for `first.end`
-// but silently let `second.start` absorb the inserted text instead of moving out of its way — corrupting
-// the sibling's boundary one keystroke at a time. See `slotSession.ts`'s `mapOffset` doc for the fix.
-
 test("shiftSlots: a zero-width insert at a zero-gap boundary pushes the following slot's start forward, never letting it absorb the inserted text", () => {
 	const first = slot(0, 6);
 	const second = slot(6, 12);
 	const [shiftedFirst, shiftedSecond] = shiftSlots([first, second], 6, 0, 3);
-	// shiftSlots alone never grows a slot by default — that is the composer's decision (see below) — so
-	// `first` is unaffected by this call...
 	expect(shiftedFirst).toEqual({ start: 0, end: 6, group: 1, filled: false });
-	// ...while `second` is pushed forward by the inserted length, not stolen from.
 	expect(shiftedSecond).toEqual({ start: 9, end: 15, group: 1, filled: false });
-	// The invariant that actually matters: the two never overlap.
 	expect(shiftedSecond?.start).toBeGreaterThanOrEqual(shiftedFirst?.end ?? 0);
 });
 
 test("shiftSlots composes with the composer's own active-slot growth to stay non-overlapping across several keystrokes", () => {
-	// Simulates `Composer.tsx`'s own post-process for the actively-selected slot: after `shiftSlots`,
-	// manually extend the active slot's `end` by the inserted length. `shiftSlots` itself only guarantees
-	// the *other* slot's coincident start gets out of the way; growing the active one is layered on top,
-	// exactly as production code does it — this pins that the composition never overlaps, keystroke after
-	// keystroke, not just on the first one.
 	const grow = (slots: TemplateSlot[], editStart: number, insertedLen: number): TemplateSlot[] =>
 		shiftSlots(slots, editStart, 0, insertedLen).map((s, i) =>
 			i === 0 ? { ...s, end: s.end + insertedLen } : s,
 		);
 
 	let slots: TemplateSlot[] = [slot(0, 6), slot(6, 12)];
-	slots = grow(slots, 6, 1); // 1st keystroke, landing right at the shared boundary
+	slots = grow(slots, 6, 1);
 	expect(slots).toEqual([
 		{ start: 0, end: 7, group: 1, filled: false },
 		{ start: 7, end: 13, group: 1, filled: false },
 	]);
 	expect(slots[1]?.start).toBeGreaterThanOrEqual(slots[0]?.end ?? 0);
 
-	slots = grow(slots, 7, 1); // 2nd keystroke, boundary having moved along with the growth
-	slots = grow(slots, 8, 1); // 3rd keystroke
+	slots = grow(slots, 7, 1);
+	slots = grow(slots, 8, 1);
 	expect(slots).toEqual([
 		{ start: 0, end: 9, group: 1, filled: false },
 		{ start: 9, end: 15, group: 1, filled: false },
 	]);
 	expect(slots[1]?.start).toBeGreaterThanOrEqual(slots[0]?.end ?? 0);
 });
-
-// ---- mirrorSlotGroup / mirrorAllGroups ----
-// A repeated placeholder (same `group`) is one conceptual argument occurring more than once — pi would
-// expand every occurrence from the same value, so the composer mirrors a filled slot's text into its
-// unfilled (or differently-filled) group-mates. `stepSlot` (Tab-out) and `submit()` (direct Send) both
-// need this; these functions are the pure, shared core both call into (see Composer.tsx).
 
 const gslot = (
 	start: number,
@@ -331,11 +283,9 @@ test("mirrorSlotGroup is a no-op once every member of a group already agrees —
 });
 
 test("mirrorSlotGroup propagates a MULTI-WORD value into every same-group sibling, re-tracking offsets", () => {
-	// three occurrences of one placeholder (one group) — the /rename shape at scale
 	const { text, slots } = parseTemplateSlots("update $1, then test $1, then ship $1");
 	expect(slots).toHaveLength(3);
-	expect(new Set(slots.map((s) => s.group)).size).toBe(1); // all one group
-	// simulate the user typing a multi-word value into the first occurrence
+	expect(new Set(slots.map((s) => s.group)).size).toBe(1);
 	const filled = "the auth module";
 	const s0 = slots[0];
 	if (!s0) throw new Error("expected a first slot");
@@ -345,14 +295,11 @@ test("mirrorSlotGroup propagates a MULTI-WORD value into every same-group siblin
 	);
 	const { value: next, slots: out } = mirrorSlotGroup(value, filledSlots, 0);
 	expect(next).toBe("update the auth module, then test the auth module, then ship the auth module");
-	// every occurrence carries the full multi-word text, and each slot's range still bounds it exactly
 	for (const s of out) expect(next.slice(s.start, s.end)).toBe(filled);
 });
 
 test("mirrorAllGroups propagates every user-edited slot's text into its own group's siblings, and never touches a different group", () => {
 	const value = "W.m.M";
-	// slot 0 is edited (a mirror source); slot 2 shares its group but is only mirrored INTO — it becomes
-	// filled, never `edited` (a mirrored value isn't a user edit). slot 1 is a different group, untouched.
 	const slots = [gslot(0, 1, 0, true, true), gslot(2, 3, 1, false), gslot(4, 5, 0, false)];
 	const { value: next, slots: nextSlots } = mirrorAllGroups(value, slots);
 	expect(next).toBe("W.m.W");
@@ -369,12 +316,6 @@ test("mirrorAllGroups: when two siblings are independently EDITED with different
 	expect(nextSlots.every((s) => s.filled)).toBe(true);
 });
 
-// ---- regression (Air review): filled ≠ edited — differing `${N:-default}` occurrences ----
-// `${1:-foo} … ${1:-bar}` share one group and are both born `filled` (real defaults) but NOT `edited`.
-// Mirroring keyed on `filled` used to collapse "foo … bar" to "foo … foo" on a plain Send, unlike pi's own
-// expansion (unprovided `${1:-foo}`/`${1:-bar}` yield "foo"/"bar"). Keyed on `edited`, an untouched default
-// is never a mirror source; editing one occurrence (providing the argument) is what starts the mirror.
-
 test(`parseTemplateSlots marks a \${N:-default} filled but NOT edited`, () => {
 	const { slots } = parseTemplateSlots(`copy to \${2:-src/}`);
 	expect(slots).toHaveLength(1);
@@ -386,16 +327,15 @@ test("mirrorAllGroups leaves two differing UNTOUCHED defaults independent — no
 	const { text, slots } = parseTemplateSlots(`\${1:-foo} versus \${1:-bar}`);
 	expect(text).toBe("foo versus bar");
 	expect(slots).toHaveLength(2);
-	expect(slots[0]?.group).toBe(slots[1]?.group); // one argument, one group
-	expect(slots.every((s) => s.filled && !s.edited)).toBe(true); // real defaults, none edited
+	expect(slots[0]?.group).toBe(slots[1]?.group);
+	expect(slots.every((s) => s.filled && !s.edited)).toBe(true);
 	const { value: next, slots: nextSlots } = mirrorAllGroups(text, slots);
-	expect(next).toBe("foo versus bar"); // the bug produced "foo versus foo"
-	expect(nextSlots).toBe(slots); // nothing edited ⇒ nothing to mirror ⇒ same references (cheap no-op)
+	expect(next).toBe("foo versus bar");
+	expect(nextSlots).toBe(slots);
 });
 
 test("mirrorAllGroups mirrors from an EDITED default into its group-mate (the user provided the argument)", () => {
 	const { slots } = parseTemplateSlots(`\${1:-foo} versus \${1:-bar}`);
-	// Simulate the user replacing the first default "foo" with "cats" — the composer marks it filled+edited.
 	const s0 = slots[0];
 	if (!s0) throw new Error("expected a first slot");
 	const typed = "cats";
@@ -406,11 +346,6 @@ test("mirrorAllGroups mirrors from an EDITED default into its group-mate (the us
 	const { value: next } = mirrorAllGroups(value, editedSlots);
 	expect(next).toBe("cats versus cats");
 });
-
-// ---- highlightSegments ----
-// The composer's backdrop layer breaks the live value into ordered plain/unfilled/filled/active runs for
-// the highlight tint spans. Every case below also asserts the concatenation invariant: the segments must
-// reconstruct `value` exactly, or the backdrop text would silently drift from the textarea's real text.
 
 const segText = (segs: { text: string }[]) => segs.map((s) => s.text).join("");
 
@@ -433,7 +368,6 @@ test("highlightSegments: a single unfilled slot renders plain/unfilled/plain aro
 	const after = " now";
 	const value = before + marker + after;
 	const slots = [gslot(before.length, before.length + marker.length, 0, false)];
-	// activeIdx points at no real slot — nothing should be marked "active".
 	const segs = highlightSegments(value, slots, -1);
 	expect(segs).toEqual([
 		{ text: before, state: "plain" },

@@ -61,7 +61,6 @@ export function LayoutSettings() {
 			await updateLayoutSettings(next);
 			return true;
 		} catch {
-			// The host broadcast is the only state writer; a rejected edit leaves the current value intact.
 			return false;
 		} finally {
 			setSaving(false);

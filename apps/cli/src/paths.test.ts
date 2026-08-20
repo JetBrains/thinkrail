@@ -12,7 +12,6 @@ test("installMetaFile is where both installers write install.json", () => {
 test("readInstallMeta reads the installers' file and degrades to {} on anything else", () => {
 	const home = mkdtempSync(join(tmpdir(), "thinkrail-paths-"));
 	try {
-		// Absent.
 		expect(readInstallMeta(home)).toEqual({});
 
 		mkdirSync(installConfigDir(home), { recursive: true });
@@ -26,8 +25,6 @@ test("readInstallMeta reads the installers' file and degrades to {} on anything 
 			version: "1.2.3",
 		});
 
-		// Hand-mangled: a reader must never throw here — `update` and `uninstall` both have to run
-		// against a broken install, which is exactly when the file is likely to be junk.
 		writeFileSync(installMetaFile(home), "{not json");
 		expect(readInstallMeta(home)).toEqual({});
 		writeFileSync(installMetaFile(home), '"a string"');

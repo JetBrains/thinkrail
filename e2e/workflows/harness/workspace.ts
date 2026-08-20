@@ -1,5 +1,3 @@
-// Context preset — the throwaway cwd a scenario's workflow runs in (what routers classify against).
-// Every workspace is a fresh, committed git repo under E2E_DATA_DIR (wiped by global teardown).
 import { execFileSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -10,12 +8,7 @@ export type WorkspaceSeed = WorkspaceKind | ((cwd: string) => void);
 
 let counter = 0;
 
-/** Fabricate a workspace: fresh dir, git init + commit; custom seeds run after the base init. */
 export function seedWorkspace(seed: WorkspaceSeed): string {
-	// The pid keeps names unique across Playwright WORKER RESTARTS too: after a test failure the next
-	// test runs in a fresh worker whose module state (this counter) resets — a bare counter would then
-	// reuse workflow-ws-1 with the failed test's leftovers inside (a poisoned fixture) and collide on
-	// pi's per-cwd session dir (observed as mid-run ENOENT on the session jsonl).
 	const cwd = join(E2E_DATA_DIR, `workflow-ws-${process.pid}-${++counter}`);
 	mkdirSync(cwd, { recursive: true });
 	const git = (...args: string[]) => execFileSync("git", ["-C", cwd, ...args], { stdio: "ignore" });
@@ -35,8 +28,6 @@ function seedKind(cwd: string, kind: WorkspaceKind): void {
 			writeFileSync(join(cwd, "README.md"), "# blank-slate\n\nAn empty project.\n");
 			return;
 		case "code-only": {
-			// The same shape the import @agent e2e uses: an explicit AGENTS.md + a small two-module source
-			// tree with a clear boundary, so import-style flows can proceed from the files alone.
 			writeFileSync(
 				join(cwd, "AGENTS.md"),
 				[

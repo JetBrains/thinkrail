@@ -12,56 +12,24 @@ import { ProjectSkillsNotice } from "./ProjectSkillsNotice";
 import { ProviderWarningBanner } from "./ProviderWarningBanner";
 import { useOpenProject } from "./useOpenProject";
 
-// Seeds the New-Workspace prompt hero for "Set up project" — pi's skill-command syntax `/skill:<name>`,
-// which FORCES the setting-up-a-project dispatcher to load (vs. hoping the model auto-matches its
-// description). The dispatcher then detects new-vs-existing and routes to starting-a-new-project /
-// importing-a-codebase. Still editable in the dialog.
-//
-// The **trailing space** is load-bearing: it's the same insertion format the slash-command completion
-// produces (`selectedSlashCommandValue`), so the seeded value reads as a *completed* command — the
-// completion popup stays closed over the seeded hero instead of opening on a bare `/skill:…` query.
-// pi's command parser tolerates it (the arg tail is optional).
 const SETUP_PROMPT = "/skill:setting-up-a-project ";
 
-// The dialog's info strip for "Set up project" — says what the seeded command actually does (the card
-// alone can't: the dialog it opens is the generic create surface). The copy lives here, with the card
-// that seeds it, so the dialog stays skill-agnostic.
 const SETUP_NOTE =
 	"Runs the setting-up-a-project skill — the agent drafts your project's specs, starting from its goal, before building.";
 
-/**
- * The first-touch surface the shell mounts (centered, beside the projects rail) whenever no workspace is
- * active. A single hero heading — the shown project's name, or the ThinkRail wordmark with no project
- * (topbar brand styling, scaled up) — over one-to-three cards, no pitch prose: adaptive across three
- * states: no projects → "Open project" (the only card, and the only state that carries it — with a
- * project shown, opening another lives on the projects-rail "+"); a project with specs → "Start
- * building"; a project without any registered spec → a spec-first "Set up project". With a
- * project shown, Welcome is **the mode fork**: "Start building" (an isolated worktree — the intent-first
- * framing of create + kick off a chat) always sits beside "Work in project folder" (direct-enters the
- * built-in Default workspace), so the two working modes are a visible choice, not a hidden default.
- */
 export function WelcomePanel() {
 	const projects = useAppStore((s) => s.projects);
 	const recentProjects = useAppStore((s) => s.recentProjects);
 	const selectedProjectId = useAppStore((s) => s.selectedProjectId);
-	// The New-Workspace dialog opener state (null = closed). `prompt` seeds the hero ("" for a plain
-	// create; the setup command for "Set up project", which also carries the explanatory `note`). The
-	// dialog always opens on the isolated-worktree target and keeps the folder alternative one click away.
 	const [dialog, setDialog] = useState<{
 		projectId: string;
 		prompt: string;
 		note?: string;
 	} | null>(null);
-	// Whether the shown project has any registered spec, fetched lazily (a full-tree walk — so it's
-	// requested only for this one project, on demand, never eagerly for every project on connect).
-	// null = pending/unknown (cards wait for it).
 	const [hasSpecs, setHasSpecs] = useState<boolean | null>(null);
 
-	// The project the has-specs states key off — the selected one, else the most-recent (list is sorted).
 	const project = projects.find((p) => p.id === selectedProjectId) ?? projects[0] ?? null;
 
-	// Re-check the shown project's specs on demand — keeps the full-tree walk off the connect handshake
-	// (the welcome push no longer stamps hasSpecs for every project).
 	useEffect(() => {
 		const projectId = project?.id;
 		if (!projectId) {
@@ -76,7 +44,6 @@ export function WelcomePanel() {
 				if (!cancelled) setHasSpecs(r.hasSpecs);
 			})
 			.catch(() => {
-				// Transport error — don't nag "Set up project" on uncertainty; assume specs exist.
 				if (!cancelled) setHasSpecs(true);
 			});
 		return () => {
@@ -84,14 +51,10 @@ export function WelcomePanel() {
 		};
 	}, [project?.id]);
 
-	// The shared open-project flow (offers to git-init a non-git folder, or shows a legible error). Its
-	// adopt step just selects the project — the visible rail reflects it; there's no tree to expand here.
 	const { openProject, pickAndOpen, dialogs } = useOpenProject((opened) =>
 		useAppStore.getState().selectProject(opened.id),
 	);
 
-	// A workspace was created from the welcome dialog: refresh that project's list (the dialog itself sets
-	// the active workspace, which swaps the shell to the workspace surface — this view then unmounts).
 	const onWorkspaceCreated = async (ws: Workspace) => {
 		useAppStore
 			.getState()
@@ -103,10 +66,6 @@ export function WelcomePanel() {
 
 	const noProjects = project == null;
 
-	// The fork's "no isolation" card — identical in both project states, so it's built once. It
-	// direct-enters the project's built-in Default workspace, no dialog (it's navigation; the Default
-	// receipt + New chat cover kick-off): the shared helper lists, stores, and activates in one step,
-	// degrading to its error toast on an older host with no Default.
 	const projectFolderCard = (projectId: string) => (
 		<Card
 			icon={House}
@@ -116,8 +75,6 @@ export function WelcomePanel() {
 		/>
 	);
 
-	// The "Open project" card — only rendered in the no-projects state (with a project shown, the
-	// projects-rail "+" carries this same dropdown). Triggers the same menu as that "+".
 	const openProjectCard = () => (
 		<AddProjectMenu
 			recentProjects={recentProjects}
@@ -210,12 +167,6 @@ export function WelcomePanel() {
 	);
 }
 
-/**
- * One welcome card (icon top-left, label + explainer bottom-left). The state's primary
- * is a filled-violet card carrying the stable `welcome-cta` hook; others are quiet outlined
- * `welcome-action`s. A `forwardRef` so it can serve as a Radix `asChild` trigger (the "Open project" card
- * hangs the `AddProjectMenu` dropdown off it).
- */
 type CardProps = {
 	cta?: boolean;
 	primary?: boolean;

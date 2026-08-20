@@ -26,11 +26,6 @@ import {
 
 const REBUILD_DEBOUNCE_MS = 75;
 
-/**
- * A status read never blocks on the Central status probe: the cached closed observation answers immediately,
- * and the refresh publishes an invalidation only when auth/proxy facts change. It refreshes only while
- * someone is reading — nothing polls Central in the background.
- */
 const STATUS_TTL_MS = JBCENTRAL_STATUS_TTL_MS;
 
 type RebuildResult =
@@ -68,12 +63,10 @@ let loginTask: Promise<JbcentralLoginResult> | null = null;
 let publishApplied: () => void = () => {};
 let publishChanged: () => void = () => {};
 
-/** Host composition seam: analytics may observe only a successful in-app Connect. */
 export function setJbcentralAppliedPublisher(publisher: () => void): void {
 	publishApplied = publisher;
 }
 
-/** Host composition seam: broadcast a data-free provider/model invalidation. */
 export function setJbcentralChangedPublisher(publisher: () => void): void {
 	publishChanged = publisher;
 }
@@ -97,7 +90,6 @@ function mapInspectionStatus(inspection: JbcentralInspection): JbcentralStatus {
 		case "probe-failed":
 			return { state: "probe-failed", reason: inspection.status.reason };
 		case "supported": {
-			// Only negative facts we positively observed become recovery demands.
 			const signedOut = statusObservation.auth === "signed-out";
 			return inspection.status.configured
 				? {
@@ -111,7 +103,6 @@ function mapInspectionStatus(inspection: JbcentralInspection): JbcentralStatus {
 	}
 }
 
-/** Invalidate any in-flight/pre-change observation before an action that can change Central status. */
 function invalidateStatusObservation(): void {
 	statusProbedAt = 0;
 	statusGeneration += 1;
@@ -124,7 +115,6 @@ function sameStatusObservation(
 	return left.auth === right.auth && left.proxy === right.proxy;
 }
 
-/** Install one already-sanitized observation and notify clients only when its closed facts changed. */
 function applyStatusObservation(observation: JbcentralStatusObservation): void {
 	statusProbedAt = Date.now();
 	if (sameStatusObservation(observation, statusObservation)) return;
@@ -132,7 +122,6 @@ function applyStatusObservation(observation: JbcentralStatusObservation): void {
 	publishChanged();
 }
 
-/** Refresh the combined observation off the read path, at most one probe in flight and never by polling. */
 function refreshStatusIfStale(): void {
 	if (stopped || statusTask || Date.now() - statusProbedAt < STATUS_TTL_MS) return;
 	const generation = statusGeneration;
@@ -216,7 +205,6 @@ async function runRebuildDrain(): Promise<void> {
 		const configured = inspectionConfigured(inspection);
 		const prepared = await preparePiRuntimeGeneration(configured ? [inspection.extensionPath] : []);
 
-		// Stale candidate: a newer observation owns the pointer.
 		if (stopped) return;
 		if (sequence !== requestedSequence) continue;
 
@@ -297,7 +285,6 @@ async function prepareInitialRuntime(inspection: JbcentralInspection): Promise<v
 	};
 }
 
-/** Initialize watching plus the current PI generation before any chat/runtime read. */
 export function initializeJbcentralRuntime(): Promise<void> {
 	if (bootstrapTask) return bootstrapTask;
 	stopped = false;
@@ -320,7 +307,6 @@ export function initializeJbcentralRuntime(): Promise<void> {
 	return bootstrapTask;
 }
 
-/** Stop future watcher/rebuild work. A candidate already loading is discarded when it returns. */
 export function stopJbcentralRuntime(): void {
 	stopped = true;
 	stopArtifactWatcher?.();
@@ -335,7 +321,6 @@ export function stopJbcentralRuntime(): void {
 	settleRebuildWaiters(Number.POSITIVE_INFINITY, result);
 }
 
-/** Closed status projection with a pull-side repair if a filesystem event was missed. */
 export async function getJbcentralStatus(): Promise<JbcentralStatus> {
 	await initializeJbcentralRuntime();
 	if (transientAction || settledSequence < requestedSequence) return configuringStatus();
@@ -343,7 +328,6 @@ export async function getJbcentralStatus(): Promise<JbcentralStatus> {
 	const inspection = await inspectJbcentral();
 	const configured = inspectionConfigured(inspection);
 	if (loadFailure) {
-		// Keep the closed failure only while it describes the latest artifact state.
 		if (configured === loadFailure.configured) return loadFailure;
 		void requestRuntimeRebuild();
 		return configuringStatus();
@@ -352,7 +336,6 @@ export async function getJbcentralStatus(): Promise<JbcentralStatus> {
 		void requestRuntimeRebuild();
 		return configuringStatus();
 	}
-	// Only meaningful once Central is usable at all, and only from the settled path — never mid-action.
 	if (inspection.status.state === "supported") refreshStatusIfStale();
 	return mapInspectionStatus(inspection);
 }
@@ -366,7 +349,6 @@ async function connect(): Promise<JbcentralActionResult> {
 		if (preflightFailure) return preflightFailure;
 		const actionFailure = mapCliFailure(await runJbcentralAction("add"));
 		if (actionFailure) {
-			// A refused `add pi` is evidence that the cached Central observation may be stale.
 			invalidateStatusObservation();
 			return failed(actionFailure);
 		}
@@ -385,7 +367,6 @@ async function disconnect(): Promise<JbcentralActionResult> {
 	publishChanged();
 	try {
 		const inspection = await inspectJbcentral();
-		// An already-absent artifact is the complete postcondition; rebuild plain PI directly.
 		if (inspection.artifactExists) {
 			const preflightFailure = inspectionFailure(inspection);
 			if (preflightFailure) return preflightFailure;
@@ -501,7 +482,6 @@ export function jbcentralLogin(): Promise<JbcentralLoginResult> {
 				case "probe-failed":
 					return { outcome: "failed", reason: "version-probe-failed" };
 				case "supported":
-					// The user is about to sign in out-of-band; the current observation is already obsolete.
 					invalidateStatusObservation();
 					return await launchJbcentralLogin();
 			}

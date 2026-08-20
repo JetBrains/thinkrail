@@ -11,9 +11,6 @@ import type {
 import { LINK_KINDS, SLICE_DIRECTIONS, SPEC_STATUSES, SPEC_TYPES } from "../core/index.ts";
 import { registerSpecTools } from "./index.ts";
 
-// Capture the registered tool defs via a minimal fake ExtensionAPI, then drive their `execute`
-// against a real temp cwd — the tools layer's integration surface (param plumbing, fs writes, and the
-// result shape). `execute` is a method, so heterogeneous defs collect in one typed map.
 const tools = new Map<string, ToolDefinition>();
 registerSpecTools({
 	registerTool(tool: ToolDefinition) {
@@ -37,7 +34,6 @@ function isError(result: AgentToolResult<unknown>): boolean {
 	return typeof result.details === "object" && result.details !== null && "error" in result.details;
 }
 
-/** The `enum` values a tool's param schema advertises (StringEnum params), or `[]` when none. */
 function paramEnum(toolName: string, prop: string): readonly string[] {
 	const schema = tools.get(toolName)?.parameters as {
 		properties?: Record<string, { enum?: string[] }>;
@@ -45,8 +41,6 @@ function paramEnum(toolName: string, prop: string): readonly string[] {
 	return schema.properties?.[prop]?.enum ?? [];
 }
 
-// Pin each finite-vocabulary param to its core tuple: guards against a literal list being re-hardcoded
-// in the tools layer instead of derived from core (the single source of truth).
 test("finite-vocabulary param schemas derive their enum from the core tuples", () => {
 	expect(paramEnum("spec_create", "type")).toEqual([...SPEC_TYPES]);
 	expect(paramEnum("spec_create", "status")).toEqual([...SPEC_STATUSES]);
@@ -54,7 +48,6 @@ test("finite-vocabulary param schemas derive their enum from the core tuples", (
 	expect(paramEnum("spec_graph", "edge")).toEqual([...LINK_KINDS]);
 });
 
-/** The human-readable text of a tool result's first content block. */
 function text(result: AgentToolResult<unknown>): string {
 	const block = result.content[0] as { text?: string } | undefined;
 	return block?.text ?? "";
@@ -69,9 +62,6 @@ async function withRoot(fn: (root: string) => Promise<void>): Promise<void> {
 	}
 }
 
-// A small, realistic spec-graph, built through the tools (each write is picked up by the next read):
-//   product (g&r) ← arch ← { mod-a, mod-b };  mod-a ← sub-a
-//   mod-a --depends-on--> mod-b;  mod-a --references--> arch;  sub-a --implements--> mod-a
 async function seedGraph(root: string): Promise<void> {
 	await run(
 		"spec_create",
@@ -236,7 +226,7 @@ test("spec_update edits frontmatter only (body preserved); refuses protected + u
 		const file = readFileSync(join(root, "m/SPEC.md"), "utf8");
 		expect(file).toContain("title: M v2");
 		expect(file).toContain("references: [pkg]");
-		expect(file).toContain("## Responsibility"); // body untouched
+		expect(file).toContain("## Responsibility");
 
 		expect(isError(await run("spec_update", { id: "m", remove: ["id"] }, root))).toBe(true);
 		expect(isError(await run("spec_update", { id: "nope", set: { title: "x" } }, root))).toBe(true);
@@ -270,10 +260,6 @@ test("spec_validate flags a dangling link then clean; spec_delete removes the fi
 		expect(isError(await run("spec_get", { id: "a" }, root))).toBe(true);
 	});
 });
-
-// ---------------------------------------------------------------------------
-// spec_create — full frontmatter, ordering, scaffolds
-// ---------------------------------------------------------------------------
 
 test("spec_create writes canonical frontmatter order with inline arrays into nested dirs", async () => {
 	await withRoot(async (root) => {
@@ -346,10 +332,6 @@ test("spec_create scaffolds body headings by type (and none for an unknown type)
 	});
 });
 
-// ---------------------------------------------------------------------------
-// spec_get — forward + reverse links, missing targets, errors
-// ---------------------------------------------------------------------------
-
 test("spec_get resolves forward and reverse links and marks a missing target", async () => {
 	await withRoot(async (root) => {
 		await seedGraph(root);
@@ -364,7 +346,6 @@ test("spec_get resolves forward and reverse links and marks a missing target", a
 		expect(d.links).toContainEqual({ kind: "parent", target: "arch", path: "architecture.md" });
 		expect(d.links).toContainEqual({ kind: "depends-on", target: "mod-b", path: "b/SPEC.md" });
 		expect(d.links).toContainEqual({ kind: "references", target: "arch", path: "architecture.md" });
-		// sub-a is a child of mod-a (reverse parent) and implements it (reverse implements).
 		expect(d.reverseLinks).toContainEqual({
 			kind: "parent",
 			target: "sub-a",
@@ -376,7 +357,6 @@ test("spec_get resolves forward and reverse links and marks a missing target", a
 			path: "a/sub/SPEC.md",
 		});
 
-		// mod-b now carries a dangling reference; spec_get renders it as (missing).
 		const bad = await run("spec_get", { id: "mod-b" }, root);
 		expect(text(bad)).toContain("ghost");
 		expect(text(bad)).toContain("(missing)");
@@ -388,10 +368,6 @@ test("spec_get errors on an unknown id", async () => {
 		expect(isError(await run("spec_get", { id: "nope" }, root))).toBe(true);
 	});
 });
-
-// ---------------------------------------------------------------------------
-// spec_graph — direction, depth bounding, chosen edge, missing, errors
-// ---------------------------------------------------------------------------
 
 test("spec_graph subtree is bounded by depth", async () => {
 	await withRoot(async (root) => {
@@ -429,9 +405,7 @@ test("spec_graph neighbors traverses a chosen edge and reverse (defaulting to de
 				.map((node) => node.id)
 				.sort();
 		expect(await neighborIds({ edge: "depends-on" })).toEqual(["mod-a", "mod-b"]);
-		// reverse of implements: mod-a is implemented by sub-a.
 		expect(await neighborIds({ edge: "implements" })).toEqual(["mod-a", "sub-a"]);
-		// edge omitted -> defaults to depends-on.
 		expect(await neighborIds({})).toEqual(["mod-a", "mod-b"]);
 	});
 });
@@ -453,10 +427,6 @@ test("spec_graph errors on an unknown root and reports missing targets", async (
 		expect(text(res)).toContain("missing targets: ghost");
 	});
 });
-
-// ---------------------------------------------------------------------------
-// spec_grep — regex, case, filters, limit/truncation, empty
-// ---------------------------------------------------------------------------
 
 test("spec_grep supports regex, case-sensitivity, and an empty result", async () => {
 	await withRoot(async (root) => {
@@ -483,7 +453,6 @@ test("spec_grep supports regex, case-sensitivity, and an empty result", async ()
 
 test("spec_grep caps at limit and flags truncation only when more exist", async () => {
 	await withRoot(async (root) => {
-		// The architecture scaffold has exactly four `#`-bearing heading lines.
 		await run(
 			"spec_create",
 			{ path: "arch.md", id: "arch", type: "architecture-design", title: "Architecture" },
@@ -540,14 +509,9 @@ test("spec_grep narrows by each metadata filter (type / tag / parent / depends-o
 		expect(await paths({ tag: "core" })).toEqual(["a/SPEC.md"]);
 		expect(await paths({ parent: "a" })).toEqual(["b/SPEC.md"]);
 		expect(await paths({ dependsOn: "a" })).toEqual(["b/SPEC.md"]);
-		// Unfiltered: both specs carry a Responsibility heading.
 		expect(await paths({})).toEqual(["a/SPEC.md", "b/SPEC.md"]);
 	});
 });
-
-// ---------------------------------------------------------------------------
-// spec_update — set/remove fields, link dedupe/prune, prose preservation, type
-// ---------------------------------------------------------------------------
 
 test("spec_update sets/removes fields, dedupes/prunes links, and preserves multi-line prose", async () => {
 	await withRoot(async (root) => {
@@ -556,7 +520,6 @@ test("spec_update sets/removes fields, dedupes/prunes links, and preserves multi
 			{ path: "m/SPEC.md", id: "m", type: "module-design", title: "M", parent: "p", tags: ["x"] },
 			root,
 		);
-		// Add a real multi-line body to prove prose survives a frontmatter-only edit.
 		const abs = join(root, "m/SPEC.md");
 		writeFileSync(abs, `${readFileSync(abs, "utf8")}\nSome prose.\n\n- a bullet\n- another\n`);
 
@@ -570,15 +533,14 @@ test("spec_update sets/removes fields, dedupes/prunes links, and preserves multi
 			},
 			root,
 		);
-		// Removing the only reference should prune the field entirely.
 		await run("spec_update", { id: "m", removeList: { references: ["r1"] } }, root);
 
 		const file = readFileSync(abs, "utf8");
 		expect(file).toContain("title: M v2");
 		expect(file).toContain("parent: p2");
 		expect(file).not.toContain("tags:");
-		expect(file).toContain("depends-on: [d1, d2]"); // duplicate d1 collapsed
-		expect(file).not.toContain("references:"); // pruned when emptied
+		expect(file).toContain("depends-on: [d1, d2]");
+		expect(file).not.toContain("references:");
 		expect(file).toContain("Some prose.");
 		expect(file).toContain("- a bullet");
 		expect(file).toContain("- another");
@@ -608,27 +570,19 @@ test("spec_update never un-specs: rejects renaming id via set and blanking id/ty
 			{ path: "m/SPEC.md", id: "m", type: "module-design", title: "M" },
 			root,
 		);
-		// Renaming a spec's id is refused outright (identity change; would dangle inbound links).
 		expect(isError(await run("spec_update", { id: "m", set: { id: "m2" } }, root))).toBe(true);
-		// Blanking id/type (an empty scalar is dropped on serialize) is refused before any write.
 		expect(isError(await run("spec_update", { id: "m", set: { type: "" } }, root))).toBe(true);
-		// The file is untouched and still a valid spec.
 		const file = readFileSync(join(root, "m/SPEC.md"), "utf8");
 		expect(file).toContain("id: m");
 		expect(file).toContain("type: module-design");
 	});
 });
 
-// ---------------------------------------------------------------------------
-// spec_delete — errors, and the dangling links a delete leaves behind
-// ---------------------------------------------------------------------------
-
 test("spec_delete errors on an unknown id and leaves a dangling link behind", async () => {
 	await withRoot(async (root) => {
 		await seedGraph(root);
 		expect(isError(await run("spec_delete", { id: "ghost" }, root))).toBe(true);
 
-		// mod-a depends-on mod-b; deleting mod-b should dangle that edge.
 		expect(isError(await run("spec_delete", { id: "mod-b" }, root))).toBe(false);
 		expect(existsSync(join(root, "b/SPEC.md"))).toBe(false);
 
@@ -642,10 +596,6 @@ test("spec_delete errors on an unknown id and leaves a dangling link behind", as
 		).toBe(true);
 	});
 });
-
-// ---------------------------------------------------------------------------
-// spec_validate — clean, dangling across all kinds, duplicates, cycles
-// ---------------------------------------------------------------------------
 
 test("spec_validate: clean graph, then dangling links across every kind", async () => {
 	await withRoot(async (root) => {
@@ -683,7 +633,6 @@ test("spec_validate: clean graph, then dangling links across every kind", async 
 
 test("spec_validate: duplicate ids and parent cycles from pre-existing files", async () => {
 	await withRoot(async (root) => {
-		// Written before any tool call; the first index read globs them off disk.
 		writeFileSync(join(root, "b1.md"), "---\nid: b\ntype: module-design\ntitle: B1\n---\n");
 		writeFileSync(join(root, "b2.md"), "---\nid: b\ntype: module-design\ntitle: B2\n---\n");
 		writeFileSync(
@@ -721,12 +670,11 @@ test("spec_update manages covers/tags lists (append, dedupe, prune) via addList/
 		);
 		const abs = join(root, "m/SPEC.md");
 		expect(readFileSync(abs, "utf8")).toContain("covers: [c1, c2]");
-		expect(readFileSync(abs, "utf8")).toContain("tags: [a, b]"); // existing "a" deduped
+		expect(readFileSync(abs, "utf8")).toContain("tags: [a, b]");
 
 		await run("spec_update", { id: "m", removeList: { tags: ["a"] } }, root);
 		expect(readFileSync(abs, "utf8")).toContain("tags: [b]");
 
-		// Pruning a list to empty drops the field entirely.
 		await run("spec_update", { id: "m", removeList: { covers: ["c1", "c2"] } }, root);
 		expect(readFileSync(abs, "utf8")).not.toContain("covers:");
 	});
@@ -739,17 +687,14 @@ test("spec_update rejects set on a list field and preserves comments + non-diale
 			{ path: "m/SPEC.md", id: "m", type: "module-design", title: "M" },
 			root,
 		);
-		// Simulate a foreign repo: a nested map + a comment a vanilla-pi author might have written.
 		const abs = join(root, "m/SPEC.md");
 		writeFileSync(
 			abs,
 			readFileSync(abs, "utf8").replace("title: M\n", "title: M\nowner:\n  name: bob # keep me\n"),
 		);
 
-		// `set` on a list field is refused (it would corrupt the list into one wrong scalar entry).
 		expect(isError(await run("spec_update", { id: "m", set: { tags: "a, b" } }, root))).toBe(true);
 
-		// A real edit leaves the nested map + comment intact on disk.
 		await run("spec_update", { id: "m", addList: { tags: ["t"] } }, root);
 		const file = readFileSync(abs, "utf8");
 		expect(file).toContain("owner:");

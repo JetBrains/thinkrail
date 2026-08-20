@@ -4,10 +4,8 @@ import type { ToolRenderProps } from "../toolRegistry";
 import { Collapsible } from "./Collapsible";
 import { resultText, strArg } from "./toolHelpers";
 
-/** Body for the `edit` tool: a simple removed/added line diff. */
 export function EditCard({ args, result, status, workspaceRoot }: ToolRenderProps) {
 	const path = strArg(args, "path");
-	// pi's edit arg names can vary; fall back across the common variants.
 	const oldText = strArg(args, "oldText") || strArg(args, "old_string") || strArg(args, "old");
 	const newText = strArg(args, "newText") || strArg(args, "new_string") || strArg(args, "new");
 	const message = resultText(result);
@@ -33,7 +31,6 @@ export function EditCard({ args, result, status, workspaceRoot }: ToolRenderProp
 			>
 				<div className="overflow-auto rounded-[var(--radius-sm)] border border-border-default tr-code-text leading-relaxed">
 					{oldLines.map((line, i) => {
-						// Diff lines are render-order-stable (never reordered), so the index is a correct key.
 						const key = `old-${i}`;
 						return (
 							<div key={key} className="flex bg-feedback-error-subtle">

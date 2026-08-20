@@ -1,20 +1,4 @@
 #!/usr/bin/env bun
-// Enforces this repo's dependency-pinning policy across every workspace manifest. Two rules, one pass:
-//
-//   1. Exact pins only. Every dependency pins an EXACT version — no ranges (`^` `~` `>` `<` `.x` `*`).
-//      Floating would drift into breakage (pi ships breaking releases daily, and a silent minor bump is
-//      the classic "works on my machine" trap); an exact pin makes the lockfile the single source of a
-//      dependency's version and every upgrade an explicit, reviewable diff.
-//   2. Catalog-managed deps go through the catalog. A dependency listed in the root `workspaces.catalog`
-//      must be referenced from workspace manifests only via the `catalog:` protocol, so its version lives
-//      in exactly one place; and catalog entries must themselves be exact. A `catalog:` reference that
-//      points at no catalog entry is rejected too.
-//
-// Scope: dependencies/devDependencies/optionalDependencies. peerDependencies are exempt (extension
-// packages declare `"*"` there on purpose — the host provides the dependency). Local protocols
-// (`workspace:`, `link:`, `file:`, …) are exempt from rule 1 — they don't carry a registry version.
-// Exits non-zero listing every violation. Named catalogs (`catalogs` / `catalog:<name>`) are not
-// supported — only the single default catalog this repo uses.
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -37,7 +21,6 @@ if (workspaces === undefined || Array.isArray(workspaces)) {
 const catalog = workspaces.catalog ?? {};
 const patterns = workspaces.packages ?? [];
 
-/** Workspace manifest paths from the `<dir>/*` workspace patterns. */
 function manifestPaths(): string[] {
 	const paths: string[] = [];
 	for (const pattern of patterns) {
@@ -54,7 +37,6 @@ function manifestPaths(): string[] {
 const SECTIONS = ["dependencies", "devDependencies", "optionalDependencies"] as const;
 const violations: string[] = [];
 
-/** Exact semver (optionally with a prerelease/build suffix) — no ranges. */
 const EXACT_VERSION = /^\d+\.\d+\.\d+(?:[-+][\w.]+)?$/;
 
 for (const [name, version] of Object.entries(catalog)) {
@@ -80,7 +62,6 @@ for (const path of [join(root, "package.json"), ...manifestPaths()]) {
 				);
 				continue;
 			}
-			// A protocol reference (`workspace:*`, `link:`, `file:`, …) carries no registry version to pin.
 			if (version.includes(":")) continue;
 			if (!EXACT_VERSION.test(version)) {
 				violations.push(

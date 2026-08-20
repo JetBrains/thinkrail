@@ -17,8 +17,6 @@ describe("isStale", () => {
 		expect(isStale(committed(CSS))).toBe(false);
 	});
 
-	// Regression pin: a CRLF checkout made every file read as stale, and the Windows nightly never
-	// got past `typography:check`.
 	it("treats CRLF line endings in the working tree as identical content", () => {
 		const { path } = committed(CSS.replaceAll("\n", "\r\n"));
 		expect(isStale({ path, content: CSS })).toBe(false);

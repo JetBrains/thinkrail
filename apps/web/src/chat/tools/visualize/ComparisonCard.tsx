@@ -4,10 +4,6 @@ import { strArg } from "../toolHelpers";
 import { parseComparisonOptions } from "./args";
 import { MermaidView } from "./MermaidView";
 
-/**
- * Body for `visualize` type="comparison": option cards with pros/cons, a `recommended` highlight, and an
- * optional per-option inline diagram.
- */
 export function ComparisonCard({ args }: ToolRenderProps) {
 	const title = strArg(args, "title");
 	const options = parseComparisonOptions(args.options);

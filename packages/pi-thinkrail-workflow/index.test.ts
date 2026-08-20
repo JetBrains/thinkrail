@@ -3,7 +3,6 @@ import factory, { WORKFLOW_RULE } from "./index.ts";
 
 type BeforeAgentStartHandler = (event: { systemPrompt: string }) => { systemPrompt: string };
 
-/** Run the extension factory with a fake `pi` and return the registered `before_agent_start` handler. */
 function loadHandler(): BeforeAgentStartHandler {
 	let captured: BeforeAgentStartHandler | undefined;
 	const fakePi = {

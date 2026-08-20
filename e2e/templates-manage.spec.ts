@@ -10,49 +10,14 @@ import {
 	seedTemplateFixtures,
 } from "./fixtures/templates";
 
-// No-agent: Settings → Templates (create/edit/delete, both scopes) + the history overlay's
-// save-as-template action. `templates-compose.spec.ts` already covers the composer `/` menu + slot
-// session against pre-seeded global fixtures (`e2e/fixtures/templates.ts`, untouched here); this suite
-// instead drives the *management* surface end to end — a template created here must show up in (and a
-// deleted one must vanish from) that same `/` menu, proving the store's `templatesVersion` bump actually
-// invalidates `ChatView`'s cached fetch rather than just exercising the settings panel in isolation.
 test.describe("templates management", () => {
-	// R4 (design doc "Amendments (2026-07-22)" item 4): when the Global group's list is empty, the panel
-	// offers to seed the starter templates instead of the bare "No templates yet." — one click creates
-	// them all, sequentially, via the same `template.save` wire call the editor dialog uses. The set is
-	// the same five this repo checks into its own `.pi/prompts/` (see `STARTER_TEMPLATES`), so an install
-	// working on any other project gets what a ThinkRail checkout gets for free at project scope.
-	//
-	// Deliberately the FIRST test in this file: Playwright preserves declaration order within a file
-	// (`fullyParallel: false`, `workers: 1`, see playwright.config.ts), and this file is the only place
-	// anything ever adds to the Global group (`templates-compose.spec.ts` only reads the fixtures below;
-	// no other spec touches templates at all) — so running first guarantees neither "standup" (created and
-	// deleted by the test below; deliberately NOT one of the starters, so the two can't collide) nor "foo"
-	// (created, and left, by the shadowing test below) exists yet.
-	// `globalSetup` seeds four Global fixtures once for the whole run and `resetState` never wipes
-	// `prompts/` (see `fixtures/templates.ts`), so the Global group is otherwise never empty during the
-	// suite — manufacturing that condition means removing those four ourselves first. Restores them (and
-	// removes the four starters this test adds) at the end, so every test/file that runs after — including
-	// this file's own later tests, and `templates-compose.spec.ts`, which depends on
-	// `review`/`rename`/`adjacent`/`defaults`'s exact original content — sees the world exactly as it was
-	// before this test ran.
 	test("Global empty state offers starter templates; adding them fills the composer's / menu", async ({
 		page,
 	}) => {
 		await openWorkspaceChat(page);
 		clearTemplateFixtures();
 
-		// Everything from here on must restore the four original fixtures no matter how the test body
-		// exits: this is a serial suite (one shared host, `workers: 1`), there's no `afterEach`, and
-		// `templates-compose.spec.ts` depends on `review`/`rename`/`adjacent`/`defaults`'s exact original
-		// content — a thrown assertion between the clear above and the restore below would otherwise leave
-		// the shared `prompts/` dir permanently short those fixtures for every test that runs after this one.
 		try {
-			// The `/` menu's own empty-state nudge — the discoverability half of the same problem the
-			// starter offer solves: with no templates anywhere, the manager is two clicks deep in Settings
-			// and nothing in the composer says it exists. Doubles as this test's way IN to the Templates
-			// panel (one gesture instead of the gear + nav clicks), which also pins that it deep-links to
-			// the right section.
 			const input = page.getByTestId("chat-input");
 			await input.fill("/");
 			const nudge = page.getByTestId("slash-templates-empty");
@@ -74,26 +39,20 @@ test.describe("templates management", () => {
 					page.locator(`[data-testid="template-row"][data-name="${name}"][data-scope="global"]`),
 				).toBeVisible();
 			}
-			// The offer disappears the instant the list is non-empty.
 			await expect(offer).toHaveCount(0);
 
 			await page.keyboard.press("Escape");
 			await expect(settingsDialog).toBeHidden();
 
-			// The freshly-added "review" starter (not the fixture of the same name — that one was removed
-			// above) shows up in the composer's `/` menu, same as any other template would.
 			await input.fill("/rev");
 			await expect(
 				page
 					.locator('[data-testid="slash-command"][data-source="prompt"]')
 					.filter({ hasText: "review" }),
 			).toHaveCount(1);
-			// …and the nudge is gone with it — a menu that has templates to offer never shows it.
 			await expect(nudge).toHaveCount(0);
 			await input.fill("");
 		} finally {
-			// Restore: remove the five starters this test added, then put the original four fixtures
-			// back — always, even if an assertion above threw.
 			removeGlobalTemplates(["review", "explain", "tests", "commit", "rename"]);
 			seedTemplateFixtures();
 		}
@@ -108,7 +67,6 @@ test.describe("templates management", () => {
 			.locator('[data-testid="slash-command"][data-source="prompt"]')
 			.filter({ hasText: "standup" });
 
-		// Not there yet.
 		await input.fill("/stand");
 		await expect(menuHit).toHaveCount(0);
 		await input.fill("");
@@ -137,12 +95,10 @@ test.describe("templates management", () => {
 		await page.keyboard.press("Escape");
 		await expect(settingsDialog).toBeHidden();
 
-		// Now it shows up — the save bumped `templatesVersion`, invalidating the composer's cached fetch.
 		await input.fill("/stand");
 		await expect(menuHit).toHaveCount(1);
 		await input.fill("");
 
-		// Edit: name + scope lock, description changes and the row (and re-fetch) reflect it.
 		await page.getByTestId("open-settings").click();
 		await page.getByTestId("settings-nav-templates").click();
 		await row.getByTestId("template-edit").click();
@@ -154,25 +110,17 @@ test.describe("templates management", () => {
 		await expect(editor).toBeHidden();
 		await expect(row).toContainText("Standup notes, revised");
 
-		// Delete (a `ConfirmPopover` anchored to this row's own Delete button) — gone from the panel...
-		// Scoped to this row: the Global group also lists the suite-wide seeded fixture templates, so an
-		// unscoped `template-delete` would be ambiguous.
 		await row.getByTestId("template-delete").click();
 		await expect(page.getByRole("alertdialog", { name: /Delete standup/ })).toBeVisible();
 		await page.getByTestId("template-confirm-delete").click();
 		await expect(row).toHaveCount(0);
 
-		// ...and gone from the / menu too.
 		await page.keyboard.press("Escape");
 		await expect(settingsDialog).toBeHidden();
 		await input.fill("/stand");
 		await expect(menuHit).toHaveCount(0);
 	});
 
-	// Reviewer-flagged regression: the assembler always wraps a real description in frontmatter, so picking
-	// the saved template back up must hand back the body exactly as typed — no leaked leading blank line —
-	// and an edit-save cycle that only touches the description must never grow the body (unit-level pin:
-	// `chat/templateText.test.ts`; this is the end-to-end proof over the real dialog + wire).
 	test("frontmatter round-trip: picking a saved template gets the body verbatim, and an edit-save cycle never grows it", async ({
 		page,
 	}) => {
@@ -195,8 +143,6 @@ test.describe("templates management", () => {
 		await page.keyboard.press("Escape");
 		await expect(settingsDialog).toBeHidden();
 
-		// Pick via /roundtrip: the draft must equal the body exactly — no leading blank line leaked in by
-		// the client-side splitter.
 		await input.fill("/roundtrip");
 		await page
 			.locator('[data-testid="slash-command"][data-source="prompt"]')
@@ -206,8 +152,6 @@ test.describe("templates management", () => {
 		await expect(input).toHaveValue("Notes for the day");
 		await input.fill("");
 
-		// Edit only the description, save, reopen: the body must be byte-for-byte unchanged — not
-		// compounded with an extra leading blank line from the previous split/assemble cycle.
 		await page.getByTestId("open-settings").click();
 		await page.getByTestId("settings-nav-templates").click();
 		const row = page.locator('[data-testid="template-row"][data-name="roundtrip"]');
@@ -232,7 +176,6 @@ test.describe("templates management", () => {
 		const editor = page.getByTestId("template-editor-dialog");
 		await expect(editor).toBeVisible();
 
-		// Leading "." is the server's own `isValidTemplateName` path-traversal gate, mirrored client-side.
 		await page.getByTestId("template-name-input").fill(".hidden");
 		await page.getByTestId("template-body-input").fill("anything");
 		await page.getByTestId("template-save").click();
@@ -264,9 +207,6 @@ test.describe("templates management", () => {
 		);
 		await expect(row).toBeVisible();
 
-		// Open-as-file is project-only — global rows never get this action. Clicking it both opens the real
-		// file as a center editor tab (the exact `openFileInTab` action the file tree itself uses) and closes
-		// Settings — no separate Escape needed.
 		const settingsDialog = page.getByTestId("settings-dialog");
 		await row.getByTestId("template-open-file").click();
 		await expect(settingsDialog).toBeHidden();
@@ -274,8 +214,6 @@ test.describe("templates management", () => {
 			page.locator('[data-testid="editor-tab"]').filter({ hasText: "scoped-note.md" }),
 		).toBeVisible();
 
-		// The file really landed in the worktree: `.pi/prompts/scoped-note.md`, browsable like any other file
-		// — `fs.readDir` doesn't special-case dotdirs beyond `.git`, and the single-directory run is one row.
 		await page.getByTestId("tab-files").click();
 		const promptsDir = page
 			.locator('[data-testid="file-node"][data-kind="dir"]')
@@ -289,10 +227,6 @@ test.describe("templates management", () => {
 		).toBeVisible();
 	});
 
-	// Save-as-template's other entry point: the Ctrl+R history overlay's selected prompt row. Reuses
-	// `seedExternalCwdSessions`'s deterministic fixture ("fix the flaky watcher test") the same way
-	// `history-search.spec.ts` does — cycle scope to "all" so the deliberately-unmapped external-cwd
-	// session is in view, then act on its (default-selected) prompt row.
 	test("history overlay: save-as-template opens the shared editor prefilled with the selected prompt", async ({
 		page,
 	}) => {
@@ -315,12 +249,9 @@ test.describe("templates management", () => {
 		await expect(scopeBadge).toHaveAttribute("data-scope", "all");
 		await expect(promptRow).toBeVisible();
 
-		// Click affordance: hovering the row reveals its save-as-template button.
 		await promptRow.hover();
 		await expect(promptRow.getByTestId("history-save-template")).toBeVisible();
 
-		// Keyboard affordance: Cmd/Ctrl+S while this (sole, hence default-selected) prompt row is the
-		// keyboard selection — the overlay closes and the shared editor opens, body-prefilled.
 		await query.press("Control+s");
 		await expect(overlay).toBeHidden();
 		const editor = page.getByTestId("template-editor-dialog");
@@ -332,13 +263,6 @@ test.describe("templates management", () => {
 		await expect(editor).toBeHidden();
 	});
 
-	// Reviewer-flagged regression: `TemplatesSettings` used to fetch `template.list { workspaceId }` once
-	// and derive both groups from that one response. The server shadow-merges by design (`templates.ts`'s
-	// `listTemplates`: a project template wins over a same-named global one) — right for the composer's
-	// `/` menu (one name, one expansion), but it meant a global template shadowed by a same-named project
-	// one vanished from the Global group entirely, with no way left to find, edit, or delete it. The panel
-	// now fetches twice — unscoped for Global, `{ workspaceId }` filtered to project-scope for This
-	// project — so a shadowed global template stays visible and independently editable.
 	test("a project template shadowing a same-named global one leaves both visible and independently editable", async ({
 		page,
 	}) => {
@@ -347,7 +271,6 @@ test.describe("templates management", () => {
 		await page.getByTestId("settings-nav-templates").click();
 		const editor = page.getByTestId("template-editor-dialog");
 
-		// Global "foo" first.
 		await page.getByTestId("template-new-global").click();
 		await expect(editor).toBeVisible();
 		await page.getByTestId("template-name-input").fill("foo");
@@ -362,8 +285,6 @@ test.describe("templates management", () => {
 		await expect(globalRow).toBeVisible();
 		await expect(globalRow).toContainText("Global foo");
 
-		// Project "foo" — same name, shadowing the global one for the composer's `/` menu, but Settings
-		// must still show both rows.
 		await page.getByTestId("template-new-project").click();
 		await expect(editor).toBeVisible();
 		await page.getByTestId("template-name-input").fill("foo");
@@ -377,12 +298,9 @@ test.describe("templates management", () => {
 		);
 		await expect(projectRow).toBeVisible();
 		await expect(projectRow).toContainText("Project foo");
-		// The regression: the global row used to vanish the moment a same-named project template existed.
 		await expect(globalRow).toBeVisible();
 		await expect(globalRow).toContainText("Global foo");
 
-		// Editing the GLOBAL row must update the global template, not the project one — proving the editor
-		// is handed the correct scope regardless of which group's affordance opened it.
 		await globalRow.getByTestId("template-edit").click();
 		await expect(editor).toBeVisible();
 		await expect(page.getByTestId("template-scope-global")).toHaveAttribute("data-active", "true");
@@ -395,21 +313,9 @@ test.describe("templates management", () => {
 		await expect(projectRow).not.toContainText("revised");
 	});
 
-	// Reviewer-flagged data-loss regression: `template.list` is metadata-only with a BOUNDED frontmatter
-	// head-scan (`packages/server/src/templates/templates.ts` — the whole point is that a listing never
-	// does full-file reads), so a file whose closing fence sits past that window legitimately lists with
-	// NO description/argument-hint. The edit dialog used to seed its metadata fields from that degraded
-	// listing row and write them back on Save — a body-only edit silently deleted the file's real
-	// frontmatter. Now the `template.get` response (a full-file parse) is authoritative for every field:
-	// its metadata replaces the listing seed when it resolves, and the fields + Save stay disabled until
-	// then, so what gets written back is what the file actually said.
 	test("editing a template whose frontmatter fence is past the listing scan window keeps its metadata", async ({
 		page,
 	}) => {
-		// 16 KiB of hint pushes the closing fence well past the 8 KiB scan window — the same construction
-		// the server suite pins the list/get asymmetry with (`templates.test.ts`). The description itself
-		// is short, but a truncated block with no closing fence in view parses as "no frontmatter at all",
-		// so the listing drops EVERY field, not just the ones past the window.
 		const hugeHint = "p".repeat(16 * 1024);
 		const filePath = join(E2E_PI_AGENT_DIR, "prompts", "deep-meta.md");
 		writeFileSync(
@@ -421,15 +327,12 @@ test.describe("templates management", () => {
 			await page.getByTestId("open-settings").click();
 			await page.getByTestId("settings-nav-templates").click();
 
-			// The listing row really is degraded — the name lists, the description doesn't.
 			const row = page.locator(
 				'[data-testid="template-row"][data-name="deep-meta"][data-scope="global"]',
 			);
 			await expect(row).toBeVisible();
 			await expect(row).not.toContainText("buried description");
 
-			// Edit-open: once `template.get` resolves, the full-file parse's metadata has replaced the
-			// degraded listing seed in the form.
 			await row.getByTestId("template-edit").click();
 			const editor = page.getByTestId("template-editor-dialog");
 			await expect(editor).toBeVisible();
@@ -438,12 +341,10 @@ test.describe("templates management", () => {
 			);
 			await expect(page.getByTestId("template-body-input")).toHaveValue("Original body");
 
-			// A body-only edit + save…
 			await page.getByTestId("template-body-input").fill("Edited body");
 			await page.getByTestId("template-save").click();
 			await expect(editor).toBeHidden();
 
-			// …must not have touched the metadata on disk.
 			const onDisk = readFileSync(filePath, "utf-8");
 			expect(onDisk).toContain('description: "buried description"');
 			expect(onDisk).toContain(`argument-hint: "${hugeHint}"`);
@@ -454,13 +355,6 @@ test.describe("templates management", () => {
 		}
 	});
 
-	// Reviewer-flagged identity regression: whitespace-bearing template names are server-legal BY DESIGN
-	// (pi derives a template's name from its filename verbatim, so a hand-created `report .md` lists as
-	// `report ` — the gate in `packages/server/src/templates/templates.ts` deliberately accepts every
-	// pi-listable name). The dialog used to trim the name on every save, so editing `report ` wrote a NEW
-	// `report.md` and left the file being edited untouched — the edit looked successful while the selected
-	// template never changed. An edit now saves under `template.name` verbatim; only new-template names
-	// are trimmed (deliberate form normalization).
 	test("editing a hand-created template with a whitespace-bearing name round-trips to the same file", async ({
 		page,
 	}) => {
@@ -482,19 +376,15 @@ test.describe("templates management", () => {
 			await expect(page.getByTestId("template-name-input")).toHaveValue("report ");
 			await expect(page.getByTestId("template-body-input")).toHaveValue("Hand-created body");
 
-			// A body-only edit + save…
 			await page.getByTestId("template-body-input").fill("Edited body");
 			await page.getByTestId("template-save").click();
 			await expect(editor).toBeHidden();
 
-			// …must land in the file being edited…
 			const onDisk = readFileSync(filePath, "utf-8");
 			expect(onDisk).toContain("Edited body");
 			expect(onDisk).toContain('description: "Trailing-space name"');
-			// …and mint no trimmed twin (the regression: save used to write `report.md` instead).
 			expect(existsSync(join(promptsDir, "report.md"))).toBe(false);
 		} finally {
-			// "report" too: if the regression ever recurs, the minted twin must not leak into later tests.
 			removeGlobalTemplates(["report ", "report"]);
 		}
 	});

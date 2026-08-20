@@ -20,11 +20,6 @@ export interface SkillLoadDependencies {
 	) => Promise<WsResult<"session.reloadResources">>;
 }
 
-/**
- * Build the three guarded session-resource requests around one per-workspace preparation flight.
- * `startupNudge` is folded even when the normal push arrived: the duplicate is idempotent, while this
- * response survives reconnect replay and therefore closes the lost-push gap before the baseline is read.
- */
 export function createSkillLoadRequests(deps: SkillLoadDependencies) {
 	const pending = new Map<string, Promise<number>>();
 

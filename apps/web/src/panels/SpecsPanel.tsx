@@ -15,28 +15,12 @@ import { selectActiveEditorTab, useAppStore } from "../store";
 import { openFileInTab } from "./openTabs";
 import { buildSpecTree, type SpecTreeNode, specRoleLabel, specRoleTag } from "./specTree";
 
-/**
- * Read-only spec-graph viewer for the active worktree, rendered as a compact document-first `parent`
- * tree — a pure reader of the store snapshot that `useWorkspaceSpecs` (owned by
- * `WorkspaceWorkbench`, so it outlives this tab) keeps current. Rows are keyed by spec id, so expansion state survives a silent
- * refresh; a failed re-read keeps the last good tree and `failed` renders the hint only when there is
- * nothing to show. The chevron expands children; one click on the document row **previews** its rendered
- * spec in the workspace's reusable center tab (so reading down the graph never piles tabs up) and a
- * double click keeps it.
- *
- * Being keyed per workspace, a switch shows that workspace's last known tree while the re-read is in
- * flight — there is nothing to reset. A `specRequest` deep link (the divider's "N specs" chip) opens the
- * rendered spec and is **consumed**: it opens a center tab, so replaying it on a remount or a refetch would
- * yank the user's tab back. The row lights up from the active file's semantic path, independent of its
- * stable shared placement id.
- */
 export function SpecsPanel({
 	workspaceId,
 	failed = false,
 	onRefresh,
 }: {
 	workspaceId: string;
-	/** The current workspace's spec read failed (from `useWorkspaceSpecs`, which owns the fetch). */
 	failed?: boolean;
 	onRefresh?: () => void;
 }) {
@@ -44,10 +28,6 @@ export function SpecsPanel({
 	const activeTab = useAppStore((state) => selectActiveEditorTab(state, workspaceId));
 	const specRequest = useAppStore((s) => s.specRequest);
 
-	// A chat deep-link targeting this workspace: open the requested spec as a rendered doc tab, then clear
-	// the request. The path arrives as pi reported it (possibly absolute) — `openFileInTab` canonicalizes it
-	// to the worktree-relative tab identity, so no graph lookup is needed here (and a spec created seconds
-	// ago, not yet in the snapshot, opens just the same).
 	useEffect(() => {
 		if (specRequest?.workspaceId !== workspaceId) return;
 		if (useAppStore.getState().specRequest !== specRequest) return;

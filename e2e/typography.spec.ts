@@ -9,18 +9,6 @@ import {
 } from "./fixtures/app";
 import { BRAND_FACE, CODE_FACE, INTERFACE_FACE } from "./fixtures/typography";
 
-/**
- * Computed-style verification: the generated typography actually renders on the real surfaces, and the
- * roles the spec ties together stay tied (dialog title == card title, branch metadata is proportional,
- * Monaco and xterm match the code style, the document markdown scale outranks its own body copy).
- *
- * Every assertion here is UNCONDITIONAL on purpose. An earlier version wrapped each measurement in
- * `if (await locator.count())`, which meant a renamed selector or a surface that failed to mount turned
- * the whole spec into a silent no-op — green while measuring nothing. If an element this spec names
- * stops existing, that is the failure, not a reason to skip.
- *
- * Values come from `apps/web/src/styles/typography.json` — update them there, never here.
- */
 type TypeInfo = {
 	family: string;
 	size: string;
@@ -48,8 +36,6 @@ async function typeOf(locator: import("@playwright/test").Locator): Promise<Type
 test("welcome hero renders the generated brand style", async ({ page }) => {
 	await openAppFresh(page);
 	await openFixtureProject(page);
-	// The welcome hero is the brand/display face (Orbitron @ 400); assert the family too so the brand
-	// typography stays pinned now that the header wordmark is an inline SVG rather than live text.
 	const welcomeTitle = await typeOf(page.getByTestId("welcome-title"));
 	expect(welcomeTitle).toMatchObject({ size: "44px", weight: "400", lineHeight: "55px" });
 	expect(welcomeTitle.family).toMatch(BRAND_FACE);
@@ -58,8 +44,6 @@ test("welcome hero renders the generated brand style", async ({ page }) => {
 test("dialog title and card title share one typography", async ({ page }) => {
 	await openFixtureProject(page);
 
-	// The Welcome fork cards are the `title.card` surface; assert it before opening the dialog so both
-	// halves of the pair are measured in the same run.
 	const card = await typeOf(page.locator(".tr-title-card").first());
 
 	await page.getByTestId("open-settings").click();
@@ -68,7 +52,6 @@ test("dialog title and card title share one typography", async ({ page }) => {
 	);
 	expect(dialog).toMatchObject({ size: "14px", weight: "600", lineHeight: "17.5px" });
 
-	// `title.card` is a `$ref` to `title.dialog`, so the two must be indistinguishable.
 	expect(card.size).toBe(dialog.size);
 	expect(card.weight).toBe(dialog.weight);
 	expect(card.lineHeight).toBe(dialog.lineHeight);
@@ -96,7 +79,6 @@ test("Monaco and xterm render the generated code family and size", async ({ page
 	await openFixtureProject(page);
 	await createWorkspaceViaDialog(page);
 	await page.getByTestId("tab-files").click();
-	// A non-markdown file opens in Monaco (markdown opens rendered).
 	await page.getByTestId("file-node").filter({ hasText: "notes.txt" }).first().dblclick();
 	const editor = page.locator(".monaco-editor .view-lines").first();
 	await expect(editor).toBeVisible({ timeout: 30_000 });
@@ -104,13 +86,9 @@ test("Monaco and xterm render the generated code family and size", async ({ page
 	expect(editorType.family).toMatch(CODE_FACE);
 	expect(editorType.size).toBe("11px");
 
-	// A terminal opens with the workspace. Measure the VISIBLE instance: several stay mounted at once
-	// and only one is `data-visible="true"`, so a bare `.xterm-rows` locator resolves to a hidden layer
-	// with no box — which is what let the old `if (await count())` version skip xterm entirely.
 	await waitTerminalReady(page);
 	const termType = await typeOf(visibleTerminalScreen(page));
 	expect(termType.family).toMatch(CODE_FACE);
-	// xterm adopts `code.block`'s size (13px); Monaco stays on the 11px editor tier above.
 	expect(termType.size).toBe("13px");
 });
 
@@ -122,23 +100,14 @@ test("the chat and document markdown surfaces each wear their own prose system",
 	await page.getByTestId("file-node").filter({ hasText: "README.md" }).first().dblclick();
 	await expect(page.getByTestId("markdown-preview")).toContainText("sample-project");
 
-	// The document surface: `tr-prose-doc`, body copy at the reading size, h1 at the document scale —
-	// 24px, which is the whole point of a separate system (the chat h1 is 18px).
 	const doc = page.locator(".tr-prose-doc").first();
 	expect(await typeOf(doc)).toMatchObject({ size: "14px", weight: "370", lineHeight: "22.4px" });
 	expect(await typeOf(doc.locator("h1").first())).toMatchObject({ size: "24px", weight: "600" });
 
-	// One system per surface: the rendered file must not also carry the bubble scale, or which of the two
-	// wins comes down to emission order inside `@layer components`.
 	expect(await doc.evaluate((el) => el.classList.contains("tr-prose-chat"))).toBe(false);
 	expect(await page.locator(".tr-prose-doc.tr-prose-chat").count()).toBe(0);
 });
 
-/**
- * The reason the `doc` system exists: a rendered document has to read as one. Probed on a detached
- * fragment so the assertion covers the CSS itself rather than whatever headings a fixture happens to
- * contain — every level is measured, not just the ones a README uses.
- */
 test("document headings are larger than document body text", async ({ page }) => {
 	await openFixtureProject(page);
 	await expect(page.getByTestId("welcome")).toBeVisible();
@@ -166,15 +135,12 @@ test("document headings are larger than document body text", async ({ page }) =>
 
 	expect(measured.body).toBe(14);
 	expect(measured.h).toEqual([24, 20, 18, 16, 14, 12]);
-	// h1–h4 strictly larger than body copy — the hierarchy the chat scale cannot give a document.
 	for (const [i, size] of measured.h.slice(0, 4).entries())
 		expect(size, `h${i + 1} > body`).toBeGreaterThan(measured.body);
-	// The ladder never inverts, and every level is a heading weight.
 	for (let i = 1; i < measured.h.length; i++)
 		expect(measured.h[i], `h${i + 1} <= h${i}`).toBeLessThanOrEqual(measured.h[i - 1] as number);
 	for (const [i, w] of measured.hWeight.entries())
 		expect(Number(w), `h${i + 1} weight`).toBeGreaterThanOrEqual(600);
-	// Document code tracks document body copy, not the compact chat sizes.
 	expect(measured.pre).toBe(13);
 	expect(measured.inline).toBe(13);
 });
@@ -217,12 +183,9 @@ test("typography survives a narrow mobile viewport without clipping or overflow"
 			const style = getComputedStyle(el);
 			if (!/hidden|clip/.test(style.overflowY)) continue;
 			const over = el.scrollHeight - el.clientHeight;
-			// Any hidden vertical overflow is a clipped line. No upper bound: a badly broken layout
-			// overflowing by 300px used to slip past the old `< clientHeight + 200` guard.
 			if (over > 1 && el.clientHeight > 0)
 				out.push(`${el.tagName}[${el.getAttribute("data-testid") ?? ""}] +${over}px`);
 		}
-		// Horizontal overflow of the document is the other typography failure mode.
 		if (document.documentElement.scrollWidth > window.innerWidth + 1)
 			out.push(
 				`document overflows: ${document.documentElement.scrollWidth} > ${window.innerWidth}`,
@@ -236,8 +199,6 @@ test("bold inside prose changes weight only — in both prose systems", async ({
 	await openFixtureProject(page);
 	await expect(page.getByTestId("welcome")).toBeVisible();
 
-	// Each markdown surface mounts its own `tr-prose-*` root, so the shared rules are what govern them.
-	// Probe both directly on a detached fragment: no agent session needed to assert the CSS they use.
 	const measured = await page.evaluate(() => {
 		const read = (el: Element | null) => {
 			if (!el) return null;
@@ -277,23 +238,19 @@ test("bold inside prose changes weight only — in both prose systems", async ({
 	});
 
 	for (const [system, m] of Object.entries(measured)) {
-		// A bold word in a heading keeps the heading's size and line-height; only the weight differs.
 		expect(m.h1Strong?.size, `${system} h1 strong size`).toBe(m.h1?.size);
 		expect(m.h1Strong?.lineHeight, `${system} h1 strong leading`).toBe(m.h1?.lineHeight);
 		expect(m.h1Strong?.weight, `${system} h1 strong weight`).toBe("500");
 		expect(m.h1?.weight, `${system} h1 weight`).toBe("600");
 
-		// A bold word in a table cell keeps the table's size and line-height.
 		expect(m.cellStrong?.size, `${system} cell strong size`).toBe(m.cell?.size);
 		expect(m.cellStrong?.lineHeight, `${system} cell strong leading`).toBe(m.cell?.lineHeight);
 		expect(m.cellStrong?.weight, `${system} cell strong weight`).toBe("500");
 
-		// A bold word in body prose keeps the body typography and becomes 500.
 		expect(m.bodyStrong?.size, `${system} body strong size`).toBe(m.body?.size);
 		expect(m.bodyStrong?.lineHeight, `${system} body strong leading`).toBe(m.body?.lineHeight);
 		expect(m.bodyStrong?.weight, `${system} body strong weight`).toBe("500");
 
-		// Nested bold inherits family, tracking, transform and colour from its parent.
 		for (const key of ["family", "spacing", "transform", "color"] as const) {
 			expect(m.h1Strong?.[key], `${system} h1 strong ${key}`).toBe(m.h1?.[key]);
 			expect(m.cellStrong?.[key], `${system} cell strong ${key}`).toBe(m.cell?.[key]);
@@ -307,10 +264,6 @@ test("a Tailwind utility at a call site overrides the semantic default it names"
 }) => {
 	await openAppFresh(page);
 
-	// The semantic classes are emitted in `@layer components`, so `italic` / `leading-*` (Tailwind's
-	// `utilities` layer) win for the ONE property they set while the rest of the semantic style holds.
-	// Unlayered semantic CSS used to outrank every utility — "(empty file)" lost its italics and
-	// `leading-tight` rows kept the 1.6 default.
 	const measured = await page.evaluate(() => {
 		const probe = (className: string) => {
 			const el = document.createElement("span");
@@ -328,27 +281,22 @@ test("a Tailwind utility at a call site overrides the semantic default it names"
 			metadataSnug: probe("tr-text-metadata leading-snug"),
 			ui: probe("tr-text-ui"),
 			uiTight: probe("tr-text-ui leading-tight"),
-			// The `<body>` base lives in `@layer base`, so ANY semantic class must outrank it.
 			bare: probe(""),
 		};
 	});
 
-	// `italic` applies, and the semantic size/line-height are untouched.
 	expect(measured.metadataItalic.fontStyle).toBe("italic");
 	expect(measured.metadata.fontStyle).toBe("normal");
 	expect(measured.metadataItalic.fontSize).toBe(measured.metadata.fontSize);
 	expect(measured.metadataItalic.lineHeight).toBe(measured.metadata.lineHeight);
 
-	// `leading-tight` (1.25) beats the semantic 20px line-height, and only line-height moves.
-	expect(measured.uiTight.lineHeight).toBe("17.5px"); // 14px × 1.25
+	expect(measured.uiTight.lineHeight).toBe("17.5px");
 	expect(measured.ui.lineHeight).toBe("20px");
 	expect(measured.uiTight.fontSize).toBe(measured.ui.fontSize);
 
-	// `leading-snug` (1.375) likewise, on the current 12px metadata tier.
-	expect(measured.metadataSnug.lineHeight).toBe("16.5px"); // 12px × 1.375
+	expect(measured.metadataSnug.lineHeight).toBe("16.5px");
 	expect(measured.metadataSnug.fontSize).toBe(measured.metadata.fontSize);
 
-	// The document base is `rootStyle` → `ui.default` (14px), and a class beats it rather than tying.
 	expect(measured.bare.fontSize).toBe("14px");
 	expect(measured.metadata.fontSize).toBe("12px");
 });

@@ -18,7 +18,6 @@ import { WsTransport } from "./transport";
 
 let transport: WsTransport | null = null;
 
-/** Create the singleton transport, route pushes into the store, and connect. */
 export function initTransport(): WsTransport {
 	if (transport) return transport;
 
@@ -28,17 +27,15 @@ export function initTransport(): WsTransport {
 
 	transport.subscribe(WS_CHANNELS.serverWelcome, (data) => {
 		const welcome = data as Partial<ServerWelcome>;
-		// Cold navigation waits for this one complete snapshot edge; never validate a route against a
-		// protocol-only or project-only intermediate state.
 		if (typeof welcome.protocolVersion !== "number" || !Array.isArray(welcome.projects)) return;
-		useAppStore.getState().installWelcomeSnapshot(
-			welcome.protocolVersion,
-			welcome.projects,
-			// `recentProjects` is required by the current protocol; falling back keeps a stale host's open
-			// projects usable while the shell surfaces the version mismatch.
-			Array.isArray(welcome.recentProjects) ? welcome.recentProjects : welcome.projects,
-			welcome.config,
-		);
+		useAppStore
+			.getState()
+			.installWelcomeSnapshot(
+				welcome.protocolVersion,
+				welcome.projects,
+				Array.isArray(welcome.recentProjects) ? welcome.recentProjects : welcome.projects,
+				welcome.config,
+			);
 	});
 
 	transport.subscribe(WS_CHANNELS.projectUpdated, (data) => {
@@ -64,7 +61,6 @@ export function initTransport(): WsTransport {
 	});
 
 	transport.subscribe(WS_CHANNELS.providerChanged, () => {
-		// Clear stale choices now; the monotonic version stops an older model.list reply overwriting this.
 		useAppStore.getState().noteProviderChanged();
 		const providerVersion = useAppStore.getState().providerVersion;
 		getTransport()
@@ -73,8 +69,6 @@ export function initTransport(): WsTransport {
 			.catch(() => {});
 	});
 
-	// The workspace lifecycle trio — every client (including the initiator) converges by reacting to these,
-	// never a per-client optimistic mutation. `created`/`updated` carry the full snapshot; `removed` the ids.
 	transport.subscribe(WS_CHANNELS.workspaceCreated, (data) => {
 		useAppStore.getState().addWorkspace(data as Workspace);
 	});
@@ -88,8 +82,6 @@ export function initTransport(): WsTransport {
 		useAppStore.getState().applyWorkspaceRemoved(projectId, id);
 	});
 
-	// A workspace's review snapshot changed (UI edit, agent resolve, re-anchor) — every client converges
-	// on the full-snapshot push, the initiator too (no optimistic mutation).
 	transport.subscribe(WS_CHANNELS.reviewChanged, (data) => {
 		const payload = data as ReviewChangedPayload;
 		useAppStore.getState().applyReviewChanged(payload);
@@ -99,8 +91,6 @@ export function initTransport(): WsTransport {
 		useAppStore.getState().noteFsChanged(data as WorkspaceFsChangedPayload);
 	});
 
-	// A server-synced settings change (theme, …) — every client converges on this broadcast, including the
-	// one that made the change (no optimistic apply).
 	transport.subscribe(WS_CHANNELS.settingsChanged, (data) => {
 		useAppStore.getState().applyConfig(data as AppConfig);
 	});

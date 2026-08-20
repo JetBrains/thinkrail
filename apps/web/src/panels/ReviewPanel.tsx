@@ -31,32 +31,15 @@ import {
 import { sendReviewComment } from "./reviewSend";
 import { SendAllReviewsButton, SendReviewButton } from "./SendReviewButton";
 
-/**
- * The side-only Review tool — ONE screen, an ACCORDION of the files still in review (see
- * panels/SPEC.md): each row a path + its comment counts; clicking a row unfolds its comments in place
- * AND opens the file's tab (collapsing is just a second click — it navigates nowhere). The section whose
- * file is the active center tab auto-expands, and `WorkspaceWorkbench` reveals Review for a newly active
- * reviewed surface; an expansion never auto-collapses — folding is the user's. Batch send mirrors the pane
- * toolbars: an expanded section's strip carries the same per-file `Send review (N)` (drafts-only,
- * `SendReviewButton`) + the Done finisher, the tool header a `Send all (N)` across every file — all over
- * the shared `reviewSend` batch path. Hydration is owned by `WorkspaceWorkbench`
- * (`useWorkspaceReview`); every mutation converges on the store's `review.changed` fold.
- */
 export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; failed: boolean }) {
 	const snapshot = useAppStore((s) => s.reviewsByWorkspace[workspaceId]);
 	const activeReviewedPath = useAppStore((s) => selectActiveReviewedPath(s, workspaceId));
 	const [sending, setSending] = useState(false);
 	const [clearing, setClearing] = useState(false);
-	// The unfolded sections, keyed like `fileSummaries` rows (`null` = the whole-change-set bucket).
-	// Seeded with the active reviewed file: the panel often mounts as the workbench reveals Review for
-	// that activation, and the adjust-on-change below only sees later changes.
 	const [expanded, setExpanded] = useState<ReadonlySet<string | null>>(
 		() => new Set(activeReviewedPath === null ? [] : [activeReviewedPath]),
 	);
 
-	// A newly activated reviewed file unfolds its own section — the accordion's "follow the active
-	// tab". Render-time state adjustment (react.dev "adjusting state when a prop changes"), no effect
-	// needed; deactivation collapses nothing (folding is the user's gesture alone).
 	const [followedPath, setFollowedPath] = useState(activeReviewedPath);
 	if (followedPath !== activeReviewedPath) {
 		setFollowedPath(activeReviewedPath);
@@ -64,16 +47,8 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 			setExpanded(new Set(expanded).add(activeReviewedPath));
 	}
 
-	/** Open the chat a sent comment/batch lives in — the shared tab→runtime→disk escalation. */
 	const openChat = (sessionId: string) => openChatInTab(workspaceId, sessionId);
 
-	/**
-	 * Open the center surface a review anchor is readable on (`reviewModel`'s {@link ReviewSurface}): the
-	 * DIFF for a base-side anchor — a **pinned** scope on the anchor's own `baseRef`, so the original
-	 * side is the very blob the remark quotes no matter how the worktree or the review target moved
-	 * since — and the plain file tab for a worktree one. A comment saved before `baseRef` was stamped
-	 * falls back to its captured scope, then to the workspace's current one.
-	 */
 	const openSurface = (path: string, surface: ReviewSurface) => {
 		if (surface.kind === "file") {
 			void openFileInTab(workspaceId, path, "preview");
@@ -83,8 +58,6 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 		void openDiffInTab(workspaceId, scope, path, "preview");
 	};
 
-	/** Row click: navigate to the comment's own surface, focused on it (the pane consumes the focus
-	 * request — Monaco reveals the anchor line, the preview scrolls the in-flow card into view). */
 	const navigateTo = (comment: ReviewComment) => {
 		const path = comment.anchor?.path;
 		if (!path) return;
@@ -92,14 +65,11 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 		openSurface(path, commentSurface(comment));
 	};
 
-	// The shared send paths (reviewSend.ts) own the request + chat-open + failure toast; this panel
-	// only tracks its own busy state.
 	const sendOne = async (comment: ReviewComment) => {
 		setSending(true);
 		try {
 			await sendReviewComment(workspaceId, comment.id);
 		} catch {
-			// reported by the helper
 		} finally {
 			setSending(false);
 		}
@@ -122,8 +92,6 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 			toast.error(errorText(err), "Couldn't finish the file's review");
 		}
 	};
-	// Clear is one server-side mutation. Its `review.changed` fresh-snapshot push is the only state fold,
-	// so this page and every sibling client empty together — no initiating-only `review.get` write.
 	const clearReview = async () => {
 		try {
 			await getTransport().request("review.close", { workspaceId });
@@ -132,9 +100,6 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 		}
 	};
 	const hasDrafts = snapshot.comments.some((c) => c.status === "draft");
-	// Clear (archive the review + start fresh) follows the RECORDS, not the file rows: finishing every
-	// reviewed file empties `files` while resolved/sent records live on, and that is exactly when the user
-	// wants to archive. Gating Clear on `files.length` stranded them with no way to close the review.
 	const hasComments = snapshot.comments.length > 0;
 	const toggleFile = (file: ReviewFileSummary) => {
 		const isOpen = expanded.has(file.path);
@@ -142,7 +107,6 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 		if (isOpen) next.delete(file.path);
 		else next.add(file.path);
 		setExpanded(next);
-		// Unfolding also opens the file's own surface; folding is quiet — it navigates nowhere.
 		if (!isOpen && file.path)
 			openSurface(file.path, reviewFileSurface(snapshot.comments, file.path));
 	};
@@ -189,8 +153,6 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 					<ul>
 						{files.map((file) => {
 							const isOpen = expanded.has(file.path);
-							// Everything resolved — the row itself offers the Done finisher, inline after the
-							// counts (a strip below just for one glyph read as stray space).
 							const finishable = file.total === 0 && file.resolved > 0;
 							return (
 								<li
@@ -258,13 +220,6 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 	);
 }
 
-/**
- * One unfolded file's comments, in the TODO plan's section flow — what the chat is already working
- * on first (In progress = sent), then Drafts (the to-do), then the muted Resolved (Done) — topped,
- * while drafts exist, by the pane toolbar's `Send review (N)` (same drafts-only gate and batch path;
- * its own testid so tests can tell the sidebar's copy from the pane's). The Done finisher lives in
- * the FILE ROW, not here — a strip holding one glyph read as stray space.
- */
 function FileSection({
 	workspaceId,
 	path,
@@ -338,8 +293,6 @@ function FileSection({
 	);
 }
 
-/** The active center tab's path when it is a file/diff still carrying unresolved comments — what the
- * panel follows and what the workbench's Review reveal keys on. */
 export function selectActiveReviewedPath(
 	s: {
 		activeWorkspaceId: string | null;
@@ -371,7 +324,6 @@ function CommentRow({
 }: {
 	workspaceId: string;
 	comment: ReviewComment;
-	/** Drafts number themselves (1., 2., …) instead of wearing a status glyph. */
 	ordinal?: number;
 	sending: boolean;
 	onSend: () => void;
@@ -381,8 +333,6 @@ function CommentRow({
 	const isDraft = comment.status === "draft";
 	const [confirmDelete, setConfirmDelete] = useState(false);
 	const ref = lineRef(comment);
-	// A sent comment's glyph follows its SESSION, exactly like a TODO's in-progress item (planView's
-	// glance): working dot / (?) waiting for your answer / paused. No runtime loaded = not working.
 	const runtime = useAppStore((s) =>
 		comment.sessionId ? s.sessions[comment.sessionId] : undefined,
 	);
@@ -408,8 +358,6 @@ function CommentRow({
 		}
 	};
 
-	// The whole row is the navigation gesture (file + focus on the comment); the action icons sit in
-	// their own layer on top so they never trigger it. Editing happens in the in-file card, not here.
 	return (
 		<div
 			data-testid="review-comment"
@@ -443,8 +391,6 @@ function CommentRow({
 					</span>
 				</span>
 			</button>
-			{/* Hover-revealed, like the worktree row's Remove (ProjectTree): rows stay quiet until pointed
-			    at; keyboard focus and an open confirm keep them visible. */}
 			<span className="absolute top-xs right-sm flex items-center gap-xs opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 has-[[data-state=open]]:opacity-100">
 				{isDraft && (
 					<>
@@ -458,7 +404,6 @@ function CommentRow({
 						>
 							<Send className="size-3.5" />
 						</button>
-						{/* Drafts only: an unsent remark is the user's own scratch — once sent it is a record. */}
 						<ConfirmPopover
 							open={confirmDelete}
 							onOpenChange={setConfirmDelete}
@@ -509,9 +454,6 @@ function CommentRow({
 	);
 }
 
-/** A resolved comment, sunk into the muted bottom section — the TODO plan's Done row styling (check +
- * struck hint text); the chat action reveals on hover. Resolved is final — no reopen (like delete and
- * rollback, undoing a review outcome isn't offered; a fresh remark is a fresh comment). */
 function ResolvedRow({
 	comment,
 	onOpenChat,
@@ -548,8 +490,6 @@ function ResolvedRow({
 	);
 }
 
-/** The in-progress glyph, glance-aware — the exact `TodoList` vocabulary (`glanceIcon`): working dot,
- * (?) when the session waits on an `ask_user_question`, pause when it's idle on the user. */
 function GlanceGlyph({ glance }: { glance: ReturnType<typeof sessionGlance> }) {
 	const { Icon, className, label } = glanceIcon(glance);
 	return (

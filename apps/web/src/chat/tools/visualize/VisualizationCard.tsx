@@ -3,7 +3,6 @@ import { resultText, strArg } from "../toolHelpers";
 import { ComparisonCard } from "./ComparisonCard";
 import { DiagramCard } from "./DiagramCard";
 
-/** Renderer for the `visualize` tool. Dispatches on `args.type`; surfaces tool errors. */
 export function VisualizationCard(props: ToolRenderProps) {
 	const { args, result, status } = props;
 

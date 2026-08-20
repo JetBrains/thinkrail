@@ -84,8 +84,6 @@ async function dragTabToTarget(page: Page, tab: Locator, target: Locator): Promi
 async function reloadDefaultWorkbench(page: Page): Promise<void> {
 	await page.reload();
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
-	// The workspace route restores without a rail click. A persisted hidden left side can remove ProjectTree,
-	// so the center surface—not a workspace row—is the universal activation receipt.
 	await expect(page.getByTestId("center-tabs")).toBeVisible();
 }
 
@@ -322,8 +320,6 @@ test("side groups expose broad per-panel above and below split targets", async (
 	changesGroup = groups.filter({ has: page.getByTestId("tab-changes") });
 	await waitForLayoutSettled(page);
 	const foldChanges = changesGroup.getByTestId("side-group-fold");
-	// dnd-kit captures clicks briefly after pointer teardown to suppress the drag's synthetic click.
-	// Once persistence has settled, use the same button's keyboard path instead of racing that guard.
 	await foldChanges.press("Enter");
 	await expect(changesGroup).toHaveAttribute("data-folded", "true");
 	const foldedAboveTarget = changesGroup.locator('[data-drop-label="Create right group above"]');
@@ -476,9 +472,7 @@ test("deferred opens stay with their request-time group and reroute only when it
 				) {
 					pathByRequest.set(String(frame.id), frame.params.path);
 				}
-			} catch {
-				// Forward non-JSON frames unchanged.
-			}
+			} catch {}
 			server.send(message);
 		});
 		server.onMessage((message) => {
@@ -489,9 +483,7 @@ test("deferred opens stay with their request-time group and reroute only when it
 					heldByPath.set(path, message);
 					return;
 				}
-			} catch {
-				// Forward non-JSON frames unchanged.
-			}
+			} catch {}
 			ws.send(message);
 		});
 	});
@@ -726,8 +718,6 @@ test("remote closures reconcile chat history and cached file reopening", async (
 	await defaultWorkspaceRow(peer).click();
 	const peerChat = peer.locator('[data-testid="editor-tab"][data-kind="chat"]');
 	await expect(peerChat).toHaveCount(1);
-	// A shared tab can render before this browser has hydrated its local chat cache. Closing at that point
-	// removes the shared placement but has no local cache entry to move into History.
 	await expect(peer.getByTestId("chat-input")).toBeVisible();
 	await peerChat.hover();
 	await peerChat.getByTestId("editor-tab-close").click();

@@ -85,7 +85,6 @@ test("workspace scope with unknown workspaceId: filter always returns false, eve
 		(projectId) => (projectId === "p1" ? [ws1, ws2] : []),
 	);
 
-	// Unknown workspace filters everything out, even though other workspaces exist
 	expect(filter("/proj/worktrees/ws1", "any-session")).toBe(false);
 	expect(filter("/proj/worktrees/ws2", "any-session")).toBe(false);
 	expect(filter("/", "session1")).toBe(false);
@@ -184,10 +183,8 @@ test("labels: build a worktreePath → {workspaceId, projectId} map from all pro
 });
 
 test("unknown scope kind: filter always returns false, never throws", () => {
-	// Simulate a malformed scope from a version-skewed client by casting
 	const { filter } = buildHistoryScope({ kind: "bogus" } as never, [], () => []);
 
-	// Unknown kind filters to false, never throws
 	expect(filter("/some/cwd", "session1")).toBe(false);
 	expect(filter("/another/cwd", "session2")).toBe(false);
 });

@@ -34,7 +34,6 @@ import {
 	selectWorkspaceTick,
 } from "./selectors";
 
-// Event fixtures — the reducer only reads the fields below, so casting minimal objects is safe here.
 const agentStart = { type: "agent_start" } as unknown as PiEvent;
 const agentEnd = { type: "agent_end", willRetry: false, messages: [] } as unknown as PiEvent;
 const agentSettled = (terminal: Extract<PiEvent, { type: "agent_settled" }>["terminal"] = null) =>
@@ -73,8 +72,6 @@ const summarizationScheduled = (
 	errorMessage: "stream dropped",
 });
 const summarizationFinished: PiEvent = { type: "summarization_retry_finished" };
-// An attempt whose last assistant message is a provider/model error. The host retains these reported
-// fields and projects them onto the later `agent_settled` terminal.
 const agentEndError = (errorMessage: string) =>
 	({
 		type: "agent_end",
@@ -90,7 +87,6 @@ const userStart = (text: string) =>
 		type: "message_start",
 		message: { role: "user", content: [{ type: "text", text }], timestamp: 1 },
 	}) as unknown as PiEvent;
-// A streaming `text` update carries the cumulative `partial` snapshot (the assistant message so far).
 const assistantText = (text: string) =>
 	({
 		type: "message_update",
@@ -161,9 +157,7 @@ test("selectLastOpenChatSession: active chat tab first, then the most recent cha
 	expect(selectLastOpenChatSession(useAppStore.getState(), "ws1")).toBeNull();
 	store.openChatSession("ws1", "s1", null, "medium");
 	store.openChatSession("ws1", "s2", null, "medium");
-	// The just-opened chat is active → it wins.
 	expect(selectLastOpenChatSession(useAppStore.getState(), "ws1")).toBe("s2");
-	// A non-chat tab takes focus → the most recently opened chat tab still answers.
 	useAppStore.getState().openTab(fileTab("ws1", "a.ts"), "keep");
 	expect(selectLastOpenChatSession(useAppStore.getState(), "ws1")).toBe("s2");
 });
@@ -173,7 +167,6 @@ test("pi events route to the right session runtime; chats stay independent", () 
 	store.openChatSession("ws1", "a", null, "medium");
 	store.openChatSession("ws1", "b", null, "high");
 
-	// A starts streaming + runs a tool; none of it leaks into B.
 	store.handlePiEvent(agentStart, "a");
 	store.handlePiEvent(toolStart("t1"), "a");
 	expect(rt("a").isStreaming).toBe(true);
@@ -181,12 +174,10 @@ test("pi events route to the right session runtime; chats stay independent", () 
 	expect(rt("b").isStreaming).toBe(false);
 	expect(Object.keys(rt("b").toolResults)).toHaveLength(0);
 
-	// B starts streaming while A is still streaming — both run at once.
 	store.handlePiEvent(agentStart, "b");
 	expect(rt("a").isStreaming).toBe(true);
 	expect(rt("b").isStreaming).toBe(true);
 
-	// A's attempt ends, but automatic post-run work may still follow — it remains live until settled.
 	store.handlePiEvent(agentEnd, "a");
 	expect(rt("a").isStreaming).toBe(true);
 	expect(rt("a").turns.some((t) => t.kind === "system" && t.text === "✓ Done")).toBe(false);
@@ -201,17 +192,14 @@ test("a host-fired USER message folds into the transcript; the composer's optimi
 	const store = useAppStore.getState();
 	store.openChatSession("ws1", "a", null, "medium");
 
-	// Host-fired (a review send's package): no optimistic append happened — the event builds the turn.
 	store.handlePiEvent(userStart("<review pkg>"), "a");
 	expect(rt("a").turns).toHaveLength(1);
 	expect(rt("a").turns[0]?.kind).toBe("user");
 
-	// Composer flow: optimistic append first, then pi echoes the same text — no duplicate.
 	store.appendUserMessage("a", "fix the tests");
 	store.handlePiEvent(userStart("fix the tests"), "a");
 	expect(rt("a").turns.filter((t) => t.kind === "user")).toHaveLength(2);
 
-	// A control message (a pi-todos nudge) stays hidden, like in hydration.
 	store.handlePiEvent(userStart("[thinkrail:todo-nudge] plan changed"), "a");
 	expect(rt("a").turns.filter((t) => t.kind === "user")).toHaveLength(2);
 });
@@ -232,7 +220,6 @@ test("Pi's expanded skill echo replaces its matching optimistic slash command in
 	expect(canonical?.id).toBe(optimistic.id);
 	expect(canonical?.kind === "user" && userText(canonical.message.content)).toBe(expanded);
 
-	// A different raw command cannot be swallowed just because the next event is some expanded skill.
 	store.openChatSession("ws1", "mismatch", null, "medium");
 	store.appendUserMessage("mismatch", "/skill:other Focus on src/app.ts.");
 	store.handlePiEvent(userStart(expanded), "mismatch");
@@ -244,12 +231,12 @@ test("an assistant turn is built (and replaced, not duplicated) from message_upd
 	store.openChatSession("ws1", "a", null, "medium");
 
 	store.handlePiEvent(agentStart, "a");
-	store.handlePiEvent(assistantStart, "a"); // reserves currentAssistantId
+	store.handlePiEvent(assistantStart, "a");
 	store.handlePiEvent(assistantText("po"), "a");
-	store.handlePiEvent(assistantText("pong"), "a"); // replaces the prior snapshot
+	store.handlePiEvent(assistantText("pong"), "a");
 
 	const assistants = rt("a").turns.filter((t) => t.kind === "assistant");
-	expect(assistants).toHaveLength(1); // replaced, not accumulated
+	expect(assistants).toHaveLength(1);
 	const turn = assistants[0];
 	expect(turn?.kind === "assistant" && turn.streaming).toBe(true);
 	expect(turn?.kind === "assistant" && turn.message.content[0]?.type === "text").toBe(true);
@@ -267,19 +254,15 @@ test("a multi-message turn leaves no assistant turn flagged streaming (no stray 
 	const store = useAppStore.getState();
 	store.openChatSession("ws1", "a", null, "medium");
 
-	// pi splits one run into several assistant messages (one per tool round) and does NOT send each a
-	// terminal `done`. Message A streams, then message B starts before A ever concludes.
 	store.handlePiEvent(agentStart, "a");
 	store.handlePiEvent(assistantStart, "a");
-	store.handlePiEvent(assistantText("first"), "a"); // A: streaming
-	store.handlePiEvent(assistantStart, "a"); // B starts — A must be finalized here
+	store.handlePiEvent(assistantText("first"), "a");
+	store.handlePiEvent(assistantStart, "a");
 	expect(rt("a").turns.filter((t) => t.kind === "assistant" && t.streaming)).toHaveLength(0);
-	store.handlePiEvent(assistantText("second"), "a"); // B: streaming
+	store.handlePiEvent(assistantText("second"), "a");
 	const streamingMid = rt("a").turns.filter((t) => t.kind === "assistant" && t.streaming);
-	expect(streamingMid).toHaveLength(1); // exactly one turn is ever live at a time
+	expect(streamingMid).toHaveLength(1);
 
-	// The run settles without B getting a `done` either — settlement must sweep the flag off every turn,
-	// or a blinking cursor lingers in the transcript after "✓ Done".
 	store.handlePiEvent(agentEnd, "a");
 	expect(rt("a").turns.some((t) => t.kind === "assistant" && t.streaming)).toBe(true);
 	store.handlePiEvent(agentSettled(), "a");
@@ -293,10 +276,6 @@ test("message_end finalizes the turn the moment its message completes (not at ag
 	const store = useAppStore.getState();
 	store.openChatSession("ws1", "a", null, "medium");
 
-	// pi forwards only *streaming* variants as message_update — a message's real terminal is message_end.
-	// The distinction matters most for a tool-calling message: its tools run AFTER it completes (for
-	// ask_user_question, until the user answers), and the card gates Submit on the turn's streaming flag —
-	// were the flag to survive until agent_settled, an interactive tool could never be answered.
 	store.handlePiEvent(agentStart, "a");
 	store.handlePiEvent(assistantStart, "a");
 	store.handlePiEvent(assistantText("asking…"), "a");
@@ -310,14 +289,12 @@ test("message_end finalizes the turn the moment its message completes (not at ag
 	store.handlePiEvent({ type: "message_end", message: finalMessage } as unknown as PiEvent, "a");
 
 	const after = rt("a");
-	expect(after.isStreaming).toBe(true); // the ROUND is still live (its tool is executing)
+	expect(after.isStreaming).toBe(true);
 	expect(after.currentAssistantId).toBeNull();
 	const turn = after.turns.find((t) => t.kind === "assistant");
-	expect(turn?.kind === "assistant" && turn.streaming).toBe(false); // …but the MESSAGE is final
-	// The final message (with stopReason — how renderers spot dead tool calls) replaced the partial.
+	expect(turn?.kind === "assistant" && turn.streaming).toBe(false);
 	expect(turn?.kind === "assistant" && turn.message.stopReason).toBe("toolUse");
 
-	// A non-assistant message_end (toolResult/user) is a no-op for the turn list.
 	const before = rt("a");
 	store.handlePiEvent(
 		{ type: "message_end", message: { role: "toolResult" } } as unknown as PiEvent,
@@ -350,7 +327,6 @@ test("an ask-user-answers custom message_end indexes into askAnswers (never the 
 	expect(rt("a").askAnswers.ask1).toEqual(result as never);
 	expect(rt("a").turns.filter((t) => t.kind === "assistant" || t.kind === "user")).toHaveLength(0);
 
-	// Unknown customTypes are ignored without touching the runtime ref.
 	const before = rt("a");
 	store.handlePiEvent(
 		{
@@ -366,16 +342,13 @@ test("the tool lifecycle folds into toolResults (the status + raw the renderers 
 	const store = useAppStore.getState();
 	store.openChatSession("ws1", "a", null, "medium");
 
-	// start → running, no result yet.
 	store.handlePiEvent(toolStart("t1"), "a");
 	expect(rt("a").toolResults.t1).toEqual({ status: "running", raw: undefined });
 
-	// update → still running, carries the partial snapshot (REPLACE semantics).
 	const partial = { content: [{ type: "text", text: "partial" }] };
 	store.handlePiEvent(toolUpdate("t1", partial), "a");
 	expect(rt("a").toolResults.t1).toEqual({ status: "running", raw: partial });
 
-	// end (ok) → done, carries the final result.
 	const final = { content: [{ type: "text", text: "done" }] };
 	store.handlePiEvent(toolEnd("t1", final), "a");
 	expect(rt("a").toolResults.t1).toEqual({ status: "done", raw: final });
@@ -402,7 +375,6 @@ test("auto-retry adds a countdown turn, and resolving it clears the indicator", 
 	expect(retry?.kind === "retry" && retry.maxAttempts).toBe(3);
 	expect(retry?.kind === "retry" && retry.delayMs).toBe(5_000);
 
-	// auto_retry_end removes it — the retried attempt's streaming/answer takes over.
 	store.handlePiEvent(retryEnd, "a");
 	expect(rt("a").turns.some((t) => t.kind === "retry")).toBe(false);
 });
@@ -416,7 +388,6 @@ test("summarization retries show their own countdown; re-scheduling replaces, fi
 	expect(first?.kind === "retry" && first.source).toBe("summarization");
 	expect(first?.kind === "retry" && first.attempt).toBe(1);
 
-	// The next attempt's back-off REPLACES the indicator — never stacks a second one.
 	store.handlePiEvent(summarizationScheduled(2, 3, 4_000), "a");
 	const retries = rt("a").turns.filter((t) => t.kind === "retry");
 	expect(retries.length).toBe(1);
@@ -430,18 +401,15 @@ test("overlapping turn + summarization retries never clear each other", () => {
 	const store = useAppStore.getState();
 	store.openChatSession("ws1", "a", null, "medium");
 
-	// A threshold compaction can back off while the turn itself is also retrying.
 	store.handlePiEvent(retryStart(1, 3, 1_000), "a");
 	store.handlePiEvent(summarizationScheduled(1, 3, 2_000), "a");
 	expect(rt("a").turns.filter((t) => t.kind === "retry").length).toBe(2);
 
-	// The turn retry resolving leaves the summarization countdown alone…
 	store.handlePiEvent(retryEnd, "a");
 	const left = rt("a").turns.filter((t) => t.kind === "retry");
 	expect(left.length).toBe(1);
 	expect(left[0]?.kind === "retry" && left[0].source).toBe("summarization");
 
-	// …and vice versa: finishing summarization doesn't require a turn retry to exist.
 	store.handlePiEvent(summarizationFinished, "a");
 	expect(rt("a").turns.some((t) => t.kind === "retry")).toBe(false);
 });
@@ -463,11 +431,6 @@ test("auto-retry drops the failed attempt's turn — the retried message must no
 	const store = useAppStore.getState();
 	store.openChatSession("ws1", "a", null, "medium");
 
-	// Attempt 1: the provider stream dies mid-message (e.g. "fetch failed"). pi commits the partial
-	// assistant message with stopReason "error", ends the run with willRetry: true, then — in
-	// `_prepareRetry` — REMOVES that failed message from the transcript before re-running the turn.
-	// The reducer must mirror that removal, or the client renders the reply twice (the frozen failed
-	// partial + the retried message) while the transcript — and any reloaded client — holds one.
 	store.handlePiEvent(agentStart, "a");
 	store.handlePiEvent(assistantStart, "a");
 	store.handlePiEvent(assistantText("The answer is"), "a");
@@ -488,9 +451,8 @@ test("auto-retry drops the failed attempt's turn — the retried message must no
 		"a",
 	);
 	store.handlePiEvent(retryStart(1, 3, 2_000), "a");
-	expect(rt("a").turns.some((t) => t.kind === "retry")).toBe(true); // countdown shows
+	expect(rt("a").turns.some((t) => t.kind === "retry")).toBe(true);
 
-	// Attempt 2: pi continues the run and streams the SAME reply from scratch as a new message.
 	store.handlePiEvent(agentStart, "a");
 	store.handlePiEvent(assistantStart, "a");
 	store.handlePiEvent(assistantText("The answer is 4"), "a");
@@ -506,11 +468,9 @@ test("auto-retry drops the failed attempt's turn — the retried message must no
 		"a",
 	);
 	store.handlePiEvent(agentEnd, "a");
-	store.handlePiEvent(agentSettled(), "a"); // settlement, not agent_end, concludes the run on main's model
+	store.handlePiEvent(agentSettled(), "a");
 
 	const after = rt("a");
-	// Exactly ONE assistant turn — the retried message; the failed attempt's copy is gone, matching
-	// what pi's transcript (and therefore a reloaded/hydrated client) shows.
 	const assistants = after.turns.filter((t) => t.kind === "assistant");
 	expect(assistants).toHaveLength(1);
 	expect(
@@ -526,8 +486,6 @@ test("auto-retry with no assistant message yet (error before message_start) drop
 	store.openChatSession("ws1", "a", null, "medium");
 	store.appendUserMessage("a", "hi");
 
-	// The request failed before any assistant tokens arrived — pi's `_prepareRetry` only slices when
-	// the transcript's last message is an assistant message; the user turn must survive untouched.
 	store.handlePiEvent(agentStart, "a");
 	store.handlePiEvent(
 		{ type: "agent_end", willRetry: true, messages: [] } as unknown as PiEvent,
@@ -542,7 +500,6 @@ test("a turn that ends in a provider error surfaces the error (not a false ✓ D
 	const store = useAppStore.getState();
 	store.openChatSession("ws1", "a", null, "medium");
 
-	// Reproduces "pick a bad model → nothing happens": the run streams no content and ends in an error.
 	store.handlePiEvent(agentStart, "a");
 	store.handlePiEvent(agentEndError("model 'gpt-5.5' not found"), "a");
 	expect(rt("a").isStreaming).toBe(true);
@@ -553,10 +510,8 @@ test("a turn that ends in a provider error surfaces the error (not a false ✓ D
 
 	const after = rt("a");
 	expect(after.isStreaming).toBe(false);
-	// The failure must be visible — an error turn carrying the provider message.
 	const err = after.turns.find((t) => t.kind === "error");
 	expect(err?.kind === "error" && err.text).toContain("gpt-5.5");
-	// And it must NOT masquerade as a successful "✓ Done".
 	expect(after.turns.some((t) => t.kind === "system" && t.text === "✓ Done")).toBe(false);
 });
 
@@ -624,8 +579,6 @@ test("overflow recovery never removes an older failure when this attempt was not
 	store.handlePiEvent(agentSettled({ stopReason: "error", errorMessage: "old failure" }), "a");
 	expect(rt("a").turns.filter((turn) => turn.kind === "assistant")).toHaveLength(1);
 
-	// A hidden control turn starts, but this client misses its assistant events (e.g. it connected while
-	// Pi was compacting). Its successful recovery must not guess that the prior run's failure is current.
 	store.handlePiEvent(agentStart, "a");
 	store.handlePiEvent(agentEnd, "a");
 	store.handlePiEvent(recoveredOverflow, "a");
@@ -633,7 +586,6 @@ test("overflow recovery never removes an older failure when this attempt was not
 	expect(rt("a").turns.filter((turn) => turn.kind === "assistant")).toHaveLength(1);
 });
 
-// Event shapes pinned against a real Pi session by packages/server/src/agent/compactionEvents.test.ts.
 const compactionStart = (reason: "manual" | "threshold" | "overflow" = "threshold"): PiEvent => ({
 	type: "compaction_start",
 	reason,
@@ -679,7 +631,6 @@ test("the incident sequence: truncated response → compacting → compacted-res
 	const store = useAppStore.getState();
 	store.openChatSession("ws1", "a", null, "medium");
 
-	// A `length`-stopped, effectively-empty response (the 019f7fad incident shape).
 	store.handlePiEvent(agentStart, "a");
 	store.handlePiEvent(assistantStart, "a");
 	store.handlePiEvent(assistantText(""), "a");
@@ -694,7 +645,6 @@ test("the incident sequence: truncated response → compacting → compacted-res
 	store.handlePiEvent(compactionStart("overflow"), "a");
 	expect(compactionTurns("a")).toMatchObject([{ status: "running" }]);
 
-	// Pi recovers: the notice flips to done+resuming, the truncated attempt disappears, still live.
 	store.handlePiEvent(
 		compactionEnd({ reason: "overflow", willRetry: true, result: { tokensBefore: 268_909 } }),
 		"a",
@@ -713,7 +663,6 @@ test("the incident sequence: truncated response → compacting → compacted-res
 	store.handlePiEvent(agentSettled(), "a");
 	expect(rt("a").turns.at(-1)).toMatchObject({ kind: "system", text: "✓ Done" });
 	expect(rt("a").isStreaming).toBe(false);
-	// Settlement releases the "— resuming…" label — the record must not claim ongoing work forever.
 	expect(compactionTurns("a")[0]?.resuming).toBeUndefined();
 });
 
@@ -766,8 +715,6 @@ test("appendErrorTurn surfaces a failed send (a rejected prompt) as a visible er
 	const store = useAppStore.getState();
 	store.openChatSession("ws1", "a", null, "medium");
 
-	// A `session.prompt`/`session.create` rejection (e.g. `prompt()` throwing "no API key") must land in
-	// the chat instead of being swallowed by a bare `.catch(() => {})`.
 	store.appendUserMessage("a", "do the thing");
 	store.appendErrorTurn("a", "No API key configured for provider openai");
 
@@ -780,22 +727,19 @@ test("a message_update with no prior message_start still builds the turn (mid-st
 	const store = useAppStore.getState();
 	store.openChatSession("ws1", "a", null, "medium");
 
-	// Hydrated mid-stream: we missed message_start, so currentAssistantId is null. A streaming update must
-	// still adopt the in-flight turn (and set currentAssistantId so later cumulative updates land on it).
 	store.handlePiEvent(assistantText("partial reply"), "a");
 	expect(rt("a").turns.filter((t) => t.kind === "assistant")).toHaveLength(1);
 	expect(rt("a").currentAssistantId).not.toBeNull();
 
-	// A terminal `done` then clears it.
-	store.handlePiEvent(assistantText("partial reply") /* still streaming */, "a");
-	expect(rt("a").turns.filter((t) => t.kind === "assistant")).toHaveLength(1); // same turn, replaced
+	store.handlePiEvent(assistantText("partial reply"), "a");
+	expect(rt("a").turns.filter((t) => t.kind === "assistant")).toHaveLength(1);
 });
 
 test("an event for an unknown session is a no-op (no runtime is conjured)", () => {
 	const before = useAppStore.getState().sessions;
 	useAppStore.getState().handlePiEvent(agentStart, "ghost");
 	const after = useAppStore.getState().sessions;
-	expect(after).toBe(before); // withRuntime returns {} → same sessions ref
+	expect(after).toBe(before);
 	expect(after.ghost).toBeUndefined();
 });
 
@@ -807,7 +751,7 @@ test("closeChatRuntime drops only its own runtime", () => {
 
 	store.closeChatRuntime("a");
 	expect(useAppStore.getState().sessions.a).toBeUndefined();
-	expect(rt("b").isStreaming).toBe(true); // the other session is untouched
+	expect(rt("b").isStreaming).toBe(true);
 });
 
 test("applyExtUi routes a dialog to its session; the reply clears only that one", () => {
@@ -885,8 +829,6 @@ test("setTitle refreshes shared chat metadata without requesting activation", ()
 		tab: { id: placementId, name: "Migration plan", sessionId: "a" },
 	});
 
-	// A queued cache-alias open must be retargeted to the stable placement id too; otherwise processing the
-	// alias would focus the semantic chat but deliberately preserve the stale shared metadata.
 	const cache = useAppStore.getState().tabsByWorkspace.ws1?.find((tab) => tab.id === cacheId);
 	if (!cache) throw new Error("missing title cache fixture");
 	useAppStore.setState({ layoutIntents: [] });
@@ -942,7 +884,6 @@ test("a second dialog for a busy session queues instead of orphaning the first",
 	expect(rt("a").pendingExtUi?.id).toBe("d1");
 	expect(rt("a").extUiQueue.map((q) => q.id)).toEqual(["d2"]);
 
-	// Answering d1 promotes d2 to the head.
 	store.clearPendingExtUi("a", "d1");
 	expect(rt("a").pendingExtUi?.id).toBe("d2");
 	expect(rt("a").extUiQueue).toHaveLength(0);
@@ -952,7 +893,7 @@ test("closing a chat moves it to history with its runtime kept; reopening restor
 	const store = useAppStore.getState();
 	useAppStore.setState({ activeWorkspaceId: "ws1" });
 	store.openChatSession("ws1", "a", null, "medium");
-	store.handlePiEvent(agentStart, "a"); // give the runtime live state to prove it survives close
+	store.handlePiEvent(agentStart, "a");
 	useAppStore.setState({
 		chatLocationRequest: {
 			workspaceId: "ws1",
@@ -968,7 +909,7 @@ test("closing a chat moves it to history with its runtime kept; reopening restor
 	let st = useAppStore.getState();
 	expect(st.tabsByWorkspace.ws1?.some((t) => t.kind === "chat" && t.sessionId === "a")).toBe(false);
 	expect(st.closedChatsByWorkspace.ws1?.map((c) => c.sessionId)).toEqual(["a"]);
-	expect(st.sessions.a).toBeDefined(); // runtime NOT disposed
+	expect(st.sessions.a).toBeDefined();
 	expect(st.sessions.a?.isStreaming).toBe(true);
 	expect(st.chatLocationRequest).toBeNull();
 	expect(st.historyOpenRequest).toBeNull();
@@ -992,8 +933,8 @@ test("closing a chat moves it to history with its runtime kept; reopening restor
 	st = useAppStore.getState();
 	expect(st.tabsByWorkspace.ws1?.some((t) => t.kind === "chat" && t.sessionId === "a")).toBe(true);
 	expect(st.activeTabByWorkspace.ws1).toBe(chatTabId("ws1", "a"));
-	expect(st.closedChatsByWorkspace.ws1 ?? []).toHaveLength(0); // removed from history on reopen
-	expect(st.sessions.a?.isStreaming).toBe(true); // full transcript/state intact
+	expect(st.closedChatsByWorkspace.ws1 ?? []).toHaveLength(0);
+	expect(st.sessions.a?.isStreaming).toBe(true);
 });
 
 test("reopening a chat targets its captured workspace after the user switches away", () => {
@@ -1041,7 +982,6 @@ test("session-list reconciliation removes missed deletions without deleting a ch
 	store.openChatSession("ws1", "stale", null, "medium");
 	const baseline = selectWorkspaceSessionIds(useAppStore.getState(), "ws1");
 
-	// This chat was created after session.list began, so an older empty response cannot speak about it.
 	store.openChatSession("ws1", "newcomer", null, "medium");
 	store.reconcileWorkspaceSessions("ws1", baseline, []);
 
@@ -1218,10 +1158,9 @@ test("hydrateSession rebuilds a runtime + tab on connect, and never clobbers a l
 	});
 	const st = useAppStore.getState();
 	expect(st.sessions.h1?.turns).toHaveLength(1);
-	expect(st.sessions.h1?.turnIdByMessageIndex).toEqual(["u1"]); // the anchor map copies through
+	expect(st.sessions.h1?.turnIdByMessageIndex).toEqual(["u1"]);
 	expect(st.tabsByWorkspace.ws1?.some((t) => t.kind === "chat" && t.sessionId === "h1")).toBe(true);
 
-	// A second hydrate (e.g. stale list) must NOT overwrite the now-live runtime.
 	store.hydrateSession(
 		{ ...summary, messageCount: 99 },
 		{ turns: [], toolResults: {}, askAnswers: {}, turnIdByMessageIndex: [] },
@@ -1232,17 +1171,16 @@ test("hydrateSession rebuilds a runtime + tab on connect, and never clobbers a l
 test("noteClosedChats surfaces disk-only sessions in history, skipping live/open/known ones", () => {
 	const store = useAppStore.getState();
 	useAppStore.setState({ activeWorkspaceId: "ws1" });
-	store.openChatSession("ws1", "live1", null, "medium"); // a live, open tab
+	store.openChatSession("ws1", "live1", null, "medium");
 
 	store.noteClosedChats("ws1", [
 		{ sessionId: "disk1", title: "Old chat", closedAt: 200 },
 		{ sessionId: "disk2", title: "Older chat", closedAt: 100 },
-		{ sessionId: "live1", title: "dup of open tab", closedAt: 300 }, // already open → skipped
+		{ sessionId: "live1", title: "dup of open tab", closedAt: 300 },
 	]);
 	let history = useAppStore.getState().closedChatsByWorkspace.ws1 ?? [];
-	expect(history.map((c) => c.sessionId)).toEqual(["disk1", "disk2"]); // newest-first, live1 excluded
+	expect(history.map((c) => c.sessionId)).toEqual(["disk1", "disk2"]);
 
-	// Idempotent: re-noting the same disk sessions adds nothing.
 	store.noteClosedChats("ws1", [{ sessionId: "disk1", title: "Old chat", closedAt: 200 }]);
 	history = useAppStore.getState().closedChatsByWorkspace.ws1 ?? [];
 	expect(history).toHaveLength(2);
@@ -1308,7 +1246,7 @@ test("hydrateSession preserves the stable id of an already-restored shared place
 test("hydrateSession(activate) reopens a disk-only chat: builds it, focuses it, and drops it from history", () => {
 	const store = useAppStore.getState();
 	useAppStore.setState({ activeWorkspaceId: "ws1" });
-	store.openChatSession("ws1", "other", null, "medium"); // an existing active tab
+	store.openChatSession("ws1", "other", null, "medium");
 	store.noteClosedChats("ws1", [{ sessionId: "disk1", title: "Old", closedAt: 1 }]);
 
 	const summary: SessionSummary = {
@@ -1329,9 +1267,9 @@ test("hydrateSession(activate) reopens a disk-only chat: builds it, focuses it, 
 	);
 
 	const st = useAppStore.getState();
-	expect(st.sessions.disk1).toBeDefined(); // runtime built from the re-opened session
-	expect(st.closedChatsByWorkspace.ws1 ?? []).toHaveLength(0); // left history (it's open now)
-	expect(st.activeTabByWorkspace.ws1).toBe(chatTabId("ws1", "disk1")); // focused, despite an existing active tab
+	expect(st.sessions.disk1).toBeDefined();
+	expect(st.closedChatsByWorkspace.ws1 ?? []).toHaveLength(0);
+	expect(st.activeTabByWorkspace.ws1).toBe(chatTabId("ws1", "disk1"));
 });
 
 test("clearWorkspaceTabs drops both open and closed chat runtimes + clears history", () => {
@@ -1339,7 +1277,7 @@ test("clearWorkspaceTabs drops both open and closed chat runtimes + clears histo
 	useAppStore.setState({ activeWorkspaceId: "ws1" });
 	store.openChatSession("ws1", "a", null, "medium");
 	store.openChatSession("ws1", "b", null, "medium");
-	store.closeChatToHistory("a"); // a → history (runtime kept), b stays an open tab
+	store.closeChatToHistory("a");
 
 	store.clearWorkspaceTabs("ws1");
 	const st = useAppStore.getState();
@@ -1368,14 +1306,13 @@ test("requestChatLocation sets the jump deep link AND switches project+workspace
 		messageIndex: 3,
 		anchorText: "deploy the docs",
 	});
-	// A cross-project jump activates BOTH ids together — never leaving selectedProjectId on the source.
 	expect(st.activeWorkspaceId).toBe("ws2");
 	expect(st.selectedProjectId).toBe("p2");
 
 	store.clearChatLocation();
 	st = useAppStore.getState();
 	expect(st.chatLocationRequest).toBeNull();
-	expect(st.activeWorkspaceId).toBe("ws2"); // clearing the request never reverts the navigation
+	expect(st.activeWorkspaceId).toBe("ws2");
 	expect(st.selectedProjectId).toBe("p2");
 });
 
@@ -1406,8 +1343,6 @@ test("requestChatLocation captures an already-hydrated destination before switch
 		useAppStore.getState().layoutAttentionByWorkspace.ws2?.navigationClockByGroup.destination,
 	).toBe(5);
 });
-
-// ---- project.updated: open/recent projections + per-client navigation fallback -------------------
 
 function project(over: Partial<Project> = {}): Project {
 	return {
@@ -1551,8 +1486,6 @@ test("applyProjectUpdated closes the last project to the no-project state", () =
 	expect(state.activeWorkspaceId).toBeNull();
 });
 
-// ---- updateWorkspace: the workspace.updated push folds in without losing local computed state ----
-
 function pushedWorkspace(over: Partial<Workspace> = {}): Workspace {
 	return {
 		id: "w1",
@@ -1581,8 +1514,6 @@ test("project and workspace navigation update both scope ids atomically", () => 
 	expect(transitions).toEqual([["p3", "w3"]]);
 	unsubscribe();
 });
-
-// ---- navigation restore: atomic welcome + exact-chat intent --------------------------------------
 
 test("installWelcomeSnapshot lands one complete snapshot and advances its own generation", () => {
 	const p1 = project();
@@ -1647,8 +1578,6 @@ test("activateWorkspaceFromRoute atomically stamps exact-chat intent", () => {
 		routeChatTargetGeneration: 1,
 	});
 
-	// A workspace-only route carries no center-tab intent: it clears only the exact target and leaves
-	// existing browser-local attention to the workbench. Clearing cannot trigger a duplicate catalog pass.
 	useAppStore.getState().activateWorkspaceFromRoute(workspace);
 	expect(useAppStore.getState().routeChatTarget).toBeNull();
 	expect(selectWorkspaceNavTick(useAppStore.getState(), "w1")).toBe(5);
@@ -1685,14 +1614,12 @@ test("updateWorkspace applies a pushed snapshot authoritatively: dropped fields 
 			],
 		},
 	});
-	// Re-pointing back to the creation base clears `diffBase` server-side; a merge would keep the stale
-	// override and the pill would keep reading `vs release` while the host diffs against `main`.
 	useAppStore.getState().updateWorkspace(pushedWorkspace());
 
 	const ws = useAppStore.getState().workspaces.p1?.[0];
 	expect(ws?.diffBase).toBeUndefined();
 	expect(ws?.skillOverrides).toBeUndefined();
-	expect(ws?.diffStats).toEqual({ added: 3, removed: 1 }); // locally computed — survives the replace
+	expect(ws?.diffStats).toEqual({ added: 3, removed: 1 });
 });
 
 test("updateWorkspace applies the pushed snapshot by id, keeping the computed diffStats aggregate", () => {
@@ -1712,7 +1639,7 @@ test("updateWorkspace applies the pushed snapshot by id, keeping the computed di
 	const ws = useAppStore.getState().workspaces.p1?.[0];
 	expect(ws?.name).toBe("add-login-flow");
 	expect(ws?.renamed).toBe(true);
-	expect(ws?.diffStats).toEqual({ added: 3, removed: 1 }); // the push carries none — merge keeps it
+	expect(ws?.diffStats).toEqual({ added: 3, removed: 1 });
 });
 
 test("updateWorkspace is a no-op for a project whose list was never fetched", () => {
@@ -1724,7 +1651,7 @@ test("updateWorkspace is a no-op for a project whose list was never fetched", ()
 test("updateWorkspace never appends an unknown id to a fetched list", () => {
 	const existing = pushedWorkspace({ id: "other", name: "workspace-2", branch: "workspace-2" });
 	useAppStore.setState({ workspaces: { p1: [existing] } });
-	useAppStore.getState().updateWorkspace(pushedWorkspace()); // id w1 — not in the list
+	useAppStore.getState().updateWorkspace(pushedWorkspace());
 
 	const list = useAppStore.getState().workspaces.p1;
 	expect(list).toHaveLength(1);
@@ -1738,23 +1665,19 @@ test("removeWorkspace optimistically drops the row, leaving siblings; unknown pr
 	useAppStore.getState().removeWorkspace("p1", "w1");
 	expect(useAppStore.getState().workspaces.p1?.map((w) => w.id)).toEqual(["other"]);
 
-	// Unknown id leaves the list untouched; an unfetched project is a no-op (no empty list conjured).
 	useAppStore.getState().removeWorkspace("p1", "missing");
 	expect(useAppStore.getState().workspaces.p1).toHaveLength(1);
 	useAppStore.getState().removeWorkspace("p2", "w1");
 	expect(useAppStore.getState().workspaces.p2).toBeUndefined();
 });
 
-// ---- addWorkspace: the workspace.created push upserts by id ----------------------------------------
-
 test("addWorkspace upserts into a fetched list (append if absent, merge if present)", () => {
 	const other = pushedWorkspace({ id: "other", name: "workspace-2", branch: "workspace-2" });
 	useAppStore.setState({ workspaces: { p1: [other] } });
 
-	useAppStore.getState().addWorkspace(pushedWorkspace()); // id w1 — new row appended
+	useAppStore.getState().addWorkspace(pushedWorkspace());
 	expect(useAppStore.getState().workspaces.p1?.map((w) => w.id)).toEqual(["other", "w1"]);
 
-	// Re-applying the same id merges in place (idempotent with the creator's own post-create re-list).
 	useAppStore.getState().addWorkspace(pushedWorkspace({ name: "renamed-later" }));
 	const list = useAppStore.getState().workspaces.p1;
 	expect(list).toHaveLength(2);
@@ -1766,8 +1689,6 @@ test("addWorkspace is a no-op for a project whose list was never fetched", () =>
 	useAppStore.getState().addWorkspace(pushedWorkspace());
 	expect(useAppStore.getState().workspaces).toEqual({});
 });
-
-// ---- applyWorkspaceRemoved: the workspace.removed reaction, run by every client --------------------
 
 test("applyWorkspaceRemoved drops the row, clears its tabs, and returns the active client to Welcome + toast", () => {
 	useAppStore.setState({
@@ -1816,11 +1737,11 @@ test("applyWorkspaceRemoved drops the row, clears its tabs, and returns the acti
 	const s = useAppStore.getState();
 	expect(cleanupSubscriberAttempted).toBe(true);
 	expect(s.workspaces.p1).toEqual([]);
-	expect(s.tabsByWorkspace.w1).toBeUndefined(); // clearWorkspaceTabs dropped its tabs
-	expect(s.activeWorkspaceId).toBeNull(); // shell falls back to the project Welcome
-	expect(s.selectedProjectId).toBe("p1"); // specifically the removed workspace's owning Project Home
+	expect(s.tabsByWorkspace.w1).toBeUndefined();
+	expect(s.activeWorkspaceId).toBeNull();
+	expect(s.selectedProjectId).toBe("p1");
 	expect(s.toasts).toHaveLength(1);
-	expect(s.toasts[0]?.message).toContain("add-login-flow"); // the removed workspace's name
+	expect(s.toasts[0]?.message).toContain("add-login-flow");
 	expect(s.changesRequest).toBeNull();
 	expect(s.specRequest).toBeNull();
 	expect(s.chatLocationRequest).toBeNull();
@@ -1892,7 +1813,7 @@ test("applyWorkspaceRemoved on a non-active workspace drops the row silently (no
 
 	const s = useAppStore.getState();
 	expect(s.workspaces.p1?.map((w) => w.id)).toEqual(["other"]);
-	expect(s.activeWorkspaceId).toBe("other"); // a background removal doesn't move the client
+	expect(s.activeWorkspaceId).toBe("other");
 	expect(s.toasts).toHaveLength(0);
 });
 
@@ -1908,11 +1829,9 @@ test("applyWorkspaceRemoved drops the removed workspace's cached spec graph", ()
 	useAppStore.getState().applyWorkspaceRemoved("p1", "w1");
 
 	const s = useAppStore.getState();
-	expect(s.specsByWorkspace.w1).toBeUndefined(); // the worktree is gone; its graph must not linger
-	expect(s.specsByWorkspace.other).toEqual([]); // a sibling's snapshot is untouched
+	expect(s.specsByWorkspace.w1).toBeUndefined();
+	expect(s.specsByWorkspace.other).toEqual([]);
 });
-
-// --- workbench tool deep links (chat turn-divider chips) ------------------------------------------
 
 test("requestChangesView / requestSpecView pair independent path requests with reveal intents", () => {
 	useAppStore.setState({ changesRequest: null, specRequest: null, layoutIntents: [] });
@@ -1921,20 +1840,17 @@ test("requestChangesView / requestSpecView pair independent path requests with r
 	useAppStore.getState().requestSpecView("w1", ".thinkrail/context/TASK-x.md");
 
 	const s = useAppStore.getState();
-	// The request itself advances and stamps navigation before its tool can mount.
 	expect(s.changesRequest).toEqual({
 		workspaceId: "w1",
 		path: "src/a.ts",
 		navTick: 1,
 		navigation: null,
 	});
-	// The spec intent is a separate field, so a spec chip can never be mistaken for a Changes deep link.
 	expect(s.specRequest).toEqual({
 		workspaceId: "w1",
 		path: ".thinkrail/context/TASK-x.md",
 		navigation: null,
 	});
-	// Each path request atomically carries the shell-owned reveal command for the tool that can render it.
 	expect(
 		s.layoutIntents.map(({ kind, workspaceId, ...intent }) => ({ kind, workspaceId, ...intent })),
 	).toMatchObject([
@@ -1942,7 +1858,6 @@ test("requestChangesView / requestSpecView pair independent path requests with r
 		{ kind: "reveal-tool", workspaceId: "w1", tool: "specs" },
 	]);
 
-	// A fresh object each call, so re-clicking the same chip re-fires the watching effects.
 	const first = useAppStore.getState().specRequest;
 	useAppStore.getState().requestSpecView("w1", ".thinkrail/context/TASK-x.md");
 	expect(useAppStore.getState().specRequest).not.toBe(first);
@@ -1959,7 +1874,6 @@ test("requestToolView reveals a tool without fabricating a path request", () => 
 	expect(useAppStore.getState().specRequest).toBeNull();
 	expect(useAppStore.getState().changesRequest).toBeNull();
 
-	// Re-choosing the same tool remains a fresh command after a manual arrangement change.
 	useAppStore.getState().requestToolView("w1", "specs");
 	const second = useAppStore.getState().layoutIntents[1];
 	expect(second).toMatchObject({ kind: "reveal-tool", workspaceId: "w1", tool: "specs" });
@@ -1973,10 +1887,8 @@ test("clearSpecRequest consumes the spec intent once — it opens a tab, so it m
 	useAppStore.getState().clearSpecRequest();
 
 	expect(useAppStore.getState().specRequest).toBeNull();
-	// Idempotent: a second consume (a remount racing the first) is a no-op, not a resurrect.
 	useAppStore.getState().clearSpecRequest();
 	expect(useAppStore.getState().specRequest).toBeNull();
-	// It clears only its own intent — the Changes deep link is a separate field with its own consume.
 	useAppStore.getState().requestChangesView("w1", "src/a.ts");
 	useAppStore.getState().clearSpecRequest();
 	expect(useAppStore.getState().changesRequest).toEqual({
@@ -1987,16 +1899,10 @@ test("clearSpecRequest consumes the spec intent once — it opens a tab, so it m
 	});
 });
 
-// The Changes deep link can't act on itself: `ChangesPanel` has to resolve the reported path against
-// `git.status` first, and the chip is usually what reveals that view, so the open happens a fresh mount's
-// round trip after the click. Stamping the nav count at the click is what lets the panel tell that the user
-// moved the center on in between — an overtaken deep link degrades to the row highlight instead of yanking
-// focus off whatever they picked. Specs carry the same destination stamp across their reveal/mount delay.
 test("the Changes deep link stamps the nav count at the click, so a later navigation still wins", () => {
 	useAppStore.setState({ activeWorkspaceId: "ws1", changesRequest: null, layoutIntents: [] });
 	const s = () => useAppStore.getState();
 
-	// A couple of navigations before the chip, so a stamp of "whatever it is now" is distinguishable from 0.
 	s().openTab(fileTab("ws1", "a.ts"), "keep");
 	s().setActiveTab("ws1:a.ts");
 	const beforeClick = selectWorkspaceNavTick(s(), "ws1");
@@ -2004,11 +1910,8 @@ test("the Changes deep link stamps the nav count at the click, so a later naviga
 	s().requestChangesView("ws1", "src/b.ts");
 	expect(s().changesRequest?.navTick).toBe(beforeClick + 1);
 
-	// Nothing has moved the center since, so the request is still current: the panel may open its diff.
 	expect(selectWorkspaceNavTick(s(), "ws1")).toBe(s().changesRequest?.navTick);
 
-	// The user picks a tab while `git.status` is still in flight. That is the LATER navigation, so the
-	// stamp no longer matches and the deep link has lost the race.
 	s().setActiveTab("ws1:a.ts");
 	expect(selectWorkspaceNavTick(s(), "ws1")).not.toBe(s().changesRequest?.navTick);
 });
@@ -2143,7 +2046,6 @@ test("clearChangesRequest consumes the Changes intent once — it opens a diff t
 	useAppStore.getState().clearChangesRequest();
 
 	expect(useAppStore.getState().changesRequest).toBeNull();
-	// Idempotent, and it clears only its own intent — the Specs deep link stays.
 	useAppStore.getState().requestSpecView("w1", "docs/SPEC.md");
 	useAppStore.getState().clearChangesRequest();
 	expect(useAppStore.getState().changesRequest).toBeNull();
@@ -2178,17 +2080,13 @@ test("setWorkspaceSpecs records a snapshot per workspace without touching its si
 });
 
 test("setWorkspaceSpecs keeps the previous array identity when the re-read found no change", () => {
-	// The Specs read refetches on every worktree fs tick and most ticks touch no spec. A new array identity
-	// would invalidate ChatView's `isSpec` memo and re-derive every open chat's whole transcript, ~1/s.
 	useAppStore.setState({ specsByWorkspace: {} });
 	useAppStore.getState().setWorkspaceSpecs("w1", [specNode()]);
 	const first = useAppStore.getState().specsByWorkspace.w1;
 
-	useAppStore.getState().setWorkspaceSpecs("w1", [specNode()]); // equal, freshly-allocated wire objects
+	useAppStore.getState().setWorkspaceSpecs("w1", [specNode()]);
 	expect(useAppStore.getState().specsByWorkspace.w1).toBe(first);
 
-	// Any field the DTO carries counts as a change — including the link lists the tree doesn't render yet,
-	// so a stale snapshot can never survive here.
 	useAppStore.getState().setWorkspaceSpecs("w1", [specNode({ status: "active" })]);
 	expect(useAppStore.getState().specsByWorkspace.w1).not.toBe(first);
 
@@ -2196,12 +2094,9 @@ test("setWorkspaceSpecs keeps the previous array identity when the re-read found
 	useAppStore.getState().setWorkspaceSpecs("w1", [specNode({ status: "active", tags: ["v1"] })]);
 	expect(useAppStore.getState().specsByWorkspace.w1).not.toBe(withStatus);
 
-	// A shorter/longer graph is a change too (a spec was deleted or added).
 	useAppStore.getState().setWorkspaceSpecs("w1", []);
 	expect(useAppStore.getState().specsByWorkspace.w1).toEqual([]);
 });
-
-// --- in-app login (flat, session-less) -------------------------------------------------------------
 
 test("beginLogin opens a fresh active login; frames accumulate (url + paste prompt coexist)", () => {
 	const s = useAppStore.getState();
@@ -2222,7 +2117,6 @@ test("beginLogin opens a fresh active login; frames accumulate (url + paste prom
 		providerId: "anthropic",
 		frame: { kind: "prompt", message: "Paste the code", placeholder: "code" },
 	});
-	// The browser-vs-paste race: the URL and the paste input are live at the same time.
 	expect(useAppStore.getState().activeLogin).toMatchObject({
 		url: "https://x/auth",
 		input: { kind: "prompt", message: "Paste the code", placeholder: "code" },
@@ -2242,7 +2136,6 @@ test("a prompt frame's allowEmpty folds through (Copilot's blank-for-github.com 
 			allowEmpty: true,
 		},
 	});
-	// Without allowEmpty carried through, the dialog would refuse to submit a blank github.com answer.
 	expect(useAppStore.getState().activeLogin?.input).toMatchObject({
 		kind: "prompt",
 		allowEmpty: true,
@@ -2251,7 +2144,6 @@ test("a prompt frame's allowEmpty folds through (Copilot's blank-for-github.com 
 
 test("a frame that beats the loginStart response creates the login; beginLogin then no-ops", () => {
 	const s = useAppStore.getState();
-	// Provider fired onAuth synchronously → the frame arrives before beginLogin.
 	s.applyLoginFrame({
 		loginId: "l9",
 		providerId: "openai-codex",
@@ -2259,7 +2151,6 @@ test("a frame that beats the loginStart response creates the login; beginLogin t
 	});
 	expect(useAppStore.getState().activeLogin).toMatchObject({ loginId: "l9", url: "https://y" });
 
-	// The late beginLogin for the same id must not clobber the folded state.
 	s.beginLogin("l9", "openai-codex");
 	expect(useAppStore.getState().activeLogin).toMatchObject({ loginId: "l9", url: "https://y" });
 });
@@ -2289,7 +2180,7 @@ test("clearLoginInput drops the live input; success is terminal; clearLogin dism
 	});
 	expect(useAppStore.getState().activeLogin?.input).toBeDefined();
 
-	s.clearLoginInput(); // sent a reply → hide the input immediately (no double-submit)
+	s.clearLoginInput();
 	expect(useAppStore.getState().activeLogin?.input).toBeUndefined();
 
 	s.applyLoginFrame({ loginId: "l1", providerId: "anthropic", frame: { kind: "success" } });
@@ -2313,7 +2204,6 @@ test("openSettings deep-links to a section (default providers); closeSettings hi
 
 	s.closeSettings();
 	expect(useAppStore.getState().settingsOpen).toBe(false);
-	// The section is remembered across close/open (not reset).
 	expect(useAppStore.getState().settingsSection).toBe("providers");
 });
 
@@ -2346,7 +2236,6 @@ test("pushToast appends with a fresh id and dismissToast removes only that toast
 	const id1 = store.pushToast({ variant: "error", message: "boom" });
 	const id2 = store.pushToast({ variant: "info", message: "fyi", title: "Heads up" });
 	expect(id1).not.toBe(id2);
-	// Oldest-first, and the optional title is carried only when given.
 	expect(useAppStore.getState().toasts).toMatchObject([
 		{ id: id1, variant: "error", message: "boom" },
 		{ id: id2, variant: "info", message: "fyi", title: "Heads up" },
@@ -2372,12 +2261,10 @@ test("pushToast coalesces an identical live toast (same variant/title/message) i
 	expect(twin).toBe(id1);
 	expect(useAppStore.getState().toasts).toHaveLength(1);
 
-	// Any field differing → a distinct toast.
 	store.pushToast({ variant: "info", message: "boom", title: "Failed" });
 	store.pushToast({ variant: "error", message: "boom" });
 	expect(useAppStore.getState().toasts).toHaveLength(3);
 
-	// Once the twin is dismissed, the same content enqueues fresh (with a new id).
 	store.dismissToast(id1);
 	const fresh = store.pushToast({ variant: "error", message: "boom", title: "Failed" });
 	expect(fresh).not.toBe(id1);
@@ -2406,7 +2293,6 @@ test("the toast helper enqueues by variant and omits an absent title", () => {
 });
 
 test("applyConfig folds the server-synced app config in (theme is an opaque host-owned value)", () => {
-	// The themes module resolves/applies it; the store preserves exactly the id received from the host.
 	useAppStore.getState().applyConfig({ theme: "acme.solarized" });
 	expect(useAppStore.getState().theme).toBe("acme.solarized");
 	useAppStore.getState().applyConfig({ theme: "custom.high-contrast" });
@@ -2429,25 +2315,21 @@ test("diff tabs: openTab dedupes by id + activates; view + contents update in pl
 		loadedTarget: "main",
 	};
 	s().openTab(tab);
-	s().openTab(tab); // re-open = no duplicate, stays active
+	s().openTab(tab);
 	expect(s().tabsByWorkspace.ws1).toHaveLength(1);
 	expect(s().activeTabByWorkspace.ws1).toBe(tab.id);
 
-	// Split ↔ inline is per-tab state; a wrong-kind id is a no-op.
 	s().setDiffTabView(tab.id, "inline");
 	const afterView = s().tabsByWorkspace.ws1?.[0];
 	expect(afterView?.kind === "diff" && afterView.view).toBe("inline");
-	s().setFileTabView(tab.id, "source"); // kind-guarded: must not touch the diff tab
+	s().setFileTabView(tab.id, "source");
 	const guarded = s().tabsByWorkspace.ws1?.[0];
 	expect(guarded?.kind === "diff" && guarded.view).toBe("inline");
 
-	// Hide-whitespace is per-tab too, through the same patch path.
 	s().setDiffTabIgnoreWhitespace(tab.id, true);
 	const afterWs = s().tabsByWorkspace.ws1?.[0];
 	expect(afterWs?.kind === "diff" && afterWs.ignoreWhitespace).toBe(true);
 
-	// A live re-read replaces both sides and advances **both** live dimensions: the fs tick and the review
-	// target the fresh content was read against (which is what lets a background tab detect a moved target).
 	s().updateDiffTabContent("ws1", tab.id, "old2", "new2", 5, "origin/release");
 	const updated = s().tabsByWorkspace.ws1?.[0];
 	expect(updated?.kind).toBe("diff");
@@ -2507,21 +2389,17 @@ test("the diff scope is per workspace, defaults to the branch, and is dropped wi
 		activeWorkspaceId: "ws1",
 		selectedProjectId: "p1",
 	});
-	// Unset → the shared default object (referentially stable, so selectors don't re-render).
 	expect(selectDiffScope(s(), "ws1")).toBe(selectDiffScope(s(), "ws2"));
 	expect(selectDiffScope(s(), "ws1")).toEqual({ kind: "branch" });
 
 	s().setDiffScope("ws1", { kind: "commit", sha: "abc123" });
 	expect(selectDiffScope(s(), "ws1")).toEqual({ kind: "commit", sha: "abc123" });
-	// Another workspace is unaffected — a commit sha means nothing in a different worktree.
 	expect(selectDiffScope(s(), "ws2")).toEqual({ kind: "branch" });
 
 	s().applyWorkspaceRemoved("p1", "ws1");
 	expect(s().diffScopeByWorkspace.ws1).toBeUndefined();
 });
 
-// The Skills-reload badge (selectSkillsStale) is store-derived, so it must not depend on the ChatView
-// mount that reads it. These drive the real store actions end-to-end.
 const skillFs = (
 	workspaceId: string,
 	paths: string[],
@@ -2534,21 +2412,16 @@ const isStale = (workspaceId: string, sessionId: string) =>
 test("skills badge: a skill-dir change flags the loaded session; reload clears it for good", () => {
 	const s = () => useAppStore.getState();
 	s().openChatSession("ws1", "a", null, "medium");
-	expect(isStale("ws1", "a")).toBe(false); // nothing changed yet
+	expect(isStale("ws1", "a")).toBe(false);
 
-	// A skill file changes on disk → the session that loaded the older set is stale.
 	s().noteFsChanged(skillFs("ws1", [".claude/skills/foo/SKILL.md"]));
 	expect(isStale("ws1", "a")).toBe(true);
 
-	// The reported bug: re-reading the selector (what a tab-switch remount does — a fresh ChatView reads
-	// the same store) must NOT spuriously toggle it, and it stays stale until an actual reload.
 	expect(isStale("ws1", "a")).toBe(true);
 
-	// A successful reload anchors the session to now → cleared.
 	s().markSkillsSynced("a", selectWorkspaceTick(s(), "ws1"));
 	expect(isStale("ws1", "a")).toBe(false);
 
-	// Later unrelated (non-skill) fs churn must not re-raise the badge — the core regression.
 	s().noteFsChanged(skillFs("ws1", ["src/app.ts"], "none"));
 	s().noteFsChanged(skillFs("ws1", ["README.md"], "none"));
 	expect(isStale("ws1", "a")).toBe(false);
@@ -2558,9 +2431,8 @@ test("skills badge: the skill-change tick is accumulated, so a later non-skill b
 	const s = () => useAppStore.getState();
 	s().openChatSession("ws1", "a", null, "medium");
 
-	s().noteFsChanged(skillFs("ws1", [".claude/skills/foo/SKILL.md"])); // skill change
-	s().noteFsChanged(skillFs("ws1", ["src/app.ts"], "none")); // later non-skill batch replaces `paths`
-	// Before the fix this false-negatived (the last batch wasn't a skill path); now it stays stale.
+	s().noteFsChanged(skillFs("ws1", [".claude/skills/foo/SKILL.md"]));
+	s().noteFsChanged(skillFs("ws1", ["src/app.ts"], "none"));
 	expect(isStale("ws1", "a")).toBe(true);
 });
 
@@ -2568,7 +2440,7 @@ test("skills badge: a pathless skill-neutral repo-metadata nudge refreshes witho
 	const s = () => useAppStore.getState();
 	s().openChatSession("ws1", "a", null, "medium");
 	s().noteFsChanged(skillFs("ws1", [], "none"));
-	expect(selectWorkspaceTick(s(), "ws1")).toBe(1); // live readers still re-read
+	expect(selectWorkspaceTick(s(), "ws1")).toBe(1);
 	expect(isStale("ws1", "a")).toBe(false);
 });
 
@@ -2576,28 +2448,22 @@ test("skills badge: generic path overflow is neutral, but detected and unknown s
 	const s = () => useAppStore.getState();
 	s().openChatSession("ws1", "a", null, "medium");
 
-	// The live false positive: a build exceeded the generic path cap, but every observed path was
-	// concretely non-skill. `truncated` still refreshes broad readers; it is not skill evidence.
 	s().noteFsChanged(skillFs("ws1", ["dist/chunk.js"], "none", true));
 	expect(selectWorkspaceTick(s(), "ws1")).toBe(1);
 	expect(isStale("ws1", "a")).toBe(false);
 
-	// A skill event survives even when its own path was beyond the retained generic list.
 	s().noteFsChanged(skillFs("ws1", ["dist/chunk.js"], "detected", true));
 	expect(isStale("ws1", "a")).toBe(true);
 	s().markSkillsSynced("a", selectWorkspaceTick(s(), "ws1"));
 
-	// A platform event with no classifiable path remains conservative.
 	s().noteFsChanged(skillFs("ws1", [], "unknown", true));
 	expect(isStale("ws1", "a")).toBe(true);
 });
 
 test("skills badge: non-skill overflow during session creation does not open the new chat stale", () => {
 	const s = () => useAppStore.getState();
-	// Startup uncertainty is folded before the load baseline (the workspace.watchReady contract).
 	s().noteFsChanged(skillFs("ws1", [], "unknown", true));
 	const baseline = selectWorkspaceTick(s(), "ws1");
-	// The reproduced event: >100 generated build outputs land while session.create is in flight.
 	s().noteFsChanged(skillFs("ws1", ["dist/chunk.js"], "none", true));
 	s().openChatSession("ws1", "new", null, "medium", baseline);
 	expect(isStale("ws1", "new")).toBe(false);
@@ -2605,20 +2471,17 @@ test("skills badge: non-skill overflow during session creation does not open the
 
 test("skills badge: per session — a chat opened after the change isn't flagged; reload clears only its own", () => {
 	const s = () => useAppStore.getState();
-	s().openChatSession("ws1", "a", null, "medium"); // baseline tick 0
+	s().openChatSession("ws1", "a", null, "medium");
 
-	s().noteFsChanged(skillFs("ws1", [".claude/skills/foo/SKILL.md"])); // tick 1
-	// A chat created *now* loads the current skills → not stale, while the older one is.
+	s().noteFsChanged(skillFs("ws1", [".claude/skills/foo/SKILL.md"]));
 	s().openChatSession("ws1", "b", null, "medium");
 	expect(isStale("ws1", "a")).toBe(true);
 	expect(isStale("ws1", "b")).toBe(false);
 
-	// A fresh skill change makes both stale…
-	s().noteFsChanged(skillFs("ws1", [".claude/skills/foo/SKILL.md"])); // tick 2
+	s().noteFsChanged(skillFs("ws1", [".claude/skills/foo/SKILL.md"]));
 	expect(isStale("ws1", "a")).toBe(true);
 	expect(isStale("ws1", "b")).toBe(true);
 
-	// …and reloading one clears only that chat (reloadResources is per-session).
 	s().markSkillsSynced("b", selectWorkspaceTick(s(), "ws1"));
 	expect(isStale("ws1", "a")).toBe(true);
 	expect(isStale("ws1", "b")).toBe(false);
@@ -2627,13 +2490,9 @@ test("skills badge: per session — a chat opened after the change isn't flagged
 test("skills badge: a skill change mid-reload stays flagged (baseline is captured at reload start)", () => {
 	const s = () => useAppStore.getState();
 	s().openChatSession("ws1", "a", null, "medium");
-	// The user starts a reload; the baseline is snapshot NOW (what the server will load).
-	const reloadBaseline = selectWorkspaceTick(s(), "ws1"); // 0
-	// While the reload request is in flight, a skill file changes and its fsChanged frame folds first.
-	s().noteFsChanged(skillFs("ws1", [".claude/skills/foo/SKILL.md"])); // tick 1
-	// The reload resolves and records the request-START baseline, not the now-newer tick.
+	const reloadBaseline = selectWorkspaceTick(s(), "ws1");
+	s().noteFsChanged(skillFs("ws1", [".claude/skills/foo/SKILL.md"]));
 	s().markSkillsSynced("a", reloadBaseline);
-	// The mid-reload change (which the reload did not load) is preserved → still stale.
 	expect(isStale("ws1", "a")).toBe(true);
 });
 
@@ -2652,13 +2511,10 @@ test("skills badge: markSkillsSynced is monotonic and ignores a disposed session
 	const s = () => useAppStore.getState();
 	s().openChatSession("ws1", "a", null, "medium");
 
-	// Out-of-order reload completions: a newer baseline lands, then an older request resolves last —
-	// the older tick must not move the baseline backward (which would falsely re-light the badge).
 	s().markSkillsSynced("a", 5);
 	s().markSkillsSynced("a", 2);
 	expect(s().skillsSyncedTickBySession.a).toBe(5);
 
-	// A completion after the runtime was disposed must not resurrect a dropped entry (leak).
 	s().closeChatRuntime("a");
 	s().markSkillsSynced("a", 9);
 	expect(s().skillsSyncedTickBySession.a).toBeUndefined();
@@ -2678,17 +2534,11 @@ const summaryFor = (sessionId: string, live: boolean): SessionSummary => ({
 
 test("skills badge: a LIVE restore stays conservatively stale; a disk attach anchors to its load tick", () => {
 	const s = () => useAppStore.getState();
-	// A skill change was already observed before this client hydrated these sessions.
-	s().noteFsChanged(skillFs("ws1", [".claude/skills/foo/SKILL.md"])); // tick 1
+	s().noteFsChanged(skillFs("ws1", [".claude/skills/foo/SKILL.md"]));
 
-	// A LIVE restore reused the server session's already-loaded (older) skills — no reload — so the caller
-	// passes no baseline: it must stay flagged (Air's finding — never falsely clear a live session that
-	// predates the change).
 	s().hydrateSession(summaryFor("live1", true), { turns: [], toolResults: {}, askAnswers: {} });
 	expect(isStale("ws1", "live1")).toBe(true);
 
-	// A disk-only attach reconstructs the loader against current disk → the caller passes the load's
-	// request-start tick, and the chat is correctly in sync.
 	s().hydrateSession(
 		summaryFor("disk1", false),
 		{ turns: [], toolResults: {}, askAnswers: {} },
@@ -2711,10 +2561,6 @@ test("explicitly passive hydration never becomes navigation just because the cac
 	expect(useAppStore.getState().navTickByWorkspace.ws1).toBeUndefined();
 });
 
-// ── Preview tabs ────────────────────────────────────────────────────────────────────────────────────
-// Before workbench hydration, the legacy cache keeps one workspace preview hint. Once a layout document
-// exists, structural per-group preview slots are authoritative and cache entries must not evict one another.
-
 function fileTab(workspaceId: string, name: string): FileTab {
 	return { kind: "file", id: `${workspaceId}:${name}`, workspaceId, name, path: name, content: "" };
 }
@@ -2723,7 +2569,7 @@ test("a preview open replaces the previous preview tab at its index (the strip n
 	const store = useAppStore.getState();
 	store.openTab(fileTab("ws1", "a.ts"), "keep");
 	store.openTab(fileTab("ws1", "b.ts"), "preview");
-	store.openTab(fileTab("ws1", "c.ts"), "keep"); // the slot now sits between two kept tabs
+	store.openTab(fileTab("ws1", "c.ts"), "keep");
 
 	store.openTab(fileTab("ws1", "d.ts"), "preview");
 
@@ -2761,8 +2607,8 @@ test("a preview open of an already-kept tab focuses it without demoting it or mo
 
 	const s = useAppStore.getState();
 	expect(s.activeTabByWorkspace.ws1).toBe("ws1:a.ts");
-	expect(s.previewTabByWorkspace.ws1).toBe("ws1:b.ts"); // the slot stayed where it was
-	expect(s.tabsByWorkspace.ws1).toHaveLength(2); // and nothing was duplicated
+	expect(s.previewTabByWorkspace.ws1).toBe("ws1:b.ts");
+	expect(s.tabsByWorkspace.ws1).toHaveLength(2);
 });
 
 test("keep releases the slot — through openTab, through setActiveTab, and through closeTab", () => {
@@ -2774,7 +2620,7 @@ test("keep releases the slot — through openTab, through setActiveTab, and thro
 	expect(useAppStore.getState().previewTabByWorkspace.ws1).toBeUndefined();
 
 	store.openTab(fileTab("ws1", "b.ts"), "preview");
-	store.openTab(fileTab("ws1", "b.ts"), "keep"); // a double-click on a row already previewing
+	store.openTab(fileTab("ws1", "b.ts"), "keep");
 	expect(useAppStore.getState().previewTabByWorkspace.ws1).toBeUndefined();
 
 	store.openTab(fileTab("ws1", "c.ts"), "preview");
@@ -2788,10 +2634,10 @@ test("promotion is one-way: neither a plain activation nor a keep elsewhere demo
 	store.openTab(fileTab("ws1", "a.ts"), "keep");
 	store.openTab(fileTab("ws1", "b.ts"), "preview");
 
-	store.setActiveTab("ws1:a.ts"); // plain focus
+	store.setActiveTab("ws1:a.ts");
 	expect(useAppStore.getState().previewTabByWorkspace.ws1).toBe("ws1:b.ts");
 
-	store.setActiveTab("ws1:a.ts", "keep"); // keep on a tab that isn't the slot
+	store.setActiveTab("ws1:a.ts", "keep");
 	expect(useAppStore.getState().previewTabByWorkspace.ws1).toBe("ws1:b.ts");
 });
 
@@ -2841,7 +2687,6 @@ test("chat, document, and plan tabs never enter the preview slot", () => {
 	});
 
 	const s = useAppStore.getState();
-	// Still the file: even callers that pass `preview` directly are hardened to a kept chat open.
 	expect(s.previewTabByWorkspace.ws1).toBe("ws1:a.ts");
 	expect(s.tabsByWorkspace.ws1).toHaveLength(5);
 	expect(s.layoutIntents.at(-1)).toMatchObject({ kind: "open", intent: "keep" });
@@ -2853,10 +2698,6 @@ test("a keep on an already-open tab releases ITS workspace's slot, never the act
 	store.openTab(fileTab("ws2", "b.ts"), "preview");
 	useAppStore.setState({ activeWorkspaceId: "ws2" });
 
-	// The promote half of a double click, landing after a slow read let the user switch workspaces.
-	// `openTab` keys off `tab.workspaceId`, so it must reach ws1 and leave ws2 completely alone —
-	// `setActiveTab` here would strand ws1 previewing AND write a foreign tab id into ws2 (whose center
-	// pane then resolves no active tab and falls back to the workspace receipt).
 	store.openTab(fileTab("ws1", "a.ts"), "keep");
 
 	const s = useAppStore.getState();
@@ -2866,13 +2707,9 @@ test("a keep on an already-open tab releases ITS workspace's slot, never the act
 	expect(s.activeTabByWorkspace.ws2).toBe("ws2:b.ts");
 });
 
-// The counter a slow read compares against (`navTickByWorkspace`). It lives in the store so that NO focus
-// transition can bypass it — the earlier module-local version missed close/reopen/doc/new-chat, which is
-// exactly how a stale browse got to steal focus back. One case per action that moves the active tab.
 test("every center navigation bumps the workspace's nav tick, and none of them bypass it", () => {
 	useAppStore.setState({ activeWorkspaceId: "ws1" });
 	const tick = () => useAppStore.getState().navTickByWorkspace.ws1 ?? 0;
-	// Collected rather than asserted inline so a regression names the action that stopped bumping.
 	const missed: string[] = [];
 	const bumps = (label: string, act: () => void) => {
 		const before = tick();
@@ -2881,9 +2718,6 @@ test("every center navigation bumps the workspace's nav tick, and none of them b
 	};
 
 	const s = () => useAppStore.getState();
-	// `openTab` is the exception, and deliberately so: it IS the read completion being ordered. Counting it
-	// would make an earlier read's own commit look like user navigation and drop the later one — i.e. two
-	// browse clicks in a row would leave the FIRST click's file open.
 	const beforeOpen = tick();
 	s().openTab(fileTab("ws1", "a.ts"), "preview");
 	s().openTab(fileTab("ws1", "a.ts"), "keep");
@@ -2904,8 +2738,6 @@ test("every center navigation bumps the workspace's nav tick, and none of them b
 	bumps("openChatSession", () => s().openChatSession("ws1", "sess", null, "medium"));
 	bumps("closeChatToHistory", () => s().closeChatToHistory("sess"));
 	bumps("reopenChat", () => s().reopenChat("ws1", "sess"));
-	// Closing the ACTIVE tab hands focus to a neighbour, so it counts. Closing an inactive one does not —
-	// that case is its own test below, since it's a distinct rule rather than another entry in this list.
 	s().setActiveTab("ws1:a.ts");
 	bumps("closeTab", () => s().closeTab("ws1:a.ts"));
 	bumps("noteNavigation", () => s().noteNavigation("ws1"));
@@ -2915,8 +2747,6 @@ test("every center navigation bumps the workspace's nav tick, and none of them b
 	expect(s().layoutIntents.at(-1)).toMatchObject({ kind: "select", focus: false });
 	expect(missed).toEqual([]);
 
-	// A background auto-restore is NOT a navigation: it takes no focus, so it must not supersede a read the
-	// user is still waiting on.
 	useAppStore.setState({ activeTabByWorkspace: { ws1: "ws1:sess" } });
 	const before = tick();
 	s().hydrateSession(
@@ -2932,16 +2762,11 @@ test("every center navigation bumps the workspace's nav tick, and none of them b
 	);
 	expect(tick()).toBe(before);
 
-	// The tick is per workspace, and a cleared workspace releases its entry.
 	expect(useAppStore.getState().navTickByWorkspace.ws2).toBeUndefined();
 	s().clearWorkspaceTabs("ws1");
 	expect(useAppStore.getState().navTickByWorkspace.ws1).toBeUndefined();
 });
 
-// The other half of the rule above: the counter tracks NAVIGATIONS, not tab-list edits. Closing a tab the
-// user isn't looking at leaves focus exactly where it was, so it must not count.
-// The finding this pins: bumped unconditionally, closing any unrelated tab while a browse was in flight made
-// that read look overtaken, and the file the user clicked never opened at all.
 test("history selection resolves a cache alias to its stable shared placement id", () => {
 	const store = useAppStore.getState();
 	store.openChatSession("ws1", "history-alias", null, "medium");
@@ -3072,7 +2897,6 @@ test("a close that moves no focus is not a navigation — it can't discard a bro
 	s().openTab(fileTab("ws1", "a.ts"), "keep");
 	s().openTab(fileTab("ws1", "b.ts"), "keep");
 	s().openChatSession("ws1", "sess", null, "medium");
-	// `b.ts` is what the user is looking at; `a.ts` and the chat are both inactive.
 	s().setActiveTab("ws1:b.ts");
 	const before = tick();
 
@@ -3084,7 +2908,6 @@ test("a close that moves no focus is not a navigation — it can't discard a bro
 	expect(tick()).toBe(before);
 	expect(s().activeTabByWorkspace.ws1).toBe("ws1:b.ts");
 
-	// ...and closing what IS active still counts, since focus has to move somewhere.
 	s().closeTab("ws1:b.ts");
 	expect(tick()).toBeGreaterThan(before);
 });
@@ -3121,26 +2944,19 @@ test("catalog authority falls with the list it describes — only an awaited ref
 	const listed = [{ id: "opus-5", name: "opus-5", provider: "anthropic" }] as WireModel[];
 	const refreshed = [{ id: "opus-6", name: "opus-6", provider: "anthropic" }] as WireModel[];
 
-	// A `model.list` snapshot is current but never authoritative (its handler answers from before the
-	// detached refresh it starts).
 	s().setModelsForProviderVersion(s().providerVersion, listed);
 	expect(s().modelsFresh).toBe(false);
 
-	// The installed result of an awaited forced refresh that SETTLED is.
 	const settledVersion = s().beginModelsRefresh();
 	s().finishModelsRefresh(settledVersion, { models: refreshed, complete: true });
 	expect(s().models).toBe(refreshed);
 	expect(s().modelsRefreshing).toBe(false);
 	expect(s().modelsFresh).toBe(true);
 
-	// The finding this pins: authority is a property of the SHARED list, so the next `model.list` install
-	// — this picker reopening, or any other consumer mounting — drops it in the same write. Held as a
-	// consumer's local flag, it outlived the list and a removed model reached `create()`.
 	s().setModelsForProviderVersion(s().providerVersion, listed);
 	expect(s().models).toBe(listed);
 	expect(s().modelsFresh).toBe(false);
 
-	// A FAILED refresh installs nothing, so it changes neither the list nor its provenance.
 	s().finishModelsRefresh(s().providerVersion, { models: refreshed, complete: true });
 	const failedVersion = s().beginModelsRefresh();
 	s().finishModelsRefresh(failedVersion, null);
@@ -3162,7 +2978,6 @@ test("a provider invalidation rejects every stale model reply", () => {
 	expect(s().modelsFresh).toBe(false);
 	expect(s().modelsRefreshing).toBe(false);
 
-	// Replies issued against the removed generation cannot restore either a list or its authority.
 	s().setModelsForProviderVersion(before, listed);
 	s().finishModelsRefresh(before, { models: listed, complete: true });
 	expect(s().models).toEqual([]);
@@ -3177,10 +2992,6 @@ test("a refresh whose wait was capped installs its list but claims no authority"
 	s().finishModelsRefresh(settledVersion, { models: listed, complete: true });
 	expect(s().modelsFresh).toBe(true);
 
-	// The finding this pins: the host caps how long it waits for pi, so a reply can carry the registry as it
-	// stands while the pass that would settle it is still running (`complete: false`). Rendering it is right;
-	// treating it as the host's verdict is what would let `NewWorkspaceDialog` substitute off a list nothing
-	// confirmed — so it must also DROP any authority the previous list had.
 	const unsettledVersion = s().beginModelsRefresh();
 	s().finishModelsRefresh(unsettledVersion, { models: unsettled, complete: false });
 	expect(s().models).toBe(unsettled);
@@ -3195,10 +3006,6 @@ test("authority can be given up without replacing the list (a consumer activatin
 	s().finishModelsRefresh(providerVersion, { models: refreshed, complete: true });
 	expect(s().modelsFresh).toBe(true);
 
-	// The finding this pins: a consumer activating inherits the list a *previous* consumer made
-	// authoritative, and the registry can have moved since (a provider logged in, no `model.list`). It must
-	// be able to drop authority up front — synchronously, before its own read lands — while still serving
-	// the inherited list to render with.
 	s().dropModelsFreshness();
 	expect(s().modelsFresh).toBe(false);
 	expect(s().models).toBe(refreshed);

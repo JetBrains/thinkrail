@@ -1,10 +1,5 @@
 import type { VisualizeParams } from "./schema.ts";
 
-/**
- * Enforce the per-`type` shape that the flat schema can't. Throws a clear `Error` on bad input — pi
- * turns a thrown error into an error tool-result. Validates *shape* only; mermaid *syntax* is a
- * render-time concern (the UI reports parse errors), not this function's job.
- */
 export function validateShape(params: VisualizeParams): void {
 	if (params.type === "diagram") {
 		if (!params.mermaid || params.mermaid.trim() === "") {

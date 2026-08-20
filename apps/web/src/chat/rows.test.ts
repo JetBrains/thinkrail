@@ -4,11 +4,8 @@ import { deriveRows, turnDivider } from "./rows";
 import { registerToolRenderer } from "./toolRegistry";
 import type { ChatTurn, ToolResultState } from "./types";
 
-// Prominence comes from the registry seam — register fakes here (module-global registry; unique names).
 registerToolRenderer("primary-tool", () => null, { prominence: "primary" });
-registerToolRenderer("bare-tool", () => null, { chrome: "bare" }); // bare implies primary
-
-// ---- turn builders ----
+registerToolRenderer("bare-tool", () => null, { chrome: "bare" });
 
 type Block =
 	| { type: "text"; text: string }
@@ -67,11 +64,8 @@ const text = (t: string): Block => ({ type: "text", text: t });
 
 const kinds = (rows: ReturnType<typeof deriveRows>) => rows.map((r) => r.kind);
 
-// ---- grouping ----
-
 describe("deriveRows grouping", () => {
 	test("merges contiguous routine steps ACROSS assistant-message boundaries into one activity run", () => {
-		// pi emits one assistant message per tool round — the fold must span them.
 		const turns = [
 			user("u1"),
 			assistant("a1", [think("plan"), tc("t1", "bash")]),
@@ -84,7 +78,6 @@ describe("deriveRows grouping", () => {
 		const activity = rows[1];
 		if (activity?.kind !== "activity") throw new Error("expected activity row");
 		expect(activity.steps.map((s) => s.id)).toEqual(["a1:thinking:0", "t1", "t2", "t3"]);
-		// Row id = first step's id — stable while the trailing run accumulates steps.
 		expect(activity.id).toBe("activity:a1:thinking:0");
 	});
 
@@ -93,10 +86,10 @@ describe("deriveRows grouping", () => {
 			user("u1"),
 			assistant("a1", [
 				tc("t1"),
-				text("  "), // whitespace-only — renders nothing, splits nothing
-				think(""), // empty thinking — skipped
+				text("  "),
+				think(""),
 				tc("t2"),
-				text("interim narration"), // non-empty — stays visible and splits the fold
+				text("interim narration"),
 				tc("t3"),
 			]),
 			done("s1"),
@@ -155,7 +148,6 @@ describe("deriveRows grouping", () => {
 		];
 		const rows = deriveRows(turns, {}, true);
 		expect(kinds(rows)).toEqual(["user", "activity", "error", "retry", "activity"]);
-		// The retry row carries its source through — the renderer labels the two flows differently.
 		expect(rows[3]?.kind === "retry" && rows[3].source).toBe("summarization");
 		expect(rows[1]?.kind === "activity" && rows[1].steps.length).toBe(1);
 		expect(rows[4]?.kind === "activity" && rows[4].steps.length).toBe(1);
@@ -164,7 +156,7 @@ describe("deriveRows grouping", () => {
 	test("steps carry dead from the owning message's stopReason (aborted calls never execute)", () => {
 		const turns = [
 			user("u1"),
-			assistant("a1", [tc("t1")]), // completed round
+			assistant("a1", [tc("t1")]),
 			assistant("a2", [tc("t2")], { stopReason: "aborted" }),
 		];
 		const rows = deriveRows(turns, {}, false);
@@ -193,8 +185,6 @@ describe("deriveRows grouping", () => {
 		expect(s3?.kind === "tool" && s3.tool).toBeUndefined();
 	});
 });
-
-// ---- streaming / live ----
 
 describe("deriveRows compaction notices", () => {
 	test("a compaction turn maps 1:1 to its own row and breaks the activity run (never folded)", () => {
@@ -229,7 +219,6 @@ describe("deriveRows compaction notices", () => {
 			assistant("a1", [], { stopReason: "length" }),
 			{ kind: "compaction", id: "c1", status: "running" },
 		];
-		// The incident shape: an empty length-stopped message contributes no rows of its own.
 		expect(kinds(deriveRows(turns, {}, true))).toEqual(["user", "compaction"]);
 	});
 });
@@ -263,7 +252,6 @@ describe("deriveRows live trailing run", () => {
 	});
 
 	test("a run broken by a mid-round user boundary is never live even while streaming", () => {
-		// A completed earlier round stays folded while a new turn streams.
 		const turns = [
 			user("u1"),
 			assistant("a1", [tc("t1")]),
@@ -300,8 +288,6 @@ describe("deriveRows live trailing run", () => {
 	});
 });
 
-// ---- dividers (the turnDivider deriver, folded behind deriveRows) ----
-
 describe("deriveRows dividers", () => {
 	test("a divider row closes the round at its ✓ Done marker (not at the next user turn)", () => {
 		const turns = [user("u1", 1_000), assistant("a1", [tc("t1", "write")]), done("s1", 3_000)];
@@ -322,8 +308,6 @@ describe("deriveRows dividers", () => {
 		expect(kinds(rows)).toEqual(["user", "markdown"]);
 	});
 });
-
-// ---- turnDivider (moved from turns.test.ts — the deriver itself) ----
 
 function assistantWithPaths(
 	id: string,
@@ -347,7 +331,6 @@ test("turnDivider is null with no user turn to open the round (nothing to summar
 });
 
 test("turnDivider counts tools, collects only edit/write files, and measures user→end elapsed", () => {
-	// Anchored at the round's "✓ Done" marker (index 2); elapsed = endedAt − user.timestamp.
 	const turns: ChatTurn[] = [
 		user("u1", 1_000),
 		assistantWithPaths("a1", [
@@ -360,7 +343,7 @@ test("turnDivider counts tools, collects only edit/write files, and measures use
 	];
 	const d = turnDivider(turns, 2);
 	expect(d?.toolCount).toBe(4);
-	expect(d?.changedFiles).toEqual(["a.ts"]); // distinct; read is not a change
+	expect(d?.changedFiles).toEqual(["a.ts"]);
 	expect(d?.elapsedMs).toBe(72_000);
 });
 
@@ -381,7 +364,6 @@ test("turnDivider spans multiple assistant turns in the round and dedupes files"
 });
 
 test("turnDivider falls back to the last assistant timestamp when there is no ✓ Done marker (hydrated)", () => {
-	// Hydrated rounds carry no web-local "✓ Done" marker; the end time comes from the assistant reply.
 	const turns: ChatTurn[] = [
 		user("u1", 1_000),
 		assistantWithPaths("a1", [{ name: "write", path: "x.ts" }], 6_000),
@@ -401,8 +383,6 @@ test("turnDivider reports no changed files / zero tools for a plain Q&A round", 
 	expect(d?.elapsedMs).toBe(2_000);
 });
 
-// ---- the spec / code partition (the two divider chips) ----
-
 test("turnDivider splits specs from code changes via isSpec, each path on exactly one side", () => {
 	const turns: ChatTurn[] = [
 		user("u1", 0),
@@ -418,8 +398,6 @@ test("turnDivider splits specs from code changes via isSpec, each path on exactl
 });
 
 test("turnDivider counts a gitignored scratch spec as a spec, not as a (never-visible) change", () => {
-	// The reported bug: a `.thinkrail/context/` task-spec has zero git footprint, so a "files changed"
-	// chip pointing at it deep-linked to an empty Changes view. It belongs on the Specs side.
 	const path = ".thinkrail/context/TASK-todo-linear-groups.md";
 	const turns: ChatTurn[] = [
 		user("u1", 0),
@@ -430,14 +408,13 @@ test("turnDivider counts a gitignored scratch spec as a spec, not as a (never-vi
 		]),
 		done("s1", 5_000),
 	];
-	const d = turnDivider(turns, 2, () => false); // graph snapshot hasn't caught up yet
+	const d = turnDivider(turns, 2, () => false);
 	expect(d?.toolCount).toBe(3);
-	expect(d?.specs).toEqual([path]); // spec_create's target is a spec by construction
+	expect(d?.specs).toEqual([path]);
 	expect(d?.changedFiles).toEqual([]);
 });
 
 test("turnDivider lets the spec side win a tie — a path reached by both routes is never double-counted", () => {
-	// `edit` lands first (classified as code by a stale snapshot), then `spec_create` claims the same path.
 	const path = "docs/SPEC.md";
 	const turns: ChatTurn[] = [
 		user("u1", 0),
@@ -453,7 +430,6 @@ test("turnDivider lets the spec side win a tie — a path reached by both routes
 });
 
 test("turnDivider treats every written file as a change when no classifier is supplied", () => {
-	// The presentational default: without a spec graph, the divider degrades to the old single-chip behavior.
 	const turns: ChatTurn[] = [
 		user("u1", 0),
 		assistantWithPaths("a1", [{ name: "write", path: "SPEC.md" }]),

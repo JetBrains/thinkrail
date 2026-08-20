@@ -84,10 +84,13 @@ Architecture decisions live as spec-graph nodes, dogfooding the spec layer the p
   `parent` (single link), `depends-on` / `references` / `implements` (link lists), `covers` / `tags`.
 - **Specs are the source of truth and are updated during implementation.** A module spec is `draft`
   until its design firms up, then `active`. Keep them honest as code lands.
-- **Durable rationale belongs in specs, not code comments.** Record decisions, invariants, trade-offs, and
-  rejected alternatives once in the owning `SPEC.md`. Prefer names, types, and control flow in code; reserve
-  comments for terse implementation-local mechanics or hazards that those cannot make clear. Do not narrate
-  the code or duplicate spec rationale beside it.
+- **Comments: avoid them. Near-zero is the norm.** Decisions, invariants, trade-offs, rejected
+  alternatives, protocol history, bug post-mortems — all of it lives in the owning `SPEC.md` (or the
+  test that pins it), never in code comments. Code carries meaning through names, types, and control
+  flow. The only comments that may exist: lint/type directives (`biome-ignore` with a reason,
+  `/// <reference`) and a *rare* one-line hazard note where misediting silently breaks something no
+  type or test can pin — usually ending in a `see <SPEC>` pointer. A comment spanning multiple lines
+  is content that belongs in a spec: move it. Never narrate code or duplicate spec prose beside it.
 
 ## Non-negotiable invariants
 
@@ -196,6 +199,10 @@ Before committing, opening/updating a PR, or declaring work done, re-read the fu
   unrequested suppression must never be discovered in review. Audit before handoff:
   `git diff origin/main...HEAD -U0 | rg '^\+.*(biome-ignore|eslint-disable|@ts-ignore|@ts-expect-error|as any)'`
   → must come back empty.
+- **No comment creep.** New comments in the diff are suspect by default (see the near-zero rule under
+  *Spec graph*): a rationale paragraph added as a comment gets moved to the owning `SPEC.md` before
+  handoff. Audit: `git diff origin/main...HEAD -U0 | rg '^\+\s*(//|/\*|\*)'` → every hit is a lint
+  directive or a one-line hazard note, nothing else.
 - **No duplicated derivations.** The same nontrivial expression/lookup landing in 2+ places means
   centralize it first. Web specifics: derived state belongs in store selectors
   (`apps/web/src/store/selectors.ts`), components never inline multi-step derivations from store state;

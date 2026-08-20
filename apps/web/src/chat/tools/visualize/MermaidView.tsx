@@ -6,13 +6,6 @@ import { CodeBlock } from "../CodeBlock";
 import { renderMermaid } from "./mermaid";
 import { PanZoomView } from "./PanZoomView";
 
-/**
- * Render mermaid `source` to a themed SVG, re-rendering on `[data-theme]` changes. On a parse/render
- * error, falls back to showing the raw source (still copy-pasteable) — mermaid *syntax* is the model's
- * concern, so we surface it rather than swallow it. A "full screen" button opens the diagram large in a
- * `Dialog` (which brings its own close button + Esc / overlay dismissal). While the SVG is pending,
- * renders `fallback` (the markdown path passes the source block) or a default "Rendering…" line.
- */
 export function MermaidView({
 	source,
 	title,
@@ -42,7 +35,6 @@ export function MermaidView({
 		setSvg(null);
 		setError(null);
 		run();
-		// Re-render when the theme flips so token-derived colors stay in sync.
 		const stopThemeWatch = onThemeSwap(run);
 		return () => {
 			cancelled = true;

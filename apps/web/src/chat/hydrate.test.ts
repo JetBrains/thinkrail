@@ -5,8 +5,6 @@ import { messagesToRuntime } from "./hydrate";
 
 type Message = TranscriptMessage;
 
-// Partial fixtures cast to Message — the converter reads only `role` (+ toolCallId/isError/content for
-// tool results) and passes user/assistant messages through verbatim.
 const messages = [
 	{ role: "user", content: "do it", timestamp: 1 },
 	{ role: "assistant", content: [{ type: "toolCall", id: "tc1", name: "bash", arguments: {} }] },
@@ -24,17 +22,14 @@ const messages = [
 test("messagesToRuntime folds a transcript into ordered turns + a toolResults map", () => {
 	const { turns, toolResults } = messagesToRuntime(messages);
 
-	// user/assistant become turns in order; toolResult does NOT (it's indexed for inline pairing).
 	expect(turns.map((t) => t.kind)).toEqual(["user", "assistant", "assistant"]);
 	expect(turns.every((t) => typeof t.id === "string" && t.id.length > 0)).toBe(true);
-	// hydrated assistant turns are not streaming.
 	expect(
 		turns
 			.filter((t) => t.kind === "assistant")
 			.every((t) => t.kind === "assistant" && !t.streaming),
 	).toBe(true);
 
-	// the tool result is keyed by toolCallId (pairs with the assistant turn's toolCall block id).
 	expect(toolResults.tc1?.status).toBe("done");
 });
 
@@ -48,7 +43,6 @@ test("an assistant turn that ended in a provider error hydrates a following erro
 			errorMessage: "model 'gpt-5.5' not found",
 		},
 	] as unknown as Message[]);
-	// The failure re-surfaces so a reopened chat shows it, matching the live path.
 	expect(turns.map((t) => t.kind)).toEqual(["user", "assistant", "error"]);
 	const err = turns.find((t) => t.kind === "error");
 	expect(err?.kind === "error" && err.text).toContain("gpt-5.5");
@@ -117,9 +111,6 @@ test("an explicit live null suppresses a stale persisted failure while a resumed
 });
 
 test("a persisted failed attempt superseded by a successful retry hydrates as one assistant turn", () => {
-	// pi's `_prepareRetry` keeps the failed attempt in the session file ("keep in session for history")
-	// while trimming it from the live context; the live reducer drops its turn on `auto_retry_start`.
-	// Hydration must agree, or a reload resurrects the failed partial + a bogus error turn.
 	const { turns, turnIdByMessageIndex } = messagesToRuntime([
 		{ role: "user", content: "hi", timestamp: 1 },
 		{
@@ -135,9 +126,6 @@ test("a persisted failed attempt superseded by a successful retry hydrates as on
 });
 
 test("exhausted retries hydrate as the final attempt + its error turn; earlier attempts stay hidden", () => {
-	// Attempts 1..N-1 are each followed by another assistant message (the next attempt) ⇒ superseded.
-	// The final attempt is followed by nothing (or a user message) ⇒ terminal — visible, and the
-	// trailing settlement-derived error turn reports its failure, matching the live reducer.
 	const { turns } = messagesToRuntime([
 		{ role: "user", content: "hi", timestamp: 1 },
 		{ role: "assistant", content: [], stopReason: "error", errorMessage: "attempt 1" },
@@ -170,15 +158,14 @@ test("turnIdByMessageIndex maps each message's position to its own turn id, null
 		{ role: "assistant", content: [], stopReason: "error", errorMessage: "boom" },
 	] as unknown as Message[]);
 
-	// [user, user, assistant, error] — the injected error turn has no message index of its own.
 	expect(turns.map((t) => t.kind)).toEqual(["user", "user", "assistant", "error"]);
 	expect(turnIdByMessageIndex).toHaveLength(5);
 	expect(turnIdByMessageIndex[0]).toBe(turns[0]?.id);
-	expect(turnIdByMessageIndex[1]).toBeNull(); // toolResult never becomes a turn
-	expect(turnIdByMessageIndex[2]).toBeNull(); // custom never becomes a turn
+	expect(turnIdByMessageIndex[1]).toBeNull();
+	expect(turnIdByMessageIndex[2]).toBeNull();
 	expect(turnIdByMessageIndex[3]).toBe(turns[1]?.id);
-	expect(turnIdByMessageIndex[4]).toBe(turns[2]?.id); // the assistant turn itself...
-	expect(turnIdByMessageIndex[4]).not.toBe(turns[3]?.id); // ...never the synthesized error turn
+	expect(turnIdByMessageIndex[4]).toBe(turns[2]?.id);
+	expect(turnIdByMessageIndex[4]).not.toBe(turns[3]?.id);
 });
 
 test("a failed tool result maps to error status", () => {
@@ -196,8 +183,6 @@ test("a failed tool result maps to error status", () => {
 });
 
 test("a toolCall with no matching toolResult has no entry — the call renders as still running", () => {
-	// The (sub-second) window between an assistant message ending and its tool results landing: the absent
-	// `toolResults` entry makes ToolCard/ToolBlock default the status to "running".
 	const { turns, toolResults } = messagesToRuntime([
 		{
 			role: "assistant",
@@ -211,8 +196,6 @@ test("a toolCall with no matching toolResult has no entry — the call renders a
 });
 
 test("a resolved toolResult keeps its structured `details` (a legacy blocking-era ask record)", () => {
-	// hydrate mirrors the live `tool_execution_end` shape (`{ content, details }`) so a legacy resolved
-	// questionnaire record (answers in the tool result) survives a reconnect — the card's fallback path.
 	const details = {
 		answers: [{ questionIndex: 0, question: "Q?", kind: "option", answer: "A" }],
 		cancelled: false,
@@ -251,13 +234,12 @@ test("an ask-user-answers custom message indexes into askAnswers and never becom
 			timestamp: 2,
 		},
 	] as unknown as Message[]);
-	expect(turns).toHaveLength(1); // the card is the answers' rendering — no separate bubble
+	expect(turns).toHaveLength(1);
 	expect(askAnswers.ask3).toEqual(result as never);
 });
 
 test("an answers message with malformed details is ignored — the guard validates shape, not just tag", () => {
 	const { askAnswers } = messagesToRuntime([
-		// right customType, but details missing / wrong-shaped — wire data is untrusted.
 		{
 			role: "custom",
 			customType: ASK_USER_ANSWERS_CUSTOM_TYPE,
@@ -306,6 +288,5 @@ test("a compaction summary becomes its own turn without claiming a jump anchor",
 		summary: "## Goal\nship it",
 		tokensBefore: 148_000,
 	});
-	// The slot is consumed but unanchored — history search indexes user/assistant text only.
 	expect(turnIdByMessageIndex).toEqual([turns[0]?.id ?? null, null, turns[2]?.id ?? null]);
 });

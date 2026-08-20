@@ -52,8 +52,6 @@ test("a self-parenting node renders as a root, not an infinite chain", () => {
 	expect(tree[0]?.children).toEqual([]);
 });
 
-// Parent cycles are spec_validate's problem, not the viewer's — what matters here is that malformed
-// input terminates (visited-guarded walk) and leaves the well-formed part of the graph intact.
 test("a parent cycle terminates and leaves well-formed roots intact", () => {
 	const tree = buildSpecTree([
 		node("a", { parent: "b" }),

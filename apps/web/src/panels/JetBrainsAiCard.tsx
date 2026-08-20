@@ -30,7 +30,6 @@ type Notice =
 	| { kind: "login-launched" }
 	| { kind: "login-failed" };
 
-/** Guided native JetBrains AI configuration over the host's closed Central lifecycle. */
 export function JetBrainsAiCard({
 	status,
 	install,
@@ -44,20 +43,12 @@ export function JetBrainsAiCard({
 	const [notice, setNotice] = useState<Notice | null>(null);
 	const [signingIn, setSigningIn] = useState(false);
 
-	// Poll only while applying; `provider.changed` pushes cover transitions that start while settled.
 	useEffect(() => {
 		if (status.state !== "configuring") return;
 		const timer = setInterval(() => void onChanged(), 500);
 		return () => clearInterval(timer);
 	}, [status.state, onChanged]);
 
-	/**
-	 * A sign-in note ("finish it in the browser", "we couldn't launch it") is advice about an outstanding
-	 * demand, so it must die with the demand — otherwise it outlives its own resolution. Two things end it:
-	 * reaching `configured`, and the signed-out demand clearing. The latter needs the *transition*, because
-	 * `signedOut` is equally false for a host that never demanded anything, and the reactive flow (auth
-	 * unknown, an action refused) has to keep its note.
-	 */
 	const demandedSignIn = useRef(isSignedOut(status));
 	useEffect(() => {
 		const signedOut = isSignedOut(status);
@@ -103,8 +94,6 @@ export function JetBrainsAiCard({
 			setNotice(
 				result.outcome === "launched" ? { kind: "login-launched" } : { kind: "login-failed" },
 			);
-			// Launching invalidated the host's auth verdict — re-read so a sign-in that already completed
-			// clears the warning without waiting for the next visit.
 			if (result.outcome === "launched") await onChanged();
 		} catch {
 			setNotice({ kind: "login-failed" });
@@ -114,9 +103,6 @@ export function JetBrainsAiCard({
 	}, [signingIn, onChanged]);
 
 	const visibleState = busyAction ? "configuring" : status.state;
-	// Signing in is the *prerequisite*, so while Central holds no credentials it is the only action the card
-	// offers — Connect and Disconnect alike are withheld. Both return the moment credentials come back, and
-	// offering either beside a broken session asks the user to choose between fixing it and something else.
 	const signedOut = isSignedOut(status);
 	const installed = status.state !== "absent";
 	const configured = status.state === "configured";
@@ -193,8 +179,6 @@ export function JetBrainsAiCard({
 							? failureText(notice.action, notice.reason)
 							: "ThinkRail couldn't reach the host. Recheck the connection and try again."}
 					</p>
-					{/* Hedged guidance only while auth is unknown: once the host says signed out, the header
-					    already carries that action and repeating it here asks the same question twice. */}
 					{!signedOut &&
 					notice.action === "connect" &&
 					(notice.kind === "transport-failed" || notice.reason === "central-action-failed") ? (
@@ -251,8 +235,6 @@ function StatusBody({
 	install: JbcentralInstall;
 	onChanged: () => void | Promise<void>;
 }) {
-	// Signed out is the whole story while it lasts. The connection may still be wired, but nothing it offers
-	// works until credentials return, so the card says that instead of pairing it with a success line.
 	if (isSignedOut(status)) return <SignedOutNotice />;
 
 	switch (status.state) {
@@ -341,11 +323,6 @@ function StatusBody({
 	}
 }
 
-/**
- * The one way to sign in: ThinkRail launches Central's flow on the host. The `central login` command is
- * deliberately not shown next to it — it is the fallback for a launch that *failed*, and printing it
- * pre-emptively turns one action into a menu.
- */
 function SignInButton({
 	signingIn,
 	onSignIn,
@@ -376,7 +353,6 @@ function SignInButton({
 	);
 }
 
-/** Offered after an action failed, when auth is a *possible* cause — hence the conditional wording. */
 function SignInGuidance({ signingIn, onSignIn }: { signingIn: boolean; onSignIn: () => void }) {
 	return (
 		<div className="flex flex-col gap-xs" data-testid="jetbrains-signin-guidance">
@@ -393,7 +369,6 @@ function SignInGuidance({ signingIn, onSignIn }: { signingIn: boolean; onSignIn:
 	);
 }
 
-/** Says why the header offers only Sign in; the action itself is up there, not repeated here. */
 function SignedOutNotice() {
 	return (
 		<p
@@ -406,7 +381,6 @@ function SignedOutNotice() {
 	);
 }
 
-/** Whether the host positively observed Central holding no credentials. */
 function isSignedOut(status: JbcentralStatus): boolean {
 	return (status.state === "supported" || status.state === "configured") && status.signedOut;
 }
@@ -474,7 +448,6 @@ function failureText(action: JbcentralAction, reason: JbcentralActionFailureReas
 	}
 }
 
-/** A copyable one-line shell command (mono, with a copy affordance). */
 function CopyableCommand({ command }: { command: string }) {
 	const [copied, setCopied] = useState(false);
 	const copy = async () => {

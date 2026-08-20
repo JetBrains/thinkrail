@@ -1,7 +1,6 @@
 import { StringEnum } from "@earendil-works/pi-ai";
 import { type Static, Type } from "typebox";
 
-/** One alternative in a `comparison` visualization. */
 const ComparisonOptionSchema = Type.Object({
 	name: Type.String({ description: "Short label for this option." }),
 	description: Type.Optional(
@@ -17,11 +16,6 @@ const ComparisonOptionSchema = Type.Object({
 	),
 });
 
-/**
- * Tool parameters for `visualize`. A single flat object (top-level object schemas are what tool /
- * function-calling APIs expect), discriminated by `type`. Per-type fields are optional in the schema
- * and enforced at runtime by `validateShape`.
- */
 export const VisualizeSchema = Type.Object({
 	type: StringEnum(["diagram", "comparison"], {
 		description:

@@ -682,8 +682,6 @@ function WorkbenchTab({
 			onSelect(tab.id);
 			return;
 		}
-		// Wait out the browser's double-click window for every preview tab. Otherwise an inactive preview's
-		// leading click publishes a select before `dblclick` can upgrade the gesture to one final keep.
 		if (pendingPreviewKeep.current) clearTimeout(pendingPreviewKeep.current);
 		const gestureEpoch = ++selectionEpoch.current;
 		const navigationClocks = navigationClockSnapshot(attentionRef.current);

@@ -11,29 +11,17 @@ import {
 	E2E_RESTART_PORT,
 } from "./fixtures/paths";
 
-// Tagged @agent: drives a real pi agent. THE restart test — the one scenario the shared-host suite
-// structurally cannot cover (Playwright's webServer owns that host for the whole run): a questionnaire is
-// open, the host process DIES (kill -9 — no graceful shutdown, the harshest path), a fresh host boots on
-// the same on-disk state, and the questionnaire is still answerable — the answer starts a new turn and
-// the agent replies. This is the end-to-end proof of the ack + terminate design (see the server
-// `agent/askUserQuestion` SPEC): nothing about a pending question lives in host memory, so a restart
-// costs nothing. Everything here is self-contained: a dedicated port, data dir, fixture repo, and pi
-// agent dir (copied from the suite's seeded one, so the same auth + pinned model apply); the shared
-// e2e host keeps running untouched.
-
-const PORT = E2E_RESTART_PORT; // its own slot in the per-worktree port block (e2e/fixtures/paths.ts)
+const PORT = E2E_RESTART_PORT;
 const BASE = `http://localhost:${PORT}`;
 const DATA_DIR = E2E_RESTART_DATA_DIR;
 const REPO = join(DATA_DIR, "sample-project");
 const AGENT_DIR = join(DATA_DIR, "pi-agent");
 const HOME_DIR = join(DATA_DIR, "home");
 const PICK_POINTER = join(DATA_DIR, "pick-dir");
-// Outside DATA_DIR so a failed run's teardown doesn't destroy the post-mortem trail.
 const HOST_LOG = E2E_RESTART_HOST_LOG;
 const rootDir = fileURLToPath(new URL("..", import.meta.url));
 const staticDir = join(rootDir, "apps", "web", "dist");
 
-/** Fresh isolated state: a tiny git fixture repo + a pi agent dir cloned from the suite's seeded one. */
 function seedState(): void {
 	rmSync(DATA_DIR, { recursive: true, force: true });
 	rmSync(HOST_LOG, { force: true });
@@ -48,7 +36,6 @@ function seedState(): void {
 	git("add", "-A");
 	git("commit", "-m", "init");
 
-	// Same auth + pinned default model as the shared suite (global setup seeded these from the user's).
 	mkdirSync(AGENT_DIR, { recursive: true });
 	for (const file of ["auth.json", "models.json", "settings.json"]) {
 		const src = join(E2E_PI_AGENT_DIR, file);
@@ -59,9 +46,8 @@ function seedState(): void {
 
 let host: ChildProcess | null = null;
 
-/** Boot the private host and wait for /health. The web app is already built (the shared webServer did). */
 async function startHost(): Promise<void> {
-	const log = openSync(HOST_LOG, "a"); // post-mortem trail for a failed boot (appended across restarts)
+	const log = openSync(HOST_LOG, "a");
 	host = spawn("bun", ["packages/server/src/dev.ts"], {
 		cwd: rootDir,
 		stdio: ["ignore", log, log],
@@ -84,15 +70,12 @@ async function startHost(): Promise<void> {
 		try {
 			const res = await fetch(`${BASE}/health`);
 			if (res.ok) return;
-		} catch {
-			// not up yet
-		}
+		} catch {}
 		await new Promise((r) => setTimeout(r, 250));
 	}
 	throw new Error(`private e2e host did not become healthy on :${PORT} (see ${HOST_LOG})`);
 }
 
-/** Kill the private host (default SIGKILL — the crash case) and wait for the process to exit. */
 async function stopHost(signal: NodeJS.Signals = "SIGKILL"): Promise<void> {
 	const proc = host;
 	host = null;
@@ -107,7 +90,6 @@ test.afterEach(async () => {
 	rmSync(DATA_DIR, { recursive: true, force: true });
 });
 
-/** The interactive (awaiting) questionnaire card. */
 function activeCard(page: Page) {
 	return page.locator('[data-testid="ask-user-question"][data-tone="active"]').first();
 }
@@ -115,11 +97,10 @@ function activeCard(page: Page) {
 test("a pending questionnaire survives a host kill -9: reboot, reopen, answer, agent resumes", {
 	tag: "@agent",
 }, async ({ page }) => {
-	test.setTimeout(300_000); // two host boots + two real agent turns
+	test.setTimeout(300_000);
 	seedState();
 	await startHost();
 
-	// ---- before the restart: open a chat and get a questionnaire on screen ----
 	await page.goto(BASE);
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 	await page.getByTestId("add-project-menu").click();
@@ -143,13 +124,10 @@ test("a pending questionnaire survives a host kill -9: reboot, reopen, answer, a
 		);
 	await page.getByTestId("chat-send").click();
 	await expect(activeCard(page)).toBeVisible({ timeout: 90_000 });
-	// Ack + terminate: the ask TURN is already over ("✓ Done"), so the ack tool result — everything the
-	// answer path needs — is durably on disk before we pull the plug.
 	await expect(
 		page.locator('[data-testid="chat-message"][data-role="system"]').filter({ hasText: "Done" }),
 	).toBeVisible({ timeout: 30_000 });
 
-	// ---- the restart: kill -9, then a fresh host on the same on-disk state ----
 	await stopHost("SIGKILL");
 	await expect(page.getByTestId("connection-status")).not.toHaveAttribute(
 		"data-status",
@@ -160,19 +138,14 @@ test("a pending questionnaire survives a host kill -9: reboot, reopen, answer, a
 	await page.reload();
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 
-	// The fragment restores the workspace and exact chat across the restart. The session is now disk-only
-	// (the live one died with the host), so the exact target re-opens it through hydration automatically.
 	await expect(activeWorktreeRow(page)).toHaveCount(1, { timeout: 15_000 });
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 
-	// The questionnaire is STILL ANSWERABLE — the awaiting state is pure transcript, no host memory.
 	const card = activeCard(page);
 	await expect(card).toBeVisible({ timeout: 30_000 });
 	await card.getByTestId("ask-option").first().click();
 	await card.getByTestId("ask-submit").click();
 
-	// The answer resolves the card into the answered record and STARTS A NEW TURN on the reborn host —
-	// the agent replies with the answer in context.
 	await expect(
 		page.locator('[data-testid="ask-user-question"][data-tone="answered"]').first(),
 	).toBeVisible({ timeout: 60_000 });
@@ -182,7 +155,6 @@ test("a pending questionnaire survives a host kill -9: reboot, reopen, answer, a
 			.filter({ hasText: "Done" })
 			.last(),
 	).toBeVisible({ timeout: 90_000 });
-	// A fresh assistant reply exists below the record (the resumed turn's output).
 	await expect(
 		page.locator('[data-testid="chat-message"][data-role="assistant"]').last(),
 	).toBeVisible();

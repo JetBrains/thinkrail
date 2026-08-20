@@ -9,14 +9,11 @@ import { ConfirmDialog } from "./ConfirmDialog";
 
 const TerminalInstance = lazy(() => import("./TerminalInstance"));
 
-/** Keep the terminal domain catalog current independently of where terminal bodies are arranged. */
 export function useTerminalCatalog(workspaceId: string | null): boolean {
 	const connectionGeneration = useAppStore((state) => state.connectionGeneration);
 	const status = useAppStore((state) => state.status);
 	const [ready, setReady] = useState(false);
 	const pushEpochByWorkspace = useRef(new Map<string, number>());
-	// Subscribe before starting the read: subscribe() synchronously replays its cached latest snapshot. That
-	// replay predates the read and must be part of the baseline, while a genuinely later push wins the race.
 	useEffect(
 		() =>
 			getTransport().subscribe(WS_CHANNELS.terminalTabs, (payload) => {
@@ -47,7 +44,6 @@ export function useTerminalCatalog(workspaceId: string | null): boolean {
 					return;
 				}
 				if ((pushEpochByWorkspace.current.get(workspaceId) ?? 0) !== pushEpoch) {
-					// A full catalog push landed after this read began; installing the older read would undo it.
 					setReady(true);
 					return;
 				}
@@ -66,7 +62,6 @@ export function useTerminalCatalog(workspaceId: string | null): boolean {
 	return ready;
 }
 
-/** A selected, visible terminal body. The workbench visibility gate decides whether this mounts. */
 export function TerminalWorkbenchBody({ tab, onAdd }: { tab: TerminalTab; onAdd: () => void }) {
 	return (
 		<div data-testid="terminal-panel" className="relative h-full min-h-0 bg-container-terminal-bg">
@@ -101,7 +96,6 @@ interface TerminalCloseState {
 	phase: "requesting" | "confirming" | "forcing";
 }
 
-/** Domain-safe terminal close flow, including the server's live-process confirmation. */
 export function useTerminalClose(): {
 	requestClose: (tab: TerminalTab, onClosed: () => void) => void;
 	confirmation: ReactNode;
