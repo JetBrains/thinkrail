@@ -34,6 +34,7 @@ const SUPPORTED_LANGUAGES = [
 	"css",
 	"bash",
 	"shell",
+	"powershell",
 	"markdown",
 	"yaml",
 	"python",

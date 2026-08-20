@@ -18,10 +18,17 @@ We believe ThinkRail can make Pi more accessible without compromising its power.
 
 ThinkRail ships as a single self-contained executable. To install it, open the terminal and use one of the following commands:
 
-1. **macOS/Linux** and **Windows** from cmd:
-   ```curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash```
-2. **Windows** from PowerShell:
-   ```powershell -c "irm https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1 | iex"```
+**macOS/Linux** (also works in Git Bash on Windows):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash
+```
+
+**Windows** (PowerShell):
+
+```powershell
+irm https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1 | iex
+```
 
 Once installed, run `thinkrail`. Your browser will open a new tab with a button prompting you to open your first local project. The project should already be connected to a Git repository. This is a core ThinkRail functionality: every working session operates on a separate Git branch that merges with the original repository only after the work is finished and reviewed.
 
