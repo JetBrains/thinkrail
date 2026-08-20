@@ -167,6 +167,8 @@ via `bunx wrangler@<pinned> pages deploy --project-name=thinkrail-previews --bra
 per-PR alias URL is deterministic — `https://pr-<num>.thinkrail-previews.pages.dev` — and is surfaced
 as a sticky PR comment (marker `<!-- thinkrail-site-preview -->`, edited in place each push, via
 `gh api` — no third-party comment action) plus a `Website preview` commit status on the head SHA.
+The workflow polls the URL until it serves 200 before posting (a fresh `pr-<num>` subdomain 522s for
+its first ~20s — observed at setup, 2026-08-20) so the designer never receives a dead link.
 
 Boundaries of the preview path (decisions, 2026-08):
 - **Production is untouched**: GitHub Pages + `thinkrail.ai` remain the only production host;
