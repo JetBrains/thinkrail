@@ -584,7 +584,10 @@ export function setWorkspaceDiffBase(id: string, ref: string | null): Workspace 
 	return ws;
 }
 
-export function listWorkspaces(projectId: string): Workspace[] {
+export function listWorkspaces(
+	projectId: string,
+	opts: { includeDiffStats?: boolean } = {},
+): Workspace[] {
 	// Lazily ensure the built-in Default workspace on every list: find-or-create is idempotent, backfills
 	// projects opened before the feature existed, and self-heals out-of-band state churn (the e2e reset
 	// rewrites workspaces.json mid-run). Unknown project → no ensure, the filter returns [] as before.
@@ -600,6 +603,10 @@ export function listWorkspaces(projectId: string): Workspace[] {
 	const rows = loadWorkspaces().filter((w) => w.projectId === projectId);
 	// Pin the Default workspace first (creation order would put a backfilled one last).
 	rows.sort((a, b) => (a.kind === "default" ? -1 : 0) - (b.kind === "default" ? -1 : 0));
+	// The membership/order above is always the complete authoritative answer; only the per-workspace
+	// diff-stat fan-out (a synchronous `git diff --shortstat` per row) is optional — navigation
+	// restoration opts out so an automatic reload on a shared host never diffs every worktree.
+	if (opts.includeDiffStats === false) return rows;
 	return rows.map((w) => {
 		const stats = diffStats(w);
 		// Omitted, not zeroed, when git couldn't answer (`exactOptionalPropertyTypes`).

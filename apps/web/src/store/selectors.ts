@@ -15,7 +15,7 @@ import {
 	normalizePath,
 	readLayoutSelection,
 } from "../lib";
-import type { ClosedChat, EditorTab, TerminalTab } from "./appStore";
+import type { ClosedChat, EditorTab, RouteChatTarget, TerminalTab } from "./appStore";
 
 interface ConnectionGenerationState {
 	status: string;
@@ -453,6 +453,17 @@ export function selectWorkspaceTick(
 	workspaceId: string,
 ): number {
 	return state.fsChangesByWorkspace[workspaceId]?.tick ?? 0;
+}
+
+/** Exact-chat route intent only while its workspace remains active and no newer center navigation won. */
+export function selectCurrentRouteChatTarget(state: {
+	routeChatTarget: RouteChatTarget | null;
+	activeWorkspaceId: string | null;
+	navTickByWorkspace: Record<string, number>;
+}): RouteChatTarget | null {
+	const target = state.routeChatTarget;
+	if (!target || state.activeWorkspaceId !== target.workspaceId) return null;
+	return selectWorkspaceNavTick(state, target.workspaceId) === target.navTick ? target : null;
 }
 
 /**

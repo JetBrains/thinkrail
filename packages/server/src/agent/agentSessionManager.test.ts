@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, expect, jest, test } from "bun:test";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import {
 	InMemoryCredentialStore,
 	type Model,
@@ -528,6 +528,34 @@ test("listSessions reports a workspace's live sessions; getSessionMessages retur
 	expect(messages.some((m) => m.role === "assistant")).toBe(true);
 	expect(messages.every((m) => ["user", "assistant", "toolResult"].includes(m.role))).toBe(true);
 	removeSession(s.sessionId);
+});
+
+test("listSessions ignores a live session's transient physical rewrite but stays strict for detached files", async () => {
+	const cwd = tmpCwd("trpi-live-rewrite-");
+	const liveManager = SessionManager.create(cwd);
+	setSessionManagerFactory(() => liveManager);
+	try {
+		const s = await createSession({
+			cwd,
+			workspaceId: "ws-live-rewrite",
+			model: toWireModel(fauxA.getModel()),
+		});
+		const sessionFile = liveManager.getSessionFile();
+		if (!sessionFile) throw new Error("disk-backed live session has no file path");
+		mkdirSync(dirname(sessionFile), { recursive: true });
+		// Model pi's synchronous truncate→rewrite window at its worst point: the registered runtime is still
+		// authoritative, while its exact physical path temporarily has no readable header.
+		writeFileSync(sessionFile, "");
+		expect((await listSessions("ws-live-rewrite", cwd)).map((row) => row.sessionId)).toContain(
+			s.sessionId,
+		);
+
+		removeSession(s.sessionId);
+		// Once detached, the same malformed file is no longer exempt: absence must never be inferred from it.
+		await expect(listSessions("ws-live-rewrite", cwd)).rejects.toThrow("unreadable or malformed");
+	} finally {
+		setSessionManagerFactory(() => SessionManager.inMemory());
+	}
 });
 
 test("disk-reopen: a disposed session is re-listed from disk and re-opened with its transcript (restart survival)", async () => {
