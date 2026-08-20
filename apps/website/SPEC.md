@@ -9,9 +9,10 @@ tags: [website, marketing]
 
 ## Responsibility
 
-The project's public website — a single landing page whose creative conceit is that **the site IS the
-IDE**: a faithful HTML/CSS recreation of the ThinkRail shell (title bar, project rail, tab strip,
-files rail, terminal, status bar) whose center "editor" is the normally-scrolling page content. Each
+The project's public website — a landing page and blog whose creative conceit is that **the site IS
+the IDE**: a faithful HTML/CSS recreation of the ThinkRail shell (title bar, project rail, tab strip,
+files rail, terminal, status bar) whose center "editor" is the normally-scrolling page content — the
+blog included (see Blog below). Each
 section poses as a file of a `website` workspace (`README.md`, `why.md`, `features/*.md`,
 `install.sh`, `CONTRIBUTING.md`). The **file tree is the source of truth for the page's navigation
 structure**, and its selection reacts to scroll (scroll-spy) like the editor is switching files. The
@@ -62,8 +63,18 @@ binary.
   (the app's tokens assume the theme engine's runtime swap).
 - **Shared page chrome is single-sourced in components.** `src/components/BaseHead.astro` is the one
   head every page uses: charset/viewport, favicon, global stylesheet (which bundles the fonts), the
-  pre-paint theme guard, and the analytics loaders. `src/components/Copyright.astro` is the one
-  copyright line (landing statusbar + blog footer). The dark/light theme model lives in
+  pre-paint theme guard, and the analytics loaders. `src/components/IdeShell.astro` is the one IDE
+  shell every page's body renders through — icon sprite, skip link, title bar (workspace name
+  parameterized: `website` on the landing, `blog` on blog pages, each with the matching
+  `workspace/<name> · from main` branch label), the left project rail, the right files rail +
+  terminal, the status bar, and the `main.ts` script import; the center column is its default slot
+  and the right rail's All-files rows its `filetree` slot. The left rail carries the site's real
+  navigation as child rows of the `website` workspace — **Landing** (`/`) and **Blog** (`/blog/`,
+  selected on the index and on every article) as links, **Docs** disabled with a `Coming soon` chip
+  (no tooltip — the tag carries the state) — while the remaining mock rows keep the
+  `data-mock-hint` treatment; the selected row wears the same accent-tinted grammar as the right
+  rail's active file row (one grouped CSS rule). `src/components/Copyright.astro` is the one
+  copyright line (shell statusbar). The dark/light theme model lives in
   `src/theme.ts` (explicit choice in `localStorage` → `prefers-color-scheme` fallback, live
   system-follow, legacy `darcula`/`gruvbox` values normalize to dark); the inline FOUC guard in
   BaseHead is its declared twin — a behavior change updates both.
@@ -211,8 +222,20 @@ The `/blog` subsite is a typed Astro content collection over Markdown posts in `
   `src/youTubeEmbeds.ts` (Astro 7's native Markdown processor — the unified/rehype pipeline is a
   separate legacy package we don't carry) rewrites `youtube.com/embed` → `youtube-nocookie.com` and
   adds `title` + `loading="lazy"` when omitted. This keeps the no-consent-banner stance intact.
-- **Theming/chrome**: blog pages share BaseHead (theme guard, fonts, analytics) and the `src/theme.ts`
-  toggle — same behavior as the landing page, one implementation.
+- **Chrome: blog pages live inside the IDE shell**, not a separate page frame (decision, 2026-08 —
+  the prior standalone blog header/footer is deleted). `BlogLayout.astro` renders through
+  `IdeShell.astro`: the content sits in the same scrolling editor pane as the landing sections, in a
+  `.blog-main` container sharing their exact geometry (one grouped `.file-section, .blog-main` CSS
+  rule — deliberately *not* the `.file-section` class, whose typography cascade would fight the blog
+  content styles). Opening an article replaces the index in that same central area. **No tab strip on
+  blog pages** (the landing keeps its section tabs; page-level Landing/Blog tabs were explicitly
+  rejected for now). The right rail's All-files list shows the published articles (current one
+  active); the terminal keeps its static install transcript — `main.ts` guards make every
+  landing-only enhancement inert (no sections → no scroll-spy, no picker → no terminal replay).
+  Post cards are whole-card links that signal hover on the border alone (no underline, no movement)
+  and share the landing feature cards' surface, which keeps the `--elevated` tag chips visible on
+  them. Theming: BaseHead (theme guard, fonts, analytics) + the `src/theme.ts` toggle via the
+  shell's `main.ts` — same behavior as the landing page, one implementation.
 - **Author guide**: `content/blog/BLOG.md` documents the frontmatter schema, Markdown features,
   embeds, and the local preview loop (`bun run dev` hot-reloads posts).
 - **Deployment**: alongside the main site via the same `site.yml` workflow; changes to

@@ -563,7 +563,6 @@ if (mockElements.length > 0) {
 	const RAIL_OFFSET = 12;
 	const titlebar = document.querySelector(".titlebar");
 	const railRight = document.getElementById("rail-right");
-	const railLeft = document.querySelector(".rail-left");
 
 	const positionTooltip = (trigger: HTMLElement) => {
 		const triggerRect = trigger.getBoundingClientRect();
@@ -574,21 +573,15 @@ if (mockElements.length > 0) {
 		let left: number;
 		let top: number;
 
-		// Placement per region. Only `.rail-tabs` and `.rail-left-nav` carry a hint; both anchor to their
-		// panel's live edge so the callout sits in the header/panel corner rather than inside the content.
+		// Placement per region. `.rail-tabs` anchors to its panel's live edge so the callout sits in
+		// the header corner; other triggers (the left rail's mock rows) use the generic placement.
 		if (trigger.classList.contains("rail-tabs") && titlebar && railRight) {
 			const titlebarRect = titlebar.getBoundingClientRect();
 			const railRect = railRight.getBoundingClientRect();
 			left = railRect.left - tooltipRect.width - RAIL_OFFSET;
 			top = titlebarRect.bottom + RAIL_OFFSET;
-		} else if (trigger.classList.contains("rail-left-nav") && titlebar && railLeft) {
-			// The mirror of the above, offset to the RIGHT of the left rail's edge.
-			const titlebarRect = titlebar.getBoundingClientRect();
-			const railLeftRect = railLeft.getBoundingClientRect();
-			left = railLeftRect.right + RAIL_OFFSET;
-			top = titlebarRect.bottom + RAIL_OFFSET;
 		} else {
-			// Left sidebar and others: right of trigger (original behavior)
+			// Generic: right of the trigger, below it
 			left = triggerRect.right + GAP;
 			top = triggerRect.bottom + GAP;
 

@@ -96,8 +96,6 @@
 	--transition-normal: 250ms ease;
 
 	/* ── Blog semantic aliases (map to main tokens) ─────────────────────────── */
-	--blog-bg: var(--container-workspace-bg);
-	--blog-header-bg: var(--container-header-bg);
 	--blog-text: var(--text);
 	--blog-text-muted: var(--muted);
 	--blog-text-hint: var(--hint);
@@ -461,18 +459,6 @@ code {
 	display: block;
 }
 
-.blog-btn {
-	color: var(--muted);
-}
-
-.blog-btn:hover {
-	text-decoration: none;
-}
-
-.blog-label {
-	font-size: 13px;
-}
-
 .gh-btn {
 	color: var(--muted);
 }
@@ -566,6 +552,45 @@ code {
 
 .tree-row.dim {
 	opacity: 0.5;
+}
+
+/* Site pages nested under the `website` workspace — real navigation, not part of the mock. */
+.tree-row.page {
+	padding-left: 44px;
+}
+
+a.tree-row:hover {
+	background: var(--hover);
+	color: var(--text);
+	text-decoration: none;
+}
+
+/* Docs ships later; the `Coming soon` tag carries the state, so the row is quiet via colour,
+   not opacity — the chip must stay legible. */
+.tree-row.disabled {
+	color: var(--hint);
+}
+
+.tree-tag {
+	margin-left: auto;
+	flex: none;
+	padding: 1px 6px;
+	border: 1px solid var(--border2);
+	border-radius: 4px;
+	background: var(--elevated);
+	font-family: var(--font-mono);
+	font-weight: 500;
+	font-size: 9.5px;
+	letter-spacing: 0.4px;
+	color: var(--muted);
+	white-space: nowrap;
+}
+
+/* The rows that remain a static mock (the `data-mock-hint` wrapper) keep the tree's row rhythm. */
+.tree-mock {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
 }
 
 .rail-note {
@@ -734,10 +759,16 @@ code {
 
 /* ── Sections: files ────────────────────────────────────────────────────── */
 
-.file-section {
+/* One container geometry for everything the editor pane shows: the landing's sections and the
+   blog pages' content column. */
+.file-section,
+.blog-main {
 	max-width: 860px;
 	margin: 0 auto;
 	padding: clamp(40px, 7vh, 84px) clamp(20px, 5vw, 56px);
+}
+
+.file-section {
 	scroll-margin-top: 8px;
 }
 
@@ -1228,11 +1259,17 @@ p.hero-platforms {
 	}
 }
 
-.feature-card {
+/* The shell's shared card surface, worn by the landing feature cards and the blog post cards
+   alike — slightly raised off the editor surface, so `--elevated` chips stay visible on it. */
+.feature-card,
+.blog-post-card {
 	border: 1px solid var(--border2);
+	background: color-mix(in srgb, var(--elevated) 40%, var(--container-workspace-bg));
+}
+
+.feature-card {
 	border-radius: 4px;
 	padding: 16px 18px;
-	background: color-mix(in srgb, var(--elevated) 40%, var(--container-workspace-bg));
 }
 
 .feature-card h3 {
@@ -1600,12 +1637,17 @@ p.footer-fineprint {
 	color: var(--muted);
 }
 
-.ft-row.active {
+/* One selected-item grammar for both rails: the accent-tinted row. (`a.tree-row.selected` ties
+   with `a.tree-row:hover` on specificity and wins by source order, so — like `.ft-row.active` —
+   a selected row keeps its accent background under the pointer.) */
+.ft-row.active,
+a.tree-row.selected {
 	background: color-mix(in srgb, var(--accent) 16%, transparent);
 	color: var(--text);
 }
 
-.ft-row.active .i {
+.ft-row.active .i,
+a.tree-row.selected .i {
 	color: var(--accent);
 }
 
@@ -2168,90 +2210,10 @@ html:not(.anim) .term-caret {
 
 /* ═══════════════════════════════════════════════════════════════════════════
    BLOG STYLES
-   Shared styles for /blog pages. Uses the same tokens as the main site.
+   Shared styles for /blog pages, rendered inside the IDE shell's editor pane.
+   `.blog-main` (the content column) shares the landing sections' container geometry — see
+   the grouped `.file-section, .blog-main` rule. Uses the same tokens as the main site.
    ═══════════════════════════════════════════════════════════════════════════ */
-
-/* Blog pages need body-level scrolling (main site uses overflow:hidden on body
-   because the editor pane owns scrolling). */
-body.blog-page {
-	overflow: auto;
-	height: auto;
-	min-height: 100%;
-	background: var(--blog-bg);
-}
-
-/* ── Blog Header ────────────────────────────────────────────────────────── */
-
-.blog-header {
-	position: sticky;
-	top: 0;
-	z-index: 100;
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	padding: var(--space-md) var(--space-xl);
-	background: var(--blog-header-bg);
-	border-bottom: 1px solid var(--blog-border);
-}
-
-.blog-logo {
-	font-family: var(--font-display);
-	font-size: var(--text-xl);
-	font-weight: 700;
-	color: var(--blog-accent);
-	text-decoration: none;
-	letter-spacing: 0.05em;
-}
-
-.blog-header-nav {
-	display: flex;
-	align-items: center;
-	gap: var(--space-lg);
-}
-
-.blog-header-nav a {
-	color: var(--blog-text-muted);
-	text-decoration: none;
-	font-size: var(--text-sm);
-	transition: color var(--transition-fast);
-}
-
-.blog-header-nav a:hover {
-	color: var(--blog-accent);
-}
-
-/* Blog theme toggle button */
-.blog-theme-toggle {
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	width: 32px;
-	height: 32px;
-	padding: 0;
-	border: 1px solid var(--blog-border);
-	border-radius: 0.25rem;
-	background: transparent;
-	color: var(--blog-text-muted);
-	cursor: pointer;
-	transition:
-		color var(--transition-fast),
-		border-color var(--transition-fast);
-}
-
-.blog-theme-toggle:hover {
-	color: var(--blog-accent);
-	border-color: var(--blog-accent);
-}
-
-/* ── Blog Main Content ──────────────────────────────────────────────────── */
-
-.blog-main {
-	flex: 1;
-	width: 100%;
-	max-width: 48rem;
-	margin: 0 auto;
-	padding: var(--space-2xl) var(--space-xl);
-}
 
 /* ── Blog Index ─────────────────────────────────────────────────────────── */
 
@@ -2279,21 +2241,19 @@ body.blog-page {
 	gap: var(--space-xl);
 }
 
+/* Surface + border come from the shared card rule (`.feature-card, .blog-post-card`). The whole
+   card is the link; hover signals on the border alone — no underline, no movement. */
 .blog-post-card {
 	display: block;
 	padding: var(--space-lg);
-	background: var(--blog-code-bg);
-	border: 1px solid var(--blog-border);
 	border-radius: 0.5rem;
 	text-decoration: none;
-	transition:
-		border-color var(--transition-fast),
-		transform var(--transition-fast);
+	transition: border-color var(--transition-fast);
 }
 
 .blog-post-card:hover {
 	border-color: var(--blog-accent);
-	transform: translateY(-2px);
+	text-decoration: none;
 }
 
 .blog-post-card-title {
@@ -2377,11 +2337,12 @@ body.blog-page {
 	gap: var(--space-xs);
 }
 
+/* The chip grammar (`.chip`): raised surface + border-strong outline, so tags read as tags. */
 .blog-tag {
 	display: inline-block;
 	padding: var(--space-xs) var(--space-sm);
 	background: var(--blog-code-bg);
-	border: 1px solid var(--blog-border);
+	border: 1px solid var(--border2);
 	border-radius: 0.25rem;
 	font-size: var(--text-xs);
 	color: var(--blog-text-muted);
@@ -2598,27 +2559,9 @@ body.blog-page {
 	text-align: right;
 }
 
-/* ── Blog Footer ────────────────────────────────────────────────────────── */
-
-.blog-footer {
-	padding: var(--space-xl);
-	text-align: center;
-	color: var(--blog-text-hint);
-	font-size: var(--text-sm);
-	border-top: 1px solid var(--blog-border);
-}
-
 /* ── Blog Responsive ────────────────────────────────────────────────────── */
 
 @media (max-width: 640px) {
-	.blog-header {
-		padding: var(--space-sm) var(--space-md);
-	}
-
-	.blog-main {
-		padding: var(--space-lg) var(--space-md);
-	}
-
 	.blog-post-title {
 		font-size: var(--text-2xl);
 	}
