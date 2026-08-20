@@ -5,11 +5,13 @@ import { expect, test } from "@playwright/test";
 import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
 
 // The TODO → review workflow's user-driven half, no agent: a seeded plan whose done step carries a
-// completion summary + a real commit artifact (the host's change-set shape) renders summary-first on the
-// plan page, grows the Plan | Review toggle + the separate reviewed counter, and Approve records the
-// review (host sidecar) and flips the card + counter. The agent half (the host committing per done item,
-// ask-to-fix's fix cycle) is @agent territory; the seeded JSON here is exactly the shape those leave
-// behind.
+// completion summary + a real commit artifact (the host's change-set shape) renders on the plan page
+// with the separate reviewed counter, and the inline manual Approve (next to the changes) records the
+// review (host sidecar) and flips the counter + the step's Verified glyph. There is no separate
+// summary-first "Review mode" page any more (task-plan-review-kebab): findings live in the right-panel
+// Review tab, header actions are a kebab menu. The agent half (the host committing per done item,
+// ask-to-fix's fix cycle, Review All) is @agent territory; the seeded JSON here is exactly the shape
+// those leave behind.
 
 /** One real commit in the worktree (the shape artifacts.ts leaves), returning its sha. */
 function commitFile(worktree: string, path: string, content: string, subject: string): string {
@@ -25,7 +27,7 @@ function commitFile(worktree: string, path: string, content: string, subject: st
 	return git("rev-parse", "HEAD").trim();
 }
 
-test("a reviewable step reads summary-first in Review mode and Approve records the review", async ({
+test("a reviewable step shows the reviewed counter and inline Approve records the review", async ({
 	page,
 }) => {
 	await openFixtureProject(page);
@@ -104,21 +106,16 @@ test("a reviewable step reads summary-first in Review mode and Approve records t
 	await expect(verification).toContainText("bun test — 12 pass");
 	await expect(verification).toHaveAttribute("data-status", "claimed");
 
-	// Review mode: summary-first card for the code step only; the diff (the commit's file rows) under it.
-	await pane.getByTestId("plan-mode-review").click();
-	const card = pane.getByTestId("review-item");
-	await expect(card).toHaveCount(1);
-	await expect(card).toHaveAttribute("data-state", "unreviewed");
-	await expect(card).toContainText("Implement FloodWait handling");
-	await expect(card.getByTestId("review-summary")).toContainText("Added throttling and fallback");
-	await expect(card.getByTestId("todo-verification")).toContainText("bun test — 12 pass");
-	await expect(card.getByTestId("review-commit-chip")).toContainText(sha.slice(0, 7));
-	// The newest (only) revision unfolds for an unreviewed item — its file rows are the grouped diff.
-	await expect(card.getByTestId("plan-file-row").filter({ hasText: "flood.ts" })).toBeVisible();
+	// The header kebab holds the export + Review All actions (portaled to the body). Review All is enabled
+	// while an unsettled reviewable item exists.
+	await pane.getByTestId("plan-menu").click();
+	await expect(page.getByTestId("plan-copy-markdown")).toBeVisible();
+	await expect(page.getByTestId("plan-save-markdown")).toBeVisible();
+	await expect(page.getByTestId("plan-review-all")).not.toHaveAttribute("data-disabled", "");
+	await page.keyboard.press("Escape");
 
-	// Approve happens NEXT TO THE CHANGES: back in Plan mode, expanding the step's change set reveals a
-	// Start review button, which unfolds the verdict pair right under the file rows.
-	await pane.getByTestId("plan-mode-plan").click();
+	// Approve happens NEXT TO THE CHANGES: expanding the step's change set reveals a Start review button,
+	// which unfolds the verdict pair right under the file rows.
 	const codeItem = pane
 		.getByTestId("plan-item")
 		.filter({ hasText: "Implement FloodWait handling" });
@@ -130,15 +127,16 @@ test("a reviewable step reads summary-first in Review mode and Approve records t
 	await codeItem.getByTestId("plan-review-manually").click();
 	await codeItem.getByTestId("review-approve").click();
 
-	// Approved → the step's glyph becomes the circled Verified check, the counter flips, the inline
-	// affordance disappears, and the Review-mode card settles too.
+	// Approved → the step's glyph becomes the circled Verified check, the counter flips, and the inline
+	// affordance disappears.
 	await expect(codeItem).toHaveAttribute("data-reviewed", "true");
 	await expect(codeItem.locator('[data-reviewed="true"][class*="lucide"]')).toBeVisible();
 	await expect(codeItem.getByTestId("plan-start-review")).toHaveCount(0);
 	await expect(pane.getByTestId("plan-review-progress")).toContainText("1/1 reviewed");
-	await pane.getByTestId("plan-mode-review").click();
-	await expect(card).toHaveAttribute("data-state", "reviewed");
-	await expect(card.getByTestId("review-approve")).toHaveCount(0);
+	// Nothing left unsettled → Review All is disabled in the kebab.
+	await pane.getByTestId("plan-menu").click();
+	await expect(page.getByTestId("plan-review-all")).toHaveAttribute("data-disabled", "");
+	await page.keyboard.press("Escape");
 	const sidecar = join(todosDir, `${sessionId}.reviews.json`);
 	expect(existsSync(sidecar)).toBe(true);
 	const record = JSON.parse(readFileSync(sidecar, "utf8")).items.t_code;

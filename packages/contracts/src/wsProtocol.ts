@@ -222,7 +222,9 @@ export interface TerminalTabsPush {
 // v41: the agent reviewer — `todo.startReview` sends an item to the plan's dedicated reviewer chat, whose
 // findings land as `author: "agent"` review comments (the Review tab) and whose `review_verdict` settles
 // the item; `TodoItem.review` grows `reviewing`/`reviewedBy`, `ReviewComment` grows `author`.
-export const PROTOCOL_VERSION = 41;
+// v42: Review All — `todo.reviewAll` starts a host-side queue that agent-reviews every unsettled
+// reviewable item one at a time (advances on any verdict; auto-fix runs in the background).
+export const PROTOCOL_VERSION = 42;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a
@@ -320,6 +322,7 @@ export const WS_METHODS = {
 	todoReview: "todo.review",
 	todoRequestFix: "todo.requestFix",
 	todoStartReview: "todo.startReview",
+	todoReviewAll: "todo.reviewAll",
 	gitStatus: "git.status",
 	gitDiffFile: "git.diffFile",
 	// The workspace branch's own commits (`<diff base>..HEAD`, newest first) — the scope menu's commit list,
@@ -662,6 +665,15 @@ export interface WsMethodMap {
 	"todo.startReview": {
 		params: { workspaceId: string; sessionId: string; id: string };
 		result: { ok: true; reviewerSessionId: string };
+	};
+	// Review All: start the AGENT review of every unsettled reviewable item, driven by a HOST-side queue
+	// that reviews strictly one at a time. The queue advances on ANY reviewer verdict for the in-flight
+	// item (approve OR changes_requested — a single pass; the auto-fix + auto-re-review of a requested
+	// item runs in the background). `total` = items queued (0 = nothing to review). The client fires this
+	// once and watches progress via `todo.list` refetch (per-item `review.reviewing`).
+	"todo.reviewAll": {
+		params: { workspaceId: string; sessionId: string };
+		result: { ok: true; total: number };
 	};
 	// `scope` (default `{ kind: "branch" }`) selects **what** is diffed; see `GitDiffScope`. An unresolvable
 	// scope (a commit that a rebase/reset removed) is REJECTED — the panel treats that as "reset the scope"

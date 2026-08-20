@@ -144,7 +144,9 @@ comments to the worker (autoCycles 1), the fixed revision auto-re-reviews once (
 autoCycles === 1 + a fresh delta), and that verdict records autoCycles 2 — terminal, the human decides),
 and `workerSessionForReviewer` (the verdict seam's reverse lookup, enumerating sidecars). The reviewer's
 findings are **agent-authored review comments** in the reviews module (`author: "agent"`), never a
-parallel store; orchestration/sends live in `host/todoReview.ts`.
+parallel store; orchestration/sends live in `host/todoReview.ts`. **Review All** (`todo.reviewAll`) is
+pure host orchestration over this same flow: `host/reviewQueue.ts` drives a per-(workspace, session)
+FIFO of the unsettled reviewable items one at a time, so it adds no state here (see host/SPEC.md).
 
 **The read barrier.** `listTodos` first awaits the workspace's in-flight reconciles
 (`settleChangeArtifacts` — the same per-workspace chain). A client's only refresh signal is the `pi.event`

@@ -34,6 +34,9 @@ export interface ChatTodos {
 	/** Start the AGENT review (`todo.startReview`): the plan's reviewer chat reviews the item's change
 	 * set; findings land in the Review tab, the verdict settles the item. Re-reads for the spinner. */
 	startReview: (id: string) => Promise<void>;
+	/** Review All (`todo.reviewAll`): agent-review every unsettled reviewable item, host-side queue, one
+	 * at a time. Resolves with how many items were queued (0 = nothing to review). Re-reads for spinners. */
+	reviewAll: () => Promise<{ total: number }>;
 }
 
 /**
@@ -188,7 +191,24 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 		await reloadPlan(); // the `reviewing` mark is host-derived — never patched locally
 	};
 
-	return { data, failed, add, remove, openPlan, openChanges, approve, askFix, startReview };
+	const reviewAll = async () => {
+		const { total } = await getTransport().request("todo.reviewAll", { workspaceId, sessionId });
+		await reloadPlan(); // the first item's `reviewing` mark is host-derived — re-read to show it
+		return { total };
+	};
+
+	return {
+		data,
+		failed,
+		add,
+		remove,
+		openPlan,
+		openChanges,
+		approve,
+		askFix,
+		startReview,
+		reviewAll,
+	};
 }
 
 /**

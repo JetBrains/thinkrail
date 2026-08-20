@@ -331,3 +331,20 @@ export function selectReviewDraftCount(
 	const snapshot = state.reviewsByWorkspace[workspaceId];
 	return snapshot ? snapshot.comments.filter((c) => c.status === "draft").length : 0;
 }
+
+/** Open review comments authored by the plan's reviewer AGENT — the plan page's comment-count chip
+ * (task-plan-review-kebab). "Open" = not resolved/dismissed; the chip focuses the Review tab where the
+ * reviewer's findings live. The ONE derivation so the chip and the Review tab can't disagree. */
+export function selectAgentReviewCommentCount(
+	state: {
+		reviewsByWorkspace: Record<string, { comments: { status: string; author?: string }[] }>;
+	},
+	workspaceId: string | null,
+): number {
+	if (!workspaceId) return 0;
+	const snapshot = state.reviewsByWorkspace[workspaceId];
+	if (!snapshot) return 0;
+	return snapshot.comments.filter(
+		(c) => c.author === "agent" && c.status !== "resolved" && c.status !== "dismissed",
+	).length;
+}

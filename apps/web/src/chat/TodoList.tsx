@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "../lib";
-import { PlanStatusIcon, SectionLabel, VerificationBadge } from "./planKit";
+import { PlanStatusIcon, SectionLabel } from "./planKit";
 import {
 	groupProgress,
 	type ItemChangeSet,
@@ -422,21 +422,9 @@ function TodoRow({
 				>
 					{todo.title}
 				</div>
-				{todo.note ? (
-					<div className="truncate text-text-muted tr-text-metadata">{todo.note}</div>
-				) : null}
-				{todo.status === "done" && todo.summary ? (
-					<div
-						data-testid="todo-summary"
-						className="line-clamp-2 text-text-subtle tr-text-metadata"
-						title={todo.summary}
-					>
-						{todo.summary}
-					</div>
-				) : null}
-				{todo.status === "done" && todo.verification ? (
-					<VerificationBadge verification={todo.verification} />
-				) : null}
+				{/* The compact list stays title-only (note/summary/verification live on the full plan page) so
+				    a long plan reads at a glance without overloading each row. The change-set chip stays —
+				    it's an affordance, not prose. */}
 				{changeSet && onOpenChanges ? (
 					<ChangeSetChip set={changeSet} onOpen={onOpenChanges} />
 				) : null}

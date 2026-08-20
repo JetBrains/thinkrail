@@ -112,7 +112,13 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `add_review_comment`/`review_verdict` tool seams (reviewer session → workspace → worker plan via
   `getSessionWorkspaceId` + `workerSessionForReviewer`; non-reviewer callers get a loud error), run the
   ONE auto fix cycle (reviewer comments → `buildSendPackage` → the worker chat) and the one auto
-  re-review off the reconcile tee (`maybeAutoReReview`);
+  re-review off the reconcile tee (`maybeAutoReReview`); **`todo.reviewAll` + `host/reviewQueue.ts`**
+  add the Review All pass (task-plan-review-kebab): `startReviewAllFlow` seeds a per-(workspace, session)
+  in-memory FIFO with every *unsettled* reviewable item (plan order) and kicks the first; the queue
+  advances one at a time on ANY reviewer verdict for the in-flight item (`onReviewVerdict`, wired into
+  all three `review_verdict` branches) — approve OR changes_requested, so a requested item's background
+  fix + auto-re-review never stalls the pass. `reviewQueue.ts` is pure mechanics with an injected
+  `startOne` (no agent/session dep — unit-tested in `reviewQueue.test.ts`);
   `project.setTrust`
   acknowledges the aliases present at grant via agent's
   `listProjectAliasSkillNames`; `project.acknowledgeSkills` / `project.setSkillEnabled` /

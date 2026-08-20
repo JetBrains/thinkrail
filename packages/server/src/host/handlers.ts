@@ -142,7 +142,7 @@ import { nudgeBaseRefWorkspaces } from "./fsNudge";
 import { buildHistoryScope } from "./historyScope";
 import { dropLogin, recordLoginStart } from "./loginAnalytics";
 import { withReviewLock } from "./reviewLock";
-import { startTodoReviewFlow } from "./todoReview";
+import { startReviewAllFlow, startTodoReviewFlow } from "./todoReview";
 
 /**
  * Who a request came from. Threaded to every handler so one can scope a resource to its caller; most ignore
@@ -429,6 +429,10 @@ const handlers: Record<string, Handler> = {
 	// agent-authored review comments, the verdict via the review_verdict tool (host/todoReview.ts).
 	"todo.startReview": (params) =>
 		startTodoReviewFlow(params as { workspaceId: string; sessionId: string; id: string }),
+	// Review All: seed the host-side review queue and kick the first item; it reviews the rest one at a
+	// time, advancing on each reviewer verdict (host/todoReview.ts).
+	"todo.reviewAll": (params) =>
+		startReviewAllFlow(params as { workspaceId: string; sessionId: string }),
 	// Ask-to-fix: record `changes_requested` + the watermark, then fire the context package into the
 	// item's OWN chat (the plan, work windows, and artifact reconcile are all per-session, so a foreign
 	// session could not attach the fix to the item). `followUpSession` rides a followUp while the agent

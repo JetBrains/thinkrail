@@ -69,8 +69,10 @@ test("the plan opens as a live plan page tab (markdown is its export)", async ({
 	await expect(pane.getByTestId("plan-item").filter({ hasText: "Second thought" })).toBeVisible();
 	await expect(pane.getByTestId("plan-progress")).toContainText("0/2");
 
-	// Export: copy-as-markdown lands the compiled plan in the clipboard.
-	await pane.getByTestId("plan-copy-markdown").click();
+	// Export: copy-as-markdown (in the header kebab menu, portaled to the body) lands the compiled plan
+	// in the clipboard.
+	await pane.getByTestId("plan-menu").click();
+	await page.getByTestId("plan-copy-markdown").click();
 	const clipboard = await page.evaluate(() => navigator.clipboard.readText());
 	expect(clipboard).toContain("# TODO");
 	expect(clipboard).toContain("Draft the outline");

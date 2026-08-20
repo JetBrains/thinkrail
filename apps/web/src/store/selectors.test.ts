@@ -8,6 +8,7 @@ import {
 	matchesWorktreePath,
 	selectActiveWorkspace,
 	selectActiveWorkspaceProjectId,
+	selectAgentReviewCommentCount,
 	selectCatalogModel,
 	selectContextProject,
 	selectHistoryTarget,
@@ -248,4 +249,24 @@ test("selectCatalogModel returns the LIVE entry, not the stale ref handed to it"
 test("selectCatalogModel is null when the ref left the catalog (caller keeps its snapshot)", () => {
 	const gone = catalogModel("anthropic", "opus-4", ["off"]);
 	expect(selectCatalogModel([catalogModel("anthropic", "opus-5", ["off"])], gone)).toBeNull();
+});
+
+test("selectAgentReviewCommentCount counts only OPEN agent-authored comments", () => {
+	const state = {
+		reviewsByWorkspace: {
+			w1: {
+				comments: [
+					{ status: "draft", author: "agent" }, // open agent finding
+					{ status: "sent", author: "agent" }, // open (sent to worker) agent finding
+					{ status: "resolved", author: "agent" }, // closed → excluded
+					{ status: "dismissed", author: "agent" }, // closed → excluded
+					{ status: "draft", author: "user" }, // human comment → excluded
+					{ status: "draft" }, // author absent (human default) → excluded
+				],
+			},
+		},
+	};
+	expect(selectAgentReviewCommentCount(state, "w1")).toBe(2);
+	expect(selectAgentReviewCommentCount(state, "missing")).toBe(0);
+	expect(selectAgentReviewCommentCount(state, null)).toBe(0);
 });

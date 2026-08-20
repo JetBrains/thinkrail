@@ -5,9 +5,19 @@ import {
 	Copy,
 	Download,
 	GitCommitHorizontal,
+	ListChecks,
 	LoaderCircle,
+	MessageSquare,
+	MoreVertical,
 } from "lucide-react";
 import { useState } from "react";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuSeparator,
+	DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { VerificationBadge } from "../chat/planKit";
 import { planToMarkdown } from "../chat/planMarkdown";
 import {
@@ -17,18 +27,17 @@ import {
 	planCompletionSummary,
 	planSections,
 	planSummary,
-	reviewProgress,
+	reviewableItems,
 	reviewSettled,
 } from "../chat/planView";
 import { StatusIcon } from "../chat/TodoList";
 import { useChatTodos } from "../chat/useChatTodos";
-import { cn } from "../lib";
-import { selectChatTitle, useAppStore } from "../store";
+import { selectAgentReviewCommentCount, selectChatTitle, useAppStore } from "../store";
 import { errorText } from "../transport";
 import { DiffStatBadge } from "./DiffStatBadge";
 import { openChatInTab } from "./openChat";
 import { openDiffInTab } from "./openTabs";
-import { PlanReviewList, ReviewActions } from "./PlanReview";
+import { ReviewActions } from "./PlanReview";
 import { FileRow } from "./planFileRow";
 
 // The chat plan's live review-map page — a center `plan` tab (see `store`'s `PlanTab`): the session's
@@ -347,7 +356,10 @@ export default function PlanPane({
 	const plan = useChatTodos(workspaceId, sessionId);
 	const title = useAppStore((s) => selectChatTitle(s, workspaceId, sessionId));
 	const pushToast = useAppStore((s) => s.pushToast);
-	const [mode, setMode] = useState<"plan" | "review">("plan");
+	const requestRightTab = useAppStore((s) => s.requestRightTab);
+	// The plan page points at the right-panel Review tab for findings (no in-page review list): count the
+	// reviewer AGENT's open comments so the header chip can offer navigation to them.
+	const agentComments = useAppStore((s) => selectAgentReviewCommentCount(s, workspaceId));
 
 	if (plan.data === null) {
 		return (
@@ -362,7 +374,9 @@ export default function PlanPane({
 	const groups = [...sections.activeGroups, ...sections.pendingGroups, ...sections.doneGroups];
 	const loose = [...sections.activeLoose, ...sections.pendingLoose, ...sections.doneLoose];
 	const empty = groups.length === 0 && loose.length === 0;
-	const review = reviewProgress(data);
+	const reviewables = reviewableItems(data);
+	const unsettledReviewables = reviewables.filter((t) => !reviewSettled(t));
+	const reviewedCount = reviewables.length - unsettledReviewables.length;
 	const overallSummary = planCompletionSummary(data);
 	const onOpenCommit = (sha: string) => plan.openChanges({ sha });
 	// Start review stays ON this page — the only signals are the row's Reviewing… pulse and a toast
@@ -384,6 +398,48 @@ export default function PlanPane({
 				});
 			},
 		);
+	// Review All: fire the host-side queue once; it reviews every unsettled reviewable item one at a time.
+	// Only a toast signals the kickoff (the per-row Reviewing… pulses track progress); success AND the
+	// nothing-to-do case are both surfaced so the menu action never feels inert.
+	const reviewAll = async (): Promise<void> =>
+		plan.reviewAll().then(
+			({ total }) => {
+				pushToast(
+					total > 0
+						? {
+								variant: "success",
+								title: "Review All started",
+								message: `Reviewing ${total} step${total === 1 ? "" : "s"} one at a time — findings land in the Review tab.`,
+							}
+						: {
+								variant: "info",
+								title: "Nothing to review",
+								message: "Every reviewable step is already reviewed.",
+							},
+				);
+			},
+			(err) => {
+				pushToast({ variant: "error", title: "Review All didn't start", message: errorText(err) });
+			},
+		);
+	const copyMarkdown = () => {
+		void navigator.clipboard
+			.writeText(exportMarkdown())
+			.then(() =>
+				pushToast({
+					variant: "success",
+					title: "Plan copied",
+					message: "Markdown is in your clipboard.",
+				}),
+			)
+			.catch(() =>
+				pushToast({
+					variant: "error",
+					title: "Copy failed",
+					message: "Couldn't write to the clipboard.",
+				}),
+			);
+	};
 	const exportMarkdown = () => planToMarkdown(data, title);
 
 	return (
@@ -394,80 +450,62 @@ export default function PlanPane({
 						<h1 className="truncate tr-title-section text-text-default">Plan · {title}</h1>
 						<div data-testid="plan-progress" className="tr-text-metadata text-text-subtle">
 							{done}/{total} done
-							{review.total > 0 ? (
+							{reviewables.length > 0 ? (
 								<span data-testid="plan-review-progress">
 									{" · "}
-									{review.reviewed}/{review.total} reviewed
+									{reviewedCount}/{reviewables.length} reviewed
 								</span>
 							) : null}
 						</div>
 					</div>
-					{review.total > 0 ? (
-						<div
-							className="flex shrink-0 items-center rounded-[var(--radius-sm)] border border-border-default"
-							role="tablist"
-							aria-label="Plan or review"
+					{agentComments > 0 ? (
+						<button
+							type="button"
+							data-testid="plan-review-comments"
+							onClick={() => requestRightTab(workspaceId, "review")}
+							title="Open the Review tab — the reviewer's findings"
+							className="flex shrink-0 items-center gap-xs rounded-[var(--radius-sm)] px-sm py-xs tr-text-ui text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 						>
-							{(
-								[
-									{ id: "plan", label: "Plan" },
-									{ id: "review", label: `Review (${review.total - review.reviewed})` },
-								] as const
-							).map((tab) => (
-								<button
-									key={tab.id}
-									type="button"
-									role="tab"
-									data-testid={`plan-mode-${tab.id}`}
-									aria-selected={mode === tab.id}
-									onClick={() => setMode(tab.id)}
-									className={cn(
-										"px-sm py-xs tr-text-ui",
-										mode === tab.id
-											? "bg-control-bg-hovered text-text-default"
-											: "text-text-muted hover:text-text-default",
-									)}
-								>
-									{tab.label}
-								</button>
-							))}
-						</div>
+							<MessageSquare className="size-3.5" />
+							{agentComments} {agentComments === 1 ? "comment" : "comments"}
+						</button>
 					) : null}
-					<button
-						type="button"
-						data-testid="plan-copy-markdown"
-						onClick={() => {
-							void navigator.clipboard
-								.writeText(exportMarkdown())
-								.then(() =>
-									pushToast({
-										variant: "success",
-										title: "Plan copied",
-										message: "Markdown is in your clipboard.",
-									}),
-								)
-								.catch(() =>
-									pushToast({
-										variant: "error",
-										title: "Copy failed",
-										message: "Couldn't write to the clipboard.",
-									}),
-								);
-						}}
-						title="Copy the plan as markdown"
-						className="flex shrink-0 items-center gap-xs rounded-[var(--radius-sm)] px-sm py-xs tr-text-ui text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
-					>
-						<Copy className="size-3.5" /> Copy
-					</button>
-					<button
-						type="button"
-						data-testid="plan-save-markdown"
-						onClick={() => downloadMarkdown(exportMarkdown(), title)}
-						title="Save the plan as a .md file"
-						className="flex shrink-0 items-center gap-xs rounded-[var(--radius-sm)] px-sm py-xs tr-text-ui text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
-					>
-						<Download className="size-3.5" /> Save .md
-					</button>
+					<DropdownMenu>
+						<DropdownMenuTrigger
+							data-testid="plan-menu"
+							aria-label="Plan actions"
+							className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary data-[state=open]:bg-control-bg-hovered"
+						>
+							<MoreVertical className="size-4" />
+						</DropdownMenuTrigger>
+						<DropdownMenuContent align="end" data-testid="plan-menu-content">
+							<DropdownMenuItem data-testid="plan-copy-markdown" onSelect={() => copyMarkdown()}>
+								<Copy />
+								Copy
+							</DropdownMenuItem>
+							<DropdownMenuItem
+								data-testid="plan-save-markdown"
+								onSelect={() => downloadMarkdown(exportMarkdown(), title)}
+							>
+								<Download />
+								Save .md
+							</DropdownMenuItem>
+							{reviewables.length > 0 ? (
+								<>
+									<DropdownMenuSeparator />
+									<DropdownMenuItem
+										data-testid="plan-review-all"
+										disabled={unsettledReviewables.length === 0}
+										onSelect={() => void reviewAll()}
+									>
+										<ListChecks />
+										Review All
+										{unsettledReviewables.length > 0 ? ` (${unsettledReviewables.length})` : ""}
+									</DropdownMenuItem>
+								</>
+							) : null}
+						</DropdownMenuContent>
+					</DropdownMenu>
 				</header>
 				{overallSummary ? (
 					<p
@@ -477,17 +515,7 @@ export default function PlanPane({
 						{overallSummary}
 					</p>
 				) : null}
-				{/* Review mode is only reachable while reviewable items exist — if they vanish (a re-plan), the
-				    toggle disappears and the page falls back to the plan rather than stranding an empty mode. */}
-				{mode === "review" && review.total > 0 ? (
-					<PlanReviewList
-						plan={data}
-						workspaceId={workspaceId}
-						onOpenCommit={onOpenCommit}
-						onApprove={plan.approve}
-						onAskFix={plan.askFix}
-					/>
-				) : empty ? (
+				{empty ? (
 					<p className="text-text-subtle tr-text-ui">
 						No items yet — the agent adds its plan here.
 					</p>

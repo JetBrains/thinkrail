@@ -7,6 +7,7 @@
 // fixed revision auto-fires one re-review), then everything waits for the human. Manual buttons stay the
 // override at every stage.
 
+import type { TodoItem } from "@thinkrail/contracts";
 import {
 	type AddReviewCommentParams,
 	createSession,
@@ -33,6 +34,7 @@ import {
 } from "../todos";
 import { getWorkspace } from "../workspaces";
 import { ackSend } from "./ackSend";
+import { advanceReviewQueue, onReviewVerdict, type StartOne, seedReviewQueue } from "./reviewQueue";
 
 /** Ids the flow needs everywhere: the workspace, the WORKER chat (the plan's owner), and the item. */
 interface ItemRef {
@@ -67,6 +69,38 @@ export async function startTodoReviewFlow(
 		cancelTodoReview(p);
 		throw err;
 	}
+}
+
+/** Host mirror of the client's `planView.reviewSettled`: approved AND no unreviewed delta. */
+function isReviewSettled(item: TodoItem): boolean {
+	const r = item.review;
+	return r !== undefined && r.state === "reviewed" && (r.unreviewedShas?.length ?? 0) === 0;
+}
+
+/** The queue's per-item effect: kick one item's agent review (the reviewQueue's injected `startOne`). */
+const startOneReview =
+	(workspaceId: string, sessionId: string): StartOne =>
+	(id: string) =>
+		startTodoReviewFlow({ workspaceId, sessionId, id });
+
+/**
+ * Start a Review All pass (task-plan-review-kebab): seed the host-side queue with every reviewable item
+ * that isn't already settled or in-flight (plan order), then kick the first — the rest follow one at a
+ * time as verdicts land (`onReviewVerdict`). Returns how many items were queued (0 = nothing to do).
+ */
+export async function startReviewAllFlow(p: {
+	workspaceId: string;
+	sessionId: string;
+}): Promise<{ ok: true; total: number }> {
+	const plan = await listTodos(p);
+	const items = [...plan.todos, ...plan.groups.flatMap((g) => g.todos)];
+	const pending = items
+		.filter((t) => t.review !== undefined && !isReviewSettled(t) && t.review.reviewing !== true)
+		.map((t) => t.id);
+	seedReviewQueue(p.workspaceId, p.sessionId, pending);
+	if (pending.length === 0) return { ok: true, total: 0 };
+	await advanceReviewQueue(p.workspaceId, p.sessionId, startOneReview(p.workspaceId, p.sessionId));
+	return { ok: true, total: pending.length };
 }
 
 /** Detached delivery: a pre-turn rejection clears the `reviewing` mark + surfaces in the reviewer chat. */
@@ -122,6 +156,12 @@ export function installTodoReviewSeams(): void {
 		const ref: ItemRef = { ...ctx, id: params.todoId };
 		if (params.verdict === "approve") {
 			approveTodoReview(ref, "agent");
+			onReviewVerdict(
+				ctx.workspaceId,
+				ctx.sessionId,
+				params.todoId,
+				startOneReview(ctx.workspaceId, ctx.sessionId),
+			);
 			return { summary: `Verdict recorded: ${params.todoId} approved — the item is now reviewed.` };
 		}
 		const spent = todoReviewRecord(ref)?.autoCycles ?? 0;
@@ -133,6 +173,12 @@ export function installTodoReviewSeams(): void {
 				...(params.note ? { note: params.note } : {}),
 				autoCycles: 2,
 			});
+			onReviewVerdict(
+				ctx.workspaceId,
+				ctx.sessionId,
+				params.todoId,
+				startOneReview(ctx.workspaceId, ctx.sessionId),
+			);
 			return {
 				summary: `Verdict recorded: changes requested on ${params.todoId}. The automated fix cycle is spent — the user decides next.`,
 			};
@@ -163,6 +209,15 @@ export function installTodoReviewSeams(): void {
 				"error",
 			);
 		});
+		// Review All advances immediately on a changes_requested verdict — the fix + auto-re-review runs
+		// in the background (task-plan-review-kebab): a single pass over everything, never blocking on the
+		// worker's fix.
+		onReviewVerdict(
+			ctx.workspaceId,
+			ctx.sessionId,
+			params.todoId,
+			startOneReview(ctx.workspaceId, ctx.sessionId),
+		);
 		return {
 			summary: `Verdict recorded: changes requested on ${params.todoId} — your ${comments.length} comment(s) were sent to the worker chat as a fix request (auto cycle 1 of 1).`,
 		};

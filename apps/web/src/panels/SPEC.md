@@ -344,38 +344,27 @@ a project picker, the prompt hero, and the reused
   `Start review` button (`plan-start-review`) that fires the AGENT review (`todo.startReview` — the
   plan's reviewer chat; the row pulses `Reviewing…` off the host-derived `review.reviewing`, and the
   Changes panel opens at the step's scope so the review is watchable) plus a quiet `manually` toggle
-  (`plan-review-manually`) unfolding the shared `ReviewActions` pair (Approve / Ask to fix — one
-  component with the Review-mode card, so the two surfaces can never drift) under the file rows — the
+  (`plan-review-manually`) unfolding the `ReviewActions` pair (Approve / Ask to fix, `PlanReview.tsx`)
+  under the file rows — the
   human override at every stage; agent-authored findings appear in the Review panel badged `agent`
   (`review-comment-agent`), and an agent-settled card reads `Reviewed · agent`; approving settles the item — its status glyph upgrades to the **circled Verified check**
   (`StatusIcon reviewed`, hover "Verified", `data-reviewed` on the row; `planView.reviewSettled` is the
   one derivation — approved AND no unreviewed delta, so a fresh revision drops the item back out of
-  both the glyph and the reviewed counter) — and header export actions —
-  **Copy** (clipboard) / **Save .md** (browser download) — both compiling through `chat/planMarkdown`.
-  Live by construction: it reads through the same `useChatTodos` hook as the plan popup (per-mount
-  fetch + `pi.event` refetch), so it can never show a stale snapshot the way the old compiled-markdown
-  `doc` route did.
-  **The plan page's Review mode** (`PlanReview.tsx`, the TODO→review workflow — see
-  [[submodule-server-todos]] §Review workflow + the wire DTOs in [[module-contracts]]): when the plan has
-  reviewable items (`reviewProgress.total > 0` — host-gated by `TodoItem.review` presence), the header
-  grows a **`Plan | Review (n)`** segmented toggle plus a second counter (`… · r/k reviewed`, execution
-  and review progress stay separate); the mode is only reachable while reviewables exist (a re-plan that
-  empties them falls back to Plan rather than stranding an empty mode). Review mode is **summary-first**:
-  each reviewable item is a card — state glyph + title + `Revision N` badge + state label → the agent's
-  completion `summary` (italic "No summary provided." placeholder — advisory, never a block) → the
-  verification line as the shared `VerificationBadge` (`chat/planKit`) — and on a DONE reviewable item
-  with no line at all, an explicit "No verification reported." gap (silence must be visible; a
-  re-opened item mid-fix shows nothing) → the `changes_requested` feedback quote → the item's **revisions** (`itemRevisions`, newest first, each a
-  collapsible commit block: sha chip → Changes panel, `DiffStatBadge`, `FileRow`s → commit-scope Monaco
-  diffs — the newest unfolds when it's the thing to review; ones in `review.unreviewedShas` are tagged
-  **"changed since review"**, so a fix cycle re-reviews only its delta, never the original diff again) →
-  the path-list fallback rows (branch scope) → **Approve** (`todo.review`) and **Ask to fix** (a
-  fold-out feedback textarea → `todo.requestFix`; failure keeps the typed text). Cards order: awaiting
-  the user (unreviewed / fresh delta), then awaited fixes (`changes_requested`, with a "Fix in
-  progress…" hint while the item is re-opened), then reviewed history — a settled reviewed card hides
-  its actions. The header also shows the agent's plan-level completion note
-  (`planCompletionSummary`-gated `plan-overall-summary`). `FileRow` is exported by `PlanPane` and shared,
-  so both modes' file rows read identically. `CenterTabs`
+  both the glyph and the reviewed counter). **The header is a title + progress line (`d/t done`, plus
+  the separate `r/k reviewed` counter when the plan has reviewable items) and a kebab menu**
+  (`plan-menu`, a `DropdownMenu`) holding **Copy** (clipboard) / **Save .md** (browser download) — both
+  compiling through `chat/planMarkdown` — and, when the plan has reviewable items, **Review All**
+  (`plan-review-all`): fires `todo.reviewAll`, the host-side queue that agent-reviews every *unsettled*
+  reviewable item one at a time (disabled when none are unsettled; a toast reports how many were queued,
+  the per-row `Reviewing…` pulses track progress). There is **no in-page "Review mode"** — findings
+  live in the right-panel **Review** tab; when the reviewer agent has open comments
+  (`selectAgentReviewCommentCount` — open, `author: "agent"`) the header shows a **`N comments`** chip
+  (`plan-review-comments`) that `requestRightTab(ws, "review")` to focus that tab. The header also
+  shows the agent's plan-level completion note (`planCompletionSummary`-gated `plan-overall-summary`).
+  `FileRow` (`planFileRow.tsx`, its own module so PlanPane → PlanReview stays a one-way import, never a
+  cycle) is the shared change-set row. Live by construction: it reads through the same `useChatTodos`
+  hook as the plan popup (per-mount fetch + `pi.event` refetch), so it can never show a stale snapshot
+  the way the old compiled-markdown `doc` route did. `CenterTabs`
   closing a chat tab routes to `store.closeChatToHistory` (keeps the session alive) and shows a
   **chat-history** dropdown (recently-closed + disk-only chats, shown only when non-empty); each row has
   a one-click trash action (`session.delete` → idempotent `store.deleteChat`, no confirm); the
