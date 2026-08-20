@@ -191,7 +191,6 @@ interface PostFrontmatter {
 	date: string;
 	draft?: boolean;
 	excerpt?: string;
-	coverImage?: string;
 	tags?: string[];
 }
 
@@ -234,7 +233,6 @@ async function parsePost(postDir: string, md: Marked): Promise<ParsedPost> {
 		date: data.date,
 		draft: data.draft === true,
 		excerpt: data.excerpt,
-		coverImage: data.coverImage,
 		tags: data.tags || [],
 	};
 

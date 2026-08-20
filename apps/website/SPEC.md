@@ -149,7 +149,6 @@ folder containing `index.md` (with YAML frontmatter) and an optional `images/` s
 4. Generates static HTML pages from `src/blog/post-template.html`
 5. Generates the index page from `src/blog/index-template.html`
 6. Copies post images to `dist/blog/images/[slug]/`
-7. Emits `dist/blog/posts.json` manifest
 
 ### Dependencies (devDependencies only)
 
