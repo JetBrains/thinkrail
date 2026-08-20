@@ -5,4 +5,7 @@ import { defineConfig } from "vite";
 // redirects there).
 export default defineConfig({
 	base: "./",
+	build: {
+		manifest: true, // Generate manifest.json for blog build to read asset paths
+	},
 });

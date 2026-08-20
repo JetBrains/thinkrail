@@ -1,9 +1,9 @@
 /**
  * Blog build script — discovers Markdown posts in content/blog/, parses frontmatter,
- * converts to HTML, and generates:
- * 1. Static HTML pages for each post in dist/blog/[slug].html
- * 2. A manifest JSON (dist/blog/posts.json) for the blog index
- * 3. Copies post images to dist/blog/images/[slug]/
+ * converts to HTML with syntax highlighting, and generates static pages.
+ *
+ * IMPORTANT: This script runs AFTER `vite build` and reads the Vite manifest
+ * to reference the same processed CSS (with fonts) as the main site.
  *
  * Run with: bun scripts/build-blog.ts
  */
@@ -15,7 +15,15 @@ import matter from "gray-matter";
 import { Marked, type MarkedExtension } from "marked";
 import { createHighlighter, type Highlighter } from "shiki";
 
-// Languages to support in code blocks
+// ── Configuration ──────────────────────────────────────────────────────────
+
+const CONTENT_DIR = join(import.meta.dirname, "../content/blog");
+const OUTPUT_DIR = join(import.meta.dirname, "../dist/blog");
+const TEMPLATE_PATH = join(import.meta.dirname, "../src/blog/post-template.html");
+const INDEX_TEMPLATE_PATH = join(import.meta.dirname, "../src/blog/index-template.html");
+const VITE_MANIFEST_PATH = join(import.meta.dirname, "../dist/.vite/manifest.json");
+
+// Languages to support in code blocks (kept minimal for bundle size)
 const SUPPORTED_LANGUAGES = [
 	"javascript",
 	"typescript",
@@ -24,60 +32,127 @@ const SUPPORTED_LANGUAGES = [
 	"json",
 	"html",
 	"css",
-	"scss",
 	"bash",
 	"shell",
-	"powershell",
 	"markdown",
 	"yaml",
-	"toml",
 	"python",
-	"rust",
-	"go",
-	"java",
-	"c",
-	"cpp",
-	"csharp",
-	"ruby",
-	"php",
-	"swift",
-	"kotlin",
-	"sql",
-	"graphql",
-	"docker",
 	"diff",
 	"plaintext",
 ] as const;
 
-// Theme for syntax highlighting (matches the blog's dark theme)
 const SHIKI_THEME = "github-dark";
-
-// Average reading speed in words per minute
 const WORDS_PER_MINUTE = 200;
 
-/**
- * Calculates estimated reading time in minutes from markdown content
- */
-function calculateReadingTime(content: string): number {
-	// Strip markdown syntax for more accurate word count
-	const text = content
-		.replace(/```[\s\S]*?```/g, "") // Remove code blocks
-		.replace(/`[^`]+`/g, "") // Remove inline code
-		.replace(/!?\[[^\]]*\]\([^)]*\)/g, "") // Remove links and images
-		.replace(/[#*_~>-]/g, "") // Remove markdown symbols
-		.replace(/\s+/g, " ") // Normalize whitespace
-		.trim();
+// ── Helpers ────────────────────────────────────────────────────────────────
 
-	const wordCount = text.split(/\s+/).filter((word) => word.length > 0).length;
-	const minutes = Math.ceil(wordCount / WORDS_PER_MINUTE);
-	return Math.max(1, minutes); // At least 1 minute
+function escapeHtml(str: string): string {
+	return str
+		.replace(/&/g, "&amp;")
+		.replace(/</g, "&lt;")
+		.replace(/>/g, "&gt;")
+		.replace(/"/g, "&quot;");
 }
 
-let highlighter: Highlighter | null = null;
+function formatDate(date: string): string {
+	// Use UTC to avoid timezone-dependent date shifts
+	const d = new Date(date);
+	return d.toLocaleDateString("en-US", {
+		year: "numeric",
+		month: "long",
+		day: "numeric",
+		timeZone: "UTC",
+	});
+}
 
-/**
- * Creates a marked extension that uses shiki for syntax highlighting
- */
+function calculateReadingTime(content: string): number {
+	const text = content
+		.replace(/```[\s\S]*?```/g, "")
+		.replace(/`[^`]+`/g, "")
+		.replace(/!?\[[^\]]*\]\([^)]*\)/g, "")
+		.replace(/[#*_~>-]/g, "")
+		.replace(/\s+/g, " ")
+		.trim();
+	const wordCount = text.split(/\s+/).filter((word) => word.length > 0).length;
+	return Math.max(1, Math.ceil(wordCount / WORDS_PER_MINUTE));
+}
+
+function stripLeadingH1(content: string, title: string): string {
+	const match = content.match(/^\s*#\s+(.+)\n?/);
+	if (match && match[1].trim() === title.trim()) {
+		return content.slice(match[0].length);
+	}
+	return content;
+}
+
+function resolveImagePaths(html: string, slug: string): string {
+	return html.replace(/src=["']\.\/images\/([^"']+)["']/g, `src="./images/${slug}/$1"`);
+}
+
+// ── Vite manifest ──────────────────────────────────────────────────────────
+
+interface ViteManifest {
+	[key: string]: {
+		file: string;
+		css?: string[];
+		assets?: string[];
+	};
+}
+
+async function getCssPathFromManifest(): Promise<string> {
+	const manifestRaw = await readFile(VITE_MANIFEST_PATH, "utf-8");
+	const manifest: ViteManifest = JSON.parse(manifestRaw);
+
+	// Find the entry that has CSS (the main entry point)
+	for (const entry of Object.values(manifest)) {
+		if (entry.css && entry.css.length > 0) {
+			// Return path relative to /blog/ directory
+			return `../${entry.css[0]}`;
+		}
+	}
+
+	throw new Error("Could not find CSS in Vite manifest");
+}
+
+// ── YouTube embeds ─────────────────────────────────────────────────────────
+
+function extractYouTubeId(url: string): string | null {
+	const patterns = [
+		/youtu\.be\/([\w-]+)/,
+		/youtube\.com\/watch\?v=([\w-]+)/,
+		/youtube\.com\/embed\/([\w-]+)/,
+		/youtube\.com\/v\/([\w-]+)/,
+	];
+	for (const pattern of patterns) {
+		const match = url.match(pattern);
+		if (match) return match[1];
+	}
+	return null;
+}
+
+function createYouTubeExtension(): MarkedExtension {
+	return {
+		renderer: {
+			html(token: { text: string }) {
+				const text = token.text;
+				const videoMatch = text.match(/<video[^>]*src=["']([^"']+)["'][^>]*>/i);
+				if (videoMatch) {
+					const videoId = extractYouTubeId(videoMatch[1]);
+					if (videoId) {
+						return `<div class="youtube-embed"><iframe src="https://www.youtube-nocookie.com/embed/${videoId}" title="YouTube video" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen loading="lazy"></iframe></div>`;
+					}
+				}
+				if (text.match(/<\/video>/i)) {
+					return "";
+				}
+				return false;
+			},
+		},
+	};
+}
+
+// ── Shiki ──────────────────────────────────────────────────────────────────
+
 function createShikiExtension(hl: Highlighter): MarkedExtension {
 	return {
 		renderer: {
@@ -85,50 +160,35 @@ function createShikiExtension(hl: Highlighter): MarkedExtension {
 				const language = lang || "plaintext";
 				const loadedLangs = hl.getLoadedLanguages();
 
-				// Use shiki if the language is loaded, otherwise fall back to plain text
 				if (loadedLangs.includes(language as (typeof loadedLangs)[number])) {
-					const html = hl.codeToHtml(text, {
-						lang: language,
-						theme: SHIKI_THEME,
-					});
-					// Strip inline background-color so CSS can control it without !important
+					const html = hl.codeToHtml(text, { lang: language, theme: SHIKI_THEME });
 					return html.replace(/background-color:[^;"]+;?/g, "");
 				}
 
-				// Fallback for unknown languages
-				const escaped = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+				const escaped = escapeHtml(text);
 				return `<pre class="shiki"><code>${escaped}</code></pre>`;
 			},
 		},
 	};
 }
 
-/**
- * Initializes shiki highlighter with supported languages
- */
-async function initHighlighter(): Promise<Highlighter> {
-	if (!highlighter) {
-		highlighter = await createHighlighter({
-			themes: [SHIKI_THEME],
-			langs: [...SUPPORTED_LANGUAGES],
-		});
-	}
-	return highlighter;
-}
-
-const CONTENT_DIR = join(import.meta.dirname, "../content/blog");
-const OUTPUT_DIR = join(import.meta.dirname, "../dist/blog");
-const TEMPLATE_PATH = join(import.meta.dirname, "../src/blog/post-template.html");
-const INDEX_TEMPLATE_PATH = join(import.meta.dirname, "../src/blog/index-template.html");
-const BLOG_CSS_PATH = join(import.meta.dirname, "../src/blog/blog.css");
+// ── Data types ─────────────────────────────────────────────────────────────
 
 interface PostFrontmatter {
 	title: string;
 	slug: string;
 	date: string;
+	draft?: boolean;
 	excerpt?: string;
 	coverImage?: string;
 	tags?: string[];
+}
+
+interface ParsedPost {
+	dir: string;
+	frontmatter: PostFrontmatter;
+	html: string;
+	readingTime: number;
 }
 
 interface PostManifestEntry {
@@ -136,32 +196,23 @@ interface PostManifestEntry {
 	slug: string;
 	date: string;
 	excerpt: string;
-	coverImage: string | null;
 	tags: string[];
 	url: string;
-	readingTime: number; // in minutes
+	readingTime: number;
 }
 
-/**
- * Discovers all blog post directories in content/blog/
- */
+// ── Parsing ────────────────────────────────────────────────────────────────
+
 async function discoverPosts(): Promise<string[]> {
 	const entries = await readdir(CONTENT_DIR, { withFileTypes: true });
 	return entries.filter((e) => e.isDirectory()).map((e) => join(CONTENT_DIR, e.name));
 }
 
-/**
- * Reads and parses a blog post's Markdown file
- */
-async function parsePost(
-	postDir: string,
-	hl: Highlighter,
-): Promise<{ frontmatter: PostFrontmatter; content: string; html: string; readingTime: number }> {
+async function parsePost(postDir: string, md: Marked): Promise<ParsedPost> {
 	const mdPath = join(postDir, "index.md");
 	const raw = await readFile(mdPath, "utf-8");
 	const { data, content } = matter(raw);
 
-	// Validate required frontmatter
 	if (!data.title || !data.slug || !data.date) {
 		throw new Error(`Post at ${postDir} missing required frontmatter (title, slug, date)`);
 	}
@@ -170,34 +221,22 @@ async function parsePost(
 		title: data.title,
 		slug: data.slug,
 		date: data.date,
+		draft: data.draft === true,
 		excerpt: data.excerpt,
 		coverImage: data.coverImage,
 		tags: data.tags || [],
 	};
 
-	// Configure marked with shiki extension
-	const markedWithShiki = new Marked(createShikiExtension(hl));
-
-	// Convert Markdown to HTML with syntax highlighting
-	const html = await markedWithShiki.parse(content);
-
-	// Calculate reading time
+	const body = stripLeadingH1(content, frontmatter.title);
+	const html = await md.parse(body);
 	const readingTime = calculateReadingTime(content);
+	const resolvedHtml = resolveImagePaths(html, frontmatter.slug);
 
-	return { frontmatter, content, html, readingTime };
+	return { dir: postDir, frontmatter, html: resolvedHtml, readingTime };
 }
 
-/**
- * Resolves image paths in HTML content — transforms ./images/foo.svg to /blog/images/[slug]/foo.svg
- */
-function resolveImagePaths(html: string, slug: string): string {
-	// Replace relative image paths with absolute paths to the blog images directory
-	return html.replace(/src=["']\.\/images\/([^"']+)["']/g, `src="./images/${slug}/$1"`);
-}
+// ── HTML generation ────────────────────────────────────────────────────────
 
-/**
- * Copies post images to the output directory
- */
 async function copyPostImages(postDir: string, slug: string): Promise<void> {
 	const imagesDir = join(postDir, "images");
 	const outputImagesDir = join(OUTPUT_DIR, "images", slug);
@@ -208,87 +247,78 @@ async function copyPostImages(postDir: string, slug: string): Promise<void> {
 	}
 }
 
-/**
- * Generates the HTML page for a single blog post
- */
-async function generatePostPage(
+function generatePostPage(
 	frontmatter: PostFrontmatter,
 	html: string,
 	template: string,
 	allPosts: PostManifestEntry[],
 	readingTime: number,
-): Promise<string> {
-	// Find previous and next posts for navigation
+	cssPath: string,
+): string {
 	const currentIndex = allPosts.findIndex((p) => p.slug === frontmatter.slug);
 	const prevPost = currentIndex > 0 ? allPosts[currentIndex - 1] : null;
 	const nextPost = currentIndex < allPosts.length - 1 ? allPosts[currentIndex + 1] : null;
 
-	// Build navigation HTML
 	const navHtml = `
 		<nav class="blog-post-nav">
-			${prevPost ? `<a href="./${prevPost.slug}.html" class="blog-nav-prev">← ${prevPost.title}</a>` : "<span></span>"}
+			${prevPost ? `<a href="./${prevPost.slug}.html" class="blog-nav-prev">← ${escapeHtml(prevPost.title)}</a>` : "<span></span>"}
 			<a href="./index.html" class="blog-nav-home">All Posts</a>
-			${nextPost ? `<a href="./${nextPost.slug}.html" class="blog-nav-next">${nextPost.title} →</a>` : "<span></span>"}
+			${nextPost ? `<a href="./${nextPost.slug}.html" class="blog-nav-next">${escapeHtml(nextPost.title)} →</a>` : "<span></span>"}
 		</nav>
 	`;
 
-	// Format date
-	const formattedDate = new Date(frontmatter.date).toLocaleDateString("en-US", {
-		year: "numeric",
-		month: "long",
-		day: "numeric",
-	});
-
-	// Build tags HTML
 	const tagsHtml = frontmatter.tags?.length
-		? `<div class="blog-post-tags">${frontmatter.tags.map((t) => `<span class="blog-tag">${t}</span>`).join("")}</div>`
+		? `<div class="blog-post-tags">${frontmatter.tags.map((t) => `<span class="blog-tag">${escapeHtml(t)}</span>`).join("")}</div>`
 		: "";
 
-	// Format reading time
-	const readingTimeText = `${readingTime} min read`;
-
-	// Replace template placeholders
+	const title = escapeHtml(frontmatter.title);
 	return template
-		.replace(/\{\{title\}\}/g, frontmatter.title)
-		.replace(/\{\{date\}\}/g, formattedDate)
-		.replace(/\{\{readingTime\}\}/g, readingTimeText)
+		.replace(/\{\{cssPath\}\}/g, cssPath)
+		.replace(/\{\{title\}\}/g, title)
+		.replace(/\{\{date\}\}/g, formatDate(frontmatter.date))
+		.replace(/\{\{readingTime\}\}/g, `${readingTime} min read`)
 		.replace(/\{\{tags\}\}/g, tagsHtml)
 		.replace(/\{\{content\}\}/g, html)
 		.replace(/\{\{navigation\}\}/g, navHtml);
 }
 
-/**
- * Main build function
- */
+// ── Main ───────────────────────────────────────────────────────────────────
+
 async function build(): Promise<void> {
 	console.log("📝 Building blog...");
 
+	// Read Vite manifest to get CSS path
+	console.log("   Reading Vite manifest...");
+	const cssPath = await getCssPathFromManifest();
+	console.log(`   CSS path: ${cssPath}`);
+
 	// Initialize syntax highlighter
 	console.log("   Initializing syntax highlighter...");
-	const hl = await initHighlighter();
+	const hl = await createHighlighter({
+		themes: [SHIKI_THEME],
+		langs: [...SUPPORTED_LANGUAGES],
+	});
+	const md = new Marked(createYouTubeExtension(), createShikiExtension(hl));
 
-	// Ensure output directory exists
 	await mkdir(OUTPUT_DIR, { recursive: true });
 
-	// Discover all posts
+	// Discover + parse all posts in parallel
 	const postDirs = await discoverPosts();
-	console.log(`   Found ${postDirs.length} posts`);
+	console.log(`   Found ${postDirs.length} post directories`);
 
-	// Parse all posts
-	const posts: Array<{
-		dir: string;
-		frontmatter: PostFrontmatter;
-		html: string;
-		readingTime: number;
-	}> = [];
-
-	for (const dir of postDirs) {
-		try {
-			const { frontmatter, html, readingTime } = await parsePost(dir, hl);
-			const resolvedHtml = resolveImagePaths(html, frontmatter.slug);
-			posts.push({ dir, frontmatter, html: resolvedHtml, readingTime });
-		} catch (err) {
-			console.error(`   ⚠️  Skipping ${basename(dir)}: ${err}`);
+	const results = await Promise.allSettled(postDirs.map((dir) => parsePost(dir, md)));
+	const posts: ParsedPost[] = [];
+	for (let i = 0; i < results.length; i++) {
+		const r = results[i];
+		if (r.status === "fulfilled") {
+			if (r.value.frontmatter.draft) {
+				console.log(`   ⏭ Skipping draft: ${r.value.frontmatter.slug}`);
+			} else {
+				posts.push(r.value);
+			}
+		} else {
+			// Fail hard on broken posts — no silent green deploys
+			throw new Error(`Failed to parse ${basename(postDirs[i])}: ${r.reason}`);
 		}
 	}
 
@@ -297,133 +327,64 @@ async function build(): Promise<void> {
 		(a, b) => new Date(b.frontmatter.date).getTime() - new Date(a.frontmatter.date).getTime(),
 	);
 
-	// Build manifest
+	// Build manifest (for index page generation, not output)
 	const manifest: PostManifestEntry[] = posts.map((p) => ({
 		title: p.frontmatter.title,
 		slug: p.frontmatter.slug,
 		date: p.frontmatter.date,
 		excerpt: p.frontmatter.excerpt || "",
-		coverImage: p.frontmatter.coverImage
-			? `./images/${p.frontmatter.slug}/${basename(p.frontmatter.coverImage)}`
-			: null,
 		tags: p.frontmatter.tags || [],
 		url: `./${p.frontmatter.slug}.html`,
 		readingTime: p.readingTime,
 	}));
 
-	// Write manifest
-	await writeFile(join(OUTPUT_DIR, "posts.json"), JSON.stringify(manifest, null, "\t"));
-	console.log("   ✓ Generated posts.json");
+	// Load templates — fail hard if missing
+	const template = await readFile(TEMPLATE_PATH, "utf-8");
+	const indexTemplate = await readFile(INDEX_TEMPLATE_PATH, "utf-8");
 
-	// Load template
-	let template: string;
-	try {
-		template = await readFile(TEMPLATE_PATH, "utf-8");
-	} catch {
-		console.error("   ⚠️  Post template not found, using minimal fallback template");
-		template = `<!DOCTYPE html>
-<html lang="en">
-<head>
-	<meta charset="UTF-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>{{title}} — ThinkRail Blog</title>
-	<link rel="stylesheet" href="../styles.css">
-	<link rel="stylesheet" href="./blog.css">
-</head>
-<body>
-	<article class="blog-post">
-		<header class="blog-post-header">
-			<h1>{{title}}</h1>
-			<time>{{date}}</time>
-			{{tags}}
-		</header>
-		<div class="blog-post-content">
-			{{content}}
-		</div>
-		{{navigation}}
-	</article>
-</body>
-</html>`;
-	}
-
-	// Generate HTML pages for each post
+	// Generate post pages
 	for (const post of posts) {
-		const pageHtml = await generatePostPage(
+		const pageHtml = generatePostPage(
 			post.frontmatter,
 			post.html,
 			template,
 			manifest,
 			post.readingTime,
+			cssPath,
 		);
-		const outputPath = join(OUTPUT_DIR, `${post.frontmatter.slug}.html`);
-		await writeFile(outputPath, pageHtml);
-
-		// Copy images
+		await writeFile(join(OUTPUT_DIR, `${post.frontmatter.slug}.html`), pageHtml);
 		await copyPostImages(post.dir, post.frontmatter.slug);
-
 		console.log(`   ✓ Generated ${post.frontmatter.slug}.html`);
 	}
 
 	// Generate blog index page
-	let indexTemplate: string;
-	try {
-		indexTemplate = await readFile(INDEX_TEMPLATE_PATH, "utf-8");
-	} catch {
-		console.error("   ⚠️  Index template not found");
-		indexTemplate = `<!DOCTYPE html>
-<html lang="en">
-<head>
-	<meta charset="UTF-8">
-	<title>Blog — ThinkRail</title>
-	<link rel="stylesheet" href="./blog.css">
-</head>
-<body data-theme="dark">
-	<main class="blog-main"><div class="blog-posts-list">{{posts}}</div></main>
-</body>
-</html>`;
-	}
-
-	// Generate post cards HTML
 	const postsHtml = manifest
 		.map((post) => {
-			const formattedDate = new Date(post.date).toLocaleDateString("en-US", {
-				year: "numeric",
-				month: "long",
-				day: "numeric",
-			});
 			const tagsHtml = post.tags.length
-				? `<div class="blog-post-card-tags">${post.tags.map((t) => `<span class="blog-tag">${t}</span>`).join("")}</div>`
+				? `<div class="blog-post-card-tags">${post.tags.map((t) => `<span class="blog-tag">${escapeHtml(t)}</span>`).join("")}</div>`
 				: "";
 			return `
 			<a href="${post.url}" class="blog-post-card">
-				<h2 class="blog-post-card-title">${post.title}</h2>
+				<h2 class="blog-post-card-title">${escapeHtml(post.title)}</h2>
 				<div class="blog-post-card-meta">
-					<time>${formattedDate}</time>
+					<time>${formatDate(post.date)}</time>
 					<span class="blog-post-card-reading-time">${post.readingTime} min read</span>
 				</div>
-				${post.excerpt ? `<p class="blog-post-card-excerpt">${post.excerpt}</p>` : ""}
+				${post.excerpt ? `<p class="blog-post-card-excerpt">${escapeHtml(post.excerpt)}</p>` : ""}
 				${tagsHtml}
 			</a>`;
 		})
 		.join("\n");
 
-	const indexHtml = indexTemplate.replace(/\{\{posts\}\}/g, postsHtml);
+	const indexHtml = indexTemplate
+		.replace(/\{\{cssPath\}\}/g, cssPath)
+		.replace(/\{\{posts\}\}/g, postsHtml);
 	await writeFile(join(OUTPUT_DIR, "index.html"), indexHtml);
 	console.log("   ✓ Generated index.html");
 
-	// Copy blog.css to output
-	try {
-		const blogCss = await readFile(BLOG_CSS_PATH, "utf-8");
-		await writeFile(join(OUTPUT_DIR, "blog.css"), blogCss);
-		console.log("   ✓ Copied blog.css");
-	} catch {
-		console.error("   ⚠️  blog.css not found");
-	}
-
-	console.log("✅ Blog build complete!");
+	console.log(`✅ Blog build complete! ${posts.length} posts published.`);
 }
 
-// Run build
 build().catch((err) => {
 	console.error("❌ Blog build failed:", err);
 	process.exit(1);

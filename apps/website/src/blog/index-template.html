@@ -6,18 +6,17 @@
 	<title>Blog — ThinkRail</title>
 	<meta name="description" content="Updates, tutorials, and insights from the ThinkRail team.">
 	<link rel="icon" type="image/svg+xml" href="../favicon.svg">
-	<link rel="stylesheet" href="./blog.css">
+	<link rel="stylesheet" href="{{cssPath}}">
 	<script>
 		// Blocking theme init — runs before first paint to prevent FOUC.
-		// Priority: localStorage > system preference > dark default.
+		// Uses the same localStorage key as the main site for unified theme.
 		(function() {
-			var stored = localStorage.getItem('blog-theme');
-			var theme = stored || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'light' : 'dark');
+			var theme = localStorage.getItem('thinkrail-site-theme') || 'dark';
 			document.documentElement.setAttribute('data-theme', theme);
 		})();
 	</script>
 </head>
-<body>
+<body class="blog-page">
 	<header class="blog-header">
 		<a href="../" class="blog-logo">ThinkRail</a>
 		<nav class="blog-header-nav">
@@ -42,10 +41,10 @@
 	</main>
 
 	<footer class="blog-footer">
-		<p>© 2025 ThinkRail. All rights reserved.</p>
+		<p>© 2025 JetBrains s.r.o. ThinkRail is Apache-2.0 licensed.</p>
 	</footer>
 	<script>
-		// Theme toggle handler — wired after DOM is ready.
+		// Theme toggle handler — uses same key as main site.
 		(function() {
 			var toggle = document.getElementById('theme-toggle');
 			var root = document.documentElement;
@@ -54,7 +53,7 @@
 				var current = root.getAttribute('data-theme');
 				var next = current === 'dark' ? 'light' : 'dark';
 				root.setAttribute('data-theme', next);
-				localStorage.setItem('blog-theme', next);
+				localStorage.setItem('thinkrail-site-theme', next);
 				toggle.setAttribute('aria-label', next === 'dark' ? 'Switch to light theme' : 'Switch to dark theme');
 			});
 		})();
