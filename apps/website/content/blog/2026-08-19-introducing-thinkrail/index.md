@@ -24,7 +24,7 @@ ThinkRail ships as a single self-contained executable. To install it, open the t
 curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash
 ```
 
-**Windows** (PowerShell):
+**Windows** (PowerShell and cmd):
 
 ```powershell
 irm https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1 | iex
