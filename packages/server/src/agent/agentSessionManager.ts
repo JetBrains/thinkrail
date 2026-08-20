@@ -1,4 +1,4 @@
-import { createReadStream, rmSync } from "node:fs";
+import { createReadStream, existsSync, rmSync } from "node:fs";
 import { readdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { createInterface } from "node:readline";
@@ -18,7 +18,6 @@ import type {
 	AskUserQuestionResult,
 	ImageContent,
 	Model,
-	PiEvent,
 	RefreshedModels,
 	SessionDeletedPayload,
 	SessionEventPayload,
@@ -29,14 +28,17 @@ import type {
 	TranscriptMessage,
 	WireModel,
 } from "@thinkrail/contracts";
+import { isTranscriptMessageRole } from "@thinkrail/contracts";
 import { ANSWERABILITY_ERRORS, assessAnswerability, buildAnswersMessage } from "./askUserQuestion";
 import { buildResourceLoader, toSkillCommands } from "./extensions";
 import {
 	getPiRuntime,
+	getPiRuntimeGeneration,
+	type PiRuntimeGeneration,
 	refreshCatalogs,
-	refreshCatalogsDetached,
 	settledAvailableModels,
 } from "./piRuntime";
+import { projectSessionEvent } from "./sessionEventProjection";
 import { repairDanglingToolCalls } from "./sessionRepair";
 import type { SkillAdmissionContext } from "./skillAdmission";
 import { trashFile } from "./trash";
@@ -44,6 +46,8 @@ import { cancelExtUiForSession, createWebUiContext, notifyExtUi } from "./webUiC
 
 interface Entry {
 	session: AgentSession;
+	/** Runtime generation captured when this session was created or attached. */
+	generation: PiRuntimeGeneration;
 	unsubscribe: () => void;
 	/** The workspace this session belongs to — so `listSessions` can report a workspace's sessions. */
 	workspaceId: string;
@@ -52,6 +56,18 @@ interface Entry {
 }
 
 const sessions = new Map<string, Entry>();
+
+/** Public auth/dev seam: capture the current runtime for the callback's complete async lifetime. */
+export async function usePiRuntime<T>(
+	operation: (
+		runtime: PiRuntimeGeneration["runtime"],
+		generation: PiRuntimeGeneration,
+	) => Promise<T> | T,
+): Promise<T> {
+	const generation = await getPiRuntimeGeneration();
+	return operation(generation.runtime, generation);
+}
+
 // Permanent for this host lifetime. A process restart naturally clears it; by then the trashed transcript
 // is absent, or the user deliberately restored it from the OS trash.
 const deletedSessions = new Map<string, string>();
@@ -109,14 +125,18 @@ function hasDeletionTombstone(sessionId: string): boolean {
 	return deletedSessions.has(sessionId);
 }
 
-function mustGet(sessionId: string): AgentSession {
+function mustGetEntry(sessionId: string): Entry {
 	// A live entry deliberately remains registered while its transcript move is pending so trash failure
 	// can restore the same runtime. It is not command-addressable in that window: accepting a new turn
 	// after deletion began could append behind the move and lose or recreate the supposedly deleted chat.
 	if (hasDeletionTombstone(sessionId)) throw new Error(`Unknown session: ${sessionId}`);
 	const entry = sessions.get(sessionId);
 	if (!entry) throw new Error(`Unknown session: ${sessionId}`);
-	return entry.session;
+	return entry;
+}
+
+function mustGet(sessionId: string): AgentSession {
+	return mustGetEntry(sessionId).session;
 }
 
 /** Whether a session is live and command-addressable — false while a delete transaction owns it. */
@@ -208,24 +228,40 @@ export function toWireModel(model: Model<string>): WireModel {
  * `createAgentSession` use it verbatim, so accepting it would let a client (esp. a remote V2 one) point the
  * agent's model traffic at an arbitrary URL. Throws if the ref isn't an available model.
  */
-async function resolveWireModel(ref: Pick<WireModel, "provider" | "id">): Promise<Model<string>> {
-	const available = settledAvailableModels(await getPiRuntime());
-	const match = available.find((m) => m.provider === ref.provider && m.id === ref.id);
+function resolveWireModel(
+	runtime: PiRuntimeGeneration["runtime"],
+	ref: Pick<WireModel, "provider" | "id">,
+): Model<string> {
+	const available = settledAvailableModels(runtime);
+	const match = available.find((model) => model.provider === ref.provider && model.id === ref.id);
 	if (!match) throw new Error(`Unknown or unavailable model: ${ref.provider}/${ref.id}`);
 	return match as unknown as Model<string>;
 }
 
-/** Wire a freshly-created/opened session into the manager: forward its events + bind the extension-UI bridge. */
-async function registerSession(
+interface PreparedSessionEntry {
+	entry: Entry;
+	result: CreateSessionResult;
+}
+
+/** Prepare event forwarding + extension bindings without replacing an existing stable session id. */
+async function prepareSessionEntry(
 	session: AgentSession,
 	workspaceId: string,
-): Promise<CreateSessionResult> {
+	generation: PiRuntimeGeneration,
+	lastSettlement: AgentSettlement | null | undefined = undefined,
+): Promise<PreparedSessionEntry> {
 	const { sessionId } = session;
 	let terminal: AgentSettlement | null = null;
-	const unsubscribe = session.subscribe((event) => {
+	const entry: Entry = {
+		session,
+		generation,
+		unsubscribe: () => {},
+		workspaceId,
+		lastSettlement,
+	};
+	entry.unsubscribe = session.subscribe((event) => {
 		if (event.type === "agent_start") {
-			const entry = sessions.get(sessionId);
-			if (entry) entry.lastSettlement = null;
+			entry.lastSettlement = null;
 		}
 		if (event.type === "agent_end") {
 			const assistant = [...event.messages]
@@ -240,54 +276,68 @@ async function registerSession(
 					}
 				: null;
 		}
-		const projected: PiEvent =
-			event.type === "agent_settled" ? { type: "agent_settled", terminal } : (event as PiEvent);
-		if (event.type === "agent_settled") {
-			const entry = sessions.get(sessionId);
-			if (entry) entry.lastSettlement = terminal;
-		}
-		publish({ sessionId, event: projected });
+		const projected = projectSessionEvent(event, terminal);
+		if (event.type === "agent_settled") entry.lastSettlement = terminal;
+		if (sessions.get(sessionId) === entry) publish({ sessionId, event: projected });
 		if (event.type === "agent_settled") terminal = null;
 	});
-	// `rpc` mode = dialog-capable, non-TUI: extension `uiContext` dialogs bridge to the browser over WS.
-	await session.bindExtensions({
-		mode: "rpc",
-		uiContext: createWebUiContext(sessionId),
-		onError: (error) => notifyExtUi(sessionId, `Extension error: ${error.error}`, "error"),
-	});
-	// A delete can land while disk re-open is awaiting extension binding. Never register that stale open
-	// behind the deletion; otherwise the trashed transcript returns as a live host session.
-	if (isSessionDeleted(sessionId, workspaceId)) {
+
+	try {
+		// `rpc` mode = dialog-capable, non-TUI. Failures rethrow generic: diagnostics can carry private config.
+		await session.bindExtensions({
+			mode: "rpc",
+			uiContext: createWebUiContext(sessionId),
+			onError: () => notifyExtUi(sessionId, "An extension failed.", "error"),
+		});
+		if (isSessionDeleted(sessionId, workspaceId)) throw new Error(`Unknown session: ${sessionId}`);
+	} catch (error) {
 		cancelExtUiForSession(sessionId);
-		unsubscribe();
+		entry.unsubscribe();
 		session.dispose();
-		throw new Error(`Unknown session: ${sessionId}`);
+		throw error;
 	}
-	sessions.set(sessionId, { session, unsubscribe, workspaceId, lastSettlement: undefined });
+
 	return {
-		sessionId,
-		model: session.model ? toWireModel(session.model as unknown as Model<string>) : null,
-		thinkingLevel: session.thinkingLevel,
+		entry,
+		result: {
+			sessionId,
+			model: session.model ? toWireModel(session.model as unknown as Model<string>) : null,
+			thinkingLevel: session.thinkingLevel,
+		},
 	};
+}
+
+/** Wire a freshly-created/opened session into the manager. */
+async function registerSession(
+	session: AgentSession,
+	workspaceId: string,
+	generation: PiRuntimeGeneration,
+): Promise<CreateSessionResult> {
+	const prepared = await prepareSessionEntry(session, workspaceId, generation);
+	sessions.set(session.sessionId, prepared.entry);
+	return prepared.result;
 }
 
 /** Create an in-process AgentSession rooted in `cwd`; its events stream out tagged with the session id. */
 export async function createSession(input: CreateSessionInput): Promise<CreateSessionResult> {
-	const modelRuntime = await getPiRuntime();
+	const generation = await getPiRuntimeGeneration();
 	const settingsManager = buildSessionSettings(input.cwd);
 	const { session } = await createAgentSession({
 		cwd: input.cwd,
-		modelRuntime,
+		modelRuntime: generation.runtime,
 		sessionManager: sessionManagerFactory(input.cwd),
 		settingsManager,
-		resourceLoader: await buildResourceLoader(input.cwd, settingsManager, () =>
-			skillAdmissionResolver(input.workspaceId),
+		resourceLoader: await buildResourceLoader(
+			input.cwd,
+			settingsManager,
+			() => skillAdmissionResolver(input.workspaceId),
+			generation.excludedSessionExtensionPaths,
 		),
 		// Re-resolve the wire ref to the real model (with baseUrl) host-side — never the client's baseUrl.
-		...(input.model ? { model: await resolveWireModel(input.model) } : {}),
+		...(input.model ? { model: resolveWireModel(generation.runtime, input.model) } : {}),
 		...(input.thinkingLevel ? { thinkingLevel: input.thinkingLevel } : {}),
 	});
-	return registerSession(session, input.workspaceId);
+	return registerSession(session, input.workspaceId, generation);
 }
 
 /** A live session's summary (drawn from the running `AgentSession`). */
@@ -362,7 +412,10 @@ async function readSessionFileIdentity(path: string): Promise<SessionFileIdentit
 }
 
 /** Enumerate every physical transcript in pi's one encoded-cwd directory without swallowing errors. */
-async function scanSessionFiles(cwd: string): Promise<ScannedSessionFile[]> {
+async function scanSessionFiles(
+	cwd: string,
+	excludedPaths: ReadonlySet<string> = new Set(),
+): Promise<ScannedSessionFile[]> {
 	const dir = defaultSessionDirectory(cwd);
 	let names: string[];
 	try {
@@ -377,6 +430,9 @@ async function scanSessionFiles(cwd: string): Promise<ScannedSessionFile[]> {
 	for (const name of names) {
 		if (!name.endsWith(".jsonl")) continue;
 		const path = join(dir, name);
+		// A registered live session is authoritative from memory. Pi can truncate/rewrite its physical file;
+		// observing that tiny window must not turn a healthy live chat into a corrupt detached transcript.
+		if (excludedPaths.has(resolve(path))) continue;
 		try {
 			scanned.push({ path, ok: true, identity: await readSessionFileIdentity(path) });
 		} catch (error) {
@@ -395,8 +451,11 @@ async function scanSessionFiles(cwd: string): Promise<ScannedSessionFile[]> {
  * membership and deletion boundaries that would mean "absent", so preflight every header and verify pi
  * returned every physical file. Only a successful result is authoritative.
  */
-async function listSessionInfosStrict(cwd: string): Promise<SessionInfo[]> {
-	const scanned = await scanSessionFiles(cwd);
+async function listSessionInfosStrict(
+	cwd: string,
+	excludedPaths: ReadonlySet<string> = new Set(),
+): Promise<SessionInfo[]> {
+	const scanned = await scanSessionFiles(cwd, excludedPaths);
 	const broken = scanned.find((file) => !file.ok);
 	if (broken && !broken.ok) throw broken.error;
 	const infos = await SessionManager.list(cwd);
@@ -415,15 +474,18 @@ async function listSessionInfosStrict(cwd: string): Promise<SessionInfo[]> {
  * wins on id. This is the domain state a reconnecting/second client hydrates from; the disk half is what
  * survives a host restart. The disk list throws rather than reporting false absence on an unreadable file.
  */
-export async function listSessions(workspaceId: string, cwd: string): Promise<SessionSummary[]> {
+async function listSessionsInternal(workspaceId: string, cwd: string): Promise<SessionSummary[]> {
 	const live: SessionSummary[] = [];
 	const liveIds = new Set<string>();
+	const liveFiles = new Set<string>();
 	for (const [sessionId, entry] of sessions) {
 		if (entry.workspaceId !== workspaceId || isSessionDeleted(sessionId, workspaceId)) continue;
 		live.push(summaryOf(sessionId, entry));
 		liveIds.add(sessionId);
+		const sessionFile = entry.session.sessionManager.getSessionFile();
+		if (sessionFile) liveFiles.add(resolve(sessionFile));
 	}
-	const infos = await listSessionInfosStrict(cwd);
+	const infos = await listSessionInfosStrict(cwd, liveFiles);
 	// One encoded-cwd dir can alias distinct cwds, so disambiguate on the recorded header cwd; live wins.
 	const disk: SessionSummary[] = infos
 		.filter(
@@ -443,6 +505,10 @@ export async function listSessions(workspaceId: string, cwd: string): Promise<Se
 			live: false,
 		}));
 	return [...live, ...disk];
+}
+
+export function listSessions(workspaceId: string, cwd: string): Promise<SessionSummary[]> {
+	return listSessionsInternal(workspaceId, cwd);
 }
 
 // In-flight disk re-opens, deduped by session id: concurrent `getSessionMessages` for the same disk session
@@ -465,6 +531,18 @@ function attachDiskSession(sessionId: string, workspaceId: string, cwd: string):
 	return pending;
 }
 
+function persistedSessionModelRef(model: unknown): { provider: string; id: string } | undefined {
+	if (typeof model !== "object" || model === null) return undefined;
+	const provider = Reflect.get(model, "provider");
+	const id = Reflect.get(model, "modelId");
+	// PI persists "no model" as a ref whose fields are BOTH undefined — distinct from a named model.
+	if (provider === undefined && id === undefined) return undefined;
+	if (typeof provider !== "string" || !provider || typeof id !== "string" || !id) {
+		throw new Error("The chat's saved model is unavailable.");
+	}
+	return { provider, id };
+}
+
 async function openDiskSession(sessionId: string, workspaceId: string, cwd: string): Promise<void> {
 	if (isSessionDeleted(sessionId, workspaceId)) throw new Error(`Unknown session: ${sessionId}`);
 	const info = (await listSessionInfosStrict(cwd)).find(
@@ -472,28 +550,42 @@ async function openDiskSession(sessionId: string, workspaceId: string, cwd: stri
 	);
 	if (!info) throw new Error(`Unknown session: ${sessionId}`);
 	if (sessions.has(sessionId)) return; // attached while we listed
-	const modelRuntime = await getPiRuntime();
+	const generation = await getPiRuntimeGeneration();
 	const settingsManager = buildSessionSettings(cwd);
 	const sessionManager = SessionManager.open(info.path);
+	const persistedModel = persistedSessionModelRef(sessionManager.buildSessionContext().model);
+	// Resolve the exact transcript model up front: PI's create-time fallback would silently switch providers.
+	let exactModel: Model<string> | undefined;
+	if (persistedModel) {
+		try {
+			exactModel = resolveWireModel(generation.runtime, persistedModel);
+		} catch {
+			throw new Error("The chat's saved model is unavailable.");
+		}
+	}
 	// Restart safety net: pair any tool call the last run left dangling (host died mid-tool) with a
 	// synthetic result BEFORE the session seeds its context — providers reject unpaired tool calls, and
 	// appending behind a live session would desync its in-memory state. See `sessionRepair`.
 	repairDanglingToolCalls(sessionManager);
 	const { session } = await createAgentSession({
 		cwd,
-		modelRuntime,
+		modelRuntime: generation.runtime,
 		sessionManager,
 		settingsManager,
-		resourceLoader: await buildResourceLoader(cwd, settingsManager, () =>
-			skillAdmissionResolver(workspaceId),
+		resourceLoader: await buildResourceLoader(
+			cwd,
+			settingsManager,
+			() => skillAdmissionResolver(workspaceId),
+			generation.excludedSessionExtensionPaths,
 		),
+		...(exactModel ? { model: exactModel } : {}),
 	});
 	// Lost a race after the open — drop this duplicate rather than clobber the registered one.
 	if (sessions.has(sessionId)) {
 		session.dispose();
 		return;
 	}
-	await registerSession(session, workspaceId);
+	await registerSession(session, workspaceId, generation);
 }
 
 /**
@@ -505,7 +597,7 @@ async function openDiskSession(sessionId: string, workspaceId: string, cwd: stri
  * corrupt transcript) **throws**: a caller that treated those as "not there" would silently fork a
  * conversation that is merely unreadable right now.
  */
-export async function ensureSessionAttached(
+async function ensureSessionAttachedInternal(
 	sessionId: string,
 	workspaceId: string,
 	cwd: string,
@@ -531,11 +623,19 @@ export async function ensureSessionAttached(
 	return true;
 }
 
+export function ensureSessionAttached(
+	sessionId: string,
+	workspaceId: string,
+	cwd: string,
+): Promise<boolean> {
+	return ensureSessionAttachedInternal(sessionId, workspaceId, cwd);
+}
+
 /**
- * A session's transcript (pi-canonical user/assistant/toolResult messages) + its current summary. Re-opens
+ * A session's transcript (the roles `isTranscriptMessageRole` admits) + its current summary. Re-opens
  * the session from disk first if it isn't live, so a reopened chat is continuable and its summary accurate.
  */
-export async function getSessionMessages(
+async function getSessionMessagesInternal(
 	sessionId: string,
 	workspaceId: string,
 	cwd: string,
@@ -550,13 +650,22 @@ export async function getSessionMessages(
 		entry = sessions.get(sessionId);
 		if (!entry) throw new Error(`Unknown session: ${sessionId}`);
 	}
-	// `custom` rides along for the ask-user-answers pairing (the card reads `details.toolCallId`); the
-	// web renders only the customTypes it knows and ignores the rest.
-	const renderable = new Set(["user", "assistant", "toolResult", "custom"]);
+	// Which roles travel is the wire's policy, not this function's: `history`'s search index counts
+	// positions by the same guard, and a set restated here could drift from it by one role and shift every
+	// later jump anchor (see `isTranscriptMessageRole`). `custom` carries the ask-user-answers pairing;
+	// `compactionSummary` is pi's durable marker for what compaction summarized away.
 	const messages = entry.session.messages.filter((m) =>
-		renderable.has(m.role),
+		isTranscriptMessageRole(m.role),
 	) as TranscriptMessage[];
 	return { summary: summaryOf(sessionId, entry), messages };
+}
+
+export function getSessionMessages(
+	sessionId: string,
+	workspaceId: string,
+	cwd: string,
+): Promise<{ summary: SessionSummary; messages: TranscriptMessage[] }> {
+	return getSessionMessagesInternal(sessionId, workspaceId, cwd);
 }
 
 /**
@@ -595,12 +704,12 @@ export async function promptSession(
 	await session.prompt(text, images ? { images } : undefined);
 }
 
-export async function steerSession(
+export function steerSession(
 	sessionId: string,
 	text: string,
 	images?: ImageContent[],
 ): Promise<void> {
-	await mustGet(sessionId).steer(text, images);
+	return mustGet(sessionId).steer(text, images);
 }
 
 /**
@@ -627,20 +736,20 @@ export async function followUpSession(
 	await session.prompt(text, images ? { images } : undefined);
 }
 
-/** Trigger compaction (fire-and-forget — progress/result arrive as `compaction_*` events). */
-export function compactSession(sessionId: string, instructions?: string): void {
-	void mustGet(sessionId)
-		.compact(instructions)
-		.catch(() => {});
+/** Trigger compaction; progress/result still arrive as `compaction_*` events. */
+export async function compactSession(sessionId: string, instructions?: string): Promise<void> {
+	await mustGet(sessionId).compact(instructions);
 }
 
-export async function abortSession(sessionId: string): Promise<void> {
-	await mustGet(sessionId).abort();
+/** Cancellation control path for a live session. */
+export function abortSession(sessionId: string): Promise<void> {
+	return mustGet(sessionId).abort();
 }
 
 export async function setSessionModel(sessionId: string, model: WireModel): Promise<void> {
-	// Re-resolve the wire ref to the real model host-side (pi's setModel uses baseUrl verbatim).
-	await mustGet(sessionId).setModel(await resolveWireModel(model));
+	// Re-resolve host-side against this chat's retained generation — never a newer one, never the wire ref.
+	const entry = mustGetEntry(sessionId);
+	await entry.session.setModel(resolveWireModel(entry.generation.runtime, model));
 }
 
 export function setSessionThinkingLevel(sessionId: string, level: ThinkingLevel): void {
@@ -671,17 +780,17 @@ export function getSessionStats(sessionId: string): SessionStats {
 // uses (pi's own `modes/rpc` `get_commands`).
 export function getSessionCommands(sessionId: string): SlashCommandInfo[] {
 	const session = mustGet(sessionId);
-	const extension = session.extensionRunner.getRegisteredCommands().map((c) => ({
-		name: c.invocationName,
+	const extension = session.extensionRunner.getRegisteredCommands().map((command) => ({
+		name: command.invocationName,
 		source: "extension" as const,
-		sourceInfo: c.sourceInfo,
-		...(c.description !== undefined ? { description: c.description } : {}),
+		sourceInfo: command.sourceInfo,
+		...(command.description !== undefined ? { description: command.description } : {}),
 	}));
-	const prompt = session.promptTemplates.map((t) => ({
-		name: t.name,
-		description: t.description,
+	const prompt = session.promptTemplates.map((template) => ({
+		name: template.name,
+		description: template.description,
 		source: "prompt" as const,
-		sourceInfo: t.sourceInfo,
+		sourceInfo: template.sourceInfo,
 	}));
 	const skill = toSkillCommands(session.resourceLoader.getSkills().skills);
 	return [...extension, ...prompt, ...skill];
@@ -694,7 +803,7 @@ export function getSessionCommands(sessionId: string): SlashCommandInfo[] {
  * the refresh landed. */
 export async function listAvailableModels(): Promise<WireModel[]> {
 	const runtime = await getPiRuntime();
-	refreshCatalogsDetached(runtime);
+	void refreshCatalogs(runtime);
 	return readAvailableWireModels(runtime);
 }
 
@@ -735,7 +844,8 @@ export async function clampThinkingForModel(
 	ref: Pick<WireModel, "provider" | "id">,
 	level: ThinkingLevel,
 ): Promise<ThinkingLevel> {
-	return clampThinkingLevel(await resolveWireModel(ref), level);
+	const generation = await getPiRuntimeGeneration();
+	return clampThinkingLevel(resolveWireModel(generation.runtime, ref), level);
 }
 
 /**
@@ -756,7 +866,7 @@ export async function getDefaultModel(): Promise<DefaultModelResult> {
 	const modelId = settings.getDefaultModel();
 	const pinned =
 		provider && modelId
-			? available.find((m) => m.provider === provider && m.id === modelId)
+			? available.find((model) => model.provider === provider && model.id === modelId)
 			: undefined;
 	const resolved = (pinned ?? available[0] ?? null) as Model<string> | null;
 	const saved = settings.getDefaultThinkingLevel() ?? "medium";
@@ -819,7 +929,7 @@ export async function settleSessionsForShutdown(timeoutMs = 2000): Promise<void>
  * worktree so no session — in memory or on disk — outlives it. `cwd` is optional: on a double-archive the
  * record is already gone, so we still reap any lingering live sessions and just skip the disk purge.
  */
-export async function removeWorkspaceSessions(workspaceId: string, cwd?: string): Promise<void> {
+async function removeWorkspaceSessionsInternal(workspaceId: string, cwd?: string): Promise<void> {
 	const ids = [...sessions]
 		.filter(([, entry]) => entry.workspaceId === workspaceId)
 		.map(([sessionId]) => sessionId);
@@ -834,6 +944,10 @@ export async function removeWorkspaceSessions(workspaceId: string, cwd?: string)
 		disposeSession(sessionId);
 	}
 	if (cwd) await purgeDiskSessions(cwd);
+}
+
+export function removeWorkspaceSessions(workspaceId: string, cwd?: string): Promise<void> {
+	return removeWorkspaceSessionsInternal(workspaceId, cwd);
 }
 
 /**
@@ -873,10 +987,18 @@ export function deleteSession(sessionId: string, workspaceId: string, cwd: strin
 			return Promise.reject(new Error(`Unknown session: ${sessionId}`));
 		return inFlight.done;
 	}
+
 	// `runDeleteTransaction` installs the tombstone synchronously (before its first await), so the entry is
 	// registered here before the promise suspends and any concurrent caller can only observe it in flight.
-	const done = runDeleteTransaction(sessionId, workspaceId, cwd).finally(() =>
-		deletingSessions.delete(sessionId),
+	const transaction = runDeleteTransaction(sessionId, workspaceId, cwd);
+	const done = transaction.then(
+		() => {
+			deletingSessions.delete(sessionId);
+		},
+		(error: unknown) => {
+			deletingSessions.delete(sessionId);
+			throw error;
+		},
 	);
 	deletingSessions.set(sessionId, { workspaceId, done });
 	return done;
@@ -919,7 +1041,8 @@ async function runDeleteTransaction(
 				(candidate) => candidate.id === sessionId && candidate.cwd === cwd,
 			)?.path;
 		}
-		if (path) await trashFile(path);
+		// A new empty chat's reserved JSONL path may not exist yet — nothing recoverable to move.
+		if (path && existsSync(path)) await trashFile(path);
 	} catch (error) {
 		// The deletion boundary did not complete: retain any live entry, allow disk re-attach/retry, and
 		// publish nothing. The client that received the failure still has a usable chat runtime. Single-flight

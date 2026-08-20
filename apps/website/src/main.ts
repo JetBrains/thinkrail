@@ -2,6 +2,7 @@
 // complete with JS disabled, and every animation is gated on prefers-reduced-motion.
 
 import { initAnalytics } from "./analytics";
+import { deriveEditorTabs } from "./editorTabs";
 import { initGtm } from "./gtm";
 import { detectInstallPlatform, type InstallPlatform } from "./installPlatform";
 
@@ -15,14 +16,43 @@ if (motionOK) document.documentElement.classList.add("anim");
 
 const editor = document.getElementById("editor-scroll");
 
-/* ── Scroll-spy: file-tree rows follow the section in view ─────────────── */
-// Top tabs are now decorative editor tabs; scroll-spy only updates file tree navigation.
+/* ── Top tabs: mirror the right-rail file tree (Table of Contents) ──────── */
+// The `.filetree` is the single static source of truth for navigation; the top
+// tabs are generated from it so labels + #anchors can never drift into a second
+// hardcoded list. Both light up together via the shared scroll-spy below.
 
 const sections = Array.from(document.querySelectorAll<HTMLElement>(".file-section"));
 const treeRows = Array.from(document.querySelectorAll<HTMLAnchorElement>(".filetree a.ft-row"));
+const tabstrip = document.querySelector<HTMLElement>(".tabstrip");
+const tabRows: HTMLAnchorElement[] = [];
+
+if (tabstrip) {
+	// One tab per unique target — see `deriveEditorTabs`, which owns that rule and is tested.
+	const iconFor = new Map(
+		treeRows.map((row) => [row.getAttribute("href"), row.querySelector("svg.i")] as const),
+	);
+	for (const { href, label } of deriveEditorTabs(
+		treeRows.map((row) => ({
+			href: row.getAttribute("href"),
+			label: row.textContent?.trim() ?? "",
+		})),
+	)) {
+		const tab = document.createElement("a");
+		tab.className = "tab";
+		tab.href = href;
+		// Copy the row's leading icon (SVG sprite) so tabs match the tree glyphs.
+		const icon = iconFor.get(href);
+		if (icon) tab.appendChild(icon.cloneNode(true));
+		tab.appendChild(document.createTextNode(label));
+		tabstrip.appendChild(tab);
+		tabRows.push(tab);
+	}
+}
+
+/* ── Scroll-spy: file-tree rows + top tabs follow the section in view ───── */
 
 function setActiveTreeRow(id: string): void {
-	for (const el of treeRows) {
+	for (const el of [...treeRows, ...tabRows]) {
 		const active = el.getAttribute("href") === `#${id}`;
 		el.classList.toggle("active", active);
 	}
@@ -46,34 +76,188 @@ if (editor && sections.length > 0) {
 	for (const section of sections) spy.observe(section);
 }
 
-/* ── Terminal: type the install command, then reveal the output ─────────── */
+/* ── Terminal: OS-synced install replay + ThinkRail logo banner ─────────── */
+// The hero install picker is the single source of truth for the command (see the picker block
+// below, which calls publishInstallSelection). The terminal subscribes, so it always types the
+// command for the OS/shell selected in the hero. On load / OS change it types that command, shows a
+// short install sequence, then draws the logo. Clicking the finished terminal replays the logo alone
+// plus a GitHub CTA — never the install. Clicks mid-animation are ignored, and prefers-reduced-motion
+// renders each end state with no typing or per-line stagger.
+
+interface InstallSelection {
+	command: string;
+	platform: InstallPlatform;
+}
+let installSelection: InstallSelection | null = null;
+const installSelectionListeners: ((selection: InstallSelection) => void)[] = [];
+function publishInstallSelection(selection: InstallSelection): void {
+	installSelection = selection;
+	for (const listener of installSelectionListeners) listener(selection);
+}
+function onInstallSelection(listener: (selection: InstallSelection) => void): void {
+	installSelectionListeners.push(listener);
+	if (installSelection) listener(installSelection);
+}
+
+// The ThinkRail logo banner, drawn one line at a time — preserved exactly.
+const TERMINAL_LOGO: readonly string[] = [
+	"–––––––––––––––––––––––––––––––––^  R–––––––––7^",
+	"–––––––––––––––––––––––––––––––:  7–––––––––––––5~",
+	"                ...                       .:~R–––R.",
+	"–––––––––––––––^  :––––––––––––––––––––––7~.  :5–––T",
+	"–––––––––––––––R  ~–––––––––––––––––––––––––^  :––––.",
+	"––––––––––~T–––T  .~~~~–––––––––––––––––5–––Y  .––––.",
+	"           T–––R  .:::.                 !–––?  .––––.",
+	"           T–––R  ^––––.                !–––?,  .––––.",
+	"           T–––R  ^––––.                !–––?  ––––.",
+	"           T–––R  ^––––.               .T–––?  ––––.",
+	"           T–––R  ^––––:^!RY55–––––––––––––~  .––––",
+	"           T–––R  ^––––––––––––––––––––––––R:   T–––!",
+	"           T–––R  ^––––––R7~^^::::::^^^:.  .~5–––7",
+	"           T–––R  ^––––!   :^~~~~~~~^   .T5––––~",
+	"           T–––R  ^––––^  ~5––––––––––:  !–––––^",
+	"           T–––R  ^––––  .––––––RRR5––––!  :5––––!",
+	"           T–––R  ^–––5  :––––~     7––––T   R––––R.",
+	"           T–––R  ^–––5  :––––:      ^5––––:  !––––5:",
+	"           T–––R  ^–––5  :––––:       .R––––~  ^–––––!",
+	"           T–––R  ^–––5  :––––:         !––––7  .Y––––T",
+	"           T–––R  ^–––5  :––––:          :5––––.  7––––5:",
+	"           T–––R  ^–––5  :––––:            R––––:  ~–––––^",
+];
+
+const GITHUB_URL = "https://github.com/JetBrains/thinkrail";
+const INSTALL_ARCH: Record<InstallPlatform, string> = {
+	macos: "macos-arm64",
+	linux: "linux-x64",
+	windows: "windows-x64",
+};
 
 const terminal = document.querySelector<HTMLElement>(".terminal");
-const typeTarget = document.querySelector<HTMLElement>(".term-cmd[data-type]");
-if (motionOK && terminal && typeTarget) {
-	terminal.classList.add("armed");
-	const text = typeTarget.dataset.type ?? "";
-	const outs = Array.from(terminal.querySelectorAll<HTMLElement>("[data-out]"));
-	const caret = terminal.querySelector<HTMLElement>(".term-caret");
-	let i = 0;
-	const typeNext = () => {
-		if (i <= text.length) {
-			typeTarget.textContent = text.slice(0, i);
-			i += 1;
-			setTimeout(typeNext, 14 + Math.random() * 26);
-			return;
-		}
-		outs.forEach((out, index) => {
-			setTimeout(
-				() => {
-					out.style.visibility = "visible";
-					if (index === outs.length - 1 && caret) caret.remove();
-				},
-				350 + index * 420,
-			);
-		});
+const termScreen = document.getElementById("term-screen");
+if (terminal && termScreen) {
+	const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+	const makeLine = (className: string, text = "") => {
+		const el = document.createElement("span");
+		el.className = className;
+		if (text) el.textContent = text;
+		return el;
 	};
-	setTimeout(typeNext, 900);
+
+	// A generation counter: each new sequence invalidates any still-running one (so an OS change
+	// restarts cleanly). `animating` gates clicks; the initial sequence must finish before replays.
+	let generation = 0;
+	let animating = false;
+	let initialDone = false;
+
+	// The logo is wider than the narrow terminal: fit the longest line to the available width by
+	// shrinking the font — the characters are never touched, only the size.
+	const maxLogoLen = Math.max(...TERMINAL_LOGO.map((line) => line.length));
+	const fitLogo = () => {
+		const avail = termScreen.clientWidth - 28; // .term-screen horizontal padding
+		if (avail <= 0) return;
+		const px = Math.max(4, Math.min(11, Math.floor(avail / (maxLogoLen * 0.6))));
+		termScreen.style.setProperty("--term-logo-fs", `${px}px`);
+	};
+
+	const typeCommand = async (command: string, gen: number) => {
+		const row = makeLine("term-line");
+		const prompt = makeLine("term-prompt", "❯");
+		const cmd = makeLine("term-cmd");
+		const caret = makeLine("term-caret");
+		row.append(prompt, document.createTextNode(" "), cmd, caret);
+		termScreen.append(row);
+		if (motionOK) {
+			for (let i = 1; i <= command.length; i += 1) {
+				if (gen !== generation) return;
+				cmd.textContent = command.slice(0, i);
+				await wait(14 + Math.random() * 26);
+			}
+		} else {
+			cmd.textContent = command;
+		}
+		caret.remove();
+	};
+
+	const drawLines = async (
+		lines: readonly string[],
+		className: string,
+		perLineMs: number,
+		gen: number,
+	) => {
+		for (const text of lines) {
+			if (gen !== generation) return;
+			termScreen.append(makeLine(className, text));
+			termScreen.scrollTop = termScreen.scrollHeight;
+			if (motionOK && perLineMs > 0) await wait(perLineMs);
+		}
+	};
+
+	const runInstall = async (selection: InstallSelection) => {
+		generation += 1;
+		const gen = generation;
+		animating = true;
+		termScreen.replaceChildren();
+		fitLogo();
+		await typeCommand(selection.command, gen);
+		if (gen !== generation) return;
+		await drawLines(
+			[
+				`⬇ thinkrail latest (${INSTALL_ARCH[selection.platform]}) · sha256 verified ✓`,
+				"✓ installed — starting ThinkRail …",
+			],
+			"term-out",
+			420,
+			gen,
+		);
+		if (gen !== generation) return;
+		// Stop at the completed/ready install state — the logo plays only on a terminal click (replayLogo).
+		animating = false;
+		initialDone = true;
+	};
+
+	const replayLogo = async () => {
+		if (animating || !initialDone) return;
+		generation += 1;
+		const gen = generation;
+		animating = true;
+		termScreen.replaceChildren();
+		fitLogo();
+		await drawLines(TERMINAL_LOGO, "term-out term-logo", 60, gen);
+		if (gen !== generation) return;
+		const cta = makeLine("term-out term-cta");
+		cta.append(document.createTextNode("Ready for the real thing? → "));
+		const link = document.createElement("a");
+		link.href = GITHUB_URL;
+		link.target = "_blank";
+		link.rel = "noopener noreferrer";
+		link.textContent = "GitHub";
+		link.addEventListener("click", (event) => event.stopPropagation());
+		cta.append(link);
+		termScreen.append(cta);
+		termScreen.scrollTop = termScreen.scrollHeight;
+		animating = false;
+	};
+
+	// The logo's font size is derived from the rail's width, so a resize has to re-derive it or the
+	// banner stays sized for the old width (the rail is a drawer under 1180px).
+	window.addEventListener("resize", fitLogo);
+
+	terminal.addEventListener("click", () => {
+		void replayLogo();
+	});
+	// The click-anywhere replay is pointer-only and invisible; the head button is the keyboard-reachable,
+	// discoverable version of it. Revealed once the install sequence has finished, since that is exactly
+	// when `replayLogo` starts accepting input.
+	const replayButton = terminal.querySelector<HTMLButtonElement>("[data-term-replay]");
+	replayButton?.addEventListener("click", (event) => {
+		event.stopPropagation(); // The terminal's own handler would otherwise fire it twice.
+		void replayLogo();
+	});
+	onInstallSelection((selection) => {
+		void runInstall(selection).then(() => {
+			if (replayButton && initialDone) replayButton.hidden = false;
+		});
+	});
 }
 
 /* ── Chat demo: replay the captured session when it scrolls into view ───── */
@@ -208,33 +392,27 @@ if (installPicker) {
 		userAgent: browserNavigator.userAgent,
 		maxTouchPoints: browserNavigator.maxTouchPoints,
 	});
-	const platformLabel: Record<InstallPlatform, string> = {
-		macos: "macOS",
-		linux: "Linux",
-		windows: "Windows",
-	};
-
 	const platformTabs = document.querySelectorAll<HTMLButtonElement>("[data-install-platform]");
 	const platformPanels = document.querySelectorAll<HTMLElement>("[data-install-panel]");
 	const shellTabs = document.querySelectorAll<HTMLButtonElement>("[data-windows-shell]");
 	const shellPanels = document.querySelectorAll<HTMLElement>("[data-windows-shell-panel]");
+	// The Windows shell switcher lives inline in the tab bar; it shows only while Windows is active.
+	const shellSwitcher = installPicker.querySelector<HTMLElement>(".windows-shell-tabs");
+
+	// The command currently on screen is the single source of truth for both the copy button and the
+	// terminal simulation: visible OS panel -> its visible Windows shell panel (if any) -> the <code>.
+	const syncActiveCommand = () => {
+		const osPanel = Array.from(platformPanels).find((panel) => !panel.hidden);
+		const shellPanel = osPanel?.querySelector<HTMLElement>(
+			"[data-windows-shell-panel]:not([hidden])",
+		);
+		const code = (shellPanel ?? osPanel)?.querySelector(".install-line code");
+		const command = code?.textContent?.trim() ?? "";
+		// The terminal simulation follows the active command; the copy buttons live per command row.
+		publishInstallSelection({ command, platform: selectedPlatform });
+	};
 	let selectedPlatform: InstallPlatform = detectedPlatform ?? "linux";
 	const initialShell: WindowsShell = "powershell";
-
-	const updateDetectionNote = () => {
-		for (const note of document.querySelectorAll<HTMLElement>("[data-install-detection-note]")) {
-			if (selectedPlatform === "windows") {
-				note.textContent =
-					detectedPlatform === "windows"
-						? "Windows detected — choose your shell."
-						: "Choose your Windows shell.";
-			} else if (detectedPlatform) {
-				note.textContent = `Detected ${platformLabel[detectedPlatform]}. You can switch at any time.`;
-			} else {
-				note.textContent = "Choose your OS. You can switch at any time.";
-			}
-		}
-	};
 
 	const selectPlatform = (platform: InstallPlatform) => {
 		selectedPlatform = platform;
@@ -246,7 +424,8 @@ if (installPicker) {
 		for (const panel of platformPanels) {
 			panel.hidden = platformFrom(panel.dataset.installPanel) !== platform;
 		}
-		updateDetectionNote();
+		if (shellSwitcher) shellSwitcher.hidden = platform !== "windows";
+		syncActiveCommand();
 	};
 
 	const selectShell = (shell: WindowsShell) => {
@@ -258,6 +437,7 @@ if (installPicker) {
 		for (const panel of shellPanels) {
 			panel.hidden = windowsShellFrom(panel.dataset.windowsShellPanel) !== shell;
 		}
+		syncActiveCommand();
 	};
 
 	const nextTab = (
@@ -307,9 +487,6 @@ if (installPicker) {
 		);
 	}
 
-	for (const marker of document.querySelectorAll<HTMLElement>("[data-detected-platform]")) {
-		marker.hidden = platformFrom(marker.dataset.detectedPlatform) !== detectedPlatform;
-	}
 	selectShell(initialShell);
 	selectPlatform(selectedPlatform);
 	document.documentElement.classList.add("install-tabs-ready");
@@ -420,49 +597,43 @@ if (railNote && railNoteDismiss) {
 }
 
 /* ── Mock-disabled tooltips ─────────────────────────────────────────────── */
-// Disabled mock UI elements show a rich callout encouraging visitors to try the real product.
-// Tooltip is anchored to the trigger region, not the cursor.
+// Disabled mock UI elements show a compact callout encouraging visitors to try the real product.
+// Click-to-open: clicking a disabled region toggles the tooltip; clicking outside (or Escape)
+// closes it. The tooltip is anchored to the trigger region, not the cursor.
 
 const mockElements = document.querySelectorAll<HTMLElement>("[data-mock-hint]");
 if (mockElements.length > 0) {
-	// Create a shared tooltip element with icon, text, and CTA
+	// Create a shared tooltip element with text and CTA
 	const tooltip = document.createElement("div");
 	tooltip.className = "mock-tooltip";
+	tooltip.id = "mock-tooltip";
 	tooltip.setAttribute("role", "tooltip");
-
-	// Info icon (uses the SVG sprite)
-	const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-	icon.setAttribute("class", "mock-tooltip-icon");
-	icon.setAttribute("aria-hidden", "true");
-	const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
-	use.setAttribute("href", "#i-info");
-	icon.appendChild(use);
-	tooltip.appendChild(icon);
 
 	// Text message (updated dynamically)
 	const text = document.createElement("div");
 	text.className = "mock-tooltip-text";
 	tooltip.appendChild(text);
 
-	// CTA button (reuses hero button styling)
+	// CTA button (reuses the site's shared `.btn` label typography; only sizing is overridden in CSS)
 	const cta = document.createElement("div");
 	cta.className = "mock-tooltip-cta";
-	cta.innerHTML = `<a href="https://github.com/JetBrains/thinkrail" target="_blank" rel="noopener noreferrer">
+	cta.innerHTML = `<a class="btn" href="https://github.com/JetBrains/thinkrail" target="_blank" rel="noopener noreferrer">
 		<svg class="i i-fill" aria-hidden="true"><use href="#i-github" /></svg>
-		Star on GitHub
+		Open on GitHub
 	</a>`;
 	tooltip.appendChild(cta);
 
 	document.body.appendChild(tooltip);
 
-	let hideTimeout: ReturnType<typeof setTimeout> | null = null;
 	let currentTarget: HTMLElement | null = null;
 
 	const GAP = 8; // Gap between trigger and tooltip
 	const MARGIN = 8; // Viewport margin
+	// Shared offset for rail-anchored placements: distance below the header AND gap from the panel edge.
+	const RAIL_OFFSET = 12;
 	const titlebar = document.querySelector(".titlebar");
 	const railRight = document.getElementById("rail-right");
-	const statusbar = document.querySelector(".statusbar");
+	const railLeft = document.querySelector(".rail-left");
 
 	const positionTooltip = (trigger: HTMLElement) => {
 		const triggerRect = trigger.getBoundingClientRect();
@@ -473,20 +644,19 @@ if (mockElements.length > 0) {
 		let left: number;
 		let top: number;
 
-		// Customize placement per region
-		const isTopRegion =
-			trigger.classList.contains("tabstrip") || trigger.classList.contains("rail-tabs");
-		if (isTopRegion && titlebar && railRight) {
-			// Top regions (editor tabs + rail tabs): 12px below titlebar, 12px to the left of right rail
+		// Placement per region. Only `.rail-tabs` and `.rail-left-nav` carry a hint; both anchor to their
+		// panel's live edge so the callout sits in the header/panel corner rather than inside the content.
+		if (trigger.classList.contains("rail-tabs") && titlebar && railRight) {
 			const titlebarRect = titlebar.getBoundingClientRect();
 			const railRect = railRight.getBoundingClientRect();
-			left = railRect.left - tooltipRect.width - 12;
-			top = titlebarRect.bottom + 12;
-		} else if (trigger.classList.contains("term-screen") && statusbar) {
-			// Terminal: to the left of terminal, 12px above statusbar
-			const statusbarRect = statusbar.getBoundingClientRect();
-			left = triggerRect.left - tooltipRect.width - 12;
-			top = statusbarRect.top - tooltipRect.height - 12;
+			left = railRect.left - tooltipRect.width - RAIL_OFFSET;
+			top = titlebarRect.bottom + RAIL_OFFSET;
+		} else if (trigger.classList.contains("rail-left-nav") && titlebar && railLeft) {
+			// The mirror of the above, offset to the RIGHT of the left rail's edge.
+			const titlebarRect = titlebar.getBoundingClientRect();
+			const railLeftRect = railLeft.getBoundingClientRect();
+			left = railLeftRect.right + RAIL_OFFSET;
+			top = titlebarRect.bottom + RAIL_OFFSET;
 		} else {
 			// Left sidebar and others: right of trigger (original behavior)
 			left = triggerRect.right + GAP;
@@ -520,51 +690,85 @@ if (mockElements.length > 0) {
 	};
 
 	const showTooltip = (target: HTMLElement) => {
-		// Cancel any pending hide
-		if (hideTimeout) {
-			clearTimeout(hideTimeout);
-			hideTimeout = null;
-		}
-
-		// If already showing for this target, don't restart animation
-		if (currentTarget === target) return;
-
 		const hint = target.dataset.mockHint;
 		if (!hint) return;
 
+		// Reset the previously-open trigger's expanded/description state when switching regions.
+		if (currentTarget && currentTarget !== target) {
+			currentTarget.setAttribute("aria-expanded", "false");
+			currentTarget.removeAttribute("aria-describedby");
+		}
 		currentTarget = target;
 		text.textContent = hint;
 		tooltip.classList.add("visible");
+		target.setAttribute("aria-expanded", "true");
+		target.setAttribute("aria-describedby", tooltip.id);
 		positionTooltip(target);
 	};
 
 	const hideTooltip = () => {
-		hideTimeout = setTimeout(() => {
-			tooltip.classList.remove("visible");
-			currentTarget = null;
-		}, 200); // Grace delay allows moving cursor to tooltip
-	};
-
-	const cancelHide = () => {
-		if (hideTimeout) {
-			clearTimeout(hideTimeout);
-			hideTimeout = null;
+		tooltip.classList.remove("visible");
+		if (currentTarget) {
+			currentTarget.setAttribute("aria-expanded", "false");
+			currentTarget.removeAttribute("aria-describedby");
 		}
+		currentTarget = null;
 	};
-
-	// Keep tooltip open when hovering the tooltip itself (for clicking the CTA)
-	tooltip.addEventListener("mouseenter", cancelHide);
-	tooltip.addEventListener("mouseleave", hideTooltip);
 
 	for (const el of mockElements) {
-		// Re-enable pointer events for hover detection, but prevent clicks
+		// Re-enable pointer events so the disabled region is interactive.
 		el.style.pointerEvents = "auto";
-		el.addEventListener("mouseenter", () => showTooltip(el));
-		el.addEventListener("mouseleave", hideTooltip);
-		// Block clicks on the element itself
+		// Keyboard-accessible TOGGLE (not a navigation target): a focusable button that opens the callout;
+		// the GitHub CTA inside the tooltip stays the only navigation action. Enter/Space toggle, Escape
+		// closes (below). Pointer behaviour and positioning are unchanged.
+		el.tabIndex = 0;
+		el.setAttribute("role", "button");
+		// The name is applied WITH the role, not in the markup: a bare `<div>` does not support
+		// `aria-label`, and the button only exists once this script runs. Without it, a `role="button"`
+		// wrapping a whole panel is announced as its entire flattened subtree.
+		const label = el.dataset.mockLabel;
+		if (label) el.setAttribute("aria-label", label);
+		// No `aria-haspopup`: the popup is a `tooltip`, which is not one of its allowed values.
+		// `aria-expanded` + `aria-describedby` (set on open) are the disclosure contract.
+		el.setAttribute("aria-expanded", "false");
+		el.setAttribute("aria-controls", tooltip.id);
+		const toggle = () => {
+			if (currentTarget === el) hideTooltip();
+			else showTooltip(el);
+		};
 		el.addEventListener("click", (e) => {
 			e.preventDefault();
 			e.stopPropagation();
+			toggle();
+		});
+		el.addEventListener("keydown", (e) => {
+			if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") {
+				e.preventDefault(); // Space would otherwise scroll the page.
+				toggle();
+			}
 		});
 	}
+
+	// Click outside the tooltip (and outside any trigger) closes it.
+	document.addEventListener("click", (e) => {
+		if (!currentTarget) return;
+		const node = e.target as Node | null;
+		if (node && (tooltip.contains(node) || currentTarget.contains(node))) return;
+		hideTooltip();
+	});
+
+	// Escape closes it too, and returns focus to the trigger so keyboard users are not stranded.
+	document.addEventListener("keydown", (e) => {
+		if (e.key === "Escape" && currentTarget) {
+			const trigger = currentTarget;
+			hideTooltip();
+			trigger.focus();
+		}
+	});
+
+	// The callout is click-persistent and anchored to live panel edges, so a resize (or the right rail
+	// becoming a drawer under 1180px) would otherwise strand it at a stale position.
+	window.addEventListener("resize", () => {
+		if (currentTarget) positionTooltip(currentTarget);
+	});
 }

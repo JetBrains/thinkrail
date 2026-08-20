@@ -1,28 +1,126 @@
 #!/bin/sh
-# e2e stub for the JetBrains Central CLI (`central`). Deterministic: no network, no real proxy/daemon.
-# Mirrors ONLY the surface ThinkRail's jbcentral integration invokes (see packages/shared/src/jbcentral.ts).
-#
-# Outcome is controlled by the file named in $CENTRAL_STUB_STATE (E2E_CENTRAL_STATE), read live per call so a
-# test can drive the card's not-signed-in / error branches without restarting the shared host:
-#   absent/empty  -> signed in     (prints the persistent secret, exit 0)
-#   "needs-login" -> not signed in (empty secret, exit 0)  -> the card's "Sign in to JetBrains" state
-#   "error"       -> hard failure  (stderr + exit 1)        -> the card's error state
-if [ "$1" = "proxy" ] && [ "$2" = "start" ]; then
-	state=""
-	[ -n "$CENTRAL_STUB_STATE" ] && [ -f "$CENTRAL_STUB_STATE" ] && state=$(cat "$CENTRAL_STUB_STATE")
-	if [ "$state" = "needs-login" ]; then
-		# `--return-key` with no JetBrains session prints nothing → the host reads it as not-logged-in.
+# Independently authored, stateful fake for the reviewed JetBrains Central CLI surface. It intentionally
+# models only argv, exit status, and the opaque global extension postcondition used by ThinkRail tests.
+set -eu
+
+# The control file holds space-separated tokens, so independent axes compose: the version a probe reports,
+# whether credentials exist, and how an action fails are separate facts about a host, and a single-valued
+# control could not express combinations a user really hits (an outdated Central whose update also fails).
+state=""
+if [ -n "${CENTRAL_STUB_STATE:-}" ] && [ -f "$CENTRAL_STUB_STATE" ]; then
+	state=$(cat "$CENTRAL_STUB_STATE")
+fi
+has() {
+	case " $state " in
+	*" $1 "*) return 0 ;;
+	*) return 1 ;;
+	esac
+}
+drop() {
+	next=""
+	for token in $state; do
+		if [ "$token" != "$1" ]; then next="$next $token"; fi
+	done
+	state=${next# }
+	printf '%s\n' "$state" > "$CENTRAL_STUB_STATE"
+}
+if [ -n "${CENTRAL_STUB_LOG:-}" ]; then
+	printf '%s\n' "$*" >> "$CENTRAL_STUB_LOG"
+fi
+
+artifact="$HOME/.pi/agent/extensions/jetbrains-central.ts"
+
+if [ "$1" = "--version" ]; then
+	if has probe-error; then
+		printf 'E2E_CENTRAL_CHILD_SENTINEL_probe\n' >&2
+		exit 7
+	elif has malformed; then
+		printf 'synthetic malformed version\n'
+	elif has outdated; then
+		printf 'central 1.3.9 (synthetic test metadata)\n'
+	elif has newer; then
+		printf 'central 1.7.0 (synthetic test metadata)\n'
+	else
+		printf 'central 1.6.2 (synthetic test metadata)\n'
+	fi
+	exit 0
+fi
+
+# Only the Auth/Proxy rows' *shape* is modelled: styled indicators, padded labels, and styled values. The
+# strings are test-owned, and the extra line asserts ThinkRail never surfaces this output.
+if [ "$1" = "status" ]; then
+	if has needs-login; then
+		printf '\033[38;2;198;40;40m\xe2\xa0\xa4\033[m \033[1mAuth      \033[m \033[1;38;2;198;40;40mnot connected\033[m\n'
+	else
+		printf '\033[38;2;46;125;50m\xe2\xa3\xbf\033[m \033[1mAuth      \033[m \033[1;38;2;46;125;50mE2E Synthetic Access\033[m\n'
+	fi
+	if has proxy-stopped; then
+		printf '\033[38;2;198;40;40m\xe2\xa0\xa4\033[m \033[1mProxy     \033[m \033[1;38;2;198;40;40mstopped\033[m\n'
+	else
+		printf '\033[38;2;46;125;50m\xe2\xa3\xbf\033[m \033[1mProxy     \033[m \033[1;38;2;46;125;50mrunning on port 19516\033[m\n'
+	fi
+	printf 'E2E_CENTRAL_CHILD_SENTINEL_status\n'
+	exit 0
+fi
+
+if [ "$1" = "add" ] && [ "${2:-}" = "pi" ]; then
+	if has needs-login || has add-error; then
+		printf 'E2E_CENTRAL_CHILD_SENTINEL_add\n' >&2
+		exit 9
+	fi
+	if has missing-artifact; then
+		rm -f "$artifact"
 		exit 0
 	fi
-	if [ "$state" = "error" ]; then
-		echo "stub central: proxy start failed" >&2
-		exit 1
+	if has slow-add; then
+		sleep 1
 	fi
-	# `--return-key`: print ONLY the persistent proxy secret (a URL-safe path segment).
-	echo "e2efakesecret0123456789abcdef01"
+	mkdir -p "$(dirname "$artifact")"
+	if has candidate-error; then
+		cp "$CENTRAL_STUB_BAD_EXTENSION_SOURCE" "$artifact"
+	else
+		cp "$CENTRAL_STUB_EXTENSION_SOURCE" "$artifact"
+	fi
 	exit 0
 fi
+
+if [ "$1" = "remove" ] && [ "${2:-}" = "pi" ]; then
+	if has remove-error; then
+		printf 'E2E_CENTRAL_CHILD_SENTINEL_remove\n' >&2
+		exit 11
+	fi
+	if ! has remove-leaves-artifact; then
+		rm -f "$artifact"
+	fi
+	exit 0
+fi
+
+if [ "$1" = "proxy" ] && [ "${2:-}" = "start" ] && [ "${3:-}" = "--ensure-updated" ]; then
+	if has proxy-start-error; then
+		exit 14
+	fi
+	drop proxy-stopped
+	exit 0
+fi
+
 if [ "$1" = "login" ]; then
+	if has login-error; then
+		exit 12
+	fi
+	# A successful synthetic login changes only the credential axis.
+	if has needs-login; then
+		drop needs-login
+	fi
 	exit 0
 fi
-exit 0
+
+if [ "$1" = "update" ] && [ "${2:-}" = "--install" ]; then
+	if has update-error; then
+		exit 13
+	fi
+	# A successful update makes the host supported again without changing auth/proxy axes.
+	drop outdated
+	exit 0
+fi
+
+exit 8

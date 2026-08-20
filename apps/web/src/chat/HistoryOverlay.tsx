@@ -7,7 +7,7 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { relativeTime } from "@/lib";
+import { platformShortcutLabel, relativeTime } from "@/lib";
 import {
 	type ChatLocationRequest,
 	type HistorySearchState,
@@ -33,14 +33,8 @@ const SCOPE_MENU_LABELS: Record<HistoryScope["kind"], string> = {
 	all: "Everywhere",
 };
 
-/** Cmd on Mac/iOS, Ctrl elsewhere — matches the modifier `onKeyDown` below actually checks
- * (`e.metaKey || e.ctrlKey`), so the save-as-template button's tooltip never shows a glyph the user's
- * platform doesn't have. Guarded for a non-browser environment (e.g. this module under a non-DOM test
- * runner) — falls back to the cross-platform spelling. */
-const SAVE_SHORTCUT_LABEL =
-	typeof navigator !== "undefined" && /Mac|iPhone|iPad|iPod/.test(navigator.platform ?? "")
-		? "⌘S"
-		: "Ctrl+S";
+/** Platform spelling for the save-as-template chord handled below. */
+const SAVE_SHORTCUT_LABEL = platformShortcutLabel("S");
 
 function escapeRegExp(term: string): string {
 	return term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -71,7 +65,7 @@ function Highlight({ text, query }: { text: string; query: string }) {
 		<>
 			{parts.map(({ text: part, key }) =>
 				terms.includes(part.toLowerCase()) ? (
-					<mark key={key} className="rounded-[2px] bg-primary-soft text-text-default">
+					<mark key={key} className="rounded-[var(--radius-xs)] bg-primary-soft text-text-default">
 						{part}
 					</mark>
 				) : (
@@ -612,7 +606,7 @@ export function HistoryOverlay({
 		<div
 			data-testid="history-overlay"
 			data-stage={stage}
-			className="absolute bottom-full left-sm right-sm mb-xs flex flex-col overflow-hidden rounded-[var(--radius-md)] border border-border-default bg-container-elevated-bg shadow-[var(--shadow-md)]"
+			className="absolute bottom-full left-sm right-sm mb-xs flex flex-col overflow-hidden rounded-[var(--radius-lg)] border border-border-default bg-container-elevated-bg shadow-[var(--shadow-md)]"
 		>
 			<div className="flex items-center gap-sm border-b border-border-default p-sm">
 				<input

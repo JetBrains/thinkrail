@@ -1,24 +1,22 @@
 import type {
 	JbcentralInstall,
+	JbcentralStatus,
 	ProviderAuthKind,
 	ProviderStatus,
 	ProviderStatusReport,
 } from "@thinkrail/contracts";
-import {
-	isJbcentralInstalled,
-	isJbcentralProxyUrl,
-	jbcentralInstall,
-} from "@thinkrail/shared/jbcentral";
-import { getPiRuntime } from "../agent";
+import { jbcentralInstall } from "@thinkrail/shared/jbcentral";
+import { settledAvailableModels, usePiRuntime } from "../agent";
+import { getJbcentralStatus } from "./jbcentral";
 
 /**
  * The narrow slice of the pi runtime the report reads — extracted so `buildProviderReport` stays a pure
  * function unit-testable with fixture data (no auth/network/disk).
  */
 export interface ProviderStatusSources {
-	/** provider id → its models' *effective* baseUrls (the registry's post-merge state). */
-	modelProviders: Map<string, string[]>;
-	/** Providers with ≥1 model whose auth resolves (the registry's `getAvailable()` truth). */
+	/** Provider ids with at least one registered model. Raw models and endpoints never leave the host. */
+	modelProviderIds: Set<string>;
+	/** Providers with ≥1 model in the registry's last settled availability snapshot. */
 	availableProviders: Set<string>;
 	/** Providers holding credentials in auth.json (`listCredentials()`), even model-less ones. */
 	credentialProviders: string[];
@@ -38,20 +36,17 @@ export interface ProviderStatusSources {
 	displayName: (id: string) => string;
 	/** Any auth form at all (stored / runtime / env) — the fallback truth for model-less providers. */
 	hasAuth: (id: string) => boolean;
-	/** Whether the `central` CLI is on PATH — surfaced so the JetBrains AI card knows its state. */
-	jbcentralInstalled: boolean;
-	/** The host's per-OS install command for the JetBrains Central CLI — carried to the card so it renders
-	 * the right command (for the *host's* OS) when the CLI isn't installed. */
+	/** Closed Central version/configuration/action state. */
+	jbcentral: JbcentralStatus;
+	/** The host's per-OS official install plan. */
 	jbcentralInstall: JbcentralInstall;
 }
 
 /** Map pi's auth source + credential kind onto the wire's `ProviderAuthKind`. */
 function resolveKind(
-	viaJbcentral: boolean,
 	credentialType: "oauth" | "api_key" | undefined,
 	source: string | undefined,
 ): ProviderAuthKind {
-	if (viaJbcentral) return "central";
 	if (credentialType === "oauth") return "oauth";
 	if (credentialType === "api_key") return "api-key";
 	switch (source) {
@@ -67,12 +62,7 @@ function resolveKind(
 }
 
 /** A human hint for the auth source (env var name, models.json) — never a credential value. */
-function resolveDetail(
-	kind: ProviderAuthKind,
-	source?: string,
-	label?: string,
-): string | undefined {
-	if (kind === "central") return undefined; // the kind's label says it all
+function resolveDetail(source?: string, label?: string): string | undefined {
 	if (label) return label;
 	if (source === "models_json_key") return "models.json";
 	if (source === "models_json_command") return "models.json (command)";
@@ -89,16 +79,11 @@ export function buildProviderReport(sources: ProviderStatusSources): ProviderSta
 	// Every loginable thing is a row: model providers + stored credentials + OAuth providers (so the
 	// oauth-only ids `openai-codex`/`github-copilot` show a Sign-in row even with no models registered).
 	const ids = new Set<string>([
-		...sources.modelProviders.keys(),
+		...sources.modelProviderIds,
 		...sources.credentialProviders,
 		...oauthIds,
 	]);
-	let jbcentralWired = false;
-
 	const providers: ProviderStatus[] = [...ids].map((id) => {
-		const baseUrls = sources.modelProviders.get(id) ?? [];
-		const viaJbcentral = baseUrls.some((url) => isJbcentralProxyUrl(url));
-		if (viaJbcentral) jbcentralWired = true;
 		// Prefer the registry's display name; fall back to the OAuth provider's label for ids the registry
 		// doesn't know (an oauth-only provider with no models yet resolves to its own id otherwise).
 		const registryName = sources.displayName(id);
@@ -117,11 +102,12 @@ export function buildProviderReport(sources: ProviderStatusSources): ProviderSta
 		// A provider with models is configured iff the registry can resolve auth for it; a model-less
 		// credential entry falls back to `hasAuth` (it holds a key, so report it rather than hide it).
 		const configured =
-			sources.availableProviders.has(id) || (baseUrls.length === 0 && sources.hasAuth(id));
+			sources.availableProviders.has(id) ||
+			(!sources.modelProviderIds.has(id) && sources.hasAuth(id));
 		if (!configured) return { id, name, configured: false, ...login };
 		const { source, label } = sources.providerAuth(id);
-		const kind = resolveKind(viaJbcentral, sources.credentialType(id), source);
-		const detail = resolveDetail(kind, source, label);
+		const kind = resolveKind(sources.credentialType(id), source);
+		const detail = resolveDetail(source, label);
 		return {
 			id,
 			name,
@@ -138,50 +124,66 @@ export function buildProviderReport(sources: ProviderStatusSources): ProviderSta
 	});
 	return {
 		providers,
-		jbcentralWired,
-		jbcentralInstalled: sources.jbcentralInstalled,
+		jbcentral: sources.jbcentral,
 		jbcentralInstall: sources.jbcentralInstall,
 	};
 }
 
 /**
  * The `provider.status` read. **Revalidates on every call** — `runtime.refresh()` (pi 0.82 folded the
- * old `reloadConfig()` into it) reloads models.json and recomposes providers (it does NOT touch
- * auth.json itself), and its availability refresh re-runs the per-provider auth checks against pi's
- * credential store, which reads auth.json fresh (under a lock) on every access — so a `pi` `/login`
- * (or a terminal `central` re-wire) shows up on the next read without restarting the host. Called with
- * no options so `allowNetwork` resolves to the runtime's ambient default — OFF (see `piRuntime`).
- * (Accepted micro-risk: refreshing the shared runtime concurrent with a streaming session — the same
- * thing pi's TUI does on `/login`.)
+ * old `reloadConfig()` into it) reloads models.json and recomposes only the pre-opaque provider allowlist
+ * (it does NOT touch auth.json itself), and its availability refresh re-runs auth checks only for those
+ * providers against pi's credential store, which reads auth.json fresh (under a lock) on every access —
+ * so a `pi` `/login` shows up on the next read without restarting the host. The runtime's ambient network
+ * default remains OFF (see `piRuntime`). (Accepted micro-risk: refreshing the shared runtime concurrent
+ * with a streaming session — the same thing pi's TUI does on `/login`.)
  */
 export async function getProviderStatus(): Promise<ProviderStatusReport> {
-	const runtime = await getPiRuntime();
-	await runtime.refresh();
+	const jbcentral = await getJbcentralStatus();
+	const install = jbcentralInstall(process.platform);
+	return usePiRuntime(async (runtime, generation) => {
+		const providerStatusIds = [...generation.providerStatusIds];
+		try {
+			await runtime.refresh({ providers: providerStatusIds });
+		} catch {
+			throw new Error("Provider status refresh failed");
+		}
 
-	const modelProviders = new Map<string, string[]>();
-	for (const model of runtime.getModels()) {
-		const urls = modelProviders.get(model.provider) ?? [];
-		urls.push(model.baseUrl);
-		modelProviders.set(model.provider, urls);
-	}
-	const available = await runtime.getAvailable();
-	const credentials = await runtime.listCredentials();
-	const credentialTypes = new Map(credentials.map((c) => [c.providerId, c.type]));
+		const providerStatusIdSet = new Set(providerStatusIds);
+		const visibleProviders = providerStatusIds.flatMap((id) => {
+			const provider = runtime.getProvider(id);
+			return provider ? [provider] : [];
+		});
+		const available = settledAvailableModels(runtime).filter((model) =>
+			providerStatusIdSet.has(model.provider),
+		);
+		const credentials = await runtime.listCredentials();
+		const visibleCredentials = credentials.filter((credential) =>
+			providerStatusIdSet.has(credential.providerId),
+		);
+		const credentialTypes = new Map(
+			visibleCredentials.map((credential) => [credential.providerId, credential.type]),
+		);
 
-	return buildProviderReport({
-		modelProviders,
-		availableProviders: new Set(available.map((m) => m.provider)),
-		credentialProviders: credentials.map((c) => c.providerId),
-		oauthProviders: runtime
-			.getProviders()
-			.filter((p) => p.auth.oauth)
-			.map((p) => ({ id: p.id, name: p.auth.oauth?.name ?? p.name })),
-		credentialType: (id) => credentialTypes.get(id),
-		providerAuth: (id) => runtime.getProviderAuthStatus(id),
-		apiKeyLogin: (id) => Boolean(runtime.getProvider(id)?.auth.apiKey?.login),
-		displayName: (id) => runtime.getProvider(id)?.name ?? id,
-		hasAuth: (id) => runtime.getProviderAuthStatus(id).configured,
-		jbcentralInstalled: isJbcentralInstalled(),
-		jbcentralInstall: jbcentralInstall(process.platform),
+		return buildProviderReport({
+			modelProviderIds: new Set(
+				providerStatusIds.filter((providerId) => runtime.getModels(providerId).length > 0),
+			),
+			availableProviders: new Set(available.map((model) => model.provider)),
+			credentialProviders: visibleCredentials.map((credential) => credential.providerId),
+			oauthProviders: visibleProviders
+				.filter((provider) => provider.auth.oauth)
+				.map((provider) => ({
+					id: provider.id,
+					name: provider.auth.oauth?.name ?? provider.name,
+				})),
+			credentialType: (id) => credentialTypes.get(id),
+			providerAuth: (id) => runtime.getProviderAuthStatus(id),
+			apiKeyLogin: (id) => Boolean(runtime.getProvider(id)?.auth.apiKey?.login),
+			displayName: (id) => runtime.getProvider(id)?.name ?? id,
+			hasAuth: (id) => runtime.getProviderAuthStatus(id).configured,
+			jbcentral,
+			jbcentralInstall: install,
+		});
 	});
 }

@@ -7,6 +7,7 @@
 // boot a redundant second host that nothing connects to.
 
 import { findFreePort } from "@thinkrail/shared/freePort";
+import { printStartupMark } from "@thinkrail/shared/startupMark";
 
 const host = process.env.THINKRAIL_HOST ?? "localhost";
 const preferred = Number(process.env.THINKRAIL_PORT ?? 24242);
@@ -15,6 +16,11 @@ if (port !== preferred) {
 	console.log(`thinkrail dev: host port ${preferred} is in use → using ${port}`);
 }
 const webPort = await findFreePort(24269, host);
+
+// Announce the complete composition before Turbo's concurrent child logs can split it.
+const openHost = host === "0.0.0.0" || host === "::" ? "localhost" : host;
+const webUrl = `http://${openHost}:${webPort}/`;
+printStartupMark({ status: "starting", endpoint: webUrl });
 
 const turbo = Bun.spawn(
 	["bunx", "turbo", "run", "dev", "--filter=@thinkrail/web", "--filter=@thinkrail/server"],
@@ -38,8 +44,7 @@ process.on("SIGTERM", stop);
 
 // Open the browser ourselves — the OS default (via `open`/`xdg-open`/`start`) — rather than via vite,
 // whose macOS heuristic opens a running Chrome regardless of the user's default browser.
-const openHost = host === "0.0.0.0" || host === "::" ? "localhost" : host;
-void openWhenReady(`http://${openHost}:${webPort}/`);
+void openWhenReady(webUrl);
 
 process.exit(await turbo.exited);
 

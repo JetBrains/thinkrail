@@ -210,6 +210,33 @@ export type TodoStatus = "pending" | "in_progress" | "done";
 export type TodoOrigin = "agent" | "user";
 
 /**
+ * What an item's artifact points at — mirrors `pi-todos`' core vocabulary. `file`/`change`/`spec` are
+ * addressed by a worktree-relative `path`; a `commit` carries the `sha` its work was recorded as (the host
+ * commits per done item) and opens the Changes panel at the `commit:{sha}` scope.
+ */
+export type TodoArtifactKind = "file" | "change" | "spec" | "commit";
+
+/** A link from a TODO item to what its work produced (files/specs by the agent; changes/commit by the host). */
+export interface TodoArtifact {
+	kind: TodoArtifactKind;
+	/** Worktree-relative nav address — present for `file`/`change`/`spec`; a `commit` uses `sha` instead. */
+	path?: string;
+	/** Display text; the UI falls back to the path's basename when absent. */
+	label?: string;
+	/** For `spec` only: the durable spec-graph id. */
+	specId?: string;
+	/** For `commit` only: the sha the item's changes were committed as. */
+	sha?: string;
+	/**
+	 * For `commit` only — **host-derived, never stored**: the commit's recorded changes (path + status +
+	 * `+/−` line counts), resolved from git by `todo.list`'s decoration (memoized by sha — immutable, so
+	 * the cache never staleness-checks). Absent when the sha no longer resolves (a GC'd history rewrite) —
+	 * the client's signal to degrade the affordance silently.
+	 */
+	files?: GitFileChange[];
+}
+
+/**
  * One item of a chat's TODO plan, as the chat's plan popup renders it. Mirrored from `pi-todos`' core
  * `Todo` (never imported — the extension package stays out of the wire). The plan is scoped to a chat
  * session.
@@ -220,6 +247,8 @@ export interface TodoItem {
 	status: TodoStatus;
 	origin: TodoOrigin;
 	note?: string;
+	/** Links to what the work produced — the host attaches `change`/`commit` on `done` (see the todos module). */
+	artifacts?: TodoArtifact[];
 	createdAt: string;
 	updatedAt: string;
 }
@@ -314,7 +343,7 @@ export interface BranchList {
 
 /** Local `gh` CLI auth status (read-only, shelled server-side) for the New-Workspace + Settings surfaces. */
 /** How a model provider is authenticated — drives the status row's label, never carries secrets. */
-export type ProviderAuthKind = "oauth" | "api-key" | "env" | "central" | "other";
+export type ProviderAuthKind = "oauth" | "api-key" | "env" | "other";
 
 /** One model provider's auth status, as the host reports it (read-only; no credential values). */
 export interface ProviderStatus {
@@ -322,9 +351,9 @@ export interface ProviderStatus {
 	id: string;
 	/** Human display name, e.g. `Anthropic`. */
 	name: string;
-	/** Whether the provider is usable (any auth form: stored, env var, models.json, proxy). */
+	/** Whether the provider is usable (any auth form: stored, env var, models.json, or runtime). */
 	configured: boolean;
-	/** The auth source kind, when configured. `central` = routed through the JetBrains Central proxy. */
+	/** The auth source kind, when configured. Central configuration is reported only by `JbcentralStatus`. */
 	kind?: ProviderAuthKind;
 	/** Optional human hint for the source (e.g. the env var name, or `models.json`). */
 	detail?: string;
@@ -333,8 +362,8 @@ export interface ProviderStatus {
 	/** Interactive API-key login is available (`provider.loginStart` with `type: "api_key"`) — pi's
 	 * provider-owned truth (`Provider.auth.apiKey.login`), multi-prompt providers included. */
 	canApiKey?: boolean;
-	/** The provider has a removable `auth.json` credential (`provider.logout`) — false for env / central /
-	 * models.json auth, which the host can't unset (so the strip shows no Sign-out for those). */
+	/** The provider has a removable `auth.json` credential (`provider.logout`) — false for env / models.json
+	 * auth, which the host can't unset (so the strip shows no Sign-out for those). */
 	canLogout?: boolean;
 }
 
@@ -354,28 +383,72 @@ export interface JbcentralInstall {
 	command: string;
 }
 
+export type JbcentralAction = "connect" | "disconnect" | "start-proxy" | "update";
+
+export type JbcentralProbeFailureReason =
+	| "launch-failed"
+	| "timed-out"
+	| "output-too-large"
+	| "nonzero-exit";
+
+export type JbcentralActionFailureReason =
+	| "not-installed"
+	| "unsupported-version"
+	| "version-probe-failed"
+	| "central-action-failed"
+	| "artifact-missing"
+	| "artifact-present"
+	| "candidate-failed";
+
+/** Closed JetBrains AI lifecycle. No child output, paths, model data, or loader diagnostics are permitted. */
+export type JbcentralStatus =
+	| { state: "absent" }
+	| { state: "outdated"; version: string }
+	/**
+	 * `signedOut` is a *positive* observation of Central holding no credentials — an unavailable or
+	 * unreadable probe reports `false`, so the UI never demands a sign-in it cannot substantiate.
+	 */
+	| { state: "supported"; version: string; signedOut: boolean }
+	| {
+			state: "configured";
+			version: string;
+			signedOut: boolean;
+			/** Positive observation only: unavailable/unrecognized proxy status reports `false`. */
+			proxyStopped: boolean;
+	  }
+	| { state: "malformed-version" }
+	| { state: "probe-failed"; reason: JbcentralProbeFailureReason }
+	| { state: "configuring"; action?: JbcentralAction }
+	| {
+			state: "load-failed";
+			/** Whether the latest observed global artifact state requested Central in the new generation. */
+			configured: boolean;
+			action?: JbcentralAction;
+			reason: "candidate-failed";
+	  };
+
 /** The `provider.status` result: configured providers first, then the rest alphabetically. */
 export interface ProviderStatusReport {
 	providers: ProviderStatus[];
-	/** Whether any provider's effective baseUrl routes through the jbcentral proxy (JetBrains AI is wired). */
-	jbcentralWired: boolean;
-	/** Whether the `central` CLI is installed on the host (drives the in-app JetBrains AI card's state). */
-	jbcentralInstalled: boolean;
-	/** The host's per-OS install command for the JetBrains Central CLI — rendered by the card when not
-	 * installed (reflects the host's OS, not the browser's). */
+	jbcentral: JbcentralStatus;
+	/** The host's per-OS install command for the JetBrains Central CLI — rendered by the card when absent or
+	 * outdated (reflects the host's OS, not the browser's). */
 	jbcentralInstall: JbcentralInstall;
 }
 
-/**
- * The outcome of an in-app `provider.jbcentralConnect` attempt — a small state machine the JetBrains AI card
- * walks the user through: connected, or the reason it couldn't (install the CLI / sign in / a hard error).
- */
-export interface JbcentralConnectResult {
-	outcome: "connected" | "needs-install" | "needs-login" | "error";
-	/** The failure detail when `outcome === "error"`. The `needs-install` case carries no message — the card
-	 * renders the per-OS command from `ProviderStatusReport.jbcentralInstall`. */
-	message?: string;
-}
+export type JbcentralActionResult =
+	| { outcome: "applied" }
+	| { outcome: "failed"; reason: JbcentralActionFailureReason };
+
+/** Kept as the connect method's named result type; all Central mutations share this closed union. */
+export type JbcentralConnectResult = JbcentralActionResult;
+
+export type JbcentralLoginResult =
+	| { outcome: "launched" }
+	| {
+			outcome: "failed";
+			reason: "not-installed" | "unsupported-version" | "version-probe-failed" | "launch-failed";
+	  };
 
 /**
  * A single update in an in-app OAuth login flow, pushed host→client on the `provider.login` channel
@@ -427,6 +500,192 @@ export interface GithubAuthStatus {
  */
 export type ThemeId = string;
 
+/** Stable singleton feature views that may live in either side region, never in the center. */
+export type LayoutToolId = "projects" | "specs" | "files" | "changes" | "review";
+
+/** A file-like resource placed in a center group. Content and editor state remain browser-local caches. */
+export interface LayoutFileTab {
+	kind: "file";
+	id: string;
+	name: string;
+	path: string;
+}
+
+/** A diff identity includes its immutable scope; loaded content and view controls remain browser-local. */
+export interface LayoutDiffTab {
+	kind: "diff";
+	id: string;
+	name: string;
+	path: string;
+	scope: GitDiffScope;
+}
+
+/** One durable pi session placed as a workbench tab. */
+export interface LayoutChatTab {
+	kind: "chat";
+	id: string;
+	name: string;
+	sessionId: string;
+}
+
+/**
+ * A registered, rehydratable virtual document. Arbitrary inline content is deliberately absent: every
+ * independently shipped client must be able to resolve a shared placement from `documentKind` + `sourceId`.
+ */
+export interface LayoutDocumentTab {
+	kind: "document";
+	id: string;
+	name: string;
+	documentKind: "todo-plan";
+	sourceId: string;
+	docPath: string;
+}
+
+/** A terminal placement references the terminal domain's durable `(workspaceId, tabKey)` identity. */
+export interface LayoutTerminalTab {
+	kind: "terminal";
+	id: string;
+	name: string;
+	tabKey: string;
+}
+
+/** A singleton side tool. */
+export interface LayoutToolTab {
+	kind: "tool";
+	/** Opaque stable placement key; `tool` is the singleton's semantic identity. */
+	id: string;
+	name: string;
+	tool: LayoutToolId;
+}
+
+export type LayoutCenterTab =
+	| LayoutFileTab
+	| LayoutDiffTab
+	| LayoutChatTab
+	| LayoutDocumentTab
+	| LayoutTerminalTab;
+export type LayoutSideTab = LayoutToolTab | LayoutTerminalTab;
+export type LayoutTab = LayoutCenterTab | LayoutSideTab;
+
+/** A center leaf. Selection is device-local; only membership/order and a file/diff preview identity are shared. */
+export interface LayoutCenterGroup {
+	kind: "group";
+	id: string;
+	tabs: LayoutCenterTab[];
+	previewTabId?: string;
+}
+
+/** Recursive binary center split. Weights are normalized positive values; children preserve visual order. */
+export interface LayoutCenterSplit {
+	kind: "split";
+	id: string;
+	direction: "horizontal" | "vertical";
+	weights: [number, number];
+	children: [LayoutCenterNode, LayoutCenterNode];
+}
+
+export type LayoutCenterNode = LayoutCenterGroup | LayoutCenterSplit;
+
+/** One independently resizable/foldable side group. */
+export interface LayoutSideGroup {
+	id: string;
+	weight: number;
+	folded: boolean;
+	tabs: LayoutSideTab[];
+}
+
+/** One outer side. `width` is a normalized workbench fraction, not a viewport-derived projection. */
+export interface LayoutSideRegion {
+	visible: boolean;
+	width: number;
+	groups: LayoutSideGroup[];
+}
+
+/** Where a closed singleton should return if its prior group still exists. */
+export interface LayoutToolRestoreTarget {
+	side: "left" | "right";
+	groupId?: string;
+	index: number;
+}
+
+/**
+ * The complete shared structural layout for one workspace. `version` is intentionally in the document so
+ * persisted values can migrate independently of the outer WS protocol version.
+ */
+export interface WorkspaceLayoutDocument {
+	version: 1;
+	center: LayoutCenterNode;
+	left: LayoutSideRegion;
+	right: LayoutSideRegion;
+	toolRestoreTargets: Partial<Record<LayoutToolId, LayoutToolRestoreTarget>>;
+}
+
+export interface WorkspaceLayoutSnapshot {
+	workspaceId: string;
+	revision: number;
+	document: WorkspaceLayoutDocument;
+}
+
+/** Client-authored full replacement. `mutationId` correlates optimism; it is not the concurrency token. */
+export interface LayoutReplaceParams {
+	workspaceId: string;
+	mutationId: string;
+	/** `null` creates only while absent; a number replaces only that exact current revision. */
+	expectedRevision: number | null;
+	document: WorkspaceLayoutDocument;
+}
+
+/** Accepted replacement broadcast and accepted-result payload. */
+export interface LayoutChangedPayload {
+	snapshot: WorkspaceLayoutSnapshot;
+	mutationId: string;
+}
+
+/** Expected synchronization result for a full-document replacement. */
+export type LayoutReplaceResult =
+	| { status: "accepted"; payload: LayoutChangedPayload }
+	| { status: "conflict"; current: WorkspaceLayoutSnapshot | null };
+
+/** Resource-free center shape captured by a portable preset. */
+export interface LayoutPresetCenterGroup {
+	kind: "group";
+	id: string;
+}
+export interface LayoutPresetCenterSplit {
+	kind: "split";
+	id: string;
+	direction: "horizontal" | "vertical";
+	weights: [number, number];
+	children: [LayoutPresetCenterNode, LayoutPresetCenterNode];
+}
+export type LayoutPresetCenterNode = LayoutPresetCenterGroup | LayoutPresetCenterSplit;
+
+export interface LayoutPresetSideGroup {
+	id: string;
+	weight: number;
+	folded: boolean;
+	tools: LayoutToolId[];
+}
+export interface LayoutPresetSideRegion {
+	visible: boolean;
+	width: number;
+	groups: LayoutPresetSideGroup[];
+}
+
+export interface LayoutPreset {
+	id: string;
+	name: string;
+	center: LayoutPresetCenterNode;
+	left: LayoutPresetSideRegion;
+	right: LayoutPresetSideRegion;
+}
+
+export interface LayoutSettings {
+	defaultPresetId: string;
+	customPresets: LayoutPreset[];
+	maxSideGroups: number;
+}
+
 /**
  * Server-synced app settings — OUR config, persisted host-side as `config.json` under the data dir and
  * delivered to every client in `server.welcome`. A small, extensible bag (theme is the first member);
@@ -449,6 +708,8 @@ export interface AppConfig {
 	 * generous by fiat. `0` disables replay entirely.
 	 */
 	terminalReplayKb: number;
+	/** Host-synchronized workbench defaults and portable custom presets. */
+	layout: LayoutSettings;
 }
 
 /** Bounds for `AppConfig.terminalReplayKb`, enforced host-side so a hand-edited config cannot exhaust memory. */
@@ -459,6 +720,11 @@ export const DEFAULT_CONFIG: AppConfig = {
 	theme: "dark",
 	analyticsEnabled: true,
 	terminalReplayKb: TERMINAL_REPLAY_KB.default,
+	layout: {
+		defaultPresetId: "balanced",
+		customPresets: [],
+		maxSideGroups: 6,
+	},
 };
 
 /**

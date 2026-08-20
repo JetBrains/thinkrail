@@ -1,17 +1,20 @@
 import { existsSync } from "node:fs";
-import { delimiter } from "node:path";
+import { delimiter, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig, devices } from "@playwright/test";
 import {
 	E2E_BINARY_CACHE,
 	E2E_BINARY_PORT,
+	E2E_CENTRAL_BAD_EXTENSION_SOURCE,
+	E2E_CENTRAL_EXTENSION_SOURCE,
+	E2E_CENTRAL_LOG,
 	E2E_CENTRAL_STATE,
 	E2E_DATA_DIR,
 	E2E_EDITOR_LOG,
+	E2E_FAKE_BIN_DIR,
 	E2E_HOME_DIR,
 	E2E_PI_AGENT_DIR,
 	E2E_PICK_DIR_POINTER,
-	E2E_WIRE_PROXY_PORT,
 } from "./e2e/fixtures/paths";
 
 // The e2e suite run against the COMPILED single-file binary instead of the dev host (`bun run
@@ -42,7 +45,9 @@ if (!existsSync(binary)) {
 // Per-worktree block (e2e/fixtures/paths.ts): main e2e +0 · this suite +2 · restart spec +4; the dev
 // host (24242) and smoke:binary (24262, free-scans + reads the served URL) stay clear of the block.
 const PORT = E2E_BINARY_PORT;
-const fakeBinDir = fileURLToPath(new URL("./e2e/fixtures/bin", import.meta.url));
+const hostPath = [E2E_FAKE_BIN_DIR, "/usr/bin", "/bin", "/usr/sbin", "/sbin"].join(delimiter);
+if (hostPath.split(delimiter).some((directory) => existsSync(join(directory, "pi"))))
+	throw new Error("binary e2e host PATH must not contain pi");
 
 export default defineConfig({
 	testDir: "./e2e",
@@ -89,9 +94,11 @@ export default defineConfig({
 			GEMINI_CLI_HOME: E2E_HOME_DIR,
 			PI_CODING_AGENT_DIR: E2E_PI_AGENT_DIR,
 			PI_OFFLINE: "1",
-			PATH: `${fakeBinDir}${delimiter}${process.env.PATH ?? ""}`,
-			WIRE_PROXY_PORT: String(E2E_WIRE_PROXY_PORT),
+			PATH: hostPath,
 			CENTRAL_STUB_STATE: E2E_CENTRAL_STATE,
+			CENTRAL_STUB_LOG: E2E_CENTRAL_LOG,
+			CENTRAL_STUB_EXTENSION_SOURCE: E2E_CENTRAL_EXTENSION_SOURCE,
+			CENTRAL_STUB_BAD_EXTENSION_SOURCE: E2E_CENTRAL_BAD_EXTENSION_SOURCE,
 			// Where the stub `code` appends each invocation's argv — see playwright.config.ts.
 			THINKRAIL_E2E_EDITOR_LOG: E2E_EDITOR_LOG,
 			// Analytics: a locally built binary sends like any other build, and `CI` is unset on a

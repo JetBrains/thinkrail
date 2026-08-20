@@ -309,7 +309,7 @@ export function attachReviewThreads(
 		const head = document.createElement("div");
 		head.className = "review-thread-head";
 		const dot = document.createElement("span");
-		dot.className = `review-thread-dot review-thread-dot-${thread.status === "sent" ? "sent" : "draft"}`;
+		dot.className = `review-thread-dot rounded-full review-thread-dot-${thread.status === "sent" ? "sent" : "draft"}`;
 		const label = document.createElement("span");
 		label.className = "review-thread-label tr-text-eyebrow";
 		label.textContent =

@@ -34,15 +34,17 @@ describe("site fonts match the app", () => {
 		expect(cssStack("font-mono")).toEqual(appFamily("code").stack);
 	});
 
-	it("aliases the display role onto the interface face, like the app's brand family", () => {
-		expect(cssStack("font-display")).toEqual(["var(--font-sans)"]);
+	it("uses the app's brand display face for the display role", () => {
+		// The display role mirrors the app's `brand` family (Orbitron), a face distinct from interface.
+		expect(cssStack("font-display")).toEqual(appFamily("brand").stack);
 	});
 
-	it("bundles the same font packages", () => {
+	it("bundles the app's interface, code and brand font packages", () => {
 		const imported = [...CSS.matchAll(/@import "([^"]+)";/g)].map((m) => m[1]);
 		expect(imported).toEqual([
 			...(appFamily("interface").selfHosted ?? []),
 			...(appFamily("code").selfHosted ?? []),
+			...(appFamily("brand").selfHosted ?? []),
 		]);
 	});
 

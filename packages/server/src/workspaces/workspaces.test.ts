@@ -108,6 +108,25 @@ test("createWorkspace branches off a locally-present remote ref without a networ
 	expect(gitOut(ws.worktreePath, "rev-parse", "--abbrev-ref", "HEAD")).toBe(ws.branch);
 });
 
+test("createWorkspace leaves the new branch with no upstream", async () => {
+	// Cutting from a remote-tracking base would, by git's default (`autoSetupMerge=true`), set the branch's
+	// upstream to `origin/main` — pointing the workspace terminal's `git push`/`git pull` at the *base*
+	// branch. `--no-track` is what keeps the upstream unset until the user pushes the branch themselves.
+	const remoteRepo = join(dataDir, "remote.git");
+	git(repo, "init", "--bare", remoteRepo);
+	git(repo, "remote", "add", "origin", remoteRepo);
+	git(repo, "push", "origin", "main");
+	git(repo, "fetch", "origin");
+
+	const ws = await createWorkspace("p1", undefined, "origin/main");
+	expect(gitOut(repo, "config", "--get", `branch.${ws.branch}.merge`)).toBe("");
+	expect(gitOut(repo, "config", "--get", `branch.${ws.branch}.remote`)).toBe("");
+	// Only the *upstream* is withheld — the branch still starts at the base's tip.
+	expect(gitOut(ws.worktreePath, "rev-parse", "HEAD")).toBe(
+		gitOut(repo, "rev-parse", "origin/main"),
+	);
+});
+
 test("listExistingWorktrees shows unattached branch and detached checkouts only", async () => {
 	const external = join(dataDir, "existing auth checkout");
 	git(repo, "worktree", "add", external, "-b", "feature/auth", "main");
@@ -742,4 +761,28 @@ test("ensuring the Default emits created once; listing never writes into the pro
 	ensureWorkspaceScratchDir(def); // what the host runs on session.create
 	expect(readFileSync(join(repo, ".thinkrail", "context", ".gitignore"), "utf8")).toBe("*\n");
 	expect(gitOut(repo, "status", "--porcelain")).not.toContain(".thinkrail");
+});
+
+test("includeDiffStats: false keeps membership/order/Default ensure while skipping the diff-stat fan-out", async () => {
+	const events: WorkspaceLifecycleEvent[] = [];
+	setWorkspacePublisher((e) => events.push(e));
+
+	const ws = await createWorkspace("p1", "Iso");
+	// Commit branch work so the full list demonstrably computes stats the light one skips.
+	writeFileSync(join(ws.worktreePath, "work.txt"), "one\ntwo\n");
+	git(ws.worktreePath, "add", "-A");
+	git(ws.worktreePath, "commit", "-m", "branch work");
+
+	const light = listWorkspaces("p1", { includeDiffStats: false });
+	// Same complete authoritative answer: the ensured Default pinned first, then the worktree.
+	expect(light.map((w) => w.kind ?? "worktree")).toEqual(["default", "worktree"]);
+	expect(events.map((e) => e.kind)).toContain("created"); // the Default ensure still ran
+	// The fan-out was skipped: no row carries a computed aggregate (`diffStats` only ever comes from it).
+	expect(light.every((w) => w.diffStats === undefined)).toBe(true);
+
+	// Omitted (an older client) and explicit `true` both keep the existing full behavior.
+	for (const full of [listWorkspaces("p1"), listWorkspaces("p1", { includeDiffStats: true })]) {
+		expect(full.map((w) => w.id)).toEqual(light.map((w) => w.id));
+		expect(full.find((w) => w.id === ws.id)?.diffStats).toEqual({ added: 2, removed: 0 });
+	}
 });

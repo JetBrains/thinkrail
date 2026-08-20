@@ -72,9 +72,6 @@ export const E2E_BINARY_PORT = PORT_BASE + 2;
 /** The self-hosting restart spec's private-host port (`ask-restart.live.spec.ts`). */
 export const E2E_RESTART_PORT = PORT_BASE + 4;
 
-/** The lane-local JetBrains proxy port used by the central CLI stub. */
-export const E2E_WIRE_PROXY_PORT = PORT_BASE + 6;
-
 /**
  * Isolated on-disk state for an e2e run — per-worktree, so tests never touch the user's real
  * ~/.thinkrail and parallel runs from different worktrees never touch each other.
@@ -83,6 +80,25 @@ export const E2E_DATA_DIR = join(tmpdir(), `thinkrail-e2e-${E2E_STATE_KEY}`);
 
 /** Isolated HOME so cross-agent skill discovery never reads a developer's real personal libraries. */
 export const E2E_HOME_DIR = join(E2E_DATA_DIR, "home");
+
+/** Lane-local command stubs. Keeping Central here lets one lane simulate absence without touching another. */
+export const E2E_FAKE_BIN_DIR = join(E2E_DATA_DIR, "bin");
+
+/** Independently authored external PI extension sources materialized by the stateful Central fake. */
+export const E2E_CENTRAL_EXTENSION_SOURCE = join(E2E_DATA_DIR, "synthetic-central-extension.ts");
+export const E2E_CENTRAL_BAD_EXTENSION_SOURCE = join(
+	E2E_DATA_DIR,
+	"synthetic-central-extension-error.ts",
+);
+
+/** Global Central artifact path: deliberately under HOME, independent of PI_CODING_AGENT_DIR. */
+export const E2E_CENTRAL_ARTIFACT = join(
+	E2E_HOME_DIR,
+	".pi",
+	"agent",
+	"extensions",
+	"jetbrains-central.ts",
+);
 
 /** A throwaway git repo (created in global setup) used as a "project" fixture. Lives under the data dir. */
 export const E2E_FIXTURE_REPO = join(E2E_DATA_DIR, "sample-project");
@@ -107,12 +123,21 @@ export const E2E_PICK_DIR_POINTER = join(E2E_DATA_DIR, "pick-dir");
 export const E2E_PLAIN_DIR = join(E2E_DATA_DIR, "plain-folder");
 
 /**
- * A dev/e2e control file the stub `central` (JetBrains Central CLI) reads live per call to pick its outcome:
- * absent/empty → signed in (prints a secret); `needs-login` → empty secret (not signed in); `error` → a
- * non-zero exit. Lets a test drive the JetBrains AI card's not-signed-in / error branches without a real CLI,
- * mirroring the `E2E_PICK_DIR_POINTER` pattern. Safe only because the suite is serial (`workers: 1`).
+ * Live control file for the independently authored Central fake. Empty means supported/ready; named states
+ * drive version, action, postcondition, and candidate-loading failures without copying Central behavior.
  */
 export const E2E_CENTRAL_STATE = join(E2E_DATA_DIR, "central-state");
+
+/** Reviewed argv log from the Central fake; contains arguments only, never action output or secrets. */
+export const E2E_CENTRAL_LOG = join(E2E_DATA_DIR, "central-invocations.log");
+
+/**
+ * Where screenshot-capturing specs write their PNGs, one subdirectory per group (`fixtures/screenshots.ts`).
+ * Deliberately repo-local (and gitignored) rather than under the per-lane data dir: these are review
+ * evidence a developer opens by hand, so the path must be the same on every run. Names are unique per
+ * scenario, so a rerun overwrites its own files in place.
+ */
+export const E2E_SCREENSHOT_DIR = join(repoRoot, "e2e", "screenshots");
 
 /**
  * Where the stub `code` (the "Open in VS Code" fake, `fixtures/bin/code`) appends each invocation's
@@ -132,11 +157,9 @@ export const E2E_PI_AGENT_DIR = join(E2E_DATA_DIR, "pi-agent");
 
 /**
  * A pristine snapshot of the seeded `models.json`, captured in global setup so per-test reset can restore
- * it. The in-app JetBrains AI spec connects/disconnects the jbcentral proxy, which rewrites the *shared*
- * agent-dir `models.json` — stripping the anthropic/openai `baseUrl`+`apiKey` that a proxy- or apiKey-authed
- * dev's `@agent` runs resolve their pinned model through — and leaves the host disconnected, so without a
- * restore every later `@agent` test finds an empty model registry. Absent when the user has no `models.json`
- * (auth via `auth.json` only); reset then just clears any test-written copy instead.
+ * it after any provider test. Central never edits this shared agent-dir file; restoring the isolated baseline
+ * keeps later `@agent` runs independent. Absent when the user has no
+ * `models.json` (auth via `auth.json` only); reset then just clears any test-written copy instead.
  */
 export const E2E_PI_MODELS_SEED = join(E2E_DATA_DIR, "pi-agent-models.seed.json");
 

@@ -2,6 +2,39 @@ import { expect, test } from "bun:test";
 import type { WorkspaceFsChangedPayload, WorkspaceWatchReadyResult } from "@thinkrail/contracts";
 import { createSkillLoadRequests } from "./skillLoad";
 
+test("session-message loads reject a response for a different workspace or session", async () => {
+	let requestedMismatch: "workspace" | "session" = "workspace";
+	const requests = createSkillLoadRequests({
+		watchReady: async () => ({ startupNudge: false }),
+		noteFsChanged: () => {},
+		workspaceTick: () => 0,
+		createSession: async () => ({ sessionId: "created", model: null, thinkingLevel: "medium" }),
+		getSessionMessages: async () => ({
+			summary: {
+				sessionId: requestedMismatch === "session" ? "other-session" : "requested-session",
+				workspaceId: requestedMismatch === "workspace" ? "other-workspace" : "requested-workspace",
+				title: "Chat",
+				model: null,
+				thinkingLevel: "medium",
+				isStreaming: false,
+				messageCount: 0,
+				updatedAt: 1,
+				live: false,
+			},
+			messages: [],
+		}),
+		reloadSessionResources: async () => ({ ok: true }),
+	});
+	const params = { workspaceId: "requested-workspace", sessionId: "requested-session" };
+	await expect(requests.getSessionMessages(params)).rejects.toThrow(
+		"Session response did not match the requested workspace and session",
+	);
+	requestedMismatch = "session";
+	await expect(requests.getSessionMessages(params)).rejects.toThrow(
+		"Session response did not match the requested workspace and session",
+	);
+});
+
 test("skill-load requests share startup, fold the replay fallback before the baseline, and guard every load", async () => {
 	let resolveReady: (result: WorkspaceWatchReadyResult) => void = () => {};
 	const firstReady = new Promise<WorkspaceWatchReadyResult>((resolve) => {

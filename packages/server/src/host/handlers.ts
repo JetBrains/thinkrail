@@ -5,6 +5,7 @@ import type {
 	GitDiffScope,
 	HistoryScope,
 	ImageContent,
+	LayoutReplaceParams,
 	LoginReply,
 	ReviewAnchor,
 	ReviewComment,
@@ -58,6 +59,8 @@ import {
 	logoutProvider,
 	resolveLogin,
 	startLogin,
+	startProxyJbcentral,
+	updateJbcentral,
 } from "../auth";
 import { findOpenBranchReview } from "../branch-review";
 import { selectDirectory } from "../dialog";
@@ -66,6 +69,12 @@ import { readDir, readFile } from "../fs";
 import { gitDiffFile, gitStatus, listBranches, listCommits, prefetchBranch } from "../git";
 import { githubAuthStatus, githubRefresh } from "../github";
 import { clampLimit, getHistoryIndex } from "../history";
+import {
+	getWorkspaceLayout,
+	removeWorkspaceLayout,
+	replaceWorkspaceLayout,
+	validateLayoutSettings,
+} from "../layout";
 import {
 	acknowledgeProjectSkills,
 	closeProject,
@@ -93,7 +102,7 @@ import {
 	sendableComments,
 	updateComment,
 } from "../reviews";
-import { updateConfig } from "../settings";
+import { getConfig, updateConfig } from "../settings";
 import { evictSpecIndex, projectHasSpecs, specGraph } from "../spec";
 import {
 	deleteTemplate,
@@ -110,7 +119,14 @@ import {
 	resizeTerminal,
 	writeTerminal,
 } from "../terminal";
-import { addTodo, countOpenTodos, listTodos, removeTodo, updateTodo } from "../todos";
+import {
+	addTodo,
+	countOpenTodos,
+	listTodos,
+	removeSessionTodoWindows,
+	removeTodo,
+	updateTodo,
+} from "../todos";
 import { ensureWatch, stopWatch } from "../watch";
 import {
 	createWorkspace,
@@ -302,7 +318,10 @@ const handlers: Record<string, Handler> = {
 		const p = params as { projectId: string; path: string };
 		return openExistingWorktree(p.projectId, p.path);
 	},
-	"workspace.list": (params) => listWorkspaces((params as { projectId: string }).projectId),
+	"workspace.list": (params) => {
+		const p = params as { projectId: string; includeDiffStats?: boolean };
+		return listWorkspaces(p.projectId, { includeDiffStats: p.includeDiffStats ?? true });
+	},
 	"workspace.openReview": (params) => {
 		const ws = getWorkspace((params as { workspaceId: string }).workspaceId);
 		return findOpenBranchReview(ws.worktreePath, ws.branch);
@@ -318,6 +337,7 @@ const handlers: Record<string, Handler> = {
 		// helper also refuses path-segment ids — two layers). An unknown id is an idempotent no-op ack.
 		const ws = forgetWorkspace(id);
 		if (ws) {
+			removeWorkspaceLayout(ws.id); // structural view state must not outlive its workspace
 			evictSpecIndex(ws.id); // the archived worktree's spec parse cache must not outlive it
 			removeWorkspaceReviews(ws.id); // the review file must not outlive its workspace either
 			stopWatch(ws.id); // fast: stop the change notifier before the worktree dir is reclaimed
@@ -577,6 +597,9 @@ const handlers: Record<string, Handler> = {
 	"session.delete": async (params) => {
 		const p = params as { workspaceId: string; sessionId: string };
 		await deleteSession(p.sessionId, p.workspaceId, getWorkspace(p.workspaceId).worktreePath);
+		// The chat is gone — close its TODO work windows too, or an orphan baseline sidecar would read as a
+		// permanently open foreign window and force every sibling chat into the path-list fallback forever.
+		removeSessionTodoWindows(p);
 		return { ok: true } as const;
 	},
 	"session.setModel": async (params) => {
@@ -589,9 +612,9 @@ const handlers: Record<string, Handler> = {
 		setSessionThinkingLevel(p.sessionId, p.level);
 		return { ok: true } as const;
 	},
-	"session.compact": (params) => {
+	"session.compact": async (params) => {
 		const p = params as { sessionId: string; instructions?: string };
-		compactSession(p.sessionId, p.instructions);
+		await compactSession(p.sessionId, p.instructions);
 		return { ok: true } as const;
 	},
 	"session.getStats": (params) => getSessionStats((params as { sessionId: string }).sessionId),
@@ -670,25 +693,30 @@ const handlers: Record<string, Handler> = {
 		await logoutProvider((params as { providerId: string }).providerId);
 		return { ok: true } as const;
 	},
-	// JetBrains AI (jbcentral proxy): connect/disconnect write models.json + reload the runtime config; login
-	// launches `central login` (browser) on the host.
-	"provider.jbcentralConnect": async () => {
-		const result = await connectJbcentral();
-		// Analytics: only an actual connect counts (needs-install / needs-login / error don't). `jbcentral`
-		// is our own constant, not user input — no bucketing needed.
-		if (result.outcome === "connected") {
-			track({ name: "provider_login", params: { provider: "jbcentral", method: "central" } });
-		}
-		return result;
-	},
-	"provider.jbcentralDisconnect": async () => {
-		await disconnectJbcentral();
-		return { ok: true } as const;
-	},
+	// Central actions: closed typed outcomes only — child output/diagnostics never become frames.
+	"provider.jbcentralConnect": () => connectJbcentral(),
+	"provider.jbcentralDisconnect": () => disconnectJbcentral(),
+	"provider.jbcentralStartProxy": () => startProxyJbcentral(),
 	"provider.jbcentralLogin": () => jbcentralLogin(),
+	"provider.jbcentralUpdate": () => updateJbcentral(),
+	// Read or replace the one host-synchronized workbench document for a registered workspace.
+	"layout.get": (params) => {
+		const { workspaceId } = params as { workspaceId: string };
+		getWorkspace(workspaceId);
+		return getWorkspaceLayout(workspaceId);
+	},
+	"layout.replace": (params) => {
+		const replacement = params as LayoutReplaceParams;
+		getWorkspace(replacement.workspaceId);
+		return replaceWorkspaceLayout(replacement, getConfig().layout.maxSideGroups);
+	},
 	// Merge + persist a partial into the server-synced app config (theme, …); the broadcast is fired by
 	// `updateConfig`'s injected publisher (wired in `createServer`), so every client converges.
-	"settings.update": (params) => updateConfig((params as { config: Partial<AppConfig> }).config),
+	"settings.update": (params) => {
+		const config = (params as { config: Partial<AppConfig> }).config;
+		if (config.layout !== undefined) validateLayoutSettings(config.layout);
+		return updateConfig(config);
+	},
 	// Prompt recall + conversation search over pi's session files. Scope mapping is resolved here (host
 	// owns the registries); the index itself stays registry-free (see history/SPEC.md).
 	// Uses listWorkspaceRecords (diffStats-free registry read) to avoid blocking on git per keystroke.

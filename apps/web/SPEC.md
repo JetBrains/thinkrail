@@ -15,7 +15,7 @@ event stream as a chat-centric, multi-session IDE shell.
 
 ## Boundary
 
-- **Owns:** the browser UI — transport client, store, panels, the responsive shell, branding tokens.
+- **Owns:** the browser UI — client-local navigation, transport client, store, panels, the responsive shell, branding tokens.
 - **Public surface:** the built static bundle (`dist/`) — a deployable artifact that dials a host.
 - **Allowed deps:** `@thinkrail/contracts` (types + WS constants) ONLY; React / Zustand / Vite / etc.
 - **Forbidden:** importing `server` / `shared` / any `pi` package (value or type). Kept clean by type-only
@@ -23,19 +23,20 @@ event stream as a chat-centric, multi-session IDE shell.
 
 ## Internal modules
 
-Each is a bounded sub-module; `transport`/`store`/`lib` expose an `index.ts` **barrel** (their only public
+Each is a bounded sub-module; `navigation`/`transport`/`store`/`lib` expose an `index.ts` **barrel** (their only public
 surface). `panels`/`components/ui`/`chat` are imported **per-file by design** — barreling them would pull
 the lazily-loaded Monaco/shiki/xterm chunks into the eager bundle and break the shadcn per-primitive
 convention; their boundary is held by convention + spec. Sibling edges live here, not in the leaves.
 
 | module | owns | barrel | spec |
 | --- | --- | --- | --- |
+| `navigation` | backend-relative location model + fragment driver/validated restore | yes | [navigation/SPEC.md](src/navigation/SPEC.md) |
 | `transport` | the WS client + its singleton/store wiring | yes | [transport/SPEC.md](src/transport/SPEC.md) |
-| `store` | Zustand: connection, projects/workspaces, workspace-scoped tabs + terminals | yes | [store/SPEC.md](src/store/SPEC.md) |
+| `store` | Zustand: domain projections, accepted workspace-layout snapshots, local attention, chat runtimes | yes | [store/SPEC.md](src/store/SPEC.md) |
 | `panels` | layout-agnostic, store-driven feature views | no | [panels/SPEC.md](src/panels/SPEC.md) |
 | `chat` | pi conversation UI primitives: content-block renderers + the tool-renderer registry | no | [chat/SPEC.md](src/chat/SPEC.md) |
 | `auth` | in-app provider login: the presentational OAuth dialog + its client-side state reducer | yes | [auth/SPEC.md](src/auth/SPEC.md) |
-| `shell` | the responsive frame + composition of panels | no | [shell/SPEC.md](src/shell/SPEC.md) |
+| `shell` | the responsive frame + synchronized workbench composition (with bounded child `layout/`) | no | [shell/SPEC.md](src/shell/SPEC.md) |
 | `components` | the app's single `ErrorBoundary` primitive (contains the `ui/` sub-module) | no | [components/SPEC.md](src/components/SPEC.md) |
 | `components/ui` | shadcn primitives, themed with our tokens | no | [components/ui/SPEC.md](src/components/ui/SPEC.md) |
 | `themes` | validated single-file manifests, bundled catalog + atomic token application | yes | [themes/SPEC.md](src/themes/SPEC.md) |
@@ -49,21 +50,23 @@ Outside `src/`, **[`scripts/`](scripts/SPEC.md)** is the build-time generator mo
 never ships, and turns those two JSON sources into `styles/generated/`.
 `index.html` names the product and links the local, symbol-only SVG favicon derived from the same
 ThinkRail artwork as the shell logo (compact enough for browser-tab sizes and light/dark browser chrome).
-`main.tsx` is the entry/composition root — it synchronously builds the bundled theme catalog, then
-applies the cached first-paint theme hint pre-React before wrapping `<Shell />` in
+`main.tsx` is the entry/composition root — it synchronously builds the bundled theme catalog, applies the
+cached first-paint theme hint pre-React, initializes transport + client-local navigation, then wraps `<Shell />` in
 `components/ErrorBoundary` as the last-resort boundary (a crash escaping every region shows a reload
 screen, not a blank root).
 
 ### Dependency graph
 
-- `shell` → `panels`, `store`, `transport`, `contracts` (type-only), `components/ui`, `components` (`ErrorBoundary` around each mounted region), `constants`, `themes` (the single owner of the atomic `applyTheme` DOM effect, driven by `store.theme`)
-- `panels` → `store`, `transport`, `components/ui`, `components` (`ErrorBoundary` — `CenterTabs`'s per-tab boundary), `lib`, `contracts`, `constants` (`WelcomePanel`'s wordmark), `chat` (`CenterTabs` lazy-mounts `chat/ChatView`; `NewWorkspaceDialog` eagerly reuses `chat/ModelSelector`+`ThinkingSelector`+`useModelCatalog` — these are shiki-free, so the eager import stays split-safe; `TemplatesSettings` reuses `chat/TemplateEditorDialog` for its New/Edit flows — see `panels/SPEC.md`'s `TemplatesSettings` paragraph), `auth` (`ProvidersSettings` mounts `auth/LoginDialog`), `themes` (`AppearanceSettings` consumes the live catalog; code surfaces consume generic theme variables/syntax mapping)
+- `navigation` → `store`, `transport`, `contracts` (type-only); neither dependency imports it, and `main.tsx` initializes the integration
+- `shell` → child `shell/layout`, `panels`, `chat` (app-integration render/hydration only), `store`, `transport`, `contracts` (type-only), `components/ui`, `components` (`ErrorBoundary` around each mounted region), `constants`, `lib` (platform shortcut semantics), `themes` (the single owner of the atomic `applyTheme` DOM effect, driven by `store.theme`)
+- `shell/layout` → `contracts` (types only), `lib` (attention/id primitives), and React / `react-resizable-panels` / `@dnd-kit/core`; the parent injects store state, commit callbacks, and feature renderers, so the child has no feature-module runtime edge
+- `panels` → `store`, `transport`, `components/ui`, `components` (`ErrorBoundary` for feature bodies), `lib`, `contracts`, `constants` (`WelcomePanel`'s wordmark), `chat` (`NewWorkspaceDialog` eagerly reuses `chat/ModelSelector`+`ThinkingSelector`+`useModelCatalog` — these are shiki-free, so the eager import stays split-safe; `TemplatesSettings` reuses `chat/TemplateEditorDialog` for its New/Edit flows — see `panels/SPEC.md`'s `TemplatesSettings` paragraph), `auth` (`ProvidersSettings` mounts `auth/LoginDialog`), `themes` (`AppearanceSettings` consumes the live catalog; code surfaces consume generic theme variables/syntax mapping)
 - `chat` → `contracts` (pi message types, **type-only**), `components/ui`, `lib`; `store` + `transport`
   (**app-integration files only** — the renderers stay store-free; see `chat/SPEC.md` for the current set)
 - `auth` → `components/ui` (the dialog is store/transport-free — the panel integrates it; the state types need no imports)
 - `store` → `transport` (**type-only** — `ConnectionStatus`), `chat` (**type-only** — `ChatTurn`/`ToolResultState`), `auth` (**type-only** — `LoginState`; the `foldLoginFrame` reducer lives in `store`, like `reduceExtUi`), `contracts`, `lib` (the shared path/array primitives — a leaf, so no cycle)
 - `transport` → `contracts`, `store` (welcome routing; the `store → transport` back-edge is type-only, so
-  the runtime graph is acyclic)
+  the runtime graph is acyclic), `lib` (plain-HTTP-safe random page identity)
 - `components` (`ErrorBoundary`) → `lib` only (`shallowEqualArrays` for its reset keys — a leaf, so any region can still wrap in it); `components/ui` → `lib`
 - `lib` → `themes` (the lazy highlighter uses the one generic CSS-variable Shiki registration)
 - `themes` → `constants` (the branding storage prefix scopes the first-paint hint)
@@ -71,10 +74,10 @@ screen, not a blank root).
 
 Rules: a panel never imports another panel sideways; nothing imports `shell` (it's the composition root).
 
-The module set: `transport` / `store` / branded `shell`; `ProjectTree`; `FileTree` + `RightPanel`;
-`CenterTabs` + lazy `MonacoEditor`/`MonacoDiff`; `ChangesPanel` (list → center diff tab); `TerminalsPanel` + lazy
-`TerminalInstance`. The `chat` module — `ChatView` + content-block renderers + the tool-renderer registry
-— plus the full `Composer` (model/effort/@-mentions).
+The module set: `transport` / `store` / branded `shell` + its headless `shell/layout` child;
+layout-agnostic Project/File/Specs/Changes/Review renderers; lazy Monaco file/diff bodies and xterm terminal
+bodies; and the `chat` module (`ChatView`, content-block renderers, tool registry, and full Composer). The
+workbench owns strips/groups around those bodies, never the panels themselves.
 
 ## Styling & theming
 
@@ -91,6 +94,17 @@ The module set: `transport` / `store` / branded `shell`; `ProjectTree`; `FileTre
   `bg-[var(--elevated)]`; and a tint is a token on the four-step alpha scale, not a `/40` modifier.
   `src/styles/COLOR.md` is the system; `src/styles/colorUsage.test.ts` is the adoption guard (Tailwind
   drops an unknown utility silently, so an unpublished token renders as nothing at all).
+- **A radius or spacing utility names a scale step, never a raw pixel length** — `rounded-[var(--radius-md)]`
+  and `p-md` / `py-0.5`, not `rounded-[7px]` or `py-[3px]`. Two scales are legitimate and both are
+  token-backed: the project family (`--radius-xs/sm/md/lg` — a small primitive geometry capped at 8px:
+  `sm` (4px) is the default corner, `md` (6px) the outer corner for surfaces nesting 4px children, `lg`
+  (8px) the exception for large standalone elevated surfaces (dialogs, user-message bubbles) — and
+  `--space-xs…xl`) and Tailwind's numeric steps
+  for the sub-`--space-xs` tier the project family does not cover. `src/styles/spacingUsage.test.ts` is
+  that adoption guard, and it exists because this class of drift is **invisible**: unlike a colour
+  utility, an arbitrary length always renders, so an off-scale value looks correct in review and passes
+  every other gate. Lengths that are not scale steps at all — `max-w-[78ch]`, `w-[320px]`,
+  `max-h-[40vh]`, a measured `pl-[calc(…)]` indent — stay allowed; they are layout constraints, not rhythm.
 - **`src/themes` is the theme contract and catalog; `src/styles/tokens.css` is structural.** A bundled
   theme is one strict, complete `*.theme.json` manifest: appearance/contrast metadata + semantic UI
   colors + all 16 ANSI colors + a semantic syntax palette. Selected-text foreground overrides are the

@@ -23,3 +23,5 @@ function bundledFace(id: string): string {
 
 export const INTERFACE_FACE = bundledFace("interface");
 export const CODE_FACE = bundledFace("code");
+/** The brand/display face (wordmark + welcome hero) — distinct from the interface face. */
+export const BRAND_FACE = bundledFace("brand");

@@ -81,8 +81,8 @@ export type PiEvent =
 	| {
 			type: "compaction_end";
 			reason: "manual" | "threshold" | "overflow";
-			// `CompactionResult` lives in the Node-only pi-coding-agent; the UI doesn't read it.
-			result: unknown;
+			/** Present on success, absent on failure/abort. See {@link CompactionEndResult}. */
+			result: CompactionEndResult | undefined;
 			aborted: boolean;
 			willRetry: boolean;
 			errorMessage?: string;
@@ -115,6 +115,12 @@ export type PiEvent =
 	// Streamed output of `session.executeBash` (pi ≥0.82.0) — mirrored for union fidelity only: this host
 	// never calls `executeBash` (terminals are real PTYs), so the UI never receives it and ignores it.
 	| { type: "bash_execution_update"; id?: string; delta: string };
+
+/** Allowlist MIRROR of pi-coding-agent's Node-only `CompactionResult` — the fields the notice renders. */
+export interface CompactionEndResult {
+	tokensBefore: number;
+	estimatedTokensAfter?: number;
+}
 
 /** The `pi.event` push frame: a session's event tagged with its id. */
 export interface SessionEventPayload {
@@ -342,5 +348,41 @@ export interface WireCustomMessage<T = unknown> {
 	timestamp: number;
 }
 
-/** A transcript message as `session.getMessages` reports it: pi-canonical + custom messages. */
-export type TranscriptMessage = Message | WireCustomMessage;
+/**
+ * MIRROR of pi-coding-agent's `CompactionSummaryMessage` (Node-only package, so re-declared type-only for
+ * the wire, like `WireCustomMessage` above): the entry pi leaves in a resolved transcript where compaction
+ * replaced earlier messages with `summary`. It is the only durable record of that gap — pi drops the
+ * summarized messages themselves — so the client can explain it after reload.
+ */
+export interface WireCompactionSummary {
+	role: "compactionSummary";
+	summary: string;
+	/** Context size before the pass, as pi measured it. */
+	tokensBefore: number;
+	timestamp: number;
+}
+
+/** A transcript message as `session.getMessages` reports it: pi-canonical + custom + compaction records. */
+export type TranscriptMessage = Message | WireCustomMessage | WireCompactionSummary;
+
+/**
+ * The pi message roles a transcript carries — the ONE definition of that policy, read through the guard
+ * below (the `isControlMessage` pattern).
+ *
+ * Not a display preference: the host filters `session.getMessages` by this set, and `history`'s search
+ * index counts message positions by it, so a hit's `messageIndex` lines up with the client's
+ * `turnIdByMessageIndex` only while both use the *same* set. Two copies differing by one role would shift
+ * every later jump anchor, with nothing to fail — which is why the policy cannot live in either module.
+ */
+const TRANSCRIPT_MESSAGE_ROLES: ReadonlySet<string> = new Set([
+	"user",
+	"assistant",
+	"toolResult",
+	"custom",
+	"compactionSummary",
+]);
+
+/** True when a pi message's role is one a transcript carries (see {@link TRANSCRIPT_MESSAGE_ROLES}). */
+export function isTranscriptMessageRole(role: string): boolean {
+	return TRANSCRIPT_MESSAGE_ROLES.has(role);
+}

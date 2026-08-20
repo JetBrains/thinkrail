@@ -15,7 +15,7 @@ import { cssColorToHex } from "@/lib";
 import { useAppStore } from "../store";
 import { onThemeSwap } from "../themes";
 import { getTransport } from "../transport";
-import { createPtySizeSync } from "./ptySizeSync";
+import { createPtySizeSync, runAfterTerminalRelayout } from "./ptySizeSync";
 import { createTerminalPrebindBuffer } from "./terminalPrebindBuffer";
 
 /**
@@ -23,6 +23,13 @@ import { createTerminalPrebindBuffer } from "./terminalPrebindBuffer";
  * one `ioctl`+SIGWINCH instead of one per layout frame, short enough to feel immediate on release.
  */
 const RESIZE_DEBOUNCE_MS = 60;
+
+/**
+ * Deadline on the pre-attach web-font relayout: `relayout()` stays *pending* (not rejected) while a font
+ * request stalls, so an unbounded wait would leave the pane blank with no shell. Generous enough for a cold
+ * cache over a slow remote link; see the panels SPEC for the fallback semantics.
+ */
+const RELAYOUT_TIMEOUT_MS = 4000;
 
 /**
  * Fire-and-forget terminal writes. Reconnect replay + host request deduplication still executes a submitted
@@ -306,22 +313,6 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 
 		let disposed = false;
 
-		// Our code font ships as per-alphabet woff2 subsets (`font-display: swap`), so the Cyrillic/CJK file
-		// is only fetched once such a glyph is first drawn. xterm measures the character cell exactly once, at
-		// construction, against whatever had loaded by then — and never re-measures (unlike Monaco, which
-		// treats an early measurement as untrusted). Left alone, non-Latin text renders into cells sized for
-		// the fallback font (drifting glyphs, a misplaced cursor) and the PTY holds the wrong cols/rows. The
-		// addon re-measures once `document.fonts.ready` resolves; we await that ourselves rather than letting
-		// its constructor fire it, so we know when to re-fit and push the corrected size to the shell.
-		void webFonts
-			.relayout()
-			.then(() => {
-				if (!disposed) applyFit();
-			})
-			.catch(() => {
-				// A font that never resolves must not break the terminal — the construction-time fit stands.
-			});
-
 		/**
 		 * Ask the host for this tab's shell.
 		 *
@@ -393,7 +384,10 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 					else finishAttach();
 				})
 				.catch(() => {
-					if (disposed) return;
+					if (disposed || attachGeneration !== startedAt || prebind !== attemptPrebind) {
+						attemptPrebind.stop();
+						return;
+					}
 					// Reconnects replay this request, so this is a real host refusal or deadline rather than an
 					// ambiguous dropped response. Stop pre-bind intake: this failed pane must not retain every other
 					// terminal's addressed output for the rest of its life.
@@ -403,7 +397,20 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 				});
 		};
 		reattachRef.current = attach;
-		attach();
+		void runAfterTerminalRelayout(
+			() => webFonts.relayout(),
+			() => {
+				if (disposed) return;
+				applyFit();
+				attach();
+			},
+			{
+				timeoutMs: RELAYOUT_TIMEOUT_MS,
+				// dispose() nulls the addon's terminal, so the timed-out relayout's eventual settlement skips its
+				// re-measuring fontFamily toggle instead of re-laying-out an already-attached terminal.
+				onTimeout: () => webFonts.dispose(),
+			},
+		);
 
 		const resizeObserver = new ResizeObserver(scheduleFit);
 		resizeObserver.observe(host);

@@ -6,7 +6,7 @@ import { defaultWorkspaceRow, enterDefaultWorkspace, openFixtureProject } from "
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { seedWorkspaceSession } from "./fixtures/sessions";
 
-// Auto-open on workspace entry: `CenterTabs`' hydrate-on-activate no longer sends every disk-only
+// Auto-open on workspace entry: `WorkspaceWorkbench`'s hydrate-on-activate no longer sends every disk-only
 // session to history. A disk chat with unfinished TODO items (the `SessionSummary.openTodos` decoration,
 // counted host-side from `.thinkrail/context/todos/<sessionId>.json`) auto-opens as a tab — work in
 // progress must survive a host restart as an open chat, not a history entry. And when nothing at all
@@ -204,7 +204,7 @@ test("a client that misses chat deletion while offline reconciles it after recon
 		window.WebSocket = TrackedWebSocket;
 	});
 	const page2 = await context2.newPage();
-	await page2.goto(page.url());
+	await page2.goto("/");
 	await expect(page2.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 	await page2.getByTestId("project-expand").first().click();
 	await defaultWorkspaceRow(page2).click();

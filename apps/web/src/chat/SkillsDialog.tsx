@@ -260,7 +260,7 @@ export function SkillsDialog({
 				{workspace?.stale ? (
 					<div
 						data-testid="skills-stale"
-						className="rounded-[var(--radius-md)] border border-border-default bg-container-elevated-bg px-md py-sm text-text-muted tr-text-metadata"
+						className="rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-md py-sm text-text-muted tr-text-metadata"
 					>
 						This worktree's skills changed on disk —{" "}
 						<span className="text-text-default">Reload</span> to apply them to this chat.
@@ -270,7 +270,7 @@ export function SkillsDialog({
 				{untrustedCount > 0 ? (
 					<div
 						data-testid="skills-trust-all"
-						className="flex items-center gap-sm rounded-[var(--radius-md)] border border-border-default border-l-[3px] border-l-feedback-warning bg-feedback-warning-subtle px-md py-sm"
+						className="flex items-center gap-sm rounded-[var(--radius-sm)] border border-border-default border-l-[3px] border-l-feedback-warning bg-feedback-warning-subtle px-md py-sm"
 					>
 						<span className="min-w-0 flex-1 tr-text-ui text-text-default">
 							{untrustedCount} project skill{untrustedCount === 1 ? "" : "s"} off until you trust

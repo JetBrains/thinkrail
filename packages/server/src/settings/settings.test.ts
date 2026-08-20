@@ -55,3 +55,38 @@ test("loadConfig degrades a partial/corrupt file over DEFAULT_CONFIG", () => {
 	resetConfigCache();
 	expect(getConfig()).toEqual(DEFAULT_CONFIG);
 });
+
+test("an older host preserves unknown top-level config extensions when updating a known field", () => {
+	writeFileSync(
+		join(dataDir, "config.json"),
+		JSON.stringify({ ...DEFAULT_CONFIG, futureSetting: { mode: "new" } }),
+	);
+	resetConfigCache();
+	updateConfig({ theme: "acme.changed" });
+	const onDisk = JSON.parse(readFileSync(join(dataDir, "config.json"), "utf8"));
+	expect(onDisk.futureSetting).toEqual({ mode: "new" });
+});
+
+test("loadConfig normalizes nested layout fields independently", () => {
+	writeFileSync(
+		join(dataDir, "config.json"),
+		JSON.stringify({
+			theme: "acme.persisted",
+			layout: {
+				defaultPresetId: "review",
+				customPresets: "corrupt",
+				maxSideGroups: 0,
+			},
+		}),
+	);
+	resetConfigCache();
+	expect(getConfig()).toEqual({
+		...DEFAULT_CONFIG,
+		theme: "acme.persisted",
+		layout: {
+			defaultPresetId: "review",
+			customPresets: [],
+			maxSideGroups: DEFAULT_CONFIG.layout.maxSideGroups,
+		},
+	});
+});

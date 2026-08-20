@@ -1,5 +1,9 @@
 import { expect, test } from "@playwright/test";
-import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
+import {
+	createWorkspaceViaDialog,
+	enterDefaultWorkspace,
+	openFixtureProject,
+} from "./fixtures/app";
 
 // Preview tabs: a light open (single click, link follow) lands in ONE reusable italic slot per workspace;
 // a deliberate open (double click) keeps its own tab. See apps/web/src/panels/SPEC.md's Preview tabs
@@ -199,6 +203,24 @@ test("a keep that lands first does not invalidate a browse requested after it", 
 	await expect(tabs.first()).toHaveAttribute("data-preview", "false"); // kept by the double click
 	await expect(tabs.nth(1)).toContainText("notes.txt");
 	await expect(tabs.nth(1)).toHaveAttribute("data-preview", "true");
+});
+
+test("a newer tab click cancels an older preview-tab settle timer", async ({ page }) => {
+	await openFixtureProject(page);
+	await enterDefaultWorkspace(page);
+	await page.getByTestId("tab-files").click();
+	await page.getByTestId("file-node").filter({ hasText: "notes.txt" }).dblclick();
+	await page.getByTestId("file-node").filter({ hasText: "README.md" }).click();
+
+	const notes = page.getByTestId("editor-tab").filter({ hasText: "notes.txt" });
+	const readme = page.getByTestId("editor-tab").filter({ hasText: "README.md" });
+	await expect(readme).toHaveAttribute("data-preview", "true");
+	await readme.click();
+	await notes.click();
+	await page.waitForTimeout(300);
+
+	await expect(notes).toHaveAttribute("data-active", "true");
+	await expect(readme).toHaveAttribute("data-preview", "true");
 });
 
 test("the Specs panel shares the one slot, and closing the preview tab releases it", async ({

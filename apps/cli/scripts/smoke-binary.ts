@@ -10,7 +10,7 @@
 
 import { existsSync, globSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { delimiter, dirname, join, resolve } from "node:path";
 import { defaultSessionDirFor, writeFixtureSession } from "@thinkrail/server/history-test-fixtures";
 
 const binary = resolve(process.argv[2] ?? join(import.meta.dir, "..", "dist", "thinkrail"));
@@ -26,8 +26,19 @@ const projectDir = join(tmp, "project");
 const dataDir = join(tmp, "data");
 const agentDir = join(tmp, "pi-agent");
 
+/** Kills the spawned host once it exists; a no-op for the failures that happen before it is up. */
+let killHost: () => void = () => {};
+
 function fail(message: string): never {
 	console.error(`smoke FAILED: ${message}`);
+	// `process.exit` unwinds nothing — the `finally` at the bottom never runs — so the host has to be
+	// killed right here. Left alive it outlives the smoke: CI reports "Terminate orphan process: pid (…)
+	// (thinkrail-…)", and locally it keeps the inherited stdout pipe open, so a piped invocation hangs
+	// forever after the failure has already been printed.
+	killHost();
+	// The throwaway dirs are deliberately KEPT on failure — they are the post-mortem (which encoded
+	// session dir a transcript landed in, what got staged). A CI runner discards them with the job.
+	console.error(`smoke state kept for inspection: ${tmp}`);
 	process.exit(1);
 }
 
@@ -42,6 +53,43 @@ function within<T>(promise: Promise<T>, ms: number, what: string): Promise<T> {
 }
 
 mkdirSync(homeDir, { recursive: true });
+
+// External extension + Central fake, on a PATH with no `pi`: the compiled host must load the global
+// artifact through embedded PI alone (default and custom PI_CODING_AGENT_DIR layouts).
+const fakeBinDir = join(tmp, "no-pi-bin");
+const centralArtifact = join(homeDir, ".pi", "agent", "extensions", "jetbrains-central.ts");
+mkdirSync(fakeBinDir, { recursive: true });
+mkdirSync(dirname(centralArtifact), { recursive: true });
+writeFileSync(
+	join(fakeBinDir, "central"),
+	'#!/bin/sh\n[ "$1" = "--version" ] || exit 8\nprintf \'central 1.6.2 (synthetic smoke metadata)\\n\'\n',
+	{ mode: 0o755 },
+);
+writeFileSync(
+	centralArtifact,
+	`const model = {
+  id: "compiled-external-model",
+  name: "Compiled external extension model",
+  reasoning: false,
+  input: ["text"],
+  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+  contextWindow: 100000,
+  maxTokens: 4096,
+  api: "openai-completions",
+};
+export default function syntheticExternalExtension(pi) {
+  pi.registerProvider("compiled-external", {
+    api: "openai-completions",
+    baseUrl: "https://compiled-extension.invalid",
+    apiKey: "synthetic-smoke-key",
+    models: [model],
+  });
+}
+`,
+);
+const noPiPath = [fakeBinDir, "/usr/bin", "/bin", "/usr/sbin", "/sbin"].join(delimiter);
+if (Bun.which("pi", { PATH: noPiPath }))
+	fail("the external-extension smoke PATH unexpectedly contains pi");
 
 // A compiled artifact must not execute startup config from the project it is launched inside. A malicious
 // or merely incompatible Bun preload would otherwise run before ThinkRail can establish any boundary.
@@ -107,15 +155,6 @@ const gitCommit = Bun.spawnSync([
 ]);
 if (gitCommit.exitCode !== 0) fail("could not commit the portable-skill smoke project");
 
-// A real transcript drives the binary-only Linux trash path. `trash` loads processMountinfo through a
-// template-literal CommonJS require; without the server's static inclusion seam this exact RPC fails only
-// inside the artifact, even though source e2e stays green.
-const doomedTranscript = writeFixtureSession(defaultSessionDirFor(agentDir, projectDir), {
-	cwd: projectDir,
-	name: "compiled trash probe",
-	messages: [{ role: "user", text: "move this transcript to trash", timestamp: Date.now() }],
-});
-
 // 24262 is only the scan start: the CLI free-picks past a taken port and we read the actually served
 // URL from stdout below — so concurrent runs (other worktrees, dev hosts, e2e suites) never collide.
 const proc = Bun.spawn([binary, "--no-open", "--port", "24262"], {
@@ -125,16 +164,19 @@ const proc = Bun.spawn([binary, "--no-open", "--port", "24262"], {
 		// cache so the binary's staging path (web assets + skills) is exercised from scratch.
 		THINKRAIL_DATA_DIR: dataDir,
 		PI_CODING_AGENT_DIR: agentDir,
+		PI_OFFLINE: "1",
 		XDG_CACHE_HOME: cacheDir,
 		HOME: homeDir,
 		CLAUDE_CONFIG_DIR: join(homeDir, ".claude"),
 		CODEX_HOME: join(homeDir, ".codex"),
 		GEMINI_CLI_HOME: homeDir,
+		PATH: noPiPath,
 		THINKRAIL_NO_ANALYTICS: "1",
 	},
 	stdout: "pipe",
 	stderr: "inherit",
 });
+killHost = () => proc.kill("SIGKILL");
 
 async function connectRpc(baseUrl: string): Promise<WebSocket> {
 	const socket = new WebSocket(`${baseUrl.replace(/^http/, "ws")}/ws`);
@@ -167,6 +209,73 @@ function rpc(socket: WebSocket, method: string, params: unknown): Promise<unknow
 		socket.addEventListener("message", onMessage);
 		socket.send(JSON.stringify({ id, method, params }));
 	});
+}
+
+async function readServedUrlFrom(processHandle: {
+	stdout: ReadableStream<Uint8Array>;
+}): Promise<string> {
+	const decoder = new TextDecoder();
+	let buffered = "";
+	for await (const chunk of processHandle.stdout) {
+		buffered += decoder.decode(chunk, { stream: true });
+		const match = buffered.match(/thinkrail → (http:\/\/\S+)/);
+		if (match) return match[1];
+	}
+	throw new Error(`stdout closed without a serving URL (output: ${JSON.stringify(buffered)})`);
+}
+
+/** Prove the global artifact loads when PI uses its default agent dir (the main host covers custom). */
+async function assertDefaultAgentDirExternalExtension(): Promise<void> {
+	const probeEnv = {
+		...process.env,
+		THINKRAIL_DATA_DIR: join(tmp, "default-agent-data"),
+		XDG_CACHE_HOME: join(tmp, "default-agent-cache"),
+		HOME: homeDir,
+		CLAUDE_CONFIG_DIR: join(homeDir, ".claude"),
+		CODEX_HOME: join(homeDir, ".codex"),
+		GEMINI_CLI_HOME: homeDir,
+		PI_OFFLINE: "1",
+		PATH: noPiPath,
+		THINKRAIL_NO_ANALYTICS: "1",
+	};
+	delete probeEnv.PI_CODING_AGENT_DIR;
+	const probe = Bun.spawn([binary, "--no-open", "--port", "24312"], {
+		env: probeEnv,
+		stdout: "pipe",
+		stderr: "inherit",
+	});
+	let socket: WebSocket | null = null;
+	try {
+		const url = await within(
+			Promise.race([
+				readServedUrlFrom(probe),
+				probe.exited.then((code) => {
+					throw new Error(`default-agent binary probe exited early with code ${code}`);
+				}),
+			]),
+			30_000,
+			"default-agent binary probe did not report a serving URL",
+		);
+		socket = await within(connectRpc(url), 10_000, "default-agent WebSocket connect");
+		const models = await within(rpc(socket, "model.list", {}), 20_000, "default-agent model.list");
+		if (
+			!Array.isArray(models) ||
+			!models.some(
+				(model) =>
+					typeof model === "object" &&
+					model !== null &&
+					(model as { provider?: string; id?: string }).provider === "compiled-external" &&
+					(model as { provider?: string; id?: string }).id === "compiled-external-model",
+			)
+		) {
+			fail("compiled binary did not load the global external extension with the default agent dir");
+		}
+		probe.kill("SIGTERM");
+		await within(probe.exited, 15_000, "default-agent probe shutdown");
+	} finally {
+		socket?.close();
+		if (probe.exitCode === null) probe.kill("SIGKILL");
+	}
 }
 
 /**
@@ -244,23 +353,12 @@ async function assertOAuthLoginReachesAuthUrl(socket: WebSocket): Promise<void> 
 	}
 }
 
-/** The URL from the CLI's `thinkrail → http://…` line (it may scan past a busy port). */
-async function readServedUrl(): Promise<string> {
-	const decoder = new TextDecoder();
-	let buffered = "";
-	for await (const chunk of proc.stdout) {
-		buffered += decoder.decode(chunk, { stream: true });
-		const match = buffered.match(/thinkrail → (http:\/\/\S+)/);
-		if (match) return match[1];
-	}
-	throw new Error(`stdout closed without a serving URL (output: ${JSON.stringify(buffered)})`);
-}
-
 let rpcSocket: WebSocket | null = null;
 try {
+	await assertDefaultAgentDirExternalExtension();
 	const url = await within(
 		Promise.race([
-			readServedUrl(),
+			readServedUrlFrom(proc),
 			proc.exited.then((code) => {
 				throw new Error(`binary exited early with code ${code}`);
 			}),
@@ -281,6 +379,23 @@ try {
 	// Exercise the binary's actual resource-loader mode, not only staged files: a recognized project alias
 	// and a bundled skill must coexist in the pre-session catalog, with truthful project provenance.
 	rpcSocket = await within(connectRpc(url), 10_000, "WebSocket connect");
+	const externalModels = await within(
+		rpc(rpcSocket, "model.list", {}),
+		20_000,
+		"custom-agent model.list",
+	);
+	if (
+		!Array.isArray(externalModels) ||
+		!externalModels.some(
+			(model) =>
+				typeof model === "object" &&
+				model !== null &&
+				(model as { provider?: string; id?: string }).provider === "compiled-external" &&
+				(model as { provider?: string; id?: string }).id === "compiled-external-model",
+		)
+	) {
+		fail("compiled binary did not load the global external extension with a custom agent dir");
+	}
 	const project = (await within(
 		rpc(rpcSocket, "project.open", { path: projectDir }),
 		10_000,
@@ -291,9 +406,30 @@ try {
 		rpc(rpcSocket, "workspace.list", { projectId: project.id }),
 		10_000,
 		"workspace.list",
-	)) as { id?: string; kind?: string }[];
-	const workspaceId = workspaces.find((workspace) => workspace.kind === "default")?.id;
+	)) as { id?: string; kind?: string; worktreePath?: string }[];
+	const defaultWorkspace = workspaces.find((workspace) => workspace.kind === "default");
+	const workspaceId = defaultWorkspace?.id;
 	if (!workspaceId) fail("workspace.list returned no Default workspace");
+
+	// A real transcript drives the binary-only Linux trash path. `trash` loads processMountinfo through a
+	// template-literal CommonJS require; without the server's static inclusion seam this exact RPC fails only
+	// inside the artifact, even though source e2e stays green.
+	//
+	// Seed it against the **host-reported** worktree path, never our own `projectDir` string: the host stores
+	// git's symlink-resolved root, and a handed-in temp path is only incidentally canonical (macOS resolves
+	// `/var` → `/private/var`, Windows' `TEMP` is the 8.3 `RUNNER~1` form of `runneradmin`). `session.delete`
+	// matches a transcript on that exact cwd — both the encoded session dir *and* the file's header — so
+	// seeding from an unresolved path strands the file in a directory the host never scans, and the delete
+	// then truthfully reports "nothing in this workspace matched" while the file stays put. Same contract as
+	// e2e's `seedWorkspaceSession(worktreePath, …)`.
+	const worktreePath = defaultWorkspace?.worktreePath;
+	if (!worktreePath) fail("workspace.list returned no worktreePath for the Default workspace");
+	const doomedTranscript = writeFixtureSession(defaultSessionDirFor(agentDir, worktreePath), {
+		cwd: worktreePath,
+		name: "compiled trash probe",
+		messages: [{ role: "user", text: "move this transcript to trash", timestamp: Date.now() }],
+	});
+
 	await within(
 		rpc(rpcSocket, "session.delete", { sessionId: doomedTranscript.id, workspaceId }),
 		10_000,
@@ -382,12 +518,13 @@ try {
 	}
 
 	console.log(
-		`smoke OK: ${binary} booted at ${url}, served the UI + staged skills + portable alias, trashed a transcript, OAuth reached its auth URL, exited cleanly.`,
+		`smoke OK: ${binary} booted at ${url}, loaded the external extension for default/custom agent dirs with no pi on PATH, served the UI + staged skills + portable alias, trashed a transcript, OAuth reached its auth URL, exited cleanly.`,
 	);
 } catch (err) {
-	proc.kill("SIGKILL");
+	// `fail` kills the host itself, so every exit path — thrown or asserted — sheds the process.
 	fail(err instanceof Error ? err.message : String(err));
 } finally {
+	// Success only: `fail` exits before this can run, and keeps `tmp` on purpose for the post-mortem.
 	rpcSocket?.close();
 	rmSync(tmp, { recursive: true, force: true });
 }

@@ -14,7 +14,7 @@ export function ResolveCommentCard({ args, status }: ToolRenderProps): ReactNode
 	return (
 		<div className="flex items-start gap-xs tr-text-ui">
 			<CheckCircle2
-				className={`mt-[1px] size-3.5 shrink-0 ${status === "error" ? "text-feedback-error" : "text-feedback-success"}`}
+				className={`mt-0.5 size-3.5 shrink-0 ${status === "error" ? "text-feedback-error" : "text-feedback-success"}`}
 			/>
 			<div className="min-w-0">
 				<span className="tr-code-text text-text-muted">{commentId}</span>

@@ -35,5 +35,5 @@ a {
 }
 ::-webkit-scrollbar-thumb {
 	background: var(--border-default);
-	border-radius: var(--radius-md);
+	border-radius: var(--radius-sm);
 }

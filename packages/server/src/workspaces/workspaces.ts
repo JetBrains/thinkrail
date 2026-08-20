@@ -255,7 +255,8 @@ function diffStats(ws: Workspace): DiffStats | undefined {
 /**
  * Create a workspace = a `git worktree` on its own fresh branch, under the data dir. `baseRef` is the base
  * the branch is cut from (the New-Workspace picker): `worktree add -b <branch> <baseRef>` cuts a *local*
- * branch from it — never a detached remote checkout. Omitted → branch off the repo's current `HEAD`.
+ * branch from it — never a detached remote checkout, and **never tracking the base** (`--no-track`, see
+ * below). Omitted → branch off the repo's current `HEAD`.
  *
  * Freshness for a remote ref (`origin/<b>`) is kept off this critical path: the New-Workspace dialog
  * `prefetchBranch`es it in the background when it opens, so the local remote-tracking ref is already
@@ -303,12 +304,18 @@ export async function createWorkspace(
 
 	const worktreePath = join(dataDir(), "worktrees", project.slug, branch);
 	mkdirSync(dirname(worktreePath), { recursive: true });
+	// `--no-track`: for a remote-tracking base (`origin/main` from the picker) git's default
+	// (`autoSetupMerge=true`) would set the new branch's upstream to it, so the workspace's own terminal —
+	// a real shell in this worktree — would have `git push` land the feature work on *main* and `git pull`
+	// merge main back in. The branch is the workspace's; its upstream is the user's to set when they first
+	// push it, not ours to guess at creation.
 	const added = git(project.path, [
 		"worktree",
 		"add",
 		worktreePath,
 		"-b",
 		branch,
+		"--no-track",
 		"--end-of-options",
 		baseBranch,
 	]);
@@ -577,7 +584,10 @@ export function setWorkspaceDiffBase(id: string, ref: string | null): Workspace 
 	return ws;
 }
 
-export function listWorkspaces(projectId: string): Workspace[] {
+export function listWorkspaces(
+	projectId: string,
+	opts: { includeDiffStats?: boolean } = {},
+): Workspace[] {
 	// Lazily ensure the built-in Default workspace on every list: find-or-create is idempotent, backfills
 	// projects opened before the feature existed, and self-heals out-of-band state churn (the e2e reset
 	// rewrites workspaces.json mid-run). Unknown project → no ensure, the filter returns [] as before.
@@ -593,6 +603,10 @@ export function listWorkspaces(projectId: string): Workspace[] {
 	const rows = loadWorkspaces().filter((w) => w.projectId === projectId);
 	// Pin the Default workspace first (creation order would put a backfilled one last).
 	rows.sort((a, b) => (a.kind === "default" ? -1 : 0) - (b.kind === "default" ? -1 : 0));
+	// The membership/order above is always the complete authoritative answer; only the per-workspace
+	// diff-stat fan-out (a synchronous `git diff --shortstat` per row) is optional — navigation
+	// restoration opts out so an automatic reload on a shared host never diffs every worktree.
+	if (opts.includeDiffStats === false) return rows;
 	return rows.map((w) => {
 		const stats = diffStats(w);
 		// Omitted, not zeroed, when git couldn't answer (`exactOptionalPropertyTypes`).

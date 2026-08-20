@@ -7,17 +7,18 @@ import {
 	FileText,
 	ListChecks,
 	Network,
+	RefreshCw,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { cn } from "../lib";
-import { useAppStore } from "../store";
+import { selectActiveEditorTab, useAppStore } from "../store";
 import { openFileInTab } from "./openTabs";
 import { buildSpecTree, type SpecTreeNode, specRoleLabel, specRoleTag } from "./specTree";
 
 /**
  * Read-only spec-graph viewer for the active worktree, rendered as a compact document-first `parent`
- * tree — a pure reader of the store snapshot that `useWorkspaceSpecs` (owned by `RightPanel`, so it
- * outlives this tab) keeps current. Rows are keyed by spec id, so expansion state survives a silent
+ * tree — a pure reader of the store snapshot that `useWorkspaceSpecs` (owned by
+ * `WorkspaceWorkbench`, so it outlives this tab) keeps current. Rows are keyed by spec id, so expansion state survives a silent
  * refresh; a failed re-read keeps the last good tree and `failed` renders the hint only when there is
  * nothing to show. The chevron expands children; one click on the document row **previews** its rendered
  * spec in the workspace's reusable center tab (so reading down the graph never piles tabs up) and a
@@ -26,18 +27,21 @@ import { buildSpecTree, type SpecTreeNode, specRoleLabel, specRoleTag } from "./
  * Being keyed per workspace, a switch shows that workspace's last known tree while the re-read is in
  * flight — there is nothing to reset. A `specRequest` deep link (the divider's "N specs" chip) opens the
  * rendered spec and is **consumed**: it opens a center tab, so replaying it on a remount or a refetch would
- * yank the user's tab back. The row lights up on its own, since rows key off the active tab id.
+ * yank the user's tab back. The row lights up from the active file's semantic path, independent of its
+ * stable shared placement id.
  */
 export function SpecsPanel({
 	workspaceId,
 	failed = false,
+	onRefresh,
 }: {
 	workspaceId: string;
 	/** The current workspace's spec read failed (from `useWorkspaceSpecs`, which owns the fetch). */
 	failed?: boolean;
+	onRefresh?: () => void;
 }) {
 	const nodes = useAppStore((s) => s.specsByWorkspace[workspaceId]) ?? null;
-	const activeTabId = useAppStore((state) => state.activeTabByWorkspace[workspaceId] ?? null);
+	const activeTab = useAppStore((state) => selectActiveEditorTab(state, workspaceId));
 	const specRequest = useAppStore((s) => s.specRequest);
 
 	// A chat deep-link targeting this workspace: open the requested spec as a rendered doc tab, then clear
@@ -46,34 +50,53 @@ export function SpecsPanel({
 	// ago, not yet in the snapshot, opens just the same).
 	useEffect(() => {
 		if (specRequest?.workspaceId !== workspaceId) return;
-		void openFileInTab(workspaceId, specRequest.path, "preview");
+		if (useAppStore.getState().specRequest !== specRequest) return;
+		void openFileInTab(workspaceId, specRequest.path, "preview", specRequest.navigation);
 		useAppStore.getState().clearSpecRequest();
 	}, [specRequest, workspaceId]);
 
 	const roots = useMemo(() => (nodes ? buildSpecTree(nodes) : null), [nodes]);
 
-	if (failed && !nodes)
-		return (
+	const content =
+		failed && !nodes ? (
 			<p data-testid="specs-error" className="px-xs py-xs tr-text-metadata text-text-muted">
 				Couldn't load specs — Refresh to retry.
 			</p>
+		) : nodes === null || roots === null ? (
+			<p className="px-xs py-xs tr-text-metadata text-text-muted">Loading…</p>
+		) : nodes.length === 0 ? (
+			<p className="px-xs py-xs tr-text-metadata text-text-muted">No specs</p>
+		) : (
+			<ul className="flex flex-col">
+				{roots.map((root) => (
+					<SpecNodeRow
+						key={root.node.id}
+						tree={root}
+						workspaceId={workspaceId}
+						activeFilePath={activeTab?.kind === "file" ? activeTab.path : null}
+						depth={0}
+					/>
+				))}
+			</ul>
 		);
-	if (nodes === null || roots === null)
-		return <p className="px-xs py-xs tr-text-metadata text-text-muted">Loading…</p>;
-	if (nodes.length === 0)
-		return <p className="px-xs py-xs tr-text-metadata text-text-muted">No specs</p>;
 	return (
-		<ul className="flex flex-col">
-			{roots.map((root) => (
-				<SpecNodeRow
-					key={root.node.id}
-					tree={root}
-					workspaceId={workspaceId}
-					activeTabId={activeTabId}
-					depth={0}
-				/>
-			))}
-		</ul>
+		<div className="flex min-h-0 flex-col">
+			{onRefresh ? (
+				<div className="flex h-7 shrink-0 items-center justify-end border-border-muted border-b px-xs">
+					<button
+						type="button"
+						data-testid="specs-refresh"
+						aria-label="Refresh specs"
+						title="Refresh specs"
+						onClick={onRefresh}
+						className="flex size-6 items-center justify-center rounded-[var(--radius-sm)] text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+					>
+						<RefreshCw className="size-3.5" />
+					</button>
+				</div>
+			) : null}
+			{content}
+		</div>
 	);
 }
 
@@ -97,18 +120,17 @@ function specRoleIcon(type: string) {
 function SpecNodeRow({
 	tree,
 	workspaceId,
-	activeTabId,
+	activeFilePath,
 	depth,
 }: {
 	tree: SpecTreeNode;
 	workspaceId: string;
-	activeTabId: string | null;
+	activeFilePath: string | null;
 	depth: number;
 }) {
 	const { node, children } = tree;
 	const [expanded, setExpanded] = useState(true);
-	const tabId = `${workspaceId}:${node.path}`;
-	const isActive = activeTabId === tabId;
+	const isActive = activeFilePath === node.path;
 	const isMainSpec = depth === 0 && node.type === "goal-and-requirements";
 	const role = specRoleLabel(node.type);
 	const trailingRole = isMainSpec ? "Main spec" : specRoleTag(node.type);
@@ -189,7 +211,7 @@ function SpecNodeRow({
 							key={child.node.id}
 							tree={child}
 							workspaceId={workspaceId}
-							activeTabId={activeTabId}
+							activeFilePath={activeFilePath}
 							depth={depth + 1}
 						/>
 					))}

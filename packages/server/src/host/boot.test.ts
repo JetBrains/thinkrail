@@ -1,8 +1,12 @@
-import { afterEach, expect, test } from "bun:test";
+import { afterEach, beforeAll, beforeEach, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
+import { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { isPortFree } from "@thinkrail/shared/freePort";
+import { configurePiRuntime, configurePiRuntimeFactory } from "../agent";
+import { resetJbcentralStateForTests } from "../auth";
 import { type BootedHost, bootHost } from "./boot";
 
 // bootHost registers a SIGINT/SIGTERM handler per call; a handful of boots stays well under the warn
@@ -11,10 +15,28 @@ process.setMaxListeners(50);
 
 const booted: BootedHost[] = [];
 const tmpDirs: string[] = [];
+let testRuntime: ModelRuntime;
 
-afterEach(() => {
+beforeAll(async () => {
+	testRuntime = await ModelRuntime.create({
+		credentials: new InMemoryCredentialStore(),
+		modelsPath: null,
+		allowModelNetwork: false,
+	});
+});
+
+beforeEach(async () => {
+	await resetJbcentralStateForTests();
+	configurePiRuntime(null);
+	configurePiRuntimeFactory(async () => testRuntime);
+});
+
+afterEach(async () => {
 	while (booted.length) booted.pop()?.server.stop();
 	while (tmpDirs.length) rmSync(tmpDirs.pop() as string, { recursive: true, force: true });
+	await resetJbcentralStateForTests();
+	configurePiRuntimeFactory();
+	configurePiRuntime(null);
 });
 
 /** Bind an OS-assigned port, then release it — a port known to be free for the next bind. */

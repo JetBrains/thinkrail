@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { join, normalize } from "node:path";
 import type {
+	LayoutChangedPayload,
 	ServerWelcome,
 	SessionDeletedPayload,
 	TerminalTabsPush,
@@ -23,9 +24,18 @@ import {
 	initializeAnalytics,
 	setAnalyticsSending,
 	shutdownAnalytics,
+	track,
 } from "../analytics";
-import { cancelAllLogins, setLoginPublisher } from "../auth";
+import {
+	cancelAllLogins,
+	initializeJbcentralRuntime,
+	setJbcentralAppliedPublisher,
+	setJbcentralChangedPublisher,
+	setLoginPublisher,
+	stopJbcentralRuntime,
+} from "../auth";
 import { resolveWorktreeFile } from "../fs";
+import { normalizeStoredLayoutSettings, setLayoutPublisher } from "../layout";
 import {
 	getProjects,
 	listProjects,
@@ -34,7 +44,7 @@ import {
 	setProjectPublisher,
 } from "../projects";
 import { reanchorWorkspace, resolveCommentFromAgent, setReviewPublisher } from "../reviews";
-import { getConfig, setSettingsPublisher } from "../settings";
+import { getConfig, setSettingsPublisher, updateConfig } from "../settings";
 import {
 	closeAllTerminals,
 	persistTerminalSessions,
@@ -43,6 +53,7 @@ import {
 	setTerminalPublisher,
 	setTerminalTabsPublisher,
 } from "../terminal";
+import { isTodoToolEnd, maybeAttachChangeArtifacts } from "../todos";
 import {
 	setRepoMetaPublisher,
 	setSkillPathClassifier,
@@ -110,8 +121,17 @@ const CLIENT_REPLAY_RETENTION_MS = 60_000;
 /** Ids arrive from the wire, so an `ack`/`resume` list is filtered rather than trusted to hold strings. */
 const isRequestId = (id: unknown): id is string => typeof id === "string";
 
-/** Boot the engine host: Bun.serve HTTP+WS, /health, optional static SPA, and the server.welcome push. */
-export function createServer(options: CreateServerOptions = {}): RunningServer {
+function normalizePersistedLayoutSettings(): void {
+	const current = getConfig().layout;
+	const normalized = normalizeStoredLayoutSettings(current);
+	if (JSON.stringify(normalized) !== JSON.stringify(current)) updateConfig({ layout: normalized });
+}
+
+/** Boot the engine host only after the safe Central runtime generation is established. */
+export async function createServer(options: CreateServerOptions = {}): Promise<RunningServer> {
+	// In the public factory, not only the CLI: the safe generation must precede any handler.
+	await initializeJbcentralRuntime();
+	normalizePersistedLayoutSettings();
 	const {
 		port = 24242,
 		host = "localhost",
@@ -161,10 +181,10 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 		async fetch(req, srv) {
 			const url = new URL(req.url);
 			if (url.pathname === "/ws") {
-				// `?client=` identifies the *page*, not the socket: it survives that client's reconnects and is
-				// new on every reload, which is what lets a PTY outlive a dropped connection (the client
-				// reconnects on its own) without outliving the document that owns it. A client that sends none
-				// gets a per-socket fallback — correct isolation, just no reconnect grace.
+				// `?client=` identifies the *page*, not the socket: it survives that page's reconnects but is new
+				// on reload. It correlates replayed requests and terminal stream routing; terminal tabs/shells are
+				// host-owned and a new page takes them over by durable tabKey. A client that sends none gets a
+				// per-socket fallback — correct isolation, just no reconnect grace.
 				const clientKey = url.searchParams.get("client") ?? `anon-${randomUUID()}`;
 				return srv.upgrade(req, { data: { clientKey } })
 					? undefined
@@ -202,6 +222,7 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 				ws.subscribe(WS_CHANNELS.piExtensionUi);
 				ws.subscribe(WS_CHANNELS.sessionDeleted);
 				ws.subscribe(WS_CHANNELS.providerLogin);
+				ws.subscribe(WS_CHANNELS.providerChanged);
 				ws.subscribe(WS_CHANNELS.projectUpdated);
 				ws.subscribe(WS_CHANNELS.terminalTabs);
 				ws.subscribe(WS_CHANNELS.workspaceCreated);
@@ -209,6 +230,7 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 				ws.subscribe(WS_CHANNELS.workspaceRemoved);
 				ws.subscribe(WS_CHANNELS.workspaceFsChanged);
 				ws.subscribe(WS_CHANNELS.settingsChanged);
+				ws.subscribe(WS_CHANNELS.layoutChanged);
 				ws.subscribe(WS_CHANNELS.reviewChanged);
 				const welcome: ServerWelcome = {
 					protocolVersion: PROTOCOL_VERSION,
@@ -455,6 +477,15 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 		resolvedBody: resolveCommentFromAgent(commentId, note).body,
 	}));
 
+	// Broadcast each accepted canonical workspace layout. The payload includes the origin mutation id so
+	// the initiating client can settle optimism without mistaking its own acknowledgement for a remote edit.
+	setLayoutPublisher((payload: LayoutChangedPayload) => {
+		server.publish(
+			WS_CHANNELS.layoutChanged,
+			JSON.stringify({ channel: WS_CHANNELS.layoutChanged, data: payload }),
+		);
+	});
+
 	// Broadcast a server-synced settings change (the full `AppConfig`) to every client so they converge —
 	// the initiator applies on this push too, never optimistically (the workspace-lifecycle pattern). The
 	// analytics service syncs off the same tee (host-mediated — `analytics` has no `settings` edge), so
@@ -495,6 +526,12 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 			const workspaceId = getSessionWorkspaceId(payload.sessionId);
 			if (workspaceId) void maybeAutoRenameWorkspace(payload.sessionId, workspaceId);
 		}
+		// A `todo_*` tool just mutated the plan → reconcile the item's change set (commit a done item's work,
+		// attach the sha + files). Deferred off the publish path (it runs git writes), best-effort (`void`).
+		if (isTodoToolEnd(payload.event)) {
+			const workspaceId = getSessionWorkspaceId(payload.sessionId);
+			if (workspaceId) void maybeAttachChangeArtifacts(workspaceId, payload.sessionId);
+		}
 	});
 
 	// Push extension-UI dialog requests (the in-process `uiContext` bridge) over the pi.extensionUi channel.
@@ -509,13 +546,22 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 	// channel. A terminal `success` frame doubles as the `provider_login` analytics moment — the method
 	// (`oauth`/`api-key`) comes from `loginAnalytics`'s loginId→method map (recorded by the
 	// `provider.loginStart` handler), the provider id is bucketed, so a custom provider name never
-	// leaves the process. (jbcentral's `central` method is tracked in its own connect handler.)
+	// leaves the process. JetBrains AI has its own closed applied-transition publisher below.
 	setLoginPublisher((push) => {
 		server.publish(
 			WS_CHANNELS.providerLogin,
 			JSON.stringify({ channel: WS_CHANNELS.providerLogin, data: push }),
 		);
 		trackLoginOutcome(push);
+	});
+	setJbcentralAppliedPublisher(() => {
+		track({ name: "provider_login", params: { provider: "jbcentral", method: "central" } });
+	});
+	setJbcentralChangedPublisher(() => {
+		server.publish(
+			WS_CHANNELS.providerChanged,
+			JSON.stringify({ channel: WS_CHANNELS.providerChanged, data: {} }),
+		);
 	});
 
 	// Boot analytics before any trackable action can occur (fire-and-forget by contract — a failure in
@@ -553,6 +599,7 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 			// (best-effort by contract — stop never waits on the network).
 			void shutdownAnalytics();
 			cancelAllLogins();
+			stopJbcentralRuntime();
 			stopAllWatches();
 			disposeAllSessions();
 			// Drop the pending abandoned-client reapers before killing the PTYs they would have killed, so no
@@ -568,6 +615,10 @@ export function createServer(options: CreateServerOptions = {}): RunningServer {
 			// the picture still exists, and a restart restores tabs from it (see `persistTerminalSessions`).
 			persistTerminalSessions();
 			closeAllTerminals();
+			setLayoutPublisher(null);
+			setSettingsPublisher(null);
+			setJbcentralAppliedPublisher(() => {});
+			setJbcentralChangedPublisher(() => {});
 			server.stop(true);
 		},
 	};

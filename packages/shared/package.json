@@ -6,6 +6,7 @@
 	"exports": {
 		"./shellEnv": "./src/shellEnv.ts",
 		"./freePort": "./src/freePort.ts",
+		"./startupMark": "./src/startupMark.ts",
 		"./jbcentral": "./src/jbcentral.ts",
 		"./paths": "./src/paths.ts",
 		"./codedError": "./src/codedError.ts"
