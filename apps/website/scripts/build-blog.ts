@@ -14,6 +14,7 @@ import { basename, join } from "node:path";
 import matter from "gray-matter";
 import { Marked, type MarkedExtension } from "marked";
 import { createHighlighter, type Highlighter } from "shiki";
+import { PROD_HOST, PROJECT_KEY, PROXY_HOST, UI_HOST } from "../src/analytics";
 
 // ── Configuration ──────────────────────────────────────────────────────────
 
@@ -282,14 +283,21 @@ function generatePostPage(
 		: "";
 
 	const title = escapeHtml(frontmatter.title);
-	return template
-		.replace(/\{\{cssPath\}\}/g, cssPath)
-		.replace(/\{\{title\}\}/g, title)
-		.replace(/\{\{date\}\}/g, formatDate(frontmatter.date))
-		.replace(/\{\{readingTime\}\}/g, `${readingTime} min read`)
-		.replace(/\{\{tags\}\}/g, tagsHtml)
-		.replace(/\{\{content\}\}/g, html)
-		.replace(/\{\{navigation\}\}/g, navHtml);
+	return (
+		template
+			.replace(/\{\{cssPath\}\}/g, cssPath)
+			.replace(/\{\{title\}\}/g, title)
+			.replace(/\{\{date\}\}/g, formatDate(frontmatter.date))
+			.replace(/\{\{readingTime\}\}/g, `${readingTime} min read`)
+			.replace(/\{\{tags\}\}/g, tagsHtml)
+			.replace(/\{\{content\}\}/g, html)
+			.replace(/\{\{navigation\}\}/g, navHtml)
+			// Analytics constants (from src/analytics.ts)
+			.replace(/\{\{prodHost\}\}/g, PROD_HOST)
+			.replace(/\{\{proxyHost\}\}/g, PROXY_HOST)
+			.replace(/\{\{uiHost\}\}/g, UI_HOST)
+			.replace(/\{\{projectKey\}\}/g, PROJECT_KEY)
+	);
 }
 
 // ── Main ───────────────────────────────────────────────────────────────────
@@ -388,7 +396,12 @@ async function build(): Promise<void> {
 
 	const indexHtml = indexTemplate
 		.replace(/\{\{cssPath\}\}/g, cssPath)
-		.replace(/\{\{posts\}\}/g, postsHtml);
+		.replace(/\{\{posts\}\}/g, postsHtml)
+		// Analytics constants (from src/analytics.ts)
+		.replace(/\{\{prodHost\}\}/g, PROD_HOST)
+		.replace(/\{\{proxyHost\}\}/g, PROXY_HOST)
+		.replace(/\{\{uiHost\}\}/g, UI_HOST)
+		.replace(/\{\{projectKey\}\}/g, PROJECT_KEY);
 	await writeFile(join(OUTPUT_DIR, "index.html"), indexHtml);
 	console.log("   ✓ Generated index.html");
 

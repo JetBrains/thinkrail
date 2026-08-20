@@ -14,6 +14,29 @@
 			document.documentElement.setAttribute('data-theme', theme);
 		})();
 	</script>
+	<script>
+		// PostHog analytics — production-only, cookieless (no consent banner needed).
+		// Same config as src/analytics.ts; see apps/website/SPEC.md for privacy details.
+		(() => {
+			if (window.location.hostname !== '{{prodHost}}') return;
+			const script = document.createElement('script');
+			script.src = '{{proxyHost}}/static/array.js';
+			script.async = true;
+			script.crossOrigin = 'anonymous';
+			script.addEventListener('load', () => {
+				window.posthog?.init('{{projectKey}}', {
+					api_host: '{{proxyHost}}',
+					ui_host: '{{uiHost}}',
+					defaults: '2026-05-30',
+					person_profiles: 'identified_only',
+					cookieless_mode: 'always',
+					respect_dnt: true,
+					disable_session_recording: true,
+				});
+			});
+			document.head.appendChild(script);
+		})();
+	</script>
 </head>
 <body class="blog-page">
 	<header class="blog-header">

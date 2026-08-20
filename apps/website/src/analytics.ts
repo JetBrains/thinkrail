@@ -13,14 +13,14 @@
 // the PostHog project settings (Project Settings → Web analytics), or events are dropped. See
 // apps/website/SPEC.md.
 
-const PROD_HOST = "thinkrail.ai";
+export const PROD_HOST = "thinkrail.ai";
 // PostHog's MANAGED reverse proxy on our own domain (first-party, so ad blockers don't drop it). It
 // fronts both PostHog EU origins: `/static/*` + `/array/*` → eu-assets.i.posthog.com, everything else
 // → eu.i.posthog.com. Hence one host for ingest and assets. `ui_host` must stay the real PostHog app
 // origin so links/toolbar resolve. See apps/website/SPEC.md.
-const PROXY_HOST = "https://p.thinkrail.ai";
-const UI_HOST = "https://eu.posthog.com";
-const PROJECT_KEY = "phc_AFJBcKraEUrfpTrSSMjBGXMHTusYudtFfxWqdevchy8X"; // public/client-safe key
+export const PROXY_HOST = "https://p.thinkrail.ai";
+export const UI_HOST = "https://eu.posthog.com";
+export const PROJECT_KEY = "phc_AFJBcKraEUrfpTrSSMjBGXMHTusYudtFfxWqdevchy8X"; // public/client-safe key
 
 interface PostHogLike {
 	init(key: string, config: Record<string, unknown>): void;
