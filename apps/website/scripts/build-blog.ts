@@ -59,6 +59,48 @@ function escapeHtml(str: string): string {
 		.replace(/"/g, "&quot;");
 }
 
+// ── Slug validation ───────────────────────────────────────────────────────
+
+// Reserved names that would conflict with output structure or common routes
+const RESERVED_SLUGS = new Set([
+	"index",
+	"images",
+	"assets",
+	"feed",
+	"rss",
+	"atom",
+	"api",
+	"admin",
+	"posts",
+	"tags",
+	"categories",
+]);
+
+// Slug format: lowercase letters, numbers, hyphens; must start with a letter; 3-100 chars
+const SLUG_PATTERN = /^[a-z][a-z0-9-]{2,99}$/;
+
+function validateSlug(slug: unknown, postDir: string): string {
+	if (typeof slug !== "string") {
+		throw new Error(`Post at ${postDir}: slug must be a string`);
+	}
+
+	if (!SLUG_PATTERN.test(slug)) {
+		throw new Error(
+			`Post at ${postDir}: invalid slug "${slug}". ` +
+				"Slug must be 3-100 characters, start with a lowercase letter, and contain only lowercase letters, numbers, and hyphens.",
+		);
+	}
+
+	if (RESERVED_SLUGS.has(slug)) {
+		throw new Error(
+			`Post at ${postDir}: slug "${slug}" is reserved. ` +
+				`Reserved names: ${[...RESERVED_SLUGS].join(", ")}.`,
+		);
+	}
+
+	return slug;
+}
+
 function formatDate(date: string): string {
 	// Use UTC to avoid timezone-dependent date shifts
 	const d = new Date(date);
@@ -227,9 +269,12 @@ async function parsePost(postDir: string, md: Marked): Promise<ParsedPost> {
 		throw new Error(`Post at ${postDir} missing required frontmatter (title, slug, date)`);
 	}
 
+	// Validate slug format and reserved names
+	const validatedSlug = validateSlug(data.slug, postDir);
+
 	const frontmatter: PostFrontmatter = {
 		title: data.title,
-		slug: data.slug,
+		slug: validatedSlug,
 		date: data.date,
 		draft: data.draft === true,
 		excerpt: data.excerpt,
@@ -336,6 +381,19 @@ async function build(): Promise<void> {
 			// Fail hard on broken posts — no silent green deploys
 			throw new Error(`Failed to parse ${basename(postDirs[i])}: ${r.reason}`);
 		}
+	}
+
+	// Validate slug uniqueness across all posts
+	const slugsSeen = new Map<string, string>();
+	for (const post of posts) {
+		const existing = slugsSeen.get(post.frontmatter.slug);
+		if (existing) {
+			throw new Error(
+				`Duplicate slug "${post.frontmatter.slug}" in ${basename(post.dir)} ` +
+					`(already used by ${existing})`,
+			);
+		}
+		slugsSeen.set(post.frontmatter.slug, basename(post.dir));
 	}
 
 	// Sort posts by date (newest first)
