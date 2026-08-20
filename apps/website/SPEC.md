@@ -79,9 +79,17 @@ binary.
   system-follow, legacy `darcula`/`gruvbox` values normalize to dark); the inline FOUC guard in
   BaseHead is its declared twin — a behavior change updates both.
 - **A colour with a contrast floor gets a `:root` token, never the region-inherited `--accent`.**
-  `.hero` re-points `--accent` for its artwork, so descendants reading it inherit a value chosen for dark
-  backgrounds. `--link` and `--focus-ring` are declared once on `:root` as `var(--accent)`, which resolves
-  against the *root* accent — per-theme, but out of reach of a region override.
+  A region may re-point `--accent` (the light theme's kicker pill does; the hero once did), so
+  descendants reading it can inherit a value chosen for another surface. `--link` and `--focus-ring`
+  are declared once on `:root` as `var(--accent)`, which resolves against the *root* accent —
+  per-theme, but out of reach of a region override.
+- **The primary button (and the hero's brand accents) are per-theme, not a brand constant** (decision
+  reversed 2026-08 on review — the light theme kept the dark theme's bright green): the
+  `--control-primary-*` tokens mirror the app's semantic mapping (`bg = accent`, `hovered =
+  accentHover`, `text = onAccent`, per `apps/web/src/styles/colors.json`), declared on `:root` via the
+  root-token mechanism above, with `--accent-hover` copied per theme from the app's palettes. The hero
+  title follows the theme accent like every other accent-coloured element; `palette.test.ts` pins the
+  hovered-fill label contrast.
 - All marketing copy is static DOM text; JS only *enhances* (scroll-spy, the derived editor-tab strip
   and its scroll-spy/click navigation, terminal typing, chat streaming replay, theme switcher, copy
   buttons, star count, install-platform selection). The page must read complete with JS disabled (the

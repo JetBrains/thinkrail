@@ -44,19 +44,22 @@
 	--muted: #a8adb5;
 	--hint: #71757c;
 	--accent: #8dff4f;
+	--accent-hover: #59d915;
 	--on-accent: #0a0a0a;
 	--green: #41cb66;
 	/* Link color token: primary at 60% opacity — a touch darker than the bright primary on the
 	   dark surfaces (light theme keeps the full, already-dark accent below). */
 	--link: color-mix(in srgb, var(--accent) 60%, transparent);
 	/* Focus ring. Declared here so `var(--accent)` resolves against the ROOT accent: per-theme, but out
-	   of reach of `.hero`'s override — which rendered a 1.27:1 ring on white. Same mechanism as --link. */
+	   of reach of a region override (a `.hero` override once rendered a 1.27:1 ring on white). Same
+	   mechanism as --link. */
 	--focus-ring: var(--accent);
-	/* Primary button = a shared, theme-independent brand constant (mirrors the app's
-	   control-primary-* tokens); defined once here so every theme inherits it. */
-	--control-primary-bg: #8dff4f;
-	--control-primary-bg-hovered: #59d915;
-	--control-primary-text: #0a0a0a;
+	/* Primary button — mirrors the app's control-primary-* mapping PER THEME (bg = accent, hovered =
+	   accentHover, text = onAccent; see apps/web/src/styles/colors.json). Declared on :root so the
+	   values resolve against the ROOT tokens — the --link/--focus-ring mechanism. */
+	--control-primary-bg: var(--accent);
+	--control-primary-bg-hovered: var(--accent-hover);
+	--control-primary-text: var(--on-accent);
 	--gold: #ffd54b;
 	--red: #ff4b75;
 	--blue: #6ac8ff;
@@ -146,8 +149,10 @@
 	--muted: #5a5f6a;
 	--hint: #667085;
 	--accent: #2e7d16;
-	/* Foreground ON the accent fill (`.skip-link`, `.send-btn`). The root value is for the bright dark
-	   accent; near-black on this dark green is 3.8:1, so light takes white (5.2:1) as the app does. */
+	--accent-hover: #25640f;
+	/* Foreground ON the accent fill (`.skip-link`, `.send-btn`, the primary button). The root value is
+	   for the bright dark accent; near-black on this dark green is 3.8:1, so light takes white (5.2:1)
+	   as the app does. */
 	--on-accent: #ffffff;
 	/* The light accent is already dark/readable; links use it at full strength (60% would be too faint on white). */
 	--link: var(--accent);
@@ -920,15 +925,10 @@ a.tree-row:hover {
 	color: var(--accent);
 }
 
-/* Light theme hero overrides (must follow base classes for specificity) */
-[data-theme="light"] .hero {
-	--accent: #8dff4f;
-}
-
-[data-theme="light"] .hero-title {
-	--accent: var(--control-primary-bg-hovered);
-}
-
+/* Light theme hero override (must follow the base class for specificity): the kicker pill reads as
+   plain text on white — the bright accent-tinted pill treatment is a dark-surface look. Everything
+   else in the hero (title, `pi` chip, primary button) follows the per-theme accent like the rest of
+   the page. */
 [data-theme="light"] .hero-kicker .pill-accent {
 	--accent: var(--text);
 	background: transparent;
@@ -1206,8 +1206,10 @@ p.hero-platforms {
 	font-weight: 500;
 }
 
+/* The color pins the label against the global `a:hover` green-mix (which outranks `.btn`). */
 .btn:hover {
 	background: var(--hover);
+	color: var(--text);
 	text-decoration: none;
 }
 
@@ -1220,6 +1222,7 @@ p.hero-platforms {
 .btn-primary:hover {
 	background: var(--control-primary-bg-hovered);
 	border-color: var(--control-primary-bg-hovered);
+	color: var(--control-primary-text);
 }
 
 /* ── why.md ─────────────────────────────────────────────────────────────── */

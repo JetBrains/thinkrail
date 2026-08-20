@@ -78,6 +78,11 @@ const TEXT_PAIRS: [fg: string, bg: (v: Record<string, string>) => string, what: 
 		"success icons on the chat demo's mixed surface",
 	],
 	["--on-accent", (v) => v["--accent"] as string, "the label on an accent fill"],
+	[
+		"--on-accent",
+		(v) => v["--accent-hover"] as string,
+		"the label on the hovered accent fill (the primary button)",
+	],
 ];
 
 describe("every rendered foreground pair clears WCAG AA", () => {
@@ -95,8 +100,8 @@ describe("every rendered foreground pair clears WCAG AA", () => {
 describe("the focus ring is a visible indicator", () => {
 	for (const [name, vars] of Object.entries(THEMES)) {
 		// Non-text contrast floor. `--focus-ring` is `var(--accent)`, resolved on the ROOT element, so a
-		// region that re-points `--accent` (the hero) cannot drag the ring below this — the reason the
-		// token exists at all.
+		// region that re-points `--accent` (the light kicker pill) cannot drag the ring below this — the
+		// reason the token exists at all.
 		it(`${name}: ring against the editor surface`, () => {
 			const ring =
 				vars["--focus-ring"] === "var(--accent)" ? vars["--accent"] : vars["--focus-ring"];
