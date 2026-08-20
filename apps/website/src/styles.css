@@ -2527,7 +2527,15 @@ body.blog-page {
 	border: 1px solid var(--blog-border);
 }
 
-/* YouTube embeds (responsive 16:9) */
+/* Direct YouTube/video iframes: override fixed width/height for responsive 16:9 */
+.blog-post-content iframe[src*="youtube"],
+.blog-post-content iframe[src*="vimeo"] {
+	width: 100%;
+	height: auto;
+	aspect-ratio: 16 / 9;
+}
+
+/* YouTube embeds via <video> tag (responsive 16:9 wrapper) */
 .blog-post-content .youtube-embed {
 	position: relative;
 	width: 100%;
