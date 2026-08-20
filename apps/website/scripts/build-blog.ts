@@ -42,7 +42,10 @@ const SUPPORTED_LANGUAGES = [
 	"plaintext",
 ] as const;
 
-const SHIKI_THEME = "github-dark";
+const SHIKI_THEMES = {
+	light: "github-light",
+	dark: "github-dark",
+} as const;
 const WORDS_PER_MINUTE = 200;
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -162,7 +165,13 @@ function createShikiExtension(hl: Highlighter): MarkedExtension {
 				const loadedLangs = hl.getLoadedLanguages();
 
 				if (loadedLangs.includes(language as (typeof loadedLangs)[number])) {
-					const html = hl.codeToHtml(text, { lang: language, theme: SHIKI_THEME });
+					// Use dual themes with CSS variables for light/dark mode support
+					const html = hl.codeToHtml(text, {
+						lang: language,
+						themes: SHIKI_THEMES,
+						defaultColor: false, // Use CSS variables instead of inline color
+					});
+					// Remove background-color from <pre> (we style it ourselves)
 					return html.replace(/background-color:[^;"]+;?/g, "");
 				}
 
@@ -296,7 +305,7 @@ async function build(): Promise<void> {
 	// Initialize syntax highlighter
 	console.log("   Initializing syntax highlighter...");
 	const hl = await createHighlighter({
-		themes: [SHIKI_THEME],
+		themes: [SHIKI_THEMES.light, SHIKI_THEMES.dark],
 		langs: [...SUPPORTED_LANGUAGES],
 	});
 	const md = new Marked(createYouTubeExtension(), createShikiExtension(hl));

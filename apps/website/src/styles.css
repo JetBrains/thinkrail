@@ -2501,6 +2501,17 @@ body.blog-page {
 	display: inline;
 }
 
+/* Shiki dual-theme: select colors based on data-theme */
+.blog-post-content .shiki,
+.blog-post-content .shiki span {
+	color: var(--shiki-dark);
+}
+
+[data-theme="light"] .blog-post-content .shiki,
+[data-theme="light"] .blog-post-content .shiki span {
+	color: var(--shiki-light);
+}
+
 .blog-post-content img {
 	max-width: 100%;
 	height: auto;
