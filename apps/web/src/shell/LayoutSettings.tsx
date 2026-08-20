@@ -184,7 +184,7 @@ export function LayoutSettings() {
 										type="button"
 										disabled={saving || !activeWorkspaceId || !document}
 										onClick={() => setApplying(preset)}
-										className="rounded-[var(--radius-sm)] bg-control-primary-bg px-sm py-xs tr-text-metadata text-control-primary-text hover:bg-control-primary-bg-hovered disabled:bg-control-disabled-bg disabled:text-control-disabled-text"
+										className="rounded-[var(--radius-sm)] bg-control-primary-bg px-sm py-xs tr-text-metadata text-control-primary-text hover:bg-control-primary-bg-hovered disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text"
 									>
 										Apply now…
 									</button>
@@ -300,7 +300,7 @@ export function LayoutSettings() {
 								if (saved) setName("");
 							});
 						}}
-						className="flex shrink-0 items-center gap-xs rounded-[var(--radius-sm)] bg-control-primary-bg px-md py-xs tr-text-ui text-control-primary-text hover:bg-control-primary-bg-hovered disabled:bg-control-disabled-bg disabled:text-control-disabled-text"
+						className="flex shrink-0 items-center gap-xs rounded-[var(--radius-sm)] bg-control-primary-bg px-md py-xs tr-text-ui text-control-primary-text hover:bg-control-primary-bg-hovered disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text"
 					>
 						<Plus className="size-4" /> Save preset
 					</button>
