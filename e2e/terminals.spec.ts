@@ -4,6 +4,7 @@ import {
 	createWorkspaceViaDialog,
 	openFixtureProject,
 	openTerminal,
+	revealFirstProjectWorkspaces,
 	runInTerminal,
 	visibleTerminal,
 	visibleTerminalScreen,
@@ -244,7 +245,7 @@ test("a terminal's output never reaches another client", async ({ page, context 
 
 	await page2.goto("/");
 	await expect(page2.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
-	await page2.getByTestId("project-expand").first().click();
+	await revealFirstProjectWorkspaces(page2);
 	await worktreeRows(page2).nth(1).click();
 	await waitTerminalReady(page2);
 
@@ -450,7 +451,7 @@ test("a second client takes a terminal over and the first is told", async ({ pag
 	const page2 = await context.newPage();
 	await page2.goto("/");
 	await expect(page2.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
-	await page2.getByTestId("project-expand").first().click();
+	await revealFirstProjectWorkspaces(page2);
 	await worktreeRows(page2).nth(0).click();
 	await waitTerminalReady(page2);
 
@@ -565,7 +566,7 @@ test("a tab opened or closed in one browser reaches the other", async ({ page, c
 	const page2 = await context.newPage();
 	await page2.goto("/");
 	await expect(page2.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
-	await page2.getByTestId("project-expand").first().click();
+	await revealFirstProjectWorkspaces(page2);
 	await worktreeRows(page2).nth(0).click();
 	await waitTerminalReady(page2);
 	await expect(page2.getByTestId("terminal-tab")).toHaveCount(1);
@@ -618,7 +619,7 @@ test("a shell that dies during a reclaim is not presented as alive", async ({ pa
 	const page2 = await context.newPage();
 	await page2.goto("/");
 	await expect(page2.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
-	await page2.getByTestId("project-expand").first().click();
+	await revealFirstProjectWorkspaces(page2);
 	await worktreeRows(page2).nth(0).click();
 	await waitTerminalReady(page2);
 	await expect(visibleTerminal(page)).toHaveAttribute("data-detached", "true");

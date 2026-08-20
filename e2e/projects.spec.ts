@@ -4,6 +4,7 @@ import { basename, join } from "node:path";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import {
 	createWorkspaceViaDialog,
+	defaultWorkspaceRow,
 	openAppFresh,
 	openFixtureProject,
 	stagePlainFolder,
@@ -68,6 +69,27 @@ test("opening a non-git folder offers to initialise a repo, then opens it end-to
 
 	await createWorkspaceViaDialog(page);
 	await expect(worktreeRows(page).first()).toBeVisible();
+});
+
+test("rail expansion is per-browser view state that survives a reload", async ({ page }) => {
+	await openFixtureProject(page);
+	const row = page.getByTestId("project-item").filter({ hasText: "sample-project" });
+	const expand = row.getByTestId("project-expand");
+
+	await expect(expand).toHaveAttribute("data-expanded", "true");
+	await expect(defaultWorkspaceRow(page)).toBeVisible();
+
+	await page.reload();
+	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+	await expect(expand).toHaveAttribute("data-expanded", "true");
+	await expect(defaultWorkspaceRow(page)).toBeVisible();
+
+	await expand.click();
+	await expect(expand).toHaveAttribute("data-expanded", "false");
+	await page.reload();
+	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+	await expect(expand).toHaveAttribute("data-expanded", "false");
+	await expect(defaultWorkspaceRow(page)).toHaveCount(0);
 });
 
 test("project context actions stay compact and close/reopen is lossless across clients", async ({

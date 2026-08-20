@@ -52,7 +52,7 @@ export function WelcomePanel() {
 	}, [project?.id]);
 
 	const { openProject, pickAndOpen, dialogs } = useOpenProject((opened) =>
-		useAppStore.getState().selectProject(opened.id),
+		useAppStore.getState().selectProject(opened.id, { reveal: true }),
 	);
 
 	const onWorkspaceCreated = async (ws: Workspace) => {

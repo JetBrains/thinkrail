@@ -5,6 +5,7 @@ import {
 	enterDefaultWorkspace,
 	openFixtureProject,
 	pressPlatformShortcut,
+	revealFirstProjectWorkspaces,
 	waitTerminalReady,
 } from "./fixtures/app";
 
@@ -714,7 +715,7 @@ test("remote closures reconcile chat history and cached file reopening", async (
 	const peer = await context.newPage();
 	await peer.goto("/");
 	await expect(peer.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
-	await peer.getByTestId("project-expand").first().click();
+	await revealFirstProjectWorkspaces(peer);
 	await defaultWorkspaceRow(peer).click();
 	const peerChat = peer.locator('[data-testid="editor-tab"][data-kind="chat"]');
 	await expect(peerChat).toHaveCount(1);
@@ -782,7 +783,7 @@ test("a nonmatching remote revision cancels an active drag and both clients conv
 	const page2 = await context.newPage();
 	await page2.goto("/");
 	await expect(page2.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
-	await page2.getByTestId("project-expand").first().click();
+	await revealFirstProjectWorkspaces(page2);
 	await defaultWorkspaceRow(page2).getByRole("button").first().click();
 	await expect(page2.getByTestId("center-group")).toHaveCount(1);
 
@@ -816,7 +817,7 @@ test("a nonmatching remote revision cancels an active resize without publishing 
 	const page2 = await context.newPage();
 	await page2.goto("/");
 	await expect(page2.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
-	await page2.getByTestId("project-expand").first().click();
+	await revealFirstProjectWorkspaces(page2);
 	await defaultWorkspaceRow(page2).getByRole("button").first().click();
 	await expect(page2.getByTestId("right-panel")).toBeVisible();
 

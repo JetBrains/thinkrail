@@ -2,7 +2,12 @@ import { existsSync, mkdirSync, realpathSync, rmSync, utimesSync, writeFileSync 
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import { TodoStore } from "pi-todos/core";
-import { defaultWorkspaceRow, enterDefaultWorkspace, openFixtureProject } from "./fixtures/app";
+import {
+	defaultWorkspaceRow,
+	enterDefaultWorkspace,
+	openFixtureProject,
+	revealFirstProjectWorkspaces,
+} from "./fixtures/app";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { seedWorkspaceSession } from "./fixtures/sessions";
 
@@ -126,7 +131,7 @@ test("trashing a chat converges to a second client", async ({ page, context }) =
 	const page2 = await context.newPage();
 	await page2.goto("/");
 	await expect(page2.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
-	await page2.getByTestId("project-expand").first().click();
+	await revealFirstProjectWorkspaces(page2);
 	await defaultWorkspaceRow(page2).click();
 	await expect(page2.getByText("shared doomed transcript")).toBeVisible();
 
@@ -174,7 +179,7 @@ test("a client that misses chat deletion while offline reconciles it after recon
 	const page2 = await context2.newPage();
 	await page2.goto("/");
 	await expect(page2.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
-	await page2.getByTestId("project-expand").first().click();
+	await revealFirstProjectWorkspaces(page2);
 	await defaultWorkspaceRow(page2).click();
 	await expect(page2.getByText("offline doomed transcript")).toBeVisible();
 
