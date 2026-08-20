@@ -36,10 +36,10 @@ function comment(over: Partial<ReviewComment>): ReviewComment {
 
 test("draft ids: per-file counts only that file's drafts (null keys the anchorless bucket); allDraftIds spans every file", () => {
 	const comments = [
-		comment({ id: "a1" }), // draft on src/a.ts
-		comment({ id: "a2", status: "sent" }), // sent — never sendable
+		comment({ id: "a1" }),
+		comment({ id: "a2", status: "sent" }),
 		comment({ id: "b1", anchor: { path: "src/b.ts", side: "worktree", selectors: [] } }),
-		comment({ id: "r1", kind: "review", anchor: null }), // whole-change-set draft
+		comment({ id: "r1", kind: "review", anchor: null }),
 		comment({ id: "a3", status: "resolved" }),
 	];
 	expect(fileDraftIds(comments, "src/a.ts")).toEqual(["a1"]);
@@ -70,14 +70,11 @@ test("reviewFlags: a file in review is flagged whether its comments are unsent o
 		comment({ anchor: { path, side: "worktree", selectors: [] }, ...over });
 	const flags = reviewFlags([
 		at("draft.ts", { status: "draft" }),
-		// Sent still counts — the chat is working on it, so the file is not "untouched".
 		at("sent.ts", { status: "sent" }),
-		// Draft wins for a file holding both, whichever order they arrive in.
 		at("both.ts", { status: "sent" }),
 		at("both.ts", { status: "draft" }),
 		at("also-both.ts", { status: "draft" }),
 		at("also-both.ts", { status: "sent" }),
-		// Finished files drop out entirely.
 		at("done.ts", { status: "resolved" }),
 		at("dropped.ts", { status: "dismissed" }),
 		comment({ kind: "review", anchor: null, status: "draft" }),
@@ -115,9 +112,6 @@ test("status vocabulary: outdated rides draft/sent labels but never resolved", (
 });
 
 test("a base-side comment navigates to a PINNED diff on its own baseRef, a worktree one to the file", () => {
-	// The card for a base anchor is mounted only by the diff's ORIGINAL editor — and that original must
-	// be the very blob the anchor pinned at creation, not a re-resolution of the mutable scope it was
-	// captured in (which moves when the worktree commits or the review target is re-pointed).
 	const base = comment({
 		id: "cb",
 		anchor: {
@@ -132,7 +126,6 @@ test("a base-side comment navigates to a PINNED diff on its own baseRef, a workt
 		kind: "diff",
 		scope: { kind: "pinned", baseRef: "abc123" },
 	});
-	// Saved before baseRef was stamped: fall back to the captured scope…
 	expect(
 		commentSurface(
 			comment({
@@ -140,7 +133,6 @@ test("a base-side comment navigates to a PINNED diff on its own baseRef, a workt
 			}),
 		),
 	).toEqual({ kind: "diff", scope: { kind: "uncommitted" } });
-	// …and with neither, to the workspace's current scope (the caller's job).
 	expect(
 		commentSurface(comment({ anchor: { path: "a.ts", side: "base", selectors: [] } })),
 	).toEqual({ kind: "diff" });
@@ -155,10 +147,7 @@ test("a file row opens the diff only when EVERY unresolved comment on it is base
 	});
 	const worktree = comment({ id: "cw", anchor: { path: "a.ts", side: "worktree", selectors: [] } });
 	expect(reviewFileSurface([base], "a.ts")).toEqual({ kind: "diff", scope: { kind: "branch" } });
-	// Mixed: the file wins — that's where the worktree cards render, and the base rows still reach the
-	// diff through their own navigation.
 	expect(reviewFileSurface([base, worktree], "a.ts")).toEqual({ kind: "file" });
-	// Resolved base comments don't drag the row onto a diff, and an unknown path is just a file.
 	expect(reviewFileSurface([comment({ ...base, status: "resolved" })], "a.ts")).toEqual({
 		kind: "file",
 	});
@@ -168,15 +157,11 @@ test("a file row opens the diff only when EVERY unresolved comment on it is base
 test("fileSummaries: a fully-resolved file stays listed until marked done; a new comment re-lists it", () => {
 	const open = comment({ id: "rc_1", status: "sent" });
 	const closed = comment({ id: "rc_2", status: "resolved" });
-	// Unresolved comments: listed regardless of doneFiles.
 	expect(fileSummaries([open, closed], ["src/a.ts"])).toEqual([
 		{ path: "src/a.ts", total: 1, drafts: 0, resolved: 1 },
 	]);
-	// All resolved: stays (with its resolved count) until done…
 	expect(fileSummaries([closed])).toEqual([{ path: "src/a.ts", total: 0, drafts: 0, resolved: 1 }]);
-	// …and leaves once marked done.
 	expect(fileSummaries([closed], ["src/a.ts"])).toEqual([]);
-	// The anchorless bucket keys as "" in doneFiles.
 	const overall = comment({ id: "rc_3", kind: "review", anchor: null, status: "resolved" });
 	expect(fileSummaries([overall], [""])).toEqual([]);
 	expect(fileSummaries([overall])).toEqual([{ path: null, total: 0, drafts: 0, resolved: 1 }]);

@@ -5,13 +5,11 @@ import type { JbcentralInstall } from "@thinkrail/contracts";
 
 export type ParseEnv = Record<string, string | undefined>;
 
-/** The oldest Central release that carries the native PI surface (`central add pi`). */
 export const MINIMUM_CENTRAL_VERSION = "1.4.0" as const;
 
 const CENTRAL_BIN = "central";
 const VERSION_TIMEOUT_MS = 5_000;
 const STATUS_TIMEOUT_MS = 15_000;
-/** How long a launched `central login` must survive before it counts as actually running. */
 const LOGIN_GRACE_MS = 1_500;
 const MAX_STATUS_OUTPUT_BYTES = 16_384;
 const ACTION_TIMEOUT_MS = 120_000;
@@ -32,7 +30,6 @@ export type JbcentralVersionStatus =
 			reason: "launch-failed" | "timed-out" | "output-too-large" | "nonzero-exit";
 	  };
 
-/** Host-private inspection. Only `status` is suitable for mapping to a wire DTO. */
 export interface JbcentralInspection {
 	executablePath: string | null;
 	extensionPath: string;
@@ -42,16 +39,10 @@ export interface JbcentralInspection {
 
 export type JbcentralAction = "add" | "remove" | "update" | "start-proxy";
 
-/**
- * Whether Central currently holds credentials. `unknown` is a first-class answer: the probe is allowed to
- * fail, and a failed probe must never be presented as a sign-in demand.
- */
 export type JbcentralAuthVerdict = "connected" | "signed-out" | "unknown";
 
-/** Only a positively observed stopped marker is actionable; every other rendering stays non-demanding. */
 export type JbcentralProxyVerdict = "stopped" | "unknown";
 
-/** Closed observations extracted from one bounded `central status` invocation. */
 export interface JbcentralStatusObservation {
 	auth: JbcentralAuthVerdict;
 	proxy: JbcentralProxyVerdict;
@@ -90,7 +81,6 @@ interface WatchHandle {
 	close(): void;
 }
 
-/** What a launched login exposes: just enough to notice it died, never its output. */
 interface LoginHandle {
 	exited: Promise<number>;
 }
@@ -119,15 +109,10 @@ function pathExists(path: string, deps: JbcentralAdapterDependencies): boolean {
 	return (deps.exists ?? existsSync)(path);
 }
 
-/** Central's global artifact — ignores `PI_CODING_AGENT_DIR`; an opaque identity, never read. */
 export function jbcentralExtensionPath(env: ParseEnv = process.env): string {
 	return join(env.HOME ?? homedir(), ".pi", "agent", "extensions", "jetbrains-central.ts");
 }
 
-/**
- * Resolve Central from the live PATH, with the installer's default `~/.local/bin` as a fallback.
- * The returned path is always absolute so callers never execute a bare command.
- */
 export function resolveJbcentralBin(deps: JbcentralAdapterDependencies = {}): string | null {
 	const env = effectiveEnv(deps);
 	const path = env.PATH ?? "";
@@ -143,7 +128,6 @@ export function isJbcentralInstalled(deps: JbcentralAdapterDependencies = {}): b
 	return resolveJbcentralBin(deps) !== null;
 }
 
-/** Parse only Central's version prefix; trailing presentation metadata is ignored and never retained. */
 export function parseJbcentralVersion(output: string): SemanticVersion | null {
 	const match = /^central\s+(\d+)\.(\d+)\.(\d+)(?:\s|$)/u.exec(output.trim());
 	if (!match) return null;
@@ -203,10 +187,6 @@ async function runProcess(request: ProcessRequest): Promise<ProcessResult> {
 		return { outcome: "launch-failed" };
 	}
 
-	// The deadline has to win the race outright, not merely fire a kill: killing the child does not close a
-	// pipe its own grandchildren still hold open (Central spawns a proxy daemon), so awaiting the read first
-	// would let a probe outlive its timeout by as long as that daemon lives — and the version probe is on the
-	// host's boot path, where an unbounded wait means no port, no UI, and no error.
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	const deadline = new Promise<ProcessResult>((resolve) => {
 		timer = setTimeout(() => {
@@ -229,7 +209,6 @@ async function runProcess(request: ProcessRequest): Promise<ProcessResult> {
 		const exitCode = await processHandle.exited;
 		return { outcome: "exited", exitCode, stdout: stdoutResult.text };
 	})();
-	// A completion that loses the race still settles later; nothing may surface as an unhandled rejection.
 	completion.catch(() => {});
 
 	try {
@@ -243,7 +222,6 @@ function processRunner(deps: JbcentralAdapterDependencies) {
 	return deps.run ?? runProcess;
 }
 
-/** Inspect Central without retaining or exposing its raw output. */
 export async function inspectJbcentral(
 	deps: JbcentralAdapterDependencies = {},
 ): Promise<JbcentralInspection> {
@@ -319,20 +297,13 @@ export async function inspectJbcentral(
 	};
 }
 
-/** Central styles its rows with SGR colour sequences; the row's text only exists once they are removed. */
 const ANSI_SGR = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g");
-/** Whole status-row labels followed by their values — never similarly named warning prose. */
 const AUTH_ROW = /(?:^|\s)Auth\s+(\S.*)$/u;
 const PROXY_ROW = /(?:^|\s)Proxy\s+(\S.*)$/u;
 const SIGNED_OUT_MARKER = "not connected";
 const PROXY_STOPPED_MARKER = "stopped";
 const UNKNOWN_STATUS: JbcentralStatusObservation = { auth: "unknown", proxy: "unknown" };
 
-/**
- * Read only closed negative observations from `central status`. Auth remains deliberately asymmetric: a
- * recognized row with any value besides the signed-out marker is connected. Proxy health is stricter — only
- * the exact stopped value creates a recovery demand; running and unfamiliar values remain non-demanding.
- */
 export function parseJbcentralStatusObservation(output: string): JbcentralStatusObservation {
 	let auth: JbcentralAuthVerdict = "unknown";
 	let proxy: JbcentralProxyVerdict = "unknown";
@@ -348,16 +319,8 @@ export function parseJbcentralStatusObservation(output: string): JbcentralStatus
 	return { auth, proxy };
 }
 
-/**
- * How long a caller may serve an observation before re-probing. Sized against the probe's cost, not against
- * how fast auth or proxy state can change: a burst of reads collapses to one child process.
- */
 export const JBCENTRAL_STATUS_TTL_MS = 3_000;
 
-/**
- * Probe auth and proxy health once. The output may contain private account/server details, so only the closed
- * observation escapes; raw output is never returned or logged.
- */
 export async function probeJbcentralStatus(
 	deps: JbcentralAdapterDependencies = {},
 ): Promise<JbcentralStatusObservation> {
@@ -386,7 +349,6 @@ const ACTION_ARGS: Record<JbcentralAction, readonly string[]> = {
 	"start-proxy": ["proxy", "start", "--ensure-updated"],
 };
 
-/** Run one reviewed Central action and enforce its safe artifact postcondition. */
 export async function runJbcentralAction(
 	action: JbcentralAction,
 	deps: JbcentralAdapterDependencies = {},
@@ -429,15 +391,6 @@ export async function runJbcentralAction(
 	return { outcome: "succeeded" };
 }
 
-/**
- * Launch Central's browser sign-in without letting its output or errors reach callers.
- *
- * Spawning successfully is NOT evidence the flow started: `central login` drives its browser handoff from a
- * terminal UI, so without a TTY it exits immediately and no sign-in ever happens. The launch therefore waits
- * a grace period for an early non-zero exit and reports failure — a caller that trusted the spawn alone would
- * tell the user to finish in a browser that was never opened. A flow that really started is still running
- * when the grace elapses (it is waiting on the browser), and an "already signed in" short-circuit exits zero.
- */
 export async function launchJbcentralLogin(
 	deps: JbcentralAdapterDependencies = {},
 ): Promise<JbcentralLoginResult> {
@@ -499,11 +452,6 @@ function nodeWatchDirectory(path: string, onInvalidate: () => void): WatchHandle
 	return watcher;
 }
 
-/**
- * Observe only Central's reviewed artifact location. Filesystem events report invalidation nudges, while a
- * cheap existence poll repairs dropped add/remove events; neither path opens the artifact. If its directory
- * does not exist yet, the watcher follows the nearest existing parent and re-arms as the tree appears.
- */
 export function watchJbcentralArtifact(
 	onInvalidate: () => void,
 	deps: JbcentralAdapterDependencies = {},
@@ -520,9 +468,7 @@ export function watchJbcentralArtifact(
 	const closeHandle = (): void => {
 		try {
 			handle?.close();
-		} catch {
-			// A watcher invalidated by directory removal may already be closed.
-		}
+		} catch {}
 		handle = null;
 		watchedDirectory = null;
 	};
@@ -537,13 +483,10 @@ export function watchJbcentralArtifact(
 
 	const invalidate = (): void => {
 		if (stopped) return;
-		// Fold existence into the poll baseline so an event and its later poll can't double-report a transition.
 		artifactExists = pathExists(extensionPath, deps);
 		try {
 			onInvalidate();
-		} catch {
-			// The watcher remains armed even if a consumer rejects one nudge.
-		}
+		} catch {}
 		scheduleRearm();
 	};
 
@@ -584,7 +527,6 @@ export function watchJbcentralArtifact(
 	};
 }
 
-/** The official per-OS Central install plan shown by the guided UI. */
 export function jbcentralInstall(platform: NodeJS.Platform): JbcentralInstall {
 	if (platform === "win32") {
 		return {

@@ -1,7 +1,6 @@
 import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 import type { AgentSettlement, PiEvent } from "@thinkrail/contracts";
 
-/** Project Pi's richer in-process events onto the versioned browser wire. */
 export function projectSessionEvent(
 	event: AgentSessionEvent,
 	terminal: AgentSettlement | null,

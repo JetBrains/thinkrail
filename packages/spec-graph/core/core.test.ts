@@ -25,10 +25,6 @@ import {
 	validateGraph,
 } from "./index.ts";
 
-// ---------------------------------------------------------------------------
-// vocabulary tuples (single source of truth for the unions + the tools' StringEnum schemas)
-// ---------------------------------------------------------------------------
-
 test("the finite-vocabulary tuples carry exactly their members", () => {
 	expect([...IDENTITY_FIELDS]).toEqual(["id", "type"]);
 	expect([...LINK_KINDS]).toEqual(["parent", "depends-on", "references", "implements"]);
@@ -56,7 +52,6 @@ test("FIELDS is the single source for field names and the field tuples derive fr
 		covers: "covers",
 		tags: "tags",
 	});
-	// The tuples are composed from FIELDS values — renaming a field in FIELDS moves all of them together.
 	expect([...REQUIRED_FIELDS]).toEqual([FIELDS.id, FIELDS.type, FIELDS.title]);
 	expect([...IDENTITY_FIELDS]).toEqual([FIELDS.id, FIELDS.type]);
 	expect([...SINGLE_LINK_FIELDS]).toEqual([FIELDS.parent]);
@@ -82,10 +77,6 @@ test("FIELDS is the single source for field names and the field tuples derive fr
 	]);
 });
 
-// ---------------------------------------------------------------------------
-// parse
-// ---------------------------------------------------------------------------
-
 test("parseFile splits frontmatter (scalars + inline arrays) from body", () => {
 	const { frontmatter, body } = parseFile(
 		"---\nid: foo\ntype: module-design\ntitle: Foo\ndepends-on: [a, b]\ntags: [x]\n---\n\n## Body\ntext\n",
@@ -101,8 +92,6 @@ test("parseFile splits frontmatter (scalars + inline arrays) from body", () => {
 });
 
 test("parseFile reads block-style (multi-line) YAML arrays, normalizing them to a string list", () => {
-	// A human or pi's normal edit tool may write a block sequence; the yaml lib reads it (the old
-	// hand-rolled parser only understood inline `[a, b]`). We re-serialize it back inline.
 	const { frontmatter } = parseFile(
 		"---\nid: m\ntype: module-design\ntitle: M\ndepends-on:\n  - a\n  - b\n---\nbody\n",
 	);
@@ -129,8 +118,6 @@ test("isSpec requires id and type", () => {
 });
 
 test("serializeFrontmatter emits in the given key order, arrays inline, empties dropped", () => {
-	// No reordering: it serializes the object as given. `spec_create` builds the object in FIELD_ORDER;
-	// edits preserve a file's own field order (see updateFrontmatterText).
 	const out = serializeFrontmatter({
 		id: "foo",
 		type: "module-design",
@@ -159,15 +146,12 @@ test("serialize <-> parse round-trips", () => {
 });
 
 test("serialize <-> parse round-trips a list item containing a comma", () => {
-	// The serializer must quote a comma-bearing item and the parser must split quote-aware, else the
-	// item is silently torn into two on the next read.
 	const fm = { id: "x", type: "t", title: "T", tags: ["hello, world", "b"] };
 	const { frontmatter } = parseFile(`${serializeFrontmatter(fm)}\nbody`);
 	expect(frontmatter).toEqual(fm);
 });
 
 test("parseFile strips a trailing CR so a CRLF-authored last field isn't corrupted", () => {
-	// Splitting on \n alone leaves the final frontmatter line's \r inside the scalar (title -> "T\r").
 	const { frontmatter } = parseFile(
 		"---\r\nid: my-spec\r\ntype: module-design\r\ntitle: T\r\n---\r\nbody\r\n",
 	);
@@ -175,20 +159,13 @@ test("parseFile strips a trailing CR so a CRLF-authored last field isn't corrupt
 });
 
 test("parseFile survives a CRLF file whose last frontmatter line is a flow list", () => {
-	// Before the CR strip, the stray \r made the flow-list line throw -> null -> silently not-a-spec.
 	const { frontmatter } = parseFile(
 		"---\r\nid: my-spec\r\ntype: module-design\r\ntags: [a, b]\r\n---\r\nbody\r\n",
 	);
 	expect(frontmatter).toEqual({ id: "my-spec", type: "module-design", tags: ["a", "b"] });
 });
 
-// ---------------------------------------------------------------------------
-// updateFrontmatterText — the lossless in-place write path
-// ---------------------------------------------------------------------------
-
 test("updateFrontmatterText preserves comments and non-dialect fields through an edit", () => {
-	// The read model coerces frontmatter to a scalar/string-array dialect (dropping nested maps + comments);
-	// the write path must NOT, or any edit would silently delete what it doesn't understand.
 	const file = [
 		"---",
 		"id: a # the slug",
@@ -213,7 +190,6 @@ test("updateFrontmatterText preserves comments and non-dialect fields through an
 	expect(content).toContain("tags: [x, y, z]");
 	expect(content).toContain("status: active");
 	expect(content).toContain("prose body");
-	// Still the same spec on the next read.
 	const { frontmatter } = parseFile(content);
 	expect(frontmatter?.id).toBe("a");
 	expect(frontmatter?.tags).toEqual(["x", "y", "z"]);
@@ -224,12 +200,10 @@ test("updateFrontmatterText writes the file back in its original CRLF line endin
 	const res = updateFrontmatterText(file, { set: { title: "T2" } }) as { content: string };
 	expect(res.content).toContain("title: T2");
 	expect(res.content).toContain("body line");
-	// No lone LF: every newline is a CRLF (no mixed endings left behind).
 	expect(/(?<!\r)\n/.test(res.content)).toBe(false);
 });
 
 test("updateFrontmatterText rejects set on a list field (use addList/removeList instead)", () => {
-	// `set: {tags: "a, b"}` would list-coerce to one wrong entry ["a, b"]; the tool routes lists elsewhere.
 	const res = updateFrontmatterText("---\nid: a\ntype: t\n---\nbody\n", { set: { tags: "a, b" } });
 	expect("error" in res).toBe(true);
 });
@@ -240,10 +214,6 @@ test("updateFrontmatterText never un-specs: refuses to blank/rename/remove id/ty
 	expect("error" in updateFrontmatterText(file, { set: { type: "" } })).toBe(true);
 	expect("error" in updateFrontmatterText(file, { remove: ["id"] })).toBe(true);
 });
-
-// ---------------------------------------------------------------------------
-// graph
-// ---------------------------------------------------------------------------
 
 const entries = [
 	{ path: "root/SPEC.md", frontmatter: { id: "root", type: "architecture-design", title: "Root" } },
@@ -280,10 +250,6 @@ test("buildGraph tracks duplicate ids (first file wins the node)", () => {
 	expect(g.duplicateIds.get("dup")).toEqual(["one.md", "two.md"]);
 });
 
-// ---------------------------------------------------------------------------
-// query
-// ---------------------------------------------------------------------------
-
 test("graphSlice subtree walks children down the parent tree", () => {
 	const slice = graphSlice(buildGraph(entries), { root: "root", direction: "subtree", depth: 1 });
 	expect(slice.nodes.map((n) => n.id).sort()).toEqual(["a", "b", "root"]);
@@ -309,8 +275,6 @@ test("graphSlice neighbors traverses a chosen edge and its reverse", () => {
 });
 
 test("graphSlice neighbors records each edge once across depth", () => {
-	// a -> b -> c along depends-on: at depth 2 the a->b edge is reachable forward (from a) and
-	// reverse (incoming to b); it must appear exactly once.
 	const g = buildGraph([
 		{ path: "a.md", frontmatter: { id: "a", type: "t", "depends-on": ["b"] } },
 		{ path: "b.md", frontmatter: { id: "b", type: "t", "depends-on": ["c"] } },
@@ -345,19 +309,13 @@ test("grepSpecs matches with metadata filters", () => {
 
 test("grepSpecs marks truncated only when a match exists beyond the limit", () => {
 	const content = [{ path: "a.md", content: "x\nx\nx", frontmatter: { id: "a", type: "t" } }];
-	// Exactly `limit` matches: capped but not truncated (no further match cut off).
 	const exact = grepSpecs(content, { pattern: "x", limit: 3 });
 	expect(exact.matches).toHaveLength(3);
 	expect(exact.truncated).toBe(false);
-	// Fewer than the matches available: capped and truncated.
 	const cut = grepSpecs(content, { pattern: "x", limit: 2 });
 	expect(cut.matches).toHaveLength(2);
 	expect(cut.truncated).toBe(true);
 });
-
-// ---------------------------------------------------------------------------
-// validate
-// ---------------------------------------------------------------------------
 
 test("validateGraph flags dangling links, duplicate ids, and parent cycles", () => {
 	const g = buildGraph([
@@ -377,10 +335,6 @@ test("validateGraph flags dangling links, duplicate ids, and parent cycles", () 
 	expect(report.parentCycles).toHaveLength(1);
 	expect(report.parentCycles[0]?.ids.sort()).toEqual(["a", "b"]);
 });
-
-// ---------------------------------------------------------------------------
-// store (on-demand read model over the filesystem)
-// ---------------------------------------------------------------------------
 
 function withIndexRoot(fn: (root: string) => void): void {
 	const root = mkdtempSync(join(tmpdir(), "spec-index-"));
@@ -414,7 +368,6 @@ test("SpecIndex re-globs to pick up an externally added spec on the next read", 
 	withIndexRoot((root) => {
 		const index = new SpecIndex(root);
 		expect([...index.graph().nodes.keys()]).toEqual([]);
-		// A brand-new file appears on disk; the next read re-globs (no cache, no refresh call).
 		writeFileSync(join(root, "new.md"), "---\nid: new\ntype: module-design\ntitle: New\n---\n");
 		expect([...index.graph().nodes.keys()]).toEqual(["new"]);
 		expect(index.pathForId("new")).toBe("new.md");
@@ -427,7 +380,6 @@ test("SpecIndex re-parses an externally modified spec", () => {
 		writeFileSync(abs, "---\nid: m\ntype: module-design\ntitle: Old\n---\n");
 		const index = new SpecIndex(root);
 		expect(index.graph().nodes.get("m")?.title).toBe("Old");
-		// An external edit (pi's normal write/edit) changes the frontmatter; the next read reflects it.
 		writeFileSync(abs, "---\nid: m\ntype: module-design\ntitle: New\ntags: [x]\n---\n");
 		const node = index.graph().nodes.get("m");
 		expect(node?.title).toBe("New");
@@ -453,9 +405,7 @@ test("SpecIndex memoizes the graph and rebuilds it only when the spec set change
 		writeFileSync(abs, "---\nid: m\ntype: t\ntitle: M\n---\n");
 		const index = new SpecIndex(root);
 		const g1 = index.graph();
-		// Nothing changed on disk -> same instance (the rebuild + re-parse are skipped).
 		expect(index.graph()).toBe(g1);
-		// An external edit changes (mtimeMs, size) -> the next read rebuilds a fresh graph.
 		writeFileSync(abs, "---\nid: m\ntype: t\ntitle: M2\n---\n");
 		const g2 = index.graph();
 		expect(g2).not.toBe(g1);
@@ -472,7 +422,6 @@ test("SpecIndex.recordForId returns the cached read (path + text + frontmatter) 
 		expect(record?.rel).toBe("m.md");
 		expect(record?.abs).toBe(abs);
 		expect(record?.frontmatter.title).toBe("M");
-		// Text is retained for specs, so spec_update can re-split the body without a second disk read.
 		expect(record?.content.includes("body line")).toBe(true);
 		expect(index.recordForId("nope")).toBeUndefined();
 	});
@@ -484,10 +433,8 @@ test("SpecIndex tracks a file entering and leaving spec-hood via its frontmatter
 		writeFileSync(abs, "# just prose, no frontmatter\n");
 		const index = new SpecIndex(root);
 		expect([...index.graph().nodes.keys()]).toEqual([]);
-		// Gains frontmatter -> becomes a spec.
 		writeFileSync(abs, "---\nid: x\ntype: module-design\ntitle: X\n---\nbody\n");
 		expect([...index.graph().nodes.keys()]).toEqual(["x"]);
-		// Loses its id -> no longer a spec.
 		writeFileSync(abs, "---\ntype: module-design\ntitle: X\n---\nbody\n");
 		expect([...index.graph().nodes.keys()]).toEqual([]);
 	});

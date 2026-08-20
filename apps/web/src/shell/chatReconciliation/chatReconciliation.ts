@@ -262,7 +262,6 @@ export function useWorkspaceChatCatalogReconciliation(
 				if (target?.workspaceId === workspaceId) {
 					const targetSummary = summaries.find((summary) => summary.sessionId === target.sessionId);
 					if (!targetSummary) {
-						// A successful catalog is authoritative absence: retain the workspace, consume only chat intent.
 						useAppStore.getState().clearRouteChatTarget();
 					} else {
 						handledRouteSessionId = target.sessionId;
@@ -428,9 +427,7 @@ export function useWorkspaceChatCatalogReconciliation(
 				if (state.sessions[currentPlacement.sessionId]) continue;
 				try {
 					await hydrateChatResource(workspaceId, currentPlacement.sessionId);
-				} catch {
-					// Reconnect or a later placement change retries this rehydratable reference.
-				}
+				} catch {}
 			}
 		})();
 		return () => {

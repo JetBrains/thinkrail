@@ -141,7 +141,6 @@ function instantiateSide(
 	return { visible: region.visible && groups.length > 0, width: region.width, groups };
 }
 
-/** A fresh workspace starts resource-free, so unused preset center leaves prune to one deterministic leaf. */
 export function instantiateLayoutPreset(preset: LayoutPreset): WorkspaceLayoutDocument {
 	return {
 		version: 1,
@@ -246,7 +245,6 @@ function putTerminalsInPrimaryCenter(
 	};
 }
 
-/** Apply a resource-free preset while preserving every placed workspace resource identity. */
 export function applyLayoutPreset(
 	document: WorkspaceLayoutDocument,
 	preset: LayoutPreset,
@@ -318,7 +316,6 @@ export function applyLayoutPreset(
 	};
 }
 
-/** Capture portable topology/tool placement, excluding every workspace resource identity. */
 export function captureLayoutPreset(
 	document: WorkspaceLayoutDocument,
 	id: string,

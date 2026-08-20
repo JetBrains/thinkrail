@@ -41,19 +41,14 @@ export function Shell() {
 	const openReview = useOpenBranchReview(activeWorkspace, status);
 	const hasActiveWorkspace = activeWorkspaceId != null;
 
-	// Project Home keeps its own simple two-column layout. Active workspaces hand all arrangement to
-	// `WorkspaceWorkbench`; its structural state is host-synchronized rather than react-panel local storage.
 	const welcomeCenterRef = useRef<HTMLDivElement>(null);
 	const welcomeProjects = useCollapsibleRegion(welcomeCenterRef, "welcome-left");
 
-	// The single owner of the theme DOM side-effect: apply the store's (host-owned) theme + cache it as the
-	// next load's first-paint hint. The store is fed by transport (welcome / settings.changed).
 	const theme = useAppStore((s) => s.theme);
 	useEffect(() => {
 		applyTheme(theme);
 		writeThemeHint(theme);
 	}, [theme]);
-	// App-wide chords the browser would otherwise take: history plus the two workbench side toggles.
 	useGlobalHotkeys({
 		onProjects: hasActiveWorkspace
 			? () => {
@@ -107,8 +102,6 @@ export function Shell() {
 									<span data-testid="scope-branch" className="truncate text-text-muted">
 										{activeWorkspace.branch}
 									</span>
-									{/* User-owned Default/external workspaces have no ThinkRail creation provenance,
-									    so "from <base>" would make a promise the app cannot support. */}
 									{isUserOwnedWorkspace(activeWorkspace) ? null : (
 										<span
 											data-testid="scope-base"
@@ -162,7 +155,6 @@ export function Shell() {
 					<WorkspaceWorkbench key={activeWorkspaceId} workspaceId={activeWorkspaceId} />
 				</div>
 			) : (
-				// No active workspace — the separately-persisted Welcome layout has only the Projects region.
 				<div
 					data-testid="welcome-shell-layout"
 					data-left-collapsed={welcomeProjects.collapsed}

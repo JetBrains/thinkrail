@@ -1,5 +1,3 @@
-// Tier-1 deterministic verdicts — the BINDING pass/fail vocabulary, evaluated after the run against the
-// frozen event log + workspace. Never calls a model: fully reproducible given the same log.
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { EventLog } from "./events";
@@ -30,7 +28,6 @@ function pathOf(args: Record<string, unknown>): string {
 }
 
 export const checks = {
-	/** The skill was loaded (its SKILL.md read). */
 	expectSkillRead(name: string): Check {
 		const checkName = `skill "${name}" read`;
 		return {
@@ -42,7 +39,6 @@ export const checks = {
 		};
 	},
 
-	/** None of these skills were loaded. */
 	expectNoSkillRead(names: string[]): Check {
 		const checkName = `no skill of [${names.join(", ")}] read`;
 		return {
@@ -55,7 +51,6 @@ export const checks = {
 		};
 	},
 
-	/** Skill `first` was loaded before skill `second` (router before worker). */
 	expectOrdering(first: string, second: string): Check {
 		const checkName = `skill "${first}" read before "${second}"`;
 		return {
@@ -97,7 +92,6 @@ export const checks = {
 		};
 	},
 
-	/** The file exists (and matches, when a matcher is given). */
 	expectFile(relative: string, matcher?: RegExp | ((content: string) => boolean)): Check {
 		const checkName = `file ${relative}${matcher ? " matches" : " exists"}`;
 		return {
@@ -113,7 +107,6 @@ export const checks = {
 		};
 	},
 
-	/** The file is a well-formed spec: frontmatter parses and carries `id` + `type`. */
 	expectSpecValid(relative: string): Check {
 		const checkName = `spec ${relative} valid`;
 		return {
@@ -135,7 +128,6 @@ export const checks = {
 		};
 	},
 
-	/** Escape hatch — any predicate over the frozen log + workspace. */
 	custom(name: string, run: (ctx: CheckContext) => boolean, detail = ""): Check {
 		return {
 			name,
@@ -144,7 +136,6 @@ export const checks = {
 	},
 };
 
-/** Evaluate all checks; the scenario asserts every result passes. */
 export function runChecks(checkList: Check[], ctx: CheckContext): CheckResult[] {
 	return checkList.map((check) => check.run(ctx));
 }

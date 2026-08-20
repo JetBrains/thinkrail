@@ -13,29 +13,8 @@ import {
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { seedExternalCwdSessions, seedWorkspaceSession } from "./fixtures/sessions";
 
-// No-agent (see composer.live.spec.ts for the @agent-tagged composer suite): the Ctrl+R history-recall
-// overlay never touches the agent — `openWorkspaceChat` creates a chat session but sends nothing to it.
-// `history.search` runs against the two deterministic sessions `seedExternalCwdSessions` seeds for the
-// deliberately unmapped `E2E_EXTERNAL_CWD` (see fixtures/sessions.ts): "deploy the docs site" / "fix the
-// flaky watcher test" (+ an assistant reply containing "the debounce window overlaps") and, in a second
-// session, "update dependency pins".
-//
-// Deviation from the brief's literal wording: Step 2 describes querying "flaky" and expecting BOTH a
-// prompt hit ("fix the flaky watcher test") and a message hit ("...debounce window overlaps...") to
-// surface for the same query. That pair isn't reachable — `historyIndex.ts`'s `matchesTerms` matches each
-// transcript entry independently, and "flaky" only appears in the user prompt, never in the assistant
-// reply. Querying "fix" instead matches both entries (a direct substring of the prompt, and a
-// case-insensitive substring of "Fixed" in the reply) and otherwise exercises the exact same scenario the
-// brief describes — see task-A7-report.md for the full writeup.
-
 type SeededMessages = Parameters<typeof seedWorkspaceSession>[1]["messages"];
 
-/**
- * Open a disk-only chat from History without paying for a throwaway git worktree. A live Default-workspace
- * chat supplies the active-chat baseline while the seeded session remains history-only; reloading before the
- * disk write prevents an in-flight session list from hydrating it early. The helper returns only after the
- * history affordance itself is ready.
- */
 async function openSeededClosedChat(page: Page, messages: SeededMessages) {
 	await openFixtureProject(page);
 	await enterDefaultWorkspace(page);
@@ -57,8 +36,6 @@ async function openSeededClosedChat(page: Page, messages: SeededMessages) {
 	await expect(closedChat).toBeVisible();
 	await closedChat.click();
 
-	// The prior live chat's composer can remain visible while the disk session hydrates. Wait for every
-	// seeded user turn so the returned input belongs to the reopened chat and recall has its full source.
 	const userMessageCount = messages.filter((message) => message.role === "user").length;
 	await expect(page.locator('[data-testid="chat-message"][data-role="user"]')).toHaveCount(
 		userMessageCount,
@@ -85,11 +62,6 @@ test("Ctrl+R opens history recall, cycles scope to all, zooms to messages, inser
 	page,
 }) => {
 	await openWorkspaceChat(page);
-	// `openWorkspaceChat` → `openAppFresh` → `resetState()` unconditionally wipes `E2E_PI_AGENT_DIR/sessions`
-	// (see its jsdoc: stale sessions must be cleared so they don't resurface in a reused worktree) — which
-	// also empties the external-cwd fixture `globalSetup` seeded once for the whole run. Re-seed per-test,
-	// the same way `seedWorkspaceSession`'s own doc comment describes doing "during a test"; the write is
-	// idempotent (same ids/timestamps every call), so re-seeding here never duplicates or drifts the fixture.
 	seedExternalCwdSessions();
 
 	const input = page.getByTestId("chat-input");
@@ -99,54 +71,38 @@ test("Ctrl+R opens history recall, cycles scope to all, zooms to messages, inser
 	const promptItems = page.locator('[data-testid="history-item"][data-kind="prompt"]');
 	const messageItems = page.locator('[data-testid="history-item"][data-kind="message"]');
 
-	// Ctrl+R from the composer opens the overlay in `compact` stage, focused on the (seeded-empty) query,
-	// defaulted to `workspace` scope.
 	await input.press("Control+r");
 	await expect(overlay).toBeVisible();
 	await expect(overlay).toHaveAttribute("data-stage", "compact");
 	await expect(query).toBeFocused();
 	await expect(scopeBadge).toHaveAttribute("data-scope", "workspace");
 
-	// Query "fix" (see file-header deviation note), then cycle scope workspace → project → all (2 presses)
-	// so the deliberately-unmapped external-cwd fixture sessions are in scope.
 	await query.fill("fix");
 	await query.press("Control+r");
 	await query.press("Control+r");
 	await expect(scopeBadge).toHaveAttribute("data-scope", "all");
 	await expect(scopeBadge).toContainText("All");
 	await expect(promptItems.filter({ hasText: "fix the flaky watcher test" })).toBeVisible();
-	// Exactly one prompt matches "fix" across the seeded fixtures — the Prompts counter is "shown/total".
 	await expect(page.getByTestId("history-counts")).toHaveText("1/1");
 
-	// Tab zooms to `zoomed` (both sections); the assistant reply surfaces as a message hit, flagged as not
-	// belonging to a ThinkRail workspace (the fixture's cwd is deliberately unmapped — see the file header).
 	await query.press("Tab");
 	await expect(overlay).toHaveAttribute("data-stage", "zoomed");
 	const debounceHit = messageItems.filter({ hasText: "debounce window overlaps" });
 	await expect(debounceHit).toBeVisible();
 	await expect(debounceHit).toContainText("not a ThinkRail workspace");
-	// messages is assistant-only — "fix the flaky watcher test" (user-role) no longer reappears as a
-	// message (its jump anchor lives on the prompt hit above instead); only the assistant reply
-	// matches "fix" (via "Fixed"). The Messages counter is the second `history-counts` (Prompts renders
-	// first).
 	await expect(page.getByTestId("history-counts").last()).toHaveText("1/1");
 
-	// ↓ moves the flat-list selection off the prompt and onto that (unmapped) message hit; Enter on an
-	// unmapped message hit is a deliberate no-op — the overlay stays open and the draft is untouched.
 	await query.press("ArrowDown");
 	await query.press("Enter");
 	await expect(overlay).toBeVisible();
 	await expect(input).toHaveValue("");
 
-	// ↑ moves the selection back onto the prompt hit. Enter now inserts it into the composer, focuses it,
-	// and closes the overlay.
 	await query.press("ArrowUp");
 	await query.press("Enter");
 	await expect(overlay).toBeHidden();
 	await expect(input).toHaveValue("fix the flaky watcher test");
 	await expect(input).toBeFocused();
 
-	// Draft preservation: a fresh draft survives Ctrl+R → mutating the query → Esc leaves it untouched.
 	await input.fill("my draft");
 	await input.press("Control+r");
 	await expect(overlay).toBeVisible();
@@ -156,14 +112,6 @@ test("Ctrl+R opens history recall, cycles scope to all, zooms to messages, inser
 	await expect(overlay).toBeHidden();
 	await expect(input).toHaveValue("my draft");
 
-	// Cmd/Ctrl+Enter on a selected prompt hit inserts AND submits, reusing the composer's own send path.
-	// `onSubmit` appends the user message optimistically, so this assertion needs no provider result; the
-	// turn is stopped below as soon as the send path is covered. Re-open + re-navigate to the same hit
-	// rather than reusing the overlay instance closed by the Enter-insert above. `ControlOrMeta` is the
-	// cross-platform modifier alias (Meta on macOS, Control elsewhere) — it matches the app's own check on
-	// both the
-	// Composer's and the overlay's key handlers (`e.metaKey || e.ctrlKey`), so this exercises the same
-	// gesture a real user would make on either platform.
 	await input.press("Control+r");
 	await query.fill("fix");
 	await query.press("Control+r");
@@ -178,18 +126,12 @@ test("Ctrl+R opens history recall, cycles scope to all, zooms to messages, inser
 			.locator('[data-testid="chat-message"][data-role="user"]')
 			.filter({ hasText: "fix the flaky watcher test" }),
 	).toBeVisible();
-	// Settle before resetState removes the transcript — a later append could recreate it headerless.
 	await settleSubmittedTurn(page);
 });
 
 test("Cmd/Ctrl+Enter from the overlay sends pending image attachments with the recalled prompt and clears them", async ({
 	page,
 }) => {
-	// Regression (Air review): the overlay's insert-and-send used to call ChatView's `onSubmit` directly,
-	// bypassing the composer's own submit seam — the pending image was silently dropped from the send and
-	// its stale thumbnail stayed attached to the next message. Tap the app's WebSocket before it connects
-	// (the live-refresh spec's pattern, `framesent` side) so the assertion covers the actual wire payload
-	// — a `session.prompt` request carrying `images` — not just the thumbnails' visible state.
 	const sentFrames: string[] = [];
 	page.on("websocket", (ws) => {
 		ws.on("framesent", (frame) => {
@@ -198,15 +140,13 @@ test("Cmd/Ctrl+Enter from the overlay sends pending image attachments with the r
 	});
 
 	await openWorkspaceChat(page);
-	seedExternalCwdSessions(); // re-seed after resetState — see the first test's note
+	seedExternalCwdSessions();
 
 	const input = page.getByTestId("chat-input");
 	const overlay = page.getByTestId("history-overlay");
 	const query = page.getByTestId("history-query");
 	const thumbnails = page.getByTestId("composer-images");
 
-	// Attach an image the way a user does — paste. A constructed ClipboardEvent must be dispatched in
-	// page context (Playwright's keyboard can't carry files); React's onPaste reads `e.clipboardData`.
 	await input.evaluate((el) => {
 		const dt = new DataTransfer();
 		dt.items.add(
@@ -217,10 +157,8 @@ test("Cmd/Ctrl+Enter from the overlay sends pending image attachments with the r
 		);
 	});
 	await expect(thumbnails).toBeVisible();
-	// The attachment chip shows the file's NAME (file-chip rendering; the mime type is no longer shown).
 	await expect(thumbnails).toContainText("pixel.png");
 
-	// Recall a prompt (same navigation as above: query "fix", cycle scope to `all`) and insert-and-send.
 	await input.press("Control+r");
 	await query.fill("fix");
 	await query.press("Control+r");
@@ -233,8 +171,6 @@ test("Cmd/Ctrl+Enter from the overlay sends pending image attachments with the r
 	await query.press("ControlOrMeta+Enter");
 	await expect(overlay).toBeHidden();
 
-	// The send went through the composer's own seam: the text is in the transcript, the draft is empty,
-	// and the thumbnail strip is cleared with it — nothing stale left attached to the next message.
 	await expect(
 		page
 			.locator('[data-testid="chat-message"][data-role="user"]')
@@ -243,9 +179,6 @@ test("Cmd/Ctrl+Enter from the overlay sends pending image attachments with the r
 	await expect(input).toHaveValue("");
 	await expect(thumbnails).toBeHidden();
 
-	// And the wire request really carried the attachment (the frame may land a beat after the UI
-	// updates — poll). Whether the host accepts or rejects it is immaterial: the payload proves the image
-	// went with the text.
 	await expect(() => {
 		const prompt = sentFrames.find(
 			(f) => f.includes('"session.prompt"') && f.includes("fix the flaky watcher test"),
@@ -254,7 +187,6 @@ test("Cmd/Ctrl+Enter from the overlay sends pending image attachments with the r
 		expect(prompt).toContain('"images"');
 		expect(prompt).toContain('"image/png"');
 	}).toPass({ timeout: 5000 });
-	// As above: settle before this test's state is removed (the e2e host is shared across tests).
 	await settleSubmittedTurn(page);
 });
 
@@ -271,15 +203,11 @@ test("empty query in chat scope shows the empty state for a session with no hist
 	await input.press("Control+r");
 	await expect(overlay).toBeVisible();
 
-	// `openOverlay` always resets scope to `workspace`; reaching `chat` takes 3 forward cycles:
-	// workspace → project → all → chat.
 	await query.press("Control+r");
 	await query.press("Control+r");
 	await query.press("Control+r");
 	await expect(scopeBadge).toHaveAttribute("data-scope", "chat");
 
-	// This chat session was just created and never sent to — no prompts/messages of its own, so an empty
-	// query (which otherwise matches everything) still turns up nothing.
 	await expect(overlay).toContainText("no matches");
 });
 
@@ -290,28 +218,14 @@ test("Ctrl+R dismisses an open mention menu instead of overlapping it", async ({
 	const overlay = page.getByTestId("history-overlay");
 	const mentionMenu = page.getByTestId("mention-menu");
 
-	// `@` alone matches every root-level entry (`fs.readDir` with an empty prefix) — the fixture repo
-	// always has files at its root, so the mention menu is guaranteed to have candidates to show.
 	await input.fill("@");
 	await expect(mentionMenu).toBeVisible();
 
-	// Regression: both floating panels anchor at the same `bottom-full` rect above the composer, so Ctrl+R
-	// must dismiss the mention menu rather than paint the history overlay on top of it
-	// (`Composer.tsx`'s Ctrl+R guard calls `setDismissed(true)` before `onHistoryOpen()`).
 	await input.press("Control+r");
 	await expect(overlay).toBeVisible();
 	await expect(mentionMenu).not.toBeVisible();
 });
 
-// A9: plain `↑`/`↓` recall (no Ctrl+R, no query typing) steps through *this chat's own* prior prompts — it
-// needs a chat whose runtime actually has prior user turns, so `openWorkspaceChat`'s brand-new session
-// (never sent to) doesn't do; seed one via `seedWorkspaceSession` at the already-seeded Default workspace's
-// canonical fixture-repo cwd and open it. Simplest way in: the `chat-history` / `closed-chat-item` reopen flow
-// (`WorkspaceWorkbench.tsx`) rather than the search-and-jump flow `history-jump.spec.ts` already covers — a
-// disk-only session surfaces there the moment its workspace becomes active. No `historyIndex` revalidation
-// wait is needed here (contrast the 2.1s waits in `history-jump.spec.ts`): `session.list` reads pi's
-// `SessionManager.list` straight off disk on every call, it isn't behind the throttled `HistoryIndex`
-// singleton that backs `history.search`.
 test("plain ArrowUp/ArrowDown recall steps through this chat's own prior prompts, a diverging edit exits the session, and the history button opens the overlay", async ({
 	page,
 }) => {
@@ -327,20 +241,16 @@ test("plain ArrowUp/ArrowDown recall steps through this chat's own prior prompts
 		{ role: "user", text: "write a test for the jitter", timestamp: 1_700_400_004_000 },
 		{ role: "assistant", text: "Added a test.", timestamp: 1_700_400_005_000 },
 	]);
-	// The reopened chat's transcript is restored, but its *draft* is fresh — recall must start from empty.
 	await expect(input).toHaveValue("");
-	// Newest first: ArrowUp on the empty field recalls the latest prompt, then steps older.
 	await input.press("ArrowUp");
 	await expect(input).toHaveValue("write a test for the jitter");
 	await input.press("ArrowUp");
 	await expect(input).toHaveValue("add a jittered ceiling to the backoff");
 	await input.press("ArrowUp");
 	await expect(input).toHaveValue("audit the retry backoff");
-	// Clamped at the oldest entry — one more ArrowUp doesn't wrap around.
 	await input.press("ArrowUp");
 	await expect(input).toHaveValue("audit the retry backoff");
 
-	// ArrowDown steps back newer; past the newest restores the empty draft.
 	await input.press("ArrowDown");
 	await expect(input).toHaveValue("add a jittered ceiling to the backoff");
 	await input.press("ArrowDown");
@@ -348,46 +258,18 @@ test("plain ArrowUp/ArrowDown recall steps through this chat's own prior prompts
 	await input.press("ArrowDown");
 	await expect(input).toHaveValue("");
 
-	// A diverging edit exits the recall session: the next ArrowUp must not step — the value is unchanged
-	// besides the edit itself.
-	//
-	// Typed as a real keystroke, NOT `fill()`. `fill()` is a CDP select-all + `Input.insertText` driven from
-	// outside React's event batching, so its single `input` event races the controlled `value`'s round trip
-	// through the store: when the prop has not caught up, React reverts the DOM to the older draft, the edit
-	// is lost, and the session never sees anything diverging — the recalled entry is still what the field
-	// holds, so the next ArrowUp steps to the *older* prompt and overwrites it. That reverted-edit failure is
-	// an artifact of how `fill()` delivers the change (a real paste is one input event inside React's
-	// batching, and is fine), and it made this test intermittently red for a reason that had nothing to do
-	// with recall. A keypress is one event, one commit — and it is what the assertion below actually claims.
 	await input.press("ArrowUp");
 	await expect(input).toHaveValue("write a test for the jitter");
 	await input.press("End");
 	await input.press("!");
-	// Confirm the edit committed before stepping, so the ArrowUp below can only be testing the session exit.
 	await expect(input).toHaveValue("write a test for the jitter!");
 	await input.press("ArrowUp");
 	await expect(input).toHaveValue("write a test for the jitter!");
 
-	// The history button — the tap path on mobile, a discoverability affordance on desktop — opens the
-	// exact same overlay `Ctrl+R` does.
 	await page.getByTestId("history-open").click();
 	await expect(page.getByTestId("history-overlay")).toBeVisible();
 });
 
-// Regression for a real flake caught in the test above: `Composer`'s `focusCaret` used to move the caret
-// via a bare `requestAnimationFrame`, which only guarantees "before the next paint" — leaving a gap after
-// the triggering keystroke's task ends where another actor touching the same textarea's selection (e.g.
-// Playwright's `fill`, which does select-all then insert-text as separate steps) could run first. If that
-// stale RAF fired between `fill`'s select-all and insert steps, its `setSelectionRange(pos, pos)` collapsed
-// the select-all to a bare caret, so the insert appended instead of replacing — producing a doubled
-// `oldValue + newValue` (seen as `"write a test for the jitterwrite a test for the jitter!"` under
-// parallel-worker contention). `focusCaret` now moves the caret from a `useLayoutEffect`, which commits
-// synchronously in the same task as the triggering keystroke — there's no longer a gap for `fill` (or any
-// other follow-up interaction) to land in. This mechanism doesn't depend on Playwright specifically — any
-// fast selection-replacing interaction right after a recall step could have raced the old stale RAF — so
-// this is a real feature fix, not test-only synchronization; CPU-throttling below only makes an already-
-// closed race window observable within a short, deterministic test rather than needing rare real-world
-// timing (see `Composer.tsx`'s `focusCaret` comment for the fuller mechanism writeup).
 test("a recall step immediately followed by a full-value replace never doubles the value, even under CPU contention", async ({
 	page,
 }) => {
@@ -398,10 +280,6 @@ test("a recall step immediately followed by a full-value replace never doubles t
 	]);
 	await expect(input).toHaveValue("");
 
-	// Throttle the main thread so any reintroduced deferred-callback gap (RAF or otherwise) would widen
-	// enough to be caught reliably within a handful of iterations — this is what let the old RAF-based
-	// code reproduce the doubled value in ~3% of iterations during root-cause diagnosis. `press` and
-	// `fill` still auto-wait/retry as usual; only real wall-clock CPU speed is reduced.
 	const client = await page.context().newCDPSession(page);
 	await client.send("Emulation.setCPUThrottlingRate", { rate: 4 });
 
@@ -410,19 +288,11 @@ test("a recall step immediately followed by a full-value replace never doubles t
 		await expect(input).toHaveValue("write a test for the jitter");
 		const replacement = `edit ${i}`;
 		await input.fill(replacement);
-		// A snapshot read, not the auto-retrying `toHaveValue` matcher: the corruption this pins is an
-		// immediate, permanent doubling at `fill`-completion time, not a transient state that later
-		// settles — polling could mask a regression that briefly shows the wrong value.
 		expect(await input.inputValue()).toBe(replacement);
 		await input.fill("");
 	}
 });
 
-// Regression: `recentPrompts`'s dedup must keep a repeated prompt's NEWEST occurrence (recency-first,
-// matching the server history index's own ranking rule and the atuin/fzf convention) — not its oldest.
-// "alpha" is said twice, "beta" once, in between: the first ArrowUp must recall "alpha" (the most recent
-// prompt), the second must recall "beta", and a third must stay clamped on "beta" — proving "alpha" backs
-// exactly one recall slot (its newest), not two.
 test("a prompt repeated earlier in the chat recalls at its most recent position, deduped to one entry", async ({
 	page,
 }) => {
@@ -440,16 +310,10 @@ test("a prompt repeated earlier in the chat recalls at its most recent position,
 	await expect(input).toHaveValue("alpha");
 	await input.press("ArrowUp");
 	await expect(input).toHaveValue("beta");
-	// Clamped at "beta" — if the earlier "alpha" occurrence were a distinct entry, this would step to it.
 	await input.press("ArrowUp");
 	await expect(input).toHaveValue("beta");
 });
 
-// A9's mobile-discoverability half: `HistoryOverlay` sizes itself with `left-sm right-sm` insets (see
-// `HistoryOverlay.tsx`) rather than a fixed pixel width, specifically so it can't overflow a narrow
-// container. The recursive desktop workbench is not itself the future mobile single-view projection, so
-// this isolates the overlay's own sizing at a narrow (~390px, small-phone) viewport. Resize only for the
-// check itself (after normal desktop-sized setup) so a compressed workbench cannot make setup flaky.
 test("the history overlay stays inside the viewport and its query stays focusable at a narrow (~390px) width", async ({
 	page,
 }) => {
@@ -475,20 +339,11 @@ test("the history overlay stays inside the viewport and its query stays focusabl
 	await expect(query).toBeFocused();
 });
 
-// Reviewer-flagged regression: the results list itself scrolls (mouse wheel, drag), but before this fix
-// keyboard-only navigation never moved that scroll position on its own — repeatedly pressing ArrowDown
-// could walk `selected` well past the bottom of what's currently visible, leaving the highlighted row
-// entirely offscreen inside the `overflow-y-auto` results container. `HistoryOverlay` now scrolls the
-// selected row into view (`Element.scrollIntoView({ block: "nearest" })`) whenever the selection changes.
 test("ArrowDown repeatedly scrolls the keyboard-selected row into view inside the results container", async ({
 	page,
 }) => {
 	await openFixtureProject(page);
 	const workspace = await createWorkspaceViaDialog(page);
-	// 30 distinct prompts, all in this workspace's own cwd — comfortably more than fit inside the compact
-	// stage's `max-h-[40vh]`. An empty query in the default "workspace" scope (no scope cycling needed)
-	// surfaces every one of them as a recent prompt (see `historyIndex.test.ts`'s "(d) empty query returns
-	// recent prompts"), well under the 50-item server cap, so none get paged out.
 	seedWorkspaceSession(workspace.worktreePath, {
 		messages: Array.from({ length: 30 }, (_, i) => ({
 			role: "user" as const,
@@ -510,44 +365,26 @@ test("ArrowDown repeatedly scrolls the keyboard-selected row into view inside th
 	const results = page.getByTestId("history-results");
 	const selectedRow = page.locator('[data-testid="history-item"][data-selected="true"]');
 
-	// Walk the selection deep into the list — well past what the compact stage can show without scrolling.
 	for (let i = 0; i < 25; i++) {
 		await query.press("ArrowDown");
 	}
 	await expect(selectedRow).toHaveCount(1);
 
-	// The selected row's own layout box (real position, regardless of the container's overflow-clipping)
-	// must sit entirely within the results container's box — i.e. the container actually scrolled to bring
-	// it into view, rather than leaving it below the visible range.
 	const resultsBox = await results.boundingBox();
 	const rowBox = await selectedRow.boundingBox();
 	expect(resultsBox).not.toBeNull();
 	expect(rowBox).not.toBeNull();
-	// ±1px, like the Changes-row layout pins: the UI line-heights are truncated repeating ratios
-	// (`1.4285714` for 10/7), so at the 14px scale a row box is 30.0625px, not a whole number, and
-	// `scrollIntoView`'s fractional scrollTop lands up to ~1/16px shy of flush. That residue is invisible
-	// and is not what this test is about — "did the container scroll at all" is, and a row left below the
-	// visible range misses by tens of pixels, not by one.
 	if (resultsBox && rowBox) {
 		expect(rowBox.y).toBeGreaterThanOrEqual(resultsBox.y - 1);
 		expect(rowBox.y + rowBox.height).toBeLessThanOrEqual(resultsBox.y + resultsBox.height + 1);
 	}
 });
 
-// R1: the zoomed stage's two-pane preview (`data-testid="history-preview"`) shows the keyboard-selected
-// item's FULL text — never the row's truncated first line — with query terms highlighted the same way a
-// row highlights its own text (`Highlight` is reused verbatim, never forked). The compact stage has no
-// preview pane in the DOM at all (not merely hidden), and moving the keyboard selection swaps the preview
-// to match the newly-selected item.
 test("the zoomed stage's preview pane shows the selected item's full text, including a tail truncated in its row, and updates on ArrowDown; the compact stage has no preview at all", async ({
 	page,
 }) => {
 	await openFixtureProject(page);
 	const workspace = await createWorkspaceViaDialog(page);
-	// A 3-line, >200-char prompt whose FIRST line never mentions the tail marker "zephyr9000" —
-	// `PromptRow` shows only `hit.text.split("\n")[0]`, so a hit whose full text matched the query can
-	// still show a row whose visible first line doesn't contain the very term that matched. That's the
-	// "truncated in the row" case R1's preview pane exists for.
 	const longPrompt = [
 		"Investigate the deployment pipeline failure end to end before the next release window opens.",
 		"Check the retry policy, the queue backlog depth, and every healthcheck threshold across all services.",
@@ -571,7 +408,6 @@ test("the zoomed stage's preview pane shows the selected item's full text, inclu
 	const query = page.getByTestId("history-query");
 	const preview = page.getByTestId("history-preview");
 
-	// Compact stage: the preview pane doesn't exist in the DOM at all, not merely hidden.
 	await expect(preview).toHaveCount(0);
 
 	await query.fill("zephyr9000");
@@ -579,33 +415,24 @@ test("the zoomed stage's preview pane shows the selected item's full text, inclu
 		.locator('[data-testid="history-item"][data-kind="prompt"]')
 		.filter({ hasText: "Investigate the deployment pipeline" });
 	await expect(longRow).toBeVisible();
-	// The row shows only the truncated first line — the tail term that actually matched never appears.
 	await expect(longRow).not.toContainText("zephyr9000");
 
 	await query.press("Tab");
 	await expect(overlay).toHaveAttribute("data-stage", "zoomed");
 	await expect(preview).toBeVisible();
-	// The preview shows the FULL text, including the tail the row truncated away.
 	await expect(preview).toContainText("zephyr9000");
 	await expect(preview).toContainText("Investigate the deployment pipeline failure");
 
-	// Broaden to an empty query so both seeded prompts are in the flat list; newest first ("a shorter
-	// unrelated prompt", seeded one second later) is selected initially — the preview follows.
 	await query.fill("");
 	await expect(page.locator('[data-testid="history-item"][data-kind="prompt"]')).toHaveCount(2);
 	await expect(preview).toContainText("a shorter unrelated prompt");
 	await expect(preview).not.toContainText("zephyr9000");
 
-	// ArrowDown moves the keyboard selection onto the long prompt — the preview updates to match.
 	await query.press("ArrowDown");
 	await expect(preview).toContainText("zephyr9000");
 	await expect(preview).toContainText("Investigate the deployment pipeline failure");
 });
 
-// R1: at a narrow (~390px) viewport, the zoomed stage's preview pane stacks BELOW the results list
-// instead of beside it — the two-pane wrapper switches to a column flex layout under the `md` breakpoint
-// (the same convention `SettingsDialog`'s own two-pane shell uses). Keeps the existing 390px overlay-
-// sizing e2e (above) passing unmodified — this is a separate assertion about the *zoomed* stage only.
 test("at a narrow (~390px) viewport, the zoomed stage's preview pane stacks below the results list, both visible", async ({
 	page,
 }) => {
@@ -642,16 +469,10 @@ test("at a narrow (~390px) viewport, the zoomed stage's preview pane stacks belo
 	expect(resultsBox).not.toBeNull();
 	expect(previewBox).not.toBeNull();
 	if (resultsBox && previewBox) {
-		// Stacked, list first: the preview's top sits at or below the list's own bottom edge.
 		expect(previewBox.y).toBeGreaterThanOrEqual(resultsBox.y + resultsBox.height - 1);
 	}
 });
 
-// R2: the scope badge is now a dropdown picker (the discoverable mouse path — atuin's "cycling is
-// invisible" lesson) alongside the unchanged `Ctrl+R` cycle. Also proves the brief's sharp edge: while
-// the picker is open, ArrowDown belongs to the menu, never to the overlay's own results selection —
-// Radix's portaled content is a sibling of the query `<input>` the overlay's key handler is bound to,
-// never its descendant, so there's nothing for the two handlers to double up on; this test is the proof.
 test("the scope badge opens a picker that selects a scope directly without disturbing the results selection, returns focus to the query input, and Ctrl+R still cycles afterward", async ({
 	page,
 }) => {
@@ -681,11 +502,9 @@ test("the scope badge opens a picker that selects a scope directly without distu
 	const scopeOptions = page.getByTestId("history-scope-option");
 	const selectedRow = page.locator('[data-testid="history-item"][data-selected="true"]');
 
-	// Default "workspace" scope, empty query: both seeded prompts, newest ("beta…") first and selected.
 	await expect(page.locator('[data-testid="history-item"][data-kind="prompt"]')).toHaveCount(2);
 	await expect(selectedRow).toContainText("beta prompt for the scope picker test");
 
-	// Click the badge → 4 options, correct data-scopes, in cycle order.
 	await scopeBadge.click();
 	await expect(scopeOptions).toHaveCount(4);
 	await expect(scopeOptions.nth(0)).toHaveAttribute("data-scope", "chat");
@@ -693,12 +512,9 @@ test("the scope badge opens a picker that selects a scope directly without distu
 	await expect(scopeOptions.nth(2)).toHaveAttribute("data-scope", "project");
 	await expect(scopeOptions.nth(3)).toHaveAttribute("data-scope", "all");
 
-	// Sharp edge: ArrowDown while the menu is open belongs to the menu, not the overlay's results list.
 	await page.keyboard.press("ArrowDown");
 	await expect(selectedRow).toContainText("beta prompt for the scope picker test");
 
-	// Click "Everywhere" selects it directly (no Ctrl+R needed), closes the menu, and returns focus to
-	// the query input.
 	await scopeOptions.filter({ hasText: "Everywhere" }).click();
 	await expect(scopeBadge).toHaveAttribute("data-scope", "all");
 	await expect(query).toBeFocused();
@@ -708,22 +524,10 @@ test("the scope badge opens a picker that selects a scope directly without distu
 			.filter({ hasText: "deploy the docs site" }),
 	).toBeVisible();
 
-	// Ctrl+R still cycles after the mouse pick — from "all" it wraps forward to "chat".
 	await query.press("Control+r");
 	await expect(scopeBadge).toHaveAttribute("data-scope", "chat");
 });
 
-// The chord and the dismissal both had exactly one handler, and both were bound to a single element —
-// `Ctrl+R` to the composer textarea, `Escape` to the overlay's query input. So with focus anywhere else
-// the browser reloaded the page on Ctrl+R, and an overlay whose input had lost focus (a click back into
-// the composer, an errant click on the page) could not be dismissed by keyboard at all. Both are now
-// owned centrally: `shell/useGlobalHotkeys` swallows Ctrl+R app-wide and routes it, and the overlay
-// registers a window-level Escape while it is open.
-//
-// One caveat this suite cannot assert: that the *browser* no longer reloads. Playwright's synthetic
-// key events are delivered to the renderer and never reach Chromium's own shortcut layer, so Ctrl+R in a
-// test never reloaded in the first place. What is covered here is the functional half — the chord being
-// seen, and acted on, from outside the composer.
 test("Ctrl+R and Escape are owned app-wide: both work with focus outside the composer", async ({
 	page,
 }) => {
@@ -734,25 +538,17 @@ test("Ctrl+R and Escape are owned app-wide: both work with focus outside the com
 	const overlay = page.getByTestId("history-overlay");
 	const query = page.getByTestId("history-query");
 	const scopeBadge = page.getByTestId("history-scope");
-	// An inert bit of the topbar — clicking it parks focus well outside the chat subtree without
-	// triggering anything.
 	const outside = page.getByTestId("scope-context");
 
-	// Ctrl+R with focus outside the chat opens the overlay and focuses its query, exactly as the chord
-	// from inside the composer does.
 	await outside.click();
 	await page.keyboard.press("Control+r");
 	await expect(overlay).toBeVisible();
 	await expect(query).toBeFocused();
 
-	// Escape with focus back in the composer — the reported bug: the overlay used to stay open forever.
 	await input.click();
 	await page.keyboard.press("Escape");
 	await expect(overlay).toBeHidden();
 
-	// Escape with focus nowhere in particular closes it too — and lands focus back in the prompt field,
-	// so typing just continues. (Without the refocus, closing unmounts the query input and focus falls to
-	// `<body>`: the overlay is gone but every keystroke after it is silently dropped.)
 	await page.keyboard.press("Control+r");
 	await expect(overlay).toBeVisible();
 	await outside.click();
@@ -762,8 +558,6 @@ test("Ctrl+R and Escape are owned app-wide: both work with focus outside the com
 	await page.keyboard.type("still typing");
 	await expect(input).toHaveValue("still typing");
 
-	// …and the caret comes back where it was, not at the end: park it mid-draft, round-trip the overlay,
-	// and the next keystrokes land at that same spot.
 	await input.click();
 	await page.keyboard.press("Home");
 	await page.keyboard.press("Control+r");
@@ -774,31 +568,21 @@ test("Ctrl+R and Escape are owned app-wide: both work with focus outside the com
 	await expect(input).toHaveValue("i am still typing");
 	await input.fill("");
 
-	// While the overlay is open, Ctrl+R still means "cycle the scope" — including from outside it, since
-	// the chord no longer depends on the query input holding focus.
 	await page.keyboard.press("Control+r");
 	await expect(scopeBadge).toHaveAttribute("data-scope", "workspace");
 	await outside.click();
 	await page.keyboard.press("Control+r");
 	await expect(scopeBadge).toHaveAttribute("data-scope", "project");
 
-	// Escape dismisses the INNERMOST layer: with the scope picker open it closes just the menu, leaving
-	// the overlay up. The window-level handler stands down while that menu is open, so Radix's own
-	// Escape is the only one that fires.
 	await scopeBadge.click();
 	await expect(page.getByTestId("history-scope-option")).toHaveCount(4);
 	await page.keyboard.press("Escape");
 	await expect(page.getByTestId("history-scope-option")).toHaveCount(0);
 	await expect(overlay).toBeVisible();
-	// The next Escape closes the overlay itself.
 	await page.keyboard.press("Escape");
 	await expect(overlay).toBeHidden();
 });
 
-// The one deliberate hole in the app-wide Ctrl+R swallow: inside a terminal the chord is the shell's
-// reverse-i-search and belongs to the PTY, so the global handler passes it straight through. The chat
-// tab is still the active center tab throughout (terminals are their own panel), so this is exactly the
-// case where the exclusion has to hold rather than a case where routing had nothing to do anyway.
 test("Ctrl+R inside a terminal belongs to the shell, not to history search", async ({ page }) => {
 	await openWorkspaceChat(page);
 	seedExternalCwdSessions();
@@ -807,25 +591,16 @@ test("Ctrl+R inside a terminal belongs to the shell, not to history search", asy
 	await visibleTerminal(page).locator(".xterm-helper-textarea").focus();
 	await page.keyboard.press("Control+r");
 
-	// No overlay — and the byte really reached the PTY: depending on what the CI/dev machine's login
-	// shell binds `^R` to, the screen shows either its reverse-search prompt (`bck-i-search`/
-	// `reverse-i-search`) or the literal `^R` echo. Either way the keystroke was the shell's, not ours;
-	// asserting only "no overlay" would also pass if the chord had been swallowed and dropped.
 	await expect(page.getByTestId("history-overlay")).toBeHidden();
 	await expect(visibleTerminalScreen(page)).toContainText(/i-search|\^R/i);
 });
 
-// The Air review's blocking finding: routing that resolves only "the active tab, if it's a chat" makes the
-// app-wide swallow *worse* than the bug it fixes over a file/diff tab — Ctrl+R is prevented, nothing opens,
-// and the shortcut silently dies exactly where Monaco and diffs live. The target now falls back to the
-// workspace's most recently opened chat and the request activates that tab atomically with itself.
 test("Ctrl+R from an active file tab switches to the chat and opens history search", async ({
 	page,
 }) => {
 	await openWorkspaceChat(page);
 	seedExternalCwdSessions();
 
-	// Open a file tab on top of the chat, so the center pane is Monaco/preview and no ChatView is mounted.
 	await page.getByTestId("tab-files").click();
 	const readme = page.getByTestId("file-node").filter({ hasText: "README.md" });
 	await expect(readme).toBeVisible();
@@ -834,11 +609,9 @@ test("Ctrl+R from an active file tab switches to the chat and opens history sear
 	await expect(fileTab).toHaveAttribute("data-active", "true");
 	await expect(page.getByTestId("chat-input")).toHaveCount(0);
 
-	// Ctrl+R with the file tab active (focus in the editor pane, not any chat surface).
 	await page.getByTestId("editor-pane").click();
 	await page.keyboard.press("Control+r");
 
-	// The chat tab is active again and its overlay is up, focused and ready to type.
 	await expect(page.getByTestId("editor-tab").filter({ hasText: "README.md" })).toHaveAttribute(
 		"data-active",
 		"false",
@@ -847,17 +620,6 @@ test("Ctrl+R from an active file tab switches to the chat and opens history sear
 	await expect(page.getByTestId("history-query")).toBeFocused();
 });
 
-// Regression: both of the app's letter chords used to be matched by `e.key` — the character a key
-// *produces*, which is layout-dependent. On a Russian layout R produces `к` and S produces `ы`, so both
-// guards bailed out before `preventDefault()` and the browser's own shortcuts won instead: `Ctrl+R`
-// reloaded the whole app (the exact thing `useGlobalHotkeys` exists to prevent) and `Ctrl+S` opened "Save
-// page as". Both now match `e.code`, the physical key, which no layout changes.
-//
-// CDP is the only way to drive a *trusted* event whose `key` and `code` disagree — Playwright's
-// `press("Control+r")` always sends the matching pair, so it passed both before and after the fix. Scope
-// note: a real reload is performed by the browser UI, not the renderer, so a CDP-dispatched chord cannot
-// exercise it. What this pins is that our handlers fire at all when `key` is non-Latin, which is precisely
-// what regressed.
 test("the Ctrl+R and Ctrl+S chords fire on a non-Latin keyboard layout", async ({ page }) => {
 	await openWorkspaceChat(page);
 	seedExternalCwdSessions();
@@ -870,33 +632,29 @@ test("the Ctrl+R and Ctrl+S chords fire on a non-Latin keyboard layout", async (
 		.filter({ hasText: "fix the flaky watcher test" });
 
 	const cdp = await page.context().newCDPSession(page);
-	/** Ctrl + a physical key, while the active layout produces a Cyrillic character for it. */
 	const pressCyrillicChord = async (key: string, code: string, virtualKeyCode: number) => {
 		for (const type of ["keyDown", "keyUp"] as const) {
 			await cdp.send("Input.dispatchKeyEvent", {
 				type,
 				key,
 				code,
-				modifiers: 2, // Ctrl
+				modifiers: 2,
 				windowsVirtualKeyCode: virtualKeyCode,
 			});
 		}
 	};
 	const pressCtrlR = () => pressCyrillicChord("к", "KeyR", 82);
 
-	// Ctrl+R from the composer still opens the overlay, even though `key` is `к`.
 	await page.getByTestId("chat-input").click();
 	await pressCtrlR();
 	await expect(overlay).toBeVisible();
 
-	// …and still cycles scope workspace → project → all, so the external-cwd fixture rows come into view.
 	await query.fill("flaky");
 	await pressCtrlR();
 	await pressCtrlR();
 	await expect(scopeBadge).toHaveAttribute("data-scope", "all");
 	await expect(promptRow).toBeVisible();
 
-	// Ctrl+S on that selected prompt row still reaches save-as-template rather than the browser's save dialog.
 	await pressCyrillicChord("ы", "KeyS", 83);
 	await expect(overlay).toBeHidden();
 	await expect(page.getByTestId("template-editor-dialog")).toBeVisible();

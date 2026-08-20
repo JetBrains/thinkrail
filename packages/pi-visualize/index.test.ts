@@ -8,7 +8,6 @@ type CapturedTool = {
 	execute: (id: string, params: unknown) => Promise<ExecResult>;
 };
 
-/** Run the extension factory with a fake `pi` and return the single registered tool. */
 function loadTool(): CapturedTool {
 	let captured: CapturedTool | undefined;
 	const fakePi = {

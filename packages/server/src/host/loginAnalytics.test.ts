@@ -5,9 +5,6 @@ import { join } from "node:path";
 import { initializeAnalytics, resetAnalyticsForTests } from "../analytics";
 import { dropLogin, recordLoginStart, trackLoginOutcome } from "./loginAnalytics";
 
-// The loginId→method correlation between `provider.loginStart` and the login channel's terminal
-// frame — the piece that gives `provider_login` an honest `oauth` / `api-key` method.
-
 let dataDir: string;
 const savedDataDir = process.env.THINKRAIL_DATA_DIR;
 
@@ -26,8 +23,6 @@ beforeEach(() => {
 	initializeAnalytics({
 		channel: "stable",
 		enabled: true,
-		// `env: {}` is load-bearing: `bun test` sets NODE_ENV=test, which the mute policy honors, so
-		// without a clean injected env this suite would assert against a noop sink (see analytics/mute.ts).
 		env: {},
 		fetchImpl: ((_url: string | URL | Request, init?: RequestInit) => {
 			sent.push(...JSON.parse(String(init?.body)).batch);
@@ -43,7 +38,6 @@ afterEach(() => {
 	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
 });
 
-/** Await until `sent` holds at least `count` events (posthog-node delivers async). */
 async function drained(count: number): Promise<void> {
 	const deadline = Date.now() + 2_000;
 	while (sent.length < count && Date.now() < deadline) await Bun.sleep(5);
@@ -57,7 +51,7 @@ function logins(): BatchEntry[] {
 test("an oauth success tracks provider_login {method: oauth}", async () => {
 	recordLoginStart("l1", "oauth");
 	trackLoginOutcome({ loginId: "l1", providerId: "anthropic", frame: { kind: "success" } });
-	await drained(3); // app_installed + app_started + provider_login
+	await drained(3);
 	expect(logins()[0]?.properties).toMatchObject({ provider: "anthropic", method: "oauth" });
 });
 
@@ -70,7 +64,7 @@ test("an api_key success tracks provider_login {method: api-key}; the provider i
 
 test("a success for an unknown loginId tracks nothing (fails closed, never a guessed method)", async () => {
 	trackLoginOutcome({ loginId: "ghost", providerId: "anthropic", frame: { kind: "success" } });
-	await drained(2); // just the boot lifecycle
+	await drained(2);
 	await Bun.sleep(25);
 	expect(logins()).toHaveLength(0);
 });

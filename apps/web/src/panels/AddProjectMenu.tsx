@@ -11,13 +11,6 @@ import {
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-/**
- * The shared "add a project" dropdown — Open project / Open GitHub (soon) / Recents. The **trigger is
- * supplied by the caller** (`children`, via Radix `asChild`) so it can hang off the projects-rail "+"
- * button *or* the Welcome screen's "Open project" card. `recentProjects` contains every known open +
- * closed record in last-opened order; `onOpen` runs the native picker and `onOpenRecent` opens/reactivates
- * one stable project by path.
- */
 export function AddProjectMenu({
 	recentProjects,
 	onOpen,

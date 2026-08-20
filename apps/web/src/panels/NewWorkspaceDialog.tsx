@@ -45,33 +45,8 @@ import { BranchPicker } from "./BranchPicker";
 import { useBranchList } from "./branches";
 import { enterDefaultWorkspace } from "./defaultWorkspace";
 
-/** Where the work runs: cut an isolated worktree, or enter the project folder (Default workspace). */
 type WorkspaceTarget = "worktree" | "default";
 
-/**
- * Reconcile the held pre-session model against the catalog: re-point to the same `{provider,id}` entry
- * (the refreshed object, whose `thinkingLevels` may differ). Null means "change nothing";
- * **`"unavailable"`** means "this model is gone — ask the host what to use instead" (the *replacement* is
- * never decided here; see below).
- *
- * Whether a model the catalog *lacks* may be declared gone turns on whether that catalog is authoritative
- * for the question, which is what `catalogFresh` says:
- *
- * - **fresh** — the list *currently held* is the installed result of an awaited forced refresh.
- *   `model.refresh` and the host's `resolveWireModel` read the same registry, and that refresh has
- *   finished, so a missing model really is gone — replacing it beats letting Create fail. (Provenance
- *   lives on the store beside `models` — so the next `model.list` install, from this dialog or any other
- *   consumer, drops it along with the list it described.)
- * - **not fresh** — the app-wide store copy, including anything `model.list` returned (its handler starts
- *   a detached refresh and answers from before it, so the registry can move underneath the reply).
- *   Substituting on that basis would replace a valid host-resolved default with a stale local entry, so
- *   an unconfirmable model is kept until a real refresh settles it.
- *
- * Neither the replacement nor the effort is decided here: `models[0]` would re-derive the host's
- * `pinned ?? available[0]` default policy client-side, so the caller asks `model.default` — authoritative,
- * and it returns an effort consistent with the model it names — exactly as the effort clamp already defers
- * to `model.clampThinking`. No path here invents a policy of its own.
- */
 export function reconcileModel(
 	models: readonly WireModel[],
 	model: WireModel,
@@ -82,24 +57,9 @@ export function reconcileModel(
 	return catalogFresh && models.length > 0 ? "unavailable" : null;
 }
 
-/** A shared pill-trigger look for the project + branch pickers (mockup `.pill`). */
 const PILL =
 	"flex h-8 min-w-0 items-center gap-sm rounded-[var(--radius-sm)] border border-control-border-default bg-clip-padding bg-control-bg px-sm tr-text-ui text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:border-control-border-active data-[open=true]:bg-control-bg-selected";
 
-/**
- * The start-working surface: a **target control** chooses where the work runs — an isolated worktree
- * ("Create workspace": pick a base branch, cut a worktree from it) or the project folder itself ("Work
- * in project folder": nothing is created, submit enters the built-in Default workspace). Either way:
- * say what to work on, pick a model + effort, submit → enter the target and **open a fresh chat there**
- * — a typed prompt is sent as its first message, an empty one leaves the composer ready (submitting the
- * start-working surface always lands in a chat, never on a bare receipt). The header is mode-aware so
- * it always names the operation truthfully.
- *
- * The only app-integration piece here: it wires the store + transport. `onCreated(ws)` fires **only when
- * a worktree was created** (folder mode creates nothing — it enters via `enterDefaultWorkspace`, whose
- * list is already fresh and whose activation drives the rail's auto-expand); it lets the parent
- * (ProjectTree) reload its list. The dialog itself kicks off the optional chat.
- */
 export function NewWorkspaceDialog({
 	open,
 	projectId,
@@ -109,11 +69,8 @@ export function NewWorkspaceDialog({
 	onCreated,
 }: {
 	open: boolean;
-	/** The project the "+" was clicked on — the picker's default (changeable). */
 	projectId: string;
-	/** Optional seed for the prompt hero (still fully editable) — e.g. Welcome's "Set up project". */
 	initialPrompt?: string;
-	/** Optional info strip above the prompt — e.g. what a seeded skill command does (copy owned by the opener). */
 	promptNote?: string;
 	onOpenChange: (open: boolean) => void;
 	onCreated: (workspace: Workspace) => void;
@@ -121,8 +78,6 @@ export function NewWorkspaceDialog({
 	const projects = useAppStore((s) => s.projects);
 
 	const [selectedProjectId, setSelectedProjectId] = useState(projectId);
-	// Every opener starts on the isolated-worktree side (task-welcome-trim made the entry points
-	// uniform — no opener-chosen target exists); the folder alternative is the in-dialog toggle.
 	const [target, setTarget] = useState<WorkspaceTarget>("worktree");
 	const [baseRef, setBaseRef] = useState<string>("");
 	const [prompt, setPrompt] = useState("");
@@ -134,12 +89,8 @@ export function NewWorkspaceDialog({
 	const [trusting, setTrusting] = useState(false);
 	const [manageSkills, setManageSkills] = useState(false);
 	const promptRef = useRef<HTMLTextAreaElement>(null);
-	// Whether this opening already asked the host to replace a model the catalog dropped (see below).
 	const hostDefaultAsked = useRef(false);
-	// Ties the two target radios into one native group, unique per dialog instance.
 	const targetGroupName = useId();
-	// The dialog content node — popovers portal into it so their lists stay scrollable under the Dialog's
-	// scroll lock (react-remove-scroll blocks wheel/trackpad on body-portaled content).
 	const [dialogEl, setDialogEl] = useState<HTMLElement | null>(null);
 
 	const focusPromptCaret = (position: number) => {
@@ -161,8 +112,6 @@ export function NewWorkspaceDialog({
 		},
 	});
 
-	// Reset the form each time the dialog opens, anchored to the project the "+" was clicked on and any
-	// seed prompt (empty by default).
 	useEffect(() => {
 		if (!open) return;
 		setSelectedProjectId(projectId);
@@ -172,9 +121,6 @@ export function NewWorkspaceDialog({
 		hostDefaultAsked.current = false;
 	}, [open, projectId, initialPrompt]);
 
-	// The picker's list is open projects only — if the selected one is closed by another client while this
-	// dialog is up, it drops out from under the picker. Close now rather than let `create()` round-trip to
-	// the host's now-enforced rejection.
 	useEffect(() => {
 		if (!open) return;
 		if (projects.some((p) => p.id === selectedProjectId)) return;
@@ -182,8 +128,6 @@ export function NewWorkspaceDialog({
 		toast.info("That project was closed");
 	}, [open, projects, selectedProjectId, onOpenChange]);
 
-	// Skills are previewed from the selected project's current checkout; the created worktree/session is
-	// authoritative if its base ref differs. Autocomplete is an enhancement, so failure degrades to empty.
 	useEffect(() => {
 		if (!open) return;
 		let cancelled = false;
@@ -198,8 +142,6 @@ export function NewWorkspaceDialog({
 		};
 	}, [open, selectedProjectId]);
 
-	// Whether the selected project ships committed skills — a count, so the trust notice is presence-gated
-	// (hidden when there's nothing to trust) and never renders the skills' names before trust.
 	useEffect(() => {
 		if (!open) return;
 		let cancelled = false;
@@ -215,8 +157,6 @@ export function NewWorkspaceDialog({
 		};
 	}, [open, selectedProjectId]);
 
-	// Models are global to the host — the shared catalog hook re-reads them for this opening (`fresh`)
-	// and wires the refresh flow.
 	const {
 		models,
 		refreshing: modelsRefreshing,
@@ -224,10 +164,6 @@ export function NewWorkspaceDialog({
 		fresh: catalogFresh,
 	} = useModelCatalog(open);
 
-	// The one place a {model, effort} pair is *chosen* for this not-yet-created session: the host applies
-	// pi's own default policy and answers with a level already clamped onto the model it names, so nothing
-	// here re-derives either. Both callers below go through it — the preselect on open and the replacement
-	// for a model the catalog says is gone. Returns the calling effect's cleanup.
 	const applyHostDefault = useCallback(() => {
 		let cancelled = false;
 		getTransport()
@@ -235,8 +171,6 @@ export function NewWorkspaceDialog({
 			.then((d) => {
 				if (cancelled) return;
 				setModel(d.model);
-				// Self-consistent already (the host clamped the saved level onto this model with the same
-				// `clampThinkingLevel` the effect below asks for), so it needs no adjustment here.
 				setThinkingLevel(d.thinkingLevel);
 			})
 			.catch(() => {});
@@ -245,19 +179,11 @@ export function NewWorkspaceDialog({
 		};
 	}, []);
 
-	// Preselect the exact model + effort a fresh session would resolve to (so the picker shows the real
-	// model, not a placeholder). Passing it back at create time is a no-op vs. the host default.
 	useEffect(() => {
 		if (!open) return;
 		return applyHostDefault();
 	}, [open, applyHostDefault]);
 
-	// The stored selection tracks the catalog, so a refresh that changes a model's `thinkingLevels`
-	// can't leave the UI and pi's clamp disagreeing, and a model this opening's own snapshot says is
-	// gone is replaced rather than left for `create()` to fail on. `catalogFresh` is what separates
-	// those two cases from a stale shared copy — see `reconcileModel`. Converges: the reconciled object
-	// comes FROM `models`, so the second pass is a no-op. The effort follows the model, either via the
-	// host's default here or via its clamp below.
 	useEffect(() => {
 		if (!open || !model) return;
 		const next = reconcileModel(models, model, catalogFresh);
@@ -266,20 +192,11 @@ export function NewWorkspaceDialog({
 			if (next !== model) setModel(next);
 			return;
 		}
-		// Gone from an authoritative catalog — the host names the replacement. Asked at most once per
-		// opening: its answer comes from the same registry the fresh list did, so a still-missing model is a
-		// race to leave to `create()`'s error, never something to re-request in a loop.
 		if (hostDefaultAsked.current) return;
 		hostDefaultAsked.current = true;
 		return applyHostDefault();
 	}, [open, models, model, catalogFresh, applyHostDefault]);
 
-	// Keep the held effort runnable by the held model. Whenever the two disagree — an explicit model
-	// switch, or a catalog refresh that changed what the model supports — ask the host for pi's own
-	// `clampThinkingLevel` answer rather than deciding here: `model.default` clamps the same way and a
-	// live session gets it from pi directly, so a third, client-side policy would make this the one path
-	// that adjusts effort differently. Converges: the clamped level is in the model's set, so the guard
-	// then holds. A failed request leaves the level alone; `create()` surfaces the host's error.
 	useEffect(() => {
 		if (!open || !model) return;
 		if (model.thinkingLevels.includes(thinkingLevel)) return;
@@ -299,9 +216,6 @@ export function NewWorkspaceDialog({
 		};
 	}, [open, model, thinkingLevel]);
 
-	// Warm a remote base ref in the background so `workspace.create` branches off a fresh tip without
-	// paying the ~2s `git fetch` on the create path. Fire-and-forget: it overlaps branch-picking / typing,
-	// and offline / local refs are a no-op host-side. Called on open (default base) + on a remote pick.
 	const prefetchBase = (ref: string) => {
 		if (!ref.startsWith("origin/")) return;
 		getTransport()
@@ -309,16 +223,11 @@ export function NewWorkspaceDialog({
 			.catch(() => {});
 	};
 
-	// Base picked in the combobox: set it and warm it (if remote) so create stays instant.
 	const selectBaseRef = (ref: string) => {
 		setBaseRef(ref);
 		prefetchBase(ref);
 	};
 
-	// Branches for the selected project (the shared hook: keyed to the project, refreshable, only the initial
-	// read degrades). A closed dialog reads nothing. The first answer preselects the default base — empty when
-	// git couldn't be read, which makes `create` omit `baseRef` and let the host resolve the real branch — and
-	// warms it, so `workspace.create` skips the fetch while the user is still typing.
 	const {
 		branches,
 		refreshing,
@@ -333,8 +242,6 @@ export function NewWorkspaceDialog({
 		setCreating(true);
 		let workspace: Workspace;
 		if (target === "default") {
-			// Folder mode: nothing is created — the shared helper lists, stores, and activates the project's
-			// built-in Default workspace in one atomic entry (and toasts + returns null on failure).
 			const def = await enterDefaultWorkspace(selectedProjectId);
 			if (!def) {
 				setCreating(false);
@@ -348,29 +255,19 @@ export function NewWorkspaceDialog({
 					...(baseRef ? { baseRef } : {}),
 				});
 			} catch (err) {
-				// Worktree creation failed (bad ref, etc.) — keep the dialog open so the user can retry/adjust,
-				// and surface the reason (it's otherwise invisible — the dialog just refuses to close).
 				toast.error(errorText(err), "Couldn't create workspace");
 				setCreating(false);
 				return;
 			}
 		}
 
-		// The target exists — the intent is fulfilled, so close the dialog *now* and run the (slower)
-		// chat kick-off in the background. This keeps the dialog from lingering while pi
-		// spins up a session, and a kick-off failure can't strand the dialog open.
 		const store = useAppStore.getState();
 		if (target === "worktree") {
-			// Only a real create notifies the parent + activates here — folder mode already entered via the
-			// helper (its list is fresh; a re-list would just repeat the host's git work).
 			onCreated(workspace);
 			store.activateWorkspace(workspace);
 		}
 		onOpenChange(false);
 
-		// Submitting the start-working surface always lands in a ready chat: create the session (the
-		// picked model + effort apply even without a prompt) and open its tab; a typed prompt is
-		// additionally sent as the first message — an empty one just leaves the composer focused.
 		const text = prompt.trim();
 		try {
 			const { result: session, syncedTick } = await createSessionWithSkillBaseline({
@@ -387,23 +284,14 @@ export function NewWorkspaceDialog({
 			);
 			if (!text) return;
 			store.appendUserMessage(session.sessionId, text);
-			// Fire-and-forget the turn (it resolves only when the turn ends); the now-open chat tab streams it.
-			// A rejected send (bad model / no API key) surfaces as an error turn in the just-opened chat rather
-			// than vanishing — the "pick a bad model → nothing happens" failure. Streaming faults arrive as events.
 			getTransport()
 				.request("session.prompt", { sessionId: session.sessionId, text })
 				.catch((err) => store.appendErrorTurn(session.sessionId, errorText(err)));
 		} catch (err) {
-			// `session.create` itself failed — there's no session/tab to host an error turn, and the dialog has
-			// already closed (the workspace exists), so a toast is the only place left to surface the kick-off
-			// failure. Without it the "create + kick off a chat" intent just silently drops the chat.
 			toast.error(errorText(err), "Couldn't start the chat");
 		}
 	};
 
-	// Grant the project trust, then re-preview: the skill effect keys off open/project only, so a grant
-	// wouldn't otherwise refresh the catalog. The updated project is folded back into the store so the
-	// notice clears (trust rides `Project` through the wire).
 	const trustProject = async () => {
 		if (trusting) return;
 		setTrusting(true);
@@ -435,14 +323,11 @@ export function NewWorkspaceDialog({
 				data-testid="new-workspace-dialog"
 				className="max-w-[600px] gap-md p-md"
 				onEscapeKeyDown={(event) => {
-					// Radix handles Escape outside the textarea's React bubble path. Keep the parent dialog open
-					// while completion consumes Escape to dismiss only its menu (even if focus moved elsewhere).
 					if (!slashCompletion.open) return;
 					event.preventDefault();
 					slashCompletion.dismiss();
 				}}
 				onOpenAutoFocus={(e) => {
-					// Land focus on the prompt (the hero), not the first picker Radix would otherwise focus.
 					e.preventDefault();
 					promptRef.current?.focus();
 				}}
@@ -456,7 +341,6 @@ export function NewWorkspaceDialog({
 					</DialogDescription>
 				</DialogHeader>
 
-				{/* where: the target control — both modes always visible, the two-mode model in one glance */}
 				<fieldset
 					data-testid="ws-target"
 					className="flex w-fit items-center gap-0.5 rounded-[var(--radius-md)] border border-control-border-default bg-control-bg p-0.5"
@@ -480,7 +364,6 @@ export function NewWorkspaceDialog({
 					/>
 				</fieldset>
 
-				{/* controls-top: project + (worktree mode) base-branch pickers */}
 				<div className="flex flex-wrap items-center gap-sm">
 					<ProjectPicker
 						projects={projects}
@@ -508,8 +391,6 @@ export function NewWorkspaceDialog({
 					/>
 				</div>
 
-				{/* Trust gate: a repo's committed skills (`.claude/skills` …) are attacker-controlled for a clone,
-				    so they load only after an explicit grant. Personal + bundled skills are always on. */}
 				{selectedProject && selectedProject.trusted !== true && aliasSkills.length > 0 ? (
 					<div
 						data-testid="ws-trust-notice"
@@ -532,7 +413,6 @@ export function NewWorkspaceDialog({
 					</div>
 				) : null}
 
-				{/* hero: the prompt */}
 				<div className="relative">
 					{promptNote ? (
 						<p
@@ -554,7 +434,6 @@ export function NewWorkspaceDialog({
 						className="min-h-[160px]"
 						onKeyDown={(e) => {
 							if (slashCompletion.handleKeyDown(e)) return;
-							// Enter creates (matching the button's ↵ affordance); Shift+Enter inserts a newline.
 							if (e.key === "Enter" && !e.shiftKey) {
 								e.preventDefault();
 								void create();
@@ -583,7 +462,6 @@ export function NewWorkspaceDialog({
 					)}
 				</div>
 
-				{/* controls-bottom: model + effort (left), Create (right) */}
 				<div className="flex flex-wrap items-center gap-sm">
 					<div className="flex min-w-0 flex-1 flex-wrap items-center gap-sm">
 						<ModelSelector
@@ -594,7 +472,6 @@ export function NewWorkspaceDialog({
 							container={dialogEl}
 							onSelect={(m) => {
 								setModel(m);
-								// Pre-session there is no pi to clamp — snap the effort onto the new model's set.
 							}}
 						/>
 						<ThinkingSelector
@@ -627,12 +504,6 @@ export function NewWorkspaceDialog({
 	);
 }
 
-/**
- * One option of the target control — a **native radio** (the two choices are one mutually-exclusive
- * group, which independent toggle buttons would misrepresent to assistive tech), its input visually
- * hidden and the wrapping label wearing the app's active-nav styling. The testid + `data-active` hooks
- * stay on the clickable label; keyboard follows native radio-group behavior.
- */
 function TargetOption({
 	icon: Icon,
 	label,
@@ -643,7 +514,6 @@ function TargetOption({
 }: {
 	icon: LucideIcon;
 	label: string;
-	/** The radio group name tying the options together (unique per dialog instance). */
 	name: string;
 	active: boolean;
 	testid: string;
@@ -665,7 +535,6 @@ function TargetOption({
 	);
 }
 
-/** The project picker pill (defaults to the project the "+" was clicked on). */
 function ProjectPicker({
 	projects,
 	current,

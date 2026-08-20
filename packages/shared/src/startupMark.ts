@@ -1,4 +1,3 @@
-/** Approved R17 artwork: the current TR vector sampled once, then filled with a cyclic THINKRAIL· field. */
 const STARTUP_MARK_LINES = [
 	"THINKRAIL·THINKRAIL·THIN RAIL·THINK",
 	"INKRAIL·THINKRAIL·THINKR IL·THINKRAI",
@@ -41,9 +40,7 @@ export type StartupMarkStatus = "starting" | "host ready";
 export interface RenderStartupMarkOptions {
 	status: StartupMarkStatus;
 	endpoint: string;
-	/** Visible terminal columns. Unknown widths default to 80. */
 	columns?: number;
-	/** Emit ANSI SGR sequences. Defaults to plain UTF-8. */
 	color?: boolean;
 }
 
@@ -173,7 +170,6 @@ function renderLine(segments: readonly Segment[], color: boolean): string {
 	return `${segments.map((segment) => `${ANSI_BY_TONE[segment.tone]}${segment.text}`).join("")}${RESET}`;
 }
 
-/** Render the complete startup composition, including one blank separator line after it. */
 export function renderStartupMark(options: RenderStartupMarkOptions): string {
 	const columns = normalizedColumns(options.columns);
 	const lines =
@@ -183,12 +179,10 @@ export function renderStartupMark(options: RenderStartupMarkOptions): string {
 	return `${lines.map((line) => renderLine(line, options.color ?? false)).join("\n")}\n\n`;
 }
 
-/** Decorative startup output is interactive-only; captured/redirected stdout stays parseable. */
 export function shouldPrintStartupMark(output: Pick<StartupMarkOutput, "isTTY">): boolean {
 	return output.isTTY === true;
 }
 
-/** Render and write the mark exactly once. Returns whether anything was written. */
 export function printStartupMark(
 	options: Omit<RenderStartupMarkOptions, "columns" | "color">,
 	output: StartupMarkOutput = process.stdout,

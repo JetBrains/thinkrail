@@ -2,10 +2,6 @@ import type { ThemeRegistration } from "shiki/core";
 
 export const THINKRAIL_SHIKI_THEME_NAME = "thinkrail-css-variables";
 
-/**
- * One web-only TextMate scope map for every ThinkRail theme. Shiki supports arbitrary color values,
- * including CSS variables, so highlighted markup follows theme swaps without re-highlighting.
- */
 export const THINKRAIL_SHIKI_THEME: ThemeRegistration = {
 	name: THINKRAIL_SHIKI_THEME_NAME,
 	type: "dark",

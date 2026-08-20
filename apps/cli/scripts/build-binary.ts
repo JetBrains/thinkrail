@@ -1,15 +1,4 @@
 #!/usr/bin/env bun
-// Build a single-file `thinkrail` executable: embed the built web UI + the bundled pi extensions into
-// generated modules and `bun build --compile` `compiled-entry.ts`. Bun bundles the host + the `bun-pty`
-// native lib automatically; this script wires in what it can't: the web assets (a directory the host
-// serves), the bundled extensions (which the server path-loads out of `node_modules` in dev — a binary has
-// none, so their entries are value-imported and their skills embedded as files), and `trash`'s macOS/Windows
-// helper executables (which must run from real filesystem paths). Run
-// `bun run build:web` first (we error if the build is missing).
-//
-// Usage:  bun run scripts/build-binary.ts [--target=<bun-target>]
-//   --target  a Bun cross-compile target (e.g. bun-darwin-arm64 / bun-linux-x64 / bun-windows-x64).
-//             Omitted → the host platform. Each target bundles that platform's matching bun-pty lib.
 
 import { createHash } from "node:crypto";
 import {
@@ -34,7 +23,6 @@ const entryPath = join(cliDir, "src", "compiled-entry.ts");
 const outDir = join(cliDir, "dist");
 const serverRequire = createRequire(join(repoRoot, "packages", "server", "package.json"));
 
-/** Every file under `dir`, recursively (absolute paths). */
 function listFiles(dir: string): string[] {
 	const out: string[] = [];
 	for (const name of readdirSync(dir)) {
@@ -45,7 +33,6 @@ function listFiles(dir: string): string[] {
 	return out;
 }
 
-/** `{ route, data }` manifest source for `files`, rooted at `rootDir`; returns imports + entries + hash. */
 function embedFiles(
 	files: { root: string; file: string }[],
 	importPrefix: string,
@@ -65,7 +52,6 @@ function embedFiles(
 	return { imports, entries, version: hash.digest("hex").slice(0, 16) };
 }
 
-/** Write `src/web-assets.generated.ts`: a `with { type: "file" }` import per dist file + the manifest. */
 function generateWebManifest(): void {
 	if (!existsSync(join(webDist, "index.html"))) {
 		throw new Error(`web build not found at ${webDist} — run \`bun run build:web\` first.`);
@@ -80,12 +66,6 @@ function generateWebManifest(): void {
 	);
 }
 
-/**
- * Write `src/bundled-extensions.generated.ts`: value-imports of the bundled extension entries
- * (resolved from the *server package's* module context — they aren't deps of `cli`; Bun compiles the raw
- * `.ts` + their deps into the binary) + the skills files the dev path wires via `additionalSkillPaths`
- * (`pi-spec-graph`, `pi-thinkrail-workflow`, `pi-todos` — parity with the server's run-from-source wiring).
- */
 function generateBundledExtensions(): void {
 	const entrySpecifiers = [
 		"pi-web-access/index.ts",
@@ -96,7 +76,6 @@ function generateBundledExtensions(): void {
 	];
 	const entryPaths = entrySpecifiers.map((specifier) => serverRequire.resolve(specifier));
 	const factoryImports = entryPaths.map((path, i) => `import x${i} from ${JSON.stringify(path)};`);
-	// Skill-bearing extensions: spec-graph, workflow, todos (indices 2, 3, 4).
 	const skillRoots = [entryPaths[2], entryPaths[3], entryPaths[4]].map((entry) =>
 		join(dirname(entry), "skills"),
 	);
@@ -112,7 +91,6 @@ function generateBundledExtensions(): void {
 	);
 }
 
-/** Embed `trash`'s native helper sidecars so compiled macOS/Windows hosts can stage executable files. */
 function generateRuntimeManifest(): void {
 	const trashLibDir = join(dirname(serverRequire.resolve("trash")), "lib");
 	const files = ["macos-trash", "windows-trash.exe"].map((name) => ({
@@ -150,7 +128,6 @@ try {
 	);
 	if (!proc.success) process.exit(proc.exitCode ?? 1);
 } finally {
-	// The generated modules are build-only — keep the working tree (and tsc) clean.
 	rmSync(webGeneratedPath, { force: true });
 	rmSync(extGeneratedPath, { force: true });
 	rmSync(runtimeGeneratedPath, { force: true });

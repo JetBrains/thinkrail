@@ -36,8 +36,8 @@ test("isMarkdownPath matches .md/.markdown case-insensitively, nothing else", ()
 	expect(isMarkdownPath("a/b/notes.Md")).toBe(true);
 	expect(isMarkdownPath("index.ts")).toBe(false);
 	expect(isMarkdownPath("notes.txt")).toBe(false);
-	expect(isMarkdownPath("mdfile")).toBe(false); // no extension
-	expect(isMarkdownPath("weird.md.ts")).toBe(false); // .md not the final ext
+	expect(isMarkdownPath("mdfile")).toBe(false);
+	expect(isMarkdownPath("weird.md.ts")).toBe(false);
 });
 
 test("stripFrontmatter drops a leading YAML block, keeping the body", () => {
@@ -52,13 +52,12 @@ test("stripFrontmatter handles a `...` close and CRLF newlines", () => {
 
 test("stripFrontmatter leaves content without frontmatter untouched", () => {
 	expect(stripFrontmatter("# Heading\n\nbody")).toBe("# Heading\n\nbody");
-	// A `---` that isn't the very first line is a thematic break, not frontmatter.
 	expect(stripFrontmatter("intro\n---\nid: x\n---\n")).toBe("intro\n---\nid: x\n---\n");
 });
 
 test("cssColorToHex expands short hex and passes full hex through", () => {
 	expect(cssColorToHex("#fff")).toBe("#ffffff");
-	expect(cssColorToHex("#FfF")).toBe("#FFffFF"); // case-preserving; hex is case-insensitive anyway
+	expect(cssColorToHex("#FfF")).toBe("#FFffFF");
 	expect(cssColorToHex("#abc4")).toBe("#aabbcc44");
 	expect(cssColorToHex("#ffffff")).toBe("#ffffff");
 	expect(cssColorToHex("#a9b7c6")).toBe("#a9b7c6");
@@ -66,8 +65,6 @@ test("cssColorToHex expands short hex and passes full hex through", () => {
 });
 
 test("cssColorToHex reads unparseable values as unset", () => {
-	// Non-hex forms (`gray`, `rgb(…)`) canonicalize through a canvas — DOM-only, covered by the theme
-	// e2e spec. Under bun (no DOM) they fall back to "" (unset), same as genuinely invalid input.
 	expect(cssColorToHex("")).toBe("");
 	expect(cssColorToHex("not-a-color")).toBe("");
 });
@@ -107,12 +104,9 @@ test("layout resource identity ignores placement ids and separates delimiter-bea
 test("normalizePath brings both separator styles to one form and drops a leading ./", () => {
 	expect(normalizePath("src/foo.ts")).toBe("src/foo.ts");
 	expect(normalizePath("C:\\wt\\src\\foo.ts")).toBe("C:/wt/src/foo.ts");
-	// The `./` strip is a *comparison* concern, not cosmetics: pi reports this form, and without it the
-	// path matches neither a Changes entry nor a spec-graph node.
 	expect(normalizePath("./src/foo.ts")).toBe("src/foo.ts");
 	expect(normalizePath(".//src/foo.ts")).toBe("src/foo.ts");
 	expect(normalizePath(".\\src\\foo.ts")).toBe("src/foo.ts");
-	// A bare "." is a path, not a prefix — left alone.
 	expect(normalizePath(".")).toBe(".");
 	expect(normalizePath("../src/foo.ts")).toBe("../src/foo.ts");
 });
@@ -122,16 +116,13 @@ test("projectRelativePath yields the worktree-relative tab identity from every r
 	expect(projectRelativePath("src/foo.ts", root)).toBe("src/foo.ts");
 	expect(projectRelativePath("./src/foo.ts", root)).toBe("src/foo.ts");
 	expect(projectRelativePath("/wt/ws/src/foo.ts", root)).toBe("src/foo.ts");
-	expect(projectRelativePath("/wt/ws/src/foo.ts", `${root}/`)).toBe("src/foo.ts"); // trailing slash
+	expect(projectRelativePath("/wt/ws/src/foo.ts", `${root}/`)).toBe("src/foo.ts");
 	expect(projectRelativePath("/wt/ws/src/../foo.ts", root)).toBe("foo.ts");
 	expect(projectRelativePath("src/./nested/../foo.ts", root)).toBe("src/foo.ts");
 	expect(projectRelativePath("../outside.ts", root)).toBe("../outside.ts");
 	expect(projectRelativePath("C:\\wt\\ws\\src\\..\\foo.ts", "C:\\wt\\ws")).toBe("foo.ts");
 	expect(projectRelativePath("/src/foo.ts", "/")).toBe("src/foo.ts");
 	expect(projectRelativePath("C:/src/foo.ts", "C:/")).toBe("src/foo.ts");
-	// Lexical aliases for each actual path collapse to one identity (`src/../foo.ts` correctly names the
-	// root-level `foo.ts`). Outside the root (or with no root known) an absolute path stays absolute, so the
-	// host rejects it rather than opening a second, unsafe identity.
 	expect(projectRelativePath("/elsewhere/foo.ts", root)).toBe("/elsewhere/foo.ts");
 	expect(projectRelativePath("/wt/ws/src/foo.ts")).toBe("/wt/ws/src/foo.ts");
 });
@@ -139,7 +130,7 @@ test("projectRelativePath yields the worktree-relative tab identity from every r
 test("isAbsolutePath accepts posix and Windows roots, in either separator style", () => {
 	expect(isAbsolutePath("/wt/src/foo.ts")).toBe(true);
 	expect(isAbsolutePath("C:/wt/foo.ts")).toBe(true);
-	expect(isAbsolutePath("C:\\wt\\foo.ts")).toBe(true); // normalized before the test
+	expect(isAbsolutePath("C:\\wt\\foo.ts")).toBe(true);
 	expect(isAbsolutePath("src/foo.ts")).toBe(false);
 	expect(isAbsolutePath("./src/foo.ts")).toBe(false);
 	expect(isAbsolutePath("")).toBe(false);
@@ -147,12 +138,11 @@ test("isAbsolutePath accepts posix and Windows roots, in either separator style"
 
 test("shallowEqualArrays compares element-wise and treats absent as unequal", () => {
 	const same = ["a", "b"];
-	expect(shallowEqualArrays(same, same)).toBe(true); // identity short-circuit
+	expect(shallowEqualArrays(same, same)).toBe(true);
 	expect(shallowEqualArrays(["a", "b"], ["a", "b"])).toBe(true);
 	expect(shallowEqualArrays(["a", "b"], ["a", "c"])).toBe(false);
 	expect(shallowEqualArrays(["a"], ["a", "b"])).toBe(false);
 	expect(shallowEqualArrays([], [])).toBe(true);
-	// `Object.is`, so a NaN key equals itself — the reason it isn't `===`.
 	expect(shallowEqualArrays([Number.NaN], [Number.NaN])).toBe(true);
 	expect(shallowEqualArrays(undefined, [])).toBe(false);
 	expect(shallowEqualArrays(undefined, undefined)).toBe(true);

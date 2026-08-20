@@ -46,7 +46,6 @@ beforeEach(() => {
 	dataDir = mkdtempSync(join(tmpdir(), "reviews-data-"));
 	worktree = mkdtempSync(join(tmpdir(), "reviews-wt-"));
 	process.env.THINKRAIL_DATA_DIR = dataDir;
-	// A tiny real repo: the store resolves the review's baseSha via `git rev-parse <baseBranch>`.
 	gitIn(worktree, ["init", "-b", "main"]);
 	gitIn(worktree, [
 		"-c",
@@ -80,8 +79,6 @@ afterEach(() => {
 	rmSync(worktree, { recursive: true, force: true });
 });
 
-/** Commit `path` on the review's base branch, then leave the worktree copy holding `after` — so the
- * diff's two sides genuinely say different things at the same line numbers. */
 function commitThenEdit(path: string, committed: string, after: string): void {
 	writeFileSync(join(worktree, path), committed);
 	gitIn(worktree, ["add", path]);
@@ -145,7 +142,6 @@ test("get re-anchors against the worktree: edit above → moved, fragment gone �
 	writeFileSync(join(worktree, "a.ts"), "const a = 1;\nconst c = 3;\n");
 	snapshot = getReviewSnapshot(WS_ID);
 	expect(snapshot.comments[0]?.anchorState).toBe("outdated");
-	// The creation-time fragment survives for the sidebar/package.
 	const quote = snapshot.comments[0]?.anchor?.selectors.find((s) => s.kind === "textQuote");
 	expect(quote && "exact" in quote ? quote.exact : "").toBe("const b = 2;");
 });
@@ -154,7 +150,7 @@ test("reanchorWorkspace publishes only when something moved", () => {
 	addInline();
 	const before = pushes.length;
 	reanchorWorkspace(WS_ID);
-	expect(pushes.length).toBe(before); // nothing changed → no push
+	expect(pushes.length).toBe(before);
 	writeFileSync(join(worktree, "a.ts"), "// x\nconst a = 1;\nconst b = 2;\nconst c = 3;\n");
 	reanchorWorkspace(WS_ID);
 	expect(pushes.length).toBe(before + 1);
@@ -163,8 +159,6 @@ test("reanchorWorkspace publishes only when something moved", () => {
 test("update edits drafts only; manual resolve stamps resolvedBy user; resolved is final", () => {
 	const comment = addInline();
 	updateComment({ workspaceId: WS_ID, id: comment.id, body: "better wording" });
-	// The wire may only land the terminal manual outcomes — draft/sent belong to the send path
-	// (markCommentsSent/rollbackSend), so a client can't un-send a comment and rewrite/delete it.
 	expect(() => updateComment({ workspaceId: WS_ID, id: comment.id, status: "sent" })).toThrow(
 		/resolved or dismissed/,
 	);
@@ -175,7 +169,6 @@ test("update edits drafts only; manual resolve stamps resolvedBy user; resolved 
 	);
 	const resolved = updateComment({ workspaceId: WS_ID, id: comment.id, status: "resolved" });
 	expect(resolved.resolvedBy).toBe("user");
-	// Resolved is final — like delete and rollback, undoing a review outcome isn't offered.
 	expect(() => updateComment({ workspaceId: WS_ID, id: comment.id, status: "dismissed" })).toThrow(
 		/final/,
 	);
@@ -188,7 +181,6 @@ test("send lifecycle: sendable drafts → sent with session link; the file's cha
 	expect(drafts.map((c) => c.id)).toEqual([c1.id, c2.id]);
 	markCommentsSent(WS_ID, [c1.id, c2.id], "sess-file");
 	const snapshot = getReviewSnapshot(WS_ID);
-	// Both comments sit on a.ts — the file is pinned to the chat, so later sends follow up into it.
 	expect(snapshot.review.fileSessions).toEqual({ "a.ts": "sess-file" });
 	expect(fileReviewSession(WS_ID, "a.ts")).toBe("sess-file");
 	expect(fileReviewSession(WS_ID, "other.ts")).toBeUndefined();
@@ -209,7 +201,6 @@ test("rollbackSend undoes an optimistic markSent (pre-turn rejection) → drafts
 		true,
 	);
 	expect(snapshot.comments.every((c) => c.sentAt === undefined)).toBe(true);
-	// The chat spun up for the failed send no longer backs any comment → unpinned, so a retry is clean.
 	expect(snapshot.review.fileSessions).toEqual({});
 	expect(sendableComments(WS_ID).map((c) => c.id)).toEqual([c1.id, c2.id]);
 });
@@ -223,7 +214,6 @@ test("rollbackSend keeps a reused chat's pin when another comment still backs it
 	const snapshot = getReviewSnapshot(WS_ID);
 	expect(snapshot.comments.find((c) => c.id === first.id)?.status).toBe("sent");
 	expect(snapshot.comments.find((c) => c.id === second.id)?.status).toBe("draft");
-	// The first comment still lives in that chat, so the pin stays.
 	expect(snapshot.review.fileSessions).toEqual({ "a.ts": "sess-file" });
 });
 
@@ -232,27 +222,23 @@ test("rollbackSend is a no-op for a session that never sent these comments (faul
 	markCommentsSent(WS_ID, [comment.id], "sess-file");
 	const before = pushes.length;
 	rollbackSend(WS_ID, [comment.id], "other-session");
-	expect(pushes.length).toBe(before); // nothing matched → no push
+	expect(pushes.length).toBe(before);
 	expect(getReviewSnapshot(WS_ID).comments[0]?.status).toBe("sent");
 });
 
 test("rollbackSend after clear is a clean no-op — it never resurrects cleared comments", () => {
-	// The rollback fires DETACHED, so a clear can land first; reading with `load` (not `ensureSnapshot`)
-	// makes it inspect the fresh review and leave the discarded comment behind.
 	const comment = addInline();
 	markCommentsSent(WS_ID, [comment.id], "sess-file");
 	clearReview(WS_ID);
 	const before = pushes.length;
 	rollbackSend(WS_ID, [comment.id], "sess-file");
-	expect(pushes.length).toBe(before); // no matching comment → no write or extra push
+	expect(pushes.length).toBe(before);
 	const onDisk = JSON.parse(readFileSync(join(dataDir, "reviews", `${WS_ID}.json`), "utf8"));
 	expect(onDisk.review.status).toBe("open");
 	expect(onDisk.comments).toEqual([]);
 });
 
 test("a review-level remark pins its own bucket chat, so a second one continues the discussion", () => {
-	// The whole-change-set bucket is keyed like a file (`REVIEW_LEVEL_KEY`). Without a pin, every
-	// anchorless remark opened a chat of its own — the one send that could never be followed up.
 	const overall = addComment({ workspaceId: WS_ID, kind: "review", anchor: null, body: "overall" });
 	markCommentsSent(WS_ID, [overall.id], "sess-overall");
 	expect(getReviewSnapshot(WS_ID).review.fileSessions).toEqual({
@@ -292,8 +278,6 @@ test("clear archives records, discards drafts, and publishes only the fresh snap
 	expect(typeof archived?.review.closedAt).toBe("number");
 	expect(archived?.comments.map((comment) => comment.id)).toEqual([sent.id]);
 
-	// A resolve already in flight when Clear landed still finishes the archived record, without pushing
-	// that inactive snapshot over the fresh one clients now render.
 	const beforeResolve = pushes.length;
 	expect(resolveCommentFromAgent(sent.id, "fixed after clear").status).toBe("resolved");
 	expect(pushes).toHaveLength(beforeResolve);
@@ -326,7 +310,6 @@ test("purge removes the workspace's active review and archives", () => {
 });
 
 test("a path-segment workspace id is refused by every file touch — no traversal out of the reviews dir", () => {
-	// The id becomes a filename: `../config` would resolve to the data dir's own config.json.
 	for (const evil of ["../config", "a/b", "a\\b", "..", ".", "x.y"]) {
 		expect(() => removeWorkspaceReviews(evil)).toThrow(/Invalid workspace id/);
 		expect(() => getReviewSnapshot(evil)).toThrow(/Invalid workspace id/);
@@ -349,13 +332,10 @@ test("clear refuses an unsafe persisted review id instead of escaping the archiv
 test("a base-side anchor is captured from the BASE blob and never re-anchored", () => {
 	commitThenEdit("b.ts", "keep me\nDELETED LINE\ntail\n", "keep me\ntail\nmore\n");
 	const comment = addBase("b.ts", 2, "why was this removed?");
-	// The fragment is the line as it stood in the base — the worktree's line 2 says something else
-	// entirely, which is exactly what a translated-to-worktree anchor would have captured.
 	const quote = comment.anchor?.selectors.find((s) => s.kind === "textQuote");
 	expect(quote && "exact" in quote ? quote.exact : "").toBe("DELETED LINE");
 	expect(comment.anchor?.baseRef).toBeTruthy();
 
-	// Worktree churn re-anchors worktree comments; a base anchor names an immutable blob, so it holds.
 	writeFileSync(join(worktree, "b.ts"), "totally different\n");
 	const snapshot = getReviewSnapshot(WS_ID);
 	expect(snapshot.comments[0]?.anchorState).toBe("anchored");
@@ -363,9 +343,6 @@ test("a base-side anchor is captured from the BASE blob and never re-anchored", 
 });
 
 test("a base anchor pins its ref to a commit oid, so a later commit can't move the fragment under it", () => {
-	// `uncommitted` scope resolves its original side to the literal `HEAD`. Stored verbatim, the user's
-	// next commit re-points it and the package reads TODAY's content at yesterday's line numbers — the
-	// agent is shown a fragment the remark was never about.
 	commitThenEdit("b.ts", "const one = 1;\nconst two = 2;\n", "const one = 1;\nconst TWO = 2;\n");
 	const head = execFileSync("git", ["rev-parse", "HEAD"], {
 		cwd: worktree,
@@ -384,14 +361,12 @@ test("a base anchor pins its ref to a commit oid, so a later commit can't move t
 	});
 	expect(comment.anchor?.baseRef).toBe(head);
 
-	// Commit the rename: HEAD moves on.
 	gitIn(worktree, ["add", "b.ts"]);
 	gitIn(worktree, ["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-m", "rename two"]);
 	expect(
 		execFileSync("git", ["rev-parse", "HEAD"], { cwd: worktree, encoding: "utf8" }).trim(),
 	).not.toBe(head);
 
-	// The package still quotes the pre-commit blob — fragment AND the context read around it.
 	const pkg = buildSendPackage(WS_ID, sendableComments(WS_ID, [comment.id]));
 	expect(pkg).toContain("const two = 2;");
 	expect(pkg).not.toContain("const TWO = 2;");
@@ -399,14 +374,10 @@ test("a base anchor pins its ref to a commit oid, so a later commit can't move t
 });
 
 test("a base-side anchor on a path the base doesn't have is rejected, never re-pointed", () => {
-	// `a.ts` exists only in the worktree (untracked) — there is no pre-change content to quote.
 	expect(() => addBase("a.ts", 1, "x")).toThrow(/no a\.ts to comment on/);
 });
 
 test("the review's base is the FORK POINT, not a target tip that advanced past it", () => {
-	// The `branch` diff shows fork-point-vs-worktree (merge-base semantics), so the review must pin the
-	// same commit. Pinning the target's TIP instead means Reject "restores" upstream commits the review
-	// never displayed.
 	writeFileSync(join(worktree, "up.ts"), "fork\n");
 	gitIn(worktree, ["add", "up.ts"]);
 	gitIn(worktree, ["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-m", "fork point"]);
@@ -414,12 +385,10 @@ test("the review's base is the FORK POINT, not a target tip that advanced past i
 		cwd: worktree,
 		encoding: "utf8",
 	}).trim();
-	// The workspace diverges…
 	gitIn(worktree, ["checkout", "-b", "feature"]);
 	writeFileSync(join(worktree, "mine.ts"), "mine\n");
 	gitIn(worktree, ["add", "mine.ts"]);
 	gitIn(worktree, ["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-m", "my work"]);
-	// …and the base branch advances underneath it, touching the same file.
 	gitIn(worktree, ["checkout", "main"]);
 	writeFileSync(join(worktree, "up.ts"), "upstream\n");
 	gitIn(worktree, ["add", "up.ts"]);
@@ -431,8 +400,6 @@ test("the review's base is the FORK POINT, not a target tip that advanced past i
 	gitIn(worktree, ["checkout", "feature"]);
 	expect(tip).not.toBe(forkPoint);
 
-	// The review is created now: its base is the fork point, and the blob it names is the REVIEWED
-	// content — not the upstream edit the diff never showed.
 	expect(getReviewSnapshot(WS_ID).review.baseSha).toBe(forkPoint);
 	expect(
 		execFileSync("git", ["show", `${forkPoint}:up.ts`], { cwd: worktree, encoding: "utf8" }),
@@ -462,13 +429,10 @@ test("a DAMAGED review file is refused, never replaced — the comments stay on 
 	addComment({ workspaceId: WS_ID, kind: "review", anchor: null, body: "keep me" });
 	const file = join(dataDir, "reviews", `${WS_ID}.json`);
 	const intact = readFileSync(file, "utf8");
-	// A host killed mid-write leaves a truncated file. Reading that as "no review yet" would have
-	// `ensureSnapshot` write a fresh empty one over it — every comment gone, silently.
 	writeFileSync(file, intact.slice(0, Math.floor(intact.length / 2)));
 	expect(() => getReviewSnapshot(WS_ID)).toThrow(/damaged/);
 	expect(() => clearReview(WS_ID)).toThrow(/damaged/);
 	expect(readFileSync(file, "utf8")).not.toContain('"comments": []');
-	// Repairing it by hand brings the review back untouched.
 	writeFileSync(file, intact);
 	expect(getReviewSnapshot(WS_ID).comments[0]?.body).toBe("keep me");
 });
@@ -476,8 +440,6 @@ test("a DAMAGED review file is refused, never replaced — the comments stay on 
 test("an unreadable review file fails the read instead of starting an empty review", () => {
 	addComment({ workspaceId: WS_ID, kind: "review", anchor: null, body: "keep me too" });
 	const file = join(dataDir, "reviews", `${WS_ID}.json`);
-	// Any read failure that ISN'T "no such file" (here EISDIR; in the wild EACCES, EIO) must fail the
-	// read — answering it with a fresh empty review is how a still-recoverable one gets overwritten.
 	rmSync(file);
 	mkdirSync(file);
 	expect(() => getReviewSnapshot(WS_ID)).toThrow();
@@ -498,8 +460,6 @@ test("resolve_comment skips a damaged sibling review rather than failing the res
 		body: "resolve me",
 	});
 	markCommentsSent(WS_ID, [comment.id], "sess-x");
-	// A second workspace's file, damaged. The agent's tool scans every review by id, so this one must
-	// not take down a resolve that belongs to the healthy review next to it.
 	writeFileSync(join(dataDir, "reviews", "ws-broken.json"), "{ truncated");
 	expect(resolveCommentFromAgent(comment.id).status).toBe("resolved");
 });
@@ -512,7 +472,6 @@ test("markFileDone: only a fully-resolved file; a new comment re-opens it", () =
 	resolveCommentFromAgent(comment.id);
 	markFileDone(WS_ID, "a.ts");
 	expect(getReviewSnapshot(WS_ID).review.doneFiles).toEqual(["a.ts"]);
-	// Saying more re-opens the file's review.
 	addInline("more to say");
 	expect(getReviewSnapshot(WS_ID).review.doneFiles).toEqual([]);
 });

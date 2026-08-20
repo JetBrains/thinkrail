@@ -8,14 +8,6 @@ import {
 } from "../store";
 import { errorText, getSessionMessagesWithSkillBaseline } from "../transport";
 
-/**
- * Open (or focus) a chat by session id — the ONE escalation every "take me to this chat" affordance
- * shares (`openFile.ts`'s pattern): an open tab is focused; a live-but-closed runtime is re-attached
- * (`reopenChat`); a disk-only session is fetched (`session.getMessages`) and hydrated focused. Used by
- * the workbench's chat-history menu (`WorkspaceChatHistory`) and Review's linked-chat glyphs.
- * The guarded request waits for watcher startup, then captures the sync baseline before the fetch;
- * a failed fetch raises a toast — the entry stays wherever it was for a retry.
- */
 export async function openChatInTab(
 	workspaceId: string,
 	sessionId: string,

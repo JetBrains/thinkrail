@@ -2,31 +2,19 @@ import { CircleAlert, Info, Lightbulb, OctagonAlert, TriangleAlert } from "lucid
 import type { ComponentType, ReactNode } from "react";
 import type { Components } from "react-markdown";
 
-/**
- * GitHub-style alert callouts (`> [!NOTE]` / `[!TIP]` / `[!IMPORTANT]` / `[!WARNING]` / `[!CAUTION]`)
- * for the rendered markdown view. Two pieces, wired only into `MarkdownPreview` (not chat):
- *  - `remarkGithubAlerts` — a tiny in-repo remark transform (no extra dep): re-tags a matching
- *    blockquote as a custom `mdalert` element carrying its variant, and strips the marker text.
- *  - `AlertCallout` — the React renderer (mapped via react-markdown `components`), a lucide icon + label
- *    over the body, colored with our theme tokens.
- */
-
 export type AlertVariant = "note" | "tip" | "important" | "warning" | "caution";
 
 const MARKER = /^\[!(note|tip|important|warning|caution)\]/i;
 
-/** Pure marker parse (unit-tested): reads the leading `[!VARIANT]` and returns the remaining body text. */
 export function parseAlertMarker(text: string): { variant: AlertVariant; rest: string } | null {
 	const m = MARKER.exec(text);
 	const marker = m?.[0];
 	const variant = m?.[1];
 	if (!marker || !variant) return null;
-	// Drop the marker, then any trailing spaces + a single newline (the marker sits on its own line).
 	const rest = text.slice(marker.length).replace(/^[^\S\n]*\n?/, "");
 	return { variant: variant.toLowerCase() as AlertVariant, rest };
 }
 
-// Minimal structural mdast shapes — only the fields this transform reads/writes (no @types/mdast dep).
 interface MdNode {
 	type: string;
 	value?: string;
@@ -34,7 +22,6 @@ interface MdNode {
 	data?: { hName?: string; hProperties?: Record<string, unknown> };
 }
 
-/** Remark plugin: turn GitHub-alert blockquotes into `mdalert` elements tagged with their variant. */
 export function remarkGithubAlerts() {
 	return (tree: MdNode): void => walk(tree);
 }
@@ -55,7 +42,6 @@ function transformBlockquote(bq: MdNode): void {
 	const parsed = parseAlertMarker(firstText.value);
 	if (!parsed) return;
 	firstText.value = parsed.rest;
-	// If stripping the marker emptied the first paragraph (marker on its own line), drop it.
 	if (parsed.rest === "" && firstPara.children?.length === 1) bq.children?.shift();
 	bq.data = {
 		...bq.data,
@@ -115,7 +101,6 @@ function isVariant(v: unknown): v is AlertVariant {
 	return v === "note" || v === "tip" || v === "important" || v === "warning" || v === "caution";
 }
 
-/** Renderer for the `mdalert` element the remark transform emits (the variant rides on hProperties). */
 function AlertCallout({
 	node,
 	children,
@@ -141,5 +126,4 @@ function AlertCallout({
 	);
 }
 
-/** Component map to hand react-markdown so `mdalert` elements render as callouts. */
 export const alertComponents = { mdalert: AlertCallout } as Components;

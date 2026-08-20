@@ -59,7 +59,6 @@ test("an empty plan renders a placeholder", () => {
 test("a committed done item renders sha + summary + status-lettered file rows with ± counts", () => {
 	const done: TodoItem = {
 		...item("Implement foo", "done"),
-		// The commit artifact's `files` is the host's `todo.list` decoration (derived from git, never stored).
 		artifacts: [
 			{
 				kind: "commit",

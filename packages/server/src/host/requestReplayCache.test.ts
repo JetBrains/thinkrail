@@ -29,7 +29,7 @@ describe("request replay cache", () => {
 		const first = cache.run("page", "req-1", "same", execute);
 		const concurrent = cache.run("page", "req-1", "same", execute);
 		expect(concurrent).toBe(first);
-		expect(executions).toBe(0); // execution starts on the cache's next microtask
+		expect(executions).toBe(0);
 
 		run.resolve("done");
 		expect(await first).toBe("done");
@@ -62,9 +62,6 @@ describe("request replay cache", () => {
 		);
 	});
 
-	// The bound refuses NEW work; it never reaches back for an answer already owed. That direction is the whole
-	// invariant: a refused request provably did not run, whereas a discarded result can be replayed into a
-	// second execution.
 	test("a full namespace refuses new ids while still answering every id it holds", async () => {
 		const cache = new RequestReplayCache<string>(2);
 		let executions = 0;
@@ -74,14 +71,11 @@ describe("request replay cache", () => {
 		expect(await cache.run("page", "second", "two", execute)).toBe("2");
 
 		expect(() => cache.run("page", "third", "three", execute)).toThrow(RequestReplayOverflowError);
-		expect(executions).toBe(2); // the refused handler never ran
+		expect(executions).toBe(2);
 
-		// Everything already admitted is still replayable — a full namespace stops taking work, it does not
-		// stop owing answers.
 		expect(await cache.run("page", "first", "one", execute)).toBe("1");
 		expect(await cache.run("page", "second", "two", execute)).toBe("2");
 
-		// Reading one response makes room for exactly one more.
 		cache.acknowledge("page", ["first"]);
 		expect(await cache.run("page", "third", "three", execute)).toBe("3");
 		expect(() => cache.run("page", "fourth", "four", execute)).toThrow(RequestReplayOverflowError);
@@ -107,21 +101,16 @@ describe("request replay cache", () => {
 		expect(longExecutions).toBe(1);
 	});
 
-	// Admission cannot police bytes: a handler's output size is unknown until it finishes, and in-flight work
-	// weighs nothing. Checked only on the way in, a few concurrent large reads settle far past the budget and,
-	// since nothing is ever evicted, stay there. So the byte budget is enforced on the way out instead.
 	test("the byte budget holds even when every response is admitted before any settles", async () => {
 		const cache = new RequestReplayCache<string>(100, 8);
 		const gates = ["a", "b", "c"].map(() => deferred<string>());
 
-		// All three admitted while empty — exactly the window an admission-time byte check cannot see.
 		const flights = gates.map((gate, i) =>
 			cache.run("page", `read-${i}`, `f${i}`, () => gate.promise),
 		);
-		for (const gate of gates) gate.resolve("12345"); // 5 chars each, 15 against a budget of 8
+		for (const gate of gates) gate.resolve("12345");
 		await Promise.all(flights);
 
-		// First fits; the rest would breach the budget, so their answers are dropped rather than retained.
 		expect(await cache.run("page", "read-0", "f0", () => "reran")).toBe("12345");
 		expect(() => cache.run("page", "read-1", "f1", () => "reran")).toThrow(
 			RequestReplayUnretainedError,
@@ -139,12 +128,10 @@ describe("request replay cache", () => {
 			return "123456789";
 		};
 
-		// The caller still gets its answer — only the retained copy is refused.
 		expect(await cache.run("page", "huge", "same", huge)).toBe("123456789");
 		expect(() => cache.run("page", "huge", "same", huge)).toThrow(RequestReplayUnretainedError);
-		expect(executions).toBe(1); // never a second execution, which is the whole point
+		expect(executions).toBe(1);
 
-		// And it cost the budget nothing, so a later result of a workable size is still retained.
 		expect(await cache.run("page", "small", "other", () => "ok")).toBe("ok");
 		expect(await cache.run("page", "small", "other", () => "reran")).toBe("ok");
 	});
@@ -154,13 +141,10 @@ describe("request replay cache", () => {
 
 		await cache.run("page", "first", "one", () => "12345");
 		cache.acknowledge("page", ["first"]);
-		// Without the release this would breach the 8-char budget and be dropped.
 		await cache.run("page", "second", "two", () => "12345");
 		expect(await cache.run("page", "second", "two", () => "reran")).toBe("12345");
 	});
 
-	// A successful `send` only says the bytes were queued. Acknowledgement is what frees a result, and it is
-	// the only thing that does — nothing here evicts.
 	test("acknowledged results are freed; an undelivered one is kept indefinitely", async () => {
 		const cache = new RequestReplayCache<string>(2);
 		let lostExecutions = 0;
@@ -169,14 +153,12 @@ describe("request replay cache", () => {
 			return "first-execution";
 		};
 
-		// The reply to `lost` dies with the socket and is never acknowledged. Everything after it is read.
 		await cache.run("page", "lost", "same", lost);
 		for (const id of ["read-1", "read-2", "read-3", "read-4"]) {
 			await cache.run("page", id, id, () => id);
 			cache.acknowledge("page", [id]);
 		}
 
-		// Four later results passed through a namespace of two without displacing the one still owed.
 		expect(await cache.run("page", "lost", "same", lost)).toBe("first-execution");
 		expect(lostExecutions).toBe(1);
 	});
@@ -191,8 +173,6 @@ describe("request replay cache", () => {
 		};
 
 		const inFlight = cache.run("page", "picker", "same", execute);
-		// No client can have read a response that does not exist yet; honouring this would drop the running
-		// handler and let the replay below start a second one.
 		cache.acknowledge("page", ["picker"]);
 		expect(cache.run("page", "picker", "same", execute)).toBe(inFlight);
 
@@ -209,9 +189,6 @@ describe("request replay cache", () => {
 		expect(() => cache.acknowledge("ghost", ["req-1"])).not.toThrow();
 	});
 
-	// A receipt can die in a socket buffer exactly like a response can, and nothing would ever re-send it: the
-	// page dropped that request from `pending` the moment it resolved. Restating the live set on reconnect is
-	// what stops one lost receipt from pinning a result until the page retires.
 	test("reconnect reconciliation frees everything the page is no longer waiting on", async () => {
 		const cache = new RequestReplayCache<string>(3);
 		let executions = 0;
@@ -221,11 +198,9 @@ describe("request replay cache", () => {
 		await cache.run("page", "also-lost", "two", () => "two");
 		await cache.run("page", "still-pending", "three", () => "three");
 
-		// The page comes back waiting on exactly one of the three; the receipts for the others never arrived.
 		cache.retain("page", ["still-pending"]);
 
 		expect(await cache.run("page", "still-pending", "three", execute)).toBe("three");
-		// Room reclaimed without any receipt having landed.
 		expect(await cache.run("page", "fresh", "four", execute)).toBe("1");
 	});
 
@@ -239,8 +214,6 @@ describe("request replay cache", () => {
 		};
 
 		const inFlight = cache.run("page", "picker", "same", execute);
-		// A page that reconnects mid-handler may legitimately omit an id it has since timed out on. Dropping a
-		// *running* handler is still the one thing that could produce a duplicate, so it is kept regardless.
 		cache.retain("page", []);
 		expect(cache.run("page", "picker", "same", execute)).toBe(inFlight);
 
@@ -263,9 +236,6 @@ describe("request replay cache", () => {
 		expect(await cache.run("page", "req-1", "same", execute)).toBe("2");
 	});
 
-	// Retirement is driven by a *socket* grace window, but a request outlives it: the folder picker waits up
-	// to 30 minutes on a human, and the page replays that id whenever it reconnects. Retiring mid-handler
-	// would open a second picker beside the one still on screen.
 	test("client retirement is declined, and retains everything, while a request is in flight", async () => {
 		const cache = new RequestReplayCache<string>();
 		const run = deferred<string>();
@@ -280,8 +250,6 @@ describe("request replay cache", () => {
 		const inFlight = cache.run("page", "picker", "same", execute);
 
 		expect(cache.clearClient("page")).toBe(false);
-		// Nothing was dropped: the replay joins the running handler rather than starting a second one, and the
-		// already-settled sibling still answers from cache.
 		expect(cache.run("page", "picker", "same", execute)).toBe(inFlight);
 		expect(await cache.run("page", "settled", "one", () => "reran")).toBe("cached");
 		expect(executions).toBe(1);

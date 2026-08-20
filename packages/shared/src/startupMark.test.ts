@@ -33,7 +33,6 @@ test("wide plain output pins the approved recursive host lockup", () => {
 	expect(lines[10]).toEndWith("● host ready");
 	expect(lines[11]).toEndWith("  localhost:24242");
 	expect(Math.max(...lines.map((line) => Array.from(line).length))).toBeLessThanOrEqual(80);
-	// One digest pins every space and glyph without duplicating the 42×20 artwork in the test fixture.
 	expect(createHash("sha256").update(output).digest("hex")).toBe(
 		"ddcb60ce1cbca6846bd6d4b78b701ff6f1d3c00224658722cdae3b4840bee93e",
 	);

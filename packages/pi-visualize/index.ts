@@ -14,11 +14,6 @@ const DESCRIPTION =
 const PROMPT_SNIPPET =
 	"Show diagrams (raw mermaid) and option comparisons as rich cards — prefer over ASCII art or markdown tables for architecture, flows, and trade-offs.";
 
-/**
- * pi extension entry. Registers the `visualize` tool. The tool's only work is to validate the shape and
- * build a markdown fallback (`content`); rich rendering happens in host-specific renderers keyed to the
- * tool name. Pure display — no side effects.
- */
 export default function (pi: ExtensionAPI): void {
 	pi.registerTool({
 		name: "visualize",

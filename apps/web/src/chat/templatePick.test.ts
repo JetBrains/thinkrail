@@ -13,8 +13,6 @@ test("a current pick with an untouched draft applies", () => {
 });
 
 test("a delayed response is dropped once the user has typed a new draft", () => {
-	// The user picked, then typed something else before `template.get` resolved — applying now would
-	// destroy that newer input.
 	expect(
 		shouldApplyTemplatePick({
 			generation: 1,
@@ -26,7 +24,6 @@ test("a delayed response is dropped once the user has typed a new draft", () => 
 });
 
 test("out-of-order responses: only the newest pick applies, whatever order the responses land in", () => {
-	// Pick A (gen 1) then pick B (gen 2); B's response lands first and applies…
 	expect(
 		shouldApplyTemplatePick({
 			generation: 2,
@@ -35,7 +32,6 @@ test("out-of-order responses: only the newest pick applies, whatever order the r
 			currentDraft: "/rev",
 		}),
 	).toBe(true);
-	// …then A's slower response arrives — superseded, dropped, regardless of the draft state.
 	expect(
 		shouldApplyTemplatePick({
 			generation: 1,

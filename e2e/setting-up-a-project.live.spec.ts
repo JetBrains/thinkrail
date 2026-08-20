@@ -3,13 +3,6 @@ import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import { createWorkspaceViaDialog, openFixtureProject, waitForDone } from "./fixtures/app";
 
-/**
- * Whether the worktree holds a drafted graph *root* — a markdown spec whose frontmatter is
- * `type: goal-and-requirements` — at whatever path the import flow chose. The skill's contract is "draft
- * the graph root" (file named `goal-and-requirements.md`), not a fixed location: a real agent legitimately
- * puts it at the repo root or under a `specs/` dir, so match by frontmatter type at any depth rather than a
- * hard-coded path. (The product's Specs viewer scans nested specs too — see specs-panel.spec.ts.)
- */
 function hasGoalSpec(dir: string): boolean {
 	for (const entry of readdirSync(dir, { withFileTypes: true })) {
 		if (entry.name === ".git" || entry.name === "node_modules") continue;
@@ -25,27 +18,15 @@ function hasGoalSpec(dir: string): boolean {
 	return false;
 }
 
-// Tagged @agent (see agent.live.spec.ts): drives a REAL pi agent end to end to prove the setting-up-a-project
-// skill family works — the exact `/skill:setting-up-a-project` command the "Set up project" button seeds
-// (WelcomePanel `SETUP_PROMPT`) force-loads the dispatcher, which routes an existing, un-specced codebase
-// to `importing-a-codebase` and drafts the first spec graph — proving the button's `/skill:setting-up-a-project` seed
-// drives the flow on the programmatic `session.prompt` path.
-//
-// The shared fixture repo carries seed specs (global-setup), so we make *this workspace's* worktree look
-// like a real un-specced project instead: drop the seed specs, add an AGENTS.md + a little source with a
-// clear module boundary. The AGENTS.md is deliberately explicit so `importing-a-codebase` can infer intent from
-// the files and skip the interview (a headless run can't answer `ask_user_question`), which we also
-// reinforce in the prompt args.
 test("`/skill:setting-up-a-project` routes an existing codebase to import and drafts a spec graph", {
 	tag: "@agent",
 }, async ({ page }) => {
-	test.setTimeout(360_000); // real provider drafting a multi-file graph — well above the 30s default
+	test.setTimeout(360_000);
 
 	await openFixtureProject(page);
 	const ws = await createWorkspaceViaDialog(page);
 	const worktree = ws.worktreePath;
 
-	// Make the worktree an un-specced codebase: remove the fixture's seed specs, seed agent-doc + source.
 	rmSync(join(worktree, "SPEC.md"), { force: true });
 	rmSync(join(worktree, "module-a"), { recursive: true, force: true });
 	writeFileSync(
@@ -74,12 +55,9 @@ test("`/skill:setting-up-a-project` routes an existing codebase to import and dr
 		"// The image-resizing pipeline — the core domain. Never imports from cli.\nexport function resize(files: string[]): void {\n\tvoid files;\n}\n",
 	);
 
-	// The dialog set this workspace active on create and landed in a fresh chat there.
 	await expect(page.locator('[data-testid="workspace-item"][data-active="true"]')).toHaveCount(1);
 	await expect(page.getByTestId("chat-input")).toBeVisible();
 
-	// The SAME command the button seeds, plus a no-questions instruction so the interview can't block the
-	// headless run (importing-a-codebase is designed to proceed from the files when the user declines to answer).
 	await page
 		.getByTestId("chat-input")
 		.fill(
@@ -87,7 +65,6 @@ test("`/skill:setting-up-a-project` routes an existing codebase to import and dr
 		);
 	await page.getByTestId("chat-send").click();
 
-	// The command shows in the transcript — the same `/skill:setting-up-a-project` seed the button uses.
 	await expect(
 		page
 			.locator('[data-testid="chat-message"][data-role="user"]')
@@ -96,14 +73,8 @@ test("`/skill:setting-up-a-project` routes an existing codebase to import and dr
 
 	await waitForDone(page, 320_000);
 
-	// Outcome (disk-stable, tool-order- AND path-agnostic): the import flow drafted the graph root somewhere
-	// in the worktree — proof it routed to importing-a-codebase and followed its rails, without depending on
-	// expanding a churning virtualized transcript or on the exact dir the agent chose (root vs. `specs/`).
-	// (Live spec-tool wiring is covered by spec-tools.live.spec.ts.)
 	expect(hasGoalSpec(worktree)).toBe(true);
 
-	// And it's a well-formed spec the product renders: refresh the Specs rail → a goal-and-requirements
-	// node appears (the `title` attribute carries `<id> · <type>`).
 	await page.getByTestId("tab-specs").click();
 	await page.getByTestId("specs-refresh").click();
 	await expect(

@@ -7,8 +7,6 @@ import { gitCommitPaths } from "../git";
 import { maybeAttachChangeArtifacts } from "./artifacts";
 import { listTodos } from "./todos";
 
-// --- listTodos decoration: unfolding a commit artifact into its derived `files` (real git + registry) ---
-
 let dataDir: string;
 let repo: string;
 const savedDataDir = process.env.THINKRAIL_DATA_DIR;
@@ -58,7 +56,6 @@ afterEach(() => {
 
 test("listTodos decorates a commit artifact with the commit's derived files; a dead sha ships none", async () => {
 	const store = new TodoStore(repo, SESSION);
-	// A real commit made the way artifacts.ts makes it.
 	writeFileSync(join(repo, "impl.ts"), "export {};\n");
 	const committed = gitCommitPaths("w1", "todo: step", ["impl.ts"]);
 	if (!committed) throw new Error("commit failed");
@@ -74,8 +71,6 @@ test("listTodos decorates a commit artifact with the commit's derived files; a d
 	const plan = await listTodos({ workspaceId: "w1", sessionId: SESSION });
 	const wireGood = plan.todos.find((t) => t.id === good.id);
 	const wireDead = plan.todos.find((t) => t.id === dead.id);
-	// The derived unfolding rides the DTO — never the stored JSON. `files` is the full change shape
-	// (path + status + `+/−`), the same rows the Changes panel renders at the commit scope.
 	const files = wireGood?.artifacts?.[0]?.files;
 	expect(wireGood?.artifacts?.[0]).toMatchObject({
 		kind: "commit",
@@ -89,7 +84,6 @@ test("listTodos decorates a commit artifact with the commit's derived files; a d
 	expect(store.get(good.id)?.artifacts).toEqual([
 		{ kind: "commit", sha: committed.sha, label: "committed step" },
 	]);
-	// …and an unresolvable sha ships the artifact bare (no `files`) — the client's degrade signal.
 	expect(wireDead?.artifacts).toEqual([
 		{ kind: "commit", sha: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef" },
 	]);
@@ -98,15 +92,11 @@ test("listTodos decorates a commit artifact with the commit's derived files; a d
 test("listTodos waits for an in-flight reconcile — a done item is never read before its change set", async () => {
 	const store = new TodoStore(repo, SESSION);
 	const todo = store.add({ title: "step" });
-	// Open the item's window on a clean worktree, then do its work and finish it — the state the agent's
-	// `todo_update` leaves behind, with the reconcile still queued.
 	store.update(todo.id, { status: "in_progress" });
 	await maybeAttachChangeArtifacts("w1", SESSION);
 	writeFileSync(join(repo, "impl.ts"), "export {};\n");
 	store.update(todo.id, { status: "done" });
 
-	// Enqueued exactly as `host/server.ts` does it — synchronously with the publish, NOT awaited. A read that
-	// didn't wait would see the item `done` with no change set at all (the stale-plan-page bug).
 	void maybeAttachChangeArtifacts("w1", SESSION);
 	const plan = await listTodos({ workspaceId: "w1", sessionId: SESSION });
 

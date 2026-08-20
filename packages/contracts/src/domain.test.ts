@@ -7,10 +7,6 @@ import {
 	REQUEST_IMAGE_BASE64_BUDGET,
 } from "./domain";
 
-// The shared presentation/measurement contracts live here (next to isControlMessage), used by both the
-// web client and the host — so their behavior is pinned where it's defined, not only transitively
-// through each consumer's suites.
-
 describe("isRetriedAttempt", () => {
 	const failed = { role: "assistant", stopReason: "error" };
 	const ok = { role: "assistant", stopReason: "stop" };
@@ -57,7 +53,6 @@ describe("image payload ceiling", () => {
 	test("the request-wide image budget leaves headroom under Anthropic's 32MB per-request cap", () => {
 		expect(REQUEST_IMAGE_BASE64_BUDGET).toBe(24 * 1024 * 1024);
 		expect(REQUEST_IMAGE_BASE64_BUDGET).toBeLessThan(32 * 1024 * 1024);
-		// The budget must admit at least a few ceiling-sized images — otherwise the per-image ceiling is dead.
 		expect(REQUEST_IMAGE_BASE64_BUDGET).toBeGreaterThan(IMAGE_MAX_BASE64_BYTES * 4);
 	});
 

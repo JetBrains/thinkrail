@@ -4,19 +4,6 @@ import { useFold } from "./foldState";
 import { getToolRenderer, getToolSummary, resolveProminence } from "./toolRegistry";
 import type { ToolResultState } from "./types";
 
-/**
- * A tool call paired with its result, in one card. The body comes from the tool-renderer registry
- * (default = pretty-printed args/result); the header + status icon are shared chrome. Presentational.
- *
- * Collapsed by default — the header carries a one-line summary (the registered {@link getToolSummary})
- * so a collapsed card still reads at a glance; click the header to reveal the body. Two auto-expands,
- * both losing to a manual toggle: errors (failures stay visible), and a registered `defaultExpanded`
- * once the call completes (e.g. `visualize` — while its args stream it stays a slim running row).
- * The manual choice lives in the shared fold cache (keyed by `toolCallId`), so it survives
- * virtualization — a deliberately collapsed `defaultExpanded` card must not pop back open when
- * scrolled away and back.
- * A call on a dead message (`dead`) renders as errored — pi never executes it, so it must not spin.
- */
 export function ToolCard({
 	toolCallId,
 	toolName,
@@ -30,7 +17,6 @@ export function ToolCard({
 	toolName: string;
 	args: Record<string, unknown>;
 	tool: ToolResultState | undefined;
-	/** Owning message aborted/errored — the call will never execute. */
 	dead?: boolean;
 	streaming: boolean;
 	workspaceRoot?: string | undefined;
@@ -49,8 +35,6 @@ export function ToolCard({
 	};
 	const summary = getToolSummary(toolName, renderProps);
 
-	// Auto-expand on error, or — for a `defaultExpanded` registration — on completion. The default only
-	// applies until the user toggles; the cached manual choice then wins (see `useFold`).
 	const autoExpand = isError || (resolveProminence(toolName).defaultExpanded && status === "done");
 	const [expanded, toggle] = useFold(toolCallId, autoExpand);
 

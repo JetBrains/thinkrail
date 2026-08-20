@@ -1,4 +1,3 @@
-// Dev/e2e entry: boot the host from env. The polished `thinkrail` bin lives in apps/cli.
 import type { Provider } from "@earendil-works/pi-ai";
 import type { OAuthCredentials, OAuthLoginCallbacks } from "@earendil-works/pi-ai/oauth";
 import { resolveShellEnv } from "@thinkrail/shared/shellEnv";
@@ -8,10 +7,6 @@ import { bootHost } from "./host";
 
 resolveShellEnv();
 
-// e2e-only: register deterministic fake pi providers so the in-app login flows are drivable end-to-end
-// without a real provider or browser — `e2e-oauth` (OAuth: select → open URL / paste code → success) and
-// `e2e-apikey` (interactive API-key entry: one secret prompt → success, issue #97). Gated by
-// THINKRAIL_E2E_FAKE_OAUTH; this file is the dev/e2e entry and never ships (apps/cli is the prod bin).
 if (process.env.THINKRAIL_E2E_FAKE_OAUTH === "1") {
 	const fakeOauth = {
 		name: "E2E Test Provider",
@@ -27,7 +22,6 @@ if (process.env.THINKRAIL_E2E_FAKE_OAUTH === "1") {
 			callbacks.onAuth({ url: "https://e2e.test/authorize?probe=1" });
 			const code = (await callbacks.onManualCodeInput?.()) ?? "";
 			callbacks.onProgress?.("Exchanging authorization code…");
-			// Far-future expiry (no Date.now needed) so the stored credential never reads as expired.
 			return {
 				refresh: "e2e-refresh",
 				access: `e2e-access-${choice}-${code}`,
@@ -41,10 +35,6 @@ if (process.env.THINKRAIL_E2E_FAKE_OAUTH === "1") {
 			return String(credentials.access);
 		},
 	};
-	// The API-key fake must be a NATIVE provider (pi 0.81 full provider extensions): only `Provider.auth`
-	// can express an interactive `apiKey.login` — the ProviderConfig path above takes a key *string*, not
-	// a flow. `login` runs one secret prompt (multi-prompt providers differ only in prompt count — the
-	// bridge parks each the same way); pi persists the returned credential to auth.json itself.
 	const dummyStream = (): never => {
 		throw new Error("e2e-apikey is a login fixture — it never streams");
 	};
@@ -87,20 +77,16 @@ if (process.env.THINKRAIL_E2E_FAKE_OAUTH === "1") {
 		stream: dummyStream,
 		streamSimple: dummyStream,
 	};
-	// Via the generation initializer: every candidate rebuild must keep the dev fixtures.
 	configurePiRuntimeGenerationInitializer((runtime) => {
 		runtime.registerProvider("e2e-oauth", { oauth: fakeOauth });
 		runtime.registerNativeProvider(fakeApiKeyProvider);
 	});
 }
 
-// After every invariant registration is declared; bootHost re-runs this idempotently.
 await initializeJbcentralRuntime();
 
 const host = process.env.THINKRAIL_HOST ?? "localhost";
 const staticDir = process.env.THINKRAIL_STATIC_DIR;
-// An explicit THINKRAIL_PORT is honored as-is (e2e pins it; the dev launcher pre-picks it so vite's
-// proxy can match). With none set, pick a free port so a standalone host never collides with one running.
 const envPort = process.env.THINKRAIL_PORT;
 
 const { port } = await bootHost({
@@ -108,8 +94,6 @@ const { port } = await bootHost({
 	host,
 	portMode: envPort ? "exact" : "free",
 	...(staticDir ? { staticDir } : {}),
-	// Run-from-source: the `dev` channel, `source` build. Nothing to gate here — muting belongs to the
-	// analytics service (CI / NODE_ENV=test / THINKRAIL_NO_ANALYTICS, which the e2e configs set).
 	analytics: { channel: "dev", build: "source" },
 });
 console.log(`thinkrail host: http://${host}:${port}`);

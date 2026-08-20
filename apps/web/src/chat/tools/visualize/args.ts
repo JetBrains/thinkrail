@@ -1,7 +1,3 @@
-// Defensive parsing of the `visualize` tool's `comparison` args (a `Record<string, unknown>` off the
-// wire) into a typed view model the renderer can trust. Pure — unit-tested; no React/DOM.
-
-/** A comparison option, normalized for rendering. Optional fields are always present but may be undefined. */
 export interface ComparisonOptionView {
 	name: string;
 	description: string | undefined;
@@ -15,7 +11,6 @@ function strArray(value: unknown): string[] {
 	return Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : [];
 }
 
-/** Parse the `options` arg into view models. Non-arrays → `[]`; non-object entries → empty options. */
 export function parseComparisonOptions(value: unknown): ComparisonOptionView[] {
 	if (!Array.isArray(value)) return [];
 	return value.map((entry) => {

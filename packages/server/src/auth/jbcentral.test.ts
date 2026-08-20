@@ -133,7 +133,6 @@ function control(name: string, present: boolean): void {
 	else rmSync(path, { force: true });
 }
 
-/** How many times the host has actually run `central status` — the combined probe's cost meter. */
 function probeCount(): number {
 	return commandLog().filter((invocation) => invocation === "status").length;
 }
@@ -333,7 +332,6 @@ describe("watched native Central runtime", () => {
 			outcome: "failed",
 			reason: "candidate-failed",
 		});
-		// The watcher/poll may coalesce one final removal hint behind the action-owned rebuild.
 		await pollStatus("load-failed");
 		expect(await getJbcentralStatus()).toMatchObject({
 			state: "load-failed",
@@ -388,8 +386,6 @@ describe("watched native Central runtime", () => {
 
 	test("reports a signed-out Central off the read path, without exposing the probe's output", async () => {
 		control("signed-out", true);
-		// The first read answers immediately from the unknown verdict and only *starts* the probe: a demand
-		// is never invented, and a 1.3s child process never blocks a status read.
 		expect(await getJbcentralStatus()).toEqual({
 			state: "supported",
 			version: "1.6.2",
@@ -404,7 +400,6 @@ describe("watched native Central runtime", () => {
 			"synthetic-sensitive-child-output",
 		);
 
-		// The demand survives Connect — being configured says nothing about holding credentials.
 		expect(await connectJbcentral()).toEqual({ outcome: "applied" });
 		expect(await getJbcentralStatus()).toEqual({
 			state: "configured",
@@ -453,10 +448,6 @@ describe("watched native Central runtime", () => {
 	});
 
 	test("collapses a burst of status reads into a single status probe", async () => {
-		// The probe is a ~1.3s child process that records one Central analytics event per call, so the TTL is
-		// a cost boundary, not a nicety: a panel open plus its invalidation pushes plus a Refresh must not
-		// multiply into a probe each. Without this, losing the TTL is invisible until Central bills for it.
-		// A read is what starts a probe; nothing polls Central on its own.
 		await getJbcentralStatus();
 		await waitFor(() => probeCount() >= 1);
 		const settled = probeCount();
@@ -465,13 +456,6 @@ describe("watched native Central runtime", () => {
 	});
 
 	test("never probes Central status while an action or rebuild is in flight", async () => {
-		// A status read during `configuring` returns before inspection, so no probe may start. The card polls
-		// this path twice a second while an action runs — probing here would pile 1.3s children behind a slow
-		// `add pi` and flood Central's analytics for the length of the action.
-		//
-		// The cache is deliberately left INVALID for this test (launching sign-in drops it). A fresh verdict
-		// would block the probe on the TTL alone and the assertion would hold no matter where the refresh is
-		// called from, which is the failure mode this comment exists to prevent.
 		await getJbcentralStatus();
 		await waitFor(() => probeCount() >= 1);
 		expect(await jbcentralLogin()).toEqual({ outcome: "launched" });
@@ -480,9 +464,6 @@ describe("watched native Central runtime", () => {
 		const connect = connectJbcentral();
 		await waitFor(() => commandLog().includes("add pi"));
 		const duringAction = probeCount();
-		// Spread the polls over real time: the fake logs its argv as its first statement, so a probe started
-		// by any of these reads would appear in the log well inside this window. Asserting immediately after
-		// a tight loop would race the spawn and pass regardless.
 		for (let poll = 0; poll < 6; poll += 1) {
 			expect((await getJbcentralStatus()).state).toBe("configuring");
 			await new Promise((resolve) => setTimeout(resolve, 50));
@@ -491,8 +472,6 @@ describe("watched native Central runtime", () => {
 
 		control("add-wait", false);
 		expect(await connect).toEqual({ outcome: "applied" });
-		// And once it settles, the next read picks the stale verdict up — deferred, not dropped. (A read is
-		// what drives it; polling the counter alone would wait forever, which is the invariant restated.)
 		await waitFor(async () => {
 			await getJbcentralStatus();
 			return probeCount() > duringAction;
@@ -500,21 +479,15 @@ describe("watched native Central runtime", () => {
 	});
 
 	test("an invalidation that overtakes an in-flight probe discards its answer", async () => {
-		// The probe is ~1.3s of child process, so a credential change can easily land while one is running.
-		// That probe read the world as it was before the change: caching its answer would serve a stale
-		// verdict as fresh for a whole TTL and silently undo the invalidation.
 		control("status-wait", true);
 		control("signed-out", true);
 		await getJbcentralStatus();
 		await waitFor(() => probeCount() >= 1);
 
-		// The user signs in while that probe is still blocked.
 		control("signed-out", false);
 		expect(await jbcentralLogin()).toEqual({ outcome: "launched" });
 		control("status-wait", false);
 
-		// The overtaken answer must not become the cached verdict, so a read re-probes rather than waiting
-		// out the TTL. Bounded well under the TTL so serving the stale answer cannot pass by luck.
 		const started = Date.now();
 		let reprobed = false;
 		while (Date.now() - started < 1_500) {
@@ -540,8 +513,6 @@ describe("watched native Central runtime", () => {
 		});
 		const probes = probeCount();
 
-		// Signing in happens out-of-band, so the verdict is obsolete the moment the flow launches — without
-		// this seam the stale demand would be served for the rest of the TTL.
 		control("signed-out", false);
 		expect(await jbcentralLogin()).toEqual({ outcome: "launched" });
 		await waitFor(async () => {

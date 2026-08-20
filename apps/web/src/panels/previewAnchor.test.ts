@@ -19,7 +19,6 @@ test("normalizeFragment strips the markers rendering removes", () => {
 });
 
 test("maps a rendered paragraph selection to its source line despite markers", () => {
-	// What the user selects in the PREVIEW: rendered text, markers gone.
 	expect(mapPreviewSelection(SOURCE, "A paragraph with bold text and a")).toEqual({
 		startLine: 3,
 		endLine: 3,

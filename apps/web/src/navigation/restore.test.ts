@@ -4,8 +4,6 @@ import { selectAttentionCenterTab, useAppStore } from "../store";
 import type { NavigationDriver } from "./driver";
 import { startNavigation } from "./restore";
 
-// ——— fixtures ————————————————————————————————————————————————————————————————————————————————————
-
 function project(id: string): Project {
 	return { id, name: id, path: `/tmp/${id}`, slug: id, lastOpened: 1 };
 }
@@ -21,7 +19,6 @@ function workspace(id: string, projectId = "p1"): Workspace {
 	};
 }
 
-/** An in-memory driver: records every `replace`, and can push an incoming fragment like a hash edit. */
 function fakeDriver(initial = "") {
 	let fragment = initial;
 	const handlers = new Set<(fragment: string) => void>();
@@ -50,7 +47,6 @@ function fakeDriver(initial = "") {
 	};
 }
 
-/** A manually-settled `workspace.list` fake, so tests control exactly when each read lands. */
 function fakeLists() {
 	const calls: {
 		projectId: string;
@@ -64,14 +60,12 @@ function fakeLists() {
 	return { calls, listWorkspaces };
 }
 
-/** Let queued promise continuations run. */
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 function installWelcome(projects: Project[]): void {
 	useAppStore.getState().installWelcomeSnapshot(1, projects, projects);
 }
 
-/** Install the host-shared chat placement plus this browser's local selection of it. */
 function selectChatPlacement(workspaceId: string, sessionId: string): void {
 	const tabId = `placed:${sessionId}`;
 	const document: WorkspaceLayoutDocument = {
@@ -140,19 +134,16 @@ afterEach(() => {
 	stop = null;
 });
 
-// ——— readiness ————————————————————————————————————————————————————————————————————————————————————
-
 test("no restore runs before the atomic welcome generation", async () => {
 	const d = fakeDriver("#/v1/projects/p1/workspaces/w1/chats/s1");
 	const { calls, listWorkspaces } = fakeLists();
 	stop = startNavigation({ driver: d.driver, listWorkspaces });
 	await settle();
-	// Connection status alone is NOT readiness — nothing was validated, nothing moved.
 	useAppStore.getState().setStatus("connected");
 	await settle();
 	expect(calls).toHaveLength(0);
 	expect(useAppStore.getState().activeWorkspaceId).toBeNull();
-	expect(d.fragment).toBe("#/v1/projects/p1/workspaces/w1/chats/s1"); // the URL is never downgraded early
+	expect(d.fragment).toBe("#/v1/projects/p1/workspaces/w1/chats/s1");
 
 	installWelcome([project("p1")]);
 	await settle();
@@ -170,7 +161,6 @@ test("no restore runs before the atomic welcome generation", async () => {
 		navigation: null,
 		validated: false,
 	});
-	// The exact-chat fragment survives untouched throughout the restore.
 	expect(d.fragment).toBe("#/v1/projects/p1/workspaces/w1/chats/s1");
 });
 
@@ -179,13 +169,12 @@ test("duplicate welcome delivery starts at most one active restore read", async 
 	const { calls, listWorkspaces } = fakeLists();
 	stop = startNavigation({ driver: d.driver, listWorkspaces });
 	installWelcome([project("p1")]);
-	installWelcome([project("p1")]); // e.g. a reconnect racing the first welcome
+	installWelcome([project("p1")]);
 	await settle();
 	expect(calls).toHaveLength(1);
 	calls[0]?.resolve([workspace("w1")]);
 	await settle();
 	expect(useAppStore.getState().activeWorkspaceId).toBe("w1");
-	// A welcome AFTER the route resolved must not replay the completed startup route.
 	installWelcome([project("p1")]);
 	await settle();
 	expect(calls).toHaveLength(1);
@@ -202,19 +191,15 @@ test("a malformed initial fragment canonicalizes to #/v1 and restores nothing", 
 	expect(useAppStore.getState().activeWorkspaceId).toBeNull();
 });
 
-// ——— generations & cancellation ————————————————————————————————————————————————————————————————————
-
 test("a newer incoming fragment cancels the older restore's landing", async () => {
 	const d = fakeDriver("#/v1/projects/p1/workspaces/w1");
 	const { calls, listWorkspaces } = fakeLists();
 	stop = startNavigation({ driver: d.driver, listWorkspaces });
 	installWelcome([project("p1")]);
 	await settle();
-	// A fresh fragment arrives while the first read is still in flight.
 	d.incoming("#/v1/projects/p1/workspaces/w2");
 	await settle();
 	expect(calls).toHaveLength(2);
-	// The OLDER response lands after the newer route took over: it must change nothing.
 	calls[0]?.resolve([workspace("w1"), workspace("w2")]);
 	await settle();
 	expect(useAppStore.getState().activeWorkspaceId).toBeNull();
@@ -229,19 +214,16 @@ test("fresh user navigation wins over a delayed workspace response", async () =>
 	stop = startNavigation({ driver: d.driver, listWorkspaces });
 	installWelcome([project("p1")]);
 	await settle();
-	// The user clicks a workspace while the route's list read is still in flight.
 	useAppStore.getState().setWorkspaces("p1", [workspace("w1"), workspace("w2")]);
 	useAppStore.getState().activateWorkspace(workspace("w2"));
-	// The pending route is cancelled the instant the user navigates — the URL follows them immediately,
-	// not once the delayed response lands.
 	expect(d.fragment).toBe("#/v1/projects/p1/workspaces/w2");
 	await settle();
 	calls[0]?.resolve([workspace("w1"), workspace("w2")]);
 	await settle();
 	const state = useAppStore.getState();
-	expect(state.activeWorkspaceId).toBe("w2"); // the user's choice stands
-	expect(state.routeChatTarget).toBeNull(); // the stale chat intent never installs
-	expect(d.fragment).toBe("#/v1/projects/p1/workspaces/w2"); // and the URL follows the user
+	expect(state.activeWorkspaceId).toBe("w2");
+	expect(state.routeChatTarget).toBeNull();
+	expect(d.fragment).toBe("#/v1/projects/p1/workspaces/w2");
 });
 
 test("same-workspace center navigation wins over a delayed route response", async () => {
@@ -254,12 +236,10 @@ test("same-workspace center navigation wins over a delayed route response", asyn
 	store.activateWorkspace(workspace("w1"));
 	store.openChatSession("w1", "s1", null, "medium");
 
-	// An exact-chat hash starts its authoritative workspace read, then the user opens a file without
-	// changing project/workspace scope. The center-navigation tick must still cancel the pending route.
 	d.incoming("#/v1/projects/p1/workspaces/w1/chats/s1");
 	await settle();
 	expect(calls).toHaveLength(1);
-	store.noteNavigation("w1"); // the click stamps its intent before the asynchronous file read lands
+	store.noteNavigation("w1");
 	store.openTab(
 		{
 			kind: "file",
@@ -289,14 +269,10 @@ test("user navigation past an installed exact-chat target cancels it and resumes
 	calls[0]?.resolve([workspace("w1")]);
 	await settle();
 	expect(useAppStore.getState().routeChatTarget?.sessionId).toBe("s1");
-	// A center navigation (starting a chat) moves the workspace's nav tick past the stamp.
 	useAppStore.getState().noteNavigation("w1");
 	expect(useAppStore.getState().routeChatTarget).toBeNull();
-	// Sync resumed: the URL now tracks the store again (workspace-level — no chat tab is open).
 	expect(d.fragment).toBe("#/v1/projects/p1/workspaces/w1");
 });
-
-// ——— authoritative absence vs transient failure ——————————————————————————————————————————————————————
 
 test("a completed welcome lacking the project canonicalizes to Welcome", async () => {
 	const d = fakeDriver("#/v1/projects/p-gone/workspaces/w1/chats/s1");
@@ -304,7 +280,7 @@ test("a completed welcome lacking the project canonicalizes to Welcome", async (
 	stop = startNavigation({ driver: d.driver, listWorkspaces });
 	installWelcome([project("p1")]);
 	await settle();
-	expect(calls).toHaveLength(0); // nothing to list — the project is authoritatively absent
+	expect(calls).toHaveLength(0);
 	expect(useAppStore.getState().activeWorkspaceId).toBeNull();
 	expect(d.fragment).toBe("#/v1");
 });
@@ -331,10 +307,8 @@ test("a failed workspace read is not deletion: URL and intent survive, the next 
 	await settle();
 	calls[0]?.reject(new Error("socket died"));
 	await settle();
-	// Nothing moved and nothing was rewritten — a timeout says nothing about existence.
 	expect(useAppStore.getState().activeWorkspaceId).toBeNull();
 	expect(d.fragment).toBe("#/v1/projects/p1/workspaces/w1/chats/s1");
-	// The reconnect welcome retries the same unresolved intent…
 	installWelcome([project("p1")]);
 	await settle();
 	expect(calls).toHaveLength(2);
@@ -344,13 +318,11 @@ test("a failed workspace read is not deletion: URL and intent survive, the next 
 	expect(useAppStore.getState().routeChatTarget?.sessionId).toBe("s1");
 });
 
-// ——— store → URL sync ————————————————————————————————————————————————————————————————————————————————
-
 test("internal navigation replaces the fragment; each location writes exactly once", async () => {
 	const d = fakeDriver("");
 	const { listWorkspaces } = fakeLists();
 	stop = startNavigation({ driver: d.driver, listWorkspaces });
-	expect(d.fragment).toBe("#/v1"); // the empty fragment canonicalizes
+	expect(d.fragment).toBe("#/v1");
 	installWelcome([project("p1")]);
 	await settle();
 
@@ -364,7 +336,6 @@ test("internal navigation replaces the fragment; each location writes exactly on
 	selectChatPlacement("w1", "s1");
 	expect(d.fragment).toBe("#/v1/projects/p1/workspaces/w1/chats/s1");
 
-	// Re-asserting the same location is idempotent — no second write for an unchanged fragment.
 	const writes = d.replaces.length;
 	useAppStore.getState().setStatus("connected");
 	expect(d.replaces.length).toBe(writes);
@@ -408,8 +379,6 @@ test("an unresolved exact-chat target pauses URL sync until it is consumed", asy
 	await settle();
 	expect(useAppStore.getState().routeChatTarget?.sessionId).toBe("s1");
 
-	// Temporary no-tab/error state (a background file tab opening takes no navigation tick) must not
-	// overwrite the exact-chat fragment while the target is unresolved.
 	useAppStore.getState().openTab(
 		{
 			kind: "file",
@@ -423,7 +392,6 @@ test("an unresolved exact-chat target pauses URL sync until it is consumed", asy
 	);
 	expect(d.fragment).toBe("#/v1/projects/p1/workspaces/w1/chats/s1");
 
-	// Consuming the target (what shell/chatReconciliation does after hydration) resumes sync.
 	useAppStore.getState().clearRouteChatTarget();
 	expect(d.fragment).toBe("#/v1/projects/p1/workspaces/w1");
 });
@@ -484,8 +452,6 @@ test("a workspace-level route retains existing local attention and canonicalizes
 	const state = useAppStore.getState();
 	expect(selectAttentionCenterTab(state, "w1")?.sessionId).toBe("s1");
 	expect(state.routeChatTarget).toBeNull();
-	// Workspace routes carry no tab intent. Existing browser-local attention survives, then ordinary
-	// store→URL sync truthfully canonicalizes to that selected chat.
 	expect(d.fragment).toBe("#/v1/projects/p1/workspaces/w1/chats/s1");
 });
 
@@ -499,8 +465,6 @@ test("an older response cannot unmark a newer generation's in-flight read", asyn
 	await settle();
 	expect(calls).toHaveLength(2);
 
-	// The obsolete generation settles while w2 is still in flight. A reconnect welcome must NOT start a
-	// duplicate w2 read merely because the older continuation finished.
 	calls[0]?.resolve([workspace("w1"), workspace("w2")]);
 	await settle();
 	installWelcome([project("p1")]);

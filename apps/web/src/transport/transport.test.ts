@@ -47,7 +47,6 @@ class TestWebSocket {
 const originalWebSocket = globalThis.WebSocket;
 const tick = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** The three client→host frame shapes, read by shape rather than by position. */
 interface ClientFrame {
 	id?: string;
 	method?: string;
@@ -130,13 +129,12 @@ describe("WsTransport reconnect delivery", () => {
 
 		first?.close();
 		await tick(20);
-		expect(settled).toBe(false); // disconnect is not reported as a false operation failure
+		expect(settled).toBe(false);
 
-		await tick(520); // initial reconnect backoff
+		await tick(520);
 		const replacement = TestWebSocket.instances[1];
 		expect(replacement).toBeDefined();
 		replacement?.open();
-		// The reconciliation states the still-unresolved set, and precedes the replay of that very frame.
 		expect(replacement?.sent).toEqual([JSON.stringify({ resume: [id] }), originalFrame]);
 
 		replacement?.message(JSON.stringify({ id, ok: true, result: [] }));
@@ -151,11 +149,6 @@ describe("WsTransport reconnect delivery", () => {
 	});
 });
 
-/**
- * The host cannot tell a reply that was read from one that died in a socket buffer, so it holds every result
- * until the page says it arrived. These receipts are the half of exactly-once the client owns: without them
- * the host must either keep every response forever or reclaim one the page is still about to replay for.
- */
 describe("WsTransport response receipts", () => {
 	test("acknowledges each response, batching a burst into one frame", async () => {
 		const transport = new WsTransport({ url: "ws://localhost:24242/ws" });
@@ -175,7 +168,6 @@ describe("WsTransport response receipts", () => {
 		await tick(0);
 
 		expect(acksIn(socket?.sent ?? [])).toEqual(ids);
-		// Both receipts rode a single frame rather than one each.
 		expect((socket?.sent.length ?? 0) - before).toBe(1);
 	});
 
@@ -187,19 +179,16 @@ describe("WsTransport response receipts", () => {
 
 		const result = transport.request("project.list", {});
 		const id = requestsIn(first?.sent ?? [])[0]?.id;
-		// The reply lands and the socket dies before the batched receipt can flush.
 		first?.message(JSON.stringify({ id, ok: true, result: [] }));
 		first?.close();
 		expect(await result).toEqual([]);
 		expect(acksIn(first?.sent ?? [])).toEqual([]);
 
-		await tick(520); // initial reconnect backoff
+		await tick(520);
 		const replacement = TestWebSocket.instances[1];
 		replacement?.open();
 		await tick(0);
 
-		// The lost receipt is never retransmitted — it does not have to be. `resume` names the whole live set,
-		// which here is empty, so the host releases that result anyway.
 		expect(acksIn(replacement?.sent ?? [])).toEqual([]);
 		expect(resumesIn(replacement?.sent ?? [])).toEqual([[]]);
 	});
@@ -217,14 +206,12 @@ describe("WsTransport response receipts", () => {
 		expect(await resolved).toEqual([]);
 		first?.close();
 
-		// Issued with no socket at all: the pending map doubles as the reconnect queue.
 		const queued = transport.request("git.status", { workspaceId: "w1" });
 		await tick(520);
 		const replacement = TestWebSocket.instances[1];
 		replacement?.open();
 		const queuedId = requestsIn(replacement?.sent ?? [])[1]?.id;
 
-		// Both still-unresolved ids, and only those: the one already answered is not the host's to hold.
 		expect(resumesIn(replacement?.sent ?? [])).toEqual([[stillOpenId, queuedId ?? ""]]);
 		expect(resumesIn(replacement?.sent ?? [])[0]).not.toContain(resolvedId);
 

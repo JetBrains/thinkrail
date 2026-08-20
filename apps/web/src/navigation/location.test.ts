@@ -26,7 +26,6 @@ test("ids that need encoding survive the round trip as single path segments", ()
 		sessionId: "s%25already",
 	};
 	const fragment = serializeLocation(location);
-	// One encoded segment per id — a raw "/" inside an id must never mint an extra segment.
 	expect(fragment.split("/")).toHaveLength(8);
 	expect(parseFragment(fragment)).toEqual(location);
 });
@@ -38,21 +37,21 @@ test("parse accepts the fragment with or without its leading '#'", () => {
 
 test("malformed and unknown fragments canonicalize safely to main", () => {
 	const invalid = [
-		"", // no fragment at all
-		"#", // bare hash
-		"#/v2/projects/p1", // unknown version
-		"#/projects/p1", // missing version
-		"#v1/projects/p1", // no leading slash
-		"#/v1/project/p1", // wrong collection name
-		"#/v1/projects", // missing id
-		"#/v1/projects/", // empty id
-		"#/v1/projects/p1/", // trailing slash = trailing empty segment
-		"#/v1/projects/p1/workspaces", // missing workspace id
-		"#/v1/projects/p1/workspaces/w1/chats", // missing session id
-		"#/v1/projects/p1/workspaces/w1/chats/s1/extra", // extra segments
-		"#/v1/projects/p1/tabs/t1", // unknown sub-collection
-		"#/v1/projects/%GG", // malformed percent-encoding
-		"#/section-heading", // a plain in-page anchor is not a route
+		"",
+		"#",
+		"#/v2/projects/p1",
+		"#/projects/p1",
+		"#v1/projects/p1",
+		"#/v1/project/p1",
+		"#/v1/projects",
+		"#/v1/projects/",
+		"#/v1/projects/p1/",
+		"#/v1/projects/p1/workspaces",
+		"#/v1/projects/p1/workspaces/w1/chats",
+		"#/v1/projects/p1/workspaces/w1/chats/s1/extra",
+		"#/v1/projects/p1/tabs/t1",
+		"#/v1/projects/%GG",
+		"#/section-heading",
 	];
 	for (const fragment of invalid) {
 		expect(parseFragment(fragment)).toEqual(MAIN_LOCATION);

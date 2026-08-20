@@ -5,7 +5,6 @@ import { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { completeOnce, pickModel } from "./oneshot";
 import { configurePiRuntime } from "./piRuntime";
 
-/** A full model def for the runtime (id + per-token input/output cost drives cheap-tier selection). */
 function modelDef(id: string, cost = 0) {
 	return {
 		id,
@@ -18,13 +17,7 @@ function modelDef(id: string, cost = 0) {
 	};
 }
 
-/**
- * Point the shared runtime at a fake exposing exactly `models` as authenticated. `pickModel` is
- * pure logic over the settled availability snapshot, so this stays deterministic regardless of the dev
- * machine's real provider env keys.
- */
 function stubAvailable(models: ReturnType<typeof withProvider>[]): void {
-	// A minimal runtime stub — pickModel only reads the snapshot (never pi's awaiting `getAvailable()`).
 	configurePiRuntime({ getAvailableSnapshot: () => models } as unknown as ModelRuntime);
 }
 
@@ -33,14 +26,13 @@ function withProvider(provider: string, id: string, cost = 0) {
 }
 
 afterEach(() => {
-	// Reset the singleton so a later test (or file) rebuilds from real auth rather than a stub.
 	configurePiRuntime(null);
 });
 
 test("pickModel(cheap) prefers a known small model (allowlist) over a cheaper unlisted one", async () => {
 	stubAvailable([
-		withProvider("anthropic", "claude-haiku-faux", 10), // allowlisted, but pricier
-		withProvider("cheapo", "cheapo-1", 1), // cheaper, but not on the allowlist
+		withProvider("anthropic", "claude-haiku-faux", 10),
+		withProvider("cheapo", "cheapo-1", 1),
 	]);
 	expect((await pickModel("cheap"))?.id).toBe("claude-haiku-faux");
 });
@@ -64,10 +56,6 @@ test("completeOnce throws 'no-model' when nothing is authenticated", async () =>
 });
 
 test("completeOnce dispatches a single request on the picked model and returns its text", async () => {
-	// Register a faux under the top allowlist slot (anthropic/claude-haiku) so `pickModel("cheap")` lands
-	// on it deterministically — even if the dev machine has other providers authed via env. A REAL
-	// ModelRuntime (in-memory credentials, no models.json/network) exercises pi's actual auth resolution
-	// + completeSimple dispatch through the extension provider's streamSimple.
 	const faux = createFauxCore({
 		provider: "anthropic",
 		api: "faux-anthropic",
@@ -81,7 +69,6 @@ test("completeOnce dispatches a single request on the picked model and returns i
 	});
 	runtime.registerProvider("anthropic", {
 		api: "faux-anthropic",
-		// baseUrl + apiKey are required when models are defined; streamSimple does the real (in-process) work.
 		baseUrl: "http://faux.local",
 		apiKey: "faux",
 		streamSimple: faux.streamSimple,

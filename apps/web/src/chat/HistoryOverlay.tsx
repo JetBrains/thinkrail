@@ -24,8 +24,6 @@ const SCOPE_LABELS: Record<HistoryScope["kind"], string> = {
 	all: "All",
 };
 
-/** The scope picker's dropdown labels (R2) — fuller than the terse badge label above (a menu has room a
- * pill doesn't), matching the design doc's prose exactly: "This chat / Workspace / Project / Everywhere". */
 const SCOPE_MENU_LABELS: Record<HistoryScope["kind"], string> = {
 	chat: "This chat",
 	workspace: "Workspace",
@@ -33,28 +31,18 @@ const SCOPE_MENU_LABELS: Record<HistoryScope["kind"], string> = {
 	all: "Everywhere",
 };
 
-/** Platform spelling for the save-as-template chord handled below. */
 const SAVE_SHORTCUT_LABEL = platformShortcutLabel("S");
 
 function escapeRegExp(term: string): string {
 	return term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-/**
- * Wraps every case-insensitive occurrence of a `query` term in `text`. Term split matches the server
- * matcher exactly (`query.toLowerCase().split(/\s+/)`, see `packages/server/src/history/historyIndex.ts`)
- * so highlighted spans always line up with why a row matched; terms sort longest-first so overlapping
- * terms prefer the longer alternative.
- */
 function Highlight({ text, query }: { text: string; query: string }) {
 	const terms = [...new Set(query.toLowerCase().split(/\s+/).filter(Boolean))].sort(
 		(a, b) => b.length - a.length,
 	);
 	if (terms.length === 0) return <>{text}</>;
 	const pattern = new RegExp(`(${terms.map(escapeRegExp).join("|")})`, "gi");
-	// Key on each part's own start offset in `text` (not the array index) — parts are consecutive,
-	// non-overlapping substrings, so `start` alone would collide only for two same-offset zero-length
-	// gaps either side of back-to-back matches; pairing it with the part's own text rules that out too.
 	let offset = 0;
 	const parts = text.split(pattern).map((part) => {
 		const start = offset;
@@ -130,9 +118,6 @@ function PromptRow({
 }) {
 	const firstLine = hit.text.split("\n")[0] ?? hit.text;
 	const showChip = (scope.kind === "project" || scope.kind === "all") && !!hit.workspaceId;
-	// jumpable once the hit carries its jump anchor (absent for an unmapped cwd, or a host that
-	// doesn't populate those fields) — the same rule the overlay's `Shift+Enter` handler gates on, so
-	// the icon and the shortcut can never disagree.
 	const target = jumpTarget(hit);
 	return (
 		<div
@@ -163,11 +148,6 @@ function PromptRow({
 				</span>
 			</button>
 			{isSelected ? (
-				// Persistent keyboard-shortcut glyph — the same precedent as the scope badge's `⌃R`
-				// (always visible next to its label, not hover-only). The icon beside it is still
-				// hover-revealed via `group-hover`/`isSelected` opacity; this glyph is the part a
-				// keyboard-only user (Shift+Enter's own audience) needs, so it can't be mouse-hover-gated
-				// the way the icon itself is.
 				<span
 					data-testid="history-save-shortcut"
 					className="shrink-0 text-text-muted tr-text-metadata"
@@ -282,9 +262,6 @@ function MessageRow({
 	);
 }
 
-/** A prompt hit's preview footer: chat title (when set) / a workspace chip whenever the hit has a
- * `workspaceId` — unlike `PromptRow`'s chip, never scope-gated, since a single detail pane has room a
- * dense list row doesn't — / relative time, `·`-joined like every other crumb in this file. */
 function PromptPreviewFooter({
 	hit,
 	workspaceName,
@@ -300,15 +277,6 @@ function PromptPreviewFooter({
 	return <>{parts.join(" · ")}</>;
 }
 
-/**
- * The zoomed stage's right-hand pane (R1) — a full-text preview of the flat-list keyboard-selected item.
- * Always mounted while `stage === "zoomed"` (never in `compact`), so `data-testid="history-preview"`'s
- * mere presence in the DOM doubles as the zoomed/compact signal. `item` is `null` when there's nothing
- * selected (an empty result set) — renders an empty panel then, never a crash. Body reuses `Highlight`
- * **verbatim** (the same helper `PromptRow`/`MessageRow` use for their truncated text) over the hit's
- * full `text` — never a row's first-line/snippet truncation — so a long prompt's tail, cut off in the
- * list, reads in full here.
- */
 function HistoryPreview({
 	item,
 	query,
@@ -340,54 +308,25 @@ function HistoryPreview({
 	);
 }
 
-/** A message hit's preview footer — the literal `sessionTitle · role · relative time` crumb (R1 spec),
- * deliberately simpler than `MessageRow`'s own header (which also flags an unmapped session): the row
- * immediately to this preview's left already carries that flag, so the preview isn't the only place it
- * shows. */
 function messageCrumb(hit: MessageHit): string {
 	return `${hit.sessionTitle || hit.cwd.split("/").pop() || "session"} · ${hit.role} · ${relativeTime(hit.timestamp)}`;
 }
 
 export interface HistoryOverlayProps {
 	state: HistorySearchState;
-	/** `workspaceId → display name` for every known workspace, so the "project"/"all" scope's cross-
-	 * workspace chip can show a human label without this presentational component touching the store. */
 	workspaceNames: Record<string, string>;
 	onQueryChange: (query: string) => void;
 	onToggleStage: () => void;
 	onMoveSelection: (delta: number) => void;
-	/** **Dismissal** — Escape, the overlay's only "close and do nothing else" exit (every other close is a
-	 * side effect of insert/jump/save, which the respective callback owns). The caller both closes the
-	 * overlay and hands focus back to the composer; this component never decides where focus lands next. */
 	onClose: () => void;
-	/** Enter on a prompt hit — replace the draft, focus, caret at end, close. */
 	onInsert: (hit: PromptHit) => void;
-	/** Cmd/Ctrl+Enter on a prompt hit — insert then submit via the composer's own submit path. */
 	onInsertAndSend: (hit: PromptHit) => void;
-	/** Jump to an already-resolved target — `Enter`/click on a mapped message hit, or the
-	 * go-to-chat icon / `Shift+Enter` on a jumpable prompt hit. Every call site resolves its hit through
-	 * the shared `jumpTarget` helper first and only calls this when it returns non-null, so an unmapped
-	 * hit (or a prompt hit missing its anchor) never reaches here — belt-and-suspenders, not a
-	 * redundant guard inside `useHistorySearch`'s `openMessage`. */
 	onOpenMessage: (target: ChatLocationRequest) => void;
-	/** A prompt row's save-as-template action — its own button (hover-revealed, every row) and
-	 * Cmd/Ctrl+S while that row is the keyboard selection. Opens `TemplateEditorDialog` body-prefilled;
-	 * `ChatView` owns the dialog, this overlay only reports the hit. */
 	onSaveAsTemplate: (hit: PromptHit) => void;
-	/** Move the hit's whole chat to trash; only mapped hits render this action. */
 	onDeleteChat: (workspaceId: string, sessionId: string) => void;
-	/** R2's mouse path: a direct scope pick from the badge's dropdown menu. The `Ctrl+R` keyboard path
-	 * (`cycleScope`, routed from the shell through `ChatView`) is unaffected — both just set the same
-	 * underlying scope state (`useHistorySearch.ts`'s `setScope`/`cycleScope` reset the results selection
-	 * identically). */
 	onSetScope: (kind: HistoryScope["kind"]) => void;
 }
 
-/**
- * The Ctrl+R history-recall overlay (props-driven, no store/transport — `useHistorySearch` owns that
- * edge). Anchored above the composer exactly like its mention menu (`Composer.tsx:224-263`): `compact`
- * shows prompts only (~40vh); `Tab` zooms to ~75vh with both the Prompts and Messages sections.
- */
 export function HistoryOverlay({
 	state,
 	workspaceNames,
@@ -405,11 +344,8 @@ export function HistoryOverlay({
 	const { open, stage, query, scope, result, selected, error } = state;
 	const inputRef = useRef<HTMLInputElement>(null);
 	const resultsRef = useRef<HTMLDivElement>(null);
-	// The scope picker is a CONTROLLED Radix menu purely so the Escape handler below can stand down while
-	// it is open — Escape must dismiss the innermost layer (the menu), not the overlay under it.
 	const [scopeMenuOpen, setScopeMenuOpen] = useState(false);
 
-	// Auto-focus with the seeded text selected, the instant the overlay opens — not on every keystroke.
 	useEffect(() => {
 		if (!open) return;
 		const el = inputRef.current;
@@ -418,14 +354,6 @@ export function HistoryOverlay({
 		el.select();
 	}, [open]);
 
-	// Escape dismisses the overlay from ANYWHERE, not just the query input. Focus routinely leaves that
-	// input while the overlay is up — a click back into the composer, a row's icon button, an errant click
-	// on the page — and an input-local handler was the only way out, so the panel got stuck open with no
-	// keyboard dismissal at all. Window + **capture** phase, so it wins over anything downstream that also
-	// treats Escape as its own (the composer's slot session, which must survive the dismissal); the
-	// `stopPropagation` is what enforces that "topmost floating panel closes first" ordering. Registered
-	// only while `open`, and stood down while the scope menu is up so Radix's own Escape (a document-level
-	// capture listener, which would otherwise fire in the same keystroke) closes just that menu.
 	useEffect(() => {
 		if (!open || scopeMenuOpen) return;
 		const onWindowKeyDown = (e: globalThis.KeyboardEvent) => {
@@ -438,10 +366,6 @@ export function HistoryOverlay({
 		return () => window.removeEventListener("keydown", onWindowKeyDown, true);
 	}, [open, scopeMenuOpen, onClose]);
 
-	// A stable identity for the currently-selected row, derived from stage/result/selected. It changes
-	// exactly when the selection lands on a different row — including when a stage toggle or a fresh result
-	// makes the same `selected` index point at a different hit (or none) — so the scroll effect below can
-	// depend on it alone and stay honestly exhaustive. `null` when nothing is selected.
 	const selectedKey = useMemo(() => {
 		const sel = resolveHistorySelection(stage, result, selected);
 		if (!sel) return null;
@@ -450,12 +374,6 @@ export function HistoryOverlay({
 			: `m:${sel.hit.sessionId}:${sel.hit.messageIndex}`;
 	}, [stage, result, selected]);
 
-	// Arrow-key navigation moves the selection past the edge of what's scrolled into view — the container
-	// itself scrolls (mouse wheel, drag), but a keyboard-only selection change never does on its own.
-	// `block: "nearest"` is the minimal scroll: it only moves the container when the selected row is
-	// actually outside the visible range, never re-centering a row that's already visible. The row is
-	// reached through the DOM (`data-selected`); `selectedKey` is the sole dependency because it's the
-	// thing that changes when "which row is selected" changes.
 	useEffect(() => {
 		if (selectedKey === null) return;
 		resultsRef.current
@@ -465,16 +383,8 @@ export function HistoryOverlay({
 
 	if (!open) return null;
 
-	// No Ctrl+R or Escape branch here: both chords are owned outside this input, because both must work
-	// with focus anywhere — `Ctrl+R` by `shell/useGlobalHotkeys` (which routes a scope cycle back through
-	// `ChatView` while the overlay is open), Escape by the window listener above.
 	const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
 		if ((e.metaKey || e.ctrlKey) && e.code === "KeyS") {
-			// Always swallow — Cmd/Ctrl+S is the browser's own "save page" shortcut. Only a prompt row
-			// selection actually opens the save-as-template dialog; on a message hit (or none) this is a
-			// no-op, same as Enter's message-hit gating above.
-			// Matched by `e.code` (the physical key), not `e.key` (the character): on a Cyrillic layout the S
-			// key produces `ы`, so a `key`-based guard let the browser's save dialog through.
 			e.preventDefault();
 			const item = resolveHistorySelection(stage, result, selected);
 			if (item?.kind === "prompt") onSaveAsTemplate(item.hit);
@@ -499,9 +409,6 @@ export function HistoryOverlay({
 			e.preventDefault();
 			const item = resolveHistorySelection(stage, result, selected);
 			if (!item) return;
-			// Shift+Enter on a prompt row jumps to its chat location instead of inserting — the
-			// same target its go-to-chat icon resolves via `jumpTarget`. A message row has no separate
-			// insert action, so Shift+Enter there just falls through to the same jump Enter already did.
 			if (item.kind === "prompt" && !e.shiftKey) {
 				if (e.metaKey || e.ctrlKey) onInsertAndSend(item.hit);
 				else onInsert(item.hit);
@@ -514,19 +421,10 @@ export function HistoryOverlay({
 
 	const promptCount = result ? Math.min(result.prompts.length, result.promptTotal) : 0;
 	const messageCount = result ? Math.min(result.messages.length, result.messageTotal) : 0;
-	// A cold-build partial (`result.indexing`) can still carry real hits — whatever the server's budget
-	// managed to parse before it gave up and returned early. `hasResults` is checked independently of
-	// `indexing` so those partials render instead of being suppressed behind the indexing message; `isEmpty`
-	// only ever fires once indexing is done, so a partial's "nothing found yet" moment never flashes "no
-	// matches" while the index is still filling in.
 	const hasResults =
 		!!result && (result.prompts.length > 0 || (stage === "zoomed" && result.messages.length > 0));
 	const isEmpty = !!result && !result.indexing && !hasResults;
 
-	// The zoomed stage's preview (R1) mirrors whatever the flat-list `selected` index currently resolves
-	// to — the same resolution `Enter`/Cmd/Ctrl+S already use above, so the preview and the keyboard
-	// actions can never disagree on "the selected item." `null` (no result yet, or an empty result set)
-	// renders an empty panel, never a crash — see `HistoryPreview`.
 	const selectedItem = resolveHistorySelection(stage, result, selected);
 	const selectedWorkspaceName = selectedItem?.hit.workspaceId
 		? workspaceNames[selectedItem.hit.workspaceId]
@@ -629,10 +527,6 @@ export function HistoryOverlay({
 					</DropdownMenuTrigger>
 					<DropdownMenuContent
 						align="end"
-						// Radix's default on close is to return focus to the trigger — override it so focus
-						// lands back on the query input instead, the same place it is right after `Enter`
-						// inserts a prompt. `Ctrl+R` cycling only fires from the input's own `onKeyDown`, so
-						// this is also what keeps it working right after a mouse pick.
 						onCloseAutoFocus={(e) => {
 							e.preventDefault();
 							inputRef.current?.focus();

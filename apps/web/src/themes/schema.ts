@@ -190,7 +190,6 @@ function parsePalette<K extends string>(
 	return Object.freeze(palette);
 }
 
-/** Parse untrusted theme data. A manifest is accepted all-or-nothing; no partial palette is returned. */
 export function parseThemeManifest(value: unknown): ThemeManifestParseResult {
 	const issues: string[] = [];
 	if (!isRecord(value)) return { ok: false, issues: ["theme manifest must be an object"] };

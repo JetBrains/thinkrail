@@ -984,6 +984,13 @@ a project picker, the prompt hero, and the reused
   side) rather than as padding on it — FitAddon derives cols/rows from that host's measured size, so
   padding would overcount the grid and clip the last row/column; insetting the box keeps the measured
   area equal to the visible content area.
+- **IME control-chord rescue.** xterm 6.0.0 drops `Ctrl+<letter>` and `Escape` outright while a CJK
+  input method is active (upstream #6065): its chord table switches on `keyCode`, and an active IME
+  reports the sentinel 229 for every key, so nothing matches and *no byte is emitted* — a
+  Chinese/Japanese/Korean user cannot interrupt a runaway process or leave vim. `TerminalInstance`'s
+  key handler intercepts keydown at `keyCode === 229` and derives the control bytes from `event.code`
+  (which stays accurate under an IME) via `imeControlBytes`, writing them to the PTY itself; anything
+  that isn't a rescued chord is left to normal text input.
 - Heavy deps (Monaco / shiki / xterm) load via `React.lazy(() => import())` to stay out of the eager bundle.
   A lazy chunk that fails to load (or a render throw) is contained by the `components/ErrorBoundary` the
   **shell** wraps each region in (see `shell/SPEC.md`), so a single panel degrades instead of blanking the

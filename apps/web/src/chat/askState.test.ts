@@ -3,9 +3,6 @@ import type { AskUserQuestionResult, AssistantMessage, UserMessage } from "@thin
 import { deriveAskStates } from "./askState";
 import type { ChatTurn } from "./types";
 
-// The transcript-derived questionnaire lifecycle (see askState.ts): answered when an ask-user-answers
-// reply is indexed, superseded when a user turn follows an unanswered call, awaiting otherwise.
-
 const askTurn = (id: string, toolCallId: string): ChatTurn => ({
 	kind: "assistant",
 	id,
@@ -40,7 +37,7 @@ test("a user turn AFTER an unanswered call supersedes it; one before does not", 
 		{},
 	);
 	expect(states.tc1).toEqual({ superseded: true });
-	expect(states.tc2).toEqual({ superseded: false }); // the later ask is still open
+	expect(states.tc2).toEqual({ superseded: false });
 });
 
 test("non-ask tool calls derive no state", () => {

@@ -11,8 +11,6 @@ import type {
 import { TODO_STATUSES, TodoStore } from "../core/index.ts";
 import { registerTodoTools } from "./index.ts";
 
-// Capture the registered tool defs via a minimal fake ExtensionAPI, then drive their `execute` against a
-// real temp cwd — the tools layer's integration surface (param plumbing, store writes, result shape).
 const tools = new Map<string, ToolDefinition>();
 registerTodoTools({
 	registerTool(tool: ToolDefinition) {
@@ -27,7 +25,6 @@ function run(
 ): Promise<AgentToolResult<unknown>> {
 	const tool = tools.get(name);
 	if (!tool) throw new Error(`missing tool: ${name}`);
-	// The tools resolve their chat-scoped store via ctx.sessionManager.getSessionId().
 	return tool.execute("call-1", params, undefined, undefined, {
 		cwd,
 		sessionManager: { getSessionId: () => "sess-test" },
@@ -121,7 +118,6 @@ test("todo_write lays out a groups-only plan (no loose lane for the agent)", asy
 		)) as AgentToolResult<{ plan: { todos: unknown[]; groups: { title: string }[] } }>;
 		expect(written.details.plan.todos).toHaveLength(0);
 		expect(written.details.plan.groups.map((g) => g.title)).toEqual(["Import", "Export"]);
-		// The schema no longer offers a loose `todos` param at all.
 		const schema = tools.get("todo_write")?.parameters as { properties?: Record<string, unknown> };
 		expect(Object.keys(schema.properties ?? {})).toEqual(["groups"]);
 	} finally {
@@ -179,7 +175,6 @@ test("todo_update reports paused items and suggests the next step after done", a
 		}>;
 		await run("todo_update", { id: a.details.todo.id, status: "in_progress" }, cwd);
 
-		// Flipping b to in_progress pauses a — and says so.
 		const flipped = (await run(
 			"todo_update",
 			{ id: b.details.todo.id, status: "in_progress" },
@@ -188,7 +183,6 @@ test("todo_update reports paused items and suggests the next step after done", a
 		expect(flipped.details.paused.map((t) => t.id)).toEqual([a.details.todo.id]);
 		expect(resultText(flipped)).toContain("paused:");
 
-		// Marking b done suggests the next open step (a).
 		const done = await run("todo_update", { id: b.details.todo.id, status: "done" }, cwd);
 		expect(resultText(done)).toContain(`next: ${a.details.todo.id}`);
 	} finally {
@@ -200,7 +194,6 @@ test("todo_list renders groups first, then the user's loose lane last (a mid-tas
 	const cwd = mkdtempSync(join(tmpdir(), "pi-todos-tools-"));
 	try {
 		await run("todo_add", { title: "agent step", group: "Refactor" }, cwd);
-		// A user add (loose) comes through the host store, not the agent tools.
 		new TodoStore(cwd, "sess-test").add({ title: "user ask", origin: "user" });
 
 		const text = resultText(await run("todo_list", {}, cwd));
@@ -208,7 +201,7 @@ test("todo_list renders groups first, then the user's loose lane last (a mid-tas
 		const headerAt = text.indexOf("Your requests:");
 		const looseAt = text.indexOf("user ask");
 		expect(groupAt).toBeGreaterThanOrEqual(0);
-		expect(headerAt).toBeGreaterThan(groupAt); // the user's lane is rendered after the groups
+		expect(headerAt).toBeGreaterThan(groupAt);
 		expect(looseAt).toBeGreaterThan(headerAt);
 	} finally {
 		rmSync(cwd, { recursive: true, force: true });
@@ -247,21 +240,15 @@ test("todo_list renders group-first with derived status + progress, and nudges w
 test("todo_add refuses an `after` anchor in the user's lane, and a re-plan keeps that lane intact", async () => {
 	const cwd = mkdtempSync(join(tmpdir(), "pi-todos-tools-"));
 	try {
-		// The user's own item lives loose. Anchoring a step to it would splice an agent-origin item into
-		// that lane — which `todo_write` then drops (it keeps only user or done items there), so the step
-		// would appear in the user's requests and silently vanish on the next re-plan.
 		const mine = new TodoStore(cwd, "sess-test").add({ title: "user ask", origin: "user" });
 		const rejected = await run("todo_add", { title: "related step", after: mine.id }, cwd);
 		expect(isError(rejected)).toBe(true);
 		expect(resultText(rejected)).toContain("group");
 
-		// Nothing was written: the user's lane still holds exactly their own item.
 		const plan = new TodoStore(cwd, "sess-test").read();
 		expect(plan.todos.map((t) => t.title)).toEqual(["user ask"]);
 		expect(plan.groups).toHaveLength(0);
 
-		// And the lane keeps its meaning across a re-plan: the user's item survives, agent steps are the
-		// ones replaced.
 		await run("todo_write", { groups: [{ title: "Task", todos: [{ title: "step" }] }] }, cwd);
 		const after = new TodoStore(cwd, "sess-test").read();
 		expect(after.todos.map((t) => t.title)).toEqual(["user ask"]);

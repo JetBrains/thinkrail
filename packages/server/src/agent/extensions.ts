@@ -1,20 +1,3 @@
-// `pi-spec-graph` (spec_* tools + the spec-graph skill), `pi-thinkrail-workflow` (the workflow-router
-// rule + workflow skills), and `pi-todos` (todo_* tools + the todos skill) extensions and recognized
-// portable cross-agent skill aliases into a session's resource loader, so they are present without a
-// separate install/import. Two bundled-resource modes:
-// - Run-from-source: explicit `additionalExtensionPaths` (all five ship raw `.ts`; pi's loader jiti-loads
-//   TS, keeping their source out of our typecheck graph — `pi-spec-graph`'s exports map keeps `./index.ts`
-//   reachable alongside the `./core` subpath the `spec/` module value-imports). Paths resolve lazily on
-//   first use — resolution needs `node_modules`, which a compiled binary lacks. `pi-spec-graph`,
-//   `pi-thinkrail-workflow`, and `pi-todos` are workspace packages (not pi-installed), so pi's package
-//   manager won't auto-discover their `pi.skills` manifests — we point `additionalSkillPaths` at their
-//   `skills/` dirs, before the personal/project aliases so bundled skills outrank them (precedence in
-//   `resolveSkillInputs`).
-// - Compiled binary: the launcher injects the same five extensions as value-imported factories + a staged
-//   on-disk skills dir via `registerBundledRuntime` (pi gives `extensionFactories` full API parity with
-//   path loading; pi reads skills via plain fs, so they must live on the real filesystem) — which also
-//   performs pi's binary-only provider registrations (OAuth flows + Bedrock, see below).
-
 import { createRequire } from "node:module";
 import { dirname, join, resolve, sep } from "node:path";
 import {
@@ -42,33 +25,16 @@ import {
 } from "./skillSources";
 import { type BundledTrashHelpers, setBundledTrashHelpers } from "./trash";
 
-/** A bundled extension entry's default export — the pi factory shape the loader invokes. */
 export type BundledExtensionFactory = ExtensionFactory;
 
 export interface BundledExtensions {
-	/** The bundled extension entries' default-export factories, in load order. */
 	factories: BundledExtensionFactory[];
-	/** A real on-disk dir of staged skill roots (each `<name>/SKILL.md`) for `additionalSkillPaths`. */
 	skillsDir: string;
-	/** Real executable paths staged from `trash`'s macOS/Windows helper sidecars. */
 	trashHelpers: BundledTrashHelpers;
 }
 
 let bundled: BundledExtensions | undefined;
 
-/**
- * Compiled-binary seam: inject the bundled extensions as value-imported factories (+ a staged skills
- * dir) where path-loading is impossible — a `bun build --compile` binary has no `node_modules` to
- * resolve the extension entries or their deps from — and perform pi's **binary-only registrations**.
- * pi hides Node-only provider code behind bundler-opaque variable-specifier dynamic imports (so
- * browser bundles can't reach its `node:http` OAuth servers / the AWS SDK); inside a single-file
- * binary those imports can't resolve at runtime, so every OAuth sign-in died with `Cannot find module
- * './openai-codex.js'` (and Bedrock streaming would die the same way). pi ships static registration
- * seams for exactly this — mirror pi's own binary entry (`pi-coding-agent` `dist/bun/cli.js`): the
- * bundled OAuth flows + the Bedrock provider module. The dynamic literal imports below are statically
- * bundled by `bun build --compile`; dev never calls this seam, so it never loads the flow modules or
- * the AWS SDK. Await before the first session or login can start.
- */
 export async function registerBundledRuntime(extensions: BundledExtensions): Promise<void> {
 	bundled = extensions;
 	setBundledTrashHelpers(extensions.trashHelpers);
@@ -82,10 +48,6 @@ export async function registerBundledRuntime(extensions: BundledExtensions): Pro
 	setBedrockProviderModule(bedrockProviderModule);
 }
 
-/**
- * The run-from-source wiring: the bundled extension entries + the workspace packages' skills dirs, resolved
- * out of `node_modules` on first use (memoized — module-load resolution would crash a compiled binary).
- */
 let devPaths: { extensionPaths: string[]; skillPaths: string[] } | undefined;
 function resolveDevPaths(): { extensionPaths: string[]; skillPaths: string[] } {
 	if (devPaths) return devPaths;
@@ -106,12 +68,6 @@ function resolveDevPaths(): { extensionPaths: string[]; skillPaths: string[] } {
 	return devPaths;
 }
 
-/**
- * `pi-web-access`'s `web_search` opens an interactive **browser curator** whenever the UI is dialog-capable
- * (our `rpc` host reports `hasUI: true` but has no browser to render it), which would hang the tool. Default
- * `workflow` to `"none"` before it runs so search returns results directly. A caller that sets `workflow`
- * explicitly still wins.
- */
 const headlessSearchPolicy: ExtensionFactory = (pi: ExtensionAPI) => {
 	pi.on("tool_call", (event) => {
 		if (event.toolName !== "web_search") return;
@@ -126,10 +82,7 @@ function isUnderPath(path: string, root: string): boolean {
 	return normalizedPath === normalizedRoot || normalizedPath.startsWith(`${normalizedRoot}${sep}`);
 }
 
-/** Relabel one skill's default `temporary` scope to its true provider/scope; leave configured ones alone. */
 function relabelAliasProvenance(skill: Skill, sources: CompatibilitySkillSource[]): Skill {
-	// Pi-configured/native/shared resources already carry user/project metadata and outrank inferred aliases;
-	// only the loader's default `temporary` scope (an additional path) needs relabeling.
 	if (skill.sourceInfo.scope !== "temporary") return skill;
 	const source = sources.find((candidate) => isUnderPath(skill.filePath, candidate.path));
 	if (!source) return skill;
@@ -144,11 +97,6 @@ function relabelAliasProvenance(skill: Skill, sources: CompatibilitySkillSource[
 	};
 }
 
-/**
- * The canonical group key + plugin flag for a skill, by where its file lives — a plugin name, else the
- * source tier (`project`/`personal`/`bundled`/`pi`). Must match the key the UI groups/toggles by
- * (`SkillCatalogEntry.group`) so a group disable resolves consistently on both sides.
- */
 function skillGroup(
 	filePath: string,
 	sources: CompatibilitySkillSource[],
@@ -164,16 +112,6 @@ function skillGroup(
 	return { group: "pi", isPlugin: false };
 }
 
-/**
- * The combined skills override: relabel compatibility aliases' provenance AND apply the admission decision,
- * so a session only ever loads skills that resolve to `load` — untrusted / unacknowledged / disabled (per
- * skill or per group) ones never reach the system prompt or the `/skill:` list. `bundledPaths` classifies
- * bundled skills; the compatibility `sources` **and** the admission `ctx` are **both re-resolved on every
- * invocation** (each `loader.reload()`): `getCtx` so a mid-session trust grant or toggle lands, and fresh
- * discovery so a compatibility dir that appeared mid-session (e.g. `.claude/skills` from a branch switch)
- * is classified correctly — critically, a newly-appeared project alias is recognised as such and stays
- * behind the trust gate rather than slipping through as an unclassified `load`.
- */
 function skillsGate(cwd: string, bundledPaths: string[], getCtx: () => SkillAdmissionContext) {
 	return (current: { skills: Skill[]; diagnostics: ResourceDiagnostic[] }) => {
 		const ctx = getCtx();
@@ -205,18 +143,11 @@ function resolveSkillInputs(
 	additionalSkillPaths: string[];
 	skillsOverride: ReturnType<typeof skillsGate>;
 } {
-	// Register the CANDIDATE roots (not just the ones that exist now) so `loader.reload()` picks up a
-	// compatibility dir that appears mid-session — e.g. a branch switch/pull adds `.claude/skills`. Pi
-	// tolerates a not-yet-existing path and scans it once it appears; `skillsGate` re-discovers the live
-	// source set each reload, so a late project alias is still classified + trust-gated correctly.
 	const candidates = candidateCompatibilitySkillRoots(cwd);
 	const personal = candidates.filter((source) => source.scope === "user");
 	const project = candidates.filter((source) => source.scope === "project");
 	const bundledSkillPaths = bundled ? [bundled.skillsDir] : resolveDevPaths().skillPaths;
 	return {
-		// All alias dirs are made discoverable so the catalog can enumerate them; the per-skill admission gate
-		// (`skillsGate`) is what actually withholds untrusted/unacknowledged/disabled ones. Path order sets the
-		// first-name-wins precedence pi-native > bundled > personal > project.
 		additionalSkillPaths: [
 			...bundledSkillPaths,
 			...personal.map((source) => source.path),
@@ -226,7 +157,6 @@ function resolveSkillInputs(
 	};
 }
 
-/** Map Pi's canonical skill records onto the existing slash-command wire shape. */
 export function toSkillCommands(skills: readonly Skill[]): SlashCommandInfo[] {
 	return skills.map((skill) => ({
 		name: `skill:${skill.name}`,
@@ -236,15 +166,6 @@ export function toSkillCommands(skills: readonly Skill[]): SlashCommandInfo[] {
 	}));
 }
 
-/**
- * A resource loader with `pi-web-access` + `pi-visualize` + `pi-spec-graph` (and its skill) +
- * `pi-thinkrail-workflow` (and its skills) + `pi-todos` (and its skill) (+ the headless-search policy),
- * our host-owned `ask_user_question` tool, and portable cross-agent skill aliases layered onto Pi's
- * default discovery. `getAdmission` gates the skills (project-scoped aliases behind trust + acknowledgment,
- * plus the per-skill enable/disable layer) — pass a resolver for the owning workspace's context, **re-read
- * on every `loader.reload()`** so a mid-session trust grant or skill/group toggle lands via
- * `session.reload()`; fail closed when it is unknown.
- */
 export async function buildResourceLoader(
 	cwd: string,
 	settingsManager: SettingsManager,
@@ -266,8 +187,6 @@ export async function buildResourceLoader(
 		...skillInputs,
 	};
 
-	// Re-feed PI's ordinary enabled extension paths minus the opaque identities, with auto-discovery off —
-	// the Central artifact may sit inside PI's default discovery dir. No excluded file is opened here.
 	const excluded = new Set(excludedExtensionPaths.map((path) => resolve(path)));
 	const discoveredExtensionPaths: string[] = [];
 	const discoveredMetadata = new Map<string, PathMetadata>();
@@ -305,7 +224,6 @@ export async function buildResourceLoader(
 	);
 	await loader.reload();
 
-	// Re-fed paths would otherwise carry temporary-CLI provenance; restore PI's resolved source metadata.
 	for (const extension of loader.getExtensions().extensions) {
 		const metadata = discoveredMetadata.get(resolve(extension.resolvedPath));
 		if (!metadata) continue;
@@ -316,7 +234,6 @@ export async function buildResourceLoader(
 	return loader;
 }
 
-/** A stable cache key for a `(cwd, admission)` pair — sorted so equal contexts collide, distinct ones don't. */
 function admissionCacheKey(cwd: string, ctx: SkillAdmissionContext): string {
 	return JSON.stringify([
 		cwd,
@@ -331,13 +248,6 @@ function admissionCacheKey(cwd: string, ctx: SkillAdmissionContext): string {
 const SKILL_LIST_TTL_MS = 5_000;
 const skillListCache = new Map<string, { at: number; value: SlashCommandInfo[] }>();
 
-/**
- * Skill-only pre-session catalog for New Workspace autocomplete. It shares the real session's Pi settings,
- * package/native discovery, compatibility aliases, and bundled skills, but never loads extension factories
- * or creates a model/session/transcript. `admission` gates the skills exactly as the live session does.
- * Cached briefly per `(cwd, admission)` so flipping the project picker doesn't re-walk the filesystem; a
- * fresh grant changes the key, so it never returns a stale untrusted list.
- */
 export async function listSkillCommands(
 	cwd: string,
 	admission: SkillAdmissionContext,
@@ -362,11 +272,6 @@ export async function listSkillCommands(
 	return value;
 }
 
-/**
- * The project-scoped alias skill names present in a checkout right now — what granting trust acknowledges,
- * and the count the New Workspace / Welcome trust notice shows. A skills-only loader restricted to the
- * project alias dirs (no admission filter), so it enumerates them regardless of the current trust state.
- */
 export async function listProjectAliasSkillNames(cwd: string): Promise<string[]> {
 	const projectPaths = discoverCompatibilitySkillSources(cwd)
 		.filter((source) => source.scope === "project")
@@ -390,12 +295,6 @@ export async function listProjectAliasSkillNames(cwd: string): Promise<string[]>
 		.map((skill) => skill.name);
 }
 
-/**
- * The full skill catalog for a workspace's Skills manager: every discovered skill (bundled + personal +
- * project + pi-native) with its admission verdict, so hidden skills show a reason instead of vanishing.
- * Unlike `listSkillCommands` this does NOT filter — it relabels provenance only and attaches each skill's
- * `decision`, letting the UI render untrusted / pending-ack / disabled entries with the right affordance.
- */
 export async function listSkillCatalog(
 	cwd: string,
 	admission: SkillAdmissionContext,
@@ -414,7 +313,6 @@ export async function listSkillCatalog(
 			...personal.map((s) => s.path),
 			...project.map((s) => s.path),
 		],
-		// Relabel only (no admission filter) so the manager sees every discovered skill + its verdict.
 		skillsOverride: (current) => ({
 			...current,
 			skills: current.skills.map((skill) => relabelAliasProvenance(skill, discovered)),

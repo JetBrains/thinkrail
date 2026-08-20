@@ -59,7 +59,9 @@ assumptions get caught cheaply. Scale the *depth* to the task; never skip the wo
    handing off, self-review the implementation diff the way step 7 reviewed the spec: no silent
    lint/type suppressions (a gate error is a design signal — question the flagged state or dependency
    before guarding it; any genuinely-needed suppression gets explicit user sign-off first), no
-   nontrivial derivation duplicated across files (centralize it), and when the change replaced a
+   nontrivial derivation duplicated across files (centralize it), no rationale left as code comments
+   (near-zero comments: decisions and invariants go to the owning spec per the writing-specs bar;
+   only lint directives and rare one-line hazard notes survive), and when the change replaced a
    pattern, sweep the repo for remnants of the old one. Keep the task-spec and the durable specs
    honest as the code lands, and retire the task-spec once **the work itself** is done, not merely
    once the design was promoted.

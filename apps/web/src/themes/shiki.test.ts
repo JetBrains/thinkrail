@@ -17,9 +17,6 @@ test("the TextMate map references exactly the semantic syntax variables", () => 
 	expect(referenced).toEqual(expected);
 });
 
-// Token-granularity assertions are deliberately absent: bun's linux-x64 RegExp engine mis-tokenizes
-// complex grammars nondeterministically (correct under V8 and macOS bun), so this pins only the
-// platform-stable contract — every color leaves as a CSS variable, none as a baked palette value.
 test("highlighted output carries CSS variables only, never a baked palette color", async () => {
 	const highlighter = await createHighlighterCore({
 		themes: [THINKRAIL_SHIKI_THEME],

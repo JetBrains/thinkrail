@@ -2,30 +2,11 @@ import type { AskUserQuestionResult } from "@thinkrail/contracts";
 import { createContext, useContext } from "react";
 import type { ChatTurn } from "./types";
 
-// The transcript-derived lifecycle of `ask_user_question` calls under the ack + terminate design: the
-// tool resolves instantly (its result is just an ack), so "answered or still open?" is NOT a tool status —
-// it's a fact about the conversation that follows the call. This module derives that fact once per
-// runtime snapshot; the questionnaire card consumes it via context (`ChatView` provides it), staying
-// store/transport-free like the other renderers.
-
-/** One questionnaire's transcript-derived state (see {@link deriveAskStates}). */
 export interface AskState {
-	/** The structured reply, when an `ask-user-answers` message for this call exists. */
 	answer?: AskUserQuestionResult;
-	/**
-	 * The user sent a free-form message after the questionnaire instead of answering it — the model was
-	 * told to treat that message as the reply, so the card is terminal (not answerable). Mirrors the
-	 * host-side verdict (`assessAnswerability`), which rejects answers to superseded calls.
-	 */
 	superseded: boolean;
 }
 
-/**
- * Derive every `ask_user_question` call's state from the transcript: `answer` from the indexed
- * `ask-user-answers` replies, `superseded` when a user turn follows the call without one. An answered
- * call is never superseded (the reply exists — render it), and a call with neither is "awaiting":
- * answerable now, after a reconnect, or after any number of host restarts. Pure.
- */
 export function deriveAskStates(
 	turns: ChatTurn[],
 	askAnswers: Record<string, AskUserQuestionResult>,
@@ -55,25 +36,17 @@ export function deriveAskStates(
 	return states;
 }
 
-/** The questionnaire data supplied by one mounted ChatView. */
 export interface AskContextValue {
 	states: Record<string, AskState>;
-	/** Opaque mount identity: Virtuoso remounts reuse it; closing/reopening the chat creates a new one. */
 	focusScope: object;
 }
 
-/**
- * The per-chat ask seam, provided by `ChatView`. `null` for a standalone/extracted renderer, where the
- * card treats calls as awaiting and falls back to its own local focus scope.
- */
 export const AskStatesContext = createContext<AskContextValue | null>(null);
 
-/** The transcript-derived state for one `ask_user_question` call, or `undefined` outside a provider. */
 export function useAskState(toolCallId: string): AskState | undefined {
 	return useContext(AskStatesContext)?.states[toolCallId];
 }
 
-/** The current mounted-chat focus scope, or `null` for a standalone renderer. */
 export function useAskFocusScope(): object | null {
 	return useContext(AskStatesContext)?.focusScope ?? null;
 }

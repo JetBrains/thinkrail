@@ -1,12 +1,4 @@
 #!/usr/bin/env bun
-/**
- * Writes `src/styles/generated/typography.css` from `src/styles/typography.json`.
- *
- *   bun run typography:generate        write the file
- *   bun run typography:generate --check  fail if the committed file is stale (CI + pre-commit gate)
- *
- * The generated CSS is committed so every typography change is reviewable as a diff.
- */
 import { writeOrCheck } from "./generatedFiles";
 import {
 	GENERATED_FONTS_PATH,

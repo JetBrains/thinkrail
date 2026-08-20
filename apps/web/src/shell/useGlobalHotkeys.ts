@@ -9,21 +9,10 @@ type GlobalHotkeyActions = {
 	onWorkspace?: () => void;
 };
 
-/** Everything xterm renders, including its input textarea, lives under this library-owned root. */
 function isInTerminal(target: EventTarget | null): boolean {
 	return target instanceof Element && target.closest(TERMINAL_ROOT_SELECTOR) !== null;
 }
 
-/**
- * The shell's one capture-phase listener for app-wide chords.
- *
- * - `Mod+B` → toggle the active workbench's left side (Project Home keeps its local focus/collapse rail).
- * - `Mod+J` → toggle the active workbench's right side.
- * - `Ctrl+R` → chat history search rather than browser reload (except inside xterm).
- *
- * Letter chords match `code`, not the layout-dependent produced character. Layout commands intentionally
- * win inside xterm; history does not, because Ctrl+R is the shell's reverse-i-search there.
- */
 export function useGlobalHotkeys(actions: GlobalHotkeyActions): void {
 	const actionsRef = useRef(actions);
 	actionsRef.current = actions;
@@ -38,7 +27,6 @@ export function useGlobalHotkeys(actions: GlobalHotkeyActions): void {
 			if (isPanelCommand) {
 				event.preventDefault();
 				event.stopPropagation();
-				// One held key must not focus and then immediately collapse the same region.
 				if (!event.repeat) {
 					if (event.code === "KeyB") actionsRef.current.onProjects();
 					else actionsRef.current.onWorkspace?.();

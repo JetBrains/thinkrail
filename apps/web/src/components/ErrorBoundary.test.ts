@@ -26,14 +26,9 @@ test("tolerates non-Error throwables", () => {
 	expect(isChunkLoadError(undefined)).toBe(false);
 });
 
-// `resetKeys` gate auto-recovery: a caught error clears only when the array changes (it is wired to the
-// workspace/tab id), so a stale key must keep the fallback up and a changed one must drop it. The
-// comparison itself is `lib`'s `shallowEqualArrays`, tested there — this pins the boundary's *use* of it.
 test("resetKeys recovery: equal keys keep the error, a changed key clears it", () => {
-	expect(shallowEqualArrays(["ws-1"], ["ws-2"])).toBe(false); // navigated → reset and re-render children
+	expect(shallowEqualArrays(["ws-1"], ["ws-2"])).toBe(false);
 	expect(shallowEqualArrays([1, "tab-a"], [1, "tab-b"])).toBe(false);
-	// Same values across distinct array instances → equal → the error stays until the id really changes.
 	expect(shallowEqualArrays(["ws-1"], ["ws-1"])).toBe(true);
-	// A boundary mounted without `resetKeys` never auto-resets.
 	expect(shallowEqualArrays(undefined, undefined)).toBe(true);
 });

@@ -7,7 +7,6 @@ type ReviewProvider = "github" | "gitlab";
 type CommandResult = { ok: boolean; out: string };
 type CommandRunner = (cwd: string, command: string[]) => Promise<CommandResult>;
 
-/** Resolve the first supported push/fetch remote, preferring the branch's configured remote and origin. */
 export function detectReviewProvider(cwd: string, branch: string): ReviewProvider | null {
 	const configured = [
 		git(cwd, ["config", "--get", `branch.${branch}.pushRemote`]).out,
@@ -34,7 +33,6 @@ export function detectReviewProvider(cwd: string, branch: string): ReviewProvide
 	return null;
 }
 
-/** Recognize only the two hosted forges in the current product contract. */
 export function providerFromRemoteUrl(remoteUrl: string): ReviewProvider | null {
 	const host = remoteHost(remoteUrl);
 	if (host === "github.com") return "github";
@@ -46,13 +44,10 @@ function remoteHost(remoteUrl: string): string | null {
 	try {
 		const host = new URL(remoteUrl).hostname;
 		if (host) return host.toLowerCase();
-	} catch {
-		// SCP-like Git URL (`git@github.com:owner/repo.git`) — not a WHATWG URL.
-	}
+	} catch {}
 	return /^(?:[^@/:\s]+@)?([^/:\s]+):/.exec(remoteUrl)?.[1]?.toLowerCase() ?? null;
 }
 
-/** Best-effort open PR/MR number for one local branch. Every unavailable state degrades to null. */
 export function findOpenBranchReview(
 	cwd: string,
 	branch: string,
@@ -60,7 +55,6 @@ export function findOpenBranchReview(
 	return findOpenBranchReviewWithRunner(cwd, branch, runCommand);
 }
 
-/** Internal test seam; the module barrel deliberately exposes only `findOpenBranchReview`. */
 export async function findOpenBranchReviewWithRunner(
 	cwd: string,
 	branch: string,

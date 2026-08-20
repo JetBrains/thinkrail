@@ -6,18 +6,11 @@ import {
 	worktreeRows,
 } from "./fixtures/app";
 
-// Two tabs on ONE host, no agent. Registry membership is backend-owned shared domain state (architecture
-// #9), so a create/remove in one tab streams to the other via the workspace lifecycle pushes — every
-// client (including the initiator) reacts identically, with no per-client optimism. Regression cover for
-// issue #77: a workspace removed in one tab used to linger as a broken "zombie" row in the others.
-
 test("workspace removal propagates — no zombie row in a second tab", async ({ page, context }) => {
-	// Tab A: open the project + create a workspace (it becomes A's active workspace).
 	await openFixtureProject(page);
 	const created = await createWorkspaceViaDialog(page);
 	await expect(worktreeRows(page)).toHaveCount(1);
 
-	// Tab B: a second tab on the same host — expand the project (loads the list) + activate the workspace.
 	const page2 = await context.newPage();
 	await page2.goto("/");
 	await expect(page2.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
@@ -26,34 +19,27 @@ test("workspace removal propagates — no zombie row in a second tab", async ({ 
 	await worktreeRows(page2).first().click();
 	await expect(worktreeRows(page2).first()).toHaveAttribute("data-active", "true");
 
-	// Tab A: remove the workspace (kebab menu → Remove → confirm dialog → confirm).
 	await openWorkspaceMenu(worktreeRows(page).first());
 	await page.getByTestId("workspace-remove").click();
 	await page.getByTestId("confirm-remove").click();
 	await expect(worktreeRows(page)).toHaveCount(0);
 
-	// Tab B converges purely by reacting to the `workspace.removed` push: the row disappears (no zombie),
-	// and — since it was B's active workspace — B returns to the Welcome screen with a neutral toast.
 	await expect(worktreeRows(page2)).toHaveCount(0);
 	await expect(page2.getByTestId("welcome")).toBeVisible();
 	await expect(page2.getByTestId("toast").filter({ hasText: created.name })).toBeVisible();
 });
 
 test("workspace creation propagates to a second tab's rail", async ({ page, context }) => {
-	// Tab A: open the project (no workspaces yet).
 	await openFixtureProject(page);
 
-	// Tab B: expand the project so its (empty) list is loaded — the precondition for folding in `created`.
 	const page2 = await context.newPage();
 	await page2.goto("/");
 	await expect(page2.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 	await page2.getByTestId("project-expand").first().click();
-	await expect(worktreeRows(page2)).toHaveCount(0); // only the built-in Default row so far
+	await expect(worktreeRows(page2)).toHaveCount(0);
 
-	// Tab A: create a workspace.
 	await createWorkspaceViaDialog(page);
 	await expect(worktreeRows(page)).toHaveCount(1);
 
-	// Tab B sees it appear via the `workspace.created` push — no manual re-list, no focus stolen.
 	await expect(worktreeRows(page2)).toHaveCount(1);
 });

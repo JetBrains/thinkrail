@@ -1,12 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { openFixtureProject, worktreeRows } from "./fixtures/app";
 
-// Tagged @agent (see agent.live.spec.ts): drives a REAL pi agent. Proves the New-Workspace headline — the
-// New-Workspace dialog's "create + kick-off": Create with a prompt cuts a worktree, opens a chat in it,
-// and sends the prompt; and a second dialog kick-off in another workspace streams concurrently (which
-// works only because the web client is per-session).
-
-/** Open the New-Workspace dialog from the first project's "+", type a prompt, and Create. */
 async function kickOff(page: import("@playwright/test").Page, prompt: string): Promise<void> {
 	const dialog = page.getByTestId("new-workspace-dialog");
 	await expect(async () => {
@@ -26,13 +20,11 @@ test("the dialog shows the exact default model and its picker scrolls inside the
 	const dialog = page.getByTestId("new-workspace-dialog");
 	await expect(dialog).toBeVisible();
 
-	// #1 — the picker shows the resolved default model (a real name), not a "Default model" placeholder.
 	const model = dialog.getByTestId("model-selector");
 	await expect(model).toBeEnabled();
 	await expect(model).not.toContainText("Default model");
 	await expect(model).not.toContainText("Select model");
 
-	// #2 — the model list (portaled into the dialog) scrolls by wheel under the Dialog's scroll lock.
 	await model.click();
 	const list = page.locator("[cmdk-list]");
 	await expect(page.getByTestId("model-option").first()).toBeVisible();
@@ -40,11 +32,8 @@ test("the dialog shows the exact default model and its picker scrolls inside the
 	await list.hover();
 	await page.mouse.wheel(0, 600);
 	await expect.poll(() => list.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
-	await page.keyboard.press("Escape"); // close WITHOUT picking — a pick would pin a default model
+	await page.keyboard.press("Escape");
 
-	// #3 — the effort pill offers exactly what the resolved model supports (never a fixed seven), and
-	// picking one is reflected. Which levels those are depends on the pinned model, so read one off the
-	// list rather than naming a level.
 	const effort = dialog.getByTestId("thinking-selector");
 	await expect(effort).toBeEnabled();
 	await effort.click();
@@ -63,14 +52,12 @@ test("Create with a prompt cuts a worktree and streams the answer in a new chat"
 
 	await kickOff(page, "Reply with the single word: pong");
 
-	// A worktree appears + becomes active, and a chat tab opened with the prompt already sent.
 	await expect(worktreeRows(page).first()).toHaveAttribute("data-active", "true");
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 	await expect(
 		page.locator('[data-testid="chat-message"][data-role="user"]').filter({ hasText: "pong" }),
 	).toBeVisible();
 
-	// The assistant streams a non-empty reply from the real provider.
 	const assistant = page.locator('[data-testid="chat-message"][data-role="assistant"]').first();
 	await expect(assistant).toBeVisible({ timeout: 60_000 });
 	await expect(assistant).not.toBeEmpty({ timeout: 60_000 });
@@ -86,18 +73,14 @@ test("two dialog kick-offs in separate workspaces stream concurrently", {
 		.locator('[data-testid="chat-message"][data-role="system"]')
 		.filter({ hasText: "Done" });
 
-	// Workspace A — kick off a turn…
 	await kickOff(page, "Reply with the single word: alpha");
 	await expect(worktreeRows(page)).toHaveCount(1);
 
-	// …then immediately spin up workspace B with its own kick-off, before A necessarily finishes.
 	await kickOff(page, "Reply with the single word: bravo");
 	await expect(worktreeRows(page)).toHaveCount(2);
 
-	// B (now active) reaches its turn-completion notice while A streamed in the background.
 	await expect(doneNotice).toBeVisible({ timeout: 90_000 });
 
-	// Switch back to workspace A → its chat streamed to completion concurrently (background runtime).
 	await worktreeRows(page).nth(0).getByRole("button").first().click();
 	await expect(doneNotice).toBeVisible({ timeout: 90_000 });
 });

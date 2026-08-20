@@ -51,9 +51,7 @@ function mergeLastRunFiles(reportDir: string, shardCount: number, failed: boolea
 					for (const id of ids) if (typeof id === "string") failedTests.add(id);
 				}
 			}
-		} catch {
-			// A shard that crashed before Playwright configured has no last-run file; its exit still fails the run.
-		}
+		} catch {}
 	}
 	const lastRun: LastRun = {
 		status: failed ? "failed" : "passed",
@@ -128,8 +126,6 @@ async function runShards(shardCount: number, playwrightArgs: string[]): Promise<
 	const reports = readdirSync(reportDir).filter((name) => name.endsWith(".zip"));
 	let mergeCode = 1;
 	if (reports.length > 0) {
-		// Shards already stream their own progress; the merged local reporter stays compact instead of
-		// printing every test a second time, and the runner prints the aggregate verdict below.
 		const reporters = process.env.CI ? "github,html" : "dot";
 		mergeCode = await run([
 			bun,

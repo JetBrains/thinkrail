@@ -1,6 +1,5 @@
 import type { ContextUsage, SessionStats } from "@thinkrail/contracts";
 
-/** Match pi's compact footer formatting. */
 export function formatTokens(count: number): string {
 	if (count < 1_000) return count.toString();
 	if (count < 10_000) return `${(count / 1_000).toFixed(1)}k`;
@@ -9,7 +8,6 @@ export function formatTokens(count: number): string {
 	return `${Math.round(count / 1_000_000)}M`;
 }
 
-/** Pi omits zero-valued cumulative fields from its footer. */
 export function usageParts(stats: SessionStats): string[] {
 	const parts: string[] = [];
 	if (stats.tokens.input) parts.push(`↑${formatTokens(stats.tokens.input)}`);
@@ -33,7 +31,6 @@ export function contextPart(usage: ContextUsage): { bar: string; text: string } 
 	};
 }
 
-/** Pi-style cumulative usage + current context-window usage. Display only — `pi` owns the numbers. */
 export function SessionStatsBar({ stats }: { stats: SessionStats | null }) {
 	if (!stats) return null;
 	const parts = usageParts(stats);

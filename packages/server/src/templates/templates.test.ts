@@ -21,9 +21,6 @@ import {
 	templateDirs,
 } from "./templates";
 
-/** Names that are unsafe as a filename segment — must be rejected by `isValidTemplateName` and,
- * transitively, by save/get/delete. Shared between the direct gate tests and the by-name-operation tests
- * below so the two lists can never drift apart. */
 const INVALID_NAMES = ["../x", "a/b", "a\\b", ".hidden", ""];
 
 let root: string;
@@ -62,9 +59,6 @@ describe("isValidTemplateName", () => {
 		});
 	}
 
-	// Interior dots, uppercase, and spaces are all pi-legal (pi's loader does no sanitization) and must
-	// be accepted — this is a traversal gate, not a naming-style rule. "foo.bar" in particular is the
-	// case that a former, over-restrictive allowlist regex used to reject.
 	for (const name of ["greet", "My_Template-2", "a", "foo.bar", "my template"]) {
 		test(`accepts ${JSON.stringify(name)}`, () => {
 			expect(isValidTemplateName(name)).toBe(true);
@@ -93,8 +87,6 @@ describe("saveTemplate -> listTemplates -> getTemplate", () => {
 			filePath: join(globalDir, "greet.md"),
 		});
 
-		// The listing is metadata-only — the same fields as `saved` MINUS `content` (the full text travels
-		// only on the by-name get/save path; a listing never reads whole files).
 		const { content: _content, ...metadata } = saved;
 		expect(listTemplates(dirs)).toEqual([metadata]);
 
@@ -201,9 +193,6 @@ describe("listTemplates precedence + freshness", () => {
 	});
 
 	test("a scope dir that isn't actually a directory doesn't blank the other scope's listing", () => {
-		// A deterministic stand-in for an unreadable directory (EACCES setup is flaky cross-platform):
-		// point globalDir at a path that's a plain file. `existsSync` is true, but `readdirSync` throws
-		// (ENOTDIR) just like a permissions failure would.
 		mkdirSync(join(root, "agent-home"), { recursive: true });
 		writeFileSync(globalDir, "not a directory");
 		saveTemplate(dirs, "project", "solo", "project body");
@@ -303,9 +292,6 @@ describe("project ops without a projectDir throw", () => {
 	});
 });
 
-// The no-follow gate (SPEC.md "symlink containment"): a checked-out repo can plant
-// `.pi/prompts/linked.md → <anywhere>`; no by-name operation may read, overwrite, or act through it —
-// a deliberate divergence from pi's read-only scanner, which follows file symlinks.
 describe("symlink containment", () => {
 	let outsideTarget: string;
 
@@ -322,7 +308,6 @@ describe("symlink containment", () => {
 
 	test("getTemplate treats a symlinked entry as absent — never discloses the target", () => {
 		expect(() => getTemplate(dirs, "linked", "project")).toThrow(/not found/);
-		// Scope-omitted lookup falls through the project dir the same way (and finds no global either).
 		expect(() => getTemplate(dirs, "linked")).toThrow(/not found/);
 	});
 
@@ -340,9 +325,6 @@ describe("symlink containment", () => {
 		expect(existsSync(outsideTarget)).toBe(true);
 	});
 
-	// Both symlinked directory levels (`.pi/prompts` itself, and `.pi` above it), every operation:
-	// writes refuse loudly; reads treat the project dir as having no templates — without the read half,
-	// `template.list`/`template.get` would disclose the link target's `.md` files over the wire.
 	for (const level of ["prompts", ".pi"] as const) {
 		test(`a symlinked ${level === ".pi" ? ".pi" : ".pi/prompts"} directory: writes refuse, list/get treat the project dir as empty`, () => {
 			const evilRoot = mkdtempSync(join(tmpdir(), "trpi-templates-evil-"));
@@ -367,7 +349,6 @@ describe("symlink containment", () => {
 				expect(() => saveTemplate(evilDirs, "project", "x", "body")).toThrow(/symlinked directory/);
 				expect(existsSync(join(elsewherePrompts, "x.md"))).toBe(false);
 				expect(() => deleteTemplate(evilDirs, "project", "x")).toThrow(/symlinked directory/);
-				// The read half of the gate: the target's .md files are neither listed nor fetchable.
 				expect(listTemplates(evilDirs).map((t) => t.name)).not.toContain("secret");
 				expect(() => getTemplate(evilDirs, "secret", "project")).toThrow(/not found/);
 				expect(() => getTemplate(evilDirs, "secret")).toThrow(/not found/);
@@ -391,9 +372,6 @@ describe("symlink containment", () => {
 	});
 });
 
-// The client's TemplateEditorDialog populates its form fields from THESE parsed values (never from a
-// browser-side YAML reimplementation), so full-YAML scalar fidelity here is what keeps an edit of a
-// pi-native template from corrupting its metadata — pin the styles pi accepts beyond bare/double-quoted.
 describe("frontmatter value fidelity (pi's real YAML parser)", () => {
 	test("a single-quoted scalar parses to its value — quotes are never part of the description", () => {
 		mkdirSync(globalDir, { recursive: true });
@@ -415,8 +393,6 @@ describe("frontmatter value fidelity (pi's real YAML parser)", () => {
 	});
 });
 
-// The size cap + bounded metadata reads (the "one huge checked-in .md must not cost the host" rule):
-// a listing does bounded work per file whatever a checkout contains; the full-text path is capped loudly.
 describe("size cap + bounded metadata reads", () => {
 	test("saveTemplate rejects content over MAX_TEMPLATE_BYTES before writing anything", () => {
 		const huge = "x".repeat(MAX_TEMPLATE_BYTES + 1);
@@ -436,7 +412,7 @@ describe("size cap + bounded metadata reads", () => {
 
 	test("a large-but-capped file lists with its metadata via the bounded head read (never a full read)", () => {
 		mkdirSync(globalDir, { recursive: true });
-		const bigBody = "z".repeat(MAX_TEMPLATE_BYTES - 1024); // just under the cap, far past the scan window
+		const bigBody = "z".repeat(MAX_TEMPLATE_BYTES - 1024);
 		writeFileSync(join(globalDir, "big.md"), `---\ndescription: Big but fine\n---\n${bigBody}`);
 
 		const listed = listTemplates(dirs);
@@ -451,10 +427,7 @@ describe("size cap + bounded metadata reads", () => {
 
 		const listed = listTemplates(dirs);
 		expect(listed.map((t) => t.name)).toEqual(["deep"]);
-		// The head read never found the closing fence, so the block reads as plain content — no metadata.
 		expect(listed[0]?.description).toBeUndefined();
-		// The by-name path reads the whole (capped) file and DOES see the metadata — the asymmetry is the
-		// bounded-listing tradeoff, not a parity bug.
 		expect(getTemplate(dirs, "deep", "global").description).toBe("buried");
 	});
 });

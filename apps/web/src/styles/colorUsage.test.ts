@@ -4,25 +4,9 @@ import { join } from "node:path";
 import { loadColors, paletteVar, renderCss, themeColorKeys, validate } from "../../scripts/colors";
 import { normalizeEol } from "../../scripts/generatedFiles";
 
-/**
- * The colour adoption guard, the sibling of `typographyUsage.test.ts`. Three failure modes shaped it,
- * and all three shipped once:
- *  - a colour class Tailwind never emits (`bg-green`, after its `@theme` entry was deleted). Tailwind
- *    drops an unknown utility SILENTLY, so the element renders with no colour while its class list
- *    claims otherwise — nothing in lint, typecheck or the test suite could see it;
- *  - a CSS variable read from JS that does not exist (`--text-text-muted`, the *class* name spelled
- *    into a `getComputedStyle` call) — it resolves to "" and slides into a fallback;
- *  - a component reaching around the semantic layer for a palette entry (`bg-[var(--input)]`),
- *    which re-couples the component to a colour instead of a role.
- *
- * The palette denylist is DERIVED from `themes/runtime.ts`, so renaming a manifest key updates this
- * guard automatically rather than leaving it asserting yesterday's names.
- */
-
 const SRC = new URL("..", import.meta.url).pathname;
 const read = (path: string) => normalizeEol(readFileSync(path, "utf8"));
 const rel = (path: string) => path.slice(SRC.length);
-/** Comments name classes and variables in order to explain them, which is not a usage. */
 const code = (path: string) =>
 	read(path)
 		.replace(/\/\*[\s\S]*?\*\//g, "")
@@ -51,7 +35,6 @@ const GENERATED_CSS = join(SRC, "styles/generated/colors.css");
 const GENERATED_TYPE_CSS = join(SRC, "styles/generated/typography.css");
 
 const THEME_ENTRY = /^\s*--color-([a-z0-9-]+)\s*:\s*var\((--[a-z0-9-]+)\)/gm;
-/** `--color-<name>` in the generated `@theme inline` — exactly the utilities Tailwind will emit. */
 const PUBLISHED_TARGET = new Map(
 	[...read(GENERATED_CSS).matchAll(THEME_ENTRY)].map(
 		(m) => [m[1] as string, m[2] as string] as const,
@@ -59,21 +42,11 @@ const PUBLISHED_TARGET = new Map(
 );
 const PUBLISHED = new Set(PUBLISHED_TARGET.keys());
 
-/**
- * Every custom property declared anywhere in our CSS. The generated typography sheet is excluded from
- * the scans below (it is not hand-written) but still DECLARES the `--tr-*` tokens that Monaco, xterm
- * and mermaid read, so it counts here.
- */
 const DECLARED_VARS = new Set(
 	[...CSS_FILES, GENERATED_CSS, GENERATED_TYPE_CSS].flatMap((f) =>
 		[...read(f).matchAll(/^\s*(--[a-z0-9-]+)\s*:/gm)].map((m) => m[1]),
 	),
 );
-/**
- * Every custom property the theme engine writes at runtime. The UI palette is DERIVED from the manifest
- * key list exactly as `runtime.ts` derives it, so a renamed key updates this guard for free; the ANSI
- * and syntax tables are still literals in `runtime.ts`.
- */
 const PALETTE_VARS = new Set([
 	...themeColorKeys().map(paletteVar),
 	...[...read(join(SRC, "themes/runtime.ts")).matchAll(/"(--[a-z0-9-]+)"/g)].map(
@@ -82,26 +55,14 @@ const PALETTE_VARS = new Set([
 ]);
 const ALL_VARS = new Set([...DECLARED_VARS, ...PALETTE_VARS]);
 
-/**
- * Palette names that must never appear as a colour utility. `--primary` is both a palette entry and a
- * published role, so anything already published is excluded — `text-primary` is legal, `text-hint` is
- * not.
- */
 const PALETTE_BARE = new Set(
 	[...PALETTE_VARS].map((v) => (v as string).slice(2)).filter((n) => !PUBLISHED.has(n)),
 );
 
-/**
- * The COMPLETE set of non-colour values that legitimately share a colour-utility prefix: the CSS-wide
- * colour keywords, the directional border shorthands, and a handful of `text-*` / `outline-*` /
- * `ring-*` properties that are not colours at all. Everything else after a colour prefix must be a
- * published token — that is what makes the check below strict rather than heuristic.
- */
 const NON_COLOR = new Set([
 	"current",
 	"transparent",
 	"inherit",
-	// directional border shorthands and widths: border-t, border-l-2, border-b-0, border-y
 	"t",
 	"r",
 	"b",
@@ -115,7 +76,6 @@ const NON_COLOR = new Set([
 	"l-4",
 	"collapse",
 	"separate",
-	// text-align / text-wrap / text-overflow
 	"center",
 	"left",
 	"right",
@@ -123,18 +83,13 @@ const NON_COLOR = new Set([
 	"pretty",
 	"ellipsis",
 	"clip",
-	// background-clip: `bg-clip-padding` renders a translucent border against the surrounding surface
 	"clip-padding",
-	// outline-none, ring-inset
 	"none",
 	"inset",
 ]);
 
-// Longest alternative FIRST: with `border` ahead of `border-l`, `border-l-feedback-error` parsed as
-// the token `l-feedback-error` and slipped past every check below.
 const COLOR_PREFIX =
 	"border-[trblxyse]{1,2}|bg|text|border|ring|fill|stroke|divide|outline|decoration|caret|accent|placeholder";
-/** A colour-capable utility, with any variant chain stripped: captures the prefix and the token name. */
 const UTILITY = new RegExp(
 	`(?<![\\w-])(${COLOR_PREFIX})-([a-z][a-z0-9-]*)(/\\d+)?(?![\\w./[-])`,
 	"g",
@@ -170,8 +125,6 @@ describe("the published token set", () => {
 	});
 
 	it("gives every generated role a consumer", () => {
-		// A role is either published as a utility or read directly by a non-CSS consumer
-		// (Monaco/xterm/mermaid/Shiki/`global.css`). One that is neither is dead weight.
 		const roles = [
 			...(read(GENERATED_CSS).split("@theme inline")[0] as string).matchAll(
 				/^\s*(--[a-z0-9-]+)\s*:/gm,
@@ -186,8 +139,6 @@ describe("the published token set", () => {
 	});
 
 	it("is regenerated from `colors.json` — the committed output is not stale", () => {
-		// The same assertion `bun run colors:check` makes, so a hand-edit of the generated CSS fails
-		// here too rather than only at commit time.
 		expect(validate(COLORS)).toEqual([]);
 		expect(read(GENERATED_CSS)).toBe(renderCss(COLORS));
 	});
@@ -202,12 +153,6 @@ describe("colour at a call site", () => {
 	});
 
 	it("names a published token, or nothing that is a colour at all", () => {
-		// The strict guard, and the one that matters most. Two failures hide here:
-		//  - a token we do not publish (a typo, or a rename that missed a call site) — Tailwind emits
-		//    NOTHING and the element renders unstyled while its class list claims otherwise;
-		//  - one of Tailwind's own 250+ built-in colours (`bg-red-500`, `text-white`) — which used to
-		//    compile into a hardcoded, un-themeable value that no theme could reach. `colors.json`
-		//    now resets that namespace, and this check keeps the source honest about it too.
 		const bad = USES.filter((u) => !PUBLISHED.has(u.name) && !NON_COLOR.has(u.name)).map(
 			(u) => `${u.file}: ${u.text}`,
 		);
@@ -229,8 +174,6 @@ describe("colour at a call site", () => {
 	});
 
 	it("never tints with an opacity modifier", () => {
-		// Tailwind's `/40` mixes `in oklab` while the tokens mix `in srgb`, so the same nominal
-		// percentage rendered two different colours. Tints are tokens on the four-step scale.
 		const bad = USES.filter((u) => u.modifier && PUBLISHED.has(u.name)).map(
 			(u) => `${u.file}: ${u.text}`,
 		);
@@ -239,11 +182,6 @@ describe("colour at a call site", () => {
 });
 
 describe("raw colour values", () => {
-	/**
-	 * The COMPLETE allowlist, now one file: `lib/utils.ts` round-trips colours through a canvas and
-	 * needs two literal probes. The effect scrims that used to sit in `themes/runtime.ts` are data in
-	 * `colors.json`.
-	 */
 	const ALLOWLIST = new Set(["lib/utils.ts"]);
 
 	it("appear in no component", () => {
@@ -261,8 +199,6 @@ describe("raw colour values", () => {
 	});
 
 	it("appear in no hand-written stylesheet", () => {
-		// There is no exception any more: the roles are generated, so a literal in a .css file is a
-		// colour that `colors.json` does not know about.
 		const bad = CSS_FILES.flatMap((f) =>
 			code(f)
 				.split("\n")
@@ -276,8 +212,6 @@ describe("raw colour values", () => {
 
 describe("variables read from JavaScript", () => {
 	it("all exist", () => {
-		// Monaco, xterm and mermaid resolve tokens through `getComputedStyle`; a name that does not
-		// exist returns "" and silently takes whatever fallback the call site has.
 		const reads = TS_FILES.flatMap((f) =>
 			[...code(f).matchAll(/(?:cssVar|cssColorVar|token)\("(--[a-z0-9-]+)"\)/g)].map((m) => ({
 				file: rel(f),
@@ -296,7 +230,6 @@ describe("variables read from JavaScript", () => {
 				name: m[1] as string,
 			})),
 		);
-		// The syntax palette (`--code-*`) and the type tokens (`--tr-*`) are their own contracts.
 		const bad = reads
 			.filter((r) => PALETTE_VARS.has(r.name))
 			.filter((r) => !/^--(code|tr)-/.test(r.name))

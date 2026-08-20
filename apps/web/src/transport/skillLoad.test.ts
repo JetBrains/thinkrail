@@ -60,7 +60,6 @@ test("skill-load requests share startup, fold the replay fallback before the bas
 		},
 		createSession: async () => {
 			order.push("create");
-			// A later real event remains newer than the already-captured baseline.
 			tick += 1;
 			return { sessionId: "created", model: null, thinkingLevel: "medium" };
 		},

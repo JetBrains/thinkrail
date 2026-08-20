@@ -30,8 +30,6 @@ afterEach(() => {
 	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
 });
 
-// ── test fetch (the sink's injected seam) ──────────────────────────────
-
 interface BatchEntry {
 	event: string;
 	distinct_id: string;
@@ -43,8 +41,6 @@ interface SentPayload {
 	body: { api_key: string; batch: BatchEntry[] };
 }
 
-// posthog-node delivers asynchronously (queue → flush), so the fake fetch fills `sent` a beat after
-// `track()` returns. `drained(n)` awaits at least n entries; negative assertions settle briefly first.
 function makeFetch(sent: SentPayload[]): typeof fetch {
 	return ((url: string | URL | Request, init?: RequestInit) => {
 		sent.push({ url: String(url), body: JSON.parse(String(init?.body)) });
@@ -52,26 +48,18 @@ function makeFetch(sent: SentPayload[]): typeof fetch {
 	}) as typeof fetch;
 }
 
-/** Every batch entry across every captured payload. */
 function allEntries(sent: SentPayload[]): BatchEntry[] {
 	return sent.flatMap((p) => p.body.batch);
 }
 
-/** Await until at least `count` events have been delivered to the fake fetch (bounded). */
 async function drained(sent: SentPayload[], count: number): Promise<void> {
 	const deadline = Date.now() + 2_000;
 	while (allEntries(sent).length < count && Date.now() < deadline) await Bun.sleep(5);
 	expect(allEntries(sent).length).toBeGreaterThanOrEqual(count);
 }
 
-/** A short settle so "nothing was sent" assertions are honest against the async queue. */
 const settled = (): Promise<void> => Bun.sleep(25);
 
-/**
- * Boot the service on the sending path. `env: {}` is load-bearing: `bun test` sets `NODE_ENV=test`, which
- * the mute policy honors, so without an injected clean env every test here would silently assert nothing.
- * No `posthogApiKey` either — the committed project key is what a real boot uses.
- */
 function bootSending(
 	sent: SentPayload[],
 	overrides: Partial<Parameters<typeof initializeAnalytics>[0]> = {},
@@ -87,12 +75,6 @@ function bootSending(
 	});
 }
 
-// ── the machine-checked privacy invariant ──────────────────────────────
-
-// One fully-populated sample per event variant. The `satisfies` map is EXHAUSTIVE over the union's
-// names — adding a new event variant without a sample here is a compile error, so the payload pinning
-// below always covers the whole event model (the closed union + these exact-set assertions ARE the
-// leak guard; there is deliberately no runtime filter).
 const EVENT_SAMPLES = {
 	app_installed: { name: "app_installed" },
 	app_started: { name: "app_started" },
@@ -103,7 +85,6 @@ const EVENT_SAMPLES = {
 
 const ENV_KEYS = ["app_version", "channel", "os", "arch", "build"];
 
-/** The exact non-`$` property keys each variant may put on the wire — extend only with a spec change. */
 const EXPECTED_KEYS: Record<keyof typeof EVENT_SAMPLES, string[]> = {
 	app_installed: ENV_KEYS,
 	app_started: ENV_KEYS,
@@ -116,7 +97,6 @@ test("every event's outgoing properties are EXACTLY its declared params (+ $ tra
 	const sent: SentPayload[] = [];
 	bootSending(sent);
 	for (const event of Object.values(EVENT_SAMPLES)) track(event);
-	// boot emits app_installed + app_started, then one per tracked sample
 	await drained(sent, 2 + Object.keys(EVENT_SAMPLES).length);
 	for (const entry of allEntries(sent)) {
 		const plainKeys = Object.keys(entry.properties)
@@ -125,7 +105,6 @@ test("every event's outgoing properties are EXACTLY its declared params (+ $ tra
 		const expected = EXPECTED_KEYS[entry.event as keyof typeof EXPECTED_KEYS];
 		expect(expected).toBeDefined();
 		expect(plainKeys).toEqual([...expected].sort());
-		// PostHog framing: personless (no person profiles) + GeoIP disabled — on EVERY event.
 		expect(entry.properties.$process_person_profile).toBe(false);
 		expect(entry.properties.$geoip_disable).toBe(true);
 	}
@@ -154,7 +133,6 @@ test("the batch goes to the EU cloud by default; THINKRAIL_POSTHOG_HOST retarget
 
 	resetAnalyticsForTests();
 	const retargeted: SentPayload[] = [];
-	// trailing slash normalized; the host rides the injected env, the module's one env reader
 	bootSending(retargeted, { env: { THINKRAIL_POSTHOG_HOST: "https://ph.example.test/" } });
 	await drained(retargeted, 1);
 	expect(retargeted[0]?.url).toBe("https://ph.example.test/batch/");
@@ -163,20 +141,19 @@ test("the batch goes to the EU cloud by default; THINKRAIL_POSTHOG_HOST retarget
 test("shutdownAnalytics genuinely awaits the drain (slow transport, no polling) and never throws", async () => {
 	const sent: SentPayload[] = [];
 	const slowFetch: typeof fetch = (async (url: Parameters<typeof fetch>[0], init?: RequestInit) => {
-		await Bun.sleep(50); // a real network-ish delay — an unawaited drain could not see this land
+		await Bun.sleep(50);
 		sent.push({ url: String(url), body: JSON.parse(String(init?.body)) });
 		return new Response("{}", { status: 200 });
 	}) as typeof fetch;
 	bootSending(sent, { fetchImpl: slowFetch });
 	track({ name: "chat_started", params: { provider: "anthropic", model: "m" } });
 	await shutdownAnalytics();
-	// Asserted immediately after the await — deliverable only because shutdown really waited.
 	expect(allEntries(sent).map((e) => e.event)).toEqual([
 		"app_installed",
 		"app_started",
 		"chat_started",
 	]);
-	await shutdownAnalytics(); // idempotent (memoized), still never throws
+	await shutdownAnalytics();
 });
 
 test("toggle-off silences events already queued inside the SDK — the transport gate", async () => {
@@ -184,30 +161,28 @@ test("toggle-off silences events already queued inside the SDK — the transport
 	let started = 0;
 	const slowFetch: typeof fetch = (async (url: Parameters<typeof fetch>[0], init?: RequestInit) => {
 		started++;
-		await Bun.sleep(100); // keep this request in-flight while the next event queues behind it
+		await Bun.sleep(100);
 		delivered.push({ url: String(url), body: JSON.parse(String(init?.body)) });
 		return new Response("{}", { status: 200 });
 	}) as typeof fetch;
 	bootSending(delivered, { fetchImpl: slowFetch });
-	await drained(delivered, 2); // boot lifecycle out of the way
+	await drained(delivered, 2);
 
 	const startedBefore = started;
 	track({ name: "chat_started", params: { provider: "anthropic", model: "m" } });
 	const deadline = Date.now() + 2_000;
 	while (started === startedBefore && Date.now() < deadline) await Bun.sleep(5);
-	expect(started).toBeGreaterThan(startedBefore); // chat_started is genuinely ON the wire…
+	expect(started).toBeGreaterThan(startedBefore);
 
-	track({ name: "provider_login", params: { provider: "openai", method: "oauth" } }); // …this one queues behind it
-	setAnalyticsSending(false); // consent off while one is in-flight and one is queued
-	await shutdownAnalytics(); // drains the queue — into the closed gate
-	await Bun.sleep(150); // let the in-flight request finish
+	track({ name: "provider_login", params: { provider: "openai", method: "oauth" } });
+	setAnalyticsSending(false);
+	await shutdownAnalytics();
+	await Bun.sleep(150);
 
 	const events = allEntries(delivered).map((e) => e.event);
-	expect(events).toContain("chat_started"); // already on the wire — cannot be recalled
-	expect(events).not.toContain("provider_login"); // queued — died at the gate, zero network
+	expect(events).toContain("chat_started");
+	expect(events).not.toContain("provider_login");
 });
-
-// ── installation identity ──────────────────────────────────────────────
 
 test("the install id is minted once, used as distinct_id, and NEVER rotated by toggles", async () => {
 	const sent: SentPayload[] = [];
@@ -221,7 +196,7 @@ test("the install id is minted once, used as distinct_id, and NEVER rotated by t
 	track({ name: "app_started" });
 	await drained(sent, 3);
 	expect(allEntries(sent).at(-1)?.distinct_id).toBe(id);
-	expect(ensureInstallation().id).toBe(id); // unchanged on disk too
+	expect(ensureInstallation().id).toBe(id);
 });
 
 test("app_installed fires exactly once per install (announced bit survives restarts)", async () => {
@@ -230,7 +205,6 @@ test("app_installed fires exactly once per install (announced bit survives resta
 	await drained(sent, 2);
 	expect(allEntries(sent).map((e) => e.event)).toEqual(["app_installed", "app_started"]);
 
-	// Simulated restart: same data dir, fresh in-memory state.
 	resetAnalyticsForTests();
 	const sentAfterRestart: SentPayload[] = [];
 	bootSending(sentAfterRestart);
@@ -249,12 +223,10 @@ test("a disabled boot mints the id but sends nothing; enabling later announces o
 	setAnalyticsSending(true);
 	await drained(sent, 1);
 	expect(allEntries(sent).map((e) => e.event)).toEqual(["app_installed"]);
-	setAnalyticsSending(true); // idempotent — no second announce
+	setAnalyticsSending(true);
 	await settled();
 	expect(allEntries(sent)).toHaveLength(1);
 });
-
-// ── gates ──────────────────────────────────────────────────────────────
 
 test("a run from source on the dev channel sends — the release allowlist is gone", async () => {
 	const sent: SentPayload[] = [];
@@ -297,7 +269,7 @@ test("--no-analytics (mute) silences the run even when the config says send", as
 	const sent: SentPayload[] = [];
 	bootSending(sent, { mute: true });
 	track({ name: "app_started" });
-	setAnalyticsSending(true); // a settings toggle during a muted run must not unmute it
+	setAnalyticsSending(true);
 	track({ name: "app_started" });
 	await settled();
 	expect(sent).toHaveLength(0);
@@ -306,8 +278,8 @@ test("--no-analytics (mute) silences the run even when the config says send", as
 test("setAnalyticsSending(false) stops sending immediately", async () => {
 	const sent: SentPayload[] = [];
 	bootSending(sent);
-	await drained(sent, 2); // let the boot lifecycle land first…
-	sent.length = 0; // …then drop it
+	await drained(sent, 2);
+	sent.length = 0;
 	setAnalyticsSending(false);
 	track({ name: "chat_started", params: { provider: "anthropic", model: "m" } });
 	await settled();
@@ -324,10 +296,8 @@ test("track never throws into the caller, even when the transport does", async (
 		}) as unknown as typeof fetch,
 	});
 	expect(() => track({ name: "app_started" })).not.toThrow();
-	await settled(); // let the SDK's internal retry/error path run inside the test's lifetime
+	await settled();
 });
-
-// ── identity bucketing (closed vocabulary from pi's built-in catalog) ──
 
 test("a pi built-in provider + model pass through raw", () => {
 	const model = getBuiltinModels("anthropic")[0];

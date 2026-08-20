@@ -4,7 +4,6 @@ import { CodeBlock } from "../CodeBlock";
 import { Collapsible, countLines } from "../Collapsible";
 import { resultText, strArg } from "../toolHelpers";
 
-/** First query string from `web_search` args (`query`, or the first of `queries[]`). */
 function firstQuery(args: Record<string, unknown>): string {
 	const single = strArg(args, "query");
 	if (single) return single;
@@ -12,7 +11,6 @@ function firstQuery(args: Record<string, unknown>): string {
 	return Array.isArray(many) && typeof many[0] === "string" ? many[0] : "";
 }
 
-/** Best-effort provider name from the tool result (pi-web-access reports it in `details`; shape not typed). */
 function providerOf(result: unknown): string {
 	const details = (result as { details?: unknown } | null)?.details as
 		| { provider?: unknown; results?: Array<{ provider?: unknown }> }
@@ -21,7 +19,6 @@ function providerOf(result: unknown): string {
 	return typeof p === "string" ? p : "";
 }
 
-/** Body for the `web_search` tool: query + provider + the synthesized answer / sources. */
 export function WebSearchCard({ args, result, status }: ToolRenderProps) {
 	const query = firstQuery(args);
 	const provider = providerOf(result);

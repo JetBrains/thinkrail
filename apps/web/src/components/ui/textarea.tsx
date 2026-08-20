@@ -1,8 +1,6 @@
 import type * as React from "react";
 import { cn } from "@/lib";
 
-/** A token-themed textarea: hairline neutral border that strengthens to `control-border-active` while
- * editing (matches the composer's neutral active border). No accent ring — focus/active stays neutral. */
 export function Textarea({ className, ...props }: React.ComponentProps<"textarea">) {
 	return (
 		<textarea

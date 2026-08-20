@@ -1,6 +1,3 @@
-// Tier-2 ADVISORY verdicts — a cheap one-shot model grades the transcript against a per-scenario rubric
-// of falsifiable statements. Failures warn and land in the run log; they NEVER fail the suite (spec
-// files never assert on judge output). Malformed replies degrade to "unclear", never a throw.
 import "./env";
 import { completeOnce } from "@thinkrail/server/agent";
 
@@ -25,7 +22,6 @@ const JUDGE_SYSTEM = [
 	"in rubric order, no markdown, no commentary.",
 ].join(" ");
 
-/** Parse a judge reply against the rubric. Pure (unit-tested). Anything malformed → all "unclear". */
 export function parseJudgeReply(reply: string, rubric: string[]): JudgeItem[] {
 	const unclear = (): JudgeItem[] =>
 		rubric.map((statement) => ({
@@ -52,7 +48,6 @@ export function parseJudgeReply(reply: string, rubric: string[]): JudgeItem[] {
 	});
 }
 
-/** Grade one transcript. `skipped` when no model is authenticated — advisory means degradable. */
 export async function judgeTranscript(transcript: string, rubric: string[]): Promise<JudgeResult> {
 	if (rubric.length === 0) return { status: "skipped", items: [] };
 	try {

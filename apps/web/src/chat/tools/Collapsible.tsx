@@ -2,12 +2,6 @@ import { type ReactNode, useState } from "react";
 
 const THRESHOLD = 24;
 
-/**
- * Clips tall tool output (read/write content, edit diffs) beyond ~{@link THRESHOLD} lines behind a fade
- * and a "Show all N lines" toggle; short output renders untouched. State is local, so it survives the
- * card's streaming re-renders. `fadeClass` is a token-var gradient matching the content's background so
- * the fade is themeable. Presentational — no store/transport.
- */
 export function Collapsible({
 	lines,
 	children,
@@ -41,7 +35,6 @@ export function Collapsible({
 	);
 }
 
-/** Line count of a block of text ("" → 0); a single trailing newline doesn't count as an extra line. */
 export function countLines(text: string): number {
 	if (!text) return 0;
 	const n = text.split("\n").length;

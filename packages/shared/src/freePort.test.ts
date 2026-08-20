@@ -15,7 +15,7 @@ afterEach(() => {
 });
 
 test("isPortFree is true for an unused port", async () => {
-	const port = listenOn(0); // OS-assigned port we immediately release
+	const port = listenOn(0);
 	servers.pop()?.stop(true);
 	expect(await isPortFree(port)).toBe(true);
 });

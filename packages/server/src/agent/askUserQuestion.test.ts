@@ -30,17 +30,13 @@ const args = (over: Partial<AskUserQuestionArgs> = {}): AskUserQuestionArgs => (
 	...over,
 });
 
-/** Concatenate the text content of a tool result (its content is a `TextContent | ImageContent` union). */
 const textOf = (r: { content: { type: string; text?: string }[] }): string =>
 	r.content.map((c) => c.text ?? "").join("");
 
-/** A minimal `ExtensionContext` for the tool: only `hasUI` is read (the ack design awaits nothing). */
 const ctx = (hasUI = true): ExtensionContext => ({ hasUI }) as unknown as ExtensionContext;
 
 const run = (hasUI = true, params: AskUserQuestionArgs = args()) =>
 	createAskUserQuestionTool().execute("tc-1", params as never, undefined, undefined, ctx(hasUI));
-
-// ---- transcript fixtures for the pure assessors (structural AgentMessage views) ----
 
 const askCall = (toolCallId: string, a: AskUserQuestionArgs = args()) =>
 	({
@@ -79,8 +75,6 @@ const answersMessage = (toolCallId: string) =>
 
 const userMessage = (text = "actually, let me explain") =>
 	({ role: "user", content: [{ type: "text", text }] }) as unknown as AgentMessage;
-
-// ---- validation (unchanged contract) ----
 
 test("validateQuestionnaire accepts a well-formed questionnaire", () => {
 	expect(validateQuestionnaire(args()).ok).toBe(true);
@@ -125,8 +119,6 @@ test("validateQuestionnaire rejects empty, too-few-options, dupes, and reserved 
 		).ok,
 	).toBe(false);
 });
-
-// ---- the envelope (now the ask-user-answers message text; same wording as the blocking era) ----
 
 test("buildQuestionnaireResponse: cancelled → the canonical decline message", () => {
 	const r = buildQuestionnaireResponse({ answers: [], cancelled: true }, args());
@@ -195,8 +187,6 @@ test("buildQuestionnaireResponse: a multi answer's typed free text is marked as 
 	expect(r.content[0]?.text).toContain('user\'s own answer: "some-other-lib"');
 });
 
-// ---- the ack + terminate execute ----
-
 test("execute returns the ack immediately and ends the turn (terminate: true) — it never blocks", async () => {
 	const r = await run();
 	expect(textOf(r)).toBe(ASK_ACK_TEXT);
@@ -217,8 +207,6 @@ test("execute returns a validation error (non-terminating) for a malformed quest
 	expect((r.details as AskUserQuestionResult).cancelled).toBe(true);
 	expect((r as { terminate?: boolean }).terminate).toBeUndefined();
 });
-
-// ---- assessAnswerability: the transcript-derived verdict behind session.answerQuestion ----
 
 test("assessAnswerability: an ack'd, unanswered call is answerable and yields its args", () => {
 	const verdict = assessAnswerability([askCall("tc"), ackResult("tc")], "tc");
@@ -259,18 +247,14 @@ test("assessAnswerability: a malformed answers message cannot mark a call answer
 		customType: ASK_USER_ANSWERS_CUSTOM_TYPE,
 		content: "tag right, shape wrong",
 		display: true,
-		details: { toolCallId: "tc", result: { answers: "nope" } }, // no cancelled, answers not an array
+		details: { toolCallId: "tc", result: { answers: "nope" } },
 	} as unknown as AgentMessage;
 	expect(assessAnswerability([askCall("tc"), ackResult("tc"), malformed], "tc").ok).toBe(true);
 });
 
 test("assessAnswerability: the tiny pre-ack window (call ended, result not yet) is answerable", () => {
-	// The card unlocks at message end; `execute` (which writes the ack) runs a beat later. An answer in
-	// that window must not be rejected — sendCustomMessage will steer it into the ending turn.
 	expect(assessAnswerability([askCall("tc")], "tc").ok).toBe(true);
 });
-
-// ---- the ask-user-answers payload ----
 
 test("buildAnswersMessage carries the envelope text + the correlated structured result", () => {
 	const result: AskUserQuestionResult = {

@@ -148,26 +148,12 @@ import { buildHistoryScope } from "./historyScope";
 import { dropLogin, recordLoginStart } from "./loginAnalytics";
 import { withReviewLock } from "./reviewLock";
 
-/**
- * Who a request came from. Threaded to every handler so one can scope a resource to its caller; most ignore
- * it, since almost everything the host owns is shared domain state that every client sees identically
- * (architecture #9). Terminals use it for *attachment*, not ownership — a shell belongs to its tab, but only
- * the client currently attached may receive its output or drive it.
- */
 export interface RequestContext {
-	/** The calling client's id (`?client=` on its socket URL), stable across that client's reconnects. */
 	clientKey: string;
 }
 
 type Handler = (params: unknown, ctx: RequestContext) => unknown | Promise<unknown>;
 
-/**
- * The slow half of archiving a workspace, run in the background after `workspace.remove` acks: tear down
- * the workspace's sessions (abort a streaming turn, dispose, purge on-disk transcripts) then reclaim the
- * worktree (`git worktree remove`). Sessions/terminals are down before the dir is deleted (terminals are
- * killed synchronously in the handler; sessions here, before the reclaim). Best-effort by contract — a
- * failure is logged, never thrown into the void (nothing awaits it).
- */
 async function archiveTeardown(ws: Workspace): Promise<void> {
 	try {
 		await removeWorkspaceSessions(ws.id, ws.worktreePath);
@@ -177,28 +163,11 @@ async function archiveTeardown(ws: Workspace): Promise<void> {
 	}
 }
 
-/**
- * Analytics for a user-authored send, fired only once the send was ACCEPTED (a rejected send throws
- * before this and never counts). Carries just the closed-vocabulary `mode` — nothing about the message,
- * not even its length. Internal control traffic (the client's TODO wake-nudge, marked on the wire) is
- * not a message the user sent, so it is skipped: the `session.*` send methods carry both kinds.
- */
 function trackSend(mode: SendMode, text: string): void {
 	if (isControlMessage(text)) return;
 	track({ name: "message_sent", params: { mode } });
 }
 
-/**
- * Fire a review package into its session DETACHED — the send handlers return the moment the session
- * exists, so the client opens the chat tab immediately instead of sitting on pi's turn (`ackSend`'s
- * 10s acceptance window made every review send feel stuck). A pre-turn rejection (bad model, missing
- * API key) can't reach the WS response any more, so it surfaces INSIDE the just-opened chat as an
- * extension-UI notice — AND rolls the comments back from the optimistic `sent` (`markCommentsSent`
- * runs synchronously, before we know the turn is accepted) to `draft` (`rollbackSend`), so a review
- * the agent never received stays retryable instead of stranding as sent with its actions gone. The
- * `ackSend` window is what tells accept from reject: a fault AFTER acceptance is a real turn fault
- * (the package WAS delivered) and rides the event stream, leaving the `sent` state correct.
- */
 function fireReviewPrompt(
 	workspaceId: string,
 	ids: string[],
@@ -216,25 +185,10 @@ function fireReviewPrompt(
 			);
 		})
 		.catch((err) => {
-			// The rollback/notify itself failed — nothing left to do but log; a detached fire has no one
-			// to throw to, and letting it surface as an unhandled rejection would be worse.
 			console.warn(`review send rollback failed: ${err instanceof Error ? err.message : err}`);
 		});
 }
 
-/**
- * Send one KEY's comments into a review chat. The landing is, in order: the client's **last open
- * chat** (`opts.sessionId` — the conversation already on the user's screen), else the key's pinned
- * chat (the key is the file path, or the review-level bucket for anchorless remarks, see
- * `reviews.reviewSessionKey`), else a NEW chat (with the review tools every session carries). Whatever
- * receives the package becomes the key's pin (`markCommentsSent`), so the sidebar's "open the
- * discussion" follows the comments. A linked chat that isn't LIVE is not an absent chat: review state
- * and pi transcripts both survive a host restart, so the session is RE-ATTACHED
- * (`ensureSessionAttached`) rather than forked. Only a transcript that is genuinely gone (a purged pi
- * session dir) falls back to a fresh chat — a recovery, not a routine path, so the reason is logged.
- * Every comment handed in must share one key (`sendBatch` groups first). Callers hold the workspace's
- * review lock.
- */
 async function sendToFileChat(
 	workspaceId: string,
 	comments: ReviewComment[],
@@ -249,9 +203,6 @@ async function sendToFileChat(
 	if (existing && (await ensureSessionAttached(existing, workspaceId, ws.worktreePath))) {
 		markCommentsSent(workspaceId, ids, existing);
 		fireReviewPrompt(workspaceId, ids, existing, pkg, followUpSession);
-		// `reused`: the client must HYDRATE this chat rather than open it as new — it may never have seen
-		// it (a second client, or this one after a reload). The model/thinking placeholders match the
-		// disk-summary convention and are ignored on that path.
 		return {
 			sessionId: existing,
 			model: null,
@@ -287,8 +238,6 @@ const handlers: Record<string, Handler> = {
 	"project.inspect": (params) => inspectProjectPath((params as { path: string }).path),
 	"project.init": (params) => initProject((params as { path: string }).path),
 	"project.list": () => listProjects(),
-	// Lazy, per-project: the Welcome screen requests this only for the one project it renders, so the
-	// full-tree spec walk never sits on the connect handshake (which fans out over every project).
 	"project.hasSpecs": (params) => {
 		const { projectId } = params as { projectId: string };
 		const project = listProjects().find((p) => p.id === projectId);
@@ -298,9 +247,6 @@ const handlers: Record<string, Handler> = {
 		closeProject((params as { id: string }).id);
 		return { ok: true } as const;
 	},
-	// Persist the user's trust grant → gates the repo's committed cross-agent skill aliases. Granting
-	// acknowledges the skills present *now*, so a skill that appears later (a pull / branch) stays gated
-	// until separately confirmed. Returns the updated project so the client refreshes its store.
 	"project.setTrust": async (params) => {
 		const p = params as { id: string; trusted: boolean };
 		const project = listProjects().find((candidate) => candidate.id === p.id);
@@ -328,20 +274,13 @@ const handlers: Record<string, Handler> = {
 	},
 	"workspace.remove": (params) => {
 		const id = (params as { id: string }).id;
-		// Non-blocking archive: drop the record now (gone from `workspace.list` immediately) + the fast
-		// teardown, ack, then reclaim sessions/worktree in the background so the user never waits for the
-		// slow git subprocess + session abort.
-		// Everything below keys off the CANONICAL id of a workspace that actually existed — never the
-		// raw wire string. `removeWorkspaceReviews` in particular deletes a file derived from the id, so
-		// an unchecked id would let a client aim the unlink outside the reviews dir (the persistence
-		// helper also refuses path-segment ids — two layers). An unknown id is an idempotent no-op ack.
 		const ws = forgetWorkspace(id);
 		if (ws) {
-			removeWorkspaceLayout(ws.id); // structural view state must not outlive its workspace
-			evictSpecIndex(ws.id); // the archived worktree's spec parse cache must not outlive it
-			removeWorkspaceReviews(ws.id); // the review file must not outlive its workspace either
-			stopWatch(ws.id); // fast: stop the change notifier before the worktree dir is reclaimed
-			closeWorkspaceTerminals(ws.id); // fast: kill workspace-scoped PTYs before the dir is reclaimed
+			removeWorkspaceLayout(ws.id);
+			evictSpecIndex(ws.id);
+			removeWorkspaceReviews(ws.id);
+			stopWatch(ws.id);
+			closeWorkspaceTerminals(ws.id);
 			void archiveTeardown(ws);
 		}
 		return { ok: true } as const;
@@ -361,19 +300,12 @@ const handlers: Record<string, Handler> = {
 	"git.prefetch": async (params) => {
 		const p = params as { projectId: string; ref: string };
 		const { ok, moved } = await prefetchBranch(p.projectId, p.ref);
-		// A fetch that moved the local remote-tracking ref may have changed what a sibling workspace's
-		// branch-scope diff *means* (its merge-base can move) — and it is invisible to the watch module (it
-		// writes only to the shared `.git`, outside every watched location), so this is the one signal those
-		// workspaces get; an unaffected re-read is an idempotent no-op. `moved` itself stays host-internal:
-		// the wire result remains `{ ok }`.
 		if (moved) nudgeBaseRefWorkspaces(p.projectId, p.ref);
 		return { ok };
 	},
 	"github.authStatus": () => githubAuthStatus(),
 	"github.refresh": () => githubRefresh(),
 	"dialog.selectDirectory": () => selectDirectory(),
-	// Workspace reads double as the change-notifier trigger: a read means "a client is looking at this
-	// worktree", so the host lazily starts its watcher (idempotent; unknown ids no-op, the read throws).
 	"fs.readDir": (params) => {
 		const p = params as { workspaceId: string; path: string };
 		void ensureWatch(p.workspaceId);
@@ -405,8 +337,6 @@ const handlers: Record<string, Handler> = {
 		),
 	"todo.remove": (params) =>
 		removeTodo(params as { workspaceId: string; sessionId: string; id: string }),
-	// `scope` selects what is diffed (branch / uncommitted / one commit; omitted = branch). A scope naming a
-	// commit that no longer exists rejects — the panel resets its scope on that rejection.
 	"git.status": (params) => {
 		const p = params as { workspaceId: string; scope?: GitDiffScope };
 		void ensureWatch(p.workspaceId);
@@ -418,17 +348,8 @@ const handlers: Record<string, Handler> = {
 		void ensureWatch(p.workspaceId);
 		return gitDiffFile(p.workspaceId, p.path, p.scope);
 	},
-	// The workspace branch's own commits — the scope menu's lazily-fetched commit list.
 	"git.listCommits": (params) => listCommits((params as { workspaceId: string }).workspaceId),
-	// Every terminal op is scoped to `ctx.clientKey`: a PTY belongs to the client that created it, so another
-	// connection can neither read its output nor write to or kill it. An id the caller doesn't own is treated
-	// exactly like one that doesn't exist.
-	// SYNCHRONOUS ON PURPOSE — see `attachTerminal`. Lookup and insert in one tick is what makes attach atomic
-	// on Bun's single event loop, so two concurrent attaches for the same tab cannot both spawn a shell. An
-	// `await` anywhere in this path silently reintroduces double-spawn.
 	"terminal.attach": (params, ctx) => {
-		// Forwarded whole rather than rebuilt: under `exactOptionalPropertyTypes`, an absent `cols` and an
-		// explicit `cols: undefined` are different types, and only the former means "use the default".
 		const p = params as {
 			workspaceId: string;
 			tabKey: string;
@@ -441,9 +362,6 @@ const handlers: Record<string, Handler> = {
 	"terminal.list": (params) => ({
 		tabs: listTerminals((params as { workspaceId: string }).workspaceId),
 	}),
-	// Both carry the caller: only the client currently ATTACHED to a terminal may drive it. A displaced client
-	// can still hold a valid PTY id, and a reconnect replays its queued frames — without this its keystrokes
-	// would land in whoever took the tab over.
 	"terminal.write": (params, ctx) => {
 		const p = params as { id: string; data: string };
 		writeTerminal(p.id, p.data, ctx.clientKey);
@@ -462,7 +380,6 @@ const handlers: Record<string, Handler> = {
 		const { projectId } = params as { projectId: string };
 		const project = listProjects().find((candidate) => candidate.id === projectId);
 		if (!project) throw new Error(`Unknown project: ${projectId}`);
-		// Same admission gate the live session uses, minus per-workspace overrides (none pre-session).
 		return listSkillCommands(project.path, {
 			trusted: project.trusted === true,
 			acknowledged: project.acknowledgedSkills ?? [],
@@ -471,8 +388,6 @@ const handlers: Record<string, Handler> = {
 			overrides: {},
 		});
 	},
-	// The workspace Skills manager: the full catalog + each skill's admission verdict, resolved against the
-	// worktree's checkout and the owning project's trust/toggles plus this workspace's overrides.
 	"skills.state": (params) => {
 		const { workspaceId } = params as { workspaceId: string };
 		const ws = getWorkspace(workspaceId);
@@ -485,29 +400,24 @@ const handlers: Record<string, Handler> = {
 			overrides: ws.skillOverrides ?? {},
 		});
 	},
-	// Confirm project-scoped skills that appeared after trust (re-confirm-new) — echoes the updated Project.
 	"project.acknowledgeSkills": (params) => {
 		const p = params as { id: string; names: string[] };
 		return acknowledgeProjectSkills(p.id, p.names);
 	},
-	// Project-baseline per-skill enable/disable.
 	"project.setSkillEnabled": (params) => {
 		const p = params as { id: string; name: string; enabled: boolean };
 		return setProjectSkillEnabled(p.id, p.name, p.enabled);
 	},
-	// Present committed alias skill names in the project's checkout — the count behind the trust notice.
 	"project.aliasSkills": (params) => {
 		const { projectId } = params as { projectId: string };
 		const project = listProjects().find((p) => p.id === projectId);
 		if (!project) throw new Error(`Unknown project: ${projectId}`);
 		return listProjectAliasSkillNames(project.path);
 	},
-	// Turn a group (plugin / source tier / `@plugins`) on/off at the project baseline.
 	"project.setGroupEnabled": (params) => {
 		const p = params as { id: string; group: string; enabled: boolean };
 		return setProjectGroupEnabled(p.id, p.group, p.enabled);
 	},
-	// Project-scoped catalog for the pre-session manager (current checkout, no per-workspace overrides).
 	"project.skills": (params) => {
 		const { projectId } = params as { projectId: string };
 		const project = listProjects().find((p) => p.id === projectId);
@@ -520,26 +430,19 @@ const handlers: Record<string, Handler> = {
 			overrides: {},
 		});
 	},
-	// Per-workspace per-skill override over the project baseline (`null` clears it).
 	"workspace.setSkillOverride": (params) => {
 		const p = params as { id: string; name: string; override: "on" | "off" | null };
 		return setWorkspaceSkillOverride(p.id, p.name, p.override);
 	},
-	// Re-point the workspace's diff target (`null` clears it back to the creation base).
 	"workspace.setDiffBase": (params) => {
 		const p = params as { id: string; ref: string | null };
 		return setWorkspaceDiffBase(p.id, p.ref);
 	},
-	// Session-skill startup barrier: the watcher's wildcard publishes before this resolves. The result
-	// tells a replaying client whether to fold its local fallback if that event frame died with the socket.
 	"workspace.watchReady": (params) => ensureWatch((params as { workspaceId: string }).workspaceId),
-	// Apply skill/settings changes to a running session (active-chat reload); rejects while streaming.
 	"session.reloadResources": async (params) => {
 		await reloadSessionResources((params as { sessionId: string }).sessionId);
 		return { ok: true } as const;
 	},
-	// session.* — the pi engine. A thrown/failed call returns a `{ ok:false, error }` WS response;
-	// streaming faults arrive as `pi.event`s and surface at `agent_settled`, not here.
 	"session.create": async (params) => {
 		const p = params as {
 			workspaceId: string;
@@ -547,8 +450,6 @@ const handlers: Record<string, Handler> = {
 			thinkingLevel?: ThinkingLevel;
 		};
 		const ws = getWorkspace(p.workspaceId);
-		// Chat start is what seeds the gitignored scratch dir — for the Default workspace this is the one
-		// moment ThinkRail may write into the user's repo (worktrees self-heal a deleted dir the same way).
 		ensureWorkspaceScratchDir(ws);
 		const created = await createSession({
 			cwd: ws.worktreePath,
@@ -556,8 +457,6 @@ const handlers: Record<string, Handler> = {
 			...(p.model ? { model: p.model } : {}),
 			...(p.thinkingLevel ? { thinkingLevel: p.thinkingLevel } : {}),
 		});
-		// Analytics: a NEW chat only (disk re-opens via session.getMessages never land here). Identity is
-		// bucketed against pi's built-in catalog — a custom provider/model name never leaves the process.
 		if (created.model) {
 			track({
 				name: "chat_started",
@@ -566,8 +465,6 @@ const handlers: Record<string, Handler> = {
 		}
 		return created;
 	},
-	// Sends are acked when ACCEPTED, not when the turn ends — see `ackSend` (a turn can outlive the
-	// client's request timeout; long tool rounds are routine).
 	"session.prompt": async (params) => {
 		const p = params as { sessionId: string; text: string; images?: ImageContent[] };
 		await ackSend(promptSession(p.sessionId, p.text, p.images));
@@ -597,8 +494,6 @@ const handlers: Record<string, Handler> = {
 	"session.delete": async (params) => {
 		const p = params as { workspaceId: string; sessionId: string };
 		await deleteSession(p.sessionId, p.workspaceId, getWorkspace(p.workspaceId).worktreePath);
-		// The chat is gone — close its TODO work windows too, or an orphan baseline sidecar would read as a
-		// permanently open foreign window and force every sibling chat into the path-list fallback forever.
 		removeSessionTodoWindows(p);
 		return { ok: true } as const;
 	},
@@ -623,8 +518,6 @@ const handlers: Record<string, Handler> = {
 	"session.list": async (params) => {
 		const { workspaceId } = params as { workspaceId: string };
 		const summaries = await listSessions(workspaceId, getWorkspace(workspaceId).worktreePath);
-		// Decorate with each chat's unfinished-TODO count (agent stays todos-free — host composes, the
-		// same pattern as history + scope). A single failed count omits the field, never fails the list.
 		return summaries.map((summary) => {
 			try {
 				return {
@@ -646,10 +539,6 @@ const handlers: Record<string, Handler> = {
 	},
 	"session.answerQuestion": async (params) => {
 		const p = params as { sessionId: string; toolCallId: string; result: AskUserQuestionResult };
-		// Reply-style method: vet the shape and the target up front — a disposed/unknown session or a
-		// non-awaiting tool call (already answered / superseded / legacy-resolved) fails the request loud;
-		// nothing is ever parked. Delivery starts the answer TURN, so like prompt/steer/followUp it's acked
-		// when accepted (`ackSend`), and later faults arrive via the event stream.
 		if (!hasSession(p.sessionId)) throw new Error(`Unknown session: ${p.sessionId}`);
 		if (!p.result || !Array.isArray(p.result.answers) || typeof p.result.cancelled !== "boolean")
 			throw new Error("Malformed ask_user_question result");
@@ -667,15 +556,10 @@ const handlers: Record<string, Handler> = {
 	},
 	"model.default": () => getDefaultModel(),
 	"provider.status": () => getProviderStatus(),
-	// In-app login (OAuth or interactive API-key entry, per `type`). `loginStart` returns its handle at
-	// once (the flow runs detached — see `startLogin`); frames stream on the `provider.login` channel,
-	// `loginReply` answers a live select/prompt frame.
 	"provider.loginStart": (params) => {
 		const p = params as { providerId: string; type?: "oauth" | "api_key" };
 		const type = p.type ?? "oauth";
 		const handle = startLogin(p.providerId, type);
-		// Analytics: remember the flow's method so the login channel's terminal `success` frame can carry
-		// it (the tee in `createServer` looks it up — see loginAnalytics.ts).
 		recordLoginStart(handle.loginId, type);
 		return handle;
 	},
@@ -693,13 +577,11 @@ const handlers: Record<string, Handler> = {
 		await logoutProvider((params as { providerId: string }).providerId);
 		return { ok: true } as const;
 	},
-	// Central actions: closed typed outcomes only — child output/diagnostics never become frames.
 	"provider.jbcentralConnect": () => connectJbcentral(),
 	"provider.jbcentralDisconnect": () => disconnectJbcentral(),
 	"provider.jbcentralStartProxy": () => startProxyJbcentral(),
 	"provider.jbcentralLogin": () => jbcentralLogin(),
 	"provider.jbcentralUpdate": () => updateJbcentral(),
-	// Read or replace the one host-synchronized workbench document for a registered workspace.
 	"layout.get": (params) => {
 		const { workspaceId } = params as { workspaceId: string };
 		getWorkspace(workspaceId);
@@ -710,22 +592,16 @@ const handlers: Record<string, Handler> = {
 		getWorkspace(replacement.workspaceId);
 		return replaceWorkspaceLayout(replacement, getConfig().layout.maxSideGroups);
 	},
-	// Merge + persist a partial into the server-synced app config (theme, …); the broadcast is fired by
-	// `updateConfig`'s injected publisher (wired in `createServer`), so every client converges.
 	"settings.update": (params) => {
 		const config = (params as { config: Partial<AppConfig> }).config;
 		if (config.layout !== undefined) validateLayoutSettings(config.layout);
 		return updateConfig(config);
 	},
-	// Prompt recall + conversation search over pi's session files. Scope mapping is resolved here (host
-	// owns the registries); the index itself stays registry-free (see history/SPEC.md).
-	// Uses listWorkspaceRecords (diffStats-free registry read) to avoid blocking on git per keystroke.
 	"history.search": (params) => {
 		const p = params as { query: string; scope: HistoryScope; limit?: number };
 		const { filter, labels } = buildHistoryScope(p.scope, listProjects(), (projectId) =>
 			listWorkspaceRecords(projectId),
 		);
-		// Clamp the client-controlled limit at the boundary (defense in depth; `search()` clamps too).
 		return getHistoryIndex().search({
 			query: p.query,
 			filter,
@@ -733,12 +609,6 @@ const handlers: Record<string, Handler> = {
 			limit: clampLimit(p.limit),
 		});
 	},
-	// review.* — draft comments on files/diffs → AI sessions (see reviews/SPEC.md). Reads re-anchor
-	// server-side; every mutation converges via the `review.changed` push, so handlers just delegate.
-	// Every MUTATION runs under the workspace's review lock, sends included: a send's check→mark
-	// straddles an await, and a delete/close landing in that gap sends the agent a package for comments
-	// no open review contains (see `reviewLock`). The read stays unlocked — it is atomic on its own and
-	// hydration must not queue behind a send.
 	"review.get": (params) => {
 		const p = params as { workspaceId: string };
 		ensureWatch(p.workspaceId);
@@ -784,9 +654,6 @@ const handlers: Record<string, Handler> = {
 			return { ok: true } as const;
 		});
 	},
-	// Send ONE comment — into its FILE's review chat (created on the file's first send, followed up
-	// after). Serialized per workspace: check-and-mark straddles an await, so a concurrent send would
-	// double-spawn and a concurrent delete/close would strand the package (see `reviewLock`).
 	"review.sendComment": (params) => {
 		const p = params as {
 			workspaceId: string;
@@ -799,13 +666,6 @@ const handlers: Record<string, Handler> = {
 			sendToFileChat(p.workspaceId, sendableComments(p.workspaceId, [p.id]), p),
 		);
 	},
-	// Send all/selected drafts as one batch, grouped by review key (file path, or the review-level
-	// bucket): each group lands in its own chat. **Every session it touched comes back**, in group order
-	// — a batch spanning two files starts two chats, and returning only the first left the user with a
-	// chat they never saw for comments already marked sent. (The Send-review button is per-file, so a
-	// multi-group batch is a wire-only case today.) Serialized per workspace like `review.sendComment`:
-	// without it two concurrent "Send review" clicks both read the file's session as unset and each
-	// create their own.
 	"review.sendBatch": (params) => {
 		const p = params as {
 			workspaceId: string;
@@ -829,9 +689,6 @@ const handlers: Record<string, Handler> = {
 			return { sessions };
 		});
 	},
-	// Prompt-template CRUD: list/read/write/delete pi's global + project-scoped templates. The
-	// template.* handlers resolve workspaceId → cwd via getWorkspace, then delegate to the templates
-	// module (which stays registry-free: it only takes a cwd, never a workspaceId).
 	"template.list": (params) => {
 		const p = params as { workspaceId?: string };
 		const dirs = templateDirs(p.workspaceId ? getWorkspace(p.workspaceId).worktreePath : undefined);
@@ -860,7 +717,6 @@ const handlers: Record<string, Handler> = {
 	},
 };
 
-/** Route a WS request to its handler. Throws on unknown method (→ a `{ ok:false }` WS response). */
 export async function handleRequest(
 	method: string,
 	params: unknown,

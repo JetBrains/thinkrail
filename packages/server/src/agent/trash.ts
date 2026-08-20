@@ -6,9 +6,6 @@ import procfsParsers from "@stroncium/procfs/lib/parsers";
 import processMountinfo from "@stroncium/procfs/lib/parsers/processMountinfo";
 import trash from "trash";
 
-// `trash`'s Linux path asks procfs for this parser through a template-literal CommonJS require. A source
-// run resolves it from node_modules, but Bun cannot discover that edge for a single-file binary. Statically
-// include the parser and install the same lazy-getter result as an own property before trash ever calls it.
 if (!Object.hasOwn(procfsParsers, "processMountinfo")) {
 	Object.defineProperty(procfsParsers, "processMountinfo", { value: processMountinfo });
 }
@@ -26,14 +23,12 @@ export interface BundledTrashHelpers {
 let bundledHelpers: BundledTrashHelpers | undefined;
 let testImplementation: TrashImplementation | undefined;
 
-/** Internal test seam for exercising manager rollback without touching the machine's real trash. */
 export function setTrashImplementationForTests(
 	implementation: TrashImplementation | undefined,
 ): void {
 	testImplementation = implementation;
 }
 
-/** Compiled-runtime seam: helpers must be staged to real files before the host accepts requests. */
 export function setBundledTrashHelpers(helpers: BundledTrashHelpers): void {
 	bundledHelpers = helpers;
 }
@@ -54,7 +49,6 @@ function defaultTrashImplementation(): TrashImplementation {
 	};
 }
 
-/** Move one literal path to the OS trash. Failures propagate; a recoverable action never falls back to unlink. */
 export async function trashFile(
 	path: string,
 	implementation: TrashImplementation = testImplementation ?? defaultTrashImplementation(),

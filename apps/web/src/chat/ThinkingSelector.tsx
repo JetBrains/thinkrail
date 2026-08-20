@@ -3,11 +3,6 @@ import { Check, ChevronDown } from "lucide-react";
 import { useState } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
-/**
- * The per-session effort picker: a pill opening the levels the active model actually supports — the same
- * trigger+popover shape as the model picker. Props-driven, no store — shared by the chat composer and
- * the New-Workspace dialog.
- */
 export function ThinkingSelector({
 	level,
 	levels,
@@ -15,11 +10,8 @@ export function ThinkingSelector({
 	container,
 }: {
 	level: ThinkingLevel;
-	/** The active model's selectable levels, straight from `WireModel.thinkingLevels` (already in pi's
-	 * escalation order). Empty until a model resolves, which disables the trigger. */
 	levels: readonly ThinkingLevel[];
 	onSelect: (level: ThinkingLevel) => void;
-	/** Popover portal target — the host Dialog node when used inside a dialog (so the list scrolls). */
 	container?: HTMLElement | null;
 }) {
 	const [open, setOpen] = useState(false);

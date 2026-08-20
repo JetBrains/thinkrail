@@ -10,15 +10,6 @@ import {
 	SINGLE_IMAGE_EDGE_LIMIT,
 } from "./imageGuard";
 
-// The un-bricking half of TASK-image-attachment-downscale: an oversized image anywhere in a session's
-// history re-fails EVERY turn (Anthropic caps a side at 8000px, dropping to 2000px once a request
-// carries more than 20 images). Sessions are append-only and the host has no image codec, so the guard
-// transforms the OUTGOING context (pi's `context` extension event) — sniffing dimensions straight from
-// the base64 header bytes and replacing violating image blocks with a text note — while the session
-// file and transcript stay untouched.
-
-// ---- tiny hand-built image headers (only the bytes the sniffer reads) ----
-
 function pngBytes(width: number, height: number): Buffer {
 	const sig = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 	const ihdr = Buffer.alloc(21);
@@ -31,13 +22,12 @@ function pngBytes(width: number, height: number): Buffer {
 
 function jpegBytes(width: number, height: number): Buffer {
 	const soi = Buffer.from([0xff, 0xd8]);
-	// An APP0 segment before the SOF, so the sniffer must actually walk segments.
 	const app0 = Buffer.from([0xff, 0xe0, 0x00, 0x04, 0x00, 0x00]);
 	const sof = Buffer.alloc(9);
 	sof[0] = 0xff;
-	sof[1] = 0xc0; // SOF0
+	sof[1] = 0xc0;
 	sof.writeUInt16BE(7, 2);
-	sof[4] = 8; // bit depth
+	sof[4] = 8;
 	sof.writeUInt16BE(height, 5);
 	sof.writeUInt16BE(width, 7);
 	return Buffer.concat([soi, app0, sof]);
@@ -62,7 +52,6 @@ function webpRiff(chunk: string): Buffer {
 }
 
 function webpVp8Bytes(width: number, height: number): Buffer {
-	// Lossy: 3-byte frame tag at 20, sync code 0x9D 0x01 0x2A, then 14-bit LE width / height.
 	const b = webpRiff("VP8 ");
 	b[23] = 0x9d;
 	b[24] = 0x01;
@@ -73,7 +62,6 @@ function webpVp8Bytes(width: number, height: number): Buffer {
 }
 
 function webpVp8lBytes(width: number, height: number): Buffer {
-	// Lossless: signature 0x2F at 20, then 14-bit width-1 / height-1 packed little-endian.
 	const b = webpRiff("VP8L");
 	b[20] = 0x2f;
 	b.writeUInt32LE((width - 1) | ((height - 1) << 14), 21);
@@ -111,8 +99,6 @@ const toolResult = (content: (ImageContent | { type: "text"; text: string })[]) 
 		timestamp: 1,
 	}) as AgentMessage;
 
-// ---- imageDimensions: header sniffing, no codec ----
-
 describe("imageDimensions", () => {
 	test("reads PNG IHDR dimensions", () => {
 		expect(imageDimensions(pngBytes(3024, 1964).toString("base64"))).toEqual({
@@ -147,7 +133,6 @@ describe("imageDimensions", () => {
 			width: 3200,
 			height: 1400,
 		});
-		// A missing sync code reads as undefined — never a bogus size.
 		const noSync = webpVp8Bytes(3200, 1400);
 		noSync[23] = 0x00;
 		expect(imageDimensions(noSync.toString("base64"))).toBeUndefined();
@@ -158,29 +143,24 @@ describe("imageDimensions", () => {
 			width: 9000,
 			height: 123,
 		});
-		// 14-bit boundary values survive the bit packing.
 		expect(imageDimensions(webpVp8lBytes(16384, 1).toString("base64"))).toEqual({
 			width: 16384,
 			height: 1,
 		});
-		// A wrong signature byte reads as undefined.
 		const badSig = webpVp8lBytes(9000, 123);
 		badSig[20] = 0x30;
 		expect(imageDimensions(badSig.toString("base64"))).toBeUndefined();
 	});
 
 	test("sniffs from a bounded prefix — a multi-MB payload after the header is never a problem", () => {
-		// The guard runs on every LLM call; only the header region is decoded, so trailing image data
-		// (the actual pixels) beyond the 256KiB sniff bound must not affect the result.
 		const big = Buffer.concat([pngBytes(3024, 1964), Buffer.alloc(4 * 1024 * 1024, 0xab)]);
 		expect(imageDimensions(big.toString("base64"))).toEqual({ width: 3024, height: 1964 });
 	});
 
 	test("a JPEG whose SOF lies beyond the sniff bound reads as undefined — never stripped blind", () => {
-		// SOI + a chain of max-size APP1 segments pushing the SOF past 256KiB of decoded bytes.
 		const filler = Buffer.alloc(0xffff + 2);
 		filler[0] = 0xff;
-		filler[1] = 0xe1; // APP1
+		filler[1] = 0xe1;
 		filler.writeUInt16BE(0xffff, 2);
 		const sof = Buffer.alloc(9);
 		sof[0] = 0xff;
@@ -190,7 +170,7 @@ describe("imageDimensions", () => {
 		sof.writeUInt16BE(200, 7);
 		const jpeg = Buffer.concat([
 			Buffer.from([0xff, 0xd8]),
-			...Array.from({ length: 5 }, () => filler), // ~320KiB of metadata before the SOF
+			...Array.from({ length: 5 }, () => filler),
 			sof,
 		]);
 		expect(imageDimensions(jpeg.toString("base64"))).toBeUndefined();
@@ -202,8 +182,6 @@ describe("imageDimensions", () => {
 		expect(imageDimensions("")).toBeUndefined();
 	});
 });
-
-// ---- guardOversizedImages: the context transform ----
 
 describe("guardOversizedImages", () => {
 	test("keeps a 2000–8000px image while the context holds few images", () => {
@@ -224,17 +202,15 @@ describe("guardOversizedImages", () => {
 
 	test("applies the stricter 2000px cap once the context carries more than 20 images", () => {
 		const small = image(pngBytes(100, 100));
-		const big = image(pngBytes(2100, 1000)); // legal alone, illegal in a many-image request
+		const big = image(pngBytes(2100, 1000));
 		const messages: AgentMessage[] = [
 			toolResult(Array.from({ length: MANY_IMAGE_THRESHOLD }, () => small)),
 			user([big]),
 		];
 		const guarded = guardOversizedImages(messages);
 		expect(guarded).toBeDefined();
-		// The 20 small images survive untouched…
 		const tr = (guarded?.[0] as { content: { type: string }[] }).content;
 		expect(tr.every((b) => b.type === "image")).toBe(true);
-		// …the 21st, oversized one becomes a text note naming the stricter cap.
 		const u = (guarded?.[1] as { content: { type: string; text?: string }[] }).content;
 		expect(u[0]?.type).toBe("text");
 		expect(u[0]?.text).toContain(`${MANY_IMAGE_EDGE_LIMIT}px`);
@@ -275,8 +251,6 @@ describe("guardOversizedImages", () => {
 	});
 
 	test("strips an image over the 4.5MB encoded-base64 ceiling — dimensions within bounds, even unsniffable", () => {
-		// A dimensionally-tiny image whose payload is huge (the 12MB-GIF class), and an unsniffable
-		// format over the ceiling — the byte rule needs no dimensions, so both are stripped.
 		const hugeGif = Buffer.concat([gifBytes(1280, 960), Buffer.alloc(6 * 1024 * 1024, 0xab)]);
 		const hugeMystery = Buffer.concat([
 			Buffer.from("mystery-format"),
@@ -291,8 +265,6 @@ describe("guardOversizedImages", () => {
 	});
 
 	test("strips an image whose DECODED size is under Anthropic's 5MB but whose base64 exceeds pi's 4.5MB cap", () => {
-		// 3.6MiB decoded → 4.8MiB of base64: the wire carries base64, so this payload is rejected by the
-		// provider even though its raw byte size looks legal — the ceiling must be measured encoded.
 		const decoded = Buffer.concat([
 			gifBytes(100, 100),
 			Buffer.alloc(Math.round(3.6 * 1024 * 1024) - gifBytes(100, 100).length, 0xab),
@@ -305,8 +277,6 @@ describe("guardOversizedImages", () => {
 	});
 
 	test("strips a provider-unsupported media type even when small and within bounds — legacy HEIC/BMP heals", () => {
-		// The composer refuses these now, but sessions poisoned before that rule (or fed by another
-		// client) re-send the block every turn — the guard is what un-bricks them.
 		const guarded = guardOversizedImages([
 			user([
 				image(Buffer.from("tiny-heic-payload"), "image/heic"),
@@ -321,8 +291,6 @@ describe("guardOversizedImages", () => {
 	});
 
 	test("strips largest-first down to the request-wide 24MB image budget — each image alone is legal", () => {
-		// Seven ~4.2MiB-of-base64 images: every one passes the 4.5MiB per-image ceiling, but the sum
-		// (~29.4MiB) exceeds the 24MiB aggregate budget — the largest two go, five stay (~21MiB).
 		const mib = 1024 * 1024;
 		const gif = (decodedBytes: number) =>
 			image(
@@ -341,7 +309,6 @@ describe("guardOversizedImages", () => {
 		expect(stripped.length).toBe(2);
 		expect(kept.length).toBe(5);
 		for (const note of stripped) expect(note.text).toContain("over the 24MB budget");
-		// Largest-first: the 3.3MiB and 3.2MiB blocks are the ones stripped — all five 3.1MiB stay.
 		const keptSizes = kept.map((b) => (b as { data?: string }).data?.length ?? 0);
 		for (const size of keptSizes)
 			expect(size).toBeLessThanOrEqual(Math.ceil((3.1 * mib) / 3) * 4 + 8);
@@ -357,7 +324,6 @@ describe("guardOversizedImages", () => {
 	});
 
 	test("keeps an image exactly at the encoded-base64 ceiling boundary", () => {
-		// 3.375MiB decoded is divisible by 3 → exactly 4.5MiB of base64, the last legal size.
 		const atLimit = Buffer.concat([
 			gifBytes(100, 100),
 			Buffer.alloc(3.375 * 1024 * 1024 - gifBytes(100, 100).length, 0xab),
@@ -367,8 +333,6 @@ describe("guardOversizedImages", () => {
 	});
 
 	test("re-evaluates the count-aware cap as it strips: largest-first, only down to the threshold", () => {
-		// 18 small + 3 over 2000px ⇒ 21 images select the strict cap, but stripping ONE (the largest)
-		// brings the request to 20, where the 8000px cap applies — the other two are legal and stay.
 		const small = image(pngBytes(500, 500));
 		const messages: AgentMessage[] = [
 			toolResult(Array.from({ length: 18 }, () => small)),
@@ -379,9 +343,9 @@ describe("guardOversizedImages", () => {
 		const tr = (guarded?.[0] as { content: { type: string }[] }).content;
 		expect(tr.every((b) => b.type === "image")).toBe(true);
 		const u = (guarded?.[1] as { content: { type: string; text?: string }[] }).content;
-		expect(u[0]?.type).toBe("text"); // the largest (2600px) goes…
+		expect(u[0]?.type).toBe("text");
 		expect(u[0]?.text).toContain("2600×100");
-		expect(u[1]?.type).toBe("image"); // …the other two survive under the now-lifted cap
+		expect(u[1]?.type).toBe("image");
 		expect(u[2]?.type).toBe("image");
 	});
 
@@ -393,8 +357,6 @@ describe("guardOversizedImages", () => {
 	});
 });
 
-// ---- the provider gate ----
-
 describe("isAnthropicFamilyModel", () => {
 	test("matches native Anthropic and Claude-through-a-front, and nothing else", () => {
 		expect(isAnthropicFamilyModel({ provider: "anthropic", api: "anthropic-messages" })).toBe(true);
@@ -405,12 +367,9 @@ describe("isAnthropicFamilyModel", () => {
 			isAnthropicFamilyModel({ provider: "openai", api: "openai-responses", id: "gpt-5" }),
 		).toBe(false);
 		expect(isAnthropicFamilyModel({ provider: "google", id: "gemini-3-pro" })).toBe(false);
-		// No model ⇒ no known policy ⇒ never strip.
 		expect(isAnthropicFamilyModel(undefined)).toBe(false);
 	});
 });
-
-// ---- the extension wiring ----
 
 type ContextHandler = (
 	event: { type: "context"; messages: AgentMessage[] },

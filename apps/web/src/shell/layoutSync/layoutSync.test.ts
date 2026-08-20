@@ -75,7 +75,7 @@ describe("synchronized layout store", () => {
 		const settled = useAppStore.getState();
 		expect(settled.layoutDocumentsByWorkspace.ws).toEqual(document("second"));
 		expect(settled.layoutPendingByWorkspace.ws).toEqual([]);
-		expect(settled.layoutRemoteEpochByWorkspace.ws).toBe(1); // initial host read only
+		expect(settled.layoutRemoteEpochByWorkspace.ws).toBe(1);
 	});
 
 	test("a later acknowledgement settles the accepted pending prefix even if an earlier reply was lost", () => {

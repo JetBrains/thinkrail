@@ -1,13 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { createOutputRecorder } from "./outputRecorder";
 
-/** The escape byte, named so no test writes a bare control character into a pattern or literal. */
 const ESC = "\u001b";
 
 const ALT_ON = `${ESC}[?1049h`;
 const ALT_OFF = `${ESC}[?1049l`;
 
-/** Everything after the mode-restoring preamble — the recorded output itself. */
 function body(snapshot: string): string {
 	const lastEscape = snapshot.lastIndexOf(`${ESC}[?`);
 	if (lastEscape === -1) return snapshot.replace(`${ESC}[0m`, "");
@@ -47,7 +45,6 @@ describe("outputRecorder", () => {
 		test("trims at a line boundary, never mid-line", () => {
 			const recorder = createOutputRecorder({ maxChars: 20 });
 			for (let i = 0; i < 10; i++) recorder.push(`abcdefgh-${i}\n`);
-			// A trim that cut anywhere else would leave a leading fragment of the line it sliced.
 			for (const line of body(recorder.snapshot()).split("\n")) {
 				if (line !== "") expect(line).toMatch(/^abcdefgh-\d$/);
 			}
@@ -55,13 +52,10 @@ describe("outputRecorder", () => {
 
 		test("never opens mid escape sequence", () => {
 			const recorder = createOutputRecorder({ maxChars: 24 });
-			// Colour codes packed against the boundary: a naive slice lands inside one and xterm would print the
-			// remainder as literal text.
 			for (let i = 0; i < 12; i++) recorder.push(`${ESC}[31mred-${i}${ESC}[0m\n`);
 			const text = body(recorder.snapshot());
 			const sgr = new RegExp(`${ESC}\\[[0-9;]*m`, "g");
 			expect(text.match(sgr)?.every((code) => code.startsWith(`${ESC}[`)) ?? true).toBe(true);
-			// A slice inside `ESC [ 3 1 m` would leave the tail of that sequence as literal text at the front.
 			expect(/^[0-9;]*m/.test(text)).toBe(false);
 		});
 
@@ -84,7 +78,6 @@ describe("outputRecorder", () => {
 			const text = body(recorder.snapshot());
 			expect(text).toContain("before vim");
 			expect(text).toContain("after vim");
-			// Replaying a torn-off slice of a full-screen app paints garbage no live process will correct.
 			expect(text).not.toContain("VIM - Vi IMproved");
 		});
 
@@ -97,8 +90,6 @@ describe("outputRecorder", () => {
 		});
 
 		test("a switch split across two reads is still seen", () => {
-			// PTY reads are byte boundaries, not message boundaries. Matching per-read missed this entirely and
-			// recorded the full-screen bytes the recorder promises to exclude.
 			const recorder = createOutputRecorder();
 			recorder.push("before\r\n");
 			recorder.push(`${ESC}[?10`);
@@ -124,7 +115,6 @@ describe("outputRecorder", () => {
 		});
 
 		test("the switch sequence itself is never replayed", () => {
-			// Replaying `?1049h` would flip the fresh terminal to the alt screen and show nothing at all.
 			const recorder = createOutputRecorder();
 			recorder.push("visible\r\n");
 			recorder.push(ALT_ON);
@@ -164,8 +154,6 @@ describe("outputRecorder", () => {
 			const recorder = createOutputRecorder();
 			recorder.push(`${ESC}[?25h visible `);
 			recorder.push(`${ESC}[?25l hidden `);
-			// Asserted on the preamble, not the whole snapshot: the recorded body still contains both original
-			// sequences, and replaying them in order is exactly what leaves the cursor hidden either way.
 			expect(recorder.snapshot().startsWith(`${ESC}[0m${ESC}[?25l`)).toBe(true);
 		});
 
@@ -188,7 +176,6 @@ describe("outputRecorder", () => {
 			const recorder = createOutputRecorder({ maxChars: 16 });
 			recorder.push(`${ESC}[?2004h`);
 			for (let i = 0; i < 20; i++) recorder.push(`filler-${i}\n`);
-			// The bytes that enabled bracketed paste are long gone from the window; the mode is not.
 			expect(recorder.snapshot()).toContain(`${ESC}[?2004h`);
 		});
 	});

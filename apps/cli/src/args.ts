@@ -1,43 +1,23 @@
-// Pure CLI argument + env parsing for the `thinkrail` bin. Kept free of any `@thinkrail/server`
-// import so it stays cheaply unit-testable (no `pi` runtime pulled in).
-
 export const DEFAULT_PORT = 24242;
 export const DEFAULT_HOST = "localhost";
 
 export interface CliOptions {
-	/** Requested listen port (flag > env > default). The actual port may differ after a collision fallback. */
 	port: number;
 	host: string;
-	/** Open the browser at the resolved URL on boot. */
 	open: boolean;
-	/**
-	 * `--no-analytics`: mute anonymous usage analytics for this run. The `THINKRAIL_NO_ANALYTICS` env
-	 * spelling is honored by the host itself (`packages/server/src/analytics/mute.ts`, its single reader),
-	 * so it is deliberately not folded in here.
-	 */
 	noAnalytics: boolean;
-	/** Static SPA dir override (`THINKRAIL_STATIC_DIR`); when unset the bin derives a default. */
 	staticDir: string | undefined;
-	/** A git repo to open as a project on boot (the positional arg), or undefined. */
 	projectDir: string | undefined;
-	/** `--help`/`-h` was requested — the bin prints usage and exits. */
 	help: boolean;
-	/** `--version`/`-v` was requested — the bin prints the baked version and exits. */
 	version: boolean;
 }
 
 export type ParseEnv = Record<string, string | undefined>;
 
-/**
- * Positionals intercepted *before* the launch flags: each is its own command with its own arg parser, and
- * none of them boots the host. Named here because the compiled entry needs the set too — a subcommand
- * must not pay for staging the embedded assets (and `uninstall` would be re-creating the cache it deletes).
- */
 const SUBCOMMANDS = ["update", "uninstall"] as const;
 
 export type Subcommand = (typeof SUBCOMMANDS)[number];
 
-/** The leading subcommand of `argv` (the slice after the runtime + script), or `undefined` for a launch. */
 export function parseSubcommand(argv: readonly string[]): Subcommand | undefined {
 	return SUBCOMMANDS.find((name) => name === argv[0]);
 }
@@ -68,7 +48,6 @@ Env:
   THINKRAIL_STATIC_DIR                 Override the built web app served by the host.
   THINKRAIL_NO_ANALYTICS               Same as --no-analytics (any non-empty value; read by the host).`;
 
-/** Read a flag's value from either `--flag value` or `--flag=value`; returns the value + how many argv slots it consumed. */
 function readFlagValue(arg: string, next: string | undefined): { value: string; consumed: number } {
 	const eq = arg.indexOf("=");
 	if (eq !== -1) return { value: arg.slice(eq + 1), consumed: 1 };
@@ -76,11 +55,6 @@ function readFlagValue(arg: string, next: string | undefined): { value: string; 
 	return { value: next, consumed: 2 };
 }
 
-/**
- * Parse the bin's argv (the slice *after* the runtime + script) + the process env into resolved options.
- * Precedence is flag > env > built-in default. Throws on an unknown flag, a missing flag value, an
- * unparseable `--port`, or more than one positional dir.
- */
 export function parseArgs(argv: readonly string[], env: ParseEnv = {}): CliOptions {
 	let port: number | undefined;
 	let host: string | undefined;

@@ -10,11 +10,6 @@ import {
 } from "@/components/ui/dialog";
 import type { ExtUiDialogRequest } from "./types";
 
-/**
- * Renders the active extension-UI dialog (pi's in-process `uiContext.select/confirm/input/editor`,
- * bridged over `pi.extensionUi`). `onReply` carries the value back to the agent; cancelling sends `false`
- * for `confirm`, `null` otherwise. Mount with `key={request.id}` so each dialog gets fresh local state.
- */
 export function ExtUiDialog({
 	request,
 	onReply,

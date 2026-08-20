@@ -5,7 +5,6 @@ interface AssistantTerminal {
 	errorMessage?: string;
 }
 
-/** The persistent user-facing failure for an assistant terminal, or null when it completed normally. */
 export function assistantFailureText(
 	terminal: AssistantTerminal | null | undefined,
 ): string | null {

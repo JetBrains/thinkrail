@@ -19,13 +19,6 @@ import {
 	validate,
 } from "../../scripts/typography";
 
-/**
- * The typography system's guard rail. `typography.json` is the only source of typography values, so
- * these tests pin (a) the source's integrity, (b) that the committed generated CSS matches it, and
- * (c) the policies that cannot be read off the JSON — mono is code-only, the document ladder never
- * inverts, `<body>` names a semantic style rather than repeating one.
- */
-
 const typography = loadTypography();
 const SRC = new URL("..", import.meta.url).pathname;
 const GENERATED = normalizeEol(readFileSync(GENERATED_PATH, "utf8"));
@@ -55,8 +48,6 @@ describe("typography source", () => {
 		expect(styles).toHaveLength(49);
 		expect(styles.filter((s) => !s.ref)).toHaveLength(19);
 		expect(styles.filter((s) => s.ref)).toHaveLength(30);
-		// Both markdown surfaces are almost entirely aliases — that is the point of the reference
-		// mechanism: two scales, one set of underlying definitions.
 		expect(styles.filter((s) => s.prose)).toHaveLength(28);
 	});
 
@@ -88,8 +79,6 @@ describe("typography source", () => {
 			semibold: 600,
 			brand: 400,
 		});
-		// Each self-hosted face LEADS its own stack — behind a system font it would never render. The
-		// face names stay in the JSON alone, so swapping a family is a one-file change.
 		for (const id of ["interface", "code", "brand"]) {
 			const family = resolveFamily(typography, id);
 			expect(family.selfHosted ?? [], `${id} self-hosted`).not.toEqual([]);
@@ -97,19 +86,12 @@ describe("typography source", () => {
 				/^(?:-apple-system|sans-serif|serif|monospace)$/,
 			);
 		}
-		// The brand family is its own self-hosted display face (Orbitron), no longer an alias of
-		// interface — the display/brand role is deliberately distinct from the interface face.
 		expect(isRef(typography.fontFamilies.brand)).toBe(false);
 		expect(resolveFamily(typography, "brand").stack[0]).toBe("Orbitron Variable");
 		expect(resolveFamily(typography, "brand")).not.toEqual(resolveFamily(typography, "interface"));
-		// One reading line-height: no 1.65 anywhere in the system.
 		expect(Object.values(typography.lineHeights)).not.toContain(1.65);
 	});
 
-	/**
-	 * The `<body>` fallback is a `$ref`, never values. If it held its own numbers, unclassed text would
-	 * render at a size no semantic style names — which is how a broken class name goes unnoticed.
-	 */
 	it("names a semantic style for the document base instead of repeating one", () => {
 		expect(isRef(typography.rootStyle)).toBe(true);
 		expect(typography.rootStyle.$ref).toBe("ui.default");
@@ -137,7 +119,6 @@ describe("typography source", () => {
 			const isMono = resolveFamily(typography, style.fontFamily).kind === "monospace";
 			expect(isMono, `${id} mono=${isMono}`).toBe(isCodeStyleId(typography, id));
 		}
-		// The surfaces the mono policy names as proportional must be served by proportional styles.
 		for (const id of [
 			"ui.default",
 			"ui.metadata",
@@ -169,7 +150,6 @@ describe("typography source", () => {
 		});
 	});
 
-	/** The shared heading scale both markdown surfaces draw from, largest to smallest, no gaps. */
 	it("holds one monotonic heading scale", () => {
 		expect(Object.keys(typography.textStyles.heading)).toEqual(["xl", "lg", "md", "sm"]);
 		const sizes = ["xl", "lg", "md", "sm"].map((n) => px(`heading.${n}`) as number);
@@ -200,11 +180,6 @@ describe("prose systems", () => {
 		expect(px("chat.codeBlock")).toBe(13);
 	});
 
-	/**
-	 * The reason `doc` exists. A rendered README has to read as a document: h1–h4 visibly larger than
-	 * its paragraphs, and the ladder monotonic all the way down. The chat scale (h2 == body, h3–h5
-	 * below it) is correct in a bubble and wrong here.
-	 */
 	it("gives the document scale headings larger than its body text", () => {
 		const body = px("doc.body") as number;
 		expect(body).toBe(14);
@@ -214,30 +189,25 @@ describe("prose systems", () => {
 		const ladder = ["h1", "h2", "h3", "h4", "h5", "h6"].map((h) => px(`doc.${h}`) as number);
 		for (let i = 1; i < ladder.length; i++)
 			expect(ladder[i], `doc.h${i + 1} <= doc.h${i}`).toBeLessThanOrEqual(ladder[i - 1] as number);
-		// h5/h6 carry weight and transform instead of size, the convention markdown renderers settle on.
 		expect(resolveStyle(typography, "doc.h5")).toMatchObject({ fontWeight: "semibold" });
 		expect(resolveStyle(typography, "doc.h6")).toMatchObject({
 			fontWeight: "semibold",
 			textTransform: "uppercase",
 		});
-		// Chat and document fenced code share the current 13px size; document code is never smaller.
 		expect(px("doc.codeBlock")).toBe(13);
 		expect(px("doc.codeBlock")).toBeGreaterThanOrEqual(px("chat.codeBlock") as number);
 	});
 
 	it("shares its canonical definitions across both surfaces", () => {
-		// The same 18/600 heading serves the chat h1 and the document h3 — one definition, two roles.
 		expect(resolveStyle(typography, "chat.h1")).toEqual(resolveStyle(typography, "doc.h3"));
 		expect(rawStyle(typography, "chat.h1")).toEqual({ $ref: "heading.md" });
 		expect(rawStyle(typography, "doc.h3")).toEqual({ $ref: "heading.md" });
-		// Body copy is one definition everywhere.
 		for (const id of ["chat.body", "doc.body", "chat.blockquote", "doc.list", "title.entity"])
 			expect(resolveStyle(typography, id), id).toEqual(resolveStyle(typography, "body.reading"));
 	});
 });
 
 describe("references", () => {
-	/** A minimal valid document, so a case under test is the only thing that can fail. */
 	function doc(
 		styles: Record<string, Style | StyleRef>,
 		prose: Record<string, Style | StyleRef> = {},
@@ -251,7 +221,6 @@ describe("references", () => {
 			textTransform: "none",
 			fontStyle: "normal",
 		};
-		// The real `code` group stays, so the mono-only prose code styles have a canonical target.
 		return {
 			...typography,
 			rootStyle: { $ref: "probe.base" },
@@ -274,7 +243,6 @@ describe("references", () => {
 			},
 		} as unknown as Typography;
 	}
-	/** The real source's policy checks (card title, the `doc` ladder) don't apply to a probe document. */
 	const errorsFor = (t: Typography) =>
 		validate(t).filter((e) => !e.startsWith("title.card") && !e.startsWith("doc."));
 
@@ -388,18 +356,14 @@ describe("generated CSS", () => {
 		expect(baseLayer).toBeLessThan(componentLayer);
 		const block = /@layer base \{\s*body \{([^}]*)\}/.exec(GENERATED);
 		expect(block, "the body base rule is missing").not.toBeNull();
-		// It carries the rootStyle target's values, not values of its own.
 		const root = resolveStyle(typography, typography.rootStyle.$ref);
 		expect(block?.[1]).toContain(`--tr-font-size-${root.fontSize}`);
 		expect(block?.[1]).toContain(`--tr-font-weight-${root.fontWeight}`);
 	});
 
 	it("emits the semantic classes inside @layer components, so utilities can override them", () => {
-		// Unlayered CSS outranks every @layer, which would make `italic` / `leading-*` at a call site
-		// lose to the semantic declarations. Tailwind orders theme < base < components < utilities.
 		const layerStart = GENERATED.indexOf("@layer components {");
 		expect(layerStart, "the semantic classes must be layered").toBeGreaterThan(-1);
-		// Tokens stay unlayered: custom properties have nothing to compete with.
 		expect(GENERATED.indexOf(":root {")).toBeLessThan(layerStart);
 		for (const { group, name, prose } of allStyles(typography)) {
 			if (prose) continue;
@@ -412,7 +376,6 @@ describe("generated CSS", () => {
 			expect(GENERATED.indexOf(`.${proseRootClassName(typography, system)} {`)).toBeGreaterThan(
 				layerStart,
 			);
-		// The layer block closes exactly once at the end.
 		expect(GENERATED.trimEnd().endsWith("}\n}")).toBe(true);
 		expect(GENERATED.split("{").length).toBe(GENERATED.split("}").length);
 	});
@@ -446,7 +409,6 @@ describe("generated CSS", () => {
 				.map((d) => d.trim())
 				.filter(Boolean);
 			expect(declarations, system).toEqual(["font-weight: var(--tr-font-weight-medium)"]);
-			// A complete style here would override the size/line-height of the heading or cell it sits in.
 			expect(typography.proseSystems[system]).not.toHaveProperty("strong");
 		}
 		expect(PROSE_SELECTORS).not.toHaveProperty("strong");
@@ -468,7 +430,6 @@ describe("generated CSS", () => {
 		expect(GENERATED).toContain("--tr-line-height-default: 1.6;");
 		const monaco = read(join(SRC, "panels/monacoSetup.ts"));
 		const xterm = read(join(SRC, "panels/TerminalInstance.tsx"));
-		// Monaco reads the s11 editor tier; xterm reads the shared code-text size (s13).
 		expect(monaco).toContain('cssVar("--tr-font-size-s11")');
 		expect(xterm).toContain('cssVar("--tr-font-size-s13")');
 		for (const file of [monaco, xterm]) {

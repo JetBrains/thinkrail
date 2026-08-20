@@ -118,7 +118,6 @@ describe("Central version inspection", () => {
 
 describe("Central status observation", () => {
 	const ESC = String.fromCharCode(27);
-	/** Central's own rendering: an SGR-styled indicator, a padded label, an SGR-styled value. */
 	const statusRow = (label: string, value: string) =>
 		`${ESC}[38;2;46;125;50m⣿${ESC}[m ${ESC}[1m${label.padEnd(10)}${ESC}[m ${ESC}[1;38;2;46;125;50m${value}${ESC}[m`;
 	const authRow = (value: string) => statusRow("Auth", value);
@@ -127,7 +126,6 @@ describe("Central status observation", () => {
 
 	test("trusts only the signed-out marker, and answers unknown when the row is absent", () => {
 		expect(parseAuth(authRow("not connected"))).toBe("signed-out");
-		// Every other rendering of the row — account, licence, managed server, unseen wording — is credentials.
 		for (const value of [
 			"JetBrains Team",
 			"logged in (AI Pro)",
@@ -137,7 +135,6 @@ describe("Central status observation", () => {
 		]) {
 			expect(parseAuth(authRow(value))).toBe("connected");
 		}
-		// The `Authentication can't be refreshed` warning is not the Auth row and must not be read as one.
 		expect(parseAuth("⚠ Authentication can't be refreshed — run central logout")).toBe("unknown");
 		expect(parseAuth("")).toBe("unknown");
 		expect(parseAuth("synthetic unrelated output")).toBe("unknown");
@@ -304,7 +301,6 @@ describe("Central command adapter", () => {
 
 	test("launches login detached with approved argv and a generic result", async () => {
 		let argv: readonly string[] = [];
-		// A flow that really started is still running when the grace elapses — it is waiting on the browser.
 		expect(
 			await launchJbcentralLogin(
 				adapterDeps({
@@ -328,9 +324,6 @@ describe("Central command adapter", () => {
 	});
 
 	test("a login that dies immediately is a failure, not a launch", async () => {
-		// The real `central login` drives its browser handoff from a terminal UI and exits at once without a
-		// TTY. Spawning it successfully therefore proves nothing, and reporting `launched` would send the user
-		// to a browser that never opened. Every non-zero early exit is a failure...
 		for (const code of [1, 12, 127]) {
 			expect(
 				await launchJbcentralLogin(
@@ -338,13 +331,11 @@ describe("Central command adapter", () => {
 				),
 			).toEqual({ outcome: "failed", reason: "launch-failed" });
 		}
-		// ...while an immediate *zero* exit is Central's "already signed in" short-circuit, which is success.
 		expect(
 			await launchJbcentralLogin(
 				adapterDeps({ launchDetached: () => ({ exited: Promise.resolve(0) }) }),
 			),
 		).toEqual({ outcome: "launched" });
-		// A spawn that yields no handle at all never reached the executable.
 		expect(await launchJbcentralLogin(adapterDeps({ launchDetached: () => null }))).toEqual({
 			outcome: "failed",
 			reason: "launch-failed",
@@ -352,12 +343,6 @@ describe("Central command adapter", () => {
 	});
 });
 
-/**
- * The real child-process runner, driven with NO `run` dependency injected. Every other suite here replaces
- * that seam, so the production spawn — its stdout bound, its timeout kill, and its launch failure — has no
- * coverage at all: an injected fake can return `output-too-large` without anything proving the code that
- * decides it exists.
- */
 describe("Central process runner (real spawn)", () => {
 	let binDir: string;
 
@@ -400,12 +385,9 @@ ${script}
 	});
 
 	test("stdout at the bound parses, and past it is refused rather than buffered", async () => {
-		// Just inside the 4096-byte cap: the bound is strictly greater, so this must still parse.
 		const atBound = await inspectJbcentral(realDeps(`printf 'central 1.6.2 '; printf '%4081s' ''`));
 		expect(atBound.status).toEqual({ state: "supported", version: "1.6.2", configured: false });
 
-		// Far past it, with a *valid* version prefix — so a runner that ignored the bound would happily
-		// report `supported` off the first line instead of refusing to read an unbounded child.
 		const flood = await inspectJbcentral(
 			realDeps(`printf 'central 1.7.0 '\nyes SYNTHETIC_FLOOD | head -20000`),
 		);
@@ -414,13 +396,10 @@ ${script}
 	});
 
 	test("a child that outlives the version timeout is killed, and the timeout beats its exit code", async () => {
-		// The child would exit 0 if it were ever allowed to finish, so `timed-out` winning proves both that
-		// the kill happened and that it takes precedence over the dead child's status.
 		const started = Date.now();
 		const { status } = await inspectJbcentral(realDeps("sleep 20; exit 0"));
 		expect(status).toEqual({ state: "probe-failed", reason: "timed-out" });
 		expect(Date.now() - started).toBeLessThan(12_000);
-		// The probe's own timeout is 5s, so this case cannot fit the default per-test budget.
 	}, 20_000);
 });
 
@@ -478,7 +457,6 @@ describe("Central artifact watcher", () => {
 			},
 			adapterDeps({
 				exists: (path) => existing.has(path),
-				// Deliberately retain but never invoke the filesystem callback.
 				watchDirectory: () => ({ close: () => {} }),
 			}),
 		);

@@ -1,10 +1,4 @@
 #!/usr/bin/env bun
-// `bun run dev`: pick free host + web ports, run the web (vite) + server (host) dev tasks, and open the
-// default browser at the vite URL once it's serving. The host reads THINKRAIL_PORT (vite proxies `/ws`
-// to it); vite reads THINKRAIL_WEB_PORT — both pre-picked here, so a second dev session (e.g. another
-// branch) lands on its own ports instead of silently sharing one. apps/cli is excluded: it's the
-// standalone product launcher (free-picks its own port + serves a built SPA), so running it here would
-// boot a redundant second host that nothing connects to.
 
 import { findFreePort } from "@thinkrail/shared/freePort";
 import { printStartupMark } from "@thinkrail/shared/startupMark";
@@ -17,7 +11,6 @@ if (port !== preferred) {
 }
 const webPort = await findFreePort(24269, host);
 
-// Announce the complete composition before Turbo's concurrent child logs can split it.
 const openHost = host === "0.0.0.0" || host === "::" ? "localhost" : host;
 const webUrl = `http://${openHost}:${webPort}/`;
 printStartupMark({ status: "starting", endpoint: webUrl });
@@ -42,13 +35,10 @@ const stop = (): void => {
 process.on("SIGINT", stop);
 process.on("SIGTERM", stop);
 
-// Open the browser ourselves — the OS default (via `open`/`xdg-open`/`start`) — rather than via vite,
-// whose macOS heuristic opens a running Chrome regardless of the user's default browser.
 void openWhenReady(webUrl);
 
 process.exit(await turbo.exited);
 
-/** Poll `url` until the dev server answers, then open it in the default browser. Gives up quietly. */
 async function openWhenReady(url: string): Promise<void> {
 	for (let attempt = 0; attempt < 100; attempt += 1) {
 		try {
@@ -61,7 +51,6 @@ async function openWhenReady(url: string): Promise<void> {
 	}
 }
 
-/** Open `url` in the OS default browser, best-effort (never blocks or keeps the process alive). */
 function openBrowser(url: string): void {
 	const command =
 		process.platform === "darwin"
@@ -71,7 +60,5 @@ function openBrowser(url: string): void {
 				: ["xdg-open", url];
 	try {
 		Bun.spawn(command, { stdout: "ignore", stderr: "ignore" }).unref();
-	} catch {
-		// Headless / no browser available — vite prints the URL, so this is non-fatal.
-	}
+	} catch {}
 }

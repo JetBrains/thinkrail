@@ -47,7 +47,7 @@ describe("parseQuestions", () => {
 	it("returns [] for missing / malformed args (defensive)", () => {
 		expect(parseQuestions({})).toEqual([]);
 		expect(parseQuestions({ questions: "nope" })).toEqual([]);
-		expect(parseQuestions({ questions: [{ question: "x" }] })).toEqual([]); // no options[]
+		expect(parseQuestions({ questions: [{ question: "x" }] })).toEqual([]);
 	});
 });
 
@@ -88,18 +88,12 @@ describe("keyboard interaction", () => {
 	});
 
 	it("closes the note on Shift+Escape rather than letting it skip the questionnaire", () => {
-		// The card reads Shift+Escape as "decline"; the open editor must consume it first, or the gesture
-		// throws away the note being typed along with every answer.
 		expect(noteKeyAction("Escape", true, false)).toBe("finish");
 	});
 
 	it("keeps Escape inside the editor mid-composition — consumed, not finished, and never bubbled", () => {
-		// The IME owns the key there, so the note must NOT close; but returning "none" would also decline to
-		// swallow it, and `Shift+Escape` would bubble to the card's skip and take the questionnaire down with
-		// the composition. "consume" is what closes that door — the one hole in the Shift-held rule above.
 		expect(noteKeyAction("Escape", true, true)).toBe("consume");
 		expect(noteKeyAction("Escape", false, true)).toBe("consume");
-		// Enter mid-composition stays inert: nothing above the editor claims it, so there is nothing to eat.
 		expect(noteKeyAction("Enter", false, true)).toBe("none");
 		expect(noteKeyAction("Enter", true, true)).toBe("none");
 	});
@@ -130,8 +124,6 @@ describe("keyboard interaction", () => {
 	});
 
 	it("lets a page change take focus everywhere except into a text field on touch", () => {
-		// A page change follows a tap the user just made, so it may move focus on touch — but landing in the
-		// Other input would raise the soft keyboard the reveal path takes such care never to raise.
 		expect(shouldFocusPageTarget(false, true)).toBe(true);
 		expect(shouldFocusPageTarget(true, true)).toBe(false);
 		expect(shouldFocusPageTarget(true, false)).toBe(true);
@@ -157,8 +149,6 @@ describe("confirmStateFor", () => {
 	});
 
 	it("Other-row confirm commits the state as it stands, never re-derived from the text", () => {
-		// The regression this pins: confirming through `customTextPatch(state.customText)` re-activates the
-		// row for ANY non-empty text, which is how a row painted unselected comes to supply the answer.
 		const leftover = state({ option: "A", customText: "stale", customActive: false });
 		expect(confirmStateFor(leftover, false, { kind: "custom" })).toEqual(leftover);
 		const excluded = state({ multi: ["A"], customText: "excluded", customActive: false });
@@ -168,12 +158,10 @@ describe("confirmStateFor", () => {
 	it("round-trips with deriveAnswer: the confirmed answer always matches the painted row", () => {
 		const single = q();
 		const multi = q({ multiSelect: true });
-		// single-select: text typed, then an authored option picked — the pick is painted, so the pick wins.
 		const afterPick = state({ option: "A", customText: "stale", customActive: false });
 		expect(
 			deriveAnswer(single, 0, confirmStateFor(afterPick, false, { kind: "custom" })),
 		).toMatchObject({ kind: "option", answer: "A" });
-		// multi-select: text typed then explicitly UNCHECKED — the checkbox's whole purpose is honoured.
 		const afterUncheck = state({ multi: ["A"], customText: "excluded", customActive: false });
 		expect(deriveAnswer(multi, 0, confirmStateFor(afterUncheck, true, { kind: "custom" }))).toEqual(
 			{
@@ -184,7 +172,6 @@ describe("confirmStateFor", () => {
 				selected: ["A"],
 			},
 		);
-		// ...while text the user is actually standing behind still confirms as the answer.
 		const typed = state({ ...customTextPatch("mine") });
 		expect(
 			deriveAnswer(single, 0, confirmStateFor(typed, false, { kind: "custom" })),
@@ -192,12 +179,10 @@ describe("confirmStateFor", () => {
 			kind: "custom",
 			answer: "mine",
 		});
-		// ...and an untouched Other row with a pick above it still confirms that pick.
 		const untouched = state({ option: "A" });
 		expect(
 			deriveAnswer(single, 0, confirmStateFor(untouched, false, { kind: "custom" })),
 		).toMatchObject({ kind: "option", answer: "A" });
-		// ...and nothing at all is still unanswerable, so the "choose an option first" nudge still fires.
 		expect(deriveAnswer(multi, 0, confirmStateFor(state(), true, { kind: "custom" }))).toBeNull();
 	});
 });
@@ -207,8 +192,6 @@ describe("nudgeShowsOnPage", () => {
 
 	it("shows only on the question that raised it", () => {
 		expect(nudgeShowsOnPage(nudge, 1, false, false)).toBe(true);
-		// Paging on within the nudge's 2.5s life must not carry the complaint to a question the user never
-		// tried to confirm — it would sit there as a warning they cannot explain.
 		expect(nudgeShowsOnPage(nudge, 0, false, false)).toBe(false);
 		expect(nudgeShowsOnPage(nudge, 2, false, false)).toBe(false);
 	});
@@ -233,8 +216,6 @@ describe("customTextPatch", () => {
 	});
 
 	it("does NOT activate on blank text, so passing through Other keeps the current pick", () => {
-		// The ↑/↓/Home/End cursor wraps through the Other row; activating there would clear `option` and
-		// paint an empty row as chosen. Only text does that — and emptying the field hands the row back.
 		expect(customTextPatch("")).toEqual({ customText: "", customActive: false });
 		expect(customTextPatch("   ")).toEqual({ customText: "   ", customActive: false });
 	});
@@ -327,7 +308,6 @@ describe("deriveAnswer", () => {
 	});
 
 	it("multi-select: an unchecked 'Other' row keeps its text OUT of the answer", () => {
-		// Typing checks the row; the user then unchecked it — the text stays visible but must not submit.
 		expect(
 			deriveAnswer(
 				q({ multiSelect: true }),

@@ -2,7 +2,6 @@ import type { ToolRenderProps } from "../../toolRegistry";
 import { strArg } from "../toolHelpers";
 import { MermaidView } from "./MermaidView";
 
-/** Body for `visualize` type="diagram": an optional title + the mermaid diagram (from `args.mermaid`). */
 export function DiagramCard({ args, status }: ToolRenderProps) {
 	const source = strArg(args, "mermaid");
 	const title = strArg(args, "title");
