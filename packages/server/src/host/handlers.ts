@@ -195,13 +195,13 @@ async function sendToFileChat(
 	opts: { model?: WireModel; thinkingLevel?: ThinkingLevel; sessionId?: string },
 ): Promise<ReviewSendResult> {
 	const ids = comments.map((c) => c.id);
-	const pkg = buildSendPackage(workspaceId, comments);
+	const pkg = await buildSendPackage(workspaceId, comments);
 	const ws = getWorkspace(workspaceId);
 	const first = comments[0];
 	const path = first ? reviewSessionKey(first) : REVIEW_LEVEL_KEY;
-	const existing = opts.sessionId ?? fileReviewSession(workspaceId, path);
+	const existing = opts.sessionId ?? (await fileReviewSession(workspaceId, path));
 	if (existing && (await ensureSessionAttached(existing, workspaceId, ws.worktreePath))) {
-		markCommentsSent(workspaceId, ids, existing);
+		await markCommentsSent(workspaceId, ids, existing);
 		fireReviewPrompt(workspaceId, ids, existing, pkg, followUpSession);
 		return {
 			sessionId: existing,
@@ -228,7 +228,7 @@ async function sendToFileChat(
 			params: bucketProviderModel(created.model.provider, created.model.id),
 		});
 	}
-	markCommentsSent(workspaceId, ids, created.sessionId);
+	await markCommentsSent(workspaceId, ids, created.sessionId);
 	fireReviewPrompt(workspaceId, ids, created.sessionId, pkg);
 	return { ...created, reused: false };
 }
@@ -612,6 +612,7 @@ const handlers: Record<string, Handler> = {
 			limit: clampLimit(p.limit),
 		});
 	},
+
 	"review.get": (params) => {
 		const p = params as { workspaceId: string };
 		ensureWatch(p.workspaceId);
@@ -639,21 +640,21 @@ const handlers: Record<string, Handler> = {
 	"review.commentDelete": (params) => {
 		const p = params as { workspaceId: string; id: string };
 		return withReviewLock(p.workspaceId, async () => {
-			deleteComment(p.workspaceId, p.id);
+			await deleteComment(p.workspaceId, p.id);
 			return { ok: true } as const;
 		});
 	},
 	"review.fileDone": (params) => {
 		const p = params as { workspaceId: string; path: string };
 		return withReviewLock(p.workspaceId, async () => {
-			markFileDone(p.workspaceId, p.path);
+			await markFileDone(p.workspaceId, p.path);
 			return { ok: true } as const;
 		});
 	},
 	"review.close": (params) => {
 		const p = params as { workspaceId: string };
 		return withReviewLock(p.workspaceId, async () => {
-			clearReview(p.workspaceId);
+			await clearReview(p.workspaceId);
 			return { ok: true } as const;
 		});
 	},
@@ -665,8 +666,8 @@ const handlers: Record<string, Handler> = {
 			thinkingLevel?: ThinkingLevel;
 			sessionId?: string;
 		};
-		return withReviewLock(p.workspaceId, () =>
-			sendToFileChat(p.workspaceId, sendableComments(p.workspaceId, [p.id]), p),
+		return withReviewLock(p.workspaceId, async () =>
+			sendToFileChat(p.workspaceId, await sendableComments(p.workspaceId, [p.id]), p),
 		);
 	},
 	"review.sendBatch": (params) => {
@@ -678,7 +679,7 @@ const handlers: Record<string, Handler> = {
 			sessionId?: string;
 		};
 		return withReviewLock(p.workspaceId, async () => {
-			const comments = sendableComments(p.workspaceId, p.commentIds);
+			const comments = await sendableComments(p.workspaceId, p.commentIds);
 			const groups = new Map<string, typeof comments>();
 			for (const comment of comments) {
 				const key = reviewSessionKey(comment);

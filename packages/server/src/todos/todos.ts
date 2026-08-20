@@ -23,12 +23,15 @@ function storeFor(workspaceId: string, sessionId: string): TodoStore {
 
 const commitFilesCache = new Map<string, GitFileChange[]>();
 
-function resolveCommitFiles(workspaceId: string, sha: string): GitFileChange[] | undefined {
+async function resolveCommitFiles(
+	workspaceId: string,
+	sha: string,
+): Promise<GitFileChange[] | undefined> {
 	const key = `${workspaceId}\u0000${sha}`;
 	const hit = commitFilesCache.get(key);
 	if (hit) return hit;
 	try {
-		const files = gitStatus(workspaceId, { kind: "commit", sha }).changes;
+		const files = (await gitStatus(workspaceId, { kind: "commit", sha })).changes;
 		commitFilesCache.set(key, files);
 		return files;
 	} catch {
@@ -36,13 +39,15 @@ function resolveCommitFiles(workspaceId: string, sha: string): GitFileChange[] |
 	}
 }
 
-function toWireItem(workspaceId: string, item: StoredItem): TodoItem {
+async function toWireItem(workspaceId: string, item: StoredItem): Promise<TodoItem> {
 	if (!item.artifacts) return item;
-	const artifacts = item.artifacts.map((a): TodoArtifact => {
-		if (a.kind !== "commit" || !a.sha) return a;
-		const files = resolveCommitFiles(workspaceId, a.sha);
-		return files ? { ...a, files } : a;
-	});
+	const artifacts = await Promise.all(
+		item.artifacts.map(async (a): Promise<TodoArtifact> => {
+			if (a.kind !== "commit" || !a.sha) return a;
+			const files = await resolveCommitFiles(workspaceId, a.sha);
+			return files ? { ...a, files } : a;
+		}),
+	);
 	return { ...item, artifacts };
 }
 
@@ -53,12 +58,14 @@ export async function listTodos(params: {
 	await settleChangeArtifacts(params.workspaceId);
 	const plan = storeFor(params.workspaceId, params.sessionId).read();
 	return {
-		todos: plan.todos.map((t) => toWireItem(params.workspaceId, t)),
-		groups: plan.groups.map((group) => ({
-			...group,
-			todos: group.todos.map((t) => toWireItem(params.workspaceId, t)),
-			status: groupStatus(group),
-		})),
+		todos: await Promise.all(plan.todos.map((t) => toWireItem(params.workspaceId, t))),
+		groups: await Promise.all(
+			plan.groups.map(async (group) => ({
+				...group,
+				todos: await Promise.all(group.todos.map((t) => toWireItem(params.workspaceId, t))),
+				status: groupStatus(group),
+			})),
+		),
 	};
 }
 

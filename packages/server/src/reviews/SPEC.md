@@ -18,7 +18,11 @@ re-anchoring, and package rendering. Design + user-confirmed decisions: [[task-r
 
 ## Model (mirrors the wire DTOs in `contracts`)
 
-- **One open `Review` per workspace** (auto-created lazily on the first read/comment). Wire
+- **One open `Review` per workspace** (auto-created lazily on the first read/comment). Lazy creation
+  awaits git (the pinned base resolves through the async scope resolver), so it is **single-flighted per
+  workspace**: the unlocked `review.get` read and a locked mutation racing through that window would
+  otherwise each save a distinct fresh review, the last silently replacing the other's (possibly
+  already-mutated) snapshot. Wire
   **`review.close` is the Clear operation**: under the host's workspace review lock, `clearReview`
   first persists the current review's non-draft records as a closed snapshot under
   `reviews/archive/<workspaceId>/<reviewId>.json`, then replaces the active snapshot with a fresh open
@@ -105,9 +109,9 @@ happens *before* the awaited session creation, so in that gap two concurrent sen
 package already built, leaving the agent with comment ids no open review contains.
 **The prompt is fired DETACHED** (`fireReviewPrompt`): the handler returns the
 moment the session exists so the client opens the chat immediately — awaiting the ack meant sitting
-out pi's 10s acceptance window on every send. Because `markSent` runs synchronously (before the turn is
-known-accepted — it must, so the key's pin exists inside the lock and a concurrent send can't fork the
-chat), a pre-turn rejection (bad model, missing/expired key) both surfaces INSIDE the just-opened chat
+out pi's 10s acceptance window on every send. Because `markSent` is awaited inside the lock, before the
+turn is known-accepted — it must be, so the key's pin exists inside the lock and a concurrent send can't
+fork the chat — a pre-turn rejection (bad model, missing/expired key) both surfaces INSIDE the just-opened chat
 as an extension-UI notice AND **rolls the comments back to `draft`** (`rollbackSend`, keyed off
 `ackSend`'s accept-vs-reject window): a review the agent never received stays retryable instead of
 stranding as `sent` with its send/edit/delete actions gone, and a chat spun up solely for that failed

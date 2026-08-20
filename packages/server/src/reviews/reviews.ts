@@ -138,9 +138,9 @@ function readWorktreeFile(worktreePath: string, path: string): string | null {
 	}
 }
 
-function freshSnapshot(workspaceId: string): ReviewSnapshot {
+async function freshSnapshot(workspaceId: string): Promise<ReviewSnapshot> {
 	const ws = getWorkspace(workspaceId);
-	const ref = resolveDiffRange(ws).originalRef ?? diffBaseRef(ws);
+	const ref = (await resolveDiffRange(ws)).originalRef ?? diffBaseRef(ws);
 	const base = resolveCommitOid(ws.worktreePath, ref);
 	return {
 		review: {
@@ -166,13 +166,25 @@ function archiveRecords(workspaceId: string, snapshot: ReviewSnapshot): void {
 	if (archived.comments.length > 0) saveArchive(workspaceId, archived);
 }
 
-function ensureSnapshot(workspaceId: string): ReviewSnapshot {
+// Lazy creation awaits git, and the unlocked `review.get` may race a locked mutation through that
+// window — single-flighted so two creates can't each save a distinct fresh review (see the module SPEC).
+const ensuring = new Map<string, Promise<ReviewSnapshot>>();
+
+function ensureSnapshot(workspaceId: string): Promise<ReviewSnapshot> {
+	const pending = ensuring.get(workspaceId);
+	if (pending) return pending;
 	const existing = load(workspaceId);
-	if (existing?.review.status === "open") return existing;
-	const snapshot = freshSnapshot(workspaceId);
-	if (existing) archiveRecords(workspaceId, existing);
-	save(workspaceId, snapshot);
-	return snapshot;
+	if (existing?.review.status === "open") return Promise.resolve(existing);
+	const flight = (async () => {
+		const snapshot = await freshSnapshot(workspaceId);
+		if (existing) archiveRecords(workspaceId, existing);
+		save(workspaceId, snapshot);
+		return snapshot;
+	})().finally(() => {
+		if (ensuring.get(workspaceId) === flight) ensuring.delete(workspaceId);
+	});
+	ensuring.set(workspaceId, flight);
+	return flight;
 }
 
 function reanchorSnapshot(workspaceId: string, snapshot: ReviewSnapshot): boolean {
@@ -192,8 +204,8 @@ function reanchorSnapshot(workspaceId: string, snapshot: ReviewSnapshot): boolea
 	return changed;
 }
 
-export function getReviewSnapshot(workspaceId: string): ReviewSnapshot {
-	const snapshot = ensureSnapshot(workspaceId);
+export async function getReviewSnapshot(workspaceId: string): Promise<ReviewSnapshot> {
+	const snapshot = await ensureSnapshot(workspaceId);
 	if (reanchorSnapshot(workspaceId, snapshot)) persistAndPublish(workspaceId, snapshot);
 	return snapshot;
 }
@@ -223,19 +235,19 @@ function captureAnchor(anchor: ReviewAnchor, content: string): ReviewAnchor {
 	return { ...anchor, contentHash: hashContent(content), selectors };
 }
 
-export function addComment(input: AddCommentInput): ReviewComment {
+export async function addComment(input: AddCommentInput): Promise<ReviewComment> {
 	const body = input.body.trim();
 	if (!body) throw new Error("A comment body is required.");
 	if (input.kind !== "review" && !input.anchor?.path)
 		throw new Error(`A ${input.kind} comment requires an anchor path.`);
 	if (input.kind === "review" && input.anchor)
 		throw new Error("A review-level comment carries no anchor.");
-	const snapshot = ensureSnapshot(input.workspaceId);
+	const snapshot = await ensureSnapshot(input.workspaceId);
 	let anchor = input.anchor;
 	if (anchor) {
 		const ws = getWorkspace(input.workspaceId);
 		if (anchor.side === "base") {
-			const originalRef = resolveDiffRange(ws, input.scope).originalRef;
+			const originalRef = (await resolveDiffRange(ws, input.scope)).originalRef;
 			if (!originalRef)
 				throw new Error("This diff has no base side to comment on (nothing precedes the change).");
 			const baseRef = resolveCommitOid(ws.worktreePath, originalRef);
@@ -271,8 +283,8 @@ export function addComment(input: AddCommentInput): ReviewComment {
 	return comment;
 }
 
-export function markFileDone(workspaceId: string, path: string): void {
-	const snapshot = ensureSnapshot(workspaceId);
+export async function markFileDone(workspaceId: string, path: string): Promise<void> {
+	const snapshot = await ensureSnapshot(workspaceId);
 	const unresolved = snapshot.comments.some(
 		(c) => reviewSessionKey(c) === path && (c.status === "draft" || c.status === "sent"),
 	);
@@ -288,13 +300,13 @@ function mustFind(snapshot: ReviewSnapshot, id: string): ReviewComment {
 	return comment;
 }
 
-export function updateComment(input: {
+export async function updateComment(input: {
 	workspaceId: string;
 	id: string;
 	body?: string;
 	status?: ReviewCommentStatus;
-}): ReviewComment {
-	const snapshot = ensureSnapshot(input.workspaceId);
+}): Promise<ReviewComment> {
+	const snapshot = await ensureSnapshot(input.workspaceId);
 	const comment = mustFind(snapshot, input.id);
 	if (input.body !== undefined) {
 		if (comment.status !== "draft") throw new Error("Only a draft comment's text can be edited.");
@@ -316,8 +328,8 @@ export function updateComment(input: {
 	return comment;
 }
 
-export function deleteComment(workspaceId: string, id: string): void {
-	const snapshot = ensureSnapshot(workspaceId);
+export async function deleteComment(workspaceId: string, id: string): Promise<void> {
+	const snapshot = await ensureSnapshot(workspaceId);
 	const comment = mustFind(snapshot, id);
 	if (comment.status !== "draft")
 		throw new Error("Only a draft can be deleted — a sent comment is a record.");
@@ -325,16 +337,19 @@ export function deleteComment(workspaceId: string, id: string): void {
 	persistAndPublish(workspaceId, snapshot);
 }
 
-export function clearReview(workspaceId: string): ReviewSnapshot {
+export async function clearReview(workspaceId: string): Promise<ReviewSnapshot> {
 	const existing = load(workspaceId);
-	const fresh = freshSnapshot(workspaceId);
+	const fresh = await freshSnapshot(workspaceId);
 	if (existing) archiveRecords(workspaceId, existing);
 	persistAndPublish(workspaceId, fresh);
 	return fresh;
 }
 
-export function sendableComments(workspaceId: string, commentIds?: string[]): ReviewComment[] {
-	const snapshot = getReviewSnapshot(workspaceId);
+export async function sendableComments(
+	workspaceId: string,
+	commentIds?: string[],
+): Promise<ReviewComment[]> {
+	const snapshot = await getReviewSnapshot(workspaceId);
 	const drafts = snapshot.comments.filter((c) => c.status === "draft");
 	if (!commentIds) {
 		if (drafts.length === 0) throw new Error("No draft comments to send.");
@@ -347,9 +362,12 @@ export function sendableComments(workspaceId: string, commentIds?: string[]): Re
 	});
 }
 
-export function buildSendPackage(workspaceId: string, comments: ReviewComment[]): string {
+export async function buildSendPackage(
+	workspaceId: string,
+	comments: ReviewComment[],
+): Promise<string> {
 	const ws = getWorkspace(workspaceId);
-	const snapshot = ensureSnapshot(workspaceId);
+	const snapshot = await ensureSnapshot(workspaceId);
 	return renderPackage({
 		review: snapshot.review,
 		branch: ws.branch,
@@ -365,12 +383,12 @@ export function reviewSessionKey(comment: Pick<ReviewComment, "anchor">): string
 	return comment.anchor?.path ?? REVIEW_LEVEL_KEY;
 }
 
-export function markCommentsSent(
+export async function markCommentsSent(
 	workspaceId: string,
 	commentIds: string[],
 	sessionId: string,
-): void {
-	const snapshot = ensureSnapshot(workspaceId);
+): Promise<void> {
+	const snapshot = await ensureSnapshot(workspaceId);
 	const ids = new Set(commentIds);
 	for (const comment of snapshot.comments) {
 		if (!ids.has(comment.id)) continue;
@@ -409,8 +427,11 @@ export function rollbackSend(workspaceId: string, commentIds: string[], sessionI
 	persistAndPublish(workspaceId, snapshot);
 }
 
-export function fileReviewSession(workspaceId: string, key: string): string | undefined {
-	return ensureSnapshot(workspaceId).review.fileSessions?.[key];
+export async function fileReviewSession(
+	workspaceId: string,
+	key: string,
+): Promise<string | undefined> {
+	return (await ensureSnapshot(workspaceId)).review.fileSessions?.[key];
 }
 
 function applyAgentResolution(
