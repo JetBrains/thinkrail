@@ -59,6 +59,15 @@ function escapeHtml(str: string): string {
 		.replace(/"/g, "&quot;");
 }
 
+// Template substitution helper — uses callback replacers to avoid special replacement
+// patterns ($&, $1, $$) in dynamic content being misinterpreted.
+function substituteTemplate(template: string, vars: Record<string, string>): string {
+	return Object.entries(vars).reduce(
+		(result, [key, value]) => result.replace(new RegExp(`\\{\\{${key}\\}\\}`, "g"), () => value),
+		template,
+	);
+}
+
 // ── Slug validation ───────────────────────────────────────────────────────
 
 // Reserved names that would conflict with output structure or common routes
@@ -326,21 +335,20 @@ function generatePostPage(
 		: "";
 
 	const title = escapeHtml(frontmatter.title);
-	return (
-		template
-			.replace(/\{\{cssPath\}\}/g, cssPath)
-			.replace(/\{\{title\}\}/g, title)
-			.replace(/\{\{date\}\}/g, formatDate(frontmatter.date))
-			.replace(/\{\{readingTime\}\}/g, `${readingTime} min read`)
-			.replace(/\{\{tags\}\}/g, tagsHtml)
-			.replace(/\{\{content\}\}/g, html)
-			.replace(/\{\{navigation\}\}/g, navHtml)
-			// Analytics constants (from src/analytics.ts)
-			.replace(/\{\{prodHost\}\}/g, PROD_HOST)
-			.replace(/\{\{proxyHost\}\}/g, PROXY_HOST)
-			.replace(/\{\{uiHost\}\}/g, UI_HOST)
-			.replace(/\{\{projectKey\}\}/g, PROJECT_KEY)
-	);
+	return substituteTemplate(template, {
+		cssPath,
+		title,
+		date: formatDate(frontmatter.date),
+		readingTime: `${readingTime} min read`,
+		tags: tagsHtml,
+		content: html,
+		navigation: navHtml,
+		// Analytics constants (from src/analytics.ts)
+		prodHost: PROD_HOST,
+		proxyHost: PROXY_HOST,
+		uiHost: UI_HOST,
+		projectKey: PROJECT_KEY,
+	});
 }
 
 // ── Main ───────────────────────────────────────────────────────────────────
@@ -450,14 +458,15 @@ async function build(): Promise<void> {
 		})
 		.join("\n");
 
-	const indexHtml = indexTemplate
-		.replace(/\{\{cssPath\}\}/g, cssPath)
-		.replace(/\{\{posts\}\}/g, postsHtml)
+	const indexHtml = substituteTemplate(indexTemplate, {
+		cssPath,
+		posts: postsHtml,
 		// Analytics constants (from src/analytics.ts)
-		.replace(/\{\{prodHost\}\}/g, PROD_HOST)
-		.replace(/\{\{proxyHost\}\}/g, PROXY_HOST)
-		.replace(/\{\{uiHost\}\}/g, UI_HOST)
-		.replace(/\{\{projectKey\}\}/g, PROJECT_KEY);
+		prodHost: PROD_HOST,
+		proxyHost: PROXY_HOST,
+		uiHost: UI_HOST,
+		projectKey: PROJECT_KEY,
+	});
 	await writeFile(join(OUTPUT_DIR, "index.html"), indexHtml);
 	console.log("   ✓ Generated index.html");
 
