@@ -1,7 +1,10 @@
 import type { GitStatus } from "@thinkrail/contracts";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+	type CenterNavigationStamp,
+	isCenterNavigationCurrent,
 	matchesWorktreePath,
+	selectActiveEditorTab,
 	selectDiffBaseRef,
 	selectDiffScope,
 	selectWorkspaceById,
@@ -16,7 +19,7 @@ import { useBranchList } from "./branches";
 import { ChangeRowActions } from "./ChangeRowActions";
 import { ChangesScopeMenu } from "./ChangesScopeMenu";
 import { ChangesTree } from "./ChangesTree";
-import { diffTabId, isDiffTabId, scopeKey, splitPath, statusNameClass } from "./changesModel";
+import { scopeKey, splitPath, statusNameClass } from "./changesModel";
 import { DiffStatBadge } from "./DiffStatBadge";
 import { openDiffInTab } from "./openTabs";
 import { ToggleSegment } from "./ToggleSegment";
@@ -59,7 +62,10 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 	// it joins the scope in the read key: re-pointing the target (which arrives as a `workspace.updated`
 	// broadcast, never optimistically) re-reads the list exactly like a scope switch.
 	const baseRef = useAppStore((s) => selectDiffBaseRef(s, workspaceId));
-	const activeTabId = useAppStore((s) => s.activeTabByWorkspace[workspaceId] ?? null);
+	const activeDiffTab = useAppStore((state) => {
+		const tab = selectActiveEditorTab(state, workspaceId);
+		return tab?.kind === "diff" ? tab : null;
+	});
 
 	// The changed-file list, re-read on the workspace's fs tick *and* on a scope/target change (the `readKey`); a
 	// switch clears the list and its deep-link highlight, a failed re-read keeps the last good list (a failed
@@ -126,9 +132,9 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 	// either way. Stable per workspace + scope so the deep-link effect below can depend on it without
 	// re-firing per render.
 	const openDiff = useCallback(
-		(path: string, intent: TabIntent) => {
+		(path: string, intent: TabIntent, navigation?: CenterNavigationStamp | null) => {
 			setHighlighted(path);
-			void openDiffInTab(workspaceId, scope, path, intent);
+			void openDiffInTab(workspaceId, scope, path, intent, navigation);
 		},
 		[workspaceId, scope],
 	);
@@ -152,11 +158,14 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 	// read that lands after the count moved.
 	useEffect(() => {
 		if (!status || changesRequest?.workspaceId !== workspaceId) return;
+		if (useAppStore.getState().changesRequest !== changesRequest) return;
 		const want = changesRequest.path;
 		const match = status.changes.find((c) => matchesWorktreePath(want, c.path));
-		const overtaken =
-			selectWorkspaceNavTick(useAppStore.getState(), workspaceId) !== changesRequest.navTick;
-		if (match && !overtaken) openDiff(match.path, "preview");
+		const currentState = useAppStore.getState();
+		const overtaken = changesRequest.navigation
+			? !isCenterNavigationCurrent(currentState, workspaceId, changesRequest.navigation)
+			: selectWorkspaceNavTick(currentState, workspaceId) !== changesRequest.navTick;
+		if (match && !overtaken) openDiff(match.path, "preview", changesRequest.navigation);
 		else setHighlighted(match ? match.path : want);
 		useAppStore.getState().clearChangesRequest();
 	}, [changesRequest, status, workspaceId, openDiff]);
@@ -165,16 +174,16 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 	// soon as a diff tab of this workspace is the active center tab, so closing that tab later doesn't
 	// resurrect a stale highlight.
 	useEffect(() => {
-		if (isDiffTabId(workspaceId, activeTabId)) setHighlighted(null);
-	}, [activeTabId, workspaceId]);
+		if (activeDiffTab) setHighlighted(null);
+	}, [activeDiffTab]);
 
 	// Exactly one row is ever selected: while a diff tab of this workspace is active, that tab is the sole
 	// signal (an active tab matches exactly one path); only when none is open does the deep-link highlight
 	// apply. This can't show two rows at once — unlike OR-ing the two signals, where a stale highlight plus
 	// a different active tab would both read as selected.
 	const isActive = (path: string) =>
-		isDiffTabId(workspaceId, activeTabId)
-			? activeTabId === diffTabId(workspaceId, scope, path)
+		activeDiffTab
+			? activeDiffTab.path === path && scopeKey(activeDiffTab.scope) === scopeKey(scope)
 			: highlighted === path;
 
 	return (

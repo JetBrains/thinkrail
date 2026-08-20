@@ -4,18 +4,30 @@ import {
 	hasPlatformModifier,
 	isAbsolutePath,
 	isMarkdownPath,
+	layoutResourceIdentity,
 	normalizePath,
+	parseTupleKey,
 	platformShortcutLabel,
 	projectRelativePath,
 	shallowEqualArrays,
 	stripFrontmatter,
+	tupleKey,
 } from "./utils";
 
-test("platform shortcuts use Ctrl outside an Apple browser environment", () => {
-	expect(platformShortcutLabel("B")).toBe("Ctrl+B");
-	expect(hasPlatformModifier({ ctrlKey: true, metaKey: false })).toBe(true);
-	expect(hasPlatformModifier({ ctrlKey: false, metaKey: true })).toBe(false);
-	expect(hasPlatformModifier({ ctrlKey: true, metaKey: true })).toBe(false);
+test("platform shortcuts use Ctrl on non-Apple platforms", () => {
+	const platform = "Linux x86_64";
+	expect(platformShortcutLabel("B", platform)).toBe("Ctrl+B");
+	expect(hasPlatformModifier({ ctrlKey: true, metaKey: false }, platform)).toBe(true);
+	expect(hasPlatformModifier({ ctrlKey: false, metaKey: true }, platform)).toBe(false);
+	expect(hasPlatformModifier({ ctrlKey: true, metaKey: true }, platform)).toBe(false);
+});
+
+test("platform shortcuts use Command on Apple platforms", () => {
+	const platform = "MacIntel";
+	expect(platformShortcutLabel("B", platform)).toBe("⌘B");
+	expect(hasPlatformModifier({ ctrlKey: false, metaKey: true }, platform)).toBe(true);
+	expect(hasPlatformModifier({ ctrlKey: true, metaKey: false }, platform)).toBe(false);
+	expect(hasPlatformModifier({ ctrlKey: true, metaKey: true }, platform)).toBe(false);
 });
 
 test("isMarkdownPath matches .md/.markdown case-insensitively, nothing else", () => {
@@ -60,6 +72,38 @@ test("cssColorToHex reads unparseable values as unset", () => {
 	expect(cssColorToHex("not-a-color")).toBe("");
 });
 
+test("tuple keys keep delimiter-bearing identity tuples distinct and parse only their namespace", () => {
+	const first = tupleKey("resource", "a:b", "c");
+	const second = tupleKey("resource", "a", "b:c");
+	expect(first).not.toBe(second);
+	expect(parseTupleKey(first, "resource")).toEqual(["a:b", "c"]);
+	expect(parseTupleKey(first, "other")).toBeNull();
+	expect(parseTupleKey("resource:not-json", "resource")).toBeNull();
+});
+
+test("layout resource identity ignores placement ids and separates delimiter-bearing diff tuples", () => {
+	expect(layoutResourceIdentity({ kind: "file", id: "one", name: "One", path: "src/a:b.ts" })).toBe(
+		layoutResourceIdentity({ kind: "file", id: "two", name: "Two", path: "src/a:b.ts" }),
+	);
+	expect(
+		layoutResourceIdentity({
+			kind: "diff",
+			id: "one",
+			name: "One",
+			path: "a",
+			scope: { kind: "commit", sha: "x:commit:y" },
+		}),
+	).not.toBe(
+		layoutResourceIdentity({
+			kind: "diff",
+			id: "two",
+			name: "Two",
+			path: "a:commit:x",
+			scope: { kind: "commit", sha: "y" },
+		}),
+	);
+});
+
 test("normalizePath brings both separator styles to one form and drops a leading ./", () => {
 	expect(normalizePath("src/foo.ts")).toBe("src/foo.ts");
 	expect(normalizePath("C:\\wt\\src\\foo.ts")).toBe("C:/wt/src/foo.ts");
@@ -79,9 +123,15 @@ test("projectRelativePath yields the worktree-relative tab identity from every r
 	expect(projectRelativePath("./src/foo.ts", root)).toBe("src/foo.ts");
 	expect(projectRelativePath("/wt/ws/src/foo.ts", root)).toBe("src/foo.ts");
 	expect(projectRelativePath("/wt/ws/src/foo.ts", `${root}/`)).toBe("src/foo.ts"); // trailing slash
-	// One file, one identity: every form above collapses to the same string, which is what keeps
-	// `openFileInTab` from opening a second tab for an already-open file.
-	// Outside the root (or with no root known) it stays as reported — the read then fails loudly.
+	expect(projectRelativePath("/wt/ws/src/../foo.ts", root)).toBe("foo.ts");
+	expect(projectRelativePath("src/./nested/../foo.ts", root)).toBe("src/foo.ts");
+	expect(projectRelativePath("../outside.ts", root)).toBe("../outside.ts");
+	expect(projectRelativePath("C:\\wt\\ws\\src\\..\\foo.ts", "C:\\wt\\ws")).toBe("foo.ts");
+	expect(projectRelativePath("/src/foo.ts", "/")).toBe("src/foo.ts");
+	expect(projectRelativePath("C:/src/foo.ts", "C:/")).toBe("src/foo.ts");
+	// Lexical aliases for each actual path collapse to one identity (`src/../foo.ts` correctly names the
+	// root-level `foo.ts`). Outside the root (or with no root known) an absolute path stays absolute, so the
+	// host rejects it rather than opening a second, unsafe identity.
 	expect(projectRelativePath("/elsewhere/foo.ts", root)).toBe("/elsewhere/foo.ts");
 	expect(projectRelativePath("/wt/ws/src/foo.ts")).toBe("/wt/ws/src/foo.ts");
 });

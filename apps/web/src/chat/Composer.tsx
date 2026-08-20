@@ -250,7 +250,17 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	// The plain `↑`-recall session: `null` when inactive; otherwise an index into `recentPrompts` (0 =
 	// newest). Reset on a diverging edit (the textarea's `onChange` below) or a submit — see `onKeyDown`'s
 	// recall block (after the mention/slash menu) for the stepping rules.
-	const [recallIdx, setRecallIdx] = useState<number | null>(null);
+	//
+	// A **ref, not state**: nothing renders from it (only the two handlers below read it), and as state it
+	// was a staleness trap. Stepping writes two stores in one keystroke — this index here and the draft via
+	// `onChange`, which lives in the parent — and those can commit in separate passes. In between, the
+	// textarea already shows the recalled text while still carrying the *previous* render's handlers, whose
+	// captured index is stale. A gesture landing in that window read the old index: a second `↑` re-recalled
+	// the same entry instead of stepping, and an edit (a fast typist, a paste, Playwright's `fill()`) failed
+	// to end the session — so the next `↑`/`↓` stepped from the live index and overwrote what was just typed,
+	// the very loss `replaceDraft` guards against on the insert paths. A ref is read at the value it was last
+	// written, so commit timing cannot come into it.
+	const recallIdxRef = useRef<number | null>(null);
 	// The template slot session: `null` when inactive. Starts on `insertTemplate`, steps via `stepSlot`
 	// (Tab/Shift+Tab and the hint chip), re-tracked across edits in the textarea's `onChange`, and ends on
 	// `Escape`, submit, or any programmatic mutation that doesn't participate in slot tracking (recall,
@@ -327,7 +337,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	// AND any active template slot session (the inserted text has nothing to do with the tracked ranges).
 	const replaceDraft = useCallback(
 		(text: string, caret: number = text.length) => {
-			setRecallIdx(null);
+			recallIdxRef.current = null;
 			setSlots(null);
 			onChange(text);
 			focusSelection(caret);
@@ -349,7 +359,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		);
 		onChange("");
 		setImages([]);
-		setRecallIdx(null);
+		recallIdxRef.current = null;
 		setSlots(null);
 	};
 
@@ -406,7 +416,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 			// A slotted insert is the one programmatic mutation that STARTS a slot session instead of
 			// ending one — but it must still exit any `↑`-recall session the way `replaceDraft` does
 			// (this path sets `value` directly, so the textarea's diverging-edit reset never fires).
-			setRecallIdx(null);
+			recallIdxRef.current = null;
 			onChange(parsed.text);
 			setSlots(parsed.slots);
 			setSlotIdx(0);
@@ -531,27 +541,30 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		// session is already active, so it can never eat a draft; `↓` only steps while a session is active.
 		// Both place the caret at the recalled text's end, matching `insertText`/`pickMention`/the slash
 		// completion's own focus-after-change pattern.
-		if (e.key === "ArrowUp" && (value === "" || recallIdx !== null) && recentPrompts.length > 0) {
+		// One snapshot for both branches: the ref cannot change inside a single synchronous handler, and
+		// reading it once keeps it narrowable (a `.current` read is not, across statements).
+		const recallAt = recallIdxRef.current;
+		if (e.key === "ArrowUp" && (value === "" || recallAt !== null) && recentPrompts.length > 0) {
 			e.preventDefault();
 			setSlots(null);
-			const next = recallIdx === null ? 0 : Math.min(recallIdx + 1, recentPrompts.length - 1);
+			const next = recallAt === null ? 0 : Math.min(recallAt + 1, recentPrompts.length - 1);
 			const text = recentPrompts[next] ?? "";
-			setRecallIdx(next);
+			recallIdxRef.current = next;
 			onChange(text);
 			focusSelection(text.length);
 			return;
 		}
-		if (e.key === "ArrowDown" && recallIdx !== null) {
+		if (e.key === "ArrowDown" && recallAt !== null) {
 			e.preventDefault();
 			setSlots(null);
-			if (recallIdx === 0) {
-				setRecallIdx(null);
+			if (recallAt === 0) {
+				recallIdxRef.current = null;
 				onChange("");
 				focusSelection(0);
 			} else {
-				const next = recallIdx - 1;
+				const next = recallAt - 1;
 				const text = recentPrompts[next] ?? "";
-				setRecallIdx(next);
+				recallIdxRef.current = next;
 				onChange(text);
 				focusSelection(text.length);
 			}
@@ -733,7 +746,10 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							// A genuine user edit (typing/pasting/deleting — never fired by the recall/insert paths
 							// themselves, since those set the controlled `value` prop directly rather than mutating the
 							// DOM node) that diverges from the recalled entry exits the recall session.
-							if (recallIdx !== null && next !== recentPrompts[recallIdx]) setRecallIdx(null);
+							const recalled = recallIdxRef.current;
+							if (recalled !== null && next !== recentPrompts[recalled]) {
+								recallIdxRef.current = null;
+							}
 							if (slots) {
 								const { editStart, removedLen, insertedLen } = diffValues(value, next, nextCaret);
 								if (editStart === 0 && removedLen === value.length) {
@@ -795,7 +811,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 						// `relative` keeps the textarea a positioned participant so it paints ABOVE the absolute
 						// slot-highlight backdrop (its earlier DOM sibling) — otherwise a static textarea paints
 						// under the backdrop and the native caret/selection get dimmed by the active-slot tint.
-						className="relative min-h-[108px] w-full resize-none rounded-[var(--radius-md)] bg-transparent px-md py-sm tr-text-ui text-text-default outline-none placeholder:text-text-muted"
+						className="relative min-h-[108px] w-full resize-none rounded-[var(--radius-sm)] bg-transparent px-md py-sm tr-text-ui text-text-default outline-none placeholder:text-text-muted"
 					/>
 				</div>
 				<div className="flex flex-wrap items-center gap-sm">
@@ -821,7 +837,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							data-testid="history-open"
 							aria-label="Search history"
 							onClick={openHistory}
-							className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] border border-border-default bg-container-elevated-bg text-text-default hover:bg-control-bg-hovered"
+							className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg text-text-default hover:bg-control-bg-hovered"
 						>
 							<History className="size-3.5" />
 						</button>
@@ -831,7 +847,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 								data-testid="chat-abort"
 								aria-label="Stop"
 								onClick={onAbort}
-								className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] border border-border-default bg-container-elevated-bg text-text-default hover:bg-control-bg-hovered"
+								className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg text-text-default hover:bg-control-bg-hovered"
 							>
 								<Square className="size-3.5" />
 							</button>
@@ -842,7 +858,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							aria-label={isStreaming ? "Steer" : "Send"}
 							onClick={() => submit(isStreaming ? "steer" : "send")}
 							disabled={!value.trim() && images.length === 0}
-							className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-control-primary-bg text-control-primary-text hover:bg-control-primary-bg-hovered disabled:pointer-events-none disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text"
+							className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-control-primary-bg text-control-primary-text hover:bg-control-primary-bg-hovered disabled:pointer-events-none disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text"
 						>
 							<ArrowUp className="size-4" />
 						</button>

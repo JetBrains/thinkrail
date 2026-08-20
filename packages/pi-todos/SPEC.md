@@ -82,13 +82,15 @@ which are theirs.
 
 ## Artifacts
 
-An item may link to what it produced via **`artifacts`** — `kind: "file" | "change" | "spec"`, a
-worktree-relative `path`, an optional `label`, and (spec only) a durable `specId`. Ownership splits by
-kind: the **agent** attaches `file`/`spec` through the tools (a `spec` from `spec_create`'s `{path,id}`);
-**`change` is host-owned** — the host attaches it automatically when the agent marks an item `done`
-(the files changed during the step, see [[submodule-server-todos]]). The pi-free `core`/`tools` never
-touch git — they just store whatever artifacts they're handed; the diff of a `change` is computed live in
-the UI, not persisted. The on-disk file `version` is `3` (a `2` file with no artifacts upgrades on write).
+An item may link to what it produced via **`artifacts`** — `kind: "file" | "change" | "spec" | "commit"`,
+an optional `label`, and per kind a worktree-relative `path` (`file`/`change`/`spec`, + a durable `specId`
+for `spec`) or a `sha` (`commit`). Ownership splits by kind: the **agent** attaches `file`/`spec` through
+the tools (a `spec` from `spec_create`'s `{path,id}`); **`change` and `commit` are host-owned** — when the
+agent marks an item `done`, the host commits the item's work and records just the `sha` (one `commit`
+artifact — the file list is derived from git at read time, never denormalized); `change` path-lists are
+the host's **no-commit fallback** only, see [[submodule-server-todos]]. The pi-free `core`/`tools`
+never touch git — they just store whatever artifacts they're handed. The on-disk file `version` is `4`
+(`3` added artifacts, `4` added the `commit` kind); an older file with no artifacts upgrades on write.
 
 ## Boundary
 

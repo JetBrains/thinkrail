@@ -4,7 +4,13 @@
 // then opens its chat tab; a failure toasts and rethrows so callers can keep their UI open.
 
 import type { ReviewSendResult } from "@thinkrail/contracts";
-import { selectLastOpenChatSession, toast, useAppStore } from "../store";
+import {
+	type CenterNavigationStamp,
+	layoutOpenOptionsForNavigation,
+	selectLastOpenChatSession,
+	toast,
+	useAppStore,
+} from "../store";
 import { errorText, getTransport } from "../transport";
 import { openChatInTab } from "./openChat";
 
@@ -15,14 +21,26 @@ import { openChatInTab } from "./openChat";
  * client, or this one after a reload), and opening that as new would show a blank conversation for
  * comments already marked sent.
  */
-async function showReviewChat(workspaceId: string, sent: ReviewSendResult): Promise<void> {
+async function showReviewChat(
+	workspaceId: string,
+	sent: ReviewSendResult,
+	navigation: CenterNavigationStamp | null,
+	background = false,
+): Promise<void> {
 	if (sent.reused) {
-		await openChatInTab(workspaceId, sent.sessionId);
+		await openChatInTab(workspaceId, sent.sessionId, navigation, background);
 		return;
 	}
-	useAppStore
-		.getState()
-		.openChatSession(workspaceId, sent.sessionId, sent.model, sent.thinkingLevel);
+	const store = useAppStore.getState();
+	const routed = layoutOpenOptionsForNavigation(store, workspaceId, navigation);
+	store.openChatSession(
+		workspaceId,
+		sent.sessionId,
+		sent.model,
+		sent.thinkingLevel,
+		undefined,
+		background ? { ...routed, activate: false } : routed,
+	);
 }
 
 /** The send target the client prefers: the last OPEN chat (active tab first) — the package lands in
@@ -34,13 +52,14 @@ function preferredChat(workspaceId: string): { sessionId?: string } {
 
 /** Send ONE draft into the last open chat (or the file's review chat / a new one) and open its tab. */
 export async function sendReviewComment(workspaceId: string, id: string): Promise<void> {
+	const navigation = useAppStore.getState().beginCenterNavigation(workspaceId);
 	try {
 		const sent = await getTransport().request("review.sendComment", {
 			workspaceId,
 			id,
 			...preferredChat(workspaceId),
 		});
-		await showReviewChat(workspaceId, sent);
+		await showReviewChat(workspaceId, sent, navigation);
 	} catch (err) {
 		toast.error(errorText(err), "Couldn't send the comment");
 		throw err;
@@ -50,6 +69,7 @@ export async function sendReviewComment(workspaceId: string, id: string): Promis
 /** Send the given drafts (or all) as one batch — the host groups them into per-file review chats —
  * and open the (first) chat's tab. */
 export async function sendReviewBatch(workspaceId: string, commentIds?: string[]): Promise<void> {
+	const navigation = useAppStore.getState().beginCenterNavigation(workspaceId);
 	try {
 		const { sessions } = await getTransport().request("review.sendBatch", {
 			workspaceId,
@@ -57,11 +77,11 @@ export async function sendReviewBatch(workspaceId: string, commentIds?: string[]
 			...preferredChat(workspaceId),
 		});
 		// One chat per group, so a batch spanning files opens EVERY chat it started — a tab the user
-		// never saw would still be an agent working on their comments. The first group's chat takes
-		// focus (it's the one the click was about); the rest sit in the strip.
-		for (const sent of sessions) await showReviewChat(workspaceId, sent);
-		const first = sessions[0];
-		if (first && sessions.length > 1) await openChatInTab(workspaceId, first.sessionId);
+		// never saw would still be an agent working on their comments. The first group's chat may take
+		// the request-time focus (unless newer navigation won); the rest open in the background.
+		for (const [index, sent] of sessions.entries()) {
+			await showReviewChat(workspaceId, sent, navigation, index > 0);
+		}
 	} catch (err) {
 		toast.error(errorText(err), "Couldn't send the review");
 		throw err;

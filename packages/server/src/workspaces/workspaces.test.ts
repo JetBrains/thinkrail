@@ -762,3 +762,27 @@ test("ensuring the Default emits created once; listing never writes into the pro
 	expect(readFileSync(join(repo, ".thinkrail", "context", ".gitignore"), "utf8")).toBe("*\n");
 	expect(gitOut(repo, "status", "--porcelain")).not.toContain(".thinkrail");
 });
+
+test("includeDiffStats: false keeps membership/order/Default ensure while skipping the diff-stat fan-out", async () => {
+	const events: WorkspaceLifecycleEvent[] = [];
+	setWorkspacePublisher((e) => events.push(e));
+
+	const ws = await createWorkspace("p1", "Iso");
+	// Commit branch work so the full list demonstrably computes stats the light one skips.
+	writeFileSync(join(ws.worktreePath, "work.txt"), "one\ntwo\n");
+	git(ws.worktreePath, "add", "-A");
+	git(ws.worktreePath, "commit", "-m", "branch work");
+
+	const light = listWorkspaces("p1", { includeDiffStats: false });
+	// Same complete authoritative answer: the ensured Default pinned first, then the worktree.
+	expect(light.map((w) => w.kind ?? "worktree")).toEqual(["default", "worktree"]);
+	expect(events.map((e) => e.kind)).toContain("created"); // the Default ensure still ran
+	// The fan-out was skipped: no row carries a computed aggregate (`diffStats` only ever comes from it).
+	expect(light.every((w) => w.diffStats === undefined)).toBe(true);
+
+	// Omitted (an older client) and explicit `true` both keep the existing full behavior.
+	for (const full of [listWorkspaces("p1"), listWorkspaces("p1", { includeDiffStats: true })]) {
+		expect(full.map((w) => w.id)).toEqual(light.map((w) => w.id));
+		expect(full.find((w) => w.id === ws.id)?.diffStats).toEqual({ added: 2, removed: 0 });
+	}
+});

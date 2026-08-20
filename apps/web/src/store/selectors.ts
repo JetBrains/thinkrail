@@ -1,21 +1,177 @@
 import type {
 	GitDiffScope,
+	LayoutCenterTab,
+	LayoutTab,
 	Project,
 	SpecGraphNode,
 	WireModel,
 	Workspace,
+	WorkspaceLayoutDocument,
 } from "@thinkrail/contracts";
-import { isAbsolutePath, normalizePath } from "../lib";
-import type { ClosedChat, EditorTab, TerminalTab } from "./appStore";
+import {
+	isAbsolutePath,
+	type LayoutAttention,
+	layoutResourceIdentity,
+	normalizePath,
+	readLayoutSelection,
+} from "../lib";
+import type { ClosedChat, EditorTab, RouteChatTarget, TerminalTab } from "./appStore";
+
+interface ConnectionGenerationState {
+	status: string;
+	connectionGeneration: number;
+}
+
+/** Whether an asynchronous read still belongs to the socket generation that started it. */
+export function isConnectedGeneration(
+	state: ConnectionGenerationState,
+	connectionGeneration: number,
+): boolean {
+	return state.status === "connected" && state.connectionGeneration === connectionGeneration;
+}
 
 interface ActiveWorkspaceState {
 	activeWorkspaceId: string | null;
 	workspaces: Record<string, Workspace[]>;
 }
 
+interface LayoutDocumentState {
+	layoutDocumentsByWorkspace: Record<string, WorkspaceLayoutDocument>;
+}
+
+interface LayoutAttentionState extends LayoutDocumentState {
+	layoutAttentionByWorkspace: Record<string, LayoutAttention>;
+}
+
+interface CenterResourceCacheState extends LayoutAttentionState {
+	tabsByWorkspace: Record<string, EditorTab[]>;
+	terminalsByWorkspace: Record<string, TerminalTab[]>;
+}
+
 interface ProjectContextState extends ActiveWorkspaceState {
 	selectedProjectId: string | null;
 	projects: Project[];
+}
+
+export interface LayoutTabPlacement {
+	area: "center" | "left" | "right";
+	groupId: string;
+}
+
+export interface LayoutResourcePlacement extends LayoutTabPlacement {
+	tabId: string;
+	tab: LayoutTab;
+}
+
+function findLayoutPlacement(
+	document: WorkspaceLayoutDocument,
+	matches: (tab: LayoutTab) => boolean,
+): LayoutResourcePlacement | null {
+	const findCenter = (node: WorkspaceLayoutDocument["center"]): LayoutResourcePlacement | null => {
+		if (node.kind === "split") return findCenter(node.children[0]) ?? findCenter(node.children[1]);
+		const tab = node.tabs.find(matches);
+		return tab ? { area: "center", groupId: node.id, tabId: tab.id, tab } : null;
+	};
+	const center = findCenter(document.center);
+	if (center) return center;
+	for (const side of ["left", "right"] as const) {
+		for (const group of document[side].groups) {
+			const tab = group.tabs.find(matches);
+			if (tab) return { area: side, groupId: group.id, tabId: tab.id, tab };
+		}
+	}
+	return null;
+}
+
+/** The synchronized group currently owning a tab id, across the recursive center and both sides. */
+export function selectLayoutTabPlacement(
+	state: LayoutDocumentState,
+	workspaceId: string,
+	tabId: string,
+): LayoutTabPlacement | null {
+	const document = state.layoutDocumentsByWorkspace[workspaceId];
+	if (!document) return null;
+	const placement = findLayoutPlacement(document, (tab) => tab.id === tabId);
+	return placement ? { area: placement.area, groupId: placement.groupId } : null;
+}
+
+/** The stable shared placement of a semantic resource whose browser cache id may be an alias. */
+export function selectLayoutResourcePlacement(
+	state: LayoutDocumentState,
+	workspaceId: string,
+	resource: LayoutTab,
+): LayoutResourcePlacement | null {
+	const document = state.layoutDocumentsByWorkspace[workspaceId];
+	if (!document) return null;
+	const identity = layoutResourceIdentity(resource);
+	return findLayoutPlacement(document, (tab) => layoutResourceIdentity(tab) === identity);
+}
+
+/** Whether the synchronized layout currently places this tab id anywhere in the workspace. */
+export function selectLayoutTabPlaced(
+	state: LayoutDocumentState,
+	workspaceId: string,
+	tabId: string,
+): boolean {
+	return selectLayoutTabPlacement(state, workspaceId, tabId) !== null;
+}
+
+/** The center resource selected in this browser's last-focused center leaf. */
+export function selectAttentionCenterTab(
+	state: LayoutAttentionState,
+	workspaceId: string,
+): LayoutCenterTab | null {
+	const document = state.layoutDocumentsByWorkspace[workspaceId];
+	const attention = state.layoutAttentionByWorkspace[workspaceId];
+	if (!document || !attention) return null;
+	const find = (node: WorkspaceLayoutDocument["center"]): LayoutCenterTab | null => {
+		if (node.kind === "split") return find(node.children[0]) ?? find(node.children[1]);
+		if (node.id !== attention.lastFocusedCenterGroupId) return null;
+		const selectedId = readLayoutSelection(attention, node.id);
+		return node.tabs.find((tab) => tab.id === selectedId) ?? node.tabs[0] ?? null;
+	};
+	return find(document.center);
+}
+
+/**
+ * Cache/catalog key for the selected shared center resource. Unlike a boolean readiness projection, the key
+ * changes when hydration replaces a canonical browser id with a stable shared placement id, so legacy
+ * selection mirroring reruns instead of retaining a dangling cache id.
+ */
+export function selectAttentionCenterResourceCacheKey(
+	state: CenterResourceCacheState,
+	workspaceId: string,
+): string | null {
+	const selected = selectAttentionCenterTab(state, workspaceId);
+	if (!selected) return null;
+	if (selected.kind === "terminal") {
+		return (state.terminalsByWorkspace[workspaceId] ?? []).some(
+			(terminal) => terminal.tabKey === selected.tabKey,
+		)
+			? selected.tabKey
+			: null;
+	}
+	const identity = layoutResourceIdentity(selected);
+	const cache = (state.tabsByWorkspace[workspaceId] ?? []).find((tab) => {
+		switch (tab.kind) {
+			case "file":
+			case "diff":
+			case "chat":
+				return tab.kind === selected.kind && layoutResourceIdentity(tab) === identity;
+			case "doc":
+				return selected.kind === "document" && tab.sourceId === selected.sourceId;
+		}
+		return false;
+	});
+	return cache?.id ?? null;
+}
+
+/** Whether the selected shared center resource has the legacy render cache/catalog entry it can mirror. */
+export function selectAttentionCenterResourceReady(
+	state: CenterResourceCacheState,
+	workspaceId: string,
+): boolean {
+	return selectAttentionCenterResourceCacheKey(state, workspaceId) !== null;
 }
 
 /**
@@ -72,13 +228,25 @@ export interface HistoryTarget {
 	sessionId: string;
 }
 
+/** The browser render-cache tab mirrored from the workbench's selected center resource. */
+export function selectActiveEditorTab(
+	state: {
+		tabsByWorkspace: Record<string, EditorTab[]>;
+		activeTabByWorkspace: Record<string, string | null>;
+	},
+	workspaceId: string,
+): EditorTab | null {
+	const activeId = state.activeTabByWorkspace[workspaceId];
+	return (state.tabsByWorkspace[workspaceId] ?? []).find((tab) => tab.id === activeId) ?? null;
+}
+
 /**
  * The chat the active workspace's history search belongs to: the active tab when it *is* a chat,
  * otherwise the workspace's most recently opened one. Null only when the workspace has no chat tab at
  * all (or there's no active workspace) — the one case where `Ctrl+R` has nothing to open.
  *
- * The fallback is the point. `CenterTabs` mounts one tab body at a time, so with a file/diff/doc tab
- * active there is no `ChatView` to route to — and since the chord is swallowed app-wide, resolving to
+ * The fallback is the point. The workbench mounts one tab body per selected center group, so with no
+ * chat selected there is no `ChatView` to route to — and since the chord is swallowed app-wide, resolving to
  * "no target" there would make `Ctrl+R` silently do *nothing* over Monaco, a diff, or the file tree:
  * precisely the places the global handler exists to cover. Returning the chat tab (which the caller
  * activates, atomically with the request) means the chord always lands somewhere.
@@ -91,34 +259,80 @@ export function selectHistoryTarget(state: {
 	const workspaceId = state.activeWorkspaceId;
 	if (!workspaceId) return null;
 	const tabs = state.tabsByWorkspace[workspaceId] ?? [];
-	const activeTabId = state.activeTabByWorkspace[workspaceId] ?? null;
-	const active = tabs.find((t) => t.id === activeTabId);
+	const active = selectActiveEditorTab(state, workspaceId);
 	// `findLast`, not `find`: tabs are appended in open order, so the last chat tab is the most recently
 	// opened one — the best "which chat did they mean" answer available without an MRU we don't track.
 	const chat = active?.kind === "chat" ? active : tabs.findLast((t) => t.kind === "chat");
 	return chat ? { workspaceId, tabId: chat.id, sessionId: chat.sessionId } : null;
 }
 
+export interface KnownChatLocation {
+	workspaceId: string;
+	title: string;
+}
+
+/** Find the workspace/title this client knows for a live or history chat, without duplicating the scan. */
+export function selectKnownChatLocation(
+	state: {
+		tabsByWorkspace: Record<string, EditorTab[]>;
+		closedChatsByWorkspace: Record<string, ClosedChat[]>;
+	},
+	sessionId: string,
+): KnownChatLocation | null {
+	for (const [workspaceId, tabs] of Object.entries(state.tabsByWorkspace)) {
+		const tab = tabs.find(
+			(candidate) => candidate.kind === "chat" && candidate.sessionId === sessionId,
+		);
+		if (tab?.kind === "chat") return { workspaceId, title: tab.name };
+	}
+	for (const [workspaceId, chats] of Object.entries(state.closedChatsByWorkspace)) {
+		const chat = chats.find((candidate) => candidate.sessionId === sessionId);
+		if (chat) return { workspaceId, title: chat.title };
+	}
+	return null;
+}
+
 /**
- * Chat membership this client currently associates with one workspace: open tabs plus history rows,
- * deduplicated. Snapshot this before an authoritative `session.list` read; its result may safely delete a
+ * Session membership this client currently associates with one workspace: chat/plan/document caches,
+ * history rows, and (when available) durable chat/TODO placements, deduplicated. Snapshot this before an
+ * authoritative `session.list` read; its result may safely delete a
  * baseline id the host omitted without touching a chat created while that older read was in flight.
  */
 export function selectWorkspaceSessionIds(
 	state: {
 		tabsByWorkspace: Record<string, EditorTab[]>;
 		closedChatsByWorkspace: Record<string, ClosedChat[]>;
+		layoutDocumentsByWorkspace?: Record<string, WorkspaceLayoutDocument>;
 	},
 	workspaceId: string,
 ): string[] {
 	const sessionIds = new Set(
-		(state.tabsByWorkspace[workspaceId] ?? [])
-			.filter((tab) => tab.kind === "chat")
-			.map((tab) => tab.sessionId),
+		(state.tabsByWorkspace[workspaceId] ?? []).flatMap((tab) =>
+			tab.kind === "chat" || tab.kind === "plan"
+				? [tab.sessionId]
+				: tab.kind === "doc"
+					? [tab.sourceId]
+					: [],
+		),
 	);
 	for (const chat of state.closedChatsByWorkspace[workspaceId] ?? []) {
 		sessionIds.add(chat.sessionId);
 	}
+	const visit = (node: WorkspaceLayoutDocument["center"]): void => {
+		if (node.kind === "split") {
+			visit(node.children[0]);
+			visit(node.children[1]);
+			return;
+		}
+		for (const tab of node.tabs) {
+			if (tab.kind === "chat") sessionIds.add(tab.sessionId);
+			if (tab.kind === "document" && tab.documentKind === "todo-plan") {
+				sessionIds.add(tab.sourceId);
+			}
+		}
+	};
+	const document = state.layoutDocumentsByWorkspace?.[workspaceId];
+	if (document) visit(document.center);
 	return [...sessionIds];
 }
 
@@ -219,11 +433,37 @@ export function specPathMatcher(nodes: SpecGraphNode[]): (path: string) => boole
  * baseline once the load resolves — so a skill change whose `fsChanged` frame folds *while the load is in
  * flight* stays past the baseline and keeps the reload badge lit (the load saw the pre-change skills).
  */
+/**
+ * A chat's display title: its open chat tab's name, `"Chat"` when none (closed to history / not yet
+ * named). One home for the lookup — the plan page's heading and the plan-tab opener both read it, so the
+ * two can never disagree on what a session is called.
+ */
+export function selectChatTitle(
+	state: { tabsByWorkspace: Record<string, EditorTab[]> },
+	workspaceId: string,
+	sessionId: string,
+): string {
+	const tabs = state.tabsByWorkspace[workspaceId] ?? [];
+	const chatTab = tabs.find((t) => t.kind === "chat" && t.sessionId === sessionId);
+	return (chatTab?.name ?? "Chat").trim() || "Chat";
+}
+
 export function selectWorkspaceTick(
 	state: { fsChangesByWorkspace: Record<string, { tick: number }> },
 	workspaceId: string,
 ): number {
 	return state.fsChangesByWorkspace[workspaceId]?.tick ?? 0;
+}
+
+/** Exact-chat route intent only while its workspace remains active and no newer center navigation won. */
+export function selectCurrentRouteChatTarget(state: {
+	routeChatTarget: RouteChatTarget | null;
+	activeWorkspaceId: string | null;
+	navTickByWorkspace: Record<string, number>;
+}): RouteChatTarget | null {
+	const target = state.routeChatTarget;
+	if (!target || state.activeWorkspaceId !== target.workspaceId) return null;
+	return selectWorkspaceNavTick(state, target.workspaceId) === target.navTick ? target : null;
 }
 
 /**

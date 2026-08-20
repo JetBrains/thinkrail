@@ -1,6 +1,6 @@
 import type { ProviderAuthKind, ProviderStatus, ProviderStatusReport } from "@thinkrail/contracts";
 import { Boxes, Check, KeyRound, Lock, LogIn, LogOut, RefreshCw } from "lucide-react";
-import { type ReactNode, useCallback, useEffect, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { LoginDialog } from "@/auth";
 import { Button } from "@/components/ui/button";
 import { toast, useAppStore } from "@/store";
@@ -9,7 +9,6 @@ import { JetBrainsAiCard } from "./JetBrainsAiCard";
 
 /** Human label per auth kind (a configured provider's source suffix). */
 const KIND_LABEL: Record<ProviderAuthKind, string> = {
-	central: "JetBrains AI proxy",
 	oauth: "OAuth subscription",
 	"api-key": "API key",
 	env: "environment",
@@ -25,7 +24,7 @@ const MAX_REST_NAMES = 5;
  * The Providers section of the Settings dialog — the in-app model-provider auth surface (moved here from the
  * old Welcome strip). One `provider.status` fetch on mount (every read revalidates host-side), plus in-app
  * auth: Sign-in (OAuth subscriptions), inline API-key entry, and Sign-out — each re-reads status when it
- * settles, so an external `pi` `/login` (or a terminal `central` re-wire) shows up on Refresh too.
+ * settles, so an external `pi` `/login` (or a terminal Central configuration change) shows up on Refresh too.
  */
 export function ProvidersSettings() {
 	const [report, setReport] = useState<ProviderStatusReport | null>(null);
@@ -34,23 +33,37 @@ export function ProvidersSettings() {
 	const [busyProvider, setBusyProvider] = useState<string | null>(null);
 	const [showAllKeys, setShowAllKeys] = useState(false);
 	const activeLogin = useAppStore((s) => s.activeLogin);
+	const providerVersion = useAppStore((s) => s.providerVersion);
+	const loadSequence = useRef(0);
 
 	/** Re-reads provider status. Never rejects — a failed read renders the pane's error banner instead. */
 	const load = useCallback(async () => {
+		const sequence = ++loadSequence.current;
+		const providerVersion = useAppStore.getState().providerVersion;
+		const isCurrent = () =>
+			sequence === loadSequence.current &&
+			providerVersion === useAppStore.getState().providerVersion;
 		setRefreshing(true);
 		try {
-			setReport(await getTransport().request("provider.status", {}));
+			const next = await getTransport().request("provider.status", {});
+			if (!isCurrent()) return;
+			setReport(next);
 			setFailed(false);
 		} catch {
+			if (!isCurrent()) return;
 			setFailed(true);
 		} finally {
-			setRefreshing(false);
+			if (sequence === loadSequence.current) setRefreshing(false);
 		}
 	}, []);
 
 	useEffect(() => {
 		void load();
 	}, [load]);
+
+	useEffect(() => {
+		if (providerVersion > 0) void load();
+	}, [providerVersion, load]);
 
 	// A settled login (success) mutated auth.json + refreshed the registry host-side — re-read so the pane
 	// reflects the new provider even while the terminal dialog is still up (closing it reveals the change).
@@ -151,7 +164,7 @@ export function ProvidersSettings() {
 					{subscriptionRows.length > 0 ? (
 						<section
 							data-testid="providers-subscriptions"
-							className="flex flex-col gap-sm rounded-[var(--radius-lg)] border border-primary-muted bg-clip-padding bg-primary-subtle p-md"
+							className="flex flex-col gap-sm rounded-[var(--radius-sm)] border border-primary-muted bg-clip-padding bg-primary-subtle p-md"
 						>
 							<div className="flex flex-col gap-0.5">
 								<h4 className="tr-title-compact text-text-default">Sign in with a subscription</h4>
@@ -173,12 +186,13 @@ export function ProvidersSettings() {
 						</section>
 					) : null}
 
-					<JetBrainsAiCard
-						wired={report?.jbcentralWired ?? false}
-						installed={report?.jbcentralInstalled ?? false}
-						install={report?.jbcentralInstall}
-						onChanged={load}
-					/>
+					{report ? (
+						<JetBrainsAiCard
+							status={report.jbcentral}
+							install={report.jbcentralInstall}
+							onChanged={load}
+						/>
+					) : null}
 
 					{apiKeyRows.length > 0 ? (
 						<Group title="Add an API key">
@@ -273,9 +287,9 @@ function ConnectedCard({
 			data-testid="provider-row"
 			data-provider={provider.id}
 			data-configured="true"
-			className="flex items-center gap-md rounded-[var(--radius-md)] border border-border-default bg-control-bg px-md py-sm"
+			className="flex items-center gap-md rounded-[var(--radius-sm)] border border-border-default bg-control-bg px-md py-sm"
 		>
-			<span className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-feedback-success-subtle text-feedback-success">
+			<span className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-feedback-success-subtle text-feedback-success">
 				<Check className="size-4" />
 			</span>
 			<div className="flex min-w-0 flex-col">
@@ -335,10 +349,10 @@ function ProviderActionRow({
 			data-testid="provider-signin-row"
 			data-provider={provider.id}
 			data-configured="false"
-			className="flex flex-col gap-xs rounded-[var(--radius-md)] border border-border-default bg-control-bg px-md py-sm"
+			className="flex flex-col gap-xs rounded-[var(--radius-sm)] border border-border-default bg-control-bg px-md py-sm"
 		>
 			<div className="flex items-center gap-sm tr-text-ui">
-				<span className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-control-bg-selected text-text-muted">
+				<span className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-control-bg-selected text-text-muted">
 					<Boxes className="size-4" />
 				</span>
 				<span className="min-w-0 flex-1 truncate text-text-default">{provider.name}</span>

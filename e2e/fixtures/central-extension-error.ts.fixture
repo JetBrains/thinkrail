@@ -1,0 +1,1 @@
+throw new Error("E2E_EXTENSION_DIAGNOSTIC_SENTINEL");

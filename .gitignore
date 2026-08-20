@@ -21,6 +21,8 @@ docs/*
 
 # Build-only manifests written transiently by apps/cli/scripts/build-binary.ts
 apps/cli/src/*.generated.ts
+# Scratch files `bun build --compile` leaves behind when a binary build is interrupted
+*.bun-build
 
 # Local env / secrets (Vite auto-loads .env*; app handles provider auth tokens)
 .env

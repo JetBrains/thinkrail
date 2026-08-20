@@ -5,7 +5,7 @@ test("renders the branded shell and, with no workspace, the Welcome screen", asy
 	await page.goto("/");
 
 	// The shell + projects rail are present, and (no workspace active on a fresh load) the Welcome screen
-	// fills the rest — the center/right/terminal surface is not mounted.
+	// fills the rest — no workspace workbench is mounted.
 	await expect(page.getByTestId("shell")).toBeVisible();
 	await expect(page.getByTestId("left-nav")).toBeVisible();
 	await expect(page.getByTestId("welcome")).toBeVisible();

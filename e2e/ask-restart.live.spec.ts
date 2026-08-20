@@ -3,7 +3,7 @@ import { copyFileSync, existsSync, mkdirSync, openSync, rmSync, writeFileSync } 
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, type Page, test } from "@playwright/test";
-import { worktreeRows } from "./fixtures/app";
+import { activeWorktreeRow } from "./fixtures/app";
 import {
 	E2E_PI_AGENT_DIR,
 	E2E_RESTART_DATA_DIR,
@@ -160,14 +160,9 @@ test("a pending questionnaire survives a host kill -9: reboot, reopen, answer, a
 	await page.reload();
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 
-	// The project persisted but renders collapsed after a fresh load — select it to reveal its workspaces.
-	await page.getByTestId("project-item").first().click();
-	// The workspace persisted; its session is now DISK-ONLY (the live one died with the host), so it
-	// surfaces in chat history and re-opens through the hydration path.
-	await expect(worktreeRows(page).first()).toBeVisible({ timeout: 15_000 });
-	await worktreeRows(page).first().click();
-	await page.getByTestId("chat-history").click();
-	await page.getByTestId("closed-chat-item").first().click();
+	// The fragment restores the workspace and exact chat across the restart. The session is now disk-only
+	// (the live one died with the host), so the exact target re-opens it through hydration automatically.
+	await expect(activeWorktreeRow(page)).toHaveCount(1, { timeout: 15_000 });
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 
 	// The questionnaire is STILL ANSWERABLE — the awaiting state is pure transcript, no host memory.

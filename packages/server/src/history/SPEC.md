@@ -30,9 +30,12 @@ to preserve).
   metadata. Pi session files are **trees** (abandoned branches) that compaction rewrites, so it resolves
   the file the way pi does before the client renders it — `parseSessionEntries` →
   `migrateSessionEntries` → `buildSessionContext` (follow the current leaf, apply the latest compaction,
-  drop summarized/abandoned entries) — then indexes the resolved messages, filtered to the same renderable
-  roles `getSessionMessages` sends. So `messageIndex` matches the client's `turnIdByMessageIndex` exactly
-  (no raw-file-order drift), and abandoned/summarized text never becomes a hit. The internal
+  drop summarized/abandoned entries) — then indexes the resolved messages, filtered through contracts'
+  **`isTranscriptMessageRole`**, the very guard `getSessionMessages` sends by (one policy, not a local copy
+  of it). So `messageIndex` matches the client's `turnIdByMessageIndex` exactly
+  (no raw-file-order drift), and abandoned/summarized text never becomes a hit — the compaction summary is
+  sent (it renders the client's compaction marker), so it consumes an index slot without being searchable.
+  The internal
   `TODO_NUDGE_PREFIX` control message (hidden from the transcript on hydrate) is skipped after its index
   slot is consumed, so alignment holds. Entry text is **full, never truncated** — a hit's `text` is what
   recall inserts and what the overlay's preview presents as the whole prompt, so a cap would silently

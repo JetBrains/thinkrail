@@ -28,7 +28,7 @@ export function PrivacySettings() {
 				</p>
 			</div>
 
-			<div className="flex items-center justify-between gap-md rounded-[var(--radius-md)] border border-border-default bg-control-bg px-md py-sm">
+			<div className="flex items-center justify-between gap-md rounded-[var(--radius-sm)] border border-border-default bg-control-bg px-md py-sm">
 				<div className="flex flex-col gap-0.5">
 					<span className="tr-title-compact text-text-default">
 						Share anonymous usage analytics

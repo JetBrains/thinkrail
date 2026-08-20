@@ -84,6 +84,10 @@ Architecture decisions live as spec-graph nodes, dogfooding the spec layer the p
   `parent` (single link), `depends-on` / `references` / `implements` (link lists), `covers` / `tags`.
 - **Specs are the source of truth and are updated during implementation.** A module spec is `draft`
   until its design firms up, then `active`. Keep them honest as code lands.
+- **Durable rationale belongs in specs, not code comments.** Record decisions, invariants, trade-offs, and
+  rejected alternatives once in the owning `SPEC.md`. Prefer names, types, and control flow in code; reserve
+  comments for terse implementation-local mechanics or hazards that those cannot make clear. Do not narrate
+  the code or duplicate spec rationale beside it.
 
 ## Non-negotiable invariants
 

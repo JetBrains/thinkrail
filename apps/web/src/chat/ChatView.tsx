@@ -232,6 +232,9 @@ export default function ChatView({
 	const { followOutput, handleAtBottom, showScrollButton, scrollToBottom, containerProps } =
 		useChatScroll(virtuosoRef);
 	const composerRef = useRef<ComposerHandle>(null);
+	// One identity per mounted chat view: question cards use it to focus once across Virtuoso remounts,
+	// while deliberately closing/reopening the chat gets a fresh scope and may focus the pending card.
+	const askFocusScope = useRef<object>({}).current;
 
 	// The Ctrl+R history-recall overlay's integration edge (store/transport) — see `chat/SPEC.md`'s
 	// boundary section for why this hook, not this component's body, owns that edge.
@@ -248,8 +251,8 @@ export default function ChatView({
 	} = useHistorySearch(sessionId, workspaceId, projectId);
 
 	// The history-search "jump to message" deep link this session is the target of, if any — cleared by
-	// this effect below once it has resolved (or failed to resolve) a row to scroll to. `CenterTabs` is the
-	// other consumer: it opens/hydrates the target chat's tab but never clears the request (see its own
+	// this effect below once it has resolved (or failed to resolve) a row to scroll to.
+	// `WorkspaceWorkbench` is the other consumer: it opens/hydrates the target chat's tab but never clears the request (see its own
 	// effect's jsdoc).
 	const chatLocationRequest = useAppStore((s) => s.chatLocationRequest);
 	const [flashRowId, setFlashRowId] = useState<string | null>(null);
@@ -475,9 +478,15 @@ export default function ChatView({
 	// view, and flash it briefly. `rows.length > 0` guards against running before the transcript is ready
 	// (a fresh tab renders zero rows for one tick). Always clears the request — this is its only consumer.
 	useEffect(() => {
-		if (!chatLocationRequest || chatLocationRequest.sessionId !== sessionId || rows.length === 0) {
+		if (
+			!chatLocationRequest ||
+			chatLocationRequest.workspaceId !== workspaceId ||
+			chatLocationRequest.sessionId !== sessionId ||
+			rows.length === 0
+		) {
 			return;
 		}
+		if (useAppStore.getState().chatLocationRequest !== chatLocationRequest) return;
 		const { messageIndex, anchorText } = chatLocationRequest;
 		const prefix = anchorText.slice(0, 40);
 		const mappedId = runtime.turnIdByMessageIndex?.[messageIndex];
@@ -499,7 +508,7 @@ export default function ChatView({
 		virtuosoRef.current?.scrollToIndex({ index, align: "center" });
 		setFlashRowId(rows[index]?.id ?? null);
 		useAppStore.getState().clearChatLocation();
-	}, [chatLocationRequest, sessionId, rows, runtime.turnIdByMessageIndex, turns]);
+	}, [chatLocationRequest, sessionId, rows, runtime.turnIdByMessageIndex, turns, workspaceId]);
 
 	// Consume the shell's global `Ctrl+R` (`store.historyOpenRequest`), the chord's only handler app-wide —
 	// it fires with focus anywhere, so it can't be a key handler in the composer or the overlay. Already
@@ -510,6 +519,7 @@ export default function ChatView({
 	const historyOverlayOpen = historyState.open;
 	useEffect(() => {
 		if (historyOpenRequest?.sessionId !== sessionId) return;
+		if (useAppStore.getState().historyOpenRequest !== historyOpenRequest) return;
 		useAppStore.getState().clearHistoryOpen();
 		if (historyOverlayOpen) cycleScope();
 		else composerRef.current?.openHistory();
@@ -548,11 +558,11 @@ export default function ChatView({
 		[workspaceId],
 	);
 
-	// A chip expanding its artifact list asks for the owning view alongside — no path, so nothing is opened
-	// or highlighted: the user is choosing which side of the round to look at, and the panel follows.
+	// A chip expanding its artifact list asks the workbench to reveal the owning tool — no path, so nothing
+	// is opened or highlighted: the user is choosing which side of the round to inspect.
 	const onReveal = useCallback(
-		(tab: "specs" | "changes") => {
-			useAppStore.getState().requestRightTab(workspaceId, tab);
+		(tool: "specs" | "changes") => {
+			useAppStore.getState().requestToolView(workspaceId, tool);
 		},
 		[workspaceId],
 	);
@@ -562,6 +572,10 @@ export default function ChatView({
 	const askStates = useMemo(
 		() => deriveAskStates(runtime.turns, runtime.askAnswers),
 		[runtime.turns, runtime.askAnswers],
+	);
+	const askContext = useMemo(
+		() => ({ states: askStates, focusScope: askFocusScope }),
+		[askStates, askFocusScope],
 	);
 
 	// The plan's glance state — "working or waiting on you?" — derived from session state (streaming +
@@ -581,6 +595,7 @@ export default function ChatView({
 				getTransport()
 					.request("session.answerQuestion", { sessionId, toolCallId, result })
 					.then(() => undefined),
+			focusComposer: () => composerRef.current?.refocus(),
 		}),
 		[sessionId],
 	);
@@ -598,7 +613,7 @@ export default function ChatView({
 
 	return (
 		<ChatActionsContext.Provider value={chatActions}>
-			<AskStatesContext.Provider value={askStates}>
+			<AskStatesContext.Provider value={askContext}>
 				<div className="flex h-full min-h-0 flex-col bg-container-workspace-bg">
 					{/* The plan popover is anchored to the whole header, so it hangs flush under it at the chat's
 					    left edge; the strip in the header's left slot is the trigger. */}
@@ -655,7 +670,7 @@ export default function ChatView({
 							itemContent={(_, row) => (
 								<div
 									data-flash={row.id === flashRowId || undefined}
-									className="mx-auto max-w-3xl rounded-[var(--radius-md)] px-md py-xs transition-colors data-[flash]:bg-primary-subtle"
+									className="mx-auto max-w-3xl rounded-[var(--radius-sm)] px-md py-xs transition-colors data-[flash]:bg-primary-subtle"
 								>
 									<ChatTurnView
 										row={row}
@@ -672,7 +687,7 @@ export default function ChatView({
 								type="button"
 								data-testid="scroll-to-bottom"
 								onClick={scrollToBottom}
-								className="-translate-x-1/2 absolute bottom-md left-1/2 flex items-center gap-xs rounded-[var(--radius-lg)] border border-border-default bg-container-elevated-bg px-sm py-xs text-text-muted tr-text-metadata shadow-[var(--shadow-md)] hover:bg-control-bg-hovered hover:text-text-default"
+								className="-translate-x-1/2 absolute bottom-md left-1/2 flex items-center gap-xs rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-sm py-xs text-text-muted tr-text-metadata shadow-[var(--shadow-md)] hover:bg-control-bg-hovered hover:text-text-default"
 							>
 								<ArrowDown className="size-3" />
 								New messages
