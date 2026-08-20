@@ -158,6 +158,36 @@ week, and `cancel-in-progress: false` so an in-flight publish finishes. Don't ad
 deployment is keyed by `GITHUB_SHA` and the timeout cancels it, so a second attempt moments later only
 reads back `deployment_cancelled`. Re-deploying that SHA *later* is fine — hence the remedy above.
 
+### PR preview deploys
+
+PRs that touch this module get a **preview URL** so design review happens against the rendered site,
+not the diff: `.github/workflows/site-preview.yml` runs the *same build command* as `site.yml` (one
+build definition — never let the two drift) and uploads `apps/website/dist` to **Cloudflare Pages**
+via `bunx wrangler@<pinned> pages deploy --project-name=thinkrail-previews --branch=pr-<num>`. The
+per-PR alias URL is deterministic — `https://pr-<num>.thinkrail-previews.pages.dev` — and is surfaced
+as a sticky PR comment (marker `<!-- thinkrail-site-preview -->`, edited in place each push, via
+`gh api` — no third-party comment action) plus a `Website preview` commit status on the head SHA.
+
+Boundaries of the preview path (decisions, 2026-08):
+- **Production is untouched**: GitHub Pages + `thinkrail.ai` remain the only production host;
+  Cloudflare Pages hosts previews *only* (the project's production branch is `main`, which we never
+  deploy there, so every upload is a preview deployment).
+- **Same-repo PRs only**: the job is guarded by `head.repo.full_name == github.repository`. Fork PRs
+  skip silently — repo secrets are never exposed to forks, and the split-workflow machinery for safe
+  fork previews was deliberately rejected until outside contributors need it.
+- **Preview URLs are public** (unauthenticated, not search-indexed) — accepted for a public marketing
+  site; no Cloudflare Access gating.
+- Previews work unmodified because assets are root-absolute (served at a `pages.dev` domain root),
+  analytics stay silent off `thinkrail.ai` (the hostname gate), and canonical/OG URLs keep pointing
+  at production. Drafts stay excluded — the preview shows exactly what would ship.
+- **No cleanup job**: closed-PR preview deployments are inert and free; the alias just stops updating.
+- Concurrency is per-PR with `cancel-in-progress: true` — the opposite of production, because a
+  superseded preview has no value.
+
+One-time setup: Cloudflare Pages project `thinkrail-previews` (`wrangler pages project create
+thinkrail-previews --production-branch main`) and repo secrets `CLOUDFLARE_API_TOKEN` (Pages:Edit) +
+`CLOUDFLARE_ACCOUNT_ID`.
+
 ## Blog
 
 The `/blog` subsite is a typed Astro content collection over Markdown posts in `content/blog/`
