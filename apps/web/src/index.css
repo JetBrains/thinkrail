@@ -100,7 +100,7 @@
 	/* Right-above the cursor point: the nudge + the ABOVE placement make the standard floating
 	   "comment here" offset (see reviewWidgets.ts / PreviewCommenting.tsx). */
 	padding-left: var(--space-sm);
-	padding-bottom: 2px; /* space-exempt: sub-step optical nudge that seats the floating icon at the cursor point */
+	padding-bottom: var(--space-2xs);
 	/* Above the view zones: a thread card sitting right where the icon floats must not intercept its
 	   click (Monaco stacks zones and content widgets in one context). */
 	position: relative;
@@ -215,7 +215,7 @@
 }
 /* Typography comes from the generated `tr-text-action` class on the node. */
 .review-composer-btn {
-	padding: 2px var(--space-sm); /* space-exempt: 2px is a sub-step vertical inset — no scale step below --space-xs */
+	padding: var(--space-2xs) var(--space-sm);
 	border-radius: var(--radius-sm);
 	border: 1px solid var(--border-default);
 	background: var(--container-elevated-bg);
