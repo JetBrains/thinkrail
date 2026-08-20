@@ -256,6 +256,9 @@ The `/blog` subsite is a typed Astro content collection over Markdown posts in `
 padding for legibility at tab sizes. It is wired via `<link rel="icon" type="image/svg+xml">` in
 `index.html`; there is no `.ico` fallback.
 
-`public/og.png` is a capture of the site's own hero. The transcript in the `features/agent-chat.md`
-section is from a real `pi` session captured in the app while it worked on this repo. Re-capture
-method lives in the task-spec that built this module.
+`public/og.png` is a capture of the site's own hero inside the IDE shell (dark theme, Landing
+selected, terminal install transcript finished, worktree note visible). The transcript in the
+`features/agent-chat.md` section is from a real `pi` session captured in the app while it worked on
+this repo. Re-capture: `astro preview` the built site, view it at a 1200×630 viewport with
+deviceScaleFactor 2 (dark theme), wait for the terminal replay + the rail note (~7s), screenshot the
+viewport, and downscale the 2400×1260 capture to 1200×630.
