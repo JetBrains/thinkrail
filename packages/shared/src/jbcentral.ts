@@ -110,10 +110,17 @@ function pathExists(path: string, deps: JbcentralAdapterDependencies): boolean {
 	return (deps.exists ?? existsSync)(path);
 }
 
+function platformOf(deps: JbcentralAdapterDependencies): NodeJS.Platform {
+	return deps.platform ?? process.platform;
+}
+
 function homeDirectory(deps: JbcentralAdapterDependencies): string {
 	const env = effectiveEnv(deps);
-	const platform = deps.platform ?? process.platform;
-	return (platform === "win32" ? env.USERPROFILE : env.HOME) ?? homedir();
+	return (platformOf(deps) === "win32" ? env.USERPROFILE : env.HOME) ?? homedir();
+}
+
+function centralExecutableName(deps: JbcentralAdapterDependencies): string {
+	return platformOf(deps) === "win32" ? `${CENTRAL_BIN}.exe` : CENTRAL_BIN;
 }
 
 export function jbcentralExtensionPath(deps: JbcentralAdapterDependencies = {}): string {
@@ -127,7 +134,7 @@ export function resolveJbcentralBin(deps: JbcentralAdapterDependencies = {}): st
 	const onPath = which(CENTRAL_BIN, path);
 	if (onPath && isAbsolute(onPath)) return onPath;
 
-	const local = join(homeDirectory(deps), ".local", "bin", CENTRAL_BIN);
+	const local = join(homeDirectory(deps), ".local", "bin", centralExecutableName(deps));
 	return pathExists(local, deps) ? local : null;
 }
 

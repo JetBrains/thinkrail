@@ -529,9 +529,38 @@ describe("Central paths and install guidance", () => {
 		expect(jbcentralExtensionPath({ env, platform: "darwin" })).toBe(
 			join("/msys/person", ".pi", "agent", "extensions", "jetbrains-central.ts"),
 		);
+	});
+
+	test("the installer fallback is the exact path each OS's installer writes", () => {
+		const env = { HOME: "/msys/person", USERPROFILE: "/profile/person" };
+		const onlyExisting = (existing: string) => (path: string) => path === existing;
+		const windowsInstall = join("/profile/person", ".local", "bin", "central.exe");
+		const posixInstall = join("/msys/person", ".local", "bin", "central");
+
 		expect(
-			resolveJbcentralBin({ env, platform: "win32", which: () => null, exists: () => true }),
-		).toBe(join("/profile/person", ".local", "bin", "central"));
+			resolveJbcentralBin({
+				env,
+				platform: "win32",
+				which: () => null,
+				exists: onlyExisting(windowsInstall),
+			}),
+		).toBe(windowsInstall);
+		expect(
+			resolveJbcentralBin({
+				env,
+				platform: "darwin",
+				which: () => null,
+				exists: onlyExisting(posixInstall),
+			}),
+		).toBe(posixInstall);
+		expect(
+			resolveJbcentralBin({
+				env,
+				platform: "win32",
+				which: () => null,
+				exists: onlyExisting(join("/profile/person", ".local", "bin", "central")),
+			}),
+		).toBeNull();
 	});
 
 	test("returns official per-OS install plans", () => {
