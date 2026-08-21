@@ -21,6 +21,8 @@ export interface Todo {
 	status: TodoStatus;
 	origin: TodoOrigin;
 	note?: string;
+	summary?: string;
+	verification?: string;
 	artifacts?: TodoArtifact[];
 	createdAt: string;
 	updatedAt: string;
@@ -38,12 +40,19 @@ export interface TodoGroup {
 export interface TodoPlan {
 	todos: Todo[];
 	groups: TodoGroup[];
+	/**
+	 * The agent's overall completion summary (`todo_plan_summary`), written when the whole plan is done.
+	 * Stored verbatim across later edits; the UI shows it only while every item is `done` (a re-opened
+	 * plan hides it until the agent rewrites it at the next completion), so no clearing logic exists.
+	 */
+	summary?: string;
 }
 
 export interface TodoFile {
-	version: 4;
+	version: 5;
 	todos: Todo[];
 	groups: TodoGroup[];
+	summary?: string;
 }
 
 export interface TodoInput {
@@ -64,6 +73,8 @@ export interface TodoPatch {
 	title?: string;
 	status?: TodoStatus;
 	note?: string;
+	summary?: string;
+	verification?: string;
 	artifacts?: TodoArtifact[];
 }
 
@@ -71,6 +82,8 @@ export interface WriteItem {
 	title: string;
 	status?: TodoStatus;
 	note?: string;
+	summary?: string;
+	verification?: string;
 	artifacts?: TodoArtifact[];
 }
 

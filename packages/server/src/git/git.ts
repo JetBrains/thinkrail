@@ -321,3 +321,19 @@ export function listCommits(workspaceId: string): { commits: GitCommit[] } {
 	}
 	return { commits };
 }
+
+export async function countUnpushedCommits(
+	worktreePath: string,
+	branch: string,
+): Promise<number | null> {
+	const counted = await gitAsync(worktreePath, [
+		"rev-list",
+		"--count",
+		"--end-of-options",
+		`origin/${branch}..HEAD`,
+		"--",
+	]);
+	if (!counted.ok) return null;
+	const count = Number(counted.out);
+	return Number.isSafeInteger(count) && count >= 0 ? count : null;
+}

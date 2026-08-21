@@ -38,6 +38,12 @@ The shell is built first, `pi` connected last:
 - A workspace-local **Review** surface for the current worktree: GitHub-style anchored file/diff drafts
   are collected without starting the agent, then sent as structured context into per-file `pi` chats;
   sent records persist and the agent can resolve them. This is local review, not PR-provider integration.
+- A plan-header **Open PR** action (`task-open-pr`, deterministic host-side — never agent-routed):
+  pushes the workspace branch and opens or updates its GitHub PR through the user's own `gh` CLI (no
+  stored tokens, no provider REST API), with the PR body rendered from the verified plan; falls back to
+  a prefilled compare URL when `gh` is missing or the forge isn't GitHub. Re-press pushes updates to the
+  SAME PR, never a second one. CI/Checks status, merge/squash from the app, and `glab` support are not
+  part of this slice. See `packages/server/src/pr`.
 - Cheap wins `pi` already emits: per-session model pick (#1), token/cost display (#3), and skill
   catalog/autocomplete (#2), including read-through reuse of portable Agent Skills a user already keeps
   for major coding agents — Pi remains the parser/runtime; no copying or vendor-semantic emulation. A
@@ -59,7 +65,9 @@ V1 is explicitly **not**: the workflow **product layer** (a runtime/engine, conf
 the skill-based workflow *system*, skills + an always-on rule with no runtime machinery, ships as the
 bundled `pi-thinkrail-workflow` extension); the spec-graph **product layer** beyond the read-only viewer
 (drift detection, pre-build approval, living graph — the pi-side spec capability ships as the bundled
-extension above); PR / Checks beyond the active workspace's optional open GitHub PR / GitLab MR number, self-improvement, automations, per-step model routing, cost ledger.
+extension above); PR/Checks automation beyond push + open/update via `gh` (CI/checks status, merge or
+squash from the app, provider REST API integration, `glab` — see `packages/server/src/pr`'s Out of
+scope), self-improvement, automations, per-step model routing, cost ledger.
 
 ## V2 — the product
 

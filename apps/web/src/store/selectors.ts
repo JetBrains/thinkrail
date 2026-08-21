@@ -444,3 +444,17 @@ export function selectReviewDraftCount(
 	const snapshot = state.reviewsByWorkspace[workspaceId];
 	return snapshot ? snapshot.comments.filter((c) => c.status === "draft").length : 0;
 }
+
+export function selectAgentReviewCommentCount(
+	state: {
+		reviewsByWorkspace: Record<string, { comments: { status: string; author?: string }[] }>;
+	},
+	workspaceId: string | null,
+): number {
+	if (!workspaceId) return 0;
+	const snapshot = state.reviewsByWorkspace[workspaceId];
+	if (!snapshot) return 0;
+	return snapshot.comments.filter(
+		(c) => c.author === "agent" && c.status !== "resolved" && c.status !== "dismissed",
+	).length;
+}

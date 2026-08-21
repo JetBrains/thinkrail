@@ -1,3 +1,5 @@
+import type { ThinkingLevel, WireModel } from "./piProtocol";
+
 export type TabStatus = "idle" | "running" | "waiting" | "error";
 
 export interface Project {
@@ -38,6 +40,27 @@ export interface Workspace {
 export interface OpenBranchReview {
 	kind: "pull-request" | "merge-request";
 	number: number;
+	/** `workspace.openReview` only: local commits origin/<branch> doesn't have yet. */
+	unpushedCommits?: number;
+}
+
+export type GhSetupProblem = "missing" | "unauthenticated";
+
+export interface PrDraft {
+	title: string;
+	body: string;
+}
+
+export interface OpenPrResult {
+	action: "created" | "updated" | "pushed" | "compare";
+	review?: OpenBranchReview;
+	url?: string;
+	compareUrl?: string;
+	/** `updated` only: whether the `gh pr edit --body` refresh actually succeeded. */
+	bodyRefreshed?: boolean;
+	/** `compare` only: why the direct gh path was unavailable, when the host could tell. */
+	ghProblem?: GhSetupProblem;
+	dirtyFiles: number;
 }
 
 export type ExistingWorktreeCandidate =
@@ -114,9 +137,29 @@ export interface TodoItem {
 	status: TodoStatus;
 	origin: TodoOrigin;
 	note?: string;
+	summary?: string;
+	verification?: string;
 	artifacts?: TodoArtifact[];
+	/**
+	 * The item's review decoration — **host-derived on `todo.list`, present only on reviewable items**
+	 * (those carrying a host change set). Review state is user-owned and host-stored (a sidecar, never the
+	 * agent-writable plan file), so an agent re-plan can't flip a review decision.
+	 */
+	review?: TodoReviewInfo;
 	createdAt: string;
 	updatedAt: string;
+}
+
+export type TodoReviewState = "unreviewed" | "reviewed" | "changes_requested";
+
+export interface TodoReviewInfo {
+	state: TodoReviewState;
+	reviewing?: boolean;
+	reviewedBy?: "user" | "agent";
+	revision: number;
+	unreviewedShas?: string[];
+	feedback?: string;
+	at?: string;
 }
 
 export type TodoGroupStatus = "pending" | "active" | "done";
@@ -131,6 +174,21 @@ export interface TodoGroupItem {
 export interface TodoPlan {
 	todos: TodoItem[];
 	groups: TodoGroupItem[];
+	/**
+	 * The agent's overall completion summary (`todo_plan_summary`), written when the whole plan is done.
+	 * Clients show it only while every item stays `done` — a re-opened plan hides it until the agent
+	 * rewrites it at the next completion.
+	 */
+	summary?: string;
+	/** The plan's dedicated reviewer chat (set once Start review ran) — the Reviewing label opens it. */
+	reviewerSessionId?: string;
+	/**
+	 * Worktree changes attributed to NO item of this plan — **host-derived on `todo.list`, present only
+	 * when non-empty**. The honesty section of the review map: work no item claims (edits before the
+	 * first work window, after the last `done`, or in a chat that never planned) stays visible instead
+	 * of silently absent.
+	 */
+	unattributed?: GitFileChange[];
 }
 
 export type GitFileStatus = "added" | "modified" | "deleted" | "renamed" | "untracked";
@@ -486,7 +544,19 @@ export interface AppConfig {
 	terminalReplayKb: number;
 	composerGrowthLimit: ComposerGrowthLimit;
 	layout: LayoutSettings;
+	/** The model the plan reviewer + reflector run on; unset ⇒ the pi default. */
+	reviewModel?: WireModel;
+	/** Reviewer + reflector thinking level; unset ⇒ the model's default. */
+	reviewEffort?: ThinkingLevel;
+	/** When false, a `request_changes` verdict records findings and waits — no automated fix cycle. */
+	reviewAutoFix: boolean;
 }
+
+/** The `settings.update` payload: `null` clears an optional override back to unset (⇒ the default). */
+export type AppConfigUpdate = Partial<Omit<AppConfig, "reviewModel" | "reviewEffort">> & {
+	reviewModel?: WireModel | null;
+	reviewEffort?: ThinkingLevel | null;
+};
 
 export const TERMINAL_REPLAY_KB = { min: 0, max: 1024, default: 64 } as const;
 
@@ -501,6 +571,7 @@ export const DEFAULT_CONFIG: AppConfig = {
 		maxSideGroups: 6,
 		maxBottomGroups: 3,
 	},
+	reviewAutoFix: true,
 };
 
 export const TODO_NUDGE_PREFIX = "[thinkrail:todo-nudge] ";
@@ -614,6 +685,18 @@ export interface ReviewComment {
 	status: ReviewCommentStatus;
 	anchorState: ReviewAnchorState;
 	sessionId?: string;
+	/** Who authored the remark — the human (default, absent) or the plan's reviewer agent. */
+	author?: "user" | "agent";
+	/** Provenance of an agent finding: the plan step (in its session) and the newest reviewed commit sha. */
+	origin?: { todoId: string; reviewedSha: string; sessionId: string };
+	/** Server-derived for the client, never persisted: the reviewed code was overwritten after review. */
+	stale?: boolean;
+	/** An independent reflector's verdict on an agent finding (refuted findings are held back from auto-fix). */
+	reflection?: {
+		verdict: "kept" | "refuted";
+		confidence: "low" | "medium" | "high";
+		reason: string;
+	};
 	resolvedBy?: "agent" | "user";
 	resolveNote?: string;
 	createdAt: number;

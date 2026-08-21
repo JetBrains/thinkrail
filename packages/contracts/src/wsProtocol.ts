@@ -1,5 +1,6 @@
 import type {
 	AppConfig,
+	AppConfigUpdate,
 	BranchList,
 	DiffStats,
 	EditorInfo,
@@ -18,6 +19,8 @@ import type {
 	LayoutReplaceResult,
 	LoginReply,
 	OpenBranchReview,
+	OpenPrResult,
+	PrDraft,
 	Project,
 	ProjectPathStatus,
 	ProviderStatusReport,
@@ -83,9 +86,12 @@ export interface TerminalTabsPush {
 
 export const PROTOCOL_VERSION = 52;
 
+export type HostPlatform = "darwin" | "linux" | "win32";
+
 export interface ServerWelcome {
 	protocolVersion: number;
 	appVersion?: string;
+	hostPlatform?: HostPlatform;
 	projects: Project[];
 	recentProjects: Project[];
 	config: AppConfig;
@@ -131,6 +137,8 @@ export const WS_METHODS = {
 	gitPrefetch: "git.prefetch",
 	githubAuthStatus: "github.authStatus",
 	githubRefresh: "github.refresh",
+	prPreview: "pr.preview",
+	prOpen: "pr.open",
 	fsReadDir: "fs.readDir",
 	fsReadFile: "fs.readFile",
 	specGraph: "spec.graph",
@@ -138,6 +146,10 @@ export const WS_METHODS = {
 	todoAdd: "todo.add",
 	todoUpdate: "todo.update",
 	todoRemove: "todo.remove",
+	todoReview: "todo.review",
+	todoRequestFix: "todo.requestFix",
+	todoStartReview: "todo.startReview",
+	todoReviewAll: "todo.reviewAll",
 	gitStatus: "git.status",
 	gitDiffFile: "git.diffFile",
 	gitListCommits: "git.listCommits",
@@ -317,6 +329,21 @@ export interface WsMethodMap {
 	"git.prefetch": { params: { projectId: string; ref: string }; result: { ok: boolean } };
 	"github.authStatus": { params: Record<string, never>; result: GithubAuthStatus };
 	"github.refresh": { params: Record<string, never>; result: GithubAuthStatus };
+	"pr.preview": {
+		params: { workspaceId: string; sessionId: string; title?: string };
+		result: PrDraft;
+	};
+	"pr.open": {
+		params: {
+			workspaceId: string;
+			sessionId: string;
+			title?: string;
+			titleEdited?: boolean;
+			body?: string;
+			draft?: boolean;
+		};
+		result: OpenPrResult;
+	};
 	"fs.readDir": { params: { workspaceId: string; path: string }; result: FileNode[] };
 	"fs.readFile": { params: { workspaceId: string; path: string }; result: { content: string } };
 	"spec.graph": { params: { workspaceId: string }; result: SpecGraphSnapshot };
@@ -340,6 +367,19 @@ export interface WsMethodMap {
 		result: TodoItem;
 	};
 	"todo.remove": { params: { workspaceId: string; sessionId: string; id: string }; result: Ack };
+	"todo.review": { params: { workspaceId: string; sessionId: string; id: string }; result: Ack };
+	"todo.requestFix": {
+		params: { workspaceId: string; sessionId: string; id: string; feedback: string };
+		result: Ack;
+	};
+	"todo.startReview": {
+		params: { workspaceId: string; sessionId: string; id: string };
+		result: { ok: true; reviewerSessionId: string };
+	};
+	"todo.reviewAll": {
+		params: { workspaceId: string; sessionId: string };
+		result: { ok: true; total: number; alreadyRunning?: true };
+	};
 	"git.status": { params: { workspaceId: string; scope?: GitDiffScope }; result: GitStatus };
 	"git.diffFile": {
 		params: { workspaceId: string; path: string; scope?: GitDiffScope };
@@ -441,7 +481,7 @@ export interface WsMethodMap {
 		result: WorkspaceLayoutSnapshot | null;
 	};
 	"layout.replace": { params: LayoutReplaceParams; result: LayoutReplaceResult };
-	"settings.update": { params: { config: Partial<AppConfig> }; result: AppConfig };
+	"settings.update": { params: { config: AppConfigUpdate }; result: AppConfig };
 	"history.search": {
 		params: { query: string; scope: HistoryScope; limit?: number };
 		result: HistorySearchResult;
@@ -528,7 +568,7 @@ export interface WsResume {
 
 export type WsClientMessage = WsRequest | WsAck | WsResume;
 
-export type WsErrorCode = "UNKNOWN_COMMIT";
+export type WsErrorCode = "UNKNOWN_COMMIT" | "PUSH_AUTH_FAILED";
 
 export interface WsResponse {
 	id: string;

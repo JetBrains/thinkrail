@@ -268,7 +268,10 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   in every connected client), and a
   **zoomed-stage preview pane** + **scope picker** — see the next bullet),
   `ModelSelector` + `ThinkingSelector` (also shared with `NewWorkspaceDialog`;
-  optional `container` prop portals their popovers into a host Dialog; `ModelSelector` takes
+  optional `container` prop portals their popovers into a host Dialog; optional
+  `defaultOption`/`onSelectDefault` render an explicit use-the-default row above the provider groups
+  (checked when `current` is null) for callers whose selection is an *override* — `ReviewSettings` —
+  since a plain model list can only ever narrow, never restore the unset state; `ModelSelector` takes
   `refreshing`/`onRefresh(force)` — a footer “Refresh catalog” row that passes **`force: true`** (the
   user asked, so bypass pi's freshness throttle) and spins while that awaited refresh runs, plus an
   **unforced** auto-fire on each open, which `useModelCatalog` serves from the host snapshot
@@ -685,8 +688,21 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   `openMarkdown` snapshot action; tool completion refreshes immediately and `agent_settled` supplies the
   final refresh; overlapping list reads are latest-wins and connection-generation stamped, accepted adds
   fold by item id, and a failed optimistic removal re-reads authority rather than restoring a stale whole-plan
-  capture over concurrent edits), `planView` (pure derivations over the DTO: `groupProgress`,
-  `planSummary`, `planGlance`/`sessionGlance`, `planSections`, and `shouldNudgeOnAdd`. A group's *status* is
+  capture over concurrent edits; plus the agent-review ops `startReview` (`todo.startReview`) and
+  `reviewAll` (`todo.reviewAll`) — both re-read the plan, since the review decoration is host-derived
+  and never patched locally; the manual-verdict ops were removed with the plan page's manual mode —
+  `todo.review`/`todo.requestFix` remain on the wire, host-side), `planView` (pure derivations over the DTO: `groupProgress`,
+  `planSummary`, `planGlance`/`sessionGlance`, `planSections`, `shouldNudgeOnAdd`, and the review-trail
+  set — `itemRevisions` (the commit history, 1 TODO = N commits), `reviewableItems`/`reviewProgress`
+  (host-gated by `TodoItem.review` presence — the reviewable rule has ONE home, server-side),
+  `reviewChangesRequested` + `itemOpenFindings` (the changes_requested warning marking: the flag and
+  the count of the reviewer's open comments — matched by the finding's `origin` provenance
+  (todoId + optional sessionId) when stamped, falling back to the change-set path join only for
+  provenance-less comments, so two steps touching one file don't count each other's findings; the
+  Review tab is the truth), and
+  `planCompletionSummary` (the plan-level note gated on "everything done", so a re-opened plan never
+  shows a stale all-done note). `itemChangeSet`'s precedence: live `change` paths win (a fallback redo's
+  latest delta), else the NEWEST resolvable commit. A group's *status* is
   **not** derived here — the host computes it and ships it on `TodoGroupItem.status`, so the rule has one
   home; a user edit therefore re-reads the plan rather than patching it locally, see `useChatTodos`), `TodoList` (the
   **status-ordered, group-first** rendering (`planSections`) — group = task: the **in-progress** task
@@ -696,7 +712,21 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   one collapse over all of Done). Finished *steps* stay inline in their (active/pending)
   group; only whole done tasks move to Done. Each group is a header row (derived status icon + title +
   done/total badge), the `active` group emphasized; the user's loose items carry a per-row `user` badge
-  (no separate "Your requests" header — they're placed by status). **A row whose item carries a host
+  (no separate "Your requests" header — they're placed by status). **The compact list is title-only**
+  (status glyph + title + the change-set chip) — a row's `note`, a done item's agent-authored `summary`,
+  and its `verification` are **not** shown here, so a long plan reads at a glance without overloading;
+  the **full plan page** (`PlanPane`) is where those surface: the `summary` as a clamped muted line
+  (`todo-summary`) and the `verification` as the shared **`VerificationBadge`** (`planKit`; the
+  "Tests ✓" element — check glyph for a named check, warning glyph for an honest "not verified", the
+  split derived by `planView.verificationStatus`, ONE home; the badge's title labels it self-reported —
+  never a host-run gate). The plan page has no in-page review list
+  — its header kebab offers **Review All** (host-side queue, `todo.reviewAll`) and a comment chip that
+  focuses the right-panel Review tab (see `panels/SPEC.md`). A row whose review is **settled** (`planView.reviewSettled` — approved and
+  nothing landed since) upgrades its done check to the **circled Verified glyph**
+  (`StatusIcon reviewed`, hover "Verified", `data-reviewed`) — the at-a-glance "this step was
+  reviewed" state, popup and plan page alike; a **changes_requested** verdict flips the glyph to the
+  warning `CircleAlert` instead (`StatusIcon changesRequested`, hover "Changes requested",
+  `data-changes-requested`) — the plan page adds the chip + feedback note (see `panels/SPEC.md`). **A row whose item carries a host
   change set grows a quiet "N files" chip** (`itemChangeSet` in `planView` — the one derivation shared
   with the markdown snapshot below, so the two can never disagree): a **committed** item's chip opens the
   Changes panel at its `commit:{sha}` scope via `useChatTodos.openChanges` (`setDiffScope` + a

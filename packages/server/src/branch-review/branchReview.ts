@@ -53,7 +53,7 @@ export function findOpenBranchReview(
 	cwd: string,
 	branch: string,
 ): Promise<OpenBranchReview | null> {
-	return findOpenBranchReviewWithRunner(cwd, branch, runCommand);
+	return findOpenBranchReviewWithRunner(cwd, branch, runProviderCommand);
 }
 
 export async function findOpenBranchReviewWithRunner(
@@ -105,10 +105,14 @@ export function reviewNumber(output: string, field: "number" | "iid"): number | 
 	}
 }
 
-async function runCommand(cwd: string, command: string[]): Promise<CommandResult> {
+export async function runProviderCommand(
+	cwd: string,
+	command: string[],
+	timeoutMs: number = LOOKUP_TIMEOUT_MS,
+): Promise<CommandResult> {
 	const run = await runBounded(command, {
 		cwd,
-		timeoutMs: LOOKUP_TIMEOUT_MS,
+		timeoutMs,
 		env: {
 			...nonInteractiveGitEnv(),
 			GH_PROMPT_DISABLED: "1",

@@ -933,6 +933,7 @@ function WorkbenchTab({
 					data-active={active}
 					data-preview={preview}
 					data-kind={tab.kind === "document" ? "plan" : tab.kind}
+					data-session-id={tab.kind === "chat" ? tab.sessionId : undefined}
 					data-dragging={drag.isDragging || undefined}
 					className="group relative flex min-w-96 max-w-192 shrink-0 items-center border-border-default border-r text-text-muted after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:z-10 after:h-[2px] after:rounded-full after:content-[''] data-[active=true]:bg-control-bg-selected data-[active=true]:text-text-default data-[active=true]:after:bg-primary data-[dragging]:opacity-40"
 				>

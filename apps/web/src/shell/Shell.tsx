@@ -10,6 +10,7 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "../compone
 import { ProjectTree } from "../panels/ProjectTree";
 import { SettingsDialog } from "../panels/SettingsDialog";
 import { Toaster } from "../panels/Toaster";
+import { openReviewLabel, useOpenBranchReview } from "../panels/useOpenBranchReview";
 import { WelcomePanel } from "../panels/WelcomePanel";
 import {
 	isUserOwnedWorkspace,
@@ -24,7 +25,6 @@ import { CollapsedPanelRail } from "./CollapsedPanelRail";
 import { LayoutSettings } from "./LayoutSettings";
 import { useCollapsibleRegion } from "./useCollapsibleRegion";
 import { useGlobalHotkeys } from "./useGlobalHotkeys";
-import { openReviewLabel, useOpenBranchReview } from "./useOpenBranchReview";
 import { WorkspaceWorkbench } from "./WorkspaceWorkbench";
 
 const STATUS_LABEL: Record<ConnectionStatus, string> = {
@@ -45,7 +45,7 @@ export function Shell() {
 	const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
 	const activeWorkspace = useAppStore(selectActiveWorkspace);
 	const contextProject = useAppStore(selectContextProject);
-	const openReview = useOpenBranchReview(activeWorkspace, status);
+	const { review: openReview } = useOpenBranchReview(activeWorkspace, status);
 	const hasActiveWorkspace = activeWorkspaceId != null;
 
 	const welcomeCenterRef = useRef<HTMLDivElement>(null);

@@ -164,6 +164,8 @@ export interface CreateSessionInput {
 	workspaceId: string;
 	model?: WireModel;
 	thinkingLevel?: ThinkingLevel;
+	/** True: an unresolvable `model` falls back to the default instead of throwing. */
+	modelOptional?: boolean;
 }
 
 export interface CreateSessionResult {
@@ -303,6 +305,14 @@ async function registerSession(
 export async function createSession(input: CreateSessionInput): Promise<CreateSessionResult> {
 	const generation = await getPiRuntimeGeneration();
 	const settingsManager = buildSessionSettings(input.cwd);
+	let model: Model<string> | undefined;
+	if (input.model) {
+		try {
+			model = resolveWireModel(generation.runtime, input.model);
+		} catch (err) {
+			if (!input.modelOptional) throw err;
+		}
+	}
 	const { session } = await createAgentSession({
 		cwd: input.cwd,
 		modelRuntime: generation.runtime,
@@ -314,7 +324,7 @@ export async function createSession(input: CreateSessionInput): Promise<CreateSe
 			() => skillAdmissionResolver(input.workspaceId),
 			generation.excludedSessionExtensionPaths,
 		),
-		...(input.model ? { model: resolveWireModel(generation.runtime, input.model) } : {}),
+		...(model ? { model } : {}),
 		...(input.thinkingLevel ? { thinkingLevel: input.thinkingLevel } : {}),
 	});
 	return registerSession(session, input.workspaceId, generation);

@@ -7,6 +7,7 @@ import * as monaco from "monaco-editor";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { LineSelection } from "./reviewGutter";
+import { threadLabel } from "./reviewModel";
 
 export interface ReviewCommentingCallbacks {
 	onSave: (selection: LineSelection | null, text: string) => Promise<void>;
@@ -15,6 +16,13 @@ export interface ReviewCommentingCallbacks {
 
 const ICON_WIDGET_ID = "thinkrail.review.addIcon";
 
+// Keep in sync with the CSS caps in index.css (.review-thread / .review-composer-flow).
+const CARD_MAX_WIDTH = 832;
+
+function cardMaxWidth(codeEditor: monaco.editor.ICodeEditor): number {
+	return Math.max(280, Math.min(CARD_MAX_WIDTH, codeEditor.getLayoutInfo().contentWidth - 24));
+}
+
 export interface ReviewThreadData {
 	id: string;
 	startLine: number;
@@ -22,6 +30,8 @@ export interface ReviewThreadData {
 	body: string;
 	status: string;
 	anchorState: string;
+	stale?: boolean;
+	refuted?: boolean;
 }
 
 export interface ReviewThreadActions {
@@ -104,8 +114,7 @@ export function attachReviewCommenting(
 		const card = document.createElement("div");
 		card.className = "review-composer";
 		card.dataset.testid = "review-composer";
-		const layout = codeEditor.getLayoutInfo();
-		card.style.maxWidth = `${Math.max(280, Math.min(560, layout.contentWidth - 24))}px`;
+		card.style.maxWidth = `${cardMaxWidth(codeEditor)}px`;
 		domNode.appendChild(card);
 
 		const label = document.createElement("span");
@@ -263,9 +272,11 @@ export function attachReviewThreads(
 		const dot = document.createElement("span");
 		dot.className = `review-thread-dot rounded-full review-thread-dot-${thread.status === "sent" ? "sent" : "draft"}`;
 		const label = document.createElement("span");
-		label.className = "review-thread-label tr-text-eyebrow";
-		label.textContent =
-			thread.anchorState === "outdated" ? `${thread.status} · outdated` : thread.status;
+		let labelTone = "";
+		if (thread.refuted) labelTone = " text-text-subtle";
+		else if (thread.stale) labelTone = " text-feedback-warning";
+		label.className = `review-thread-label tr-text-eyebrow${labelTone}`;
+		label.textContent = threadLabel(thread);
 		head.append(dot, label);
 
 		if (thread.status === "draft") {
@@ -360,14 +371,21 @@ export function attachReviewThreads(
 	const cardSizeObserver = new ResizeObserver(() => relayoutCards());
 
 	const signature = (t: ReviewThreadData): string =>
-		[t.status, t.anchorState, t.startLine, t.endLine, t.body].join("\u0000");
+		[
+			t.status,
+			t.anchorState,
+			t.stale ?? false,
+			t.refuted ?? false,
+			t.startLine,
+			t.endLine,
+			t.body,
+		].join("\u0000");
 
 	const buildZone = (accessor: monaco.editor.IViewZoneChangeAccessor, thread: ReviewThreadData) => {
 		const domNode = document.createElement("div");
 		domNode.className = "review-composer-zone";
 		const card = cardFor(thread);
-		const layout = codeEditor.getLayoutInfo();
-		card.style.maxWidth = `${Math.max(280, Math.min(560, layout.contentWidth - 24))}px`;
+		card.style.maxWidth = `${cardMaxWidth(codeEditor)}px`;
 		domNode.appendChild(card);
 		const zone: monaco.editor.IViewZone = {
 			afterLineNumber: thread.endLine,
