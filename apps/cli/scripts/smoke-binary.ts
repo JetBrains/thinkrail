@@ -231,6 +231,19 @@ function hasExternalExtensionModel(models: unknown): boolean {
 	);
 }
 
+function centralFixtureState(): string {
+	const exe = existsSync(centralFake);
+	const version = exe
+		? Bun.spawnSync([centralFake, "--version"], { stdout: "pipe", stderr: "pipe" })
+		: null;
+	return JSON.stringify({
+		exe,
+		resolved: Bun.which("central", { PATH: noPiPath }),
+		artifact: existsSync(centralArtifact),
+		version: version && { code: version.exitCode, out: version.stdout.toString().trim() },
+	});
+}
+
 async function centralStatus(socket: WebSocket): Promise<string> {
 	try {
 		const report = (await within(
@@ -273,7 +286,7 @@ async function assertDefaultAgentDirExternalExtension(): Promise<void> {
 		const models = await within(rpc(socket, "model.list", {}), 20_000, "default-agent model.list");
 		if (!hasExternalExtensionModel(models)) {
 			fail(
-				`compiled binary did not load the global external extension with the default agent dir (Central status: ${await centralStatus(socket)})`,
+				`compiled binary did not load the global external extension with the default agent dir (Central status: ${await centralStatus(socket)}, fixture: ${centralFixtureState()})`,
 			);
 		}
 		probe.kill("SIGTERM");
@@ -379,7 +392,7 @@ try {
 	);
 	if (!hasExternalExtensionModel(externalModels)) {
 		fail(
-			`compiled binary did not load the global external extension with a custom agent dir (Central status: ${await centralStatus(rpcSocket)})`,
+			`compiled binary did not load the global external extension with a custom agent dir (Central status: ${await centralStatus(rpcSocket)}, fixture: ${centralFixtureState()})`,
 		);
 	}
 	const project = (await within(
