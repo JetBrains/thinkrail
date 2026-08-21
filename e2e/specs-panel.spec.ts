@@ -77,7 +77,9 @@ test("Specs tab renders the worktree's spec tree and opens a spec as an editor t
 	await expect(submodule).toBeVisible();
 	await expect(submodule).toHaveAttribute("data-depth", "2");
 	await expect(submodule).toHaveAttribute("data-spec-role", "SUBMODULE");
+	await expect(submodule.getByTestId("spec-role")).toBeHidden();
 	await submodule.hover();
+	await expect(submodule.getByTestId("spec-role")).toBeVisible();
 	await expect(submodule.getByTestId("spec-role")).toHaveText("SUBMODULE");
 	const childLeftAfterRefresh = await child.evaluate(
 		(element) => element.getBoundingClientRect().left,
