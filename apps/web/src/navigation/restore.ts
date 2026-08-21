@@ -196,7 +196,11 @@ export function startNavigation({ driver, listWorkspaces }: NavigationDeps): () 
 		generation += 1;
 		pending = { generation, location };
 		armedPush = false;
-		useAppStore.getState().clearRouteChatTarget();
+		applyRoute(() => {
+			const state = useAppStore.getState();
+			if (state.activeWorkspaceId) state.noteNavigation(state.activeWorkspaceId);
+			useAppStore.getState().clearRouteChatTarget();
+		});
 		const canonical = serializeLocation(location);
 		if (canonical !== fragment) driver.replace(canonical);
 		lastWritten = canonical;
@@ -212,6 +216,7 @@ export function startNavigation({ driver, listWorkspaces }: NavigationDeps): () 
 			armedPush = true;
 		}
 		if (
+			!applyingRoute &&
 			pending &&
 			(state.selectedProjectId !== previous.selectedProjectId ||
 				state.activeWorkspaceId !== previous.activeWorkspaceId ||
