@@ -18,10 +18,16 @@ test("Specs tab renders the worktree's spec tree and opens a spec as an editor t
 	await expect(root).toHaveAttribute("data-depth", "0");
 	await expect(root).toHaveAttribute("data-main-spec", "true");
 	await expect(root).toHaveAttribute("data-spec-role", "Main spec");
-	await expect(root).toContainText("Main spec");
+	await expect(root.getByTestId("spec-role")).toBeHidden();
+	await root.hover();
+	await expect(root.getByTestId("spec-role")).toBeVisible();
+	await expect(root.getByTestId("spec-role")).toHaveText("Main spec");
 	await expect(child).toHaveAttribute("data-depth", "1");
 	await expect(child).toHaveAttribute("data-spec-role", "MODULE");
-	await expect(child).toContainText("MODULE");
+	await expect(child.getByTestId("spec-role")).toBeHidden();
+	await child.hover();
+	await expect(child.getByTestId("spec-role")).toBeVisible();
+	await expect(child.getByTestId("spec-role")).toHaveText("MODULE");
 
 	expect(await child.getAttribute("data-status")).toBeNull();
 	await expect(child).not.toContainText("active");
@@ -72,6 +78,10 @@ test("Specs tab renders the worktree's spec tree and opens a spec as an editor t
 	await expect(submodule).toBeVisible();
 	await expect(submodule).toHaveAttribute("data-depth", "2");
 	await expect(submodule).toHaveAttribute("data-spec-role", "SUBMODULE");
+	await expect(submodule.getByTestId("spec-role")).toBeHidden();
+	await submodule.hover();
+	await expect(submodule.getByTestId("spec-role")).toBeVisible();
+	await expect(submodule.getByTestId("spec-role")).toHaveText("SUBMODULE");
 	const childLeftAfterRefresh = await child.evaluate(
 		(element) => element.getBoundingClientRect().left,
 	);

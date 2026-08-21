@@ -1,5 +1,10 @@
 import { expect, test } from "@playwright/test";
-import { createWorkspaceViaDialog, openFixtureProject, worktreeRows } from "./fixtures/app";
+import {
+	createWorkspaceViaDialog,
+	openFixtureProject,
+	revealFirstProjectWorkspaces,
+	worktreeRows,
+} from "./fixtures/app";
 
 test("a second tab hydrates the same workspace's chats and then sees live updates", {
 	tag: "@agent",
@@ -22,7 +27,7 @@ test("a second tab hydrates the same workspace's chats and then sees live update
 	const page2 = await context.newPage();
 	await page2.goto("/");
 	await expect(page2.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
-	await page2.getByTestId("project-expand").first().click();
+	await revealFirstProjectWorkspaces(page2);
 	await worktreeRows(page2).first().click();
 
 	await expect(page2.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1, {

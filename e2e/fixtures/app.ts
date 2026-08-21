@@ -126,6 +126,12 @@ export async function enterDefaultWorkspace(page: Page): Promise<void> {
 	await expect(page.getByTestId("center-tabs")).toBeVisible();
 }
 
+export async function revealFirstProjectWorkspaces(page: Page): Promise<void> {
+	const expand = page.getByTestId("project-expand").first();
+	await expect(expand).toBeVisible();
+	if ((await expand.getAttribute("data-expanded")) !== "true") await expand.click();
+}
+
 export function defaultWorkspaceRow(page: Page): Locator {
 	return page.locator('[data-testid="workspace-item"][data-kind="default"]');
 }

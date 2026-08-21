@@ -13,7 +13,13 @@ import { useEffect, useMemo, useState } from "react";
 import { cn } from "../lib";
 import { selectActiveEditorTab, useAppStore } from "../store";
 import { openFileInTab } from "./openTabs";
-import { buildSpecTree, type SpecTreeNode, specRoleLabel, specRoleTag } from "./specTree";
+import {
+	buildSpecTree,
+	type SpecTreeNode,
+	specDisplayTitle,
+	specRoleLabel,
+	specRoleTag,
+} from "./specTree";
 
 export function SpecsPanel({
 	workspaceId,
@@ -171,12 +177,12 @@ function SpecNodeRow({
 							isActive ? "text-text-default" : "text-text-muted group-hover:text-text-default",
 						)}
 					>
-						{node.title}
+						{specDisplayTitle(node.title)}
 					</span>
 					<span
 						data-testid="spec-role"
 						className={cn(
-							"max-w-16 shrink-0 truncate text-right tr-text-eyebrow",
+							"hidden shrink-0 text-right tr-text-eyebrow group-hover:block group-focus-within:block",
 							isMainSpec || isActive ? "text-primary" : "text-text-subtle",
 						)}
 					>
