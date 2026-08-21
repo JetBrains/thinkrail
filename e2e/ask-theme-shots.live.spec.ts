@@ -4,8 +4,12 @@ import { expect, type Page, test } from "@playwright/test";
 import { openWorkspaceChat } from "./fixtures/app";
 
 const STAGE = process.env.ASK_SHOTS_STAGE ?? "before";
-const OUT = join(process.cwd(), ".thinkrail", "context", "ask-shots", STAGE);
-const THEMES = ["dark", "light", "high-contrast-dark", "high-contrast-light"] as const;
+const OUT = join(process.env.ASK_SHOTS_OUT ?? process.cwd(), ".ask-shots", STAGE);
+const THEMES = (
+	process.env.ASK_SHOTS_THEMES ?? "dark,light,high-contrast-dark,high-contrast-light"
+).split(",");
+
+test.use({ viewport: { width: 1280, height: 1200 } });
 
 async function pickTheme(page: Page, theme: string): Promise<void> {
 	await page.getByTestId("open-settings").click();
@@ -18,24 +22,29 @@ async function pickTheme(page: Page, theme: string): Promise<void> {
 	await expect(dialog).toBeHidden();
 }
 
-async function shootCard(page: Page, name: string): Promise<void> {
-	const card = page.locator('[data-testid="ask-user-question"][data-tone="active"]').first();
-	const box = await card.boundingBox();
-	if (!box) throw new Error("card has no bounding box");
-	const pad = 28;
+async function shoot(page: Page, target: ReturnType<Page["locator"]>, name: string) {
+	await target.scrollIntoViewIfNeeded();
+	await page.waitForTimeout(200);
+	const box = await target.boundingBox();
+	if (!box) throw new Error(`no bounding box for ${name}`);
+	const pad = 24;
+	const viewport = page.viewportSize();
+	if (!viewport) throw new Error("no viewport");
+	const x = Math.max(0, box.x - pad);
+	const y = Math.max(0, box.y - pad);
 	await page.screenshot({
 		path: join(OUT, `${name}.png`),
 		clip: {
-			x: Math.max(0, box.x - pad),
-			y: Math.max(0, box.y - pad),
-			width: box.width + pad * 2,
-			height: box.height + pad * 2,
+			x,
+			y,
+			width: Math.min(box.width + pad * 2, viewport.width - x),
+			height: Math.min(box.height + pad * 2, viewport.height - y),
 		},
 	});
 }
 
 test("ask-user-question card screenshots across themes", { tag: "@agent" }, async ({ page }) => {
-	test.setTimeout(420_000);
+	test.setTimeout(600_000);
 	mkdirSync(OUT, { recursive: true });
 	await openWorkspaceChat(page);
 	await page
@@ -54,11 +63,47 @@ test("ask-user-question card screenshots across themes", { tag: "@agent" }, asyn
 	await expect(card).toBeVisible({ timeout: 120_000 });
 	await expect(card.getByTestId("ask-option")).toHaveCount(3);
 
-	await card.getByTestId("ask-option").nth(0).click();
+	const tabs = card.getByTestId("ask-tab");
+	const options = card.getByTestId("ask-option");
+	const selectedOption = card.locator('[data-testid="ask-option"][data-selected="true"]');
 
 	for (const theme of THEMES) {
 		await pickTheme(page, theme);
-		await page.waitForTimeout(400);
-		await shootCard(page, theme);
+
+		await tabs.nth(0).click();
+		await expect(card.getByTestId("ask-option")).toHaveCount(3);
+		if ((await selectedOption.count()) === 0) await options.nth(0).click();
+		await shoot(page, card, `${theme}-q1`);
+
+		await options.nth(0).click();
+		await page.keyboard.press("ArrowDown");
+		await expect(options.nth(1)).toBeFocused();
+		await shoot(page, card, `${theme}-q1-kbcursor`);
+
+		await page.keyboard.press("End");
+		await expect(card.getByTestId("ask-custom")).toBeFocused();
+		await shoot(page, card, `${theme}-q1-other`);
+
+		await card.getByTestId("ask-note-toggle").click();
+		await expect(card.getByTestId("ask-note")).toBeFocused();
+		await shoot(page, card, `${theme}-q1-note`);
+		await page.keyboard.press("Escape");
+
+		await tabs.nth(1).click();
+		await expect(card.getByTestId("ask-option")).toHaveCount(3);
+		if ((await selectedOption.count()) === 0) await options.nth(1).click();
+		await shoot(page, card, `${theme}-q2-multi`);
+
+		await tabs.nth(2).click();
+		await expect(card.getByTestId("ask-review-title")).toBeVisible();
+		await shoot(page, card, `${theme}-review`);
+	}
+
+	await card.getByTestId("ask-submit").click();
+	const record = page.locator('[data-testid="ask-user-question"][data-tone="answered"]').first();
+	await expect(record).toBeVisible({ timeout: 60_000 });
+	for (const theme of THEMES) {
+		await pickTheme(page, theme);
+		await shoot(page, record, `${theme}-answered`);
 	}
 });
