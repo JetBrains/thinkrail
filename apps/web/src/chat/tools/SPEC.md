@@ -75,6 +75,13 @@ registration runs once when the chat module mounts. Unregistered tools fall back
     A **failed send undoes the hand-off with the latch**: the form comes back interactive, and since the
     one-shot claim is long spent and could neither re-focus nor re-announce, the card takes focus back itself
     rather than reappearing with the keyboard parked in the composer and nothing to say it had returned.
+  - **Every focus indicator in the card is the app-wide accent focus ring** (`focus-visible:ring-2` +
+    `ring-primary`; `focus-within:` on the Other row, whose ring marks the roving cursor passing through
+    a text field) — per the colour system's "accent = focus" rule (`styles/COLOR.md`, Control row). The
+    card originally shipped on `ring-primary-soft`, which the theme refinement's palette flattening
+    composites to near-invisibility (accent @20% over the flattened surfaces), leaving keyboard users
+    with no visible cursor — the one file the app-wide focus-ring sweep missed. `ring-primary-soft`
+    remains only as the awaiting card's decorative active halo, which is not a focus indicator.
   - **Claude-style local keyboard selector** — one authored choice is in the Tab order; Up/Down wraps
     through every authored choice **and Other**, Home/End jumps to the first/Other target *from a choice
     row* (inside the Other field they stay caret keys, exactly as ←/→ do — a free-text field keeps the keys
