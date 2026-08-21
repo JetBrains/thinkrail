@@ -8,7 +8,7 @@ import { selectWorkspaceTick, useAppStore } from "../store";
 import { getTransport } from "./wireTransport";
 
 export interface SkillLoadDependencies {
-	watchReady: (workspaceId: string) => Promise<WorkspaceWatchReadyResult>;
+	watchReady: (workspaceId: string, prewarm: boolean) => Promise<WorkspaceWatchReadyResult>;
 	noteFsChanged: (payload: WorkspaceFsChangedPayload) => void;
 	workspaceTick: (workspaceId: string) => number;
 	createSession: (params: WsParams<"session.create">) => Promise<WsResult<"session.create">>;
@@ -21,13 +21,13 @@ export interface SkillLoadDependencies {
 }
 
 export function createSkillLoadRequests(deps: SkillLoadDependencies) {
-	const pending = new Map<string, Promise<number>>();
+	const pending = new Map<string, { preparation: Promise<number>; prewarm: boolean }>();
 
-	const prepare = (workspaceId: string): Promise<number> => {
+	const prepare = (workspaceId: string, prewarm: boolean): Promise<number> => {
 		const existing = pending.get(workspaceId);
-		if (existing) return existing;
+		if (existing && (prewarm || !existing.prewarm)) return existing.preparation;
 
-		const started = deps.watchReady(workspaceId).then(({ startupNudge }) => {
+		const started = deps.watchReady(workspaceId, prewarm).then(({ startupNudge }) => {
 			if (startupNudge) {
 				deps.noteFsChanged({
 					workspaceId,
@@ -39,20 +39,23 @@ export function createSkillLoadRequests(deps: SkillLoadDependencies) {
 			return deps.workspaceTick(workspaceId);
 		});
 		const preparation = started.finally(() => {
-			if (pending.get(workspaceId) === preparation) pending.delete(workspaceId);
+			if (pending.get(workspaceId)?.preparation === preparation) pending.delete(workspaceId);
 		});
-		pending.set(workspaceId, preparation);
+		pending.set(workspaceId, { preparation, prewarm });
 		return preparation;
 	};
 
 	return {
+		async prewarmWorkspaceSkillLoad(workspaceId: string): Promise<void> {
+			await prepare(workspaceId, true);
+		},
 		async createSession(params: WsParams<"session.create">) {
-			const syncedTick = await prepare(params.workspaceId);
+			const syncedTick = await prepare(params.workspaceId, false);
 			const result = await deps.createSession(params);
 			return { result, syncedTick };
 		},
 		async getSessionMessages(params: WsParams<"session.getMessages">) {
-			const syncedTick = await prepare(params.workspaceId);
+			const syncedTick = await prepare(params.workspaceId, false);
 			const result = await deps.getSessionMessages(params);
 			if (
 				result.summary.workspaceId !== params.workspaceId ||
@@ -63,7 +66,7 @@ export function createSkillLoadRequests(deps: SkillLoadDependencies) {
 			return { result, syncedTick };
 		},
 		async reloadSessionResources(workspaceId: string, params: WsParams<"session.reloadResources">) {
-			const syncedTick = await prepare(workspaceId);
+			const syncedTick = await prepare(workspaceId, false);
 			const result = await deps.reloadSessionResources(params);
 			return { result, syncedTick };
 		},
@@ -71,7 +74,11 @@ export function createSkillLoadRequests(deps: SkillLoadDependencies) {
 }
 
 const skillLoadRequests = createSkillLoadRequests({
-	watchReady: (workspaceId) => getTransport().request("workspace.watchReady", { workspaceId }),
+	watchReady: (workspaceId, prewarm) =>
+		getTransport().request(
+			"workspace.watchReady",
+			prewarm ? { workspaceId, prewarm: true } : { workspaceId },
+		),
 	noteFsChanged: (payload) => useAppStore.getState().noteFsChanged(payload),
 	workspaceTick: (workspaceId) => selectWorkspaceTick(useAppStore.getState(), workspaceId),
 	createSession: (params) => getTransport().request("session.create", params),
@@ -79,6 +86,7 @@ const skillLoadRequests = createSkillLoadRequests({
 	reloadSessionResources: (params) => getTransport().request("session.reloadResources", params),
 });
 
+export const prewarmWorkspaceSkillLoad = skillLoadRequests.prewarmWorkspaceSkillLoad;
 export const createSessionWithSkillBaseline = skillLoadRequests.createSession;
 export const getSessionMessagesWithSkillBaseline = skillLoadRequests.getSessionMessages;
 export const reloadSessionResourcesWithSkillBaseline = skillLoadRequests.reloadSessionResources;

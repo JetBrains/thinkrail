@@ -290,7 +290,9 @@ of the host.
   `workspace.updated`, so every client converges on the push) / **`workspace.watchReady`** (await the
   fresh watcher's conservative startup nudge before a skill-loading client captures its freshness baseline;
   `{ startupNudge }` is true unless the watcher was already known ready, so a replayed response can supply
-  the client's conservative fallback when the event push was lost or startup failed) / **`git.status`** +
+  the client's conservative fallback when the event push was lost or startup failed; an optional
+  `prewarm: true` marks the started watcher as prewarm-only — the host keeps those in a globally bounded,
+  evictable pool and any real preflight/read promotes them out of it, see the server `watch` SPEC) / **`git.status`** +
   **`git.diffFile`**, both
   taking an optional **`scope: GitDiffScope`** (an unresolvable scope — a commit a rebase removed — is
   *rejected*, which the panel reads as "reset the scope" instead of staying wedged on a dead sha) /

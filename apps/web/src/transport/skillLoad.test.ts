@@ -110,3 +110,97 @@ test("skill-load requests share startup, fold the replay fallback before the bas
 	expect(order.filter((step) => step === "fallback")).toHaveLength(1);
 	expect(order.at(-1)).toBe("reload");
 });
+
+test("a prewarm-started preparation never becomes a real load's baseline: the first real load re-prepares with the real flag", async () => {
+	let resolvePrewarm: (result: WorkspaceWatchReadyResult) => void = () => {};
+	const prewarmReady = new Promise<WorkspaceWatchReadyResult>((resolve) => {
+		resolvePrewarm = resolve;
+	});
+	let resolveReal: (result: WorkspaceWatchReadyResult) => void = () => {};
+	const realReady = new Promise<WorkspaceWatchReadyResult>((resolve) => {
+		resolveReal = resolve;
+	});
+	const watchCalls: boolean[] = [];
+	const requests = createSkillLoadRequests({
+		watchReady: (_workspaceId, prewarm) => {
+			watchCalls.push(prewarm);
+			if (watchCalls.length > 2) return Promise.resolve({ startupNudge: false });
+			return prewarm ? prewarmReady : realReady;
+		},
+		noteFsChanged: () => {},
+		workspaceTick: () => 3,
+		createSession: async () => ({ sessionId: "created", model: null, thinkingLevel: "medium" }),
+		getSessionMessages: async ({ sessionId, workspaceId }) => ({
+			summary: {
+				sessionId,
+				workspaceId,
+				title: "Chat",
+				model: null,
+				thinkingLevel: "medium",
+				isStreaming: false,
+				messageCount: 0,
+				updatedAt: 1,
+				live: false,
+			},
+			messages: [],
+		}),
+		reloadSessionResources: async () => ({ ok: true }),
+	});
+
+	const prewarming = requests.prewarmWorkspaceSkillLoad("ws1");
+	const prewarmingAgain = requests.prewarmWorkspaceSkillLoad("ws1");
+	expect(watchCalls).toEqual([true]);
+
+	const creating = requests.createSession({ workspaceId: "ws1" });
+	expect(watchCalls).toEqual([true, false]);
+
+	const prewarmingDuringReal = requests.prewarmWorkspaceSkillLoad("ws1");
+	expect(watchCalls).toEqual([true, false]);
+
+	resolvePrewarm({ startupNudge: true });
+	resolveReal({ startupNudge: false });
+	const [created] = await Promise.all([
+		creating,
+		prewarming,
+		prewarmingAgain,
+		prewarmingDuringReal,
+	]);
+	expect(created.syncedTick).toBe(3);
+
+	await requests.prewarmWorkspaceSkillLoad("ws1");
+	expect(watchCalls).toEqual([true, false, true]);
+});
+
+test("a failed prewarm leaves the eventual session load able to retry preparation", async () => {
+	const watchCalls: boolean[] = [];
+	const requests = createSkillLoadRequests({
+		watchReady: async (_workspaceId, prewarm) => {
+			watchCalls.push(prewarm);
+			if (prewarm) throw new Error("watch failed");
+			return { startupNudge: false };
+		},
+		noteFsChanged: () => {},
+		workspaceTick: () => 7,
+		createSession: async () => ({ sessionId: "created", model: null, thinkingLevel: "medium" }),
+		getSessionMessages: async ({ sessionId, workspaceId }) => ({
+			summary: {
+				sessionId,
+				workspaceId,
+				title: "Chat",
+				model: null,
+				thinkingLevel: "medium",
+				isStreaming: false,
+				messageCount: 0,
+				updatedAt: 1,
+				live: false,
+			},
+			messages: [],
+		}),
+		reloadSessionResources: async () => ({ ok: true }),
+	});
+
+	await expect(requests.prewarmWorkspaceSkillLoad("ws1")).rejects.toThrow("watch failed");
+	const loaded = await requests.getSessionMessages({ workspaceId: "ws1", sessionId: "disk" });
+	expect(watchCalls).toEqual([true, false]);
+	expect(loaded.syncedTick).toBe(7);
+});

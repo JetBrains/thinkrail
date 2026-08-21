@@ -334,6 +334,80 @@ test("a deleted-and-recreated worktree root (same path, new inode) is re-watched
 	expect(payloads.some((p) => p.workspaceId === "ws1")).toBe(true);
 });
 
+function seedWorkspaces(ids: string[]): Map<string, string> {
+	const roots = new Map<string, string>();
+	for (const id of ids) {
+		const root = join(dataDir, `worktree-${id}`);
+		mkdirSync(root, { recursive: true });
+		roots.set(id, root);
+	}
+	writeFileSync(
+		join(dataDir, "workspaces.json"),
+		JSON.stringify(
+			ids.map((id) => ({
+				id,
+				projectId: "p1",
+				name: id,
+				branch: id,
+				worktreePath: roots.get(id),
+				baseBranch: "main",
+			})),
+		),
+	);
+	return roots;
+}
+
+const isSettled = (promise: Promise<unknown>): Promise<boolean> =>
+	Promise.race([promise.then(() => true), sleep(10).then(() => false)]);
+
+test("prewarm-only watchers are globally capped: the oldest is evicted, real watchers never are", async () => {
+	const prewarmIds = Array.from({ length: 9 }, (_, i) => `p${i + 1}`);
+	seedWorkspaces(["real1", ...prewarmIds]);
+	const realReady = ensureWatch("real1");
+	const readies = new Map(
+		prewarmIds.slice(0, 8).map((id) => [id, ensureWatch(id, { prewarm: true })]),
+	);
+	expect(await isSettled(realReady)).toBe(false);
+	for (const ready of readies.values()) expect(await isSettled(ready)).toBe(false);
+
+	ensureWatch("p9", { prewarm: true });
+	const evicted = readies.get("p1");
+	if (!evicted) throw new Error("missing p1 readiness");
+	expect(await evicted).toEqual({ startupNudge: true });
+	expect(await isSettled(readies.get("p2") ?? Promise.resolve())).toBe(false);
+	expect(await isSettled(realReady)).toBe(false);
+});
+
+test("a real read promotes a prewarmed watcher out of prewarm eviction", async () => {
+	const prewarmIds = Array.from({ length: 10 }, (_, i) => `p${i + 1}`);
+	seedWorkspaces(prewarmIds);
+	const promoted = ensureWatch("p1", { prewarm: true });
+	expect(ensureWatch("p1")).toBe(promoted);
+	const readies = new Map(
+		prewarmIds.slice(1, 9).map((id) => [id, ensureWatch(id, { prewarm: true })]),
+	);
+	expect(await isSettled(promoted)).toBe(false);
+
+	ensureWatch("p10", { prewarm: true });
+	expect(await isSettled(readies.get("p2") ?? Promise.resolve())).toBe(true);
+	expect(await isSettled(promoted)).toBe(false);
+	expect(await isSettled(readies.get("p3") ?? Promise.resolve())).toBe(false);
+});
+
+test("re-prewarming an alive prewarm-only watcher refreshes its eviction recency", async () => {
+	const prewarmIds = Array.from({ length: 9 }, (_, i) => `p${i + 1}`);
+	seedWorkspaces(prewarmIds);
+	const first = ensureWatch("p1", { prewarm: true });
+	const readies = new Map(
+		prewarmIds.slice(1, 8).map((id) => [id, ensureWatch(id, { prewarm: true })]),
+	);
+	expect(ensureWatch("p1", { prewarm: true })).toBe(first);
+
+	ensureWatch("p9", { prewarm: true });
+	expect(await isSettled(readies.get("p2") ?? Promise.resolve())).toBe(true);
+	expect(await isSettled(first)).toBe(false);
+});
+
 test("a watcher whose workspace record is gone is reaped on the next ensureWatch", async () => {
 	ensureWatch("ws1");
 	await sleep(100);

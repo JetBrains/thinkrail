@@ -438,7 +438,10 @@ const handlers: Record<string, Handler> = {
 		const p = params as { id: string; ref: string | null };
 		return setWorkspaceDiffBase(p.id, p.ref);
 	},
-	"workspace.watchReady": (params) => ensureWatch((params as { workspaceId: string }).workspaceId),
+	"workspace.watchReady": (params) => {
+		const p = params as { workspaceId: string; prewarm?: boolean };
+		return ensureWatch(p.workspaceId, { prewarm: p.prewarm === true });
+	},
 	"session.reloadResources": async (params) => {
 		await reloadSessionResources((params as { sessionId: string }).sessionId);
 		return { ok: true } as const;

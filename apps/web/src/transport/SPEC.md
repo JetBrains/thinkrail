@@ -70,13 +70,22 @@ The single WebSocket client to the host, and its app-wide singleton.
   specific failure" from "the read failed"); `skillLoad.ts` (the one app-integration coordinator for session
   resource loads: single-flight `workspace.watchReady` per workspace; unless the watcher was already known
   ready, fold the conservative `skillChange: "unknown"` wildcard locally as a replay-safe fallback; capture
-  the store tick only
-  afterward; then wrappers issue `session.create` / `session.getMessages` / `session.reloadResources`, so no
-  call site can accidentally reverse readiness and baseline ordering. The `session.getMessages` wrapper also
-  rejects unless the returned summary exactly matches both requested workspace and session, making that
-  untrusted-response identity check one shared installation boundary rather than a caller convention).
-- **Public surface (barrel):** `initTransport`, `getTransport`, the three skill-load-safe session request
-  wrappers, `errorText`, `RequestError`, `wsErrorCode`, `ConnectionStatus`, `TransportOptions`.
+  the store tick only afterward. Its narrow `prewarmWorkspaceSkillLoad` entry lets a workspace navigator start
+  that same preparation before selection without duplicating readiness/fallback policy; failures remain
+  retryable by the eventual load. A prewarm preparation is flagged on the wire (`prewarm: true` — the host
+  keeps prewarm-only watchers in a bounded, evictable pool) and **never becomes a real load's baseline**:
+  the first real load always runs its own real-flagged preparation — answered instantly while the watcher is
+  still warm, and re-creating/promoting it (fresh conservative nudge included) when it was evicted — so an
+  evicted prewarm can never leave a session on a stale freshness baseline, while prewarms freely ride any
+  in-flight preparation and a settled prewarm re-issues (re-warming an evicted watcher on project
+  re-selection stays cheap). The wrappers then issue `session.create` / `session.getMessages` /
+  `session.reloadResources`, so no call site can accidentally reverse readiness and baseline ordering. The
+  `session.getMessages` wrapper also rejects unless the returned summary exactly matches both requested
+  workspace and session, making that untrusted-response identity check one shared installation boundary rather
+  than a caller convention).
+- **Public surface (barrel):** `initTransport`, `getTransport`, `prewarmWorkspaceSkillLoad`, the three
+  skill-load-safe session request wrappers, `errorText`, `RequestError`, `wsErrorCode`, `ConnectionStatus`,
+  `TransportOptions`.
 - **Allowed deps:** `contracts` (method maps, `WS_CHANNELS`, `Project` for welcome + `project.updated`, `SessionEventPayload`
   for `pi.event`, `ExtUiRequest` for `pi.extensionUi`, `Workspace` for `workspace.created`/`updated`,
   `WorkspaceRemoved` for `workspace.removed`, `SessionDeletedPayload` for `session.deleted`,

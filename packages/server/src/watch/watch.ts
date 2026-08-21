@@ -12,6 +12,7 @@ const QUIET_MS = 300;
 const MAX_WAIT_MS = 1000;
 const MAX_PATHS = 100;
 const STARTUP_NUDGE_MS = 750;
+const MAX_PREWARM_ONLY_WATCHES = 8;
 
 const IGNORED_SEGMENTS = new Set([".git", "node_modules"]);
 const IGNORED_NAMES = new Set([".DS_Store"]);
@@ -111,6 +112,7 @@ interface WatchEntry {
 	ready: Promise<WorkspaceWatchReadyResult>;
 	resolveReady: (result: WorkspaceWatchReadyResult) => void;
 	readySettled: boolean;
+	prewarmOnly: boolean;
 	metaTimer: ReturnType<typeof setTimeout> | null;
 	metaWatcher: FSWatcher | null;
 }
@@ -123,7 +125,17 @@ function settleReady(entry: WatchEntry): void {
 	entry.resolveReady(STARTUP_NUDGE);
 }
 
-export function ensureWatch(workspaceId: string): Promise<WorkspaceWatchReadyResult> {
+function evictExcessPrewarmOnlyWatches(): void {
+	const prewarmOnlyIds = [...entries].filter(([, e]) => e.prewarmOnly).map(([id]) => id);
+	const excess = prewarmOnlyIds.length - MAX_PREWARM_ONLY_WATCHES;
+	for (const id of prewarmOnlyIds.slice(0, Math.max(0, excess))) stopWatch(id);
+}
+
+export function ensureWatch(
+	workspaceId: string,
+	options?: { prewarm?: boolean },
+): Promise<WorkspaceWatchReadyResult> {
+	const prewarm = options?.prewarm === true;
 	const workspaces = loadWorkspaces();
 	for (const id of [...entries.keys()]) {
 		if (!workspaces.some((w) => w.id === id)) stopWatch(id);
@@ -139,10 +151,16 @@ export function ensureWatch(workspaceId: string): Promise<WorkspaceWatchReadyRes
 		return startupFallback;
 	}
 	const existing = entries.get(workspaceId);
-	if (existing) {
-		if (existing.rootIno === rootIno) return existing.readySettled ? alreadyReady : existing.ready;
-		stopWatch(workspaceId);
+	if (existing && existing.rootIno === rootIno) {
+		if (!prewarm) existing.prewarmOnly = false;
+		else if (existing.prewarmOnly) {
+			entries.delete(workspaceId);
+			entries.set(workspaceId, existing);
+		}
+		return existing.readySettled ? alreadyReady : existing.ready;
 	}
+	const replacesRealWatch = existing !== undefined && !existing.prewarmOnly;
+	if (existing) stopWatch(workspaceId);
 
 	const coalescer = createCoalescer({
 		quietMs: QUIET_MS,
@@ -184,10 +202,12 @@ export function ensureWatch(workspaceId: string): Promise<WorkspaceWatchReadyRes
 			ready,
 			resolveReady,
 			readySettled: false,
+			prewarmOnly: prewarm && !replacesRealWatch,
 			metaTimer: null,
 			metaWatcher: null,
 		};
 		entries.set(workspaceId, entry);
+		if (entry.prewarmOnly) evictExcessPrewarmOnlyWatches();
 		entry.nudgeTimer = setTimeout(() => {
 			if (entries.get(workspaceId) !== entry) return;
 			entry.nudgeTimer = null;
