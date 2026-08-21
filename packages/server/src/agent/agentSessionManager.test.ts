@@ -13,6 +13,7 @@ import type { AgentSettlement, ExtUiRequest } from "@thinkrail/contracts";
 import {
 	buildSessionSettings,
 	clampThinkingForModel,
+	clearQueueSession,
 	createSession,
 	deleteSession,
 	disposeAllSessions,
@@ -849,6 +850,49 @@ test("followUpSession on an IDLE session runs the turn — pi's follow-up queue 
 		setSessionManagerFactory(() => SessionManager.inMemory());
 	}
 });
+
+test("mid-stream followUpSession queues: the summary snapshot carries it, clearQueueSession hands it back", async () => {
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	const slow = createFauxCore({
+		provider: "fauxq",
+		api: "fauxq",
+		models: [modelDef("fauxq")],
+		tokensPerSecond: 40,
+	});
+	runtime.registerProvider("fauxq", cfg(slow, "fauxq"));
+	try {
+		slow.setResponses([fauxAssistantMessage(`SLOW_TURN ${"word ".repeat(80)}END`)]);
+		const cwd = tmpCwd("trpi-queue-");
+		const s = await createSession({
+			cwd,
+			workspaceId: "ws-queue",
+			model: toWireModel(slow.getModel()),
+		});
+		const turn = promptSession(s.sessionId, "stream slowly");
+		turn.catch(() => {});
+		const deadline = Date.now() + 5000;
+		while (!seen(s.sessionId).includes("message_update")) {
+			if (Date.now() > deadline) throw new Error("first turn never started streaming");
+			await new Promise((resolve) => setTimeout(resolve, 20));
+		}
+		await followUpSession(s.sessionId, "queued line");
+
+		const summary = (await listSessions("ws-queue", cwd)).find(
+			(row) => row.sessionId === s.sessionId,
+		);
+		expect(summary?.queue).toEqual({ steering: [], followUp: ["queued line"] });
+		expect(seen(s.sessionId)).toContain("queue_update");
+
+		expect(clearQueueSession(s.sessionId)).toEqual({ steering: [], followUp: ["queued line"] });
+		expect(clearQueueSession(s.sessionId)).toEqual({ steering: [], followUp: [] });
+
+		await turn;
+		removeSession(s.sessionId);
+	} finally {
+		runtime.unregisterProvider("fauxq");
+		setSessionManagerFactory(() => SessionManager.inMemory());
+	}
+}, 20000);
 
 test("removeWorkspaceSessions: archives a workspace's live sessions + purges their on-disk transcripts, leaving siblings", async () => {
 	setSessionManagerFactory((cwd) => SessionManager.create(cwd));

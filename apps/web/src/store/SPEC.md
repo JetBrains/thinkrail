@@ -222,8 +222,15 @@ snapshots plus device-local attention, terminal catalogs, and one **per-session 
   the persisted transcript's final conversational message is current (historical `length` attempts followed
   by later work must not become stale warnings). Hydration is a no-op if a runtime already exists, so a
   live/ahead chat is never clobbered. The
-  pure **`reduceSessionEvent`** folds a `PiEvent` into a runtime. Composer user messages enter
-  optimistically: an equal Pi `message_start` echo is ignored, while Pi's canonical expanded `<skill>`
+  pure **`reduceSessionEvent`** folds a `PiEvent` into a runtime. **Only idle sends enter the transcript
+  optimistically** (`ChatView.onSubmit` → `appendUserMessage`); the last-turn echo dedup below is
+  sufficient precisely because nothing intervenes before the echo. A **streaming send (`steer`/`followUp`)
+  never appends a turn**: its text lives in `queue` (folded verbatim from pi's `queue_update`, seeded from
+  the summary's snapshot at hydration) and the turn lands only via pi's canonical user `message_start` —
+  at its true position, converging live with hydrated. (Mirrors pi's own interactive mode; replaces the
+  optimistic-append-for-everything model whose last-turn dedup missed whenever assistant content landed
+  between the append and the echo — reproduced live as a duplicated, mispositioned queued bubble.)
+  For the idle echo: an equal Pi `message_start` echo is ignored, while Pi's canonical expanded `<skill>`
   echo **replaces** the immediately preceding matching raw `/skill:<name> …` turn in place (same turn id),
   so live and hydrated transcripts both contain one canonical skill invocation; a malformed or mismatched
   block appends normally. **`handlePiEvent(event,

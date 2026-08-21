@@ -274,6 +274,20 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   skill overrides, + a **Reload** that applies changes to this chat's session via `session.reloadResources`,
   disabled while streaming) or project (`project.skills`, per-project-baseline toggles, no session) — the
   latter reused by `panels` pre-session). All props-driven; behavior detail lives in the components' jsdoc.
+- **Queued messages: the pending strip** (`QueueStrip.tsx`, props-driven: `queue` + `onDequeue`) — the
+  web mirror of pi's interactive-mode pending-messages area. A **streaming send never renders an
+  optimistic transcript bubble** (see the store SPEC's echo contract): `ChatView.onSubmit` skips
+  `appendUserMessage` for `steer`/`followUp`, and the queued texts render between transcript and
+  composer as one dim clickable strip — a truncated `Steering:`/`Follow-up:` line per message
+  (`queue-strip`/`queue-item` testids, `data-kind`) + an edit hint, sourced from the runtime's `queue`.
+  **Dequeue = click**: `session.clearQueue` returns the texts and `ChatView` prepends them to the draft
+  (queued first, `\n\n`-joined — pi's own restore order); the strip clears via pi's emptying
+  `queue_update`. **Abort restores the queue too** (`onAbort` dequeues first, then `session.abort`) —
+  pi's Escape parity: an aborted run must not silently discard messages the user queued behind it. A
+  **rejected** streaming send likewise restores its text to the draft alongside the `appendErrorTurn`
+  (no bubble holds it anymore). Trade-off, accepted: `queue_update` carries text only, so a queued
+  image attachment shows no chip in the strip; the canonical transcript turn later renders its image
+  blocks with the hydrated-turn fallback labels. E2e: `queue.live.spec.ts` (@agent).
 - **History overlay: zoomed preview pane + scope picker** (`HistoryOverlay.tsx`) — `Tab` grows the
   compact single-column overlay into a **two-pane** `zoomed` layout: the existing Prompts/Messages
   sections list stays on the left (~55% width, `data-testid="history-results"` — keyboard nav,

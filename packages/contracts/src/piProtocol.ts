@@ -98,6 +98,11 @@ export interface SessionStats {
 	contextUsage?: ContextUsage;
 }
 
+export interface SessionQueueState {
+	steering: readonly string[];
+	followUp: readonly string[];
+}
+
 export interface SessionSummary {
 	sessionId: string;
 	workspaceId: string;
@@ -110,6 +115,7 @@ export interface SessionSummary {
 	live: boolean;
 	openTodos?: number;
 	lastSettlement?: AgentSettlement | null;
+	queue?: SessionQueueState;
 }
 
 export type SlashCommandSource = "extension" | "prompt" | "skill";
