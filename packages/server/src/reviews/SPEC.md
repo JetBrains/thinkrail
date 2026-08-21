@@ -22,7 +22,10 @@ re-anchoring, and package rendering. Design + user-confirmed decisions: [[task-r
   awaits git (the pinned base resolves through the async scope resolver), so it is **single-flighted per
   workspace**: the unlocked `review.get` read and a locked mutation racing through that window would
   otherwise each save a distinct fresh review, the last silently replacing the other's (possibly
-  already-mutated) snapshot. Creation is the **only** await a snapshot pass may span: every
+  already-mutated) snapshot. `freshSnapshot` re-checks workspace liveness **after** its git await, so
+  neither the creation flight nor `clearReview` can save past a `workspace.remove` that already purged
+  the review file (`removeWorkspaceReviews`) — an unchecked save would resurrect it as an orphan in the
+  data dir. Creation is the **only** await a snapshot pass may span: every
   load→mutate→persist over the open snapshot runs synchronously — the unlocked read's re-anchor pass
   (`getReviewSnapshot`) included, and `addComment` resolves its base-side ref *before* taking the
   snapshot — because the review lock covers only mutations, and a pass holding a snapshot across an

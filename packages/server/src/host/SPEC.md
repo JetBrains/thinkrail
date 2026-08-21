@@ -160,7 +160,9 @@ channel fan-out, and the process-boot wrapper both launchers share.
     on-disk transcripts for the cwd) → `reclaimWorktree` (`git worktree remove`; a hard no-op for an
     external one). So the user never waits
     for the git subprocess + session abort. **Ordering holds:** terminals (sync) and sessions (bg, before
-    the reclaim) are down before the dir is deleted, since they hold it as cwd. Best-effort by contract —
+    the reclaim) are down before the dir is deleted, since they hold it as cwd, and the workspace's
+    todo-mutation queue is settled (`settleChangeArtifacts`) between the two — an in-flight reconcile's
+    plan/baseline writes land before the reclaim that sweeps them, never after it into a resurrected dir. Best-effort by contract —
     a failed background teardown is `console.warn`ed, never thrown into the void (nothing awaits it), like
     the auto-rename tee. **Archive keeps the branch but not the chat:** the git branch stays (code is
     recoverable), yet chat history is purged with the worktree — a deliberate scope choice, not a leak.
