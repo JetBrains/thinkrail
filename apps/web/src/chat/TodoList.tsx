@@ -13,6 +13,7 @@ import {
 	UserRound,
 } from "lucide-react";
 import { useState } from "react";
+import { IconTooltip } from "../components/ui/tooltip";
 import { cn } from "../lib";
 import { PlanStatusIcon, SectionLabel } from "./planKit";
 import {
@@ -89,16 +90,17 @@ export function TodoAddRow({
 				className="min-w-0 flex-1 bg-transparent tr-text-ui text-text-default outline-none placeholder:text-text-muted"
 			/>
 			{onOpenPlan ? (
-				<button
-					type="button"
-					data-testid="todo-open-plan"
-					onClick={onOpenPlan}
-					aria-label="Open the plan page"
-					title="Open the plan as a page — review each step's changes"
-					className="flex size-6 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted hover:bg-control-bg-hovered hover:text-text-default focus-visible:opacity-100"
-				>
-					<FileText className="size-3.5" />
-				</button>
+				<IconTooltip label="Open the plan as a page — review each step's changes">
+					<button
+						type="button"
+						data-testid="todo-open-plan"
+						onClick={onOpenPlan}
+						aria-label="Open the plan page"
+						className="flex size-6 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted hover:bg-control-bg-hovered hover:text-text-default focus-visible:opacity-100"
+					>
+						<FileText className="size-3.5" />
+					</button>
+				</IconTooltip>
 			) : null}
 		</div>
 	);
@@ -362,15 +364,16 @@ function TodoRow({
 					<UserRound className="size-3.5" />
 				</span>
 			) : null}
-			<button
-				type="button"
-				onClick={onRemove}
-				aria-label="Remove"
-				title="Remove"
-				className="flex size-6 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted opacity-0 transition-opacity hover:bg-container-elevated-bg hover:text-feedback-error group-hover:opacity-100 focus-visible:opacity-100"
-			>
-				<Trash2 className="size-3.5" />
-			</button>
+			<IconTooltip label="Remove">
+				<button
+					type="button"
+					onClick={onRemove}
+					aria-label="Remove"
+					className="flex size-6 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted opacity-0 transition-opacity hover:bg-container-elevated-bg hover:text-feedback-error group-hover:opacity-100 focus-visible:opacity-100"
+				>
+					<Trash2 className="size-3.5" />
+				</button>
+			</IconTooltip>
 		</li>
 	);
 }

@@ -25,4 +25,25 @@ function TooltipContent({
 	);
 }
 
-export { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger };
+function IconTooltip({
+	label,
+	side,
+	align,
+	children,
+}: {
+	label: React.ReactNode;
+	side?: React.ComponentProps<typeof TooltipPrimitive.Content>["side"];
+	align?: React.ComponentProps<typeof TooltipPrimitive.Content>["align"];
+	children: React.ReactNode;
+}) {
+	return (
+		<Tooltip>
+			<TooltipTrigger asChild>{children}</TooltipTrigger>
+			<TooltipContent {...(side ? { side } : {})} {...(align ? { align } : {})}>
+				{label}
+			</TooltipContent>
+		</Tooltip>
+	);
+}
+
+export { IconTooltip, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger };

@@ -3,6 +3,7 @@ import { Puzzle, RefreshCw, ShieldCheck } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { IconTooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { toast, useAppStore } from "@/store";
 import { errorText, getTransport, reloadSessionResourcesWithSkillBaseline } from "@/transport";
@@ -207,21 +208,26 @@ export function SkillsDialog({
 				<div className="flex items-center justify-between gap-sm pr-8">
 					<DialogTitle className="tr-text-ui text-text-default">Skills</DialogTitle>
 					{workspace ? (
-						<Button
-							size="sm"
-							variant="outline"
-							data-testid="skills-reload"
-							disabled={busy || workspace.streaming}
-							title={
+						<IconTooltip
+							label={
 								workspace.streaming
 									? "Available once the current turn finishes"
 									: "Apply to this chat"
 							}
-							onClick={() => void reload()}
 						>
-							<RefreshCw className="size-3.5" />
-							Reload
-						</Button>
+							<span className="flex">
+								<Button
+									size="sm"
+									variant="outline"
+									data-testid="skills-reload"
+									disabled={busy || workspace.streaming}
+									onClick={() => void reload()}
+								>
+									<RefreshCw className="size-3.5" />
+									Reload
+								</Button>
+							</span>
+						</IconTooltip>
 					) : null}
 				</div>
 

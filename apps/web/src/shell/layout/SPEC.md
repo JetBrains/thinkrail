@@ -104,7 +104,18 @@ or New group below. Tab strips implement the WAI-ARIA tabs pattern and
 visible roving focus; a folded side group retains its linked native-hidden tabpanel while unmounting the body,
 and separators expose orientation and current/min/max values. One-row strips have bounded
 readable tab widths, wheel/trackpad scrolling, previous/next controls, active reveal, and a searchable
-keyboard overflow list.
+keyboard overflow list. A control renders only when it can act: previous/next and the search list while
+the tab list overflows its scroller, the fold button while the side holds more than one group (or the
+group is already folded) — folding a lone group buys no space from a neighbour.
+
+Every side strip trails an add-to-this-group menu, so recovery does not depend on discovering the tab
+context menu. It offers app actions injected via `renderSideMenuActions(side, groupId)` (New terminal, right side only
+— the render prop keeps store-bound creation out of this module) above the tools `unplacedToolsForSide`
+reports for **this** side, so the two rails never offer the same tool. The tab context menu stays
+document-wide, being also the recovery path from a center tab. Both read "Show <tool>" — a tool may never
+have been opened. A terminal placed here lands in the group whose menu was used: `place-terminal` resolves
+its group id through `findGroupLocation` across every area, not center-only, unfolding a side target;
+with no requested group the prior fallback stands.
 
 ## Presets and synchronization
 

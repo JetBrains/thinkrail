@@ -31,14 +31,24 @@ import {
 	ListTodo,
 	MessageSquare,
 	MessageSquarePlus,
-	MoreHorizontal,
 	PanelLeftOpen,
 	PanelRightOpen,
 	PanelsTopLeft,
+	Plus,
+	Search,
 	SquareTerminal,
 	X,
 } from "lucide-react";
-import { Fragment, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+	Fragment,
+	type ReactNode,
+	useCallback,
+	useEffect,
+	useLayoutEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import {
 	Command,
 	CommandEmpty,
@@ -53,6 +63,13 @@ import {
 	ContextMenuSeparator,
 	ContextMenuTrigger,
 } from "../../components/ui/context-menu";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuSeparator,
+	DropdownMenuTrigger,
+} from "../../components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "../../components/ui/popover";
 import {
 	type ImperativePanelGroupHandle,
@@ -60,6 +77,7 @@ import {
 	ResizablePanel,
 	ResizablePanelGroup,
 } from "../../components/ui/resizable";
+import { IconTooltip } from "../../components/ui/tooltip";
 import {
 	DOUBLE_CLICK_SETTLE_MS,
 	type LayoutAttention,
@@ -84,7 +102,6 @@ import {
 	isLayoutUnavailable,
 	keepPreview,
 	LAYOUT_LIMITS,
-	LAYOUT_TOOLS,
 	type LayoutGroupLocation,
 	type LayoutMutationResult,
 	type LayoutOperationResult,
@@ -100,6 +117,8 @@ import {
 	showSide,
 	splitCenterGroup,
 	toolTab,
+	unplacedTools,
+	unplacedToolsForSide,
 } from "./model";
 
 export interface LayoutTabFocusRequest {
@@ -124,6 +143,7 @@ export interface WorkbenchProps {
 	renderToolBody: (tool: LayoutToolId) => ReactNode;
 	renderEmptyCenter: (groupId: string) => ReactNode;
 	renderCenterActions: (groupId: string) => ReactNode;
+	renderSideMenuActions: (side: LayoutSide, groupId: string) => ReactNode;
 	onCommit: (document: WorkspaceLayoutDocument) => void;
 	onAttentionChange: (attention: LayoutAttention) => void;
 	onUserNavigation: () => void;
@@ -430,6 +450,7 @@ function TabStrip({
 	const tabRefs = useRef(new Map<string, HTMLButtonElement>());
 	const overflowFocusTarget = useRef<string | null>(null);
 	const [overflowOpen, setOverflowOpen] = useState(false);
+	const [scrollable, setScrollable] = useState(false);
 	const selectTab = (tabId: string, keep?: boolean) => {
 		selectionEpoch.current += 1;
 		onSelect(tabId, keep);
@@ -456,6 +477,24 @@ function TabStrip({
 			tabRefs.current.get(selectedId)?.scrollIntoView({ block: "nearest", inline: "nearest" });
 	}, [selectedId]);
 
+	useLayoutEffect(() => {
+		const node = scroller.current;
+		if (!node) return;
+		const measure = () => {
+			const overflows = node.scrollWidth - node.clientWidth > 1;
+			setScrollable(overflows);
+			if (!overflows) setOverflowOpen(false);
+		};
+		const observer = new ResizeObserver(measure);
+		observer.observe(node);
+		for (const tab of tabs) {
+			const element = tabRefs.current.get(tab.id);
+			if (element) observer.observe(element);
+		}
+		measure();
+		return () => observer.disconnect();
+	}, [tabs]);
+
 	const selectAt = (index: number) => {
 		const tab = tabs[index];
 		if (!tab) return;
@@ -478,14 +517,18 @@ function TabStrip({
 			data-drop-active={groupDrop.isOver || undefined}
 			className="relative flex h-panel-header-row shrink-0 items-stretch border-border-default border-b bg-container-workspace-bg data-[drop-active]:bg-primary-subtle"
 		>
-			<button
-				type="button"
-				aria-label="Scroll tabs left"
-				onClick={() => scroller.current?.scrollBy({ left: -180, behavior: "smooth" })}
-				className="flex w-6 shrink-0 items-center justify-center border-border-muted border-r text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
-			>
-				<ChevronLeft className="size-3.5" />
-			</button>
+			{scrollable ? (
+				<IconTooltip label="Scroll tabs left">
+					<button
+						type="button"
+						aria-label="Scroll tabs left"
+						onClick={() => scroller.current?.scrollBy({ left: -180, behavior: "smooth" })}
+						className="flex w-6 shrink-0 items-center justify-center border-border-muted border-r text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+					>
+						<ChevronLeft className="size-3.5" />
+					</button>
+				</IconTooltip>
+			) : null}
 			<div
 				ref={scroller}
 				role="tablist"
@@ -565,55 +608,63 @@ function TabStrip({
 				) : null}
 			</div>
 			{trailing}
-			<button
-				type="button"
-				aria-label="Scroll tabs right"
-				onClick={() => scroller.current?.scrollBy({ left: 180, behavior: "smooth" })}
-				className="flex w-6 shrink-0 items-center justify-center border-border-muted border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
-			>
-				<ChevronRight className="size-3.5" />
-			</button>
-			<Popover open={overflowOpen} onOpenChange={setOverflowOpen}>
-				<PopoverTrigger
-					aria-label="Search open tabs"
-					className="flex w-7 shrink-0 items-center justify-center border-border-muted border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
-				>
-					<MoreHorizontal className="size-4" />
-				</PopoverTrigger>
-				<PopoverContent
-					align="end"
-					className="w-72 p-0"
-					onCloseAutoFocus={(event) => {
-						const targetId = overflowFocusTarget.current;
-						if (!targetId) return;
-						overflowFocusTarget.current = null;
-						event.preventDefault();
-						tabRefs.current.get(targetId)?.focus();
-					}}
-				>
-					<Command>
-						<CommandInput placeholder="Find an open tab…" />
-						<CommandList>
-							<CommandEmpty>No matching tabs.</CommandEmpty>
-							{tabs.map((tab) => (
-								<CommandItem
-									key={tab.id}
-									value={tab.id}
-									keywords={tabSearchKeywords(tab)}
-									onSelect={() => {
-										overflowFocusTarget.current = tab.id;
-										selectTab(tab.id);
-										setOverflowOpen(false);
-									}}
-								>
-									{tabIcon(tab)}
-									<span className="truncate">{tab.name}</span>
-								</CommandItem>
-							))}
-						</CommandList>
-					</Command>
-				</PopoverContent>
-			</Popover>
+			{scrollable ? (
+				<IconTooltip label="Scroll tabs right">
+					<button
+						type="button"
+						aria-label="Scroll tabs right"
+						onClick={() => scroller.current?.scrollBy({ left: 180, behavior: "smooth" })}
+						className="flex w-6 shrink-0 items-center justify-center border-border-muted border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+					>
+						<ChevronRight className="size-3.5" />
+					</button>
+				</IconTooltip>
+			) : null}
+			{scrollable ? (
+				<Popover open={overflowOpen} onOpenChange={setOverflowOpen}>
+					<IconTooltip label="Search open tabs">
+						<PopoverTrigger
+							aria-label="Search open tabs"
+							className="flex w-7 shrink-0 items-center justify-center border-border-muted border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+						>
+							<Search className="size-4" />
+						</PopoverTrigger>
+					</IconTooltip>
+					<PopoverContent
+						align="end"
+						className="w-72 p-0"
+						onCloseAutoFocus={(event) => {
+							const targetId = overflowFocusTarget.current;
+							if (!targetId) return;
+							overflowFocusTarget.current = null;
+							event.preventDefault();
+							tabRefs.current.get(targetId)?.focus();
+						}}
+					>
+						<Command>
+							<CommandInput placeholder="Find an open tab…" />
+							<CommandList>
+								<CommandEmpty>No matching tabs.</CommandEmpty>
+								{tabs.map((tab) => (
+									<CommandItem
+										key={tab.id}
+										value={tab.id}
+										keywords={tabSearchKeywords(tab)}
+										onSelect={() => {
+											overflowFocusTarget.current = tab.id;
+											selectTab(tab.id);
+											setOverflowOpen(false);
+										}}
+									>
+										{tabIcon(tab)}
+										<span className="truncate">{tab.name}</span>
+									</CommandItem>
+								))}
+							</CommandList>
+						</Command>
+					</PopoverContent>
+				</Popover>
+			) : null}
 		</div>
 	);
 }
@@ -716,7 +767,7 @@ function WorkbenchTab({
 		disabled: !acceptsAfter,
 	});
 	const groups = collectAllGroups(document);
-	const missingTools = LAYOUT_TOOLS.filter((tool) => !findPlacedResource(document, toolTab(tool)));
+	const missingTools = unplacedTools(document);
 	const splitReason = (direction: CenterSplitDirection): string | null => {
 		if (location.area !== "center") return "Only center tabs can split the center.";
 		if (tab.kind === "tool") return "Tools stay in a side region.";
@@ -981,7 +1032,7 @@ function WorkbenchTab({
 						<ContextMenuSeparator />
 						{missingTools.map((tool) => (
 							<ContextMenuItem key={tool} onSelect={() => onRevealTool(tool)}>
-								Restore {toolTab(tool).name}
+								Show {toolTab(tool).name}
 							</ContextMenuItem>
 						))}
 					</>
@@ -1022,6 +1073,7 @@ interface SharedGroupProps {
 	draggingTab: LayoutTab | null;
 	renderTabBody: WorkbenchProps["renderTabBody"];
 	renderTabAdornment: WorkbenchProps["renderTabAdornment"];
+	renderSideMenuActions: WorkbenchProps["renderSideMenuActions"];
 	onAttentionChange: WorkbenchProps["onAttentionChange"];
 	onUserNavigation: WorkbenchProps["onUserNavigation"];
 	onRemoteGestureCanceled: (() => void) | undefined;
@@ -1101,16 +1153,17 @@ function CenterGroupView({
 				trailing={
 					<>
 						{renderCenterActions(group.id)}
-						<button
-							type="button"
-							data-testid="new-chat"
-							aria-label="New chat"
-							title="New chat"
-							onClick={() => onNewChat(group.id)}
-							className="flex w-7 shrink-0 items-center justify-center text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
-						>
-							<MessageSquarePlus className="size-4" />
-						</button>
+						<IconTooltip label="New chat">
+							<button
+								type="button"
+								data-testid="new-chat"
+								aria-label="New chat"
+								onClick={() => onNewChat(group.id)}
+								className="flex w-7 shrink-0 items-center justify-center text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+							>
+								<MessageSquarePlus className="size-4" />
+							</button>
+						</IconTooltip>
 					</>
 				}
 			/>
@@ -1273,6 +1326,7 @@ function SideGroupView({
 	side,
 	group,
 	groupIndex,
+	foldable,
 	renderToolBody,
 	onFold,
 	...shared
@@ -1280,6 +1334,7 @@ function SideGroupView({
 	side: LayoutSide;
 	group: LayoutSideGroup;
 	groupIndex: number;
+	foldable: boolean;
 	renderToolBody: WorkbenchProps["renderToolBody"];
 	onFold: () => void;
 }) {
@@ -1364,25 +1419,38 @@ function SideGroupView({
 						onRevealTool={shared.onRevealTool}
 						canFocusAdjacentGroup={shared.canFocusAdjacentGroup}
 						renderTabAdornment={shared.renderTabAdornment}
+						trailing={
+							<SideGroupMenu
+								document={shared.document}
+								side={side}
+								groupId={group.id}
+								renderSideMenuActions={shared.renderSideMenuActions}
+								onRevealTool={shared.onRevealTool}
+							/>
+						}
 					/>
 				</div>
-				<button
-					type="button"
-					data-testid="side-group-fold"
-					aria-label={group.folded ? "Expand group" : "Fold group"}
-					aria-expanded={!group.folded}
-					onClick={onFold}
-					onKeyDown={(event) => {
-						if (event.key !== "Enter" && event.key !== " ") return;
-						event.preventDefault();
-						onFold();
-					}}
-					className="flex w-7 shrink-0 items-center justify-center border-border-muted border-b border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
-				>
-					<ChevronDown
-						className={`size-3.5 transition-transform ${group.folded ? "-rotate-90" : ""}`}
-					/>
-				</button>
+				{foldable ? (
+					<IconTooltip label={group.folded ? "Expand group" : "Fold group"}>
+						<button
+							type="button"
+							data-testid="side-group-fold"
+							aria-label={group.folded ? "Expand group" : "Fold group"}
+							aria-expanded={!group.folded}
+							onClick={onFold}
+							onKeyDown={(event) => {
+								if (event.key !== "Enter" && event.key !== " ") return;
+								event.preventDefault();
+								onFold();
+							}}
+							className="flex w-7 shrink-0 items-center justify-center border-border-muted border-b border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+						>
+							<ChevronDown
+								className={`size-3.5 transition-transform ${group.folded ? "-rotate-90" : ""}`}
+							/>
+						</button>
+					</IconTooltip>
+				) : null}
 			</div>
 			<div
 				id={groupPanelId(location)}
@@ -1404,6 +1472,50 @@ function SideGroupView({
 			</div>
 			{group.folded ? creationTargets : null}
 		</div>
+	);
+}
+
+function SideGroupMenu({
+	document,
+	side,
+	groupId,
+	renderSideMenuActions,
+	onRevealTool,
+}: {
+	document: WorkspaceLayoutDocument;
+	side: LayoutSide;
+	groupId: string;
+	renderSideMenuActions: WorkbenchProps["renderSideMenuActions"];
+	onRevealTool: (tool: LayoutToolId) => void;
+}) {
+	const missing = unplacedToolsForSide(document, side);
+	const actions = renderSideMenuActions(side, groupId);
+	if (missing.length === 0 && !actions) return null;
+	return (
+		<DropdownMenu>
+			<IconTooltip label="Add to this group">
+				<DropdownMenuTrigger
+					data-testid="side-group-menu"
+					aria-label="Add to this group"
+					className="flex w-7 shrink-0 items-center justify-center border-border-muted border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+				>
+					<Plus className="size-4" />
+				</DropdownMenuTrigger>
+			</IconTooltip>
+			<DropdownMenuContent align="end">
+				{actions}
+				{actions && missing.length > 0 ? <DropdownMenuSeparator /> : null}
+				{missing.map((tool) => (
+					<DropdownMenuItem
+						key={tool}
+						data-testid={`show-tool-${tool}`}
+						onSelect={() => onRevealTool(tool)}
+					>
+						Show {toolTab(tool).name}
+					</DropdownMenuItem>
+				))}
+			</DropdownMenuContent>
+		</DropdownMenu>
 	);
 }
 
@@ -1487,6 +1599,7 @@ function SideStack({
 								side={side}
 								group={group}
 								groupIndex={index}
+								foldable={region.groups.length > 1 || group.folded}
 								renderToolBody={renderToolBody}
 								onFold={() => {
 									const result = setSideGroupFolded(shared.document, side, group.id, !group.folded);
@@ -1573,20 +1686,23 @@ function HiddenSideRail({
 			data-drop-active={drop.isOver || undefined}
 			className="flex w-7 shrink-0 flex-col items-center border-border-default bg-container-sidebar-bg py-xs first:border-r last:border-l data-[drop-active]:bg-primary-subtle data-[drop-active]:ring-2 data-[drop-active]:ring-inset data-[drop-active]:ring-primary"
 		>
-			<button
-				type="button"
-				aria-label={`Show ${side} side`}
-				title={showEnabled ? `Show ${side} side` : `No ${side} groups to show`}
-				disabled={!showEnabled}
-				onClick={onShow}
-				className="flex size-6 items-center justify-center rounded-[var(--radius-sm)] text-text-muted hover:bg-control-bg-hovered hover:text-text-default disabled:text-control-disabled-text disabled:hover:bg-transparent"
-			>
-				{side === "left" ? (
-					<PanelLeftOpen className="size-4" />
-				) : (
-					<PanelRightOpen className="size-4" />
-				)}
-			</button>
+			<IconTooltip label={showEnabled ? `Show ${side} side` : `No ${side} groups to show`}>
+				<span className="flex">
+					<button
+						type="button"
+						aria-label={`Show ${side} side`}
+						disabled={!showEnabled}
+						onClick={onShow}
+						className="flex size-6 items-center justify-center rounded-[var(--radius-sm)] text-text-muted hover:bg-control-bg-hovered hover:text-text-default disabled:pointer-events-none disabled:text-control-disabled-text"
+					>
+						{side === "left" ? (
+							<PanelLeftOpen className="size-4" />
+						) : (
+							<PanelRightOpen className="size-4" />
+						)}
+					</button>
+				</span>
+			</IconTooltip>
 		</div>
 	);
 }
@@ -1602,6 +1718,7 @@ export function Workbench({
 	renderToolBody,
 	renderEmptyCenter,
 	renderCenterActions,
+	renderSideMenuActions,
 	onCommit,
 	onAttentionChange,
 	onUserNavigation,
@@ -1982,6 +2099,7 @@ export function Workbench({
 		draggingTab,
 		renderTabBody,
 		renderTabAdornment,
+		renderSideMenuActions,
 		onAttentionChange,
 		onUserNavigation,
 		onRemoteGestureCanceled,

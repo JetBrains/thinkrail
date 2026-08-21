@@ -123,6 +123,15 @@ export function findTabLocation(
 	return null;
 }
 
+export function findGroupLocation(
+	document: WorkspaceLayoutDocument,
+	groupId: string,
+): LayoutGroupLocation | null {
+	return (
+		collectAllGroups(document).find((group) => group.location.groupId === groupId)?.location ?? null
+	);
+}
+
 export function findLayoutTab(document: WorkspaceLayoutDocument, tabId: string): LayoutTab | null {
 	for (const group of collectAllGroups(document)) {
 		const tab = group.tabs.find((candidate) => candidate.id === tabId);
@@ -323,6 +332,19 @@ export function findPlacedResource(
 		collectAllGroups(document)
 			.flatMap((group) => group.tabs)
 			.find((candidate) => layoutResourceIdentity(candidate) === identity) ?? null
+	);
+}
+
+export function unplacedTools(document: WorkspaceLayoutDocument): readonly LayoutToolId[] {
+	return LAYOUT_TOOLS.filter((tool) => findPlacedResource(document, toolTab(tool)) === null);
+}
+
+export function unplacedToolsForSide(
+	document: WorkspaceLayoutDocument,
+	side: LayoutSide,
+): readonly LayoutToolId[] {
+	return unplacedTools(document).filter(
+		(tool) => (document.toolRestoreTargets[tool]?.side ?? LAYOUT_TOOL_DEFAULT_SIDES[tool]) === side,
 	);
 }
 
@@ -730,14 +752,7 @@ export function hideSide(
 }
 
 export function canShowSide(document: WorkspaceLayoutDocument, side: LayoutSide): boolean {
-	return (
-		document[side].groups.length > 0 ||
-		TOOL_RESTORE_ORDER.some(
-			(tool) =>
-				(document.toolRestoreTargets[tool]?.side ?? LAYOUT_TOOL_DEFAULT_SIDES[tool]) === side &&
-				findPlacedResource(document, toolTab(tool)) === null,
-		)
-	);
+	return document[side].groups.length > 0 || unplacedToolsForSide(document, side).length > 0;
 }
 
 export function showSide(

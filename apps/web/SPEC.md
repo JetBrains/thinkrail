@@ -53,7 +53,7 @@ ThinkRail artwork as the shell logo (compact enough for browser-tab sizes and li
 `main.tsx` is the entry/composition root — it synchronously builds the bundled theme catalog, applies the
 cached first-paint theme hint pre-React, initializes transport + client-local navigation, then wraps `<Shell />` in
 `components/ErrorBoundary` as the last-resort boundary (a crash escaping every region shows a reload
-screen, not a blank root).
+screen, not a blank root) plus the app's single `TooltipProvider`.
 
 ### Dependency graph
 
@@ -179,7 +179,8 @@ workbench owns strips/groups around those bodies, never the panels themselves.
   generator that turns it into CSS is [scripts/SPEC.md](scripts/SPEC.md).
 - **Icons: `lucide-react`. Components: shadcn/ui** (Radix primitives), copy-in under `src/components/ui/`
   and themed with our token utilities (`cn()` in `src/lib/utils.ts`) — never shadcn's default oklch
-  palette. Use these for accessible menus / dialogs / tooltips.
+  palette. Use these for accessible menus / dialogs / tooltips; icon-only controls label themselves with
+  `IconTooltip`, never native `title`.
 
 ## Get right
 

@@ -14,12 +14,14 @@ import {
 	closeLayoutTab,
 	collectAllGroups,
 	findCenterGroup,
+	findGroupLocation,
 	findLayoutTab,
 	findPlacedResource,
 	findTabLocation,
 	hideSide,
 	isLayoutUnavailable,
 	keepPreview,
+	type LayoutGroupLocation,
 	type LayoutTabFocusRequest,
 	moveTabToGroup,
 	openCenterTab,
@@ -267,17 +269,37 @@ export function useLayoutIntentProcessing(
 					name: layoutIntent.title,
 					tabKey: layoutIntent.tabKey,
 				});
-				const requestedGroupId = currentRouting?.targetGroupId ?? layoutIntent.targetGroupId;
-				const requestedGroup = requestedGroupId
-					? findCenterGroup(document.center, requestedGroupId)
+				const explicitLocation = layoutIntent.targetGroupId
+					? findGroupLocation(document, layoutIntent.targetGroupId)
+					: null;
+				const requestedGroupId =
+					explicitLocation && explicitLocation.area !== "center"
+						? layoutIntent.targetGroupId
+						: (currentRouting?.targetGroupId ?? layoutIntent.targetGroupId);
+				const requestedLocation = requestedGroupId
+					? findGroupLocation(document, requestedGroupId)
 					: null;
 				if (requestedGroupId) {
-					const groupId =
-						requestedGroup?.id ??
-						findCenterGroup(document.center, attention.lastFocusedCenterGroupId)?.id ??
-						primaryCenterGroupId(document);
-					const moved = moveTabToGroup(document, tab, { area: "center", groupId });
-					if (!isLayoutUnavailable(moved)) result = moved;
+					const target: LayoutGroupLocation = requestedLocation ?? {
+						area: "center",
+						groupId:
+							findCenterGroup(document.center, attention.lastFocusedCenterGroupId)?.id ??
+							primaryCenterGroupId(document),
+					};
+					const moved = moveTabToGroup(document, tab, target);
+					if (!isLayoutUnavailable(moved)) {
+						result = moved;
+						if (target.area !== "center") {
+							const unfolded = setSideGroupFolded(
+								moved.document,
+								target.area,
+								target.groupId,
+								false,
+							);
+							if (!isLayoutUnavailable(unfolded))
+								result = { ...moved, document: unfolded.document };
+						}
+					}
 					break;
 				}
 				const target = document.right.groups.at(-1);
