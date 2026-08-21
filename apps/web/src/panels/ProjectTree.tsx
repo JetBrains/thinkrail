@@ -64,9 +64,7 @@ export function ProjectTree() {
 			.catch(() => {});
 	}, []);
 
-	const [expanded, setExpanded] = useState<Set<string>>(
-		() => new Set(selectedProjectId ? [selectedProjectId] : []),
-	);
+	const expandedProjectIds = useAppStore((s) => s.expandedProjectIds);
 	const [dialogProjectId, setDialogProjectId] = useState<string | null>(null);
 	const [existingDialogProjectId, setExistingDialogProjectId] = useState<string | null>(null);
 	const addProjectButtonRef = useRef<HTMLButtonElement>(null);
@@ -102,16 +100,10 @@ export function ProjectTree() {
 
 	const activeProjectId = useAppStore(selectActiveWorkspaceProjectId);
 	useEffect(() => {
-		if (!activeProjectId) return;
-		setExpanded((prev) => {
-			if (prev.has(activeProjectId)) return prev;
-			const next = new Set(prev);
-			next.add(activeProjectId);
-			return next;
-		});
+		if (activeProjectId) useAppStore.getState().expandProject(activeProjectId);
 	}, [activeProjectId]);
 
-	const loadWorkspaces = async (projectId: string) => {
+	const loadWorkspaces = useCallback(async (projectId: string) => {
 		const rows = await getTransport().request("workspace.list", { projectId });
 		const store = useAppStore.getState();
 		store.setWorkspaces(projectId, rows);
@@ -119,11 +111,22 @@ export function ProjectTree() {
 		for (const workspace of rows.slice(0, PREWARM_WORKSPACE_LIMIT)) {
 			void prewarmWorkspaceSkillLoad(workspace.id).catch(() => {});
 		}
-	};
+	}, []);
+
+	const pendingListLoadsRef = useRef(new Set<string>());
+	useEffect(() => {
+		for (const project of projects) {
+			if (!expandedProjectIds[project.id] || workspaces[project.id]) continue;
+			if (pendingListLoadsRef.current.has(project.id)) continue;
+			pendingListLoadsRef.current.add(project.id);
+			void loadWorkspaces(project.id)
+				.catch(() => {})
+				.finally(() => pendingListLoadsRef.current.delete(project.id));
+		}
+	}, [projects, expandedProjectIds, workspaces, loadWorkspaces]);
 
 	const selectProject = async (projectId: string) => {
-		useAppStore.getState().selectProject(projectId);
-		setExpanded((prev) => new Set(prev).add(projectId));
+		useAppStore.getState().selectProject(projectId, { reveal: true });
 		await loadWorkspaces(projectId);
 	};
 
@@ -132,16 +135,10 @@ export function ProjectTree() {
 	};
 
 	const toggleExpand = (projectId: string) => {
-		setExpanded((prev) => {
-			const next = new Set(prev);
-			if (next.has(projectId)) {
-				next.delete(projectId);
-			} else {
-				next.add(projectId);
-				void loadWorkspaces(projectId);
-			}
-			return next;
-		});
+		const store = useAppStore.getState();
+		const willExpand = !store.expandedProjectIds[projectId];
+		store.toggleProjectExpanded(projectId);
+		if (willExpand) void loadWorkspaces(projectId);
 	};
 
 	const { openProject, pickAndOpen, dialogs } = useOpenProject((project) =>
@@ -149,7 +146,7 @@ export function ProjectTree() {
 	);
 
 	const onWorkspaceCreated = async (workspace: Workspace) => {
-		setExpanded((prev) => new Set(prev).add(workspace.projectId));
+		useAppStore.getState().expandProject(workspace.projectId);
 		await loadWorkspaces(workspace.projectId);
 	};
 
@@ -159,8 +156,8 @@ export function ProjectTree() {
 		});
 		const attached = rows.find((candidate) => candidate.id === workspace.id);
 		if (!attached) throw new Error("The attached worktree is missing from the workspace list");
-		setExpanded((prev) => new Set(prev).add(workspace.projectId));
 		const store = useAppStore.getState();
+		store.expandProject(workspace.projectId);
 		store.setWorkspaces(workspace.projectId, rows);
 		store.activateWorkspace(attached);
 	};
@@ -234,7 +231,7 @@ export function ProjectTree() {
 
 			<ul className="flex flex-col">
 				{projects.map((project) => {
-					const isExpanded = expanded.has(project.id);
+					const isExpanded = expandedProjectIds[project.id] === true;
 					const list = workspaces[project.id];
 					return (
 						<li key={project.id}>

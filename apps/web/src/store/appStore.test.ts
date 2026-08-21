@@ -126,6 +126,7 @@ beforeEach(() => {
 		recentProjects: [],
 		workspaces: {},
 		removedWorkspaceIds: {},
+		expandedProjectIds: {},
 		selectedProjectId: null,
 		activeWorkspaceId: null,
 		activeLogin: null,
@@ -1387,6 +1388,38 @@ test("installProjectSnapshot sorts both projections and repairs navigation after
 	expect(state.activeWorkspaceId).toBeNull();
 	expect(state.workspaces.p2).toEqual([workspace]);
 	expect(state.tabsByWorkspace).toBe(tabs);
+});
+
+test("projects-rail expansion: gestures reveal, restore stays neutral, the chevron toggles", () => {
+	const p1 = project();
+	const p2 = project({ id: "p2", name: "Project two", path: "/projects/two", slug: "project-two" });
+	useAppStore.setState({ projects: [p1, p2], recentProjects: [p1, p2] });
+	const store = useAppStore.getState();
+
+	store.selectProject("p1");
+	expect(useAppStore.getState().expandedProjectIds).toEqual({});
+	store.selectProject("p1", { reveal: true });
+	expect(useAppStore.getState().expandedProjectIds).toEqual({ p1: true });
+	const before = useAppStore.getState().expandedProjectIds;
+	store.expandProject("p1");
+	expect(useAppStore.getState().expandedProjectIds).toBe(before);
+	store.toggleProjectExpanded("p1");
+	expect(useAppStore.getState().expandedProjectIds).toEqual({});
+	store.toggleProjectExpanded("p2");
+	expect(useAppStore.getState().expandedProjectIds).toEqual({ p2: true });
+	useAppStore.getState().applyProjectUpdated({ ...p2, closed: true });
+	expect(useAppStore.getState().expandedProjectIds).toEqual({});
+});
+
+test("hydrateExpandedProjects seeds the persisted mirror; the welcome snapshot prunes to the open rail", () => {
+	const p1 = project();
+	useAppStore.getState().hydrateExpandedProjects(["p1", "stale-closed-project"]);
+	expect(useAppStore.getState().expandedProjectIds).toEqual({
+		p1: true,
+		"stale-closed-project": true,
+	});
+	useAppStore.getState().installWelcomeSnapshot(1, [p1], [p1]);
+	expect(useAppStore.getState().expandedProjectIds).toEqual({ p1: true });
 });
 
 test("applyProjectUpdated closes a background project without moving the current workspace", () => {

@@ -4,6 +4,7 @@ import { basename, join } from "node:path";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import {
 	createWorkspaceViaDialog,
+	defaultWorkspaceRow,
 	openAppFresh,
 	openFixtureProject,
 	stagePlainFolder,
@@ -68,6 +69,58 @@ test("opening a non-git folder offers to initialise a repo, then opens it end-to
 
 	await createWorkspaceViaDialog(page);
 	await expect(worktreeRows(page).first()).toBeVisible();
+});
+
+test("rail expansion is per-browser view state that survives a reload", async ({ page }) => {
+	await openFixtureProject(page);
+	const row = page.getByTestId("project-item").filter({ hasText: "sample-project" });
+	const expand = row.getByTestId("project-expand");
+
+	await expect(expand).toHaveAttribute("data-expanded", "true");
+	await expect(defaultWorkspaceRow(page)).toBeVisible();
+
+	await page.reload();
+	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+	await expect(expand).toHaveAttribute("data-expanded", "true");
+	await expect(defaultWorkspaceRow(page)).toBeVisible();
+
+	await expand.click();
+	await expect(expand).toHaveAttribute("data-expanded", "false");
+	await page.reload();
+	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+	await expect(expand).toHaveAttribute("data-expanded", "false");
+	await expect(defaultWorkspaceRow(page)).toHaveCount(0);
+});
+
+test("activating a workspace in one project keeps the other project's rail expansion", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	seedSecondRepo();
+	await page.getByTestId("add-project-menu").click();
+	await page.getByTestId("menu-open-project").click();
+
+	const fixtureExpand = page
+		.getByTestId("project-item")
+		.filter({ hasText: "sample-project" })
+		.getByTestId("project-expand");
+	const secondExpand = page
+		.getByTestId("project-item")
+		.filter({ hasText: "second-project" })
+		.getByTestId("project-expand");
+	await expect(secondExpand).toHaveAttribute("data-expanded", "true");
+	await expect(fixtureExpand).toHaveAttribute("data-expanded", "true");
+
+	const fixtureDefaultRow = page
+		.locator("li")
+		.filter({ has: page.getByTestId("project-item").filter({ hasText: "sample-project" }) })
+		.locator('[data-testid="workspace-item"][data-kind="default"]');
+	await fixtureDefaultRow.click();
+	await expect(fixtureDefaultRow).toHaveAttribute("data-active", "true");
+	await expect(page.getByTestId("center-tabs")).toBeVisible();
+
+	await expect(secondExpand).toHaveAttribute("data-expanded", "true");
+	await expect(fixtureExpand).toHaveAttribute("data-expanded", "true");
 });
 
 test("project context actions stay compact and close/reopen is lossless across clients", async ({
