@@ -192,7 +192,10 @@ snapshots plus device-local attention, terminal catalogs, and one **per-session 
   chats are reopenable: the workbench close command first publishes the shared placement removal and only
   after host acceptance invokes **`closeChatToHistory`**, which **keeps the runtime + session alive** and
   records it in **`closedChatsByWorkspace`** (`ClosedChat[]`, per workspace, most-recent-first) and clears
-  any pending jump/history-open request for that session. File, diff, and registered-document render caches
+  any pending jump/history-open request for that session — but **never a `routeChatTarget`**: the close
+  acceptance is a delayed echo of an older click, while a route target may have been installed by a newer
+  Back/Forward to that very chat; target lifecycle belongs to navigation supersession (`navTick` currency)
+  and reconciliation consumption/absence, not to tab closure. File, diff, and registered-document render caches
   follow the same acceptance-before-removal order; once no layout
   write is pending, the shell reclaims only caches absent from both accepted placement and queued opens,
   without advancing user-navigation clocks. A newer remote restoration keeps or rehydrates them instead of

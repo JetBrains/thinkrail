@@ -1620,6 +1620,19 @@ test("activateWorkspaceFromRoute atomically stamps exact-chat intent", () => {
 	expect(useAppStore.getState()).toBe(before);
 });
 
+test("closeChatToHistory keeps a route target for the closed session", () => {
+	const workspace = pushedWorkspace();
+	useAppStore.setState({ workspaces: { p1: [workspace] } });
+	useAppStore.getState().openChatSession("w1", "s1", null, "medium");
+	useAppStore.getState().activateWorkspaceFromRoute(workspace, "s1");
+	const target = useAppStore.getState().routeChatTarget;
+	expect(target?.sessionId).toBe("s1");
+
+	useAppStore.getState().closeChatToHistory("s1", false, "w1", false);
+	expect(useAppStore.getState().closedChatsByWorkspace.w1?.[0]?.sessionId).toBe("s1");
+	expect(useAppStore.getState().routeChatTarget).toBe(target);
+});
+
 test("selectCurrentRouteChatTarget rejects overtaken or off-workspace intent", () => {
 	const workspace = pushedWorkspace();
 	useAppStore.setState({ workspaces: { p1: [workspace] } });
