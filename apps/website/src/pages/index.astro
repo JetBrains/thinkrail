@@ -1,0 +1,381 @@
+---
+import BaseHead from "../components/BaseHead.astro";
+import IdeShell from "../components/IdeShell.astro";
+---
+
+<!doctype html>
+<html lang="en" data-theme="dark">
+	<head>
+		<BaseHead />
+		<title>ThinkRail — the worktree IDE for the pi coding agent</title>
+		<meta
+			name="description"
+			content="Open a repo as a project, cut isolated git-worktree workspaces, and pair with the pi coding agent in a real IDE — Monaco tabs, terminals, diffs, concurrent chats, and a spec graph the agent actually reads. Open source, Apache-2.0, a JetBrains InnovationHub project."
+		/>
+		<link rel="canonical" href="https://thinkrail.ai/" />
+		<meta property="og:type" content="website" />
+		<meta property="og:title" content="ThinkRail — the worktree IDE for the pi coding agent" />
+		<meta
+			property="og:description"
+			content="Git-worktree workspaces, a real editor, terminals, concurrent agent chats, and a spec graph the agent reads. Open source, Apache-2.0."
+		/>
+		<meta property="og:url" content="https://thinkrail.ai/" />
+		<meta property="og:image" content="https://thinkrail.ai/og.png" />
+		<meta name="twitter:card" content="summary_large_image" />
+		<link rel="alternate" type="application/rss+xml" title="ThinkRail Blog" href="/blog/rss.xml" />
+	</head>
+	<body>
+		<IdeShell workspace="website" nav="landing" skipHref="#readme">
+			<nav class="tabstrip" aria-label="Editor tabs"></nav>
+
+			<main class="editor" id="editor-scroll" aria-label="Page content">
+				<!-- ── README.md ─ hero ── -->
+				<section class="file-section hero" id="readme" data-file="README.md">
+					<p class="file-comment">&lt;!-- README.md --&gt;</p>
+					<p class="hero-kicker">
+						<span class="pill pill-accent">JetBrains InnovationHub</span>
+						<span class="pill">Apache-2.0</span>
+						<span class="pill">open source</span>
+					</p>
+					<h1 class="hero-title">ThinkRail</h1>
+					<p class="hero-tagline">The worktree IDE for the <code>pi</code> coding agent.</p>
+					<p class="hero-lede">
+						Open a repo as a project. Cut isolated <strong>git-worktree workspaces</strong>. Pair
+						with a real agent across Monaco tabs, terminals, and diffs — while your project's
+						intent lives in a <strong>spec graph the agent actually reads</strong>.
+					</p>
+					<div class="install-picker install-picker-hero" data-install-picker>
+						<div class="install-frame">
+						<div class="install-tabs">
+							<div class="install-os-tabs" role="tablist" aria-label="Choose your operating system">
+								<button type="button" class="install-tab" role="tab" id="hero-install-macos-tab" aria-controls="hero-install-macos" aria-selected="false" tabindex="-1" data-install-platform="macos">macOS</button>
+								<button type="button" class="install-tab" role="tab" id="hero-install-linux-tab" aria-controls="hero-install-linux" aria-selected="true" data-install-platform="linux">Linux</button>
+								<button type="button" class="install-tab" role="tab" id="hero-install-windows-tab" aria-controls="hero-install-windows" aria-selected="false" tabindex="-1" data-install-platform="windows">Windows</button>
+							</div>
+							<div class="windows-shell-tabs" role="tablist" aria-label="Choose your Windows shell" hidden>
+								<button type="button" class="windows-shell-tab" role="tab" id="hero-shell-powershell-tab" aria-controls="hero-shell-powershell" aria-selected="true" data-windows-shell="powershell">PowerShell</button>
+								<button type="button" class="windows-shell-tab" role="tab" id="hero-shell-cmd-tab" aria-controls="hero-shell-cmd" aria-selected="false" tabindex="-1" data-windows-shell="cmd">Command Prompt</button>
+								<button type="button" class="windows-shell-tab" role="tab" id="hero-shell-wsl-tab" aria-controls="hero-shell-wsl" aria-selected="false" tabindex="-1" data-windows-shell="wsl">WSL</button>
+							</div>
+						</div>
+						<div class="install-panel" id="hero-install-macos" role="tabpanel" aria-labelledby="hero-install-macos-tab" data-install-panel="macos">
+							<p class="install-fallback-heading">macOS</p>
+							<div class="install-line">
+								<code>curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash</code>
+								<button type="button" class="copy-btn" data-copy="curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash" aria-label="Copy macOS install command">
+									<svg class="i" aria-hidden="true"><use href="#i-copy" /></svg>
+									<svg class="i i-done" aria-hidden="true"><use href="#i-check" /></svg>
+								</button>
+							</div>
+						</div>
+						<div class="install-panel" id="hero-install-linux" role="tabpanel" aria-labelledby="hero-install-linux-tab" data-install-panel="linux">
+							<p class="install-fallback-heading">Linux</p>
+							<div class="install-line">
+								<code>curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash</code>
+								<button type="button" class="copy-btn" data-copy="curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash" aria-label="Copy Linux install command">
+									<svg class="i" aria-hidden="true"><use href="#i-copy" /></svg>
+									<svg class="i i-done" aria-hidden="true"><use href="#i-check" /></svg>
+								</button>
+							</div>
+						</div>
+						<div class="install-panel" id="hero-install-windows" role="tabpanel" aria-labelledby="hero-install-windows-tab" data-install-panel="windows">
+							<p class="install-fallback-heading">Windows</p>
+							<div class="windows-shell-picker">
+								<div class="windows-shell-panel" id="hero-shell-powershell" role="tabpanel" aria-labelledby="hero-shell-powershell-tab" data-windows-shell-panel="powershell">
+									<p class="install-fallback-heading">PowerShell</p>
+									<div class="install-line">
+										<code>powershell -c "irm https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1 | iex"</code>
+										<button type="button" class="copy-btn" data-copy="powershell -c &quot;irm https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1 | iex&quot;" aria-label="Copy PowerShell install command">
+											<svg class="i" aria-hidden="true"><use href="#i-copy" /></svg>
+											<svg class="i i-done" aria-hidden="true"><use href="#i-check" /></svg>
+										</button>
+									</div>
+								</div>
+								<div class="windows-shell-panel" id="hero-shell-cmd" role="tabpanel" aria-labelledby="hero-shell-cmd-tab" data-windows-shell-panel="cmd">
+									<p class="install-fallback-heading">Command Prompt</p>
+									<div class="install-line">
+										<code>powershell -c "irm https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1 | iex"</code>
+										<button type="button" class="copy-btn" data-copy="powershell -c &quot;irm https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1 | iex&quot;" aria-label="Copy Command Prompt install command">
+											<svg class="i" aria-hidden="true"><use href="#i-copy" /></svg>
+											<svg class="i i-done" aria-hidden="true"><use href="#i-check" /></svg>
+										</button>
+									</div>
+								</div>
+								<div class="windows-shell-panel" id="hero-shell-wsl" role="tabpanel" aria-labelledby="hero-shell-wsl-tab" data-windows-shell-panel="wsl">
+									<p class="install-fallback-heading">WSL</p>
+									<div class="install-line">
+										<code>curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash</code>
+										<button type="button" class="copy-btn" data-copy="curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash" aria-label="Copy WSL install command">
+											<svg class="i" aria-hidden="true"><use href="#i-copy" /></svg>
+											<svg class="i i-done" aria-hidden="true"><use href="#i-check" /></svg>
+										</button>
+									</div>
+								</div>
+							</div>
+						</div>
+						</div>
+					</div>
+					<p class="hero-platforms">
+						One self-contained binary. macOS (Apple Silicon) · Linux arm64 / x64 · Windows x64.
+					</p>
+					<div class="hero-ctas">
+						<a class="btn btn-primary" href="https://github.com/JetBrains/thinkrail" target="_blank" rel="noopener noreferrer">
+							<svg class="i i-fill" aria-hidden="true"><use href="#i-github" /></svg>
+							Star on GitHub
+						</a>
+						<a class="btn" href="#agent-chat">ThinkRail in action</a>
+					</div>
+				</section>
+
+				<!-- ── why.md ── -->
+				<section class="file-section" id="why" data-file="why.md">
+					<p class="file-comment">&lt;!-- WHY ThinkRail --&gt;</p>
+					<h2>Why ThinkRail</h2>
+					<div class="beats">
+						<div class="beat">
+							<h3>Agents deserve worktrees, not your working tree.</h3>
+							<p>
+								Every workspace is a real <code>git worktree</code> — its own branch, its own
+								cwd. Run several agents in parallel; each one's mess stays on its branch, and
+								<code>main</code> stays clean until you say otherwise.
+							</p>
+						</div>
+						<div class="beat">
+							<h3>Specs are the ground truth.</h3>
+							<p>
+								ThinkRail is built spec-first, and so are your projects: a connected graph of
+								spec files lives beside the code, and the agent reads, searches, and maintains
+								it with dedicated tools. Intent survives the session.
+							</p>
+						</div>
+						<div class="beat">
+							<h3>A thin host, a real engine.</h3>
+							<p>
+								The <a href="https://pi.dev"><code>pi</code> coding agent</a>
+								runs in-process and owns models, skills, compaction, and cost. ThinkRail owns
+								the workspace, the editor, and the wire — it never assembles prompts behind
+								your back.
+							</p>
+						</div>
+					</div>
+				</section>
+
+				<!-- ── features/worktrees.md ── -->
+				<section class="file-section" id="worktrees" data-file="features/worktrees.md">
+					<p class="file-comment">&lt;!-- FEATURES / worktrees --&gt;</p>
+					<h2>Projects &rarr; workspaces</h2>
+					<p>
+						A project is any local git repo. A workspace is a <code>git worktree</code> cut from
+						it — created in one click, listed in the rail, disposable without ceremony.
+					</p>
+					<pre class="code-block"><code><span class="sx-cm"># one repo, three parallel lines of thought</span>
+~/code/my-repo                        <span class="sx-cm">← project</span>
+└─ ~/.thinkrail/worktrees/
+   ├─ workspace-1   <span class="sx-str">⎇ feature/auth</span>      <span class="sx-cm">agent A building</span>
+   ├─ workspace-2   <span class="sx-str">⎇ fix/flaky-test</span>    <span class="sx-cm">agent B fixing</span>
+   └─ workspace-3   <span class="sx-str">⎇ spike/ideas</span>       <span class="sx-cm">you, exploring</span></code></pre>
+					<ul>
+						<li>Own branch + cwd per workspace — files, diffs, terminals, and chats all scope to it.</li>
+						<li>Switch workspaces instantly; nothing reloads, nothing leaks across.</li>
+						<li>Merge the good one, delete the rest. Your repo never noticed the chaos.</li>
+					</ul>
+				</section>
+
+				<!-- ── features/editor.md ── -->
+				<section class="file-section" id="editor" data-file="features/editor.md">
+					<p class="file-comment">&lt;!-- FEATURES / editor --&gt;</p>
+					<h2>A real IDE around the agent</h2>
+					<p>Watch the agent work — or work beside it — without leaving the page.</p>
+					<div class="feature-grid">
+						<div class="feature-card">
+							<h3><svg class="i" aria-hidden="true"><use href="#i-panels-top-left" /></svg> Monaco editor tabs</h3>
+							<p>The VS Code editor engine: syntax everywhere, rendered markdown with a source toggle, file tabs per workspace.</p>
+						</div>
+						<div class="feature-card">
+							<h3><svg class="i" aria-hidden="true"><use href="#i-folder-tree" /></svg> All-files tree</h3>
+							<p>The active worktree at a glance — like the rail on the right of this very page.</p>
+						</div>
+						<div class="feature-card">
+							<h3><svg class="i" aria-hidden="true"><use href="#i-git-branch-plus" /></svg> Changes</h3>
+							<p>A live git diff of the workspace branch, so you review the agent's work as it lands.</p>
+						</div>
+						<div class="feature-card">
+							<h3><svg class="i" aria-hidden="true"><use href="#i-square-terminal" /></svg> Terminals</h3>
+							<p>Real PTYs scoped to the worktree — run the tests yourself while the agent keeps typing.</p>
+						</div>
+					</div>
+				</section>
+
+				<!-- ── features/agent-chat.md ── -->
+				<section class="file-section" id="agent-chat" data-file="features/agent-chat.md">
+					<p class="file-comment">&lt;!-- FEATURES / agent-chat --&gt;</p>
+					<h2>Chats that stream like the engine thinks</h2>
+					<p>
+						This transcript is a real <code>pi</code> session, captured in ThinkRail while it
+						worked on its own repo:
+					</p>
+					<div class="chat-demo" id="chat-demo">
+						<div class="chat-msg user" data-step>
+							Quick tour: what is ThinkRail, and what are the three rings of its architecture?
+							Keep it brief.
+						</div>
+						<div class="chat-activity" data-step>
+							<svg class="i" aria-hidden="true"><use href="#i-check" /></svg>
+							<span>read <code>goal-and-requirements.md</code> · <code>architecture.md</code></span>
+						</div>
+						<div class="chat-msg assistant">
+							<p data-step>
+								ThinkRail is a desktop-and-mobile client for the <code>pi</code> coding agent —
+								a thin host that runs <code>pi</code> in-process and bridges it to a rich UI,
+								while <code>pi</code> owns models, skills, compaction, cost, and session state.
+							</p>
+							<p data-step>The <strong>three rings</strong>:</p>
+							<ol>
+								<li data-step>
+									<strong>Engine host</strong> (<code>packages/server</code>) —
+									<code>createServer()</code> runs an HTTP+WS host plus an
+									<code>AgentSessionManager</code>: one in-process <code>pi</code> session per tab.
+								</li>
+								<li data-step>
+									<strong>The wire</strong> (<code>packages/contracts</code>) — the typed,
+									versioned protocol between host and UI. Types only.
+								</li>
+								<li data-step>
+									<strong>UI client</strong> (<code>apps/web</code>) — mobile-first React that
+									ships independently and dials any host over the wire.
+								</li>
+							</ol>
+						</div>
+						<div class="chat-done" data-step>
+							<span><svg class="i" aria-hidden="true"><use href="#i-check" /></svg> Done</span>
+							<span>5s · 25.9k tok · $0.17</span>
+						</div>
+						<div class="chat-composer" aria-hidden="true">
+							<div class="composer-box">Message the agent… (@ files · / commands · Enter to send)</div>
+							<div class="composer-row">
+								<span class="chip">Claude Opus 4.8 <svg class="i" aria-hidden="true"><use href="#i-chevron-down" /></svg></span>
+								<span class="chip chip-dim">EFFORT&nbsp;<b>Low</b></span>
+								<span class="send-btn"><svg class="i" aria-hidden="true"><use href="#i-arrow-up" /></svg></span>
+							</div>
+						</div>
+					</div>
+					<ul>
+						<li>Several sessions per workspace, streaming concurrently.</li>
+						<li>Pick the model per session; tokens and cost tick live in the header.</li>
+						<li>Steer a running turn or queue a follow-up — no waiting for the agent to finish.</li>
+						<li>Interactive tools: the agent can ask structured questions back, right in the chat.</li>
+					</ul>
+				</section>
+
+				<!-- ── features/specs.md ── -->
+				<section class="file-section" id="specs" data-file="features/specs.md">
+					<p class="file-comment">&lt;!-- FEATURES / specs --&gt;</p>
+					<h2>Specs are first-class</h2>
+					<p>
+						Every module carries a <code>SPEC.md</code> with frontmatter linking it into a graph —
+						goal, architecture, modules, tasks. The bundled <code>pi-spec-graph</code> extension
+						gives the agent <code>spec_*</code> tools to search, navigate, and maintain it, and
+						the Specs tab renders the live graph of your worktree:
+					</p>
+					<div class="spec-tree">
+						<div class="spec-row depth-0">
+							<svg class="i" aria-hidden="true"><use href="#i-book" /></svg>
+							<span>ThinkRail — product goal and scope</span>
+							<b class="spec-badge badge-accent">main spec</b>
+						</div>
+						<div class="spec-row depth-1">
+							<svg class="i" aria-hidden="true"><use href="#i-fork" /></svg>
+							<span>ThinkRail — top-level architecture</span>
+							<b class="spec-badge">arch</b>
+						</div>
+						<div class="spec-row depth-2">
+							<svg class="i" aria-hidden="true"><use href="#i-box" /></svg>
+							<span>Engine host (server library)</span>
+							<b class="spec-badge">module</b>
+						</div>
+						<div class="spec-row depth-3">
+							<svg class="i" aria-hidden="true"><use href="#i-box" /></svg>
+							<span>agent — in-process pi sessions</span>
+							<b class="spec-badge">submodule</b>
+						</div>
+						<div class="spec-row depth-2">
+							<svg class="i" aria-hidden="true"><use href="#i-box" /></svg>
+							<span>Web UI client</span>
+							<b class="spec-badge">module</b>
+						</div>
+					</div>
+					<pre class="code-block"><code><span class="sx-punct">---</span>
+<span class="sx-prop">id:</span> <span class="sx-str">module-server</span>
+<span class="sx-prop">type:</span> <span class="sx-str">module-design</span>
+<span class="sx-prop">status:</span> <span class="sx-str">active</span>
+<span class="sx-prop">parent:</span> <span class="sx-str">architecture</span>
+<span class="sx-punct">---</span></code></pre>
+					<p>
+						Plain markdown, plain frontmatter, versioned with the code — reading the specs is
+						enough to understand an area and formulate the next task. The agent keeps them honest
+						as it builds.
+					</p>
+				</section>
+
+				<!-- ── install.sh ── -->
+				<section class="file-section" id="install" data-file="install.sh">
+					<p class="file-comment"># INSTALL</p>
+					<h2>Install</h2>
+					<pre class="code-block install-block"><code><span class="sx-cm"># one line: downloads the right build, verifies its SHA-256, puts `thinkrail` on your PATH</span>
+<span class="line-copy" data-copy="curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash"><span class="sx-fn">curl</span> -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | <span class="sx-fn">bash</span></span>
+
+<span class="sx-cm"># windows — same thing, from cmd or powershell</span>
+<span class="line-copy" data-copy="powershell -c &quot;irm https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1 | iex&quot;"><span class="sx-fn">powershell</span> -c <span class="sx-str">"irm https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1 | iex"</span></span>
+
+<span class="sx-cm"># nightly channel, or pin a version</span>
+<span class="line-copy" data-copy="curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash -s -- --channel nightly"><span class="sx-fn">curl</span> -fsSL … | <span class="sx-fn">bash</span> -s -- <span class="sx-str">--channel nightly</span></span>
+<span class="line-copy" data-copy="curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash -s -- --version 0.2.0"><span class="sx-fn">curl</span> -fsSL … | <span class="sx-fn">bash</span> -s -- <span class="sx-str">--version 0.2.0</span></span>
+
+<span class="sx-cm"># then</span>
+<span class="line-copy" data-copy="thinkrail"><span class="sx-fn">thinkrail</span>         <span class="sx-cm"># launch — opens the IDE in your browser</span></span>
+<span class="line-copy" data-copy="thinkrail update"><span class="sx-fn">thinkrail</span> update  <span class="sx-cm"># grab the latest build later</span></span></code></pre>
+					<ul>
+						<li><strong>Prebuilt:</strong> macOS (Apple Silicon), Linux arm64 + x64, Windows x64.</li>
+						<li><strong>Needs:</strong> <code>git</code> on PATH and an authenticated <code>pi</code> provider — the agent runs against your real credentials.</li>
+						<li>
+							Prefer manual? Grab a binary + <code>SHA256SUMS</code> from the
+							<a href="https://github.com/JetBrains/thinkrail/releases">releases page</a>, verify,
+							<code>chmod +x</code>, done. App state lives under <code>~/.thinkrail</code>.
+						</li>
+					</ul>
+				</section>
+
+				<!-- ── CONTRIBUTING.md ─ footer ── -->
+				<section class="file-section footer-section" id="contributing" data-file="CONTRIBUTING.md">
+					<p class="file-comment">&lt;!-- CONTRIBUTING --&gt;</p>
+					<h2>Open source, spec-first</h2>
+					<p>
+						ThinkRail is a <a href="https://github.com/JetBrains">JetBrains</a> InnovationHub project,
+						licensed <a href="https://github.com/JetBrains/thinkrail/blob/main/LICENSE">Apache-2.0</a>.
+						The repo is developed spec-first — the top-level specs are the product's ground truth,
+						and this website is itself a module with a <code>SPEC.md</code>.
+					</p>
+					<nav class="footer-links" aria-label="Project links">
+						<a href="https://github.com/JetBrains/thinkrail"><svg class="i i-fill" aria-hidden="true"><use href="#i-github" /></svg>GitHub</a>
+						<a href="https://github.com/JetBrains/thinkrail/issues"><svg class="i" aria-hidden="true"><use href="#i-bug" /></svg>Issues</a>
+						<a href="https://github.com/JetBrains/thinkrail/blob/main/CONTRIBUTING.md"><svg class="i" aria-hidden="true"><use href="#i-git-pull-request" /></svg>Contributing</a>
+						<a href="https://github.com/JetBrains/thinkrail/blob/main/CODE_OF_CONDUCT.md"><svg class="i" aria-hidden="true"><use href="#i-scale" /></svg>Code of Conduct</a>
+						<a href="https://github.com/JetBrains/thinkrail/releases"><svg class="i" aria-hidden="true"><use href="#i-package" /></svg>Releases</a>
+					</nav>
+				</section>
+			</main>
+
+			<Fragment slot="filetree">
+				<a class="ft-row file" href="#readme"><svg class="i" aria-hidden="true"><use href="#i-file" /></svg>README.md</a>
+				<a class="ft-row file depth-1" href="#why"><svg class="i" aria-hidden="true"><use href="#i-circle-help" /></svg>WHY ThinkRail</a>
+				<a class="ft-row file depth-1" href="#worktrees"><svg class="i" aria-hidden="true"><use href="#i-blocks" /></svg>FEATURES</a>
+				<a class="ft-row file depth-2" href="#worktrees"><svg class="i" aria-hidden="true"><use href="#i-git-branch" /></svg>worktrees</a>
+				<a class="ft-row file depth-2" href="#editor"><svg class="i" aria-hidden="true"><use href="#i-square-pen" /></svg>editor</a>
+				<a class="ft-row file depth-2" href="#agent-chat"><svg class="i" aria-hidden="true"><use href="#i-message-square" /></svg>agent-chat</a>
+				<a class="ft-row file depth-2" href="#specs"><svg class="i" aria-hidden="true"><use href="#i-file-text" /></svg>specs</a>
+				<a class="ft-row file depth-1" href="#install"><svg class="i" aria-hidden="true"><use href="#i-square-terminal" /></svg>INSTALL</a>
+				<a class="ft-row file depth-1" href="#contributing"><svg class="i" aria-hidden="true"><use href="#i-git-pull-request" /></svg>CONTRIBUTING</a>
+			</Fragment>
+		</IdeShell>
+	</body>
+</html>

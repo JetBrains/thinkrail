@@ -62,6 +62,11 @@ const TEXT_PAIRS: [fg: string, bg: (v: Record<string, string>) => string, what: 
 		"success icons on the chat demo's mixed surface",
 	],
 	["--on-accent", (v) => v["--accent"] as string, "the label on an accent fill"],
+	[
+		"--on-accent",
+		(v) => v["--accent-hover"] as string,
+		"the label on the hovered accent fill (the primary button)",
+	],
 ];
 
 describe("every rendered foreground pair clears WCAG AA", () => {

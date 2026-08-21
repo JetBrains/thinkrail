@@ -4,17 +4,20 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"dev": "vite",
-		"build": "tsc --noEmit && vite build",
-		"typecheck": "tsc --noEmit",
+		"dev": "astro dev",
+		"build": "astro check && astro build",
+		"typecheck": "astro check",
 		"test": "bun test",
-		"preview": "vite preview"
+		"preview": "astro preview"
 	},
 	"devDependencies": {
+		"@astrojs/check": "0.9.10",
+		"@astrojs/markdown-satteri": "0.3.7",
+		"@astrojs/rss": "4.0.19",
 		"@fontsource-variable/geist": "catalog:",
 		"@fontsource-variable/jetbrains-mono": "catalog:",
 		"@fontsource-variable/orbitron": "catalog:",
-		"typescript": "catalog:",
-		"vite": "8.0.16"
+		"astro": "7.2.4",
+		"typescript": "catalog:"
 	}
 }

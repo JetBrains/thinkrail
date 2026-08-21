@@ -1,9 +1,7 @@
-// <script> tags and the snippet trips it, which would force a forbidden `biome-ignore`. array.js
-
-const PROD_HOST = "thinkrail.ai";
-const PROXY_HOST = "https://p.thinkrail.ai";
-const UI_HOST = "https://eu.posthog.com";
-const PROJECT_KEY = "phc_AFJBcKraEUrfpTrSSMjBGXMHTusYudtFfxWqdevchy8X";
+export const PROD_HOST = "thinkrail.ai";
+export const PROXY_HOST = "https://p.thinkrail.ai";
+export const UI_HOST = "https://eu.posthog.com";
+export const PROJECT_KEY = "phc_AFJBcKraEUrfpTrSSMjBGXMHTusYudtFfxWqdevchy8X";
 
 interface PostHogLike {
 	init(key: string, config: Record<string, unknown>): void;

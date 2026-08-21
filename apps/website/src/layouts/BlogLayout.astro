@@ -1,0 +1,61 @@
+---
+import { postPath, publishedPosts } from "../blogCollection";
+import BaseHead from "../components/BaseHead.astro";
+import IdeShell from "../components/IdeShell.astro";
+
+interface Props {
+	title: string;
+	description?: string | undefined;
+	article?: { publishedTime: Date } | undefined;
+}
+
+const { title, description, article } = Astro.props;
+const canonical = new URL(Astro.url.pathname, Astro.site);
+const posts = await publishedPosts();
+const normalizePath = (path: string) => path.replace(/\/+$/, "");
+const isCurrent = (path: string) => normalizePath(Astro.url.pathname) === normalizePath(path);
+---
+
+<!doctype html>
+<html lang="en" data-theme="dark">
+	<head>
+		<BaseHead />
+		<title>{title}</title>
+		{description && <meta name="description" content={description} />}
+		<link rel="canonical" href={canonical} />
+		<meta property="og:type" content={article ? "article" : "website"} />
+		<meta property="og:title" content={title} />
+		{description && <meta property="og:description" content={description} />}
+		<meta property="og:url" content={canonical} />
+		<meta property="og:image" content={new URL("/og.png", Astro.site)} />
+		<meta name="twitter:card" content="summary_large_image" />
+		{article && <meta property="article:published_time" content={article.publishedTime.toISOString()} />}
+		<link rel="alternate" type="application/rss+xml" title="ThinkRail Blog" href="/blog/rss.xml" />
+	</head>
+	<body>
+		<IdeShell workspace="blog" nav="blog" skipHref="#blog-content">
+			<main class="editor" id="editor-scroll" aria-label="Page content">
+				<div class="blog-main" id="blog-content">
+					<slot />
+				</div>
+			</main>
+
+			<Fragment slot="filetree">
+				{
+					posts.map((post) => (
+						<a
+							class:list={["ft-row", "file", { active: isCurrent(postPath(post)) }]}
+							href={postPath(post)}
+							aria-current={isCurrent(postPath(post)) ? "page" : undefined}
+						>
+							<svg class="i" aria-hidden="true">
+								<use href="#i-file-text" />
+							</svg>
+							{post.data.title}
+						</a>
+					))
+				}
+			</Fragment>
+		</IdeShell>
+	</body>
+</html>
