@@ -128,6 +128,5 @@ jobs:
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
           restore-keys: ${{ runner.os }}-bun-
       - run: bun install --frozen-lockfile
-      # The Windows leg of the artifact smoke (why it gates PRs: .github/SPEC.md). e2e:binary stays ubuntu-only.
       - run: bun run build:binary
       - run: bun run smoke:binary
