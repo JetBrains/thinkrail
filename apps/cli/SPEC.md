@@ -242,6 +242,15 @@ and `trash`'s **native helper sidecars** (which macOS/Windows must execute from 
     `homedir()` — which pi's `getAgentDir()` uses — reads `USERPROFILE` on Windows and ignores `HOME`.
     Without it the default-agent-dir probe writes into the runner's (or a Windows developer's) real
     `%USERPROFILE%\.pi\agent` instead of the sandbox.
+  - **Every spawned host's env is built by `hostEnv`, which drops the inherited case-variants of the keys
+    it overrides.** Windows env names are case-insensitive and the runner's is spelled `Path`, so the
+    familiar `{...process.env, PATH: x}` ships *both* keys and the child reads the inherited one — the host
+    then ran with the machine's real PATH, saw no fake `central`, reported `absent`, and never loaded the
+    extension while the fixture itself was provably fine.
+  - **Both legs require `provider.status`'s `jbcentral` to be `configured`**, not just the model to be
+    present: the artifact sits inside the *default* agent dir, so a leg that only checks `model.list` could
+    in principle pass through pi's own agent-dir discovery instead of the Central-fed absolute path this
+    gate exists to pin. The status read waits out a transient `configuring` (a boot-time watcher event).
   - **The two hosts run one at a time**: the default-agent probe boots, asserts and exits before the
     custom-agent host is spawned. They load the *same* on-disk extension, and a concurrent initial load
     races on the loader's transpile cache — harmless on POSIX, an EPERM-class failure on Windows, where the

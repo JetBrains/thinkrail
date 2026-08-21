@@ -103,6 +103,15 @@ const sandboxEnv = {
 	THINKRAIL_NO_ANALYTICS: "1",
 };
 
+function hostEnv(overrides: Record<string, string>, unset: string[] = []): Record<string, string> {
+	const shadowed = new Set([...Object.keys(overrides), ...unset].map((name) => name.toLowerCase()));
+	const inherited: Record<string, string> = {};
+	for (const [name, value] of Object.entries(process.env)) {
+		if (value !== undefined && !shadowed.has(name.toLowerCase())) inherited[name] = value;
+	}
+	return { ...inherited, ...overrides };
+}
+
 const autoloadDir = join(tmp, "autoload-project");
 const preloadMarker = join(autoloadDir, "preload-ran");
 mkdirSync(autoloadDir, { recursive: true });
@@ -115,11 +124,7 @@ writeFileSync(
 {
 	const subCache = join(tmp, "subcommand-cache");
 	const run = Bun.spawnSync([binary, "uninstall", "--help"], {
-		env: {
-			...process.env,
-			...sandboxEnv,
-			XDG_CACHE_HOME: subCache,
-		},
+		env: hostEnv({ ...sandboxEnv, XDG_CACHE_HOME: subCache }),
 		stdout: "pipe",
 		stderr: "inherit",
 		cwd: autoloadDir,
@@ -161,13 +166,12 @@ if (gitCommit.exitCode !== 0) fail("could not commit the portable-skill smoke pr
 
 const spawnCustomAgentHost = () =>
 	Bun.spawn([binary, "--no-open", "--port", "24262"], {
-		env: {
-			...process.env,
+		env: hostEnv({
 			...sandboxEnv,
 			THINKRAIL_DATA_DIR: dataDir,
 			PI_CODING_AGENT_DIR: agentDir,
 			XDG_CACHE_HOME: cacheDir,
-		},
+		}),
 		stdout: "pipe",
 		stderr: "inherit",
 	});
@@ -244,29 +248,50 @@ function centralFixtureState(): string {
 	});
 }
 
-async function centralStatus(socket: WebSocket): Promise<string> {
+async function centralStatus(socket: WebSocket): Promise<{ state?: string } | null> {
 	try {
 		const report = (await within(
 			rpc(socket, "provider.status", {}),
 			10_000,
 			"provider.status",
-		)) as { jbcentral?: unknown };
-		return JSON.stringify(report.jbcentral ?? null);
+		)) as { jbcentral?: { state?: string } };
+		return report.jbcentral ?? null;
 	} catch (err) {
-		return `unreadable (${err instanceof Error ? err.message : String(err)})`;
+		return { state: `unreadable (${err instanceof Error ? err.message : String(err)})` };
 	}
 }
 
+async function settledCentralStatus(socket: WebSocket): Promise<{ state?: string } | null> {
+	for (let attempt = 0; attempt < 40; attempt += 1) {
+		const status = await centralStatus(socket);
+		if (status?.state !== "configuring") return status;
+		await new Promise((resolve) => setTimeout(resolve, 250));
+	}
+	return await centralStatus(socket);
+}
+
+async function assertExternalExtensionLoaded(
+	socket: WebSocket,
+	agentDirKind: string,
+): Promise<void> {
+	const models = await within(rpc(socket, "model.list", {}), 20_000, `${agentDirKind} model.list`);
+	const status = await settledCentralStatus(socket);
+	if (hasExternalExtensionModel(models) && status?.state === "configured") return;
+	fail(
+		`compiled binary did not load the global external extension with ${agentDirKind} (Central status: ${JSON.stringify(status)}, fixture: ${centralFixtureState()})`,
+	);
+}
+
 async function assertDefaultAgentDirExternalExtension(): Promise<void> {
-	const probeEnv = {
-		...process.env,
-		...sandboxEnv,
-		THINKRAIL_DATA_DIR: join(tmp, "default-agent-data"),
-		XDG_CACHE_HOME: join(tmp, "default-agent-cache"),
-	};
-	delete probeEnv.PI_CODING_AGENT_DIR;
 	const probe = Bun.spawn([binary, "--no-open", "--port", "24312"], {
-		env: probeEnv,
+		env: hostEnv(
+			{
+				...sandboxEnv,
+				THINKRAIL_DATA_DIR: join(tmp, "default-agent-data"),
+				XDG_CACHE_HOME: join(tmp, "default-agent-cache"),
+			},
+			["PI_CODING_AGENT_DIR"],
+		),
 		stdout: "pipe",
 		stderr: "inherit",
 	});
@@ -283,12 +308,7 @@ async function assertDefaultAgentDirExternalExtension(): Promise<void> {
 			"default-agent binary probe did not report a serving URL",
 		);
 		socket = await within(connectRpc(url), 10_000, "default-agent WebSocket connect");
-		const models = await within(rpc(socket, "model.list", {}), 20_000, "default-agent model.list");
-		if (!hasExternalExtensionModel(models)) {
-			fail(
-				`compiled binary did not load the global external extension with the default agent dir (Central status: ${await centralStatus(socket)}, fixture: ${centralFixtureState()})`,
-			);
-		}
+		await assertExternalExtensionLoaded(socket, "the default agent dir");
 		probe.kill("SIGTERM");
 		await within(probe.exited, 15_000, "default-agent probe shutdown");
 	} finally {
@@ -385,16 +405,7 @@ try {
 	}
 
 	rpcSocket = await within(connectRpc(url), 10_000, "WebSocket connect");
-	const externalModels = await within(
-		rpc(rpcSocket, "model.list", {}),
-		20_000,
-		"custom-agent model.list",
-	);
-	if (!hasExternalExtensionModel(externalModels)) {
-		fail(
-			`compiled binary did not load the global external extension with a custom agent dir (Central status: ${await centralStatus(rpcSocket)}, fixture: ${centralFixtureState()})`,
-		);
-	}
+	await assertExternalExtensionLoaded(rpcSocket, "a custom agent dir");
 	const project = (await within(
 		rpc(rpcSocket, "project.open", { path: projectDir }),
 		10_000,
