@@ -734,9 +734,11 @@ a project picker, the prompt hero, and the reused
   **single click previews** the rendered spec — and whose **double click keeps** it — through the same
   `fs.readFile` → `openTab` flow as `FileTree` (see the Preview tabs bullet; reading down a spec graph is
   the case the reusable slot exists for). Every row stays on one line: indentation → chevron →
-  shape-coded role icon → truncated title → fixed trailing role (`ARCH` / `MODULE` / `SUBMODULE` / `TASK`;
-  unknown types degrade compactly). The top-level `goal-and-requirements` row instead carries the exact
-  **`Main spec`** label and distinct root icon; a locally selected file resource's row has a persistent selected
+  shape-coded role icon → truncated title → trailing role (`ARCH` / `MODULE` / `SUBMODULE` / `TASK`;
+  unknown types degrade compactly). The role is **revealed on row hover/focus**, untruncated, and the
+  `aria-label` carries it unconditionally. Titles render through `specDisplayTitle`, which collapses a
+  title's ` — ` to **` · `**. The top-level `goal-and-requirements` row
+  instead carries the exact **`Main spec`** label and distinct root icon; a locally selected file resource's row has a persistent selected
   treatment. **Lifecycle status is not presented at all** — future lint health arrives with a real linter
   feature, not speculative dots or reused status chrome. This remains a restrained hierarchy — no hero,
   duplicate root, preview pane, or graph canvas. `FileTree` shares the same file gesture model

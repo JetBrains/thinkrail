@@ -31,6 +31,10 @@ export function specRoleLabel(type: string): string {
 	return words.map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(" ");
 }
 
+export function specDisplayTitle(title: string): string {
+	return title.replace(/\s+[—–]\s+/g, " · ");
+}
+
 export function specRoleTag(type: string): string {
 	return isKnownSpecType(type) ? SPEC_ROLES[type].tag : specRoleLabel(type).toUpperCase();
 }
