@@ -430,20 +430,25 @@ export async function listWorkspaces(
 			refreshUserOwnedWorkspace(workspace.id);
 		}
 	}
-	const rows = loadWorkspaces().filter((w) => w.projectId === projectId);
-	rows.sort((a, b) => (a.kind === "default" ? -1 : 0) - (b.kind === "default" ? -1 : 0));
+	const rows = projectRows(projectId);
 	if (opts.includeDiffStats === false) return rows;
-	const statsById = new Map(
-		await Promise.all(rows.map(async (w) => [w.id, await diffStats(w)] as const)),
+	const statsByKey = new Map(
+		await Promise.all(rows.map(async (w) => [diffStatsKey(w), await diffStats(w)] as const)),
 	);
-	// Membership is re-read after the awaits (stale-snapshot discipline — see the module SPEC): a row
-	// created mid-flight must appear even though its stats aren't computed yet.
-	const fresh = loadWorkspaces().filter((w) => w.projectId === projectId);
-	fresh.sort((a, b) => (a.kind === "default" ? -1 : 0) - (b.kind === "default" ? -1 : 0));
-	return fresh.map((w) => {
-		const stats = statsById.get(w.id);
+	return projectRows(projectId).map((w) => {
+		const stats = statsByKey.get(diffStatsKey(w));
 		return stats ? { ...w, diffStats: stats } : w;
 	});
+}
+
+function projectRows(projectId: string): Workspace[] {
+	const rows = loadWorkspaces().filter((w) => w.projectId === projectId);
+	rows.sort((a, b) => (a.kind === "default" ? -1 : 0) - (b.kind === "default" ? -1 : 0));
+	return rows;
+}
+
+function diffStatsKey(ws: Workspace): string {
+	return `${ws.id}\u0000${ws.worktreePath}\u0000${ws.baseBranch}\u0000${ws.diffBase ?? ""}`;
 }
 
 export function listWorkspaceRecords(projectId: string): Workspace[] {

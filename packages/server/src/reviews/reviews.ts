@@ -166,8 +166,6 @@ function archiveRecords(workspaceId: string, snapshot: ReviewSnapshot): void {
 	if (archived.comments.length > 0) saveArchive(workspaceId, archived);
 }
 
-// Lazy creation awaits git, and the unlocked `review.get` may race a locked mutation through that
-// window — single-flighted so two creates can't each save a distinct fresh review (see the module SPEC).
 const ensuring = new Map<string, Promise<ReviewSnapshot>>();
 
 function ensureSnapshot(workspaceId: string): Promise<ReviewSnapshot> {
@@ -185,6 +183,11 @@ function ensureSnapshot(workspaceId: string): Promise<ReviewSnapshot> {
 	});
 	ensuring.set(workspaceId, flight);
 	return flight;
+}
+
+function openSnapshot(workspaceId: string): ReviewSnapshot | null {
+	const existing = load(workspaceId);
+	return existing?.review.status === "open" ? existing : null;
 }
 
 function reanchorSnapshot(workspaceId: string, snapshot: ReviewSnapshot): boolean {
@@ -205,15 +208,16 @@ function reanchorSnapshot(workspaceId: string, snapshot: ReviewSnapshot): boolea
 }
 
 export async function getReviewSnapshot(workspaceId: string): Promise<ReviewSnapshot> {
-	const snapshot = await ensureSnapshot(workspaceId);
+	const snapshot = openSnapshot(workspaceId);
+	if (!snapshot) return ensureSnapshot(workspaceId);
 	if (reanchorSnapshot(workspaceId, snapshot)) persistAndPublish(workspaceId, snapshot);
 	return snapshot;
 }
 
 export function reanchorWorkspace(workspaceId: string): void {
 	try {
-		const snapshot = load(workspaceId);
-		if (snapshot?.review.status !== "open" || snapshot.comments.length === 0) return;
+		const snapshot = openSnapshot(workspaceId);
+		if (!snapshot || snapshot.comments.length === 0) return;
 		if (reanchorSnapshot(workspaceId, snapshot)) persistAndPublish(workspaceId, snapshot);
 	} catch {}
 }
@@ -242,7 +246,6 @@ export async function addComment(input: AddCommentInput): Promise<ReviewComment>
 		throw new Error(`A ${input.kind} comment requires an anchor path.`);
 	if (input.kind === "review" && input.anchor)
 		throw new Error("A review-level comment carries no anchor.");
-	const snapshot = await ensureSnapshot(input.workspaceId);
 	let anchor = input.anchor;
 	if (anchor) {
 		const ws = getWorkspace(input.workspaceId);
@@ -265,6 +268,7 @@ export async function addComment(input: AddCommentInput): Promise<ReviewComment>
 			if (content !== null) anchor = captureAnchor(anchor, content);
 		}
 	}
+	const snapshot = await ensureSnapshot(input.workspaceId);
 	const comment: ReviewComment = {
 		id: `rc_${randomUUID().slice(0, 8)}`,
 		reviewId: snapshot.review.id,

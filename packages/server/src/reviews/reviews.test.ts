@@ -146,6 +146,17 @@ test("get re-anchors against the worktree: edit above â†’ moved, fragment gone â
 	expect(quote && "exact" in quote ? quote.exact : "").toBe("const b = 2;");
 });
 
+test("a concurrent get's re-anchor persist can't delete a mutation's just-saved comment", async () => {
+	const first = await addInline("first");
+	writeFileSync(join(worktree, "a.ts"), "// shift\nconst a = 1;\nconst b = 2;\nconst c = 3;\n");
+	const adding = addInline("second");
+	const reading = getReviewSnapshot(WS_ID);
+	const [second] = await Promise.all([adding, reading]);
+	const ids = (await getReviewSnapshot(WS_ID)).comments.map((c) => c.id);
+	expect(ids).toContain(first.id);
+	expect(ids).toContain(second.id);
+});
+
 test("reanchorWorkspace publishes only when something moved", async () => {
 	await addInline();
 	const before = pushes.length;

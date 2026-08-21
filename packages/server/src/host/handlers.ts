@@ -497,7 +497,7 @@ const handlers: Record<string, Handler> = {
 	"session.delete": async (params) => {
 		const p = params as { workspaceId: string; sessionId: string };
 		await deleteSession(p.sessionId, p.workspaceId, getWorkspace(p.workspaceId).worktreePath);
-		removeSessionTodoWindows(p);
+		await removeSessionTodoWindows(p);
 		return { ok: true } as const;
 	},
 	"session.setModel": async (params) => {

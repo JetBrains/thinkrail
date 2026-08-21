@@ -39,14 +39,22 @@ function commitMessage(title: string, sessionId: string, todoId: string): string
 
 const commitQueues = new Map<string, Promise<void>>();
 
-export function maybeAttachChangeArtifacts(workspaceId: string, sessionId: string): Promise<void> {
+export function enqueueTodoMutation<T>(workspaceId: string, fn: () => T | Promise<T>): Promise<T> {
 	const prev = commitQueues.get(workspaceId) ?? Promise.resolve();
-	const next = prev.then(() => runReconcile(workspaceId, sessionId));
-	commitQueues.set(workspaceId, next);
-	void next.finally(() => {
-		if (commitQueues.get(workspaceId) === next) commitQueues.delete(workspaceId);
+	const next = prev.then(fn);
+	const tail = next.then(
+		() => undefined,
+		() => undefined,
+	);
+	commitQueues.set(workspaceId, tail);
+	void tail.finally(() => {
+		if (commitQueues.get(workspaceId) === tail) commitQueues.delete(workspaceId);
 	});
 	return next;
+}
+
+export function maybeAttachChangeArtifacts(workspaceId: string, sessionId: string): Promise<void> {
+	return enqueueTodoMutation(workspaceId, () => runReconcile(workspaceId, sessionId));
 }
 
 export function settleChangeArtifacts(workspaceId: string): Promise<void> {

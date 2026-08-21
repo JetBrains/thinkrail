@@ -37,7 +37,13 @@ V1 (the chat-plan UX this feeds: [[submodule-web-chat]]'s "Chat TODO plan").
 `host/server.ts` tees `isTodoToolEnd` off the session event stream and fires
 `maybeAttachChangeArtifacts(workspaceId, sessionId)` off the publish path (`void` — it runs git writes).
 Reconciles are **serialized per workspace** (a promise chain) so two quick `todo_*` ends can't race the
-index mid-commit; the whole path is best-effort and never throws into the event stream.
+index mid-commit; the whole path is best-effort and never throws into the event stream. The same chain
+serializes **every other sidecar writer** — the UI's `todo.remove` and `session.delete`'s window removal
+enqueue behind any in-flight reconcile (`enqueueTodoMutation`) — because a reconcile reads plan +
+baselines, awaits git, and ends with a whole-map baseline write: an unqueued removal landing inside that
+window would be resurrected by the stale write, exactly the permanent-orphan case below. Agent-side
+`todo_*` plan writes can't be queued (they happen inside pi), but every one fires a tool end that
+enqueues a follow-up reconcile, whose orphan-prune self-heals what the stale pass got wrong.
 
 On `in_progress` it **opens the item's work window**: a baseline of the worktree's **uncommitted**
 changed-path set + the current `HEAD` sha, **persisted** in a host-owned sidecar next to the todos JSON
@@ -121,7 +127,9 @@ it resolves immediately when nothing is in flight, and never rejects.
   no todo file counts 0),
   `addTodo(...) → TodoItem` (validates a non-empty title; tags `origin: "user"`),
   `updateTodo(...) → TodoItem` (throws on unknown id → a `{ ok:false }` WS response),
-  `removeTodo(...) → { ok:true }` (idempotent). **Mapping only** — no plan logic; `TodoStore` owns disk.
+  `removeTodo(...) → Promise<{ ok:true }>` (idempotent; enqueued on the per-workspace reconcile chain —
+  see the sidecar-writer serialization above — as is `removeSessionTodoWindows`). **Mapping only** — no
+  plan logic; `TodoStore` owns disk.
 - **Allowed deps:** `workspaces` (worktree-path lookup via `getWorkspace`, which throws on unknown);
   `git` (`gitStatus` — the uncommitted changed-path set + the commit-scope DTO decoration;
   `gitCommitPaths` — the per-done-item delta commit; `gitHeadSha` — the baseline's head);
