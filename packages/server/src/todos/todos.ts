@@ -14,7 +14,7 @@ import {
 } from "pi-todos/core";
 import { gitStatus } from "../git";
 import { getWorkspace } from "../workspaces";
-import { settleChangeArtifacts } from "./artifacts";
+import { enqueueTodoMutation, settleChangeArtifacts } from "./artifacts";
 import { dropItemBaseline, removeSessionBaselines } from "./baselines";
 
 function storeFor(workspaceId: string, sessionId: string): TodoStore {
@@ -77,8 +77,13 @@ export function openTodoCount(plan: StoredPlan): number {
 	return flatItems(plan).filter((item) => item.status !== "done").length;
 }
 
-export function removeSessionTodoWindows(params: { workspaceId: string; sessionId: string }): void {
-	removeSessionBaselines(getWorkspace(params.workspaceId).worktreePath, params.sessionId);
+export function removeSessionTodoWindows(params: {
+	workspaceId: string;
+	sessionId: string;
+}): Promise<void> {
+	return enqueueTodoMutation(params.workspaceId, () => {
+		removeSessionBaselines(getWorkspace(params.workspaceId).worktreePath, params.sessionId);
+	});
 }
 
 export function addTodo(params: {
@@ -114,11 +119,17 @@ export function updateTodo(params: {
 	return result.todo;
 }
 
-export function removeTodo(params: { workspaceId: string; sessionId: string; id: string }): {
+export function removeTodo(params: {
+	workspaceId: string;
+	sessionId: string;
+	id: string;
+}): Promise<{
 	ok: true;
-} {
-	const root = getWorkspace(params.workspaceId).worktreePath;
-	new TodoStore(root, params.sessionId).remove(params.id);
-	dropItemBaseline(root, params.sessionId, params.id);
-	return { ok: true } as const;
+}> {
+	return enqueueTodoMutation(params.workspaceId, () => {
+		const root = getWorkspace(params.workspaceId).worktreePath;
+		new TodoStore(root, params.sessionId).remove(params.id);
+		dropItemBaseline(root, params.sessionId, params.id);
+		return { ok: true } as const;
+	});
 }

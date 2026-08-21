@@ -249,7 +249,6 @@ export function readBlobAt(worktreePath: string, ref: string, path: string): str
 	);
 }
 
-/** One shared read of a `git show ref:path` result, so the sync and async blob reads cannot drift. */
 function blobFrom(
 	shown: { ok: boolean; out: string; err: string },
 	ref: string,

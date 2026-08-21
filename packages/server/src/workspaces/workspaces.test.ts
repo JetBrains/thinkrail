@@ -357,6 +357,23 @@ test("setWorkspaceDiffBase re-points the diff target, leaving creation provenanc
 	expect(() => setWorkspaceDiffBase("nope", "release")).toThrow("Unknown workspace: nope");
 });
 
+test("a diff base re-pointed while badges resolve drops the badge, never pairing it with stale totals", async () => {
+	const ws = await createWorkspace("p1", "Iso");
+	writeFileSync(join(ws.worktreePath, "work.txt"), "one\ntwo\n");
+	git(ws.worktreePath, "add", "-A");
+	git(ws.worktreePath, "commit", "-m", "branch work");
+	expect((await listWorkspaces("p1")).find((w) => w.id === ws.id)?.diffStats).toEqual({
+		added: 2,
+		removed: 0,
+	});
+
+	const listing = listWorkspaces("p1");
+	setWorkspaceDiffBase(ws.id, gitOut(ws.worktreePath, "rev-parse", "HEAD"));
+	const listed = (await listing).find((w) => w.id === ws.id);
+	expect(listed?.diffBase).toBeDefined();
+	expect(listed?.diffStats).toBeUndefined();
+});
+
 test("renameWorkspace re-points a sibling whose diff TARGET was the renamed branch", async () => {
 	const first = await createWorkspace("p1");
 	const dependent = await createWorkspace("p1");

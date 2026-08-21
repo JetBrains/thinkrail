@@ -76,6 +76,10 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   as the writers): a workspace created while the badges resolved must appear in this response, because its
   `created` push may reach a client before this reply seeds that client's list, where a push into an
   unlisted project is deliberately not folded — a mid-flight row ships without stats until the next list.
+  Cached stats attach to a fresh row **only when its diff-defining fields (`worktreePath`, `baseBranch`,
+  `diffBase`) still match the snapshot they were computed from** — a `setDiffBase` landing while the
+  badges resolved drops that row's badge the same way, never pairing the new ref with the old ref's
+  totals.
   Diff stats default **on** for compatibility, while `includeDiffStats: false` skips the per-workspace
   fan-out for cold navigation — an automatic reload on a shared host must not diff every worktree),
   `listWorkspaceRecords`
