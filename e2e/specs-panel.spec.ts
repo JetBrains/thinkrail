@@ -20,6 +20,7 @@ test("Specs tab renders the worktree's spec tree and opens a spec as an editor t
 	await expect(root).toHaveAttribute("data-spec-role", "Main spec");
 	await expect(root.getByTestId("spec-role")).toBeHidden();
 	await root.hover();
+	await expect(root.getByTestId("spec-role")).toBeVisible();
 	await expect(root.getByTestId("spec-role")).toHaveText("Main spec");
 	await expect(child).toHaveAttribute("data-depth", "1");
 	await expect(child).toHaveAttribute("data-spec-role", "MODULE");
