@@ -40,7 +40,7 @@ describe("site fonts match the app", () => {
 	});
 
 	it("requests no font from a CDN", () => {
-		const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+		const html = readFileSync(new URL("./pages/index.astro", import.meta.url), "utf8");
 		for (const source of [CSS, html])
 			expect(source).not.toMatch(/fonts\.(?:googleapis|gstatic)\.com|api\.fontshare\.com/);
 	});

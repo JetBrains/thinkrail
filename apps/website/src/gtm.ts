@@ -1,5 +1,3 @@
-// (`noCommaOperator`, `noAssignInExpressions`), which would force a forbidden `biome-ignore`.
-
 const PROD_HOST = "thinkrail.ai";
 const CONTAINER_ID = "GTM-WDW2DZW4";
 

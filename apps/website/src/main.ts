@@ -1,10 +1,6 @@
-import { initAnalytics } from "./analytics";
 import { deriveEditorTabs } from "./editorTabs";
-import { initGtm } from "./gtm";
 import { detectInstallPlatform, type InstallPlatform } from "./installPlatform";
-
-initAnalytics();
-initGtm();
+import { initThemeToggle } from "./theme";
 
 const motionOK = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 if (motionOK) document.documentElement.classList.add("anim");
@@ -246,59 +242,7 @@ if (motionOK && chat) {
 	player.observe(chat);
 }
 
-const themeToggle = document.getElementById("theme-toggle");
-if (themeToggle) {
-	const STORAGE_KEY = "thinkrail-site-theme";
-	const mediaQuery = window.matchMedia("(prefers-color-scheme: light)");
-
-	const getSavedTheme = (): string | null => {
-		try {
-			const raw = localStorage.getItem(STORAGE_KEY);
-			if (raw === null) return null;
-			return raw === "light" ? "light" : "dark";
-		} catch {
-			return null;
-		}
-	};
-
-	const getSystemTheme = (): string => (mediaQuery.matches ? "light" : "dark");
-
-	const apply = (theme: string, save: boolean) => {
-		document.documentElement.setAttribute("data-theme", theme);
-
-		const nextTheme = theme === "dark" ? "light" : "dark";
-		themeToggle.setAttribute("aria-label", `Switch to ${nextTheme} theme`);
-
-		const chrome = getComputedStyle(document.documentElement).getPropertyValue("--chrome").trim();
-		if (chrome) {
-			document
-				.querySelector<HTMLMetaElement>('meta[name="theme-color"]')
-				?.setAttribute("content", chrome);
-		}
-
-		if (save) {
-			try {
-				localStorage.setItem(STORAGE_KEY, theme);
-			} catch {}
-		}
-	};
-
-	const savedTheme = getSavedTheme();
-	const initialTheme = savedTheme ?? getSystemTheme();
-	apply(initialTheme, false);
-
-	themeToggle.addEventListener("click", () => {
-		const current = document.documentElement.getAttribute("data-theme") ?? "dark";
-		const next = current === "dark" ? "light" : "dark";
-		apply(next, true);
-	});
-
-	mediaQuery.addEventListener("change", () => {
-		if (!getSavedTheme()) {
-			apply(getSystemTheme(), false);
-		}
-	});
-}
+initThemeToggle();
 
 type WindowsShell = "powershell" | "cmd" | "wsl";
 
@@ -549,7 +493,6 @@ if (mockElements.length > 0) {
 	const RAIL_OFFSET = 12;
 	const titlebar = document.querySelector(".titlebar");
 	const railRight = document.getElementById("rail-right");
-	const railLeft = document.querySelector(".rail-left");
 
 	const positionTooltip = (trigger: HTMLElement) => {
 		const triggerRect = trigger.getBoundingClientRect();
@@ -564,11 +507,6 @@ if (mockElements.length > 0) {
 			const titlebarRect = titlebar.getBoundingClientRect();
 			const railRect = railRight.getBoundingClientRect();
 			left = railRect.left - tooltipRect.width - RAIL_OFFSET;
-			top = titlebarRect.bottom + RAIL_OFFSET;
-		} else if (trigger.classList.contains("rail-left-nav") && titlebar && railLeft) {
-			const titlebarRect = titlebar.getBoundingClientRect();
-			const railLeftRect = railLeft.getBoundingClientRect();
-			left = railLeftRect.right + RAIL_OFFSET;
 			top = titlebarRect.bottom + RAIL_OFFSET;
 		} else {
 			left = triggerRect.right + GAP;

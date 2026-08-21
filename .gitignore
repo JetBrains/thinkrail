@@ -30,3 +30,6 @@ apps/cli/src/*.generated.ts
 .env.*.local
 test-results-binary/
 playwright-report-binary/
+
+# Astro's generated type cache
+.astro/
