@@ -614,7 +614,7 @@ export function AskUserQuestionCard({
 								data-testid="ask-skip"
 								onClick={() => reply({ answers: [], cancelled: true })}
 								disabled={!actions}
-								className="shrink-0 rounded-[var(--radius-sm)] px-xs text-text-muted tr-text-ui outline-none hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary-soft disabled:text-control-disabled-text"
+								className="shrink-0 rounded-[var(--radius-sm)] px-xs text-text-muted tr-text-ui outline-none hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary disabled:text-control-disabled-text"
 							>
 								Skip
 							</button>
@@ -623,7 +623,7 @@ export function AskUserQuestionCard({
 									type="button"
 									data-testid="ask-continue"
 									onClick={() => setTab(Math.min(tab + 1, reviewTab))}
-									className="shrink-0 whitespace-nowrap rounded-[var(--radius-sm)] bg-control-primary-bg px-md py-1.5 tr-text-action text-control-primary-text outline-none hover:bg-control-primary-bg-hovered focus-visible:ring-2 focus-visible:ring-primary-soft"
+									className="shrink-0 whitespace-nowrap rounded-[var(--radius-sm)] bg-control-primary-bg px-md py-1.5 tr-text-action text-control-primary-text outline-none hover:bg-control-primary-bg-hovered focus-visible:ring-2 focus-visible:ring-primary"
 								>
 									Next →
 								</button>
@@ -634,7 +634,7 @@ export function AskUserQuestionCard({
 									data-ask-page-focus={onReview && canSubmit ? "true" : undefined}
 									onClick={() => reply({ answers, cancelled: false })}
 									disabled={!canSubmit}
-									className="shrink-0 whitespace-nowrap rounded-[var(--radius-sm)] bg-control-primary-bg px-md py-1.5 tr-text-action text-control-primary-text outline-none hover:bg-control-primary-bg-hovered focus-visible:ring-2 focus-visible:ring-primary-soft disabled:cursor-not-allowed disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text"
+									className="shrink-0 whitespace-nowrap rounded-[var(--radius-sm)] bg-control-primary-bg px-md py-1.5 tr-text-action text-control-primary-text outline-none hover:bg-control-primary-bg-hovered focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text"
 								>
 									Submit
 								</button>
@@ -746,7 +746,7 @@ function TabChip({
 			data-answered={answered}
 			onClick={onClick}
 			className={cn(
-				"flex shrink-0 items-center gap-xs whitespace-nowrap rounded-full px-sm py-0.5 tr-text-metadata outline-none focus-visible:ring-2 focus-visible:ring-primary-soft",
+				"flex shrink-0 items-center gap-xs whitespace-nowrap rounded-full px-sm py-0.5 tr-text-metadata outline-none focus-visible:ring-2 focus-visible:ring-primary",
 				active ? "bg-primary-subtle text-primary" : "text-text-muted hover:bg-control-bg-hovered",
 			)}
 		>
@@ -967,7 +967,7 @@ function QuestionBody({
 									type="button"
 									data-testid="ask-note-toggle"
 									onClick={() => openNote(noteOption.label, noteIndex)}
-									className="flex items-center gap-xs rounded-[var(--radius-sm)] text-text-muted tr-text-metadata outline-none hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary-soft"
+									className="flex items-center gap-xs rounded-[var(--radius-sm)] text-text-muted tr-text-metadata outline-none hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
 								>
 									<Pencil className="size-3" />
 									{state.notes[noteOption.label]?.trim() ? "Edit note" : "Add note"}
@@ -1054,7 +1054,7 @@ function OptionRow({
 			onKeyDown={onKeyDown}
 			onClick={onClick}
 			className={cn(
-				"flex items-start gap-sm rounded-[var(--radius-sm)] border px-md py-sm text-left outline-none transition-colors focus-visible:border-control-border-active focus-visible:ring-2 focus-visible:ring-primary-soft",
+				"flex items-start gap-sm rounded-[var(--radius-sm)] border px-md py-sm text-left outline-none transition-colors focus-visible:border-control-border-active focus-visible:ring-2 focus-visible:ring-primary",
 				selected
 					? "border-primary bg-primary-subtle"
 					: "border-border-default hover:bg-control-bg-hovered",
@@ -1112,7 +1112,7 @@ function OtherOptionRow({
 			data-testid="ask-custom-row"
 			data-selected={active}
 			className={cn(
-				"flex cursor-text items-center gap-sm rounded-[var(--radius-sm)] border px-md py-sm transition-colors focus-within:border-control-border-active focus-within:ring-2 focus-within:ring-primary-soft",
+				"flex cursor-text items-center gap-sm rounded-[var(--radius-sm)] border px-md py-sm transition-colors focus-within:border-control-border-active focus-within:ring-2 focus-within:ring-primary",
 				active
 					? "border-primary bg-primary-subtle"
 					: "border-border-default hover:bg-control-bg-hovered",
@@ -1127,7 +1127,7 @@ function OtherOptionRow({
 						e.preventDefault();
 						onToggle();
 					}}
-					className="flex items-center rounded-[var(--radius-sm)] outline-none focus-visible:ring-2 focus-visible:ring-primary-soft"
+					className="flex items-center rounded-[var(--radius-sm)] outline-none focus-visible:ring-2 focus-visible:ring-primary"
 				>
 					<Indicator selected={active} multi className="mt-0" />
 				</button>
@@ -1245,7 +1245,7 @@ function ReviewView({
 					data-testid="ask-unanswered"
 					data-ask-page-focus={submitEnabled ? undefined : "true"}
 					onClick={() => onJump(unanswered[0]?.i ?? 0)}
-					className="self-start rounded-[var(--radius-sm)] text-feedback-warning tr-text-metadata outline-none hover:underline focus-visible:ring-2 focus-visible:ring-primary-soft"
+					className="self-start rounded-[var(--radius-sm)] text-feedback-warning tr-text-metadata outline-none hover:underline focus-visible:ring-2 focus-visible:ring-primary"
 				>
 					⚠ Unanswered: {unanswered.map(({ q, i }) => q.header || `Q${i + 1}`).join(", ")}
 				</button>
