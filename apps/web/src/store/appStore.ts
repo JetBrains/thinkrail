@@ -13,6 +13,7 @@ import type {
 	RefreshedModels,
 	ReviewChangedPayload,
 	ReviewSnapshot,
+	SessionQueueState,
 	SessionStats,
 	SessionSummary,
 	SlashCommandInfo,
@@ -267,6 +268,7 @@ export interface SessionRuntime {
 	currentAssistantId: string | null;
 	attemptAssistantId: string | null;
 	isStreaming: boolean;
+	queue: SessionQueueState;
 	model: WireModel | null;
 	thinkingLevel: ThinkingLevel;
 	stats: SessionStats | null;
@@ -278,6 +280,8 @@ export interface SessionRuntime {
 	extUiWidget: Record<string, string[]>;
 }
 
+const EMPTY_QUEUE: SessionQueueState = { steering: [], followUp: [] };
+
 function newRuntime(model: WireModel | null, thinkingLevel: ThinkingLevel): SessionRuntime {
 	return {
 		turns: [],
@@ -286,6 +290,7 @@ function newRuntime(model: WireModel | null, thinkingLevel: ThinkingLevel): Sess
 		currentAssistantId: null,
 		attemptAssistantId: null,
 		isStreaming: false,
+		queue: EMPTY_QUEUE,
 		model,
 		thinkingLevel,
 		stats: null,
@@ -384,6 +389,8 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 	switch (event.type) {
 		case "agent_start":
 			return { ...rt, isStreaming: true, attemptAssistantId: null };
+		case "queue_update":
+			return { ...rt, queue: { steering: event.steering, followUp: event.followUp } };
 		case "message_start": {
 			if (event.message.role === "assistant")
 				return {
@@ -2353,6 +2360,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				toolResults: hydrated.toolResults,
 				askAnswers: hydrated.askAnswers,
 				isStreaming: summary.isStreaming,
+				...(summary.queue ? { queue: summary.queue } : {}),
 				...(hydrated.turnIdByMessageIndex
 					? { turnIdByMessageIndex: hydrated.turnIdByMessageIndex }
 					: {}),

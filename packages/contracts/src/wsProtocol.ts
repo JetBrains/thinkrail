@@ -42,6 +42,7 @@ import type {
 	ExtUiResponse,
 	ImageContent,
 	RefreshedModels,
+	SessionQueueState,
 	SessionStats,
 	SessionSummary,
 	SkillCatalogEntry,
@@ -78,7 +79,7 @@ export interface TerminalTabsPush {
 	tabs: TerminalTabInfo[];
 }
 
-export const PROTOCOL_VERSION = 46;
+export const PROTOCOL_VERSION = 47;
 
 export interface ServerWelcome {
 	protocolVersion: number;
@@ -150,6 +151,7 @@ export const WS_METHODS = {
 	sessionPrompt: "session.prompt",
 	sessionSteer: "session.steer",
 	sessionFollowUp: "session.followUp",
+	sessionClearQueue: "session.clearQueue",
 	sessionAbort: "session.abort",
 	sessionDispose: "session.dispose",
 	sessionDelete: "session.delete",
@@ -373,6 +375,7 @@ export interface WsMethodMap {
 		params: { sessionId: string; text: string; images?: ImageContent[] };
 		result: Ack;
 	};
+	"session.clearQueue": { params: { sessionId: string }; result: SessionQueueState };
 	"session.abort": { params: { sessionId: string }; result: Ack };
 	"session.dispose": { params: { sessionId: string }; result: Ack };
 	"session.delete": { params: { workspaceId: string; sessionId: string }; result: Ack };

@@ -19,6 +19,7 @@ import type {
 	RefreshedModels,
 	SessionDeletedPayload,
 	SessionEventPayload,
+	SessionQueueState,
 	SessionStats,
 	SessionSummary,
 	SlashCommandInfo,
@@ -283,6 +284,14 @@ function summaryOf(sessionId: string, entry: Entry): SessionSummary {
 		updatedAt: Date.now(),
 		live: true,
 		...(entry.lastSettlement !== undefined ? { lastSettlement: entry.lastSettlement } : {}),
+		...(session.pendingMessageCount > 0
+			? {
+					queue: {
+						steering: [...session.getSteeringMessages()],
+						followUp: [...session.getFollowUpMessages()],
+					},
+				}
+			: {}),
 	};
 }
 
@@ -592,6 +601,10 @@ export async function followUpSession(
 
 export async function compactSession(sessionId: string, instructions?: string): Promise<void> {
 	await mustGet(sessionId).compact(instructions);
+}
+
+export function clearQueueSession(sessionId: string): SessionQueueState {
+	return mustGet(sessionId).clearQueue();
 }
 
 export function abortSession(sessionId: string): Promise<void> {
