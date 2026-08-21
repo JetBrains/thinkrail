@@ -4,8 +4,11 @@ import { existsSync, globSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } f
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
 import { defaultSessionDirFor, writeFixtureSession } from "@thinkrail/server/history-test-fixtures";
+import { binaryArtifactName } from "./artifactName";
 
-const binary = resolve(process.argv[2] ?? join(import.meta.dir, "..", "dist", "thinkrail"));
+const binary = resolve(
+	process.argv[2] ?? join(import.meta.dir, "..", "dist", binaryArtifactName()),
+);
 if (!existsSync(binary)) {
 	console.error(`binary not found at ${binary} — run \`bun run build:binary\` first.`);
 	process.exit(1);

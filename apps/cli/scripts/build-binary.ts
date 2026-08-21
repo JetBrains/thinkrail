@@ -12,6 +12,7 @@ import {
 } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join, relative, resolve, sep } from "node:path";
+import { binaryArtifactName } from "./artifactName";
 
 const cliDir = resolve(import.meta.dir, "..");
 const repoRoot = resolve(cliDir, "..", "..");
@@ -105,8 +106,7 @@ function generateRuntimeManifest(): void {
 }
 
 const target = process.argv.find((a) => a.startsWith("--target="))?.slice("--target=".length);
-const outName = target ? `thinkrail-${target.replace(/^bun-/, "")}` : "thinkrail";
-const outFile = join(outDir, outName);
+const outFile = join(outDir, binaryArtifactName(target));
 
 mkdirSync(outDir, { recursive: true });
 generateWebManifest();

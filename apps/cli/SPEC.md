@@ -248,6 +248,10 @@ and `trash`'s **native helper sidecars** (which macOS/Windows must execute from 
 - **Owns:** `src/args.ts` (pure `parseArgs(argv, env) → CliOptions` + `parseSubcommand` + `USAGE`),
   `src/index.ts` (the run-from-source `bootstrap()`: shell env → server → browser open → signal handlers),
   and the binary build + its boot smoke (`scripts/build-binary.ts`, `scripts/smoke-binary.ts`,
+  `scripts/artifactName.ts` — the one place the artifact filename rule lives, including the `.exe` Bun
+  appends for a Windows target, so the build's output path and the smoke's default input cannot disagree
+  the way they did on Windows; the release action re-derives the same name in bash because it is also the
+  published-asset contract, see `module-ci-release`),
   `src/compiled-entry.ts`, `src/web-assets.generated.*`, `src/bundled-extensions.generated.*`,
   `src/runtime-assets.generated.*`),
   `src/version.ts` (the release version stamped in at build time), `src/update.ts` (the `update`
