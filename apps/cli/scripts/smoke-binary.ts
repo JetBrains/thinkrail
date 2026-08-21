@@ -159,18 +159,18 @@ const gitCommit = Bun.spawnSync([
 ]);
 if (gitCommit.exitCode !== 0) fail("could not commit the portable-skill smoke project");
 
-const proc = Bun.spawn([binary, "--no-open", "--port", "24262"], {
-	env: {
-		...process.env,
-		...sandboxEnv,
-		THINKRAIL_DATA_DIR: dataDir,
-		PI_CODING_AGENT_DIR: agentDir,
-		XDG_CACHE_HOME: cacheDir,
-	},
-	stdout: "pipe",
-	stderr: "inherit",
-});
-killHost = () => proc.kill("SIGKILL");
+const spawnCustomAgentHost = () =>
+	Bun.spawn([binary, "--no-open", "--port", "24262"], {
+		env: {
+			...process.env,
+			...sandboxEnv,
+			THINKRAIL_DATA_DIR: dataDir,
+			PI_CODING_AGENT_DIR: agentDir,
+			XDG_CACHE_HOME: cacheDir,
+		},
+		stdout: "pipe",
+		stderr: "inherit",
+	});
 
 async function connectRpc(baseUrl: string): Promise<WebSocket> {
 	const socket = new WebSocket(`${baseUrl.replace(/^http/, "ws")}/ws`);
@@ -218,6 +218,32 @@ async function readServedUrlFrom(processHandle: {
 	throw new Error(`stdout closed without a serving URL (output: ${JSON.stringify(buffered)})`);
 }
 
+function hasExternalExtensionModel(models: unknown): boolean {
+	return (
+		Array.isArray(models) &&
+		models.some(
+			(model) =>
+				typeof model === "object" &&
+				model !== null &&
+				(model as { provider?: string; id?: string }).provider === "compiled-external" &&
+				(model as { provider?: string; id?: string }).id === "compiled-external-model",
+		)
+	);
+}
+
+async function centralStatus(socket: WebSocket): Promise<string> {
+	try {
+		const report = (await within(
+			rpc(socket, "provider.status", {}),
+			10_000,
+			"provider.status",
+		)) as { jbcentral?: unknown };
+		return JSON.stringify(report.jbcentral ?? null);
+	} catch (err) {
+		return `unreadable (${err instanceof Error ? err.message : String(err)})`;
+	}
+}
+
 async function assertDefaultAgentDirExternalExtension(): Promise<void> {
 	const probeEnv = {
 		...process.env,
@@ -245,17 +271,10 @@ async function assertDefaultAgentDirExternalExtension(): Promise<void> {
 		);
 		socket = await within(connectRpc(url), 10_000, "default-agent WebSocket connect");
 		const models = await within(rpc(socket, "model.list", {}), 20_000, "default-agent model.list");
-		if (
-			!Array.isArray(models) ||
-			!models.some(
-				(model) =>
-					typeof model === "object" &&
-					model !== null &&
-					(model as { provider?: string; id?: string }).provider === "compiled-external" &&
-					(model as { provider?: string; id?: string }).id === "compiled-external-model",
-			)
-		) {
-			fail("compiled binary did not load the global external extension with the default agent dir");
+		if (!hasExternalExtensionModel(models)) {
+			fail(
+				`compiled binary did not load the global external extension with the default agent dir (Central status: ${await centralStatus(socket)})`,
+			);
 		}
 		probe.kill("SIGTERM");
 		await within(probe.exited, 15_000, "default-agent probe shutdown");
@@ -330,6 +349,8 @@ async function assertOAuthLoginReachesAuthUrl(socket: WebSocket): Promise<void> 
 let rpcSocket: WebSocket | null = null;
 try {
 	await assertDefaultAgentDirExternalExtension();
+	const proc = spawnCustomAgentHost();
+	killHost = () => proc.kill("SIGKILL");
 	const url = await within(
 		Promise.race([
 			readServedUrlFrom(proc),
@@ -356,17 +377,10 @@ try {
 		20_000,
 		"custom-agent model.list",
 	);
-	if (
-		!Array.isArray(externalModels) ||
-		!externalModels.some(
-			(model) =>
-				typeof model === "object" &&
-				model !== null &&
-				(model as { provider?: string; id?: string }).provider === "compiled-external" &&
-				(model as { provider?: string; id?: string }).id === "compiled-external-model",
-		)
-	) {
-		fail("compiled binary did not load the global external extension with a custom agent dir");
+	if (!hasExternalExtensionModel(externalModels)) {
+		fail(
+			`compiled binary did not load the global external extension with a custom agent dir (Central status: ${await centralStatus(rpcSocket)})`,
+		);
 	}
 	const project = (await within(
 		rpc(rpcSocket, "project.open", { path: projectDir }),

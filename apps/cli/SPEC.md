@@ -242,6 +242,13 @@ and `trash`'s **native helper sidecars** (which macOS/Windows must execute from 
     `homedir()` — which pi's `getAgentDir()` uses — reads `USERPROFILE` on Windows and ignores `HOME`.
     Without it the default-agent-dir probe writes into the runner's (or a Windows developer's) real
     `%USERPROFILE%\.pi\agent` instead of the sandbox.
+  - **The two hosts run one at a time**: the default-agent probe boots, asserts and exits before the
+    custom-agent host is spawned. They load the *same* on-disk extension, and a concurrent initial load
+    races on the loader's transpile cache — harmless on POSIX, an EPERM-class failure on Windows, where the
+    loser silently falls back to a runtime without the extension (`prepareInitialRuntime`'s plain-runtime
+    path). A failed *rebuild* keeps the loaded generation, so only the boot load can lose the provider this
+    way — which is why the assertion reports `provider.status`'s `jbcentral` state on failure: `load-failed`
+    names that cause, `absent` names a fixture that never ran.
 
 ## Boundary
 
