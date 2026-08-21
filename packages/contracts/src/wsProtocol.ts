@@ -78,7 +78,7 @@ export interface TerminalTabsPush {
 	tabs: TerminalTabInfo[];
 }
 
-export const PROTOCOL_VERSION = 45;
+export const PROTOCOL_VERSION = 46;
 
 export interface ServerWelcome {
 	protocolVersion: number;
@@ -301,7 +301,7 @@ export interface WsMethodMap {
 	};
 	"workspace.setDiffBase": { params: { id: string; ref: string | null }; result: Workspace };
 	"workspace.watchReady": {
-		params: { workspaceId: string };
+		params: { workspaceId: string; prewarm?: boolean };
 		result: WorkspaceWatchReadyResult;
 	};
 	"workspace.openIn": { params: { id: string; editor: string }; result: Ack };

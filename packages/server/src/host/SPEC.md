@@ -57,7 +57,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
   **`workspace.watchReady`** as the typed preflight that awaits a fresh watcher's conservative startup nudge
   before a web skill-loading flow
   captures its baseline and reports whether the watcher was already known ready (the client's replay-safe
-  conservative fallback); plus the **repo-metadata** callback (`setRepoMetaPublisher`) fanned out to **two**
+  conservative fallback; its optional `prewarm` flag is forwarded into `watch`'s bounded prewarm-only tier,
+  so pre-selection warm-ups never grow the watcher registry unboundedly); plus the **repo-metadata** callback (`setRepoMetaPublisher`) fanned out to **two**
   convergences for a git-metadata write in a watched worktree:
   `refreshUserOwnedWorkspace` (**re-sync a user-owned workspace's folder-truth branch** — host-mediated,
   since `watch` has no `workspaces` edge, and self-publishing through the workspace-lifecycle tee) **and** a
