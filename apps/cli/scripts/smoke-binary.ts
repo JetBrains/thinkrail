@@ -42,11 +42,20 @@ const fakeBinDir = join(tmp, "no-pi-bin");
 const centralArtifact = join(homeDir, ".pi", "agent", "extensions", "jetbrains-central.ts");
 mkdirSync(fakeBinDir, { recursive: true });
 mkdirSync(dirname(centralArtifact), { recursive: true });
+const centralFakeSource = join(tmp, "central-fake.ts");
+const centralFake = join(fakeBinDir, process.platform === "win32" ? "central.exe" : "central");
 writeFileSync(
-	join(fakeBinDir, "central"),
-	'#!/bin/sh\n[ "$1" = "--version" ] || exit 8\nprintf \'central 1.6.2 (synthetic smoke metadata)\\n\'\n',
-	{ mode: 0o755 },
+	centralFakeSource,
+	`if (process.argv[2] !== "--version") process.exit(8);\nprocess.stdout.write("central 1.6.2 (synthetic smoke metadata)\\n");\n`,
 );
+const compileFake = Bun.spawnSync(
+	[process.execPath, "build", "--compile", centralFakeSource, "--outfile", centralFake],
+	{ cwd: tmp, stdout: "pipe", stderr: "pipe" },
+);
+if (!compileFake.success || !existsSync(centralFake)) {
+	console.error(compileFake.stderr.toString());
+	fail(`could not compile the fake Central CLI at ${centralFake}`);
+}
 writeFileSync(
 	centralArtifact,
 	`const model = {
@@ -69,9 +78,27 @@ export default function syntheticExternalExtension(pi) {
 }
 `,
 );
-const noPiPath = [fakeBinDir, "/usr/bin", "/bin", "/usr/sbin", "/sbin"].join(delimiter);
+const noPiPath = [
+	fakeBinDir,
+	...(process.env.PATH ?? "")
+		.split(delimiter)
+		.filter((entry) => entry.length > 0 && !Bun.which("pi", { PATH: entry })),
+].join(delimiter);
 if (Bun.which("pi", { PATH: noPiPath }))
 	fail("the external-extension smoke PATH unexpectedly contains pi");
+if (!Bun.which("git", { PATH: noPiPath }))
+	fail("dropping every pi directory from PATH also dropped git — move pi out of git's directory");
+
+const sandboxEnv = {
+	HOME: homeDir,
+	USERPROFILE: homeDir,
+	CLAUDE_CONFIG_DIR: join(homeDir, ".claude"),
+	CODEX_HOME: join(homeDir, ".codex"),
+	GEMINI_CLI_HOME: homeDir,
+	PI_OFFLINE: "1",
+	PATH: noPiPath,
+	THINKRAIL_NO_ANALYTICS: "1",
+};
 
 const autoloadDir = join(tmp, "autoload-project");
 const preloadMarker = join(autoloadDir, "preload-ran");
@@ -87,9 +114,8 @@ writeFileSync(
 	const run = Bun.spawnSync([binary, "uninstall", "--help"], {
 		env: {
 			...process.env,
+			...sandboxEnv,
 			XDG_CACHE_HOME: subCache,
-			HOME: homeDir,
-			THINKRAIL_NO_ANALYTICS: "1",
 		},
 		stdout: "pipe",
 		stderr: "inherit",
@@ -133,16 +159,10 @@ if (gitCommit.exitCode !== 0) fail("could not commit the portable-skill smoke pr
 const proc = Bun.spawn([binary, "--no-open", "--port", "24262"], {
 	env: {
 		...process.env,
+		...sandboxEnv,
 		THINKRAIL_DATA_DIR: dataDir,
 		PI_CODING_AGENT_DIR: agentDir,
-		PI_OFFLINE: "1",
 		XDG_CACHE_HOME: cacheDir,
-		HOME: homeDir,
-		CLAUDE_CONFIG_DIR: join(homeDir, ".claude"),
-		CODEX_HOME: join(homeDir, ".codex"),
-		GEMINI_CLI_HOME: homeDir,
-		PATH: noPiPath,
-		THINKRAIL_NO_ANALYTICS: "1",
 	},
 	stdout: "pipe",
 	stderr: "inherit",
@@ -198,15 +218,9 @@ async function readServedUrlFrom(processHandle: {
 async function assertDefaultAgentDirExternalExtension(): Promise<void> {
 	const probeEnv = {
 		...process.env,
+		...sandboxEnv,
 		THINKRAIL_DATA_DIR: join(tmp, "default-agent-data"),
 		XDG_CACHE_HOME: join(tmp, "default-agent-cache"),
-		HOME: homeDir,
-		CLAUDE_CONFIG_DIR: join(homeDir, ".claude"),
-		CODEX_HOME: join(homeDir, ".codex"),
-		GEMINI_CLI_HOME: homeDir,
-		PI_OFFLINE: "1",
-		PATH: noPiPath,
-		THINKRAIL_NO_ANALYTICS: "1",
 	};
 	delete probeEnv.PI_CODING_AGENT_DIR;
 	const probe = Bun.spawn([binary, "--no-open", "--port", "24312"], {

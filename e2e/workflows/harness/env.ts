@@ -10,6 +10,7 @@ for (const file of ["auth.json", "models.json", "settings.json"]) {
 }
 
 process.env.HOME = E2E_HOME_DIR;
+process.env.USERPROFILE = E2E_HOME_DIR;
 process.env.CLAUDE_CONFIG_DIR = `${E2E_HOME_DIR}/.claude`;
 process.env.CODEX_HOME = `${E2E_HOME_DIR}/.codex`;
 process.env.GEMINI_CLI_HOME = E2E_HOME_DIR;

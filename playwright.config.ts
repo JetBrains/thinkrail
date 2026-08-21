@@ -78,6 +78,7 @@ export default defineConfig({
 			THINKRAIL_GH_OFFLINE: "1",
 			// Keep cross-agent personal skill aliases away from the developer's real homes/overrides.
 			HOME: E2E_HOME_DIR,
+			USERPROFILE: E2E_HOME_DIR,
 			CLAUDE_CONFIG_DIR: `${E2E_HOME_DIR}/.claude`,
 			CODEX_HOME: `${E2E_HOME_DIR}/.codex`,
 			GEMINI_CLI_HOME: E2E_HOME_DIR,

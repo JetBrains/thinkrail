@@ -87,6 +87,7 @@ interface LoginHandle {
 
 export interface JbcentralAdapterDependencies {
 	env?: ParseEnv;
+	platform?: NodeJS.Platform;
 	which?: (command: string, path: string) => string | null;
 	exists?: (path: string) => boolean;
 	run?: (request: ProcessRequest) => Promise<ProcessResult>;
@@ -109,8 +110,14 @@ function pathExists(path: string, deps: JbcentralAdapterDependencies): boolean {
 	return (deps.exists ?? existsSync)(path);
 }
 
-export function jbcentralExtensionPath(env: ParseEnv = process.env): string {
-	return join(env.HOME ?? homedir(), ".pi", "agent", "extensions", "jetbrains-central.ts");
+function homeDirectory(deps: JbcentralAdapterDependencies): string {
+	const env = effectiveEnv(deps);
+	const platform = deps.platform ?? process.platform;
+	return (platform === "win32" ? env.USERPROFILE : env.HOME) ?? homedir();
+}
+
+export function jbcentralExtensionPath(deps: JbcentralAdapterDependencies = {}): string {
+	return join(homeDirectory(deps), ".pi", "agent", "extensions", "jetbrains-central.ts");
 }
 
 export function resolveJbcentralBin(deps: JbcentralAdapterDependencies = {}): string | null {
@@ -120,7 +127,7 @@ export function resolveJbcentralBin(deps: JbcentralAdapterDependencies = {}): st
 	const onPath = which(CENTRAL_BIN, path);
 	if (onPath && isAbsolute(onPath)) return onPath;
 
-	const local = join(env.HOME ?? homedir(), ".local", "bin", CENTRAL_BIN);
+	const local = join(homeDirectory(deps), ".local", "bin", CENTRAL_BIN);
 	return pathExists(local, deps) ? local : null;
 }
 
@@ -225,7 +232,7 @@ function processRunner(deps: JbcentralAdapterDependencies) {
 export async function inspectJbcentral(
 	deps: JbcentralAdapterDependencies = {},
 ): Promise<JbcentralInspection> {
-	const extensionPath = jbcentralExtensionPath(effectiveEnv(deps));
+	const extensionPath = jbcentralExtensionPath(deps);
 	const artifactExists = pathExists(extensionPath, deps);
 	const executablePath = resolveJbcentralBin(deps);
 	if (!executablePath) {
@@ -375,7 +382,7 @@ export async function runJbcentralAction(
 	}
 	if (result.exitCode !== 0) return { outcome: "failed", reason: "nonzero-exit" };
 
-	const artifactExists = pathExists(jbcentralExtensionPath(effectiveEnv(deps)), deps);
+	const artifactExists = pathExists(jbcentralExtensionPath(deps), deps);
 	if (action === "add" && !artifactExists) {
 		return { outcome: "failed", reason: "artifact-missing" };
 	}
@@ -456,7 +463,7 @@ export function watchJbcentralArtifact(
 	onInvalidate: () => void,
 	deps: JbcentralAdapterDependencies = {},
 ): () => void {
-	const extensionPath = jbcentralExtensionPath(effectiveEnv(deps));
+	const extensionPath = jbcentralExtensionPath(deps);
 	const watchDirectory = deps.watchDirectory ?? nodeWatchDirectory;
 	let stopped = false;
 	let watchedDirectory: string | null = null;
