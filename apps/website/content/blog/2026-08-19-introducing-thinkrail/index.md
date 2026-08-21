@@ -34,13 +34,13 @@ Once installed, run `thinkrail`. Your browser will open a new tab with a button 
 
 Before opening the project, you can click the gear icon in the top-right corner to access the Settings panel, where you can configure your LLM providers, GUI appearance, and other settings.
 
-<iframe src="https://www.youtube.com/embed/Q9pqE4Y4p50" width="640" height="360" allow="autoplay" allowfullscreen></iframe>
+<iframe src="https://www.youtube.com/embed/9IsjXhAW4Po" width="640" height="360" allow="autoplay" allowfullscreen></iframe>
 
 
 
 After setup, return to the main screen, open your project, click its entry in the left panel, expand it, and select "Default" to open your default workspace. You can then start a new chat with your AI agent of choice, browse your project’s files, and review any changes the AI agent makes. The GUI also includes a CLI window that you can use to build and test the project.
 
-<iframe src="https://www.youtube.com/embed/SvXa-jjhA8c" width="640" height="360" allow="autoplay" allowfullscreen></iframe>
+<iframe src="https://www.youtube.com/embed/18Z1O2TOSZ4" width="640" height="360" allow="autoplay" allowfullscreen></iframe>
 
 ## What's next?
 
