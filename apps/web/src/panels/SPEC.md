@@ -737,7 +737,7 @@ a project picker, the prompt hero, and the reused
   shape-coded role icon → truncated title → trailing role (`ARCH` / `MODULE` / `SUBMODULE` / `TASK`;
   unknown types degrade compactly). The role is **revealed on row hover/focus**, untruncated, and the
   `aria-label` carries it unconditionally. Titles render through `specDisplayTitle`, which collapses a
-  title's ` — ` to **` · `**. The top-level `goal-and-requirements` row
+  title's ` — ` / ` – ` separator to **` · `**. The top-level `goal-and-requirements` row
   instead carries the exact **`Main spec`** label and distinct root icon; a locally selected file resource's row has a persistent selected
   treatment. **Lifecycle status is not presented at all** — future lint health arrives with a real linter
   feature, not speculative dots or reused status chrome. This remains a restrained hierarchy — no hero,
