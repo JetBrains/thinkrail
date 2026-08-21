@@ -32,9 +32,19 @@ snapshots plus device-local attention, terminal catalogs, and one **per-session 
   remain), while deliberately retaining every workspace layout/attention/resource-render/terminal/session
   map for lossless reopen. Other-client opens never steal navigation, and a background close never moves it.
   All project response call sites use the same updater, so the open and recent copies cannot drift.
-  Explicit local transitions are **`selectMain()`**, **`selectProject(projectId)`**, and
+  Explicit local transitions are **`selectMain()`**, **`selectProject(projectId, opts?)`**, and
   **`activateWorkspace(workspace)`**; each updates its coupled scope ids atomically, and there is no generic
-  active-workspace setter that can split the invariant. Validated route restoration uses
+  active-workspace setter that can split the invariant. **`expandedProjectIds: Record<string, true>`** is the
+  Projects rail's per-browser expansion — store-held (it must survive the rail's remounts and be writable by
+  non-rail gestures) with **`toggleProjectExpanded(projectId)`** (the chevron), **`expandProject(projectId)`**
+  (idempotent reveal: workspace creation / worktree attach / the active-workspace visibility rule), and
+  `selectProject`'s **`{ reveal: true }`** option — the user-gesture variant that enters a project's home and
+  expands its row in one write (rail row click, Welcome-screen open adoption); navigation restore and the
+  workspace-removal fallback call it bare, staying expansion-neutral. Project-snapshot installs prune
+  expansion to the open rail (a closed project's entry drops; identity-stable when unchanged).
+  **`hydrateExpandedProjects(projectIds)`** seeds the set at boot from the `panels/projectExpansion`
+  persistence module — the store itself still touches no storage: that module owns the localStorage
+  mirror (host-qualified key, best-effort writes, untrusted reads) and subscribes to changes. Validated route restoration uses
   **`activateWorkspaceFromRoute(workspace, sessionId?)`**: it applies the same scope ids, advances the
   compatibility workspace navigation tick plus the current destination-group clock, and either installs a
   transient **`routeChatTarget`** stamped with both clocks or clears an older exact target. A workspace-only

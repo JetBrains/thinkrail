@@ -65,11 +65,21 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   in a capped, evictable pool (server `watch` SPEC), so clicking through many projects in one host lifetime
   reuses that pool instead of accumulating watchers. The list never waits for prewarm, failures stay
   silent and retryable by the eventual chat load, and merely expanding a background project does not prewarm
-  it. The active workspace must also stay visible: when `ProjectTree` mounts with an active workspace, or the
-  active workspace's derived
-  owning project changes or first becomes resolvable, it expands that parent project. A manual collapse
+  it (the prewarm is gated on the *selected* project, so the lazy restored-expansion fetch below keeps this
+  invariant too). **Rail expansion is store-held, per-browser view state**
+  (`store.expandedProjectIds`), not component state: it survives the Project-Home/workspace remount
+  boundary and, via the `projectExpansion` persistence module (localStorage under a host-qualified key,
+  hydrated at boot from `main.tsx`, best-effort writes, untrusted reads), a page reload — the rail
+  looks the same after reloading. Rows whose persisted expansion outlives this client's fetched lists
+  (a fresh reload) fetch their missing `workspace.list` lazily; an already-fetched list is refreshed on
+  an explicit expand gesture, never refetched in a loop. The active workspace must
+  also stay visible: when `ProjectTree` mounts with an active workspace, or the active workspace's derived
+  owning project changes or first becomes resolvable, it expands that parent project — this reveal applies
+  *on top of* the persisted baseline (a persisted collapse never hides the active workspace). A manual collapse
   remains respected while the owning project is unchanged; ordinary `workspace.updated` snapshots and
-  same-project workspace switches do not force it open again. Workspace creation expands its project
+  same-project workspace switches do not force it open again. Navigation restore is neutral: a reload
+  re-selects the routed project without touching expansion (the persisted state *is* the view). Workspace
+  creation expands its project
   explicitly. Selecting or creating a workspace also selects its owning project, keeping project-home and
   active-workspace context coherent even when the create dialog's project picker targets another project.
   **Opening a project lands on that project's Welcome** — deliberately **no auto-enter** into any
@@ -88,7 +98,11 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   on-screen anchor, unlike the Remove popover); `NoticeDialog` is a single-button info modal for failures
   with no yes/no follow-up. The hook returns a `dialogs` node each consumer renders. **Selecting a
   project** (clicking its row — the chevron expands/collapses separately) **deselects any active
-  workspace**, so the shell returns to that project's Welcome — a deliberate "project home" gesture; the
+  workspace**, so the shell returns to that project's Welcome — a deliberate "project home" gesture. Both
+  select-project gestures — the rail row click and adopting a just-opened project (`ProjectTree` *and*
+  `WelcomePanel`) — also **reveal the project's workspaces** (`selectProject(id, { reveal: true })`): a
+  gesture that enters a project promises its workspace list, so opening from the Welcome screen never
+  lands with a collapsed rail row; the
   workspace's shared layout survives on the host, so re-selecting it restores the workbench. That round
   trip unmounts the whole workspace surface, but terminals keep no client-side lifetime to lose: the host owns
   each tab and PTY, and unmounting kills nothing. Several distinct terminals may be visible in different

@@ -586,6 +586,7 @@ interface AppState {
 	recentProjects: Project[];
 	workspaces: Record<string, Workspace[]>;
 	removedWorkspaceIds: Record<string, true>;
+	expandedProjectIds: Record<string, true>;
 	selectedProjectId: string | null;
 	activeWorkspaceId: string | null;
 	routeChatTarget: RouteChatTarget | null;
@@ -651,7 +652,10 @@ interface AppState {
 	updateWorkspace: (workspace: Workspace) => void;
 	removeWorkspace: (projectId: string, workspaceId: string) => void;
 	applyWorkspaceRemoved: (projectId: string, workspaceId: string) => void;
-	selectProject: (projectId: string) => void;
+	selectProject: (projectId: string, opts?: { reveal?: boolean }) => void;
+	toggleProjectExpanded: (projectId: string) => void;
+	expandProject: (projectId: string) => void;
+	hydrateExpandedProjects: (projectIds: readonly string[]) => void;
 	selectMain: () => void;
 	activateWorkspace: (workspace: Pick<Workspace, "id" | "projectId">) => void;
 	activateWorkspaceFromRoute: (
@@ -820,6 +824,25 @@ function upsertProject(projects: Project[], project: Project): Project[] {
 	return projects.some((candidate) => candidate.id === project.id)
 		? projects.map((candidate) => (candidate.id === project.id ? project : candidate))
 		: [...projects, project];
+}
+
+function withExpandedProject(
+	record: Record<string, true>,
+	projectId: string,
+): Record<string, true> {
+	return record[projectId] ? record : { ...record, [projectId]: true };
+}
+
+function pruneExpandedProjects(
+	state: Pick<AppState, "expandedProjectIds">,
+	projects: Project[],
+): Pick<AppState, "expandedProjectIds"> | Record<string, never> {
+	const open = new Set(projects.map((project) => project.id));
+	const kept = Object.keys(state.expandedProjectIds).filter((id) => open.has(id));
+	if (kept.length === Object.keys(state.expandedProjectIds).length) return {};
+	return {
+		expandedProjectIds: Object.fromEntries(kept.map((id) => [id, true as const])),
+	};
 }
 
 function reconcileProjectNavigation(
@@ -1228,6 +1251,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	recentProjects: [],
 	workspaces: {},
 	removedWorkspaceIds: Object.create(null) as Record<string, true>,
+	expandedProjectIds: Object.create(null) as Record<string, true>,
 	selectedProjectId: null,
 	activeWorkspaceId: null,
 	routeChatTarget: null,
@@ -1287,6 +1311,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				recentProjects: sortProjects(recentProjects),
 				...(config ? configPatch(config) : {}),
 				...reconcileProjectNavigation(state, openProjects),
+				...pruneExpandedProjects(state, openProjects),
 				welcomeGeneration: state.welcomeGeneration + 1,
 			};
 		}),
@@ -1297,6 +1322,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				projects: openProjects,
 				recentProjects: sortProjects(recentProjects),
 				...reconcileProjectNavigation(state, openProjects),
+				...pruneExpandedProjects(state, openProjects),
 			};
 		}),
 	applyProjectUpdated: (project) =>
@@ -1309,6 +1335,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				projects,
 				recentProjects: sortProjects(upsertProject(state.recentProjects, project)),
 				...reconcileProjectNavigation(state, projects),
+				...pruneExpandedProjects(state, projects),
 			};
 		}),
 	setWorkspaces: (projectId, workspaces) =>
@@ -1392,7 +1419,29 @@ export const useAppStore = create<AppState>((set, get) => ({
 			toast.info(`Workspace "${name ?? "?"}" was removed`);
 		}
 	},
-	selectProject: (selectedProjectId) => set({ selectedProjectId, activeWorkspaceId: null }),
+	selectProject: (selectedProjectId, opts) =>
+		set((state) => ({
+			selectedProjectId,
+			activeWorkspaceId: null,
+			...(opts?.reveal
+				? { expandedProjectIds: withExpandedProject(state.expandedProjectIds, selectedProjectId) }
+				: {}),
+		})),
+	toggleProjectExpanded: (projectId) =>
+		set((state) => ({
+			expandedProjectIds: state.expandedProjectIds[projectId]
+				? omitKey(state.expandedProjectIds, projectId)
+				: withExpandedProject(state.expandedProjectIds, projectId),
+		})),
+	expandProject: (projectId) =>
+		set((state) => {
+			const expandedProjectIds = withExpandedProject(state.expandedProjectIds, projectId);
+			return expandedProjectIds === state.expandedProjectIds ? {} : { expandedProjectIds };
+		}),
+	hydrateExpandedProjects: (projectIds) =>
+		set(() => ({
+			expandedProjectIds: Object.fromEntries(projectIds.map((id) => [id, true as const])),
+		})),
 	selectMain: () =>
 		set({ selectedProjectId: null, activeWorkspaceId: null, routeChatTarget: null }),
 	activateWorkspace: (workspace) =>

@@ -3,6 +3,7 @@ import {
 	createWorkspaceViaDialog,
 	openFixtureProject,
 	openWorkspaceMenu,
+	revealFirstProjectWorkspaces,
 	worktreeRows,
 } from "./fixtures/app";
 
@@ -14,7 +15,7 @@ test("workspace removal propagates — no zombie row in a second tab", async ({ 
 	const page2 = await context.newPage();
 	await page2.goto("/");
 	await expect(page2.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
-	await page2.getByTestId("project-expand").first().click();
+	await revealFirstProjectWorkspaces(page2);
 	await expect(worktreeRows(page2)).toHaveCount(1);
 	await worktreeRows(page2).first().click();
 	await expect(worktreeRows(page2).first()).toHaveAttribute("data-active", "true");
@@ -35,7 +36,7 @@ test("workspace creation propagates to a second tab's rail", async ({ page, cont
 	const page2 = await context.newPage();
 	await page2.goto("/");
 	await expect(page2.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
-	await page2.getByTestId("project-expand").first().click();
+	await revealFirstProjectWorkspaces(page2);
 	await expect(worktreeRows(page2)).toHaveCount(0);
 
 	await createWorkspaceViaDialog(page);
