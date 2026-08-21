@@ -146,6 +146,15 @@ test("get re-anchors against the worktree: edit above â†’ moved, fragment gone â
 	expect(quote && "exact" in quote ? quote.exact : "").toBe("const b = 2;");
 });
 
+test("a workspace removed while creation awaits git gets no resurrected review file", async () => {
+	const pending = getReviewSnapshot(WS_ID);
+	saveWorkspaces([]);
+	await expect(pending).rejects.toThrow(`Unknown workspace: ${WS_ID}`);
+	expect(
+		statSync(join(dataDir, "reviews", `${WS_ID}.json`), { throwIfNoEntry: false }),
+	).toBeUndefined();
+});
+
 test("a concurrent get's re-anchor persist can't delete a mutation's just-saved comment", async () => {
 	const first = await addInline("first");
 	writeFileSync(join(worktree, "a.ts"), "// shift\nconst a = 1;\nconst b = 2;\nconst c = 3;\n");

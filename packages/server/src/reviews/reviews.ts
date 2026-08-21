@@ -142,6 +142,7 @@ async function freshSnapshot(workspaceId: string): Promise<ReviewSnapshot> {
 	const ws = getWorkspace(workspaceId);
 	const ref = (await resolveDiffRange(ws)).originalRef ?? diffBaseRef(ws);
 	const base = resolveCommitOid(ws.worktreePath, ref);
+	getWorkspace(workspaceId);
 	return {
 		review: {
 			id: `rev_${randomUUID().slice(0, 8)}`,

@@ -125,6 +125,7 @@ import {
 	listTodos,
 	removeSessionTodoWindows,
 	removeTodo,
+	settleChangeArtifacts,
 	updateTodo,
 } from "../todos";
 import { ensureWatch, stopWatch } from "../watch";
@@ -157,6 +158,7 @@ type Handler = (params: unknown, ctx: RequestContext) => unknown | Promise<unkno
 async function archiveTeardown(ws: Workspace): Promise<void> {
 	try {
 		await removeWorkspaceSessions(ws.id, ws.worktreePath);
+		await settleChangeArtifacts(ws.id);
 		reclaimWorktree(ws);
 	} catch (error) {
 		console.warn(`workspace archive teardown failed for ${ws.id}: ${error}`);
