@@ -37,6 +37,8 @@ import {
 	showSide,
 	splitCenterGroup,
 	toolTab,
+	unplacedTools,
+	unplacedToolsForSide,
 	validateLayoutDocument,
 	withAvailablePlacementId,
 } from "./model";
@@ -394,6 +396,21 @@ describe("workspace layout model", () => {
 			area: "center",
 			groupId: "center-a",
 		});
+	});
+
+	test("side-scoped tool recovery never offers a tool the other side would receive", () => {
+		let document = baseDocument();
+		document = closeLayoutTab(document, "tool:files").document;
+		document = closeLayoutTab(document, "tool:projects").document;
+
+		expect(unplacedTools(document)).toContain("files");
+		expect(unplacedTools(document)).toContain("projects");
+		expect(unplacedToolsForSide(document, "right")).toContain("files");
+		expect(unplacedToolsForSide(document, "right")).not.toContain("projects");
+		expect(unplacedToolsForSide(document, "left")).toEqual(["projects"]);
+
+		const placedAgain = mutation(revealTool(document, "files", 6)).document;
+		expect(unplacedToolsForSide(placedAgain, "right")).not.toContain("files");
 	});
 
 	test("records singleton restore targets and reveals closed tools unfolded in place", () => {

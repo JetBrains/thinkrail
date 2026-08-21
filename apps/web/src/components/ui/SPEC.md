@@ -19,18 +19,27 @@ The shadcn/ui primitives (Radix), copied in and owned here, themed with our desi
   classes), `popover` (with an optional `container` portal target — pass the host Dialog node so a popover
   inside a
   Dialog stays wheel-scrollable under its scroll lock), `command` (cmdk combobox body), `textarea`,
-  `tooltip`, `resizable`, `toast` (Radix Toast primitives — `ToastProvider`/`Toast`/`ToastViewport`/`Title`/
+  `tooltip` (+ the `IconTooltip` convenience; one root `TooltipProvider` sets the delay), `resizable`, `toast` (Radix Toast primitives — `ToastProvider`/`Toast`/`ToastViewport`/`Title`/
   `Description`/`Close` + the `error`/`success`/`info` `toastVariants`; a left accent bar carries severity.
   Presentational only — the store owns the queue; `panels/Toaster` composes these against it).
 - **Public surface:** each primitive imported directly via `@/components/ui/<name>` (no barrel — preserves
   tree-shaking and the shadcn per-primitive convention).
 - **Allowed deps:** Radix (incl. `@radix-ui/react-context-menu`, `@radix-ui/react-popover`,
-  `@radix-ui/react-toast`), `cmdk`, `@remixicon/react`, `lib` (`cn`),
+  `@radix-ui/react-toast`, `@radix-ui/react-tooltip`), `cmdk`, `@remixicon/react`, `lib` (`cn`),
   `class-variance-authority`/`clsx`/`tailwind-merge`.
 - **Forbidden:** `store`/`transport`/`panels`/`shell` (primitives are leaf UI); `server`/`shared`/`pi`;
   shadcn's default oklch palette — themed with our token utilities only.
 
 ## Get right
+
+- **Icon-only controls use `IconTooltip`, never native `title`** — the OS delay is untunable and reads as
+  "no label". `title` stays only where it is not a control label (truncation fallback) or cannot reach the
+  provider (`panels/reviewWidgets`). Keep `aria-label`: the tooltip is the affordance, not the name. A
+  `disabled` trigger emits no pointer events, so wrap it in a plain element that stays interactive.
+- **Never make `IconTooltip` the outer `asChild` over another Radix trigger** — Radix triggers spread
+  incoming props *after* their own `data-state`, so the tooltip's state (`closed`/`instant-open`, never
+  `open`) silently overwrites the popover's or menu's on the shared button, breaking any
+  `data-[state=open]` / `has-[[data-state=open]]` styling. Put a plain span between them.
 
 - **`context-menu` and `dropdown-menu` are one visual menu system** — same tokenized content surface,
   radius/shadow, item/icon spacing, separators, semantic action colors, focus rows, and viewport collision
