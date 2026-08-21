@@ -1,10 +1,13 @@
 import { expect, test } from "bun:test";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { Workspace } from "@thinkrail/contracts";
 import { WORKSPACE_TODOS_DIR } from "@thinkrail/shared/paths";
 import { STORE_DIR, storeRel, TodoStore } from "pi-todos/core";
-import { reconcileChangeArtifacts } from "./artifacts";
+import { saveWorkspaces } from "../persistence";
+import { maybeAttachChangeArtifacts, reconcileChangeArtifacts } from "./artifacts";
 import {
 	dropItemBaseline,
 	otherSessionWindows,
@@ -12,11 +15,12 @@ import {
 	removeSessionBaselines,
 	writeBaselines,
 } from "./baselines";
+import { removeTodo } from "./todos";
 
 const SESSION = "sess-artifacts";
 const STORE_PATH = storeRel(SESSION);
 
-test("pi-todos STORE_DIR mirrors the shared WORKSPACE_TODOS_DIR", () => {
+test("pi-todos STORE_DIR mirrors the shared WORKSPACE_TODOS_DIR", async () => {
 	expect(STORE_DIR).toBe(WORKSPACE_TODOS_DIR);
 });
 
@@ -25,32 +29,32 @@ function tempStore(): { store: TodoStore; root: string } {
 	return { store: new TodoStore(root, SESSION), root };
 }
 
-test("done attaches the delta of changes since the in_progress baseline", () => {
+test("done attaches the delta of changes since the in_progress baseline", async () => {
 	const { store, root } = tempStore();
 	try {
 		const todo = store.add({ title: "step" });
 		store.update(todo.id, { status: "in_progress" });
-		reconcileChangeArtifacts(store, root, SESSION, () => ["a.ts"]);
+		await reconcileChangeArtifacts(store, root, SESSION, async () => ["a.ts"]);
 		expect(store.get(todo.id)?.artifacts).toBeUndefined();
 
 		store.update(todo.id, { status: "done" });
-		reconcileChangeArtifacts(store, root, SESSION, () => ["a.ts", "b.ts"]);
+		await reconcileChangeArtifacts(store, root, SESSION, async () => ["a.ts", "b.ts"]);
 		expect(store.get(todo.id)?.artifacts).toEqual([{ kind: "change", path: "b.ts" }]);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}
 });
 
-test("baselines persist on disk — a fresh process (new read) still sees the window", () => {
+test("baselines persist on disk — a fresh process (new read) still sees the window", async () => {
 	const { store, root } = tempStore();
 	try {
 		const todo = store.add({ title: "step" });
 		store.update(todo.id, { status: "in_progress" });
-		reconcileChangeArtifacts(
+		await reconcileChangeArtifacts(
 			store,
 			root,
 			SESSION,
-			() => ["a.ts"],
+			async () => ["a.ts"],
 			undefined,
 			() => "head1",
 		);
@@ -58,7 +62,7 @@ test("baselines persist on disk — a fresh process (new read) still sees the wi
 
 		const store2 = new TodoStore(root, SESSION);
 		store2.update(todo.id, { status: "done" });
-		reconcileChangeArtifacts(store2, root, SESSION, () => ["a.ts", "b.ts"]);
+		await reconcileChangeArtifacts(store2, root, SESSION, async () => ["a.ts", "b.ts"]);
 		expect(store2.get(todo.id)?.artifacts).toEqual([{ kind: "change", path: "b.ts" }]);
 		expect(existsSync(join(root, WORKSPACE_TODOS_DIR, `${SESSION}.baselines.json`))).toBe(false);
 	} finally {
@@ -66,17 +70,17 @@ test("baselines persist on disk — a fresh process (new read) still sees the wi
 	}
 });
 
-test("no baseline (direct pending→done) reports the current set but NEVER commits it", () => {
+test("no baseline (direct pending→done) reports the current set but NEVER commits it", async () => {
 	const { store, root } = tempStore();
 	try {
 		const todo = store.add({ title: "step" });
 		store.update(todo.id, { status: "done" });
 		let called = false;
-		reconcileChangeArtifacts(
+		await reconcileChangeArtifacts(
 			store,
 			root,
 			SESSION,
-			() => ["x.ts", "y.ts"],
+			async () => ["x.ts", "y.ts"],
 			() => {
 				called = true;
 				return { sha: "must-not-happen" };
@@ -92,46 +96,50 @@ test("no baseline (direct pending→done) reports the current set but NEVER comm
 	}
 });
 
-test("app-state paths (.thinkrail/…) are never attributed — the todos JSON is not a produced change", () => {
+test("app-state paths (.thinkrail/…) are never attributed — the todos JSON is not a produced change", async () => {
 	const { store, root } = tempStore();
 	try {
 		const todo = store.add({ title: "step" });
 		store.update(todo.id, { status: "in_progress" });
-		reconcileChangeArtifacts(store, root, SESSION, () => [STORE_PATH]);
+		await reconcileChangeArtifacts(store, root, SESSION, async () => [STORE_PATH]);
 		store.update(todo.id, { status: "done" });
-		reconcileChangeArtifacts(store, root, SESSION, () => [STORE_PATH, ".thinkrail", "src/impl.ts"]);
+		await reconcileChangeArtifacts(store, root, SESSION, async () => [
+			STORE_PATH,
+			".thinkrail",
+			"src/impl.ts",
+		]);
 		expect(store.get(todo.id)?.artifacts).toEqual([{ kind: "change", path: "src/impl.ts" }]);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}
 });
 
-test("a done item whose only changes are app-state paths attaches nothing", () => {
+test("a done item whose only changes are app-state paths attaches nothing", async () => {
 	const { store, root } = tempStore();
 	try {
 		const todo = store.add({ title: "planning step" });
 		store.update(todo.id, { status: "done" });
-		reconcileChangeArtifacts(store, root, SESSION, () => [STORE_PATH]);
+		await reconcileChangeArtifacts(store, root, SESSION, async () => [STORE_PATH]);
 		expect(store.get(todo.id)?.artifacts).toBeUndefined();
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}
 });
 
-test("reconcile is idempotent — a done item already carrying a change set is left untouched", () => {
+test("reconcile is idempotent — a done item already carrying a change set is left untouched", async () => {
 	const { store, root } = tempStore();
 	try {
 		const todo = store.add({ title: "step" });
 		store.update(todo.id, { status: "done" });
-		reconcileChangeArtifacts(store, root, SESSION, () => ["x.ts"]);
-		reconcileChangeArtifacts(store, root, SESSION, () => ["x.ts", "z.ts"]);
+		await reconcileChangeArtifacts(store, root, SESSION, async () => ["x.ts"]);
+		await reconcileChangeArtifacts(store, root, SESSION, async () => ["x.ts", "z.ts"]);
 		expect(store.get(todo.id)?.artifacts).toEqual([{ kind: "change", path: "x.ts" }]);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}
 });
 
-test("change artifacts merge with (never replace) the agent's file/spec artifacts", () => {
+test("change artifacts merge with (never replace) the agent's file/spec artifacts", async () => {
 	const { store, root } = tempStore();
 	try {
 		const todo = store.add({
@@ -139,7 +147,7 @@ test("change artifacts merge with (never replace) the agent's file/spec artifact
 			artifacts: [{ kind: "spec", path: "SPEC.md", specId: "s1" }],
 		});
 		store.update(todo.id, { status: "done" });
-		reconcileChangeArtifacts(store, root, SESSION, () => ["impl.ts"]);
+		await reconcileChangeArtifacts(store, root, SESSION, async () => ["impl.ts"]);
 		expect(store.get(todo.id)?.artifacts).toEqual([
 			{ kind: "spec", path: "SPEC.md", specId: "s1" },
 			{ kind: "change", path: "impl.ts" },
@@ -149,33 +157,33 @@ test("change artifacts merge with (never replace) the agent's file/spec artifact
 	}
 });
 
-test("done with no changes beyond the baseline attaches nothing", () => {
+test("done with no changes beyond the baseline attaches nothing", async () => {
 	const { store, root } = tempStore();
 	try {
 		const todo = store.add({ title: "step" });
 		store.update(todo.id, { status: "in_progress" });
-		reconcileChangeArtifacts(store, root, SESSION, () => ["a.ts"]);
+		await reconcileChangeArtifacts(store, root, SESSION, async () => ["a.ts"]);
 		store.update(todo.id, { status: "done" });
-		reconcileChangeArtifacts(store, root, SESSION, () => ["a.ts"]);
+		await reconcileChangeArtifacts(store, root, SESSION, async () => ["a.ts"]);
 		expect(store.get(todo.id)?.artifacts).toBeUndefined();
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}
 });
 
-test("done commits the window: one commit artifact (the sha), and only the item's delta paths", () => {
+test("done commits the window: one commit artifact (the sha), and only the item's delta paths", async () => {
 	const { store, root } = tempStore();
 	try {
 		const todo = store.add({ title: "step" });
 		store.update(todo.id, { status: "in_progress" });
-		reconcileChangeArtifacts(store, root, SESSION, () => ["already.ts"]);
+		await reconcileChangeArtifacts(store, root, SESSION, async () => ["already.ts"]);
 		store.update(todo.id, { status: "done" });
 		const seen: string[][] = [];
-		reconcileChangeArtifacts(
+		await reconcileChangeArtifacts(
 			store,
 			root,
 			SESSION,
-			() => ["src/foo.ts"],
+			async () => ["src/foo.ts"],
 			({ paths, title, todoId }) => {
 				seen.push(paths);
 				expect(title).toBe("step");
@@ -192,15 +200,15 @@ test("done commits the window: one commit artifact (the sha), and only the item'
 	}
 });
 
-test("one plan never has two open windows — starting an item demotes the previous one", () => {
+test("one plan never has two open windows — starting an item demotes the previous one", async () => {
 	const { store, root } = tempStore();
 	try {
 		const first = store.add({ title: "first" });
 		const second = store.add({ title: "second" });
 		store.update(first.id, { status: "in_progress" });
-		reconcileChangeArtifacts(store, root, SESSION, () => []);
+		await reconcileChangeArtifacts(store, root, SESSION, async () => []);
 		store.update(second.id, { status: "in_progress" });
-		reconcileChangeArtifacts(store, root, SESSION, () => []);
+		await reconcileChangeArtifacts(store, root, SESSION, async () => []);
 
 		expect(store.get(first.id)?.status).toBe("pending");
 		expect(Object.keys(readBaselines(root, SESSION))).toEqual([second.id]);
@@ -209,24 +217,24 @@ test("one plan never has two open windows — starting an item demotes the previ
 	}
 });
 
-test("commit gate: another CHAT's open window in the same worktree → no commit, path-list fallback", () => {
+test("commit gate: another CHAT's open window in the same worktree → no commit, path-list fallback", async () => {
 	const { store, root } = tempStore();
 	try {
 		const sibling = new TodoStore(root, "sess-other");
 		const siblingTodo = sibling.add({ title: "their step" });
 		sibling.update(siblingTodo.id, { status: "in_progress" });
-		reconcileChangeArtifacts(sibling, root, "sess-other", () => []);
+		await reconcileChangeArtifacts(sibling, root, "sess-other", async () => []);
 
 		const todo = store.add({ title: "step" });
 		store.update(todo.id, { status: "in_progress" });
-		reconcileChangeArtifacts(store, root, SESSION, () => []);
+		await reconcileChangeArtifacts(store, root, SESSION, async () => []);
 		store.update(todo.id, { status: "done" });
 		let called = false;
-		reconcileChangeArtifacts(
+		await reconcileChangeArtifacts(
 			store,
 			root,
 			SESSION,
-			() => ["mine.ts"],
+			async () => ["mine.ts"],
 			() => {
 				called = true;
 				return { sha: "nope" };
@@ -236,15 +244,15 @@ test("commit gate: another CHAT's open window in the same worktree → no commit
 		expect(store.get(todo.id)?.artifacts).toEqual([{ kind: "change", path: "mine.ts" }]);
 
 		sibling.update(siblingTodo.id, { status: "done" });
-		reconcileChangeArtifacts(sibling, root, "sess-other", () => []);
+		await reconcileChangeArtifacts(sibling, root, "sess-other", async () => []);
 		store.update(todo.id, { status: "in_progress" });
-		reconcileChangeArtifacts(store, root, SESSION, () => []);
+		await reconcileChangeArtifacts(store, root, SESSION, async () => []);
 		store.update(todo.id, { status: "done" });
-		reconcileChangeArtifacts(
+		await reconcileChangeArtifacts(
 			store,
 			root,
 			SESSION,
-			() => ["mine.ts"],
+			async () => ["mine.ts"],
 			() => ({ sha: "sha-exclusive" }),
 		);
 		expect(store.get(todo.id)?.artifacts).toEqual([
@@ -255,29 +263,29 @@ test("commit gate: another CHAT's open window in the same worktree → no commit
 	}
 });
 
-test("commit gate: a window that overlapped another chat is never committed, even after the other closes", () => {
+test("commit gate: a window that overlapped another chat is never committed, even after the other closes", async () => {
 	const { store, root } = tempStore();
 	try {
 		const todo = store.add({ title: "step" });
 		store.update(todo.id, { status: "in_progress" });
-		reconcileChangeArtifacts(store, root, SESSION, () => []);
+		await reconcileChangeArtifacts(store, root, SESSION, async () => []);
 		expect(readBaselines(root, SESSION)[todo.id]?.shared).toBeUndefined();
 
 		const sibling = new TodoStore(root, "sess-other");
 		const theirs = sibling.add({ title: "their step" });
 		sibling.update(theirs.id, { status: "in_progress" });
-		reconcileChangeArtifacts(sibling, root, "sess-other", () => []);
+		await reconcileChangeArtifacts(sibling, root, "sess-other", async () => []);
 		expect(readBaselines(root, SESSION)[todo.id]?.shared).toBe(true);
 
 		sibling.update(theirs.id, { status: "done" });
-		reconcileChangeArtifacts(sibling, root, "sess-other", () => []);
+		await reconcileChangeArtifacts(sibling, root, "sess-other", async () => []);
 		store.update(todo.id, { status: "done" });
 		let called = false;
-		reconcileChangeArtifacts(
+		await reconcileChangeArtifacts(
 			store,
 			root,
 			SESSION,
-			() => ["a.ts"],
+			async () => ["a.ts"],
 			() => {
 				called = true;
 				return { sha: "nope" };
@@ -290,7 +298,7 @@ test("commit gate: a window that overlapped another chat is never committed, eve
 	}
 });
 
-test("two committable items in one pass: the second's delta is re-read, never the first's committed paths", () => {
+test("two committable items in one pass: the second's delta is re-read, never the first's committed paths", async () => {
 	const { store, root } = tempStore();
 	try {
 		const first = store.add({ title: "first" });
@@ -304,11 +312,11 @@ test("two committable items in one pass: the second's delta is re-read, never th
 
 		let reads = 0;
 		const committed: string[][] = [];
-		reconcileChangeArtifacts(
+		await reconcileChangeArtifacts(
 			store,
 			root,
 			SESSION,
-			() => (++reads === 1 ? ["a.ts", "b.ts"] : ["b.ts"]),
+			async () => (++reads === 1 ? ["a.ts", "b.ts"] : ["b.ts"]),
 			({ paths }) => {
 				committed.push(paths);
 				return { sha: `sha-${committed.length}` };
@@ -321,19 +329,25 @@ test("two committable items in one pass: the second's delta is re-read, never th
 	}
 });
 
-test("commit gate: foreign dirt still present at done → no commit, path-list fallback", () => {
+test("commit gate: foreign dirt still present at done → no commit, path-list fallback", async () => {
 	const { store, root } = tempStore();
 	try {
 		const todo = store.add({ title: "step" });
 		store.update(todo.id, { status: "in_progress" });
-		reconcileChangeArtifacts(store, root, SESSION, () => ["foreign.ts"]);
+		await reconcileChangeArtifacts(store, root, SESSION, async () => ["foreign.ts"]);
 		store.update(todo.id, { status: "done" });
 		let called = false;
 		const commit = () => {
 			called = true;
 			return { sha: "x" };
 		};
-		reconcileChangeArtifacts(store, root, SESSION, () => ["foreign.ts", "new.ts"], commit);
+		await reconcileChangeArtifacts(
+			store,
+			root,
+			SESSION,
+			async () => ["foreign.ts", "new.ts"],
+			commit,
+		);
 		expect(called).toBe(false);
 		expect(store.get(todo.id)?.artifacts).toEqual([{ kind: "change", path: "new.ts" }]);
 	} finally {
@@ -341,18 +355,18 @@ test("commit gate: foreign dirt still present at done → no commit, path-list f
 	}
 });
 
-test("commit gate: foreign dirt resolved by done → commit proceeds", () => {
+test("commit gate: foreign dirt resolved by done → commit proceeds", async () => {
 	const { store, root } = tempStore();
 	try {
 		const todo = store.add({ title: "step" });
 		store.update(todo.id, { status: "in_progress" });
-		reconcileChangeArtifacts(store, root, SESSION, () => ["foreign.ts"]);
+		await reconcileChangeArtifacts(store, root, SESSION, async () => ["foreign.ts"]);
 		store.update(todo.id, { status: "done" });
-		reconcileChangeArtifacts(
+		await reconcileChangeArtifacts(
 			store,
 			root,
 			SESSION,
-			() => ["new.ts"],
+			async () => ["new.ts"],
 			() => ({ sha: "sha9" }),
 		);
 		expect(store.get(todo.id)?.artifacts).toEqual([{ kind: "commit", sha: "sha9", label: "step" }]);
@@ -361,7 +375,7 @@ test("commit gate: foreign dirt resolved by done → commit proceeds", () => {
 	}
 });
 
-test("re-done replaces the old commit/change artifacts, keeping the agent's spec/file artifacts", () => {
+test("re-done replaces the old commit/change artifacts, keeping the agent's spec/file artifacts", async () => {
 	const { store, root } = tempStore();
 	try {
 		const todo = store.add({
@@ -369,13 +383,13 @@ test("re-done replaces the old commit/change artifacts, keeping the agent's spec
 			artifacts: [{ kind: "spec", path: "SPEC.md", specId: "s1" }],
 		});
 		store.update(todo.id, { status: "in_progress" });
-		reconcileChangeArtifacts(store, root, SESSION, () => []);
+		await reconcileChangeArtifacts(store, root, SESSION, async () => []);
 		store.update(todo.id, { status: "done" });
-		reconcileChangeArtifacts(
+		await reconcileChangeArtifacts(
 			store,
 			root,
 			SESSION,
-			() => ["a.ts"],
+			async () => ["a.ts"],
 			() => ({ sha: "sha1" }),
 		);
 		expect(store.get(todo.id)?.artifacts).toEqual([
@@ -384,13 +398,13 @@ test("re-done replaces the old commit/change artifacts, keeping the agent's spec
 		]);
 
 		store.update(todo.id, { status: "in_progress" });
-		reconcileChangeArtifacts(store, root, SESSION, () => []);
+		await reconcileChangeArtifacts(store, root, SESSION, async () => []);
 		store.update(todo.id, { status: "done" });
-		reconcileChangeArtifacts(
+		await reconcileChangeArtifacts(
 			store,
 			root,
 			SESSION,
-			() => ["b.ts"],
+			async () => ["b.ts"],
 			() => ({ sha: "sha2" }),
 		);
 		expect(store.get(todo.id)?.artifacts).toEqual([
@@ -402,16 +416,16 @@ test("re-done replaces the old commit/change artifacts, keeping the agent's spec
 	}
 });
 
-test("an orphan baseline (its item removed from the plan) is pruned by the next reconcile", () => {
+test("an orphan baseline (its item removed from the plan) is pruned by the next reconcile", async () => {
 	const { store, root } = tempStore();
 	try {
 		const todo = store.add({ title: "step" });
 		store.update(todo.id, { status: "in_progress" });
-		reconcileChangeArtifacts(store, root, SESSION, () => []);
+		await reconcileChangeArtifacts(store, root, SESSION, async () => []);
 		expect(readBaselines(root, SESSION)[todo.id]).toBeDefined();
 
 		store.remove(todo.id);
-		reconcileChangeArtifacts(store, root, SESSION, () => []);
+		await reconcileChangeArtifacts(store, root, SESSION, async () => []);
 		expect(readBaselines(root, SESSION)[todo.id]).toBeUndefined();
 		expect(otherSessionWindows(root, "sess-other")).toBe(false);
 	} finally {
@@ -419,7 +433,7 @@ test("an orphan baseline (its item removed from the plan) is pruned by the next 
 	}
 });
 
-test("dropItemBaseline closes one removed item's window; removeSessionBaselines drops the whole sidecar", () => {
+test("dropItemBaseline closes one removed item's window; removeSessionBaselines drops the whole sidecar", async () => {
 	const { root } = tempStore();
 	try {
 		writeBaselines(root, SESSION, {
@@ -441,17 +455,61 @@ test("dropItemBaseline closes one removed item's window; removeSessionBaselines 
 	}
 });
 
-test("a pending reset drops the persisted baseline", () => {
+test("a pending reset drops the persisted baseline", async () => {
 	const { store, root } = tempStore();
 	try {
 		const todo = store.add({ title: "step" });
 		store.update(todo.id, { status: "in_progress" });
-		reconcileChangeArtifacts(store, root, SESSION, () => ["a.ts"]);
+		await reconcileChangeArtifacts(store, root, SESSION, async () => ["a.ts"]);
 		expect(readBaselines(root, SESSION)[todo.id]).toBeDefined();
 		store.update(todo.id, { status: "pending" });
-		reconcileChangeArtifacts(store, root, SESSION, () => ["a.ts"]);
+		await reconcileChangeArtifacts(store, root, SESSION, async () => ["a.ts"]);
 		expect(readBaselines(root, SESSION)[todo.id]).toBeUndefined();
 	} finally {
 		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test("a UI removal landing during an in-flight reconcile leaves no orphan window", async () => {
+	const dataDir = mkdtempSync(join(tmpdir(), "todos-race-data-"));
+	const worktree = mkdtempSync(join(tmpdir(), "todos-race-wt-"));
+	const prevDataDir = process.env.THINKRAIL_DATA_DIR;
+	process.env.THINKRAIL_DATA_DIR = dataDir;
+	try {
+		execFileSync("git", ["init", "-b", "main"], { cwd: worktree, stdio: "ignore" });
+		execFileSync(
+			"git",
+			["-c", "user.email=t@t", "-c", "user.name=t", "commit", "--allow-empty", "-m", "init"],
+			{ cwd: worktree, stdio: "ignore" },
+		);
+		saveWorkspaces([
+			{
+				id: "ws-todo-race",
+				projectId: "p1",
+				name: "race",
+				branch: "main",
+				baseBranch: "main",
+				worktreePath: worktree,
+				createdAt: 0,
+			} as Workspace,
+		]);
+		writeFileSync(join(worktree, "dirty.ts"), "work\n");
+		const store = new TodoStore(worktree, SESSION);
+		const todo = store.add({ title: "step" });
+		store.update(todo.id, { status: "in_progress" });
+
+		const reconcile = maybeAttachChangeArtifacts("ws-todo-race", SESSION);
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		const removal = removeTodo({ workspaceId: "ws-todo-race", sessionId: SESSION, id: todo.id });
+		await Promise.all([reconcile, removal]);
+
+		expect(store.get(todo.id)).toBeUndefined();
+		expect(readBaselines(worktree, SESSION)[todo.id]).toBeUndefined();
+		expect(otherSessionWindows(worktree, "sess-other")).toBe(false);
+	} finally {
+		if (prevDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
+		else process.env.THINKRAIL_DATA_DIR = prevDataDir;
+		rmSync(dataDir, { recursive: true, force: true });
+		rmSync(worktree, { recursive: true, force: true });
 	}
 });

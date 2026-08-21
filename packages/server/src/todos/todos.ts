@@ -14,7 +14,7 @@ import {
 } from "pi-todos/core";
 import { gitStatus } from "../git";
 import { getWorkspace } from "../workspaces";
-import { settleChangeArtifacts } from "./artifacts";
+import { enqueueTodoMutation, settleChangeArtifacts } from "./artifacts";
 import { dropItemBaseline, removeSessionBaselines } from "./baselines";
 
 function storeFor(workspaceId: string, sessionId: string): TodoStore {
@@ -23,12 +23,15 @@ function storeFor(workspaceId: string, sessionId: string): TodoStore {
 
 const commitFilesCache = new Map<string, GitFileChange[]>();
 
-function resolveCommitFiles(workspaceId: string, sha: string): GitFileChange[] | undefined {
+async function resolveCommitFiles(
+	workspaceId: string,
+	sha: string,
+): Promise<GitFileChange[] | undefined> {
 	const key = `${workspaceId}\u0000${sha}`;
 	const hit = commitFilesCache.get(key);
 	if (hit) return hit;
 	try {
-		const files = gitStatus(workspaceId, { kind: "commit", sha }).changes;
+		const files = (await gitStatus(workspaceId, { kind: "commit", sha })).changes;
 		commitFilesCache.set(key, files);
 		return files;
 	} catch {
@@ -36,13 +39,15 @@ function resolveCommitFiles(workspaceId: string, sha: string): GitFileChange[] |
 	}
 }
 
-function toWireItem(workspaceId: string, item: StoredItem): TodoItem {
+async function toWireItem(workspaceId: string, item: StoredItem): Promise<TodoItem> {
 	if (!item.artifacts) return item;
-	const artifacts = item.artifacts.map((a): TodoArtifact => {
-		if (a.kind !== "commit" || !a.sha) return a;
-		const files = resolveCommitFiles(workspaceId, a.sha);
-		return files ? { ...a, files } : a;
-	});
+	const artifacts = await Promise.all(
+		item.artifacts.map(async (a): Promise<TodoArtifact> => {
+			if (a.kind !== "commit" || !a.sha) return a;
+			const files = await resolveCommitFiles(workspaceId, a.sha);
+			return files ? { ...a, files } : a;
+		}),
+	);
 	return { ...item, artifacts };
 }
 
@@ -53,12 +58,14 @@ export async function listTodos(params: {
 	await settleChangeArtifacts(params.workspaceId);
 	const plan = storeFor(params.workspaceId, params.sessionId).read();
 	return {
-		todos: plan.todos.map((t) => toWireItem(params.workspaceId, t)),
-		groups: plan.groups.map((group) => ({
-			...group,
-			todos: group.todos.map((t) => toWireItem(params.workspaceId, t)),
-			status: groupStatus(group),
-		})),
+		todos: await Promise.all(plan.todos.map((t) => toWireItem(params.workspaceId, t))),
+		groups: await Promise.all(
+			plan.groups.map(async (group) => ({
+				...group,
+				todos: await Promise.all(group.todos.map((t) => toWireItem(params.workspaceId, t))),
+				status: groupStatus(group),
+			})),
+		),
 	};
 }
 
@@ -70,8 +77,13 @@ export function openTodoCount(plan: StoredPlan): number {
 	return flatItems(plan).filter((item) => item.status !== "done").length;
 }
 
-export function removeSessionTodoWindows(params: { workspaceId: string; sessionId: string }): void {
-	removeSessionBaselines(getWorkspace(params.workspaceId).worktreePath, params.sessionId);
+export function removeSessionTodoWindows(params: {
+	workspaceId: string;
+	sessionId: string;
+}): Promise<void> {
+	return enqueueTodoMutation(params.workspaceId, () => {
+		removeSessionBaselines(getWorkspace(params.workspaceId).worktreePath, params.sessionId);
+	});
 }
 
 export function addTodo(params: {
@@ -107,11 +119,17 @@ export function updateTodo(params: {
 	return result.todo;
 }
 
-export function removeTodo(params: { workspaceId: string; sessionId: string; id: string }): {
+export function removeTodo(params: {
+	workspaceId: string;
+	sessionId: string;
+	id: string;
+}): Promise<{
 	ok: true;
-} {
-	const root = getWorkspace(params.workspaceId).worktreePath;
-	new TodoStore(root, params.sessionId).remove(params.id);
-	dropItemBaseline(root, params.sessionId, params.id);
-	return { ok: true } as const;
+}> {
+	return enqueueTodoMutation(params.workspaceId, () => {
+		const root = getWorkspace(params.workspaceId).worktreePath;
+		new TodoStore(root, params.sessionId).remove(params.id);
+		dropItemBaseline(root, params.sessionId, params.id);
+		return { ok: true } as const;
+	});
 }
