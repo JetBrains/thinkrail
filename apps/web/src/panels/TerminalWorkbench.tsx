@@ -2,6 +2,7 @@ import type { TerminalTabsPush } from "@thinkrail/contracts";
 import { WS_CHANNELS } from "@thinkrail/contracts";
 import { Plus } from "lucide-react";
 import { lazy, type ReactNode, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { IconTooltip } from "../components/ui/tooltip";
 import type { TerminalTab } from "../store";
 import { isConnectedGeneration, toast, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
@@ -65,16 +66,17 @@ export function useTerminalCatalog(workspaceId: string | null): boolean {
 export function TerminalWorkbenchBody({ tab, onAdd }: { tab: TerminalTab; onAdd: () => void }) {
 	return (
 		<div data-testid="terminal-panel" className="relative h-full min-h-0 bg-container-terminal-bg">
-			<button
-				type="button"
-				data-testid="terminal-add"
-				aria-label="New terminal"
-				title="New terminal"
-				onClick={onAdd}
-				className="absolute top-1 right-1 z-10 flex size-5 items-center justify-center rounded-[var(--radius-sm)] bg-container-elevated-bg text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
-			>
-				<Plus className="size-4" />
-			</button>
+			<IconTooltip label="New terminal">
+				<button
+					type="button"
+					data-testid="terminal-add"
+					aria-label="New terminal"
+					onClick={onAdd}
+					className="absolute top-1 right-1 z-10 flex size-5 items-center justify-center rounded-[var(--radius-sm)] bg-container-elevated-bg text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+				>
+					<Plus className="size-4" />
+				</button>
+			</IconTooltip>
 			<Suspense fallback={null}>
 				<TerminalInstance
 					tabKey={tab.tabKey}

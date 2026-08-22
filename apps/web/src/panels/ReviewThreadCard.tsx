@@ -1,5 +1,6 @@
 import { Send, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { IconTooltip } from "../components/ui/tooltip";
 import type { ReviewThreadActions, ReviewThreadData } from "./reviewWidgets";
 
 function grow(el: HTMLTextAreaElement): void {
@@ -54,28 +55,34 @@ export function ReviewThreadCard({
 				</span>
 				{thread.status === "draft" && (
 					<span className="review-thread-actions">
-						<button
-							type="button"
-							data-testid="review-thread-send"
-							title="Send this comment to the file's review chat"
-							aria-label="Send this comment to the file's review chat"
-							className="review-thread-action"
-							disabled={busy}
-							onClick={() => run(actions.onSendComment)}
-						>
-							<Send className="size-3" />
-						</button>
-						<button
-							type="button"
-							data-testid="review-thread-delete"
-							title="Delete draft"
-							aria-label="Delete draft"
-							className="review-thread-action"
-							disabled={busy}
-							onClick={() => run(actions.onDeleteComment)}
-						>
-							<Trash2 className="size-3" />
-						</button>
+						<IconTooltip label="Send this comment to the file's review chat">
+							<span className="flex">
+								<button
+									type="button"
+									data-testid="review-thread-send"
+									aria-label="Send this comment to the file's review chat"
+									className="review-thread-action disabled:pointer-events-none"
+									disabled={busy}
+									onClick={() => run(actions.onSendComment)}
+								>
+									<Send className="size-3" />
+								</button>
+							</span>
+						</IconTooltip>
+						<IconTooltip label="Delete draft">
+							<span className="flex">
+								<button
+									type="button"
+									data-testid="review-thread-delete"
+									aria-label="Delete draft"
+									className="review-thread-action disabled:pointer-events-none"
+									disabled={busy}
+									onClick={() => run(actions.onDeleteComment)}
+								>
+									<Trash2 className="size-3" />
+								</button>
+							</span>
+						</IconTooltip>
 					</span>
 				)}
 			</div>

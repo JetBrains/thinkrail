@@ -1,5 +1,6 @@
 import { Check, Copy, Pilcrow } from "lucide-react";
 import { lazy, Suspense, useState } from "react";
+import { IconTooltip } from "@/components/ui/tooltip";
 import { copyText, isMarkdownPath } from "@/lib/utils";
 import type { DiffTab } from "../store";
 import { selectDiffTabTargetRef, useAppStore } from "../store";
@@ -175,21 +176,22 @@ function HeaderIconButton({
 	children: React.ReactNode;
 }) {
 	return (
-		<button
-			type="button"
-			data-testid={testid}
-			data-active={active}
-			aria-pressed={active}
-			aria-label={label}
-			title={label}
-			onClick={onClick}
-			className={`flex size-6 items-center justify-center rounded-[var(--radius-sm)] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary ${
-				active
-					? "bg-container-elevated-bg text-text-default"
-					: "text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
-			}`}
-		>
-			{children}
-		</button>
+		<IconTooltip label={label}>
+			<button
+				type="button"
+				data-testid={testid}
+				data-active={active}
+				aria-pressed={active}
+				aria-label={label}
+				onClick={onClick}
+				className={`flex size-6 items-center justify-center rounded-[var(--radius-sm)] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary ${
+					active
+						? "bg-container-elevated-bg text-text-default"
+						: "text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+				}`}
+			>
+				{children}
+			</button>
+		</IconTooltip>
 	);
 }

@@ -7,6 +7,8 @@ import type {
 import { GitBranch, MessageSquarePlus, SquareTerminal } from "lucide-react";
 import { lazy, type ReactNode, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { ErrorBoundary } from "../components/ErrorBoundary";
+import { DropdownMenuItem } from "../components/ui/dropdown-menu";
+import { IconTooltip } from "../components/ui/tooltip";
 import { type LayoutAttention, layoutResourceIdentity } from "../lib";
 import { ChangesPanel } from "../panels/ChangesPanel";
 import { DiffPane } from "../panels/DiffPane";
@@ -566,18 +568,29 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				renderCenterActions={(groupId) => (
 					<>
 						<WorkspaceChatHistory workspaceId={workspaceId} targetGroupId={groupId} />
-						<button
-							type="button"
-							data-testid="new-terminal"
-							aria-label="New terminal in this group"
-							title="New terminal in this group"
-							onClick={() => useAppStore.getState().addTerminal(workspaceId, undefined, groupId)}
-							className="flex w-7 shrink-0 items-center justify-center border-border-default border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
-						>
-							<SquareTerminal className="size-4" />
-						</button>
+						<IconTooltip label="New terminal in this group">
+							<button
+								type="button"
+								data-testid="new-terminal"
+								aria-label="New terminal in this group"
+								onClick={() => useAppStore.getState().addTerminal(workspaceId, undefined, groupId)}
+								className="flex w-7 shrink-0 items-center justify-center border-border-default border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+							>
+								<SquareTerminal className="size-4" />
+							</button>
+						</IconTooltip>
 					</>
 				)}
+				renderSideMenuActions={(side, groupId) =>
+					side === "right" ? (
+						<DropdownMenuItem
+							data-testid="side-new-terminal"
+							onSelect={() => useAppStore.getState().addTerminal(workspaceId, undefined, groupId)}
+						>
+							New terminal
+						</DropdownMenuItem>
+					) : null
+				}
 				onCommit={commit}
 				onAttentionChange={changeAttention}
 				onUserNavigation={() => useAppStore.getState().noteNavigation(workspaceId)}

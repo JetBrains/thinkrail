@@ -1,6 +1,7 @@
 import { ChevronRight, GitBranch, Settings } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "../components/ui/resizable";
+import { IconTooltip } from "../components/ui/tooltip";
 import { ProjectTree } from "../panels/ProjectTree";
 import { SettingsDialog } from "../panels/SettingsDialog";
 import { Toaster } from "../panels/Toaster";
@@ -137,16 +138,17 @@ export function Shell() {
 							{STATUS_LABEL[status]}
 						</span>
 					</span>
-					<button
-						type="button"
-						data-testid="open-settings"
-						aria-label="Settings"
-						title="Settings"
-						onClick={() => useAppStore.getState().openSettings()}
-						className="flex size-7 items-center justify-center rounded-[var(--radius-sm)] text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
-					>
-						<Settings className="size-4" />
-					</button>
+					<IconTooltip label="Settings">
+						<button
+							type="button"
+							data-testid="open-settings"
+							aria-label="Settings"
+							onClick={() => useAppStore.getState().openSettings()}
+							className="flex size-7 items-center justify-center rounded-[var(--radius-sm)] text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
+						>
+							<Settings className="size-4" />
+						</button>
+					</IconTooltip>
 				</div>
 				<SettingsDialog layoutSettings={<LayoutSettings />} />
 			</header>
