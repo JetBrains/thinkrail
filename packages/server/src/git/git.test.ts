@@ -213,6 +213,24 @@ test("prefetchBranch fetches a remote ref and no-ops on a local ref or unknown p
 	expect(await prefetchBranch("nope", "origin/main")).toEqual({ ok: false, moved: false });
 });
 
+test("prefetchBranch refuses a ref git would read as a refspec", async () => {
+	const remoteRepo = join(dataDir, "remote.git");
+	git(repo, "init", "--bare", remoteRepo);
+	git(repo, "remote", "add", "origin", remoteRepo);
+	git(repo, "push", "origin", "main");
+
+	for (const ref of [
+		"origin/+main:refs/heads/victim",
+		"origin/main:refs/heads/attacker-created",
+		"origin/main~1",
+		"origin/../../etc/passwd",
+	]) {
+		expect(await prefetchBranch("p1", ref)).toEqual({ ok: false, moved: false });
+	}
+	expect(existsSync(join(repo, ".git", "refs", "heads", "victim"))).toBe(false);
+	expect(existsSync(join(repo, ".git", "refs", "heads", "attacker-created"))).toBe(false);
+});
+
 test("gitStatus reads the Default workspace's branch live, not the persisted snapshot", () => {
 	writeFileSync(
 		join(dataDir, "workspaces.json"),

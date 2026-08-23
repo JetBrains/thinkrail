@@ -19,8 +19,25 @@ ref off the workspace-create critical path.
 
 - **Owns:** `git(cwd, args)` (spawn git *sync*, capture trimmed stdout/stderr + ok; `opts.raw` keeps
   stdout byte-exact for file-content reads) and `gitAsync(cwd,
-  args)` (its async twin — `Bun.spawn`, off the event loop, for network-bound ops like `fetch` that must
-  not block the host);
+  args)` (its async twin — off the event loop through `subprocess`' `runBounded`, for network-bound ops
+  like `fetch` that must not block the host: it owns only the git-shaped part, the 55s budget and the
+  stalled/stderr wording, never the child-lifetime mechanics). **A timeout keeps whatever git wrote before
+  the kill**: the runner drains continuously, so on expiry its `err` already holds the real diagnosis —
+  a publickey rejection, a proxy's refusal, `remote:` progress proving a large transfer was simply still
+  running. The ssh-key hint is what we say when git wrote *nothing*, never advice pasted over an
+  observation we already have (the message never names a cause we did not observe);
+  **`remoteTrackingRef(ref)`** → `refs/remotes/<ref>` for an `origin/` ref, else `null` — **the one place
+  that spelling is built**, so the probe below and `workspaces`' `worktree add` cannot drift apart;
+  **`remoteRefOid(repoPath, ref)`** → the oid `refs/remotes/<ref>` resolves to, or `null` — **the one way
+  to ask whether a remote-tracking ref is present**, shared by `prefetchBranch` (which compares oids to
+  report `moved`), `resolveDefaultBranch`'s `origin/main` fallback, and `workspaces`' create fallback. It
+  probes the **full** `refs/remotes/` path behind
+  `--end-of-options`: the `origin/<b>` shorthand goes through git's disambiguation and can resolve to a
+  tag or a local branch of that name, so the call sites would have raced over different objects. "One way"
+  is literal — no caller re-spells the `rev-parse` by hand;
+  **`nonInteractiveGitEnv()`** — the environment *both* runners spawn under, with no caller override
+  (`git`'s only option is `raw`): `process.env` plus `GIT_TERMINAL_PROMPT=0`, and **nothing else**. It reads
+  no config and rewrites none of the user's ssh setup;
   **the scope→range resolver** — `resolveDiffRange(ws, scope?)` → `DiffRange` — **the one definition of what
   a `GitDiffScope` means** (`branch`: `git diff <merge-base(base, HEAD)>` + untracked, sides = **fork
   point** ↔ worktree — what the workspace changed *since diverging*, so a base that advanced underneath it
@@ -95,9 +112,13 @@ ref off the workspace-create critical path.
   detach); **`canonicalPath(path)`** — the symlink-resolved form any path compared against git output must
   take (git resolves symlinks, a caller's path does not), shared with `workspaces`' worktree-identity
   checks; `prefetchBranch(projectId, ref)` — best-effort background
-  `git fetch` of a remote ref (via `gitAsync`, branch passed after `--` so a `-`-prefixed name can't be
-  parsed as a git option), so a later `createWorkspace` branches off a fresh tip without the network
-  round-trip on its critical path (non-`origin/` ref / offline → no-op). Its result also says whether the
+  `git fetch` of a remote ref (via `gitAsync`), so a later `createWorkspace` branches off a fresh tip
+  without the network round-trip on its critical path (non-`origin/` ref / offline → no-op). Its ref is
+  **wire-supplied and passes the same `isSafeRef` gate `createWorkspace` uses** before it reaches git:
+  `--` separates *options*, not refspecs, so `--`-after-`fetch` alone stopped a `-`-prefixed name and
+  nothing else — `origin/+main:refs/heads/victim` would have arrived as a **refspec** and let any client
+  force-overwrite or create arbitrary local branches in every open project (an unsafe ref → the same
+  `{ ok: false, moved: false }` no-op, never a throw, because this path is fire-and-forget). Its result also says whether the
   fetch **`moved`** the local remote-tracking ref (first appearance included; compared on the
   fully-qualified `refs/remotes/…` — the exact ref a fetch updates — so a local branch literally named
   `origin/<b>` can't shadow the check via git's DWIM order): a moved ref *may* change what a sibling
@@ -133,13 +154,15 @@ ref off the workspace-create critical path.
   **writes** the user's branch; the caller serializes it per workspace.
   **`gitHeadSha(workspaceId)`** → `string | null` — `rev-parse HEAD` (`null` on an unborn HEAD), recorded
   into the todos baseline sidecar at `in_progress`.
-- **Public surface (barrel):** `git`, `gitAsync`, `gitStatus`, `gitDiffFile`, `readBlobAt`,
+- **Public surface (barrel):** `git`, `gitAsync`, `nonInteractiveGitEnv`, `remoteRefOid`, `remoteTrackingRef`, `gitStatus`, `gitDiffFile`,
+  `readBlobAt`,
   `gitCommitPaths`, `gitHeadSha`, `listCommits`,
   `resolveDiffRange`, `changedFileArgs`, `diffBaseRef`, `resolveCommitOid`, `DiffRange`, `isSafeRef`,
   `assertSafeRef`, `listBranches`, `resolveDefaultBranch`, `tryCurrentBranch`, `currentBranch`,
   `canonicalPath`, `prefetchBranch`.
 - **Allowed deps:** `persistence` (workspace + project lookup); `contracts` (`Git*`/`BranchList` types);
-  `@thinkrail/shared/codedError` (naming a failure for the wire); Bun (spawn).
+  `subprocess` (`runBounded`, the bounded child behind `gitAsync`);
+  `@thinkrail/shared/codedError` (naming a failure for the wire); Bun (spawn, for the sync runner).
 - **Forbidden:** `host`; sibling features.
 
 ## Get right
@@ -159,3 +182,60 @@ ref off the workspace-create critical path.
 - `gitStatus` reports the **live** current branch for a user-owned (`kind: "default" | "external"`)
   workspace (its branch moves out-of-band — a terminal `git checkout` — and the persisted snapshot
   self-heals only at list time; the Changes header must not lag).
+- **A network git call is bounded by us, not talked out of waiting.** A `fetch` whose remote wants a
+  passphrase blocks on `/dev/tty` forever, and the only thing that ever ended that wait was the *client's*
+  60s request timeout (`transport.ts` `DEFAULT_TIMEOUT_MS`, not overridden for `workspace.create`) — which
+  by construction carries no cause, so the user got `request "workspace.create" timed out` (issue #209).
+  `gitAsync` therefore races the child against a **55s budget** (`opts.timeoutMs` overrides; the tests
+  drive it at 500ms): on expiry it kills the child and resolves with `timed out after <actual>s — the
+  remote never answered`, which `workspaces` carries into the create failure.
+  **The budget is set as high as the client's 60s allows, on purpose.** Any budget below the client's turns
+  a *slow but healthy* operation that used to finish into a hard failure — the first fetch of a large
+  repository over a slow link is the real case. That window is **not closed, only narrowed** to roughly
+  55–58s, and it cannot be closed: a budget at or above the client's would hand the race back to the
+  causeless `request … timed out` this bullet exists to remove. The remaining ~5s is what the throw needs
+  to travel back and still beat the client; if a blocked loop overshoots it, the client's generic timeout
+  fires — the pre-fix behaviour, a degradation rather than a new failure. The ordering itself is **pinned
+  by nothing**: `transport.ts`'s 60s and this 55s are hand-kept numbers in two independently-shipped
+  artifacts, correct by agreement rather than by construction. Deriving one from the other belongs in
+  `contracts`, and is deliberately out of this change's scope.
+  **The message never names a cause we did not observe.** All we know on expiry is that the remote did not
+  answer; an unloaded SSH key is offered as *a* likely cause, conditional on the remote using SSH, because
+  asserting it outright mis-diagnosed every `https://` stall and every slow-link fetch as an auth problem.
+  Elapsed seconds are floored at 1: `Math.round` renders a sub-500ms wait as `0s`, which reads as a bug.
+  **It is a lower bound, not a ceiling.** `setTimeout` cannot fire while the loop is blocked, and the
+  *sync* runner blocks it by design (`Bun.spawnSync`), so the real wait is the budget plus whatever
+  sibling `git()` calls hold the loop for — measured at 6× the budget under a deliberate storm. Hence the
+  message reports the **elapsed** time rather than the configured budget: the number the user reads is
+  never a fiction. Closing the gap would mean moving git off the loop entirely, which this ticket does not
+  buy. The timer is `unref`'d: it exists to *bound* a wait, so it must never itself be the reason the host
+  stays alive — an in-flight fire-and-forget `prefetchBranch` would otherwise hold shutdown open for up to
+  the full budget.
+  **`boundedStderr` cuts the middle, not the tail.** git's own words are always last, and a tail cut hid
+  them: `git.ts`'s `exists on disk, but not in` probe sits *after* the path, so losing it turned an
+  ordinary miss into a `console.warn` storm. Residual, unfixed, and inherent to any fixed-size cut — a
+  message long enough to push that phrase into the elided middle (a ~2000-character path *and* a
+  ~800-character ref) still loses it, and moving the head/tail split only moves the window.
+  **The wait ends when git exits, not when git's pipes do.** That distinction is `subprocess`'
+  (`runBounded`) to keep, and getting it wrong inverted this feature: a grandchild `ssh` — a
+  `ControlMaster`, a credential-cache daemon, a corporate wrapper — inherits `stderr` and outlives git, so
+  reading to EOF never returns *even when the fetch succeeded*. With the read as the completion signal, a
+  fetch that finished in milliseconds was reported as a full-budget authentication failure.
+  Verified both ways by `gitExec.test.ts`: a `core.sshCommand` that backgrounds a stderr-holding child and
+  exits 0 yields git's own `Could not read from remote repository` in well under a second, and yielded the
+  stalled message after the full budget before the fix.
+- **We never touch the user's ssh client — that was tried and withdrawn.** Appending `-o BatchMode=yes` to
+  their effective ssh command (`GIT_SSH_COMMAND`, else `core.sshCommand`, else `ssh`) fixes #209 for the
+  common setup, and cannot be made safe. Two of its failures are unfixable
+  in principle, not merely unfixed: `BatchMode` suppresses `SSH_ASKPASS`, so every user whose desktop
+  passphrase dialog *worked* loses it — the dialog **is** a wait for a human, so forbidding the wait
+  forbids the dialog; and delivering a *per-repo* option through `GIT_SSH_COMMAND`, a *process*-scoped
+  variable that outranks `core.sshCommand`, inverts priority for every other repo touched under that env —
+  a submodule with its own deploy key gets the parent's client. Four further defects followed from having to
+  rewrite a command we must first parse the way git does (`split_cmdline`) — a quoted plink path slipping the
+  non-OpenSSH bail-out, corporate wrappers rejecting the `-o`, `GIT_SSH` bailing out with the hang left
+  unfixed, and a `spawnSync` config read per `git()`. The budget above needs none of it: it is blind to which
+  ssh client, which variant, which wrapper, and whether an askpass exists.
+- **The env layers over `process.env`, never replaces it.** `boot`'s `resolveShellEnv()` repairs `PATH`/`LANG`
+  by *mutating* `process.env`; a bare env object would drop that repair and `SSH_AUTH_SOCK` with it, and a
+  live agent socket is what lets the user who did load their key fetch without any prompt at all.

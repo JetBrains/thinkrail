@@ -15,6 +15,8 @@ import {
 	currentBranch,
 	git,
 	gitAsync,
+	remoteRefOid,
+	remoteTrackingRef,
 	resolveDefaultBranch,
 	resolveDiffRange,
 	tryCurrentBranch,
@@ -221,11 +223,21 @@ export async function createWorkspace(
 		baseBranch = head.ok ? head.out : "HEAD";
 	}
 	assertSafeRef(baseBranch);
-	if (
-		baseBranch.startsWith("origin/") &&
-		!git(project.path, ["rev-parse", "--verify", "--quiet", baseBranch]).ok
-	) {
-		await gitAsync(project.path, ["fetch", "origin", "--", baseBranch.slice("origin/".length)]);
+	const remoteBase = remoteTrackingRef(baseBranch);
+	const baseMissing = () => remoteRefOid(project.path, baseBranch) === null;
+	if (remoteBase && baseMissing()) {
+		const fetched = await gitAsync(project.path, [
+			"fetch",
+			"origin",
+			"--",
+			baseBranch.slice("origin/".length),
+		]);
+		if (baseMissing())
+			throw new Error(
+				fetched.ok
+					? `Could not fetch ${baseBranch}: origin does not map it into refs/remotes — check remote.origin.fetch`
+					: `Could not fetch ${baseBranch}: ${fetched.err || "git wrote no error output"}`,
+			);
 	}
 
 	const worktreePath = join(dataDir(), "worktrees", project.slug, branch);
@@ -238,7 +250,7 @@ export async function createWorkspace(
 		branch,
 		"--no-track",
 		"--end-of-options",
-		baseBranch,
+		remoteBase ?? baseBranch,
 	]);
 	if (!added.ok) throw new Error(`git worktree add failed: ${added.err}`);
 
