@@ -78,15 +78,22 @@ separate layout snapshot and merely references `tabKey`.
 - **`closeTerminalTab` checks `busy` and kills in the same synchronous pass.** A separately-asked question
   lets a process started in between die unannounced.
 - Recorder rules: raw bytes (not a serialized grid); never replay resize events; re-emit observed private
-  modes; **never record the alt screen**, tracking it as a *stream* since a switch can split across PTY reads
+  modes **except mouse tracking (1000/1002/1003/1006)** — those belong to a live foreground program, and a TUI
+  that exits without its own `DECRST` leaves the last observed value stuck at `on`, so re-emitting it into a
+  fresh xterm at a bare prompt turns every mouse move into an SGR report the shell echoes back as garbage;
+  **never record the alt screen**, tracking it as a *stream* since a switch can split across PTY reads
   and both screens can appear in one; **never record a mode sequence itself** (replaying `?1049h` would flip
-  the fresh terminal to the alt screen); applied in one write on bind.
+  the fresh terminal to the alt screen); applied in one write on bind. **`restore()` parses what it is handed
+  instead of copying it** — the persisted string is a `snapshot()`, so a verbatim copy moves its mode preamble
+  into the body, where it stops being a re-derivable summary and becomes literal bytes that every later
+  snapshot replays and re-persists: one bad mode then outlives the run that observed it, across restarts.
 - Attach hands back the recording and then **discards** held batcher output — the replay already contains it.
 
 ## Validation
 
 - `outputRecorder.test.ts` — bounds, line/escape-safe trimming, alt-screen exclusion (incl. a switch split
-  across reads and enter+exit in one read), mode restoration.
+  across reads and enter+exit in one read), mode restoration, mouse tracking never restored, and `restore()`
+  keeping mode sequences out of the body (incl. a recording persisted by a host that still replayed them).
 - `outputBatcher.test.ts` — batching, backpressure, truncation, `reset`.
 - `shellBusy.test.ts` — child detection, including that an unanswerable platform reports *not* busy.
 - `terminalManager.test.ts` — attach idempotency (incl. concurrent), takeover, displaced-client rejection,
