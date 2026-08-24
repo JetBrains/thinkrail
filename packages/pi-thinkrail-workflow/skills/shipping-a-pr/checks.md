@@ -17,6 +17,12 @@ the workflow — the terminal state is declared below.
   the branch.
 - Never report a check green on hope: the report below is written from observed check states only.
 
+## Before declaring done: the base, not just CI
+
+Checks only observe CI — they say nothing about the base moving underneath. Query the merge state:
+`gh pr view <n> --json mergeStateStatus -q .mergeStateStatus`. `BEHIND` or `DIRTY` → read and
+follow `syncing.md`, then return here. Only a head current with its base is reported done.
+
 ## Terminal state (this workflow ends here)
 
 Done means: the PR exists, is up to date with its base, its checks are **green**, and the user has

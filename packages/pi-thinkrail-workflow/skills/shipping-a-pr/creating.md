@@ -4,17 +4,20 @@ Entry: finished work on a branch, no PR yet. Saves the body draft at
 `.thinkrail/context/pr-body.md`. Control continues at `screenshots.md` (UI-visible change) or
 `checks.md`.
 
-## Gates — all four pass before `gh pr create`, in this order
+## Gates — all five pass before `gh pr create`, in this order
 
-1. **Fresh base.** `git fetch origin`, then rebase onto the base branch (default `origin/main`).
+1. **Committed, clean worktree.** Everything that ships is committed — `git status --porcelain`
+   comes back empty. Work git doesn't hold (uncommitted edits, untracked files) will not reach the
+   PR, and the rebase in the next gate needs a clean tree anyway.
+2. **Fresh base.** `git fetch origin`, then rebase onto the base branch (default `origin/main`).
    Conflicts are resolved now, not after review starts.
-2. **Clean branch.** Remove throwaway artifacts — repro tests, capture specs, scratch files, test
+3. **Clean branch.** Remove throwaway artifacts — repro tests, capture specs, scratch files, test
    output dirs. Read `git log --oneline <base>..HEAD` and `git status --short` as the reviewer will:
    every file in the diff must be explainable in one line.
-3. **Verified.** Run the project's own verification gates (its agent instructions / package
+4. **Verified.** Run the project's own verification gates (its agent instructions / package
    scripts) — *after* the rebase, not before. New behavior ships with tests; if the project's
    convention demands a suite class (e.g. e2e) not yet run for this change, run it now.
-4. **Self-review.** Re-read the full diff (`git diff <base>...HEAD` plus working tree) as a
+5. **Self-review.** Re-read the full diff (`git diff <base>...HEAD` plus working tree) as a
    reviewer, holding the project's handoff-hygiene bar: no silent lint/type suppressions, no comment
    creep, no half-migrated patterns, no leftovers. Fix what you find; don't annotate it.
 
@@ -33,7 +36,9 @@ Red flags — stop, a gate is being rationalized away:
     migration steps.
   - `## Testing` — the actual commands run and their results ("`bun run e2e` — 252 passed"), never
     a bare "tests pass".
-- **Create**:
+- **Push, then create** — `gh pr create --head` does **not** push for you: push the verified head
+  first (`git push -u origin <branch>`; `--force-with-lease` when the remote branch exists and was
+  rebased), then
   `gh pr create --base <base> --head <branch> --title "…" --body-file .thinkrail/context/pr-body.md`
   — add `--repo` when the remote is ambiguous; `--draft` only when the user asked for a draft.
   Never pass the body inline: long inline/heredoc bodies have truncated and failed; the body file
