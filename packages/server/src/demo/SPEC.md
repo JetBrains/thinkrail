@@ -37,8 +37,10 @@ on it (see the web onboarding SPEC).
     managed worktree dirs keyed by project slug ([[submodule-server-workspaces]]).
   - `ensureDemoProject()` — idempotent: when the target is absent, copy the bundled template into it
     (never mutating the bundled source), then hand off to `initProject` (git init + initial commit, or a
-    short-circuit `openProject` when the repo already exists). Returns the `Project`. A second call
-    re-opens the existing record rather than re-initialising.
+    short-circuit `openProject` when the repo already exists) and set the display **`name`** to
+    "To Do App" via `projects`' `setProjectName` (the folder + `slug` stay `to-do-app`; the existing
+    display-name field, not a new naming concept). Returns the `Project`. A second call re-opens the
+    existing record rather than re-initialising.
   - `removeDemoFiles()` — `rm -rf` the user-local copy. The *domain* half of a reset (archiving the
     demo's workspaces + dropping the project record via `deleteProject`) is orchestrated by `host`, which
     can reach the per-workspace teardown seams this module must not (terminals, spec index, reviews,

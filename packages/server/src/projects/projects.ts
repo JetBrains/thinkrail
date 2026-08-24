@@ -124,6 +124,17 @@ export function closeProject(id: string): Project {
 	return project;
 }
 
+export function setProjectName(id: string, name: string): Project {
+	const projects = getProjects();
+	const project = projects.find((p) => p.id === id);
+	if (!project) throw new Error(`Unknown project: ${id}`);
+	if (project.name === name) return project;
+	project.name = name;
+	saveProjects(projects);
+	emit(project);
+	return project;
+}
+
 export function setProjectTrust(
 	id: string,
 	trusted: boolean,

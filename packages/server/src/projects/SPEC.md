@@ -41,7 +41,11 @@ bootstrap it into one so it can be opened.
   — `host` answers the lazy `project.hasSpecs` query via `spec.projectHasSpecs`, keeping this module free
   of any spec dependency.)
 - **Public surface (barrel):** `openProject`, `listProjects`, `listRecentProjects`, `closeProject`,
-  `deleteProject`, `getProjects`, `setProjectPublisher`, `inspectProjectPath`, `initProject`.
+  `deleteProject`, `setProjectName`, `getProjects`, `setProjectPublisher`, `inspectProjectPath`,
+  `initProject`. **`setProjectName(id, name)`** overwrites the **display `name`** only (never the
+  path-derived `slug`), persists, and emits `project.updated` — the demo project uses it for a friendly
+  "To Do App" title while its folder/slug stay `to-do-app`. `name` is display-only; `openProject` seeds it
+  from the folder basename at first open and never overwrites it on reopen, so a set name survives.
 - **Allowed deps:** `persistence`; the `git` sub-module (shared `git()` runner, bound to live `env` for
   config overrides); `contracts` (`Project`, `ProjectPathStatus`); Node/Bun.
 - **Forbidden:** `host`; sibling features other than `git` (`workspaces` depends on `projects`, never the

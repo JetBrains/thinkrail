@@ -19,6 +19,7 @@ test("enter the demo, the coach guides creating two workspaces, then reset repla
 	await demoCard.click();
 
 	await expect(page.getByTestId("project-item")).toHaveCount(1);
+	await expect(page.getByTestId("welcome-title")).toHaveText("To Do App");
 	await expect(page.getByTestId("welcome-cta")).toContainText("Start building");
 
 	const coach = page.getByTestId("onboarding-coach");

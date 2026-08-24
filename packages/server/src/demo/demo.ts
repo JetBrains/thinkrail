@@ -2,9 +2,10 @@ import { cpSync, existsSync, mkdirSync, rmSync } from "node:fs";
 import { join, resolve } from "node:path";
 import type { Project } from "@thinkrail/contracts";
 import { dataDir } from "../persistence";
-import { initProject } from "../projects";
+import { initProject, setProjectName } from "../projects";
 
 export const DEMO_APP_DIR = "to-do-app";
+export const DEMO_DISPLAY_NAME = "To Do App";
 
 function templateRoot(): string {
 	return process.env.THINKRAIL_DEMO_DIR ?? resolve(import.meta.dir, "../../assets/demo");
@@ -22,7 +23,7 @@ export function ensureDemoProject(): Project {
 		mkdirSync(join(dataDir(), "demo"), { recursive: true });
 		cpSync(source, target, { recursive: true });
 	}
-	return initProject(target);
+	return setProjectName(initProject(target).id, DEMO_DISPLAY_NAME);
 }
 
 export function removeDemoFiles(): void {

@@ -33,6 +33,8 @@ test("ensureDemoProject copies the template, inits a real repo, and opens it", (
 	const project = ensureDemoProject();
 
 	expect(project.path).toBe(realpathSync(demoProjectPath()));
+	expect(project.name).toBe("To Do App");
+	expect(project.slug).toBe("to-do-app");
 	expect(existsSync(join(demoProjectPath(), "index.html"))).toBe(true);
 	expect(existsSync(join(demoProjectPath(), "src", "app.js"))).toBe(true);
 	expect(gitOut(demoProjectPath(), "rev-parse", "HEAD")).not.toBe("");
