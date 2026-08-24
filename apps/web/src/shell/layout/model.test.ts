@@ -251,10 +251,12 @@ describe("workspace layout model", () => {
 		expect(document.bottom.alignment).toBe("full");
 		expect(document.bottom.height).toBe(0.7);
 		document = closeLayoutTab(document, terminal.id).document;
-		expect(document.bottom.groups[0]?.tabs).toEqual([]);
+		expect(document.bottom.groups).toHaveLength(1);
+		expect(document.bottom.groups[0]?.tabs).toEqual([toolTab("changes")]);
+		expect(document.bottom.groups[0]?.weight).toBe(1);
 		expect(document.bottom.visible).toBe(true);
 		document = closeLayoutTab(document, "tool:changes").document;
-		expect(document.bottom.groups).toHaveLength(2);
+		expect(document.bottom.groups).toEqual([]);
 		expect(document.bottom.visible).toBe(false);
 		expect(document.toolRestoreTargets.changes?.region).toBe("bottom");
 		const revealed = mutation(revealTool(document, "changes", 6, 2));
@@ -263,6 +265,64 @@ describe("workspace layout model", () => {
 		);
 		expect(revealed.document.bottom.visible).toBe(true);
 		expect(validateLayoutDocument(revealed.document, 6, 2)).toEqual([]);
+	});
+
+	test("bottom removal drops only the group newly vacated by its final tab", () => {
+		const terminal: LayoutTerminalTab = {
+			kind: "terminal",
+			id: "terminal:bottom",
+			name: "Bottom terminal",
+			tabKey: "bottom",
+		};
+		const document = baseDocument([file("one")]);
+		document.bottom = {
+			visible: true,
+			height: 0.3,
+			alignment: "center",
+			groups: [
+				{ id: "deliberate-empty", weight: 0.25, folded: false, tabs: [] },
+				{ id: "vacated", weight: 0.75, folded: false, tabs: [terminal] },
+			],
+		};
+
+		const closed = closeLayoutTab(document, terminal.id).document;
+
+		expect(closed.bottom.groups).toEqual([
+			{ id: "deliberate-empty", weight: 1, folded: false, tabs: [] },
+		]);
+		expect(closed.bottom.visible).toBe(false);
+	});
+
+	test("moving a bottom group's final tab removes its source group", () => {
+		const terminal: LayoutTerminalTab = {
+			kind: "terminal",
+			id: "terminal:bottom",
+			name: "Bottom terminal",
+			tabKey: "bottom",
+		};
+		const document = baseDocument([file("one")]);
+		document.bottom = {
+			visible: true,
+			height: 0.3,
+			alignment: "center",
+			groups: [
+				{ id: "source", weight: 0.4, folded: false, tabs: [terminal] },
+				{ id: "destination", weight: 0.6, folded: false, tabs: [toolTab("changes")] },
+			],
+		};
+
+		const moved = mutation(
+			moveTabToGroup(document, terminal, { area: "bottom", groupId: "destination" }),
+		).document;
+
+		expect(moved.bottom.groups).toEqual([
+			{
+				id: "destination",
+				weight: 1,
+				folded: false,
+				tabs: [toolTab("changes"), terminal],
+			},
+		]);
 	});
 
 	test("bottom hide and show preserve focus, restore tools, and seed a process-free slot", () => {

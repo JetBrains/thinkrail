@@ -296,10 +296,14 @@ function removeTabFromSide(region: LayoutSideRegion, tabId: string): LayoutSideR
 
 function removeTabFromBottom(region: LayoutBottomRegion, tabId: string): LayoutBottomRegion {
 	if (!region.groups.some((group) => group.tabs.some((tab) => tab.id === tabId))) return region;
-	const groups = region.groups.map((group) => ({
-		...group,
-		tabs: group.tabs.filter((tab) => tab.id !== tabId),
-	}));
+	const remaining = region.groups.flatMap((group) => {
+		if (!group.tabs.some((tab) => tab.id === tabId)) return [group];
+		const tabs = group.tabs.filter((tab) => tab.id !== tabId);
+		return tabs.length > 0 ? [{ ...group, tabs }] : [];
+	});
+	const total = remaining.reduce((sum, group) => sum + group.weight, 0);
+	const groups =
+		total > 0 ? remaining.map((group) => ({ ...group, weight: group.weight / total })) : remaining;
 	return {
 		...region,
 		visible: region.visible && groups.some((group) => group.tabs.length > 0),

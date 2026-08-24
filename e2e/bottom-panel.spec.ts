@@ -60,6 +60,23 @@ async function expectHorizontalSpan(surface: Locator, start: Locator, end: Locat
 		.toBeLessThan(4);
 }
 
+async function expectVerticalSpan(surface: Locator, start: Locator, end: Locator): Promise<void> {
+	await expect
+		.poll(async () => {
+			const [surfaceBox, startBox, endBox] = await Promise.all([
+				surface.boundingBox(),
+				start.boundingBox(),
+				end.boundingBox(),
+			]);
+			if (!surfaceBox || !startBox || !endBox) return Number.POSITIVE_INFINITY;
+			return Math.max(
+				Math.abs(surfaceBox.y - startBox.y),
+				Math.abs(surfaceBox.y + surfaceBox.height - (endBox.y + endBox.height)),
+			);
+		})
+		.toBeLessThan(4);
+}
+
 async function dragHandle(page: Page, handle: Locator, x: number, y: number): Promise<void> {
 	const box = await handle.boundingBox();
 	if (!box) throw new Error("resize handle has no bounding box");
@@ -425,6 +442,48 @@ test("bottom height, all alignments, and keyboard resizing persist across reload
 	await expectHorizontalSpan(page.getByTestId("bottom-panel"), left, center);
 });
 
+test("bottom alignments give excluded lower corners to the actual side panels", async ({
+	page,
+}) => {
+	await openDefaultWorkbench(page);
+	const workbench = page.getByTestId("workbench");
+	const center = page.getByTestId("center-tabs");
+	const left = page.getByTestId("left-stack");
+	const right = page.getByTestId("right-stack");
+
+	const cases = [
+		{ name: "Below center", leftOwnsCorner: true, rightOwnsCorner: true },
+		{ name: "Below center and left", leftOwnsCorner: false, rightOwnsCorner: true },
+		{ name: "Below center and right", leftOwnsCorner: true, rightOwnsCorner: false },
+		{ name: "Full width", leftOwnsCorner: false, rightOwnsCorner: false },
+	];
+	for (const alignment of cases) {
+		await setBottomAlignment(page, alignment.name);
+		await expectVerticalSpan(
+			left,
+			alignment.leftOwnsCorner ? workbench : center,
+			alignment.leftOwnsCorner ? workbench : center,
+		);
+		await expectVerticalSpan(
+			right,
+			alignment.rightOwnsCorner ? workbench : center,
+			alignment.rightOwnsCorner ? workbench : center,
+		);
+		await pressPlatformShortcut(page, "Shift+j");
+		await expectVerticalSpan(
+			left,
+			alignment.leftOwnsCorner ? workbench : center,
+			alignment.leftOwnsCorner ? workbench : center,
+		);
+		await expectVerticalSpan(
+			right,
+			alignment.rightOwnsCorner ? workbench : center,
+			alignment.rightOwnsCorner ? workbench : center,
+		);
+		await pressPlatformShortcut(page, "Shift+j");
+	}
+});
+
 test("bottom alignments follow locally compressed side geometry at narrow widths", async ({
 	page,
 }) => {
@@ -482,6 +541,16 @@ test("bottom groups arrange left-to-right, resize, fold to 27px, restore, and en
 	await expect(bottomGroups(page)).toHaveCount(2);
 	await expect(bottomGroups(page).nth(0)).toContainText("Terminal 1");
 	await expect(bottomGroups(page).nth(1)).toContainText("Changes");
+
+	await page.getByTestId("tab-changes").click({ button: "right" });
+	await page.getByRole("menuitem", { name: /Move to bottom group/ }).click();
+	await waitForLayoutSettled(page);
+	await expect(bottomGroups(page)).toHaveCount(1);
+	await expect(bottomGroups(page).nth(0)).toContainText("Terminal 1");
+	await expect(bottomGroups(page).nth(0)).toContainText("Changes");
+	await page.getByTestId("tab-changes").click({ button: "right" });
+	await page.getByRole("menuitem", { name: "New bottom group at right", exact: true }).click();
+	await expect(bottomGroups(page)).toHaveCount(2);
 
 	const first = bottomGroups(page).nth(0);
 	const second = bottomGroups(page).nth(1);

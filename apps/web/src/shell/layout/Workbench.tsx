@@ -1985,61 +1985,19 @@ function BottomStack({
 
 function BottomAlignedRow({
 	document,
-	projectedLeft,
-	projectedRight,
 	children,
 }: {
 	document: WorkspaceLayoutDocument;
-	projectedLeft: number;
-	projectedRight: number;
 	children: ReactNode;
 }) {
-	const start =
-		document.bottom.alignment === "center" || document.bottom.alignment === "center-right"
-			? projectedLeft
-			: 0;
-	const end =
-		document.bottom.alignment === "center" || document.bottom.alignment === "center-left"
-			? projectedRight
-			: 0;
-	const body = Math.max(Number.EPSILON, 100 - start - end);
-	const layout = useMemo(
-		() => [...(start > 0 ? [start] : []), body, ...(end > 0 ? [end] : [])],
-		[body, end, start],
-	);
-	const groupRef = useRef<ImperativePanelGroupHandle>(null);
-	useEffect(() => {
-		const group = groupRef.current;
-		if (group && !sameSizes(group.getLayout(), layout, 0.01)) group.setLayout(layout);
-	}, [layout]);
 	return (
-		<ResizablePanelGroup
-			ref={groupRef}
-			key={tupleKey(
-				"bottom-alignment",
-				document.bottom.alignment,
-				String(start > 0),
-				String(end > 0),
-			)}
-			direction="horizontal"
+		<div
 			data-testid="bottom-aligned-row"
 			data-alignment={document.bottom.alignment}
-			className="min-h-0 min-w-0"
+			className="h-full min-h-0 min-w-0"
 		>
-			{start > 0 ? (
-				<ResizablePanel id="bottom-start-spacer" order={1} defaultSize={start}>
-					<div aria-hidden="true" className="h-full bg-container-workspace-bg" />
-				</ResizablePanel>
-			) : null}
-			<ResizablePanel id="bottom-aligned-body" order={2} defaultSize={body}>
-				{children}
-			</ResizablePanel>
-			{end > 0 ? (
-				<ResizablePanel id="bottom-end-spacer" order={3} defaultSize={end}>
-					<div aria-hidden="true" className="h-full bg-container-workspace-bg" />
-				</ResizablePanel>
-			) : null}
-		</ResizablePanelGroup>
+			{children}
+		</div>
 	);
 }
 
@@ -2449,44 +2407,55 @@ export function Workbench({
 		Math.max(10, 100 - visibleSideMinimums),
 		workbenchWidth > 0 ? (LAYOUT_LIMITS.minCenterWidth / workbenchWidth) * 100 : 10,
 	);
+	const leftOwnsBottomCorner =
+		leftVisible &&
+		document.bottom.alignment !== "center-left" &&
+		document.bottom.alignment !== "full";
+	const rightOwnsBottomCorner =
+		rightVisible &&
+		document.bottom.alignment !== "center-right" &&
+		document.bottom.alignment !== "full";
+	const leftInAlignedRow = leftVisible && !leftOwnsBottomCorner;
+	const rightInAlignedRow = rightVisible && !rightOwnsBottomCorner;
+	const globalLeftCurrent = leftVisible ? document.left.width * 100 : 0;
+	const globalRightCurrent = rightVisible ? document.right.width * 100 : 0;
+	const alignedWidthCurrent =
+		100 -
+		(leftOwnsBottomCorner ? globalLeftCurrent : 0) -
+		(rightOwnsBottomCorner ? globalRightCurrent : 0);
 	const outerCurrent = useMemo(
 		() => [
-			...(leftVisible ? [document.left.width * 100] : []),
-			100 -
-				(leftVisible ? document.left.width * 100 : 0) -
-				(rightVisible ? document.right.width * 100 : 0),
-			...(rightVisible ? [document.right.width * 100] : []),
+			...(leftOwnsBottomCorner ? [globalLeftCurrent] : []),
+			alignedWidthCurrent,
+			...(rightOwnsBottomCorner ? [globalRightCurrent] : []),
 		],
-		[document.left.width, document.right.width, leftVisible, rightVisible],
+		[
+			alignedWidthCurrent,
+			globalLeftCurrent,
+			globalRightCurrent,
+			leftOwnsBottomCorner,
+			rightOwnsBottomCorner,
+		],
 	);
-	const [projectedOuter, setProjectedOuter] = useState<readonly number[]>(outerCurrent);
-	const activeProjection =
-		projectedOuter.length === outerCurrent.length ? projectedOuter : outerCurrent;
-	const projectedLeft = leftVisible ? (activeProjection[0] ?? 0) : 0;
-	const projectedRight = rightVisible ? (activeProjection.at(-1) ?? 0) : 0;
-	const outerGroupRef = useRef<ImperativePanelGroupHandle>(null);
-	useEffect(() => {
-		const group = outerGroupRef.current;
-		if (group && !sameSizes(group.getLayout(), outerCurrent)) group.setLayout(outerCurrent);
-	}, [outerCurrent]);
-	const outerResize = useCommittedSizes(
-		outerCurrent,
-		remoteEpoch,
-		(sizes) => {
-			let index = 0;
+	const outerTopology = tupleKey(
+		"outer-workbench",
+		String(leftOwnsBottomCorner),
+		String(rightOwnsBottomCorner),
+		String(remoteEpoch),
+	);
+	const [alignedProjection, setAlignedProjection] = useState({
+		topology: outerTopology,
+		width: alignedWidthCurrent,
+	});
+	const projectedAlignedWidth =
+		alignedProjection.topology === outerTopology ? alignedProjection.width : alignedWidthCurrent;
+	const commitSideSizes = useCallback(
+		(entries: ReadonlyArray<readonly [LayoutSide, number]>) => {
 			let next = document;
 			const collapsedSides: LayoutSide[] = [];
-			if (leftVisible) {
-				const size = sizes[index] ?? outerCurrent[index] ?? 18;
-				if (size <= Number.EPSILON) collapsedSides.push("left");
-				else next = resizeSideRegion(next, "left", size / 100);
-				index += 1;
-			}
-			index += 1;
-			if (rightVisible) {
-				const size = sizes[index] ?? outerCurrent[index] ?? 28;
-				if (size <= Number.EPSILON) collapsedSides.push("right");
-				else next = resizeSideRegion(next, "right", size / 100);
+			for (const [side, size] of entries) {
+				if (size <= Number.EPSILON) collapsedSides.push(side);
+				else next = resizeSideRegion(next, side, size / 100);
 			}
 			if (collapsedSides.length === 0) {
 				if (next !== document) onCommit(next);
@@ -2498,14 +2467,80 @@ export function Workbench({
 			}
 			apply(result);
 		},
+		[apply, document, onCommit],
+	);
+	const outerGroupRef = useRef<ImperativePanelGroupHandle>(null);
+	useEffect(() => {
+		const group = outerGroupRef.current;
+		if (group && !sameSizes(group.getLayout(), outerCurrent)) group.setLayout(outerCurrent);
+	}, [outerCurrent]);
+	const outerResize = useCommittedSizes(
+		outerCurrent,
+		remoteEpoch,
+		(sizes) => {
+			const entries: Array<readonly [LayoutSide, number]> = [];
+			if (leftOwnsBottomCorner) entries.push(["left", sizes[0] ?? globalLeftCurrent]);
+			if (rightOwnsBottomCorner) {
+				entries.push(["right", sizes.at(-1) ?? globalRightCurrent]);
+			}
+			commitSideSizes(entries);
+		},
 		onRemoteGestureCanceled,
 	);
 	const projectOuterLayout = useCallback(
 		(sizes: number[]) => {
-			setProjectedOuter((current) => (sameSizes(current, sizes, 0.01) ? current : [...sizes]));
+			const alignedIndex = leftOwnsBottomCorner ? 1 : 0;
+			const width = sizes[alignedIndex] ?? alignedWidthCurrent;
+			setAlignedProjection((current) =>
+				current.topology === outerTopology && Math.abs(current.width - width) < 0.01
+					? current
+					: { topology: outerTopology, width },
+			);
 			outerResize.onLayout(sizes);
 		},
-		[outerResize.onLayout],
+		[alignedWidthCurrent, leftOwnsBottomCorner, outerResize.onLayout, outerTopology],
+	);
+	const alignedRowCurrent = useMemo(() => {
+		const widths = [
+			...(leftInAlignedRow ? [globalLeftCurrent] : []),
+			Math.max(
+				Number.EPSILON,
+				projectedAlignedWidth -
+					(leftInAlignedRow ? globalLeftCurrent : 0) -
+					(rightInAlignedRow ? globalRightCurrent : 0),
+			),
+			...(rightInAlignedRow ? [globalRightCurrent] : []),
+		];
+		const total = widths.reduce((sum, width) => sum + width, 0);
+		return widths.map((width) => (width / total) * 100);
+	}, [
+		globalLeftCurrent,
+		globalRightCurrent,
+		leftInAlignedRow,
+		projectedAlignedWidth,
+		rightInAlignedRow,
+	]);
+	const alignedRowGroupRef = useRef<ImperativePanelGroupHandle>(null);
+	useEffect(() => {
+		const group = alignedRowGroupRef.current;
+		if (group && !sameSizes(group.getLayout(), alignedRowCurrent, 0.01)) {
+			group.setLayout(alignedRowCurrent);
+		}
+	}, [alignedRowCurrent]);
+	const alignedRowResize = useCommittedSizes(
+		alignedRowCurrent,
+		remoteEpoch,
+		(sizes) => {
+			const entries: Array<readonly [LayoutSide, number]> = [];
+			if (leftInAlignedRow) {
+				entries.push(["left", ((sizes[0] ?? 0) * projectedAlignedWidth) / 100]);
+			}
+			if (rightInAlignedRow) {
+				entries.push(["right", ((sizes.at(-1) ?? 0) * projectedAlignedWidth) / 100]);
+			}
+			commitSideSizes(entries);
+		},
+		onRemoteGestureCanceled,
 	);
 	const bottomVisible = document.bottom.visible && document.bottom.groups.length > 0;
 	const hiddenBottomTargetGroupId =
@@ -2654,20 +2689,172 @@ export function Workbench({
 		onRevealTool: revealMissingTool,
 		canFocusAdjacentGroup,
 	};
-	const mainRow = (
+	const alignedWidth = Math.max(Number.EPSILON, projectedAlignedWidth);
+	const alignedSideMinimum = Math.min(100, (8 / alignedWidth) * 100);
+	const alignedCenterMinimum = Math.min(100, (centerMinimumPercent / alignedWidth) * 100);
+	const alignedColumnMinimum = Math.min(
+		100,
+		centerMinimumPercent + (leftInAlignedRow ? 8 : 0) + (rightInAlignedRow ? 8 : 0),
+	);
+	const sideStack = (side: LayoutSide) => (
+		<SideStack
+			side={side}
+			region={document[side]}
+			remoteEpoch={remoteEpoch}
+			onCommit={onCommit}
+			{...shared}
+		/>
+	);
+	const centerView = (
+		<main data-testid="center-tabs" className="h-full min-h-0 min-w-0">
+			<CenterNodeView
+				node={document.center}
+				remoteEpoch={remoteEpoch}
+				onCommit={onCommit}
+				onNewChat={onNewChat}
+				renderEmptyCenter={renderEmptyCenter}
+				renderCenterActions={renderCenterActions}
+				{...shared}
+			/>
+		</main>
+	);
+	const alignedTopRow = (
 		<ResizablePanelGroup
-			ref={outerGroupRef}
+			ref={alignedRowGroupRef}
 			key={tupleKey(
-				"outer-workbench",
-				String(leftVisible),
-				String(rightVisible),
+				"aligned-workbench-row",
+				String(leftInAlignedRow),
+				String(rightInAlignedRow),
 				String(remoteEpoch),
 			)}
+			direction="horizontal"
+			onLayout={alignedRowResize.onLayout}
+			className="h-full min-h-0 min-w-0"
+		>
+			{leftInAlignedRow ? (
+				<>
+					<ResizablePanel
+						id="layout-left"
+						order={1}
+						defaultSize={alignedRowCurrent[0]}
+						minSize={alignedSideMinimum}
+						collapsedSize={0}
+						collapsible
+					>
+						{sideStack("left")}
+					</ResizablePanel>
+					<ResizableHandle
+						direction="horizontal"
+						data-testid="resize-left"
+						onDragging={alignedRowResize.onDragging}
+						onKeyDownCapture={alignedRowResize.onKeyboard}
+						onKeyUpCapture={alignedRowResize.onKeyboardEnd}
+					/>
+				</>
+			) : null}
+			<ResizablePanel
+				id="layout-center"
+				order={2}
+				defaultSize={alignedRowCurrent[leftInAlignedRow ? 1 : 0]}
+				minSize={alignedCenterMinimum}
+			>
+				{centerView}
+			</ResizablePanel>
+			{rightInAlignedRow ? (
+				<>
+					<ResizableHandle
+						direction="horizontal"
+						data-testid="resize-right"
+						onDragging={alignedRowResize.onDragging}
+						onKeyDownCapture={alignedRowResize.onKeyboard}
+						onKeyUpCapture={alignedRowResize.onKeyboardEnd}
+					/>
+					<ResizablePanel
+						id="layout-right"
+						order={3}
+						defaultSize={alignedRowCurrent[alignedRowCurrent.length - 1]}
+						minSize={alignedSideMinimum}
+						collapsedSize={0}
+						collapsible
+					>
+						{sideStack("right")}
+					</ResizablePanel>
+				</>
+			) : null}
+		</ResizablePanelGroup>
+	);
+	const alignedColumn = bottomVisible ? (
+		<ResizablePanelGroup
+			ref={bottomGroupRef}
+			key={tupleKey("workbench-bottom", String(remoteEpoch))}
+			direction="vertical"
+			onLayout={bottomResize.onLayout}
+			className="min-h-0 min-w-0 flex-1"
+		>
+			<ResizablePanel id="layout-main-row" order={1} defaultSize={bottomCurrent[0]} minSize={30}>
+				{alignedTopRow}
+			</ResizablePanel>
+			<ResizableHandle
+				direction="vertical"
+				data-testid="resize-bottom"
+				onDragging={bottomResize.onDragging}
+				onKeyDownCapture={bottomResize.onKeyboard}
+				onKeyUpCapture={bottomResize.onKeyboardEnd}
+			/>
+			<ResizablePanel
+				id="layout-bottom"
+				order={2}
+				defaultSize={bottomCurrent[1]}
+				minSize={bottomMinimumPercent}
+				maxSize={LAYOUT_LIMITS.maxBottomHeight * 100}
+				collapsedSize={0}
+				collapsible
+			>
+				<BottomAlignedRow document={document}>
+					<BottomStack
+						remoteEpoch={remoteEpoch}
+						onCommit={onCommit}
+						onNewTerminal={onNewTerminal}
+						{...shared}
+					/>
+				</BottomAlignedRow>
+			</ResizablePanel>
+		</ResizablePanelGroup>
+	) : (
+		<div className="flex h-full min-h-0 min-w-0 flex-col">
+			<div className="min-h-0 min-w-0 flex-1">{alignedTopRow}</div>
+			<div className="h-7 shrink-0">
+				<BottomAlignedRow document={document}>
+					<HiddenBottomRail
+						onShow={showBottomRegion}
+						dropEnabled={
+							!!draggingTab &&
+							canPlaceLayoutTab(draggingTab, "bottom") &&
+							(hiddenBottomTargetGroupId !== undefined ||
+								canCreateAuxiliaryGroup(
+									document,
+									"bottom",
+									draggingTab,
+									maxBottomGroups,
+									document.bottom.groups.length,
+								))
+						}
+						targetGroupId={hiddenBottomTargetGroupId}
+						targetIndex={document.bottom.groups.length}
+					/>
+				</BottomAlignedRow>
+			</div>
+		</div>
+	);
+	const workbenchColumns = (
+		<ResizablePanelGroup
+			ref={outerGroupRef}
+			key={outerTopology}
 			direction="horizontal"
 			onLayout={projectOuterLayout}
 			className="h-full min-h-0 min-w-0 flex-1"
 		>
-			{leftVisible ? (
+			{leftOwnsBottomCorner ? (
 				<>
 					<ResizablePanel
 						id="layout-left"
@@ -2677,13 +2864,7 @@ export function Workbench({
 						collapsedSize={0}
 						collapsible
 					>
-						<SideStack
-							side="left"
-							region={document.left}
-							remoteEpoch={remoteEpoch}
-							onCommit={onCommit}
-							{...shared}
-						/>
+						{sideStack("left")}
 					</ResizablePanel>
 					<ResizableHandle
 						direction="horizontal"
@@ -2695,24 +2876,14 @@ export function Workbench({
 				</>
 			) : null}
 			<ResizablePanel
-				id="layout-center"
+				id="layout-aligned-column"
 				order={2}
-				defaultSize={outerCurrent[leftVisible ? 1 : 0]}
-				minSize={centerMinimumPercent}
+				defaultSize={outerCurrent[leftOwnsBottomCorner ? 1 : 0]}
+				minSize={alignedColumnMinimum}
 			>
-				<main data-testid="center-tabs" className="h-full min-h-0 min-w-0">
-					<CenterNodeView
-						node={document.center}
-						remoteEpoch={remoteEpoch}
-						onCommit={onCommit}
-						onNewChat={onNewChat}
-						renderEmptyCenter={renderEmptyCenter}
-						renderCenterActions={renderCenterActions}
-						{...shared}
-					/>
-				</main>
+				{alignedColumn}
 			</ResizablePanel>
-			{rightVisible ? (
+			{rightOwnsBottomCorner ? (
 				<>
 					<ResizableHandle
 						direction="horizontal"
@@ -2729,13 +2900,7 @@ export function Workbench({
 						collapsedSize={0}
 						collapsible
 					>
-						<SideStack
-							side="right"
-							region={document.right}
-							remoteEpoch={remoteEpoch}
-							onCommit={onCommit}
-							{...shared}
-						/>
+						{sideStack("right")}
 					</ResizablePanel>
 				</>
 			) : null}
@@ -2787,84 +2952,7 @@ export function Workbench({
 						targetIndex={document.left.groups.length}
 					/>
 				) : null}
-				<div className="flex min-h-0 min-w-0 flex-1 flex-col">
-					{bottomVisible ? (
-						<ResizablePanelGroup
-							ref={bottomGroupRef}
-							key={tupleKey("workbench-bottom", String(remoteEpoch))}
-							direction="vertical"
-							onLayout={bottomResize.onLayout}
-							className="min-h-0 min-w-0 flex-1"
-						>
-							<ResizablePanel
-								id="layout-main-row"
-								order={1}
-								defaultSize={bottomCurrent[0]}
-								minSize={30}
-							>
-								{mainRow}
-							</ResizablePanel>
-							<ResizableHandle
-								direction="vertical"
-								data-testid="resize-bottom"
-								onDragging={bottomResize.onDragging}
-								onKeyDownCapture={bottomResize.onKeyboard}
-								onKeyUpCapture={bottomResize.onKeyboardEnd}
-							/>
-							<ResizablePanel
-								id="layout-bottom"
-								order={2}
-								defaultSize={bottomCurrent[1]}
-								minSize={bottomMinimumPercent}
-								maxSize={LAYOUT_LIMITS.maxBottomHeight * 100}
-								collapsedSize={0}
-								collapsible
-							>
-								<BottomAlignedRow
-									document={document}
-									projectedLeft={projectedLeft}
-									projectedRight={projectedRight}
-								>
-									<BottomStack
-										remoteEpoch={remoteEpoch}
-										onCommit={onCommit}
-										onNewTerminal={onNewTerminal}
-										{...shared}
-									/>
-								</BottomAlignedRow>
-							</ResizablePanel>
-						</ResizablePanelGroup>
-					) : (
-						<>
-							<div className="min-h-0 min-w-0 flex-1">{mainRow}</div>
-							<div className="h-7 shrink-0">
-								<BottomAlignedRow
-									document={document}
-									projectedLeft={projectedLeft}
-									projectedRight={projectedRight}
-								>
-									<HiddenBottomRail
-										onShow={showBottomRegion}
-										dropEnabled={
-											!!draggingTab &&
-											canPlaceLayoutTab(draggingTab, "bottom") &&
-											(hiddenBottomTargetGroupId !== undefined ||
-												canCreateAuxiliaryGroup(
-													document,
-													"bottom",
-													draggingTab,
-													maxBottomGroups,
-													document.bottom.groups.length,
-												))
-										}
-										targetGroupId={hiddenBottomTargetGroupId}
-										targetIndex={document.bottom.groups.length}
-									/>
-								</BottomAlignedRow>
-							</div>
-						</>
-					)}
-				</div>
+				{workbenchColumns}
 				{!rightVisible ? (
 					<HiddenSideRail
 						side="right"
