@@ -120,6 +120,22 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   repairs dropped add/remove filesystem events. It never opens or fingerprints the generated file. The caller
   debounces events and rechecks existence through the ordinary inspection API.
 
+  **A directory event is not an artifact event.** `fs.watch` is per-directory, and the re-arm above means the
+  watched directory is routinely an *ancestor* — when Central was never installed, `~/.pi/agent/extensions`
+  does not exist and the watcher lands on `~/.pi/agent`, pi's entire state directory. So invalidation is
+  gated on the artifact itself: an event is forwarded only when it names the artifact entry inside the
+  artifact's own directory, and any other event (ancestor churn, a sibling extension, an unnamed/error event)
+  at most re-arms and re-checks existence. Naming the entry — rather than stat-fingerprinting the file — is
+  what keeps "replacement" observable without ever reading the generated artifact.
+
+  This is load-bearing, not defensive: forwarding raw directory events shipped a beta livelock. pi rewrites
+  `auth.json.lock` and `models-store.json` continuously (~23 events/s while idle), each one requested a
+  runtime rebuild, so `settledSequence` never caught `requestedSequence`; `getJbcentralStatus()` pinned
+  `configuring` forever and the card told users with no Central installed that ThinkRail "is applying the
+  latest Central configuration" while the drain rebuilt the pi runtime in a hot loop at ~30% CPU. Debouncing
+  in the caller cannot fix this — the event stream never ends. Pinned by
+  `packages/shared/src/jbcentral.test.ts`.
+
   The adapter deliberately has no migration path for the previous unpublished integration: it never reads or
   edits `models.json`, `auth.json`, backups, or any unrelated PI state.
 

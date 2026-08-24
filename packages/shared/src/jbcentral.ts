@@ -1,6 +1,6 @@
 import { existsSync, watch } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, isAbsolute, join } from "node:path";
+import { basename, dirname, isAbsolute, join } from "node:path";
 import type { JbcentralInstall } from "@thinkrail/contracts";
 
 export type ParseEnv = Record<string, string | undefined>;
@@ -92,7 +92,7 @@ export interface JbcentralAdapterDependencies {
 	exists?: (path: string) => boolean;
 	run?: (request: ProcessRequest) => Promise<ProcessResult>;
 	launchDetached?: (argv: readonly string[]) => LoginHandle | null;
-	watchDirectory?: (path: string, onInvalidate: () => void) => WatchHandle;
+	watchDirectory?: (path: string, onEntry: (entry: string | null) => void) => WatchHandle;
 }
 
 interface SemanticVersion {
@@ -460,9 +460,11 @@ function nearestExistingDirectory(path: string, deps: JbcentralAdapterDependenci
 	return candidate;
 }
 
-function nodeWatchDirectory(path: string, onInvalidate: () => void): WatchHandle {
-	const watcher = watch(path, { persistent: false }, onInvalidate);
-	watcher.on("error", onInvalidate);
+function nodeWatchDirectory(path: string, onEntry: (entry: string | null) => void): WatchHandle {
+	const watcher = watch(path, { persistent: false }, (_event, filename) =>
+		onEntry(typeof filename === "string" ? filename : null),
+	);
+	watcher.on("error", () => onEntry(null));
 	return watcher;
 }
 
@@ -471,6 +473,8 @@ export function watchJbcentralArtifact(
 	deps: JbcentralAdapterDependencies = {},
 ): () => void {
 	const extensionPath = jbcentralExtensionPath(deps);
+	const artifactDirectory = dirname(extensionPath);
+	const artifactName = basename(extensionPath);
 	const watchDirectory = deps.watchDirectory ?? nodeWatchDirectory;
 	let stopped = false;
 	let watchedDirectory: string | null = null;
@@ -504,13 +508,30 @@ export function watchJbcentralArtifact(
 		scheduleRearm();
 	};
 
+	const syncExistence = (): boolean => {
+		const next = pathExists(extensionPath, deps);
+		if (next === artifactExists) return false;
+		artifactExists = next;
+		return true;
+	};
+
+	const handleEntry = (entry: string | null): void => {
+		if (stopped) return;
+		if (entry !== null && watchedDirectory === artifactDirectory) {
+			if (entry === artifactName) invalidate();
+			return;
+		}
+		if (syncExistence()) invalidate();
+		else scheduleRearm();
+	};
+
 	const arm = (): void => {
 		if (stopped) return;
 		const directory = nearestExistingDirectory(extensionPath, deps);
 		if (handle && watchedDirectory === directory) return;
 		closeHandle();
 		try {
-			handle = watchDirectory(directory, invalidate);
+			handle = watchDirectory(directory, handleEntry);
 			watchedDirectory = directory;
 		} catch {
 			scheduleRearm(WATCH_RETRY_MS);
@@ -519,11 +540,7 @@ export function watchJbcentralArtifact(
 
 	const pollExistence = (): void => {
 		if (stopped) return;
-		const nextArtifactExists = pathExists(extensionPath, deps);
-		if (nextArtifactExists !== artifactExists) {
-			artifactExists = nextArtifactExists;
-			invalidate();
-		}
+		if (syncExistence()) invalidate();
 		pollTimer = setTimeout(pollExistence, WATCH_EXISTENCE_POLL_MS);
 		pollTimer.unref?.();
 	};
