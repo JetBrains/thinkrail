@@ -25,6 +25,7 @@ import {
 	useAppStore,
 } from "./appStore";
 import {
+	selectCompactionTurnIds,
 	selectCurrentRouteChatTarget,
 	selectDiffScope,
 	selectLastOpenChatSession,
@@ -740,6 +741,28 @@ test("a failed compaction settles into a visible, actionable notice — and a ca
 	store.handlePiEvent(compactionStart("manual"), "a");
 	store.handlePiEvent(compactionEnd({ reason: "manual", result: undefined, aborted: true }), "a");
 	expect(compactionTurns("a")).toMatchObject([{ status: "failed" }, { status: "cancelled" }]);
+});
+
+test("manual compaction rejection appends one failed row only when no lifecycle was observed", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", null, "medium");
+
+	const beforeEarlyFailure = selectCompactionTurnIds(useAppStore.getState(), "a");
+	store.appendCompactionFailureUnlessObserved("a", beforeEarlyFailure, "host unavailable");
+	expect(compactionTurns("a")).toMatchObject([{ status: "failed", detail: "host unavailable" }]);
+
+	const beforePiFailure = selectCompactionTurnIds(useAppStore.getState(), "a");
+	store.handlePiEvent(compactionStart("manual"), "a");
+	store.handlePiEvent(
+		compactionEnd({ reason: "manual", result: undefined, errorMessage: "Nothing to compact" }),
+		"a",
+	);
+	store.appendCompactionFailureUnlessObserved("a", beforePiFailure, "request rejected");
+
+	expect(compactionTurns("a")).toMatchObject([
+		{ status: "failed", detail: "host unavailable" },
+		{ status: "failed", detail: "Nothing to compact" },
+	]);
 });
 
 test("a compaction_end with no observed start still lands a settled notice (connected mid-compaction)", () => {

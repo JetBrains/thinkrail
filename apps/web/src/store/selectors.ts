@@ -16,7 +16,13 @@ import {
 	normalizePath,
 	readLayoutSelection,
 } from "../lib";
-import type { ClosedChat, EditorTab, RouteChatTarget, TerminalTab } from "./appStore";
+import type {
+	ClosedChat,
+	EditorTab,
+	RouteChatTarget,
+	SessionRuntime,
+	TerminalTab,
+} from "./appStore";
 
 interface ConnectionGenerationState {
 	status: string;
@@ -341,6 +347,17 @@ export function selectChatTitle(
 	const tabs = state.tabsByWorkspace[workspaceId] ?? [];
 	const chatTab = tabs.find((t) => t.kind === "chat" && t.sessionId === sessionId);
 	return (chatTab?.name ?? "Chat").trim() || "Chat";
+}
+
+export function selectCompactionTurnIds(
+	state: { sessions: Record<string, SessionRuntime> },
+	sessionId: string,
+): ReadonlySet<string> {
+	return new Set(
+		(state.sessions[sessionId]?.turns ?? [])
+			.filter((turn) => turn.kind === "compaction")
+			.map((turn) => turn.id),
+	);
 }
 
 export function selectWorkspaceTick(
