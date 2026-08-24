@@ -77,6 +77,16 @@ export function WelcomePanel() {
 		/>
 	);
 
+	const demoCard = () => (
+		<Card
+			icon={Sparkles}
+			title="Try the To Do App"
+			subtitle="Spin up a ready-made demo project and learn the ThinkRail loop in three quick steps."
+			data-testid="welcome-demo"
+			onClick={() => void startDemo()}
+		/>
+	);
+
 	const openProjectCard = () => (
 		<AddProjectMenu
 			recentProjects={recentProjects}
@@ -113,13 +123,7 @@ export function WelcomePanel() {
 				{noProjects ? (
 					<>
 						{openProjectCard()}
-						<Card
-							icon={Sparkles}
-							title="Try the To Do App"
-							subtitle="Spin up a ready-made demo project and learn the ThinkRail loop in three quick steps."
-							data-testid="welcome-demo"
-							onClick={() => void startDemo()}
-						/>
+						{demoCard()}
 					</>
 				) : hasSpecs === null ? null : hasSpecs ? (
 					<>
@@ -132,6 +136,7 @@ export function WelcomePanel() {
 							onClick={() => setDialog({ projectId: project.id, prompt: "" })}
 						/>
 						{projectFolderCard(project.id)}
+						{demoCard()}
 					</>
 				) : (
 					<>
@@ -157,6 +162,7 @@ export function WelcomePanel() {
 							onClick={() => setDialog({ projectId: project.id, prompt: "" })}
 						/>
 						{projectFolderCard(project.id)}
+						{demoCard()}
 					</>
 				)}
 			</div>
