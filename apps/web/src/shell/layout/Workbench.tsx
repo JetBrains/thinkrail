@@ -29,7 +29,6 @@ import {
 	Check,
 	ChevronDown,
 	ChevronLeft,
-	ChevronRight,
 	File,
 	GitCompareArrows,
 	ListTodo,
@@ -551,19 +550,11 @@ function TabStrip({
 			data-drop-active={groupDrop.isOver || undefined}
 			className="relative flex h-panel-header-row shrink-0 items-stretch border-border-default border-b bg-container-workspace-bg data-[drop-active]:bg-primary-subtle"
 		>
-			<button
-				type="button"
-				aria-label="Scroll tabs left"
-				onClick={() => scroller.current?.scrollBy({ left: -180, behavior: "smooth" })}
-				className="flex w-6 shrink-0 items-center justify-center border-border-muted border-r text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
-			>
-				<ChevronLeft className="size-3.5" />
-			</button>
 			<div
 				ref={scroller}
 				role="tablist"
 				aria-label={`${location.area} group tabs`}
-				className="flex min-w-0 flex-1 items-stretch overflow-x-auto overflow-y-hidden [scrollbar-width:none]"
+				className="flex min-w-0 flex-1 items-stretch overflow-x-auto overflow-y-hidden [scrollbar-color:transparent_transparent] [scrollbar-width:thin] supports-[selector(::-webkit-scrollbar)]:[scrollbar-width:auto] [&::-webkit-scrollbar]:!h-0.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-transparent [&::-webkit-scrollbar-track]:bg-transparent hover:[scrollbar-color:var(--color-border-default)_transparent] hover:[&::-webkit-scrollbar-thumb]:bg-border-default focus-within:[scrollbar-color:var(--color-border-default)_transparent] focus-within:[&::-webkit-scrollbar-thumb]:bg-border-default"
 				onWheel={(event) => {
 					if (!scroller.current || Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
 					scroller.current.scrollLeft += event.deltaY;
@@ -639,14 +630,6 @@ function TabStrip({
 				) : null}
 			</div>
 			{trailing}
-			<button
-				type="button"
-				aria-label="Scroll tabs right"
-				onClick={() => scroller.current?.scrollBy({ left: 180, behavior: "smooth" })}
-				className="flex w-6 shrink-0 items-center justify-center border-border-muted border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
-			>
-				<ChevronRight className="size-3.5" />
-			</button>
 			<Popover open={overflowOpen} onOpenChange={setOverflowOpen}>
 				<PopoverTrigger
 					aria-label="Search open tabs"
@@ -880,22 +863,24 @@ function WorkbenchTab({
 						onClick={selectFromClick}
 						onDoubleClick={selectFromDoubleClick}
 						onKeyDown={onKeyDown}
-						className="flex min-w-0 flex-1 items-center gap-xs py-xs pl-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
+						className={`flex min-w-0 flex-1 items-center gap-xs py-xs pl-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary ${tab.kind === "tool" ? "pr-sm" : ""}`}
 					>
 						{tabIcon(tab)}
 						<span className={`truncate ${preview ? "italic" : ""}`}>{tab.name}</span>
 						{renderTabAdornment(tab)}
 					</button>
-					<button
-						type="button"
-						tabIndex={-1}
-						data-testid={tab.kind === "terminal" ? "terminal-tab-close" : "editor-tab-close"}
-						aria-label={`Close ${tab.name}`}
-						onClick={onClose}
-						className="mr-xs rounded-[var(--radius-sm)] p-0.5 opacity-0 hover:bg-control-bg-hovered group-hover:opacity-100 focus:opacity-100"
-					>
-						<X className="size-3.5" />
-					</button>
+					{tab.kind !== "tool" ? (
+						<button
+							type="button"
+							tabIndex={-1}
+							data-testid={tab.kind === "terminal" ? "terminal-tab-close" : "editor-tab-close"}
+							aria-label={`Close ${tab.name}`}
+							onClick={onClose}
+							className="mr-xs rounded-[var(--radius-sm)] p-0.5 opacity-0 hover:bg-control-bg-hovered group-hover:opacity-100 focus:opacity-100"
+						>
+							<X className="size-3.5" />
+						</button>
+					) : null}
 				</div>
 			</ContextMenuTrigger>
 			<ContextMenuContent>

@@ -42,6 +42,10 @@ async function height(locator: Locator): Promise<number> {
 	return box.height;
 }
 
+async function scrollbarColor(locator: Locator): Promise<string> {
+	return locator.evaluate((element) => getComputedStyle(element).scrollbarColor);
+}
+
 async function dragHandle(page: Page, handle: Locator, x: number, y: number): Promise<void> {
 	const box = await handle.boundingBox();
 	if (!box) throw new Error("resize handle has no bounding box");
@@ -104,6 +108,7 @@ test("workbench strips and feature toolbars keep one-row geometry with ARIA tabs
 	for (const strip of [centerStrip, rightStrip, bottomStrip]) {
 		await expect(strip).toHaveCSS("height", "28px");
 		await expect(strip.getByRole("tablist")).toHaveCount(1);
+		await expect(strip.getByRole("button", { name: /^Scroll tabs (left|right)$/ })).toHaveCount(0);
 		const active = strip.locator('[role="tab"][aria-selected="true"]');
 		await expect(active).toHaveCount(1);
 		const panelId = await active.getAttribute("aria-controls");
@@ -116,11 +121,65 @@ test("workbench strips and feature toolbars keep one-row geometry with ARIA tabs
 	const centerScroller = centerStrip.getByRole("tablist");
 	await expect(centerScroller).toHaveCSS("overflow-x", "auto");
 	await expect(centerScroller).toHaveCSS("overflow-y", "hidden");
+	for (const tool of ["projects", "specs", "files", "changes", "review"]) {
+		await expect(
+			page.getByTestId(`tab-${tool}`).getByRole("button", { name: /^Close / }),
+		).toHaveCount(0);
+	}
+	await expect(centerStrip.getByTestId("editor-tab-close")).toHaveCount(1);
+	await expect(bottomStrip.getByTestId("terminal-tab-close")).toHaveCount(1);
 
 	await page.getByTestId("tab-changes").click();
 	await expect(page.getByTestId("chat-toolbar")).toHaveCSS("height", "28px");
 	await expect(page.getByTestId("chat-toolbar")).toHaveCSS("overflow-x", "clip");
 	await expect(page.getByTestId("changes-view-toggle")).toHaveCSS("height", "28px");
+});
+
+test("overflow uses a focus-revealed scrollbar and keyboard navigation reveals the active tab", async ({
+	page,
+}) => {
+	await page.setViewportSize({ width: 800, height: 720 });
+	await openDefaultWorkbench(page);
+	await openKeptFiles(page, [
+		"README.md",
+		"notes.txt",
+		"ALERTS.md",
+		"DIAGRAM.md",
+		"LARGE.md",
+		"LINKS.md",
+	]);
+	const strip = page.getByTestId("center-tab-strip");
+	const tablist = strip.getByRole("tablist");
+	await expect
+		.poll(() => tablist.evaluate((element) => element.scrollWidth > element.clientWidth))
+		.toBe(true);
+
+	const outside = page.getByTestId("open-settings");
+	await outside.hover();
+	await outside.focus();
+	const idleColor = await scrollbarColor(tablist);
+	await tablist.hover();
+	await expect.poll(() => scrollbarColor(tablist)).not.toBe(idleColor);
+	await expect
+		.poll(() =>
+			tablist.evaluate((element) => getComputedStyle(element, "::-webkit-scrollbar").height),
+		)
+		.toBe("2px");
+
+	await outside.hover();
+	await strip.getByRole("tab", { name: /README\.md/ }).focus();
+	await expect.poll(() => scrollbarColor(tablist)).not.toBe(idleColor);
+	await page.keyboard.press("End");
+	const last = strip.getByRole("tab", { name: /LINKS\.md/ });
+	await expect(last).toBeFocused();
+	await expect
+		.poll(async () => {
+			const [listBox, tabBox] = await Promise.all([tablist.boundingBox(), last.boundingBox()]);
+			if (!listBox || !tabBox) return false;
+			return tabBox.x >= listBox.x && tabBox.x + tabBox.width <= listBox.x + listBox.width + 1;
+		})
+		.toBe(true);
+	await expect(strip).toHaveCSS("height", "28px");
 });
 
 test("ARIA tabs use roving keyboard focus, recover after close, and expose keyboard separators", async ({
@@ -383,6 +442,12 @@ test("keyboard and menu commands reorder, search, recursively split, and collaps
 	await page.getByTestId("tab-changes").click({ button: "right" });
 	await page.getByRole("menuitem", { name: "Restore All files" }).click();
 	await expect(page.getByTestId("tab-files")).toBeVisible();
+	await page.getByTestId("tab-specs").getByRole("tab").focus();
+	await page.keyboard.press("Delete");
+	await expect(page.getByTestId("tab-specs")).toHaveCount(0);
+	await page.getByTestId("tab-changes").click({ button: "right" });
+	await page.getByRole("menuitem", { name: "Restore Specs" }).click();
+	await expect(page.getByTestId("tab-specs")).toBeVisible();
 
 	await openKeptFiles(page, ["README.md", "notes.txt", "LINKS.md"]);
 	const tabs = page.getByTestId("editor-tab");

@@ -130,9 +130,12 @@ roving focus; a folded auxiliary group retains its linked native-hidden tabpanel
 and its named restore control is the group focus endpoint when no tab control is rendered. A local bottom-fold
 transition moves focus onto that restore control and expansion returns it to the selected tab. Separators expose
 orientation and current/min/max values. `Ctrl+F6` visits upper-row groups in visual
-order, then visible bottom groups left-to-right. One-row strips have bounded
-readable tab widths, wheel/trackpad scrolling, previous/next controls, active reveal, and a searchable
-keyboard overflow list.
+order, then visible bottom groups left-to-right. One-row strips have bounded readable tab widths and no
+fixed previous/next controls: wheel, trackpad, touch, roving-keyboard navigation, active reveal, and the
+searchable keyboard overflow list all scroll the same tab list, whose slim horizontal scrollbar appears only
+on hover or focus-within when content overflows without changing the strip's fixed height. Singleton tool tabs
+(Projects, Specs, All files, Changes, Review) carry no inline close glyph; Close remains in their context menu
+and on the Delete key, while terminals and center resources retain the direct glyph.
 
 ## Presets and synchronization
 
