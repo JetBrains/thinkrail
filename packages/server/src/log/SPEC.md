@@ -12,9 +12,9 @@ tags: [v1]
 
 The host's diagnostic record: every module logs through `logger(scope)` instead of `console.*`.
 Operators see readable stderr, while the same application records land as structured JSONL under
-`<dataDir>/logs/` so users can send them to ThinkRail for agent-led reproduction and investigation. A
-console tee additionally mirrors `console.*` output from pi / third-party code into the file because pi
-runs in-process and prints its own warnings.
+`<dataDir>/logs/` so users can send them to ThinkRail for agent-led reproduction and investigation.
+Only calls through this module's explicit logger reach durable files; arbitrary pi / extension
+`console.*` arguments remain terminal-only because they can contain prompts, tool data, or credentials.
 
 ## Destinations & rotation
 
@@ -41,19 +41,18 @@ runs in-process and prints its own warnings.
   `THINKRAIL_LOG_LEVEL` (this module is that variable's single reader; an invalid value warns without
   echoing the environment value and falls back to info) > info.
 - Before `initLogging`, `logger(...)` calls echo to stderr only and write no file, so unit tests and
-  library embedders never grow support files or get a patched console implicitly.
+  library embedders never grow support files implicitly.
 - `initLogging` asynchronously opens pino-roll and is awaited first by `host`'s `bootHost` (never by
   `createServer`; process-level logging belongs to the process owner). Repeated calls re-resolve the
   level and concurrent calls await the same one-time opener. Direct in-process streams deliberately avoid `pino.transport()` worker threads and their
   extra-file binary-bundling contract.
 
-## Console tee
+## Console boundary
 
-After the rolling stream opens, `initLogging` patches `console.debug/log/info/warn/error` to call through
-to the original and mirror the formatted arguments into the JSONL file under the `console` scope
-(`log`→info, others 1:1). The mirror uses a file-only Pino logger, so terminal output is not duplicated.
-Because the tee installs only at `bootHost`, the CLI's user-facing `--help`/`update`/`uninstall` output
-never lands in a support file.
+`console.debug/log/info/warn/error` are never patched or copied into durable files. Pi, extensions, and
+third-party packages may put sensitive project data in arbitrary console arguments; no structured
+redactor can make their free text safe. Host diagnostics that belong in support files must instead pass
+through a reviewed `logger(scope)` call with an intentionally bounded message.
 
 ## Failure & privacy boundary
 
@@ -68,11 +67,10 @@ never lands in a support file.
 ## Boundary
 
 - **Owns:** the process-level Pino adapter, level/env resolution, scoped façade, JSONL schema and privacy
-  policy, pino-roll configuration and startup cleanup invocation, pretty stderr, console tee, and the
-  shared `describeError` used by the independent crash report.
+  policy, pino-roll configuration and startup cleanup invocation, pretty stderr, and the shared
+  `describeError` used by the independent crash report.
 - **Public surface (barrel):** `logger`, `Logger`, `LogLevel`, `initLogging`, `InitLoggingOptions`,
   `setLogLevel`, `logsDir`, `describeError`.
-- **Allowed deps:** `persistence` (`dataDir`); `pino`, `pino-pretty`, `pino-roll`; Node
-  `path`/`util`/streams.
+- **Allowed deps:** `persistence` (`dataDir`); `pino`, `pino-pretty`, `pino-roll`; Node path/streams.
 - **Forbidden:** importing any other sibling module or `host`; being imported by `persistence` (the one
   module below it — a `persistence → log` edge would be a cycle).

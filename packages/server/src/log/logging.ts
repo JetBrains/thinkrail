@@ -1,7 +1,6 @@
 /// <reference path="./pino-roll.d.ts" />
 
 import { join } from "node:path";
-import { format } from "node:util";
 import pino, { type LoggerOptions, type Logger as PinoLogger } from "pino";
 import pretty from "pino-pretty";
 import buildPinoRoll, { type PinoRollOptions, type PinoRollStream } from "pino-roll";
@@ -131,15 +130,12 @@ export function createPinoRollOptions(directory: string): PinoRollOptions {
 
 let currentLevel: LogLevel = "info";
 let applicationLogger: PinoLogger | null = null;
-let consoleFileLogger: PinoLogger | null = null;
 let rollingStream: PinoRollStream | null = null;
 let initialization: Promise<void> | null = null;
-let teeInstalled = false;
 
 export function setLogLevel(level: LogLevel): void {
 	currentLevel = level;
 	if (applicationLogger) applicationLogger.level = level;
-	if (consoleFileLogger) consoleFileLogger.level = level;
 }
 
 function writeDirectStderr(line: string): void {
@@ -183,13 +179,6 @@ function emit(level: LogLevel, scope: string, message: string, error?: unknown):
 	}
 }
 
-function emitFileOnly(level: LogLevel, scope: string, message: string): void {
-	if (!shouldLog(level, currentLevel) || !consoleFileLogger) return;
-	try {
-		writeWithPino(consoleFileLogger, level, scope, message);
-	} catch {}
-}
-
 export interface Logger {
 	debug(message: string, error?: unknown): void;
 	info(message: string, error?: unknown): void;
@@ -204,29 +193,6 @@ export function logger(scope: string): Logger {
 		warn: (message, error?) => emit("warn", scope, message, error),
 		error: (message, error?) => emit("error", scope, message, error),
 	};
-}
-
-const CONSOLE_TEE: ReadonlyArray<readonly ["debug" | "log" | "info" | "warn" | "error", LogLevel]> =
-	[
-		["debug", "debug"],
-		["log", "info"],
-		["info", "info"],
-		["warn", "warn"],
-		["error", "error"],
-	];
-
-function installConsoleTee(): void {
-	if (teeInstalled) return;
-	teeInstalled = true;
-	for (const [method, level] of CONSOLE_TEE) {
-		const original = console[method].bind(console);
-		console[method] = (...args: unknown[]) => {
-			original(...args);
-			try {
-				emitFileOnly(level, "console", format(...args));
-			} catch {}
-		};
-	}
 }
 
 function reportDestinationError(error: unknown): void {
@@ -273,8 +239,6 @@ async function initializeLogging(
 				{ level: "debug", stream: rollingStream },
 			]),
 		);
-		consoleFileLogger = pino(createPinoOptions(currentLevel), rollingStream);
-		installConsoleTee();
 	} catch (error) {
 		reportDestinationError(error);
 	}
