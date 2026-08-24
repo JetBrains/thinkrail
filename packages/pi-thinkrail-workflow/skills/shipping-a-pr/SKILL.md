@@ -10,8 +10,9 @@ until it is mergeable. One workflow, five phases as sibling docs — enter at th
 
 ## The done bar (applies to every phase)
 
-A PR is **done** when its checks are green and the user has the link plus its current state — never
-at "PR opened", "pushed", or "comment replied". Every phase below therefore ends in `checks.md`,
+A PR is **done** when every check it *has* is green — a repo with no CI is reported as exactly
+that, never silently treated as green — and the user has the link plus its current state; never at
+"PR opened", "pushed", or "comment replied". Every phase below therefore ends in `checks.md`,
 which declares this workflow's terminal state.
 
 ## Observed, never assumed (applies to every phase)

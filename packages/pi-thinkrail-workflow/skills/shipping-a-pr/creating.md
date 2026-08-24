@@ -16,7 +16,9 @@ Entry: finished work on a branch, no PR yet. Saves the body draft at
    every file in the diff must be explainable in one line.
 4. **Verified.** Run the project's own verification gates (its agent instructions / package
    scripts) — *after* the rebase, not before. New behavior ships with tests; if the project's
-   convention demands a suite class (e.g. e2e) not yet run for this change, run it now.
+   convention demands a suite class (e.g. e2e) not yet run for this change, run it now. A project
+   with no gates of its own is verified by hand and reported as exactly that in the body's Testing
+   section — never silently treated as verified.
 5. **Self-review.** Re-read the full diff (`git diff <base>...HEAD` plus working tree) as a
    reviewer, holding the project's handoff-hygiene bar: no silent lint/type suppressions, no comment
    creep, no half-migrated patterns, no leftovers. Fix what you find; don't annotate it.
