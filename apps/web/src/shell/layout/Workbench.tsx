@@ -170,10 +170,10 @@ interface DragData {
 	tab: LayoutTab;
 }
 
-function sameSizes(first: readonly number[], second: readonly number[]): boolean {
+function sameSizes(first: readonly number[], second: readonly number[], tolerance = 0.15): boolean {
 	return (
 		first.length === second.length &&
-		first.every((value, index) => Math.abs(value - (second[index] ?? 0)) < 0.15)
+		first.every((value, index) => Math.abs(value - (second[index] ?? 0)) < tolerance)
 	);
 }
 
@@ -1985,63 +1985,57 @@ function BottomStack({
 
 function BottomAlignedRow({
 	document,
-	leftVisible,
-	rightVisible,
+	projectedLeft,
+	projectedRight,
 	children,
 }: {
 	document: WorkspaceLayoutDocument;
-	leftVisible: boolean;
-	rightVisible: boolean;
+	projectedLeft: number;
+	projectedRight: number;
 	children: ReactNode;
 }) {
-	const left = leftVisible ? document.left.width * 100 : 0;
-	const right = rightVisible ? document.right.width * 100 : 0;
-	const center = 100 - left - right;
 	const start =
 		document.bottom.alignment === "center" || document.bottom.alignment === "center-right"
-			? left
+			? projectedLeft
 			: 0;
 	const end =
 		document.bottom.alignment === "center" || document.bottom.alignment === "center-left"
-			? right
+			? projectedRight
 			: 0;
-	const body = Math.max(Number.EPSILON, center + left + right - start - end);
+	const body = Math.max(Number.EPSILON, 100 - start - end);
+	const layout = useMemo(
+		() => [...(start > 0 ? [start] : []), body, ...(end > 0 ? [end] : [])],
+		[body, end, start],
+	);
+	const groupRef = useRef<ImperativePanelGroupHandle>(null);
+	useEffect(() => {
+		const group = groupRef.current;
+		if (group && !sameSizes(group.getLayout(), layout, 0.01)) group.setLayout(layout);
+	}, [layout]);
 	return (
 		<ResizablePanelGroup
-			key={tupleKey("bottom-alignment", document.bottom.alignment, String(left), String(right))}
+			ref={groupRef}
+			key={tupleKey(
+				"bottom-alignment",
+				document.bottom.alignment,
+				String(start > 0),
+				String(end > 0),
+			)}
 			direction="horizontal"
 			data-testid="bottom-aligned-row"
 			data-alignment={document.bottom.alignment}
 			className="min-h-0 min-w-0"
 		>
 			{start > 0 ? (
-				<ResizablePanel
-					id="bottom-start-spacer"
-					order={1}
-					defaultSize={start}
-					minSize={start}
-					maxSize={start}
-				>
+				<ResizablePanel id="bottom-start-spacer" order={1} defaultSize={start}>
 					<div aria-hidden="true" className="h-full bg-container-workspace-bg" />
 				</ResizablePanel>
 			) : null}
-			<ResizablePanel
-				id="bottom-aligned-body"
-				order={2}
-				defaultSize={body}
-				minSize={body}
-				maxSize={body}
-			>
+			<ResizablePanel id="bottom-aligned-body" order={2} defaultSize={body}>
 				{children}
 			</ResizablePanel>
 			{end > 0 ? (
-				<ResizablePanel
-					id="bottom-end-spacer"
-					order={3}
-					defaultSize={end}
-					minSize={end}
-					maxSize={end}
-				>
+				<ResizablePanel id="bottom-end-spacer" order={3} defaultSize={end}>
 					<div aria-hidden="true" className="h-full bg-container-workspace-bg" />
 				</ResizablePanel>
 			) : null}
@@ -2465,6 +2459,11 @@ export function Workbench({
 		],
 		[document.left.width, document.right.width, leftVisible, rightVisible],
 	);
+	const [projectedOuter, setProjectedOuter] = useState<readonly number[]>(outerCurrent);
+	const activeProjection =
+		projectedOuter.length === outerCurrent.length ? projectedOuter : outerCurrent;
+	const projectedLeft = leftVisible ? (activeProjection[0] ?? 0) : 0;
+	const projectedRight = rightVisible ? (activeProjection.at(-1) ?? 0) : 0;
 	const outerGroupRef = useRef<ImperativePanelGroupHandle>(null);
 	useEffect(() => {
 		const group = outerGroupRef.current;
@@ -2500,6 +2499,13 @@ export function Workbench({
 			apply(result);
 		},
 		onRemoteGestureCanceled,
+	);
+	const projectOuterLayout = useCallback(
+		(sizes: number[]) => {
+			setProjectedOuter((current) => (sameSizes(current, sizes, 0.01) ? current : [...sizes]));
+			outerResize.onLayout(sizes);
+		},
+		[outerResize.onLayout],
 	);
 	const bottomVisible = document.bottom.visible && document.bottom.groups.length > 0;
 	const hiddenBottomTargetGroupId =
@@ -2658,7 +2664,7 @@ export function Workbench({
 				String(remoteEpoch),
 			)}
 			direction="horizontal"
-			onLayout={outerResize.onLayout}
+			onLayout={projectOuterLayout}
 			className="h-full min-h-0 min-w-0 flex-1"
 		>
 			{leftVisible ? (
@@ -2816,8 +2822,8 @@ export function Workbench({
 							>
 								<BottomAlignedRow
 									document={document}
-									leftVisible={leftVisible}
-									rightVisible={rightVisible}
+									projectedLeft={projectedLeft}
+									projectedRight={projectedRight}
 								>
 									<BottomStack
 										remoteEpoch={remoteEpoch}
@@ -2834,8 +2840,8 @@ export function Workbench({
 							<div className="h-7 shrink-0">
 								<BottomAlignedRow
 									document={document}
-									leftVisible={leftVisible}
-									rightVisible={rightVisible}
+									projectedLeft={projectedLeft}
+									projectedRight={projectedRight}
 								>
 									<HiddenBottomRail
 										onShow={showBottomRegion}

@@ -47,6 +47,9 @@ const OUTPUT_BATCH = {
 	maxBatchChars: 32_768,
 	maxPendingChars: 1_048_576,
 } as const;
+const MAX_TERMINAL_TABS_PER_WORKSPACE = 256;
+const MAX_TERMINAL_TAB_KEY_LENGTH = 500;
+const MAX_TERMINAL_TITLE_LENGTH = 1000;
 
 const terminals = new Map<string, TerminalEntry>();
 const ptyByTab = new Map<string, string>();
@@ -107,6 +110,32 @@ function tabsFor(workspaceId: string): TabRecord[] {
 		tabsByWorkspace.set(workspaceId, tabs);
 	}
 	return tabs;
+}
+
+function isValidTerminalTabKey(value: unknown): value is string {
+	return (
+		typeof value === "string" && value.length > 0 && value.length <= MAX_TERMINAL_TAB_KEY_LENGTH
+	);
+}
+
+function assertTerminalTabKey(tabKey: string): void {
+	if (!isValidTerminalTabKey(tabKey)) throw new Error("Invalid terminal tab key");
+}
+
+function isValidTerminalTitle(value: unknown): value is string {
+	return typeof value === "string" && value.length > 0 && value.length <= MAX_TERMINAL_TITLE_LENGTH;
+}
+
+function assertTerminalTitle(title: string): void {
+	if (!isValidTerminalTitle(title)) throw new Error("Invalid terminal title");
+}
+
+function assertTerminalCatalogCapacity(tabs: readonly TabRecord[]): void {
+	if (tabs.length >= MAX_TERMINAL_TABS_PER_WORKSPACE) {
+		throw new Error(
+			`Terminal tabs are limited to ${MAX_TERMINAL_TABS_PER_WORKSPACE} per workspace`,
+		);
+	}
 }
 
 function spawnForTab(
@@ -184,12 +213,22 @@ export function reserveTerminal(
 	tabKey: string,
 	title: string,
 ): TerminalTabInfo {
+	assertTerminalTabKey(tabKey);
+	assertTerminalTitle(title);
 	const tabs = tabsFor(workspaceId);
 	const existing = tabs.find((tab) => tab.tabKey === tabKey);
 	if (existing) return { tabKey: existing.tabKey, title: existing.title };
+	assertTerminalCatalogCapacity(tabs);
 	const tab = { tabKey, title };
 	tabs.push(tab);
-	membershipChanged(workspaceId);
+	try {
+		persistTerminalSessions();
+	} catch (error) {
+		tabs.pop();
+		if (tabs.length === 0) tabsByWorkspace.delete(workspaceId);
+		throw error;
+	}
+	broadcastTabs(workspaceId, listTerminals(workspaceId));
 	return tab;
 }
 
@@ -205,9 +244,12 @@ export function attachTerminal(
 	clientKey: string,
 	options: { title?: string; cols?: number; rows?: number } = {},
 ): AttachResult {
+	assertTerminalTabKey(tabKey);
+	if (options.title !== undefined) assertTerminalTitle(options.title);
 	const tabs = tabsFor(workspaceId);
 	const isNewTab = !tabs.some((tab) => tab.tabKey === tabKey);
 	if (isNewTab) {
+		assertTerminalCatalogCapacity(tabs);
 		tabs.push({ tabKey, title: options.title ?? `Terminal ${tabs.length + 1}` });
 	}
 
@@ -356,9 +398,10 @@ export function reviveTerminalSessions(): void {
 	for (const [workspaceId, tabs] of Object.entries(loadTerminalSessions())) {
 		if (!Array.isArray(tabs)) continue;
 		const restored: TabRecord[] = [];
-		for (const tab of tabs) {
-			if (typeof tab?.tabKey !== "string" || tab.tabKey === "") continue;
-			restored.push({ tabKey: tab.tabKey, title: tab.title ?? "Terminal" });
+		for (const tab of tabs.slice(0, MAX_TERMINAL_TABS_PER_WORKSPACE)) {
+			if (!isValidTerminalTabKey(tab?.tabKey)) continue;
+			const title = isValidTerminalTitle(tab.title) ? tab.title : "Terminal";
+			restored.push({ tabKey: tab.tabKey, title });
 			if (typeof tab.recorded === "string" && tab.recorded !== "") {
 				pendingReplay.set(tabIndex(workspaceId, tab.tabKey), tab.recorded);
 			}

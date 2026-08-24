@@ -66,8 +66,10 @@ publishing.
 - **Bottom:** ordered left-to-right groups resize on vertical separators. A group may fold to a 27 px-wide
   vertical rail; the whole region hides to a 27 px-high horizontal restore rail over its selected span. Height
   starts at 30%, has a 120 px body minimum, and caps at 70%. Alignment is one of center, center+left,
-  center+right, or full workbench; an included hidden side contributes no phantom width and expands the span
-  only when shown. Broad left/right targets create groups at every boundary. Empty structural slots are legal
+  center+right, or full workbench; its span follows the upper row's actual browser-local side projection during
+  a resize gesture and narrow-width compression, while persisted side-width ratios remain the durable target.
+  An included hidden side contributes no phantom width and expands the span only when shown. Broad left/right
+  targets create groups at every boundary. Empty structural slots are legal
   for portable terminal layouts; losing the final placed tab auto-hides, while explicit preset application may
   deliberately show the New Terminal empty state.
 - **Limits:** left/right share the host setting that defaults to six groups per side; bottom has an independent
@@ -76,8 +78,8 @@ publishing.
   uniqueness, one canonical placement per resource, normalized geometry, and the final-center-leaf invariant
   are enforced by every mutation.
 - **Small viewports:** restoring onto less space may compress below operation minimums locally. Content
-  scrolls/clips; the shared topology, alignment, and ratios are never rewritten merely because this viewport
-  is narrow.
+  scrolls/clips; bottom alignment projects from those actual compressed side spans, while the shared topology,
+  alignment choice, and ratios are never rewritten merely because this viewport is narrow.
 
 Ordinary opens target this browser's last-focused surviving center group. Reopening a canonical resource
 selects its existing placement instead of duplicating it and refreshes non-identity metadata such as a chat
@@ -143,7 +145,9 @@ tools stay deliberately unplaced but receive default/prior auxiliary restore tar
 preset can never strand the user without a Projects/tool recovery path. Version-1 layouts/custom presets
 normalize to hidden empty bottom without moving a resource.
 
-Pointer drag/resize drafts remain local and emit one snapshot only on drop/pointer-up. A newer accepted
+Pointer drag/resize drafts remain local and emit one snapshot only on drop/pointer-up. The bottom row follows
+an outer side-resize draft from the panel group's live projection without publishing that transient geometry.
+A newer accepted
 revision whose mutation id does not match this client's optimistic base cancels the draft, makes release
 inert, and lets the parent explain the cancellation; the same projection epoch invalidates a pending
 preview-click settle timer before it can publish from the replaced document. A matching acknowledgement

@@ -5,7 +5,16 @@ import type {
 	WorkspaceLayoutDocument,
 } from "@thinkrail/contracts";
 import { GitBranch, MessageSquarePlus, SquareTerminal } from "lucide-react";
-import { lazy, type ReactNode, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import {
+	lazy,
+	type ReactNode,
+	Suspense,
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { type LayoutAttention, layoutResourceIdentity } from "../lib";
 import { ChangesPanel } from "../panels/ChangesPanel";
@@ -155,7 +164,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	const reviewDraftCount = useAppStore((state) => selectReviewDraftCount(state, workspaceId));
 	const reviewFlagByPath = useMemo(() => reviewFlags(reviewComments), [reviewComments]);
 	const [focusRequest, setFocusRequest] = useState<LayoutTabFocusRequest | null>(null);
-	const [initialTerminalSeeded, setInitialTerminalSeeded] = useState(false);
+	const attemptedInitialTerminalGeneration = useRef<number | null>(null);
 	const activeReviewedPath = useAppStore((state) => selectActiveReviewedPath(state, workspaceId));
 	const readActiveReviewedPath = useCallback(
 		() => selectActiveReviewedPath(useAppStore.getState(), workspaceId),
@@ -247,7 +256,6 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 
 	useEffect(() => {
 		if (
-			initialTerminalSeeded ||
 			!document ||
 			!attention ||
 			!terminalCatalogReady ||
@@ -260,20 +268,23 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 		const placedTerminal = collectAllGroups(document)
 			.flatMap((group) => group.tabs)
 			.some((tab) => tab.kind === "terminal");
-		if (terminals.length > 0 || placedTerminal) {
-			setInitialTerminalSeeded(true);
+		if (
+			terminals.length > 0 ||
+			placedTerminal ||
+			attemptedInitialTerminalGeneration.current === connectionGeneration
+		) {
 			return;
 		}
 		const preferredId = attention.lastFocusedSideGroupId.bottom;
 		const target =
 			document.bottom.groups.find((group) => group.id === preferredId) ?? document.bottom.groups[0];
-		setInitialTerminalSeeded(true);
+		attemptedInitialTerminalGeneration.current = connectionGeneration;
 		useAppStore
 			.getState()
 			.addTerminal(workspaceId, undefined, target?.id, "bottom", false, INITIAL_TERMINAL_TAB_KEY);
 	}, [
 		attention,
-		initialTerminalSeeded,
+		connectionGeneration,
 		document,
 		layoutRevision,
 		pendingLayoutWrites,

@@ -107,7 +107,9 @@ resource-lifetime-free and a host migration (floored at revision 2) cannot seed 
 intent may commit, the parent reserves its client-minted key in the host catalog; the new-workspace seed uses
 one deterministic key inside that workspace, so competing clients reserve and place the same terminal rather
 than each creating one. Reservation is process-free and preserves a hidden configured default across reload
-and peer reconciliation.
+and peer reconciliation. A rejected reservation suppresses another automatic attempt within that connection
+only; a later connection generation may retry the deterministic key, while confirmed membership or placement
+ends seeding.
 The placement intent can then retain hidden/folded geometry, and PTY attach still waits until the visibility
 gate mounts it.
 

@@ -38,10 +38,15 @@ separate layout snapshot and merely references `tabKey`.
 - **A shell is keyed by `(workspaceId, tabKey)`**, never by a socket, a client, or a component. `tabKey` is
   durable and client-supplied; PTY ids are per-run and **never persisted** (attaching to an id that outlived
   its process is Theia's `Couldn't attach - can't find terminal with id`).
-- **Catalog reservation and PTY attachment are separate.** `reserveTerminal` idempotently persists and
-  broadcasts a client-minted tab identity without spawning. `attachTerminal` remains idempotent
-  get-or-create and the only way a PTY is born. This is not a liveness split: a client still never holds the
-  only pointer to a running shell.
+- **Catalog reservation and PTY attachment are separate.** `reserveTerminal` idempotently records a
+  client-minted tab identity without spawning. A new reservation is transactional: validate and insert,
+  persist the complete catalog, then publish membership; persistence failure removes the in-memory insertion
+  and publishes nothing. `attachTerminal` remains idempotent get-or-create and the only way a PTY is born.
+  This is not a liveness split: a client still never holds the only pointer to a running shell.
+- **Durable terminal identities are bounded.** A workspace catalog holds at most 256 tabs; a key is non-empty
+  and at most 500 characters, and a title is non-empty and at most 1000 characters. Reservation and new attach
+  share those checks. Revival truncates oversized catalogs, drops invalid keys, and repairs invalid titles
+  before exposing host-authoritative membership.
 - **Tracked-grid updates are change-only.** Each live entry tracks the grid applied at spawn or by the last
   successful resize. Attach and explicit resize advance that grid only when it changes, and failed calls do not
   advance it. A reattach may still perform a *transient* redraw nudge (below) that leaves the tracked grid
@@ -119,7 +124,8 @@ separate layout snapshot and merely references `tabKey`.
   keeping mode sequences out of the body (incl. a recording persisted by a host that still replayed them).
 - `outputBatcher.test.ts` — batching, backpressure, truncation, `reset`.
 - `shellBusy.test.ts` — child detection, including that an unanswerable platform reports *not* busy.
-- `terminalManager.test.ts` — reservation without spawn, attach idempotency (incl. concurrent), takeover,
-  displaced-client rejection, tab-list broadcast, close/busy, revive.
+- `terminalManager.test.ts` — transactional durable reservation without spawn, catalog bounds, attach
+  idempotency (incl. concurrent), takeover, displaced-client rejection, tab-list broadcast, close/busy,
+  revive.
 - `e2e/terminals.spec.ts` — the rapid re-entry regression, reload survival, second-client takeover,
   cross-client tab convergence.

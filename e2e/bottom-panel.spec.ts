@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import {
@@ -251,6 +251,78 @@ test("a hidden default reserves one synchronized terminal placement without atta
 	await expect(bottomGroups(page).getByTestId("terminal-tab")).toHaveCount(1);
 });
 
+test("a failed default reservation retries after reconnect without duplicating the terminal", async ({
+	page,
+	context,
+}) => {
+	await page.addInitScript(() => {
+		const NativeWebSocket = window.WebSocket;
+		const sockets = new Set<WebSocket>();
+		Object.defineProperty(window, "__thinkrailBottomSockets", {
+			configurable: true,
+			value: sockets,
+		});
+		class TrackedWebSocket extends NativeWebSocket {
+			constructor(url: string | URL, protocols?: string | string[]) {
+				super(url, protocols);
+				sockets.add(this);
+				this.addEventListener("close", () => sockets.delete(this));
+			}
+		}
+		window.WebSocket = TrackedWebSocket;
+	});
+	await page.reload();
+	await openDefaultWorkbench(page);
+	const workspace = await createWorkspaceWithoutOpening(page);
+	const terminalFile = join(E2E_DATA_DIR, "terminals.json");
+	const savedTerminalFile = join(E2E_DATA_DIR, "terminals.before-bottom-retry.json");
+	if (!existsSync(terminalFile)) throw new Error("terminal catalog fixture was not persisted");
+	if (existsSync(savedTerminalFile)) rmSync(savedTerminalFile, { recursive: true, force: true });
+	await waitForLayoutSettled(page);
+	const workspaceRow = page.getByTestId("workspace-item").filter({ hasText: workspace.name });
+	try {
+		renameSync(terminalFile, savedTerminalFile);
+		mkdirSync(terminalFile);
+		await workspaceRow.getByRole("button").first().click();
+		await expect(
+			page.getByTestId("toast").getByText("Couldn't create the terminal", { exact: true }),
+		).toBeVisible();
+		await expect(page.getByTestId("terminal-tab")).toHaveCount(0);
+		const failedCatalog = await requestOverWire<{ tabs: Array<{ tabKey: string }> }>(
+			page,
+			"terminal.list",
+			{ workspaceId: workspace.id },
+		);
+		expect(failedCatalog.tabs).toEqual([]);
+	} finally {
+		rmSync(terminalFile, { recursive: true, force: true });
+		if (existsSync(savedTerminalFile)) renameSync(savedTerminalFile, terminalFile);
+	}
+
+	await context.setOffline(true);
+	await page.evaluate(() => {
+		const sockets = Object.getOwnPropertyDescriptor(window, "__thinkrailBottomSockets")?.value;
+		if (!(sockets instanceof Set)) return;
+		for (const socket of sockets) {
+			if (socket instanceof WebSocket) socket.close();
+		}
+	});
+	await expect(page.getByTestId("connection-status")).toHaveAttribute(
+		"data-status",
+		"disconnected",
+	);
+	await context.setOffline(false);
+	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+	await waitTerminalReady(page);
+	await expect(page.getByTestId("terminal-tab")).toHaveCount(1);
+	const recoveredCatalog = await requestOverWire<{ tabs: Array<{ tabKey: string }> }>(
+		page,
+		"terminal.list",
+		{ workspaceId: workspace.id },
+	);
+	expect(recoveredCatalog.tabs).toHaveLength(1);
+});
+
 test("Mod+Shift+J works from xterm, preserves its PTY through hide and reload, and is modal-aware", async ({
 	page,
 }) => {
@@ -351,6 +423,54 @@ test("bottom height, all alignments, and keyboard resizing persist across reload
 	await expectHorizontalSpan(page.getByTestId("bottom-layout-rail"), left, center);
 	await pressPlatformShortcut(page, "Shift+j");
 	await expectHorizontalSpan(page.getByTestId("bottom-panel"), left, center);
+});
+
+test("bottom alignments follow locally compressed side geometry at narrow widths", async ({
+	page,
+}) => {
+	await openDefaultWorkbench(page);
+	await page.setViewportSize({ width: 390, height: 844 });
+	const bottom = page.getByTestId("bottom-panel");
+	const center = page.getByTestId("center-tabs");
+	const left = page.getByTestId("left-stack");
+	const right = page.getByTestId("right-stack");
+
+	await setBottomAlignment(page, "Below center");
+	await expectHorizontalSpan(bottom, center, center);
+	await setBottomAlignment(page, "Below center and left");
+	await expectHorizontalSpan(bottom, left, center);
+	await setBottomAlignment(page, "Below center and right");
+	await expectHorizontalSpan(bottom, center, right);
+});
+
+test("bottom alignments follow side geometry while a resize gesture is in progress", async ({
+	page,
+}) => {
+	await openDefaultWorkbench(page);
+	const bottom = page.getByTestId("bottom-panel");
+	const center = page.getByTestId("center-tabs");
+	const left = page.getByTestId("left-stack");
+	const right = page.getByTestId("right-stack");
+	const handle = page.getByTestId("resize-left");
+	const cases: Array<{ name: string; start: Locator; end: Locator; offset: number }> = [
+		{ name: "Below center", start: center, end: center, offset: 60 },
+		{ name: "Below center and left", start: left, end: center, offset: -50 },
+		{ name: "Below center and right", start: center, end: right, offset: 50 },
+	];
+
+	for (const alignment of cases) {
+		await setBottomAlignment(page, alignment.name);
+		const handleBox = await handle.boundingBox();
+		if (!handleBox) throw new Error("left resize handle has no bounding box");
+		const x = handleBox.x + handleBox.width / 2;
+		const y = handleBox.y + handleBox.height / 2;
+		await page.mouse.move(x, y);
+		await page.mouse.down();
+		await page.mouse.move(x + alignment.offset, y, { steps: 8 });
+		await expectHorizontalSpan(bottom, alignment.start, alignment.end);
+		await page.mouse.up();
+		await waitForLayoutSettled(page);
+	}
 });
 
 test("bottom groups arrange left-to-right, resize, fold to 27px, restore, and enforce their own limit", async ({
