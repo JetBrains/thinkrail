@@ -30,6 +30,7 @@ import type {
 	WireModel,
 } from "@thinkrail/contracts";
 import { isTranscriptMessageRole } from "@thinkrail/contracts";
+import { logger } from "../log";
 import { ANSWERABILITY_ERRORS, assessAnswerability, buildAnswersMessage } from "./askUserQuestion";
 import { buildResourceLoader, toSkillCommands } from "./extensions";
 import {
@@ -44,6 +45,8 @@ import { repairDanglingToolCalls } from "./sessionRepair";
 import type { SkillAdmissionContext } from "./skillAdmission";
 import { trashFile } from "./trash";
 import { cancelExtUiForSession, createWebUiContext, notifyExtUi } from "./webUiContext";
+
+const log = logger("agent");
 
 interface Entry {
 	session: AgentSession;
@@ -250,6 +253,7 @@ async function registerSession(
 ): Promise<CreateSessionResult> {
 	const prepared = await prepareSessionEntry(session, workspaceId, generation);
 	sessions.set(session.sessionId, prepared.entry);
+	log.debug(`session ${session.sessionId} attached (workspace ${workspaceId})`);
 	return prepared.result;
 }
 
@@ -735,6 +739,7 @@ function disposeSession(sessionId: string): void {
 	entry.unsubscribe();
 	entry.session.dispose();
 	sessions.delete(sessionId);
+	log.debug(`session ${sessionId} disposed`);
 }
 
 export function removeSession(sessionId: string): void {

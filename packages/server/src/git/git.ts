@@ -9,9 +9,12 @@ import type {
 	GitStatus,
 	Workspace,
 } from "@thinkrail/contracts";
+import { logger } from "../log";
 import { loadProjects, loadWorkspaces } from "../persistence";
 import { changedFileArgs, type DiffRange, diffBaseRef, resolveDiffRange } from "./diffScope";
 import { git, gitAsync } from "./gitExec";
+
+const log = logger("git");
 
 function workspace(workspaceId: string): Workspace {
 	const ws = loadWorkspaces().find((w) => w.id === workspaceId);
@@ -238,7 +241,7 @@ export function readBlobAt(worktreePath: string, ref: string, path: string): str
 	const shown = git(worktreePath, ["show", "--end-of-options", `${ref}:${path}`], { raw: true });
 	if (shown.ok) return shown.out;
 	if (!/does not exist in|exists on disk, but not in/.test(shown.err)) {
-		console.warn(`git show ${ref}:${path} failed: ${shown.err || "unknown error"}`);
+		log.warn(`git show ${ref}:${path} failed: ${shown.err || "unknown error"}`);
 	}
 	return null;
 }

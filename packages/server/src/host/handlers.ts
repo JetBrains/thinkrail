@@ -78,6 +78,7 @@ import {
 	replaceWorkspaceLayout,
 	validateLayoutSettings,
 } from "../layout";
+import { logger } from "../log";
 import {
 	acknowledgeProjectSkills,
 	closeProject,
@@ -151,6 +152,8 @@ import { buildHistoryScope } from "./historyScope";
 import { dropLogin, recordLoginStart } from "./loginAnalytics";
 import { withReviewLock } from "./reviewLock";
 
+const log = logger("host");
+
 export interface RequestContext {
 	clientKey: string;
 }
@@ -162,7 +165,7 @@ async function archiveTeardown(ws: Workspace): Promise<void> {
 		await removeWorkspaceSessions(ws.id, ws.worktreePath);
 		reclaimWorktree(ws);
 	} catch (error) {
-		console.warn(`workspace archive teardown failed for ${ws.id}: ${error}`);
+		log.warn(`workspace archive teardown failed for ${ws.id}: ${error}`);
 	}
 }
 
@@ -188,7 +191,7 @@ function fireReviewPrompt(
 			);
 		})
 		.catch((err) => {
-			console.warn(`review send rollback failed: ${err instanceof Error ? err.message : err}`);
+			log.warn(`review send rollback failed: ${err instanceof Error ? err.message : err}`);
 		});
 }
 
@@ -214,7 +217,7 @@ async function sendToFileChat(
 		};
 	}
 	if (existing) {
-		console.warn(
+		log.warn(
 			`review ${workspaceId}: linked chat ${existing} for ${path} is no longer on disk — starting a new review chat`,
 		);
 	}

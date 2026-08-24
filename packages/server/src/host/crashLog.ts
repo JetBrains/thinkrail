@@ -1,5 +1,6 @@
 import { appendFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
+import { describeError } from "../log";
 import { dataDir } from "../persistence";
 
 export type CrashKind = "uncaughtException" | "unhandledRejection";
@@ -16,23 +17,7 @@ export function formatCrashRecord(
 	appVersion?: string,
 ): string {
 	const build = appVersion ?? "source";
-	return `[${at.toISOString()}] ${kind} (thinkrail ${build}, up ${Math.round(uptimeSeconds)}s)\n${describe(error)}\n\n`;
-}
-
-function describe(error: unknown): string {
-	try {
-		if (error instanceof Error) {
-			const { stack } = error;
-			return typeof stack === "string" && stack ? stack : `${error.name}: ${error.message}`;
-		}
-		if (typeof error === "string") return `Non-Error thrown: ${error}`;
-		return `Non-Error thrown: ${JSON.stringify(error) ?? String(error)}`;
-	} catch {}
-	try {
-		return `Unrenderable throw: ${String(error)}`;
-	} catch {
-		return `Unrenderable throw (${typeof error})`;
-	}
+	return `[${at.toISOString()}] ${kind} (thinkrail ${build}, up ${Math.round(uptimeSeconds)}s)\n${describeError(error)}\n\n`;
 }
 
 let installed = false;

@@ -127,6 +127,6 @@ it resolves immediately when nothing is in flight, and never rejects.
   `gitCommitPaths` — the per-done-item delta commit; `gitHeadSha` — the baseline's head);
   `contracts` (DTOs + `PiEvent` for `isTodoToolEnd`); `@thinkrail/shared/paths` (`WORKSPACE_INTERNAL_DIR`
   — the app-state prefix filtered out of change sets); **`pi-todos/core`** (the pi-free read/write model — a sanctioned host-side
-  value-import of the extension package, the same pattern as `spec` → `pi-spec-graph/core`).
-- **Forbidden:** `host`; sibling features other than `workspaces` + `git`; `pi-todos`' extension entry or
+  value-import of the extension package, the same pattern as `spec` → `pi-spec-graph/core`); `log`.
+- **Forbidden:** `host`; sibling features other than `workspaces` + `git` + `log`; `pi-todos`' extension entry or
   `tools/` (pi-coupled); any pi package.

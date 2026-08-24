@@ -1,7 +1,10 @@
 import type { PiEvent, TranscriptMessage, Workspace } from "@thinkrail/contracts";
 import { getSessionMessages } from "../agent";
 import { extractFirstTurn, naiveWorkspaceName, suggestWorkspaceName } from "../assist";
+import { logger } from "../log";
 import { getWorkspace, renameWorkspace } from "../workspaces";
+
+const log = logger("host");
 
 const PRISTINE_BRANCH = /^workspace-\d+$/;
 
@@ -42,7 +45,7 @@ export async function maybeNaiveNameWorkspace(
 		if (!isPristine(workspaceId)) return null;
 		return renameWorkspace(workspaceId, name, { lock: false });
 	} catch (err) {
-		console.warn(
+		log.warn(
 			`workspace naive-rename skipped (${workspaceId}): ${err instanceof Error ? err.message : err}`,
 		);
 		return null;
@@ -90,7 +93,7 @@ export async function maybeAutoRenameWorkspace(
 		if (fresh.renamed) return null;
 		return renameWorkspace(workspaceId, name);
 	} catch (err) {
-		console.warn(
+		log.warn(
 			`workspace auto-rename skipped (${workspaceId}): ${err instanceof Error ? err.message : err}`,
 		);
 		return null;

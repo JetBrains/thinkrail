@@ -36,6 +36,7 @@ import {
 } from "../auth";
 import { resolveWorktreeFile } from "../fs";
 import { normalizeStoredLayoutSettings, setLayoutPublisher } from "../layout";
+import { logger } from "../log";
 import {
 	getProjects,
 	listProjects,
@@ -95,6 +96,8 @@ interface SocketData {
 }
 
 const CLIENT_REPLAY_RETENTION_MS = 60_000;
+
+const log = logger("host");
 
 const isRequestId = (id: unknown): id is string => typeof id === "string";
 
@@ -232,6 +235,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				const fingerprint = createHash("sha256")
 					.update(JSON.stringify([method, params, sessionId ?? null]))
 					.digest("hex");
+				log.debug(`ws ${method}`);
 				try {
 					const response = await requestReplays.run(
 						ws.data.clientKey,
@@ -245,6 +249,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 								return JSON.stringify({ id: requestId, ok: true, result });
 							} catch (err) {
 								const error = err instanceof Error ? err.message : String(err);
+								log.debug(`ws ${method} failed: ${error}`);
 								const code = errorCodeOf(err);
 								return JSON.stringify({
 									id: requestId,
@@ -439,8 +444,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		try {
 			openProject(projectPath);
 		} catch (err) {
-			console.warn(
-				`Could not open project ${projectPath}: ${err instanceof Error ? err.message : err}`,
+			log.warn(
+				`could not open project ${projectPath}: ${err instanceof Error ? err.message : err}`,
 			);
 		}
 	}

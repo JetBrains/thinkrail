@@ -2,6 +2,7 @@ import type { PiEvent } from "@thinkrail/contracts";
 import { WORKSPACE_INTERNAL_DIR } from "@thinkrail/shared/paths";
 import { type TodoArtifact, type TodoPlan, TodoStore } from "pi-todos/core";
 import { gitCommitPaths, gitHeadSha, gitStatus } from "../git";
+import { logger } from "../log";
 import { getWorkspace } from "../workspaces";
 import {
 	type Baseline,
@@ -10,6 +11,8 @@ import {
 	readBaselines,
 	writeBaselines,
 } from "./baselines";
+
+const log = logger("todos");
 
 export type CommitWindow = (opts: {
 	title: string;
@@ -67,7 +70,7 @@ function runReconcile(workspaceId: string, sessionId: string): void {
 			() => gitHeadSha(workspaceId),
 		);
 	} catch (err) {
-		console.warn(
+		log.warn(
 			`todo change-artifacts skipped (${workspaceId}/${sessionId}): ${err instanceof Error ? err.message : err}`,
 		);
 	}

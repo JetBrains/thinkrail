@@ -6,6 +6,7 @@ export interface CliOptions {
 	host: string;
 	open: boolean;
 	noAnalytics: boolean;
+	verbose: boolean;
 	staticDir: string | undefined;
 	projectDir: string | undefined;
 	help: boolean;
@@ -37,6 +38,8 @@ Options:
   --no-open      Don't open the browser (e.g. headless / remote host).
   --no-analytics Don't send anonymous usage analytics this run (the durable switch
                  lives in the app: Settings → Privacy).
+  --verbose      Debug-level logging (terminal + the rotated log files under
+                 ~/.thinkrail/logs).
   -v, --version  Print the version and exit.
   -h, --help     Show this help.
 
@@ -46,7 +49,8 @@ Arguments:
 Env:
   THINKRAIL_PORT / THINKRAIL_HOST   Defaults for --port / --host.
   THINKRAIL_STATIC_DIR                 Override the built web app served by the host.
-  THINKRAIL_NO_ANALYTICS               Same as --no-analytics (any non-empty value; read by the host).`;
+  THINKRAIL_NO_ANALYTICS               Same as --no-analytics (any non-empty value; read by the host).
+  THINKRAIL_LOG_LEVEL                  Log level: debug|info|warn|error (default info; read by the host).`;
 
 function readFlagValue(arg: string, next: string | undefined): { value: string; consumed: number } {
 	const eq = arg.indexOf("=");
@@ -60,6 +64,7 @@ export function parseArgs(argv: readonly string[], env: ParseEnv = {}): CliOptio
 	let host: string | undefined;
 	let open = true;
 	let noAnalytics = false;
+	let verbose = false;
 	let help = false;
 	let version = false;
 	let projectDir: string | undefined;
@@ -70,6 +75,8 @@ export function parseArgs(argv: readonly string[], env: ParseEnv = {}): CliOptio
 			open = false;
 		} else if (arg === "--no-analytics") {
 			noAnalytics = true;
+		} else if (arg === "--verbose") {
+			verbose = true;
 		} else if (arg === "-h" || arg === "--help") {
 			help = true;
 		} else if (arg === "-v" || arg === "--version") {
@@ -104,6 +111,7 @@ export function parseArgs(argv: readonly string[], env: ParseEnv = {}): CliOptio
 		host: host ?? env.THINKRAIL_HOST ?? DEFAULT_HOST,
 		open,
 		noAnalytics,
+		verbose,
 		staticDir: env.THINKRAIL_STATIC_DIR,
 		projectDir,
 		help,

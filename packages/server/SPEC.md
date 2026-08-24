@@ -51,6 +51,7 @@ internals**. The edges between them are owned here (see the dependency graph), n
 | --- | --- | --- |
 | `host` | `Bun.serve` HTTP+WS, static SPA, the WS dispatch registry, channel publish | [host/SPEC.md](src/host/SPEC.md) |
 | `persistence` | JSON app state under the data dir, including workspace-layout snapshots | [persistence/SPEC.md](src/persistence/SPEC.md) |
+| `log` | leveled diagnostics → stderr + daily-rotated files under `<dataDir>/logs` (10 MB cap/file, 14-day retention) + the console tee | [log/SPEC.md](src/log/SPEC.md) |
 | `settings` | server-synced app config, including layout preset/default/side-limit settings | [settings/SPEC.md](src/settings/SPEC.md) |
 | `layout` | validated, revisioned, persisted per-workspace workbench snapshots | [layout/SPEC.md](src/layout/SPEC.md) |
 | `projects` | stable known-repo registry: open/recent views + lossless close/reopen (validate, dedupe, slug) | [projects/SPEC.md](src/projects/SPEC.md) |
@@ -80,11 +81,15 @@ the host from env via `bootHost` for dev/e2e.
 
 `host` is the **only composition root** — it wires each feature's handlers into the WS registry.
 
-- `host` → `projects`, `workspaces`, `git`, `github`, `branch-review`, `fs`, `spec`, `todos`, `reviews`, `watch`, `terminal`, `dialog`, `editors`, `agent`, `auth`, `assist`, `settings`, `layout`, `history`, `templates`, `analytics`, `persistence` (`dataDir`, for the crash report)
+- `host` → `projects`, `workspaces`, `git`, `github`, `branch-review`, `fs`, `spec`, `todos`, `reviews`, `watch`, `terminal`, `dialog`, `editors`, `agent`, `auth`, `assist`, `settings`, `layout`, `history`, `templates`, `analytics`, `log`, `persistence` (`dataDir`, for the crash report)
 - `workspaces` → `projects`, `git`, `persistence`
 - `branch-review` → `git`
 - `projects` → `git` (shared runner), `persistence`
 - `git`, `fs`, `spec`, `watch`, `terminal`, `settings`, `layout`, `analytics` → `persistence` (`spec` also → `pi-spec-graph/core`, external; `analytics` also → the pi-ai built-in provider/model catalog + `posthog-node`, external — the identity-bucketing vocabulary and the delivery SDK)
+- `log` → `persistence` (`dataDir`) — and **any feature module (+ `host`) may → `log`**: it is the one
+  cross-cutting edge, like `persistence`, exempt from the never-each-other rule (today: `host`,
+  `agent`, `workspaces`, `watch`, `git`, `todos`, `reviews`, `analytics`). `persistence` never imports
+  `log` (would cycle); `initLogging` is called only from `host`'s `bootHost`
 - `todos` → `workspaces` (worktree path lookup) + `pi-todos/core` (external, value-imported, pi-free)
 - `reviews` → `workspaces` (worktree path lookup), `persistence` (data dir), `git` (the review's baseSha
   resolve, plus the diff range + blob read behind a base-side anchor). The `review.send*` flows are
@@ -95,7 +100,7 @@ the host from env via `bootHost` for dev/e2e.
   `host` installs (`agent.setReviewCommentHandler` → `reviews.resolveCommentFromAgent`)
 - `assist` → `agent` (the one-shot completion primitive)
 - `auth` → `agent` (the current runtime/auth facade plus candidate prepare/activate; one-way, `agent` never imports `auth`)
-- `agent` → (no internal deps — only the pi runtime; auth passes desired opaque Central paths through its public generation seam)
+- `agent` → `log` only (otherwise the pi runtime alone; auth passes desired opaque Central paths through its public generation seam)
 - `persistence`, `dialog`, `github`, `history`, `templates` → (leaves)
 
 Rules: features never import `host`, and never each other except the edges above. The graph is acyclic.

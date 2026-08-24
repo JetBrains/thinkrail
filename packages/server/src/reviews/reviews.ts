@@ -19,10 +19,13 @@ import type {
 	ReviewSnapshot,
 } from "@thinkrail/contracts";
 import { diffBaseRef, readBlobAt, resolveCommitOid, resolveDiffRange } from "../git";
+import { logger } from "../log";
 import { dataDir } from "../persistence";
 import { getWorkspace } from "../workspaces";
 import { buildTextQuote, hashContent, lineRangeOf, reanchor, textQuoteOf } from "./anchoring";
 import { renderPackage } from "./packageRender";
+
+const log = logger("reviews");
 
 let publish: (payload: ReviewChangedPayload) => void = () => {};
 export function setReviewPublisher(fn: (payload: ReviewChangedPayload) => void): void {
@@ -114,7 +117,7 @@ function archivedReviewFiles(): string[] {
 				if (review.isFile() && review.name.endsWith(".json")) files.push(join(dir, review.name));
 			}
 		} catch (err) {
-			console.warn(
+			log.warn(
 				`review archive ${workspace.name}: ${err instanceof Error ? err.message : String(err)}`,
 			);
 		}
@@ -441,7 +444,7 @@ export function resolveCommentFromAgent(commentId: string, note?: string): Revie
 		try {
 			snapshot = load(workspaceId);
 		} catch (err) {
-			console.warn(`review ${workspaceId}: ${err instanceof Error ? err.message : String(err)}`);
+			log.warn(`review ${workspaceId}: ${err instanceof Error ? err.message : String(err)}`);
 			continue;
 		}
 		if (snapshot?.review.status !== "open") continue;
@@ -456,7 +459,7 @@ export function resolveCommentFromAgent(commentId: string, note?: string): Revie
 		try {
 			snapshot = readSnapshot(file);
 		} catch (err) {
-			console.warn(`review archive ${file}: ${err instanceof Error ? err.message : String(err)}`);
+			log.warn(`review archive ${file}: ${err instanceof Error ? err.message : String(err)}`);
 			continue;
 		}
 		if (snapshot?.review.status !== "closed") continue;

@@ -163,6 +163,6 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   `listWorkspaces`, `listWorkspaceRecords`, `forgetWorkspace`, `reclaimWorktree`, `removeWorkspace`,
   `workspaceDiffStats`, `getWorkspace`, `renameWorkspace`, `refreshUserOwnedWorkspace`,
   `ensureWorkspaceScratchDir`, `setWorkspacePublisher`, `WorkspaceLifecycleEvent`.
-- **Allowed deps:** `projects` (repo lookup), `git` (the runner), `persistence`; `contracts`;
+- **Allowed deps:** `projects` (repo lookup), `git` (the runner), `persistence`, `log`; `contracts`;
   `@thinkrail/shared/paths` (the scratch-dir path convention); Node.
 - **Forbidden:** `host`; reaching into another feature's internals (use its barrel).

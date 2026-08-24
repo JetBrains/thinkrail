@@ -24,6 +24,7 @@ describe("parseArgs", () => {
 			host: DEFAULT_HOST,
 			open: true,
 			noAnalytics: false,
+			verbose: false,
 			staticDir: undefined,
 			projectDir: undefined,
 			help: false,
@@ -35,6 +36,12 @@ describe("parseArgs", () => {
 		expect(parseArgs(["--no-analytics"], {}).noAnalytics).toBe(true);
 		expect(parseArgs([], { THINKRAIL_NO_ANALYTICS: "1" }).noAnalytics).toBe(false);
 		expect(parseArgs([], {}).noAnalytics).toBe(false);
+	});
+
+	test("--verbose turns on debug logging; the env spelling is the log module's job", () => {
+		expect(parseArgs(["--verbose"], {}).verbose).toBe(true);
+		expect(parseArgs([], { THINKRAIL_LOG_LEVEL: "debug" }).verbose).toBe(false);
+		expect(parseArgs([], {}).verbose).toBe(false);
 	});
 
 	test("flags win over env over defaults", () => {

@@ -19,8 +19,11 @@ import {
 	resolveDiffRange,
 	tryCurrentBranch,
 } from "../git";
+import { logger } from "../log";
 import { dataDir, loadProjects, loadWorkspaces, saveWorkspaces } from "../persistence";
 import { getProjects, listProjects } from "../projects";
+
+const log = logger("workspaces");
 
 export type WorkspaceLifecycleEvent =
 	| { kind: "created"; workspace: Workspace }
@@ -188,9 +191,7 @@ function applyFolderTruth(ws: Workspace, truth: { branch: string; baseBranch: st
 function diffStats(ws: Workspace): DiffStats | undefined {
 	const result = git(ws.worktreePath, changedFileArgs(resolveDiffRange(ws), "--shortstat"));
 	if (!result.ok) {
-		console.warn(
-			`git diff --shortstat failed in ${ws.worktreePath}: ${result.err || "unknown error"}`,
-		);
+		log.warn(`git diff --shortstat failed in ${ws.worktreePath}: ${result.err || "unknown error"}`);
 		return undefined;
 	}
 	if (!result.out) return { added: 0, removed: 0 };
