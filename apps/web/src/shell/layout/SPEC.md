@@ -118,7 +118,8 @@ creation, fold/show/hide/tool restore, bottom alignment, and keyboard separator 
 unavailable reason. A tab can reproduce any interior pointer placement by moving into the destination group
 and invoking New group above/below or left/right. Tab strips implement the WAI-ARIA tabs pattern and visible
 roving focus; a folded auxiliary group retains its linked native-hidden tabpanel while unmounting the body,
-and its named restore control is the group focus endpoint when no tab control is rendered. Separators expose
+and its named restore control is the group focus endpoint when no tab control is rendered. A local bottom-fold
+transition moves focus onto that restore control and expansion returns it to the selected tab. Separators expose
 orientation and current/min/max values. `Ctrl+F6` visits upper-row groups in visual
 order, then visible bottom groups left-to-right. One-row strips have bounded
 readable tab widths, wheel/trackpad scrolling, previous/next controls, active reveal, and a searchable

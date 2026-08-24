@@ -23,6 +23,7 @@ const MAX_DEPTH = 8;
 const MAX_TABS = 256;
 const MAX_SIDE_GROUPS_SAFETY = 32;
 const MAX_BOTTOM_HEIGHT = 0.7;
+const MIGRATED_LAYOUT_REVISION_FLOOR = 2;
 const DEFAULT_BOTTOM = {
 	visible: false,
 	height: 0.3,
@@ -786,11 +787,15 @@ function parseSnapshot(value: unknown, workspaceId: string): WorkspaceLayoutSnap
 		return null;
 	}
 	try {
+		const migratedFromVersionOne = record(snapshot.document)?.version === 1;
 		const document = validateWorkspaceLayout(migrateWorkspaceDocument(snapshot.document), {
 			maxSideGroups: MAX_SIDE_GROUPS_SAFETY,
 			maxBottomGroups: MAX_SIDE_GROUPS_SAFETY,
 		});
-		return { workspaceId, revision: Number(snapshot.revision), document };
+		const revision = migratedFromVersionOne
+			? Math.max(Number(snapshot.revision), MIGRATED_LAYOUT_REVISION_FLOOR)
+			: Number(snapshot.revision);
+		return { workspaceId, revision, document };
 	} catch {
 		return null;
 	}

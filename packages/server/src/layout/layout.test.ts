@@ -500,6 +500,17 @@ describe("workspace layout persistence and ordering", () => {
 		});
 	});
 
+	test("keeps a revision-one version-1 migration distinct from a fresh version-2 layout", () => {
+		const directory = join(dataDir, "layouts");
+		mkdirSync(directory, { recursive: true });
+		writeFileSync(
+			join(directory, "ws.json"),
+			JSON.stringify({ workspaceId: "ws", revision: 1, document: legacyDocument() }),
+		);
+
+		expect(getWorkspaceLayout("ws")?.revision).toBe(2);
+	});
+
 	test("serializes dependent writes with the revision produced by their predecessor", async () => {
 		const seen: LayoutChangedPayload[] = [];
 		setLayoutPublisher((payload) => seen.push(payload));

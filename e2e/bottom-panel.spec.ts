@@ -288,6 +288,23 @@ test("bottom height, all alignments, and keyboard resizing persist across reload
 	const left = page.getByTestId("left-stack");
 	const right = page.getByTestId("right-stack");
 	await expectHorizontalSpan(bottom, center, center);
+	const alignmentButton = page.getByRole("button", { name: "Bottom panel alignment" });
+	await alignmentButton.focus();
+	await page.keyboard.press("Enter");
+	await expect(
+		page.getByRole("menuitemradio", { name: "Below center", exact: true }),
+	).toBeFocused();
+	await page.keyboard.press("ArrowDown");
+	await expect(
+		page.getByRole("menuitemradio", { name: "Below center and left", exact: true }),
+	).toBeFocused();
+	await page.keyboard.press("Enter");
+	await waitForLayoutSettled(page);
+	await expect(page.getByTestId("bottom-aligned-row")).toHaveAttribute(
+		"data-alignment",
+		"center-left",
+	);
+	await setBottomAlignment(page, "Below center");
 	const before = await size(bottom, "height");
 	const handle = page.getByTestId("resize-bottom");
 	const handleBox = await handle.boundingBox();
@@ -358,6 +375,7 @@ test("bottom groups arrange left-to-right, resize, fold to 27px, restore, and en
 
 	await first.getByTestId("bottom-group-fold").click();
 	await expect(first).toHaveAttribute("data-folded", "true");
+	await expect(first.getByTestId("bottom-group-restore")).toBeFocused();
 	expect(await size(first, "width")).toBeCloseTo(27, 0);
 	await expect(page.getByTestId("terminal-instance")).toHaveCount(0);
 	await second.getByRole("tab", { name: "Changes" }).focus();
@@ -365,6 +383,7 @@ test("bottom groups arrange left-to-right, resize, fold to 27px, restore, and en
 	await expect(first.getByTestId("bottom-group-restore")).toBeFocused();
 	await page.keyboard.press("Space");
 	await expect(first).toHaveAttribute("data-folded", "false");
+	await expect(first.getByRole("tab", { name: "Terminal 1" })).toBeFocused();
 	await waitTerminalReady(page);
 
 	await page.getByTestId("tab-files").click({ button: "right" });
@@ -472,7 +491,7 @@ test("a stored version-1 layout migrates with its tools untouched and no termina
 		join(directory, `${fileId}.json`),
 		`${JSON.stringify({
 			workspaceId: workspace.id,
-			revision: 7,
+			revision: 1,
 			document: {
 				version: 1,
 				center: { kind: "group", id: "legacy-center", tabs: [] },
@@ -527,7 +546,7 @@ test("a stored version-1 layout migrates with its tools untouched and no termina
 		revision: number;
 		document: { version: number; bottom: { visible: boolean; groups: unknown[] } };
 	}>(page, "layout.get", { workspaceId: workspace.id });
-	expect(migrated.revision).toBe(7);
+	expect(migrated.revision).toBe(2);
 	expect(migrated.document.version).toBe(2);
 	expect(migrated.document.bottom).toMatchObject({ visible: false, groups: [] });
 
@@ -538,7 +557,7 @@ test("a stored version-1 layout migrates with its tools untouched and no termina
 		revision: number;
 		document: { bottom: { visible: boolean; groups: unknown[] } };
 	}>(page, "layout.get", { workspaceId: workspace.id });
-	expect(installed.revision).toBeGreaterThanOrEqual(7);
+	expect(installed.revision).toBeGreaterThanOrEqual(2);
 	expect(installed.document.bottom).toMatchObject({ visible: false, groups: [] });
 	await expect(page.getByTestId("left-nav")).toContainText("Projects");
 	await expect(page.getByTestId("right-stack")).toContainText("Specs");

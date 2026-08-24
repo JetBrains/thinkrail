@@ -58,6 +58,15 @@ import {
 	ContextMenuSeparator,
 	ContextMenuTrigger,
 } from "../../components/ui/context-menu";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuRadioGroup,
+	DropdownMenuRadioItem,
+	DropdownMenuSeparator,
+	DropdownMenuTrigger,
+} from "../../components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "../../components/ui/popover";
 import {
 	type ImperativePanelGroupHandle,
@@ -1574,42 +1583,35 @@ function BottomAlignmentMenu({
 	onHide: () => void;
 }) {
 	return (
-		<Popover>
-			<PopoverTrigger
+		<DropdownMenu>
+			<DropdownMenuTrigger
 				aria-label="Bottom panel alignment"
 				title={`Bottom panel alignment: ${BOTTOM_ALIGNMENT_LABELS[alignment]}`}
 				className="flex w-7 shrink-0 items-center justify-center border-border-muted border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 			>
 				<MoreHorizontal className="size-4" />
-			</PopoverTrigger>
-			<PopoverContent align="end" className="w-56 p-xs">
-				<div className="space-y-0.5" role="menu" aria-label="Bottom panel alignment">
+			</DropdownMenuTrigger>
+			<DropdownMenuContent align="end" className="w-56">
+				<DropdownMenuRadioGroup
+					value={alignment}
+					onValueChange={(value) => onChange(value as LayoutBottomAlignment)}
+				>
 					{(Object.keys(BOTTOM_ALIGNMENT_LABELS) as LayoutBottomAlignment[]).map((value) => (
-						<button
+						<DropdownMenuRadioItem
 							key={value}
-							type="button"
-							role="menuitemradio"
-							aria-checked={alignment === value}
+							value={value}
 							data-testid={`bottom-align-${value}`}
-							onClick={() => onChange(value)}
-							className="flex w-full items-center justify-between rounded-[var(--radius-sm)] px-sm py-xs text-left tr-text-ui text-text-default hover:bg-control-bg-hovered"
+							className="justify-between"
 						>
 							<span>{BOTTOM_ALIGNMENT_LABELS[value]}</span>
-							{alignment === value ? <Check className="size-3.5 text-primary" /> : null}
-						</button>
+							{alignment === value ? <Check className="text-primary" /> : null}
+						</DropdownMenuRadioItem>
 					))}
-					<div className="my-xs border-border-default border-t" />
-					<button
-						type="button"
-						role="menuitem"
-						onClick={onHide}
-						className="w-full rounded-[var(--radius-sm)] px-sm py-xs text-left tr-text-ui text-text-default hover:bg-control-bg-hovered"
-					>
-						Hide bottom panel
-					</button>
-				</div>
-			</PopoverContent>
-		</Popover>
+				</DropdownMenuRadioGroup>
+				<DropdownMenuSeparator />
+				<DropdownMenuItem onSelect={onHide}>Hide bottom panel</DropdownMenuItem>
+			</DropdownMenuContent>
+		</DropdownMenu>
 	);
 }
 
@@ -1917,7 +1919,14 @@ function BottomStack({
 							group.id,
 							!group.folded,
 						);
-						if (!isLayoutUnavailable(result)) shared.onApply(result);
+						if (isLayoutUnavailable(result)) return;
+						const selectedId = readLayoutSelection(shared.attention, group.id);
+						const selected = group.tabs.find((tab) => tab.id === selectedId) ?? group.tabs[0];
+						shared.onApply({
+							...result,
+							focusGroupId: group.id,
+							...(group.folded && selected ? { focusTabId: selected.id } : {}),
+						});
 					};
 					return (
 						<PanelWithHandle
