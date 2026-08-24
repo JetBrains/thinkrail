@@ -169,7 +169,9 @@ label + explainer bottom-left; the primary is a filled-primary card carrying the
 hook, others quiet `welcome-action`s). Welcome is **the mode fork**: with a project shown it always pairs
 **"Start building"** (isolated worktree) with **"Work in project folder"** (the Default workspace) so the
 two working modes are a visible choice, not a hidden default. The cards by state: **no projects** →
-**"Open project"** (one card); **project + `hasSpecs`** → **"Start building"** (primary) + "Work in
+**"Open project"** + **"Try the To Do App"** (`data-testid="welcome-demo"`, `Sparkles`) — the demo entry
+that calls `onboarding`'s `startDemo` (materialize the bundled demo via `demo.ensure`, arm the onboarding
+tour, land on the demo's Welcome); **project + `hasSpecs`** → **"Start building"** (primary) + "Work in
 project folder"; **project + no specs** → a spec-first **"Set up project"** (primary) + "Start building"
 + "Work in project folder". **"Open project" appears only in the no-projects state** — where it's the
 only possible action; once a project is shown, opening another is the projects-rail **"+"** (the same
@@ -178,7 +180,10 @@ dropdown), so Welcome stays the *work-in-this-project* surface. That card hangs 
 / Recents). Recents is the store's `recentProjects`: one last-opened path list containing open + closed
 records with no status badge; selecting either runs the shared open flow and lands at Project Home, with a
 closed record retaining its id and workspace state. `Card` is a `forwardRef` usable as a Radix `asChild`
-trigger. **"Work in project folder"**
+trigger. When the shown project **is** the active demo (`store.onboarding.demoProjectId`), Welcome also
+renders a quiet **"Reset demo"** text button (`data-testid="welcome-reset-demo"`) that calls
+`onboarding`'s `resetDemo` — the replay door (see [[submodule-web-onboarding]]). The demo entry/reset
+orchestration lives in `onboarding` (a one-way panels→onboarding edge); Welcome never owns the tour. **"Work in project folder"**
 (`House` icon, matching the rail's Default row) **direct-enters** the Default workspace — no dialog: the
 shared `enterDefaultWorkspace` helper lists the project's workspaces, stores them, and activates the
 `kind === "default"` row; an older host with no Default row degrades to an error toast. **"Start building"** is the
@@ -450,7 +455,8 @@ a project picker, the prompt hero, and the reused
   panes, singleton side tools, terminal bodies, Settings, and `Toaster`), imported **per-file** so
   Monaco/shiki/xterm stay lazy. Tab strips, group headers, side stacks, and center topology are not panel
   surfaces; the shell layout module wraps these renderers.
-- **Allowed deps:** `store`, `transport`, `components/ui` (incl. `popover`/`command`/`textarea` for the
+- **Allowed deps:** `onboarding` (`WelcomePanel` calls its `startDemo`/`resetDemo` orchestration — one-way,
+  no cycle); `store`, `transport`, `components/ui` (incl. `popover`/`command`/`textarea` for the
   dialog), `chat` (`ModelSelector`/`ThinkingSelector` + the `useModelCatalog` hook that feeds them,
   reused by `NewWorkspaceDialog`; `Markdown`,
   reused by `MarkdownPreview`; `TemplateEditorDialog`, reused by `TemplatesSettings`), `lib`, `themes` (catalog + generic application contract),
