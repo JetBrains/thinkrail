@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import type { AskUserQuestionAnswer, AskUserQuestionItem } from "@thinkrail/contracts";
 import {
+	answerSupportsNote,
 	choiceKeyAction,
 	confirmStateFor,
 	createQuestionAttentionClaim,
@@ -14,9 +15,11 @@ import {
 	questionPageForKey,
 	readAskResult,
 	readRecommendation,
+	selectOptionPatch,
 	shouldClaimQuestionFocus,
 	shouldFocusPageTarget,
 	splitRecommended,
+	toggleMultiPatch,
 } from "./AskUserQuestionCard";
 
 const q = (over: Partial<AskUserQuestionItem> = {}): AskUserQuestionItem => ({
@@ -307,6 +310,41 @@ describe("deriveAnswer", () => {
 		});
 	});
 
+	it("multi-select: each checked option's note joins the answer as a labelled line", () => {
+		expect(
+			deriveAnswer(
+				q({
+					multiSelect: true,
+					options: [...q().options, { label: "C (Recommended)", description: "c" }],
+				}),
+				0,
+				state({
+					multi: ["A", "C (Recommended)"],
+					notes: { A: " note a ", B: "unchecked note", "C (Recommended)": "note c" },
+				}),
+			),
+		).toEqual({
+			questionIndex: 0,
+			question: "Which?",
+			kind: "multi",
+			answer: null,
+			selected: ["A", "C (Recommended)"],
+			notes: "A: note a\nC: note c",
+		});
+	});
+
+	it("multi-select: blank notes leave the notes field off entirely", () => {
+		expect(
+			deriveAnswer(q({ multiSelect: true }), 0, state({ multi: ["A"], notes: { A: "   " } })),
+		).toEqual({
+			questionIndex: 0,
+			question: "Which?",
+			kind: "multi",
+			answer: null,
+			selected: ["A"],
+		});
+	});
+
 	it("multi-select: an unchecked 'Other' row keeps its text OUT of the answer", () => {
 		expect(
 			deriveAnswer(
@@ -465,6 +503,51 @@ describe("readRecommendation", () => {
 			recommended: false,
 			reason: undefined,
 		});
+	});
+});
+
+describe("choice patches", () => {
+	it("unchecking the option whose note editor is open closes the editor, keeps the text", () => {
+		const s = state({ multi: ["A", "B"], noteFor: "A", notes: { A: "kept" } });
+		expect(toggleMultiPatch(s, "A", 0)).toEqual({ cursor: 0, multi: ["B"], noteFor: null });
+	});
+	it("unchecking another option leaves the open editor alone", () => {
+		const s = state({ multi: ["A", "B"], noteFor: "A" });
+		expect(toggleMultiPatch(s, "B", 1)).toEqual({ cursor: 1, multi: ["A"] });
+	});
+	it("checking an option never touches noteFor", () => {
+		expect(toggleMultiPatch(state({ multi: [] }), "A", 0)).toEqual({ cursor: 0, multi: ["A"] });
+	});
+	it("selecting a different single-select option closes a stale open editor", () => {
+		const s = state({ option: "A", noteFor: "A", notes: { A: "kept" } });
+		expect(selectOptionPatch(s, "B", 1)).toEqual({
+			cursor: 1,
+			option: "B",
+			customActive: false,
+			noteFor: null,
+		});
+	});
+	it("re-selecting the option that owns the open editor keeps it open", () => {
+		const s = state({ option: "A", noteFor: "A" });
+		expect(selectOptionPatch(s, "A", 0)).toEqual({ cursor: 0, option: "A", customActive: false });
+	});
+});
+
+describe("answerSupportsNote", () => {
+	const base = { questionIndex: 0, question: "Which?" };
+	it("a picked single-select option can carry a note", () => {
+		expect(answerSupportsNote({ ...base, kind: "option", answer: "A" })).toBe(true);
+	});
+	it("a multi answer supports notes only once something is checked", () => {
+		expect(answerSupportsNote({ ...base, kind: "multi", answer: null, selected: ["A"] })).toBe(
+			true,
+		);
+		expect(answerSupportsNote({ ...base, kind: "multi", answer: "typed", selected: [] })).toBe(
+			false,
+		);
+	});
+	it("a custom answer has no option to hang a note on", () => {
+		expect(answerSupportsNote({ ...base, kind: "custom", answer: "mine" })).toBe(false);
 	});
 });
 
