@@ -77,6 +77,7 @@ flowchart LR
   rule([before_agent_start rule]) --> router[root router]
   router --> ps[setting-up-a-project — dispatcher]
   router --> bs[brainstorming]
+  router --> ship[shipping-a-pr]
   card(["/skill:setting-up-a-project card"]) --> ps
   ps --> pn[starting-a-new-project]
   ps --> pim[importing-a-codebase]
@@ -190,6 +191,7 @@ flowchart LR
 | `writing-specs` | concept — the spec quality bar (short / honest / on-rails) for every spec-producing flow | — (reached by name, rule 4) | active; observed by use (2026-07 manual: self-triggered for a spec revision and applied) |
 | `choosing-a-workflow` | router (root) — classification + routing | — (always-on entry, rule 4) | active; all three classifications observed by the routing suite — feature → brainstorming and onboarding → setup family green; the "anything else" row has an observed gap (see Current limitations & gaps) |
 | `writing-workflow-skills` | worker — authoring checklist for adding workflows | — (self-trigger only, rule 4) | active |
+| `shipping-a-pr` | worker — PR lifecycle (create with gates / screenshots / up-to-date sync / checks watch / review comments — phases as sibling docs) | `choosing-a-workflow` (root) + narrow self-trigger | active; unverified by use (rule 14 suspended) |
 
 The family is open and grows from real use; candidates (research/spike, refactor, bug-fix, a composing
 skill in the composer pattern with its stage workers, and **extending an existing spec graph** — the
@@ -285,6 +287,21 @@ follows is only the rationale the skill bodies don't state:
 - **`asking-user-questions`** carries the family's `ask_user_question` norms once: rounds, option
   design, the inference-confirmation pattern, and skip/headless degradation. Callers keep the *when* —
   and say where assumptions get recorded.
+- **`shipping-a-pr`** was mined from the operator's real PR sessions (2026-06→08: 125 scanned, 36
+  with PR work): the recurring asks — verify-then-PR, self-review first, rebase on fresh main,
+  screenshots for UI changes, "make PR up-to-date", "look at the checks", "do not fix review
+  comments blindly" — became its gates and phase docs. One skill rather than five (rule 1): every
+  lifecycle ask enters through the same trigger; the phases are internal forks as sibling docs. Its
+  done bar (every existing check green + user told, never "PR opened"; a no-CI repo terminates as
+  an explicit "no checks configured", never a silent green) and the review-only assets-ref screenshot
+  default were explicit user decisions (task-spec `task-shipping-a-pr-skill`). Its review hardening
+  (PR #284) converged on one shared discipline instead of per-finding patches — **observed, never
+  assumed**: every finding across three review rounds was the same defect (acting on, or declaring,
+  state not observed at the moment of the action), so the rule lives once in the spine — verify at
+  the point of action, fetch remote state fresh and completely, poll indeterminate answers — and
+  each phase doc instantiates it at its own action points (pre-push re-assertions after
+  tree-mutating steps, body fetched before edit, `UNKNOWN` merge state polled, throwaway cleanup
+  owned by the phase that made the throwaway).
 - **`writing-specs`** carries the family's spec quality bar once — short / honest / on-rails — and is
   the accruing home for the family's rules about specs and the spec graph as they grow. Graph
   *mechanics* (frontmatter, link kinds, the `spec_*` tools) stay with the spec-graph skill

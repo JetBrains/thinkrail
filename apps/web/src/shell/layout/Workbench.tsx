@@ -127,6 +127,7 @@ export interface WorkbenchProps {
 	onCommit: (document: WorkspaceLayoutDocument) => void;
 	onAttentionChange: (attention: LayoutAttention) => void;
 	onUserNavigation: () => void;
+	readNavigationTick: () => number;
 	onRequestClose: (
 		tab: LayoutTab,
 		prepare: (latestDocument?: WorkspaceLayoutDocument) => PreparedLayoutClose,
@@ -1605,6 +1606,7 @@ export function Workbench({
 	onCommit,
 	onAttentionChange,
 	onUserNavigation,
+	readNavigationTick,
 	onRequestClose,
 	onNewChat,
 	onRemoteGestureCanceled,
@@ -1698,6 +1700,7 @@ export function Workbench({
 			const requestedDocument = documentRef.current;
 			const requestedAttention = attentionRef.current;
 			const requestedSelectionEpoch = tabSelectionEpoch.current;
+			const requestedNavigationTick = readNavigationTick();
 			const requestedLocation = findTabLocation(requestedDocument, tab.id);
 			const wasSelectedAtRequest = Boolean(
 				requestedLocation &&
@@ -1734,6 +1737,7 @@ export function Workbench({
 						]);
 						const navigationWasOvertaken =
 							tabSelectionEpoch.current !== requestedSelectionEpoch ||
+							readNavigationTick() !== requestedNavigationTick ||
 							[...clockGroups].some(
 								(groupId) =>
 									survivingGroupIds.has(groupId) &&
@@ -1790,7 +1794,7 @@ export function Workbench({
 				};
 			});
 		},
-		[onAttentionChange, onRequestClose, onUserNavigation],
+		[onAttentionChange, onRequestClose, onUserNavigation, readNavigationTick],
 	);
 
 	useEffect(() => {

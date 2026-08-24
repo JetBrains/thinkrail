@@ -105,7 +105,10 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     `estimatedTokensAfter`, never pi's summary, entry id, usage, or extension details. The live entry retains
     that settlement in `SessionSummary.lastSettlement` for reconnect after Pi removed a failed attempt from its rebuilt
     context; a new `agent_start` exposes explicit `null` (no current terminal) so an older persisted failure
-    cannot reappear mid-run, while disk sessions remain transcript-authoritative.
+    cannot reappear mid-run, while disk sessions remain transcript-authoritative. A live summary also
+    carries pi's queue snapshot (`SessionQueueState`, only when non-empty): `queue_update` fires only on
+    changes, so this is the read-side seed that lets a client attaching mid-run render messages queued
+    before it connected.
     New-session and pre-session entrypoints capture the current generation; operations on a live session use
     that session's retained runtime. `abort` remains available as the cancellation control path.
     `prompt`/`steer`/`followUp` (with images) /
@@ -114,7 +117,17 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     back to `steer`), and pi's `followUp()` only *enqueues* into a queue that a run already in flight
     drains (so on an idle session it falls back to `prompt`, else the message parks forever — the way a
     `review.sendBatch` into a re-attached review chat marked its comments sent to an agent that never
-    saw them) —
+    saw them) / **`clearQueueSession`** (pi's `clearQueue()`, verbatim: drains both queues and returns the
+    texts for the client's dequeue-to-composer; pi emits the emptying `queue_update`, so the host adds no
+    bookkeeping) / **`removeQueuedSession(sessionId, kind, index)`** — per-item queue removal, which pi's
+    API lacks (queues are bare string arrays, `clearQueue` is all-or-nothing): drain via `clearQueue()`,
+    drop `lane[index]` (out-of-range → `removed: null`, everything re-queued), re-queue the keepers in
+    order (`steer()`/`followUp()` per lane — each re-queue emits its own `queue_update`, so clients
+    converge by events alone). **No-loss guarantee:** if the run settled during the operation the
+    re-queued keepers would park forever (pi's queues only drain inside a run), so the idle case drains
+    them through the same idle-delivery fallback as `followUpSession` — the first becomes a `prompt`,
+    the rest steer into the run it starts; delivery timing may degrade across that race window, content
+    is never lost (pinned by the idle-fallback unit test) —
     `setModel` / `setThinkingLevel` / `compact` / `getSessionStats` (+ contextUsage) / `getSessionCommands` /
     `listAvailableModels` / **`clampThinkingForModel`** (pi's `clampThinkingLevel` for a `{model, level}`
     pair — `model.clampThinking`; the host owns it so the pre-session picker, `getDefaultModel`, and a live

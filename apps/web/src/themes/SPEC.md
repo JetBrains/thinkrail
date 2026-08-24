@@ -81,7 +81,12 @@ floor on the transient `hover` surface — the latter being our line rather than
 a theme borrowed from elsewhere keeps its signature colours. `accent` and `success` are exempt from
 `input` alone: neither is ever rendered as text on a control. Separately, `onAccent` must clear AA on
 **both** accent fills (`accent` and `accentHover`), so a theme cannot darken its hover step far enough
-to swallow the primary button's own label. A new manifest that reads poorly fails to merge; see
+to swallow the primary button's own label. Legibility alone proved insufficient: High Contrast Light
+once shipped its `hover` fill — the palette source of the selected/hovered control roles — at 1.05:1
+against its own sidebar, an invisible selection with every check green, so the suite also pins
+hover-vs-surface **distinguishability** (≥ 1.15 against every resting surface — `content` included,
+because PlanPane and the workbench backdrop host hovered controls there, which Light's original
+`hover == content` palette made invisible). A new manifest that reads poorly fails to merge; see
 [`styles/COLOR.md`](../styles/COLOR.md) for the reasoning.
 
 **A `contrast: "high"` manifest is held to AAA (7.0) resting and full AA (4.5) even on hover**, `hint`
