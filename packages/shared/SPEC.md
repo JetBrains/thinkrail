@@ -78,7 +78,8 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   there, not here.)
 - **/jbcentral** — the **single Central process/filesystem boundary**. It resolves Central by absolute path,
   parses a bounded `central --version` result into a compatibility verdict, exposes the
-  global opaque artifact path (`~/.pi/agent/extensions/jetbrains-central.ts`) and existence only, and invokes
+  global opaque artifact path (`~/.pi/agent/extensions/jetbrains-central.ts`, and the `~/.local/bin/`
+  installer fallback) and existence only, and invokes
   only the reviewed argv: `status`, `add pi`, `remove pi`, `login`, `update --install`, and
   `proxy start --ensure-updated`. Support is a **minimum version only** (`MINIMUM_CENTRAL_VERSION`,
   `1.4.0` — the first Central release carrying the native PI surface): anything at or above it is supported,
@@ -139,8 +140,23 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
 ## Get right (jbcentral)
 
 - **Detect + invoke Central by absolute path (`resolveJbcentralBin`), never by bare command.** Pass the live
-  `process.env.PATH` to lookup and retain the official `~/.local/bin/central` fallback, because a long-running
-  host must see a just-installed executable without restart.
+  `process.env.PATH` to lookup and retain the official `~/.local/bin` fallback, because a long-running
+  host must see a just-installed executable without restart. **The fallback names the file each OS's
+  installer actually writes** — `central.exe` on Windows, `central` elsewhere (`install.ps1` installs
+  `$HOME\.local\bin\central.exe`) — while the PATH lookup keeps the bare name, since `Bun.which` tries the
+  Windows executable extensions itself and refuses extensionless files there. An extensionless fallback on
+  Windows can never match a real install, which is precisely the case the fallback exists for: Central
+  installed from the in-app guidance while the host is already running with a stale PATH. Its unit test
+  pins the exact path, never an `exists` stub that answers true for everything.
+- **`~` is `USERPROFILE` on Windows and `HOME` everywhere else** — read from the live env, per platform, with
+  `homedir()` only as the fallback. This is the *same* home pi resolves for `getAgentDir()`, which is the
+  whole point: the adapter and pi must name one artifact. Two rejected forms, both real bugs:
+  `env.HOME ?? homedir()` (the original) silently loses on Windows, where `HOME` is ignored by pi but *is*
+  set by Git Bash to an MSYS path — Central would be installed and configured and ThinkRail would report
+  `absent`; and plain `homedir()` cannot be redirected in-process under Bun, which resolves it **once at
+  startup** rather than per call (Node re-reads it), so the tests and e2e/smoke hosts that redirect a home
+  would silently read the developer's real one. The platform is an injectable dependency (`platform`), so
+  both branches are pinned by unit tests on any host OS.
 - **Confidential-source-informed, public-surface-only.** Tracked artifacts contain only reviewed argv,
   compatibility bounds, the opaque path, typed outcomes, and independently authored fakes. Never copy or
   paraphrase Central source/output, and never read, parse, hash, snapshot, copy, log, upload, persist elsewhere,

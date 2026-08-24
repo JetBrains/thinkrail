@@ -19,10 +19,18 @@ GitHub releases. It owns no product code — only workflows, composite actions, 
   see `scripts/check-binary-seams.ts`), unit tests, no-agent e2e, and a **host-target** binary
   build+smoke+**e2e-vs-binary** (`bun run e2e:binary`: the same no-agent suite against the compiled
   artifact, minus the `@dev-seam` fake-login specs — the regression class that only exists inside the
-  binary; ubuntu only by decision, see `task-artifact-verification`). Fast, no provider auth. Gates
-  merges.
+  binary; ubuntu only by decision, see `task-artifact-verification`), **plus a windows-latest binary
+  build+smoke** (`binary-windows`). Fast, no provider auth. Gates merges.
 - **Release** (`nightly.yml` / `stable.yml` → `_release.yml` → `_build.yml`): trusts a green `main` (no
   test gate of its own) and produces published binaries + a GitHub release.
+
+**Why Windows gates PRs and macOS does not.** A release build is all-or-nothing: `release` needs
+`build.result == 'success'`, so one red matrix leg publishes *nothing* — quietly, with no notification, and
+with the other platforms' green artifacts discarded. #255 spent two nightlies and a stable dispatch that
+way on a Windows-only smoke fixture defect (see `module-cli`). Windows is where the host's assumptions
+diverge most (executable resolution, `PATH` shape, `USERPROFILE` vs `HOME`, real-OS trash), and its runner is
+the cheap half of that risk; macOS divergence is narrower (path canonicalization) and its runner minutes are
+dearer, so it stays release-matrix-only. A red release matrix still notifies nobody — an open gap.
 
 ## Channels
 

@@ -215,21 +215,59 @@ and `trash`'s **native helper sidecars** (which macOS/Windows must execute from 
   because the host stores git's symlink-resolved root — macOS `/var` → `/private/var`, Windows' 8.3 `TEMP`
   — so a fixture written at an unresolved path lands in an encoded session dir the host never scans, and
   the delete then truthfully no-ops while the file stays put), verifies both macOS/Windows helpers were
-  staged from the artifact, and SIGTERM exits 0. CI builds + smokes the binary on every PR (its host
-  target — the generation/bundling/staging logic is platform-independent, but a Linux-only smoke cannot
-  see path-canonicalization or real-OS-trash divergence: those first surface on the release matrix's
-  macOS/Windows runners). What it can't cover without provider auth: the factories registering inside a
+  staged from the artifact, and SIGTERM exits 0. CI builds + smokes the binary on every PR on **ubuntu and
+  windows** (each its host target); macOS binary coverage stays release-matrix-only. The Windows leg is not
+  optional polish: the host reaches that extension only when its Central inspection says *installed and
+  supported*, so the whole assertion is Windows-executable-shaped, and a ubuntu-only smoke let #255 ship a
+  release matrix that failed for two days while publishing nothing (see `module-ci-release`). What it can't cover without provider auth: the factories registering inside a
   live session (that's `e2e:agent` territory, run-from-source). The smoke's **broad-net sibling** is `bun run e2e:binary` (root
   `playwright.binary.config.ts`): the whole no-agent e2e suite executed against this binary — also in CI
   on every PR. And `bun run check:seams` (root `scripts/check-binary-seams.ts`) is the build-time canary
   for the seam class: it fails when a pi bump introduces a new bundler-opaque dynamic import the server's
   `registerBundledRuntime` doesn't statically register.
+- **The smoke's fixtures are host-OS-shaped, not POSIX-shaped.** Every one of them was a Windows failure
+  in a green-on-Linux suite:
+  - The **fake Central CLI is compiled** (`bun build --compile` into `central`/`central.exe`), not written
+    as a `#!/bin/sh` script: the host only feeds the synthetic extension to PI when `inspectJbcentral`
+    resolves *and spawns* a `central` reporting a supported version, and Windows can neither resolve an
+    extensionless file as an executable nor `CreateProcess` a shell script. A `.cmd` shim was rejected —
+    `Bun.spawn` cannot launch a batch file without a `cmd.exe` wrapper, and it splits the fixture per shell
+    dialect. Its argv surface stays the reviewed one: `--version` prints a synthetic `central <semver>`,
+    everything else exits non-zero (so the background `status` probe stays an `unknown` observation).
+  - The **pi-free `PATH` is derived from the live `PATH`** by dropping the entries that hold a `pi`
+    executable, then prepending the fake bin dir — never a hardcoded `/usr/bin:/bin` skeleton, which on
+    Windows leaves the host without `git.exe` or System32 (`project.open` shells out to bare `git`). The
+    smoke still asserts no `pi` is reachable, and additionally that `git` survived the filter.
+  - **`HOME` *and* `USERPROFILE` point at the smoke's temp home** in every spawned host, because
+    `homedir()` — which pi's `getAgentDir()` uses — reads `USERPROFILE` on Windows and ignores `HOME`.
+    Without it the default-agent-dir probe writes into the runner's (or a Windows developer's) real
+    `%USERPROFILE%\.pi\agent` instead of the sandbox.
+  - **Every spawned host's env is built by `hostEnv`, which drops the inherited case-variants of the keys
+    it overrides.** Windows env names are case-insensitive and the runner's is spelled `Path`, so the
+    familiar `{...process.env, PATH: x}` ships *both* keys and the child reads the inherited one — the host
+    then ran with the machine's real PATH, saw no fake `central`, reported `absent`, and never loaded the
+    extension while the fixture itself was provably fine.
+  - **Both legs require `provider.status`'s `jbcentral` to be `configured`**, not just the model to be
+    present: the artifact sits inside the *default* agent dir, so a leg that only checks `model.list` could
+    in principle pass through pi's own agent-dir discovery instead of the Central-fed absolute path this
+    gate exists to pin. The status read waits out a transient `configuring` (a boot-time watcher event).
+  - **The two hosts run one at a time**: the default-agent probe boots, asserts and exits before the
+    custom-agent host is spawned. They load the *same* on-disk extension, and a concurrent initial load
+    races on the loader's transpile cache — harmless on POSIX, an EPERM-class failure on Windows, where the
+    loser silently falls back to a runtime without the extension (`prepareInitialRuntime`'s plain-runtime
+    path). A failed *rebuild* keeps the loaded generation, so only the boot load can lose the provider this
+    way — which is why the assertion reports `provider.status`'s `jbcentral` state on failure: `load-failed`
+    names that cause, `absent` names a fixture that never ran.
 
 ## Boundary
 
 - **Owns:** `src/args.ts` (pure `parseArgs(argv, env) → CliOptions` + `parseSubcommand` + `USAGE`),
   `src/index.ts` (the run-from-source `bootstrap()`: shell env → server → browser open → signal handlers),
   and the binary build + its boot smoke (`scripts/build-binary.ts`, `scripts/smoke-binary.ts`,
+  `scripts/artifactName.ts` — the one place the artifact filename rule lives, including the `.exe` Bun
+  appends for a Windows target, so the build's output path and the smoke's default input cannot disagree
+  the way they did on Windows; the release action re-derives the same name in bash because it is also the
+  published-asset contract, see `module-ci-release`),
   `src/compiled-entry.ts`, `src/web-assets.generated.*`, `src/bundled-extensions.generated.*`,
   `src/runtime-assets.generated.*`),
   `src/version.ts` (the release version stamped in at build time), `src/update.ts` (the `update`

@@ -4,8 +4,11 @@ import { existsSync, globSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } f
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
 import { defaultSessionDirFor, writeFixtureSession } from "@thinkrail/server/history-test-fixtures";
+import { binaryArtifactName } from "./artifactName";
 
-const binary = resolve(process.argv[2] ?? join(import.meta.dir, "..", "dist", "thinkrail"));
+const binary = resolve(
+	process.argv[2] ?? join(import.meta.dir, "..", "dist", binaryArtifactName()),
+);
 if (!existsSync(binary)) {
 	console.error(`binary not found at ${binary} — run \`bun run build:binary\` first.`);
 	process.exit(1);
@@ -42,11 +45,20 @@ const fakeBinDir = join(tmp, "no-pi-bin");
 const centralArtifact = join(homeDir, ".pi", "agent", "extensions", "jetbrains-central.ts");
 mkdirSync(fakeBinDir, { recursive: true });
 mkdirSync(dirname(centralArtifact), { recursive: true });
+const centralFakeSource = join(tmp, "central-fake.ts");
+const centralFake = join(fakeBinDir, process.platform === "win32" ? "central.exe" : "central");
 writeFileSync(
-	join(fakeBinDir, "central"),
-	'#!/bin/sh\n[ "$1" = "--version" ] || exit 8\nprintf \'central 1.6.2 (synthetic smoke metadata)\\n\'\n',
-	{ mode: 0o755 },
+	centralFakeSource,
+	`if (process.argv[2] !== "--version") process.exit(8);\nprocess.stdout.write("central 1.6.2 (synthetic smoke metadata)\\n");\n`,
 );
+const compileFake = Bun.spawnSync(
+	[process.execPath, "build", "--compile", centralFakeSource, "--outfile", centralFake],
+	{ cwd: tmp, stdout: "pipe", stderr: "pipe" },
+);
+if (!compileFake.success || !existsSync(centralFake)) {
+	console.error(compileFake.stderr.toString());
+	fail(`could not compile the fake Central CLI at ${centralFake}`);
+}
 writeFileSync(
 	centralArtifact,
 	`const model = {
@@ -69,9 +81,36 @@ export default function syntheticExternalExtension(pi) {
 }
 `,
 );
-const noPiPath = [fakeBinDir, "/usr/bin", "/bin", "/usr/sbin", "/sbin"].join(delimiter);
+const noPiPath = [
+	fakeBinDir,
+	...(process.env.PATH ?? "")
+		.split(delimiter)
+		.filter((entry) => entry.length > 0 && !Bun.which("pi", { PATH: entry })),
+].join(delimiter);
 if (Bun.which("pi", { PATH: noPiPath }))
 	fail("the external-extension smoke PATH unexpectedly contains pi");
+if (!Bun.which("git", { PATH: noPiPath }))
+	fail("dropping every pi directory from PATH also dropped git — move pi out of git's directory");
+
+const sandboxEnv = {
+	HOME: homeDir,
+	USERPROFILE: homeDir,
+	CLAUDE_CONFIG_DIR: join(homeDir, ".claude"),
+	CODEX_HOME: join(homeDir, ".codex"),
+	GEMINI_CLI_HOME: homeDir,
+	PI_OFFLINE: "1",
+	PATH: noPiPath,
+	THINKRAIL_NO_ANALYTICS: "1",
+};
+
+function hostEnv(overrides: Record<string, string>, unset: string[] = []): Record<string, string> {
+	const shadowed = new Set([...Object.keys(overrides), ...unset].map((name) => name.toLowerCase()));
+	const inherited: Record<string, string> = {};
+	for (const [name, value] of Object.entries(process.env)) {
+		if (value !== undefined && !shadowed.has(name.toLowerCase())) inherited[name] = value;
+	}
+	return { ...inherited, ...overrides };
+}
 
 const autoloadDir = join(tmp, "autoload-project");
 const preloadMarker = join(autoloadDir, "preload-ran");
@@ -85,12 +124,7 @@ writeFileSync(
 {
 	const subCache = join(tmp, "subcommand-cache");
 	const run = Bun.spawnSync([binary, "uninstall", "--help"], {
-		env: {
-			...process.env,
-			XDG_CACHE_HOME: subCache,
-			HOME: homeDir,
-			THINKRAIL_NO_ANALYTICS: "1",
-		},
+		env: hostEnv({ ...sandboxEnv, XDG_CACHE_HOME: subCache }),
 		stdout: "pipe",
 		stderr: "inherit",
 		cwd: autoloadDir,
@@ -130,24 +164,17 @@ const gitCommit = Bun.spawnSync([
 ]);
 if (gitCommit.exitCode !== 0) fail("could not commit the portable-skill smoke project");
 
-const proc = Bun.spawn([binary, "--no-open", "--port", "24262"], {
-	env: {
-		...process.env,
-		THINKRAIL_DATA_DIR: dataDir,
-		PI_CODING_AGENT_DIR: agentDir,
-		PI_OFFLINE: "1",
-		XDG_CACHE_HOME: cacheDir,
-		HOME: homeDir,
-		CLAUDE_CONFIG_DIR: join(homeDir, ".claude"),
-		CODEX_HOME: join(homeDir, ".codex"),
-		GEMINI_CLI_HOME: homeDir,
-		PATH: noPiPath,
-		THINKRAIL_NO_ANALYTICS: "1",
-	},
-	stdout: "pipe",
-	stderr: "inherit",
-});
-killHost = () => proc.kill("SIGKILL");
+const spawnCustomAgentHost = () =>
+	Bun.spawn([binary, "--no-open", "--port", "24262"], {
+		env: hostEnv({
+			...sandboxEnv,
+			THINKRAIL_DATA_DIR: dataDir,
+			PI_CODING_AGENT_DIR: agentDir,
+			XDG_CACHE_HOME: cacheDir,
+		}),
+		stdout: "pipe",
+		stderr: "inherit",
+	});
 
 async function connectRpc(baseUrl: string): Promise<WebSocket> {
 	const socket = new WebSocket(`${baseUrl.replace(/^http/, "ws")}/ws`);
@@ -195,22 +222,76 @@ async function readServedUrlFrom(processHandle: {
 	throw new Error(`stdout closed without a serving URL (output: ${JSON.stringify(buffered)})`);
 }
 
+function hasExternalExtensionModel(models: unknown): boolean {
+	return (
+		Array.isArray(models) &&
+		models.some(
+			(model) =>
+				typeof model === "object" &&
+				model !== null &&
+				(model as { provider?: string; id?: string }).provider === "compiled-external" &&
+				(model as { provider?: string; id?: string }).id === "compiled-external-model",
+		)
+	);
+}
+
+function centralFixtureState(): string {
+	const exe = existsSync(centralFake);
+	const version = exe
+		? Bun.spawnSync([centralFake, "--version"], { stdout: "pipe", stderr: "pipe" })
+		: null;
+	return JSON.stringify({
+		exe,
+		resolved: Bun.which("central", { PATH: noPiPath }),
+		artifact: existsSync(centralArtifact),
+		version: version && { code: version.exitCode, out: version.stdout.toString().trim() },
+	});
+}
+
+async function centralStatus(socket: WebSocket): Promise<{ state?: string } | null> {
+	try {
+		const report = (await within(
+			rpc(socket, "provider.status", {}),
+			10_000,
+			"provider.status",
+		)) as { jbcentral?: { state?: string } };
+		return report.jbcentral ?? null;
+	} catch (err) {
+		return { state: `unreadable (${err instanceof Error ? err.message : String(err)})` };
+	}
+}
+
+async function settledCentralStatus(socket: WebSocket): Promise<{ state?: string } | null> {
+	for (let attempt = 0; attempt < 40; attempt += 1) {
+		const status = await centralStatus(socket);
+		if (status?.state !== "configuring") return status;
+		await new Promise((resolve) => setTimeout(resolve, 250));
+	}
+	return await centralStatus(socket);
+}
+
+async function assertExternalExtensionLoaded(
+	socket: WebSocket,
+	agentDirKind: string,
+): Promise<void> {
+	const models = await within(rpc(socket, "model.list", {}), 20_000, `${agentDirKind} model.list`);
+	const status = await settledCentralStatus(socket);
+	if (hasExternalExtensionModel(models) && status?.state === "configured") return;
+	fail(
+		`compiled binary did not load the global external extension with ${agentDirKind} (Central status: ${JSON.stringify(status)}, fixture: ${centralFixtureState()})`,
+	);
+}
+
 async function assertDefaultAgentDirExternalExtension(): Promise<void> {
-	const probeEnv = {
-		...process.env,
-		THINKRAIL_DATA_DIR: join(tmp, "default-agent-data"),
-		XDG_CACHE_HOME: join(tmp, "default-agent-cache"),
-		HOME: homeDir,
-		CLAUDE_CONFIG_DIR: join(homeDir, ".claude"),
-		CODEX_HOME: join(homeDir, ".codex"),
-		GEMINI_CLI_HOME: homeDir,
-		PI_OFFLINE: "1",
-		PATH: noPiPath,
-		THINKRAIL_NO_ANALYTICS: "1",
-	};
-	delete probeEnv.PI_CODING_AGENT_DIR;
 	const probe = Bun.spawn([binary, "--no-open", "--port", "24312"], {
-		env: probeEnv,
+		env: hostEnv(
+			{
+				...sandboxEnv,
+				THINKRAIL_DATA_DIR: join(tmp, "default-agent-data"),
+				XDG_CACHE_HOME: join(tmp, "default-agent-cache"),
+			},
+			["PI_CODING_AGENT_DIR"],
+		),
 		stdout: "pipe",
 		stderr: "inherit",
 	});
@@ -227,19 +308,7 @@ async function assertDefaultAgentDirExternalExtension(): Promise<void> {
 			"default-agent binary probe did not report a serving URL",
 		);
 		socket = await within(connectRpc(url), 10_000, "default-agent WebSocket connect");
-		const models = await within(rpc(socket, "model.list", {}), 20_000, "default-agent model.list");
-		if (
-			!Array.isArray(models) ||
-			!models.some(
-				(model) =>
-					typeof model === "object" &&
-					model !== null &&
-					(model as { provider?: string; id?: string }).provider === "compiled-external" &&
-					(model as { provider?: string; id?: string }).id === "compiled-external-model",
-			)
-		) {
-			fail("compiled binary did not load the global external extension with the default agent dir");
-		}
+		await assertExternalExtensionLoaded(socket, "the default agent dir");
 		probe.kill("SIGTERM");
 		await within(probe.exited, 15_000, "default-agent probe shutdown");
 	} finally {
@@ -313,6 +382,8 @@ async function assertOAuthLoginReachesAuthUrl(socket: WebSocket): Promise<void> 
 let rpcSocket: WebSocket | null = null;
 try {
 	await assertDefaultAgentDirExternalExtension();
+	const proc = spawnCustomAgentHost();
+	killHost = () => proc.kill("SIGKILL");
 	const url = await within(
 		Promise.race([
 			readServedUrlFrom(proc),
@@ -334,23 +405,7 @@ try {
 	}
 
 	rpcSocket = await within(connectRpc(url), 10_000, "WebSocket connect");
-	const externalModels = await within(
-		rpc(rpcSocket, "model.list", {}),
-		20_000,
-		"custom-agent model.list",
-	);
-	if (
-		!Array.isArray(externalModels) ||
-		!externalModels.some(
-			(model) =>
-				typeof model === "object" &&
-				model !== null &&
-				(model as { provider?: string; id?: string }).provider === "compiled-external" &&
-				(model as { provider?: string; id?: string }).id === "compiled-external-model",
-		)
-	) {
-		fail("compiled binary did not load the global external extension with a custom agent dir");
-	}
+	await assertExternalExtensionLoaded(rpcSocket, "a custom agent dir");
 	const project = (await within(
 		rpc(rpcSocket, "project.open", { path: projectDir }),
 		10_000,

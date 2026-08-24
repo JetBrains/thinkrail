@@ -100,7 +100,10 @@ still valid.
 
 Different worktrees may run concurrently. Two complete E2E invocations in one worktree remain sequential;
 the lane ids are deliberately stable across runs so interrupted state is reclaimed rather than leaked.
-No path may fall back to `~/.thinkrail`, the developer's HOME/config trees, or the real pi agent dir.
+No path may fall back to `~/.thinkrail`, the developer's HOME/config trees, or the real pi agent dir. A
+sandboxed home is handed to the host as **both `HOME` and `USERPROFILE`**: `homedir()` — pi's own home
+resolution — reads `USERPROFILE` on Windows and ignores `HOME`, so `HOME` alone would silently leak a
+Windows lane into the real profile (see `module-shared`).
 
 ## Boundary
 
