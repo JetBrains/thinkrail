@@ -41,6 +41,6 @@ Red flags — stop, a gate is being rationalized away:
 
 ## Next
 
-- The change is UI-visible → offer screenshots proactively (don't wait to be asked) and continue at
-  `screenshots.md`.
-- Otherwise → `checks.md`.
+- The change is UI-visible → offer screenshots proactively (don't wait to be asked), then read and
+  follow `screenshots.md`.
+- Otherwise → read and follow `checks.md`.

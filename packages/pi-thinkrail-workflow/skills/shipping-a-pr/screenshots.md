@@ -31,9 +31,13 @@ COMMIT=$(printf 'PR screenshots (review-only ref)\n' | git commit-tree "$TREE")
 git push -f origin "$COMMIT:refs/heads/assets/<topic>"
 ```
 
-Reference each image in the PR body as
-`https://github.com/<owner>/<repo>/blob/<COMMIT>/<name>.png?raw=true` — pinned to the pushed commit
-SHA so later branch pushes never break the images — then `gh pr edit <n> --body-file …`.
+Then update the body — **never rebuild it**: fetch the current one first
+(`gh pr view <n> --json body -q .body > .thinkrail/context/pr-body.md`), add or update a
+`## Screenshots` section in it referencing each image as
+`https://github.com/<owner>/<repo>/blob/<COMMIT>/<name>.png?raw=true` (pinned to the pushed commit
+SHA so later branch pushes never break the images), then
+`gh pr edit <n> --body-file .thinkrail/context/pr-body.md` and delete the file. A body built from
+scratch here would erase the PR's summary, testing notes, and issue links.
 
 Fallback (the user sometimes prefers it): leave the PNGs staged and hand over their paths — the
 user drags them into GitHub by hand. Offer the choice only when the user has signaled it; the
@@ -42,4 +46,4 @@ assets ref is the default.
 ## Next
 
 Delete `.thinkrail/context/pr-shots/` once the body edit lands — unless the user is uploading by
-hand; then leave it until they confirm. Continue at `checks.md`.
+hand; then leave it until they confirm. Read and follow `checks.md`.

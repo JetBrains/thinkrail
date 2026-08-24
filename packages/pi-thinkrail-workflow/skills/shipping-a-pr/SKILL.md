@@ -24,7 +24,8 @@ which declares this workflow's terminal state.
 | Monitor CI / investigate or fix failing checks | `checks.md` |
 | Address review comments | `review-comments.md` |
 
-A compound ask ("rebase, verify, and create a PR") is one flow: start at the earliest phase named;
+**Read and follow the selected phase doc** — the gates and mechanics live only there; never run a
+phase from this spine's summary. A compound ask ("rebase, verify, and create a PR") is one flow: start at the earliest phase named;
 the docs chain forward on their own. If the work itself isn't finished — the ask bundles new design
 or implementation before the ship — that part is not this workflow's; route it per
 choosing-a-workflow first and come back here when it lands.

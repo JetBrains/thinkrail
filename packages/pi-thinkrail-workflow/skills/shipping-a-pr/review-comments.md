@@ -3,7 +3,7 @@
 Entry: an open PR has review comments to address. Saves nothing. Control continues at `checks.md`.
 
 1. **Whole-PR read first.** Fetch every comment thread and the full diff (`gh pr view <n>
-   --comments`, `gh api repos/<owner>/<repo>/pulls/<n>/comments`), then re-read the PR's changes
+   --comments`, `gh api repos/<owner>/<repo>/pulls/<n>/comments --paginate`), then re-read the PR's changes
    end to end. Each comment is judged against the whole change, not just its quoted lines.
 2. **Verdict per comment, before touching code**: *apply* (it's right), *push back* (it's wrong or
    misreads the design — say why, citing the spec or design), or *clarify* (genuinely ambiguous —
@@ -22,4 +22,4 @@ Red flags:
 
 ## Next
 
-`checks.md`.
+Read and follow `checks.md`.

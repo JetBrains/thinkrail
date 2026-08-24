@@ -17,4 +17,4 @@ depends on; step 3 is unconditional.
 
 ## Next
 
-`checks.md`.
+Read and follow `checks.md`.
