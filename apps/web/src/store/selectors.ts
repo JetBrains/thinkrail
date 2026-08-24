@@ -439,6 +439,7 @@ interface OnboardingDomainState {
 export function selectOnboardingActive(state: { onboarding: OnboardingState }): boolean {
 	return (
 		state.onboarding.flow === "demo" &&
+		state.onboarding.stage === "live" &&
 		!state.onboarding.dismissed &&
 		state.onboarding.demoProjectId !== null
 	);

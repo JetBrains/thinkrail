@@ -136,7 +136,6 @@ export function WelcomePanel() {
 							onClick={() => setDialog({ projectId: project.id, prompt: "" })}
 						/>
 						{projectFolderCard(project.id)}
-						{demoCard()}
 					</>
 				) : (
 					<>
@@ -162,7 +161,6 @@ export function WelcomePanel() {
 							onClick={() => setDialog({ projectId: project.id, prompt: "" })}
 						/>
 						{projectFolderCard(project.id)}
-						{demoCard()}
 					</>
 				)}
 			</div>

@@ -262,14 +262,18 @@ export interface ChatLocationRequest {
 
 export type OnboardingFlow = "demo";
 
+export type OnboardingStage = "welcome" | "picker" | "live";
+
 export interface OnboardingState {
 	flow: OnboardingFlow | null;
+	stage: OnboardingStage | null;
 	demoProjectId: string | null;
 	dismissed: boolean;
 }
 
 export const NO_ONBOARDING: OnboardingState = {
 	flow: null,
+	stage: null,
 	demoProjectId: null,
 	dismissed: false,
 };
@@ -827,6 +831,8 @@ interface AppState {
 	applyReviewChanged: (payload: ReviewChangedPayload) => void;
 	pushToast: (toast: Omit<Toast, "id">) => string;
 	dismissToast: (id: string) => void;
+	startDemoTour: () => void;
+	setDemoStage: (stage: OnboardingStage) => void;
 	startOnboarding: (demoProjectId: string) => void;
 	dismissOnboarding: () => void;
 	resetOnboarding: () => void;
@@ -2779,8 +2785,11 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((s) =>
 			s.toasts.some((t) => t.id === id) ? { toasts: s.toasts.filter((t) => t.id !== id) } : {},
 		),
+	startDemoTour: () =>
+		set({ onboarding: { flow: "demo", stage: "welcome", demoProjectId: null, dismissed: false } }),
+	setDemoStage: (stage) => set((s) => ({ onboarding: { ...s.onboarding, stage } })),
 	startOnboarding: (demoProjectId) =>
-		set({ onboarding: { flow: "demo", demoProjectId, dismissed: false } }),
+		set({ onboarding: { flow: "demo", stage: "live", demoProjectId, dismissed: false } }),
 	dismissOnboarding: () =>
 		set((s) =>
 			s.onboarding.dismissed ? {} : { onboarding: { ...s.onboarding, dismissed: true } },

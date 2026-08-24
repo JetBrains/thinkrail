@@ -39,7 +39,12 @@ function withUserTurn(): SessionRuntime {
 	};
 }
 
-const onboarding: OnboardingState = { flow: "demo", demoProjectId: DEMO, dismissed: false };
+const onboarding: OnboardingState = {
+	flow: "demo",
+	stage: "live",
+	demoProjectId: DEMO,
+	dismissed: false,
+};
 
 function baseState(workspaces: Workspace[]) {
 	return {
@@ -54,6 +59,7 @@ function baseState(workspaces: Workspace[]) {
 test("selectOnboardingActive: true only for an armed, undismissed demo flow", () => {
 	expect(selectOnboardingActive({ onboarding })).toBe(true);
 	expect(selectOnboardingActive({ onboarding: { ...onboarding, dismissed: true } })).toBe(false);
+	expect(selectOnboardingActive({ onboarding: { ...onboarding, stage: "welcome" } })).toBe(false);
 	expect(selectOnboardingActive({ onboarding: NO_ONBOARDING })).toBe(false);
 });
 

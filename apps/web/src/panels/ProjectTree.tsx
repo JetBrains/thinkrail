@@ -33,6 +33,7 @@ import {
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { copyText } from "@/lib";
+import { OnboardingLauncher } from "../onboarding/OnboardingLauncher";
 import {
 	isDefaultWorkspace,
 	isExternalWorkspace,
@@ -209,7 +210,7 @@ export function ProjectTree() {
 	};
 
 	return (
-		<nav className="flex flex-col gap-sm">
+		<nav className="flex h-full flex-col gap-sm">
 			<header className="flex h-7 items-center justify-between pr-xs pl-sm">
 				<span className="tr-text-eyebrow text-text-muted">Projects</span>
 				<AddProjectMenu
@@ -302,6 +303,10 @@ export function ProjectTree() {
 			) : null}
 
 			{dialogs}
+
+			<div className="mt-auto flex flex-col border-border-default border-t pt-sm">
+				<OnboardingLauncher />
+			</div>
 		</nav>
 	);
 }

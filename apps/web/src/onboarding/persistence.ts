@@ -13,8 +13,10 @@ export function readPersistedOnboarding(): OnboardingState {
 		const parsed = JSON.parse(raw) as unknown;
 		if (!parsed || typeof parsed !== "object") return NO_ONBOARDING;
 		const value = parsed as Record<string, unknown>;
+		const stage = value.stage;
 		return {
 			flow: value.flow === "demo" ? "demo" : null,
+			stage: stage === "welcome" || stage === "picker" || stage === "live" ? stage : null,
 			demoProjectId: typeof value.demoProjectId === "string" ? value.demoProjectId : null,
 			dismissed: value.dismissed === true,
 		};

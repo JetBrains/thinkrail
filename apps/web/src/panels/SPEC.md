@@ -20,6 +20,9 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   **always-visible chevron** + folder/name + a collapsed-only plain workspace count + a **bare muted Create
   workspace `+` always visible in a fixed right-edge column** (the Projects-header Add project `+` is unchanged).
   Long names truncate before the count/action; there is deliberately **no visible Close or overflow icon**.
+  The nav is a full-height column with a **bottom-pinned footer** hosting the onboarding
+  **`OnboardingLauncher`** (a Help-style icon button that starts the demo tour from its simulated empty
+  state — see [[submodule-web-onboarding]]).
   Hover highlights the full row and the highlight remains while its **project context menu** is open.
   Right-click opens that PR-#167-styled menu at the pointer without selecting/navigating; a scroll-cancelled
   ~700ms long press is its touch equivalent. With a project-name button focused, the standard Context Menu
@@ -455,8 +458,9 @@ a project picker, the prompt hero, and the reused
   panes, singleton side tools, terminal bodies, Settings, and `Toaster`), imported **per-file** so
   Monaco/shiki/xterm stay lazy. Tab strips, group headers, side stacks, and center topology are not panel
   surfaces; the shell layout module wraps these renderers.
-- **Allowed deps:** `onboarding` (`WelcomePanel` calls its `startDemo`/`resetDemo` orchestration — one-way,
-  no cycle); `store`, `transport`, `components/ui` (incl. `popover`/`command`/`textarea` for the
+- **Allowed deps:** `onboarding` (`WelcomePanel` calls its `startDemo`/`resetDemo` orchestration and
+  `ProjectTree` mounts its `OnboardingLauncher` at the left-panel footer — one-way panels→onboarding, no
+  cycle); `store`, `transport`, `components/ui` (incl. `popover`/`command`/`textarea` for the
   dialog), `chat` (`ModelSelector`/`ThinkingSelector` + the `useModelCatalog` hook that feeds them,
   reused by `NewWorkspaceDialog`; `Markdown`,
   reused by `MarkdownPreview`; `TemplateEditorDialog`, reused by `TemplatesSettings`), `lib`, `themes` (catalog + generic application contract),

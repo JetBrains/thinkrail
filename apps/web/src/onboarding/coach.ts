@@ -13,13 +13,15 @@ export const FILTER_PROMPT = "Add a filter for completed tasks.";
 
 export interface CoachStep {
 	done?: false;
-	index: 1 | 2 | 3;
+	index: 2 | 3 | 4;
 	title: string;
 	body: string;
 	selector: string;
 	insertPrompt?: string;
 	sessionId?: string;
 }
+
+export const COACH_STEP_COUNT = 4;
 
 export interface CoachDone {
 	done: true;
@@ -40,14 +42,14 @@ export function selectCoach(state: AppStoreState): CoachView {
 	if (step === 0) {
 		if (demoWorkspaces.length === 0) {
 			return {
-				index: 1,
+				index: 2,
 				title: "Create your first workspace",
 				body: "ThinkRail runs each task in its own isolated worktree and branch. Create two workspaces so you can work on two tasks side by side — start with this one.",
 				selector: '[data-testid="welcome-cta"]',
 			};
 		}
 		return {
-			index: 1,
+			index: 2,
 			title: "Create a second workspace",
 			body: "One down. Create a second workspace for the other task — each stays isolated on its own branch.",
 			selector: `[data-onboarding="rail-add"][data-project-id="${demoProjectId}"]`,
@@ -56,7 +58,7 @@ export function selectCoach(state: AppStoreState): CoachView {
 
 	const target = demoWorkspaces[step === 1 ? 0 : 1];
 	if (!target) return null;
-	const index = step === 1 ? 2 : 3;
+	const index = step === 1 ? 3 : 4;
 
 	if (state.activeWorkspaceId !== target.id) {
 		return {

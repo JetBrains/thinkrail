@@ -6,6 +6,15 @@ const Popover = PopoverPrimitive.Root;
 const PopoverTrigger = PopoverPrimitive.Trigger;
 const PopoverAnchor = PopoverPrimitive.Anchor;
 
+function PopoverArrow({
+	className,
+	...props
+}: React.ComponentProps<typeof PopoverPrimitive.Arrow>) {
+	return (
+		<PopoverPrimitive.Arrow className={cn("fill-container-elevated-bg", className)} {...props} />
+	);
+}
+
 function PopoverContent({
 	className,
 	align = "center",
@@ -30,4 +39,4 @@ function PopoverContent({
 	);
 }
 
-export { Popover, PopoverAnchor, PopoverContent, PopoverTrigger };
+export { Popover, PopoverAnchor, PopoverArrow, PopoverContent, PopoverTrigger };
