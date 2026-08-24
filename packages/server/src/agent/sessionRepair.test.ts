@@ -3,11 +3,6 @@ import { SessionManager } from "@earendil-works/pi-coding-agent";
 import type { Message } from "@thinkrail/contracts";
 import { repairDanglingToolCalls } from "./sessionRepair";
 
-// The restart safety net: a transcript that died mid-tool (host crash/kill) ends with an assistant
-// message whose toolCalls have no toolResult — providers reject that context outright. The repair pairs
-// every orphan before the session re-attaches. Exercised against a real (in-memory) pi SessionManager so
-// the appended results round-trip through `buildSessionContext` exactly as a re-opened session would see.
-
 const assistantWithCalls = (
 	calls: { id: string; name: string; args?: Record<string, unknown> }[],
 ): Message =>
@@ -62,7 +57,6 @@ test("a dangling generic tool call gets an error 'Operation aborted' result", ()
 	expect(repaired.toolCallId).toBe("b1");
 	expect(repaired.isError).toBe(true);
 	expect((repaired.content[0] as { text?: string }).text ?? "").toContain("host restarted");
-	// Idempotent: the orphan is paired now.
 	expect(repairDanglingToolCalls(sm)).toEqual([]);
 });
 
@@ -75,7 +69,7 @@ test("a dangling ask_user_question (old blocking format) resolves as the canonic
 	]);
 	const repaired = sm.buildSessionContext().messages.find((m) => m.role === "toolResult");
 	if (repaired?.role !== "toolResult") throw new Error("unreachable");
-	expect(repaired.isError).toBe(false); // a decline is a valid outcome, not a tool fault
+	expect(repaired.isError).toBe(false);
 	expect(repaired.details).toEqual({ answers: [], cancelled: true });
 	const text = (repaired.content[0] as { text?: string }).text ?? "";
 	expect(text).toContain("User declined to answer questions");

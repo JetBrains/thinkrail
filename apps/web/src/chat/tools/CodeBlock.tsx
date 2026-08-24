@@ -1,10 +1,6 @@
 import { useEffect, useState } from "react";
 import { highlightCode } from "@/lib/highlighter";
 
-/**
- * Presentational code block. When `lang` is a known shiki language, renders themed HTML; otherwise (or
- * until shiki resolves) renders plain monospace text. No store/transport deps.
- */
 export function CodeBlock({ code, lang }: { code: string; lang: string }) {
 	const [html, setHtml] = useState<string | null>(null);
 

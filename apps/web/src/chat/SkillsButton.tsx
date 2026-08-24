@@ -1,12 +1,6 @@
 import { BookOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-/**
- * The Skills-manager trigger: a `BookOpen` pill labelled "Skills". Shared by the chat header (workspace
- * mode — passes `stale` for the on-disk-changed badge + Reload tooltip) and `panels/NewWorkspaceDialog`
- * (project mode, no session, no stale) so the two triggers cannot drift. Presentational: the owner wires
- * `onOpen`, supplies its own stable `testId`, and passes positioning via `className` (e.g. `ml-auto`).
- */
 export function SkillsButton({
 	onOpen,
 	testId,
@@ -14,11 +8,8 @@ export function SkillsButton({
 	className,
 }: {
 	onOpen: () => void;
-	/** The owner's stable test hook (differs per surface). */
 	testId: string;
-	/** The worktree's skills changed on disk since load — badge the trigger + swap the tooltip. */
 	stale?: boolean;
-	/** Positioning utilities from the owner (merged onto the shared look). */
 	className?: string;
 }) {
 	return (

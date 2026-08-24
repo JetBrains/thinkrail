@@ -6,12 +6,10 @@ import { SettingsManager } from "@earendil-works/pi-coding-agent";
 import { buildResourceLoader, listProjectAliasSkillNames, listSkillCommands } from "./extensions";
 import type { SkillAdmissionContext } from "./skillAdmission";
 
-/** A context with the given trust + acknowledged names, and no baseline disables / workspace overrides. */
 function ctx(trusted: boolean, acknowledged: string[] = []): SkillAdmissionContext {
 	return { trusted, acknowledged, disabled: [], disabledGroups: [], overrides: {} };
 }
 
-/** Stub the skill-discovery env at `home`/`agentDir`; returns a restorer. Mirrors the catalog tests. */
 function stubSkillEnv(home: string, agentDir: string): () => void {
 	const names = [
 		"HOME",
@@ -80,7 +78,6 @@ describe("listSkillCommands", () => {
 			);
 			writeSkill(nativeRoot, "native-wins", "native description");
 			writeSkill(projectRoot, "native-wins", "alias must lose");
-			// Personal alias outranks the project alias of the same name (precedence personal > project).
 			writeSkill(projectRoot, "personal-wins", "project alias must lose");
 			writeSkill(personalRoot, "personal-wins", "personal description");
 			writeSkill(personalRoot, "personal-only", "personal description");
@@ -89,8 +86,6 @@ describe("listSkillCommands", () => {
 			writeSkill(join(home, ".codex", "skills"), "personal-codex", "codex personal");
 			writeSkill(join(home, ".copilot", "skills"), "personal-copilot", "copilot personal");
 			writeSkill(join(home, ".gemini", "skills"), "personal-gemini", "gemini personal");
-			// Bundled workflow skills now outrank personal aliases (precedence bundled > personal), so this
-			// same-named personal skill must NOT win.
 			writeSkill(personalRoot, "brainstorming", "personal brainstorming override");
 
 			const invalidDir = join(projectRoot, "invalid");
@@ -104,7 +99,6 @@ describe("listSkillCommands", () => {
 				`import { writeFileSync } from "node:fs";\nwriteFileSync(${JSON.stringify(marker)}, "ran");\nexport default () => {};\n`,
 			);
 
-			// Trusting acknowledges every project alias present now — mirror that so the aliases are admitted.
 			const commands = await listSkillCommands(
 				project,
 				ctx(true, await listProjectAliasSkillNames(project)),
@@ -180,14 +174,10 @@ describe("listSkillCommands", () => {
 			writeSkill(join(home, ".claude", "skills"), "personal-skill", "personal skill");
 
 			const untrusted = await listSkillCommands(project, ctx(false));
-			// The attacker-controlled project alias is withheld until trust is granted…
 			expect(untrusted.some((command) => command.name === "skill:repo-alias")).toBe(false);
-			// …but the user's own personal library still loads, and (this fix is scoped to the compatibility
-			// aliases) pi-native project resources are intentionally left as-is.
 			expect(untrusted.some((command) => command.name === "skill:personal-skill")).toBe(true);
 			expect(untrusted.some((command) => command.name === "skill:repo-native")).toBe(true);
 
-			// Granting trust surfaces the project alias — a distinct cache key, so no stale untrusted hit.
 			const trusted = await listSkillCommands(
 				project,
 				ctx(true, await listProjectAliasSkillNames(project)),
@@ -199,10 +189,6 @@ describe("listSkillCommands", () => {
 		}
 	});
 
-	// Regression: the short-lived cache is keyed on the admission context, and `disabledGroups` gates the
-	// catalog (`decideSkill`) — so a group toggle that changes only `disabledGroups` must not serve the
-	// previously-cached enabled catalog for the TTL window. Two calls differing only by `disabledGroups`
-	// must return different results.
 	it("does not serve a stale catalog when only disabledGroups differs", async () => {
 		const root = mkdtempSync(join(tmpdir(), "thinkrail-skill-groups-"));
 		const project = join(root, "project");
@@ -225,7 +211,6 @@ describe("listSkillCommands", () => {
 			});
 			expect(enabled.some((command) => command.name === "skill:personal-widget")).toBe(true);
 
-			// Disabling the "personal" group is a distinct cache key — the toggle applies immediately.
 			const groupOff = await listSkillCommands(project, {
 				trusted: true,
 				acknowledged: [],
@@ -242,9 +227,6 @@ describe("listSkillCommands", () => {
 });
 
 describe("buildResourceLoader", () => {
-	// Regression: the admission gate is resolved through a thunk that `skillsGate` re-reads on every
-	// `loader.reload()`, so a mid-session trust/group/skill change lands via `session.reloadResources`
-	// instead of re-applying the snapshot captured when the session was created.
 	it("reload re-reads admission so a mid-session group toggle applies", async () => {
 		const root = mkdtempSync(join(tmpdir(), "thinkrail-skill-reload-"));
 		const project = join(root, "project");
@@ -272,7 +254,6 @@ describe("buildResourceLoader", () => {
 
 			expect(hasWidget()).toBe(true);
 
-			// Flip the group off, then reload the SAME loader — the gate must re-read the new admission.
 			admission = { ...admission, disabledGroups: ["personal"] };
 			await loader.reload();
 			expect(hasWidget()).toBe(false);
@@ -282,9 +263,6 @@ describe("buildResourceLoader", () => {
 		}
 	});
 
-	// Regression: a compatibility skill dir that appears AFTER session creation (a branch switch / pull
-	// adding `.claude/skills`) must be picked up on reload — the candidate roots are registered up front
-	// so pi scans them once they exist, rather than being frozen to the set present at construction.
 	it("reload picks up a compatibility dir created after construction", async () => {
 		const root = mkdtempSync(join(tmpdir(), "thinkrail-skill-newdir-"));
 		const project = join(root, "project");
@@ -296,7 +274,6 @@ describe("buildResourceLoader", () => {
 		const restore = stubSkillEnv(home, agentDir);
 
 		try {
-			// `~/.claude/skills` does not exist yet at loader construction (personal scope — not trust-gated).
 			const admission: SkillAdmissionContext = {
 				trusted: true,
 				acknowledged: [],
@@ -319,9 +296,6 @@ describe("buildResourceLoader", () => {
 		}
 	});
 
-	// Security regression: a project alias dir (`.claude/skills`) appearing mid-session on an UNTRUSTED
-	// project must still be withheld — the reload's fresh discovery has to classify the late dir as a
-	// project alias so the trust gate holds, not slip through as an unclassified `load`.
 	it("keeps a late-appearing untrusted project alias behind the trust gate on reload", async () => {
 		const root = mkdtempSync(join(tmpdir(), "thinkrail-skill-latetrust-"));
 		const project = join(root, "project");
@@ -343,7 +317,6 @@ describe("buildResourceLoader", () => {
 			const settingsManager = SettingsManager.create(project, agentDir, { projectTrusted: true });
 			const loader = await buildResourceLoader(project, settingsManager, () => admission);
 
-			// The project has no committed skills at start; a branch switch then adds one.
 			writeSkill(join(project, ".claude", "skills"), "repo-late", "committed, appeared late");
 			await loader.reload();
 			expect(loader.getSkills().skills.some((skill) => skill.name === "repo-late")).toBe(false);

@@ -10,11 +10,6 @@ import {
 } from "@/components/ui/dialog";
 import type { ExtUiDialogRequest } from "./types";
 
-/**
- * Renders the active extension-UI dialog (pi's in-process `uiContext.select/confirm/input/editor`,
- * bridged over `pi.extensionUi`). `onReply` carries the value back to the agent; cancelling sends `false`
- * for `confirm`, `null` otherwise. Mount with `key={request.id}` so each dialog gets fresh local state.
- */
 export function ExtUiDialog({
 	request,
 	onReply,
@@ -69,7 +64,7 @@ export function ExtUiDialog({
 								onReply(text);
 							}
 						}}
-						className="rounded-[var(--radius-sm)] border border-control-border-default bg-control-bg px-8 py-4 tr-text-ui text-text-default outline-none placeholder:text-text-muted focus-visible:border-control-border-active focus-visible:ring-2 focus-visible:ring-primary-soft"
+						className="rounded-[var(--radius-sm)] border border-control-border-default bg-control-bg px-8 py-4 tr-text-ui text-text-default outline-none placeholder:text-text-muted focus-visible:border-control-border-active"
 					/>
 				) : null}
 
@@ -80,7 +75,7 @@ export function ExtUiDialog({
 						value={text}
 						rows={8}
 						onChange={(e) => setText(e.target.value)}
-						className="resize-none rounded-[var(--radius-sm)] border border-control-border-default bg-control-bg px-8 py-4 tr-code-text text-text-default outline-none focus-visible:border-control-border-active focus-visible:ring-2 focus-visible:ring-primary-soft"
+						className="resize-none rounded-[var(--radius-sm)] border border-control-border-default bg-control-bg px-8 py-4 tr-code-text text-text-default outline-none focus-visible:border-control-border-active"
 					/>
 				) : null}
 

@@ -5,7 +5,6 @@ import { CodeBlock } from "./CodeBlock";
 import { Collapsible, countLines } from "./Collapsible";
 import { languageFromPath, resultText, strArg } from "./toolHelpers";
 
-/** Body for the `write` tool: file header + highlighted preview of the written content. */
 export function WriteCard({ args, result, status, workspaceRoot }: ToolRenderProps) {
 	const path = strArg(args, "path");
 	const displayPath = projectRelativePath(path, workspaceRoot);

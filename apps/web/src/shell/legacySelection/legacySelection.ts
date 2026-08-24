@@ -29,7 +29,6 @@ function syncLegacySelectedResource(
 	state.syncLegacySelection(workspaceId, cache ? { kind: "editor", tabId: cache.id } : null);
 }
 
-/** Synchronize immediately after an imperative attention change, before React selectors rerender. */
 export function syncLegacySelectionFromAttention(workspaceId: string): void {
 	const state = useAppStore.getState();
 	syncLegacySelectedResource(

@@ -1,12 +1,5 @@
-/*
- * ThinkRail website — "the site IS the IDE".
- * Hand-written CSS. Theme palettes are copied from apps/web/src/themes/bundled/*.theme.json
- * (see SPEC.md: values are lifted at authoring time, never imported).
- */
+/* ThinkRail website — "the site IS the IDE". Hand-written CSS; palettes copied from the app themes (SPEC.md). */
 
-/* Self-hosted variable faces — no external font request from the site at all. The packages, the stacks
-   below and `--font-display` are copied from apps/web/src/styles/typography.json (the app's source of
-   truth); `src/fonts.test.ts` reads that JSON and fails on drift. */
 @import "@fontsource-variable/geist";
 @import "@fontsource-variable/geist/wght-italic.css";
 @import "@fontsource-variable/jetbrains-mono";
@@ -19,21 +12,13 @@
 	--font-sans: "Geist Variable", "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 	--font-mono:
 		"JetBrains Mono Variable", "JetBrains Mono", "Fira Code", "SF Mono", "Cascadia Code", monospace;
-	/* The display role, mirroring the app's `brand` family — Orbitron (self-hosted above), a distinct
-	   display face used by the brand elements (wordmark + hero heading). Orbitron is latin-only, so the
-	   next fallback is the interface face (Geist) rather than a system font, matching the app.
-	   See src/fonts.test.ts (kept in step with apps/web/src/styles/typography.json). */
 	--font-display:
 		"Orbitron Variable", "Orbitron", "Geist Variable", "Geist", -apple-system, BlinkMacSystemFont,
 		"Segoe UI", sans-serif;
 
 	/* dark (the app's default) */
 	--chrome: #171719;
-	/* The workspace/content surface (app semantic token container-workspace-bg = --background).
-	   The central body and the active tabs share it so active tabs merge into the content. */
 	--container-workspace-bg: #09090b;
-	/* The header/tab-strip surface (app semantic token container-header-bg = --header). Inactive
-	   tabs and the empty tab-bar space read as this; the active tab uses --container-workspace-bg. */
 	--container-header-bg: #18181b;
 	--elevated: #2b2d30;
 	--hover: #393b40;
@@ -44,19 +29,15 @@
 	--muted: #a8adb5;
 	--hint: #71757c;
 	--accent: #8dff4f;
+	--accent-hover: #59d915;
 	--on-accent: #0a0a0a;
 	--green: #41cb66;
-	/* Link color token: primary at 60% opacity — a touch darker than the bright primary on the
-	   dark surfaces (light theme keeps the full, already-dark accent below). */
+	/* --link/--focus-ring/--control-primary-*: :root-declared — out of reach of region --accent overrides (SPEC.md). */
 	--link: color-mix(in srgb, var(--accent) 60%, transparent);
-	/* Focus ring. Declared here so `var(--accent)` resolves against the ROOT accent: per-theme, but out
-	   of reach of `.hero`'s override — which rendered a 1.27:1 ring on white. Same mechanism as --link. */
 	--focus-ring: var(--accent);
-	/* Primary button = a shared, theme-independent brand constant (mirrors the app's
-	   control-primary-* tokens); defined once here so every theme inherits it. */
-	--control-primary-bg: #8dff4f;
-	--control-primary-bg-hovered: #59d915;
-	--control-primary-text: #0a0a0a;
+	--control-primary-bg: var(--accent);
+	--control-primary-bg-hovered: var(--accent-hover);
+	--control-primary-text: var(--on-accent);
 	--gold: #ffd54b;
 	--red: #ff4b75;
 	--blue: #6ac8ff;
@@ -71,11 +52,41 @@
 	--sx-punct: #e6edf3;
 
 	--shadow: 0 24px 80px rgb(0 0 0 / 0.55);
+
+	/* ── Spacing scale (blog + shared) ─────────────────────────────────────── */
+	--space-xs: 0.25rem;
+	--space-sm: 0.5rem;
+	--space-md: 1rem;
+	--space-lg: 1.5rem;
+	--space-xl: 2rem;
+	--space-2xl: 3rem;
+	--space-3xl: 4rem;
+
+	/* ── Typography scale (blog + shared) ──────────────────────────────────── */
+	--text-xs: 0.75rem;
+	--text-sm: 0.875rem;
+	--text-base: 1rem;
+	--text-lg: 1.125rem;
+	--text-xl: 1.25rem;
+	--text-2xl: 1.5rem;
+	--text-3xl: 2rem;
+	--text-4xl: 2.5rem;
+
+	/* ── Transitions ───────────────────────────────────────────────────────── */
+	--transition-fast: 150ms ease;
+	--transition-normal: 250ms ease;
+
+	/* ── Blog semantic aliases (map to main tokens) ─────────────────────────── */
+	--blog-text: var(--text);
+	--blog-text-muted: var(--muted);
+	--blog-text-hint: var(--hint);
+	--blog-accent: var(--accent);
+	--blog-code-bg: var(--elevated);
+	--blog-border: var(--border);
+
 	color-scheme: dark;
 }
 
-/* `--elevated`, `--text`, `--muted` and `--hint` here had drifted from the app manifest, which put
-   `--text` on `--elevated` (the mock callout) at 4.46:1. Resynced to the app's values. */
 [data-theme="darcula"] {
 	--chrome: #3c3f41;
 	--container-workspace-bg: #3c3f41;
@@ -102,8 +113,6 @@
 [data-theme="light"] {
 	--chrome: #f2f3f5;
 	--container-workspace-bg: #ffffff;
-	/* Surrounding-interface surface (inactive tabs): a touch off the white central body so the
-	   active tab (= workspace bg) reads distinct from inactive ones, as on the dark theme. */
 	--container-header-bg: #f2f3f5;
 	--elevated: #ffffff;
 	--hover: #e9eaee;
@@ -114,14 +123,10 @@
 	--muted: #5a5f6a;
 	--hint: #667085;
 	--accent: #2e7d16;
-	/* Foreground ON the accent fill (`.skip-link`, `.send-btn`). The root value is for the bright dark
-	   accent; near-black on this dark green is 3.8:1, so light takes white (5.2:1) as the app does. */
+	--accent-hover: #25640f;
 	--on-accent: #ffffff;
 	/* The light accent is already dark/readable; links use it at full strength (60% would be too faint on white). */
 	--link: var(--accent);
-	/* `--green` is a FOREGROUND here (done/activity icons, the +N badge), so it takes the light theme's
-	   own success value rather than the dark-theme #41cb66 — which reads 2.1:1 on white. Copied from
-	   `apps/web/src/themes/bundled/light.theme.json`, like the rest of this block. */
 	--green: #1a7f37;
 	--gold: #946300;
 	--red: #d02533;
@@ -136,23 +141,6 @@
 	--sx-punct: #24292f;
 	--shadow: 0 24px 80px rgb(15 20 40 / 0.18);
 	color-scheme: light;
-}
-
-/* Hero keeps the same brand accent in both light and dark themes */
-[data-theme="light"] .hero {
-	--accent: #8dff4f;
-}
-
-/* Light theme: the hero logo (title) uses dark-primary (--control-primary-bg-hovered = #59d915)
-   instead of the hero's light-primary accent. */
-[data-theme="light"] .hero-title {
-	--accent: var(--control-primary-bg-hovered);
-}
-
-/* Light theme: the JetBrains InnovationHub tag is black (text-default) with no background fill. */
-[data-theme="light"] .hero-kicker .pill-accent {
-	--accent: var(--text);
-	background: transparent;
 }
 
 [data-theme="gruvbox"] {
@@ -278,8 +266,7 @@ code {
 
 /* ── The app window ─────────────────────────────────────────────────────── */
 
-/* Fixed + inset pins the app window to the viewport: the document itself never gains scroll
-   extent, so anchor jumps can only ever scroll the editor pane (the chrome stays put). */
+/* Fixed + inset: the document never gains scroll extent, so anchor jumps scroll only the editor pane. */
 .window {
 	position: fixed;
 	inset: 0;
@@ -325,8 +312,6 @@ code {
 	background: #28c840;
 }
 
-/* Brand logomark left of the wordmark. The span controls the size; the SVG scales to it and
-   follows the primary accent via currentColor. */
 .wordmark-logo {
 	display: inline-flex;
 	align-items: center;
@@ -408,8 +393,6 @@ code {
 	color: var(--text);
 }
 
-/* Theme toggle: a simple icon button that switches between dark and light themes.
-   Shows Sun icon in dark mode (click to switch to light), Moon in light mode (click to switch to dark). */
 .theme-toggle {
 	display: inline-flex;
 	align-items: center;
@@ -539,6 +522,43 @@ code {
 	opacity: 0.5;
 }
 
+/* Site pages nested under the `website` workspace — real navigation, not part of the mock. */
+.tree-row.page {
+	padding-left: 44px;
+}
+
+a.tree-row:hover {
+	background: var(--hover);
+	color: var(--text);
+	text-decoration: none;
+}
+
+.tree-row.disabled {
+	color: var(--hint);
+}
+
+.tree-tag {
+	margin-left: auto;
+	flex: none;
+	padding: 1px 6px;
+	border: 1px solid var(--border2);
+	border-radius: 4px;
+	background: var(--elevated);
+	font-family: var(--font-mono);
+	font-weight: 500;
+	font-size: 9.5px;
+	letter-spacing: 0.4px;
+	color: var(--muted);
+	white-space: nowrap;
+}
+
+/* The rows that remain a static mock (the `data-mock-hint` wrapper) keep the tree's row rhythm. */
+.tree-mock {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+}
+
 .rail-note {
 	margin: auto 8px 8px;
 	padding: 12px;
@@ -614,10 +634,6 @@ code {
 	min-height: 0; /* grid items default to min-height:auto — without this the row grows to content */
 }
 
-/* Header-surface strip that SCROLLS, like the app's own tab strip: the tabs are navigation and overflow
-   below ~1500px, so every one must stay reachable. The 1px divider lives on the TABS (plus a filler for
-   the trailing space) — on the strip it would sit outside the scrollport, where the active tab cannot
-   paint over it to merge into the content. Inactive tabs stay transparent and read as this strip. */
 .tabstrip {
 	display: flex;
 	align-items: stretch;
@@ -670,9 +686,6 @@ code {
 	font-size: 12px;
 }
 
-/* Active tab = the content surface, no border or indicator — it merges into the editor body. Its own
-   divider segment becomes the content colour, which is what produces the merge now that the divider is
-   per-tab rather than a strip border the tab had to overhang. */
 .tab.active {
 	color: var(--text);
 	background: var(--container-workspace-bg);
@@ -705,10 +718,14 @@ code {
 
 /* ── Sections: files ────────────────────────────────────────────────────── */
 
-.file-section {
+.file-section,
+.blog-main {
 	max-width: 860px;
 	margin: 0 auto;
 	padding: clamp(40px, 7vh, 84px) clamp(20px, 5vw, 56px);
+}
+
+.file-section {
 	scroll-margin-top: 8px;
 }
 
@@ -860,6 +877,11 @@ code {
 	color: var(--accent);
 }
 
+[data-theme="light"] .hero-kicker .pill-accent {
+	--accent: var(--text);
+	background: transparent;
+}
+
 /* p.<class> ties with `.file-section p` on specificity and wins by source order — no !important. */
 p.hero-tagline {
 	font-family: var(--font-sans);
@@ -932,8 +954,6 @@ p.hero-lede {
 	display: none;
 }
 
-/* OS tabs attach to the command surface like editor tabs. Without JS the controls stay hidden and all
-   labelled instruction panels remain visible; main.ts adds install-tabs-ready only after wiring them. */
 .install-picker {
 	max-width: 100%;
 }
@@ -947,6 +967,7 @@ p.hero-lede {
 	display: none;
 }
 
+/* Without JS the tab controls stay hidden and every labelled instruction panel remains visible. */
 html.install-tabs-ready .install-tabs {
 	display: flex;
 	/* Fixed 44px header row; tabs stretch to it and centre their own content. */
@@ -955,8 +976,6 @@ html.install-tabs-ready .install-tabs {
 	gap: 0;
 	/* No left padding: the first tab sits flush with the frame edge. */
 	padding: 0 4px 0 0;
-	/* Header surface for the strip + the empty space to the right of the tabs, with a full-width
-	   bottom divider; the active tab overlaps it (below) to merge into the command block. */
 	background: var(--container-header-bg);
 	border-bottom: 1px solid var(--border);
 }
@@ -1025,8 +1044,6 @@ html.install-tabs-ready p.install-fallback-heading {
 	margin: 8px 0 16px;
 }
 
-/* One border-default frame around the whole OS-tabs + command component. overflow:hidden
-   clips the tab-bar / command corners to the 4px radius; inner boxes drop their own borders. */
 html.install-tabs-ready .install-frame {
 	border: 1px solid var(--border);
 	border-radius: 4px;
@@ -1039,8 +1056,6 @@ html.install-tabs-ready .install-frame .install-line {
 	border-radius: 0;
 }
 
-/* The command <code> otherwise inherits the global code radius; the outer frame
-   provides the only corner rounding, so drop it here. */
 .install-frame .install-line > code {
 	border-radius: 0;
 }
@@ -1057,10 +1072,6 @@ html.install-tabs-ready .install-frame .windows-shell-picker {
 	border-radius: 0;
 }
 
-/* Inline next to the active Windows tab, shown only while Windows is active (JS toggles [hidden]).
-   Compact segmented control: one shared border/container on the container-workspace-bg surface (it
-   belongs to the active tab state), options are segments not chips. Centred + short so the tab-bar
-   height stays stable across OS. */
 html.install-tabs-ready .windows-shell-tabs:not([hidden]) {
 	display: inline-flex;
 	align-self: center;
@@ -1132,8 +1143,10 @@ p.hero-platforms {
 	font-weight: 500;
 }
 
+/* The color pins the label against the global `a:hover` green-mix (which outranks `.btn`). */
 .btn:hover {
 	background: var(--hover);
+	color: var(--text);
 	text-decoration: none;
 }
 
@@ -1146,6 +1159,7 @@ p.hero-platforms {
 .btn-primary:hover {
 	background: var(--control-primary-bg-hovered);
 	border-color: var(--control-primary-bg-hovered);
+	color: var(--control-primary-text);
 }
 
 /* ── why.md ─────────────────────────────────────────────────────────────── */
@@ -1185,11 +1199,15 @@ p.hero-platforms {
 	}
 }
 
-.feature-card {
+.feature-card,
+.blog-post-card {
 	border: 1px solid var(--border2);
+	background: color-mix(in srgb, var(--elevated) 40%, var(--container-workspace-bg));
+}
+
+.feature-card {
 	border-radius: 4px;
 	padding: 16px 18px;
-	background: color-mix(in srgb, var(--elevated) 40%, var(--container-workspace-bg));
 }
 
 .feature-card h3 {
@@ -1340,8 +1358,6 @@ html.anim .chat-demo [data-step].on {
 	align-items: center;
 	justify-content: center;
 	height: 30px;
-	/* Fixed square: width mirrors the height and flex never shrinks it, so the icon button keeps
-	   its shape when the composer row gets tight on mobile. */
 	width: 30px;
 	flex: none;
 	border-radius: 4px;
@@ -1557,12 +1573,15 @@ p.footer-fineprint {
 	color: var(--muted);
 }
 
-.ft-row.active {
+/* Ties with `a.tree-row:hover`; wins by source order, so a selected row keeps its accent bg when hovered. */
+.ft-row.active,
+a.tree-row.selected {
 	background: color-mix(in srgb, var(--accent) 16%, transparent);
 	color: var(--text);
 }
 
-.ft-row.active .i {
+.ft-row.active .i,
+a.tree-row.selected .i {
 	color: var(--accent);
 }
 
@@ -1665,8 +1684,6 @@ p.footer-fineprint {
 	color: var(--hint);
 }
 
-/* The logo banner: wide ASCII, so it never wraps and its font is sized by JS (--term-logo-fs) to fit
-   the narrow terminal without altering any character. */
 .term-logo {
 	white-space: pre;
 	word-break: normal;
@@ -1767,8 +1784,6 @@ html:not(.anim) .term-caret {
 }
 
 /* ── Mock-disabled state ────────────────────────────────────────────────── */
-/* Non-interactive elements: dimmed to --hint, no pointer events, tooltip on hover */
-
 /* Non-interactive mock elements: dimmed to --hint, pointer events blocked */
 [data-mock-hint],
 [data-mock-hint] * {
@@ -1839,8 +1854,6 @@ html:not(.anim) .term-caret {
 		transform 200ms ease-out;
 	z-index: 1001;
 	box-shadow: 0 8px 24px rgb(0 0 0 / 0.35);
-	/* Width follows the widest child: the nowrap CTA button. The text (which
-	   wraps) is narrower, so the popover sizes to the button, not the sentence. */
 	width: min-content;
 	max-width: min(240px, calc(100vw - 32px));
 }
@@ -1919,8 +1932,6 @@ html:not(.anim) .term-caret {
 		display: inline-flex;
 	}
 
-	/* Mobile header: the theme switcher sits at the far right, after every other action
-	   (GitHub link, file-tree toggle). Order-only — behaviour and styling are unchanged. */
 	.titlebar-right .theme-toggle {
 		order: 1;
 	}
@@ -1955,9 +1966,6 @@ html:not(.anim) .term-caret {
 
 	html.install-tabs-ready .install-tabs {
 		padding-inline: 0;
-		/* Too narrow to keep the shell switcher inline with the OS tabs: let it wrap onto a
-		   second row below them (see the .windows-shell-tabs override) instead of clipping.
-		   height:auto lets the strip grow by that row; the OS-tab row keeps its 44px. */
 		flex-wrap: wrap;
 		height: auto;
 		min-height: 44px;
@@ -1974,9 +1982,6 @@ html:not(.anim) .term-caret {
 		padding-inline: 7px;
 	}
 
-	/* Second row: a full-width band on the active container-workspace-bg surface, directly under
-	   the OS tabs and inside the same frame. flex-basis:100% forces the wrap; the segments share the
-	   width (flex:1) so every shell stays reachable with no horizontal scroll or clipping. */
 	html.install-tabs-ready .windows-shell-tabs:not([hidden]) {
 		flex-basis: 100%;
 		align-self: stretch;
@@ -2001,10 +2006,8 @@ html:not(.anim) .term-caret {
 		justify-content: center;
 	}
 
-	/* Windows active: the shell switcher wraps to its own row, so the active Windows tab must keep
-	   the structural divider above that row (it should merge into content only when the command
-	   block sits directly below, as on macOS/Linux). Restore it with the border-default token. */
-	html.install-tabs-ready .install-tabs:has(.windows-shell-tabs:not([hidden]))
+	html.install-tabs-ready
+		.install-tabs:has(.windows-shell-tabs:not([hidden]))
 		.install-tab[aria-selected="true"] {
 		border-bottom-color: var(--border);
 	}
@@ -2014,9 +2017,6 @@ html:not(.anim) .term-caret {
 		padding-left: 8px;
 	}
 
-	/* Demo: compact so the whole frame fits a phone viewport at once — no internal scroll, no
-	   scale(), no smaller type. Only whitespace shrinks: outer/inner padding, inter-event gaps and
-	   text leading (line-height). Font sizes + families are the shared semantic values, untouched. */
 	.chat-demo {
 		padding: 12px;
 		gap: 8px;
@@ -2057,17 +2057,11 @@ html:not(.anim) .term-caret {
 		gap: 8px;
 	}
 
-	/* Keep the Send button inside the composer's content area with the same inset as the left:
-	   let the row wrap when the chips get too wide (on very narrow phones) instead of overflowing
-	   and shoving the fixed-square button past the right edge. The button never shrinks. */
 	.composer-row {
 		flex-wrap: wrap;
 		row-gap: 8px;
 	}
 
-	/* Footer grows to two lines instead of clipping: the copyright/InnovationHub content stays on
-	   line 1 and "Apache License 2.0" always starts on line 2. Both lines are left-aligned and
-	   share the same left edge; the 6px flex gap preserves the vertical spacing between them. */
 	.statusbar {
 		white-space: normal;
 		overflow: visible;
@@ -2089,8 +2083,6 @@ html:not(.anim) .term-caret {
 	}
 }
 
-/* Typing/streaming replays are JS-gated on the same query (html.anim is never added); these cover
-   the remaining CSS-only motion. */
 @media (prefers-reduced-motion: reduce) {
 	.rail-right {
 		transition: none;
@@ -2120,5 +2112,371 @@ html:not(.anim) .term-caret {
 
 	.mock-tooltip {
 		transition: none;
+	}
+}
+
+/* ══ BLOG STYLES — /blog pages, rendered inside the IDE shell's editor pane (SPEC.md "Blog") ══ */
+
+/* ── Blog Index ─────────────────────────────────────────────────────────── */
+
+.blog-index-header {
+	margin-bottom: var(--space-3xl);
+	text-align: center;
+}
+
+.blog-index-title {
+	font-family: var(--font-display);
+	font-size: var(--text-4xl);
+	font-weight: 700;
+	color: var(--blog-accent);
+	margin-bottom: var(--space-sm);
+}
+
+.blog-index-subtitle {
+	font-size: var(--text-lg);
+	color: var(--blog-text-muted);
+}
+
+.blog-posts-list {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-xl);
+}
+
+.blog-post-card {
+	display: block;
+	padding: var(--space-lg);
+	border-radius: 0.5rem;
+	text-decoration: none;
+	transition: border-color var(--transition-fast);
+}
+
+.blog-post-card:hover {
+	border-color: var(--blog-accent);
+	text-decoration: none;
+}
+
+.blog-post-card-title {
+	font-size: var(--text-xl);
+	font-weight: 600;
+	color: var(--blog-text);
+	margin-bottom: var(--space-xs);
+}
+
+.blog-post-card-meta {
+	display: flex;
+	align-items: center;
+	gap: var(--space-sm);
+	margin-bottom: var(--space-sm);
+	font-size: var(--text-sm);
+	color: var(--blog-text-hint);
+}
+
+.blog-post-card-meta time::after {
+	content: "·";
+	margin-left: var(--space-sm);
+}
+
+.blog-post-card-excerpt {
+	color: var(--blog-text-muted);
+	font-size: var(--text-sm);
+	line-height: 1.5;
+}
+
+.blog-post-card-tags {
+	display: flex;
+	gap: var(--space-xs);
+	margin-top: var(--space-sm);
+}
+
+/* ── Blog Single Post ───────────────────────────────────────────────────── */
+
+.blog-post {
+	max-width: 100%;
+}
+
+.blog-post-header {
+	margin-bottom: var(--space-2xl);
+	padding-bottom: var(--space-xl);
+	border-bottom: 1px solid var(--blog-border);
+}
+
+.blog-post-title {
+	font-family: var(--font-display);
+	font-size: var(--text-3xl);
+	font-weight: 700;
+	color: var(--blog-text);
+	line-height: 1.2;
+	margin-bottom: var(--space-md);
+}
+
+.blog-post-meta {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-md);
+}
+
+.blog-post-date {
+	font-size: var(--text-sm);
+	color: var(--blog-text-hint);
+}
+
+.blog-post-reading-time {
+	font-size: var(--text-sm);
+	color: var(--blog-text-hint);
+}
+
+.blog-post-date::after {
+	content: "·";
+	margin: 0 var(--space-sm);
+}
+
+.blog-post-tags {
+	display: flex;
+	gap: var(--space-xs);
+}
+
+/* The chip grammar (`.chip`): raised surface + border-strong outline, so tags read as tags. */
+.blog-tag {
+	display: inline-block;
+	padding: var(--space-xs) var(--space-sm);
+	background: var(--blog-code-bg);
+	border: 1px solid var(--border2);
+	border-radius: 0.25rem;
+	font-size: var(--text-xs);
+	color: var(--blog-text-muted);
+}
+
+/* ── Blog Post Content ──────────────────────────────────────────────────── */
+
+.blog-post-content {
+	font-size: var(--text-lg);
+	line-height: 1.75;
+}
+
+.blog-post-content h1,
+.blog-post-content h2,
+.blog-post-content h3,
+.blog-post-content h4,
+.blog-post-content h5,
+.blog-post-content h6 {
+	font-weight: 600;
+	color: var(--blog-text);
+	margin-top: var(--space-2xl);
+	margin-bottom: var(--space-md);
+	line-height: 1.3;
+}
+
+.blog-post-content h1 {
+	font-size: var(--text-3xl);
+}
+
+.blog-post-content h2 {
+	font-size: var(--text-2xl);
+}
+
+.blog-post-content h3 {
+	font-size: var(--text-xl);
+}
+
+.blog-post-content p {
+	margin-bottom: var(--space-lg);
+}
+
+.blog-post-content a {
+	color: var(--blog-accent);
+	text-decoration: underline;
+	text-underline-offset: 2px;
+}
+
+.blog-post-content a:hover {
+	text-decoration: none;
+}
+
+.blog-post-content ul,
+.blog-post-content ol {
+	margin-bottom: var(--space-lg);
+	padding-left: var(--space-xl);
+}
+
+.blog-post-content li {
+	margin-bottom: var(--space-sm);
+}
+
+.blog-post-content blockquote {
+	margin: var(--space-lg) 0;
+	padding: var(--space-md) var(--space-lg);
+	border-left: 3px solid var(--blog-accent);
+	background: var(--blog-code-bg);
+	font-style: italic;
+	color: var(--blog-text-muted);
+}
+
+.blog-post-content code {
+	font-family: var(--font-mono);
+	font-size: 0.9em;
+	padding: 0.1em 0.3em;
+	background: var(--blog-code-bg);
+	border-radius: 0.25rem;
+}
+
+.blog-post-content pre {
+	margin: var(--space-lg) 0;
+	padding: var(--space-lg);
+	background: var(--blog-code-bg);
+	border: 1px solid var(--blog-border);
+	border-radius: 0.5rem;
+	overflow-x: auto;
+}
+
+.blog-post-content pre code {
+	padding: 0;
+	background: none;
+	font-size: var(--text-sm);
+	line-height: 1.6;
+}
+
+/* Shiki syntax highlighting */
+.blog-post-content .astro-code {
+	margin: var(--space-lg) 0;
+	padding: var(--space-lg);
+	border: 1px solid var(--blog-border);
+	border-radius: 0.5rem;
+	overflow-x: auto;
+	font-family: var(--font-mono);
+	font-size: var(--text-sm);
+	line-height: 1.6;
+	background: var(--blog-code-bg);
+}
+
+.blog-post-content .astro-code code {
+	padding: 0;
+	background: none;
+	font-family: inherit;
+	font-size: inherit;
+	line-height: inherit;
+}
+
+.blog-post-content .astro-code .line {
+	display: inline;
+}
+
+/* Shiki dual-theme: select colors based on data-theme */
+.blog-post-content .astro-code,
+.blog-post-content .astro-code span {
+	color: var(--shiki-dark);
+}
+
+[data-theme="light"] .blog-post-content .astro-code,
+[data-theme="light"] .blog-post-content .astro-code span {
+	color: var(--shiki-light);
+}
+
+.blog-post-content img {
+	max-width: 100%;
+	height: auto;
+	margin: var(--space-lg) 0;
+	border-radius: 0.5rem;
+	border: 1px solid var(--blog-border);
+}
+
+.blog-post-content iframe {
+	max-width: 100%;
+	margin: var(--space-lg) 0;
+	border-radius: 0.5rem;
+	border: 1px solid var(--blog-border);
+}
+
+/* Direct YouTube/video iframes: override fixed width/height for responsive 16:9 */
+.blog-post-content iframe[src*="youtube"],
+.blog-post-content iframe[src*="vimeo"] {
+	width: 100%;
+	height: auto;
+	aspect-ratio: 16 / 9;
+}
+
+/* YouTube embeds via <video> tag (responsive 16:9 wrapper) */
+.blog-post-content .youtube-embed {
+	position: relative;
+	width: 100%;
+	padding-bottom: 56.25%;
+	margin: var(--space-lg) 0;
+	border-radius: 0.5rem;
+	overflow: hidden;
+	background: var(--blog-code-bg);
+}
+
+.blog-post-content .youtube-embed iframe {
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
+	margin: 0;
+	border: none;
+	border-radius: 0.5rem;
+}
+
+.blog-post-content hr {
+	margin: var(--space-2xl) 0;
+	border: none;
+	border-top: 1px solid var(--blog-border);
+}
+
+/* ── Blog Post Navigation ───────────────────────────────────────────────── */
+
+.blog-post-nav {
+	display: grid;
+	grid-template-columns: 1fr auto 1fr;
+	gap: var(--space-md);
+	margin-top: var(--space-3xl);
+	padding-top: var(--space-xl);
+	border-top: 1px solid var(--blog-border);
+}
+
+.blog-post-nav a {
+	color: var(--blog-text-muted);
+	text-decoration: none;
+	font-size: var(--text-sm);
+	transition: color var(--transition-fast);
+}
+
+.blog-post-nav a:hover {
+	color: var(--blog-accent);
+}
+
+.blog-nav-prev {
+	text-align: left;
+}
+
+.blog-nav-home {
+	text-align: center;
+	font-weight: 500;
+}
+
+.blog-nav-next {
+	text-align: right;
+}
+
+/* ── Blog Responsive ────────────────────────────────────────────────────── */
+
+@media (max-width: 640px) {
+	.blog-post-title {
+		font-size: var(--text-2xl);
+	}
+
+	.blog-post-content {
+		font-size: var(--text-base);
+	}
+
+	.blog-post-nav {
+		grid-template-columns: 1fr;
+		text-align: center;
+	}
+
+	.blog-nav-prev,
+	.blog-nav-next {
+		text-align: center;
 	}
 }

@@ -28,6 +28,10 @@ and is where the family's rules for specs and the spec graph accrue.
 ## On-rails
 
 - High-signal enough that a future agent (or human) lands on the decisions without re-deriving them.
+- The spec is the *only* home for rationale: decisions, invariants, trade-offs, and bug post-mortems
+  are recorded here, never as code comments — a rationale paragraph found in code is content to
+  promote into the owning spec, leaving at most a one-line pointer where misediting would silently
+  break something.
 - Say each thing once: link by `id` instead of restating; the dependency edges *between* sibling
   modules live in the parent's spec, not in each leaf.
 - One spec per *genuine* boundary — not per directory, not per file.

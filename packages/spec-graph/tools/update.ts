@@ -1,16 +1,9 @@
-// spec_update — frontmatter only: set/remove scalar fields and add/remove list entries. Never touches
-// prose. The frontmatter is edited in place on a live YAML Document (via core's updateFrontmatterText),
-// so comments and any non-dialect fields survive the round-trip and the file keeps its line endings.
-
 import { writeFileSync } from "node:fs";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { FIELDS, type FrontmatterEdit, updateFrontmatterText } from "../core/index.ts";
 import { errorResult, getIndex, textResult } from "./shared.ts";
 
-// Keyed by the frontmatter list-field names via FIELDS (single-sourced), so the schema and the core
-// write path move together when a list field is renamed. Covers the DAG links (depends-on/references/
-// implements) and the metadata lists (covers/tags) — every list field the schema owns.
 const listGroup = Type.Object({
 	[FIELDS.dependsOn]: Type.Optional(Type.Array(Type.String())),
 	[FIELDS.references]: Type.Optional(Type.Array(Type.String())),
@@ -48,8 +41,6 @@ export function registerSpecUpdate(pi: ExtensionAPI): void {
 			const record = index.recordForId(params.id);
 			if (!record) return errorResult(`No spec with id "${params.id}".`);
 
-			// Work off the scan's cached read (no second disk read). A scanned spec always has frontmatter;
-			// the lossless edit re-parses that cached text into a live Document and mutates it in place.
 			const { abs, rel: path, content: cachedText } = record;
 			const edit: FrontmatterEdit = {
 				set: params.set,

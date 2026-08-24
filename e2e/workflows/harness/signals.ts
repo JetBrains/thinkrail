@@ -1,6 +1,3 @@
-// Stop conditions — predicates over the EventLog. First match aborts the session, which is the harness's
-// main cost control: a routing scenario ends the moment its question is answered, not at turn end.
-// Scenario surface: `stopWhen` (pass-signals) and `forbid` (fail-signals — abort + deterministic fail).
 import type { CapturedToolCall, EventLog } from "./events";
 
 export interface Signal {
@@ -9,16 +6,10 @@ export interface Signal {
 }
 
 export interface ToolCallMatcher {
-	/** Matches when the call's path-ish arg (path / file_path) ends with this suffix. */
 	pathEndsWith?: string;
-	/** Arbitrary predicate on the call. */
 	where?: (call: CapturedToolCall) => boolean;
 }
 
-/**
- * The ONE `ToolCallMatcher` semantics — shared by signals and checks so `stopWhen: signals.toolCall(…)`
- * and `expect: checks.expectToolCalled(…)` can never drift apart for the same matcher.
- */
 export function matchesToolCall(call: CapturedToolCall, matcher?: ToolCallMatcher): boolean {
 	if (!matcher) return true;
 	if (matcher.pathEndsWith) {
@@ -29,7 +20,6 @@ export function matchesToolCall(call: CapturedToolCall, matcher?: ToolCallMatche
 }
 
 export const signals = {
-	/** The agent loaded a skill (read its SKILL.md). */
 	skillRead(name: string): Signal {
 		return {
 			description: `skill "${name}" read`,
@@ -62,11 +52,6 @@ export interface SignalHit {
 	signal: Signal;
 }
 
-/**
- * Watch the log until a stop- or forbid-signal fires. Resolves with the hit; never rejects — the
- * scenario loop owns timeouts (via its turn promise) and budget trips (watchdog). Call `cancel()` in
- * the scenario's `finally` so no watcher outlives its run.
- */
 export function watchSignals(
 	log: EventLog,
 	stopWhen: Signal[],

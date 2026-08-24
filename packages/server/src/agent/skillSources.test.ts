@@ -63,7 +63,6 @@ describe("discoverCompatibilitySkillSources", () => {
 			join(codexHome, "skills"),
 			join(home, ".copilot", "skills"),
 			join(geminiHome, ".gemini", "skills"),
-			// Deliberately unsupported locations must not be swept in.
 			join(project, ".cursor", "skills"),
 			join(home, ".random-agent", "skills"),
 		]) {
@@ -96,7 +95,6 @@ describe("discoverCompatibilitySkillSources", () => {
 		const project = directory(join(root, "project"));
 		const home = directory(join(root, "home"));
 		const claudeConfig = directory(join(root, "claude-config"));
-		// A version-pinned plugin install with a skills dir + a transitive node_modules skills dir (junk).
 		const installPath = join(claudeConfig, "plugins", "cache", "market", "superpowers", "6.1.1");
 		directory(join(installPath, "skills", "brainstorming"));
 		directory(join(installPath, "node_modules", "dep", "skills"));
@@ -112,7 +110,6 @@ describe("discoverCompatibilitySkillSources", () => {
 			env: { HOME: home, CLAUDE_CONFIG_DIR: claudeConfig },
 		});
 
-		// The plugin's own skills dir is discovered (personal-scope, tagged with the plugin name)…
 		expect(
 			sources.some(
 				(s) =>
@@ -122,7 +119,6 @@ describe("discoverCompatibilitySkillSources", () => {
 					s.plugin === "superpowers",
 			),
 		).toBe(true);
-		// …but never the transitive node_modules skills junk (we read the manifest, not a blind find).
 		expect(sources.some((s) => s.path.includes("node_modules"))).toBe(false);
 	});
 

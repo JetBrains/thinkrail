@@ -4,10 +4,6 @@ import { strArg } from "../toolHelpers";
 import { parseComparisonOptions } from "./args";
 import { MermaidView } from "./MermaidView";
 
-/**
- * Body for `visualize` type="comparison": option cards with pros/cons, a `recommended` highlight, and an
- * optional per-option inline diagram.
- */
 export function ComparisonCard({ args }: ToolRenderProps) {
 	const title = strArg(args, "title");
 	const options = parseComparisonOptions(args.options);
@@ -30,7 +26,7 @@ export function ComparisonCard({ args }: ToolRenderProps) {
 						<div className="flex items-center gap-4">
 							<span className="tr-text-ui text-text-default">{opt.name}</span>
 							{opt.recommended ? (
-								<span className="rounded-[var(--radius-sm)] bg-primary px-4 py-2 text-text-on-primary tr-text-metadata">
+								<span className="rounded-[var(--radius-sm)] bg-primary px-8 py-2 text-text-on-primary tr-text-metadata">
 									Recommended
 								</span>
 							) : null}

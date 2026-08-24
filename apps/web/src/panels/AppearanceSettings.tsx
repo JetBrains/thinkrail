@@ -5,12 +5,6 @@ import { toast, useAppStore } from "@/store";
 import { getThemes, resolveTheme } from "@/themes";
 import { getTransport } from "@/transport";
 
-/**
- * The "Appearance" settings section: the theme picker. Server-synced — clicking a theme fires
- * `settings.update` and the UI converges when the host's `settings.changed` broadcast folds into the store
- * (no optimistic apply), the same pattern as the workspace lifecycle. The active theme is read from the
- * store (fed by `server.welcome` / `settings.changed`); a rejected update surfaces a toast.
- */
 export function AppearanceSettings() {
 	const theme = useAppStore((s) => s.theme);
 	const themes = getThemes();

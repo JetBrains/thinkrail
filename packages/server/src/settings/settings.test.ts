@@ -11,11 +11,11 @@ const savedDataDir = process.env.THINKRAIL_DATA_DIR;
 beforeEach(() => {
 	dataDir = mkdtempSync(join(tmpdir(), "trpi-settings-test-"));
 	process.env.THINKRAIL_DATA_DIR = dataDir;
-	resetConfigCache(); // never carry a prior test's cache into this fresh data dir
+	resetConfigCache();
 });
 
 afterEach(() => {
-	setSettingsPublisher(null); // never leak a test's publisher into the next
+	setSettingsPublisher(null);
 	resetConfigCache();
 	rmSync(dataDir, { recursive: true, force: true });
 	if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
@@ -30,10 +30,8 @@ test("updateConfig merges, persists an opaque theme id, and returns the merged c
 	const opaqueTheme = "acme.solarized";
 	const next = updateConfig({ theme: opaqueTheme });
 	expect(next.theme).toBe(opaqueTheme);
-	// Persisted to disk without requiring a server-side theme catalog.
 	const onDisk = JSON.parse(readFileSync(join(dataDir, "config.json"), "utf8"));
 	expect(onDisk.theme).toBe(opaqueTheme);
-	// Cached: a re-read reflects it without touching disk again.
 	expect(getConfig().theme).toBe(opaqueTheme);
 });
 

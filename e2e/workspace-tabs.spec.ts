@@ -6,15 +6,13 @@ test("editor tabs are scoped to the active workspace", async ({ page }) => {
 	const tabs = page.getByTestId("editor-tab");
 	const workspaces = worktreeRows(page);
 
-	// Workspace 1: the create lands in its auto-opened chat; open README.md beside it.
 	await createWorkspaceViaDialog(page);
 	await expect(workspaces).toHaveCount(1);
-	await expect(tabs).toHaveCount(1); // the fresh chat the create landed in
+	await expect(tabs).toHaveCount(1);
 	await page.getByTestId("tab-files").click();
 	await page.getByTestId("file-node").filter({ hasText: "README.md" }).dblclick();
 	await expect(tabs).toHaveCount(2);
 
-	// Workspace 2 is brand new → only its own fresh chat, none of workspace 1's tabs.
 	await createWorkspaceViaDialog(page);
 	await expect(workspaces).toHaveCount(2);
 	await expect(workspaces.nth(1)).toHaveAttribute("data-active", "true");
@@ -23,7 +21,6 @@ test("editor tabs are scoped to the active workspace", async ({ page }) => {
 	await expect(page.getByTestId("scope-name")).toHaveText("workspace-2");
 	await expect(page.getByTestId("scope-branch")).toHaveText("workspace-2");
 
-	// Switching back to workspace 1 restores its tab set (its chat + README).
 	await workspaces.nth(0).getByRole("button").first().click();
 	await expect(workspaces.nth(0)).toHaveAttribute("data-active", "true");
 	await expect(page.getByTestId("scope-name")).toHaveText("workspace-1");

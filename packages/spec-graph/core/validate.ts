@@ -1,9 +1,6 @@
-// Structural checks over the graph: dangling links, duplicate ids, parent cycles. Pi-free.
-
 import { LINK_KINDS, linkTargets, type SpecGraph } from "./graph.ts";
 import { FIELDS, type LinkKind, scalar } from "./parse.ts";
 
-/** A link whose target id has no node. */
 export interface DanglingLink {
 	from: string;
 	fromPath: string;
@@ -11,25 +8,21 @@ export interface DanglingLink {
 	target: string;
 }
 
-/** An id declared by more than one file. */
 export interface DuplicateId {
 	id: string;
 	paths: string[];
 }
 
-/** A cycle in the parent tree, as the id chain that closes on itself. */
 export interface ParentCycle {
 	ids: string[];
 }
 
-/** The full validation report. Empty arrays mean a clean graph. */
 export interface ValidationReport {
 	danglingLinks: DanglingLink[];
 	duplicateIds: DuplicateId[];
 	parentCycles: ParentCycle[];
 }
 
-/** Detect all parent-chain cycles, returning each as a normalized id ring. */
 function findParentCycles(graph: SpecGraph): ParentCycle[] {
 	const cycles: ParentCycle[] = [];
 	const seen = new Set<string>();
@@ -60,7 +53,6 @@ function findParentCycles(graph: SpecGraph): ParentCycle[] {
 	return cycles;
 }
 
-/** Report dangling links, duplicate ids, and parent cycles for the given graph. */
 export function validateGraph(graph: SpecGraph): ValidationReport {
 	const danglingLinks: DanglingLink[] = [];
 	for (const node of graph.nodes.values()) {
@@ -78,7 +70,6 @@ export function validateGraph(graph: SpecGraph): ValidationReport {
 	return { danglingLinks, duplicateIds, parentCycles: findParentCycles(graph) };
 }
 
-/** True when the report has no findings. */
 export function isValid(report: ValidationReport): boolean {
 	return (
 		report.danglingLinks.length === 0 &&

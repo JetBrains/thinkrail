@@ -34,9 +34,7 @@ function writeExpandSize(storageKey: string, size: number | null): void {
 	try {
 		if (size === null) localStorage.removeItem(storageKey);
 		else localStorage.setItem(storageKey, String(size));
-	} catch {
-		// Layout persistence is best-effort, just like react-resizable-panels' default local storage.
-	}
+	} catch {}
 }
 
 function canReceiveFocus(element: HTMLElement): boolean {
@@ -69,10 +67,6 @@ function preferredFocusable(container: HTMLElement): HTMLElement | null {
 	);
 }
 
-/**
- * Shell-local behavior for one outer region: persisted panel collapse, focus memory, and the imperative
- * focus-first/collapse-when-focused command. Panels themselves stay unaware of their arrangement.
- */
 export function useCollapsibleRegion<T extends HTMLElement = HTMLElement>(
 	outsideFallbackRef: RefObject<HTMLElement | null>,
 	storageId: string,
@@ -144,12 +138,9 @@ export function useCollapsibleRegion<T extends HTMLElement = HTMLElement>(
 			expandSizeRef.current = dragStartSizeRef.current;
 			writeExpandSize(storageKeyRef.current, expandSizeRef.current);
 		} else if (requestedCollapseRef.current) {
-			// Imperative collapse is already remembered (and persisted) by react-resizable-panels.
 			expandSizeRef.current = null;
 			writeExpandSize(storageKeyRef.current, null);
 		}
-		// A single pointer gesture can cross the snap point more than once. Keep its starting width until
-		// pointer-up so every collapse in that gesture restores the same pre-drag width.
 		if (!draggingRef.current) dragStartSizeRef.current = null;
 		requestedCollapseRef.current = false;
 		if (!pendingFocusRef.current) {

@@ -10,18 +10,6 @@ import { errorText, getTransport } from "@/transport";
 import { ConfirmPopover } from "./ConfirmPopover";
 import { openFileInTab } from "./openTabs";
 
-/**
- * R4: verbatim starter-template content offered by `StarterTemplatesOffer` below (design doc "Amendments
- * (2026-07-22)" item 4). Bodies use pi's own `$1`/`${N:-default}` placeholder grammar — not JS
- * interpolation — so the two bodies containing `${…}` are written as template literals with the `\${`
- * escape (a literal dollar-brace, never an embedded expression); the rest only use bare `$1`/`$2`, which
- * need no escape.
- *
- * These are the **same five** this repo checks into its own `.pi/prompts/` — the set a ThinkRail checkout
- * gets for free at project scope, which an install working on any *other* project would otherwise never
- * see. Keeping the two in sync is deliberate: "the templates ThinkRail ships" should mean one thing, not
- * two. Change one, change the other.
- */
 const STARTER_TEMPLATES: ReadonlyArray<{
 	name: string;
 	description: string;
@@ -60,13 +48,6 @@ const STARTER_TEMPLATES: ReadonlyArray<{
 	},
 ];
 
-/**
- * R4: the Global group's empty-state nudge — one click seeds the five `STARTER_TEMPLATES` above via the
- * same `template.save` wire call `TemplateEditorDialog` uses (scope `"global"`, body assembled by the same
- * `assembleTemplate` helper), sequentially, then bumps `templatesVersion` once so both this panel and the
- * composer's `/` menu cache pick them up. No dismiss state to track: once the list is non-empty,
- * `TemplateGroup` renders the normal row list instead and this component never mounts again.
- */
 function StarterTemplatesOffer() {
 	const [adding, setAdding] = useState(false);
 
@@ -84,10 +65,6 @@ function StarterTemplatesOffer() {
 		} catch (err) {
 			toast.error(errorText(err), "Couldn't add starter templates");
 		} finally {
-			// Bump even on a partial failure (e.g. the 3rd of 4 saves throws): `template.save` is an
-			// idempotent overwrite, so whichever starters landed before the throw are real rows the
-			// list refetch should pick up — without the bump they'd exist on disk but never appear, and
-			// the offer would linger since the (still-empty, per its stale fetch) list never re-renders.
 			useAppStore.getState().bumpTemplatesVersion();
 			setAdding(false);
 		}
@@ -112,16 +89,6 @@ function StarterTemplatesOffer() {
 	);
 }
 
-/**
- * One `template.list` fetch per `(enabled, workspaceId, templatesVersion)` generation, filtered to
- * `scope`. The store's `templatesVersion` is recorded WITH the response, and only a current-generation
- * list is returned — so a bump (a save/delete/seed from anywhere: this panel, the editor dialog,
- * `HistoryOverlay`'s save-as-template) instantly invalidates the display while the refetch is in
- * flight, and a response from a superseded generation can never be shown as fresh. Recording the
- * generation is also what keeps the effect's dependency list honest: the version is a real input of
- * the body, not a trigger-only extra dependency. `enabled: false` (no workspace for the project group)
- * pins the result to `null` without issuing a request.
- */
 function useTemplateList(
 	workspaceId: string | undefined,
 	scope: TemplateScope,
@@ -164,39 +131,17 @@ function useTemplateList(
 	};
 }
 
-/**
- * The Settings → Templates panel: two groups — **Global** (always) and **This project** (only with an
- * active workspace) — each listing its prompt-template files with New/Edit/Delete, and (project rows
- * only) an Open-as-file shortcut. Fetches `template.list` **twice**, both refetched whenever the store's
- * `templatesVersion` bumps (a save or delete from anywhere — this panel or `HistoryOverlay`'s
- * save-as-template — invalidates it):
- *  - unscoped (`{}`) for the **Global** group — the server's shadow-merge (`templates.ts`'s
- *    `listTemplates`: a project template wins over a same-named global one, by design — see that
- *    module's own doc) means a *workspace-scoped* list would silently drop a shadowed global template
- *    from view entirely. That's the right behavior for the composer's `/` menu (one name expands to one
- *    thing), but wrong here: Settings must still let the user find, edit, or delete it.
- *  - `{ workspaceId }`, filtered to `scope === "project"`, for the **This project** group — exactly the
- *    templates that exist in this worktree's `.pi/prompts/`, whether or not a same-named global template
- *    also exists.
- * New/Edit open the shared `chat/TemplateEditorDialog` (see `chat/SPEC.md`'s Save-as-template bullet for
- * why it lives in `chat/`, not here). Delete never touches the dialog — it's a `ConfirmPopover` directly
- * on the row.
- */
 export function TemplatesSettings() {
 	const workspaceId = useAppStore((s) => s.activeWorkspaceId);
 	const [editorOpen, setEditorOpen] = useState(false);
 	const [editing, setEditing] = useState<TemplateInfo | null>(null);
 	const [newScope, setNewScope] = useState<TemplateScope>("global");
 
-	// Global group: always unscoped — never the shadow-merged `{ workspaceId }` response (see doc above).
 	const { templates: globalTemplates, failed: globalFailed } = useTemplateList(
 		undefined,
 		"global",
 		true,
 	);
-	// Project group: the workspace-scoped (shadow-merged) list, filtered down to the project-scoped
-	// entries. A separate hook instance means a separate failure flag — two independent in-flight
-	// requests must never let one's success silently clear the other's already-reported failure.
 	const { templates: projectTemplates, failed: projectFailed } = useTemplateList(
 		workspaceId ?? undefined,
 		"project",
@@ -344,7 +289,6 @@ function TemplateRow({
 				scope: template.scope,
 				name: template.name,
 			});
-			// The list re-fetches itself off this bump (see TemplatesSettings's effect) — no local state to update.
 			useAppStore.getState().bumpTemplatesVersion();
 		} catch (err) {
 			toast.error(errorText(err), "Couldn't delete the template");
@@ -353,8 +297,6 @@ function TemplateRow({
 
 	const openAsFile = () => {
 		if (!workspaceId) return;
-		// "Open in editor" is a deliberate open, not browsing — it keeps its own tab, and closing Settings
-		// on top of a preview tab that a later click could silently replace would read as a lost file.
 		void openFileInTab(workspaceId, `.pi/prompts/${template.name}.md`, "keep");
 		useAppStore.getState().closeSettings();
 	};
@@ -371,8 +313,6 @@ function TemplateRow({
 			onConfirm={() => void del()}
 			align="end"
 		>
-			{/* Anchored to the Delete button (the PopoverTrigger below), mirroring ProjectTree.tsx's
-			    workspace-remove row. */}
 			<div
 				data-testid="template-row"
 				data-name={template.name}

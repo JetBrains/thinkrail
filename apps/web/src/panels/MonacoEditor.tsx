@@ -14,12 +14,6 @@ import type { EditorReview } from "./useReviewCommenting";
 
 const beforeMount: BeforeMount = (m) => defineThinkrailTheme(m);
 
-/**
- * Read-only file viewer; language is inferred from `path`. Editing + save land with `fs.writeFile`.
- * The optional `review` hook (see panels/SPEC.md + `useFileReview`) carries the whole review surface:
- * comment-line decorations + inline thread cards (derived from `review.threads`) and the
- * selection→icon→composer flow (`review.commenting`).
- */
 export default function MonacoEditor({
 	path,
 	content,
@@ -35,12 +29,9 @@ export default function MonacoEditor({
 	const threadsRef = useRef<ReturnType<typeof attachReviewThreads> | null>(null);
 	const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
 	const decorationsRef = useRef<string[]>([]);
-	// Attach once; the widgets read the LATEST review object through this ref (its identity changes per
-	// render — re-attaching per render would tear the composer down mid-typing).
 	const reviewRef = useRef(review);
 	reviewRef.current = review;
 
-	// Stable (reads only refs), so the effect below can list it honestly.
 	const syncThreads = useCallback((target: EditorReview) => {
 		if (!editorRef.current) return;
 		threadsRef.current?.setThreads(target.threads);
@@ -51,11 +42,9 @@ export default function MonacoEditor({
 		);
 	}, []);
 
-	// Mirrors TerminalInstance's observer: follow atomic `[data-theme]` swaps while mounted.
 	const onMount: OnMount = (codeEditor, m) => {
 		stopThemeWatchRef.current = watchThemeSwap(m, EDITOR_THEME);
 		editorRef.current = codeEditor;
-		// Review or not, the editor HAS a context menu (Copy, Command Palette…) — icon it always.
 		menuIconsRef.current = decorateEditorContextMenus(codeEditor);
 		if (review) {
 			detachRef.current = attachReviewCommenting(codeEditor, {
@@ -70,8 +59,6 @@ export default function MonacoEditor({
 					reviewRef.current?.actions.onUpdateComment(id, body) ?? Promise.resolve(),
 			});
 			syncThreads(review);
-			// A focus deep link that arrived BEFORE the editor mounted (row click opens the tab, Monaco
-			// loads lazily) is consumed here — the effect below only re-runs on `review` changes.
 			const focus = reviewRef.current?.focus;
 			if (focus) {
 				codeEditor.revealLineInCenter(focus.line);
@@ -84,8 +71,6 @@ export default function MonacoEditor({
 		if (review) syncThreads(review);
 	}, [review, syncThreads]);
 
-	// The Review panel's "focus this comment" deep link: reveal the anchor line (the in-flow card sits
-	// right below it), then consume the request so it fires exactly once.
 	useEffect(() => {
 		if (!review?.focus || !editorRef.current) return;
 		editorRef.current.revealLineInCenter(review.focus.line);

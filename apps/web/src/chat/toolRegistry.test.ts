@@ -38,7 +38,6 @@ describe("toolRegistry summaries", () => {
 		const renderer = () => null;
 		registerToolRenderer("with-renderer", renderer);
 		expect(getToolRenderer("with-renderer")).toBe(renderer);
-		// Unknown tools fall back rather than throwing.
 		expect(typeof getToolRenderer("totally-unknown")).toBe("function");
 	});
 });

@@ -3,11 +3,6 @@ import type { ReactNode } from "react";
 import type { ToolRenderProps } from "../toolRegistry";
 import { strArg } from "./toolHelpers";
 
-/**
- * The compact receipt for the host-owned `resolve_comment` review tool (see chat/tools/SPEC.md): a ✓ +
- * the resolved comment id and the agent's note. Routine — the review sidebar is where resolution state
- * lives (it converges via `review.changed`); this card is just the in-transcript trace.
- */
 export function ResolveCommentCard({ args, status }: ToolRenderProps): ReactNode {
 	const commentId = strArg(args, "commentId");
 	const note = strArg(args, "note");

@@ -5,7 +5,6 @@ import {
 	type TerminalDeliveryResult,
 } from "./outputBatcher";
 
-/** A batcher plus accepted batches. `delivery` flips to simulate receiver/backpressure state. */
 function harness(overrides: Partial<OutputBatcherOptions> = {}) {
 	const accepted: { data: string; truncated: boolean }[] = [];
 	const attempts: { data: string; truncated: boolean }[] = [];
@@ -31,7 +30,7 @@ describe("output batcher", () => {
 		const { batcher, accepted } = harness();
 
 		for (const chunk of ["a", "b", "c", "d"]) batcher.push(chunk);
-		expect(accepted).toHaveLength(0); // nothing delivered yet — still inside the flush window
+		expect(accepted).toHaveLength(0);
 
 		await tick(20);
 		expect(accepted).toEqual([{ data: "abcd", truncated: false }]);
@@ -42,7 +41,7 @@ describe("output batcher", () => {
 
 		batcher.push("abc");
 		expect(accepted).toHaveLength(0);
-		batcher.push("d"); // reaches maxBatchChars
+		batcher.push("d");
 		expect(accepted).toEqual([{ data: "abcd", truncated: false }]);
 	});
 
@@ -55,7 +54,7 @@ describe("output batcher", () => {
 		batcher.push("-more");
 		await tick(20);
 		expect(accepted).toHaveLength(0);
-		expect(attempts).toHaveLength(1); // blocked is latched; a flood does not keep calling send
+		expect(attempts).toHaveLength(1);
 
 		state.delivery = "delivered";
 		batcher.resume();
@@ -70,7 +69,7 @@ describe("output batcher", () => {
 		expect(accepted).toEqual([{ data: "first", truncated: false }]);
 		batcher.push("second");
 		await tick(20);
-		expect(attempts).toHaveLength(1); // first was accepted; second stays local while blocked
+		expect(attempts).toHaveLength(1);
 
 		state.delivery = "delivered";
 		batcher.resume();
@@ -85,11 +84,10 @@ describe("output batcher", () => {
 
 		state.delivery = "unavailable";
 		batcher.push("0123456789");
-		batcher.push("ABCDE"); // overflows: the oldest 5 characters go
+		batcher.push("ABCDE");
 		state.delivery = "delivered";
 		batcher.resume();
 
-		// The tail survives — on a terminal that is the part the user is waiting to see.
 		expect(accepted).toEqual([{ data: "56789ABCDE", truncated: true }]);
 	});
 

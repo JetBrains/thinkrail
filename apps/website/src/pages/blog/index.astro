@@ -1,0 +1,41 @@
+---
+import { postPath, publishedPosts } from "../../blogCollection";
+import BlogLayout from "../../layouts/BlogLayout.astro";
+import { formatPostDate, readingTimeMinutes } from "../../postMeta";
+
+const posts = await publishedPosts();
+---
+
+<BlogLayout
+	title="Blog — ThinkRail"
+	description="Updates, tutorials, and insights from the ThinkRail team."
+>
+	<header class="blog-index-header">
+		<h1 class="blog-index-title">Blog</h1>
+		<p class="blog-index-subtitle">Updates, tutorials, and insights from the ThinkRail team.</p>
+	</header>
+
+	<div class="blog-posts-list">
+		{
+			posts.map((post) => (
+				<a href={postPath(post)} class="blog-post-card">
+					<h2 class="blog-post-card-title">{post.data.title}</h2>
+					<div class="blog-post-card-meta">
+						<time datetime={post.data.date.toISOString()}>{formatPostDate(post.data.date)}</time>
+						<span class="blog-post-card-reading-time">
+							{readingTimeMinutes(post.body ?? "")} min read
+						</span>
+					</div>
+					{post.data.excerpt && <p class="blog-post-card-excerpt">{post.data.excerpt}</p>}
+					{post.data.tags.length > 0 && (
+						<div class="blog-post-card-tags">
+							{post.data.tags.map((tag) => (
+								<span class="blog-tag">{tag}</span>
+							))}
+						</div>
+					)}
+				</a>
+			))
+		}
+	</div>
+</BlogLayout>

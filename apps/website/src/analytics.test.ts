@@ -12,10 +12,8 @@ describe("analyticsConfig", () => {
 		const settings = analyticsConfig("thinkrail.ai");
 		expect(settings).not.toBeNull();
 		const config = settings?.config ?? {};
-		// Genuine cookieless: no browser storage of any kind, so no consent banner is required.
 		expect(config.cookieless_mode).toBe("always");
 		expect(config).not.toHaveProperty("persistence");
-		// Privacy posture pinned so it can't silently regress.
 		expect(config.person_profiles).toBe("identified_only");
 		expect(config.respect_dnt).toBe(true);
 		expect(config.disable_session_recording).toBe(true);
@@ -24,9 +22,7 @@ describe("analyticsConfig", () => {
 
 	test("ingests through the first-party managed proxy, with ui_host still PostHog's app origin", () => {
 		const config = analyticsConfig("thinkrail.ai")?.config ?? {};
-		// A blocker-resistant first-party host: never a *.posthog.com ingest endpoint.
 		expect(config.api_host).toBe("https://p.thinkrail.ai");
-		// Required with a proxy: without it, in-app links/toolbar point at the proxy and break.
 		expect(config.ui_host).toBe("https://eu.posthog.com");
 	});
 });

@@ -6,21 +6,14 @@ export type CompatibilitySkillProvider = "claude" | "codex" | "github-copilot" |
 
 const PROJECT_SKILL_PATH = /^\.(claude|github|gemini|pi|agents)\/skills(?:\/|$)/;
 
-/**
- * Whether a worktree-relative path belongs to one of the project skill roots the session loader sees:
- * ThinkRail's three compatibility aliases plus Pi's two native roots. Kept here, beside skill discovery,
- * then injected into the watcher by the host so generic filesystem batching never duplicates this policy.
- */
 export function isProjectSkillPath(relativePath: string): boolean {
 	return PROJECT_SKILL_PATH.test(relativePath.replaceAll("\\", "/"));
 }
 
-/** One conventional, existing skill root that another Agent Skills-compatible harness owns. */
 export interface CompatibilitySkillSource {
 	path: string;
 	scope: "project" | "user";
 	provider: CompatibilitySkillProvider;
-	/** For a Claude-plugin source, the plugin's display name — lets the Skills manager group by plugin. */
 	plugin?: string;
 }
 
@@ -45,13 +38,6 @@ function existingDirectory(path: string): string | null {
 	}
 }
 
-/**
- * The `skills/` dir of each installed Claude Code **plugin**, read from the plugin manager's authoritative
- * `installed_plugins.json` (`{ plugins: { "<name>@<market>": [{ installPath, … }] } }`). We take each
- * install's resolved `installPath` (version-pinned) + `/skills` — never a blind scan of the plugin cache,
- * which would sweep in stale versions and transitive `node_modules/**​/skills` junk. Missing/garbled
- * manifest → none. These are personal-scope (the user installed them via Claude).
- */
 function readClaudePluginSkillDirs(claudeConfigDir: string): { path: string; plugin: string }[] {
 	const manifest = join(claudeConfigDir, "plugins", "installed_plugins.json");
 	if (!existsSync(manifest)) return [];
@@ -66,7 +52,7 @@ function readClaudePluginSkillDirs(claudeConfigDir: string): { path: string; plu
 	const dirs: { path: string; plugin: string }[] = [];
 	for (const [key, installs] of Object.entries(plugins)) {
 		if (!Array.isArray(installs)) continue;
-		const plugin = key.split("@")[0] || key; // "superpowers@claude-plugins-official" → "superpowers"
+		const plugin = key.split("@")[0] || key;
 		for (const install of installs) {
 			const installPath = (install as { installPath?: unknown } | null)?.installPath;
 			if (typeof installPath === "string") dirs.push({ path: join(installPath, "skills"), plugin });
@@ -75,14 +61,6 @@ function readClaudePluginSkillDirs(claudeConfigDir: string): { path: string; plu
 	return dirs;
 }
 
-/**
- * The full compatibility allowlist **before the existence filter**: the fixed project + personal alias
- * dirs at their conventional paths, plus each currently-installed Claude plugin's `skills/` dir. Returned
- * whether or not each dir exists right now — so a caller can register them as skill paths a later reload
- * will pick up the moment a branch switch / pull / clone creates one (a worktree gaining `.claude/skills`
- * mid-session). `discoverCompatibilitySkillSources` is the existence-filtered view for classification.
- * (Plugins installed *after* this call are not covered — their install path isn't yet known.)
- */
 export function candidateCompatibilitySkillRoots(
 	cwd: string,
 	options: DiscoverCompatibilitySkillSourcesOptions = {},
@@ -99,7 +77,6 @@ export function candidateCompatibilitySkillRoots(
 		env.CODEX_HOME?.trim() || join(homeDir, ".codex"),
 		homeDir,
 	);
-	// GEMINI_CLI_HOME is a replacement user-home root; Gemini creates `.gemini` beneath it.
 	const geminiHome = resolveConfiguredPath(env.GEMINI_CLI_HOME?.trim() || homeDir, homeDir);
 
 	const candidates: CompatibilitySkillSource[] = [
@@ -120,8 +97,6 @@ export function candidateCompatibilitySkillRoots(
 		{ path: join(geminiHome, ".gemini", "skills"), scope: "user", provider: "gemini" },
 	];
 
-	// Installed Claude plugins (superpowers, etc.) — appended after the hand-written personal aliases so a
-	// loose `~/.claude/skills/<name>` wins a name collision over a plugin's.
 	for (const { path, plugin } of readClaudePluginSkillDirs(claudeConfigDir)) {
 		candidates.push({ path, scope: "user", provider: "claude", plugin });
 	}
@@ -129,15 +104,6 @@ export function candidateCompatibilitySkillRoots(
 	return candidates;
 }
 
-/**
- * The existence-filtered compatibility allowlist (each dir present + canonicalized, deduped): the fixed
- * project + personal alias dirs, plus each installed Claude plugin's `skills/` dir (from
- * `installed_plugins.json`, personal-scope). Pi-native/configured/shared roots are not returned here —
- * DefaultResourceLoader owns those and places them before this list; ThinkRail's bundled skills are
- * appended after it. `resolveSkillInputs` applies the real precedence (bundled > personal > project);
- * this returns discovery order. Used for **classification** (group + provenance + project-alias trust
- * gating), so it must be re-run whenever the on-disk set can have changed (every reload).
- */
 export function discoverCompatibilitySkillSources(
 	cwd: string,
 	options: DiscoverCompatibilitySkillSourcesOptions = {},
@@ -150,9 +116,7 @@ export function discoverCompatibilitySkillSources(
 		let canonical = path;
 		try {
 			canonical = realpathSync(path);
-		} catch {
-			// The directory was stat-able above; if canonicalization races with removal, keep the resolved path.
-		}
+		} catch {}
 		if (seen.has(canonical)) continue;
 		seen.add(canonical);
 		sources.push({ ...candidate, path });

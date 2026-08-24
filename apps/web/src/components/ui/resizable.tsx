@@ -21,10 +21,6 @@ export function ResizablePanelGroup({ className, ...props }: ComponentProps<type
 export type { ImperativePanelGroupHandle, ImperativePanelHandle };
 export const ResizablePanel = Panel;
 
-/**
- * A draggable divider between panels. `direction` matches the parent group's: a horizontal group gets a
- * vertical (1px-wide) handle, a vertical group a horizontal one. Highlights on hover/drag via tokens.
- */
 export function ResizableHandle({
 	direction = "horizontal",
 	withHandle = false,

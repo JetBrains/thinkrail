@@ -41,19 +41,14 @@ export function Shell() {
 	const openReview = useOpenBranchReview(activeWorkspace, status);
 	const hasActiveWorkspace = activeWorkspaceId != null;
 
-	// Project Home keeps its own simple two-column layout. Active workspaces hand all arrangement to
-	// `WorkspaceWorkbench`; its structural state is host-synchronized rather than react-panel local storage.
 	const welcomeCenterRef = useRef<HTMLDivElement>(null);
 	const welcomeProjects = useCollapsibleRegion(welcomeCenterRef, "welcome-left");
 
-	// The single owner of the theme DOM side-effect: apply the store's (host-owned) theme + cache it as the
-	// next load's first-paint hint. The store is fed by transport (welcome / settings.changed).
 	const theme = useAppStore((s) => s.theme);
 	useEffect(() => {
 		applyTheme(theme);
 		writeThemeHint(theme);
 	}, [theme]);
-	// App-wide chords the browser would otherwise take: history plus the two workbench side toggles.
 	useGlobalHotkeys({
 		onProjects: hasActiveWorkspace
 			? () => {
@@ -87,32 +82,31 @@ export function Shell() {
 						<div
 							data-testid="scope-context"
 							data-context={activeWorkspace ? "workspace" : "project-home"}
-							className="min-w-0 border-border-default border-l pl-12 leading-tight"
+							className="flex min-w-0 items-center gap-4 leading-tight tr-text-ui"
 						>
-							<div className="flex min-w-0 items-center gap-4 tr-text-ui">
-								<span className="hidden min-w-0 items-center gap-4 sm:flex">
-									<span
-										data-testid="scope-project"
-										className="max-w-[160px] truncate text-text-muted"
-									>
-										{contextProject.name}
-									</span>
-									<ChevronRight className="size-12 shrink-0 text-text-muted" />
+							<span className="hidden min-w-0 items-center gap-4 sm:flex">
+								<span
+									data-testid="scope-project"
+									className="max-w-[160px] truncate text-text-default"
+								>
+									{contextProject.name}
 								</span>
-								<span data-testid="scope-name" className="max-w-[220px] truncate text-text-default">
-									{activeWorkspace?.name ?? "Project home"}
-								</span>
-							</div>
+								<ChevronRight className="size-12 shrink-0 text-text-muted" />
+							</span>
+							<span data-testid="scope-name" className="max-w-[220px] truncate text-text-default">
+								{activeWorkspace?.name ?? "Project home"}
+							</span>
 							{activeWorkspace ? (
-								<div className="mt-2 flex min-w-0 items-center gap-4 text-text-muted tr-text-metadata">
-									<GitBranch className="size-12 shrink-0" />
-									<span data-testid="scope-branch" className="truncate">
+								<>
+									<GitBranch className="size-12 shrink-0 text-text-muted" />
+									<span data-testid="scope-branch" className="truncate text-text-muted">
 										{activeWorkspace.branch}
 									</span>
-									{/* User-owned Default/external workspaces have no ThinkRail creation provenance,
-									    so "from <base>" would make a promise the app cannot support. */}
 									{isUserOwnedWorkspace(activeWorkspace) ? null : (
-										<span data-testid="scope-base" className="hidden shrink-0 md:inline">
+										<span
+											data-testid="scope-base"
+											className="hidden shrink-0 text-text-muted md:inline"
+										>
 											· from {activeWorkspace.baseBranch}
 										</span>
 									)}
@@ -120,12 +114,12 @@ export function Shell() {
 										<span
 											data-testid="scope-review"
 											data-kind={openReview.kind}
-											className="shrink-0"
+											className="shrink-0 text-text-muted"
 										>
 											· {openReviewLabel(openReview)}
 										</span>
 									) : null}
-								</div>
+								</>
 							) : null}
 						</div>
 					) : null}
@@ -161,7 +155,6 @@ export function Shell() {
 					<WorkspaceWorkbench key={activeWorkspaceId} workspaceId={activeWorkspaceId} />
 				</div>
 			) : (
-				// No active workspace — the separately-persisted Welcome layout has only the Projects region.
 				<div
 					data-testid="welcome-shell-layout"
 					data-left-collapsed={welcomeProjects.collapsed}

@@ -3,7 +3,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { DiffTab } from "../store";
 import { MarkdownDocument } from "./MarkdownPreview";
 
-/** Marker skin for the merged document — token colors only, so it wears any theme. */
 const DIFF_MARKS = [
 	"[&_ins]:rounded-[var(--radius-sm)] [&_ins]:bg-feedback-success-subtle [&_ins]:text-feedback-success [&_ins]:no-underline",
 	"[&_del]:rounded-[var(--radius-sm)] [&_del]:bg-feedback-error-subtle [&_del]:text-feedback-error",
@@ -13,15 +12,6 @@ type MergeState = { state: "pending" } | { state: "failed" } | { state: "done"; 
 const PENDING: MergeState = { state: "pending" };
 const FAILED: MergeState = { state: "failed" };
 
-/**
- * The htmldiff merge, off the main thread. htmldiff is super-linear on repetitive content (seconds of
- * synchronous blocking for a few hundred identical rows), so it must never run inline — the two
- * static-HTML sides go to a Web Worker (`htmldiff.worker.ts`) and the merged document comes back as a
- * message. One worker per pending request: a new input (live re-read) or unmount terminates it —
- * termination *is* the cancellation, so no stale result can land. A worker failure (the script asset
- * failing to load — e.g. deploy skew — or htmldiff throwing) resolves to `failed`, never an eternal
- * `pending`.
- */
 function useHtmldiffMerge(before: string, after: string): MergeState {
 	const [merge, setMerge] = useState<MergeState>(PENDING);
 
@@ -41,7 +31,6 @@ function useHtmldiffMerge(before: string, after: string): MergeState {
 	return merge;
 }
 
-/** The full-pane centered placeholder both non-done states render. */
 function Placeholder({ testid, children }: { testid: string; children: string }) {
 	return (
 		<div
@@ -53,16 +42,6 @@ function Placeholder({ testid, children }: { testid: string; children: string })
 	);
 }
 
-/**
- * The rendered ("rich") markdown diff — see the panels SPEC + [[task-rendered-markdown-diff]]. Both
- * sides go through the exact same document pipeline as the plain preview (`MarkdownDocument`) to static
- * HTML (`renderToStaticMarkup` — effects don't run, so code blocks show the plain fallback and link
- * handlers are inert; accepted for a diff view), then `node-htmldiff` merges them into ONE document
- * with `<ins>`/`<del>` markers: deletions red + struck through, insertions green. Rendering both
- * sides to static markup is linear and stays on the main thread; the merge itself runs off it — see
- * `useHtmldiffMerge`. While it computes, a `rendered-diff-loading` placeholder shows; if the worker
- * fails, a `rendered-diff-error` placeholder points at the Source view instead of spinning forever.
- */
 export default function RenderedDiff({ tab }: { tab: DiffTab }) {
 	const [before, after] = useMemo(
 		() => [

@@ -22,16 +22,13 @@ a future `packages/chat-ui`). Built-in tool renderers live in the child
 ## Rendering model — rows and progressive disclosure
 
 The transcript is pi-canonical turns (`ChatTurn` in `types.ts`: user/assistant are pi messages; `system`,
-`error`, `retry` are web-local notices; `compaction` marks where pi replaced earlier messages with a
-summary — hydration-only, since a live transcript still holds everything it streamed), but the list renders
-**derived rows, not raw turns** — folding
+`error`, `retry` are web-local notices; `compaction` carries both the live lifecycle and the durable summary
+record pi leaves where it replaced earlier messages), but the list renders **derived rows, not raw turns** — folding
 spans assistant-message boundaries (pi emits one assistant message per tool round), so a per-turn item
 model can't group. The pure **`deriveRows(turns, toolResults, isStreaming, isSpec?)`** (`rows.ts`) walks
 blocks in order into rows; `ChatTurnView` dispatches on row kind:
 
-- `user` / `system` / `retry` / `compaction` — 1:1 renderers (`CompactionTurn` is a labelled rule that
-  opens pi's summary on click, so a reloaded long chat explains its gap instead of starting mid-conversation).
-  A user message that is Pi's canonical expanded skill block (`<skill name="…" location="…">`) renders
+- `user` / `system` / `retry` — 1:1 renderers. A user message that is Pi's canonical expanded skill block (`<skill name="…" location="…">`) renders
   as one **collapsed skill-invocation card** rather than exposing the full `SKILL.md`: the skill name is
   always visible, any request supplied after `/skill:<name>` stays visible as ordinary user text beneath
   it, and disclosure reveals the exact persisted instructions as Markdown. Parsing comes from `lib`'s
@@ -56,7 +53,20 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   a failed turn can't look like nothing happened. Live settlement and transcript hydration share the
   same assistant-failure classifier, so reload cannot turn the latest unresolved failure into success;
   recovered historical `length` attempts followed by later work are not re-labeled as current failures.
-- `markdown` — a non-empty assistant text block (react-markdown + remark-gfm + shiki).
+- `compaction` — a 1:1, fold-breaking row with two sources. Live `compaction_start` / `compaction_end`
+  events produce `CompactionNotice` (see the store SPEC): running "Compacting context…" (spinner), done
+  "Context compacted" (+ "— resuming…" while pi's overflow retry continues the run, + tokens before→after
+  when the result carried them), failed with the actionable error text, or cancelled as a muted notice.
+  These states are assertable via `data-testid="compaction-notice"` +
+  `data-status="running|done|failed|cancelled"`. Hydration turns the persisted `compactionSummary` into the
+  same `compaction` state (`done`) at its canonical position, plus the durable `summary`; that richer record
+  renders as `CompactionTurn`, a labelled rule whose summary opens on click (`data-testid="chat-compaction"`).
+  Thus a live run exposes every beat, while reload preserves main's explanation of the messages pi replaced.
+- `markdown` — a non-empty assistant text block (react-markdown + remark-gfm + shiki). A fenced
+  ```mermaid block renders as a themed diagram via `tools/visualize`'s `MermaidView` (fullscreen
+  pan-zoom, error → source fallback) — uniform across every `Markdown` surface (chat, file/specs
+  preview); until mounted it renders as highlighted source, so static contexts (`RenderedDiff`'s
+  `renderToStaticMarkup`) degrade to code exactly like shiki blocks do.
 - `tool` — a **primary** tool call: the collapsible `ToolCard` frame (collapsed unless registered
   `defaultExpanded`; errors auto-expand; a manual toggle wins), or a `"bare"` renderer that owns its
   frame. A `"bare"` call on a dead message (`stopReason` aborted/error — pi never executes those calls)
@@ -130,19 +140,36 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
 
 - **`ChatActions`** — a React context (provided by `ChatView`, `null` standalone): how a renderer talks
   **back** to the agent without importing store/transport. Today: `answerQuestion(toolCallId, result)` —
-  it rejects when the host refuses (unknown/answered/superseded call), and the caller owns the failure UX.
+  it rejects when the host refuses (unknown/answered/superseded call), and the caller owns the failure UX —
+  plus `focusComposer()`, for a renderer that resolves *itself*: it unmounts the control the user was
+  standing on, and focus would otherwise fall to `<body>` and swallow every following keystroke (the same
+  stranding the history overlay's dismiss refocus avoids). Only the card's own reply path calls it, and
+  only while the card still holds focus.
 - **`askState`** — the questionnaire lifecycle seam: the pure `deriveAskStates(turns, askAnswers)` +
   `AskStatesContext`/`useAskState` (provided by `ChatView`, `null` standalone). The ask tool is **ack +
   terminate** (its tool result is just an ack; the reply arrives later as an `ask-user-answers` message),
   so "answered / superseded / awaiting" is a fact about the transcript, not a tool status — derived once
   per runtime snapshot and consumed by the card via context, keeping it props-driven everywhere else.
+  The same seam supplies an opaque **per-mounted-ChatView focus scope**: an awaiting card claims attention
+  once within that scope (so Virtuoso remounts cannot steal focus), while a fresh mount creates a new scope
+  and may focus the still-pending question again. "Fresh mount" is broader than closing/reopening the chat:
+  `CenterTabs` renders only the active tab's body, so **every switch back to the chat tab** — from a file,
+  a diff, another chat — is a new scope and re-claims attention for a question still waiting. That is the
+  intended read (you returned to the chat that needs you), not just a side effect. It carries no store or
+  transport state.
 - **Hydration** (`hydrate.ts`) — the pure
   `messagesToRuntime(TranscriptMessage[], lastSettlement?)` converter (read-side counterpart of the event
   reducer): rebuilds `{ turns, toolResults, askAnswers, turnIdByMessageIndex }` (a `HydratedRuntime`) from a
   persisted transcript so a reconnecting/second client renders identically to the live path (same `raw`
   result shape). When supplied, the live summary's `lastSettlement` is authoritative; otherwise only the
   final conversational assistant can synthesize an error/length turn. Compacted historical length attempts
-  followed by later messages remain history, not a stale current warning. It also
+  followed by later messages remain history, not a stale current warning. One retry-presentation rule on
+  both paths: pi persists a superseded auto-retry attempt ("keep in session for history") that the live
+  reducer dropped on `auto_retry_start`, so hydration hides an errored assistant message immediately
+  followed by another assistant message — exactly the adjacent shape `_prepareRetry` produces
+  (`isRetriedAttempt`); a terminal failure — errored
+  assistant followed by a user message or nothing — stays visible, its failure reported by the trailing
+  settlement-derived error turn. It also
   returns `turnIdByMessageIndex` (message-position → minted turn id) — the jump anchor map a
   history-search "jump to message" deep link (`chatLocationRequest`, see `store/SPEC.md`) resolves
   against; entries are `null` for a `toolResult`/`custom` message (never its own turn) and for a
@@ -175,7 +202,39 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   transcript's last message is in view without scrolling.
 - **Composer & chrome** — `Composer` (prompt field + send/steer/followUp/abort, `@`-mentions, `/`
   commands + template **slot sessions** (Tab-through placeholders — see the Template slots bullet
-  below), image paste/drop, `openHistory` on its imperative handle → `onHistoryOpen`) plus its props-driven **slash-completion
+  below), image paste/drop — routed through **`imageAttachment.ts`**: `fileToAttachedImage` decodes in
+  the browser and downscales anything over a **1568px long edge** (`fitWithin`; Claude's standard-tier
+  edge — an oversized image in history 400s every later turn once the provider's >20-image 2000px cap
+  kicks in, and pi's own resizer is deliberately off server-side). An image passes through
+  byte-identical only when within pixel bounds **and** a provider-accepted type (png/jpeg/gif/webp)
+  **and** under the provider's **4.5MB encoded-base64 ceiling** (`IMAGE_MAX_BASE64_BYTES`, shared via
+  `contracts` — pi's own headroom under Anthropic's 5MB API limit; the wire carries base64, so the
+  ceiling is measured on `data.length`, with `base64EncodedLength` sizing a raw File before encoding);
+  anything else re-encodes through canvas, walking a **JPEG quality ladder** while the encoding
+  exceeds the ceiling (a within-bounds multi-MB GIF or a small BMP would 400 the request just like an
+  oversized side). An undecodable file falls back to raw **only when its media type is
+  provider-accepted** (`ACCEPTED_IMAGE_TYPES`, shared via `contracts`); undecodable + unsupported
+  (HEIC…) is **refused** (`fileToAttachedImage` → `null`) — raw pass-through would 400 every later
+  turn — and surfaced as a dismissible error chip (`composer-image-error` testid) in the attachment
+  strip, cleared on send. One message's batch is also bounded by the request-wide
+  **`REQUEST_IMAGE_BASE64_BUDGET`** (24MB of base64, headroom under Anthropic's 32MB per-request cap):
+  files that would push the batch over it are refused with the same error-chip surface. The server's
+  `imageGuard` extension is the second line of defense for history. While files are still decoding, a placeholder chip renders
+  (`composer-image-pending` testid) and sends are held (`canSubmit` is the one reading — `submitText`
+  refuses, the send button disables) — a send mid-decode would otherwise go without the image and strand
+  it on the next message. A held send keeps its text: the composer's own gestures leave the draft in
+  place, and `insertAndSubmit` (the overlay's ⌘/Ctrl+Enter, whose text is not in the draft yet) parks it
+  there instead of dropping it. The pending chip shows `filename · W×H` (the picked file's name; mime text appears only in the
+  hydrated-turn fallback when no name survived) (`composer-image` testid +
+  `data-width`/`data-height`/`data-mime` — the `e2e/composer-images.spec.ts` hooks; both chip skins
+  share `FileChip.tsx`). **Chips are bounded, and the label is the only part that gives way**: a chip is
+  `max-w-full` and truncates its `label`, while the icon, the `meta` suffix and the trailing action are
+  shrink-free — filenames are user-controlled, and an unbounded chip would push its own Remove button
+  off a phone viewport (and be clipped by the transcript scroller's `overflow-x-hidden`). So whatever
+  must stay readable at any width goes in `meta`, not `label`: the `· W×H` size, and an attach error's
+  reason (its filename truncates — the reason is what the user can act on, and a phone has no tooltip
+  to fall back to) — and `openHistory` on its
+  imperative handle → `onHistoryOpen`) plus its props-driven **slash-completion
   primitive** (filter/menu/caret + Up/Down, Enter/Tab, Escape), reused by `panels/NewWorkspaceDialog` so
   the two inputs cannot drift; `HistoryOverlay` (the history-recall/search overlay `Composer` opens —
   presentational, driven entirely by `useHistorySearch.ts`'s state + callbacks, plus **Save as template**
@@ -310,7 +369,12 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   `AgentSession.prompt()` substitutes args into `expandedText` before persisting the `role: "user"`
   message, so a `session.getMessages` re-fetch (a reload, or reopening from history) shows the expanded
   text. The one nuance: the web client's own immediate bubble is an **optimistic echo**
-  (`ChatView.onSubmit` → `appendUserMessage`, store-only, appended *before* the transport call resolves) —
+  (`ChatView.onSubmit` → `appendUserMessage`, store-only, appended *before* the transport call resolves;
+  attached images ride along as content blocks so the bubble shows them — `UserTurn` renders image blocks
+  as compact "attached file" chips above the text (no inline preview; click opens the image in a dialog,
+  the diagram-fullscreen pattern). The chip label is the picked file's name, carried on the echo turn as
+  `attachmentNames` (UI-side only — pi's `ImageContent` has no filename), index-aligned with the image
+  blocks; a hydrated turn has no names and falls back to mime-type labels) —
   it shows exactly what was typed (the raw command) until a re-fetch replaces it with pi's real persisted
   record. **The `/` menu merge**
   (`ChatView`): pi's `commands` snapshot (`session.getCommands`, frozen at session-create time) minus its
@@ -506,10 +570,18 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
 - **Plain `↑` recall + history button** — `Composer`'s `recentPrompts` prop (`ChatView`: this chat's own
   user-turn texts via `turnAnchorText`, newest first, deduped **keeping the newest occurrence** — the same
   recency-first ranking rule as the server history index, the atuin/fzf convention) backs a lightweight
-  recall session (`recallIdx`) gated so it can never eat a draft: `↑` only steps in when the field is
+  recall session (`recallIdxRef`) gated so it can never eat a draft: `↑` only steps in when the field is
   **empty** or a recall is already active (older → higher index), `↓` steps newer (past the newest
   restores `""`), any diverging edit or a submit exits the session, and the recalled text lands with the
-  caret at its end. A `History`-icon button (`data-testid="history-open"`, `aria-label="Search history"`,
+  caret at its end. The session index is a **ref, never state**: nothing renders from it, and stepping
+  writes the index *here* while the draft goes through `onChange` to the **parent's** store, so as state
+  the two could commit in separate passes. In that window the textarea already showed the recalled text
+  while still carrying the previous render's handlers and their stale index — a second `↑` re-recalled the
+  same entry instead of stepping, and an edit failed to end the session, so the next `↑`/`↓` stepped from
+  the live index and **overwrote what the user had just typed** (the loss `replaceDraft` guards against on
+  the insert paths, arriving through the keyboard path instead). A ref reads at its last written value, so
+  commit ordering cannot enter into it. Handlers take **one snapshot per event** — the ref cannot change
+  inside a synchronous handler, and one read stays narrowable where repeated `.current` reads do not. A `History`-icon button (`data-testid="history-open"`, `aria-label="Search history"`,
   always rendered next to send) calls the same `openHistory` the global `Ctrl+R` reaches — the tap path
   on mobile, a discoverability affordance on desktop.
 - **Chat TODO plan** — the chat's `pi-todos` list surfaced **only in the chat** (engine:
@@ -610,7 +682,8 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   from *any* consumer. `model.list` answers from *before* the
   detached refresh it triggers, so it is never a basis for concluding a model is gone);
   `react-markdown` / `remark-gfm` / `shiki` (via `lib/highlighter`); `mermaid`
-  (**lazy, `tools/visualize` only**); `react-virtuoso`; `lucide-react`; `components/ui`; `lib`.
+  (**lazy, `tools/visualize` only** — `Markdown` consumes the `MermaidView` *component*, never the
+  package); `react-virtuoso`; `lucide-react`; `components/ui`; `lib`.
 - **Forbidden:** value-importing any `pi` package; a **presentational** renderer importing
   `store`/`transport` (only the app-integration files enumerated above may — keep the renderers reusable).
 - **`ChatView`** is the primary app-integration file: wires this session's runtime
@@ -642,8 +715,11 @@ indexed by `toolCallId` in `toolResults`; `ask-user-answers` custom messages ind
 the per-message `streaming` flag on new-message start and the final `agent_settled` (at most one turn is
 ever flagged). The session remains live across attempt-level `agent_end` events. The loader
 is a **single footer** (`StreamIndicator`: typing-dots + a phase label from the pure `streamStatus`
-deriver — `working` → `thinking` → `running-tool` → `writing`) — not a per-turn cursor — so it can't
-duplicate and it fills the post-send gap. The activity fold's live ticker is a *status* line (spinner,
+deriver — `working` → `thinking` → `running-tool` → `writing`, plus `compacting` while the transcript's
+trailing turn is a running compaction) — not a per-turn cursor — so it can't
+duplicate and it fills the post-send gap. Outside the streaming window (a manual compact, or the
+pre-prompt compaction pi runs inside `prompt()` before `agent_start`) the footer is absent by design —
+the running `CompactionNotice` row itself carries the spinner, so the beat is never dead air. The activity fold's live ticker is a *status* line (spinner,
 like a running card header), not a second loader. `data-testid="stream-indicator"` + `data-phase` make
 the lifecycle assertable.
 

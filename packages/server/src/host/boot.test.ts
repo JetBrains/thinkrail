@@ -1,23 +1,42 @@
-import { afterEach, expect, test } from "bun:test";
+import { afterEach, beforeAll, beforeEach, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
+import { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { isPortFree } from "@thinkrail/shared/freePort";
+import { configurePiRuntime, configurePiRuntimeFactory } from "../agent";
+import { resetJbcentralStateForTests } from "../auth";
 import { type BootedHost, bootHost } from "./boot";
 
-// bootHost registers a SIGINT/SIGTERM handler per call; a handful of boots stays well under the warn
-// threshold, but lift the cap so a noisy run never trips MaxListenersExceededWarning.
 process.setMaxListeners(50);
 
 const booted: BootedHost[] = [];
 const tmpDirs: string[] = [];
+let testRuntime: ModelRuntime;
 
-afterEach(() => {
-	while (booted.length) booted.pop()?.server.stop();
-	while (tmpDirs.length) rmSync(tmpDirs.pop() as string, { recursive: true, force: true });
+beforeAll(async () => {
+	testRuntime = await ModelRuntime.create({
+		credentials: new InMemoryCredentialStore(),
+		modelsPath: null,
+		allowModelNetwork: false,
+	});
 });
 
-/** Bind an OS-assigned port, then release it — a port known to be free for the next bind. */
+beforeEach(async () => {
+	await resetJbcentralStateForTests();
+	configurePiRuntime(null);
+	configurePiRuntimeFactory(async () => testRuntime);
+});
+
+afterEach(async () => {
+	while (booted.length) booted.pop()?.server.stop();
+	while (tmpDirs.length) rmSync(tmpDirs.pop() as string, { recursive: true, force: true });
+	await resetJbcentralStateForTests();
+	configurePiRuntimeFactory();
+	configurePiRuntime(null);
+});
+
 function grabFreePort(): number {
 	const probe = Bun.serve({ port: 0, hostname: "localhost", fetch: () => new Response("x") });
 	const port = probe.port;
@@ -45,7 +64,6 @@ test('portMode "exact" binds the requested port', async () => {
 });
 
 test('portMode "free" scans upward past a taken port', async () => {
-	// Hold a port open so the requested one is occupied at boot.
 	const holder = Bun.serve({ port: 0, hostname: "localhost", fetch: () => new Response("x") });
 	const taken = holder.port as number;
 	try {
@@ -76,7 +94,6 @@ test("serves the SPA from staticDir with index.html fallback", async () => {
 	expect(root.headers.get("content-type") ?? "").toContain("text/html");
 	expect(await root.text()).toContain("<title>spa</title>");
 
-	// Unknown client-side route falls back to index.html (SPA), not 404.
 	const deep = await fetch(`http://localhost:${b.port}/some/client/route`);
 	expect(deep.status).toBe(200);
 	expect(await deep.text()).toContain("<title>spa</title>");

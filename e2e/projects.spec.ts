@@ -4,6 +4,7 @@ import { basename, join } from "node:path";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import {
 	createWorkspaceViaDialog,
+	defaultWorkspaceRow,
 	openAppFresh,
 	openFixtureProject,
 	stagePlainFolder,
@@ -41,7 +42,6 @@ test("opens a git repo as a project via the directory picker", async ({ page }) 
 	await page.goto("/");
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 
-	// "Open project" invokes the host's native directory picker — stubbed to E2E_FIXTURE_REPO in e2e.
 	await page.getByTestId("add-project-menu").click();
 	await page.getByTestId("menu-open-project").click();
 
@@ -53,29 +53,74 @@ test("opens a git repo as a project via the directory picker", async ({ page }) 
 test("opening a non-git folder offers to initialise a repo, then opens it end-to-end", async ({
 	page,
 }) => {
-	// A plain (non-git) folder for the stubbed picker to return.
 	stagePlainFolder();
 	await page.goto("/");
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 
-	// "Open project" — the folder isn't a repo, so instead of failing silently we're asked to initialise.
 	await page.getByTestId("add-project-menu").click();
 	await page.getByTestId("menu-open-project").click();
 	const confirmInit = page.getByTestId("confirm-init-repo");
 	await expect(confirmInit).toBeVisible();
 	await confirmInit.click();
 
-	// The initialised folder now shows up as a project…
 	await expect(
 		page.getByTestId("project-item").filter({ hasText: basename(E2E_PLAIN_DIR) }),
 	).toBeVisible();
 
-	// …and it's usable end-to-end: a workspace (git worktree) can be created, which needs the HEAD the
-	// initial commit gave the fresh repo.
 	await createWorkspaceViaDialog(page);
-	// The created *worktree* row — `.first()` of all rows would match the pinned Default and pass
-	// even if the new workspace never rendered.
 	await expect(worktreeRows(page).first()).toBeVisible();
+});
+
+test("rail expansion is per-browser view state that survives a reload", async ({ page }) => {
+	await openFixtureProject(page);
+	const row = page.getByTestId("project-item").filter({ hasText: "sample-project" });
+	const expand = row.getByTestId("project-expand");
+
+	await expect(expand).toHaveAttribute("data-expanded", "true");
+	await expect(defaultWorkspaceRow(page)).toBeVisible();
+
+	await page.reload();
+	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+	await expect(expand).toHaveAttribute("data-expanded", "true");
+	await expect(defaultWorkspaceRow(page)).toBeVisible();
+
+	await expand.click();
+	await expect(expand).toHaveAttribute("data-expanded", "false");
+	await page.reload();
+	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+	await expect(expand).toHaveAttribute("data-expanded", "false");
+	await expect(defaultWorkspaceRow(page)).toHaveCount(0);
+});
+
+test("activating a workspace in one project keeps the other project's rail expansion", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	seedSecondRepo();
+	await page.getByTestId("add-project-menu").click();
+	await page.getByTestId("menu-open-project").click();
+
+	const fixtureExpand = page
+		.getByTestId("project-item")
+		.filter({ hasText: "sample-project" })
+		.getByTestId("project-expand");
+	const secondExpand = page
+		.getByTestId("project-item")
+		.filter({ hasText: "second-project" })
+		.getByTestId("project-expand");
+	await expect(secondExpand).toHaveAttribute("data-expanded", "true");
+	await expect(fixtureExpand).toHaveAttribute("data-expanded", "true");
+
+	const fixtureDefaultRow = page
+		.locator("li")
+		.filter({ has: page.getByTestId("project-item").filter({ hasText: "sample-project" }) })
+		.locator('[data-testid="workspace-item"][data-kind="default"]');
+	await fixtureDefaultRow.click();
+	await expect(fixtureDefaultRow).toHaveAttribute("data-active", "true");
+	await expect(page.getByTestId("center-tabs")).toBeVisible();
+
+	await expect(secondExpand).toHaveAttribute("data-expanded", "true");
+	await expect(fixtureExpand).toHaveAttribute("data-expanded", "true");
 });
 
 test("project context actions stay compact and close/reopen is lossless across clients", async ({
@@ -96,7 +141,6 @@ test("project context actions stay compact and close/reopen is lossless across c
 	await expect(fixtureRow.getByTestId("close-project")).toHaveCount(0);
 	await expect(fixtureRow.getByLabel(/project actions/i)).toHaveCount(0);
 
-	// Collapsed-only worktree count stays immediately before the fixed right-edge Create workspace action.
 	await expand.click();
 	const count = fixtureRow.getByTestId("project-workspace-count");
 	await expect(count).toHaveText("1");
@@ -104,7 +148,6 @@ test("project context actions stay compact and close/reopen is lossless across c
 		await count.evaluate((element) => element.nextElementSibling?.getAttribute("data-testid")),
 	).toBe("add-workspace");
 
-	// Standard keyboard context-menu gestures expose the same actions without requiring a pointer.
 	const projectActions = page.getByTestId("project-actions");
 	await fixtureName.focus();
 	await page.keyboard.press("Shift+F10");
@@ -117,8 +160,6 @@ test("project context actions stay compact and close/reopen is lossless across c
 	await page.keyboard.press("Escape");
 	await expect(fixtureName).toBeFocused();
 
-	// Right-click anchors at the pointer, highlights the row, and never performs the name button's
-	// Project-Home navigation. Once open, standard menu keys remain available.
 	const fixtureBox = await fixtureRow.boundingBox();
 	if (!fixtureBox) throw new Error("Fixture project row has no bounding box");
 	const pointer = { x: fixtureBox.x + 72, y: fixtureBox.y + fixtureBox.height / 2 };
@@ -153,7 +194,6 @@ test("project context actions stay compact and close/reopen is lossless across c
 	await expect(fixtureName).toBeFocused();
 	await expect(fixtureRow).toHaveAttribute("data-menu-open", "false");
 
-	// Moving before the touch threshold cancels; a deliberate ~700ms hold opens at the touch point.
 	await fixtureRow.dispatchEvent("pointerdown", {
 		pointerType: "touch",
 		pointerId: 1,
@@ -208,14 +248,12 @@ test("project context actions stay compact and close/reopen is lossless across c
 	await page.keyboard.press("Escape");
 	await expect(fixtureName).toBeFocused();
 
-	// The duplicate menu action enters the exact same New Workspace dialog as the persistent `+`.
 	await openProjectActions(page, fixtureRow);
 	await page.getByTestId("project-menu-create-workspace").click();
 	await expect(page.getByTestId("new-workspace-dialog")).toBeVisible();
 	await page.keyboard.press("Escape");
 	await expect(fixtureName).toBeFocused();
 
-	// Open a second repo so closing the current project has a deterministic next-Project-Home fallback.
 	const secondRepo = seedSecondRepo();
 	await page.getByTestId("add-project-menu").click();
 	await page.getByTestId("menu-open-project").click();
@@ -246,7 +284,6 @@ test("project context actions stay compact and close/reopen is lossless across c
 	await expect(secondRow).toBeVisible();
 	await expect(secondName).toBeFocused();
 
-	// Backdrop and Escape are the same safe cancellation path as the explicit Cancel button.
 	await openProjectActions(page, secondRow);
 	await page.getByTestId("project-menu-close").click();
 	await page.getByTestId("dialog-overlay").click({ position: { x: 4, y: 4 } });
@@ -271,8 +308,6 @@ test("project context actions stay compact and close/reopen is lossless across c
 	await expect(page.getByTestId("center-tabs")).toHaveCount(0);
 	await expect(fixtureName).toBeFocused();
 
-	// Close the final open project: both clients converge on the no-project Welcome and local focus moves
-	// to Add project because the source row disappeared.
 	const remainingRow = page.getByTestId("project-item").filter({ hasText: "sample-project" });
 	await openProjectActions(page, remainingRow);
 	await page.getByTestId("project-menu-close").click();
@@ -283,8 +318,6 @@ test("project context actions stay compact and close/reopen is lossless across c
 	await expect(observer.getByTestId("welcome-title")).toHaveText("ThinkRail");
 	await expect(page.getByTestId("add-project-menu")).toBeFocused();
 
-	// Recents contains open + closed records. Reopening uses the same project id, lands at Home, and the
-	// worktree created before close is still associated and listed after the rail expands.
 	await page.getByTestId("add-project-menu").click();
 	const fixtureRecent = page.getByRole("menuitem").filter({ hasText: E2E_FIXTURE_REPO });
 	await expect(fixtureRecent).toBeVisible();

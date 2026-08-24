@@ -1,5 +1,3 @@
-// The workflow-test harness barrel — the only import surface for spec files (module rule: siblings
-// import through the barrel). Architecture + contracts: ../SPEC.md (module-workflow-tests).
 export { type Check, type CheckContext, type CheckResult, checks, runChecks } from "./checks";
 export {
 	type AnsweredRound,

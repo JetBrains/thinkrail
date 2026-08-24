@@ -12,7 +12,6 @@ const recordingSpawn: SpawnFn = (cmd) => {
 	spawnCalls.push(cmd);
 };
 
-/** A fake `which`: resolves exactly the given bin names to themselves-as-a-path, everything else absent. */
 function whichOnly(...installed: string[]): WhichFn {
 	return (bin) => (installed.includes(bin) ? `/usr/bin/${bin}` : null);
 }

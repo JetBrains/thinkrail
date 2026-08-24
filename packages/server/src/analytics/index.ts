@@ -1,7 +1,3 @@
-/**
- * Anonymous usage analytics (see SPEC.md — the privacy contract). Consumed by `host` ONLY: every
- * `track()` call site lives there, feature modules never know analytics exists.
- */
 export {
 	type AnalyticsEvent,
 	type BuildKind,

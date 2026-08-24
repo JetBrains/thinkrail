@@ -1,9 +1,6 @@
 import { expect, test } from "bun:test";
 import { parseReviewPackage, reviewPackageLabel } from "./reviewPackage";
 
-// A VERBATIM `renderPackage` output (packages/server/src/reviews/packageRender.ts) — the parser is
-// pinned against the real renderer, not a hand-built lookalike: a hand fixture drifted once (rv_ vs
-// rev_ ids) and silently turned every summary back into raw XML.
 const REAL_PACKAGE =
 	'The user left the following review comment. It is a structured review item anchored to the workspace\'s files.\n\n<review id="rev_ab12cd34" branch="feature" base="main@deadbeefcafe" comments="1">\n\n<comment id="rc_11aa22bb" kind="inline" path="src/a.ts" side="worktree" lines="2-2" anchor="anchored">\n<fragment>\nconst two = 2;\n</fragment>\n<context lines="1-4">\nconst one = 1;\nconst two = 2;\nconst three = 3;\n\n</context>\n<text>\nRename this.\n</text>\n</comment>\n\n<instructions>\nAddress each review comment above.\n- Edit the worktree files directly with your normal tools; read any file you need — the fragments above are excerpts, not the whole picture.\n- After you have addressed a comment (by an edit, or by an answer when no change is needed), call resolve_comment with its id and a one-line note of what you did.\n- If a comment is unclear or you disagree, reply in the conversation instead of editing, and do NOT resolve it.\n- A comment marked outdated includes the fragment as it was when the comment was written — verify against the current file first.\n- A comment with side="base" points at the PRE-change version of the file: its lines and fragment index base-ref, not the worktree. It is a remark about what the change removed or replaced — find the corresponding place in the current file before editing.\n</instructions>\n</review>';
 
@@ -73,7 +70,6 @@ test("a multi-line body and a line range survive into the item (L2–4), fragmen
 test("ordinary user text — even text QUOTING a review tag mid-line — is not a package", () => {
 	expect(parseReviewPackage("please fix the tests")).toBeNull();
 	expect(parseReviewPackage('see `<review id="rev_x" comments="1">` in the docs')).toBeNull();
-	// A header with no comment items is not a package either.
 	expect(parseReviewPackage(pkg([]))).toBeNull();
 });
 

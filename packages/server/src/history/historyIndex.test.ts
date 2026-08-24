@@ -44,17 +44,10 @@ describe("HistoryIndex.search", () => {
 			labels: noLabels,
 		});
 
-		// AND matching: "unrelated note about lunch" (no "deploy") never appears.
-		// messages is assistant-only, so only sess-a's assistant line qualifies; the two
-		// user-role "deploy ... service" hits surface as prompts instead.
 		expect(result.messages.map((m) => m.timestamp)).toEqual([3000]);
 		expect(result.messages.map((m) => m.sessionId)).toEqual(["sess-a"]);
-		// Cross-session recency still holds for prompts: sess-b's t=2000 sorts ahead of sess-a's
-		// t=1000, even though sess-a's file was written first — proves the merge is global, not
-		// grouped per session.
 		expect(result.prompts.map((p) => p.timestamp)).toEqual([2000, 1000]);
 		expect(result.prompts.map((p) => p.sessionId)).toEqual(["sess-b", "sess-a"]);
-		// Tiny fixture — the cold build finishes well inside the 150ms budget.
 		expect(result.indexing).toBe(false);
 	});
 
@@ -145,9 +138,6 @@ describe("HistoryIndex.search", () => {
 			labels: noLabels,
 		});
 
-		// prompts (user-role) and messages (assistant-role) are counted/capped independently —
-		// 3 of each match "widget", so each section's total is 3 (not 6), and each cap keeps its own
-		// newest 2, proving the role filter and the pagination cap compose correctly.
 		expect(result.prompts).toHaveLength(2);
 		expect(result.promptTotal).toBe(3);
 		expect(result.prompts.map((p) => p.timestamp)).toEqual([3000, 2000]);
@@ -167,7 +157,6 @@ describe("HistoryIndex.search", () => {
 		const first = await index.search({ query: "prompt", filter: allowAll, labels: noLabels });
 		expect(first.prompts.map((p) => p.text)).toEqual(["original prompt one"]);
 
-		// Append a new message entry onto the same file — mtime naturally bumps on write.
 		appendFileSync(
 			path,
 			`${JSON.stringify({
@@ -179,16 +168,11 @@ describe("HistoryIndex.search", () => {
 			})}\n`,
 		);
 
-		// Pass the 2000ms revalidation throttle so the next search triggers a re-list/re-parse.
 		await Bun.sleep(2100);
 
-		// Warm revalidation is non-blocking: this search kicks off the background refresh but returns the
-		// still-current index, so the freshly appended line hasn't landed yet.
 		const second = await index.search({ query: "prompt", filter: allowAll, labels: noLabels });
 		expect(second.prompts.map((p) => p.text)).toEqual(["original prompt one"]);
 
-		// Once the background refresh settles, a follow-up search reflects the appended line. Poll rather
-		// than sleep a fixed amount, since the refresh completes off the search's critical path.
 		let third = second;
 		for (let i = 0; i < 100 && third.prompts.length < 2; i++) {
 			await Bun.sleep(20);
@@ -211,20 +195,10 @@ describe("HistoryIndex.search", () => {
 		expect(result.prompts).toHaveLength(1);
 		expect(result.prompts[0]?.messageIndex).toBe(0);
 		expect(result.prompts[0]?.anchorText).toBe(longText.slice(0, 120));
-		// messages is assistant-only — a user-role hit never gets a separate message hit; the
-		// location it used to carry now lives on the prompt hit above instead.
 		expect(result.messages).toHaveLength(0);
 		expect(result.messageTotal).toBe(0);
 	});
 
-	// R1 step 0 (task-R1R2-brief.md): the web zoomed-stage preview pane renders a message hit's FULL
-	// text, not its truncated `snippet`. `search()`'s message-hit construction spreads the same `hit`
-	// object it builds for prompts (`{ ...hit, role, snippet, messageIndex, anchorText }`) — `text` is
-	// never overwritten in that spread, so it already carries `entry.text` (the extractor's full,
-	// uncapped text) unchanged. This pins that invariant with an **assistant**-role message,
-	// deliberately: an assistant entry can never become a `promptCandidate` (only `role === "user"`
-	// does), so a passing assertion here can only be explained by the message-hit-specific construction
-	// path itself carrying the full text — not by some accidental aliasing with the prompts branch.
 	test("(h) an assistant-text match produces a message hit — full text, snippet, anchorText", async () => {
 		const longText = `intro ${"padding ".repeat(40)}needle-marker ${"more-padding ".repeat(40)}`;
 		writeFixtureSession(dir, {
@@ -249,16 +223,11 @@ describe("HistoryIndex.search", () => {
 		expect(result.messages[0]?.text.length).toBeGreaterThan(
 			result.messages[0]?.snippet.length ?? 0,
 		);
-		// Confirms the fixture's assistant-only setup: no prompt hit exists to have accidentally supplied
-		// `.text` instead.
 		expect(result.prompts).toHaveLength(0);
 	});
 
-	// Pins the fix for the truncation finding: a hit's `text` IS what recall inserts and what the
-	// overlay's preview shows as the whole prompt, so a long pasted-log prompt must round-trip in full
-	// and a term past any would-be cutoff must stay searchable.
 	test("(i) a prompt far beyond 4k chars round-trips in full, and its tail is searchable", async () => {
-		const big = `${"log-line ".repeat(1000)}rare-tail-needle`; // ~9k chars, needle at the very end
+		const big = `${"log-line ".repeat(1000)}rare-tail-needle`;
 		writeFixtureSession(dir, {
 			id: "sess-a",
 			cwd: "/repo/a",
@@ -276,13 +245,9 @@ describe("HistoryIndex.search", () => {
 		expect(result.prompts[0]?.text).toBe(big);
 	});
 
-	// Pins the rewritten discovery walk (no `SessionManager.listAll()`): a no-arg index must find files
-	// in pi's real default layout — `<agentDir>/sessions/<encoded-cwd>/*.jsonl`, one subdir level — with
-	// the agent dir resolved live from `PI_CODING_AGENT_DIR` (the same live-read `getAgentDir()` behavior
-	// the e2e host relies on; see SPEC.md).
 	test("(j) default layout: a no-arg index discovers per-cwd subdirectories under the agent dir", async () => {
 		const prev = process.env.PI_CODING_AGENT_DIR;
-		process.env.PI_CODING_AGENT_DIR = dir; // `dir` acts as the agent dir, not a flat session dir
+		process.env.PI_CODING_AGENT_DIR = dir;
 		try {
 			writeFixtureSession(defaultSessionDirFor(dir, "/repo/a"), {
 				id: "sess-a",

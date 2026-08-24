@@ -2,11 +2,6 @@ import { createHighlighterCore, type HighlighterCore } from "shiki/core";
 import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
 import { THINKRAIL_SHIKI_THEME, THINKRAIL_SHIKI_THEME_NAME } from "@/themes";
 
-// Shared shiki highlighter for chat code blocks: the JS regex engine (no WASM), a curated language set,
-// and one generic ThinkRail theme whose TextMate colors are live CSS variables. It stays behind the lazy
-// highlighter import; a theme swap changes those variables, so existing markup follows without another
-// highlight pass or a per-theme package import.
-
 const CANONICAL = new Set([
 	"typescript",
 	"tsx",
@@ -22,7 +17,6 @@ const CANONICAL = new Set([
 	"yaml",
 ]);
 
-// Common fence tags → the canonical grammar name loaded above.
 const ALIAS: Record<string, string> = {
 	ts: "typescript",
 	js: "javascript",
@@ -59,7 +53,6 @@ function getHighlighter(): Promise<HighlighterCore> {
 	return highlighterPromise;
 }
 
-/** Highlight `code` as `lang` → themed HTML, or `null` for an unknown language / failure (plain fallback). */
 export async function highlightCode(code: string, lang: string): Promise<string | null> {
 	const key = lang.toLowerCase();
 	const canonical = ALIAS[key] ?? key;

@@ -1,0 +1,31 @@
+---
+import "../styles.css";
+---
+
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="theme-color" content="#171719" />
+<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+<!-- Pre-paint theme guard: the inline twin of src/theme.ts (it cannot import modules). Saved
+     explicit choice wins (legacy darcula/gruvbox values normalize to dark), else OS preference. -->
+<script is:inline>
+	try {
+		const saved = localStorage.getItem("thinkrail-site-theme");
+		const theme =
+			saved === "light"
+				? "light"
+				: saved
+					? "dark"
+					: window.matchMedia("(prefers-color-scheme: light)").matches
+						? "light"
+						: "dark";
+		document.documentElement.setAttribute("data-theme", theme);
+	} catch {}
+</script>
+<script>
+	import { initAnalytics } from "../analytics";
+	import { initGtm } from "../gtm";
+
+	initAnalytics();
+	initGtm();
+</script>

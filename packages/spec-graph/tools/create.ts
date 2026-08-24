@@ -1,5 +1,3 @@
-// spec_create — a new spec file with scaffolded frontmatter and a heading-only body stub.
-
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { StringEnum } from "@earendil-works/pi-ai";
@@ -54,7 +52,6 @@ export function registerSpecCreate(pi: ExtensionAPI): void {
 				return errorResult(`Spec id "${params.id}" is already in use.`);
 			}
 
-			// Build in FIELD_ORDER (serializeFrontmatter emits in key order): id, type, status, title, …
 			const fm: Frontmatter = { [FIELDS.id]: params.id, [FIELDS.type]: params.type };
 			if (params.status !== undefined) fm[FIELDS.status] = params.status;
 			fm[FIELDS.title] = params.title;

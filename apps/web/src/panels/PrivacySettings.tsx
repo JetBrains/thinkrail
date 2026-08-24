@@ -2,13 +2,6 @@ import { cn } from "@/lib";
 import { toast, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
 
-/**
- * The "Privacy" settings section: the anonymous-usage-analytics toggle. Server-synced — flipping the
- * switch fires `settings.update { analyticsEnabled }` and the UI converges on the host's
- * `settings.changed` broadcast (no optimistic apply), the same pattern as the theme picker. Only this
- * boolean ever crosses the wire: events are emitted host-side and the anonymous install id never
- * leaves the host (see the server analytics module's spec).
- */
 export function PrivacySettings() {
 	const enabled = useAppStore((s) => s.analyticsEnabled);
 

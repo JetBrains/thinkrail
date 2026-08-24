@@ -2,21 +2,11 @@ import { Send, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { ReviewThreadActions, ReviewThreadData } from "./reviewWidgets";
 
-/** Auto-size a textarea to its wrapped content (the in-place draft editor grows with typing). */
 function grow(el: HTMLTextAreaElement): void {
 	el.style.height = "auto";
 	el.style.height = `${el.scrollHeight}px`;
 }
 
-/**
- * The in-flow review comment card (the inline-edit branch's action-box presentation, adopted for
- * comments): a box sitting IN the document flow directly below its anchor — spliced between markdown
- * segments in the preview, held by a Monaco view zone in source/diff — with a status-colored left bar
- * (violet = draft, blue = sent). A DRAFT's body is **editable in place** until it's sent (click in,
- * type; blur or Cmd/Ctrl+Enter saves, Esc reverts) and carries Send + Delete (DRAFT-only — once
- * sent, a comment is a record; no rollback anywhere in review); sent/outdated cards are
- * passive read-only markers. Wears the `.review-thread*` skin the Monaco DOM twin uses.
- */
 export function ReviewThreadCard({
 	thread,
 	actions,
@@ -26,10 +16,6 @@ export function ReviewThreadCard({
 }) {
 	const [busy, setBusy] = useState(false);
 	const [draftText, setDraftText] = useState(thread.body);
-	// Reconcile the field with a `review.changed` push (another client editing this draft): adopt the
-	// new body whenever the field is NOT dirty — an unsaved local edit in flight is kept (it's the
-	// user's newest intent; their save then lands as the usual last-writer update). Render-time state
-	// adjustment (react.dev "adjusting state when a prop changes"), keyed on the last body we synced.
 	const [syncedBody, setSyncedBody] = useState(thread.body);
 	if (syncedBody !== thread.body) {
 		setSyncedBody(thread.body);
@@ -40,9 +26,6 @@ export function ReviewThreadCard({
 		setBusy(true);
 		action(thread.id).catch(() => setBusy(false));
 	};
-	// Auto-size on mount and on every programmatic body change (a push-adopted body never fires the
-	// textarea's own change handler). Guarded on the committed value so the measurement always reads
-	// the text it is sizing for.
 	useEffect(() => {
 		const el = editRef.current;
 		if (el && el.value === draftText) grow(el);
@@ -50,7 +33,7 @@ export function ReviewThreadCard({
 	const saveEdit = () => {
 		const next = draftText.trim();
 		if (!next || next === thread.body) {
-			setDraftText(thread.body); // empty/unchanged — revert, never delete from here
+			setDraftText(thread.body);
 			return;
 		}
 		actions.onUpdateComment(thread.id, next).catch(() => setDraftText(thread.body));
@@ -97,7 +80,6 @@ export function ReviewThreadCard({
 				)}
 			</div>
 			{thread.status === "draft" ? (
-				// Editable in place until sent: click in, type; blur / Cmd+Enter saves, Esc reverts.
 				<textarea
 					ref={editRef}
 					data-testid="review-thread-edit"

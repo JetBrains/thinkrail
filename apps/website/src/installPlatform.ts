@@ -7,11 +7,6 @@ export interface BrowserPlatformHints {
 	maxTouchPoints?: number | undefined;
 }
 
-/**
- * Resolve only desktop platforms for which ThinkRail publishes an installer. Mobile and ChromeOS
- * browsers deliberately return undefined: their user agents often contain "Mac" or "Linux", but
- * neither can run the corresponding desktop binary.
- */
 export function detectInstallPlatform(hints: BrowserPlatformHints): InstallPlatform | undefined {
 	const platform = hints.userAgentDataPlatform?.trim() || hints.platform?.trim() || "";
 	const userAgent = hints.userAgent ?? "";

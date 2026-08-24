@@ -9,19 +9,11 @@ function clamp(scale: number): number {
 	return Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale));
 }
 
-/**
- * A scrollable, zoomable, drag-to-pan viewport for a rendered SVG string — used inside the diagram
- * full-screen dialog. Plain wheel / trackpad scrolls (both axes); Ctrl/⌘ + wheel and the buttons zoom;
- * dragging with the mouse pans. Zoom drives the SVG's rendered width (via a CSS var), so the overflow
- * container gets real scrollbars in both directions when the diagram is larger than the viewport.
- */
 export function PanZoomView({ svg }: { svg: string }) {
 	const [scale, setScale] = useState(1);
 	const scrollRef = useRef<HTMLDivElement>(null);
 	const drag = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
 
-	// Ctrl/⌘ + wheel zooms. Registered natively (non-passive) so we can preventDefault the browser's
-	// page-zoom; plain wheel is left alone so it scrolls the container.
 	useEffect(() => {
 		const el = scrollRef.current;
 		if (!el) return;
@@ -35,7 +27,7 @@ export function PanZoomView({ svg }: { svg: string }) {
 	}, []);
 
 	const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-		if (e.pointerType !== "mouse") return; // touch/pen use native scrolling
+		if (e.pointerType !== "mouse") return;
 		const el = scrollRef.current;
 		if (!el) return;
 		drag.current = { x: e.clientX, y: e.clientY, left: el.scrollLeft, top: el.scrollTop };

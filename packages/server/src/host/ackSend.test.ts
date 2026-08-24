@@ -8,7 +8,7 @@ test("a rejection inside the window rethrows (the client must see a refused send
 test("a resolution inside the window acks immediately", async () => {
 	const start = Date.now();
 	await ackSend(Promise.resolve(), 5_000);
-	expect(Date.now() - start).toBeLessThan(1_000); // did not sit out the window
+	expect(Date.now() - start).toBeLessThan(1_000);
 });
 
 test("a still-running turn is acked at the window; its later rejection is swallowed", async () => {
@@ -16,7 +16,7 @@ test("a still-running turn is acked at the window; its later rejection is swallo
 	const run = new Promise<void>((_, reject) => {
 		rejectRun = reject;
 	});
-	await ackSend(run, 20); // resolves at the window — the turn is simply still going
-	rejectRun(new Error("late turn fault")); // must NOT become an unhandled rejection
+	await ackSend(run, 20);
+	rejectRun(new Error("late turn fault"));
 	await new Promise((r) => setTimeout(r, 10));
 });

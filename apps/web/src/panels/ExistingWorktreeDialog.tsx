@@ -12,7 +12,6 @@ import {
 } from "@/components/ui/dialog";
 import { errorText, getTransport } from "../transport";
 
-/** Choose one checkout from Git's registry and attach it without mutating or taking ownership of it. */
 export function ExistingWorktreeDialog({
 	open,
 	projectId,
@@ -84,8 +83,6 @@ export function ExistingWorktreeDialog({
 		}
 	};
 
-	// Selecting a row commits a server mutation that cannot be rolled back safely. Keep the modal in place
-	// until that request settles rather than accepting a dismissal that a late success would contradict.
 	const handleOpenChange = (nextOpen: boolean) => {
 		if (!nextOpen && openingPath !== null) return;
 		onOpenChange(nextOpen);
@@ -156,7 +153,7 @@ export function ExistingWorktreeDialog({
 									data-testid="existing-worktree-candidate"
 									data-status={candidate.status}
 									onClick={() => void openCandidate(candidate)}
-									className="flex w-full items-start gap-12 rounded-[var(--radius-sm)] border border-border-default bg-control-bg p-12 text-left outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-60"
+									className="flex w-full items-start gap-12 rounded-[var(--radius-sm)] border border-border-default bg-control-bg p-12 text-left outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:border-control-disabled-border disabled:bg-control-disabled-bg disabled:text-control-disabled-text"
 								>
 									<div className="mt-2 flex size-28 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-container-elevated-bg text-text-muted">
 										{opening ? (

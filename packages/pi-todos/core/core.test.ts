@@ -10,7 +10,6 @@ function tempRoot(): string {
 	return mkdtempSync(join(tmpdir(), "pi-todos-"));
 }
 
-/** A store for the fixed test session under `root`. */
 function store(root: string): TodoStore {
 	return new TodoStore(root, SESSION);
 }
@@ -32,7 +31,6 @@ test("add persists to the session file and assigns id + timestamps + pending sta
 		expect(todo.status).toBe("pending");
 		expect(todo.createdAt).toBeTruthy();
 		expect(existsSync(join(root, storeRel(SESSION)))).toBe(true);
-		// A fresh store instance sees the persisted item (file is the source of truth).
 		expect(store(root).list()).toHaveLength(1);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
@@ -137,9 +135,7 @@ test("add places an item into a named group (created if new) or loose", () => {
 		expect(plan.groups).toHaveLength(1);
 		expect(plan.groups[0]?.title).toBe("Auth");
 		expect(plan.groups[0]?.todos).toHaveLength(2);
-		expect(s.list()).toHaveLength(3); // flat across loose + groups
-		// Display order (flat/list): the groups' steps first, the loose lane (user adds) LAST — so a
-		// mid-task user add is read after the agent's current work, never before it.
+		expect(s.list()).toHaveLength(3);
 		expect(s.list().map((t) => t.title)).toEqual(["grouped", "grouped 2", "loose"]);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
@@ -157,9 +153,9 @@ test("done items in a group rejoin it across a re-plan; a dropped group's done i
 
 		const plan = s.replaceAll({ groups: [{ title: "Import", todos: [{ title: "next step" }] }] });
 		const importGroup = plan.groups.find((g) => g.title === "Import");
-		expect(importGroup?.todos.map((t) => t.title)).toContain("kept done"); // rejoins its group
-		expect(plan.groups.find((g) => g.title === "Gone")).toBeUndefined(); // dropped group is gone
-		expect(plan.todos.map((t) => t.title)).toContain("orphan done"); // its done item survives, loose
+		expect(importGroup?.todos.map((t) => t.title)).toContain("kept done");
+		expect(plan.groups.find((g) => g.title === "Gone")).toBeUndefined();
+		expect(plan.todos.map((t) => t.title)).toContain("orphan done");
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}
@@ -169,7 +165,6 @@ test("literal \\uXXXX escapes in titles/notes/group names are decoded, not shown
 	const root = tempRoot();
 	try {
 		const s = store(root);
-		// A model double-escaped the backslash, so the arg is the literal 6-char text "Б…".
 		const todo = s.add({
 			title: "\\u0411\\u041b\\u041e\\u041a",
 			note: "\\u043d\\u043e\\u0442\\u0435",
@@ -189,11 +184,9 @@ test("user-authored text is stored verbatim — \\uXXXX is NOT decoded for user 
 	const root = tempRoot();
 	try {
 		const s = store(root);
-		// The human legitimately typed the literal escape text; decoding it would silently corrupt it.
 		const todo = s.add({ title: "about \\u0041", note: "\\u0042", origin: "user" });
 		expect(todo.title).toBe("about \\u0041");
 		expect(todo.note).toBe("\\u0042");
-		// A user-origin title stays verbatim through an update too.
 		expect(s.update(todo.id, { title: "still \\u0043" })?.todo.title).toBe("still \\u0043");
 	} finally {
 		rmSync(root, { recursive: true, force: true });
@@ -218,7 +211,6 @@ test("an agent item stored with literal escapes self-heals on the next write", (
 	try {
 		const file = join(root, storeRel(SESSION));
 		mkdirSync(dirname(file), { recursive: true });
-		// Simulate an already-persisted agent item carrying the literal escape gibberish.
 		writeFileSync(
 			file,
 			JSON.stringify({
@@ -236,7 +228,6 @@ test("an agent item stored with literal escapes self-heals on the next write", (
 			"utf8",
 		);
 		const s = store(root);
-		// A read decodes agent text; a subsequent write persists the decoded form.
 		expect(s.get("t_old")?.title).toBe("БЛОК");
 		s.update("t_old", { status: "done" });
 		const raw = JSON.parse(readFileSync(file, "utf8")) as { todos: { title: string }[] };
@@ -252,7 +243,6 @@ test("a session id that could escape the store dir is rejected", () => {
 		expect(() => storeRel("../evil")).toThrow();
 		expect(() => storeRel("a/b")).toThrow();
 		expect(() => new TodoStore(root, "../../etc/passwd").read()).toThrow();
-		// A normal UUID-shaped id is fine.
 		expect(() => storeRel("018f-abc_DEF")).not.toThrow();
 	} finally {
 		rmSync(root, { recursive: true, force: true });
@@ -278,7 +268,7 @@ test("update/remove find items inside a group by id", () => {
 		expect(s.get(todo.id)?.title).toBe("grouped");
 		expect(s.update(todo.id, { status: "in_progress" })?.todo.status).toBe("in_progress");
 		expect(s.remove(todo.id)).toBe(true);
-		expect(s.read().groups).toHaveLength(0); // the emptied group is pruned
+		expect(s.read().groups).toHaveLength(0);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}
@@ -289,15 +279,15 @@ test("replaceAll preserves user items and done items, replacing only the agent's
 	try {
 		const s = store(root);
 		s.add({ title: "user task", origin: "user" });
-		s.add({ title: "agent open" }); // agent + pending → replaced
+		s.add({ title: "agent open" });
 		const done = s.add({ title: "agent finished" });
 		s.update(done.id, { status: "done" });
 
 		const titles = s.replaceAll({ todos: [{ title: "new plan item" }] }).todos.map((t) => t.title);
 		expect(titles).toContain("new plan item");
-		expect(titles).toContain("user task"); // user item survives a re-plan
-		expect(titles).toContain("agent finished"); // done history survives
-		expect(titles).not.toContain("agent open"); // the agent's open item is replaced
+		expect(titles).toContain("user task");
+		expect(titles).toContain("agent finished");
+		expect(titles).not.toContain("agent open");
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}
@@ -351,7 +341,7 @@ test("groupStatus derives the task lifecycle from the steps", () => {
 		s.update(a.id, { status: "in_progress" });
 		expect(groupStatus(g())).toBe("active");
 		s.update(a.id, { status: "done" });
-		expect(groupStatus(g())).toBe("pending"); // one done, one pending — not active
+		expect(groupStatus(g())).toBe("pending");
 		for (const t of g().todos) s.update(t.id, { status: "done" });
 		expect(groupStatus(g())).toBe("done");
 	} finally {
@@ -371,7 +361,6 @@ test("add with after inserts right after that item, inheriting its lane", () => 
 		expect(group?.todos.map((t) => t.title)).toEqual(["one", "two", "three"]);
 		expect(mid.status).toBe("pending");
 
-		// Loose lane: after a loose item stays loose.
 		const l1 = s.add({ title: "loose-a", origin: "user" });
 		s.add({ title: "loose-c", origin: "user" });
 		s.add({ title: "loose-b", after: l1.id });
@@ -407,12 +396,10 @@ test("setting in_progress auto-demotes the previous in_progress and reports it a
 		expect(result?.paused.map((t) => t.id)).toEqual([a.id]);
 		expect(s.get(a.id)?.status).toBe("pending");
 
-		// Demotion spans lanes: a loose in_progress pauses too.
 		s.update(loose.id, { status: "in_progress" });
 		const again = s.update(a.id, { status: "in_progress" });
 		expect(again?.paused.map((t) => t.id)).toEqual([loose.id]);
 
-		// Non-status updates never demote.
 		const rename = s.update(b.id, { title: "step b2" });
 		expect(rename?.paused).toEqual([]);
 		expect(s.get(a.id)?.status).toBe("in_progress");
@@ -425,20 +412,15 @@ test("replaceAll re-establishes one in_progress across the MERGED plan, not just
 	const root = tempRoot();
 	try {
 		const s = store(root);
-		// The user's own item is the one in progress (the agent may flip it — the skill tells it to work
-		// that lane, and `update` has no origin restriction).
 		const mine = s.add({ title: "user ask", origin: "user" });
 		s.update(mine.id, { status: "in_progress" });
 
-		// The agent then re-plans with a step already in_progress. A fresh-only normalization would leave
-		// two items in_progress at once — the invariant `update` upholds, broken by the next re-plan.
 		s.replaceAll({
 			groups: [{ title: "Task", todos: [{ title: "step", status: "in_progress" }] }],
 		});
 
 		const inProgress = flatItems(s.read()).filter((t) => t.status === "in_progress");
 		expect(inProgress).toHaveLength(1);
-		// Display order decides the survivor: the group's step (groups lead), the user's item pauses.
 		expect(inProgress[0]?.title).toBe("step");
 		expect(s.get(mine.id)?.status).toBe("pending");
 	} finally {
@@ -462,9 +444,6 @@ test("replaceAll keeps only the first in_progress of a fresh plan (direct API: `
 				},
 			],
 		});
-		// Asserted in DISPLAY order (`flatItems`: groups lead, the user's lane last) — the same order the
-		// normalization walks, so the survivor is the first *displayed* in_progress rather than whichever
-		// lane happened to be iterated first.
 		const statuses = flatItems(plan).map((t) => t.status);
 		expect(statuses).toEqual(["in_progress", "pending", "pending"]);
 		expect(flatItems(plan)[0]?.title).toBe("one");
@@ -479,10 +458,10 @@ test("artifact sanitize is per-kind: a commit needs a sha, every other kind a pa
 		const todo = store(root).add({
 			title: "step",
 			artifacts: [
-				{ kind: "commit", sha: "abc123", label: "step" }, // kept — sha-addressed, no path needed
-				{ kind: "commit" }, // dropped — a commit without its sha is unaddressable
-				{ kind: "change", path: "src/a.ts" }, // kept
-				{ kind: "change" }, // dropped — path-addressed kind without a path
+				{ kind: "commit", sha: "abc123", label: "step" },
+				{ kind: "commit" },
+				{ kind: "change", path: "src/a.ts" },
+				{ kind: "change" },
 			],
 		});
 		expect(store(root).get(todo.id)?.artifacts).toEqual([
@@ -518,7 +497,7 @@ test("a version-3 file (pre-commit-kind) reads cleanly and upgrades to 4 on the 
 			}),
 		);
 		expect(store(root).get("t_old")?.artifacts).toEqual([{ kind: "change", path: "a.ts" }]);
-		store(root).add({ title: "new" }); // any write upgrades the file version
+		store(root).add({ title: "new" });
 		expect(JSON.parse(readFileSync(file, "utf8")).version).toBe(4);
 	} finally {
 		rmSync(root, { recursive: true, force: true });

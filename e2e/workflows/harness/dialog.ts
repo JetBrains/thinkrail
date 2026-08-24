@@ -1,8 +1,3 @@
-// The ask_user_question autoresponder — answers interview rounds headlessly through the PRODUCTION
-// answerQuestion bridge (the same path a browser reply takes), walking a policy ladder:
-//   script matchers (exact control) → persona (cheap LLM answers in character) → deterministic fallback.
-// The fallback guarantees an unscripted interview can never hang a run: "skip" is the workflow family's
-// own declared degradation path.
 import "./env";
 import type {
 	AskUserQuestionAnswer,
@@ -19,9 +14,7 @@ export interface DialogScriptEntry {
 
 export interface DialogConfig {
 	script?: DialogScriptEntry[];
-	/** Persona brief — an LLM answers in character when no script entry matches. */
 	persona?: string;
-	/** Deterministic last rung (default "skip" — the family's degradation path). */
 	fallback?: "skip" | "pickRecommended";
 }
 
@@ -31,11 +24,9 @@ export interface AnsweredRound {
 	questions: AskUserQuestionItem[];
 	result: AskUserQuestionResult;
 	rung: DialogRung;
-	/** A scripted matcher/answer threw — the round degraded to the fallback rung; here's why. */
 	error?: string;
 }
 
-/** Deterministic answers: every question gets its FIRST option (the recommended-first convention). */
 export function pickRecommended(questions: AskUserQuestionItem[]): AskUserQuestionResult {
 	const answers: AskUserQuestionAnswer[] = questions.map((q, i) => ({
 		questionIndex: i,
@@ -46,7 +37,6 @@ export function pickRecommended(questions: AskUserQuestionItem[]): AskUserQuesti
 	return { answers, cancelled: false };
 }
 
-/** The skip result — the tool reports "user declined" and the workflow proceeds on assumptions. */
 export function skipAll(): AskUserQuestionResult {
 	return { answers: [], cancelled: true };
 }
@@ -59,10 +49,6 @@ const PERSONA_SYSTEM = [
 	"— one entry per question, no markdown, no commentary.",
 ].join(" ");
 
-/**
- * Parse + validate a persona reply into a result. Pure (unit-tested). Returns null when the reply is
- * malformed or references unknown options — the caller falls to the deterministic rung.
- */
 export function parsePersonaReply(
 	reply: string,
 	questions: AskUserQuestionItem[],
@@ -107,15 +93,10 @@ async function personaAnswer(
 		});
 		return parsePersonaReply(text, questions);
 	} catch {
-		return null; // no model / provider error → deterministic rung
+		return null;
 	}
 }
 
-/**
- * Watch the log for ask_user_question calls and answer each round once, walking the ladder. Relies on
- * the bridge's documented hold ("the reply can beat the tool"): answering right at tool_execution_start
- * is safe even if the tool's execute registers a moment later.
- */
 export function attachDialog(
 	sessionId: string,
 	log: EventLog,
@@ -142,8 +123,6 @@ export function attachDialog(
 		let rung: DialogRung = "fallback";
 		let result: AskUserQuestionResult | null = null;
 		let error: string | undefined;
-		// Script matchers/answers are scenario-author code and may throw — that must degrade down the
-		// ladder (never an unhandled rejection crashing the worker, never a round left unanswered).
 		try {
 			const scripted = config.script?.find((entry) => entry.match(questions));
 			if (scripted) {
@@ -164,27 +143,16 @@ export function attachDialog(
 		}
 		const round: AnsweredRound = { questions, result, rung, ...(error ? { error } : {}) };
 		answered.push(round);
-		// Delivery: answerQuestion resolves at the END of the turn its answer triggers — awaiting it here
-		// (tracked in `pending`) is what lets `settle()` guarantee that turn has finished before a
-		// scenario runs its verdicts. Delivery can also fail — e.g. the round was SUPERSEDED because the
-		// user simulator's next message beat a slow (persona-rung) answer. That is a legitimate race
-		// outcome, not a harness crash: record it on the round and let the scenario's own verdicts
-		// decide — never an unhandled rejection.
 		try {
 			await answerQuestion(sessionId, toolCallId, result);
 		} catch (err) {
 			const message = err instanceof Error ? err.message : String(err);
-			// Append — never clobber a script/persona error already recorded on the round.
 			round.error = round.error ? `${round.error}; delivery: ${message}` : `delivery: ${message}`;
 		}
 	};
 
 	const detach = log.onGrow(onGrow);
-	onGrow(); // handle rounds already in the log
-	// Wait until every answered round's triggered turn has ENDED (or its delivery failed) — including
-	// cascading rounds asked DURING a triggered turn (hence the loop over a growing `pending`). The
-	// scenario awaits this before verdicts, so checks never race the turn an answer set in motion;
-	// runaway turns stay bounded by the watchdog's budget tripwire (it aborts, which ends the turn).
+	onGrow();
 	const settle = async (): Promise<void> => {
 		while (pending.length > 0) {
 			const batch = pending.splice(0);

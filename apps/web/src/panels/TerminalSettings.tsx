@@ -4,11 +4,6 @@ import { cn } from "@/lib";
 import { toast, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
 
-/**
- * Replay budgets offered, in KiB. Presets rather than a free number field: the value sizes a buffer held per
- * live terminal *and* written to disk, so the useful range is a handful of orders of magnitude, not any
- * integer — and presets need no validation UI for a setting most people will never open.
- */
 const REPLAY_CHOICES: { kb: number; label: string; hint: string }[] = [
 	{ kb: 0, label: "Off", hint: "Reattaching shows an empty screen over the live shell" },
 	{ kb: 16, label: "16 KB", hint: "About a screenful" },
@@ -17,12 +12,6 @@ const REPLAY_CHOICES: { kb: number; label: string; hint: string }[] = [
 	{ kb: TERMINAL_REPLAY_KB.max, label: "1 MB", hint: "Maximum" },
 ];
 
-/**
- * The "Terminal" settings section: how much output the host keeps to repaint a reattaching terminal.
- *
- * Server-synced like the theme picker — `settings.update` fires and the UI converges when the host's
- * `settings.changed` broadcast folds into the store, with no optimistic apply.
- */
 export function TerminalSettings() {
 	const replayKb = useAppStore((s) => s.terminalReplayKb);
 

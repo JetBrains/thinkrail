@@ -25,7 +25,7 @@ const expandedSkill = [
 test("a persisted expanded skill renders as one collapsed invocation with its request visible", async ({
 	page,
 }) => {
-	await openFixtureProject(page); // resets state — seed after
+	await openFixtureProject(page);
 	seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), {
 		name: "skill invocation chat",
 		messages: [

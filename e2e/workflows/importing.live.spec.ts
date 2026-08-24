@@ -1,17 +1,3 @@
-// Slice-3 (partial): the importing-a-codebase worker end-to-end — the doc-adoption sub-flow.
-//
-// Two variants over the same small project (acme-widgets, the code-only shape):
-//   1. docs-rich    — a real architecture doc + an ADR (candidates) and a finished plan file + CHANGELOG
-//                     (traps). PASS = the adoption offer fires listing the architecture doc, accepted
-//                     docs are adopted IN PLACE (frontmatter added, content preserved), the filled
-//                     architecture slot is NOT drafted again, and the plan file is never offered nor
-//                     touched.
-//   2. no-candidates — only README/CHANGELOG/TODO besides code. PASS = the offer never fires, none of
-//                     those files gain frontmatter, and the plain import path still drafts the graph.
-//
-// Binding verdicts are deterministic (files on disk + the captured ask_user_question args); the judge
-// grades candidate classification quality advisorily. Needs pi auth; spends real tokens:
-//   bun run test:workflows -- --grep "importing worker"
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "@playwright/test";
@@ -28,8 +14,6 @@ import {
 
 test.afterAll(() => endAllSessions());
 
-// ── Fixture content (inline — no *.md fixture files at rest) ──────────────────────────────────────────
-
 const AGENTS_MD = [
 	"# acme-widgets",
 	"",
@@ -45,8 +29,6 @@ const AGENTS_MD = [
 
 const README_MD = "# acme-widgets\n\nBatch-resize images from the command line.\n";
 
-// Candidate 1 — a durable, declarative architecture doc that matches the code. The "pipeline is pure"
-// sentence is the preservation sentinel: it must survive adoption byte-for-byte.
 const ARCHITECTURE_DOC = [
 	"# Architecture",
 	"",
@@ -61,7 +43,6 @@ const ARCHITECTURE_DOC = [
 	"",
 ].join("\n");
 
-// Candidate 2 — a decision record still in force.
 const ADR_0001 = [
 	"# ADR 0001 — the resize pipeline stays pure",
 	"",
@@ -72,7 +53,6 @@ const ADR_0001 = [
 	"",
 ].join("\n");
 
-// Trap — a FINISHED implementation plan: never a candidate, never touched.
 const PLAN_DOC = [
 	"# Phase 2 rollout plan",
 	"",
@@ -111,12 +91,9 @@ function seedAcme(cwd: string, opts: { withDocs: boolean }): void {
 	}
 }
 
-// ── Shared predicates ──────────────────────────────────────────────────────────────────────────────────
-
 const pathArg = (args: Record<string, unknown>): string =>
 	String(args.path ?? args.file_path ?? "");
 
-/** Every ask_user_question question whose OPTIONS mention `pattern` (candidates are offered as options). */
 function offerMentions(ctx: CheckContext, pattern: RegExp): boolean {
 	return ctx.log
 		.toolCalls("ask_user_question")
@@ -124,10 +101,6 @@ function offerMentions(ctx: CheckContext, pattern: RegExp): boolean {
 		.some((q) => pattern.test(JSON.stringify(q.options)));
 }
 
-/**
- * The graph root is a FILENAME, not a fixed location (a real agent legitimately roots the graph in
- * docs/ — the browser import e2e makes the same allowance): search the workspace for it.
- */
 function findGraphRoot(cwd: string): string | null {
 	const walk = (dir: string): string | null => {
 		for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -143,7 +116,6 @@ function findGraphRoot(cwd: string): string | null {
 	return walk(cwd);
 }
 
-/** Workspace-relative paths of files whose spec frontmatter declares the given type. */
 function specPathsOfType(cwd: string, type: string): string[] {
 	const hits: string[] = [];
 	const walk = (dir: string, prefix: string): void => {
@@ -163,7 +135,6 @@ function specPathsOfType(cwd: string, type: string): string[] {
 	return hits;
 }
 
-/** Binding: a goal-and-requirements.md exists somewhere and is a well-formed spec (id + type). */
 const graphRootDrafted = checks.custom(
 	"graph root drafted (goal-and-requirements.md, any dir)",
 	({ cwd }) => {
@@ -178,13 +149,6 @@ const graphRootDrafted = checks.custom(
 	},
 );
 
-/**
- * Flow-settled stop signal — fires the moment the DETERMINISTIC outcome is decided (routing-suite
- * philosophy: abort for cost control, don't ride the flow to its natural end). That point is "the
- * graph root is drafted (+ the adoption landed, when expected)": every binding check is a filesystem
- * fact by then. Deliberately NOT gated on the skill's final spec_validate — it runs last (step 5) and
- * gating on it rode every run into the turn budget instead of a clean stop.
- */
 function flowSettled(needsAdoption: boolean): Signal {
 	return {
 		description: needsAdoption ? "goal drafted + docs/architecture.md adopted" : "goal drafted",
@@ -195,7 +159,6 @@ function flowSettled(needsAdoption: boolean): Signal {
 					.some(
 						(call) => call.result !== undefined && (!suffix || pathArg(call.args).endsWith(suffix)),
 					);
-			// The skill drafts via the spec tools (spec_create per node) — count every drafting tool.
 			const goal = ["spec_create", "write", "edit"].some((tool) =>
 				completed(tool, "goal-and-requirements.md"),
 			);
@@ -212,17 +175,11 @@ const MAINTAINER_BRIEF =
 	"Answer intent questions from the README/AGENTS content (a CLI that batch-resizes images; no " +
 	"non-goals worth adding). Never add new requirements. If the agent is mid-work, just say: continue.";
 
-// Rounds are answered by SCRIPT rungs only (synchronous at tool_execution_start): a persona-rung
-// answer is an LLM call, and the user simulator's next message can supersede the round while it
-// composes — the delivery then fails (recorded on the round) and the scenario loses its answer.
-
-/** Catch-all script rung: first option for every question — the deterministic interview answer. */
 const answerFirstOption = {
 	match: () => true,
 	answer: pickRecommended,
 };
 
-/** Script rung: accept every offered candidate on the adoption question; first option elsewhere. */
 const acceptAllCandidates = {
 	match: (questions: AskUserQuestionItem[]) =>
 		questions.some((q) => /architecture/i.test(JSON.stringify(q.options))),
@@ -247,8 +204,6 @@ const acceptAllCandidates = {
 	}),
 };
 
-// ── Variant 1: docs-rich — the adoption offer fires and lands in place ────────────────────────────────
-
 workflowTest(
 	defineScenario({
 		name: "importing worker: existing docs are offered and adopted in place",
@@ -260,11 +215,8 @@ workflowTest(
 		},
 		user: { brief: MAINTAINER_BRIEF, maxUserTurns: 3 },
 		dialog: { script: [acceptAllCandidates, answerFirstOption], fallback: "pickRecommended" },
-		// Each ask_user_question round costs extra turns (ack+terminate + the answer-triggered turn), so
-		// the default 8-turn budget is too tight for a full import flow — hence maxTurns: 16 below.
 		stopWhen: [flowSettled(true)],
 		forbid: [
-			// The finished plan is input at most — any write to it fails the run immediately.
 			{
 				description: "the plan file was modified",
 				test: (log) =>
@@ -275,37 +227,26 @@ workflowTest(
 		],
 		watchdog: { budget: { maxTurns: 16, maxToolCalls: 80 } },
 		expect: [
-			// The offer fired and listed the architecture doc as a candidate…
 			checks.custom("adoption offer lists the architecture doc", (ctx) =>
 				offerMentions(ctx, /architecture/i),
 			),
-			// …and never offered the finished plan.
 			checks.custom(
 				"the plan file is never offered as a candidate",
 				(ctx) => !offerMentions(ctx, /plan-phase-2/i),
 			),
-			// Adopted in place: frontmatter added, sentinel prose preserved.
 			checks.expectSpecValid("docs/architecture.md"),
 			checks.expectFile(
 				"docs/architecture.md",
 				(content) => content.startsWith("---") && content.includes("The resize pipeline is pure"),
 			),
-			// The filled slot is not drafted again: every architecture-design node must be one of the
-			// project's own adopted docs — never a NEW file. (The pre-change skill drafted a parallel
-			// specs/architecture.md while docs/architecture.md sat ignored — the duplication this sub-flow
-			// exists to prevent. The adopted ADR may legitimately carry architecture-design too — live runs
-			// vary on that typing — so the invariant is "no new node", not "exactly one node".)
 			checks.custom("no new architecture-design node beside the adopted docs", ({ cwd }) =>
 				specPathsOfType(cwd, "architecture-design").every(
 					(path) => path === "docs/architecture.md" || path.startsWith("docs/adr/"),
 				),
 			),
-			// The rest of the graph still lands.
 			graphRootDrafted,
-			// Traps untouched, byte-for-byte.
 			checks.expectFile("docs/plan-phase-2.md", (content) => content === PLAN_DOC),
 			checks.expectFile("CHANGELOG.md", (content) => content === CHANGELOG_MD),
-			// The ADR was not corrupted (adopted or not — its decision text survives).
 			checks.expectFile("docs/adr/0001-pure-resize-pipeline.md", (content) =>
 				content.includes("transforms buffers only"),
 			),
@@ -320,8 +261,6 @@ workflowTest(
 		},
 	}),
 );
-
-// ── Variant 2: no candidates — the offer must not fire; the plain path is unchanged ───────────────────
 
 workflowTest(
 	defineScenario({
@@ -348,16 +287,13 @@ workflowTest(
 		],
 		watchdog: { budget: { maxTurns: 16, maxToolCalls: 80 } },
 		expect: [
-			// Excluded kinds are never offered as spec-graph nodes.
 			checks.custom(
 				"no adoption offer over README/CHANGELOG/TODO",
 				(ctx) => !offerMentions(ctx, /(README|CHANGELOG|TODO)/i),
 			),
-			// And never adopted: byte-identical to the seed.
 			checks.expectFile("README.md", (content) => content === README_MD),
 			checks.expectFile("CHANGELOG.md", (content) => content === CHANGELOG_MD),
 			checks.expectFile("TODO.md", (content) => content === TODO_MD),
-			// The plain import path still drafts the graph.
 			graphRootDrafted,
 		],
 		judge: {

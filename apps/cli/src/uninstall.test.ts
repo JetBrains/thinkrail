@@ -31,7 +31,6 @@ describe("parseUninstallArgs", () => {
 			"mutually exclusive",
 		);
 		expect(() => parseUninstallArgs(["--purge"])).toThrow("Unknown option: --purge");
-		// Repeating the same choice is not a contradiction.
 		expect(parseUninstallArgs(["--keep-data", "--keep-data"]).data).toBe("keep");
 	});
 });
@@ -82,7 +81,6 @@ describe("resolveUninstallTargets", () => {
 	});
 
 	test("adds our own binary when we *are* one — the lost-install.json case", () => {
-		// Running from source (execPath = the Bun runtime) must never make Bun a removal candidate.
 		expect(
 			resolveUninstallTargets({ ...base, platform: "linux", installMeta: {} }).binaries,
 		).not.toContain("/usr/bin/bun");
@@ -96,7 +94,6 @@ describe("resolveUninstallTargets", () => {
 			join("/home/u/.local", "bin", "thinkrail"),
 			"/opt/elsewhere/bin/thinkrail",
 		]);
-		// …and isn't listed twice when it is the recorded install.
 		expect(
 			resolveUninstallTargets({
 				...base,
@@ -116,7 +113,6 @@ describe("resolveUninstallTargets", () => {
 			installMeta: { prefix: "D:\\tools" },
 		});
 		expect(targets.binaries).toEqual([join("D:\\tools", "bin", "thinkrail.exe")]);
-		// install.sh never writes an rc block on Windows, and install.ps1 edits the registry instead.
 		expect(targets.rcFiles).toEqual([]);
 		expect(targets.fishFile).toBe("");
 	});
@@ -130,16 +126,11 @@ describe("resolveUninstallTargets", () => {
 				installMeta,
 			}).pathEntryOwned;
 		expect(owned({ prefix: "D:\\tools", path_entry_added: true })).toBe(true);
-		// Being installed is not adding the entry: -NoModifyPath, an entry that was already there, a failed
-		// registry write and a Git-Bash install.sh install all write metadata without touching the PATH.
 		expect(owned({ prefix: "D:\\tools", path_entry_added: false })).toBe(false);
-		// Legacy metadata (written before the flag existed) counts as not ours.
 		expect(owned({ prefix: "D:\\tools" })).toBe(false);
 		expect(owned({})).toBe(false);
-		// A flag we can't tie to the prefix we're acting on proves nothing.
 		expect(owned({ prefix: "relative\\dir", path_entry_added: true })).toBe(false);
 		expect(owned({ path_entry_added: true })).toBe(false);
-		// Truthy-but-not-true JSON is not a yes.
 		expect(owned({ prefix: "D:\\tools", path_entry_added: "yes" })).toBe(false);
 	});
 

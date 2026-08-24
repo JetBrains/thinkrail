@@ -6,15 +6,6 @@ import { buildChangesTree, type ChangeTreeNode, statusNameClass } from "./change
 import { DiffStatBadge } from "./DiffStatBadge";
 import { TreeRow } from "./TreeRow";
 
-/**
- * The Changes panel's folder view: the changed files laid out as a tree with single-directory runs
- * compacted into slash-joined rows, styled exactly like the All-files tree (shared `TreeRow`) with a
- * per-file / per-folder `+/−` badge (shared `DiffStatBadge`). **File** rows carry the same action menu the
- * flat list does
- * (`ChangeRowActions` — hover `⌄` + right-click); folder rows get none, since nothing in that menu applies to
- * a folder. Presentational — the flat list and this view share the same `onOpen` (open/focus the file's diff
- * tab, at the gesture's `TabIntent`) and `isActive` (selected row) from `ChangesPanel`.
- */
 export function ChangesTree({
 	changes,
 	onOpen,
@@ -42,7 +33,6 @@ function ChangeNodeRow({
 	onOpen: (path: string, intent: TabIntent) => void;
 	isActive: (path: string) => boolean;
 }) {
-	// Folders default open — change sets are small, so the tree reads at a glance (like VS Code's SCM tree).
 	const [expanded, setExpanded] = useState(true);
 
 	if (node.kind === "file") {
@@ -58,7 +48,6 @@ function ChangeNodeRow({
 							testid="change-node"
 							onContextMenu={onContextMenu}
 							kind="file"
-							// The wrapper paints the band (it has to cover the trailing ⌄ slot); this row paints none.
 							highlight="wrapper"
 							active={isActive(node.path)}
 							dataStatus={node.status}
@@ -76,8 +65,6 @@ function ChangeNodeRow({
 
 	return (
 		<li>
-			{/* A folder has no row menu, but it reserves the same trailing slot the file rows spend on their `⌄`
-			    — otherwise the `+N −M` column would sit further right on folders than on files. */}
 			<div className="flex min-w-0 items-center">
 				<TreeRow
 					testid="change-tree-folder"

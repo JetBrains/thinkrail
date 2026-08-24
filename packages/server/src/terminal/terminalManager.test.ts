@@ -22,7 +22,6 @@ const WS = "ws-1";
 let dataDir: string;
 const savedDataDir = process.env.THINKRAIL_DATA_DIR;
 
-/** Frames the publisher was handed, so takeover and addressing are observable without a WebSocket. */
 let pushed: { clientKey: string; channel: string; data: unknown }[] = [];
 
 beforeEach(() => {
@@ -57,9 +56,6 @@ test("attaching twice to a tab returns the SAME shell", () => {
 });
 
 test("re-entering after the view went away adopts the shell instead of spawning a second one", () => {
-	// The regression this design exists for: a client used to hold the only pointer to a running shell between
-	// asking "is it still alive?" and hearing back, so re-entering inside that window spawned a duplicate and
-	// orphaned the first for the life of the host. There is no such window — the host holds the mapping.
 	const original = attachTerminal(WS, "tab-a", "client-1");
 	const afterLeaving = attachTerminal(WS, "tab-a", "client-1");
 	const afterLeavingAgain = attachTerminal(WS, "tab-a", "client-1");
@@ -70,8 +66,6 @@ test("re-entering after the view went away adopts the shell instead of spawning 
 });
 
 test("concurrent attaches on one tab cannot both spawn", () => {
-	// Atomicity comes from attach being synchronous on Bun's single event loop, so this is what an `await`
-	// slipped between the lookup and the insert would break.
 	const results = [1, 2, 3, 4].map(() => attachTerminal(WS, "tab-a", "client-1"));
 
 	expect(new Set(results.map((r) => r.id)).size).toBe(1);
@@ -132,7 +126,6 @@ test("closing an unknown tab is not an error and not busy", () => {
 test("a shell with something running refuses to close until forced", async () => {
 	const attached = attachTerminal(WS, "tab-a", "client-1");
 	expect(attached.created).toBe(true);
-	// Give the shell its prompt, then start a job so it has a child process.
 	await Bun.sleep(600);
 	writeTerminal(attached.id, "sleep 30\r", "client-1");
 	await Bun.sleep(800);
@@ -156,7 +149,6 @@ test("a host restart gives the tabs back with fresh shells showing the old outpu
 	expect(listTerminals(WS)).toEqual([{ tabKey: "tab-a", title: "Kept" }]);
 
 	const revived = attachTerminal(WS, "tab-a", "client-1");
-	// A new shell — the old one died with the host — but carrying the picture it left behind.
 	expect(revived.created).toBe(true);
 	expect(revived.id).not.toBe(first.id);
 	expect(revived.replay ?? "").not.toBe("");
@@ -174,7 +166,6 @@ test("a revived recording is served once, not to every later attach", async () =
 	const fresh = attachTerminal(WS, "tab-a", "client-1");
 
 	expect(revived.replay ?? "").not.toBe("");
-	// The closed tab took its recording with it; a tab reopened under the same key starts blank.
 	expect(fresh.replay ?? "").toBe("");
 });
 
@@ -192,8 +183,6 @@ test("only the attached client may drive a terminal", async () => {
 	const attached = attachTerminal(WS, "tab-a", "client-1");
 	await Bun.sleep(500);
 
-	// Client B takes the tab over; A keeps a perfectly valid pty id, and a reconnect would replay its queued
-	// frames. Accepting them would run A's keystrokes in B's shell.
 	attachTerminal(WS, "tab-a", "client-2");
 	writeTerminal(attached.id, "echo TR_FROM_DISPLACED\r", "client-1");
 	resizeTerminal(attached.id, 5, 2, "client-1");
@@ -205,7 +194,6 @@ test("only the attached client may drive a terminal", async () => {
 		.join("");
 	expect(seen).not.toContain("TR_FROM_DISPLACED");
 
-	// Reclaiming is an explicit gesture, and then input works again.
 	attachTerminal(WS, "tab-a", "client-1");
 	writeTerminal(attached.id, "echo TR_RECLAIMED\r", "client-1");
 	await Bun.sleep(800);
@@ -221,7 +209,6 @@ test("opening and closing a tab broadcasts the new list", () => {
 	setTerminalTabsPublisher((workspaceId, tabs) => seen.push({ workspaceId, tabs }));
 
 	attachTerminal(WS, "tab-a", "client-1", { title: "One" });
-	// Re-attaching changes no membership, so it must not fan out a snapshot per remount.
 	attachTerminal(WS, "tab-a", "client-1");
 	expect(seen).toEqual([{ workspaceId: WS, tabs: [{ tabKey: "tab-a", title: "One" }] }]);
 
@@ -235,9 +222,6 @@ test("a displaced client that tries to type is told it is displaced", async () =
 	attachTerminal(WS, "tab-a", "client-2");
 	pushed = [];
 
-	// The original notice is fire-and-forget and can be lost — most plainly when the displaced client was
-	// mid-reconnect during the takeover, since its replayed attach then gets the cached success back. Learning
-	// on the first keystroke is what stops the tab looking live forever while nothing happens.
 	writeTerminal(attached.id, "echo TR_LOST_NOTICE\r", "client-1");
 
 	const told = pushed.filter((frame) => frame.channel === "terminal.detached");
@@ -265,7 +249,6 @@ test("a tab keeps its last screen when its shell exits on its own", async () => 
 	writeTerminal(first.id, "exit\r", "client-1");
 	await Bun.sleep(800);
 
-	// The tab outlives its shell, so the output that would say what happened must outlive it too.
 	expect(listTerminals(WS)).toHaveLength(1);
 	const next = attachTerminal(WS, "tab-a", "client-1");
 	expect(next.created).toBe(true);
@@ -288,8 +271,6 @@ test("a dead tab's last screen survives a host restart", async () => {
 });
 
 describe("membership survives an ungraceful exit", () => {
-	// The host has no crash isolation by design, so an exit without `stop()` is an ordinary path. Everything
-	// below therefore skips `persistTerminalSessions()` entirely — that is the whole point.
 	test("a tab closed before a crash does not come back", () => {
 		attachTerminal(WS, "tab-a", "client-1");
 		closeTerminalTab(WS, "tab-a", true);
@@ -297,7 +278,6 @@ describe("membership survives an ungraceful exit", () => {
 		resetTerminalState();
 		reviveTerminalSessions();
 
-		// Resurrecting it would spawn a shell for a tab the user closed — the no-tab/no-shell rule.
 		expect(listTerminals(WS)).toHaveLength(0);
 	});
 

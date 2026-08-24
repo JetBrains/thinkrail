@@ -1,4 +1,3 @@
-/** One segment of a slim header view-toggle (Preview|Source, Split|Inline) — shared by the panes. */
 export function ToggleSegment({
 	testid,
 	label,
@@ -18,7 +17,7 @@ export function ToggleSegment({
 			aria-pressed={active}
 			className={`rounded-[var(--radius-sm)] px-8 py-2 tr-text-metadata ${
 				active
-					? "bg-container-elevated-bg text-text-default"
+					? "bg-control-bg-selected text-text-default"
 					: "text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 			}`}
 			onClick={onClick}

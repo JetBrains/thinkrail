@@ -5,6 +5,7 @@ status: active
 title: panels — feature views
 parent: module-web
 depends-on: [module-contracts]
+references: [central-integration]
 tags: [v1, ui]
 ---
 
@@ -58,11 +59,28 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   `workspace.list`; `addWorkspace` appends created worktree rows after it), with a **`House` icon** in
   place of the `GitBranch` glyph and **no Remove item** (non-removable — the server enforces it; the menu
   simply omits it) — it still gets "Open in" / Copy path / Reveal, same as any worktree. Its branch line
-  shows the folder's real current branch. The active workspace must
+  shows the folder's real current branch. When the **selected project's** authoritative workspace list lands,
+  `ProjectTree` fire-and-forgets transport's `prewarmWorkspaceSkillLoad` for at most the first eight rows:
+  the common visible set begins the conservative watcher-readiness window before a workspace click. The
+  per-selection cap bounds the request fan-out; the *global* bound is host-side — prewarm-only watchers live
+  in a capped, evictable pool (server `watch` SPEC), so clicking through many projects in one host lifetime
+  reuses that pool instead of accumulating watchers. The list never waits for prewarm, failures stay
+  silent and retryable by the eventual chat load, and merely expanding a background project does not prewarm
+  it (the prewarm is gated on the *selected* project, so the lazy restored-expansion fetch below keeps this
+  invariant too). **Rail expansion is store-held, per-browser view state**
+  (`store.expandedProjectIds`), not component state: it survives the Project-Home/workspace remount
+  boundary and, via the `projectExpansion` persistence module (localStorage under a host-qualified key,
+  hydrated at boot from `main.tsx`, best-effort writes, untrusted reads), a page reload — the rail
+  looks the same after reloading. Rows whose persisted expansion outlives this client's fetched lists
+  (a fresh reload) fetch their missing `workspace.list` lazily; an already-fetched list is refreshed on
+  an explicit expand gesture, never refetched in a loop. The active workspace must
   also stay visible: when `ProjectTree` mounts with an active workspace, or the active workspace's derived
-  owning project changes or first becomes resolvable, it expands that parent project. A manual collapse
+  owning project changes or first becomes resolvable, it expands that parent project — this reveal applies
+  *on top of* the persisted baseline (a persisted collapse never hides the active workspace). A manual collapse
   remains respected while the owning project is unchanged; ordinary `workspace.updated` snapshots and
-  same-project workspace switches do not force it open again. Workspace creation expands its project
+  same-project workspace switches do not force it open again. Navigation restore is neutral: a reload
+  re-selects the routed project without touching expansion (the persisted state *is* the view). Workspace
+  creation expands its project
   explicitly. Selecting or creating a workspace also selects its owning project, keeping project-home and
   active-workspace context coherent even when the create dialog's project picker targets another project.
   **Opening a project lands on that project's Welcome** — deliberately **no auto-enter** into any
@@ -81,7 +99,11 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   on-screen anchor, unlike the Remove popover); `NoticeDialog` is a single-button info modal for failures
   with no yes/no follow-up. The hook returns a `dialogs` node each consumer renders. **Selecting a
   project** (clicking its row — the chevron expands/collapses separately) **deselects any active
-  workspace**, so the shell returns to that project's Welcome — a deliberate "project home" gesture; the
+  workspace**, so the shell returns to that project's Welcome — a deliberate "project home" gesture. Both
+  select-project gestures — the rail row click and adopting a just-opened project (`ProjectTree` *and*
+  `WelcomePanel`) — also **reveal the project's workspaces** (`selectProject(id, { reveal: true })`): a
+  gesture that enters a project promises its workspace list, so opening from the Welcome screen never
+  lands with a collapsed rail row; the
   workspace's shared layout survives on the host, so re-selecting it restores the workbench. That round
   trip unmounts the whole workspace surface, but terminals keep no client-side lifetime to lose: the host owns
   each tab and PTY, and unmounting kills nothing. Several distinct terminals may be visible in different
@@ -107,7 +129,11 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   `MonacoDiff`), plus lazy `TerminalInstance`. The Monaco plumbing both editors share —
   worker wiring, the local loader, the token-driven `thinkrail` theme + the `[data-theme]` re-theme
   observer — lives once in `monacoSetup.ts`; the slim header view-toggle segment (`Preview|Source`,
-  `Split|Inline`, `List|Tree`) is the shared `ToggleSegment`. The **file-style tree row** (chevron/spacer
+  `Split|Inline`, `List|Tree`) is the shared `ToggleSegment` — whose active segment reuses the tab
+  grammar's `control-bg-selected` (below), never a container surface, so the selected fill survives the
+  high-contrast themes where `container-elevated-bg` collapses onto the toolbar surface.
+  The `ChangesPanel` secondary toolbar paints **no surface of its own**: like the right-panel tab strip
+  it shows the panel's `container-sidebar-bg`, so the two chrome rows read as one continuous surface. The **file-style tree row** (chevron/spacer
   lead, folder/file icon, truncated label, trailing slot; `min-w-0` so a row can shrink when it shares a
   flex line with a trailing control) is the shared **`TreeRow`**, used by both
   `FileTree` and `ChangesTree` so the two trees stay identical. Both trees **compact a single-directory
@@ -264,19 +290,47 @@ a project picker, the prompt hero, and the reused
   **store-driven two-pane shell** (left section rail + scrollable content pane; mobile collapses the rail to
   a horizontal segmented strip): `settingsOpen`/`settingsSection` live in the store so the gear AND the
   Welcome banner can open it deep-linked to a section. Live sections: **`ProvidersSettings`** (the in-app
-  provider-auth surface — Connected cards each with a **Sign-out only when `canLogout`** (env / central /
+  provider-auth surface — Connected cards each with a **Sign-out only when `canLogout`** (env /
   models.json auth shows a "Managed" tag instead, since the host can't unset it); a **"Sign in with a
   subscription"** block of `canOAuth` providers; an **"Add an API key"** group of `canApiKey`-only
   providers (capped with a "Show N more" expander) — **both routes start `provider.loginStart`**
   (`type` `"oauth"` / `"api_key"`, issue #97) into the same store-driven `auth/LoginDialog` (open the
   URL / paste a code / answer the provider's own key prompts, `provider.loginReply` — no inline key
   field); a "configured outside the app" note for rows with neither flag; and
-  the **`JetBrainsAiCard`** — route Claude+GPT through your JetBrains subscription (the jbcentral proxy) — a
-  state machine over `jbcentralWired`/`jbcentralInstalled` + `jbcentralInstall` (all from the same status
-  read) + `provider.jbcentral*`:
-  Connected (Disconnect) / ready (Connect) / not signed in (in-app `central login` + Retry) / not installed
-  (the host's per-OS copyable install command — from `jbcentralInstall`, for the *host's* OS, never the
-  browser's — + Recheck); each mutation re-reads `provider.status`) **`GithubSettings`** (the "Local GitHub" block — `github.authStatus()`
+  the **`JetBrainsAiCard`** — route Central-supported models through the user's JetBrains subscription while
+  keeping ThinkRail's embedded PI — a state machine over the typed `JbcentralStatus` +
+  `provider.jbcentral*`: absent (official host-OS install guidance + Recheck), outdated — below the host's
+  minimum supported Central (guided Update), invalid/unverifiable version (safe guidance, no native action;
+  a version *above* the minimum is simply ready, never gated), **signed out** — the card
+  **states it and offers only Sign in**: the primary action *replaces* Connect rather than sitting beside it,
+  and on `supported` the signed-out line replaces the "Central is ready" claim instead of annotating it. The
+  rule is that the card never advertises an action that cannot succeed — connecting without credentials
+  fails — so the prerequisite becomes the offer, and Connect returns once the host reports credentials.
+  **Signed out renders as one state, whatever the configuration underneath:** the body says only that Central
+  is signed out — never paired with a "Connected" line that would contradict it — and **Sign in is the only
+  action**, Disconnect withheld along with Connect. Once authenticated, a configured status whose proxy is
+  positively observed stopped likewise replaces the success claim with “Central's proxy is not running” and
+  offers only **Start proxy**; after it starts, Connected + Disconnect return. The prerequisite order is
+  therefore Sign in → Start proxy → ordinary connected controls, never competing actions. Unknown proxy
+  health does not manufacture a demand. A broken session asks for the one thing that resolves its current
+  prerequisite rather than pairing a fix with an unrelated choice or success message.
+  **Signing in is one button, never a menu:** ThinkRail launches Central's flow on the host, and the
+  `central login` command appears *only* where that launch failed — printing it beside a working button makes
+  the user choose between two routes to the same place. Because the flow opens on the **host's** browser, the
+  launched confirmation says so and names Refresh as the next step, since Connect is not on screen yet. The
+  *reactive* guidance survives for the case the probe cannot see: credentials present, action refused
+  anyway —, sign-in required (launch Central sign-in +
+  Retry), ready (Connect), configuring (a Central action or watched candidate rebuild is in flight),
+  connected (the current runtime for new work applied Central; Disconnect), load-failed (the last runtime or
+  boot-time plain fallback remains usable; Retry or Disconnect), and generic action error (Retry/Recheck).
+  There is no restart prompt, affected-chat list, blocked state, or recovery mode. Existing live chats may
+  retain an older runtime—including Central after Disconnect—and the card says its state applies to new chats.
+  Update/connect/disconnect state is host-authoritative and shared across clients; every mutation re-reads
+  `provider.status`, while `provider.changed` invalidations from watched external changes trigger the same
+  re-read plus model-list invalidation. Status reads are request-sequenced so an older response cannot replace
+  a newer watched/action result. Copy never promises only Claude/GPT, never asks for standalone PI,
+  never renders child output/diagnostics/artifact content/paths/proxy data/secrets/raw models, and maps only
+  closed reason codes to ThinkRail-authored text. **`GithubSettings`** (the "Local GitHub" block — `github.authStatus()`
   Connected + login / Not connected + Refresh); **`AppearanceSettings`** (the **theme picker** — the
   bundled catalog from `themes`, with the resolved active selection from `store.theme` marked; clicking
   one fires `settings.update` and the UI **converges on the `settings.changed` broadcast** (no optimistic
@@ -408,10 +462,17 @@ a project picker, the prompt hero, and the reused
 ## Get right
 
 - **Workbench tab chrome is not a feature panel.** The shell layout module supplies one selected-tab
-  grammar to every group: semantic selected/hover/focus tokens, a shape cue at the content edge, bounded
-  one-row overflow, and the complete WAI-ARIA tabs pattern with roving focus and labelled tabpanels. Panel
-  renderers provide title/icon/status/close metadata and fill the selected tabpanel; they never read group
-  order or draw their own docking strip.
+  grammar to every group: `control-bg-selected` behind the whole selectable tab, `text-default`, and a
+  **2px `primary` marker spanning the tab's full width** on the bottom edge (`after:inset-x-0`, flush
+  with the selected fill — no horizontal inset). Inactive tabs stay transparent with muted text; hover
+  uses `control-bg-hovered`; keyboard focus keeps its separate focus ring. The marker is a shape cue, not
+  merely a text-colour change, so selection remains obvious when a high-contrast theme makes neighbouring
+  surfaces equal. The grammar also supplies bounded one-row overflow and the complete WAI-ARIA tabs
+  pattern with roving focus and labelled tabpanels. Panel renderers provide title/icon/status/close
+  metadata and fill the selected tabpanel; they never read group order or draw their own docking strip.
+  The shared `ToggleSegment` (List|Tree, Split|Inline, Preview|Source) borrows the same
+  `control-bg-selected` fill + `text-default` for its active segment (no bottom marker — a slim toggle,
+  not a tab), so "selected" reads the same everywhere and never derives a parallel surface token.
 - The singleton side-tool renderers are **Projects | Specs | All files | Changes | Review**. Their current
   location and local selection are supplied by the shell; Review exposes its store-derived pending-draft
   count as tab metadata. A renderer remains the same when its singleton moves to the opposite side.
@@ -689,9 +750,11 @@ a project picker, the prompt hero, and the reused
   **single click previews** the rendered spec — and whose **double click keeps** it — through the same
   `fs.readFile` → `openTab` flow as `FileTree` (see the Preview tabs bullet; reading down a spec graph is
   the case the reusable slot exists for). Every row stays on one line: indentation → chevron →
-  shape-coded role icon → truncated title → fixed trailing role (`ARCH` / `MODULE` / `SUBMODULE` / `TASK`;
-  unknown types degrade compactly). The top-level `goal-and-requirements` row instead carries the exact
-  **`Main spec`** label and distinct root icon; a locally selected file resource's row has a persistent selected
+  shape-coded role icon → truncated title → trailing role (`ARCH` / `MODULE` / `SUBMODULE` / `TASK`;
+  unknown types degrade compactly). The role is **revealed on row hover/focus**, untruncated, and the
+  `aria-label` carries it unconditionally. Titles render through `specDisplayTitle`, which collapses a
+  title's ` — ` / ` – ` separator to **` · `**. The top-level `goal-and-requirements` row
+  instead carries the exact **`Main spec`** label and distinct root icon; a locally selected file resource's row has a persistent selected
   treatment. **Lifecycle status is not presented at all** — future lint health arrives with a real linter
   feature, not speculative dots or reused status chrome. This remains a restrained hierarchy — no hero,
   duplicate root, preview pane, or graph canvas. `FileTree` shares the same file gesture model
@@ -880,7 +943,9 @@ a project picker, the prompt hero, and the reused
   only what is *not* typography: h1/h2 section rules, a capped reading measure (~78ch) with wide
   tables/code scrolling inside it, zebra-striped bordered tables, muted accent blockquotes, crisp
   rules, and **GitHub-style alert callouts** (`> [!NOTE]`…`[!CAUTION]`, via the in-repo
-  `markdownAlerts` remark transform + a lucide/token `AlertCallout`, wired in only here — not chat) — in
+  `markdownAlerts` remark transform + a lucide/token `AlertCallout`, wired in only here — not chat), and
+  **```mermaid fences render as themed diagrams** (the shared `Markdown` primitive's mermaid path —
+  `chat/SPEC.md`; the rendered *diff* keeps the source-code degradation, like shiki) — in
   a centered reading column; strips a leading YAML frontmatter block via
   `lib.stripFrontmatter` so a spec's metadata doesn't render as a stray heading — source view still shows
   it) and source being the lazy read-only `MonacoEditor`. The choice
@@ -928,7 +993,29 @@ a project picker, the prompt hero, and the reused
   genuinely live frames; replies xterm synthesizes for recorded terminal queries can therefore never enter the
   live shell. PTY sizing distinguishes desired, in-flight, and
   host-acknowledged grids; only a successful `terminal.resize` advances the acknowledgement, so reconnect
-  replay cannot leave a full-screen app permanently sized to a request the host never applied.
+  replay cannot leave a full-screen app permanently sized to a request the host never applied. The 16 ANSI
+  slots come from the theme's `--ansi-*` domain palette (never the semantic UI text tokens); on top of it
+  xterm runs a **`minimumContrastRatio` legibility floor** driven by the theme's contrast metadata (normal
+  `4.5`, high `7`, in `panels/terminalContrast.ts`). xterm's default of `1` disables correction, which
+  left colours close to the terminal background (`black` on the near-black dark canvas) with no floor; the
+  ratio lifts the resolved foreground against the live background without editing the palette — all 16 HC
+  ANSI colours render ≥ 7:1 with hue preserved. The floor **cannot** fix ANSI **dim** (SGR 2): xterm renders
+  dim as the foreground at 50% opacity, correction never fires for the already-high-contrast default
+  foreground (Vite's `(client)` tag is dim over the *default foreground*, not an ansi colour), and 50%
+  over a light canvas caps ≈ 3.3:1. So in **high-contrast themes the dim attribute is stripped from
+  terminal output** (`stripAnsiDim`), rendering that text at full foreground contrast (≥ AA). The
+  `terminalContrast.test.ts` gate reproduces xterm's colour maths to hold both HC themes at the threshold. The **12px
+  content inset** lives on the xterm **mount host's own box** (absolutely positioned, `inset-md` on every
+  side) rather than as padding on it — FitAddon derives cols/rows from that host's measured size, so
+  padding would overcount the grid and clip the last row/column; insetting the box keeps the measured
+  area equal to the visible content area.
+- **IME control-chord rescue.** xterm 6.0.0 drops `Ctrl+<letter>` and `Escape` outright while a CJK
+  input method is active (upstream #6065): its chord table switches on `keyCode`, and an active IME
+  reports the sentinel 229 for every key, so nothing matches and *no byte is emitted* — a
+  Chinese/Japanese/Korean user cannot interrupt a runaway process or leave vim. `TerminalInstance`'s
+  key handler intercepts keydown at `keyCode === 229` and derives the control bytes from `event.code`
+  (which stays accurate under an IME) via `imeControlBytes`, writing them to the PTY itself; anything
+  that isn't a rescued chord is left to normal text input.
 - Heavy deps (Monaco / shiki / xterm) load via `React.lazy(() => import())` to stay out of the eager bundle.
   A lazy chunk that fails to load (or a render throw) is contained by the `components/ErrorBoundary` the
   **shell** wraps each region in (see `shell/SPEC.md`), so a single panel degrades instead of blanking the

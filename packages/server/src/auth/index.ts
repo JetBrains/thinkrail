@@ -1,7 +1,16 @@
-/** Provider auth: the read side (`provider.status`) + in-app login/mutation (OAuth + interactive
- * API-key entry over one channel, logout, JetBrains AI). */
-
-export { connectJbcentral, disconnectJbcentral, jbcentralLogin } from "./jbcentral";
+export {
+	connectJbcentral,
+	disconnectJbcentral,
+	getJbcentralStatus,
+	initializeJbcentralRuntime,
+	jbcentralLogin,
+	resetJbcentralStateForTests,
+	setJbcentralAppliedPublisher,
+	setJbcentralChangedPublisher,
+	startProxyJbcentral,
+	stopJbcentralRuntime,
+	updateJbcentral,
+} from "./jbcentral";
 export {
 	cancelAllLogins,
 	cancelLogin,

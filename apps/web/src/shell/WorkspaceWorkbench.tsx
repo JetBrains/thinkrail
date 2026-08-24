@@ -401,7 +401,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 					break;
 				case "specs":
 					body = (
-						<div className="p-12">
+						<div className="p-4">
 							<SpecsPanel
 								workspaceId={workspaceId}
 								failed={specs.failed}
@@ -412,7 +412,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 					break;
 				case "files":
 					body = (
-						<div className="p-12">
+						<div className="p-4">
 							<FileTree key={workspaceId} workspaceId={workspaceId} />
 						</div>
 					);
@@ -589,8 +589,6 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 							const latest = state.layoutDocumentsByWorkspace[workspaceId];
 							const prepared = prepare(latest);
 							if (!latest || prepared.document !== latest) commit(prepared.document);
-							// The host terminal close is already authoritative; layout reconciliation may retry its
-							// structural removal, but this accepted user close owns attention exactly once now.
 							prepared.onAccepted(useAppStore.getState().layoutDocumentsByWorkspace[workspaceId]);
 						};
 						const terminal = terminalByKey.get(tab.tabKey);

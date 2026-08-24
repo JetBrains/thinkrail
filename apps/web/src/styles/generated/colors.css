@@ -10,7 +10,7 @@
 	--text-default: var(--text);
 	--text-muted: var(--muted);
 	--text-subtle: var(--hint);
-	--text-disabled: color-mix(in srgb, var(--disabled) 60%, transparent);
+	--text-disabled: color-mix(in srgb, var(--text) 60%, transparent); /* disabled non-control text = the default text colour at the `strong` (60%) alpha step — a disabled element inherits its enabled semantic colour, dimmed at the token level, never a dedicated disabled palette value */
 	--text-on-primary: var(--on-accent);
 	--text-link: var(--info); /* global.css `a {}` is the only consumer; no component styles a bare link */
 	--container-workspace-bg: var(--background); /* the app surface, and with it the opened-document canvas — a document reads as part of the workspace (Monaco's EDITOR_THEME, the markdown/spec preview, the chat column, the tab strip) */
@@ -22,13 +22,16 @@
 	--control-bg: var(--input);
 	--control-bg-hovered: var(--hover);
 	--control-bg-selected: var(--hover);
-	--control-primary-bg: var(--accent);
+	--control-primary-bg: var(--accent-solid); /* the SOLID primary button fill — its own palette source (`accentSolid`), decoupled from `accent` so a theme can brighten the opaque fill without moving the alpha-derived primary tints (primary-subtle/soft/muted) or the accent used for text/ring/border; every theme maps accentSolid to its accent except regular Light, which uses the brighter dark-theme green */
 	--control-primary-bg-hovered: var(--accent-hover); /* the primary button's hover fill — its own manifest key so a theme owns the hover step instead of the button fading with an opacity utility */
 	--control-primary-text: var(--on-accent);
 	--control-border-default: var(--border);
 	--control-border-active: var(--border-strong);
-	--control-disabled-bg: var(--input);
-	--control-disabled-text: color-mix(in srgb, var(--disabled) 60%, transparent);
+	--control-disabled-bg: color-mix(in srgb, var(--input) 60%, transparent); /* disabled control fill = the default control fill (`input`, i.e. control-bg) at the `strong` (60%) alpha step */
+	--control-disabled-text: color-mix(in srgb, var(--text) 60%, transparent); /* disabled control label/icon = the default control text colour (`text`, i.e. text-default) at the `strong` (60%) alpha step */
+	--control-disabled-border: color-mix(in srgb, var(--border) 60%, transparent); /* disabled control border = the default control border (`border`, i.e. control-border-default) at the `strong` (60%) alpha step */
+	--control-primary-disabled-bg: color-mix(in srgb, var(--accent) 60%, transparent); /* disabled primary button fill = the accent hue at the `strong` (60%) alpha step — kept on `accent` (the alpha-tint base), not the brightened solid `accentSolid`, so the disabled fill stays with the primary tint family */
+	--control-primary-disabled-text: color-mix(in srgb, var(--on-accent) 60%, transparent); /* disabled primary button label/icon = the normal primary text (`onAccent`, i.e. control-primary-text) at the `strong` (60%) alpha step */
 	--border-default: var(--border-strong);
 	--border-muted: var(--border);
 	--primary: var(--accent);
@@ -95,6 +98,9 @@
 	--color-control-border-active: var(--control-border-active);
 	--color-control-disabled-bg: var(--control-disabled-bg);
 	--color-control-disabled-text: var(--control-disabled-text);
+	--color-control-disabled-border: var(--control-disabled-border);
+	--color-control-primary-disabled-bg: var(--control-primary-disabled-bg);
+	--color-control-primary-disabled-text: var(--control-primary-disabled-text);
 	--color-border-default: var(--border-default);
 	--color-border-muted: var(--border-muted);
 	--color-primary: var(--primary);

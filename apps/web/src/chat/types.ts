@@ -1,37 +1,26 @@
-import type { AssistantMessage, ExtUiRequest, UserMessage } from "@thinkrail/contracts";
+import type {
+	AssistantMessage,
+	ExtUiRequest,
+	ImageContent,
+	UserMessage,
+} from "@thinkrail/contracts";
 
-/** The extension-UI frames that await a browser reply (the ones `ExtUiDialog` renders). */
+export interface ChatAttachment {
+	name: string;
+	content: ImageContent;
+}
+
 export type ExtUiDialogRequest = Extract<
 	ExtUiRequest,
 	{ kind: "select" | "confirm" | "input" | "editor" }
 >;
 
-/**
- * A rendered chat turn. User/assistant turns are pi's **canonical** message objects (so these renderers
- * drop into any pi UI); `system` is a web-local notice (e.g. "✓ Done"); `error` is a web-local failure
- * notice (a turn that ended in a provider/model error, or a send the host rejected — e.g. a bad model or a
- * missing API key). A final "✓ Done" marker also carries `endedAt` (the `agent_settled` wall-clock) so the
- * round summary can measure the turn's duration. Tool results are not turns — they're indexed by
- * `toolCallId` and rendered inline with their call (see `ToolResultState`).
- */
 export type ChatTurn =
-	| { kind: "user"; id: string; message: UserMessage }
+	| { kind: "user"; id: string; message: UserMessage; attachmentNames?: string[] }
 	| { kind: "assistant"; id: string; message: AssistantMessage; streaming: boolean }
 	| { kind: "system"; id: string; text: string; endedAt?: number }
-	/** A failure notice: the run ended in an error, or the host rejected a send. `text` is the reason. */
+	| ({ kind: "compaction"; id: string } & CompactionState)
 	| { kind: "error"; id: string; text: string }
-	/**
-	 * Where compaction replaced earlier messages with `summary` (pi's `compactionSummary`). Hydration-only:
-	 * a live transcript still holds every message it streamed, so there is no gap to mark until a reload
-	 * rebuilds the chat from what pi kept.
-	 */
-	| { kind: "compaction"; id: string; summary: string; tokensBefore: number }
-	/**
-	 * A live retry countdown (shown during the back-off, cleared when the retry resolves). `source`
-	 * separates the two flows that can overlap — a `turn` retry (pi `auto_retry_*`) and a `summarization`
-	 * retry (compaction / branch-summary, pi `summarization_retry_*`) — so one flow's end event never
-	 * clears the other's countdown.
-	 */
 	| {
 			kind: "retry";
 			id: string;
@@ -41,9 +30,17 @@ export type ChatTurn =
 			delayMs: number;
 	  };
 
+export interface CompactionState {
+	status: "running" | "done" | "failed" | "cancelled";
+	detail?: string;
+	summary?: string;
+	tokensBefore?: number;
+	tokensAfter?: number;
+	resuming?: boolean;
+}
+
 export type ToolStatus = "running" | "done" | "error";
 
-/** A tool's live state keyed by `toolCallId`. `raw` is the pi event's `result`/`partialResult` (typed any). */
 export interface ToolResultState {
 	status: ToolStatus;
 	raw: unknown;

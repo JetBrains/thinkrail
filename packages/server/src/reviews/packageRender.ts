@@ -1,11 +1,6 @@
-// The structured context package a send hands the agent as its first user message (or follow-up):
-// review items with stable ids, fragments + bounded surrounding context — never the full diff (the
-// agent reads the worktree with its own tools). Pure: file access comes in as a callback.
-
 import type { Review, ReviewComment } from "@thinkrail/contracts";
 import { lineRangeOf, textQuoteOf } from "./anchoring";
 
-/** How many lines of surrounding context each anchored comment inlines on each side of its fragment. */
 export const CONTEXT_LINES = 10;
 
 export interface PackageInput {
@@ -13,9 +8,7 @@ export interface PackageInput {
 	branch: string;
 	baseBranch: string;
 	comments: ReviewComment[];
-	/** A worktree file's current content, or `null` when unreadable/gone. */
 	readFile: (path: string) => string | null;
-	/** A file's content at a ref — how a `side: "base"` anchor reads its own (pre-change) content. */
 	readBase: (ref: string, path: string) => string | null;
 }
 
@@ -48,8 +41,6 @@ function renderComment(comment: ReviewComment, input: PackageInput): string {
 	const quote = anchor ? textQuoteOf(anchor) : undefined;
 	if (quote?.exact) parts.push(`<fragment>\n${quote.exact}\n</fragment>`);
 	if (anchor && range && comment.anchorState !== "outdated") {
-		// Each side reads its OWN content: a base anchor's line numbers index the pre-change blob, so
-		// pulling worktree lines here would caption the fragment with unrelated code.
 		const content =
 			anchor.side === "base"
 				? anchor.baseRef
@@ -68,7 +59,6 @@ function renderComment(comment: ReviewComment, input: PackageInput): string {
 	return parts.join("\n");
 }
 
-/** Render the whole package: header, the structured review items, then the standing instructions. */
 export function renderPackage(input: PackageInput): string {
 	const { review, comments } = input;
 	const header = `<review id="${review.id}" branch="${input.branch}" base="${input.baseBranch}@${review.baseSha}" comments="${comments.length}">`;

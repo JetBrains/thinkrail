@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { localeRepair, pathLooksComplete, resolveShellEnv } from "./shellEnv";
 
-/** `resolveShellEnv` mutates these, so every test saves and restores them. */
 const LOCALE_VARS = ["LANG", "LC_ALL", "LC_CTYPE"];
 
 let originalPath: string | undefined;
@@ -34,11 +33,9 @@ test("resolveShellEnv leaves PATH alone when it already looks complete", () => {
 });
 
 test("localeRepair supplies a UTF-8 locale only when none is configured", () => {
-	// Nothing configured: the shell would be byte-oriented, so a multi-byte character breaks on backspace.
 	expect(localeRepair({}, "linux")).toBe("C.UTF-8");
-	expect(localeRepair({}, "darwin")).toBe("en_US.UTF-8"); // C.UTF-8 doesn't exist on macOS
+	expect(localeRepair({}, "darwin")).toBe("en_US.UTF-8");
 
-	// Any configured locale is the user's choice — including a bare `C`, which we deliberately don't overrule.
 	expect(localeRepair({ LANG: "en_GB.UTF-8" }, "linux")).toBeNull();
 	expect(localeRepair({ LANG: "C" }, "linux")).toBeNull();
 	expect(localeRepair({ LC_ALL: "de_DE.UTF-8" }, "linux")).toBeNull();
@@ -47,12 +44,11 @@ test("localeRepair supplies a UTF-8 locale only when none is configured", () => 
 
 test("resolveShellEnv installs LANG when the host has no locale at all", () => {
 	for (const key of LOCALE_VARS) delete process.env[key];
-	process.env.PATH = "/opt/homebrew/bin:/usr/bin"; // keeps PATH resolution a no-op, so no shell is spawned
+	process.env.PATH = "/opt/homebrew/bin:/usr/bin";
 
 	resolveShellEnv();
 
 	expect(process.env.LANG).toMatch(/UTF-8$/);
-	// Only LANG: setting LC_ALL would override the user's per-category settings.
 	expect(process.env.LC_ALL).toBeUndefined();
 	expect(process.env.LC_CTYPE).toBeUndefined();
 });
@@ -67,7 +63,6 @@ test("resolveShellEnv leaves an existing locale untouched", () => {
 });
 
 test("a missing locale is repaired even when PATH short-circuits", () => {
-	// The two repairs are independent: PATH looking complete must not skip the locale one.
 	for (const key of LOCALE_VARS) delete process.env[key];
 	process.env.PATH = "/opt/homebrew/bin:/usr/bin";
 

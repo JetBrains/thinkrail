@@ -5,17 +5,8 @@ import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-// For assertions at the end of the fs-PROPAGATION chain (fs.watch → ≤ 1s debounce → WS push → panel
-// re-read → render): the default 5s window was observed flaking under full-suite load on macOS — where
-// recursive fs.watch rides FSEvents, whose delivery latency spikes under load — most readily against
-// the compiled binary (`e2e:binary`). A LOST frame still fails at 10s, so real notifier bugs stay
-// visible; only late delivery is absorbed. Mount-driven reads keep the ordinary `expect`.
 const fsExpect = expect.configure({ timeout: 10_000 });
 
-// Live refresh: the host watches the active worktree (recursive fs.watch → a debounced
-// `workspace.fsChanged` push) and the panels silently re-read — so files/specs/git changes made
-// OUTSIDE the app (Finder, a terminal, the agent) appear with no manual refresh anywhere. The watcher
-// starts lazily on the workspace's first read, which panel-mount itself triggers.
 test("worktree changes on disk appear live in Specs, All files, Changes, and an open file tab", async ({
 	page,
 }) => {
@@ -23,7 +14,6 @@ test("worktree changes on disk appear live in Specs, All files, Changes, and an 
 	const workspace = await createWorkspaceViaDialog(page);
 	const worktree = workspace.worktreePath;
 
-	// --- Specs (the right rail's default tab): a spec written on disk appears — no Refresh click.
 	await expect(page.locator('[data-testid="spec-node"][data-spec-id="sample-root"]')).toBeVisible();
 	mkdirSync(join(worktree, "module-live"), { recursive: true });
 	writeFileSync(
@@ -34,7 +24,6 @@ test("worktree changes on disk appear live in Specs, All files, Changes, and an 
 		page.locator('[data-testid="spec-node"][data-spec-id="sample-live"]'),
 	).toBeVisible();
 
-	// --- All files: an added file appears; a deleted one drops out.
 	await page.getByTestId("tab-files").click();
 	const freshFile = page.getByTestId("file-node").filter({ hasText: "fresh-file.txt" });
 	await expect(page.getByTestId("file-node").filter({ hasText: "README.md" })).toBeVisible();
@@ -43,8 +32,6 @@ test("worktree changes on disk appear live in Specs, All files, Changes, and an 
 	rmSync(join(worktree, "fresh-file.txt"));
 	await fsExpect(freshFile).toHaveCount(0);
 
-	// --- Changes: a tracked-file edit surfaces while the tab is open, and the open Monaco diff tab
-	// follows further edits (DiffPane re-reads both sides on the workspace's fs tick).
 	await page.getByTestId("tab-changes").click();
 	const readmeRow = page.getByTestId("change-item").filter({ hasText: "README.md" });
 	await expect(
@@ -58,8 +45,6 @@ test("worktree changes on disk appear live in Specs, All files, Changes, and an 
 	writeFileSync(join(worktree, "README.md"), "# sample-project\n\nedited twice by e2e\n");
 	await fsExpect(page.getByTestId("diff-pane")).toContainText("edited twice by e2e");
 
-	// --- Open file tab: the visible tab's content follows the disk (the viewer is read-only, so a
-	// silent swap is conflict-free).
 	await page.getByTestId("tab-files").click();
 	await page.getByTestId("file-node").filter({ hasText: "README.md" }).dblclick();
 	await expect(page.getByTestId("editor-pane")).toContainText("edited twice by e2e");
@@ -68,16 +53,10 @@ test("worktree changes on disk appear live in Specs, All files, Changes, and an 
 	await fsExpect(page.getByTestId("editor-pane")).not.toContainText("edited twice by e2e");
 });
 
-// Performance canary: live refresh must never turn a write storm into a message/refetch storm. The
-// host's coalescer bounds pushes to ≤ ~1 frame/sec/workspace (300ms quiet / 1s max-wait), so ~200
-// rapid writes over ~3s must reach the client as a HANDFUL of `workspace.fsChanged` frames — not 200 —
-// while the host's event loop stays responsive (a mid-storm /health round-trip) and the UI still
-// converges on the final state. If the debounce ever regresses, the frame-count bound trips.
 test("churn canary: a write storm coalesces to a few frames and the host stays responsive", async ({
 	page,
 	baseURL,
 }) => {
-	// Tap the app's WebSocket before it connects: count pushed fsChanged frames as the browser sees them.
 	const fsFrameTimes: number[] = [];
 	page.on("websocket", (ws) => {
 		ws.on("framereceived", (frame) => {
@@ -90,15 +69,11 @@ test("churn canary: a write storm coalesces to a few frames and the host stays r
 	const workspace = await createWorkspaceViaDialog(page);
 	const worktree = workspace.worktreePath;
 
-	// Watch the tree live so the storm also exercises the client refetch path, then let the watcher's
-	// startup nudge pass so the storm window counts only storm-driven frames.
 	await page.getByTestId("tab-files").click();
 	await expect(page.getByTestId("file-node").filter({ hasText: "README.md" })).toBeVisible();
 	await sleep(1200);
 	const framesBefore = fsFrameTimes.length;
 
-	// The storm: 20 bursts × 10 files, 150ms apart (≈ 3s of sustained churn — gaps shorter than the
-	// 300ms quiet window, so only the 1s max-wait can flush). Probe the host mid-storm.
 	mkdirSync(join(worktree, "storm"), { recursive: true });
 	let healthMs = -1;
 	for (let burst = 0; burst < 20; burst++) {
@@ -113,18 +88,13 @@ test("churn canary: a write storm coalesces to a few frames and the host stays r
 		}
 		await sleep(150);
 	}
-	// Marker write + settle: everything pending has flushed well within this window.
 	writeFileSync(join(worktree, "storm-done.txt"), "done\n");
 	await expect(page.getByTestId("file-node").filter({ hasText: "storm-done.txt" })).toBeVisible();
 	await sleep(1500);
 
-	// The UI converged: the storm dir is present and expandable to its files.
 	await page.getByTestId("file-node").filter({ hasText: "storm" }).first().click();
 	await expect(page.getByTestId("file-node").filter({ hasText: "f-19-9.txt" })).toBeVisible();
 
-	// The bounds: ~201 writes reached the client as a handful of frames (debounce held — a regression to
-	// per-event pushes would show hundreds), batching actually happened repeatedly (≥ 2 flushes across a
-	// 3s storm — the max-wait bound), and the host answered mid-storm without event-loop starvation.
 	const stormFrames = fsFrameTimes.length - framesBefore;
 	expect(stormFrames).toBeGreaterThanOrEqual(2);
 	expect(stormFrames).toBeLessThanOrEqual(8);

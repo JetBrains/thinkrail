@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { SpecGraphNode } from "@thinkrail/contracts";
-import { buildSpecTree, specRoleLabel, specRoleTag } from "./specTree";
+import { buildSpecTree, specDisplayTitle, specRoleLabel, specRoleTag } from "./specTree";
 
 function node(id: string, over: Partial<SpecGraphNode> = {}): SpecGraphNode {
 	return {
@@ -29,6 +29,17 @@ test("humanizes known and extension-defined spec roles", () => {
 	expect(specRoleTag("risk_register")).toBe("RISK REGISTER");
 });
 
+test("renders dashed titles with a compact dot separator", () => {
+	expect(specDisplayTitle("ACP client — spawn, negotiate, translate")).toBe(
+		"ACP client · spawn, negotiate, translate",
+	);
+	expect(specDisplayTitle("meta – the ThinkRail extension namespace")).toBe(
+		"meta · the ThinkRail extension namespace",
+	);
+	expect(specDisplayTitle("browser↔host wire")).toBe("browser↔host wire");
+	expect(specDisplayTitle("e2e/workflows — harness")).toBe("e2e/workflows · harness");
+});
+
 test("nests children under their parent; roots and siblings sort by title", () => {
 	const tree = buildSpecTree([
 		node("b-child", { parent: "root", title: "B child" }),
@@ -52,8 +63,6 @@ test("a self-parenting node renders as a root, not an infinite chain", () => {
 	expect(tree[0]?.children).toEqual([]);
 });
 
-// Parent cycles are spec_validate's problem, not the viewer's — what matters here is that malformed
-// input terminates (visited-guarded walk) and leaves the well-formed part of the graph intact.
 test("a parent cycle terminates and leaves well-formed roots intact", () => {
 	const tree = buildSpecTree([
 		node("a", { parent: "b" }),

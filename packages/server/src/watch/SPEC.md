@@ -48,6 +48,17 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
   readiness and cancels the nudge, so callers cannot
   hang and torn-down watchers cannot publish. An invalidation nudge remains idempotent, so the fallback's
   possible duplicate is one cheap no-op refetch.
+- **Prewarm tier (globally bounded):** `ensureWatch(workspaceId, { prewarm: true })` — reached via
+  `workspace.watchReady`'s optional `prewarm` flag, the web's pre-selection warm-up — starts the same
+  watcher but marks its entry **prewarm-only**. Prewarm-only entries live in one global pool capped at
+  **8**: creating one beyond the cap evicts the least-recently-prewarmed prewarm-only entry through
+  `stopWatch` (its conservative readiness settle included), so clicking through many projects reuses one
+  bounded pool instead of accumulating watchers for one host lifetime. Any **real** call promotes the
+  entry out of the tier for good — a watcher activated by a real workspace read or skill-load preflight
+  is never evicted — while a prewarm hit on a live prewarm-only entry only refreshes its eviction
+  recency, and a prewarm can never demote a real watcher (including across an inode-change
+  re-creation). Correctness under eviction rides the existing recovery paths: the next real call
+  re-creates the watcher and its fresh conservative startup nudge covers the blind window.
 - **Repo-metadata nudge (second seam):** a git-metadata write is *metadata, not content*, so it never
   becomes an `fsChanged` path (the `.git` blackout stands — plumbing storms must not turn into frames). It
   instead arms a separately debounced (300ms), **pathless** `setRepoMetaPublisher(workspaceId)` nudge. This
@@ -82,7 +93,7 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
   publishing for a forgotten id), and **retries a failed start on the next read** (no sticky failure
   marker). A watcher that errors mid-flight (ENOSPC, root deleted) is `console.warn`ed and dropped —
   panels fall back to read-on-demand until a later read re-creates it. No idle-stop in V1 (bounded by
-  workspaces actually visited).
+  workspaces actually visited plus the capped prewarm tier).
 - **Public surface (barrel):** `ensureWatch`, `stopWatch`, `stopAllWatches`, `setWatchPublisher`,
   `setRepoMetaPublisher`, `setSkillPathClassifier`.
 - **Allowed deps:** `persistence` (workspace lookup); `contracts` (payload type); Bun/Node.

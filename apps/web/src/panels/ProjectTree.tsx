@@ -40,14 +40,15 @@ import {
 	toast,
 	useAppStore,
 } from "../store";
-import { errorText, getTransport } from "../transport";
+import { errorText, getTransport, prewarmWorkspaceSkillLoad } from "../transport";
 import { AddProjectMenu } from "./AddProjectMenu";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { ExistingWorktreeDialog } from "./ExistingWorktreeDialog";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
 import { useOpenProject } from "./useOpenProject";
 
-/** Left-nav: projects → workspaces (git worktrees). Open a repo, select it, create/select workspaces. */
+const PREWARM_WORKSPACE_LIMIT = 8;
+
 export function ProjectTree() {
 	const projects = useAppStore((s) => s.projects);
 	const recentProjects = useAppStore((s) => s.recentProjects);
@@ -55,9 +56,6 @@ export function ProjectTree() {
 	const workspaces = useAppStore((s) => s.workspaces);
 	const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
 
-	// The host's installed editors for every row's "Open in" submenu — host-wide, not per-workspace, so
-	// it's fetched once here rather than once per row. An empty list (still loading, or none detected)
-	// simply hides the submenu — never a dead entry for an app the host doesn't have.
 	const [editors, setEditors] = useState<EditorInfo[]>([]);
 	useEffect(() => {
 		void getTransport()
@@ -66,14 +64,7 @@ export function ProjectTree() {
 			.catch(() => {});
 	}, []);
 
-	// The Projects view is rendered by both Project Home and the workspace layout, so crossing that boundary remounts
-	// this component. Seed the selected project open: a project-row click promises to reveal its workspaces,
-	// and that promise must survive the hand-off to Project Home rather than collapsing on the new instance.
-	const [expanded, setExpanded] = useState<Set<string>>(
-		() => new Set(selectedProjectId ? [selectedProjectId] : []),
-	);
-	// The project a New-Workspace dialog is open for (null = closed). The "+" opens it instead of
-	// creating a workspace directly.
+	const expandedProjectIds = useAppStore((s) => s.expandedProjectIds);
 	const [dialogProjectId, setDialogProjectId] = useState<string | null>(null);
 	const [existingDialogProjectId, setExistingDialogProjectId] = useState<string | null>(null);
 	const addProjectButtonRef = useRef<HTMLButtonElement>(null);
@@ -96,9 +87,6 @@ export function ProjectTree() {
 		});
 	}, []);
 
-	// Once this client's event-driven close removes its source row, move focus to the project selected by
-	// the store's navigation fallback (or the newest open project for a background close), then Add project
-	// when the rail is empty. Other clients receive the same snapshot without having their focus moved.
 	useEffect(() => {
 		const closedProjectId = pendingCloseFocusProjectIdRef.current;
 		if (!closedProjectId || projects.some((project) => project.id === closedProjectId)) return;
@@ -110,32 +98,35 @@ export function ProjectTree() {
 		focusProjectNameOrAdd(fallbackProjectId);
 	}, [focusProjectNameOrAdd, projects, selectedProjectId]);
 
-	// Reveal the active workspace's parent on mount or when its derived owner changes/resolves. Depending
-	// only on that project id preserves a deliberate manual collapse across same-project switches and
-	// workspace updates; creation expands its project explicitly in `onWorkspaceCreated` below.
 	const activeProjectId = useAppStore(selectActiveWorkspaceProjectId);
 	useEffect(() => {
-		if (!activeProjectId) return;
-		setExpanded((prev) => {
-			if (prev.has(activeProjectId)) return prev;
-			const next = new Set(prev);
-			next.add(activeProjectId);
-			return next;
-		});
+		if (activeProjectId) useAppStore.getState().expandProject(activeProjectId);
 	}, [activeProjectId]);
 
-	const loadWorkspaces = async (projectId: string) => {
-		useAppStore
-			.getState()
-			.setWorkspaces(projectId, await getTransport().request("workspace.list", { projectId }));
-	};
+	const loadWorkspaces = useCallback(async (projectId: string) => {
+		const rows = await getTransport().request("workspace.list", { projectId });
+		const store = useAppStore.getState();
+		store.setWorkspaces(projectId, rows);
+		if (store.selectedProjectId !== projectId) return;
+		for (const workspace of rows.slice(0, PREWARM_WORKSPACE_LIMIT)) {
+			void prewarmWorkspaceSkillLoad(workspace.id).catch(() => {});
+		}
+	}, []);
+
+	const pendingListLoadsRef = useRef(new Set<string>());
+	useEffect(() => {
+		for (const project of projects) {
+			if (!expandedProjectIds[project.id] || workspaces[project.id]) continue;
+			if (pendingListLoadsRef.current.has(project.id)) continue;
+			pendingListLoadsRef.current.add(project.id);
+			void loadWorkspaces(project.id)
+				.catch(() => {})
+				.finally(() => pendingListLoadsRef.current.delete(project.id));
+		}
+	}, [projects, expandedProjectIds, workspaces, loadWorkspaces]);
 
 	const selectProject = async (projectId: string) => {
-		// Selecting a project atomically returns to its Welcome. The row is a deliberate "project home"
-		// gesture; the chevron handles expand/collapse separately, so this never fires from just expanding.
-		// The workspace's tabs survive in the store, so re-selecting it restores its view.
-		useAppStore.getState().selectProject(projectId);
-		setExpanded((prev) => new Set(prev).add(projectId));
+		useAppStore.getState().selectProject(projectId, { reveal: true });
 		await loadWorkspaces(projectId);
 	};
 
@@ -144,59 +135,39 @@ export function ProjectTree() {
 	};
 
 	const toggleExpand = (projectId: string) => {
-		setExpanded((prev) => {
-			const next = new Set(prev);
-			if (next.has(projectId)) {
-				next.delete(projectId);
-			} else {
-				next.add(projectId);
-				void loadWorkspaces(projectId);
-			}
-			return next;
-		});
+		const store = useAppStore.getState();
+		const willExpand = !store.expandedProjectIds[projectId];
+		store.toggleProjectExpanded(projectId);
+		if (willExpand) void loadWorkspaces(projectId);
 	};
 
-	// The shared open-project flow (open → offer to git-init a non-git folder → or a legible error). Its
-	// adopt step selects + expands the freshly opened/initialised project; `dialogs` is rendered below.
 	const { openProject, pickAndOpen, dialogs } = useOpenProject((project) =>
 		selectProject(project.id),
 	);
 
-	// After the dialog creates a workspace: expand its project + reload the list (the dialog itself sets
-	// the active workspace and kicks off any chat).
 	const onWorkspaceCreated = async (workspace: Workspace) => {
-		setExpanded((prev) => new Set(prev).add(workspace.projectId));
+		useAppStore.getState().expandProject(workspace.projectId);
 		await loadWorkspaces(workspace.projectId);
 	};
 
-	// The response is authoritative, but the project may never have been expanded: `addWorkspace` rightly
-	// refuses to seed a partial list. Re-list first, install the complete snapshot, then activate the row.
 	const onExistingWorktreeOpened = async (workspace: Workspace) => {
 		const rows = await getTransport().request("workspace.list", {
 			projectId: workspace.projectId,
 		});
 		const attached = rows.find((candidate) => candidate.id === workspace.id);
 		if (!attached) throw new Error("The attached worktree is missing from the workspace list");
-		setExpanded((prev) => new Set(prev).add(workspace.projectId));
 		const store = useAppStore.getState();
+		store.expandProject(workspace.projectId);
 		store.setWorkspaces(workspace.projectId, rows);
 		store.activateWorkspace(attached);
 	};
 
-	// Event-driven removal: just fire the request — no per-client optimism. The host tears the worktree
-	// down and broadcasts `workspace.removed`, which every client (including this one) reacts to via
-	// `applyWorkspaceRemoved`. A rejected request means no event will come, so surface it as an error toast
-	// (the row simply stays).
 	const removeWorkspace = (workspaceId: string) => {
 		void getTransport()
 			.request("workspace.remove", { id: workspaceId })
 			.catch((err) => toast.error(errorText(err, "Failed to remove workspace")));
 	};
 
-	// GUI editors (`code`/`emacs`/a JetBrains IDE) launch host-side, detached, at the worktree. Vim is
-	// `kind: "terminal"` — it has no window of its own, so instead of asking the host to spawn a TTY-less
-	// process, activate the workspace and run it in its embedded terminal (`editor.id` doubles as the
-	// literal shell command for a terminal-kind entry — a deliberate simplification for the one case).
 	const openWorkspaceIn = (workspace: Workspace, editor: EditorInfo) => {
 		if (editor.kind === "terminal") {
 			useAppStore.getState().activateWorkspace(workspace);
@@ -214,8 +185,6 @@ export function ProjectTree() {
 			.catch((err) => toast.error(errorText(err, "Failed to reveal workspace")));
 	};
 
-	// Lossless and event-driven: the host marks the stable project record closed, then project.updated
-	// removes it from every client's rail. A rejected request emits no event, so the row stays and we toast.
 	const closeProject = (project: Project) => {
 		pendingCloseFocusProjectIdRef.current = project.id;
 		void getTransport()
@@ -262,9 +231,7 @@ export function ProjectTree() {
 
 			<ul className="flex flex-col">
 				{projects.map((project) => {
-					const isExpanded = expanded.has(project.id);
-					// `undefined` = not fetched yet (render nothing — once fetched the list always holds at
-					// least the ensured Default row, so there is no persistent "empty" state to name).
+					const isExpanded = expandedProjectIds[project.id] === true;
 					const list = workspaces[project.id];
 					return (
 						<li key={project.id}>
@@ -272,8 +239,6 @@ export function ProjectTree() {
 								project={project}
 								isSelected={selectedProjectId === project.id}
 								isExpanded={isExpanded}
-								// Worktrees only: the always-present Default would make the badge a constant "≥1",
-								// destroying its meaning ("you have N workspaces here").
 								workspaceCount={(list ?? []).filter((w) => !isDefaultWorkspace(w)).length}
 								onToggle={() => toggleExpand(project.id)}
 								onSelect={() => void selectProject(project.id)}
@@ -285,8 +250,7 @@ export function ProjectTree() {
 								onRestoreFocus={() => focusProjectNameOrAdd(project.id)}
 							/>
 							{isExpanded && list !== undefined && (
-								// 4px above the first workspace (project → workspace) and 4px between workspace blocks.
-								<ul className="mt-4 flex flex-col gap-4">
+								<ul className="flex flex-col">
 									{list.map((ws) => (
 										<WorkspaceRow
 											key={ws.id}
@@ -374,8 +338,6 @@ function ProjectRow({
 	const [confirmOpen, setConfirmOpen] = useState(false);
 	const openingDialogRef = useRef(false);
 	const closeConfirmedRef = useRef(false);
-	// Release the context menu's modal layer before mounting another one. Overlapping Radix modals can
-	// otherwise race while restoring body pointer events after the next dialog closes.
 	const openDialogAfterMenu = (openDialog: () => void) => {
 		openingDialogRef.current = true;
 		setMenuOpen(false);
@@ -532,8 +494,6 @@ function WorkspaceRow({
 	onReveal: () => void;
 	onRemove: () => void;
 }) {
-	// Default is non-removable; external is removable from ThinkRail but its user-owned checkout is not.
-	// Icons make the three ownership modes legible without adding another text badge to the compact row.
 	const isDefault = isDefaultWorkspace(workspace);
 	const isExternal = isExternalWorkspace(workspace);
 	const Icon = isDefault ? House : isExternal ? FolderOpen : GitBranch;
@@ -542,10 +502,6 @@ function WorkspaceRow({
 		event.preventDefault();
 		setMenuOpen(true);
 	};
-	// A centered dialog, not an anchored popover: the trigger is a generic overflow icon, not a dedicated
-	// delete affordance, so anchoring a confirm box to it the way the old dedicated Remove button did would
-	// read oddly. Opened from the menu item's `onSelect`, `preventDefault`ed so Radix's own close-then-
-	// return-focus-to-trigger doesn't fight the dialog's focus trap opening right behind it.
 	const [confirmOpen, setConfirmOpen] = useState(false);
 	return (
 		<li>
@@ -565,11 +521,7 @@ function WorkspaceRow({
 					className="flex min-w-0 flex-1 items-center gap-8 text-left"
 				>
 					<Icon className={`size-16 shrink-0 ${isActive ? "text-primary" : "text-text-muted"}`} />
-					{/* Name on top, the git branch on a second line beneath it — the display name is decoupled
-					    from the branch, so surface both without crowding one line. The branch line is hidden when
-					    they coincide, so pristine/legacy rows stay a single compact line. */}
-					{/* 2px between the workspace name and its branch/metadata line. */}
-					<span className="flex min-w-0 flex-1 flex-col gap-2">
+					<span className="flex min-w-0 flex-1 flex-col">
 						<span
 							data-testid="workspace-name"
 							className={`truncate tr-text-ui leading-tight ${isActive ? "text-primary" : "text-text-muted"}`}
@@ -590,10 +542,6 @@ function WorkspaceRow({
 					<DropdownMenuTrigger
 						data-testid="workspace-menu"
 						aria-label={`Actions for ${workspace.name}`}
-						// This menu is the row's only surface for Open in / Copy path / Reveal / Remove, so it
-						// can't be hover-only-invisible: a touch device has no hover and would never discover
-						// it. `opacity-0` only applies under `(hover: hover)` (a device that actually has a
-						// hover state to reveal it on) — everywhere else (touch) it stays visible by default.
 						className="flex size-20 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted opacity-100 outline-none transition hover:bg-container-elevated-bg hover:text-text-default [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-primary data-[state=open]:opacity-100"
 					>
 						<MoreVertical className="size-16" />

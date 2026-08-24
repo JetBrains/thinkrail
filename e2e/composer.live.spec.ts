@@ -1,15 +1,8 @@
 import { expect, test } from "@playwright/test";
 import { createWorkspaceViaDialog, openFixtureProject, worktreeRows } from "./fixtures/app";
 
-// Tagged @agent (see agent.live.spec.ts): excluded from the default `bun run e2e`; run via
-// `bun run e2e:agent`. These exercise the Composer + cheap wins against a REAL pi agent + pi's
-// default auth, since the model list and a session both need a working provider.
-
-/** Create a workspace, open a chat tab in it, and wait for the composer to mount. */
 async function openChat(page: import("@playwright/test").Page): Promise<void> {
 	await openFixtureProject(page);
-	// The fixture ships a committed `.claude/skills` alias; trust the project so the live session loads it
-	// (project-scoped aliases are gated behind trust). Open the dialog, grant, then create through it.
 	await page.getByTestId("add-workspace").first().click();
 	const trustDialog = page.getByTestId("new-workspace-dialog");
 	await expect(trustDialog).toBeVisible();
@@ -44,7 +37,6 @@ test("composer prompt is moderately tall with model and effort controls undernea
 		throw new Error("Composer layout boxes were not measurable");
 	}
 
-	// Four rows is intentionally ~2/3 of the New-Workspace prompt height — roomy, but not as tall as the dialog hero.
 	expect(inputBox.height).toBeGreaterThanOrEqual(100);
 	expect(inputBox.height).toBeLessThanOrEqual(130);
 	const belowInputY = inputBox.y + inputBox.height;
@@ -58,25 +50,19 @@ test("model picker plus file and portable-skill completion use the live session 
 }, async ({ page }) => {
 	await openChat(page);
 
-	// Cheap win #1 — the model selector populates from `model.list` once auth-backed models load.
 	const modelSelector = page.getByTestId("model-selector");
 	await expect(modelSelector).toBeEnabled();
 	await modelSelector.click();
 	await expect(page.getByTestId("model-option").first()).toBeVisible();
 	expect(await page.getByTestId("model-option").count()).toBeGreaterThan(0);
-	// Close WITHOUT selecting: a real pick calls `session.setModel`, which pi persists as the *default*
-	// model — pinning the first-listed (possibly deprecated) model would break later turns this run.
 	await page.keyboard.press("Escape");
 	await expect(page.getByTestId("model-option")).toHaveCount(0);
 
-	// The thinking-level picker is the honest effort knob.
 	await expect(page.getByTestId("thinking-selector")).toBeVisible();
 
-	// Cheap win #3 — the stats bar renders current context as soon as the session reports stats.
 	await expect(page.getByTestId("session-stats")).toBeVisible();
 	await expect(page.getByTestId("session-stats")).toContainText(/[?%]\/\d/);
 
-	// The worktree session is authoritative and discovers the fixture's Claude-compatible project alias.
 	const input = page.getByTestId("chat-input");
 	await input.fill("/e2e");
 	const portableSkill = page
@@ -86,12 +72,10 @@ test("model picker plus file and portable-skill completion use the live session 
 	await expect(portableSkill).toContainText("skill/project");
 	await input.press("Tab");
 	await expect(input).toHaveValue("/skill:e2e-portable ");
-	// Selection restores focus/caret on the next animation frame; let that settle before replacing the value.
 	await input.evaluate(
 		() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())),
 	);
 
-	// Composer @-mention: typing `@RE` lists the worktree's README.md and picking it inserts the path.
 	await input.fill("@RE");
 	const mention = page.getByTestId("mention-item").filter({ hasText: "README.md" });
 	await expect(mention).toBeVisible();
@@ -106,8 +90,6 @@ test("stats refresh after a turn completes (cheap win #3)", { tag: "@agent" }, a
 	await page.getByTestId("chat-input").fill("Reply with the single word: pong");
 	await page.getByTestId("chat-send").click();
 
-	// Key off final settlement (the completion notice), not model output — stats refresh when the store
-	// folds `agent_settled`, and the env's default model may vary. The bar then shows cumulative usage.
 	await expect(
 		page.locator('[data-testid="chat-message"][data-role="system"]').filter({ hasText: "Done" }),
 	).toBeVisible({ timeout: 80_000 });
@@ -115,7 +97,6 @@ test("stats refresh after a turn completes (cheap win #3)", { tag: "@agent" }, a
 	await expect(stats).toBeVisible();
 	await expect(stats).toContainText(/[↑↓RW]/);
 
-	// Populated usage wraps at field boundaries on a phone instead of pushing the context or Skills out.
 	await page.setViewportSize({ width: 320, height: 720 });
 	const skills = page.getByTestId("open-skills");
 	await expect(skills).toBeVisible();

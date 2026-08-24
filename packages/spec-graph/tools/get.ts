@@ -1,5 +1,3 @@
-// spec_get — one node by id: frontmatter, resolved links, and path. No body (read it with `read`).
-
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { type Frontmatter, LINK_KINDS, type LinkKind, linkTargets } from "../core/index.ts";
@@ -9,7 +7,6 @@ const parameters = Type.Object({
 	id: Type.String({ description: "The spec id to look up." }),
 });
 
-/** A resolved link target: the id and whether a node exists for it. */
 interface ResolvedLink {
 	kind: LinkKind;
 	target: string;

@@ -26,15 +26,10 @@ beforeEach(() => {
 	writeFileSync(
 		join(dataDir, "workspaces.json"),
 		JSON.stringify([
-			// Measures against the fetched ref via its creation base → nudged.
 			ws("w-base", "p1", { baseBranch: "origin/main" }),
-			// Re-pointed ONTO the fetched ref → nudged (`diffBase` wins over `baseBranch`).
 			ws("w-repointed", "p1", { baseBranch: "main", diffBase: "origin/main" }),
-			// Re-pointed AWAY from it → its diff didn't change meaning → silent.
 			ws("w-away", "p1", { baseBranch: "origin/main", diffBase: "release" }),
-			// Another ref entirely → silent.
 			ws("w-other-ref", "p1", {}),
-			// Same ref, another project → silent (the fetch ran in p1's repo, not this one's).
 			ws("w-other-project", "p2", { baseBranch: "origin/main" }),
 		]),
 	);
@@ -53,8 +48,6 @@ test("nudges exactly the project's workspaces whose diff base is the moved ref, 
 
 	nudgeBaseRefWorkspaces("p1", "origin/main");
 
-	// Pathless (an invalidation, not data — no `.git` path may reach a client), never truncated or
-	// skill-relevant.
 	expect(frames).toEqual([
 		{ workspaceId: "w-base", paths: [], truncated: false, skillChange: "none" },
 		{ workspaceId: "w-repointed", paths: [], truncated: false, skillChange: "none" },

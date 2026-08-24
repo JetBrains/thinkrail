@@ -61,7 +61,6 @@ export function LayoutSettings() {
 			await updateLayoutSettings(next);
 			return true;
 		} catch {
-			// The host broadcast is the only state writer; a rejected edit leaves the current value intact.
 			return false;
 		} finally {
 			setSaving(false);
@@ -184,7 +183,7 @@ export function LayoutSettings() {
 										type="button"
 										disabled={saving || !activeWorkspaceId || !document}
 										onClick={() => setApplying(preset)}
-										className="rounded-[var(--radius-sm)] bg-control-primary-bg px-8 py-4 tr-text-metadata text-control-primary-text hover:bg-control-primary-bg-hovered disabled:bg-control-disabled-bg disabled:text-control-disabled-text"
+										className="rounded-[var(--radius-sm)] bg-control-primary-bg px-8 py-4 tr-text-metadata text-control-primary-text hover:bg-control-primary-bg-hovered disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text"
 									>
 										Apply now…
 									</button>
@@ -266,7 +265,7 @@ export function LayoutSettings() {
 						placement.
 					</p>
 				</div>
-				<div className="flex max-w-lg gap-8">
+				<div className="flex max-w-16 gap-8">
 					<input
 						value={name}
 						onChange={(event) => setName(event.target.value)}
@@ -300,7 +299,7 @@ export function LayoutSettings() {
 								if (saved) setName("");
 							});
 						}}
-						className="flex shrink-0 items-center gap-4 rounded-[var(--radius-sm)] bg-control-primary-bg px-12 py-4 tr-text-ui text-control-primary-text hover:bg-control-primary-bg-hovered disabled:bg-control-disabled-bg disabled:text-control-disabled-text"
+						className="flex shrink-0 items-center gap-4 rounded-[var(--radius-sm)] bg-control-primary-bg px-12 py-4 tr-text-ui text-control-primary-text hover:bg-control-primary-bg-hovered disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text"
 					>
 						<Plus className="size-16" /> Save preset
 					</button>
@@ -314,7 +313,7 @@ export function LayoutSettings() {
 						Applies to new groups. Existing over-limit arrangements remain usable and reducible.
 					</p>
 				</div>
-				<div className="flex max-w-xs items-center gap-8">
+				<div className="flex max-w-4 items-center gap-8">
 					<input
 						type="number"
 						min={minimumSideLimit}

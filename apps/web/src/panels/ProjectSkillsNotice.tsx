@@ -5,19 +5,11 @@ import { Button } from "@/components/ui/button";
 import { toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
 
-/**
- * The per-project trust + new-skill surface for pre-workspace contexts (the Welcome view). **Presence-
- * gated:** renders nothing unless the project's checkout actually ships committed alias skills, and shows a
- * COUNT — never the skills' (attacker-controlled) names/descriptions — before trust. Granting trust
- * acknowledges the skills present now; ones that appear later (a pull/branch) surface a "review" affordance
- * that acknowledges them. Grants/acks echo the updated `Project` back, which we fold into the store.
- */
 export function ProjectSkillsNotice({ projectId }: { projectId: string }) {
 	const project = useAppStore((s) => s.projects.find((p) => p.id === projectId));
 	const [aliasSkills, setAliasSkills] = useState<string[] | null>(null);
 	const [busy, setBusy] = useState(false);
 
-	// The committed alias skills present in the project's current checkout (a count only — degrades to none).
 	useEffect(() => {
 		let cancelled = false;
 		setAliasSkills(null);
@@ -58,7 +50,6 @@ export function ProjectSkillsNotice({ projectId }: { projectId: string }) {
 		}
 	};
 
-	// Trusted with nothing new pending → a quiet confirmation line, no action.
 	if (trusted && pending.length === 0) {
 		return (
 			<p

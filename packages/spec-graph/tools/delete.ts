@@ -1,5 +1,3 @@
-// spec_delete — remove a spec file by id.
-
 import { rmSync } from "node:fs";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";

@@ -5,6 +5,7 @@ import {
 	enterDefaultWorkspace,
 	openFixtureProject,
 	pressPlatformShortcut,
+	revealFirstProjectWorkspaces,
 	waitTerminalReady,
 } from "./fixtures/app";
 
@@ -81,12 +82,9 @@ async function dragTabToTarget(page: Page, tab: Locator, target: Locator): Promi
 	return targetBox.height;
 }
 
-async function reenterDefaultAfterReload(page: Page): Promise<void> {
+async function reloadDefaultWorkbench(page: Page): Promise<void> {
 	await page.reload();
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
-	await page.getByTestId("welcome-action").filter({ hasText: "Work in project folder" }).click();
-	// A persisted hidden left side intentionally removes ProjectTree (and therefore its active workspace row)
-	// from the workbench, so the center surface—not the rail—is the universal activation receipt.
 	await expect(page.getByTestId("center-tabs")).toBeVisible();
 }
 
@@ -171,7 +169,7 @@ test("outer side widths publish on pointer-up and restore after reload", async (
 	await expect.poll(() => width(right)).toBeGreaterThan(before + 70);
 	const resized = await width(right);
 
-	await reenterDefaultAfterReload(page);
+	await reloadDefaultWorkbench(page);
 	await expect.poll(() => width(page.getByTestId("right-stack"))).toBeGreaterThan(before + 50);
 	expect(Math.abs((await width(page.getByTestId("right-stack"))) - resized)).toBeLessThan(24);
 });
@@ -192,7 +190,7 @@ test("dragging outer separators hides both sides and preserves their restore sta
 	await expect(page.getByTestId("right-stack")).toHaveCount(0);
 	await waitForLayoutSettled(page);
 
-	await reenterDefaultAfterReload(page);
+	await reloadDefaultWorkbench(page);
 	await expect(page.getByTestId("left-layout-rail")).toBeVisible();
 	await expect(page.getByTestId("right-layout-rail")).toBeVisible();
 
@@ -323,8 +321,6 @@ test("side groups expose broad per-panel above and below split targets", async (
 	changesGroup = groups.filter({ has: page.getByTestId("tab-changes") });
 	await waitForLayoutSettled(page);
 	const foldChanges = changesGroup.getByTestId("side-group-fold");
-	// dnd-kit captures clicks briefly after pointer teardown to suppress the drag's synthetic click.
-	// Once persistence has settled, use the same button's keyboard path instead of racing that guard.
 	await foldChanges.press("Enter");
 	await expect(changesGroup).toHaveAttribute("data-folded", "true");
 	const foldedAboveTarget = changesGroup.locator('[data-drop-label="Create right group above"]');
@@ -351,7 +347,7 @@ test("Mod+B and Mod+J hide and restore synchronized sides, including after reloa
 	await expect(page.getByTestId("right-stack")).toHaveCount(0);
 	await expect(page.getByTestId("terminal-instance")).toHaveCount(0);
 
-	await reenterDefaultAfterReload(page);
+	await reloadDefaultWorkbench(page);
 	await expect(page.getByTestId("left-layout-rail")).toBeVisible();
 	await expect(page.getByTestId("right-layout-rail")).toBeVisible();
 
@@ -477,9 +473,7 @@ test("deferred opens stay with their request-time group and reroute only when it
 				) {
 					pathByRequest.set(String(frame.id), frame.params.path);
 				}
-			} catch {
-				// Forward non-JSON frames unchanged.
-			}
+			} catch {}
 			server.send(message);
 		});
 		server.onMessage((message) => {
@@ -490,9 +484,7 @@ test("deferred opens stay with their request-time group and reroute only when it
 					heldByPath.set(path, message);
 					return;
 				}
-			} catch {
-				// Forward non-JSON frames unchanged.
-			}
+			} catch {}
 			ws.send(message);
 		});
 	});
@@ -707,7 +699,7 @@ test("a narrow viewport compresses locally without rewriting recursive topology"
 	await expect(page.getByRole("menuitem", { name: /Split right/ })).toBeDisabled();
 	await page.keyboard.press("Escape");
 
-	await reenterDefaultAfterReload(page);
+	await reloadDefaultWorkbench(page);
 	await expect(page.getByTestId("center-group")).toHaveCount(2);
 });
 
@@ -723,12 +715,10 @@ test("remote closures reconcile chat history and cached file reopening", async (
 	const peer = await context.newPage();
 	await peer.goto("/");
 	await expect(peer.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
-	await peer.getByTestId("project-expand").first().click();
+	await revealFirstProjectWorkspaces(peer);
 	await defaultWorkspaceRow(peer).click();
 	const peerChat = peer.locator('[data-testid="editor-tab"][data-kind="chat"]');
 	await expect(peerChat).toHaveCount(1);
-	// A shared tab can render before this browser has hydrated its local chat cache. Closing at that point
-	// removes the shared placement but has no local cache entry to move into History.
 	await expect(peer.getByTestId("chat-input")).toBeVisible();
 	await peerChat.hover();
 	await peerChat.getByTestId("editor-tab-close").click();
@@ -793,7 +783,7 @@ test("a nonmatching remote revision cancels an active drag and both clients conv
 	const page2 = await context.newPage();
 	await page2.goto("/");
 	await expect(page2.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
-	await page2.getByTestId("project-expand").first().click();
+	await revealFirstProjectWorkspaces(page2);
 	await defaultWorkspaceRow(page2).getByRole("button").first().click();
 	await expect(page2.getByTestId("center-group")).toHaveCount(1);
 
@@ -827,7 +817,7 @@ test("a nonmatching remote revision cancels an active resize without publishing 
 	const page2 = await context.newPage();
 	await page2.goto("/");
 	await expect(page2.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
-	await page2.getByTestId("project-expand").first().click();
+	await revealFirstProjectWorkspaces(page2);
 	await defaultWorkspaceRow(page2).getByRole("button").first().click();
 	await expect(page2.getByTestId("right-panel")).toBeVisible();
 

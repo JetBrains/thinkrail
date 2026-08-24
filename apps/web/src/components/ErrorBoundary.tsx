@@ -2,8 +2,6 @@ import { AlertTriangle, RefreshCw, RotateCcw } from "lucide-react";
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { shallowEqualArrays } from "../lib";
 
-// Our single boundary primitive: contains a panel's render/lazy-import crash to that region instead of unmounting the root (bare gray `--header`); a rejected lazy `import()` (stale Vite chunk → 504) throws through Suspense into here, and we steer that case to a reload.
-
 const CHUNK_ERROR_PATTERNS = [
 	"dynamically imported module", // "Failed to fetch dynamically imported module: …"
 	"importing a module script failed", // Safari
@@ -11,7 +9,6 @@ const CHUNK_ERROR_PATTERNS = [
 	"outdated optimize dep", // Vite dev: pre-bundled deps went stale
 ];
 
-/** True when `error` is a failed dynamic `import()` (stale/unreachable chunk) — those recover from a reload, not a retry. Pure so it's unit-testable. */
 export function isChunkLoadError(error: unknown): boolean {
 	const message = (error instanceof Error ? error.message : String(error ?? "")).toLowerCase();
 	return CHUNK_ERROR_PATTERNS.some((pattern) => message.includes(pattern));
@@ -19,9 +16,7 @@ export function isChunkLoadError(error: unknown): boolean {
 
 type Props = {
 	children: ReactNode;
-	/** Short human name of the wrapped surface (e.g. "Terminals") — shown in the fallback + logs. */
 	label?: string;
-	/** When any value here changes, a caught error clears and children re-render — wire to the subtree's identity (workspace/tab id) so navigating away auto-recovers. */
 	resetKeys?: readonly unknown[];
 };
 
@@ -35,7 +30,6 @@ export class ErrorBoundary extends Component<Props, State> {
 	}
 
 	override componentDidCatch(error: Error, info: ErrorInfo): void {
-		// Keep the crash observable in the console for dev/debugging; the UI already degrades gracefully.
 		console.error(`[ErrorBoundary${this.props.label ? `: ${this.props.label}` : ""}]`, error, info);
 	}
 
@@ -63,7 +57,6 @@ export class ErrorBoundary extends Component<Props, State> {
 	}
 }
 
-/** Themed, self-contained fallback — token utilities only, so it wears any theme. */
 function PanelErrorFallback({
 	label,
 	error,

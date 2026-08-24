@@ -7,14 +7,11 @@ describe("parseSubcommand", () => {
 		expect(parseSubcommand(["uninstall", "--yes"])).toBe("uninstall");
 		expect(parseSubcommand([])).toBeUndefined();
 		expect(parseSubcommand(["--no-open"])).toBeUndefined();
-		// A repo that happens to be named after a subcommand is a project dir, not a command.
 		expect(parseSubcommand(["./update"])).toBeUndefined();
 		expect(parseSubcommand(["--port", "80", "update"])).toBeUndefined();
 	});
 
 	test("a launch is not a subcommand — the host boot path must stay reachable", () => {
-		// `compiled-entry` skips asset staging on a subcommand, so a false positive here would boot a
-		// host with no UI staged.
 		expect(parseSubcommand(["/home/u/code/repo"])).toBeUndefined();
 		expect(parseSubcommand(["--version"])).toBeUndefined();
 	});
@@ -36,8 +33,6 @@ describe("parseArgs", () => {
 
 	test("--no-analytics mutes for the run; the env spelling is the analytics service's job", () => {
 		expect(parseArgs(["--no-analytics"], {}).noAnalytics).toBe(true);
-		// THINKRAIL_NO_ANALYTICS is deliberately NOT read here — `packages/server/src/analytics/mute.ts`
-		// is its single reader, so every entrypoint honors it (including `dev.ts`, which parses no argv).
 		expect(parseArgs([], { THINKRAIL_NO_ANALYTICS: "1" }).noAnalytics).toBe(false);
 		expect(parseArgs([], {}).noAnalytics).toBe(false);
 	});

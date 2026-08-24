@@ -99,14 +99,13 @@ describe("PTY size synchronization", () => {
 		first.reject(new Error("not applied"));
 		await tick();
 
-		// The failed grid was not cached as applied, so the next fit retries it.
 		sync.request({ ...size });
 		expect(attempts).toEqual([size, size]);
 		second.resolve();
 		await tick();
 
 		sync.request({ ...size });
-		expect(attempts).toHaveLength(2); // successful acknowledgement suppresses duplicates
+		expect(attempts).toHaveLength(2);
 	});
 
 	test("coalesces layout changes behind one in-flight resize and sends only the newest", async () => {

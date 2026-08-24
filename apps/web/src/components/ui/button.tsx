@@ -8,11 +8,11 @@ const buttonVariants = cva(
 		variants: {
 			variant: {
 				default:
-					"bg-control-primary-bg text-control-primary-text hover:bg-control-primary-bg-hovered disabled:bg-control-disabled-bg disabled:text-control-disabled-text",
+					"bg-control-primary-bg text-control-primary-text hover:bg-control-primary-bg-hovered disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text",
 				destructive:
 					"bg-feedback-error text-text-on-primary hover:opacity-90 disabled:bg-control-disabled-bg disabled:text-control-disabled-text",
 				outline:
-					"border border-control-border-default bg-control-bg text-text-default hover:bg-control-bg-hovered active:border-control-border-active disabled:bg-control-disabled-bg disabled:text-control-disabled-text",
+					"border border-control-border-default bg-control-bg text-text-default hover:bg-control-bg-hovered active:border-control-border-active disabled:border-control-disabled-border disabled:bg-control-disabled-bg disabled:text-control-disabled-text",
 				ghost:
 					"text-text-muted hover:bg-control-bg-hovered hover:text-text-default disabled:text-control-disabled-text",
 			},

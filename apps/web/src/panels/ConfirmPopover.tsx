@@ -3,21 +3,6 @@ import { type ComponentProps, type ReactNode, useId } from "react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent } from "@/components/ui/popover";
 
-/**
- * A small reusable confirmation popover built on the `Popover` primitive — for destructive actions that
- * need an explicit yes/no anchored to the thing they act on (e.g. deleting a prompt template opens it
- * right beneath that row's own Delete button — see `TemplatesSettings`). Reach for `ConfirmDialog` instead
- * when the trigger is a generic control (an overflow menu item) rather than a dedicated affordance for
- * this one action. The caller supplies the trigger as `children` (a `PopoverTrigger`, which also acts
- * as the popover's anchor — add a `PopoverAnchor` only to reposition against something else); this
- * renders the confirm body in `PopoverContent`.
- *
- * It keeps the same deliberate-choice contract as a modal confirm: it's an `alertdialog` named by its
- * title + description (so screen readers announce it — `PopoverContent`, unlike `Dialog`, doesn't wire
- * this for us), Cancel comes first in the DOM so it takes the popover's initial focus (a destructive
- * action is never one stray Enter away), Esc + outside-click cancel (safe), and a `destructive` confirm
- * gets a warning glyph + red button so the weight of the action reads at a glance.
- */
 export function ConfirmPopover({
 	open,
 	onOpenChange,
@@ -43,7 +28,6 @@ export function ConfirmPopover({
 	onConfirm: () => void;
 	side?: ComponentProps<typeof PopoverContent>["side"];
 	align?: ComponentProps<typeof PopoverContent>["align"];
-	/** The popover's trigger (a `PopoverTrigger`), which also anchors it; add a `PopoverAnchor` only to reposition. */
 	children: ReactNode;
 }) {
 	const titleId = useId();

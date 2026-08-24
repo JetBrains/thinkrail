@@ -17,7 +17,6 @@ import {
 } from "../layout";
 
 const hydration = new Map<string, Promise<WorkspaceLayoutDocument>>();
-/** Network writes are serialized per workspace; optimistic projections still install immediately. */
 const commitQueues = new Map<string, Promise<void>>();
 type LayoutReplaceRequester = (params: LayoutReplaceParams) => Promise<LayoutReplaceResult>;
 let layoutReplaceRequesterForTests: LayoutReplaceRequester | null = null;
@@ -53,7 +52,6 @@ function requestLayoutReplace(params: LayoutReplaceParams): Promise<LayoutReplac
 	);
 }
 
-/** Unit-test seam for deterministic settlement ordering; production always uses the wire singleton. */
 export function setLayoutReplaceRequesterForTests(requester: LayoutReplaceRequester | null): void {
 	layoutReplaceRequesterForTests = requester;
 }
@@ -126,9 +124,7 @@ function sameAttention(first: LayoutAttention, second: LayoutAttention): boolean
 export function persistLayoutAttention(workspaceId: string, attention: LayoutAttention): void {
 	try {
 		localStorage.setItem(attentionStorageKey(workspaceId), JSON.stringify(attention));
-	} catch {
-		// Local attention persistence is best-effort; structural state remains safe on the host.
-	}
+	} catch {}
 }
 
 function installAttentionForDocument(
@@ -164,8 +160,6 @@ export async function commitWorkspaceLayout(
 				.layoutPendingByWorkspace[workspaceId]?.find(
 					(candidate) => candidate.mutationId === mutationId,
 				);
-			// Rejecting an earlier full snapshot rolls back every dependent projection after it. Those later
-			// writes must never reach the host and resurrect state that the browser already rolled back.
 			if (!pending) throw new SupersededLayoutCommitError();
 			try {
 				const current = useAppStore.getState();
@@ -204,8 +198,6 @@ export async function commitWorkspaceLayout(
 				const stillPending = state.layoutPendingByWorkspace[workspaceId]?.some(
 					(candidate) => candidate.mutationId === mutationId,
 				);
-				// The matching broadcast can settle optimism before a response is lost with the socket. In that
-				// ordering the write is authoritative success: never roll it back or report a false save failure.
 				if (!stillPending && !state.removedWorkspaceIds[workspaceId]) {
 					const accepted = state.layoutSnapshotsByWorkspace[workspaceId];
 					if (accepted) return accepted;

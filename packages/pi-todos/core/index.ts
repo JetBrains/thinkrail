@@ -1,6 +1,3 @@
-// Public surface of the pi-free TODO model. `tools/` and the host viewer import through this barrel
-// only. Nothing here imports `@earendil-works/*`.
-
 export { countItems, flatItems, groupStatus, STORE_DIR, storeRel, TodoStore } from "./store.ts";
 export {
 	TODO_ARTIFACT_KINDS,

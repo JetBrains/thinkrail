@@ -54,10 +54,15 @@ making store tests import shell runtime synchronization.
 
 ## Composition
 
-The topbar keeps ThinkRail identity, connection state, Settings, and a compact location context. An active
-workspace shows project/workspace plus branch/base/review metadata with progressive responsive degradation.
-A selected project without an active workspace shows Project Home. No selected project leaves the logo
-alone.
+The topbar keeps ThinkRail identity, connection state, Settings, and a compact location context. The
+identity is the icon-only ThinkRail mark — the same vector served as `public/favicon.svg`, inlined at
+32×32 and rendered through the semantic `text-primary` colour so it stays legible in every theme — with
+no divider between it and the location context. An active workspace shows a single-line
+`project / workspace  branch · from baseBranch` context plus optional review metadata, all on one
+typography token (`tr-text-ui` per [[web-typography]]) with only colour distinguishing the parts
+(project + workspace in `text-text-default`, branch and trailing metadata in `text-text-muted`), with
+progressive responsive degradation. A selected project without an active workspace shows Project Home.
+No selected project leaves the logo alone.
 
 With an active workspace, `Shell` mounts the synchronized workbench from `layout/`; the workbench owns all
 center/side geometry and visibility. Without one, it mounts the existing Welcome surface beside the

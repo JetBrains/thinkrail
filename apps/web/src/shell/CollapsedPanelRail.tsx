@@ -9,7 +9,6 @@ type CollapsedPanelRailProps = {
 	onOpen: () => void;
 };
 
-/** The collapsed region itself: one full-height native button, not another resize handle. */
 export const CollapsedPanelRail = forwardRef<HTMLButtonElement, CollapsedPanelRailProps>(
 	function CollapsedPanelRail({ side, label, shortcutKey, onOpen }, ref) {
 		const Icon = side === "left" ? PanelLeftOpen : PanelRightOpen;

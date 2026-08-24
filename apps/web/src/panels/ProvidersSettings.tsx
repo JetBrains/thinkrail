@@ -1,32 +1,22 @@
 import type { ProviderAuthKind, ProviderStatus, ProviderStatusReport } from "@thinkrail/contracts";
 import { Boxes, Check, KeyRound, Lock, LogIn, LogOut, RefreshCw } from "lucide-react";
-import { type ReactNode, useCallback, useEffect, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { LoginDialog } from "@/auth";
 import { Button } from "@/components/ui/button";
 import { toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
 import { JetBrainsAiCard } from "./JetBrainsAiCard";
 
-/** Human label per auth kind (a configured provider's source suffix). */
 const KIND_LABEL: Record<ProviderAuthKind, string> = {
-	central: "JetBrains AI proxy",
 	oauth: "OAuth subscription",
 	"api-key": "API key",
 	env: "environment",
 	other: "configured",
 };
 
-/** How many single-key API-key providers to show before the "Show N more" expander (pi registers ~20). */
 const API_KEY_VISIBLE = 6;
-/** How many non-actionable (multi-field) provider names the compact line spells out before eliding. */
 const MAX_REST_NAMES = 5;
 
-/**
- * The Providers section of the Settings dialog — the in-app model-provider auth surface (moved here from the
- * old Welcome strip). One `provider.status` fetch on mount (every read revalidates host-side), plus in-app
- * auth: Sign-in (OAuth subscriptions), inline API-key entry, and Sign-out — each re-reads status when it
- * settles, so an external `pi` `/login` (or a terminal `central` re-wire) shows up on Refresh too.
- */
 export function ProvidersSettings() {
 	const [report, setReport] = useState<ProviderStatusReport | null>(null);
 	const [failed, setFailed] = useState(false);
@@ -34,17 +24,26 @@ export function ProvidersSettings() {
 	const [busyProvider, setBusyProvider] = useState<string | null>(null);
 	const [showAllKeys, setShowAllKeys] = useState(false);
 	const activeLogin = useAppStore((s) => s.activeLogin);
+	const providerVersion = useAppStore((s) => s.providerVersion);
+	const loadSequence = useRef(0);
 
-	/** Re-reads provider status. Never rejects — a failed read renders the pane's error banner instead. */
 	const load = useCallback(async () => {
+		const sequence = ++loadSequence.current;
+		const providerVersion = useAppStore.getState().providerVersion;
+		const isCurrent = () =>
+			sequence === loadSequence.current &&
+			providerVersion === useAppStore.getState().providerVersion;
 		setRefreshing(true);
 		try {
-			setReport(await getTransport().request("provider.status", {}));
+			const next = await getTransport().request("provider.status", {});
+			if (!isCurrent()) return;
+			setReport(next);
 			setFailed(false);
 		} catch {
+			if (!isCurrent()) return;
 			setFailed(true);
 		} finally {
-			setRefreshing(false);
+			if (sequence === loadSequence.current) setRefreshing(false);
 		}
 	}, []);
 
@@ -52,21 +51,20 @@ export function ProvidersSettings() {
 		void load();
 	}, [load]);
 
-	// A settled login (success) mutated auth.json + refreshed the registry host-side — re-read so the pane
-	// reflects the new provider even while the terminal dialog is still up (closing it reveals the change).
+	useEffect(() => {
+		if (providerVersion > 0) void load();
+	}, [providerVersion, load]);
+
 	useEffect(() => {
 		if (activeLogin?.status === "success") void load();
 	}, [activeLogin?.status, load]);
 
-	// One starter for both auth types: OAuth and interactive API-key entry ride the same login channel
-	// (issue #97) — the LoginDialog renders whatever frames the provider-owned flow pushes.
 	const startLogin = useCallback(async (providerId: string, type: "oauth" | "api_key") => {
 		setBusyProvider(providerId);
 		try {
 			const { loginId } = await getTransport().request("provider.loginStart", { providerId, type });
 			useAppStore.getState().beginLogin(loginId, providerId);
 		} catch (err) {
-			// loginStart failing (offline) leaves no dialog — surface why; the button stays for a retry.
 			toast.error(errorText(err), "Couldn't start the connection");
 		} finally {
 			setBusyProvider(null);
@@ -79,7 +77,6 @@ export function ProvidersSettings() {
 			try {
 				await getTransport().request("provider.logout", { providerId });
 			} catch (err) {
-				// A failed sign-out leaves the card still showing signed-in — surface why.
 				toast.error(errorText(err), "Couldn't sign out");
 				return;
 			} finally {
@@ -97,11 +94,9 @@ export function ProvidersSettings() {
 	const apiKeyRows = unconfigured.filter((p) => p.canApiKey && !p.canOAuth);
 	const shownKeys = showAllKeys ? apiKeyRows : apiKeyRows.slice(0, API_KEY_VISIBLE);
 	const hiddenKeyCount = apiKeyRows.length - shownKeys.length;
-	// Neither in-app path applies (ambient-only auth — env vars / models.json customs): a note, not a row.
 	const noInApp = unconfigured.filter((p) => !p.canOAuth && !p.canApiKey);
 	const loginProviderName =
 		providers.find((p) => p.id === activeLogin?.providerId)?.name ?? activeLogin?.providerId ?? "";
-	// While a login is modal (one at a time), hold the other in-app actions.
 	const rowBusy = (id: string) => busyProvider === id || activeLogin !== null;
 
 	return (
@@ -173,12 +168,13 @@ export function ProvidersSettings() {
 						</section>
 					) : null}
 
-					<JetBrainsAiCard
-						wired={report?.jbcentralWired ?? false}
-						installed={report?.jbcentralInstalled ?? false}
-						install={report?.jbcentralInstall}
-						onChanged={load}
-					/>
+					{report ? (
+						<JetBrainsAiCard
+							status={report.jbcentral}
+							install={report.jbcentralInstall}
+							onChanged={load}
+						/>
+					) : null}
 
 					{apiKeyRows.length > 0 ? (
 						<Group title="Add an API key">
@@ -227,7 +223,6 @@ export function ProvidersSettings() {
 					onReply={(value) => {
 						getTransport()
 							.request("provider.loginReply", { loginId: activeLogin.loginId, value })
-							// A dropped reply strands the login waiting on input that never arrives — surface it.
 							.catch((err) => toast.error(errorText(err), "Couldn't submit"));
 						useAppStore.getState().clearLoginInput();
 					}}
@@ -247,7 +242,6 @@ export function ProvidersSettings() {
 	);
 }
 
-/** A labelled group of provider rows/cards. */
 function Group({ title, children }: { title: string; children: ReactNode }) {
 	return (
 		<section className="flex flex-col gap-8">
@@ -257,7 +251,6 @@ function Group({ title, children }: { title: string; children: ReactNode }) {
 	);
 }
 
-/** A connected provider: an icon tile + name + auth-source label, and a Sign-out when it's removable. */
 function ConnectedCard({
 	provider,
 	busy,
@@ -285,8 +278,6 @@ function ConnectedCard({
 					{provider.detail ? ` · ${provider.detail}` : ""}
 				</span>
 			</div>
-			{/* Only auth.json credentials are removable here — env / central / models.json auth can't be
-			    unset by the host, so it shows a "Managed" tag instead of a Sign-out that would silently no-op. */}
 			{provider.canLogout ? (
 				<Button
 					variant="outline"
@@ -313,12 +304,6 @@ function ConnectedCard({
 	);
 }
 
-/**
- * An unconfigured provider offering in-app auth: a "Sign in" button (when `provider.canOAuth`) and/or an
- * "API key" button (when `provider.canApiKey`) — a provider can offer both (anthropic: subscription or
- * key). Both routes open the same LoginDialog; the API-key flow runs the provider's own prompts over
- * the login channel (multi-prompt creds like azure/vertex included — issue #97), so no inline field.
- */
 function ProviderActionRow({
 	provider,
 	busy,
@@ -358,7 +343,7 @@ function ProviderActionRow({
 					) : null}
 					{provider.canOAuth ? (
 						<Button
-							variant="outline"
+							variant="default"
 							size="sm"
 							data-testid="provider-signin"
 							data-provider={provider.id}

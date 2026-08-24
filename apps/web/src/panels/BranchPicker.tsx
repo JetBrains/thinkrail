@@ -11,17 +11,6 @@ import {
 } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
-/**
- * A branch combobox: searchable, grouped **Remote** / **Local**, the current pick check-marked, with a
- * Refresh that re-lists. One definition for both places the app picks a ref — the New-Workspace dialog's
- * *base* branch (what a worktree is cut from) and the Changes header's *target* branch (what its diff is
- * measured against) — so the two never drift in behaviour or degradation (an offline/failed list arrives
- * empty via `listBranchesOrEmpty` and the popover simply says so).
- *
- * Presentational: the caller owns the fetch, the trigger's look (`triggerClassName`) and its `label`, and
- * what a pick means. `container` portals the popover into a host node (pass a Dialog's node so the list
- * stays scrollable under its scroll lock).
- */
 export function BranchPicker({
 	branches,
 	selected,
@@ -33,10 +22,8 @@ export function BranchPicker({
 	onSelect,
 	onRefresh,
 }: {
-	/** `null` while the list is loading — the popover then shows its empty state. */
 	branches: BranchList | null;
 	selected: string;
-	/** Short prefix in front of the ref ("From" / "vs"), naming what the ref *is* to this surface. */
 	label: ReactNode;
 	testid: string;
 	triggerClassName: string;

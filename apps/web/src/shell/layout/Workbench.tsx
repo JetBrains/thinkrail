@@ -482,7 +482,7 @@ function TabStrip({
 				type="button"
 				aria-label="Scroll tabs left"
 				onClick={() => scroller.current?.scrollBy({ left: -180, behavior: "smooth" })}
-				className="flex w-32 shrink-0 items-center justify-center border-border-muted border-r text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+				className="flex w-24 shrink-0 items-center justify-center border-border-muted border-r text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 			>
 				<ChevronLeft className="size-14" />
 			</button>
@@ -569,14 +569,14 @@ function TabStrip({
 				type="button"
 				aria-label="Scroll tabs right"
 				onClick={() => scroller.current?.scrollBy({ left: 180, behavior: "smooth" })}
-				className="flex w-32 shrink-0 items-center justify-center border-border-muted border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+				className="flex w-24 shrink-0 items-center justify-center border-border-muted border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 			>
 				<ChevronRight className="size-14" />
 			</button>
 			<Popover open={overflowOpen} onOpenChange={setOverflowOpen}>
 				<PopoverTrigger
 					aria-label="Search open tabs"
-					className="flex w-32 shrink-0 items-center justify-center border-border-muted border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+					className="flex w-28 shrink-0 items-center justify-center border-border-muted border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 				>
 					<MoreHorizontal className="size-16" />
 				</PopoverTrigger>
@@ -682,8 +682,6 @@ function WorkbenchTab({
 			onSelect(tab.id);
 			return;
 		}
-		// Wait out the browser's double-click window for every preview tab. Otherwise an inactive preview's
-		// leading click publishes a select before `dblclick` can upgrade the gesture to one final keep.
 		if (pendingPreviewKeep.current) clearTimeout(pendingPreviewKeep.current);
 		const gestureEpoch = ++selectionEpoch.current;
 		const navigationClocks = navigationClockSnapshot(attentionRef.current);
@@ -774,7 +772,7 @@ function WorkbenchTab({
 					data-preview={preview}
 					data-kind={tab.kind === "document" ? "plan" : tab.kind}
 					data-dragging={drag.isDragging || undefined}
-					className="group relative flex min-w-96 max-w-192 shrink-0 items-center border-border-default border-r text-text-muted after:pointer-events-none after:absolute after:right-4 after:bottom-0 after:left-4 after:z-10 after:h-[2px] after:rounded-full after:content-[''] data-[active=true]:bg-control-bg-selected data-[active=true]:text-text-default data-[active=true]:after:bg-primary data-[dragging]:opacity-40"
+					className="group relative flex min-w-96 max-w-192 shrink-0 items-center border-border-default border-r text-text-muted after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:z-10 after:h-[2px] after:rounded-full after:content-[''] data-[active=true]:bg-control-bg-selected data-[active=true]:text-text-default data-[active=true]:after:bg-primary data-[dragging]:opacity-40"
 				>
 					<div
 						ref={before.setNodeRef}
@@ -1109,7 +1107,7 @@ function CenterGroupView({
 							aria-label="New chat"
 							title="New chat"
 							onClick={() => onNewChat(group.id)}
-							className="flex w-32 shrink-0 items-center justify-center text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+							className="flex w-28 shrink-0 items-center justify-center text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 						>
 							<MessageSquarePlus className="size-16" />
 						</button>
@@ -1379,7 +1377,7 @@ function SideGroupView({
 						event.preventDefault();
 						onFold();
 					}}
-					className="flex w-32 shrink-0 items-center justify-center border-border-muted border-b border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+					className="flex w-28 shrink-0 items-center justify-center border-border-muted border-b border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 				>
 					<ChevronDown
 						className={`size-14 transition-transform ${group.folded ? "-rotate-90" : ""}`}

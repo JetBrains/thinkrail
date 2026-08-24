@@ -10,12 +10,6 @@ import {
 	DialogTitle,
 } from "@/components/ui/dialog";
 
-/**
- * A minimal informational modal built on the `Dialog` primitive: a title, a message, and a single
- * acknowledge button — for surfacing a failure that has no yes/no follow-up (e.g. "this folder no longer
- * exists"). Distinct from `ConfirmDialog`, which forces a deliberate yes/no. Errors get a warning glyph.
- * Reusable by the broader error-handling pass; today it surfaces a failed `project.open`.
- */
 export function NoticeDialog({
 	open,
 	onOpenChange,

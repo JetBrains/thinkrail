@@ -34,7 +34,6 @@ let publishLayout: LayoutPublisher | null = null;
 const cache = new Map<string, WorkspaceLayoutSnapshot | null>();
 const queues = new Map<string, Promise<void>>();
 const removalEpochs = new Map<string, number>();
-/** Workspaces whose primary document uses a future schema; compatible backups are read-only fallbacks. */
 const futureProtected = new Set<string>();
 
 export function setLayoutPublisher(publisher: LayoutPublisher | null): void {
@@ -558,9 +557,7 @@ export function normalizeStoredLayoutSettings(current: LayoutSettings): LayoutSe
 				preset.left.groups.length,
 				preset.right.groups.length,
 			);
-		} catch {
-			// Invalid persisted custom presets are isolated from otherwise valid settings fields.
-		}
+		} catch {}
 	}
 	const selectedCustomSurvived = customPresets.some(
 		(preset) => preset.id === current.defaultPresetId,

@@ -119,8 +119,6 @@ describe("resolveWindowsUpdatePlan", () => {
 	const home = "C:\\Users\\u";
 
 	test("passes channel, version and prefix to install.ps1 — always all three", () => {
-		// install.ps1's params default from THINKRAIL_* env vars the child inherits, so an update that
-		// omitted one would silently obey a stray var instead of this install.
 		const plan = resolveWindowsUpdatePlan({
 			args: { version: "latest" },
 			installMeta: { channel: "nightly", prefix: "D:\\tools" },
@@ -137,7 +135,6 @@ describe("resolveWindowsUpdatePlan", () => {
 			"-Prefix",
 			"D:\\tools",
 		]);
-		// The fallback command must name the same custom prefix the attempt used.
 		expect(plan.manualPrefix).toBe("D:\\tools");
 	});
 
@@ -157,7 +154,6 @@ describe("resolveWindowsUpdatePlan", () => {
 			"-Prefix",
 			"C:\\Users\\u\\.local",
 		]);
-		// …and stays out of the fallback command when it is the installer's own default.
 		expect(plan.manualPrefix).toBeUndefined();
 	});
 
@@ -206,8 +202,6 @@ describe("windowsManualUpdateMessage", () => {
 
 	test("carries the channel in each shell's own env syntax", () => {
 		const msg = windowsManualUpdateMessage("nightly", "latest");
-		// The bug this pins: a single cmd-syntax `set "X=v"` shown to PowerShell users, where `set` is
-		// Set-Variable and never reaches the child process -> a silent downgrade to stable.
 		expect(psLine(msg)).toContain("$env:THINKRAIL_CHANNEL='nightly';");
 		expect(psLine(msg)).not.toContain('set "');
 		expect(cmdLine(msg)).toContain('set "THINKRAIL_CHANNEL=nightly" &&');
@@ -225,8 +219,6 @@ describe("windowsManualUpdateMessage", () => {
 	});
 
 	test("carries a custom prefix, so the re-install lands where this one did", () => {
-		// Without it the user re-installs under the default `.local` while the PATH-resolved
-		// D:\tools\bin\thinkrail.exe stays on the old build.
 		const msg = windowsManualUpdateMessage("stable", "latest", "D:\\tools");
 		expect(psLine(msg)).toContain("$env:THINKRAIL_PREFIX='D:\\tools';");
 		expect(cmdLine(msg)).toContain('set "THINKRAIL_PREFIX=D:\\tools" &&');
@@ -241,7 +233,6 @@ describe("windowsManualUpdateMessage", () => {
 	test("stays ASCII (legacy conhost code pages garble anything else)", () => {
 		for (const channel of ["stable", "nightly"] as const) {
 			const msg = windowsManualUpdateMessage(channel, "1.2.3", "D:\\tools");
-			// One UTF-8 byte per char <=> every char is ASCII.
 			expect(Buffer.byteLength(msg, "utf8")).toBe(msg.length);
 		}
 	});
@@ -263,17 +254,16 @@ describe("resolveWindowsPrefix", () => {
 		expect(resolveWindowsPrefix("\\\\nas\\share\\thinkrail", home)).toBe(
 			"\\\\nas\\share\\thinkrail",
 		);
-		// `&` is literal inside both `set "X=…"` and '…', so a legitimate path keeps working.
 		expect(resolveWindowsPrefix("C:\\R&D\\tools", home)).toBe("C:\\R&D\\tools");
 	});
 
 	test("refuses a prefix that isn't rooted or can't be safely quoted", () => {
 		for (const bad of [
-			"tools\\thinkrail", // relative
-			"/home/u/.local", // not a Windows root
-			'D:\\a" && del /f /q C:\\Windows\\System32 && set "X=', // breaks out of cmd's quoting
-			"D:\\%APPDATA%\\x", // cmd expands it before the installer sees it
-			"D:\\a;C:\\b", // breaks the ;-delimited PATH value install.ps1 writes
+			"tools\\thinkrail",
+			"/home/u/.local",
+			'D:\\a" && del /f /q C:\\Windows\\System32 && set "X=',
+			"D:\\%APPDATA%\\x",
+			"D:\\a;C:\\b",
 			"D:\\a\nrm -rf /",
 		]) {
 			expect(() => resolveWindowsPrefix(bad, home)).toThrow("suspicious install prefix");

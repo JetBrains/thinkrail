@@ -20,7 +20,6 @@ import { ProvidersSettings } from "./ProvidersSettings";
 import { TemplatesSettings } from "./TemplatesSettings";
 import { TerminalSettings } from "./TerminalSettings";
 
-/** The live settings sections, in nav order. */
 const SECTIONS: { id: SettingsSection; label: string; icon: LucideIcon }[] = [
 	{ id: SettingsSection.Providers, label: "Providers", icon: KeyRound },
 	{ id: SettingsSection.Github, label: "GitHub", icon: GitBranch },
@@ -30,14 +29,8 @@ const SECTIONS: { id: SettingsSection; label: string; icon: LucideIcon }[] = [
 	{ id: SettingsSection.Templates, label: "Templates", icon: LayoutTemplate },
 	{ id: SettingsSection.Privacy, label: "Privacy", icon: ShieldCheck },
 ];
-/** Placeholder sections — shown dimmed so the shell reads as built-to-grow (not yet wired). */
 const SOON: { label: string; icon: LucideIcon }[] = [{ label: "General", icon: SlidersHorizontal }];
 
-/**
- * App settings — a two-pane shell (left section rail + scrollable content pane) so it grows past today's two
- * sections. Store-driven: the top-bar gear and the Welcome provider-warning both open it via `openSettings`,
- * deep-linking to a section. On mobile the rail collapses to a horizontal segmented strip above the content.
- */
 export function SettingsDialog({ layoutSettings }: { layoutSettings: ReactNode }) {
 	const open = useAppStore((s) => s.settingsOpen);
 	const section = useAppStore((s) => s.settingsSection);

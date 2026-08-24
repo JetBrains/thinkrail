@@ -16,15 +16,22 @@ its URL. It is a thin launcher — all engine logic lives in `packages/server`.
 ## Flow
 
 1. Parse argv + env into options (`src/args.ts`, a pure function); `--help` prints usage and exits.
-2. `resolveShellEnv()` first (a GUI- or `npx`-launched process must still find `pi`/`git` on PATH); it
-   runs once, before any `AgentSession` (sessions are created lazily, on a WS request).
+2. `bootHost()` first resolves the shell environment (a GUI- or `npx`-launched process must still find
+   `git`, Central, and user tools on PATH; ThinkRail embeds PI and never requires a `pi` executable), then
+   awaits the public `createServer()` factory, which starts Central artifact watching and publishes the
+   initial current runtime (or a plain fallback with closed load-failure status) before binding or permitting
+   any `AgentSession` or model/auth read. Later watched changes rotate the current runtime for new chats;
+   existing chats keep their captured generation.
 3. Resolve the static dir (`THINKRAIL_STATIC_DIR`, else the built web app shipped beside the bin) and
    warn if it's missing.
 4. Resolve a free listen port at or above the requested one (`findFreePort` — `Bun.serve` won't report a
-   busy port), then `createServer({ port, host, staticDir, projectPath? })` to embed the host in this Bun
-   process.
-5. Resolve the actual port, log the URL, then open the browser at it (cross-platform: `open` / `start` /
-   `xdg-open`, best-effort), unless `--no-open`.
+   busy port), then await `createServer({ port, host, staticDir, projectPath? })` to embed the host in this
+   Bun process.
+5. Resolve the actual port; on interactive stdout render the shared recursive ThinkRail startup mark
+   with honest `host ready` status + the resolved endpoint, then retain the stable
+   `thinkrail → <url>` line and open the browser there (cross-platform: `open` / `start` / `xdg-open`,
+   best-effort), unless `--no-open`. The mark is omitted for redirected output and every exit-only
+   command (`--help`, `--version`, `update`, `uninstall`).
 6. SIGINT / SIGTERM → `server.stop()` (disposes agent sessions + PTYs, closes the socket), then exit.
 
 ## Interface
@@ -194,6 +201,9 @@ and `trash`'s **native helper sidecars** (which macOS/Windows must execute from 
   `scripts/smoke-binary.ts` (root: `bun run smoke:binary`, after `build:binary`) boots the built binary
   against throwaway data/agent/cache dirs and asserts: a project-local `bunfig.toml` preload does **not**
   execute, `/health` answers, `/` serves the staged UI, the bundled skills staged to the cache dir,
+  **an external synthetic PI extension loads by absolute path** through the compiled artifact's public PI
+  loader with no `pi` executable on `PATH`, under both the default and a custom `PI_CODING_AGENT_DIR`
+  (test-owned source only; no Central-generated artifact is committed, copied, read, or snapshotted),
   **an OAuth sign-in reaches its auth URL** (a WS
   `provider.loginStart` for the Codex provider must answer the method select and push an `authUrl`
   frame — offline and credential-free, since pi's flow only does PKCE + a local callback server before
@@ -205,31 +215,70 @@ and `trash`'s **native helper sidecars** (which macOS/Windows must execute from 
   because the host stores git's symlink-resolved root — macOS `/var` → `/private/var`, Windows' 8.3 `TEMP`
   — so a fixture written at an unresolved path lands in an encoded session dir the host never scans, and
   the delete then truthfully no-ops while the file stays put), verifies both macOS/Windows helpers were
-  staged from the artifact, and SIGTERM exits 0. CI builds + smokes the binary on every PR (its host
-  target — the generation/bundling/staging logic is platform-independent, but a Linux-only smoke cannot
-  see path-canonicalization or real-OS-trash divergence: those first surface on the release matrix's
-  macOS/Windows runners). What it can't cover without provider auth: the factories registering inside a
+  staged from the artifact, and SIGTERM exits 0. CI builds + smokes the binary on every PR on **ubuntu and
+  windows** (each its host target); macOS binary coverage stays release-matrix-only. The Windows leg is not
+  optional polish: the host reaches that extension only when its Central inspection says *installed and
+  supported*, so the whole assertion is Windows-executable-shaped, and a ubuntu-only smoke let #255 ship a
+  release matrix that failed for two days while publishing nothing (see `module-ci-release`). What it can't cover without provider auth: the factories registering inside a
   live session (that's `e2e:agent` territory, run-from-source). The smoke's **broad-net sibling** is `bun run e2e:binary` (root
   `playwright.binary.config.ts`): the whole no-agent e2e suite executed against this binary — also in CI
   on every PR. And `bun run check:seams` (root `scripts/check-binary-seams.ts`) is the build-time canary
   for the seam class: it fails when a pi bump introduces a new bundler-opaque dynamic import the server's
   `registerBundledRuntime` doesn't statically register.
+- **The smoke's fixtures are host-OS-shaped, not POSIX-shaped.** Every one of them was a Windows failure
+  in a green-on-Linux suite:
+  - The **fake Central CLI is compiled** (`bun build --compile` into `central`/`central.exe`), not written
+    as a `#!/bin/sh` script: the host only feeds the synthetic extension to PI when `inspectJbcentral`
+    resolves *and spawns* a `central` reporting a supported version, and Windows can neither resolve an
+    extensionless file as an executable nor `CreateProcess` a shell script. A `.cmd` shim was rejected —
+    `Bun.spawn` cannot launch a batch file without a `cmd.exe` wrapper, and it splits the fixture per shell
+    dialect. Its argv surface stays the reviewed one: `--version` prints a synthetic `central <semver>`,
+    everything else exits non-zero (so the background `status` probe stays an `unknown` observation).
+  - The **pi-free `PATH` is derived from the live `PATH`** by dropping the entries that hold a `pi`
+    executable, then prepending the fake bin dir — never a hardcoded `/usr/bin:/bin` skeleton, which on
+    Windows leaves the host without `git.exe` or System32 (`project.open` shells out to bare `git`). The
+    smoke still asserts no `pi` is reachable, and additionally that `git` survived the filter.
+  - **`HOME` *and* `USERPROFILE` point at the smoke's temp home** in every spawned host, because
+    `homedir()` — which pi's `getAgentDir()` uses — reads `USERPROFILE` on Windows and ignores `HOME`.
+    Without it the default-agent-dir probe writes into the runner's (or a Windows developer's) real
+    `%USERPROFILE%\.pi\agent` instead of the sandbox.
+  - **Every spawned host's env is built by `hostEnv`, which drops the inherited case-variants of the keys
+    it overrides.** Windows env names are case-insensitive and the runner's is spelled `Path`, so the
+    familiar `{...process.env, PATH: x}` ships *both* keys and the child reads the inherited one — the host
+    then ran with the machine's real PATH, saw no fake `central`, reported `absent`, and never loaded the
+    extension while the fixture itself was provably fine.
+  - **Both legs require `provider.status`'s `jbcentral` to be `configured`**, not just the model to be
+    present: the artifact sits inside the *default* agent dir, so a leg that only checks `model.list` could
+    in principle pass through pi's own agent-dir discovery instead of the Central-fed absolute path this
+    gate exists to pin. The status read waits out a transient `configuring` (a boot-time watcher event).
+  - **The two hosts run one at a time**: the default-agent probe boots, asserts and exits before the
+    custom-agent host is spawned. They load the *same* on-disk extension, and a concurrent initial load
+    races on the loader's transpile cache — harmless on POSIX, an EPERM-class failure on Windows, where the
+    loser silently falls back to a runtime without the extension (`prepareInitialRuntime`'s plain-runtime
+    path). A failed *rebuild* keeps the loaded generation, so only the boot load can lose the provider this
+    way — which is why the assertion reports `provider.status`'s `jbcentral` state on failure: `load-failed`
+    names that cause, `absent` names a fixture that never ran.
 
 ## Boundary
 
 - **Owns:** `src/args.ts` (pure `parseArgs(argv, env) → CliOptions` + `parseSubcommand` + `USAGE`),
   `src/index.ts` (the run-from-source `bootstrap()`: shell env → server → browser open → signal handlers),
   and the binary build + its boot smoke (`scripts/build-binary.ts`, `scripts/smoke-binary.ts`,
+  `scripts/artifactName.ts` — the one place the artifact filename rule lives, including the `.exe` Bun
+  appends for a Windows target, so the build's output path and the smoke's default input cannot disagree
+  the way they did on Windows; the release action re-derives the same name in bash because it is also the
+  published-asset contract, see `module-ci-release`),
   `src/compiled-entry.ts`, `src/web-assets.generated.*`, `src/bundled-extensions.generated.*`,
   `src/runtime-assets.generated.*`),
   `src/version.ts` (the release version stamped in at build time), `src/update.ts` (the `update`
   subcommand), `src/uninstall.ts` (the `uninstall` subcommand), `src/paths.ts` (the installed layout:
-  `install.json` + the staging cache root), `src/powershell.ts` (the Windows PowerShell seam), and
-  `src/jbcentral.ts` (the `jbcentral` subcommand — JetBrains Central CLI proxy wiring).
+  `install.json` + the staging cache root), and `src/powershell.ts` (the Windows PowerShell seam). Central
+  integration remains a server/auth feature; the launcher has no Central subcommand or protocol implementation.
 - **Allowed deps:** `@thinkrail/server` (`createServer`, `registerBundledRuntime`, `dataDir` — the
   uninstaller has to name the app state dir, and must name the *same* one the host uses — plus the
   test-only `history-test-fixtures` subpath in the artifact smoke to seed a real pi transcript),
-  `@thinkrail/shared/shellEnv` (`resolveShellEnv`), Bun/Node; the generated build module may
+  `@thinkrail/shared/shellEnv` (`resolveShellEnv`) + `@thinkrail/shared/startupMark` (the shared boot
+  signature renderer), Bun/Node; the generated build module may
   value-import the bundled extension packages' entries (resolved via the server package — build-time
   only, deleted after compile).
 - **Forbidden:** reaching into the server's internals (use only its public surface), the browser/`contracts`
@@ -244,6 +293,8 @@ and `trash`'s **native helper sidecars** (which macOS/Windows must execute from 
 - The browser is the V1 client, not a fallback — the same UI can point at a remote host (the V2 path).
 - The agent runs in this process — a fatal fault takes the app down (the accepted in-process tradeoff).
 - `resolveShellEnv()` runs once, before any `AgentSession`.
+- The startup mark is a presentation of the resolved launch result, never a second readiness signal:
+  `bootHost` must return first, and the parse-stable `thinkrail → <url>` line remains unchanged beneath it.
 
 ## Later
 

@@ -1,4 +1,4 @@
-import type { UserMessage } from "@thinkrail/contracts";
+import type { ImageContent, UserMessage } from "@thinkrail/contracts";
 import {
 	BookOpen,
 	ChevronDown,
@@ -6,11 +6,13 @@ import {
 	Clock,
 	FileDiff,
 	FileText,
+	FoldVertical,
 	RotateCw,
 	TriangleAlert,
 	Wrench,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
 	cn,
 	parseSkillInvocation,
@@ -19,6 +21,7 @@ import {
 	userText,
 } from "@/lib";
 import { ActivityGroup } from "./ActivityGroup";
+import { FileChip } from "./FileChip";
 import { useFold, useSelection } from "./foldState";
 import { Markdown } from "./Markdown";
 import { parseReviewPackage, type ReviewPackageItem, reviewPackageLabel } from "./reviewPackage";
@@ -26,16 +29,8 @@ import type { ChatRow, TurnDividerData } from "./rows";
 import { formatTokens } from "./SessionStatsBar";
 import { ToolCard } from "./ToolCard";
 import { getToolChrome, getToolRenderer } from "./toolRegistry";
+import type { CompactionState } from "./types";
 
-/**
- * Render one derived chat row (see `rows.ts` — the transcript renders rows, not raw turns, so routine
- * activity can fold across assistant-message boundaries). Presentational + props-driven (no
- * store/transport) so the renderers stay reusable; `ChatView` derives the rows from the store and feeds
- * them here. `onOpenSpec` / `onOpenChange` are the divider's two deep links ("N specs" → the Specs panel,
- * "N files changed" → the Changes panel), each taking the ONE path the user picked; `onReveal` just shows a
- * view (a chip expanding its list) — supplied by the integration layer, no-op defaults keep the primitives
- * standalone.
- */
 export function ChatTurnView({
 	row,
 	workspaceRoot,
@@ -51,13 +46,17 @@ export function ChatTurnView({
 }) {
 	switch (row.kind) {
 		case "user":
-			return <UserTurn id={row.id} message={row.message} />;
+			return <UserTurn id={row.id} message={row.message} attachmentNames={row.attachmentNames} />;
 		case "system":
 			return <SystemTurn text={row.text} />;
 		case "error":
 			return <ErrorTurn text={row.text} />;
 		case "compaction":
-			return <CompactionTurn id={row.id} summary={row.summary} tokensBefore={row.tokensBefore} />;
+			return row.summary !== undefined && row.tokensBefore !== undefined ? (
+				<CompactionTurn id={row.id} summary={row.summary} tokensBefore={row.tokensBefore} />
+			) : (
+				<CompactionNotice {...row} />
+			);
 		case "retry":
 			return (
 				<RetryIndicator
@@ -104,18 +103,65 @@ export function ChatTurnView({
 	}
 }
 
-const USER_BUBBLE =
-	"max-w-[85%] whitespace-pre-wrap rounded-[var(--radius-lg)] border border-bubble-user-border bg-clip-padding bg-bubble-user-bg px-12 py-8 tr-text-reading text-text-muted";
+function userAttachments(content: UserMessage["content"], names?: string[]) {
+	if (typeof content === "string") return [];
+	const seen = new Map<string, number>();
+	return content
+		.filter((c) => c.type === "image")
+		.map((img, i) => {
+			const tail = img.data.slice(-24);
+			const n = seen.get(tail) ?? 0;
+			seen.set(tail, n + 1);
+			return { key: `${tail}-${n}`, label: names?.[i] ?? img.mimeType, img };
+		});
+}
 
-/** The user bubble. Pi's canonical expanded skill block renders as a compact, collapsed invocation with
- * any user-supplied request kept visible beneath it. A review send's context package renders as a compact
- * card — the "Sent N review comments on <file>" line with the COMMENT rows right under it (a send is one
- * message per file, so a file level would always hold exactly one entry — the summary already names the
- * file); each comment unfolds to its full text + the quoted fragment — instead of the structured XML the
- * agent needs. Everything is parsed from the message itself (the transcript IS the history), so any old
- * chat unfolds the same way; the folds survive virtualization via the shared cache. */
-function UserTurn({ id, message }: { id: string; message: UserMessage }) {
+const USER_BUBBLE =
+	"max-w-[85%] whitespace-pre-wrap break-words rounded-[var(--radius-lg)] border border-bubble-user-border bg-clip-padding bg-bubble-user-bg px-12 py-8 tr-text-reading text-text-muted";
+
+function AttachmentChip({ label, img }: { label: string; img: ImageContent }) {
+	const [open, setOpen] = useState(false);
+	return (
+		<>
+			<FileChip
+				data-testid="chat-attachment-chip"
+				title={label}
+				aria-label={`View attachment ${label}`}
+				onClick={() => setOpen(true)}
+				label={label}
+			/>
+			<Dialog open={open} onOpenChange={setOpen}>
+				<DialogContent
+					data-testid="chat-attachment-dialog"
+					className="flex max-h-[90vh] w-auto max-w-[95vw] flex-col gap-8"
+				>
+					<DialogHeader>
+						<DialogTitle>{label}</DialogTitle>
+					</DialogHeader>
+					<div className="min-h-0 flex-1 overflow-auto">
+						<img
+							src={`data:${img.mimeType};base64,${img.data}`}
+							alt=""
+							className="max-h-[80vh] max-w-full rounded-[var(--radius-sm)]"
+						/>
+					</div>
+				</DialogContent>
+			</Dialog>
+		</>
+	);
+}
+
+function UserTurn({
+	id,
+	message,
+	attachmentNames,
+}: {
+	id: string;
+	message: UserMessage;
+	attachmentNames?: string[] | undefined;
+}) {
 	const text = userText(message.content);
+	const attachments = userAttachments(message.content, attachmentNames);
 	const skill = parseSkillInvocation(text);
 	if (skill) {
 		return (
@@ -136,6 +182,13 @@ function UserTurn({ id, message }: { id: string; message: UserMessage }) {
 	return (
 		<div data-testid="chat-message" data-role="user" className="flex justify-end">
 			<div className={USER_BUBBLE}>
+				{attachments.length > 0 ? (
+					<div className="flex flex-wrap gap-4 pb-4" data-testid="chat-message-images">
+						{attachments.map(({ key, label, img }) => (
+							<AttachmentChip key={key} label={label} img={img} />
+						))}
+					</div>
+				) : null}
 				{review ? (
 					<div data-testid="review-package-card" className="whitespace-normal">
 						<span data-testid="review-package-summary" className="block text-text-default">
@@ -155,8 +208,6 @@ function UserTurn({ id, message }: { id: string; message: UserMessage }) {
 	);
 }
 
-/** Pi expands `/skill:<name>` before persistence; this disclosure keeps that canonical payload available
- * without making the full SKILL.md the transcript's default surface. */
 function SkillInvocationCard({
 	foldId,
 	invocation,
@@ -208,8 +259,6 @@ function SkillInvocationCard({
 	);
 }
 
-/** Content keys (+ a per-duplicate ordinal) for a package's comment rows: parsed from an immutable
- * message — exact identity, no index keys. */
 function keyPackageItems(items: ReviewPackageItem[]): { key: string; item: ReviewPackageItem }[] {
 	const seen = new Map<string, number>();
 	return items.map((item) => {
@@ -220,8 +269,6 @@ function keyPackageItems(items: ReviewPackageItem[]): { key: string; item: Revie
 	});
 }
 
-/** One comment row in the package card: collapsed — a one-line `▸ L2 · the remark…`; expanded — the
- * full text plus the quoted fragment (verbatim from the package, monospace, height-capped). */
 function PackageCommentRow({ foldId, item }: { foldId: string; item: ReviewPackageItem }) {
 	const [expanded, toggle] = useFold(foldId);
 	return (
@@ -260,13 +307,6 @@ function PackageCommentRow({ foldId, item }: { foldId: string; item: ReviewPacka
 	);
 }
 
-/**
- * A primary tool call, framed by its registered chrome. `"bare"` tools (e.g. the inline
- * `ask_user_question` questionnaire) own their whole frame and render full-width without the collapsible
- * header; everything else goes through the shared {@link ToolCard} (collapsed unless `defaultExpanded`;
- * errors auto-expand). A call on a dead message (aborted/errored — pi never executes those calls) renders
- * as errored rather than staying running/interactive forever.
- */
 function ToolRow({
 	row,
 	workspaceRoot,
@@ -315,11 +355,6 @@ function SystemTurn({ text }: { text: string }) {
 	);
 }
 
-/**
- * The compaction boundary: a rule where pi replaced earlier messages with a summary. Without it a
- * reloaded long chat simply starts mid-conversation, which reads as lost history. The summary is what pi
- * kept of those messages, so it opens on click rather than being hidden outright.
- */
 function CompactionTurn({
 	id,
 	summary,
@@ -329,8 +364,6 @@ function CompactionTurn({
 	summary: string;
 	tokensBefore: number;
 }) {
-	// The shared fold cache, like every other manual open/close in the transcript: a summary is long
-	// enough to scroll past, and Virtuoso unmounting the row must not collapse what the reader opened.
 	const [open, toggle] = useFold(id);
 	return (
 		<div data-testid="chat-compaction" className="flex flex-col gap-8">
@@ -356,10 +389,6 @@ function CompactionTurn({
 	);
 }
 
-/**
- * A failure notice: the run ended in a provider/model error, or the host rejected a send (bad model,
- * missing API key, …). Kept visible (never folded) so a failed turn never looks like nothing happened.
- */
 function ErrorTurn({ text }: { text: string }) {
 	return (
 		<div
@@ -373,11 +402,56 @@ function ErrorTurn({ text }: { text: string }) {
 	);
 }
 
-/**
- * The live auto-retry back-off: attempt count + a bar that drains over `delayMs`. The fill flips from full
- * to empty on the next frame so the CSS width transition runs the countdown; only the (dynamic) transition
- * duration is an inline style — color/width are token utilities.
- */
+function CompactionNotice({
+	status,
+	detail,
+	tokensBefore,
+	tokensAfter,
+	resuming,
+}: CompactionState) {
+	if (status === "failed") {
+		return (
+			<div
+				data-testid="compaction-notice"
+				data-status="failed"
+				className="flex items-start gap-8 rounded-[var(--radius-md)] border border-feedback-error-muted bg-clip-padding bg-feedback-error-subtle px-12 py-8 text-feedback-error tr-text-ui"
+			>
+				<TriangleAlert className="mt-2 size-16 shrink-0" />
+				<span className="min-w-0 whitespace-pre-wrap break-words">
+					{detail || "Compaction failed."}
+				</span>
+			</div>
+		);
+	}
+	const label =
+		status === "running"
+			? "Compacting context…"
+			: status === "cancelled"
+				? "Compaction cancelled"
+				: resuming
+					? "Context compacted — resuming…"
+					: "Context compacted";
+	const tokens =
+		tokensBefore != null && tokensAfter != null
+			? `${formatTokens(tokensBefore)} → ${formatTokens(tokensAfter)} tokens`
+			: null;
+	return (
+		<div
+			data-testid="compaction-notice"
+			data-status={status}
+			className="flex items-center justify-center gap-8 text-text-muted tr-text-metadata"
+		>
+			{status === "running" ? (
+				<RotateCw className="size-12 shrink-0 animate-spin" />
+			) : (
+				<FoldVertical className="size-12 shrink-0" />
+			)}
+			<span>{label}</span>
+			{tokens ? <span>({tokens})</span> : null}
+		</div>
+	);
+}
+
 function RetryIndicator({
 	source,
 	attempt,
@@ -416,7 +490,6 @@ function RetryIndicator({
 	);
 }
 
-/** "1m 12s" / "45s" from a millisecond span. */
 function formatElapsed(ms: number): string {
 	const totalSec = Math.round(ms / 1000);
 	const m = Math.floor(totalSec / 60);
@@ -424,46 +497,22 @@ function formatElapsed(ms: number): string {
 	return m > 0 ? `${m}m ${s}s` : `${s}s`;
 }
 
-/**
- * One kind of artifact a round produced: the paths, how to name them, which side tool owns them, and
- * where a click sends the user. `TurnDivider` builds one per kind (specs / changed files) so the two are
- * described once instead of being spelled out in parallel across chip and list.
- */
 interface ArtifactGroup {
-	/** Which side this is: the selection key, and the stem of the chip's testid + the list's element id. */
 	id: "specs" | "files";
 	icon: typeof FileText;
 	paths: string[];
-	/** Chip text for a count — each group owns its own singular/plural. */
 	label: (count: number) => string;
 	expanded: boolean;
 	onOpen: (path: string) => void;
-	/** Reveal the side tool that owns this kind (the action that rides along with expanding). */
 	reveal: () => void;
 }
 
-/**
- * One artifact chip of the round-end divider. A **single** artifact is an immediate deep link — one click
- * lands on the file, which is the common case and the whole point of the chip. **Several** turn it into a
- * disclosure: the round's set expands as a list right here in the transcript, each row the same deep link.
- * The two chips are **alternatives, not independent folds** — opening one closes the other, and clicking the
- * open one closes it (nothing selected), so the divider never grows two lists at once. Expanding also
- * reveals the side tool that owns the kind, which is what makes the chip read as a switch between
- * Specs and Changes rather than two unrelated toggles.
- *
- * Why the list lives in the chat and not as a highlight over the panels: the set belongs to *this round*,
- * while the panels show *now* — a round from days ago would frame rows that have since moved on (or, for
- * Changes, are no longer in the diff at all). It also keeps the count honest — clicking "5 files changed"
- * can't silently surface just the first one. Selection rides `useSelection`, so it survives virtualization
- * and streaming re-derivation like every other fold in the transcript.
- */
 function ArtifactChip({
 	group,
 	listId,
 	onSelect,
 }: {
 	group: ArtifactGroup;
-	/** The list this chip discloses, so assistive tech can follow the pair. */
 	listId: string;
 	onSelect: () => void;
 }) {
@@ -479,10 +528,9 @@ function ArtifactChip({
 			aria-controls={many && expanded ? listId : undefined}
 			onClick={() => {
 				if (!many) {
-					if (first) onOpen(first); // its own deep link already reveals the owning view
+					if (first) onOpen(first);
 					return;
 				}
-				// Reveal the owning view when opening; a close is "never mind" and leaves the tool alone.
 				if (!expanded) reveal();
 				onSelect();
 			}}
@@ -504,11 +552,6 @@ function ArtifactChip({
 	);
 }
 
-/**
- * The expanded artifact set, listed under the divider rule — one deep-linking row per path. Paths render
- * worktree-relative (`projectRelativePath`, the same normalization the tool cards use), since pi reports a
- * `path` argument either way and an absolute one truncates to nothing useful.
- */
 function ArtifactList({
 	group,
 	listId,
@@ -542,17 +585,6 @@ function ArtifactList({
 	);
 }
 
-/**
- * A subtle round-end divider (rendered right when the turn finishes, below its "✓ Done" marker): tool-call
- * count, then the round's written artifacts as two ownership-routed chips — "N specs" (reveals the Specs
- * tool and opens the rendered spec via `onOpenSpec`) and "N files changed" (reveals the Changes tool,
- * highlights its row, and opens its diff tab in the center via `onOpenChange`) — and elapsed wall-clock.
- * A single artifact deep-links outright;
- * several make the chip a **single-choice** disclosure (see `ArtifactChip`) whose list replaces the other
- * kind's rather than joining it, keyed off `id` (the divider row's id). Presentational — the store touches
- * live in `ChatView`, which supplies the open + reveal handlers. The data comes from the pure `turnDivider`
- * deriver in `rows.ts`, which owns the spec/code partition.
- */
 export function TurnDivider({
 	id,
 	data,
@@ -566,12 +598,9 @@ export function TurnDivider({
 	workspaceRoot?: string | undefined;
 	onOpenSpec: (path: string) => void;
 	onOpenChange: (path: string) => void;
-	/** Reveal the side tool that owns a kind, without surfacing any particular path. */
 	onReveal: (tab: "specs" | "changes") => void;
 }) {
 	const { elapsedMs, toolCount, specs, changedFiles } = data;
-	// ONE selection per divider, not a fold per kind: the two lists are alternatives, so "at most one open"
-	// is structural — there is no state where both are expanded.
 	const [selected, select] = useSelection(`${id}:artifacts`);
 	const allGroups: ArtifactGroup[] = [
 		{
@@ -596,7 +625,6 @@ export function TurnDivider({
 	const groups = allGroups.filter((group) => group.paths.length > 0);
 
 	if (toolCount === 0 && groups.length === 0 && (elapsedMs == null || elapsedMs < 1000)) {
-		// Nothing worth noting between these turns — just a hairline rule.
 		return <div data-testid="turn-divider" className="my-8 h-px bg-border-muted" />;
 	}
 	return (

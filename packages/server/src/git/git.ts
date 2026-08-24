@@ -19,33 +19,6 @@ function workspace(workspaceId: string): Workspace {
 	return ws;
 }
 
-/**
- * Commit **exactly `paths`** (worktree-relative) as one commit, with `--no-verify` so the host's commit
- * never runs (or is failed by) the user's hooks. Returns the new commit's sha, or `null` when there was
- * nothing to commit or a git op failed. Author/committer stay the user's own git config — it's their
- * branch. Best-effort bookkeeping for the TODO change-set feature; the caller (todos/artifacts) never
- * lets it throw. The commit stores only the sha — its change list is derived on demand via `gitStatus`
- * at the `commit:{sha}` scope (sha-immutable, cacheable; see the todos module's `listTodos` decoration).
- *
- * **Only the named paths are committed** — never "whatever is dirty now": the caller passes the set it
- * proved belongs to the item (and, being the caller's filtered delta, it never contains the host's own
- * `.thinkrail/` state). Anything that lands in the worktree between the caller's `gitStatus` and this
- * call is therefore left alone rather than swept into someone else's commit.
- *
- * **The user's index is preserved.** Staging is fallible (a missing identity, a signing failure), so the
- * index **file** is snapshotted byte-for-byte first and written back on every failure path — a skipped
- * commit leaves the user's staging area exactly as it was, *including index-only state* a tree round-trip
- * would drop (an intent-to-add entry from `git add -N` has no tree representation, so `write-tree`/
- * `read-tree` would silently unstage it). An index with unmerged entries (a conflicted merge in flight)
- * bails out before touching anything — a half-merged worktree is nothing to auto-commit. On success,
- * `commit -- <paths>` moves only those paths' entries; the user's other staged work stays staged.
- *
- * **Paths are literal, never pathspecs.** `paths` are *filenames* reported by `git status`, but a git
- * pathspec interprets magic (`:(top)…`, `:!…`) and glob characters — a tracked file literally named
- * `:(top)*` would otherwise expand to "everything from the repo top", defeating the exact-path guarantee
- * (and the `.thinkrail/` exclusion) above. Every path-consuming command here runs with
- * `--literal-pathspecs`, so a filename is only ever itself.
- */
 export function gitCommitPaths(
 	workspaceId: string,
 	message: string,
@@ -53,11 +26,8 @@ export function gitCommitPaths(
 ): { sha: string } | null {
 	if (paths.length === 0) return null;
 	const cwd = workspace(workspaceId).worktreePath;
-	// A conflicted index is nothing to auto-commit over — bail before touching anything.
 	const unmerged = git(cwd, ["ls-files", "-u"]);
 	if (!unmerged.ok || unmerged.out) return null;
-	// The checkout's real index file (per-worktree in a linked worktree — hence `--git-path`, never a
-	// hardcoded `.git/index`). Snapshot its exact bytes so any later failure can put it back verbatim.
 	const indexOut = git(cwd, ["rev-parse", "--git-path", "index"]);
 	if (!indexOut.ok || !indexOut.out) return null;
 	const indexPath = isAbsolute(indexOut.out) ? indexOut.out : resolve(cwd, indexOut.out);
@@ -65,33 +35,25 @@ export function gitCommitPaths(
 	try {
 		saved = readFileSync(indexPath);
 	} catch {
-		saved = null; // no index yet (fresh checkout) — restore = remove
+		saved = null;
 	}
 	const restore = (): null => {
 		try {
 			if (saved === null) rmSync(indexPath, { force: true });
 			else writeFileSync(indexPath, saved);
-		} catch {
-			// best-effort: an unwritable index leaves git's own state as the failure left it
-		}
+		} catch {}
 		return null;
 	};
-	// Every command that consumes `paths` runs `--literal-pathspecs`: they are filenames from `git status`,
-	// and pathspec magic/globs in a filename (`:(top)*`) must not expand beyond the proved delta (see above).
-	// `-A` over an explicit pathspec so a deleted path is staged as a deletion, not skipped.
 	if (!git(cwd, ["--literal-pathspecs", "add", "-A", "--", ...paths]).ok) return restore();
-	// `git diff --cached --quiet -- <paths>` exits 0 (ok) when those paths match HEAD — nothing to commit.
 	if (git(cwd, ["--literal-pathspecs", "diff", "--cached", "--quiet", "--", ...paths]).ok)
 		return restore();
-	// Pathspec-scoped commit: the item's paths only, whatever else the user may have had staged.
 	if (!git(cwd, ["--literal-pathspecs", "commit", "--no-verify", "-m", message, "--", ...paths]).ok)
 		return restore();
 	const head = git(cwd, ["rev-parse", "HEAD"]);
-	if (!head.ok) return null; // committed — the index is already correct for those paths
+	if (!head.ok) return null;
 	return { sha: head.out };
 }
 
-/** The worktree's current `HEAD` sha (`null` on an unborn HEAD) — the todos baseline's window anchor. */
 export function gitHeadSha(workspaceId: string): string | null {
 	const cwd = workspace(workspaceId).worktreePath;
 	const head = git(cwd, ["rev-parse", "--verify", "--quiet", "HEAD"]);
@@ -105,19 +67,12 @@ function lines(out: string): string[] {
 		.filter(Boolean);
 }
 
-/**
- * A project repo's branches for the New-Workspace base picker: local (`refs/heads`), remote-tracking under
- * `origin` (minus `origin/HEAD`), and the preselected default — `origin/HEAD`'s target, else `origin/main`,
- * else the repo's current `HEAD` branch. Offline-safe: every step degrades to what git can answer locally.
- */
 export function listBranches(projectId: string): BranchList {
 	const project = loadProjects().find((p) => p.id === projectId);
 	if (!project) throw new Error(`Unknown project: ${projectId}`);
 	const repo = project.path;
 
 	const local = lines(git(repo, ["for-each-ref", "--format=%(refname:short)", "refs/heads"]).out);
-	// `origin/HEAD` (the remote's default-branch pointer) shortens to a bare `origin` and is a *symref* —
-	// list `%(symref)` alongside the name and drop any ref that has one, so `origin` never leaks in.
 	const remote = lines(
 		git(repo, ["for-each-ref", "--format=%(refname:short)\t%(symref)", "refs/remotes/origin"]).out,
 	)
@@ -129,27 +84,14 @@ export function listBranches(projectId: string): BranchList {
 	return { local, remote, defaultBranch: resolveDefaultBranch(repo) };
 }
 
-/**
- * The repo's default branch, resolved from what git knows locally: `origin/HEAD`'s target →
- * `origin/main` → the repo's current `HEAD` branch. Named once — shared by `listBranches` (the base
- * picker's preselection) and the `workspaces` module's Default-workspace ensure (its `baseBranch`).
- */
 export function resolveDefaultBranch(repoPath: string): string {
 	const head = git(repoPath, ["symbolic-ref", "--short", "refs/remotes/origin/HEAD"]);
 	if (head.ok && head.out) return head.out;
 	if (git(repoPath, ["rev-parse", "--verify", "--quiet", "refs/remotes/origin/main"]).ok)
 		return "origin/main";
-	// Last resort: the checkout's own branch. `currentBranch` answers even on an unborn HEAD (a repo
-	// with no commits yet), so the literal "HEAD" never leaks into a persisted, user-visible baseBranch.
 	return currentBranch(repoPath);
 }
 
-/**
- * The comparable form of a path. **Git reports symlink-resolved paths** (`--show-toplevel`, `worktree
- * list`) while a path we were handed keeps whatever symlinks the caller wrote (macOS's `/var` →
- * `private/var`), so comparing either side raw mismatches silently. An unreadable path degrades to
- * `resolve` — a missing dir still compares by name instead of throwing.
- */
 export function canonicalPath(path: string): string {
 	try {
 		return realpathSync(path);
@@ -158,11 +100,6 @@ export function canonicalPath(path: string): string {
 	}
 }
 
-/**
- * Fallibly read the branch a checkout currently has out. A valid detached checkout is the literal
- * `"HEAD"`; an unreadable/non-worktree root is `null`, so callers that persist folder truth never turn an
- * I/O failure into a fake detach. `symbolic-ref` also answers on an unborn branch.
- */
 export function tryCurrentBranch(repoPath: string): string | null {
 	const head = git(repoPath, ["symbolic-ref", "--short", "HEAD"]);
 	if (head.ok && head.out) return head.out;
@@ -170,38 +107,16 @@ export function tryCurrentBranch(repoPath: string): string | null {
 	return topLevel.ok && canonicalPath(topLevel.out) === canonicalPath(repoPath) ? "HEAD" : null;
 }
 
-/**
- * Compatibility read for callers that already established a valid checkout. Detached (or unreadable)
- * paths degrade to `"HEAD"`; persistence refreshes use `tryCurrentBranch` instead.
- */
 export function currentBranch(repoPath: string): string {
 	return tryCurrentBranch(repoPath) ?? "HEAD";
 }
 
-/**
- * Best-effort **background** fetch of a remote branch, so a *subsequent* `createWorkspace` branches off a
- * fresh tip without paying the ~2s network round-trip on the create critical path. The New-Workspace dialog
- * fires this when it opens (for the default base) and when a different remote base is picked — the fetch
- * overlaps the time the user spends choosing a branch / typing the prompt, so the create itself stays local
- * and instant. Async (`gitAsync`, never `spawnSync`) so the network fetch can't block the host's event
- * loop; a local (non-`origin/`) ref or an offline/failed fetch is a harmless no-op ack.
- *
- * `moved` reports whether the fetch changed which commit the local remote-tracking ref names (its first
- * appearance counts). A moved ref *may* change what a sibling workspace's branch-scope diff means (its
- * merge-base can move), so the `git.prefetch` handler fans the pathless `fsChanged` invalidation out to
- * the workspaces reading that ref (see `host`'s fsNudge seam; the re-read is idempotent when the
- * merge-base stayed put) — `moved` is host-internal and never reaches the wire (the response stays
- * `{ ok }`).
- */
 export async function prefetchBranch(
 	projectId: string,
 	ref: string,
 ): Promise<{ ok: boolean; moved: boolean }> {
 	const project = loadProjects().find((p) => p.id === projectId);
 	if (!project || !ref.startsWith("origin/")) return { ok: false, moved: false };
-	// Fully qualified on purpose: the short name resolves by git's DWIM order, where a local branch
-	// literally named `origin/<b>` (`refs/heads/origin/<b>`) would shadow the remote-tracking ref — and the
-	// fetch updates `refs/remotes/…` regardless, so the comparison must read exactly that.
 	const revParse = () =>
 		git(project.path, [
 			"rev-parse",
@@ -211,7 +126,6 @@ export async function prefetchBranch(
 			`refs/remotes/${ref}`,
 		]);
 	const before = revParse();
-	// `--` so a `-`-prefixed branch name can't be parsed by git as an option.
 	const result = await gitAsync(project.path, [
 		"fetch",
 		"origin",
@@ -224,7 +138,6 @@ export async function prefetchBranch(
 	return { ok: true, moved };
 }
 
-/** Map a `git diff --name-status` code (`M`, `A`, `D`, `R100`, …) to our status enum. */
 function mapStatus(code: string): GitFileStatus {
 	if (code.startsWith("A") || code.startsWith("C")) return "added";
 	if (code.startsWith("D")) return "deleted";
@@ -232,11 +145,6 @@ function mapStatus(code: string): GitFileStatus {
 	return "modified";
 }
 
-/**
- * Resolve a `git diff --numstat` path to its final path so it matches `--name-status`'s destination.
- * Rename/copy rows arrive mangled: plain `old => new`, or brace form `pre{old => new}post` →
- * `pre + new + post` (e.g. `src/{a => b}/x.ts` → `src/b/x.ts`).
- */
 export function numstatPath(raw: string): string {
 	if (!raw.includes("=>")) return raw;
 	const brace = raw.match(/^(.*)\{.* => (.*)\}(.*)$/);
@@ -245,11 +153,6 @@ export function numstatPath(raw: string): string {
 	return arrow ? (arrow[1] ?? raw) : raw;
 }
 
-/**
- * Per-file `{added, removed}` over the range, keyed by (resolved) path. Binary rows (`-`/`-`) are skipped.
- * A **failed** command throws (see {@link diffFailure}) rather than yielding an empty map: counts silently
- * missing from every row is the same lie as a missing row.
- */
 function numstat(
 	worktreePath: string,
 	range: DiffRange,
@@ -263,55 +166,36 @@ function numstat(
 		if (parts.length < 3) continue;
 		const added = Number(parts[0]);
 		const removed = Number(parts[1]);
-		if (!Number.isFinite(added) || !Number.isFinite(removed)) continue; // binary: "-" / "-"
+		if (!Number.isFinite(added) || !Number.isFinite(removed)) continue;
 		counts.set(numstatPath(parts.slice(2).join("\t")), { added, removed });
 	}
 	return counts;
 }
 
-/** Count a file's lines the way git counts additions (final line without a trailing newline still counts). */
 function lineCount(content: string): number {
 	if (content.length === 0) return 0;
 	return content.split("\n").length - (content.endsWith("\n") ? 1 : 0);
 }
 
-// An untracked file's whole content counts as added (it never shows in `git diff`), but bounded: a file
-// over this size, or one that looks binary (a NUL byte in its head), gets NO count — matching how tracked
-// binaries drop out of `--numstat` (`-`/`-`). This also keeps a large untracked artifact (build output,
-// archive) from being re-read into memory on every `git.status` tick.
 const UNTRACKED_COUNT_MAX_BYTES = 2 * 1024 * 1024;
 const BINARY_SNIFF_BYTES = 8192;
 
-/** Added-line count for an untracked file, or `undefined` when it's too large or looks binary. */
 function untrackedAdded(worktreePath: string, path: string): number | undefined {
 	try {
 		const abs = resolve(worktreePath, path);
 		if (statSync(abs).size > UNTRACKED_COUNT_MAX_BYTES) return undefined;
 		const buf = readFileSync(abs);
-		if (buf.subarray(0, BINARY_SNIFF_BYTES).includes(0)) return undefined; // NUL byte → treat as binary
+		if (buf.subarray(0, BINARY_SNIFF_BYTES).includes(0)) return undefined;
 		return lineCount(buf.toString("utf8"));
 	} catch {
-		// unreadable (a dir entry, perms, a race) → no count
 		return undefined;
 	}
 }
 
-/**
- * A **failed** `git diff`/`git show` is an error, never an empty change set. Reporting "no changes" because
- * the command didn't run is the worst failure a review surface can have — so the exit code is honoured and
- * the caller (the panel) keeps its last good list and says the refresh failed.
- */
 function diffFailure(stderr: string): Error {
 	return new Error(`Could not read the changed files: ${stderr || "git failed"}`);
 }
 
-/**
- * A worktree's changed files over the given {@link GitDiffScope} (default: the branch scope — what the
- * workspace changed since diverging from its diff base),
- * plus any untracked files when the range ends at the worktree. Each carries `+/−` counts. Throws for a
- * scope naming a commit that no longer exists (see `resolveDiffRange`) — and for a diff that **failed**,
- * which must never be reported as a clean worktree.
- */
 export function gitStatus(workspaceId: string, scope?: GitDiffScope): GitStatus {
 	const ws = workspace(workspaceId);
 	const range = resolveDiffRange(ws, scope);
@@ -324,22 +208,17 @@ export function gitStatus(workspaceId: string, scope?: GitDiffScope): GitStatus 
 		for (const line of tracked.out.split("\n")) {
 			const parts = line.split("\t");
 			const code = parts[0] ?? "";
-			// Renames/copies have a third field (old → new); take the destination path.
 			const path = parts.length > 2 ? parts[parts.length - 1] : parts[1];
 			if (path) changes.push({ path, status: mapStatus(code), ...counts.get(path) });
 		}
 	}
 
-	// Untracked files belong to a range that ends at the worktree (branch/uncommitted), never to a historical
-	// commit — they are not "in" it.
 	if (range.untracked) {
 		const untracked = git(ws.worktreePath, ["ls-files", "--others", "--exclude-standard"]);
 		if (untracked.ok && untracked.out) {
 			for (const path of untracked.out.split("\n")) {
 				if (!path) continue;
 				const added = untrackedAdded(ws.worktreePath, path);
-				// Countable (small text) → whole content added, nothing removed. Binary/oversized → no counts at
-				// all, matching the tracked-binary rows `--numstat` drops (and satisfying `exactOptionalPropertyTypes`).
 				changes.push({
 					path,
 					status: "untracked",
@@ -350,22 +229,12 @@ export function gitStatus(workspaceId: string, scope?: GitDiffScope): GitStatus 
 	}
 
 	changes.sort((a, b) => a.path.localeCompare(b.path));
-	// User-owned workspaces can switch branches out-of-band; the Changes header reads folder truth live
-	// while their persisted snapshot converges through the metadata nudge/list path.
 	const branch =
 		ws.kind === "default" || ws.kind === "external" ? currentBranch(ws.worktreePath) : ws.branch;
 	return { branch, changes };
 }
 
-/**
- * One file's content at a ref (`git show ref:path`, byte-exact), or `null` when the read didn't produce
- * one. Any failure — a path the ref simply doesn't have, index-lock contention, an invalid/removed ref,
- * repo corruption — is logged unless it's the ordinary "not in that ref", so a broken read stays visible
- * instead of masquerading as an empty file.
- */
 export function readBlobAt(worktreePath: string, ref: string, path: string): string | null {
-	// `--end-of-options`: `<ref>:<path>` starts with a repo-controlled ref, which must never be re-parsed
-	// as a git option (see `isSafeRef`).
 	const shown = git(worktreePath, ["show", "--end-of-options", `${ref}:${path}`], { raw: true });
 	if (shown.ok) return shown.out;
 	if (!/does not exist in|exists on disk, but not in/.test(shown.err)) {
@@ -374,21 +243,10 @@ export function readBlobAt(worktreePath: string, ref: string, path: string): str
 	return null;
 }
 
-/**
- * `readBlobAt` for the diff sides: a path absent from a ref is the intended EMPTY side (an added file has
- * no original; a deleted one has no modified), so the diff degrades to add/delete style rather than failing.
- */
 function showBlob(worktreePath: string, ref: string, path: string): string {
 	return readBlobAt(worktreePath, ref, path) ?? "";
 }
 
-/**
- * Both sides of one changed file over the given {@link GitDiffScope} (default: the branch scope — since
- * diverging from the diff base), for the center Monaco diff tab: `original` = the file at the range's start (empty when it doesn't
- * exist there — untracked/added, a renamed file's new path, or a root commit — which degrades to an
- * add-style diff), `modified` = the file at its end: the worktree (empty when deleted) for a range ending
- * there, else the commit's own tree.
- */
 export function gitDiffFile(
 	workspaceId: string,
 	path: string,
@@ -408,37 +266,15 @@ export function gitDiffFile(
 	let modified = "";
 	try {
 		modified = readFileSync(abs, "utf8");
-	} catch {
-		// deleted (or unreadable) in the worktree → empty modified side
-	}
+	} catch {}
 	return { original, modified };
 }
 
-/** How many commits the scope menu's list can hold — a long-lived branch must not ship its whole history. */
 const COMMIT_LIST_MAX = 200;
-/**
- * Field separator for the `git log` format: a **NUL byte**, the one byte repository-controlled text cannot
- * smuggle in. An author ident carries neither NUL nor newline (git's ident parser refuses both), so the
- * record framing — fields split on NUL, records split on newline — holds no matter what a repo puts in a
- * name; a `%s` *could* in principle carry a NUL, which costs nothing because the subject is the record's
- * **tail**: everything past the fixed leading fields is joined back together.
- *
- * A previous version used `\u001f` and claimed "structured fields first" made it safe. It didn't: `%an` is
- * free text too and sits *between* the structured fields and the subject, so an author named
- * `a\u001f2020-01-01T00:00:00Z` shifted the subject one field over and truncated the author. Fixed arity +
- * a separator the text can't contain is what actually makes the framing unambiguous.
- */
 const LOG_SEP = "\u0000";
 
-/** How many leading `--format` fields are structured; everything after them is one free-text tail. */
 const LOG_LEADING_FIELDS = 4;
 
-/**
- * Repository-controlled text, made safe to render: control characters (the framing bytes included) plus the
- * **invisible** troublemakers — bidi overrides/embeddings (which can make a subject render right-to-left and
- * disguise what a commit says) and zero-width/format characters (which hide inside a name). Everything else,
- * emoji and scripts alike, is kept: this strips deception, not internationalization.
- */
 function plainText(raw: string): string {
 	let out = "";
 	for (const char of raw) {
@@ -456,18 +292,11 @@ function plainText(raw: string): string {
 	return out;
 }
 
-/**
- * The commits **on this workspace's branch** that its diff base doesn't have (`git log <base>..HEAD`),
- * newest first and capped — the scope menu's commit rows. An unreadable range (a base branch that was
- * deleted, an unborn HEAD) degrades to an empty list: the menu still offers its other scopes.
- */
 export function listCommits(workspaceId: string): { commits: GitCommit[] } {
 	const ws = workspace(workspaceId);
 	const log = git(ws.worktreePath, [
 		"log",
 		`--max-count=${COMMIT_LIST_MAX}`,
-		// NUL-separated fields of fixed arity, the free-text subject last (see LOG_SEP), and `--end-of-options`
-		// so the range's base ref can't be parsed as an option.
 		`--format=%H%x00%h%x00%cI%x00%an%x00%s`,
 		"--end-of-options",
 		`${diffBaseRef(ws)}..HEAD`,
@@ -479,8 +308,6 @@ export function listCommits(workspaceId: string): { commits: GitCommit[] } {
 		const parts = line.split(LOG_SEP);
 		const [sha, shortSha, committedAt, author] = parts;
 		if (!sha || !shortSha) continue;
-		// Everything past the fixed leading fields is the subject, separators and all — so nothing a repo can put
-		// in the free-text fields can shift `author`/`committedAt`.
 		const subject = parts.slice(LOG_LEADING_FIELDS).join(LOG_SEP);
 		commits.push({
 			sha,

@@ -1,33 +1,17 @@
 import type { TodoItem, TodoPlan } from "@thinkrail/contracts";
 import { changeSetStat, flatItems, groupProgress, itemChangeSet, statusLetter } from "./planView";
 
-// Compile a chat's TODO plan to a human-readable markdown report (SPEC §Chat TODO plan) — the plan
-// page's **export** (copy / save-as-.md). Pure + presentational-adjacent (no store/transport): it just
-// maps the plan to GFM. Structure mirrors the plan's own shape — named groups as `##` sections, the
-// loose items last — with a progress header and GFM task-list checkboxes. A done item that produced a
-// change set reads as a **review map**: its short commit sha + `N files · +A −R` inline, and each
-// changed file a status-lettered row with its own `+/−`. Plain text throughout — the export leaves the
-// app, so links would be dead; interactive navigation lives on the plan page itself (`panels/PlanPane`).
-
-/** GFM task-list box for a status: done `[x]`, pending `[ ]`, in-progress `[~]` (a distinct middle mark). */
 function checkbox(item: TodoItem): string {
 	if (item.status === "done") return "[x]";
 	if (item.status === "in_progress") return "[~]";
 	return "[ ]";
 }
 
-/** `+A −R` (either side omitted at 0; empty when neither) — the textual twin of the UI's DiffStatBadge. */
 function plusMinus(added: number, removed: number): string {
 	const parts = [...(added > 0 ? [`+${added}`] : []), ...(removed > 0 ? [`−${removed}`] : [])];
 	return parts.join(" ");
 }
 
-/**
- * One item as markdown lines: the checkbox row, then — for a done item carrying a change set
- * (`itemChangeSet`, the shared derivation) — its short commit sha + `N files · +A −R` summary and a
- * nested status-lettered file list with per-file counts. The path-list fallback lists bare paths (its
- * diff is live, so counts would drift). Plain text — this is an export, not the interactive page.
- */
 function itemLines(item: TodoItem): string[] {
 	const head = `- ${checkbox(item)} ${item.title}`;
 	const set = itemChangeSet(item);
@@ -48,12 +32,6 @@ function itemLines(item: TodoItem): string[] {
 	];
 }
 
-/**
- * Render `plan` as markdown under a `# TODO — <title>` heading with a `Progress: done/total` line. Named
- * groups (tasks) become `## <title> — n/m` sections in order (the same done/total badge the popup
- * shows); the loose (user) items follow — under an `### Other` heading only when groups exist, else
- * listed directly. Trailing newline so it reads clean in the rendered view.
- */
 export function planToMarkdown(plan: TodoPlan, title: string): string {
 	const all = flatItems(plan);
 	const done = all.filter((t) => t.status === "done").length;

@@ -7,19 +7,6 @@ import { cn } from "@/lib/utils";
 import { toast, useAppStore } from "@/store";
 import { errorText, getTransport, reloadSessionResourcesWithSkillBaseline } from "@/transport";
 
-/**
- * The Skills manager. Two modes from one component:
- * - **workspace** (chat header): `skills.state` catalog, per-**workspace** skill overrides, and a Reload
- *   that applies changes to that chat's running session.
- * - **project** (Welcome / New Workspace, no session yet): `project.skills` catalog, per-**project**-baseline
- *   skill toggles, no Reload.
- * Both share trust, re-confirm-new, and the per-project **group** toggles (a plugin / source tier, or all
- * plugins at once). Skills are grouped by source — ThinkRail / Pi / Personal / a group per Claude plugin /
- * Project — with sticky section headers; the first-party ThinkRail and Pi groups lead, above the All-plugins
- * master (which governs only the plugin groups).
- */
-// ThinkRail-bundled + pi-native first-party skills lead; then personal, then plugins (sorted), then the
-// repo's gated project skills last.
 const TIER_META: Record<string, { label: string; hint: string; rank: number }> = {
 	bundled: { label: "ThinkRail", hint: "Bundled with the app.", rank: 0 },
 	pi: { label: "Pi", hint: "Pi-native / configured.", rank: 1 },
@@ -35,7 +22,6 @@ interface Group {
 	items: SkillCatalogEntry[];
 }
 
-/** Group entries by their canonical group key; order ThinkRail → Pi → Personal → plugins (sorted) → Project. */
 function groupCatalog(entries: SkillCatalogEntry[]): Group[] {
 	const byKey = new Map<string, { isPlugin: boolean; items: SkillCatalogEntry[] }>();
 	for (const entry of entries) {
@@ -58,20 +44,15 @@ function groupCatalog(entries: SkillCatalogEntry[]): Group[] {
 		.sort((a, b) => a.rank - b.rank || a.label.localeCompare(b.label));
 }
 
-/** A mutation result carries `projectId` only when it's a Workspace; Project has no such field. */
 function isWorkspace(result: Project | Workspace): result is Workspace {
 	return "projectId" in result;
 }
 
-/** Chat-mode extras: a live session to reload after changes. Absent in project mode (pre-session). */
 export interface SkillsWorkspaceContext {
 	workspaceId: string;
 	sessionId: string;
 	streaming: boolean;
-	/** Skills changed on disk since the session loaded — prompt a reload. */
 	stale?: boolean;
-	/** Fired after a successful reload with the workspace tick captured at reload-*start*, so the caller
-	 * anchors the sync baseline to what the reload actually loaded (a change mid-reload stays flagged). */
 	onReloaded?: (syncedTick: number) => void;
 }
 
@@ -109,8 +90,6 @@ export function SkillsDialog({
 		void refresh();
 	}, [open, refresh]);
 
-	// Fold a mutation's echoed record into the store (Project only — a Workspace update also arrives on the
-	// workspace.updated push), then re-read the catalog so decisions reflect the change.
 	const mutate = async (request: () => Promise<Project | Workspace>, failure: string) => {
 		if (busy) return;
 		setBusy(true);
@@ -165,27 +144,18 @@ export function SkillsDialog({
 	const untrustedCount = entries?.filter((e) => e.decision === "untrusted").length ?? 0;
 	const groups = groupCatalog(entries ?? []);
 	const hasPlugins = groups.some((g) => g.isPlugin);
-	// First-party skills (ThinkRail + Pi) render above the all-plugins master — they aren't plugins and
-	// the master doesn't govern them; every other group renders below it.
 	const isLeadingKey = (key: string) => key === "bundled" || key === "pi";
 	const leadingGroups = groups.filter((g) => isLeadingKey(g.key));
 	const otherGroups = groups.filter((g) => !isLeadingKey(g.key));
 
 	const renderGroup = (group: Group) => {
-		// A plugin group is locked off when the "all plugins" master is off; either way a disabled
-		// group grays its skill toggles (re-enable the group to change individual skills).
 		const lockedByMaster = group.isPlugin && pluginsDisabled;
 		const groupOn = !lockedByMaster && !disabledGroups.has(group.key);
 		return (
 			<div key={group.key} data-testid="skill-group" data-group={group.key} data-on={groupOn}>
-				{/* Sticky section header (VSCode-style): pins while the group is in view, then the next
-				    group's header pushes it out. The first-party leads (ThinkRail, Pi) sit at the scroll top
-				    (`top-0`), above the all-plugins master; every other header pins below the master at
-				    `top-32` when plugins exist. No `overflow-hidden` ancestor (would clip sticky); an opaque
-				    bg keeps rows from bleeding through. */}
 				<div
 					className={cn(
-						"sticky z-10 flex items-center gap-8 border-border-default border-y bg-container-header-bg px-8 py-4",
+						"sticky z-10 flex items-center gap-8 border-border-default border-y bg-container-header-bg px-8 py-8",
 						hasPlugins && !isLeadingKey(group.key) ? "top-32" : "top-0",
 					)}
 				>
@@ -196,7 +166,7 @@ export function SkillsDialog({
 					<span className="min-w-0 flex-1 truncate text-text-muted tr-text-metadata">
 						{group.hint}
 					</span>
-					<span className="shrink-0 rounded-full bg-control-bg-selected px-4 text-text-muted tr-text-metadata">
+					<span className="shrink-0 rounded-full bg-control-bg-selected px-8 text-text-muted tr-text-metadata">
 						{group.items.length}
 					</span>
 					<Toggle
@@ -206,7 +176,6 @@ export function SkillsDialog({
 						onClick={() => setGroupEnabled(group.key, !groupOn)}
 					/>
 				</div>
-				{/* Indent + left rail nests the skills visually under their group/plugin header. */}
 				<div className="ml-8 divide-y divide-border-default border-border-default border-l">
 					{group.items.map((entry) => (
 						<SkillRow
@@ -235,7 +204,6 @@ export function SkillsDialog({
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent data-testid="skills-dialog" className="max-w-[560px] gap-12 p-12">
-				{/* pr-32 reserves room for the DialogContent's absolute close (X) so it can't overlap Reload. */}
 				<div className="flex items-center justify-between gap-8 pr-32">
 					<DialogTitle className="tr-text-ui text-text-default">Skills</DialogTitle>
 					{workspace ? (
@@ -299,10 +267,7 @@ export function SkillsDialog({
 						<p className="px-8 py-12 text-text-muted tr-text-ui">No skills discovered.</p>
 					) : (
 						<>
-							{/* First-party skills (ThinkRail + Pi) lead, above the all-plugins master. */}
 							{leadingGroups.map(renderGroup)}
-							{/* Once the first-party groups scroll past, the all-plugins master pins at the scroll top
-							    (higher z, fixed h-32); plugin/other headers stick below it at `top-32` — a two-level sticky. */}
 							{hasPlugins ? (
 								<div
 									data-testid="skills-all-plugins"
@@ -328,7 +293,6 @@ export function SkillsDialog({
 	);
 }
 
-/** A small on/off pill toggle (group + all-plugins controls). */
 function Toggle({
 	on,
 	busy,
@@ -375,7 +339,6 @@ function SkillRow({
 }: {
 	entry: SkillCatalogEntry;
 	busy: boolean;
-	/** The skill's group (or the all-plugins master) is disabled — toggling this one skill won't apply. */
 	groupOff: boolean;
 	onToggle: (enabled: boolean) => void;
 	onAcknowledge: () => void;
@@ -386,7 +349,7 @@ function SkillRow({
 			data-testid="skill-row"
 			data-skill={entry.name}
 			data-decision={entry.decision}
-			className="flex items-center gap-8 py-4 pr-8 pl-12 hover:bg-control-bg-hovered"
+			className="flex items-center gap-8 py-8 pr-8 pl-12 hover:bg-control-bg-hovered"
 		>
 			<span className="flex min-w-0 flex-1 flex-col">
 				<span className="truncate tr-text-ui text-text-default">{entry.name}</span>

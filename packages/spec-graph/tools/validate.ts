@@ -1,5 +1,3 @@
-// spec_validate — report dangling links, duplicate ids, and parent cycles across the spec-graph.
-
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { isValid, type ValidationReport, validateGraph } from "../core/index.ts";

@@ -6,7 +6,6 @@ import type { Workspace, WorkspaceWatchReadyResult } from "@thinkrail/contracts"
 import { stopAllWatches } from "../watch";
 import { handleRequest } from "./handlers";
 
-/** Requests carry their calling client (terminals scope PTYs to it); nothing here is client-scoped. */
 const CTX = { clientKey: "test-client" };
 
 let dataDir: string;
@@ -62,9 +61,6 @@ test("workspace.watchReady waits for startup once, then reports an already-ready
 });
 
 test("workspace.remove rejects the Default at the handler level, before any teardown side-effect", async () => {
-	// The wire-level guarantee the module guards alone can't pin: the handler must reject a Default
-	// removal *first* — `forgetWorkspace` is its opening statement and throws — so the archive teardown
-	// (spec-cache eviction, watcher stop, PTY kill, background worktree reclaim) never runs for it.
 	const rows = (await handleRequest("workspace.list", { projectId: "p1" }, CTX)) as Workspace[];
 	const def = rows[0];
 	if (def?.kind !== "default")
@@ -74,7 +70,6 @@ test("workspace.remove rejects the Default at the handler level, before any tear
 		"The Default workspace cannot be removed",
 	);
 
-	// The record survived, same id — nothing was torn down or re-minted.
 	const after = (await handleRequest("workspace.list", { projectId: "p1" }, CTX)) as Workspace[];
 	expect(after.filter((w) => w.kind === "default")).toHaveLength(1);
 	expect(after[0]?.id).toBe(def.id);
