@@ -18,9 +18,9 @@ arrangement-agnostic.
 ## Boundary
 
 - **Owns:** the pure topology/policy operations; semantic minimum and independent group-limit checks;
-  one-result drag previews; center, side-stack, and bottom-row renderers; bottom span projection; tab-strip
-  overflow; ARIA tab/separator behavior; and the visibility gate that mounts a terminal body only while that
-  terminal is selected in a visible, unfolded group.
+  one-result drag previews; center/side/bottom renderers; alignment-owned nested workbench composition and
+  side-width projection; tab-strip overflow; ARIA tab/separator behavior; and the visibility gate that mounts
+  a terminal body only while that terminal is selected in a visible, unfolded group.
 - **Public surface (`index.ts`):** the workbench renderer/controller, pure document mutations and invariant
   validator, built-in preset definitions + instantiate/refill operations, attention-fallback helpers, and
   their web-only types. Callers pass resource/tool render callbacks rather
@@ -66,12 +66,15 @@ publishing.
 - **Bottom:** ordered left-to-right groups resize on vertical separators. A group may fold to a 27 px-wide
   vertical rail; the whole region hides to a 27 px-high horizontal restore rail over its selected span. Height
   starts at 30%, has a 120 px body minimum, and caps at 70%. Alignment is one of center, center+left,
-  center+right, or full workbench; its span follows the upper row's actual browser-local side projection during
-  a resize gesture and narrow-width compression, while persisted side-width ratios remain the durable target.
-  An included hidden side contributes no phantom width and expands the span only when shown. Broad left/right
-  targets create groups at every boundary. Empty structural slots are legal
-  for portable terminal layouts; losing the final placed tab auto-hides, while explicit preset application may
-  deliberately show the New Terminal empty state.
+  center+right, or full workbench. A side excluded from that span owns its lower corner and its real stack
+  continues to the workbench bottom; an included side ends above the bottom surface. The hidden restore rail
+  follows the same ownership. Alignment composition follows actual browser-local side projection during a
+  resize gesture and narrow-width compression, while persisted workbench-wide side ratios remain the durable
+  target and are converted through nested panel groups. A hidden side contributes no phantom width and joins
+  the span only when shown. Broad left/right targets create groups at every boundary. Empty structural slots
+  remain legal for portable terminal layouts and the deliberate process-free New Terminal state. Closing or
+  moving a group's final tab removes only that newly vacated group, renormalizes survivors, and auto-hides when
+  no populated group remains.
 - **Limits:** left/right share the host setting that defaults to six groups per side; bottom has an independent
   setting defaulting to three. Both accept 1–32. Existing overages survive; creation is unavailable until the
   region falls below its limit, while reorder/join/reducing moves remain legal. Domain eligibility, stable-id
@@ -145,9 +148,9 @@ tools stay deliberately unplaced but receive default/prior auxiliary restore tar
 preset can never strand the user without a Projects/tool recovery path. Version-1 layouts/custom presets
 normalize to hidden empty bottom without moving a resource.
 
-Pointer drag/resize drafts remain local and emit one snapshot only on drop/pointer-up. The bottom row follows
-an outer side-resize draft from the panel group's live projection without publishing that transient geometry.
-A newer accepted
+Pointer drag/resize drafts remain local and emit one snapshot only on drop/pointer-up. Nested outer and
+aligned-row groups project active side-resize drafts through one browser-local workbench-wide coordinate
+space without publishing that transient geometry. A newer accepted
 revision whose mutation id does not match this client's optimistic base cancels the draft, makes release
 inert, and lets the parent explain the cancellation; the same projection epoch invalidates a pending
 preview-click settle timer before it can publish from the replaced document. A matching acknowledgement
