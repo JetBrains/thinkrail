@@ -402,7 +402,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 					break;
 				case "specs":
 					body = (
-						<div className="p-4">
+						<div className="p-12">
 							<SpecsPanel
 								workspaceId={workspaceId}
 								failed={specs.failed}
@@ -413,7 +413,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 					break;
 				case "files":
 					body = (
-						<div className="p-4">
+						<div className="p-12">
 							<FileTree key={workspaceId} workspaceId={workspaceId} />
 						</div>
 					);

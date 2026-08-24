@@ -114,7 +114,7 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 	return (
 		<div className="flex h-full min-h-0 flex-col" data-testid="review-panel">
 			{hasComments && (
-				<div className="flex h-28 shrink-0 items-center justify-end gap-8 border-border-default border-b px-8">
+				<div className="flex h-panel-header-row shrink-0 items-center justify-end gap-8 border-border-default border-b px-12">
 					{hasDrafts && <SendAllReviewsButton workspaceId={workspaceId} />}
 					<ConfirmPopover
 						open={clearing}
@@ -142,7 +142,7 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 					</ConfirmPopover>
 				</div>
 			)}
-			<div className="min-h-0 flex-1 overflow-auto">
+			<div className="min-h-0 flex-1 overflow-auto p-12">
 				{files.length === 0 ? (
 					<p data-testid="review-empty" className="px-8 py-4 tr-text-metadata text-text-subtle">
 						{hasComments
@@ -165,7 +165,7 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 										<button
 											type="button"
 											data-testid="review-file-row"
-											className="flex min-w-0 flex-1 items-center gap-8 px-8 py-4 text-left tr-text-ui"
+											className="flex min-w-0 flex-1 items-center gap-8 px-4 py-4 text-left tr-text-ui"
 											onClick={() => toggleFile(file)}
 										>
 											{isOpen ? (
@@ -193,7 +193,7 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 												title="Done — finish this file's review"
 												aria-label="Done — finish this file's review"
 												onClick={() => void finishFile(file.path)}
-												className="flex shrink-0 items-center py-4 pr-8 pl-4 text-text-subtle hover:text-feedback-success"
+												className="flex shrink-0 items-center py-4 pr-4 pl-4 text-text-subtle hover:text-feedback-success"
 											>
 												<CheckCircle2 className="size-14" />
 											</button>

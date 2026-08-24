@@ -505,7 +505,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 			{mentionOpen ? (
 				<div
 					data-testid="mention-menu"
-					className="absolute bottom-full left-8 mb-4 max-h-[40vh] w-[min(28rem,90%)] overflow-y-auto rounded-[var(--radius-md)] border border-border-default bg-container-elevated-bg p-4 shadow-[var(--shadow-md)]"
+					className="absolute bottom-full left-12 mb-4 max-h-[40vh] w-[min(28rem,90%)] overflow-y-auto rounded-[var(--radius-md)] border border-border-default bg-container-elevated-bg p-4 shadow-[var(--shadow-md)]"
 				>
 					{mentionCandidates.map((candidate, index) => (
 						<button
@@ -529,7 +529,9 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 					commands={slashCompletion.matches}
 					activeIndex={slashCompletion.activeIndex}
 					onSelect={slashCompletion.pick}
-					className="absolute bottom-full left-8 mb-4"
+					className="absolute bottom-full left-12 mb-4"
+					// The nudge is about having NO templates at all — never about the current query matching
+					// none — so it keys on the owner's confirmed-empty listing, not on the visible matches.
 					footer={
 						templatesEmpty && onManageTemplates ? (
 							<button
@@ -556,14 +558,14 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 					type="button"
 					data-testid="slot-hint"
 					onClick={() => stepSlot(1)}
-					className="absolute bottom-full left-8 mb-4 rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-8 py-4 text-text-muted tr-text-metadata shadow-[var(--shadow-md)] hover:bg-control-bg-hovered hover:text-text-default"
+					className="absolute bottom-full left-12 mb-4 rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-8 py-4 text-text-muted tr-text-metadata shadow-[var(--shadow-md)] hover:bg-control-bg-hovered hover:text-text-default"
 				>
 					slot {slotIdx + 1}/{slots.length} · ⇥ next · esc done
 				</button>
 			) : null}
 
 			{images.length > 0 || pendingImages > 0 || attachErrors.length > 0 ? (
-				<div className="flex flex-wrap gap-4 px-8 pt-8" data-testid="composer-images">
+				<div className="flex flex-wrap gap-4 px-12 pt-12" data-testid="composer-images">
 					{attachErrors.map((err) => (
 						<FileChip
 							key={err.id}
@@ -620,7 +622,18 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 				</div>
 			) : null}
 
-			<div className="flex flex-col gap-8 p-8">
+			<div className="flex flex-col gap-8 p-12">
+				{/* The input's border AND background live here (the textarea below is `bg-transparent` + has no
+				 * border), so the backdrop's tint spans, painted behind the textarea, show through. The 1px
+				 * border is on this wrapper so `bg-clip-padding` (background-clip: padding-box) clips the fill to
+				 * *inside* the border — the fill can't bleed past the rounded border, and the border stays fully
+				 * visible. Border colour: `control-border-default` at rest, `control-border-active` via
+				 * `focus-within` while the textarea is being edited (the textarea is the only focusable child) —
+				 * never an accent border. **Composer-specific:** the active border is the *single* focus outline;
+				 * unlike other controls it carries NO accent focus ring (the textarea below has none), so the
+				 * neutral border + accent ring never double up here. The fill is clipped by `bg-clip-padding` +
+				 * `rounded` and the slot backdrop clips itself (its own `overflow-hidden` below), so this wrapper
+				 * needs no `overflow-hidden`. */}
 				<div className="relative rounded-[var(--radius-md)] border border-control-border-default bg-control-bg bg-clip-padding transition-colors focus-within:border-control-border-active">
 					{slots ? (
 						<div

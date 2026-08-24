@@ -102,7 +102,7 @@ export function DiffPane({ tab }: { tab: DiffTab }) {
 				data-testid="diff-view-toggle"
 				role="toolbar"
 				aria-label="Diff view mode"
-				className="flex h-32 shrink-0 items-center gap-4 border-border-default border-b bg-container-header-bg px-8"
+				className="flex h-32 shrink-0 items-center gap-4 border-border-default border-b bg-container-header-bg px-12"
 			>
 				<span
 					data-testid="diff-path"

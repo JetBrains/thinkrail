@@ -124,7 +124,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 				data-testid="changes-view-toggle"
 				role="toolbar"
 				aria-label="Changes scope and view"
-				className="flex h-panel-header-row shrink-0 items-center gap-4 overflow-clip border-border-default border-b px-8"
+				className="flex h-panel-header-row shrink-0 items-center gap-4 overflow-clip border-border-default border-b px-12"
 			>
 				<div className="mr-auto flex min-w-0 items-center gap-4">
 					<ChangesScopeMenu
@@ -159,7 +159,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 					onClick={() => setChangesView("tree")}
 				/>
 			</div>
-			<div className="min-h-0 flex-1 overflow-auto">
+			<div className="min-h-0 flex-1 overflow-auto p-12">
 				{status === null && error !== null ? (
 					<div data-testid="changes-error" className="flex flex-col items-start gap-4 px-8 py-4">
 						<p className="tr-text-metadata text-feedback-error">
@@ -203,7 +203,10 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 												onClick={() => openDiff(change.path, "preview")}
 												onDoubleClick={() => openDiff(change.path, "keep")}
 												title={change.path}
-												className="flex min-w-0 flex-1 items-center gap-8 px-8 py-4 text-left tr-text-ui"
+												// No background of its own: the WRAPPER paints the row's hover/selected band, which has
+												// to span the trailing ⌄ slot too. Two painters would make the row read as cut off at
+												// this button's edge (and hide that the wrapper stopped painting).
+												className="flex min-w-0 flex-1 items-center gap-8 px-4 py-4 text-left tr-text-ui"
 											>
 												<span className="flex min-w-0 flex-1 items-baseline">
 													{dir ? (

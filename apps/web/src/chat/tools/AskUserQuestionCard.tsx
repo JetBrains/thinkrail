@@ -698,7 +698,7 @@ function SupersededRecord({ questions }: { questions: AskUserQuestionItem[] }) {
 				Superseded — you replied in chat instead of answering these.
 			</div>
 			{questions.map((q) => (
-				<div key={q.question} className="pl-[calc(0.875rem+var(--spacing-sm))] text-text-muted">
+				<div key={q.question} className="pl-[calc(0.875rem+var(--space-8))] text-text-muted">
 					{q.question}
 				</div>
 			))}
@@ -961,7 +961,7 @@ function QuestionBody({
 										}
 									/>
 									{selected ? (
-										<div className="pl-[calc(1.125rem+var(--spacing-sm))]">
+										<div className="pl-[calc(1.125rem+var(--space-8))]">
 											{state.noteFor === option.label ? (
 												<textarea
 													ref={noteRef}
@@ -1347,7 +1347,7 @@ function QuestionRecap({
 			</div>
 			{showOptions ? (
 				<>
-					<ul className="flex flex-col gap-2 pl-[calc(0.875rem+var(--spacing-sm))]">
+					<ul className="flex flex-col gap-2 pl-[calc(0.875rem+var(--space-8))]">
 						{question.options.map((opt) => {
 							const isSel = selected.has(opt.label);
 							return (
@@ -1391,14 +1391,14 @@ function QuestionRecap({
 					{!answer ? (
 						<div
 							data-testid="ask-review-unanswered"
-							className="flex items-center gap-4 pl-[calc(0.875rem+var(--spacing-sm))] text-text-muted tr-text-metadata italic"
+							className="flex items-center gap-4 pl-[calc(0.875rem+var(--space-8))] text-text-muted tr-text-metadata italic"
 						>
 							<SkipForward className="size-12 shrink-0" /> Not answered
 						</div>
 					) : null}
 				</>
 			) : !answer ? (
-				<div className="flex items-center gap-4 pl-[calc(0.875rem+var(--spacing-sm))] text-text-muted tr-text-metadata italic">
+				<div className="flex items-center gap-4 pl-[calc(0.875rem+var(--space-8))] text-text-muted tr-text-metadata italic">
 					<SkipForward className="size-12 shrink-0" /> No answer (skipped).
 				</div>
 			) : (
@@ -1411,7 +1411,7 @@ function QuestionRecap({
 				</div>
 			)}
 			{answer?.notes ? (
-				<div className="pl-[calc(0.875rem+var(--spacing-sm))] text-text-muted tr-text-metadata">
+				<div className="pl-[calc(0.875rem+var(--space-8))] text-text-muted tr-text-metadata">
 					Note: {answer.notes}
 				</div>
 			) : null}
