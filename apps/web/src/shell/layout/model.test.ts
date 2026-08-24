@@ -11,6 +11,7 @@ import {
 	closePlacedResource,
 	collectAllGroups,
 	collectCenterGroups,
+	createAuxiliaryGroup,
 	createSideGroup,
 	findTabLocation,
 	hideSide,
@@ -20,10 +21,14 @@ import {
 	openCenterTab,
 	reconcileAttention,
 	removeSessionLayoutTabs,
+	resizeAuxiliaryGroups,
+	resizeBottomRegion,
 	resizeSideGroups,
 	resizeSideRegion,
 	revealTool,
 	selectTab,
+	setAuxiliaryGroupFolded,
+	setBottomAlignment,
 	setSideGroupFolded,
 	setSideVisibility,
 	showSide,
@@ -48,7 +53,7 @@ const file = (id: string): LayoutCenterTab => ({
 
 function baseDocument(tabs: LayoutCenterTab[] = []): WorkspaceLayoutDocument {
 	return {
-		version: 1,
+		version: 2,
 		center: { kind: "group", id: "center-a", tabs },
 		left: {
 			visible: true,
@@ -60,6 +65,7 @@ function baseDocument(tabs: LayoutCenterTab[] = []): WorkspaceLayoutDocument {
 			width: 0.28,
 			groups: [{ id: "right-a", weight: 1, folded: false, tabs: [toolTab("files")] }],
 		},
+		bottom: { visible: false, height: 0.3, alignment: "center", groups: [] },
 		toolRestoreTargets: {},
 	};
 }
@@ -204,6 +210,51 @@ describe("workspace layout model", () => {
 		expect(findTabLocation(document, "terminal:canonical-alias")).toBeNull();
 	});
 
+	test("bottom groups accept auxiliary tabs, preserve empty slots, and use independent geometry", () => {
+		const terminal: LayoutTerminalTab = {
+			kind: "terminal",
+			id: "terminal:bottom",
+			name: "Bottom terminal",
+			tabKey: "bottom",
+		};
+		let document = baseDocument([file("one"), terminal]);
+		document = mutation(createAuxiliaryGroup(document, "bottom", terminal, 0, 1)).document;
+		expect(findTabLocation(document, terminal.id)).toEqual({
+			area: "bottom",
+			groupId: document.bottom.groups[0]?.id,
+		});
+		expect(document.bottom.visible).toBe(true);
+		expect(isLayoutUnavailable(createAuxiliaryGroup(document, "bottom", toolTab("changes"), 1, 1))).toBe(
+			true,
+		);
+		document = mutation(createAuxiliaryGroup(document, "bottom", toolTab("changes"), 1, 2)).document;
+		expect(document.bottom.groups).toHaveLength(2);
+		expect(isLayoutUnavailable(moveTabToGroup(document, file("one"), {
+			area: "bottom",
+			groupId: document.bottom.groups[0]?.id ?? "missing",
+		}))).toBe(true);
+		const firstGroupId = document.bottom.groups[0]?.id;
+		if (!firstGroupId) throw new Error("missing first bottom group");
+		document = mutation(setAuxiliaryGroupFolded(document, "bottom", firstGroupId, true)).document;
+		document = resizeAuxiliaryGroups(document, "bottom", [5, 95]);
+		expect(document.bottom.groups.map((group) => group.weight)).toEqual([0.5, 0.5]);
+		document = setBottomAlignment(document, "full");
+		document = resizeBottomRegion(document, 0.9);
+		expect(document.bottom.alignment).toBe("full");
+		expect(document.bottom.height).toBe(0.7);
+		document = closeLayoutTab(document, terminal.id).document;
+		expect(document.bottom.groups[0]?.tabs).toEqual([]);
+		expect(document.bottom.visible).toBe(true);
+		document = closeLayoutTab(document, "tool:changes").document;
+		expect(document.bottom.groups).toHaveLength(2);
+		expect(document.bottom.visible).toBe(false);
+		expect(document.toolRestoreTargets.changes?.region).toBe("bottom");
+		const revealed = mutation(revealTool(document, "changes", 6, 2));
+		expect(findTabLocation(revealed.document, revealed.focusTabId ?? "missing")?.area).toBe("bottom");
+		expect(revealed.document.bottom.visible).toBe(true);
+		expect(validateLayoutDocument(revealed.document, 6, 2)).toEqual([]);
+	});
+
 	test("rejects no-op moves and preserves identity when a missing tab is closed", () => {
 		const document = baseDocument([file("one"), file("two")]);
 		const noChange = moveTabToGroup(
@@ -256,7 +307,7 @@ describe("workspace layout model", () => {
 		expect(document.right.groups).toHaveLength(0);
 		expect(document.right.visible).toBe(false);
 		expect(document.toolRestoreTargets.files).toEqual({
-			side: "right",
+			region: "right",
 			groupId: "right-a",
 			index: 0,
 		});
@@ -429,6 +480,31 @@ describe("workspace layout model", () => {
 		expect(passivelySelected.navigationClockByGroup["center-a"]).toBe(7);
 	});
 
+	test("attention tracks bottom selection and last focus without affecting center navigation", () => {
+		const document = baseDocument([file("one")]);
+		document.bottom = {
+			visible: true,
+			height: 0.3,
+			alignment: "center",
+			groups: [
+				{
+					id: "bottom-a",
+					weight: 1,
+					folded: false,
+					tabs: [
+						{ kind: "terminal", id: "terminal:t1", name: "Terminal", tabKey: "t1" },
+					],
+				},
+			],
+		};
+		const initial = reconcileAttention(document, undefined);
+		const selected = selectTab(initial, { area: "bottom", groupId: "bottom-a" }, "terminal:t1");
+		expect(selected.selectedByGroup["bottom-a"]).toBe("terminal:t1");
+		expect(selected.lastFocusedSideGroupId.bottom).toBe("bottom-a");
+		expect(selected.lastFocusedCenterGroupId).toBe("center-a");
+		expect(selected.navigationClockByGroup["center-a"]).toBe(0);
+	});
+
 	test("attention reconciliation treats opaque group ids as data, not object prototype keys", () => {
 		const document = baseDocument([file("one")]);
 		document.center.id = "__proto__";
@@ -472,7 +548,23 @@ describe("workspace layout model", () => {
 		]);
 	});
 
-	test("preset application preserves resources and falls terminals back to center when sides are empty", () => {
+	test("built-in presets carry the approved bottom topology", () => {
+		const balanced = BUILTIN_LAYOUT_PRESETS.find((preset) => preset.id === "balanced");
+		const focus = BUILTIN_LAYOUT_PRESETS.find((preset) => preset.id === "focus");
+		const review = BUILTIN_LAYOUT_PRESETS.find((preset) => preset.id === "review");
+		expect(balanced?.bottom).toMatchObject({
+			visible: true,
+			height: 0.3,
+			alignment: "center",
+		});
+		expect(balanced?.bottom.groups).toHaveLength(1);
+		expect(focus?.bottom.visible).toBe(false);
+		expect(focus?.bottom.groups).toHaveLength(1);
+		expect(review?.bottom).toMatchObject({ visible: true, alignment: "center" });
+		expect(review?.bottom.groups).toHaveLength(1);
+	});
+
+	test("preset application preserves resources and routes every terminal through bottom slots", () => {
 		const terminal: LayoutTerminalTab = {
 			kind: "terminal",
 			id: "terminal:t1",
@@ -492,34 +584,37 @@ describe("workspace layout model", () => {
 				groupId: "right-a",
 			}),
 		).document;
-		const emptyPreset = {
+		const bottomPreset = {
 			id: "empty-sides",
 			name: "Empty sides",
 			center: { kind: "group" as const, id: "only" },
 			left: { visible: false, width: 0.2, groups: [] },
 			right: { visible: false, width: 0.2, groups: [] },
+			bottom: {
+				visible: true,
+				height: 0.3,
+				alignment: "center" as const,
+				groups: [{ id: "bottom-slot", weight: 1, folded: false, tools: [] }],
+			},
 		};
 		const seeded = instantiateLayoutPreset({
-			...emptyPreset,
+			...bottomPreset,
 			center: { kind: "group", id: "x".repeat(200) },
 		});
 		expect(seeded.center.id.length).toBeLessThanOrEqual(200);
-		expect(validateLayoutDocument(seeded, 6)).toEqual([]);
+		expect(validateLayoutDocument(seeded, 6, 3)).toEqual([]);
 		expect(canShowSide(seeded, "left")).toBe(true);
 		expect(canShowSide(seeded, "right")).toBe(true);
-		const applied = applyLayoutPreset(source, emptyPreset);
-		expect(validateLayoutDocument(applied, 6)).toEqual([]);
-		expect(
-			collectCenterGroups(applied.center)[0]
-				?.tabs.map((tab) => tab.id)
-				.sort(),
-		).toEqual(["one", "terminal:t1"]);
+		const applied = applyLayoutPreset(source, bottomPreset);
+		expect(validateLayoutDocument(applied, 6, 3)).toEqual([]);
+		expect(collectCenterGroups(applied.center)[0]?.tabs.map((tab) => tab.id)).toEqual(["one"]);
+		expect(applied.bottom.groups[0]?.tabs.map((tab) => tab.id)).toEqual(["terminal:t1"]);
 		expect(applied.toolRestoreTargets).toEqual({
-			projects: { side: "left", index: 0 },
-			specs: { side: "right", index: 0 },
-			files: { side: "right", index: 0 },
-			changes: { side: "right", index: 2 },
-			review: { side: "right", index: 3 },
+			projects: { region: "left", index: 0 },
+			specs: { region: "right", index: 0 },
+			files: { region: "right", index: 0 },
+			changes: { region: "right", index: 2 },
+			review: { region: "right", index: 3 },
 		});
 		expect(canShowSide(applied, "left")).toBe(true);
 		expect(
@@ -531,8 +626,9 @@ describe("workspace layout model", () => {
 		const focused = applyLayoutPreset(source, focus);
 		expect(focused.left.visible).toBe(false);
 		expect(focused.right.visible).toBe(false);
+		expect(focused.bottom.visible).toBe(false);
 		expect(
-			focused.right.groups.flatMap((group) => group.tabs).some((tab) => tab.id === "terminal:t1"),
+			focused.bottom.groups.flatMap((group) => group.tabs).some((tab) => tab.id === "terminal:t1"),
 		).toBe(true);
 		expect(
 			focused.right.groups
@@ -549,7 +645,7 @@ describe("workspace layout model", () => {
 			tabKey: "collision",
 		};
 		const collisionApplied = applyLayoutPreset(baseDocument([collidingTerminal]), balanced);
-		expect(validateLayoutDocument(collisionApplied, 6)).toEqual([]);
+		expect(validateLayoutDocument(collisionApplied, 6, 3)).toEqual([]);
 		expect(
 			collisionApplied.right.groups
 				.flatMap((group) => group.tabs)
@@ -557,18 +653,61 @@ describe("workspace layout model", () => {
 		).not.toBe("tool:review");
 	});
 
-	test("portable capture drops terminal-only groups without leaving an impossible visible side", () => {
-		const terminalOnly = baseDocument();
-		terminalOnly.right.groups = [
-			{
-				id: "terminal-only",
-				weight: 1,
-				folded: false,
-				tabs: [{ kind: "terminal", id: "terminal:t1", name: "Terminal", tabKey: "t1" }],
+	test("preset terminal distribution is one per bottom group before extras join the first", () => {
+		const document = baseDocument(
+			["one", "two", "three"].map((tabKey) => ({
+				kind: "terminal" as const,
+				id: `terminal:${tabKey}`,
+				name: tabKey,
+				tabKey,
+			})),
+		);
+		const preset = {
+			...BUILTIN_LAYOUT_PRESETS[0],
+			bottom: {
+				visible: true,
+				height: 0.4,
+				alignment: "full" as const,
+				groups: [
+					{ id: "bottom-one", weight: 0.6, folded: false, tools: [] },
+					{ id: "bottom-two", weight: 0.4, folded: true, tools: [] },
+				],
 			},
+		};
+		const applied = applyLayoutPreset(document, preset);
+		expect(applied.bottom.groups.map((group) => group.tabs.map((tab) => tab.id))).toEqual([
+			["terminal:one", "terminal:three"],
+			["terminal:two"],
+		]);
+		expect(applied.bottom).toMatchObject({ visible: true, height: 0.4, alignment: "full" });
+	});
+
+	test("portable capture drops side terminal-only groups but retains empty bottom structure", () => {
+		const terminalOnly = baseDocument();
+		const terminal = { kind: "terminal" as const, id: "terminal:t1", name: "Terminal", tabKey: "t1" };
+		terminalOnly.right.groups = [
+			{ id: "terminal-only", weight: 1, folded: false, tabs: [terminal] },
 		];
+		terminalOnly.bottom = {
+			visible: true,
+			height: 0.44,
+			alignment: "center-right",
+			groups: [
+				{ id: "bottom-one", weight: 0.4, folded: false, tabs: [terminal] },
+				{ id: "bottom-two", weight: 0.6, folded: true, tabs: [] },
+			],
+		};
 		const preset = captureLayoutPreset(terminalOnly, "portable", "Portable");
 		expect(preset.right).toEqual({ visible: false, width: 0.28, groups: [] });
+		expect(preset.bottom).toEqual({
+			visible: true,
+			height: 0.44,
+			alignment: "center-right",
+			groups: [
+				{ id: "bottom-one", weight: 0.4, folded: false, tools: [] },
+				{ id: "bottom-two", weight: 0.6, folded: true, tools: [] },
+			],
+		});
 
 		terminalOnly.right.groups.unshift({
 			id: "tool-group",
