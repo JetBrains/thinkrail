@@ -51,6 +51,42 @@ describe("terminal intent routing", () => {
 		expect(result.document.bottom.groups[1]?.folded).toBe(false);
 	});
 
+	test("a reserved hidden default keeps its captured bottom geometry and does not request focus", () => {
+		const result = placeTerminalForIntent(
+			document(),
+			attention,
+			terminal,
+			{ area: "bottom", groupId: "bottom-two" },
+			limits,
+			false,
+		);
+		if ("reason" in result) throw new Error(result.reason);
+		expect(findTabLocation(result.document, terminal.id)).toEqual({
+			area: "bottom",
+			groupId: "bottom-two",
+		});
+		expect(result.document.bottom.visible).toBe(false);
+		expect(result.document.bottom.groups[1]?.folded).toBe(true);
+		expect(result.focusGroupId).toBeUndefined();
+		expect(result.focusTabId).toBeUndefined();
+
+		const withoutSlot = document();
+		withoutSlot.bottom.groups = [];
+		const created = placeTerminalForIntent(
+			withoutSlot,
+			attention,
+			terminal,
+			undefined,
+			limits,
+			false,
+		);
+		if ("reason" in created) throw new Error(created.reason);
+		expect(created.document.bottom.visible).toBe(false);
+		expect(created.document.bottom.groups).toHaveLength(1);
+		expect(findTabLocation(created.document, terminal.id)?.area).toBe("bottom");
+		expect(created.focusGroupId).toBeUndefined();
+	});
+
 	test("global creation makes a bottom slot while an explicit center target stays center", () => {
 		const empty = document();
 		empty.bottom.groups = [];

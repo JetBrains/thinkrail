@@ -105,11 +105,12 @@ clock does not impersonate such navigation, so collapsing the final tab in a lea
 A tab drag paints exactly one result: strip insertion, whole-group join, legal center half-split, a side
 upper/lower boundary, or a bottom left/right boundary. Expanded tab strips remain join/reorder targets while
 content halves create adjacent groups; folded rails divide their compact axis between the same two targets.
-The user never has to acquire a thin outer edge. Hidden left/right/bottom rails become broad creation targets
-only for an eligible tab within that region's limit. Illegal domains, limits, exact-position no-ops, or
-minimums paint no valid target and commit nothing. Escape, pointer cancellation, outside drop, or a
-superseding remote revision restores the source. Drag moves one tab only—never copies, crosses workspaces, or
-moves a whole group.
+The user never has to acquire a thin outer edge. Hidden left/right rails become broad creation targets for an
+eligible tab within that side's limit. A hidden bottom rail instead reuses the last-focused surviving bottom
+slot, creating one at the trailing boundary only when no slot exists; either drop reveals the region. Illegal
+domains, limits, exact-position no-ops, or minimums paint no valid target and commit nothing. Escape, pointer
+cancellation, outside drop, or a superseding remote revision restores the source. Drag moves one tab
+only—never copies, crosses workspaces, or moves a whole group.
 
 Pointer is never the sole arrangement path. Keyboard controls and the shadcn menu surface cover group/tab
 focus, select/close/keep/reorder/move, directional center splits, absolute and adjacent auxiliary-group
@@ -117,7 +118,8 @@ creation, fold/show/hide/tool restore, bottom alignment, and keyboard separator 
 unavailable reason. A tab can reproduce any interior pointer placement by moving into the destination group
 and invoking New group above/below or left/right. Tab strips implement the WAI-ARIA tabs pattern and visible
 roving focus; a folded auxiliary group retains its linked native-hidden tabpanel while unmounting the body,
-and separators expose orientation and current/min/max values. `Ctrl+F6` visits upper-row groups in visual
+and its named restore control is the group focus endpoint when no tab control is rendered. Separators expose
+orientation and current/min/max values. `Ctrl+F6` visits upper-row groups in visual
 order, then visible bottom groups left-to-right. One-row strips have bounded
 readable tab widths, wheel/trackpad scrolling, previous/next controls, active reveal, and a searchable
 keyboard overflow list.

@@ -166,6 +166,12 @@ describe("workspace layout validation", () => {
 		badHeight.bottom.height = 0.8;
 		expect(() => validateWorkspaceLayout(badHeight, LIMITS)).toThrow("Invalid bottom height");
 
+		const visibleWithoutSlot = structuredClone(document());
+		visibleWithoutSlot.bottom.groups = [];
+		expect(() => validateWorkspaceLayout(visibleWithoutSlot, LIMITS)).toThrow(
+			"Visible bottom region requires a group",
+		);
+
 		const illegalTab = structuredClone(document());
 		illegalTab.bottom.groups[0]?.tabs.push({
 			kind: "file",

@@ -90,11 +90,20 @@ assertion — a state that only a picture would catch is a missing `data-testid`
 scenarios are a finding, not a defect: they are how the suite shows two distinct host situations rendering
 one indistinguishable card.
 
+The bottom-workbench scenarios exercise the integrated layout-v2 path rather than only the pure model: first
+seeding and process-free hidden reservation, reload survival before attach, all four alignments, independent
+height/group resizing, 27 px folding with `Ctrl+F6` restore focus, local narrow-viewport compression,
+modal-aware visibility chords, PTY continuity while hidden, peer synchronization, and version-1 migration
+without terminal creation.
+
 ## Isolation contract
 
 Every concurrent lane derives a distinct data dir, HOME, pi-agent dir, fixture repository, binary cache,
 restart artifacts, picker/editor/provider control files, host/restart/binary ports, and Central fixture
-artifacts. Port allocation remains stable and collision-safe across worktrees: the registry claim distinguishes
+artifacts. The lane's fake executable directory lives under `.bun/bin`: this intentionally marks the injected,
+hermetic host `PATH` as complete to `resolveShellEnv()`, preventing login-shell repair from replacing the
+Central/editor stubs with developer-machine executables. Port allocation remains stable and collision-safe
+across worktrees: the registry claim distinguishes
 a lane's logical key while checking staleness against the real worktree path. Legacy plain-path claims are
 still valid.
 

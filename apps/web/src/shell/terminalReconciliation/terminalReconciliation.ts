@@ -109,7 +109,7 @@ export function useTerminalPlacementReconciliation(
 			if (!isLayoutUnavailable(refreshed)) next = refreshed.document;
 		}
 		const placed = new Set(placedTabs.map((tab) => tab.tabKey));
-		const missing = terminals.filter((tab) => !tab.attachPending && !placed.has(tab.tabKey));
+		const missing = terminals.filter((tab) => !tab.reservationPending && !placed.has(tab.tabKey));
 		for (const terminal of missing) {
 			const tab = withAvailablePlacementId(next, {
 				kind: "terminal" as const,

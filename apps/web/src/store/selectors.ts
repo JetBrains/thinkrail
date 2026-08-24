@@ -1,5 +1,6 @@
 import type {
 	GitDiffScope,
+	LayoutAuxiliaryRegion,
 	LayoutCenterTab,
 	LayoutTab,
 	Project,
@@ -53,7 +54,7 @@ interface ProjectContextState extends ActiveWorkspaceState {
 }
 
 export interface LayoutTabPlacement {
-	area: "center" | "left" | "right";
+	area: "center" | LayoutAuxiliaryRegion;
 	groupId: string;
 }
 
@@ -73,10 +74,10 @@ function findLayoutPlacement(
 	};
 	const center = findCenter(document.center);
 	if (center) return center;
-	for (const side of ["left", "right"] as const) {
-		for (const group of document[side].groups) {
+	for (const region of ["left", "right", "bottom"] as const) {
+		for (const group of document[region].groups) {
 			const tab = group.tabs.find(matches);
-			if (tab) return { area: side, groupId: group.id, tabId: tab.id, tab };
+			if (tab) return { area: region, groupId: group.id, tabId: tab.id, tab };
 		}
 	}
 	return null;

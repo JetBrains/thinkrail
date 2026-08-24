@@ -10,6 +10,7 @@ import {
 	closeWorkspaceTerminals,
 	listTerminals,
 	persistTerminalSessions,
+	reserveTerminal,
 	resetTerminalState,
 	resizeTerminal,
 	reviveTerminalSessions,
@@ -100,6 +101,28 @@ test("re-attaching as the same client does not announce a takeover", () => {
 	attachTerminal(WS, "tab-a", "client-1");
 
 	expect(pushed.filter((frame) => frame.channel === "terminal.detached")).toHaveLength(0);
+});
+
+test("reserving a tab persists catalog membership without starting its shell", () => {
+	const seen: unknown[] = [];
+	setTerminalTabsPublisher((workspaceId, tabs) => seen.push({ workspaceId, tabs }));
+
+	expect(reserveTerminal(WS, "tab-a", "Reserved")).toEqual({
+		tabKey: "tab-a",
+		title: "Reserved",
+	});
+	expect(reserveTerminal(WS, "tab-a", "Ignored rename")).toEqual({
+		tabKey: "tab-a",
+		title: "Reserved",
+	});
+	expect(listTerminals(WS)).toEqual([{ tabKey: "tab-a", title: "Reserved" }]);
+	expect(seen).toEqual([{ workspaceId: WS, tabs: [{ tabKey: "tab-a", title: "Reserved" }] }]);
+
+	persistTerminalSessions();
+	resetTerminalState();
+	reviveTerminalSessions();
+	expect(listTerminals(WS)).toEqual([{ tabKey: "tab-a", title: "Reserved" }]);
+	expect(attachTerminal(WS, "tab-a", "client-1").created).toBe(true);
 });
 
 test("the tab list is the host's, in creation order", () => {

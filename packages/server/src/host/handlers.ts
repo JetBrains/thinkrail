@@ -119,6 +119,7 @@ import {
 	closeTerminalTab,
 	closeWorkspaceTerminals,
 	listTerminals,
+	reserveTerminal,
 	resizeTerminal,
 	writeTerminal,
 } from "../terminal";
@@ -352,6 +353,11 @@ const handlers: Record<string, Handler> = {
 		return gitDiffFile(p.workspaceId, p.path, p.scope);
 	},
 	"git.listCommits": (params) => listCommits((params as { workspaceId: string }).workspaceId),
+	"terminal.reserve": (params) => {
+		const p = params as { workspaceId: string; tabKey: string; title: string };
+		getWorkspace(p.workspaceId);
+		return { tab: reserveTerminal(p.workspaceId, p.tabKey, p.title) };
+	},
 	"terminal.attach": (params, ctx) => {
 		const p = params as {
 			workspaceId: string;

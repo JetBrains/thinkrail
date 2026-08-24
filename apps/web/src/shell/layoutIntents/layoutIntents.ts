@@ -44,32 +44,58 @@ import {
 } from "../layout";
 import { terminalLayoutId } from "../terminalReconciliation";
 
+function preservePassiveAuxiliaryPlacement(
+	original: WorkspaceLayoutDocument,
+	moved: { document: WorkspaceLayoutDocument },
+	location: Exclude<LayoutGroupLocation, { area: "center" }>,
+): LayoutOperationResult {
+	const previousGroup = findAuxiliaryGroup(original, location.area, location.groupId);
+	return {
+		document: {
+			...moved.document,
+			[location.area]: {
+				...moved.document[location.area],
+				visible: original[location.area].visible,
+				groups: moved.document[location.area].groups.map((group) =>
+					group.id === previousGroup?.id ? { ...group, folded: previousGroup.folded } : group,
+				),
+			},
+		},
+	};
+}
+
 export function placeTerminalForIntent(
 	document: WorkspaceLayoutDocument,
 	attention: LayoutAttention,
 	tab: LayoutTerminalTab,
 	target: LayoutGroupLocation | undefined,
 	limits: { maxSideGroups: number; maxBottomGroups: number },
+	reveal = true,
 ): LayoutOperationResult {
 	if (target?.area === "center") {
 		const groupId =
 			findCenterGroup(document.center, target.groupId)?.id ??
 			findCenterGroup(document.center, attention.lastFocusedCenterGroupId)?.id ??
 			primaryCenterGroupId(document);
-		return moveTabToGroup(document, tab, { area: "center", groupId });
+		const moved = moveTabToGroup(document, tab, { area: "center", groupId });
+		return !reveal && !isLayoutUnavailable(moved) ? { document: moved.document } : moved;
 	}
-	if (target && findAuxiliaryGroup(document, target.area, target.groupId)) {
-		const moved = moveTabToGroup(document, tab, target);
-		if (isLayoutUnavailable(moved)) return moved;
-		const unfolded = setAuxiliaryGroupFolded(moved.document, target.area, target.groupId, false);
-		if (isLayoutUnavailable(unfolded)) return moved;
-		return {
-			...moved,
-			document: {
-				...unfolded.document,
-				[target.area]: { ...unfolded.document[target.area], visible: true },
-			},
-		};
+	if (target) {
+		const targetGroup = findAuxiliaryGroup(document, target.area, target.groupId);
+		if (targetGroup) {
+			const moved = moveTabToGroup(document, tab, target);
+			if (isLayoutUnavailable(moved)) return moved;
+			if (!reveal) return preservePassiveAuxiliaryPlacement(document, moved, target);
+			const unfolded = setAuxiliaryGroupFolded(moved.document, target.area, target.groupId, false);
+			if (isLayoutUnavailable(unfolded)) return moved;
+			return {
+				...moved,
+				document: {
+					...unfolded.document,
+					[target.area]: { ...unfolded.document[target.area], visible: true },
+				},
+			};
+		}
 	}
 	const preferredId = attention.lastFocusedSideGroupId.bottom;
 	const bottomGroup =
@@ -81,6 +107,12 @@ export function placeTerminalForIntent(
 			groupId: bottomGroup.id,
 		});
 		if (isLayoutUnavailable(moved)) return moved;
+		if (!reveal) {
+			return preservePassiveAuxiliaryPlacement(document, moved, {
+				area: "bottom",
+				groupId: bottomGroup.id,
+			});
+		}
 		return {
 			...moved,
 			document: {
@@ -95,7 +127,14 @@ export function placeTerminalForIntent(
 			},
 		};
 	}
-	return createAuxiliaryGroup(document, "bottom", tab, 0, limits.maxBottomGroups);
+	const created = createAuxiliaryGroup(document, "bottom", tab, 0, limits.maxBottomGroups);
+	if (reveal || isLayoutUnavailable(created)) return created;
+	return {
+		document: {
+			...created.document,
+			bottom: { ...created.document.bottom, visible: document.bottom.visible },
+		},
+	};
 }
 
 export function toLayoutTab(tab: EditorTab): LayoutCenterTab | null {
@@ -147,6 +186,14 @@ export function useLayoutIntentProcessing(
 	);
 	const maxSideGroups = useAppStore((state) => state.layoutSettings.maxSideGroups);
 	const maxBottomGroups = useAppStore((state) => state.layoutSettings.maxBottomGroups);
+	const terminalReservationPending = useAppStore((state) => {
+		if (layoutIntent?.kind !== "place-terminal") return false;
+		return (
+			state.terminalsByWorkspace[workspaceId]?.some(
+				(tab) => tab.tabKey === layoutIntent.tabKey && tab.reservationPending,
+			) ?? false
+		);
+	});
 
 	useEffect(() => {
 		if (!layoutIntent || !document || !attention) return;
@@ -157,6 +204,7 @@ export function useLayoutIntentProcessing(
 		) {
 			return;
 		}
+		if (layoutIntent.kind === "place-terminal" && terminalReservationPending) return;
 		if (
 			layoutIntent.kind === "select" &&
 			layoutIntent.historyRequestId !== undefined &&
@@ -341,10 +389,17 @@ export function useLayoutIntentProcessing(
 				const target = requestedGroupId
 					? { area: requestedArea, groupId: requestedGroupId }
 					: undefined;
-				const placed = placeTerminalForIntent(document, attention, tab, target, {
-					maxSideGroups,
-					maxBottomGroups,
-				});
+				const placed = placeTerminalForIntent(
+					document,
+					attention,
+					tab,
+					target,
+					{
+						maxSideGroups,
+						maxBottomGroups,
+					},
+					layoutIntent.reveal !== false,
+				);
 				if (!isLayoutUnavailable(placed)) result = placed;
 				break;
 			}
@@ -451,6 +506,7 @@ export function useLayoutIntentProcessing(
 		maxBottomGroups,
 		maxSideGroups,
 		requestFocus,
+		terminalReservationPending,
 		workspaceId,
 	]);
 }

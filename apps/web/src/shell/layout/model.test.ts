@@ -679,6 +679,31 @@ describe("workspace layout model", () => {
 		).not.toBe("tool:review");
 	});
 
+	test("a slotless hidden preset stays slotless until it has terminals to preserve", () => {
+		const preset = {
+			...BUILTIN_LAYOUT_PRESETS[0],
+			bottom: {
+				visible: false,
+				height: 0.3,
+				alignment: "center" as const,
+				groups: [],
+			},
+		};
+		const withoutTerminal = applyLayoutPreset(baseDocument([file("one")]), preset);
+		expect(withoutTerminal.bottom.groups).toEqual([]);
+
+		const terminal = {
+			kind: "terminal" as const,
+			id: "terminal:one",
+			name: "Terminal",
+			tabKey: "one",
+		};
+		const withTerminal = applyLayoutPreset(baseDocument([terminal]), preset);
+		expect(withTerminal.bottom).toMatchObject({ visible: false });
+		expect(withTerminal.bottom.groups).toHaveLength(1);
+		expect(withTerminal.bottom.groups[0]?.tabs).toEqual([terminal]);
+	});
+
 	test("preset terminal distribution is one per bottom group before extras join the first", () => {
 		const document = baseDocument(
 			["one", "two", "three"].map((tabKey) => ({
@@ -842,6 +867,14 @@ describe("workspace layout model", () => {
 				expect(validateLayoutDocument(document, 6)).toEqual([]);
 			}
 		}
+	});
+
+	test("validator rejects a visible bottom region without a structural slot", () => {
+		const document = baseDocument([file("one")]);
+		document.bottom.visible = true;
+		expect(validateLayoutDocument(document, 6, 3)).toContain(
+			"Visible bottom region requires a group.",
+		);
 	});
 
 	test("validator catches duplicate placement and illegal side content", () => {

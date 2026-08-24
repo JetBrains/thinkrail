@@ -264,9 +264,10 @@ of the host.
   fan-out used nowhere by navigation restoration / `fs.*` / `git.*` / **`spec.graph`**
   (the Specs-viewer whole-graph read, per workspace) / **`todo.*`** — **`list`**/**`add`**/**`update`**/
   **`remove`**, the chat's per-session TODO plan (keyed by `workspaceId` + `sessionId`; `add` tags the
-  item `origin:"user"`) / **`terminal.*`** — **`attach`** (idempotent get-or-create keyed by
-  `(workspaceId, tabKey)`, returning `created` + the `replay` to repaint; the only way a PTY is born, and it
-  replaced `create`+`alive`) / **`list`** (the host owns the tab list) / `write` / `resize` /
+  item `origin:"user"`) / **`terminal.*`** — **`reserve`** (idempotently establishes a host-catalog tab
+  without starting its PTY) / **`attach`** (idempotent get-or-create keyed by `(workspaceId, tabKey)`,
+  returning `created` + the `replay` to repaint; the only way a PTY is born, and it replaced
+  `create`+`alive`) / **`list`** (the host owns the tab list) / `write` / `resize` /
   **`close`** (by `tabKey`, refusing a busy shell unless `force`) / `model.list` + **`model.refresh`** (awaits the host's
   single-flighted catalog refresh and returns **`RefreshedModels`** — the post-refresh list plus
   **`complete`**, whether that pass settled inside the host's capped wait, since only a settled list is

@@ -328,6 +328,13 @@ function groupDomId(location: LayoutGroupLocation): string {
 	return encodedElementId("layout-group", location.area, location.groupId);
 }
 
+function focusLayoutRequest(request: LayoutTabFocusRequest): void {
+	const tab = request.tabId
+		? globalThis.document.getElementById(tabDomId(request.location, request.tabId))
+		: null;
+	(tab ?? globalThis.document.getElementById(groupDomId(request.location)))?.focus();
+}
+
 function navigationClockSnapshot(attention: LayoutAttention): string {
 	return JSON.stringify(
 		Object.keys(attention.navigationClockByGroup)
@@ -339,28 +346,33 @@ function navigationClockSnapshot(attention: LayoutAttention): string {
 function visibleFocusableGroups(document: WorkspaceLayoutDocument): Array<{
 	location: LayoutGroupLocation;
 	tabs: LayoutTab[];
+	tabControlsRendered: boolean;
 }> {
 	return [
 		...(document.left.visible
 			? document.left.groups.map((group) => ({
 					location: { area: "left" as const, groupId: group.id },
 					tabs: group.tabs,
+					tabControlsRendered: true,
 				}))
 			: []),
 		...collectCenterGroups(document.center).map((group) => ({
 			location: { area: "center" as const, groupId: group.id },
 			tabs: group.tabs,
+			tabControlsRendered: true,
 		})),
 		...(document.right.visible
 			? document.right.groups.map((group) => ({
 					location: { area: "right" as const, groupId: group.id },
 					tabs: group.tabs,
+					tabControlsRendered: true,
 				}))
 			: []),
 		...(document.bottom.visible
 			? document.bottom.groups.map((group) => ({
 					location: { area: "bottom" as const, groupId: group.id },
 					tabs: group.tabs,
+					tabControlsRendered: !group.folded,
 				}))
 			: []),
 	];
@@ -1788,6 +1800,8 @@ function BottomFoldedGroup({
 	const selectedId = readLayoutSelection(shared.attention, group.id);
 	const selected = group.tabs.find((tab) => tab.id === selectedId) ?? group.tabs[0];
 	const location: LayoutGroupLocation = { area: "bottom", groupId: group.id };
+	const restoreId = groupDomId(location);
+	const panelId = groupPanelId(location);
 	const drop = useDroppable({
 		id: tupleKey("dnd-bottom-folded", group.id),
 		data: { target: { kind: "group", location } satisfies DropTarget },
@@ -1800,6 +1814,7 @@ function BottomFoldedGroup({
 			data-group-id={group.id}
 			data-folded="true"
 			data-drop-active={drop.isOver || undefined}
+			aria-label={selected ? `Folded bottom group: ${selected.name}` : "Folded empty bottom group"}
 			className="relative flex h-full items-stretch overflow-hidden border-border-default border-r bg-container-sidebar-bg data-[drop-active]:bg-primary-subtle"
 		>
 			<div className="flex min-h-0 w-full flex-col">
@@ -1811,9 +1826,11 @@ function BottomFoldedGroup({
 					/>
 				) : null}
 				<button
+					id={restoreId}
 					type="button"
 					data-testid="bottom-group-restore"
 					aria-label={`Expand bottom group${selected ? ` ${selected.name}` : ""}`}
+					aria-controls={panelId}
 					aria-expanded="false"
 					onClick={onExpand}
 					className="flex min-h-0 w-full flex-1 items-center justify-center overflow-hidden text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
@@ -1822,6 +1839,7 @@ function BottomFoldedGroup({
 						{selected?.name ?? "Empty group"}
 					</span>
 				</button>
+				<div id={panelId} role="tabpanel" aria-labelledby={restoreId} hidden />
 			</div>
 			<BottomCreationTargets group={group} groupIndex={groupIndex} shared={shared} />
 		</section>
@@ -2192,23 +2210,13 @@ export function Workbench({
 
 	useEffect(() => {
 		if (!focusRequest) return;
-		const frame = requestAnimationFrame(() => {
-			const id = focusRequest.tabId
-				? tabDomId(focusRequest.location, focusRequest.tabId)
-				: groupDomId(focusRequest.location);
-			globalThis.document.getElementById(id)?.focus();
-		});
+		const frame = requestAnimationFrame(() => focusLayoutRequest(focusRequest));
 		return () => cancelAnimationFrame(frame);
 	}, [focusRequest]);
 
 	useEffect(() => {
 		if (!localFocusRequest) return;
-		const frame = requestAnimationFrame(() => {
-			const id = localFocusRequest.tabId
-				? tabDomId(localFocusRequest.location, localFocusRequest.tabId)
-				: groupDomId(localFocusRequest.location);
-			globalThis.document.getElementById(id)?.focus();
-		});
+		const frame = requestAnimationFrame(() => focusLayoutRequest(localFocusRequest));
 		return () => cancelAnimationFrame(frame);
 	}, [localFocusRequest]);
 
@@ -2546,7 +2554,7 @@ export function Workbench({
 				setLocalFocusRequest({
 					key: createLayoutId("focus-group"),
 					location: target.location,
-					tabId: selected.id,
+					...(target.tabControlsRendered ? { tabId: selected.id } : {}),
 				});
 				return;
 			}
@@ -2814,23 +2822,31 @@ export function Workbench({
 					) : (
 						<>
 							<div className="min-h-0 min-w-0 flex-1">{mainRow}</div>
-							<HiddenBottomRail
-								onShow={showBottomRegion}
-								dropEnabled={
-									!!draggingTab &&
-									canPlaceLayoutTab(draggingTab, "bottom") &&
-									(hiddenBottomTargetGroupId !== undefined ||
-										canCreateAuxiliaryGroup(
-											document,
-											"bottom",
-											draggingTab,
-											maxBottomGroups,
-											document.bottom.groups.length,
-										))
-								}
-								targetGroupId={hiddenBottomTargetGroupId}
-								targetIndex={document.bottom.groups.length}
-							/>
+							<div className="h-7 shrink-0">
+								<BottomAlignedRow
+									document={document}
+									leftVisible={leftVisible}
+									rightVisible={rightVisible}
+								>
+									<HiddenBottomRail
+										onShow={showBottomRegion}
+										dropEnabled={
+											!!draggingTab &&
+											canPlaceLayoutTab(draggingTab, "bottom") &&
+											(hiddenBottomTargetGroupId !== undefined ||
+												canCreateAuxiliaryGroup(
+													document,
+													"bottom",
+													draggingTab,
+													maxBottomGroups,
+													document.bottom.groups.length,
+												))
+										}
+										targetGroupId={hiddenBottomTargetGroupId}
+										targetIndex={document.bottom.groups.length}
+									/>
+								</BottomAlignedRow>
+							</div>
 						</>
 					)}
 				</div>

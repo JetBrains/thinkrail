@@ -179,6 +179,20 @@ function spawnForTab(
 	return { id, entry };
 }
 
+export function reserveTerminal(
+	workspaceId: string,
+	tabKey: string,
+	title: string,
+): TerminalTabInfo {
+	const tabs = tabsFor(workspaceId);
+	const existing = tabs.find((tab) => tab.tabKey === tabKey);
+	if (existing) return { tabKey: existing.tabKey, title: existing.title };
+	const tab = { tabKey, title };
+	tabs.push(tab);
+	membershipChanged(workspaceId);
+	return tab;
+}
+
 export interface AttachResult {
 	id: string;
 	created: boolean;

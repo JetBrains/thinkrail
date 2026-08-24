@@ -27,6 +27,9 @@ transaction plus the corresponding device-local attention/focus transition.
 An intent is consumed only after confirming that its captured store document and attention are still current.
 Deferred chat/history work retains its request-time navigation stamp so a late completion cannot steal focus.
 A global terminal placement resolves to last surviving bottom focus, reveals or creates its bottom slot, and
-selects it; a contextual group id still wins. Bottom show/toggle uses the same consume-once transaction as
+selects it; a contextual group id still wins. The parent-reserved new-workspace intent is the explicit
+non-activating exception: it uses its captured/preferred bottom slot, creates one when none survives, and
+retains that region's visibility and existing fold state. Bottom show/toggle uses the same consume-once
+transaction as
 left/right, including eligible singleton restoration before terminal creation and non-bottom focus recovery
 on hide.

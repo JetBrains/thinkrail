@@ -143,7 +143,7 @@ test("selected workspace tabs keep their surface and edge marker in high contras
 	const strips = [
 		page.getByTestId("center-tab-strip"),
 		page.getByTestId("right-tab-strip"),
-		page.getByTestId("workbench-tab-strip").filter({ has: page.getByTestId("terminal-tab") }),
+		page.getByTestId("bottom-tab-strip").filter({ has: page.getByTestId("terminal-tab") }),
 	];
 	for (const strip of strips) {
 		await expect(strip.getByRole("tablist")).toHaveCount(1);

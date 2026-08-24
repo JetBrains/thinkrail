@@ -147,9 +147,10 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   `onOpen`/`isActive` by `ChangesPanel`), together with the **diff-tab identity + scope vocabulary**:
   `scopeKey` / `diffTabId(workspaceId, scope, path)` / `diffTabName` / `scopeLabel` and the `splitPath`
   used by both the flat list's path rows and the diff header's path chip. The **branch combobox** is the
-  shared **`BranchPicker`** (searchable, grouped Remote/Local, current pick check-marked, a Refresh that
-  re-lists) — one component for the New-Workspace dialog's *base* branch and the Changes header's *target*
-  branch; the whole state *around* it — the list, `refreshing`, `refresh()` — is the shared
+  shared **`BranchPicker`** (searchable, grouped Remote/Local, current pick check-marked, refreshed on every
+  open with an explicit Refresh control as well) — one component for the New-Workspace dialog's *base* branch
+  and the Changes header's *target* branch; the whole state *around* it — the list, `refreshing`, `refresh()` —
+  is the shared
   **`useBranchList(projectId, onLoaded?)`** (`branches.ts`, over the offline-degrading
   `listBranchesOrEmpty`), so both pickers are identical **by construction**: the list is **keyed to the
   project** (it clears on a project change, and both reads are generation-stamped, so a switch can never

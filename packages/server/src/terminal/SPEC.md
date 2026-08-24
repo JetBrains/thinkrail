@@ -21,9 +21,10 @@ separate layout snapshot and merely references `tabKey`.
   `(workspaceId, tabKey)`; batched output on `terminal.data` plus `terminal.exit` / `terminal.detached`
   (addressed) and `terminal.tabs` (broadcast), via injected publishers; the bounded per-terminal output
   recorder replayed on attach.
-- **Public surface (barrel):** `attachTerminal`, `listTerminals`, `writeTerminal`, `resizeTerminal`,
-  `closeTerminalTab`, `resumeClientTerminals`, `closeWorkspaceTerminals`, `persistTerminalSessions`,
-  `reviveTerminalSessions`, `closeAllTerminals`, `resetTerminalState` (test seam), `setTerminalPublisher`,
+- **Public surface (barrel):** `reserveTerminal`, `attachTerminal`, `listTerminals`, `writeTerminal`,
+  `resizeTerminal`, `closeTerminalTab`, `resumeClientTerminals`, `closeWorkspaceTerminals`,
+  `persistTerminalSessions`, `reviveTerminalSessions`, `closeAllTerminals`, `resetTerminalState` (test seam),
+  `setTerminalPublisher`,
   `setTerminalTabsPublisher`;
   the `TerminalDeliveryResult` type shared with the host publisher adapter.
 - **Allowed deps:** `persistence`, `contracts` (`WS_CHANNELS`), `bun-pty`, `process.env`.
@@ -37,8 +38,10 @@ separate layout snapshot and merely references `tabKey`.
 - **A shell is keyed by `(workspaceId, tabKey)`**, never by a socket, a client, or a component. `tabKey` is
   durable and client-supplied; PTY ids are per-run and **never persisted** (attaching to an id that outlived
   its process is Theia's `Couldn't attach - can't find terminal with id`).
-- **`attachTerminal` is idempotent get-or-create** — the only way a PTY is born. No separate liveness call, so
-  there is no window in which a client holds the only pointer to a running shell.
+- **Catalog reservation and PTY attachment are separate.** `reserveTerminal` idempotently persists and
+  broadcasts a client-minted tab identity without spawning. `attachTerminal` remains idempotent
+  get-or-create and the only way a PTY is born. This is not a liveness split: a client still never holds the
+  only pointer to a running shell.
 - **Tracked-grid updates are change-only.** Each live entry tracks the grid applied at spawn or by the last
   successful resize. Attach and explicit resize advance that grid only when it changes, and failed calls do not
   advance it. A reattach may still perform a *transient* redraw nudge (below) that leaves the tracked grid
@@ -76,8 +79,8 @@ separate layout snapshot and merely references `tabKey`.
   first keystroke is what stops a tab looking live while nothing happens. The client also guards the reverse
   order with an attach generation, so a stale attach response can never clear a newer detach.
 - **Output stays addressed**, never broadcast — a frame only ever reaches a client that attached. The tab
-  *catalog* is the exception: which terminals exist is shared domain state (architecture #9), so every change
-  fans out on `terminal.tabs` as an idempotent per-workspace snapshot.
+  *catalog* is the exception: which terminals exist is shared domain state (architecture #12), so every
+  reservation or removal fans out on `terminal.tabs` as an idempotent per-workspace snapshot.
 - **A shell dies from exactly five causes:** tab closed, workspace archived, natural exit, host stop, orphan
   sweep on attach. Unmounting a view kills nothing.
 - **No idle culling.** Terminal "activity" can only mean last PTY I/O, so a quiet long-running command would be
@@ -116,7 +119,7 @@ separate layout snapshot and merely references `tabKey`.
   keeping mode sequences out of the body (incl. a recording persisted by a host that still replayed them).
 - `outputBatcher.test.ts` — batching, backpressure, truncation, `reset`.
 - `shellBusy.test.ts` — child detection, including that an unanswerable platform reports *not* busy.
-- `terminalManager.test.ts` — attach idempotency (incl. concurrent), takeover, displaced-client rejection,
-  tab-list broadcast, close/busy, revive.
+- `terminalManager.test.ts` — reservation without spawn, attach idempotency (incl. concurrent), takeover,
+  displaced-client rejection, tab-list broadcast, close/busy, revive.
 - `e2e/terminals.spec.ts` — the rapid re-entry regression, reload survival, second-client takeover,
   cross-client tab convergence.

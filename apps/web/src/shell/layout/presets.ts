@@ -237,6 +237,7 @@ function putTerminalsInBottom(
 	region: LayoutBottomRegion,
 	terminals: LayoutTerminalTab[],
 ): LayoutBottomRegion {
+	if (region.groups.length === 0 && terminals.length === 0) return region;
 	const seeded =
 		region.groups.length > 0
 			? region.groups

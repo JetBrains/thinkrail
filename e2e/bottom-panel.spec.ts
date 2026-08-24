@@ -43,18 +43,18 @@ async function size(locator: Locator, axis: "height" | "width"): Promise<number>
 	return box[axis];
 }
 
-async function expectBottomSpan(page: Page, start: Locator, end: Locator): Promise<void> {
+async function expectHorizontalSpan(surface: Locator, start: Locator, end: Locator): Promise<void> {
 	await expect
 		.poll(async () => {
-			const [bottomBox, startBox, endBox] = await Promise.all([
-				page.getByTestId("bottom-panel").boundingBox(),
+			const [surfaceBox, startBox, endBox] = await Promise.all([
+				surface.boundingBox(),
 				start.boundingBox(),
 				end.boundingBox(),
 			]);
-			if (!bottomBox || !startBox || !endBox) return Number.POSITIVE_INFINITY;
+			if (!surfaceBox || !startBox || !endBox) return Number.POSITIVE_INFINITY;
 			return Math.max(
-				Math.abs(bottomBox.x - startBox.x),
-				Math.abs(bottomBox.x + bottomBox.width - (endBox.x + endBox.width)),
+				Math.abs(surfaceBox.x - startBox.x),
+				Math.abs(surfaceBox.x + surfaceBox.width - (endBox.x + endBox.width)),
 			);
 		})
 		.toBeLessThan(4);
@@ -76,6 +76,7 @@ function bottomGroups(page: Page): Locator {
 async function setBottomAlignment(page: Page, name: string): Promise<void> {
 	await page.getByRole("button", { name: "Bottom panel alignment" }).click();
 	await page.getByRole("menuitemradio", { name, exact: true }).click();
+	await waitForLayoutSettled(page);
 }
 
 async function requestOverWire<T>(
@@ -176,6 +177,80 @@ test("a new workspace starts with one accessible terminal group in a 30% bottom 
 	await expect(page.getByTestId("tab-changes").getByRole("tab")).toBeFocused();
 });
 
+test("a hidden default reserves one synchronized terminal placement without attaching until shown", async ({
+	page,
+	context,
+}) => {
+	await openDefaultWorkbench(page);
+	await page.getByTestId("open-settings").click();
+	await page.getByTestId("settings-nav-layout").click();
+	const focusPreset = page.getByTestId("layout-preset").filter({ hasText: "Focus" });
+	await focusPreset.getByRole("button", { name: "Set default" }).click();
+	await expect(focusPreset.getByText("Default", { exact: true })).toBeVisible();
+	await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();
+
+	const workspace = await createWorkspaceWithoutOpening(page);
+	const peer = await context.newPage();
+	await peer.goto("/");
+	await expect(peer.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+	await revealFirstProjectWorkspaces(peer);
+	const workspaceRow = page.getByTestId("workspace-item").filter({ hasText: workspace.name });
+	const peerWorkspaceRow = peer.getByTestId("workspace-item").filter({ hasText: workspace.name });
+	await expect(workspaceRow).toBeVisible();
+	await expect(peerWorkspaceRow).toBeVisible();
+	await Promise.all([
+		workspaceRow.getByRole("button").first().click(),
+		peerWorkspaceRow.getByRole("button").first().click(),
+	]);
+	await expect(page.getByTestId("bottom-layout-rail")).toBeVisible();
+	await expect(peer.getByTestId("bottom-layout-rail")).toBeVisible();
+	await expect(page.getByTestId("terminal-instance")).toHaveCount(0);
+	await expect(peer.getByTestId("terminal-instance")).toHaveCount(0);
+	await expect
+		.poll(async () => {
+			const [layout, catalog] = await Promise.all([
+				requestOverWire<{
+					document: {
+						bottom: {
+							visible: boolean;
+							groups: Array<{ tabs: Array<{ kind: string; tabKey?: string }> }>;
+						};
+					};
+				}>(page, "layout.get", { workspaceId: workspace.id }),
+				requestOverWire<{ tabs: Array<{ tabKey: string }> }>(page, "terminal.list", {
+					workspaceId: workspace.id,
+				}),
+			]);
+			const placements = layout.document.bottom.groups
+				.flatMap((group) => group.tabs)
+				.filter((tab) => tab.kind === "terminal");
+			return {
+				visible: layout.document.bottom.visible,
+				placementCount: placements.length,
+				catalogCount: catalog.tabs.length,
+				sameKey:
+					typeof placements[0]?.tabKey === "string" &&
+					placements[0]?.tabKey === catalog.tabs[0]?.tabKey,
+			};
+		})
+		.toEqual({ visible: false, placementCount: 1, catalogCount: 1, sameKey: true });
+
+	await page.getByTestId("open-settings").click();
+	await page.getByTestId("settings-nav-layout").click();
+	const balancedPreset = page.getByTestId("layout-preset").filter({ hasText: "Balanced" });
+	await balancedPreset.getByRole("button", { name: "Set default" }).click();
+	await expect(balancedPreset.getByText("Default", { exact: true })).toBeVisible();
+	await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();
+	await peer.close();
+
+	await page.reload();
+	await expect(page.getByTestId("bottom-layout-rail")).toBeVisible();
+	await expect(page.getByTestId("terminal-instance")).toHaveCount(0);
+	await page.getByRole("button", { name: "Show bottom panel" }).click();
+	await waitTerminalReady(page);
+	await expect(bottomGroups(page).getByTestId("terminal-tab")).toHaveCount(1);
+});
+
 test("Mod+Shift+J works from xterm, preserves its PTY through hide and reload, and is modal-aware", async ({
 	page,
 }) => {
@@ -212,7 +287,7 @@ test("bottom height, all alignments, and keyboard resizing persist across reload
 	const center = page.getByTestId("center-tabs");
 	const left = page.getByTestId("left-stack");
 	const right = page.getByTestId("right-stack");
-	await expectBottomSpan(page, center, center);
+	await expectHorizontalSpan(bottom, center, center);
 	const before = await size(bottom, "height");
 	const handle = page.getByTestId("resize-bottom");
 	const handleBox = await handle.boundingBox();
@@ -226,16 +301,16 @@ test("bottom height, all alignments, and keyboard resizing persist across reload
 		"data-alignment",
 		"center-left",
 	);
-	await expectBottomSpan(page, left, center);
+	await expectHorizontalSpan(bottom, left, center);
 	await setBottomAlignment(page, "Below center and right");
 	await expect(page.getByTestId("bottom-aligned-row")).toHaveAttribute(
 		"data-alignment",
 		"center-right",
 	);
-	await expectBottomSpan(page, center, right);
+	await expectHorizontalSpan(bottom, center, right);
 	await setBottomAlignment(page, "Full width");
 	await expect(page.getByTestId("bottom-aligned-row")).toHaveAttribute("data-alignment", "full");
-	await expectBottomSpan(page, left, right);
+	await expectHorizontalSpan(bottom, left, right);
 	await setBottomAlignment(page, "Below center and left");
 
 	await reloadDefaultWorkbench(page);
@@ -254,6 +329,11 @@ test("bottom height, all alignments, and keyboard resizing persist across reload
 	await expect
 		.poll(() => size(page.getByTestId("bottom-panel"), "height"))
 		.toBeGreaterThan(keyboardBefore);
+
+	await pressPlatformShortcut(page, "Shift+j");
+	await expectHorizontalSpan(page.getByTestId("bottom-layout-rail"), left, center);
+	await pressPlatformShortcut(page, "Shift+j");
+	await expectHorizontalSpan(page.getByTestId("bottom-panel"), left, center);
 });
 
 test("bottom groups arrange left-to-right, resize, fold to 27px, restore, and enforce their own limit", async ({
@@ -267,6 +347,7 @@ test("bottom groups arrange left-to-right, resize, fold to 27px, restore, and en
 	await expect(bottomGroups(page).nth(1)).toContainText("Changes");
 
 	const first = bottomGroups(page).nth(0);
+	const second = bottomGroups(page).nth(1);
 	const firstBefore = await size(first, "width");
 	const groupHandle = page.getByTestId("bottom-group-resize");
 	await expect(groupHandle).toHaveAttribute("aria-orientation", "vertical");
@@ -279,7 +360,9 @@ test("bottom groups arrange left-to-right, resize, fold to 27px, restore, and en
 	await expect(first).toHaveAttribute("data-folded", "true");
 	expect(await size(first, "width")).toBeCloseTo(27, 0);
 	await expect(page.getByTestId("terminal-instance")).toHaveCount(0);
-	await first.getByTestId("bottom-group-restore").focus();
+	await second.getByRole("tab", { name: "Changes" }).focus();
+	await page.keyboard.press("Control+Shift+F6");
+	await expect(first.getByTestId("bottom-group-restore")).toBeFocused();
 	await page.keyboard.press("Space");
 	await expect(first).toHaveAttribute("data-folded", "false");
 	await waitTerminalReady(page);
@@ -463,6 +546,12 @@ test("a stored version-1 layout migrates with its tools untouched and no termina
 	await expect(page.getByTestId("bottom-layout-rail")).toBeVisible();
 	await expect(page.getByTestId("terminal-tab")).toHaveCount(0);
 	await expect(page.getByTestId("terminal-instance")).toHaveCount(0);
+	const emptyCatalog = await requestOverWire<{ tabs: Array<{ tabKey: string }> }>(
+		page,
+		"terminal.list",
+		{ workspaceId: workspace.id },
+	);
+	expect(emptyCatalog.tabs).toEqual([]);
 
 	await page.getByRole("button", { name: "Show bottom panel" }).click();
 	await expect(bottomGroups(page)).toHaveCount(1);

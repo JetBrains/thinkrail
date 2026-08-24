@@ -24,6 +24,7 @@ import {
 	isConnectedGeneration,
 	isDefaultWorkspace,
 	isExternalWorkspace,
+	type LayoutIntent,
 	layoutOpenOptionsForNavigation,
 	selectContextProject,
 	selectDiffTabTargetRef,
@@ -63,6 +64,7 @@ const ChatView = lazy(() => import("../chat/ChatView"));
 const PlanPane = lazy(() => import("../panels/PlanPane"));
 
 const NO_EDITOR_TABS: EditorTab[] = [];
+const INITIAL_TERMINAL_TAB_KEY = "thinkrail-initial";
 
 function MissingResource({ label }: { label: string }) {
 	return (
@@ -70,6 +72,62 @@ function MissingResource({ label }: { label: string }) {
 			Restoring {label}…
 		</div>
 	);
+}
+
+function useTerminalReservation(workspaceId: string): void {
+	const status = useAppStore((state) => state.status);
+	const connectionGeneration = useAppStore((state) => state.connectionGeneration);
+	const pendingIntent = useAppStore((state) =>
+		state.layoutIntents.find(
+			(intent): intent is Extract<LayoutIntent, { kind: "place-terminal" }> =>
+				intent.kind === "place-terminal" &&
+				intent.workspaceId === workspaceId &&
+				state.terminalsByWorkspace[workspaceId]?.some(
+					(tab) => tab.tabKey === intent.tabKey && tab.reservationPending,
+				) === true,
+		),
+	);
+
+	useEffect(() => {
+		if (!pendingIntent || status !== "connected" || connectionGeneration === 0) return;
+		let current = true;
+		void getTransport()
+			.request("terminal.reserve", {
+				workspaceId,
+				tabKey: pendingIntent.tabKey,
+				title: pendingIntent.title,
+			})
+			.then(() => {
+				const state = useAppStore.getState();
+				if (
+					!current ||
+					!isConnectedGeneration(state, connectionGeneration) ||
+					state.removedWorkspaceIds[workspaceId]
+				) {
+					return;
+				}
+				state.confirmTerminalReservation(workspaceId, pendingIntent.tabKey);
+			})
+			.catch((error) => {
+				const state = useAppStore.getState();
+				if (
+					!current ||
+					!isConnectedGeneration(state, connectionGeneration) ||
+					state.removedWorkspaceIds[workspaceId]
+				) {
+					return;
+				}
+				const stillPending = state.terminalsByWorkspace[workspaceId]?.some(
+					(tab) => tab.tabKey === pendingIntent.tabKey && tab.reservationPending,
+				);
+				if (!stillPending) return;
+				state.rejectTerminalReservation(workspaceId, pendingIntent.tabKey);
+				toast.error(errorText(error), "Couldn't create the terminal");
+			});
+		return () => {
+			current = false;
+		};
+	}, [connectionGeneration, pendingIntent, status, workspaceId]);
 }
 
 export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
@@ -178,6 +236,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 
 	useLegacySelectionAdapter(workspaceId, activeReviewedPath, readActiveReviewedPath);
 	useDeletedChatPlacementReconciliation(workspaceId);
+	useTerminalReservation(workspaceId);
 	useLayoutIntentProcessing(workspaceId, commit, changeAttention, setFocusRequest);
 	useWorkspaceChatCatalogReconciliation(workspaceId, commit);
 	const { terminals, catalogReady: terminalCatalogReady } = useTerminalPlacementReconciliation(
@@ -208,9 +267,10 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 		const preferredId = attention.lastFocusedSideGroupId.bottom;
 		const target =
 			document.bottom.groups.find((group) => group.id === preferredId) ?? document.bottom.groups[0];
-		if (!target) return;
 		setInitialTerminalSeeded(true);
-		useAppStore.getState().addTerminal(workspaceId, undefined, target.id, "bottom");
+		useAppStore
+			.getState()
+			.addTerminal(workspaceId, undefined, target?.id, "bottom", false, INITIAL_TERMINAL_TAB_KEY);
 	}, [
 		attention,
 		initialTerminalSeeded,

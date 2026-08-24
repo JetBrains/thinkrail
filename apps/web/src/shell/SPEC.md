@@ -102,8 +102,12 @@ Project/file/change/review/chat/terminal views receive only resource identity, v
 bounds. Moving a view cannot change its module dependencies or make it inspect the layout tree. A visible
 terminal is mounted through the layout visibility gate; hidden terminal tabs stay unmounted while their PTYs
 continue running. After first layout seeding, the parent workbench—not `layoutSync`—creates the one initial
-terminal placement, so synchronization remains resource-lifetime-free. A hidden configured default delays
-PTY attach until the placement becomes visible.
+terminal placement, so synchronization remains resource-lifetime-free. Before that intent may commit, the
+parent reserves its client-minted key in the host catalog; the new-workspace seed uses one deterministic key
+inside that workspace, so competing clients reserve and place the same terminal rather than each creating one.
+Reservation is process-free and preserves a hidden configured default across reload and peer reconciliation.
+The placement intent can then retain hidden/folded geometry, and PTY attach still waits until the visibility
+gate mounts it.
 
 ## Error resilience
 
@@ -127,7 +131,8 @@ workbench command surface rather than imperative feature-panel refs:
 
 Letter chords match physical `KeyboardEvent.code`, never layout-dependent `key`. The three layout chords stay
 app-owned inside xterm, do not repeat, and are suppressed while a modal dialog is open. With no active
-workspace they neither act nor swallow the browser chord. Terminal `Ctrl+R` still belongs to xterm;
+workspace, the right/bottom workbench chords neither act nor swallow the browser chord; the established
+Projects chord remains available. Terminal `Ctrl+R` still belongs to xterm;
 `Ctrl+Shift+R`, macOS `Cmd+R`, F5, and the browser reload control remain untouched. All arrangement operations
 beyond these shortcuts are exposed by the layout command/menu system described in
 [[submodule-web-shell-layout]].

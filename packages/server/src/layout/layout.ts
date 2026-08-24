@@ -425,6 +425,9 @@ function validateBottom(
 		return;
 	}
 	validateKeys(region, ["visible", "height", "alignment", "groups"], "Bottom region", state);
+	if (region.visible && region.groups.length === 0) {
+		state.errors.push("Visible bottom region requires a group");
+	}
 	if (Number(region.height) > MAX_BOTTOM_HEIGHT) state.errors.push("Invalid bottom height");
 	const allowed = Math.max(configuredLimit, currentCount);
 	if (region.groups.length > allowed) state.errors.push("bottom region exceeds its group limit");

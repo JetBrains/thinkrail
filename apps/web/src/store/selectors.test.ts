@@ -56,9 +56,9 @@ test("workspace kind predicates distinguish managed and user-owned checkouts", (
 	expect(isUserOwnedWorkspace(external)).toBe(true);
 });
 
-test("layout placement lookup traverses recursive center and side groups", () => {
+test("layout placement lookup traverses recursive center and every auxiliary region", () => {
 	const layout: WorkspaceLayoutDocument = {
-		version: 1,
+		version: 2,
 		center: {
 			kind: "split",
 			id: "split",
@@ -83,6 +83,26 @@ test("layout placement lookup traverses recursive center and side groups", () =>
 					weight: 1,
 					folded: false,
 					tabs: [{ kind: "tool", id: "tool:files", name: "Files", tool: "files" }],
+				},
+			],
+		},
+		bottom: {
+			visible: true,
+			height: 0.3,
+			alignment: "center",
+			groups: [
+				{
+					id: "bottom",
+					weight: 1,
+					folded: false,
+					tabs: [
+						{
+							kind: "terminal",
+							id: "bottom-terminal",
+							name: "Terminal 1",
+							tabKey: "terminal-1",
+						},
+					],
 				},
 			],
 		},
@@ -118,6 +138,18 @@ test("layout placement lookup traverses recursive center and side groups", () =>
 		groupId: "b",
 	});
 	expect(selectLayoutTabPlaced(state, "ws", "tool:files")).toBe(true);
+	expect(selectLayoutTabPlacement(state, "ws", "bottom-terminal")).toEqual({
+		area: "bottom",
+		groupId: "bottom",
+	});
+	expect(
+		selectLayoutResourcePlacement(state, "ws", {
+			kind: "terminal",
+			id: "another-placement-id",
+			name: "Terminal",
+			tabKey: "terminal-1",
+		}),
+	).toMatchObject({ area: "bottom", groupId: "bottom", tabId: "bottom-terminal" });
 	expect(selectLayoutTabPlaced(state, "ws", "missing")).toBe(false);
 	expect(selectAttentionCenterTab(state, "ws")?.id).toBe("legacy-file-placement");
 	const cachedResource = state.tabsByWorkspace.ws[0];
@@ -136,7 +168,7 @@ test("layout placement lookup traverses recursive center and side groups", () =>
 
 test("registered documents participate in legacy selection readiness", () => {
 	const layout: WorkspaceLayoutDocument = {
-		version: 1,
+		version: 2,
 		center: {
 			kind: "group",
 			id: "center",
@@ -153,6 +185,7 @@ test("registered documents participate in legacy selection readiness", () => {
 		},
 		left: { visible: false, width: 0.2, groups: [] },
 		right: { visible: false, width: 0.2, groups: [] },
+		bottom: { visible: false, height: 0.3, alignment: "center", groups: [] },
 		toolRestoreTargets: {},
 	};
 	const state = {

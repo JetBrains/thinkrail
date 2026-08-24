@@ -1332,6 +1332,9 @@ export function validateLayoutDocument(
 	) {
 		errors.push("Invalid bottom alignment.");
 	}
+	if (bottom.visible && bottom.groups.length === 0) {
+		errors.push("Visible bottom region requires a group.");
+	}
 	if (bottom.groups.length > maxBottomGroups) errors.push("Too many bottom groups.");
 	if (bottom.groups.length > LAYOUT_LIMITS.maxSideGroupsSafety) {
 		errors.push("Unsafe bottom group count.");

@@ -131,7 +131,9 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
     mouse reporting and OSC 8 working.
 
 12. **A shell belongs to a tab, and the host owns the mapping.** Terminals are keyed by
-    `(workspaceId, tabKey)` and reached through one idempotent `terminal.attach`; the client keeps no
+    `(workspaceId, tabKey)`; `terminal.reserve` may durably establish the catalog tab without a process, while
+    one idempotent `terminal.attach` remains the only way its PTY is born. This separation lets a synchronized
+    hidden default placement survive reload and another client without starting a shell. The client keeps no
     tab→shell pointer of its own. Shells are **owner-scoped**, matching `history`/`todos`/`templates`, so
     they survive a reload, a closed browser and a different browser — attach is exclusive, and taking a tab
     over notifies the displaced client. Lifetime is bounded by reference (no tab → no shell) plus the host
