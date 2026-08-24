@@ -18,11 +18,13 @@ model *is*; `pi-visualize` is a rendering tool.) It contributes exactly two thin
 
 - **`index.ts`** — an `ExtensionFactory` registering one always-on `before_agent_start` rule that
   points every new piece of work at the root router skill (`choosing-a-workflow`).
-- **`skills/`** — the workflow skill family: the root router, `brainstorming`, and the
-  **setting-up-a-project trio** — the `setting-up-a-project` **dispatcher** routing to
-  `starting-a-new-project` (inception interview → `goal-and-requirements.md`) or
-  `importing-a-codebase` (existing codebase → first spec graph) — plus the authoring checklist. The system's design — concept model, skill roles, meta-rules, the
-  family table, per-skill rationale — lives in [[submodule-workflow-skills]].
+- **`skills/`** — the workflow skill family: the root router that classifies every new piece of
+  work, plus the worker and concept skills reached from it. The **authoritative roster is the
+  family table in [[submodule-workflow-skills]]**, alongside the system's design — concept model,
+  skill roles, meta-rules, per-skill rationale. This spec keeps no roster of its own (a second list
+  would drift — the partial enumeration this bullet replaced had already gone stale, omitting the
+  concept skills) and names an individual skill only where a package-level decision is about it
+  (the root router above; the authoring checklist under Boundary).
 
 The package grows by adding `skills/<name>/` sub-modules (a new tool would go under a `tools/`
 sub-module if one is ever needed); nothing about the layout — or the system's shape — changes to add

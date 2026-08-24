@@ -11,12 +11,15 @@ skill alone; read it, don't run it from memory.
 
 ## Classify
 
-Read the request and the workspace, then answer two questions — usually silently, from what is already
+Read the request and the workspace, then answer three questions — usually silently, from what is already
 in front of you:
 
 1. **Is this project onboarding?** No spec graph yet — an empty (or effectively empty) workspace where
    the user brings a raw idea, or an existing codebase being set up / specced for the first time.
-2. **Does the work create or change anything in the project?** A new feature, added functionality, a
+2. **Is this the PR lifecycle?** Finished work shipping as a pull request, or an existing PR being
+   tended — created, brought up to date, given screenshots, its checks watched, its review comments
+   addressed. Fixes that flow from a PR's own review comments belong here, not to feature work.
+3. **Does the work create or change anything in the project?** A new feature, added functionality, a
    behavior change, a nontrivial design decision — anything that alters what the project is or does.
 
 If the route is genuinely ambiguous from the request alone, ask one short clarifying question
@@ -27,6 +30,7 @@ If the route is genuinely ambiguous from the request alone, ask one short clarif
 | Classification | Route |
 |---|---|
 | Project onboarding — no spec graph yet: an empty workspace with a raw idea, or an existing codebase to set up / spec | Read and follow **setting-up-a-project** — a dispatcher that routes on the workspace's state |
+| The PR lifecycle — finished work to ship as a pull request, or an existing PR to tend: create, bring up to date, screenshots, checks, review comments | Read and follow **shipping-a-pr** |
 | The work creates or changes anything in the project — a new feature, added functionality, a behavior change, a nontrivial design decision | Read and follow **brainstorming** — however small it looks; that skill owns the "too small" judgment |
 | Anything else — answering questions, explaining code, running commands or checks, work that changes nothing | **No matching workflow.** Say so in one line (e.g. "No workflow skill covers this; proceeding directly.") and proceed with your own judgment. Never stretch a route to fit — a forced route is worse than none. |
 
@@ -42,6 +46,6 @@ change Y"), route the part that changes the project and handle the rest directly
 
 ## Handoff
 
-This skill ends by naming exactly one of: **setting-up-a-project**, **brainstorming**, or **no matching
-workflow** (proceed with judgment). Adding a workflow to the family adds a row to the table above —
+This skill ends by naming exactly one of: **setting-up-a-project**, **shipping-a-pr**,
+**brainstorming**, or **no matching workflow** (proceed with judgment). Adding a workflow to the family adds a row to the table above —
 see the writing-workflow-skills skill.
