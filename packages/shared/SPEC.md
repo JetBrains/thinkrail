@@ -5,6 +5,7 @@ status: active
 title: Shared server-side utilities
 parent: architecture
 depends-on: []
+references: [central-integration]
 tags: [v1, host]
 ---
 
@@ -119,6 +120,33 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   existing extension directory by re-arming from the nearest existing parent, and an existence-only poll
   repairs dropped add/remove filesystem events. It never opens or fingerprints the generated file. The caller
   debounces events and rechecks existence through the ordinary inspection API.
+
+  **A directory event is not an artifact event.** `fs.watch` is per-directory, and the re-arm above means the
+  watched directory is routinely an *ancestor* — when the artifact directory has not been created, the
+  watcher may land on `~/.pi/agent`, pi's entire state directory. So invalidation is
+  gated on the artifact itself: an event is forwarded only when it names the artifact entry inside the
+  artifact's own directory, and named events from anywhere else (ancestor churn, a sibling extension) at most
+  re-arm and re-check existence. Naming the entry — rather than stat-fingerprinting the file — is what keeps
+  "replacement" observable without ever reading the generated artifact.
+
+  **An event is classified against the watcher that emitted it, never the current one.** The watched
+  directory is mutable state that re-arming changes, so a callback already queued by a watcher that has
+  since been closed would otherwise be judged against its successor's directory — reading an ancestor's
+  churn as an artifact replacement, or an artifact event as ancestor churn. Each `arm()` therefore binds its
+  own directory and a monotonic generation into the callback it installs, and closing a handle retires that
+  generation, so a superseded callback is dropped rather than reclassified.
+
+  **An unnamed event is scoped, not uniformly trusted or dropped.** `fs.watch` may omit the filename, and a
+  watcher error surfaces the same way, so `null` carries no information about *what* changed — only about
+  where we were watching. On the artifact's own directory it is treated as a possible replacement: the handle
+  is closed (it may be the dead watcher behind an error) and the caller is invalidated, because existence is
+  unchanged for an in-place rewrite and the existence poll therefore cannot recover it. From an ancestor it
+  falls back to existence only. That asymmetry is deliberate: trusting `null` from an ancestor would restore
+  that livelock on any platform that omits filenames, while dropping it on the artifact directory would
+  silently strand a stale Central runtime until restart.
+
+  The cross-module liveness obligation and post-mortem live in [[central-integration]]; watcher mechanics are
+  pinned by `packages/shared/src/jbcentral.test.ts`.
 
   The adapter deliberately has no migration path for the previous unpublished integration: it never reads or
   edits `models.json`, `auth.json`, backups, or any unrelated PI state.

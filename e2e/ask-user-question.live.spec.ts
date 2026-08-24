@@ -41,8 +41,6 @@ test("single-select: focus, roving keys, and Enter resolve the tool", {
 
 	await page.keyboard.press("ArrowDown");
 	await expect(options.nth(1)).toBeFocused();
-	await expect(card.locator('[data-testid="ask-option"][data-selected="true"]')).toHaveCount(0);
-	await page.keyboard.press("Space");
 	await expect(options.nth(1)).toHaveAttribute("data-selected", "true");
 	await expect(card.getByTestId("ask-submit")).toBeEnabled();
 
@@ -52,13 +50,15 @@ test("single-select: focus, roving keys, and Enter resolve the tool", {
 	await expect(options.nth(1)).toHaveAttribute("data-selected", "true");
 	await page.keyboard.press("ArrowUp");
 	await expect(options.last()).toBeFocused();
+	await expect(options.last()).toHaveAttribute("data-selected", "true");
 	await expect(card.getByTestId("ask-custom-row")).toHaveAttribute("data-selected", "false");
-	await expect(options.nth(1)).toHaveAttribute("data-selected", "true");
 	await expect(card.getByTestId("ask-submit")).toBeEnabled();
 
 	await page.keyboard.press("Home");
+	await expect(options.first()).toHaveAttribute("data-selected", "true");
 	await page.keyboard.press("ArrowDown");
 	await expect(options.nth(1)).toBeFocused();
+	await expect(options.nth(1)).toHaveAttribute("data-selected", "true");
 	await page.keyboard.press("Enter");
 
 	await expect(page.getByTestId("chat-input")).toBeFocused();
@@ -124,11 +124,36 @@ test("multi-select: several options can be checked and submitted", { tag: "@agen
 	await expect(card.locator('[data-testid="ask-option"][data-selected="true"]')).toHaveCount(0);
 	await expect(card).toBeVisible();
 
+	await expect(card.getByTestId("ask-note-toggle")).toHaveCount(0);
+
 	await page.keyboard.press("Space");
+	await expect(card.getByTestId("ask-note-toggle")).toHaveCount(1);
 	await page.keyboard.press("ArrowDown");
 	await page.keyboard.press("Space");
 	await expect(card.locator('[data-testid="ask-option"][data-selected="true"]')).toHaveCount(2);
 	await expect(card.getByTestId("ask-needs-choice")).toHaveCount(0);
+
+	const labels = (await card.getByTestId("ask-option-label").allTextContents()).map((label) =>
+		label.trim(),
+	);
+	const noteToggles = card.getByTestId("ask-note-toggle");
+	await expect(noteToggles).toHaveCount(2);
+	await expect(noteToggles.nth(0)).toHaveAccessibleName(`Add note for ${labels[0]}`);
+	await expect(noteToggles.nth(1)).toHaveAccessibleName(`Add note for ${labels[1]}`);
+
+	await noteToggles.nth(0).click();
+	const note = card.getByTestId("ask-note");
+	await expect(note).toBeFocused();
+	await page.keyboard.type("e2e-note-alpha");
+	await page.keyboard.press("Enter");
+	await expect(note).toHaveCount(0);
+	await expect(noteToggles.nth(0)).toContainText("Edit note");
+
+	await noteToggles.nth(1).click();
+	await expect(card.getByTestId("ask-note")).toBeFocused();
+	await page.keyboard.type("e2e-note-beta");
+	await page.keyboard.press("Enter");
+	await expect(options.nth(1)).toBeFocused();
 
 	await page.keyboard.press("Enter");
 	const record = answeredRecord(page);
@@ -136,6 +161,8 @@ test("multi-select: several options can be checked and submitted", { tag: "@agen
 	await expect(
 		record.locator('[data-testid="ask-record-option"][data-selected="true"]'),
 	).toHaveCount(2);
+	await expect(record).toContainText(`${labels[0]}: e2e-note-alpha`);
+	await expect(record).toContainText(`${labels[1]}: e2e-note-beta`);
 });
 
 test("multi-select: the free-text row is mandatory and additive — checks + typed text round-trip", {

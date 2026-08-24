@@ -5,6 +5,7 @@ status: active
 title: Wire contracts (types-only)
 parent: architecture
 depends-on: []
+references: [central-integration]
 tags: [v1, wire]
 ---
 
