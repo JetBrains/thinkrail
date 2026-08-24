@@ -603,7 +603,8 @@ const handlers: Record<string, Handler> = {
 	"layout.replace": (params) => {
 		const replacement = params as LayoutReplaceParams;
 		getWorkspace(replacement.workspaceId);
-		return replaceWorkspaceLayout(replacement, getConfig().layout.maxSideGroups);
+		const { maxSideGroups, maxBottomGroups } = getConfig().layout;
+		return replaceWorkspaceLayout(replacement, { maxSideGroups, maxBottomGroups });
 	},
 	"settings.update": (params) => {
 		const config = (params as { config: Partial<AppConfig> }).config;

@@ -81,7 +81,7 @@ export interface TerminalTabsPush {
 	tabs: TerminalTabInfo[];
 }
 
-export const PROTOCOL_VERSION = 48;
+export const PROTOCOL_VERSION = 49;
 
 export interface ServerWelcome {
 	protocolVersion: number;
