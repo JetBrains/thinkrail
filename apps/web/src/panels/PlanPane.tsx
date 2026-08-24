@@ -43,6 +43,7 @@ import {
 } from "../chat/planView";
 import { StatusIcon } from "../chat/TodoList";
 import { useChatTodos } from "../chat/useChatTodos";
+import { SkeletonRows } from "../components/Skeleton";
 import { IconTooltip } from "../components/ui/tooltip";
 import {
 	selectAgentReviewCommentCount,
@@ -531,9 +532,16 @@ export default function PlanPane({
 	const reviewComments = useAppStore((s) => s.reviewsByWorkspace[workspaceId]?.comments);
 
 	if (plan.data === null) {
+		if (plan.failed) {
+			return (
+				<div className="flex h-full items-center justify-center text-text-subtle tr-text-ui">
+					Couldn't load the plan.
+				</div>
+			);
+		}
 		return (
-			<div className="flex h-full items-center justify-center text-text-subtle tr-text-ui">
-				{plan.failed ? "Couldn't load the plan." : "Loading…"}
+			<div className="h-full p-md">
+				<SkeletonRows rows={8} />
 			</div>
 		);
 	}

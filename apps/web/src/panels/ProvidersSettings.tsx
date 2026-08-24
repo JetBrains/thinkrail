@@ -10,6 +10,7 @@ import {
 import type { ProviderAuthKind, ProviderStatus, ProviderStatusReport } from "@thinkrail/contracts";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { LoginDialog } from "@/auth";
+import { SkeletonRows } from "@/components/Skeleton";
 import { Button } from "@/components/ui/button";
 import { toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
@@ -130,7 +131,7 @@ export function ProvidersSettings() {
 			</div>
 
 			{report == null && !failed ? (
-				<p className="text-text-muted tr-text-ui">Loading providers…</p>
+				<SkeletonRows rows={3} />
 			) : failed ? (
 				<p data-testid="providers-error" className="text-text-muted tr-text-ui">
 					Couldn't read the provider status from the host — try Refresh.

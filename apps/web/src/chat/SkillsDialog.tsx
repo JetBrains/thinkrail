@@ -5,6 +5,7 @@ import {
 } from "@remixicon/react";
 import type { Project, SkillCatalogEntry, SkillDecision, Workspace } from "@thinkrail/contracts";
 import { useCallback, useEffect, useState } from "react";
+import { SkeletonRows } from "@/components/Skeleton";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { IconTooltip } from "@/components/ui/tooltip";
@@ -271,7 +272,9 @@ export function SkillsDialog({
 
 				<div className="max-h-[50vh] overflow-y-auto">
 					{entries === null ? (
-						<p className="px-8 py-12 text-text-muted tr-text-ui">Loading skills…</p>
+						<div className="px-sm py-md">
+							<SkeletonRows rows={4} />
+						</div>
 					) : entries.length === 0 ? (
 						<p className="px-8 py-12 text-text-muted tr-text-ui">No skills discovered.</p>
 					) : (

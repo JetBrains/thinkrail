@@ -3,6 +3,7 @@ import {
 	RiArrowDownSLine as ChevronDown,
 	RiGitCommitLine as GitCommitHorizontal,
 	RiGitPullRequestLine as GitCompare,
+	RiLoader4Line as Loader2,
 } from "@remixicon/react";
 import type { GitCommit, GitDiffScope } from "@thinkrail/contracts";
 import { useRef, useState } from "react";
@@ -96,7 +97,10 @@ export function ChangesScopeMenu({
 				<DropdownMenuSeparator />
 				<DropdownMenuLabel>Commits</DropdownMenuLabel>
 				{commits === null ? (
-					<DropdownMenuItem disabled>Loading commits…</DropdownMenuItem>
+					<DropdownMenuItem disabled>
+						<Loader2 className="size-3.5 animate-spin motion-reduce:animate-none" />
+						Loading commits…
+					</DropdownMenuItem>
 				) : commits.length === 0 ? (
 					<DropdownMenuItem disabled>No commits on this branch</DropdownMenuItem>
 				) : (

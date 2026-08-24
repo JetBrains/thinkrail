@@ -70,7 +70,8 @@ const NO_EDITOR_TABS: EditorTab[] = [];
 
 function MissingResource({ label }: { label: string }) {
 	return (
-		<div className="flex h-full items-center justify-center px-16 text-center tr-text-ui text-text-muted">
+		<div className="flex h-full items-center justify-center gap-4 px-16 text-center tr-text-ui text-text-muted">
+			<Loader2 className="size-14 shrink-0 animate-spin motion-reduce:animate-none" />
 			Restoring {label}…
 		</div>
 	);
