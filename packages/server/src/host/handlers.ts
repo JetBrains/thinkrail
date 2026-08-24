@@ -66,10 +66,18 @@ import {
 	updateJbcentral,
 } from "../auth";
 import { findOpenBranchReview } from "../branch-review";
+import { demoProjectPath, ensureDemoProject, removeDemoFiles } from "../demo";
 import { selectDirectory } from "../dialog";
 import { listAvailableEditors, openEditor, revealInFileManager } from "../editors";
 import { readDir, readFile } from "../fs";
-import { gitDiffFile, gitStatus, listBranches, listCommits, prefetchBranch } from "../git";
+import {
+	canonicalPath,
+	gitDiffFile,
+	gitStatus,
+	listBranches,
+	listCommits,
+	prefetchBranch,
+} from "../git";
 import { githubAuthStatus, githubRefresh } from "../github";
 import { clampLimit, getHistoryIndex } from "../history";
 import {
@@ -81,6 +89,8 @@ import {
 import {
 	acknowledgeProjectSkills,
 	closeProject,
+	deleteProject,
+	getProjects,
 	initProject,
 	inspectProjectPath,
 	listProjects,
@@ -164,6 +174,15 @@ async function archiveTeardown(ws: Workspace): Promise<void> {
 	} catch (error) {
 		console.warn(`workspace archive teardown failed for ${ws.id}: ${error}`);
 	}
+}
+
+function teardownWorkspace(ws: Workspace): Promise<void> {
+	removeWorkspaceLayout(ws.id);
+	evictSpecIndex(ws.id);
+	removeWorkspaceReviews(ws.id);
+	stopWatch(ws.id);
+	closeWorkspaceTerminals(ws.id);
+	return archiveTeardown(ws);
 }
 
 function trackSend(mode: SendMode, text: string): void {
@@ -250,6 +269,22 @@ const handlers: Record<string, Handler> = {
 		closeProject((params as { id: string }).id);
 		return { ok: true } as const;
 	},
+	"demo.ensure": () => ensureDemoProject(),
+	"demo.reset": async () => {
+		const target = canonicalPath(demoProjectPath());
+		const project = getProjects().find((p) => canonicalPath(p.path) === target);
+		if (project) {
+			await Promise.all(
+				listWorkspaceRecords(project.id).map((record) => {
+					const ws = forgetWorkspace(record.id);
+					return ws ? teardownWorkspace(ws) : Promise.resolve();
+				}),
+			);
+			deleteProject(project.id);
+		}
+		removeDemoFiles();
+		return { ok: true } as const;
+	},
 	"project.setTrust": async (params) => {
 		const p = params as { id: string; trusted: boolean };
 		const project = listProjects().find((candidate) => candidate.id === p.id);
@@ -278,14 +313,7 @@ const handlers: Record<string, Handler> = {
 	"workspace.remove": (params) => {
 		const id = (params as { id: string }).id;
 		const ws = forgetWorkspace(id);
-		if (ws) {
-			removeWorkspaceLayout(ws.id);
-			evictSpecIndex(ws.id);
-			removeWorkspaceReviews(ws.id);
-			stopWatch(ws.id);
-			closeWorkspaceTerminals(ws.id);
-			void archiveTeardown(ws);
-		}
+		if (ws) void teardownWorkspace(ws);
 		return { ok: true } as const;
 	},
 	"workspace.diffStats": (params) => workspaceDiffStats((params as { id: string }).id),

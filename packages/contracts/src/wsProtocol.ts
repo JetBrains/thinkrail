@@ -114,6 +114,8 @@ export const WS_METHODS = {
 	projectAliasSkills: "project.aliasSkills",
 	projectSetGroupEnabled: "project.setGroupEnabled",
 	projectSkills: "project.skills",
+	demoEnsure: "demo.ensure",
+	demoReset: "demo.reset",
 	workspaceCreate: "workspace.create",
 	workspaceListExisting: "workspace.listExisting",
 	workspaceOpenExisting: "workspace.openExisting",
@@ -278,6 +280,8 @@ export interface WsMethodMap {
 		result: Project;
 	};
 	"project.skills": { params: { projectId: string }; result: SkillCatalogEntry[] };
+	"demo.ensure": { params: Record<string, never>; result: Project };
+	"demo.reset": { params: Record<string, never>; result: Ack };
 	"workspace.create": {
 		params: { projectId: string; name?: string; baseRef?: string };
 		result: Workspace;
