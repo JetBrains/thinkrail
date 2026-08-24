@@ -386,6 +386,8 @@ function ProjectRow({
 			<button
 				type="button"
 				data-testid="add-workspace"
+				data-onboarding="rail-add"
+				data-project-id={project.id}
 				aria-label="Create workspace"
 				onClick={onAddWorkspace}
 				className="flex size-5 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted transition-colors hover:bg-container-elevated-bg hover:text-text-default focus-visible:bg-container-elevated-bg focus-visible:text-text-default"
@@ -508,6 +510,7 @@ function WorkspaceRow({
 			<fieldset
 				aria-label={workspace.name}
 				data-testid="workspace-item"
+				data-onboarding-ws={workspace.id}
 				data-active={isActive}
 				data-kind={workspace.kind ?? "worktree"}
 				onContextMenu={openMenuFromContext}

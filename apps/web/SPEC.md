@@ -34,6 +34,7 @@ convention; their boundary is held by convention + spec. Sibling edges live here
 | `transport` | the WS client + its singleton/store wiring | yes | [transport/SPEC.md](src/transport/SPEC.md) |
 | `store` | Zustand: domain projections, accepted workspace-layout snapshots, local attention, chat runtimes | yes | [store/SPEC.md](src/store/SPEC.md) |
 | `panels` | layout-agnostic, store-driven feature views | no | [panels/SPEC.md](src/panels/SPEC.md) |
+| `onboarding` | the first-run demo tour: entry + contextual coach-mark steps + reset | yes | [onboarding/SPEC.md](src/onboarding/SPEC.md) |
 | `chat` | pi conversation UI primitives: content-block renderers + the tool-renderer registry | no | [chat/SPEC.md](src/chat/SPEC.md) |
 | `auth` | in-app provider login: the presentational OAuth dialog + its client-side state reducer | yes | [auth/SPEC.md](src/auth/SPEC.md) |
 | `shell` | the responsive frame + synchronized workbench composition (with bounded child `layout/`) | no | [shell/SPEC.md](src/shell/SPEC.md) |
@@ -58,7 +59,8 @@ screen, not a blank root).
 ### Dependency graph
 
 - `navigation` → `store`, `transport`, `contracts` (type-only); neither dependency imports it, and `main.tsx` initializes the integration
-- `shell` → child `shell/layout`, `panels`, `chat` (app-integration render/hydration only), `store`, `transport`, `contracts` (type-only), `components/ui`, `components` (`ErrorBoundary` around each mounted region), `constants`, `lib` (platform shortcut semantics), `themes` (the single owner of the atomic `applyTheme` DOM effect, driven by `store.theme`)
+- `shell` → child `shell/layout`, `panels`, `onboarding` (mounts `OnboardingCoach` beside `Toaster`), `chat` (app-integration render/hydration only), `store`, `transport`, `contracts` (type-only), `components/ui`, `components` (`ErrorBoundary` around each mounted region), `constants`, `lib` (platform shortcut semantics), `themes` (the single owner of the atomic `applyTheme` DOM effect, driven by `store.theme`)
+- `onboarding` → `store`, `transport`, `components/ui`, `lib`, `contracts`; mounted by `shell`, initialized in `main.tsx`; `panels/WelcomePanel` calls its `startDemo`/`resetDemo` (one-way panels→onboarding edge, no cycle)
 - `shell/layout` → `contracts` (types only), `lib` (attention/id primitives), and React / `react-resizable-panels` / `@dnd-kit/core`; the parent injects store state, commit callbacks, and feature renderers, so the child has no feature-module runtime edge
 - `panels` → `store`, `transport`, `components/ui`, `components` (`ErrorBoundary` for feature bodies), `lib`, `contracts`, `constants` (`WelcomePanel`'s wordmark), `chat` (`NewWorkspaceDialog` eagerly reuses `chat/ModelSelector`+`ThinkingSelector`+`useModelCatalog` — these are shiki-free, so the eager import stays split-safe; `TemplatesSettings` reuses `chat/TemplateEditorDialog` for its New/Edit flows — see `panels/SPEC.md`'s `TemplatesSettings` paragraph), `auth` (`ProvidersSettings` mounts `auth/LoginDialog`), `themes` (`AppearanceSettings` consumes the live catalog; code surfaces consume generic theme variables/syntax mapping)
 - `chat` → `contracts` (pi message types, **type-only**), `components/ui`, `lib`; `store` + `transport`
