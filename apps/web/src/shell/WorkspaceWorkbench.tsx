@@ -1,5 +1,6 @@
 import {
 	RiGitBranchLine as GitBranch,
+	RiLoader4Line as Loader2,
 	RiChatNewLine as MessageSquarePlus,
 	RiTerminalBoxLine as SquareTerminal,
 } from "@remixicon/react";
@@ -199,6 +200,8 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	const workspace = useAppStore((state) => selectWorkspaceById(state, workspaceId));
 	const contextProject = useAppStore(selectContextProject);
 	const editorTabs = useAppStore((state) => state.tabsByWorkspace[workspaceId] ?? NO_EDITOR_TABS);
+	const chatStarting = useAppStore((state) => (state.chatStartsByWorkspace[workspaceId] ?? 0) > 0);
+	const sessions = useAppStore((state) => state.sessions);
 	const deletedSessions = useAppStore((state) => state.deletedSessionsByWorkspace[workspaceId]);
 	const terminalClose = useTerminalClose();
 	const specs = useWorkspaceSpecs(workspaceId);
@@ -516,6 +519,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 			if (!currentAttention) return;
 			changeAttention({ ...currentAttention, lastFocusedCenterGroupId: groupId });
 			const navigation = useAppStore.getState().beginCenterNavigation(workspaceId, groupId);
+			useAppStore.getState().beginChatStart(workspaceId);
 			void createSessionWithSkillBaseline({ workspaceId })
 				.then(({ result: { sessionId, model, thinkingLevel }, syncedTick }) => {
 					const store = useAppStore.getState();
@@ -536,7 +540,8 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 					) {
 						toast.error("The agent session could not be created.", "Couldn't start the chat");
 					}
-				});
+				})
+				.finally(() => useAppStore.getState().endChatStart(workspaceId));
 		},
 		[changeAttention, workspaceId],
 	);
@@ -627,10 +632,21 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 						<button
 							type="button"
 							data-testid="start-chat"
+							data-starting={chatStarting || undefined}
+							disabled={chatStarting}
 							onClick={() => startChat(groupId)}
-							className="mt-4 flex items-center gap-4 rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-12 py-4 tr-text-ui text-text-default hover:bg-control-bg-hovered"
+							className="mt-4 flex items-center gap-4 rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-12 py-4 tr-text-ui text-text-default hover:bg-control-bg-hovered disabled:text-text-muted disabled:hover:bg-container-elevated-bg"
 						>
-							<MessageSquarePlus className="size-14" /> New chat
+							{chatStarting ? (
+								<>
+									<Loader2 className="size-14 animate-spin motion-reduce:animate-none" /> Starting
+									chat…
+								</>
+							) : (
+								<>
+									<MessageSquarePlus className="size-14" /> New chat
+								</>
+							)}
 						</button>
 					</div>
 				)}
