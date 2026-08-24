@@ -19,6 +19,16 @@ workspaces, sessions, and worktrees are the existing modules' jobs, unchanged.
 **Lazy, never eager.** The copy happens only when the user explicitly starts the demo (the `demo.ensure`
 wire door), never at host startup.
 
+**Ships its own spec.** The bundled template carries a small `SPEC.md` (a `goal-and-requirements` node
+describing the To Do App), so the demo is a *specced* project from first open: `project.hasSpecs` is true,
+the Specs side-tool has content, and the Welcome fork leads with "Start building" rather than the
+spec-first "Set up project" — the natural path for the onboarding tour.
+
+**Reset is the onboarding replay door.** `demo.reset` (host-orchestrated, below) archives the demo's
+workspaces, drops the project record, and deletes the user-local copy, returning the app to the empty
+first-run state — the frontend "Reset demo" control that lets a user replay the onboarding tour is built
+on it (see the web onboarding SPEC).
+
 ## Boundary
 
 - **Owns:**

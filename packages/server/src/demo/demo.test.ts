@@ -36,7 +36,9 @@ test("ensureDemoProject copies the template, inits a real repo, and opens it", (
 	expect(existsSync(join(demoProjectPath(), "index.html"))).toBe(true);
 	expect(existsSync(join(demoProjectPath(), "src", "app.js"))).toBe(true);
 	expect(gitOut(demoProjectPath(), "rev-parse", "HEAD")).not.toBe("");
-	expect(gitOut(demoProjectPath(), "ls-tree", "-r", "HEAD", "--name-only")).toContain("index.html");
+	const tracked = gitOut(demoProjectPath(), "ls-tree", "-r", "HEAD", "--name-only");
+	expect(tracked).toContain("index.html");
+	expect(tracked).toContain("SPEC.md");
 	expect(listProjects().map((p) => p.id)).toEqual([project.id]);
 });
 
