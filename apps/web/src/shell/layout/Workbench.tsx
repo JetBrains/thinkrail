@@ -177,6 +177,10 @@ function sameSizes(first: readonly number[], second: readonly number[], toleranc
 	);
 }
 
+function isResizeArrowKey(key: string): boolean {
+	return ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(key);
+}
+
 function useCommittedSizes(
 	current: readonly number[],
 	remoteEpoch: number,
@@ -258,7 +262,7 @@ function useCommittedSizes(
 		[cancelStaleGesture, flush],
 	);
 	const onKeyboard = useCallback((event: { key: string }) => {
-		if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) return;
+		if (!isResizeArrowKey(event.key)) return;
 		startEpoch.current = epoch.current;
 		keyboard.current = true;
 	}, []);
@@ -267,6 +271,28 @@ function useCommittedSizes(
 		pending.current = null;
 	}, []);
 	return { onLayout, onDragging, onKeyboard, onKeyboardEnd };
+}
+
+function bindSideResize(
+	side: LayoutSide,
+	resize: ReturnType<typeof useCommittedSizes>,
+	activeSide: { current: LayoutSide | null },
+) {
+	return {
+		onDragging: (active: boolean) => {
+			if (active) activeSide.current = side;
+			resize.onDragging(active);
+			if (!active && activeSide.current === side) activeSide.current = null;
+		},
+		onKeyboard: (event: { key: string }) => {
+			if (isResizeArrowKey(event.key)) activeSide.current = side;
+			resize.onKeyboard(event);
+		},
+		onKeyboardEnd: () => {
+			resize.onKeyboardEnd();
+			if (activeSide.current === side) activeSide.current = null;
+		},
+	};
 }
 
 function useElementSize(): {
@@ -2281,7 +2307,12 @@ export function Workbench({
 						const countsAsNavigation =
 							(wasSelectedAtRequest || closeControlHadFocusAtRequest) && !navigationWasOvertaken;
 						let focusLocation: LayoutGroupLocation | null = null;
-						if (countsAsNavigation && location && location.area !== "center") {
+						if (
+							countsAsNavigation &&
+							location &&
+							location.area !== "center" &&
+							acceptedDocument[location.area].visible
+						) {
 							const sideGroupId = nextAttention.lastFocusedSideGroupId[location.area];
 							if (sideGroupId) focusLocation = { area: location.area, groupId: sideGroupId };
 						}
@@ -2449,6 +2480,7 @@ export function Workbench({
 	});
 	const projectedAlignedWidth =
 		alignedProjection.topology === outerTopology ? alignedProjection.width : alignedWidthCurrent;
+	const activeSideResize = useRef<LayoutSide | null>(null);
 	const commitSideSizes = useCallback(
 		(entries: ReadonlyArray<readonly [LayoutSide, number]>) => {
 			let next = document;
@@ -2478,12 +2510,13 @@ export function Workbench({
 		outerCurrent,
 		remoteEpoch,
 		(sizes) => {
-			const entries: Array<readonly [LayoutSide, number]> = [];
-			if (leftOwnsBottomCorner) entries.push(["left", sizes[0] ?? globalLeftCurrent]);
-			if (rightOwnsBottomCorner) {
-				entries.push(["right", sizes.at(-1) ?? globalRightCurrent]);
+			const side = activeSideResize.current;
+			if (side === "left" && leftOwnsBottomCorner) {
+				commitSideSizes([["left", sizes[0] ?? globalLeftCurrent]]);
 			}
-			commitSideSizes(entries);
+			if (side === "right" && rightOwnsBottomCorner) {
+				commitSideSizes([["right", sizes.at(-1) ?? globalRightCurrent]]);
+			}
 		},
 		onRemoteGestureCanceled,
 	);
@@ -2531,17 +2564,20 @@ export function Workbench({
 		alignedRowCurrent,
 		remoteEpoch,
 		(sizes) => {
-			const entries: Array<readonly [LayoutSide, number]> = [];
-			if (leftInAlignedRow) {
-				entries.push(["left", ((sizes[0] ?? 0) * projectedAlignedWidth) / 100]);
+			const side = activeSideResize.current;
+			if (side === "left" && leftInAlignedRow) {
+				commitSideSizes([["left", ((sizes[0] ?? 0) * projectedAlignedWidth) / 100]]);
 			}
-			if (rightInAlignedRow) {
-				entries.push(["right", ((sizes.at(-1) ?? 0) * projectedAlignedWidth) / 100]);
+			if (side === "right" && rightInAlignedRow) {
+				commitSideSizes([["right", ((sizes.at(-1) ?? 0) * projectedAlignedWidth) / 100]]);
 			}
-			commitSideSizes(entries);
 		},
 		onRemoteGestureCanceled,
 	);
+	const outerLeftResize = bindSideResize("left", outerResize, activeSideResize);
+	const outerRightResize = bindSideResize("right", outerResize, activeSideResize);
+	const alignedLeftResize = bindSideResize("left", alignedRowResize, activeSideResize);
+	const alignedRightResize = bindSideResize("right", alignedRowResize, activeSideResize);
 	const bottomVisible = document.bottom.visible && document.bottom.groups.length > 0;
 	const hiddenBottomTargetGroupId =
 		document.bottom.groups.find((group) => group.id === attention.lastFocusedSideGroupId.bottom)
@@ -2746,9 +2782,9 @@ export function Workbench({
 					<ResizableHandle
 						direction="horizontal"
 						data-testid="resize-left"
-						onDragging={alignedRowResize.onDragging}
-						onKeyDownCapture={alignedRowResize.onKeyboard}
-						onKeyUpCapture={alignedRowResize.onKeyboardEnd}
+						onDragging={alignedLeftResize.onDragging}
+						onKeyDownCapture={alignedLeftResize.onKeyboard}
+						onKeyUpCapture={alignedLeftResize.onKeyboardEnd}
 					/>
 				</>
 			) : null}
@@ -2765,9 +2801,9 @@ export function Workbench({
 					<ResizableHandle
 						direction="horizontal"
 						data-testid="resize-right"
-						onDragging={alignedRowResize.onDragging}
-						onKeyDownCapture={alignedRowResize.onKeyboard}
-						onKeyUpCapture={alignedRowResize.onKeyboardEnd}
+						onDragging={alignedRightResize.onDragging}
+						onKeyDownCapture={alignedRightResize.onKeyboard}
+						onKeyUpCapture={alignedRightResize.onKeyboardEnd}
 					/>
 					<ResizablePanel
 						id="layout-right"
@@ -2869,9 +2905,9 @@ export function Workbench({
 					<ResizableHandle
 						direction="horizontal"
 						data-testid="resize-left"
-						onDragging={outerResize.onDragging}
-						onKeyDownCapture={outerResize.onKeyboard}
-						onKeyUpCapture={outerResize.onKeyboardEnd}
+						onDragging={outerLeftResize.onDragging}
+						onKeyDownCapture={outerLeftResize.onKeyboard}
+						onKeyUpCapture={outerLeftResize.onKeyboardEnd}
 					/>
 				</>
 			) : null}
@@ -2888,9 +2924,9 @@ export function Workbench({
 					<ResizableHandle
 						direction="horizontal"
 						data-testid="resize-right"
-						onDragging={outerResize.onDragging}
-						onKeyDownCapture={outerResize.onKeyboard}
-						onKeyUpCapture={outerResize.onKeyboardEnd}
+						onDragging={outerRightResize.onDragging}
+						onKeyDownCapture={outerRightResize.onKeyboard}
+						onKeyUpCapture={outerRightResize.onKeyboardEnd}
 					/>
 					<ResizablePanel
 						id="layout-right"

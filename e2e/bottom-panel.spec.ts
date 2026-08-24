@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Locator, type Page, test } from "@playwright/test";
+import type { WorkspaceLayoutSnapshot } from "@thinkrail/contracts";
 import {
 	defaultWorkspaceRow,
 	enterDefaultWorkspace,
@@ -127,6 +128,63 @@ async function requestOverWire<T>(
 		},
 		{ requestMethod: method, requestParams: params },
 	) as Promise<T>;
+}
+
+function activeWorkspaceId(page: Page): string {
+	const encodedWorkspaceId = new URL(page.url()).hash.match(/\/workspaces\/([^/]+)/)?.[1];
+	if (!encodedWorkspaceId) throw new Error("active workspace route is missing");
+	return decodeURIComponent(encodedWorkspaceId);
+}
+
+async function readActiveSideWidths(page: Page): Promise<{ left: number; right: number }> {
+	const snapshot = await requestOverWire<WorkspaceLayoutSnapshot>(page, "layout.get", {
+		workspaceId: activeWorkspaceId(page),
+	});
+	return { left: snapshot.document.left.width, right: snapshot.document.right.width };
+}
+
+async function readLocalSideWidths(page: Page): Promise<{ left: number; right: number }> {
+	const [workbench, left, right] = await Promise.all([
+		page.getByTestId("workbench").boundingBox(),
+		page.getByTestId("left-stack").boundingBox(),
+		page.getByTestId("right-stack").boundingBox(),
+	]);
+	if (!workbench || !left || !right) throw new Error("visible workbench sides are missing");
+	return { left: left.width / workbench.width, right: right.width / workbench.width };
+}
+
+async function replaceActiveSideWidths(page: Page, left: number, right: number): Promise<void> {
+	const workspaceId = activeWorkspaceId(page);
+	const snapshot = await requestOverWire<WorkspaceLayoutSnapshot>(page, "layout.get", {
+		workspaceId,
+	});
+	const result = await requestOverWire<{ status: "accepted" | "conflict" }>(
+		page,
+		"layout.replace",
+		{
+			workspaceId,
+			mutationId: `bottom-side-widths-${Date.now()}-${Math.random()}`,
+			expectedRevision: snapshot.revision,
+			document: {
+				...snapshot.document,
+				left: { ...snapshot.document.left, width: left },
+				right: { ...snapshot.document.right, width: right },
+			},
+		},
+	);
+	expect(result.status).toBe("accepted");
+	await expect
+		.poll(async () => {
+			const widths = await readActiveSideWidths(page);
+			return Math.max(Math.abs(widths.left - left), Math.abs(widths.right - right));
+		})
+		.toBeLessThan(1e-8);
+	await expect
+		.poll(async () => {
+			const widths = await readLocalSideWidths(page);
+			return Math.max(Math.abs(widths.left - left), Math.abs(widths.right - right));
+		})
+		.toBeLessThan(0.005);
 }
 
 async function createWorkspaceWithoutOpening(page: Page): Promise<{ id: string; name: string }> {
@@ -500,6 +558,92 @@ test("bottom alignments follow locally compressed side geometry at narrow widths
 	await expectHorizontalSpan(bottom, left, center);
 	await setBottomAlignment(page, "Below center and right");
 	await expectHorizontalSpan(bottom, center, right);
+});
+
+test("narrow side resizing persists only the side whose separator moved", async ({ page }) => {
+	await openDefaultWorkbench(page);
+	const cases = [
+		{ alignment: "Full width", side: "left", input: "pointer" },
+		{ alignment: "Full width", side: "right", input: "keyboard" },
+		{ alignment: "Below center", side: "left", input: "keyboard" },
+		{ alignment: "Below center", side: "right", input: "pointer" },
+	] as const;
+	for (const scenario of cases) {
+		await page.setViewportSize({ width: 1200, height: 844 });
+		await setBottomAlignment(page, scenario.alignment);
+		await replaceActiveSideWidths(page, 0.18, 0.28);
+		const durableBefore = await readActiveSideWidths(page);
+		await page.setViewportSize({ width: 500, height: 844 });
+		await expect
+			.poll(async () => {
+				const local = await readLocalSideWidths(page);
+				return Math.max(
+					Math.abs(local.left - durableBefore.left),
+					Math.abs(local.right - durableBefore.right),
+				);
+			})
+			.toBeGreaterThan(0.005);
+		const untouched = scenario.side === "left" ? "right" : "left";
+		const handle = page.getByTestId(`resize-${scenario.side}`);
+		if (scenario.input === "keyboard") {
+			await handle.focus();
+			await page.keyboard.press(scenario.side === "left" ? "ArrowLeft" : "ArrowRight");
+		} else {
+			const handleBox = await handle.boundingBox();
+			if (!handleBox) throw new Error(`${scenario.side} resize handle has no bounding box`);
+			await dragHandle(
+				page,
+				handle,
+				handleBox.x + (scenario.side === "left" ? -20 : 20),
+				handleBox.y,
+			);
+		}
+		await expect
+			.poll(async () =>
+				Math.abs((await readActiveSideWidths(page))[scenario.side] - durableBefore[scenario.side]),
+			)
+			.toBeGreaterThan(0.001);
+		const durableAfter = await readActiveSideWidths(page);
+		expect(durableAfter[untouched]).toBeCloseTo(durableBefore[untouched], 8);
+	}
+});
+
+test("closing the final populated bottom group focuses center when an empty slot survives", async ({
+	page,
+}) => {
+	await openDefaultWorkbench(page);
+	const workspaceId = activeWorkspaceId(page);
+	const snapshot = await requestOverWire<WorkspaceLayoutSnapshot>(page, "layout.get", {
+		workspaceId,
+	});
+	const replaced = await requestOverWire<{ status: "accepted" | "conflict" }>(
+		page,
+		"layout.replace",
+		{
+			workspaceId,
+			mutationId: `bottom-empty-focus-${Date.now()}`,
+			expectedRevision: snapshot.revision,
+			document: {
+				...snapshot.document,
+				bottom: {
+					...snapshot.document.bottom,
+					groups: [
+						{ id: "e2e-intentional-empty", weight: 0.5, folded: false, tabs: [] },
+						...snapshot.document.bottom.groups.map((group) => ({
+							...group,
+							weight: 0.5 / snapshot.document.bottom.groups.length,
+						})),
+					],
+				},
+			},
+		},
+	);
+	expect(replaced.status).toBe("accepted");
+	await expect(bottomGroups(page)).toHaveCount(2);
+
+	await page.getByTestId("terminal-tab-close").click();
+	await expect(page.getByTestId("bottom-layout-rail")).toBeVisible();
+	await expect(page.getByTestId("center-group")).toBeFocused();
 });
 
 test("bottom alignments follow side geometry while a resize gesture is in progress", async ({

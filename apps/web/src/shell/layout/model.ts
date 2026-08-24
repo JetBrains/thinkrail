@@ -715,10 +715,7 @@ export function createAuxiliaryGroup(
 	);
 	const movedWeight = removesSourceGroup ? sourceGroup.weight : undefined;
 	const removed = removeTabEverywhere(document, movingTab.id);
-	const retained =
-		region === "bottom" && removesSourceGroup
-			? removed.bottom.groups.filter((group) => group.id !== sourceGroup.id)
-			: removed[region].groups;
+	const retained = removed[region].groups;
 	const retainedTotal = retained.reduce((sum, group) => sum + group.weight, 0);
 	const groups = retained.map((group) => ({
 		...group,

@@ -70,7 +70,9 @@ publishing.
   continues to the workbench bottom; an included side ends above the bottom surface. The hidden restore rail
   follows the same ownership. Alignment composition follows actual browser-local side projection during a
   resize gesture and narrow-width compression, while persisted workbench-wide side ratios remain the durable
-  target and are converted through nested panel groups. A hidden side contributes no phantom width and joins
+  target and are converted through nested panel groups. A separator gesture publishes only the ratio of the
+  side that owns that separator; compression of an untouched neighbor remains browser-local. A hidden side
+  contributes no phantom width and joins
   the span only when shown. Broad left/right targets create groups at every boundary. Empty structural slots
   remain legal for portable terminal layouts and the deliberate process-free New Terminal state. Closing or
   moving a group's final tab removes only that newly vacated group, renormalizes survivors, and auto-hides when
@@ -104,6 +106,8 @@ settlement resolves the resource semantically against the latest document, so a 
 unrelated resource that reused the old opaque placement id is never closed. Any newer tab gesture or center
 navigation suppresses delayed close-focus recovery; structural reconciliation that removes the closing group's
 clock does not impersonate such navigation, so collapsing the final tab in a leaf still restores visible tab focus.
+When closing a populated auxiliary group hides its region while an intentional empty bottom slot survives,
+focus falls back to the last center group rather than targeting the unrendered hidden group.
 
 ## Arrangement and accessibility
 
