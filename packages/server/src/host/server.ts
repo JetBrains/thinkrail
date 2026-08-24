@@ -69,7 +69,7 @@ import {
 	maybeNaiveNameWorkspace,
 } from "./autoRename";
 import { setFsNudgePublisher } from "./fsNudge";
-import { handleRequest } from "./handlers";
+import { handleRequest, requestMethodDiagnostic } from "./handlers";
 import { trackLoginOutcome } from "./loginAnalytics";
 import { RequestReplayCache } from "./requestReplayCache";
 import { terminalDeliveryForSendStatus } from "./terminalSend";
@@ -230,12 +230,13 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				}
 				const requestId = req.id;
 				const method = req.method;
+				const methodDiagnostic = requestMethodDiagnostic(method);
 				const params = "params" in req ? req.params : undefined;
 				const sessionId = "sessionId" in req ? req.sessionId : undefined;
 				const fingerprint = createHash("sha256")
 					.update(JSON.stringify([method, params, sessionId ?? null]))
 					.digest("hex");
-				log.debug(`ws ${method}`);
+				log.debug(`ws ${methodDiagnostic}`);
 				try {
 					const response = await requestReplays.run(
 						ws.data.clientKey,
@@ -249,7 +250,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 								return JSON.stringify({ id: requestId, ok: true, result });
 							} catch (err) {
 								const error = err instanceof Error ? err.message : String(err);
-								log.debug(`ws ${method} failed`);
+								log.debug(`ws ${methodDiagnostic} failed`);
 								const code = errorCodeOf(err);
 								return JSON.stringify({
 									id: requestId,

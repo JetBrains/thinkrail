@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Workspace, WorkspaceWatchReadyResult } from "@thinkrail/contracts";
 import { stopAllWatches } from "../watch";
-import { handleRequest } from "./handlers";
+import { handleRequest, requestMethodDiagnostic } from "./handlers";
 
 const CTX = { clientKey: "test-client" };
 
@@ -39,6 +39,13 @@ afterEach(() => {
 	rmSync(dataDir, { recursive: true, force: true });
 	if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
 	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
+});
+
+test("request diagnostics expose only registered method names", async () => {
+	expect(requestMethodDiagnostic("workspace.list")).toBe("workspace.list");
+	expect(requestMethodDiagnostic("secret prompt value")).toBe("unknown method");
+	expect(requestMethodDiagnostic("toString")).toBe("unknown method");
+	await expect(handleRequest("toString", undefined, CTX)).rejects.toThrow("Unknown method");
 });
 
 test("workspace.watchReady waits for startup once, then reports an already-ready watcher", async () => {

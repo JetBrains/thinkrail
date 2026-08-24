@@ -733,12 +733,16 @@ const handlers: Record<string, Handler> = {
 	},
 };
 
+export function requestMethodDiagnostic(method: string): string {
+	return Object.hasOwn(handlers, method) ? method : "unknown method";
+}
+
 export async function handleRequest(
 	method: string,
 	params: unknown,
 	ctx: RequestContext,
 ): Promise<unknown> {
-	const handler = handlers[method];
+	const handler = Object.hasOwn(handlers, method) ? handlers[method] : undefined;
 	if (!handler) throw new Error(`Unknown method: ${method}`);
 	return handler(params, ctx);
 }
