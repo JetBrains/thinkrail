@@ -13,6 +13,7 @@ import type { AgentSettlement, ExtUiRequest } from "@thinkrail/contracts";
 import {
 	buildSessionSettings,
 	clampThinkingForModel,
+	clearQueueSession,
 	createSession,
 	deleteSession,
 	disposeAllSessions,
@@ -27,11 +28,13 @@ import {
 	listSessions,
 	promptSession,
 	refreshAvailableModels,
+	removeQueuedSession,
 	removeSession,
 	removeWorkspaceSessions,
 	setSessionDeletedPublisher,
 	setSessionManagerFactory,
 	setSessionPublisher,
+	steerSession,
 	toWireModel,
 } from "./agentSessionManager";
 import { configurePiRuntime } from "./piRuntime";
@@ -848,6 +851,79 @@ test("followUpSession on an IDLE session runs the turn — pi's follow-up queue 
 	} finally {
 		setSessionManagerFactory(() => SessionManager.inMemory());
 	}
+});
+
+test("mid-stream followUpSession queues: the summary snapshot carries it, clearQueueSession hands it back", async () => {
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	const slow = createFauxCore({
+		provider: "fauxq",
+		api: "fauxq",
+		models: [modelDef("fauxq")],
+		tokensPerSecond: 40,
+	});
+	runtime.registerProvider("fauxq", cfg(slow, "fauxq"));
+	try {
+		slow.setResponses([fauxAssistantMessage(`SLOW_TURN ${"word ".repeat(80)}END`)]);
+		const cwd = tmpCwd("trpi-queue-");
+		const s = await createSession({
+			cwd,
+			workspaceId: "ws-queue",
+			model: toWireModel(slow.getModel()),
+		});
+		const turn = promptSession(s.sessionId, "stream slowly");
+		turn.catch(() => {});
+		const deadline = Date.now() + 5000;
+		while (!seen(s.sessionId).includes("message_update")) {
+			if (Date.now() > deadline) throw new Error("first turn never started streaming");
+			await new Promise((resolve) => setTimeout(resolve, 20));
+		}
+		await followUpSession(s.sessionId, "queued line");
+		await followUpSession(s.sessionId, "queued line two");
+
+		const summary = (await listSessions("ws-queue", cwd)).find(
+			(row) => row.sessionId === s.sessionId,
+		);
+		expect(summary?.queue).toEqual({
+			steering: [],
+			followUp: ["queued line", "queued line two"],
+		});
+		expect(seen(s.sessionId)).toContain("queue_update");
+
+		expect(await removeQueuedSession(s.sessionId, "followUp", 5)).toEqual({
+			removed: null,
+			queue: { steering: [], followUp: ["queued line", "queued line two"] },
+		});
+		expect(await removeQueuedSession(s.sessionId, "followUp", 0)).toEqual({
+			removed: "queued line",
+			queue: { steering: [], followUp: ["queued line two"] },
+		});
+
+		expect(clearQueueSession(s.sessionId)).toEqual({ steering: [], followUp: ["queued line two"] });
+		expect(clearQueueSession(s.sessionId)).toEqual({ steering: [], followUp: [] });
+
+		await turn;
+		removeSession(s.sessionId);
+	} finally {
+		runtime.unregisterProvider("fauxq");
+		setSessionManagerFactory(() => SessionManager.inMemory());
+	}
+}, 20000);
+
+test("removeQueuedSession on an idle session never strands the keepers — they deliver via the idle fallback", async () => {
+	fauxA.setResponses([fauxAssistantMessage("PARKED_DELIVERED")]);
+	const s = await createSession({
+		cwd: tmpCwd("trpi-remove-idle-"),
+		workspaceId: "ws-remove-idle",
+		model: toWireModel(fauxA.getModel()),
+	});
+	await steerSession(s.sessionId, "parked one");
+	await steerSession(s.sessionId, "parked two");
+
+	const result = await removeQueuedSession(s.sessionId, "steering", 0);
+	expect(result.removed).toBe("parked one");
+	expect(result.queue).toEqual({ steering: [], followUp: [] });
+	expect(seen(s.sessionId)).toContain("PARKED_DELIVERED");
+	removeSession(s.sessionId);
 });
 
 test("removeWorkspaceSessions: archives a workspace's live sessions + purges their on-disk transcripts, leaving siblings", async () => {

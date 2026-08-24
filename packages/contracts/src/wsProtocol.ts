@@ -41,7 +41,10 @@ import type {
 	AskUserQuestionResult,
 	ExtUiResponse,
 	ImageContent,
+	QueueLane,
 	RefreshedModels,
+	RemovedQueuedMessage,
+	SessionQueueState,
 	SessionStats,
 	SessionSummary,
 	SkillCatalogEntry,
@@ -78,7 +81,7 @@ export interface TerminalTabsPush {
 	tabs: TerminalTabInfo[];
 }
 
-export const PROTOCOL_VERSION = 46;
+export const PROTOCOL_VERSION = 48;
 
 export interface ServerWelcome {
 	protocolVersion: number;
@@ -150,6 +153,8 @@ export const WS_METHODS = {
 	sessionPrompt: "session.prompt",
 	sessionSteer: "session.steer",
 	sessionFollowUp: "session.followUp",
+	sessionClearQueue: "session.clearQueue",
+	sessionRemoveQueued: "session.removeQueued",
 	sessionAbort: "session.abort",
 	sessionDispose: "session.dispose",
 	sessionDelete: "session.delete",
@@ -372,6 +377,11 @@ export interface WsMethodMap {
 	"session.followUp": {
 		params: { sessionId: string; text: string; images?: ImageContent[] };
 		result: Ack;
+	};
+	"session.clearQueue": { params: { sessionId: string }; result: SessionQueueState };
+	"session.removeQueued": {
+		params: { sessionId: string; kind: QueueLane; index: number };
+		result: RemovedQueuedMessage;
 	};
 	"session.abort": { params: { sessionId: string }; result: Ack };
 	"session.dispose": { params: { sessionId: string }; result: Ack };
