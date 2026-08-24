@@ -450,6 +450,15 @@ export function forgetWorkspace(id: string): Workspace | null {
 	return ws;
 }
 
+export function forgetProjectWorkspaces(projectId: string): Workspace[] {
+	const all = loadWorkspaces();
+	const removed = all.filter((w) => w.projectId === projectId);
+	if (removed.length === 0) return [];
+	saveWorkspaces(all.filter((w) => w.projectId !== projectId));
+	for (const ws of removed) emit({ kind: "removed", projectId: ws.projectId, id: ws.id });
+	return removed;
+}
+
 export function reclaimWorktree(ws: Workspace): void {
 	if (ws.kind === "default" || ws.kind === "external") return;
 	const project = loadProjects().find((p) => p.id === ws.projectId);

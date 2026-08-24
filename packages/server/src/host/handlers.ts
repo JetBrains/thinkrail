@@ -144,6 +144,7 @@ import { ensureWatch, stopWatch } from "../watch";
 import {
 	createWorkspace,
 	ensureWorkspaceScratchDir,
+	forgetProjectWorkspaces,
 	forgetWorkspace,
 	getWorkspace,
 	listExistingWorktrees,
@@ -274,12 +275,8 @@ const handlers: Record<string, Handler> = {
 		const target = canonicalPath(demoProjectPath());
 		const project = getProjects().find((p) => canonicalPath(p.path) === target);
 		if (project) {
-			await Promise.all(
-				listWorkspaceRecords(project.id).map((record) => {
-					const ws = forgetWorkspace(record.id);
-					return ws ? teardownWorkspace(ws) : Promise.resolve();
-				}),
-			);
+			await Promise.all(listWorkspaceRecords(project.id).map((ws) => teardownWorkspace(ws)));
+			forgetProjectWorkspaces(project.id);
 			deleteProject(project.id);
 		}
 		removeDemoFiles();

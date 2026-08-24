@@ -105,7 +105,13 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   defense-in-depth, any record whose `worktreePath` resolves to the project folder** — the rm-fallback must
   never see the user's repo or an attached checkout, however a corrupt/hand-edited record got there), and
   `removeWorkspace(id)` (the synchronous composition of the two, kept for callers/tests that want the whole
-  archive in one call).
+  archive in one call), and **`forgetProjectWorkspaces(projectId)`** — the **project-deletion** drop:
+  removes **every** record for a project (including the user-owned `default`/`external` kinds that
+  `forgetWorkspace` protects), emits `removed` for each, and returns them. Unlike `forgetWorkspace`, it is
+  allowed to drop a Default record because the *project itself is going away* (the demo-reset door in
+  `host`, paired with `deleteProject` + `removeDemoFiles`); it never touches git — worktree reclaim for the
+  managed rows is the caller's separate `reclaimWorktree`/`archiveTeardown` step, which still refuses the
+  user-owned kinds.
 - **Default workspace (`kind: "default"`):** exactly one per project. `listWorkspaces` **ensures** it
   — find-or-create by `projectId`+`kind` (id a plain `randomUUID`; the `kind` field is the marker,
   never an id convention), **collapsing duplicates** defensively if out-of-band state churn ever
@@ -160,7 +166,8 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   module the **single source of workspace lifecycle pushes** (the auto-rename tee no longer pushes — rename
   self-publishes), so registry membership stays shared domain state across every client (architecture #9).
 - **Public surface (barrel):** `createWorkspace`, `listExistingWorktrees`, `openExistingWorktree`,
-  `listWorkspaces`, `listWorkspaceRecords`, `forgetWorkspace`, `reclaimWorktree`, `removeWorkspace`,
+  `listWorkspaces`, `listWorkspaceRecords`, `forgetWorkspace`, `forgetProjectWorkspaces`,
+  `reclaimWorktree`, `removeWorkspace`,
   `workspaceDiffStats`, `getWorkspace`, `renameWorkspace`, `refreshUserOwnedWorkspace`,
   `ensureWorkspaceScratchDir`, `setWorkspacePublisher`, `WorkspaceLifecycleEvent`.
 - **Allowed deps:** `projects` (repo lookup), `git` (the runner), `persistence`; `contracts`;
