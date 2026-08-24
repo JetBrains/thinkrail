@@ -49,49 +49,32 @@ Two facts the table encodes that no single module states:
 
 ## Decisions
 
-1. **One artifact is the whole coupling.** `~/.pi/agent/extensions/jetbrains-central.ts`, named identically
-   by the adapter that watches it and the `pi` runtime that loads it. `central add pi` creates it,
-   `central remove pi` deletes it, and existence *is* the configured verdict. ThinkRail never opens, parses,
-   hashes, or copies it. Corollary that makes the first invariant subtle: because existence is the only fact
-   read, an **in-place replacement is invisible to an existence check**, so the watcher — not the poll — is
-   the only thing that can observe one.
-2. **No Central-derived text ever reaches a client.** Every state above is a closed enum the host chose,
-   never a passthrough of what Central printed. The obligation is enforced in three places, each
-   authoritative for its own half: the process surface invokes only reviewed argv and maps only exit success
-   plus a safe postcondition to an outcome ([[module-shared]]); the runtime surface receives the artifact
-   path as the only artifact fact and captures the provider-id allowlist *before* the opaque extension loads
-   ([[submodule-server-agent]]); the wire surface never lets Central-owned providers, credentials, or details
-   become ordinary provider rows ([[submodule-server-auth]], [[module-contracts]]).
+1. **One reviewed artifact joins inspection to runtime loading.** The adapter owns its location, existence
+   verdict, and watcher; the runtime receives only its opaque path. Because configured truth uses existence
+   alone, in-place replacement depends on the watcher rather than the existence poll. The local mechanics
+   remain authoritative in [[module-shared]] and [[submodule-server-agent]].
+2. **No Central-derived text reaches a client.** The process adapter, pre-extension provider allowlist, and
+   closed wire status each enforce one part of that guarantee; their local contracts remain in
+   [[module-shared]], [[submodule-server-agent]], [[submodule-server-auth]], and [[module-contracts]].
 
 ## Invariants
 
-1. **Invalidation is edge-triggered on the artifact, never level-triggered on a directory.** `fs.watch` is
-   per-directory and the watcher re-arms from the nearest existing parent, so the watched directory is
-   routinely an *ancestor* — with Central never installed it is `~/.pi/agent`, `pi`'s entire state directory.
-   Forwarding raw directory events therefore converts unrelated `pi` churn into rebuild demand. Held by
-   [[module-shared]].
-2. **Every path into `configuring` has a bounded exit.** Two paths reach it: an in-flight action (bounded by
-   the adapter's `ACTION_TIMEOUT_MS` / `UPDATE_TIMEOUT_MS`) and an outstanding rebuild
-   (`settledSequence < requestedSequence`). A path with no bound is a stuck card, not a slow one, because
-   the state carries no deadline of its own.
-3. **The rebuild drain settles a requested sequence in bounded time, independent of inbound event rate.**
-   A debounce cannot supply this: it bounds *burst width*, not stream length, so an unbounded event source
-   starves any drain that restarts on every new sequence.
+1. **Watcher invalidations represent possible edges on the reviewed artifact, not directory activity.** The
+   platform event classification and replacement-recovery mechanics belong only to [[module-shared]].
+2. **Every path into `configuring` has a bounded exit.** Actions are bounded by adapter timeouts; an
+   outstanding rebuild exits when the drain settles. The wire state carries no deadline of its own.
+3. **The rebuild drain settles requested state in bounded time, independent of inbound event rate.** A
+   debounce bounds burst width, not stream length, so it cannot provide this guarantee.
 
-**Invariant 3 is currently violated.** `runRebuildDrain` re-reads `requestedSequence` after each
-`preparePiRuntimeGeneration()` and discards the completed build when it changed, so progress requires a
-quiet window of the debounce plus a full runtime build, and nothing bounds how many times it may discard.
-Worse, the activation sits after that guard, so under starvation no generation is adopted at all and the
-host serves the boot-time runtime indefinitely. Latent, not fixed: invariant 1 removed the only known event
-source fast enough to trigger it, and a second such source reproduces it unchanged.
+**Invariant 3 is currently violated and tracked by issue #287.** `runRebuildDrain` discards a completed
+candidate whenever `requestedSequence` changed during preparation, so progress still requires a quiet
+window and activation can starve indefinitely. Artifact-scoped invalidation removes the known source of
+unrelated events but does not change that algorithm.
 
-**Post-mortem.** Both halves of the composition were individually correct. [[module-shared]] said the
-caller debounces events and rechecks existence; [[submodule-server-auth]] said watcher drift schedules a
-rebuild and status is `configuring` until the newest candidate applies. Composed against an endless event
-stream — `pi` rewriting `auth.json.lock` and `models-store.json` at ~23 events/s while idle — the drain
-never settled, `getJbcentralStatus()` pinned `configuring`, and users with no Central installed were told
-ThinkRail "is applying the latest Central configuration" while the host rebuilt the `pi` runtime in a hot
-loop at ~30-45% CPU. No spec was wrong; no spec owned the composition.
+**Post-mortem.** With the artifact directory absent, the watcher fell back to `pi`'s state directory and
+turned unrelated state writes into rebuild requests. The drain's quiet-window assumption kept
+`configuring` active while repeatedly preparing runtimes. Each leaf contract was locally consistent, but
+no spec owned their liveness in composition.
 
 ## Out of scope
 

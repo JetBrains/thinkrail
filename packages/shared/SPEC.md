@@ -122,8 +122,8 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   debounces events and rechecks existence through the ordinary inspection API.
 
   **A directory event is not an artifact event.** `fs.watch` is per-directory, and the re-arm above means the
-  watched directory is routinely an *ancestor* — when Central was never installed, `~/.pi/agent/extensions`
-  does not exist and the watcher lands on `~/.pi/agent`, pi's entire state directory. So invalidation is
+  watched directory is routinely an *ancestor* — when the artifact directory has not been created, the
+  watcher may land on `~/.pi/agent`, pi's entire state directory. So invalidation is
   gated on the artifact itself: an event is forwarded only when it names the artifact entry inside the
   artifact's own directory, and named events from anywhere else (ancestor churn, a sibling extension) at most
   re-arm and re-check existence. Naming the entry — rather than stat-fingerprinting the file — is what keeps
@@ -145,12 +145,8 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   that livelock on any platform that omits filenames, while dropping it on the artifact directory would
   silently strand a stale Central runtime until restart.
 
-  This is load-bearing, not defensive: `pi` itself rewrites `auth.json.lock` and `models-store.json`
-  continuously (~23 events/s while idle), so forwarding raw directory events converts ordinary `pi` churn
-  into unbounded rebuild demand — and a debounce in the caller cannot absorb it, because a debounce bounds
-  burst width, not stream length. Composed with the caller's rebuild machinery that shipped a beta livelock;
-  the cross-module chain and its liveness obligations are [[central-integration]] (Invariants). Pinned by
-  `packages/shared/src/jbcentral.test.ts`.
+  The cross-module liveness obligation and post-mortem live in [[central-integration]]; watcher mechanics are
+  pinned by `packages/shared/src/jbcentral.test.ts`.
 
   The adapter deliberately has no migration path for the previous unpublished integration: it never reads or
   edits `models.json`, `auth.json`, backups, or any unrelated PI state.

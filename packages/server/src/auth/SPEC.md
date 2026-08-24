@@ -28,11 +28,8 @@ ourselves and never surface a credential value over the wire.
     Central is not inferred from model URLs: status combines `shared/jbcentral`'s executable/version/artifact
     postconditions and closed auth/proxy observations with the synchronizer's latest desired/applied generation.
     Watcher drift schedules a rebuild; status is `configuring` until the newest candidate applies and
-    `load-failed` when it cannot apply. **`configuring` carries no deadline of its own, so every path into it
-    owes a bounded exit** — an in-flight action is bounded by the adapter's timeouts, an outstanding rebuild
-    by the drain settling. The drain's obligation to settle *independent of inbound event rate*, and its
-    current unmet state, are [[central-integration]] (Invariants); this module must not assume termination it does not
-    enforce.
+    `load-failed` when it cannot apply. The cross-module bounded-exit obligation and the drain's known
+    starvation risk are owned by [[central-integration]] (Invariants).
 
     **The auth/proxy observation is cached, refreshed off the read path, and never polled.** A settled
     `supported` reading serves the cached result immediately and, past `JBCENTRAL_STATUS_TTL_MS`, starts one

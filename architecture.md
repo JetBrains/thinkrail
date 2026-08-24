@@ -135,17 +135,10 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
     **tmux was rejected** as the persistence layer: an unassumable dependency on Windows, a competing tab
     model, env-propagation breakage, and polling-based capture — for restart survival we have already
     decided not to hold. Detail: [[submodule-server-terminal]].
-13. **Central is an opaque third-party integration, isolated behind one adapter and one artifact.**
-    JetBrains AI models reach ThinkRail through the user's own `central` CLI, not through a provider we
-    configure: the CLI writes a `pi` extension to a single global path and ThinkRail's only coupling to it
-    is that path's existence. Nothing reads the artifact, and no Central-derived text reaches a client —
-    every state the UI sees is a closed enum the host chose. This is the only integration that shells out
-    to a third-party binary which mutates `pi`'s own state directory and injects an opaque extension into a
-    live runtime, so it is also the only one whose behaviour is a *chain* across five modules
-    (`shared` → `auth` → `agent` → `contracts` → `web/panels`) rather than a module boundary. The chain's
-    end-to-end state mapping and its **liveness** obligations are owned by [[central-integration]], because
-    no single module can hold them — a beta livelock proved that two individually-correct module specs can
-    compose into a non-terminating state.
+13. **Central's cross-module lifecycle has one architectural owner.** Its adapter, runtime generation,
+    wire status, and card remain in their bounded modules; the correspondence between those surfaces and
+    their liveness obligations belongs to [[central-integration]]. This keeps feature-specific mechanics in
+    their leaf specs while making a non-terminating composition visible at the architecture layer.
 
 ## Invariants
 
