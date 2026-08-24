@@ -6,6 +6,7 @@ import {
 } from "@monaco-editor/react";
 import type { editor } from "monaco-editor";
 import { useCallback, useEffect, useRef } from "react";
+import { SkeletonRows } from "../components/Skeleton";
 import { decorateEditorContextMenus } from "./monacoMenuIcons";
 import {
 	defineThinkrailTheme,
@@ -148,7 +149,9 @@ export default function MonacoDiff({
 			beforeMount={beforeMount}
 			onMount={onMount}
 			loading={
-				<div className="flex h-full items-center justify-center text-text-muted">Loading diff…</div>
+				<div className="h-full w-full p-md">
+					<SkeletonRows rows={12} />
+				</div>
 			}
 			options={{
 				...sharedEditorOptions(),

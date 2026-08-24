@@ -6,6 +6,7 @@ import {
 import { lazy, Suspense, useState } from "react";
 import { IconTooltip } from "@/components/ui/tooltip";
 import { copyText, isMarkdownPath } from "@/lib/utils";
+import { SkeletonRows } from "../components/Skeleton";
 import type { DiffTab } from "../store";
 import { selectDiffTabTargetRef, useAppStore } from "../store";
 import { getTransport } from "../transport";
@@ -19,7 +20,9 @@ const MonacoDiff = lazy(() => import("./MonacoDiff"));
 const RenderedDiff = lazy(() => import("./RenderedDiff"));
 
 const loading = (
-	<div className="flex h-full items-center justify-center text-text-muted">Loading…</div>
+	<div className="h-full p-md">
+		<SkeletonRows rows={12} />
+	</div>
 );
 
 export function DiffPane({ tab }: { tab: DiffTab }) {

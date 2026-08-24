@@ -37,6 +37,7 @@ import {
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { copyText } from "@/lib";
+import { SkeletonRows } from "../components/Skeleton";
 import {
 	isDefaultWorkspace,
 	isExternalWorkspace,
@@ -253,6 +254,11 @@ export function ProjectTree() {
 								onRegisterNameButton={(element) => registerProjectNameButton(project.id, element)}
 								onRestoreFocus={() => focusProjectNameOrAdd(project.id)}
 							/>
+							{isExpanded && list === undefined && (
+								<div className="py-xs pr-sm pl-lg">
+									<SkeletonRows rows={2} />
+								</div>
+							)}
 							{isExpanded && list !== undefined && (
 								<ul className="mt-4 flex flex-col gap-4">
 									{list.map((ws) => (

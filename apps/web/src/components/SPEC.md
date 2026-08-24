@@ -10,8 +10,9 @@ tags: [v1, ui, resilience]
 ## Responsibility
 
 The app's dependency-light shared React primitives: the error boundary that keeps one failed region from
-unmounting the root, project-custom icons, and the quiet-scroll frame used by shell and feature panels.
-Also houses the `ui/` sub-module (shadcn primitives), which has its own spec.
+unmounting the root, project-custom icons, the quiet-scroll frame used by shell and feature panels, and
+the shared loading-skeleton primitive. Also houses the `ui/` sub-module (shadcn primitives), which has
+its own spec.
 
 ## Boundary
 
@@ -42,9 +43,13 @@ Also houses the `ui/` sub-module (shadcn primitives), which has its own spec.
   and removes the cosmetic curtains; reduced motion removes both optical and third-party controller opacity
   transitions. Surface colour is an explicit semantic prop (`sidebar` or `terminal`), never inferred from
   arrangement.
-- **Public surface:** `ErrorBoundary`, `isChunkLoadError` — imported directly via
-  `@/components/ErrorBoundary` (no barrel); `CustomIcon`, `CustomIconName` via `@/components/CustomIcon`;
-  `QuietScrollArea`, `QuietScrollFrame`, and the `QuietScrollEdges` type via
+- **Also owns:** `Skeleton.tsx` — `SkeletonRows`, the one pulsing-rows placeholder every loading surface
+  uses (tool panels, project tree expansion, Monaco editor/diff boot). One primitive, not per-panel
+  ad-hoc "Loading…" lines: a loading state must occupy content-shaped space so the arriving data
+  replaces it without the layout jumping.
+- **Public surface:** `ErrorBoundary`, `isChunkLoadError`, `SkeletonRows` — imported directly via
+  `@/components/ErrorBoundary` / `@/components/Skeleton` (no barrel); `CustomIcon`, `CustomIconName` via
+  `@/components/CustomIcon`; `QuietScrollArea`, `QuietScrollFrame`, and the `QuietScrollEdges` type via
   `@/components/QuietScrollArea`. The `ui/` primitives are their own sub-module
   ([components/ui/SPEC.md](ui/SPEC.md)).
 - **Allowed deps:** React, `@remixicon/react`, `lib` (`shallowEqualArrays` — the reset-keys comparison, shared

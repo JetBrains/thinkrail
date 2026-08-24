@@ -1,5 +1,6 @@
 import { lazy, Suspense, useMemo } from "react";
 import { isMarkdownPath } from "@/lib/utils";
+import { SkeletonRows } from "../components/Skeleton";
 import type { FileTab } from "../store";
 import { useAppStore } from "../store";
 import { getTransport } from "../transport";
@@ -13,7 +14,9 @@ const MonacoEditor = lazy(() => import("./MonacoEditor"));
 const MarkdownPreview = lazy(() => import("./MarkdownPreview"));
 
 const loading = (
-	<div className="flex h-full items-center justify-center text-text-muted">Loading…</div>
+	<div className="h-full p-md">
+		<SkeletonRows rows={12} />
+	</div>
 );
 
 export function FilePane({ tab }: { tab: FileTab }) {
