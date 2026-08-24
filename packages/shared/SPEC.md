@@ -5,6 +5,7 @@ status: active
 title: Shared server-side utilities
 parent: architecture
 depends-on: []
+references: [central-integration]
 tags: [v1, host]
 ---
 
@@ -134,15 +135,14 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   is closed (it may be the dead watcher behind an error) and the caller is invalidated, because existence is
   unchanged for an in-place rewrite and the existence poll therefore cannot recover it. From an ancestor it
   falls back to existence only. That asymmetry is deliberate: trusting `null` from an ancestor would restore
-  the livelock below on any platform that omits filenames, while dropping it on the artifact directory would
+  that livelock on any platform that omits filenames, while dropping it on the artifact directory would
   silently strand a stale Central runtime until restart.
 
-  This is load-bearing, not defensive: forwarding raw directory events shipped a beta livelock. pi rewrites
-  `auth.json.lock` and `models-store.json` continuously (~23 events/s while idle), each one requested a
-  runtime rebuild, so `settledSequence` never caught `requestedSequence`; `getJbcentralStatus()` pinned
-  `configuring` forever and the card told users with no Central installed that ThinkRail "is applying the
-  latest Central configuration" while the drain rebuilt the pi runtime in a hot loop at ~30% CPU. Debouncing
-  in the caller cannot fix this — the event stream never ends. Pinned by
+  This is load-bearing, not defensive: `pi` itself rewrites `auth.json.lock` and `models-store.json`
+  continuously (~23 events/s while idle), so forwarding raw directory events converts ordinary `pi` churn
+  into unbounded rebuild demand — and a debounce in the caller cannot absorb it, because a debounce bounds
+  burst width, not stream length. Composed with the caller's rebuild machinery that shipped a beta livelock;
+  the cross-module chain and its liveness obligations are [[central-integration]] §2. Pinned by
   `packages/shared/src/jbcentral.test.ts`.
 
   The adapter deliberately has no migration path for the previous unpublished integration: it never reads or

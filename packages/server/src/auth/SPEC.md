@@ -5,7 +5,7 @@ status: active
 title: auth — provider status + in-app login
 parent: module-server
 depends-on: [module-contracts, module-shared]
-references: [submodule-server-agent]
+references: [submodule-server-agent, central-integration]
 tags: [v1, auth, pi]
 ---
 
@@ -28,7 +28,11 @@ ourselves and never surface a credential value over the wire.
     Central is not inferred from model URLs: status combines `shared/jbcentral`'s executable/version/artifact
     postconditions and closed auth/proxy observations with the synchronizer's latest desired/applied generation.
     Watcher drift schedules a rebuild; status is `configuring` until the newest candidate applies and
-    `load-failed` when it cannot apply.
+    `load-failed` when it cannot apply. **`configuring` carries no deadline of its own, so every path into it
+    owes a bounded exit** — an in-flight action is bounded by the adapter's timeouts, an outstanding rebuild
+    by the drain settling. The drain's obligation to settle *independent of inbound event rate*, and its
+    current unmet state, are [[central-integration]] §2; this module must not assume termination it does not
+    enforce.
 
     **The auth/proxy observation is cached, refreshed off the read path, and never polled.** A settled
     `supported` reading serves the cached result immediately and, past `JBCENTRAL_STATUS_TTL_MS`, starts one

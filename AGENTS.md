@@ -6,6 +6,7 @@ runs `pi` and bridges it to a rich UI; `pi` owns models, skills, compaction, cos
 Canonical specs (read these first):
 - `goal-and-requirements.md` — product goal + V1/V2 scope
 - `architecture.md` — top-level architecture, decisions, invariants
+- `central-integration.md` — the JetBrains AI / Central chain: cross-module state mapping + liveness
 
 ## Module structure & boundaries (top-priority requirement)
 
@@ -62,6 +63,7 @@ PR/Checks.
 
 ```
 goal-and-requirements.md, architecture.md   top-level specs (repo root)
+central-integration.md                      cross-module spec: JetBrains AI via Central
 apps/
   cli/        V1 entrypoint: boot host + open browser   (SPEC.md)
   web/        mobile-first UI client                    (SPEC.md)
