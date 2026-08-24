@@ -5,6 +5,7 @@ import { format } from "node:util";
 import pino, { type LoggerOptions, type Logger as PinoLogger } from "pino";
 import pretty from "pino-pretty";
 import buildPinoRoll, { type PinoRollOptions, type PinoRollStream } from "pino-roll";
+import { removeOldFiles } from "pino-roll/lib/utils.js";
 import { dataDir } from "../persistence";
 
 export const LOG_LEVELS = ["debug", "info", "warn", "error"] as const;
@@ -12,6 +13,7 @@ export type LogLevel = (typeof LOG_LEVELS)[number];
 
 export const LOG_SCHEMA_VERSION = 1;
 export const LOG_RETENTION_FILES = 14;
+export const LOG_TOTAL_FILES = LOG_RETENTION_FILES + 1;
 export const LOG_FILE_SIZE = "10m";
 
 const SECRET_PATHS = [
@@ -121,7 +123,7 @@ export function createPinoRollOptions(directory: string): PinoRollOptions {
 		frequency: "daily",
 		size: LOG_FILE_SIZE,
 		dateFormat: "yyyy-MM-dd",
-		limit: { count: LOG_RETENTION_FILES, removeOtherLogFiles: true },
+		limit: { count: LOG_TOTAL_FILES, removeOtherLogFiles: true },
 		mkdir: true,
 		sync: true,
 	};
@@ -231,6 +233,16 @@ function reportDestinationError(error: unknown): void {
 	writeDirectStderr(fallbackLine("error", "log", "logging destination failed", error));
 }
 
+export async function cleanManagedLogs(directory: string): Promise<void> {
+	await removeOldFiles({
+		baseFile: join(directory, "thinkrail"),
+		count: LOG_TOTAL_FILES,
+		dateFormat: "yyyy-MM-dd",
+		extension: "jsonl",
+		removeOtherLogFiles: true,
+	});
+}
+
 export function logsDir(): string {
 	return join(dataDir(), "logs");
 }
@@ -247,6 +259,11 @@ async function initializeLogging(
 	try {
 		rollingStream = await buildPinoRoll(createPinoRollOptions(logsDir()));
 		rollingStream.on("error", reportDestinationError);
+		try {
+			await cleanManagedLogs(logsDir());
+		} catch (error) {
+			reportDestinationError(error);
+		}
 		const prettyStderr = pretty(createPrettyOptions());
 		prettyStderr.on("error", reportDestinationError);
 		applicationLogger = pino(
@@ -264,9 +281,7 @@ async function initializeLogging(
 
 	const log = logger("log");
 	if (invalidEnv) {
-		log.warn(
-			`THINKRAIL_LOG_LEVEL=${process.env.THINKRAIL_LOG_LEVEL} is not a level (debug|info|warn|error); using info`,
-		);
+		log.warn("THINKRAIL_LOG_LEVEL is not a level (debug|info|warn|error); using info");
 	}
 	log.info(
 		`logging to ${logsDir()} (thinkrail ${appVersion ?? "source"}, pid ${process.pid}, level ${currentLevel})`,

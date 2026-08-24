@@ -1,9 +1,12 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Writable } from "node:stream";
 import pino, { type DestinationStream } from "pino";
 import pretty from "pino-pretty";
 import {
+	cleanManagedLogs,
 	createPinoOptions,
 	createPinoRollOptions,
 	createPrettyOptions,
@@ -11,6 +14,7 @@ import {
 	LOG_FILE_SIZE,
 	LOG_RETENTION_FILES,
 	LOG_SCHEMA_VERSION,
+	LOG_TOTAL_FILES,
 	resolveLogLevel,
 	serializeLogError,
 	shouldLog,
@@ -92,11 +96,36 @@ describe("destinations", () => {
 			dateFormat: "yyyy-MM-dd",
 			file: join("/tmp/logs", "thinkrail.jsonl"),
 			frequency: "daily",
-			limit: { count: LOG_RETENTION_FILES, removeOtherLogFiles: true },
+			limit: { count: LOG_TOTAL_FILES, removeOtherLogFiles: true },
 			mkdir: true,
 			size: LOG_FILE_SIZE,
 			sync: true,
 		});
+	});
+
+	test("enforces the file bound when a new process opens", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "thinkrail-log-retention-"));
+		try {
+			for (let day = 1; day <= LOG_TOTAL_FILES + 2; day += 1) {
+				const date = `2026-08-${String(day).padStart(2, "0")}`;
+				await writeFile(join(directory, `thinkrail.${date}.1.jsonl`), date);
+			}
+			await writeFile(join(directory, "crash.log"), "unrelated");
+			await writeFile(join(directory, "other.jsonl"), "unrelated");
+
+			await cleanManagedLogs(directory);
+
+			const files = await readdir(directory);
+			const managed = files.filter((file) => file.startsWith("thinkrail.")).sort();
+			expect(managed).toHaveLength(LOG_RETENTION_FILES + 1);
+			expect(managed).not.toContain("thinkrail.2026-08-01.1.jsonl");
+			expect(managed).not.toContain("thinkrail.2026-08-02.1.jsonl");
+			expect(managed).toContain("thinkrail.2026-08-17.1.jsonl");
+			expect(files).toContain("crash.log");
+			expect(files).toContain("other.jsonl");
+		} finally {
+			await rm(directory, { force: true, recursive: true });
+		}
 	});
 
 	test("renders readable stderr text", async () => {

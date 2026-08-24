@@ -23,3 +23,15 @@ declare module "pino-roll" {
 
 	export default function buildPinoRoll(options: PinoRollOptions): Promise<PinoRollStream>;
 }
+
+declare module "pino-roll/lib/utils.js" {
+	export interface RemoveOldFilesOptions {
+		baseFile: string;
+		count: number;
+		dateFormat?: string;
+		extension?: string;
+		removeOtherLogFiles: true;
+	}
+
+	export function removeOldFiles(options: RemoveOldFilesOptions): Promise<void>;
+}

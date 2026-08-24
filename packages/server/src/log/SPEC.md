@@ -26,8 +26,10 @@ runs in-process and prints its own warnings.
 - `pino-roll` owns the complete file lifecycle: daily plus 10 MB size rotation, generated suffixes, size
   accounting, restart continuation, and cleanup. The base is `thinkrail.jsonl`; generated names follow
   the installed transport's convention. Fourteen rotated files plus the active file are retained, which
-  bounds ordinary diagnostic storage near 150 MB. Rotation follows the host's local calendar boundary;
-  record timestamps remain UTC ISO strings.
+  bounds ordinary diagnostic storage near 150 MB. The adapter invokes the pinned transport's own cleanup
+  routine once after opening because `pino-roll@4.0.0` otherwise runs it only after an in-process roll;
+  this preserves the bound for restart-heavy, low-volume hosts without duplicating its retention
+  algorithm. Rotation follows the host's local calendar boundary; record timestamps remain UTC ISO strings.
 - The rolling destination writes synchronously so accepted records are not stranded in a worker queue.
   `crash.log` remains a separate synchronous plain-text fatal report owned by `host/crashLog.ts` and is
   outside pino-roll's filename set.
@@ -36,8 +38,8 @@ runs in-process and prints its own warnings.
 
 - `debug | info | warn | error`; default threshold **info**. The threshold gates stderr and file alike.
   Resolution: explicit `initLogging({ level })` (the CLI's `--verbose` → debug) >
-  `THINKRAIL_LOG_LEVEL` (this module is that variable's single reader; an invalid value warns and falls
-  back to info) > info.
+  `THINKRAIL_LOG_LEVEL` (this module is that variable's single reader; an invalid value warns without
+  echoing the environment value and falls back to info) > info.
 - Before `initLogging`, `logger(...)` calls echo to stderr only and write no file, so unit tests and
   library embedders never grow support files or get a patched console implicitly.
 - `initLogging` asynchronously opens pino-roll and is awaited first by `host`'s `bootHost` (never by
@@ -66,8 +68,8 @@ never lands in a support file.
 ## Boundary
 
 - **Owns:** the process-level Pino adapter, level/env resolution, scoped façade, JSONL schema and privacy
-  policy, pino-roll configuration, pretty stderr, console tee, and the shared `describeError` used by the
-  independent crash report.
+  policy, pino-roll configuration and startup cleanup invocation, pretty stderr, console tee, and the
+  shared `describeError` used by the independent crash report.
 - **Public surface (barrel):** `logger`, `Logger`, `LogLevel`, `initLogging`, `InitLoggingOptions`,
   `setLogLevel`, `logsDir`, `describeError`.
 - **Allowed deps:** `persistence` (`dataDir`); `pino`, `pino-pretty`, `pino-roll`; Node
