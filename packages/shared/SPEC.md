@@ -124,9 +124,18 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   watched directory is routinely an *ancestor* — when Central was never installed, `~/.pi/agent/extensions`
   does not exist and the watcher lands on `~/.pi/agent`, pi's entire state directory. So invalidation is
   gated on the artifact itself: an event is forwarded only when it names the artifact entry inside the
-  artifact's own directory, and any other event (ancestor churn, a sibling extension, an unnamed/error event)
-  at most re-arms and re-checks existence. Naming the entry — rather than stat-fingerprinting the file — is
-  what keeps "replacement" observable without ever reading the generated artifact.
+  artifact's own directory, and named events from anywhere else (ancestor churn, a sibling extension) at most
+  re-arm and re-check existence. Naming the entry — rather than stat-fingerprinting the file — is what keeps
+  "replacement" observable without ever reading the generated artifact.
+
+  **An unnamed event is scoped, not uniformly trusted or dropped.** `fs.watch` may omit the filename, and a
+  watcher error surfaces the same way, so `null` carries no information about *what* changed — only about
+  where we were watching. On the artifact's own directory it is treated as a possible replacement: the handle
+  is closed (it may be the dead watcher behind an error) and the caller is invalidated, because existence is
+  unchanged for an in-place rewrite and the existence poll therefore cannot recover it. From an ancestor it
+  falls back to existence only. That asymmetry is deliberate: trusting `null` from an ancestor would restore
+  the livelock below on any platform that omits filenames, while dropping it on the artifact directory would
+  silently strand a stale Central runtime until restart.
 
   This is load-bearing, not defensive: forwarding raw directory events shipped a beta livelock. pi rewrites
   `auth.json.lock` and `models-store.json` continuously (~23 events/s while idle), each one requested a

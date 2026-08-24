@@ -517,8 +517,9 @@ export function watchJbcentralArtifact(
 
 	const handleEntry = (entry: string | null): void => {
 		if (stopped) return;
-		if (entry !== null && watchedDirectory === artifactDirectory) {
-			if (entry === artifactName) invalidate();
+		if (watchedDirectory === artifactDirectory) {
+			if (entry === null) closeHandle();
+			if (entry === null || entry === artifactName) invalidate();
 			return;
 		}
 		if (syncExistence()) invalidate();

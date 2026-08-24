@@ -473,6 +473,7 @@ describe("Central artifact watcher", () => {
 		for (let index = 0; index < 50; index += 1) {
 			callbacks.get("/users/test/.pi/agent")?.("auth.json.lock");
 			callbacks.get("/users/test/.pi/agent")?.("models-store.json");
+			callbacks.get("/users/test/.pi/agent")?.(null);
 		}
 		await new Promise((resolve) => setTimeout(resolve, 20));
 		expect(invalidations).toBe(0);
@@ -517,6 +518,41 @@ describe("Central artifact watcher", () => {
 		existing.delete(extensionPath);
 		fire(null);
 		expect(invalidations).toBe(3);
+		stop();
+	});
+
+	test("treats an unnamed event on the artifact directory as a possible replacement", async () => {
+		const extensionPath = "/users/test/.pi/agent/extensions/jetbrains-central.ts";
+		const existing = new Set([
+			"/users/test",
+			"/users/test/.pi",
+			"/users/test/.pi/agent",
+			"/users/test/.pi/agent/extensions",
+			extensionPath,
+		]);
+		const callbacks = new Map<string, (entry: string | null) => void>();
+		const closed: string[] = [];
+		let invalidations = 0;
+		const stop = watchJbcentralArtifact(
+			() => {
+				invalidations += 1;
+			},
+			adapterDeps({
+				exists: (path) => existing.has(path),
+				watchDirectory: (path, callback) => {
+					callbacks.set(path, callback);
+					return { close: () => closed.push(path) };
+				},
+			}),
+		);
+
+		callbacks.get("/users/test/.pi/agent/extensions")?.(null);
+		expect(invalidations).toBe(1);
+		expect(closed).toEqual(["/users/test/.pi/agent/extensions"]);
+
+		await new Promise((resolve) => setTimeout(resolve, 5));
+		callbacks.get("/users/test/.pi/agent/extensions")?.("jetbrains-central.ts");
+		expect(invalidations).toBe(2);
 		stop();
 	});
 
