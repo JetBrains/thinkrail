@@ -309,8 +309,11 @@ of the host.
   the pre-session manager) / **`session.reloadResources`** (re-scan skills + rebuild the system prompt for one
   running session; rejected while streaming) /
   `session.*` — `create`/`prompt`/`steer`/`followUp`/**`clearQueue`** (drain pi's steering+followUp
-  queues, returning the texts — the client's dequeue-to-composer; pi itself emits the emptying
-  `queue_update`)/`abort`/`dispose`/**`delete`**/`setModel`/
+  queues, returning the texts — the client's abort-restores-queue path; pi itself emits the emptying
+  `queue_update`)/**`removeQueued`** (`{ kind, index }` → `RemovedQueuedMessage`: drop or extract ONE
+  queued message — the strip rows' edit/remove; position-addressed because pi's queue entries are bare
+  strings with no id, and the host emulates per-item removal over pi's all-or-nothing `clearQueue`, see
+  the server agent SPEC)/`abort`/`dispose`/**`delete`**/`setModel`/
   `setThinkingLevel`/`compact`/`getStats`/`getCommands`/`extUiReply`/**`answerQuestion`** (the inline
   `ask_user_question` reply, correlated by tool call id)/**`list`**/**`getMessages`** (the
   read side) / **`layout.get`** (hydrate one workspace snapshot, or `null` before first seeding) /

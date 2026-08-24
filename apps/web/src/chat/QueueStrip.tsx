@@ -1,42 +1,69 @@
-import type { SessionQueueState } from "@thinkrail/contracts";
+import type { QueueLane, SessionQueueState } from "@thinkrail/contracts";
+import { Pencil, X } from "lucide-react";
 
 export function QueueStrip({
 	queue,
-	onDequeue,
+	onEdit,
+	onRemove,
 }: {
 	queue: SessionQueueState;
-	onDequeue: () => void;
+	onEdit: (kind: QueueLane, index: number) => void;
+	onRemove: (kind: QueueLane, index: number) => void;
 }) {
-	const occurrences = new Map<string, number>();
 	const items = [
-		...queue.steering.map((text) => ({ kind: "steering" as const, label: "Steering", text })),
-		...queue.followUp.map((text) => ({ kind: "followUp" as const, label: "Follow-up", text })),
-	].map((item) => {
-		const base = `${item.kind}:${item.text}`;
-		const seen = occurrences.get(base) ?? 0;
-		occurrences.set(base, seen + 1);
-		return { ...item, key: `${base}:${seen}` };
-	});
+		...queue.steering.map((text, index) => ({
+			kind: "steering" as const,
+			index,
+			label: "Steering",
+			hint: "delivers at the agent's next step",
+			text,
+		})),
+		...queue.followUp.map((text, index) => ({
+			kind: "followUp" as const,
+			index,
+			label: "Follow-up",
+			hint: "runs after the agent finishes",
+			text,
+		})),
+	];
 	if (items.length === 0) return null;
 	return (
-		<button
-			type="button"
+		<div
 			data-testid="queue-strip"
-			aria-label="Edit queued messages"
-			onClick={onDequeue}
-			className="flex w-full shrink-0 flex-col gap-2xs border-border-default border-t bg-container-elevated-bg px-md py-xs text-left text-text-muted tr-text-metadata hover:bg-control-bg-hovered hover:text-text-default"
+			className="flex w-full shrink-0 flex-col gap-2xs border-border-default border-t bg-container-elevated-bg px-md py-xs text-text-muted tr-text-metadata"
 		>
 			{items.map((item) => (
-				<span
-					key={item.key}
+				<div
+					key={`${item.kind}:${item.index}`}
 					data-testid="queue-item"
 					data-kind={item.kind}
-					className="w-full truncate"
+					data-index={item.index}
+					title={`${item.text} — ${item.hint}`}
+					className="flex w-full items-center gap-sm"
 				>
-					<span className="text-text-default">{item.label}:</span> {item.text}
-				</span>
+					<span className="min-w-0 flex-1 truncate">
+						<span className="text-text-default">{item.label}:</span> {item.text}
+					</span>
+					<button
+						type="button"
+						data-testid="queue-item-edit"
+						aria-label={`Edit queued message: ${item.text}`}
+						onClick={() => onEdit(item.kind, item.index)}
+						className="flex size-5 shrink-0 items-center justify-center rounded-[var(--radius-xs)] hover:bg-control-bg-hovered hover:text-text-default"
+					>
+						<Pencil className="size-3" />
+					</button>
+					<button
+						type="button"
+						data-testid="queue-item-remove"
+						aria-label={`Remove queued message: ${item.text}`}
+						onClick={() => onRemove(item.kind, item.index)}
+						className="flex size-5 shrink-0 items-center justify-center rounded-[var(--radius-xs)] hover:bg-control-bg-hovered hover:text-text-default"
+					>
+						<X className="size-3" />
+					</button>
+				</div>
 			))}
-			<span className="w-full truncate opacity-70">↳ click to edit queued messages</span>
-		</button>
+		</div>
 	);
 }

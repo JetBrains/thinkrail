@@ -119,7 +119,15 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     `review.sendBatch` into a re-attached review chat marked its comments sent to an agent that never
     saw them) / **`clearQueueSession`** (pi's `clearQueue()`, verbatim: drains both queues and returns the
     texts for the client's dequeue-to-composer; pi emits the emptying `queue_update`, so the host adds no
-    bookkeeping) —
+    bookkeeping) / **`removeQueuedSession(sessionId, kind, index)`** — per-item queue removal, which pi's
+    API lacks (queues are bare string arrays, `clearQueue` is all-or-nothing): drain via `clearQueue()`,
+    drop `lane[index]` (out-of-range → `removed: null`, everything re-queued), re-queue the keepers in
+    order (`steer()`/`followUp()` per lane — each re-queue emits its own `queue_update`, so clients
+    converge by events alone). **No-loss guarantee:** if the run settled during the operation the
+    re-queued keepers would park forever (pi's queues only drain inside a run), so the idle case drains
+    them through the same idle-delivery fallback as `followUpSession` — the first becomes a `prompt`,
+    the rest steer into the run it starts; delivery timing may degrade across that race window, content
+    is never lost (pinned by the idle-fallback unit test) —
     `setModel` / `setThinkingLevel` / `compact` / `getSessionStats` (+ contextUsage) / `getSessionCommands` /
     `listAvailableModels` / **`clampThinkingForModel`** (pi's `clampThinkingLevel` for a `{model, level}`
     pair — `model.clampThinking`; the host owns it so the pre-session picker, `getDefaultModel`, and a live

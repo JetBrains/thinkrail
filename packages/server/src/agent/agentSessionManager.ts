@@ -16,7 +16,9 @@ import type {
 	AskUserQuestionResult,
 	ImageContent,
 	Model,
+	QueueLane,
 	RefreshedModels,
+	RemovedQueuedMessage,
 	SessionDeletedPayload,
 	SessionEventPayload,
 	SessionQueueState,
@@ -284,14 +286,7 @@ function summaryOf(sessionId: string, entry: Entry): SessionSummary {
 		updatedAt: Date.now(),
 		live: true,
 		...(entry.lastSettlement !== undefined ? { lastSettlement: entry.lastSettlement } : {}),
-		...(session.pendingMessageCount > 0
-			? {
-					queue: {
-						steering: [...session.getSteeringMessages()],
-						followUp: [...session.getFollowUpMessages()],
-					},
-				}
-			: {}),
+		...(session.pendingMessageCount > 0 ? { queue: queueStateOf(session) } : {}),
 	};
 }
 
@@ -603,8 +598,36 @@ export async function compactSession(sessionId: string, instructions?: string): 
 	await mustGet(sessionId).compact(instructions);
 }
 
+function queueStateOf(session: AgentSession): SessionQueueState {
+	return {
+		steering: [...session.getSteeringMessages()],
+		followUp: [...session.getFollowUpMessages()],
+	};
+}
+
 export function clearQueueSession(sessionId: string): SessionQueueState {
 	return mustGet(sessionId).clearQueue();
+}
+
+export async function removeQueuedSession(
+	sessionId: string,
+	kind: QueueLane,
+	index: number,
+): Promise<RemovedQueuedMessage> {
+	const session = mustGet(sessionId);
+	const drained = session.clearQueue();
+	const lane = [...drained[kind]];
+	const removed = index >= 0 && index < lane.length ? (lane.splice(index, 1)[0] ?? null) : null;
+	const keep = { ...drained, [kind]: lane };
+	for (const text of keep.steering) await session.steer(text);
+	for (const text of keep.followUp) await session.followUp(text);
+	if (!session.isStreaming && session.pendingMessageCount > 0) {
+		const parked = session.clearQueue();
+		for (const text of [...parked.steering, ...parked.followUp]) {
+			await followUpSession(sessionId, text);
+		}
+	}
+	return { removed, queue: queueStateOf(session) };
 }
 
 export function abortSession(sessionId: string): Promise<void> {

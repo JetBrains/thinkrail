@@ -98,9 +98,16 @@ export interface SessionStats {
 	contextUsage?: ContextUsage;
 }
 
+export type QueueLane = "steering" | "followUp";
+
 export interface SessionQueueState {
 	steering: readonly string[];
 	followUp: readonly string[];
+}
+
+export interface RemovedQueuedMessage {
+	removed: string | null;
+	queue: SessionQueueState;
 }
 
 export interface SessionSummary {

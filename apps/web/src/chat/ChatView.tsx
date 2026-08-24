@@ -1,6 +1,7 @@
 import type {
 	AskUserQuestionResult,
 	PromptHit,
+	QueueLane,
 	SlashCommandInfo,
 	TemplateInfo,
 	ThinkingLevel,
@@ -285,7 +286,11 @@ export default function ChatView({
 		composerRef.current?.refocus();
 	};
 
-	const onSubmit = (text: string, attachments: ChatAttachment[], behavior: SubmitBehavior) => {
+	const performSend = (
+		text: string,
+		attachments: ChatAttachment[],
+		behavior: Exclude<SubmitBehavior, "interrupt">,
+	) => {
 		const queued = behavior !== "send";
 		if (!queued && (text || attachments.length > 0))
 			useAppStore.getState().appendUserMessage(sessionId, text, attachments);
@@ -305,14 +310,39 @@ export default function ChatView({
 			});
 	};
 
+	const onSubmit = (text: string, attachments: ChatAttachment[], behavior: SubmitBehavior) => {
+		if (behavior !== "interrupt") {
+			performSend(text, attachments, behavior);
+			return;
+		}
+		getTransport()
+			.request("session.abort", { sessionId })
+			.then(() => performSend(text, attachments, "send"))
+			.catch((err) => {
+				useAppStore.getState().appendErrorTurn(sessionId, errorText(err));
+				restoreTextToDraft(text);
+			});
+	};
+
+	const removeQueued = (kind: QueueLane, index: number) =>
+		getTransport().request("session.removeQueued", { sessionId, kind, index });
+
+	const onEditQueued = (kind: QueueLane, index: number) =>
+		void removeQueued(kind, index)
+			.then(({ removed }) => {
+				if (removed !== null) restoreTextToDraft(removed);
+			})
+			.catch(() => {});
+
+	const onRemoveQueued = (kind: QueueLane, index: number) =>
+		void removeQueued(kind, index).catch(() => {});
+
 	const restoreQueueToDraft = async (): Promise<void> => {
 		const { steering, followUp } = await getTransport().request("session.clearQueue", {
 			sessionId,
 		});
 		restoreTextToDraft([...steering, ...followUp].join("\n\n"));
 	};
-
-	const onDequeue = () => void restoreQueueToDraft().catch(() => {});
 
 	const onAbort = () => {
 		void restoreQueueToDraft().catch(() => {});
@@ -568,7 +598,7 @@ export default function ChatView({
 							))}
 						</div>
 					) : null}
-					<QueueStrip queue={queue} onDequeue={onDequeue} />
+					<QueueStrip queue={queue} onEdit={onEditQueued} onRemove={onRemoveQueued} />
 					<div className="relative shrink-0">
 						<HistoryOverlay
 							state={historyState}

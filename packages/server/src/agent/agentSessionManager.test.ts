@@ -28,11 +28,13 @@ import {
 	listSessions,
 	promptSession,
 	refreshAvailableModels,
+	removeQueuedSession,
 	removeSession,
 	removeWorkspaceSessions,
 	setSessionDeletedPublisher,
 	setSessionManagerFactory,
 	setSessionPublisher,
+	steerSession,
 	toWireModel,
 } from "./agentSessionManager";
 import { configurePiRuntime } from "./piRuntime";
@@ -876,14 +878,27 @@ test("mid-stream followUpSession queues: the summary snapshot carries it, clearQ
 			await new Promise((resolve) => setTimeout(resolve, 20));
 		}
 		await followUpSession(s.sessionId, "queued line");
+		await followUpSession(s.sessionId, "queued line two");
 
 		const summary = (await listSessions("ws-queue", cwd)).find(
 			(row) => row.sessionId === s.sessionId,
 		);
-		expect(summary?.queue).toEqual({ steering: [], followUp: ["queued line"] });
+		expect(summary?.queue).toEqual({
+			steering: [],
+			followUp: ["queued line", "queued line two"],
+		});
 		expect(seen(s.sessionId)).toContain("queue_update");
 
-		expect(clearQueueSession(s.sessionId)).toEqual({ steering: [], followUp: ["queued line"] });
+		expect(await removeQueuedSession(s.sessionId, "followUp", 5)).toEqual({
+			removed: null,
+			queue: { steering: [], followUp: ["queued line", "queued line two"] },
+		});
+		expect(await removeQueuedSession(s.sessionId, "followUp", 0)).toEqual({
+			removed: "queued line",
+			queue: { steering: [], followUp: ["queued line two"] },
+		});
+
+		expect(clearQueueSession(s.sessionId)).toEqual({ steering: [], followUp: ["queued line two"] });
 		expect(clearQueueSession(s.sessionId)).toEqual({ steering: [], followUp: [] });
 
 		await turn;
@@ -893,6 +908,23 @@ test("mid-stream followUpSession queues: the summary snapshot carries it, clearQ
 		setSessionManagerFactory(() => SessionManager.inMemory());
 	}
 }, 20000);
+
+test("removeQueuedSession on an idle session never strands the keepers — they deliver via the idle fallback", async () => {
+	fauxA.setResponses([fauxAssistantMessage("PARKED_DELIVERED")]);
+	const s = await createSession({
+		cwd: tmpCwd("trpi-remove-idle-"),
+		workspaceId: "ws-remove-idle",
+		model: toWireModel(fauxA.getModel()),
+	});
+	await steerSession(s.sessionId, "parked one");
+	await steerSession(s.sessionId, "parked two");
+
+	const result = await removeQueuedSession(s.sessionId, "steering", 0);
+	expect(result.removed).toBe("parked one");
+	expect(result.queue).toEqual({ steering: [], followUp: [] });
+	expect(seen(s.sessionId)).toContain("PARKED_DELIVERED");
+	removeSession(s.sessionId);
+});
 
 test("removeWorkspaceSessions: archives a workspace's live sessions + purges their on-disk transcripts, leaving siblings", async () => {
 	setSessionManagerFactory((cwd) => SessionManager.create(cwd));

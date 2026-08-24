@@ -7,6 +7,7 @@ import type {
 	ImageContent,
 	LayoutReplaceParams,
 	LoginReply,
+	QueueLane,
 	ReviewAnchor,
 	ReviewComment,
 	ReviewCommentKind,
@@ -43,6 +44,7 @@ import {
 	promptSession,
 	refreshAvailableModels,
 	reloadSessionResources,
+	removeQueuedSession,
 	removeSession,
 	removeWorkspaceSessions,
 	resolveExtUi,
@@ -489,6 +491,10 @@ const handlers: Record<string, Handler> = {
 	},
 	"session.clearQueue": (params) => {
 		return clearQueueSession((params as { sessionId: string }).sessionId);
+	},
+	"session.removeQueued": async (params) => {
+		const p = params as { sessionId: string; kind: QueueLane; index: number };
+		return removeQueuedSession(p.sessionId, p.kind, p.index);
 	},
 	"session.abort": async (params) => {
 		await abortSession((params as { sessionId: string }).sessionId);
