@@ -68,8 +68,10 @@ Built-in presets remain web-owned. The Layout section presents built-ins plus th
 Starting an agent session is seconds-long (watcher readiness + `session.create`), so it is never silent:
 every chat-start path — the empty-center New-chat button, `NewWorkspaceDialog`'s create-and-kick-off flow,
 and reopening a closed chat (`openChatInTab`) — brackets its request with the store's per-workspace
-chat-start counter (`beginChatStart`/`endChatStart`, a counter because starts can overlap). Consumers show
-it as an inline pending state where the result will appear: the empty-center button flips to a disabled
+chat-start counter (`beginChatStart`/`endChatStart`, a counter because starts can overlap); worktree
+creation does the same per-project (`beginWorktreeCreation`/`endWorktreeCreation`), which `ProjectTree`
+renders as a pending row under the project — the list stays put and the new worktree lands where the
+row was. Consumers show it as an inline pending state where the result will appear: the empty-center button flips to a disabled
 spinner ("Starting chat…", also the double-click guard), and the chat-history trigger spins while a
 reopened chat hydrates. Workspace removal drops the counter with the rest of the per-workspace state.
 

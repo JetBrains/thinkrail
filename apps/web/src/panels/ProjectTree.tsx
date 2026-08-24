@@ -6,6 +6,7 @@ import {
 	RiFolderOpenLine as FolderOpen,
 	RiGitBranchLine as GitBranch,
 	RiHome2Line as House,
+	RiLoader4Line as Loader2,
 	RiMore2Line as MoreVertical,
 	RiAddLine as Plus,
 	RiFolderFill,
@@ -59,6 +60,7 @@ export function ProjectTree() {
 	const recentProjects = useAppStore((s) => s.recentProjects);
 	const selectedProjectId = useAppStore((s) => s.selectedProjectId);
 	const workspaces = useAppStore((s) => s.workspaces);
+	const worktreeCreations = useAppStore((s) => s.worktreeCreationsByProject);
 	const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
 
 	const [editors, setEditors] = useState<EditorInfo[]>([]);
@@ -257,6 +259,15 @@ export function ProjectTree() {
 							{isExpanded && list === undefined && (
 								<div className="py-xs pr-sm pl-lg">
 									<SkeletonRows rows={2} />
+								</div>
+							)}
+							{isExpanded && (worktreeCreations[project.id] ?? 0) > 0 && (
+								<div
+									data-testid="worktree-creating-row"
+									className="flex items-center gap-sm py-xs pr-sm pl-lg tr-text-ui text-text-muted"
+								>
+									<Loader2 className="size-3.5 shrink-0 animate-spin motion-reduce:animate-none" />
+									Creating worktree…
 								</div>
 							)}
 							{isExpanded && list !== undefined && (

@@ -250,6 +250,7 @@ export function NewWorkspaceDialog({
 			}
 			workspace = def;
 		} else {
+			useAppStore.getState().beginWorktreeCreation(selectedProjectId);
 			try {
 				workspace = await getTransport().request("workspace.create", {
 					projectId: selectedProjectId,
@@ -259,6 +260,8 @@ export function NewWorkspaceDialog({
 				toast.error(errorText(err), "Couldn't create workspace");
 				setCreating(false);
 				return;
+			} finally {
+				useAppStore.getState().endWorktreeCreation(selectedProjectId);
 			}
 		}
 
