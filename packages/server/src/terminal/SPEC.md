@@ -39,10 +39,30 @@ separate layout snapshot and merely references `tabKey`.
   its process is Theia's `Couldn't attach - can't find terminal with id`).
 - **`attachTerminal` is idempotent get-or-create** — the only way a PTY is born. No separate liveness call, so
   there is no window in which a client holds the only pointer to a running shell.
-- **PTY resizing is change-only.** Each live entry tracks the grid applied at spawn or by the last successful
-  resize. Attach and explicit resize call `IPty.resize` only when that grid changes, and failed calls do not
-  advance the tracked state. Even a same-grid resize can wake the shell through `SIGWINCH`; a redraw emitted
+- **Tracked-grid updates are change-only.** Each live entry tracks the grid applied at spawn or by the last
+  successful resize. Attach and explicit resize advance that grid only when it changes, and failed calls do not
+  advance it. A reattach may still perform a *transient* redraw nudge (below) that leaves the tracked grid
+  untouched. Even a same-grid resize can wake the shell through `SIGWINCH`; a redraw emitted
   after the attach snapshot can overwrite freshly replayed rows.
+- **Reattaching to an unchanged grid still nudges the foreground app** (`nudgePtyRedraw`, `ptyGrid.ts`):
+  `TIOCSWINSZ` to the same size is a kernel no-op — no `SIGWINCH`, so a full-screen alt-screen app (vim,
+  htop, an interactive CLI) left running behind a tab that was switched away and back gets no signal to
+  repaint, and the recorder never captured its alt-screen content to replay in its place (see below) — the
+  tab would otherwise show a frozen pre-alt-screen buffer. `attachTerminal`'s reattach branch resizes to
+  `cols - 1` only when the real resize above was a no-op, forcing a genuine `SIGWINCH`; the restoring
+  resize back to `cols` is **deferred** (`NUDGE_RESTORE_DELAY_MS`, `setTimeout`), not fired back to back
+  with the first. Two `pty.resize()` calls in the same tick are, from the child's perspective, a single
+  observable transition — its own event loop never gets scheduled between them — so an ncurses-style app
+  ends up seeing "same size as before" and does its normal *incremental* refresh (diffing against what it
+  last drew) instead of a full clear-and-redraw; that paints new content over whatever stale/blank buffer
+  the client is currently showing rather than replacing it — visibly garbled, not merely stale, and worse
+  than doing nothing. The deferred restore gives the child a real scheduling opportunity to observe — and
+  fully redraw at — the intermediate size before the second resize lands. The restore checks liveness
+  (`terminals.get(id) === entry`) before firing, since the tab may have closed or respawned in the
+  interval, and it also checks that the tracked grid is still the one it captured: a real resize landing
+  during the delay would otherwise be undone by the restore, leaving the PTY at the old size while the
+  tracked grid says otherwise — and the change-only rule then makes retrying the new size a no-op. This is the same "redraw after the attach snapshot" class of race the bullet above already
+  accepts, deliberately triggered every reattach instead of only incidentally.
 - **Ownership is the host's owner, not the browser page.** Any client may attach; consistent with `history`,
   `todos` and `templates`, which already assume a single-owner host. Consequence: shells survive a reload, a
   closed browser and a different browser.

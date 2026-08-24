@@ -21,7 +21,7 @@ import {
 	type TerminalDeliveryResult,
 } from "./outputBatcher";
 import { createOutputRecorder, type OutputRecorder } from "./outputRecorder";
-import { type PtyGrid, resizePtyIfChanged } from "./ptyGrid";
+import { nudgePtyRedraw, type PtyGrid, resizePtyIfChanged } from "./ptyGrid";
 import { terminalShellArgs } from "./shellArgs";
 import { hasChildProcesses } from "./shellBusy";
 
@@ -207,10 +207,16 @@ export function attachTerminal(
 			pushToClient(existing.attachedClient, WS_CHANNELS.terminalDetached, push);
 		}
 		existing.attachedClient = clientKey;
-		if (options.cols !== undefined && options.rows !== undefined) {
-			resizePtyIfChanged(existing.pty, existing.grid, {
-				cols: options.cols,
-				rows: options.rows,
+		const resized =
+			options.cols !== undefined && options.rows !== undefined
+				? resizePtyIfChanged(existing.pty, existing.grid, {
+						cols: options.cols,
+						rows: options.rows,
+					})
+				: false;
+		if (!resized) {
+			nudgePtyRedraw(existing.pty, existing.grid, {
+				isStillLive: () => terminals.get(existingId) === existing,
 			});
 		}
 		const replay = existing.recorder.snapshot();
