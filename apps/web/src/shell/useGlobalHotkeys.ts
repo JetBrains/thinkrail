@@ -7,7 +7,34 @@ const TERMINAL_ROOT_SELECTOR = ".xterm";
 type GlobalHotkeyActions = {
 	onProjects: () => void;
 	onWorkspace?: () => void;
+	onBottom?: () => void;
 };
+
+type PanelHotkeyCommand = "projects" | "workspace" | "bottom";
+
+type PanelHotkeyAvailability = Record<PanelHotkeyCommand, boolean>;
+
+type PanelHotkeyEvent = Pick<KeyboardEvent, "altKey" | "code" | "ctrlKey" | "metaKey" | "shiftKey">;
+
+export function panelHotkeyCommand(
+	event: PanelHotkeyEvent,
+	available: PanelHotkeyAvailability,
+	modalOpen: boolean,
+	platform?: string,
+): PanelHotkeyCommand | null {
+	if (modalOpen || event.altKey || !hasPlatformModifier(event, platform)) return null;
+	if (!event.shiftKey && event.code === "KeyB" && available.projects) return "projects";
+	if (!event.shiftKey && event.code === "KeyJ" && available.workspace) return "workspace";
+	if (event.shiftKey && event.code === "KeyJ" && available.bottom) return "bottom";
+	return null;
+}
+
+function hasOpenModal(): boolean {
+	return (
+		globalThis.document.querySelector('[aria-modal="true"], [role="dialog"][data-state="open"]') !==
+		null
+	);
+}
 
 function isInTerminal(target: EventTarget | null): boolean {
 	return target instanceof Element && target.closest(TERMINAL_ROOT_SELECTOR) !== null;
@@ -19,17 +46,22 @@ export function useGlobalHotkeys(actions: GlobalHotkeyActions): void {
 
 	useEffect(() => {
 		const onKeyDown = (event: KeyboardEvent) => {
-			const isPanelCommand =
-				!event.altKey &&
-				!event.shiftKey &&
-				hasPlatformModifier(event) &&
-				(event.code === "KeyB" || event.code === "KeyJ");
-			if (isPanelCommand) {
+			const command = panelHotkeyCommand(
+				event,
+				{
+					projects: true,
+					workspace: actionsRef.current.onWorkspace !== undefined,
+					bottom: actionsRef.current.onBottom !== undefined,
+				},
+				hasOpenModal(),
+			);
+			if (command) {
 				event.preventDefault();
 				event.stopPropagation();
 				if (!event.repeat) {
-					if (event.code === "KeyB") actionsRef.current.onProjects();
-					else actionsRef.current.onWorkspace?.();
+					if (command === "projects") actionsRef.current.onProjects();
+					else if (command === "workspace") actionsRef.current.onWorkspace?.();
+					else actionsRef.current.onBottom?.();
 				}
 				return;
 			}

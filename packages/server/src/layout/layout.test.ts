@@ -212,7 +212,9 @@ describe("workspace layout validation", () => {
 				{ kind: "group", id: "empty-b", tabs: [] },
 			],
 		};
-		expect(() => validateWorkspaceLayout(emptyLeaves, LIMITS)).toThrow("Only one empty center group");
+		expect(() => validateWorkspaceLayout(emptyLeaves, LIMITS)).toThrow(
+			"Only one empty center group",
+		);
 
 		const badGeometry = document();
 		const rightGroup = badGeometry.right.groups[0];
@@ -227,7 +229,9 @@ describe("workspace layout validation", () => {
 
 	test("enforces byte-accurate budgets and rejects unserializable values", () => {
 		const byteHeavy = { ...document(), padding: "界".repeat(180_000) };
-		expect(() => validateWorkspaceLayout(byteHeavy, LIMITS)).toThrow("Layout snapshot is too large");
+		expect(() => validateWorkspaceLayout(byteHeavy, LIMITS)).toThrow(
+			"Layout snapshot is too large",
+		);
 		expect(() => validateWorkspaceLayout({ ...document(), padding: 1n }, LIMITS)).toThrow(
 			"Layout snapshot is too large",
 		);

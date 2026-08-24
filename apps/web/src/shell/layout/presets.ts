@@ -298,9 +298,7 @@ export function applyLayoutPreset(
 	const center = filled ?? fallback;
 	const allTabs = collectAllGroups(document).flatMap((group) => group.tabs);
 	const existingTools = new Map(
-		allTabs
-			.filter((tab) => tab.kind === "tool")
-			.map((tab) => [tab.tool, tab] as const),
+		allTabs.filter((tab) => tab.kind === "tool").map((tab) => [tab.tool, tab] as const),
 	);
 	const claimedIds = new Set(allTabs.map((tab) => tab.id));
 	const resolveTool = (tool: LayoutToolId): ReturnType<typeof toolTab> => {

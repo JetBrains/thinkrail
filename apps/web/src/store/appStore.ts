@@ -3,6 +3,7 @@ import type {
 	AskUserQuestionResult,
 	ExtUiRequest,
 	GitDiffScope,
+	LayoutAuxiliaryRegion,
 	LayoutChangedPayload,
 	LayoutSettings,
 	LayoutToolId,
@@ -205,12 +206,14 @@ export type LayoutIntent =
 			tabKey: string;
 			title: string;
 			targetGroupId?: string;
+			targetArea?: "center" | LayoutAuxiliaryRegion;
 			navigation?: CenterNavigationStamp | null;
 			countNavigation?: boolean;
 	  }
 	| { id: string; kind: "close-terminal"; workspaceId: string; tabKey: string }
 	| { id: string; kind: "select-terminal"; workspaceId: string; tabKey: string }
-	| { id: string; kind: "toggle-side"; workspaceId: string; side: "left" | "right" };
+	| { id: string; kind: "toggle-side"; workspaceId: string; side: "left" | "right" }
+	| { id: string; kind: "toggle-bottom"; workspaceId: string };
 export type LayoutIntentInput = LayoutIntent extends infer Intent
 	? Intent extends { id: string }
 		? Omit<Intent, "id">
@@ -730,7 +733,12 @@ interface AppState {
 		loadedTarget: string,
 	) => void;
 	clearWorkspaceTabs: (workspaceId: string) => void;
-	addTerminal: (workspaceId: string, initialCommand?: string, targetGroupId?: string) => void;
+	addTerminal: (
+		workspaceId: string,
+		initialCommand?: string,
+		targetGroupId?: string,
+		targetArea?: "center" | LayoutAuxiliaryRegion,
+	) => void;
 	setWorkspaceTerminals: (workspaceId: string, tabs: TerminalTabInfo[]) => void;
 	settleTerminalAttach: (workspaceId: string, tabKey: string) => void;
 	consumeTerminalInitialCommand: (workspaceId: string, tabKey: string) => void;
@@ -1975,13 +1983,14 @@ export const useAppStore = create<AppState>((set, get) => ({
 				skillsSyncedTickBySession,
 			};
 		}),
-	addTerminal: (workspaceId, initialCommand, targetGroupId) =>
+	addTerminal: (workspaceId, initialCommand, targetGroupId, targetArea = "center") =>
 		set((s) => {
 			if (s.removedWorkspaceIds[workspaceId]) return {};
 			const list = s.terminalsByWorkspace[workspaceId] ?? [];
-			const navigation = targetGroupId
-				? advanceCenterNavigation(s, workspaceId, targetGroupId)
-				: null;
+			const navigation =
+				targetGroupId && targetArea === "center"
+					? advanceCenterNavigation(s, workspaceId, targetGroupId)
+					: null;
 			const tabKey = randomId("terminal");
 			const tab: TerminalTab = {
 				tabKey,
@@ -1997,7 +2006,13 @@ export const useAppStore = create<AppState>((set, get) => ({
 					workspaceId,
 					tabKey,
 					title: tab.title,
-					...(targetGroupId ? { targetGroupId, navigation: navigation?.stamp ?? null } : {}),
+					...(targetGroupId
+						? {
+								targetGroupId,
+								...(targetArea !== "center" ? { targetArea } : {}),
+								...(targetArea === "center" ? { navigation: navigation?.stamp ?? null } : {}),
+							}
+						: {}),
 				}),
 				terminalsByWorkspace: { ...s.terminalsByWorkspace, [workspaceId]: [...list, tab] },
 				activeTerminalByWorkspace: { ...s.activeTerminalByWorkspace, [workspaceId]: tabKey },

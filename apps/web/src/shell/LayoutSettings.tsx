@@ -77,10 +77,7 @@ export function LayoutSettings() {
 	const apply = (preset: LayoutPreset) => {
 		if (!activeWorkspaceId || !document) return;
 		const requiredSideLimit = Math.max(settings.maxSideGroups, minimumSideGroupLimit(preset));
-		const requiredBottomLimit = Math.max(
-			settings.maxBottomGroups,
-			minimumBottomGroupLimit(preset),
-		);
+		const requiredBottomLimit = Math.max(settings.maxBottomGroups, minimumBottomGroupLimit(preset));
 		void (async () => {
 			if (
 				(requiredSideLimit !== settings.maxSideGroups ||
@@ -119,8 +116,8 @@ export function LayoutSettings() {
 			<header>
 				<h2 className="tr-title-section text-text-default">Layout</h2>
 				<p className="mt-xs max-w-[42rem] tr-text-ui text-text-muted">
-					Choose how new workspaces begin, save reusable arrangements, and control auxiliary
-					group density. Existing workspaces change only when you apply a preset.
+					Choose how new workspaces begin, save reusable arrangements, and control auxiliary group
+					density. Existing workspaces change only when you apply a preset.
 				</p>
 			</header>
 
@@ -348,10 +345,11 @@ export function LayoutSettings() {
 					</p>
 				</div>
 				<div className="grid max-w-lg gap-sm sm:grid-cols-2">
-					<label className="space-y-xs tr-text-metadata text-text-muted">
-						<span>Side groups</span>
+					<div className="space-y-xs tr-text-metadata text-text-muted">
+						<label htmlFor="layout-side-group-limit">Side groups</label>
 						<div className="flex items-center gap-sm">
 							<input
+								id="layout-side-group-limit"
 								type="number"
 								min={minimumSideLimit}
 								max={32}
@@ -369,19 +367,18 @@ export function LayoutSettings() {
 									Number(sideLimit) === settings.maxSideGroups ||
 									saving
 								}
-								onClick={() =>
-									void saveSettings({ ...settings, maxSideGroups: Number(sideLimit) })
-								}
+								onClick={() => void saveSettings({ ...settings, maxSideGroups: Number(sideLimit) })}
 								className="rounded-[var(--radius-sm)] border border-border-default px-md py-xs tr-text-ui text-text-default hover:bg-control-bg-hovered disabled:text-control-disabled-text"
 							>
 								Save
 							</button>
 						</div>
-					</label>
-					<label className="space-y-xs tr-text-metadata text-text-muted">
-						<span>Bottom groups</span>
+					</div>
+					<div className="space-y-xs tr-text-metadata text-text-muted">
+						<label htmlFor="layout-bottom-group-limit">Bottom groups</label>
 						<div className="flex items-center gap-sm">
 							<input
+								id="layout-bottom-group-limit"
 								type="number"
 								min={minimumBottomLimit}
 								max={32}
@@ -407,7 +404,7 @@ export function LayoutSettings() {
 								Save
 							</button>
 						</div>
-					</label>
+					</div>
 				</div>
 			</section>
 

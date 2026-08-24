@@ -3035,6 +3035,26 @@ test("terminal creation can capture a center-group destination without creating 
 	expect(state.navTickByWorkspace.w1).toBe(1);
 });
 
+test("terminal creation can target bottom without advancing center navigation", () => {
+	const attention = {
+		selectedByGroup: {},
+		lastFocusedCenterGroupId: "center-a",
+		lastFocusedSideGroupId: { bottom: "bottom-a" },
+		navigationClockByGroup: { "center-a": 2 },
+	};
+	useAppStore.setState({ layoutAttentionByWorkspace: { w1: attention } });
+	useAppStore.getState().addTerminal("w1", undefined, "bottom-b", "bottom");
+	const state = useAppStore.getState();
+	expect(state.layoutIntents[0]).toMatchObject({
+		kind: "place-terminal",
+		workspaceId: "w1",
+		targetGroupId: "bottom-b",
+		targetArea: "bottom",
+	});
+	expect(state.layoutAttentionByWorkspace.w1).toBe(attention);
+	expect(state.navTickByWorkspace.w1).toBeUndefined();
+});
+
 test("catalog authority falls with the list it describes — only an awaited refresh sets it", () => {
 	const s = () => useAppStore.getState();
 	const listed = [{ id: "opus-5", name: "opus-5", provider: "anthropic" }] as WireModel[];

@@ -70,6 +70,13 @@ export function Shell() {
 							side: "right",
 						});
 					},
+					onBottom: () => {
+						if (!activeWorkspaceId) return;
+						useAppStore.getState().enqueueLayoutIntent({
+							kind: "toggle-bottom",
+							workspaceId: activeWorkspaceId,
+						});
+					},
 				}
 			: {}),
 	});

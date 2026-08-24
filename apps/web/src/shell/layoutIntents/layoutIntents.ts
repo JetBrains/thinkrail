@@ -1,4 +1,8 @@
-import type { LayoutCenterTab, WorkspaceLayoutDocument } from "@thinkrail/contracts";
+import type {
+	LayoutCenterTab,
+	LayoutTerminalTab,
+	WorkspaceLayoutDocument,
+} from "@thinkrail/contracts";
 import { useEffect } from "react";
 import type { LayoutAttention } from "../../lib";
 import {
@@ -13,13 +17,18 @@ import { currentChatDestination, hydrateChatResource } from "../chatReconciliati
 import {
 	closeLayoutTab,
 	collectAllGroups,
+	createAuxiliaryGroup,
+	findAuxiliaryGroup,
 	findCenterGroup,
 	findLayoutTab,
 	findPlacedResource,
 	findTabLocation,
+	hideBottom,
 	hideSide,
 	isLayoutUnavailable,
 	keepPreview,
+	type LayoutGroupLocation,
+	type LayoutOperationResult,
 	type LayoutTabFocusRequest,
 	moveTabToGroup,
 	openCenterTab,
@@ -28,11 +37,66 @@ import {
 	removeSessionLayoutTabs,
 	revealTool,
 	selectTab,
-	setSideGroupFolded,
+	setAuxiliaryGroupFolded,
+	showBottom,
 	showSide,
 	withAvailablePlacementId,
 } from "../layout";
 import { terminalLayoutId } from "../terminalReconciliation";
+
+export function placeTerminalForIntent(
+	document: WorkspaceLayoutDocument,
+	attention: LayoutAttention,
+	tab: LayoutTerminalTab,
+	target: LayoutGroupLocation | undefined,
+	limits: { maxSideGroups: number; maxBottomGroups: number },
+): LayoutOperationResult {
+	if (target?.area === "center") {
+		const groupId =
+			findCenterGroup(document.center, target.groupId)?.id ??
+			findCenterGroup(document.center, attention.lastFocusedCenterGroupId)?.id ??
+			primaryCenterGroupId(document);
+		return moveTabToGroup(document, tab, { area: "center", groupId });
+	}
+	if (target && findAuxiliaryGroup(document, target.area, target.groupId)) {
+		const moved = moveTabToGroup(document, tab, target);
+		if (isLayoutUnavailable(moved)) return moved;
+		const unfolded = setAuxiliaryGroupFolded(moved.document, target.area, target.groupId, false);
+		if (isLayoutUnavailable(unfolded)) return moved;
+		return {
+			...moved,
+			document: {
+				...unfolded.document,
+				[target.area]: { ...unfolded.document[target.area], visible: true },
+			},
+		};
+	}
+	const preferredId = attention.lastFocusedSideGroupId.bottom;
+	const bottomGroup =
+		document.bottom.groups.find((group) => group.id === preferredId) ??
+		document.bottom.groups.at(-1);
+	if (bottomGroup) {
+		const moved = moveTabToGroup(document, tab, {
+			area: "bottom",
+			groupId: bottomGroup.id,
+		});
+		if (isLayoutUnavailable(moved)) return moved;
+		return {
+			...moved,
+			document: {
+				...moved.document,
+				bottom: {
+					...moved.document.bottom,
+					visible: true,
+					groups: moved.document.bottom.groups.map((group) =>
+						group.id === bottomGroup.id ? { ...group, folded: false } : group,
+					),
+				},
+			},
+		};
+	}
+	return createAuxiliaryGroup(document, "bottom", tab, 0, limits.maxBottomGroups);
+}
 
 export function toLayoutTab(tab: EditorTab): LayoutCenterTab | null {
 	switch (tab.kind) {
@@ -82,6 +146,7 @@ export function useLayoutIntentProcessing(
 		(state) => state.layoutIntents.find((intent) => intent.workspaceId === workspaceId) ?? null,
 	);
 	const maxSideGroups = useAppStore((state) => state.layoutSettings.maxSideGroups);
+	const maxBottomGroups = useAppStore((state) => state.layoutSettings.maxBottomGroups);
 
 	useEffect(() => {
 		if (!layoutIntent || !document || !attention) return;
@@ -117,6 +182,7 @@ export function useLayoutIntentProcessing(
 		let result:
 			| { document: WorkspaceLayoutDocument; focusGroupId?: string; focusTabId?: string }
 			| undefined;
+		let terminalTargetAfterCommit: string | undefined;
 		switch (layoutIntent.kind) {
 			case "open": {
 				const cacheTab = toLayoutTab(layoutIntent.tab);
@@ -253,7 +319,7 @@ export function useLayoutIntentProcessing(
 				break;
 			}
 			case "reveal-tool": {
-				const revealed = revealTool(document, layoutIntent.tool, maxSideGroups);
+				const revealed = revealTool(document, layoutIntent.tool, maxSideGroups, maxBottomGroups);
 				if (!isLayoutUnavailable(revealed)) result = revealed;
 				break;
 			}
@@ -267,35 +333,19 @@ export function useLayoutIntentProcessing(
 					name: layoutIntent.title,
 					tabKey: layoutIntent.tabKey,
 				});
-				const requestedGroupId = currentRouting?.targetGroupId ?? layoutIntent.targetGroupId;
-				const requestedGroup = requestedGroupId
-					? findCenterGroup(document.center, requestedGroupId)
-					: null;
-				if (requestedGroupId) {
-					const groupId =
-						requestedGroup?.id ??
-						findCenterGroup(document.center, attention.lastFocusedCenterGroupId)?.id ??
-						primaryCenterGroupId(document);
-					const moved = moveTabToGroup(document, tab, { area: "center", groupId });
-					if (!isLayoutUnavailable(moved)) result = moved;
-					break;
-				}
-				const target = document.right.groups.at(-1);
-				if (target) {
-					const moved = moveTabToGroup(document, tab, { area: "right", groupId: target.id });
-					if (!isLayoutUnavailable(moved)) {
-						const unfolded = setSideGroupFolded(moved.document, "right", target.id, false);
-						result = isLayoutUnavailable(unfolded)
-							? moved
-							: { ...moved, document: unfolded.document };
-					}
-				} else {
-					const moved = moveTabToGroup(document, tab, {
-						area: "center",
-						groupId: attention.lastFocusedCenterGroupId,
-					});
-					if (!isLayoutUnavailable(moved)) result = moved;
-				}
+				const routedCenterGroupId = currentRouting?.targetGroupId;
+				const requestedGroupId = routedCenterGroupId ?? layoutIntent.targetGroupId;
+				const requestedArea = routedCenterGroupId
+					? "center"
+					: (layoutIntent.targetArea ?? "center");
+				const target = requestedGroupId
+					? { area: requestedArea, groupId: requestedGroupId }
+					: undefined;
+				const placed = placeTerminalForIntent(document, attention, tab, target, {
+					maxSideGroups,
+					maxBottomGroups,
+				});
+				if (!isLayoutUnavailable(placed)) result = placed;
 				break;
 			}
 			case "close-terminal": {
@@ -331,6 +381,19 @@ export function useLayoutIntentProcessing(
 					if (!isLayoutUnavailable(shown)) result = shown;
 				}
 				break;
+			case "toggle-bottom":
+				if (document.bottom.visible) {
+					result = hideBottom(document, attention);
+				} else {
+					const shown = showBottom(document, maxSideGroups, maxBottomGroups, attention);
+					if (!isLayoutUnavailable(shown)) {
+						result = shown;
+						if (shown.document.bottom.groups.every((group) => group.tabs.length === 0)) {
+							terminalTargetAfterCommit = shown.focusGroupId ?? shown.document.bottom.groups[0]?.id;
+						}
+					}
+				}
+				break;
 		}
 		if (!result) return;
 		let nextAttention = reconcileAttention(result.document, attention, document);
@@ -341,11 +404,18 @@ export function useLayoutIntentProcessing(
 					? currentRouting?.activate !== false
 					: true;
 		if (activateResult && result.focusGroupId) {
+			const focusGroupId = result.focusGroupId;
 			const location = result.focusTabId
 				? findTabLocation(result.document, result.focusTabId)
-				: findCenterGroup(result.document.center, result.focusGroupId)
-					? ({ area: "center", groupId: result.focusGroupId } as const)
-					: null;
+				: findCenterGroup(result.document.center, focusGroupId)
+					? ({ area: "center", groupId: focusGroupId } as const)
+					: ((["left", "right", "bottom"] as const)
+							.map((area) =>
+								findAuxiliaryGroup(result.document, area, focusGroupId)
+									? ({ area, groupId: focusGroupId } as const)
+									: null,
+							)
+							.find((candidate) => candidate !== null) ?? null);
 			if (location) {
 				if (result.focusTabId) {
 					nextAttention = selectTab(
@@ -367,12 +437,18 @@ export function useLayoutIntentProcessing(
 		}
 		changeAttention(nextAttention);
 		if (result.document !== document) commit(result.document);
+		if (terminalTargetAfterCommit) {
+			useAppStore
+				.getState()
+				.addTerminal(workspaceId, undefined, terminalTargetAfterCommit, "bottom");
+		}
 	}, [
 		attention,
 		changeAttention,
 		commit,
 		document,
 		layoutIntent,
+		maxBottomGroups,
 		maxSideGroups,
 		requestFocus,
 		workspaceId,

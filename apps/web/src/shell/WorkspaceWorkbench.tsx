@@ -81,6 +81,9 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	const pendingLayoutWrites = useAppStore(
 		(state) => state.layoutPendingByWorkspace[workspaceId]?.length ?? 0,
 	);
+	const layoutRevision = useAppStore(
+		(state) => state.layoutSnapshotsByWorkspace[workspaceId]?.revision,
+	);
 	const layoutSettings = useAppStore((state) => state.layoutSettings);
 	const workspace = useAppStore((state) => selectWorkspaceById(state, workspaceId));
 	const contextProject = useAppStore(selectContextProject);
@@ -94,6 +97,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	const reviewDraftCount = useAppStore((state) => selectReviewDraftCount(state, workspaceId));
 	const reviewFlagByPath = useMemo(() => reviewFlags(reviewComments), [reviewComments]);
 	const [focusRequest, setFocusRequest] = useState<LayoutTabFocusRequest | null>(null);
+	const [initialTerminalSeeded, setInitialTerminalSeeded] = useState(false);
 	const activeReviewedPath = useAppStore((state) => selectActiveReviewedPath(state, workspaceId));
 	const readActiveReviewedPath = useCallback(
 		() => selectActiveReviewedPath(useAppStore.getState(), workspaceId),
@@ -176,8 +180,49 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	useDeletedChatPlacementReconciliation(workspaceId);
 	useLayoutIntentProcessing(workspaceId, commit, changeAttention, setFocusRequest);
 	useWorkspaceChatCatalogReconciliation(workspaceId, commit);
-	const terminals = useTerminalPlacementReconciliation(workspaceId, commit);
+	const { terminals, catalogReady: terminalCatalogReady } = useTerminalPlacementReconciliation(
+		workspaceId,
+		commit,
+	);
 	useChatLocationReconciliation(workspaceId, changeAttention);
+
+	useEffect(() => {
+		if (
+			initialTerminalSeeded ||
+			!document ||
+			!attention ||
+			!terminalCatalogReady ||
+			pendingLayoutWrites > 0 ||
+			status !== "connected" ||
+			layoutRevision !== 1
+		) {
+			return;
+		}
+		const placedTerminal = collectAllGroups(document)
+			.flatMap((group) => group.tabs)
+			.some((tab) => tab.kind === "terminal");
+		if (terminals.length > 0 || placedTerminal) {
+			setInitialTerminalSeeded(true);
+			return;
+		}
+		if (!document.bottom.visible) return;
+		const preferredId = attention.lastFocusedSideGroupId.bottom;
+		const target =
+			document.bottom.groups.find((group) => group.id === preferredId) ?? document.bottom.groups[0];
+		if (!target) return;
+		setInitialTerminalSeeded(true);
+		useAppStore.getState().addTerminal(workspaceId, undefined, target.id, "bottom");
+	}, [
+		attention,
+		initialTerminalSeeded,
+		document,
+		layoutRevision,
+		pendingLayoutWrites,
+		status,
+		terminalCatalogReady,
+		terminals,
+		workspaceId,
+	]);
 
 	useEffect(() => {
 		if (!document || status !== "connected") return;
@@ -352,11 +397,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 								onAdd={() =>
 									useAppStore
 										.getState()
-										.addTerminal(
-											workspaceId,
-											undefined,
-											location?.area === "center" ? location.groupId : undefined,
-										)
+										.addTerminal(workspaceId, undefined, location?.groupId, location?.area)
 								}
 							/>
 						) : (
@@ -486,6 +527,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				document={document}
 				attention={attention}
 				maxSideGroups={layoutSettings.maxSideGroups}
+				maxBottomGroups={layoutSettings.maxBottomGroups}
 				remoteEpoch={remoteEpoch}
 				{...(focusRequest ? { focusRequest } : {})}
 				renderTabBody={renderTabBody}
@@ -627,6 +669,9 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 						.catch(() => {});
 				}}
 				onNewChat={startChat}
+				onNewTerminal={(groupId, area) =>
+					useAppStore.getState().addTerminal(workspaceId, undefined, groupId, area)
+				}
 				onRemoteGestureCanceled={() =>
 					toast.info("The shared layout changed. Your drag was canceled.")
 				}

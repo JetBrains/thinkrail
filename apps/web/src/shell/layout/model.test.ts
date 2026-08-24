@@ -14,6 +14,7 @@ import {
 	createAuxiliaryGroup,
 	createSideGroup,
 	findTabLocation,
+	hideBottom,
 	hideSide,
 	isLayoutUnavailable,
 	type LayoutOperationResult,
@@ -31,6 +32,7 @@ import {
 	setBottomAlignment,
 	setSideGroupFolded,
 	setSideVisibility,
+	showBottom,
 	showSide,
 	splitCenterGroup,
 	toolTab,
@@ -224,15 +226,21 @@ describe("workspace layout model", () => {
 			groupId: document.bottom.groups[0]?.id,
 		});
 		expect(document.bottom.visible).toBe(true);
-		expect(isLayoutUnavailable(createAuxiliaryGroup(document, "bottom", toolTab("changes"), 1, 1))).toBe(
-			true,
-		);
-		document = mutation(createAuxiliaryGroup(document, "bottom", toolTab("changes"), 1, 2)).document;
+		expect(
+			isLayoutUnavailable(createAuxiliaryGroup(document, "bottom", toolTab("changes"), 1, 1)),
+		).toBe(true);
+		document = mutation(
+			createAuxiliaryGroup(document, "bottom", toolTab("changes"), 1, 2),
+		).document;
 		expect(document.bottom.groups).toHaveLength(2);
-		expect(isLayoutUnavailable(moveTabToGroup(document, file("one"), {
-			area: "bottom",
-			groupId: document.bottom.groups[0]?.id ?? "missing",
-		}))).toBe(true);
+		expect(
+			isLayoutUnavailable(
+				moveTabToGroup(document, file("one"), {
+					area: "bottom",
+					groupId: document.bottom.groups[0]?.id ?? "missing",
+				}),
+			),
+		).toBe(true);
 		const firstGroupId = document.bottom.groups[0]?.id;
 		if (!firstGroupId) throw new Error("missing first bottom group");
 		document = mutation(setAuxiliaryGroupFolded(document, "bottom", firstGroupId, true)).document;
@@ -250,9 +258,29 @@ describe("workspace layout model", () => {
 		expect(document.bottom.visible).toBe(false);
 		expect(document.toolRestoreTargets.changes?.region).toBe("bottom");
 		const revealed = mutation(revealTool(document, "changes", 6, 2));
-		expect(findTabLocation(revealed.document, revealed.focusTabId ?? "missing")?.area).toBe("bottom");
+		expect(findTabLocation(revealed.document, revealed.focusTabId ?? "missing")?.area).toBe(
+			"bottom",
+		);
 		expect(revealed.document.bottom.visible).toBe(true);
 		expect(validateLayoutDocument(revealed.document, 6, 2)).toEqual([]);
+	});
+
+	test("bottom hide and show preserve focus, restore tools, and seed a process-free slot", () => {
+		const empty = baseDocument([file("one")]);
+		const shown = mutation(showBottom(empty, 6, 3));
+		expect(shown.document.bottom.visible).toBe(true);
+		expect(shown.document.bottom.groups).toHaveLength(1);
+		expect(shown.document.bottom.groups[0]?.tabs).toEqual([]);
+		const attention = reconcileAttention(shown.document, undefined);
+		const hidden = hideBottom(shown.document, attention);
+		expect(hidden.document.bottom.visible).toBe(false);
+		expect(hidden.focusGroupId).toBe("center-a");
+
+		const restorable = baseDocument();
+		restorable.toolRestoreTargets.changes = { region: "bottom", index: 0 };
+		const restored = mutation(showBottom(restorable, 6, 3));
+		expect(findTabLocation(restored.document, "tool:changes")?.area).toBe("bottom");
+		expect(restored.document.bottom.visible).toBe(true);
 	});
 
 	test("rejects no-op moves and preserves identity when a missing tab is closed", () => {
@@ -491,9 +519,7 @@ describe("workspace layout model", () => {
 					id: "bottom-a",
 					weight: 1,
 					folded: false,
-					tabs: [
-						{ kind: "terminal", id: "terminal:t1", name: "Terminal", tabKey: "t1" },
-					],
+					tabs: [{ kind: "terminal", id: "terminal:t1", name: "Terminal", tabKey: "t1" }],
 				},
 			],
 		};
@@ -684,7 +710,12 @@ describe("workspace layout model", () => {
 
 	test("portable capture drops side terminal-only groups but retains empty bottom structure", () => {
 		const terminalOnly = baseDocument();
-		const terminal = { kind: "terminal" as const, id: "terminal:t1", name: "Terminal", tabKey: "t1" };
+		const terminal = {
+			kind: "terminal" as const,
+			id: "terminal:t1",
+			name: "Terminal",
+			tabKey: "t1",
+		};
 		terminalOnly.right.groups = [
 			{ id: "terminal-only", weight: 1, folded: false, tabs: [terminal] },
 		];

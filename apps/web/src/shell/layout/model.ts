@@ -30,6 +30,7 @@ export const LAYOUT_LIMITS = {
 	minCenterHeight: 180,
 	minSideBodyHeight: 120,
 	minBottomBodyHeight: 120,
+	minBottomGroupWidth: 160,
 	foldedSideHeight: 27,
 	foldedBottomWidth: 27,
 	initialBottomHeight: 0.3,
@@ -471,10 +472,7 @@ export function closeLayoutTab(
 	};
 }
 
-export function canPlaceLayoutTab(
-	tab: LayoutTab,
-	area: "center" | LayoutAuxiliaryRegion,
-): boolean {
+export function canPlaceLayoutTab(tab: LayoutTab, area: "center" | LayoutAuxiliaryRegion): boolean {
 	if (area === "center") return tab.kind !== "tool";
 	return tab.kind === "tool" || tab.kind === "terminal";
 }
@@ -703,8 +701,7 @@ export function createAuxiliaryGroup(
 		source?.area === region
 			? document[region].groups.findIndex((group) => group.id === source.groupId)
 			: -1;
-	const sourceGroup =
-		sourceGroupIndex >= 0 ? document[region].groups[sourceGroupIndex] : undefined;
+	const sourceGroup = sourceGroupIndex >= 0 ? document[region].groups[sourceGroupIndex] : undefined;
 	const removesSourceGroup = sourceGroup?.tabs.length === 1;
 	const insertionIndex = sideGroupInsertionIndex(
 		document[region].groups.length,
@@ -794,6 +791,15 @@ export function setSideVisibility(
 	return { ...document, [side]: { ...document[side], visible: nextVisible } };
 }
 
+export function setBottomVisibility(
+	document: WorkspaceLayoutDocument,
+	visible: boolean,
+): WorkspaceLayoutDocument {
+	const nextVisible = visible && document.bottom.groups.length > 0;
+	if (document.bottom.visible === nextVisible) return document;
+	return { ...document, bottom: { ...document.bottom, visible: nextVisible } };
+}
+
 const TOOL_RESTORE_ORDER = LAYOUT_TOOLS;
 
 export function hideSide(
@@ -814,6 +820,23 @@ export function hideSide(
 	};
 }
 
+export function hideBottom(
+	document: WorkspaceLayoutDocument,
+	attention: LayoutAttention,
+): LayoutMutationResult {
+	const center =
+		findCenterGroup(document.center, attention.lastFocusedCenterGroupId) ??
+		findCenterGroup(document.center, primaryCenterGroupId(document));
+	const selected =
+		center?.tabs.find((tab) => tab.id === readLayoutSelection(attention, center.id)) ??
+		center?.tabs[0];
+	return {
+		document: setBottomVisibility(document, false),
+		...(center ? { focusGroupId: center.id } : {}),
+		...(selected ? { focusTabId: selected.id } : {}),
+	};
+}
+
 export function canShowSide(document: WorkspaceLayoutDocument, side: LayoutSide): boolean {
 	return (
 		document[side].groups.length > 0 ||
@@ -823,6 +846,58 @@ export function canShowSide(document: WorkspaceLayoutDocument, side: LayoutSide)
 				findPlacedResource(document, toolTab(tool)) === null,
 		)
 	);
+}
+
+export function showBottom(
+	document: WorkspaceLayoutDocument,
+	maxSideGroups: number,
+	maxBottomGroups: number,
+	attention?: LayoutAttention,
+): LayoutOperationResult {
+	const populated = document.bottom.groups.some((group) => group.tabs.length > 0);
+	if (populated) {
+		const shown = setBottomVisibility(document, true);
+		const preferredId = attention?.lastFocusedSideGroupId.bottom;
+		const group =
+			shown.bottom.groups.find((candidate) => candidate.id === preferredId) ??
+			shown.bottom.groups.find((candidate) => candidate.tabs.length > 0) ??
+			shown.bottom.groups[0];
+		if (!group) return { document: shown };
+		const selectedId = attention ? readLayoutSelection(attention, group.id) : undefined;
+		const tab = group.tabs.find((candidate) => candidate.id === selectedId) ?? group.tabs[0];
+		return {
+			document: shown,
+			focusGroupId: group.id,
+			...(tab ? { focusTabId: tab.id } : {}),
+		};
+	}
+	const tool = TOOL_RESTORE_ORDER.find(
+		(candidate) =>
+			document.toolRestoreTargets[candidate]?.region === "bottom" &&
+			!findPlacedResource(document, toolTab(candidate)),
+	);
+	if (tool) return revealTool(document, tool, maxSideGroups, maxBottomGroups);
+	if (document.bottom.groups.length > 0) {
+		const shown = setBottomVisibility(document, true);
+		const preferredId = attention?.lastFocusedSideGroupId.bottom;
+		const group =
+			shown.bottom.groups.find((candidate) => candidate.id === preferredId) ??
+			shown.bottom.groups[0];
+		return { document: shown, ...(group ? { focusGroupId: group.id } : {}) };
+	}
+	const group: LayoutSideGroup = {
+		id: createLayoutId("bottom-group"),
+		weight: 1,
+		folded: false,
+		tabs: [],
+	};
+	return {
+		document: {
+			...document,
+			bottom: { ...document.bottom, visible: true, groups: [group] },
+		},
+		focusGroupId: group.id,
+	};
 }
 
 export function showSide(
