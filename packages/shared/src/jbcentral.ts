@@ -482,6 +482,7 @@ export function watchJbcentralArtifact(
 	let rearmTimer: ReturnType<typeof setTimeout> | null = null;
 	let pollTimer: ReturnType<typeof setTimeout> | null = null;
 	let artifactExists = pathExists(extensionPath, deps);
+	let watchGeneration = 0;
 
 	const closeHandle = (): void => {
 		try {
@@ -489,6 +490,7 @@ export function watchJbcentralArtifact(
 		} catch {}
 		handle = null;
 		watchedDirectory = null;
+		watchGeneration += 1;
 	};
 
 	const scheduleRearm = (delay = 0): void => {
@@ -515,9 +517,9 @@ export function watchJbcentralArtifact(
 		return true;
 	};
 
-	const handleEntry = (entry: string | null): void => {
-		if (stopped) return;
-		if (watchedDirectory === artifactDirectory) {
+	const handleEntry = (entry: string | null, directory: string, generation: number): void => {
+		if (stopped || generation !== watchGeneration) return;
+		if (directory === artifactDirectory) {
 			if (entry === null) closeHandle();
 			if (entry === null || entry === artifactName) invalidate();
 			return;
@@ -531,8 +533,9 @@ export function watchJbcentralArtifact(
 		const directory = nearestExistingDirectory(extensionPath, deps);
 		if (handle && watchedDirectory === directory) return;
 		closeHandle();
+		const generation = watchGeneration;
 		try {
-			handle = watchDirectory(directory, handleEntry);
+			handle = watchDirectory(directory, (entry) => handleEntry(entry, directory, generation));
 			watchedDirectory = directory;
 		} catch {
 			scheduleRearm(WATCH_RETRY_MS);

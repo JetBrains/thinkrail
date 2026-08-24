@@ -521,6 +521,37 @@ describe("Central artifact watcher", () => {
 		stop();
 	});
 
+	test("drops a callback from a superseded watcher instead of reclassifying it", async () => {
+		const existing = new Set(["/users/test", "/users/test/.pi", "/users/test/.pi/agent"]);
+		const callbacks = new Map<string, (entry: string | null) => void>();
+		let invalidations = 0;
+		const stop = watchJbcentralArtifact(
+			() => {
+				invalidations += 1;
+			},
+			adapterDeps({
+				exists: (path) => existing.has(path),
+				watchDirectory: (path, callback) => {
+					callbacks.set(path, callback);
+					return { close: () => {} };
+				},
+			}),
+		);
+		const ancestor = callbacks.get("/users/test/.pi/agent");
+		expect(ancestor).toBeDefined();
+
+		existing.add("/users/test/.pi/agent/extensions");
+		ancestor?.("extensions");
+		await new Promise((resolve) => setTimeout(resolve, 5));
+		expect(callbacks.has("/users/test/.pi/agent/extensions")).toBe(true);
+
+		const before = invalidations;
+		ancestor?.(null);
+		ancestor?.("auth.json.lock");
+		expect(invalidations).toBe(before);
+		stop();
+	});
+
 	test("treats an unnamed event on the artifact directory as a possible replacement", async () => {
 		const extensionPath = "/users/test/.pi/agent/extensions/jetbrains-central.ts";
 		const existing = new Set([

@@ -129,6 +129,13 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   re-arm and re-check existence. Naming the entry — rather than stat-fingerprinting the file — is what keeps
   "replacement" observable without ever reading the generated artifact.
 
+  **An event is classified against the watcher that emitted it, never the current one.** The watched
+  directory is mutable state that re-arming changes, so a callback already queued by a watcher that has
+  since been closed would otherwise be judged against its successor's directory — reading an ancestor's
+  churn as an artifact replacement, or an artifact event as ancestor churn. Each `arm()` therefore binds its
+  own directory and a monotonic generation into the callback it installs, and closing a handle retires that
+  generation, so a superseded callback is dropped rather than reclassified.
+
   **An unnamed event is scoped, not uniformly trusted or dropped.** `fs.watch` may omit the filename, and a
   watcher error surfaces the same way, so `null` carries no information about *what* changed — only about
   where we were watching. On the artifact's own directory it is treated as a possible replacement: the handle
