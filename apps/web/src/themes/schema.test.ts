@@ -127,12 +127,11 @@ test("the primary control's label stays legible on both its resting and hover fi
 	}
 });
 
-const HOVER_DISTINCTION_SURFACES = ["background", "sidebar", "header", "elevated"] as const;
 const HOVER_DISTINCTION_FLOOR = 1.15;
 
-test("the hover/selected fill stays distinguishable from every surface it sits on", () => {
+test("the hover/selected fill stays distinguishable from every resting surface", () => {
 	for (const theme of bundledThemes()) {
-		for (const surface of HOVER_DISTINCTION_SURFACES) {
+		for (const surface of RESTING) {
 			expect(
 				contrast(theme.colors.hover, theme.colors[surface]),
 				`${theme.id}: hover vs ${surface}`,
