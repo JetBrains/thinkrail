@@ -571,7 +571,7 @@ test("a tab opened or closed in one browser reaches the other", async ({ page, c
 	await waitTerminalReady(page2);
 	await expect(page2.getByTestId("terminal-tab")).toHaveCount(1);
 
-	await page2.getByTestId("terminal-add").click();
+	await openTerminal(page2);
 	await expect(page2.getByTestId("terminal-tab")).toHaveCount(2);
 	await expect(page.getByTestId("terminal-tab")).toHaveCount(2);
 

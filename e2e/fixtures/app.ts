@@ -209,7 +209,10 @@ export async function waitTerminalReady(page: Page): Promise<void> {
 }
 
 export async function openTerminal(page: Page): Promise<void> {
+	const tabs = page.getByTestId("terminal-tab");
+	const previousCount = await tabs.count();
 	await page.getByTestId("terminal-add").click();
+	await expect(tabs).toHaveCount(previousCount + 1);
 	await waitTerminalReady(page);
 }
 
