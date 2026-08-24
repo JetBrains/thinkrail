@@ -1,7 +1,7 @@
 import { ChevronRight, GitBranch, Settings } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "../components/ui/resizable";
-import { OnboardingDemo } from "../onboarding";
+import { OnboardingSimulation } from "../onboarding";
 import { ProjectTree } from "../panels/ProjectTree";
 import { SettingsDialog } from "../panels/SettingsDialog";
 import { Toaster } from "../panels/Toaster";
@@ -218,7 +218,7 @@ export function Shell() {
 				</div>
 			)}
 			<Toaster />
-			<OnboardingDemo />
+			<OnboardingSimulation />
 		</div>
 	);
 }

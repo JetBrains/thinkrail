@@ -1,54 +1,56 @@
-import { rmSync } from "node:fs";
-import { join } from "node:path";
 import { expect, test } from "@playwright/test";
-import { createWorkspaceViaDialog, openAppFresh, worktreeRows } from "./fixtures/app";
-import { E2E_DATA_DIR } from "./fixtures/paths";
+import { openAppFresh } from "./fixtures/app";
 
-test.beforeEach(() => {
-	rmSync(join(E2E_DATA_DIR, "demo"), { recursive: true, force: true });
-});
-
-test("the left-panel launcher runs the simulated empty-state flow into the live demo", async ({
+test("the launcher runs the fully mocked onboarding simulation, never touching real projects", async ({
 	page,
 }) => {
 	await openAppFresh(page);
+	await expect(page.getByTestId("project-item")).toHaveCount(0);
 
 	await page.getByTestId("onboarding-launch").click();
-
+	await expect(page.getByTestId("onboarding-sim")).toBeVisible();
 	const coach = page.getByTestId("onboarding-coach");
+
 	await expect(coach).toContainText("Step 1 of 4");
 	await expect(coach).toContainText("Open a project");
-	await page.getByTestId("demo-open-project").click();
+	await page.getByTestId("sim-open-project").click();
 
 	await expect(coach).toContainText("Choose your project folder");
-	await page.getByTestId("demo-folder-todo").click();
-
-	await expect(page.getByTestId("project-item")).toHaveCount(1);
-	await expect(page.getByTestId("welcome-title")).toHaveText("To Do App");
-	await expect(coach).toContainText("Step 2 of 4");
-
-	await page.getByTestId("welcome-cta").click();
-	await expect(page.getByTestId("new-workspace-dialog")).toBeVisible();
-	await page.getByTestId("create-workspace").click();
-	await expect(worktreeRows(page)).toHaveCount(1);
+	await page.getByTestId("sim-folder").click();
 
 	await expect(coach).toContainText("Step 2 of 4");
-	await createWorkspaceViaDialog(page);
-	await expect(worktreeRows(page)).toHaveCount(2);
+	await page.getByTestId("sim-add-workspace").click();
+	await expect(coach).toContainText("Step 2 of 4");
+	await page.getByTestId("sim-add-workspace").click();
 
 	await expect(coach).toContainText("Step 3 of 4");
+	await page.getByTestId("onboarding-insert-prompt").click();
+	await expect(page.getByTestId("sim-composer")).toHaveValue(
+		"Add search functionality to the To Do app.",
+	);
+	await page.getByTestId("sim-send").click();
 
-	await page.getByTestId("onboarding-exit").click();
-	await expect(page.getByTestId("onboarding-coach")).toHaveCount(0);
+	await expect(coach).toContainText("Step 4 of 4");
+	await expect(coach).toContainText("Switch to your second workspace");
+	await page.getByTestId("sim-ws-1").click();
+
+	await expect(coach).toContainText("Run a second agent in parallel");
+	await page.getByTestId("onboarding-insert-prompt").click();
+	await expect(page.getByTestId("sim-composer")).toHaveValue("Add a filter for completed tasks.");
+	await page.getByTestId("sim-send").click();
+
+	await expect(page.getByTestId("onboarding-finish")).toBeVisible();
+	await page.getByTestId("onboarding-finish").click();
+	await expect(page.getByTestId("onboarding-sim")).toHaveCount(0);
+
+	await expect(page.getByTestId("project-item")).toHaveCount(0);
 });
 
-test("the empty-state Welcome card starts the demo directly at the live coach", async ({ page }) => {
+test("the empty-state Welcome card also opens the mocked simulation", async ({ page }) => {
 	await openAppFresh(page);
 	await page.getByTestId("welcome-demo").click();
 
-	await expect(page.getByTestId("project-item")).toHaveCount(1);
-	await expect(page.getByTestId("onboarding-coach")).toContainText("Step 2 of 4");
-
-	await page.getByTestId("onboarding-exit").click();
-	await expect(page.getByTestId("onboarding-coach")).toHaveCount(0);
+	await expect(page.getByTestId("onboarding-sim")).toBeVisible();
+	await expect(page.getByTestId("onboarding-coach")).toContainText("Step 1 of 4");
+	await expect(page.getByTestId("project-item")).toHaveCount(0);
 });

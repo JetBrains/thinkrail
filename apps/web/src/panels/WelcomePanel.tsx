@@ -3,7 +3,7 @@ import { FolderOpen, House, type LucideIcon, Rocket, Sparkles } from "lucide-rea
 import { type ComponentPropsWithoutRef, forwardRef, useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { PRODUCT_NAME } from "../constants/branding";
-import { resetDemo, startDemo } from "../onboarding/demo";
+
 import { useAppStore } from "../store";
 import { getTransport } from "../transport";
 import { AddProjectMenu } from "./AddProjectMenu";
@@ -22,7 +22,7 @@ export function WelcomePanel() {
 	const projects = useAppStore((s) => s.projects);
 	const recentProjects = useAppStore((s) => s.recentProjects);
 	const selectedProjectId = useAppStore((s) => s.selectedProjectId);
-	const demoProjectId = useAppStore((s) => s.onboarding.demoProjectId);
+	const openDemo = useAppStore((s) => s.openDemo);
 	const [dialog, setDialog] = useState<{
 		projectId: string;
 		prompt: string;
@@ -81,9 +81,9 @@ export function WelcomePanel() {
 		<Card
 			icon={Sparkles}
 			title="Try the To Do App"
-			subtitle="Spin up a ready-made demo project and learn the ThinkRail loop in three quick steps."
+			subtitle="Take a guided, interactive tour of the ThinkRail loop — no setup required."
 			data-testid="welcome-demo"
-			onClick={() => void startDemo()}
+			onClick={() => openDemo()}
 		/>
 	);
 
@@ -164,17 +164,6 @@ export function WelcomePanel() {
 					</>
 				)}
 			</div>
-
-			{project && demoProjectId === project.id ? (
-				<button
-					type="button"
-					data-testid="welcome-reset-demo"
-					onClick={() => void resetDemo()}
-					className="mt-lg text-text-muted tr-text-metadata underline underline-offset-2 hover:text-text-default"
-				>
-					Reset demo
-				</button>
-			) : null}
 
 			{dialog ? (
 				<NewWorkspaceDialog

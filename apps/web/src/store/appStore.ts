@@ -664,6 +664,7 @@ interface AppState {
 	layoutSettings: LayoutSettings;
 	toasts: Toast[];
 	onboarding: OnboardingState;
+	demoOpen: boolean;
 	setStatus: (status: ConnectionStatus) => void;
 	installWelcomeSnapshot: (
 		protocolVersion: number,
@@ -831,6 +832,8 @@ interface AppState {
 	applyReviewChanged: (payload: ReviewChangedPayload) => void;
 	pushToast: (toast: Omit<Toast, "id">) => string;
 	dismissToast: (id: string) => void;
+	openDemo: () => void;
+	closeDemo: () => void;
 	startDemoTour: () => void;
 	setDemoStage: (stage: OnboardingStage) => void;
 	startOnboarding: (demoProjectId: string) => void;
@@ -1329,6 +1332,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	layoutSettings: DEFAULT_CONFIG.layout,
 	toasts: [],
 	onboarding: NO_ONBOARDING,
+	demoOpen: false,
 	setStatus: (status) =>
 		set((state) => ({
 			status,
@@ -2785,6 +2789,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((s) =>
 			s.toasts.some((t) => t.id === id) ? { toasts: s.toasts.filter((t) => t.id !== id) } : {},
 		),
+	openDemo: () => set({ demoOpen: true }),
+	closeDemo: () => set({ demoOpen: false }),
 	startDemoTour: () =>
 		set({ onboarding: { flow: "demo", stage: "welcome", demoProjectId: null, dismissed: false } }),
 	setDemoStage: (stage) => set((s) => ({ onboarding: { ...s.onboarding, stage } })),

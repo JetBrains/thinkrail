@@ -21,8 +21,8 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   workspace `+` always visible in a fixed right-edge column** (the Projects-header Add project `+` is unchanged).
   Long names truncate before the count/action; there is deliberately **no visible Close or overflow icon**.
   The nav is a full-height column with a **bottom-pinned footer** hosting the onboarding
-  **`OnboardingLauncher`** (a Help-style icon button that starts the demo tour from its simulated empty
-  state — see [[submodule-web-onboarding]]).
+  **`OnboardingLauncher`** (a Help-style icon button that opens the mocked onboarding simulation — see
+  [[submodule-web-onboarding]]).
   Hover highlights the full row and the highlight remains while its **project context menu** is open.
   Right-click opens that PR-#167-styled menu at the pointer without selecting/navigating; a scroll-cancelled
   ~700ms long press is its touch equivalent. With a project-name button focused, the standard Context Menu
@@ -173,9 +173,8 @@ hook, others quiet `welcome-action`s). Welcome is **the mode fork**: with a proj
 **"Start building"** (isolated worktree) with **"Work in project folder"** (the Default workspace) so the
 two working modes are a visible choice, not a hidden default. The cards by state: **no projects** →
 **"Open project"** + **"Try the To Do App"** (`data-testid="welcome-demo"`, `Sparkles`) — the demo entry
-that calls `onboarding`'s `startDemo` (materialize the bundled demo via `demo.ensure`, arm the onboarding
-tour, land on the demo's Welcome); **project + `hasSpecs`** → **"Start building"** (primary) + "Work in
-project folder"; **project + no specs** → a spec-first **"Set up project"** (primary) + "Start building"
+that calls `onboarding`'s `openDemo` (opens the fully mocked onboarding simulation — no real project is
+created); **project + `hasSpecs`** → **"Start building"** (primary) + "Work in project folder"; **project + no specs** → a spec-first **"Set up project"** (primary) + "Start building"
 + "Work in project folder". **"Open project" appears only in the no-projects state** — where it's the
 only possible action; once a project is shown, opening another is the projects-rail **"+"** (the same
 dropdown), so Welcome stays the *work-in-this-project* surface. That card hangs the shared
@@ -183,10 +182,8 @@ dropdown), so Welcome stays the *work-in-this-project* surface. That card hangs 
 / Recents). Recents is the store's `recentProjects`: one last-opened path list containing open + closed
 records with no status badge; selecting either runs the shared open flow and lands at Project Home, with a
 closed record retaining its id and workspace state. `Card` is a `forwardRef` usable as a Radix `asChild`
-trigger. When the shown project **is** the active demo (`store.onboarding.demoProjectId`), Welcome also
-renders a quiet **"Reset demo"** text button (`data-testid="welcome-reset-demo"`) that calls
-`onboarding`'s `resetDemo` — the replay door (see [[submodule-web-onboarding]]). The demo entry/reset
-orchestration lives in `onboarding` (a one-way panels→onboarding edge); Welcome never owns the tour. **"Work in project folder"**
+trigger. The demo entry lives in `onboarding` (a one-way panels→onboarding edge); Welcome never owns the
+tour (see [[submodule-web-onboarding]]). **"Work in project folder"**
 (`House` icon, matching the rail's Default row) **direct-enters** the Default workspace — no dialog: the
 shared `enterDefaultWorkspace` helper lists the project's workspaces, stores them, and activates the
 `kind === "default"` row; an older host with no Default row degrades to an error toast. **"Start building"** is the
@@ -458,9 +455,9 @@ a project picker, the prompt hero, and the reused
   panes, singleton side tools, terminal bodies, Settings, and `Toaster`), imported **per-file** so
   Monaco/shiki/xterm stay lazy. Tab strips, group headers, side stacks, and center topology are not panel
   surfaces; the shell layout module wraps these renderers.
-- **Allowed deps:** `onboarding` (`WelcomePanel` calls its `startDemo`/`resetDemo` orchestration and
-  `ProjectTree` mounts its `OnboardingLauncher` at the left-panel footer — one-way panels→onboarding, no
-  cycle); `store`, `transport`, `components/ui` (incl. `popover`/`command`/`textarea` for the
+- **Allowed deps:** `onboarding` (`WelcomePanel` + `ProjectTree`'s footer `OnboardingLauncher` call
+  `openDemo` to open the mocked simulation — one-way panels→onboarding, no cycle); `store`, `transport`,
+  `components/ui` (incl. `popover`/`command`/`textarea` for the
   dialog), `chat` (`ModelSelector`/`ThinkingSelector` + the `useModelCatalog` hook that feeds them,
   reused by `NewWorkspaceDialog`; `Markdown`,
   reused by `MarkdownPreview`; `TemplateEditorDialog`, reused by `TemplatesSettings`), `lib`, `themes` (catalog + generic application contract),
