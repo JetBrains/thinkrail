@@ -22,7 +22,7 @@ const CENTRAL_BIN = "/opt/central/bin/central";
 
 function adapterDeps(overrides: JbcentralAdapterDependencies = {}): JbcentralAdapterDependencies {
 	return {
-		env: { HOME: "/users/test", PATH: "/opt/central/bin" },
+		env: { HOME: "/users/test", USERPROFILE: "/users/test", PATH: "/opt/central/bin" },
 		which: () => CENTRAL_BIN,
 		exists: () => false,
 		...overrides,
@@ -355,7 +355,7 @@ ${script}
 		);
 		chmodSync(join(binDir, "central"), 0o755);
 		return {
-			env: { HOME: binDir, PATH: binDir },
+			env: { HOME: binDir, USERPROFILE: binDir, PATH: binDir },
 			exists: () => false,
 		};
 	}
@@ -380,7 +380,12 @@ ${script}
 		});
 		rmSync(join(binDir, "central"));
 		expect(
-			(await inspectJbcentral({ env: { HOME: binDir, PATH: binDir }, exists: () => false })).status,
+			(
+				await inspectJbcentral({
+					env: { HOME: binDir, USERPROFILE: binDir, PATH: binDir },
+					exists: () => false,
+				})
+			).status,
 		).toEqual({ state: "absent" });
 	});
 
@@ -477,13 +482,9 @@ describe("Central artifact watcher", () => {
 });
 
 describe("Central paths and install guidance", () => {
-	const originalPath = process.env.PATH;
-	const originalHome = process.env.HOME;
 	let tempHome: string | undefined;
 
 	afterEach(() => {
-		process.env.PATH = originalPath;
-		process.env.HOME = originalHome;
 		if (tempHome) rmSync(tempHome, { recursive: true, force: true });
 		tempHome = undefined;
 	});
@@ -496,7 +497,10 @@ describe("Central paths and install guidance", () => {
 		writeFileSync(central, "#!/bin/sh\n");
 		chmodSync(central, 0o755);
 
-		const deps = { env: { HOME: tempHome, PATH: "" }, which: () => null };
+		const deps = {
+			env: { HOME: tempHome, USERPROFILE: tempHome, PATH: "" },
+			which: () => null,
+		};
 		expect(resolveJbcentralBin(deps)).toBe(central);
 		expect(isJbcentralInstalled(deps)).toBe(true);
 		rmSync(central);
@@ -511,10 +515,52 @@ describe("Central paths and install guidance", () => {
 	});
 
 	test("uses the global extension even with a custom PI agent directory", () => {
-		const env = { HOME: "/home/person", PI_CODING_AGENT_DIR: "/tmp/custom-agent" };
-		expect(jbcentralExtensionPath(env)).toBe(
-			"/home/person/.pi/agent/extensions/jetbrains-central.ts",
+		const env = { HOME: "/home/person", USERPROFILE: "/home/person" };
+		expect(
+			jbcentralExtensionPath({ env: { ...env, PI_CODING_AGENT_DIR: "/tmp/custom-agent" } }),
+		).toBe("/home/person/.pi/agent/extensions/jetbrains-central.ts");
+	});
+
+	test("reads the home PI itself reads: USERPROFILE on Windows, HOME elsewhere", () => {
+		const env = { HOME: "/msys/person", USERPROFILE: "/profile/person" };
+		expect(jbcentralExtensionPath({ env, platform: "win32" })).toBe(
+			join("/profile/person", ".pi", "agent", "extensions", "jetbrains-central.ts"),
 		);
+		expect(jbcentralExtensionPath({ env, platform: "darwin" })).toBe(
+			join("/msys/person", ".pi", "agent", "extensions", "jetbrains-central.ts"),
+		);
+	});
+
+	test("the installer fallback is the exact path each OS's installer writes", () => {
+		const env = { HOME: "/msys/person", USERPROFILE: "/profile/person" };
+		const onlyExisting = (existing: string) => (path: string) => path === existing;
+		const windowsInstall = join("/profile/person", ".local", "bin", "central.exe");
+		const posixInstall = join("/msys/person", ".local", "bin", "central");
+
+		expect(
+			resolveJbcentralBin({
+				env,
+				platform: "win32",
+				which: () => null,
+				exists: onlyExisting(windowsInstall),
+			}),
+		).toBe(windowsInstall);
+		expect(
+			resolveJbcentralBin({
+				env,
+				platform: "darwin",
+				which: () => null,
+				exists: onlyExisting(posixInstall),
+			}),
+		).toBe(posixInstall);
+		expect(
+			resolveJbcentralBin({
+				env,
+				platform: "win32",
+				which: () => null,
+				exists: onlyExisting(join("/profile/person", ".local", "bin", "central")),
+			}),
+		).toBeNull();
 	});
 
 	test("returns official per-OS install plans", () => {
