@@ -159,10 +159,19 @@ describe("outputRecorder", () => {
 
 		test("handles several modes set in one sequence", () => {
 			const recorder = createOutputRecorder();
-			recorder.push(`${ESC}[?1000;1006h x`);
+			recorder.push(`${ESC}[?2004;1h x`);
 			const snapshot = recorder.snapshot();
-			expect(snapshot).toContain(`${ESC}[?1000h`);
-			expect(snapshot).toContain(`${ESC}[?1006h`);
+			expect(snapshot).toContain(`${ESC}[?2004h`);
+			expect(snapshot).toContain(`${ESC}[?1h`);
+		});
+
+		test("never restores mouse tracking, which a fresh prompt would echo back as garbage", () => {
+			const recorder = createOutputRecorder();
+			recorder.push(`${ESC}[?1000;1002;1003;1006h x`);
+			const snapshot = recorder.snapshot();
+			for (const mode of [1000, 1002, 1003, 1006]) {
+				expect(snapshot).not.toContain(`${ESC}[?${mode}h`);
+			}
 		});
 
 		test("leaves untouched modes alone rather than asserting xterm's defaults", () => {
@@ -199,6 +208,32 @@ describe("outputRecorder", () => {
 			recorder.push("this run\r\n");
 			const text = body(recorder.snapshot());
 			expect(text.indexOf("previous run")).toBeLessThan(text.indexOf("this run"));
+		});
+
+		test("keeps mode sequences out of the body rather than copying a snapshot verbatim", () => {
+			const recorder = createOutputRecorder();
+			recorder.restore(`${ESC}[0m${ESC}[?2004h$ old prompt\r\n`);
+			expect(body(recorder.snapshot())).not.toContain(`${ESC}[?`);
+			expect(recorder.snapshot()).toContain(`${ESC}[?2004h`);
+		});
+
+		test("a recording persisted by a host that still replayed mouse tracking is scrubbed", () => {
+			const recorder = createOutputRecorder();
+			recorder.restore(`${ESC}[0m${ESC}[?1000h${ESC}[?1006h$ old prompt\r\n`);
+			const snapshot = recorder.snapshot();
+			expect(snapshot).not.toContain(`${ESC}[?1000`);
+			expect(snapshot).not.toContain(`${ESC}[?1006`);
+			expect(snapshot).toContain("old prompt");
+		});
+
+		test("restoring across successive runs never compounds the preamble", () => {
+			const first = createOutputRecorder();
+			first.push(`${ESC}[?2004h$ `);
+			const second = createOutputRecorder();
+			second.restore(first.snapshot());
+			const third = createOutputRecorder();
+			third.restore(second.snapshot());
+			expect(third.snapshot().split(`${ESC}[?2004h`).length - 1).toBe(1);
 		});
 	});
 

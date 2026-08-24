@@ -7,6 +7,7 @@ import type {
 	ImageContent,
 	LayoutReplaceParams,
 	LoginReply,
+	QueueLane,
 	ReviewAnchor,
 	ReviewComment,
 	ReviewCommentKind,
@@ -23,6 +24,7 @@ import {
 	abortSession,
 	answerQuestion,
 	clampThinkingForModel,
+	clearQueueSession,
 	compactSession,
 	createSession,
 	deleteSession,
@@ -42,6 +44,7 @@ import {
 	promptSession,
 	refreshAvailableModels,
 	reloadSessionResources,
+	removeQueuedSession,
 	removeSession,
 	removeWorkspaceSessions,
 	resolveExtUi,
@@ -485,6 +488,13 @@ const handlers: Record<string, Handler> = {
 		await ackSend(followUpSession(p.sessionId, p.text, p.images));
 		trackSend("follow_up", p.text);
 		return { ok: true } as const;
+	},
+	"session.clearQueue": (params) => {
+		return clearQueueSession((params as { sessionId: string }).sessionId);
+	},
+	"session.removeQueued": async (params) => {
+		const p = params as { sessionId: string; kind: QueueLane; index: number };
+		return removeQueuedSession(p.sessionId, p.kind, p.index);
 	},
 	"session.abort": async (params) => {
 		await abortSession((params as { sessionId: string }).sessionId);

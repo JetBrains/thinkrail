@@ -114,14 +114,14 @@ binary.
     live edge; others place beside the trigger, clamped to the viewport and repositioned on resize.
 - The hero's install command has **macOS / Linux / Windows** tabs. Browser hints choose only the
   initial supported desktop OS; they never hide alternatives or claim to detect an ambiguous mobile
-  platform. Windows adds **PowerShell / Command Prompt / WSL** tabs: native shells use `install.ps1`
-  (the stable command is deliberately identical in both), while WSL uses `install.sh` and therefore
-  installs the Linux build inside that distro. ARIA structure: a `tablist` may contain nothing but
-  `tab`s, so the OS tabs form their own tablist and the Windows shell switcher is its *sibling* (its
-  own tablist), shown inline only while Windows is active so the component height never changes.
-  Every hero panel remains in the static DOM; JS turns the
-  complete fallback into the tabbed view. The detailed Install section keeps its existing complete,
-  mixed-platform reference rather than duplicating the picker.
+  platform. Windows adds **PowerShell / Command Prompt (cmd) / WSL** tabs with shell-native commands:
+  PowerShell runs `irm …/install.ps1 | iex` directly in the current session, Command Prompt launches
+  `powershell -c "irm …/install.ps1 | iex"`, and WSL uses `install.sh` to install the Linux build inside
+  that distro. ARIA structure: a `tablist` may contain nothing but `tab`s, so the OS tabs form their
+  own tablist and the Windows shell switcher is its *sibling* (its own tablist), shown inline only
+  while Windows is active so the component height never changes. Every hero panel remains in the
+  static DOM; JS turns the complete fallback into the tabbed view. The detailed Install section keeps
+  its complete mixed-platform reference and labels the distinct PowerShell and Command Prompt (cmd) lines.
 
 ## Analytics
 

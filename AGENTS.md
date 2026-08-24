@@ -62,6 +62,7 @@ PR/Checks.
 
 ```
 goal-and-requirements.md, architecture.md   top-level specs (repo root)
+central-integration.md                      cross-module spec: JetBrains AI via Central
 apps/
   cli/        V1 entrypoint: boot host + open browser   (SPEC.md)
   web/        mobile-first UI client                    (SPEC.md)

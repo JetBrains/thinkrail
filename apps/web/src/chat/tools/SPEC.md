@@ -120,8 +120,16 @@ registration runs once when the chat module mounts. Unregistered tools fall back
     could only contradict the row on screen — resurrecting multi-select text the user explicitly unchecked, or
     submitting text left over from an earlier edit while the card still paints the option picked after it.
     What is confirmed always matches what is drawn.
-    A selected single-choice note remains an explicit secondary control: Tab reaches Add/Edit note and
-    Enter opens it (the legend only promises `Tab note` once a choice exists to hang one on). In the editor
+    A note remains an explicit secondary control on every **checked choice**: the selected single-select
+    option, or **each checked multi-select option** — one Add/Edit note control per check, rendered
+    **directly beneath its own option row**, appearing the moment the choice is made. (Multi-select notes
+    were missing entirely, and the single-select note had drifted to the bottom of the list where it read
+    as belonging to the last option — both reported as a regression; the contract always allowed notes.)
+    The wire carries **one `notes` string per answer**, so a multi answer joins its per-option notes as
+    `label: note` lines (newline-separated — notes themselves may be multiline). The visible toggle text
+    stays the short Add/Edit note; the option it belongs to is carried by `aria-label`, and adjacency
+    carries it visually. Tab reaches Add/Edit note and Enter opens it (the legend only promises `Tab
+    note` once a choice exists to hang one on — `answerSupportsNote`). In the editor
     Enter finishes and returns focus to the choice, Shift+Enter remains the multiline escape hatch, and
     Escape also returns **without discarding typed text** — **including `Shift+Escape`**, which the open
     editor consumes rather than letting the card's skip gesture throw away the note mid-sentence.
@@ -133,15 +141,29 @@ registration runs once when the chat module mounts. Unregistered tools fall back
     `Shift+Escape` is otherwise the deliberate card-local skip; plain Escape outside a note never declines.
     Tab still reaches
     Other, Skip, and footer actions. A compact visible shortcut legend makes the interaction discoverable,
-    and the choices are a **`listbox` of `option`s with `aria-selected`** — never `aria-pressed`, which
-    announced an exclusive pick as a toggle button and said nothing about the set. Listbox is the pattern
-    whose *keys* these are (a cursor that moves without committing, Space to select, Enter to confirm),
-    where a radiogroup's arrows select as they move; `aria-multiselectable` carries single vs multi, and
-    each row is announced with its position in the choices. It owns **nothing but `option`s** (a `listbox`
-    may only own `option`/`group`; a stray input/textarea/button inside one is skipped by some screen
-    readers and corrupts the announced set), so the **Other row and the note editor are siblings below the
-    list** — hence the note rendering under the list rather than its own row, named by `aria-label` instead
-    of adjacency. Movement is driven by the choice refs, not DOM containment, so the keys are unaffected.
+    and the choices are checked rows with `aria-checked` — never `aria-pressed`, which
+    announced an exclusive pick as a toggle button and said nothing about the set. The container role
+    carries single vs multi (`radiogroup` vs `group` of checkboxes), and
+    each row is announced with its position in the choices. The note controls live **between the rows,
+    each under its checked choice**, because adjacency is what tells the user which choice a note belongs
+    to — the earlier notes-below-the-list layout read as the note belonging to the last option and was
+    reported as a regression. That interleaving is what forced the container role: a `listbox` may own
+    nothing but `option`/`group` (interactive descendants are non-conforming and some ATs flatten or skip
+    them — review finding on the multi-note change; `aria-posinset` only numbers options, it cannot make
+    stray children conforming), so the choices are a **`radiogroup` of `radio` rows (single-select) / a
+    `group` of `checkbox` rows (multi-select)** with `aria-checked`, whose contracts place no constraint
+    on sibling content — the note editor and toggle are ordinary named controls beside them. Each role's
+    keyboard contract is honored, not just its markup (second review finding: a radio whose arrows only
+    move focus exposes the focused row as unchecked while Enter would submit it — the semantic state
+    would contradict both the cursor and the answer): **single-select arrows select as they move** (the
+    APG radio contract; Space also selects, Enter stays the separate confirm), landing on the Other row
+    moves focus without selecting (it is a text field, not a radio), and **multi-select arrows only move**
+    with Space toggling (the checkbox contract). Selection is still never submission — Enter confirms. The **Other row
+    stays a sibling below the rows**. Movement is driven by the choice refs, not DOM containment, so the
+    keys are unaffected.
+    Deselecting a choice whose note editor is open also clears `noteFor` in the same update
+    (`toggleMultiPatch` / `selectOptionPatch`) while keeping the typed note text: a stale `noteFor` would
+    remount the open editor on re-check, stealing a focus action the user never took.
     Bare-letter/number shortcuts and global chords are deliberately absent so
     browser extensions, custom text, and explicit decline stay safe.
   - **Recommended-reason affordance** — a recommended option (label suffix `(Recommended)` **or** a

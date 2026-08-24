@@ -1,6 +1,7 @@
 ---
 import BaseHead from "../components/BaseHead.astro";
 import IdeShell from "../components/IdeShell.astro";
+import { installCommands, windowsShellLabels } from "../installCommands";
 ---
 
 <!doctype html>
@@ -53,9 +54,9 @@ import IdeShell from "../components/IdeShell.astro";
 								<button type="button" class="install-tab" role="tab" id="hero-install-windows-tab" aria-controls="hero-install-windows" aria-selected="false" tabindex="-1" data-install-platform="windows">Windows</button>
 							</div>
 							<div class="windows-shell-tabs" role="tablist" aria-label="Choose your Windows shell" hidden>
-								<button type="button" class="windows-shell-tab" role="tab" id="hero-shell-powershell-tab" aria-controls="hero-shell-powershell" aria-selected="true" data-windows-shell="powershell">PowerShell</button>
-								<button type="button" class="windows-shell-tab" role="tab" id="hero-shell-cmd-tab" aria-controls="hero-shell-cmd" aria-selected="false" tabindex="-1" data-windows-shell="cmd">Command Prompt</button>
-								<button type="button" class="windows-shell-tab" role="tab" id="hero-shell-wsl-tab" aria-controls="hero-shell-wsl" aria-selected="false" tabindex="-1" data-windows-shell="wsl">WSL</button>
+								<button type="button" class="windows-shell-tab" role="tab" id="hero-shell-powershell-tab" aria-controls="hero-shell-powershell" aria-selected="true" data-windows-shell="powershell">{windowsShellLabels.powershell}</button>
+								<button type="button" class="windows-shell-tab" role="tab" id="hero-shell-cmd-tab" aria-controls="hero-shell-cmd" aria-selected="false" tabindex="-1" data-windows-shell="cmd">{windowsShellLabels.cmd}</button>
+								<button type="button" class="windows-shell-tab" role="tab" id="hero-shell-wsl-tab" aria-controls="hero-shell-wsl" aria-selected="false" tabindex="-1" data-windows-shell="wsl">{windowsShellLabels.wsl}</button>
 							</div>
 						</div>
 						<div class="install-panel" id="hero-install-macos" role="tabpanel" aria-labelledby="hero-install-macos-tab" data-install-panel="macos">
@@ -82,30 +83,30 @@ import IdeShell from "../components/IdeShell.astro";
 							<p class="install-fallback-heading">Windows</p>
 							<div class="windows-shell-picker">
 								<div class="windows-shell-panel" id="hero-shell-powershell" role="tabpanel" aria-labelledby="hero-shell-powershell-tab" data-windows-shell-panel="powershell">
-									<p class="install-fallback-heading">PowerShell</p>
+									<p class="install-fallback-heading">{windowsShellLabels.powershell}</p>
 									<div class="install-line">
-										<code>powershell -c "irm https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1 | iex"</code>
-										<button type="button" class="copy-btn" data-copy="powershell -c &quot;irm https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1 | iex&quot;" aria-label="Copy PowerShell install command">
+										<code>{installCommands.windows.powershell}</code>
+										<button type="button" class="copy-btn" data-copy={installCommands.windows.powershell} aria-label="Copy PowerShell install command">
 											<svg class="i" aria-hidden="true"><use href="#i-copy" /></svg>
 											<svg class="i i-done" aria-hidden="true"><use href="#i-check" /></svg>
 										</button>
 									</div>
 								</div>
 								<div class="windows-shell-panel" id="hero-shell-cmd" role="tabpanel" aria-labelledby="hero-shell-cmd-tab" data-windows-shell-panel="cmd">
-									<p class="install-fallback-heading">Command Prompt</p>
+									<p class="install-fallback-heading">{windowsShellLabels.cmd}</p>
 									<div class="install-line">
-										<code>powershell -c "irm https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1 | iex"</code>
-										<button type="button" class="copy-btn" data-copy="powershell -c &quot;irm https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1 | iex&quot;" aria-label="Copy Command Prompt install command">
+										<code>{installCommands.windows.cmd}</code>
+										<button type="button" class="copy-btn" data-copy={installCommands.windows.cmd} aria-label="Copy Command Prompt (cmd) install command">
 											<svg class="i" aria-hidden="true"><use href="#i-copy" /></svg>
 											<svg class="i i-done" aria-hidden="true"><use href="#i-check" /></svg>
 										</button>
 									</div>
 								</div>
 								<div class="windows-shell-panel" id="hero-shell-wsl" role="tabpanel" aria-labelledby="hero-shell-wsl-tab" data-windows-shell-panel="wsl">
-									<p class="install-fallback-heading">WSL</p>
+									<p class="install-fallback-heading">{windowsShellLabels.wsl}</p>
 									<div class="install-line">
-										<code>curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash</code>
-										<button type="button" class="copy-btn" data-copy="curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash" aria-label="Copy WSL install command">
+										<code>{installCommands.windows.wsl}</code>
+										<button type="button" class="copy-btn" data-copy={installCommands.windows.wsl} aria-label="Copy WSL install command">
 											<svg class="i" aria-hidden="true"><use href="#i-copy" /></svg>
 											<svg class="i i-done" aria-hidden="true"><use href="#i-check" /></svg>
 										</button>
@@ -324,8 +325,11 @@ import IdeShell from "../components/IdeShell.astro";
 					<pre class="code-block install-block"><code><span class="sx-cm"># one line: downloads the right build, verifies its SHA-256, puts `thinkrail` on your PATH</span>
 <span class="line-copy" data-copy="curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash"><span class="sx-fn">curl</span> -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | <span class="sx-fn">bash</span></span>
 
-<span class="sx-cm"># windows — same thing, from cmd or powershell</span>
-<span class="line-copy" data-copy="powershell -c &quot;irm https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1 | iex&quot;"><span class="sx-fn">powershell</span> -c <span class="sx-str">"irm https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1 | iex"</span></span>
+<span class="sx-cm"># windows — PowerShell</span>
+<span class="line-copy" data-copy={installCommands.windows.powershell}><span class="sx-fn">irm</span> https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1 | <span class="sx-fn">iex</span></span>
+
+<span class="sx-cm"># windows — Command Prompt (cmd)</span>
+<span class="line-copy" data-copy={installCommands.windows.cmd}><span class="sx-fn">powershell</span> -c <span class="sx-str">"irm https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1 | iex"</span></span>
 
 <span class="sx-cm"># nightly channel, or pin a version</span>
 <span class="line-copy" data-copy="curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash -s -- --channel nightly"><span class="sx-fn">curl</span> -fsSL … | <span class="sx-fn">bash</span> -s -- <span class="sx-str">--channel nightly</span></span>

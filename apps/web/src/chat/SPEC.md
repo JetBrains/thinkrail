@@ -274,6 +274,37 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   skill overrides, + a **Reload** that applies changes to this chat's session via `session.reloadResources`,
   disabled while streaming) or project (`project.skills`, per-project-baseline toggles, no session) — the
   latter reused by `panels` pre-session). All props-driven; behavior detail lives in the components' jsdoc.
+- **Queued messages: the pending strip** (`QueueStrip.tsx`, props-driven: `queue` + `onEdit`/`onRemove`)
+  — the web mirror of pi's interactive-mode pending-messages area. A **streaming send never renders an
+  optimistic transcript bubble** (see the store SPEC's echo contract): `ChatView.onSubmit` skips
+  `appendUserMessage` for `steer`/`followUp`, and the queued texts render between transcript and
+  composer as dim rows — one truncated `Steering:`/`Follow-up:` line per message (`queue-strip` /
+  `queue-item` testids, `data-kind` + `data-index`; full text + delivery meaning in the row `title`),
+  sourced from the runtime's `queue`. **Each row carries its own edit and remove actions**
+  (`queue-item-edit` / `queue-item-remove`) — both call `session.removeQueued { kind, index }` (rows
+  are position-addressed, matching the wire op); edit additionally prepends the removed text to the
+  draft and refocuses. Per-row actions exist because the original all-or-nothing dequeue (click strip
+  → `clearQueue` → every message merged into one draft blob) proved undiscoverable and lossy in use.
+  **Abort still restores the whole queue** (`onAbort` → `session.clearQueue` → texts prepended
+  `\n\n`-joined, pi's restore order, then `session.abort`) — pi's Escape parity: an aborted run must
+  not silently discard messages queued behind it. A **rejected** streaming send likewise restores its
+  text to the draft alongside the `appendErrorTurn`. Trade-off, accepted: `queue_update` carries text
+  only, so a queued image attachment shows no chip in the strip; the canonical transcript turn later
+  renders its image blocks with the hydrated-turn fallback labels. E2e: `queue.live.spec.ts` (@agent).
+- **Streaming send modes: split send + interrupt** (`Composer`) — steer/queue semantics are pi's loop
+  design (steer = injected at the next turn boundary, after the current assistant message + its tool
+  calls; queue = runs after the agent settles; only abort halts an in-flight response) and proved
+  illegible from key-name hints alone. While streaming the composer therefore self-documents: the
+  placeholder states meanings ("Enter steers at the next step · Cmd/Ctrl+Enter queues for when it
+  finishes") and a **send-options menu** (`send-menu` trigger beside the send button; rows
+  `send-mode-steer` / `send-mode-queue` / `send-mode-interrupt`) names each mode with a one-line
+  meaning + shortcut. Menu rows are **actions** (send the current draft with that mode), never a
+  sticky mode switch — a persistent mode would make the next plain Enter silently obey hidden state.
+  **Interrupt** (`SubmitBehavior: "interrupt"`, Cmd/Ctrl+Shift+Enter while streaming; plain send when
+  idle; Shift+Enter alone stays newline) is the "take my message NOW" gesture pi lacks: `ChatView`
+  awaits `session.abort` (the ack means idle) then performs an ordinary idle send — the partial reply
+  stays in the transcript marked aborted, and messages still queued keep their lanes (they deliver in
+  the run the interrupt starts). Rejection restores the draft like other streaming sends.
 - **History overlay: zoomed preview pane + scope picker** (`HistoryOverlay.tsx`) — `Tab` grows the
   compact single-column overlay into a **two-pane** `zoomed` layout: the existing Prompts/Messages
   sections list stays on the left (~55% width, `data-testid="history-results"` — keyboard nav,

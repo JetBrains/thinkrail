@@ -12,7 +12,7 @@ import {
 	Pencil,
 	SkipForward,
 } from "lucide-react";
-import { type KeyboardEvent, useEffect, useId, useMemo, useRef, useState } from "react";
+import { Fragment, type KeyboardEvent, useEffect, useId, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib";
 import { useAskFocusScope, useAskState } from "../askState";
 import { useChatActions } from "../ChatActions";
@@ -75,7 +75,17 @@ export function deriveAnswer(
 		const valid = state.multi.filter((label) => question.options.some((o) => o.label === label));
 		const custom = state.customActive ? state.customText.trim() : "";
 		if (valid.length === 0 && !custom) return null;
-		return { ...base, kind: "multi", answer: custom || null, selected: valid };
+		const noteLines = valid.flatMap((label) => {
+			const note = state.notes[label]?.trim();
+			return note ? [`${splitRecommended(label).text}: ${note}`] : [];
+		});
+		return {
+			...base,
+			kind: "multi",
+			answer: custom || null,
+			selected: valid,
+			...(noteLines.length > 0 ? { notes: noteLines.join("\n") } : {}),
+		};
 	}
 	if (state.customActive && state.customText.trim()) {
 		return { ...base, kind: "custom", answer: state.customText.trim() };
@@ -102,6 +112,11 @@ export function deriveAnswers(
 	return questions
 		.map((question, index) => deriveAnswer(question, index, states[index] ?? emptyQState()))
 		.filter((answer): answer is AskUserQuestionAnswer => answer != null);
+}
+
+export function answerSupportsNote(answer: AskUserQuestionAnswer): boolean {
+	if (answer.kind === "option") return true;
+	return answer.kind === "multi" && (answer.selected?.length ?? 0) > 0;
 }
 
 export function readAskResult(raw: unknown): AskUserQuestionResult | null {
@@ -162,6 +177,24 @@ export function customTextPatch(text: string): Partial<QState> {
 	return text.trim()
 		? { customText: text, customActive: true, option: null }
 		: { customText: text, customActive: false };
+}
+
+export function selectOptionPatch(state: QState, label: string, cursor: number): Partial<QState> {
+	return {
+		cursor,
+		option: label,
+		customActive: false,
+		...(state.noteFor != null && state.noteFor !== label ? { noteFor: null } : {}),
+	};
+}
+
+export function toggleMultiPatch(state: QState, label: string, cursor: number): Partial<QState> {
+	const removing = state.multi.includes(label);
+	return {
+		cursor,
+		multi: removing ? state.multi.filter((item) => item !== label) : [...state.multi, label],
+		...(removing && state.noteFor === label ? { noteFor: null } : {}),
+	};
 }
 
 export type ConfirmSource = { kind: "choice"; label: string; cursor: number } | { kind: "custom" };
@@ -556,17 +589,8 @@ export function AskUserQuestionCard({
 							question={q}
 							state={state}
 							pageKeys={multipleQuestions}
-							onSelect={(label, cursor) =>
-								patch(idx, { cursor, option: label, customActive: false })
-							}
-							onToggleMulti={(label, cursor) =>
-								patch(idx, {
-									cursor,
-									multi: state.multi.includes(label)
-										? state.multi.filter((item) => item !== label)
-										: [...state.multi, label],
-								})
-							}
+							onSelect={(label, cursor) => patch(idx, selectOptionPatch(state, label, cursor))}
+							onToggleMulti={(label, cursor) => patch(idx, toggleMultiPatch(state, label, cursor))}
 							onCursor={(cursor) => {
 								if (cursor !== state.cursor) patch(idx, { cursor });
 							}}
@@ -575,12 +599,12 @@ export function AskUserQuestionCard({
 							onToggleCustom={() => patch(idx, { customActive: !state.customActive })}
 							onConfirmCustom={confirmCustom}
 							onOpenNote={(label, cursor) =>
-								patch(idx, {
-									cursor,
-									option: label,
-									customActive: false,
-									noteFor: label,
-								})
+								patch(
+									idx,
+									q.multiSelect
+										? { cursor, noteFor: label }
+										: { cursor, option: label, customActive: false, noteFor: label },
+								)
 							}
 							onCloseNote={() => patch(idx, { noteFor: null })}
 							onNote={(label, text) => patch(idx, { notes: { ...state.notes, [label]: text } })}
@@ -593,7 +617,7 @@ export function AskUserQuestionCard({
 							review={onReview}
 							multipleQuestions={multipleQuestions}
 							noteAvailable={
-								!onReview && answers.some((a) => a.questionIndex === idx && a.kind === "option")
+								!onReview && answers.some((a) => a.questionIndex === idx && answerSupportsNote(a))
 							}
 						/>
 						<div className="flex items-center justify-end gap-md">
@@ -796,7 +820,7 @@ function ModeHint({
 			) : (
 				<CircleDot className="size-3.5 shrink-0" />
 			)}
-			<span>↑↓ move incl. Other</span>
+			<span>{multiSelect ? "↑↓ move incl. Other" : "↑↓ move & select"}</span>
 			<span>· Space {multiSelect ? "toggle" : "select"}</span>
 			<span>· Enter confirm</span>
 			<span>· Tab {noteAvailable ? "note/actions" : "actions"}</span>
@@ -843,10 +867,6 @@ function QuestionBody({
 	const cursor = Math.min(Math.max(state.cursor, 0), Math.max(otherIndex - 1, 0));
 	const customOwnsPageFocus =
 		state.customActive && (!question.multiSelect || state.multi.length === 0);
-	const noteIndex = question.multiSelect
-		? -1
-		: question.options.findIndex((option) => option.label === state.option);
-	const noteOption = noteIndex < 0 ? undefined : question.options[noteIndex];
 	const anyPreview = !question.multiSelect && question.options.some((option) => option.preview);
 	const previewSource =
 		question.options.find((option) => option.label === state.option && option.preview) ??
@@ -868,6 +888,12 @@ function QuestionBody({
 		choiceRefs.current[index]?.focus({ preventScroll: true });
 	};
 
+	const moveCursor = (index: number) => {
+		focusChoice(index);
+		const target = question.options[index];
+		if (!question.multiSelect && target) onSelect(target.label, index);
+	};
+
 	const finishNote = (index: number) => {
 		onCloseNote();
 		requestAnimationFrame(() => choiceRefs.current[index]?.focus({ preventScroll: true }));
@@ -882,7 +908,7 @@ function QuestionBody({
 		const action = choiceKeyAction(event.key, index, choiceCount);
 		if (action.type === "none") return;
 		event.preventDefault();
-		if (action.type === "move") focusChoice(action.index);
+		if (action.type === "move") moveCursor(action.index);
 		else if (action.type === "select") {
 			if (question.multiSelect) onToggleMulti(label, index);
 			else onSelect(label, index);
@@ -900,9 +926,9 @@ function QuestionBody({
 			<div className={cn("grid gap-sm", anyPreview && "md:grid-cols-2")}>
 				<div className="flex min-w-0 flex-col gap-sm">
 					<div
-						role="listbox"
-						aria-multiselectable={!!question.multiSelect}
-						aria-label={question.question}
+						{...(question.multiSelect
+							? { role: "group", "aria-label": question.question }
+							: { role: "radiogroup", "aria-label": question.question })}
 						className="flex flex-col gap-sm"
 					>
 						{question.options.map((option, index) => {
@@ -910,71 +936,74 @@ function QuestionBody({
 								? state.multi.includes(option.label)
 								: state.option === option.label;
 							const ownsCursor = index === cursor;
+							const optionText = splitRecommended(option.label).text;
+							const noteText = state.notes[option.label]?.trim();
 							return (
-								<OptionRow
-									key={option.label}
-									buttonRef={(node) => {
-										choiceRefs.current[index] = node;
-									}}
-									label={option.label}
-									description={option.description}
-									recommendedReason={option.recommendedReason}
-									selected={selected}
-									cursor={ownsCursor}
-									pageFocus={ownsCursor && !customOwnsPageFocus}
-									multi={!!question.multiSelect}
-									pageKeys={pageKeys}
-									onFocus={() => onCursor(index)}
-									onKeyDown={(event) => onChoiceKeyDown(event, option.label, index)}
-									onClick={() =>
-										question.multiSelect
-											? onToggleMulti(option.label, index)
-											: onSelect(option.label, index)
-									}
-								/>
+								<Fragment key={option.label}>
+									<OptionRow
+										buttonRef={(node) => {
+											choiceRefs.current[index] = node;
+										}}
+										label={option.label}
+										description={option.description}
+										recommendedReason={option.recommendedReason}
+										selected={selected}
+										cursor={ownsCursor}
+										pageFocus={ownsCursor && !customOwnsPageFocus}
+										multi={!!question.multiSelect}
+										pageKeys={pageKeys}
+										onFocus={() => onCursor(index)}
+										onKeyDown={(event) => onChoiceKeyDown(event, option.label, index)}
+										onClick={() =>
+											question.multiSelect
+												? onToggleMulti(option.label, index)
+												: onSelect(option.label, index)
+										}
+									/>
+									{selected ? (
+										<div className="pl-[calc(1.125rem+var(--spacing-sm))]">
+											{state.noteFor === option.label ? (
+												<textarea
+													ref={noteRef}
+													data-testid="ask-note"
+													aria-label={`Note for ${optionText}`}
+													aria-keyshortcuts="Enter Shift+Enter Escape"
+													rows={2}
+													value={state.notes[option.label] ?? ""}
+													placeholder="Add a note for the model…"
+													onChange={(event) => onNote(option.label, event.target.value)}
+													onKeyDown={(event) => {
+														const action = noteKeyAction(
+															event.key,
+															event.shiftKey,
+															event.nativeEvent.isComposing,
+														);
+														if (action === "none") return;
+														event.stopPropagation();
+														if (action === "consume") return;
+														event.preventDefault();
+														finishNote(index);
+													}}
+													className="w-full resize-none rounded-[var(--radius-sm)] border border-control-border-default bg-control-bg px-sm py-xs text-text-default tr-text-metadata outline-none focus-visible:border-control-border-active"
+												/>
+											) : (
+												<button
+													type="button"
+													data-testid="ask-note-toggle"
+													aria-label={`${noteText ? "Edit" : "Add"} note for ${optionText}`}
+													onClick={() => openNote(option.label, index)}
+													className="flex items-center gap-xs rounded-[var(--radius-sm)] text-text-muted tr-text-metadata outline-none hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
+												>
+													<Pencil className="size-3" />
+													{noteText ? "Edit note" : "Add note"}
+												</button>
+											)}
+										</div>
+									) : null}
+								</Fragment>
 							);
 						})}
 					</div>
-
-					{noteOption ? (
-						<div className="pl-[calc(1.125rem+var(--spacing-sm))]">
-							{state.noteFor === noteOption.label ? (
-								<textarea
-									ref={noteRef}
-									data-testid="ask-note"
-									aria-label={`Note for ${splitRecommended(noteOption.label).text}`}
-									aria-keyshortcuts="Enter Shift+Enter Escape"
-									rows={2}
-									value={state.notes[noteOption.label] ?? ""}
-									placeholder="Add a note for the model…"
-									onChange={(event) => onNote(noteOption.label, event.target.value)}
-									onKeyDown={(event) => {
-										const action = noteKeyAction(
-											event.key,
-											event.shiftKey,
-											event.nativeEvent.isComposing,
-										);
-										if (action === "none") return;
-										event.stopPropagation();
-										if (action === "consume") return;
-										event.preventDefault();
-										finishNote(noteIndex);
-									}}
-									className="w-full resize-none rounded-[var(--radius-sm)] border border-control-border-default bg-control-bg px-sm py-xs text-text-default tr-text-metadata outline-none focus-visible:border-control-border-active"
-								/>
-							) : (
-								<button
-									type="button"
-									data-testid="ask-note-toggle"
-									onClick={() => openNote(noteOption.label, noteIndex)}
-									className="flex items-center gap-xs rounded-[var(--radius-sm)] text-text-muted tr-text-metadata outline-none hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
-								>
-									<Pencil className="size-3" />
-									{state.notes[noteOption.label]?.trim() ? "Edit note" : "Add note"}
-								</button>
-							)}
-						</div>
-					) : null}
 
 					<OtherOptionRow
 						inputRef={(node) => {
@@ -988,7 +1017,7 @@ function QuestionBody({
 						onText={onCustomText}
 						onMove={(key) => {
 							const action = choiceKeyAction(key, otherIndex, choiceCount);
-							if (action.type === "move") focusChoice(action.index);
+							if (action.type === "move") moveCursor(action.index);
 						}}
 						onConfirm={onConfirmCustom}
 					/>
@@ -1042,8 +1071,9 @@ function OptionRow({
 		<button
 			ref={buttonRef}
 			type="button"
-			role="option"
-			aria-selected={selected}
+			{...(multi
+				? { role: "checkbox", "aria-checked": selected }
+				: { role: "radio", "aria-checked": selected })}
 			aria-keyshortcuts={`ArrowUp ArrowDown Home End Space Enter${pageKeys ? " ArrowLeft ArrowRight" : ""} Shift+Escape`}
 			tabIndex={cursor ? 0 : -1}
 			data-testid="ask-option"

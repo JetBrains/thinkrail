@@ -4,7 +4,7 @@ type: architecture-design
 status: active
 title: ThinkRail — top-level architecture
 parent: goal-and-requirements
-covers: [client-host-split, cli-entrypoint, wire-contract, transport-endpoint, ui-shell-panels, git-worktrees, remote-tailscale, hydrate-then-stream, domain-vs-view-state, shared-workspace-layout, client-local-navigation]
+covers: [client-host-split, cli-entrypoint, wire-contract, transport-endpoint, ui-shell-panels, git-worktrees, remote-tailscale, hydrate-then-stream, domain-vs-view-state, shared-workspace-layout, client-local-navigation, central-integration]
 tags: [v1, architecture]
 ---
 
@@ -135,6 +135,10 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
     **tmux was rejected** as the persistence layer: an unassumable dependency on Windows, a competing tab
     model, env-propagation breakage, and polling-based capture — for restart survival we have already
     decided not to hold. Detail: [[submodule-server-terminal]].
+13. **Central's cross-module lifecycle has one architectural owner.** Its adapter, runtime generation,
+    wire status, and card remain in their bounded modules; the correspondence between those surfaces and
+    their liveness obligations belongs to [[central-integration]]. This keeps feature-specific mechanics in
+    their leaf specs while making a non-terminating composition visible at the architecture layer.
 
 ## Invariants
 
