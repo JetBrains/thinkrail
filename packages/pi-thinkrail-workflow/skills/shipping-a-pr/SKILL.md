@@ -14,6 +14,22 @@ A PR is **done** when its checks are green and the user has the link plus its cu
 at "PR opened", "pushed", or "comment replied". Every phase below therefore ends in `checks.md`,
 which declares this workflow's terminal state.
 
+## Observed, never assumed (applies to every phase)
+
+Git and GitHub state is concurrent and mutable: the base moves, CI lags, mergeability is computed
+lazily, and this workflow's own steps dirty the tree they just checked. Three rules hold at every
+step of every phase:
+
+- **Verify at the point of action.** An irreversible step — push, `gh pr create`, `gh pr edit`,
+  replying to a thread, declaring done — re-checks the exact state it consumes immediately before
+  running. A gate passed earlier does not survive the mutations made since it passed.
+- **Fetch, don't remember.** Remote state is read fresh and completely at the moment it's needed:
+  the current body before editing it, `--paginate` on every listing, `git fetch` before reasoning
+  about the base.
+- **Indeterminate is not affirmative.** A pending or still-computing answer (an `UNKNOWN` merge
+  state, queued checks) is polled until it resolves; done is declared only from observed
+  affirmative state, never from the absence of a bad signal.
+
 ## Classify the ask
 
 | The ask | Phase doc |

@@ -19,9 +19,17 @@ the workflow — the terminal state is declared below.
 
 ## Before declaring done: the base, not just CI
 
-Checks only observe CI — they say nothing about the base moving underneath. Query the merge state:
-`gh pr view <n> --json mergeStateStatus -q .mergeStateStatus`. `BEHIND` or `DIRTY` → read and
-follow `syncing.md`, then return here. Only a head current with its base is reported done.
+Checks only observe CI — they say nothing about the base moving underneath. Query the merge state
+(`gh pr view <n> --json mergeStateStatus -q .mergeStateStatus`) and act on the answer:
+
+- `UNKNOWN` — GitHub is still computing mergeability (normal right after a push): wait a few
+  seconds and re-query until it resolves. An indeterminate answer never falls through to done.
+- `BEHIND` or `DIRTY` — read and follow `syncing.md`, then return here.
+- Any other value is a computed, non-behind, non-conflicted state — the affirmative answer the
+  terminal state below requires.
+
+Only a head *observed* current with its base is reported done — never one assumed current because
+nothing said otherwise.
 
 ## Terminal state (this workflow ends here)
 

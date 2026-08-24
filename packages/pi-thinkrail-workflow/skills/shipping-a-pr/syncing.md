@@ -10,7 +10,9 @@ Entry: an open PR has fallen behind its base or has conflicts. Saves nothing. Co
    work gets silently reverted.
 3. **Re-verify.** A conflict-free rebase is not a green rebase — run the project's gates again: at
    minimum the suites covering the conflicted areas, the full bar when the base moved substantially.
-4. Push — `--force-with-lease` after a rebase, never plain `--force`.
+4. Push — but first commit anything step 3 changed and confirm `git status --porcelain` is empty
+   (the spine's point-of-action rule: a re-verification fix left in the working tree does not
+   reach the PR). `--force-with-lease` after a rebase, never plain `--force`.
 
 Red flag: "no conflicts, so nothing to re-run" — the base may have changed behavior this branch
 depends on; step 3 is unconditional.

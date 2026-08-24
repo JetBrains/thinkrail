@@ -11,7 +11,8 @@ Entry: a PR exists (or was just created) for a UI-visible change. Saves PNGs und
   visually.
 - Capture with whatever drives the app in this project: the e2e harness with a throwaway capture
   spec, or a browser-automation session against a running dev host. A capture spec is a throwaway —
-  it never ships (creating.md's clean-branch gate).
+  it never ships, and *this* doc owns its cleanup (Next below): creating.md's clean-branch gate has
+  already run on every entry path here and will not catch it.
 - Stage the picked shots as `.thinkrail/context/pr-shots/<name>.png` with names a reviewer reads
   (`loader-before-gap.png`, `loader-after-working.png`).
 
@@ -45,5 +46,7 @@ assets ref is the default.
 
 ## Next
 
-Delete `.thinkrail/context/pr-shots/` once the body edit lands — unless the user is uploading by
-hand; then leave it until they confirm. Read and follow `checks.md`.
+Clean up this phase's throwaways once the body edit lands: delete `.thinkrail/context/pr-shots/`
+(unless the user is uploading by hand — then leave it until they confirm) and every capture
+scaffold (specs, throwaway builds). If any scaffolding was committed, the commit that removes it
+is pushed too — a deletion left in the working tree ships nothing. Read and follow `checks.md`.

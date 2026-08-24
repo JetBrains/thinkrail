@@ -36,9 +36,12 @@ Red flags — stop, a gate is being rationalized away:
     migration steps.
   - `## Testing` — the actual commands run and their results ("`bun run e2e` — 252 passed"), never
     a bare "tests pass".
-- **Push, then create** — `gh pr create --head` does **not** push for you: push the verified head
-  first (`git push -u origin <branch>`; `--force-with-lease` when the remote branch exists and was
-  rebased), then
+- **Re-verify, push, then create.** Gates 3–5 edit the tree gate 1 checked — artifact removals,
+  self-review fixes: commit everything they changed and confirm `git status --porcelain` is empty
+  again *now*, immediately before the push (the spine's point-of-action rule; a deletion or fix
+  left in the working tree does not reach the PR). Then push the verified head —
+  `gh pr create --head` does **not** push for you: `git push -u origin <branch>`
+  (`--force-with-lease` when the remote branch exists and was rebased) — then
   `gh pr create --base <base> --head <branch> --title "…" --body-file .thinkrail/context/pr-body.md`
   — add `--repo` when the remote is ambiguous; `--draft` only when the user asked for a draft.
   Never pass the body inline: long inline/heredoc bodies have truncated and failed; the body file

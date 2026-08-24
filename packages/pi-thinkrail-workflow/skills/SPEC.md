@@ -293,7 +293,14 @@ follows is only the rationale the skill bodies don't state:
   comments blindly" — became its gates and phase docs. One skill rather than five (rule 1): every
   lifecycle ask enters through the same trigger; the phases are internal forks as sibling docs. Its
   done bar (checks green + user told, never "PR opened") and the review-only assets-ref screenshot
-  default were explicit user decisions (task-spec `task-shipping-a-pr-skill`).
+  default were explicit user decisions (task-spec `task-shipping-a-pr-skill`). Its review hardening
+  (PR #284) converged on one shared discipline instead of per-finding patches — **observed, never
+  assumed**: every finding across three review rounds was the same defect (acting on, or declaring,
+  state not observed at the moment of the action), so the rule lives once in the spine — verify at
+  the point of action, fetch remote state fresh and completely, poll indeterminate answers — and
+  each phase doc instantiates it at its own action points (pre-push re-assertions after
+  tree-mutating steps, body fetched before edit, `UNKNOWN` merge state polled, throwaway cleanup
+  owned by the phase that made the throwaway).
 - **`writing-specs`** carries the family's spec quality bar once — short / honest / on-rails — and is
   the accruing home for the family's rules about specs and the spec graph as they grow. Graph
   *mechanics* (frontmatter, link kinds, the `spec_*` tools) stay with the spec-graph skill

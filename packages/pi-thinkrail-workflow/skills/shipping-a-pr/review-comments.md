@@ -9,9 +9,10 @@ Entry: an open PR has review comments to address. Saves nothing. Control continu
    misreads the design — say why, citing the spec or design), or *clarify* (genuinely ambiguous —
    ask the reviewer or the user). Batch the verdicts; surface them to the user whenever any verdict
    is push-back.
-3. Apply the accepted ones as proper changes — the project's verification gates still apply — push,
-   and **reply to every thread**: what changed and where, or the push-back rationale. Resolve only
-   threads actually addressed.
+3. Apply the accepted ones as proper changes — the project's verification gates still apply —
+   commit everything, confirm the tree is clean, and push. **Reply to every thread** only after
+   the push lands: what changed and where (naming the commit), or the push-back rationale. Resolve
+   only threads actually addressed.
 
 Red flags:
 
