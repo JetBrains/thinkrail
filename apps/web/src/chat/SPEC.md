@@ -412,7 +412,19 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   `source === "prompt"` entries, plus a fresh `template.list { workspaceId }` fetch mapped to
   `SlashCommandInfo` rows (`source: "prompt"`, `sourceInfo` synthesized to match pi's own prompt-template
   convention exactly: `{ path: filePath, source: "local", scope: scope === "global" ? "user" : "project",
-  origin: "top-level" }`) — one merged list. When a `template.list` response comes back **empty**,
+  origin: "top-level" }`) — one merged list. The chat prepends its one **browser-native command**,
+  `/compact [instructions]`, as a display-local `builtin` row labelled `Pi/built-in`; contracts' Pi-mirrored
+  command source stays unchanged. Native `compact` is reserved over an exact-name extension/template
+  collision (skill commands remain namespaced), and the exact Pi parser recognizes only `/compact` or
+  `/compact ` plus trimmed instructions — every near-miss remains an ordinary prompt. A compact submit
+  bypasses the optimistic user echo and every streaming send mode: completed images reject it in place with
+  an actionable composer chip (text + images preserved; pending images already hold all submits), otherwise
+  the command clears, drains `session.clearQueue` back into the composer in steering-then-follow-up order,
+  then calls `session.compact`; Pi owns abort, summarization, persistence, and lifecycle. The request snapshots
+  existing compaction-turn ids, and a rejected clear/compact asks the store to append a failed compaction row
+  only when no new lifecycle turn appeared, so Pi's emitted failure and a pre-lifecycle wire failure share one
+  surface without duplicating. Existing live/hydrated compaction rendering is unchanged. When a
+  `template.list` response comes back **empty**,
   `SlashCommandMenu` renders a `footer` nudge (`data-testid="slash-templates-empty"`) that
   deep-links to Settings → Templates via `ChatView`'s `onManageTemplates` — the discoverability half of
   the starter-templates offer (`panels/SPEC.md`), since a fresh install has an empty global prompts dir
