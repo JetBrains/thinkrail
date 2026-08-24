@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>To Do App</title>
+		<link rel="stylesheet" href="styles.css" />
+	</head>
+	<body>
+		<main class="app">
+			<h1>To Do</h1>
+			<form id="new-task" class="new-task" autocomplete="off">
+				<input
+					id="new-task-input"
+					class="new-task__input"
+					type="text"
+					name="title"
+					placeholder="Add a task…"
+					aria-label="Task title"
+				/>
+				<button class="new-task__add" type="submit">Add</button>
+			</form>
+			<ul id="task-list" class="task-list"></ul>
+			<p id="empty" class="empty" hidden>Nothing to do yet.</p>
+		</main>
+		<script type="module" src="src/app.js"></script>
+	</body>
+</html>

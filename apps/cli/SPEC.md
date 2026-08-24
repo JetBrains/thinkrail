@@ -161,9 +161,10 @@ entrypoint honors it (including `packages/server/src/dev.ts`, which parses no ar
 platform — via `bun build --compile`. Bun bundles the host *and* transparently embeds the `bun-pty` native
 lib; the extra steps are the **web UI** (a directory the host normally serves), the **bundled pi
 extensions** (which the server path-loads out of `node_modules` in dev — impossible inside a binary),
-and `trash`'s **native helper sidecars** (which macOS/Windows must execute from real filesystem paths):
+`trash`'s **native helper sidecars** (which macOS/Windows must execute from real filesystem paths), and
+the **bundled demo project templates** (which the server copies out of `packages/server/assets` in dev):
 
-- `scripts/build-binary.ts` writes three **transient** generated modules, runs
+- `scripts/build-binary.ts` writes four **transient** generated modules, runs
   `bun build --compile --no-compile-autoload-bunfig --target=<host|--target>` on
   `src/compiled-entry.ts`, then deletes them (so the artifact cannot execute a project-local
   `bunfig.toml` preload before ThinkRail boots, and the working tree + `tsc` stay clean); each generated
@@ -181,12 +182,16 @@ and `trash`'s **native helper sidecars** (which macOS/Windows must execute from 
     `@earendil-works/pi-coding-agent`.
   - `src/runtime-assets.generated.ts` — embeds `trash`'s `macos-trash` and `windows-trash.exe` helper
     binaries, resolved from the server package's dependency context, as a content-hashed manifest.
+  - `src/demo-assets.generated.ts` — enumerates `packages/server/assets/demo` (the bundled demo project
+    templates, e.g. `to-do-app/…`): a Bun file-attribute import per file + a `{ route, data }[]` manifest
+    + a content-hash version, embedded like web assets.
 - `src/compiled-entry.ts` is the binary's entry: on startup it stages the embedded web + skills +
-  runtime-helper files to per-build cache dirs (`$XDG_CACHE_HOME`/`~/.cache`/temp; files written straight into the versioned dir,
+  runtime-helper + demo-template files to per-build cache dirs (`$XDG_CACHE_HOME`/`~/.cache`/temp; files written straight into the versioned dir,
   then a sibling `<dir>.complete` marker written **last** — readiness is gated on the marker, so a killed
   first run leaves an incomplete cache that's re-extracted next launch. **No stage-then-rename**: Bun's
   `renameSync` of a fresh non-empty dir `EPERM`s on Windows, so the marker replaces the directory-rename
-  publish), makes the macOS helper executable, sets `THINKRAIL_STATIC_DIR`, then **awaits** the server's
+  publish), makes the macOS helper executable, sets `THINKRAIL_STATIC_DIR` and `THINKRAIL_DEMO_DIR` (the
+  staged demo-template root the server materializes lazily from), then **awaits** the server's
   **`registerBundledRuntime`** seam — which injects the factories + staged skills dir + real trash-helper
   paths **and** performs pi's binary-only registrations (the
   statically-bundled OAuth flows + the Bedrock provider module, replacing pi's binary-hostile dynamic

@@ -8,6 +8,7 @@ import {
 	bundledSkillsVersion,
 	embeddedSkillFiles,
 } from "./bundled-extensions.generated";
+import { demoAssetsVersion, embeddedDemoAssets } from "./demo-assets.generated";
 import { stagingRoot } from "./paths";
 import { embeddedRuntimeAssets, runtimeAssetsVersion } from "./runtime-assets.generated";
 import { embeddedWebAssets, webAssetsVersion } from "./web-assets.generated";
@@ -35,6 +36,8 @@ if (parseSubcommand(Bun.argv.slice(2)) === undefined) {
 	const staticDir = await stage("web", webAssetsVersion, embeddedWebAssets);
 	const skillsDir = await stage("skills", bundledSkillsVersion, embeddedSkillFiles);
 	const runtimeDir = await stage("runtime", runtimeAssetsVersion, embeddedRuntimeAssets);
+	const demoDir = await stage("demo", demoAssetsVersion, embeddedDemoAssets);
+	process.env.THINKRAIL_DEMO_DIR ??= demoDir;
 	const macosTrash = join(runtimeDir, "macos-trash");
 	const windowsTrash = join(runtimeDir, "windows-trash.exe");
 	if (process.platform !== "win32") chmodSync(macosTrash, 0o755);

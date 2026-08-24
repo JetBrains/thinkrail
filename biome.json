@@ -7,7 +7,13 @@
 	},
 	"files": {
 		"ignoreUnknown": true,
-		"includes": ["**", "!designs", "!**/.claude", "!apps/web/src/styles/generated"]
+		"includes": [
+			"**",
+			"!designs",
+			"!**/.claude",
+			"!apps/web/src/styles/generated",
+			"!packages/server/assets"
+		]
 	},
 	"formatter": {
 		"enabled": true,

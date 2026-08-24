@@ -1,0 +1,89 @@
+:root {
+	color-scheme: light dark;
+	font-family: system-ui, sans-serif;
+}
+
+body {
+	margin: 0;
+	display: flex;
+	justify-content: center;
+	background: Canvas;
+	color: CanvasText;
+}
+
+.app {
+	width: 100%;
+	max-width: 32rem;
+	padding: 2rem 1rem;
+}
+
+h1 {
+	margin: 0 0 1rem;
+	font-size: 1.75rem;
+}
+
+.new-task {
+	display: flex;
+	gap: 0.5rem;
+	margin-bottom: 1rem;
+}
+
+.new-task__input {
+	flex: 1;
+	padding: 0.5rem 0.75rem;
+	font: inherit;
+	border: 1px solid GrayText;
+	border-radius: 0.5rem;
+	background: Field;
+	color: FieldText;
+}
+
+.new-task__add {
+	padding: 0.5rem 1rem;
+	font: inherit;
+	border: 0;
+	border-radius: 0.5rem;
+	background: Highlight;
+	color: HighlightText;
+	cursor: pointer;
+}
+
+.task-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 0.25rem;
+}
+
+.task {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	padding: 0.5rem 0.25rem;
+	border-bottom: 1px solid ButtonBorder;
+}
+
+.task__title {
+	flex: 1;
+}
+
+.task--done .task__title {
+	text-decoration: line-through;
+	opacity: 0.6;
+}
+
+.task__delete {
+	border: 0;
+	background: transparent;
+	color: GrayText;
+	cursor: pointer;
+	font-size: 1rem;
+}
+
+.empty {
+	color: GrayText;
+	text-align: center;
+	margin-top: 2rem;
+}
