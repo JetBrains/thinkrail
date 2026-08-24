@@ -142,7 +142,7 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   continuously (~23 events/s while idle), so forwarding raw directory events converts ordinary `pi` churn
   into unbounded rebuild demand — and a debounce in the caller cannot absorb it, because a debounce bounds
   burst width, not stream length. Composed with the caller's rebuild machinery that shipped a beta livelock;
-  the cross-module chain and its liveness obligations are [[central-integration]] §2. Pinned by
+  the cross-module chain and its liveness obligations are [[central-integration]] (Invariants). Pinned by
   `packages/shared/src/jbcentral.test.ts`.
 
   The adapter deliberately has no migration path for the previous unpublished integration: it never reads or

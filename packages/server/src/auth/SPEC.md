@@ -31,7 +31,7 @@ ourselves and never surface a credential value over the wire.
     `load-failed` when it cannot apply. **`configuring` carries no deadline of its own, so every path into it
     owes a bounded exit** — an in-flight action is bounded by the adapter's timeouts, an outstanding rebuild
     by the drain settling. The drain's obligation to settle *independent of inbound event rate*, and its
-    current unmet state, are [[central-integration]] §2; this module must not assume termination it does not
+    current unmet state, are [[central-integration]] (Invariants); this module must not assume termination it does not
     enforce.
 
     **The auth/proxy observation is cached, refreshed off the read path, and never polled.** A settled
