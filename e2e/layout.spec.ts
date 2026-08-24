@@ -42,10 +42,6 @@ async function height(locator: Locator): Promise<number> {
 	return box.height;
 }
 
-async function scrollbarColor(locator: Locator): Promise<string> {
-	return locator.evaluate((element) => getComputedStyle(element).scrollbarColor);
-}
-
 async function dragHandle(page: Page, handle: Locator, x: number, y: number): Promise<void> {
 	const box = await handle.boundingBox();
 	if (!box) throw new Error("resize handle has no bounding box");
@@ -137,9 +133,7 @@ test("workbench strips and feature toolbars keep one-row geometry with ARIA tabs
 	await expect(page.getByTestId("changes-view-toggle")).toHaveCSS("height", "28px");
 });
 
-test("overflow uses a focus-revealed scrollbar and keyboard navigation reveals the active tab", async ({
-	page,
-}) => {
+test("overflow uses directional fades without changing tab-strip geometry", async ({ page }) => {
 	await page.setViewportSize({ width: 800, height: 720 });
 	await openDefaultWorkbench(page);
 	await openKeptFiles(page, [
@@ -155,25 +149,33 @@ test("overflow uses a focus-revealed scrollbar and keyboard navigation reveals t
 	await expect
 		.poll(() => tablist.evaluate((element) => element.scrollWidth > element.clientWidth))
 		.toBe(true);
-
-	const outside = page.getByTestId("open-settings");
-	await outside.hover();
-	await outside.focus();
-	const idleColor = await scrollbarColor(tablist);
-	await tablist.hover();
-	await expect.poll(() => scrollbarColor(tablist)).not.toBe(idleColor);
+	await expect(tablist).toHaveCSS("scrollbar-width", "none");
 	await expect
 		.poll(() =>
-			tablist.evaluate((element) => getComputedStyle(element, "::-webkit-scrollbar").height),
+			tablist.evaluate((element) => getComputedStyle(element, "::-webkit-scrollbar").display),
 		)
-		.toBe("2px");
+		.toBe("none");
+	await expect(strip).toHaveCSS("height", "28px");
+	await expect.poll(() => height(strip.getByRole("tab").first())).toBeCloseTo(28, 1);
 
-	await outside.hover();
+	await tablist.evaluate((element) => {
+		element.scrollLeft = 0;
+	});
+	await expect(strip.getByTestId("tab-overflow-before")).toHaveCount(0);
+	await expect(strip.getByTestId("tab-overflow-after")).toHaveCount(1);
+
+	await tablist.evaluate((element) => {
+		element.scrollLeft = (element.scrollWidth - element.clientWidth) / 2;
+	});
+	await expect(strip.getByTestId("tab-overflow-before")).toHaveCount(1);
+	await expect(strip.getByTestId("tab-overflow-after")).toHaveCount(1);
+
 	await strip.getByRole("tab", { name: /README\.md/ }).focus();
-	await expect.poll(() => scrollbarColor(tablist)).not.toBe(idleColor);
 	await page.keyboard.press("End");
 	const last = strip.getByRole("tab", { name: /LINKS\.md/ });
 	await expect(last).toBeFocused();
+	await expect(strip.getByTestId("tab-overflow-before")).toHaveCount(1);
+	await expect(strip.getByTestId("tab-overflow-after")).toHaveCount(0);
 	await expect
 		.poll(async () => {
 			const [listBox, tabBox] = await Promise.all([tablist.boundingBox(), last.boundingBox()]);
@@ -182,6 +184,7 @@ test("overflow uses a focus-revealed scrollbar and keyboard navigation reveals t
 		})
 		.toBe(true);
 	await expect(strip).toHaveCSS("height", "28px");
+	await expect.poll(() => height(last)).toBeCloseTo(28, 1);
 });
 
 test("ARIA tabs use roving keyboard focus, recover after close, and expose keyboard separators", async ({

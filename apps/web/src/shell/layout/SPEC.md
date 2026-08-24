@@ -134,8 +134,9 @@ transition moves focus onto that restore control and expansion returns it to the
 orientation and current/min/max values. `Ctrl+F6` visits upper-row groups in visual
 order, then visible bottom groups left-to-right. One-row strips have bounded readable tab widths and no
 fixed previous/next controls: wheel, trackpad, touch, roving-keyboard navigation, active reveal, and the
-searchable keyboard overflow list all scroll the same tab list, whose slim horizontal scrollbar appears only
-on hover or focus-within when content overflows without changing the strip's fixed height. Singleton tool tabs
+searchable keyboard overflow list all scroll the same tab list. Its native scrollbar stays hidden; subtle,
+pointer-transparent edge fades appear only on directions with clipped tabs and update with scroll, resize, and
+tab changes without altering the fixed 28 px strip or tab geometry. Singleton tool tabs
 (Projects, Specs, Files, Changes, Review) carry no inline close glyph; Close remains in their context menu
 and on the Delete key, while terminals and center resources retain the direct glyph.
 

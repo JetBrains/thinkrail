@@ -314,6 +314,51 @@ function useElementSize(): {
 	return { ref, ...size };
 }
 
+interface HorizontalOverflow {
+	before: boolean;
+	after: boolean;
+}
+
+function useHorizontalOverflow(ref: React.RefObject<HTMLDivElement | null>): HorizontalOverflow {
+	const [overflow, setOverflow] = useState<HorizontalOverflow>({ before: false, after: false });
+	const update = useCallback(() => {
+		const element = ref.current;
+		if (!element) return;
+		const maximum = Math.max(0, element.scrollWidth - element.clientWidth);
+		const next = {
+			before: element.scrollLeft > 1,
+			after: element.scrollLeft < maximum - 1,
+		};
+		setOverflow((current) =>
+			current.before === next.before && current.after === next.after ? current : next,
+		);
+	}, [ref]);
+
+	useEffect(() => {
+		const element = ref.current;
+		if (!element) return;
+		const frame = requestAnimationFrame(update);
+		element.addEventListener("scroll", update, { passive: true });
+		const resize = new ResizeObserver(update);
+		resize.observe(element);
+		const mutations = new MutationObserver(update);
+		mutations.observe(element, {
+			attributes: true,
+			characterData: true,
+			childList: true,
+			subtree: true,
+		});
+		return () => {
+			cancelAnimationFrame(frame);
+			element.removeEventListener("scroll", update);
+			resize.disconnect();
+			mutations.disconnect();
+		};
+	}, [ref, update]);
+
+	return overflow;
+}
+
 function tabSearchKeywords(tab: LayoutTab): string[] {
 	const name = layoutTabName(tab);
 	switch (tab.kind) {
@@ -499,6 +544,7 @@ function TabStrip({
 	trailing,
 }: TabStripProps) {
 	const scroller = useRef<HTMLDivElement>(null);
+	const scrollOverflow = useHorizontalOverflow(scroller);
 	const tabRefs = useRef(new Map<string, HTMLButtonElement>());
 	const overflowFocusTarget = useRef<string | null>(null);
 	const [overflowOpen, setOverflowOpen] = useState(false);
@@ -552,82 +598,104 @@ function TabStrip({
 			data-drop-active={groupDrop.isOver || undefined}
 			className="relative flex h-panel-header-row shrink-0 items-stretch border-border-default border-b bg-container-workspace-bg data-[drop-active]:bg-primary-subtle"
 		>
-			<div
-				ref={scroller}
-				role="tablist"
-				aria-label={`${location.area} group tabs`}
-				className="flex min-w-0 flex-1 items-stretch overflow-x-auto overflow-y-hidden [scrollbar-color:transparent_transparent] [scrollbar-width:thin] supports-[selector(::-webkit-scrollbar)]:[scrollbar-width:auto] [&::-webkit-scrollbar]:!h-0.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-transparent [&::-webkit-scrollbar-track]:bg-transparent hover:[scrollbar-color:var(--color-border-default)_transparent] hover:[&::-webkit-scrollbar-thumb]:bg-border-default focus-within:[scrollbar-color:var(--color-border-default)_transparent] focus-within:[&::-webkit-scrollbar-thumb]:bg-border-default"
-				onWheel={(event) => {
-					if (!scroller.current || Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
-					scroller.current.scrollLeft += event.deltaY;
-				}}
-			>
-				{tabs.map((tab, index) => (
-					<WorkbenchTab
-						key={tab.id}
-						tab={tab}
-						index={index}
-						location={location}
-						attention={attention}
-						selectionEpoch={selectionEpoch}
-						active={tab.id === selectedId}
-						preview={tab.id === previewId}
-						document={document}
-						maxSideGroups={maxSideGroups}
-						maxBottomGroups={maxBottomGroups}
-						register={(node) => {
-							if (node) tabRefs.current.set(tab.id, node);
-							else tabRefs.current.delete(tab.id);
-						}}
-						onSelect={selectTab}
-						onClose={() => closeTab(tab)}
-						onApply={applyResult}
-						onFocusAdjacentGroup={onFocusAdjacentGroup}
-						onHideSide={onHideSide}
-						onRevealTool={onRevealTool}
-						canFocusAdjacentGroup={canFocusAdjacentGroup}
-						renderTabAdornment={renderTabAdornment}
-						draggingTab={draggingTab}
-						panelId={panelId}
-						{...(splitGeometry ? { splitGeometry } : {})}
-						onKeyDown={(event) => {
-							if (event.altKey && event.shiftKey && event.key === "ArrowLeft") {
-								event.preventDefault();
-								if (index > 0) {
-									const moved = moveTabToGroup(document, tab, location, index - 1);
-									if (!isLayoutUnavailable(moved)) applyResult(moved);
+			<div className="relative min-w-0 flex-1 overflow-hidden">
+				<div
+					ref={scroller}
+					role="tablist"
+					aria-label={`${location.area} group tabs`}
+					className="flex h-full w-full min-w-0 items-stretch overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+					onWheel={(event) => {
+						if (!scroller.current || Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
+						scroller.current.scrollLeft += event.deltaY;
+					}}
+				>
+					{tabs.map((tab, index) => (
+						<WorkbenchTab
+							key={tab.id}
+							tab={tab}
+							index={index}
+							location={location}
+							attention={attention}
+							selectionEpoch={selectionEpoch}
+							active={tab.id === selectedId}
+							preview={tab.id === previewId}
+							document={document}
+							maxSideGroups={maxSideGroups}
+							maxBottomGroups={maxBottomGroups}
+							register={(node) => {
+								if (node) tabRefs.current.set(tab.id, node);
+								else tabRefs.current.delete(tab.id);
+							}}
+							onSelect={selectTab}
+							onClose={() => closeTab(tab)}
+							onApply={applyResult}
+							onFocusAdjacentGroup={onFocusAdjacentGroup}
+							onHideSide={onHideSide}
+							onRevealTool={onRevealTool}
+							canFocusAdjacentGroup={canFocusAdjacentGroup}
+							renderTabAdornment={renderTabAdornment}
+							draggingTab={draggingTab}
+							panelId={panelId}
+							{...(splitGeometry ? { splitGeometry } : {})}
+							onKeyDown={(event) => {
+								if (event.altKey && event.shiftKey && event.key === "ArrowLeft") {
+									event.preventDefault();
+									if (index > 0) {
+										const moved = moveTabToGroup(document, tab, location, index - 1);
+										if (!isLayoutUnavailable(moved)) applyResult(moved);
+									}
+								} else if (event.altKey && event.shiftKey && event.key === "ArrowRight") {
+									event.preventDefault();
+									if (index < tabs.length - 1) {
+										const moved = moveTabToGroup(document, tab, location, index + 1);
+										if (!isLayoutUnavailable(moved)) applyResult(moved);
+									}
+								} else if (event.key === "ArrowLeft") {
+									event.preventDefault();
+									selectAt(index === 0 ? tabs.length - 1 : index - 1);
+								} else if (event.key === "ArrowRight") {
+									event.preventDefault();
+									selectAt(index === tabs.length - 1 ? 0 : index + 1);
+								} else if (event.key === "Home") {
+									event.preventDefault();
+									selectAt(0);
+								} else if (event.key === "End") {
+									event.preventDefault();
+									selectAt(tabs.length - 1);
+								} else if (event.key === "Delete") {
+									event.preventDefault();
+									closeTab(tab);
 								}
-							} else if (event.altKey && event.shiftKey && event.key === "ArrowRight") {
-								event.preventDefault();
-								if (index < tabs.length - 1) {
-									const moved = moveTabToGroup(document, tab, location, index + 1);
-									if (!isLayoutUnavailable(moved)) applyResult(moved);
-								}
-							} else if (event.key === "ArrowLeft") {
-								event.preventDefault();
-								selectAt(index === 0 ? tabs.length - 1 : index - 1);
-							} else if (event.key === "ArrowRight") {
-								event.preventDefault();
-								selectAt(index === tabs.length - 1 ? 0 : index + 1);
-							} else if (event.key === "Home") {
-								event.preventDefault();
-								selectAt(0);
-							} else if (event.key === "End") {
-								event.preventDefault();
-								selectAt(tabs.length - 1);
-							} else if (event.key === "Delete") {
-								event.preventDefault();
-								closeTab(tab);
-							}
-						}}
+							}}
+						/>
+					))}
+					{acceptsAppend ? (
+						<DropZone
+							id={tupleKey(
+								"dnd-insert",
+								location.area,
+								location.groupId,
+								String(tabs.length),
+								"end",
+							)}
+							target={{ kind: "insert", location, index: tabs.length }}
+							label="Insert at end"
+							className="relative h-full w-5 shrink-0"
+						/>
+					) : null}
+				</div>
+				{scrollOverflow.before ? (
+					<div
+						aria-hidden="true"
+						data-testid="tab-overflow-before"
+						className="pointer-events-none absolute inset-y-0 left-0 z-20 w-lg bg-[linear-gradient(to_right,var(--color-container-workspace-bg),transparent)]"
 					/>
-				))}
-				{acceptsAppend ? (
-					<DropZone
-						id={tupleKey("dnd-insert", location.area, location.groupId, String(tabs.length), "end")}
-						target={{ kind: "insert", location, index: tabs.length }}
-						label="Insert at end"
-						className="relative h-full w-5 shrink-0"
+				) : null}
+				{scrollOverflow.after ? (
+					<div
+						aria-hidden="true"
+						data-testid="tab-overflow-after"
+						className="pointer-events-none absolute inset-y-0 right-0 z-20 w-lg bg-[linear-gradient(to_left,var(--color-container-workspace-bg),transparent)]"
 					/>
 				) : null}
 			</div>
