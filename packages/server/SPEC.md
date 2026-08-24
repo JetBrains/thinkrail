@@ -38,7 +38,8 @@ and runs the `pi` agent in-process via `createAgentSession`. Launched in-process
   deliberate second entry that avoids evaluating `host` (Bun-only: `Bun.serve`, `bun-pty`) under the
   node-run e2e worker. Not for `apps/*` use — the web/CLI boundary rules are unchanged.
 - **Allowed deps:** `contracts` (types + WS constants), `shared` (`shellEnv` + the Central adapter), `bun-pty`,
-  `@earendil-works/pi-coding-agent` + `@earendil-works/pi-ai` (runtime), Bun/Node.
+  `@earendil-works/pi-coding-agent` + `@earendil-works/pi-ai` (runtime), `pino` + its pretty/rolling
+  destinations (host diagnostics), Bun/Node.
 - **Forbidden:** importing `web`/`cli`/`desktop`; being bundled into the browser.
 
 ## Internal modules
@@ -51,7 +52,7 @@ internals**. The edges between them are owned here (see the dependency graph), n
 | --- | --- | --- |
 | `host` | `Bun.serve` HTTP+WS, static SPA, the WS dispatch registry, channel publish | [host/SPEC.md](src/host/SPEC.md) |
 | `persistence` | JSON app state under the data dir, including workspace-layout snapshots | [persistence/SPEC.md](src/persistence/SPEC.md) |
-| `log` | leveled diagnostics → stderr + daily-rotated files under `<dataDir>/logs` (10 MB cap/file, 14-day retention) + the console tee | [log/SPEC.md](src/log/SPEC.md) |
+| `log` | leveled diagnostics → pretty stderr + agent-oriented JSONL under `<dataDir>/logs` (pino-roll daily/10 MB rotation, 14 rotated + active) + the console tee | [log/SPEC.md](src/log/SPEC.md) |
 | `settings` | server-synced app config, including layout preset/default/side-limit settings | [settings/SPEC.md](src/settings/SPEC.md) |
 | `layout` | validated, revisioned, persisted per-workspace workbench snapshots | [layout/SPEC.md](src/layout/SPEC.md) |
 | `projects` | stable known-repo registry: open/recent views + lossless close/reopen (validate, dedupe, slug) | [projects/SPEC.md](src/projects/SPEC.md) |

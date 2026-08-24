@@ -1,69 +1,36 @@
 import { describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { Writable } from "node:stream";
+import pino, { type DestinationStream } from "pino";
+import pretty from "pino-pretty";
 import {
-	formatLogLine,
-	LogFileWriter,
-	latestLogSequence,
-	logFileName,
-	parseLogFileName,
+	createPinoOptions,
+	createPinoRollOptions,
+	createPrettyOptions,
+	describeError,
+	LOG_FILE_SIZE,
+	LOG_RETENTION_FILES,
+	LOG_SCHEMA_VERSION,
 	resolveLogLevel,
-	selectRetentionVictims,
+	serializeLogError,
 	shouldLog,
 } from "./logging";
 
-describe("logFileName / parseLogFileName", () => {
-	test("sequence 0 has no suffix, later sequences carry _n", () => {
-		expect(logFileName("2026-01-28", 0)).toBe("thinkrail-2026-01-28.log");
-		expect(logFileName("2026-01-28", 1)).toBe("thinkrail-2026-01-28_1.log");
-		expect(logFileName("2026-01-28", 12)).toBe("thinkrail-2026-01-28_12.log");
-	});
+class StringSink extends Writable {
+	value = "";
 
-	test("round-trips through parse and rejects foreign files", () => {
-		expect(parseLogFileName("thinkrail-2026-01-28.log")).toEqual({
-			day: "2026-01-28",
-			sequence: 0,
-		});
-		expect(parseLogFileName("thinkrail-2026-01-28_3.log")).toEqual({
-			day: "2026-01-28",
-			sequence: 3,
-		});
-		expect(parseLogFileName("crash.log")).toBeNull();
-		expect(parseLogFileName("thinkrail-notadate.log")).toBeNull();
-	});
-});
+	override _write(
+		chunk: string | Buffer,
+		_encoding: BufferEncoding,
+		callback: (error?: Error | null) => void,
+	): void {
+		this.value += chunk.toString();
+		callback();
+	}
+}
 
-describe("latestLogSequence", () => {
-	test("picks the highest sequence for the day, ignoring other days and foreign files", () => {
-		const names = [
-			"crash.log",
-			"thinkrail-2026-01-27_9.log",
-			"thinkrail-2026-01-28.log",
-			"thinkrail-2026-01-28_2.log",
-			"thinkrail-2026-01-28_1.log",
-		];
-		expect(latestLogSequence(names, "2026-01-28")).toBe(2);
-		expect(latestLogSequence(names, "2026-01-27")).toBe(9);
-		expect(latestLogSequence(names, "2026-01-26")).toBeNull();
-	});
-});
-
-describe("selectRetentionVictims", () => {
-	test("deletes files strictly older than the retention window, never crash.log", () => {
-		const names = [
-			"crash.log",
-			"thinkrail-2026-01-13.log",
-			"thinkrail-2026-01-14.log",
-			"thinkrail-2026-01-14_4.log",
-			"thinkrail-2026-01-28.log",
-		];
-		expect(selectRetentionVictims(names, "2026-01-28", 14)).toEqual(["thinkrail-2026-01-13.log"]);
-	});
-});
-
-describe("shouldLog / resolveLogLevel", () => {
-	test("threshold gates lower levels", () => {
+describe("level resolution", () => {
+	test("gates lower levels", () => {
 		expect(shouldLog("debug", "info")).toBe(false);
 		expect(shouldLog("info", "info")).toBe(true);
 		expect(shouldLog("error", "warn")).toBe(true);
@@ -78,128 +45,88 @@ describe("shouldLog / resolveLogLevel", () => {
 	});
 });
 
-describe("formatLogLine", () => {
-	const at = new Date("2026-01-28T10:03:22.123Z");
+describe("Pino records", () => {
+	test("writes the support schema and a structured error", () => {
+		const lines: string[] = [];
+		const destination: DestinationStream = { write: (line) => lines.push(line) };
+		const log = pino(createPinoOptions("debug"), destination).child({ scope: "agent" });
 
-	test("renders ts, padded level, scope, message", () => {
-		expect(formatLogLine(at, "info", "host", "listening on http://localhost:24242")).toBe(
-			"2026-01-28T10:03:22.123Z INFO  [host] listening on http://localhost:24242",
-		);
-		expect(formatLogLine(at, "warn", "watch", "watcher failed")).toBe(
-			"2026-01-28T10:03:22.123Z WARN  [watch] watcher failed",
-		);
+		log.error({ err: serializeLogError(new Error("boom")) }, "prompt failed");
+
+		const record = JSON.parse(lines[0] as string);
+		expect(record).toMatchObject({
+			err: { message: "boom", type: "Error" },
+			level: 50,
+			levelName: "error",
+			msg: "prompt failed",
+			schemaVersion: LOG_SCHEMA_VERSION,
+			scope: "agent",
+		});
+		expect(record.err.stack).toContain("Error: boom");
+		expect(new Date(record.time).toISOString()).toBe(record.time);
 	});
 
-	test("appends an indented error rendering", () => {
-		const line = formatLogLine(at, "error", "agent", "prompt failed", new Error("boom"));
-		const [head, ...rest] = line.split("\n");
-		expect(head).toBe("2026-01-28T10:03:22.123Z ERROR [agent] prompt failed");
-		expect(rest.length).toBeGreaterThan(0);
-		expect(rest[0]).toMatch(/^ {2}Error: boom/);
-		expect(rest.every((l) => l.startsWith("  "))).toBe(true);
-	});
+	test("removes structured secret fields", () => {
+		const lines: string[] = [];
+		const destination: DestinationStream = { write: (line) => lines.push(line) };
+		const log = pino(createPinoOptions("info"), destination);
 
-	test("renders non-Error values without throwing", () => {
-		expect(formatLogLine(at, "warn", "host", "odd", "just a string")).toContain(
-			"Non-Error thrown: just a string",
+		log.info(
+			{
+				headers: { authorization: "Bearer secret", safe: "kept" },
+				token: "secret",
+			},
+			"redacted",
 		);
+
+		const record = JSON.parse(lines[0] as string);
+		expect(record.token).toBeUndefined();
+		expect(record.headers).toEqual({ safe: "kept" });
+		expect(lines[0]).not.toContain("secret");
 	});
 });
 
-function tempLogsDir(): string {
-	return mkdtempSync(join(tmpdir(), "thinkrail-log-test-"));
-}
-
-describe("LogFileWriter", () => {
-	test("appends to the day file and rolls to _1, _2 at the byte cap", () => {
-		const dir = tempLogsDir();
-		try {
-			const writer = new LogFileWriter(dir, 64, 14);
-			const at = new Date("2026-01-28T10:00:00.000Z");
-			const line = "x".repeat(30);
-			writer.append(line, at);
-			writer.append(line, at);
-			writer.append(line, at);
-			writer.append(line, at);
-			writer.append(line, at);
-			const names = readdirSync(dir).sort();
-			expect(names).toEqual([
-				"thinkrail-2026-01-28.log",
-				"thinkrail-2026-01-28_1.log",
-				"thinkrail-2026-01-28_2.log",
-			]);
-			expect(readFileSync(join(dir, "thinkrail-2026-01-28.log"), "utf8")).toBe(
-				`${line}\n${line}\n`,
-			);
-		} finally {
-			rmSync(dir, { recursive: true, force: true });
-		}
+describe("destinations", () => {
+	test("configures pino-roll as the file lifecycle owner", () => {
+		expect(createPinoRollOptions("/tmp/logs")).toEqual({
+			dateFormat: "yyyy-MM-dd",
+			file: join("/tmp/logs", "thinkrail.jsonl"),
+			frequency: "daily",
+			limit: { count: LOG_RETENTION_FILES, removeOtherLogFiles: true },
+			mkdir: true,
+			size: LOG_FILE_SIZE,
+			sync: true,
+		});
 	});
 
-	test("a single oversized line still lands (in a file of its own)", () => {
-		const dir = tempLogsDir();
-		try {
-			const writer = new LogFileWriter(dir, 16, 14);
-			const at = new Date("2026-01-28T10:00:00.000Z");
-			writer.append("y".repeat(100), at);
-			writer.append("z", at);
-			const names = readdirSync(dir).sort();
-			expect(names).toEqual(["thinkrail-2026-01-28.log", "thinkrail-2026-01-28_1.log"]);
-		} finally {
-			rmSync(dir, { recursive: true, force: true });
-		}
+	test("renders readable stderr text", async () => {
+		const sink = new StringSink();
+		const prettyStream = pretty(createPrettyOptions(sink));
+		const log = pino(createPinoOptions("info"), prettyStream).child({ scope: "host" });
+
+		log.info("listening");
+		await Bun.sleep(10);
+		prettyStream.end();
+
+		expect(sink.value).toContain("INFO");
+		expect(sink.value).toContain("[host] listening");
+		expect(sink.value).not.toContain("schemaVersion");
+	});
+});
+
+describe("error normalization", () => {
+	test("keeps only the stable Error fields", () => {
+		const error = Object.assign(new Error("boom"), { token: "secret" });
+		const serialized = serializeLogError(error);
+		expect(serialized).toMatchObject({ type: "Error", message: "boom" });
+		expect(serialized).not.toHaveProperty("token");
 	});
 
-	test("switches file on day change", () => {
-		const dir = tempLogsDir();
-		try {
-			const writer = new LogFileWriter(dir, 1024, 14);
-			writer.append("today", new Date("2026-01-28T23:59:59.000Z"));
-			writer.append("tomorrow", new Date("2026-01-29T00:00:01.000Z"));
-			expect(readdirSync(dir).sort()).toEqual([
-				"thinkrail-2026-01-28.log",
-				"thinkrail-2026-01-29.log",
-			]);
-		} finally {
-			rmSync(dir, { recursive: true, force: true });
-		}
-	});
-
-	test("resumes the highest existing sequence on open and honors its size", () => {
-		const dir = tempLogsDir();
-		try {
-			mkdirSync(dir, { recursive: true });
-			writeFileSync(join(dir, "thinkrail-2026-01-28.log"), "old\n");
-			writeFileSync(join(dir, "thinkrail-2026-01-28_1.log"), "w".repeat(64));
-			const writer = new LogFileWriter(dir, 64, 14);
-			writer.append("fresh", new Date("2026-01-28T12:00:00.000Z"));
-			expect(readdirSync(dir).sort()).toEqual([
-				"thinkrail-2026-01-28.log",
-				"thinkrail-2026-01-28_1.log",
-				"thinkrail-2026-01-28_2.log",
-			]);
-			expect(readFileSync(join(dir, "thinkrail-2026-01-28_2.log"), "utf8")).toBe("fresh\n");
-		} finally {
-			rmSync(dir, { recursive: true, force: true });
-		}
-	});
-
-	test("sweeps files older than retention on open, keeping the boundary day and crash.log", () => {
-		const dir = tempLogsDir();
-		try {
-			mkdirSync(dir, { recursive: true });
-			writeFileSync(join(dir, "thinkrail-2026-01-10.log"), "ancient\n");
-			writeFileSync(join(dir, "thinkrail-2026-01-14.log"), "boundary\n");
-			writeFileSync(join(dir, "crash.log"), "fatal\n");
-			const writer = new LogFileWriter(dir, 1024, 14);
-			writer.append("hello", new Date("2026-01-28T12:00:00.000Z"));
-			expect(readdirSync(dir).sort()).toEqual([
-				"crash.log",
-				"thinkrail-2026-01-14.log",
-				"thinkrail-2026-01-28.log",
-			]);
-		} finally {
-			rmSync(dir, { recursive: true, force: true });
-		}
+	test("renders non-Error throws without throwing", () => {
+		expect(serializeLogError("odd")).toEqual({
+			type: "NonError",
+			message: "Non-Error thrown: odd",
+		});
+		expect(describeError({ reason: "odd" })).toBe('Non-Error thrown: {"reason":"odd"}');
 	});
 });

@@ -27,7 +27,7 @@ export interface BootedHost {
 }
 
 export async function bootHost(options: BootHostOptions): Promise<BootedHost> {
-	initLogging({
+	await initLogging({
 		...(options.verbose ? { level: "debug" as const } : {}),
 		...(options.appVersion ? { appVersion: options.appVersion } : {}),
 	});

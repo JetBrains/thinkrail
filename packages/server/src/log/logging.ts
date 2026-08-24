@@ -1,16 +1,39 @@
-import { appendFileSync, mkdirSync, readdirSync, statSync, unlinkSync } from "node:fs";
+/// <reference path="./pino-roll.d.ts" />
+
 import { join } from "node:path";
 import { format } from "node:util";
+import pino, { type LoggerOptions, type Logger as PinoLogger } from "pino";
+import pretty from "pino-pretty";
+import buildPinoRoll, { type PinoRollOptions, type PinoRollStream } from "pino-roll";
 import { dataDir } from "../persistence";
 
 export const LOG_LEVELS = ["debug", "info", "warn", "error"] as const;
 export type LogLevel = (typeof LOG_LEVELS)[number];
 
-export const MAX_LOG_FILE_BYTES = 10 * 1024 * 1024;
-export const LOG_RETENTION_DAYS = 14;
+export const LOG_SCHEMA_VERSION = 1;
+export const LOG_RETENTION_FILES = 14;
+export const LOG_FILE_SIZE = "10m";
 
-const LOG_FILE_RE = /^thinkrail-(\d{4}-\d{2}-\d{2})(?:_(\d+))?\.log$/;
-const DAY_MS = 86_400_000;
+const SECRET_PATHS = [
+	"password",
+	"token",
+	"accessToken",
+	"refreshToken",
+	"apiKey",
+	"api_key",
+	"authorization",
+	"cookie",
+	"headers.authorization",
+	"headers.cookie",
+	"*.password",
+	"*.token",
+	"*.accessToken",
+	"*.refreshToken",
+	"*.apiKey",
+	"*.api_key",
+	"*.authorization",
+	"*.cookie",
+];
 
 export function isLogLevel(value: string): value is LogLevel {
 	return (LOG_LEVELS as readonly string[]).includes(value);
@@ -30,42 +53,6 @@ export function resolveLogLevel(
 	return { level: "info", invalidEnv: true };
 }
 
-export function logDay(at: Date): string {
-	return at.toISOString().slice(0, 10);
-}
-
-export function logFileName(day: string, sequence: number): string {
-	return sequence === 0 ? `thinkrail-${day}.log` : `thinkrail-${day}_${sequence}.log`;
-}
-
-export function parseLogFileName(name: string): { day: string; sequence: number } | null {
-	const match = LOG_FILE_RE.exec(name);
-	if (!match?.[1]) return null;
-	return { day: match[1], sequence: match[2] ? Number(match[2]) : 0 };
-}
-
-export function latestLogSequence(names: readonly string[], day: string): number | null {
-	let latest: number | null = null;
-	for (const name of names) {
-		const parsed = parseLogFileName(name);
-		if (parsed?.day !== day) continue;
-		if (latest === null || parsed.sequence > latest) latest = parsed.sequence;
-	}
-	return latest;
-}
-
-export function selectRetentionVictims(
-	names: readonly string[],
-	today: string,
-	retentionDays: number,
-): string[] {
-	const cutoff = Date.parse(`${today}T00:00:00Z`) - retentionDays * DAY_MS;
-	return names.filter((name) => {
-		const parsed = parseLogFileName(name);
-		return parsed !== null && Date.parse(`${parsed.day}T00:00:00Z`) < cutoff;
-	});
-}
-
 export function describeError(error: unknown): string {
 	try {
 		if (error instanceof Error) {
@@ -82,101 +69,123 @@ export function describeError(error: unknown): string {
 	}
 }
 
-export function formatLogLine(
-	at: Date,
-	level: LogLevel,
-	scope: string,
-	message: string,
-	error?: unknown,
-): string {
-	const base = `${at.toISOString()} ${level.toUpperCase().padEnd(5)} [${scope}] ${message}`;
-	if (error === undefined) return base;
-	const rendered = describeError(error)
-		.split("\n")
-		.map((line) => `  ${line}`)
-		.join("\n");
-	return `${base}\n${rendered}`;
+export interface StructuredLogError {
+	type: string;
+	message: string;
+	stack?: string;
 }
 
-export class LogFileWriter {
-	private day = "";
-	private sequence = 0;
-	private bytes = 0;
-	private opened = false;
-
-	constructor(
-		private readonly dir: string,
-		private readonly maxFileBytes = MAX_LOG_FILE_BYTES,
-		private readonly retentionDays = LOG_RETENTION_DAYS,
-	) {}
-
-	append(line: string, at = new Date()): void {
-		const day = logDay(at);
-		if (!this.opened || day !== this.day) this.open(day);
-		const record = `${line}\n`;
-		const recordBytes = Buffer.byteLength(record);
-		if (this.bytes > 0 && this.bytes + recordBytes > this.maxFileBytes) {
-			this.sequence += 1;
-			this.bytes = 0;
-		}
-		appendFileSync(this.path(), record);
-		this.bytes += recordBytes;
-	}
-
-	path(): string {
-		return join(this.dir, logFileName(this.day, this.sequence));
-	}
-
-	private open(day: string): void {
-		mkdirSync(this.dir, { recursive: true });
-		const names = readdirSync(this.dir);
-		this.day = day;
-		this.sequence = latestLogSequence(names, day) ?? 0;
-		this.bytes = fileSize(this.path());
-		if (this.bytes >= this.maxFileBytes) {
-			this.sequence += 1;
-			this.bytes = 0;
-		}
-		this.opened = true;
-		for (const victim of selectRetentionVictims(names, day, this.retentionDays)) {
-			try {
-				unlinkSync(join(this.dir, victim));
-			} catch {}
-		}
-	}
-}
-
-function fileSize(path: string): number {
+export function serializeLogError(error: unknown): StructuredLogError {
 	try {
-		return statSync(path).size;
-	} catch {
-		return 0;
-	}
+		if (error instanceof Error) {
+			return {
+				type: error.name || "Error",
+				message: error.message,
+				...(typeof error.stack === "string" && error.stack ? { stack: error.stack } : {}),
+			};
+		}
+	} catch {}
+	return { type: "NonError", message: describeError(error) };
+}
+
+export function createPinoOptions(level: LogLevel): LoggerOptions {
+	return {
+		base: { schemaVersion: LOG_SCHEMA_VERSION },
+		formatters: {
+			level: (label, number) => ({ level: number, levelName: label }),
+		},
+		level,
+		redact: { paths: SECRET_PATHS, remove: true },
+		serializers: { err: (error) => error },
+		timestamp: pino.stdTimeFunctions.isoTime,
+	};
+}
+
+type PrettyOptions = NonNullable<Parameters<typeof pretty>[0]>;
+
+export function createPrettyOptions(destination: PrettyOptions["destination"] = 2): PrettyOptions {
+	return {
+		colorize: false,
+		destination,
+		ignore: "pid,hostname,scope,levelName,schemaVersion",
+		messageFormat: "[{scope}] {msg}",
+		singleLine: true,
+		sync: true,
+		translateTime: "UTC:yyyy-mm-dd'T'HH:MM:ss.l'Z'",
+	};
+}
+
+export function createPinoRollOptions(directory: string): PinoRollOptions {
+	return {
+		file: join(directory, "thinkrail.jsonl"),
+		frequency: "daily",
+		size: LOG_FILE_SIZE,
+		dateFormat: "yyyy-MM-dd",
+		limit: { count: LOG_RETENTION_FILES, removeOtherLogFiles: true },
+		mkdir: true,
+		sync: true,
+	};
 }
 
 let currentLevel: LogLevel = "info";
-let writer: LogFileWriter | null = null;
-let initialized = false;
+let applicationLogger: PinoLogger | null = null;
+let consoleFileLogger: PinoLogger | null = null;
+let rollingStream: PinoRollStream | null = null;
+let initialization: Promise<void> | null = null;
 let teeInstalled = false;
 
 export function setLogLevel(level: LogLevel): void {
 	currentLevel = level;
+	if (applicationLogger) applicationLogger.level = level;
+	if (consoleFileLogger) consoleFileLogger.level = level;
 }
 
-function writeToFile(line: string): void {
-	if (!writer) return;
+function writeDirectStderr(line: string): void {
 	try {
-		writer.append(line);
+		process.stderr.write(`${line}\n`);
 	} catch {}
+}
+
+function fallbackLine(level: LogLevel, scope: string, message: string, error?: unknown): string {
+	const line = `${new Date().toISOString()} ${level.toUpperCase()} [${scope}] ${message}`;
+	if (error === undefined) return line;
+	return `${line}\n${describeError(error)
+		.split("\n")
+		.map((part) => `  ${part}`)
+		.join("\n")}`;
+}
+
+function writeWithPino(
+	root: PinoLogger,
+	level: LogLevel,
+	scope: string,
+	message: string,
+	error?: unknown,
+): void {
+	const target = root.child({ scope });
+	const method = target[level].bind(target);
+	if (error === undefined) method(message);
+	else method({ err: serializeLogError(error) }, message);
 }
 
 function emit(level: LogLevel, scope: string, message: string, error?: unknown): void {
 	if (!shouldLog(level, currentLevel)) return;
-	const line = formatLogLine(new Date(), level, scope, message, error);
+	if (!applicationLogger) {
+		writeDirectStderr(fallbackLine(level, scope, message, error));
+		return;
+	}
 	try {
-		process.stderr.write(`${line}\n`);
+		writeWithPino(applicationLogger, level, scope, message, error);
+	} catch {
+		writeDirectStderr(fallbackLine(level, scope, message, error));
+	}
+}
+
+function emitFileOnly(level: LogLevel, scope: string, message: string): void {
+	if (!shouldLog(level, currentLevel) || !consoleFileLogger) return;
+	try {
+		writeWithPino(consoleFileLogger, level, scope, message);
 	} catch {}
-	writeToFile(line);
 }
 
 export interface Logger {
@@ -211,10 +220,15 @@ function installConsoleTee(): void {
 		const original = console[method].bind(console);
 		console[method] = (...args: unknown[]) => {
 			original(...args);
-			if (!shouldLog(level, currentLevel)) return;
-			writeToFile(formatLogLine(new Date(), level, "console", format(...args)));
+			try {
+				emitFileOnly(level, "console", format(...args));
+			} catch {}
 		};
 	}
+}
+
+function reportDestinationError(error: unknown): void {
+	writeDirectStderr(fallbackLine("error", "log", "logging destination failed", error));
 }
 
 export function logsDir(): string {
@@ -226,13 +240,28 @@ export interface InitLoggingOptions {
 	appVersion?: string;
 }
 
-export function initLogging(options: InitLoggingOptions = {}): void {
-	const { level, invalidEnv } = resolveLogLevel(options.level, process.env.THINKRAIL_LOG_LEVEL);
-	setLogLevel(level);
-	if (initialized) return;
-	initialized = true;
-	writer = new LogFileWriter(logsDir());
-	installConsoleTee();
+async function initializeLogging(
+	appVersion: string | undefined,
+	invalidEnv: boolean,
+): Promise<void> {
+	try {
+		rollingStream = await buildPinoRoll(createPinoRollOptions(logsDir()));
+		rollingStream.on("error", reportDestinationError);
+		const prettyStderr = pretty(createPrettyOptions());
+		prettyStderr.on("error", reportDestinationError);
+		applicationLogger = pino(
+			createPinoOptions(currentLevel),
+			pino.multistream([
+				{ level: "debug", stream: prettyStderr },
+				{ level: "debug", stream: rollingStream },
+			]),
+		);
+		consoleFileLogger = pino(createPinoOptions(currentLevel), rollingStream);
+		installConsoleTee();
+	} catch (error) {
+		reportDestinationError(error);
+	}
+
 	const log = logger("log");
 	if (invalidEnv) {
 		log.warn(
@@ -240,6 +269,13 @@ export function initLogging(options: InitLoggingOptions = {}): void {
 		);
 	}
 	log.info(
-		`logging to ${logsDir()} (thinkrail ${options.appVersion ?? "source"}, pid ${process.pid}, level ${level})`,
+		`logging to ${logsDir()} (thinkrail ${appVersion ?? "source"}, pid ${process.pid}, level ${currentLevel})`,
 	);
+}
+
+export async function initLogging(options: InitLoggingOptions = {}): Promise<void> {
+	const { level, invalidEnv } = resolveLogLevel(options.level, process.env.THINKRAIL_LOG_LEVEL);
+	setLogLevel(level);
+	initialization ??= initializeLogging(options.appVersion, invalidEnv);
+	await initialization;
 }

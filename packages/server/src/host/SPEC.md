@@ -100,7 +100,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
   Never a recovery, and never installed under `NODE_ENV=test` — a unit-test process reports its own
   faults. It renders the throw via the `log` module's `describeError`, so crash reports and log lines
   agree, but keeps its own sync append — the death path must not depend on the logger's state);
-  `boot.ts` (`bootHost` → `initLogging` first — debug level when the launcher passed `verbose`, plus
+  `boot.ts` (`bootHost` → await `initLogging` first — debug level when the launcher passed `verbose`, plus
   the `listening on` info line after `createServer` (see `submodule-server-log`) — then install that
   report, resolve the login-shell PATH, pre-warm the same
   Central watcher/runtime initialization before choosing a port, then await `createServer` (which idempotently enforces the

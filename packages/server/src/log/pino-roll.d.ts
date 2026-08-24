@@ -1,0 +1,25 @@
+declare module "pino-roll" {
+	import type { DestinationStream } from "pino";
+
+	export interface PinoRollLimitOptions {
+		count: number;
+		removeOtherLogFiles?: boolean;
+	}
+
+	export interface PinoRollOptions {
+		file: string | (() => string);
+		size?: string | number;
+		frequency?: "daily" | "hourly" | "weekly" | number;
+		dateFormat?: string;
+		limit?: PinoRollLimitOptions;
+		mkdir?: boolean;
+		sync?: boolean;
+	}
+
+	export interface PinoRollStream extends DestinationStream {
+		on(event: "error", listener: (error: Error) => void): this;
+		end(): void;
+	}
+
+	export default function buildPinoRoll(options: PinoRollOptions): Promise<PinoRollStream>;
+}
