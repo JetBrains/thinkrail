@@ -51,7 +51,7 @@ internals**. The edges between them are owned here (see the dependency graph), n
 | --- | --- | --- |
 | `host` | `Bun.serve` HTTP+WS, static SPA, the WS dispatch registry, channel publish | [host/SPEC.md](src/host/SPEC.md) |
 | `persistence` | JSON app state under the data dir, including workspace-layout snapshots | [persistence/SPEC.md](src/persistence/SPEC.md) |
-| `settings` | server-synced app config, including layout preset/default/side-limit settings | [settings/SPEC.md](src/settings/SPEC.md) |
+| `settings` | server-synced app config, including layout presets/default and independent side/bottom limits | [settings/SPEC.md](src/settings/SPEC.md) |
 | `layout` | validated, revisioned, persisted per-workspace workbench snapshots | [layout/SPEC.md](src/layout/SPEC.md) |
 | `projects` | stable known-repo registry: open/recent views + lossless close/reopen (validate, dedupe, slug) | [projects/SPEC.md](src/projects/SPEC.md) |
 | `workspaces` | workspaces = `git worktree`s on their own branch | [workspaces/SPEC.md](src/workspaces/SPEC.md) |
@@ -110,8 +110,9 @@ own never import `host` either: they expose a **publisher-injection seam** (`set
 analytics + `provider.changed` invalidation publishers) that `host` installs at `createServer` — so
 channel/analytics wiring lives only in
 `host`.
-For layout writes, `host` passes `settings.getConfig().layout.maxSideGroups` into the `layout` validator;
-for layout-setting writes it runs the complete nested value through `layout.validateLayoutSettings` before calling `settings`.
+For layout writes, `host` passes the current side + bottom group-limit policy from
+`settings.getConfig().layout` into the `layout` validator; for layout-setting writes it runs the complete
+nested value through `layout.validateLayoutSettings` before calling `settings`.
 Neither sibling imports the other.
 `history` stays registry-free (never imports `projects`/`workspaces`); `host` injects the scope filter
 + labels from the registries at the handler layer (`history.search` handler). `templates` stays

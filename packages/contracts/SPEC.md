@@ -186,8 +186,9 @@ of the host.
   the **theme/config selection** — **`ThemeId`** is an open string on the wire, because the host persists
   an opaque selection while the independently shipped web client owns the available manifest catalog;
   **`AppConfig`** (`{ theme, analyticsEnabled, terminalReplayKb, layout }` — an extensible bag; `layout` is the
-  **`LayoutSettings`** selection (`defaultPresetId`, named portable `customPresets`, and
-  `maxSideGroups`, default 6); `analyticsEnabled` is the anonymous-usage-analytics switch, default `true`
+  **`LayoutSettings`** selection (`defaultPresetId`, named portable `customPresets`, `maxSideGroups`
+  defaulting to 6, and independent `maxBottomGroups` defaulting to 3); `analyticsEnabled` is the
+  anonymous-usage-analytics switch, default `true`
   — it is the **only** analytics fact on the wire:
   the installation id stays server-side by design, see `submodule-server-analytics`) carries it with the
   **`DEFAULT_CONFIG`** fallback
@@ -236,17 +237,20 @@ of the host.
   what `template.list` returns; deliberately body-free so a listing never ships every file's full text),
   and **`Template`** (`TemplateInfo` + full `content` — frontmatter + body — the by-name
   `template.get`/`template.save` shape);
-  **workbench layout DTOs** — a versioned **`WorkspaceLayoutDocument`** (stable center split/group and
-  side/group/tab references, normalized geometry, preview identities, folds/visibility, and singleton-tool
-  restore targets; explicitly no active/focused tab; virtual-document references name a registered resolver
-  and durable source identity, never inline client-only content), **`WorkspaceLayoutSnapshot`**
+  **workbench layout DTOs** — version-2 **`WorkspaceLayoutDocument`** (stable recursive center plus
+  left/right auxiliary stacks and a bottom auxiliary row; group/tab references, normalized side widths and
+  bottom height, bottom alignment, preview identities, folds/visibility, and singleton-tool restore targets;
+  explicitly no active/focused tab; virtual-document references name a registered resolver and durable source
+  identity, never inline client-only content), **`WorkspaceLayoutSnapshot`**
   (`workspaceId` +
   monotonic `revision` + document), **`LayoutReplaceParams`** (complete document + client-generated
   `mutationId` + explicit `expectedRevision`, where `null` is create-only and a number is exact
   replace-only), **`LayoutReplaceResult`** (discriminated accepted payload or conflict carrying the current
   snapshot, including `null`), **`LayoutChangedPayload`** (snapshot + echoed origin `mutationId`), and
-  portable **`LayoutPreset`** / **`LayoutSettings`**. The mutation id is correlation metadata, not the
-  concurrency token or durable document state. A tab `id` is an opaque stable placement key—including for singleton tools—not semantic identity;
+  portable **`LayoutPreset`** / **`LayoutSettings`**. Presets carry resource-free bottom group slots, so a
+  terminal-only group survives capture without carrying terminal identity/count. The mutation id is
+  correlation metadata, not the concurrency token or durable document state. A tab `id` is an opaque stable
+  placement key—including for singleton tools—not semantic identity;
   the kind-specific path/scope/session/source/tabKey/tool fields define the resource and prevent aliases from
   duplicating it. Resource references carry placement identity only; their domain DTO remains authoritative
   for lifetime.

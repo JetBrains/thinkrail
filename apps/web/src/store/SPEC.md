@@ -117,7 +117,8 @@ snapshots plus device-local attention, terminal catalogs, and one **per-session 
   enter the layout.
 
   **Device-local layout attention** is separate: selected tab per stable group, last-focused center group,
-  last-focused group per side, and per-group navigation clocks keyed by host/workspace. Selection/focus
+  last-focused group per auxiliary region (left/right/bottom), and per-group navigation clocks keyed by
+  host/workspace. Selection/focus
   mutations never alter or publish
   the shared document. Installing a structural snapshot reconciles attention deterministically to the nearest
   surviving tab/group. Navigation clocks advance at request time for every local focus-changing open and
@@ -145,10 +146,11 @@ snapshots plus device-local attention, terminal catalogs, and one **per-session 
   **`terminalsByWorkspace` remains a mirror of terminal domain state, never placement authority.** The host
   owns terminal existence and keys shells by `(workspaceId, tabKey)`; the layout snapshot merely references a
   tab key at one eligible location. `setWorkspaceTerminals` adopts `terminal.list` / `terminal.tabs`, retaining
-  an omitted local tab only while its own attach is genuinely in flight. `addTerminal` mints a durable key
-  and may attach a captured center-group destination to its placement intent (it never edits topology itself),
-  so Group Header creation still works with no terminal body mounted; attach registers the key host-side and
-  consumes any initial command only for a newly created shell. Confirmed
+  an omitted local tab only while its own attach is genuinely in flight. `addTerminal` mints a durable key and
+  emits one placement intent (it never edits topology itself): a captured group destination preserves
+  contextual Group Header creation, while an uncaptured request resolves to bottom. The initial-workspace
+  request may establish a hidden placement without attaching; attach registers the key host-side only when
+  the visibility gate mounts it and consumes any initial command only for a newly created shell. Confirmed
   close removes the domain tab and queues a resource-removal intent; the shell layout integration prunes
   every stale placement through the next whole-document commit. A stale layout reference never reattaches or
   recreates an absent catalog entry. There is no workspace-global

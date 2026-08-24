@@ -19,7 +19,8 @@ must not inherit desktop docking accidentally.
 - **Owns:** `Shell` as the one composition root; the topbar and persistent location context; active-workspace
   versus Project Home/Welcome branching; the single Settings and Toaster mounts; the theme DOM side effect;
   global keyboard chords; the injected Layout settings section (built-ins, custom-preset CRUD, default,
-  apply, and side-group limit); and the integration of `layout/` with store, transport, panel renderers,
+  apply, and independent side/bottom group limits); and the integration of `layout/` with store, transport,
+  panel renderers,
   and region error boundaries.
 - **Public surface:** `Shell`.
 - **Allowed deps:** child `layout`; `panels`; `chat` app-integration hydration/rendering; `store`,
@@ -65,8 +66,9 @@ progressive responsive degradation. A selected project without an active workspa
 No selected project leaves the logo alone.
 
 With an active workspace, `Shell` mounts the synchronized workbench from `layout/`; the workbench owns all
-center/side geometry and visibility. Without one, it mounts the existing Welcome surface beside the
-projects navigator using separate client-local geometry—there is no workspace layout document to mutate.
+center and left/right/bottom auxiliary geometry, alignment, and visibility. Without one, it mounts the
+existing Welcome surface beside the projects navigator using separate client-local geometry—there is no
+workspace layout document to mutate.
 Toasts mount once above both branches.
 
 The shell is also the sole theme side-effect owner: store receives the host-selected opaque theme through
@@ -98,7 +100,10 @@ separate background concern.
 
 Project/file/change/review/chat/terminal views receive only resource identity, visibility, and container
 bounds. Moving a view cannot change its module dependencies or make it inspect the layout tree. A visible
-terminal is mounted through the layout visibility gate; hidden terminal tabs stay unmounted.
+terminal is mounted through the layout visibility gate; hidden terminal tabs stay unmounted while their PTYs
+continue running. After first layout seeding, the parent workbench—not `layoutSync`—creates the one initial
+terminal placement, so synchronization remains resource-lifetime-free. A hidden configured default delays
+PTY attach until the placement becomes visible.
 
 ## Error resilience
 
@@ -116,9 +121,13 @@ workbench command surface rather than imperative feature-panel refs:
 - `Ctrl+R` opens chat history for the locally selected chat, or the workspace's most-recent chat fallback;
 - `Mod+B` toggles the left side; restoring it focuses its last local group/tab or recreates an eligible
   singleton tool from its saved restore target when the side is empty;
-- `Mod+J` does the same for the right side.
+- `Mod+J` does the same for the right side;
+- `Mod+Shift+J` toggles bottom; restoring it focuses last local bottom attention, restores an eligible
+  bottom-targeted singleton, or creates a terminal when structurally empty.
 
-Letter chords match physical `KeyboardEvent.code`, never layout-dependent `key`. Terminal `Ctrl+R` still
-belongs to xterm; the two layout chords remain app-owned there. `Ctrl+Shift+R`, macOS `Cmd+R`, F5, and the
-browser reload control remain untouched. All arrangement operations beyond these shortcuts are exposed by
-the layout command/menu system described in [[submodule-web-shell-layout]].
+Letter chords match physical `KeyboardEvent.code`, never layout-dependent `key`. The three layout chords stay
+app-owned inside xterm, do not repeat, and are suppressed while a modal dialog is open. With no active
+workspace they neither act nor swallow the browser chord. Terminal `Ctrl+R` still belongs to xterm;
+`Ctrl+Shift+R`, macOS `Cmd+R`, F5, and the browser reload control remain untouched. All arrangement operations
+beyond these shortcuts are exposed by the layout command/menu system described in
+[[submodule-web-shell-layout]].

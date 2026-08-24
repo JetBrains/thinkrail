@@ -56,10 +56,11 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
    is keyed by backend profile so ids from one host are never interpreted against another.
 5. **UI = panels + shell.** Layout-agnostic, store-driven panels (project→workspace nav, file tree,
    Monaco editor, changes/diff, workspace-local review, terminal, chat, composer) never know their
-   arrangement. The desktop shell owns a host-synchronized IDE workbench: a recursively split center plus
-   vertically stacked side groups, with terminal tabs eligible in either domain. A future mobile shell may
-   project the same panels differently; desktop docking does not define that projection. Detail:
-   [[submodule-web-shell-layout]].
+   arrangement. The desktop shell owns one host-synchronized IDE workbench: a recursively split center plus
+   auxiliary groups in vertical left/right stacks and a horizontally grouped bottom region with synchronized
+   height/alignment. Singleton tools move among auxiliary regions; terminals may also occupy center, with new
+   workspaces defaulting one terminal to bottom. A future mobile shell may project the same panels differently;
+   desktop docking does not define that projection. Detail: [[submodule-web-shell-layout]].
 6. **Workspaces are git worktrees (V1).** project (git repo) → workspace (`git worktree` on its own
    branch/cwd, under `~/.thinkrail/worktrees`) → {chats, files, terminals}. **Two deliberate
    exceptions, both `kind`-marked on the wire and both *user-owned* — never renamed or reclaimed by
@@ -86,12 +87,16 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
 9. **Domain state, shared placement, and local attention.** *Domain* state — projects, workspaces,
    **sessions + their transcripts**, terminals, git — is backend-owned, shared, and persistent; every
    client hydrates it from the host. Workspace **placement state is deliberately shared too**: one
-   versioned host document owns center/side topology, open resource references, tab order, preview
-   identities, folds/visibility, and normalized geometry. Valid full snapshots converge by monotonic
+   versioned host document owns center plus left/right/bottom auxiliary topology, open resource references,
+   tab order, preview identities, folds/visibility, and normalized geometry. Layout schema version 2 adds
+   bottom explicitly and migrates known version-1 documents to hidden/empty bottom without moving a resource;
+   a generic region map was rejected as an unnecessary rewrite of stable side contracts, while a separate
+   bottom snapshot would make cross-region moves non-atomic. Valid full snapshots converge by monotonic
    revision, but replacement is optimistic-concurrency guarded: a client names its exact accepted revision
    (or create-only absence), and a stale full replacement conflicts with the current snapshot instead of
-   making the last arrival win. That is placement only, never resource lifetime. *Attention and
-   drafts* — selected tab per group, last-focused group, uncommitted pointer/resize drafts, composer drafts — remain
+   making the last arrival win. Left/right/bottom visibility, folds, extents, and bottom alignment are
+   structural; this remains placement only, never resource lifetime. *Attention and drafts* — selected tab per
+   group, last-focused group, uncommitted pointer/resize drafts, composer drafts — remain
    per-client (ephemeral or local reload persistence), so one browser cannot steal another's focus. The active
    client location is likewise local: one backend-relative route names main / Project Home / workspace / exact
    chat; web stores it in a versioned fragment, while later native shells persist it per backend profile and
