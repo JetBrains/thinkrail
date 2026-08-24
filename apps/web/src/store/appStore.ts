@@ -260,6 +260,20 @@ export interface ChatLocationRequest {
 	navigation?: CenterNavigationStamp | null;
 }
 
+export type OnboardingFlow = "demo";
+
+export interface OnboardingState {
+	flow: OnboardingFlow | null;
+	demoProjectId: string | null;
+	dismissed: boolean;
+}
+
+export const NO_ONBOARDING: OnboardingState = {
+	flow: null,
+	demoProjectId: null,
+	dismissed: false,
+};
+
 export interface SessionRuntime {
 	turns: ChatTurn[];
 	turnIdByMessageIndex?: (string | null)[];
@@ -645,6 +659,7 @@ interface AppState {
 	terminalReplayKb: number;
 	layoutSettings: LayoutSettings;
 	toasts: Toast[];
+	onboarding: OnboardingState;
 	setStatus: (status: ConnectionStatus) => void;
 	installWelcomeSnapshot: (
 		protocolVersion: number,
@@ -812,6 +827,10 @@ interface AppState {
 	applyReviewChanged: (payload: ReviewChangedPayload) => void;
 	pushToast: (toast: Omit<Toast, "id">) => string;
 	dismissToast: (id: string) => void;
+	startOnboarding: (demoProjectId: string) => void;
+	dismissOnboarding: () => void;
+	resetOnboarding: () => void;
+	hydrateOnboarding: (onboarding: OnboardingState) => void;
 }
 
 function sortProjects(projects: Project[]): Project[] {
@@ -1303,6 +1322,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	terminalReplayKb: DEFAULT_CONFIG.terminalReplayKb,
 	layoutSettings: DEFAULT_CONFIG.layout,
 	toasts: [],
+	onboarding: NO_ONBOARDING,
 	setStatus: (status) =>
 		set((state) => ({
 			status,
@@ -2759,6 +2779,14 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((s) =>
 			s.toasts.some((t) => t.id === id) ? { toasts: s.toasts.filter((t) => t.id !== id) } : {},
 		),
+	startOnboarding: (demoProjectId) =>
+		set({ onboarding: { flow: "demo", demoProjectId, dismissed: false } }),
+	dismissOnboarding: () =>
+		set((s) =>
+			s.onboarding.dismissed ? {} : { onboarding: { ...s.onboarding, dismissed: true } },
+		),
+	resetOnboarding: () => set({ onboarding: NO_ONBOARDING }),
+	hydrateOnboarding: (onboarding) => set({ onboarding }),
 }));
 
 export const toast = {

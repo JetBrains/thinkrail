@@ -3,6 +3,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { initNavigation } from "./navigation";
+import { initOnboardingPersistence } from "./onboarding/persistence";
 import { initProjectExpansionPersistence } from "./panels/projectExpansion";
 import { Shell } from "./shell/Shell";
 import { applyTheme, initializeBundledThemes, readThemeHint } from "./themes";
@@ -12,6 +13,7 @@ initializeBundledThemes();
 applyTheme(readThemeHint());
 initTransport();
 initProjectExpansionPersistence();
+initOnboardingPersistence();
 initNavigation();
 
 const root = document.getElementById("root");

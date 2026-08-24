@@ -15,7 +15,14 @@ import {
 	normalizePath,
 	readLayoutSelection,
 } from "../lib";
-import type { ClosedChat, EditorTab, RouteChatTarget, TerminalTab } from "./appStore";
+import type {
+	ClosedChat,
+	EditorTab,
+	OnboardingState,
+	RouteChatTarget,
+	SessionRuntime,
+	TerminalTab,
+} from "./appStore";
 
 interface ConnectionGenerationState {
 	status: string;
@@ -416,6 +423,58 @@ export function selectLastOpenChatSession(
 		if (tab?.kind === "chat" && tab.sessionId) return tab.sessionId;
 	}
 	return null;
+}
+
+export type OnboardingStep = 0 | 1 | 2 | 3;
+
+interface OnboardingDomainState {
+	onboarding: OnboardingState;
+	workspaces: Record<string, Workspace[]>;
+	sessions: Record<string, SessionRuntime>;
+	tabsByWorkspace: Record<string, EditorTab[]>;
+	closedChatsByWorkspace: Record<string, ClosedChat[]>;
+	layoutDocumentsByWorkspace?: Record<string, WorkspaceLayoutDocument>;
+}
+
+export function selectOnboardingActive(state: { onboarding: OnboardingState }): boolean {
+	return (
+		state.onboarding.flow === "demo" &&
+		!state.onboarding.dismissed &&
+		state.onboarding.demoProjectId !== null
+	);
+}
+
+export function selectDemoWorkspaces(state: {
+	onboarding: OnboardingState;
+	workspaces: Record<string, Workspace[]>;
+}): Workspace[] {
+	const projectId = state.onboarding.demoProjectId;
+	if (!projectId) return [];
+	return (state.workspaces[projectId] ?? []).filter((ws) => !isDefaultWorkspace(ws));
+}
+
+export function selectAgentStarted(
+	state: {
+		sessions: Record<string, SessionRuntime>;
+		tabsByWorkspace: Record<string, EditorTab[]>;
+		closedChatsByWorkspace: Record<string, ClosedChat[]>;
+		layoutDocumentsByWorkspace?: Record<string, WorkspaceLayoutDocument>;
+	},
+	workspaceId: string,
+): boolean {
+	return selectWorkspaceSessionIds(state, workspaceId).some((id) => {
+		const rt = state.sessions[id];
+		return rt ? rt.turns.some((turn) => turn.kind === "user") : false;
+	});
+}
+
+export function selectOnboardingStep(state: OnboardingDomainState): OnboardingStep {
+	const demoWorkspaces = selectDemoWorkspaces(state);
+	if (demoWorkspaces.length < 2) return 0;
+	const [first, second] = demoWorkspaces;
+	if (!first || !selectAgentStarted(state, first.id)) return 1;
+	if (!second || !selectAgentStarted(state, second.id)) return 2;
+	return 3;
 }
 
 export function selectReviewDraftCount(
