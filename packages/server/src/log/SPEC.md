@@ -62,7 +62,9 @@ through a reviewed `logger(scope)` call with an intentionally bounded message.
   values, prompt/message contents, file contents, tool arguments/results, or WS/protocol payloads. Known
   structured secret fields are removed with Pino redaction as defense in depth; call sites must still
   follow the closed-diagnostics rule because secrets embedded in free-text messages cannot be redacted
-  structurally. Errors are reduced to type/message/stack rather than copying arbitrary enumerable fields.
+  structurally. Durable messages may interpolate only closed method names, counts, generated ids, and
+  equivalent bounded metadata — never raw error text or request-derived paths. A callsite that explicitly
+  approves a structured error gets only type/message/stack, never arbitrary enumerable fields.
 
 ## Boundary
 

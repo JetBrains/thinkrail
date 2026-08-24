@@ -164,8 +164,8 @@ async function archiveTeardown(ws: Workspace): Promise<void> {
 	try {
 		await removeWorkspaceSessions(ws.id, ws.worktreePath);
 		reclaimWorktree(ws);
-	} catch (error) {
-		log.warn(`workspace archive teardown failed for ${ws.id}: ${error}`);
+	} catch {
+		log.warn(`workspace archive teardown failed for ${ws.id}`);
 	}
 }
 
@@ -190,8 +190,8 @@ function fireReviewPrompt(
 				"error",
 			);
 		})
-		.catch((err) => {
-			log.warn(`review send rollback failed: ${err instanceof Error ? err.message : err}`);
+		.catch(() => {
+			log.warn("review send rollback failed");
 		});
 }
 
@@ -218,7 +218,7 @@ async function sendToFileChat(
 	}
 	if (existing) {
 		log.warn(
-			`review ${workspaceId}: linked chat ${existing} for ${path} is no longer on disk — starting a new review chat`,
+			`review ${workspaceId}: linked chat ${existing} is no longer on disk — starting a new review chat`,
 		);
 	}
 	ensureWorkspaceScratchDir(ws);

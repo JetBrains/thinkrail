@@ -241,7 +241,7 @@ export function readBlobAt(worktreePath: string, ref: string, path: string): str
 	const shown = git(worktreePath, ["show", "--end-of-options", `${ref}:${path}`], { raw: true });
 	if (shown.ok) return shown.out;
 	if (!/does not exist in|exists on disk, but not in/.test(shown.err)) {
-		log.warn(`git show ${ref}:${path} failed: ${shown.err || "unknown error"}`);
+		log.warn("git blob read failed");
 	}
 	return null;
 }

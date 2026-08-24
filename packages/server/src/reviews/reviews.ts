@@ -116,10 +116,8 @@ function archivedReviewFiles(): string[] {
 			for (const review of readdirSync(dir, { withFileTypes: true })) {
 				if (review.isFile() && review.name.endsWith(".json")) files.push(join(dir, review.name));
 			}
-		} catch (err) {
-			log.warn(
-				`review archive ${workspace.name}: ${err instanceof Error ? err.message : String(err)}`,
-			);
+		} catch {
+			log.warn(`review archive could not be listed for workspace ${workspace.name}`);
 		}
 	}
 	return files;
@@ -443,8 +441,8 @@ export function resolveCommentFromAgent(commentId: string, note?: string): Revie
 		let snapshot: ReviewSnapshot | null = null;
 		try {
 			snapshot = load(workspaceId);
-		} catch (err) {
-			log.warn(`review ${workspaceId}: ${err instanceof Error ? err.message : String(err)}`);
+		} catch {
+			log.warn(`active review could not be read for workspace ${workspaceId}`);
 			continue;
 		}
 		if (snapshot?.review.status !== "open") continue;
@@ -458,8 +456,8 @@ export function resolveCommentFromAgent(commentId: string, note?: string): Revie
 		let snapshot: ReviewSnapshot | null = null;
 		try {
 			snapshot = readSnapshot(file);
-		} catch (err) {
-			log.warn(`review archive ${file}: ${err instanceof Error ? err.message : String(err)}`);
+		} catch {
+			log.warn("archived review could not be read");
 			continue;
 		}
 		if (snapshot?.review.status !== "closed") continue;

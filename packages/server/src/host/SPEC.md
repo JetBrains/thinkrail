@@ -233,9 +233,9 @@ channel fan-out, and the process-boot wrapper both launchers share.
 
 ## Get right
 
-- Every WS command is debug-traced by **method name only** (`ws <method>` / `ws <method> failed: …`) —
-  never its params, which can carry credentials (`provider.loginReply`); see `submodule-server-log`'s
-  privacy rule.
+- Every WS command is debug-traced by **method name only** (`ws <method>` / `ws <method> failed`) —
+  never its params or handler error text, which can reflect credentials and user-supplied values; see
+  `submodule-server-log`'s privacy rule.
 - WS commands return values directly; only events + extension-UI + **`project.updated`** (published from
   the `projects` module's injected publisher) + the workspace lifecycle trio
   (`workspace.created`/`updated`/`removed`, published from the `workspaces` module's injected publisher) +

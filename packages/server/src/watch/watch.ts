@@ -74,15 +74,15 @@ function watchGitDir(
 		const watcher = watch(gitDir, { recursive: false }, () => {
 			scheduleRepoMeta(workspaceId, rootWatcher);
 		});
-		watcher.on("error", (err) => {
-			log.warn(`git metadata watcher for ${workspaceId} failed: ${err}`);
+		watcher.on("error", () => {
+			log.warn(`git metadata watcher failed for workspace ${workspaceId}`);
 			watcher.close();
 			const entry = entries.get(workspaceId);
 			if (entry?.metaWatcher === watcher) entry.metaWatcher = null;
 		});
 		return watcher;
-	} catch (err) {
-		log.warn(`could not watch git metadata for ${workspaceId}: ${err}`);
+	} catch {
+		log.warn(`could not watch git metadata for workspace ${workspaceId}`);
 		return null;
 	}
 }
@@ -189,8 +189,8 @@ export function ensureWatch(
 							: "none";
 			coalescer.add(rel, skillChange);
 		});
-		watcher.on("error", (err) => {
-			log.warn(`worktree watcher for ${workspaceId} failed: ${err}`);
+		watcher.on("error", () => {
+			log.warn(`worktree watcher failed for workspace ${workspaceId}`);
 			stopWatch(workspaceId);
 		});
 		let resolveReady: (result: WorkspaceWatchReadyResult) => void = () => {};
@@ -223,9 +223,9 @@ export function ensureWatch(
 		const gitDir = resolveExternalGitDir(ws.worktreePath);
 		if (gitDir) entry.metaWatcher = watchGitDir(workspaceId, gitDir, watcher);
 		return ready;
-	} catch (err) {
+	} catch {
 		coalescer.dispose();
-		log.warn(`could not watch worktree for ${workspaceId}: ${err}`);
+		log.warn(`could not watch worktree for workspace ${workspaceId}`);
 		return startupFallback;
 	}
 }

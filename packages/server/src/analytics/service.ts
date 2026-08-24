@@ -141,6 +141,6 @@ function toOutgoingEvent(event: AnalyticsEvent, s: AnalyticsState): OutgoingEven
 	};
 }
 
-function debugLog(error: unknown): void {
-	log.debug(`analytics failed: ${error instanceof Error ? error.message : error}`);
+function debugLog(_error: unknown): void {
+	log.debug("analytics operation failed");
 }

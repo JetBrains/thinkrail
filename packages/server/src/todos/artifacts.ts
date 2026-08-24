@@ -69,10 +69,8 @@ function runReconcile(workspaceId: string, sessionId: string): void {
 				gitCommitPaths(workspaceId, commitMessage(title, sessionId, todoId), paths),
 			() => gitHeadSha(workspaceId),
 		);
-	} catch (err) {
-		log.warn(
-			`todo change-artifacts skipped (${workspaceId}/${sessionId}): ${err instanceof Error ? err.message : err}`,
-		);
+	} catch {
+		log.warn(`todo change-artifacts skipped (${workspaceId}/${sessionId})`);
 	}
 }
 

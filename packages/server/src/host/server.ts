@@ -249,7 +249,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 								return JSON.stringify({ id: requestId, ok: true, result });
 							} catch (err) {
 								const error = err instanceof Error ? err.message : String(err);
-								log.debug(`ws ${method} failed: ${error}`);
+								log.debug(`ws ${method} failed`);
 								const code = errorCodeOf(err);
 								return JSON.stringify({
 									id: requestId,
@@ -443,10 +443,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	if (projectPath) {
 		try {
 			openProject(projectPath);
-		} catch (err) {
-			log.warn(
-				`could not open project ${projectPath}: ${err instanceof Error ? err.message : err}`,
-			);
+		} catch {
+			log.warn("could not open requested project");
 		}
 	}
 

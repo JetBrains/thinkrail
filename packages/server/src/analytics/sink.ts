@@ -72,6 +72,6 @@ export function createPostHogSink(options: PostHogSinkOptions): AnalyticsSink {
 	};
 }
 
-function debugLog(error: unknown): void {
-	log.debug(`analytics send failed: ${error instanceof Error ? error.message : error}`);
+function debugLog(_error: unknown): void {
+	log.debug("analytics send failed");
 }

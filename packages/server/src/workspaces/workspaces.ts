@@ -191,7 +191,7 @@ function applyFolderTruth(ws: Workspace, truth: { branch: string; baseBranch: st
 function diffStats(ws: Workspace): DiffStats | undefined {
 	const result = git(ws.worktreePath, changedFileArgs(resolveDiffRange(ws), "--shortstat"));
 	if (!result.ok) {
-		log.warn(`git diff --shortstat failed in ${ws.worktreePath}: ${result.err || "unknown error"}`);
+		log.warn(`git diff --shortstat failed for workspace ${ws.id}`);
 		return undefined;
 	}
 	if (!result.out) return { added: 0, removed: 0 };
