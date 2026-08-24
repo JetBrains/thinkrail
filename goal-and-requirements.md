@@ -30,7 +30,7 @@ The shell is built first, `pi` connected last:
   newcomers aren't lost in the worktree model, and any **existing worktree** the user attaches in place
   from the project menu (ThinkRail uses its cwd, never touches its checkout).
 - **Desktop workbench**: a recursively splittable center for files, diffs, registered documents, chats, and terminals,
-  bounded to four visible groups; Projects / Specs / All files / Changes / Review and terminals may occupy
+  bounded to four visible groups; Projects / Specs / Files / Changes / Review and terminals may occupy
   movable auxiliary groups—vertical stacks at left/right and a horizontally grouped, alignable bottom panel.
   New workspaces place one terminal in that bottom panel by default. Each workspace's structural layout is
   host-persisted and shared across clients, while active selection/focus remains local so clients do not steal

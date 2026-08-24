@@ -105,6 +105,7 @@ import {
 	type LayoutMutationResult,
 	type LayoutOperationResult,
 	type LayoutSide,
+	layoutTabName,
 	moveTabToGroup,
 	reconcileAttention,
 	resizeAuxiliaryGroups,
@@ -314,18 +315,19 @@ function useElementSize(): {
 }
 
 function tabSearchKeywords(tab: LayoutTab): string[] {
+	const name = layoutTabName(tab);
 	switch (tab.kind) {
 		case "file":
 		case "diff":
-			return [tab.name, tab.kind, tab.path];
+			return [name, tab.kind, tab.path];
 		case "chat":
-			return [tab.name, tab.kind, tab.sessionId];
+			return [name, tab.kind, tab.sessionId];
 		case "document":
-			return [tab.name, tab.kind, tab.sourceId, tab.docPath];
+			return [name, tab.kind, tab.sourceId, tab.docPath];
 		case "terminal":
-			return [tab.name, tab.kind, tab.tabKey];
+			return [name, tab.kind, tab.tabKey];
 		case "tool":
-			return [tab.name, tab.kind, tab.tool];
+			return [name, tab.kind, tab.tool];
 	}
 }
 
@@ -664,7 +666,7 @@ function TabStrip({
 									}}
 								>
 									{tabIcon(tab)}
-									<span className="truncate">{tab.name}</span>
+									<span className="truncate">{layoutTabName(tab)}</span>
 								</CommandItem>
 							))}
 						</CommandList>
@@ -802,6 +804,7 @@ function WorkbenchTab({
 		? document[currentAuxiliary].groups.findIndex((group) => group.id === location.groupId)
 		: -1;
 	const currentAuxiliaryLimit = currentAuxiliary === "bottom" ? maxBottomGroups : maxSideGroups;
+	const name = layoutTabName(tab);
 
 	const move = (target: LayoutGroupLocation, targetIndex?: number) => {
 		const result = moveTabToGroup(document, tab, target, targetIndex);
@@ -837,14 +840,14 @@ function WorkbenchTab({
 					<div
 						ref={before.setNodeRef}
 						aria-hidden="true"
-						data-drop-label={acceptsBefore ? `Insert before ${tab.name}` : undefined}
+						data-drop-label={acceptsBefore ? `Insert before ${name}` : undefined}
 						data-drop-active={before.isOver || undefined}
 						className="pointer-events-none absolute inset-y-0 left-0 z-10 w-1/2 border-primary data-[drop-active]:border-l-2"
 					/>
 					<div
 						ref={after.setNodeRef}
 						aria-hidden="true"
-						data-drop-label={acceptsAfter ? `Insert after ${tab.name}` : undefined}
+						data-drop-label={acceptsAfter ? `Insert after ${name}` : undefined}
 						data-drop-active={after.isOver || undefined}
 						className="pointer-events-none absolute inset-y-0 right-0 z-10 w-1/2 border-primary data-[drop-active]:border-r-2"
 					/>
@@ -859,14 +862,14 @@ function WorkbenchTab({
 						data-layout-tab-id={tab.id}
 						tabIndex={active ? 0 : -1}
 						{...drag.listeners}
-						title={preview ? "Preview — double-click to keep" : tab.name}
+						title={preview ? "Preview — double-click to keep" : name}
 						onClick={selectFromClick}
 						onDoubleClick={selectFromDoubleClick}
 						onKeyDown={onKeyDown}
 						className={`flex min-w-0 flex-1 items-center gap-xs py-xs pl-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary ${tab.kind === "tool" ? "pr-sm" : ""}`}
 					>
 						{tabIcon(tab)}
-						<span className={`truncate ${preview ? "italic" : ""}`}>{tab.name}</span>
+						<span className={`truncate ${preview ? "italic" : ""}`}>{name}</span>
 						{renderTabAdornment(tab)}
 					</button>
 					{tab.kind !== "tool" ? (
@@ -874,7 +877,7 @@ function WorkbenchTab({
 							type="button"
 							tabIndex={-1}
 							data-testid={tab.kind === "terminal" ? "terminal-tab-close" : "editor-tab-close"}
-							aria-label={`Close ${tab.name}`}
+							aria-label={`Close ${name}`}
 							onClick={onClose}
 							className="mr-xs rounded-[var(--radius-sm)] p-0.5 opacity-0 hover:bg-control-bg-hovered group-hover:opacity-100 focus:opacity-100"
 						>
@@ -1695,6 +1698,7 @@ function BottomGroupView({
 	const location: LayoutGroupLocation = { area: "bottom", groupId: group.id };
 	const selectedId = readLayoutSelection(shared.attention, group.id);
 	const selected = group.tabs.find((tab) => tab.id === selectedId) ?? group.tabs[0];
+	const selectedName = selected ? layoutTabName(selected) : undefined;
 	return (
 		<section
 			id={groupDomId(location)}
@@ -1702,7 +1706,7 @@ function BottomGroupView({
 			data-group-id={group.id}
 			data-folded="false"
 			tabIndex={-1}
-			aria-label={selected ? `Bottom group: ${selected.name}` : "Empty bottom group"}
+			aria-label={selectedName ? `Bottom group: ${selectedName}` : "Empty bottom group"}
 			className="relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-container-sidebar-bg outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
 			onFocusCapture={() => {
 				if (selected) {
@@ -1812,6 +1816,7 @@ function BottomFoldedGroup({
 }) {
 	const selectedId = readLayoutSelection(shared.attention, group.id);
 	const selected = group.tabs.find((tab) => tab.id === selectedId) ?? group.tabs[0];
+	const selectedName = selected ? layoutTabName(selected) : undefined;
 	const location: LayoutGroupLocation = { area: "bottom", groupId: group.id };
 	const restoreId = groupDomId(location);
 	const panelId = groupPanelId(location);
@@ -1827,7 +1832,9 @@ function BottomFoldedGroup({
 			data-group-id={group.id}
 			data-folded="true"
 			data-drop-active={drop.isOver || undefined}
-			aria-label={selected ? `Folded bottom group: ${selected.name}` : "Folded empty bottom group"}
+			aria-label={
+				selectedName ? `Folded bottom group: ${selectedName}` : "Folded empty bottom group"
+			}
 			className="relative flex h-full items-stretch overflow-hidden border-border-default border-r bg-container-sidebar-bg data-[drop-active]:bg-primary-subtle"
 		>
 			<div className="flex min-h-0 w-full flex-col">
@@ -1842,14 +1849,14 @@ function BottomFoldedGroup({
 					id={restoreId}
 					type="button"
 					data-testid="bottom-group-restore"
-					aria-label={`Expand bottom group${selected ? ` ${selected.name}` : ""}`}
+					aria-label={`Expand bottom group${selectedName ? ` ${selectedName}` : ""}`}
 					aria-controls={panelId}
 					aria-expanded="false"
 					onClick={onExpand}
 					className="flex min-h-0 w-full flex-1 items-center justify-center overflow-hidden text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 				>
 					<span className="truncate [writing-mode:vertical-rl]">
-						{selected?.name ?? "Empty group"}
+						{selectedName ?? "Empty group"}
 					</span>
 				</button>
 				<div id={panelId} role="tabpanel" aria-labelledby={restoreId} hidden />
@@ -3001,7 +3008,7 @@ export function Workbench({
 				{draggingTab ? (
 					<div className="flex max-w-56 items-center gap-xs rounded-[var(--radius-sm)] border border-primary bg-container-elevated-bg px-sm py-xs tr-text-ui text-text-default shadow-lg">
 						{tabIcon(draggingTab)}
-						<span className="truncate">{draggingTab.name}</span>
+						<span className="truncate">{layoutTabName(draggingTab)}</span>
 					</div>
 				) : null}
 			</DragOverlay>

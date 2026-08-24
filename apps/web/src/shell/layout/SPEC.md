@@ -47,14 +47,16 @@ focus, navigation clocks, pointer drafts, or viewport compression. The browser-l
 selection per group plus last focus for center/each auxiliary region and a zero-initialized clock for every
 center leaf;
 structural replacement reconciles it to the nearest surviving identity and prunes removed-group clocks without
-publishing.
+publishing. A tab's stored `name` is non-identity metadata. Singleton tool names resolve from the current
+web-owned catalog at presentation time, so a vocabulary update reaches old snapshots without spending a
+shared-layout revision merely to rewrite display copy.
 
 ## Layout grammar
 
 - **Center:** a recursive horizontal/vertical binary tree, maximum four leaves. A split replaces one leaf
   with equal halves. User creation/resize requires each child to remain at least 320 px wide and 180 px high.
   Losing a leaf's final tab removes that leaf and promotes its sibling; one final empty leaf always remains.
-- **Auxiliary eligibility:** Projects, Specs, All files, Changes, and Review are singleton auxiliary-only
+- **Auxiliary eligibility:** Projects, Specs, Files, Changes, and Review are singleton auxiliary-only
   tools; terminals may cross between center and any auxiliary region. Closing a singleton keeps its local
   feature state and restore target; a View/deep-link reveal restores or unfolds it in place and focuses the
   requested item.
@@ -134,7 +136,7 @@ order, then visible bottom groups left-to-right. One-row strips have bounded rea
 fixed previous/next controls: wheel, trackpad, touch, roving-keyboard navigation, active reveal, and the
 searchable keyboard overflow list all scroll the same tab list, whose slim horizontal scrollbar appears only
 on hover or focus-within when content overflows without changing the strip's fixed height. Singleton tool tabs
-(Projects, Specs, All files, Changes, Review) carry no inline close glyph; Close remains in their context menu
+(Projects, Specs, Files, Changes, Review) carry no inline close glyph; Close remains in their context menu
 and on the Delete key, while terminals and center resources retain the direct glyph.
 
 ## Presets and synchronization

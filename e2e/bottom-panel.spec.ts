@@ -722,7 +722,7 @@ test("bottom groups arrange left-to-right, resize, fold to 27px, restore, and en
 	await page.getByTestId("tab-files").click({ button: "right" });
 	await page.getByRole("menuitem", { name: "New bottom group at left", exact: true }).click();
 	await expect(bottomGroups(page)).toHaveCount(3);
-	await expect(bottomGroups(page).nth(0)).toContainText("All files");
+	await expect(bottomGroups(page).nth(0)).toContainText("Files");
 	await page.getByTestId("tab-specs").click({ button: "right" });
 	await expect(
 		page.getByRole("menuitem", { name: /New bottom group at left — limited to 3/ }),
@@ -894,6 +894,8 @@ test("a stored version-1 layout migrates with its tools untouched and no termina
 	expect(installed.document.bottom).toMatchObject({ visible: false, groups: [] });
 	await expect(page.getByTestId("left-nav")).toContainText("Projects");
 	await expect(page.getByTestId("right-stack")).toContainText("Specs");
+	await expect(page.getByTestId("tab-files")).toContainText("Files");
+	await expect(page.getByTestId("tab-files")).not.toContainText("All files");
 	await expect(page.getByTestId("right-stack")).toContainText("Changes");
 	await expect(page.getByTestId("bottom-layout-rail")).toBeVisible();
 	await expect(page.getByTestId("terminal-tab")).toHaveCount(0);

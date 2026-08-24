@@ -18,6 +18,7 @@ import {
 	hideSide,
 	isLayoutUnavailable,
 	type LayoutOperationResult,
+	layoutTabName,
 	moveTabToGroup,
 	openCenterTab,
 	reconcileAttention,
@@ -78,6 +79,13 @@ function mutation<T extends { document: WorkspaceLayoutDocument } | { reason: st
 }
 
 describe("workspace layout model", () => {
+	test("canonical tool labels override stale persisted display copy", () => {
+		const legacyFiles = { ...toolTab("files"), name: "All files" };
+		expect(toolTab("files").name).toBe("Files");
+		expect(layoutTabName(legacyFiles)).toBe("Files");
+		expect(layoutTabName(file("one"))).toBe("one.ts");
+	});
+
 	test("opens one canonical tab and keeps preview promotion one-way", () => {
 		let document = baseDocument();
 		document = mutation(openCenterTab(document, file("one"), "center-a", "preview")).document;

@@ -126,6 +126,8 @@ test("workbench strips and feature toolbars keep one-row geometry with ARIA tabs
 			page.getByTestId(`tab-${tool}`).getByRole("button", { name: /^Close / }),
 		).toHaveCount(0);
 	}
+	await expect(page.getByTestId("tab-files")).toContainText("Files");
+	await expect(page.getByTestId("tab-files")).not.toContainText("All files");
 	await expect(centerStrip.getByTestId("editor-tab-close")).toHaveCount(1);
 	await expect(bottomStrip.getByTestId("terminal-tab-close")).toHaveCount(1);
 
@@ -440,7 +442,7 @@ test("keyboard and menu commands reorder, search, recursively split, and collaps
 	await page.getByRole("menuitem", { name: "Close", exact: true }).click();
 	await expect(page.getByTestId("tab-files")).toHaveCount(0);
 	await page.getByTestId("tab-changes").click({ button: "right" });
-	await page.getByRole("menuitem", { name: "Restore All files" }).click();
+	await page.getByRole("menuitem", { name: "Restore Files" }).click();
 	await expect(page.getByTestId("tab-files")).toBeVisible();
 	await page.getByTestId("tab-specs").getByRole("tab").focus();
 	await page.keyboard.press("Delete");

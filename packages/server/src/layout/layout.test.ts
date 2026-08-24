@@ -56,7 +56,7 @@ function document(name = "README.md"): WorkspaceLayoutDocument {
 					id: "right",
 					weight: 1,
 					folded: false,
-					tabs: [{ kind: "tool", id: "tool:files", name: "All files", tool: "files" }],
+					tabs: [{ kind: "tool", id: "tool:files", name: "Files", tool: "files" }],
 				},
 			],
 		},
