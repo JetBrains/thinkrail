@@ -100,7 +100,8 @@ test("workbench strips and feature toolbars keep one-row geometry with ARIA tabs
 
 	const centerStrip = page.getByTestId("center-tab-strip");
 	const rightStrip = page.getByTestId("right-tab-strip");
-	for (const strip of [centerStrip, rightStrip]) {
+	const bottomStrip = page.getByTestId("bottom-tab-strip");
+	for (const strip of [centerStrip, rightStrip, bottomStrip]) {
 		await expect(strip).toHaveCSS("height", "28px");
 		await expect(strip.getByRole("tablist")).toHaveCount(1);
 		const active = strip.locator('[role="tab"][aria-selected="true"]');
@@ -155,6 +156,13 @@ test("ARIA tabs use roving keyboard focus, recover after close, and expose keybo
 	await separator.focus();
 	await page.keyboard.press("ArrowLeft");
 	await expect.poll(() => width(page.getByTestId("right-stack"))).not.toBeCloseTo(before, 0);
+
+	const bottomSeparator = page.getByTestId("resize-bottom");
+	await expect(bottomSeparator).toHaveAttribute("role", "separator");
+	await expect(bottomSeparator).toHaveAttribute("aria-orientation", "horizontal");
+	await expect(bottomSeparator).toHaveAttribute("aria-valuemin", /\d+/);
+	await expect(bottomSeparator).toHaveAttribute("aria-valuemax", /\d+/);
+	await expect(bottomSeparator).toHaveAttribute("aria-valuenow", /\d+/);
 });
 
 test("outer side widths publish on pointer-up and restore after reload", async ({ page }) => {
@@ -246,7 +254,7 @@ test("a terminal can move to its own side group; resize, fold, and visibility ga
 	await expect(page.getByTestId("terminal-instance")).toHaveCount(1);
 	await page.getByTestId("terminal-tab").click({ button: "right" });
 	await expect(
-		page.getByRole("menuitem", { name: "New left group — already at bottom" }),
+		page.getByRole("menuitem", { name: "New left group at bottom — already at end" }),
 	).toBeDisabled();
 	await expect(page.getByRole("menuitem", { name: "New left group at top" })).toBeEnabled();
 	await page.keyboard.press("Escape");
@@ -282,7 +290,7 @@ test("a terminal can move to its own side group; resize, fold, and visibility ga
 	await waitTerminalReady(page);
 
 	await page.getByTestId("tab-files").click({ button: "right" });
-	await page.getByRole("menuitem", { name: "New left group", exact: true }).click();
+	await page.getByRole("menuitem", { name: "New left group at bottom", exact: true }).click();
 	await expect(sideGroups(page, "left")).toHaveCount(3);
 	await expect(page.getByTestId("tab-files")).toHaveCount(1);
 });
@@ -333,7 +341,7 @@ test("side groups expose broad per-panel above and below split targets", async (
 	await expect(groups.nth(2)).toHaveAttribute("data-folded", "true");
 });
 
-test("Mod+B and Mod+J hide and restore synchronized sides, including after reload", async ({
+test("Mod+B and Mod+J hide and restore synchronized sides without affecting bottom", async ({
 	page,
 }) => {
 	await openDefaultWorkbench(page);
@@ -345,7 +353,8 @@ test("Mod+B and Mod+J hide and restore synchronized sides, including after reloa
 	await pressPlatformShortcut(page, "j");
 	await expect(page.getByTestId("right-layout-rail")).toBeVisible();
 	await expect(page.getByTestId("right-stack")).toHaveCount(0);
-	await expect(page.getByTestId("terminal-instance")).toHaveCount(0);
+	await expect(page.getByTestId("terminal-instance")).toHaveCount(1);
+	await waitForLayoutSettled(page);
 
 	await reloadDefaultWorkbench(page);
 	await expect(page.getByTestId("left-layout-rail")).toBeVisible();
@@ -591,6 +600,8 @@ test("applying the Review preset preserves resources and installs its vertical c
 	await expect(page.getByTestId("terminal-tab")).toHaveCount(1);
 	await expect(sideGroups(page, "left")).toHaveCount(1);
 	await expect(sideGroups(page, "right")).toHaveCount(2);
+	await expect(page.getByTestId("bottom-group")).toHaveCount(1);
+	await expect(page.getByTestId("bottom-group")).toContainText("Terminal 1");
 	await page.keyboard.press("Escape");
 	await expect(page.getByRole("heading", { name: "Layout" })).toBeHidden();
 	await expect
@@ -606,7 +617,7 @@ test("applying the Review preset preserves resources and installs its vertical c
 	);
 });
 
-test("custom presets and the side-group limit round-trip through synchronized Layout settings", async ({
+test("custom presets and independent group limits round-trip through synchronized Layout settings", async ({
 	page,
 }) => {
 	await openDefaultWorkbench(page);
@@ -627,9 +638,15 @@ test("custom presets and the side-group limit round-trip through synchronized La
 
 	const sideLimit = page.getByRole("spinbutton", { name: "Maximum side groups" });
 	await sideLimit.fill("7");
-	await page.getByRole("button", { name: "Save limit" }).click();
+	await page.getByRole("button", { name: "Save side group limit" }).click();
 	await expect(sideLimit).toHaveValue("7");
-	await expect(page.getByRole("button", { name: "Save limit" })).toBeDisabled();
+	await expect(page.getByRole("button", { name: "Save side group limit" })).toBeDisabled();
+
+	const bottomLimit = page.getByRole("spinbutton", { name: "Maximum bottom groups" });
+	await bottomLimit.fill("4");
+	await page.getByRole("button", { name: "Save bottom group limit" }).click();
+	await expect(bottomLimit).toHaveValue("4");
+	await expect(page.getByRole("button", { name: "Save bottom group limit" })).toBeDisabled();
 
 	await custom.getByRole("button", { name: "Delete My renamed workbench" }).click();
 	await expect(custom).toHaveCount(0);
@@ -647,11 +664,11 @@ test("an accepted side-group overage is grandfathered without allowing further g
 	await page.getByTestId("settings-nav-layout").click();
 	let sideLimit = page.getByRole("spinbutton", { name: "Maximum side groups" });
 	await sideLimit.fill("3");
-	await page.getByRole("button", { name: "Save limit" }).click();
+	await page.getByRole("button", { name: "Save side group limit" }).click();
 	await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();
 
 	await page.getByTestId("terminal-tab").click({ button: "right" });
-	await page.getByRole("menuitem", { name: "New right group", exact: true }).click();
+	await page.getByRole("menuitem", { name: "New right group at bottom", exact: true }).click();
 	await expect(sideGroups(page, "right")).toHaveCount(3);
 
 	await createWorkspaceViaDialog(page);
@@ -659,7 +676,7 @@ test("an accepted side-group overage is grandfathered without allowing further g
 	await page.getByTestId("settings-nav-layout").click();
 	sideLimit = page.getByRole("spinbutton", { name: "Maximum side groups" });
 	await sideLimit.fill("2");
-	await page.getByRole("button", { name: "Save limit" }).click();
+	await page.getByRole("button", { name: "Save side group limit" }).click();
 	await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();
 
 	await defaultWorkspaceRow(page).getByRole("button").first().click();
@@ -667,12 +684,12 @@ test("an accepted side-group overage is grandfathered without allowing further g
 	await expect(sideGroups(page, "right")).toHaveCount(3);
 	await page.getByTestId("tab-files").click({ button: "right" });
 	await expect(page.getByRole("menuitem", { name: /^New right group at top/ })).toBeDisabled();
-	await expect(page.getByRole("menuitem", { name: /^New right group(?: —|$)/ })).toBeDisabled();
+	await expect(page.getByRole("menuitem", { name: /^New right group at bottom/ })).toBeDisabled();
 	await page.keyboard.press("Escape");
 
 	await page.getByTestId("terminal-tab").click({ button: "right" });
 	await expect(
-		page.getByRole("menuitem", { name: "New right group — already at bottom" }),
+		page.getByRole("menuitem", { name: "New right group at bottom — already at end" }),
 	).toBeDisabled();
 	await expect(page.getByRole("menuitem", { name: "New right group at top" })).toBeEnabled();
 	await page.getByRole("menuitem", { name: "New right group at top" }).click();
@@ -691,6 +708,7 @@ test("a narrow viewport compresses locally without rewriting recursive topology"
 	await page.setViewportSize({ width: 390, height: 844 });
 	await expect(page.getByTestId("workbench")).toBeVisible();
 	await expect(page.getByTestId("center-group")).toHaveCount(2);
+	await expect(page.getByTestId("bottom-group")).toHaveCount(1);
 	const bounds = await page.getByTestId("workbench").boundingBox();
 	if (!bounds) throw new Error("workbench has no box");
 	expect(bounds.x).toBeGreaterThanOrEqual(0);

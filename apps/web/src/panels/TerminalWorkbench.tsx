@@ -49,10 +49,6 @@ export function useTerminalCatalog(workspaceId: string | null): boolean {
 				}
 				state.setWorkspaceTerminals(workspaceId, tabs);
 				setReady(true);
-				const installed = useAppStore.getState();
-				if ((installed.terminalsByWorkspace[workspaceId]?.length ?? 0) === 0) {
-					installed.addTerminal(workspaceId);
-				}
 			})
 			.catch(() => {});
 		return () => {

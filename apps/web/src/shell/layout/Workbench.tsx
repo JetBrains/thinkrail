@@ -490,9 +490,11 @@ function TabStrip({
 	const compatibilityTestId =
 		location.area === "center"
 			? "center-tab-strip"
-			: tabs.some((tab) => tab.kind === "tool" && tab.tool === "specs")
-				? "right-tab-strip"
-				: "workbench-tab-strip";
+			: location.area === "bottom"
+				? "bottom-tab-strip"
+				: tabs.some((tab) => tab.kind === "tool" && tab.tool === "specs")
+					? "right-tab-strip"
+					: "workbench-tab-strip";
 	return (
 		<div
 			ref={groupDrop.setNodeRef}
@@ -1015,7 +1017,7 @@ function WorkbenchTab({
 				<ContextMenuSeparator />
 				{location.area !== "center" ? (
 					<ContextMenuItem onSelect={() => onHideSide(location.area)}>
-						Hide {location.area} region
+						{location.area === "bottom" ? "Hide bottom panel" : `Hide ${location.area} side`}
 					</ContextMenuItem>
 				) : null}
 				<ContextMenuItem
@@ -1673,6 +1675,7 @@ function BottomGroupView({
 			id={groupDomId(location)}
 			data-testid="bottom-group"
 			data-group-id={group.id}
+			data-folded="false"
 			tabIndex={-1}
 			aria-label={selected ? `Bottom group: ${selected.name}` : "Empty bottom group"}
 			className="relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-container-sidebar-bg outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
@@ -1980,6 +1983,8 @@ function BottomAlignedRow({
 		<ResizablePanelGroup
 			key={tupleKey("bottom-alignment", document.bottom.alignment, String(left), String(right))}
 			direction="horizontal"
+			data-testid="bottom-aligned-row"
+			data-alignment={document.bottom.alignment}
 			className="min-h-0 min-w-0"
 		>
 			{start > 0 ? (
@@ -2102,22 +2107,18 @@ function HiddenSideRail({
 	onShow,
 	dropEnabled,
 	showEnabled,
-	targetGroupId,
 	targetIndex,
 }: {
 	side: LayoutSide;
 	onShow: () => void;
 	dropEnabled: boolean;
 	showEnabled: boolean;
-	targetGroupId: string | undefined;
 	targetIndex: number;
 }) {
 	const drop = useDroppable({
 		id: tupleKey("dnd-hidden-side-edge", side),
 		data: {
-			target: targetGroupId
-				? ({ kind: "group", location: { area: side, groupId: targetGroupId } } satisfies DropTarget)
-				: ({ kind: "auxiliary-edge", region: side, index: targetIndex } satisfies DropTarget),
+			target: { kind: "auxiliary-edge", region: side, index: targetIndex } satisfies DropTarget,
 		},
 		disabled: !dropEnabled,
 	});
@@ -2432,12 +2433,6 @@ export function Workbench({
 
 	const leftVisible = document.left.visible && document.left.groups.length > 0;
 	const rightVisible = document.right.visible && document.right.groups.length > 0;
-	const hiddenLeftTargetGroupId =
-		document.left.groups.find((group) => group.id === attention.lastFocusedSideGroupId.left)?.id ??
-		document.left.groups[0]?.id;
-	const hiddenRightTargetGroupId =
-		document.right.groups.find((group) => group.id === attention.lastFocusedSideGroupId.right)
-			?.id ?? document.right.groups[0]?.id;
 	const visibleSideMinimums = (leftVisible ? 8 : 0) + (rightVisible ? 8 : 0);
 	const centerMinimumPercent = Math.min(
 		Math.max(10, 100 - visibleSideMinimums),
@@ -2758,16 +2753,14 @@ export function Workbench({
 						dropEnabled={
 							!!draggingTab &&
 							canPlaceLayoutTab(draggingTab, "left") &&
-							(hiddenLeftTargetGroupId !== undefined ||
-								canCreateSideGroup(
-									document,
-									"left",
-									draggingTab,
-									maxSideGroups,
-									document.left.groups.length,
-								))
+							canCreateSideGroup(
+								document,
+								"left",
+								draggingTab,
+								maxSideGroups,
+								document.left.groups.length,
+							)
 						}
-						targetGroupId={hiddenLeftTargetGroupId}
 						targetIndex={document.left.groups.length}
 					/>
 				) : null}
@@ -2852,16 +2845,14 @@ export function Workbench({
 						dropEnabled={
 							!!draggingTab &&
 							canPlaceLayoutTab(draggingTab, "right") &&
-							(hiddenRightTargetGroupId !== undefined ||
-								canCreateSideGroup(
-									document,
-									"right",
-									draggingTab,
-									maxSideGroups,
-									document.right.groups.length,
-								))
+							canCreateSideGroup(
+								document,
+								"right",
+								draggingTab,
+								maxSideGroups,
+								document.right.groups.length,
+							)
 						}
-						targetGroupId={hiddenRightTargetGroupId}
 						targetIndex={document.right.groups.length}
 					/>
 				) : null}

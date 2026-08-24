@@ -205,7 +205,6 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 			setInitialTerminalSeeded(true);
 			return;
 		}
-		if (!document.bottom.visible) return;
 		const preferredId = attention.lastFocusedSideGroupId.bottom;
 		const target =
 			document.bottom.groups.find((group) => group.id === preferredId) ?? document.bottom.groups[0];

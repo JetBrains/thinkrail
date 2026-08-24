@@ -344,7 +344,7 @@ export function LayoutSettings() {
 						Applies to new groups. Existing over-limit arrangements remain usable and reducible.
 					</p>
 				</div>
-				<div className="grid max-w-lg gap-sm sm:grid-cols-2">
+				<div className="grid max-w-sm gap-sm">
 					<div className="space-y-xs tr-text-metadata text-text-muted">
 						<label htmlFor="layout-side-group-limit">Side groups</label>
 						<div className="flex items-center gap-sm">
@@ -360,6 +360,7 @@ export function LayoutSettings() {
 							/>
 							<button
 								type="button"
+								aria-label="Save side group limit"
 								disabled={
 									!Number.isInteger(Number(sideLimit)) ||
 									Number(sideLimit) < minimumSideLimit ||
@@ -389,6 +390,7 @@ export function LayoutSettings() {
 							/>
 							<button
 								type="button"
+								aria-label="Save bottom group limit"
 								disabled={
 									!Number.isInteger(Number(bottomLimit)) ||
 									Number(bottomLimit) < minimumBottomLimit ||
