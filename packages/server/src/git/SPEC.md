@@ -27,7 +27,12 @@ ref off the workspace-create critical path.
   running. The ssh-key hint is what we say when git wrote *nothing*, never advice pasted over an
   observation we already have (the message never names a cause we did not observe);
   **`remoteTrackingRef(ref)`** → `refs/remotes/<ref>` for an `origin/` ref, else `null` — **the one place
-  that spelling is built**, so the probe below and `workspaces`' `worktree add` cannot drift apart;
+  that spelling is built**, so the probe below and `workspaces`' `worktree add` cannot drift apart. Its
+  reach is **creation only**, and `resolveDiffRange` is the named survivor: `diffBaseRef` hands git the
+  `origin/<b>` shorthand recorded in `baseBranch`, so in the very setup create now guards against — a local
+  branch literally named `origin/main` — the worktree is cut from `refs/remotes/origin/main` while the diff
+  is measured against the decoy. Left alone because `diffBase` is separately user-settable and may name any
+  ref, so qualifying it is a change to what a *pinned* base means, not a spelling fix;
   **`remoteRefOid(repoPath, ref)`** → the oid `refs/remotes/<ref>` resolves to, or `null` — **the one way
   to ask whether a remote-tracking ref is present**, shared by `prefetchBranch` (which compares oids to
   report `moved`), `resolveDefaultBranch`'s `origin/main` fallback, and `workspaces`' create fallback. It

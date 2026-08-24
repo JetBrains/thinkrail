@@ -18,6 +18,8 @@ const pipeHoldingChild = (body: string) =>
 		`Bun.spawn(["sh", "-c", "sleep 5"], { stdout: "inherit", stderr: "inherit" }).unref(); ${body}`,
 	);
 
+const escapedPipeHolder = `Bun.spawn(["sh", "-c", "sleep 5"], { stdout: "inherit", stderr: "inherit", detached: true }).unref();`;
+
 const SENTINEL = "THINKRAIL_SPAWN_SENTINEL";
 
 async function gone(pid: number): Promise<boolean> {
@@ -154,4 +156,20 @@ posix("the timeout kills the whole process group, not just the child", async () 
 	expect(result.ok).toBe(false);
 	expect(existsSync(pidFile)).toBe(true);
 	expect(await gone(Number(readFileSync(pidFile, "utf8")))).toBe(true);
+});
+
+posix("the timeout path drains after the kill, bounded by the grace", async () => {
+	const budget = 500;
+
+	const result = await runBounded(
+		bun(
+			`${escapedPipeHolder} process.stderr.write("REMOTE-SAID-THIS"); await new Promise(() => {});`,
+		),
+		{ timeoutMs: budget },
+	);
+
+	expect(result.timedOut).toBe(true);
+	expect(result.err).toBe("REMOTE-SAID-THIS");
+	expect(result.waitedMs).toBeGreaterThanOrEqual(budget + DRAIN_GRACE_MS);
+	expect(result.waitedMs).toBeLessThan(budget + DRAIN_GRACE_MS * 8);
 });

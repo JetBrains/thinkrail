@@ -95,3 +95,13 @@ The single WebSocket client to the host, and its app-wide singleton.
   (welcome + event routing — a runtime edge owned by the parent graph); `lib` (plain-HTTP-safe random page
   identity); the browser `WebSocket`.
 - **Forbidden:** `server`/`shared`/any `pi` package; importing `panels`/`shell`.
+
+## Get right
+
+- **`DEFAULT_TIMEOUT_MS` is the ceiling a host-side budget has to fit under, and nothing enforces it.**
+  The server bounds network `git` at 55s precisely so its own error — naming the ref, carrying git's
+  stderr — wins the race against the causeless `request "…" timed out` this side raises at 60s (issue #209;
+  `packages/server/src/git/SPEC.md`). Lower this number below that budget and every stalled fetch silently
+  reverts to the generic timeout, with no test or type failing to say so. The two constants live in
+  independently-shipped artifacts and are correct by agreement; deriving them from one another belongs in
+  `contracts`. Raising a per-request `timeoutMs` is safe, lowering the default is not.
