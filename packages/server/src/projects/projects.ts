@@ -105,6 +105,15 @@ export function listRecentProjects(): Project[] {
 	return newestFirst(getProjects());
 }
 
+export function deleteProject(id: string): Project | null {
+	const projects = getProjects();
+	const index = projects.findIndex((candidate) => candidate.id === id);
+	if (index === -1) return null;
+	const [removed] = projects.splice(index, 1);
+	saveProjects(projects);
+	return removed ?? null;
+}
+
 export function closeProject(id: string): Project {
 	const projects = getProjects();
 	const project = projects.find((candidate) => candidate.id === id);
