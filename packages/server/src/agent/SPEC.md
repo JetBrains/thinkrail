@@ -5,7 +5,7 @@ status: active
 title: agent — in-process pi sessions
 parent: module-server
 depends-on: [module-contracts]
-references: [module-spec-graph]
+references: [module-spec-graph, central-integration]
 tags: [v1, pi]
 ---
 
