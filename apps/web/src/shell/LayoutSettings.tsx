@@ -288,7 +288,7 @@ export function LayoutSettings() {
 						placement.
 					</p>
 				</div>
-				<div className="flex max-w-lg gap-8">
+				<div data-testid="layout-preset-save-row" className="flex max-w-lg gap-8">
 					<input
 						value={name}
 						onChange={(event) => setName(event.target.value)}
@@ -344,7 +344,7 @@ export function LayoutSettings() {
 						Applies to new groups. Existing over-limit arrangements remain usable and reducible.
 					</p>
 				</div>
-				<div className="grid max-w-sm gap-8">
+				<div data-testid="layout-group-limits" className="grid max-w-sm gap-8">
 					<div className="space-y-4 tr-text-metadata text-text-muted">
 						<label htmlFor="layout-side-group-limit">Side groups</label>
 						<div className="flex items-center gap-8">

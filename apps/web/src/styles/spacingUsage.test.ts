@@ -155,6 +155,24 @@ describe("spacing at a call site", () => {
 	});
 });
 
+describe("container-width presets are not spacing", () => {
+	const SIZING = ["w", "min-w", "max-w", "h", "min-h", "max-h", "size", "basis"];
+	const CONTAINER = "3xs|2xs|xs|sm|md|lg|xl|2xl|3xl|4xl|5xl|6xl|7xl";
+
+	it("never lets the spacing gate police a width/sizing utility", () => {
+		expect(SIZING.filter((p) => SPACING_PREFIX.split("|").includes(p))).toEqual([]);
+	});
+
+	it("keeps Tailwind container presets as named width utilities", () => {
+		const named = new Set(
+			hits(new RegExp(String.raw`(?<![\w-])(?:${SIZING.join("|")})-(?:${CONTAINER})\b`, "g")).map(
+				(h) => h.slice(h.lastIndexOf(" ") + 1),
+			),
+		);
+		for (const preset of ["max-w-lg", "max-w-sm"]) expect(named.has(preset)).toBe(true);
+	});
+});
+
 describe("spacing in handwritten CSS", () => {
 	it("spends a --space-* token on every rhythm property, never a raw pixel length", () => {
 		// A rhythm length in CSS must be a `--space-*` token (or `0`/`auto`); only `CSS_RHYTHM_EXEMPT` stays raw.

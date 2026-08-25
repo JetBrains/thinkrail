@@ -726,6 +726,15 @@ test("custom presets and independent group limits round-trip through synchronize
 	);
 });
 
+test("Layout settings controls keep their container-preset max-widths", async ({ page }) => {
+	await openDefaultWorkbench(page);
+	await page.getByTestId("open-settings").click();
+	await page.getByTestId("settings-nav-layout").click();
+
+	await expect(page.getByTestId("layout-preset-save-row")).toHaveCSS("max-width", "512px");
+	await expect(page.getByTestId("layout-group-limits")).toHaveCSS("max-width", "384px");
+});
+
 test("an accepted side-group overage is grandfathered without allowing further growth", async ({
 	page,
 }) => {

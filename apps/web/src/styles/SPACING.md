@@ -54,6 +54,12 @@ Tailwind v4 drives **spacing (`p`/`m`/`gap`) and sizing (`w`/`h`/`size`/inset/tr
 is is a layout constraint, not rhythm** — sizing is deliberately *not* policed by the spacing gate, and
 sizing values are free-form px, not the canonical step set.
 
+Tailwind's **named container presets stay a separate scale**: `max-w-lg` / `max-w-sm` (and the rest of
+`w`/`min-w`/`max-w`/`basis` t-shirt names) resolve through `--container-*` (32rem / 24rem), independent
+of `--spacing`. They are **not** spacing aliases and must never be migrated to numeric utilities — a
+mechanical `lg`→`16` rewrite would collapse a 32rem column to 16px. `spacingUsage.test.ts` pins this
+(the gate never polices a width/sizing prefix, and the container presets we depend on stay named).
+
 Spacing stays independent of typography, colour and radius: a change to the type scale or a theme never
 moves layout. `tokens.css` (structure) holds no spacing; `spacing.json` is the only source.
 
