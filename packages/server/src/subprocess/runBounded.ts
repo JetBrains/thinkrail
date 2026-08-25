@@ -95,11 +95,9 @@ export async function runBounded(argv: string[], opts: BoundedRunOptions): Promi
 	]);
 	deadline.cancel();
 	if (outcome === "timed-out") killTree(proc);
-	else {
-		const grace = delay(DRAIN_GRACE_MS);
-		await Promise.race([drained, grace.promise]);
-		grace.cancel();
-	}
+	const grace = delay(DRAIN_GRACE_MS);
+	await Promise.race([drained, grace.promise]);
+	grace.cancel();
 	out.cancel();
 	err.cancel();
 
