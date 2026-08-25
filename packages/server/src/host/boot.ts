@@ -64,6 +64,6 @@ export async function bootHost(options: BootHostOptions): Promise<BootedHost> {
 	process.on("SIGINT", shutdown);
 	process.on("SIGTERM", shutdown);
 
-	log.info(`listening on http://${options.host}:${server.port}`);
+	log.info(`listening on port ${server.port}`);
 	return { server, port: server.port, requested };
 }
