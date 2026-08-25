@@ -205,14 +205,7 @@ const Card = forwardRef<HTMLButtonElement, CardProps>(function Card(
 					{tag}
 				</span>
 			) : null}
-			<span
-				className={cn(
-					"flex size-9 items-center justify-center rounded-[var(--radius-sm)]",
-					primary ? "bg-primary text-text-on-primary" : "bg-control-bg-selected text-text-muted",
-				)}
-			>
-				<Icon className="size-4" />
-			</span>
+			<Icon className={cn("size-8", primary ? "text-primary" : "text-text-muted")} />
 			<span className="w-full">
 				<span className="block tr-title-card text-text-default">{title}</span>
 				<span className="mt-0.5 block text-text-muted tr-text-metadata leading-snug">
