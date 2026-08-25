@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import type { WorkspaceLayoutSnapshot } from "@thinkrail/contracts";
@@ -324,6 +324,36 @@ test("a hidden default reserves one synchronized terminal placement without atta
 	await page.getByRole("button", { name: "Show bottom panel" }).click();
 	await waitTerminalReady(page);
 	await expect(bottomGroups(page).getByTestId("terminal-tab")).toHaveCount(1);
+});
+
+test("a legacy layoutless workspace does not gain a default terminal", async ({ page }) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceWithoutOpening(page);
+	const workspaceFile = join(E2E_DATA_DIR, "workspaces.json");
+	const records = JSON.parse(readFileSync(workspaceFile, "utf8")) as Array<Record<string, unknown>>;
+	const legacyRecord = records.find((candidate) => candidate.id === workspace.id);
+	if (!legacyRecord) throw new Error("created workspace record is missing");
+	delete legacyRecord.initialTerminalEligible;
+	writeFileSync(workspaceFile, `${JSON.stringify(records, null, "\t")}\n`);
+
+	await page.reload();
+	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+	await revealFirstProjectWorkspaces(page);
+	const workspaceRow = page.getByTestId("workspace-item").filter({ hasText: workspace.name });
+	await expect(workspaceRow).toBeVisible();
+	await workspaceRow.getByRole("button").first().click();
+	await expect(page.getByTestId("workspace-workbench")).toHaveAttribute(
+		"data-layout-status",
+		"settled",
+	);
+	await expect(page.getByTestId("bottom-new-terminal")).toBeVisible();
+	await expect(page.getByTestId("terminal-tab")).toHaveCount(0);
+	const catalog = await requestOverWire<{ tabs: Array<{ tabKey: string }> }>(
+		page,
+		"terminal.list",
+		{ workspaceId: workspace.id },
+	);
+	expect(catalog.tabs).toEqual([]);
 });
 
 test("a failed default reservation retries after reconnect without duplicating the terminal", async ({

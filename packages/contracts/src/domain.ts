@@ -30,6 +30,7 @@ export interface Workspace {
 	baseBranch: string;
 	diffBase?: string;
 	renamed?: boolean;
+	initialTerminalEligible?: true;
 	diffStats?: DiffStats;
 	skillOverrides?: Record<string, "on" | "off">;
 }

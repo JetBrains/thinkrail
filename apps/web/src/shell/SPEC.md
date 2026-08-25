@@ -102,8 +102,10 @@ Project/file/change/review/chat/terminal views receive only resource identity, v
 bounds. Moving a view cannot change its module dependencies or make it inspect the layout tree. A visible
 terminal is mounted through the layout visibility gate; hidden terminal tabs stay unmounted while their PTYs
 continue running. After first layout seeding, the parent workbench—not `layoutSync`—creates the one initial
-terminal placement only for an accepted revision-1 version-2 document, so synchronization remains
-resource-lifetime-free and a host migration (floored at revision 2) cannot seed an old workspace. Before that
+terminal placement only when the active host `Workspace` carries `initialTerminalEligible: true` and the
+accepted version-2 document is still at revision 1. The marker scopes eligibility to records created with this
+behavior; revision 1 scopes the attempt to the first layout snapshot, while the migration floor at revision 2
+remains defense in depth for known version-1 layouts. Synchronization stays resource-lifetime-free. Before that
 intent may commit, the parent reserves its client-minted key in the host catalog; the new-workspace seed uses
 one deterministic key inside that workspace, so competing clients reserve and place the same terminal rather
 than each creating one. Reservation is process-free and preserves a hidden configured default across reload

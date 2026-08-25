@@ -92,8 +92,10 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
    bottom explicitly and migrates known version-1 documents to hidden/empty bottom without moving a resource;
    a generic region map was rejected as an unnecessary rewrite of stable side contracts, while a separate
    bottom snapshot would make cross-region moves non-atomic. A migrated snapshot is reported at revision 2
-   or later, keeping revision 1 exclusive to a newly created version-2 layout so default-terminal seeding can
-   never mistake an old workspace for a new one. Valid full snapshots converge by monotonic revision, but
+   or later, so revision 1 identifies a first persisted version-2 layout—but not the age of its workspace.
+   Default-terminal seeding additionally requires the host-owned `Workspace.initialTerminalEligible` marker,
+   written only when a workspace record is first created; legacy records are never backfilled. Valid full
+   snapshots converge by monotonic revision, but
    replacement is optimistic-concurrency guarded: a client names its exact accepted revision
    (or create-only absence), and a stale full replacement conflicts with the current snapshot instead of
    making the last arrival win. Left/right/bottom visibility, folds, extents, and bottom alignment are

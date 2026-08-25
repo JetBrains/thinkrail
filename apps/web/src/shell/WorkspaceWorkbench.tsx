@@ -153,6 +153,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	);
 	const layoutSettings = useAppStore((state) => state.layoutSettings);
 	const workspace = useAppStore((state) => selectWorkspaceById(state, workspaceId));
+	const initialTerminalEligible = workspace?.initialTerminalEligible === true;
 	const contextProject = useAppStore(selectContextProject);
 	const editorTabs = useAppStore((state) => state.tabsByWorkspace[workspaceId] ?? NO_EDITOR_TABS);
 	const sessions = useAppStore((state) => state.sessions);
@@ -261,6 +262,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 			!terminalCatalogReady ||
 			pendingLayoutWrites > 0 ||
 			status !== "connected" ||
+			!initialTerminalEligible ||
 			layoutRevision !== 1
 		) {
 			return;
@@ -286,6 +288,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 		attention,
 		connectionGeneration,
 		document,
+		initialTerminalEligible,
 		layoutRevision,
 		pendingLayoutWrites,
 		status,

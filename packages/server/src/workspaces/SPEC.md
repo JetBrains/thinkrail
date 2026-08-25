@@ -161,6 +161,11 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   `kind: "default"` — forget would hand the archive teardown's `rm -rf` fallback the project folder,
   rename would `git branch -m` the user's real branch; the record carries `renamed: true` so both
   auto-rename passes stay away as belt-and-suspenders.
+- **Initial-terminal eligibility is creation-owned.** Every workspace record first persisted by
+  `createWorkspace`, `openExistingWorktree`, or Default ensure carries the optional literal marker
+  `initialTerminalEligible: true`. Existing records are never backfilled during list, refresh, or migration;
+  absence means legacy/ineligible. The web combines this host-owned creation fact with first-layout state, so
+  opening a pre-existing layoutless workspace after an upgrade cannot manufacture a default terminal.
 - **`ensureWorkspaceScratchDir(ws)`** — idempotent seed of the gitignored `WORKSPACE_CONTEXT_DIR`
   scratch dir (mkdir + self-ignoring `*` `.gitignore`); the host calls it on **session create** for
   every workspace, so the Default workspace writes into the user's repo only when a chat actually

@@ -140,7 +140,9 @@ of the host.
   project folder itself as a workspace, exactly one per project, pinned first in `workspace.list`,
   non-removable and non-renamable server-side; **`kind: "external"`** marks an explicitly attached,
   user-owned worktree ThinkRail may forget but must never rename or reclaim; absent = a ThinkRail-managed
-  worktree workspace — an explicit wire field, never an id convention),
+  worktree workspace; optional literal **`initialTerminalEligible: true`** is the host-owned creation marker
+  carried only by newly persisted workspace records, while absence is the backward-compatible legacy value
+  that forbids automatic default-terminal seeding — explicit wire fields, never id conventions),
   **`OpenBranchReview`** (the optional open review reference for the active branch: PR vs MR + number; no status/actions),
   **`ExistingWorktreeCandidate`** (a `workspace.listExisting` row: absolute `path` + `branch`, or a
   `detached` row the chooser disables), `Session` (chat tab),

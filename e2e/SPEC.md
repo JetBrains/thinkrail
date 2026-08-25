@@ -91,8 +91,9 @@ scenarios are a finding, not a defect: they are how the suite shows two distinct
 one indistinguishable card.
 
 The bottom-workbench scenarios exercise the integrated layout-v2 path rather than only the pure model: first
-seeding and process-free hidden reservation, transactional-failure retry after reconnect, reload survival
-before attach, all four alignments with real side-stack ownership of excluded lower corners, live alignment
+seeding and process-free hidden reservation, a legacy layoutless workspace without the host creation marker
+remaining terminal-free, transactional-failure retry after reconnect, reload survival before attach, all four
+alignments with real side-stack ownership of excluded lower corners, live alignment
 during side resizing and narrow-width compression, pointer/keyboard persistence of only the separator-owned
 side ratio, vacated bottom-group cleanup with center-focus recovery beside a surviving empty slot, independent
 height/group resizing, 27 px folding with `Ctrl+F6` restore focus, modal-aware visibility chords,

@@ -36,9 +36,10 @@ replace, and broadcast complete documents.
 `layout.get` returns `null` for an uninitialized workspace; the compatible web client owns built-in preset
 instantiation and commits the first document through the normal replace path. A persisted version-1 document
 migrates to version 2 with a hidden, empty below-center bottom region, preserving every existing placement,
-side geometry, and process lifetime. Migration floors the reported snapshot revision at 2; revision 1 remains
-an unambiguous fresh-version-2 marker for the web's one-time default-terminal seed. A bottom-less custom
-preset normalizes the same way. An unknown future
+side geometry, and process lifetime. Migration floors the reported snapshot revision at 2. Revision 1
+identifies a first persisted version-2 document, not whether its workspace is new; the web combines it with
+`Workspace.initialTerminalEligible`, which is owned by the workspace registry, for one-time default-terminal
+seeding. A bottom-less custom preset normalizes the same way. An unknown future
 version is preserved and may fall back to a compatible last-known-good copy, but an older host never
 overwrites it implicitly. Persisted settings normalization isolates malformed custom presets and, when the
 selected custom preset is lost, restores the contracts default preset **and both default group capacities** so
