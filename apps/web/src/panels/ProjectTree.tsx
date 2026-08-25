@@ -250,7 +250,6 @@ export function ProjectTree() {
 								onRestoreFocus={() => focusProjectNameOrAdd(project.id)}
 							/>
 							{isExpanded && list !== undefined && (
-								// 4px above the first workspace (project → workspace) and 4px between workspace blocks.
 								<ul className="mt-4 flex flex-col gap-4">
 									{list.map((ws) => (
 										<WorkspaceRow
@@ -525,7 +524,6 @@ function WorkspaceRow({
 					{/* Name on top, the git branch on a second line beneath it — the display name is decoupled
 					    from the branch, so surface both without crowding one line. The branch line is hidden when
 					    they coincide, so pristine/legacy rows stay a single compact line. */}
-					{/* 2px between the workspace name and its branch/metadata line. */}
 					<span className="flex min-w-0 flex-1 flex-col gap-2">
 						<span
 							data-testid="workspace-name"

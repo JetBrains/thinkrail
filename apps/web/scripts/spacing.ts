@@ -1,24 +1,5 @@
-/**
- * The spacing pipeline: load → validate → render CSS.
- *
- * `styles/spacing.json` is the ONLY source of layout-spacing values. This module derives the raw
- * `--space-<n>` custom properties and the Tailwind base from it; nothing downstream may invent a
- * padding, margin or gap length. The scale is CANONICAL and NUMERIC — a step's name IS its pixel value
- * (`4` → `4px`), so a design instruction ("use spacing 8") maps to exactly one token (`--space-8`) and
- * one family of utilities (`p-8`, `gap-8`, `py-8`).
- *
- * NUMBER = PX, UNIFORMLY. Tailwind v4 powers spacing (`p`/`m`/`gap`) AND sizing (`w`/`h`/`size`/inset/
- * translate) from one `--spacing` base, so the two cannot be split by theme. We set `--spacing: 1px`,
- * which makes every bare number resolve to that many pixels (`p-4`=4px, `w-16`=16px) and REPLACES
- * Tailwind's built-in 0.25rem base — so nothing falls back to Tailwind's own numeric scale. The
- * canonical `--space-<n>` steps below are the vocabulary the `spacingUsage` gate enforces at `p`/`m`/
- * `gap` call sites, and the tokens hand-written CSS reads directly; sizing utilities are exact px.
- *
- * Spacing is deliberately independent of typography, colour and radius: a change to the type scale or a
- * theme must never move layout.
- *
- * Entry point: `generate-spacing.ts` (write / --check).
- */
+// The spacing pipeline: load → validate → render CSS. Design + rationale: src/styles/SPACING.md
+// (web-spacing); pipeline shape: scripts/SPEC.md (module-web-scripts). Entry point: generate-spacing.ts.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -49,8 +30,7 @@ export function validate(spacing: Spacing): string[] {
 		issues.push("steps must declare at least one step");
 	}
 	for (const [step, value] of Object.entries(spacing.steps ?? {})) {
-		// A step name IS its pixel value: `"8"` must be `"8px"`. This is what lets an instruction name a
-		// number and reach exactly one token — a `"8": "10px"` step would break that contract silently.
+		// A step name IS its pixel value (`"8"` → `"8px"`).
 		if (!/^[0-9]+$/.test(step)) {
 			issues.push(`steps.${step} must be a bare integer (the canonical pixel value)`);
 			continue;
@@ -65,10 +45,7 @@ export function validate(spacing: Spacing): string[] {
 const HEADER = (version: string) => `/*
  * GENERATED — do not edit. Source: \`src/styles/spacing.json\` (v${version}).
  * Regenerate with \`bun run spacing:generate\`; \`spacing:check\` fails when this file is stale.
- *
- * The canonical numeric spacing tokens, then the Tailwind base. Hand-written CSS reads the raw
- * \`--space-<n>\` tokens; component call sites use the numeric \`p-<n>\` / \`gap-<n>\` / \`py-<n>\`
- * utilities, which resolve to N pixels through the \`--spacing: 1px\` base below.
+ * See src/styles/SPACING.md (web-spacing).
  */
 `;
 
@@ -84,13 +61,7 @@ export function renderCss(spacing: Spacing): string {
 		"}",
 		"",
 		"@theme inline {",
-		"\t/*",
-		"\t * NUMBER = PX. Tailwind v4 shares one `--spacing` base between spacing (`p`/`m`/`gap`) and sizing",
-		"\t * (`w`/`h`/`size`/inset/translate), so they cannot be split by theme. Setting it to 1px makes every",
-		"\t * bare number resolve to that many pixels (`p-4`=4px, `w-16`=16px) and REPLACES Tailwind's built-in",
-		"\t * 0.25rem base, so no length falls back to Tailwind's own numeric scale. The canonical spacing",
-		"\t * VOCABULARY (which of these numbers `p`/`m`/`gap` may use) is enforced by `spacingUsage.test.ts`.",
-		"\t */",
+		"\t/* NUMBER = PX: one base drives spacing AND sizing (see SPACING.md). Replaces Tailwind's 0.25rem. */",
 		"\t--spacing: 1px;",
 		"}",
 		"",

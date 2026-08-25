@@ -3,48 +3,15 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { normalizeEol } from "../../scripts/generatedFiles";
 
-/**
- * The SHAPE + SPACING adoption guard — the third sibling of `colorUsage.test.ts` and
- * `typographyUsage.test.ts`. Colour, typography, radius and spacing each have a JSON/token source and a
- * usage guard that fails on drift; unlike a colour utility, an off-scale length always RENDERS, so its
- * drift is invisible in review and in every other gate.
- *
- * SPACING IS ONE CANONICAL NUMERIC VOCABULARY. `styles/spacing.json` declares the steps — `0`, `2`,
- * `4`, `8`, `12`, `16`, `24`, `32`, `40`, `64` — where the step name IS its pixel value. Every
- * `p`/`m`/`gap` utility must spend one of those steps (`p-8`, `gap-4`, `py-12`); the value flows from
- * `--spacing: 1px` in `generated/spacing.css`, which makes a bare number resolve to that many pixels and
- * replaces Tailwind's built-in 0.25rem base — so nothing falls back to Tailwind's own numeric scale. The
- * scale is a DEFINED primitive set, not an inventory of usage: a step may exist with no consumers yet.
- *
- * What is banned:
- *  - the legacy t-shirt aliases (`p-xs`, `gap-sm`, …) — they no longer exist;
- *  - any OFF-SCALE number on a spacing utility (`p-6`, `py-1`, `gap-0.5`) — it lands between steps, so
- *    the next person copies it instead of the step it was reaching for;
- *  - a raw pixel length at the call site (`py-[3px]`) — belongs to no scale;
- *  - re-spelling a step through an arbitrary value (`p-[var(--space-8)]` / `p-[8px]`) — the numeric
- *    utility is the one way to name it.
- *
- * SIZING IS OUT OF SCOPE HERE, deliberately. Tailwind v4 shares the `--spacing` base between spacing
- * and sizing, so `w`/`h`/`size`/inset/translate also resolve as number = px — but which px a box is is a
- * layout constraint, not rhythm, and is not policed by this gate.
- *
- * HANDWRITTEN CSS IS COVERED TOO. `index.css` (and any sibling `.css` under `styles/`) spends the same
- * scale on its rhythm PROPERTIES — `gap` / `padding` / `margin` and their longhands must carry a
- * `--space-*` token (or `0` / `auto`), never a raw `Npx`. Sizing, coordinates and box-shadow/border
- * offsets are geometry, not rhythm, and are not scanned. A documented non-rhythm optical offset may stay
- * raw via the `CSS_RHYTHM_EXEMPT` allowlist (currently the `.review-region` rail pair only).
- *
- * A LENGTH THAT IS NOT A SCALE STEP IS STILL ALLOWED on a spacing utility through the BRACKET escape
- * hatch, for measured/optical/geometry values that are not rhythm: `pr-[2rem]` (a close-button reserve),
- * `pl-[1.6em]` (an em-relative list indent) and `pl-[calc(0.875rem+var(--space-8))]` (an icon-aligned
- * indent) are constraints, not steps. Only the bare-suffix form of a spacing utility is policed, and the
- * two arbitrary forms that re-spell a step (`[<n>px]`, `[var(--space…)]`).
- */
+// The radius + spacing adoption guard (sibling of colorUsage/typographyUsage). An off-scale length
+// always RENDERS, so its drift is invisible in review and every other gate — hence this gate. The
+// contract it enforces (canonical numeric scale, number=px, bans, sizing out of scope, handwritten-CSS
+// rhythm coverage, bracket escape hatch) lives in src/styles/SPACING.md (web-spacing).
 
 const SRC = new URL("..", import.meta.url).pathname;
 const read = (p: string) => normalizeEol(readFileSync(p, "utf8"));
 const rel = (p: string) => p.slice(SRC.length);
-/** Comments name utilities in order to explain them, which is not a usage. */
+// Strip comments: they name utilities to explain them, which is not a usage.
 const code = (p: string) =>
 	read(p)
 		.replace(/\/\*[\s\S]*?\*\//g, "")
@@ -74,17 +41,12 @@ const SPACING_JSON = join(SRC, "styles/spacing.json");
 const STEPS = new Set(
 	Object.keys((JSON.parse(read(SPACING_JSON)) as { steps: Record<string, string> }).steps),
 );
-/** The retired t-shirt names — rejected outright so they can never creep back. */
 const TSHIRT = new Set(["xs", "sm", "md", "lg", "xl"]);
 
-/**
- * `p`, `px`, `mt`, `gap-y`, … — the utilities that spend a step of the spacing scale (NOT the sizing
- * utilities, which share the base but are not rhythm). Ordered longest-first so alternation matches the
- * whole prefix (`gap-x`, not `gap` + a stray `x`).
- */
+// The spacing (rhythm) utilities — NOT sizing, which shares the base. Longest-first so `gap-x` matches
+// before `gap`. A responsive/state prefix (`sm:`, `hover:`) may precede any of them.
 const SPACING_PREFIX =
 	"px|py|pt|pb|pl|pr|ps|pe|p|mx|my|mt|mb|ml|mr|ms|me|m|gap-x|gap-y|gap|space-x|space-y";
-/** A responsive/state prefix (`sm:`, `hover:`, `group-hover:`) may precede any of them. */
 const VARIANT = String.raw`(?:[a-z-]+(?:\[[^\]]*\])?:)*`;
 
 function hits(pattern: RegExp): string[] {
@@ -95,29 +57,19 @@ function hits(pattern: RegExp): string[] {
 	);
 }
 
-/** Strip block comments to spaces but KEEP newlines, so a reported CSS line number stays true and a
- *  length that only appears inside prose (`A 6px status circle`) is never a false positive. */
+// Strip block comments to spaces but KEEP newlines, so a reported CSS line stays true and prose
+// (`A 6px status circle`) is never a false positive.
 const cssCode = (p: string) =>
 	read(p).replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "));
 
-/**
- * Rhythm PROPERTIES only — the handwritten-CSS twins of the `p`/`m`/`gap` utilities. Sizing
- * (`width`/`height`/`min-*`/`max-*`), coordinates (`top`/`left`/`inset`), and `box-shadow`/`border`
- * offsets + hairlines are deliberately NOT here: they are geometry, not rhythm, exactly as the utility
- * scan above excludes `w`/`h`. The property must open the declaration, so `scroll-margin` / a `--custom`
- * property name never matches.
- */
+// Rhythm PROPERTIES only — the CSS twins of `p`/`m`/`gap`. Sizing/coordinates/box-shadow offsets are
+// geometry, not rhythm, and excluded (as the utility scan excludes `w`/`h`). Must open the declaration.
 const CSS_RHYTHM_PROP =
 	/^\s*(gap|row-gap|column-gap|padding(?:-(?:top|right|bottom|left|inline|block)(?:-(?:start|end))?)?|margin(?:-(?:top|right|bottom|left|inline|block)(?:-(?:start|end))?)?)\s*:\s*([^;{}]+)/;
-/** A raw px length anywhere in the value (`8px`, `-10px`, `2px 12px`) — the drift the token layer removes. */
 const RAW_PX = /-?\d*\.?\d+px/;
 
-/**
- * Documented NON-RHYTHM geometry kept raw on a rhythm property — an optical offset that is not a step.
- * `.review-region` draws a left rail as a 2px inset box-shadow; `padding-left` clears that rail and an
- * equal negative `margin-left` cancels it, so the rail adds ZERO layout shift. 10px is measured to the
- * rail, off the scale, and the two must stay equal-and-opposite — not rhythm, so it is not tokenised.
- */
+// Documented non-rhythm geometry kept raw on a rhythm property (see SPACING.md): the `.review-region`
+// rail pair, an equal-and-opposite optical offset that adds zero layout shift.
 const CSS_RHYTHM_EXEMPT = new Set(["padding-left: 10px", "margin-left: -10px"]);
 
 function cssRhythmHits(): string[] {
@@ -152,8 +104,8 @@ describe("radius at a call site", () => {
 	});
 
 	it("declares no radius step nothing consumes", () => {
-		// The scan EXCLUDES `tokens.css`, or each step's own declaration counts as its consumer and the
-		// check is vacuous — which is how the first draft of it passed while an orphan step was present.
+		// Must EXCLUDE `tokens.css`, or each step's own declaration counts as its consumer and the check is
+		// vacuous.
 		const used = new Set(
 			FILES.filter((f) => f !== TOKENS).flatMap((f) =>
 				[...code(f).matchAll(/--radius-([a-z0-9]+)/g)].map((m) => m[1] as string),
@@ -168,10 +120,8 @@ describe("radius at a call site", () => {
 
 describe("spacing at a call site", () => {
 	it("names a canonical spacing step, never a t-shirt alias or off-scale number", () => {
-		// `p-8` / `gap-4` (steps) pass; `p-xs` (legacy alias) and `p-6` / `py-1` / `gap-0.5` (off-scale)
-		// do not. The bracket escape hatch (`pr-[2rem]`) is not a bare suffix, so it is not matched here.
-		// Keyword suffixes (`auto`, `px` hairline, `full`, `reverse`) are not rhythm and stay fine; a bare
-		// number must be a declared step, and the retired t-shirt names are rejected outright.
+		// `p-8`/`gap-4` pass; t-shirt aliases and off-scale numbers (`p-6`, `py-1`, `gap-0.5`) do not.
+		// Keyword suffixes (`auto`, `px`, `full`) and the bracket escape hatch are not bare suffixes here.
 		const bad = hits(
 			new RegExp(String.raw`(?<![\w-])${VARIANT}-?(?:${SPACING_PREFIX})-([a-z0-9.]+)`, "g"),
 		).filter((h) => {
@@ -184,27 +134,22 @@ describe("spacing at a call site", () => {
 	});
 
 	it("never spells a spacing length as a raw pixel value", () => {
-		// `py-[3px]` lands between steps; `pr-[2rem]` / `pl-[1.6em]` / `pl-[calc(…)]` are measured
-		// constraints, not px rhythm, so only a bare `px` length in the brackets is banned.
+		// Bans only a bare `px` length in the brackets (`py-[3px]`); measured `rem`/`em`/`calc` stay.
 		expect(
 			hits(new RegExp(String.raw`(?<![\w-])${VARIANT}-?(?:${SPACING_PREFIX})-\[-?[\d.]+px\]`, "g")),
 		).toEqual([]);
 	});
 
 	it("never re-spells a step through a --space arbitrary value", () => {
-		// `p-[var(--space-8)]` re-spells `p-8` and hides the step behind a variable; the numeric utility
-		// is the one way to name it. Composed measured indents (`pl-[calc(…+var(--space-8))]`) are fine —
-		// the ban is only the DIRECT `-[var(--space…` re-spelling.
+		// Bans only the DIRECT `-[var(--space…` re-spelling of a step; composed indents
+		// (`pl-[calc(…+var(--space-8))]`) are fine.
 		expect(
 			hits(new RegExp(String.raw`(?<![\w-])${VARIANT}-?(?:${SPACING_PREFIX})-\[var\(--space`, "g")),
 		).toEqual([]);
 	});
 
 	it("treats the scale as a DEFINED primitive set — a step may exist with no consumers", () => {
-		// The spacing scale is intentionally defined, NOT an inventory derived from current usage: reserved
-		// primitives exist ahead of any consumer. So there is deliberately no orphan/reachability check
-		// here — re-adding one would reject a reserved step (`32`/`40`/`64` currently have no call sites).
-		// This pins that those reserved primitives stay declared and every step is a bare-integer px value.
+		// No orphan/reachability check on purpose: reserved primitives (`32`/`40`/`64`) exist ahead of use.
 		for (const step of ["32", "40", "64"]) expect(STEPS.has(step)).toBe(true);
 		expect([...STEPS].every((step) => /^\d+$/.test(step))).toBe(true);
 	});
@@ -212,9 +157,7 @@ describe("spacing at a call site", () => {
 
 describe("spacing in handwritten CSS", () => {
 	it("spends a --space-* token on every rhythm property, never a raw pixel length", () => {
-		// `gap`/`padding`/`margin` are the CSS twins of `p`/`m`/`gap`: a length here is rhythm and must be a
-		// `--space-*` token (or `0`/`auto`). On-scale (`8px`) becomes its token; off-scale (`6px`) is
-		// resolved to a step first. Only documented non-rhythm geometry stays raw (`CSS_RHYTHM_EXEMPT`).
+		// A rhythm length in CSS must be a `--space-*` token (or `0`/`auto`); only `CSS_RHYTHM_EXEMPT` stays raw.
 		expect(cssRhythmHits()).toEqual([]);
 	});
 });

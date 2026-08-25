@@ -2,7 +2,7 @@
 id: module-web-scripts
 type: submodule-design
 status: active
-title: apps/web build-time scripts — the typography and colour pipelines
+title: apps/web build-time scripts — the typography, colour and spacing pipelines
 parent: module-web
 ---
 
@@ -13,7 +13,7 @@ machine or in CI, never in the browser bundle. They read files from `src/`, writ
 into `src/`, and exit with a status code.
 
 The directory holds three pipelines — typography, colour and spacing — built the same way. They live here rather than in `src/` because
-it is a *generator*: it uses `node:fs` and `node:path`, which must never reach browser-bundled code.
+they are *generators*: they use `node:fs` and `node:path`, which must never reach browser-bundled code.
 
 ## What it owns
 
@@ -26,7 +26,7 @@ it is a *generator*: it uses `node:fs` and `node:path`, which must never reach b
 | `generate-colors.ts` | CLI. Writes `src/styles/generated/colors.css` — the roles, the appearance-level effects, and the Tailwind map; `--check` fails when it is stale. |
 | `spacing.ts` | the library: load → validate → render. The **only** place a spacing length is written — the canonical numeric steps and the `--spacing: 1px` (number = px) base. |
 | `generate-spacing.ts` | CLI. Writes `src/styles/generated/spacing.css` — the `--space-<n>` tokens + the Tailwind base; `--check` fails when it is stale. |
-| `generatedFiles.ts` | what both CLIs do with a rendered file: `--check` reports drift, otherwise write. The **only** definition of "stale", so the two pipelines and the tests cannot disagree. |
+| `generatedFiles.ts` | what every generate CLI does with a rendered file: `--check` reports drift, otherwise write. The **only** definition of "stale", so the three pipelines and the tests cannot disagree. |
 | `generatedFiles.test.ts` | pins that definition — content drift and a missing file are stale, a CRLF working tree is not. |
 
 Public surface: the `typography.ts`, `colors.ts`, `spacing.ts` and `generatedFiles.ts` exports. There is no `index.ts` barrel — the CLIs are entry points
@@ -78,5 +78,6 @@ in agreement about the same functions.
 - **A generated file is never hand-edited.** The header of the emitted CSS says so, and `typography:check`
   enforces it.
 
-Design and rationale for the system itself: [../src/styles/TYPOGRAPHY.md](../src/styles/TYPOGRAPHY.md)
-(`web-typography`).
+Design and rationale for each system itself: [../src/styles/TYPOGRAPHY.md](../src/styles/TYPOGRAPHY.md)
+(`web-typography`), [../src/styles/COLOR.md](../src/styles/COLOR.md) (`web-color`), and
+[../src/styles/SPACING.md](../src/styles/SPACING.md) (`web-spacing`).

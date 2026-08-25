@@ -6,12 +6,8 @@
 	 * one that can drift; `colorUsage.test.ts` fails on a colour literal here.
 	 */
 
-	/*
-	 * SPACING IS NOT HERE. The canonical numeric scale (`--space-2` … `--space-24`) is generated into
-	 * `generated/spacing.css` from `spacing.json`, the single place a layout length is written — the same
-	 * arrangement colour and typography use. Spacing stays deliberately independent of typography: a
-	 * change to the type scale must never move layout.
-	 */
+	/* SPACING IS NOT HERE: the `--space-*` scale is generated into `generated/spacing.css` from
+	   `spacing.json`. See styles/SPACING.md (web-spacing). */
 
 	/* Shape + motion. A four-step primitive scale, `sm` (4px) is the DEFAULT corner for ordinary
 	   standalone controls (buttons, inputs, rows, tabs, tool cards). `xs` (2px) is the text-run tier:

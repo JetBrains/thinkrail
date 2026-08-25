@@ -332,10 +332,8 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 			data-visible="true"
 			className="absolute inset-0"
 		>
-			{/* 12px inset on all four sides of the terminal content, via positioning (not padding): the mount
-			    host's border-box IS the inset region, so FitAddon reads its true content size. Padding on the
-			    xterm host breaks @xterm/addon-fit@0.11.0, which subtracts padding from xterm's child, not this
-			    parent — leaving the grid sized to the full pane. */}
+			{/* HAZARD: inset via positioning, NOT padding — addon-fit@0.11.0 subtracts padding from xterm's
+			    child, not this mount host, so `p-*` here would size the grid to the full pane. */}
 			<div ref={hostRef} className="absolute inset-12" />
 			{detached ? (
 				<div className="absolute inset-0 flex flex-col items-center justify-center gap-8 bg-overlay">

@@ -1,13 +1,8 @@
 #!/usr/bin/env bun
-/**
- * Writes `src/styles/generated/spacing.css` from `src/styles/spacing.json`.
- *
- *   bun run spacing:generate          write the file
- *   bun run spacing:generate --check  fail if the committed file is stale (CI + pre-commit gate)
- *
- * The generated output is committed so every spacing change is reviewable as a diff — the same
- * arrangement `generate-colors.ts` and `generate-typography.ts` use.
- */
+// Writes `src/styles/generated/spacing.css` from `src/styles/spacing.json`.
+//   bun run spacing:generate          write the file
+//   bun run spacing:generate --check  fail if the committed file is stale (CI + pre-commit gate)
+// See scripts/SPEC.md (module-web-scripts).
 import { writeOrCheck } from "./generatedFiles";
 import { GENERATED_PATH, loadSpacing, renderCss, type Spacing, validate } from "./spacing";
 
