@@ -35,8 +35,8 @@ decisions: [[task-subagent-support]].
 
 | Tool | Behavior |
 | --- | --- |
-| `Agent({ subagent_type, task, run_in_background? })` | Discovers definitions per call (editable mid-session), maps the named one to `SessionOptions`, spawns via `createChild` + `runQueued`. Foreground: awaits the outcome; `error` outcomes throw (tool error). Background: returns `{childSessionId}` text immediately; the terminal event injects a `subagent-completion` custom message (`deliverAs: "followUp", triggerTurn: true`). Live `onUpdate` details flow to `partialResult` (REPLACE). Results bounded to 50k chars — the full text stays in the child transcript. |
-| `get_subagent_result({ session_id })` | Reads the core registry via `findChild` + `collectResult`: terminal → final text + details (marks collected); running → status snapshot; unknown id → error naming the restart-loss case + the derived transcript path. |
+| `Agent({ subagent_type, task, run_in_background? })` | Discovers definitions per call (editable mid-session), maps the named one to `SessionOptions`, spawns via `createChild` + `runQueued`. Foreground: awaits the outcome and rides the tool signal; `error` outcomes throw (tool error, reason-first). Background: **never rides the parent turn's abort signal** (a detached run survives a parent abort — core-spec semantics, test-pinned); returns `{childSessionId}` text immediately; the terminal event injects a `subagent-completion` custom message (`deliverAs: "followUp", triggerTurn: true`). Live `onUpdate` details flow to `partialResult` (REPLACE). Results bounded to 50k chars — the full text stays in the child transcript. |
+| `get_subagent_result({ session_id })` | Reads the core registry via `findChild` + `collectResult`: terminal → final text + details (marks collected; an errored run reports its `errorMessage` first — core decision #24); running → status snapshot; unknown id → error naming the restart-loss case + the derived transcript path. |
 
 Both tools register inside `session_start` (emitted by `bindExtensions`), so the `Agent`
 description enumerates the definitions actually visible to that session.

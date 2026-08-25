@@ -13,7 +13,6 @@ import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import {
 	createDelegationService,
 	DEFAULT_SCOPE,
-	type DelegationRunDetails,
 	type DelegationService,
 	defaultDelegationRoot,
 	deriveChildSessionFile,
@@ -50,10 +49,12 @@ function agentListLines(definitions: AgentDefinition[]): string {
 }
 
 function boundedText(outcome: RunOutcome): string {
+	// An error's REASON leads; any partial text follows (a truncated report must not mask the failure).
 	const text =
-		outcome.finalText ??
-		outcome.errorMessage ??
-		(outcome.status === "completed" ? "(no output)" : `Run ${outcome.status}.`);
+		outcome.status === "error"
+			? `${outcome.errorMessage ?? "unknown error"}${outcome.finalText ? `\n\n${outcome.finalText}` : ""}`
+			: (outcome.finalText ??
+				(outcome.status === "completed" ? "(no output)" : `Run ${outcome.status}.`));
 	return text.length > MAX_RESULT_CHARS ? `${text.slice(0, MAX_RESULT_CHARS)}\n[truncated]` : text;
 }
 
@@ -137,7 +138,9 @@ ${known}`,
 
 					const run = child.runQueued(params.task, {
 						...(mapping.maxTurns !== undefined ? { maxTurns: mapping.maxTurns } : {}),
-						...(signal !== undefined ? { signal } : {}),
+						// The tool signal is the parent turn's abort — only AWAITED runs ride it; a detached
+						// run must survive a parent-turn abort (core spec: Waiting & control → Abort).
+						...(!params.run_in_background && signal !== undefined ? { signal } : {}),
 						onUpdate: (details) => {
 							onUpdate?.({ content: [{ type: "text", text: details.status }], details });
 						},
@@ -160,8 +163,11 @@ ${known}`,
 								// Contract-misuse rejections cannot happen here (fresh child, first run);
 								// run failures arrive as outcome VALUES and are delivered above.
 							});
-						// The snapshot exists synchronously once runQueued is called.
-						const details = child.snapshot?.details as DelegationRunDetails | undefined;
+						// runQueued marks the run queued synchronously — the snapshot exists by construction.
+						const details = child.snapshot?.details;
+						if (details === undefined) {
+							throw new Error("pi-delegation invariant violated: no run snapshot after runQueued");
+						}
 						return {
 							content: [
 								{
@@ -169,7 +175,7 @@ ${known}`,
 									text: `Started background subagent "${definition.name}" (session ${child.sessionId}). A completion message will arrive when it finishes; use get_subagent_result to collect it on demand.`,
 								},
 							],
-							details: details ?? {},
+							details,
 						};
 					}
 
@@ -223,9 +229,11 @@ ${known}`,
 						snapshot.status === "completed" ||
 						snapshot.status === "error" ||
 						snapshot.status === "aborted";
-					const text = terminal
-						? (snapshot.finalText ?? `Run ${snapshot.status}.`)
-						: `Still ${snapshot.status}. Ask again later or continue with other work.`;
+					const text = !terminal
+						? `Still ${snapshot.status}. Ask again later or continue with other work.`
+						: snapshot.status === "error"
+							? `Run error: ${snapshot.errorMessage ?? "unknown error"}${snapshot.finalText ? `\n\n${snapshot.finalText}` : ""}`
+							: (snapshot.finalText ?? `Run ${snapshot.status}.`);
 					return {
 						content: [{ type: "text", text }],
 						details: snapshot.details,

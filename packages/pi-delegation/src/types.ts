@@ -146,6 +146,8 @@ export interface RunSnapshot {
 	task: string;
 	details: DelegationRunDetails;
 	finalText?: string;
+	/** An errored run keeps its reason for later collection (decision #24). */
+	errorMessage?: string;
 	/** A detached (unawaited) run's result was collected (`ChildHandle.collectResult`). */
 	collected: boolean;
 }

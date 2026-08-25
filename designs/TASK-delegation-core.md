@@ -166,6 +166,7 @@ interface RunSnapshot {
   task: string;
   details: DelegationRunDetails;
   finalText?: string;
+  errorMessage?: string;            // an errored run keeps its reason for later collection
   collected: boolean;               // a detached (unawaited) run's result was collected
 }
 
@@ -533,3 +534,6 @@ lineage-siblings under the root — parent edge ≠ dependency edge.
     pi. The core reads exactly `cwd`/`model`/`thinkingLevel` (+liveness) off a parent, so
     `ParentContext = Pick<ExtensionContext, …>` (type reuse over new types — user note) covers all
     verified usage in both worlds and structurally prevents the core from driving the parent.
+24. **`RunSnapshot.errorMessage`** (review round 2): the terminal snapshot keeps an errored run's
+    reason — without it, a detached error collected later via `get_subagent_result` carried zero
+    diagnostic (the completion message had it, the collection path didn't).

@@ -2,7 +2,7 @@
 // resource loader, faux providers script both sides (parent on fauxa, background child on fauxb so
 // the two response queues never race), and the child runs through the real delegation core.
 
-import { afterAll, beforeAll, expect, test } from "bun:test";
+import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -95,6 +95,11 @@ beforeAll(async () => {
 		join(agentDir, "agents", "bg-runner.md"),
 		"---\nname: bg-runner\ndescription: Background test runner\nmodel: fauxb\n---\n\nRun the delegated task.\n",
 	);
+	// A capped definition on the parent's provider — pins that max_turns flows def → RunOptions.
+	writeFileSync(
+		join(agentDir, "agents", "capped.md"),
+		"---\nname: capped\ndescription: Turn-capped test agent\ntools: read, ls\nmax_turns: 1\n---\n\nWork until stopped.\n",
+	);
 
 	runtime = await ModelRuntime.create({
 		credentials: new InMemoryCredentialStore(),
@@ -141,6 +146,11 @@ beforeAll(async () => {
 	parent = created.session;
 	// session_start (where the tools register) fires from bindExtensions.
 	await parent.bindExtensions({ mode: "print" });
+});
+
+// A failed assertion skips a test's own cleanup — never let its children leak into the next test.
+beforeEach(async () => {
+	if (parent) await service.disposeChildrenOf(parent.sessionId);
 });
 
 afterAll(() => {
@@ -241,6 +251,77 @@ test("background: run_in_background returns immediately, completion arrives as a
 	const child = service.childrenOf(parent.sessionId)[0];
 	expect(child?.collectResult()?.finalText).toBe("BG_RESULT");
 	expect(child?.snapshot?.collected).toBe(true);
+	await service.disposeChildrenOf(parent.sessionId);
+});
+
+test("a foreground error outcome surfaces as a tool error carrying the reason", async () => {
+	fauxA.setResponses([
+		fauxAssistantMessage(fauxToolCall("Agent", { subagent_type: "scout", task: "Fail." })),
+		fauxAssistantMessage("partial", { stopReason: "error", errorMessage: "boom" }), // the child
+		fauxAssistantMessage("PARENT_SAW_ERROR"),
+	]);
+
+	await parent.prompt("Send a doomed scout.");
+
+	const text = lastToolResultText();
+	expect(text).toContain("failed: boom");
+	await service.disposeChildrenOf(parent.sessionId);
+});
+
+test("max_turns flows from the definition into the run: the cap steers the wrap-up", async () => {
+	fauxA.setResponses([
+		fauxAssistantMessage(fauxToolCall("Agent", { subagent_type: "capped", task: "Loop." })),
+		fauxAssistantMessage(fauxToolCall("ls", {})), // child turn 1 — hits the cap, wrap-up steered
+		fauxAssistantMessage("WRAPPED_UP"), // child turn 2 — the allowed wrap-up turn
+		fauxAssistantMessage("PARENT_OK"),
+	]);
+
+	await parent.prompt("Run the capped agent.");
+
+	// The report is the wrap-up answer — only produced because maxTurns reached the core.
+	expect(lastToolResultText()).toContain("WRAPPED_UP");
+	const child = service.childrenOf(parent.sessionId).at(-1);
+	expect(child?.snapshot?.status).toBe("completed");
+	expect(child?.snapshot?.details.usage.turns).toBe(2);
+	await service.disposeChildrenOf(parent.sessionId);
+});
+
+test("a detached run SURVIVES a parent-turn abort (only awaited runs ride the tool signal)", async () => {
+	fauxA.setResponses([
+		fauxAssistantMessage(
+			fauxToolCall("Agent", {
+				subagent_type: "bg-runner",
+				task: "Slow job.",
+				run_in_background: true,
+			}),
+		),
+		// Parent turn 2 streams slowly so the abort lands mid-turn, while the child is mid-run.
+		async () => {
+			await Bun.sleep(150);
+			return fauxAssistantMessage("SLOW_ACK");
+		},
+		fauxAssistantMessage("POST_ABORT_COMPLETION"), // the completion-triggered turn after the abort
+	]);
+	fauxB.setResponses([
+		async () => {
+			await Bun.sleep(250);
+			return fauxAssistantMessage("SURVIVED");
+		},
+	]);
+
+	const prompted = parent.prompt("Run it, then get interrupted.");
+	await waitFor(() => transcript().includes("Started background subagent"));
+	await Bun.sleep(30); // into parent turn 2, child still sleeping
+	await parent.abort();
+	await prompted;
+
+	// The parent turn died; the detached child did not.
+	const child = service.childrenOf(parent.sessionId).at(-1);
+	await waitFor(() => child?.snapshot?.status === "completed");
+	expect(child?.snapshot?.finalText).toBe("SURVIVED");
+	// Its completion still reaches the parent as a followUp-triggered turn.
+	await waitFor(() => transcript().includes("POST_ABORT_COMPLETION"));
+	expect(transcript()).toContain(SUBAGENT_COMPLETION_MESSAGE);
 	await service.disposeChildrenOf(parent.sessionId);
 });
 

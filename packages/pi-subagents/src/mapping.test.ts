@@ -36,6 +36,18 @@ test("model refs resolve fuzzily: provider/id, exact id, unique prefix — ambig
 	expect(resolveModelRef("nothing", AVAILABLE)).toBeUndefined();
 });
 
+test("an id mirrored by several providers is ambiguous — never resolved by registry order", () => {
+	const mirrored = [...AVAILABLE, { provider: "openrouter", id: "gpt-5" }];
+	// Exact id and prefix both hit two providers — must fail, not first-win.
+	expect(resolveModelRef("gpt-5", mirrored)).toBeUndefined();
+	expect(resolveModelRef("gpt", mirrored)).toBeUndefined();
+	// Qualifying picks deterministically.
+	expect(resolveModelRef("openrouter/gpt-5", mirrored)).toEqual({
+		provider: "openrouter",
+		id: "gpt-5",
+	});
+});
+
 test("the child prompt is stable-first: body, then bridge, then env", () => {
 	const prompt = buildChildSystemPrompt(definition(), "/tmp/somewhere");
 	const body = prompt.indexOf("You are a scout.");

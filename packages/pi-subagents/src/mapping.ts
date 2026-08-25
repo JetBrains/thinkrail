@@ -13,7 +13,9 @@ export const RECURSION_GUARD_TOOLS = ["Agent", "get_subagent_result"] as const;
 
 /**
  * Fuzzy-resolve a definition's model ref against the available models: exact `provider/id` →
- * exact id → unique id prefix. Undefined when nothing (or nothing unambiguous) matches.
+ * exact id → unique id prefix. Undefined when nothing matches OR the match is ambiguous — an id
+ * mirrored by several providers (openrouter-style) must be qualified as `provider/id`, never
+ * silently resolved by registry order.
  */
 export function resolveModelRef(
 	ref: string,
@@ -27,10 +29,14 @@ export function resolveModelRef(
 		return exact ? { provider: exact.provider, id: exact.id } : undefined;
 	}
 	const byId = available.filter((model) => model.id === ref);
-	if (byId.length >= 1 && byId[0]) return { provider: byId[0].provider, id: byId[0].id };
+	if (byId.length === 1 && byId[0]) return { provider: byId[0].provider, id: byId[0].id };
+	if (byId.length > 1) return undefined;
 	const byPrefix = available.filter((model) => model.id.startsWith(ref));
 	const first = byPrefix[0];
-	if (first && byPrefix.every((model) => model.id === first.id)) {
+	if (
+		first &&
+		byPrefix.every((model) => model.id === first.id && model.provider === first.provider)
+	) {
 		return { provider: first.provider, id: first.id };
 	}
 	return undefined;
@@ -89,7 +95,7 @@ export function toSpawnMapping(
 		model = resolveModelRef(definition.model, options.availableModels);
 		if (!model) {
 			throw new Error(
-				`Agent "${definition.name}" pins model "${definition.model}", which matches none of the available models`,
+				`Agent "${definition.name}" pins model "${definition.model}", which does not match exactly one available model — qualify it as "provider/id"`,
 			);
 		}
 	}

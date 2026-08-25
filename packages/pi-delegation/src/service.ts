@@ -315,6 +315,7 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 				task,
 				details: outcome.details,
 				...(outcome.finalText !== undefined ? { finalText: outcome.finalText } : {}),
+				...(outcome.errorMessage !== undefined ? { errorMessage: outcome.errorMessage } : {}),
 				collected: false,
 			};
 			emit(

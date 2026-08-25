@@ -271,6 +271,8 @@ test("a scripted provider error becomes an error OUTCOME, not a rejection", asyn
 		expect(outcome.status).toBe("error");
 		expect(outcome.errorMessage).toBe("boom");
 		expect(child.snapshot?.status).toBe("error");
+		// The reason survives into the registry for later collection (decision #24).
+		expect(child.snapshot?.errorMessage).toBe("boom");
 	} finally {
 		await child.dispose();
 	}
