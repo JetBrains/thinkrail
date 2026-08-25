@@ -9,10 +9,13 @@ import type {
 	GitStatus,
 	Workspace,
 } from "@thinkrail/contracts";
+import { logger } from "../log";
 import { loadProjects, loadWorkspaces } from "../persistence";
 import { changedFileArgs, type DiffRange, diffBaseRef, resolveDiffRange } from "./diffScope";
 import { git, gitAsync } from "./gitExec";
 import { isSafeRef, remoteTrackingRef } from "./refs";
+
+const log = logger("git");
 
 function workspace(workspaceId: string): Workspace {
 	const ws = loadWorkspaces().find((w) => w.id === workspaceId);
@@ -241,21 +244,13 @@ export async function gitStatus(workspaceId: string, scope?: GitDiffScope): Prom
 }
 
 export function readBlobAt(worktreePath: string, ref: string, path: string): string | null {
-	return blobFrom(
-		git(worktreePath, ["show", "--end-of-options", `${ref}:${path}`], { raw: true }),
-		ref,
-		path,
-	);
+	return blobFrom(git(worktreePath, ["show", "--end-of-options", `${ref}:${path}`], { raw: true }));
 }
 
-function blobFrom(
-	shown: { ok: boolean; out: string; err: string },
-	ref: string,
-	path: string,
-): string | null {
+function blobFrom(shown: { ok: boolean; out: string; err: string }): string | null {
 	if (shown.ok) return shown.out;
 	if (!/does not exist in|exists on disk, but not in/.test(shown.err)) {
-		console.warn(`git show ${ref}:${path} failed: ${shown.err || "unknown error"}`);
+		log.warn("git blob read failed");
 	}
 	return null;
 }
@@ -264,7 +259,7 @@ async function showBlob(worktreePath: string, ref: string, path: string): Promis
 	const shown = await gitAsync(worktreePath, ["show", "--end-of-options", `${ref}:${path}`], {
 		raw: true,
 	});
-	return blobFrom(shown, ref, path) ?? "";
+	return blobFrom(shown) ?? "";
 }
 
 export async function gitDiffFile(

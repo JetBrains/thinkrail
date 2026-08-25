@@ -1,9 +1,10 @@
 export type WorkbenchSide = "left" | "right";
+export type WorkbenchAuxiliaryRegion = WorkbenchSide | "bottom";
 
 export interface LayoutAttention {
 	selectedByGroup: Record<string, string>;
 	lastFocusedCenterGroupId: string;
-	lastFocusedSideGroupId: Partial<Record<WorkbenchSide, string>>;
+	lastFocusedSideGroupId: Partial<Record<WorkbenchAuxiliaryRegion, string>>;
 	navigationClockByGroup: Record<string, number>;
 }
 

@@ -69,7 +69,8 @@ PostHog won on free tier, EU residency, and a self-host path).
   `shutdownAnalytics`, `resetAnalyticsForTests`, the event types + bucket helpers, and `BuildKind` — which
   `host/index.ts` re-exports so a launcher can name its own provenance without importing this module
   (the forbidden edge below stays intact).
-- **Allowed deps:** `persistence` (installation record + data dir), `contracts` (types),
+- **Allowed deps:** `persistence` (installation record + data dir), `log` (send failures surface at
+  debug level through the shared logger), `contracts` (types),
   `@earendil-works/pi-ai` (the built-in catalog — server-side value import), `posthog-node` (the
   delivery SDK — value-imported **only** in `sink.ts`), Node `crypto`/`process`.
 - **Forbidden:** importing `host` or any other sibling; being imported by anything but `host` (all

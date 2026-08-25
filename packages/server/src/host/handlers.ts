@@ -78,6 +78,7 @@ import {
 	replaceWorkspaceLayout,
 	validateLayoutSettings,
 } from "../layout";
+import { logger } from "../log";
 import {
 	acknowledgeProjectSkills,
 	closeProject,
@@ -119,6 +120,7 @@ import {
 	closeTerminalTab,
 	closeWorkspaceTerminals,
 	listTerminals,
+	reserveTerminal,
 	resizeTerminal,
 	writeTerminal,
 } from "../terminal";
@@ -152,6 +154,8 @@ import { buildHistoryScope } from "./historyScope";
 import { dropLogin, recordLoginStart } from "./loginAnalytics";
 import { withReviewLock } from "./reviewLock";
 
+const log = logger("host");
+
 export interface RequestContext {
 	clientKey: string;
 }
@@ -163,8 +167,8 @@ async function archiveTeardown(ws: Workspace): Promise<void> {
 		await removeWorkspaceSessions(ws.id, ws.worktreePath);
 		await settleChangeArtifacts(ws.id);
 		reclaimWorktree(ws);
-	} catch (error) {
-		console.warn(`workspace archive teardown failed for ${ws.id}: ${error}`);
+	} catch {
+		log.warn(`workspace archive teardown failed for ${ws.id}`);
 	}
 }
 
@@ -189,8 +193,8 @@ function fireReviewPrompt(
 				"error",
 			);
 		})
-		.catch((err) => {
-			console.warn(`review send rollback failed: ${err instanceof Error ? err.message : err}`);
+		.catch(() => {
+			log.warn("review send rollback failed");
 		});
 }
 
@@ -216,8 +220,8 @@ async function sendToFileChat(
 		};
 	}
 	if (existing) {
-		console.warn(
-			`review ${workspaceId}: linked chat ${existing} for ${path} is no longer on disk — starting a new review chat`,
+		log.warn(
+			`review ${workspaceId}: linked chat ${existing} is no longer on disk — starting a new review chat`,
 		);
 	}
 	ensureWorkspaceScratchDir(ws);
@@ -354,6 +358,11 @@ const handlers: Record<string, Handler> = {
 		return gitDiffFile(p.workspaceId, p.path, p.scope);
 	},
 	"git.listCommits": (params) => listCommits((params as { workspaceId: string }).workspaceId),
+	"terminal.reserve": (params) => {
+		const p = params as { workspaceId: string; tabKey: string; title: string };
+		getWorkspace(p.workspaceId);
+		return { tab: reserveTerminal(p.workspaceId, p.tabKey, p.title) };
+	},
 	"terminal.attach": (params, ctx) => {
 		const p = params as {
 			workspaceId: string;
@@ -605,7 +614,8 @@ const handlers: Record<string, Handler> = {
 	"layout.replace": (params) => {
 		const replacement = params as LayoutReplaceParams;
 		getWorkspace(replacement.workspaceId);
-		return replaceWorkspaceLayout(replacement, getConfig().layout.maxSideGroups);
+		const { maxSideGroups, maxBottomGroups } = getConfig().layout;
+		return replaceWorkspaceLayout(replacement, { maxSideGroups, maxBottomGroups });
 	},
 	"settings.update": (params) => {
 		const config = (params as { config: Partial<AppConfig> }).config;
@@ -733,12 +743,16 @@ const handlers: Record<string, Handler> = {
 	},
 };
 
+export function requestMethodDiagnostic(method: string): string {
+	return Object.hasOwn(handlers, method) ? method : "unknown method";
+}
+
 export async function handleRequest(
 	method: string,
 	params: unknown,
 	ctx: RequestContext,
 ): Promise<unknown> {
-	const handler = handlers[method];
+	const handler = Object.hasOwn(handlers, method) ? handlers[method] : undefined;
 	if (!handler) throw new Error(`Unknown method: ${method}`);
 	return handler(params, ctx);
 }

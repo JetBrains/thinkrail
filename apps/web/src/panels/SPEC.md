@@ -147,9 +147,10 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   `onOpen`/`isActive` by `ChangesPanel`), together with the **diff-tab identity + scope vocabulary**:
   `scopeKey` / `diffTabId(workspaceId, scope, path)` / `diffTabName` / `scopeLabel` and the `splitPath`
   used by both the flat list's path rows and the diff header's path chip. The **branch combobox** is the
-  shared **`BranchPicker`** (searchable, grouped Remote/Local, current pick check-marked, a Refresh that
-  re-lists) — one component for the New-Workspace dialog's *base* branch and the Changes header's *target*
-  branch; the whole state *around* it — the list, `refreshing`, `refresh()` — is the shared
+  shared **`BranchPicker`** (searchable, grouped Remote/Local, current pick check-marked, refreshed on every
+  open with an explicit Refresh control as well) — one component for the New-Workspace dialog's *base* branch
+  and the Changes header's *target* branch; the whole state *around* it — the list, `refreshing`, `refresh()` —
+  is the shared
   **`useBranchList(projectId, onLoaded?)`** (`branches.ts`, over the offline-degrading
   `listBranchesOrEmpty`), so both pickers are identical **by construction**: the list is **keyed to the
   project** (it clears on a project change, and both reads are generation-stamped, so a switch can never
@@ -472,7 +473,7 @@ a project picker, the prompt hero, and the reused
   The shared `ToggleSegment` (List|Tree, Split|Inline, Preview|Source) borrows the same
   `control-bg-selected` fill + `text-default` for its active segment (no bottom marker — a slim toggle,
   not a tab), so "selected" reads the same everywhere and never derives a parallel surface token.
-- The singleton side-tool renderers are **Projects | Specs | All files | Changes | Review**. Their current
+- The singleton side-tool renderers are **Projects | Specs | Files | Changes | Review**. Their current
   location and local selection are supplied by the shell; Review exposes its store-derived pending-draft
   count as tab metadata. A renderer remains the same when its singleton moves to the opposite side.
 - **`ReviewPanel`** is the review sidebar (see [[submodule-server-reviews]] +
@@ -870,7 +871,7 @@ a project picker, the prompt hero, and the reused
 - **Changes: List | Tree.** A header toggle (`store.changesView`, app-wide — persisted in the store, not
   per workspace, so it survives workspace switches) switches the flat **List** and a folder **Tree**
   (`ChangesTree`), both built from the same `git.status` list. The Tree is styled exactly like the
-  All-files tree (shared `TreeRow`); folders **default expanded** (change sets are small), and a
+  Files tree (shared `TreeRow`); folders **default expanded** (change sets are small), and a
   single-directory run is one slash-joined compact row (based on the changed-file tree, regardless of
   unchanged siblings on disk), matching `FileTree`. **Status is shown on the file name, not a letter glyph**
   (the git-decoration convention — `changesModel.statusNameClass`, shared by both views):
@@ -915,7 +916,7 @@ a project picker, the prompt hero, and the reused
   **(1) the wrapper owns the row's highlight** (hover / selected / menu-open), since the band has to span the
   trailing slot too or a row reads as cut off before its own menu — the inner element paints **no** background
   at all (the flat list's button carries no `hover:`/selected class, and `TreeRow` takes
-  `highlight="wrapper"`, its `"self"` default being what the All-files tree wants). Exactly one painter,
+  `highlight="wrapper"`, its `"self"` default being what the Files tree wants). Exactly one painter,
   always: two hide the case where the wrapper stopped painting, which is why the e2e pin compares the *wrapper's*
   computed band against the *inner button's* (transparent) one, not a wrapper against a wrapper;
   **(2) rows *without* a menu reserve the same gutter** (`ROW_MENU_SLOT`, exported from `ChangeRowActions`

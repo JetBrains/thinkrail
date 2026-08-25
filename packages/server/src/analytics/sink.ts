@@ -1,4 +1,7 @@
 import { PostHog } from "posthog-node";
+import { logger } from "../log";
+
+const log = logger("analytics");
 
 export interface OutgoingEvent {
 	name: string;
@@ -69,8 +72,6 @@ export function createPostHogSink(options: PostHogSinkOptions): AnalyticsSink {
 	};
 }
 
-function debugLog(error: unknown): void {
-	if (process.env.THINKRAIL_ANALYTICS_DEBUG) {
-		console.warn(`analytics send failed: ${error instanceof Error ? error.message : error}`);
-	}
+function debugLog(_error: unknown): void {
+	log.debug("analytics send failed");
 }

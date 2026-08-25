@@ -91,10 +91,10 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
   deleted+recreated path leaves the old stream silently following a dead inode), **reaps zombie
   watchers** whose workspace record no longer exists (a resurrected path-based stream would keep
   publishing for a forgotten id), and **retries a failed start on the next read** (no sticky failure
-  marker). A watcher that errors mid-flight (ENOSPC, root deleted) is `console.warn`ed and dropped —
+  marker). A watcher that errors mid-flight (ENOSPC, root deleted) is warn-logged and dropped —
   panels fall back to read-on-demand until a later read re-creates it. No idle-stop in V1 (bounded by
   workspaces actually visited plus the capped prewarm tier).
 - **Public surface (barrel):** `ensureWatch`, `stopWatch`, `stopAllWatches`, `setWatchPublisher`,
   `setRepoMetaPublisher`, `setSkillPathClassifier`.
-- **Allowed deps:** `persistence` (workspace lookup); `contracts` (payload type); Bun/Node.
+- **Allowed deps:** `persistence` (workspace lookup), `log`; `contracts` (payload type); Bun/Node.
 - **Forbidden:** `host`; sibling features; any pi package.

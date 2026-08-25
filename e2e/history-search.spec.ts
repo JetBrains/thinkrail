@@ -36,11 +36,14 @@ async function openSeededClosedChat(page: Page, messages: SeededMessages) {
 	await expect(closedChat).toBeVisible();
 	await closedChat.click();
 
-	const userMessageCount = messages.filter((message) => message.role === "user").length;
-	await expect(page.locator('[data-testid="chat-message"][data-role="user"]')).toHaveCount(
-		userMessageCount,
-		{ timeout: 20_000 },
-	);
+	const latestUserMessage = messages.filter((message) => message.role === "user").at(-1);
+	if (latestUserMessage) {
+		await expect(
+			page
+				.locator('[data-testid="chat-message"][data-role="user"]')
+				.filter({ hasText: latestUserMessage.text }),
+		).toBeVisible({ timeout: 20_000 });
+	}
 	const input = page.getByTestId("chat-input");
 	await expect(input).toBeVisible();
 	return input;

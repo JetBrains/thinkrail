@@ -57,7 +57,7 @@ export const E2E_DATA_DIR = join(tmpdir(), `thinkrail-e2e-${E2E_STATE_KEY}`);
 
 export const E2E_HOME_DIR = join(E2E_DATA_DIR, "home");
 
-export const E2E_FAKE_BIN_DIR = join(E2E_DATA_DIR, "bin");
+export const E2E_FAKE_BIN_DIR = join(E2E_DATA_DIR, ".bun", "bin");
 
 export const E2E_CENTRAL_EXTENSION_SOURCE = join(E2E_DATA_DIR, "synthetic-central-extension.ts");
 export const E2E_CENTRAL_BAD_EXTENSION_SOURCE = join(

@@ -77,7 +77,8 @@ Rules: a panel never imports another panel sideways; nothing imports `shell` (it
 The module set: `transport` / `store` / branded `shell` + its headless `shell/layout` child;
 layout-agnostic Project/File/Specs/Changes/Review renderers; lazy Monaco file/diff bodies and xterm terminal
 bodies; and the `chat` module (`ChatView`, content-block renderers, tool registry, and full Composer). The
-workbench owns strips/groups around those bodies, never the panels themselves.
+workbench owns center and left/right/bottom auxiliary strips/groups around those bodies, never the panels
+themselves.
 
 ## Styling & theming
 

@@ -15,7 +15,7 @@ import {
 
 function document(tabId: string): WorkspaceLayoutDocument {
 	return {
-		version: 1,
+		version: 2,
 		center: {
 			kind: "group",
 			id: "center",
@@ -23,6 +23,7 @@ function document(tabId: string): WorkspaceLayoutDocument {
 		},
 		left: { visible: false, width: 0.18, groups: [] },
 		right: { visible: false, width: 0.28, groups: [] },
+		bottom: { visible: false, height: 0.3, alignment: "center", groups: [] },
 		toolRestoreTargets: {},
 	};
 }

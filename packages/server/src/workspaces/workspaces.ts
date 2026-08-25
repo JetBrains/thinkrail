@@ -21,8 +21,11 @@ import {
 	resolveDiffRange,
 	tryCurrentBranch,
 } from "../git";
+import { logger } from "../log";
 import { dataDir, loadProjects, loadWorkspaces, saveWorkspaces } from "../persistence";
 import { getProjects, listProjects } from "../projects";
+
+const log = logger("workspaces");
 
 export type WorkspaceLifecycleEvent =
 	| { kind: "created"; workspace: Workspace }
@@ -169,6 +172,7 @@ export function openExistingWorktree(projectId: string, requestedPath: string): 
 		worktreePath: entry.path,
 		baseBranch,
 		renamed: true,
+		initialTerminalEligible: true,
 	};
 	all.push(workspace);
 	saveWorkspaces(all);
@@ -193,9 +197,7 @@ async function diffStats(ws: Workspace): Promise<DiffStats | undefined> {
 		changedFileArgs(await resolveDiffRange(ws), "--shortstat"),
 	);
 	if (!result.ok) {
-		console.warn(
-			`git diff --shortstat failed in ${ws.worktreePath}: ${result.err || "unknown error"}`,
-		);
+		log.warn(`git diff --shortstat failed for workspace ${ws.id}`);
 		return undefined;
 	}
 	if (!result.out) return { added: 0, removed: 0 };
@@ -264,6 +266,7 @@ export async function createWorkspace(
 		branch,
 		worktreePath,
 		baseBranch,
+		initialTerminalEligible: true,
 		...(displayName ? { renamed: true } : {}),
 	};
 	ensureWorkspaceScratchDir(workspace);
@@ -322,6 +325,7 @@ function ensureDefaultWorkspace(project: Project): Workspace {
 		worktreePath: project.path,
 		baseBranch,
 		renamed: true,
+		initialTerminalEligible: true,
 	};
 	all.push(workspace);
 	saveWorkspaces(all);

@@ -45,6 +45,10 @@ re-create) the staged asset cache. Otherwise the launch args: `--port` (stable d
 scans upward to the next free port on collision), `--host` (default `localhost`), `--no-open`,
 `--no-analytics` (**per-run mute** for anonymous usage analytics — this run sends nothing; the
 durable switch is the app's Settings → Privacy toggle, see `submodule-server-analytics`),
+`--verbose` (debug-level logging — threaded to `bootHost` as `verbose: true`; the log files under
+`<dataDir>/logs` and their env switch `THINKRAIL_LOG_LEVEL` belong to `submodule-server-log`, whose
+module is that variable's single reader — same pattern as `THINKRAIL_NO_ANALYTICS`, so `dev.ts` honors
+it too),
 `-v`/`--version` (print the baked version and exit), `-h`/`--help`, and one positional `project-dir` (a
 git repo to open as a project on boot, best-effort). Env defaults: `THINKRAIL_PORT` / `THINKRAIL_HOST` /
 `THINKRAIL_STATIC_DIR` (flag > env > default). `THINKRAIL_NO_ANALYTICS` is documented in `--help` but

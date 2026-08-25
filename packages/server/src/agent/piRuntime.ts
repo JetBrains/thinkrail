@@ -4,6 +4,9 @@ import {
 	getAgentDir,
 	ModelRuntime,
 } from "@earendil-works/pi-coding-agent";
+import { logger } from "../log";
+
+const log = logger("agent");
 
 export interface PiRuntimeGeneration {
 	readonly id: number;
@@ -230,7 +233,7 @@ export function refreshCatalogs(
 function withDeadline(task: Promise<void>): Promise<CatalogRefreshOutcome> {
 	return new Promise<CatalogRefreshOutcome>((resolve) => {
 		const timer = setTimeout(() => {
-			console.warn(
+			log.warn(
 				`model catalog refresh exceeded ${CATALOG_REFRESH_TIMEOUT_MS}ms; serving cached catalogs`,
 			);
 			resolve({ completed: false });
@@ -251,15 +254,15 @@ function runCatalogRefresh(runtime: CatalogRefreshRuntime, force: boolean): Prom
 		.refresh({ allowNetwork: true, force, signal: controller.signal })
 		.then((result) => {
 			if (result.aborted) {
-				console.warn(
+				log.warn(
 					`model catalog refresh timed out after ${CATALOG_REFRESH_TIMEOUT_MS}ms; serving cached catalogs`,
 				);
 			} else if (result.errors.size > 0) {
-				console.warn(`model catalog refresh: ${result.errors.size} provider(s) failed`);
+				log.warn(`model catalog refresh: ${result.errors.size} provider(s) failed`);
 			}
 		})
 		.catch(() => {
-			console.warn("model catalog refresh failed");
+			log.warn("model catalog refresh failed");
 		})
 		.finally(() => clearTimeout(timer));
 }

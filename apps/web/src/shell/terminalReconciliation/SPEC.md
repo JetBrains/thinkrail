@@ -25,5 +25,8 @@ and browser-local attention separate from placement.
   restored terminal, direct WS calls, panel rendering, server/shared/pi imports, or treating layout references
   as terminal existence proof.
 
-New attach-pending terminals continue through their explicit placement intents. Remote/catalog restoration
-preserves side visibility and never steals attention.
+New reservation-pending terminals remain behind their explicit placement intents until the host catalog
+confirms them. A catalog terminal with no
+placement passively restores into the last available bottom group (creating a hidden slot within the bottom
+limit when needed), preserving bottom visibility and never stealing attention. Existing placed terminals,
+including version-1 center/side placements, never move merely because bottom now exists.

@@ -30,7 +30,12 @@ ref off the workspace-create critical path.
   same 55s default (`opts.timeoutMs` overrides it): a local read that has to be *bounded* at all is a
   wedged git, and every one of them was unbounded before it moved off the loop;
   **`remoteTrackingRef(ref)`** → `refs/remotes/<ref>` for an `origin/` ref, else `null` — **the one place
-  that spelling is built**, so the probe below and `workspaces`' `worktree add` cannot drift apart;
+  that spelling is built**, so the probe below and `workspaces`' `worktree add` cannot drift apart. Its
+  reach is **creation only**, and `resolveDiffRange` is the named survivor: `diffBaseRef` hands git the
+  `origin/<b>` shorthand recorded in `baseBranch`, so in the very setup create now guards against — a local
+  branch literally named `origin/main` — the worktree is cut from `refs/remotes/origin/main` while the diff
+  is measured against the decoy. Left alone because `diffBase` is separately user-settable and may name any
+  ref, so qualifying it is a change to what a *pinned* base means, not a spelling fix;
   **`remoteRefOid(repoPath, ref)`** → the oid `refs/remotes/<ref>` resolves to, or `null` — **the one way
   to ask whether a remote-tracking ref is present**, shared by `prefetchBranch` (which compares oids to
   report `moved`), `resolveDefaultBranch`'s `origin/main` fallback, and `workspaces`' create fallback. It
@@ -173,7 +178,7 @@ ref off the workspace-create critical path.
   `resolveDiffRange`, `changedFileArgs`, `diffBaseRef`, `resolveCommitOid`, `DiffRange`, `isSafeRef`,
   `assertSafeRef`, `listBranches`, `resolveDefaultBranch`, `tryCurrentBranch`, `currentBranch`,
   `canonicalPath`, `prefetchBranch`.
-- **Allowed deps:** `persistence` (workspace + project lookup); `contracts` (`Git*`/`BranchList` types);
+- **Allowed deps:** `persistence` (workspace + project lookup), `log`; `contracts` (`Git*`/`BranchList` types);
   `subprocess` (`runBounded`, the bounded child behind `gitAsync`);
   `@thinkrail/shared/codedError` (naming a failure for the wire); Bun (spawn, for the sync runner).
 - **Forbidden:** `host`; sibling features.

@@ -3,13 +3,14 @@ import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Workspace } from "@thinkrail/contracts";
-import { saveWorkspaces } from "../persistence";
+import { saveTerminalSessions, saveWorkspaces } from "../persistence";
 import {
 	attachTerminal,
 	closeTerminalTab,
 	closeWorkspaceTerminals,
 	listTerminals,
 	persistTerminalSessions,
+	reserveTerminal,
 	resetTerminalState,
 	resizeTerminal,
 	reviveTerminalSessions,
@@ -100,6 +101,82 @@ test("re-attaching as the same client does not announce a takeover", () => {
 	attachTerminal(WS, "tab-a", "client-1");
 
 	expect(pushed.filter((frame) => frame.channel === "terminal.detached")).toHaveLength(0);
+});
+
+test("reserving a tab persists catalog membership without starting its shell", () => {
+	const seen: unknown[] = [];
+	setTerminalTabsPublisher((workspaceId, tabs) => seen.push({ workspaceId, tabs }));
+
+	expect(reserveTerminal(WS, "tab-a", "Reserved")).toEqual({
+		tabKey: "tab-a",
+		title: "Reserved",
+	});
+	expect(reserveTerminal(WS, "tab-a", "Ignored rename")).toEqual({
+		tabKey: "tab-a",
+		title: "Reserved",
+	});
+	expect(listTerminals(WS)).toEqual([{ tabKey: "tab-a", title: "Reserved" }]);
+	expect(seen).toEqual([{ workspaceId: WS, tabs: [{ tabKey: "tab-a", title: "Reserved" }] }]);
+	expect(attachTerminal(WS, "tab-a", "client-1").created).toBe(true);
+
+	resetTerminalState();
+	reviveTerminalSessions();
+	expect(listTerminals(WS)).toEqual([{ tabKey: "tab-a", title: "Reserved" }]);
+});
+
+test("a failed reservation persistence rolls back without publishing membership", () => {
+	const seen: unknown[] = [];
+	setTerminalTabsPublisher((workspaceId, tabs) => seen.push({ workspaceId, tabs }));
+	mkdirSync(join(dataDir, "terminals.json"));
+
+	expect(() => reserveTerminal(WS, "tab-a", "Reserved")).toThrow();
+	expect(listTerminals(WS)).toEqual([]);
+	expect(seen).toEqual([]);
+});
+
+test("reservations and attachments reject malformed or excessive catalog entries", () => {
+	expect(() => reserveTerminal(WS, "", "Terminal")).toThrow("Invalid terminal tab key");
+	expect(() => reserveTerminal(WS, "x".repeat(501), "Terminal")).toThrow(
+		"Invalid terminal tab key",
+	);
+	expect(() => reserveTerminal(WS, "tab-a", "")).toThrow("Invalid terminal title");
+	expect(() => reserveTerminal(WS, "tab-a", "x".repeat(1001))).toThrow("Invalid terminal title");
+	expect(() => attachTerminal(WS, "", "client-1")).toThrow("Invalid terminal tab key");
+	expect(() => attachTerminal(WS, "tab-a", "client-1", { title: "" })).toThrow(
+		"Invalid terminal title",
+	);
+	for (let index = 0; index < 256; index += 1) {
+		reserveTerminal(WS, `tab-${index}`, `Terminal ${index}`);
+	}
+	expect(() => reserveTerminal(WS, "tab-over-limit", "Terminal")).toThrow(
+		"Terminal tabs are limited to 256 per workspace",
+	);
+	expect(() => attachTerminal(WS, "tab-over-limit", "client-1")).toThrow(
+		"Terminal tabs are limited to 256 per workspace",
+	);
+});
+
+test("revival bounds the catalog and sanitizes durable identities", () => {
+	saveTerminalSessions({
+		[WS]: [
+			{ tabKey: "", title: "Dropped" },
+			{ tabKey: "x".repeat(501), title: "Dropped" },
+			{ tabKey: "kept", title: "" },
+		],
+	});
+	reviveTerminalSessions();
+	expect(listTerminals(WS)).toEqual([{ tabKey: "kept", title: "Terminal" }]);
+
+	resetTerminalState();
+	saveTerminalSessions({
+		[WS]: Array.from({ length: 300 }, (_, index) => ({
+			tabKey: `tab-${index}`,
+			title: `Terminal ${index}`,
+		})),
+	});
+	reviveTerminalSessions();
+	expect(listTerminals(WS)).toHaveLength(256);
+	expect(listTerminals(WS).at(-1)?.tabKey).toBe("tab-255");
 });
 
 test("the tab list is the host's, in creation order", () => {
