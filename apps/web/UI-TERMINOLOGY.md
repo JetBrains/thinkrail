@@ -330,7 +330,7 @@ leaves a compact restore rail. Side arrangement is workspace-shared; selection a
 
 Every Side Group has a **Group Header**; folding retains that header as a 27px row while its linked
 body stays native-hidden and unmounted. Initial Balanced placement puts Projects on the left, Specs and
-All files in the first right group, then Changes and Review in the second; the default terminal catalog
+Files in the first right group, then Changes and Review in the second; the default terminal catalog
 joins that last group. This is startup behavior, not a fixed hierarchy.
 
 ## Side Tools
@@ -339,7 +339,7 @@ joins that last group. This is startup behavior, not a fixed hierarchy.
 |---|---|---|
 | Projects | `tab-projects`, body `left-nav` | `panels/ProjectTree.tsx`; projects and workspaces |
 | Specs | `tab-specs` | `panels/SpecsPanel.tsx`; read-only spec graph, with `specs-refresh` |
-| All files | `tab-files` | `panels/FileTree.tsx`; worktree file tree |
+| Files | `tab-files` | `panels/FileTree.tsx`; worktree file tree |
 | Changes | `tab-changes` | `panels/ChangesPanel.tsx`; scoped git changes and diff opens |
 | Review | `tab-review` | `panels/ReviewPanel.tsx`; review accordion and send actions |
 
@@ -513,8 +513,8 @@ its alternatives in parentheses.
 **Sides**
 
 - **Left Side**, **Right Side**, **Side Group**, **Hidden-Side Rail**.
-- Singleton tools: **Projects**, **Specs**, **All files**, **Changes**, **Review**.
-- **Specs Panel**, **All Files Panel** (alt: File Tree), **Changes Panel**, **Review Panel**.
+- Singleton tools: **Projects**, **Specs**, **Files**, **Changes**, **Review**.
+- **Specs Panel**, **Files Panel** (alt: File Tree), **Changes Panel**, **Review Panel**.
 - **Changes Header** (no component): **Changes Scope Menu**, **Branch Picker**, **Changes View Toggle**.
 - **Changes List** / **Changes Tree**, **Change-Row Actions**, **Tree Row**, **Diff-Stat Badge**.
 

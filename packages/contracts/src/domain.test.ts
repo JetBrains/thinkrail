@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
 	ACCEPTED_IMAGE_TYPES,
 	base64EncodedLength,
+	DEFAULT_CONFIG,
 	IMAGE_MAX_BASE64_BYTES,
 	isRetriedAttempt,
 	REQUEST_IMAGE_BASE64_BUDGET,
@@ -36,6 +37,12 @@ describe("isRetriedAttempt", () => {
 	test("an intervening toolResult breaks adjacency — pi's _prepareRetry re-runs the turn directly, so anything between the two means this was not a retry", () => {
 		const toolResult = { role: "toolResult" };
 		expect(isRetriedAttempt([userMsg, failed, toolResult, ok], 1)).toBe(false);
+	});
+});
+
+describe("layout defaults", () => {
+	test("bottom groups have an independent default limit", () => {
+		expect(DEFAULT_CONFIG.layout.maxBottomGroups).toBe(3);
 	});
 });
 

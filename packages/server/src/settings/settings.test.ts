@@ -74,6 +74,7 @@ test("loadConfig normalizes nested layout fields independently", () => {
 				defaultPresetId: "review",
 				customPresets: "corrupt",
 				maxSideGroups: 0,
+				maxBottomGroups: 33,
 			},
 		}),
 	);
@@ -85,6 +86,7 @@ test("loadConfig normalizes nested layout fields independently", () => {
 			defaultPresetId: "review",
 			customPresets: [],
 			maxSideGroups: DEFAULT_CONFIG.layout.maxSideGroups,
+			maxBottomGroups: DEFAULT_CONFIG.layout.maxBottomGroups,
 		},
 	});
 });

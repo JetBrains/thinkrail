@@ -1,10 +1,12 @@
-import type { WorkspaceLayoutDocument } from "@thinkrail/contracts";
+import type { LayoutTerminalTab, WorkspaceLayoutDocument } from "@thinkrail/contracts";
 import { useEffect, useRef } from "react";
+import type { LayoutAttention } from "../../lib";
 import { useTerminalCatalog } from "../../panels/TerminalWorkbench";
 import { type TerminalTab, useAppStore } from "../../store";
 import {
 	closeLayoutTab,
 	collectAllGroups,
+	createAuxiliaryGroup,
 	isLayoutUnavailable,
 	moveTabToGroup,
 	openCenterTab,
@@ -18,10 +20,33 @@ export function terminalLayoutId(tabKey: string): string {
 	return `terminal:${tabKey}`;
 }
 
+export function placeRecoveredTerminal(
+	document: WorkspaceLayoutDocument,
+	attention: LayoutAttention | undefined,
+	tab: LayoutTerminalTab,
+	maxBottomGroups: number,
+): { document: WorkspaceLayoutDocument } {
+	const preferredId = attention?.lastFocusedSideGroupId.bottom;
+	const target =
+		document.bottom.groups.find((group) => group.id === preferredId) ??
+		document.bottom.groups.at(-1);
+	const visible = document.bottom.visible;
+	const placed = target
+		? moveTabToGroup(document, tab, { area: "bottom", groupId: target.id })
+		: createAuxiliaryGroup(document, "bottom", tab, 0, maxBottomGroups);
+	if (isLayoutUnavailable(placed)) return { document };
+	return {
+		document: {
+			...placed.document,
+			bottom: { ...placed.document.bottom, visible },
+		},
+	};
+}
+
 export function useTerminalPlacementReconciliation(
 	workspaceId: string,
 	commit: (document: WorkspaceLayoutDocument) => void,
-): readonly TerminalTab[] {
+): { terminals: readonly TerminalTab[]; catalogReady: boolean } {
 	const document = useAppStore((state) => state.layoutDocumentsByWorkspace[workspaceId]);
 	const status = useAppStore((state) => state.status);
 	const connectionGeneration = useAppStore((state) => state.connectionGeneration);
@@ -31,6 +56,8 @@ export function useTerminalPlacementReconciliation(
 	const pendingLayoutWrites = useAppStore(
 		(state) => state.layoutPendingByWorkspace[workspaceId]?.length ?? 0,
 	);
+	const attention = useAppStore((state) => state.layoutAttentionByWorkspace[workspaceId]);
+	const maxBottomGroups = useAppStore((state) => state.layoutSettings.maxBottomGroups);
 	const terminals = useAppStore((state) => state.terminalsByWorkspace[workspaceId] ?? NO_TERMINALS);
 	const terminalCatalogReady = useTerminalCatalog(workspaceId);
 	const reconciledTerminalCatalog = useRef<{
@@ -82,7 +109,7 @@ export function useTerminalPlacementReconciliation(
 			if (!isLayoutUnavailable(refreshed)) next = refreshed.document;
 		}
 		const placed = new Set(placedTabs.map((tab) => tab.tabKey));
-		const missing = terminals.filter((tab) => !tab.attachPending && !placed.has(tab.tabKey));
+		const missing = terminals.filter((tab) => !tab.reservationPending && !placed.has(tab.tabKey));
 		for (const terminal of missing) {
 			const tab = withAvailablePlacementId(next, {
 				kind: "terminal" as const,
@@ -90,23 +117,7 @@ export function useTerminalPlacementReconciliation(
 				name: terminal.title,
 				tabKey: terminal.tabKey,
 			});
-			const target = next.right.groups.at(-1);
-			if (target) {
-				const visible = next.right.visible;
-				const moved = moveTabToGroup(next, tab, { area: "right", groupId: target.id });
-				if (!isLayoutUnavailable(moved)) {
-					next = {
-						...moved.document,
-						right: { ...moved.document.right, visible },
-					};
-				}
-			} else {
-				const moved = moveTabToGroup(next, tab, {
-					area: "center",
-					groupId: primaryCenterGroupId(next),
-				});
-				if (!isLayoutUnavailable(moved)) next = moved.document;
-			}
+			next = placeRecoveredTerminal(next, attention, tab, maxBottomGroups).document;
 		}
 		if (next !== document) {
 			commit(next);
@@ -114,10 +125,12 @@ export function useTerminalPlacementReconciliation(
 		}
 		if (attemptedCatalog) reconciledTerminalCatalog.current = attemptedCatalog;
 	}, [
+		attention,
 		commit,
 		connectionGeneration,
 		document,
 		layoutIntent,
+		maxBottomGroups,
 		pendingLayoutWrites,
 		status,
 		terminalCatalogReady,
@@ -125,5 +138,5 @@ export function useTerminalPlacementReconciliation(
 		workspaceId,
 	]);
 
-	return terminals;
+	return { terminals, catalogReady: terminalCatalogReady };
 }

@@ -3,6 +3,7 @@ import type {
 	AskUserQuestionResult,
 	ExtUiRequest,
 	GitDiffScope,
+	LayoutAuxiliaryRegion,
 	LayoutChangedPayload,
 	LayoutSettings,
 	LayoutToolId,
@@ -205,12 +206,15 @@ export type LayoutIntent =
 			tabKey: string;
 			title: string;
 			targetGroupId?: string;
+			targetArea?: "center" | LayoutAuxiliaryRegion;
+			reveal?: false;
 			navigation?: CenterNavigationStamp | null;
 			countNavigation?: boolean;
 	  }
 	| { id: string; kind: "close-terminal"; workspaceId: string; tabKey: string }
 	| { id: string; kind: "select-terminal"; workspaceId: string; tabKey: string }
-	| { id: string; kind: "toggle-side"; workspaceId: string; side: "left" | "right" };
+	| { id: string; kind: "toggle-side"; workspaceId: string; side: "left" | "right" }
+	| { id: string; kind: "toggle-bottom"; workspaceId: string };
 export type LayoutIntentInput = LayoutIntent extends infer Intent
 	? Intent extends { id: string }
 		? Omit<Intent, "id">
@@ -242,7 +246,7 @@ export interface TerminalTab {
 	workspaceId: string;
 	title: string;
 	initialCommand?: string;
-	attachPending?: true;
+	reservationPending?: true;
 }
 
 export interface ClosedChat {
@@ -730,9 +734,17 @@ interface AppState {
 		loadedTarget: string,
 	) => void;
 	clearWorkspaceTabs: (workspaceId: string) => void;
-	addTerminal: (workspaceId: string, initialCommand?: string, targetGroupId?: string) => void;
+	addTerminal: (
+		workspaceId: string,
+		initialCommand?: string,
+		targetGroupId?: string,
+		targetArea?: "center" | LayoutAuxiliaryRegion,
+		reveal?: boolean,
+		requestedTabKey?: string,
+	) => void;
 	setWorkspaceTerminals: (workspaceId: string, tabs: TerminalTabInfo[]) => void;
-	settleTerminalAttach: (workspaceId: string, tabKey: string) => void;
+	confirmTerminalReservation: (workspaceId: string, tabKey: string) => void;
+	rejectTerminalReservation: (workspaceId: string, tabKey: string) => void;
 	consumeTerminalInitialCommand: (workspaceId: string, tabKey: string) => void;
 	closeTerminalTab: (workspaceId: string, tabKey: string, syncLayout?: boolean) => void;
 	setActiveTerminalTab: (workspaceId: string, tabKey: string, syncLayout?: boolean) => void;
@@ -1975,19 +1987,28 @@ export const useAppStore = create<AppState>((set, get) => ({
 				skillsSyncedTickBySession,
 			};
 		}),
-	addTerminal: (workspaceId, initialCommand, targetGroupId) =>
+	addTerminal: (
+		workspaceId,
+		initialCommand,
+		targetGroupId,
+		targetArea = "center",
+		reveal = true,
+		requestedTabKey,
+	) =>
 		set((s) => {
 			if (s.removedWorkspaceIds[workspaceId]) return {};
 			const list = s.terminalsByWorkspace[workspaceId] ?? [];
-			const navigation = targetGroupId
-				? advanceCenterNavigation(s, workspaceId, targetGroupId)
-				: null;
-			const tabKey = randomId("terminal");
+			const tabKey = requestedTabKey ?? randomId("terminal");
+			if (list.some((tab) => tab.tabKey === tabKey)) return {};
+			const navigation =
+				targetGroupId && targetArea === "center"
+					? advanceCenterNavigation(s, workspaceId, targetGroupId)
+					: null;
 			const tab: TerminalTab = {
 				tabKey,
 				workspaceId,
 				title: nextTerminalTitle(list),
-				attachPending: true,
+				reservationPending: true,
 				...(initialCommand ? { initialCommand } : {}),
 			};
 			return {
@@ -1997,7 +2018,14 @@ export const useAppStore = create<AppState>((set, get) => ({
 					workspaceId,
 					tabKey,
 					title: tab.title,
-					...(targetGroupId ? { targetGroupId, navigation: navigation?.stamp ?? null } : {}),
+					...(targetGroupId
+						? {
+								targetGroupId,
+								...(targetArea !== "center" ? { targetArea } : {}),
+								...(targetArea === "center" ? { navigation: navigation?.stamp ?? null } : {}),
+							}
+						: {}),
+					...(reveal ? {} : { reveal: false as const }),
 				}),
 				terminalsByWorkspace: { ...s.terminalsByWorkspace, [workspaceId]: [...list, tab] },
 				activeTerminalByWorkspace: { ...s.activeTerminalByWorkspace, [workspaceId]: tabKey },
@@ -2008,7 +2036,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 			if (s.removedWorkspaceIds[workspaceId]) return {};
 			const local = s.terminalsByWorkspace[workspaceId] ?? [];
 			const known = new Set(tabs.map((tab) => tab.tabKey));
-			const pending = local.filter((tab) => !known.has(tab.tabKey) && tab.attachPending);
+			const pending = local.filter((tab) => !known.has(tab.tabKey) && tab.reservationPending);
 			const merged: TerminalTab[] = [
 				...tabs.map((tab) => {
 					const existing = local.find((candidate) => candidate.tabKey === tab.tabKey);
@@ -2031,20 +2059,41 @@ export const useAppStore = create<AppState>((set, get) => ({
 				},
 			};
 		}),
-	settleTerminalAttach: (workspaceId, tabKey) =>
+	confirmTerminalReservation: (workspaceId, tabKey) =>
 		set((s) => {
 			if (s.removedWorkspaceIds[workspaceId]) return {};
 			const list = s.terminalsByWorkspace[workspaceId] ?? [];
-			if (!list.some((t) => t.tabKey === tabKey && t.attachPending)) return s;
+			if (!list.some((tab) => tab.tabKey === tabKey && tab.reservationPending)) return s;
 			return {
 				terminalsByWorkspace: {
 					...s.terminalsByWorkspace,
-					[workspaceId]: list.map(({ attachPending, ...rest }) =>
+					[workspaceId]: list.map(({ reservationPending, ...rest }) =>
 						rest.tabKey === tabKey
 							? rest
-							: { ...rest, ...(attachPending ? { attachPending } : {}) },
+							: { ...rest, ...(reservationPending ? { reservationPending } : {}) },
 					),
 				},
+			};
+		}),
+	rejectTerminalReservation: (workspaceId, tabKey) =>
+		set((s) => {
+			if (s.removedWorkspaceIds[workspaceId]) return {};
+			const list = s.terminalsByWorkspace[workspaceId] ?? [];
+			if (!list.some((tab) => tab.tabKey === tabKey && tab.reservationPending)) return s;
+			const terminals = list.filter((tab) => tab.tabKey !== tabKey);
+			const active = s.activeTerminalByWorkspace[workspaceId] ?? null;
+			return {
+				terminalsByWorkspace: { ...s.terminalsByWorkspace, [workspaceId]: terminals },
+				activeTerminalByWorkspace: {
+					...s.activeTerminalByWorkspace,
+					[workspaceId]: active === tabKey ? (terminals.at(-1)?.tabKey ?? null) : active,
+				},
+				layoutIntents: s.layoutIntents.filter(
+					(intent) =>
+						intent.kind !== "place-terminal" ||
+						intent.workspaceId !== workspaceId ||
+						intent.tabKey !== tabKey,
+				),
 			};
 		}),
 	consumeTerminalInitialCommand: (workspaceId, tabKey) =>

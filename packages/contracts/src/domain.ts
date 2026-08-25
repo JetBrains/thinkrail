@@ -30,6 +30,7 @@ export interface Workspace {
 	baseBranch: string;
 	diffBase?: string;
 	renamed?: boolean;
+	initialTerminalEligible?: true;
 	diffStats?: DiffStats;
 	skillOverrides?: Record<string, "on" | "off">;
 }
@@ -328,8 +329,9 @@ export type LayoutCenterTab =
 	| LayoutChatTab
 	| LayoutDocumentTab
 	| LayoutTerminalTab;
-export type LayoutSideTab = LayoutToolTab | LayoutTerminalTab;
-export type LayoutTab = LayoutCenterTab | LayoutSideTab;
+export type LayoutAuxiliaryTab = LayoutToolTab | LayoutTerminalTab;
+export type LayoutSideTab = LayoutAuxiliaryTab;
+export type LayoutTab = LayoutCenterTab | LayoutAuxiliaryTab;
 
 export interface LayoutCenterGroup {
 	kind: "group";
@@ -352,7 +354,7 @@ export interface LayoutSideGroup {
 	id: string;
 	weight: number;
 	folded: boolean;
-	tabs: LayoutSideTab[];
+	tabs: LayoutAuxiliaryTab[];
 }
 
 export interface LayoutSideRegion {
@@ -361,17 +363,36 @@ export interface LayoutSideRegion {
 	groups: LayoutSideGroup[];
 }
 
+export type LayoutBottomAlignment = "center" | "center-left" | "center-right" | "full";
+
+export interface LayoutBottomGroup {
+	id: string;
+	weight: number;
+	folded: boolean;
+	tabs: LayoutAuxiliaryTab[];
+}
+
+export interface LayoutBottomRegion {
+	visible: boolean;
+	height: number;
+	alignment: LayoutBottomAlignment;
+	groups: LayoutBottomGroup[];
+}
+
+export type LayoutAuxiliaryRegion = "left" | "right" | "bottom";
+
 export interface LayoutToolRestoreTarget {
-	side: "left" | "right";
+	region: LayoutAuxiliaryRegion;
 	groupId?: string;
 	index: number;
 }
 
 export interface WorkspaceLayoutDocument {
-	version: 1;
+	version: 2;
 	center: LayoutCenterNode;
 	left: LayoutSideRegion;
 	right: LayoutSideRegion;
+	bottom: LayoutBottomRegion;
 	toolRestoreTargets: Partial<Record<LayoutToolId, LayoutToolRestoreTarget>>;
 }
 
@@ -422,18 +443,34 @@ export interface LayoutPresetSideRegion {
 	groups: LayoutPresetSideGroup[];
 }
 
+export interface LayoutPresetBottomGroup {
+	id: string;
+	weight: number;
+	folded: boolean;
+	tools: LayoutToolId[];
+}
+
+export interface LayoutPresetBottomRegion {
+	visible: boolean;
+	height: number;
+	alignment: LayoutBottomAlignment;
+	groups: LayoutPresetBottomGroup[];
+}
+
 export interface LayoutPreset {
 	id: string;
 	name: string;
 	center: LayoutPresetCenterNode;
 	left: LayoutPresetSideRegion;
 	right: LayoutPresetSideRegion;
+	bottom: LayoutPresetBottomRegion;
 }
 
 export interface LayoutSettings {
 	defaultPresetId: string;
 	customPresets: LayoutPreset[];
 	maxSideGroups: number;
+	maxBottomGroups: number;
 }
 
 export interface AppConfig {
@@ -453,6 +490,7 @@ export const DEFAULT_CONFIG: AppConfig = {
 		defaultPresetId: "balanced",
 		customPresets: [],
 		maxSideGroups: 6,
+		maxBottomGroups: 3,
 	},
 };
 

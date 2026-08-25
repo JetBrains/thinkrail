@@ -7,6 +7,7 @@ import { menuContentClass, menuItemClass, menuSeparatorClass } from "./menu-styl
 const DropdownMenu = DropdownMenuPrimitive.Root;
 const DropdownMenuTrigger = DropdownMenuPrimitive.Trigger;
 const DropdownMenuGroup = DropdownMenuPrimitive.Group;
+const DropdownMenuRadioGroup = DropdownMenuPrimitive.RadioGroup;
 const DropdownMenuSub = DropdownMenuPrimitive.Sub;
 
 function DropdownMenuContent({
@@ -34,6 +35,13 @@ function DropdownMenuItem({
 	...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Item>) {
 	return <DropdownMenuPrimitive.Item className={cn(menuItemClass, className)} {...props} />;
+}
+
+function DropdownMenuRadioItem({
+	className,
+	...props
+}: React.ComponentProps<typeof DropdownMenuPrimitive.RadioItem>) {
+	return <DropdownMenuPrimitive.RadioItem className={cn(menuItemClass, className)} {...props} />;
 }
 
 function DropdownMenuSubTrigger({
@@ -96,6 +104,8 @@ export {
 	DropdownMenuGroup,
 	DropdownMenuItem,
 	DropdownMenuLabel,
+	DropdownMenuRadioGroup,
+	DropdownMenuRadioItem,
 	DropdownMenuSeparator,
 	DropdownMenuSub,
 	DropdownMenuSubContent,

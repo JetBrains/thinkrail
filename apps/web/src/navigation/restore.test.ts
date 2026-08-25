@@ -83,7 +83,7 @@ function placeChats(
 	clock?: number,
 ): void {
 	const document: WorkspaceLayoutDocument = {
-		version: 1,
+		version: 2,
 		center: {
 			kind: "group",
 			id: "center",
@@ -96,6 +96,7 @@ function placeChats(
 		},
 		left: { visible: false, width: 0.2, groups: [] },
 		right: { visible: false, width: 0.2, groups: [] },
+		bottom: { visible: false, height: 0.3, alignment: "center", groups: [] },
 		toolRestoreTargets: {},
 	};
 	useAppStore.setState((state) => ({

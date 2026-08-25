@@ -242,7 +242,6 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 						const buffered = attemptPrebind.bind(id);
 						if (buffered.truncated) writeTruncation();
 						for (const ev of buffered.frames) writeFrame(ev);
-						useAppStore.getState().settleTerminalAttach(workspaceId, tabKey);
 						setDetached(false);
 						setExited(false);
 						setReady(true);

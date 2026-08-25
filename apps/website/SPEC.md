@@ -68,7 +68,7 @@ binary.
   parameterized: `website` on the landing, `blog` on blog pages, each with the matching
   `workspace/<name> · from main` branch label), the left project rail, the right files rail +
   terminal, the status bar, and the `main.ts` script import; the center column is its default slot
-  and the right rail's All-files rows its `filetree` slot. The left rail carries the site's real
+  and the right rail's Files rows its `filetree` slot. The left rail carries the site's real
   navigation as child rows of the `website` workspace — **Landing** (`/`) and **Blog** (`/blog/`,
   selected on the index and on every article) as links, **Docs** disabled with a `Coming soon` chip
   (no tooltip — the tag carries the state) — while the remaining mock rows keep the
@@ -257,7 +257,7 @@ The `/blog` subsite is a typed Astro content collection over Markdown posts in `
   rule — deliberately *not* the `.file-section` class, whose typography cascade would fight the blog
   content styles). Opening an article replaces the index in that same central area. **No tab strip on
   blog pages** (the landing keeps its section tabs; page-level Landing/Blog tabs were explicitly
-  rejected for now). The right rail's All-files list shows the published articles (current one
+  rejected for now). The right rail's Files list shows the published articles (current one
   active); the terminal keeps its static install transcript — `main.ts` guards make every
   landing-only enhancement inert (no sections → no scroll-spy, no picker → no terminal replay).
   Post cards are whole-card links that signal hover on the border alone (no underline, no movement)

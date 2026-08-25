@@ -140,7 +140,9 @@ of the host.
   project folder itself as a workspace, exactly one per project, pinned first in `workspace.list`,
   non-removable and non-renamable server-side; **`kind: "external"`** marks an explicitly attached,
   user-owned worktree ThinkRail may forget but must never rename or reclaim; absent = a ThinkRail-managed
-  worktree workspace — an explicit wire field, never an id convention),
+  worktree workspace; optional literal **`initialTerminalEligible: true`** is the host-owned creation marker
+  carried only by newly persisted workspace records, while absence is the backward-compatible legacy value
+  that forbids automatic default-terminal seeding — explicit wire fields, never id conventions),
   **`OpenBranchReview`** (the optional open review reference for the active branch: PR vs MR + number; no status/actions),
   **`ExistingWorktreeCandidate`** (a `workspace.listExisting` row: absolute `path` + `branch`, or a
   `detached` row the chooser disables), `Session` (chat tab),
@@ -186,8 +188,9 @@ of the host.
   the **theme/config selection** — **`ThemeId`** is an open string on the wire, because the host persists
   an opaque selection while the independently shipped web client owns the available manifest catalog;
   **`AppConfig`** (`{ theme, analyticsEnabled, terminalReplayKb, layout }` — an extensible bag; `layout` is the
-  **`LayoutSettings`** selection (`defaultPresetId`, named portable `customPresets`, and
-  `maxSideGroups`, default 6); `analyticsEnabled` is the anonymous-usage-analytics switch, default `true`
+  **`LayoutSettings`** selection (`defaultPresetId`, named portable `customPresets`, `maxSideGroups`
+  defaulting to 6, and independent `maxBottomGroups` defaulting to 3); `analyticsEnabled` is the
+  anonymous-usage-analytics switch, default `true`
   — it is the **only** analytics fact on the wire:
   the installation id stays server-side by design, see `submodule-server-analytics`) carries it with the
   **`DEFAULT_CONFIG`** fallback
@@ -236,17 +239,20 @@ of the host.
   what `template.list` returns; deliberately body-free so a listing never ships every file's full text),
   and **`Template`** (`TemplateInfo` + full `content` — frontmatter + body — the by-name
   `template.get`/`template.save` shape);
-  **workbench layout DTOs** — a versioned **`WorkspaceLayoutDocument`** (stable center split/group and
-  side/group/tab references, normalized geometry, preview identities, folds/visibility, and singleton-tool
-  restore targets; explicitly no active/focused tab; virtual-document references name a registered resolver
-  and durable source identity, never inline client-only content), **`WorkspaceLayoutSnapshot`**
+  **workbench layout DTOs** — version-2 **`WorkspaceLayoutDocument`** (stable recursive center plus
+  left/right auxiliary stacks and a bottom auxiliary row; group/tab references, normalized side widths and
+  bottom height, bottom alignment, preview identities, folds/visibility, and singleton-tool restore targets;
+  explicitly no active/focused tab; virtual-document references name a registered resolver and durable source
+  identity, never inline client-only content), **`WorkspaceLayoutSnapshot`**
   (`workspaceId` +
   monotonic `revision` + document), **`LayoutReplaceParams`** (complete document + client-generated
   `mutationId` + explicit `expectedRevision`, where `null` is create-only and a number is exact
   replace-only), **`LayoutReplaceResult`** (discriminated accepted payload or conflict carrying the current
   snapshot, including `null`), **`LayoutChangedPayload`** (snapshot + echoed origin `mutationId`), and
-  portable **`LayoutPreset`** / **`LayoutSettings`**. The mutation id is correlation metadata, not the
-  concurrency token or durable document state. A tab `id` is an opaque stable placement key—including for singleton tools—not semantic identity;
+  portable **`LayoutPreset`** / **`LayoutSettings`**. Presets carry resource-free bottom group slots, so a
+  terminal-only group survives capture without carrying terminal identity/count. The mutation id is
+  correlation metadata, not the concurrency token or durable document state. A tab `id` is an opaque stable
+  placement key—including for singleton tools—not semantic identity;
   the kind-specific path/scope/session/source/tabKey/tool fields define the resource and prevent aliases from
   duplicating it. Resource references carry placement identity only; their domain DTO remains authoritative
   for lifetime.
@@ -260,9 +266,10 @@ of the host.
   fan-out used nowhere by navigation restoration / `fs.*` / `git.*` / **`spec.graph`**
   (the Specs-viewer whole-graph read, per workspace) / **`todo.*`** — **`list`**/**`add`**/**`update`**/
   **`remove`**, the chat's per-session TODO plan (keyed by `workspaceId` + `sessionId`; `add` tags the
-  item `origin:"user"`) / **`terminal.*`** — **`attach`** (idempotent get-or-create keyed by
-  `(workspaceId, tabKey)`, returning `created` + the `replay` to repaint; the only way a PTY is born, and it
-  replaced `create`+`alive`) / **`list`** (the host owns the tab list) / `write` / `resize` /
+  item `origin:"user"`) / **`terminal.*`** — **`reserve`** (idempotently establishes a host-catalog tab
+  without starting its PTY) / **`attach`** (idempotent get-or-create keyed by `(workspaceId, tabKey)`,
+  returning `created` + the `replay` to repaint; the only way a PTY is born, and it replaced
+  `create`+`alive`) / **`list`** (the host owns the tab list) / `write` / `resize` /
   **`close`** (by `tabKey`, refusing a busy shell unless `force`) / `model.list` + **`model.refresh`** (awaits the host's
   single-flighted catalog refresh and returns **`RefreshedModels`** — the post-refresh list plus
   **`complete`**, whether that pass settled inside the host's capped wait, since only a settled list is

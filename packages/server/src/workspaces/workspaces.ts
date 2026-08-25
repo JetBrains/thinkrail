@@ -172,6 +172,7 @@ export function openExistingWorktree(projectId: string, requestedPath: string): 
 		worktreePath: entry.path,
 		baseBranch,
 		renamed: true,
+		initialTerminalEligible: true,
 	};
 	all.push(workspace);
 	saveWorkspaces(all);
@@ -262,6 +263,7 @@ export async function createWorkspace(
 		branch,
 		worktreePath,
 		baseBranch,
+		initialTerminalEligible: true,
 		...(displayName ? { renamed: true } : {}),
 	};
 	ensureWorkspaceScratchDir(workspace);
@@ -320,6 +322,7 @@ function ensureDefaultWorkspace(project: Project): Workspace {
 		worktreePath: project.path,
 		baseBranch,
 		renamed: true,
+		initialTerminalEligible: true,
 	};
 	all.push(workspace);
 	saveWorkspaces(all);

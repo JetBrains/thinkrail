@@ -13,6 +13,7 @@ import {
 	applyLayoutPreset,
 	BUILTIN_LAYOUT_PRESETS,
 	captureLayoutPreset,
+	minimumBottomGroupLimit,
 	minimumSideGroupLimit,
 	resolveLayoutPreset,
 } from "./layout";
@@ -39,9 +40,11 @@ export function LayoutSettings() {
 	const [name, setName] = useState("");
 	const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
 	const [sideLimit, setSideLimit] = useState(String(settings.maxSideGroups));
+	const [bottomLimit, setBottomLimit] = useState(String(settings.maxBottomGroups));
 	const [applying, setApplying] = useState<LayoutPreset | null>(null);
 	const [saving, setSaving] = useState(false);
 	useEffect(() => setSideLimit(String(settings.maxSideGroups)), [settings.maxSideGroups]);
+	useEffect(() => setBottomLimit(String(settings.maxBottomGroups)), [settings.maxBottomGroups]);
 	const presets = useMemo(
 		() => [
 			...BUILTIN_LAYOUT_PRESETS,
@@ -53,6 +56,10 @@ export function LayoutSettings() {
 	const minimumSideLimit = Math.max(
 		minimumSideGroupLimit(selected),
 		...settings.customPresets.map(minimumSideGroupLimit),
+	);
+	const minimumBottomLimit = Math.max(
+		minimumBottomGroupLimit(selected),
+		...settings.customPresets.map(minimumBottomGroupLimit),
 	);
 
 	const saveSettings = async (next: LayoutSettingsValue): Promise<boolean> => {
@@ -69,11 +76,17 @@ export function LayoutSettings() {
 
 	const apply = (preset: LayoutPreset) => {
 		if (!activeWorkspaceId || !document) return;
-		const requiredLimit = Math.max(settings.maxSideGroups, minimumSideGroupLimit(preset));
+		const requiredSideLimit = Math.max(settings.maxSideGroups, minimumSideGroupLimit(preset));
+		const requiredBottomLimit = Math.max(settings.maxBottomGroups, minimumBottomGroupLimit(preset));
 		void (async () => {
 			if (
-				requiredLimit !== settings.maxSideGroups &&
-				!(await saveSettings({ ...settings, maxSideGroups: requiredLimit }))
+				(requiredSideLimit !== settings.maxSideGroups ||
+					requiredBottomLimit !== settings.maxBottomGroups) &&
+				!(await saveSettings({
+					...settings,
+					maxSideGroups: requiredSideLimit,
+					maxBottomGroups: requiredBottomLimit,
+				}))
 			) {
 				return;
 			}
@@ -103,7 +116,7 @@ export function LayoutSettings() {
 			<header>
 				<h2 className="tr-title-section text-text-default">Layout</h2>
 				<p className="mt-xs max-w-[42rem] tr-text-ui text-text-muted">
-					Choose how new workspaces begin, save reusable arrangements, and control side-stack
+					Choose how new workspaces begin, save reusable arrangements, and control auxiliary group
 					density. Existing workspaces change only when you apply a preset.
 				</p>
 			</header>
@@ -157,7 +170,8 @@ export function LayoutSettings() {
 											) : null}
 										</div>
 										<p className="mt-0.5 tr-text-metadata text-text-muted">
-											{preset.left.groups.length} left · {preset.right.groups.length} right groups
+											{preset.left.groups.length} left · {preset.right.groups.length} right ·{" "}
+											{preset.bottom.groups.length} bottom groups
 										</p>
 									</div>
 								</div>
@@ -172,6 +186,10 @@ export function LayoutSettings() {
 												maxSideGroups: Math.max(
 													settings.maxSideGroups,
 													minimumSideGroupLimit(preset),
+												),
+												maxBottomGroups: Math.max(
+													settings.maxBottomGroups,
+													minimumBottomGroupLimit(preset),
 												),
 											})
 										}
@@ -242,6 +260,11 @@ export function LayoutSettings() {
 															minimumSideGroupLimit(nextDefault),
 															...customPresets.map(minimumSideGroupLimit),
 														),
+														maxBottomGroups: Math.max(
+															settings.maxBottomGroups,
+															minimumBottomGroupLimit(nextDefault),
+															...customPresets.map(minimumBottomGroupLimit),
+														),
 													});
 												}}
 												className="rounded-[var(--radius-sm)] p-xs text-text-muted hover:bg-feedback-error-subtle hover:text-feedback-error"
@@ -290,10 +313,18 @@ export function LayoutSettings() {
 						onClick={() => {
 							if (!document || !name.trim()) return;
 							const preset = captureLayoutPreset(document, randomId("preset"), name.trim());
-							const requiredLimit = Math.max(settings.maxSideGroups, minimumSideGroupLimit(preset));
+							const requiredSideLimit = Math.max(
+								settings.maxSideGroups,
+								minimumSideGroupLimit(preset),
+							);
+							const requiredBottomLimit = Math.max(
+								settings.maxBottomGroups,
+								minimumBottomGroupLimit(preset),
+							);
 							void saveSettings({
 								...settings,
-								maxSideGroups: requiredLimit,
+								maxSideGroups: requiredSideLimit,
+								maxBottomGroups: requiredBottomLimit,
 								customPresets: [...settings.customPresets, preset],
 							}).then((saved) => {
 								if (saved) setName("");
@@ -308,35 +339,74 @@ export function LayoutSettings() {
 
 			<section className="space-y-sm border-border-default border-t pt-lg">
 				<div>
-					<h3 className="tr-title-section text-text-default">Side group limit</h3>
+					<h3 className="tr-title-section text-text-default">Group limits</h3>
 					<p className="tr-text-metadata text-text-muted">
 						Applies to new groups. Existing over-limit arrangements remain usable and reducible.
 					</p>
 				</div>
-				<div className="flex max-w-xs items-center gap-sm">
-					<input
-						type="number"
-						min={minimumSideLimit}
-						max={32}
-						value={sideLimit}
-						onChange={(event) => setSideLimit(event.target.value)}
-						aria-label="Maximum side groups"
-						className="w-24 rounded-[var(--radius-sm)] border border-border-default bg-control-bg px-sm py-xs tr-text-ui text-text-default outline-none focus:ring-2 focus:ring-primary"
-					/>
-					<button
-						type="button"
-						disabled={
-							!Number.isInteger(Number(sideLimit)) ||
-							Number(sideLimit) < minimumSideLimit ||
-							Number(sideLimit) > 32 ||
-							Number(sideLimit) === settings.maxSideGroups ||
-							saving
-						}
-						onClick={() => void saveSettings({ ...settings, maxSideGroups: Number(sideLimit) })}
-						className="rounded-[var(--radius-sm)] border border-border-default px-md py-xs tr-text-ui text-text-default hover:bg-control-bg-hovered disabled:text-control-disabled-text"
-					>
-						Save limit
-					</button>
+				<div className="grid max-w-sm gap-sm">
+					<div className="space-y-xs tr-text-metadata text-text-muted">
+						<label htmlFor="layout-side-group-limit">Side groups</label>
+						<div className="flex items-center gap-sm">
+							<input
+								id="layout-side-group-limit"
+								type="number"
+								min={minimumSideLimit}
+								max={32}
+								value={sideLimit}
+								onChange={(event) => setSideLimit(event.target.value)}
+								aria-label="Maximum side groups"
+								className="w-24 rounded-[var(--radius-sm)] border border-border-default bg-control-bg px-sm py-xs tr-text-ui text-text-default outline-none focus:ring-2 focus:ring-primary"
+							/>
+							<button
+								type="button"
+								aria-label="Save side group limit"
+								disabled={
+									!Number.isInteger(Number(sideLimit)) ||
+									Number(sideLimit) < minimumSideLimit ||
+									Number(sideLimit) > 32 ||
+									Number(sideLimit) === settings.maxSideGroups ||
+									saving
+								}
+								onClick={() => void saveSettings({ ...settings, maxSideGroups: Number(sideLimit) })}
+								className="rounded-[var(--radius-sm)] border border-border-default px-md py-xs tr-text-ui text-text-default hover:bg-control-bg-hovered disabled:text-control-disabled-text"
+							>
+								Save
+							</button>
+						</div>
+					</div>
+					<div className="space-y-xs tr-text-metadata text-text-muted">
+						<label htmlFor="layout-bottom-group-limit">Bottom groups</label>
+						<div className="flex items-center gap-sm">
+							<input
+								id="layout-bottom-group-limit"
+								type="number"
+								min={minimumBottomLimit}
+								max={32}
+								value={bottomLimit}
+								onChange={(event) => setBottomLimit(event.target.value)}
+								aria-label="Maximum bottom groups"
+								className="w-24 rounded-[var(--radius-sm)] border border-border-default bg-control-bg px-sm py-xs tr-text-ui text-text-default outline-none focus:ring-2 focus:ring-primary"
+							/>
+							<button
+								type="button"
+								aria-label="Save bottom group limit"
+								disabled={
+									!Number.isInteger(Number(bottomLimit)) ||
+									Number(bottomLimit) < minimumBottomLimit ||
+									Number(bottomLimit) > 32 ||
+									Number(bottomLimit) === settings.maxBottomGroups ||
+									saving
+								}
+								onClick={() =>
+									void saveSettings({ ...settings, maxBottomGroups: Number(bottomLimit) })
+								}
+								className="rounded-[var(--radius-sm)] border border-border-default px-md py-xs tr-text-ui text-text-default hover:bg-control-bg-hovered disabled:text-control-disabled-text"
+							>
+								Save
+							</button>
+						</div>
+					</div>
 				</div>
 			</section>
 
@@ -346,7 +416,7 @@ export function LayoutSettings() {
 					if (!open) setApplying(null);
 				}}
 				title="Apply this layout?"
-				description="Open files, chats, documents, and terminals are preserved, but their groups and proportions will be rearranged for every client in this workspace. The side-group limit is raised if this preset needs more groups."
+				description="Open files, chats, documents, and terminals are preserved, but their groups and proportions will be rearranged for every client in this workspace. Group limits are raised if this preset needs more groups."
 				confirmLabel="Apply layout"
 				confirmTestId="layout-apply-confirm"
 				onConfirm={() => {

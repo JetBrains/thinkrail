@@ -120,6 +120,7 @@ import {
 	closeTerminalTab,
 	closeWorkspaceTerminals,
 	listTerminals,
+	reserveTerminal,
 	resizeTerminal,
 	writeTerminal,
 } from "../terminal";
@@ -355,6 +356,11 @@ const handlers: Record<string, Handler> = {
 		return gitDiffFile(p.workspaceId, p.path, p.scope);
 	},
 	"git.listCommits": (params) => listCommits((params as { workspaceId: string }).workspaceId),
+	"terminal.reserve": (params) => {
+		const p = params as { workspaceId: string; tabKey: string; title: string };
+		getWorkspace(p.workspaceId);
+		return { tab: reserveTerminal(p.workspaceId, p.tabKey, p.title) };
+	},
 	"terminal.attach": (params, ctx) => {
 		const p = params as {
 			workspaceId: string;
@@ -606,7 +612,8 @@ const handlers: Record<string, Handler> = {
 	"layout.replace": (params) => {
 		const replacement = params as LayoutReplaceParams;
 		getWorkspace(replacement.workspaceId);
-		return replaceWorkspaceLayout(replacement, getConfig().layout.maxSideGroups);
+		const { maxSideGroups, maxBottomGroups } = getConfig().layout;
+		return replaceWorkspaceLayout(replacement, { maxSideGroups, maxBottomGroups });
 	},
 	"settings.update": (params) => {
 		const config = (params as { config: Partial<AppConfig> }).config;
