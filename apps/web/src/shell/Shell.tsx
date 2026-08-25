@@ -220,7 +220,7 @@ export function Shell() {
 			)}
 			<Toaster />
 			<OnboardingSimulation
-				renderCreateDialog={({ onCreate, onClose, prompt }) => (
+				renderCreateDialog={({ onCreate, onClose, onReady, prompt }) => (
 					<NewWorkspaceDialog
 						open
 						preview
@@ -231,6 +231,7 @@ export function Shell() {
 						}}
 						onCreated={() => {}}
 						onPreviewCreate={onCreate}
+						onPreviewReady={onReady}
 					/>
 				)}
 			/>

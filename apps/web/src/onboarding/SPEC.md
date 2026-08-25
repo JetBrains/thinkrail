@@ -48,9 +48,11 @@ App" card); both flip one **view flag** (`store.demoOpen`, a top-level, non-pers
   `panels`, no cycle). The dialog runs in an **inert `preview` mode** (optional props on the shared
   component, default off): all its wire reads are skipped, submit is short-circuited to `onPreviewCreate`,
   and the Create button's `↵` key-badge is hidden (Create is text-only) — so the exact real dialog UI is
-  taught while **no** workspace/session/wire work happens. The task is passed through as the dialog's
-  `initialPrompt`. Its coach uses a **viewport-scoped** spotlight (the dialog is a portaled modal): a
-  pulse ring on Create + a tooltip to the dialog's right; every other step uses the card-scoped spotlight.
+  taught while **no** workspace/session/wire work happens. The task is passed as `initialPrompt` and the
+  seam **types it in** character-by-character (instant under reduced motion), keeping Create inactive
+  until done and firing `onPreviewReady` so the sim only shows the Create coach once typing finishes. Its
+  coach uses a **viewport-scoped** spotlight (the dialog is a portaled modal): a pulse ring on Create + a
+  tooltip to the dialog's right; every other step uses the card-scoped spotlight.
 - **Coach marks** reuse the tooltip + arrow treatment: a card-scoped **spotlight** dims everything inside
   the card except the current target with the `container-workspace-overlay` scrim (the workspace surface at
   the `veil` **50%** alpha step — a sanctioned color token, light enough to keep the interface legible;
@@ -78,7 +80,7 @@ App" card); both flip one **view flag** (`store.demoOpen`, a top-level, non-pers
   the card's bottom edge and advances across the scripted `STEP_ORDER`. No labels/percentages/dots.
 - Only the current target is interactive; everything else is present but inert (covered by the dim).
 
-## Scripted flow (local `step` state machine, numbered "of 4")
+## Scripted flow (local `step` state machine)
 
 1. **Open a project** — empty-state Welcome with an "Open project" card (arrow points down to it); clicking
    opens a **fake, simplified macOS-Finder-style folder picker** rendered on a **light / inverse system
@@ -94,23 +96,35 @@ App" card); both flip one **view flag** (`store.demoOpen`, a top-level, non-pers
    The demo card carries a soft **brand glow** — a blurred `bg-primary-soft` layer behind it (not
    `feedback-success`; onboarding emphasis, not a success state), extending slightly beyond the card
    without altering its background, border, or layout.
-2. **Create separate workspaces** — coach sits right of the left panel (arrow at the rail `+`); clicking
-   it opens the **real** `NewWorkspaceDialog` (see the preview seam below) with its prompt **prefilled**
-   (focused, blinking caret — no fake typing) with that workspace's predetermined task, and the coach
-   re-points **to the right of the dialog** with its arrow at the emphasized **Create** button. Doing this
-   twice yields two fake workspaces. No real worktrees are created.
-3. **Start the first agent** — switches into the first workspace's composer with the first task **already
-   prefilled** (no Insert button); the coach highlights the existing **Send** button (pulsing primary
-   ring). Send shows a brief "Working…" then a predetermined successful result (a `setTimeout`, no model
-   call), using the existing chat treatment.
-4. **Run agents in parallel** — coach guides switching to the second workspace, whose composer is
-   **prefilled** with the second task (Send highlighted); the first workspace's row shows it already
-   **done** while the second works —
-   the payoff that separate workspaces hold independent, concurrent sessions. A left-panel note reinforces
-   that switching tabs never stops a session.
+2. **Create the first workspace** — coach at the rail `+` opens the **real** `NewWorkspaceDialog` (preview
+   seam below); the task **types itself** into the real prompt field (focused, blinking caret; instant
+   under reduced motion), Create stays inactive until typing finishes, then the coach re-points to the
+   right of the dialog with its arrow on the emphasized **Create**. Clicking Create enters the first
+   workspace.
+3. **First agent starts, and keeps running** — the first workspace shows concise, believable agent
+   activity (reads files → plan → "Working…") in the real chat visual language and **stays running**; its
+   rail row keeps a working indicator. The coach points back at the rail `+`: "start a second task — your
+   first agent keeps working here."
+4. **Create the second workspace** — same real dialog + typed task for *"Add filtering by tags…"*.
+5. **Second agent + full workbench** — entering the second workspace shows the integrated workbench, all
+   **mocked** with the real visual language: an active agent chat (center), a right-side
+   Files/Specs/Changes strip, and a bottom **Terminal** strip — so it reads as ThinkRail, not a bare chat.
+6. **Agent asks for feedback** — the second agent pauses with a **question widget** ("Where should tag
+   filters appear?" + options + a custom field); a coach points at it ("Give the agent feedback"). The
+   user must choose an option or type their own; on answer the agent acknowledges and resumes.
+7. **Parallel payoff** — while the second agent continues, the coach moves to the **left nav** and
+   highlights the **first** workspace (pulsing primary): "Your agents work in parallel — your first task
+   kept running. Check its progress." The second workspace visibly stays active; a left-panel note states
+   switching views never stops a session.
+8. **Return to the first workspace** — clicking it shows the first agent **completed** (result + a small
+   Changes summary), making the "I left, worked elsewhere, came back done" point.
 
-**Completion** — a "You're ready to build" card with a single **Finish** action (`closeDemo`). Because the
-whole thing is local state, replaying (reopen) starts fresh at step 1.
+**Completion** (`step: "final"`, progress 100%) — a central **primary-subtle** surface: **"That's the
+workflow." / "Now try it with your own project."** with a **Finish** action (`closeDemo`) and a **"Learn
+more in the docs"** link to the existing `https://thinkrail.ai`. Local state, so reopening replays from
+the intro. The agent activity, workbench sides, terminal, and question widget are **faithful mocks** (the
+real chat/panels/terminal/question components are chat-runtime/store-coupled and can't mount in an
+isolated mock); only `NewWorkspaceDialog` is the real component (preview seam).
 
 ## Boundary
 

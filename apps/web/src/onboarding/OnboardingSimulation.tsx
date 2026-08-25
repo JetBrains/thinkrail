@@ -1,6 +1,7 @@
 import {
 	Check,
 	ChevronRight,
+	FileText,
 	Folder,
 	FolderOpen,
 	GitBranch,
@@ -8,7 +9,7 @@ import {
 	Loader2,
 	type LucideIcon,
 	Plus,
-	Send,
+	SquareTerminal,
 	X,
 } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
@@ -19,38 +20,95 @@ import { cn } from "../lib";
 import { useAppStore } from "../store";
 import { useTargetRect } from "./anchor";
 
+const DOCS_URL = "https://thinkrail.ai";
+
 const TASK_1 = "Implement a search feature in my To Do app.";
 const TASK_2 = "Add filtering by tags so I can quickly show tasks with a specific tag.";
-const RESULT_1 =
-	"Added a live search box that filters tasks as you type — a new searchTasks() in src/app.js wired to an input in index.html.";
-const RESULT_2 =
-	"Added an All / Active / Completed filter above the list, with the chosen filter remembered across reloads.";
+const WS_NAMES = ["Search feature", "Tag filtering"];
+
+const QUESTION = "Where should tag filters appear?";
+const QUESTION_OPTIONS = ["Above the task list", "In the sidebar", "Next to the search field"];
+
+type Activity =
+	| { id: string; kind: "user" | "note" | "result"; text: string }
+	| { id: string; kind: "tool"; text: string }
+	| { id: string; kind: "working"; text: string }
+	| { id: string; kind: "changes"; text: string };
+
+const uid = () => crypto.randomUUID();
+
+function ws1Working(): Activity[] {
+	return [
+		{ id: uid(), kind: "user", text: TASK_1 },
+		{ id: uid(), kind: "tool", text: "Read index.html" },
+		{ id: uid(), kind: "tool", text: "Read src/app.js" },
+		{ id: uid(), kind: "note", text: "Plan: add a search box that filters tasks as you type." },
+		{ id: uid(), kind: "working", text: "Implementing search…" },
+	];
+}
+
+function ws1Done(): Activity[] {
+	return [
+		{ id: uid(), kind: "user", text: TASK_1 },
+		{ id: uid(), kind: "tool", text: "Edit src/app.js" },
+		{ id: uid(), kind: "tool", text: "Edit index.html" },
+		{
+			id: uid(),
+			kind: "result",
+			text: "Search is live — a searchTasks() filter wired to a new input; tasks narrow as you type.",
+		},
+		{ id: uid(), kind: "changes", text: "2 files changed · +38 −4" },
+	];
+}
+
+function ws2Thinking(): Activity[] {
+	return [
+		{ id: uid(), kind: "user", text: TASK_2 },
+		{ id: uid(), kind: "tool", text: "Read src/app.js" },
+		{
+			id: uid(),
+			kind: "note",
+			text: "Thinking about where the tag filters should live in the UI…",
+		},
+	];
+}
+
+function ws2Resume(choice: string): Activity[] {
+	return [
+		{ id: uid(), kind: "note", text: `Got it — placing the filters ${choice.toLowerCase()}.` },
+		{ id: uid(), kind: "tool", text: "Edit src/app.js" },
+		{ id: uid(), kind: "working", text: "Adding tag parsing and the filter row…" },
+	];
+}
 
 type Step =
 	| "intro"
 	| "open"
 	| "picker"
 	| "ws1-create"
+	| "ws1-working"
 	| "ws2-create"
-	| "agent1"
-	| "agent2-switch"
-	| "agent2"
-	| "done";
+	| "ws2-working"
+	| "ws2-question"
+	| "ws2-resume"
+	| "ws1-done"
+	| "final";
 
 const STEP_ORDER: Step[] = [
 	"intro",
 	"open",
 	"picker",
 	"ws1-create",
+	"ws1-working",
 	"ws2-create",
-	"agent1",
-	"agent2-switch",
-	"agent2",
-	"done",
+	"ws2-working",
+	"ws2-question",
+	"ws2-resume",
+	"ws1-done",
+	"final",
 ];
 
 type WsStatus = "idle" | "working" | "done";
-type Msg = { id: string; role: "user" | "assistant" | "working"; text?: string };
 
 type CoachInfo = {
 	selector: string;
@@ -60,7 +118,7 @@ type CoachInfo = {
 	body: string;
 };
 
-function activeCoach(step: Step, dialogOpen: boolean): CoachInfo | null {
+function activeCoach(step: Step, dialogOpen: boolean, dialogReady: boolean): CoachInfo | null {
 	switch (step) {
 		case "open":
 			return {
@@ -79,69 +137,59 @@ function activeCoach(step: Step, dialogOpen: boolean): CoachInfo | null {
 				body: "Select the To Do App folder to open it in ThinkRail.",
 			};
 		case "ws1-create":
-			return dialogOpen
-				? {
-						selector: '[data-testid="create-workspace"]',
-						side: "right",
-						scope: "viewport",
-						title: "Create the workspace",
-						body: "A workspace isolates this task on its own branch. The prepared task will start here — click Create.",
-					}
-				: {
-						selector: '[data-sim="rail-add"]',
-						side: "right",
-						scope: "card",
-						title: "Create a workspace",
-						body: "ThinkRail runs each task in its own isolated worktree and branch. Open the New workspace dialog.",
-					};
-		case "ws2-create":
-			return dialogOpen
-				? {
-						selector: '[data-testid="create-workspace"]',
-						side: "right",
-						scope: "viewport",
-						title: "Create the second workspace",
-						body: "A second isolated workspace so the tasks run in parallel. Its prepared task starts here — click Create.",
-					}
-				: {
-						selector: '[data-sim="rail-add"]',
-						side: "right",
-						scope: "card",
-						title: "Create a second workspace",
-						body: "Add a second workspace so two tasks run side by side, each on its own branch.",
-					};
-		case "agent1":
+		case "ws2-create": {
+			if (!dialogOpen)
+				return {
+					selector: '[data-sim="rail-add"]',
+					side: "right",
+					scope: "card",
+					title: step === "ws1-create" ? "Create a workspace" : "Create a second workspace",
+					body: "Each task runs in its own isolated worktree and branch. Open the New workspace dialog.",
+				};
+			if (!dialogReady) return null;
 			return {
-				selector: '[data-sim="send"]',
-				side: "top",
-				scope: "card",
-				title: "Start the first agent",
-				body: "The prompt is ready — send it to the agent.",
+				selector: '[data-testid="create-workspace"]',
+				side: "right",
+				scope: "viewport",
+				title: "Create the workspace",
+				body: "The task is ready. Create the workspace to start it on its own branch.",
 			};
-		case "agent2-switch":
+		}
+		case "ws1-working":
 			return {
-				selector: '[data-sim="ws-1"]',
+				selector: '[data-sim="rail-add"]',
 				side: "right",
 				scope: "card",
-				title: "Switch to your second workspace",
-				body: "Your first agent keeps working — switch over to start the next one.",
+				title: "Now start a second task",
+				body: "Your first agent keeps working here. Open a second workspace for the next task.",
 			};
-		case "agent2":
+		case "ws2-question":
 			return {
-				selector: '[data-sim="send"]',
-				side: "top",
+				selector: '[data-sim="question"]',
+				side: "right",
 				scope: "card",
-				title: "Run a second agent in parallel",
-				body: "Both agents run at the same time, each in its own workspace. Send to start.",
+				title: "Give the agent feedback",
+				body: "Choose one of the suggestions or write your own.",
+			};
+		case "ws2-resume":
+			return {
+				selector: '[data-sim="ws-0"]',
+				side: "right",
+				scope: "card",
+				title: "Your agents work in parallel",
+				body: "Your first task kept running in another workspace. Check its progress.",
 			};
 		default:
 			return null;
 	}
 }
 
-const WS_NAMES = ["Add search", "Completed filter"];
-
-export type CreateDialogArgs = { onCreate: () => void; onClose: () => void; prompt: string };
+export type CreateDialogArgs = {
+	onCreate: () => void;
+	onClose: () => void;
+	onReady: () => void;
+	prompt: string;
+};
 
 export function OnboardingSimulation({
 	renderCreateDialog,
@@ -180,70 +228,67 @@ function Simulation({
 	const startTour = useCallback(() => setStep("open"), []);
 	const [workspaces, setWorkspaces] = useState<string[]>([]);
 	const [activeWs, setActiveWs] = useState(0);
-	const [drafts, setDrafts] = useState<Record<number, string>>({});
-	const [messages, setMessages] = useState<Record<number, Msg[]>>({});
+	const [messages, setMessages] = useState<Record<number, Activity[]>>({});
 	const [status, setStatus] = useState<Record<number, WsStatus>>({});
 	const [dialogOpen, setDialogOpen] = useState(false);
+	const [dialogReady, setDialogReady] = useState(false);
 	const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
-	useEffect(() => () => timers.current.forEach(clearTimeout), []);
+	const after = useCallback((ms: number, fn: () => void) => {
+		timers.current.push(setTimeout(fn, ms));
+	}, []);
+	useEffect(() => {
+		const list = timers.current;
+		return () => list.forEach(clearTimeout);
+	}, []);
 
 	const projectOpen = step !== "intro" && step !== "open" && step !== "picker";
-	const coach = activeCoach(step, dialogOpen);
+	const coach = activeCoach(step, dialogOpen, dialogReady);
 	const progress = STEP_ORDER.indexOf(step) / (STEP_ORDER.length - 1);
 
 	const onRailAdd = () => {
-		if (step === "ws1-create" || step === "ws2-create") setDialogOpen(true);
+		if (step === "ws1-working") setStep("ws2-create");
+		if (step === "ws1-create" || step === "ws2-create" || step === "ws1-working") {
+			setDialogReady(false);
+			setDialogOpen(true);
+		}
 	};
 
 	const onPreviewCreate = () => {
 		if (step === "ws1-create") {
 			setWorkspaces([WS_NAMES[0] as string]);
+			setActiveWs(0);
+			setStatus({ 0: "working" });
+			setMessages({ 0: ws1Working() });
 			setDialogOpen(false);
-			setStep("ws2-create");
+			setStep("ws1-working");
 		} else if (step === "ws2-create") {
 			setWorkspaces([WS_NAMES[0] as string, WS_NAMES[1] as string]);
-			setActiveWs(0);
-			setDrafts((d) => ({ ...d, 0: TASK_1 }));
+			setActiveWs(1);
+			setStatus({ 0: "working", 1: "working" });
+			setMessages((m) => ({ ...m, 1: ws2Thinking() }));
 			setDialogOpen(false);
-			setStep("agent1");
+			setStep("ws2-working");
+			after(1600, () => setStep("ws2-question"));
 		}
+	};
+
+	const onAnswer = (choice: string) => {
+		if (step !== "ws2-question") return;
+		setMessages((m) => ({
+			...m,
+			1: [...(m[1] ?? []), { id: uid(), kind: "user", text: choice }, ...ws2Resume(choice)],
+		}));
+		setStep("ws2-resume");
 	};
 
 	const onWsClick = (index: number) => {
-		if (step === "agent2-switch" && index === 1) {
-			setActiveWs(1);
-			setDrafts((d) => ({ ...d, 1: TASK_2 }));
-			setStep("agent2");
+		if (step === "ws2-resume" && index === 0) {
+			setActiveWs(0);
+			setStatus((s) => ({ ...s, 0: "done" }));
+			setMessages((m) => ({ ...m, 0: ws1Done() }));
+			setStep("ws1-done");
+			after(1900, () => setStep("final"));
 		}
-	};
-
-	const send = () => {
-		const ws = activeWs;
-		const text = (drafts[ws] ?? "").trim();
-		if (!text || status[ws] === "working") return;
-		const result = ws === 0 ? RESULT_1 : RESULT_2;
-		setDrafts((d) => ({ ...d, [ws]: "" }));
-		setStatus((s) => ({ ...s, [ws]: "working" }));
-		setMessages((m) => ({
-			...m,
-			[ws]: [
-				...(m[ws] ?? []),
-				{ id: crypto.randomUUID(), role: "user", text },
-				{ id: crypto.randomUUID(), role: "working" },
-			],
-		}));
-		const timer = setTimeout(() => {
-			setMessages((m) => ({
-				...m,
-				[ws]: [
-					...(m[ws] ?? []).filter((msg) => msg.role !== "working"),
-					{ id: crypto.randomUUID(), role: "assistant", text: result },
-				],
-			}));
-			setStatus((s) => ({ ...s, [ws]: "done" }));
-			setStep(ws === 0 ? "agent2-switch" : "done");
-		}, 1400);
-		timers.current.push(timer);
 	};
 
 	return (
@@ -286,16 +331,13 @@ function Simulation({
 						onRailAdd={onRailAdd}
 						onWsClick={onWsClick}
 					/>
-					<SimCenter
+					<SimMain
 						step={step}
-						activeWs={activeWs}
-						messages={messages}
-						status={status}
-						draft={drafts[activeWs] ?? ""}
-						onDraft={(v) => setDrafts((d) => ({ ...d, [activeWs]: v }))}
+						rows={messages[activeWs] ?? []}
 						onOpenProject={() => setStep("picker")}
 						onPickFolder={() => setStep("ws1-create")}
-						onSend={send}
+						onAnswer={onAnswer}
+						onFinish={() => closeDemo()}
 					/>
 				</div>
 
@@ -321,10 +363,10 @@ function Simulation({
 					? renderCreateDialog({
 							onCreate: onPreviewCreate,
 							onClose: () => setDialogOpen(false),
+							onReady: () => setDialogReady(true),
 							prompt: step === "ws1-create" ? TASK_1 : TASK_2,
 						})
 					: null}
-				{step === "done" ? <Completion onFinish={() => closeDemo()} /> : null}
 
 				<div className="pointer-events-none absolute inset-x-0 bottom-0 z-50 h-px">
 					<div
@@ -355,6 +397,7 @@ function SimLeftPanel({
 	onRailAdd: () => void;
 	onWsClick: (index: number) => void;
 }) {
+	const parallel = step === "ws2-working" || step === "ws2-question" || step === "ws2-resume";
 	return (
 		<aside className="flex w-[220px] shrink-0 flex-col gap-sm border-border-default border-r bg-container-sidebar-bg p-md">
 			<span className="tr-text-eyebrow text-text-muted">Projects</span>
@@ -390,11 +433,12 @@ function SimLeftPanel({
 									data-sim={`ws-${index}`}
 									data-testid={`sim-ws-${index}`}
 									onClick={() => onWsClick(index)}
-									className={`flex h-7 w-full items-center gap-sm rounded-[var(--radius-sm)] pr-xs pl-xl text-left tr-text-ui transition-colors ${
+									className={cn(
+										"flex h-7 w-full items-center gap-sm rounded-[var(--radius-sm)] pr-xs pl-xl text-left tr-text-ui transition-colors",
 										index === activeWs
 											? "bg-control-bg-selected text-primary"
-											: "text-text-muted hover:bg-control-bg-hovered"
-									}`}
+											: "text-text-muted hover:bg-control-bg-hovered",
+									)}
 								>
 									<GitBranch className="size-4 shrink-0" />
 									<span className="flex-1 truncate">{name}</span>
@@ -408,9 +452,9 @@ function SimLeftPanel({
 							</li>
 						))}
 					</ul>
-					{step === "agent2" || step === "agent2-switch" ? (
+					{parallel ? (
 						<span className="mt-sm pl-sm text-text-subtle tr-text-metadata leading-snug">
-							Both workspaces keep their own agent session — switching tabs never stops them.
+							Each workspace keeps its own agent session — switching views never stops them.
 						</span>
 					) : null}
 				</>
@@ -421,26 +465,20 @@ function SimLeftPanel({
 	);
 }
 
-function SimCenter({
+function SimMain({
 	step,
-	activeWs,
-	messages,
-	status,
-	draft,
-	onDraft,
+	rows,
 	onOpenProject,
 	onPickFolder,
-	onSend,
+	onAnswer,
+	onFinish,
 }: {
 	step: Step;
-	activeWs: number;
-	messages: Record<number, Msg[]>;
-	status: Record<number, WsStatus>;
-	draft: string;
-	onDraft: (value: string) => void;
+	rows: Activity[];
 	onOpenProject: () => void;
 	onPickFolder: () => void;
-	onSend: () => void;
+	onAnswer: (choice: string) => void;
+	onFinish: () => void;
 }) {
 	if (step === "open") {
 		return (
@@ -473,37 +511,7 @@ function SimCenter({
 		);
 	}
 	if (step === "picker") {
-		return (
-			<div className="flex min-h-0 flex-1 bg-container-content-bg p-lg">
-				<div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[var(--radius-lg)] border border-border-inverse bg-container-inverse-bg text-text-on-inverse shadow-[var(--shadow-lg)]">
-					<div className="flex h-10 shrink-0 items-center gap-xs border-border-inverse border-b px-md">
-						<House className="size-4 shrink-0 text-text-on-inverse-muted" />
-						<span className="tr-text-ui text-text-on-inverse">Your computer</span>
-						<ChevronRight className="size-3.5 shrink-0 text-text-on-inverse-muted" />
-						<span className="tr-text-ui text-text-on-inverse-muted">My Documents</span>
-						<ChevronRight className="size-3.5 shrink-0 text-text-on-inverse-muted" />
-						<span className="tr-text-ui text-text-on-inverse-muted">Projects</span>
-					</div>
-					<div className="flex min-h-0 flex-1">
-						<PickerColumn className="w-[200px]" label="Locations">
-							<PickerRow icon={House} name="Your computer" />
-							<PickerRow icon={Folder} name="Desktop" />
-							<PickerRow icon={Folder} name="My Documents" selected />
-							<PickerRow icon={Folder} name="Downloads" />
-						</PickerColumn>
-						<PickerColumn className="w-[220px]">
-							<PickerRow icon={Folder} name="Notes" />
-							<PickerRow icon={Folder} name="Projects" selected chevron />
-						</PickerColumn>
-						<PickerColumn className="min-w-0 flex-1" last>
-							<PickerRow icon={Folder} name="my-app" />
-							<PickerRow icon={Folder} name="notes" />
-							<PickerRow icon={Folder} name="to-do-app" target onSelect={onPickFolder} />
-						</PickerColumn>
-					</div>
-				</div>
-			</div>
-		);
+		return <FolderPicker onPickFolder={onPickFolder} />;
 	}
 	if (step === "ws1-create" || step === "ws2-create") {
 		return (
@@ -516,59 +524,218 @@ function SimCenter({
 			</Center>
 		);
 	}
-	const rows = messages[activeWs] ?? [];
+	if (step === "final") {
+		return (
+			<div className="flex min-h-0 flex-1 items-center justify-center bg-container-content-bg p-xl">
+				<div className="w-[420px] rounded-[var(--radius-md)] border border-primary-muted bg-clip-padding bg-primary-subtle p-lg text-center">
+					<p className="tr-brand-hero text-primary">That's the workflow.</p>
+					<p className="mt-sm text-text-muted tr-text-ui">Now try it with your own project.</p>
+					<div className="mt-lg flex items-center justify-center gap-md">
+						<Button size="sm" data-testid="onboarding-finish" onClick={onFinish}>
+							Finish
+						</Button>
+						<a
+							href={DOCS_URL}
+							target="_blank"
+							rel="noreferrer"
+							data-testid="onboarding-docs"
+							className="tr-text-ui text-primary underline underline-offset-2 hover:text-text-default"
+						>
+							Learn more in the docs
+						</a>
+					</div>
+				</div>
+			</div>
+		);
+	}
 	return (
 		<div className="flex min-h-0 flex-1 flex-col bg-container-content-bg">
-			<div className="flex min-h-0 flex-1 flex-col gap-sm overflow-auto p-lg">
-				{rows.length === 0 ? (
-					<p className="m-auto text-text-subtle tr-text-metadata">
-						Start the agent below to build this task.
-					</p>
-				) : (
-					rows.map((msg) =>
-						msg.role === "user" ? (
-							<div
-								key={msg.id}
-								className="max-w-[80%] self-end rounded-[var(--radius-md)] border border-bubble-user-border bg-bubble-user-bg px-md py-sm tr-text-ui text-text-default"
-							>
-								{msg.text}
-							</div>
-						) : msg.role === "working" ? (
-							<div
-								key={msg.id}
-								className="inline-flex items-center gap-sm self-start text-text-muted tr-text-metadata"
-							>
-								<span className="size-2 animate-pulse rounded-full bg-primary" />
-								Working…
-							</div>
-						) : (
-							<div key={msg.id} className="max-w-[80%] self-start tr-text-ui text-text-default">
-								{msg.text}
-							</div>
-						),
-					)
-				)}
+			<div className="flex min-h-0 flex-1">
+				<AgentChat rows={rows} question={step === "ws2-question"} onAnswer={onAnswer} />
+				<WorkbenchSides />
 			</div>
-			<div data-sim="composer" className="border-border-default border-t p-md">
-				<div className="flex items-end gap-sm rounded-[var(--radius-md)] border border-control-border-default bg-container-workspace-bg p-sm">
-					<textarea
-						data-testid="sim-composer"
-						value={draft}
-						onChange={(event) => onDraft(event.target.value)}
-						placeholder="Ask the agent…"
-						rows={2}
-						className="min-h-[40px] flex-1 resize-none bg-transparent tr-text-ui text-text-default outline-none placeholder:text-text-subtle"
-					/>
+			<TerminalStrip />
+		</div>
+	);
+}
+
+function AgentChat({
+	rows,
+	question,
+	onAnswer,
+}: {
+	rows: Activity[];
+	question: boolean;
+	onAnswer: (choice: string) => void;
+}) {
+	return (
+		<div className="flex min-h-0 flex-1 flex-col gap-sm overflow-auto p-lg">
+			{rows.map((row) => (
+				<ActivityRow key={row.id} row={row} />
+			))}
+			{question ? <QuestionWidget onAnswer={onAnswer} /> : null}
+		</div>
+	);
+}
+
+function ActivityRow({ row }: { row: Activity }) {
+	switch (row.kind) {
+		case "user":
+			return (
+				<div className="max-w-[80%] self-end rounded-[var(--radius-md)] border border-bubble-user-border bg-bubble-user-bg px-md py-sm tr-text-ui text-text-default">
+					{row.text}
+				</div>
+			);
+		case "note":
+			return <div className="max-w-[85%] self-start tr-text-ui text-text-default">{row.text}</div>;
+		case "tool":
+			return (
+				<div className="inline-flex items-center gap-sm self-start rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-sm py-0.5 text-text-muted tr-code-text">
+					<FileText className="size-3.5 shrink-0" />
+					{row.text}
+				</div>
+			);
+		case "working":
+			return (
+				<div className="inline-flex items-center gap-sm self-start text-text-muted tr-text-metadata">
+					<span className="size-2 animate-pulse rounded-full bg-primary" />
+					{row.text}
+				</div>
+			);
+		case "result":
+			return (
+				<div className="flex max-w-[85%] items-start gap-sm self-start tr-text-ui text-text-default">
+					<Check className="mt-0.5 size-4 shrink-0 text-feedback-success" />
+					<span>{row.text}</span>
+				</div>
+			);
+		case "changes":
+			return (
+				<div className="inline-flex items-center gap-sm self-start rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-sm py-0.5 text-text-muted tr-text-metadata">
+					<GitBranch className="size-3.5 shrink-0" />
+					{row.text}
+				</div>
+			);
+	}
+}
+
+function QuestionWidget({ onAnswer }: { onAnswer: (choice: string) => void }) {
+	const [custom, setCustom] = useState("");
+	return (
+		<div
+			data-sim="question"
+			data-testid="onboarding-question"
+			className="w-full max-w-[85%] self-start rounded-[var(--radius-md)] border border-border-default bg-container-elevated-bg p-md"
+		>
+			<p className="tr-text-ui text-text-default">{QUESTION}</p>
+			<div className="mt-sm flex flex-col gap-xs">
+				{QUESTION_OPTIONS.map((option) => (
 					<Button
+						key={option}
+						variant="outline"
 						size="sm"
-						data-sim="send"
-						data-testid="sim-send"
-						disabled={!draft.trim() || status[activeWs] === "working"}
-						onClick={onSend}
+						data-testid="sim-question-option"
+						className="justify-start"
+						onClick={() => onAnswer(option)}
 					>
-						<Send className="size-4" />
-						Send
+						{option}
 					</Button>
+				))}
+			</div>
+			<div className="mt-sm flex items-end gap-sm rounded-[var(--radius-sm)] border border-control-border-default bg-container-workspace-bg p-sm">
+				<input
+					data-testid="sim-question-custom"
+					value={custom}
+					onChange={(event) => setCustom(event.target.value)}
+					placeholder="Or write your own…"
+					className="min-w-0 flex-1 bg-transparent tr-text-ui text-text-default outline-none placeholder:text-text-subtle"
+				/>
+				<Button
+					size="sm"
+					disabled={!custom.trim()}
+					onClick={() => onAnswer(custom.trim())}
+					data-testid="sim-question-send"
+				>
+					Send
+				</Button>
+			</div>
+		</div>
+	);
+}
+
+function WorkbenchSides() {
+	return (
+		<div className="hidden w-[220px] shrink-0 flex-col border-border-default border-l bg-container-sidebar-bg md:flex">
+			<div className="flex h-8 shrink-0 items-center gap-md border-border-default border-b px-md tr-text-eyebrow text-text-muted">
+				<span className="text-text-default">Files</span>
+				<span>Specs</span>
+				<span>Changes</span>
+			</div>
+			<ul className="flex flex-col gap-0.5 overflow-auto p-xs tr-text-ui text-text-muted">
+				<SideRow name="index.html" />
+				<SideRow name="styles.css" />
+				<SideRow name="src/app.js" />
+				<SideRow name="src/storage.js" />
+				<SideRow name="SPEC.md" />
+			</ul>
+		</div>
+	);
+}
+
+function SideRow({ name }: { name: string }) {
+	return (
+		<span className="flex h-6 items-center gap-sm rounded-[var(--radius-sm)] px-sm">
+			<FileText className="size-3.5 shrink-0 text-text-subtle" />
+			<span className="truncate">{name}</span>
+		</span>
+	);
+}
+
+function TerminalStrip() {
+	return (
+		<div className="h-[104px] shrink-0 border-border-default border-t bg-container-terminal-bg">
+			<div className="flex h-7 items-center gap-sm border-border-default border-b px-md tr-text-eyebrow text-text-muted">
+				<SquareTerminal className="size-3.5" />
+				Terminal
+			</div>
+			<pre className="overflow-hidden px-md py-sm text-text-muted tr-code-text leading-relaxed">
+				{"~/to-do-app "}
+				<span className="text-text-subtle">(tag-filtering)</span>
+				{" $ git status\nOn branch tag-filtering\nnothing to commit, working tree clean\n$ "}
+				<span className="animate-pulse motion-reduce:animate-none">▊</span>
+			</pre>
+		</div>
+	);
+}
+
+function FolderPicker({ onPickFolder }: { onPickFolder: () => void }) {
+	return (
+		<div className="flex min-h-0 flex-1 bg-container-content-bg p-lg">
+			<div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[var(--radius-lg)] border border-border-inverse bg-container-inverse-bg text-text-on-inverse shadow-[var(--shadow-lg)]">
+				<div className="flex h-10 shrink-0 items-center gap-xs border-border-inverse border-b px-md">
+					<House className="size-4 shrink-0 text-text-on-inverse-muted" />
+					<span className="tr-text-ui text-text-on-inverse">Your computer</span>
+					<ChevronRight className="size-3.5 shrink-0 text-text-on-inverse-muted" />
+					<span className="tr-text-ui text-text-on-inverse-muted">My Documents</span>
+					<ChevronRight className="size-3.5 shrink-0 text-text-on-inverse-muted" />
+					<span className="tr-text-ui text-text-on-inverse-muted">Projects</span>
+				</div>
+				<div className="flex min-h-0 flex-1">
+					<PickerColumn className="w-[200px]" label="Locations">
+						<PickerRow icon={House} name="Your computer" />
+						<PickerRow icon={Folder} name="Desktop" />
+						<PickerRow icon={Folder} name="My Documents" selected />
+						<PickerRow icon={Folder} name="Downloads" />
+					</PickerColumn>
+					<PickerColumn className="w-[220px]">
+						<PickerRow icon={Folder} name="Notes" />
+						<PickerRow icon={Folder} name="Projects" selected chevron />
+					</PickerColumn>
+					<PickerColumn className="min-w-0 flex-1" last>
+						<PickerRow icon={Folder} name="my-app" />
+						<PickerRow icon={Folder} name="notes" />
+						<PickerRow icon={Folder} name="to-do-app" target onSelect={onPickFolder} />
+					</PickerColumn>
 				</div>
 			</div>
 		</div>
@@ -819,25 +986,6 @@ function Intro({ onDone }: { onDone: () => void }) {
 			>
 				{"Let's set up a demo project first.\nIt takes about 2 minutes."}
 			</p>
-		</div>
-	);
-}
-
-function Completion({ onFinish }: { onFinish: () => void }) {
-	return (
-		<div className="absolute inset-0 z-40 flex items-center justify-center bg-container-workspace-overlay">
-			<div className="w-[360px] rounded-[var(--radius-md)] border border-border-default bg-container-elevated-bg p-lg text-center shadow-[var(--shadow-md)]">
-				<p className="tr-title-card text-text-default">You're ready to build</p>
-				<p className="mt-xs text-text-muted tr-text-metadata leading-snug">
-					You opened a project, created two isolated workspaces, and ran two agents in parallel —
-					that's the ThinkRail loop.
-				</p>
-				<div className="mt-md flex justify-center">
-					<Button size="sm" data-testid="onboarding-finish" onClick={onFinish}>
-						Finish
-					</Button>
-				</div>
-			</div>
 		</div>
 	);
 }

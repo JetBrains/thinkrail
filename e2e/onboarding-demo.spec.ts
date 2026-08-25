@@ -1,7 +1,10 @@
 import { expect, test } from "@playwright/test";
 import { openAppFresh } from "./fixtures/app";
 
-test("the mocked onboarding simulation runs intro → scripted flow, never touching real projects", async ({
+const TASK_1 = "Implement a search feature in my To Do app.";
+const TASK_2 = "Add filtering by tags so I can quickly show tasks with a specific tag.";
+
+test("the mocked demo runs intro → parallel-agents payoff, never touching real projects", async ({
 	page,
 }) => {
 	await openAppFresh(page);
@@ -10,49 +13,40 @@ test("the mocked onboarding simulation runs intro → scripted flow, never touch
 	await page.getByTestId("onboarding-launch").click();
 	await expect(page.getByTestId("onboarding-sim")).toBeVisible();
 	await expect(page.getByTestId("onboarding-intro")).toContainText("Welcome to ThinkRail");
-	await expect(page.getByTestId("onboarding-progress")).toBeAttached();
-	await expect(page.getByTestId("onboarding-intro")).toContainText("Before we start");
 	await expect(page.getByTestId("onboarding-git")).toContainText("Git is ready");
+	await expect(page.getByTestId("onboarding-progress")).toBeAttached();
 
 	const coach = page.getByTestId("onboarding-coach");
 	await expect(coach).toContainText("Open a project");
-	await expect(coach).not.toContainText("Step");
 	await page.getByTestId("sim-open-project").click();
 
 	await expect(coach).toContainText("Choose your project folder");
 	await page.getByTestId("sim-folder").click();
 
-	const task1 = "Implement a search feature in my To Do app.";
-	const task2 = "Add filtering by tags so I can quickly show tasks with a specific tag.";
-
 	await expect(coach).toContainText("Create a workspace");
 	await page.getByTestId("sim-add-workspace").click();
 	await expect(page.getByTestId("new-workspace-dialog")).toBeVisible();
-	await expect(page.getByTestId("ws-prompt")).toHaveValue(task1);
-	const createButton = page.getByTestId("create-workspace");
-	await expect(createButton).toHaveText("Create");
-	await expect(coach).toContainText("Create the workspace");
-	await createButton.click();
-
-	await expect(coach).toContainText("Create a second workspace");
-	await page.getByTestId("sim-add-workspace").click();
-	await expect(page.getByTestId("new-workspace-dialog")).toBeVisible();
-	await expect(page.getByTestId("ws-prompt")).toHaveValue(task2);
+	await expect(page.getByTestId("ws-prompt")).toHaveValue(TASK_1);
 	await page.getByTestId("create-workspace").click();
 
-	await expect(coach).toContainText("Start the first agent");
-	await expect(page.getByTestId("onboarding-insert-prompt")).toHaveCount(0);
-	await expect(page.getByTestId("sim-composer")).toHaveValue(task1);
-	await page.getByTestId("sim-send").click();
+	await expect(coach).toContainText("Now start a second task");
+	await page.getByTestId("sim-add-workspace").click();
+	await expect(page.getByTestId("new-workspace-dialog")).toBeVisible();
+	await expect(page.getByTestId("ws-prompt")).toHaveValue(TASK_2);
+	await page.getByTestId("create-workspace").click();
 
-	await expect(coach).toContainText("Switch to your second workspace");
-	await page.getByTestId("sim-ws-1").click();
+	const question = page.getByTestId("onboarding-question");
+	await expect(question).toBeVisible();
+	await expect(coach).toContainText("Give the agent feedback");
+	await page.getByTestId("sim-question-option").first().click();
 
-	await expect(coach).toContainText("Run a second agent in parallel");
-	await expect(page.getByTestId("sim-composer")).toHaveValue(task2);
-	await page.getByTestId("sim-send").click();
+	await expect(coach).toContainText("Your agents work in parallel");
+	await page.getByTestId("sim-ws-0").click();
 
+	await expect(page.getByTestId("onboarding-finish")).toBeVisible();
+	await expect(page.getByTestId("onboarding-docs")).toHaveAttribute("href", "https://thinkrail.ai");
 	await page.getByTestId("onboarding-finish").click();
+
 	await expect(page.getByTestId("onboarding-sim")).toHaveCount(0);
 	await expect(page.getByTestId("project-item")).toHaveCount(0);
 });

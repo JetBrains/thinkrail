@@ -69,6 +69,7 @@ export function NewWorkspaceDialog({
 	onCreated,
 	preview = false,
 	onPreviewCreate,
+	onPreviewReady,
 }: {
 	open: boolean;
 	projectId: string;
@@ -78,6 +79,7 @@ export function NewWorkspaceDialog({
 	onCreated: (workspace: Workspace) => void;
 	preview?: boolean;
 	onPreviewCreate?: () => void;
+	onPreviewReady?: () => void;
 }) {
 	const projects = useAppStore((s) => s.projects);
 
@@ -90,6 +92,9 @@ export function NewWorkspaceDialog({
 	const [model, setModel] = useState<WireModel | null>(null);
 	const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevel>("medium");
 	const [creating, setCreating] = useState(false);
+	const [previewTyped, setPreviewTyped] = useState(false);
+	const previewReadyRef = useRef(onPreviewReady);
+	previewReadyRef.current = onPreviewReady;
 	const [trusting, setTrusting] = useState(false);
 	const [manageSkills, setManageSkills] = useState(false);
 	const promptRef = useRef<HTMLTextAreaElement>(null);
@@ -119,11 +124,39 @@ export function NewWorkspaceDialog({
 	useEffect(() => {
 		if (!open) return;
 		setSelectedProjectId(projectId);
-		setPrompt(initialPrompt ?? "");
+		setPrompt(preview ? "" : (initialPrompt ?? ""));
+		setPreviewTyped(!preview);
 		setTarget("worktree");
 		setCreating(false);
 		hostDefaultAsked.current = false;
-	}, [open, projectId, initialPrompt]);
+	}, [open, projectId, initialPrompt, preview]);
+
+	useEffect(() => {
+		if (!open || !preview) return;
+		const full = initialPrompt ?? "";
+		const reduce =
+			typeof window !== "undefined" &&
+			window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+		if (!full || reduce) {
+			setPrompt(full);
+			setPreviewTyped(true);
+			previewReadyRef.current?.();
+			return;
+		}
+		setPrompt("");
+		setPreviewTyped(false);
+		let index = 0;
+		const id = setInterval(() => {
+			index += 1;
+			setPrompt(full.slice(0, index));
+			if (index >= full.length) {
+				clearInterval(id);
+				setPreviewTyped(true);
+				previewReadyRef.current?.();
+			}
+		}, 26);
+		return () => clearInterval(id);
+	}, [open, preview, initialPrompt]);
 
 	useEffect(() => {
 		if (!open || preview) return;
@@ -493,7 +526,7 @@ export function NewWorkspaceDialog({
 					<button
 						type="button"
 						data-testid="create-workspace"
-						disabled={creating}
+						disabled={creating || (preview && !previewTyped)}
 						onClick={() => void create()}
 						className="flex h-8 shrink-0 items-center gap-sm rounded-[var(--radius-sm)] bg-control-primary-bg px-md tr-text-action text-control-primary-text outline-none transition-colors hover:bg-control-primary-bg-hovered focus-visible:ring-2 focus-visible:ring-primary disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text"
 					>
