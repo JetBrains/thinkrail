@@ -113,9 +113,10 @@ themselves.
   navigation chrome** (left/right panels, panel & toolbar headers, tabs, the mobile switcher rail, menu
   items, standalone chrome icon-buttons); `size-4` (16px) only for a **prominent dedicated icon-button
   surface** — the app-chrome Settings gear and the composer's bottom controls (Send + peers). An
-  icon+text navigation row pairs the 14px icon with a **6px** `gap-1.5` gap and **top-aligns** the icon to
-  the first line (`items-start` + `mt-0.5`) so a two-line row hangs the glyph on its title, not the
-  block centre. Menu-item icons are centralized once in `components/ui/menu-styles.ts` (`menuItemClass`
+  icon+text navigation row pairs the 14px icon with a **6px** `gap-1.5` gap; a **two-line** row (e.g. a
+  workspace whose branch differs from its name) **top-aligns** the icon to the first line (`items-start`
+  + `mt-0.5`) so the glyph hangs on its title, while a single-line row stays vertically centred
+  (`items-center`, no nudge). Menu-item icons are centralized once in `components/ui/menu-styles.ts` (`menuItemClass`
   `[&_svg]:size-3.5` + `gap-sm`). **Stroke weight tracks size**, set once in `src/styles/global.css`
   keyed on the size utility (never a per-call-site `strokeWidth`): the 12/14px tiers (`size-3` /
   `size-3.5`) render at `1.4`, while 16px and up keep lucide's default `2`.

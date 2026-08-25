@@ -499,6 +499,7 @@ function WorkspaceRow({
 	const isDefault = isDefaultWorkspace(workspace);
 	const isExternal = isExternalWorkspace(workspace);
 	const Icon = isDefault ? House : isExternal ? FolderOpen : GitBranch;
+	const isTwoLine = workspace.branch !== workspace.name;
 	const [menuOpen, setMenuOpen] = useState(false);
 	const openMenuFromContext = (event: MouseEvent) => {
 		event.preventDefault();
@@ -520,10 +521,10 @@ function WorkspaceRow({
 				<button
 					type="button"
 					onClick={onSelect}
-					className="flex min-w-0 flex-1 items-start gap-1.5 text-left"
+					className={`flex min-w-0 flex-1 gap-1.5 text-left ${isTwoLine ? "items-start" : "items-center"}`}
 				>
 					<Icon
-						className={`mt-0.5 size-3.5 shrink-0 ${isActive ? "text-primary" : "text-text-muted"}`}
+						className={`${isTwoLine ? "mt-0.5 " : ""}size-3.5 shrink-0 ${isActive ? "text-primary" : "text-text-muted"}`}
 					/>
 					<span className="flex min-w-0 flex-1 flex-col">
 						<span
@@ -532,7 +533,7 @@ function WorkspaceRow({
 						>
 							{workspace.name}
 						</span>
-						{workspace.branch !== workspace.name && (
+						{isTwoLine && (
 							<span
 								data-testid="workspace-branch"
 								className="truncate text-text-subtle tr-text-metadata leading-tight"
