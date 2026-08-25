@@ -26,6 +26,7 @@ import {
 	reanchorWorkspace,
 	removeWorkspaceReviews,
 	resolveCommentFromAgent,
+	reviewReadFailure,
 	reviewSessionKey,
 	rollbackSend,
 	sendableComments,
@@ -430,7 +431,12 @@ test("a DAMAGED review file is refused, never replaced — the comments stay on 
 	const file = join(dataDir, "reviews", `${WS_ID}.json`);
 	const intact = readFileSync(file, "utf8");
 	writeFileSync(file, intact.slice(0, Math.floor(intact.length / 2)));
-	expect(() => getReviewSnapshot(WS_ID)).toThrow(/damaged/);
+	try {
+		getReviewSnapshot(WS_ID);
+		expect.unreachable();
+	} catch (error) {
+		expect(reviewReadFailure(error)).toBe("damaged");
+	}
 	expect(() => clearReview(WS_ID)).toThrow(/damaged/);
 	expect(readFileSync(file, "utf8")).not.toContain('"comments": []');
 	writeFileSync(file, intact);
@@ -442,8 +448,19 @@ test("an unreadable review file fails the read instead of starting an empty revi
 	const file = join(dataDir, "reviews", `${WS_ID}.json`);
 	rmSync(file);
 	mkdirSync(file);
-	expect(() => getReviewSnapshot(WS_ID)).toThrow();
+	try {
+		getReviewSnapshot(WS_ID);
+		expect.unreachable();
+	} catch (error) {
+		expect(reviewReadFailure(error)).toBe("not a file");
+	}
 	expect(statSync(file).isDirectory()).toBe(true);
+});
+
+test("review read diagnostics keep filesystem messages out of their closed classification", () => {
+	const error = Object.assign(new Error("private path"), { code: "EACCES" });
+	expect(reviewReadFailure(error)).toBe("permission denied");
+	expect(reviewReadFailure(new Error("private path"))).toBe("read failure");
 });
 
 test("writes land atomically: a rename, and no temp file left behind", () => {

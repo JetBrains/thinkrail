@@ -59,6 +59,7 @@ async function bootstrap(build: BuildKind): Promise<void> {
 		portMode: "free",
 		staticDir,
 		appVersion: version,
+		...(options.verbose ? { verbose: true } : {}),
 		analytics: {
 			channel,
 			build,

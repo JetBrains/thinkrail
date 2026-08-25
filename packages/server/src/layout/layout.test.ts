@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type {
+	LayoutBottomGroup,
 	LayoutChangedPayload,
 	LayoutPreset,
 	LayoutReplaceResult,
@@ -25,10 +26,11 @@ import {
 
 let dataDir: string;
 const savedDataDir = process.env.THINKRAIL_DATA_DIR;
+const LIMITS = { maxSideGroups: 6, maxBottomGroups: 3 } as const;
 
 function document(name = "README.md"): WorkspaceLayoutDocument {
 	return {
-		version: 1,
+		version: 2,
 		center: {
 			kind: "group",
 			id: "center",
@@ -54,12 +56,24 @@ function document(name = "README.md"): WorkspaceLayoutDocument {
 					id: "right",
 					weight: 1,
 					folded: false,
-					tabs: [{ kind: "tool", id: "tool:files", name: "All files", tool: "files" }],
+					tabs: [{ kind: "tool", id: "tool:files", name: "Files", tool: "files" }],
 				},
 			],
 		},
+		bottom: {
+			visible: true,
+			height: 0.3,
+			alignment: "center",
+			groups: [{ id: "bottom", weight: 1, folded: false, tabs: [] }],
+		},
 		toolRestoreTargets: {},
 	};
+}
+
+function legacyDocument(name = "README.md") {
+	const current = document(name);
+	const { bottom: _bottom, ...legacy } = current;
+	return { ...legacy, version: 1 };
 }
 
 function preset(id: string): LayoutPreset {
@@ -76,6 +90,12 @@ function preset(id: string): LayoutPreset {
 				{ id: `${id}-two`, weight: 1 / 3, folded: false, tools: ["changes"] },
 				{ id: `${id}-three`, weight: 1 / 3, folded: false, tools: ["review"] },
 			],
+		},
+		bottom: {
+			visible: true,
+			height: 0.3,
+			alignment: "center",
+			groups: [{ id: `${id}-bottom`, weight: 1, folded: false, tools: [] }],
 		},
 	};
 }
@@ -96,12 +116,12 @@ afterEach(() => {
 
 describe("workspace layout validation", () => {
 	test("accepts the protocol document and rejects unknown or browser-only fields", () => {
-		expect(validateWorkspaceLayout(document(), 6)).toEqual(document());
+		expect(validateWorkspaceLayout(document(), LIMITS)).toEqual(document());
 		const withInlineContent = structuredClone(document()) as WorkspaceLayoutDocument & {
 			content?: string;
 		};
 		withInlineContent.content = "not legal shared state";
-		expect(() => validateWorkspaceLayout(withInlineContent, 6)).toThrow("unknown field");
+		expect(() => validateWorkspaceLayout(withInlineContent, LIMITS)).toThrow("unknown field");
 
 		const virtual = document();
 		if (virtual.center.kind !== "group") throw new Error("expected group");
@@ -116,23 +136,50 @@ describe("workspace layout validation", () => {
 				content: "inline markdown",
 			} as never,
 		];
-		expect(() => validateWorkspaceLayout(virtual, 6)).toThrow("unknown field");
+		expect(() => validateWorkspaceLayout(virtual, LIMITS)).toThrow("unknown field");
 		delete (virtual.center.tabs[0] as { content?: string }).content;
 		(virtual.center.tabs[0] as { docPath: string }).docPath = "../TODO.md";
-		expect(() => validateWorkspaceLayout(virtual, 6)).toThrow("Invalid virtual document");
+		expect(() => validateWorkspaceLayout(virtual, LIMITS)).toThrow("Invalid virtual document");
 
 		const chatPreview = document();
 		if (chatPreview.center.kind !== "group") throw new Error("expected group");
 		chatPreview.center.tabs = [{ kind: "chat", id: "chat", name: "Chat", sessionId: "session" }];
 		chatPreview.center.previewTabId = "chat";
-		expect(() => validateWorkspaceLayout(chatPreview, 6)).toThrow("invalid preview");
+		expect(() => validateWorkspaceLayout(chatPreview, LIMITS)).toThrow("invalid preview");
 
 		const unsafeRestore = document();
 		unsafeRestore.toolRestoreTargets.files = {
-			side: "right",
+			region: "right",
 			index: Number.MAX_SAFE_INTEGER + 1,
 		};
-		expect(() => validateWorkspaceLayout(unsafeRestore, 6)).toThrow("Invalid restore target");
+		expect(() => validateWorkspaceLayout(unsafeRestore, LIMITS)).toThrow("Invalid restore target");
+	});
+
+	test("accepts process-free bottom slots and rejects malformed bottom geometry or content", () => {
+		expect(validateWorkspaceLayout(document(), LIMITS)).toEqual(document());
+
+		const badAlignment = structuredClone(document());
+		badAlignment.bottom.alignment = "floating" as never;
+		expect(() => validateWorkspaceLayout(badAlignment, LIMITS)).toThrow("Malformed bottom region");
+
+		const badHeight = structuredClone(document());
+		badHeight.bottom.height = 0.8;
+		expect(() => validateWorkspaceLayout(badHeight, LIMITS)).toThrow("Invalid bottom height");
+
+		const visibleWithoutSlot = structuredClone(document());
+		visibleWithoutSlot.bottom.groups = [];
+		expect(() => validateWorkspaceLayout(visibleWithoutSlot, LIMITS)).toThrow(
+			"Visible bottom region requires a group",
+		);
+
+		const illegalTab = structuredClone(document());
+		illegalTab.bottom.groups[0]?.tabs.push({
+			kind: "file",
+			id: "bottom-file",
+			name: "README",
+			path: "README.md",
+		} as never);
+		expect(() => validateWorkspaceLayout(illegalTab, LIMITS)).toThrow("Invalid file tab");
 	});
 
 	test("rejects noncanonical resource paths and more than one empty center leaf", () => {
@@ -144,21 +191,21 @@ describe("workspace layout validation", () => {
 			name: "README alias",
 			path: "./README.md",
 		});
-		expect(() => validateWorkspaceLayout(pathAlias, 6)).toThrow("Invalid file tab");
+		expect(() => validateWorkspaceLayout(pathAlias, LIMITS)).toThrow("Invalid file tab");
 		pathAlias.center.tabs[1] = {
 			kind: "file",
 			id: "file:alias",
 			name: "README alias",
 			path: "folder\\README.md",
 		};
-		expect(() => validateWorkspaceLayout(pathAlias, 6)).toThrow("Invalid file tab");
+		expect(() => validateWorkspaceLayout(pathAlias, LIMITS)).toThrow("Invalid file tab");
 		pathAlias.center.tabs[1] = {
 			kind: "file",
 			id: "file:alias",
 			name: "README alias",
 			path: "C:/outside/README.md",
 		};
-		expect(() => validateWorkspaceLayout(pathAlias, 6)).toThrow("Invalid file tab");
+		expect(() => validateWorkspaceLayout(pathAlias, LIMITS)).toThrow("Invalid file tab");
 
 		const emptyLeaves = document();
 		emptyLeaves.center = {
@@ -171,23 +218,27 @@ describe("workspace layout validation", () => {
 				{ kind: "group", id: "empty-b", tabs: [] },
 			],
 		};
-		expect(() => validateWorkspaceLayout(emptyLeaves, 6)).toThrow("Only one empty center group");
+		expect(() => validateWorkspaceLayout(emptyLeaves, LIMITS)).toThrow(
+			"Only one empty center group",
+		);
 
 		const badGeometry = document();
 		const rightGroup = badGeometry.right.groups[0];
 		if (!rightGroup) throw new Error("missing right group fixture");
 		rightGroup.weight = 2;
-		expect(() => validateWorkspaceLayout(badGeometry, 6)).toThrow("not normalized");
+		expect(() => validateWorkspaceLayout(badGeometry, LIMITS)).toThrow("not normalized");
 		rightGroup.weight = 1;
 		badGeometry.left.width = 0.7;
 		badGeometry.right.width = 0.4;
-		expect(() => validateWorkspaceLayout(badGeometry, 6)).toThrow("no center region");
+		expect(() => validateWorkspaceLayout(badGeometry, LIMITS)).toThrow("no center region");
 	});
 
 	test("enforces byte-accurate budgets and rejects unserializable values", () => {
 		const byteHeavy = { ...document(), padding: "界".repeat(180_000) };
-		expect(() => validateWorkspaceLayout(byteHeavy, 6)).toThrow("Layout snapshot is too large");
-		expect(() => validateWorkspaceLayout({ ...document(), padding: 1n }, 6)).toThrow(
+		expect(() => validateWorkspaceLayout(byteHeavy, LIMITS)).toThrow(
+			"Layout snapshot is too large",
+		);
+		expect(() => validateWorkspaceLayout({ ...document(), padding: 1n }, LIMITS)).toThrow(
 			"Layout snapshot is too large",
 		);
 		expect(() =>
@@ -195,6 +246,7 @@ describe("workspace layout validation", () => {
 				defaultPresetId: "界".repeat(180_000),
 				customPresets: [],
 				maxSideGroups: 6,
+				maxBottomGroups: 3,
 			}),
 		).toThrow("Layout settings are too large");
 	});
@@ -206,7 +258,7 @@ describe("workspace layout validation", () => {
 		const files = filesGroup.tabs[0];
 		if (files?.kind !== "tool") throw new Error("missing tool fixture");
 		filesGroup.tabs[0] = { ...files, id: "legacy-files-placement" };
-		expect(validateWorkspaceLayout(opaque, 6)).toEqual(opaque);
+		expect(validateWorkspaceLayout(opaque, LIMITS)).toEqual(opaque);
 
 		const collision = document();
 		if (collision.center.kind !== "group") throw new Error("expected group");
@@ -216,7 +268,7 @@ describe("workspace layout validation", () => {
 			name: "Terminal",
 			tabKey: "collision",
 		});
-		expect(validateWorkspaceLayout(collision, 6)).toEqual(collision);
+		expect(validateWorkspaceLayout(collision, LIMITS)).toEqual(collision);
 	});
 
 	test("rejects one canonical resource smuggled under two placement ids", () => {
@@ -234,7 +286,7 @@ describe("workspace layout validation", () => {
 			name: "Terminal alias",
 			tabKey: "shared-terminal",
 		});
-		expect(() => validateWorkspaceLayout(duplicate, 6)).toThrow(
+		expect(() => validateWorkspaceLayout(duplicate, LIMITS)).toThrow(
 			"Duplicate canonical resource: terminal shared-terminal",
 		);
 
@@ -256,7 +308,7 @@ describe("workspace layout validation", () => {
 				scope: { kind: "commit", sha: "y" },
 			},
 		);
-		expect(() => validateWorkspaceLayout(delimiterSafe, 6)).not.toThrow();
+		expect(() => validateWorkspaceLayout(delimiterSafe, LIMITS)).not.toThrow();
 	});
 
 	test("grandfathers only the currently accepted side overage", () => {
@@ -279,10 +331,31 @@ describe("workspace layout validation", () => {
 			weight: 1 / 7,
 		}));
 		const sameCount = structuredClone(current);
-		expect(validateWorkspaceLayout(sameCount, 6, current)).toEqual(sameCount);
+		expect(validateWorkspaceLayout(sameCount, LIMITS, current)).toEqual(sameCount);
 		const increased = structuredClone(current);
 		increased.right.groups.push({ ...makeGroup(7), weight: 1 / 7 });
-		expect(() => validateWorkspaceLayout(increased, 6, current)).toThrow("group limit");
+		expect(() => validateWorkspaceLayout(increased, LIMITS, current)).toThrow("group limit");
+	});
+
+	test("grandfathers bottom overages independently from side limits", () => {
+		const current = document();
+		const makeGroup = (index: number): LayoutBottomGroup => ({
+			id: `bottom-${index}`,
+			weight: 0.25,
+			folded: false,
+			tabs: [],
+		});
+		current.bottom.groups = Array.from({ length: 4 }, (_, index) => makeGroup(index));
+		const sameCount = structuredClone(current);
+		expect(validateWorkspaceLayout(sameCount, LIMITS, current)).toEqual(sameCount);
+		const increased = structuredClone(current);
+		increased.bottom.groups = [
+			...increased.bottom.groups.map((group) => ({ ...group, weight: 0.2 })),
+			{ id: "bottom-4", weight: 0.2, folded: false, tabs: [] },
+		];
+		expect(() => validateWorkspaceLayout(increased, LIMITS, current)).toThrow(
+			"bottom region exceeds its group limit",
+		);
 	});
 
 	test("rejects unnormalized portable preset geometry", () => {
@@ -312,36 +385,67 @@ describe("workspace layout validation", () => {
 			defaultPresetId: "future-built-in",
 			customPresets: [valid, valid, { id: "broken" } as never],
 			maxSideGroups: 1,
+			maxBottomGroups: 1,
 		});
 		expect(normalized).toEqual({
 			defaultPresetId: "future-built-in",
 			customPresets: [valid],
 			maxSideGroups: 3,
+			maxBottomGroups: 1,
 		});
 
 		const selectedInvalid: LayoutSettings = {
 			defaultPresetId: "broken",
 			customPresets: [{ id: "broken" } as never],
 			maxSideGroups: 1,
+			maxBottomGroups: 1,
 		};
 		expect(normalizeStoredLayoutSettings(selectedInvalid)).toEqual({
 			defaultPresetId: "balanced",
 			customPresets: [],
 			maxSideGroups: 6,
+			maxBottomGroups: 3,
 		});
 
 		const capped = normalizeStoredLayoutSettings({
 			defaultPresetId: "balanced",
 			customPresets: Array.from({ length: 40 }, (_, index) => preset(`custom-${index}`)),
 			maxSideGroups: 6,
+			maxBottomGroups: 3,
 		});
 		expect(capped.customPresets).toHaveLength(32);
 	});
 
+	test("migrates bottom-less custom presets to a hidden empty bottom slot", () => {
+		const { bottom: _bottom, ...current } = preset("legacy-custom");
+		const normalized = normalizeStoredLayoutSettings({
+			defaultPresetId: "legacy-custom",
+			customPresets: [current as never],
+			maxSideGroups: 6,
+			maxBottomGroups: 3,
+		});
+		expect(normalized.customPresets[0]?.bottom).toEqual({
+			visible: false,
+			height: 0.3,
+			alignment: "center",
+			groups: [],
+		});
+	});
+
 	test("validates layout settings as one complete strict nested value", () => {
 		expect(
-			validateLayoutSettings({ defaultPresetId: "balanced", customPresets: [], maxSideGroups: 6 }),
-		).toEqual({ defaultPresetId: "balanced", customPresets: [], maxSideGroups: 6 });
+			validateLayoutSettings({
+				defaultPresetId: "balanced",
+				customPresets: [],
+				maxSideGroups: 6,
+				maxBottomGroups: 3,
+			}),
+		).toEqual({
+			defaultPresetId: "balanced",
+			customPresets: [],
+			maxSideGroups: 6,
+			maxBottomGroups: 3,
+		});
 		expect(() => validateLayoutSettings({ defaultPresetId: "balanced", maxSideGroups: 6 })).toThrow(
 			"Invalid layout settings",
 		);
@@ -350,6 +454,7 @@ describe("workspace layout validation", () => {
 				defaultPresetId: "balanced",
 				customPresets: [],
 				maxSideGroups: 6,
+				maxBottomGroups: 3,
 				extra: true,
 			}),
 		).toThrow("unknown field");
@@ -371,6 +476,41 @@ describe("workspace layout persistence and ordering", () => {
 		return result.payload;
 	}
 
+	test("migrates a stored version-1 layout without moving resources or showing bottom", () => {
+		const directory = join(dataDir, "layouts");
+		mkdirSync(directory, { recursive: true });
+		const legacy = legacyDocument();
+		legacy.toolRestoreTargets = { changes: { side: "right", index: 1 } } as never;
+		writeFileSync(
+			join(directory, "ws.json"),
+			JSON.stringify({ workspaceId: "ws", revision: 7, document: legacy }),
+		);
+
+		const migrated = getWorkspaceLayout("ws");
+		expect(migrated?.revision).toBe(7);
+		expect(migrated?.document).toEqual({
+			...document(),
+			bottom: {
+				visible: false,
+				height: 0.3,
+				alignment: "center",
+				groups: [],
+			},
+			toolRestoreTargets: { changes: { region: "right", index: 1 } },
+		});
+	});
+
+	test("keeps a revision-one version-1 migration distinct from a fresh version-2 layout", () => {
+		const directory = join(dataDir, "layouts");
+		mkdirSync(directory, { recursive: true });
+		writeFileSync(
+			join(directory, "ws.json"),
+			JSON.stringify({ workspaceId: "ws", revision: 1, document: legacyDocument() }),
+		);
+
+		expect(getWorkspaceLayout("ws")?.revision).toBe(2);
+	});
+
 	test("serializes dependent writes with the revision produced by their predecessor", async () => {
 		const seen: LayoutChangedPayload[] = [];
 		setLayoutPublisher((payload) => seen.push(payload));
@@ -381,7 +521,7 @@ describe("workspace layout persistence and ordering", () => {
 				expectedRevision: null,
 				document: document("first.ts"),
 			},
-			6,
+			LIMITS,
 		);
 		const second = replaceWorkspaceLayout(
 			{
@@ -390,7 +530,7 @@ describe("workspace layout persistence and ordering", () => {
 				expectedRevision: 1,
 				document: document("second.ts"),
 			},
-			6,
+			LIMITS,
 		);
 		const payloads = (await Promise.all([first, second])).map(accepted);
 		expect(payloads.map((payload) => payload.snapshot.revision)).toEqual([1, 2]);
@@ -414,7 +554,7 @@ describe("workspace layout persistence and ordering", () => {
 					expectedRevision: null,
 					document: document("seed.ts"),
 				},
-				6,
+				LIMITS,
 			),
 		);
 		const seen: LayoutChangedPayload[] = [];
@@ -428,7 +568,7 @@ describe("workspace layout persistence and ordering", () => {
 					expectedRevision: 1,
 					document: document("client-a.ts"),
 				},
-				6,
+				LIMITS,
 			),
 			replaceWorkspaceLayout(
 				{
@@ -437,7 +577,7 @@ describe("workspace layout persistence and ordering", () => {
 					expectedRevision: 1,
 					document: document("client-b.ts"),
 				},
-				6,
+				LIMITS,
 			),
 		]);
 
@@ -482,7 +622,7 @@ describe("workspace layout persistence and ordering", () => {
 					expectedRevision: 0,
 					document: document("stale.ts"),
 				},
-				6,
+				LIMITS,
 			),
 		).resolves.toEqual({ status: "conflict", current: null });
 		expect(getWorkspaceLayout("ws")).toBeNull();
@@ -495,7 +635,7 @@ describe("workspace layout persistence and ordering", () => {
 				expectedRevision: null,
 				document: document("created.ts"),
 			},
-			6,
+			LIMITS,
 		);
 		expect(accepted(created).snapshot.revision).toBe(1);
 	});
@@ -504,7 +644,7 @@ describe("workspace layout persistence and ordering", () => {
 		const workspaceId = "../legacy workspace";
 		await replaceWorkspaceLayout(
 			{ workspaceId, mutationId: "safe-path", expectedRevision: null, document: document() },
-			6,
+			LIMITS,
 		);
 		resetLayoutsForTests();
 		expect(getWorkspaceLayout(workspaceId)?.workspaceId).toBe(workspaceId);
@@ -522,7 +662,7 @@ describe("workspace layout persistence and ordering", () => {
 				expectedRevision: null,
 				document: document("first.ts"),
 			},
-			6,
+			LIMITS,
 		);
 		await replaceWorkspaceLayout(
 			{
@@ -531,7 +671,7 @@ describe("workspace layout persistence and ordering", () => {
 				expectedRevision: 1,
 				document: document("second.ts"),
 			},
-			6,
+			LIMITS,
 		);
 		writeFileSync(join(dataDir, "layouts", "ws.json"), "{broken");
 		resetLayoutsForTests();
@@ -562,7 +702,7 @@ describe("workspace layout persistence and ordering", () => {
 					expectedRevision: 4,
 					document: document("overwrite.ts"),
 				},
-				6,
+				LIMITS,
 			),
 		).rejects.toThrow("read-only");
 		const primary = JSON.parse(readFileSync(join(directory, "ws.json"), "utf8"));
@@ -572,7 +712,7 @@ describe("workspace layout persistence and ordering", () => {
 	test("a workspace removal cancels a queued write before it can resurrect persistence", async () => {
 		const pending = replaceWorkspaceLayout(
 			{ workspaceId: "ws", mutationId: "racing", expectedRevision: null, document: document() },
-			6,
+			LIMITS,
 		);
 		removeWorkspaceLayout("ws");
 		await expect(pending).rejects.toThrow("removed before the write completed");
@@ -582,7 +722,7 @@ describe("workspace layout persistence and ordering", () => {
 	test("removes primary, backup, and cache with the workspace", async () => {
 		await replaceWorkspaceLayout(
 			{ workspaceId: "ws", mutationId: "first", expectedRevision: null, document: document() },
-			6,
+			LIMITS,
 		);
 		removeWorkspaceLayout("ws");
 		expect(getWorkspaceLayout("ws")).toBeNull();

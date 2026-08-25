@@ -98,7 +98,11 @@ channel fan-out, and the process-boot wrapper both launchers share.
   appended to `<dataDir>/logs/crash.log` and echoed to stderr, then `exit(1)`: in-process pi means such a
   fault is the whole host's, and a launcher started without a terminal otherwise loses its only trace.
   Never a recovery, and never installed under `NODE_ENV=test` — a unit-test process reports its own
-  faults); `boot.ts` (`bootHost` → install that report first, resolve the login-shell PATH, pre-warm the same
+  faults. It renders the throw via the `log` module's `describeError`, so crash reports and log lines
+  agree, but keeps its own sync append — the death path must not depend on the logger's state);
+  `boot.ts` (`bootHost` → await `initLogging` first — debug level when the launcher passed `verbose`, plus
+  the `listening on` info line after `createServer` (see `submodule-server-log`) — then install that
+  report, resolve the login-shell PATH, pre-warm the same
   Central watcher/runtime initialization before choosing a port, then await `createServer` (which idempotently enforces the
   bootstrap for every embedder), and
   install SIGINT/SIGTERM handlers that **settle before exit**: `settleSessionsForShutdown()` — abort
@@ -143,7 +147,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
     human-readable name (cheap model), re-checks the workspace (exists, not `renamed`) after the await,
     then calls `renameWorkspace` in the same tick — upgrading the provisional naive name into the final
     name (and its derived branch) and **locking** it (`renamed: true`). Best-effort by contract: every failure path resolves `null` and
-    leaves the flag unset so a later settled turn retries — but a swallowed exception is `console.warn`ed
+    leaves the flag unset so a later settled turn retries — but a swallowed exception is warn-logged
     (a broken rename path must stay distinguishable from "assist had nothing"). Its own per-workspace
     **in-flight set** (independent of the naive one — the two passes can overlap on a short turn) dedupes
     concurrent turns/sessions.
@@ -161,7 +165,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
     external one). So the user never waits
     for the git subprocess + session abort. **Ordering holds:** terminals (sync) and sessions (bg, before
     the reclaim) are down before the dir is deleted, since they hold it as cwd. Best-effort by contract —
-    a failed background teardown is `console.warn`ed, never thrown into the void (nothing awaits it), like
+    a failed background teardown is warn-logged, never thrown into the void (nothing awaits it), like
     the auto-rename tee. **Archive keeps the branch but not the chat:** the git branch stays (code is
     recoverable), yet chat history is purged with the worktree — a deliberate scope choice, not a leak.
 - **Review state is host-composed and serialized per workspace** (`reviewLock.ts`): `review.send*` is
@@ -229,6 +233,10 @@ channel fan-out, and the process-boot wrapper both launchers share.
 
 ## Get right
 
+- Every registered WS command is debug-traced by **method name only** (`ws <method>` / `ws <method>
+  failed`); a name absent from the closed handler registry is traced as fixed `ws unknown method` instead.
+  Never trace raw unregistered method names, params, or handler error text, which can reflect credentials
+  and user-supplied values; see `submodule-server-log`'s privacy rule.
 - WS commands return values directly; only events + extension-UI + **`project.updated`** (published from
   the `projects` module's injected publisher) + the workspace lifecycle trio
   (`workspace.created`/`updated`/`removed`, published from the `workspaces` module's injected publisher) +

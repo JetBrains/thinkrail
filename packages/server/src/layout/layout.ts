@@ -22,6 +22,14 @@ const MAX_CENTER_GROUPS = 4;
 const MAX_DEPTH = 8;
 const MAX_TABS = 256;
 const MAX_SIDE_GROUPS_SAFETY = 32;
+const MAX_BOTTOM_HEIGHT = 0.7;
+const MIGRATED_LAYOUT_REVISION_FLOOR = 2;
+const DEFAULT_BOTTOM = {
+	visible: false,
+	height: 0.3,
+	alignment: "center",
+	groups: [],
+} as const;
 const MAX_CUSTOM_PRESETS = 32;
 const MAX_NAME_LENGTH = 200;
 const MAX_TAB_NAME_LENGTH = 1000;
@@ -44,6 +52,38 @@ function record(value: unknown): Record<string, unknown> | null {
 	return value !== null && typeof value === "object" && !Array.isArray(value)
 		? (value as Record<string, unknown>)
 		: null;
+}
+
+type LayoutGroupLimits = Pick<LayoutSettings, "maxSideGroups" | "maxBottomGroups">;
+
+function migrateRestoreTargets(value: unknown): unknown {
+	const targets = record(value);
+	if (!targets) return value;
+	return Object.fromEntries(
+		Object.entries(targets).map(([tool, raw]) => {
+			const target = record(raw);
+			if (!target || !("side" in target) || "region" in target) return [tool, raw];
+			const { side, ...rest } = target;
+			return [tool, { ...rest, region: side }];
+		}),
+	);
+}
+
+function migrateWorkspaceDocument(value: unknown): unknown {
+	const document = record(value);
+	if (document?.version !== 1) return value;
+	return {
+		...document,
+		version: 2,
+		bottom: structuredClone(DEFAULT_BOTTOM),
+		toolRestoreTargets: migrateRestoreTargets(document.toolRestoreTargets),
+	};
+}
+
+function migrateStoredPreset(value: unknown): unknown {
+	const preset = record(value);
+	if (!preset || preset.bottom !== undefined) return value;
+	return { ...preset, bottom: structuredClone(DEFAULT_BOTTOM) };
 }
 
 function nonEmptyString(value: unknown, max = MAX_NAME_LENGTH): value is string {
@@ -365,6 +405,57 @@ function validateSide(
 	}
 }
 
+function validateBottom(
+	value: unknown,
+	currentCount: number,
+	configuredLimit: number,
+	state: ValidationState,
+): void {
+	const region = record(value);
+	if (
+		!region ||
+		typeof region.visible !== "boolean" ||
+		!positive(region.height) ||
+		(region.alignment !== "center" &&
+			region.alignment !== "center-left" &&
+			region.alignment !== "center-right" &&
+			region.alignment !== "full") ||
+		!Array.isArray(region.groups)
+	) {
+		state.errors.push("Malformed bottom region");
+		return;
+	}
+	validateKeys(region, ["visible", "height", "alignment", "groups"], "Bottom region", state);
+	if (region.visible && region.groups.length === 0) {
+		state.errors.push("Visible bottom region requires a group");
+	}
+	if (Number(region.height) > MAX_BOTTOM_HEIGHT) state.errors.push("Invalid bottom height");
+	const allowed = Math.max(configuredLimit, currentCount);
+	if (region.groups.length > allowed) state.errors.push("bottom region exceeds its group limit");
+	if (region.groups.length > MAX_SIDE_GROUPS_SAFETY) {
+		state.errors.push("bottom region exceeds the safety limit");
+	}
+	let weightTotal = 0;
+	for (const valueGroup of region.groups) {
+		const group = record(valueGroup);
+		if (!group || !addId(state, group.id, "Bottom group")) continue;
+		validateKeys(group, ["id", "weight", "folded", "tabs"], `Bottom group ${group.id}`, state);
+		if (
+			!positive(group.weight) ||
+			typeof group.folded !== "boolean" ||
+			!Array.isArray(group.tabs)
+		) {
+			state.errors.push(`Malformed bottom group: ${group.id}`);
+			continue;
+		}
+		weightTotal += Number(group.weight);
+		for (const tab of group.tabs) validateTab(tab, "side", state);
+	}
+	if (region.groups.length > 0 && Math.abs(weightTotal - 1) > 1e-6) {
+		state.errors.push("Bottom group weights are not normalized");
+	}
+}
+
 function validateRestoreTargets(value: unknown, state: ValidationState): void {
 	const targets = record(value);
 	if (!targets) {
@@ -377,10 +468,12 @@ function validateRestoreTargets(value: unknown, state: ValidationState): void {
 			continue;
 		}
 		const target = record(raw);
-		if (target) validateKeys(target, ["side", "groupId", "index"], `Restore target ${tool}`, state);
+		if (target) {
+			validateKeys(target, ["region", "groupId", "index"], `Restore target ${tool}`, state);
+		}
 		if (
 			!target ||
-			(target.side !== "left" && target.side !== "right") ||
+			(target.region !== "left" && target.region !== "right" && target.region !== "bottom") ||
 			!Number.isSafeInteger(target.index) ||
 			Number(target.index) < 0 ||
 			Number(target.index) > MAX_TABS ||
@@ -393,12 +486,12 @@ function validateRestoreTargets(value: unknown, state: ValidationState): void {
 
 export function validateWorkspaceLayout(
 	value: unknown,
-	configuredLimit: number,
+	limits: LayoutGroupLimits,
 	current?: WorkspaceLayoutDocument,
 ): WorkspaceLayoutDocument {
 	if (exceedsLayoutBudget(value)) throw new Error("Layout snapshot is too large");
 	const document = record(value);
-	if (document?.version !== 1) throw new Error("Unsupported layout schema version");
+	if (document?.version !== 2) throw new Error("Unsupported layout schema version");
 	const state: ValidationState = {
 		errors: [],
 		ids: new Set(),
@@ -411,13 +504,31 @@ export function validateWorkspaceLayout(
 	};
 	validateKeys(
 		document,
-		["version", "center", "left", "right", "toolRestoreTargets"],
+		["version", "center", "left", "right", "bottom", "toolRestoreTargets"],
 		"Layout document",
 		state,
 	);
 	validateCenter(document.center, 1, state);
-	validateSide(document.left, "left", current?.left.groups.length ?? 0, configuredLimit, state);
-	validateSide(document.right, "right", current?.right.groups.length ?? 0, configuredLimit, state);
+	validateSide(
+		document.left,
+		"left",
+		current?.left.groups.length ?? 0,
+		limits.maxSideGroups,
+		state,
+	);
+	validateSide(
+		document.right,
+		"right",
+		current?.right.groups.length ?? 0,
+		limits.maxSideGroups,
+		state,
+	);
+	validateBottom(
+		document.bottom,
+		current?.bottom.groups.length ?? 0,
+		limits.maxBottomGroups,
+		state,
+	);
 	const left = record(document.left);
 	const right = record(document.right);
 	if (
@@ -478,7 +589,7 @@ export function validateLayoutPreset(value: unknown): LayoutPreset {
 	if (!preset || !nonEmptyString(preset.id, 200) || !nonEmptyString(preset.name, MAX_NAME_LENGTH)) {
 		throw new Error("Malformed layout preset");
 	}
-	assertKeys(preset, ["id", "name", "center", "left", "right"], "Layout preset");
+	assertKeys(preset, ["id", "name", "center", "left", "right", "bottom"], "Layout preset");
 	const ids = new Set<string>();
 	if (validatePresetCenter(preset.center, 1, ids) > MAX_CENTER_GROUPS) {
 		throw new Error("Preset has too many center groups");
@@ -527,6 +638,52 @@ export function validateLayoutPreset(value: unknown): LayoutPreset {
 			throw new Error(`Preset ${side} side group weights are not normalized`);
 		}
 	}
+	const bottom = record(preset.bottom);
+	if (
+		!bottom ||
+		typeof bottom.visible !== "boolean" ||
+		!positive(bottom.height) ||
+		Number(bottom.height) > MAX_BOTTOM_HEIGHT ||
+		(bottom.alignment !== "center" &&
+			bottom.alignment !== "center-left" &&
+			bottom.alignment !== "center-right" &&
+			bottom.alignment !== "full") ||
+		!Array.isArray(bottom.groups)
+	) {
+		throw new Error("Malformed preset bottom region");
+	}
+	assertKeys(bottom, ["visible", "height", "alignment", "groups"], "Preset bottom region");
+	if (bottom.visible && bottom.groups.length === 0) {
+		throw new Error("Preset bottom region cannot be visible without a group");
+	}
+	if (bottom.groups.length > MAX_SIDE_GROUPS_SAFETY) {
+		throw new Error("Preset has too many bottom groups");
+	}
+	let bottomWeightTotal = 0;
+	for (const rawGroup of bottom.groups) {
+		const group = record(rawGroup);
+		if (
+			!group ||
+			!nonEmptyString(group.id, 200) ||
+			!positive(group.weight) ||
+			typeof group.folded !== "boolean" ||
+			!Array.isArray(group.tools) ||
+			!group.tools.every((tool) => typeof tool === "string" && TOOL_IDS.has(tool as LayoutToolId))
+		) {
+			throw new Error("Malformed preset bottom group");
+		}
+		assertKeys(group, ["id", "weight", "folded", "tools"], "Preset bottom group");
+		bottomWeightTotal += Number(group.weight);
+		if (ids.has(group.id)) throw new Error(`Duplicate preset id: ${group.id}`);
+		ids.add(group.id);
+		for (const tool of group.tools) {
+			if (tools.has(String(tool))) throw new Error(`Duplicate preset singleton tool: ${tool}`);
+			tools.add(String(tool));
+		}
+	}
+	if (bottom.groups.length > 0 && Math.abs(bottomWeightTotal - 1) > 1e-6) {
+		throw new Error("Preset bottom group weights are not normalized");
+	}
 	const left = record(preset.left);
 	const right = record(preset.right);
 	if (
@@ -546,9 +703,10 @@ export function normalizeStoredLayoutSettings(current: LayoutSettings): LayoutSe
 		(candidate) => record(candidate)?.id === current.defaultPresetId,
 	);
 	let maxSideGroups = current.maxSideGroups;
+	let maxBottomGroups = current.maxBottomGroups ?? DEFAULT_CONFIG.layout.maxBottomGroups;
 	for (const candidate of current.customPresets.slice(0, MAX_CUSTOM_PRESETS)) {
 		try {
-			const preset = validateLayoutPreset(candidate);
+			const preset = validateLayoutPreset(migrateStoredPreset(candidate));
 			if (seen.has(preset.id)) continue;
 			seen.add(preset.id);
 			customPresets.push(preset);
@@ -557,6 +715,7 @@ export function normalizeStoredLayoutSettings(current: LayoutSettings): LayoutSe
 				preset.left.groups.length,
 				preset.right.groups.length,
 			);
+			maxBottomGroups = Math.max(maxBottomGroups, preset.bottom.groups.length);
 		} catch {}
 	}
 	const selectedCustomSurvived = customPresets.some(
@@ -571,6 +730,9 @@ export function normalizeStoredLayoutSettings(current: LayoutSettings): LayoutSe
 		maxSideGroups: fellBackToDefault
 			? Math.max(maxSideGroups, DEFAULT_CONFIG.layout.maxSideGroups)
 			: maxSideGroups,
+		maxBottomGroups: fellBackToDefault
+			? Math.max(maxBottomGroups, DEFAULT_CONFIG.layout.maxBottomGroups)
+			: maxBottomGroups,
 	};
 }
 
@@ -583,12 +745,19 @@ export function validateLayoutSettings(value: unknown): LayoutSettings {
 		!Number.isInteger(settings.maxSideGroups) ||
 		Number(settings.maxSideGroups) < 1 ||
 		Number(settings.maxSideGroups) > MAX_SIDE_GROUPS_SAFETY ||
+		!Number.isInteger(settings.maxBottomGroups) ||
+		Number(settings.maxBottomGroups) < 1 ||
+		Number(settings.maxBottomGroups) > MAX_SIDE_GROUPS_SAFETY ||
 		!Array.isArray(settings.customPresets) ||
 		settings.customPresets.length > MAX_CUSTOM_PRESETS
 	) {
 		throw new Error("Invalid layout settings");
 	}
-	assertKeys(settings, ["defaultPresetId", "customPresets", "maxSideGroups"], "Layout settings");
+	assertKeys(
+		settings,
+		["defaultPresetId", "customPresets", "maxSideGroups", "maxBottomGroups"],
+		"Layout settings",
+	);
 	for (const rawPreset of settings.customPresets) {
 		const preset = validateLayoutPreset(rawPreset);
 		if (
@@ -596,6 +765,9 @@ export function validateLayoutSettings(value: unknown): LayoutSettings {
 			preset.right.groups.length > Number(settings.maxSideGroups)
 		) {
 			throw new Error("Custom preset exceeds the configured side-group limit");
+		}
+		if (preset.bottom.groups.length > Number(settings.maxBottomGroups)) {
+			throw new Error("Custom preset exceeds the configured bottom-group limit");
 		}
 	}
 	const ids = settings.customPresets.map((preset) => preset.id);
@@ -615,8 +787,15 @@ function parseSnapshot(value: unknown, workspaceId: string): WorkspaceLayoutSnap
 		return null;
 	}
 	try {
-		const document = validateWorkspaceLayout(snapshot.document, MAX_SIDE_GROUPS_SAFETY);
-		return { workspaceId, revision: Number(snapshot.revision), document };
+		const migratedFromVersionOne = record(snapshot.document)?.version === 1;
+		const document = validateWorkspaceLayout(migrateWorkspaceDocument(snapshot.document), {
+			maxSideGroups: MAX_SIDE_GROUPS_SAFETY,
+			maxBottomGroups: MAX_SIDE_GROUPS_SAFETY,
+		});
+		const revision = migratedFromVersionOne
+			? Math.max(Number(snapshot.revision), MIGRATED_LAYOUT_REVISION_FLOOR)
+			: Number(snapshot.revision);
+		return { workspaceId, revision, document };
 	} catch {
 		return null;
 	}
@@ -625,7 +804,7 @@ function parseSnapshot(value: unknown, workspaceId: string): WorkspaceLayoutSnap
 function hasFutureLayoutVersion(value: unknown): boolean {
 	const snapshot = record(value);
 	const document = record(snapshot?.document);
-	return typeof document?.version === "number" && document.version > 1;
+	return typeof document?.version === "number" && document.version > 2;
 }
 
 export function getWorkspaceLayout(workspaceId: string): WorkspaceLayoutSnapshot | null {
@@ -651,7 +830,7 @@ export function getWorkspaceLayout(workspaceId: string): WorkspaceLayoutSnapshot
 
 export function replaceWorkspaceLayout(
 	params: LayoutReplaceParams,
-	configuredLimit: number,
+	limits: LayoutGroupLimits,
 ): Promise<LayoutReplaceResult> {
 	if (!nonEmptyString(params.mutationId, 200))
 		return Promise.reject(new Error("Invalid layout mutation id"));
@@ -678,7 +857,7 @@ export function replaceWorkspaceLayout(
 			if (futureProtected.has(params.workspaceId)) {
 				throw new Error("Workspace layout is read-only because it was written by a newer host");
 			}
-			const document = validateWorkspaceLayout(params.document, configuredLimit, current?.document);
+			const document = validateWorkspaceLayout(params.document, limits, current?.document);
 			if ((current?.revision ?? 0) >= Number.MAX_SAFE_INTEGER) {
 				throw new Error("Workspace layout revision limit reached");
 			}

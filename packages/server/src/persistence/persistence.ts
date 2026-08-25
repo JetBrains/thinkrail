@@ -95,6 +95,13 @@ export function loadConfig(): AppConfig {
 				layoutValue.maxSideGroups <= 32
 					? layoutValue.maxSideGroups
 					: DEFAULT_CONFIG.layout.maxSideGroups,
+			maxBottomGroups:
+				typeof layoutValue.maxBottomGroups === "number" &&
+				Number.isInteger(layoutValue.maxBottomGroups) &&
+				layoutValue.maxBottomGroups >= 1 &&
+				layoutValue.maxBottomGroups <= 32
+					? layoutValue.maxBottomGroups
+					: DEFAULT_CONFIG.layout.maxBottomGroups,
 		},
 	};
 }

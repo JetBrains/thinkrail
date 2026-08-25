@@ -3,6 +3,7 @@ import { resolveShellEnv } from "@thinkrail/shared/shellEnv";
 import { settleSessionsForShutdown } from "../agent";
 import { shutdownAnalytics } from "../analytics";
 import { initializeJbcentralRuntime } from "../auth";
+import { initLogging, logger } from "../log";
 import { installCrashLog } from "./crashLog";
 import { type CreateServerOptions, createServer, type RunningServer } from "./server";
 
@@ -14,7 +15,10 @@ export interface BootHostOptions {
 	projectPath?: string;
 	appVersion?: string;
 	analytics?: CreateServerOptions["analytics"];
+	verbose?: boolean;
 }
+
+const log = logger("host");
 
 export interface BootedHost {
 	readonly server: RunningServer;
@@ -23,6 +27,10 @@ export interface BootedHost {
 }
 
 export async function bootHost(options: BootHostOptions): Promise<BootedHost> {
+	await initLogging({
+		...(options.verbose ? { level: "debug" as const } : {}),
+		...(options.appVersion ? { appVersion: options.appVersion } : {}),
+	});
 	installCrashLog(options.appVersion);
 	resolveShellEnv();
 	await initializeJbcentralRuntime();
@@ -56,5 +64,6 @@ export async function bootHost(options: BootHostOptions): Promise<BootedHost> {
 	process.on("SIGINT", shutdown);
 	process.on("SIGTERM", shutdown);
 
+	log.info(`listening on port ${server.port}`);
 	return { server, port: server.port, requested };
 }

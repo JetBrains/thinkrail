@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import { createWorkspaceViaDialog, openFixtureProject, worktreeRows } from "./fixtures/app";
 
-test("shows files and compacts single-directory runs in the All-files tree", async ({ page }) => {
+test("shows files and compacts single-directory runs in the Files tree", async ({ page }) => {
 	await openFixtureProject(page);
 
 	const workspace = await createWorkspaceViaDialog(page);

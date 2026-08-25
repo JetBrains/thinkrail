@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { rmSync, statSync } from "node:fs";
 import { basename, join } from "node:path";
 import type { Project, ProjectPathStatus } from "@thinkrail/contracts";
-import { canonicalPath, git as runGit } from "../git";
+import { canonicalPath, git } from "../git";
 import { loadProjects, loadWorkspaces, saveProjects } from "../persistence";
 
 type ProjectPublisher = (project: Project) => void;
@@ -15,10 +15,6 @@ export function setProjectPublisher(fn: ProjectPublisher | null): void {
 
 function emit(project: Project): void {
 	publishProject?.(project);
-}
-
-function git(cwd: string, args: string[]) {
-	return runGit(cwd, args, { env: process.env });
 }
 
 function gitToplevel(path: string): string | null {

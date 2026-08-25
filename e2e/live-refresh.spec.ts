@@ -7,7 +7,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 const fsExpect = expect.configure({ timeout: 10_000 });
 
-test("worktree changes on disk appear live in Specs, All files, Changes, and an open file tab", async ({
+test("worktree changes on disk appear live in Specs, Files, Changes, and an open file tab", async ({
 	page,
 }) => {
 	await openFixtureProject(page);

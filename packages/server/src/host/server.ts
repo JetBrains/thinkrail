@@ -36,6 +36,7 @@ import {
 } from "../auth";
 import { resolveWorktreeFile } from "../fs";
 import { normalizeStoredLayoutSettings, setLayoutPublisher } from "../layout";
+import { logger } from "../log";
 import {
 	getProjects,
 	listProjects,
@@ -68,7 +69,7 @@ import {
 	maybeNaiveNameWorkspace,
 } from "./autoRename";
 import { setFsNudgePublisher } from "./fsNudge";
-import { handleRequest } from "./handlers";
+import { handleRequest, requestMethodDiagnostic } from "./handlers";
 import { trackLoginOutcome } from "./loginAnalytics";
 import { RequestReplayCache } from "./requestReplayCache";
 import { terminalDeliveryForSendStatus } from "./terminalSend";
@@ -95,6 +96,8 @@ interface SocketData {
 }
 
 const CLIENT_REPLAY_RETENTION_MS = 60_000;
+
+const log = logger("host");
 
 const isRequestId = (id: unknown): id is string => typeof id === "string";
 
@@ -227,11 +230,13 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				}
 				const requestId = req.id;
 				const method = req.method;
+				const methodDiagnostic = requestMethodDiagnostic(method);
 				const params = "params" in req ? req.params : undefined;
 				const sessionId = "sessionId" in req ? req.sessionId : undefined;
 				const fingerprint = createHash("sha256")
 					.update(JSON.stringify([method, params, sessionId ?? null]))
 					.digest("hex");
+				log.debug(`ws ${methodDiagnostic}`);
 				try {
 					const response = await requestReplays.run(
 						ws.data.clientKey,
@@ -245,6 +250,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 								return JSON.stringify({ id: requestId, ok: true, result });
 							} catch (err) {
 								const error = err instanceof Error ? err.message : String(err);
+								log.debug(`ws ${methodDiagnostic} failed`);
 								const code = errorCodeOf(err);
 								return JSON.stringify({
 									id: requestId,
@@ -438,10 +444,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	if (projectPath) {
 		try {
 			openProject(projectPath);
-		} catch (err) {
-			console.warn(
-				`Could not open project ${projectPath}: ${err instanceof Error ? err.message : err}`,
-			);
+		} catch {
+			log.warn("could not open requested project");
 		}
 	}
 

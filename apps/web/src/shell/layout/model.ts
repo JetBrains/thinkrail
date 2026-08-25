@@ -1,4 +1,7 @@
 import type {
+	LayoutAuxiliaryRegion,
+	LayoutBottomAlignment,
+	LayoutBottomRegion,
 	LayoutCenterGroup,
 	LayoutCenterNode,
 	LayoutCenterSplit,
@@ -26,14 +29,20 @@ export const LAYOUT_LIMITS = {
 	minCenterWidth: 320,
 	minCenterHeight: 180,
 	minSideBodyHeight: 120,
+	minBottomBodyHeight: 120,
+	minBottomGroupWidth: 160,
 	foldedSideHeight: 27,
+	foldedBottomWidth: 27,
+	initialBottomHeight: 0.3,
+	maxBottomHeight: 0.7,
 } as const;
 
 export type LayoutSide = "left" | "right";
+export type LayoutAuxiliary = LayoutAuxiliaryRegion;
 export type CenterSplitDirection = "left" | "right" | "up" | "down";
 export type LayoutGroupLocation =
 	| { area: "center"; groupId: string }
-	| { area: LayoutSide; groupId: string };
+	| { area: LayoutAuxiliaryRegion; groupId: string };
 
 export type { LayoutAttention } from "../../lib";
 
@@ -73,15 +82,20 @@ export const LAYOUT_TOOL_DEFAULT_SIDES: Record<LayoutToolId, LayoutSide> = {
 	review: "right",
 };
 
+const LAYOUT_TOOL_NAMES: Record<LayoutToolId, string> = {
+	projects: "Projects",
+	specs: "Specs",
+	files: "Files",
+	changes: "Changes",
+	review: "Review",
+};
+
+export function layoutTabName(tab: LayoutTab): string {
+	return tab.kind === "tool" ? LAYOUT_TOOL_NAMES[tab.tool] : tab.name;
+}
+
 export function toolTab(tool: LayoutToolId): LayoutSideTab {
-	const names: Record<LayoutToolId, string> = {
-		projects: "Projects",
-		specs: "Specs",
-		files: "All files",
-		changes: "Changes",
-		review: "Review",
-	};
-	return { kind: "tool", id: `tool:${tool}`, name: names[tool], tool };
+	return { kind: "tool", id: `tool:${tool}`, name: LAYOUT_TOOL_NAMES[tool], tool };
 }
 
 export function collectCenterGroups(node: LayoutCenterNode): LayoutCenterGroup[] {
@@ -107,6 +121,11 @@ export function collectAllGroups(document: WorkspaceLayoutDocument): Array<{
 		})),
 		...document.right.groups.map((group) => ({
 			location: { area: "right" as const, groupId: group.id },
+			tabs: group.tabs,
+			folded: group.folded,
+		})),
+		...document.bottom.groups.map((group) => ({
+			location: { area: "bottom" as const, groupId: group.id },
 			tabs: group.tabs,
 			folded: group.folded,
 		})),
@@ -147,12 +166,20 @@ export function findCenterGroup(node: LayoutCenterNode, groupId: string): Layout
 	return findCenterGroup(node.children[0], groupId) ?? findCenterGroup(node.children[1], groupId);
 }
 
+export function findAuxiliaryGroup(
+	document: WorkspaceLayoutDocument,
+	region: LayoutAuxiliaryRegion,
+	groupId: string,
+): LayoutSideGroup | null {
+	return document[region].groups.find((group) => group.id === groupId) ?? null;
+}
+
 export function findSideGroup(
 	document: WorkspaceLayoutDocument,
 	side: LayoutSide,
 	groupId: string,
 ): LayoutSideGroup | null {
-	return document[side].groups.find((group) => group.id === groupId) ?? null;
+	return findAuxiliaryGroup(document, side, groupId);
 }
 
 export function primaryCenterGroupId(document: WorkspaceLayoutDocument): string {
@@ -272,6 +299,23 @@ function removeTabFromSide(region: LayoutSideRegion, tabId: string): LayoutSideR
 	return { ...region, visible: groups.length > 0 && region.visible, groups };
 }
 
+function removeTabFromBottom(region: LayoutBottomRegion, tabId: string): LayoutBottomRegion {
+	if (!region.groups.some((group) => group.tabs.some((tab) => tab.id === tabId))) return region;
+	const remaining = region.groups.flatMap((group) => {
+		if (!group.tabs.some((tab) => tab.id === tabId)) return [group];
+		const tabs = group.tabs.filter((tab) => tab.id !== tabId);
+		return tabs.length > 0 ? [{ ...group, tabs }] : [];
+	});
+	const total = remaining.reduce((sum, group) => sum + group.weight, 0);
+	const groups =
+		total > 0 ? remaining.map((group) => ({ ...group, weight: group.weight / total })) : remaining;
+	return {
+		...region,
+		visible: region.visible && groups.some((group) => group.tabs.length > 0),
+		groups,
+	};
+}
+
 function removeTabEverywhere(
 	document: WorkspaceLayoutDocument,
 	tabId: string,
@@ -282,6 +326,7 @@ function removeTabEverywhere(
 		center: centerResult.node,
 		left: removeTabFromSide(document.left, tabId),
 		right: removeTabFromSide(document.right, tabId),
+		bottom: removeTabFromBottom(document.bottom, tabId),
 	};
 }
 
@@ -297,7 +342,7 @@ function replacePlacedCenterTab(
 	if (replacement.kind !== "terminal") {
 		return center === document.center ? document : { ...document, center };
 	}
-	const replaceInSide = (region: LayoutSideRegion): LayoutSideRegion => {
+	const replaceInAuxiliary = <T extends LayoutSideRegion | LayoutBottomRegion>(region: T): T => {
 		let changed = false;
 		const groups = region.groups.map((group) => {
 			const index = group.tabs.findIndex((tab) => tab.id === tabId);
@@ -305,13 +350,17 @@ function replacePlacedCenterTab(
 			changed = true;
 			return { ...group, tabs: group.tabs.with(index, replacement) };
 		});
-		return changed ? { ...region, groups } : region;
+		return changed ? ({ ...region, groups } as T) : region;
 	};
-	const left = replaceInSide(document.left);
-	const right = replaceInSide(document.right);
-	return center === document.center && left === document.left && right === document.right
+	const left = replaceInAuxiliary(document.left);
+	const right = replaceInAuxiliary(document.right);
+	const bottom = replaceInAuxiliary(document.bottom);
+	return center === document.center &&
+		left === document.left &&
+		right === document.right &&
+		bottom === document.bottom
 		? document
-		: { ...document, center, left, right };
+		: { ...document, center, left, right, bottom };
 }
 
 export function findPlacedResource(
@@ -415,20 +464,24 @@ export function closeLayoutTab(
 	if (tab.kind !== "tool" || location.area === "center") {
 		return { document: removeTabEverywhere(document, tabId) };
 	}
-	const group = findSideGroup(document, location.area, location.groupId);
+	const group = findAuxiliaryGroup(document, location.area, location.groupId);
 	const index = group?.tabs.findIndex((candidate) => candidate.id === tabId) ?? 0;
 	return {
 		document: {
 			...removeTabEverywhere(document, tabId),
 			toolRestoreTargets: {
 				...document.toolRestoreTargets,
-				[tab.tool]: { side: location.area, groupId: location.groupId, index: Math.max(0, index) },
+				[tab.tool]: {
+					region: location.area,
+					groupId: location.groupId,
+					index: Math.max(0, index),
+				},
 			},
 		},
 	};
 }
 
-export function canPlaceLayoutTab(tab: LayoutTab, area: "center" | LayoutSide): boolean {
+export function canPlaceLayoutTab(tab: LayoutTab, area: "center" | LayoutAuxiliaryRegion): boolean {
 	if (area === "center") return tab.kind !== "tool";
 	return tab.kind === "tool" || tab.kind === "terminal";
 }
@@ -449,7 +502,7 @@ export function moveTabToGroup(
 		const current =
 			target.area === "center"
 				? findCenterGroup(document.center, target.groupId)
-				: findSideGroup(document, target.area, target.groupId);
+				: findAuxiliaryGroup(document, target.area, target.groupId);
 		if (!current) return { reason: "The destination group no longer exists." };
 		const tabs = current.tabs.filter((candidate) => candidate.id !== movingTab.id);
 		const insertion = Math.max(0, Math.min(index ?? tabs.length, tabs.length));
@@ -566,6 +619,7 @@ export function splitCenterGroup(
 					),
 					left: removeTabFromSide(document.left, placedTab.id),
 					right: removeTabFromSide(document.right, placedTab.id),
+					bottom: removeTabFromBottom(document.bottom, placedTab.id),
 				}
 			: removeTabEverywhere(document, placedTab.id);
 	const current = findCenterGroup(cleaned.center, groupId);
@@ -601,18 +655,18 @@ function sideGroupInsertionIndex(
 	return removesSourceGroup && sourceGroupIndex < boundary ? boundary - 1 : boundary;
 }
 
-export function canCreateSideGroup(
+export function canCreateAuxiliaryGroup(
 	document: WorkspaceLayoutDocument,
-	side: LayoutSide,
+	region: LayoutAuxiliaryRegion,
 	tab: LayoutTab,
 	maxGroups: number,
 	insertAt?: number,
 ): boolean {
-	const groups = document[side].groups;
+	const groups = document[region].groups;
 	const currentCount = groups.length;
 	const source = findTabLocation(document, tab.id);
 	const sourceGroupIndex =
-		source?.area === side ? groups.findIndex((group) => group.id === source.groupId) : -1;
+		source?.area === region ? groups.findIndex((group) => group.id === source.groupId) : -1;
 	const sourceGroup = sourceGroupIndex >= 0 ? groups[sourceGroupIndex] : undefined;
 	const removesSourceGroup = sourceGroup?.tabs.length === 1;
 	if (currentCount - (removesSourceGroup ? 1 : 0) + 1 > Math.max(maxGroups, currentCount)) {
@@ -624,9 +678,19 @@ export function canCreateSideGroup(
 	);
 }
 
-export function createSideGroup(
+export function canCreateSideGroup(
 	document: WorkspaceLayoutDocument,
 	side: LayoutSide,
+	tab: LayoutTab,
+	maxGroups: number,
+	insertAt?: number,
+): boolean {
+	return canCreateAuxiliaryGroup(document, side, tab, maxGroups, insertAt);
+}
+
+export function createAuxiliaryGroup(
+	document: WorkspaceLayoutDocument,
+	region: LayoutAuxiliaryRegion,
 	tab: LayoutSideTab,
 	insertAt: number,
 	maxGroups: number,
@@ -635,32 +699,37 @@ export function createSideGroup(
 	if (resolved.conflictingId) return { reason: "That tab id belongs to another resource." };
 	const placedTab = resolved.placed;
 	const movingTab = placedTab?.kind === "tool" || placedTab?.kind === "terminal" ? placedTab : tab;
-	if (!canCreateSideGroup(document, side, movingTab, maxGroups)) {
-		return { reason: `This side is limited to ${maxGroups} groups.` };
+	if (!canCreateAuxiliaryGroup(document, region, movingTab, maxGroups)) {
+		return { reason: `This region is limited to ${maxGroups} groups.` };
 	}
-	if (!canCreateSideGroup(document, side, movingTab, maxGroups, insertAt)) {
+	if (!canCreateAuxiliaryGroup(document, region, movingTab, maxGroups, insertAt)) {
 		return { reason: "That tab is already at this position." };
 	}
 	const source = findTabLocation(document, movingTab.id);
 	const sourceGroupIndex =
-		source?.area === side
-			? document[side].groups.findIndex((group) => group.id === source.groupId)
+		source?.area === region
+			? document[region].groups.findIndex((group) => group.id === source.groupId)
 			: -1;
-	const sourceGroup = sourceGroupIndex >= 0 ? document[side].groups[sourceGroupIndex] : undefined;
+	const sourceGroup = sourceGroupIndex >= 0 ? document[region].groups[sourceGroupIndex] : undefined;
 	const removesSourceGroup = sourceGroup?.tabs.length === 1;
 	const insertionIndex = sideGroupInsertionIndex(
-		document[side].groups.length,
+		document[region].groups.length,
 		sourceGroupIndex,
 		removesSourceGroup,
 		insertAt,
 	);
 	const movedWeight = removesSourceGroup ? sourceGroup.weight : undefined;
-	const without = removeTabEverywhere(document, movingTab.id);
-	const groups = [...without[side].groups];
+	const removed = removeTabEverywhere(document, movingTab.id);
+	const retained = removed[region].groups;
+	const retainedTotal = retained.reduce((sum, group) => sum + group.weight, 0);
+	const groups = retained.map((group) => ({
+		...group,
+		weight: retainedTotal > 0 ? group.weight / retainedTotal : group.weight,
+	}));
 	const newWeight = movedWeight ?? 1 / (groups.length + 1);
 	const retainedWeight = 1 - newWeight;
 	const group: LayoutSideGroup = {
-		id: createLayoutId(`${side}-group`),
+		id: createLayoutId(`${region}-group`),
 		weight: newWeight,
 		folded: false,
 		tabs: [movingTab],
@@ -671,9 +740,41 @@ export function createSideGroup(
 	}
 	groups.splice(Math.max(0, Math.min(insertionIndex, groups.length)), 0, group);
 	return {
-		document: { ...without, [side]: { ...without[side], visible: true, groups } },
+		document: { ...removed, [region]: { ...removed[region], visible: true, groups } },
 		focusGroupId: group.id,
 		focusTabId: movingTab.id,
+	};
+}
+
+export function createSideGroup(
+	document: WorkspaceLayoutDocument,
+	side: LayoutSide,
+	tab: LayoutSideTab,
+	insertAt: number,
+	maxGroups: number,
+): LayoutOperationResult {
+	return createAuxiliaryGroup(document, side, tab, insertAt, maxGroups);
+}
+
+export function setAuxiliaryGroupFolded(
+	document: WorkspaceLayoutDocument,
+	region: LayoutAuxiliaryRegion,
+	groupId: string,
+	folded: boolean,
+): LayoutOperationResult {
+	if (!document[region].groups.some((group) => group.id === groupId)) {
+		return { reason: "The auxiliary group no longer exists." };
+	}
+	return {
+		document: {
+			...document,
+			[region]: {
+				...document[region],
+				groups: document[region].groups.map((group) =>
+					group.id === groupId ? { ...group, folded } : group,
+				),
+			},
+		},
 	};
 }
 
@@ -683,20 +784,7 @@ export function setSideGroupFolded(
 	groupId: string,
 	folded: boolean,
 ): LayoutOperationResult {
-	if (!document[side].groups.some((group) => group.id === groupId)) {
-		return { reason: "The side group no longer exists." };
-	}
-	return {
-		document: {
-			...document,
-			[side]: {
-				...document[side],
-				groups: document[side].groups.map((group) =>
-					group.id === groupId ? { ...group, folded } : group,
-				),
-			},
-		},
-	};
+	return setAuxiliaryGroupFolded(document, side, groupId, folded);
 }
 
 export function setSideVisibility(
@@ -707,6 +795,15 @@ export function setSideVisibility(
 	const nextVisible = visible && document[side].groups.length > 0;
 	if (document[side].visible === nextVisible) return document;
 	return { ...document, [side]: { ...document[side], visible: nextVisible } };
+}
+
+export function setBottomVisibility(
+	document: WorkspaceLayoutDocument,
+	visible: boolean,
+): WorkspaceLayoutDocument {
+	const nextVisible = visible && document.bottom.groups.length > 0;
+	if (document.bottom.visible === nextVisible) return document;
+	return { ...document, bottom: { ...document.bottom, visible: nextVisible } };
 }
 
 const TOOL_RESTORE_ORDER = LAYOUT_TOOLS;
@@ -729,15 +826,84 @@ export function hideSide(
 	};
 }
 
+export function hideBottom(
+	document: WorkspaceLayoutDocument,
+	attention: LayoutAttention,
+): LayoutMutationResult {
+	const center =
+		findCenterGroup(document.center, attention.lastFocusedCenterGroupId) ??
+		findCenterGroup(document.center, primaryCenterGroupId(document));
+	const selected =
+		center?.tabs.find((tab) => tab.id === readLayoutSelection(attention, center.id)) ??
+		center?.tabs[0];
+	return {
+		document: setBottomVisibility(document, false),
+		...(center ? { focusGroupId: center.id } : {}),
+		...(selected ? { focusTabId: selected.id } : {}),
+	};
+}
+
 export function canShowSide(document: WorkspaceLayoutDocument, side: LayoutSide): boolean {
 	return (
 		document[side].groups.length > 0 ||
 		TOOL_RESTORE_ORDER.some(
 			(tool) =>
-				(document.toolRestoreTargets[tool]?.side ?? LAYOUT_TOOL_DEFAULT_SIDES[tool]) === side &&
+				(document.toolRestoreTargets[tool]?.region ?? LAYOUT_TOOL_DEFAULT_SIDES[tool]) === side &&
 				findPlacedResource(document, toolTab(tool)) === null,
 		)
 	);
+}
+
+export function showBottom(
+	document: WorkspaceLayoutDocument,
+	maxSideGroups: number,
+	maxBottomGroups: number,
+	attention?: LayoutAttention,
+): LayoutOperationResult {
+	const populated = document.bottom.groups.some((group) => group.tabs.length > 0);
+	if (populated) {
+		const shown = setBottomVisibility(document, true);
+		const preferredId = attention?.lastFocusedSideGroupId.bottom;
+		const group =
+			shown.bottom.groups.find((candidate) => candidate.id === preferredId) ??
+			shown.bottom.groups.find((candidate) => candidate.tabs.length > 0) ??
+			shown.bottom.groups[0];
+		if (!group) return { document: shown };
+		const selectedId = attention ? readLayoutSelection(attention, group.id) : undefined;
+		const tab = group.tabs.find((candidate) => candidate.id === selectedId) ?? group.tabs[0];
+		return {
+			document: shown,
+			focusGroupId: group.id,
+			...(tab ? { focusTabId: tab.id } : {}),
+		};
+	}
+	const tool = TOOL_RESTORE_ORDER.find(
+		(candidate) =>
+			document.toolRestoreTargets[candidate]?.region === "bottom" &&
+			!findPlacedResource(document, toolTab(candidate)),
+	);
+	if (tool) return revealTool(document, tool, maxSideGroups, maxBottomGroups);
+	if (document.bottom.groups.length > 0) {
+		const shown = setBottomVisibility(document, true);
+		const preferredId = attention?.lastFocusedSideGroupId.bottom;
+		const group =
+			shown.bottom.groups.find((candidate) => candidate.id === preferredId) ??
+			shown.bottom.groups[0];
+		return { document: shown, ...(group ? { focusGroupId: group.id } : {}) };
+	}
+	const group: LayoutSideGroup = {
+		id: createLayoutId("bottom-group"),
+		weight: 1,
+		folded: false,
+		tabs: [],
+	};
+	return {
+		document: {
+			...document,
+			bottom: { ...document.bottom, visible: true, groups: [group] },
+		},
+		focusGroupId: group.id,
+	};
 }
 
 export function showSide(
@@ -762,7 +928,7 @@ export function showSide(
 	const tool =
 		TOOL_RESTORE_ORDER.find(
 			(candidate) =>
-				document.toolRestoreTargets[candidate]?.side === side &&
+				document.toolRestoreTargets[candidate]?.region === side &&
 				!findPlacedResource(document, toolTab(candidate)),
 		) ??
 		TOOL_RESTORE_ORDER.find(
@@ -777,6 +943,7 @@ export function revealTool(
 	document: WorkspaceLayoutDocument,
 	tool: LayoutToolId,
 	maxSideGroups: number,
+	maxBottomGroups = 3,
 ): LayoutOperationResult {
 	const requestedTab = withAvailablePlacementId(document, toolTab(tool));
 	const placedTab = resolvePlacedResource(document, requestedTab).placed;
@@ -803,8 +970,8 @@ export function revealTool(
 		};
 	}
 	const restore = document.toolRestoreTargets[tool];
-	const side: LayoutSide = restore?.side ?? LAYOUT_TOOL_DEFAULT_SIDES[tool];
-	const groups = document[side].groups;
+	const region: LayoutAuxiliaryRegion = restore?.region ?? LAYOUT_TOOL_DEFAULT_SIDES[tool];
+	const groups = document[region].groups;
 	const restoreGroup = restore?.groupId
 		? groups.find((group) => group.id === restore.groupId)
 		: undefined;
@@ -814,8 +981,8 @@ export function revealTool(
 		return {
 			document: {
 				...document,
-				[side]: {
-					...document[side],
+				[region]: {
+					...document[region],
 					visible: true,
 					groups: groups.map((group) =>
 						group.id === restoreGroup.id ? { ...group, folded: false, tabs } : group,
@@ -826,14 +993,15 @@ export function revealTool(
 			focusTabId: requestedTab.id,
 		};
 	}
-	if (groups.length > 0 && groups.length >= maxSideGroups) {
+	const maxGroups = region === "bottom" ? maxBottomGroups : maxSideGroups;
+	if (groups.length > 0 && groups.length >= maxGroups) {
 		const group = groups[0];
-		if (!group) return { reason: "There is no side group available for this tool." };
+		if (!group) return { reason: "There is no auxiliary group available for this tool." };
 		return moveTabToGroup(
 			{
 				...document,
-				[side]: {
-					...document[side],
+				[region]: {
+					...document[region],
 					visible: true,
 					groups: groups.map((candidate) =>
 						candidate.id === group.id ? { ...candidate, folded: false } : candidate,
@@ -841,10 +1009,10 @@ export function revealTool(
 				},
 			},
 			requestedTab,
-			{ area: side, groupId: group.id },
+			{ area: region, groupId: group.id },
 		);
 	}
-	return createSideGroup(document, side, requestedTab, groups.length, maxSideGroups);
+	return createAuxiliaryGroup(document, region, requestedTab, groups.length, maxGroups);
 }
 
 export function resizeSideRegion(
@@ -863,12 +1031,30 @@ export function resizeSideRegion(
 	return { ...document, [side]: { ...document[side], width: normalized } };
 }
 
-export function resizeSideGroups(
+export function resizeBottomRegion(
 	document: WorkspaceLayoutDocument,
-	side: LayoutSide,
+	height: number,
+): WorkspaceLayoutDocument {
+	const requested = Number.isFinite(height) ? height : document.bottom.height;
+	const normalized = Math.max(Number.MIN_VALUE, Math.min(LAYOUT_LIMITS.maxBottomHeight, requested));
+	if (Math.abs(normalized - document.bottom.height) < 1e-9) return document;
+	return { ...document, bottom: { ...document.bottom, height: normalized } };
+}
+
+export function setBottomAlignment(
+	document: WorkspaceLayoutDocument,
+	alignment: LayoutBottomAlignment,
+): WorkspaceLayoutDocument {
+	if (document.bottom.alignment === alignment) return document;
+	return { ...document, bottom: { ...document.bottom, alignment } };
+}
+
+export function resizeAuxiliaryGroups(
+	document: WorkspaceLayoutDocument,
+	region: LayoutAuxiliaryRegion,
 	weights: readonly number[],
 ): WorkspaceLayoutDocument {
-	const groups = document[side].groups;
+	const groups = document[region].groups;
 	if (weights.length !== groups.length) return document;
 	const expanded = groups.flatMap((group, index) => (group.folded ? [] : [index]));
 	if (expanded.length === 0) return document;
@@ -890,11 +1076,19 @@ export function resizeSideGroups(
 	if (nextGroups.every((group, index) => group === groups[index])) return document;
 	return {
 		...document,
-		[side]: {
-			...document[side],
+		[region]: {
+			...document[region],
 			groups: nextGroups,
 		},
 	};
+}
+
+export function resizeSideGroups(
+	document: WorkspaceLayoutDocument,
+	side: LayoutSide,
+	weights: readonly number[],
+): WorkspaceLayoutDocument {
+	return resizeAuxiliaryGroups(document, side, weights);
 }
 
 export function closePlacedResource(
@@ -976,20 +1170,22 @@ export function reconcileAttention(
 		(oldCenterIndex >= 0
 			? centerGroups[Math.min(oldCenterIndex, centerGroups.length - 1)]
 			: centerGroups[0]);
-	const lastFocusedSideGroupId = Object.create(null) as Partial<Record<LayoutSide, string>>;
-	for (const side of ["left", "right"] as const) {
-		const sideGroups = groups.filter((group) => group.location.area === side);
-		const previousSide = previous?.lastFocusedSideGroupId[side];
-		const oldSideGroups = oldGroups.filter((group) => group.location.area === side);
-		const oldSideIndex = oldSideGroups.findIndex(
-			(group) => group.location.groupId === previousSide,
+	const lastFocusedSideGroupId = Object.create(null) as Partial<
+		Record<LayoutAuxiliaryRegion, string>
+	>;
+	for (const region of ["left", "right", "bottom"] as const) {
+		const auxiliaryGroups = groups.filter((group) => group.location.area === region);
+		const previousGroup = previous?.lastFocusedSideGroupId[region];
+		const oldAuxiliaryGroups = oldGroups.filter((group) => group.location.area === region);
+		const oldGroupIndex = oldAuxiliaryGroups.findIndex(
+			(group) => group.location.groupId === previousGroup,
 		);
 		const group =
-			sideGroups.find((candidate) => candidate.location.groupId === previousSide) ??
-			(oldSideIndex >= 0
-				? sideGroups[Math.min(oldSideIndex, sideGroups.length - 1)]
-				: sideGroups[0]);
-		if (group) lastFocusedSideGroupId[side] = group.location.groupId;
+			auxiliaryGroups.find((candidate) => candidate.location.groupId === previousGroup) ??
+			(oldGroupIndex >= 0
+				? auxiliaryGroups[Math.min(oldGroupIndex, auxiliaryGroups.length - 1)]
+				: auxiliaryGroups[0]);
+		if (group) lastFocusedSideGroupId[region] = group.location.groupId;
 	}
 	const navigationClockByGroup = Object.assign(
 		Object.create(null),
@@ -1039,7 +1235,7 @@ export function selectTab(
 				? attention.lastFocusedSideGroupId
 				: (Object.assign(Object.create(null), attention.lastFocusedSideGroupId, {
 						[location.area]: location.groupId,
-					}) as Partial<Record<LayoutSide, string>>),
+					}) as Partial<Record<LayoutAuxiliaryRegion, string>>),
 		navigationClockByGroup:
 			location.area === "center" && countNavigation
 				? (Object.assign(Object.create(null), attention.navigationClockByGroup, {
@@ -1052,15 +1248,16 @@ export function selectTab(
 export function validateLayoutDocument(
 	document: WorkspaceLayoutDocument,
 	maxSideGroups: number,
+	maxBottomGroups = 3,
 ): string[] {
 	const errors: string[] = [];
-	if (document.version !== 1) errors.push("Unsupported layout version.");
+	if (document.version !== 2) errors.push("Unsupported layout version.");
 	const groupIds = new Set<string>();
 	const tabIds = new Set<string>();
 	const resourceKeys = new Set<string>();
 	const toolIds = new Set<LayoutToolId>();
 	let tabCount = 0;
-	const trackTab = (tab: LayoutTab, area: "center" | LayoutSide): void => {
+	const trackTab = (tab: LayoutTab, area: "center" | LayoutAuxiliaryRegion): void => {
 		tabCount += 1;
 		if (!canPlaceLayoutTab(tab, area)) errors.push(`Illegal ${area} tab: ${tab.id}`);
 		if (tabIds.has(tab.id)) errors.push(`Duplicate tab placement: ${tab.id}`);
@@ -1124,6 +1321,41 @@ export function validateLayoutDocument(
 			if (group.tabs.length === 0) errors.push(`Empty side group: ${group.id}`);
 			for (const tab of group.tabs) trackTab(tab, side);
 		}
+	}
+	const bottom = document.bottom;
+	if (
+		!Number.isFinite(bottom.height) ||
+		bottom.height <= 0 ||
+		bottom.height > LAYOUT_LIMITS.maxBottomHeight
+	) {
+		errors.push("Invalid bottom height.");
+	}
+	if (
+		bottom.alignment !== "center" &&
+		bottom.alignment !== "center-left" &&
+		bottom.alignment !== "center-right" &&
+		bottom.alignment !== "full"
+	) {
+		errors.push("Invalid bottom alignment.");
+	}
+	if (bottom.visible && bottom.groups.length === 0) {
+		errors.push("Visible bottom region requires a group.");
+	}
+	if (bottom.groups.length > maxBottomGroups) errors.push("Too many bottom groups.");
+	if (bottom.groups.length > LAYOUT_LIMITS.maxSideGroupsSafety) {
+		errors.push("Unsafe bottom group count.");
+	}
+	const bottomWeightTotal = bottom.groups.reduce((sum, group) => sum + group.weight, 0);
+	if (bottom.groups.length > 0 && Math.abs(bottomWeightTotal - 1) > 1e-6) {
+		errors.push("Invalid normalized bottom group weights.");
+	}
+	for (const group of bottom.groups) {
+		if (groupIds.has(group.id)) errors.push(`Duplicate group id: ${group.id}`);
+		groupIds.add(group.id);
+		if (!Number.isFinite(group.weight) || group.weight <= 0) {
+			errors.push(`Invalid group weight: ${group.id}`);
+		}
+		for (const tab of group.tabs) trackTab(tab, "bottom");
 	}
 	if (document.left.width + document.right.width >= 1) {
 		errors.push("Side widths leave no center region.");

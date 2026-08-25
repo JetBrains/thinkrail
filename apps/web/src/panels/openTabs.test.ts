@@ -165,7 +165,7 @@ test("an overtaken double click keeps its tab without claiming a newer preview s
 test("a deferred keep refreshes a semantically placed legacy cache without stealing focus", async () => {
 	const placementId = "legacy-diff-placement";
 	const layout: WorkspaceLayoutDocument = {
-		version: 1,
+		version: 2,
 		center: {
 			kind: "split",
 			id: "split",
@@ -190,6 +190,7 @@ test("a deferred keep refreshes a semantically placed legacy cache without steal
 		},
 		left: { visible: false, width: 0.2, groups: [] },
 		right: { visible: false, width: 0.2, groups: [] },
+		bottom: { visible: false, height: 0.3, alignment: "center", groups: [] },
 		toolRestoreTargets: {},
 	};
 	useAppStore.setState({

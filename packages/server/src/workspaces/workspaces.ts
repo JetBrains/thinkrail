@@ -15,12 +15,17 @@ import {
 	currentBranch,
 	git,
 	gitAsync,
+	remoteRefOid,
+	remoteTrackingRef,
 	resolveDefaultBranch,
 	resolveDiffRange,
 	tryCurrentBranch,
 } from "../git";
+import { logger } from "../log";
 import { dataDir, loadProjects, loadWorkspaces, saveWorkspaces } from "../persistence";
 import { getProjects, listProjects } from "../projects";
+
+const log = logger("workspaces");
 
 export type WorkspaceLifecycleEvent =
 	| { kind: "created"; workspace: Workspace }
@@ -167,6 +172,7 @@ export function openExistingWorktree(projectId: string, requestedPath: string): 
 		worktreePath: entry.path,
 		baseBranch,
 		renamed: true,
+		initialTerminalEligible: true,
 	};
 	all.push(workspace);
 	saveWorkspaces(all);
@@ -188,9 +194,7 @@ function applyFolderTruth(ws: Workspace, truth: { branch: string; baseBranch: st
 function diffStats(ws: Workspace): DiffStats | undefined {
 	const result = git(ws.worktreePath, changedFileArgs(resolveDiffRange(ws), "--shortstat"));
 	if (!result.ok) {
-		console.warn(
-			`git diff --shortstat failed in ${ws.worktreePath}: ${result.err || "unknown error"}`,
-		);
+		log.warn(`git diff --shortstat failed for workspace ${ws.id}`);
 		return undefined;
 	}
 	if (!result.out) return { added: 0, removed: 0 };
@@ -221,11 +225,21 @@ export async function createWorkspace(
 		baseBranch = head.ok ? head.out : "HEAD";
 	}
 	assertSafeRef(baseBranch);
-	if (
-		baseBranch.startsWith("origin/") &&
-		!git(project.path, ["rev-parse", "--verify", "--quiet", baseBranch]).ok
-	) {
-		await gitAsync(project.path, ["fetch", "origin", "--", baseBranch.slice("origin/".length)]);
+	const remoteBase = remoteTrackingRef(baseBranch);
+	const baseMissing = () => remoteRefOid(project.path, baseBranch) === null;
+	if (remoteBase && baseMissing()) {
+		const fetched = await gitAsync(project.path, [
+			"fetch",
+			"origin",
+			"--",
+			baseBranch.slice("origin/".length),
+		]);
+		if (baseMissing())
+			throw new Error(
+				fetched.ok
+					? `Could not fetch ${baseBranch}: origin does not map it into refs/remotes — check remote.origin.fetch`
+					: `Could not fetch ${baseBranch}: ${fetched.err || "git wrote no error output"}`,
+			);
 	}
 
 	const worktreePath = join(dataDir(), "worktrees", project.slug, branch);
@@ -238,7 +252,7 @@ export async function createWorkspace(
 		branch,
 		"--no-track",
 		"--end-of-options",
-		baseBranch,
+		remoteBase ?? baseBranch,
 	]);
 	if (!added.ok) throw new Error(`git worktree add failed: ${added.err}`);
 
@@ -249,6 +263,7 @@ export async function createWorkspace(
 		branch,
 		worktreePath,
 		baseBranch,
+		initialTerminalEligible: true,
 		...(displayName ? { renamed: true } : {}),
 	};
 	ensureWorkspaceScratchDir(workspace);
@@ -307,6 +322,7 @@ function ensureDefaultWorkspace(project: Project): Workspace {
 		worktreePath: project.path,
 		baseBranch,
 		renamed: true,
+		initialTerminalEligible: true,
 	};
 	all.push(workspace);
 	saveWorkspaces(all);

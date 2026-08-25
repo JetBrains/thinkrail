@@ -54,7 +54,7 @@ Remote/phone access (V2) is over Tailscale; auth stays external (the app carries
 
 **V1 shape (Worktree IDE):** left = projects (git repos) → workspaces (each a `git
 worktree`, own branch/cwd, under `~/.thinkrail/worktrees`); center = a tabbed area of Monaco file tabs
-+ chat tabs; right = an All-files tree + Changes (git diff) + terminals, all scoped to the active
++ chat tabs; right = a Files tree + Changes (git diff) + terminals, all scoped to the active
 worktree. The shell is built **first**, `pi` connected **last**. Deferred to V2: spec-graph viewer,
 PR/Checks.
 

@@ -57,7 +57,7 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     **caller awaits**, because the signal bounds neither pi's unsignalled `forceRefreshAvailability()`
     fan-out after it nor a forced pass queued behind a throttled one — without it one slow provider leaves
     every picker's refresh row spinning. A timed-out caller serves the registry as it stands (reporting
-    `completed: false`) while single-flight keeps tracking the unbounded pass (so it cannot start a second concurrent refresh); failures emit only a closed generic/count `console.warn` (never provider ids or errors) + are swallowed, never the picker's problem; **`PI_OFFLINE`**
+    `completed: false`) while single-flight keeps tracking the unbounded pass (so it cannot start a second concurrent refresh); failures emit only a closed generic/count warn log (never provider ids or errors) + are swallowed, never the picker's problem; **`PI_OFFLINE`**
     (pi's env convention) disables it — resolving as a *completed* pass, since with nothing fetchable the
     registry as it stands is the settled answer; the e2e webServer env and the manager's unit suite set it for
     hermeticity. The **provider-credential surface** over this runtime —
@@ -401,8 +401,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   called with globbing disabled and allowed to throw — never degraded to `unlink`);
   `@stroncium/procfs` (directly pinned solely for the compiled Linux trash parser inclusion seam);
   `contracts` (`PiEvent`/`Model`/`ThinkingLevel`/`ImageContent`/`SessionStats`/`SlashCommandInfo`/`ExtUi*`/
-  `AskUserQuestion*`/`ProviderStatus*`); Node.
-- **Forbidden:** `host`; sibling features (the `cwd` is passed in, not looked up via `persistence`);
+  `AskUserQuestion*`/`ProviderStatus*`); `log` (diagnostics + session-lifecycle debug traces); Node.
+- **Forbidden:** `host`; sibling features other than `log` (the `cwd` is passed in, not looked up via `persistence`);
   Central process/filesystem knowledge—the caller supplies only the desired opaque extension paths for a
   candidate.
 

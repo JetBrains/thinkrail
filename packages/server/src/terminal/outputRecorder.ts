@@ -1,13 +1,11 @@
 export const DEFAULT_RECORDER_MAX_CHARS = 64 * 1024;
 
+// Mouse tracking (1000/1002/1003/1006) is deliberately absent — restoring it onto a bare prompt echoes
+// garbage; see SPEC.md.
 const TRACKED_MODES: ReadonlySet<number> = new Set([
 	1, // application cursor keys — arrows send SS3 instead of CSI
 	7, // autowrap
 	25, // cursor visibility
-	1000, // mouse: button events
-	1002, // mouse: drag tracking
-	1003, // mouse: any-motion tracking
-	1006, // mouse: SGR coordinate encoding
 	2004, // bracketed paste
 ]);
 
@@ -100,10 +98,10 @@ export function createOutputRecorder(options: OutputRecorderOptions = {}): Outpu
 		},
 		restore(previous) {
 			if (disposed || maxChars <= 0) return;
-			recorded =
-				previous.length > maxChars
-					? trimToLineStart(previous, previous.length - maxChars)
-					: previous;
+			// Parse, never copy: a verbatim snapshot puts its mode preamble in the body — see SPEC.md.
+			recorded = "";
+			consume(previous);
+			inAltBuffer = false;
 		},
 		dispose() {
 			disposed = true;

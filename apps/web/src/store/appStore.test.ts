@@ -95,6 +95,12 @@ const assistantText = (text: string) =>
 			partial: { role: "assistant", content: [{ type: "text", text }] },
 		},
 	}) as unknown as PiEvent;
+const emptyBottomRegion = (): WorkspaceLayoutDocument["bottom"] => ({
+	visible: false,
+	height: 0.3,
+	alignment: "center",
+	groups: [],
+});
 
 beforeEach(() => {
 	useAppStore.setState({
@@ -834,7 +840,7 @@ test("setTitle refreshes shared chat metadata without requesting activation", ()
 		layoutIntents: [],
 		layoutDocumentsByWorkspace: {
 			ws1: {
-				version: 1,
+				version: 2,
 				center: {
 					kind: "group",
 					id: "center",
@@ -842,6 +848,7 @@ test("setTitle refreshes shared chat metadata without requesting activation", ()
 				},
 				left: { visible: false, width: 0.2, groups: [] },
 				right: { visible: false, width: 0.2, groups: [] },
+				bottom: emptyBottomRegion(),
 				toolRestoreTargets: {},
 			},
 		},
@@ -899,10 +906,11 @@ test("setTitle cannot restore a cache whose structural close is already accepted
 		layoutIntents: [],
 		layoutDocumentsByWorkspace: {
 			ws1: {
-				version: 1,
+				version: 2,
 				center: { kind: "group", id: "center", tabs: [] },
 				left: { visible: false, width: 0.2, groups: [] },
 				right: { visible: false, width: 0.2, groups: [] },
+				bottom: emptyBottomRegion(),
 				toolRestoreTargets: {},
 			},
 		},
@@ -1845,10 +1853,11 @@ test("applyWorkspaceRemoved drops the row, clears its tabs, and returns the acti
 	expect(s.reviewFocusRequest).toBeNull();
 
 	const lateDocument: WorkspaceLayoutDocument = {
-		version: 1,
+		version: 2,
 		center: { kind: "group", id: "center", tabs: [] },
 		left: { visible: false, width: 0.2, groups: [] },
 		right: { visible: false, width: 0.2, groups: [] },
+		bottom: emptyBottomRegion(),
 		toolRestoreTargets: {},
 	};
 	s.installLayoutSnapshot({ workspaceId: "w1", revision: 1, document: lateDocument });
@@ -2677,10 +2686,11 @@ test("a preview open replaces the previous preview tab at its index (the strip n
 
 test("hydrated per-group previews never evict one another from the render cache", () => {
 	const document: WorkspaceLayoutDocument = {
-		version: 1,
+		version: 2,
 		center: { kind: "group", id: "center-a", tabs: [] },
 		left: { visible: false, width: 0.18, groups: [] },
 		right: { visible: false, width: 0.28, groups: [] },
+		bottom: emptyBottomRegion(),
 		toolRestoreTargets: {},
 	};
 	useAppStore.setState({ layoutDocumentsByWorkspace: { ws1: document } });
@@ -2874,7 +2884,7 @@ test("history selection resolves a cache alias to its stable shared placement id
 		layoutIntents: [],
 		layoutDocumentsByWorkspace: {
 			ws1: {
-				version: 1,
+				version: 2,
 				center: {
 					kind: "group",
 					id: "history-group",
@@ -2889,6 +2899,7 @@ test("history selection resolves a cache alias to its stable shared placement id
 				},
 				left: { visible: false, width: 0.2, groups: [] },
 				right: { visible: false, width: 0.2, groups: [] },
+				bottom: emptyBottomRegion(),
 				toolRestoreTargets: {},
 			},
 		},
@@ -2929,7 +2940,7 @@ test("history selection never uses a colliding cache id as shared placement iden
 		tabsByWorkspace: { ws1: [{ ...chat, id: collidingId }] },
 		layoutDocumentsByWorkspace: {
 			ws1: {
-				version: 1,
+				version: 2,
 				center: {
 					kind: "split",
 					id: "history-split",
@@ -2946,6 +2957,7 @@ test("history selection never uses a colliding cache id as shared placement iden
 				},
 				left: { visible: false, width: 0.2, groups: [] },
 				right: { visible: false, width: 0.2, groups: [] },
+				bottom: emptyBottomRegion(),
 				toolRestoreTargets: {},
 			},
 		},
@@ -3033,6 +3045,71 @@ test("terminal creation can capture a center-group destination without creating 
 		navigationClockByGroup: { "center-a": 1, "center-b": 4 },
 	});
 	expect(state.navTickByWorkspace.w1).toBe(1);
+});
+
+test("terminal creation can target bottom without advancing center navigation", () => {
+	const attention = {
+		selectedByGroup: {},
+		lastFocusedCenterGroupId: "center-a",
+		lastFocusedSideGroupId: { bottom: "bottom-a" },
+		navigationClockByGroup: { "center-a": 2 },
+	};
+	useAppStore.setState({ layoutAttentionByWorkspace: { w1: attention } });
+	useAppStore.getState().addTerminal("w1", undefined, "bottom-b", "bottom");
+	const state = useAppStore.getState();
+	expect(state.layoutIntents[0]).toMatchObject({
+		kind: "place-terminal",
+		workspaceId: "w1",
+		targetGroupId: "bottom-b",
+		targetArea: "bottom",
+	});
+	expect(state.layoutAttentionByWorkspace.w1).toBe(attention);
+	expect(state.navTickByWorkspace.w1).toBeUndefined();
+});
+
+test("the host catalog confirms a reservation while retaining its one-shot command", () => {
+	useAppStore.getState().addTerminal("w1", "code .", "bottom-a", "bottom");
+	const pending = useAppStore.getState().terminalsByWorkspace.w1?.[0];
+	if (!pending) throw new Error("missing pending terminal");
+	expect(pending.reservationPending).toBe(true);
+
+	useAppStore
+		.getState()
+		.setWorkspaceTerminals("w1", [{ tabKey: pending.tabKey, title: "Host title" }]);
+	expect(useAppStore.getState().terminalsByWorkspace.w1).toEqual([
+		{
+			tabKey: pending.tabKey,
+			workspaceId: "w1",
+			title: "Host title",
+			initialCommand: "code .",
+		},
+	]);
+	expect(useAppStore.getState().layoutIntents).toHaveLength(1);
+});
+
+test("hidden terminal seeding stays non-activating, idempotent, and atomically rejectable", () => {
+	useAppStore
+		.getState()
+		.addTerminal("w1", undefined, "bottom-a", "bottom", false, "initial-terminal");
+	useAppStore
+		.getState()
+		.addTerminal("w1", undefined, "bottom-a", "bottom", false, "initial-terminal");
+	const pending = useAppStore.getState().terminalsByWorkspace.w1?.[0];
+	if (!pending) throw new Error("missing pending terminal");
+	expect(useAppStore.getState().terminalsByWorkspace.w1).toHaveLength(1);
+	expect(useAppStore.getState().layoutIntents).toHaveLength(1);
+	expect(useAppStore.getState().layoutIntents[0]).toMatchObject({
+		kind: "place-terminal",
+		workspaceId: "w1",
+		tabKey: pending.tabKey,
+		targetGroupId: "bottom-a",
+		targetArea: "bottom",
+		reveal: false,
+	});
+
+	useAppStore.getState().rejectTerminalReservation("w1", pending.tabKey);
+	expect(useAppStore.getState().terminalsByWorkspace.w1).toEqual([]);
+	expect(useAppStore.getState().layoutIntents).toEqual([]);
 });
 
 test("catalog authority falls with the list it describes — only an awaited refresh sets it", () => {

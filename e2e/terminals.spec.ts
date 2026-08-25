@@ -270,7 +270,7 @@ test("a tab says so when its shell exits", async ({ page }) => {
 	await runInTerminal(page, "exit");
 
 	await expect(visibleTerminal(page)).toHaveAttribute("data-exited", "true");
-	await expect(visibleTerminalScreen(page)).toContainText("[process exited]");
+	await expect(visibleTerminalScreen(page)).toContainText(/\[process exited(?: with code \d+)?\]/);
 });
 
 test("Ctrl+C still interrupts while an input method is active", async ({ page }) => {
@@ -571,7 +571,7 @@ test("a tab opened or closed in one browser reaches the other", async ({ page, c
 	await waitTerminalReady(page2);
 	await expect(page2.getByTestId("terminal-tab")).toHaveCount(1);
 
-	await page2.getByTestId("terminal-add").click();
+	await openTerminal(page2);
 	await expect(page2.getByTestId("terminal-tab")).toHaveCount(2);
 	await expect(page.getByTestId("terminal-tab")).toHaveCount(2);
 

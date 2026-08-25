@@ -81,9 +81,27 @@ test("createWorkspace cuts a fresh branch from baseRef and records it as the bas
 
 	const ws = await createWorkspace("p1", undefined, "feature/base");
 	expect(ws.baseBranch).toBe("feature/base");
+	expect(ws.initialTerminalEligible).toBe(true);
 	expect(gitOut(ws.worktreePath, "rev-parse", "HEAD")).toBe(baseSha);
 	expect(gitOut(ws.worktreePath, "rev-parse", "--abbrev-ref", "HEAD")).toBe(ws.branch);
 	expect(ws.branch).not.toBe("feature/base");
+});
+
+test("legacy workspace records never gain initial-terminal eligibility on read", async () => {
+	const ws = await createWorkspace("p1");
+	const file = join(dataDir, "workspaces.json");
+	const records = JSON.parse(readFileSync(file, "utf8")) as Array<Record<string, unknown>>;
+	const record = records.find((candidate) => candidate.id === ws.id);
+	if (!record) throw new Error("missing workspace record");
+	delete record.initialTerminalEligible;
+	writeFileSync(file, JSON.stringify(records));
+
+	expect(listWorkspaceRecords("p1").find((candidate) => candidate.id === ws.id)).not.toHaveProperty(
+		"initialTerminalEligible",
+	);
+	expect(listWorkspaces("p1").find((candidate) => candidate.id === ws.id)).not.toHaveProperty(
+		"initialTerminalEligible",
+	);
 });
 
 test("createWorkspace branches off a locally-present remote ref without a network fetch", async () => {
@@ -98,6 +116,56 @@ test("createWorkspace branches off a locally-present remote ref without a networ
 	expect(ws.baseBranch).toBe("origin/main");
 	expect(gitOut(ws.worktreePath, "rev-parse", "HEAD")).toBe(originSha);
 	expect(gitOut(ws.worktreePath, "rev-parse", "--abbrev-ref", "HEAD")).toBe(ws.branch);
+});
+
+test("createWorkspace checks out the remote-tracking ref, not a local branch of the same name", async () => {
+	const remoteRepo = join(dataDir, "remote.git");
+	git(repo, "init", "--bare", remoteRepo);
+	git(repo, "remote", "add", "origin", remoteRepo);
+	git(repo, "push", "origin", "main");
+	git(repo, "fetch", "origin");
+	const originSha = gitOut(repo, "rev-parse", "refs/remotes/origin/main");
+
+	writeFileSync(join(repo, "decoy.md"), "decoy\n");
+	git(repo, "add", "-A");
+	git(repo, "commit", "-m", "decoy");
+	git(repo, "update-ref", "refs/heads/origin/main", "HEAD");
+	expect(gitOut(repo, "rev-parse", "refs/heads/origin/main")).not.toBe(originSha);
+
+	const ws = await createWorkspace("p1", undefined, "origin/main");
+
+	expect(ws.baseBranch).toBe("origin/main");
+	expect(gitOut(ws.worktreePath, "rev-parse", "HEAD")).toBe(originSha);
+});
+
+test("createWorkspace fails with git's own words when the base fetch fails", async () => {
+	git(repo, "remote", "add", "origin", join(dataDir, "missing.git"));
+
+	const create = createWorkspace("p1", undefined, "origin/main");
+
+	await expect(create).rejects.toThrow(/Could not fetch origin\/main/);
+	await expect(create).rejects.toThrow(/does not appear to be a git repository/);
+	expect(existsSync(join(dataDir, "worktrees", "repo"))).toBe(false);
+	expect(worktrees()).toHaveLength(0);
+});
+
+test("createWorkspace names the refspec when a fetch succeeds without landing the ref", async () => {
+	const remoteRepo = join(dataDir, "narrow.git");
+	git(repo, "init", "--bare", remoteRepo);
+	git(repo, "remote", "add", "origin", remoteRepo);
+	git(repo, "push", "origin", "main");
+	git(repo, "push", "origin", "main:release");
+	git(repo, "config", "remote.origin.fetch", "+refs/heads/main:refs/remotes/origin/main");
+	git(repo, "update-ref", "-d", "refs/remotes/origin/release");
+
+	const message = await createWorkspace("p1", undefined, "origin/release").then(
+		() => "resolved",
+		(error: Error) => error.message,
+	);
+
+	expect(message).toContain("check remote.origin.fetch");
+	expect(message).not.toContain("FETCH_HEAD");
+	expect(worktrees()).toHaveLength(0);
 });
 
 test("createWorkspace leaves the new branch with no upstream", async () => {
@@ -164,6 +232,7 @@ test("openExistingWorktree adopts idempotently and removal never reclaims the ch
 		worktreePath: external,
 		baseBranch: "main",
 		renamed: true,
+		initialTerminalEligible: true,
 	});
 	expect(events).toEqual([{ kind: "created", workspace }]);
 	expect(listExistingWorktrees("p1")).toHaveLength(0);
@@ -503,6 +572,7 @@ test("listWorkspaces ensures exactly one Default workspace, pinned first, with f
 	expect(def?.branch).toBe("main");
 	expect(def?.baseBranch).toBe("main");
 	expect(def?.renamed).toBe(true);
+	expect(def?.initialTerminalEligible).toBe(true);
 
 	const again = listWorkspaces("p1");
 	expect(again.filter((w) => w.kind === "default")).toHaveLength(1);

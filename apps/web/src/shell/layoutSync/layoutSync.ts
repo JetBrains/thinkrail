@@ -11,6 +11,7 @@ import { errorText, getTransport } from "../../transport";
 import {
 	createLayoutId,
 	instantiateLayoutPreset,
+	minimumBottomGroupLimit,
 	minimumSideGroupLimit,
 	reconcileAttention,
 	resolveLayoutPreset,
@@ -90,7 +91,9 @@ function loadAttention(workspaceId: string): LayoutAttention | undefined {
 		if (
 			Object.values(selectedByGroup).some((entry) => typeof entry !== "string") ||
 			Object.entries(lastFocusedSideGroupId).some(
-				([side, entry]) => (side !== "left" && side !== "right") || typeof entry !== "string",
+				([region, entry]) =>
+					(region !== "left" && region !== "right" && region !== "bottom") ||
+					typeof entry !== "string",
 			) ||
 			Object.values(navigationClockByGroup).some(
 				(entry) => !Number.isSafeInteger(entry) || Number(entry) < 0,
@@ -105,7 +108,7 @@ function loadAttention(workspaceId: string): LayoutAttention | undefined {
 			>,
 			lastFocusedCenterGroupId: value.lastFocusedCenterGroupId,
 			lastFocusedSideGroupId: Object.assign(Object.create(null), lastFocusedSideGroupId) as Partial<
-				Record<"left" | "right", string>
+				Record<"left" | "right" | "bottom", string>
 			>,
 			navigationClockByGroup: Object.assign(Object.create(null), navigationClockByGroup) as Record<
 				string,
@@ -265,10 +268,20 @@ export function hydrateWorkspaceLayout(workspaceId: string): Promise<WorkspaceLa
 			}
 			const settings = currentState.layoutSettings;
 			const preset = resolveLayoutPreset(settings.defaultPresetId, settings.customPresets);
-			const requiredLimit = minimumSideGroupLimit(preset);
-			if (requiredLimit > settings.maxSideGroups) {
+			const requiredSideLimit = minimumSideGroupLimit(preset);
+			const requiredBottomLimit = minimumBottomGroupLimit(preset);
+			if (
+				requiredSideLimit > settings.maxSideGroups ||
+				requiredBottomLimit > settings.maxBottomGroups
+			) {
 				await getTransport().request("settings.update", {
-					config: { layout: { ...settings, maxSideGroups: requiredLimit } },
+					config: {
+						layout: {
+							...settings,
+							maxSideGroups: Math.max(settings.maxSideGroups, requiredSideLimit),
+							maxBottomGroups: Math.max(settings.maxBottomGroups, requiredBottomLimit),
+						},
+					},
 				});
 				const afterSettings = useAppStore.getState();
 				if (afterSettings.removedWorkspaceIds[workspaceId]) {

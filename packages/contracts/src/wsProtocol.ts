@@ -81,7 +81,7 @@ export interface TerminalTabsPush {
 	tabs: TerminalTabInfo[];
 }
 
-export const PROTOCOL_VERSION = 48;
+export const PROTOCOL_VERSION = 50;
 
 export interface ServerWelcome {
 	protocolVersion: number;
@@ -141,6 +141,7 @@ export const WS_METHODS = {
 	gitStatus: "git.status",
 	gitDiffFile: "git.diffFile",
 	gitListCommits: "git.listCommits",
+	terminalReserve: "terminal.reserve",
 	terminalAttach: "terminal.attach",
 	terminalList: "terminal.list",
 	terminalWrite: "terminal.write",
@@ -345,6 +346,10 @@ export interface WsMethodMap {
 		result: { original: string; modified: string };
 	};
 	"git.listCommits": { params: { workspaceId: string }; result: { commits: GitCommit[] } };
+	"terminal.reserve": {
+		params: { workspaceId: string; tabKey: string; title: string };
+		result: { tab: TerminalTabInfo };
+	};
 	"terminal.attach": {
 		params: { workspaceId: string; tabKey: string; title?: string; cols?: number; rows?: number };
 		result: { id: string; created: boolean; replay?: string };

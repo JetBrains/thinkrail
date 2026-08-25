@@ -139,7 +139,7 @@ lands can still finish its record; archived updates persist without publishing a
   `buildSendPackage`, `removeWorkspaceReviews`, `setReviewPublisher` (+ the pure
   anchoring/render helpers: `reanchor`, `buildTextQuote`, `hashContent`, `lineRangeOf`, `textQuoteOf`,
   `renderPackage`).
-- **Allowed deps:** `contracts` (types), `persistence` (data dir), `workspaces` (worktree path lookup),
+- **Allowed deps:** `contracts` (types), `persistence` (data dir), `log`, `workspaces` (worktree path lookup),
   `git` (the review's `baseSha` resolve, the diff range behind a base anchor's `baseRef`, and blob
   reads for the base side), Node `fs`/`crypto`.
 - **Forbidden:** importing `host`/`agent` or any pi package; publishing except through the seam.

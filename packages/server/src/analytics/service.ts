@@ -1,3 +1,4 @@
+import { logger } from "../log";
 import { ensureInstallation, saveInstallation } from "../persistence";
 import type { AnalyticsEvent, BuildKind } from "./events";
 import { type AnalyticsEnv, environmentMute } from "./mute";
@@ -8,6 +9,8 @@ import {
 	type OutgoingEvent,
 	POSTHOG_PROJECT_KEY,
 } from "./sink";
+
+const log = logger("analytics");
 
 export interface AnalyticsOptions {
 	appVersion?: string;
@@ -138,8 +141,6 @@ function toOutgoingEvent(event: AnalyticsEvent, s: AnalyticsState): OutgoingEven
 	};
 }
 
-function debugLog(error: unknown): void {
-	if (process.env.THINKRAIL_ANALYTICS_DEBUG) {
-		console.warn(`analytics failed: ${error instanceof Error ? error.message : error}`);
-	}
+function debugLog(_error: unknown): void {
+	log.debug("analytics operation failed");
 }

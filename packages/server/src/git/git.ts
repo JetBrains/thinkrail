@@ -9,9 +9,13 @@ import type {
 	GitStatus,
 	Workspace,
 } from "@thinkrail/contracts";
+import { logger } from "../log";
 import { loadProjects, loadWorkspaces } from "../persistence";
 import { changedFileArgs, type DiffRange, diffBaseRef, resolveDiffRange } from "./diffScope";
 import { git, gitAsync } from "./gitExec";
+import { isSafeRef, remoteTrackingRef } from "./refs";
+
+const log = logger("git");
 
 function workspace(workspaceId: string): Workspace {
 	const ws = loadWorkspaces().find((w) => w.id === workspaceId);
@@ -87,8 +91,7 @@ export function listBranches(projectId: string): BranchList {
 export function resolveDefaultBranch(repoPath: string): string {
 	const head = git(repoPath, ["symbolic-ref", "--short", "refs/remotes/origin/HEAD"]);
 	if (head.ok && head.out) return head.out;
-	if (git(repoPath, ["rev-parse", "--verify", "--quiet", "refs/remotes/origin/main"]).ok)
-		return "origin/main";
+	if (remoteRefOid(repoPath, "origin/main") !== null) return "origin/main";
 	return currentBranch(repoPath);
 }
 
@@ -111,21 +114,20 @@ export function currentBranch(repoPath: string): string {
 	return tryCurrentBranch(repoPath) ?? "HEAD";
 }
 
+export function remoteRefOid(repoPath: string, ref: string): string | null {
+	const remote = remoteTrackingRef(ref);
+	if (!remote) return null;
+	const result = git(repoPath, ["rev-parse", "--verify", "--quiet", "--end-of-options", remote]);
+	return result.ok && result.out !== "" ? result.out : null;
+}
+
 export async function prefetchBranch(
 	projectId: string,
 	ref: string,
 ): Promise<{ ok: boolean; moved: boolean }> {
 	const project = loadProjects().find((p) => p.id === projectId);
-	if (!project || !ref.startsWith("origin/")) return { ok: false, moved: false };
-	const revParse = () =>
-		git(project.path, [
-			"rev-parse",
-			"--verify",
-			"--quiet",
-			"--end-of-options",
-			`refs/remotes/${ref}`,
-		]);
-	const before = revParse();
+	if (!project || !ref.startsWith("origin/") || !isSafeRef(ref)) return { ok: false, moved: false };
+	const before = remoteRefOid(project.path, ref);
 	const result = await gitAsync(project.path, [
 		"fetch",
 		"origin",
@@ -133,8 +135,8 @@ export async function prefetchBranch(
 		ref.slice("origin/".length),
 	]);
 	if (!result.ok) return { ok: false, moved: false };
-	const after = revParse();
-	const moved = after.ok && after.out !== "" && (!before.ok || before.out !== after.out);
+	const after = remoteRefOid(project.path, ref);
+	const moved = after !== null && after !== before;
 	return { ok: true, moved };
 }
 
@@ -238,7 +240,7 @@ export function readBlobAt(worktreePath: string, ref: string, path: string): str
 	const shown = git(worktreePath, ["show", "--end-of-options", `${ref}:${path}`], { raw: true });
 	if (shown.ok) return shown.out;
 	if (!/does not exist in|exists on disk, but not in/.test(shown.err)) {
-		console.warn(`git show ${ref}:${path} failed: ${shown.err || "unknown error"}`);
+		log.warn("git blob read failed");
 	}
 	return null;
 }

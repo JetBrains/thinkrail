@@ -42,7 +42,7 @@ bootstrap it into one so it can be opened.
   of any spec dependency.)
 - **Public surface (barrel):** `openProject`, `listProjects`, `listRecentProjects`, `closeProject`,
   `getProjects`, `setProjectPublisher`, `inspectProjectPath`, `initProject`.
-- **Allowed deps:** `persistence`; the `git` sub-module (shared `git()` runner, bound to live `env` for
-  config overrides); `contracts` (`Project`, `ProjectPathStatus`); Node/Bun.
+- **Allowed deps:** `persistence`; the `git` sub-module (shared `git()` runner, which now owns the
+  environment its children spawn under — this module passes none); `contracts` (`Project`, `ProjectPathStatus`); Node/Bun.
 - **Forbidden:** `host`; sibling features other than `git` (`workspaces` depends on `projects`, never the
   reverse).

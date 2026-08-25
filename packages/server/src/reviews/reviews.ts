@@ -19,10 +19,13 @@ import type {
 	ReviewSnapshot,
 } from "@thinkrail/contracts";
 import { diffBaseRef, readBlobAt, resolveCommitOid, resolveDiffRange } from "../git";
+import { logger } from "../log";
 import { dataDir } from "../persistence";
 import { getWorkspace } from "../workspaces";
 import { buildTextQuote, hashContent, lineRangeOf, reanchor, textQuoteOf } from "./anchoring";
 import { renderPackage } from "./packageRender";
+
+const log = logger("reviews");
 
 let publish: (payload: ReviewChangedPayload) => void = () => {};
 export function setReviewPublisher(fn: (payload: ReviewChangedPayload) => void): void {
@@ -35,8 +38,11 @@ function reviewsDir(): string {
 
 const SAFE_ID = /^[\w-]+$/;
 
+class InvalidReviewIdError extends Error {}
+class DamagedReviewFileError extends Error {}
+
 function assertSafeId(id: string, kind: "workspace" | "review"): void {
-	if (!SAFE_ID.test(id)) throw new Error(`Invalid ${kind} id: ${id}`);
+	if (!SAFE_ID.test(id)) throw new InvalidReviewIdError(`Invalid ${kind} id: ${id}`);
 }
 
 function reviewFile(workspaceId: string): string {
@@ -69,8 +75,19 @@ function readSnapshot(file: string): ReviewSnapshot | null {
 	try {
 		return JSON.parse(raw) as ReviewSnapshot;
 	} catch {
-		throw new Error(`Review file ${file} is damaged and was left in place — repair or remove it.`);
+		throw new DamagedReviewFileError(
+			`Review file ${file} is damaged and was left in place — repair or remove it.`,
+		);
 	}
+}
+
+export function reviewReadFailure(error: unknown): string {
+	if (error instanceof DamagedReviewFileError) return "damaged";
+	if (error instanceof InvalidReviewIdError) return "invalid id";
+	const code = error instanceof Error ? (error as NodeJS.ErrnoException).code : undefined;
+	if (code === "EACCES" || code === "EPERM") return "permission denied";
+	if (code === "EISDIR" || code === "ENOTDIR") return "not a file";
+	return "read failure";
 }
 
 function load(workspaceId: string): ReviewSnapshot | null {
@@ -113,10 +130,8 @@ function archivedReviewFiles(): string[] {
 			for (const review of readdirSync(dir, { withFileTypes: true })) {
 				if (review.isFile() && review.name.endsWith(".json")) files.push(join(dir, review.name));
 			}
-		} catch (err) {
-			console.warn(
-				`review archive ${workspace.name}: ${err instanceof Error ? err.message : String(err)}`,
-			);
+		} catch {
+			log.warn(`review archive could not be listed for workspace ${workspace.name}`);
 		}
 	}
 	return files;
@@ -440,8 +455,9 @@ export function resolveCommentFromAgent(commentId: string, note?: string): Revie
 		let snapshot: ReviewSnapshot | null = null;
 		try {
 			snapshot = load(workspaceId);
-		} catch (err) {
-			console.warn(`review ${workspaceId}: ${err instanceof Error ? err.message : String(err)}`);
+		} catch (error) {
+			const target = SAFE_ID.test(workspaceId) ? ` for workspace ${workspaceId}` : "";
+			log.warn(`active review could not be read${target} (${reviewReadFailure(error)})`);
 			continue;
 		}
 		if (snapshot?.review.status !== "open") continue;
@@ -455,8 +471,8 @@ export function resolveCommentFromAgent(commentId: string, note?: string): Revie
 		let snapshot: ReviewSnapshot | null = null;
 		try {
 			snapshot = readSnapshot(file);
-		} catch (err) {
-			console.warn(`review archive ${file}: ${err instanceof Error ? err.message : String(err)}`);
+		} catch (error) {
+			log.warn(`archived review could not be read (${reviewReadFailure(error)})`);
 			continue;
 		}
 		if (snapshot?.review.status !== "closed") continue;

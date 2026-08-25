@@ -117,7 +117,8 @@ snapshots plus device-local attention, terminal catalogs, and one **per-session 
   enter the layout.
 
   **Device-local layout attention** is separate: selected tab per stable group, last-focused center group,
-  last-focused group per side, and per-group navigation clocks keyed by host/workspace. Selection/focus
+  last-focused group per auxiliary region (left/right/bottom), and per-group navigation clocks keyed by
+  host/workspace. Selection/focus
   mutations never alter or publish
   the shared document. Installing a structural snapshot reconciles attention deterministically to the nearest
   surviving tab/group. Navigation clocks advance at request time for every local focus-changing open and
@@ -145,10 +146,15 @@ snapshots plus device-local attention, terminal catalogs, and one **per-session 
   **`terminalsByWorkspace` remains a mirror of terminal domain state, never placement authority.** The host
   owns terminal existence and keys shells by `(workspaceId, tabKey)`; the layout snapshot merely references a
   tab key at one eligible location. `setWorkspaceTerminals` adopts `terminal.list` / `terminal.tabs`, retaining
-  an omitted local tab only while its own attach is genuinely in flight. `addTerminal` mints a durable key
-  and may attach a captured center-group destination to its placement intent (it never edits topology itself),
-  so Group Header creation still works with no terminal body mounted; attach registers the key host-side and
-  consumes any initial command only for a newly created shell. Confirmed
+  an omitted local tab only while its host-catalog reservation is in flight. `addTerminal` mints a durable key
+  and emits one placement intent (it never edits topology itself): a captured group destination preserves
+  contextual Group Header creation, while an uncaptured request resolves to bottom. An optional caller key
+  makes the one first-workspace seed idempotent across clients; duplicate local requests for that key are a
+  no-op. The parent shell reserves that key without a process before intent consumption. The initial-workspace
+  request may then establish a hidden placement without revealing, unfolding, or attaching it; attach waits for
+  the visibility gate and
+  consumes any initial command only for a newly created shell. A failed same-generation reservation atomically
+  rejects both the pending mirror and its placement intent. Confirmed
   close removes the domain tab and queues a resource-removal intent; the shell layout integration prunes
   every stale placement through the next whole-document commit. A stale layout reference never reattaches or
   recreates an absent catalog entry. There is no workspace-global
@@ -419,7 +425,8 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   identities from its supplied document + local attention, while host attachment remains exclusive per terminal),
   `selectActiveWorkspaceProjectId`, `selectHistoryTarget` + `HistoryTarget` (the shell's `Ctrl+R` routing
   target: the locally selected chat resource, or the workspace's newest chat otherwise),
-  `selectContextProject`, `selectAttentionCenterTab` (the selected resource in local last center focus),
+  `selectContextProject`, the layout placement selectors (recursive center plus left/right/bottom auxiliary
+  groups), `selectAttentionCenterTab` (the selected resource in local last center focus),
   `selectCurrentRouteChatTarget` (exact-chat intent only while its workspace and stamped navigation remain
   current), `selectSkillsStale`, **`selectDiffScope` + `BRANCH_SCOPE`** (what a workspace's
   Changes panel is diffing, defaulting to the shared branch-scope constant), **`selectDiffBaseRef`** (the ref

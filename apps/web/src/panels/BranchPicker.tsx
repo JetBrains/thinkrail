@@ -61,7 +61,13 @@ export function BranchPicker({
 	);
 
 	return (
-		<Popover open={open} onOpenChange={setOpen}>
+		<Popover
+			open={open}
+			onOpenChange={(nextOpen) => {
+				setOpen(nextOpen);
+				if (nextOpen) onRefresh();
+			}}
+		>
 			<PopoverTrigger data-testid={testid} data-open={open} className={triggerClassName}>
 				<GitBranch className="size-14 shrink-0 text-text-muted" />
 				<span className="shrink-0 text-text-muted tr-text-metadata">{label}</span>
