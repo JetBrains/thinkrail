@@ -24,11 +24,18 @@ test("the mocked onboarding simulation runs intro → scripted flow, never touch
 
 	await expect(coach).toContainText("Create a workspace");
 	await page.getByTestId("sim-add-workspace").click();
+	await expect(page.getByTestId("new-workspace-dialog")).toBeVisible();
+	await expect(coach).toContainText("Create the workspace");
+	await page.getByTestId("create-workspace").click();
+
 	await expect(coach).toContainText("Create a second workspace");
 	await page.getByTestId("sim-add-workspace").click();
+	await expect(page.getByTestId("new-workspace-dialog")).toBeVisible();
+	await expect(coach).toContainText("Create the second workspace");
+	await page.getByTestId("create-workspace").click();
 
 	await expect(coach).toContainText("Start the first agent");
-	await page.getByTestId("onboarding-insert-prompt").click();
+	await expect(page.getByTestId("onboarding-insert-prompt")).toHaveCount(0);
 	await expect(page.getByTestId("sim-composer")).toHaveValue(
 		"Add search functionality to the To Do app.",
 	);
@@ -38,7 +45,6 @@ test("the mocked onboarding simulation runs intro → scripted flow, never touch
 	await page.getByTestId("sim-ws-1").click();
 
 	await expect(coach).toContainText("Run a second agent in parallel");
-	await page.getByTestId("onboarding-insert-prompt").click();
 	await expect(page.getByTestId("sim-composer")).toHaveValue("Add a filter for completed tasks.");
 	await page.getByTestId("sim-send").click();
 

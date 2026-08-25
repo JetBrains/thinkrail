@@ -67,6 +67,8 @@ export function NewWorkspaceDialog({
 	promptNote,
 	onOpenChange,
 	onCreated,
+	preview = false,
+	onPreviewCreate,
 }: {
 	open: boolean;
 	projectId: string;
@@ -74,6 +76,8 @@ export function NewWorkspaceDialog({
 	promptNote?: string;
 	onOpenChange: (open: boolean) => void;
 	onCreated: (workspace: Workspace) => void;
+	preview?: boolean;
+	onPreviewCreate?: () => void;
 }) {
 	const projects = useAppStore((s) => s.projects);
 
@@ -122,14 +126,14 @@ export function NewWorkspaceDialog({
 	}, [open, projectId, initialPrompt]);
 
 	useEffect(() => {
-		if (!open) return;
+		if (!open || preview) return;
 		if (projects.some((p) => p.id === selectedProjectId)) return;
 		onOpenChange(false);
 		toast.info("That project was closed");
-	}, [open, projects, selectedProjectId, onOpenChange]);
+	}, [open, projects, selectedProjectId, onOpenChange, preview]);
 
 	useEffect(() => {
-		if (!open) return;
+		if (!open || preview) return;
 		let cancelled = false;
 		setSkillCommands([]);
 		void slashCommandCatalogOrEmpty(() =>
@@ -140,10 +144,10 @@ export function NewWorkspaceDialog({
 		return () => {
 			cancelled = true;
 		};
-	}, [open, selectedProjectId]);
+	}, [open, selectedProjectId, preview]);
 
 	useEffect(() => {
-		if (!open) return;
+		if (!open || preview) return;
 		let cancelled = false;
 		setAliasSkills([]);
 		getTransport()
@@ -155,14 +159,14 @@ export function NewWorkspaceDialog({
 		return () => {
 			cancelled = true;
 		};
-	}, [open, selectedProjectId]);
+	}, [open, selectedProjectId, preview]);
 
 	const {
 		models,
 		refreshing: modelsRefreshing,
 		refresh: onRefreshModels,
 		fresh: catalogFresh,
-	} = useModelCatalog(open);
+	} = useModelCatalog(open && !preview);
 
 	const applyHostDefault = useCallback(() => {
 		let cancelled = false;
@@ -180,12 +184,12 @@ export function NewWorkspaceDialog({
 	}, []);
 
 	useEffect(() => {
-		if (!open) return;
+		if (!open || preview) return;
 		return applyHostDefault();
-	}, [open, applyHostDefault]);
+	}, [open, preview, applyHostDefault]);
 
 	useEffect(() => {
-		if (!open || !model) return;
+		if (!open || preview || !model) return;
 		const next = reconcileModel(models, model, catalogFresh);
 		if (next === null) return;
 		if (next !== "unavailable") {
@@ -195,10 +199,10 @@ export function NewWorkspaceDialog({
 		if (hostDefaultAsked.current) return;
 		hostDefaultAsked.current = true;
 		return applyHostDefault();
-	}, [open, models, model, catalogFresh, applyHostDefault]);
+	}, [open, models, model, catalogFresh, applyHostDefault, preview]);
 
 	useEffect(() => {
-		if (!open || !model) return;
+		if (!open || preview || !model) return;
 		if (model.thinkingLevels.includes(thinkingLevel)) return;
 		let cancelled = false;
 		getTransport()
@@ -214,7 +218,7 @@ export function NewWorkspaceDialog({
 		return () => {
 			cancelled = true;
 		};
-	}, [open, model, thinkingLevel]);
+	}, [open, model, thinkingLevel, preview]);
 
 	const prefetchBase = (ref: string) => {
 		if (!ref.startsWith("origin/")) return;
@@ -232,13 +236,18 @@ export function NewWorkspaceDialog({
 		branches,
 		refreshing,
 		refresh: refreshBranches,
-	} = useBranchList(open ? selectedProjectId : null, (list) => {
+	} = useBranchList(open && !preview ? selectedProjectId : null, (list) => {
 		setBaseRef(list.defaultBranch);
 		prefetchBase(list.defaultBranch);
 	});
 
 	const create = async () => {
 		if (creating) return;
+		if (preview) {
+			onPreviewCreate?.();
+			onOpenChange(false);
+			return;
+		}
 		setCreating(true);
 		let workspace: Workspace;
 		if (target === "default") {

@@ -2,6 +2,7 @@ import { ChevronRight, GitBranch, Settings } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "../components/ui/resizable";
 import { OnboardingSimulation } from "../onboarding";
+import { NewWorkspaceDialog } from "../panels/NewWorkspaceDialog";
 import { ProjectTree } from "../panels/ProjectTree";
 import { SettingsDialog } from "../panels/SettingsDialog";
 import { Toaster } from "../panels/Toaster";
@@ -218,7 +219,20 @@ export function Shell() {
 				</div>
 			)}
 			<Toaster />
-			<OnboardingSimulation />
+			<OnboardingSimulation
+				renderCreateDialog={({ onCreate, onClose }) => (
+					<NewWorkspaceDialog
+						open
+						preview
+						projectId="onboarding-demo"
+						onOpenChange={(next) => {
+							if (!next) onClose();
+						}}
+						onCreated={() => {}}
+						onPreviewCreate={onCreate}
+					/>
+				)}
+			/>
 		</div>
 	);
 }

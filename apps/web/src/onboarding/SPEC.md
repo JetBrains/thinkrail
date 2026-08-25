@@ -39,6 +39,14 @@ App" card); both flip one **view flag** (`store.demoOpen`, a top-level, non-pers
 - **Close demo** (`onboarding-close`, a quiet `Button variant="ghost"` in the card's top-right) is present
   throughout — intro included — and is the only explicit pre-completion exit. It only clears the mocked
   experience (`closeDemo`); it touches no real state. Coach marks themselves stay non-dismissible.
+- **Reusing the real Create-workspace dialog.** Step 2 renders the production `panels/NewWorkspaceDialog`
+  verbatim via a small **injected** `renderCreateDialog` render-prop (the shell composition root supplies
+  it — same inversion it uses for `SettingsDialog`'s Layout section — so `onboarding` never imports
+  `panels`, no cycle). The dialog runs in an **inert `preview` mode** (a new optional prop on the shared
+  component, default off): all its wire reads are skipped and submit is short-circuited to a
+  `onPreviewCreate` callback, so the exact real dialog UI is taught while **no** workspace/session/wire
+  work happens. Its coach uses a **viewport-scoped** spotlight (the dialog is a portaled modal), a pulse
+  ring on its Create button + a tooltip; every other step uses the card-scoped spotlight.
 - **Coach marks** reuse the tooltip + arrow treatment: a card-scoped **spotlight** dims everything inside
   the card except the current target with the `container-workspace-overlay` scrim (the workspace surface at
   the `veil` **50%** alpha step — a sanctioned color token, light enough to keep the interface legible;
@@ -62,14 +70,18 @@ App" card); both flip one **view flag** (`store.demoOpen`, a top-level, non-pers
    The demo card carries a soft **brand glow** — a blurred `bg-primary-soft` layer behind it (not
    `feedback-success`; onboarding emphasis, not a success state), extending slightly beyond the card
    without altering its background, border, or layout.
-2. **Create separate workspaces** — coach sits right of the left panel, arrow pointing back at the rail
-   `+`; two clicks create two fake workspaces (`Add search`, `Completed filter`), teaching the isolated
-   worktree-per-task model. No real worktrees.
-3. **Start the first agent** — switches into the first workspace's fake composer; **Insert** fills the
-   predetermined *"Add search functionality to the To Do app."*, **Send** shows a brief "Working…" then a
+2. **Create separate workspaces** — coach sits right of the left panel (arrow at the rail `+`); clicking
+   it opens the **real** `NewWorkspaceDialog` (see the preview seam below) and the coach re-points at that
+   dialog's **Create** button. Doing this twice yields two fake workspaces (`Add search`,
+   `Completed filter`), teaching the isolated worktree-per-task model on the real dialog UI. No real
+   worktrees are created.
+3. **Start the first agent** — switches into the first workspace's composer with the predetermined
+   *"Add search functionality to the To Do app."* **already prefilled** (no Insert button); the coach
+   highlights the existing **Send** button (pulsing primary ring). Send shows a brief "Working…" then a
    predetermined successful result (a `setTimeout`, no model call), using the existing chat treatment.
-4. **Run agents in parallel** — coach guides switching to the second workspace and sending *"Add a filter
-   for completed tasks."*; the first workspace's row shows it already **done** while the second works —
+4. **Run agents in parallel** — coach guides switching to the second workspace, whose composer is
+   **prefilled** with *"Add a filter for completed tasks."* (Send highlighted); the first workspace's row
+   shows it already **done** while the second works —
    the payoff that separate workspaces hold independent, concurrent sessions. A left-panel note reinforces
    that switching tabs never stops a session.
 
@@ -78,13 +90,14 @@ whole thing is local state, replaying (reopen) starts fresh at step 1.
 
 ## Boundary
 
-- **Public surface (barrel):** `OnboardingSimulation`, `OnboardingLauncher`, `useTargetRect` (anchor hook).
-  The store exposes `demoOpen` + `openDemo`/`closeDemo`.
+- **Public surface (barrel):** `OnboardingSimulation` (takes a `renderCreateDialog` render-prop),
+  `OnboardingLauncher`, `useTargetRect` (anchor hook). The store exposes `demoOpen` + `openDemo`/`closeDemo`.
 - **Allowed deps:** `store` (`demoOpen`/open/close), `components/ui` (`popover`, `button`), `constants`
   (`PRODUCT_NAME`), `lib`, `lucide-react`, React.
 - **Forbidden:** `panels`, `shell` internals, `server`/`shared`/`pi`, `transport` (the simulation makes no
-  network/wire calls). `panels` (`WelcomePanel` card, `ProjectTree` footer launcher) call `openDemo` — a
-  one-way panels→onboarding edge, no cycle.
+  network/wire calls). It reuses the real `NewWorkspaceDialog` **without importing `panels`** — the shell
+  injects it through `renderCreateDialog`. `panels` (`WelcomePanel` card, `ProjectTree` footer launcher)
+  call `openDemo` — a one-way panels→onboarding edge, no cycle.
 
 ## Dormant (retained, not wired)
 

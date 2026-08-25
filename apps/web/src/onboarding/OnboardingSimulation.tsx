@@ -39,62 +39,105 @@ const STEP_ORDER: Step[] = [
 type WsStatus = "idle" | "working" | "done";
 type Msg = { id: string; role: "user" | "assistant" | "working"; text?: string };
 
-const COACH: Record<
-	Exclude<Step, "intro" | "done">,
-	{ title: string; body: string; selector: string; side: "top" | "right"; task?: string }
-> = {
-	open: {
-		title: "Open a project",
-		body: "Choose a project folder from your computer.",
-		selector: '[data-sim="open-project"]',
-		side: "top",
-	},
-	picker: {
-		title: "Choose your project folder",
-		body: "Select the To Do App folder to open it in ThinkRail.",
-		selector: '[data-sim="folder"]',
-		side: "right",
-	},
-	"ws1-create": {
-		title: "Create a workspace",
-		body: "ThinkRail runs each task in its own isolated worktree and branch. Create one for the first task.",
-		selector: '[data-sim="rail-add"]',
-		side: "right",
-	},
-	"ws2-create": {
-		title: "Create a second workspace",
-		body: "Now create a second workspace so two tasks can run side by side, each on its own branch.",
-		selector: '[data-sim="rail-add"]',
-		side: "right",
-	},
-	agent1: {
-		title: "Start the first agent",
-		body: "Ask the agent to build the first feature, then send it.",
-		selector: '[data-sim="composer"]',
-		side: "top",
-		task: TASK_1,
-	},
-	"agent2-switch": {
-		title: "Switch to your second workspace",
-		body: "Your first agent keeps working independently — switch over to start the next one.",
-		selector: '[data-sim="ws-1"]',
-		side: "right",
-	},
-	agent2: {
-		title: "Run a second agent in parallel",
-		body: "Start the second task here. Both agents now run at the same time, each in its own workspace.",
-		selector: '[data-sim="composer"]',
-		side: "top",
-		task: TASK_2,
-	},
+type CoachInfo = {
+	selector: string;
+	side: "top" | "right";
+	scope: "card" | "viewport";
+	title: string;
+	body: string;
 };
+
+function activeCoach(step: Step, dialogOpen: boolean): CoachInfo | null {
+	switch (step) {
+		case "open":
+			return {
+				selector: '[data-sim="open-project"]',
+				side: "top",
+				scope: "card",
+				title: "Open a project",
+				body: "Choose a project folder from your computer.",
+			};
+		case "picker":
+			return {
+				selector: '[data-sim="folder"]',
+				side: "right",
+				scope: "card",
+				title: "Choose your project folder",
+				body: "Select the To Do App folder to open it in ThinkRail.",
+			};
+		case "ws1-create":
+			return dialogOpen
+				? {
+						selector: '[data-testid="create-workspace"]',
+						side: "top",
+						scope: "viewport",
+						title: "Create the workspace",
+						body: "This cuts an isolated worktree on its own branch. Click Create.",
+					}
+				: {
+						selector: '[data-sim="rail-add"]',
+						side: "right",
+						scope: "card",
+						title: "Create a workspace",
+						body: "ThinkRail runs each task in its own isolated worktree and branch. Open the New workspace dialog.",
+					};
+		case "ws2-create":
+			return dialogOpen
+				? {
+						selector: '[data-testid="create-workspace"]',
+						side: "top",
+						scope: "viewport",
+						title: "Create the second workspace",
+						body: "One more isolated workspace for the second task. Click Create.",
+					}
+				: {
+						selector: '[data-sim="rail-add"]',
+						side: "right",
+						scope: "card",
+						title: "Create a second workspace",
+						body: "Add a second workspace so two tasks run side by side, each on its own branch.",
+					};
+		case "agent1":
+			return {
+				selector: '[data-sim="send"]',
+				side: "top",
+				scope: "card",
+				title: "Start the first agent",
+				body: "The prompt is ready — send it to the agent.",
+			};
+		case "agent2-switch":
+			return {
+				selector: '[data-sim="ws-1"]',
+				side: "right",
+				scope: "card",
+				title: "Switch to your second workspace",
+				body: "Your first agent keeps working — switch over to start the next one.",
+			};
+		case "agent2":
+			return {
+				selector: '[data-sim="send"]',
+				side: "top",
+				scope: "card",
+				title: "Run a second agent in parallel",
+				body: "Both agents run at the same time, each in its own workspace. Send to start.",
+			};
+		default:
+			return null;
+	}
+}
 
 const WS_NAMES = ["Add search", "Completed filter"];
 
-export function OnboardingSimulation() {
+export type CreateDialogArgs = { onCreate: () => void; onClose: () => void };
+
+export function OnboardingSimulation({
+	renderCreateDialog,
+}: {
+	renderCreateDialog: (args: CreateDialogArgs) => ReactNode;
+}) {
 	const open = useAppStore((s) => s.demoOpen);
 	if (!open) return null;
-	return <Simulation />;
+	return <Simulation renderCreateDialog={renderCreateDialog} />;
 }
 
 function useElementRect(el: HTMLElement | null): DOMRect | null {
@@ -112,7 +155,11 @@ function useElementRect(el: HTMLElement | null): DOMRect | null {
 	return rect;
 }
 
-function Simulation() {
+function Simulation({
+	renderCreateDialog,
+}: {
+	renderCreateDialog: (args: CreateDialogArgs) => ReactNode;
+}) {
 	const closeDemo = useAppStore((s) => s.closeDemo);
 	const [cardEl, setCardEl] = useState<HTMLDivElement | null>(null);
 	const cardRect = useElementRect(cardEl);
@@ -123,20 +170,28 @@ function Simulation() {
 	const [drafts, setDrafts] = useState<Record<number, string>>({});
 	const [messages, setMessages] = useState<Record<number, Msg[]>>({});
 	const [status, setStatus] = useState<Record<number, WsStatus>>({});
+	const [dialogOpen, setDialogOpen] = useState(false);
 	const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
 	useEffect(() => () => timers.current.forEach(clearTimeout), []);
 
 	const projectOpen = step !== "intro" && step !== "open" && step !== "picker";
-	const coach = step === "intro" || step === "done" ? null : COACH[step];
+	const coach = activeCoach(step, dialogOpen);
 	const progress = STEP_ORDER.indexOf(step) / (STEP_ORDER.length - 1);
 
 	const onRailAdd = () => {
+		if (step === "ws1-create" || step === "ws2-create") setDialogOpen(true);
+	};
+
+	const onPreviewCreate = () => {
 		if (step === "ws1-create") {
 			setWorkspaces([WS_NAMES[0] as string]);
+			setDialogOpen(false);
 			setStep("ws2-create");
 		} else if (step === "ws2-create") {
 			setWorkspaces([WS_NAMES[0] as string, WS_NAMES[1] as string]);
 			setActiveWs(0);
+			setDrafts((d) => ({ ...d, 0: TASK_1 }));
+			setDialogOpen(false);
 			setStep("agent1");
 		}
 	};
@@ -144,12 +199,9 @@ function Simulation() {
 	const onWsClick = (index: number) => {
 		if (step === "agent2-switch" && index === 1) {
 			setActiveWs(1);
+			setDrafts((d) => ({ ...d, 1: TASK_2 }));
 			setStep("agent2");
 		}
-	};
-
-	const insertTask = () => {
-		if (coach?.task) setDrafts((d) => ({ ...d, [activeWs]: coach.task as string }));
 	};
 
 	const send = () => {
@@ -235,16 +287,26 @@ function Simulation() {
 				</div>
 
 				{step === "intro" ? <Intro onDone={startTour} /> : null}
-				{coach ? (
+				{coach?.scope === "card" ? (
 					<CardSpotlight
 						cardRect={cardRect}
 						selector={coach.selector}
 						side={coach.side}
 						title={coach.title}
 						body={coach.body}
-						{...(coach.task ? { onInsert: insertTask } : {})}
 					/>
 				) : null}
+				{coach?.scope === "viewport" ? (
+					<ViewportCoach
+						selector={coach.selector}
+						side={coach.side}
+						title={coach.title}
+						body={coach.body}
+					/>
+				) : null}
+				{dialogOpen
+					? renderCreateDialog({ onCreate: onPreviewCreate, onClose: () => setDialogOpen(false) })
+					: null}
 				{step === "done" ? <Completion onFinish={() => closeDemo()} /> : null}
 
 				<div className="pointer-events-none absolute inset-x-0 bottom-0 z-50 h-px">
@@ -477,6 +539,7 @@ function SimCenter({
 					/>
 					<Button
 						size="sm"
+						data-sim="send"
 						data-testid="sim-send"
 						disabled={!draft.trim() || status[activeWs] === "working"}
 						onClick={onSend}
@@ -504,14 +567,12 @@ function CardSpotlight({
 	side,
 	title,
 	body,
-	onInsert,
 }: {
 	cardRect: DOMRect | null;
 	selector: string;
 	side: "top" | "right";
 	title: string;
 	body: string;
-	onInsert?: () => void;
 }) {
 	const rect = useTargetRect(selector);
 	if (!rect || !cardRect) return null;
@@ -567,22 +628,55 @@ function CardSpotlight({
 				>
 					<p className="tr-title-card text-text-default">{title}</p>
 					<p className="mt-xs text-text-muted tr-text-metadata leading-snug">{body}</p>
-					{onInsert ? (
-						<div className="mt-md flex justify-end">
-							<Button
-								variant="outline"
-								size="sm"
-								data-testid="onboarding-insert-prompt"
-								onClick={onInsert}
-							>
-								Insert prompt
-							</Button>
-						</div>
-					) : null}
 					<PopoverArrow />
 				</PopoverContent>
 			</Popover>
 		</div>
+	);
+}
+
+function ViewportCoach({
+	selector,
+	side,
+	title,
+	body,
+}: {
+	selector: string;
+	side: "top" | "right";
+	title: string;
+	body: string;
+}) {
+	const rect = useTargetRect(selector);
+	if (!rect) return null;
+	const box = { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
+	return (
+		<>
+			<div
+				aria-hidden
+				data-testid="onboarding-target-glow"
+				className="pointer-events-none fixed z-[60] rounded-[var(--radius-sm)] ring-2 ring-primary motion-safe:animate-pulse"
+				style={box}
+			/>
+			<Popover open>
+				<PopoverAnchor asChild>
+					<div aria-hidden className="pointer-events-none fixed" style={box} />
+				</PopoverAnchor>
+				<PopoverContent
+					data-testid="onboarding-coach"
+					side={side}
+					align="center"
+					className="z-[60] w-[260px] p-md"
+					onOpenAutoFocus={(event) => event.preventDefault()}
+					onEscapeKeyDown={(event) => event.preventDefault()}
+					onPointerDownOutside={(event) => event.preventDefault()}
+					onInteractOutside={(event) => event.preventDefault()}
+				>
+					<p className="tr-title-card text-text-default">{title}</p>
+					<p className="mt-xs text-text-muted tr-text-metadata leading-snug">{body}</p>
+					<PopoverArrow />
+				</PopoverContent>
+			</Popover>
+		</>
 	);
 }
 
