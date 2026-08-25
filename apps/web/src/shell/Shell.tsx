@@ -1,8 +1,8 @@
 import {
-	RiArrowRightSFill as ChevronRight,
-	RiCircleFill as Circle,
-	RiGitBranchFill as GitBranch,
-	RiSettings3Fill as Settings,
+	RiArrowRightSLine as ChevronRight,
+	RiCircleLine as Circle,
+	RiGitBranchLine as GitBranch,
+	RiSettings3Line as Settings,
 } from "@remixicon/react";
 import { useEffect, useRef } from "react";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "../components/ui/resizable";

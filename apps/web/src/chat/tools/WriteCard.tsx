@@ -1,4 +1,4 @@
-import { RiFileAddFill as FilePlus } from "@remixicon/react";
+import { RiFileAddLine as FilePlus } from "@remixicon/react";
 import { projectRelativePath } from "@/lib";
 import type { ToolRenderProps } from "../toolRegistry";
 import { CodeBlock } from "./CodeBlock";

@@ -1,8 +1,8 @@
 import {
-	RiFolderOpenFill as FolderOpen,
-	RiGitBranchFill as GitBranch,
-	RiLoader4Fill as Loader2,
-	RiRefreshFill as RefreshCw,
+	RiFolderOpenLine as FolderOpen,
+	RiGitBranchLine as GitBranch,
+	RiLoader4Line as Loader2,
+	RiRefreshLine as RefreshCw,
 } from "@remixicon/react";
 import type { ExistingWorktreeCandidate, Workspace } from "@thinkrail/contracts";
 import { useCallback, useEffect, useRef, useState } from "react";

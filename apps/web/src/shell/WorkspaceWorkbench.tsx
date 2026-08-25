@@ -1,7 +1,7 @@
 import {
-	RiGitBranchFill as GitBranch,
-	RiChatNewFill as MessageSquarePlus,
-	RiTerminalBoxFill as SquareTerminal,
+	RiGitBranchLine as GitBranch,
+	RiChatNewLine as MessageSquarePlus,
+	RiTerminalBoxLine as SquareTerminal,
 } from "@remixicon/react";
 import type {
 	LayoutCenterTab,

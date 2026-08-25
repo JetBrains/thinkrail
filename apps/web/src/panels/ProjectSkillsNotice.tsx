@@ -1,4 +1,4 @@
-import { RiShieldCheckFill as ShieldCheck, RiAlertFill as TriangleAlert } from "@remixicon/react";
+import { RiShieldCheckLine as ShieldCheck, RiAlertLine as TriangleAlert } from "@remixicon/react";
 import type { Project } from "@thinkrail/contracts";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";

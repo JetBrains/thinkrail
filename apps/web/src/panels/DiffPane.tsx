@@ -1,6 +1,6 @@
 import {
-	RiCheckFill as Check,
-	RiFileCopyFill as Copy,
+	RiCheckLine as Check,
+	RiFileCopyLine as Copy,
 	RiParagraph as Pilcrow,
 } from "@remixicon/react";
 import { lazy, Suspense, useState } from "react";

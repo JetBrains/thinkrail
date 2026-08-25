@@ -1,14 +1,14 @@
 import {
-	RiBookOpenFill as BookOpen,
-	RiArrowDownSFill as ChevronDown,
-	RiArrowRightSFill as ChevronRight,
-	RiTimeFill as Clock,
-	RiFileList2Fill as FileDiff,
-	RiFileTextFill as FileText,
-	RiContractUpDownFill as FoldVertical,
-	RiLoopRightFill as RotateCw,
-	RiAlertFill as TriangleAlert,
-	RiToolsFill as Wrench,
+	RiBookOpenLine as BookOpen,
+	RiArrowDownSLine as ChevronDown,
+	RiArrowRightSLine as ChevronRight,
+	RiTimeLine as Clock,
+	RiFileList2Line as FileDiff,
+	RiFileTextLine as FileText,
+	RiContractUpDownLine as FoldVertical,
+	RiLoopRightLine as RotateCw,
+	RiAlertLine as TriangleAlert,
+	RiToolsLine as Wrench,
 } from "@remixicon/react";
 import type { ImageContent, UserMessage } from "@thinkrail/contracts";
 import { useEffect, useState } from "react";

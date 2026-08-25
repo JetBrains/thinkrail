@@ -1,7 +1,7 @@
 import {
-	RiPuzzleFill as Puzzle,
-	RiRefreshFill as RefreshCw,
-	RiShieldCheckFill as ShieldCheck,
+	RiPuzzleLine as Puzzle,
+	RiRefreshLine as RefreshCw,
+	RiShieldCheckLine as ShieldCheck,
 } from "@remixicon/react";
 import type { Project, SkillCatalogEntry, SkillDecision, Workspace } from "@thinkrail/contracts";
 import { useCallback, useEffect, useState } from "react";

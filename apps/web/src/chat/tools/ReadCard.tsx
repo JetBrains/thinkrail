@@ -1,4 +1,4 @@
-import { RiFileTextFill as FileText } from "@remixicon/react";
+import { RiFileTextLine as FileText } from "@remixicon/react";
 import { projectRelativePath } from "@/lib";
 import type { ToolRenderProps } from "../toolRegistry";
 import { CodeBlock } from "./CodeBlock";

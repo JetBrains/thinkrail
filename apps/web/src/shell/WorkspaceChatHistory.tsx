@@ -1,7 +1,7 @@
 import {
-	RiHistoryFill as History,
-	RiArrowGoBackFill as RotateCcw,
-	RiDeleteBin6Fill as Trash2,
+	RiHistoryLine as History,
+	RiArrowGoBackLine as RotateCcw,
+	RiDeleteBin6Line as Trash2,
 } from "@remixicon/react";
 import {
 	DropdownMenu,

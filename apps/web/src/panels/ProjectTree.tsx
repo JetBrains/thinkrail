@@ -1,16 +1,20 @@
 import {
-	RiArrowDownSFill as ChevronDown,
-	RiArrowRightSFill as ChevronRight,
-	RiFileCopyFill as Copy,
-	RiExternalLinkFill as ExternalLink,
-	RiFolderFill as Folder,
-	RiFolderOpenFill as FolderOpen,
-	RiGitBranchFill as GitBranch,
-	RiHome2Fill as House,
-	RiMore2Fill as MoreVertical,
-	RiAddFill as Plus,
-	RiDeleteBin6Fill as Trash2,
-	RiCloseFill as X,
+	RiArrowDownSLine as ChevronDown,
+	RiArrowRightSLine as ChevronRight,
+	RiFileCopyLine as Copy,
+	RiExternalLinkLine as ExternalLink,
+	RiFolderOpenLine as FolderOpen,
+	RiGitBranchLine as GitBranch,
+	RiHome2Line as House,
+	RiMore2Line as MoreVertical,
+	RiAddLine as Plus,
+	RiFolderFill,
+	RiFolderLine,
+	RiFolderOpenFill,
+	RiGitBranchFill,
+	RiHome2Fill,
+	RiDeleteBin6Line as Trash2,
+	RiCloseLine as X,
 } from "@remixicon/react";
 import type { EditorInfo, Project, Workspace } from "@thinkrail/contracts";
 import { type MouseEvent, useCallback, useEffect, useRef, useState } from "react";
@@ -334,6 +338,7 @@ function ProjectRow({
 	onRestoreFocus: () => void;
 }) {
 	const Chevron = isExpanded ? ChevronDown : ChevronRight;
+	const Folder = isSelected ? RiFolderFill : RiFolderLine;
 	const [menuOpen, setMenuOpen] = useState(false);
 	const [confirmOpen, setConfirmOpen] = useState(false);
 	const openingDialogRef = useRef(false);
@@ -498,7 +503,17 @@ function WorkspaceRow({
 }) {
 	const isDefault = isDefaultWorkspace(workspace);
 	const isExternal = isExternalWorkspace(workspace);
-	const Icon = isDefault ? House : isExternal ? FolderOpen : GitBranch;
+	const Icon = isActive
+		? isDefault
+			? RiHome2Fill
+			: isExternal
+				? RiFolderOpenFill
+				: RiGitBranchFill
+		: isDefault
+			? House
+			: isExternal
+				? FolderOpen
+				: GitBranch;
 	const isTwoLine = workspace.branch !== workspace.name;
 	const [menuOpen, setMenuOpen] = useState(false);
 	const openMenuFromContext = (event: MouseEvent) => {

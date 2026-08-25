@@ -1,4 +1,4 @@
-import { RiAlertFill as TriangleAlert } from "@remixicon/react";
+import { RiAlertLine as TriangleAlert } from "@remixicon/react";
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useAppStore } from "@/store";

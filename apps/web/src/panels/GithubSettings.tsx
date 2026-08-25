@@ -1,7 +1,7 @@
 import {
-	RiCheckFill as Check,
-	RiRefreshFill as RefreshCw,
-	RiCloseFill as X,
+	RiCheckLine as Check,
+	RiRefreshLine as RefreshCw,
+	RiCloseLine as X,
 } from "@remixicon/react";
 import type { GithubAuthStatus } from "@thinkrail/contracts";
 import { useEffect, useState } from "react";

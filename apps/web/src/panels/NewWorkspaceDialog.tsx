@@ -1,11 +1,11 @@
 import {
-	RiBox3Fill as Box,
-	RiArrowDownSFill as ChevronDown,
-	RiGitBranchFill as GitBranch,
-	RiHome2Fill as House,
+	RiBox3Line as Box,
+	RiArrowDownSLine as ChevronDown,
+	RiGitBranchLine as GitBranch,
+	RiHome2Line as House,
 	type RemixiconComponentType as LucideIcon,
-	RiSparkling2Fill as Sparkles,
-	RiAlertFill as TriangleAlert,
+	RiSparkling2Line as Sparkles,
+	RiAlertLine as TriangleAlert,
 } from "@remixicon/react";
 import type { SlashCommandInfo, ThinkingLevel, WireModel, Workspace } from "@thinkrail/contracts";
 import { useCallback, useEffect, useId, useRef, useState } from "react";

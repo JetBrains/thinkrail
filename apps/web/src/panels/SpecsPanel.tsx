@@ -1,13 +1,18 @@
 import {
-	RiBookOpenFill as BookOpen,
-	RiBox3Fill as Box,
-	RiStackFill as Boxes,
-	RiArrowDownSFill as ChevronDown,
-	RiArrowRightSFill as ChevronRight,
-	RiFileTextFill as FileText,
+	RiBookOpenLine as BookOpen,
+	RiBox3Line as Box,
+	RiStackLine as Boxes,
+	RiArrowDownSLine as ChevronDown,
+	RiArrowRightSLine as ChevronRight,
+	RiFileTextLine as FileText,
 	RiListCheck3 as ListChecks,
-	RiShareFill as Network,
-	RiRefreshFill as RefreshCw,
+	RiShareLine as Network,
+	RiRefreshLine as RefreshCw,
+	RiBookOpenFill,
+	RiBox3Fill,
+	RiFileTextFill,
+	RiShareFill,
+	RiStackFill,
 } from "@remixicon/react";
 import { useEffect, useMemo, useState } from "react";
 import { cn } from "../lib";
@@ -86,20 +91,20 @@ export function SpecsPanel({
 	);
 }
 
-function specRoleIcon(type: string) {
+function specRoleIcon(type: string, filled: boolean) {
 	switch (type) {
 		case "goal-and-requirements":
-			return BookOpen;
+			return filled ? RiBookOpenFill : BookOpen;
 		case "architecture-design":
-			return Network;
+			return filled ? RiShareFill : Network;
 		case "module-design":
-			return Box;
+			return filled ? RiBox3Fill : Box;
 		case "submodule-design":
-			return Boxes;
+			return filled ? RiStackFill : Boxes;
 		case "task-spec":
 			return ListChecks;
 		default:
-			return FileText;
+			return filled ? RiFileTextFill : FileText;
 	}
 }
 
@@ -120,7 +125,7 @@ function SpecNodeRow({
 	const isMainSpec = depth === 0 && node.type === "goal-and-requirements";
 	const role = specRoleLabel(node.type);
 	const trailingRole = isMainSpec ? "Main spec" : specRoleTag(node.type);
-	const DocumentIcon = specRoleIcon(node.type);
+	const DocumentIcon = specRoleIcon(node.type, isActive || isMainSpec);
 	const Chevron = expanded ? ChevronDown : ChevronRight;
 
 	return (

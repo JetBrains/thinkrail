@@ -1,14 +1,14 @@
 import {
-	RiArrowRightUpFill as ArrowUpRight,
-	RiBracesFill as Braces,
-	RiClipboardFill as ClipboardPaste,
-	RiCommandFill as Command,
-	RiFileCopyFill as Copy,
-	RiEyeFill as Eye,
+	RiArrowRightUpLine as ArrowUpRight,
+	RiBracesLine as Braces,
+	RiClipboardLine as ClipboardPaste,
+	RiCommandLine as Command,
+	RiFileCopyLine as Copy,
+	RiEyeLine as Eye,
 	RiLinkM as Link2,
 	type RemixiconComponentType as LucideIcon,
-	RiChatNewFill as MessageSquarePlus,
-	RiScissorsFill as Scissors,
+	RiChatNewLine as MessageSquarePlus,
+	RiScissorsLine as Scissors,
 } from "@remixicon/react";
 import type * as monaco from "monaco-editor";
 import { createElement } from "react";

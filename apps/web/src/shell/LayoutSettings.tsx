@@ -1,10 +1,10 @@
 import {
-	RiCheckFill as Check,
-	RiLayoutTop2Fill as LayoutPanelTop,
-	RiPencilFill as Pencil,
-	RiAddFill as Plus,
-	RiDeleteBin6Fill as Trash2,
-	RiCloseFill as X,
+	RiCheckLine as Check,
+	RiLayoutTop2Line as LayoutPanelTop,
+	RiPencilLine as Pencil,
+	RiAddLine as Plus,
+	RiDeleteBin6Line as Trash2,
+	RiCloseLine as X,
 } from "@remixicon/react";
 import {
 	DEFAULT_CONFIG,

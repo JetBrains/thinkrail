@@ -1,8 +1,8 @@
 import {
-	RiCheckFill as Check,
-	RiArrowDownSFill as ChevronDown,
-	RiGitBranchFill as GitBranch,
-	RiRefreshFill as RefreshCw,
+	RiCheckLine as Check,
+	RiArrowDownSLine as ChevronDown,
+	RiGitBranchLine as GitBranch,
+	RiRefreshLine as RefreshCw,
 } from "@remixicon/react";
 import type { BranchList } from "@thinkrail/contracts";
 import { type ReactNode, useState } from "react";

@@ -1,4 +1,4 @@
-import { RiCheckFill as Check, RiCloseFill as X } from "@remixicon/react";
+import { RiCheckLine as Check, RiCloseLine as X } from "@remixicon/react";
 import type { ToolRenderProps } from "../../toolRegistry";
 import { strArg } from "../toolHelpers";
 import { parseComparisonOptions } from "./args";

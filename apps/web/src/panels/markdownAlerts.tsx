@@ -1,10 +1,10 @@
 import {
-	RiErrorWarningFill as CircleAlert,
-	RiInformationFill as Info,
-	RiLightbulbFill as Lightbulb,
-	RiAlarmWarningFill as OctagonAlert,
+	RiErrorWarningLine as CircleAlert,
+	RiInformationLine as Info,
+	RiLightbulbLine as Lightbulb,
+	RiAlarmWarningLine as OctagonAlert,
 	type RemixiconComponentType,
-	RiAlertFill as TriangleAlert,
+	RiAlertLine as TriangleAlert,
 } from "@remixicon/react";
 import type { ReactNode } from "react";
 import type { Components } from "react-markdown";

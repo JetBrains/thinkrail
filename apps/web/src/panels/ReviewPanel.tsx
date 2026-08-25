@@ -1,11 +1,11 @@
 import {
-	RiCheckboxCircleFill as CheckCircle2,
-	RiArrowDownSFill as ChevronDown,
-	RiArrowRightSFill as ChevronRight,
-	RiFileTextFill as FileText,
-	RiChat1Fill as MessageSquare,
-	RiSendPlaneFill as Send,
-	RiDeleteBin6Fill as Trash2,
+	RiCheckboxCircleLine as CheckCircle2,
+	RiArrowDownSLine as ChevronDown,
+	RiArrowRightSLine as ChevronRight,
+	RiFileTextLine as FileText,
+	RiChat1Line as MessageSquare,
+	RiSendPlaneLine as Send,
+	RiDeleteBin6Line as Trash2,
 } from "@remixicon/react";
 import type { ReviewComment } from "@thinkrail/contracts";
 import { useState } from "react";

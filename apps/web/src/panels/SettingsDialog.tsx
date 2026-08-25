@@ -1,13 +1,13 @@
 import {
-	RiGitBranchFill as GitBranch,
-	RiKey2Fill as KeyRound,
-	RiLayoutTop2Fill as LayoutPanelTop,
-	RiLayoutGridFill as LayoutTemplate,
+	RiGitBranchLine as GitBranch,
+	RiKey2Line as KeyRound,
+	RiLayoutTop2Line as LayoutPanelTop,
+	RiLayoutGridLine as LayoutTemplate,
 	type RemixiconComponentType as LucideIcon,
-	RiPaletteFill as Palette,
-	RiShieldCheckFill as ShieldCheck,
-	RiEqualizerFill as SlidersHorizontal,
-	RiTerminalBoxFill as SquareTerminal,
+	RiPaletteLine as Palette,
+	RiShieldCheckLine as ShieldCheck,
+	RiEqualizerLine as SlidersHorizontal,
+	RiTerminalBoxLine as SquareTerminal,
 } from "@remixicon/react";
 import type { ReactNode } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";

@@ -1,9 +1,9 @@
 import {
-	RiFolderOpenFill as FolderOpen,
-	RiHome2Fill as House,
+	RiFolderOpenLine as FolderOpen,
+	RiHome2Line as House,
 	type RemixiconComponentType as LucideIcon,
-	RiRocketFill as Rocket,
-	RiSparkling2Fill as Sparkles,
+	RiRocketLine as Rocket,
+	RiSparkling2Line as Sparkles,
 } from "@remixicon/react";
 import type { Workspace } from "@thinkrail/contracts";
 import { type ComponentPropsWithoutRef, forwardRef, useEffect, useState } from "react";

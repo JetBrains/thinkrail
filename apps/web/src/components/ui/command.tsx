@@ -1,4 +1,4 @@
-import { RiSearchFill as Search } from "@remixicon/react";
+import { RiSearchLine as Search } from "@remixicon/react";
 import { Command as CommandPrimitive } from "cmdk";
 import type * as React from "react";
 import { cn } from "@/lib";

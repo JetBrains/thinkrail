@@ -1,10 +1,10 @@
 import {
-	RiCheckFill as Check,
-	RiRecordCircleFill as CircleDot,
+	RiCheckLine as Check,
+	RiRecordCircleLine as CircleDot,
 	RiListCheck3 as ListChecks,
-	RiQuestionnaireFill as MessageCircleQuestion,
-	RiPencilFill as Pencil,
-	RiSkipForwardFill as SkipForward,
+	RiQuestionnaireLine as MessageCircleQuestion,
+	RiPencilLine as Pencil,
+	RiSkipForwardLine as SkipForward,
 } from "@remixicon/react";
 import type {
 	AskUserQuestionAnswer,

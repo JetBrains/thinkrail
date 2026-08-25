@@ -1,8 +1,8 @@
 import {
-	RiCheckFill as Check,
-	RiArrowDownSFill as ChevronDown,
-	RiGitCommitFill as GitCommitHorizontal,
-	RiGitPullRequestFill as GitCompare,
+	RiCheckLine as Check,
+	RiArrowDownSLine as ChevronDown,
+	RiGitCommitLine as GitCommitHorizontal,
+	RiGitPullRequestLine as GitCompare,
 } from "@remixicon/react";
 import type { GitCommit, GitDiffScope } from "@thinkrail/contracts";
 import { useRef, useState } from "react";

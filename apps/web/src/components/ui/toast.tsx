@@ -1,5 +1,5 @@
 import * as ToastPrimitive from "@radix-ui/react-toast";
-import { RiCloseFill as X } from "@remixicon/react";
+import { RiCloseLine as X } from "@remixicon/react";
 import { cva, type VariantProps } from "class-variance-authority";
 import type * as React from "react";
 import { cn } from "@/lib";

@@ -1,4 +1,4 @@
-import { RiFolderFill as Folder, RiGlobalFill as Globe } from "@remixicon/react";
+import { RiFolderLine as Folder, RiGlobalLine as Globe } from "@remixicon/react";
 import type { Project } from "@thinkrail/contracts";
 import type { ReactNode } from "react";
 import {

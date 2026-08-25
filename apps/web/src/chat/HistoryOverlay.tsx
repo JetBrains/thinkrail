@@ -1,8 +1,8 @@
 import {
-	RiCheckFill as Check,
-	RiCornerUpRightFill as CornerUpRight,
-	RiSaveFill as Save,
-	RiDeleteBin6Fill as Trash2,
+	RiCheckLine as Check,
+	RiCornerUpRightLine as CornerUpRight,
+	RiSaveLine as Save,
+	RiDeleteBin6Line as Trash2,
 } from "@remixicon/react";
 import type { HistoryScope, MessageHit, PromptHit } from "@thinkrail/contracts";
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";

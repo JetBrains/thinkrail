@@ -1,4 +1,4 @@
-import { RiPencilFill as Pencil } from "@remixicon/react";
+import { RiPencilLine as Pencil } from "@remixicon/react";
 import { projectRelativePath } from "@/lib";
 import type { ToolRenderProps } from "../toolRegistry";
 import { Collapsible } from "./Collapsible";

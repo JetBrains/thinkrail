@@ -1,12 +1,12 @@
 import {
-	RiArrowUpFill as ArrowUp,
-	RiArrowUpSFill as ChevronUp,
-	RiFileFill as FileIcon,
-	RiFolderFill as FolderIcon,
-	RiHistoryFill as History,
-	RiSparkling2Fill as Sparkles,
-	RiStopFill as Square,
-	RiCloseFill as X,
+	RiArrowUpLine as ArrowUp,
+	RiArrowUpSLine as ChevronUp,
+	RiFileLine as FileIcon,
+	RiFolderLine as FolderIcon,
+	RiHistoryLine as History,
+	RiSparkling2Line as Sparkles,
+	RiStopLine as Square,
+	RiCloseLine as X,
 } from "@remixicon/react";
 import {
 	REQUEST_IMAGE_BASE64_BUDGET,

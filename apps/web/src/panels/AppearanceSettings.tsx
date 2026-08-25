@@ -1,4 +1,4 @@
-import { RiCheckFill as Check } from "@remixicon/react";
+import { RiCheckLine as Check } from "@remixicon/react";
 import type { ThemeId } from "@thinkrail/contracts";
 import { cn } from "@/lib";
 import { toast, useAppStore } from "@/store";

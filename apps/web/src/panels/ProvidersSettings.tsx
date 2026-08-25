@@ -1,11 +1,11 @@
 import {
-	RiStackFill as Boxes,
-	RiCheckFill as Check,
-	RiKey2Fill as KeyRound,
-	RiLockFill as Lock,
-	RiLoginBoxFill as LogIn,
-	RiLogoutBoxFill as LogOut,
-	RiRefreshFill as RefreshCw,
+	RiStackLine as Boxes,
+	RiCheckLine as Check,
+	RiKey2Line as KeyRound,
+	RiLockLine as Lock,
+	RiLoginBoxLine as LogIn,
+	RiLogoutBoxLine as LogOut,
+	RiRefreshLine as RefreshCw,
 } from "@remixicon/react";
 import type { ProviderAuthKind, ProviderStatus, ProviderStatusReport } from "@thinkrail/contracts";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";

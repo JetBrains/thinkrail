@@ -1,8 +1,8 @@
 import {
-	RiCheckFill as Check,
-	RiArrowRightSFill as ChevronRight,
-	RiLoader4Fill as Loader2,
-	RiCloseFill as X,
+	RiCheckLine as Check,
+	RiArrowRightSLine as ChevronRight,
+	RiLoader4Line as Loader2,
+	RiCloseLine as X,
 } from "@remixicon/react";
 import { cn } from "@/lib";
 import { useFold } from "./foldState";

@@ -1,8 +1,8 @@
 import {
-	RiCheckFill as Check,
-	RiExternalLinkFill as ExternalLink,
-	RiLoader4Fill as Loader2,
-	RiAlertFill as TriangleAlert,
+	RiCheckLine as Check,
+	RiExternalLinkLine as ExternalLink,
+	RiLoader4Line as Loader2,
+	RiAlertLine as TriangleAlert,
 } from "@remixicon/react";
 import { useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";

@@ -1,4 +1,4 @@
-import { RiAddFill as Plus } from "@remixicon/react";
+import { RiAddLine as Plus } from "@remixicon/react";
 import type { TerminalTabsPush } from "@thinkrail/contracts";
 import { WS_CHANNELS } from "@thinkrail/contracts";
 import { lazy, type ReactNode, Suspense, useCallback, useEffect, useRef, useState } from "react";

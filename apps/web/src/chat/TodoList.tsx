@@ -1,15 +1,15 @@
 import {
-	RiCheckFill as Check,
-	RiArrowDownSFill as ChevronDown,
-	RiArrowRightSFill as ChevronRight,
-	RiCircleFill as Circle,
-	RiRecordCircleFill as CircleDot,
-	RiPauseCircleFill as CirclePause,
-	RiFileTextFill as FileText,
-	RiQuestionnaireFill as MessageCircleQuestion,
-	RiAddFill as Plus,
-	RiDeleteBin6Fill as Trash2,
-	RiUser3Fill as UserRound,
+	RiCheckLine as Check,
+	RiArrowDownSLine as ChevronDown,
+	RiArrowRightSLine as ChevronRight,
+	RiCircleLine as Circle,
+	RiRecordCircleLine as CircleDot,
+	RiPauseCircleLine as CirclePause,
+	RiFileTextLine as FileText,
+	RiQuestionnaireLine as MessageCircleQuestion,
+	RiAddLine as Plus,
+	RiDeleteBin6Line as Trash2,
+	RiUser3Line as UserRound,
 } from "@remixicon/react";
 import type { TodoGroupItem, TodoItem, TodoPlan, TodoStatus } from "@thinkrail/contracts";
 import { useState } from "react";

@@ -1,7 +1,7 @@
 import {
-	RiArrowDownSFill as ChevronDown,
-	RiFileCopyFill as Copy,
-	RiFileList2Fill as FileDiff,
+	RiArrowDownSLine as ChevronDown,
+	RiFileCopyLine as Copy,
+	RiFileList2Line as FileDiff,
 } from "@remixicon/react";
 import type { MouseEvent, ReactNode } from "react";
 import { useState } from "react";

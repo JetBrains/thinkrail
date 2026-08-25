@@ -1,4 +1,4 @@
-import { RiArrowDownFill as ArrowDown } from "@remixicon/react";
+import { RiArrowDownLine as ArrowDown } from "@remixicon/react";
 import type {
 	AskUserQuestionResult,
 	PromptHit,

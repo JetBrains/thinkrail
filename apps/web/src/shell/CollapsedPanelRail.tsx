@@ -1,6 +1,6 @@
 import {
-	RiLayoutLeftFill as PanelLeftOpen,
-	RiLayoutRightFill as PanelRightOpen,
+	RiLayoutLeftLine as PanelLeftOpen,
+	RiLayoutRightLine as PanelRightOpen,
 } from "@remixicon/react";
 import { forwardRef } from "react";
 import { cn, platformShortcutLabel } from "../lib";

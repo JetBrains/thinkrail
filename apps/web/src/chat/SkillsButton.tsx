@@ -1,4 +1,4 @@
-import { RiBookOpenFill as BookOpen } from "@remixicon/react";
+import { RiBookOpenLine as BookOpen } from "@remixicon/react";
 import { cn } from "@/lib/utils";
 
 export function SkillsButton({

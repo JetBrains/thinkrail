@@ -1,9 +1,9 @@
 import {
-	RiArrowDownSFill as ChevronDown,
-	RiArrowRightSFill as ChevronRight,
-	RiFileCopyFill as Copy,
-	RiDownloadFill as Download,
-	RiGitCommitFill as GitCommitHorizontal,
+	RiArrowDownSLine as ChevronDown,
+	RiArrowRightSLine as ChevronRight,
+	RiFileCopyLine as Copy,
+	RiDownloadLine as Download,
+	RiGitCommitLine as GitCommitHorizontal,
 } from "@remixicon/react";
 import type { GitFileChange, TodoGroupItem, TodoItem } from "@thinkrail/contracts";
 import { useState } from "react";

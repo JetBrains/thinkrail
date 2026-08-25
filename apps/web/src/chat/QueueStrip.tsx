@@ -1,4 +1,4 @@
-import { RiPencilFill as Pencil, RiCloseFill as X } from "@remixicon/react";
+import { RiPencilLine as Pencil, RiCloseLine as X } from "@remixicon/react";
 import type { QueueLane, SessionQueueState } from "@thinkrail/contracts";
 
 export function QueueStrip({

@@ -1,7 +1,7 @@
 import {
-	RiCheckFill as Check,
-	RiArrowDownSFill as ChevronDown,
-	RiRefreshFill as RefreshCw,
+	RiCheckLine as Check,
+	RiArrowDownSLine as ChevronDown,
+	RiRefreshLine as RefreshCw,
 } from "@remixicon/react";
 import type { WireModel } from "@thinkrail/contracts";
 import { useState } from "react";

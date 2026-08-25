@@ -12,22 +12,26 @@ import {
 	useSensors,
 } from "@dnd-kit/core";
 import {
+	RiArrowDownSLine as ChevronDown,
+	RiArrowLeftSLine as ChevronLeft,
 	RiCheckFill as Check,
-	RiArrowDownSFill as ChevronDown,
-	RiArrowLeftSFill as ChevronLeft,
-	RiArrowRightSFill as ChevronRight,
-	RiFileFill as File,
-	RiGitPullRequestFill as GitCompareArrows,
+	RiFileLine as File,
+	RiGitPullRequestLine as GitCompareArrows,
 	RiListCheck3 as ListTodo,
-	RiChat1Fill as MessageSquare,
-	RiChatNewFill as MessageSquarePlus,
-	RiMoreFill as MoreHorizontal,
-	RiLayoutBottomFill as PanelBottomOpen,
-	RiLayoutLeftFill as PanelLeftOpen,
-	RiLayoutRightFill as PanelRightOpen,
-	RiLayout2Fill as PanelsTopLeft,
-	RiTerminalBoxFill as SquareTerminal,
-	RiCloseFill as X,
+	RiChat1Line as MessageSquare,
+	RiChatNewLine as MessageSquarePlus,
+	RiMoreLine as MoreHorizontal,
+	RiLayoutBottomLine as PanelBottomOpen,
+	RiLayoutLeftLine as PanelLeftOpen,
+	RiLayoutRightLine as PanelRightOpen,
+	RiLayout2Line as PanelsTopLeft,
+	RiChat1Fill,
+	RiFileFill,
+	RiGitPullRequestFill,
+	RiLayout2Fill,
+	RiTerminalBoxFill,
+	RiTerminalBoxLine as SquareTerminal,
+	RiCloseLine as X,
 } from "@remixicon/react";
 import type {
 	LayoutAuxiliaryRegion,
@@ -377,20 +381,25 @@ function tabSearchKeywords(tab: LayoutTab): string[] {
 	}
 }
 
-function tabIcon(tab: LayoutTab): ReactNode {
+function tabIcon(tab: LayoutTab, active = false): ReactNode {
+	const cls = "size-3.5 shrink-0";
 	switch (tab.kind) {
 		case "file":
-			return <File className="size-3.5 shrink-0" />;
+			return active ? <RiFileFill className={cls} /> : <File className={cls} />;
 		case "diff":
-			return <GitCompareArrows className="size-3.5 shrink-0" />;
+			return active ? (
+				<RiGitPullRequestFill className={cls} />
+			) : (
+				<GitCompareArrows className={cls} />
+			);
 		case "chat":
-			return <MessageSquare className="size-3.5 shrink-0" />;
+			return active ? <RiChat1Fill className={cls} /> : <MessageSquare className={cls} />;
 		case "document":
-			return <ListTodo className="size-3.5 shrink-0" />;
+			return <ListTodo className={cls} />;
 		case "terminal":
-			return <SquareTerminal className="size-3.5 shrink-0" />;
+			return active ? <RiTerminalBoxFill className={cls} /> : <SquareTerminal className={cls} />;
 		case "tool":
-			return <PanelsTopLeft className="size-3.5 shrink-0" />;
+			return active ? <RiLayout2Fill className={cls} /> : <PanelsTopLeft className={cls} />;
 	}
 }
 
@@ -937,7 +946,7 @@ function WorkbenchTab({
 						onKeyDown={onKeyDown}
 						className={`flex min-w-0 flex-1 items-center gap-sm py-xs pl-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary ${tab.kind === "tool" ? "pr-sm" : ""}`}
 					>
-						{tabIcon(tab)}
+						{tabIcon(tab, active)}
 						<span className={`truncate ${preview ? "italic" : ""}`}>{name}</span>
 						{renderTabAdornment(tab)}
 					</button>

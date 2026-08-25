@@ -1,7 +1,7 @@
 import {
-	RiCheckFill as Check,
-	RiCircleFill as Circle,
-	RiRecordCircleFill as CircleDot,
+	RiCheckLine as Check,
+	RiCircleLine as Circle,
+	RiRecordCircleLine as CircleDot,
 } from "@remixicon/react";
 
 export function SectionLabel({ label }: { label: string }) {

@@ -1,4 +1,4 @@
-import { RiCheckFill as Check, RiArrowDownSFill as ChevronDown } from "@remixicon/react";
+import { RiCheckLine as Check, RiArrowDownSLine as ChevronDown } from "@remixicon/react";
 import type { ThinkingLevel } from "@thinkrail/contracts";
 import { useState } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";

@@ -1,9 +1,9 @@
 import {
-	RiFileTextFill as FileText,
-	RiPencilFill as Pencil,
-	RiAddFill as Plus,
-	RiSparkling2Fill as Sparkles,
-	RiDeleteBin6Fill as Trash2,
+	RiFileTextLine as FileText,
+	RiPencilLine as Pencil,
+	RiAddLine as Plus,
+	RiSparkling2Line as Sparkles,
+	RiDeleteBin6Line as Trash2,
 } from "@remixicon/react";
 import type { TemplateInfo, TemplateScope } from "@thinkrail/contracts";
 import { useEffect, useState } from "react";

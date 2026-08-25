@@ -1,8 +1,10 @@
 import {
-	RiArrowDownSFill as ChevronDown,
-	RiArrowRightSFill as ChevronRight,
-	RiFileFill as FileIcon,
-	RiFolderFill as Folder,
+	RiArrowDownSLine as ChevronDown,
+	RiArrowRightSLine as ChevronRight,
+	RiFileFill,
+	RiFileLine,
+	RiFolderFill,
+	RiFolderLine,
 } from "@remixicon/react";
 import type { MouseEvent, ReactNode } from "react";
 
@@ -34,6 +36,8 @@ export function TreeRow({
 	onContextMenu?: ((event: MouseEvent) => void) | undefined;
 }) {
 	const Chevron = expanded ? ChevronDown : ChevronRight;
+	const Folder = active ? RiFolderFill : RiFolderLine;
+	const FileIcon = active ? RiFileFill : RiFileLine;
 	return (
 		<button
 			type="button"
