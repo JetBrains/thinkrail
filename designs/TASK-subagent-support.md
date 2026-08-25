@@ -3,7 +3,7 @@ id: task-subagent-support
 type: task-spec
 status: draft
 title: Subagent support in ThinkRail — own-build design
-parent: submodule-server-agent
+parent: architecture
 references: [task-delegation-core]
 ---
 
@@ -13,7 +13,8 @@ references: [task-delegation-core]
 
 The agent in a chat tab delegates work to specialized child agents with isolated context windows:
 foreground delegation, parallel fan-out, background runs, a live delegation card, and an openable
-child transcript. Built as **the first consumer of the delegation core** ([[task-delegation-core]]
+child transcript. Shipped as **`packages/pi-subagents`, a portable pure-pi extension package**,
+and built as **the first consumer of the delegation core** ([[task-delegation-core]]
 — read that first; it owns creation, running, storage, lineage, waiting, and abort semantics).
 This spec owns only what is subagent-specific: the LLM-facing tools, agent definitions
 (discovery/precedence/trust), the definition → spawn mapping, and the web UI.
@@ -30,17 +31,23 @@ const outcome = await child.runQueued(task, { maxTurns, signal, onUpdate });  //
 criterion: subagents are the proof the framework is usable).
 
 **Why own-build (user decision, 2026-08):** third-party pi subagent extensions were surveyed
-twice and one adoption was attempted and rolled back; every community option assumes pi's
-single-session TUI CLI (subprocess spawning, process-wide registries/discovery, TUI management)
-and kept mismatching our multi-session embedded host, compiled binary, and web renderers. History:
+twice and one adoption was attempted and rolled back; the surveyed options kept mismatching our
+multi-session embedded host, compiled binary, and web renderers (subprocess spawning in some,
+process-wide registries/discovery, TUI management) — though the in-process spawn pattern two of
+them prove (pi SDK as peerDependency) is exactly what we now reuse (core decision #17). History:
 this file's git/scratch history; our per-session-discovery fix survives upstream as
 tintinweb/pi-subagents PR #223 (no longer a dependency).
 
 ## Settled decisions (user-aligned, 2026-08)
 
-1. **Host-owned bundled extension** — an extension factory in `packages/server/src/agent` (the
-   `ask_user_question` precedent), not a separate workspace package; extraction stays possible
-   (same posture as `chat-ui`).
+1. **Portable workspace package** — `packages/pi-subagents`, a pure-pi extension (pi SDK as a
+   `peerDependency`) consuming [[task-delegation-core]]'s `packages/pi-delegation`. ThinkRail's
+   server embeds the factory per session, handing it the host-bound `DelegationService`; under
+   vanilla pi the extension constructs the service with default bindings. It must **load and work
+   in pure pi** (default tool rendering; no pi-tui widget in V1). *Supersedes the original
+   "host-owned bundled extension" decision — reversed in the PR #261 review round (the package
+   boundary proposal, strengthened by the user's pure-pi requirement; research + rationale: core
+   decision log #17–21).*
 2. **Tool naming: Claude Code style** — `Agent` (spawn; models are trained on the convention) +
    `get_subagent_result` (collect detached results). `steer_subagent` deferred to V2.
 3. **V1 scope: foreground + parallel fan-out + background runs.**
@@ -75,8 +82,9 @@ tintinweb/pi-subagents PR #223 (no longer a dependency).
   `<worktree>/.pi/agents/*.md` + `<worktree>/.agents/agents/*.md`, first-name-wins in that order
   (decision 6).
 - **The mapping (policy, not mechanism).** definition → `session` options (pi-mirrored:
-  tools/model/thinking/systemPrompt/contextFiles/skills; `model:` fuzzy-resolved against
-  `settledAvailableModels`, default = parent's current model+thinking), + `info.roleName`/
+  tools/model/thinking/systemPrompt/contextFiles/skills; `model:` fuzzy-resolved against the
+  session's available models — the extension ctx's model registry, the same data ThinkRail's
+  `settledAvailableModels` serves — default = parent's current model+thinking), + `info.roleName`/
   `roleSource`, + `RunOptions.maxTurns`. Assembled system prompt = definition body + sub-agent
   guidance bridge + env block (stable material first, for KV-cache prefix reuse).
 - **Background completion delivery.** On an unawaited run's terminal event, inject a
@@ -139,15 +147,17 @@ healed by the existing generic `repairDanglingToolCalls`; no subagent-specific m
 ## V1 work plan
 
 0. **The delegation core lands first** ([[task-delegation-core]]). Everything below consumes it.
-1. Subagents layer in `packages/server/src/agent/`: definitions loader (precedence + trust), the
-   `Agent` + `get_subagent_result` tools via an extension factory; `DelegationRunDetails` in
-   `contracts`.
+1. `packages/pi-subagents`: definitions loader (precedence + trust), the `Agent` +
+   `get_subagent_result` tools via an extension factory taking the delegation service; the server
+   embeds it with the bound service; `DelegationRunDetails` mirrored into `contracts` (core
+   decision #20).
 2. Transcript read request in `contracts` + host handler (path via `deriveChildSessionFile`).
 3. Web: `AgentCard` (all statuses), `subagent-completion` card, child transcript view, linked from
    the card.
 4. Tests: definitions/precedence units + renderer units (no-agent); one `@agent` e2e spec
-   (foreground + parallel + background completion + transcript open). SPEC.md promotions: agent
-   module, chat tools, contracts.
+   (foreground + parallel + background completion + transcript open); the on-demand pure-pi smoke
+   (core acceptance #5). SPEC.md promotions: the two package SPECs, agent module (the embedder
+   binding), chat tools, contracts.
 
 ## Appendix — child-context research record (2026-08, source-verified)
 

@@ -3,7 +3,7 @@ id: task-delegation-core
 type: task-spec
 status: draft
 title: "Delegation core — session fabric: spawn, fork, lineage, extension points"
-parent: submodule-server-agent
+parent: architecture
 references: [task-subagent-support]
 ---
 
@@ -11,8 +11,12 @@ references: [task-subagent-support]
 
 ## Summary
 
-A `delegation` sub-module in `packages/server/src/agent/`: the framework for creating agent
-sessions *from* agent sessions. One creation primitive with orthogonal axes; a handle that owns
+`packages/pi-delegation` — a **portable, pure-pi workspace package**: the framework for creating
+agent sessions *from* agent sessions. Children run **in-process** via the pi SDK (a
+`peerDependency`; the loading runtime supplies it), and the layer must **work without ThinkRail,
+under vanilla pi** — ThinkRail's server is one *embedder*, binding a small set of host facts
+("Portability & embedding" below; superseded: the original placement as a `packages/server`
+sub-module — decision log #17). One creation primitive with orthogonal axes; a handle that owns
 the run loop; lineage, a run registry, and lifecycle events as extension points. **V1 implements
 exactly one axis combination — subagents ([[task-subagent-support]], the extensibility check);**
 every other combination is typed in the contract and rejected loudly until its consumer lands.
@@ -36,7 +40,9 @@ will be built (by us and, eventually, by the user for their own workflows):
 
 ## The contract
 
-Host-side types on the `delegation` barrel; `DelegationRunDetails` lives in `packages/contracts`.
+Types on the `pi-delegation` barrel. `DelegationRunDetails` is **mirrored** into
+`packages/contracts` (mirrored, never imported — the `pi-todos` DTO posture, decision #20), which
+keeps the package host-free and the `web → contracts`-only invariant intact.
 
 ```ts
 // ── The service (= the barrel) ───────────────────────────────────────
@@ -50,9 +56,10 @@ interface DelegationService {
 
 // ── Phase 1: creation — identity + shape, ZERO run concerns ──────────
 interface CreateChildSpec {
-  parent: string;                   // parent sessionId — workspaceId, cwd, and model/thinking
-                                    // defaults are DERIVED from the live parent (inconsistent
-                                    // triples unrepresentable; unknown parent → typed error)
+  parent: string;                   // parent sessionId — cwd and model/thinking defaults are
+                                    // DERIVED from the live parent, resolved via the embedder's
+                                    // parent binding (inconsistent triples unrepresentable;
+                                    // unknown parent → typed error)
   info: ChildInfo;                  // descriptive metadata — never behavior (type below)
   origin?: { kind: "fresh" }        // default
          | { kind: "fork"; sourceSessionId: string; entryId?: string }  // rejected in V1
@@ -128,7 +135,8 @@ interface RunOutcome {
 class DelegationError extends Error {
   code: "not-implemented"        // V1-rejected axis combination
       | "invalid-combination"    // permanently invalid (hidden+interactive; a run method on an interactive child)
-      | "unknown-parent"         // parent not live in the manager
+      | "unknown-parent"         // parent not resolvable via the embedder's parent binding
+                                 // (ThinkRail: the manager; pure pi: the extension's own session)
       | "already-running"        // one run at a time per child — steer instead
       | "disposed";
 }
@@ -141,7 +149,9 @@ type LifecycleEvent =
 
 // Lineage — the persisted edge (V1: derived from the storage layout, see "Storage & lineage")
 interface SpawnRecord {
-  sessionId: string; parentSessionId: string; workspaceId: string;
+  sessionId: string; parentSessionId: string;
+  scope: string;                    // storage partition key — bound by the embedder
+                                    // (ThinkRail: workspaceId; pure-pi default: "default")
   originKind: "fresh" | "fork" | "seeded"; entryId?: string;
   info: ChildInfo;
   interactive: boolean; visibility: "hidden" | "listed";
@@ -158,7 +168,8 @@ interface RunSnapshot {
   collected: boolean;               // a detached (unawaited) run's result was collected
 }
 
-// Wire/renderer contract (packages/contracts): server and web share this one type.
+// Wire/renderer contract — authored here, MIRRORED into packages/contracts (never imported;
+// decision #20): the package and the wire stay structurally identical, web reads the mirror.
 interface DelegationRunDetails {
   childSessionId: string;           // THE id on the wire
   roleName?: string; roleSource?: string;   // open — mirrors ChildInfo
@@ -172,8 +183,9 @@ interface DelegationRunDetails {
 }
 ```
 
-Also exported, pure: `deriveChildSessionFile(dataDir, workspaceId, parentSessionId,
-childSessionId)` — the transcript path without a live handle (post-restart reads).
+Also exported, pure: `deriveChildSessionFile(delegationRoot, scope, parentSessionId,
+childSessionId)` — the transcript path without a live handle (post-restart reads); root and scope
+are the embedder's bindings.
 
 ## Patterns = axis combinations
 
@@ -227,22 +239,24 @@ stateDiagram-v2
 
 ### Storage & lineage
 
-- **Hidden children persist under the ThinkRail data dir, never pi's default sessions root:**
-  `~/.thinkrail/delegation/<workspaceId>/<parentSessionId>/<child>.jsonl` via
+- **Hidden children persist under the embedder-bound delegation root, never pi's default sessions
+  root:** `<delegationRoot>/<scope>/<parentSessionId>/<child>.jsonl` via
   `SessionManager.create(cwd, sessionDir)` — verified: pi accepts a custom `sessionDir` on
-  `create`/`open`/`list`/`forkFrom` (the last covers the future `fork` axis). Hidden by
-  construction: the workspace's `listSessions` scans only the default root.
+  `create`/`open`/`list`/`forkFrom` (the last covers the future `fork` axis). ThinkRail binds
+  `~/.thinkrail/delegation` with `scope = workspaceId`; pure pi defaults to
+  `<piAgentDir>/delegation` with `scope = "default"`. Hidden by construction: session listings
+  scan only the default root.
 - **V1 lineage = the storage layout.** The directory structure *is* the parent edge; the
-  transcript path derives from `(workspaceId, parentSessionId, childSessionId)` with no index
+  transcript path derives from `(scope, parentSessionId, childSessionId)` with no index
   file. A persisted `SpawnRecord` index becomes real when `listed` visibility lands (the type
   exists now, the file does not).
 - **The core stores only the parent edge — a tree, never a DAG.** A workflow's steps are all
   spawned with `parent = the run's root session` (siblings); the DAG's data-flow edges are the
   engine's own record. Consequences: whole-run cancel = the existing cascade on the root's
   children (no graph traversal); a join is engine control flow, not a session.
-- **Retention:** children are deleted when their **workspace** is archived
-  (`removeWorkspaceSessions` extends to `delegation/<workspaceId>/`); closing a tab deletes
-  nothing (same as parents). No per-parent GC in V1.
+- **Retention is the embedder's:** ThinkRail deletes children when their **workspace** is
+  archived (`removeWorkspaceSessions` extends to `delegation/<workspaceId>/`); closing a tab
+  deletes nothing (same as parents). Pure pi: no GC. No per-parent GC anywhere in V1.
 - `listed` children (future) ride everything that exists — manager registration → tabs, WS
   streaming, hydration, restart repair; the wire's `SessionSummary` grows optional lineage fields
   then, not now.
@@ -263,23 +277,27 @@ flowchart TB
         TREQ["transcript read request"]
         LIN["SessionSummary lineage fields"]:::future
     end
-    subgraph SRV["packages/server/src/agent"]
+    subgraph PKG1["packages/pi-delegation (portable, pure-pi)"]
         subgraph CORE["delegation core (barrel = the contract)"]
             SPAWN["createChild(spec) + runQueued/runNow"]
             REG["run registry + semaphore"]
             EV["lifecycle events"]
             LREC["lineage records"]
         end
-        subgraph SUB["subagents layer (V1 consumer)"]
-            DEFS["definitions loader"]
-            TOOLS["Agent + get_subagent_result"]
-        end
+    end
+    subgraph PKG2["packages/pi-subagents (portable, V1 consumer)"]
+        DEFS["definitions loader"]
+        TOOLS["Agent + get_subagent_result"]
+    end
+    subgraph SRV["packages/server/src/agent (embedder)"]
+        BIND["bindings: delegation root · scope=workspaceId ·<br/>parent resolution · worktree WorkspaceProvider"]
         ASM["agentSessionManager (existing)"]
         WFE["workflow engine"]:::future
         WH["wire handlers: subsession, branch"]:::future
     end
-    PI["pi SDK: createAgentSession · fork · steer"]
+    PI["pi SDK: createAgentSession · fork · steer (peerDependency)"]
 
+    BIND -- "createDelegationService(bindings)" --> SPAWN
     TOOLS -- "ext point 1: LLM tools" --> SPAWN
     TOOLS --> REG
     DEFS --> TOOLS
@@ -311,6 +329,40 @@ projects/workspaces feature owns `git worktree` creation; merge-back semantics l
 provider's `dispose` (`resultAddendum` tells the parent where work landed), never in the core.
 (Pattern validated by gotgenes' ADR-0002 seam + companion worktrees package.)
 
+## Portability & embedding (user-settled, 2026-08, PR #261 review round)
+
+The layer must **work under vanilla pi** — no ThinkRail. `pi-delegation` itself is a library; the
+extension vanilla pi actually loads is its first consumer, `pi-subagents`
+([[task-subagent-support]]). Field-verified basis (decision #17): community subagent extensions
+already run children in-process from a plain pi extension with the SDK as a `peerDependency`
+(gotgenes, tintinweb) — peer deps are exempt from the repo's exact-pin rule, and value-importing
+the SDK is safe here because the package lives server-side by construction and never reaches
+`contracts`/`web` (the wire type is mirrored — decision #20).
+
+The barrel exports **`createDelegationService(bindings?)`**. An embedder constructs the service
+and hands it to consumers — ThinkRail keeps the handle for the manager's dispose cascade and the
+future wire handlers, and passes it to the `pi-subagents` factory; under vanilla pi the
+`pi-subagents` extension constructs it with defaults. Everything host-specific enters through one
+optional bag; **every field has a pure-pi default**:
+
+```ts
+interface DelegationBindings {
+  delegationRoot?: string;  // storage root — ThinkRail: ~/.thinkrail/delegation; default: <piAgentDir>/delegation
+  scope?: string;           // storage partition key — ThinkRail: workspaceId; default: "default"
+  resolveParent?: (sessionId: string) => AgentSession | undefined;
+                            // ThinkRail: AgentSessionManager lookup; default: the extension's own ctx session
+}
+```
+
+The `WorkspaceProvider` seam and `onLifecycle` events are unchanged — they were already
+embedder-facing. What stays host-side in ThinkRail: invoking `disposeChildrenOf` from the
+manager's dispose path, streaming `DelegationRunDetails` over the wire, the transcript read
+handler, and all web renderers.
+
+**Pure-pi V1 bar (user-settled):** the extension loads and runs correctly under vanilla pi with
+pi's **default tool rendering** — no pi-tui widget in V1 (the rich live card is the web
+renderer's job). npm publication stays possible; not a V1 goal.
+
 ## Scope & readiness rules (user-settled)
 
 **V1 = the core + subagents, nothing else.** Future patterns are out of scope, their UX unpinned —
@@ -329,8 +381,12 @@ Report-back from a subsession to its parent (when subsessions land) is pi-native
 2. Unsupported combinations fail loud with typed errors (unit-pinned).
 3. The contract reviewed on paper against each future pattern (subsession / branch / all three
    workflow styles) before the implementation is called done — recorded here.
-4. Module boundary: `delegation` sub-module with a barrel; consumers import through it; decisions
-   promoted to [[submodule-server-agent]]'s SPEC.
+4. Package boundary: `packages/pi-delegation` with a barrel; consumers (`pi-subagents`, the
+   server's binding) import through it; decisions promoted to the package's SPEC.md (plus
+   [[submodule-server-agent]]'s SPEC for the embedder binding).
+5. Pure-pi smoke: the `pi-subagents` extension, embedding this core with default bindings, loads
+   and completes a run under vanilla pi with default tool rendering — on-demand verification
+   (needs pi auth), never a commit gate.
 
 ## Appendix A — worked example: a DAG engine on the V1 surface (non-normative)
 
@@ -398,7 +454,7 @@ lineage-siblings under the root — parent edge ≠ dependency edge.
 8. **One id, eagerly created**: a run *is* a child session; the child exists from `createChild`
    (queued = only its first prompt waits), so the id is stable for cards/transcripts from birth.
    No separate run UUID.
-9. **`parent` is the only identity input** — `workspaceId`/`cwd`/model defaults derive from the
+9. **`parent` is the only identity input** — `scope`/`cwd`/model defaults derive from the
    live parent; inconsistent triples unrepresentable; parent must be live (`unknown-parent`).
 10. **Run methods resolve for run failures** (`error`/`aborted` are values with details); typed
     `DelegationError` rejections only for contract misuse.
@@ -411,4 +467,29 @@ lineage-siblings under the root — parent edge ≠ dependency edge.
 15. **`findChild` / `childrenOf`** (from `getChild`/`listChildren`) — the two lookups key on
     different ids; the name now carries the key.
 16. **Raw `AgentSession` never exposed** — the handle is the sole control path; out-of-band
-    prompting of a queued child is structurally impossible.
+    prompting of a queued child is structurally impossible. (The `resolveParent` binding hands the
+    *embedder's* live parent to the core — embedder-side plumbing, not a consumer surface.)
+17. **Portable core — the package is the deliverable** (2026-08, PR #261 review round): the user
+    settled the requirement that the layer works **without ThinkRail, in pure pi**. Field research
+    (source-verified): the pi example spawns `pi --mode json -p --no-session` subprocesses;
+    nicobailon spawns subprocesses (foreground + detached runner); **gotgenes and tintinweb run
+    children in-process via `createAgentSession` with the pi SDK as a peerDependency** — proving
+    in-process pure-pi children are a solved pattern. The core therefore moves from a
+    `packages/server` sub-module to `packages/pi-delegation`; ThinkRail becomes one embedder.
+18. **Host-injected spawn seam rejected** (resolves the PR #261 boundary proposal — adopted in
+    strengthened form): a `SpawnBackend` the host injects would require a second, in-package
+    pure-pi run loop to satisfy #17, duplicating the loop decision #1 deliberately owns once. No
+    reference implementation injects a spawner — all four keep spawning inside the extension and
+    face their seams *outward* (lifecycle events, providers, RPC). The proposal's boundary half is
+    adopted — strengthened: the whole core goes portable, not just the tool layer.
+19. **Two packages** — `pi-delegation` (framework) + `pi-subagents` (first consumer): "the
+    framework is the deliverable" enforced by construction; future consumers (workflow engine,
+    subsession/branch wire handlers) take delegation without subagents. (gotgenes keeps its core
+    inside its subagents package; we split because our future consumers are host features — a
+    host importing "subagents" to get delegation misnames the dependency.)
+20. **`DelegationRunDetails` mirrored into `contracts`, never imported** — the `pi-todos` DTO
+    posture keeps `web → contracts`-only intact and the package host-free. (Rejected: authoring
+    the type in the package and re-exporting through `contracts` — `contracts` imports no
+    extension packages.)
+21. **Pure-pi V1 bar: loads + works under default rendering** (user-settled) — no pi-tui widget in
+    V1; the rich live card ships web-side.
