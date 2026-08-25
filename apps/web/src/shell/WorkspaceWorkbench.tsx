@@ -29,6 +29,7 @@ import {
 	selectDiffTabTargetRef,
 	selectReviewDraftCount,
 	selectWorkspaceById,
+	selectWorkspaceNavTick,
 	selectWorkspaceTick,
 	toast,
 	useAppStore,
@@ -581,6 +582,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				onCommit={commit}
 				onAttentionChange={changeAttention}
 				onUserNavigation={() => useAppStore.getState().noteNavigation(workspaceId)}
+				readNavigationTick={() => selectWorkspaceNavTick(useAppStore.getState(), workspaceId)}
 				onRequestClose={(tab, prepare) => {
 					if (tab.kind === "terminal") {
 						const close = () => {

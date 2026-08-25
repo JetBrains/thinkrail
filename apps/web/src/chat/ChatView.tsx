@@ -1,6 +1,7 @@
 import type {
 	AskUserQuestionResult,
 	PromptHit,
+	QueueLane,
 	SlashCommandInfo,
 	TemplateInfo,
 	ThinkingLevel,
@@ -34,6 +35,7 @@ import {
 import { ExtUiDialog } from "./ExtUiDialog";
 import { HistoryOverlay } from "./HistoryOverlay";
 import { planGlance } from "./planView";
+import { QueueStrip } from "./QueueStrip";
 import { type ChatRow, deriveRows, rowIndexForTurn } from "./rows";
 import { SkillsDialog } from "./SkillsDialog";
 import { StreamIndicator, type StreamStatus, streamStatus } from "./StreamIndicator";
@@ -133,6 +135,7 @@ export default function ChatView({
 		stats,
 		commands,
 		draft,
+		queue,
 		pendingExtUi,
 		extUiStatus,
 		extUiWidget,
@@ -275,8 +278,21 @@ export default function ChatView({
 			.catch(() => {});
 	};
 
-	const onSubmit = (text: string, attachments: ChatAttachment[], behavior: SubmitBehavior) => {
-		if (text || attachments.length > 0)
+	const restoreTextToDraft = (text: string) => {
+		if (!text.trim()) return;
+		const current = useAppStore.getState().sessions[sessionId]?.draft ?? "";
+		const combined = [text, current].filter((t) => t.trim()).join("\n\n");
+		useAppStore.getState().setChatDraft(sessionId, combined);
+		composerRef.current?.refocus();
+	};
+
+	const performSend = (
+		text: string,
+		attachments: ChatAttachment[],
+		behavior: Exclude<SubmitBehavior, "interrupt">,
+	) => {
+		const queued = behavior !== "send";
+		if (!queued && (text || attachments.length > 0))
 			useAppStore.getState().appendUserMessage(sessionId, text, attachments);
 		const images = attachments.map((a) => a.content);
 		const params = { sessionId, text, ...(images.length > 0 ? { images } : {}) };
@@ -288,10 +304,48 @@ export default function ChatView({
 					: "session.prompt";
 		getTransport()
 			.request(method, params)
-			.catch((err) => useAppStore.getState().appendErrorTurn(sessionId, errorText(err)));
+			.catch((err) => {
+				useAppStore.getState().appendErrorTurn(sessionId, errorText(err));
+				if (queued) restoreTextToDraft(text);
+			});
+	};
+
+	const onSubmit = (text: string, attachments: ChatAttachment[], behavior: SubmitBehavior) => {
+		if (behavior !== "interrupt") {
+			performSend(text, attachments, behavior);
+			return;
+		}
+		getTransport()
+			.request("session.abort", { sessionId })
+			.then(() => performSend(text, attachments, "send"))
+			.catch((err) => {
+				useAppStore.getState().appendErrorTurn(sessionId, errorText(err));
+				restoreTextToDraft(text);
+			});
+	};
+
+	const removeQueued = (kind: QueueLane, index: number) =>
+		getTransport().request("session.removeQueued", { sessionId, kind, index });
+
+	const onEditQueued = (kind: QueueLane, index: number) =>
+		void removeQueued(kind, index)
+			.then(({ removed }) => {
+				if (removed !== null) restoreTextToDraft(removed);
+			})
+			.catch(() => {});
+
+	const onRemoveQueued = (kind: QueueLane, index: number) =>
+		void removeQueued(kind, index).catch(() => {});
+
+	const restoreQueueToDraft = async (): Promise<void> => {
+		const { steering, followUp } = await getTransport().request("session.clearQueue", {
+			sessionId,
+		});
+		restoreTextToDraft([...steering, ...followUp].join("\n\n"));
 	};
 
 	const onAbort = () => {
+		void restoreQueueToDraft().catch(() => {});
 		getTransport()
 			.request("session.abort", { sessionId })
 			.catch(() => {});
@@ -544,6 +598,7 @@ export default function ChatView({
 							))}
 						</div>
 					) : null}
+					<QueueStrip queue={queue} onEdit={onEditQueued} onRemove={onRemoveQueued} />
 					<div className="relative shrink-0">
 						<HistoryOverlay
 							state={historyState}

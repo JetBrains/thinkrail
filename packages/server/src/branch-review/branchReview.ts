@@ -1,5 +1,6 @@
 import type { OpenBranchReview } from "@thinkrail/contracts";
-import { git } from "../git";
+import { git, nonInteractiveGitEnv } from "../git";
+import { runBounded } from "../subprocess";
 
 const LOOKUP_TIMEOUT_MS = 8_000;
 
@@ -105,27 +106,15 @@ export function reviewNumber(output: string, field: "number" | "iid"): number | 
 }
 
 async function runCommand(cwd: string, command: string[]): Promise<CommandResult> {
-	try {
-		const proc = Bun.spawn(command, {
-			cwd,
-			stdout: "pipe",
-			stderr: "ignore",
-			env: {
-				...process.env,
-				GH_PROMPT_DISABLED: "1",
-				GLAB_PROMPT_DISABLED: "1",
-				GIT_TERMINAL_PROMPT: "0",
-				NO_COLOR: "1",
-			},
-		});
-		const timer = setTimeout(() => proc.kill(), LOOKUP_TIMEOUT_MS);
-		try {
-			const [out, exitCode] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
-			return { ok: exitCode === 0, out: out.trim() };
-		} finally {
-			clearTimeout(timer);
-		}
-	} catch {
-		return { ok: false, out: "" };
-	}
+	const run = await runBounded(command, {
+		cwd,
+		timeoutMs: LOOKUP_TIMEOUT_MS,
+		env: {
+			...nonInteractiveGitEnv(),
+			GH_PROMPT_DISABLED: "1",
+			GLAB_PROMPT_DISABLED: "1",
+			NO_COLOR: "1",
+		},
+	});
+	return { ok: run.ok, out: run.out.trim() };
 }

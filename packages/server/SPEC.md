@@ -56,6 +56,7 @@ internals**. The edges between them are owned here (see the dependency graph), n
 | `projects` | stable known-repo registry: open/recent views + lossless close/reopen (validate, dedupe, slug) | [projects/SPEC.md](src/projects/SPEC.md) |
 | `workspaces` | workspaces = `git worktree`s on their own branch | [workspaces/SPEC.md](src/workspaces/SPEC.md) |
 | `git` | the `git(cwd, args)` runner + worktree status/diff vs base + branch list | [git/SPEC.md](src/git/SPEC.md) |
+| `subprocess` | `runBounded(argv, …)`: one child, one budget, killed by process group on expiry | [subprocess/SPEC.md](src/subprocess/SPEC.md) |
 | `github` | read-only local `gh` auth status (shell-out) for the New-Workspace surface | [github/SPEC.md](src/github/SPEC.md) |
 | `branch-review` | best-effort open GitHub PR / GitLab MR number for a workspace branch | [branch-review/SPEC.md](src/branch-review/SPEC.md) |
 | `fs` | read dirs/files inside a worktree (path-contained) | [fs/SPEC.md](src/fs/SPEC.md) |
@@ -82,8 +83,9 @@ the host from env via `bootHost` for dev/e2e.
 
 - `host` → `projects`, `workspaces`, `git`, `github`, `branch-review`, `fs`, `spec`, `todos`, `reviews`, `watch`, `terminal`, `dialog`, `editors`, `agent`, `auth`, `assist`, `settings`, `layout`, `history`, `templates`, `analytics`, `persistence` (`dataDir`, for the crash report)
 - `workspaces` → `projects`, `git`, `persistence`
-- `branch-review` → `git`
+- `branch-review` → `git`, `subprocess`
 - `projects` → `git` (shared runner), `persistence`
+- `git` → `subprocess` (every child that talks to a network or another CLI)
 - `git`, `fs`, `spec`, `watch`, `terminal`, `settings`, `layout`, `analytics` → `persistence` (`spec` also → `pi-spec-graph/core`, external; `analytics` also → the pi-ai built-in provider/model catalog + `posthog-node`, external — the identity-bucketing vocabulary and the delivery SDK)
 - `todos` → `workspaces` (worktree path lookup) + `pi-todos/core` (external, value-imported, pi-free)
 - `reviews` → `workspaces` (worktree path lookup), `persistence` (data dir), `git` (the review's baseSha
@@ -96,7 +98,7 @@ the host from env via `bootHost` for dev/e2e.
 - `assist` → `agent` (the one-shot completion primitive)
 - `auth` → `agent` (the current runtime/auth facade plus candidate prepare/activate; one-way, `agent` never imports `auth`)
 - `agent` → (no internal deps — only the pi runtime; auth passes desired opaque Central paths through its public generation seam)
-- `persistence`, `dialog`, `github`, `history`, `templates` → (leaves)
+- `persistence`, `dialog`, `github`, `history`, `templates`, `subprocess` → (leaves)
 
 Rules: features never import `host`, and never each other except the edges above. The graph is acyclic.
 `agent`'s WS surface (`session.*` + `pi.event` forwarding) attaches to `host`. Features that push on their

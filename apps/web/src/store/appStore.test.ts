@@ -205,6 +205,56 @@ test("a host-fired USER message folds into the transcript; the composer's optimi
 	expect(rt("a").turns.filter((t) => t.kind === "user")).toHaveLength(2);
 });
 
+test("queue_update folds pi's queue into the runtime; the canonical echo lands the turn at its true position", () => {
+	const queueUpdate = (steering: string[], followUp: string[]) =>
+		({ type: "queue_update", steering, followUp }) as unknown as PiEvent;
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", null, "medium");
+	store.handlePiEvent(agentStart, "a");
+	store.handlePiEvent(assistantStart, "a");
+	store.handlePiEvent(assistantText("first reply"), "a");
+
+	store.handlePiEvent(queueUpdate(["course-correct"], ["queued question"]), "a");
+	expect(rt("a").queue).toEqual({ steering: ["course-correct"], followUp: ["queued question"] });
+	expect(rt("a").turns.filter((t) => t.kind === "user")).toHaveLength(0);
+
+	store.handlePiEvent(queueUpdate([], ["queued question"]), "a");
+	store.handlePiEvent(userStart("course-correct"), "a");
+	store.handlePiEvent(queueUpdate([], []), "a");
+	store.handlePiEvent(userStart("queued question"), "a");
+
+	const turns = rt("a").turns;
+	expect(turns.map((t) => t.kind)).toEqual(["assistant", "user", "user"]);
+	expect(rt("a").queue).toEqual({ steering: [], followUp: [] });
+});
+
+test("hydrateSession seeds the queue from the summary snapshot", () => {
+	const store = useAppStore.getState();
+	useAppStore.setState({ activeWorkspaceId: "ws1" });
+	const summary: SessionSummary = {
+		sessionId: "q1",
+		workspaceId: "ws1",
+		title: "Chat",
+		model: null,
+		thinkingLevel: "medium",
+		isStreaming: true,
+		messageCount: 1,
+		updatedAt: 0,
+		live: true,
+		queue: { steering: [], followUp: ["waiting in line"] },
+	};
+	store.hydrateSession(summary, { turns: [], toolResults: {}, askAnswers: {} });
+	expect(rt("q1").queue).toEqual({ steering: [], followUp: ["waiting in line"] });
+
+	const { queue, ...bare } = summary;
+	void queue;
+	store.hydrateSession(
+		{ ...bare, sessionId: "q2" },
+		{ turns: [], toolResults: {}, askAnswers: {} },
+	);
+	expect(rt("q2").queue).toEqual({ steering: [], followUp: [] });
+});
+
 test("Pi's expanded skill echo replaces its matching optimistic slash command in place", () => {
 	const expanded =
 		'<skill name="review" location="/repo/.pi/skills/review/SKILL.md">\nReferences are relative to /repo/.pi/skills/review.\n\n# Review\n\nInspect the diff.\n</skill>\n\nFocus on src/app.ts.';
@@ -1618,6 +1668,19 @@ test("activateWorkspaceFromRoute atomically stamps exact-chat intent", () => {
 	const before = useAppStore.getState();
 	useAppStore.getState().clearRouteChatTarget();
 	expect(useAppStore.getState()).toBe(before);
+});
+
+test("closeChatToHistory keeps a route target for the closed session", () => {
+	const workspace = pushedWorkspace();
+	useAppStore.setState({ workspaces: { p1: [workspace] } });
+	useAppStore.getState().openChatSession("w1", "s1", null, "medium");
+	useAppStore.getState().activateWorkspaceFromRoute(workspace, "s1");
+	const target = useAppStore.getState().routeChatTarget;
+	expect(target?.sessionId).toBe("s1");
+
+	useAppStore.getState().closeChatToHistory("s1", false, "w1", false);
+	expect(useAppStore.getState().closedChatsByWorkspace.w1?.[0]?.sessionId).toBe("s1");
+	expect(useAppStore.getState().routeChatTarget).toBe(target);
 });
 
 test("selectCurrentRouteChatTarget rejects overtaken or off-workspace intent", () => {

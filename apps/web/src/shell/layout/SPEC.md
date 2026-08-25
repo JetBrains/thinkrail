@@ -79,7 +79,10 @@ count-neutral, preventing a Group Header click or focus-restoration request from
 reroutes from a removed destination to current last focus (advancing that surviving destination once), unless
 a newer shared snapshot already placed the resource. A user close advances attention and compatibility
 navigation exactly once only after structural acceptance (or after an authoritative terminal close); a
-rejected layout write leaves the resource, focus, and navigation clocks untouched. Delayed terminal close
+rejected layout write leaves the resource, focus, and navigation clocks untouched. The overtaken test
+compares the workspace's center-navigation tick captured at close request against acceptance time —
+navigation the attention clocks cannot see (an incoming Back/Forward route bumps the tick at adoption,
+before its authoritative read) still makes the acceptance count as overtaken instead of cancelling it. Delayed terminal close
 settlement resolves the resource semantically against the latest document, so a move is followed while an
 unrelated resource that reused the old opaque placement id is never closed. Any newer tab gesture or center
 navigation suppresses delayed close-focus recovery; structural reconciliation that removes the closing group's

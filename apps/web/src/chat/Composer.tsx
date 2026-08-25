@@ -4,7 +4,16 @@ import {
 	type ThinkingLevel,
 	type WireModel,
 } from "@thinkrail/contracts";
-import { ArrowUp, FileIcon, FolderIcon, History, Sparkles, Square, X } from "lucide-react";
+import {
+	ArrowUp,
+	ChevronUp,
+	FileIcon,
+	FolderIcon,
+	History,
+	Sparkles,
+	Square,
+	X,
+} from "lucide-react";
 import {
 	type ClipboardEvent,
 	type DragEvent,
@@ -17,6 +26,7 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { FileChip } from "./FileChip";
 import { type AttachedImage, fileToAttachedImage } from "./imageAttachment";
 import { ModelSelector } from "./ModelSelector";
@@ -37,7 +47,31 @@ import {
 import { ThinkingSelector } from "./ThinkingSelector";
 import type { ChatAttachment } from "./types";
 
-export type SubmitBehavior = "send" | "steer" | "followUp";
+export type SubmitBehavior = "send" | "steer" | "followUp" | "interrupt";
+
+const STREAMING_SEND_MODES = [
+	{
+		behavior: "steer" as const,
+		name: "Steer",
+		meaning: "delivers at the agent's next step",
+		keys: "Enter",
+		testid: "send-mode-steer",
+	},
+	{
+		behavior: "followUp" as const,
+		name: "Queue",
+		meaning: "runs after the agent finishes",
+		keys: "Cmd/Ctrl+Enter",
+		testid: "send-mode-queue",
+	},
+	{
+		behavior: "interrupt" as const,
+		name: "Interrupt",
+		meaning: "stops the current response and sends now",
+		keys: "Cmd/Ctrl+Shift+Enter",
+		testid: "send-mode-interrupt",
+	},
+];
 
 export interface MentionCandidate {
 	path: string;
@@ -183,6 +217,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	const [attachErrors, setAttachErrors] = useState<AttachError[]>([]);
 	const [mentionActiveIndex, setMentionActiveIndex] = useState(0);
 	const [mentionDismissed, setMentionDismissed] = useState(false);
+	const [sendMenuOpen, setSendMenuOpen] = useState(false);
 	const recallIdxRef = useRef<number | null>(null);
 	const [slots, setSlots] = useState<TemplateSlot[] | null>(null);
 	const [slotIdx, setSlotIdx] = useState(0);
@@ -434,6 +469,11 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 			}
 			return;
 		}
+		if (e.key === "Enter" && e.shiftKey && (e.metaKey || e.ctrlKey)) {
+			e.preventDefault();
+			submit(isStreaming ? "interrupt" : "send");
+			return;
+		}
 		if (e.key === "Enter" && !e.shiftKey) {
 			e.preventDefault();
 			const behavior: SubmitBehavior = isStreaming
@@ -659,7 +699,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 						rows={4}
 						placeholder={
 							isStreaming
-								? "Enter to steer · Cmd/Ctrl+Enter to queue · @ files · / commands"
+								? "Enter steers at the next step · Cmd/Ctrl+Enter queues for when it finishes"
 								: "Message the agent…  (@ files · / commands · Enter to send)"
 						}
 						className="relative min-h-[108px] w-full resize-none rounded-[var(--radius-sm)] bg-transparent px-md py-sm tr-text-ui text-text-default outline-none placeholder:text-text-muted"
@@ -700,6 +740,45 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							>
 								<Square className="size-3.5" />
 							</button>
+						) : null}
+						{isStreaming ? (
+							<Popover open={sendMenuOpen} onOpenChange={setSendMenuOpen}>
+								<PopoverTrigger asChild>
+									<button
+										type="button"
+										data-testid="send-menu"
+										aria-label="Send options"
+										className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg text-text-default hover:bg-control-bg-hovered"
+									>
+										<ChevronUp className="size-3.5" />
+									</button>
+								</PopoverTrigger>
+								<PopoverContent side="top" align="end" className="w-[320px] p-xs">
+									<div className="flex flex-col gap-2xs">
+										{STREAMING_SEND_MODES.map((mode) => (
+											<button
+												key={mode.behavior}
+												type="button"
+												data-testid={mode.testid}
+												disabled={!canSubmit(value)}
+												onClick={() => {
+													setSendMenuOpen(false);
+													submit(mode.behavior);
+												}}
+												className="flex w-full flex-col gap-2xs rounded-[var(--radius-sm)] px-sm py-xs text-left hover:bg-control-bg-hovered disabled:pointer-events-none disabled:opacity-50"
+											>
+												<span className="flex w-full items-baseline justify-between gap-sm">
+													<span className="text-text-default tr-text-ui">{mode.name}</span>
+													<span className="shrink-0 text-text-muted tr-text-metadata">
+														{mode.keys}
+													</span>
+												</span>
+												<span className="text-text-muted tr-text-metadata">{mode.meaning}</span>
+											</button>
+										))}
+									</div>
+								</PopoverContent>
+							</Popover>
 						) : null}
 						<button
 							type="button"

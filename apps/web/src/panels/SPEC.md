@@ -5,6 +5,7 @@ status: active
 title: panels — feature views
 parent: module-web
 depends-on: [module-contracts]
+references: [central-integration]
 tags: [v1, ui]
 ---
 

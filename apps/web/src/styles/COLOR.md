@@ -142,18 +142,30 @@ escape hatch, or a second name for a value that already has one.
 - the committed generated files do not match what `colors.json` renders.
 
 `themes/schema.test.ts` additionally pins the **contrast floors**, and those deserve stating here
-because one tier is our judgement rather than the standard's:
+because two of the lines are our judgement rather than the standard's:
 
 - on every RESTING surface (`background`, `content`, `sidebar`, `header`, `elevated`, `input`) text
   meets WCAG AA in full — 4.5 for body and the `text-muted` tier;
 - the deliberately quiet `text-subtle` / `hint` tier remains visible at **3.0** on every resting surface;
-- on the transient HOVER surface the floor is **3.0**, not 4.5.
+- on the transient HOVER surface the floor is **3.0**, not 4.5;
+- the `hover` fill — the palette source of `control-bg-hovered` / `control-bg-selected` — stays
+  **distinguishable from every resting surface**: ≥ **1.15** against all six. No canvas is exempt:
+  interactive fills reach each of them (the content canvas hosts PlanPane's rows and the workbench
+  backdrop's controls; `input` is the resting fill hovered controls swap away from).
 
 WCAG has no "transient state" allowance, so the hover tier is a line we drew deliberately. These themes
 lift the row background toward the text colour on hover, and holding that to 4.5 would have forced a
 theme's signature accent toward a washed-out tint just to survive the hovered row. 3.0 keeps hovered
 text comfortably visible while leaving the themes recognisable.
 Revisit it if strict AA across every state ever becomes a requirement.
+
+The distinguishability floor is equally ours: WCAG has no adjacent-fill metric at all. It exists
+because High Contrast Light shipped `hover` at 1.05:1 against its own sidebar — selected
+project/workspace rows were indistinguishable from the panel — while every legibility check stayed
+green; review of that fix then found Light shipping `hover == content` outright, so PlanPane's
+hovered rows vanished the same way. 1.15 is the line that separates a visible fill from an invisible
+one; every bundled theme clears it on all six surfaces (the weakest live pair is Light's
+hover-on-content at 1.165).
 
 `themes/runtime.test.ts` pins application; `themes/shiki.test.ts` pins the syntax-variable map. See [`themes/SPEC.md`](../themes/SPEC.md) for the manifest itself and
 [TYPOGRAPHY.md](./TYPOGRAPHY.md) for the parallel type system.
