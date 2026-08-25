@@ -17,8 +17,10 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
 ## Boundary
 
 - **Owns:** `ProjectTree`. Each top-level project row is a compact 28px IDE-tree row:
-  **always-visible chevron** + folder/name + a collapsed-only plain workspace count + a **bare muted Create
-  workspace `+` always visible in a fixed right-edge column** (the Projects-header Add project `+` is unchanged).
+  **always-visible chevron** + folder/name + a collapsed-only plain workspace count + an **always-visible Create
+  workspace `+` in a fixed right-edge column**. That `+` is the **same control as the Projects-header Add
+  project `+`** — both are `Button variant="ghost" size="icon"`, so they render identically and their glyphs
+  line up on one vertical axis (both sit at the row's `pr-xs` right edge).
   Long names truncate before the count/action; there is deliberately **no visible Close or overflow icon**.
   Hover highlights the full row and the highlight remains while its **project context menu** is open.
   Right-click opens that PR-#167-styled menu at the pointer without selecting/navigating; a scroll-cancelled

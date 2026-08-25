@@ -390,15 +390,16 @@ function ProjectRow({
 					{workspaceCount}
 				</span>
 			)}
-			<button
-				type="button"
+			<Button
+				variant="ghost"
+				size="icon"
+				className="shrink-0"
 				data-testid="add-workspace"
 				aria-label="Create workspace"
 				onClick={onAddWorkspace}
-				className="flex size-5 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted transition-colors hover:bg-container-elevated-bg hover:text-text-default focus-visible:bg-container-elevated-bg focus-visible:text-text-default"
 			>
 				<Plus className="size-3.5" />
-			</button>
+			</Button>
 		</div>
 	);
 	return (
