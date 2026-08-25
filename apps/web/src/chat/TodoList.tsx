@@ -241,7 +241,7 @@ function DoneGroup({
 				onClick={() => setExpanded((v) => !v)}
 				className="flex w-full items-center gap-sm rounded-[var(--radius-sm)] px-xs py-xs text-left hover:bg-control-bg-hovered"
 			>
-				<Chevron className="size-3 shrink-0 text-text-muted" />
+				<Chevron className="size-4 shrink-0 text-text-muted" />
 				<Check className="size-3 shrink-0 text-primary" />
 				<span className="min-w-0 flex-1 truncate tr-text-ui text-text-muted line-through">
 					{group.title}

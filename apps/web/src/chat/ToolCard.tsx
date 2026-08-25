@@ -74,7 +74,7 @@ export function ToolCard({
 					<span className="flex-1" />
 				)}
 				<ChevronRight
-					className={`size-3 shrink-0 text-text-muted transition-transform ${expanded ? "rotate-90" : ""}`}
+					className={`size-4 shrink-0 text-text-muted transition-transform ${expanded ? "rotate-90" : ""}`}
 				/>
 			</button>
 			{expanded ? (

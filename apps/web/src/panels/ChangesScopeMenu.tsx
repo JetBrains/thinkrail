@@ -73,7 +73,7 @@ export function ChangesScopeMenu({
 				<span data-testid="changes-scope-label" className="truncate">
 					{scopeLabel(scope, commits ?? [])}
 				</span>
-				<ChevronDown className="size-3 shrink-0" />
+				<ChevronDown className="size-4 shrink-0" />
 			</DropdownMenuTrigger>
 			<DropdownMenuContent align="start" className="max-w-[22rem]">
 				<DropdownMenuItem

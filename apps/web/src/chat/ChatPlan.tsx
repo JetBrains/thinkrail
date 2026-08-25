@@ -25,7 +25,7 @@ export function ChatPlanStripContent({
 	const { Icon, label, className } = glanceIcon(glance);
 	return (
 		<>
-			<Chevron className="size-3 shrink-0" />
+			<Chevron className="size-4 shrink-0" />
 			<span className="tr-text-emphasis shrink-0">TODO list</span>
 			<span className="shrink-0">
 				{done}/{total}

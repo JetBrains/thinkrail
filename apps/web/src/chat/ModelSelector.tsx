@@ -67,7 +67,7 @@ export function ModelSelector({
 				<span className="truncate text-text-muted tr-text-metadata">
 					{current?.name ?? "Select model"}
 				</span>
-				<ChevronDown className="size-3 shrink-0 text-text-muted" />
+				<ChevronDown className="size-4 shrink-0 text-text-muted" />
 			</PopoverTrigger>
 			<PopoverContent align="start" container={container} className="w-[320px] p-0">
 				<Command>

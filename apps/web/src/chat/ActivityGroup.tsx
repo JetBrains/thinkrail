@@ -45,7 +45,7 @@ export function ActivityGroup({
 				className="flex w-full cursor-pointer select-none items-center gap-xs rounded-[var(--radius-sm)] px-xs py-xs text-left outline-none hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary"
 			>
 				<ChevronRight
-					className={`size-3 shrink-0 transition-transform ${expanded ? "rotate-90" : ""}`}
+					className={`size-4 shrink-0 transition-transform ${expanded ? "rotate-90" : ""}`}
 				/>
 				{live ? (
 					<Loader2 className="size-3 shrink-0 animate-spin motion-reduce:animate-none" />
@@ -212,7 +212,7 @@ function StepHeader({
 				</span>
 			) : null}
 			<ChevronRight
-				className={`size-3 shrink-0 transition-transform ${expanded ? "rotate-90" : ""}`}
+				className={`size-4 shrink-0 transition-transform ${expanded ? "rotate-90" : ""}`}
 			/>
 		</button>
 	);

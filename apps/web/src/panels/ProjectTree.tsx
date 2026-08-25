@@ -364,14 +364,14 @@ function ProjectRow({
 				className="flex size-4 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted transition-colors hover:text-text-default focus-visible:text-text-default"
 				data-expanded={isExpanded}
 			>
-				<Chevron className="size-3.5" />
+				<Chevron className="size-4" />
 			</button>
 			<button
 				ref={onRegisterNameButton}
 				type="button"
 				data-testid="project-name"
 				onClick={onSelect}
-				className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+				className="flex min-w-0 flex-1 items-center gap-xs text-left"
 			>
 				<Folder
 					className={`size-3.5 shrink-0 ${isSelected ? "text-primary" : "text-text-muted"}`}
@@ -536,7 +536,7 @@ function WorkspaceRow({
 				<button
 					type="button"
 					onClick={onSelect}
-					className={`flex min-w-0 flex-1 gap-1.5 text-left ${isTwoLine ? "items-start" : "items-center"}`}
+					className={`flex min-w-0 flex-1 gap-xs text-left ${isTwoLine ? "items-start" : "items-center"}`}
 				>
 					<Icon
 						className={`${isTwoLine ? "mt-0.5 " : ""}size-3.5 shrink-0 ${isActive ? "text-primary" : "text-text-muted"}`}

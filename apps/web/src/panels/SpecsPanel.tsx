@@ -147,7 +147,7 @@ function SpecNodeRow({
 						onClick={() => setExpanded((value) => !value)}
 						className="flex w-5 shrink-0 items-center justify-center self-stretch rounded-[var(--radius-sm)] text-text-muted outline-none transition-colors hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
 					>
-						<Chevron className="size-3.5" />
+						<Chevron className="size-4" />
 					</button>
 				) : (
 					<span className="w-5 shrink-0" />
@@ -166,7 +166,7 @@ function SpecNodeRow({
 					title={`${node.title}\n${node.id} · ${node.type}`}
 					onClick={() => void openFileInTab(workspaceId, node.path, "preview")}
 					onDoubleClick={() => void openFileInTab(workspaceId, node.path, "keep")}
-					className="flex h-7 min-w-0 flex-1 items-center gap-1.5 rounded-[var(--radius-sm)] pr-xs text-left outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+					className="flex h-7 min-w-0 flex-1 items-center gap-xs rounded-[var(--radius-sm)] pr-xs text-left outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
 				>
 					<DocumentIcon
 						className={cn(

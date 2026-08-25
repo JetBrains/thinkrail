@@ -242,9 +242,9 @@ function SkillInvocationCard({
 					{invocation.name}
 				</span>
 				{expanded ? (
-					<ChevronDown className="size-3.5 shrink-0 text-text-muted" aria-hidden="true" />
+					<ChevronDown className="size-4 shrink-0 text-text-muted" aria-hidden="true" />
 				) : (
-					<ChevronRight className="size-3.5 shrink-0 text-text-muted" aria-hidden="true" />
+					<ChevronRight className="size-4 shrink-0 text-text-muted" aria-hidden="true" />
 				)}
 			</button>
 			{expanded ? (
@@ -374,7 +374,7 @@ function CompactionTurn({
 				className="flex items-center gap-sm text-text-muted tr-text-metadata hover:text-text-default"
 			>
 				<span className="h-px flex-1 bg-border-default" />
-				{open ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
+				{open ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
 				<span>
 					Earlier messages summarized ({formatTokens(tokensBefore)} tokens of context compacted)
 				</span>
@@ -543,9 +543,9 @@ function ArtifactChip({
 			{label(paths.length)}
 			{many ? (
 				expanded ? (
-					<ChevronDown className="size-3 shrink-0" />
+					<ChevronDown className="size-4 shrink-0" />
 				) : (
-					<ChevronRight className="size-3 shrink-0" />
+					<ChevronRight className="size-4 shrink-0" />
 				)
 			) : null}
 		</button>

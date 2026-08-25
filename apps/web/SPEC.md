@@ -118,13 +118,15 @@ themselves.
   Three tiers: `size-3` (12px) for **chat-content** indicators (tool activity, plan/todo status,
   expand/collapse chat details — subordinate to chat text); `size-3.5` (14px) for **compact interface /
   navigation chrome** (left/right panels, panel & toolbar headers, tabs, the mobile switcher rail, menu
-  items, standalone chrome icon-buttons); `size-4` (16px) only for a **prominent dedicated icon-button
-  surface** — the app-chrome Settings gear and the composer's bottom controls (Send + peers). An
-  icon+text navigation row pairs the 14px icon with a **6px** `gap-1.5` gap; a **two-line** row (e.g. a
+  items, standalone chrome icon-buttons); `size-4` (16px) for a **prominent dedicated icon-button
+  surface** — the app-chrome Settings gear and the composer's bottom controls (Send + peers) — **and
+  for every disclosure/expand chevron** (`ChevronDown/Right/Left/Up`), which are `size-4` in all
+  contexts regardless of tier. The **icon↔text gap is `gap-xs` (4px)** across all icon+label rows (nav
+  rows, menu/command items, tabs). A **two-line** row (e.g. a
   workspace whose branch differs from its name) **top-aligns** the icon to the first line (`items-start`
   + `mt-0.5`) so the glyph hangs on its title, while a single-line row stays vertically centred
   (`items-center`, no nudge). Menu-item icons are centralized once in `components/ui/menu-styles.ts` (`menuItemClass`
-  `[&_svg]:size-3.5` + `gap-sm`).
+  `[&_svg]:size-3.5` + `gap-xs`).
 - **`src/themes` is the theme contract and catalog; `src/styles/tokens.css` is structural.** A bundled
   theme is one strict, complete `*.theme.json` manifest: appearance/contrast metadata + semantic UI
   colors + all 16 ANSI colors + a semantic syntax palette. Selected-text foreground overrides are the

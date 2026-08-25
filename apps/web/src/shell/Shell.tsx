@@ -103,7 +103,7 @@ export function Shell() {
 								>
 									{contextProject.name}
 								</span>
-								<ChevronRight className="size-3.5 shrink-0 text-text-muted" />
+								<ChevronRight className="size-4 shrink-0 text-text-muted" />
 							</span>
 							<span data-testid="scope-name" className="max-w-[220px] truncate text-text-default">
 								{activeWorkspace?.name ?? "Project home"}

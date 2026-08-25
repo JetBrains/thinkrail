@@ -169,9 +169,9 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 											onClick={() => toggleFile(file)}
 										>
 											{isOpen ? (
-												<ChevronDown className="size-3.5 shrink-0 text-text-subtle" />
+												<ChevronDown className="size-4 shrink-0 text-text-subtle" />
 											) : (
-												<ChevronRight className="size-3.5 shrink-0 text-text-subtle" />
+												<ChevronRight className="size-4 shrink-0 text-text-subtle" />
 											)}
 											<span className="min-w-0 flex-1 truncate text-text-muted">
 												{file.path ?? "Whole change set"}

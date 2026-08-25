@@ -46,7 +46,7 @@ export function ChangeRowActions({
 					aria-label={`Actions for ${path}`}
 					className={`${ROW_MENU_SLOT} flex items-center justify-center rounded-[var(--radius-sm)] text-text-muted opacity-0 outline-none transition hover:bg-container-elevated-bg hover:text-text-default focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-primary group-hover:opacity-100 data-[state=open]:opacity-100`}
 				>
-					<ChevronDown className="size-3.5" />
+					<ChevronDown className="size-4" />
 				</DropdownMenuTrigger>
 			</div>
 			<DropdownMenuContent align="end" data-testid="change-row-actions">

@@ -84,7 +84,7 @@ function ChangeSetBlock({
 					title={expanded ? "Hide changed files" : "Show changed files"}
 					className="flex min-w-0 items-center gap-xs rounded-[var(--radius-sm)] px-xs py-2xs text-left hover:bg-control-bg-hovered"
 				>
-					<Chevron className="size-3.5 shrink-0 text-text-muted" />
+					<Chevron className="size-4 shrink-0 text-text-muted" />
 					<span className="shrink-0 tr-text-metadata text-text-subtle">
 						{count} {count === 1 ? "file" : "files"}
 					</span>

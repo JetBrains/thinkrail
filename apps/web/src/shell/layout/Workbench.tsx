@@ -18,14 +18,14 @@ import {
 	RiFileLine as File,
 	RiGitPullRequestLine as GitCompareArrows,
 	RiListCheck3 as ListTodo,
-	RiChat1Line as MessageSquare,
 	RiChatNewLine as MessageSquarePlus,
 	RiMoreLine as MoreHorizontal,
 	RiLayoutBottomLine as PanelBottomOpen,
 	RiLayoutLeftLine as PanelLeftOpen,
 	RiLayoutRightLine as PanelRightOpen,
 	RiLayout2Line as PanelsTopLeft,
-	RiChat1Fill,
+	RiChat2Fill,
+	RiChat2Line,
 	RiFileFill,
 	RiGitPullRequestFill,
 	RiLayout2Fill,
@@ -393,7 +393,7 @@ function tabIcon(tab: LayoutTab, active = false): ReactNode {
 				<GitCompareArrows className={cls} />
 			);
 		case "chat":
-			return active ? <RiChat1Fill className={cls} /> : <MessageSquare className={cls} />;
+			return active ? <RiChat2Fill className={cls} /> : <RiChat2Line className={cls} />;
 		case "document":
 			return <ListTodo className={cls} />;
 		case "terminal":
@@ -944,7 +944,7 @@ function WorkbenchTab({
 						onClick={selectFromClick}
 						onDoubleClick={selectFromDoubleClick}
 						onKeyDown={onKeyDown}
-						className={`flex min-w-0 flex-1 items-center gap-sm py-xs pl-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary ${tab.kind === "tool" ? "pr-sm" : ""}`}
+						className={`flex min-w-0 flex-1 items-center gap-xs py-xs pl-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary ${tab.kind === "tool" ? "pr-sm" : ""}`}
 					>
 						{tabIcon(tab, active)}
 						<span className={`truncate ${preview ? "italic" : ""}`}>{name}</span>
@@ -1525,7 +1525,7 @@ function SideGroupView({
 					className="flex w-7 shrink-0 items-center justify-center border-border-muted border-b border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 				>
 					<ChevronDown
-						className={`size-3.5 transition-transform ${group.folded ? "-rotate-90" : ""}`}
+						className={`size-4 transition-transform ${group.folded ? "-rotate-90" : ""}`}
 					/>
 				</button>
 			</div>
