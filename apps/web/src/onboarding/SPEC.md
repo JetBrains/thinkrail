@@ -26,10 +26,16 @@ App" card); both flip one **view flag** (`store.demoOpen`, a top-level, non-pers
 - A centered modal (~`90vw × 90vh`) over a `bg-overlay` scrim; the card is an opaque `container-workspace-bg`
   sandbox rendering a simplified but faithful ThinkRail chrome (header / left `Projects` panel / center),
   built from the existing semantic tokens and `components/ui` — **not** wired to any store domain state.
-- **Animated intro** (`step: "intro"`, first): three lines reveal in sequence with restrained
-  fade/translate transitions (`motion-reduce:transition-none`) — "Welcome to ThinkRail" (`tr-brand-hero`),
-  the one-line product explanation (`tr-text-ui`), the ~2-minute setup note (`tr-text-metadata`) — then it
-  auto-advances into the first interactive action. No coach mark shows during the intro.
+- **Animated intro** (`step: "intro"`, first): lines reveal in sequence with restrained fade/translate
+  transitions (`motion-reduce:transition-none`) — "Welcome to ThinkRail" (`tr-brand-hero`), the one-line
+  product explanation (`tr-text-ui`), then a short **environment-readiness moment** ("Before we start" /
+  "ThinkRail works with Git projects…") with **one compact, fully mocked Git row** that animates
+  `Checking Git…` (spinner) → `Git is ready` (the semantic **success** role + check) — no clicks, always
+  ends ready, no terminal/install/Git-config detail; it exists to reveal the Git prerequisite before a
+  real project could error. Then the ~2-minute setup note (`tr-text-metadata`) and auto-advance into the
+  first interactive action. **Nothing here detects/invokes Git** or touches any real state; it is not a
+  numbered onboarding step, and no coach mark shows during the intro. (The missing-Git install flow is
+  deliberately out of scope — a future state once Git is bundled vs. externally installed is decided.)
 - **Close demo** (`onboarding-close`, a quiet `Button variant="ghost"` in the card's top-right) is present
   throughout — intro included — and is the only explicit pre-completion exit. It only clears the mocked
   experience (`closeDemo`); it touches no real state. Coach marks themselves stay non-dismissible.

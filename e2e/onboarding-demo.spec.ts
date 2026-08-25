@@ -11,6 +11,8 @@ test("the mocked onboarding simulation runs intro → scripted flow, never touch
 	await expect(page.getByTestId("onboarding-sim")).toBeVisible();
 	await expect(page.getByTestId("onboarding-intro")).toContainText("Welcome to ThinkRail");
 	await expect(page.getByTestId("onboarding-progress")).toBeAttached();
+	await expect(page.getByTestId("onboarding-intro")).toContainText("Before we start");
+	await expect(page.getByTestId("onboarding-git")).toContainText("Git is ready");
 
 	const coach = page.getByTestId("onboarding-coach");
 	await expect(coach).toContainText("Open a project");

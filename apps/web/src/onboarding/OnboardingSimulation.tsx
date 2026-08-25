@@ -1,4 +1,4 @@
-import { Check, Folder, FolderOpen, GitBranch, House, Plus, Send, X } from "lucide-react";
+import { Check, Folder, FolderOpen, GitBranch, House, Loader2, Plus, Send, X } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "../components/ui/button";
 import { Popover, PopoverAnchor, PopoverArrow, PopoverContent } from "../components/ui/popover";
@@ -583,19 +583,22 @@ function CardSpotlight({
 }
 
 function Intro({ onDone }: { onDone: () => void }) {
-	const [shown, setShown] = useState(0);
+	const [phase, setPhase] = useState(0);
+	const [gitReady, setGitReady] = useState(false);
 	useEffect(() => {
 		const timers = [
-			setTimeout(() => setShown(1), 200),
-			setTimeout(() => setShown(2), 1100),
-			setTimeout(() => setShown(3), 2100),
-			setTimeout(onDone, 3400),
+			setTimeout(() => setPhase(1), 200),
+			setTimeout(() => setPhase(2), 1000),
+			setTimeout(() => setPhase(3), 1900),
+			setTimeout(() => setGitReady(true), 3200),
+			setTimeout(() => setPhase(4), 3900),
+			setTimeout(onDone, 5200),
 		];
 		return () => timers.forEach(clearTimeout);
 	}, [onDone]);
 	const reveal = (index: number) =>
 		`transition-all duration-500 ease-out motion-reduce:transition-none ${
-			shown >= index ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0"
+			phase >= index ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0"
 		}`;
 	return (
 		<div
@@ -606,8 +609,32 @@ function Intro({ onDone }: { onDone: () => void }) {
 			<p className={`max-w-[520px] tr-text-ui text-text-default ${reveal(2)}`}>
 				ThinkRail is a worktree IDE built for working with AI agents in parallel.
 			</p>
+			<div className={`flex flex-col items-center gap-sm ${reveal(3)}`}>
+				<p className="tr-title-card text-text-default">Before we start</p>
+				<p className="max-w-[460px] text-text-muted tr-text-metadata">
+					ThinkRail works with Git projects. Let's make sure your computer is ready.
+				</p>
+				<div
+					data-testid="onboarding-git"
+					className="mt-xs inline-flex items-center gap-sm rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-md py-sm"
+				>
+					<GitBranch className="size-4 shrink-0 text-text-muted" />
+					<span className="tr-text-ui text-text-default">Git</span>
+					{gitReady ? (
+						<span className="inline-flex items-center gap-xs tr-text-metadata text-feedback-success">
+							<Check className="size-3.5" />
+							Git is ready
+						</span>
+					) : (
+						<span className="inline-flex items-center gap-xs text-text-muted tr-text-metadata">
+							<Loader2 className="size-3.5 motion-safe:animate-spin" />
+							Checking Git…
+						</span>
+					)}
+				</div>
+			</div>
 			<p
-				className={`max-w-[520px] whitespace-pre-line text-text-muted tr-text-metadata ${reveal(3)}`}
+				className={`max-w-[520px] whitespace-pre-line text-text-muted tr-text-metadata ${reveal(4)}`}
 			>
 				{"Let's set up a demo project first.\nIt takes about 2 minutes."}
 			</p>
