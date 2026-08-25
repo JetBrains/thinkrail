@@ -38,8 +38,11 @@ function reviewsDir(): string {
 
 const SAFE_ID = /^[\w-]+$/;
 
+class InvalidReviewIdError extends Error {}
+class DamagedReviewFileError extends Error {}
+
 function assertSafeId(id: string, kind: "workspace" | "review"): void {
-	if (!SAFE_ID.test(id)) throw new Error(`Invalid ${kind} id: ${id}`);
+	if (!SAFE_ID.test(id)) throw new InvalidReviewIdError(`Invalid ${kind} id: ${id}`);
 }
 
 function reviewFile(workspaceId: string): string {
@@ -72,8 +75,19 @@ function readSnapshot(file: string): ReviewSnapshot | null {
 	try {
 		return JSON.parse(raw) as ReviewSnapshot;
 	} catch {
-		throw new Error(`Review file ${file} is damaged and was left in place — repair or remove it.`);
+		throw new DamagedReviewFileError(
+			`Review file ${file} is damaged and was left in place — repair or remove it.`,
+		);
 	}
+}
+
+export function reviewReadFailure(error: unknown): string {
+	if (error instanceof DamagedReviewFileError) return "damaged";
+	if (error instanceof InvalidReviewIdError) return "invalid id";
+	const code = error instanceof Error ? (error as NodeJS.ErrnoException).code : undefined;
+	if (code === "EACCES" || code === "EPERM") return "permission denied";
+	if (code === "EISDIR" || code === "ENOTDIR") return "not a file";
+	return "read failure";
 }
 
 function load(workspaceId: string): ReviewSnapshot | null {
@@ -442,7 +456,8 @@ export function resolveCommentFromAgent(commentId: string, note?: string): Revie
 		try {
 			snapshot = load(workspaceId);
 		} catch (error) {
-			log.warn(`active review could not be read for workspace ${workspaceId}`, error);
+			const target = SAFE_ID.test(workspaceId) ? ` for workspace ${workspaceId}` : "";
+			log.warn(`active review could not be read${target} (${reviewReadFailure(error)})`);
 			continue;
 		}
 		if (snapshot?.review.status !== "open") continue;
@@ -457,7 +472,7 @@ export function resolveCommentFromAgent(commentId: string, note?: string): Revie
 		try {
 			snapshot = readSnapshot(file);
 		} catch (error) {
-			log.warn("archived review could not be read", error);
+			log.warn(`archived review could not be read (${reviewReadFailure(error)})`);
 			continue;
 		}
 		if (snapshot?.review.status !== "closed") continue;
