@@ -12,7 +12,6 @@ import {
 	useSensors,
 } from "@dnd-kit/core";
 import {
-	RiArrowDownSLine as ChevronDown,
 	RiArrowLeftSLine as ChevronLeft,
 	RiCheckFill as Check,
 	RiFileLine as File,
@@ -26,6 +25,7 @@ import {
 	RiLayout2Line as PanelsTopLeft,
 	RiChat2Fill,
 	RiChat2Line,
+	RiCollapseVerticalLine,
 	RiFileFill,
 	RiGitPullRequestFill,
 	RiLayout2Fill,
@@ -1524,9 +1524,7 @@ function SideGroupView({
 					}}
 					className="flex w-7 shrink-0 items-center justify-center border-border-muted border-b border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 				>
-					<ChevronDown
-						className={`size-4 transition-transform ${group.folded ? "-rotate-90" : ""}`}
-					/>
+					<RiCollapseVerticalLine className="size-4" />
 				</button>
 			</div>
 			<div
