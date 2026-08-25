@@ -1,4 +1,4 @@
-import { ChevronRight, GitBranch, Settings } from "lucide-react";
+import { ChevronRight, Circle, GitBranch, Settings } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "../components/ui/resizable";
 import { ProjectTree } from "../panels/ProjectTree";
@@ -28,9 +28,9 @@ const STATUS_LABEL: Record<ConnectionStatus, string> = {
 };
 
 const STATUS_DOT: Record<ConnectionStatus, string> = {
-	connected: "bg-feedback-success",
-	connecting: "bg-feedback-warning",
-	disconnected: "bg-feedback-error",
+	connected: "text-feedback-success",
+	connecting: "text-feedback-warning",
+	disconnected: "text-feedback-error",
 };
 
 export function Shell() {
@@ -139,7 +139,10 @@ export function Shell() {
 						aria-label={STATUS_LABEL[status]}
 						className="inline-flex items-center gap-sm tr-text-ui text-text-muted"
 					>
-						<span aria-hidden="true" className={`size-2 rounded-full ${STATUS_DOT[status]}`} />
+						<Circle
+							aria-hidden="true"
+							className={`size-2 shrink-0 fill-current ${STATUS_DOT[status]}`}
+						/>
 						<span aria-hidden="true" className="hidden sm:inline">
 							{STATUS_LABEL[status]}
 						</span>
