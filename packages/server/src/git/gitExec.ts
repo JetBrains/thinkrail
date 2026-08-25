@@ -1,30 +1,56 @@
-export function git(
-	cwd: string,
-	args: string[],
-	opts: { env?: Record<string, string | undefined>; raw?: boolean } = {},
-): { ok: boolean; out: string; err: string } {
+import { runBounded } from "../subprocess";
+
+const NETWORK_TIMEOUT_MS = 55_000;
+const MAX_STDERR_CHARS = 2_000;
+const TRUNCATION_MARK = "… (truncated) …";
+const HEAD_CHARS = 1_200;
+const TAIL_CHARS = MAX_STDERR_CHARS - TRUNCATION_MARK.length - HEAD_CHARS;
+
+const STALLED = (waitedMs: number) =>
+	`timed out after ${Math.max(1, Math.round(waitedMs / 1000))}s`;
+const NO_ANSWER =
+	"the remote never answered; if it uses SSH, a key that is not loaded is the usual cause (`ssh-add`)";
+
+type GitResult = { ok: boolean; out: string; err: string };
+
+export function nonInteractiveGitEnv(): Record<string, string | undefined> {
+	return { ...process.env, GIT_TERMINAL_PROMPT: "0" };
+}
+
+function boundedStderr(raw: string): string {
+	const err = raw.trim();
+	if (err.length <= MAX_STDERR_CHARS) return err;
+	const head = err.slice(0, HEAD_CHARS);
+	const tail = err.slice(err.length - TAIL_CHARS);
+	return `${head}${TRUNCATION_MARK}${tail}`;
+}
+
+export function git(cwd: string, args: string[], opts: { raw?: boolean } = {}): GitResult {
 	const result = Bun.spawnSync(["git", "-C", cwd, ...args], {
 		stdout: "pipe",
 		stderr: "pipe",
-		...(opts.env ? { env: opts.env } : {}),
+		env: nonInteractiveGitEnv(),
 	});
 	const stdout = new TextDecoder().decode(result.stdout);
 	return {
 		ok: result.success,
 		out: opts.raw ? stdout : stdout.trim(),
-		err: new TextDecoder().decode(result.stderr).trim(),
+		err: boundedStderr(new TextDecoder().decode(result.stderr)),
 	};
 }
 
 export async function gitAsync(
 	cwd: string,
 	args: string[],
-): Promise<{ ok: boolean; out: string; err: string }> {
-	const proc = Bun.spawn(["git", "-C", cwd, ...args], { stdout: "pipe", stderr: "pipe" });
-	const [out, err, exitCode] = await Promise.all([
-		new Response(proc.stdout).text(),
-		new Response(proc.stderr).text(),
-		proc.exited,
-	]);
-	return { ok: exitCode === 0, out: out.trim(), err: err.trim() };
+	opts: { timeoutMs?: number } = {},
+): Promise<GitResult> {
+	const run = await runBounded(["git", "-C", cwd, ...args], {
+		timeoutMs: opts.timeoutMs ?? NETWORK_TIMEOUT_MS,
+		env: nonInteractiveGitEnv(),
+	});
+	if (run.timedOut) {
+		const captured = boundedStderr(run.err);
+		return { ok: false, out: "", err: `${STALLED(run.waitedMs)} — ${captured || NO_ANSWER}` };
+	}
+	return { ok: run.ok, out: run.out.trim(), err: boundedStderr(run.err) };
 }

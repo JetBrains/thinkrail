@@ -23,3 +23,7 @@ const REF_METACHARS = ["~", "^", ":", "?", "*", "[", "\\"];
 export function assertSafeRef(ref: string): void {
 	if (!isSafeRef(ref)) throw new Error(`Not a usable git ref: ${ref}`);
 }
+
+export function remoteTrackingRef(ref: string): string | null {
+	return ref.startsWith("origin/") ? `refs/remotes/${ref}` : null;
+}
