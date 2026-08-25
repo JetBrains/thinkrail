@@ -115,6 +115,27 @@
         "@earendil-works/pi-coding-agent": "*",
       },
     },
+    "packages/pi-subagents": {
+      "name": "pi-subagents",
+      "version": "0.0.0",
+      "dependencies": {
+        "pi-delegation": "workspace:*",
+      },
+      "devDependencies": {
+        "@earendil-works/pi-agent-core": "catalog:",
+        "@earendil-works/pi-ai": "catalog:",
+        "@earendil-works/pi-coding-agent": "catalog:",
+        "@types/bun": "catalog:",
+        "typebox": "catalog:",
+        "typescript": "catalog:",
+      },
+      "peerDependencies": {
+        "@earendil-works/pi-agent-core": "*",
+        "@earendil-works/pi-ai": "*",
+        "@earendil-works/pi-coding-agent": "*",
+        "typebox": "*",
+      },
+    },
     "packages/pi-thinkrail-workflow": {
       "name": "pi-thinkrail-workflow",
       "version": "0.0.0",
@@ -1155,6 +1176,8 @@
     "pi-delegation": ["pi-delegation@workspace:packages/pi-delegation"],
 
     "pi-spec-graph": ["pi-spec-graph@workspace:packages/spec-graph"],
+
+    "pi-subagents": ["pi-subagents@workspace:packages/pi-subagents"],
 
     "pi-thinkrail-workflow": ["pi-thinkrail-workflow@workspace:packages/pi-thinkrail-workflow"],
 
