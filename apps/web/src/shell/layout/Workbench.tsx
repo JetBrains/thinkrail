@@ -743,7 +743,7 @@ function TabStrip({
 			{trailing}
 			{overflowing ? (
 				<Popover open={overflowOpen} onOpenChange={setOverflowOpen}>
-					<IconTooltip label="Search open tabs">
+					<IconTooltip label="Search open tabs" wrapTrigger>
 						<PopoverTrigger
 							aria-label="Search open tabs"
 							className="flex w-32 shrink-0 items-center justify-center border-border-muted border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
@@ -1153,9 +1153,6 @@ function WorkbenchTab({
 						})}
 					</>
 				) : null}
-				{/* Tools live in the side regions, and the side strip's own menu offers the missing ones there.
-				    Repeating them under a centre tab put "Show Review" in the menu of a terminal, which is
-				    neither where it would open nor anything to do with the tab clicked. */}
 				{location.area !== "center" && missingTools.length > 0 ? (
 					<>
 						<ContextMenuSeparator />
@@ -1628,16 +1625,14 @@ function SideGroupMenu({
 	if (missing.length === 0 && !actions) return null;
 	return (
 		<DropdownMenu>
-			<IconTooltip label="Add to this group">
-				<span className="flex">
-					<DropdownMenuTrigger
-						data-testid="side-group-menu"
-						aria-label="Add to this group"
-						className="flex w-32 shrink-0 items-center justify-center border-border-muted border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
-					>
-						<Plus className="size-16" />
-					</DropdownMenuTrigger>
-				</span>
+			<IconTooltip label="Add to this group" wrapTrigger>
+				<DropdownMenuTrigger
+					data-testid="side-group-menu"
+					aria-label="Add to this group"
+					className="flex w-32 shrink-0 items-center justify-center border-border-muted border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+				>
+					<Plus className="size-16" />
+				</DropdownMenuTrigger>
 			</IconTooltip>
 			<DropdownMenuContent align="end">
 				{actions}
@@ -2310,22 +2305,23 @@ function HiddenSideRail({
 			data-drop-active={drop.isOver || undefined}
 			className="flex w-28 shrink-0 flex-col items-center border-border-default bg-container-sidebar-bg py-4 first:border-r last:border-l data-[drop-active]:bg-primary-subtle data-[drop-active]:ring-2 data-[drop-active]:ring-inset data-[drop-active]:ring-primary"
 		>
-			<IconTooltip label={showEnabled ? `Show ${side} side` : `No ${side} groups to show`}>
-				<span className="flex">
-					<button
-						type="button"
-						aria-label={`Show ${side} side`}
-						disabled={!showEnabled}
-						onClick={onShow}
-						className="flex size-24 items-center justify-center rounded-[var(--radius-sm)] text-text-muted hover:bg-control-bg-hovered hover:text-text-default disabled:pointer-events-none disabled:text-control-disabled-text"
-					>
-						{side === "left" ? (
-							<PanelLeftOpen className="size-14" />
-						) : (
-							<PanelRightOpen className="size-14" />
-						)}
-					</button>
-				</span>
+			<IconTooltip
+				label={showEnabled ? `Show ${side} side` : `No ${side} groups to show`}
+				wrapTrigger
+			>
+				<button
+					type="button"
+					aria-label={`Show ${side} side`}
+					disabled={!showEnabled}
+					onClick={onShow}
+					className="flex size-24 items-center justify-center rounded-[var(--radius-sm)] text-text-muted hover:bg-control-bg-hovered hover:text-text-default disabled:pointer-events-none disabled:text-control-disabled-text"
+				>
+					{side === "left" ? (
+						<PanelLeftOpen className="size-14" />
+					) : (
+						<PanelRightOpen className="size-14" />
+					)}
+				</button>
 			</IconTooltip>
 		</div>
 	);

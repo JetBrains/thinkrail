@@ -359,19 +359,17 @@ function TemplateRow({
 							<Pencil className="size-14" />
 						</button>
 					</IconTooltip>
-					<IconTooltip label="Delete">
-						<span className="flex">
-							<PopoverTrigger asChild>
-								<button
-									type="button"
-									data-testid="template-delete"
-									aria-label="Delete"
-									className="flex size-24 items-center justify-center rounded-[var(--radius-sm)] text-text-muted transition hover:bg-control-bg-hovered hover:text-feedback-error"
-								>
-									<Trash2 className="size-14" />
-								</button>
-							</PopoverTrigger>
-						</span>
+					<IconTooltip label="Delete" wrapTrigger>
+						<PopoverTrigger asChild>
+							<button
+								type="button"
+								data-testid="template-delete"
+								aria-label="Delete"
+								className="flex size-24 items-center justify-center rounded-[var(--radius-sm)] text-text-muted transition hover:bg-control-bg-hovered hover:text-feedback-error"
+							>
+								<Trash2 className="size-14" />
+							</button>
+						</PopoverTrigger>
 					</IconTooltip>
 				</div>
 			</div>

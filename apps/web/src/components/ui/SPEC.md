@@ -34,12 +34,14 @@ The shadcn/ui primitives (Radix), copied in and owned here, themed with our desi
 
 - **Icon-only controls use `IconTooltip`, never native `title`** — the OS delay is untunable and reads as
   "no label". `title` stays only where it is not a control label (truncation fallback) or cannot reach the
-  provider (`panels/reviewWidgets`). Keep `aria-label`: the tooltip is the affordance, not the name. A
-  `disabled` trigger emits no pointer events, so wrap it in a plain element that stays interactive.
-- **Never make `IconTooltip` the outer `asChild` over another Radix trigger** — Radix triggers spread
-  incoming props *after* their own `data-state`, so the tooltip's state (`closed`/`instant-open`, never
+  provider (`panels/reviewWidgets`). Keep `aria-label`: the tooltip is the affordance, not the name.
+- **`wrapTrigger` when the child is `disabled` or is itself a Radix trigger.** It renders the tooltip
+  trigger as a plain `flex` span around the child instead of merging onto it. A `disabled` control emits
+  no pointer events, so the tooltip needs an element that stays interactive; and a Radix trigger spreads
+  incoming props *after* its own `data-state`, so a merged tooltip state (`closed`/`instant-open`, never
   `open`) silently overwrites the popover's or menu's on the shared button, breaking any
-  `data-[state=open]` / `has-[[data-state=open]]` styling. Put a plain span between them.
+  `data-[state=open]` / `has-[[data-state=open]]` styling. Never hand-roll that span at the call site —
+  `tooltip.test.tsx` pins both the isolation and the absence of a hand-rolled wrapper.
 
 - **`context-menu` and `dropdown-menu` are one visual menu system** — same tokenized content surface,
   radius/shadow, item/icon spacing, separators, semantic action colors, focus rows, and viewport collision

@@ -130,20 +130,18 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 						onConfirm={() => void clearReview()}
 						align="end"
 					>
-						<IconTooltip label="Clear review — archive sent comments">
-							<span className="flex">
-								<PopoverTrigger asChild>
-									<button
-										type="button"
-										data-testid="review-clear"
-										aria-label="Clear review"
-										className="flex shrink-0 items-center gap-4 px-4 tr-text-metadata text-text-subtle hover:text-feedback-error"
-									>
-										<Trash2 className="size-14" />
-										Clear
-									</button>
-								</PopoverTrigger>
-							</span>
+						<IconTooltip label="Clear review — archive sent comments" wrapTrigger>
+							<PopoverTrigger asChild>
+								<button
+									type="button"
+									data-testid="review-clear"
+									aria-label="Clear review"
+									className="flex shrink-0 items-center gap-4 px-4 tr-text-metadata text-text-subtle hover:text-feedback-error"
+								>
+									<Trash2 className="size-14" />
+									Clear
+								</button>
+							</PopoverTrigger>
 						</IconTooltip>
 					</ConfirmPopover>
 				</div>
@@ -428,19 +426,17 @@ function CommentRow({
 			<span className="absolute top-4 right-8 flex items-center gap-4 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 has-[[data-state=open]]:opacity-100">
 				{isDraft && (
 					<>
-						<IconTooltip label="Send this comment to the file's review chat">
-							<span className="flex">
-								<button
-									type="button"
-									data-testid="review-comment-send"
-									aria-label="Send this comment to the file's review chat"
-									disabled={sending}
-									onClick={onSend}
-									className="text-text-subtle hover:text-text-default disabled:pointer-events-none"
-								>
-									<Send className="size-14" />
-								</button>
-							</span>
+						<IconTooltip label="Send this comment to the file's review chat" wrapTrigger>
+							<button
+								type="button"
+								data-testid="review-comment-send"
+								aria-label="Send this comment to the file's review chat"
+								disabled={sending}
+								onClick={onSend}
+								className="text-text-subtle hover:text-text-default disabled:pointer-events-none"
+							>
+								<Send className="size-14" />
+							</button>
 						</IconTooltip>
 						<ConfirmPopover
 							open={confirmDelete}
@@ -452,19 +448,17 @@ function CommentRow({
 							onConfirm={() => void removeDraft()}
 							align="end"
 						>
-							<IconTooltip label="Delete draft">
-								<span className="flex">
-									<PopoverTrigger asChild>
-										<button
-											type="button"
-											data-testid="review-comment-delete"
-											aria-label="Delete draft"
-											className="text-text-subtle hover:text-feedback-error"
-										>
-											<Trash2 className="size-14" />
-										</button>
-									</PopoverTrigger>
-								</span>
+							<IconTooltip label="Delete draft" wrapTrigger>
+								<PopoverTrigger asChild>
+									<button
+										type="button"
+										data-testid="review-comment-delete"
+										aria-label="Delete draft"
+										className="text-text-subtle hover:text-feedback-error"
+									>
+										<Trash2 className="size-14" />
+									</button>
+								</PopoverTrigger>
 							</IconTooltip>
 						</ConfirmPopover>
 					</>

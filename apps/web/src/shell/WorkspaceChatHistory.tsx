@@ -28,16 +28,14 @@ export function WorkspaceChatHistory({
 	if (closed.length === 0) return null;
 	return (
 		<DropdownMenu>
-			<IconTooltip label="View chat history">
-				<span className="flex">
-					<DropdownMenuTrigger
-						data-testid="chat-history"
-						aria-label="Reopen a closed chat"
-						className="flex w-32 shrink-0 items-center justify-center border-border-default border-l text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
-					>
-						<History className="size-14" />
-					</DropdownMenuTrigger>
-				</span>
+			<IconTooltip label="View chat history" wrapTrigger>
+				<DropdownMenuTrigger
+					data-testid="chat-history"
+					aria-label="Reopen a closed chat"
+					className="flex w-32 shrink-0 items-center justify-center border-border-default border-l text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
+				>
+					<History className="size-14" />
+				</DropdownMenuTrigger>
 			</IconTooltip>
 			<DropdownMenuContent align="end" className="min-w-[16rem]">
 				<DropdownMenuLabel>Recently closed</DropdownMenuLabel>

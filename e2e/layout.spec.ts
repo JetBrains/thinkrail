@@ -502,6 +502,7 @@ test("keyboard and menu commands reorder, search, recursively split, and collaps
 	await searchTabs.click();
 	await expect(page.getByPlaceholder("Find an open tab…")).toBeVisible();
 	await page.setViewportSize({ width: 1280, height: 720 });
+	await expect(searchTabs).toHaveCount(0);
 	await page.setViewportSize({ width: 620, height: 800 });
 	await expect(searchTabs).toBeVisible();
 	await expect(page.getByPlaceholder("Find an open tab…")).toHaveCount(0);

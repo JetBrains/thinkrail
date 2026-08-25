@@ -218,19 +218,18 @@ export function SkillsDialog({
 									? "Available once the current turn finishes"
 									: "Apply to this chat"
 							}
+							wrapTrigger
 						>
-							<span className="flex">
-								<Button
-									size="sm"
-									variant="outline"
-									data-testid="skills-reload"
-									disabled={busy || workspace.streaming}
-									onClick={() => void reload()}
-								>
-									<RefreshCw className="size-14" />
-									Reload
-								</Button>
-							</span>
+							<Button
+								size="sm"
+								variant="outline"
+								data-testid="skills-reload"
+								disabled={busy || workspace.streaming}
+								onClick={() => void reload()}
+							>
+								<RefreshCw className="size-14" />
+								Reload
+							</Button>
 						</IconTooltip>
 					) : null}
 				</div>
