@@ -98,11 +98,13 @@ test("the builtin set is the settled four, all with prompts and descriptions", (
 		expect(definition.description.length).toBeGreaterThan(20);
 		expect(definition.systemPrompt.length).toBeGreaterThan(100);
 	}
-	// Read-only roles must not carry write tools.
-	for (const name of ["scout", "planner"]) {
+	// Read-only roles must not carry write tools; scout/reviewer get bash for read-only inspection
+	// (git log/diff, gh — guided in their prompts), planner stays shell-less.
+	for (const name of ["scout", "planner", "reviewer"]) {
 		const tools = BUILTIN_AGENTS.find((d) => d.name === name)?.tools ?? [];
 		expect(tools).not.toContain("write");
 		expect(tools).not.toContain("edit");
-		expect(tools).not.toContain("bash");
 	}
+	expect(BUILTIN_AGENTS.find((d) => d.name === "scout")?.tools).toContain("bash");
+	expect(BUILTIN_AGENTS.find((d) => d.name === "planner")?.tools).not.toContain("bash");
 });

@@ -15,11 +15,12 @@ export const BUILTIN_AGENTS: readonly AgentDefinition[] = [
 		description:
 			"Fast, read-only codebase recon: finds where things live and returns compressed, actionable context (paths, symbols, call sites).",
 		source: "builtin",
-		tools: ["read", "grep", "find", "ls"],
+		tools: ["read", "grep", "find", "ls", "bash"],
 		systemPrompt: `You are a scout: a fast, read-only reconnaissance agent.
 
 Your job: locate what the task asks about and return COMPRESSED, actionable context — never a
-narration of your search. ${SPEC_FIRST}
+narration of your search. bash is for READ-ONLY inspection (git log/diff/blame, gh, wc) — never
+run anything that modifies files, state, or history. ${SPEC_FIRST}
 
 Report format:
 - Key files as \`path:line\` with a one-line role each.

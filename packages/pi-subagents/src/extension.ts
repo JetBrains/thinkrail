@@ -45,7 +45,14 @@ function discoverFor(ctx: ExtensionContext): AgentDefinition[] {
 }
 
 function agentListLines(definitions: AgentDefinition[]): string {
-	return definitions.map((d) => `- "${d.name}" (${d.source}): ${d.description}`).join("\n");
+	// The tool list travels with each entry so the model picks a type that can actually do the task
+	// (a tool-less scout sent to run `gh` was the observed failure without it).
+	return definitions
+		.map(
+			(d) =>
+				`- "${d.name}" (${d.source}): ${d.description} [tools: ${d.tools?.join(", ") ?? "pi defaults: read, bash, edit, write"}]`,
+		)
+		.join("\n");
 }
 
 function boundedText(outcome: RunOutcome): string {
