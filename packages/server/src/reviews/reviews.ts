@@ -441,8 +441,8 @@ export function resolveCommentFromAgent(commentId: string, note?: string): Revie
 		let snapshot: ReviewSnapshot | null = null;
 		try {
 			snapshot = load(workspaceId);
-		} catch {
-			log.warn(`active review could not be read for workspace ${workspaceId}`);
+		} catch (error) {
+			log.warn(`active review could not be read for workspace ${workspaceId}`, error);
 			continue;
 		}
 		if (snapshot?.review.status !== "open") continue;
@@ -456,8 +456,8 @@ export function resolveCommentFromAgent(commentId: string, note?: string): Revie
 		let snapshot: ReviewSnapshot | null = null;
 		try {
 			snapshot = readSnapshot(file);
-		} catch {
-			log.warn("archived review could not be read");
+		} catch (error) {
+			log.warn("archived review could not be read", error);
 			continue;
 		}
 		if (snapshot?.review.status !== "closed") continue;
