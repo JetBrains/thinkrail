@@ -212,6 +212,11 @@ are the embedder's bindings.
 
 ### Run lifecycle
 
+Every `runQueued` run passes through `queued` — `run-queued` is emitted even when a slot is free
+and `running` follows immediately (implementation round: a uniform event stream is simpler for
+consumers than a conditional first state; the diagram's direct `running` entry remains the
+semantic for `runNow` when it lands).
+
 ```mermaid
 stateDiagram-v2
     [*] --> queued: runQueued — semaphore full
@@ -388,6 +393,17 @@ Report-back from a subsession to its parent (when subsessions land) is pi-native
 2. Unsupported combinations fail loud with typed errors (unit-pinned).
 3. The contract reviewed on paper against each future pattern (subsession / branch / all three
    workflow styles) before the implementation is called done — recorded here.
+   **Discharged (2026-08, post-implementation):** *subsession* — `{origin: fresh|fork, listed,
+   interactive}` is expressible; run methods on an interactive child reject (`invalid-combination`
+   is carried in the contract; the create-side rejection is unit-pinned today). *Branch* —
+   `{origin: fork(entryId), listed, interactive}` with no `session` options is expressible; pi's
+   `forkFrom` accepts the custom `sessionDir` (verified). *Workflows* — LLM-orchestrated: tools
+   over the service (proven by the subagent consumer); declarative engine: every lifecycle event
+   carries `{sessionId, parentSessionId}` (implemented) and Appendix A's join/fail-fast/cancel
+   needs only `runQueued` + `signal` + the dispose cascade (all implemented); programmatic: the
+   service API directly. `collectResult` and the bindings introduce no pattern-specific coupling.
+   One caveat stands, recorded in the readiness rules: `WorkspaceProvider`'s call sequencing is
+   pinned by its first consumer.
 4. Package boundary: `packages/pi-delegation` with a barrel; consumers (`pi-subagents`, the
    server's binding) import through it; decisions promoted to the package's SPEC.md (plus
    [[submodule-server-agent]]'s SPEC for the embedder binding).

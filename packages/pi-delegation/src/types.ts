@@ -34,7 +34,11 @@ export interface ChildInfo {
  * storage/lineage/trust.
  */
 export interface SessionOptions {
-	/** Exact model ref, resolved against the runtime's registry. Default: parent's current model. */
+	/**
+	 * Exact model ref, resolved against the runtime's registry. Default: parent's current model.
+	 * Fuzzy resolution is the consumer's job; an unknown exact ref throws a plain `Error` (not a
+	 * `DelegationError` — the typed codes are reserved for axis/lifecycle misuse).
+	 */
 	model?: { provider: string; id: string };
 	/** Default: parent's current level. */
 	thinkingLevel?: ThinkingLevel;

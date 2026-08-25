@@ -29,6 +29,7 @@ import {
 	type RunOutcome,
 	type RunSnapshot,
 	type RunStatus,
+	type SessionOptions,
 	type SpawnRecord,
 } from "./types";
 
@@ -49,8 +50,11 @@ interface ChildEntry {
 	disposed: boolean;
 }
 
-/** Reject every axis combination V1 has no consumer for — before any resource is touched. */
-function assertV1Combination(spec: CreateChildSpec): void {
+/**
+ * Reject every axis combination V1 has no consumer for — before any resource is touched — and
+ * return the validated `SessionOptions` (present by construction after the checks).
+ */
+function assertV1Combination(spec: CreateChildSpec): SessionOptions {
 	if (spec.visibility === "hidden" && spec.interactive === true) {
 		throw new DelegationError(
 			"invalid-combination",
@@ -90,6 +94,7 @@ function assertV1Combination(spec: CreateChildSpec): void {
 			"WorkspaceProvider has no V1 consumer — children share the parent cwd",
 		);
 	}
+	return spec.session;
 }
 
 /** The last assistant message — terminal status (stopReason) and final text live on it. */
@@ -198,7 +203,13 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 				pushUpdate("running");
 			} else if (event.type === "turn_end") {
 				turns++;
-				if (cap !== undefined && turns >= cap && !capSteered) {
+				// Steer the wrap-up only when the run will actually CONTINUE (the ending turn issued
+				// tool calls) — a child that finished naturally at the cap must keep its real answer,
+				// not be dragged into a spurious extra turn (pi drains steering before deciding to stop).
+				const continues =
+					event.message.role === "assistant" &&
+					event.message.content.some((block) => block.type === "toolCall");
+				if (cap !== undefined && turns >= cap && continues && !capSteered) {
 					capSteered = true;
 					void session.steer(WRAP_UP_INSTRUCTION).catch(() => {});
 				}
@@ -226,6 +237,9 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 		} finally {
 			unsubscribe();
 			opts.signal?.removeEventListener("abort", onAbort);
+			// Anything still queued after the prompt settles (an undelivered wrap-up steer on an
+			// errored/aborted turn) is stale by definition — it must not leak into the next run.
+			session.clearQueue();
 		}
 
 		const last = lastAssistant(session);
@@ -345,18 +359,18 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 		);
 	}
 
-	function makeHandle(getEntry: () => ChildEntry): ChildHandle {
+	function makeHandle(entry: ChildEntry): ChildHandle {
 		return {
 			get sessionId() {
-				return getEntry().record.sessionId;
+				return entry.record.sessionId;
 			},
 			get record() {
-				return getEntry().record;
+				return entry.record;
 			},
 			get snapshot() {
-				return getEntry().snapshot;
+				return entry.snapshot;
 			},
-			runQueued: (task, opts = {}) => runQueued(getEntry(), task, opts),
+			runQueued: (task, opts = {}) => runQueued(entry, task, opts),
 			runNow: () => {
 				throw new DelegationError(
 					"not-implemented",
@@ -364,25 +378,21 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 				);
 			},
 			steer: async (text) => {
-				const entry = getEntry();
 				if (entry.disposed) {
 					throw new DelegationError("disposed", `Child ${entry.record.sessionId} is disposed`);
 				}
 				await entry.session.steer(text);
 			},
 			abort: async () => {
-				const entry = getEntry();
 				if (entry.disposed) return;
 				await entry.session.abort();
 			},
-			dispose: () => disposeChild(getEntry()),
+			dispose: () => disposeChild(entry),
 			onEvent: (listener) => {
-				const entry = getEntry();
 				entry.listeners.add(listener);
 				return () => entry.listeners.delete(listener);
 			},
 			collectResult: () => {
-				const entry = getEntry();
 				const snapshot = entry.snapshot;
 				if (
 					snapshot &&
@@ -399,7 +409,7 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 	}
 
 	async function createChild(spec: CreateChildSpec): Promise<ChildHandle> {
-		assertV1Combination(spec);
+		const options = assertV1Combination(spec);
 		const parent = bindings.resolveParent(spec.parent);
 		if (!parent) {
 			throw new DelegationError(
@@ -407,8 +417,6 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 				`Parent session ${spec.parent} is not live — children derive their defaults from a live parent`,
 			);
 		}
-		// `assertV1Combination` guarantees `session` is present in V1.
-		const options = spec.session ?? {};
 		const runtime = await getRuntime();
 		const model = options.model
 			? runtime.getModel(options.model.provider, options.model.id)
@@ -472,7 +480,7 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 			listeners: new Set(),
 			disposed: false,
 		};
-		const handle = makeHandle(() => entry);
+		const handle = makeHandle(entry);
 		entry.handle = handle;
 
 		children.set(record.sessionId, entry);

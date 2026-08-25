@@ -25,16 +25,17 @@ lands.
 
 ## Public surface (the barrel, `index.ts`)
 
-- `createDelegationService(bindings)` — the service: `createChild` / `findChild` / `childrenOf` /
-  `onLifecycle` / `disposeChildrenOf`.
+- `createDelegationService(bindings)` — the service (`DelegationService`): `createChild` /
+  `findChild` / `childrenOf` / `onLifecycle` / `disposeChildrenOf`.
 - `DelegationBindings` — everything host-specific: `resolveParent` (required — ThinkRail: the
   manager; pure pi: the consuming extension's own session), `delegationRoot`, `scope`,
   `modelRuntime`, `maxConcurrentPerParent`.
 - Storage helpers: `defaultDelegationRoot` / `delegationSessionDir` / `deriveChildSessionFile`
   (post-restart transcript reads) / `DEFAULT_SCOPE`.
-- The contract types (`CreateChildSpec`, `ChildHandle`, `RunOptions`, `RunOutcome`,
-  `DelegationRunDetails`, `SpawnRecord`, `RunSnapshot`, `LifecycleEvent`, `WorkspaceProvider`) and
-  `DelegationError`.
+- The contract types — `CreateChildSpec`, `ChildInfo`, `SessionOptions`, `ChildHandle`,
+  `RunOptions`, `RunOutcome`, `RunStatus`, `RunLifecycleStatus`, `DelegationRunDetails`,
+  `SpawnRecord`, `RunSnapshot`, `LifecycleEvent`, `WorkspaceProvider` — plus `DelegationError` and
+  `DelegationErrorCode`.
 
 ## Boundary
 

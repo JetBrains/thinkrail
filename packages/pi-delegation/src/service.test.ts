@@ -206,7 +206,9 @@ test("a foreground run completes: outcome, registry, lineage storage, lifecycle 
 	expect(child.record.scope).toBe("ws-test");
 	expect(child.record.visibility).toBe("hidden");
 	// Hidden children persist under the delegation root, never pi's default sessions root.
-	expect(child.record.sessionFile.startsWith(join(delegationRoot, "ws-test", parent.sessionId)));
+	expect(
+		child.record.sessionFile.startsWith(join(delegationRoot, "ws-test", parent.sessionId)),
+	).toBe(true);
 
 	const updates: string[] = [];
 	const outcome = await child.runQueued("Report done.", {
@@ -291,6 +293,25 @@ test("an already-aborted signal resolves an aborted outcome without prompting", 
 		expect(outcome.status).toBe("aborted");
 	} finally {
 		await child.dispose();
+	}
+});
+
+test("a run that completes naturally AT the cap keeps its real answer (no spurious wrap-up)", async () => {
+	faux.setResponses([
+		fauxAssistantMessage("REAL_ANSWER"),
+		fauxAssistantMessage("SPURIOUS_WRAPUP_ANSWER"),
+	]);
+	const child = await service.createChild(subagentSpec());
+	try {
+		const outcome = await child.runQueued("One-shot answer.", { maxTurns: 1 });
+		expect(outcome.status).toBe("completed");
+		expect(outcome.finalText).toBe("REAL_ANSWER");
+		expect(outcome.details.usage.turns).toBe(1);
+		// The sentinel second response was never consumed — no extra turn was started.
+		expect(faux.getPendingResponseCount()).toBe(1);
+	} finally {
+		await child.dispose();
+		faux.setResponses([]);
 	}
 });
 
