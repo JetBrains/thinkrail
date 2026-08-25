@@ -65,11 +65,15 @@ App" card); both flip one **view flag** (`store.demoOpen`, a top-level, non-pers
   and moving with it. It is onboarding-only emphasis, never a permanent hover/focus/selected/active state.
 - **Coach surface = inverted/high-contrast.** Every coach tooltip (both card- and viewport-scoped) renders
   on `bg-primary` with `text-text-on-primary` and a `fill-primary` arrow, so it stands out from the dark
-  ThinkRail UI. **Design-system note:** the semantic layer has **no neutral light/inverse surface role**
-  (there is no `container-inverse`/`text-on-inverse`); per the design constraints we use the closest
-  existing high-contrast semantic combo (`primary` / `on-primary`) rather than inventing an
-  onboarding-specific token. If a literal neutral near-white inverse is wanted, that needs a new sanctioned
-  role — flagged, not bypassed.
+  ThinkRail UI.
+- **Inverse system surface (design-system extension).** The fake folder picker needed a neutral
+  light/inverse surface, which the semantic layer previously lacked. Rather than a picker-specific token,
+  the color model was **extended** with a small, reusable **inverse-surface family** in `styles/colors.json`:
+  `container-inverse-bg` (the theme *foreground* used as a surface — off-white on the dark themes, dark on
+  the light ones, i.e. always contrasting the app), `text-on-inverse` (+ `-muted`), `border-inverse`, and
+  `container-inverse-selected`, all derived from existing palette keys + the shared alpha scale. Any future
+  "this is the operating system / a system overlay" surface reuses it. Coach marks keep the `primary`
+  high-contrast treatment (brand emphasis), distinct from this neutral inverse.
 - A single **1px progress line** (`onboarding-progress`, `bg-primary`, smooth `transition-[width]`) sits on
   the card's bottom edge and advances across the scripted `STEP_ORDER`. No labels/percentages/dots.
 - Only the current target is interactive; everything else is present but inert (covered by the dim).
@@ -77,12 +81,16 @@ App" card); both flip one **view flag** (`store.demoOpen`, a top-level, non-pers
 ## Scripted flow (local `step` state machine, numbered "of 4")
 
 1. **Open a project** — empty-state Welcome with an "Open project" card (arrow points down to it); clicking
-   opens a **fake, simplified macOS-Finder-style folder picker** — a large three-column browser filling
-   the content area (Locations with **Home** selected → Home contents with **Projects** selected →
-   `my-app` / `notes` / `to-do-app`) plus a minimal toolbar, so it reads as a system folder window without
-   recreating Finder. Only `to-do-app` is interactive (spotlit with the pulsing primary emphasis, coach
-   above it, arrow down); everything else stays under the dim and does nothing. Selecting `to-do-app`
-   opens the fake "To Do App" project. Built from ThinkRail semantic tokens — no macOS assets/colors.
+   opens a **fake, simplified macOS-Finder-style folder picker** rendered on a **light / inverse system
+   surface** so it reads as "your computer" opened on top of the dark app (not another ThinkRail panel):
+   a header labelled **"Your computer"** with a plain **Your computer › My Documents › Projects**
+   breadcrumb (no technical `/Users/…` path), a `radius-lg` window, and three columns — Locations
+   (**My Documents** selected) → My Documents contents (**Projects** selected) → `my-app` / `notes` /
+   `to-do-app`. Only `to-do-app` is interactive (spotlit with the pulsing primary emphasis, coach above
+   it, arrow down); everything else stays under the dim and does nothing. Selecting `to-do-app` opens the
+   fake "To Do App" project. The light surface is the sanctioned **`container-inverse-*` / `text-on-inverse*`
+   / `border-inverse`** semantic family (see below) — no macOS assets or hardcoded grays. The rest of the
+   onboarding stays dark; only the picker inverts.
    The demo card carries a soft **brand glow** — a blurred `bg-primary-soft` layer behind it (not
    `feedback-success`; onboarding emphasis, not a success state), extending slightly beyond the card
    without altering its background, border, or layout.

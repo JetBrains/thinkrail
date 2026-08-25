@@ -1,5 +1,5 @@
 /*
- * GENERATED — do not edit. Source: `src/styles/colors.json` (v1.3.0).
+ * GENERATED — do not edit. Source: `src/styles/colors.json` (v1.4.0).
  * Regenerate with `bun run colors:generate`; `colors:check` fails when this file is stale.
  *
  * The semantic roles, then the Tailwind utility map. The palette they read is written to the
@@ -15,6 +15,11 @@
 	--text-link: var(--info); /* global.css `a {}` is the only consumer; no component styles a bare link */
 	--container-workspace-bg: var(--background); /* the app surface, and with it the opened-document canvas — a document reads as part of the workspace (Monaco's EDITOR_THEME, the markdown/spec preview, the chat column, the tab strip) */
 	--container-workspace-overlay: color-mix(in srgb, var(--background) 50%, transparent); /* the onboarding spotlight scrim: the workspace surface at the `veil` (50%) alpha step, dimming the demo card while a coach mark spotlights one target — light enough to keep the interface legible underneath */
+	--container-inverse-bg: var(--text); /* an inverted/system surface that contrasts the app — the theme's foreground colour used AS a surface (an off-white light panel on the dark themes, a dark panel on the light ones); for temporary 'this is your operating system' surfaces like the onboarding demo's fake folder picker */
+	--container-inverse-selected: color-mix(in srgb, var(--background) 20%, transparent); /* selected-row fill on a `container-inverse` surface: the app background tinted onto the inverse surface */
+	--text-on-inverse: var(--background); /* primary text/icons on a `container-inverse` surface (the app background colour, dark on the dark themes) */
+	--text-on-inverse-muted: color-mix(in srgb, var(--background) 60%, transparent); /* secondary text/icons on a `container-inverse` surface: the on-inverse colour at the `strong` (60%) alpha step */
+	--border-inverse: color-mix(in srgb, var(--background) 12%, transparent); /* separators/borders on a `container-inverse` surface */
 	--container-sidebar-bg: var(--sidebar);
 	--container-terminal-bg: var(--sidebar);
 	--container-header-bg: var(--header);
@@ -85,6 +90,11 @@
 	--color-text-on-primary: var(--text-on-primary);
 	--color-container-workspace-bg: var(--container-workspace-bg);
 	--color-container-workspace-overlay: var(--container-workspace-overlay);
+	--color-container-inverse-bg: var(--container-inverse-bg);
+	--color-container-inverse-selected: var(--container-inverse-selected);
+	--color-text-on-inverse: var(--text-on-inverse);
+	--color-text-on-inverse-muted: var(--text-on-inverse-muted);
+	--color-border-inverse: var(--border-inverse);
 	--color-container-sidebar-bg: var(--container-sidebar-bg);
 	--color-container-terminal-bg: var(--container-terminal-bg);
 	--color-container-header-bg: var(--container-header-bg);

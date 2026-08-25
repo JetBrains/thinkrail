@@ -1,6 +1,5 @@
 import {
 	Check,
-	ChevronLeft,
 	ChevronRight,
 	Folder,
 	FolderOpen,
@@ -476,24 +475,24 @@ function SimCenter({
 	if (step === "picker") {
 		return (
 			<div className="flex min-h-0 flex-1 bg-container-content-bg p-lg">
-				<div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[var(--radius-md)] border border-border-default bg-container-elevated-bg shadow-[var(--shadow-md)]">
-					<div className="flex h-9 shrink-0 items-center gap-sm border-border-default border-b px-md text-text-muted">
-						<ChevronLeft className="size-4" />
-						<ChevronRight className="size-4" />
-						<span className="ml-sm tr-text-ui text-text-default">Projects</span>
+				<div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[var(--radius-lg)] border border-border-inverse bg-container-inverse-bg text-text-on-inverse shadow-[var(--shadow-lg)]">
+					<div className="flex h-10 shrink-0 items-center gap-xs border-border-inverse border-b px-md">
+						<House className="size-4 shrink-0 text-text-on-inverse-muted" />
+						<span className="tr-text-ui text-text-on-inverse">Your computer</span>
+						<ChevronRight className="size-3.5 shrink-0 text-text-on-inverse-muted" />
+						<span className="tr-text-ui text-text-on-inverse-muted">My Documents</span>
+						<ChevronRight className="size-3.5 shrink-0 text-text-on-inverse-muted" />
+						<span className="tr-text-ui text-text-on-inverse-muted">Projects</span>
 					</div>
 					<div className="flex min-h-0 flex-1">
-						<PickerColumn className="w-[180px] bg-container-sidebar-bg" label="Locations">
+						<PickerColumn className="w-[200px]" label="Locations">
+							<PickerRow icon={House} name="Your computer" />
 							<PickerRow icon={Folder} name="Desktop" />
-							<PickerRow icon={Folder} name="Documents" />
+							<PickerRow icon={Folder} name="My Documents" selected />
 							<PickerRow icon={Folder} name="Downloads" />
-							<PickerRow icon={House} name="Home" selected />
 						</PickerColumn>
 						<PickerColumn className="w-[220px]">
-							<PickerRow icon={Folder} name="Applications" />
-							<PickerRow icon={Folder} name="Desktop" />
-							<PickerRow icon={Folder} name="Documents" />
-							<PickerRow icon={Folder} name="Downloads" />
+							<PickerRow icon={Folder} name="Notes" />
 							<PickerRow icon={Folder} name="Projects" selected chevron />
 						</PickerColumn>
 						<PickerColumn className="min-w-0 flex-1" last>
@@ -591,12 +590,12 @@ function PickerColumn({
 		<div
 			className={cn(
 				"flex min-h-0 flex-col gap-0.5 overflow-auto p-xs",
-				!last && "border-border-default border-r",
+				!last && "border-border-inverse border-r",
 				className,
 			)}
 		>
 			{label ? (
-				<span className="px-sm pt-xs pb-1 tr-text-eyebrow text-text-muted">{label}</span>
+				<span className="px-sm pt-xs pb-1 tr-text-eyebrow text-text-on-inverse-muted">{label}</span>
 			) : null}
 			{children}
 		</div>
@@ -626,13 +625,13 @@ function PickerRow({
 			className={cn(
 				"flex h-7 shrink-0 items-center gap-sm rounded-[var(--radius-sm)] px-sm text-left tr-text-ui transition-colors",
 				selected
-					? "bg-control-bg-selected text-primary"
-					: "text-text-default hover:bg-control-bg-hovered",
+					? "bg-container-inverse-selected text-text-on-inverse"
+					: "text-text-on-inverse hover:bg-container-inverse-selected",
 			)}
 		>
-			<Icon className={cn("size-4 shrink-0", selected ? "text-primary" : "text-text-muted")} />
+			<Icon className="size-4 shrink-0 text-text-on-inverse-muted" />
 			<span className="min-w-0 flex-1 truncate">{name}</span>
-			{chevron ? <ChevronRight className="size-3.5 shrink-0 text-text-muted" /> : null}
+			{chevron ? <ChevronRight className="size-3.5 shrink-0 text-text-on-inverse-muted" /> : null}
 		</button>
 	);
 }

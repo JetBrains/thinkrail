@@ -1,7 +1,7 @@
 {
 	"$schema": "./colors.schema.json",
 	"metadata": {
-		"version": "1.3.0",
+		"version": "1.4.0",
 		"note": "The semantic colour layer. Palettes live in themes/bundled/*.theme.json; this file says what each palette entry is FOR, and is the only place a derivation is written. A role's `from` names a theme manifest key; the CSS variable that key writes to is derived (kebab-case), not tabulated. See COLOR.md."
 	},
 
@@ -41,6 +41,34 @@
 			"alpha": "veil",
 			"publish": true,
 			"note": "the onboarding spotlight scrim: the workspace surface at the `veil` (50%) alpha step, dimming the demo card while a coach mark spotlights one target — light enough to keep the interface legible underneath"
+		},
+		"container-inverse-bg": {
+			"from": "text",
+			"publish": true,
+			"note": "an inverted/system surface that contrasts the app — the theme's foreground colour used AS a surface (an off-white light panel on the dark themes, a dark panel on the light ones); for temporary 'this is your operating system' surfaces like the onboarding demo's fake folder picker"
+		},
+		"container-inverse-selected": {
+			"from": "background",
+			"alpha": "soft",
+			"publish": true,
+			"note": "selected-row fill on a `container-inverse` surface: the app background tinted onto the inverse surface"
+		},
+		"text-on-inverse": {
+			"from": "background",
+			"publish": true,
+			"note": "primary text/icons on a `container-inverse` surface (the app background colour, dark on the dark themes)"
+		},
+		"text-on-inverse-muted": {
+			"from": "background",
+			"alpha": "strong",
+			"publish": true,
+			"note": "secondary text/icons on a `container-inverse` surface: the on-inverse colour at the `strong` (60%) alpha step"
+		},
+		"border-inverse": {
+			"from": "background",
+			"alpha": "wash",
+			"publish": true,
+			"note": "separators/borders on a `container-inverse` surface"
 		},
 		"container-sidebar-bg": { "from": "sidebar", "publish": true },
 		"container-terminal-bg": { "from": "sidebar", "publish": true },
