@@ -15,7 +15,7 @@ export function WriteCard({ args, result, status, workspaceRoot }: ToolRenderPro
 	return (
 		<div data-testid="tool-write" className="flex flex-col gap-xs">
 			<div className="flex items-center gap-xs tr-text-metadata">
-				<FilePlus className="size-3.5 shrink-0 text-feedback-success" />
+				<FilePlus className="size-3 shrink-0 text-feedback-success" />
 				<span className="truncate text-text-default" title={path}>
 					{displayPath}
 				</span>

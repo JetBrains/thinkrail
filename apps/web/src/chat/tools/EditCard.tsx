@@ -62,7 +62,7 @@ function EditHeader({ path, workspaceRoot }: { path: string; workspaceRoot?: str
 	const displayPath = projectRelativePath(path, workspaceRoot);
 	return (
 		<div className="flex items-center gap-xs tr-text-metadata">
-			<Pencil className="size-3.5 shrink-0 text-feedback-warning" />
+			<Pencil className="size-3 shrink-0 text-feedback-warning" />
 			<span className="truncate text-text-default" title={path}>
 				{displayPath}
 			</span>

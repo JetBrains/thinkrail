@@ -728,7 +728,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							onClick={openHistory}
 							className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg text-text-default hover:bg-control-bg-hovered"
 						>
-							<History className="size-3.5" />
+							<History className="size-4" />
 						</button>
 						{isStreaming ? (
 							<button
@@ -738,7 +738,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 								onClick={onAbort}
 								className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg text-text-default hover:bg-control-bg-hovered"
 							>
-								<Square className="size-3.5" />
+								<Square className="size-4" />
 							</button>
 						) : null}
 						{isStreaming ? (
@@ -750,7 +750,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 										aria-label="Send options"
 										className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg text-text-default hover:bg-control-bg-hovered"
 									>
-										<ChevronUp className="size-3.5" />
+										<ChevronUp className="size-4" />
 									</button>
 								</PopoverTrigger>
 								<PopoverContent side="top" align="end" className="w-[320px] p-xs">

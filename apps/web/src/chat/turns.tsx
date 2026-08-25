@@ -374,7 +374,7 @@ function CompactionTurn({
 				className="flex items-center gap-sm text-text-muted tr-text-metadata hover:text-text-default"
 			>
 				<span className="h-px flex-1 bg-border-default" />
-				{open ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
+				{open ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
 				<span>
 					Earlier messages summarized ({formatTokens(tokensBefore)} tokens of context compacted)
 				</span>
@@ -396,7 +396,7 @@ function ErrorTurn({ text }: { text: string }) {
 			data-role="error"
 			className="flex items-start gap-sm rounded-[var(--radius-sm)] border border-feedback-error-muted bg-clip-padding bg-feedback-error-subtle px-md py-sm text-feedback-error tr-text-ui"
 		>
-			<TriangleAlert className="mt-0.5 size-4 shrink-0" />
+			<TriangleAlert className="mt-0.5 size-3 shrink-0" />
 			<span className="min-w-0 whitespace-pre-wrap break-words">{text}</span>
 		</div>
 	);
@@ -416,7 +416,7 @@ function CompactionNotice({
 				data-status="failed"
 				className="flex items-start gap-sm rounded-[var(--radius-md)] border border-feedback-error-muted bg-clip-padding bg-feedback-error-subtle px-md py-sm text-feedback-error tr-text-ui"
 			>
-				<TriangleAlert className="mt-0.5 size-4 shrink-0" />
+				<TriangleAlert className="mt-0.5 size-3 shrink-0" />
 				<span className="min-w-0 whitespace-pre-wrap break-words">
 					{detail || "Compaction failed."}
 				</span>

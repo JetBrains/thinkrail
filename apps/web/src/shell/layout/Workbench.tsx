@@ -705,7 +705,7 @@ function TabStrip({
 					aria-label="Search open tabs"
 					className="flex w-7 shrink-0 items-center justify-center border-border-muted border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 				>
-					<MoreHorizontal className="size-4" />
+					<MoreHorizontal className="size-3.5" />
 				</PopoverTrigger>
 				<PopoverContent
 					align="end"
@@ -1243,7 +1243,7 @@ function CenterGroupView({
 							onClick={() => onNewChat(group.id)}
 							className="flex w-7 shrink-0 items-center justify-center text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 						>
-							<MessageSquarePlus className="size-4" />
+							<MessageSquarePlus className="size-3.5" />
 						</button>
 					</>
 				}
@@ -2204,9 +2204,9 @@ function HiddenSideRail({
 				className="flex size-6 items-center justify-center rounded-[var(--radius-sm)] text-text-muted hover:bg-control-bg-hovered hover:text-text-default disabled:text-control-disabled-text disabled:hover:bg-transparent"
 			>
 				{side === "left" ? (
-					<PanelLeftOpen className="size-4" />
+					<PanelLeftOpen className="size-3.5" />
 				) : (
-					<PanelRightOpen className="size-4" />
+					<PanelRightOpen className="size-3.5" />
 				)}
 			</button>
 		</div>

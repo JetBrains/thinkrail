@@ -69,7 +69,7 @@ export function TerminalWorkbenchBody({ tab, onAdd }: { tab: TerminalTab; onAdd:
 				onClick={onAdd}
 				className="absolute top-1 right-1 z-10 flex size-5 items-center justify-center rounded-[var(--radius-sm)] bg-container-elevated-bg text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 			>
-				<Plus className="size-4" />
+				<Plus className="size-3.5" />
 			</button>
 			<Suspense fallback={null}>
 				<TerminalInstance

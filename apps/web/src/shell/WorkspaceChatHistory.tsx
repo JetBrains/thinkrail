@@ -29,7 +29,7 @@ export function WorkspaceChatHistory({
 				title="View chat history"
 				className="flex w-7 shrink-0 items-center justify-center border-border-default border-l text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
 			>
-				<History className="size-4" />
+				<History className="size-3.5" />
 			</DropdownMenuTrigger>
 			<DropdownMenuContent align="end" className="min-w-[16rem]">
 				<DropdownMenuLabel>Recently closed</DropdownMenuLabel>

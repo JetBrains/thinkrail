@@ -224,7 +224,7 @@ export function ProjectTree() {
 						data-testid="add-project-menu"
 						aria-label="Add project"
 					>
-						<Plus className="size-4" />
+						<Plus className="size-3.5" />
 					</Button>
 				</AddProjectMenu>
 			</header>
@@ -359,7 +359,7 @@ function ProjectRow({
 				className="flex size-4 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted transition-colors hover:text-text-default focus-visible:text-text-default"
 				data-expanded={isExpanded}
 			>
-				<Chevron className="size-4" />
+				<Chevron className="size-3.5" />
 			</button>
 			<button
 				ref={onRegisterNameButton}
@@ -368,7 +368,9 @@ function ProjectRow({
 				onClick={onSelect}
 				className="flex min-w-0 flex-1 items-center gap-sm text-left"
 			>
-				<Folder className={`size-4 shrink-0 ${isSelected ? "text-primary" : "text-text-muted"}`} />
+				<Folder
+					className={`size-3.5 shrink-0 ${isSelected ? "text-primary" : "text-text-muted"}`}
+				/>
 				<span
 					className={`truncate tr-text-ui ${isSelected ? "text-text-default" : "text-text-muted"}`}
 				>
@@ -390,7 +392,7 @@ function ProjectRow({
 				onClick={onAddWorkspace}
 				className="flex size-5 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted transition-colors hover:bg-container-elevated-bg hover:text-text-default focus-visible:bg-container-elevated-bg focus-visible:text-text-default"
 			>
-				<Plus className="size-4" />
+				<Plus className="size-3.5" />
 			</button>
 		</div>
 	);
@@ -518,9 +520,11 @@ function WorkspaceRow({
 				<button
 					type="button"
 					onClick={onSelect}
-					className="flex min-w-0 flex-1 items-center gap-sm text-left"
+					className="flex min-w-0 flex-1 items-start gap-sm text-left"
 				>
-					<Icon className={`size-4 shrink-0 ${isActive ? "text-primary" : "text-text-muted"}`} />
+					<Icon
+						className={`mt-0.5 size-3.5 shrink-0 ${isActive ? "text-primary" : "text-text-muted"}`}
+					/>
 					<span className="flex min-w-0 flex-1 flex-col">
 						<span
 							data-testid="workspace-name"
@@ -544,7 +548,7 @@ function WorkspaceRow({
 						aria-label={`Actions for ${workspace.name}`}
 						className="flex size-5 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted opacity-100 outline-none transition hover:bg-container-elevated-bg hover:text-text-default [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-primary data-[state=open]:opacity-100"
 					>
-						<MoreVertical className="size-4" />
+						<MoreVertical className="size-3.5" />
 					</DropdownMenuTrigger>
 					<DropdownMenuContent align="end" data-testid="workspace-actions">
 						{editors.length > 0 && (

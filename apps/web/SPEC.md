@@ -106,6 +106,17 @@ themselves.
   utility, an arbitrary length always renders, so an off-scale value looks correct in review and passes
   every other gate. Lengths that are not scale steps at all — `max-w-[78ch]`, `w-[320px]`,
   `max-h-[40vh]`, a measured `pl-[calc(…)]` indent — stay allowed; they are layout constraints, not rhythm.
+- **Icons are `lucide-react` glyphs sized by UI *context*, not location, on the Tailwind `size-*`
+  scale** — no `<Icon>` wrapper and no `size=` prop, and never a container added just to resize a glyph.
+  Three tiers: `size-3` (12px) for **chat-content** indicators (tool activity, plan/todo status,
+  expand/collapse chat details — subordinate to chat text); `size-3.5` (14px) for **compact interface /
+  navigation chrome** (left/right panels, panel & toolbar headers, tabs, the mobile switcher rail, menu
+  items, standalone chrome icon-buttons); `size-4` (16px) only for a **prominent dedicated icon-button
+  surface** — the app-chrome Settings gear and the composer's bottom controls (Send + peers). An
+  icon+text navigation row pairs the 14px icon with a `gap-sm` (8px) gap and **top-aligns** the icon to
+  the first line (`items-start` + `mt-0.5`) so a two-line row hangs the glyph on its title, not the
+  block centre. Menu-item icons are centralized once in `components/ui/menu-styles.ts` (`menuItemClass`
+  `[&_svg]:size-3.5` + `gap-sm`).
 - **`src/themes` is the theme contract and catalog; `src/styles/tokens.css` is structural.** A bundled
   theme is one strict, complete `*.theme.json` manifest: appearance/contrast metadata + semantic UI
   colors + all 16 ANSI colors + a semantic syntax palette. Selected-text foreground overrides are the

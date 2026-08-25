@@ -54,7 +54,7 @@ function statusLabel(status: TodoStatus, glance: PlanGlance): string {
 export function StatusIcon({ status, glance }: { status: TodoStatus; glance: PlanGlance }) {
 	if (status === "in_progress") {
 		const { Icon, className } = glanceIcon(glance);
-		return <Icon data-glance={glance} className={cn("size-4 shrink-0", className)} />;
+		return <Icon data-glance={glance} className={cn("size-3 shrink-0", className)} />;
 	}
 	return <PlanStatusIcon kind={status === "done" ? "done" : "pending"} />;
 }
@@ -123,7 +123,7 @@ function GroupBlock({
 				{status === "active" ? (
 					<StatusIcon status="in_progress" glance={glance} />
 				) : (
-					<Circle className="size-4 shrink-0 text-text-muted" />
+					<Circle className="size-3 shrink-0 text-text-muted" />
 				)}
 				<span
 					className={cn(
@@ -241,8 +241,8 @@ function DoneGroup({
 				onClick={() => setExpanded((v) => !v)}
 				className="flex w-full items-center gap-sm rounded-[var(--radius-sm)] px-xs py-xs text-left hover:bg-control-bg-hovered"
 			>
-				<Chevron className="size-3.5 shrink-0 text-text-muted" />
-				<Check className="size-4 shrink-0 text-primary" />
+				<Chevron className="size-3 shrink-0 text-text-muted" />
+				<Check className="size-3 shrink-0 text-primary" />
 				<span className="min-w-0 flex-1 truncate tr-text-ui text-text-muted line-through">
 					{group.title}
 				</span>

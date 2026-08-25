@@ -23,7 +23,7 @@ export function ReadCard({ args, result, status, workspaceRoot }: ToolRenderProp
 	return (
 		<div data-testid="tool-read" className="flex flex-col gap-xs">
 			<div className="flex items-center gap-xs tr-text-metadata">
-				<FileText className="size-3.5 shrink-0 text-text-muted" />
+				<FileText className="size-3 shrink-0 text-text-muted" />
 				<span className="truncate text-primary" title={path}>
 					{displayPath}
 				</span>

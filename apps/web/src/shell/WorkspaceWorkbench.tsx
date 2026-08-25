@@ -675,7 +675,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 							onClick={() => startChat(groupId)}
 							className="mt-xs flex items-center gap-xs rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-md py-xs tr-text-ui text-text-default hover:bg-control-bg-hovered"
 						>
-							<MessageSquarePlus className="size-4" /> New chat
+							<MessageSquarePlus className="size-3.5" /> New chat
 						</button>
 					</div>
 				)}
@@ -690,7 +690,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 							onClick={() => useAppStore.getState().addTerminal(workspaceId, undefined, groupId)}
 							className="flex w-7 shrink-0 items-center justify-center border-border-default border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 						>
-							<SquareTerminal className="size-4" />
+							<SquareTerminal className="size-3.5" />
 						</button>
 					</>
 				)}

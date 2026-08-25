@@ -50,12 +50,14 @@ export function TreeRow({
 			) : (
 				<span className="size-3.5 shrink-0" />
 			)}
-			{kind === "dir" ? (
-				<Folder className="size-4 shrink-0 text-text-muted" />
-			) : (
-				<FileIcon className="size-4 shrink-0 text-text-muted" />
-			)}
-			<span className={`min-w-0 flex-1 truncate ${labelClassName ?? ""}`}>{label}</span>
+			<span className="flex min-w-0 flex-1 items-center gap-sm">
+				{kind === "dir" ? (
+					<Folder className="size-3.5 shrink-0 text-text-muted" />
+				) : (
+					<FileIcon className="size-3.5 shrink-0 text-text-muted" />
+				)}
+				<span className={`min-w-0 flex-1 truncate ${labelClassName ?? ""}`}>{label}</span>
+			</span>
 			{trailing}
 		</button>
 	);

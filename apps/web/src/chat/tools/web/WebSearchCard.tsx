@@ -27,7 +27,7 @@ export function WebSearchCard({ args, result, status }: ToolRenderProps) {
 	return (
 		<div data-testid="tool-web_search" className="flex flex-col gap-xs">
 			<div className="flex items-center gap-xs tr-text-metadata">
-				<Search className="size-3.5 shrink-0 text-text-muted" />
+				<Search className="size-3 shrink-0 text-text-muted" />
 				<span className="truncate text-primary" title={query}>
 					{query}
 				</span>

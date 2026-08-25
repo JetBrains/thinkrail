@@ -5,7 +5,7 @@ export function SectionLabel({ label }: { label: string }) {
 }
 
 export function PlanStatusIcon({ kind }: { kind: "pending" | "active" | "done" }) {
-	if (kind === "done") return <Check className="size-4 shrink-0 text-primary" />;
-	if (kind === "active") return <CircleDot className="size-4 shrink-0 text-primary" />;
-	return <Circle className="size-4 shrink-0 text-text-muted" />;
+	if (kind === "done") return <Check className="size-3 shrink-0 text-primary" />;
+	if (kind === "active") return <CircleDot className="size-3 shrink-0 text-primary" />;
+	return <Circle className="size-3 shrink-0 text-text-muted" />;
 }
