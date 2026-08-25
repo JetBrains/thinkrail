@@ -1,5 +1,9 @@
+import { execFileSync } from "node:child_process";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { expect, test } from "@playwright/test";
-import { openFixtureProject, worktreeRows } from "./fixtures/app";
+import { openAppFresh, openFixtureProject, worktreeRows } from "./fixtures/app";
+import { E2E_DATA_DIR, E2E_FIXTURE_REPO, E2E_PICK_DIR_POINTER } from "./fixtures/paths";
 
 test("the dialog lists local branches (no stray origin) and creates a worktree", async ({
 	page,
@@ -168,4 +172,41 @@ test("Enter in the prompt creates; Shift+Enter inserts a newline", async ({ page
 	await expect(worktreeRows(page)).toHaveCount(1);
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 	await expect(page.locator('[data-testid="chat-message"][data-role="user"]')).toHaveCount(0);
+});
+
+test("a base whose fetch fails reports git's error, not a request timeout", async ({ page }) => {
+	const remote = join(E2E_DATA_DIR, "dangling-head-remote.git");
+	const repo = join(E2E_DATA_DIR, "dangling-head-fixture");
+	const git = (cwd: string, ...args: string[]) => execFileSync("git", ["-C", cwd, ...args]);
+	for (const path of [remote, repo]) rmSync(path, { recursive: true, force: true });
+	mkdirSync(remote, { recursive: true });
+	git(remote, "init", "--bare", "-b", "main");
+	git(E2E_FIXTURE_REPO, "push", remote, "main");
+	git(E2E_DATA_DIR, "clone", remote, repo);
+	git(repo, "remote", "set-head", "origin", "main");
+	git(repo, "update-ref", "-d", "refs/remotes/origin/main");
+	rmSync(remote, { recursive: true, force: true });
+
+	try {
+		await openAppFresh(page);
+		writeFileSync(E2E_PICK_DIR_POINTER, repo);
+		await page.getByTestId("add-project-menu").click();
+		await page.getByTestId("menu-open-project").click();
+		await expect(page.getByTestId("project-item").first()).toBeVisible();
+
+		await page.getByTestId("add-workspace").first().click();
+		const dialog = page.getByTestId("new-workspace-dialog");
+		await expect(dialog).toBeVisible();
+		await expect(dialog.getByTestId("ws-branch-picker")).toContainText("origin/main");
+
+		await page.getByTestId("create-workspace").click();
+
+		const toast = page.getByTestId("toast");
+		await expect(toast).toContainText("Couldn't create workspace");
+		await expect(toast).toContainText("Could not fetch origin/main");
+		await expect(worktreeRows(page)).toHaveCount(0);
+	} finally {
+		writeFileSync(E2E_PICK_DIR_POINTER, E2E_FIXTURE_REPO);
+		rmSync(repo, { recursive: true, force: true });
+	}
 });

@@ -35,8 +35,30 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   *base* branch — the workspace branch's upstream is the user's to set on first push, never ours;
   off the repo `HEAD` otherwise; **remote-ref freshness is prefetched off this critical
   path** — the New-Workspace dialog `git.prefetch`es the base in the background, so create only `git
-  fetch`es as a cheap fallback when the local remote-tracking ref is missing entirely — that fallback runs
-  via `gitAsync` (network must not block the event loop) with the branch passed after `--`;
+  fetch`es as a fallback when the local remote-tracking ref is missing entirely — that fallback runs
+  via `gitAsync` (network must not block the event loop; bounding the wait and truncating the stderr are
+  the runner's job, not this call site's) with the branch passed after `--`, and **a fallback fetch that does not land the ref
+  fails the create**, naming the ref and carrying git's own stderr — including, when the remote simply
+  never answered, the runner's own `timed out after <n>s …` in place of it. The guard is the **ref**, not
+  the exit code: a narrowed refspec (`remote add -t`, `--single-branch`, an edited `remote.origin.fetch`)
+  makes `git fetch origin -- <b>` exit 0 without creating `refs/remotes/origin/<b>`, and keying off
+  `!fetched.ok` let exactly that case fall through to the derived `fatal: invalid reference` this bullet
+  claims to have removed. **The probe names `refs/remotes/<base>` in full**, exactly as `git`'s
+  `prefetchBranch` does — the `origin/<b>` shorthand also resolves a *local* branch literally named
+  `origin/main`, which would report the remote ref present, skip the fetch, and cut the worktree from that
+  local branch; the two sides of this race must ask about the same ref. **`worktree add` is handed that
+  same full name**, not the `origin/<b>` shorthand: checking one ref and checking out another left the
+  shorthand to hit git's disambiguation anyway, and with both refs present git refuses outright
+  (`warning: refname 'origin/main' is ambiguous` → `fatal: ambiguous object name`) — the derived error this
+  bullet claims to have removed, re-entering through the checkout. `baseBranch` still *records* the
+  user-visible `origin/<b>`; only the revision handed to git is qualified. **The message splits on the same distinction**: a fetch that *failed* carries
+  git's stderr, while a fetch that *succeeded* without landing the ref names the refspec instead — its
+  stderr is a progress log (`* branch release -> FETCH_HEAD`), so pasting it after "Could not fetch"
+  showed the user a successful fetch as the reason a fetch failed. It is the step that knows *why*
+  the base is missing, and discarding its result left `worktree add` to report the derived `fatal: invalid
+  reference: origin/<b>` — or, when the fetch never returned at all, nothing until the client's request
+  timeout (issue #209). The ref is **re-checked with `rev-parse` before throwing**: a concurrent `git.prefetch` may
+  have landed it while the fetch was in flight, and a create that would have succeeded must not lose that race;
   `Workspace.baseBranch` records **creation provenance** — the ref the worktree was cut from, which never
   moves afterwards (what the diff is measured *against* is the separate, re-pointable `diffBase`; see
   `setWorkspaceDiffBase`); **branch name made unique

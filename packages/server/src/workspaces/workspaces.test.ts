@@ -100,6 +100,56 @@ test("createWorkspace branches off a locally-present remote ref without a networ
 	expect(gitOut(ws.worktreePath, "rev-parse", "--abbrev-ref", "HEAD")).toBe(ws.branch);
 });
 
+test("createWorkspace checks out the remote-tracking ref, not a local branch of the same name", async () => {
+	const remoteRepo = join(dataDir, "remote.git");
+	git(repo, "init", "--bare", remoteRepo);
+	git(repo, "remote", "add", "origin", remoteRepo);
+	git(repo, "push", "origin", "main");
+	git(repo, "fetch", "origin");
+	const originSha = gitOut(repo, "rev-parse", "refs/remotes/origin/main");
+
+	writeFileSync(join(repo, "decoy.md"), "decoy\n");
+	git(repo, "add", "-A");
+	git(repo, "commit", "-m", "decoy");
+	git(repo, "update-ref", "refs/heads/origin/main", "HEAD");
+	expect(gitOut(repo, "rev-parse", "refs/heads/origin/main")).not.toBe(originSha);
+
+	const ws = await createWorkspace("p1", undefined, "origin/main");
+
+	expect(ws.baseBranch).toBe("origin/main");
+	expect(gitOut(ws.worktreePath, "rev-parse", "HEAD")).toBe(originSha);
+});
+
+test("createWorkspace fails with git's own words when the base fetch fails", async () => {
+	git(repo, "remote", "add", "origin", join(dataDir, "missing.git"));
+
+	const create = createWorkspace("p1", undefined, "origin/main");
+
+	await expect(create).rejects.toThrow(/Could not fetch origin\/main/);
+	await expect(create).rejects.toThrow(/does not appear to be a git repository/);
+	expect(existsSync(join(dataDir, "worktrees", "repo"))).toBe(false);
+	expect(worktrees()).toHaveLength(0);
+});
+
+test("createWorkspace names the refspec when a fetch succeeds without landing the ref", async () => {
+	const remoteRepo = join(dataDir, "narrow.git");
+	git(repo, "init", "--bare", remoteRepo);
+	git(repo, "remote", "add", "origin", remoteRepo);
+	git(repo, "push", "origin", "main");
+	git(repo, "push", "origin", "main:release");
+	git(repo, "config", "remote.origin.fetch", "+refs/heads/main:refs/remotes/origin/main");
+	git(repo, "update-ref", "-d", "refs/remotes/origin/release");
+
+	const message = await createWorkspace("p1", undefined, "origin/release").then(
+		() => "resolved",
+		(error: Error) => error.message,
+	);
+
+	expect(message).toContain("check remote.origin.fetch");
+	expect(message).not.toContain("FETCH_HEAD");
+	expect(worktrees()).toHaveLength(0);
+});
+
 test("createWorkspace leaves the new branch with no upstream", async () => {
 	const remoteRepo = join(dataDir, "remote.git");
 	git(repo, "init", "--bare", remoteRepo);
