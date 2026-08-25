@@ -205,7 +205,12 @@ const Card = forwardRef<HTMLButtonElement, CardProps>(function Card(
 					{tag}
 				</span>
 			) : null}
-			<Icon className={cn("size-8", primary ? "text-primary" : "text-text-muted")} />
+			<Icon
+				className={cn(
+					"size-8 stroke-current stroke-2",
+					primary ? "text-primary" : "text-text-muted",
+				)}
+			/>
 			<span className="w-full">
 				<span className="block tr-title-card text-text-default">{title}</span>
 				<span className="mt-0.5 block text-text-muted tr-text-metadata leading-snug">
