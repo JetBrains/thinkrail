@@ -179,7 +179,12 @@ export interface TerminalTabsPush {
 // survive a reload, a closed browser and a different browser; attach is exclusive, and taking one over tells
 // the previous client via `terminal.detached`. Attach also returns the recorded output to repaint (`replay`),
 // which is what a revived tab shows after a host restart.
-export const PROTOCOL_VERSION = 28;
+// v29: subagents — `DelegationRunDetails` (mirrored from `pi-delegation`) travels on the `Agent` tool's
+// `partialResult`/result and on the `subagent-completion` custom message, and `subagent.getTranscript`
+// reads a hidden child session's transcript from the host's delegation store, keyed
+// `(workspaceId, parentSessionId, childSessionId)` — the triple the card already carries — so a child run
+// is openable during the run, after completion, and across host restarts.
+export const PROTOCOL_VERSION = 29;
 
 /**
  * The `server.welcome` push payload (the first message on every WS connect). `protocolVersion` lets a
@@ -303,6 +308,7 @@ export const WS_METHODS = {
 	// transcript to rebuild its view on connect.
 	sessionList: "session.list",
 	sessionGetMessages: "session.getMessages",
+	subagentGetTranscript: "subagent.getTranscript",
 	modelList: "model.list",
 	// Awaited catalog refresh (the picker's freshness affordance): resolves when the pi.dev catalog pass
 	// lands, returning the post-refresh list. `force` bypasses pi's 4h provider freshness throttle — set
@@ -635,6 +641,14 @@ export interface WsMethodMap {
 	"session.getMessages": {
 		params: { sessionId: string; workspaceId: string };
 		result: { summary: SessionSummary; messages: TranscriptMessage[] };
+	};
+	// A hidden subagent child's transcript, read from the host's delegation store (never the default
+	// sessions root) — works while the run streams, after completion, and after a host restart (the
+	// registry is in-memory but transcripts persist). Read-only: children are driven exclusively
+	// through their parent's `Agent` tool. Throws when no transcript exists for the triple.
+	"subagent.getTranscript": {
+		params: { workspaceId: string; parentSessionId: string; childSessionId: string };
+		result: { messages: TranscriptMessage[] };
 	};
 	"model.list": { params: Record<string, never>; result: WireModel[] };
 	// pi's `clampThinkingLevel` for a model the client is about to select, by `{provider,id}` ref. The

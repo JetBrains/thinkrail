@@ -2,6 +2,7 @@
 
 export * from "./agentSessionManager";
 export * from "./askUserQuestion";
+export { readChildTranscript } from "./delegation";
 export {
 	type BundledExtensionFactory,
 	type BundledExtensions,

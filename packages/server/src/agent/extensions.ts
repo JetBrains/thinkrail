@@ -235,14 +235,17 @@ export function toSkillCommands(skills: readonly Skill[]): SlashCommandInfo[] {
  * default discovery. `getAdmission` gates the skills (project-scoped aliases behind trust + acknowledgment,
  * plus the per-skill enable/disable layer) — pass a resolver for the owning workspace's context, **re-read
  * on every `loader.reload()`** so a mid-session trust grant or skill/group toggle lands via
- * `session.reload()`; fail closed when it is unknown.
+ * `session.reload()`; fail closed when it is unknown. `extraFactories` carries per-session host
+ * bindings (the workspace-bound subagents extension) — value-imported factories, so dev and the
+ * compiled binary take the same path.
  */
 export async function buildResourceLoader(
 	cwd: string,
 	settingsManager: SettingsManager,
 	getAdmission: () => SkillAdmissionContext,
+	extraFactories: ExtensionFactory[] = [],
 ): Promise<ResourceLoader> {
-	const sharedFactories = [headlessSearchPolicy, askUserQuestionExtension];
+	const sharedFactories = [headlessSearchPolicy, askUserQuestionExtension, ...extraFactories];
 	const skillInputs = resolveSkillInputs(cwd, getAdmission);
 	const common = {
 		cwd,

@@ -163,7 +163,19 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     the manager bullet above). Pure over pi's `SessionManager` (compaction-aware via
     `buildSessionContext`; idempotent; appends at the leaf, where orphans sit by construction) —
     unit-tested against `SessionManager.inMemory`.
-  - `extensions` — Pi resource wiring. `buildResourceLoader(cwd, settingsManager, getAdmission)` starts
+  - `delegation` — ThinkRail's embedding of the portable **`pi-delegation`** core +
+    **`pi-subagents`** layer ([[module-pi-delegation]], [[module-pi-subagents]]): binds what only
+    the host knows — the delegation root under the data dir (`<dataDir>/delegation`),
+    `scope = workspaceId`, the manager's `liveParentContext` projection (`ParentContext`, core
+    decision #23), and the shared `ModelRuntime`. One `DelegationService` per workspace, cached
+    (`delegationServiceFor`); `subagentsExtensionFor(workspaceId)` hands the bound service to the
+    extension factory each session loads. Cascades: `removeSession`/`disposeAllSessions` fire
+    `disposeSessionChildren`; workspace archival calls `removeWorkspaceDelegation` (drops the
+    service + deletes `delegation/<workspaceId>` — hidden children never outlive their workspace).
+    `readChildTranscript` serves `subagent.getTranscript` from the store by
+    `(workspaceId, parentSessionId, childSessionId)`.
+  - `extensions` — Pi resource wiring. `buildResourceLoader(cwd, settingsManager, getAdmission,
+    extraFactories?)` starts
     with a `DefaultResourceLoader` (Pi's normal settings/package + `.pi` / `.agents` discovery), adds
     automatic **portable cross-agent skill aliases**, then loads the five bundled extensions — **`pi-web-access`**
     (`web_search` + `fetch_content`), **`pi-visualize`** (`visualize`), **`pi-spec-graph`** (the `spec_*`
@@ -229,7 +241,9 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
       `pi-ai` version repo-wide (one store entry → one bundled module instance).
     Both modes append `extensionFactories`: a **headless-search policy** (a `tool_call` hook defaulting
     `web_search`'s `workflow` to `"none"`, since pi-web-access would otherwise open a browser curator our
-    `rpc` host can't render) **and** `askUserQuestionExtension` (registers the `ask_user_question` tool).
+    `rpc` host can't render), **`askUserQuestionExtension`** (registers the `ask_user_question` tool),
+    **and the caller's `extraFactories`** — per-session host bindings (the workspace-bound subagents
+    extension), value-imported so dev and the compiled binary take the same path.
     Both session paths pass it as `resourceLoader`. `buildResourceLoader` stays internal; the seam +
     its types are on the barrel.
 - **Public surface (barrel):** the manager operations (incl. `answerQuestion` +
@@ -237,7 +251,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   `configurePiRuntime`/`getPiRuntime`; `completeOnce`/`pickModel` +
   `OneShotRequest`/`OneShotResult`/`ModelTier`; the `webUiContext` seams; the `askUserQuestion` pure
   helpers (`validateQuestionnaire`/`buildQuestionnaireResponse`/`assessAnswerability`/
-  `buildAnswersMessage`); `repairDanglingToolCalls`; the skill catalog helpers
+  `buildAnswersMessage`); `repairDanglingToolCalls`; `liveParentContext` + `readChildTranscript`
+  (the delegation embedding); the skill catalog helpers
   `listSkillCommands(cwd, admission)` (filtered, pre-session autocomplete) / `listSkillCatalog(cwd, admission)`
   (unfiltered, the manager's `skills.state`) / `listProjectAliasSkillNames(cwd)` (present-alias count);
   `reloadSessionResources(sessionId)` (active-chat reload); the **`setSkillAdmissionResolver`** seam (host

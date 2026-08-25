@@ -236,6 +236,39 @@ export interface TodoPlan {
 	groups: TodoGroupItem[];
 }
 
+/** Lifecycle of one delegated (subagent) run — mirrors `pi-delegation`'s vocabulary (never imported). */
+export type DelegationRunStatus = "queued" | "running" | "completed" | "error" | "aborted";
+
+/**
+ * A delegated child run as the chat's Agent card renders it. MIRRORED from `pi-delegation`'s
+ * `DelegationRunDetails` (never imported — the `pi-todos` DTO posture: extension packages stay out
+ * of the wire). Travels as `tool_execution_update.partialResult.details` (REPLACE semantics) while
+ * the run streams, on the final `Agent` tool result, and on the `subagent-completion` custom
+ * message a detached run injects.
+ */
+export interface DelegationRunDetails {
+	/** The child `AgentSession` id — THE id, everywhere (transcript reads key on it). */
+	childSessionId: string;
+	roleName?: string;
+	roleSource?: string;
+	task: string;
+	status: DelegationRunStatus;
+	/** `"<provider>/<id>"`. */
+	model?: string;
+	usage: {
+		input: number;
+		output: number;
+		cacheRead: number;
+		cacheWrite: number;
+		cost: number;
+		turns: number;
+		contextTokens: number;
+	};
+	durationMs: number;
+	/** Last tool/step line — the live card. */
+	activity?: string;
+}
+
 export type GitFileStatus = "added" | "modified" | "deleted" | "renamed" | "untracked";
 
 export interface GitFileChange {

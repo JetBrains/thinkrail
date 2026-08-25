@@ -31,6 +31,7 @@ import {
 	listSkillCatalog,
 	listSkillCommands,
 	promptSession,
+	readChildTranscript,
 	refreshAvailableModels,
 	reloadSessionResources,
 	removeSession,
@@ -476,6 +477,12 @@ const handlers: Record<string, Handler> = {
 	"session.getMessages": (params) => {
 		const p = params as { sessionId: string; workspaceId: string };
 		return getSessionMessages(p.sessionId, p.workspaceId, getWorkspace(p.workspaceId).worktreePath);
+	},
+	// A hidden subagent child's transcript, read from the delegation store — works during the run,
+	// after completion, and after a host restart; throws when no transcript exists for the triple.
+	"subagent.getTranscript": (params) => {
+		const p = params as { workspaceId: string; parentSessionId: string; childSessionId: string };
+		return readChildTranscript(p.workspaceId, p.parentSessionId, p.childSessionId);
 	},
 	"session.extUiReply": (params) => {
 		resolveExtUi((params as { response: ExtUiResponse }).response);

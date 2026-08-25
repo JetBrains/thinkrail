@@ -155,6 +155,11 @@ of the host.
   `TodoGroupItem` additionally carries **`status: TodoGroupStatus`** — the group's *task* lifecycle
   (`pending`/`active`/`done`), **derived by the host** from the steps (`pi-todos`' `groupStatus`) rather than
   stored: shipping it means the truth table has one home and no client re-derives it.
+  **`DelegationRunDetails`** + the **`DelegationRunStatus`** union — the subagent Agent-card DTO,
+  **mirrored** from `pi-delegation` (never imported): rides `tool_execution_update.partialResult`
+  (REPLACE), the final `Agent` tool result, and the `subagent-completion` custom message; the
+  child transcript itself is read via `subagent.getTranscript`, keyed
+  `(workspaceId, parentSessionId, childSessionId)`.
   **history-search read DTOs** — **`HistoryScope`** (the overlay's cycle: this chat → workspace →
   project → everywhere); **`PromptHit`** (a recalled prompt; carries optional `messageIndex` +
   `anchorText` — the kept-newest occurrence's jump anchor) and **`MessageHit`** (a full-text

@@ -22,7 +22,13 @@ import type {
 	TranscriptMessage,
 	WireModel,
 } from "@thinkrail/contracts";
+import type { ParentContext } from "pi-delegation";
 import { ANSWERABILITY_ERRORS, assessAnswerability, buildAnswersMessage } from "./askUserQuestion";
+import {
+	disposeSessionChildren,
+	removeWorkspaceDelegation,
+	subagentsExtensionFor,
+} from "./delegation";
 import { buildResourceLoader, toSkillCommands } from "./extensions";
 import {
 	getPiRuntime,
@@ -210,8 +216,11 @@ export async function createSession(input: CreateSessionInput): Promise<CreateSe
 		modelRuntime,
 		sessionManager: sessionManagerFactory(input.cwd),
 		settingsManager,
-		resourceLoader: await buildResourceLoader(input.cwd, settingsManager, () =>
-			skillAdmissionResolver(input.workspaceId),
+		resourceLoader: await buildResourceLoader(
+			input.cwd,
+			settingsManager,
+			() => skillAdmissionResolver(input.workspaceId),
+			[await subagentsExtensionFor(input.workspaceId)],
 		),
 		// Re-resolve the wire ref to the real model (with baseUrl) host-side — never the client's baseUrl.
 		...(input.model ? { model: await resolveWireModel(input.model) } : {}),
@@ -308,8 +317,11 @@ async function openDiskSession(sessionId: string, workspaceId: string, cwd: stri
 		modelRuntime,
 		sessionManager,
 		settingsManager,
-		resourceLoader: await buildResourceLoader(cwd, settingsManager, () =>
-			skillAdmissionResolver(workspaceId),
+		resourceLoader: await buildResourceLoader(
+			cwd,
+			settingsManager,
+			() => skillAdmissionResolver(workspaceId),
+			[await subagentsExtensionFor(workspaceId)],
 		),
 	});
 	// Lost a race after the open — drop this duplicate rather than clobber the registered one.
@@ -539,10 +551,29 @@ export function isSessionStreaming(sessionId: string): boolean {
 	return mustGet(sessionId).isStreaming;
 }
 
+/**
+ * The live-parent projection the delegation core consumes (`ParentContext`, decision #23) — the
+ * only thing the core may read off a parent: cwd + current model/thinking. Undefined = not live
+ * (→ the typed `unknown-parent` error).
+ */
+export function liveParentContext(sessionId: string): ParentContext | undefined {
+	const entry = sessions.get(sessionId);
+	if (!entry) return undefined;
+	const { session } = entry;
+	return {
+		cwd: session.sessionManager.getCwd(),
+		model: session.model,
+		thinkingLevel: session.thinkingLevel,
+	};
+}
+
 /** Remove one session: stop forwarding its events, settle any open dialog, and dispose it. */
 export function removeSession(sessionId: string): void {
 	const entry = sessions.get(sessionId);
 	if (!entry) return;
+	// Cascade first (fire-and-forget: aborts + disposes any hidden children of this parent) — the
+	// service resolves parents through this module, so children must go before their parent does.
+	void disposeSessionChildren(entry.workspaceId, sessionId).catch(() => {});
 	cancelExtUiForSession(sessionId);
 	entry.unsubscribe();
 	entry.session.dispose();
@@ -552,6 +583,7 @@ export function removeSession(sessionId: string): void {
 /** Dispose every session — called on host shutdown. */
 export function disposeAllSessions(): void {
 	for (const [sessionId, entry] of sessions) {
+		void disposeSessionChildren(entry.workspaceId, sessionId).catch(() => {});
 		cancelExtUiForSession(sessionId);
 		entry.unsubscribe();
 		entry.session.dispose();
@@ -593,6 +625,9 @@ export async function removeWorkspaceSessions(workspaceId: string, cwd?: string)
 		if (entry.session.isStreaming) await entry.session.abort().catch(() => {});
 		removeSession(sessionId);
 	}
+	// After the parents (each removal cascaded its children): drop the workspace's delegation
+	// service + store — hidden children never outlive their workspace (task-spec retention).
+	removeWorkspaceDelegation(workspaceId);
 	if (cwd) await purgeDiskSessions(cwd);
 }
 
