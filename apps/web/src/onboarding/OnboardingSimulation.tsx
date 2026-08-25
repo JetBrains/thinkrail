@@ -20,8 +20,8 @@ import { cn } from "../lib";
 import { useAppStore } from "../store";
 import { useTargetRect } from "./anchor";
 
-const TASK_1 = "Add search functionality to the To Do app.";
-const TASK_2 = "Add a filter for completed tasks.";
+const TASK_1 = "Implement a search feature in my To Do app.";
+const TASK_2 = "Add filtering by tags so I can quickly show tasks with a specific tag.";
 const RESULT_1 =
 	"Added a live search box that filters tasks as you type — a new searchTasks() in src/app.js wired to an input in index.html.";
 const RESULT_2 =
@@ -83,10 +83,10 @@ function activeCoach(step: Step, dialogOpen: boolean): CoachInfo | null {
 			return dialogOpen
 				? {
 						selector: '[data-testid="create-workspace"]',
-						side: "top",
+						side: "right",
 						scope: "viewport",
 						title: "Create the workspace",
-						body: "This cuts an isolated worktree on its own branch. Click Create.",
+						body: "A workspace isolates this task on its own branch. The prepared task will start here — click Create.",
 					}
 				: {
 						selector: '[data-sim="rail-add"]',
@@ -99,10 +99,10 @@ function activeCoach(step: Step, dialogOpen: boolean): CoachInfo | null {
 			return dialogOpen
 				? {
 						selector: '[data-testid="create-workspace"]',
-						side: "top",
+						side: "right",
 						scope: "viewport",
 						title: "Create the second workspace",
-						body: "One more isolated workspace for the second task. Click Create.",
+						body: "A second isolated workspace so the tasks run in parallel. Its prepared task starts here — click Create.",
 					}
 				: {
 						selector: '[data-sim="rail-add"]',
@@ -142,7 +142,7 @@ function activeCoach(step: Step, dialogOpen: boolean): CoachInfo | null {
 
 const WS_NAMES = ["Add search", "Completed filter"];
 
-export type CreateDialogArgs = { onCreate: () => void; onClose: () => void };
+export type CreateDialogArgs = { onCreate: () => void; onClose: () => void; prompt: string };
 
 export function OnboardingSimulation({
 	renderCreateDialog,
@@ -319,7 +319,11 @@ function Simulation({
 					/>
 				) : null}
 				{dialogOpen
-					? renderCreateDialog({ onCreate: onPreviewCreate, onClose: () => setDialogOpen(false) })
+					? renderCreateDialog({
+							onCreate: onPreviewCreate,
+							onClose: () => setDialogOpen(false),
+							prompt: step === "ws1-create" ? TASK_1 : TASK_2,
+						})
 					: null}
 				{step === "done" ? <Completion onFinish={() => closeDemo()} /> : null}
 
@@ -700,15 +704,15 @@ function CardSpotlight({
 					data-testid="onboarding-coach"
 					side={side}
 					align="center"
-					className="z-50 w-[260px] p-md"
+					className="z-50 w-[260px] border-primary bg-primary p-md text-text-on-primary"
 					onOpenAutoFocus={(event) => event.preventDefault()}
 					onEscapeKeyDown={(event) => event.preventDefault()}
 					onPointerDownOutside={(event) => event.preventDefault()}
 					onInteractOutside={(event) => event.preventDefault()}
 				>
-					<p className="tr-title-card text-text-default">{title}</p>
-					<p className="mt-xs text-text-muted tr-text-metadata leading-snug">{body}</p>
-					<PopoverArrow />
+					<p className="tr-title-card text-text-on-primary">{title}</p>
+					<p className="mt-xs tr-text-metadata leading-snug text-text-on-primary">{body}</p>
+					<PopoverArrow className="fill-primary" />
 				</PopoverContent>
 			</Popover>
 		</div>
@@ -745,15 +749,15 @@ function ViewportCoach({
 					data-testid="onboarding-coach"
 					side={side}
 					align="center"
-					className="z-[60] w-[260px] p-md"
+					className="z-[60] w-[260px] border-primary bg-primary p-md text-text-on-primary"
 					onOpenAutoFocus={(event) => event.preventDefault()}
 					onEscapeKeyDown={(event) => event.preventDefault()}
 					onPointerDownOutside={(event) => event.preventDefault()}
 					onInteractOutside={(event) => event.preventDefault()}
 				>
-					<p className="tr-title-card text-text-default">{title}</p>
-					<p className="mt-xs text-text-muted tr-text-metadata leading-snug">{body}</p>
-					<PopoverArrow />
+					<p className="tr-title-card text-text-on-primary">{title}</p>
+					<p className="mt-xs tr-text-metadata leading-snug text-text-on-primary">{body}</p>
+					<PopoverArrow className="fill-primary" />
 				</PopoverContent>
 			</Popover>
 		</>

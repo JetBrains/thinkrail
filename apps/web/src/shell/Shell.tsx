@@ -220,11 +220,12 @@ export function Shell() {
 			)}
 			<Toaster />
 			<OnboardingSimulation
-				renderCreateDialog={({ onCreate, onClose }) => (
+				renderCreateDialog={({ onCreate, onClose, prompt }) => (
 					<NewWorkspaceDialog
 						open
 						preview
 						projectId="onboarding-demo"
+						initialPrompt={prompt}
 						onOpenChange={(next) => {
 							if (!next) onClose();
 						}}

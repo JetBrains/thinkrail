@@ -39,14 +39,18 @@ App" card); both flip one **view flag** (`store.demoOpen`, a top-level, non-pers
 - **Close demo** (`onboarding-close`, a quiet `Button variant="ghost"` in the card's top-right) is present
   throughout — intro included — and is the only explicit pre-completion exit. It only clears the mocked
   experience (`closeDemo`); it touches no real state. Coach marks themselves stay non-dismissible.
+- **The two predetermined tasks** (used in the dialog prompt *and* later in the composer/chat, one source
+  of truth): *"Implement a search feature in my To Do app."* and *"Add filtering by tags so I can quickly
+  show tasks with a specific tag."*
 - **Reusing the real Create-workspace dialog.** Step 2 renders the production `panels/NewWorkspaceDialog`
   verbatim via a small **injected** `renderCreateDialog` render-prop (the shell composition root supplies
   it — same inversion it uses for `SettingsDialog`'s Layout section — so `onboarding` never imports
-  `panels`, no cycle). The dialog runs in an **inert `preview` mode** (a new optional prop on the shared
-  component, default off): all its wire reads are skipped and submit is short-circuited to a
-  `onPreviewCreate` callback, so the exact real dialog UI is taught while **no** workspace/session/wire
-  work happens. Its coach uses a **viewport-scoped** spotlight (the dialog is a portaled modal), a pulse
-  ring on its Create button + a tooltip; every other step uses the card-scoped spotlight.
+  `panels`, no cycle). The dialog runs in an **inert `preview` mode** (optional props on the shared
+  component, default off): all its wire reads are skipped, submit is short-circuited to `onPreviewCreate`,
+  and the Create button's `↵` key-badge is hidden (Create is text-only) — so the exact real dialog UI is
+  taught while **no** workspace/session/wire work happens. The task is passed through as the dialog's
+  `initialPrompt`. Its coach uses a **viewport-scoped** spotlight (the dialog is a portaled modal): a
+  pulse ring on Create + a tooltip to the dialog's right; every other step uses the card-scoped spotlight.
 - **Coach marks** reuse the tooltip + arrow treatment: a card-scoped **spotlight** dims everything inside
   the card except the current target with the `container-workspace-overlay` scrim (the workspace surface at
   the `veil` **50%** alpha step — a sanctioned color token, light enough to keep the interface legible;
@@ -59,6 +63,13 @@ App" card); both flip one **view flag** (`store.demoOpen`, a top-level, non-pers
 - The current actionable target wears a **temporary pulsing emphasis** — a `ring-2 ring-primary` glow at
   the target rect (`motion-safe:animate-pulse`; static under reduced motion), rendered by the spotlight
   and moving with it. It is onboarding-only emphasis, never a permanent hover/focus/selected/active state.
+- **Coach surface = inverted/high-contrast.** Every coach tooltip (both card- and viewport-scoped) renders
+  on `bg-primary` with `text-text-on-primary` and a `fill-primary` arrow, so it stands out from the dark
+  ThinkRail UI. **Design-system note:** the semantic layer has **no neutral light/inverse surface role**
+  (there is no `container-inverse`/`text-on-inverse`); per the design constraints we use the closest
+  existing high-contrast semantic combo (`primary` / `on-primary`) rather than inventing an
+  onboarding-specific token. If a literal neutral near-white inverse is wanted, that needs a new sanctioned
+  role — flagged, not bypassed.
 - A single **1px progress line** (`onboarding-progress`, `bg-primary`, smooth `transition-[width]`) sits on
   the card's bottom edge and advances across the scripted `STEP_ORDER`. No labels/percentages/dots.
 - Only the current target is interactive; everything else is present but inert (covered by the dim).
@@ -76,17 +87,17 @@ App" card); both flip one **view flag** (`store.demoOpen`, a top-level, non-pers
    `feedback-success`; onboarding emphasis, not a success state), extending slightly beyond the card
    without altering its background, border, or layout.
 2. **Create separate workspaces** — coach sits right of the left panel (arrow at the rail `+`); clicking
-   it opens the **real** `NewWorkspaceDialog` (see the preview seam below) and the coach re-points at that
-   dialog's **Create** button. Doing this twice yields two fake workspaces (`Add search`,
-   `Completed filter`), teaching the isolated worktree-per-task model on the real dialog UI. No real
-   worktrees are created.
-3. **Start the first agent** — switches into the first workspace's composer with the predetermined
-   *"Add search functionality to the To Do app."* **already prefilled** (no Insert button); the coach
-   highlights the existing **Send** button (pulsing primary ring). Send shows a brief "Working…" then a
-   predetermined successful result (a `setTimeout`, no model call), using the existing chat treatment.
+   it opens the **real** `NewWorkspaceDialog` (see the preview seam below) with its prompt **prefilled**
+   (focused, blinking caret — no fake typing) with that workspace's predetermined task, and the coach
+   re-points **to the right of the dialog** with its arrow at the emphasized **Create** button. Doing this
+   twice yields two fake workspaces. No real worktrees are created.
+3. **Start the first agent** — switches into the first workspace's composer with the first task **already
+   prefilled** (no Insert button); the coach highlights the existing **Send** button (pulsing primary
+   ring). Send shows a brief "Working…" then a predetermined successful result (a `setTimeout`, no model
+   call), using the existing chat treatment.
 4. **Run agents in parallel** — coach guides switching to the second workspace, whose composer is
-   **prefilled** with *"Add a filter for completed tasks."* (Send highlighted); the first workspace's row
-   shows it already **done** while the second works —
+   **prefilled** with the second task (Send highlighted); the first workspace's row shows it already
+   **done** while the second works —
    the payoff that separate workspaces hold independent, concurrent sessions. A left-panel note reinforces
    that switching tabs never stops a session.
 

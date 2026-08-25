@@ -22,30 +22,34 @@ test("the mocked onboarding simulation runs intro → scripted flow, never touch
 	await expect(coach).toContainText("Choose your project folder");
 	await page.getByTestId("sim-folder").click();
 
+	const task1 = "Implement a search feature in my To Do app.";
+	const task2 = "Add filtering by tags so I can quickly show tasks with a specific tag.";
+
 	await expect(coach).toContainText("Create a workspace");
 	await page.getByTestId("sim-add-workspace").click();
 	await expect(page.getByTestId("new-workspace-dialog")).toBeVisible();
+	await expect(page.getByTestId("ws-prompt")).toHaveValue(task1);
+	const createButton = page.getByTestId("create-workspace");
+	await expect(createButton).toHaveText("Create");
 	await expect(coach).toContainText("Create the workspace");
-	await page.getByTestId("create-workspace").click();
+	await createButton.click();
 
 	await expect(coach).toContainText("Create a second workspace");
 	await page.getByTestId("sim-add-workspace").click();
 	await expect(page.getByTestId("new-workspace-dialog")).toBeVisible();
-	await expect(coach).toContainText("Create the second workspace");
+	await expect(page.getByTestId("ws-prompt")).toHaveValue(task2);
 	await page.getByTestId("create-workspace").click();
 
 	await expect(coach).toContainText("Start the first agent");
 	await expect(page.getByTestId("onboarding-insert-prompt")).toHaveCount(0);
-	await expect(page.getByTestId("sim-composer")).toHaveValue(
-		"Add search functionality to the To Do app.",
-	);
+	await expect(page.getByTestId("sim-composer")).toHaveValue(task1);
 	await page.getByTestId("sim-send").click();
 
 	await expect(coach).toContainText("Switch to your second workspace");
 	await page.getByTestId("sim-ws-1").click();
 
 	await expect(coach).toContainText("Run a second agent in parallel");
-	await expect(page.getByTestId("sim-composer")).toHaveValue("Add a filter for completed tasks.");
+	await expect(page.getByTestId("sim-composer")).toHaveValue(task2);
 	await page.getByTestId("sim-send").click();
 
 	await page.getByTestId("onboarding-finish").click();

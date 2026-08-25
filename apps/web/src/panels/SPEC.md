@@ -230,9 +230,11 @@ pre-session half of the user's skill settings; the chat header opens the same di
 **`NewWorkspaceDialog`** carries an optional, default-off **`preview` seam** (`preview` + `onPreviewCreate`)
 for the onboarding simulation to teach this exact dialog UI: when `preview` is set, every wire read (skills,
 aliases, model default/clamp, branch list, prefetch, model catalog) and the project-closed guard are
-skipped and submit is short-circuited to `onPreviewCreate` instead of `workspace.create`/`session.create`
-— so the real component renders with no network calls and creates no domain object. Production callers pass
-neither prop and are unaffected; the demo injects it via the shell (see [[submodule-web-onboarding]]).
+skipped, submit is short-circuited to `onPreviewCreate` instead of `workspace.create`/`session.create`, and
+the Create button's `↵` key-badge is hidden (Create renders text-only) — so the real component renders with
+no network calls and creates no domain object. The demo's predetermined task rides in through the normal
+`initialPrompt` (prefilled, focused). Production callers pass none of these and are unaffected; the demo
+injects it via the shell (see [[submodule-web-onboarding]]).
 
 **`NewWorkspaceDialog`** is the start-working surface: **a target control** (a two-option segment — a
 native radio group, `fieldset` + sr-only `legend` over visually-hidden radio inputs, so assistive tech

@@ -498,9 +498,11 @@ export function NewWorkspaceDialog({
 						className="flex h-8 shrink-0 items-center gap-sm rounded-[var(--radius-sm)] bg-control-primary-bg px-md tr-text-action text-control-primary-text outline-none transition-colors hover:bg-control-primary-bg-hovered focus-visible:ring-2 focus-visible:ring-primary disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text"
 					>
 						{isolated ? "Create" : "Start"}
-						<span className="inline-flex h-4 min-w-4 items-center justify-center rounded-[var(--radius-sm)] bg-on-primary-soft px-1 tr-code-text">
-							↵
-						</span>
+						{preview ? null : (
+							<span className="inline-flex h-4 min-w-4 items-center justify-center rounded-[var(--radius-sm)] bg-on-primary-soft px-1 tr-code-text">
+								↵
+							</span>
+						)}
 					</button>
 				</div>
 				<SkillsDialog
