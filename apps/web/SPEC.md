@@ -116,7 +116,9 @@ themselves.
   icon+text navigation row pairs the 14px icon with a `gap-sm` (8px) gap and **top-aligns** the icon to
   the first line (`items-start` + `mt-0.5`) so a two-line row hangs the glyph on its title, not the
   block centre. Menu-item icons are centralized once in `components/ui/menu-styles.ts` (`menuItemClass`
-  `[&_svg]:size-3.5` + `gap-sm`).
+  `[&_svg]:size-3.5` + `gap-sm`). **Stroke weight tracks size**, set once in `src/styles/global.css`
+  keyed on the size utility (never a per-call-site `strokeWidth`): the 12/14px tiers (`size-3` /
+  `size-3.5`) render at `1.4`, while 16px and up keep lucide's default `2`.
 - **`src/themes` is the theme contract and catalog; `src/styles/tokens.css` is structural.** A bundled
   theme is one strict, complete `*.theme.json` manifest: appearance/contrast metadata + semantic UI
   colors + all 16 ANSI colors + a semantic syntax palette. Selected-text foreground overrides are the

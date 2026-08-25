@@ -230,7 +230,7 @@ function SkillInvocationCard({
 				onClick={toggle}
 				className="flex w-full items-center gap-xs px-md py-sm text-left outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary"
 			>
-				<BookOpen size={14} className="shrink-0 text-text-muted" aria-hidden="true" />
+				<BookOpen className="size-3.5 shrink-0 text-text-muted" aria-hidden="true" />
 				<span className="shrink-0 tr-text-ui text-text-muted">Skill</span>
 				<span className="shrink-0 text-text-subtle" aria-hidden="true">
 					·
@@ -242,9 +242,9 @@ function SkillInvocationCard({
 					{invocation.name}
 				</span>
 				{expanded ? (
-					<ChevronDown size={14} className="shrink-0 text-text-muted" aria-hidden="true" />
+					<ChevronDown className="size-3.5 shrink-0 text-text-muted" aria-hidden="true" />
 				) : (
-					<ChevronRight size={14} className="shrink-0 text-text-muted" aria-hidden="true" />
+					<ChevronRight className="size-3.5 shrink-0 text-text-muted" aria-hidden="true" />
 				)}
 			</button>
 			{expanded ? (

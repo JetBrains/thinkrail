@@ -25,6 +25,14 @@ body {
 	color: var(--selection-text);
 }
 
+/* Icon stroke weight tracks icon size: the small 12/14px tiers render at 1.4; 16px and up keep
+   lucide's default 2. Keyed on the size utility so stroke stays a single source with the sizing
+   scale (no per-call-site strokeWidth) — see apps/web/SPEC.md. */
+svg.lucide.size-3,
+svg.lucide.size-3\.5 {
+	stroke-width: 1.4;
+}
+
 a {
 	color: var(--text-link);
 }
