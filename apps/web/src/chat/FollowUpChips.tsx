@@ -20,7 +20,7 @@ export function FollowUpChips({
 					data-testid="followup-chip"
 					title={item.prompt}
 					onClick={() => onPick(item.prompt)}
-					className="flex max-w-full items-center rounded-[var(--radius-sm)] border border-border-default bg-control-bg px-sm py-2xs text-text-muted tr-text-metadata hover:bg-control-bg-hovered hover:text-text-default"
+					className="flex max-w-full items-center rounded-[var(--radius-sm)] border border-transparent bg-clip-padding bg-bubble-user-bg px-sm py-2xs text-text-muted tr-text-reading transition-colors hover:border-bubble-user-border"
 				>
 					<span className="truncate">{item.label}</span>
 				</button>

@@ -292,8 +292,12 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   only, so a queued image attachment shows no chip in the strip; the canonical transcript turn later
   renders its image blocks with the hydrated-turn fallback labels. E2e: `queue.live.spec.ts` (@agent).
 - **Follow-up chips** (`FollowUpChips.tsx` + the pure `deriveFollowUps(turns)` in `followUps.ts`) — a
-  compact `flex-wrap` row of low-weight suggestion chips (`tr-text-metadata`, semantic control roles)
-  rendered by `ChatView` **between `QueueStrip` and the composer wrapper** (never inside the composer).
+  compact `flex-wrap` row of suggestion chips rendered by `ChatView` **between `QueueStrip` and the
+  composer wrapper** (never inside the composer). The chips **reuse the user-message bubble roles**
+  (the `USER_BUBBLE` treatment in `turns.tsx`: `bg-bubble-user-bg` surface + `text-text-muted` +
+  `tr-text-reading`) so a suggestion reads as a pre-drafted user reply — no follow-up-specific tokens.
+  The default border is transparent (no visible border); hover reveals `border-bubble-user-border`
+  (the same accent border role), background unchanged on hover.
   Each chip carries a short `label` and a full `prompt`; clicking one populates the composer draft via
   the existing `ComposerHandle.insertText` (→ `replaceDraft`, focus stays in the composer) and **never
   sends** — the user reviews and presses Send through the unchanged path. They are **view-level**
