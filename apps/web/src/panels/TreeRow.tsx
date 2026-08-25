@@ -1,4 +1,9 @@
-import { ChevronDown, ChevronRight, File as FileIcon, Folder } from "lucide-react";
+import {
+	RiArrowDownSFill as ChevronDown,
+	RiArrowRightSFill as ChevronRight,
+	RiFileFill as FileIcon,
+	RiFolderFill as Folder,
+} from "@remixicon/react";
 import type { MouseEvent, ReactNode } from "react";
 
 export function TreeRow({

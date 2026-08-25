@@ -1,14 +1,14 @@
 import {
-	BookOpen,
-	Box,
-	Boxes,
-	ChevronDown,
-	ChevronRight,
-	FileText,
-	ListChecks,
-	Network,
-	RefreshCw,
-} from "lucide-react";
+	RiBookOpenFill as BookOpen,
+	RiBox3Fill as Box,
+	RiStackFill as Boxes,
+	RiArrowDownSFill as ChevronDown,
+	RiArrowRightSFill as ChevronRight,
+	RiFileTextFill as FileText,
+	RiListCheck3 as ListChecks,
+	RiShareFill as Network,
+	RiRefreshFill as RefreshCw,
+} from "@remixicon/react";
 import { useEffect, useMemo, useState } from "react";
 import { cn } from "../lib";
 import { selectActiveEditorTab, useAppStore } from "../store";

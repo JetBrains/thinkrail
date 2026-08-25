@@ -1,4 +1,8 @@
-import { ChevronDown, Copy, FileDiff } from "lucide-react";
+import {
+	RiArrowDownSFill as ChevronDown,
+	RiFileCopyFill as Copy,
+	RiFileList2Fill as FileDiff,
+} from "@remixicon/react";
 import type { MouseEvent, ReactNode } from "react";
 import { useState } from "react";
 import {

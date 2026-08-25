@@ -1,5 +1,10 @@
+import {
+	RiFolderOpenFill as FolderOpen,
+	RiGitBranchFill as GitBranch,
+	RiLoader4Fill as Loader2,
+	RiRefreshFill as RefreshCw,
+} from "@remixicon/react";
 import type { ExistingWorktreeCandidate, Workspace } from "@thinkrail/contracts";
-import { FolderOpen, GitBranch, Loader2, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {

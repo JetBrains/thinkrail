@@ -1,5 +1,11 @@
+import {
+	RiArrowDownSFill as ChevronDown,
+	RiArrowRightSFill as ChevronRight,
+	RiFileCopyFill as Copy,
+	RiDownloadFill as Download,
+	RiGitCommitFill as GitCommitHorizontal,
+} from "@remixicon/react";
 import type { GitFileChange, TodoGroupItem, TodoItem } from "@thinkrail/contracts";
-import { ChevronDown, ChevronRight, Copy, Download, GitCommitHorizontal } from "lucide-react";
 import { useState } from "react";
 import { planToMarkdown } from "../chat/planMarkdown";
 import {

@@ -1,19 +1,19 @@
 import {
+	RiArrowUpFill as ArrowUp,
+	RiArrowUpSFill as ChevronUp,
+	RiFileFill as FileIcon,
+	RiFolderFill as FolderIcon,
+	RiHistoryFill as History,
+	RiSparkling2Fill as Sparkles,
+	RiStopFill as Square,
+	RiCloseFill as X,
+} from "@remixicon/react";
+import {
 	REQUEST_IMAGE_BASE64_BUDGET,
 	type SlashCommandInfo,
 	type ThinkingLevel,
 	type WireModel,
 } from "@thinkrail/contracts";
-import {
-	ArrowUp,
-	ChevronUp,
-	FileIcon,
-	FolderIcon,
-	History,
-	Sparkles,
-	Square,
-	X,
-} from "lucide-react";
 import {
 	type ClipboardEvent,
 	type DragEvent,

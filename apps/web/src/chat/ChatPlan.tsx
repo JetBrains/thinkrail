@@ -1,4 +1,7 @@
-import { ChevronDown, ChevronRight } from "lucide-react";
+import {
+	RiArrowDownSFill as ChevronDown,
+	RiArrowRightSFill as ChevronRight,
+} from "@remixicon/react";
 import { PopoverContent } from "@/components/ui/popover";
 import { cn } from "../lib";
 import { type PlanGlance, planSummary, stripStatus } from "./planView";

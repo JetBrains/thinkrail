@@ -1,4 +1,8 @@
-import { Minus, Plus, RotateCcw } from "lucide-react";
+import {
+	RiSubtractFill as Minus,
+	RiAddFill as Plus,
+	RiArrowGoBackFill as RotateCcw,
+} from "@remixicon/react";
 import type * as React from "react";
 import { useEffect, useRef, useState } from "react";
 

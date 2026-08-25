@@ -1,13 +1,13 @@
-import type { ReviewComment } from "@thinkrail/contracts";
 import {
-	CheckCircle2,
-	ChevronDown,
-	ChevronRight,
-	FileText,
-	MessageSquare,
-	Send,
-	Trash2,
-} from "lucide-react";
+	RiCheckboxCircleFill as CheckCircle2,
+	RiArrowDownSFill as ChevronDown,
+	RiArrowRightSFill as ChevronRight,
+	RiFileTextFill as FileText,
+	RiChat1Fill as MessageSquare,
+	RiSendPlaneFill as Send,
+	RiDeleteBin6Fill as Trash2,
+} from "@remixicon/react";
+import type { ReviewComment } from "@thinkrail/contracts";
 import { useState } from "react";
 import { PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";

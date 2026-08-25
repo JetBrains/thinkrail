@@ -1,17 +1,17 @@
+import {
+	RiCheckFill as Check,
+	RiRecordCircleFill as CircleDot,
+	RiListCheck3 as ListChecks,
+	RiQuestionnaireFill as MessageCircleQuestion,
+	RiPencilFill as Pencil,
+	RiSkipForwardFill as SkipForward,
+} from "@remixicon/react";
 import type {
 	AskUserQuestionAnswer,
 	AskUserQuestionArgs,
 	AskUserQuestionItem,
 	AskUserQuestionResult,
 } from "@thinkrail/contracts";
-import {
-	Check,
-	CircleDot,
-	ListChecks,
-	MessageCircleQuestion,
-	Pencil,
-	SkipForward,
-} from "lucide-react";
 import { Fragment, type KeyboardEvent, useEffect, useId, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib";
 import { useAskFocusScope, useAskState } from "../askState";

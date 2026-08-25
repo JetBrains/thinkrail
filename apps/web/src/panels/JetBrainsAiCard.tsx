@@ -1,3 +1,15 @@
+import {
+	RiAlertFill as AlertTriangle,
+	RiCheckFill as Check,
+	RiFileCopyFill as Copy,
+	RiExternalLinkFill as ExternalLink,
+	RiLoader4Fill as Loader2,
+	RiLogoutBoxFill as LogOut,
+	RiPlayFill as Play,
+	RiRefreshFill as RefreshCw,
+	RiToolsFill as Wrench,
+	RiFlashlightFill as Zap,
+} from "@remixicon/react";
 import type {
 	JbcentralAction,
 	JbcentralActionFailureReason,
@@ -5,18 +17,6 @@ import type {
 	JbcentralInstall,
 	JbcentralStatus,
 } from "@thinkrail/contracts";
-import {
-	AlertTriangle,
-	Check,
-	Copy,
-	ExternalLink,
-	Loader2,
-	LogOut,
-	Play,
-	RefreshCw,
-	Wrench,
-	Zap,
-} from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { copyText } from "@/lib";

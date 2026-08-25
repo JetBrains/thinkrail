@@ -1,17 +1,17 @@
-import type { TodoGroupItem, TodoItem, TodoPlan, TodoStatus } from "@thinkrail/contracts";
 import {
-	Check,
-	ChevronDown,
-	ChevronRight,
-	Circle,
-	CircleDot,
-	CirclePause,
-	FileText,
-	MessageCircleQuestion,
-	Plus,
-	Trash2,
-	UserRound,
-} from "lucide-react";
+	RiCheckFill as Check,
+	RiArrowDownSFill as ChevronDown,
+	RiArrowRightSFill as ChevronRight,
+	RiCircleFill as Circle,
+	RiRecordCircleFill as CircleDot,
+	RiPauseCircleFill as CirclePause,
+	RiFileTextFill as FileText,
+	RiQuestionnaireFill as MessageCircleQuestion,
+	RiAddFill as Plus,
+	RiDeleteBin6Fill as Trash2,
+	RiUser3Fill as UserRound,
+} from "@remixicon/react";
+import type { TodoGroupItem, TodoItem, TodoPlan, TodoStatus } from "@thinkrail/contracts";
 import { useState } from "react";
 import { cn } from "../lib";
 import { PlanStatusIcon, SectionLabel } from "./planKit";

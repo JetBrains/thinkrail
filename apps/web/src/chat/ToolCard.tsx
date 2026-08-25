@@ -1,4 +1,9 @@
-import { Check, ChevronRight, Loader2, X } from "lucide-react";
+import {
+	RiCheckFill as Check,
+	RiArrowRightSFill as ChevronRight,
+	RiLoader4Fill as Loader2,
+	RiCloseFill as X,
+} from "@remixicon/react";
 import { cn } from "@/lib";
 import { useFold } from "./foldState";
 import { getToolRenderer, getToolSummary, resolveProminence } from "./toolRegistry";

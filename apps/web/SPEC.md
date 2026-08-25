@@ -106,8 +106,11 @@ themselves.
   utility, an arbitrary length always renders, so an off-scale value looks correct in review and passes
   every other gate. Lengths that are not scale steps at all — `max-w-[78ch]`, `w-[320px]`,
   `max-h-[40vh]`, a measured `pl-[calc(…)]` indent — stay allowed; they are layout constraints, not rhythm.
-- **Icons are `lucide-react` glyphs sized by UI *context*, not location, on the Tailwind `size-*`
-  scale** — no `<Icon>` wrapper and no `size=` prop, and never a container added just to resize a glyph.
+- **Icons are `@remixicon/react` (Remix Icon, **Fill** style) glyphs sized by UI *context*, not
+  location, on the Tailwind `size-*` scale** — imported by name (`RiFolderFill`, `RiAddFill`; the
+  suffixless `RiParagraph`/`RiDraggable`/`RiLinkM` where no Fill variant exists), no `<Icon>` wrapper
+  and no `size=` prop, and never a container added just to resize a glyph. Remix glyphs are
+  `fill="currentColor"`, so the semantic `text-*` utilities colour them.
   Three tiers: `size-3` (12px) for **chat-content** indicators (tool activity, plan/todo status,
   expand/collapse chat details — subordinate to chat text); `size-3.5` (14px) for **compact interface /
   navigation chrome** (left/right panels, panel & toolbar headers, tabs, the mobile switcher rail, menu
@@ -190,7 +193,7 @@ themselves.
   code-only mono, the two prose systems, and how to add or change a style — is specced in
   [src/styles/TYPOGRAPHY.md](src/styles/TYPOGRAPHY.md)** (`web-typography`); check changes against it. The
   generator that turns it into CSS is [scripts/SPEC.md](scripts/SPEC.md).
-- **Icons: `lucide-react`. Components: shadcn/ui** (Radix primitives), copy-in under `src/components/ui/`
+- **Icons: `@remixicon/react` (Fill style). Components: shadcn/ui** (Radix primitives), copy-in under `src/components/ui/`
   and themed with our token utilities (`cn()` in `src/lib/utils.ts`) — never shadcn's default oklch
   palette. Use these for accessible menus / dialogs / tooltips.
 

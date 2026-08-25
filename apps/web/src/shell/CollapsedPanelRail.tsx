@@ -1,4 +1,7 @@
-import { PanelLeftOpen, PanelRightOpen } from "lucide-react";
+import {
+	RiLayoutLeftFill as PanelLeftOpen,
+	RiLayoutRightFill as PanelRightOpen,
+} from "@remixicon/react";
 import { forwardRef } from "react";
 import { cn, platformShortcutLabel } from "../lib";
 

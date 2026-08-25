@@ -1,4 +1,8 @@
-import { Check, Copy, Pilcrow } from "lucide-react";
+import {
+	RiCheckFill as Check,
+	RiFileCopyFill as Copy,
+	RiParagraph as Pilcrow,
+} from "@remixicon/react";
 import { lazy, Suspense, useState } from "react";
 import { copyText, isMarkdownPath } from "@/lib/utils";
 import type { DiffTab } from "../store";

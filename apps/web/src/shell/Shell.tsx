@@ -1,4 +1,9 @@
-import { ChevronRight, Circle, GitBranch, Settings } from "lucide-react";
+import {
+	RiArrowRightSFill as ChevronRight,
+	RiCircleFill as Circle,
+	RiGitBranchFill as GitBranch,
+	RiSettings3Fill as Settings,
+} from "@remixicon/react";
 import { useEffect, useRef } from "react";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "../components/ui/resizable";
 import { ProjectTree } from "../panels/ProjectTree";

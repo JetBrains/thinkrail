@@ -1,18 +1,18 @@
-import type { EditorInfo, Project, Workspace } from "@thinkrail/contracts";
 import {
-	ChevronDown,
-	ChevronRight,
-	Copy,
-	ExternalLink,
-	Folder,
-	FolderOpen,
-	GitBranch,
-	House,
-	MoreVertical,
-	Plus,
-	Trash2,
-	X,
-} from "lucide-react";
+	RiArrowDownSFill as ChevronDown,
+	RiArrowRightSFill as ChevronRight,
+	RiFileCopyFill as Copy,
+	RiExternalLinkFill as ExternalLink,
+	RiFolderFill as Folder,
+	RiFolderOpenFill as FolderOpen,
+	RiGitBranchFill as GitBranch,
+	RiHome2Fill as House,
+	RiMore2Fill as MoreVertical,
+	RiAddFill as Plus,
+	RiDeleteBin6Fill as Trash2,
+	RiCloseFill as X,
+} from "@remixicon/react";
+import type { EditorInfo, Project, Workspace } from "@thinkrail/contracts";
 import { type MouseEvent, useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {

@@ -1,4 +1,4 @@
-import { GripVertical } from "lucide-react";
+import { RiDraggable as GripVertical } from "@remixicon/react";
 import type { ComponentProps } from "react";
 import {
 	type ImperativePanelGroupHandle,

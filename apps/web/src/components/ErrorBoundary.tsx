@@ -1,4 +1,8 @@
-import { AlertTriangle, RefreshCw, RotateCcw } from "lucide-react";
+import {
+	RiAlertFill as AlertTriangle,
+	RiRefreshFill as RefreshCw,
+	RiArrowGoBackFill as RotateCcw,
+} from "@remixicon/react";
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { shallowEqualArrays } from "../lib";
 

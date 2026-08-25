@@ -1,16 +1,16 @@
-import type { ImageContent, UserMessage } from "@thinkrail/contracts";
 import {
-	BookOpen,
-	ChevronDown,
-	ChevronRight,
-	Clock,
-	FileDiff,
-	FileText,
-	FoldVertical,
-	RotateCw,
-	TriangleAlert,
-	Wrench,
-} from "lucide-react";
+	RiBookOpenFill as BookOpen,
+	RiArrowDownSFill as ChevronDown,
+	RiArrowRightSFill as ChevronRight,
+	RiTimeFill as Clock,
+	RiFileList2Fill as FileDiff,
+	RiFileTextFill as FileText,
+	RiContractUpDownFill as FoldVertical,
+	RiLoopRightFill as RotateCw,
+	RiAlertFill as TriangleAlert,
+	RiToolsFill as Wrench,
+} from "@remixicon/react";
+import type { ImageContent, UserMessage } from "@thinkrail/contracts";
 import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {

@@ -1,13 +1,13 @@
-import type { SlashCommandInfo, ThinkingLevel, WireModel, Workspace } from "@thinkrail/contracts";
 import {
-	Box,
-	ChevronDown,
-	GitBranch,
-	House,
-	type LucideIcon,
-	Sparkles,
-	TriangleAlert,
-} from "lucide-react";
+	RiBox3Fill as Box,
+	RiArrowDownSFill as ChevronDown,
+	RiGitBranchFill as GitBranch,
+	RiHome2Fill as House,
+	type RemixiconComponentType as LucideIcon,
+	RiSparkling2Fill as Sparkles,
+	RiAlertFill as TriangleAlert,
+} from "@remixicon/react";
+import type { SlashCommandInfo, ThinkingLevel, WireModel, Workspace } from "@thinkrail/contracts";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { ModelSelector } from "@/chat/ModelSelector";
 import { SkillsButton } from "@/chat/SkillsButton";

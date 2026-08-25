@@ -1,10 +1,14 @@
+import {
+	RiGitBranchFill as GitBranch,
+	RiChatNewFill as MessageSquarePlus,
+	RiTerminalBoxFill as SquareTerminal,
+} from "@remixicon/react";
 import type {
 	LayoutCenterTab,
 	LayoutTab,
 	LayoutToolId,
 	WorkspaceLayoutDocument,
 } from "@thinkrail/contracts";
-import { GitBranch, MessageSquarePlus, SquareTerminal } from "lucide-react";
 import {
 	lazy,
 	type ReactNode,

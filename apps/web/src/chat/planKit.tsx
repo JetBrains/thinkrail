@@ -1,4 +1,8 @@
-import { Check, Circle, CircleDot } from "lucide-react";
+import {
+	RiCheckFill as Check,
+	RiCircleFill as Circle,
+	RiRecordCircleFill as CircleDot,
+} from "@remixicon/react";
 
 export function SectionLabel({ label }: { label: string }) {
 	return <div className="px-xs py-xs tr-text-eyebrow text-text-muted">{label}</div>;

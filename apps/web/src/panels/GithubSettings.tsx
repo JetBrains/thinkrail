@@ -1,5 +1,9 @@
+import {
+	RiCheckFill as Check,
+	RiRefreshFill as RefreshCw,
+	RiCloseFill as X,
+} from "@remixicon/react";
 import type { GithubAuthStatus } from "@thinkrail/contracts";
-import { Check, RefreshCw, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { getTransport } from "@/transport";

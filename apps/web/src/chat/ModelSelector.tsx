@@ -1,5 +1,9 @@
+import {
+	RiCheckFill as Check,
+	RiArrowDownSFill as ChevronDown,
+	RiRefreshFill as RefreshCw,
+} from "@remixicon/react";
 import type { WireModel } from "@thinkrail/contracts";
-import { Check, ChevronDown, RefreshCw } from "lucide-react";
 import { useState } from "react";
 import {
 	Command,

@@ -1,4 +1,4 @@
-import { Link as LinkIcon } from "lucide-react";
+import { RiLinksFill as LinkIcon } from "@remixicon/react";
 import type { ToolRenderProps } from "../../toolRegistry";
 import { CodeBlock } from "../CodeBlock";
 import { Collapsible, countLines } from "../Collapsible";

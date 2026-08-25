@@ -181,9 +181,9 @@ test("project context actions stay compact and close/reopen is lossless across c
 	await expect(menuParts.nth(1)).toHaveText("Open existing worktree…");
 	await expect(menuParts.nth(2)).toHaveAttribute("role", "separator");
 	await expect(menuParts.nth(3)).toHaveText("Close project");
-	await expect(createFromMenu.locator("svg.lucide-plus")).toHaveCount(1);
-	await expect(openExistingFromMenu.locator("svg.lucide-folder-open")).toHaveCount(1);
-	await expect(closeFromMenu.locator("svg.lucide-x")).toHaveCount(1);
+	await expect(createFromMenu.locator("svg.remixicon")).toHaveCount(1);
+	await expect(openExistingFromMenu.locator("svg.remixicon")).toHaveCount(1);
+	await expect(closeFromMenu.locator("svg.remixicon")).toHaveCount(1);
 	await page.keyboard.press("ArrowDown");
 	await expect(createFromMenu).toBeFocused();
 	await page.keyboard.press("ArrowDown");

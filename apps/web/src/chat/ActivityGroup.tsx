@@ -1,4 +1,11 @@
-import { Brain, Check, ChevronRight, Layers, Loader2, X } from "lucide-react";
+import {
+	RiBrainFill as Brain,
+	RiCheckFill as Check,
+	RiArrowRightSFill as ChevronRight,
+	RiStackFill as Layers,
+	RiLoader4Fill as Loader2,
+	RiCloseFill as X,
+} from "@remixicon/react";
 import { cn } from "@/lib";
 import { useFold } from "./foldState";
 import type { ActivityStep } from "./rows";

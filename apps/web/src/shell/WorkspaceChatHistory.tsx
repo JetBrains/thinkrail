@@ -1,4 +1,8 @@
-import { History, RotateCcw, Trash2 } from "lucide-react";
+import {
+	RiHistoryFill as History,
+	RiArrowGoBackFill as RotateCcw,
+	RiDeleteBin6Fill as Trash2,
+} from "@remixicon/react";
 import {
 	DropdownMenu,
 	DropdownMenuContent,

@@ -1,5 +1,10 @@
+import {
+	RiCheckFill as Check,
+	RiArrowDownSFill as ChevronDown,
+	RiGitBranchFill as GitBranch,
+	RiRefreshFill as RefreshCw,
+} from "@remixicon/react";
 import type { BranchList } from "@thinkrail/contracts";
-import { Check, ChevronDown, GitBranch, RefreshCw } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import {
 	Command,

@@ -11,6 +11,24 @@ import {
 	useSensor,
 	useSensors,
 } from "@dnd-kit/core";
+import {
+	RiCheckFill as Check,
+	RiArrowDownSFill as ChevronDown,
+	RiArrowLeftSFill as ChevronLeft,
+	RiArrowRightSFill as ChevronRight,
+	RiFileFill as File,
+	RiGitPullRequestFill as GitCompareArrows,
+	RiListCheck3 as ListTodo,
+	RiChat1Fill as MessageSquare,
+	RiChatNewFill as MessageSquarePlus,
+	RiMoreFill as MoreHorizontal,
+	RiLayoutBottomFill as PanelBottomOpen,
+	RiLayoutLeftFill as PanelLeftOpen,
+	RiLayoutRightFill as PanelRightOpen,
+	RiLayout2Fill as PanelsTopLeft,
+	RiTerminalBoxFill as SquareTerminal,
+	RiCloseFill as X,
+} from "@remixicon/react";
 import type {
 	LayoutAuxiliaryRegion,
 	LayoutBottomAlignment,
@@ -25,23 +43,6 @@ import type {
 	LayoutToolId,
 	WorkspaceLayoutDocument,
 } from "@thinkrail/contracts";
-import {
-	Check,
-	ChevronDown,
-	ChevronLeft,
-	File,
-	GitCompareArrows,
-	ListTodo,
-	MessageSquare,
-	MessageSquarePlus,
-	MoreHorizontal,
-	PanelBottomOpen,
-	PanelLeftOpen,
-	PanelRightOpen,
-	PanelsTopLeft,
-	SquareTerminal,
-	X,
-} from "lucide-react";
 import { Fragment, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
 	Command,

@@ -1,4 +1,4 @@
-import { CheckCircle2 } from "lucide-react";
+import { RiCheckboxCircleFill as CheckCircle2 } from "@remixicon/react";
 import type { ReactNode } from "react";
 import type { ToolRenderProps } from "../toolRegistry";
 import { strArg } from "./toolHelpers";

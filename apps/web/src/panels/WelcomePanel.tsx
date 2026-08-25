@@ -1,5 +1,11 @@
+import {
+	RiFolderOpenFill as FolderOpen,
+	RiHome2Fill as House,
+	type RemixiconComponentType as LucideIcon,
+	RiRocketFill as Rocket,
+	RiSparkling2Fill as Sparkles,
+} from "@remixicon/react";
 import type { Workspace } from "@thinkrail/contracts";
-import { FolderOpen, House, type LucideIcon, Rocket, Sparkles } from "lucide-react";
 import { type ComponentPropsWithoutRef, forwardRef, useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { PRODUCT_NAME } from "../constants/branding";

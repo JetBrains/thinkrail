@@ -1,5 +1,5 @@
+import { RiCheckFill as Check, RiArrowDownSFill as ChevronDown } from "@remixicon/react";
 import type { ThinkingLevel } from "@thinkrail/contracts";
-import { Check, ChevronDown } from "lucide-react";
 import { useState } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
