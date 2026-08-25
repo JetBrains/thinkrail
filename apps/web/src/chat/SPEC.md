@@ -291,6 +291,19 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   text to the draft alongside the `appendErrorTurn`. Trade-off, accepted: `queue_update` carries text
   only, so a queued image attachment shows no chip in the strip; the canonical transcript turn later
   renders its image blocks with the hydrated-turn fallback labels. E2e: `queue.live.spec.ts` (@agent).
+- **Follow-up chips** (`FollowUpChips.tsx` + the pure `deriveFollowUps(turns)` in `followUps.ts`) — a
+  compact `flex-wrap` row of low-weight suggestion chips (`tr-text-metadata`, semantic control roles)
+  rendered by `ChatView` **between `QueueStrip` and the composer wrapper** (never inside the composer).
+  Each chip carries a short `label` and a full `prompt`; clicking one populates the composer draft via
+  the existing `ComposerHandle.insertText` (→ `replaceDraft`, focus stays in the composer) and **never
+  sends** — the user reviews and presses Send through the unchanged path. They are **view-level**
+  suggestions, not a chat/domain entity: no store field, no wire type, no persistence; `deriveFollowUps`
+  is pure over the transcript so the set tracks the latest assistant turn. **Currently mocked** — the
+  derivation is a keyword heuristic over the last assistant message, a placeholder for real generation.
+  The row is shown only when idle (`!isStreaming`) **and the draft is empty** — the empty-draft gate is
+  the draft-protection contract: a chip replaces the draft, so it is only offered when there is nothing
+  to overwrite. Props-driven (`{ items, onPick }`), no store/transport. E2e: `data-testid="followup-row"`
+  / `followup-chip`.
 - **Streaming send modes: split send + interrupt** (`Composer`) — steer/queue semantics are pi's loop
   design (steer = injected at the next turn boundary, after the current assistant message + its tool
   calls; queue = runs after the agent settles; only abort halts an in-flight response) and proved

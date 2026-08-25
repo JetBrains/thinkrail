@@ -33,6 +33,8 @@ import {
 	type SubmitBehavior,
 } from "./Composer";
 import { ExtUiDialog } from "./ExtUiDialog";
+import { FollowUpChips } from "./FollowUpChips";
+import { deriveFollowUps } from "./followUps";
 import { HistoryOverlay } from "./HistoryOverlay";
 import { planGlance } from "./planView";
 import { QueueStrip } from "./QueueStrip";
@@ -156,6 +158,8 @@ export default function ChatView({
 			isStreaming && last?.kind !== "retry" ? streamStatus(turns, currentAssistantId) : null;
 		return { status };
 	}, [turns, isStreaming, currentAssistantId]);
+
+	const followUps = useMemo(() => deriveFollowUps(turns), [turns]);
 
 	const recentPrompts = useMemo(() => {
 		const texts = turns
@@ -599,6 +603,12 @@ export default function ChatView({
 						</div>
 					) : null}
 					<QueueStrip queue={queue} onEdit={onEditQueued} onRemove={onRemoveQueued} />
+					{!isStreaming && draft.trim() === "" ? (
+						<FollowUpChips
+							items={followUps}
+							onPick={(prompt) => composerRef.current?.insertText(prompt)}
+						/>
+					) : null}
 					<div className="relative shrink-0">
 						<HistoryOverlay
 							state={historyState}
