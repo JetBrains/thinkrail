@@ -1,7 +1,7 @@
 ---
 id: task-delegation-core
 type: task-spec
-status: draft
+status: active
 title: "Delegation core — session fabric: spawn, fork, lineage, extension points"
 parent: architecture
 references: [task-subagent-support]
@@ -114,6 +114,7 @@ interface ChildHandle {
   abort(): Promise<void>;                      // abort the current run
   dispose(): Promise<void>;                    // abort + workspace.dispose + release
   onEvent(l: (e: LifecycleEvent) => void): () => void; // this child only
+  collectResult(): RunSnapshot | undefined;    // latest snapshot; a terminal read marks `collected`
 }
 
 interface RunOptions {
@@ -339,7 +340,7 @@ already run children in-process from a plain pi extension with the SDK as a `pee
 the SDK is safe here because the package lives server-side by construction and never reaches
 `contracts`/`web` (the wire type is mirrored — decision #20).
 
-The barrel exports **`createDelegationService(bindings?)`**. An embedder constructs the service
+The barrel exports **`createDelegationService(bindings)`**. An embedder constructs the service
 and hands it to consumers — ThinkRail keeps the handle for the manager's dispose cascade and the
 future wire handlers, and passes it to the `pi-subagents` factory; under vanilla pi the
 `pi-subagents` extension constructs it with defaults. Everything host-specific enters through one
@@ -347,10 +348,13 @@ optional bag; **every field has a pure-pi default**:
 
 ```ts
 interface DelegationBindings {
+  resolveParent: (sessionId: string) => AgentSession | undefined;
+                            // REQUIRED — the one binding with no library default: ThinkRail passes the
+                            // manager lookup; in pure pi the pi-subagents extension passes its own ctx session
   delegationRoot?: string;  // storage root — ThinkRail: ~/.thinkrail/delegation; default: <piAgentDir>/delegation
   scope?: string;           // storage partition key — ThinkRail: workspaceId; default: "default"
-  resolveParent?: (sessionId: string) => AgentSession | undefined;
-                            // ThinkRail: AgentSessionManager lookup; default: the extension's own ctx session
+  modelRuntime?: ModelRuntime;      // shared model/auth runtime — ThinkRail: the host's; default: pi's own, lazily
+  maxConcurrentPerParent?: number;  // semaphore slots per parent — default 4
 }
 ```
 
@@ -368,7 +372,10 @@ renderer's job). npm publication stays possible; not a V1 goal.
 **V1 = the core + subagents, nothing else.** Future patterns are out of scope, their UX unpinned —
 but the core must be ready: the **contract carries the full axis space; the implementation stays
 minimal**. Unexercised combinations (`listed`, `fork`, `seeded`, `interactive: true`, `runNow`,
-`session` absent) **reject loudly** with typed errors — the seam is real, the dead code is not. A
+`session` absent, a `workspace` provider) **reject loudly** with typed errors — the seam is real,
+the dead code is not. (The `WorkspaceProvider` *type* is the seam; its call sequencing — `prepare`
+names the child id, which exists only after creation — is pinned by its first consumer, the
+ThinkRail worktree provider.) A
 future pattern's first consumer must only *fill in* its combination, never reshape the contract.
 Report-back from a subsession to its parent (when subsessions land) is pi-native
 (`sendMessage`/`followUp`) — no core provision needed beyond lineage.
@@ -493,3 +500,8 @@ lineage-siblings under the root — parent edge ≠ dependency edge.
     extension packages.)
 21. **Pure-pi V1 bar: loads + works under default rendering** (user-settled) — no pi-tui widget in
     V1; the rich live card ships web-side.
+22. **`collectResult()` added to `ChildHandle`** (implementation round): the `collected` flag needs
+    a maintainer, and a side-effectful `snapshot` getter was the only alternative — `snapshot`
+    stays a pure read; collection is the explicit act. **V1 child loaders are narrow by default**
+    (no extensions/prompts/themes; context files + skills opt-in via `SessionOptions`) — extension
+    loading in children waits for a consumer that needs it.

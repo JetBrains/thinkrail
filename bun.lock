@@ -99,6 +99,22 @@
         "typescript": "catalog:",
       },
     },
+    "packages/pi-delegation": {
+      "name": "pi-delegation",
+      "version": "0.0.0",
+      "devDependencies": {
+        "@earendil-works/pi-agent-core": "catalog:",
+        "@earendil-works/pi-ai": "catalog:",
+        "@earendil-works/pi-coding-agent": "catalog:",
+        "@types/bun": "catalog:",
+        "typescript": "catalog:",
+      },
+      "peerDependencies": {
+        "@earendil-works/pi-agent-core": "*",
+        "@earendil-works/pi-ai": "*",
+        "@earendil-works/pi-coding-agent": "*",
+      },
+    },
     "packages/pi-thinkrail-workflow": {
       "name": "pi-thinkrail-workflow",
       "version": "0.0.0",
@@ -1135,6 +1151,8 @@
     "path-key": ["path-key@3.1.1", "", {}, "sha512-ojmeN0qd+y0jszEtoY48r0Peq5dwMEkIlCOu6Q5f41lfkswXuKtYrhgoTpLnyIcHm24Uhqx+5Tqm2InSwLhE6Q=="],
 
     "path-scurry": ["path-scurry@2.0.2", "", { "dependencies": { "lru-cache": "^11.0.0", "minipass": "^7.1.2" } }, "sha512-3O/iVVsJAPsOnpwWIeD+d6z/7PmqApyQePUtCndjatj/9I5LylHvt5qluFaBT3I5h3r1ejfR056c+FCv+NnNXg=="],
+
+    "pi-delegation": ["pi-delegation@workspace:packages/pi-delegation"],
 
     "pi-spec-graph": ["pi-spec-graph@workspace:packages/spec-graph"],
 

@@ -1,7 +1,7 @@
 ---
 id: task-subagent-support
 type: task-spec
-status: draft
+status: active
 title: Subagent support in ThinkRail — own-build design
 parent: architecture
 references: [task-delegation-core]
