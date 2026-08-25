@@ -144,6 +144,14 @@ healed by the existing generic `repairDanglingToolCalls`; no subagent-specific m
    implementation item for the completion card.
 2. Built-in agent set contents (names, prompts, tool allowlists) — proposed during implementation.
 
+## Implementation status (kept current — branch `subagent-research-planning`)
+
+Steps 0–2 of the work plan below are **done** (see the core spec's status table for commits and
+detail); step 3 (web renderers) is next; step 4 (tests/promotions) is open, including the binary
+gate. Post-review tuning landed: scout carries read-only bash, the `Agent` description enumerates
+each type's tools, and all builtins opt into the curated child extension set (spec read tools +
+scout web tools) — core decision #25.
+
 ## V1 work plan
 
 0. **The delegation core lands first** ([[task-delegation-core]]). Everything below consumes it.

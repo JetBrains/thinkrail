@@ -396,6 +396,20 @@ future pattern's first consumer must only *fill in* its combination, never resha
 Report-back from a subsession to its parent (when subsessions land) is pi-native
 (`sendMessage`/`followUp`) — no core provision needed beyond lineage.
 
+## Implementation status (kept current — branch `subagent-research-planning`)
+
+| Stage | State | Where |
+|---|---|---|
+| 1. `packages/pi-delegation` (core) | ✅ done | contract + service + storage + semaphore; 22 unit tests on real sessions/faux provider; review round applied (turn-cap fix, clearQueue, decisions #22–24) |
+| 2. `packages/pi-subagents` (consumer) | ✅ done | definitions/builtins/mapping/tools; 17 tests; review round applied (detached-abort fix, ambiguity, #24); scout+description tuning; curated extensions opt-in (#25) |
+| 3. Host integration | ✅ done | contracts v29 (`DelegationRunDetails` mirror + `subagent.getTranscript`), `server/src/agent/delegation.ts` bindings, cascades, transcript handler, curated child set (spec-graph + headless web-access via named bundled seam) |
+| 4. Web UI | ⏳ next | `AgentCard` renderer, `subagent-completion` card, child transcript view (chat module) |
+| 5. Verification + promotion | ⏳ open | `@agent` e2e spec, pure-pi smoke (acceptance #5), **binary gate** (`build:binary` + `smoke:binary`/`e2e:binary` — bundled seam changed), SPEC promotions + retire task specs |
+| Subsessions / branching / workflows | 🚧 V2 | typed axes, loud-rejected; listed-child resource-assembly seam designed at implementation (decision #25) |
+
+Manual playground: `~/IdeaProjects/subagents-playground` (both configs, planted bugs, isolated
+pure-pi agent dir).
+
 ## V1 acceptance
 
 1. `createChild` + `runQueued` + lineage + registry/events implemented for the subagent
@@ -549,8 +563,11 @@ lineage-siblings under the root — parent edge ≠ dependency edge.
     `mode: "print"` (headless — `ctx.hasUI` false, dialogs skipped). Literal "inherit the
     parent's extensions" is rejected: interactive tools (ask_user_question) hang a hidden
     non-interactive child, and blanket loading multiplies heavy extensions per child (gotgenes'
-    documented V8-heap incident class). **The future subsession need ("full extensions, fully
-    interactive") is NOT served by this mechanism**: a `listed + interactive` child is a
-    first-class session — the embedder assembles it with its normal session path (ThinkRail:
-    `createSession`'s own loader — full bundled set, ask_user_question, skills, admission) and
-    the core contributes identity, lineage, and visibility bookkeeping only.
+    documented V8-heap incident class). **Subsessions still ride the delegation core** — a
+    subsession IS `createChild({visibility: "listed", interactive: true, origin: fresh | fork})`,
+    with the core owning creation, lineage, the registry, and lifecycle events exactly as for any
+    child; what the curated-set mechanism does NOT cover is a listed child's *resource assembly*:
+    when the listed axis lands, the core acquires an embedder seam so a listed child's loader is
+    built by the host's normal session path (ThinkRail: `createSession`'s own loader — full
+    bundled set incl. visualize + ask_user_question, skills, admission) and the child registers in
+    the host's manager (tab, WS streaming, hydration).
