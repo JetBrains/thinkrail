@@ -26,13 +26,27 @@ App" card); both flip one **view flag** (`store.demoOpen`, a top-level, non-pers
 - A centered modal (~`90vw × 90vh`) over a `bg-overlay` scrim; the card is an opaque `container-workspace-bg`
   sandbox rendering a simplified but faithful ThinkRail chrome (header / left `Projects` panel / center),
   built from the existing semantic tokens and `components/ui` — **not** wired to any store domain state.
+- **Animated intro** (`step: "intro"`, first): three lines reveal in sequence with restrained
+  fade/translate transitions (`motion-reduce:transition-none`) — "Welcome to ThinkRail" (`tr-brand-hero`),
+  the one-line product explanation (`tr-text-ui`), the ~2-minute setup note (`tr-text-metadata`) — then it
+  auto-advances into the first interactive action. No coach mark shows during the intro.
+- **Close demo** (`onboarding-close`, a quiet `Button variant="ghost"` in the card's top-right) is present
+  throughout — intro included — and is the only explicit pre-completion exit. It only clears the mocked
+  experience (`closeDemo`); it touches no real state. Coach marks themselves stay non-dismissible.
 - **Coach marks** reuse the tooltip + arrow treatment: a card-scoped **spotlight** dims everything inside
   the card except the current target with the `container-workspace-overlay` scrim (the workspace surface at
-  the `veil` 70% alpha step — a sanctioned color token, see `styles/colors.json`), drawn as four
-  `pointer-events-auto` rects computed relative to the measured card rect (so only the card interior dims,
-  the raised card stays legible). The Radix `components/ui/popover` (+ `PopoverArrow`) anchors to the
-  target; Escape / outside-interaction / auto-focus are all prevented. A coach mark is **non-dismissible**
-  (no close/Skip/Next/Escape/outside-click) and advances only when its scripted action completes.
+  the `veil` **50%** alpha step — a sanctioned color token, light enough to keep the interface legible;
+  see `styles/colors.json`), drawn as four `pointer-events-auto` rects computed relative to the measured
+  card rect (so only the card interior dims, the raised card stays legible). The Radix
+  `components/ui/popover` (+ `PopoverArrow`) anchors to the target; Escape / outside-interaction /
+  auto-focus are all prevented. The tooltip carries **only the title + instruction** — no step number,
+  progress, or pagination. A coach mark is **non-dismissible** and advances only when its scripted action
+  completes.
+- The current actionable target wears a **temporary pulsing emphasis** — a `ring-2 ring-primary` glow at
+  the target rect (`motion-safe:animate-pulse`; static under reduced motion), rendered by the spotlight
+  and moving with it. It is onboarding-only emphasis, never a permanent hover/focus/selected/active state.
+- A single **1px progress line** (`onboarding-progress`, `bg-primary`, smooth `transition-[width]`) sits on
+  the card's bottom edge and advances across the scripted `STEP_ORDER`. No labels/percentages/dots.
 - Only the current target is interactive; everything else is present but inert (covered by the dim).
 
 ## Scripted flow (local `step` state machine, numbered "of 4")

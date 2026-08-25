@@ -1,5 +1,5 @@
-import { Check, Folder, FolderOpen, GitBranch, House, Plus, Send } from "lucide-react";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { Check, Folder, FolderOpen, GitBranch, House, Plus, Send, X } from "lucide-react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "../components/ui/button";
 import { Popover, PopoverAnchor, PopoverArrow, PopoverContent } from "../components/ui/popover";
 import { PRODUCT_NAME } from "../constants/branding";
@@ -14,6 +14,7 @@ const RESULT_2 =
 	"Added an All / Active / Completed filter above the list, with the chosen filter remembered across reloads.";
 
 type Step =
+	| "intro"
 	| "open"
 	| "picker"
 	| "ws1-create"
@@ -23,43 +24,50 @@ type Step =
 	| "agent2"
 	| "done";
 
+const STEP_ORDER: Step[] = [
+	"intro",
+	"open",
+	"picker",
+	"ws1-create",
+	"ws2-create",
+	"agent1",
+	"agent2-switch",
+	"agent2",
+	"done",
+];
+
 type WsStatus = "idle" | "working" | "done";
 type Msg = { id: string; role: "user" | "assistant" | "working"; text?: string };
 
 const COACH: Record<
-	Exclude<Step, "done">,
-	{ n: number; title: string; body: string; selector: string; side: "top" | "right"; task?: string }
+	Exclude<Step, "intro" | "done">,
+	{ title: string; body: string; selector: string; side: "top" | "right"; task?: string }
 > = {
 	open: {
-		n: 1,
 		title: "Open a project",
 		body: "Choose a project folder from your computer.",
 		selector: '[data-sim="open-project"]',
 		side: "top",
 	},
 	picker: {
-		n: 1,
 		title: "Choose your project folder",
 		body: "Select the To Do App folder to open it in ThinkRail.",
 		selector: '[data-sim="folder"]',
 		side: "right",
 	},
 	"ws1-create": {
-		n: 2,
 		title: "Create a workspace",
 		body: "ThinkRail runs each task in its own isolated worktree and branch. Create one for the first task.",
 		selector: '[data-sim="rail-add"]',
 		side: "right",
 	},
 	"ws2-create": {
-		n: 2,
 		title: "Create a second workspace",
 		body: "Now create a second workspace so two tasks can run side by side, each on its own branch.",
 		selector: '[data-sim="rail-add"]',
 		side: "right",
 	},
 	agent1: {
-		n: 3,
 		title: "Start the first agent",
 		body: "Ask the agent to build the first feature, then send it.",
 		selector: '[data-sim="composer"]',
@@ -67,14 +75,12 @@ const COACH: Record<
 		task: TASK_1,
 	},
 	"agent2-switch": {
-		n: 4,
 		title: "Switch to your second workspace",
 		body: "Your first agent keeps working independently — switch over to start the next one.",
 		selector: '[data-sim="ws-1"]',
 		side: "right",
 	},
 	agent2: {
-		n: 4,
 		title: "Run a second agent in parallel",
 		body: "Start the second task here. Both agents now run at the same time, each in its own workspace.",
 		selector: '[data-sim="composer"]',
@@ -110,7 +116,8 @@ function Simulation() {
 	const closeDemo = useAppStore((s) => s.closeDemo);
 	const [cardEl, setCardEl] = useState<HTMLDivElement | null>(null);
 	const cardRect = useElementRect(cardEl);
-	const [step, setStep] = useState<Step>("open");
+	const [step, setStep] = useState<Step>("intro");
+	const startTour = useCallback(() => setStep("open"), []);
 	const [workspaces, setWorkspaces] = useState<string[]>([]);
 	const [activeWs, setActiveWs] = useState(0);
 	const [drafts, setDrafts] = useState<Record<number, string>>({});
@@ -119,8 +126,9 @@ function Simulation() {
 	const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
 	useEffect(() => () => timers.current.forEach(clearTimeout), []);
 
-	const projectOpen = step !== "open" && step !== "picker";
-	const coach = step === "done" ? null : COACH[step];
+	const projectOpen = step !== "intro" && step !== "open" && step !== "picker";
+	const coach = step === "intro" || step === "done" ? null : COACH[step];
+	const progress = STEP_ORDER.indexOf(step) / (STEP_ORDER.length - 1);
 
 	const onRailAdd = () => {
 		if (step === "ws1-create") {
@@ -183,6 +191,16 @@ function Simulation() {
 				data-testid="onboarding-sim"
 				className="relative flex h-[90vh] w-[90vw] flex-col overflow-hidden rounded-[var(--radius-lg)] border border-border-default bg-container-workspace-bg shadow-[var(--shadow-lg)]"
 			>
+				<Button
+					variant="ghost"
+					size="sm"
+					data-testid="onboarding-close"
+					onClick={() => closeDemo()}
+					className="absolute top-sm right-sm z-50"
+				>
+					<X className="size-4" />
+					Close demo
+				</Button>
 				<div className="flex h-11 shrink-0 items-center gap-md border-border-default border-b bg-container-header-bg px-lg">
 					<span className="tr-title-card text-primary">{PRODUCT_NAME}</span>
 					{projectOpen ? (
@@ -216,19 +234,26 @@ function Simulation() {
 					/>
 				</div>
 
+				{step === "intro" ? <Intro onDone={startTour} /> : null}
 				{coach ? (
 					<CardSpotlight
 						cardRect={cardRect}
 						selector={coach.selector}
 						side={coach.side}
-						step={coach.n}
 						title={coach.title}
 						body={coach.body}
 						{...(coach.task ? { onInsert: insertTask } : {})}
 					/>
-				) : (
-					<Completion onFinish={() => closeDemo()} />
-				)}
+				) : null}
+				{step === "done" ? <Completion onFinish={() => closeDemo()} /> : null}
+
+				<div className="pointer-events-none absolute inset-x-0 bottom-0 z-50 h-px">
+					<div
+						data-testid="onboarding-progress"
+						className="h-full bg-primary transition-[width] duration-500 ease-out motion-reduce:transition-none"
+						style={{ width: `${progress * 100}%` }}
+					/>
+				</div>
 			</div>
 		</div>
 	);
@@ -473,7 +498,6 @@ function CardSpotlight({
 	cardRect,
 	selector,
 	side,
-	step,
 	title,
 	body,
 	onInsert,
@@ -481,7 +505,6 @@ function CardSpotlight({
 	cardRect: DOMRect | null;
 	selector: string;
 	side: "top" | "right";
-	step: number;
 	title: string;
 	body: string;
 	onInsert?: () => void;
@@ -514,6 +537,12 @@ function CardSpotlight({
 					height: rect.height,
 				}}
 			/>
+			<div
+				aria-hidden
+				data-testid="onboarding-target-glow"
+				className="pointer-events-none absolute rounded-[var(--radius-sm)] ring-2 ring-primary motion-safe:animate-pulse"
+				style={{ left, top, width: rect.width, height: rect.height }}
+			/>
 			<Popover open>
 				<PopoverAnchor asChild>
 					<div
@@ -532,8 +561,7 @@ function CardSpotlight({
 					onPointerDownOutside={(event) => event.preventDefault()}
 					onInteractOutside={(event) => event.preventDefault()}
 				>
-					<p className="tr-text-label-pill text-primary">Step {step} of 4</p>
-					<p className="mt-xs tr-title-card text-text-default">{title}</p>
+					<p className="tr-title-card text-text-default">{title}</p>
 					<p className="mt-xs text-text-muted tr-text-metadata leading-snug">{body}</p>
 					{onInsert ? (
 						<div className="mt-md flex justify-end">
@@ -550,6 +578,39 @@ function CardSpotlight({
 					<PopoverArrow />
 				</PopoverContent>
 			</Popover>
+		</div>
+	);
+}
+
+function Intro({ onDone }: { onDone: () => void }) {
+	const [shown, setShown] = useState(0);
+	useEffect(() => {
+		const timers = [
+			setTimeout(() => setShown(1), 200),
+			setTimeout(() => setShown(2), 1100),
+			setTimeout(() => setShown(3), 2100),
+			setTimeout(onDone, 3400),
+		];
+		return () => timers.forEach(clearTimeout);
+	}, [onDone]);
+	const reveal = (index: number) =>
+		`transition-all duration-500 ease-out motion-reduce:transition-none ${
+			shown >= index ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0"
+		}`;
+	return (
+		<div
+			data-testid="onboarding-intro"
+			className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-md bg-container-workspace-bg p-xl text-center"
+		>
+			<h1 className={`tr-brand-hero text-primary ${reveal(1)}`}>Welcome to ThinkRail</h1>
+			<p className={`max-w-[520px] tr-text-ui text-text-default ${reveal(2)}`}>
+				ThinkRail is a worktree IDE built for working with AI agents in parallel.
+			</p>
+			<p
+				className={`max-w-[520px] whitespace-pre-line text-text-muted tr-text-metadata ${reveal(3)}`}
+			>
+				{"Let's set up a demo project first.\nIt takes about 2 minutes."}
+			</p>
 		</div>
 	);
 }

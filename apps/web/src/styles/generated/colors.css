@@ -1,5 +1,5 @@
 /*
- * GENERATED — do not edit. Source: `src/styles/colors.json` (v1.2.0).
+ * GENERATED — do not edit. Source: `src/styles/colors.json` (v1.3.0).
  * Regenerate with `bun run colors:generate`; `colors:check` fails when this file is stale.
  *
  * The semantic roles, then the Tailwind utility map. The palette they read is written to the
@@ -14,7 +14,7 @@
 	--text-on-primary: var(--on-accent);
 	--text-link: var(--info); /* global.css `a {}` is the only consumer; no component styles a bare link */
 	--container-workspace-bg: var(--background); /* the app surface, and with it the opened-document canvas — a document reads as part of the workspace (Monaco's EDITOR_THEME, the markdown/spec preview, the chat column, the tab strip) */
-	--container-workspace-overlay: color-mix(in srgb, var(--background) 70%, transparent); /* the onboarding spotlight scrim: the workspace surface at the `veil` (70%) alpha step, dimming the viewport while a coach mark spotlights one target */
+	--container-workspace-overlay: color-mix(in srgb, var(--background) 50%, transparent); /* the onboarding spotlight scrim: the workspace surface at the `veil` (50%) alpha step, dimming the demo card while a coach mark spotlights one target — light enough to keep the interface legible underneath */
 	--container-sidebar-bg: var(--sidebar);
 	--container-terminal-bg: var(--sidebar);
 	--container-header-bg: var(--header);
