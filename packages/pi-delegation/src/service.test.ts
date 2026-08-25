@@ -19,6 +19,7 @@ import {
 	SessionManager,
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
+import { Type } from "typebox";
 import { createDelegationService } from "./service";
 import { deriveChildSessionFile } from "./storage";
 import { DelegationError, type DelegationService, type LifecycleEvent } from "./types";
@@ -377,6 +378,67 @@ test("the per-parent semaphore paces runs FIFO", async () => {
 		]);
 	} finally {
 		await paced.disposeChildrenOf(parent.sessionId);
+	}
+});
+
+test("extensions opt-in loads ONLY the embedder-bound curated set — and only when asked", async () => {
+	let factoryLoads = 0;
+	const curated = createDelegationService({
+		resolveParent: (id) =>
+			id === parent.sessionId
+				? { cwd: parentCwd, model: parent.model, thinkingLevel: parent.thinkingLevel }
+				: undefined,
+		delegationRoot,
+		scope: "ws-ext",
+		modelRuntime: runtime,
+		childExtensionFactories: [
+			(pi) => {
+				factoryLoads++;
+				pi.registerTool({
+					name: "ping",
+					label: "Ping",
+					description: "Answers pong",
+					parameters: Type.Object({}),
+					execute: async () => ({ content: [{ type: "text", text: "PONG" }], details: {} }),
+				});
+			},
+		],
+	});
+
+	// Without the opt-in the factory never loads.
+	const plain = await curated.createChild(subagentSpec());
+	await plain.dispose();
+	expect(factoryLoads).toBe(0);
+
+	// With it, the curated tool is callable by the child.
+	faux.setResponses([
+		fauxAssistantMessage(fauxToolCall("ping", {})),
+		fauxAssistantMessage("USED_PING"),
+	]);
+	const child = await curated.createChild(
+		subagentSpec({ session: { systemPrompt: "use ping", tools: ["ping"], extensions: true } }),
+	);
+	try {
+		expect(factoryLoads).toBe(1);
+		const outcome = await child.runQueued("Ping it.");
+		expect(outcome.status).toBe("completed");
+		expect(outcome.finalText).toBe("USED_PING");
+	} finally {
+		await curated.disposeChildrenOf(parent.sessionId);
+	}
+});
+
+test("extensions opt-in is inert when the embedder binds no child factories", async () => {
+	faux.setResponses([fauxAssistantMessage("STILL_FINE")]);
+	const child = await service.createChild(
+		subagentSpec({ session: { systemPrompt: "plain", tools: [], extensions: true } }),
+	);
+	try {
+		const outcome = await child.runQueued("Go.");
+		expect(outcome.status).toBe("completed");
+		expect(outcome.finalText).toBe("STILL_FINE");
+	} finally {
+		await child.dispose();
 	}
 });
 

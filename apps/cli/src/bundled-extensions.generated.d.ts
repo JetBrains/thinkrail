@@ -8,6 +8,9 @@ import type { BundledExtensionFactory } from "@thinkrail/server";
 /** The bundled pi extensions' default-export factories, value-imported, in load order. */
 export declare const bundledExtensionFactories: BundledExtensionFactory[];
 
+/** `pi-web-access`'s factory, named — the delegation child extension set consumes the value. */
+export declare const bundledWebAccessFactory: BundledExtensionFactory;
+
 export interface EmbeddedSkillFile {
 	/** Path relative to the staged skills root, posix-style — e.g. `spec-graph/SKILL.md`. */
 	route: string;

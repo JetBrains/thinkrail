@@ -50,7 +50,10 @@ shadow a built-in or personal name (task-spec decision 6), and project definitio
 reviewer — user-settled), not `.md` files, so they survive `bun build --compile` and get
 typechecked; user-authored definitions keep the community `.md` + frontmatter convention
 (`name`, `description`, `tools`, `model`, `thinking`, `max_turns`, `inherit_project_context`,
-`skills`; body = system prompt). Malformed files are skipped, never fatal.
+`skills`, `extensions`; body = system prompt). Malformed files are skipped, never fatal. All four
+builtins set `extensions: true` (the embedder's curated child set — inert under pure-pi
+zero-config) with the spec READ tools (`spec_grep`/`spec_get`/`spec_graph`) allowlisted for the
+read-only roles and web tools (`web_search`/`fetch_content`) for the scout.
 
 ## The mapping (policy, not mechanism)
 
@@ -59,6 +62,8 @@ against the session's available models (`provider/id` → exact id → unique pr
 unknown pinned refs throw loud). Child system prompt = definition body → subagent bridge → env
 block (cwd, git branch, platform) — **stable material first** for KV-cache prefix reuse. The
 recursion guard (`excludeTools: ["Agent", "get_subagent_result"]`) is unconditional.
+`extensions: true` passes through to the core's curated-set opt-in (core decision #25) — which
+extensions that set holds is the **embedder's** choice, never this package's.
 
 ## Boundary
 

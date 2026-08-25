@@ -20,6 +20,7 @@ import { parseSubcommand } from "./args";
 import {
 	bundledExtensionFactories,
 	bundledSkillsVersion,
+	bundledWebAccessFactory,
 	embeddedSkillFiles,
 } from "./bundled-extensions.generated";
 import { stagingRoot } from "./paths";
@@ -64,7 +65,11 @@ if (parseSubcommand(Bun.argv.slice(2)) === undefined) {
 	// Respect an explicit override (e.g. pointing at a dev build); otherwise serve the staged UI.
 	process.env.THINKRAIL_STATIC_DIR ??= staticDir;
 	const { registerBundledRuntime } = await import("@thinkrail/server");
-	await registerBundledRuntime({ factories: bundledExtensionFactories, skillsDir });
+	await registerBundledRuntime({
+		factories: bundledExtensionFactories,
+		skillsDir,
+		webAccessFactory: bundledWebAccessFactory,
+	});
 }
 const { launch } = await import("./bootstrap");
 await launch("binary");

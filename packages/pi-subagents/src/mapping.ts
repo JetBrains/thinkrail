@@ -108,6 +108,7 @@ export function toSpawnMapping(
 			excludeTools: [...RECURSION_GUARD_TOOLS],
 			...(definition.inheritProjectContext === true ? { contextFiles: true } : {}),
 			...(definition.skills !== undefined ? { skills: definition.skills } : {}),
+			...(definition.extensions === true ? { extensions: true } : {}),
 		},
 		...(definition.maxTurns !== undefined ? { maxTurns: definition.maxTurns } : {}),
 	};

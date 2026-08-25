@@ -29,6 +29,8 @@ import {
 	type Skill,
 } from "@earendil-works/pi-coding-agent";
 import type { SkillCatalogEntry, SlashCommandInfo } from "@thinkrail/contracts";
+// A workspace package under our own strict tsconfig — value-importable, unlike pi-web-access.
+import specGraphExtension from "pi-spec-graph";
 import { askUserQuestionExtension } from "./askUserQuestion";
 import { decideSkill, type SkillAdmissionContext } from "./skillAdmission";
 import {
@@ -45,6 +47,11 @@ export interface BundledExtensions {
 	factories: BundledExtensionFactory[];
 	/** A real on-disk dir of staged skill roots (each `<name>/SKILL.md`) for `additionalSkillPaths`. */
 	skillsDir: string;
+	/**
+	 * `pi-web-access`'s factory, NAMED — the delegation child set needs the value itself (the
+	 * `factories` array is order-opaque), and a binary can't runtime-require it (no `node_modules`).
+	 */
+	webAccessFactory: BundledExtensionFactory;
 }
 
 let bundled: BundledExtensions | undefined;
@@ -226,6 +233,31 @@ export function toSkillCommands(skills: readonly Skill[]): SlashCommandInfo[] {
 		source: "skill" as const,
 		sourceInfo: skill.sourceInfo,
 	}));
+}
+
+// Dev-mode web-access factory: required (Bun transpiles the raw TS at runtime), NOT value-imported —
+// a value import would drag the package's third-party `.ts` source into our strict tsc graph (the
+// same reason parents load it by path). The compiled binary takes the named bundled seam instead;
+// `createRequire` cannot resolve inside a binary.
+let devWebAccessFactory: BundledExtensionFactory | undefined;
+function webAccessFactory(): BundledExtensionFactory {
+	if (bundled) return bundled.webAccessFactory;
+	if (!devWebAccessFactory) {
+		const require = createRequire(import.meta.url);
+		const loaded: { default: BundledExtensionFactory } = require("pi-web-access/index.ts");
+		devWebAccessFactory = loaded.default;
+	}
+	return devWebAccessFactory;
+}
+
+/**
+ * The curated extension set a delegation CHILD may load (`extensions: true` in an agent
+ * definition): spec-graph's tools + web-access under the same headless-search guard the parent
+ * runs. Deliberately NOT the parent's full set — see `delegation.ts` for the rationale and the
+ * subsession (listed-child) story.
+ */
+export function childExtensionFactories(): ExtensionFactory[] {
+	return [headlessSearchPolicy, webAccessFactory(), specGraphExtension];
 }
 
 /**

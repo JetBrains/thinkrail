@@ -173,7 +173,14 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     `disposeSessionChildren`; workspace archival calls `removeWorkspaceDelegation` (drops the
     service + deletes `delegation/<workspaceId>` — hidden children never outlive their workspace).
     `readChildTranscript` serves `subagent.getTranscript` from the store by
-    `(workspaceId, parentSessionId, childSessionId)`.
+    `(workspaceId, parentSessionId, childSessionId)`. Children opting into extensions
+    (`extensions: true` in their definition) get the **curated child set**
+    (`childExtensionFactories` in `extensions`): the headless-search policy + `pi-web-access` +
+    `pi-spec-graph` — deliberately not the parent's full set (ask_user_question would hang a
+    hidden child); future LISTED interactive children are first-class `createSession` sessions
+    and never pass through this set. Web-access reaches the child set via a **named bundled-seam
+    field** (`BundledExtensions.webAccessFactory`) in the binary and a Bun `require` in dev — its
+    raw third-party `.ts` must stay out of the strict tsc graph.
   - `extensions` — Pi resource wiring. `buildResourceLoader(cwd, settingsManager, getAdmission,
     extraFactories?)` starts
     with a `DefaultResourceLoader` (Pi's normal settings/package + `.pi` / `.agents` discovery), adds

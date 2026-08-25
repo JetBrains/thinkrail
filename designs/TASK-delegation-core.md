@@ -93,6 +93,8 @@ interface SessionOptions {
   systemPrompt?: string;                    // → systemPromptOverride (consumer assembles body + bridge + env)
   contextFiles?: boolean;                   // default false — worktree AGENTS.md opt-in
   skills?: string[];                        // explicit skill selection, default none
+  extensions?: boolean;                     // default false — opt into the EMBEDDER-BOUND curated
+                                            // child extension set; never pi disk discovery (#25)
 }
 
 // The isolation seam — generative: a provider returns a value the core consumes at run start.
@@ -367,6 +369,8 @@ interface DelegationBindings {
   scope?: string;           // storage partition key — ThinkRail: workspaceId; default: "default"
   modelRuntime?: ModelRuntime;      // shared model/auth runtime — ThinkRail: the host's; default: pi's own, lazily
   maxConcurrentPerParent?: number;  // semaphore slots per parent — default 4
+  childExtensionFactories?: ExtensionFactory[];  // the curated set a child MAY load (#25) —
+                                    // ThinkRail: spec-graph + headless web-access; default none
 }
 ```
 
@@ -537,3 +541,16 @@ lineage-siblings under the root — parent edge ≠ dependency edge.
 24. **`RunSnapshot.errorMessage`** (review round 2): the terminal snapshot keeps an errored run's
     reason — without it, a detached error collected later via `get_subagent_result` carried zero
     diagnostic (the completion message had it, the collection path didn't).
+25. **Child extensions: a curated, embedder-bound set — never inheritance, never disk discovery**
+    (user round — the consumer decision #22 parked arrived: spec tools in scouts).
+    `SessionOptions.extensions: true` loads exactly `DelegationBindings.childExtensionFactories`
+    (pi's loader loads injected factories even under `noExtensions` — verified); the `tools`
+    allowlist gates which of the set's tools are callable; children with extensions are bound
+    `mode: "print"` (headless — `ctx.hasUI` false, dialogs skipped). Literal "inherit the
+    parent's extensions" is rejected: interactive tools (ask_user_question) hang a hidden
+    non-interactive child, and blanket loading multiplies heavy extensions per child (gotgenes'
+    documented V8-heap incident class). **The future subsession need ("full extensions, fully
+    interactive") is NOT served by this mechanism**: a `listed + interactive` child is a
+    first-class session — the embedder assembles it with its normal session path (ThinkRail:
+    `createSession`'s own loader — full bundled set, ask_user_question, skills, admission) and
+    the core contributes identity, lineage, and visibility bookkeeping only.

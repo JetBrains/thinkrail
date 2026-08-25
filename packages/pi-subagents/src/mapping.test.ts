@@ -68,6 +68,7 @@ test("the mapping mirrors the definition onto SessionOptions with the recursion 
 			maxTurns: 9,
 			inheritProjectContext: true,
 			skills: ["alpha"],
+			extensions: true,
 		}),
 		{ cwd: "/tmp/x", availableModels: AVAILABLE },
 	);
@@ -77,6 +78,7 @@ test("the mapping mirrors the definition onto SessionOptions with the recursion 
 	expect(mapping.session.excludeTools).toEqual([...RECURSION_GUARD_TOOLS]);
 	expect(mapping.session.contextFiles).toBe(true);
 	expect(mapping.session.skills).toEqual(["alpha"]);
+	expect(mapping.session.extensions).toBe(true);
 	expect(mapping.maxTurns).toBe(9);
 });
 
@@ -87,6 +89,7 @@ test("an unpinned definition inherits the parent: no model/thinking/tools in the
 	expect(mapping.session.tools).toBeUndefined();
 	expect(mapping.session.contextFiles).toBeUndefined();
 	expect(mapping.session.skills).toBeUndefined();
+	expect(mapping.session.extensions).toBeUndefined();
 	expect(mapping.maxTurns).toBeUndefined();
 	// The guard is unconditional.
 	expect(mapping.session.excludeTools).toEqual([...RECURSION_GUARD_TOOLS]);

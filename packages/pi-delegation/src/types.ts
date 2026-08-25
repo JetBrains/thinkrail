@@ -4,7 +4,11 @@
 // rejected loudly (`DelegationError` code "not-implemented") until its consumer lands.
 
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
-import type { ExtensionContext, ModelRuntime } from "@earendil-works/pi-coding-agent";
+import type {
+	ExtensionContext,
+	ExtensionFactory,
+	ModelRuntime,
+} from "@earendil-works/pi-coding-agent";
 
 /** Terminal status of one run — expected outcomes are values, not rejections. */
 export type RunStatus = "completed" | "error" | "aborted";
@@ -52,6 +56,12 @@ export interface SessionOptions {
 	contextFiles?: boolean;
 	/** Explicit skill selection, default none. */
 	skills?: string[];
+	/**
+	 * Default false — opt into the EMBEDDER-BOUND child extension set
+	 * (`DelegationBindings.childExtensionFactories`), never pi disk discovery (decision #25). The
+	 * `tools` allowlist gates which of the set's tools are actually callable.
+	 */
+	extensions?: boolean;
 }
 
 /**
@@ -267,4 +277,11 @@ export interface DelegationBindings {
 	modelRuntime?: ModelRuntime;
 	/** Concurrency slots per parent session (resource governance, not correctness). Default 4. */
 	maxConcurrentPerParent?: number;
+	/**
+	 * The curated extension set a child MAY load (`SessionOptions.extensions: true` opts a child
+	 * in). Hidden children never run pi disk discovery — blanket inheritance is the documented
+	 * failure class (interactive tools hang a non-interactive child; heavy extensions multiply per
+	 * child). Default: none — the opt-in is inert under a zero-config embedding (decision #25).
+	 */
+	childExtensionFactories?: ExtensionFactory[];
 }

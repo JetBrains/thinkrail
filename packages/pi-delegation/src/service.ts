@@ -433,13 +433,20 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 		const settingsManager = SettingsManager.create(cwd);
 		const skills = options.skills ?? [];
 		const systemPrompt = options.systemPrompt;
+		// The extensions opt-in loads ONLY the embedder-bound curated set — `noExtensions` stays on
+		// (it gates disk discovery; injected factories load regardless), so a child can never pick up
+		// arbitrary user/project extensions (decision #25).
+		const childFactories =
+			options.extensions === true ? (bindings.childExtensionFactories ?? []) : [];
 		const resourceLoader = new DefaultResourceLoader({
 			cwd,
 			agentDir: getAgentDir(),
 			settingsManager,
-			// Narrow by default (decision 7 of the subagent spec): no extensions, prompts, or themes in
-			// a V1 child; context files and skills are explicit opt-ins in `SessionOptions`.
+			// Narrow by default (decision 7 of the subagent spec): no discovered extensions, prompts,
+			// or themes in a child; context files, skills, and the curated extension set are explicit
+			// opt-ins in `SessionOptions`.
 			noExtensions: true,
+			...(childFactories.length > 0 ? { extensionFactories: childFactories } : {}),
 			noPromptTemplates: true,
 			noThemes: true,
 			...(options.contextFiles === true ? {} : { noContextFiles: true }),
@@ -463,6 +470,9 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 			...(options.tools !== undefined ? { tools: options.tools } : {}),
 			...(options.excludeTools !== undefined ? { excludeTools: options.excludeTools } : {}),
 		});
+		// session_start is emitted by bindExtensions — the curated factories expect the normal
+		// lifecycle. "print" = headless: `ctx.hasUI` is false, so well-behaved extensions skip dialogs.
+		if (childFactories.length > 0) await session.bindExtensions({ mode: "print" });
 
 		const record: SpawnRecord = {
 			sessionId: session.sessionId,

@@ -16,7 +16,7 @@ import {
 import { createSubagentsExtension } from "pi-subagents";
 import { dataDir } from "../persistence";
 import { liveParentContext } from "./agentSessionManager";
-import type { BundledExtensionFactory } from "./extensions";
+import { type BundledExtensionFactory, childExtensionFactories } from "./extensions";
 import { getPiRuntime } from "./piRuntime";
 
 /** The host's delegation storage root — hidden children live here, never pi's sessions root. */
@@ -35,6 +35,13 @@ export async function delegationServiceFor(workspaceId: string): Promise<Delegat
 			delegationRoot: delegationRootDir(),
 			scope: workspaceId,
 			modelRuntime: await getPiRuntime(),
+			// The curated set a child MAY load (`extensions: true` in its definition): spec-graph (the
+			// spec-first read tools) + web-access under the same headless-search guard the parent runs.
+			// Deliberately NOT the parent's full set: ask_user_question would hang a hidden
+			// non-interactive child, and visualize/todos add nothing to a text report. Future LISTED
+			// interactive children (subsessions) are first-class manager sessions assembled by
+			// `createSession` itself — they get everything, and never pass through this set.
+			childExtensionFactories: childExtensionFactories(),
 		});
 		services.set(workspaceId, service);
 	}

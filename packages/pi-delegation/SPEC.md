@@ -30,7 +30,8 @@ lands.
 - `DelegationBindings` — everything host-specific: `resolveParent` (required; returns
   `ParentContext = Pick<ExtensionContext, "cwd" | "model" | "thinkingLevel">` — ThinkRail projects
   the manager's live session, pure pi passes the extension's own `ctx`), `delegationRoot`, `scope`,
-  `modelRuntime`, `maxConcurrentPerParent`.
+  `modelRuntime`, `maxConcurrentPerParent`, `childExtensionFactories` (the curated set a child MAY
+  load — decision #25).
 - Storage helpers: `defaultDelegationRoot` / `delegationSessionDir` / `deriveChildSessionFile`
   (post-restart transcript reads) / `DEFAULT_SCOPE`.
 - The contract types — `CreateChildSpec`, `ChildInfo`, `SessionOptions`, `ChildHandle`,
@@ -54,6 +55,8 @@ lands.
 
 Hidden children persist under `<delegationRoot>/<scope>/<parentSessionId>/` via
 `SessionManager.create(cwd, sessionDir)` — never pi's default sessions root. The child's resource
-loader is **narrow by default**: no extensions, no prompt templates, no themes; context files and
-skills are explicit `SessionOptions` opt-ins; `systemPrompt` maps to `systemPromptOverride`.
-Model/thinking default to the live parent's current values; `cwd` is the parent's.
+loader is **narrow by default**: no discovered extensions, no prompt templates, no themes; context
+files, skills, and the embedder's curated extension set (`extensions: true` — injected factories
+only, never disk discovery; bound `mode: "print"` so `ctx.hasUI` is false) are explicit
+`SessionOptions` opt-ins; `systemPrompt` maps to `systemPromptOverride`. Model/thinking default to
+the live parent's current values; `cwd` is the parent's.

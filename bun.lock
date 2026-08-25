@@ -107,6 +107,7 @@
         "@earendil-works/pi-ai": "catalog:",
         "@earendil-works/pi-coding-agent": "catalog:",
         "@types/bun": "catalog:",
+        "typebox": "catalog:",
         "typescript": "catalog:",
       },
       "peerDependencies": {

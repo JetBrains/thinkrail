@@ -27,6 +27,12 @@ export interface AgentDefinition {
 	inheritProjectContext?: boolean;
 	/** Opt-in: explicit skill names. */
 	skills?: string[];
+	/**
+	 * Opt-in (`extensions: true`): the embedder's curated child extension set (ThinkRail binds
+	 * spec-graph + headless web-access; pure-pi zero-config binds none, so this is inert there).
+	 * The `tools` allowlist still gates which of the set's tools are callable.
+	 */
+	extensions?: boolean;
 	/** The definition body — becomes the child's system prompt base. */
 	systemPrompt: string;
 }
@@ -86,6 +92,7 @@ export function parseAgentDefinition(
 		...(Number.isFinite(maxTurns) && maxTurns > 0 ? { maxTurns } : {}),
 		...(fields.get("inherit_project_context") === "true" ? { inheritProjectContext: true } : {}),
 		...(skills !== undefined ? { skills: parseNameList(skills) } : {}),
+		...(fields.get("extensions") === "true" ? { extensions: true } : {}),
 		systemPrompt,
 	};
 }

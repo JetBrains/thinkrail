@@ -20,6 +20,7 @@ thinking: low
 max_turns: 12
 inherit_project_context: true
 skills: [alpha, beta]
+extensions: true
 ---
 
 System prompt body.`,
@@ -37,6 +38,7 @@ System prompt body.`,
 		maxTurns: 12,
 		inheritProjectContext: true,
 		skills: ["alpha", "beta"],
+		extensions: true,
 		systemPrompt: "System prompt body.",
 	});
 });
@@ -107,4 +109,12 @@ test("the builtin set is the settled four, all with prompts and descriptions", (
 	}
 	expect(BUILTIN_AGENTS.find((d) => d.name === "scout")?.tools).toContain("bash");
 	expect(BUILTIN_AGENTS.find((d) => d.name === "planner")?.tools).not.toContain("bash");
+	// Every builtin opts into the curated child extension set (inert where none is bound), with
+	// spec READ tools allowlisted for the read-only roles and web tools for the scout.
+	for (const definition of BUILTIN_AGENTS) expect(definition.extensions).toBe(true);
+	for (const name of ["scout", "planner", "reviewer"]) {
+		expect(BUILTIN_AGENTS.find((d) => d.name === name)?.tools).toContain("spec_grep");
+	}
+	expect(BUILTIN_AGENTS.find((d) => d.name === "scout")?.tools).toContain("web_search");
+	expect(BUILTIN_AGENTS.find((d) => d.name === "planner")?.tools).not.toContain("web_search");
 });
