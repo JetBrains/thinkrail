@@ -367,7 +367,11 @@ function SimCenter({
 		return (
 			<Center>
 				<h1 className="tr-brand-hero text-primary">{PRODUCT_NAME}</h1>
-				<div className="mt-xl">
+				<div className="relative mt-xl">
+					<div
+						aria-hidden
+						className="pointer-events-none absolute -inset-3 rounded-[var(--radius-lg)] bg-primary-soft blur-xl"
+					/>
 					<button
 						type="button"
 						data-sim="open-project"

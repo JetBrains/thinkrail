@@ -59,6 +59,9 @@ App" card); both flip one **view flag** (`store.demoOpen`, a top-level, non-pers
 
 1. **Open a project** — empty-state Welcome with an "Open project" card (arrow points down to it); clicking
    opens a **fake** picker showing one `to-do-app` folder; selecting it opens the fake "To Do App" project.
+   The demo card carries a soft **brand glow** — a blurred `bg-primary-soft` layer behind it (not
+   `feedback-success`; onboarding emphasis, not a success state), extending slightly beyond the card
+   without altering its background, border, or layout.
 2. **Create separate workspaces** — coach sits right of the left panel, arrow pointing back at the rail
    `+`; two clicks create two fake workspaces (`Add search`, `Completed filter`), teaching the isolated
    worktree-per-task model. No real worktrees.
