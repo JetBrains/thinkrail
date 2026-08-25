@@ -352,10 +352,16 @@ future wire handlers, and passes it to the `pi-subagents` factory; under vanilla
 optional bag; **every field has a pure-pi default**:
 
 ```ts
+// What the core reads off a live parent — REUSES pi's ExtensionContext shape, so in pure pi the
+// consuming extension's `ctx` satisfies it structurally (pi never hands extensions the raw
+// AgentSession — verified against ExtensionContext); ThinkRail projects it off the manager's
+// live session. Additive-extensible (V2 fork adds sessionFile).
+type ParentContext = Pick<ExtensionContext, "cwd" | "model" | "thinkingLevel">;
+
 interface DelegationBindings {
-  resolveParent: (sessionId: string) => AgentSession | undefined;
-                            // REQUIRED — the one binding with no library default: ThinkRail passes the
-                            // manager lookup; in pure pi the pi-subagents extension passes its own ctx session
+  resolveParent: (sessionId: string) => ParentContext | undefined;
+                            // REQUIRED — the one binding with no library default: ThinkRail projects the
+                            // manager's live session; in pure pi the pi-subagents extension passes its ctx
   delegationRoot?: string;  // storage root — ThinkRail: ~/.thinkrail/delegation; default: <piAgentDir>/delegation
   scope?: string;           // storage partition key — ThinkRail: workspaceId; default: "default"
   modelRuntime?: ModelRuntime;      // shared model/auth runtime — ThinkRail: the host's; default: pi's own, lazily
@@ -521,3 +527,9 @@ lineage-siblings under the root — parent edge ≠ dependency edge.
     stays a pure read; collection is the explicit act. **V1 child loaders are narrow by default**
     (no extensions/prompts/themes; context files + skills opt-in via `SessionOptions`) — extension
     loading in children waits for a consumer that needs it.
+23. **`resolveParent` returns a projection, not the `AgentSession`** (user round, subagents
+    implementation): pi's extension API exposes only `ExtensionContext` projections — an extension
+    can never retrieve its own `AgentSession`, so the raw-session binding was unsatisfiable in pure
+    pi. The core reads exactly `cwd`/`model`/`thinkingLevel` (+liveness) off a parent, so
+    `ParentContext = Pick<ExtensionContext, …>` (type reuse over new types — user note) covers all
+    verified usage in both worlds and structurally prevents the core from driving the parent.

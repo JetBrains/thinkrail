@@ -4,7 +4,7 @@
 // rejected loudly (`DelegationError` code "not-implemented") until its consumer lands.
 
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
-import type { AgentSession, ModelRuntime } from "@earendil-works/pi-coding-agent";
+import type { ExtensionContext, ModelRuntime } from "@earendil-works/pi-coding-agent";
 
 /** Terminal status of one run — expected outcomes are values, not rejections. */
 export type RunStatus = "completed" | "error" | "aborted";
@@ -242,13 +242,21 @@ export interface DelegationService {
 }
 
 /**
+ * What the core reads off a live parent — cwd (the child's default workspace), current model, and
+ * thinking level. Reuses pi's own `ExtensionContext` shape, so in pure pi the consuming extension's
+ * `ctx` satisfies it structurally (pi never hands extensions the raw `AgentSession`); ThinkRail
+ * projects it off the manager's live session.
+ */
+export type ParentContext = Pick<ExtensionContext, "cwd" | "model" | "thinkingLevel">;
+
+/**
  * Embedder bindings — everything host-specific enters here. `delegationRoot`/`scope` default for
  * pure pi; `resolveParent` cannot default inside the library (in pure pi the pi-subagents extension
- * supplies its own ctx session; in ThinkRail the manager supplies the lookup).
+ * projects its own ctx; in ThinkRail the manager supplies the lookup).
  */
 export interface DelegationBindings {
-	/** Live-parent lookup — ThinkRail: AgentSessionManager; pure pi: the extension's own session. */
-	resolveParent: (sessionId: string) => AgentSession | undefined;
+	/** Live-parent projection — `undefined` = not live (→ the typed `unknown-parent` error). */
+	resolveParent: (sessionId: string) => ParentContext | undefined;
 	/** Storage root — ThinkRail: `~/.thinkrail/delegation`; default: `<piAgentDir>/delegation`. */
 	delegationRoot?: string;
 	/** Storage partition key — ThinkRail: workspaceId; default: `"default"`. */

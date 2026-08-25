@@ -103,8 +103,13 @@ beforeAll(async () => {
 	parent = created.session;
 
 	delegationRoot = tmpDir("pi-delegation-root-");
+	// The projection an embedder derives from its live parent (pure pi passes `ctx` directly).
+	const parentProjection = (id: string) =>
+		id === parent.sessionId
+			? { cwd: parentCwd, model: parent.model, thinkingLevel: parent.thinkingLevel }
+			: undefined;
 	service = createDelegationService({
-		resolveParent: (id) => (id === parent.sessionId ? parent : undefined),
+		resolveParent: parentProjection,
 		delegationRoot,
 		scope: "ws-test",
 		modelRuntime: runtime,
@@ -336,7 +341,10 @@ test("the turn cap steers a wrap-up, then aborts a run that keeps going", async 
 
 test("the per-parent semaphore paces runs FIFO", async () => {
 	const paced = createDelegationService({
-		resolveParent: (id) => (id === parent.sessionId ? parent : undefined),
+		resolveParent: (id) =>
+			id === parent.sessionId
+				? { cwd: parentCwd, model: parent.model, thinkingLevel: parent.thinkingLevel }
+				: undefined,
 		delegationRoot,
 		scope: "ws-paced",
 		modelRuntime: runtime,

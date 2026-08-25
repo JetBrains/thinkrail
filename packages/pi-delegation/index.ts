@@ -18,6 +18,7 @@ export {
 	type DelegationRunDetails,
 	type DelegationService,
 	type LifecycleEvent,
+	type ParentContext,
 	type RunLifecycleStatus,
 	type RunOptions,
 	type RunOutcome,

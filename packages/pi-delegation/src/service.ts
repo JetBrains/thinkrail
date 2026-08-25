@@ -427,7 +427,7 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 			);
 		}
 		const thinkingLevel = options.thinkingLevel ?? parent.thinkingLevel;
-		const cwd = parent.sessionManager.getCwd();
+		const cwd = parent.cwd;
 
 		const settingsManager = SettingsManager.create(cwd);
 		const skills = options.skills ?? [];
