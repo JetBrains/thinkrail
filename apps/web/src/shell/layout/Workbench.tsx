@@ -26,6 +26,7 @@ import {
 	RiChat2Fill,
 	RiChat2Line,
 	RiCollapseVerticalLine,
+	RiExpandVerticalLine,
 	RiFileFill,
 	RiGitPullRequestFill,
 	RiLayout2Fill,
@@ -1524,7 +1525,11 @@ function SideGroupView({
 					}}
 					className="flex w-7 shrink-0 items-center justify-center border-border-muted border-b border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 				>
-					<RiCollapseVerticalLine className="size-4" />
+					{group.folded ? (
+						<RiExpandVerticalLine className="size-4" />
+					) : (
+						<RiCollapseVerticalLine className="size-4" />
+					)}
 				</button>
 			</div>
 			<div
