@@ -1,8 +1,22 @@
-import { Check, Folder, FolderOpen, GitBranch, House, Loader2, Plus, Send, X } from "lucide-react";
+import {
+	Check,
+	ChevronLeft,
+	ChevronRight,
+	Folder,
+	FolderOpen,
+	GitBranch,
+	House,
+	Loader2,
+	type LucideIcon,
+	Plus,
+	Send,
+	X,
+} from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "../components/ui/button";
 import { Popover, PopoverAnchor, PopoverArrow, PopoverContent } from "../components/ui/popover";
 import { PRODUCT_NAME } from "../constants/branding";
+import { cn } from "../lib";
 import { useAppStore } from "../store";
 import { useTargetRect } from "./anchor";
 
@@ -60,7 +74,7 @@ function activeCoach(step: Step, dialogOpen: boolean): CoachInfo | null {
 		case "picker":
 			return {
 				selector: '[data-sim="folder"]',
-				side: "right",
+				side: "top",
 				scope: "card",
 				title: "Choose your project folder",
 				body: "Select the To Do App folder to open it in ThinkRail.",
@@ -457,30 +471,35 @@ function SimCenter({
 	}
 	if (step === "picker") {
 		return (
-			<Center>
-				<div className="w-[440px] overflow-hidden rounded-[var(--radius-lg)] border border-border-default bg-container-elevated-bg shadow-[var(--shadow-md)]">
-					<div className="flex items-center gap-xs border-border-default border-b px-lg py-md tr-text-metadata text-text-muted">
-						<Folder className="size-3.5" />
-						<span>Home</span>
-						<span>/</span>
-						<span>Projects</span>
+			<div className="flex min-h-0 flex-1 bg-container-content-bg p-lg">
+				<div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[var(--radius-md)] border border-border-default bg-container-elevated-bg shadow-[var(--shadow-md)]">
+					<div className="flex h-9 shrink-0 items-center gap-sm border-border-default border-b px-md text-text-muted">
+						<ChevronLeft className="size-4" />
+						<ChevronRight className="size-4" />
+						<span className="ml-sm tr-text-ui text-text-default">Projects</span>
 					</div>
-					<ul className="p-sm">
-						<li>
-							<button
-								type="button"
-								data-sim="folder"
-								data-testid="sim-folder"
-								onClick={onPickFolder}
-								className="flex w-full items-center gap-sm rounded-[var(--radius-sm)] px-md py-sm text-left tr-text-ui text-text-default transition-colors hover:bg-control-bg-hovered"
-							>
-								<Folder className="size-4 text-primary" />
-								<span>to-do-app</span>
-							</button>
-						</li>
-					</ul>
+					<div className="flex min-h-0 flex-1">
+						<PickerColumn className="w-[180px] bg-container-sidebar-bg" label="Locations">
+							<PickerRow icon={Folder} name="Desktop" />
+							<PickerRow icon={Folder} name="Documents" />
+							<PickerRow icon={Folder} name="Downloads" />
+							<PickerRow icon={House} name="Home" selected />
+						</PickerColumn>
+						<PickerColumn className="w-[220px]">
+							<PickerRow icon={Folder} name="Applications" />
+							<PickerRow icon={Folder} name="Desktop" />
+							<PickerRow icon={Folder} name="Documents" />
+							<PickerRow icon={Folder} name="Downloads" />
+							<PickerRow icon={Folder} name="Projects" selected chevron />
+						</PickerColumn>
+						<PickerColumn className="min-w-0 flex-1" last>
+							<PickerRow icon={Folder} name="my-app" />
+							<PickerRow icon={Folder} name="notes" />
+							<PickerRow icon={Folder} name="to-do-app" target onSelect={onPickFolder} />
+						</PickerColumn>
+					</div>
 				</div>
-			</Center>
+			</div>
 		);
 	}
 	if (step === "ws1-create" || step === "ws2-create") {
@@ -550,6 +569,67 @@ function SimCenter({
 				</div>
 			</div>
 		</div>
+	);
+}
+
+function PickerColumn({
+	className,
+	label,
+	last,
+	children,
+}: {
+	className?: string;
+	label?: string;
+	last?: boolean;
+	children: ReactNode;
+}) {
+	return (
+		<div
+			className={cn(
+				"flex min-h-0 flex-col gap-0.5 overflow-auto p-xs",
+				!last && "border-border-default border-r",
+				className,
+			)}
+		>
+			{label ? (
+				<span className="px-sm pt-xs pb-1 tr-text-eyebrow text-text-muted">{label}</span>
+			) : null}
+			{children}
+		</div>
+	);
+}
+
+function PickerRow({
+	icon: Icon,
+	name,
+	selected,
+	chevron,
+	target,
+	onSelect,
+}: {
+	icon: LucideIcon;
+	name: string;
+	selected?: boolean;
+	chevron?: boolean;
+	target?: boolean;
+	onSelect?: () => void;
+}) {
+	return (
+		<button
+			type="button"
+			{...(target ? { "data-sim": "folder", "data-testid": "sim-folder" } : {})}
+			{...(onSelect ? { onClick: onSelect } : {})}
+			className={cn(
+				"flex h-7 shrink-0 items-center gap-sm rounded-[var(--radius-sm)] px-sm text-left tr-text-ui transition-colors",
+				selected
+					? "bg-control-bg-selected text-primary"
+					: "text-text-default hover:bg-control-bg-hovered",
+			)}
+		>
+			<Icon className={cn("size-4 shrink-0", selected ? "text-primary" : "text-text-muted")} />
+			<span className="min-w-0 flex-1 truncate">{name}</span>
+			{chevron ? <ChevronRight className="size-3.5 shrink-0 text-text-muted" /> : null}
+		</button>
 	);
 }
 

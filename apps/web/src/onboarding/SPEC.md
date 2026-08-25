@@ -66,7 +66,12 @@ App" card); both flip one **view flag** (`store.demoOpen`, a top-level, non-pers
 ## Scripted flow (local `step` state machine, numbered "of 4")
 
 1. **Open a project** — empty-state Welcome with an "Open project" card (arrow points down to it); clicking
-   opens a **fake** picker showing one `to-do-app` folder; selecting it opens the fake "To Do App" project.
+   opens a **fake, simplified macOS-Finder-style folder picker** — a large three-column browser filling
+   the content area (Locations with **Home** selected → Home contents with **Projects** selected →
+   `my-app` / `notes` / `to-do-app`) plus a minimal toolbar, so it reads as a system folder window without
+   recreating Finder. Only `to-do-app` is interactive (spotlit with the pulsing primary emphasis, coach
+   above it, arrow down); everything else stays under the dim and does nothing. Selecting `to-do-app`
+   opens the fake "To Do App" project. Built from ThinkRail semantic tokens — no macOS assets/colors.
    The demo card carries a soft **brand glow** — a blurred `bg-primary-soft` layer behind it (not
    `feedback-success`; onboarding emphasis, not a success state), extending slightly beyond the card
    without altering its background, border, or layout.
