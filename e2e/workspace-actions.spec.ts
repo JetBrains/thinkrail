@@ -95,6 +95,11 @@ test("Rename edits the workspace name inline and persists via workspace.rename",
 	await expect
 		.poll(() => loadPersistedWorkspaces().find((w) => w.id === created.id)?.name)
 		.toBe("Renamed Space");
+	// A user rename edits the display label only — the git branch is decoupled and must be KEPT, not
+	// renamed to a slug of the new name. So the branch stays `workspace-1` and, now differing from the
+	// name, surfaces on the row's second line.
+	expect(loadPersistedWorkspaces().find((w) => w.id === created.id)?.branch).toBe(created.branch);
+	await expect(row.getByTestId("workspace-branch")).toHaveText(created.branch);
 });
 
 test("Rename with an empty value restores the previous name and sends nothing", async ({

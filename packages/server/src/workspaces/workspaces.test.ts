@@ -391,6 +391,25 @@ test("renameWorkspace moves the branch in place: record + git follow, the worktr
 	expect(worktrees()[0]?.branch).toBe("add-login-flow");
 });
 
+test("renameWorkspace with renameBranch:false renames the display name only, keeping the git branch", async () => {
+	const ws = await createWorkspace("p1");
+	const renamed = renameWorkspace(ws.id, "work3", { lock: true, renameBranch: false });
+
+	// Display label changed; the git branch is decoupled and KEPT (no `git branch -m`).
+	expect(renamed.name).toBe("work3");
+	expect(renamed.branch).toBe(ws.branch);
+	expect(renamed.renamed).toBe(true);
+	expect(renamed.worktreePath).toBe(ws.worktreePath);
+	// The worktree stays on its original branch, and that branch still exists in the repo.
+	expect(gitOut(ws.worktreePath, "rev-parse", "--abbrev-ref", "HEAD")).toBe(ws.branch);
+	expect(gitOut(repo, "for-each-ref", "--format=%(refname:short)", "refs/heads")).toContain(
+		ws.branch,
+	);
+	// And the record on disk agrees: name moved, branch kept.
+	expect(worktrees()[0]?.name).toBe("work3");
+	expect(worktrees()[0]?.branch).toBe(ws.branch);
+});
+
 test("renameWorkspace with lock:false renames name + branch but leaves renamed unset (provisional)", async () => {
 	const ws = await createWorkspace("p1");
 	const renamed = renameWorkspace(ws.id, "add login flow", { lock: false });

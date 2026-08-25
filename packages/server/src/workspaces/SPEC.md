@@ -74,7 +74,8 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   where `name === branch`; **re-reads the registry after the awaited fallback fetch** before appending —
   the pre-await snapshot is stale by then, and saving it would clobber a concurrent list's Default-ensure
   (same discipline as `renameWorkspace`'s re-load after its git subprocess)),
-  `renameWorkspace` (**sync**; sets the **display `name`** (sanitized, casing preserved) and derives the
+  `renameWorkspace` (**sync**; sets the **display `name`** (sanitized, casing preserved) and — **only when
+  `opts.renameBranch` (default `true`)** — derives the
   **git branch** from it via `toBranch`, uniqued against refs + worktree dirs, `git branch -m` from the
   project repo — the branch ref moves and the worktree's HEAD follows, but the **worktree dir never moves**
   (pi keys sessions by exact cwd; terminals/tabs are cwd'd there — the stale dir name is the accepted cost);
@@ -90,7 +91,11 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   the auto-rename hook treats it as best-effort. `opts.lock` (default `true`) sets `renamed: true`,
   marking the name deliberate so the auto-namer never touches it again — what a user rename and the
   agentic auto-rename want; the host's **provisional naive rename** passes `lock: false` to rename name +
-  branch while leaving `renamed` unset, so the settled-turn agentic pass still refines it),
+  branch while leaving `renamed` unset, so the settled-turn agentic pass still refines it. `opts.renameBranch`
+  (default `true`) is what the auto-rename passes want — a pristine workspace's branch should track its
+  derived name; the **user-facing `workspace.rename`** passes `renameBranch: false` so editing the display
+  label changes only `name` and **keeps the git branch** (decoupled; a label edit must never `git branch -m`
+  the user's — possibly pushed — branch away, and with no ref moved there is nothing to re-point)),
   `listWorkspaces(projectId, { includeDiffStats? })` (complete authoritative membership/order after Default
   ensure + user-owned folder-truth reconciliation; diff stats default **on** for compatibility, while
   `includeDiffStats: false` skips the per-workspace `git diff --shortstat` fan-out for cold navigation —

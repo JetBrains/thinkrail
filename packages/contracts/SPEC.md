@@ -339,7 +339,8 @@ of the host.
   (per-workspace on/off/clear → the `Workspace`) / **`workspace.setDiffBase`** (re-point the diff target,
   `null` clears it back to the creation base — echoes the updated `Workspace` **and** broadcasts
   `workspace.updated`, so every client converges on the push) / **`workspace.rename`** (deliberate user
-  rename of a worktree workspace — sets the display `name`, derives its branch, and **locks** it
+  rename of a worktree workspace — sets the display `name` **only** (the git `branch` is kept: name and
+  branch are decoupled, so editing the label never renames the user's branch) and **locks** it
   (`renamed: true`) so the auto-namer never overrides it; echoes the updated `Workspace` **and**
   broadcasts `workspace.updated`, same convergence as `setDiffBase`; throws for a `default`/`external`
   kind or an empty name) / **`workspace.watchReady`** (await the

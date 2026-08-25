@@ -130,8 +130,8 @@ export const WS_METHODS = {
 	workspaceList: "workspace.list",
 	workspaceOpenReview: "workspace.openReview",
 	workspaceRemove: "workspace.remove",
-	// Deliberate user rename of a worktree workspace — sets the display name + derives its branch and locks
-	// it (`renamed: true`) so the auto-namer never overrides it. Broadcasts `workspace.updated`.
+	// Deliberate user rename of a worktree workspace — sets the display name only (the git branch is kept:
+	// name and branch are decoupled) and locks it (`renamed: true`). Broadcasts `workspace.updated`.
 	workspaceRename: "workspace.rename",
 	workspaceDiffStats: "workspace.diffStats",
 	workspaceSetSkillOverride: "workspace.setSkillOverride",
@@ -342,8 +342,9 @@ export interface WsMethodMap {
 		result: OpenBranchReview | null;
 	};
 	"workspace.remove": { params: { id: string }; result: Ack };
-	// Deliberate user rename: sets the display `name` and derives the branch, locking it (`renamed: true`)
-	// so the auto-namer leaves it alone. Echoes the updated `Workspace` **and** broadcasts
+	// Deliberate user rename: sets the display `name` only — the git `branch` is **kept** (name and branch
+	// are decoupled, so editing the label never `git branch -m`s the user's branch away) — and locks it
+	// (`renamed: true`) so the auto-namer leaves it alone. Echoes the updated `Workspace` **and** broadcasts
 	// `workspace.updated`, so every client converges on the push (like `workspace.setDiffBase`). Throws for
 	// an unknown id, a non-worktree kind (default/external), or an empty name.
 	"workspace.rename": { params: { id: string; name: string }; result: Workspace };

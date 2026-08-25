@@ -335,11 +335,13 @@ const handlers: Record<string, Handler> = {
 		}
 		return { ok: true } as const;
 	},
-	// Deliberate user rename. `renameWorkspace` self-emits `workspace.updated` (it locks `renamed: true`
-	// so the auto-namer leaves the name alone) and throws for an unknown id / non-worktree kind / empty name.
+	// Deliberate user rename of the *display label only* — `renameBranch: false` keeps the git branch
+	// (name and branch are decoupled; editing the label must not `git branch -m` the user's branch away).
+	// `renameWorkspace` self-emits `workspace.updated` and locks `renamed: true` so the auto-namer leaves it
+	// alone; it throws for an unknown id / non-worktree kind / empty name.
 	"workspace.rename": (params) => {
 		const p = params as { id: string; name: string };
-		return renameWorkspace(p.id, p.name, { lock: true });
+		return renameWorkspace(p.id, p.name, { lock: true, renameBranch: false });
 	},
 	"workspace.diffStats": (params) => workspaceDiffStats((params as { id: string }).id),
 	"workspace.openIn": (params) => {
