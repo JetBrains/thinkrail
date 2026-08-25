@@ -366,7 +366,7 @@ function ProjectRow({
 				type="button"
 				data-testid="project-name"
 				onClick={onSelect}
-				className="flex min-w-0 flex-1 items-center gap-sm text-left"
+				className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
 			>
 				<Folder
 					className={`size-3.5 shrink-0 ${isSelected ? "text-primary" : "text-text-muted"}`}
@@ -520,7 +520,7 @@ function WorkspaceRow({
 				<button
 					type="button"
 					onClick={onSelect}
-					className="flex min-w-0 flex-1 items-start gap-sm text-left"
+					className="flex min-w-0 flex-1 items-start gap-1.5 text-left"
 				>
 					<Icon
 						className={`mt-0.5 size-3.5 shrink-0 ${isActive ? "text-primary" : "text-text-muted"}`}

@@ -113,7 +113,7 @@ themselves.
   navigation chrome** (left/right panels, panel & toolbar headers, tabs, the mobile switcher rail, menu
   items, standalone chrome icon-buttons); `size-4` (16px) only for a **prominent dedicated icon-button
   surface** — the app-chrome Settings gear and the composer's bottom controls (Send + peers). An
-  icon+text navigation row pairs the 14px icon with a `gap-sm` (8px) gap and **top-aligns** the icon to
+  icon+text navigation row pairs the 14px icon with a **6px** `gap-1.5` gap and **top-aligns** the icon to
   the first line (`items-start` + `mt-0.5`) so a two-line row hangs the glyph on its title, not the
   block centre. Menu-item icons are centralized once in `components/ui/menu-styles.ts` (`menuItemClass`
   `[&_svg]:size-3.5` + `gap-sm`). **Stroke weight tracks size**, set once in `src/styles/global.css`

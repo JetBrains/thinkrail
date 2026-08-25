@@ -50,7 +50,7 @@ export function TreeRow({
 			) : (
 				<span className="size-3.5 shrink-0" />
 			)}
-			<span className="flex min-w-0 flex-1 items-center gap-sm">
+			<span className="flex min-w-0 flex-1 items-center gap-1.5">
 				{kind === "dir" ? (
 					<Folder className="size-3.5 shrink-0 text-text-muted" />
 				) : (
