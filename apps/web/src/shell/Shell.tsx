@@ -2,6 +2,7 @@ import {
 	RiArrowRightSLine as ChevronRight,
 	RiCircleLine as Circle,
 	RiGitBranchLine as GitBranch,
+	RiCircleFill,
 	RiSettings3Line as Settings,
 } from "@remixicon/react";
 import { useEffect, useRef } from "react";
@@ -40,6 +41,7 @@ const STATUS_DOT: Record<ConnectionStatus, string> = {
 
 export function Shell() {
 	const status = useAppStore((s) => s.status);
+	const StatusDot = status === "connected" ? RiCircleFill : Circle;
 	const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
 	const activeWorkspace = useAppStore(selectActiveWorkspace);
 	const contextProject = useAppStore(selectContextProject);
@@ -144,7 +146,7 @@ export function Shell() {
 						aria-label={STATUS_LABEL[status]}
 						className="inline-flex items-center gap-sm tr-text-ui text-text-muted"
 					>
-						<Circle
+						<StatusDot
 							aria-hidden="true"
 							className={`size-2 shrink-0 fill-current ${STATUS_DOT[status]}`}
 						/>
