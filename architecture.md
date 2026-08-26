@@ -29,9 +29,8 @@ independently of the host and dials it over the network; a phone reaches the sel
 apps/cli        host launcher (V1): boot server + open browser   ── depends on ─▶ packages/server
 apps/web        UI client (mobile-first)                          ── depends on ─▶ packages/contracts
 apps/desktop    Electrobun local-host launcher/shared client (deferred) ── depends on ─▶ packages/server, packages/contracts
-apps/website    public landing page + blog (GitHub Pages)         ── depends on ─▶ packages/website-analytics
-apps/vibecoding-website  vibecoder landing (Cloudflare Pages)     ── depends on ─▶ packages/website-analytics
-packages/website-analytics  dependency-free browser analytics policy shared by the two static sites
+apps/website    public landing + blog + /vibecoding (Cloudflare Pages) ── depends on ─▶ packages/website-analytics
+packages/website-analytics  dependency-free browser analytics policy for the public website
 packages/server createServer(): Bun.serve(HTTP+WS) + AgentSessionManager (in-process pi) ── depends on ─▶ packages/contracts, packages/shared
 packages/contracts  the wire (types-only)
 packages/shared     shellEnv (server-side only)
@@ -153,6 +152,13 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
     wire status, and card remain in their bounded modules; the correspondence between those surfaces and
     their liveness obligations belongs to [[central-integration]]. This keeps feature-specific mechanics in
     their leaf specs while making a non-terminating composition visible at the architecture layer.
+
+14. **The public website is one origin, artifact, and production deployment.** `apps/website` owns `/`,
+    `/blog/`, and `/vibecoding/` in one static Astro build deployed through one Cloudflare Pages project.
+    React and Tailwind are permitted only inside [[submodule-website-vibecoding]]; unrelated routes retain
+    their vanilla runtime and hand-written stylesheet. Browser analytics and consent initialize once on the
+    exact `thinkrail.ai` origin. The retired `vibecoding.thinkrail.ai` hostname is an edge redirect that
+    preserves path and query, never a proxy to a second site.
 
 ## Invariants
 

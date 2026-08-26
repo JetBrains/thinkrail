@@ -4,20 +4,20 @@ type: module-design
 status: active
 title: Shared website analytics
 parent: architecture
-references: [module-website, module-vibecoding-website]
+references: [module-website]
 tags: [website, analytics, privacy]
 ---
 
 ## Responsibility
 
-The browser analytics policy shared by the independently deployed public marketing sites. It is the single source for the PostHog project key, EU endpoints, privacy configuration and loader, plus the Google Tag Manager container and loader. A consumer supplies its own exact production hostname; this package never decides which product URL is production.
+The browser analytics policy consumed by the unified public website. It is the single source for the PostHog project key, EU endpoints, privacy configuration and loader, plus the Google Tag Manager container and loader. The consumer supplies its exact production hostname; this package never decides which product URL or route is production.
 
 ## Boundary
 
 - **Public surface:** `src/index.ts` exports the configuration types and `createWebsiteAnalytics({ productionHostname })`. The returned facade exposes a pure hostname configuration function and an idempotent browser initializer.
 - **Dependency-free browser module.** It uses typed DOM APIs and has no runtime package or workspace dependency. It never imports a website, the application analytics sink, contracts, server, or shared.
-- **Build-time reuse.** [[module-website]] and [[module-vibecoding-website]] compile this source into separate static artifacts. Neither site's runtime or deployment depends on the other. Because a package change alters both artifacts, both sites' production and PR-preview workflow path filters include this package.
-- **No site knowledge.** Page structure, navigation, deployment provider, consent UI, and production hostnames remain in the consuming website modules.
+- **Build-time boundary.** [[module-website]] compiles this source once into its static artifact. A package change therefore triggers that site's production and PR-preview workflows.
+- **No site knowledge.** Page structure, routes, navigation, deployment provider, consent UI, and the production hostname remain in the consuming website module.
 
 ## Runtime contract
 
@@ -30,8 +30,8 @@ PostHog is progressive enhancement through the team's existing EU Cloud project:
 - The public `phc_…` project key is expected in the static bundle. The host-side application sink remains separate and sends directly to PostHog EU because it has no browser ad-blocking concern.
 - The loader uses typed script injection rather than `posthog-js` or a pasted minified bootstrap. The proxy's `array.js` establishes `window.posthog`; initialization occurs from its load handler.
 
-GTM container `GTM-WDW2DZW4` loads alongside PostHog after the same production gate. No static `noscript` iframe is emitted because it cannot honor that gate. GTM itself stores nothing, but any cookie-setting tag configured in the container reopens the consent requirement for both sites; the container owner is responsible for that review.
+GTM container `GTM-WDW2DZW4` loads alongside PostHog after the same production gate. No static `noscript` iframe is emitted because it cannot honor that gate. GTM itself stores nothing, but any cookie-setting tag configured in the container reopens the consent requirement for the public site; the container owner is responsible for that review. Route-specific downstream tags are expressed as GTM hostname + Page Path conditions, never by initializing another container.
 
 ## Verification
 
-Package tests pin the shared vendor identifiers, URLs, privacy options, exact-host gate, and disabled-host behavior. Each consuming site separately tests the production hostname it supplies so a deployment identity cannot drift while the shared vendor policy remains unchanged.
+Package tests pin the vendor identifiers, URLs, privacy options, exact-host gate, and disabled-host behavior. The consuming site separately tests the production hostname it supplies so deployment identity cannot drift while the vendor policy remains unchanged.
