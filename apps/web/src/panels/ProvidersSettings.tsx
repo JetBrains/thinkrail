@@ -1,7 +1,7 @@
 import {
 	RiStackLine as Boxes,
 	RiCheckLine as Check,
-	RiKey2Line as KeyRound,
+	RiKeyLine as KeyRound,
 	RiLockLine as Lock,
 	RiLoginBoxLine as LogIn,
 	RiLogoutBoxLine as LogOut,

@@ -1,6 +1,6 @@
 import {
 	RiGitBranchLine as GitBranch,
-	RiKey2Line as KeyRound,
+	RiKeyLine as KeyRound,
 	RiLayoutTop2Line as LayoutPanelTop,
 	RiLayoutGridLine as LayoutTemplate,
 	type RemixiconComponentType as LucideIcon,
