@@ -7,7 +7,7 @@ async function box(locator: import("@playwright/test").Locator) {
 	return value;
 }
 
-test("idle composer is one line and unfolds only when the draft needs it", async ({ page }) => {
+test("idle composer keeps one message line above a stable controls row", async ({ page }) => {
 	await openWorkspaceChat(page);
 
 	const composer = page.getByTestId("chat-composer");
@@ -18,28 +18,37 @@ test("idle composer is one line and unfolds only when the draft needs it", async
 	const history = page.getByTestId("history-open");
 	const send = page.getByTestId("chat-send");
 
+	const compactShell = await box(shell);
 	const compactInput = await box(input);
+	const compactModel = await box(model);
 	expect(compactInput.height).toBeGreaterThanOrEqual(32);
 	expect(compactInput.height).toBeLessThanOrEqual(40);
 	await expect(composer).toHaveAttribute("data-expanded", "false");
-	expect((await box(shell)).height).toBeLessThanOrEqual(50);
+	expect(compactShell.height).toBeGreaterThanOrEqual(compactInput.height + compactModel.height);
+	expect(compactInput.x).toBeLessThanOrEqual(compactShell.x + 8);
+	expect(compactInput.x + compactInput.width).toBeGreaterThanOrEqual(
+		compactShell.x + compactShell.width - 8,
+	);
 
+	const compactFooterBottom = compactModel.y + compactModel.height;
 	for (const control of [model, effort, history, send]) {
 		const controlBox = await box(control);
-		expect(
-			Math.abs(controlBox.y + controlBox.height - (compactInput.y + compactInput.height)),
-		).toBeLessThanOrEqual(4);
+		expect(controlBox.y).toBeGreaterThanOrEqual(compactInput.y + compactInput.height);
+		expect(Math.abs(controlBox.y + controlBox.height - compactFooterBottom)).toBeLessThanOrEqual(4);
 	}
 
 	await input.fill("Inspect the retry flow.\nThen add focused coverage.");
 	await expect(composer).toHaveAttribute("data-expanded", "true");
 	const expandedInput = await box(input);
+	const expandedModel = await box(model);
 	expect(expandedInput.height).toBeGreaterThan(compactInput.height);
-	expect((await box(model)).y).toBeGreaterThanOrEqual(expandedInput.y + expandedInput.height);
+	expect(expandedModel.y).toBeGreaterThanOrEqual(expandedInput.y + expandedInput.height);
+	expect(Math.abs(expandedModel.y - compactModel.y)).toBeLessThanOrEqual(2);
 
 	await input.fill("Short follow-up");
 	await expect(composer).toHaveAttribute("data-expanded", "false");
 	expect((await box(input)).height).toBeLessThanOrEqual(40);
+	expect(Math.abs((await box(model)).y - compactModel.y)).toBeLessThanOrEqual(2);
 });
 
 test("panel width changes expand and collapse the same textarea", async ({ page }) => {
@@ -160,5 +169,11 @@ test("compact phone controls remain inside the chat viewport", async ({ page }) 
 		expect(controlBox.x).toBeGreaterThanOrEqual(0);
 		expect(controlBox.x + controlBox.width).toBeLessThanOrEqual(PHONE_VIEWPORT.width);
 	}
-	expect((await box(page.getByTestId("chat-input"))).height).toBeLessThanOrEqual(40);
+	const inputBox = await box(page.getByTestId("chat-input"));
+	expect(inputBox.height).toBeLessThanOrEqual(40);
+	expect(inputBox.x).toBeLessThanOrEqual(shellBox.x + 8);
+	expect(inputBox.x + inputBox.width).toBeGreaterThanOrEqual(shellBox.x + shellBox.width - 8);
+	expect((await box(page.getByTestId("model-selector"))).y).toBeGreaterThanOrEqual(
+		inputBox.y + inputBox.height,
+	);
 });
