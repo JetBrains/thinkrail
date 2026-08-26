@@ -456,8 +456,11 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   re-tracked via `shiftSlots` (`mirrorSlotGroup` in `slotSession.ts`). A slot carries two independent
   bits: **`filled`** (a parse-time property — has real content: a `${N:-default}`'s default, or a marker
   typed into — drives strip-on-send + the tint) and **`edited`** (session runtime state — the user
-  changed it — the sole mirror-*source* gate). They are deliberately distinct: `${1:-foo} … ${1:-bar}` is
-  born `filled` but not `edited`, so its two differing per-occurrence defaults stay independent until the
+  changed it — the sole mirror-*source* gate). If the user collapses an untouched marker selection to
+  its end and types there, the visible marker plus typed suffix becomes filled and is preserved on send:
+  this is WYSIWYG, and stripping the grown range would delete the user's text with the marker. They are
+  deliberately distinct: `${1:-foo} … ${1:-bar}` is born `filled` but not `edited`, so its two differing
+  per-occurrence defaults stay independent until the
   user provides the argument by editing one — matching pi's own expansion, which never rewrites
   "foo … bar" to "foo … foo". `Escape` ends the session
   (`setSlots(null)`), leaving the text as-is. A genuine text edit (the textarea's own `onChange` — never a
