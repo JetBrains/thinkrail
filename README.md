@@ -7,11 +7,9 @@ coding agent. ThinkRail is a thin host that runs `pi` in-process and bridges it 
 UI — `pi` owns models, skills, compaction, cost, and session state; the app owns the workspace, the
 editor, and the wire.
 
-**Website:** [thinkrail.ai](https://thinkrail.ai/) — a landing
-page that *is* the IDE (see [`apps/website`](apps/website)).
-
-**Vibecoding website:** [vibecoding.thinkrail.ai](https://vibecoding.thinkrail.ai/) — the
-vibecoder-focused landing experience (see [`apps/vibecoding-website`](apps/vibecoding-website)).
+**Website:** [thinkrail.ai](https://thinkrail.ai/) — a landing page that *is* the IDE, its blog,
+and the [vibecoder-focused experience](https://thinkrail.ai/vibecoding/) (see
+[`apps/website`](apps/website)).
 
 **V1 is a Worktree IDE:** open a git repo as a project, spin up workspaces as `git worktree`s (each its
 own branch and cwd), and work across a tabbed Monaco editor, git Changes view, terminals, a read-only
@@ -115,7 +113,7 @@ apps/
   cli/        V1 entrypoint: boot host + open browser
   web/        mobile-first UI client
   desktop/    Electrobun launcher — deferred
-  website/    public landing page (GitHub Pages)
+  website/    public landing + blog + vibecoding site (Cloudflare Pages)
 packages/
   server/     createServer(): Bun.serve + AgentSessionManager
   contracts/  the wire (types-only)
