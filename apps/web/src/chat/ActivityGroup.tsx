@@ -39,8 +39,9 @@ export function ActivityGroup({
 			<RoutineToolRow step={single} workspaceRoot={workspaceRoot} />
 		);
 
-	const summary = live ? liveActivityTicker(steps, workspaceRoot) : summarizeSteps(steps);
-	const breadcrumb = splitSummary(summary);
+	const settledSummary = summarizeSteps(steps);
+	const summary = live ? liveActivityTicker(steps, workspaceRoot) : settledSummary;
+	const breadcrumb = splitSummary(settledSummary);
 	return (
 		<GroupDisclosure
 			id={id}
@@ -250,6 +251,7 @@ function RoutineToolRow({
 	const status: ToolStatus = step.tool?.status ?? (step.dead ? "error" : "running");
 	const Renderer = getToolRenderer(step.toolName);
 	const renderProps = toolRenderProps(step, workspaceRoot);
+	const summary = getToolSummary(step.toolName, renderProps);
 	return (
 		<div
 			data-testid="activity-step"
@@ -257,7 +259,7 @@ function RoutineToolRow({
 			data-activity-parent-id={parentId}
 			data-activity-node-kind="tool"
 			data-activity-node-label={step.toolName}
-			data-activity-node-meta={getToolSummary(step.toolName, renderProps)}
+			data-activity-node-meta={summary}
 			data-step="tool"
 			data-tool={step.toolName}
 			data-status={status}
@@ -277,7 +279,7 @@ function RoutineToolRow({
 					)
 				}
 				name={step.toolName}
-				summary={getToolSummary(step.toolName, renderProps)}
+				summary={summary}
 			/>
 			{expanded ? (
 				<div className={cn("px-8 pb-4 pl-16", status === "error" && "text-feedback-error")}>
