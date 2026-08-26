@@ -1,4 +1,4 @@
-// On-demand pure-pi smoke for the subagents stack (task-delegation-core acceptance #5): the
+// On-demand pure-pi smoke for the subagents stack (the pi-delegation SPEC's pure-pi bar): the
 // `pi-subagents` extension — embedding the `pi-delegation` core with DEFAULT bindings, no ThinkRail
 // host — loads under the repo-pinned VANILLA pi CLI and completes a real delegated run.
 //

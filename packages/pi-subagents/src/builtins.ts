@@ -1,4 +1,4 @@
-// The curated built-in agent set (task-spec decision 5, set settled with the user: scout / planner /
+// The curated built-in agent set (SPEC decision 5, set settled with the user: scout / planner /
 // worker / reviewer). TS constants, not `.md` files, so they survive `bun build --compile` (a
 // single-file binary has no package files to read) and get typechecked — personal/project
 // definitions keep the community `.md` convention.

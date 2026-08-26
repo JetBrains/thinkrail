@@ -1,5 +1,5 @@
 // The pi-delegation barrel — the package's ONLY public surface. The contract these exports form is
-// specified in designs/TASK-delegation-core.md (spec leads code); boundary rules live in SPEC.md.
+// contract, semantics, boundary rules, and decision log: SPEC.md (spec leads code).
 
 export { createDelegationService } from "./src/service";
 export {

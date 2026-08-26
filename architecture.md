@@ -19,7 +19,8 @@ host over Tailscale.
 
 - **Engine host** (`packages/server` + `packages/shared`, launched by `apps/cli` now / `apps/desktop`
   later): owns `pi`, session state, persistence, and serves the wire endpoint. It bundles pi extensions
-  (`pi-web-access`, `pi-visualize`, `pi-spec-graph`, `pi-thinkrail-workflow`) into every session.
+  (`pi-web-access`, `pi-visualize`, `pi-spec-graph`, `pi-thinkrail-workflow`, `pi-todos`, plus the
+  workspace-bound `pi-subagents` over `pi-delegation`) into every session.
 - **The wire** (`packages/contracts`): the typed, versioned protocol — the only coupling between client
   and host.
 - **UI client** (`apps/web`): a mobile-first React client, transport-driven and endpoint-configurable,
@@ -36,6 +37,10 @@ packages/shared     shellEnv (server-side only)
 packages/spec-graph portable pi extension: spec_* tools + skill (bundled into every session by packages/server;
                     its pi-free core/ read model also backs the host's spec.graph read method)
 packages/pi-visualize          portable pi extension: the visualize tool (bundled into every session)
+packages/pi-delegation         portable pure-pi package: the delegation core — agent sessions spawned
+                    from agent sessions (createChild + run-owning handle, lineage, registry, events)
+packages/pi-subagents          portable pure-pi extension: Agent + get_subagent_result tools over
+                    pi-delegation (bundled into every session, bound to the workspace's service)
 packages/pi-thinkrail-workflow pi extension: the workflow skill system + its always-on routing rule
                     (bundled into every session; workspace-internal, not portable)
 ```
@@ -119,6 +124,20 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
     **tmux was rejected** as the persistence layer: an unassumable dependency on Windows, a competing tab
     model, env-propagation breakage, and polling-based capture — for restart survival we have already
     decided not to hold. Detail: [[submodule-server-terminal]].
+
+13. **Delegation is a portable pure-pi layer; ThinkRail is one embedder.** The agent delegates work
+    to child sessions through `packages/pi-delegation` (the session fabric: one creation primitive
+    with orthogonal axes, a run-owning handle, lineage, registry, lifecycle events) consumed by
+    `packages/pi-subagents` (the `Agent` tools) — both must work under **vanilla pi** with the SDK
+    as a `peerDependency` (peer deps are exempt from the exact-pin rule, decision #10). Children run
+    in-process as **hidden pi sessions** persisted under
+    `~/.thinkrail/delegation/<workspaceId>/<parentId>/` (never pi's default sessions root), scoped
+    and retained per workspace; the host binds only what it knows (storage root, scope, live-parent
+    projection, shared `ModelRuntime`, the curated child extension set) via `DelegationBindings`.
+    The wire sees a mirrored DTO (`DelegationRunDetails` in `contracts`, never imported from the
+    package) — the `web → contracts`-only invariant holds. Contract, semantics, and the full
+    decision log: [[module-pi-delegation]] and [[module-pi-subagents]]; the host embedding:
+    [[submodule-server-agent]].
 
 ## Invariants
 

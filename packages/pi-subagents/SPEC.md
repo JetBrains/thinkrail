@@ -4,7 +4,6 @@ type: module-design
 status: active
 title: pi-subagents — the Agent tools over the delegation core
 parent: architecture
-implements: [task-subagent-support]
 depends-on: [module-pi-delegation]
 tags: [pi-extension, subagents]
 ---
@@ -15,8 +14,8 @@ tags: [pi-extension, subagents]
 that framework: the LLM-facing subagent capability. It owns exactly what is subagent-specific —
 the `Agent` + `get_subagent_result` tools, agent definitions (discovery / precedence / trust), the
 definition → spawn mapping, and background-completion delivery. It contains **zero private
-child-assembly code**: everything session-shaped goes through the core's `SessionOptions`. Design +
-decisions: [[task-subagent-support]].
+child-assembly code**: everything session-shaped goes through the core's `SessionOptions`. How each
+choice was settled: the decision log below.
 
 ## Public surface (the barrel, `index.ts`)
 
@@ -36,7 +35,7 @@ decisions: [[task-subagent-support]].
 | Tool | Behavior |
 | --- | --- |
 | `Agent({ subagent_type, task, run_in_background? })` | Discovers definitions per call (editable mid-session), maps the named one to `SessionOptions`, spawns via `createChild` + `runQueued`. Foreground: awaits the outcome and rides the tool signal; `error` outcomes throw (tool error, reason-first). Background: **never rides the parent turn's abort signal** (a detached run survives a parent abort — core-spec semantics, test-pinned); returns `{childSessionId}` text immediately; the terminal event injects a `subagent-completion` custom message (`deliverAs: "followUp", triggerTurn: true`). Live `onUpdate` details flow to `partialResult` (REPLACE). Results bounded to 50k chars — the full text stays in the child transcript. |
-| `get_subagent_result({ session_id })` | Reads the core registry via `findChild` + `collectResult`: terminal → final text + details (marks collected; an errored run reports its `errorMessage` first — core decision #24); running → status snapshot; unknown id → error naming the restart-loss case + the derived transcript path. |
+| `get_subagent_result({ session_id })` | Reads the core registry via `findChild` + `collectResult`: terminal → final text + details through the **same reason-first, 50k-bounded shaping** as a foreground result (marks collected; an errored run reports its `errorMessage` first — core decision #24); running → status snapshot; unknown id → error naming the restart-loss case + the derived transcript path. |
 
 Both tools register inside `session_start` (emitted by `bindExtensions`), so the `Agent`
 description enumerates the definitions actually visible to that session.
@@ -45,7 +44,7 @@ description enumerates the definitions actually visible to that session.
 
 First-name-wins in trust order — **builtins → personal (`<agentDir>/agents/*.md`) → project
 (`<cwd>/.pi/agents/*.md`, `<cwd>/.agents/agents/*.md`)** — so a worktree definition can never
-shadow a built-in or personal name (task-spec decision 6), and project definitions load only when
+shadow a built-in or personal name (decision 6 below), and project definitions load only when
 `ctx.isProjectTrusted()`. Built-ins are **TS constants** (`builtins.ts`: scout / planner / worker /
 reviewer — user-settled), not `.md` files, so they survive `bun build --compile` and get
 typechecked; user-authored definitions keep the community `.md` + frontmatter convention
@@ -78,6 +77,46 @@ extensions that set holds is the **embedder's** choice, never this package's.
 
 Unit suites in-package (`bun test`). End to end: `e2e/subagents.live.spec.ts` (`@agent` — the real
 host driving real children: foreground fan-out, background completion, transcript reads). The
-pure-pi bar (core acceptance #5): **`bun run smoke:subagents`** — this extension with default
+core SPEC's pure-pi bar: **`bun run smoke:subagents`** — this extension with default
 bindings under the repo-pinned vanilla pi CLI, in an isolated throwaway agent dir; on-demand only
 (needs pi auth, spends real tokens), never a commit/CI gate.
+
+## Decision log (settled with the user, 2026-08)
+
+0. **Own-build over third-party adoption.** Third-party pi subagent extensions were surveyed twice
+   and one adoption was attempted and rolled back; the surveyed options kept mismatching our
+   multi-session embedded host, compiled binary, and web renderers (subprocess spawning in some,
+   process-wide registries/discovery, TUI management) — though the in-process spawn pattern two of
+   them prove (pi SDK as peerDependency) is exactly what the core reuses (core decision #17). Our
+   per-session-discovery fix survives upstream as tintinweb/pi-subagents PR #223 (no longer a
+   dependency).
+1. **Portable workspace package** — a pure-pi extension (pi SDK as a `peerDependency`) consuming
+   `pi-delegation`. ThinkRail's server embeds the factory per session, handing it the host-bound
+   `DelegationService`; under vanilla pi the extension constructs the service with default
+   bindings. It must load and work in pure pi (the core SPEC's pure-pi bar). *Supersedes the original "host-owned bundled extension" decision — reversed in the PR #261
+   review round; research + rationale: core decision log #17–21.*
+2. **Tool naming: Claude Code style** — `Agent` (spawn; models are trained on the convention) +
+   `get_subagent_result` (collect detached results). `steer_subagent` deferred to V2.
+3. **V1 scope: foreground + parallel fan-out + background runs.** Parallel fan-out = several
+   `Agent` calls in one message (pi runs a batch's tool calls concurrently; the core's semaphore
+   paces them) — no `tasks[]`/chain DSL, the model sequences chains itself.
+4. **Transcripts persisted, openable anytime** — children are hidden pi sessions on disk; the web
+   card links a read-only transcript view that works during the run, after completion, and after a
+   host restart. Background completion delivery (`sendMessage` with `deliverAs: "followUp",
+   triggerTurn: true`) is lost on host restart — accepted, same class as other followUp messages;
+   the transcript survives regardless.
+5. **Built-in agents: a small curated set** tuned to ThinkRail's spec-first workflow (roster +
+   TS-constant form: Definitions above); personal + worktree definitions add more.
+6. **Precedence/trust: worktree definitions can never shadow built-in or personal names** (mirrors
+   the skills invariant; community libs order it the other way — that enabled the "repo ships
+   `Explore.md`" attack). Worktree defs ride the project's existing trust posture (same as
+   pi-native `.pi` resources); no separate admission gate (earlier user decision).
+7. **Child context: narrow by default, per-definition opt-ins.** A child sees the definition body
+   + the env block (contents: The mapping above) + the task; opt-ins: `inherit_project_context`
+   (worktree AGENTS.md), `skills:` (explicit list). No parent-conversation inheritance in V1;
+   fork-mode inheritance is the recorded growth path (core `origin: fork`). Basis (2026-08,
+   source-verified): the reference implementations split between narrow-by-default with opt-ins
+   (nicobailon — most adopted at 3.1k★ / 56k dl/wk — gotgenes-replace, tintinweb) and
+   project-aware (pi example, gotgenes-append); nicobailon's narrow model was chosen as the
+   cleanest base for a multi-pattern system, with gotgenes' KV-cache prompt ordering (stable
+   material first) adopted within our own layout.

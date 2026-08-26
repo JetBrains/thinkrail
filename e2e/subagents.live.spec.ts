@@ -10,7 +10,7 @@ import { openWorkspaceChat, waitForDone } from "./fixtures/app";
 // ToolCard whose header line carries role + counters), the expanded body's report fold + transcript
 // link, the read-only child transcript dialog (subagent.getTranscript), and the background path —
 // whose terminal signal is the `subagent-completion` custom message crossing the LIVE WS event stream
-// (task-spec open question #1: hydration already carried customs; this pins the live path).
+// (verified during design: hydration already carried customs; this pins the live path).
 
 const agentCards = '[data-testid="tool-card"][data-tool="Agent"]';
 

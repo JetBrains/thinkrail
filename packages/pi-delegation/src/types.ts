@@ -1,5 +1,5 @@
 // The delegation contract — the framework for creating agent sessions *from* agent sessions.
-// Design + decision log: designs/TASK-delegation-core.md (spec leads code). V1 implements exactly
+// Design + decision log: this package's SPEC.md (spec leads code). V1 implements exactly
 // one axis combination (hidden, non-interactive, fresh); every other combination is typed here and
 // rejected loudly (`DelegationError` code "not-implemented") until its consumer lands.
 
@@ -132,7 +132,7 @@ export interface RunOutcome {
 	errorMessage?: string;
 }
 
-/** Lineage — the persisted edge (V1: derived from the storage layout, see the task spec). */
+/** Lineage — the persisted edge (V1: derived from the storage layout — SPEC.md, Storage & lineage). */
 export interface SpawnRecord {
 	sessionId: string;
 	parentSessionId: string;
