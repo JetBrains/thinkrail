@@ -62,8 +62,7 @@ ThinkRail is in the early stages of development, and we are eager to hear your q
 2. [**Visit our webpage**](https://thinkrail.ai): The ThinkRail landing page serves a dual purpose: it both describes and demonstrates the product. There you can learn more about each feature and the team behind ThinkRail.
 3. [**Browse our GitHub repository**](https://github.com/JetBrains/thinkrail)
 4. [**Take Our Survey**](https://forms.gle/es1ksqAax6hnDWCP8): Share how you use Pi, what frustrates you, and what features you would like to see in ThinkRail. Your input will directly influence our roadmap.
-5. **Join the Conversation**: You can find us on Reddit, on the [r/PiCodingAgent](https://www.reddit.com/r/PiCodingAgent/) group, and on the Pi community Discord server. Say "hi" and let us know what you think about ThinkRail.
-
+5. [**Join Our Discord server**](https://discord.gg/Wybu9ceWkY): Say "hi" and let us know what you think about ThinkRail.
 
 
 Happy developing!
