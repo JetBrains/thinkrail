@@ -19,6 +19,7 @@ export interface ThinkingStep {
 	id: string;
 	text: string;
 	streaming: boolean;
+	tools: RoutineToolStep[];
 }
 
 export type ActivityStep = RoutineToolStep | ThinkingStep;
@@ -39,63 +40,27 @@ export type ChatRow =
 	| { kind: "markdown"; id: string; text: string }
 	| ({ kind: "tool"; id: string } & ToolCallData)
 	| {
-			kind: "thinking";
-			id: string;
-			thought: ThinkingStep;
-			tools: RoutineToolStep[];
-			live: boolean;
-	  }
-	| {
 			kind: "activity";
 			id: string;
-			steps: RoutineToolStep[];
+			steps: ActivityStep[];
 			live: boolean;
 	  }
 	| { kind: "divider"; id: string; data: TurnDividerData };
 
-type RoutineRow = Extract<ChatRow, { kind: "thinking" | "activity" }>;
-
-function partitionRoutineRun(steps: ActivityStep[], live: boolean): RoutineRow[] {
-	const partitioned: RoutineRow[] = [];
-	let fallback: RoutineToolStep[] = [];
-	let thought: ThinkingStep | undefined;
-	let tools: RoutineToolStep[] = [];
-
-	const flushFallback = () => {
-		const first = fallback[0];
-		if (!first) return;
-		partitioned.push({
-			kind: "activity",
-			id: `activity:${first.id}`,
-			steps: fallback,
-			live: false,
-		});
-		fallback = [];
-	};
-	const flushThinking = () => {
-		if (!thought) return;
-		partitioned.push({ kind: "thinking", id: thought.id, thought, tools, live: false });
-		thought = undefined;
-		tools = [];
-	};
-
+function nestRoutineRun(steps: ActivityStep[]): ActivityStep[] {
+	const nested: ActivityStep[] = [];
+	let currentThinking: ThinkingStep | undefined;
 	for (const step of steps) {
 		if (step.kind === "thinking") {
-			flushThinking();
-			flushFallback();
-			thought = step;
-		} else if (thought) {
-			tools.push(step);
+			currentThinking = { ...step, tools: [] };
+			nested.push(currentThinking);
+		} else if (currentThinking) {
+			currentThinking.tools.push(step);
 		} else {
-			fallback.push(step);
+			nested.push(step);
 		}
 	}
-	flushThinking();
-	flushFallback();
-
-	const trailing = partitioned[partitioned.length - 1];
-	if (trailing) trailing.live = live;
-	return partitioned;
+	return nested;
 }
 
 export function deriveRows(
@@ -108,7 +73,9 @@ export function deriveRows(
 	let run: ActivityStep[] = [];
 
 	const flushRun = (live = false) => {
-		rows.push(...partitionRoutineRun(run, live));
+		const first = run[0];
+		if (!first) return;
+		rows.push({ kind: "activity", id: `activity:${first.id}`, steps: nestRoutineRun(run), live });
 		run = [];
 	};
 
@@ -128,6 +95,7 @@ export function deriveRows(
 						id: `${turn.id}:thinking:${b}`,
 						text: block.thinking,
 						streaming: turn.streaming,
+						tools: [],
 					});
 				} else if (block.type === "text") {
 					if (block.text.trim().length === 0) continue;

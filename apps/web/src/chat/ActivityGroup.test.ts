@@ -15,7 +15,7 @@ const tool = (id: string, toolName: string): RoutineToolStep => ({
 	streaming: false,
 });
 
-describe("summarizeSteps (collapsed routine-tool headers)", () => {
+describe("activity disclosure summaries", () => {
 	it("counts steps and tallies per tool name in first-seen order", () => {
 		expect(summarizeSteps([tool("a", "bash"), tool("b", "read"), tool("c", "bash")])).toBe(
 			"3 steps · bash ×2, read",
@@ -38,18 +38,28 @@ describe("summarizeSteps (collapsed routine-tool headers)", () => {
 		expect(summarizeSteps(steps)).toBe("6 steps · bash, read, edit, write, +2 more");
 	});
 
-	it("names a multi-tool fallback Activity without claiming that it is thinking", () => {
-		const row: ChatRow = {
+	it("counts nested thinking and tools in one outer N-step disclosure", () => {
+		const row = {
 			kind: "activity",
 			id: "activity:a",
-			steps: [tool("a", "bash"), tool("b", "read")],
+			steps: [
+				tool("a", "read"),
+				{
+					kind: "thinking",
+					id: "thinking-1",
+					text: "inspect first",
+					streaming: false,
+					tools: [tool("b", "read"), tool("c", "read")],
+				},
+			],
 			live: false,
-		};
+		} as unknown as ChatRow;
 
 		const markup = renderToStaticMarkup(ChatTurnView({ row }));
 
 		expect(markup).toContain('data-testid="activity-group"');
-		expect(markup).toContain(">Activity<");
-		expect(markup).not.toContain("Thinking");
+		expect(markup).toContain("4 steps · read ×3, thinking");
+		expect(markup).not.toContain(">Activity<");
+		expect(markup).not.toContain("inspect first");
 	});
 });
