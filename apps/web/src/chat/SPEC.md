@@ -301,6 +301,19 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   skill overrides, + a **Reload** that applies changes to this chat's session via `session.reloadResources`,
   disabled while streaming) or project (`project.skills`, per-project-baseline toggles, no session) — the
   latter reused by `panels` pre-session). All props-driven; behavior detail lives in the components' jsdoc.
+- **Adaptive composer geometry** (`Composer`) — an idle draft that fits one visual line renders as a
+  **46px one-line dock**: model and effort share one compact visual group on the left while remaining two
+  independently focusable/clickable picker triggers; History and Send remain explicit on the right. A wrap,
+  explicit newline, or width change that makes the draft exceed one visual line unfolds the same shell into
+  a full-width textarea plus a stable 42px action footer; fitting one line again collapses it. This is one
+  persistent textarea, never conditional twins — the transition cannot lose focus, caret/selection, recall,
+  draft, or a template-slot session. Streaming deliberately uses the expanded form even with an empty draft,
+  because Stop + send options join the footer. `ChatView` passes the server-synced
+  `ComposerGrowthLimit` prop: `compact` caps at 6 visual lines, `roomy` at 10, and the default `half-chat`
+  caps the **editor shell** (textarea + footer) at 50% of the mounted chat panel, never the browser viewport;
+  overflow then scrolls inside the textarea. Attachment chips, completion menus, slot hints, and QueueStrip
+  keep their existing separate chrome. The slot-highlight backdrop must follow every dynamic textarea box
+  change with the exact box-model and scroll-sync invariants under Template slots below.
 - **Queued messages: the pending strip** (`QueueStrip.tsx`, props-driven: `queue` + `onEdit`/`onRemove`)
   — the web mirror of pi's interactive-mode pending-messages area. A **streaming send never renders an
   optimistic transcript bubble** (see the store SPEC's echo contract): `ChatView.onSubmit` skips
@@ -325,8 +338,8 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   design (steer = injected at the next turn boundary, after the current assistant message + its tool
   calls; queue = runs after the agent settles; only abort halts an in-flight response) and proved
   illegible from key-name hints alone. While streaming the composer therefore self-documents: the
-  placeholder states meanings ("Enter steers at the next step · Cmd/Ctrl+Enter queues for when it
-  finishes") and a **send-options menu** (`send-menu` trigger beside the send button; rows
+  compact placeholder states meanings ("Enter steers · Ctrl/Cmd+Enter queues") and a
+  **send-options menu** (`send-menu` trigger beside the send button; rows
   `send-mode-steer` / `send-mode-queue` / `send-mode-interrupt`) names each mode with a one-line
   meaning + shortcut. Menu rows are **actions** (send the current draft with that mode), never a
   sticky mode switch — a persistent mode would make the next plain Enter silently obey hidden state.
