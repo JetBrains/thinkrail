@@ -277,9 +277,6 @@ export class TodoStore {
 			todo.status = patch.status;
 			if (patch.status === "in_progress") paused = this.keepOneInProgress(plan, id);
 			if (wasDone && patch.status !== "done") {
-				// Reopening a done item invalidates its prior completion claims — otherwise a
-				// re-fix that skips repeating summary/verification would ship the old revision's
-				// stale "tests green" story alongside the new code (and the plan summary with it).
 				delete todo.summary;
 				delete todo.verification;
 				delete plan.summary;

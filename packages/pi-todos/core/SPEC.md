@@ -33,8 +33,12 @@ the decisions the diff can't show) — and **`verification`**, a separate field 
 result (or the honest "not verified"), kept apart from the prose so the UI renders it as a status badge
 and a missing line is visible at a glance; both set via `TodoPatch` when the item flips `done`; the plan itself may carry a
 plan-level `summary` (`TodoFile.summary`, written by `TodoStore.setSummary`) — the overall handoff note
-the agent writes when the whole plan completes. Both are stored verbatim across later edits (readers gate
-display on "everything done"); `replaceAll` deliberately does **not** carry the plan summary over — a
+the agent writes when the whole plan completes. Both are stored verbatim across later edits, with one
+invalidation rule: `update` clears an item's `summary`/`verification`, and drops the plan-level `summary`
+with it, the moment that item's `status` leaves `done` — unless the same patch also supplies fresh values
+for them, which win. A UI reader can gate display on "everything done", but a non-UI consumer (a generated
+PR body, a work report) has no such gate, so a reopened item's stale completion story must not survive on
+disk, not merely be hidden. `replaceAll` deliberately does **not** carry the plan summary over — a
 fresh plan is new work. Review *state* is never stored here: it is user-owned and lives in a host sidecar
 (see `server/src/todos`), so an agent re-plan can't flip a review decision.
 

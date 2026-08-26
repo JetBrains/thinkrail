@@ -40,12 +40,7 @@ export interface TodoGroup {
 export interface TodoPlan {
 	todos: Todo[];
 	groups: TodoGroup[];
-	/**
-	 * The agent's overall completion summary (`todo_plan_summary`), written when the whole plan is done.
-	 * Stored verbatim across later edits, but `TodoStore.update` drops it the moment any `done` item is
-	 * reopened (see store.ts) — a non-UI consumer (PR body, work report) has no "everything still done"
-	 * gate of its own, so a stale summary must not survive on disk past the reopen that invalidates it.
-	 */
+	// see core/SPEC.md "Summaries" for storage + reopen-invalidation rules
 	summary?: string;
 }
 
