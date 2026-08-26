@@ -4,7 +4,7 @@ type: module-design
 status: active
 title: Browser E2E harness
 parent: architecture
-depends-on: [module-server, module-web, module-cli]
+depends-on: [module-server, module-web, module-cli, module-desktop]
 references: [module-ci-release]
 tags: [testing, playwright, e2e]
 ---
@@ -36,8 +36,22 @@ exercise the wrong product branch under browser/platform emulation.
 
 Provider-backed browser tests (`e2e:agent`) and the separate headless workflow suite are not parallelized by
 this runner: concurrent provider turns would alter rate limits, cost, and determinism. The compiled-binary
-suite remains a distinct artifact gate. Its unsharded namespace does not overlap adaptive lanes, but a
-binary run and `e2e:serial` still run sequentially in the same worktree.
+and packaged-desktop suites remain distinct artifact gates. Each has an unsharded, non-overlapping
+namespace; any artifact run and `e2e:serial` still run sequentially in the same worktree.
+
+## Desktop-backed mode
+
+`bun run e2e:desktop` runs the complete no-agent suite against the host embedded in the packaged
+Electrobun process. A test-only environment seam keeps Electrobun's required native window hidden on a
+neutral local page and publishes the dynamic host origin through a ready file. Playwright is therefore the
+only hydrated application client: the native webview cannot take over exclusive terminal attachment or
+write shared placement while the test page is asserting it. The desktop adapter writes the control file
+only after Playwright finishes, then requires normal graceful application exit.
+
+This is separate from `smoke:desktop`: native smoke loads the actual packaged ThinkRail UI in the system
+webview, requires DOM-ready plus host health, and quits through the real Electrobun lifecycle. Linux runs
+that smoke under Xvfb with software rendering enabled only in the test environment. The split proves both
+the native-window path and broad browser behavior without introducing two competing clients.
 
 JetBrains Central coverage uses a stateful, independently authored fake executable implementing only the
 argv/exit/postcondition surface ThinkRail invokes (`--version`, `status`, `add pi`, `remove pi`, `login`,
@@ -102,13 +116,14 @@ PTY continuity while hidden, peer synchronization, and version-1 migration witho
 ## Isolation contract
 
 Every concurrent lane derives a distinct data dir, HOME, pi-agent dir, fixture repository, binary cache,
-Playwright transform cache, restart artifacts, picker/editor/provider control files, host/restart/binary ports,
-and Central fixture artifacts. The transform cache is lane-local because Playwright's shared cache assumes a
-single runner process; sharing it lets a cold shard consume another shard's partially written transform. The
-lane's fake executable directory lives under `.bun/bin`: this intentionally marks the injected,
-hermetic host `PATH` as complete to `resolveShellEnv()`, preventing login-shell repair from replacing the
-Central/editor stubs with developer-machine executables. Port allocation remains stable and collision-safe
-across worktrees: the registry claim distinguishes
+desktop cache/state plus ready/control files, Playwright transform cache, restart artifacts,
+picker/editor/provider control files, host/restart/binary/desktop ports, and Central fixture artifacts. The
+transform cache is lane-local because Playwright's shared cache assumes a single runner process; sharing it
+lets a cold shard consume another shard's partially written transform. The lane's fake executable directory
+lives under `.bun/bin`: this intentionally marks the injected, hermetic host `PATH` as complete to
+`resolveShellEnv()`, preventing login-shell repair from replacing the Central/editor stubs with
+developer-machine executables. Port allocation remains stable and collision-safe across worktrees: the
+registry claim distinguishes
 a lane's logical key while checking staleness against the real worktree path. Legacy plain-path claims are
 still valid.
 
@@ -124,7 +139,7 @@ Windows lane into the real profile (see `module-shared`).
 - **Owns:** browser scenarios and fixtures under `e2e/`, their Playwright configuration/runner entrypoints,
   isolation and port-allocation rules, report orchestration, and the public `e2e*` package commands.
 - **Consumes:** the built web artifact, the host's public boot/wire behavior, sanctioned server test-fixture
-  exports, git, Chromium, and Playwright.
+  exports, CLI binary, packaged desktop adapter, git, Chromium, and Playwright.
 - **Forbidden:** fake application backends, provider fakes in production boot paths, browser imports into
   product modules, tests depending on developer state, or parallel workers sharing one mutable host.
 
@@ -136,8 +151,8 @@ arbitrary sleeps, and assertion weakening are not synchronization policy. Scenar
 client-side send transformation assert the exact outgoing `session.prompt` frame rather than treating a
 mounted optimistic transcript row as delivery evidence: a fast provider rejection can add a taller error,
 scroll to the latest row, and legitimately virtualize the preceding user row. Before handoff, every
-app-affecting change runs the complete `bun run e2e` no-agent gate. Binary-only regressions remain covered by
-`e2e:binary`: a synthetic opaque external extension loads in the compiled single-file host with no `pi`
-executable on `PATH`, for default and custom `PI_CODING_AGENT_DIR`. Real Central acceptance remains
-authorized and external; real agent behavior remains covered by explicitly selected `@agent` suites rather
-than a fake agent.
+app-affecting change runs the complete `bun run e2e` no-agent gate. Artifact-only regressions remain covered
+by `e2e:binary`, `e2e:desktop`, and their shared host probe: a synthetic opaque external extension loads with
+no `pi` executable on `PATH` for default and custom `PI_CODING_AGENT_DIR`; desktop additionally proves its
+staged `.ts` PI runtime and physical resources. Real Central acceptance remains authorized and external;
+real agent behavior remains covered by explicitly selected `@agent` suites rather than a fake agent.

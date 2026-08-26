@@ -13,7 +13,10 @@ references: [architecture, module-desktop]
 
 The client-local location layer: one backend-relative, serializable route for main/Project Home/workspace/chat, plus the browser fragment driver and the restore coordinator that validates an incoming route against host-owned state before changing the rendered store.
 
-This module makes location portable without making it shared state. Browser tabs own independent fragments; later Electrobun/mobile shells persist the same route per backend profile and window/device. Cross-client continuation is an explicit link/bookmark action, never an automatic backend-owned active location.
+This module makes location portable without making it shared state. Browser tabs own independent
+fragments; the Electrobun shell persists the observed fragment per backend profile/window, and later
+mobile shells persist it per profile/device. Cross-client continuation is an explicit link/bookmark
+action, never an automatic backend-owned active location.
 
 ## Boundary
 
@@ -71,6 +74,13 @@ An incoming route is intent, never domain truth:
 
 Every incoming route advances one monotonic restore generation; every asynchronous continuation checks it. Any project/workspace scope move **or center-navigation tick** cancels a still-pending authoritative read, so a same-workspace file/chat click beats its late response too. The exact-chat target may focus only while its workspace and stamped navigation tick are still current. Store→driver writes pause while an incoming exact route is unresolved, so temporary workspace/no-tab/error state cannot erase the chat fragment. Duplicate initialization/welcome delivery and React Strict Mode are idempotent; reconnect retries unresolved intent but does not replay a completed startup route.
 
-## Later platform adapters
+## Platform adapters
 
-Electrobun persists this route outside webview storage per `{ backendProfileId, windowId }`, then appends it to the actual origin after starting a dynamic-port local host or selecting a shared backend. Mobile persists it per backend profile/device and maps universal/custom links onto it. Those adapters and backend-profile UX are outside this module's V1 browser slice; the route contract is the seam they reuse.
+Electrobun persists a bounded fragment outside webview storage per `{ backendProfileId, windowId }`, then
+appends it to the actual origin after starting the dynamic-port local host. Its preload observes the
+browser driver's `history.replaceState`/`pushState` plus initial/hash/pop changes before app code; the web
+codec remains authoritative and invalid restored intent canonicalizes through the ordinary restore path.
+The native bridge never exposes host/domain capabilities. Shared backend selection remains deferred.
+
+Mobile later persists the same route per backend profile/device and maps universal/custom links onto it.
+Those platform adapters do not move the route into backend-owned state.

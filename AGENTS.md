@@ -43,14 +43,15 @@ only alternative if fault isolation ever becomes worth the complexity.
 
 ## Architecture (three rings)
 
-- **Engine host** — `packages/server` (+ `packages/shared`), launched by `apps/cli` (V1) or
-  `apps/desktop` (Electrobun, deferred). `createServer()` = `Bun.serve` HTTP+WS + `AgentSessionManager`
+- **Engine host** — `packages/server` (+ `packages/shared`), launched in-process by `apps/cli` or
+  `apps/desktop` (Electrobun). `createServer()` = `Bun.serve` HTTP+WS + `AgentSessionManager`
   (one in-process `AgentSession` per tab) + handlers + persistence.
 - **The wire** — `packages/contracts`: the typed, versioned protocol. Types-only.
 - **UI client** — `apps/web`: mobile-first React, ships independently, dials a host over the wire.
 
-V1 entrypoint is `apps/cli`: a `thinkrail` bin that boots the host in-process and opens the browser.
-Remote/phone access (V2) is over Tailscale; auth stays external (the app carries an `owner` field).
+V1 has two additive entrypoints: `apps/cli` boots the host in-process and opens the browser, while
+`apps/desktop` packages the same host and web client in Electrobun. Remote/phone access (V2) is over
+Tailscale; auth stays external (the app carries an `owner` field).
 
 **V1 shape (Worktree IDE):** left = projects (git repos) → workspaces (each a `git
 worktree`, own branch/cwd, under `~/.thinkrail/worktrees`); center = a tabbed area of Monaco file tabs
@@ -66,7 +67,7 @@ central-integration.md                      cross-module spec: JetBrains AI via 
 apps/
   cli/        V1 entrypoint: boot host + open browser   (SPEC.md)
   web/        mobile-first UI client                    (SPEC.md)
-  desktop/    Electrobun launcher — DEFERRED            (SPEC.md)
+  desktop/    Electrobun local-host launcher             (SPEC.md)
   website/    public landing + blog + vibecoding (Cloudflare Pages) (SPEC.md)
 packages/
   server/     createServer(): Bun.serve + AgentSessionManager  (SPEC.md)
@@ -164,7 +165,7 @@ paths derive in `e2e/fixtures/paths.ts`, never touch `~/.thinkrail`, and paralle
 worktrees never collide. Two complete invocations in the same worktree remain sequential. Each lane
 seeds fixtures (`globalSetup`), drives the real web UI, then tears its host down and cleans up
 (`globalTeardown`). Tests live in `e2e/` and assert via `data-testid` / `data-status` hooks. Design:
-`e2e/SPEC.md`. When Electrobun lands, the same suite runs against the desktop app too.
+`e2e/SPEC.md`. The same suite also has packaged CLI-binary and Electrobun-desktop host modes.
 
 **Agent tests are tagged, not faked.** Specs that drive a real `pi` agent are tagged `@agent` (Playwright
 `{ tag: "@agent" }`). The host runs against an **isolated pi agent dir** (`PI_CODING_AGENT_DIR` → a

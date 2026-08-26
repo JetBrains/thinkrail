@@ -21,8 +21,9 @@ with, never by assembling the prompt ourselves.
 
 ## V1 — Worktree IDE + cheap wins
 
-A ThinkRail, git-worktree IDE, driven by a CLI you run that opens a browser UI.
-The shell is built first, `pi` connected last:
+A ThinkRail git-worktree IDE shipped through two additive local launchers: a native Electrobun desktop
+app and the retained CLI that opens the browser UI. Both embed the same host and serve the same client;
+the shell is built first, `pi` connected last:
 
 - **Projects → workspaces**: open a git repo as a project; a workspace is a `git worktree` (own branch +
   cwd) under `~/.thinkrail/worktrees` — plus one built-in, non-removable **Default workspace** per

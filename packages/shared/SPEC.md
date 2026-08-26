@@ -22,6 +22,8 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   `@thinkrail/shared/freePort` → `findFreePort()`, `isPortFree()`;
   `@thinkrail/shared/startupMark` → the static recursive wordmark plus the pure responsive/ANSI renderer
   and interactive-output gate used by every launcher;
+  `@thinkrail/shared/version` → the baked `{ version, channel, commit }` release identity shared by CLI,
+  desktop, and host provenance (with a committed `0.0.0-dev` source default);
   `@thinkrail/shared/paths` → the worktree-relative path conventions (`WORKSPACE_INTERNAL_DIR`,
   `WORKSPACE_CONTEXT_DIR`, `WORKSPACE_TODOS_DIR`);
   `@thinkrail/shared/codedError` → `CodedError` + `errorCodeOf()`;
@@ -61,6 +63,10 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   non-interactive stdout. The root dev runner calls it before spawning concurrent tasks (`starting`);
   the source/compiled CLI calls it after `bootHost` resolves the actual URL (`host ready`). SVG/image
   conversion is never a runtime concern.
+- **/version** — the one permanent release-stamping seam. Source runs report `0.0.0-dev`; release CI
+  overwrites this module in its throwaway checkout before building either artifact family so CLI
+  `--version`, desktop package metadata, analytics, and `server.welcome.appVersion` cannot drift. It
+  contains identity data only and has no launcher dependency.
 - **/codedError** — `CodedError(code, message)` + `errorCodeOf(err)`: an error carrying a wire
   `WsErrorCode`, so a failure a client must react to *specifically* travels as a name rather than a string
   to pattern-match. It lives here because both ends of the seam need it and neither may import the other:
