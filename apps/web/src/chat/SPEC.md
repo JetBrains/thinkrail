@@ -302,20 +302,20 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   `tr-text-reading`) so a suggestion reads as a pre-drafted user reply — no follow-up-specific tokens.
   The default border is transparent (no visible border); hover reveals `border-bubble-user-border`
   (the same accent border role), background unchanged on hover.
-  Each chip carries a short `label` and a full `prompt`; clicking one populates the composer draft via
-  the existing `ComposerHandle.insertText` (→ `replaceDraft`, focus stays in the composer) and **never
-  sends** — the user reviews and presses Send through the unchanged path. They are **view-level**
-  suggestions, not a chat/domain entity: no store field, no wire type, no persistence; `deriveFollowUps`
-  is pure over the transcript so the set tracks the latest assistant turn. **Currently mocked** — the
-  derivation is a keyword heuristic over the last assistant message, a placeholder for real generation.
+  Each chip carries a short `label` and a full `prompt`; clicking one **appends** that prompt to the
+  composer draft as the next sentence (`ChatView` reads the live draft and passes
+  `current + " " + prompt` through `ComposerHandle.insertText`, focus stays in the composer) and
+  **never sends** — the user reviews and presses Send through the unchanged path. Append (not replace)
+  is deliberate: a click never overwrites what the user typed or a prompt an earlier chip inserted, so
+  suggestions compose into one message. They are **view-level** suggestions, not a chat/domain entity:
+  no store field, no wire type, no persistence; `deriveFollowUps` is pure over the transcript so the set
+  tracks the latest assistant turn. **Currently mocked** — the derivation is a keyword heuristic over the
+  last assistant message, a placeholder for real generation.
   **Clicking a chip dismisses only that chip; the rest stay** — `ChatView` tracks the used prompts and
-  filters them out of the passed `items`, so the row persists as a shrinking palette (pick a different
-  suggestion, or clear the draft to pick again). The row is shown when idle (`!isStreaming`), at least
-  one un-dismissed chip remains, **and the draft is either empty or exactly the prompt a chip just
-  inserted** (`draft === chipDraft`) — the draft-protection contract: a chip replaces the draft, so the
-  row only shows over an empty draft or its own chip-inserted text, never over what the user typed
-  themselves (a manual edit diverges the draft and hides the row). The used/inserted state resets when
-  the suggestion set changes (a new turn). Props-driven (`{ items, onPick }`), no store/transport. E2e: `data-testid="followup-row"`
+  filters them out of the passed `items`, so the row persists as a shrinking palette. The row is shown
+  whenever idle (`!isStreaming`) and at least one un-dismissed chip remains — **independent of the draft**
+  (typing does not hide it, since append can't clobber the draft). The used-chip state resets when the
+  suggestion set changes (a new turn). Props-driven (`{ items, onPick }`), no store/transport. E2e: `data-testid="followup-row"`
   / `followup-chip`.
 - **Streaming send modes: split send + interrupt** (`Composer`) — steer/queue semantics are pi's loop
   design (steer = injected at the next turn boundary, after the current assistant message + its tool

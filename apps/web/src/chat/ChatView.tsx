@@ -161,22 +161,23 @@ export default function ChatView({
 
 	const followUps = useMemo(() => deriveFollowUps(turns), [turns]);
 	const [usedFollowUps, setUsedFollowUps] = useState<ReadonlySet<string>>(() => new Set());
-	const [chipDraft, setChipDraft] = useState<string | null>(null);
 	useEffect(() => {
 		setUsedFollowUps((prev) => (prev.size ? new Set() : prev));
-		setChipDraft((prev) => (prev === null ? prev : null));
 	}, [followUps]);
 	const visibleFollowUps = useMemo(
 		() => followUps.filter((f) => !usedFollowUps.has(f.prompt)),
 		[followUps, usedFollowUps],
 	);
-	const onPickFollowUp = useCallback((prompt: string) => {
-		composerRef.current?.insertText(prompt);
-		setUsedFollowUps((prev) => new Set(prev).add(prompt));
-		setChipDraft(prompt);
-	}, []);
-	const showFollowUps =
-		!isStreaming && visibleFollowUps.length > 0 && (draft.trim() === "" || draft === chipDraft);
+	const onPickFollowUp = useCallback(
+		(prompt: string) => {
+			const current = useAppStore.getState().sessions[sessionId]?.draft ?? "";
+			const combined = current.trim() ? `${current.trimEnd()} ${prompt}` : prompt;
+			composerRef.current?.insertText(combined);
+			setUsedFollowUps((prev) => new Set(prev).add(prompt));
+		},
+		[sessionId],
+	);
+	const showFollowUps = !isStreaming && visibleFollowUps.length > 0;
 
 	const recentPrompts = useMemo(() => {
 		const texts = turns

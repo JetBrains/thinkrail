@@ -12,7 +12,7 @@ test.afterEach(() => {
 	rmSync(join(E2E_FIXTURE_REPO, ".thinkrail"), { recursive: true, force: true });
 });
 
-test("clicking a follow-up chip fills the draft, dismisses only that chip, and keeps the rest", async ({
+test("a follow-up chip appends its prompt, dismisses only itself, and survives typing", async ({
 	page,
 }) => {
 	await openFixtureProject(page);
@@ -20,34 +20,36 @@ test("clicking a follow-up chip fills the draft, dismisses only that chip, and k
 	seedWorkspaceSession(repoCwd(), {
 		name: "follow-up chat",
 		messages: [
-			{ role: "user", text: "which way should we go?", timestamp: BASE_TS },
-			{
-				role: "assistant",
-				text: "Here are two approaches; I recommend the first option.",
-				timestamp: BASE_TS + 1_000,
-			},
+			{ role: "user", text: "where are we?", timestamp: BASE_TS },
+			{ role: "assistant", text: "All done here.", timestamp: BASE_TS + 1_000 },
 		],
 	});
 
 	await enterDefaultWorkspace(page);
-	await expect(page.getByText("I recommend the first option")).toBeVisible();
+	await expect(page.getByText("All done here.")).toBeVisible();
 
 	const row = page.getByTestId("followup-row");
 	const chips = page.getByTestId("followup-chip");
-	await expect(row).toBeVisible();
-	await expect(chips).toHaveCount(2);
-	const picked = chips.filter({ hasText: "Use the recommended option" });
-	await expect(picked).toBeVisible();
-
-	await picked.click();
-
 	const composer = page.getByTestId("chat-input");
-	await expect(composer).toHaveValue(
-		"Use the recommended option and continue with the implementation.",
-	);
+	await expect(row).toBeVisible();
+	await expect(chips).toHaveCount(3);
+
+	await composer.fill("hello");
+	await expect(composer).toHaveValue("hello");
+	await expect(row).toBeVisible();
+	await expect(chips).toHaveCount(3);
+
+	await chips.filter({ hasText: "Continue" }).click();
+	await expect(composer).toHaveValue("hello Continue with the implementation.");
 	await expect(composer).toBeFocused();
+	await expect(chips).toHaveCount(2);
+	await expect(chips.filter({ hasText: "Continue" })).toHaveCount(0);
+
+	await chips.filter({ hasText: "Explain this" }).click();
+	await expect(composer).toHaveValue(
+		"hello Continue with the implementation. Explain what you just did and why.",
+	);
 	await expect(row).toBeVisible();
 	await expect(chips).toHaveCount(1);
-	await expect(chips.filter({ hasText: "Compare the options" })).toBeVisible();
-	await expect(picked).toHaveCount(0);
+	await expect(chips.filter({ hasText: "Run the tests" })).toBeVisible();
 });
