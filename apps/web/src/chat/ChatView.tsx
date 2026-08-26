@@ -59,6 +59,7 @@ import type { ChatAttachment, ChatTurn } from "./types";
 import { useChatScroll } from "./useChatScroll";
 import { useChatTodos } from "./useChatTodos";
 import { useHistorySearch } from "./useHistorySearch";
+import { useTranscriptSync } from "./useTranscriptSync";
 
 function turnAnchorText(turn: ChatTurn): string {
 	if (turn.kind === "user") {
@@ -113,7 +114,18 @@ export default function ChatView({
 	sessionId: string;
 	workspaceId: string;
 }) {
-	const runtime = useAppStore((s) => s.sessions[sessionId]) ?? EMPTY_RUNTIME;
+	const sessionRuntime = useAppStore((s) => s.sessions[sessionId]);
+	const runtime = sessionRuntime ?? EMPTY_RUNTIME;
+	const status = useAppStore((s) => s.status);
+	const connectionGeneration = useAppStore((s) => s.connectionGeneration);
+	useTranscriptSync({
+		workspaceId,
+		sessionId,
+		runtime,
+		status,
+		connectionGeneration,
+		enabled: sessionRuntime !== undefined,
+	});
 	const { models, refreshing: modelsRefreshing, refresh: onRefreshModels } = useModelCatalog();
 	const projectId = useAppStore(
 		(s) =>
@@ -240,7 +252,6 @@ export default function ChatView({
 		[commands, templates],
 	);
 
-	// biome-ignore lint/correctness/useExhaustiveDependencies: `isStreaming` is the refetch trigger, not read
 	useEffect(() => {
 		getTransport()
 			.request("session.getStats", { sessionId })
