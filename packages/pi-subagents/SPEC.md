@@ -26,6 +26,17 @@ choice was settled: the decision log below.
   vanilla-pi background child never outlives its parent session burning tokens with an
   undeliverable completion (PR #302 review finding). An embedder-injected service is deliberately
   untouched — its lifecycle belongs to the embedder (ThinkRail cascades in `removeSession`).
+  `session_shutdown` also flips a closure-level `shuttingDown` flag that **suppresses background
+  completion delivery**: without it each detached run's continuation still sends its (now aborted)
+  completion with `triggerTurn: true` into the dying session — in pi 0.84.1 an idle parent answers
+  that with a provider turn racing teardown (second PR #302 review finding). The flag is set before
+  the dispose await so completions arriving *during* teardown are already suppressed, and it
+  applies to embedder-injected services too — a completion aimed at a session being shut down is
+  undeliverable regardless of who owns the service. A parent-turn *abort* never sets the flag: a
+  detached run survives it and still delivers (both sides test-pinned — the suppression via
+  `session_shutdown` emitted through pi's public extension runner in the package suite). The
+  detached run's late `onUpdate` calls need no such guard: pi-agent-core drops updates after the
+  tool call resolves (`acceptingUpdates`), so they are a no-op by construction.
 - `createSubagentsExtension({ service?, delegationRoot?, scope? })` — the embedder entry: ThinkRail
   passes its host-bound service (and the matching storage bindings, used for restart-loss error
   messages).
@@ -107,8 +118,8 @@ bindings under the repo-pinned vanilla pi CLI, in an isolated throwaway agent di
 4. **Transcripts persisted, openable anytime** — children are hidden pi sessions on disk; the web
    card links a read-only transcript view that works during the run, after completion, and after a
    host restart. Background completion delivery (`sendMessage` with `deliverAs: "followUp",
-   triggerTurn: true`) is lost on host restart — accepted, same class as other followUp messages;
-   the transcript survives regardless.
+   triggerTurn: true`) is lost on host restart and suppressed once its session is shutting down —
+   accepted, same class as other followUp messages; the transcript survives regardless.
 5. **Built-in agents: a small curated set** tuned to ThinkRail's spec-first workflow (roster +
    TS-constant form: Definitions above); personal + worktree definitions add more.
 6. **Precedence/trust: worktree definitions can never shadow built-in or personal names** (mirrors

@@ -63,6 +63,7 @@ export function createSubagentsExtension(
 		const delegationRoot = options.delegationRoot ?? defaultDelegationRoot();
 		const scope = options.scope ?? DEFAULT_SCOPE;
 
+		let shuttingDown = false;
 		const erroredRunDetails = new Map<string, DelegationRunDetails>();
 		pi.on("tool_result", (event) => {
 			const details = erroredRunDetails.get(event.toolCallId);
@@ -74,6 +75,7 @@ export function createSubagentsExtension(
 			erroredRunDetails.clear();
 		});
 		pi.on("session_shutdown", async (_event, ctx) => {
+			shuttingDown = true;
 			erroredRunDetails.clear();
 			const service = fallbackService;
 			if (!service) return;
@@ -160,6 +162,7 @@ ${known}`,
 					if (params.run_in_background) {
 						run
 							.then((outcome) => {
+								if (shuttingDown) return;
 								pi.sendMessage(
 									{
 										customType: SUBAGENT_COMPLETION_MESSAGE,

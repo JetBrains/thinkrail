@@ -55,6 +55,7 @@ let runtime: ModelRuntime;
 let parent: AgentSession;
 let parentCwd: string;
 let service: DelegationService;
+const liveParents = new Map<string, AgentSession>();
 
 function registerFaux(core: typeof fauxA, id: string): void {
 	runtime.registerProvider(id, {
@@ -107,10 +108,12 @@ beforeAll(async () => {
 	if (!model) throw new Error("fauxa not registered");
 
 	service = createDelegationService({
-		resolveParent: (id) =>
-			id === parent?.sessionId
-				? { cwd: parentCwd, model: parent.model, thinkingLevel: parent.thinkingLevel }
-				: undefined,
+		resolveParent: (id) => {
+			const live = liveParents.get(id);
+			return live
+				? { cwd: parentCwd, model: live.model, thinkingLevel: live.thinkingLevel }
+				: undefined;
+		},
 		delegationRoot: tmpDir("pi-subagents-delegation-"),
 		scope: "ws-sub",
 		modelRuntime: runtime,
@@ -137,6 +140,7 @@ beforeAll(async () => {
 		model,
 	});
 	parent = created.session;
+	liveParents.set(parent.sessionId, parent);
 	await parent.bindExtensions({ mode: "print" });
 });
 
@@ -188,6 +192,7 @@ async function makeSession(): Promise<AgentSession> {
 		resourceLoader,
 		model,
 	});
+	liveParents.set(created.session.sessionId, created.session);
 	await created.session.bindExtensions({ mode: "print" });
 	return created.session;
 }
@@ -415,6 +420,43 @@ test("get_subagent_result rejects another parent's child — lineage is enforced
 	} finally {
 		other.dispose();
 		await service.disposeChildrenOf(parent.sessionId);
+	}
+});
+
+test("session_shutdown suppresses a detached run's completion delivery into the dying session", async () => {
+	const session = await makeSession();
+	try {
+		fauxA.setResponses([
+			fauxAssistantMessage(
+				fauxToolCall("Agent", {
+					subagent_type: "bg-runner",
+					task: "Outlive the session.",
+					run_in_background: true,
+				}),
+			),
+			fauxAssistantMessage("SHUTDOWN_ACK"),
+			fauxAssistantMessage("COMPLETION_TURN_MUST_NOT_HAPPEN"),
+		]);
+		fauxB.setResponses([
+			async () => {
+				await Bun.sleep(200);
+				return fauxAssistantMessage("LATE_RESULT");
+			},
+		]);
+
+		await session.prompt("Run it, then shut the session down.");
+		expect(JSON.stringify(session.messages)).toContain("in the background:");
+
+		await session.extensionRunner.emit({ type: "session_shutdown", reason: "quit" });
+
+		const child = service.childrenOf(session.sessionId).at(-1);
+		if (!child) throw new Error("no child spawned");
+		await waitFor(() => child.snapshot?.status === "completed");
+		await Bun.sleep(100);
+		expect(JSON.stringify(session.messages)).not.toContain(SUBAGENT_COMPLETION_MESSAGE);
+	} finally {
+		session.dispose();
+		await service.disposeChildrenOf(session.sessionId);
 	}
 });
 
