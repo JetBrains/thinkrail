@@ -19,6 +19,7 @@ describe("ThinkingGroup", () => {
 		const markup = renderToStaticMarkup(
 			<ThinkingGroup
 				id="a1:thinking:0"
+				parentId="activity:a1"
 				thought={{
 					kind: "thinking",
 					id: "a1:thinking:0",
@@ -32,6 +33,10 @@ describe("ThinkingGroup", () => {
 		);
 
 		expect(markup).toContain('data-testid="thinking-group"');
+		expect(markup).toContain('data-activity-node-id="a1:thinking:0"');
+		expect(markup).toContain('data-activity-node-kind="thinking"');
+		expect(markup).toContain('data-activity-parent-id="activity:a1"');
+		expect(markup).toContain("data-activity-node-toggle");
 		expect(markup).toContain("Thinking");
 		expect(markup).toContain("2 steps · read, bash");
 		expect(markup).not.toContain("I should inspect the files first.");

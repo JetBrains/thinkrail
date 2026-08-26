@@ -7,6 +7,7 @@ import {
 	RiCloseLine as X,
 } from "@remixicon/react";
 import { cn } from "@/lib";
+import type { ActivityBreadcrumbKind } from "./activityBreadcrumbs";
 import { useFold } from "./foldState";
 import type { ActivityStep, RoutineToolStep, ThinkingStep } from "./rows";
 import { getToolRenderer, getToolSummary, type ToolRenderProps } from "./toolRegistry";
@@ -39,13 +40,17 @@ export function ActivityGroup({
 		);
 
 	const summary = live ? liveActivityTicker(steps, workspaceRoot) : summarizeSteps(steps);
+	const breadcrumb = splitSummary(summary);
 	return (
 		<GroupDisclosure
 			id={id}
+			kind="activity"
 			testId="activity-group"
 			live={live}
 			stepCount={flatSteps.length}
 			icon={<Layers className="size-12 shrink-0" />}
+			breadcrumbLabel={breadcrumb.label}
+			breadcrumbMeta={breadcrumb.meta}
 			summary={summary}
 		>
 			{steps.map((step) =>
@@ -53,13 +58,14 @@ export function ActivityGroup({
 					<ThinkingGroup
 						key={step.id}
 						id={step.id}
+						parentId={id}
 						thought={step}
 						tools={step.tools}
 						live={false}
 						workspaceRoot={workspaceRoot}
 					/>
 				) : (
-					<RoutineToolRow key={step.id} step={step} workspaceRoot={workspaceRoot} />
+					<RoutineToolRow key={step.id} step={step} parentId={id} workspaceRoot={workspaceRoot} />
 				),
 			)}
 		</GroupDisclosure>
@@ -68,12 +74,14 @@ export function ActivityGroup({
 
 export function ThinkingGroup({
 	id,
+	parentId,
 	thought,
 	tools,
 	live,
 	workspaceRoot,
 }: {
 	id: string;
+	parentId?: string;
 	thought: ThinkingStep;
 	tools: RoutineToolStep[];
 	live: boolean;
@@ -88,11 +96,15 @@ export function ThinkingGroup({
 	return (
 		<GroupDisclosure
 			id={id}
+			{...(parentId ? { parentId } : {})}
+			kind="thinking"
 			testId="thinking-group"
 			live={live}
 			stepCount={tools.length}
 			icon={<Brain className="size-12 shrink-0" />}
 			label="Thinking"
+			breadcrumbLabel="Thinking"
+			breadcrumbMeta={summary}
 			summary={summary}
 		>
 			<div
@@ -102,7 +114,7 @@ export function ThinkingGroup({
 				{thought.text}
 			</div>
 			{tools.map((step) => (
-				<RoutineToolRow key={step.id} step={step} workspaceRoot={workspaceRoot} />
+				<RoutineToolRow key={step.id} step={step} parentId={id} workspaceRoot={workspaceRoot} />
 			))}
 		</GroupDisclosure>
 	);
@@ -110,20 +122,28 @@ export function ThinkingGroup({
 
 function GroupDisclosure({
 	id,
+	parentId,
+	kind,
 	testId,
 	live,
 	stepCount,
 	icon,
 	label,
+	breadcrumbLabel,
+	breadcrumbMeta,
 	summary,
 	children,
 }: {
 	id: string;
+	parentId?: string;
+	kind: ActivityBreadcrumbKind;
 	testId: "activity-group" | "thinking-group";
 	live: boolean;
 	stepCount: number;
 	icon: React.ReactNode;
 	label?: string;
+	breadcrumbLabel: string;
+	breadcrumbMeta: string;
 	summary: string;
 	children: React.ReactNode;
 }) {
@@ -131,6 +151,11 @@ function GroupDisclosure({
 	return (
 		<div
 			data-testid={testId}
+			data-activity-node-id={id}
+			data-activity-parent-id={parentId}
+			data-activity-node-kind={kind}
+			data-activity-node-label={breadcrumbLabel}
+			data-activity-node-meta={breadcrumbMeta}
 			data-expanded={expanded}
 			data-live={live}
 			data-steps={stepCount}
@@ -139,6 +164,7 @@ function GroupDisclosure({
 			<button
 				type="button"
 				data-testid={`${testId}-toggle`}
+				data-activity-node-toggle
 				aria-expanded={expanded}
 				onClick={toggle}
 				className="flex w-full cursor-pointer select-none items-center gap-4 rounded-[var(--radius-sm)] px-4 py-4 text-left outline-none hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary"
@@ -159,6 +185,13 @@ function GroupDisclosure({
 			{expanded ? <div className="flex flex-col gap-px pl-12">{children}</div> : null}
 		</div>
 	);
+}
+
+function splitSummary(summary: string): { label: string; meta: string } {
+	const separator = summary.indexOf(" · ");
+	return separator < 0
+		? { label: summary, meta: "" }
+		: { label: summary.slice(0, separator), meta: summary.slice(separator + 3) };
 }
 
 function flattenActivitySteps(steps: ActivityStep[]): ActivityStep[] {
@@ -206,9 +239,11 @@ function toolRenderProps(
 
 function RoutineToolRow({
 	step,
+	parentId,
 	workspaceRoot,
 }: {
 	step: RoutineToolStep;
+	parentId?: string;
 	workspaceRoot?: string | undefined;
 }) {
 	const [expanded, toggle] = useFold(step.id);
@@ -218,6 +253,11 @@ function RoutineToolRow({
 	return (
 		<div
 			data-testid="activity-step"
+			data-activity-node-id={step.id}
+			data-activity-parent-id={parentId}
+			data-activity-node-kind="tool"
+			data-activity-node-label={step.toolName}
+			data-activity-node-meta={getToolSummary(step.toolName, renderProps)}
 			data-step="tool"
 			data-tool={step.toolName}
 			data-status={status}
@@ -265,6 +305,7 @@ function StepHeader({
 		<button
 			type="button"
 			data-testid="activity-step-toggle"
+			data-activity-node-toggle
 			aria-expanded={expanded}
 			onClick={onToggle}
 			className="flex w-full cursor-pointer select-none items-center gap-4 rounded-[var(--radius-sm)] px-4 py-8 text-left outline-none hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary sm:py-2"
