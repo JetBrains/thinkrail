@@ -181,6 +181,7 @@ export interface ComposerHandle {
 	insertText: (text: string) => void;
 	insertAndSubmit: (text: string, behavior: SubmitBehavior) => void;
 	insertTemplate: (parsed: ParsedTemplate) => void;
+	restoreAttachments: (attachments: ChatAttachment[]) => void;
 	openHistory: () => void;
 	refocus: () => void;
 }
@@ -348,6 +349,18 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 			setSlots(parsed.slots);
 			setSlotIdx(0);
 			focusSelection(first.start, first.end);
+		},
+		restoreAttachments: (attachments: ChatAttachment[]) => {
+			if (attachments.length === 0) return;
+			commitImages([
+				...attachments.map((attachment) => ({
+					id: crypto.randomUUID(),
+					...attachment,
+				})),
+				...imagesRef.current,
+			]);
+			setSubmitError(null);
+			focusSelection(caret);
 		},
 		openHistory,
 		refocus: () => {

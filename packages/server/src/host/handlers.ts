@@ -507,8 +507,12 @@ const handlers: Record<string, Handler> = {
 		return removeQueuedSession(p.sessionId, p.kind, p.index);
 	},
 	"session.abort": async (params) => {
-		await abortSession((params as { sessionId: string }).sessionId);
-		return { ok: true } as const;
+		const p = params as { sessionId: string; restoreQueue?: boolean };
+		const restoredQueue = await abortSession(p.sessionId, p.restoreQueue);
+		return {
+			ok: true,
+			...(restoredQueue ? { restoredQueue } : {}),
+		} as const;
 	},
 	"session.dispose": (params) => {
 		removeSession((params as { sessionId: string }).sessionId);

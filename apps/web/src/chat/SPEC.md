@@ -283,15 +283,15 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   `queue-item` testids, `data-kind` + `data-index`; full text + delivery meaning in the row `title`),
   sourced from the runtime's `queue`. **Each row carries its own edit and remove actions**
   (`queue-item-edit` / `queue-item-remove`) — both call `session.removeQueued { kind, index }` (rows
-  are position-addressed, matching the wire op); edit additionally prepends the removed text to the
-  draft and refocuses. Per-row actions exist because the original all-or-nothing dequeue (click strip
-  → `clearQueue` → every message merged into one draft blob) proved undiscoverable and lossy in use.
-  **Abort restores a text-only queue** (`onAbort` → guarded `session.clearQueue` → texts prepended
-  `\n\n`-joined in pi's order, then `session.abort`) — pi's Escape parity. Pi returns only text from a
-  destructive clear even when its internal queued messages carry image blocks, so the host refuses that
-  guarded clear while either lane has queued images; abort may then let those queued messages continue,
-  but never silently discards their attachments. A **rejected** streaming send likewise restores its text
-  to the draft alongside the `appendErrorTurn`. `queue_update` still carries only displayable text plus a
+  are position-addressed, matching the wire op); edit additionally restores the removed message's text
+  and images to the draft and refocuses. Per-row actions exist because the original all-or-nothing dequeue
+  (click strip → `clearQueue` → every message merged into one draft blob) proved undiscoverable and lossy
+  in use. **Abort atomically restores the complete queue** (`onAbort` →
+  `session.abort { restoreQueue: true }`): the host drains both Pi lanes and signals abort as one operation,
+  waits for idle, then returns each queued message's text + image content; the web prepends the texts and
+  reattaches every image. Stop therefore cannot let a queued continuation run or silently discard an
+  attachment. A **rejected** streaming send likewise restores its text to the draft alongside the
+  `appendErrorTurn`. The ordinary `queue_update` projection still carries only displayable text plus a
   conservative `hasImages` aggregate — no image bytes — so a queued image shows no chip in the strip; the
   canonical transcript turn later renders its image blocks with hydrated fallback labels. E2e:
   `queue.live.spec.ts` (@agent).
@@ -425,7 +425,8 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   preserved; pending draft images already hold all submits). Otherwise the command clears, drains
   `session.clearQueue { requireTextOnly: true }` back into the composer in steering-then-follow-up order,
   then calls `session.compact`; the host rechecks the image precondition at the destructive operation, so a
-  stale client or cross-client race still cannot drop queued bytes. Pi owns abort, summarization,
+  stale client or cross-client race still cannot drop queued bytes. The host atomically rejects a second
+  manual compaction while one is already in flight for that session; Pi owns abort, summarization,
   persistence, and lifecycle. The request snapshots
   existing compaction-turn ids, and a rejected clear/compact asks the store to append a failed compaction row
   only when no new lifecycle turn appeared, so Pi's emitted failure and a pre-lifecycle wire failure share one
