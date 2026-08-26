@@ -66,8 +66,5 @@
 	"trustedDependencies": [
 		"@biomejs/biome",
 		"esbuild"
-	],
-	"dependencies": {
-		"pino": "10.3.1"
-	}
+	]
 }
