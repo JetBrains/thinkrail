@@ -1,16 +1,15 @@
 import { beforeEach, expect, test } from "bun:test";
-import {
-	DEFAULT_CONFIG,
-	type ExtUiRequest,
-	type PiEvent,
-	type Project,
-	type SessionSummary,
-	type SpecGraphNode,
-	type WireModel,
-	type Workspace,
-	type WorkspaceFsChangedPayload,
-	type WorkspaceLayoutDocument,
-	type WorkspaceSkillChange,
+import type {
+	ExtUiRequest,
+	PiEvent,
+	Project,
+	SessionSummary,
+	SpecGraphNode,
+	WireModel,
+	Workspace,
+	WorkspaceFsChangedPayload,
+	WorkspaceLayoutDocument,
+	WorkspaceSkillChange,
 } from "@thinkrail/contracts";
 import type { ChatTurn } from "../chat/types";
 import { userText } from "../lib";
@@ -2616,14 +2615,6 @@ test("applyConfig folds the server-synced app config in (theme is an opaque host
 	expect(useAppStore.getState().theme).toBe("acme.solarized");
 	useAppStore.getState().applyConfig({ theme: "custom.high-contrast" });
 	expect(useAppStore.getState().theme).toBe("custom.high-contrast");
-});
-
-test("applyConfig projects the composer growth limit", () => {
-	useAppStore.getState().applyConfig({
-		...DEFAULT_CONFIG,
-		composerGrowthLimit: "roomy",
-	});
-	expect(useAppStore.getState()).toHaveProperty("composerGrowthLimit", "roomy");
 });
 
 test("diff tabs: openTab dedupes by id + activates; view + contents update in place", () => {

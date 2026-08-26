@@ -40,13 +40,9 @@ describe("isRetriedAttempt", () => {
 	});
 });
 
-describe("config defaults", () => {
+describe("layout defaults", () => {
 	test("bottom groups have an independent default limit", () => {
 		expect(DEFAULT_CONFIG.layout.maxBottomGroups).toBe(3);
-	});
-
-	test("the composer grows to half the chat by default", () => {
-		expect(DEFAULT_CONFIG).toHaveProperty("composerGrowthLimit", "half-chat");
 	});
 });
 

@@ -1,7 +1,6 @@
 import type {
 	AppConfig,
 	AskUserQuestionResult,
-	ComposerGrowthLimit,
 	ExtUiRequest,
 	GitDiffScope,
 	LayoutAuxiliaryRegion,
@@ -227,7 +226,6 @@ export const SettingsSection = {
 	Providers: "providers",
 	Github: "github",
 	Appearance: "appearance",
-	Chat: "chat",
 	Layout: "layout",
 	Terminal: "terminal",
 	Templates: "templates",
@@ -694,7 +692,6 @@ interface AppState {
 	theme: ThemeId;
 	analyticsEnabled: boolean;
 	terminalReplayKb: number;
-	composerGrowthLimit: ComposerGrowthLimit;
 	layoutSettings: LayoutSettings;
 	toasts: Toast[];
 	setStatus: (status: ConnectionStatus) => void;
@@ -894,7 +891,6 @@ function configPatch(config: AppConfig) {
 		theme: config.theme,
 		analyticsEnabled: config.analyticsEnabled,
 		terminalReplayKb: config.terminalReplayKb,
-		composerGrowthLimit: config.composerGrowthLimit ?? DEFAULT_CONFIG.composerGrowthLimit,
 		layoutSettings: config.layout ?? DEFAULT_CONFIG.layout,
 	};
 }
@@ -1400,7 +1396,6 @@ export const useAppStore = create<AppState>((set, get) => ({
 	theme: DEFAULT_CONFIG.theme,
 	analyticsEnabled: DEFAULT_CONFIG.analyticsEnabled,
 	terminalReplayKb: DEFAULT_CONFIG.terminalReplayKb,
-	composerGrowthLimit: DEFAULT_CONFIG.composerGrowthLimit,
 	layoutSettings: DEFAULT_CONFIG.layout,
 	toasts: [],
 	setStatus: (status) =>
