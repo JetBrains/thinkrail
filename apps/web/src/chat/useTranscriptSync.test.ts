@@ -51,6 +51,7 @@ test("transcriptSyncNeed requests an authoritative read for an older connection 
 	expect(transcriptSyncNeed(runtime(), 5)).toEqual({
 		connectionGeneration: 5,
 		compactionTurnId: null,
+		reason: "reconnect",
 	});
 });
 
@@ -64,6 +65,7 @@ test("transcriptSyncNeed recognizes only successful live compactions without a d
 	expect(transcriptSyncNeed(runtime({ turns: [liveDone] }), 4)).toEqual({
 		connectionGeneration: null,
 		compactionTurnId: "live-done",
+		reason: "compaction",
 	});
 	for (const turn of [
 		{ ...liveDone, status: "running" as const },
@@ -235,5 +237,9 @@ test("transcriptSyncNeed combines reconnect and compaction into one read", () =>
 			runtime({ turns: [{ kind: "compaction", id: "compact-1", status: "done" }] }),
 			8,
 		),
-	).toEqual({ connectionGeneration: 8, compactionTurnId: "compact-1" });
+	).toEqual({
+		connectionGeneration: 8,
+		compactionTurnId: "compact-1",
+		reason: "reconnect",
+	});
 });
