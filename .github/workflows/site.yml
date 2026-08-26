@@ -54,7 +54,7 @@ jobs:
           for attempt in $(seq 1 18); do
             ready=true
             for path in / /blog/ /vibecoding/ /robots.txt /sitemap-index.xml; do
-              code=$(curl -s -o /dev/null -w '%{http_code}' "$PAGES_URL$path")
+              code=$(curl --connect-timeout 5 --max-time 15 -s -o /dev/null -w '%{http_code}' "$PAGES_URL$path" || true)
               [ "$code" = "200" ] || ready=false
             done
             [ "$ready" = "true" ] && exit 0
