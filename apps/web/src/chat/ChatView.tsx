@@ -48,6 +48,7 @@ import { QueueStrip } from "./QueueStrip";
 import { type ChatRow, deriveRows, rowIndexForTurn } from "./rows";
 import { SkillsDialog } from "./SkillsDialog";
 import { StreamIndicator, type StreamStatus, streamStatus } from "./StreamIndicator";
+import { SubagentTranscriptDialog } from "./SubagentTranscriptDialog";
 import { parseTemplateSlots } from "./slotSession";
 import { TemplateEditorDialog } from "./TemplateEditorDialog";
 import { shouldApplyTemplatePick } from "./templatePick";
@@ -221,6 +222,7 @@ export default function ChatView({
 	const [templates, setTemplates] = useState<TemplateInfo[]>([]);
 	const [templatesEmpty, setTemplatesEmpty] = useState(false);
 	const [saveAsTemplateHit, setSaveAsTemplateHit] = useState<PromptHit | null>(null);
+	const [transcriptChildId, setTranscriptChildId] = useState<string | null>(null);
 
 	const virtuosoRef = useRef<VirtuosoHandle>(null);
 	const latestUserRow = useMemo(() => {
@@ -631,6 +633,7 @@ export default function ChatView({
 					.request("session.answerQuestion", { sessionId, toolCallId, result })
 					.then(() => undefined),
 			focusComposer: () => composerRef.current?.refocus(),
+			openSubagentTranscript: setTranscriptChildId,
 		}),
 		[sessionId],
 	);
@@ -793,6 +796,16 @@ export default function ChatView({
 					/>
 					{pendingExtUi ? (
 						<ExtUiDialog key={pendingExtUi.id} request={pendingExtUi} onReply={onExtUiReply} />
+					) : null}
+					{transcriptChildId ? (
+						<SubagentTranscriptDialog
+							workspaceId={workspaceId}
+							parentSessionId={sessionId}
+							childSessionId={transcriptChildId}
+							onOpenChange={(open) => {
+								if (!open) setTranscriptChildId(null);
+							}}
+						/>
 					) : null}
 					{projectId ? (
 						<SkillsDialog

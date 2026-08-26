@@ -32,7 +32,13 @@ import type {
 	WorkspaceLayoutDocument,
 	WorkspaceLayoutSnapshot,
 } from "@thinkrail/contracts";
-import { DEFAULT_CONFIG, isAskUserAnswersMessage, isControlMessage } from "@thinkrail/contracts";
+import {
+	customMessageText,
+	DEFAULT_CONFIG,
+	isAskUserAnswersMessage,
+	isControlMessage,
+	isSubagentCompletionMessage,
+} from "@thinkrail/contracts";
 import { create } from "zustand";
 import type { LoginState } from "../auth";
 import { assistantFailureText } from "../chat/assistantFailure";
@@ -516,6 +522,20 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 			if (isAskUserAnswersMessage(event.message)) {
 				const { toolCallId, result } = event.message.details;
 				return { ...rt, askAnswers: { ...rt.askAnswers, [toolCallId]: result } };
+			}
+			if (isSubagentCompletionMessage(event.message)) {
+				return {
+					...rt,
+					turns: [
+						...rt.turns,
+						{
+							kind: "subagentCompletion",
+							id: crypto.randomUUID(),
+							details: event.message.details,
+							text: customMessageText(event.message.content),
+						},
+					],
+				};
 			}
 			if (event.message.role !== "assistant" || !rt.currentAssistantId) return rt;
 			const id = rt.currentAssistantId;

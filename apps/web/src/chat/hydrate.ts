@@ -3,7 +3,13 @@ import type {
 	AskUserAnswersDetails,
 	TranscriptMessage,
 } from "@thinkrail/contracts";
-import { isAskUserAnswersMessage, isControlMessage, isRetriedAttempt } from "@thinkrail/contracts";
+import {
+	customMessageText,
+	isAskUserAnswersMessage,
+	isControlMessage,
+	isRetriedAttempt,
+	isSubagentCompletionMessage,
+} from "@thinkrail/contracts";
 import { userText } from "../lib";
 import { assistantFailureText } from "./assistantFailure";
 import type { ChatTurn, ToolResultState } from "./types";
@@ -51,6 +57,14 @@ export function messagesToRuntime(
 			};
 		} else if (isAskUserAnswersMessage(message)) {
 			askAnswers[message.details.toolCallId] = message.details.result;
+		} else if (isSubagentCompletionMessage(message)) {
+			turnId = crypto.randomUUID();
+			turns.push({
+				kind: "subagentCompletion",
+				id: turnId,
+				details: message.details,
+				text: customMessageText(message.content),
+			});
 		}
 		turnIdByMessageIndex.push(turnId);
 	}

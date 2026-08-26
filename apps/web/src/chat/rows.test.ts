@@ -168,6 +168,36 @@ describe("deriveRows grouping", () => {
 		expect(rows[4]?.kind === "activity" && rows[4].steps.length).toBe(1);
 	});
 
+	test("a subagentCompletion turn breaks the run and maps 1:1 to its own row", () => {
+		const details = {
+			childSessionId: "child-1",
+			roleName: "scout",
+			task: "map",
+			status: "completed",
+			usage: {
+				input: 1,
+				output: 1,
+				cacheRead: 0,
+				cacheWrite: 0,
+				cost: 0,
+				turns: 1,
+				contextTokens: 2,
+			},
+			durationMs: 1000,
+		} as const;
+		const turns: ChatTurn[] = [
+			user("u1"),
+			assistant("a1", [tc("t1")]),
+			{ kind: "subagentCompletion", id: "sc1", details, text: "the report" },
+			assistant("a2", [tc("t2")]),
+		];
+		const rows = deriveRows(turns, {}, true);
+		expect(kinds(rows)).toEqual(["user", "activity", "subagentCompletion", "activity"]);
+		const row = rows[2];
+		expect(row?.kind === "subagentCompletion" && row.details.childSessionId).toBe("child-1");
+		expect(row?.kind === "subagentCompletion" && row.text).toBe("the report");
+	});
+
 	test("steps carry dead from the owning message's stopReason (aborted calls never execute)", () => {
 		const turns = [
 			user("u1"),

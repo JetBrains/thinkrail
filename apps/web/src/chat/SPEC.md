@@ -111,6 +111,11 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   still renders directly. Non-empty text, primary tools, and non-assistant turns break the outer run. Only
   its trailing instance carries the live ticker. Errored routine tools get **no special treatment**
   (deliberate — agents often recover; `ErrorTurn` and primary error-auto-expand are the safety nets).
+- `subagentCompletion` — a `subagent-completion` custom message: a detached (background) subagent run's
+  terminal report, injected into the parent by `pi-subagents` when the run finishes. Rendered as a compact
+  self-framed card (`tools/subagent/SubagentCompletionCard`) — **the** terminal signal for a background
+  run, whose `Agent` tool card froze at its ack (why + card anatomy:
+  [tools/subagent/SPEC.md](tools/subagent/SPEC.md)). Never folded into activity groups.
 - `divider` — the round-end summary (`TurnDivider` + pure `turnDivider` deriver), anchored the instant a
   round ends: elapsed time, tool-call count, and the round's written files as **two chips split by owning
   tool** — “N specs” and “N files changed”. The split is a **partition** (a path lands on exactly
@@ -193,12 +198,26 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   prose. A standalone renderer has no callback and therefore stays inert. The callback's preview-slot
   semantics belong to [[submodule-web-panels]].
 - **`ChatActions`** — a React context (provided by `ChatView`, `null` standalone): how a renderer talks
-  **back** to the agent without importing store/transport. Today: `answerQuestion(toolCallId, result)` —
+  **back** to the agent — or asks the integration layer to open something — without importing
+  store/transport. Today: `answerQuestion(toolCallId, result)` —
   it rejects when the host refuses (unknown/answered/superseded call), and the caller owns the failure UX —
   plus `focusComposer()`, for a renderer that resolves *itself*: it unmounts the control the user was
   standing on, and focus would otherwise fall to `<body>` and swallow every following keystroke (the same
   stranding the history overlay's dismiss refocus avoids). Only the card's own reply path calls it, and
-  only while the card still holds focus.
+  only while the card still holds focus. Plus `openSubagentTranscript(childSessionId)` — the subagent
+  cards' transcript link (no provider → the cards hide the action).
+- **Subagent transcript view** (`SubagentTranscriptDialog.tsx` — an integration file, like
+  `SkillsDialog`): a **read-only overlay** over the chat rendering a hidden child's transcript with the
+  same primitives (`messagesToRuntime` → `deriveRows` → `ChatTurnView`), fetched via
+  `subagent.getTranscript` keyed `(workspaceId, parentSessionId = this chat, childSessionId)`. Opened
+  through `ChatActions.openSubagentTranscript`; rendered under a `null` `ChatActions` provider so
+  nothing inside can talk back (and a nested transcript link cannot exist). Liveness comes from the
+  **host** with each response: `subagent.getTranscript` carries the run's current registry `status`
+  (absent once the host no longer knows the run — restart, dispose), and the open dialog polls every
+  ~2.5s exactly while that reports queued/running — never from this chat's own runtime, whose frozen
+  background ack can't tell a live run from one lost to a restart. Works during the run, after
+  completion, and after a host restart (transcripts persist on disk; only the in-memory registry is
+  lost — and its absence is precisely what stops the polling).
 - **`askState`** — the questionnaire lifecycle seam: the pure `deriveAskStates(turns, askAnswers)` +
   `AskStatesContext`/`useAskState` (provided by `ChatView`, `null` standalone). The ask tool is **ack +
   terminate** (its tool result is just an ack; the reply arrives later as an `ask-user-answers` message),
@@ -226,12 +245,15 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   settlement-derived error turn. It also
   returns `turnIdByMessageIndex` (message-position → minted turn id) — the jump anchor map a
   history-search "jump to message" deep link (`chatLocationRequest`, see `store/SPEC.md`) resolves
-  against; entries are `null` for a `toolResult`/`custom` message (never its own turn) and for a
+  against; entries are `null` for a `toolResult` or non-turn `custom` message (a `subagent-completion`
+  message maps to its own completion turn's id; text-less, it is still never an anchor match) and for a
   `compactionSummary` (its own turn, but never a search hit — the host's index consumes the same slot, so
   the two stay aligned), and a message that
   ended in `stopReason: "error"` maps to its own assistant turn's id, never the synthesized error turn's.
-  `custom` messages never become turns: known ones (`ask-user-answers`) index into `askAnswers`; unknown
-  customTypes are ignored. No store/transport/shiki.
+  `custom` messages: `ask-user-answers` indexes into `askAnswers` (never a turn — the questionnaire card
+  is its rendering); `subagent-completion` **becomes its own `subagentCompletion` turn** (the completion
+  card is transcript-positioned, so it maps its message index too); unknown customTypes are ignored. No
+  store/transport/shiki.
 - **Jump-to-message** (`chatLocationRequest` — set by `useHistorySearch.ts`'s `openMessage` on Enter over
   a mapped message hit; see `store/SPEC.md` for the store-level request/clear contract and
   the workbench shell integration's open/reopen/hydrate half) — `ChatView` is the sole consumer. Once
@@ -840,7 +862,8 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   (**app-integration files only** — a renderer that takes props must never reach for either. Today that
   is `ChatView.tsx` plus the hooks and dialogs it composes: `useChatTodos.ts`, `useHistorySearch.ts`,
   `useModelCatalog.ts`, **`useTranscriptSync.ts`** (successful-compaction + connection-generation canonical
-  transcript reconciliation), `SkillsDialog.tsx`, `TemplateEditorDialog.tsx`. `useModelCatalog` is the shared
+  transcript reconciliation), `SkillsDialog.tsx`, `TemplateEditorDialog.tsx`,
+  `SubagentTranscriptDialog.tsx`. `useModelCatalog` is the shared
   models-catalog seam `panels/NewWorkspaceDialog` also imports per-file, so the two pickers cannot
   drift; on activation it **drops catalog authority synchronously** (a flag an earlier consumer set says
   nothing about the list this one inherited) and reads `model.list` only when the shared list is **empty** —
@@ -880,7 +903,8 @@ it can still precede auto-compaction/retry); `agent_settled` alone closes the au
 session loader, and appends one success/error marker. A successful overflow `compaction_end` with
 `willRetry: true` removes the superseded errored/truncated attempt, matching Pi's rebuilt context. Tool results are
 indexed by `toolCallId` in `toolResults`; `ask-user-answers` custom messages index into `askAnswers`
-(never the turn list — the questionnaire card is their rendering). The view re-derives rows each render
+(never the turn list — the questionnaire card is their rendering); `subagent-completion` custom messages
+append a `subagentCompletion` turn (the shared contracts guard narrows both, on the live and read paths). The view re-derives rows each render
 (`deriveRows` is pure; `ChatView` memoizes) — stable row/step ids keep fold state across snapshots.
 
 **One live indicator, always.** pi splits a run into several assistant messages, so the reducer sweeps

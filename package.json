@@ -47,6 +47,7 @@
 		"desktop:package:stable": "bun run build:web && bun apps/desktop/build.ts --env=stable",
 		"smoke:desktop": "bun apps/desktop/smoke.ts",
 		"smoke:desktop:installer": "bun apps/desktop/installerSmoke.ts",
+		"smoke:subagents": "bun scripts/smoke-pure-pi-subagents.ts",
 		"typecheck": "turbo run typecheck",
 		"test": "turbo run test",
 		"lint": "biome check .",

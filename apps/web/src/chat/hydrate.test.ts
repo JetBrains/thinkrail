@@ -171,6 +171,41 @@ test("turnIdByMessageIndex maps each message's position to its own turn id, null
 	expect(turnIdByMessageIndex[4]).not.toBe(turns[3]?.id);
 });
 
+test("a subagent-completion custom message hydrates as its own subagentCompletion turn", () => {
+	const details = {
+		childSessionId: "child-1",
+		roleName: "scout",
+		task: "map the repo",
+		status: "completed",
+		usage: {
+			input: 10,
+			output: 5,
+			cacheRead: 0,
+			cacheWrite: 0,
+			cost: 0.01,
+			turns: 3,
+			contextTokens: 15,
+		},
+		durationMs: 4200,
+	};
+	const { turns, turnIdByMessageIndex } = messagesToRuntime([
+		{ role: "user", content: "go", timestamp: 1 },
+		{
+			role: "custom",
+			customType: "subagent-completion",
+			content: [{ type: "text", text: 'Subagent "scout" (child-1) completed:\n\nthe report' }],
+			display: true,
+			details,
+			timestamp: 2,
+		},
+	] as unknown as Message[]);
+	expect(turns.map((t) => t.kind)).toEqual(["user", "subagentCompletion"]);
+	const turn = turns[1];
+	expect(turn?.kind === "subagentCompletion" && turn.details.childSessionId).toBe("child-1");
+	expect(turn?.kind === "subagentCompletion" && turn.text).toContain("the report");
+	expect(turnIdByMessageIndex[1]).toBe(turns[1]?.id ?? null);
+});
+
 test("a failed tool result maps to error status", () => {
 	const { toolResults } = messagesToRuntime([
 		{

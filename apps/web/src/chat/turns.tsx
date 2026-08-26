@@ -27,10 +27,11 @@ import { useFold, useSelection } from "./foldState";
 import { Markdown } from "./Markdown";
 import { parseReviewPackage, type ReviewPackageItem, reviewPackageLabel } from "./reviewPackage";
 import type { ChatRow, TurnDividerData } from "./rows";
-import { formatTokens } from "./SessionStatsBar";
+import { formatElapsed, formatTokens } from "./SessionStatsBar";
 import { ToolCard } from "./ToolCard";
 import { ToolRendererBody } from "./ToolRendererBody";
 import { getToolChrome, getToolSummary, type ToolRenderProps } from "./toolRegistry";
+import { SubagentCompletionCard } from "./tools/subagent/SubagentCompletionCard";
 import type { CompactionState } from "./types";
 
 export function ChatTurnView({
@@ -93,6 +94,8 @@ export function ChatTurnView({
 					<Markdown text={row.text} />
 				</div>
 			);
+		case "subagentCompletion":
+			return <SubagentCompletionCard id={row.id} details={row.details} text={row.text} />;
 		case "tool":
 			return <ToolRow row={row} workspaceRoot={workspaceRoot} onOpenFile={onOpenFile} />;
 		case "activity":
@@ -531,13 +534,6 @@ function RetryIndicator({
 			</div>
 		</div>
 	);
-}
-
-function formatElapsed(ms: number): string {
-	const totalSec = Math.round(ms / 1000);
-	const m = Math.floor(totalSec / 60);
-	const s = totalSec % 60;
-	return m > 0 ? `${m}m ${s}s` : `${s}s`;
 }
 
 function FileDiffGlyph({ className }: { className?: string }) {

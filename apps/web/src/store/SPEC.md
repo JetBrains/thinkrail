@@ -168,7 +168,10 @@ snapshots plus device-local attention, terminal catalogs, and one **per-session 
   existing exclusive attach/takeover contract decides which client controls a given PTY. The
   **per-session chat state** — `sessions: Record<sessionId, SessionRuntime>`, where a `SessionRuntime` holds
   one chat's `turns` (pi-canonical) / `toolResults` / `askAnswers` (the `ask-user-answers` replies keyed
-  by tool call id — indexed by the reducer and hydration, never turned into bubbles) /
+  by tool call id — indexed by the reducer and hydration, never turned into bubbles; the sibling
+  `subagent-completion` custom message is instead **appended as a `subagentCompletion` turn** — a
+  detached subagent's terminal report is transcript-positioned, rendered by `chat`'s completion card —
+  both narrowed by the shared contracts guards) /
   `currentAssistantId` / `attemptAssistantId` (scopes overflow removal to the attempt actually observed) /
   `isStreaming` / `model` / `thinkingLevel` / **`eventRevision`** (browser-local, incremented for every
   received Pi event; the compare-and-install fence for an authoritative transcript read) /
