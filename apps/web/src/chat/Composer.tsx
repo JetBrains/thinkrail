@@ -242,7 +242,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	const [slots, setSlots] = useState<TemplateSlot[] | null>(null);
 	const [slotIdx, setSlotIdx] = useState(0);
 	const backdropRef = useRef<HTMLDivElement | null>(null);
-	const compactProbeRef = useRef<HTMLDivElement | null>(null);
+	const editorSizerRef = useRef<HTMLDivElement | null>(null);
 	const [draftNeedsExpansion, setDraftNeedsExpansion] = useState(false);
 	const expanded = isStreaming || draftNeedsExpansion;
 	const syncBackdropScroll = useCallback(() => {
@@ -260,22 +260,22 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		[syncBackdropScroll],
 	);
 	const measureDraftExpansion = useCallback(() => {
-		const probe = compactProbeRef.current;
-		if (!probe) return;
-		const styles = getComputedStyle(probe);
+		const sizer = editorSizerRef.current;
+		if (!sizer) return;
+		const styles = getComputedStyle(sizer);
 		const oneLineHeight =
 			Number.parseFloat(styles.lineHeight) +
 			Number.parseFloat(styles.paddingTop) +
 			Number.parseFloat(styles.paddingBottom);
-		setDraftNeedsExpansion(value.includes("\n") || probe.scrollHeight > oneLineHeight + 1);
+		setDraftNeedsExpansion(value.includes("\n") || sizer.scrollHeight > oneLineHeight + 1);
 	}, [value]);
 
 	useLayoutEffect(() => {
-		const probe = compactProbeRef.current;
-		if (!probe) return;
+		const sizer = editorSizerRef.current;
+		if (!sizer) return;
 		measureDraftExpansion();
 		const observer = new ResizeObserver(measureDraftExpansion);
-		observer.observe(probe);
+		observer.observe(sizer);
 		return () => observer.disconnect();
 	}, [measureDraftExpansion]);
 
@@ -712,13 +712,6 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 						expanded && growthLimit === "half-chat" && "max-h-[50cqh]",
 					)}
 				>
-					<div
-						ref={compactProbeRef}
-						aria-hidden
-						className="pointer-events-none invisible absolute inset-x-0 top-0 col-span-3 col-start-1 row-start-1 whitespace-pre-wrap break-words px-12 py-8 tr-text-ui"
-					>
-						{`${value}\u200b`}
-					</div>
 					<div className="col-start-1 row-start-2 flex min-w-0 items-center gap-4 self-end sm:gap-8">
 						<ModelSelector
 							models={models}
@@ -743,6 +736,8 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 						)}
 					>
 						<div
+							ref={editorSizerRef}
+							data-testid="chat-input-sizer"
 							aria-hidden
 							className="invisible w-full whitespace-pre-wrap break-words px-12 py-8 tr-text-ui"
 						>

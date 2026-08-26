@@ -20,6 +20,7 @@ test("idle composer keeps one message line above a stable controls row", async (
 
 	const compactShell = await box(shell);
 	const compactInput = await box(input);
+	const compactWrapMeasure = await box(page.getByTestId("chat-input-sizer"));
 	const compactModel = await box(model);
 	expect(compactInput.height).toBeGreaterThanOrEqual(32);
 	expect(compactInput.height).toBeLessThanOrEqual(40);
@@ -29,6 +30,8 @@ test("idle composer keeps one message line above a stable controls row", async (
 	expect(compactInput.x + compactInput.width).toBeGreaterThanOrEqual(
 		compactShell.x + compactShell.width - 8,
 	);
+	expect(Math.abs(compactWrapMeasure.x - compactInput.x)).toBeLessThanOrEqual(0.5);
+	expect(Math.abs(compactWrapMeasure.width - compactInput.width)).toBeLessThanOrEqual(0.5);
 
 	const compactFooterBottom = compactModel.y + compactModel.height;
 	for (const control of [model, effort, history, send]) {
