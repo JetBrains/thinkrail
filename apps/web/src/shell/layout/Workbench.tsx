@@ -12,8 +12,8 @@ import {
 	useSensors,
 } from "@dnd-kit/core";
 import {
-	RiArrowLeftSLine as ChevronLeft,
 	RiCheckFill as Check,
+	RiArrowLeftSLine as ChevronLeft,
 	RiFileLine as File,
 	RiGitPullRequestLine as GitCompareArrows,
 	RiListCheck3 as ListTodo,
