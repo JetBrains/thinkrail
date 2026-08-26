@@ -142,7 +142,9 @@ cookieless behavior and consent caveat.
 
 `.github/workflows/site.yml` builds (`bun run --filter @thinkrail/website build`, which runs
 `astro check && astro build`) and publishes `apps/website/dist` to GitHub Pages on pushes to `main`
-that touch this module or [[module-website-analytics]] (plus manual dispatch). Asset URLs are root-absolute against
+that touch this module, [[module-website-analytics]], the root package manifest, or the lockfile (plus
+manual dispatch). The root files are included because catalog and resolved dependency changes alter
+the artifact even when this app's manifest is unchanged. Asset URLs are root-absolute against
 `site: "https://thinkrail.ai"` (astro.config.ts) — the `jetbrains.github.io/thinkrail` address is
 not independently servable, which is fine because it redirects to the custom domain. One-time repo
 settings: Pages → Source: GitHub Actions, and Pages → Custom domain: `thinkrail.ai` — the public
@@ -159,7 +161,8 @@ reads back `deployment_cancelled`. Re-deploying that SHA *later* is fine — hen
 
 ### PR preview deploys
 
-PRs that touch this module or [[module-website-analytics]] get a **preview URL** so design review happens against the rendered site,
+PRs that touch this module, [[module-website-analytics]], the root package manifest, or the lockfile
+get a **preview URL** so design review happens against the rendered site,
 not the diff: `.github/workflows/site-preview.yml` runs the *same build command* as `site.yml` (one
 build definition — never let the two drift) and uploads `apps/website/dist` to **Cloudflare Pages**
 via `bunx wrangler@<pinned> pages deploy --project-name=thinkrail-previews --branch=pr-<num>`. The

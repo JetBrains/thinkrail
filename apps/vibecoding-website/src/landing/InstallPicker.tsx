@@ -137,7 +137,7 @@ export function InstallPicker() {
 						type="button"
 						onClick={copy}
 						aria-label={copied ? "Install command copied" : "Copy install command"}
-						className="flex w-[45px] flex-none items-center justify-center text-text-muted transition-colors hover:bg-control-bg-hovered hover:text-text-strong focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring sm:hidden sm:group-hover:flex sm:group-focus-within:flex"
+						className="flex w-[45px] flex-none items-center justify-center text-text-muted transition-colors hover:bg-control-bg-hovered hover:text-text-strong focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring sm:pointer-events-none sm:opacity-0 sm:group-hover:pointer-events-auto sm:group-hover:opacity-100 sm:group-focus-within:pointer-events-auto sm:group-focus-within:opacity-100"
 					>
 						{copied ? <Check size={16} className="text-primary" /> : <Copy size={16} />}
 					</button>
