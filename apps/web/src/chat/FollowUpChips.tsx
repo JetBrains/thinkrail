@@ -18,7 +18,6 @@ export function FollowUpChips({
 					key={item.label}
 					type="button"
 					data-testid="followup-chip"
-					title={item.prompt}
 					onClick={() => onPick(item.prompt)}
 					className="flex max-w-full items-center rounded-[var(--radius-sm)] border border-transparent bg-clip-padding bg-bubble-user-bg px-sm py-2xs text-text-muted tr-text-reading transition-colors hover:border-bubble-user-border"
 				>
