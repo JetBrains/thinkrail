@@ -41,6 +41,7 @@ import type {
 	Workspace,
 	WorkspaceLayoutSnapshot,
 } from "./domain";
+import { isDelegationRunDetails } from "./domain";
 import type {
 	AskUserAnswersDetails,
 	AskUserQuestionResult,
@@ -273,14 +274,7 @@ export function isSubagentCompletionMessage(
 	if (!message || typeof message !== "object") return false;
 	const m = message as { role?: unknown; customType?: unknown; details?: unknown };
 	if (m.role !== "custom" || m.customType !== SUBAGENT_COMPLETION_CUSTOM_TYPE) return false;
-	const details = m.details as Partial<DelegationRunDetails> | undefined;
-	return (
-		typeof details?.childSessionId === "string" &&
-		typeof details.status === "string" &&
-		typeof details.task === "string" &&
-		typeof details.usage === "object" &&
-		details.usage !== null
-	);
+	return isDelegationRunDetails(m.details);
 }
 
 export function customMessageText(content: WireCustomMessage["content"]): string {

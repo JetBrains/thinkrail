@@ -193,6 +193,34 @@ export interface TodoPlan {
 
 export type DelegationRunStatus = "queued" | "running" | "completed" | "error" | "aborted";
 
+const DELEGATION_RUN_STATUSES: readonly string[] = [
+	"queued",
+	"running",
+	"completed",
+	"error",
+	"aborted",
+];
+
+export function isDelegationRunDetails(value: unknown): value is DelegationRunDetails {
+	if (!value || typeof value !== "object") return false;
+	const d = value as Partial<DelegationRunDetails>;
+	if (typeof d.childSessionId !== "string" || typeof d.task !== "string") return false;
+	if (typeof d.status !== "string" || !DELEGATION_RUN_STATUSES.includes(d.status)) return false;
+	if (typeof d.durationMs !== "number") return false;
+	const u = d.usage as Partial<DelegationRunDetails["usage"]> | undefined;
+	return (
+		!!u &&
+		typeof u === "object" &&
+		typeof u.input === "number" &&
+		typeof u.output === "number" &&
+		typeof u.cacheRead === "number" &&
+		typeof u.cacheWrite === "number" &&
+		typeof u.cost === "number" &&
+		typeof u.turns === "number" &&
+		typeof u.contextTokens === "number"
+	);
+}
+
 export interface DelegationRunDetails {
 	childSessionId: string;
 	roleName?: string;

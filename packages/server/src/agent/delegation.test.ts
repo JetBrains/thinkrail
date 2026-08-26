@@ -6,6 +6,12 @@ import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { createFauxCore, fauxAssistantMessage } from "@earendil-works/pi-ai/providers/faux";
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
 import {
+	SUBAGENT_COMPLETION_CUSTOM_TYPE,
+	type DelegationRunDetails as WireRunDetails,
+} from "@thinkrail/contracts";
+import type { DelegationRunDetails as CoreRunDetails } from "pi-delegation";
+import { SUBAGENT_COMPLETION_MESSAGE } from "pi-subagents";
+import {
 	createSession,
 	disposeAllSessions,
 	liveParentContext,
@@ -136,18 +142,10 @@ test("host embedding: projection, per-workspace service, transcript store, casca
 	);
 });
 
-test("a runtime generation flip preserves existing parents and reaches new parents", async () => {
-	const cwd = tmpDir("trdel-flip-");
-	const { sessionId: originalParentId } = await createSession({ cwd, workspaceId: "ws-flip" });
+test("children follow their parent's retained runtime generation across a flip", async () => {
+	const cwdOld = tmpDir("trdel-flip-old-");
+	const { sessionId: oldParent } = await createSession({ cwd: cwdOld, workspaceId: "ws-flip" });
 	const service = delegationServiceFor("ws-flip");
-	const spec = {
-		parent: originalParentId,
-		visibility: "hidden" as const,
-		info: { createdBy: "tool:Agent", roleName: "scout", roleSource: "builtin" },
-		session: { systemPrompt: "flip probe", model: { provider: "fauxg2", id: "fauxg2" } },
-	};
-	await expect(service.createChild(spec)).rejects.toThrow("Unknown model fauxg2/fauxg2");
-
 	const gen2 = await ModelRuntime.create({
 		credentials: new InMemoryCredentialStore(),
 		modelsPath: null,
@@ -171,24 +169,39 @@ test("a runtime generation flip preserves existing parents and reaches new paren
 			},
 		],
 	});
-	let newParentId: string | undefined;
+	let newParent: string | undefined;
 	try {
 		configurePiRuntime(gen2);
-		expect(liveParentContext(originalParentId)?.modelRuntime).toBe(baseRuntime);
-		await expect(service.createChild(spec)).rejects.toThrow("Unknown model fauxg2/fauxg2");
+		expect(liveParentContext(oldParent)?.modelRuntime).toBe(baseRuntime);
+		faux.setResponses([fauxAssistantMessage("OLD_GEN_DONE")]);
+		const oldChild = await service.createChild({
+			parent: oldParent,
+			visibility: "hidden",
+			info: { createdBy: "tool:Agent", roleName: "scout", roleSource: "builtin" },
+			session: { systemPrompt: "old-parent probe" },
+		});
+		const oldOutcome = await oldChild.runQueued("Probe old.");
+		expect(oldOutcome.status).toBe("completed");
+		expect(oldOutcome.details.model).toBe("faux/faux");
+		await oldChild.dispose();
 
-		({ sessionId: newParentId } = await createSession({ cwd, workspaceId: "ws-flip" }));
-		expect(liveParentContext(newParentId)?.modelRuntime).toBe(gen2);
-		faux.setResponses([fauxAssistantMessage("GEN2_DONE")]);
-		const child = await service.createChild({ ...spec, parent: newParentId });
-		const outcome = await child.runQueued("Probe.");
-		expect(outcome.status).toBe("completed");
-		expect(outcome.details.model).toBe("fauxg2/fauxg2");
-		await child.dispose();
+		const cwdNew = tmpDir("trdel-flip-new-");
+		({ sessionId: newParent } = await createSession({ cwd: cwdNew, workspaceId: "ws-flip" }));
+		expect(liveParentContext(newParent)?.modelRuntime).toBe(gen2);
+		faux.setResponses([fauxAssistantMessage("NEW_GEN_DONE")]);
+		const newChild = await service.createChild({
+			parent: newParent,
+			visibility: "hidden",
+			info: { createdBy: "tool:Agent", roleName: "scout", roleSource: "builtin" },
+			session: { systemPrompt: "new-parent probe", model: { provider: "fauxg2", id: "fauxg2" } },
+		});
+		const newOutcome = await newChild.runQueued("Probe new.");
+		expect(newOutcome.status).toBe("completed");
+		expect(newOutcome.details.model).toBe("fauxg2/fauxg2");
 	} finally {
 		configurePiRuntime(baseRuntime);
-		await removeSession(originalParentId);
-		if (newParentId) await removeSession(newParentId);
+		await removeSession(oldParent);
+		if (newParent) await removeSession(newParent);
 	}
 });
 
@@ -198,4 +211,12 @@ test("transcript reads reject path-like ids — wire strings never escape the de
 	expect(() => readChildTranscript("ws", "p", "x/../y")).toThrow("Invalid childSessionId");
 	expect(() => readChildTranscript("ws", "a\\b", "c")).toThrow("Invalid parentSessionId");
 	expect(() => readChildTranscript("", "p", "c")).toThrow("Invalid workspaceId");
+});
+
+test("the wire mirrors never drift: completion tag and DelegationRunDetails shape", () => {
+	expect(SUBAGENT_COMPLETION_CUSTOM_TYPE).toBe(SUBAGENT_COMPLETION_MESSAGE);
+	function pinMirror(core: CoreRunDetails, wire: WireRunDetails): [WireRunDetails, CoreRunDetails] {
+		return [core, wire];
+	}
+	expect(typeof pinMirror).toBe("function");
 });
