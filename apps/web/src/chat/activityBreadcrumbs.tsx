@@ -132,7 +132,7 @@ export function ActivityBreadcrumbBar({
 									aria-label={`Jump to ${segment.label}`}
 									title={segment.meta ? `${segment.label} · ${segment.meta}` : segment.label}
 									onClick={() => onJump(segment.id)}
-									className="flex min-w-0 items-center gap-4 rounded-[var(--radius-sm)] py-2 pr-6 text-left outline-none focus-visible:ring-2 focus-visible:ring-primary"
+									className="flex min-w-0 items-center gap-4 rounded-[var(--radius-sm)] py-2 pr-4 text-left outline-none focus-visible:ring-2 focus-visible:ring-primary"
 								>
 									<SegmentIcon kind={segment.kind} />
 									<span className="shrink-0 text-text-default">{segment.label}</span>
