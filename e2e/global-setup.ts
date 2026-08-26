@@ -1,6 +1,7 @@
 import { copyFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { seedAgentDefinitionFixtures } from "./fixtures/agents";
 import {
 	E2E_DATA_DIR,
 	E2E_FIXTURE_REPO,
@@ -65,6 +66,11 @@ export default function globalSetup(): void {
 	// composer's `/` menu (Task B5) — have something real to discover. `resetState` never wipes
 	// `pi-agent/prompts/`, so one seed here covers the whole suite (see fixtures/templates.ts).
 	seedTemplateFixtures();
+
+	// Seed the `echo` personal subagent definition so the @agent subagent specs delegate to a
+	// deterministic, near-free child (see fixtures/agents.ts). `resetState` never wipes
+	// `pi-agent/agents/`, so one seed covers the whole suite.
+	seedAgentDefinitionFixtures();
 
 	// Seed the shared fixture repo (git init + seed files + commit). Shared with per-test `resetState`, which
 	// re-seeds it if a flaky @agent spec damages the repo (see fixtures/repo.ts).

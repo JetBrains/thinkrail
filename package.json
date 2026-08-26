@@ -27,6 +27,7 @@
 		"build:web": "turbo run build --filter=@thinkrail/web",
 		"build:binary": "bun run build:web && bun apps/cli/scripts/build-binary.ts",
 		"smoke:binary": "bun apps/cli/scripts/smoke-binary.ts",
+		"smoke:subagents": "bun scripts/smoke-pure-pi-subagents.ts",
 		"typecheck": "turbo run typecheck",
 		"test": "turbo run test",
 		"lint": "biome check .",
