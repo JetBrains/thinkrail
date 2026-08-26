@@ -81,7 +81,7 @@ const INITIAL_TERMINAL_TAB_KEY = "thinkrail-initial";
 
 function MissingResource({ label }: { label: string }) {
 	return (
-		<div className="flex h-full items-center justify-center px-lg text-center tr-text-ui text-text-muted">
+		<div className="flex h-full items-center justify-center px-16 text-center tr-text-ui text-text-muted">
 			Restoring {label}…
 		</div>
 	);
@@ -418,7 +418,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 						</Suspense>
 					</ErrorBoundary>
 				) : (
-					<div className="flex h-full flex-col items-center justify-center gap-sm text-text-muted">
+					<div className="flex h-full flex-col items-center justify-center gap-8 text-text-muted">
 						<MissingResource label="chat" />
 						<button
 							type="button"
@@ -446,7 +446,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 										}
 									});
 							}}
-							className="rounded-[var(--radius-sm)] border border-border-default px-sm py-xs tr-text-ui hover:bg-control-bg-hovered"
+							className="rounded-[var(--radius-sm)] border border-border-default px-8 py-4 tr-text-ui hover:bg-control-bg-hovered"
 						>
 							Retry
 						</button>
@@ -513,14 +513,14 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 			switch (tool) {
 				case "projects":
 					body = (
-						<div data-testid="left-nav" className="h-full overflow-auto p-md">
+						<div data-testid="left-nav" className="h-full overflow-auto p-12">
 							<ProjectTree />
 						</div>
 					);
 					break;
 				case "specs":
 					body = (
-						<div className="p-xs">
+						<div className="p-12">
 							<SpecsPanel
 								workspaceId={workspaceId}
 								failed={specs.failed}
@@ -531,7 +531,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 					break;
 				case "files":
 					body = (
-						<div className="p-xs">
+						<div className="p-12">
 							<FileTree key={workspaceId} workspaceId={workspaceId} />
 						</div>
 					);
@@ -613,7 +613,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 						return (
 							<span
 								data-testid="review-pending-badge"
-								className="inline-flex min-w-4 items-center justify-center rounded-full bg-primary px-0.5 tr-text-label-pill text-text-on-primary"
+								className="inline-flex min-w-16 items-center justify-center rounded-full bg-primary px-2 tr-text-label-pill text-text-on-primary"
 							>
 								{reviewDraftCount}
 							</span>
@@ -639,7 +639,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				renderEmptyCenter={(groupId) => (
 					<div
 						data-testid="workspace-ready"
-						className="flex h-full flex-col items-center justify-center gap-xs px-lg text-center"
+						className="flex h-full flex-col items-center justify-center gap-4 px-16 text-center"
 					>
 						<span className="tr-text-eyebrow text-text-muted">
 							{isDefault
@@ -653,8 +653,8 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 								<h2 className="max-w-full truncate tr-title-entity text-text-default">
 									{isDefault ? (contextProject?.name ?? workspace.name) : workspace.name}
 								</h2>
-								<p className="flex max-w-full items-center gap-xs tr-text-metadata text-text-muted">
-									<GitBranch className="size-3.5 shrink-0" />
+								<p className="flex max-w-full items-center gap-4 tr-text-metadata text-text-muted">
+									<GitBranch className="size-14 shrink-0" />
 									{isDefault || isExternal ? (
 										<span className="truncate">on {workspace.branch}</span>
 									) : (
@@ -668,7 +668,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 								</p>
 							</>
 						) : null}
-						<p className="mt-xs tr-text-ui text-text-muted">
+						<p className="mt-4 tr-text-ui text-text-muted">
 							{isDefault
 								? "Chats, changes, and terminals run directly in your project folder."
 								: "Files, chats, changes, and terminals are scoped to this workspace."}
@@ -677,9 +677,9 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 							type="button"
 							data-testid="start-chat"
 							onClick={() => startChat(groupId)}
-							className="mt-xs flex items-center gap-xs rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-md py-xs tr-text-ui text-text-default hover:bg-control-bg-hovered"
+							className="mt-4 flex items-center gap-4 rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-12 py-4 tr-text-ui text-text-default hover:bg-control-bg-hovered"
 						>
-							<MessageSquarePlus className="size-3.5" /> New chat
+							<MessageSquarePlus className="size-14" /> New chat
 						</button>
 					</div>
 				)}
@@ -692,9 +692,9 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 							aria-label="New terminal in this group"
 							title="New terminal in this group"
 							onClick={() => useAppStore.getState().addTerminal(workspaceId, undefined, groupId)}
-							className="flex w-7 shrink-0 items-center justify-center border-border-default border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+							className="flex w-32 shrink-0 items-center justify-center border-border-default border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 						>
-							<SquareTerminal className="size-3.5" />
+							<SquareTerminal className="size-14" />
 						</button>
 					</>
 				)}

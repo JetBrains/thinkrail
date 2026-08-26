@@ -89,7 +89,7 @@ type ChatListContext = { status: StreamStatus | null };
 function StreamFooter({ context }: { context: ChatListContext }) {
 	if (!context.status) return null;
 	return (
-		<div className="mx-auto max-w-3xl px-md pb-sm">
+		<div className="mx-auto max-w-3xl px-12 pb-8">
 			<StreamIndicator status={context.status} />
 		</div>
 	);
@@ -530,7 +530,7 @@ export default function ChatView({
 													type="button"
 													data-testid="chat-plan-toggle"
 													data-open={planOpen}
-													className="flex min-w-0 max-w-full items-center gap-xs overflow-clip whitespace-nowrap text-text-muted tr-text-metadata hover:text-text-default"
+													className="flex min-w-0 max-w-full items-center gap-4 overflow-clip whitespace-nowrap text-text-muted tr-text-metadata hover:text-text-default"
 												>
 													<ChatPlanStripContent
 														plan={plan}
@@ -567,7 +567,7 @@ export default function ChatView({
 							itemContent={(_, row) => (
 								<div
 									data-flash={row.id === flashRowId || undefined}
-									className="mx-auto max-w-3xl rounded-[var(--radius-sm)] px-md py-xs transition-colors data-[flash]:bg-primary-subtle"
+									className="mx-auto max-w-3xl rounded-[var(--radius-sm)] px-12 py-4 transition-colors data-[flash]:bg-primary-subtle"
 								>
 									<ChatTurnView
 										row={row}
@@ -584,15 +584,15 @@ export default function ChatView({
 								type="button"
 								data-testid="scroll-to-bottom"
 								onClick={scrollToBottom}
-								className="-translate-x-1/2 absolute bottom-md left-1/2 flex items-center gap-xs rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-sm py-xs text-text-muted tr-text-metadata shadow-[var(--shadow-md)] hover:bg-control-bg-hovered hover:text-text-default"
+								className="-translate-x-1/2 absolute bottom-12 left-1/2 flex items-center gap-4 rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-8 py-4 text-text-muted tr-text-metadata shadow-[var(--shadow-md)] hover:bg-control-bg-hovered hover:text-text-default"
 							>
-								<ArrowDown className="size-3" />
+								<ArrowDown className="size-12" />
 								New messages
 							</button>
 						) : null}
 					</div>
 					{widgetEntries.length > 0 ? (
-						<div className="shrink-0 border-border-default border-t bg-container-elevated-bg px-md py-xs text-text-muted tr-text-metadata">
+						<div className="shrink-0 border-border-default border-t bg-container-elevated-bg px-12 py-4 text-text-muted tr-text-metadata">
 							{widgetEntries.map(([key, lines]) => (
 								<div key={key}>{lines.join(" ")}</div>
 							))}

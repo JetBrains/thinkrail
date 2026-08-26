@@ -44,7 +44,7 @@ export function MermaidView({
 
 	if (error !== null) {
 		return (
-			<div data-testid="mermaid-error" className="flex flex-col gap-xs">
+			<div data-testid="mermaid-error" className="flex flex-col gap-4">
 				<span className="text-feedback-error tr-text-metadata">
 					Diagram failed to render: {error}
 				</span>
@@ -69,14 +69,14 @@ export function MermaidView({
 				aria-label="View diagram full screen"
 				title="Full screen"
 				onClick={() => setOpen(true)}
-				className="absolute top-xs right-xs rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg p-1 text-text-muted transition-colors hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
+				className="absolute top-4 right-4 rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg p-4 text-text-muted transition-colors hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
 			>
-				<Maximize2 className="size-3.5" />
+				<Maximize2 className="size-14" />
 			</button>
 			<Dialog open={open} onOpenChange={setOpen}>
 				<DialogContent
 					data-testid="mermaid-fullscreen-dialog"
-					className="flex h-[90vh] w-[95vw] max-w-[95vw] flex-col gap-sm"
+					className="flex h-[90vh] w-[95vw] max-w-[95vw] flex-col gap-8"
 				>
 					<DialogHeader>
 						<DialogTitle>{title || "Diagram"}</DialogTitle>

@@ -36,14 +36,14 @@ export function ExtUiDialog({
 				</DialogHeader>
 
 				{request.kind === "select" ? (
-					<div className="flex flex-col gap-xs">
+					<div className="flex flex-col gap-4">
 						{request.options.map((option) => (
 							<button
 								key={option}
 								type="button"
 								data-testid="ext-ui-option"
 								onClick={() => onReply(option)}
-								className="rounded-[var(--radius-sm)] border border-control-border-default bg-control-bg px-md py-sm text-left tr-text-ui text-text-default outline-none hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary"
+								className="rounded-[var(--radius-sm)] border border-control-border-default bg-control-bg px-12 py-8 text-left tr-text-ui text-text-default outline-none hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary"
 							>
 								{option}
 							</button>
@@ -64,7 +64,7 @@ export function ExtUiDialog({
 								onReply(text);
 							}
 						}}
-						className="rounded-[var(--radius-sm)] border border-control-border-default bg-control-bg px-sm py-xs tr-text-ui text-text-default outline-none placeholder:text-text-muted focus-visible:border-control-border-active"
+						className="rounded-[var(--radius-sm)] border border-control-border-default bg-control-bg px-8 py-4 tr-text-ui text-text-default outline-none placeholder:text-text-muted focus-visible:border-control-border-active"
 					/>
 				) : null}
 
@@ -75,7 +75,7 @@ export function ExtUiDialog({
 						value={text}
 						rows={8}
 						onChange={(e) => setText(e.target.value)}
-						className="resize-none rounded-[var(--radius-sm)] border border-control-border-default bg-control-bg px-sm py-xs tr-code-text text-text-default outline-none focus-visible:border-control-border-active"
+						className="resize-none rounded-[var(--radius-sm)] border border-control-border-default bg-control-bg px-8 py-4 tr-code-text text-text-default outline-none focus-visible:border-control-border-active"
 					/>
 				) : null}
 

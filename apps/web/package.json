@@ -5,7 +5,7 @@
 	"type": "module",
 	"scripts": {
 		"dev": "vite",
-		"build": "bun run typography:check && bun run colors:check && tsc --noEmit && vite build",
+		"build": "bun run typography:check && bun run colors:check && bun run spacing:check && tsc --noEmit && vite build",
 		"typecheck": "tsc --noEmit",
 		"test": "bun test",
 		"preview": "vite preview",
@@ -13,7 +13,9 @@
 		"typography:validate": "bun scripts/validate-typography.ts",
 		"typography:check": "bun scripts/generate-typography.ts --check",
 		"colors:generate": "bun scripts/generate-colors.ts",
-		"colors:check": "bun scripts/generate-colors.ts --check"
+		"colors:check": "bun scripts/generate-colors.ts --check",
+		"spacing:generate": "bun scripts/generate-spacing.ts",
+		"spacing:check": "bun scripts/generate-spacing.ts --check"
 	},
 	"dependencies": {
 		"@dnd-kit/core": "6.3.1",

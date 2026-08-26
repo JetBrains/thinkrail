@@ -13,7 +13,7 @@ function ToastViewport({
 	return (
 		<ToastPrimitive.Viewport
 			className={cn(
-				"fixed inset-x-0 bottom-0 z-[100] flex max-h-screen w-full flex-col gap-sm p-md outline-none sm:inset-x-auto sm:right-0 sm:bottom-0 sm:w-[380px] sm:max-w-[100vw]",
+				"fixed inset-x-0 bottom-0 z-[100] flex max-h-screen w-full flex-col gap-8 p-12 outline-none sm:inset-x-auto sm:right-0 sm:bottom-0 sm:w-[380px] sm:max-w-[100vw]",
 				className,
 			)}
 			{...props}
@@ -22,7 +22,7 @@ function ToastViewport({
 }
 
 const toastVariants = cva(
-	"group pointer-events-auto relative flex w-full items-start gap-sm overflow-hidden rounded-[var(--radius-sm)] border border-l-4 bg-container-elevated-bg p-md text-text-default shadow-[var(--shadow-md)] data-[state=closed]:animate-[toast-out_120ms_ease-in] data-[state=open]:animate-[toast-in_150ms_ease-out] data-[swipe=cancel]:translate-x-0 data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)] data-[swipe=move]:transition-none data-[swipe=end]:animate-[toast-out_120ms_ease-in]",
+	"group pointer-events-auto relative flex w-full items-start gap-8 overflow-hidden rounded-[var(--radius-sm)] border border-l-4 bg-container-elevated-bg p-12 text-text-default shadow-[var(--shadow-md)] data-[state=closed]:animate-[toast-out_120ms_ease-in] data-[state=open]:animate-[toast-in_150ms_ease-out] data-[swipe=cancel]:translate-x-0 data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)] data-[swipe=move]:transition-none data-[swipe=end]:animate-[toast-out_120ms_ease-in]",
 	{
 		variants: {
 			variant: {
@@ -64,12 +64,12 @@ function ToastClose({ className, ...props }: React.ComponentProps<typeof ToastPr
 		<ToastPrimitive.Close
 			aria-label="Dismiss"
 			className={cn(
-				"-mr-1 -mt-1 ml-auto flex size-6 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary",
+				"-mr-4 -mt-4 ml-auto flex size-24 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary",
 				className,
 			)}
 			{...props}
 		>
-			<X className="size-3.5" />
+			<X className="size-14" />
 		</ToastPrimitive.Close>
 	);
 }

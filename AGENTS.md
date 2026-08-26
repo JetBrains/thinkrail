@@ -110,8 +110,14 @@ Architecture decisions live as spec-graph nodes, dogfooding the spec layer the p
 - **Automatic work ends at `agent_settled`, never `agent_end`.** `agent_end` is attempt-level and may be
   followed by provider retry, compaction/recovery, or a queued continuation even when `willRetry` is false.
 - **UI panels are layout-agnostic**; the shell arranges them (desktop multi-pane / mobile single-view).
-- **Web styling = Tailwind v4 utilities mapped to the CSS-var tokens** (`@theme inline` — colour in the
-  generated `styles/generated/colors.css`, everything else in `apps/web/src/index.css`); themes swap the
+- **Web styling = Tailwind v4 utilities mapped to the CSS-var tokens** (`@theme inline`). The `@theme`
+  token families are GENERATED from JSON sources into `styles/generated/`, each carrying its own
+  `@theme inline` block (Tailwind flattens imports before resolving the theme, so an imported block
+  registers like an inline one): colour (`styles/colors.json` → `styles/generated/colors.css`) and
+  spacing (`styles/spacing.json` → `styles/generated/spacing.css`, which **owns the Tailwind `--spacing`
+  base mapping**). `apps/web/src/index.css` is the integration point — it `@import`s the generated layers
+  and holds only the non-generated remainder (Preflight font defaults, chrome geometry such as
+  `--spacing-panel-header-row`, animations); it does **not** own the `--spacing` mapping. Themes swap the
   token set via `[data-theme]`. Components use utilities,
   **never inline `style` objects or raw hex** — that's what keeps the UI themeable and responsive.
   **Colour has two layers and components may only name the second:** the per-theme *palette*

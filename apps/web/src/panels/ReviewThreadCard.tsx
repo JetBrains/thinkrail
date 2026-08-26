@@ -63,7 +63,7 @@ export function ReviewThreadCard({
 							disabled={busy}
 							onClick={() => run(actions.onSendComment)}
 						>
-							<Send className="size-3" />
+							<Send className="size-12" />
 						</button>
 						<button
 							type="button"
@@ -74,7 +74,7 @@ export function ReviewThreadCard({
 							disabled={busy}
 							onClick={() => run(actions.onDeleteComment)}
 						>
-							<Trash2 className="size-3" />
+							<Trash2 className="size-12" />
 						</button>
 					</span>
 				)}

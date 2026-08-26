@@ -260,8 +260,9 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   directly via `thinking_level_changed`. Its rows follow the **live catalog** — `ChatView` resolves the
   session's model through `store`'s `selectCatalogModel` before passing it down, rather than reading the
   session's own snapshot, so a `model.refresh` that changes what a model supports changes the offered
-  levels with it), `SessionStatsBar`, `ChatHeader` (the fixed, single-line **28px panel-header row** —
-  the same structural geometry as workbench Group Headers and the Changes toolbar; it never scrolls,
+  levels with it), `SessionStatsBar`, `ChatHeader` (the fixed, single-line **panel-header row** —
+  `h-panel-header-row` (`--panel-header-row-height`, currently 32px), the shared structural geometry with
+  workbench Group Headers and the Changes toolbar, not a value pinned here; it never scrolls,
   and constrained widths clip/truncate TODO + status/usage text while preserving the trailing Skills
   action. Its `left` slot carries the plan strip; its **Skills** button is the presentational **`SkillsButton`**
   primitive — a `BookOpen` pill, badged when a skill dir changed on disk — also shared with
@@ -455,8 +456,11 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   re-tracked via `shiftSlots` (`mirrorSlotGroup` in `slotSession.ts`). A slot carries two independent
   bits: **`filled`** (a parse-time property — has real content: a `${N:-default}`'s default, or a marker
   typed into — drives strip-on-send + the tint) and **`edited`** (session runtime state — the user
-  changed it — the sole mirror-*source* gate). They are deliberately distinct: `${1:-foo} … ${1:-bar}` is
-  born `filled` but not `edited`, so its two differing per-occurrence defaults stay independent until the
+  changed it — the sole mirror-*source* gate). If the user collapses an untouched marker selection to
+  its end and types there, the visible marker plus typed suffix becomes filled and is preserved on send:
+  this is WYSIWYG, and stripping the grown range would delete the user's text with the marker. They are
+  deliberately distinct: `${1:-foo} … ${1:-bar}` is born `filled` but not `edited`, so its two differing
+  per-occurrence defaults stay independent until the
   user provides the argument by editing one — matching pi's own expansion, which never rewrites
   "foo … bar" to "foo … foo". `Escape` ends the session
   (`setSlots(null)`), leaving the text as-is. A genuine text edit (the textarea's own `onChange` — never a
@@ -480,13 +484,16 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   gaps are visually tinted in the message field itself — a native `<textarea>` can't style text ranges
   inside it, so `Composer` renders a **highlight-backdrop** (a styled mirror layer positioned behind a
   now-`bg-transparent` textarea; the input background moves up to the wrapping container instead, clipped
-  to the same `rounded-[var(--radius-md)]` so nothing changes visually outside a session). The pure
-  `highlightSegments(value, slots, activeIdx)` (`slotSession.ts`) breaks `value` into ordered
+  to the same `rounded-[var(--radius-md)]` so nothing changes visually outside a session). That wrapper
+  owns the input border and fill: `bg-clip-padding` keeps the backdrop tint inside the rounded border,
+  while `focus-within:border-control-border-active` is the composer's sole focus indicator rather than a
+  second accent ring on the textarea. The pure `highlightSegments(value, slots, activeIdx)`
+  (`slotSession.ts`) breaks `value` into ordered
   plain/unfilled/filled/active runs — a slot range is `"active"` when its `slots` index is `activeIdx`
   (`Composer`'s own `slotIdx`), else `"unfilled"`/`"filled"` per its own `filled` flag; everything else is
   `"plain"` — pure offsets/slices, no empty segment for zero-gap-adjacent slots, and the tests pin
   `segments.map(s => s.text).join("") === value` in every case. The backdrop's inner mirror div matches the
-  textarea's box model **exactly** (`px-md py-sm`, the same `tr-text-ui` typography class, a
+  textarea's box model **exactly** (`px-12 py-8`, the same `tr-text-ui` typography class, a
   `border border-transparent` of the same width so the content box lines up,
   `whitespace-pre-wrap break-words` — spelled out explicitly since a `<div>`, unlike a `<textarea>`,
   doesn't soft-wrap this way by default) so each `SlotSegment`'s tint span

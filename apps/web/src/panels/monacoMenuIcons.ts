@@ -29,7 +29,7 @@ const ICONS = new Map<string, string>([
 ]);
 
 const MENU_CSS =
-	".editor-menu-icon{display:inline-flex;align-items:center;justify-content:center;width:14px;margin:0 8px 0 2px;flex-shrink:0;color:inherit}";
+	".editor-menu-icon{display:inline-flex;align-items:center;justify-content:center;width:14px;margin:0 var(--space-8) 0 var(--space-2);flex-shrink:0;color:inherit}";
 
 function menuRoots(): (Document | ShadowRoot)[] {
 	const roots: (Document | ShadowRoot)[] = [document];

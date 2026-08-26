@@ -136,7 +136,8 @@ order, then visible bottom groups left-to-right. One-row strips have bounded rea
 fixed previous/next controls: wheel, trackpad, touch, roving-keyboard navigation, active reveal, and the
 searchable keyboard overflow list all scroll the same tab list. Its native scrollbar stays hidden; subtle,
 pointer-transparent edge fades appear only on directions with clipped tabs and update with scroll, resize, and
-tab changes without altering the fixed 28 px strip or tab geometry. Singleton tool tabs
+tab changes without altering the fixed 32 px strip or tab geometry. Full-height strip actions share that 32 px
+width, keeping search, creation, alignment, and fold controls square. Singleton tool tabs
 (Projects, Specs, Files, Changes, Review) carry no inline close glyph; Close remains in their context menu
 and on the Delete key, while terminals and center resources retain the direct glyph.
 

@@ -5,7 +5,7 @@ import { highlightCode } from "@/lib/highlighter";
 import { MermaidView } from "./tools/visualize/MermaidView";
 
 const CHAT_PROSE =
-	"tr-prose-chat max-w-none break-words [&_a]:text-primary [&_a]:underline [&_li]:my-0.5 [&_ol]:my-sm [&_ol]:list-decimal [&_ol]:pl-lg [&_p]:my-sm [&_table]:border-collapse [&_td]:border [&_td]:border-border-muted [&_td]:px-sm [&_td]:py-xs [&_th]:border [&_th]:border-border-muted [&_th]:px-sm [&_th]:py-xs [&_th]:text-left [&_ul]:my-sm [&_ul]:list-disc [&_ul]:pl-lg";
+	"tr-prose-chat max-w-none break-words [&_a]:text-primary [&_a]:underline [&_li]:my-2 [&_ol]:my-8 [&_ol]:list-decimal [&_ol]:pl-16 [&_p]:my-8 [&_table]:border-collapse [&_td]:border [&_td]:border-border-muted [&_td]:px-8 [&_td]:py-4 [&_th]:border [&_th]:border-border-muted [&_th]:px-8 [&_th]:py-4 [&_th]:text-left [&_ul]:my-8 [&_ul]:list-disc [&_ul]:pl-16";
 
 export type MarkdownRehypePlugins = ComponentProps<typeof ReactMarkdown>["rehypePlugins"];
 
@@ -64,13 +64,13 @@ function CodeBlock({
 	if (!lang) {
 		if (!code.includes("\n")) {
 			return (
-				<code className="rounded-[var(--radius-xs)] bg-container-elevated-bg px-1 py-0.5">
+				<code className="rounded-[var(--radius-xs)] bg-container-elevated-bg px-4 py-2">
 					{children}
 				</code>
 			);
 		}
 		return (
-			<pre className="overflow-auto rounded-[var(--radius-sm)] bg-container-elevated-bg p-sm">
+			<pre className="overflow-auto rounded-[var(--radius-sm)] bg-container-elevated-bg p-8">
 				{code}
 			</pre>
 		);
@@ -113,14 +113,14 @@ function ShikiBlock({ code, lang }: { code: string; lang: string }) {
 
 	if (html === null) {
 		return (
-			<pre className="overflow-auto rounded-[var(--radius-sm)] bg-container-elevated-bg p-sm text-text-default">
+			<pre className="overflow-auto rounded-[var(--radius-sm)] bg-container-elevated-bg p-8 text-text-default">
 				{code}
 			</pre>
 		);
 	}
 	return (
 		<div
-			className="overflow-auto rounded-[var(--radius-sm)] [&_pre]:!m-0 [&_pre]:!bg-container-elevated-bg [&_pre]:p-sm"
+			className="overflow-auto rounded-[var(--radius-sm)] [&_pre]:!m-0 [&_pre]:!bg-container-elevated-bg [&_pre]:p-8"
 			// biome-ignore lint/security/noDangerouslySetInnerHtml: shiki output is escaped, themed markup
 			dangerouslySetInnerHTML={{ __html: html }}
 		/>

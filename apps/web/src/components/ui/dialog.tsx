@@ -31,15 +31,15 @@ function DialogContent({
 			<DialogOverlay />
 			<DialogPrimitive.Content
 				className={cn(
-					"-translate-x-1/2 -translate-y-1/2 fixed top-1/2 left-1/2 z-50 flex w-full max-w-[28rem] flex-col gap-lg rounded-[var(--radius-lg)] border border-border-default bg-container-elevated-bg p-lg text-text-default shadow-[var(--shadow-lg)]",
+					"-translate-x-1/2 -translate-y-1/2 fixed top-1/2 left-1/2 z-50 flex w-full max-w-[28rem] flex-col gap-16 rounded-[var(--radius-lg)] border border-border-default bg-container-elevated-bg p-16 text-text-default shadow-[var(--shadow-lg)]",
 					className,
 				)}
 				{...props}
 			>
 				{children}
 				{hideClose ? null : (
-					<DialogPrimitive.Close className="absolute top-md right-md rounded-[var(--radius-sm)] p-xs text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary">
-						<X className="size-4" />
+					<DialogPrimitive.Close className="absolute top-12 right-12 rounded-[var(--radius-sm)] p-4 text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary">
+						<X className="size-16" />
 						<span className="sr-only">Close</span>
 					</DialogPrimitive.Close>
 				)}
@@ -49,13 +49,13 @@ function DialogContent({
 }
 
 function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
-	return <div className={cn("flex flex-col gap-xs", className)} {...props} />;
+	return <div className={cn("flex flex-col gap-4", className)} {...props} />;
 }
 
 function DialogFooter({ className, ...props }: React.ComponentProps<"div">) {
 	return (
 		<div
-			className={cn("flex flex-col-reverse gap-sm sm:flex-row sm:justify-end", className)}
+			className={cn("flex flex-col-reverse gap-8 sm:flex-row sm:justify-end", className)}
 			{...props}
 		/>
 	);

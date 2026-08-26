@@ -31,9 +31,9 @@ export function NoticeDialog({
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent className="max-w-[24rem]" hideClose data-testid={testId}>
 				<DialogHeader>
-					<div className="flex items-center gap-sm">
+					<div className="flex items-center gap-8">
 						{tone === "error" ? (
-							<TriangleAlert className="size-4 shrink-0 text-feedback-error" />
+							<TriangleAlert className="size-16 shrink-0 text-feedback-error" />
 						) : null}
 						<DialogTitle>{title}</DialogTitle>
 					</div>

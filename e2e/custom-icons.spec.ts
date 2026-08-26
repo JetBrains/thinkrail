@@ -16,7 +16,6 @@ test("Changes tool uses the custom file-diff glyph; Review uses the discuss glyp
 	await expect(changesTab).toBeVisible();
 	await expect(reviewTab).toBeVisible();
 
-	// Changes → custom CSS-mask glyph: a .custom-icon span with a resolved mask-image + currentColor bg.
 	const mask = changesTab.locator(".custom-icon");
 	await expect(mask).toHaveCount(1);
 	const maskImage = await mask.evaluate((el) => getComputedStyle(el).maskImage);
@@ -24,6 +23,5 @@ test("Changes tool uses the custom file-diff glyph; Review uses the discuss glyp
 	const box = await mask.boundingBox();
 	expect(box?.width ?? 0).toBeGreaterThan(8);
 
-	// Review → discuss Remix svg (inline svg, currentColor).
 	await expect(reviewTab.locator("svg")).toHaveCount(1);
 });
