@@ -273,8 +273,17 @@ export class TodoStore {
 		let paused: Todo[] = [];
 		if (patch.title !== undefined) todo.title = decodeIfAgent(patch.title, todo.origin);
 		if (patch.status !== undefined) {
+			const wasDone = todo.status === "done";
 			todo.status = patch.status;
 			if (patch.status === "in_progress") paused = this.keepOneInProgress(plan, id);
+			if (wasDone && patch.status !== "done") {
+				// Reopening a done item invalidates its prior completion claims — otherwise a
+				// re-fix that skips repeating summary/verification would ship the old revision's
+				// stale "tests green" story alongside the new code (and the plan summary with it).
+				delete todo.summary;
+				delete todo.verification;
+				delete plan.summary;
+			}
 		}
 		if (patch.note !== undefined) {
 			if (patch.note) todo.note = decodeIfAgent(patch.note, todo.origin);

@@ -525,6 +525,54 @@ test("item summary: set with done, cleared by empty string, sanitized on read", 
 	}
 });
 
+test("reopening a done item clears its stale completion summary/verification and the plan summary", () => {
+	const root = tempRoot();
+	try {
+		const s = store(root);
+		const todo = s.add({ title: "Implement FloodWait handling" });
+		s.update(todo.id, {
+			status: "done",
+			summary: "Added throttling and fallback for failed batch sends.",
+			verification: "bun test src/todos — 34 pass",
+		});
+		s.setSummary("All tasks landed; e2e suite green.");
+
+		s.update(todo.id, { status: "in_progress" });
+
+		expect(s.get(todo.id)?.summary).toBeUndefined();
+		expect(s.get(todo.id)?.verification).toBeUndefined();
+		expect(s.read().summary).toBeUndefined();
+
+		s.update(todo.id, {
+			status: "done",
+			summary: "Retried with the corrected backoff window.",
+			verification: "bun test src/todos — 35 pass",
+		});
+		expect(s.get(todo.id)?.summary).toBe("Retried with the corrected backoff window.");
+		expect(s.get(todo.id)?.verification).toBe("bun test src/todos — 35 pass");
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test("reopen and re-done in one patch keeps the freshly supplied summary/verification", () => {
+	const root = tempRoot();
+	try {
+		const s = store(root);
+		const todo = s.add({ title: "step" });
+		s.update(todo.id, { status: "done", summary: "old claim", verification: "old check" });
+		s.update(todo.id, {
+			status: "pending",
+			summary: "new claim",
+			verification: "new check",
+		});
+		expect(s.get(todo.id)?.summary).toBe("new claim");
+		expect(s.get(todo.id)?.verification).toBe("new check");
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
 test("plan summary: setSummary round-trips, empty clears, survives item edits, dropped by replaceAll", () => {
 	const root = tempRoot();
 	try {
