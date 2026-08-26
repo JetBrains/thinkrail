@@ -1,7 +1,7 @@
 ---
 id: task-delegation-core
 type: task-spec
-status: active
+status: done
 title: "Delegation core — session fabric: spawn, fork, lineage, extension points"
 parent: architecture
 references: [task-subagent-support]
@@ -396,15 +396,15 @@ future pattern's first consumer must only *fill in* its combination, never resha
 Report-back from a subsession to its parent (when subsessions land) is pi-native
 (`sendMessage`/`followUp`) — no core provision needed beyond lineage.
 
-## Implementation status (kept current — branch `subagent-research-planning`)
+## Implementation status (final — branch `subagent-research-planning`; this task spec is retired `done`)
 
 | Stage | State | Where |
 |---|---|---|
 | 1. `packages/pi-delegation` (core) | ✅ done | contract + service + storage + semaphore; 22 unit tests on real sessions/faux provider; review round applied (turn-cap fix, clearQueue, decisions #22–24) |
 | 2. `packages/pi-subagents` (consumer) | ✅ done | definitions/builtins/mapping/tools; 17 tests; review round applied (detached-abort fix, ambiguity, #24); scout+description tuning; curated extensions opt-in (#25) |
 | 3. Host integration | ✅ done | contracts v29 (`DelegationRunDetails` mirror + `subagent.getTranscript`), `server/src/agent/delegation.ts` bindings, cascades, transcript handler, curated child set (spec-graph + headless web-access via named bundled seam) |
-| 4. Web UI | ⏳ next | `AgentCard` renderer, `subagent-completion` card, child transcript view (chat module) |
-| 5. Verification + promotion | ⏳ open | `@agent` e2e spec, pure-pi smoke (acceptance #5), **binary gate** (`build:binary` + `smoke:binary`/`e2e:binary` — bundled seam changed), SPEC promotions + retire task specs |
+| 4. Web UI | ✅ done | `AgentCard` (stock collapsed ToolCard, live header line — user-settled after a Claude Code / Codex / OpenCode survey), `subagent-completion` compact card (own turn kind, live + hydration), read-only child transcript dialog (poll-while-live); design + boundary: `apps/web/src/chat/tools/subagent/SPEC.md` |
+| 5. Verification + promotion | ✅ done | `e2e/subagents.live.spec.ts` (@agent: foreground fan-out + background completion + transcript, green first run), `bun run smoke:subagents` (acceptance #5, green), binary gate green (`build:binary` + `smoke:binary` + `e2e:binary` 170), SPECs promoted `active`, task specs retired `done` |
 | Subsessions / branching / workflows | 🚧 V2 | typed axes, loud-rejected; listed-child resource-assembly seam designed at implementation (decision #25) |
 
 Manual playground: `~/IdeaProjects/subagents-playground` (both configs, planted bugs, isolated
@@ -434,7 +434,11 @@ pure-pi agent dir).
    [[submodule-server-agent]]'s SPEC for the embedder binding).
 5. Pure-pi smoke: the `pi-subagents` extension, embedding this core with default bindings, loads
    and completes a run under vanilla pi with default tool rendering — on-demand verification
-   (needs pi auth), never a commit gate.
+   (needs pi auth), never a commit gate. **Discharged:** `bun run smoke:subagents`
+   (`scripts/smoke-pure-pi-subagents.ts`) scripts the repeatable core — vanilla pi CLI (`-p --mode
+   json -e`), isolated throwaway agent dir, asserts the `Agent` tool completed and the child
+   transcript persisted under the default `<agentDir>/delegation` root; the interactive TUI half
+   stays the manual playground check (`~/IdeaProjects/subagents-playground`, config A).
 
 ## Appendix A — worked example: a DAG engine on the V1 surface (non-normative)
 

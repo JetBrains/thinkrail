@@ -1,7 +1,7 @@
 ---
 id: submodule-web-chat-tools-subagent
 type: submodule-design
-status: draft
+status: active
 title: subagent renderers (Agent / get_subagent_result / completion card)
 parent: submodule-web-chat-tools
 depends-on: [module-contracts]

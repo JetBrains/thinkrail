@@ -1,7 +1,7 @@
 ---
 id: module-pi-delegation
 type: module-design
-status: draft
+status: active
 title: pi-delegation — the session fabric (portable delegation core)
 parent: architecture
 implements: [task-delegation-core]

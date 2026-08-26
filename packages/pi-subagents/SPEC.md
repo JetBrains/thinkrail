@@ -1,7 +1,7 @@
 ---
 id: module-pi-subagents
 type: module-design
-status: draft
+status: active
 title: pi-subagents — the Agent tools over the delegation core
 parent: architecture
 implements: [task-subagent-support]
@@ -72,4 +72,12 @@ extensions that set holds is the **embedder's** choice, never this package's.
 - **Forbidden:** any `@thinkrail/*` package (must work under vanilla pi); `@earendil-works/pi-tui`
   (pure-pi V1 bar is default rendering); `pi-delegation/src/*` internals.
 - The web card / transcript view are the *presentation* side, joined by tool name
-  (`registerToolRenderer("Agent", …)`) — they live in `apps/web`, never here.
+  (`registerToolRenderer("Agent", …)`) — they live in `apps/web` (`chat/tools/subagent`), never here.
+
+## Verification
+
+Unit suites in-package (`bun test`). End to end: `e2e/subagents.live.spec.ts` (`@agent` — the real
+host driving real children: foreground fan-out, background completion, transcript reads). The
+pure-pi bar (core acceptance #5): **`bun run smoke:subagents`** — this extension with default
+bindings under the repo-pinned vanilla pi CLI, in an isolated throwaway agent dir; on-demand only
+(needs pi auth, spends real tokens), never a commit/CI gate.

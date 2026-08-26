@@ -1,7 +1,7 @@
 ---
 id: task-subagent-support
 type: task-spec
-status: active
+status: done
 title: Subagent support in ThinkRail — own-build design
 parent: architecture
 references: [task-delegation-core]
@@ -138,19 +138,26 @@ Restart behavior, abort cascades, storage layout, and the one-id rule are the co
 [[task-delegation-core]] (notably: a dangling foreground `Agent` toolCall after a host crash is
 healed by the existing generic `repairDanglingToolCalls`; no subagent-specific machinery).
 
-## Open questions
+## Open questions — all resolved
 
-1. Verify `custom` messages cross the **live** WS event stream (hydration already carries them) —
-   implementation item for the completion card.
-2. Built-in agent set contents (names, prompts, tool allowlists) — proposed during implementation.
+1. ~~Verify `custom` messages cross the **live** WS event stream (hydration already carries them).~~
+   **Verified twice:** pi's `sendCustomMessage` emits `message_start`/`message_end` on every delivery
+   path (source-checked: queued-followUp drain and idle `triggerTurn` both go through the agent
+   loop's message events), and the `@agent` e2e's background test pins it end to end — the completion
+   card appears live, no reload.
+2. ~~Built-in agent set contents.~~ Settled during implementation: scout / planner / worker /
+   reviewer as TS constants (`builtins.ts`), all opting into the curated child extension set.
 
-## Implementation status (kept current — branch `subagent-research-planning`)
+## Implementation status (final — this task spec is retired `done`)
 
-Steps 0–2 of the work plan below are **done** (see the core spec's status table for commits and
-detail); step 3 (web renderers) is next; step 4 (tests/promotions) is open, including the binary
-gate. Post-review tuning landed: scout carries read-only bash, the `Agent` description enumerates
-each type's tools, and all builtins opt into the curated child extension set (spec read tools +
-scout web tools) — core decision #25.
+All work-plan steps are **done** — see the core spec's status table for the full ledger. The web
+layer landed per the settled rendering decisions (2026-08, research round): `Agent` renders as a
+stock collapsed ToolCard whose header line is live (the Claude Code convention — surveyed against
+Codex's pinned runtime panel and OpenCode's clickable box; user chose the stock-card variant), the
+report sits behind a fold on the finished card, the child transcript opens as a read-only overlay
+dialog polling ~2.5s while the run is live, and the `subagent-completion` message is its own compact
+transcript card (the OpenCode notice pattern + a report fold). Boundary + invariants:
+`apps/web/src/chat/tools/subagent/SPEC.md`; chat integration: `apps/web/src/chat/SPEC.md`.
 
 ## V1 work plan
 
