@@ -193,7 +193,7 @@ registration runs once when the chat module mounts. Unregistered tools fall back
   `toolHelpers` for sibling renderers + `visualize/MermaidView` for the parent `Markdown` primitive. No barrel (chat pulls shiki — per-file imports, as in the parent).
 - **Allowed deps:** parent chat primitives (`toolRegistry`, `Markdown`, `ChatActions`, `askState`);
   `contracts` (type-only + the `ASK_USER_ANSWERS_CUSTOM_TYPE` constant); `components/ui`; `lib`;
-  `lucide-react`; `mermaid` (**lazy, `visualize/` only**).
+  `@remixicon/react`; `mermaid` (**lazy, `visualize/` only**).
 - **Forbidden:** value-importing any `pi` package; `store`/`transport` (renderers stay presentational —
   extraction-ready into a future `packages/chat-ui`).
 
