@@ -1,8 +1,8 @@
 import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
+import { channel as bakedChannel, version } from "@thinkrail/shared/version";
 import { type InstallMeta, readInstallMeta } from "./paths";
 import { psQuote, runPowerShellScript } from "./powershell";
-import { channel as bakedChannel, version } from "./version";
 
 const DEFAULT_INSTALL_SCRIPT_URL =
 	"https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh";

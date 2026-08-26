@@ -99,6 +99,13 @@ completed `apps/web/dist`, consumes the server-owned runtime manifest, stages ta
 resources under an ignored package-local directory, emits the transient static factory entry, bundles the
 self-contained server runtime to a packaged `.ts` filename, runs Electrobun, and removes generated source
 even on failure. Ordinary root development and web-build commands do not download or build Electrobun.
+The wrapper also injects the shared baked version while Electrobun evaluates its isolated config process.
+
+Electrobun `1.18.1` publishes implementation `.ts` files that do not typecheck under the repository's
+strict TypeScript 6 settings. Desktop typecheck therefore maps only the consumed Electrobun API surface
+to a package-local declaration adapter through a dedicated typecheck config. The runtime build config has
+no such mapping and always resolves the real package. The adapter is a compatibility boundary, not a
+runtime fork, and must stay limited to APIs the launcher and preload actually consume.
 
 Unsigned desktop installers ship beside the CLI artifacts for macOS ARM64, Windows x64, Linux x64, and
 Linux ARM64. Nightly maps to Electrobun canary and stable maps to stable. Signing, notarization, and updater

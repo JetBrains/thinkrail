@@ -1,6 +1,6 @@
 import { getBuiltinModels, getBuiltinProviders } from "@earendil-works/pi-ai/providers/all";
 
-export type BuildKind = "source" | "binary";
+export type BuildKind = "source" | "binary" | "desktop";
 
 export type LoginMethod = "oauth" | "api-key" | "central";
 

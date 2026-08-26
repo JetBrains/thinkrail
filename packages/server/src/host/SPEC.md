@@ -105,9 +105,9 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `ownership.ts` (canonicalize the data directory, hash its fingerprint into a dedicated deterministic
   loopback candidate range, hold an exclusive `node:net` listener, and answer a bounded versioned
   fingerprint handshake; same-owner candidates refuse, different owners advance, and an occupied
-  unresponsive candidate fails closed); `boot.ts` (`bootHost` → await `initLogging` first — debug level
-  when the launcher passed `verbose` — then install the crash report, acquire ownership **before**
-  shell/Central or any other mutable host initialization, resolve the login-shell PATH, pre-warm the same
+  unresponsive candidate fails closed); `boot.ts` (`bootHost` → acquire ownership before any mutable host
+  initialization, await `initLogging` — debug level when the launcher passed `verbose` — then install the
+  crash report, resolve the login-shell PATH, pre-warm the same
   Central watcher/runtime initialization before choosing the serving port, await `createServer` (which
   idempotently enforces runtime bootstrap for low-level embedders), attach the lease to
   `RunningServer.shutdown()`, and write the `listening on` info line (see `submodule-server-log`). Its
