@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "apps/vibecoding-website/**"
+      - "packages/website-analytics/**"
       - ".github/workflows/vibecoding-site.yml"
       - "package.json"
       - "bun.lock"

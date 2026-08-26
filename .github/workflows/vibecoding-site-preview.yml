@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "apps/vibecoding-website/**"
+      - "packages/website-analytics/**"
       - ".github/workflows/vibecoding-site-preview.yml"
 
 permissions:
@@ -68,7 +69,7 @@ jobs:
           | **Preview** | $PREVIEW_URL |
           | **Commit** | $HEAD_SHA |
 
-          _This comment updates in place on every push that touches \`apps/vibecoding-website\`._"
+          _This comment updates in place on every push that touches the vibecoding website or shared analytics._"
           comment_id=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate \
             --jq "[.[] | select(.body | startswith(\"$marker\")) | .id][0] // empty")
           if [ -n "$comment_id" ]; then

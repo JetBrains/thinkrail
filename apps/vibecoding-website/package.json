@@ -11,6 +11,7 @@
 		"preview": "astro preview"
 	},
 	"dependencies": {
+		"@thinkrail/website-analytics": "workspace:*",
 		"lucide-react": "catalog:",
 		"react": "catalog:",
 		"react-dom": "catalog:"

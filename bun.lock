@@ -36,6 +36,7 @@
       "name": "@thinkrail/vibecoding-website",
       "version": "0.0.0",
       "dependencies": {
+        "@thinkrail/website-analytics": "workspace:*",
         "lucide-react": "catalog:",
         "react": "catalog:",
         "react-dom": "catalog:",
@@ -109,6 +110,9 @@
     "apps/website": {
       "name": "@thinkrail/website",
       "version": "0.0.0",
+      "dependencies": {
+        "@thinkrail/website-analytics": "workspace:*",
+      },
       "devDependencies": {
         "@astrojs/check": "catalog:",
         "@astrojs/markdown-satteri": "0.3.7",
@@ -229,6 +233,14 @@
         "@earendil-works/pi-ai": "*",
         "@earendil-works/pi-coding-agent": "*",
         "typebox": "*",
+      },
+    },
+    "packages/website-analytics": {
+      "name": "@thinkrail/website-analytics",
+      "version": "0.0.0",
+      "devDependencies": {
+        "@types/bun": "catalog:",
+        "typescript": "catalog:",
       },
     },
   },
@@ -876,6 +888,8 @@
     "@thinkrail/web": ["@thinkrail/web@workspace:apps/web"],
 
     "@thinkrail/website": ["@thinkrail/website@workspace:apps/website"],
+
+    "@thinkrail/website-analytics": ["@thinkrail/website-analytics@workspace:packages/website-analytics"],
 
     "@turbo/darwin-64": ["@turbo/darwin-64@2.9.18", "", { "os": "darwin", "cpu": "x64" }, "sha512-9f27peFu16ur8c0v9nUFUEyBnbKuuFsUTjHFWfmwGfzySBXbHwzU44QhZon6Mznz0cHsIr3984NQj/bVrnGSRw=="],
 

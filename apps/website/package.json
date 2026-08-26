@@ -10,6 +10,9 @@
 		"test": "bun test",
 		"preview": "astro preview"
 	},
+	"dependencies": {
+		"@thinkrail/website-analytics": "workspace:*"
+	},
 	"devDependencies": {
 		"@astrojs/check": "catalog:",
 		"@astrojs/markdown-satteri": "0.3.7",
