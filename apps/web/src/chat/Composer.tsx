@@ -708,44 +708,37 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 				<div
 					data-testid="chat-composer-shell"
 					className={cn(
-						"relative grid grid-cols-[auto_minmax(0,1fr)_auto] items-end gap-x-4 overflow-hidden rounded-[var(--radius-md)] border border-control-border-default bg-control-bg bg-clip-padding p-4 transition-colors focus-within:border-control-border-active",
-						expanded ? "grid-rows-[minmax(0,1fr)_auto] gap-y-4" : "grid-rows-[auto]",
+						"relative grid grid-cols-[auto_minmax(0,1fr)_auto] grid-rows-[minmax(0,1fr)_auto] items-end gap-x-4 gap-y-4 overflow-hidden rounded-[var(--radius-md)] border border-control-border-default bg-control-bg bg-clip-padding p-4 transition-colors focus-within:border-control-border-active",
 						expanded && growthLimit === "half-chat" && "max-h-[50cqh]",
 					)}
 				>
 					<div
 						ref={compactProbeRef}
 						aria-hidden
-						className="pointer-events-none invisible absolute inset-x-0 top-0 col-start-2 col-end-3 row-start-1 whitespace-pre-wrap break-words px-12 py-8 tr-text-ui"
+						className="pointer-events-none invisible absolute inset-x-0 top-0 col-span-3 col-start-1 row-start-1 whitespace-pre-wrap break-words px-12 py-8 tr-text-ui"
 					>
 						{`${value}\u200b`}
 					</div>
-					<div
-						className={cn(
-							"flex min-w-0 items-center self-end",
-							expanded ? "col-start-1 row-start-2 gap-4 sm:gap-8" : "col-start-1 row-start-1 gap-0",
-						)}
-					>
+					<div className="col-start-1 row-start-2 flex min-w-0 items-center gap-4 self-end sm:gap-8">
 						<ModelSelector
 							models={models}
 							current={currentModel}
 							refreshing={modelsRefreshing}
 							onRefresh={onRefreshModels}
 							onSelect={onSelectModel}
-							className={cn("max-w-80 gap-4 px-4 sm:max-w-144", !expanded && "rounded-r-none")}
+							className="max-w-80 gap-4 px-4 sm:max-w-144"
 						/>
 						<ThinkingSelector
 							level={thinkingLevel}
 							levels={currentModel?.thinkingLevels ?? []}
 							onSelect={onSelectThinking}
 							showLabel={false}
-							className={cn("gap-4 px-4", !expanded && "-ml-px rounded-l-none")}
+							className="gap-4 px-4"
 						/>
 					</div>
 					<div
 						className={cn(
-							"relative min-h-0 overflow-hidden rounded-[var(--radius-sm)] tr-text-ui",
-							expanded ? "col-span-3 col-start-1 row-start-1" : "col-start-2 row-start-1",
+							"relative col-span-3 col-start-1 row-start-1 min-h-0 overflow-hidden rounded-[var(--radius-sm)] tr-text-ui",
 							COMPOSER_EDITOR_LIMIT_CLASS[growthLimit],
 						)}
 					>
@@ -843,12 +836,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							)}
 						/>
 					</div>
-					<div
-						className={cn(
-							"flex shrink-0 items-center gap-4 self-end",
-							expanded ? "col-start-3 row-start-2" : "col-start-3 row-start-1",
-						)}
-					>
+					<div className="col-start-3 row-start-2 flex shrink-0 items-center gap-4 self-end">
 						<button
 							type="button"
 							data-testid="history-open"
