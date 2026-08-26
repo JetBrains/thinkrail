@@ -1,6 +1,7 @@
 import { beforeEach, expect, test } from "bun:test";
-import type {
-	ExtUiRequest,
+import {
+	DEFAULT_CONFIG,
+	type ExtUiRequest,
 	PiEvent,
 	Project,
 	SessionSummary,
@@ -2615,6 +2616,14 @@ test("applyConfig folds the server-synced app config in (theme is an opaque host
 	expect(useAppStore.getState().theme).toBe("acme.solarized");
 	useAppStore.getState().applyConfig({ theme: "custom.high-contrast" });
 	expect(useAppStore.getState().theme).toBe("custom.high-contrast");
+});
+
+test("applyConfig projects the composer growth limit", () => {
+	useAppStore.getState().applyConfig({
+		...DEFAULT_CONFIG,
+		composerGrowthLimit: "roomy",
+	});
+	expect(useAppStore.getState()).toHaveProperty("composerGrowthLimit", "roomy");
 });
 
 test("diff tabs: openTab dedupes by id + activates; view + contents update in place", () => {

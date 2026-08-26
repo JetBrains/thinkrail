@@ -14,35 +14,28 @@ async function openChat(page: import("@playwright/test").Page): Promise<void> {
 	await expect(page.getByTestId("chat-input")).toBeVisible();
 }
 
-test("composer prompt is moderately tall with model and effort controls underneath", {
+test("streaming unfolds the one-line draft into a complete action rail", {
 	tag: "@agent",
 }, async ({ page }) => {
+	test.setTimeout(90_000);
 	await openChat(page);
 
 	const input = page.getByTestId("chat-input");
-	const modelSelector = page.getByTestId("model-selector");
-	const effortSelector = page.getByTestId("thinking-selector");
-	const send = page.getByTestId("chat-send");
+	await input.fill("Use the bash tool to run `sleep 8`, then reply with done.");
+	await page.getByTestId("chat-send").click();
 
-	await expect(input).toBeVisible();
-	await expect(modelSelector).toBeVisible();
-	await expect(effortSelector).toBeVisible();
-	await expect(send).toBeVisible();
-
+	const composer = page.getByTestId("chat-composer");
+	await expect(page.getByTestId("chat-abort")).toBeVisible();
+	await expect(page.getByTestId("send-menu")).toBeVisible();
+	await expect(composer).toHaveAttribute("data-expanded", "true");
 	const inputBox = await input.boundingBox();
-	const modelBox = await modelSelector.boundingBox();
-	const effortBox = await effortSelector.boundingBox();
-	const sendBox = await send.boundingBox();
-	if (!inputBox || !modelBox || !effortBox || !sendBox) {
-		throw new Error("Composer layout boxes were not measurable");
-	}
+	const modelBox = await page.getByTestId("model-selector").boundingBox();
+	if (!inputBox || !modelBox) throw new Error("Composer layout boxes were not measurable");
+	expect(inputBox.height).toBeLessThanOrEqual(40);
+	expect(modelBox.y).toBeGreaterThanOrEqual(inputBox.y + inputBox.height);
 
-	expect(inputBox.height).toBeGreaterThanOrEqual(100);
-	expect(inputBox.height).toBeLessThanOrEqual(130);
-	const belowInputY = inputBox.y + inputBox.height;
-	expect(modelBox.y).toBeGreaterThanOrEqual(belowInputY);
-	expect(effortBox.y).toBeGreaterThanOrEqual(belowInputY);
-	expect(sendBox.y).toBeGreaterThanOrEqual(belowInputY);
+	await page.getByTestId("chat-abort").click();
+	await expect(page.getByTestId("chat-abort")).toBeHidden();
 });
 
 test("model picker plus file and portable-skill completion use the live session catalog", {
