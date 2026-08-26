@@ -32,6 +32,12 @@ src/pages/index.astro ──▶ src/analytics
 
 ## Deployment
 
-A dedicated Cloudflare Pages project serves the static `dist/` artifact. A path-scoped GitHub Actions workflow builds from the frozen root lockfile and publishes on `main` only when this module or its workflow changes. `vibecoding.thinkrail.ai` is the sole production hostname; provider previews are non-production and analytics-silent.
+A dedicated Cloudflare Pages project serves the static `dist/` artifact. A path-scoped production workflow builds from the frozen root lockfile and publishes the `main` branch only when this module or its production workflow changes. `vibecoding.thinkrail.ai` is the sole production hostname; provider previews are non-production and analytics-silent.
 
 The production cutover from Lovable records the prior DNS target before attaching the Pages custom domain. Restoring that target is the rollback until the replacement is verified.
+
+### PR preview deploys
+
+Same-repository PRs that touch this module get an independently reviewable Pages deployment from `.github/workflows/vibecoding-site-preview.yml`. The workflow uses the production build command and deploys to this module's existing `thinkrail-vibecoding` project on branch `pr-<number>`, producing the deterministic alias `https://pr-<number>.thinkrail-vibecoding.pages.dev`. It waits for HTTP 200 before publishing a sticky PR comment (marker `<!-- thinkrail-vibecoding-site-preview -->`) and a `Vibecoding website preview` commit status.
+
+This workflow is independent of [[module-website]]'s preview workflow: each has its own path trigger, concurrency group, Pages deployment, comment marker, and status context. A PR that changes both website modules therefore receives two comments and two statuses, while a single-site change produces only that site's preview. Fork PRs skip because Cloudflare credentials never cross the repository boundary. Preview aliases are public, analytics-silent, and left inert after a PR closes; a newer push cancels only the superseded preview for the same site and PR.
