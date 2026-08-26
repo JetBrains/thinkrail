@@ -21,18 +21,58 @@ export function loadSpacing(path = SOURCE_PATH): Spacing {
 /** The raw custom property a step declares — consumed directly by hand-written CSS. */
 export const spaceVar = (step: string) => `--space-${step}`;
 
-export function validate(spacing: Spacing): string[] {
-	const issues: string[] = [];
-	if (!/^\d+\.\d+\.\d+$/.test(spacing.metadata?.version ?? "")) {
-		issues.push("metadata.version must be semver");
+const isObject = (value: unknown): value is Record<string, unknown> =>
+	typeof value === "object" && value !== null && !Array.isArray(value);
+
+function reportUnknownProperties(
+	value: Record<string, unknown>,
+	allowed: ReadonlySet<string>,
+	label: string,
+	issues: string[],
+): void {
+	for (const key of Object.keys(value)) {
+		if (!allowed.has(key)) issues.push(`unknown ${label} property "${key}"`);
 	}
-	if (!spacing.steps || Object.keys(spacing.steps).length === 0) {
+}
+
+export function validate(spacing: unknown): string[] {
+	const issues: string[] = [];
+	if (!isObject(spacing)) return ["spacing must be an object"];
+
+	reportUnknownProperties(spacing, new Set(["$schema", "metadata", "steps"]), "spacing", issues);
+	if (spacing.$schema !== undefined && typeof spacing.$schema !== "string") {
+		issues.push("$schema must be a string");
+	}
+
+	if (!isObject(spacing.metadata)) {
+		issues.push("metadata must be an object");
+	} else {
+		reportUnknownProperties(spacing.metadata, new Set(["version", "note"]), "metadata", issues);
+		if (
+			typeof spacing.metadata.version !== "string" ||
+			!/^\d+\.\d+\.\d+$/.test(spacing.metadata.version)
+		) {
+			issues.push("metadata.version must be semver");
+		}
+		if (spacing.metadata.note !== undefined && typeof spacing.metadata.note !== "string") {
+			issues.push("metadata.note must be a string");
+		}
+	}
+
+	if (!isObject(spacing.steps)) {
+		issues.push("steps must be an object");
+		return issues;
+	}
+	if (Object.keys(spacing.steps).length === 0) {
 		issues.push("steps must declare at least one step");
 	}
-	for (const [step, value] of Object.entries(spacing.steps ?? {})) {
-		// A step name IS its pixel value (`"8"` → `"8px"`).
+	for (const [step, value] of Object.entries(spacing.steps)) {
 		if (!/^[0-9]+$/.test(step)) {
 			issues.push(`steps.${step} must be a bare integer (the canonical pixel value)`);
+			continue;
+		}
+		if (typeof value !== "string") {
+			issues.push(`steps.${step} must be a string`);
 			continue;
 		}
 		if (value !== `${step}px`) {

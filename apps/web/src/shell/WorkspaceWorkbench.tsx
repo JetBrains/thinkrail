@@ -688,7 +688,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 							aria-label="New terminal in this group"
 							title="New terminal in this group"
 							onClick={() => useAppStore.getState().addTerminal(workspaceId, undefined, groupId)}
-							className="flex w-28 shrink-0 items-center justify-center border-border-default border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+							className="flex w-32 shrink-0 items-center justify-center border-border-default border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 						>
 							<SquareTerminal className="size-16" />
 						</button>

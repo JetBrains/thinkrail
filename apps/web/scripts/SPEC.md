@@ -25,6 +25,7 @@ they are *generators*: they use `node:fs` and `node:path`, which must never reac
 | `colors.ts` | the library: load → validate → render. The **only** place a colour derivation (a palette alias or an alpha step) is written. |
 | `generate-colors.ts` | CLI. Writes `src/styles/generated/colors.css` — the roles, the appearance-level effects, and the Tailwind map; `--check` fails when it is stale. |
 | `spacing.ts` | the library: load → validate → render. The **only** place a spacing length is written — the canonical numeric steps and the `--spacing: 1px` (number = px) base. |
+| `spacing.test.ts` | Pins the spacing source validator's closed root/metadata shapes and value types against the schema. |
 | `generate-spacing.ts` | CLI. Writes `src/styles/generated/spacing.css` — the `--space-<n>` tokens + the Tailwind base; `--check` fails when it is stale. |
 | `generatedFiles.ts` | what every generate CLI does with a rendered file: `--check` reports drift, otherwise write. The **only** definition of "stale", so the three pipelines and the tests cannot disagree. |
 | `generatedFiles.test.ts` | pins that definition — content drift and a missing file are stale, a CRLF working tree is not. |
@@ -70,11 +71,12 @@ in agreement about the same functions.
   `apps/web build` and CI. Line endings are the one exception, because they belong to the checkout
   rather than the content: `.gitattributes` pins the working tree to LF, and every comparison against
   a committed file goes through `normalizeEol` so a CRLF clone cannot report drift that is not there.
-- **`validate()` is the gate, not the JSON Schema.** `typography.schema.json` is the editor-facing
-  contract (`$schema` in the source gives completion + inline errors); the toolchain has no JSON Schema
-  validator. Shape checks, referential integrity and the policies Schema cannot express — mono is
-  code-only, `title.card` == `title.dialog`, every prose system owns the same element set, the document
-  heading ladder never inverts — all live in `validate()`. Changing one means checking the other.
+- **`validate()` is the gate, not the JSON Schema.** The schemas are editor-facing contracts (`$schema`
+  in each source gives completion + inline errors); the toolchain has no JSON Schema validator. Every
+  validator mirrors its schema's closed root and nested object shapes before enforcing policies Schema
+  cannot express. Referential integrity, mono-is-code-only, `title.card` == `title.dialog`, matching
+  prose element sets, the document heading ladder, and spacing step-name/value identity all live in
+  `validate()`. Changing either contract means checking the other.
 - **A generated file is never hand-edited.** The header of the emitted CSS says so, and `typography:check`
   enforces it.
 

@@ -823,6 +823,7 @@ test("remote closures reconcile chat history and cached file reopening", async (
 	await expect(chat).toHaveCount(0);
 	const history = page.getByTestId("chat-history");
 	await expect(history).toBeVisible();
+	await expect(history).toHaveCSS("width", "32px");
 	await waitForLayoutSettled(page);
 	await history.press("Enter");
 	await expect(page.getByTestId("closed-chat-row")).toHaveCount(1);

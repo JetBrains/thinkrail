@@ -27,7 +27,7 @@ export function WorkspaceChatHistory({
 				data-testid="chat-history"
 				aria-label="Reopen a closed chat"
 				title="View chat history"
-				className="flex w-28 shrink-0 items-center justify-center border-border-default border-l text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
+				className="flex w-32 shrink-0 items-center justify-center border-border-default border-l text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
 			>
 				<History className="size-16" />
 			</DropdownMenuTrigger>

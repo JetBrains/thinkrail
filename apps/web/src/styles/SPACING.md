@@ -68,8 +68,10 @@ moves layout. `tokens.css` (structure) holds no spacing; `spacing.json` is the o
 `styles/spacingUsage.test.ts` enforces the vocabulary at `p`/`m`/`gap` call sites (and on the rhythm
 properties of handwritten CSS), reading the allowed steps from `spacing.json` so the two cannot drift:
 
-- a spacing utility names a **canonical step** — `p-8`, `gap-4`; the retired t-shirt aliases (`p-xs`) and
-  any off-scale number (`p-6`, `py-1`, `gap-0.5`) are rejected;
+- a spacing utility names a **canonical step** — `p-8`, `gap-4`; the retired t-shirt aliases (`p-xs`),
+  unknown alphabetic suffixes (`p-bananas`) and any off-scale number (`p-6`, `py-1`, `gap-0.5`) are
+  rejected; only prefix-appropriate Tailwind keywords such as `ml-auto`, `gap-px`, and
+  `space-x-reverse` remain valid;
 - a length is **never a raw pixel value** at the call site (`py-[3px]`), and a step is **never re-spelled
   through an arbitrary value** (`p-[8px]`, `p-[var(--space-8)]`) — the numeric utility is the one way;
 - keyword suffixes that are not rhythm stay fine (`ml-auto`, `gap-px` hairline);
@@ -78,11 +80,12 @@ properties of handwritten CSS), reading the allowed steps from `spacing.json` so
   (an icon-aligned indent). These are layout constraints, deliberately outside the scale;
 - the scale is a defined primitive set, so a step is **not** required to have a consumer — the gate has no
   orphan/reachability check that could reject a reserved primitive (`32`/`40`/`64`);
-- handwritten `.css` under `styles/` is covered too: `gap` / `padding` / `margin` (and longhands) must
-  carry a `--space-*` token (or `0` / `auto`), never a raw `Npx`. Sizing, coordinates and
-  box-shadow/border offsets are geometry, not rhythm, and are not scanned; a documented non-rhythm
-  optical offset may stay raw via the guard's `CSS_RHYTHM_EXEMPT` allowlist (the `.review-region` rail
-  pair — `padding-left: 10px` cancelled by `margin-left: -10px`, zero layout shift).
+- handwritten CSS declarations anywhere under `src/` are covered, including CSS string literals in
+  TypeScript: `gap` / `padding` / `margin` (and longhands) must carry a `--space-*` token (or `0` /
+  `auto`), never a raw length in any CSS unit. Sizing, coordinates and box-shadow/border offsets are
+  geometry, not rhythm, and are not scanned; a documented non-rhythm optical offset may stay raw via
+  the guard's `CSS_RHYTHM_EXEMPT` allowlist (the `.review-region` rail pair — `padding-left: 10px`
+  cancelled by `margin-left: -10px`, zero layout shift).
 
 Like the colour and typography guards, this one exists because the drift is **invisible**: unlike an
 unknown colour utility (which Tailwind drops, rendering nothing), an off-scale length always renders, so

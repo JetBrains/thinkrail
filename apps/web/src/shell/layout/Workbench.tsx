@@ -703,7 +703,7 @@ function TabStrip({
 			<Popover open={overflowOpen} onOpenChange={setOverflowOpen}>
 				<PopoverTrigger
 					aria-label="Search open tabs"
-					className="flex w-28 shrink-0 items-center justify-center border-border-muted border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+					className="flex w-32 shrink-0 items-center justify-center border-border-muted border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 				>
 					<MoreHorizontal className="size-16" />
 				</PopoverTrigger>
@@ -1241,7 +1241,7 @@ function CenterGroupView({
 							aria-label="New chat"
 							title="New chat"
 							onClick={() => onNewChat(group.id)}
-							className="flex w-28 shrink-0 items-center justify-center text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+							className="flex w-32 shrink-0 items-center justify-center text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 						>
 							<MessageSquarePlus className="size-16" />
 						</button>
@@ -1512,7 +1512,7 @@ function SideGroupView({
 						event.preventDefault();
 						onFold();
 					}}
-					className="flex w-28 shrink-0 items-center justify-center border-border-muted border-b border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+					className="flex w-32 shrink-0 items-center justify-center border-border-muted border-b border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 				>
 					<ChevronDown
 						className={`size-14 transition-transform ${group.folded ? "-rotate-90" : ""}`}
@@ -1669,7 +1669,7 @@ function BottomAlignmentMenu({
 			<DropdownMenuTrigger
 				aria-label="Bottom panel alignment"
 				title={`Bottom panel alignment: ${BOTTOM_ALIGNMENT_LABELS[alignment]}`}
-				className="flex w-28 shrink-0 items-center justify-center border-border-muted border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+				className="flex w-32 shrink-0 items-center justify-center border-border-muted border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 			>
 				<MoreHorizontal className="size-16" />
 			</DropdownMenuTrigger>
@@ -1830,7 +1830,7 @@ function BottomGroupView({
 					aria-label="Fold bottom group"
 					aria-expanded="true"
 					onClick={onFold}
-					className="flex w-28 shrink-0 items-center justify-center border-border-muted border-b border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+					className="flex w-32 shrink-0 items-center justify-center border-border-muted border-b border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 				>
 					<ChevronLeft className="size-14" />
 				</button>
