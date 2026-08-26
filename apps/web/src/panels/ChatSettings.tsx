@@ -1,5 +1,5 @@
+import { RiCheckLine as Check } from "@remixicon/react";
 import type { ComposerGrowthLimit } from "@thinkrail/contracts";
-import { Check } from "lucide-react";
 import { cn } from "@/lib";
 import { toast, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
@@ -41,42 +41,46 @@ export function ChatSettings() {
 	};
 
 	return (
-		<section data-testid="settings-chat" className="flex flex-col gap-sm">
-			<div className="flex flex-col gap-xs">
+		<section data-testid="settings-chat" className="flex flex-col gap-8">
+			<div className="flex flex-col gap-4">
 				<h3 className="tr-title-section text-text-default">Composer growth</h3>
 				<p className="text-text-muted tr-text-metadata">
 					Choose how tall long drafts may grow before the message field scrolls. Your choice is
 					saved on the host and follows you across devices.
 				</p>
 			</div>
-			<div role="radiogroup" aria-label="Composer growth limit" className="flex flex-col gap-xs">
+			<div role="radiogroup" aria-label="Composer growth limit" className="flex flex-col gap-4">
 				{GROWTH_CHOICES.map(({ id, label, hint, description }) => {
 					const active = id === growthLimit;
 					return (
-						<button
+						<label
 							key={id}
-							type="button"
-							role="radio"
-							aria-checked={active}
 							data-testid={`composer-growth-${id}`}
 							data-active={active}
-							onClick={() => select(id)}
 							className={cn(
-								"flex items-center gap-sm rounded-[var(--radius-sm)] border px-md py-sm text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary",
+								"flex cursor-pointer items-center gap-8 rounded-[var(--radius-sm)] border px-12 py-8 text-left transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary",
 								active
 									? "border-primary-muted bg-clip-padding bg-primary-subtle"
 									: "border-border-default hover:bg-control-bg-hovered",
 							)}
 						>
+							<input
+								type="radio"
+								name="composer-growth-limit"
+								value={id}
+								checked={active}
+								onChange={() => select(id)}
+								className="sr-only"
+							/>
 							<span className="min-w-0 flex-1">
-								<span className="flex items-center gap-xs tr-title-compact text-text-default">
+								<span className="flex items-center gap-4 tr-title-compact text-text-default">
 									{label}
 									<span className="text-text-muted tr-text-metadata">{hint}</span>
 								</span>
 								<span className="block text-text-muted tr-text-metadata">{description}</span>
 							</span>
-							{active ? <Check className="size-4 shrink-0 text-primary" /> : null}
-						</button>
+							{active ? <Check className="size-16 shrink-0 text-primary" /> : null}
+						</label>
 					);
 				})}
 			</div>

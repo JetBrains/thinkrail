@@ -2,15 +2,15 @@ import { beforeEach, expect, test } from "bun:test";
 import {
 	DEFAULT_CONFIG,
 	type ExtUiRequest,
-	PiEvent,
-	Project,
-	SessionSummary,
-	SpecGraphNode,
-	WireModel,
-	Workspace,
-	WorkspaceFsChangedPayload,
-	WorkspaceLayoutDocument,
-	WorkspaceSkillChange,
+	type PiEvent,
+	type Project,
+	type SessionSummary,
+	type SpecGraphNode,
+	type WireModel,
+	type Workspace,
+	type WorkspaceFsChangedPayload,
+	type WorkspaceLayoutDocument,
+	type WorkspaceSkillChange,
 } from "@thinkrail/contracts";
 import type { ChatTurn } from "../chat/types";
 import { userText } from "../lib";

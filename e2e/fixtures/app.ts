@@ -17,6 +17,8 @@ import {
 } from "./paths";
 import { fixtureRepoHealthy, seedFixtureRepo } from "./repo";
 
+export const PHONE_VIEWPORT = { width: 390, height: 780 } as const;
+
 function removeTree(path: string): void {
 	rmSync(path, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
 }
@@ -24,6 +26,19 @@ function removeTree(path: string): void {
 export async function pressPlatformShortcut(page: Page, key: string): Promise<void> {
 	const apple = await page.evaluate(() => /Mac|iPhone|iPad|iPod/.test(navigator.platform ?? ""));
 	await page.keyboard.press(`${apple ? "Meta" : "Control"}+${key}`);
+}
+
+export async function hideAuxiliaryWorkbench(page: Page): Promise<void> {
+	for (const [testId, shortcut] of [
+		["left-stack", "B"],
+		["right-stack", "J"],
+		["bottom-panel", "Shift+J"],
+	] as const) {
+		const panel = page.getByTestId(testId);
+		if ((await panel.count()) === 0) continue;
+		await pressPlatformShortcut(page, shortcut);
+		await expect(panel).toHaveCount(0);
+	}
 }
 
 function resetState(): void {

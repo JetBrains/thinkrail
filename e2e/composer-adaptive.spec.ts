@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { openWorkspaceChat } from "./fixtures/app";
+import { hideAuxiliaryWorkbench, openWorkspaceChat, PHONE_VIEWPORT } from "./fixtures/app";
 
 async function box(locator: import("@playwright/test").Locator) {
 	const value = await locator.boundingBox();
@@ -26,7 +26,9 @@ test("idle composer is one line and unfolds only when the draft needs it", async
 
 	for (const control of [model, effort, history, send]) {
 		const controlBox = await box(control);
-		expect(Math.abs(controlBox.y + controlBox.height - (compactInput.y + compactInput.height))).toBeLessThanOrEqual(4);
+		expect(
+			Math.abs(controlBox.y + controlBox.height - (compactInput.y + compactInput.height)),
+		).toBeLessThanOrEqual(4);
 	}
 
 	await input.fill("Inspect the retry flow.\nThen add focused coverage.");
@@ -38,6 +40,34 @@ test("idle composer is one line and unfolds only when the draft needs it", async
 	await input.fill("Short follow-up");
 	await expect(composer).toHaveAttribute("data-expanded", "false");
 	expect((await box(input)).height).toBeLessThanOrEqual(40);
+});
+
+test("panel width changes expand and collapse the same textarea", async ({ page }) => {
+	await page.setViewportSize({ width: 1920, height: 900 });
+	await openWorkspaceChat(page);
+
+	const composer = page.getByTestId("chat-composer");
+	const input = page.getByTestId("chat-input");
+	const initialElement = await input.elementHandle();
+	if (!initialElement) throw new Error("composer textarea missing");
+	await input.fill(
+		"Keep the same focused draft and selection while a narrower mounted chat panel makes this line wrap.",
+	);
+	await expect(composer).toHaveAttribute("data-expanded", "false");
+	await input.evaluate((element) => element.setSelectionRange(18, 18));
+
+	await page.setViewportSize({ width: 700, height: 900 });
+	await expect(composer).toHaveAttribute("data-expanded", "true");
+	expect(await input.evaluate((element, initial) => element === initial, initialElement)).toBe(
+		true,
+	);
+	expect(await input.evaluate((element) => element.selectionStart)).toBe(18);
+
+	await page.setViewportSize({ width: 1920, height: 900 });
+	await expect(composer).toHaveAttribute("data-expanded", "false");
+	expect(await input.evaluate((element, initial) => element === initial, initialElement)).toBe(
+		true,
+	);
 });
 
 test("half-chat growth caps the editor shell and scrolls the textarea", async ({ page }) => {
@@ -90,7 +120,9 @@ test("chat growth setting persists and compact means six visual lines", async ({
 	const lines = await input.evaluate((element) => {
 		const styles = getComputedStyle(element);
 		return (
-			(element.clientHeight - Number.parseFloat(styles.paddingTop) - Number.parseFloat(styles.paddingBottom)) /
+			(element.clientHeight -
+				Number.parseFloat(styles.paddingTop) -
+				Number.parseFloat(styles.paddingBottom)) /
 			Number.parseFloat(styles.lineHeight)
 		);
 	});
@@ -105,10 +137,19 @@ test("chat growth setting persists and compact means six visual lines", async ({
 
 test("compact phone controls remain inside the chat viewport", async ({ page }) => {
 	await openWorkspaceChat(page);
-	await page.setViewportSize({ width: 320, height: 720 });
+	await hideAuxiliaryWorkbench(page);
+	await page.setViewportSize(PHONE_VIEWPORT);
 
 	const composer = page.getByTestId("chat-composer");
 	await expect(composer).toHaveAttribute("data-expanded", "false");
+	const shellBox = await box(page.getByTestId("chat-composer-shell"));
+	const idleTextMetrics = await page.getByTestId("chat-input").evaluate((element) => ({
+		clientHeight: element.clientHeight,
+		scrollHeight: element.scrollHeight,
+	}));
+	expect(idleTextMetrics.scrollHeight).toBeLessThanOrEqual(idleTextMetrics.clientHeight);
+	expect(shellBox.x).toBeGreaterThanOrEqual(0);
+	expect(shellBox.x + shellBox.width).toBeLessThanOrEqual(PHONE_VIEWPORT.width);
 	for (const control of [
 		page.getByTestId("model-selector"),
 		page.getByTestId("thinking-selector"),
@@ -117,7 +158,7 @@ test("compact phone controls remain inside the chat viewport", async ({ page }) 
 	]) {
 		const controlBox = await box(control);
 		expect(controlBox.x).toBeGreaterThanOrEqual(0);
-		expect(controlBox.x + controlBox.width).toBeLessThanOrEqual(320);
+		expect(controlBox.x + controlBox.width).toBeLessThanOrEqual(PHONE_VIEWPORT.width);
 	}
 	expect((await box(page.getByTestId("chat-input"))).height).toBeLessThanOrEqual(40);
 });

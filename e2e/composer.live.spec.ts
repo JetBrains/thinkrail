@@ -1,5 +1,11 @@
 import { expect, test } from "@playwright/test";
-import { createWorkspaceViaDialog, openFixtureProject, worktreeRows } from "./fixtures/app";
+import {
+	createWorkspaceViaDialog,
+	hideAuxiliaryWorkbench,
+	openFixtureProject,
+	PHONE_VIEWPORT,
+	worktreeRows,
+} from "./fixtures/app";
 
 async function openChat(page: import("@playwright/test").Page): Promise<void> {
 	await openFixtureProject(page);
@@ -19,6 +25,8 @@ test("streaming unfolds the one-line draft into a complete action rail", {
 }, async ({ page }) => {
 	test.setTimeout(90_000);
 	await openChat(page);
+	await hideAuxiliaryWorkbench(page);
+	await page.setViewportSize(PHONE_VIEWPORT);
 
 	const input = page.getByTestId("chat-input");
 	await input.fill("Use the bash tool to run `sleep 8`, then reply with done.");
@@ -33,6 +41,21 @@ test("streaming unfolds the one-line draft into a complete action rail", {
 	if (!inputBox || !modelBox) throw new Error("Composer layout boxes were not measurable");
 	expect(inputBox.height).toBeLessThanOrEqual(40);
 	expect(modelBox.y).toBeGreaterThanOrEqual(inputBox.y + inputBox.height);
+	const shellBox = await page.getByTestId("chat-composer-shell").boundingBox();
+	if (!shellBox) throw new Error("Composer shell was not measurable");
+	expect(shellBox.x).toBeGreaterThanOrEqual(0);
+	expect(shellBox.x + shellBox.width).toBeLessThanOrEqual(PHONE_VIEWPORT.width);
+	for (const control of [
+		page.getByTestId("history-open"),
+		page.getByTestId("chat-abort"),
+		page.getByTestId("send-menu"),
+		page.getByTestId("chat-send"),
+	]) {
+		const controlBox = await control.boundingBox();
+		if (!controlBox) throw new Error("Streaming composer control was not measurable");
+		expect(controlBox.x).toBeGreaterThanOrEqual(0);
+		expect(controlBox.x + controlBox.width).toBeLessThanOrEqual(PHONE_VIEWPORT.width);
+	}
 
 	await page.getByTestId("chat-abort").click();
 	await expect(page.getByTestId("chat-abort")).toBeHidden();
