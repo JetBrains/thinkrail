@@ -106,8 +106,29 @@ async function acquireOrAbort(
 	return winner;
 }
 
-function lastAssistant(session: AgentSession): AssistantMessage | undefined {
-	for (let i = session.messages.length - 1; i >= 0; i--) {
+interface RunBaseline {
+	messageCount: number;
+	input: number;
+	output: number;
+	cacheRead: number;
+	cacheWrite: number;
+	cost: number;
+}
+
+function baselineOf(session: AgentSession): RunBaseline {
+	const stats = session.getSessionStats();
+	return {
+		messageCount: session.messages.length,
+		input: stats.tokens.input,
+		output: stats.tokens.output,
+		cacheRead: stats.tokens.cacheRead,
+		cacheWrite: stats.tokens.cacheWrite,
+		cost: stats.cost,
+	};
+}
+
+function lastAssistant(session: AgentSession, fromIndex: number): AssistantMessage | undefined {
+	for (let i = session.messages.length - 1; i >= fromIndex; i--) {
 		const message = session.messages[i];
 		if (message?.role === "assistant") return message as AssistantMessage;
 	}
@@ -134,12 +155,13 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 	const semaphores = new Map<string, Semaphore>();
 	const lifecycleListeners = new Set<(e: LifecycleEvent) => void>();
 
-	let runtimePromise: Promise<ModelRuntime> | undefined;
+	let selfCreatedRuntime: Promise<ModelRuntime> | undefined;
 	function getRuntime(): Promise<ModelRuntime> {
-		runtimePromise ??= bindings.modelRuntime
-			? Promise.resolve(bindings.modelRuntime)
-			: ModelRuntime.create();
-		return runtimePromise;
+		const bound = bindings.modelRuntime;
+		if (typeof bound === "function") return Promise.resolve(bound());
+		if (bound) return Promise.resolve(bound);
+		selfCreatedRuntime ??= ModelRuntime.create();
+		return selfCreatedRuntime;
 	}
 
 	function semaphoreFor(parentSessionId: string): Semaphore {
@@ -163,6 +185,7 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 		turns: number,
 		activity: string | undefined,
 		startedAt: number,
+		baseline: RunBaseline,
 	): DelegationRunDetails {
 		const { session, record } = entry;
 		const stats = session.getSessionStats();
@@ -175,11 +198,11 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 			status,
 			...(session.model ? { model: `${session.model.provider}/${session.model.id}` } : {}),
 			usage: {
-				input: stats.tokens.input,
-				output: stats.tokens.output,
-				cacheRead: stats.tokens.cacheRead,
-				cacheWrite: stats.tokens.cacheWrite,
-				cost: stats.cost,
+				input: stats.tokens.input - baseline.input,
+				output: stats.tokens.output - baseline.output,
+				cacheRead: stats.tokens.cacheRead - baseline.cacheRead,
+				cacheWrite: stats.tokens.cacheWrite - baseline.cacheWrite,
+				cost: stats.cost - baseline.cost,
 				turns,
 				contextTokens: contextUsage?.tokens ?? 0,
 			},
@@ -188,7 +211,12 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 		};
 	}
 
-	async function driveRun(entry: ChildEntry, task: string, opts: RunOptions): Promise<RunOutcome> {
+	async function driveRun(
+		entry: ChildEntry,
+		task: string,
+		opts: RunOptions,
+		baseline: RunBaseline,
+	): Promise<RunOutcome> {
 		const { session } = entry;
 		const startedAt = Date.now();
 		const cap = opts.maxTurns;
@@ -198,7 +226,7 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 		let abortRequested = false;
 
 		const pushUpdate = (status: RunLifecycleStatus) => {
-			const details = buildDetails(entry, task, status, turns, activity, startedAt);
+			const details = buildDetails(entry, task, status, turns, activity, startedAt, baseline);
 			if (entry.snapshot?.task === task) entry.snapshot = { ...entry.snapshot, status, details };
 			opts.onUpdate?.(details);
 		};
@@ -242,7 +270,7 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 			session.clearQueue();
 		}
 
-		const last = lastAssistant(session);
+		const last = lastAssistant(session, baseline.messageCount);
 		let status: RunStatus;
 		let errorMessage = thrownMessage;
 		if (abortRequested || last?.stopReason === "aborted") {
@@ -254,7 +282,7 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 			status = "completed";
 		}
 		const finalText = textOf(last);
-		const details = buildDetails(entry, task, status, turns, activity, startedAt);
+		const details = buildDetails(entry, task, status, turns, activity, startedAt, baseline);
 		return {
 			status,
 			...(finalText !== undefined ? { finalText } : {}),
@@ -275,10 +303,11 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 			);
 		}
 		const startedAt = Date.now();
+		const baseline = baselineOf(entry.session);
 		entry.snapshot = {
 			status: "queued",
 			task,
-			details: buildDetails(entry, task, "queued", 0, undefined, startedAt),
+			details: buildDetails(entry, task, "queued", 0, undefined, startedAt, baseline),
 			collected: false,
 		};
 		emit(
@@ -295,7 +324,7 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 			if (release === undefined || entry.disposed || opts.signal?.aborted) {
 				outcome = {
 					status: "aborted",
-					details: buildDetails(entry, task, "aborted", 0, undefined, startedAt),
+					details: buildDetails(entry, task, "aborted", 0, undefined, startedAt, baseline),
 					errorMessage: entry.disposed ? "disposed before start" : "aborted before start",
 				};
 			} else {
@@ -308,7 +337,7 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 					},
 					entry,
 				);
-				outcome = await driveRun(entry, task, opts);
+				outcome = await driveRun(entry, task, opts, baseline);
 			}
 			entry.snapshot = {
 				status: outcome.status,

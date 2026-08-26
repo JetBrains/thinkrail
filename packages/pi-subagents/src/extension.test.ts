@@ -252,6 +252,16 @@ test("a foreground error outcome surfaces as a tool error carrying the reason", 
 
 	const text = lastToolResultText();
 	expect(text).toContain("failed: boom");
+
+	const child = service.childrenOf(parent.sessionId).at(-1);
+	if (!child) throw new Error("no child spawned");
+	const result = parent.messages.filter((m) => m.role === "toolResult").at(-1) as {
+		isError: boolean;
+		details?: { childSessionId?: string; status?: string };
+	};
+	expect(result.isError).toBe(true);
+	expect(result.details?.childSessionId).toBe(child.sessionId);
+	expect(result.details?.status).toBe("error");
 	await service.disposeChildrenOf(parent.sessionId);
 });
 

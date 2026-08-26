@@ -264,6 +264,51 @@ test("a scripted provider error becomes an error OUTCOME, not a rejection", asyn
 	}
 });
 
+test("sequential runs report per-run finalText and usage deltas, never cumulative totals", async () => {
+	const longAnswer = "FIRST_LONG_ANSWER ".repeat(20).trim();
+	faux.setResponses([fauxAssistantMessage(longAnswer), fauxAssistantMessage("TINY")]);
+	const child = await service.createChild(subagentSpec());
+	try {
+		const first = await child.runQueued("First task.");
+		expect(first.status).toBe("completed");
+		expect(first.finalText).toBe(longAnswer);
+		expect(first.details.usage.output).toBeGreaterThan(0);
+
+		const second = await child.runQueued("Second task.");
+		expect(second.status).toBe("completed");
+		expect(second.finalText).toBe("TINY");
+		expect(second.details.usage.turns).toBe(1);
+		expect(second.details.usage.output).toBeGreaterThan(0);
+		expect(second.details.usage.output).toBeLessThan(first.details.usage.output);
+	} finally {
+		await child.dispose();
+	}
+});
+
+test("a modelRuntime provider is resolved per createChild, never captured at service creation", async () => {
+	let resolves = 0;
+	const generational = createDelegationService({
+		resolveParent: (id) =>
+			id === parent.sessionId
+				? { cwd: parentCwd, model: parent.model, thinkingLevel: parent.thinkingLevel }
+				: undefined,
+		delegationRoot,
+		scope: "ws-live-runtime",
+		modelRuntime: () => {
+			resolves++;
+			return runtime;
+		},
+	});
+	expect(resolves).toBe(0);
+	try {
+		await generational.createChild(subagentSpec());
+		await generational.createChild(subagentSpec());
+		expect(resolves).toBe(2);
+	} finally {
+		await generational.disposeChildrenOf(parent.sessionId);
+	}
+});
+
 test("one run at a time per child: a second runQueued rejects already-running", async () => {
 	faux.setResponses([fauxAssistantMessage("SLOW_RESULT")]);
 	const child = await service.createChild(subagentSpec());

@@ -29,7 +29,12 @@ lands (the enumeration: scope & readiness rules below).
 - `DelegationBindings` — everything host-specific: `resolveParent` (required; returns
   `ParentContext = Pick<ExtensionContext, "cwd" | "model" | "thinkingLevel">` — ThinkRail projects
   the manager's live session, pure pi passes the extension's own `ctx`), `delegationRoot`, `scope`,
-  `modelRuntime`, `maxConcurrentPerParent`, `childExtensionFactories` (the curated set a child MAY
+  `modelRuntime` (a `ModelRuntime` value **or a live provider** `() => ModelRuntime |
+  Promise<ModelRuntime>`, resolved **per `createChild`**: an embedder's runtime can be generational
+  — ThinkRail swaps runtime generations on Central connect/disconnect — and a value captured at
+  service creation would pin every later child to the first generation while new parent chats move
+  on (PR #303 review finding); absent → the service self-creates one runtime and caches it for its
+  own lifetime), `maxConcurrentPerParent`, `childExtensionFactories` (the curated set a child MAY
   load — decision #25).
 - Storage helpers: `defaultDelegationRoot` / `delegationSessionDir` / `deriveChildSessionFile`
   (post-restart transcript reads) / `DEFAULT_SCOPE`.
@@ -96,6 +101,7 @@ stateDiagram-v2
 | Mechanism | Behavior |
 |---|---|
 | Foreground | `await child.runQueued(task)`. pi executes a batch's tool calls concurrently (verified: `pi-agent-core` `executeToolCallsParallel`), so N `Agent` calls = N children in flight — no `tasks[]`/chain DSL needed. |
+| Per-run outcome | A `RunOutcome`'s `finalText` and `details.usage` belong to **that run alone**: the run captures a baseline (message count + session stats) before `prompt()`, derives `finalText` only from messages the run added, and reports usage/cost/token **deltas** against the baseline — never the child session's cumulative totals. A reusable child running sequential tasks would otherwise return the previous run's text after a preflight failure and double-count usage (PR #302 review finding). `contextTokens` stays a point-in-time snapshot by design. |
 | Concurrency | Semaphore **per parent session**, default 4; FIFO. Why: the model decides how many spawns to emit — each child is a full LLM session, so unbounded spawn multiplies token spend, provider 429 pressure, and load on the one shared event loop (no crash isolation). Resource governance, not correctness. Host-wide ceiling: config follow-up. |
 | Background | Don't await the promise. Completion → `run-terminal` event; the subagent tool layer additionally injects a `subagent-completion` custom message into the parent. |
 | Result collection | Registry snapshot via `findChild(id)`: terminal → final output + details, marks `collected`; running → status snapshot (not an error); unknown id → error naming the restart-loss case + the derived transcript path. |

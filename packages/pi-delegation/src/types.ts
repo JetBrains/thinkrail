@@ -156,7 +156,7 @@ export interface DelegationBindings {
 	resolveParent: (sessionId: string) => ParentContext | undefined;
 	delegationRoot?: string;
 	scope?: string;
-	modelRuntime?: ModelRuntime;
+	modelRuntime?: ModelRuntime | (() => ModelRuntime | Promise<ModelRuntime>);
 	maxConcurrentPerParent?: number;
 	childExtensionFactories?: ExtensionFactory[];
 }

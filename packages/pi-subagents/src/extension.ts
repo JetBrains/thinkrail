@@ -7,6 +7,7 @@ import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import {
 	createDelegationService,
 	DEFAULT_SCOPE,
+	type DelegationRunDetails,
 	type DelegationService,
 	defaultDelegationRoot,
 	deriveChildSessionFile,
@@ -62,6 +63,14 @@ export function createSubagentsExtension(
 		const delegationRoot = options.delegationRoot ?? defaultDelegationRoot();
 		const scope = options.scope ?? DEFAULT_SCOPE;
 
+		const erroredRunDetails = new Map<string, DelegationRunDetails>();
+		pi.on("tool_result", (event) => {
+			const details = erroredRunDetails.get(event.toolCallId);
+			if (details === undefined) return undefined;
+			erroredRunDetails.delete(event.toolCallId);
+			return event.isError ? { details } : undefined;
+		});
+
 		let latestCtx: ExtensionContext | undefined;
 		let fallbackService: DelegationService | undefined;
 		function serviceFor(ctx: ExtensionContext): DelegationService {
@@ -106,7 +115,7 @@ ${known}`,
 						}),
 					),
 				}),
-				async execute(_toolCallId, params, signal, onUpdate, ctx) {
+				async execute(toolCallId, params, signal, onUpdate, ctx) {
 					const definitions = discoverFor(ctx);
 					const definition = definitions.find((d) => d.name === params.subagent_type);
 					if (!definition) {
@@ -169,6 +178,7 @@ ${known}`,
 
 					const outcome = await run;
 					if (outcome.status === "error") {
+						erroredRunDetails.set(toolCallId, outcome.details);
 						throw new Error(
 							`Subagent "${definition.name}" (${child.sessionId}) failed: ${boundedText(outcome)}`,
 						);
