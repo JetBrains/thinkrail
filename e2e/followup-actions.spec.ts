@@ -44,6 +44,5 @@ test("a follow-up chip fills the composer draft without sending, and hides once 
 		"Use the recommended option and continue with the implementation.",
 	);
 	await expect(composer).toBeFocused();
-	// The row hides once a draft exists (draft-protection: a chip only replaces an empty draft).
 	await expect(row).toHaveCount(0);
 });
