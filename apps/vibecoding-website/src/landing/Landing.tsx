@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { CallToAction } from "./CallToAction";
 import { Capabilities } from "./Capabilities";
 import { ChatDemo } from "./ChatDemo";
@@ -10,6 +11,10 @@ import { SiteHeader } from "./SiteHeader";
 import { Isolation, SpecFirst } from "./Workflow";
 
 export function Landing() {
+	useEffect(() => {
+		document.documentElement.dataset.landingReady = "true";
+	}, []);
+
 	return (
 		<div className="min-h-screen bg-background">
 			<SiteHeader />

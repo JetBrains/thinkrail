@@ -10,6 +10,9 @@ editor, and the wire.
 **Website:** [thinkrail.ai](https://thinkrail.ai/) — a landing
 page that *is* the IDE (see [`apps/website`](apps/website)).
 
+**Vibecoding website:** [vibecoding.thinkrail.ai](https://vibecoding.thinkrail.ai/) — the
+vibecoder-focused landing experience (see [`apps/vibecoding-website`](apps/vibecoding-website)).
+
 **V1 is a Worktree IDE:** open a git repo as a project, spin up workspaces as `git worktree`s (each its
 own branch and cwd), and work across a tabbed Monaco editor, git Changes view, terminals, a read-only
 spec-graph viewer, and multiple concurrent `pi` chat sessions — all scoped to the active worktree.

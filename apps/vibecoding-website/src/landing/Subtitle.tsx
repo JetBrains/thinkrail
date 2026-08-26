@@ -1,20 +1,17 @@
-import type { CSSProperties, ReactNode } from "react";
+import type { ReactNode } from "react";
 
 export function Subtitle({
-  children,
-  className = "",
-  style,
+	children,
+	className = "",
 }: {
-  children: ReactNode;
-  className?: string;
-  style?: CSSProperties;
+	children: ReactNode;
+	className?: string;
 }) {
-  return (
-    <p
-      className={`max-w-[600px] text-[1.08rem] leading-relaxed font-[350] text-text-muted whitespace-pre-line ${className}`}
-      style={style}
-    >
-      {children}
-    </p>
-  );
+	return (
+		<p
+			className={`max-w-[600px] text-[1.08rem] leading-relaxed font-[350] whitespace-pre-line text-text-muted ${className}`}
+		>
+			{children}
+		</p>
+	);
 }
