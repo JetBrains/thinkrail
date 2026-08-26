@@ -1,5 +1,12 @@
-import { CircleAlert, Info, Lightbulb, OctagonAlert, TriangleAlert } from "lucide-react";
-import type { ComponentType, ReactNode } from "react";
+import {
+	RiErrorWarningLine as CircleAlert,
+	RiInformationLine as Info,
+	RiLightbulbLine as Lightbulb,
+	RiAlarmWarningLine as OctagonAlert,
+	type RemixiconComponentType,
+	RiAlertLine as TriangleAlert,
+} from "@remixicon/react";
+import type { ReactNode } from "react";
 import type { Components } from "react-markdown";
 
 export type AlertVariant = "note" | "tip" | "important" | "warning" | "caution";
@@ -54,7 +61,7 @@ const ALERTS: Record<
 	AlertVariant,
 	{
 		label: string;
-		icon: ComponentType<{ className?: string }>;
+		icon: RemixiconComponentType;
 		border: string;
 		bg: string;
 		text: string;
@@ -115,10 +122,10 @@ function AlertCallout({
 		<div
 			data-testid="md-alert"
 			data-variant={isVariant(raw) ? raw : "note"}
-			className={`my-md rounded-r-[var(--radius-sm)] border-l-2 py-sm pr-md pl-md text-text-default ${cfg.border} ${cfg.bg} [&>*:last-child]:mb-0 [&_p]:my-1`}
+			className={`my-12 rounded-r-[var(--radius-sm)] border-l-2 py-8 pr-12 pl-12 text-text-default ${cfg.border} ${cfg.bg} [&>*:last-child]:mb-0 [&_p]:my-4`}
 		>
-			<p className={`tr-title-card mb-xs flex items-center gap-xs ${cfg.text}`}>
-				<Icon className="size-4 shrink-0" />
+			<p className={`tr-title-card mb-4 flex items-center gap-4 ${cfg.text}`}>
+				<Icon className="size-16 shrink-0" />
 				{cfg.label}
 			</p>
 			{children}

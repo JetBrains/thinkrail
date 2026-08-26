@@ -1,4 +1,8 @@
-import { Minus, Plus, RotateCcw } from "lucide-react";
+import {
+	RiSubtractLine as Minus,
+	RiAddLine as Plus,
+	RiArrowGoBackLine as RotateCcw,
+} from "@remixicon/react";
 import type * as React from "react";
 import { useEffect, useRef, useState } from "react";
 
@@ -55,7 +59,7 @@ export function PanZoomView({ svg }: { svg: string }) {
 	};
 
 	const btn =
-		"rounded-[var(--radius-sm)] p-1 text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary";
+		"rounded-[var(--radius-sm)] p-4 text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary";
 
 	return (
 		<div className="relative min-h-0 flex-1">
@@ -71,7 +75,7 @@ export function PanZoomView({ svg }: { svg: string }) {
 				// biome-ignore lint/security/noDangerouslySetInnerHtml: mermaid renders agent-provided source with securityLevel "strict"
 				dangerouslySetInnerHTML={{ __html: svg }}
 			/>
-			<div className="absolute right-sm bottom-sm flex items-center gap-xs rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg p-1 tr-text-metadata shadow-[var(--shadow-lg)]">
+			<div className="absolute right-8 bottom-8 flex items-center gap-4 rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg p-4 tr-text-metadata shadow-[var(--shadow-lg)]">
 				<button
 					type="button"
 					aria-label="Zoom out"
@@ -79,7 +83,7 @@ export function PanZoomView({ svg }: { svg: string }) {
 					onClick={() => setScale((s) => clamp(s / 1.25))}
 					className={btn}
 				>
-					<Minus className="size-4" />
+					<Minus className="size-16" />
 				</button>
 				<span
 					data-testid="mermaid-zoom-level"
@@ -94,7 +98,7 @@ export function PanZoomView({ svg }: { svg: string }) {
 					onClick={() => setScale((s) => clamp(s * 1.25))}
 					className={btn}
 				>
-					<Plus className="size-4" />
+					<Plus className="size-16" />
 				</button>
 				<button
 					type="button"
@@ -103,7 +107,7 @@ export function PanZoomView({ svg }: { svg: string }) {
 					onClick={reset}
 					className={btn}
 				>
-					<RotateCcw className="size-3.5" />
+					<RotateCcw className="size-14" />
 				</button>
 			</div>
 		</div>

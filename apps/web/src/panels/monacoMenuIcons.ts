@@ -1,15 +1,15 @@
 import {
-	ArrowUpRight,
-	Braces,
-	ClipboardPaste,
-	Command,
-	Copy,
-	Eye,
-	Link2,
-	type LucideIcon,
-	MessageSquarePlus,
-	Scissors,
-} from "lucide-react";
+	RiArrowRightUpLine as ArrowUpRight,
+	RiBracesLine as Braces,
+	RiClipboardLine as ClipboardPaste,
+	RiCommandLine as Command,
+	RiFileCopyLine as Copy,
+	RiEyeLine as Eye,
+	RiLinkM as Link2,
+	type RemixiconComponentType as LucideIcon,
+	RiChatNewLine as MessageSquarePlus,
+	RiScissorsLine as Scissors,
+} from "@remixicon/react";
 import type * as monaco from "monaco-editor";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -29,7 +29,7 @@ const ICONS = new Map<string, string>([
 ]);
 
 const MENU_CSS =
-	".editor-menu-icon{display:inline-flex;align-items:center;justify-content:center;width:14px;margin:0 8px 0 2px;flex-shrink:0;color:inherit}";
+	".editor-menu-icon{display:inline-flex;align-items:center;justify-content:center;width:14px;margin:0 var(--space-8) 0 var(--space-2);flex-shrink:0;color:inherit}";
 
 function menuRoots(): (Document | ShadowRoot)[] {
 	const roots: (Document | ShadowRoot)[] = [document];

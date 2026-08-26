@@ -1,0 +1,40 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "https://thinkrail.dev/schemas/spacing.json",
+	"title": "ThinkRail spacing scale",
+	"description": "The canonical numeric layout-spacing scale. The single source for padding, margin and gap lengths; a step name IS its pixel value. Independent of typography, colour and radius. See SPACING.md.",
+	"type": "object",
+	"additionalProperties": false,
+	"required": ["metadata", "steps"],
+	"properties": {
+		"$schema": {
+			"type": "string"
+		},
+		"metadata": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["version"],
+			"properties": {
+				"version": {
+					"type": "string",
+					"pattern": "^\\d+\\.\\d+\\.\\d+$"
+				},
+				"note": {
+					"type": "string"
+				}
+			}
+		},
+		"steps": {
+			"description": "step name → CSS length. The step name is the canonical integer pixel value with no leading zeroes: \"8\" must be \"8px\".",
+			"type": "object",
+			"minProperties": 1,
+			"additionalProperties": {
+				"type": "string",
+				"pattern": "^[0-9]+px$"
+			},
+			"propertyNames": {
+				"pattern": "^(?:0|[1-9][0-9]*)$"
+			}
+		}
+	}
+}

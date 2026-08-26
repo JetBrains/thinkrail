@@ -26,7 +26,7 @@ export function Toaster() {
 					data-testid="toast"
 					data-variant={t.variant}
 				>
-					<div className="flex min-w-0 flex-1 flex-col gap-xs">
+					<div className="flex min-w-0 flex-1 flex-col gap-4">
 						{t.title ? <ToastTitle>{t.title}</ToastTitle> : null}
 						<ToastDescription>{t.message}</ToastDescription>
 					</div>

@@ -1,0 +1,244 @@
+@import "@fontsource-variable/geist";
+@import "@fontsource-variable/jetbrains-mono";
+@import "@fontsource-variable/orbitron";
+@import "tailwindcss" source(none);
+@import "tw-animate-css";
+@source "../src";
+
+@theme inline {
+	--radius-sm: 4px;
+	--radius-md: 4px;
+	--radius-lg: 4px;
+	--radius-xl: 4px;
+	--radius-2xl: 4px;
+	--radius-3xl: 4px;
+	--radius-4xl: 4px;
+
+	--color-background: var(--background);
+	--color-foreground: var(--foreground);
+	--color-primary: var(--primary);
+	--color-primary-foreground: var(--primary-foreground);
+	--color-border: var(--border);
+	--color-ring: var(--ring);
+	--color-warn: var(--warn);
+	--color-text-strong: var(--text-strong);
+	--color-text-default: var(--text-default);
+	--color-text-muted: var(--text-muted);
+	--color-text-subtle: var(--text-subtle);
+	--color-text-disabled: var(--text-disabled);
+	--color-border-strong: var(--border-strong);
+	--color-border-default: var(--border-default);
+	--color-border-muted: var(--border-muted);
+	--color-container-card-bg: var(--container-card-bg);
+	--color-container-header-bg: var(--container-header-bg);
+	--color-container-terminal-bg: var(--container-terminal-bg);
+	--color-container-workspace-bg: var(--container-workspace-bg);
+	--color-control-bg: var(--control-bg);
+	--color-control-bg-hovered: var(--control-bg-hovered);
+	--color-control-border-active: var(--control-border-active);
+	--color-control-border-default: var(--control-border-default);
+	--color-container-overlay-bg: var(--container-overlay-bg);
+	--color-primary-subtle: var(--primary-subtle);
+	--color-primary-soft: var(--primary-soft);
+	--color-primary-muted: var(--primary-muted);
+	--color-primary-strong: var(--primary-strong);
+
+	--font-display:
+		"Orbitron Variable", "Orbitron", "Geist Variable", "Geist", ui-sans-serif, system-ui, sans-serif;
+	--font-sans: "Geist Variable", "Geist", ui-sans-serif, system-ui, sans-serif;
+	--font-mono: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+:root {
+	--zinc-0: oklch(1 0 0);
+	--zinc-50: oklch(0.985 0 0);
+	--zinc-100: oklch(0.967 0.001 286.4);
+	--zinc-200: oklch(0.92 0.004 286.3);
+	--zinc-350: oklch(0.791 0.01 286.2);
+	--zinc-500: oklch(0.552 0.014 285.9);
+	--zinc-600: oklch(0.442 0.015 285.8);
+	--zinc-700: oklch(0.37 0.012 285.8);
+	--zinc-800: oklch(0.274 0.005 286);
+	--zinc-900: oklch(0.21 0.006 285.9);
+	--zinc-925: oklch(0.174 0.006 285.7);
+	--zinc-950: oklch(0.141 0.004 285.8);
+
+	--text-strong: var(--zinc-50);
+	--text-default: var(--zinc-100);
+	--text-muted: var(--zinc-350);
+	--text-subtle: var(--zinc-500);
+	--text-disabled: var(--zinc-600);
+	--border-strong: var(--zinc-200);
+	--border-default: var(--zinc-700);
+	--border-muted: var(--zinc-800);
+	--container-card-bg: var(--zinc-800);
+	--container-header-bg: var(--zinc-900);
+	--container-terminal-bg: var(--zinc-925);
+	--container-workspace-bg: var(--zinc-950);
+	--control-bg: var(--zinc-900);
+	--control-bg-hovered: var(--zinc-800);
+	--control-border-active: var(--zinc-700);
+	--control-border-default: var(--zinc-800);
+	--primary: oklch(0.899 0.233 136.7);
+	--primary-subtle: color-mix(in srgb, var(--primary) 10%, transparent);
+	--primary-soft: color-mix(in srgb, var(--primary) 20%, transparent);
+	--primary-muted: color-mix(in srgb, var(--primary) 40%, transparent);
+	--primary-strong: color-mix(in srgb, var(--primary) 60%, transparent);
+	--primary-foreground: var(--zinc-950);
+	--container-overlay-bg: color-mix(in srgb, var(--zinc-950) 90%, transparent);
+	--warn: oklch(0.85 0.15 90);
+	--background: var(--zinc-950);
+	--foreground: var(--text-default);
+	--border: var(--border-default);
+	--ring: var(--control-border-active);
+}
+
+@layer base {
+	* {
+		border-color: var(--color-border);
+	}
+
+	body {
+		background-color: var(--color-background);
+		color: var(--color-foreground);
+		font-family: var(--font-sans);
+		-webkit-font-smoothing: antialiased;
+	}
+}
+
+@utility label-mono {
+	font-family: var(--font-sans);
+	font-size: 0.6875rem;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	color: var(--color-text-muted);
+}
+
+.label-mono::before {
+	content: "// ";
+}
+
+.reveal {
+	opacity: 1;
+	transform: none;
+}
+
+html[data-enhanced="true"] .reveal {
+	opacity: 0;
+	transform: translateY(16px);
+	transition:
+		opacity 0.7s ease,
+		transform 0.7s ease;
+}
+
+html[data-enhanced="true"] .reveal[data-visible="true"] {
+	opacity: 1;
+	transform: none;
+}
+
+.reveal[data-delay="60"] {
+	transition-delay: 60ms;
+}
+
+.reveal[data-delay="70"] {
+	transition-delay: 70ms;
+}
+
+.reveal[data-delay="80"] {
+	transition-delay: 80ms;
+}
+
+.reveal[data-delay="90"] {
+	transition-delay: 90ms;
+}
+
+.reveal[data-delay="140"] {
+	transition-delay: 140ms;
+}
+
+.reveal[data-delay="200"] {
+	transition-delay: 200ms;
+}
+
+.reveal[data-delay="210"] {
+	transition-delay: 210ms;
+}
+
+.reveal[data-delay="260"] {
+	transition-delay: 260ms;
+}
+
+.reveal[data-delay="300"] {
+	transition-delay: 300ms;
+}
+
+.subtitle-wide {
+	max-width: 650px;
+}
+
+.orchestration-outer {
+	height: var(--diagram-height, auto);
+}
+
+.orchestration-canvas {
+	transform: scale(var(--diagram-scale, 1));
+}
+
+.orchestration-progress-x {
+	transform: scaleX(var(--orchestration-progress, 0));
+}
+
+.orchestration-progress-y {
+	transform: scaleY(var(--orchestration-progress, 0));
+}
+
+.font-display {
+	font-family: var(--font-display);
+	letter-spacing: 1.5px;
+}
+
+@theme {
+	--text-xs: 0.9rem;
+	--text-sm: 1.05rem;
+	--text-base: 1.2rem;
+	--text-lg: 1.35rem;
+	--text-xl: 1.5rem;
+	--text-2xl: 1.8rem;
+	--text-3xl: 2.25rem;
+}
+
+@keyframes send-glow-pulse {
+	0%,
+	100% {
+		box-shadow:
+			0 0 10px 2px color-mix(in oklab, var(--primary) 55%, transparent),
+			0 0 22px 8px color-mix(in oklab, var(--primary) 30%, transparent);
+	}
+
+	50% {
+		box-shadow:
+			0 0 18px 5px color-mix(in oklab, var(--primary) 80%, transparent),
+			0 0 38px 14px color-mix(in oklab, var(--primary) 45%, transparent);
+	}
+}
+
+.send-glow {
+	animation: send-glow-pulse 1.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.animate-in {
+		animation: none;
+	}
+
+	html[data-enhanced="true"] .reveal {
+		opacity: 1;
+		transform: none;
+		transition: none;
+	}
+
+	.send-glow {
+		animation: none;
+		box-shadow: 0 0 18px 6px color-mix(in oklab, var(--primary) 55%, transparent);
+	}
+}

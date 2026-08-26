@@ -1,4 +1,4 @@
-import { TriangleAlert } from "lucide-react";
+import { RiAlertLine as TriangleAlert } from "@remixicon/react";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -50,8 +50,10 @@ export function ConfirmDialog({
 				}
 			>
 				<DialogHeader>
-					<div className="flex items-center gap-sm">
-						{destructive ? <TriangleAlert className="size-4 shrink-0 text-feedback-error" /> : null}
+					<div className="flex items-center gap-8">
+						{destructive ? (
+							<TriangleAlert className="size-16 shrink-0 text-feedback-error" />
+						) : null}
 						<DialogTitle>{title}</DialogTitle>
 					</div>
 					{description ? <DialogDescription>{description}</DialogDescription> : null}

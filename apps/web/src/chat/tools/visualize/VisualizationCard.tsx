@@ -8,8 +8,8 @@ export function VisualizationCard(props: ToolRenderProps) {
 
 	if (status === "error") {
 		return (
-			<div data-testid="tool-visualize" data-status="error" className="flex flex-col gap-xs">
-				<pre className="overflow-auto px-sm py-xs text-feedback-error tr-code-text">
+			<div data-testid="tool-visualize" data-status="error" className="flex flex-col gap-4">
+				<pre className="overflow-auto px-8 py-4 text-feedback-error tr-code-text">
 					{resultText(result) || "Visualization failed."}
 				</pre>
 			</div>

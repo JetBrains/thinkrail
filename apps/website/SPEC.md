@@ -5,6 +5,7 @@ status: active
 title: Project website (thinkrail.ai landing)
 parent: architecture
 tags: [website, marketing]
+depends-on: [module-website-analytics]
 ---
 
 ## Responsibility
@@ -31,13 +32,14 @@ binary.
 
 ## Boundary
 
-- **Standalone leaf.** No workspace deps — it must never import `@thinkrail/contracts`, `server`,
-  `shared`, or `web`. It is not on the wire and has no protocol knowledge.
+- **Independently deployed leaf.** Its only workspace dependency is [[module-website-analytics]]; it
+  must never import contracts, server, shared, web, or the vibecoding site. It is not on the wire and
+  has no protocol knowledge.
 - **Astro (static output) + vanilla TypeScript + hand-written CSS.** No client-side framework
   runtime: Astro ships zero JS by default and every interactive bit stays hand-written TS
-  (`src/main.ts`, `src/theme.ts`). No Tailwind, no runtime deps at all — `devDependencies` only
-  (`astro` + `@astrojs/*` pinned exact, `typescript` via `catalog:`). The two
-  `@fontsource-variable/*` packages are build-time asset sources, not runtime deps: the build emits
+  (`src/main.ts`, `src/theme.ts`). There is no Tailwind or external runtime dependency; the one
+  browser analytics workspace module is compiled into the static output. The two
+  `@fontsource-variable/*` packages are build-time asset sources: the build emits
   their woff2 files into `dist/`. They are shared with `apps/web`, so they come from the root
   `workspaces.catalog` — one pin for both apps, which is what keeps the site's faces identical to the
   app's.
@@ -125,64 +127,24 @@ binary.
 
 ## Analytics
 
-PostHog (the team's existing project, **EU** cloud). Loaded as **progressive enhancement, production
-only**: `src/analytics.ts` injects PostHog's `array.js` from the first-party proxy at runtime and
-calls `posthog.init()` **only when `location.hostname === "thinkrail.ai"`** — localhost, `astro dev`,
-`preview`, and the `jetbrains.github.io` apex send nothing. The prod gate + config are a pure
-`analyticsConfig(hostname)` function, unit-tested in `src/analytics.test.ts` (`bun:test`, no browser).
-**Every page — landing and blog alike — loads analytics through the one `BaseHead.astro` script that
-imports `initAnalytics()`/`initGtm()`**; no page carries its own copy of the gate or config.
+`src/analytics.ts` is the site-local facade over [[module-website-analytics]]. It supplies the exact
+production hostname `thinkrail.ai`; the shared module owns the PostHog and GTM identifiers, privacy
+configuration, and typed script loaders. Localhost, `astro dev`, previews, the
+`jetbrains.github.io` apex, and sibling subdomains send nothing.
 
-- **No npm dep.** We inject the CDN script at runtime rather than importing `posthog-js`, so the
-  no-runtime-deps boundary holds. We also do **not** paste PostHog's minified bootstrap snippet: Biome
-  lints JS inside `<script>` and the snippet trips it (`noCommaOperator`, `noAssignInExpressions`, …),
-  which would force a forbidden `biome-ignore`. A clean typed loader avoids both. Safe because
-  `array.js` self-assigns `window.posthog` on load (its stub-queue replay is guarded), so `init()` in
-  the load handler needs no bootstrap stub.
-- **Genuinely cookieless — stores nothing on the device.** `cookieless_mode: "always"`: PostHog sets
-  **no cookie and no local/session storage**; visitor identity is a privacy-preserving hash computed
-  server-side from a daily-rotating salt + IP + host + user-agent. Nothing persistent lands in the
-  browser, so **no consent banner is required** under GDPR/ePrivacy. Also `respect_dnt: true`,
-  `disable_session_recording: true`; autocapture + pageviews stay on. `person_profiles:
-  "identified_only"` — the site never calls `identify()` (cookieless mode forbids it anyway).
-  - **Operational dependency:** requires **"Cookieless server hash mode" enabled in the PostHog
-    project settings** (Project Settings → Web analytics). If it is off, cookieless events are dropped.
-  - Trade-off: the daily salt makes cross-day identity coarse (a visitor returning on a later day
-    counts as new); pageview counts stay accurate, unique-visitor counts are approximate.
-- **First-party ingest via PostHog's managed reverse proxy** — `p.thinkrail.ai`, so ad blockers (which
-  match on `*.posthog.com`) don't drop the beacon. One host covers both PostHog EU origins: the proxy
-  routes `/static/*` + `/array/*` to `eu-assets.i.posthog.com` and everything else to
-  `eu.i.posthog.com`, so `api_host` **and** the injected `array.js` URL are the proxy. `ui_host:
-  "https://eu.posthog.com"` stays PostHog's real app origin — mandatory with a proxy, or in-app links
-  and the toolbar point at the proxy. Both are pinned in `analytics.test.ts`.
-  - **Managed, not self-hosted:** PostHog operates it (DNS `CNAME` → their Cloudflare edge; SSL +
-    routing theirs). Consequence: traffic also transits **Cloudflare**, a PostHog
-    [subprocessor](https://posthog.com/subprocessors) under their DPA — no new controller, still EU.
-    We run no proxy infrastructure; the site stays static on GitHub Pages.
-  - Cookieless server-hash identity is unaffected: the proxy forwards `X-Forwarded-For`, so the
-    daily-salt hash still sees the real client IP.
-  - **The host-side sink is deliberately NOT proxied** (`packages/server/src/analytics` keeps
-    `eu.i.posthog.com`): `posthog-node` runs in our own process, where no ad blocker exists — a proxy
-    would add a hop and a subprocessor for nothing.
-- The `phc_…` project key is **public/client-safe** by design (meant to ship in browser code) — not a
-  secret, so embedding it in the static build is expected.
-
-**Google Tag Manager** (container `GTM-WDW2DZW4`) runs **alongside** PostHog, under the same rules:
-production-only typed loader (`src/gtm.ts`, no pasted minified snippet — same Biome reasoning as
-PostHog), gated on `location.hostname === "thinkrail.ai"` with the pure `gtmConfig(hostname)`
-unit-tested in `src/gtm.test.ts`. GTM lives **only in this module** — it must never appear in
-`apps/web` or anything that ships in user instances (local or cloud).
-- **No `<noscript>` iframe** (deliberate): it is static HTML that can't be hostname-gated, and
-  JS-disabled tracking isn't worth loosening the production-only gate.
-- **Consent caveat:** the site's "no consent banner required" stance rests on cookieless PostHog. GTM
-  itself stores nothing, but tags configured *inside* the container (e.g. GA4) typically set cookies —
-  whoever adds such tags in the GTM UI owns re-opening the consent question.
+Every page initializes the combined analytics facade through `BaseHead.astro`; no page carries vendor
+configuration or a second loader. The site test pins its production-host identity and disabled hosts,
+while the shared package tests the common PostHog/GTM contract. The shared contract deliberately has
+no `posthog-js` dependency, pasted bootstrap, or static GTM `noscript` iframe; its spec owns the
+cookieless behavior and consent caveat.
 
 ## Deploy
 
 `.github/workflows/site.yml` builds (`bun run --filter @thinkrail/website build`, which runs
 `astro check && astro build`) and publishes `apps/website/dist` to GitHub Pages on pushes to `main`
-that touch this module (plus manual dispatch). Asset URLs are root-absolute against
+that touch this module, [[module-website-analytics]], the root package manifest, or the lockfile (plus
+manual dispatch). The root files are included because catalog and resolved dependency changes alter
+the artifact even when this app's manifest is unchanged. Asset URLs are root-absolute against
 `site: "https://thinkrail.ai"` (astro.config.ts) — the `jetbrains.github.io/thinkrail` address is
 not independently servable, which is fine because it redirects to the custom domain. One-time repo
 settings: Pages → Source: GitHub Actions, and Pages → Custom domain: `thinkrail.ai` — the public
@@ -199,7 +161,8 @@ reads back `deployment_cancelled`. Re-deploying that SHA *later* is fine — hen
 
 ### PR preview deploys
 
-PRs that touch this module get a **preview URL** so design review happens against the rendered site,
+PRs that touch this module, [[module-website-analytics]], the root package manifest, or the lockfile
+get a **preview URL** so design review happens against the rendered site,
 not the diff: `.github/workflows/site-preview.yml` runs the *same build command* as `site.yml` (one
 build definition — never let the two drift) and uploads `apps/website/dist` to **Cloudflare Pages**
 via `bunx wrangler@<pinned> pages deploy --project-name=thinkrail-previews --branch=pr-<num>`. The

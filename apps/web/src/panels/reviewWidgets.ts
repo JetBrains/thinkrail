@@ -1,4 +1,8 @@
-import { MessageSquarePlus, Send, Trash2 } from "lucide-react";
+import {
+	RiChatNewLine as MessageSquarePlus,
+	RiSendPlaneLine as Send,
+	RiDeleteBin6Line as Trash2,
+} from "@remixicon/react";
 import * as monaco from "monaco-editor";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";

@@ -22,7 +22,7 @@ parent `tools/register`.
 - **Public surface:** none beyond the side-effect `register` (no barrel — chat pulls shiki; per-file like
   its siblings).
 - **Allowed deps:** sibling chat primitives (`toolRegistry`, `toolHelpers`, `CodeBlock`, `Collapsible`);
-  `lucide-react`.
+  `@remixicon/react`.
 - **Forbidden:** value-importing any `pi` package or `pi-web-access`; `store`/`transport` (renderers stay
   presentational — extraction-ready into `packages/chat-ui`).
 

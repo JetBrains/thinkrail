@@ -1,0 +1,59 @@
+name: Vibecoding website
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/vibecoding-website/**"
+      - "packages/website-analytics/**"
+      - ".github/workflows/vibecoding-site.yml"
+      - "package.json"
+      - "bun.lock"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vibecoding-site-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build and deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: vibecoding-website
+      url: https://vibecoding.thinkrail.ai/
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      PAGES_URL: https://thinkrail-vibecoding.pages.dev
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+      - name: Cache bun install
+        uses: actions/cache@v5
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
+      - run: bun install --frozen-lockfile
+      - run: bun run --filter @thinkrail/vibecoding-website build
+      - name: Deploy static site
+        run: >
+          bunx wrangler@4.124.0 pages deploy apps/vibecoding-website/dist
+          --project-name=thinkrail-vibecoding
+          --branch=main
+      - name: Verify deployment
+        run: |
+          for attempt in $(seq 1 18); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "$PAGES_URL/")
+            [ "$code" = "200" ] && exit 0
+            echo "attempt $attempt: $code"
+            sleep 5
+          done
+          exit 1

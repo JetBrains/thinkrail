@@ -16,11 +16,11 @@ export function Collapsible({
 	if (lines <= THRESHOLD) return <>{children}</>;
 
 	return (
-		<div data-testid="collapsible" data-expanded={expanded} className="flex flex-col gap-xs">
-			<div className={expanded ? undefined : "relative max-h-96 overflow-hidden"}>
+		<div data-testid="collapsible" data-expanded={expanded} className="flex flex-col gap-4">
+			<div className={expanded ? undefined : "relative max-h-384 overflow-hidden"}>
 				{children}
 				{expanded ? null : (
-					<div className={`pointer-events-none absolute inset-x-0 bottom-0 h-8 ${fadeClass}`} />
+					<div className={`pointer-events-none absolute inset-x-0 bottom-0 h-32 ${fadeClass}`} />
 				)}
 			</div>
 			<button

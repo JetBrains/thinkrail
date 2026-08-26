@@ -1,6 +1,6 @@
 import { rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { expect, type Locator, test } from "@playwright/test";
+import { expect, type Locator, type Page, test } from "@playwright/test";
 import { openWorkspaceChat } from "./fixtures/app";
 import { E2E_PI_AGENT_DIR } from "./fixtures/paths";
 
@@ -12,6 +12,39 @@ async function readSelection(
 		return { start: t.selectionStart ?? 0, end: t.selectionEnd ?? 0, value: t.value };
 	});
 }
+
+const sentPromptTexts = new WeakMap<Page, string[]>();
+
+function readPromptText(payload: string | Buffer): string | null {
+	try {
+		const frame = JSON.parse(typeof payload === "string" ? payload : payload.toString()) as {
+			method?: unknown;
+			params?: { text?: unknown };
+		};
+		return frame.method === "session.prompt" && typeof frame.params?.text === "string"
+			? frame.params.text
+			: null;
+	} catch {
+		return null;
+	}
+}
+
+async function expectPromptSent(page: Page, expected: string): Promise<void> {
+	const prompts = sentPromptTexts.get(page);
+	if (!prompts) throw new Error("prompt frame capture was not initialized");
+	await expect.poll(() => prompts.at(-1)).toBe(expected);
+}
+
+test.beforeEach(({ page }) => {
+	const prompts: string[] = [];
+	sentPromptTexts.set(page, prompts);
+	page.on("websocket", (socket) => {
+		socket.on("framesent", ({ payload }) => {
+			const text = readPromptText(payload);
+			if (text !== null) prompts.push(text);
+		});
+	});
+});
 
 test.describe("prompt templates in the composer", () => {
 	test("full lifecycle: filter, pick, fill, tab to the default, and send strips no markers", async ({
@@ -45,9 +78,7 @@ test.describe("prompt templates in the composer", () => {
 		expect(sel2.value.slice(sel2.start, sel2.end)).toBe("src/");
 
 		await page.getByTestId("chat-send").click();
-		const bubble = page.locator('[data-testid="chat-message"][data-role="user"]');
-		await expect(bubble).toContainText("Review watcher.ts for issues, focusing on src/.");
-		await expect(bubble).not.toContainText("⟨");
+		await expectPromptSent(page, "Review watcher.ts for issues, focusing on src/.");
 		await expect(hint).not.toBeVisible();
 	});
 
@@ -93,8 +124,7 @@ test.describe("prompt templates in the composer", () => {
 		await page.keyboard.type("server.ts");
 		await page.getByTestId("chat-send").click();
 
-		const bubble = page.locator('[data-testid="chat-message"][data-role="user"]');
-		await expect(bubble).toContainText("server.ts for issues, focusing on src/.");
+		await expectPromptSent(page, "Review ⟨file⟩server.ts for issues, focusing on src/.");
 	});
 
 	test("tabbing out of a filled slot mirrors its text into a sibling sharing its group", async ({
@@ -126,9 +156,7 @@ test.describe("prompt templates in the composer", () => {
 		expect(sel2.value.slice(sel2.start, sel2.end)).toBe("Widget");
 
 		await page.getByTestId("chat-send").click();
-		const bubble = page.locator('[data-testid="chat-message"][data-role="user"]');
-		await expect(bubble).toContainText("Rename Widget and update every Widget reference.");
-		await expect(bubble).not.toContainText("⟨");
+		await expectPromptSent(page, "Rename Widget and update every Widget reference.");
 	});
 
 	test("the highlight backdrop tints each gap and tracks the active slot as Tab steps through", async ({
@@ -171,9 +199,7 @@ test.describe("prompt templates in the composer", () => {
 		await expect(input).toHaveValue(/^Rename Widget and update every ⟨name⟩ reference\.\s*$/);
 
 		await page.getByTestId("chat-send").click();
-		const bubble = page.locator('[data-testid="chat-message"][data-role="user"]').first();
-		await expect(bubble).toContainText("Rename Widget and update every Widget reference.");
-		await expect(bubble).not.toContainText("⟨");
+		await expectPromptSent(page, "Rename Widget and update every Widget reference.");
 	});
 
 	test("differing per-occurrence defaults stay independent through Tab and a direct Send (no edit)", async ({
@@ -197,9 +223,7 @@ test.describe("prompt templates in the composer", () => {
 		await expect(input).toHaveValue(/^foo versus bar\s*$/);
 
 		await page.getByTestId("chat-send").click();
-		const bubble = page.locator('[data-testid="chat-message"][data-role="user"]').first();
-		await expect(bubble).toContainText("foo versus bar");
-		await expect(bubble).not.toContainText("foo versus foo");
+		await expectPromptSent(page, "foo versus bar");
 	});
 
 	test("editing one default occurrence provides the argument and mirrors it into the group-mate on Tab", async ({
@@ -221,8 +245,7 @@ test.describe("prompt templates in the composer", () => {
 		await expect(input).toHaveValue(/^cats versus cats\s*$/);
 
 		await page.getByTestId("chat-send").click();
-		const bubble = page.locator('[data-testid="chat-message"][data-role="user"]').first();
-		await expect(bubble).toContainText("cats versus cats");
+		await expectPromptSent(page, "cats versus cats");
 	});
 
 	test("Escape ends the session and leaves the text as-is", async ({ page }) => {
@@ -302,9 +325,7 @@ test.describe("prompt templates in the composer", () => {
 		expect(sel2.value.slice(sel2.start, sel2.end)).toBe("⟨arg2⟩");
 
 		await page.getByTestId("chat-send").click();
-		const bubble = page.locator('[data-testid="chat-message"][data-role="user"]');
-		await expect(bubble).toContainText("hello");
-		await expect(bubble).not.toContainText("⟨");
+		await expectPromptSent(page, "hello");
 	});
 
 	test("sending with a live unfilled marker strips it and collapses the doubled space to exactly one", async ({
@@ -318,9 +339,7 @@ test.describe("prompt templates in the composer", () => {
 		await expect(input).toHaveValue(/^Review ⟨file⟩ for issues, focusing on src\/\.\s*$/);
 
 		await page.getByTestId("chat-send").click();
-		const bubble = page.locator('[data-testid="chat-message"][data-role="user"]').first();
-		await expect(bubble).toBeVisible();
-		expect(await bubble.textContent()).toBe("Review for issues, focusing on src/.");
+		await expectPromptSent(page, "Review for issues, focusing on src/.");
 	});
 
 	test("Escape closes the history overlay without ending an active slot session", async ({
