@@ -12,6 +12,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
 	closeProject,
+	createDraftProject,
+	discardDraftProject,
+	finalizeProject,
+	finalizeProjectByPath,
 	initProject,
 	inspectProjectPath,
 	isProjectTrusted,
@@ -55,6 +59,64 @@ afterEach(() => {
 	rmSync(dataDir, { recursive: true, force: true });
 	if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
 	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
+});
+
+test("createDraftProject bootstraps a real draft repo under the managed projects root", () => {
+	const project = createDraftProject();
+	expect(project.draft).toBe(true);
+	expect(project.name).toBe("Untitled project");
+	expect(project.path.startsWith(realpathSync(join(dataDir, "projects")))).toBe(true);
+	expect(inspectProjectPath(project.path).kind).toBe("repo");
+	expect(listProjects().map((p) => p.id)).toContain(project.id);
+});
+
+test("finalizeProject applies the confirmed name, uniquifies the slug, and clears draft", () => {
+	const first = createDraftProject();
+	finalizeProject(first.id, "My App");
+	const second = createDraftProject();
+	const finalized = finalizeProject(second.id, "My App");
+	expect(finalized.name).toBe("My App");
+	expect(finalized.draft).toBeUndefined();
+	expect(finalized.slug).toBe("my-app-2");
+	expect(() => finalizeProject(finalized.id, "Again")).toThrow("not a draft");
+});
+
+test("finalizeProjectByPath finalizes the draft whose folder is the given cwd", () => {
+	const project = createDraftProject();
+	const finalized = finalizeProjectByPath(project.path, "Todo Tracker");
+	expect(finalized.id).toBe(project.id);
+	expect(finalized.name).toBe("Todo Tracker");
+	expect(() => finalizeProjectByPath(join(dataDir, "nope"), "X")).toThrow("No project found");
+});
+
+test("discardDraftProject removes the record, its workspaces, and the managed dir", () => {
+	const project = createDraftProject();
+	writeFileSync(
+		join(dataDir, "workspaces.json"),
+		JSON.stringify([
+			{
+				id: "ws-draft",
+				projectId: project.id,
+				name: "Default",
+				branch: "main",
+				worktreePath: project.path,
+				baseBranch: "main",
+				kind: "default",
+			},
+		]),
+	);
+	const removed = discardDraftProject(project.id);
+	expect(removed?.id).toBe(project.id);
+	expect(existsSync(project.path)).toBe(false);
+	expect(listProjects().map((p) => p.id)).not.toContain(project.id);
+	expect(JSON.parse(readFileSync(join(dataDir, "workspaces.json"), "utf8"))).toEqual([]);
+});
+
+test("discardDraftProject refuses a finalized (non-draft) project", () => {
+	const project = createDraftProject();
+	finalizeProject(project.id, "Real");
+	expect(() => discardDraftProject(project.id)).toThrow("not a draft");
+	expect(discardDraftProject("unknown-id")).toBeNull();
 });
 
 function seedWorkspace(worktreePath: string, kind?: "default" | "external"): void {

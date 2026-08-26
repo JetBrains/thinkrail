@@ -91,6 +91,9 @@ import { openPr, previewPr } from "../pr";
 import {
 	acknowledgeProjectSkills,
 	closeProject,
+	createDraftProject,
+	discardDraftProject,
+	finalizeProject,
 	initProject,
 	inspectProjectPath,
 	listProjects,
@@ -283,6 +286,34 @@ async function sendToFileChat(
 
 const handlers: Record<string, Handler> = {
 	"project.open": (params) => openProject((params as { path: string }).path),
+	"project.create": () => {
+		const project = createDraftProject();
+		const workspaces = listWorkspaces(project.id, { includeDiffStats: false });
+		const workspace = workspaces.find((ws) => ws.kind === "default") ?? workspaces[0];
+		if (!workspace) throw new Error("Draft project has no Default workspace");
+		return { project, workspace };
+	},
+	"project.finalize": (params) => {
+		const p = params as { id: string; name: string };
+		return finalizeProject(p.id, p.name);
+	},
+	"project.discardDraft": async (params) => {
+		const id = (params as { id: string }).id;
+		for (const ws of listWorkspaceRecords(id)) {
+			removeWorkspaceLayout(ws.id);
+			evictSpecIndex(ws.id);
+			removeWorkspaceReviews(ws.id);
+			stopWatch(ws.id);
+			closeWorkspaceTerminals(ws.id);
+			try {
+				await removeWorkspaceSessions(ws.id, ws.worktreePath);
+			} catch {
+				log.warn(`discard draft: session teardown failed for ${ws.id}`);
+			}
+		}
+		discardDraftProject(id);
+		return { ok: true } as const;
+	},
 	"project.inspect": (params) => inspectProjectPath((params as { path: string }).path),
 	"project.init": (params) => initProject((params as { path: string }).path),
 	"project.list": () => listProjects(),

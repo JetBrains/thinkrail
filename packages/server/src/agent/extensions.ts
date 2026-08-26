@@ -15,6 +15,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import type { SkillCatalogEntry, SlashCommandInfo } from "@thinkrail/contracts";
 import { askUserQuestionExtension } from "./askUserQuestion";
+import { finalizeProjectToolExtension } from "./finalizeProjectTool";
 import { oversizedImageGuard } from "./imageGuard";
 import { reviewToolExtension } from "./reviewTool";
 import { decideSkill, type SkillAdmissionContext } from "./skillAdmission";
@@ -176,6 +177,7 @@ export async function buildResourceLoader(
 		headlessSearchPolicy,
 		askUserQuestionExtension,
 		reviewToolExtension,
+		finalizeProjectToolExtension,
 		oversizedImageGuard,
 	];
 	const skillInputs = resolveSkillInputs(cwd, getAdmission);

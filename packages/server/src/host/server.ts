@@ -15,6 +15,7 @@ import {
 	getSessionWorkspaceId,
 	isProjectSkillPath,
 	setExtUiPublisher,
+	setProjectFinalizeHandler,
 	setReviewCommentHandler,
 	setSessionDeletedPublisher,
 	setSessionPublisher,
@@ -39,6 +40,7 @@ import { resolveWorktreeFile } from "../fs";
 import { normalizeStoredLayoutSettings, setLayoutPublisher } from "../layout";
 import { logger } from "../log";
 import {
+	finalizeProjectByPath,
 	getProjects,
 	listProjects,
 	listRecentProjects,
@@ -387,6 +389,10 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	}));
 	installTodoReviewSeams();
 	reconcilePendingReviewsOnBoot();
+	setProjectFinalizeHandler((cwd, name) => {
+		const project = finalizeProjectByPath(cwd, name);
+		return { projectId: project.id, name: project.name };
+	});
 
 	setLayoutPublisher((payload: LayoutChangedPayload) => {
 		server.publish(

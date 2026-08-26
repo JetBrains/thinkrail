@@ -1,9 +1,21 @@
 import { randomUUID } from "node:crypto";
-import { rmSync, statSync } from "node:fs";
-import { basename, join } from "node:path";
+import { mkdirSync, rmSync, statSync } from "node:fs";
+import { basename, join, sep } from "node:path";
 import type { Project, ProjectPathStatus } from "@thinkrail/contracts";
 import { canonicalPath, git } from "../git";
-import { loadProjects, loadWorkspaces, saveProjects } from "../persistence";
+import {
+	dataDir,
+	loadProjects,
+	loadWorkspaces,
+	saveProjects,
+	saveWorkspaces,
+} from "../persistence";
+
+function createdProjectsRoot(): string {
+	return join(dataDir(), "projects");
+}
+
+const DRAFT_PROVISIONAL_NAME = "Untitled project";
 
 type ProjectPublisher = (project: Project) => void;
 
@@ -171,6 +183,77 @@ export function inspectProjectPath(path: string): ProjectPathStatus {
 	}
 	if (!stat.isDirectory()) return { kind: "notDirectory" };
 	return { kind: gitToplevel(path) ? "repo" : "initable" };
+}
+
+export function createDraftProject(): Project {
+	const root = createdProjectsRoot();
+	const dir = join(root, randomUUID());
+	mkdirSync(dir, { recursive: true });
+	try {
+		const project = initProject(dir);
+		const projects = getProjects();
+		const record = projects.find((candidate) => candidate.id === project.id);
+		if (!record) throw new Error(`Draft project vanished after init: ${dir}`);
+		record.draft = true;
+		record.name = DRAFT_PROVISIONAL_NAME;
+		record.slug = uniqueSlug(
+			slugify(DRAFT_PROVISIONAL_NAME),
+			new Set(projects.filter((p) => p.id !== record.id).map((p) => p.slug)),
+		);
+		saveProjects(projects);
+		emit(record);
+		return record;
+	} catch (err) {
+		rmSync(dir, { recursive: true, force: true });
+		throw err;
+	}
+}
+
+export function finalizeProjectByPath(cwd: string, name: string): Project {
+	const wanted = canonicalPath(cwd);
+	const projects = getProjects();
+	const project = projects.find((candidate) => canonicalPath(candidate.path) === wanted);
+	if (!project) throw new Error(`No project found for ${cwd}`);
+	if (project.draft !== true) throw new Error(`Project is not a draft: ${project.name}`);
+	return applyFinalize(projects, project, name);
+}
+
+export function finalizeProject(id: string, name: string): Project {
+	const projects = getProjects();
+	const project = projects.find((candidate) => candidate.id === id);
+	if (!project) throw new Error(`Unknown project: ${id}`);
+	if (project.draft !== true) throw new Error(`Project is not a draft: ${project.name}`);
+	return applyFinalize(projects, project, name);
+}
+
+function applyFinalize(projects: Project[], project: Project, name: string): Project {
+	const trimmed = name.trim();
+	if (!trimmed) throw new Error("A project name is required");
+	project.name = trimmed;
+	project.slug = uniqueSlug(
+		slugify(trimmed),
+		new Set(projects.filter((p) => p.id !== project.id).map((p) => p.slug)),
+	);
+	delete project.draft;
+	saveProjects(projects);
+	emit(project);
+	return project;
+}
+
+export function discardDraftProject(id: string): Project | null {
+	const projects = getProjects();
+	const project = projects.find((candidate) => candidate.id === id);
+	if (!project) return null;
+	if (project.draft !== true) throw new Error(`Project is not a draft: ${project.name}`);
+	const root = createdProjectsRoot();
+	if (canonicalPath(project.path).startsWith(canonicalPath(root) + sep)) {
+		rmSync(project.path, { recursive: true, force: true });
+	}
+	saveProjects(projects.filter((candidate) => candidate.id !== id));
+	const workspaces = loadWorkspaces();
+	const remaining = workspaces.filter((ws) => ws.projectId !== id);
+	if (remaining.length !== workspaces.length) saveWorkspaces(remaining);
+	return project;
 }
 
 export function initProject(path: string): Project {

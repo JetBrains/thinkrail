@@ -433,8 +433,18 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     binary-capable Jiti seam; it is never bundled, staged, or copied into ThinkRail. Both modes append
     `extensionFactories`: a **headless-search policy** (a `tool_call` hook defaulting
     `web_search`'s `workflow` to `"none"`, since pi-web-access would otherwise open a browser curator our
-    `rpc` host can't render), `askUserQuestionExtension` (registers the `ask_user_question` tool), **and**
+    `rpc` host can't render), `askUserQuestionExtension` (registers the `ask_user_question` tool),
+    `reviewToolExtension` (the `resolve_comment` tool), **`finalizeProjectToolExtension`** (the
+    **`finalize_project`** tool — the create-from-scratch capability), **and**
     `oversizedImageGuard` (the context-level image-size guard, see the `imageGuard` bullet).
+    Like `resolve_comment`, `finalize_project` is registered on **every** session but its host-installed
+    handler (**`setProjectFinalizeHandler`** seam, wired in `host` to `projects.finalizeProjectByPath`)
+    **fails closed** unless the calling session's `cwd` is a **draft** project's folder — so it is inert
+    everywhere except the one setup chat, and `agent` never imports `projects`. `execute` keys on
+    `ctx.cwd` (the Default workspace's cwd is the project folder), applies the user-confirmed name, and
+    returns `{ projectId, name }`; the client reveals the renamed project via the normal `project.updated`
+    stream (no client-owned domain state). See [[submodule-server-projects]] and
+    [[task-create-project-from-scratch]].
     Both session paths pass it as `resourceLoader`. `buildResourceLoader` stays internal; the seam +
     its types are on the barrel.
 - **Public surface (barrel):** the manager operations (incl. `answerQuestion` +
@@ -450,7 +460,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   (unfiltered, the manager's `skills.state`) / `listProjectAliasSkillNames(cwd)` (present-alias count) /
   `isProjectSkillPath(relativePath)` (watch-classification predicate);
   `reloadSessionResources(sessionId)` (active-chat reload); the **`setSkillAdmissionResolver`** seam (host
-  wires `workspaceId` → the admission context);
+  wires `workspaceId` → the admission context); the **`setProjectFinalizeHandler`** seam +
+  `FINALIZE_PROJECT_TOOL_NAME` + `FinalizeProjectOutcome` (the create-from-scratch finalize tool);
   the compiled-binary seam (`registerBundledRuntime` +
   `BundledExtensions`/`BundledExtensionFactory`).
 - **Allowed deps:** `@earendil-works/pi-coding-agent` (runtime); `@earendil-works/pi-ai` (types + test

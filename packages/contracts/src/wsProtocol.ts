@@ -109,6 +109,9 @@ export interface SessionDeletedPayload {
 
 export const WS_METHODS = {
 	projectOpen: "project.open",
+	projectCreate: "project.create",
+	projectFinalize: "project.finalize",
+	projectDiscardDraft: "project.discardDraft",
 	projectList: "project.list",
 	projectClose: "project.close",
 	projectInspect: "project.inspect",
@@ -274,6 +277,12 @@ export interface WorkspaceWatchReadyResult {
 
 export interface WsMethodMap {
 	"project.open": { params: { path: string }; result: Project };
+	"project.create": {
+		params: Record<string, never>;
+		result: { project: Project; workspace: Workspace };
+	};
+	"project.finalize": { params: { id: string; name: string }; result: Project };
+	"project.discardDraft": { params: { id: string }; result: Ack };
 	"project.list": { params: Record<string, never>; result: Project[] };
 	"project.close": { params: { id: string }; result: Ack };
 	"project.inspect": { params: { path: string }; result: ProjectPathStatus };
