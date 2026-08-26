@@ -9,6 +9,7 @@
         "@earendil-works/pi-coding-agent": "catalog:",
         "@playwright/test": "1.61.0",
         "@thinkrail/contracts": "workspace:*",
+        "@thinkrail/desktop": "workspace:*",
         "@thinkrail/server": "workspace:*",
         "@thinkrail/shared": "workspace:*",
         "husky": "9.1.7",

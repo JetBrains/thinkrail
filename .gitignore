@@ -33,6 +33,8 @@ apps/desktop/artifacts/
 .env.*.local
 test-results-binary/
 playwright-report-binary/
+test-results-desktop/
+playwright-report-desktop/
 
 # Astro's generated type cache
 .astro/

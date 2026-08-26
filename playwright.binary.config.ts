@@ -1,39 +1,8 @@
 import { existsSync } from "node:fs";
-import { delimiter, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { defineConfig, devices } from "@playwright/test";
-import {
-	E2E_BINARY_CACHE,
-	E2E_BINARY_PORT,
-	E2E_CENTRAL_BAD_EXTENSION_SOURCE,
-	E2E_CENTRAL_EXTENSION_SOURCE,
-	E2E_CENTRAL_LOG,
-	E2E_CENTRAL_STATE,
-	E2E_DATA_DIR,
-	E2E_EDITOR_LOG,
-	E2E_FAKE_BIN_DIR,
-	E2E_HOME_DIR,
-	E2E_PI_AGENT_DIR,
-	E2E_PICK_DIR_POINTER,
-} from "./e2e/fixtures/paths";
-
-// The e2e suite run against the COMPILED single-file binary instead of the dev host (`bun run
-// e2e:binary`, after `bun run build:binary`). Same tests, same fixtures/global-setup — only the
-// webServer differs — so the whole behavioral surface (terminals/PTY, git, editor, embedded-asset
-// serving, staging, WS) executes inside the artifact users actually install. This is the broad net for
-// the regression class that run-from-source suites can never see (see `registerBundledRuntime` in the
-// server agent SPEC — e.g. pi's OAuth flows resolving only from `node_modules`); the *targeted* probes
-// for known compiled-binary seams live in `apps/cli/scripts/smoke-binary.ts`.
-//
-// Excluded here: `@agent` (needs provider auth — never in CI) and `@dev-seam` (the fake login
-// providers are registered by `packages/server/src/dev.ts`, which deliberately never ships — the
-// artifact's login path is covered by smoke-binary's real-provider probe instead).
-//
-// The adaptive `bun run e2e` lanes have their own state/port namespaces; this suite keeps the
-// unsharded per-worktree namespace. Two binary runs (or a binary run plus `e2e:serial`) in the SAME
-// worktree remain sequential. Parallel runs from DIFFERENT worktrees are isolated — per-worktree
-// state dirs + ports, see e2e/fixtures/paths.ts. Unix-only for now, like the main
-// config's PATH stub wiring (`:` separator, `#!/bin/sh` central stub).
+import { defineConfig } from "@playwright/test";
+import { artifactHostEnvironment, artifactPlaywrightConfig } from "./e2e/artifactPlaywright";
+import { E2E_BINARY_CACHE, E2E_BINARY_PORT } from "./e2e/fixtures/paths";
 
 const rootDir = fileURLToPath(new URL(".", import.meta.url));
 const binary =
@@ -42,69 +11,19 @@ const binary =
 if (!existsSync(binary)) {
 	throw new Error(`binary not found at ${binary} — run \`bun run build:binary\` first.`);
 }
-// Per-worktree block (e2e/fixtures/paths.ts): main e2e +0 · this suite +2 · restart spec +4; the dev
-// host (24242) and smoke:binary (24262, free-scans + reads the served URL) stay clear of the block.
-const PORT = E2E_BINARY_PORT;
-const hostPath = [E2E_FAKE_BIN_DIR, "/usr/bin", "/bin", "/usr/sbin", "/sbin"].join(delimiter);
-if (hostPath.split(delimiter).some((directory) => existsSync(join(directory, "pi"))))
-	throw new Error("binary e2e host PATH must not contain pi");
+const origin = `http://localhost:${E2E_BINARY_PORT}`;
 
 export default defineConfig({
-	testDir: "./e2e",
-	testIgnore: "workflows/**",
-	grepInvert: /@agent|@dev-seam/,
-	// Serial: the suite shares one stateful host (one DATA_DIR), so tests must not race on persistence.
-	fullyParallel: false,
-	workers: 1,
-	forbidOnly: !!process.env.CI,
-	retries: process.env.CI ? 1 : 0,
-	timeout: 30_000,
-	reporter: process.env.CI
-		? [["github"], ["html", { open: "never", outputFolder: "playwright-report-binary" }]]
-		: "list",
-	outputDir: "test-results-binary",
-	globalSetup: "./e2e/global-setup.ts",
-	globalTeardown: "./e2e/global-teardown.ts",
-	use: {
-		baseURL: `http://localhost:${PORT}`,
-		trace: "on-first-retry",
-	},
-	projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
-	// The artifact under test IS the server: no THINKRAIL_STATIC_DIR (the embedded web assets are part
-	// of what's verified) and an isolated cache root so the binary's staging path runs against a dir the
-	// teardown wiped last run. Every other seam is the same as the dev-host config — all of them are
-	// honored by production code (`THINKRAIL_PICK_DIR`, `THINKRAIL_GH_OFFLINE`) or ride PATH/env
-	// (stub `central`, `PI_OFFLINE`), which is what makes the suite boot-agnostic.
+	...artifactPlaywrightConfig("binary", origin, true),
 	webServer: {
 		command: `"${binary}" --no-open`,
 		cwd: rootDir,
-		url: `http://localhost:${PORT}/health`,
+		url: `${origin}/health`,
 		reuseExistingServer: false,
 		timeout: 120_000,
 		env: {
-			THINKRAIL_PORT: String(PORT),
-			THINKRAIL_DATA_DIR: E2E_DATA_DIR,
-			XDG_CACHE_HOME: E2E_BINARY_CACHE,
-			THINKRAIL_PICK_DIR: E2E_PICK_DIR_POINTER,
-			THINKRAIL_GH_OFFLINE: "1",
-			// Keep cross-agent personal skill aliases away from the developer's real homes/overrides.
-			HOME: E2E_HOME_DIR,
-			USERPROFILE: E2E_HOME_DIR,
-			CLAUDE_CONFIG_DIR: `${E2E_HOME_DIR}/.claude`,
-			CODEX_HOME: `${E2E_HOME_DIR}/.codex`,
-			GEMINI_CLI_HOME: E2E_HOME_DIR,
-			PI_CODING_AGENT_DIR: E2E_PI_AGENT_DIR,
-			PI_OFFLINE: "1",
-			PATH: hostPath,
-			CENTRAL_STUB_STATE: E2E_CENTRAL_STATE,
-			CENTRAL_STUB_LOG: E2E_CENTRAL_LOG,
-			CENTRAL_STUB_EXTENSION_SOURCE: E2E_CENTRAL_EXTENSION_SOURCE,
-			CENTRAL_STUB_BAD_EXTENSION_SOURCE: E2E_CENTRAL_BAD_EXTENSION_SOURCE,
-			// Where the stub `code` appends each invocation's argv — see playwright.config.ts.
-			THINKRAIL_E2E_EDITOR_LOG: E2E_EDITOR_LOG,
-			// Analytics: a locally built binary sends like any other build, and `CI` is unset on a
-			// developer machine — so the suite mutes explicitly. Nothing an e2e run does may reach PostHog.
-			THINKRAIL_NO_ANALYTICS: "1",
+			...artifactHostEnvironment(E2E_BINARY_CACHE),
+			THINKRAIL_PORT: String(E2E_BINARY_PORT),
 		},
 	},
 });

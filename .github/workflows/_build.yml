@@ -1,9 +1,7 @@
-name: Build binaries
+name: Build native artifacts
 
-# Native OS matrix: each runner compiles + boot-smokes the single-file `thinkrail` binary for its own
-# platform (target == host), so the correct bun-pty native lib is embedded and the artifact is verified
-# on the real OS. Cross-compiling all targets from one host is possible (bun-pty ships every platform's
-# lib) but can't be smoke-tested and is unproven for the embedded FFI lib — see .github/SPEC.md.
+# Native OS matrix: each runner builds and smokes both launchers for its own platform, so the PTY FFI,
+# trash helper, ownership lease, Electrobun wrapper, and system renderer execute where they will ship.
 
 on:
   workflow_call:
@@ -13,7 +11,7 @@ on:
         required: true
         type: string
       channel:
-        description: "Release channel: nightly, stable, or dev"
+        description: "Release channel: nightly or stable"
         required: true
         type: string
 
@@ -23,7 +21,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
+          - os: ubuntu-24.04
             target: bun-linux-x64
           - os: ubuntu-24.04-arm
             target: bun-linux-arm64
@@ -47,6 +45,17 @@ jobs:
 
       - run: bun install --frozen-lockfile
 
+      - name: Install Linux desktop runtime
+        if: startsWith(matrix.target, 'bun-linux-')
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            dbus-x11 xauth xvfb libgtk-3-0 libwebkit2gtk-4.1-0 libayatana-appindicator3-1 librsvg2-2
+
+      - name: Verify native host ownership
+        run: bun test packages/server/src/host/ownership.test.ts
+
       - id: build
         uses: ./.github/actions/build-binary
         with:
@@ -58,5 +67,12 @@ jobs:
         with:
           name: ${{ steps.build.outputs.artifact-name }}
           path: ${{ steps.build.outputs.artifact-path }}
+          retention-days: 7
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: ${{ steps.build.outputs.desktop-artifact-name }}
+          path: ${{ steps.build.outputs.desktop-artifact-path }}
           retention-days: 7
           if-no-files-found: error

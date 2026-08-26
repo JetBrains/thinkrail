@@ -7,7 +7,7 @@ import { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { isPortFree } from "@thinkrail/shared/freePort";
 import { configurePiRuntime, configurePiRuntimeFactory } from "../agent";
 import { resetJbcentralStateForTests } from "../auth";
-import { type BootedHost, bootHost } from "./boot";
+import { type BootedHost, bootHost, HostAlreadyRunningError } from "./boot";
 
 process.setMaxListeners(50);
 
@@ -110,6 +110,13 @@ test("stop() releases the port", async () => {
 	expect(await isPortFree(b.port)).toBe(false);
 	b.server.stop();
 	expect(await isPortFree(b.port)).toBe(true);
+});
+
+test("boot refuses a second host for the same data directory", async () => {
+	await boot({ port: grabFreePort(), host: "localhost", portMode: "exact" });
+	await expect(
+		bootHost({ port: grabFreePort(), host: "localhost", portMode: "exact" }),
+	).rejects.toBeInstanceOf(HostAlreadyRunningError);
 });
 
 test("shutdown is idempotent and releases ownership", async () => {

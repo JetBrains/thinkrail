@@ -20,8 +20,8 @@ export default {
 			".stage/runtime": "runtime",
 		},
 		useAsar: false,
-		mac: { bundleCEF: false },
-		linux: { bundleCEF: false },
-		win: { bundleCEF: false },
+		mac: { bundleCEF: false, icons: "assets/icon.iconset" },
+		linux: { bundleCEF: false, icon: "assets/icon.png" },
+		win: { bundleCEF: false, icon: "assets/icon.ico" },
 	},
 } satisfies ElectrobunConfig;

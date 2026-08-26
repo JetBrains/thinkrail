@@ -91,10 +91,10 @@ never sends anyway, since the analytics module mutes on `CI`.
 - `CODEOWNERS` — every path is owned by @rsolmano, @danyaberezun, @OLavrik; the `main` ruleset's
   pull-request rule (`require_code_owner_review`) makes an approval from one of them required to merge.
 - `scripts/next-version.sh` — channel-aware semver from tags; carries a `--tags=` override for testing.
-- The native build action: `build:web` → stamp the shared version → build/smoke the CLI binary →
-  package/native-smoke/shared-probe the desktop app → collect the CLI artifact and Electrobun's
-  first-install artifact. Desktop-backed e2e runs in CI before release; each release runner still performs
-  its target-native package smoke.
+- The native build action: stamp the shared version → `build:web` → build/smoke the CLI binary →
+  package/native-smoke/shared-probe the expanded desktop app → create and execute Electrobun's
+  first-install artifact in an isolated install root → collect both artifacts. Desktop-backed e2e runs in
+  CI before release; each release runner still performs both target-native desktop smoke layers.
 - `actions/make-checksums` — writes `SHA256SUMS` over the release artifacts.
 - `actions/codesign` — JetBrains CodeSign client wrapper; **wired but disabled** (`_release.yml`'s `sign`
   job is `if: false`). CLI and desktop artifacts ship unsigned until credentials and a separately approved

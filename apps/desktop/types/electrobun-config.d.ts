@@ -12,8 +12,8 @@ export interface ElectrobunConfig {
 		bun: { entrypoint: string };
 		copy: Record<string, string>;
 		useAsar: boolean;
-		mac: { bundleCEF: boolean };
-		linux: { bundleCEF: boolean };
-		win: { bundleCEF: boolean };
+		mac: { bundleCEF: boolean; icons: string };
+		linux: { bundleCEF: boolean; icon: string };
+		win: { bundleCEF: boolean; icon: string };
 	};
 }

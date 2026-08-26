@@ -3,7 +3,6 @@
 import {
 	cpSync,
 	existsSync,
-	globSync,
 	mkdirSync,
 	mkdtempSync,
 	readFileSync,
@@ -11,12 +10,13 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, dirname, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, join, relative, resolve } from "node:path";
 import {
 	type ArtifactHostAdapter,
 	type RunningArtifactHost,
 	runArtifactHostProbes,
 } from "@thinkrail/server/artifact-probes";
+import { locateDesktopLauncher } from "./src/artifact";
 
 const desktopDir = import.meta.dir;
 const repoRoot = resolve(desktopDir, "..", "..");
@@ -32,34 +32,25 @@ function within<T>(promise: Promise<T>, ms: number, what: string): Promise<T> {
 	]);
 }
 
-function locateLauncher(): string {
-	const explicit = process.argv[2];
-	if (explicit) return resolve(explicit);
-	const os =
-		process.platform === "darwin" ? "macos" : process.platform === "win32" ? "win" : "linux";
-	const name = process.platform === "win32" ? "launcher.exe" : "launcher";
-	const matches = globSync(join(desktopDir, "build", `dev-${os}-${process.arch}`, "**", name));
-	const launcher = matches.find((path) =>
-		process.platform === "darwin"
-			? path.includes(".app/Contents/MacOS/")
-			: path.includes(`${sep}bin${sep}`),
-	);
-	if (!launcher)
-		throw new Error("packaged desktop launcher not found — run `bun run desktop:build` first");
-	return launcher;
-}
-
 function copyApplication(launcher: string): string {
 	const bundleRoot =
 		process.platform === "darwin"
 			? dirname(dirname(dirname(launcher)))
 			: dirname(dirname(launcher));
+	const resourcesDir = join(
+		bundleRoot,
+		process.platform === "darwin" ? "Contents" : "",
+		"Resources",
+	);
+	if (!existsSync(join(resourcesDir, "app", "runtime", "server-runtime.ts"))) {
+		throw new Error("desktop smoke requires an expanded app bundle, not a first-install wrapper");
+	}
 	const copiedRoot = join(root, basename(bundleRoot));
 	cpSync(bundleRoot, copiedRoot, { recursive: true });
 	return join(copiedRoot, relative(bundleRoot, launcher));
 }
 
-const launcher = copyApplication(locateLauncher());
+const launcher = copyApplication(locateDesktopLauncher(desktopDir, process.argv[2]));
 
 async function launchDesktop(
 	env: Record<string, string>,
@@ -69,11 +60,20 @@ async function launchDesktop(
 	const id = sequence++;
 	const readyPath = join(root, `${id}-${label}.ready.json`);
 	const controlPath = join(root, `${id}-${label}.control`);
+	const userDataPath = join(root, `${id}-${label}-user-data`);
+	const restoredRoute = mode === "ui" ? "#/v1/projects/desktop-smoke" : undefined;
+	if (restoredRoute) {
+		mkdirSync(userDataPath, { recursive: true });
+		writeFileSync(
+			join(userDataPath, "routes.json"),
+			JSON.stringify({ version: 1, routes: { "local:main": restoredRoute } }),
+		);
+	}
 	const appEnv = {
 		...env,
 		THINKRAIL_DESKTOP_READY_FILE: readyPath,
 		THINKRAIL_DESKTOP_CONTROL_FILE: controlPath,
-		THINKRAIL_DESKTOP_USER_DATA: join(root, `${id}-${label}-user-data`),
+		THINKRAIL_DESKTOP_USER_DATA: userDataPath,
 		THINKRAIL_DESKTOP_HIDDEN: "1",
 		...(mode === "host" ? { THINKRAIL_DESKTOP_E2E_HOST: "1" } : {}),
 	};
@@ -166,7 +166,7 @@ try {
 		);
 		const health = await within(fetch(`${ui.origin}/health`), 10_000, "desktop UI health");
 		if (!health.ok || (await health.text()) !== "ok") throw new Error("desktop UI health failed");
-		if (ui.mode !== "ui" || !ui.windowUrl.startsWith(ui.origin)) {
+		if (ui.mode !== "ui" || ui.windowUrl !== `${ui.origin}/#/v1/projects/desktop-smoke`) {
 			throw new Error(`desktop native window reported an unexpected URL: ${ui.windowUrl}`);
 		}
 	} finally {

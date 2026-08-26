@@ -22,7 +22,8 @@ engine architecture.
 - **Owns:** Electrobun configuration and lifecycle; native window policy; local `bootHost()` startup;
   packaged resource staging; the PI-compatible server-runtime bundle; desktop route preload/persistence;
   desktop package smoke; and the desktop artifact adapter used by shared host probes.
-- **Public surface:** the packaged desktop application and its unsigned installers.
+- **Public surface:** the packaged desktop application and unsigned installers; the build/test-only
+  `@thinkrail/desktop/artifact` launcher locator consumed by smoke and E2E harnesses.
 - **Allowed deps:** `server` for the embedded host, build-support manifest, and artifact probes; `shared`
   for release identity; `contracts` for compatibility/native-bridge types; the completed built web
   artifact; Electrobun `1.18.1`; Bun/Node.
@@ -117,9 +118,12 @@ CI-only and are never shipped as user configuration.
 
 ## Verification
 
-- Native package smoke uses isolated HOME/data/PI/cache paths and ready/control files. It requires the
-  real webview to reach DOM-ready, publishes the dynamic origin, quits through normal lifecycle, and
-  observes clean process exit.
+- Expanded-app smoke uses isolated HOME/data/PI/cache paths and ready/control files. It requires the
+  real webview to reach DOM-ready, runs the shared artifact probes with repository reads denied, quits
+  through normal lifecycle, and observes clean process exit.
+- First-install smoke executes the produced DMG app, Windows setup ZIP, or Linux setup tarball against
+  isolated installation roots, boots the installed host, checks health, and requires graceful exit. The
+  release matrix must pass both smoke layers before uploading the installer.
 - The shared host-agnostic artifact suite runs through a desktop adapter and the CLI adapter. Both must
   load an external synthetic PI extension with no `pi` executable under default and custom agent dirs,
   create a session through all bundled factories, expose bundled and project-portable skills, reach an
