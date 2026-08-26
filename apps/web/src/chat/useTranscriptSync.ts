@@ -10,6 +10,7 @@ import { messagesToRuntime } from "./hydrate";
 export interface TranscriptSyncNeed {
 	connectionGeneration: number | null;
 	compactionTurnId: string | null;
+	reason: "compaction" | "reconnect";
 }
 
 interface TranscriptSyncInput {
@@ -77,6 +78,7 @@ export function transcriptSyncNeed(
 	return {
 		connectionGeneration: generation,
 		compactionTurnId: compaction?.id ?? null,
+		reason: generation !== null ? "reconnect" : "compaction",
 	};
 }
 
@@ -120,7 +122,7 @@ export function useTranscriptSync({
 			sessionId,
 			expectedEventRevision,
 			connectionGeneration,
-			reason: need?.compactionTurnId ? "compaction" : "reconnect",
+			reason: need?.reason ?? "reconnect",
 		})
 			.then((outcome) => {
 				if (!current || outcome === "stale") return;

@@ -63,8 +63,9 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   connection generation. A **generation-only reconnect snapshot is never installed while its host summary
   is streaming**: Pi's persisted `session.messages` omits the in-flight assistant partial, so the synchronizer
   waits for settlement and re-reads rather than deleting that partial and clearing its correlation id.
-  A compaction-triggered read may still install a streaming summary behind the Pi-event revision fence: at
-  that boundary the canonical summary-plus-tail is the intended replacement, and any intervening assistant
+  A pending connection-generation sync dominates even when the same read also satisfies an unresolved
+  compaction need. Only a compaction-only read may install a streaming summary behind the Pi-event revision
+  fence: at that boundary the canonical summary-plus-tail is the intended replacement, and any intervening assistant
   event rejects the snapshot. Transient transcript-read failures retry with a bounded backoff; only exhaustion
   raises the refresh error, and a new generation/compaction key gets a fresh budget. Store reconciliation
   replaces only host-derived conversation state and preserves browser-local state. The persisted
