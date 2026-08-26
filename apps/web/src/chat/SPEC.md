@@ -338,8 +338,8 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   design (steer = injected at the next turn boundary, after the current assistant message + its tool
   calls; queue = runs after the agent settles; only abort halts an in-flight response) and proved
   illegible from key-name hints alone. While streaming the composer therefore self-documents: the
-  compact placeholder states meanings ("Enter steers · Ctrl/Cmd+Enter queues") and a
-  **send-options menu** (`send-menu` trigger beside the send button; rows
+  placeholder states meanings ("Enter steers at the next step · Cmd/Ctrl+Enter queues for when it
+  finishes") and a **send-options menu** (`send-menu` trigger beside the send button; rows
   `send-mode-steer` / `send-mode-queue` / `send-mode-interrupt`) names each mode with a one-line
   meaning + shortcut. Menu rows are **actions** (send the current draft with that mode), never a
   sticky mode switch — a persistent mode would make the next plain Enter silently obey hidden state.

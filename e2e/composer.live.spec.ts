@@ -113,7 +113,14 @@ test("stats refresh after a turn completes (cheap win #3)", { tag: "@agent" }, a
 	await expect(stats).toBeVisible();
 	await expect(stats).toContainText(/[↑↓RW]/);
 
-	await page.setViewportSize({ width: 320, height: 720 });
+	await hideAuxiliaryWorkbench(page);
+	await page.setViewportSize(PHONE_VIEWPORT);
+	await expect
+		.poll(async () => {
+			const chatBox = await page.getByTestId("chat-view").boundingBox();
+			return chatBox ? chatBox.x + chatBox.width : Number.POSITIVE_INFINITY;
+		})
+		.toBeLessThanOrEqual(PHONE_VIEWPORT.width);
 	const skills = page.getByTestId("open-skills");
 	await expect(skills).toBeVisible();
 	const statsBox = await stats.boundingBox();
@@ -121,6 +128,6 @@ test("stats refresh after a turn completes (cheap win #3)", { tag: "@agent" }, a
 	if (!statsBox || !skillsBox) throw new Error("chat header item has no bounding box");
 	for (const box of [statsBox, skillsBox]) {
 		expect(box.x).toBeGreaterThanOrEqual(0);
-		expect(box.x + box.width).toBeLessThanOrEqual(320);
+		expect(box.x + box.width).toBeLessThanOrEqual(PHONE_VIEWPORT.width);
 	}
 });

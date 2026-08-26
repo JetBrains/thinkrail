@@ -1,10 +1,10 @@
 import {
-	RiChat2Line as MessageSquareText,
 	RiGitBranchLine as GitBranch,
 	RiKeyLine as KeyRound,
 	RiLayoutTop2Line as LayoutPanelTop,
 	RiLayoutGridLine as LayoutTemplate,
 	type RemixiconComponentType as LucideIcon,
+	RiChat2Line as MessageSquareText,
 	RiPaletteLine as Palette,
 	RiShieldCheckLine as ShieldCheck,
 	RiEqualizerLine as SlidersHorizontal,

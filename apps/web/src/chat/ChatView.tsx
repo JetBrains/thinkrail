@@ -594,7 +594,7 @@ export default function ChatView({
 			<AskStatesContext.Provider value={askContext}>
 				<div
 					data-testid="chat-view"
-					className="flex h-full min-h-0 flex-col bg-container-workspace-bg [container-type:size]"
+					className="flex h-full min-h-0 min-w-0 flex-col bg-container-workspace-bg [container-type:size]"
 				>
 					<Popover open={planOpen} onOpenChange={setPlanOpen}>
 						<PopoverAnchor asChild>

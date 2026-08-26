@@ -732,17 +732,14 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							refreshing={modelsRefreshing}
 							onRefresh={onRefreshModels}
 							onSelect={onSelectModel}
-							className={cn(
-								"max-w-80 gap-4 px-4 sm:max-w-144",
-								!expanded && "rounded-r-none border-r-0",
-							)}
+							className={cn("max-w-80 gap-4 px-4 sm:max-w-144", !expanded && "rounded-r-none")}
 						/>
 						<ThinkingSelector
 							level={thinkingLevel}
 							levels={currentModel?.thinkingLevels ?? []}
 							onSelect={onSelectThinking}
 							showLabel={false}
-							className={cn("gap-4 px-4", !expanded && "rounded-l-none")}
+							className={cn("gap-4 px-4", !expanded && "-ml-px rounded-l-none")}
 						/>
 					</div>
 					<div
