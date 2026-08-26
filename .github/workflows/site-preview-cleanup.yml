@@ -1,0 +1,99 @@
+name: Website preview cleanup
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: read
+  pull-requests: write
+  statuses: write
+
+concurrency:
+  group: site-preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  cleanup:
+    name: Retire PR preview
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    env:
+      BRANCH: pr-${{ github.event.pull_request.number }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      MARKER: "<!-- thinkrail-site-preview -->"
+      PR: ${{ github.event.pull_request.number }}
+      PROJECT: thinkrail-website
+    steps:
+      - name: Find preview marker
+        id: preview
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          comment_id=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate \
+            --jq "[.[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$MARKER\"))) | .id][0] // empty")
+          if [ -n "$comment_id" ]; then
+            echo "comment_id=$comment_id" >> "$GITHUB_OUTPUT"
+          else
+            echo "No website preview marker found"
+          fi
+      - name: Delete preview deployments
+        if: steps.preview.outputs.comment_id != ''
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          endpoint="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$PROJECT/deployments"
+          list_matching() {
+            local output_file=$1
+            local page=1
+            : > "$output_file"
+            while true; do
+              body=$(curl --fail-with-body --silent --show-error --get "$endpoint" \
+                --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+                --data-urlencode "env=preview" \
+                --data-urlencode "page=$page" \
+                --data-urlencode "per_page=25")
+              jq -e '.success == true' <<< "$body" > /dev/null
+              jq -r --arg branch "$BRANCH" \
+                '.result[] | select(.deployment_trigger.metadata.branch == $branch) | .id' \
+                <<< "$body" >> "$output_file"
+              total_pages=$(jq -r '.result_info.total_pages // 1' <<< "$body")
+              [ "$page" -ge "$total_pages" ] && break
+              page=$((page + 1))
+            done
+          }
+
+          ids_file="$RUNNER_TEMP/website-preview-ids"
+          list_matching "$ids_file"
+          while IFS= read -r deployment_id; do
+            [ -z "$deployment_id" ] && continue
+            response=$(curl --fail-with-body --silent --show-error \
+              --request DELETE \
+              --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              "$endpoint/$deployment_id?force=true")
+            jq -e '.success == true' <<< "$response" > /dev/null
+          done < "$ids_file"
+
+          list_matching "$ids_file"
+          if [ -s "$ids_file" ]; then
+            echo "Preview deployments still exist for $BRANCH"
+            cat "$ids_file"
+            exit 1
+          fi
+      - name: Retire preview metadata
+        if: steps.preview.outputs.comment_id != ''
+        env:
+          COMMENT_ID: ${{ steps.preview.outputs.comment_id }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          body="$MARKER
+          ### 🌐 Website preview
+
+          _Preview retired when this pull request closed._"
+          gh api --method PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$COMMENT_ID" \
+            -f body="$body" > /dev/null
+          gh api "repos/$GITHUB_REPOSITORY/statuses/$HEAD_SHA" \
+            -f state=success \
+            -f context="Website preview" \
+            -f description="Preview retired" > /dev/null
