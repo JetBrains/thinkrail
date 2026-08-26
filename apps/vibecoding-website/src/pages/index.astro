@@ -1,0 +1,32 @@
+---
+import { Landing } from "../landing";
+import "../styles.css";
+
+const title = "ThinkRail — Parallel AI Coding Agents, Under Control";
+const description =
+	"Run parallel AI coding agents safely: each gets a clear plan, an isolated Git worktree, and a visible trail of progress you can review and trust.";
+const canonicalUrl = new URL("/", Astro.site);
+const ogImageUrl = new URL("/og.png", Astro.site);
+---
+
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="description" content={description} />
+		<meta property="og:title" content={title} />
+		<meta property="og:description" content={description} />
+		<meta property="og:type" content="website" />
+		<meta property="og:url" content={canonicalUrl} />
+		<meta property="og:image" content={ogImageUrl} />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:image" content={ogImageUrl} />
+		<link rel="canonical" href={canonicalUrl} />
+		<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+		<title>{title}</title>
+	</head>
+	<body>
+		<Landing client:load />
+	</body>
+</html>
