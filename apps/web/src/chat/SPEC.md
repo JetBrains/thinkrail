@@ -71,14 +71,16 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   `defaultExpanded`; errors auto-expand; a manual toggle wins), or a `"bare"` renderer that owns its
   frame. A `"bare"` call on a dead message (`stopReason` aborted/error — pi never executes those calls)
   renders as errored rather than staying interactive forever.
-- `activity` — a contiguous run of **routine** steps (thinking blocks + routine tool calls), merged
-  across consecutive assistant messages in a round and broken by non-empty text, primary tools, and
-  non-assistant turns. `ActivityGroup` renders it **collapsed by default** behind one header ("N steps ·
-  bash ×2, read ×4"); expanded, steps are slim borderless rows that individually reveal the step's full
-  renderer body. While the trailing run streams, the header is a **live ticker** (spinner + current
-  step's summary), collapsing when answer text starts. A single-step run renders its step row directly.
-  Errored *routine* steps get **no special treatment** (deliberate — agents often recover; `ErrorTurn`
-  and primary error-auto-expand are the safety nets).
+- `thinking` / `activity` — routine work is a presentational hierarchy, never invented pi entry
+  parentage. Each non-empty thinking block starts a **collapsed Thinking disclosure** containing its exact
+  text followed by every routine tool call until the next thinking block or existing activity boundary;
+  consecutive blocks therefore become sibling disclosures, even across assistant-message boundaries.
+  Expanding reveals the thought first, then slim tool rows whose own disclosures reveal their renderer
+  bodies. Routine tools with no preceding thought — including a prefix before the first thought — stay in
+  the neutral **Activity fallback**; its single-step run still renders the step directly. Non-empty text,
+  primary tools, and non-assistant turns break both forms. The trailing form alone carries the live ticker;
+  settled headers summarize their child tools. Errored routine tools get **no special treatment**
+  (deliberate — agents often recover; `ErrorTurn` and primary error-auto-expand are the safety nets).
 - `divider` — the round-end summary (`TurnDivider` + pure `turnDivider` deriver), anchored the instant a
   round ends: elapsed time, tool-call count, and the round's written files as **two chips split by owning
   tool** — “N specs” and “N files changed”. The split is a **partition** (a path lands on exactly
@@ -102,10 +104,10 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   read as switching between Specs and Changes; closing is “never mind” and leaves the tool where the user
   last sent it.
 
-Row/step ids are stable across streaming snapshots (first step's `toolCallId`, or message-anchored index —
-pi appends, never reorders), so fold state survives re-derivation and virtualization: **every fold surface
-(activity groups, step rows, `ToolCard`, the divider's multi-artifact chips) records manual toggles in the
-shared `foldState` cache**
+Row/step ids are stable across streaming snapshots (the thinking block's message-anchored index, a
+fallback's first `toolCallId`, or the step's own id — pi appends, never reorders), so fold state survives
+re-derivation and virtualization: **every fold surface (thinking groups, activity fallbacks, tool rows,
+`ToolCard`, the divider's multi-artifact chips) records manual toggles in the shared `foldState` cache**
 (`foldState.ts`, keyed by row/step id. Two hooks over that module: **`useFold`** for independent booleans,
 and **`useSelection`** for a single-choice group — the divider's chips, which store the *selected key* under
 `${rowId}:artifacts` rather than a boolean per side, so "only one list open" cannot be violated;
@@ -124,8 +126,9 @@ the **capability** registers with the pi session server-side (custom tool or pi 
 - a **`summary`** — a pure one-liner for collapsed headers and activity-step rows,
 - a **`chrome`** — `"card"` (default, the `ToolCard` frame) or `"bare"` (owns its frame; for
   interactive/primary tools like `ask_user_question`),
-- **prominence metadata** — `prominence`: `"routine"` (default, incl. unregistered tools — folds into
-  activity groups) or `"primary"` (escapes the fold; `"bare"` chrome implies it **unconditionally**, even
+- **prominence metadata** — `prominence`: `"routine"` (default, incl. unregistered tools — nests under
+  the current Thinking disclosure or enters the neutral Activity fallback) or `"primary"` (escapes the
+  fold; `"bare"` chrome implies it **unconditionally**, even
   over an explicit `prominence: "routine"` — a self-framed renderer can't live inside a fold's step
   rows, so a misregistration must not silently break the fold), and `defaultExpanded` (a
   primary card renders expanded once complete, e.g. `visualize`). Read through the single
@@ -775,7 +778,7 @@ deriver — `working` → `thinking` → `running-tool` → `writing`, plus `com
 trailing turn is a running compaction) — not a per-turn cursor — so it can't
 duplicate and it fills the post-send gap. Outside the streaming window (a manual compact, or the
 pre-prompt compaction pi runs inside `prompt()` before `agent_start`) the footer is absent by design —
-the running `CompactionNotice` row itself carries the spinner, so the beat is never dead air. The activity fold's live ticker is a *status* line (spinner,
+the running `CompactionNotice` row itself carries the spinner, so the beat is never dead air. The trailing Thinking/Activity fold's live ticker is a *status* line (spinner,
 like a running card header), not a second loader. `data-testid="stream-indicator"` + `data-phase` make
 the lifecycle assertable.
 
