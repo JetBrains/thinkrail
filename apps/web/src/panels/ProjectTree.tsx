@@ -47,6 +47,7 @@ import {
 import { errorText, getTransport, prewarmWorkspaceSkillLoad } from "../transport";
 import { AddProjectMenu } from "./AddProjectMenu";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { createProjectFromScratch } from "./createProject";
 import { ExistingWorktreeDialog } from "./ExistingWorktreeDialog";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
 import { useOpenProject } from "./useOpenProject";
@@ -219,6 +220,7 @@ export function ProjectTree() {
 				<AddProjectMenu
 					recentProjects={recentProjects}
 					onOpen={() => void pickAndOpen()}
+					onCreate={() => void createProjectFromScratch()}
 					onOpenRecent={(p) => void openProject(p)}
 				>
 					<Button

@@ -23,10 +23,12 @@ test("opens a clean ThinkRail with no projects imported", async ({ page }) => {
 
 	await expect(page.getByTestId("welcome-title")).toHaveText("ThinkRail");
 	await expect(page.getByTestId("welcome-cta")).toContainText("Open project");
-	await expect(page.getByTestId("welcome-action")).toHaveCount(0);
+	await expect(page.getByTestId("welcome-action")).toHaveCount(1);
+	await expect(page.getByTestId("welcome-action")).toContainText("Create project from scratch");
 
 	await page.getByTestId("welcome-cta").click();
 	await expect(page.getByTestId("menu-open-project")).toBeVisible();
+	await expect(page.getByTestId("menu-create-project")).toBeVisible();
 });
 
 test("the Welcome provider warning only shows when no provider is connected, and opens Settings", async ({

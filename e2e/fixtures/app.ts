@@ -44,6 +44,7 @@ export async function hideAuxiliaryWorkbench(page: Page): Promise<void> {
 function resetState(): void {
 	rmSync(join(E2E_DATA_DIR, "projects.json"), { force: true });
 	removeTree(join(E2E_DATA_DIR, "worktrees"));
+	removeTree(join(E2E_DATA_DIR, "projects"));
 	removeTree(join(E2E_PI_AGENT_DIR, "sessions"));
 	rmSync(E2E_CENTRAL_ARTIFACT, { force: true });
 	writeFileSync(E2E_CENTRAL_STATE, "");

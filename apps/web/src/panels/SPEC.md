@@ -175,13 +175,26 @@ label + explainer bottom-left; the primary is a filled-primary card carrying the
 hook, others quiet `welcome-action`s). Welcome is **the mode fork**: with a project shown it always pairs
 **"Start building"** (isolated worktree) with **"Work in project folder"** (the Default workspace) so the
 two working modes are a visible choice, not a hidden default. The cards by state: **no projects** →
-**"Open project"** (one card); **project + `hasSpecs`** → **"Start building"** (primary) + "Work in
+**"Create project from scratch"** + **"Open project"** (two first-class cards, same architecture — Open
+project is not demoted); **project + `hasSpecs`** → **"Start building"** (primary) + "Work in
 project folder"; **project + no specs** → a spec-first **"Set up project"** (primary) + "Start building"
-+ "Work in project folder". **"Open project" appears only in the no-projects state** — where it's the
-only possible action; once a project is shown, opening another is the projects-rail **"+"** (the same
-dropdown), so Welcome stays the *work-in-this-project* surface. That card hangs the shared
-**`AddProjectMenu`** dropdown off it (same menu as the projects-rail "+": Open project / Open GitHub (soon)
-/ Recents). Recents is the store's `recentProjects`: one last-opened path list containing open + closed
++ "Work in project folder". **The two project-birth cards appear only in the no-projects state** — where
+they're the only possible actions; once a project is shown, opening or creating another is the
+projects-rail **"+"** (the same dropdown), so Welcome stays the *work-in-this-project* surface. The Open
+card hangs the shared **`AddProjectMenu`** dropdown off it (same menu as the projects-rail "+": **New
+project from scratch** / **Open existing project** / Open GitHub (soon) / Recents). The Create card runs
+`createProjectFromScratch` directly (it needs no folder picker).
+
+**Create project from scratch** (`createProject.ts`'s `createProjectFromScratch`, shared by the Welcome
+card and the `AddProjectMenu` item) is the no-repo entry: it calls **`project.create`** →
+`{ project, workspace }` (the server creates a real *draft* project + its Default workspace, see
+[[submodule-server-projects]]), adopts them into the store (`applyProjectUpdated` / `setWorkspaces` /
+`selectProject` / `activateWorkspace`), then opens a chat in the Default workspace seeded with
+`/skill:starting-a-new-project`. The agent-led setup interview runs there (asking what to build,
+clarifying via the `ask_user_question` widget, asking the name **last**), writes `goal-and-requirements.md`,
+and calls the host `finalize_project` tool, which names the project and clears `draft` — the rail reveals
+the real name via the normal `project.updated` stream. A failed `project.create` toasts and leaves
+nothing (the server rolls back); domain stays server-owned throughout. Recents is the store's `recentProjects`: one last-opened path list containing open + closed
 records with no status badge; selecting either runs the shared open flow and lands at Project Home, with a
 closed record retaining its id and workspace state. `Card` is a `forwardRef` usable as a Radix `asChild`
 trigger. **"Work in project folder"**

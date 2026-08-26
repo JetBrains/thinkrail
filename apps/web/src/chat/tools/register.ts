@@ -3,6 +3,7 @@ import { registerToolRenderer } from "../toolRegistry";
 import { AskUserQuestionCard } from "./AskUserQuestionCard";
 import { BashCard } from "./BashCard";
 import { EditCard } from "./EditCard";
+import { FinalizeProjectCard } from "./FinalizeProjectCard";
 import { ReadCard } from "./ReadCard";
 import { ResolveCommentCard } from "./ResolveCommentCard";
 import { SpecToolCard, specToolSummary } from "./SpecToolCard";
@@ -36,6 +37,11 @@ for (const toolName of [
 
 registerToolRenderer("resolve_comment", ResolveCommentCard, {
 	summary: ({ args }) => strArg(args, "commentId"),
+});
+
+registerToolRenderer("finalize_project", FinalizeProjectCard, {
+	prominence: "primary",
+	summary: ({ args }) => strArg(args, "name"),
 });
 
 registerToolRenderer("ask_user_question", AskUserQuestionCard, { chrome: "bare" });

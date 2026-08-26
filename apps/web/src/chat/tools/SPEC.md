@@ -29,6 +29,11 @@ registration runs once when the chat module mounts. Unregistered tools fall back
   (capability: the server's `agent` module + `reviews` seam; see [[submodule-server-reviews]]): a ✓ +
   the resolved comment id/note. **Routine** — the review sidebar is where resolution state lives; the
   card is just the in-transcript trace.
+- **`FinalizeProjectCard`** — the compact receipt for the host-owned `finalize_project` tool, the
+  create-from-scratch capability (server: `agent/finalizeProjectTool` + the `projects` finalize seam; see
+  [[submodule-server-agent]] and [[submodule-server-projects]]): a 🚀 + "Project ready: <name>". Marked
+  **primary** (it's the milestone that closes new-project setup); the rail reveal itself rides the normal
+  `project.updated` stream, so the card is presentational only.
 - **`AskUserQuestionCard`** — the inline questionnaire for the host-owned `ask_user_question` tool
   (capability + rationale: the server's `agent/askUserQuestion` SPEC). Registered `"bare"`: it owns its
   full-width frame, never folds, and answers through the `ChatActions` context (correlated by
