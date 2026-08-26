@@ -19,7 +19,7 @@ independently of the host and dials it over the network; a phone reaches the sel
 
 - **Engine host** (`packages/server` + `packages/shared`, launched by `apps/cli` now / `apps/desktop`
   in local-host mode later): owns `pi`, session state, persistence, and serves the wire endpoint. It bundles pi extensions
-  (`pi-web-access`, `pi-visualize`, `pi-spec-graph`, `pi-thinkrail-workflow`) into every session.
+  (`pi-web-access`, `pi-visualize`, `pi-next-steps`, `pi-spec-graph`, `pi-thinkrail-workflow`, `pi-todos`) into every session.
 - **The wire** (`packages/contracts`): the typed, versioned protocol — the only coupling between client
   and host.
 - **UI client** (`apps/web`): a mobile-first React client, transport-driven and endpoint-configurable,
@@ -37,6 +37,7 @@ packages/shared     shellEnv (server-side only)
 packages/spec-graph portable pi extension: spec_* tools + skill (bundled into every session by packages/server;
                     its pi-free core/ read model also backs the host's spec.graph read method)
 packages/pi-visualize          portable pi extension: the visualize tool (bundled into every session)
+packages/pi-next-steps         portable pi extension: terminating agent-authored next-step actions
 packages/pi-thinkrail-workflow pi extension: the workflow skill system + its always-on routing rule
                     (bundled into every session; workspace-internal, not portable)
 ```

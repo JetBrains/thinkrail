@@ -293,10 +293,11 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     from session discovery—even if the global artifact changes—so a session cannot mutate its generation.
     All other user extensions
     retain normal discovery. The loader then adds
-    automatic **portable cross-agent skill aliases**, then loads the five bundled extensions — **`pi-web-access`**
-    (`web_search` + `fetch_content`), **`pi-visualize`** (`visualize`), **`pi-spec-graph`** (the `spec_*`
-    tools + its `before_agent_start` rule), **`pi-thinkrail-workflow`** (the workflow-router rule +
-    workflow skills), and **`pi-todos`** (the `todo_*` tools + its skill). Existing personal aliases are Claude
+    automatic **portable cross-agent skill aliases**, then loads the six bundled extensions — **`pi-web-access`**
+    (`web_search` + `fetch_content`), **`pi-visualize`** (`visualize`), **`pi-next-steps`**
+    (`offer_next_steps`), **`pi-spec-graph`** (the `spec_*` tools + its `before_agent_start` rule),
+    **`pi-thinkrail-workflow`** (the workflow-router rule + workflow skills), and **`pi-todos`**
+    (the `todo_*` tools + its skill). Existing personal aliases are Claude
     (`${CLAUDE_CONFIG_DIR:-~/.claude}/skills`), Codex (`${CODEX_HOME:-~/.codex}/skills`), Copilot
     (`~/.copilot/skills`), and Gemini (`${GEMINI_CLI_HOME:-~}/.gemini/skills`), **plus each installed Claude
     plugin's `skills/` dir** (read from `~/.claude/plugins/installed_plugins.json` — the resolved `installPath`,
@@ -394,8 +395,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   fixtures + **pure catalog helpers value-imported from the package root** — today exactly
   `getSupportedThinkingLevels` + `clampThinkingLevel`, data-only projections over `Model`; *dispatch*
   still goes through the shared `ModelRuntime`, never pi-ai's stream/complete — plus the `/bun-oauth` + `/bedrock-provider`
-  + `/compat` subpaths, value-imported **only** inside `registerBundledRuntime`'s dynamic imports); `pi-web-access` + `pi-visualize` + `pi-spec-graph` +
-  `pi-thinkrail-workflow` + `pi-todos` (the bundled extensions — loaded by path, never value-imported here; the
+  + `/compat` subpaths, value-imported **only** inside `registerBundledRuntime`'s dynamic imports); `pi-web-access` + `pi-visualize` + `pi-next-steps` +
+  `pi-spec-graph` + `pi-thinkrail-workflow` + `pi-todos` (the bundled extensions — loaded by path, never value-imported here; the
   compiled binary's value-imports live in `apps/cli`'s generated build module); `typebox` (the
   `ask_user_question` parameter schema); `trash` (the cross-platform OS recycle-bin implementation;
   called with globbing disabled and allowed to throw — never degraded to `unlink`);

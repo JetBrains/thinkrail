@@ -124,6 +124,9 @@ the **capability** registers with the pi session server-side (custom tool or pi 
 - a **`summary`** — a pure one-liner for collapsed headers and activity-step rows,
 - a **`chrome`** — `"card"` (default, the `ToolCard` frame) or `"bare"` (owns its frame; for
   interactive/primary tools like `ask_user_question`),
+- a **`placement`** — `"transcript"` (default) or `"composer"`; successful composer tools are omitted
+  from historical rows and only the current one is rendered in the composer accessory slot, while an
+  errored/dead call falls back to the visible transcript card,
 - **prominence metadata** — `prominence`: `"routine"` (default, incl. unregistered tools — folds into
   activity groups) or `"primary"` (escapes the fold; `"bare"` chrome implies it **unconditionally**, even
   over an explicit `prominence: "routine"` — a self-framed renderer can't live inside a fold's step
@@ -131,17 +134,21 @@ the **capability** registers with the pi session server-side (custom tool or pi 
   primary card renders expanded once complete, e.g. `visualize`). Read through the single
   **`resolveProminence`** seam — where a per-user override map (settings) can plug in later.
 
-Unregistered tools fall back to `DefaultToolRenderer`. Tools needing user input mid-run either route
-through the extension-UI bridge (`pi.extensionUi` → `ExtUiDialog`) or — for a rich inline card — render
-from their `toolCall` args and reply through **`ChatActions`** (see below). Worked example: the
-`ask_user_question` flow in [tools/SPEC.md](tools/SPEC.md).
+Unregistered tools fall back to `DefaultToolRenderer`. `deriveComposerTool` exposes a composer-placed
+renderer only when the session is idle, the final meaningful assistant content ends with its successful
+call, and no later user/error turn exists; live settlement's trailing success marker and hydration therefore
+resolve identically without client persistence. Tools needing user input mid-run either route through the
+extension-UI bridge (`pi.extensionUi` → `ExtUiDialog`) or — for a rich inline card — render from their
+`toolCall` args and reply through **`ChatActions`** (see below). Worked examples: `ask_user_question` and
+`offer_next_steps` in [tools/SPEC.md](tools/SPEC.md).
 
 ## Interaction seams
 
 - **`ChatActions`** — a React context (provided by `ChatView`, `null` standalone): how a renderer talks
   **back** to the agent without importing store/transport. Today: `answerQuestion(toolCallId, result)` —
-  it rejects when the host refuses (unknown/answered/superseded call), and the caller owns the failure UX —
-  plus `focusComposer()`, for a renderer that resolves *itself*: it unmounts the control the user was
+  it rejects when the host refuses (unknown/answered/superseded call), and the caller owns the failure UX;
+  `sendPrompt(text)` sends a composer action through the ordinary idle prompt path; plus `focusComposer()`,
+  for a renderer that resolves *itself*: it unmounts the control the user was
   standing on, and focus would otherwise fall to `<body>` and swallow every following keystroke (the same
   stranding the history overlay's dismiss refocus avoids). Only the card's own reply path calls it, and
   only while the card still holds focus.
@@ -292,6 +299,14 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   text to the draft alongside the `appendErrorTurn`. Trade-off, accepted: `queue_update` carries text
   only, so a queued image attachment shows no chip in the strip; the canonical transcript turn later
   renders its image blocks with the hydrated-turn fallback labels. E2e: `queue.live.spec.ts` (@agent).
+- **Agent-chosen next-step chips** — the current successful `offer_next_steps` composer tool renders
+  between `QueueStrip` and the composer as `NextStepChips`; capability and native pi behavior belong to
+  [[module-pi-next-steps]]. The row is idle + empty-draft only, wraps within the viewport, and consumes the
+  tool's validated result details rather than trusting raw arguments. Activating one chip latches the row
+  against a second activation and sends its complete prompt immediately through `ChatActions.sendPrompt` —
+  never draft insertion and never a tool-specific wire method. The optimistic user turn makes the offer
+  stale immediately; a rejected send appends an error after it, so old chips cannot revive. Successful
+  historical calls have no transcript row, while failed/dead calls retain the normal tool fallback.
 - **Streaming send modes: split send + interrupt** (`Composer`) — steer/queue semantics are pi's loop
   design (steer = injected at the next turn boundary, after the current assistant message + its tool
   calls; queue = runs after the agent settles; only abort halts an in-flight response) and proved
