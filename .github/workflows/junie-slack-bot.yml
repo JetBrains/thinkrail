@@ -1,0 +1,19 @@
+name: Junie Slack Bot
+
+on:
+  schedule:
+    - cron: "0 */4 * * *"
+  workflow_dispatch:
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jetbrains/junie-slack-bot/.github/actions/run-agent@v1
+        with:
+          config: .junie-live/slack-bot.yaml
+          run-id-prefix: github-slack-bot
+          configuration-envs: |
+            JUNIE_SLACK_BOT_JUNIE_API_KEY=${{ secrets.JUNIE_SLACK_BOT_JUNIE_API_KEY }}
+            JUNIE_SLACK_BOT_BACKEND_TOKEN=${{ secrets.JUNIE_SLACK_BOT_BACKEND_TOKEN }}
