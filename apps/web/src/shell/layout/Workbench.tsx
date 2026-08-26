@@ -23,11 +23,15 @@ import {
 	RiLayoutLeftLine as PanelLeftOpen,
 	RiLayoutRightLine as PanelRightOpen,
 	RiLayout2Line as PanelsTopLeft,
+	RiBookOpenFill,
+	RiBookOpenLine,
 	RiChat2Fill,
 	RiChat2Line,
 	RiCollapseVerticalLine,
 	RiExpandVerticalLine,
 	RiFileFill,
+	RiFolder2Fill,
+	RiFolder2Line,
 	RiGitPullRequestFill,
 	RiLayout2Fill,
 	RiTerminalBoxFill,
@@ -400,7 +404,16 @@ function tabIcon(tab: LayoutTab, active = false): ReactNode {
 		case "terminal":
 			return active ? <RiTerminalBoxFill className={cls} /> : <SquareTerminal className={cls} />;
 		case "tool":
-			return active ? <RiLayout2Fill className={cls} /> : <PanelsTopLeft className={cls} />;
+			switch (tab.tool) {
+				case "projects":
+					return active ? <RiFolder2Fill className={cls} /> : <RiFolder2Line className={cls} />;
+				case "specs":
+					return active ? <RiBookOpenFill className={cls} /> : <RiBookOpenLine className={cls} />;
+				case "files":
+					return active ? <RiFileFill className={cls} /> : <File className={cls} />;
+				default:
+					return active ? <RiLayout2Fill className={cls} /> : <PanelsTopLeft className={cls} />;
+			}
 	}
 }
 
