@@ -57,6 +57,7 @@ import {
 	type HistoryTarget,
 	selectActiveWorkspaceProjectId,
 	selectLayoutResourcePlacement,
+	selectWorkspaceById,
 	selectWorkspaceNavTick,
 	selectWorkspaceSessionIds,
 	selectWorkspaceTick,
@@ -600,6 +601,7 @@ interface AppState {
 	expandedProjectIds: Record<string, true>;
 	selectedProjectId: string | null;
 	activeWorkspaceId: string | null;
+	workspaceSelectionHistory: string[];
 	routeChatTarget: RouteChatTarget | null;
 	routeChatTargetGeneration: number;
 	layoutSnapshotsByWorkspace: Record<string, WorkspaceLayoutSnapshot>;
@@ -850,6 +852,32 @@ function withExpandedProject(
 	projectId: string,
 ): Record<string, true> {
 	return record[projectId] ? record : { ...record, [projectId]: true };
+}
+
+function withWorkspaceSelected(history: string[], workspaceId: string): string[] {
+	return history[0] === workspaceId
+		? history
+		: [workspaceId, ...history.filter((id) => id !== workspaceId)];
+}
+
+function recentWorkspaceFallback(
+	state: Pick<
+		AppState,
+		| "projects"
+		| "workspaces"
+		| "activeWorkspaceId"
+		| "removedWorkspaceIds"
+		| "workspaceSelectionHistory"
+	>,
+	excludedWorkspaceId: string,
+): Workspace | null {
+	const openProjectIds = new Set(state.projects.map((project) => project.id));
+	for (const workspaceId of state.workspaceSelectionHistory) {
+		if (workspaceId === excludedWorkspaceId || state.removedWorkspaceIds[workspaceId]) continue;
+		const workspace = selectWorkspaceById(state, workspaceId);
+		if (workspace && openProjectIds.has(workspace.projectId)) return workspace;
+	}
+	return null;
 }
 
 function pruneExpandedProjects(
@@ -1273,6 +1301,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	expandedProjectIds: Object.create(null) as Record<string, true>,
 	selectedProjectId: null,
 	activeWorkspaceId: null,
+	workspaceSelectionHistory: [],
 	routeChatTarget: null,
 	routeChatTargetGeneration: 0,
 	layoutSnapshotsByWorkspace: {},
@@ -1404,6 +1433,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	applyWorkspaceRemoved: (projectId, workspaceId) => {
 		const s = get();
 		const wasActive = s.activeWorkspaceId === workspaceId;
+		const fallbackWorkspace = wasActive ? recentWorkspaceFallback(s, workspaceId) : null;
 		const name = s.workspaces[projectId]?.find((w) => w.id === workspaceId)?.name;
 		set((state) => {
 			const removedSessions = new Set(selectWorkspaceSessionIds(state, workspaceId));
@@ -1411,6 +1441,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 				removedWorkspaceIds: Object.assign(Object.create(null), state.removedWorkspaceIds, {
 					[workspaceId]: true,
 				}) as Record<string, true>,
+				workspaceSelectionHistory: state.workspaceSelectionHistory.filter(
+					(id) => id !== workspaceId,
+				),
 				fsChangesByWorkspace: omitKey(state.fsChangesByWorkspace, workspaceId),
 				skillChangeTickByWorkspace: omitKey(state.skillChangeTickByWorkspace, workspaceId),
 				specsByWorkspace: omitKey(state.specsByWorkspace, workspaceId),
@@ -1434,7 +1467,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 		s.removeWorkspace(projectId, workspaceId);
 		s.clearWorkspaceTabs(workspaceId);
 		if (wasActive) {
-			s.selectProject(projectId);
+			if (fallbackWorkspace) s.activateWorkspace(fallbackWorkspace);
+			else s.selectProject(projectId);
 			toast.info(`Workspace "${name ?? "?"}" was removed`);
 		}
 	},
@@ -1467,7 +1501,14 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((state) =>
 			state.removedWorkspaceIds[workspace.id]
 				? {}
-				: { selectedProjectId: workspace.projectId, activeWorkspaceId: workspace.id },
+				: {
+						selectedProjectId: workspace.projectId,
+						activeWorkspaceId: workspace.id,
+						workspaceSelectionHistory: withWorkspaceSelected(
+							state.workspaceSelectionHistory,
+							workspace.id,
+						),
+					},
 		),
 	activateWorkspaceFromRoute: (workspace, sessionId) =>
 		set((state) => {
@@ -1477,6 +1518,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 				...advanced.patch,
 				selectedProjectId: workspace.projectId,
 				activeWorkspaceId: workspace.id,
+				workspaceSelectionHistory: withWorkspaceSelected(
+					state.workspaceSelectionHistory,
+					workspace.id,
+				),
 				routeChatTarget: sessionId
 					? {
 							workspaceId: workspace.id,
@@ -2698,6 +2743,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 				},
 				selectedProjectId: req.projectId,
 				activeWorkspaceId: req.workspaceId,
+				workspaceSelectionHistory: withWorkspaceSelected(
+					state.workspaceSelectionHistory,
+					req.workspaceId,
+				),
 			};
 		}),
 	clearChatLocation: () => set({ chatLocationRequest: null }),

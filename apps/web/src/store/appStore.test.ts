@@ -135,6 +135,7 @@ beforeEach(() => {
 		expandedProjectIds: {},
 		selectedProjectId: null,
 		activeWorkspaceId: null,
+		workspaceSelectionHistory: [],
 		activeLogin: null,
 		settingsOpen: false,
 		settingsSection: "providers",
@@ -1606,6 +1607,34 @@ test("project and workspace navigation update both scope ids atomically", () => 
 	unsubscribe();
 });
 
+test("workspace selection history tracks ordinary, route, and history-search activation", () => {
+	const w1 = pushedWorkspace();
+	const w2 = pushedWorkspace({ id: "w2", projectId: "p2" });
+	useAppStore.setState({
+		projects: [project(), project({ id: "p2" })],
+		workspaces: { p1: [w1], p2: [w2] },
+	});
+
+	useAppStore.getState().activateWorkspace(w1);
+	useAppStore.getState().activateWorkspace(w2);
+	expect(useAppStore.getState().workspaceSelectionHistory).toEqual(["w2", "w1"]);
+
+	useAppStore.getState().activateWorkspaceFromRoute(w1);
+	expect(useAppStore.getState().workspaceSelectionHistory).toEqual(["w1", "w2"]);
+
+	useAppStore.getState().requestChatLocation({
+		workspaceId: "w2",
+		projectId: "p2",
+		sessionId: "session",
+		messageIndex: 0,
+		anchorText: "target",
+	});
+	expect(useAppStore.getState().workspaceSelectionHistory).toEqual(["w2", "w1"]);
+
+	useAppStore.getState().selectProject("p1");
+	expect(useAppStore.getState().workspaceSelectionHistory).toEqual(["w2", "w1"]);
+});
+
 test("installWelcomeSnapshot lands one complete snapshot and advances its own generation", () => {
 	const p1 = project();
 	const closed = project({
@@ -1794,7 +1823,48 @@ test("addWorkspace is a no-op for a project whose list was never fetched", () =>
 	expect(useAppStore.getState().workspaces).toEqual({});
 });
 
-test("applyWorkspaceRemoved drops the row, clears its tabs, and returns the active client to Welcome + toast", () => {
+test("applyWorkspaceRemoved restores the most-recent workspace across projects", () => {
+	const removed = pushedWorkspace();
+	const previous = pushedWorkspace({ id: "w2", projectId: "p2", name: "previous" });
+	useAppStore.setState({
+		projects: [project(), project({ id: "p2" })],
+		workspaces: { p1: [removed], p2: [previous] },
+		selectedProjectId: "p1",
+		activeWorkspaceId: "w1",
+		workspaceSelectionHistory: ["w1", "w2"],
+		toasts: [],
+	});
+
+	useAppStore.getState().applyWorkspaceRemoved("p1", "w1");
+
+	const state = useAppStore.getState();
+	expect(state.activeWorkspaceId).toBe("w2");
+	expect(state.selectedProjectId).toBe("p2");
+	expect(state.workspaceSelectionHistory).toEqual(["w2"]);
+	expect(state.toasts).toHaveLength(1);
+});
+
+test("applyWorkspaceRemoved skips missing, tombstoned, and closed-project history entries", () => {
+	const removed = pushedWorkspace();
+	const tombstoned = pushedWorkspace({ id: "tombstoned", projectId: "p3" });
+	const closed = pushedWorkspace({ id: "closed", projectId: "p2" });
+	const valid = pushedWorkspace({ id: "valid", projectId: "p3" });
+	useAppStore.setState({
+		projects: [project(), project({ id: "p3" })],
+		workspaces: { p1: [removed], p2: [closed], p3: [tombstoned, valid] },
+		removedWorkspaceIds: { tombstoned: true },
+		selectedProjectId: "p1",
+		activeWorkspaceId: "w1",
+		workspaceSelectionHistory: ["w1", "missing", "tombstoned", "closed", "valid"],
+	});
+
+	useAppStore.getState().applyWorkspaceRemoved("p1", "w1");
+
+	expect(useAppStore.getState().activeWorkspaceId).toBe("valid");
+	expect(useAppStore.getState().selectedProjectId).toBe("p3");
+});
+
+test("applyWorkspaceRemoved drops the row, clears its tabs, and returns the active client to Welcome + toast when history is empty", () => {
 	useAppStore.setState({
 		workspaces: { p1: [pushedWorkspace()] },
 		selectedProjectId: "stale-project",
@@ -1911,6 +1981,7 @@ test("applyWorkspaceRemoved on a non-active workspace drops the row silently (no
 	useAppStore.setState({
 		workspaces: { p1: [pushedWorkspace(), keep] },
 		activeWorkspaceId: "other",
+		workspaceSelectionHistory: ["other", "w1"],
 		toasts: [],
 	});
 
@@ -1919,6 +1990,7 @@ test("applyWorkspaceRemoved on a non-active workspace drops the row silently (no
 	const s = useAppStore.getState();
 	expect(s.workspaces.p1?.map((w) => w.id)).toEqual(["other"]);
 	expect(s.activeWorkspaceId).toBe("other");
+	expect(s.workspaceSelectionHistory).toEqual(["other"]);
 	expect(s.toasts).toHaveLength(0);
 });
 

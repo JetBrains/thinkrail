@@ -30,6 +30,28 @@ test("workspace removal propagates — no zombie row in a second tab", async ({ 
 	await expect(page2.getByTestId("toast").filter({ hasText: created.name })).toBeVisible();
 });
 
+test("removing the active workspace restores the previously selected workspace", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const previous = await createWorkspaceViaDialog(page);
+	const removed = await createWorkspaceViaDialog(page);
+	const previousRow = worktreeRows(page).filter({ hasText: previous.name });
+	const removedRow = worktreeRows(page).filter({ hasText: removed.name });
+
+	await previousRow.getByRole("button").first().click();
+	await removedRow.getByRole("button").first().click();
+	await expect(removedRow).toHaveAttribute("data-active", "true");
+
+	await openWorkspaceMenu(removedRow);
+	await page.getByTestId("workspace-remove").click();
+	await page.getByTestId("confirm-remove").click();
+
+	await expect(removedRow).toHaveCount(0);
+	await expect(previousRow).toHaveAttribute("data-active", "true");
+	await expect(page.getByTestId("welcome")).toHaveCount(0);
+});
+
 test("workspace creation propagates to a second tab's rail", async ({ page, context }) => {
 	await openFixtureProject(page);
 
