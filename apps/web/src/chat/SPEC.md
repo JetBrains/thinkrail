@@ -124,9 +124,13 @@ the **capability** registers with the pi session server-side (custom tool or pi 
 - a **`summary`** — a pure one-liner for collapsed headers and activity-step rows,
 - a **`chrome`** — `"card"` (default, the `ToolCard` frame) or `"bare"` (owns its frame; for
   interactive/primary tools like `ask_user_question`),
-- a **`placement`** — `"transcript"` (default) or `"composer"`; successful composer tools are omitted
-  from historical rows and only the current one is rendered in the composer accessory slot, while an
-  errored/dead call falls back to the visible transcript card,
+- a **`placement`** — `"transcript"` (default) or `"composer"`; a **successful** composer call is omitted
+  from historical rows and only the current one is rendered in the composer accessory slot
+  (`ComposerToolSlot`, which resolves the registered renderer and hands it the completed result), while
+  any other outcome — errored, or dead with no result — keeps the ordinary transcript row, so a failed
+  offer is never silently invisible. Success is the pivot on both sides, which is what keeps the row and
+  the slot from ever showing the same call twice. The round divider's tool count follows the same
+  predicate, so its summary can never name a call the round does not show,
 - **prominence metadata** — `prominence`: `"routine"` (default, incl. unregistered tools — folds into
   activity groups) or `"primary"` (escapes the fold; `"bare"` chrome implies it **unconditionally**, even
   over an explicit `prominence: "routine"` — a self-framed renderer can't live inside a fold's step
@@ -134,10 +138,13 @@ the **capability** registers with the pi session server-side (custom tool or pi 
   primary card renders expanded once complete, e.g. `visualize`). Read through the single
   **`resolveProminence`** seam — where a per-user override map (settings) can plug in later.
 
-Unregistered tools fall back to `DefaultToolRenderer`. `deriveComposerTool` exposes a composer-placed
-renderer only when the session is idle, the final meaningful assistant content ends with its successful
-call, and no later user/error turn exists; live settlement's trailing success marker and hydration therefore
-resolve identically without client persistence. Tools needing user input mid-run either route through the
+Unregistered tools fall back to `DefaultToolRenderer`. `deriveComposerTool` (`rows.ts`, pure over
+`turns`/`toolResults`/`isStreaming`) exposes a composer-placed renderer only when the session is idle, the
+final meaningful assistant content ends with its successful call, and no later user/error turn exists —
+"meaningful" skipping blank text/thinking blocks exactly as `deriveRows` does, and an aborted/errored
+assistant message never offering at all. It reads *past* a trailing `system` turn, because only the live
+path appends the settlement success marker: live settlement and hydration therefore resolve identically
+without client persistence. Tools needing user input mid-run either route through the
 extension-UI bridge (`pi.extensionUi` → `ExtUiDialog`) or — for a rich inline card — render from their
 `toolCall` args and reply through **`ChatActions`** (see below). Worked examples: `ask_user_question` and
 `offer_next_steps` in [tools/SPEC.md](tools/SPEC.md).
@@ -307,6 +314,10 @@ extension-UI bridge (`pi.extensionUi` → `ExtUiDialog`) or — for a rich inlin
   never draft insertion and never a tool-specific wire method. The optimistic user turn makes the offer
   stale immediately; a rejected send appends an error after it, so old chips cannot revive. Successful
   historical calls have no transcript row, while failed/dead calls retain the normal tool fallback.
+  E2e: `next-steps.spec.ts` (no-agent — a seeded transcript supplies the offer and the send is answered
+  on the socket, so the row and both send outcomes are covered without a provider) +
+  `next-steps.live.spec.ts` (@agent — a real model authors the offer, so the *live* event path and
+  `terminate` ending the turn are covered too; its assertions are model-agnostic by design).
 - **Streaming send modes: split send + interrupt** (`Composer`) — steer/queue semantics are pi's loop
   design (steer = injected at the next turn boundary, after the current assistant message + its tool
   calls; queue = runs after the agent settles; only abort halts an in-flight response) and proved
@@ -702,8 +713,9 @@ extension-UI bridge (`pi.extensionUi` → `ExtUiDialog`) or — for a rich inlin
 
 ## Boundary
 
-- **Public surface:** the registry API (`toolRegistry`), the props-driven slash-completion primitive, and
-  the renderers (incl. the presentational `Markdown` — GFM + shiki, no store/transport; the rendering is fixed but the **prose skin** is the
+- **Public surface:** the registry API (`toolRegistry`), the pure transcript derivations (`rows.ts`'s
+  `deriveRows` + `deriveComposerTool`), the composer accessory slot (`ComposerToolSlot`), the props-driven
+  slash-completion primitive, and the renderers (incl. the presentational `Markdown` — GFM + shiki, no store/transport; the rendering is fixed but the **prose skin** is the
   caller's via an optional `className` — chat uses the compact bubble skin (`tr-prose-chat`),
   `panels/MarkdownPreview` the document skin (`tr-prose-doc`). A skin names exactly one generated
   `tr-prose-*` system and then carries only spacing/measure/chrome — no size, weight, leading or

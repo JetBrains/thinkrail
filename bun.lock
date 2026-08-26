@@ -120,6 +120,20 @@
         "typescript": "catalog:",
       },
     },
+    "packages/pi-next-steps": {
+      "name": "pi-next-steps",
+      "version": "0.1.0",
+      "devDependencies": {
+        "@earendil-works/pi-coding-agent": "catalog:",
+        "@types/bun": "catalog:",
+        "typebox": "catalog:",
+        "typescript": "catalog:",
+      },
+      "peerDependencies": {
+        "@earendil-works/pi-coding-agent": "*",
+        "typebox": "*",
+      },
+    },
     "packages/pi-thinkrail-workflow": {
       "name": "pi-thinkrail-workflow",
       "version": "0.0.0",
@@ -174,6 +188,7 @@
         "@thinkrail/contracts": "workspace:*",
         "@thinkrail/shared": "workspace:*",
         "bun-pty": "0.4.10",
+        "pi-next-steps": "workspace:*",
         "pi-spec-graph": "workspace:*",
         "pi-thinkrail-workflow": "workspace:*",
         "pi-todos": "workspace:*",
@@ -1710,6 +1725,8 @@
     "path-scurry": ["path-scurry@2.0.2", "", { "dependencies": { "lru-cache": "^11.0.0", "minipass": "^7.1.2" } }, "sha512-3O/iVVsJAPsOnpwWIeD+d6z/7PmqApyQePUtCndjatj/9I5LylHvt5qluFaBT3I5h3r1ejfR056c+FCv+NnNXg=="],
 
     "path-type": ["path-type@6.0.0", "", {}, "sha512-Vj7sf++t5pBD637NSfkxpHSMfWaeig5+DKWLhcqIYx6mWQz5hdJTGDVMQiJcw1ZYkhs7AazKDGpRVji1LJCZUQ=="],
+
+    "pi-next-steps": ["pi-next-steps@workspace:packages/pi-next-steps"],
 
     "pi-spec-graph": ["pi-spec-graph@workspace:packages/spec-graph"],
 

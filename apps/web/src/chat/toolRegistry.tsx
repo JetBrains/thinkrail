@@ -15,6 +15,8 @@ export type ToolChrome = "card" | "bare";
 
 export type ToolProminence = "routine" | "primary";
 
+export type ToolPlacement = "transcript" | "composer";
+
 export type ToolRenderer = (props: ToolRenderProps) => ReactNode;
 
 export type ToolSummary = (props: ToolRenderProps) => string;
@@ -22,6 +24,7 @@ export type ToolSummary = (props: ToolRenderProps) => string;
 export interface ToolRegistrationOptions {
 	summary?: ToolSummary;
 	chrome?: ToolChrome;
+	placement?: ToolPlacement;
 	prominence?: ToolProminence;
 	defaultExpanded?: boolean;
 }
@@ -50,6 +53,10 @@ export function getToolSummary(toolName: string, props: ToolRenderProps): string
 
 export function getToolChrome(toolName: string): ToolChrome {
 	return registry.get(toolName)?.chrome ?? "card";
+}
+
+export function getToolPlacement(toolName: string): ToolPlacement {
+	return registry.get(toolName)?.placement ?? "transcript";
 }
 
 export interface ResolvedProminence {

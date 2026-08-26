@@ -3,6 +3,7 @@ import { registerToolRenderer } from "../toolRegistry";
 import { AskUserQuestionCard } from "./AskUserQuestionCard";
 import { BashCard } from "./BashCard";
 import { EditCard } from "./EditCard";
+import { NextStepChips } from "./NextStepChips";
 import { ReadCard } from "./ReadCard";
 import { ResolveCommentCard } from "./ResolveCommentCard";
 import { strArg } from "./toolHelpers";
@@ -26,3 +27,5 @@ registerToolRenderer("resolve_comment", ResolveCommentCard, {
 });
 
 registerToolRenderer("ask_user_question", AskUserQuestionCard, { chrome: "bare" });
+
+registerToolRenderer("offer_next_steps", NextStepChips, { placement: "composer" });

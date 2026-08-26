@@ -1,7 +1,7 @@
 ---
 id: module-pi-next-steps
 type: module-design
-status: draft
+status: active
 title: pi-next-steps extension
 parent: architecture
 tags: [pi-extension, chat, next-steps]
@@ -20,13 +20,25 @@ The tool is an optional final action after a complete answer and returns `termin
 
 ## Native interaction
 
-Tool execution never waits for a person. In TUI mode, `agent_settled` first confirms that a successful `offer_next_steps` result is the latest message on the active branch, then opens pi’s native selector. Choosing sends the normalized prompt as a real user message; if another extension started work first, it is delivered as a follow-up. Escape cancels without consuming the offer, and `/next-steps` reopens the selector while that result remains current, including after a resumed session. Non-TUI modes keep the durable fallback and perform no automatic interaction.
+Tool execution never waits for a person. In TUI mode, `agent_settled` first confirms that a successful `offer_next_steps` result is the latest message on the active branch, then opens pi’s native selector. Choosing sends the normalized prompt as a real user message; if another extension started work first, it is delivered as a follow-up. Escape cancels without consuming the offer, and `/next-steps` reopens the selector while that result remains current, including after a resumed session. Non-TUI modes keep the durable fallback and perform no interaction at all — `/next-steps` says so rather than opening a second, competing surface beside a host's own presentation.
+
+Currency is always re-read from the session branch, never cached, so a resumed session needs no reconstruction step and a session replacement cannot leave a stale offer behind. The settle handler is deliberately **not awaited**: pi awaits `agent_settled` handlers before reporting idle, and a human-length selector inside one would stall the host.
 
 This ordering is a restart invariant: no human-length wait occurs before the tool result is paired and persisted. A selector inside `execute` is forbidden.
 
 ## Public surface
 
 The package root is a pi extension factory declared by its `pi.extensions` manifest. Its package metadata is publication-ready and uses the `pi-package` keyword; no ThinkRail host is required. The stable cross-host contract is the tool name and validated result shape.
+
+## Testing
+
+`src/normalize.test.ts` pins the tool contract (trimming, the 1-3 bound, the length caps, case-insensitive
+duplicate labels/prompts, the numbered fallback, and that every rejection names the tool).
+`src/offer.test.ts` pins currency against hand-built branches — looking past non-message entries, and going
+stale on a later message, a failed result, or details that no longer validate. `index.test.ts` drives the
+registered surface through a fake `ExtensionAPI`: termination, the prompt-metadata rules, and the selector
+lifecycle (immediate send, cancellation leaving the offer intact, a stale offer never opening it, the busy
+follow-up path, non-TUI silence, and `/next-steps` after a resume).
 
 ## Boundary
 

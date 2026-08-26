@@ -20,6 +20,7 @@
 		"@thinkrail/contracts": "workspace:*",
 		"@thinkrail/shared": "workspace:*",
 		"bun-pty": "0.4.10",
+		"pi-next-steps": "workspace:*",
 		"pi-spec-graph": "workspace:*",
 		"pi-thinkrail-workflow": "workspace:*",
 		"pi-todos": "workspace:*",

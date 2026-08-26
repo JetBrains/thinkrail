@@ -1,5 +1,5 @@
-import type { UserMessage } from "@thinkrail/contracts";
-import { resolveProminence } from "./toolRegistry";
+import type { AssistantMessage, UserMessage } from "@thinkrail/contracts";
+import { getToolPlacement, resolveProminence } from "./toolRegistry";
 import { strArg } from "./tools/toolHelpers";
 import type { ChatTurn, CompactionState, ToolResultState } from "./types";
 
@@ -77,6 +77,7 @@ export function deriveRows(
 					flushRun();
 					rows.push({ kind: "markdown", id: `${turn.id}:text:${b}`, text: block.text });
 				} else if (block.type === "toolCall") {
+					if (isComposerPlaced(block.name, toolResults[block.id])) continue;
 					const data: ToolCallData = {
 						toolCallId: block.id,
 						toolName: block.name,
@@ -130,12 +131,66 @@ export function deriveRows(
 			(turns[i + 1]?.kind === "user" || (i === turns.length - 1 && !isStreaming));
 		if (roundEnded) {
 			flushRun();
-			const data = turnDivider(turns, i, isSpec);
+			const data = turnDivider(turns, i, isSpec, toolResults);
 			if (data) rows.push({ kind: "divider", id: `${turn.id}:divider`, data });
 		}
 	}
 	flushRun(isStreaming);
 	return rows;
+}
+
+function isComposerPlaced(toolName: string, tool: ToolResultState | undefined): boolean {
+	return getToolPlacement(toolName) === "composer" && tool?.status === "done";
+}
+
+export interface ComposerToolCall {
+	toolCallId: string;
+	toolName: string;
+	args: Record<string, unknown>;
+	result: unknown;
+}
+
+function trailingTurn(turns: ChatTurn[]): ChatTurn | undefined {
+	for (let i = turns.length - 1; i >= 0; i--) {
+		const turn = turns[i];
+		if (turn && turn.kind !== "system") return turn;
+	}
+	return undefined;
+}
+
+function trailingBlock(
+	content: AssistantMessage["content"],
+): AssistantMessage["content"][number] | undefined {
+	for (let b = content.length - 1; b >= 0; b--) {
+		const block = content[b];
+		if (!block) continue;
+		if (block.type === "text" && block.text.trim().length === 0) continue;
+		if (block.type === "thinking" && block.thinking.trim().length === 0) continue;
+		return block;
+	}
+	return undefined;
+}
+
+export function deriveComposerTool(
+	turns: ChatTurn[],
+	toolResults: Record<string, ToolResultState>,
+	isStreaming: boolean,
+): ComposerToolCall | null {
+	if (isStreaming) return null;
+	const turn = trailingTurn(turns);
+	if (turn?.kind !== "assistant" || turn.streaming) return null;
+	const { message } = turn;
+	if (message.stopReason === "aborted" || message.stopReason === "error") return null;
+	const block = trailingBlock(message.content);
+	if (block?.type !== "toolCall") return null;
+	const tool = toolResults[block.id];
+	if (!isComposerPlaced(block.name, tool)) return null;
+	return {
+		toolCallId: block.id,
+		toolName: block.name,
+		args: block.arguments,
+		result: tool?.raw,
+	};
 }
 
 export interface TurnDividerData {
@@ -153,6 +208,7 @@ export function turnDivider(
 	turns: ChatTurn[],
 	endIndex: number,
 	isSpec: (path: string) => boolean = () => false,
+	toolResults: Record<string, ToolResultState> = {},
 ): TurnDividerData | null {
 	let userIdx = -1;
 	for (let i = endIndex; i >= 0; i--) {
@@ -172,6 +228,7 @@ export function turnDivider(
 			if (turn.message.timestamp) endMs = turn.message.timestamp;
 			for (const block of turn.message.content) {
 				if (block.type !== "toolCall") continue;
+				if (isComposerPlaced(block.name, toolResults[block.id])) continue;
 				toolCount++;
 				const specWrite = block.name === SPEC_WRITER_TOOL;
 				if (!specWrite && !FILE_WRITER_TOOLS.has(block.name)) continue;
