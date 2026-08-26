@@ -74,6 +74,8 @@ packages/
   contracts/  the wire (types-only)                     (SPEC.md)
   shared/     shellEnv (server-side only)               (SPEC.md)
   spec-graph/ portable pi extension: spec_* tools + skill (SPEC.md)
+  pi-delegation/ portable pure-pi delegation core: child sessions from sessions (SPEC.md)
+  pi-subagents/  portable pure-pi extension: Agent tools over pi-delegation (SPEC.md)
 ```
 
 ## Spec graph (how decisions are recorded)

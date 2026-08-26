@@ -38,6 +38,10 @@ packages/shared     shellEnv (server-side only)
 packages/spec-graph portable pi extension: spec_* tools + skill (bundled into every session by packages/server;
                     its pi-free core/ read model also backs the host's spec.graph read method)
 packages/pi-visualize          portable pi extension: the visualize tool (bundled into every session)
+packages/pi-delegation         portable pure-pi package: the delegation core — agent sessions spawned
+                    from agent sessions (createChild + run-owning handle, lineage, registry, events)
+packages/pi-subagents          portable pure-pi extension: Agent + get_subagent_result tools over
+                    pi-delegation; host composition remains a separate change
 packages/pi-thinkrail-workflow pi extension: the workflow skill system + its always-on routing rule
                     (bundled into every session; workspace-internal, not portable)
 ```
@@ -188,6 +192,16 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
     and desktop acquire the same canonical-data-directory ownership lease and share graceful shutdown.
     Desktop artifacts are additive and unsigned initially; native WebKitGTK on Ubuntu 24.04+/glibc 2.38 is
     the supported Linux floor. Detail: [[module-desktop]].
+
+16. **Delegation begins as a portable pure-pi layer.** `packages/pi-delegation` owns the session
+    fabric: one creation primitive with orthogonal axes, a run-owning handle, lineage, registry, and
+    lifecycle events. `packages/pi-subagents` consumes it to expose the `Agent` tools. Both work under
+    vanilla pi with the SDK as a `peerDependency` (peer deps are exempt from the exact-pin rule,
+    decision #10), create in-process hidden pi sessions, and keep their host bindings optional. An
+    embedder may supply storage, scope, live-parent resolution, a shared runtime, and curated child
+    extensions through `DelegationBindings`; wiring those packages into the ThinkRail host and wire is
+    a separate composition change. Contract, semantics, and the full decision log:
+    [[module-pi-delegation]] and [[module-pi-subagents]].
 
 ## Invariants
 
