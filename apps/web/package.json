@@ -39,12 +39,12 @@
 		"class-variance-authority": "0.7.1",
 		"clsx": "2.1.1",
 		"cmdk": "1.1.1",
-		"lucide-react": "1.21.0",
+		"lucide-react": "catalog:",
 		"mermaid": "11.16.0",
 		"monaco-editor": "0.55.1",
 		"node-htmldiff": "0.9.4",
-		"react": "19.2.7",
-		"react-dom": "19.2.7",
+		"react": "catalog:",
+		"react-dom": "catalog:",
 		"react-markdown": "10.1.0",
 		"react-resizable-panels": "2.1.9",
 		"react-virtuoso": "4.18.7",
@@ -54,12 +54,12 @@
 		"zustand": "5.0.14"
 	},
 	"devDependencies": {
-		"@tailwindcss/vite": "4.3.1",
+		"@tailwindcss/vite": "catalog:",
 		"@types/bun": "catalog:",
-		"@types/react": "19.2.17",
-		"@types/react-dom": "19.2.3",
+		"@types/react": "catalog:",
+		"@types/react-dom": "catalog:",
 		"@vitejs/plugin-react": "6.0.2",
-		"tailwindcss": "4.3.1",
+		"tailwindcss": "catalog:",
 		"typescript": "catalog:",
 		"vite": "8.0.16"
 	}
