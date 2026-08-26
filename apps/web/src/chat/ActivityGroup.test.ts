@@ -39,7 +39,7 @@ describe("activity disclosure summaries", () => {
 	});
 
 	it("counts nested thinking and tools in one outer N-step disclosure", () => {
-		const row = {
+		const row: ChatRow = {
 			kind: "activity",
 			id: "activity:a",
 			steps: [
@@ -53,7 +53,7 @@ describe("activity disclosure summaries", () => {
 				},
 			],
 			live: false,
-		} as unknown as ChatRow;
+		};
 
 		const markup = renderToStaticMarkup(ChatTurnView({ row }));
 
