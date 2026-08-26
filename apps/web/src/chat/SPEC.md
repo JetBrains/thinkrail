@@ -114,6 +114,18 @@ the `AskUserQuestionCard` pattern, see tools/SPEC.md; deliberately
 never evicted — growth is bounded by manual toggles). A manual toggle always wins — over auto-expand
 defaults *and* over a virtualization remount.
 
+**Sticky activity breadcrumb.** While the transcript's top visible content remains inside expanded
+Activity → Thinking → tool disclosures whose original headers have scrolled above the viewport, one
+opaque compact row overlays the scroller with that active root-to-leaf path. Segments join only after
+their own header crosses the top, leave at sibling/end boundaries or when folded, and include the active
+leaf tool. A segment label scrolls and focuses its original header just below the sticky row without
+changing fold state; its separate chevron writes through the existing fold-state source. The trail is
+always one line: metadata truncates before names, then a narrow pane preserves the outermost and active
+segments while compressing middle ancestry to `…`. It never reflows transcript content, creates parallel
+navigation/fold state, or disturbs Virtuoso's initial-bottom, follow-output, and jump-to-message behavior.
+The root-to-leaf labels and chevrons are distinct keyboard targets in a labelled navigation region; visual
+entry/exit obeys reduced motion.
+
 ## Extension point — the tool registry
 
 `toolRegistry.tsx` is **THE extension point**; a tool has two decoupled sides joined by **tool name**:
