@@ -200,6 +200,10 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   overrides with its centered `scrollToIndex`. Streaming follow stays `useChatScroll`'s job
   (pointer-aware `followOutput` — unchanged). E2e: `auto-open-chats.spec.ts` asserts a long seeded
   transcript's last message is in view without scrolling.
+  A `pointer-events-none` **bottom scrim** (`chat-bottom-scrim`, absolute inside the `relative`
+  `chat-scroll`, `bg-linear-to-b from-transparent to-container-workspace-bg`) fades the last of the
+  transcript's content into the composer surface — the fade reads only because it overlaps message
+  content, not the flat same-colour chat surface.
 - **Composer & chrome** — `Composer` (prompt field + send/steer/followUp/abort, `@`-mentions, `/`
   commands + template **slot sessions** (Tab-through placeholders — see the Template slots bullet
   below), image paste/drop — routed through **`imageAttachment.ts`**: `fileToAttachedImage` decodes in

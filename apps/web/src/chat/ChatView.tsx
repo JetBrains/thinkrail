@@ -583,6 +583,11 @@ export default function ChatView({
 								</div>
 							)}
 						/>
+						<div
+							aria-hidden
+							data-testid="chat-bottom-scrim"
+							className="pointer-events-none absolute inset-x-0 bottom-0 h-6 bg-linear-to-b from-transparent to-container-workspace-bg"
+						/>
 						{showScrollButton ? (
 							<button
 								type="button"
