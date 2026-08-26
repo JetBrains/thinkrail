@@ -24,6 +24,7 @@ import {
 	useAppStore,
 } from "@/store";
 import { errorText, getTransport } from "@/transport";
+import { ActivityBreadcrumbTrail } from "./activityBreadcrumbs";
 import { AskStatesContext, deriveAskStates } from "./askState";
 import { type ChatActions, ChatActionsContext } from "./ChatActions";
 import { ChatHeader } from "./ChatHeader";
@@ -183,6 +184,10 @@ export default function ChatView({
 	const [saveAsTemplateHit, setSaveAsTemplateHit] = useState<PromptHit | null>(null);
 
 	const virtuosoRef = useRef<VirtuosoHandle>(null);
+	const [scrollerElement, setScrollerElement] = useState<HTMLElement | null>(null);
+	const handleScrollerRef = useCallback((element: HTMLElement | Window | null) => {
+		setScrollerElement(element instanceof HTMLElement ? element : null);
+	}, []);
 	const { followOutput, handleAtBottom, showScrollButton, scrollToBottom, containerProps } =
 		useChatScroll(virtuosoRef);
 	const composerRef = useRef<ComposerHandle>(null);
@@ -615,6 +620,7 @@ export default function ChatView({
 						<Virtuoso<ChatRow, ChatListContext>
 							ref={virtuosoRef}
 							data={rows}
+							scrollerRef={handleScrollerRef}
 							context={listContext}
 							components={CHAT_LIST_COMPONENTS}
 							className="min-h-0 flex-1 overflow-x-hidden"
@@ -638,6 +644,7 @@ export default function ChatView({
 								</div>
 							)}
 						/>
+						<ActivityBreadcrumbTrail scroller={scrollerElement} />
 						{showScrollButton ? (
 							<button
 								type="button"
