@@ -8,13 +8,12 @@ parent: architecture
 
 ## Responsibility
 
-The repo's automation: PR **gates**, the multi-platform **release** pipeline, and the scheduled Junie
-Slack agent. The shippable artifact is the single-file `thinkrail` binary that `apps/cli` produces
-(`build:binary` / `smoke:binary` — see `module-cli`); this module builds it for every platform, stamps a
-release version into it, and publishes GitHub releases. It owns no product code — only workflows,
-composite actions, and the version script.
+The repo's automation: PR **gates** and the multi-platform **release** pipeline. The shippable artifact
+is the single-file `thinkrail` binary that `apps/cli` produces (`build:binary` / `smoke:binary` — see
+`module-cli`); this module builds it for every platform, stamps a release version into it, and publishes
+GitHub releases. It owns no product code — only workflows, composite actions, and the version script.
 
-## Automation lanes
+## CI vs release
 
 - **CI** (`ci.yml`, on PRs to `main`): lint+typecheck (incl. `check:seams` — the pi binary-seam canary,
   see `scripts/check-binary-seams.ts`), unit tests, no-agent e2e, and a **host-target** binary
@@ -24,12 +23,6 @@ composite actions, and the version script.
   build+smoke** (`binary-windows`). Fast, no provider auth. Gates merges.
 - **Release** (`nightly.yml` / `stable.yml` → `_release.yml` → `_build.yml`): trusts a green `main` (no
   test gate of its own) and produces published binaries + a GitHub release.
-- **Junie Slack agent** (`junie-slack-bot.yml`, manual dispatch + four-hour schedule): runs the upstream
-  `JetBrains/junie-slack-bot@v1` action against `.junie-live/slack-bot.yaml`. The profile allow-lists
-  Slack channels and `slack-bot/*` push branches; Slack and repository credentials are brokered by Junie
-  Live. The workflow receives only the `JUNIE_SLACK_BOT_JUNIE_API_KEY` and
-  `JUNIE_SLACK_BOT_BACKEND_TOKEN` GitHub Actions secrets—credential values never enter git or the
-  agent-visible environment.
 
 **Why Windows gates PRs and macOS does not.** A release build is all-or-nothing: `release` needs
 `build.result == 'success'`, so one red matrix leg publishes *nothing* — quietly, with no notification, and
@@ -39,9 +32,9 @@ diverge most (executable resolution, `PATH` shape, `USERPROFILE` vs `HOME`, real
 the cheap half of that risk; macOS divergence is narrower (path canonicalization) and its runner minutes are
 dearer, so it stays release-matrix-only. A red release matrix still notifies nobody — an open gap.
 
-## Release channels
+## Channels
 
-Both release channels are `main`-only, versioned by `scripts/next-version.sh` (channel-aware semver from git
+Both channels are `main`-only, versioned by `scripts/next-version.sh` (channel-aware semver from git
 tags: `vX.Y.Z` stable, `vX.Y.Z-nightly.N`):
 
 - **Nightly** — cron 06:00 UTC + manual dispatch. Computes the next nightly, **skips when no commits**
@@ -130,15 +123,13 @@ in place.
 
 ## Boundary
 
-- **Owns:** everything under `.github/` (workflows, composite actions, the version script) — CI,
-  release, and operational automation plus the artifact/version contract.
+- **Owns:** everything under `.github/` (workflows, composite actions, the version script) — the CI +
+  release automation and the artifact/version contract.
 - **Consumes:** `apps/cli`'s `build:binary` / `smoke:binary` and its `version.ts` stamping seam; the
-  repo's root scripts (`build:web`, `lint`, `typecheck`, `test`, `e2e`); and the root
-  `.junie-live/slack-bot.yaml` profile. It **injects** the version at build time but does not otherwise
-  reach into product code.
+  repo's root scripts (`build:web`, `lint`, `typecheck`, `test`, `e2e`). It **injects** the version at
+  build time but does not otherwise reach into product code.
 - **Forbidden:** baking release logic into product code (the pipeline calls the same scripts a developer
-  runs); a release-only build path that CI never exercises (CI builds+smokes the host target every PR);
-  literal Junie, backend, GitHub, or Slack credentials in repository files or agent-visible environment.
+  runs); a release-only build path that CI never exercises (CI builds+smokes the host target every PR).
 
 ## Get right
 
