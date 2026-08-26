@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import type { TranscriptMessage } from "@thinkrail/contracts";
 import { ASK_USER_ANSWERS_CUSTOM_TYPE } from "@thinkrail/contracts";
 import { messagesToRuntime } from "./hydrate";
+import { readRunDetails } from "./tools/subagent/runDetails";
 
 type Message = TranscriptMessage;
 
@@ -218,6 +219,38 @@ test("a failed tool result maps to error status", () => {
 		},
 	] as unknown as Message[]);
 	expect(toolResults.x?.status).toBe("error");
+});
+
+test("a failed Agent result keeps its run details — the transcript stays openable after reload", () => {
+	const details = {
+		childSessionId: "child-err",
+		roleName: "scout",
+		task: "doomed task",
+		status: "error",
+		usage: {
+			input: 1,
+			output: 0,
+			cacheRead: 0,
+			cacheWrite: 0,
+			cost: 0,
+			turns: 1,
+			contextTokens: 1,
+		},
+		durationMs: 10,
+	};
+	const { toolResults } = messagesToRuntime([
+		{
+			role: "toolResult",
+			toolCallId: "ag1",
+			toolName: "Agent",
+			content: [{ type: "text", text: 'Subagent "scout" (child-err) failed: boom' }],
+			isError: true,
+			details,
+			timestamp: 1,
+		},
+	] as unknown as Message[]);
+	expect(toolResults.ag1?.status).toBe("error");
+	expect(readRunDetails(toolResults.ag1?.raw)?.childSessionId).toBe("child-err");
 });
 
 test("a toolCall with no matching toolResult has no entry — the call renders as still running", () => {

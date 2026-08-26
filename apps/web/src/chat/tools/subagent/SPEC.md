@@ -31,7 +31,10 @@ Adopted:
   line**: `role · N turns · X tok · $c · elapsed · current-step`, re-derived from each
   `partialResult.details` REPLACE snapshot. Expanded: task, live activity line, model/usage detail,
   Open-transcript action, and the final report behind a fold once terminal. Errors auto-expand
-  (existing chrome).
+  (existing chrome). **Failed runs keep the transcript action**: an error outcome's thrown tool
+  result still carries the run's final details — `pi-subagents` re-injects them via its
+  `tool_result` override (its SPEC, PR #304 review finding) — so the `details.childSessionId` gate
+  lights on both the live and hydrated paths (hydrate-pinned).
 - **A background run's tool card freezes at its ack** (pi ignores `onUpdate` after the tool promise
   settles) — deliberate: the card says "started in the background", and the **completion card** is the
   terminal signal (OpenCode's notice pattern), carrying the final details + report fold + transcript
