@@ -42,10 +42,6 @@
 	--font-sans: var(--tr-font-family-interface);
 	--font-mono: var(--tr-font-family-code);
 
-	/* The numeric spacing scale is generated into `styles/generated/spacing.css` from `spacing.json`
-	 * (its own `@theme inline` block, flattened in with this one). This block carries only chrome
-	 * geometry that is NOT layout rhythm: the panel header row height, exposed so `h-panel-header-row`
-	 * reads it. */
 	--spacing-panel-header-row: var(--panel-header-row-height);
 
 	/* A block appearing in place (e.g. the ask-question card's atomic reveal once its args are final). */

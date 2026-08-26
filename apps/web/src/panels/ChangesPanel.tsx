@@ -203,9 +203,6 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 												onClick={() => openDiff(change.path, "preview")}
 												onDoubleClick={() => openDiff(change.path, "keep")}
 												title={change.path}
-												// No background of its own: the WRAPPER paints the row's hover/selected band, which has
-												// to span the trailing ⌄ slot too. Two painters would make the row read as cut off at
-												// this button's edge (and hide that the wrapper stopped painting).
 												className="flex min-w-0 flex-1 items-center gap-8 px-4 py-4 text-left tr-text-ui"
 											>
 												<span className="flex min-w-0 flex-1 items-baseline">

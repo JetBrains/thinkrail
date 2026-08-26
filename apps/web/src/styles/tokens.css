@@ -6,9 +6,6 @@
 	 * one that can drift; `colorUsage.test.ts` fails on a colour literal here.
 	 */
 
-	/* SPACING IS NOT HERE: the `--space-*` scale is generated into `generated/spacing.css` from
-	   `spacing.json`. See styles/SPACING.md (web-spacing). */
-
 	/* Shape + motion. A four-step primitive scale, `sm` (4px) is the DEFAULT corner for ordinary
 	   standalone controls (buttons, inputs, rows, tabs, tool cards). `xs` (2px) is the text-run tier:
 	   a corner on a tint that sits BEHIND running text (a `<mark>` search hit, a composer slot
@@ -24,8 +21,6 @@
 	--transition-fast: 120ms ease;
 	--transition-normal: 200ms ease;
 
-	/* Shared chrome geometry — a panel header ROW HEIGHT, not layout rhythm, so it lives here and not on
-	 * the spacing scale. Exposed to Tailwind as `--spacing-panel-header-row` in `index.css`. */
 	--panel-header-row-height: 32px;
 }
 

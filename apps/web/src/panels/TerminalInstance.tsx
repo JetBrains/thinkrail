@@ -332,8 +332,6 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 			data-visible="true"
 			className="absolute inset-0"
 		>
-			{/* HAZARD: inset via positioning, NOT padding — addon-fit@0.11.0 subtracts padding from xterm's
-			    child, not this mount host, so `p-*` here would size the grid to the full pane. */}
 			<div ref={hostRef} className="absolute inset-12" />
 			{detached ? (
 				<div className="absolute inset-0 flex flex-col items-center justify-center gap-8 bg-overlay">

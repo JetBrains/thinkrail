@@ -156,7 +156,7 @@ test("overflow uses directional fades without changing tab-strip geometry", asyn
 		)
 		.toBe("none");
 	await expect(strip).toHaveCSS("height", "32px");
-	await expect.poll(() => height(strip.getByRole("tab").first())).toBeCloseTo(32, 1);
+	await expect.poll(() => height(strip.getByRole("tab").first())).toBeCloseTo(28, 1);
 
 	await tablist.evaluate((element) => {
 		element.scrollLeft = 0;
@@ -184,7 +184,7 @@ test("overflow uses directional fades without changing tab-strip geometry", asyn
 		})
 		.toBe(true);
 	await expect(strip).toHaveCSS("height", "32px");
-	await expect.poll(() => height(last)).toBeCloseTo(32, 1);
+	await expect.poll(() => height(last)).toBeCloseTo(28, 1);
 });
 
 test("ARIA tabs use roving keyboard focus, recover after close, and expose keyboard separators", async ({

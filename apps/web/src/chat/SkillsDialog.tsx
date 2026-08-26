@@ -204,7 +204,7 @@ export function SkillsDialog({
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent data-testid="skills-dialog" className="max-w-[560px] gap-12 p-12">
-				<div className="flex items-center justify-between gap-8 pr-32">
+				<div className="flex items-center justify-between gap-8 pr-[2rem]">
 					<DialogTitle className="tr-text-ui text-text-default">Skills</DialogTitle>
 					{workspace ? (
 						<Button

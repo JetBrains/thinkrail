@@ -530,8 +530,6 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 					activeIndex={slashCompletion.activeIndex}
 					onSelect={slashCompletion.pick}
 					className="absolute bottom-full left-12 mb-4"
-					// The nudge is about having NO templates at all — never about the current query matching
-					// none — so it keys on the owner's confirmed-empty listing, not on the visible matches.
 					footer={
 						templatesEmpty && onManageTemplates ? (
 							<button
@@ -623,17 +621,6 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 			) : null}
 
 			<div className="flex flex-col gap-8 p-12">
-				{/* The input's border AND background live here (the textarea below is `bg-transparent` + has no
-				 * border), so the backdrop's tint spans, painted behind the textarea, show through. The 1px
-				 * border is on this wrapper so `bg-clip-padding` (background-clip: padding-box) clips the fill to
-				 * *inside* the border — the fill can't bleed past the rounded border, and the border stays fully
-				 * visible. Border colour: `control-border-default` at rest, `control-border-active` via
-				 * `focus-within` while the textarea is being edited (the textarea is the only focusable child) —
-				 * never an accent border. **Composer-specific:** the active border is the *single* focus outline;
-				 * unlike other controls it carries NO accent focus ring (the textarea below has none), so the
-				 * neutral border + accent ring never double up here. The fill is clipped by `bg-clip-padding` +
-				 * `rounded` and the slot backdrop clips itself (its own `overflow-hidden` below), so this wrapper
-				 * needs no `overflow-hidden`. */}
 				<div className="relative rounded-[var(--radius-md)] border border-control-border-default bg-control-bg bg-clip-padding transition-colors focus-within:border-control-border-active">
 					{slots ? (
 						<div

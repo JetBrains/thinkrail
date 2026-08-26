@@ -18,6 +18,5 @@
 }
 
 @theme inline {
-	/* NUMBER = PX: one base drives spacing AND sizing (see SPACING.md). Replaces Tailwind's 0.25rem. */
 	--spacing: 1px;
 }

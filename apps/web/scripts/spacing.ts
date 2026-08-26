@@ -1,5 +1,3 @@
-// The spacing pipeline: load → validate → render CSS. Design + rationale: src/styles/SPACING.md
-// (web-spacing); pipeline shape: scripts/SPEC.md (module-web-scripts). Entry point: generate-spacing.ts.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -10,7 +8,6 @@ export const GENERATED_PATH = join(STYLES_DIR, "generated", "spacing.css");
 export interface Spacing {
 	readonly $schema?: string;
 	readonly metadata: { readonly version: string; readonly note?: string };
-	/** step name → CSS length. The step name is the canonical pixel value (`"8"` → `"8px"`). */
 	readonly steps: Readonly<Record<string, string>>;
 }
 
@@ -18,7 +15,6 @@ export function loadSpacing(path = SOURCE_PATH): Spacing {
 	return JSON.parse(readFileSync(path, "utf8")) as Spacing;
 }
 
-/** The raw custom property a step declares — consumed directly by hand-written CSS. */
 export const spaceVar = (step: string) => `--space-${step}`;
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
@@ -67,8 +63,8 @@ export function validate(spacing: unknown): string[] {
 		issues.push("steps must declare at least one step");
 	}
 	for (const [step, value] of Object.entries(spacing.steps)) {
-		if (!/^[0-9]+$/.test(step)) {
-			issues.push(`steps.${step} must be a bare integer (the canonical pixel value)`);
+		if (!/^(?:0|[1-9][0-9]*)$/.test(step)) {
+			issues.push(`steps.${step} must be a canonical non-negative integer without leading zeros`);
 			continue;
 		}
 		if (typeof value !== "string") {
@@ -101,7 +97,6 @@ export function renderCss(spacing: Spacing): string {
 		"}",
 		"",
 		"@theme inline {",
-		"\t/* NUMBER = PX: one base drives spacing AND sizing (see SPACING.md). Replaces Tailwind's 0.25rem. */",
 		"\t--spacing: 1px;",
 		"}",
 		"",

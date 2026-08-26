@@ -521,9 +521,6 @@ function WorkspaceRow({
 					className="flex min-w-0 flex-1 items-center gap-8 text-left"
 				>
 					<Icon className={`size-16 shrink-0 ${isActive ? "text-primary" : "text-text-muted"}`} />
-					{/* Name on top, the git branch on a second line beneath it — the display name is decoupled
-					    from the branch, so surface both without crowding one line. The branch line is hidden when
-					    they coincide, so pristine/legacy rows stay a single compact line. */}
 					<span className="flex min-w-0 flex-1 flex-col gap-2">
 						<span
 							data-testid="workspace-name"

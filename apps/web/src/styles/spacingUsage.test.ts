@@ -3,16 +3,10 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { normalizeEol } from "../../scripts/generatedFiles";
 
-// The radius + spacing adoption guard (sibling of colorUsage/typographyUsage). An off-scale length
-// always RENDERS, so its drift is invisible in review and every other gate — hence this gate. The
-// contract it enforces (canonical numeric scale, number=px, bans, sizing out of scope, handwritten-CSS
-// rhythm coverage, bracket escape hatch) lives in src/styles/SPACING.md (web-spacing).
-
 const SRC = new URL("..", import.meta.url).pathname;
 const read = (p: string) => normalizeEol(readFileSync(p, "utf8"));
 const rel = (p: string) => p.slice(SRC.length);
-// Strip comments: they name utilities to explain them, which is not a usage.
-const code = (p: string) =>
+const sourceWithoutComments = (p: string) =>
 	read(p)
 		.replace(/\/\*[\s\S]*?\*\//g, "")
 		.replace(/^[ \t]*\/\/.*$/gm, "");
@@ -36,15 +30,18 @@ const TS_FILES = FILES.filter((f) => /\.tsx?$/.test(f));
 const TOKENS = join(SRC, "styles/tokens.css");
 const SPACING_JSON = join(SRC, "styles/spacing.json");
 
-/** The canonical steps, read from the single source so the gate and the tokens cannot drift. */
 const STEPS = new Set(
 	Object.keys((JSON.parse(read(SPACING_JSON)) as { steps: Record<string, string> }).steps),
 );
-// The spacing (rhythm) utilities — NOT sizing, which shares the base. Longest-first so `gap-x` matches
-// before `gap`. A responsive/state prefix (`sm:`, `hover:`) may precede any of them.
 const SPACING_PREFIX =
 	"px|py|pt|pb|pl|pr|ps|pe|p|mx|my|mt|mb|ml|mr|ms|me|m|gap-x|gap-y|gap|space-x|space-y";
 const VARIANT = String.raw`(?:[a-z-]+(?:\[[^\]]*\])?:)*`;
+const ARBITRARY_SPACING_EXEMPT = new Set([
+	"pr-[2rem]",
+	"pl-[1.6em]",
+	"pl-[calc(0.875rem+var(--space-8))]",
+	"pl-[calc(1.125rem+var(--space-8))]",
+]);
 
 function allowsSpacingSuffix(prefix: string, suffix: string): boolean {
 	if (/^\d/.test(suffix)) return STEPS.has(suffix);
@@ -58,7 +55,7 @@ function hits(
 	include: (match: RegExpMatchArray) => boolean = () => true,
 ): string[] {
 	return TS_FILES.flatMap((f) =>
-		code(f)
+		sourceWithoutComments(f)
 			.split("\n")
 			.flatMap((line, i) =>
 				[...line.matchAll(pattern)].filter(include).map((m) => `${rel(f)}:${i + 1}: ${m[0]}`),
@@ -66,42 +63,40 @@ function hits(
 	);
 }
 
-// Strip block comments to spaces but KEEP newlines, so a reported CSS line stays true and prose
-// (`A 6px status circle`) is never a false positive.
-const cssCode = (p: string) =>
+const sourceWithoutCommentsPreservingLines = (p: string) =>
 	read(p)
 		.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "))
 		.replace(/^[ \t]*\/\/.*$/gm, "");
 
-// Rhythm PROPERTIES only — the CSS twins of `p`/`m`/`gap`. Sizing/coordinates/box-shadow offsets are
-// geometry, not rhythm, and excluded (as the utility scan excludes `w`/`h`).
 const CSS_RHYTHM_PROP =
 	/(?<![\w-])(gap|row-gap|column-gap|padding(?:-(?:top|right|bottom|left|inline|block)(?:-(?:start|end))?)?|margin(?:-(?:top|right|bottom|left|inline|block)(?:-(?:start|end))?)?)\s*:\s*([^;{}]+)/g;
-const RAW_LENGTH = /(?<![\w.-])-?(?:\d+(?:\.\d+)?|\.\d+)(?:[a-z]+|%)(?![\w-])/i;
 
-// Documented non-rhythm geometry kept raw on a rhythm property (see SPACING.md): the `.review-region`
-// rail pair, an equal-and-opposite optical offset that adds zero layout shift.
 const CSS_RHYTHM_EXEMPT = new Set(["padding-left: 10px", "margin-left: -10px"]);
 
+function isCanonicalCssRhythmValue(value: string): boolean {
+	return value.split(/\s+/).every((part) => {
+		if (part === "0" || part === "auto") return true;
+		const token = /^var\(--space-((?:0|[1-9][0-9]*))\)$/.exec(part)?.[1];
+		return token !== undefined && STEPS.has(token);
+	});
+}
+
 function cssRhythmHits(): string[] {
-	return FILES.flatMap((f) =>
-		cssCode(f)
-			.split("\n")
-			.flatMap((line, i) =>
-				[...line.matchAll(CSS_RHYTHM_PROP)].flatMap((match) => {
-					const property = match[1] as string;
-					const value = (match[2] ?? "").trim();
-					if (!RAW_LENGTH.test(value)) return [];
-					const declaration = `${property}: ${value}`;
-					return CSS_RHYTHM_EXEMPT.has(declaration) ? [] : [`${rel(f)}:${i + 1}: ${declaration}`];
-				}),
-			),
-	);
+	return FILES.flatMap((f) => {
+		const source = sourceWithoutCommentsPreservingLines(f);
+		return [...source.matchAll(CSS_RHYTHM_PROP)].flatMap((match) => {
+			const property = match[1] as string;
+			const value = (match[2] ?? "").trim().replace(/\s+/g, " ");
+			const declaration = `${property}: ${value}`;
+			if (CSS_RHYTHM_EXEMPT.has(declaration) || isCanonicalCssRhythmValue(value)) return [];
+			const line = source.slice(0, match.index ?? 0).split("\n").length;
+			return [`${rel(f)}:${line}: ${declaration}`];
+		});
+	});
 }
 
 describe("radius at a call site", () => {
 	it("names a --radius-* token, never a raw length", () => {
-		// `rounded-full` (a pill, not a step) stays fine; `rounded-[9px]` does not.
 		expect(hits(/\brounded(?:-[a-z]+)?-\[(?!var\(--radius-)[^\]]+\]/g)).toEqual([]);
 	});
 
@@ -125,11 +120,9 @@ describe("radius at a call site", () => {
 	});
 
 	it("declares no radius step nothing consumes", () => {
-		// Must EXCLUDE `tokens.css`, or each step's own declaration counts as its consumer and the check is
-		// vacuous.
 		const used = new Set(
 			FILES.filter((f) => f !== TOKENS).flatMap((f) =>
-				[...code(f).matchAll(/--radius-([a-z0-9]+)/g)].map((m) => m[1] as string),
+				[...sourceWithoutComments(f).matchAll(/--radius-([a-z0-9]+)/g)].map((m) => m[1] as string),
 			),
 		);
 		const orphans = [...read(TOKENS).matchAll(/^\s*--radius-([a-z0-9]+)\s*:/gm)]
@@ -159,24 +152,40 @@ describe("spacing at a call site", () => {
 	});
 
 	it("never spells a spacing length as a raw pixel value", () => {
-		// Bans only a bare `px` length in the brackets (`py-[3px]`); measured `rem`/`em`/`calc` stay.
 		expect(
 			hits(new RegExp(String.raw`(?<![\w-])${VARIANT}-?(?:${SPACING_PREFIX})-\[-?[\d.]+px\]`, "g")),
 		).toEqual([]);
 	});
 
 	it("never re-spells a step through a --space arbitrary value", () => {
-		// Bans only the DIRECT `-[var(--space…` re-spelling of a step; composed indents
-		// (`pl-[calc(…+var(--space-8))]`) are fine.
 		expect(
 			hits(new RegExp(String.raw`(?<![\w-])${VARIANT}-?(?:${SPACING_PREFIX})-\[var\(--space`, "g")),
 		).toEqual([]);
 	});
 
-	it("treats the scale as a DEFINED primitive set — a step may exist with no consumers", () => {
-		// No orphan/reachability check on purpose: reserved primitives (`32`/`40`/`64`) exist ahead of use.
-		for (const step of ["32", "40", "64"]) expect(STEPS.has(step)).toBe(true);
-		expect([...STEPS].every((step) => /^\d+$/.test(step))).toBe(true);
+	it("limits arbitrary spacing utilities to documented geometry constraints", () => {
+		const bad = hits(
+			new RegExp(
+				String.raw`(?<![\w-])${VARIANT}(-?(?:${SPACING_PREFIX})-(?:\[[^\]]+\]|\(--[^)]+\)))`,
+				"g",
+			),
+			(match) => !ARBITRARY_SPACING_EXEMPT.has(match[1] ?? ""),
+		);
+		expect(bad).toEqual([]);
+	});
+
+	it("keeps reserved primitives canonical and unspent by rhythm call sites", () => {
+		const reserved = ["32", "40", "64"];
+		for (const step of reserved) expect(STEPS.has(step)).toBe(true);
+		expect([...STEPS].every((step) => /^(?:0|[1-9]\d*)$/.test(step))).toBe(true);
+		expect(
+			hits(
+				new RegExp(
+					String.raw`(?<![\w-])${VARIANT}-?(?:${SPACING_PREFIX})-(?:${reserved.join("|")})\b`,
+					"g",
+				),
+			),
+		).toEqual([]);
 	});
 });
 
@@ -199,7 +208,17 @@ describe("container-width presets are not spacing", () => {
 });
 
 describe("spacing in handwritten CSS", () => {
-	it("never hardcodes a rhythm length in CSS or a CSS string literal", () => {
+	it("recognizes multiline declarations and validates their complete values", () => {
+		const source = "padding:\n  1rem;\nmargin: var(--not-a-space-token);";
+		const values = [...source.matchAll(CSS_RHYTHM_PROP)].map((match) =>
+			(match[2] ?? "").trim().replace(/\s+/g, " "),
+		);
+		expect(values).toEqual(["1rem", "var(--not-a-space-token)"]);
+		expect(values.map(isCanonicalCssRhythmValue)).toEqual([false, false]);
+		expect(isCanonicalCssRhythmValue("var(--space-8) 0 auto")).toBe(true);
+	});
+
+	it("uses canonical spacing tokens in CSS and CSS string literals", () => {
 		expect(cssRhythmHits()).toEqual([]);
 	});
 });

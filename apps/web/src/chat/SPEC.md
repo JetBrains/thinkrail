@@ -481,8 +481,11 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   gaps are visually tinted in the message field itself — a native `<textarea>` can't style text ranges
   inside it, so `Composer` renders a **highlight-backdrop** (a styled mirror layer positioned behind a
   now-`bg-transparent` textarea; the input background moves up to the wrapping container instead, clipped
-  to the same `rounded-[var(--radius-md)]` so nothing changes visually outside a session). The pure
-  `highlightSegments(value, slots, activeIdx)` (`slotSession.ts`) breaks `value` into ordered
+  to the same `rounded-[var(--radius-md)]` so nothing changes visually outside a session). That wrapper
+  owns the input border and fill: `bg-clip-padding` keeps the backdrop tint inside the rounded border,
+  while `focus-within:border-control-border-active` is the composer's sole focus indicator rather than a
+  second accent ring on the textarea. The pure `highlightSegments(value, slots, activeIdx)`
+  (`slotSession.ts`) breaks `value` into ordered
   plain/unfilled/filled/active runs — a slot range is `"active"` when its `slots` index is `activeIdx`
   (`Composer`'s own `slotIdx`), else `"unfilled"`/`"filled"` per its own `filled` flag; everything else is
   `"plain"` — pure offsets/slices, no empty segment for zero-gap-adjacent slots, and the tests pin

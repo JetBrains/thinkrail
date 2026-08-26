@@ -124,7 +124,9 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   **`ChangesScopeMenu`** scope pill + the shared **`BranchPicker`** target-branch pill, plus the
   **List | Tree** toggle (`store.changesView`, app-wide) switching a flat list and a folder
   **`ChangesTree`**; clicking a file in either opens/focuses its **center Monaco diff tab**, and every file
-  row carries the shared **`ChangeRowActions`** menu),
+  row carries the shared **`ChangeRowActions`** menu. The row wrapper paints the complete hover/selected
+  band, including the trailing menu slot; its inner open-file button remains transparent so that band
+  cannot look clipped before the menu),
   `FilePane` (+ its lazy `MonacoEditor` / `MarkdownPreview`) + `DiffPane` (+ its lazy
   `MonacoDiff`), plus lazy `TerminalInstance`. The Monaco plumbing both editors share —
   worker wiring, the local loader, the token-driven `thinkrail` theme + the `[data-theme]` re-theme
@@ -1006,7 +1008,7 @@ a project picker, the prompt hero, and the reused
   over a light canvas caps ≈ 3.3:1. So in **high-contrast themes the dim attribute is stripped from
   terminal output** (`stripAnsiDim`), rendering that text at full foreground contrast (≥ AA). The
   `terminalContrast.test.ts` gate reproduces xterm's colour maths to hold both HC themes at the threshold. The **12px
-  content inset** lives on the xterm **mount host's own box** (absolutely positioned, `inset-md` on every
+  content inset** lives on the xterm **mount host's own box** (absolutely positioned, `inset-12` on every
   side) rather than as padding on it — FitAddon derives cols/rows from that host's measured size, so
   padding would overcount the grid and clip the last row/column; insetting the box keeps the measured
   area equal to the visible content area.

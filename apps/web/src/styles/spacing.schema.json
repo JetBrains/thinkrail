@@ -25,14 +25,15 @@
 			}
 		},
 		"steps": {
-			"description": "step name → CSS length. The step name is the canonical pixel value: \"8\" must be \"8px\".",
+			"description": "step name → CSS length. The step name is the canonical integer pixel value with no leading zeroes: \"8\" must be \"8px\".",
 			"type": "object",
+			"minProperties": 1,
 			"additionalProperties": {
 				"type": "string",
 				"pattern": "^[0-9]+px$"
 			},
 			"propertyNames": {
-				"pattern": "^[0-9]+$"
+				"pattern": "^(?:0|[1-9][0-9]*)$"
 			}
 		}
 	}
