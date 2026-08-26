@@ -6,9 +6,14 @@ import { isExactVersion } from "./exactVersion";
 
 interface Manifest {
 	workspaces?: { packages?: string[]; catalog?: Record<string, string> } | string[];
+	overrides?: Record<string, string>;
 	dependencies?: Record<string, string>;
 	devDependencies?: Record<string, string>;
 	optionalDependencies?: Record<string, string>;
+}
+
+interface BunLock {
+	packages?: Record<string, unknown>;
 }
 
 const root = join(import.meta.dir, "..");
@@ -44,6 +49,12 @@ for (const [name, version] of Object.entries(catalog)) {
 	}
 }
 
+for (const name of ["react", "react-dom"]) {
+	if (rootManifest.overrides?.[name] !== "catalog:") {
+		violations.push(`package.json: overrides.${name} must be "catalog:" to keep one runtime`);
+	}
+}
+
 for (const path of [join(root, "package.json"), ...manifestPaths()]) {
 	const manifest = JSON.parse(readFileSync(path, "utf8")) as Manifest;
 	const rel = path.slice(root.length + 1);
@@ -68,6 +79,24 @@ for (const path of [join(root, "package.json"), ...manifestPaths()]) {
 				);
 			}
 		}
+	}
+}
+
+const lock = Bun.JSONC.parse(readFileSync(join(root, "bun.lock"), "utf8")) as BunLock;
+for (const name of ["react", "react-dom"]) {
+	const prefix = `${name}@`;
+	const versions = new Set<string>();
+	for (const entry of Object.values(lock.packages ?? {})) {
+		if (!Array.isArray(entry) || typeof entry[0] !== "string") continue;
+		if (entry[0].startsWith(prefix)) versions.add(entry[0].slice(prefix.length));
+	}
+	const resolved = [...versions].sort();
+	if (resolved.length > 1) {
+		violations.push(`bun.lock: ${name} resolves to multiple versions: ${resolved.join(", ")}`);
+	} else if (resolved[0] !== catalog[name]) {
+		violations.push(
+			`bun.lock: ${name} resolves to ${resolved[0] ?? "nothing"}; expected catalog pin ${catalog[name] ?? "missing"}`,
+		);
 	}
 }
 

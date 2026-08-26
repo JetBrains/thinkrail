@@ -60,8 +60,11 @@ upstream fix #34803.** React 19.2's development Performance Tracks retained ever
 `performance.measure()` record; Pi-rate chat renders grew a Vite tab past 10 GB while the JS heap stayed
 flat, then Chrome killed the renderer and Vite reported the dead socket as `EPIPE` / `ECONNRESET` (React
 #34770). The selected canary contains React's own `clearMeasures` fix; ThinkRail deliberately carries no
-second measure-reaping policy. Every React move upgrades both packages together and repeats the mounted-chat
-memory stress probe before this temporary canary pin can return to stable.
+second measure-reaping policy. Because prereleases do not satisfy dependencies' stable React peer ranges,
+the root package-manager overrides resolve both runtime packages through their catalog entries; `check:deps`
+reads `bun.lock` and rejects any second `react` or `react-dom` version. Every React move upgrades both
+packages together and repeats the mounted-chat memory stress probe before this temporary canary pin can
+return to stable.
 
 ### Dependency graph
 
