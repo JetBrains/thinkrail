@@ -8,7 +8,7 @@ import {
 } from "@remixicon/react";
 import { cn } from "@/lib";
 import { useFold } from "./foldState";
-import type { RoutineToolStep, ThinkingStep } from "./rows";
+import type { ActivityStep, RoutineToolStep, ThinkingStep } from "./rows";
 import { getToolRenderer, getToolSummary, type ToolRenderProps } from "./toolRegistry";
 import type { ToolStatus } from "./types";
 
@@ -19,27 +19,49 @@ export function ActivityGroup({
 	workspaceRoot,
 }: {
 	id: string;
-	steps: RoutineToolStep[];
+	steps: ActivityStep[];
 	live: boolean;
 	workspaceRoot?: string | undefined;
 }) {
-	const single = steps.length === 1 ? steps[0] : undefined;
-	if (single) return <RoutineToolRow step={single} workspaceRoot={workspaceRoot} />;
+	const flatSteps = flattenActivitySteps(steps);
+	const single = flatSteps.length === 1 ? steps[0] : undefined;
+	if (single)
+		return single.kind === "thinking" ? (
+			<ThinkingGroup
+				id={single.id}
+				thought={single}
+				tools={single.tools}
+				live={live}
+				workspaceRoot={workspaceRoot}
+			/>
+		) : (
+			<RoutineToolRow step={single} workspaceRoot={workspaceRoot} />
+		);
 
-	const summary = live ? liveToolTicker(steps, workspaceRoot) : summarizeSteps(steps);
+	const summary = live ? liveActivityTicker(steps, workspaceRoot) : summarizeSteps(steps);
 	return (
 		<GroupDisclosure
 			id={id}
 			testId="activity-group"
 			live={live}
-			stepCount={steps.length}
+			stepCount={flatSteps.length}
 			icon={<Layers className="size-12 shrink-0" />}
-			label="Activity"
 			summary={summary}
 		>
-			{steps.map((step) => (
-				<RoutineToolRow key={step.id} step={step} workspaceRoot={workspaceRoot} />
-			))}
+			{steps.map((step) =>
+				step.kind === "thinking" ? (
+					<ThinkingGroup
+						key={step.id}
+						id={step.id}
+						thought={step}
+						tools={step.tools}
+						live={false}
+						workspaceRoot={workspaceRoot}
+					/>
+				) : (
+					<RoutineToolRow key={step.id} step={step} workspaceRoot={workspaceRoot} />
+				),
+			)}
 		</GroupDisclosure>
 	);
 }
@@ -60,7 +82,7 @@ export function ThinkingGroup({
 	const summary =
 		tools.length > 0
 			? live
-				? liveToolTicker(tools, workspaceRoot)
+				? liveActivityTicker(tools, workspaceRoot)
 				: summarizeSteps(tools)
 			: `${formatChars(thought.text.length)} chars`;
 	return (
@@ -139,20 +161,30 @@ function GroupDisclosure({
 	);
 }
 
-export function summarizeSteps(steps: RoutineToolStep[]): string {
+function flattenActivitySteps(steps: ActivityStep[]): ActivityStep[] {
+	return steps.flatMap((step) => (step.kind === "thinking" ? [step, ...step.tools] : [step]));
+}
+
+export function summarizeSteps(steps: ActivityStep[]): string {
+	const flatSteps = flattenActivitySteps(steps);
 	const counts = new Map<string, number>();
-	for (const step of steps) counts.set(step.toolName, (counts.get(step.toolName) ?? 0) + 1);
+	for (const step of flatSteps) {
+		const name = step.kind === "thinking" ? "thinking" : step.toolName;
+		counts.set(name, (counts.get(name) ?? 0) + 1);
+	}
 	const names = [...counts.entries()].map(([name, n]) => (n > 1 ? `${name} ×${n}` : name));
 	const MAX_NAMES = 4;
 	const shown = names.slice(0, MAX_NAMES).join(", ");
 	const more = names.length - MAX_NAMES;
-	const count = `${steps.length} ${steps.length === 1 ? "step" : "steps"}`;
+	const count = `${flatSteps.length} ${flatSteps.length === 1 ? "step" : "steps"}`;
 	return `${count} · ${shown}${more > 0 ? `, +${more} more` : ""}`;
 }
 
-function liveToolTicker(steps: RoutineToolStep[], workspaceRoot: string | undefined): string {
-	const current = steps[steps.length - 1];
+function liveActivityTicker(steps: ActivityStep[], workspaceRoot: string | undefined): string {
+	const flatSteps = flattenActivitySteps(steps);
+	const current = flatSteps[flatSteps.length - 1];
 	if (!current) return "Working…";
+	if (current.kind === "thinking") return "Thinking…";
 	const summary = getToolSummary(current.toolName, toolRenderProps(current, workspaceRoot));
 	return summary ? `${current.toolName} · ${summary}` : `${current.toolName}…`;
 }

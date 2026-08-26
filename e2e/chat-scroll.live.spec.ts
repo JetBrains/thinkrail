@@ -42,7 +42,7 @@ test("jump button appears when scrolled up and returns to the latest on click", 
 	await expect(page.getByTestId("scroll-to-bottom")).toHaveCount(0);
 });
 
-test("thinking owns the following routine tools and reveals the group on click", {
+test("the outer activity run reveals a thinking subtree that owns its following tools", {
 	tag: "@agent",
 }, async ({ page }) => {
 	test.setTimeout(120_000);
@@ -53,13 +53,16 @@ test("thinking owns the following routine tools and reveals the group on click",
 
 	await waitForDone(page);
 
-	const thinking = page.getByTestId("thinking-group").first();
+	const activity = page.getByTestId("activity-group").filter({ hasText: "bash" }).first();
+	await expect(activity).toBeVisible();
+	await expect(activity).toHaveAttribute("data-expanded", "false");
+	await activity.getByTestId("activity-group-toggle").click();
+
+	const thinking = activity.getByTestId("thinking-group").filter({ hasText: "bash" }).first();
 	await expect(thinking).toBeVisible();
 	await expect(thinking).toHaveAttribute("data-expanded", "false");
-	await expect(thinking).toContainText("Thinking");
-	await expect(thinking).toContainText("bash");
-
 	await thinking.getByTestId("thinking-group-toggle").click();
+
 	await expect(thinking).toHaveAttribute("data-expanded", "true");
 	await expect(thinking.getByTestId("thinking-group-text")).toBeVisible();
 	await expect(thinking.locator('[data-testid="activity-step"][data-tool="bash"]')).toBeVisible();

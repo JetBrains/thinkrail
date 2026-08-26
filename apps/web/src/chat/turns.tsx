@@ -20,7 +20,7 @@ import {
 	type SkillInvocation,
 	userText,
 } from "@/lib";
-import { ActivityGroup, ThinkingGroup } from "./ActivityGroup";
+import { ActivityGroup } from "./ActivityGroup";
 import { FileChip } from "./FileChip";
 import { useFold, useSelection } from "./foldState";
 import { Markdown } from "./Markdown";
@@ -78,16 +78,6 @@ export function ChatTurnView({
 			);
 		case "tool":
 			return <ToolRow row={row} workspaceRoot={workspaceRoot} />;
-		case "thinking":
-			return (
-				<ThinkingGroup
-					id={row.id}
-					thought={row.thought}
-					tools={row.tools}
-					live={row.live}
-					workspaceRoot={workspaceRoot}
-				/>
-			);
 		case "activity":
 			return (
 				<ActivityGroup
