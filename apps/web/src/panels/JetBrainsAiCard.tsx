@@ -7,8 +7,8 @@ import {
 	RiLogoutBoxLine as LogOut,
 	RiPlayLine as Play,
 	RiRefreshLine as RefreshCw,
+	RiBardLine,
 	RiToolsLine as Wrench,
-	RiFlashlightLine as Zap,
 } from "@remixicon/react";
 import type {
 	JbcentralAction,
@@ -119,7 +119,7 @@ export function JetBrainsAiCard({
 		>
 			<div className="flex items-center gap-md">
 				<span className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-primary-subtle text-primary">
-					<Zap className="size-4" />
+					<RiBardLine className="size-4" />
 				</span>
 				<div className="flex min-w-0 flex-col">
 					<span className="tr-text-ui text-text-default">JetBrains AI</span>
@@ -219,7 +219,7 @@ function ActionButton({ action, onAction }: { action: JbcentralAction; onAction:
 			) : action === "start-proxy" ? (
 				<Play className="size-3.5" />
 			) : (
-				<Zap className="size-3.5" />
+				<RiBardLine className="size-3.5" />
 			)}
 			{actionLabel(action)}
 		</Button>

@@ -6,12 +6,12 @@ import {
 	RiArrowRightSLine as ChevronRight,
 	RiFileTextLine as FileText,
 	RiListCheck3 as ListChecks,
-	RiShareLine as Network,
+	RiNetworkLine as Network,
 	RiRefreshLine as RefreshCw,
 	RiBookOpenFill,
 	RiBox3Fill,
 	RiFileTextFill,
-	RiShareFill,
+	RiNetworkFill,
 	RiStackFill,
 } from "@remixicon/react";
 import { useEffect, useMemo, useState } from "react";
@@ -96,7 +96,7 @@ function specRoleIcon(type: string, filled: boolean) {
 		case "goal-and-requirements":
 			return filled ? RiBookOpenFill : BookOpen;
 		case "architecture-design":
-			return filled ? RiShareFill : Network;
+			return filled ? RiNetworkFill : Network;
 		case "module-design":
 			return filled ? RiBox3Fill : Box;
 		case "submodule-design":

@@ -3,7 +3,7 @@ import {
 	RiArrowDownSLine as ChevronDown,
 	RiArrowRightSLine as ChevronRight,
 	RiTimeLine as Clock,
-	RiFileList2Line as FileDiff,
+	RiFileScanLine as FileDiff,
 	RiFileTextLine as FileText,
 	RiContractUpDownLine as FoldVertical,
 	RiLoopRightLine as RotateCw,
