@@ -1,4 +1,5 @@
 import type { DelegationRunDetails, DelegationRunStatus } from "@thinkrail/contracts";
+import { isDelegationRunDetails } from "@thinkrail/contracts";
 import { formatCost, formatElapsed, formatTokens } from "../../SessionStatsBar";
 import type { ToolRenderProps } from "../../toolRegistry";
 import { strArg } from "../toolHelpers";
@@ -6,15 +7,7 @@ import { strArg } from "../toolHelpers";
 export function readRunDetails(value: unknown): DelegationRunDetails | undefined {
 	if (!value || typeof value !== "object" || !("details" in value)) return undefined;
 	const details = (value as { details: unknown }).details;
-	if (!details || typeof details !== "object") return undefined;
-	const d = details as Partial<DelegationRunDetails>;
-	return typeof d.childSessionId === "string" &&
-		typeof d.status === "string" &&
-		typeof d.task === "string" &&
-		typeof d.usage === "object" &&
-		d.usage !== null
-		? (details as DelegationRunDetails)
-		: undefined;
+	return isDelegationRunDetails(details) ? details : undefined;
 }
 
 export function isTerminalRunStatus(status: DelegationRunStatus): boolean {

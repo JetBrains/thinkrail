@@ -1,5 +1,5 @@
 import type { DelegationRunDetails } from "@thinkrail/contracts";
-import { Bot, Check, ChevronDown, ChevronRight, ScrollText, X } from "lucide-react";
+import { Bot, Check, ChevronDown, ChevronRight, ScrollText, TriangleAlert, X } from "lucide-react";
 import { useChatActions } from "../../ChatActions";
 import { useFold } from "../../foldState";
 
@@ -25,7 +25,6 @@ export function SubagentCompletionCard({
 }) {
 	const actions = useChatActions();
 	const [reportOpen, toggleReport] = useFold(`${id}:report`, false);
-	const failed = details.status === "error";
 	const role = details.roleName ?? "subagent";
 	const counters = runCounters(details).join(" · ");
 
@@ -36,10 +35,12 @@ export function SubagentCompletionCard({
 			className="flex flex-col gap-4 rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-8 py-4 tr-text-metadata"
 		>
 			<div className="flex items-center gap-4">
-				{failed ? (
+				{details.status === "error" ? (
 					<X className="size-3 shrink-0 text-feedback-error" />
-				) : (
+				) : details.status === "completed" ? (
 					<Check className="size-3 shrink-0 text-feedback-success" />
+				) : (
+					<TriangleAlert className="size-3 shrink-0 text-feedback-warning" />
 				)}
 				<Bot className="size-3.5 shrink-0 text-text-muted" />
 				<span className="shrink-0 text-text-default">

@@ -35,6 +35,9 @@ Adopted:
   result still carries the run's final details — `pi-subagents` re-injects them via its
   `tool_result` override (its SPEC, PR #304 review finding) — so the `details.childSessionId` gate
   lights on both the live and hydrated paths (hydrate-pinned).
+- **The completion card's icon is three-state**: green check only for `completed`, red X for
+  `error`, warning triangle for `aborted` — an aborted (e.g. turn-capped) run must not read as
+  success (PR #304 review finding); `data-status` carries the raw status for tests.
 - **A background run's tool card freezes at its ack** (pi ignores `onUpdate` after the tool promise
   settles) — deliberate: the card says "started in the background", and the **completion card** is the
   terminal signal (OpenCode's notice pattern), carrying the final details + report fold + transcript

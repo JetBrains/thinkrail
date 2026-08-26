@@ -47,6 +47,15 @@ test("readRunDetails narrows a result's details and rejects malformed shapes", (
 	expect(
 		readRunDetails({ details: { childSessionId: "c", status: "running", task: "t" } }),
 	).toBeUndefined();
+	expect(
+		readRunDetails({ content: [], details: details({ status: "done" as never }) }),
+	).toBeUndefined();
+	expect(
+		readRunDetails({
+			content: [],
+			details: { ...details(), usage: {} as never },
+		}),
+	).toBeUndefined();
 });
 
 test("runCounters formats turns/tokens/cost/duration, skipping zeros", () => {
