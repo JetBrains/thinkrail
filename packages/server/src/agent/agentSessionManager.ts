@@ -16,11 +16,13 @@ import type {
 	AskUserQuestionResult,
 	ImageContent,
 	Model,
+	QueuedMessageContent,
 	QueueLane,
 	RefreshedModels,
 	RemovedQueuedMessage,
 	SessionDeletedPayload,
 	SessionEventPayload,
+	SessionQueueContent,
 	SessionQueueState,
 	SessionStats,
 	SessionSummary,
@@ -48,13 +50,22 @@ import { cancelExtUiForSession, createWebUiContext, notifyExtUi } from "./webUiC
 
 const log = logger("agent");
 
+interface TrackedQueuedMessage {
+	id: number;
+	text: string;
+	images?: ImageContent[];
+}
+
 interface Entry {
 	session: AgentSession;
 	generation: PiRuntimeGeneration;
 	unsubscribe: () => void;
 	workspaceId: string;
 	lastSettlement: AgentSettlement | null | undefined;
-	queuedImageLanes: Record<QueueLane, boolean>;
+	queuedMessages: Record<QueueLane, TrackedQueuedMessage[]>;
+	nextQueuedMessageId: number;
+	manualCompactionInProgress: boolean;
+	piCompactionInProgress: boolean;
 }
 
 const sessions = new Map<string, Entry>();
@@ -199,13 +210,18 @@ async function prepareSessionEntry(
 		unsubscribe: () => {},
 		workspaceId,
 		lastSettlement,
-		queuedImageLanes: { steering: false, followUp: false },
+		queuedMessages: { steering: [], followUp: [] },
+		nextQueuedMessageId: 1,
+		manualCompactionInProgress: false,
+		piCompactionInProgress: false,
 	};
 	entry.unsubscribe = session.subscribe((event) => {
 		if (event.type === "queue_update") {
-			if (event.steering.length === 0) entry.queuedImageLanes.steering = false;
-			if (event.followUp.length === 0) entry.queuedImageLanes.followUp = false;
+			synchronizeQueuedLane(entry, "steering", event.steering);
+			synchronizeQueuedLane(entry, "followUp", event.followUp);
 		}
+		if (event.type === "compaction_start") entry.piCompactionInProgress = true;
+		if (event.type === "compaction_end") entry.piCompactionInProgress = false;
 		if (event.type === "agent_start") {
 			entry.lastSettlement = null;
 		}
@@ -574,26 +590,72 @@ export async function answerQuestion(
 	});
 }
 
+function synchronizeQueuedLane(entry: Entry, kind: QueueLane, texts: readonly string[]): void {
+	const current = entry.queuedMessages[kind];
+	if (texts.length >= current.length) {
+		entry.queuedMessages[kind] = texts.map((text, index) => {
+			const tracked = current[index];
+			return tracked ? { ...tracked, text } : { id: entry.nextQueuedMessageId++, text };
+		});
+		return;
+	}
+
+	const reconciled: TrackedQueuedMessage[] = [];
+	let currentIndex = current.length - 1;
+	for (let textIndex = texts.length - 1; textIndex >= 0; textIndex--) {
+		const text = texts[textIndex];
+		if (text === undefined) continue;
+		while (currentIndex >= 0 && current[currentIndex]?.text !== text) currentIndex--;
+		const tracked = currentIndex >= 0 ? current[currentIndex] : undefined;
+		reconciled.unshift(tracked ? { ...tracked, text } : { id: entry.nextQueuedMessageId++, text });
+		currentIndex--;
+	}
+	entry.queuedMessages[kind] = reconciled;
+}
+
+function synchronizeQueueFromSession(entry: Entry): void {
+	synchronizeQueuedLane(entry, "steering", entry.session.getSteeringMessages());
+	synchronizeQueuedLane(entry, "followUp", entry.session.getFollowUpMessages());
+}
+
 function hasQueuedImages(entry: Entry): boolean {
-	return entry.queuedImageLanes.steering || entry.queuedImageLanes.followUp;
+	return (["steering", "followUp"] as const).some((kind) =>
+		entry.queuedMessages[kind].some((message) => (message.images?.length ?? 0) > 0),
+	);
+}
+
+function queueContentOf(entry: Entry): SessionQueueContent {
+	synchronizeQueueFromSession(entry);
+	const project = (message: TrackedQueuedMessage): QueuedMessageContent => ({
+		text: message.text,
+		...(message.images && message.images.length > 0 ? { images: [...message.images] } : {}),
+	});
+	return {
+		steering: entry.queuedMessages.steering.map(project),
+		followUp: entry.queuedMessages.followUp.map(project),
+	};
 }
 
 async function queueSessionMessage(
 	entry: Entry,
 	kind: QueueLane,
+	text: string,
 	images: ImageContent[] | undefined,
 	send: () => Promise<void>,
 ): Promise<void> {
-	if (!images || images.length === 0) {
-		await send();
-		return;
-	}
-	const previous = entry.queuedImageLanes[kind];
-	entry.queuedImageLanes[kind] = true;
+	const tracked: TrackedQueuedMessage = {
+		id: entry.nextQueuedMessageId++,
+		text,
+		...(images && images.length > 0 ? { images: [...images] } : {}),
+	};
+	entry.queuedMessages[kind].push(tracked);
 	try {
 		await send();
 	} catch (error) {
-		entry.queuedImageLanes[kind] = previous;
+		entry.queuedMessages[kind] = entry.queuedMessages[kind].filter(
+			(message) => message.id !== tracked.id,
+		);
+		synchronizeQueueFromSession(entry);
 		throw error;
 	}
 }
@@ -605,7 +667,9 @@ export async function promptSession(
 ): Promise<void> {
 	const entry = mustGetEntry(sessionId);
 	if (entry.session.isStreaming) {
-		await queueSessionMessage(entry, "steering", images, () => entry.session.steer(text, images));
+		await queueSessionMessage(entry, "steering", text, images, () =>
+			entry.session.steer(text, images),
+		);
 		return;
 	}
 	await entry.session.prompt(text, images ? { images } : undefined);
@@ -617,7 +681,9 @@ export async function steerSession(
 	images?: ImageContent[],
 ): Promise<void> {
 	const entry = mustGetEntry(sessionId);
-	await queueSessionMessage(entry, "steering", images, () => entry.session.steer(text, images));
+	await queueSessionMessage(entry, "steering", text, images, () =>
+		entry.session.steer(text, images),
+	);
 }
 
 export async function followUpSession(
@@ -627,7 +693,7 @@ export async function followUpSession(
 ): Promise<void> {
 	const entry = mustGetEntry(sessionId);
 	if (entry.session.isStreaming) {
-		await queueSessionMessage(entry, "followUp", images, () =>
+		await queueSessionMessage(entry, "followUp", text, images, () =>
 			entry.session.followUp(text, images),
 		);
 		return;
@@ -636,10 +702,20 @@ export async function followUpSession(
 }
 
 export async function compactSession(sessionId: string, instructions?: string): Promise<void> {
-	await mustGet(sessionId).compact(instructions);
+	const entry = mustGetEntry(sessionId);
+	if (entry.manualCompactionInProgress || entry.piCompactionInProgress) {
+		throw new Error("Compaction is already in progress for this session");
+	}
+	entry.manualCompactionInProgress = true;
+	try {
+		await entry.session.compact(instructions);
+	} finally {
+		entry.manualCompactionInProgress = false;
+	}
 }
 
 function queueStateOf(entry: Entry): SessionQueueState {
+	synchronizeQueueFromSession(entry);
 	return {
 		steering: [...entry.session.getSteeringMessages()],
 		followUp: [...entry.session.getFollowUpMessages()],
@@ -647,12 +723,14 @@ function queueStateOf(entry: Entry): SessionQueueState {
 	};
 }
 
-export function clearQueueSession(sessionId: string, requireTextOnly = false): SessionQueueState {
+export function clearQueueSession(sessionId: string, requireTextOnly = false): SessionQueueContent {
 	const entry = mustGetEntry(sessionId);
+	const content = queueContentOf(entry);
 	if (requireTextOnly && hasQueuedImages(entry)) {
 		throw new Error("Cannot restore queued image messages as text");
 	}
-	return entry.session.clearQueue();
+	entry.session.clearQueue();
+	return content;
 }
 
 export async function removeQueuedSession(
@@ -662,23 +740,41 @@ export async function removeQueuedSession(
 ): Promise<RemovedQueuedMessage> {
 	const entry = mustGetEntry(sessionId);
 	const { session } = entry;
-	const drained = session.clearQueue();
+	const drained = clearQueueSession(sessionId);
 	const lane = [...drained[kind]];
 	const removed = index >= 0 && index < lane.length ? (lane.splice(index, 1)[0] ?? null) : null;
 	const keep = { ...drained, [kind]: lane };
-	for (const text of keep.steering) await session.steer(text);
-	for (const text of keep.followUp) await session.followUp(text);
+	for (const message of keep.steering) {
+		await steerSession(sessionId, message.text, message.images ? [...message.images] : undefined);
+	}
+	for (const message of keep.followUp) {
+		await followUpSession(
+			sessionId,
+			message.text,
+			message.images ? [...message.images] : undefined,
+		);
+	}
 	if (!session.isStreaming && session.pendingMessageCount > 0) {
-		const parked = session.clearQueue();
-		for (const text of [...parked.steering, ...parked.followUp]) {
-			await followUpSession(sessionId, text);
+		const parked = clearQueueSession(sessionId);
+		for (const message of [...parked.steering, ...parked.followUp]) {
+			await followUpSession(
+				sessionId,
+				message.text,
+				message.images ? [...message.images] : undefined,
+			);
 		}
 	}
 	return { removed, queue: queueStateOf(entry) };
 }
 
-export function abortSession(sessionId: string): Promise<void> {
-	return mustGet(sessionId).abort();
+export async function abortSession(
+	sessionId: string,
+	restoreQueue = false,
+): Promise<SessionQueueContent | undefined> {
+	const entry = mustGetEntry(sessionId);
+	const restoredQueue = restoreQueue ? clearQueueSession(sessionId) : undefined;
+	await entry.session.abort();
+	return restoredQueue;
 }
 
 export async function setSessionModel(sessionId: string, model: WireModel): Promise<void> {

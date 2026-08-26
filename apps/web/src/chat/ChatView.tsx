@@ -3,6 +3,7 @@ import type {
 	AskUserQuestionResult,
 	PromptHit,
 	QueueLane,
+	SessionQueueContent,
 	SlashCommandInfo,
 	TemplateInfo,
 	ThinkingLevel,
@@ -297,17 +298,29 @@ export default function ChatView({
 		composerRef.current?.refocus();
 	};
 
-	const restoreQueueToDraft = async (): Promise<void> => {
-		const { steering, followUp } = await getTransport().request("session.clearQueue", {
+	const restoreQueueContentToDraft = (content: SessionQueueContent): void => {
+		const messages = [...content.steering, ...content.followUp];
+		restoreTextToDraft(messages.map((message) => message.text).join("\n\n"));
+		const images = messages.flatMap((message) => message.images ?? []);
+		composerRef.current?.restoreAttachments(
+			images.map((image, index) => ({
+				name: `queued-image-${index + 1}`,
+				content: image,
+			})),
+		);
+	};
+
+	const drainQueueToDraft = async (): Promise<void> => {
+		const content = await getTransport().request("session.clearQueue", {
 			sessionId,
 			requireTextOnly: true,
 		});
-		restoreTextToDraft([...steering, ...followUp].join("\n\n"));
+		restoreQueueContentToDraft(content);
 	};
 
 	const performCompact = (instructions?: string) => {
 		const observedTurnIds = selectCompactionTurnIds(useAppStore.getState(), sessionId);
-		void restoreQueueToDraft()
+		void drainQueueToDraft()
 			.then(() =>
 				getTransport().request("session.compact", {
 					sessionId,
@@ -380,7 +393,8 @@ export default function ChatView({
 	const onEditQueued = (kind: QueueLane, index: number) =>
 		void removeQueued(kind, index)
 			.then(({ removed }) => {
-				if (removed !== null) restoreTextToDraft(removed);
+				if (removed === null) return;
+				restoreQueueContentToDraft({ steering: [removed], followUp: [] });
 			})
 			.catch(() => {});
 
@@ -388,9 +402,11 @@ export default function ChatView({
 		void removeQueued(kind, index).catch(() => {});
 
 	const onAbort = () => {
-		void restoreQueueToDraft().catch(() => {});
-		getTransport()
-			.request("session.abort", { sessionId })
+		void getTransport()
+			.request("session.abort", { sessionId, restoreQueue: true })
+			.then(({ restoredQueue }) => {
+				if (restoredQueue) restoreQueueContentToDraft(restoredQueue);
+			})
 			.catch(() => {});
 	};
 

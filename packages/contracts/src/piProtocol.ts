@@ -111,8 +111,18 @@ export interface SessionQueueState {
 	hasImages?: true;
 }
 
+export interface QueuedMessageContent {
+	text: string;
+	images?: readonly ImageContent[];
+}
+
+export interface SessionQueueContent {
+	steering: readonly QueuedMessageContent[];
+	followUp: readonly QueuedMessageContent[];
+}
+
 export interface RemovedQueuedMessage {
-	removed: string | null;
+	removed: QueuedMessageContent | null;
 	queue: SessionQueueState;
 }
 
