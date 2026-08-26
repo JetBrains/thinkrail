@@ -243,6 +243,62 @@ test("an ask-user-answers custom message_end indexes into askAnswers (never the 
 	expect(rt("a")).toBe(before);
 });
 
+test("a subagent-completion custom message_end appends a subagentCompletion turn", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", null, "medium");
+
+	const details = {
+		childSessionId: "child-1",
+		roleName: "scout",
+		task: "map the repo",
+		status: "completed",
+		usage: {
+			input: 10,
+			output: 5,
+			cacheRead: 0,
+			cacheWrite: 0,
+			cost: 0.01,
+			turns: 3,
+			contextTokens: 15,
+		},
+		durationMs: 4200,
+	};
+	store.handlePiEvent(
+		{
+			type: "message_end",
+			message: {
+				role: "custom",
+				customType: "subagent-completion",
+				content: 'Subagent "scout" (child-1) completed:\n\nthe report',
+				display: true,
+				details,
+			},
+		} as unknown as PiEvent,
+		"a",
+	);
+	const turn = rt("a").turns.at(-1);
+	expect(turn?.kind).toBe("subagentCompletion");
+	expect(turn?.kind === "subagentCompletion" && turn.details.childSessionId).toBe("child-1");
+	expect(turn?.kind === "subagentCompletion" && turn.text).toContain("the report");
+
+	// A malformed details shape fails the shared guard and is ignored (untrusted wire data).
+	const before = rt("a");
+	store.handlePiEvent(
+		{
+			type: "message_end",
+			message: {
+				role: "custom",
+				customType: "subagent-completion",
+				content: "x",
+				display: true,
+				details: { nope: true },
+			},
+		} as unknown as PiEvent,
+		"a",
+	);
+	expect(rt("a")).toBe(before);
+});
+
 test("the tool lifecycle folds into toolResults (the status + raw the renderers read)", () => {
 	const store = useAppStore.getState();
 	store.openChatSession("ws1", "a", null, "medium");

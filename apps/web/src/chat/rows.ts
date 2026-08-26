@@ -1,4 +1,4 @@
-import type { UserMessage } from "@thinkrail/contracts";
+import type { DelegationRunDetails, UserMessage } from "@thinkrail/contracts";
 import { resolveProminence } from "./toolRegistry";
 import { strArg } from "./tools/toolHelpers";
 import type { ChatTurn, ToolResultState } from "./types";
@@ -48,6 +48,8 @@ export type ChatRow =
 			delayMs: number;
 	  }
 	| { kind: "markdown"; id: string; text: string }
+	/** A detached subagent run's terminal report — the compact completion card (see `ChatTurn`). */
+	| { kind: "subagentCompletion"; id: string; details: DelegationRunDetails; text: string }
 	| ({ kind: "tool"; id: string } & ToolCallData)
 	| {
 			kind: "activity";
@@ -144,6 +146,14 @@ export function deriveRows(
 						attempt: turn.attempt,
 						maxAttempts: turn.maxAttempts,
 						delayMs: turn.delayMs,
+					});
+					break;
+				case "subagentCompletion":
+					rows.push({
+						kind: "subagentCompletion",
+						id: turn.id,
+						details: turn.details,
+						text: turn.text,
 					});
 					break;
 			}

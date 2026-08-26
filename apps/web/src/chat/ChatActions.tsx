@@ -3,10 +3,11 @@ import { createContext, useContext } from "react";
 
 /**
  * The interaction seam for chat tool renderers that need to talk BACK to the agent (e.g. the inline
- * `ask_user_question` card sending its reply). Presentational renderers stay store/transport
- * free — they read these callbacks from context instead. `ChatView` (the app-integration layer) provides
- * the value, wired to the transport + this tab's `sessionId`; when no provider is present (a renderer used
- * standalone, e.g. an extracted `packages/chat-ui`), the context is `null` and the card renders read-only.
+ * `ask_user_question` card sending its reply) or ask the integration layer to open something.
+ * Presentational renderers stay store/transport free — they read these callbacks from context instead.
+ * `ChatView` (the app-integration layer) provides the value, wired to the transport + this tab's
+ * `sessionId`; when no provider is present (a renderer used standalone, e.g. an extracted
+ * `packages/chat-ui`), the context is `null` and the card renders read-only.
  */
 export interface ChatActions {
 	/**
@@ -15,6 +16,11 @@ export interface ChatActions {
 	 * (unknown session/call, already answered, superseded) so the card can un-latch its "sent" state.
 	 */
 	answerQuestion: (toolCallId: string, result: AskUserQuestionResult) => Promise<void>;
+	/**
+	 * Open the read-only transcript view for a delegated child session — the subagent cards' transcript
+	 * link (`ChatView` mounts `SubagentTranscriptDialog`, keyed to this chat as the parent).
+	 */
+	openSubagentTranscript: (childSessionId: string) => void;
 }
 
 export const ChatActionsContext = createContext<ChatActions | null>(null);

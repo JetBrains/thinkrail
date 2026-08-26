@@ -97,7 +97,10 @@ editor tabs + terminals (switching workspaces swaps both), and a **per-session c
   workspace row's "Open in Vim"); `closeTerminalTab` drops the row after `terminal.close` confirms. The
   **per-session chat state** — `sessions: Record<sessionId, SessionRuntime>`, where a `SessionRuntime` holds
   one chat's `turns` (pi-canonical) / `toolResults` / `askAnswers` (the `ask-user-answers` replies keyed
-  by tool call id — indexed by the reducer and hydration, never turned into bubbles) /
+  by tool call id — indexed by the reducer and hydration, never turned into bubbles; the sibling
+  `subagent-completion` custom message is instead **appended as a `subagentCompletion` turn** — a
+  detached subagent's terminal report is transcript-positioned, rendered by `chat`'s completion card —
+  both narrowed by the shared contracts guards) /
   `currentAssistantId` / `isStreaming` / `model` /
   `thinkingLevel` / `stats` / `commands` / `draft` and its **extension-UI state** (`pendingExtUi` (typed by
   `chat`'s `ExtUiDialogRequest`) + `extUiQueue` (overlapping dialogs FIFO so none orphans its server

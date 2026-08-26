@@ -3,6 +3,7 @@
 import type {
 	AppConfig,
 	BranchList,
+	DelegationRunDetails,
 	DiffStats,
 	EditorInfo,
 	ExistingWorktreeCandidate,
@@ -437,6 +438,62 @@ export function isAskUserAnswersMessage(message: unknown): message is AskUserAns
 		Array.isArray(details.result.answers) &&
 		typeof details.result.cancelled === "boolean"
 	);
+}
+
+/**
+ * The `customType` of the transcript message a detached (background) subagent run injects into its
+ * parent when it finishes (`pi-subagents` sends it via pi's `sendMessage` with `deliverAs: "followUp",
+ * triggerTurn: true`). MIRRORS `pi-subagents`' `SUBAGENT_COMPLETION_MESSAGE` (never imported — the
+ * `DelegationRunDetails` DTO posture): the extension mints these messages; the web renders each as a
+ * compact completion turn. The terminal signal for a background run — pi ignores a tool's `onUpdate`
+ * once its promise settles, so the `Agent` tool card itself freezes at the background ack.
+ */
+export const SUBAGENT_COMPLETION_CUSTOM_TYPE = "subagent-completion";
+
+/**
+ * A correctly-paired `subagent-completion` message: `details` is the run's final
+ * {@link DelegationRunDetails} snapshot; `content` is the child's bounded report text. Same posture as
+ * {@link AskUserAnswersMessage}: `customType` stays `string` on the open wire type, strictness lives at
+ * the producer and at {@link isSubagentCompletionMessage}.
+ */
+export interface SubagentCompletionMessage extends WireCustomMessage<DelegationRunDetails> {
+	customType: typeof SUBAGENT_COMPLETION_CUSTOM_TYPE;
+	details: DelegationRunDetails;
+}
+
+/**
+ * THE narrowing point for `subagent-completion` messages, shared by the web's event reducer and
+ * hydration. Wire data is untrusted (another process, possibly another protocol version), so it
+ * validates the `details` shape — the fields the completion card actually keys on — not just the tag:
+ * a malformed message is ignored rather than trusted on its customType.
+ */
+export function isSubagentCompletionMessage(
+	message: unknown,
+): message is SubagentCompletionMessage {
+	if (!message || typeof message !== "object") return false;
+	const m = message as { role?: unknown; customType?: unknown; details?: unknown };
+	if (m.role !== "custom" || m.customType !== SUBAGENT_COMPLETION_CUSTOM_TYPE) return false;
+	const details = m.details as Partial<DelegationRunDetails> | undefined;
+	return (
+		typeof details?.childSessionId === "string" &&
+		typeof details.status === "string" &&
+		typeof details.task === "string" &&
+		typeof details.usage === "object" &&
+		details.usage !== null
+	);
+}
+
+/**
+ * Best-effort plain text of a custom message's `content` (pi allows a plain string or content blocks) —
+ * the one extraction shared by the web's event reducer and hydration, so a rendered custom message's
+ * text derives identically on the live and read paths.
+ */
+export function customMessageText(content: WireCustomMessage["content"]): string {
+	if (typeof content === "string") return content;
+	return content
+		.filter((c): c is Extract<typeof c, { type: "text" }> => c.type === "text")
+		.map((c) => c.text)
+		.join("");
 }
 
 /** Wire result for methods that return nothing meaningful — the host coerces a void handler to this. */

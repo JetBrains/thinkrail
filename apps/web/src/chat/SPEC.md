@@ -47,6 +47,12 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   step's summary), collapsing when answer text starts. A single-step run renders its step row directly.
   Errored *routine* steps get **no special treatment** (deliberate — agents often recover; `ErrorTurn`
   and primary error-auto-expand are the safety nets).
+- `subagentCompletion` — a `subagent-completion` custom message: a detached (background) subagent run's
+  terminal report, injected into the parent by `pi-subagents` when the run finishes. Rendered as a compact
+  self-framed card (`tools/subagent/SubagentCompletionCard`): role + outcome + usage/duration chips, the
+  bounded report behind a fold, and an Open-transcript action. It is **the** terminal signal for a
+  background run — pi ignores a tool's `onUpdate` once its promise settles, so the background `Agent`
+  tool card froze at its ack and can never go terminal itself. Never folded into activity groups.
 - `divider` — the round-end summary (`TurnDivider` + pure `turnDivider` deriver), anchored the instant a
   round ends: elapsed time, tool-call count, and the round's written files as **two chips split the way the
   right panel is** — "N specs" and "N files changed". The split is a **partition** (a path lands on exactly
@@ -106,8 +112,22 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
 ## Interaction seams
 
 - **`ChatActions`** — a React context (provided by `ChatView`, `null` standalone): how a renderer talks
-  **back** to the agent without importing store/transport. Today: `answerQuestion(toolCallId, result)` —
-  it rejects when the host refuses (unknown/answered/superseded call), and the caller owns the failure UX.
+  **back** to the agent — or asks the integration layer to open something — without importing
+  store/transport. Today: `answerQuestion(toolCallId, result)` — it rejects when the host refuses
+  (unknown/answered/superseded call), and the caller owns the failure UX — and
+  `openSubagentTranscript(childSessionId)` — the subagent cards' transcript link (no provider → the
+  cards hide the action).
+- **Subagent transcript view** (`SubagentTranscriptDialog.tsx` — an integration file, like
+  `SkillsDialog`): a **read-only overlay** over the chat rendering a hidden child's transcript with the
+  same primitives (`messagesToRuntime` → `deriveRows` → `ChatTurnView`), fetched via
+  `subagent.getTranscript` keyed `(workspaceId, parentSessionId = this chat, childSessionId)`. Opened
+  through `ChatActions.openSubagentTranscript`; rendered under a `null` `ChatActions` provider so
+  nothing inside can talk back (and a nested transcript link cannot exist). While the run is still live
+  — derived from this chat's own runtime via the pure `delegationRunStatus` (latest
+  `DelegationRunDetails` for the child across `toolResults`, overridden by a terminal
+  `subagentCompletion` turn) — the open dialog refetches every ~2.5s and stops on a terminal status.
+  Works during the run, after completion, and after a host restart (transcripts persist on disk; only
+  the in-memory registry is lost).
 - **`askState`** — the questionnaire lifecycle seam: the pure `deriveAskStates(turns, askAnswers)` +
   `AskStatesContext`/`useAskState` (provided by `ChatView`, `null` standalone). The ask tool is **ack +
   terminate** (its tool result is just an ack; the reply arrives later as an `ask-user-answers` message),
@@ -119,10 +139,13 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   the live path (same `raw` result shape, same error-turn surfacing for `stopReason: "error"`). It also
   returns `turnIdByMessageIndex` (message-position → minted turn id) — the jump anchor map a
   history-search "jump to message" deep link (`chatLocationRequest`, see `store/SPEC.md`) resolves
-  against; entries are `null` for a `toolResult`/`custom` message (never its own turn), and a message that
+  against; entries are `null` for a `toolResult` or non-turn `custom` message (a `subagent-completion`
+  message maps to its own completion turn's id; text-less, it is still never an anchor match), and a message that
   ended in `stopReason: "error"` maps to its own assistant turn's id, never the synthesized error turn's.
-  `custom` messages never become turns: known ones (`ask-user-answers`) index into `askAnswers`; unknown
-  customTypes are ignored. No store/transport/shiki.
+  `custom` messages: `ask-user-answers` indexes into `askAnswers` (never a turn — the questionnaire card
+  is its rendering); `subagent-completion` **becomes its own `subagentCompletion` turn** (the completion
+  card is transcript-positioned, so it maps its message index too); unknown customTypes are ignored. No
+  store/transport/shiki.
 - **Jump-to-message** (`chatLocationRequest` — set by `useHistorySearch.ts`'s `openMessage` on Enter over
   a mapped message hit; see `store/SPEC.md` for the store-level request/clear contract and
   `CenterTabs.tsx`'s open/reopen/hydrate half) — `ChatView` is the sole consumer. Once `rows.length > 0`,
@@ -538,7 +561,8 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
 - **Allowed deps:** `contracts` (pi message/content-block types, **type-only**); `store` + `transport`
   (**app-integration files only** — a renderer that takes props must never reach for either. Today that
   is `ChatView.tsx` plus the hooks and dialogs it composes: `useChatTodos.ts`, `useHistorySearch.ts`,
-  `useModelCatalog.ts`, `SkillsDialog.tsx`, `TemplateEditorDialog.tsx`. `useModelCatalog` is the shared
+  `useModelCatalog.ts`, `SkillsDialog.tsx`, `TemplateEditorDialog.tsx`, `SubagentTranscriptDialog.tsx`.
+  `useModelCatalog` is the shared
   models-catalog seam `panels/NewWorkspaceDialog` also imports per-file, so the two pickers cannot
   drift; on activation it **drops catalog authority synchronously** (a flag an earlier consumer set says
   nothing about the list this one inherited) and reads `model.list` only when the shared list is **empty** —
@@ -572,7 +596,8 @@ message's true terminal is **`message_end`**: the reducer adopts the final messa
 `stopReason`, how renderers spot dead tool calls) and clears the turn's `streaming` flag **there** — not
 at `agent_end`, which for a tool-calling message arrives only after its tools ran. Tool results are
 indexed by `toolCallId` in `toolResults`; `ask-user-answers` custom messages index into `askAnswers`
-(never the turn list — the questionnaire card is their rendering). The view re-derives rows each render
+(never the turn list — the questionnaire card is their rendering); `subagent-completion` custom messages
+append a `subagentCompletion` turn (the shared contracts guard narrows both, on the live and read paths). The view re-derives rows each render
 (`deriveRows` is pure; `ChatView` memoizes) — stable row/step ids keep fold state across snapshots.
 
 **One live indicator, always.** pi splits a run into several assistant messages, so the reducer sweeps

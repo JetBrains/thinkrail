@@ -13,10 +13,12 @@ import { useEffect, useState } from "react";
 import { cn, projectRelativePath } from "@/lib";
 import { ActivityGroup } from "./ActivityGroup";
 import { useSelection } from "./foldState";
+import { formatElapsed } from "./formatters";
 import { Markdown } from "./Markdown";
 import type { ChatRow, TurnDividerData } from "./rows";
 import { ToolCard } from "./ToolCard";
 import { getToolChrome, getToolRenderer } from "./toolRegistry";
+import { SubagentCompletionCard } from "./tools/subagent/SubagentCompletionCard";
 
 /**
  * Render one derived chat row (see `rows.ts` — the transcript renders rows, not raw turns, so routine
@@ -66,6 +68,8 @@ export function ChatTurnView({
 					<Markdown text={row.text} />
 				</div>
 			);
+		case "subagentCompletion":
+			return <SubagentCompletionCard id={row.id} details={row.details} text={row.text} />;
 		case "tool":
 			return <ToolRow row={row} workspaceRoot={workspaceRoot} />;
 		case "activity":
@@ -224,14 +228,6 @@ function RetryIndicator({
 			</div>
 		</div>
 	);
-}
-
-/** "1m 12s" / "45s" from a millisecond span. */
-function formatElapsed(ms: number): string {
-	const totalSec = Math.round(ms / 1000);
-	const m = Math.floor(totalSec / 60);
-	const s = totalSec % 60;
-	return m > 0 ? `${m}m ${s}s` : `${s}s`;
 }
 
 /**

@@ -1,5 +1,10 @@
 import type { AskUserAnswersDetails, TranscriptMessage, UserMessage } from "@thinkrail/contracts";
-import { isAskUserAnswersMessage, isControlMessage } from "@thinkrail/contracts";
+import {
+	customMessageText,
+	isAskUserAnswersMessage,
+	isControlMessage,
+	isSubagentCompletionMessage,
+} from "@thinkrail/contracts";
 import type { ChatTurn, ToolResultState } from "./types";
 
 /** The leading text of a user message (string or text blocks). */
@@ -19,7 +24,8 @@ export interface HydratedRuntime {
 	askAnswers: Record<string, AskUserAnswersDetails["result"]>;
 	/**
 	 * Parallel to `messages`: `turnIdByMessageIndex[i]` is the turn id minted for `messages[i]` (`null` for
-	 * a `toolResult`/`custom` message, which never becomes its own turn) — the jump anchor map a
+	 * a `toolResult` or non-turn `custom` message; a `subagent-completion` message maps its completion
+	 * turn's id, though its empty anchor text means a jump can never land on it) — the jump anchor map a
 	 * history-search "jump to message" deep link (`chatLocationRequest`) resolves against. A message that
 	 * ended in `stopReason: "error"` maps to its own assistant turn's id, never the synthesized error
 	 * turn's (the error turn has no message index of its own).
@@ -31,9 +37,10 @@ export interface HydratedRuntime {
  * Fold a session's transcript (`session.getMessages`) into the runtime shape the renderers consume — the
  * read-side counterpart of the event reducer, used to hydrate a chat on connect. pi messages carry no
  * stable id, so we mint one per turn; tool results are indexed by `toolCallId` (which pairs with the
- * `toolCall` block's id inside an assistant turn, exactly as in the live path). `custom` messages never
- * become turns: the ones we know (`ask-user-answers`) index into `askAnswers` — the questionnaire card is
- * their rendering — and unknown customTypes are ignored.
+ * `toolCall` block's id inside an assistant turn, exactly as in the live path). `custom` messages:
+ * `ask-user-answers` indexes into `askAnswers` (never a turn — the questionnaire card is its rendering),
+ * `subagent-completion` becomes its own `subagentCompletion` turn (the completion card is
+ * transcript-positioned), and unknown customTypes are ignored.
  */
 export function messagesToRuntime(messages: TranscriptMessage[]): HydratedRuntime {
 	const turns: ChatTurn[] = [];
@@ -77,6 +84,17 @@ export function messagesToRuntime(messages: TranscriptMessage[]): HydratedRuntim
 		} else if (isAskUserAnswersMessage(message)) {
 			// The shared guard validates the details shape (not just the tag) — a malformed reply is ignored.
 			askAnswers[message.details.toolCallId] = message.details.result;
+		} else if (isSubagentCompletionMessage(message)) {
+			// A detached subagent run's terminal report becomes its own turn (the compact completion card is
+			// transcript-positioned) — matching the live reducer exactly. It maps its message index (it IS a
+			// turn), though its anchor text is empty so a jump can never land on it by fallback.
+			turnId = crypto.randomUUID();
+			turns.push({
+				kind: "subagentCompletion",
+				id: turnId,
+				details: message.details,
+				text: customMessageText(message.content),
+			});
 		}
 		turnIdByMessageIndex.push(turnId);
 	}

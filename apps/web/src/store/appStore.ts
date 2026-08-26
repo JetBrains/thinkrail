@@ -19,7 +19,12 @@ import type {
 	Workspace,
 	WorkspaceFsChangedPayload,
 } from "@thinkrail/contracts";
-import { DEFAULT_CONFIG, isAskUserAnswersMessage } from "@thinkrail/contracts";
+import {
+	customMessageText,
+	DEFAULT_CONFIG,
+	isAskUserAnswersMessage,
+	isSubagentCompletionMessage,
+} from "@thinkrail/contracts";
 import { create } from "zustand";
 import type { LoginState } from "../auth";
 import type { HydratedRuntime } from "../chat/hydrate";
@@ -345,6 +350,23 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 			if (isAskUserAnswersMessage(event.message)) {
 				const { toolCallId, result } = event.message.details;
 				return { ...rt, askAnswers: { ...rt.askAnswers, [toolCallId]: result } };
+			}
+			// A `subagent-completion` custom message (a detached subagent run's terminal report) becomes its
+			// own turn — the compact completion card is transcript-positioned, unlike ask-user-answers which
+			// only indexes. Guard-validated: a malformed message falls through and is ignored below.
+			if (isSubagentCompletionMessage(event.message)) {
+				return {
+					...rt,
+					turns: [
+						...rt.turns,
+						{
+							kind: "subagentCompletion",
+							id: crypto.randomUUID(),
+							details: event.message.details,
+							text: customMessageText(event.message.content),
+						},
+					],
+				};
 			}
 			// The message's true terminal: pi forwards only *streaming* variants as `message_update` (the
 			// LLM-level done/error become this event), so without it the turn would stay flagged streaming

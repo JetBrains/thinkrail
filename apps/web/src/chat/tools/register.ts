@@ -8,6 +8,7 @@ import { BashCard } from "./BashCard";
 import { EditCard } from "./EditCard";
 import { ReadCard } from "./ReadCard";
 import { strArg } from "./toolHelpers";
+import "./subagent/register";
 import "./visualize/register";
 import "./web/register";
 import { WriteCard } from "./WriteCard";

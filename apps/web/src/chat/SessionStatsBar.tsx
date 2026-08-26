@@ -1,15 +1,6 @@
 import type { SessionStats } from "@thinkrail/contracts";
 import { cn } from "@/lib";
-
-function formatTokens(n: number): string {
-	if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-	if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
-	return String(n);
-}
-
-function formatCost(n: number): string {
-	return n >= 0.01 ? `$${n.toFixed(2)}` : `$${n.toFixed(4)}`;
-}
+import { formatCost, formatTokens } from "./formatters";
 
 // Context-bar fill in 10% steps — utility classes (no inline style) so the bar stays themeable.
 const FILL = [

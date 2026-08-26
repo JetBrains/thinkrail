@@ -1,4 +1,9 @@
-import type { AssistantMessage, ExtUiRequest, UserMessage } from "@thinkrail/contracts";
+import type {
+	AssistantMessage,
+	DelegationRunDetails,
+	ExtUiRequest,
+	UserMessage,
+} from "@thinkrail/contracts";
 
 /** The extension-UI frames that await a browser reply (the ones `ExtUiDialog` renders). */
 export type ExtUiDialogRequest = Extract<
@@ -20,6 +25,13 @@ export type ChatTurn =
 	| { kind: "system"; id: string; text: string; endedAt?: number }
 	/** A failure notice: the run ended in an error, or the host rejected a send. `text` is the reason. */
 	| { kind: "error"; id: string; text: string }
+	/**
+	 * A `subagent-completion` custom message: a detached (background) subagent run's terminal report,
+	 * injected into the parent by `pi-subagents`. `details` is the run's final `DelegationRunDetails`
+	 * snapshot; `text` the bounded report. Rendered as the compact completion card — the terminal signal
+	 * for a background run (its `Agent` tool card froze at the ack; pi drops onUpdate after a tool ends).
+	 */
+	| { kind: "subagentCompletion"; id: string; details: DelegationRunDetails; text: string }
 	/**
 	 * A live retry countdown (shown during the back-off, cleared when the retry resolves). `source`
 	 * separates the two flows that can overlap — a `turn` retry (pi `auto_retry_*`) and a `summarization`

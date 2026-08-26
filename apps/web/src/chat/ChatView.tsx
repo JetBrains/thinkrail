@@ -38,12 +38,14 @@ import { planGlance } from "./planView";
 import { type ChatRow, deriveRows, rowIndexForTurn } from "./rows";
 import { SkillsDialog } from "./SkillsDialog";
 import { StreamIndicator, type StreamStatus, streamStatus } from "./StreamIndicator";
+import { SubagentTranscriptDialog } from "./SubagentTranscriptDialog";
 import { parseTemplateSlots } from "./slotSession";
 import { TemplateEditorDialog } from "./TemplateEditorDialog";
 import { shouldApplyTemplatePick } from "./templatePick";
 import { stripFrontmatter } from "./templateText";
 import { useModelCatalog } from "./useModelCatalog";
 import "./tools/register"; // side-effect: register the built-in pi tool renderers (bash/read/edit/write)
+import { delegationRunStatus } from "./tools/subagent/runDetails";
 import { ChatTurnView } from "./turns";
 import type { ChatTurn } from "./types";
 import { useChatScroll } from "./useChatScroll";
@@ -227,6 +229,9 @@ export default function ChatView({
 	// is prefilled from — `TemplateEditorDialog` itself is always mounted (controlled by `open` below), the
 	// same idiom `panels/TemplatesSettings.tsx` uses for its own New/Edit instance.
 	const [saveAsTemplateHit, setSaveAsTemplateHit] = useState<PromptHit | null>(null);
+	// The subagent transcript dialog: the child session id it shows, or null when closed. Opened through
+	// `ChatActions.openSubagentTranscript` (the cards stay presentational); this chat is the parent key.
+	const [transcriptChildId, setTranscriptChildId] = useState<string | null>(null);
 
 	const virtuosoRef = useRef<VirtuosoHandle>(null);
 	const { followOutput, handleAtBottom, showScrollButton, scrollToBottom, containerProps } =
@@ -559,16 +564,27 @@ export default function ChatView({
 	);
 
 	// Interactive tool renderers reach the agent through this context (kept out of the presentational
-	// renderers). Currently: the inline `ask_user_question` card sending its reply. The promise is handed
-	// to the caller — the card owns the failure UX (it un-latches its "sent" state).
+	// renderers). Currently: the inline `ask_user_question` card sending its reply (the promise is handed
+	// to the caller — the card owns the failure UX), and the subagent cards' transcript link (opens the
+	// read-only child transcript dialog below, keyed to this chat as the parent).
 	const chatActions = useMemo<ChatActions>(
 		() => ({
 			answerQuestion: (toolCallId: string, result: AskUserQuestionResult) =>
 				getTransport()
 					.request("session.answerQuestion", { sessionId, toolCallId, result })
 					.then(() => undefined),
+			openSubagentTranscript: setTranscriptChildId,
 		}),
 		[sessionId],
+	);
+
+	// Is the viewed child's run still live? Derived from THIS chat's runtime (the run's REPLACE snapshots
+	// land in toolResults; a background run's terminal signal is its completion turn) — drives the
+	// transcript dialog's poll-while-live refresh, per the settled design.
+	const transcriptRunStatus = useMemo(
+		() =>
+			transcriptChildId ? delegationRunStatus(turns, toolResults, transcriptChildId) : undefined,
+		[transcriptChildId, turns, toolResults],
 	);
 
 	const onExtUiReply = (value: string | boolean | null) => {
@@ -721,6 +737,17 @@ export default function ChatView({
 					/>
 					{pendingExtUi ? (
 						<ExtUiDialog key={pendingExtUi.id} request={pendingExtUi} onReply={onExtUiReply} />
+					) : null}
+					{transcriptChildId ? (
+						<SubagentTranscriptDialog
+							workspaceId={workspaceId}
+							parentSessionId={sessionId}
+							childSessionId={transcriptChildId}
+							live={transcriptRunStatus === "queued" || transcriptRunStatus === "running"}
+							onOpenChange={(open) => {
+								if (!open) setTranscriptChildId(null);
+							}}
+						/>
 					) : null}
 					{projectId ? (
 						<SkillsDialog
