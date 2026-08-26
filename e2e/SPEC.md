@@ -102,8 +102,10 @@ PTY continuity while hidden, peer synchronization, and version-1 migration witho
 ## Isolation contract
 
 Every concurrent lane derives a distinct data dir, HOME, pi-agent dir, fixture repository, binary cache,
-restart artifacts, picker/editor/provider control files, host/restart/binary ports, and Central fixture
-artifacts. The lane's fake executable directory lives under `.bun/bin`: this intentionally marks the injected,
+Playwright transform cache, restart artifacts, picker/editor/provider control files, host/restart/binary ports,
+and Central fixture artifacts. The transform cache is lane-local because Playwright's shared cache assumes a
+single runner process; sharing it lets a cold shard consume another shard's partially written transform. The
+lane's fake executable directory lives under `.bun/bin`: this intentionally marks the injected,
 hermetic host `PATH` as complete to `resolveShellEnv()`, preventing login-shell repair from replacing the
 Central/editor stubs with developer-machine executables. Port allocation remains stable and collision-safe
 across worktrees: the registry claim distinguishes
