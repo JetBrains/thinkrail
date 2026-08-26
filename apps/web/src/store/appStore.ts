@@ -1,6 +1,7 @@
 import type {
 	AppConfig,
 	AskUserQuestionResult,
+	ComposerGrowthLimit,
 	ExtUiRequest,
 	GitDiffScope,
 	LayoutAuxiliaryRegion,
@@ -226,6 +227,7 @@ export const SettingsSection = {
 	Providers: "providers",
 	Github: "github",
 	Appearance: "appearance",
+	Chat: "chat",
 	Layout: "layout",
 	Terminal: "terminal",
 	Templates: "templates",
@@ -276,6 +278,8 @@ export interface SessionRuntime {
 	queue: SessionQueueState;
 	model: WireModel | null;
 	thinkingLevel: ThinkingLevel;
+	eventRevision: number;
+	syncedConnectionGeneration: number;
 	stats: SessionStats | null;
 	commands: SlashCommandInfo[];
 	draft: string;
@@ -287,7 +291,11 @@ export interface SessionRuntime {
 
 const EMPTY_QUEUE: SessionQueueState = { steering: [], followUp: [] };
 
-function newRuntime(model: WireModel | null, thinkingLevel: ThinkingLevel): SessionRuntime {
+function newRuntime(
+	model: WireModel | null,
+	thinkingLevel: ThinkingLevel,
+	syncedConnectionGeneration = 0,
+): SessionRuntime {
 	return {
 		turns: [],
 		toolResults: {},
@@ -298,6 +306,8 @@ function newRuntime(model: WireModel | null, thinkingLevel: ThinkingLevel): Sess
 		queue: EMPTY_QUEUE,
 		model,
 		thinkingLevel,
+		eventRevision: 0,
+		syncedConnectionGeneration,
 		stats: null,
 		commands: [],
 		draft: "",
@@ -359,6 +369,34 @@ function settleCompactionTurn(
 	const index = turns.findLastIndex((t) => t.kind === "compaction" && t.status === "running");
 	if (index < 0) return [...turns, { kind: "compaction", id: crypto.randomUUID(), ...outcome }];
 	return turns.map((t, i) => (i === index ? { kind: "compaction", id: t.id, ...outcome } : t));
+}
+
+function reconcileCompactionTurns(
+	current: ChatTurn[],
+	hydrated: ChatTurn[],
+	isStreaming: boolean,
+): ChatTurn[] {
+	const live = current.findLast(
+		(turn) => turn.kind === "compaction" && turn.status === "done" && turn.summary === undefined,
+	);
+	if (live?.kind !== "compaction") return hydrated;
+	const index = hydrated.findLastIndex(
+		(turn) =>
+			turn.kind === "compaction" &&
+			turn.summary !== undefined &&
+			(live.tokensBefore === undefined || turn.tokensBefore === live.tokensBefore),
+	);
+	if (index < 0) return hydrated;
+	return hydrated.map((turn, turnIndex) =>
+		turnIndex === index && turn.kind === "compaction"
+			? {
+					...turn,
+					id: live.id,
+					...(live.tokensAfter !== undefined ? { tokensAfter: live.tokensAfter } : {}),
+					...(isStreaming && live.resuming ? { resuming: true as const } : {}),
+				}
+			: turn,
+	);
 }
 
 type RetrySource = Extract<ChatTurn, { kind: "retry" }>["source"];
@@ -656,6 +694,7 @@ interface AppState {
 	theme: ThemeId;
 	analyticsEnabled: boolean;
 	terminalReplayKb: number;
+	composerGrowthLimit: ComposerGrowthLimit;
 	layoutSettings: LayoutSettings;
 	toasts: Toast[];
 	setStatus: (status: ConnectionStatus) => void;
@@ -793,6 +832,12 @@ interface AppState {
 		syncedTick?: number,
 		options?: LayoutOpenOptions,
 	) => void;
+	reconcileSession: (
+		summary: SessionSummary,
+		hydrated: HydratedRuntime,
+		expectedEventRevision: number,
+		connectionGeneration: number,
+	) => boolean;
 	appendUserMessage: (sessionId: string, text: string, attachments?: ChatAttachment[]) => void;
 	appendErrorTurn: (sessionId: string, text: string) => void;
 	appendCompactionFailureUnlessObserved: (
@@ -849,6 +894,7 @@ function configPatch(config: AppConfig) {
 		theme: config.theme,
 		analyticsEnabled: config.analyticsEnabled,
 		terminalReplayKb: config.terminalReplayKb,
+		composerGrowthLimit: config.composerGrowthLimit ?? DEFAULT_CONFIG.composerGrowthLimit,
 		layoutSettings: config.layout ?? DEFAULT_CONFIG.layout,
 	};
 }
@@ -1354,6 +1400,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	theme: DEFAULT_CONFIG.theme,
 	analyticsEnabled: DEFAULT_CONFIG.analyticsEnabled,
 	terminalReplayKb: DEFAULT_CONFIG.terminalReplayKb,
+	composerGrowthLimit: DEFAULT_CONFIG.composerGrowthLimit,
 	layoutSettings: DEFAULT_CONFIG.layout,
 	toasts: [],
 	setStatus: (status) =>
@@ -2250,7 +2297,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 						? s.navTickByWorkspace
 						: bumpNav(s, workspaceId),
 				sessions: fresh
-					? { ...s.sessions, [sessionId]: newRuntime(model, thinkingLevel) }
+					? {
+							...s.sessions,
+							[sessionId]: newRuntime(model, thinkingLevel, s.connectionGeneration),
+						}
 					: s.sessions,
 				...(fresh
 					? {
@@ -2458,7 +2508,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 			if (s.sessions[summary.sessionId]) return {};
 			const wsId = summary.workspaceId;
 			const runtime: SessionRuntime = {
-				...newRuntime(summary.model, summary.thinkingLevel),
+				...newRuntime(summary.model, summary.thinkingLevel, s.connectionGeneration),
 				turns: hydrated.turns,
 				toolResults: hydrated.toolResults,
 				askAnswers: hydrated.askAnswers,
@@ -2529,6 +2579,46 @@ export const useAppStore = create<AppState>((set, get) => ({
 					: s.closedChatsByWorkspace,
 			};
 		}),
+	reconcileSession: (summary, hydrated, expectedEventRevision, connectionGeneration) => {
+		let applied = false;
+		set((s) => {
+			const current = s.sessions[summary.sessionId];
+			if (
+				!current ||
+				current.eventRevision !== expectedEventRevision ||
+				s.removedWorkspaceIds[summary.workspaceId] ||
+				isSessionDeleted(s, summary.workspaceId, summary.sessionId) ||
+				!selectWorkspaceSessionIds(s, summary.workspaceId).includes(summary.sessionId)
+			) {
+				return {};
+			}
+			const { turnIdByMessageIndex: _previousMessageIndex, ...preserved } = current;
+			void _previousMessageIndex;
+			const runtime: SessionRuntime = {
+				...preserved,
+				turns: reconcileCompactionTurns(current.turns, hydrated.turns, summary.isStreaming),
+				toolResults: hydrated.toolResults,
+				askAnswers: hydrated.askAnswers,
+				currentAssistantId: null,
+				attemptAssistantId: null,
+				isStreaming: summary.isStreaming,
+				queue: summary.queue ?? EMPTY_QUEUE,
+				model: summary.model,
+				thinkingLevel: summary.thinkingLevel,
+				eventRevision: current.eventRevision + 1,
+				syncedConnectionGeneration: Math.max(
+					current.syncedConnectionGeneration,
+					connectionGeneration,
+				),
+				...(hydrated.turnIdByMessageIndex
+					? { turnIdByMessageIndex: hydrated.turnIdByMessageIndex }
+					: {}),
+			};
+			applied = true;
+			return { sessions: { ...s.sessions, [summary.sessionId]: runtime } };
+		});
+		return applied;
+	},
 	appendUserMessage: (sessionId, text, attachments) =>
 		set((s) =>
 			withRuntime(s, sessionId, (rt) => ({
@@ -2584,7 +2674,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 			}),
 		),
 	handlePiEvent: (event, sessionId) =>
-		set((s) => withRuntime(s, sessionId, (rt) => reduceSessionEvent(rt, event))),
+		set((s) =>
+			withRuntime(s, sessionId, (rt) => ({
+				...reduceSessionEvent(rt, event),
+				eventRevision: rt.eventRevision + 1,
+			})),
+		),
 	setModelsForProviderVersion: (providerVersion, models) =>
 		set((s) => (s.providerVersion === providerVersion ? { models, modelsFresh: false } : s)),
 	noteProviderChanged: () =>

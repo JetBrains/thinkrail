@@ -4,6 +4,7 @@ import {
 	RiLayoutTop2Line as LayoutPanelTop,
 	RiLayoutGridLine as LayoutTemplate,
 	type RemixiconComponentType as LucideIcon,
+	RiChat2Line as MessageSquareText,
 	RiPaletteLine as Palette,
 	RiShieldCheckLine as ShieldCheck,
 	RiEqualizerLine as SlidersHorizontal,
@@ -14,6 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { cn } from "@/lib";
 import { SettingsSection, useAppStore } from "@/store";
 import { AppearanceSettings } from "./AppearanceSettings";
+import { ChatSettings } from "./ChatSettings";
 import { GithubSettings } from "./GithubSettings";
 import { PrivacySettings } from "./PrivacySettings";
 import { ProvidersSettings } from "./ProvidersSettings";
@@ -24,6 +26,7 @@ const SECTIONS: { id: SettingsSection; label: string; icon: LucideIcon }[] = [
 	{ id: SettingsSection.Providers, label: "Providers", icon: KeyRound },
 	{ id: SettingsSection.Github, label: "GitHub", icon: GitBranch },
 	{ id: SettingsSection.Appearance, label: "Appearance", icon: Palette },
+	{ id: SettingsSection.Chat, label: "Chat", icon: MessageSquareText },
 	{ id: SettingsSection.Layout, label: "Layout", icon: LayoutPanelTop },
 	{ id: SettingsSection.Terminal, label: "Terminal", icon: SquareTerminal },
 	{ id: SettingsSection.Templates, label: "Templates", icon: LayoutTemplate },
@@ -95,6 +98,8 @@ export function SettingsDialog({ layoutSettings }: { layoutSettings: ReactNode }
 							<ProvidersSettings />
 						) : section === SettingsSection.Github ? (
 							<GithubSettings />
+						) : section === SettingsSection.Chat ? (
+							<ChatSettings />
 						) : section === SettingsSection.Layout ? (
 							layoutSettings
 						) : section === SettingsSection.Terminal ? (

@@ -1,15 +1,16 @@
 import { beforeEach, expect, test } from "bun:test";
-import type {
-	ExtUiRequest,
-	PiEvent,
-	Project,
-	SessionSummary,
-	SpecGraphNode,
-	WireModel,
-	Workspace,
-	WorkspaceFsChangedPayload,
-	WorkspaceLayoutDocument,
-	WorkspaceSkillChange,
+import {
+	DEFAULT_CONFIG,
+	type ExtUiRequest,
+	type PiEvent,
+	type Project,
+	type SessionSummary,
+	type SpecGraphNode,
+	type WireModel,
+	type Workspace,
+	type WorkspaceFsChangedPayload,
+	type WorkspaceLayoutDocument,
+	type WorkspaceSkillChange,
 } from "@thinkrail/contracts";
 import type { ChatTurn } from "../chat/types";
 import { userText } from "../lib";
@@ -368,7 +369,9 @@ test("message_end finalizes the turn the moment its message completes (not at ag
 		{ type: "message_end", message: { role: "toolResult" } } as unknown as PiEvent,
 		"a",
 	);
-	expect(rt("a")).toBe(before);
+	const ignored = rt("a");
+	expect(ignored.turns).toBe(before.turns);
+	expect(ignored.eventRevision).toBe(before.eventRevision + 1);
 });
 
 test("an ask-user-answers custom message_end indexes into askAnswers (never the turn list)", () => {
@@ -403,7 +406,10 @@ test("an ask-user-answers custom message_end indexes into askAnswers (never the 
 		} as unknown as PiEvent,
 		"a",
 	);
-	expect(rt("a")).toBe(before);
+	const ignored = rt("a");
+	expect(ignored.turns).toBe(before.turns);
+	expect(ignored.askAnswers).toBe(before.askAnswers);
+	expect(ignored.eventRevision).toBe(before.eventRevision + 1);
 });
 
 test("the tool lifecycle folds into toolResults (the status + raw the renderers read)", () => {
@@ -1258,6 +1264,110 @@ test("hydrateSession rebuilds a runtime + tab on connect, and never clobbers a l
 		{ turns: [], toolResults: {}, askAnswers: {}, turnIdByMessageIndex: [] },
 	);
 	expect(useAppStore.getState().sessions.h1?.turns).toHaveLength(1);
+});
+
+test("reconcileSession replaces stale host state while preserving browser-local state", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "sync", null, "medium");
+	store.setChatDraft("sync", "keep my draft");
+	store.appendUserMessage("sync", "old summarized prompt");
+	store.handlePiEvent(agentStart, "sync");
+	store.handlePiEvent({ type: "compaction_start", reason: "overflow" }, "sync");
+	store.handlePiEvent(
+		{
+			type: "compaction_end",
+			reason: "overflow",
+			result: { tokensBefore: 268_000, estimatedTokensAfter: 24_000 },
+			aborted: false,
+			willRetry: true,
+		},
+		"sync",
+	);
+
+	const before = rt("sync");
+	const liveCompaction = before.turns.findLast((turn) => turn.kind === "compaction");
+	if (liveCompaction?.kind !== "compaction") throw new Error("live compaction missing");
+	const summary: SessionSummary = {
+		sessionId: "sync",
+		workspaceId: "ws1",
+		title: "Chat",
+		model: null,
+		thinkingLevel: "high",
+		isStreaming: true,
+		messageCount: 2,
+		updatedAt: 2,
+		live: true,
+		queue: { steering: [], followUp: ["continue afterward"] },
+	};
+	const applied = store.reconcileSession(
+		summary,
+		{
+			turns: [
+				{
+					kind: "compaction",
+					id: "persisted-compaction",
+					status: "done",
+					summary: "## Earlier work\nFinished the investigation.",
+					tokensBefore: 268_000,
+				},
+			],
+			toolResults: {},
+			askAnswers: {},
+			turnIdByMessageIndex: [null],
+		},
+		before.eventRevision,
+		7,
+	);
+
+	expect(applied).toBe(true);
+	const after = rt("sync");
+	expect(after.turns).toHaveLength(1);
+	expect(after.turns[0]).toEqual({
+		kind: "compaction",
+		id: liveCompaction.id,
+		status: "done",
+		summary: "## Earlier work\nFinished the investigation.",
+		tokensBefore: 268_000,
+		tokensAfter: 24_000,
+		resuming: true,
+	});
+	expect(after.draft).toBe("keep my draft");
+	expect(after.queue).toEqual({ steering: [], followUp: ["continue afterward"] });
+	expect(after.thinkingLevel).toBe("high");
+	expect(after.syncedConnectionGeneration).toBe(7);
+	expect(after.eventRevision).toBe(before.eventRevision + 1);
+});
+
+test("reconcileSession rejects a transcript read crossed by even a UI-ignored Pi event", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "sync-race", null, "medium");
+	store.appendUserMessage("sync-race", "keep this turn");
+	const expectedRevision = rt("sync-race").eventRevision;
+
+	store.handlePiEvent({ type: "turn_start" } as PiEvent, "sync-race");
+	const crossed = rt("sync-race");
+	expect(crossed.eventRevision).toBe(expectedRevision + 1);
+
+	const applied = store.reconcileSession(
+		{
+			sessionId: "sync-race",
+			workspaceId: "ws1",
+			title: "Chat",
+			model: null,
+			thinkingLevel: "medium",
+			isStreaming: false,
+			messageCount: 0,
+			updatedAt: 2,
+			live: true,
+		},
+		{ turns: [], toolResults: {}, askAnswers: {}, turnIdByMessageIndex: [] },
+		expectedRevision,
+		3,
+	);
+
+	expect(applied).toBe(false);
+	expect(rt("sync-race").turns).toHaveLength(1);
+	expect(rt("sync-race").syncedConnectionGeneration).not.toBe(3);
 });
 
 test("noteClosedChats surfaces disk-only sessions in history, skipping live/open/known ones", () => {
@@ -2506,6 +2616,14 @@ test("applyConfig folds the server-synced app config in (theme is an opaque host
 	expect(useAppStore.getState().theme).toBe("acme.solarized");
 	useAppStore.getState().applyConfig({ theme: "custom.high-contrast" });
 	expect(useAppStore.getState().theme).toBe("custom.high-contrast");
+});
+
+test("applyConfig projects the composer growth limit", () => {
+	useAppStore.getState().applyConfig({
+		...DEFAULT_CONFIG,
+		composerGrowthLimit: "roomy",
+	});
+	expect(useAppStore.getState()).toHaveProperty("composerGrowthLimit", "roomy");
 });
 
 test("diff tabs: openTab dedupes by id + activates; view + contents update in place", () => {

@@ -191,7 +191,11 @@ of the host.
   and raw PI models are structurally absent; server and web map codes to their own generic copy);
   the **theme/config selection** — **`ThemeId`** is an open string on the wire, because the host persists
   an opaque selection while the independently shipped web client owns the available manifest catalog;
-  **`AppConfig`** (`{ theme, analyticsEnabled, terminalReplayKb, layout }` — an extensible bag; `layout` is the
+  **`ComposerGrowthLimit`** (`"compact" | "roomy" | "half-chat"`) is the closed, server-synced composer
+  height preference: 6 visual lines, 10 visual lines, or 50% of the mounted chat panel respectively;
+  `"half-chat"` is the default, and the web owns translating these semantic ids into geometry;
+  **`AppConfig`** (`{ theme, analyticsEnabled, terminalReplayKb, composerGrowthLimit, layout }` — an
+  extensible bag; `layout` is the
   **`LayoutSettings`** selection (`defaultPresetId`, named portable `customPresets`, `maxSideGroups`
   defaulting to 6, and independent `maxBottomGroups` defaulting to 3); `analyticsEnabled` is the
   anonymous-usage-analytics switch, default `true`

@@ -59,6 +59,7 @@ import type { ChatAttachment, ChatTurn } from "./types";
 import { useChatScroll } from "./useChatScroll";
 import { useChatTodos } from "./useChatTodos";
 import { useHistorySearch } from "./useHistorySearch";
+import { useTranscriptSync } from "./useTranscriptSync";
 
 function turnAnchorText(turn: ChatTurn): string {
 	if (turn.kind === "user") {
@@ -113,7 +114,19 @@ export default function ChatView({
 	sessionId: string;
 	workspaceId: string;
 }) {
-	const runtime = useAppStore((s) => s.sessions[sessionId]) ?? EMPTY_RUNTIME;
+	const sessionRuntime = useAppStore((s) => s.sessions[sessionId]);
+	const runtime = sessionRuntime ?? EMPTY_RUNTIME;
+	const status = useAppStore((s) => s.status);
+	const connectionGeneration = useAppStore((s) => s.connectionGeneration);
+	useTranscriptSync({
+		workspaceId,
+		sessionId,
+		runtime,
+		status,
+		connectionGeneration,
+		enabled: sessionRuntime !== undefined,
+	});
+	const composerGrowthLimit = useAppStore((state) => state.composerGrowthLimit);
 	const { models, refreshing: modelsRefreshing, refresh: onRefreshModels } = useModelCatalog();
 	const projectId = useAppStore(
 		(s) =>
@@ -240,7 +253,6 @@ export default function ChatView({
 		[commands, templates],
 	);
 
-	// biome-ignore lint/correctness/useExhaustiveDependencies: `isStreaming` is the refetch trigger, not read
 	useEffect(() => {
 		getTransport()
 			.request("session.getStats", { sessionId })
@@ -580,7 +592,10 @@ export default function ChatView({
 	return (
 		<ChatActionsContext.Provider value={chatActions}>
 			<AskStatesContext.Provider value={askContext}>
-				<div className="flex h-full min-h-0 flex-col bg-container-workspace-bg">
+				<div
+					data-testid="chat-view"
+					className="flex h-full min-h-0 min-w-0 flex-col bg-container-workspace-bg [container-type:size]"
+				>
 					<Popover open={planOpen} onOpenChange={setPlanOpen}>
 						<PopoverAnchor asChild>
 							<div className="shrink-0">
@@ -685,6 +700,7 @@ export default function ChatView({
 							value={draft}
 							onChange={(v) => useAppStore.getState().setChatDraft(sessionId, v)}
 							isStreaming={isStreaming}
+							growthLimit={composerGrowthLimit}
 							commands={mergedCommands}
 							mentionCandidates={mentionCandidates}
 							recentPrompts={recentPrompts}
