@@ -38,9 +38,10 @@
 	--color-control-border-active: var(--control-border-active);
 	--color-control-border-default: var(--control-border-default);
 
-	--font-display: "Orbitron", ui-sans-serif, system-ui, sans-serif;
-	--font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
-	--font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+	--font-display:
+		"Orbitron Variable", "Orbitron", "Geist Variable", "Geist", ui-sans-serif, system-ui, sans-serif;
+	--font-sans: "Geist Variable", "Geist", ui-sans-serif, system-ui, sans-serif;
+	--font-mono: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 }
 
 :root {
