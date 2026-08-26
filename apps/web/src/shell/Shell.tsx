@@ -148,7 +148,7 @@ export function Shell() {
 					>
 						<StatusDot
 							aria-hidden="true"
-							className={`size-32 shrink-0 fill-current ${STATUS_DOT[status]}`}
+							className={`size-8 shrink-0 fill-current ${STATUS_DOT[status]}`}
 						/>
 						<span aria-hidden="true" className="hidden sm:inline">
 							{STATUS_LABEL[status]}
