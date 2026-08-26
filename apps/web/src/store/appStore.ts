@@ -395,7 +395,14 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 		case "agent_start":
 			return { ...rt, isStreaming: true, attemptAssistantId: null };
 		case "queue_update":
-			return { ...rt, queue: { steering: event.steering, followUp: event.followUp } };
+			return {
+				...rt,
+				queue: {
+					steering: event.steering,
+					followUp: event.followUp,
+					...(event.hasImages ? { hasImages: true as const } : {}),
+				},
+			};
 		case "message_start": {
 			if (event.message.role === "assistant")
 				return {

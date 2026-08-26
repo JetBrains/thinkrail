@@ -9,7 +9,7 @@ import {
 } from "@earendil-works/pi-ai";
 import { createFauxCore, fauxAssistantMessage } from "@earendil-works/pi-ai/providers/faux";
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
-import type { AgentSettlement, ExtUiRequest } from "@thinkrail/contracts";
+import type { AgentSettlement, ExtUiRequest, ImageContent } from "@thinkrail/contracts";
 import {
 	buildSessionSettings,
 	clampThinkingForModel,
@@ -853,7 +853,7 @@ test("followUpSession on an IDLE session runs the turn — pi's follow-up queue 
 	}
 });
 
-test("mid-stream followUpSession queues: the summary snapshot carries it, clearQueueSession hands it back", async () => {
+test("mid-stream queue state projects image risk and guarded clear preserves it", async () => {
 	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
 	const slow = createFauxCore({
 		provider: "fauxq",
@@ -878,7 +878,12 @@ test("mid-stream followUpSession queues: the summary snapshot carries it, clearQ
 			await new Promise((resolve) => setTimeout(resolve, 20));
 		}
 		await followUpSession(s.sessionId, "queued line");
-		await followUpSession(s.sessionId, "queued line two");
+		const queuedImage = {
+			type: "image",
+			data: "AA==",
+			mimeType: "image/png",
+		} satisfies ImageContent;
+		await followUpSession(s.sessionId, "queued line two", [queuedImage]);
 
 		const summary = (await listSessions("ws-queue", cwd)).find(
 			(row) => row.sessionId === s.sessionId,
@@ -886,8 +891,15 @@ test("mid-stream followUpSession queues: the summary snapshot carries it, clearQ
 		expect(summary?.queue).toEqual({
 			steering: [],
 			followUp: ["queued line", "queued line two"],
+			hasImages: true,
 		});
-		expect(seen(s.sessionId)).toContain("queue_update");
+		expect(seen(s.sessionId)).toContain('"type":"queue_update"');
+		expect(seen(s.sessionId)).toContain('"hasImages":true');
+
+		expect(() => clearQueueSession(s.sessionId, true)).toThrow("queued image");
+		expect(
+			(await listSessions("ws-queue", cwd)).find((row) => row.sessionId === s.sessionId)?.queue,
+		).toEqual(summary?.queue);
 
 		expect(await removeQueuedSession(s.sessionId, "followUp", 5)).toEqual({
 			removed: null,

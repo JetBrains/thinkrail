@@ -81,7 +81,7 @@ export interface TerminalTabsPush {
 	tabs: TerminalTabInfo[];
 }
 
-export const PROTOCOL_VERSION = 50;
+export const PROTOCOL_VERSION = 51;
 
 export interface ServerWelcome {
 	protocolVersion: number;
@@ -383,7 +383,10 @@ export interface WsMethodMap {
 		params: { sessionId: string; text: string; images?: ImageContent[] };
 		result: Ack;
 	};
-	"session.clearQueue": { params: { sessionId: string }; result: SessionQueueState };
+	"session.clearQueue": {
+		params: { sessionId: string; requireTextOnly?: boolean };
+		result: SessionQueueState;
+	};
 	"session.removeQueued": {
 		params: { sessionId: string; kind: QueueLane; index: number };
 		result: RemovedQueuedMessage;

@@ -87,10 +87,12 @@ of the host.
     summary's optional **`lastSettlement`** retains the host-observed terminal (`null` = the live run is
     active or settled without an assistant) so reconnect can surface a final failure Pi removed from its rebuilt context; absent
     means this host process has not observed a settlement and the persisted transcript is authoritative.
-    The optional **`queue`** (**`SessionQueueState`**: pi's pending `steering`/`followUp` texts) rides a
-    live summary only when non-empty — the hydration seed for the client's pending strip, since
-    `queue_update` fires only on changes and a client attaching mid-run would otherwise never learn of
-    messages queued before it connected.
+    The optional **`queue`** (**`SessionQueueState`**: pi's pending `steering`/`followUp` texts plus
+    `hasImages?: true`, the host's conservative aggregate over queued browser sends) rides a live summary
+    only when non-empty — the hydration seed for the client's pending strip, since `queue_update` fires only
+    on changes and a client attaching mid-run would otherwise never learn of messages queued before it
+    connected. The same aggregate enriches projected `queue_update` events; image bytes never ride this
+    read-side queue state.
     `session.getMessages` returns `{ summary, messages }` (the transcript is
     **`TranscriptMessage[]`** — the pi-canonical `Message` union widened with **`WireCustomMessage`**, a
     type-only mirror of pi-coding-agent's Node-only `CustomMessage`, so extension-injected messages like
@@ -318,7 +320,8 @@ of the host.
   running session; rejected while streaming) /
   `session.*` — `create`/`prompt`/`steer`/`followUp`/**`clearQueue`** (drain pi's steering+followUp
   queues, returning the texts — the client's abort-restores-queue path; pi itself emits the emptying
-  `queue_update`)/**`removeQueued`** (`{ kind, index }` → `RemovedQueuedMessage`: drop or extract ONE
+  `queue_update`; optional `requireTextOnly` rejects without draining when the host has observed queued
+  images, because pi's return value cannot restore their bytes)/**`removeQueued`** (`{ kind, index }` → `RemovedQueuedMessage`: drop or extract ONE
   queued message — the strip rows' edit/remove; position-addressed because pi's queue entries are bare
   strings with no id, and the host emulates per-item removal over pi's all-or-nothing `clearQueue`, see
   the server agent SPEC)/`abort`/`dispose`/**`delete`**/`setModel`/
