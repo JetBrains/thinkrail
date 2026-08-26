@@ -12,7 +12,7 @@ test.afterEach(() => {
 	rmSync(join(E2E_FIXTURE_REPO, ".thinkrail"), { recursive: true, force: true });
 });
 
-test("a follow-up chip fills the composer draft without sending, and hides once a draft exists", async ({
+test("clicking a follow-up chip fills the draft, dismisses only that chip, and keeps the rest", async ({
 	page,
 }) => {
 	await openFixtureProject(page);
@@ -33,16 +33,21 @@ test("a follow-up chip fills the composer draft without sending, and hides once 
 	await expect(page.getByText("I recommend the first option")).toBeVisible();
 
 	const row = page.getByTestId("followup-row");
+	const chips = page.getByTestId("followup-chip");
 	await expect(row).toBeVisible();
-	const chip = page.getByTestId("followup-chip").filter({ hasText: "Use the recommended option" });
-	await expect(chip).toBeVisible();
+	await expect(chips).toHaveCount(2);
+	const picked = chips.filter({ hasText: "Use the recommended option" });
+	await expect(picked).toBeVisible();
 
-	await chip.click();
+	await picked.click();
 
 	const composer = page.getByTestId("chat-input");
 	await expect(composer).toHaveValue(
 		"Use the recommended option and continue with the implementation.",
 	);
 	await expect(composer).toBeFocused();
-	await expect(row).toHaveCount(0);
+	await expect(row).toBeVisible();
+	await expect(chips).toHaveCount(1);
+	await expect(chips.filter({ hasText: "Compare the options" })).toBeVisible();
+	await expect(picked).toHaveCount(0);
 });

@@ -308,9 +308,14 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   suggestions, not a chat/domain entity: no store field, no wire type, no persistence; `deriveFollowUps`
   is pure over the transcript so the set tracks the latest assistant turn. **Currently mocked** — the
   derivation is a keyword heuristic over the last assistant message, a placeholder for real generation.
-  The row is shown only when idle (`!isStreaming`) **and the draft is empty** — the empty-draft gate is
-  the draft-protection contract: a chip replaces the draft, so it is only offered when there is nothing
-  to overwrite. Props-driven (`{ items, onPick }`), no store/transport. E2e: `data-testid="followup-row"`
+  **Clicking a chip dismisses only that chip; the rest stay** — `ChatView` tracks the used prompts and
+  filters them out of the passed `items`, so the row persists as a shrinking palette (pick a different
+  suggestion, or clear the draft to pick again). The row is shown when idle (`!isStreaming`), at least
+  one un-dismissed chip remains, **and the draft is either empty or exactly the prompt a chip just
+  inserted** (`draft === chipDraft`) — the draft-protection contract: a chip replaces the draft, so the
+  row only shows over an empty draft or its own chip-inserted text, never over what the user typed
+  themselves (a manual edit diverges the draft and hides the row). The used/inserted state resets when
+  the suggestion set changes (a new turn). Props-driven (`{ items, onPick }`), no store/transport. E2e: `data-testid="followup-row"`
   / `followup-chip`.
 - **Streaming send modes: split send + interrupt** (`Composer`) — steer/queue semantics are pi's loop
   design (steer = injected at the next turn boundary, after the current assistant message + its tool
