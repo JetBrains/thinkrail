@@ -191,6 +191,28 @@ export interface TodoPlan {
 	unattributed?: GitFileChange[];
 }
 
+export type DelegationRunStatus = "queued" | "running" | "completed" | "error" | "aborted";
+
+export interface DelegationRunDetails {
+	childSessionId: string;
+	roleName?: string;
+	roleSource?: string;
+	task: string;
+	status: DelegationRunStatus;
+	model?: string;
+	usage: {
+		input: number;
+		output: number;
+		cacheRead: number;
+		cacheWrite: number;
+		cost: number;
+		turns: number;
+		contextTokens: number;
+	};
+	durationMs: number;
+	activity?: string;
+}
+
 export type GitFileStatus = "added" | "modified" | "deleted" | "renamed" | "untracked";
 
 export interface GitFileChange {

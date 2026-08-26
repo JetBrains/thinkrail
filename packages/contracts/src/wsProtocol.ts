@@ -2,6 +2,8 @@ import type {
 	AppConfig,
 	AppConfigUpdate,
 	BranchList,
+	DelegationRunDetails,
+	DelegationRunStatus,
 	DiffStats,
 	EditorInfo,
 	ExistingWorktreeCandidate,
@@ -84,7 +86,7 @@ export interface TerminalTabsPush {
 	tabs: TerminalTabInfo[];
 }
 
-export const PROTOCOL_VERSION = 52;
+export const PROTOCOL_VERSION = 53;
 
 export type HostPlatform = "darwin" | "linux" | "win32";
 
@@ -181,6 +183,7 @@ export const WS_METHODS = {
 	sessionAnswerQuestion: "session.answerQuestion",
 	sessionList: "session.list",
 	sessionGetMessages: "session.getMessages",
+	subagentGetTranscript: "subagent.getTranscript",
 	modelList: "model.list",
 	modelRefresh: "model.refresh",
 	modelDefault: "model.default",
@@ -255,6 +258,37 @@ export function isAskUserAnswersMessage(message: unknown): message is AskUserAns
 		Array.isArray(details.result.answers) &&
 		typeof details.result.cancelled === "boolean"
 	);
+}
+
+export const SUBAGENT_COMPLETION_CUSTOM_TYPE = "subagent-completion";
+
+export interface SubagentCompletionMessage extends WireCustomMessage<DelegationRunDetails> {
+	customType: typeof SUBAGENT_COMPLETION_CUSTOM_TYPE;
+	details: DelegationRunDetails;
+}
+
+export function isSubagentCompletionMessage(
+	message: unknown,
+): message is SubagentCompletionMessage {
+	if (!message || typeof message !== "object") return false;
+	const m = message as { role?: unknown; customType?: unknown; details?: unknown };
+	if (m.role !== "custom" || m.customType !== SUBAGENT_COMPLETION_CUSTOM_TYPE) return false;
+	const details = m.details as Partial<DelegationRunDetails> | undefined;
+	return (
+		typeof details?.childSessionId === "string" &&
+		typeof details.status === "string" &&
+		typeof details.task === "string" &&
+		typeof details.usage === "object" &&
+		details.usage !== null
+	);
+}
+
+export function customMessageText(content: WireCustomMessage["content"]): string {
+	if (typeof content === "string") return content;
+	return content
+		.filter((c): c is Extract<typeof c, { type: "text" }> => c.type === "text")
+		.map((c) => c.text)
+		.join("");
 }
 
 export interface Ack {
@@ -452,6 +486,10 @@ export interface WsMethodMap {
 	"session.getMessages": {
 		params: { sessionId: string; workspaceId: string };
 		result: { summary: SessionSummary; messages: TranscriptMessage[] };
+	};
+	"subagent.getTranscript": {
+		params: { workspaceId: string; parentSessionId: string; childSessionId: string };
+		result: { messages: TranscriptMessage[]; status?: DelegationRunStatus };
 	};
 	"model.list": { params: Record<string, never>; result: WireModel[] };
 	"model.clampThinking": {

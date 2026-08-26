@@ -230,6 +230,20 @@ of the host.
   remainder shipped by the same `todo.list` decoration, present only when non-empty: the worktree's
   uncommitted rows attributed to no item of the plan — the changes that would otherwise be invisible in
   the review map (derivation and rationale: [[submodule-server-todos]]).
+  **`DelegationRunDetails`** + the **`DelegationRunStatus`** union — the subagent Agent-card DTO,
+  **mirrored** from `pi-delegation` (never imported): rides `tool_execution_update.partialResult`
+  (REPLACE), the final `Agent` tool result, and the `subagent-completion` custom message; the
+  child transcript itself is read via `subagent.getTranscript`, keyed
+  `(workspaceId, parentSessionId, childSessionId)` — its result also carries the run's current
+  registry `status` (absent once the host no longer knows the run), the client's poll-while-live
+  signal. The completion message's tag + pairing live in
+  `wsProtocol` (the value-bearing half), mirroring the ask-user-answers posture exactly: the
+  **`SUBAGENT_COMPLETION_CUSTOM_TYPE`** constant (mirrors `pi-subagents`' `SUBAGENT_COMPLETION_MESSAGE`,
+  never imported — the DTO posture again), **`SubagentCompletionMessage`** (the compile-held tag↔details
+  shape) and the shared **`isSubagentCompletionMessage`** guard (validates the details *shape* — wire
+  data is untrusted), plus **`customMessageText`** — the one text extraction over
+  `WireCustomMessage.content` (string | blocks), shared by the web's event reducer and hydration so the
+  completion card's text derives once.
   **history-search read DTOs** — **`HistoryScope`** (the overlay's cycle: this chat → workspace →
   project → everywhere); **`PromptHit`** (a recalled prompt; carries optional `messageIndex` +
   `anchorText` — the kept-newest occurrence's jump anchor) and **`MessageHit`** (a full-text

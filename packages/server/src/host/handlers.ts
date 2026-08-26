@@ -43,6 +43,7 @@ import {
 	listSkillCommands,
 	notifyExtUi,
 	promptSession,
+	readChildTranscript,
 	refreshAvailableModels,
 	reloadSessionResources,
 	removeQueuedSession,
@@ -608,7 +609,7 @@ const handlers: Record<string, Handler> = {
 	"session.dispose": async (params) => {
 		const { sessionId } = params as { sessionId: string };
 		if (isSessionStreaming(sessionId)) await abortSession(sessionId).catch(() => {});
-		removeSession(sessionId);
+		await removeSession(sessionId);
 		return { ok: true } as const;
 	},
 	"session.delete": async (params) => {
@@ -652,6 +653,11 @@ const handlers: Record<string, Handler> = {
 	"session.getMessages": (params) => {
 		const p = params as { sessionId: string; workspaceId: string };
 		return getSessionMessages(p.sessionId, p.workspaceId, getWorkspace(p.workspaceId).worktreePath);
+	},
+	"subagent.getTranscript": (params) => {
+		const p = params as { workspaceId: string; parentSessionId: string; childSessionId: string };
+		getWorkspace(p.workspaceId);
+		return readChildTranscript(p.workspaceId, p.parentSessionId, p.childSessionId);
 	},
 	"session.extUiReply": (params) => {
 		resolveExtUi((params as { response: ExtUiResponse }).response);

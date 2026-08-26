@@ -33,8 +33,14 @@ import type {
 	WireModel,
 } from "@thinkrail/contracts";
 import { isTranscriptMessageRole } from "@thinkrail/contracts";
+import type { ParentContext } from "pi-delegation";
 import { logger } from "../log";
 import { ANSWERABILITY_ERRORS, assessAnswerability, buildAnswersMessage } from "./askUserQuestion";
+import {
+	disposeSessionChildren,
+	removeWorkspaceDelegation,
+	subagentsExtensionFor,
+} from "./delegation";
 import { buildResourceLoader, toSkillCommands } from "./extensions";
 import {
 	getPiRuntime,
@@ -323,6 +329,7 @@ export async function createSession(input: CreateSessionInput): Promise<CreateSe
 			settingsManager,
 			() => skillAdmissionResolver(input.workspaceId),
 			generation.excludedSessionExtensionPaths,
+			[await subagentsExtensionFor(input.workspaceId)],
 		),
 		...(model ? { model } : {}),
 		...(input.thinkingLevel ? { thinkingLevel: input.thinkingLevel } : {}),
@@ -537,6 +544,7 @@ async function openDiskSession(sessionId: string, workspaceId: string, cwd: stri
 			settingsManager,
 			() => skillAdmissionResolver(workspaceId),
 			generation.excludedSessionExtensionPaths,
+			[await subagentsExtensionFor(workspaceId)],
 		),
 		...(exactModel ? { model: exactModel } : {}),
 	});
@@ -898,23 +906,38 @@ export function isSessionStreaming(sessionId: string): boolean {
 	return mustGet(sessionId).isStreaming;
 }
 
-function disposeSession(sessionId: string): void {
+export function liveParentContext(sessionId: string): ParentContext | undefined {
 	const entry = sessions.get(sessionId);
-	if (!entry) return;
+	if (!entry) return undefined;
+	const { session } = entry;
+	return {
+		cwd: session.sessionManager.getCwd(),
+		model: session.model,
+		thinkingLevel: session.thinkingLevel,
+		modelRuntime: session.modelRuntime,
+	};
+}
+
+function disposeSession(sessionId: string): Promise<void> {
+	const entry = sessions.get(sessionId);
+	if (!entry) return Promise.resolve();
+	const cascade = disposeSessionChildren(entry.workspaceId, sessionId).catch(() => {});
 	cancelExtUiForSession(sessionId);
 	entry.unsubscribe();
 	entry.session.dispose();
 	sessions.delete(sessionId);
 	log.debug(`session ${sessionId} disposed`);
+	return cascade;
 }
 
-export function removeSession(sessionId: string): void {
+export function removeSession(sessionId: string): Promise<void> {
 	if (hasDeletionTombstone(sessionId)) throw new Error(`Unknown session: ${sessionId}`);
-	disposeSession(sessionId);
+	return disposeSession(sessionId);
 }
 
 export function disposeAllSessions(): void {
 	for (const [sessionId, entry] of sessions) {
+		void disposeSessionChildren(entry.workspaceId, sessionId).catch(() => {});
 		cancelExtUiForSession(sessionId);
 		entry.unsubscribe();
 		entry.session.dispose();
@@ -940,8 +963,9 @@ async function removeWorkspaceSessionsInternal(workspaceId: string, cwd?: string
 		const entry = sessions.get(sessionId);
 		if (!entry) continue;
 		if (entry.session.isStreaming) await entry.session.abort().catch(() => {});
-		disposeSession(sessionId);
+		await disposeSession(sessionId);
 	}
+	removeWorkspaceDelegation(workspaceId);
 	if (cwd) await purgeDiskSessions(cwd);
 }
 
@@ -1019,6 +1043,6 @@ async function runDeleteTransaction(
 		if (installedTombstone) deletedSessions.delete(sessionId);
 		throw error;
 	}
-	if (liveEntry && sessions.get(sessionId) === liveEntry) disposeSession(sessionId);
+	if (liveEntry && sessions.get(sessionId) === liveEntry) void disposeSession(sessionId);
 	publishDeleted({ workspaceId, sessionId });
 }

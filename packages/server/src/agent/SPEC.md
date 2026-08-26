@@ -347,9 +347,35 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     message. The count-aware cap also degrades a raw >2000px `read`-tool image to a note instead of a
     brick once a session crosses 21 images. Pure core (`guardOversizedImages`, `imageDimensions`)
     unit-tested with hand-built header bytes.
+  - `delegation` — ThinkRail's embedding of the portable **`pi-delegation`** core +
+    **`pi-subagents`** layer ([[module-pi-delegation]], [[module-pi-subagents]]): binds what only
+    the host knows — the delegation root under the data dir (`<dataDir>/delegation`),
+    `scope = workspaceId`, and the manager's `liveParentContext` projection (`ParentContext`, core
+    decision #23), including the exact `ModelRuntime` retained by that parent session. The host-wide
+    `getPiRuntime` resolver is only the dynamic fallback; this keeps a child on its parent's runtime
+    generation when Central changes while that parent is live. One `DelegationService` per workspace,
+    cached (`delegationServiceFor`); `subagentsExtensionFor(workspaceId)` hands the bound service to the
+    extension factory each session loads. Cascades: `removeSession`/`disposeAllSessions` fire
+    `disposeSessionChildren` — `removeSession` returns that cascade, and workspace archival
+    **awaits it per session** before `removeWorkspaceDelegation` (drops the service + deletes
+    `delegation/<workspaceId>`), so the store is never deleted under a live child — hidden
+    children never outlive their workspace.
+    `readChildTranscript` serves `subagent.getTranscript` from the store by
+    `(workspaceId, parentSessionId, childSessionId)` — the ids are wire strings that become path
+    segments, so it rejects path-like values (separators, `..`; the handler additionally validates
+    the workspace like every sibling read) — and returns the run's current registry `status`
+    alongside the messages (absent after restart/dispose; wire meaning: [[module-contracts]]).
+    Children opting into extensions
+    (`extensions: true` in their definition) get the **curated child set**
+    (`childExtensionFactories` in `extensions`): the headless-search policy + `pi-web-access` +
+    `pi-spec-graph` — deliberately not the parent's full set (rationale + the listed-children
+    carve-out: core decision #25). Web-access reaches the child set via a **named bundled-seam
+    field** (`BundledExtensions.webAccessFactory`) in the binary and a Bun `require` in dev — its
+    raw third-party `.ts` must stay out of the strict tsc graph.
   - `extensions` — Pi resource wiring. Candidate generation loads the reviewed external Central path once
     through a headless `DefaultResourceLoader` to apply provider registrations, without inspecting it.
-    `buildResourceLoader(cwd, settingsManager, excludedPaths)` then resolves Pi's normal settings/package +
+    `buildResourceLoader(cwd, settingsManager, getAdmission, excludedPaths, extraFactories?)` then resolves
+    Pi's normal settings/package +
     `.pi` / `.agents` extension set, removes that exact opaque identity **before loading**, and explicitly loads
     the remaining paths: sessions use the provider objects already owned by their retained generation, so
     arbitrary Central factory/errors/UI cannot reach `pi.extensionUi`. The Central identity is always excluded
@@ -439,8 +465,10 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     Jiti seam; it is never bundled, staged, or copied into ThinkRail. Both modes append
     `extensionFactories`: a **headless-search policy** (a `tool_call` hook defaulting
     `web_search`'s `workflow` to `"none"`, since pi-web-access would otherwise open a browser curator our
-    `rpc` host can't render), `askUserQuestionExtension` (registers the `ask_user_question` tool), **and**
-    `oversizedImageGuard` (the context-level image-size guard, see the `imageGuard` bullet).
+    `rpc` host can't render), `askUserQuestionExtension` (registers the `ask_user_question` tool),
+    `oversizedImageGuard` (the context-level image-size guard, see the `imageGuard` bullet), **and the
+    caller's `extraFactories`** — per-session host bindings (the workspace-bound subagents extension),
+    value-imported so dev and the compiled binary take the same path.
     Both session paths pass it as `resourceLoader`. `buildResourceLoader` stays internal; the seam +
     its types are on the barrel.
 - **Public surface (barrel):** the manager operations (incl. `answerQuestion` +
@@ -451,7 +479,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   `completeOnce`/`pickModel` +
   `OneShotRequest`/`OneShotResult`/`ModelTier`; the `webUiContext` seams; the `askUserQuestion` pure
   helpers (`validateQuestionnaire`/`buildQuestionnaireResponse`/`assessAnswerability`/
-  `buildAnswersMessage`); `repairDanglingToolCalls`; the skill catalog helpers
+  `buildAnswersMessage`); `repairDanglingToolCalls`; `liveParentContext` + `readChildTranscript`
+  (the delegation embedding); the skill catalog helpers
   `listSkillCommands(cwd, admission)` (filtered, pre-session autocomplete) / `listSkillCatalog(cwd, admission)`
   (unfiltered, the manager's `skills.state`) / `listProjectAliasSkillNames(cwd)` (present-alias count) /
   `isProjectSkillPath(relativePath)` (watch-classification predicate);
