@@ -1,12 +1,10 @@
 ---
 import { Landing } from "../landing";
+import { siteMetadata } from "../siteMetadata";
 import "../styles.css";
 
-const title = "ThinkRail — Parallel AI Coding Agents, Under Control";
-const description =
-	"Run parallel AI coding agents safely: each gets a clear plan, an isolated Git worktree, and a visible trail of progress you can review and trust.";
-const canonicalUrl = new URL("/", Astro.site);
-const ogImageUrl = new URL("/og.png", Astro.site);
+const canonicalUrl = new URL("/", siteMetadata.origin);
+const ogImageUrl = new URL(siteMetadata.openGraphImagePath, siteMetadata.origin);
 ---
 
 <!doctype html>
@@ -14,9 +12,9 @@ const ogImageUrl = new URL("/og.png", Astro.site);
 	<head>
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<meta name="description" content={description} />
-		<meta property="og:title" content={title} />
-		<meta property="og:description" content={description} />
+		<meta name="description" content={siteMetadata.description} />
+		<meta property="og:title" content={siteMetadata.title} />
+		<meta property="og:description" content={siteMetadata.description} />
 		<meta property="og:type" content="website" />
 		<meta property="og:url" content={canonicalUrl} />
 		<meta property="og:image" content={ogImageUrl} />
@@ -32,7 +30,7 @@ const ogImageUrl = new URL("/og.png", Astro.site);
 				}
 			}, 3000);
 		</script>
-		<title>{title}</title>
+		<title>{siteMetadata.title}</title>
 	</head>
 	<body>
 		<Landing client:load />
