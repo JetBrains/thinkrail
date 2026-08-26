@@ -44,6 +44,7 @@ function tmpDir(prefix: string): string {
 let priorAgentDir: string | undefined;
 let priorDataDir: string | undefined;
 let priorOffline: string | undefined;
+let baseRuntime: ModelRuntime;
 
 beforeAll(async () => {
 	priorAgentDir = process.env.PI_CODING_AGENT_DIR;
@@ -58,6 +59,7 @@ beforeAll(async () => {
 		modelsPath: null,
 		allowModelNetwork: false,
 	});
+	baseRuntime = runtime;
 	runtime.registerProvider("faux", {
 		api: faux.api,
 		baseUrl: "http://faux.local",
@@ -100,16 +102,12 @@ test("host embedding: projection, per-workspace service, transcript store, casca
 	const parent = liveParentContext(sessionId);
 	expect(parent?.cwd).toBe(cwd);
 	expect(parent?.model?.provider).toBe("faux");
-	const retainedRuntime = parent?.modelRuntime;
-	if (!retainedRuntime) throw new Error("Expected the parent runtime projection");
-	configurePiRuntime(null);
-	expect(liveParentContext(sessionId)?.modelRuntime).toBe(retainedRuntime);
-	configurePiRuntime(retainedRuntime);
+	expect(parent?.modelRuntime).toBe(baseRuntime);
 	expect(liveParentContext("not-a-session")).toBeUndefined();
 
-	const service = await delegationServiceFor("ws-del");
-	expect(await delegationServiceFor("ws-del")).toBe(service);
-	expect(await delegationServiceFor("ws-other")).not.toBe(service);
+	const service = delegationServiceFor("ws-del");
+	expect(delegationServiceFor("ws-del")).toBe(service);
+	expect(delegationServiceFor("ws-other")).not.toBe(service);
 
 	faux.setResponses([fauxAssistantMessage("CHILD_DONE")]);
 	const child = await service.createChild({
@@ -136,6 +134,62 @@ test("host embedding: projection, per-workspace service, transcript store, casca
 	expect(() => readChildTranscript("ws-del", sessionId, child.sessionId)).toThrow(
 		"No transcript found",
 	);
+});
+
+test("a runtime generation flip preserves existing parents and reaches new parents", async () => {
+	const cwd = tmpDir("trdel-flip-");
+	const { sessionId: originalParentId } = await createSession({ cwd, workspaceId: "ws-flip" });
+	const service = delegationServiceFor("ws-flip");
+	const spec = {
+		parent: originalParentId,
+		visibility: "hidden" as const,
+		info: { createdBy: "tool:Agent", roleName: "scout", roleSource: "builtin" },
+		session: { systemPrompt: "flip probe", model: { provider: "fauxg2", id: "fauxg2" } },
+	};
+	await expect(service.createChild(spec)).rejects.toThrow("Unknown model fauxg2/fauxg2");
+
+	const gen2 = await ModelRuntime.create({
+		credentials: new InMemoryCredentialStore(),
+		modelsPath: null,
+		allowModelNetwork: false,
+	});
+	gen2.registerProvider("fauxg2", {
+		api: faux.api,
+		baseUrl: "http://faux.local",
+		apiKey: "faux",
+		streamSimple: faux.streamSimple,
+		models: [
+			{
+				id: "fauxg2",
+				name: "fauxg2",
+				api: faux.api,
+				reasoning: false,
+				input: ["text"],
+				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+				contextWindow: 100_000,
+				maxTokens: 4096,
+			},
+		],
+	});
+	let newParentId: string | undefined;
+	try {
+		configurePiRuntime(gen2);
+		expect(liveParentContext(originalParentId)?.modelRuntime).toBe(baseRuntime);
+		await expect(service.createChild(spec)).rejects.toThrow("Unknown model fauxg2/fauxg2");
+
+		({ sessionId: newParentId } = await createSession({ cwd, workspaceId: "ws-flip" }));
+		expect(liveParentContext(newParentId)?.modelRuntime).toBe(gen2);
+		faux.setResponses([fauxAssistantMessage("GEN2_DONE")]);
+		const child = await service.createChild({ ...spec, parent: newParentId });
+		const outcome = await child.runQueued("Probe.");
+		expect(outcome.status).toBe("completed");
+		expect(outcome.details.model).toBe("fauxg2/fauxg2");
+		await child.dispose();
+	} finally {
+		configurePiRuntime(baseRuntime);
+		await removeSession(originalParentId);
+		if (newParentId) await removeSession(newParentId);
+	}
 });
 
 test("transcript reads reject path-like ids — wire strings never escape the delegation root", () => {

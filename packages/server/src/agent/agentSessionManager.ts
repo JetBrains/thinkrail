@@ -329,7 +329,7 @@ export async function createSession(input: CreateSessionInput): Promise<CreateSe
 			settingsManager,
 			() => skillAdmissionResolver(input.workspaceId),
 			generation.excludedSessionExtensionPaths,
-			[await subagentsExtensionFor(input.workspaceId)],
+			[subagentsExtensionFor(input.workspaceId)],
 		),
 		...(model ? { model } : {}),
 		...(input.thinkingLevel ? { thinkingLevel: input.thinkingLevel } : {}),
@@ -544,7 +544,7 @@ async function openDiskSession(sessionId: string, workspaceId: string, cwd: stri
 			settingsManager,
 			() => skillAdmissionResolver(workspaceId),
 			generation.excludedSessionExtensionPaths,
-			[await subagentsExtensionFor(workspaceId)],
+			[subagentsExtensionFor(workspaceId)],
 		),
 		...(exactModel ? { model: exactModel } : {}),
 	});

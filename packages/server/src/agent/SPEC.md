@@ -351,10 +351,12 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     **`pi-subagents`** layer ([[module-pi-delegation]], [[module-pi-subagents]]): binds what only
     the host knows — the delegation root under the data dir (`<dataDir>/delegation`),
     `scope = workspaceId`, and the manager's `liveParentContext` projection (`ParentContext`, core
-    decision #23), including the exact `ModelRuntime` retained by that parent session. The host-wide
-    `getPiRuntime` resolver is only the dynamic fallback; this keeps a child on its parent's runtime
-    generation when Central changes while that parent is live. One `DelegationService` per workspace,
-    cached (`delegationServiceFor`); `subagentsExtensionFor(workspaceId)` hands the bound service to the
+    decision #23), including the exact `ModelRuntime` retained by that parent session. Existing
+    parents and their children therefore stay on their runtime generation across a Central change,
+    while parents created afterward project the new generation. The host-wide `getPiRuntime` resolver
+    is passed as the core's dynamic fallback rather than captured at service creation. One
+    `DelegationService` per workspace is cached (`delegationServiceFor`, synchronous — nothing awaits
+    at bind time); `subagentsExtensionFor(workspaceId)` hands the bound service to the
     extension factory each session loads. Cascades: `removeSession`/`disposeAllSessions` fire
     `disposeSessionChildren` — `removeSession` returns that cascade, and workspace archival
     **awaits it per session** before `removeWorkspaceDelegation` (drops the service + deletes

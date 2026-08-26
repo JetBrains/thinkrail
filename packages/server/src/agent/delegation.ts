@@ -19,7 +19,7 @@ export function delegationRootDir(): string {
 
 const services = new Map<string, DelegationService>();
 
-export async function delegationServiceFor(workspaceId: string): Promise<DelegationService> {
+export function delegationServiceFor(workspaceId: string): DelegationService {
 	let service = services.get(workspaceId);
 	if (!service) {
 		service = createDelegationService({
@@ -34,9 +34,9 @@ export async function delegationServiceFor(workspaceId: string): Promise<Delegat
 	return service;
 }
 
-export async function subagentsExtensionFor(workspaceId: string): Promise<BundledExtensionFactory> {
+export function subagentsExtensionFor(workspaceId: string): BundledExtensionFactory {
 	return createSubagentsExtension({
-		service: await delegationServiceFor(workspaceId),
+		service: delegationServiceFor(workspaceId),
 		delegationRoot: delegationRootDir(),
 		scope: workspaceId,
 	});
