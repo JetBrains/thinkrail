@@ -64,5 +64,8 @@ describe("activity disclosure summaries", () => {
 		expect(markup).toContain("4 steps · read ×3, thinking");
 		expect(markup).not.toContain(">Activity<");
 		expect(markup).not.toContain("inspect first");
+
+		const liveMarkup = renderToStaticMarkup(ChatTurnView({ row: { ...row, live: true } }));
+		expect(liveMarkup).toContain('data-activity-node-label="4 steps"');
 	});
 });
