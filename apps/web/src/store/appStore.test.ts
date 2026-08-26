@@ -368,7 +368,9 @@ test("message_end finalizes the turn the moment its message completes (not at ag
 		{ type: "message_end", message: { role: "toolResult" } } as unknown as PiEvent,
 		"a",
 	);
-	expect(rt("a")).toBe(before);
+	const ignored = rt("a");
+	expect(ignored.turns).toBe(before.turns);
+	expect(ignored.eventRevision).toBe(before.eventRevision + 1);
 });
 
 test("an ask-user-answers custom message_end indexes into askAnswers (never the turn list)", () => {
@@ -403,7 +405,10 @@ test("an ask-user-answers custom message_end indexes into askAnswers (never the 
 		} as unknown as PiEvent,
 		"a",
 	);
-	expect(rt("a")).toBe(before);
+	const ignored = rt("a");
+	expect(ignored.turns).toBe(before.turns);
+	expect(ignored.askAnswers).toBe(before.askAnswers);
+	expect(ignored.eventRevision).toBe(before.eventRevision + 1);
 });
 
 test("the tool lifecycle folds into toolResults (the status + raw the renderers read)", () => {

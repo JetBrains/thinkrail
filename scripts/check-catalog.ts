@@ -2,6 +2,7 @@
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { isExactVersion } from "./exactVersion";
 
 interface Manifest {
 	workspaces?: { packages?: string[]; catalog?: Record<string, string> } | string[];
@@ -37,10 +38,8 @@ function manifestPaths(): string[] {
 const SECTIONS = ["dependencies", "devDependencies", "optionalDependencies"] as const;
 const violations: string[] = [];
 
-const EXACT_VERSION = /^\d+\.\d+\.\d+(?:[-+][\w.]+)?$/;
-
 for (const [name, version] of Object.entries(catalog)) {
-	if (!EXACT_VERSION.test(version)) {
+	if (!isExactVersion(version)) {
 		violations.push(`package.json: catalog.${name} is "${version}" — catalog entries pin exact`);
 	}
 }
@@ -63,7 +62,7 @@ for (const path of [join(root, "package.json"), ...manifestPaths()]) {
 				continue;
 			}
 			if (version.includes(":")) continue;
-			if (!EXACT_VERSION.test(version)) {
+			if (!isExactVersion(version)) {
 				violations.push(
 					`${rel}: ${section}.${name} pins "${version}" — pin an exact version (no ranges)`,
 				);
