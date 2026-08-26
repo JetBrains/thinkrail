@@ -2,17 +2,22 @@ import { RiCheckLine as Check, RiArrowDownSLine as ChevronDown } from "@remixico
 import type { ThinkingLevel } from "@thinkrail/contracts";
 import { useState } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib";
 
 export function ThinkingSelector({
 	level,
 	levels,
 	onSelect,
 	container,
+	className,
+	showLabel = true,
 }: {
 	level: ThinkingLevel;
 	levels: readonly ThinkingLevel[];
 	onSelect: (level: ThinkingLevel) => void;
 	container?: HTMLElement | null;
+	className?: string;
+	showLabel?: boolean;
 }) {
 	const [open, setOpen] = useState(false);
 	return (
@@ -21,9 +26,12 @@ export function ThinkingSelector({
 				data-testid="thinking-selector"
 				data-open={open}
 				disabled={levels.length === 0}
-				className="flex h-32 items-center gap-8 rounded-[var(--radius-sm)] border border-control-border-default bg-clip-padding bg-control-bg px-8 tr-text-ui text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary disabled:border-control-disabled-border disabled:bg-control-disabled-bg disabled:text-control-disabled-text data-[open=true]:border-control-border-active data-[open=true]:bg-control-bg-selected"
+				className={cn(
+					"flex h-32 items-center gap-8 rounded-[var(--radius-sm)] border border-control-border-default bg-clip-padding bg-control-bg px-8 tr-text-ui text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary disabled:border-control-disabled-border disabled:bg-control-disabled-bg disabled:text-control-disabled-text data-[open=true]:border-control-border-active data-[open=true]:bg-control-bg-selected",
+					className,
+				)}
 			>
-				<span className="tr-text-eyebrow text-text-muted">Effort</span>
+				{showLabel ? <span className="tr-text-eyebrow text-text-muted">Effort</span> : null}
 				<span className="capitalize">{level}</span>
 				<ChevronDown className="size-16 shrink-0 text-text-muted" />
 			</PopoverTrigger>

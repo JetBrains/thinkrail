@@ -126,6 +126,7 @@ export default function ChatView({
 		connectionGeneration,
 		enabled: sessionRuntime !== undefined,
 	});
+	const composerGrowthLimit = useAppStore((state) => state.composerGrowthLimit);
 	const { models, refreshing: modelsRefreshing, refresh: onRefreshModels } = useModelCatalog();
 	const projectId = useAppStore(
 		(s) =>
@@ -591,7 +592,10 @@ export default function ChatView({
 	return (
 		<ChatActionsContext.Provider value={chatActions}>
 			<AskStatesContext.Provider value={askContext}>
-				<div className="flex h-full min-h-0 flex-col bg-container-workspace-bg">
+				<div
+					data-testid="chat-view"
+					className="flex h-full min-h-0 min-w-0 flex-col bg-container-workspace-bg [container-type:size]"
+				>
 					<Popover open={planOpen} onOpenChange={setPlanOpen}>
 						<PopoverAnchor asChild>
 							<div className="shrink-0">
@@ -696,6 +700,7 @@ export default function ChatView({
 							value={draft}
 							onChange={(v) => useAppStore.getState().setChatDraft(sessionId, v)}
 							isStreaming={isStreaming}
+							growthLimit={composerGrowthLimit}
 							commands={mergedCommands}
 							mentionCandidates={mentionCandidates}
 							recentPrompts={recentPrompts}

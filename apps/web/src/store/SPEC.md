@@ -300,7 +300,7 @@ snapshots plus device-local attention, terminal catalogs, and one **per-session 
   `provider.login` frame (creating `activeLogin` if the frame arrived first; ignoring frames for a different
   live login), **`clearLoginInput()`** drops the live input the instant a reply is sent (no double-submit),
   and **`clearLogin()`** dismisses it. The **settings surface** state — **`settingsOpen`** +
-  **`settingsSection`** (a const-object enum: `Providers`/`Github`/`Appearance`/`Layout`/`Terminal`/`Templates`/`Privacy`) with
+  **`settingsSection`** (a const-object enum: `Providers`/`Github`/`Appearance`/`Chat`/`Layout`/`Terminal`/`Templates`/`Privacy`) with
   **`openSettings(section?)`** (deep-links to a section, defaults to Providers) / **`closeSettings()`** /
   **`setSettingsSection()`** — lives here so the top-bar gear AND the Welcome provider warning open Settings
   to a section without prop-drilling through the shell. The **theme** state — **`theme: ThemeId`** (the
@@ -308,9 +308,9 @@ snapshots plus device-local attention, terminal catalogs, and one **per-session 
   (folds the server-synced `AppConfig` in from
   `server.welcome` / the `settings.changed` broadcast) — lives here too; it's a **pure value only** (the
   theme-application side-effect is the shell's, keyed off `theme`), and defaults to
-  `DEFAULT_CONFIG.theme` until the welcome arrives. **`layoutSettings: LayoutSettings`** and
-  **`analyticsEnabled: boolean`** ride the same `applyConfig` fold (host-owned, defaulted from
-  `DEFAULT_CONFIG`) — the Layout and Privacy sections' read sides. Layout settings are not a second copy of
+  `DEFAULT_CONFIG.theme` until the welcome arrives. **`composerGrowthLimit: ComposerGrowthLimit`**,
+  **`layoutSettings: LayoutSettings`**, and **`analyticsEnabled: boolean`** ride the same `applyConfig` fold
+  (host-owned, defaulted from `DEFAULT_CONFIG`) — the Chat, Layout, and Privacy sections' read sides. Layout settings are not a second copy of
   any workspace document: they carry only the portable preset catalog/default and group limit. The
   **toast queue** — **`toasts: Toast[]`** (oldest-first) with **`pushToast(toast) → id`** / **`dismissToast(id)`**
   and the ergonomic **`toast.error/success/info(message, title?)`** helper (wraps `pushToast` so a non-React
