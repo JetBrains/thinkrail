@@ -1,7 +1,14 @@
 import type { ExtensionAPI, ExtensionFactory } from "@earendil-works/pi-coding-agent";
-import { presentOffer, presentOfferDetached } from "./src/native.ts";
-import { fallbackText, type NextStepsDetails, normalizeItems } from "./src/normalize.ts";
-import { MAX_ITEMS, NextStepsSchema, TOOL_NAME } from "./src/schema.ts";
+import {
+	fallbackText,
+	MAX_ITEMS,
+	type NextStepsDetails,
+	NextStepsSchema,
+	normalizeItems,
+	presentOffer,
+	presentOfferDetached,
+	TOOL_NAME,
+} from "./src/index.ts";
 
 const COMMAND_NAME = "next-steps";
 

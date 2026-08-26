@@ -12,6 +12,10 @@ references: [submodule-web-chat-tools]
 
 A publishable, standalone pi extension for agent-authored optional continuations. It registers the terminating `offer_next_steps` tool, gives generic hosts a readable fallback, and upgrades the same durable result into a native pi selector. ThinkRail’s web presentation lives in [[submodule-web-chat-tools]] and joins only by tool name.
 
+## Module graph
+
+The package-root `index.ts` is the pi extension entrypoint. It depends on [[submodule-pi-next-steps-core]] only through `src/index.ts`; the core submodule has no reverse dependency on the entrypoint. No other internal module edges exist.
+
 ## Tool contract
 
 Zero suggestions means the agent does not call the tool. A call carries one to three `{ label, prompt }` items: a trimmed action label of at most 60 characters and a trimmed complete user message of at most 500 characters. Blank values and case-insensitive duplicate labels or prompts are rejected. The normalized items are the result `details`; `content` is their numbered plain-text fallback.
@@ -28,7 +32,7 @@ This ordering is a restart invariant: no human-length wait occurs before the too
 
 ## Public surface
 
-The package root is a pi extension factory declared by its `pi.extensions` manifest. Its package metadata is publication-ready and uses the `pi-package` keyword; no ThinkRail host is required. The stable cross-host contract is the tool name and validated result shape.
+The package root is a pi extension factory declared by its `pi.extensions` manifest. `src/index.ts` is the core submodule's only surface to that entrypoint; the package export map exposes only the root factory. Its package metadata is publication-ready and uses the `pi-package` keyword; no ThinkRail host is required. The stable cross-host contract is the tool name and validated result shape.
 
 ## Testing
 
