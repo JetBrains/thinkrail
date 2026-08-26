@@ -21,7 +21,11 @@ choice was settled: the decision log below.
 
 - **default export** — the zero-config pure-pi extension entry (the `pi` manifest points here);
   builds its own `DelegationService` with default bindings, projecting the parent off the tool
-  `ExtensionContext` at spawn time.
+  `ExtensionContext` at spawn time. **The fallback service is session-scoped in lifetime**: on
+  `session_shutdown` the extension awaits `disposeChildrenOf(parent)` and drops the service, so a
+  vanilla-pi background child never outlives its parent session burning tokens with an
+  undeliverable completion (PR #302 review finding). An embedder-injected service is deliberately
+  untouched — its lifecycle belongs to the embedder (ThinkRail cascades in `removeSession`).
 - `createSubagentsExtension({ service?, delegationRoot?, scope? })` — the embedder entry: ThinkRail
   passes its host-bound service (and the matching storage bindings, used for restart-loss error
   messages).
@@ -34,8 +38,8 @@ choice was settled: the decision log below.
 
 | Tool | Behavior |
 | --- | --- |
-| `Agent({ subagent_type, task, run_in_background? })` | Discovers definitions per call (editable mid-session), maps the named one to `SessionOptions`, spawns via `createChild` + `runQueued`. Foreground: awaits the outcome and rides the tool signal; `error` outcomes throw (tool error, reason-first) — and the error tool result **still carries the run's final `details`**: pi replaces a thrown tool error's result with `{content, details: {}}`, so the extension stashes the outcome details by `toolCallId` before throwing and re-injects them via a `tool_result` hook override; a failed run's card keeps its child session id and the transcript stays openable (PR #304 review finding). Background: **never rides the parent turn's abort signal** (a detached run survives a parent abort — core-spec semantics, test-pinned); returns `{childSessionId}` text immediately; the terminal event injects a `subagent-completion` custom message (`deliverAs: "followUp", triggerTurn: true`). Live `onUpdate` details flow to `partialResult` (REPLACE). Results bounded to 50k chars — the full text stays in the child transcript. |
-| `get_subagent_result({ session_id })` | Reads the core registry via `findChild` + `collectResult`: terminal → final text + details through the **same reason-first, 50k-bounded shaping** as a foreground result (marks collected; an errored run reports its `errorMessage` first — core decision #24); running → status snapshot; unknown id → error naming the restart-loss case + the derived transcript path. |
+| `Agent({ subagent_type, task, run_in_background? })` | Discovers definitions per call (editable mid-session), maps the named one to `SessionOptions`, spawns via `createChild` + `runQueued`. Foreground: awaits the outcome and rides the tool signal; `error` outcomes throw (tool error, reason-first) — and the error tool result **still carries the run's final `details`**: pi replaces a thrown tool error's result with `{content, details: {}}`, so the extension stashes the outcome details by `toolCallId` before throwing and re-injects them via a `tool_result` hook override (the stash is swept on `turn_end` — after finalization — and on `session_shutdown`, so a turn aborted before tool finalization cannot strand entries); a failed run's card keeps its child session id and the transcript stays openable (PR #304 review finding). Background: **never rides the parent turn's abort signal** (a detached run survives a parent abort — core-spec semantics, test-pinned); returns `{childSessionId}` text immediately; the terminal event injects a `subagent-completion` custom message (`deliverAs: "followUp", triggerTurn: true`). Live `onUpdate` details flow to `partialResult` (REPLACE). Results bounded to 50k chars — the full text stays in the child transcript. |
+| `get_subagent_result({ session_id })` | **Lineage-checked**: a child whose `record.parentSessionId` is not the calling session takes the unknown-id error path — with a shared (workspace-scoped) service, one tab must not read or mark-collected another parent's child (PR #302 review finding). Reads the core registry via `findChild` + `collectResult`: terminal → final text + details through the **same reason-first, 50k-bounded shaping** as a foreground result (marks collected; an errored run reports its `errorMessage` first — core decision #24); running → status snapshot; unknown id → error naming the restart-loss case + the derived transcript path. |
 
 Both tools register inside `session_start` (emitted by `bindExtensions`), so the `Agent`
 description enumerates the definitions actually visible to that session.

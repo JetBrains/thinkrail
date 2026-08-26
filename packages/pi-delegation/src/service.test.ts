@@ -309,6 +309,59 @@ test("a modelRuntime provider is resolved per createChild, never captured at ser
 	}
 });
 
+test("a parent's retained runtime wins over the service-level binding", async () => {
+	const parentRuntime = await ModelRuntime.create({
+		credentials: new InMemoryCredentialStore(),
+		modelsPath: null,
+		allowModelNetwork: false,
+	});
+	parentRuntime.registerProvider("fauxp", {
+		api: faux.api,
+		baseUrl: "http://faux.local",
+		apiKey: "faux",
+		streamSimple: faux.streamSimple,
+		models: [
+			{
+				id: "fauxp",
+				name: "fauxp",
+				api: faux.api,
+				reasoning: false,
+				input: ["text"],
+				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+				contextWindow: 100_000,
+				maxTokens: 4096,
+			},
+		],
+	});
+	const generational = createDelegationService({
+		resolveParent: (id) =>
+			id === parent.sessionId
+				? {
+						cwd: parentCwd,
+						model: parent.model,
+						thinkingLevel: parent.thinkingLevel,
+						modelRuntime: parentRuntime,
+					}
+				: undefined,
+		delegationRoot,
+		scope: "ws-parent-runtime",
+		modelRuntime: runtime,
+	});
+	faux.setResponses([fauxAssistantMessage("PARENT_GEN_DONE")]);
+	const child = await generational.createChild(
+		subagentSpec({
+			session: { systemPrompt: "probe", model: { provider: "fauxp", id: "fauxp" } },
+		}),
+	);
+	try {
+		const outcome = await child.runQueued("Probe.");
+		expect(outcome.status).toBe("completed");
+		expect(outcome.details.model).toBe("fauxp/fauxp");
+	} finally {
+		await generational.disposeChildrenOf(parent.sessionId);
+	}
+});
+
 test("one run at a time per child: a second runQueued rejects already-running", async () => {
 	faux.setResponses([fauxAssistantMessage("SLOW_RESULT")]);
 	const child = await service.createChild(subagentSpec());

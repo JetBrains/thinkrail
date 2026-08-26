@@ -150,7 +150,9 @@ export interface DelegationService {
 	disposeChildrenOf(parentSessionId: string): Promise<void>;
 }
 
-export type ParentContext = Pick<ExtensionContext, "cwd" | "model" | "thinkingLevel">;
+export type ParentContext = Pick<ExtensionContext, "cwd" | "model" | "thinkingLevel"> & {
+	modelRuntime?: ModelRuntime;
+};
 
 export interface DelegationBindings {
 	resolveParent: (sessionId: string) => ParentContext | undefined;

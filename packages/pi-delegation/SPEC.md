@@ -27,8 +27,13 @@ lands (the enumeration: scope & readiness rules below).
 - `createDelegationService(bindings)` — the service (`DelegationService`): `createChild` /
   `findChild` / `childrenOf` / `onLifecycle` / `disposeChildrenOf`.
 - `DelegationBindings` — everything host-specific: `resolveParent` (required; returns
-  `ParentContext = Pick<ExtensionContext, "cwd" | "model" | "thinkingLevel">` — ThinkRail projects
-  the manager's live session, pure pi passes the extension's own `ctx`), `delegationRoot`, `scope`,
+  `ParentContext` — `Pick<ExtensionContext, "cwd" | "model" | "thinkingLevel">` plus an optional
+  **`modelRuntime`**: the parent's own retained runtime, which `createChild` **prefers over the
+  service-level binding** — an embedder whose sessions each retain their creation-time runtime
+  generation (ThinkRail) must give a child its *parent's* generation, or a parent kept alive on a
+  Central-only model after a disconnect would delegate into a runtime lacking its provider (PR
+  #303 review follow-up). ThinkRail projects the manager's live session incl. the entry's
+  generation runtime; pure pi passes the extension's own `ctx`, no runtime), `delegationRoot`, `scope`,
   `modelRuntime` (a `ModelRuntime` value **or a live provider** `() => ModelRuntime |
   Promise<ModelRuntime>`, resolved **per `createChild`**: an embedder's runtime can be generational
   — ThinkRail swaps runtime generations on Central connect/disconnect — and a value captured at

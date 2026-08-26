@@ -447,7 +447,7 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 				`Parent session ${spec.parent} is not live — children derive their defaults from a live parent`,
 			);
 		}
-		const runtime = await getRuntime();
+		const runtime = parent.modelRuntime ?? (await getRuntime());
 		const model = options.model
 			? runtime.getModel(options.model.provider, options.model.id)
 			: parent.model;

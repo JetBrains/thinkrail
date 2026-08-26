@@ -157,13 +157,39 @@ function transcript(): string {
 	return JSON.stringify(parent.messages);
 }
 
-function lastToolResultText(): string {
-	const message = parent.messages.filter((m) => m.role === "toolResult").at(-1) as
+function lastToolResultText(session: AgentSession = parent): string {
+	const message = session.messages.filter((m) => m.role === "toolResult").at(-1) as
 		| { content: Array<{ type: string; text?: string }> }
 		| undefined;
 	return (message?.content ?? [])
 		.map((block) => (block.type === "text" ? (block.text ?? "") : ""))
 		.join("\n");
+}
+
+async function makeSession(): Promise<AgentSession> {
+	const settingsManager = SettingsManager.inMemory({});
+	const resourceLoader = new DefaultResourceLoader({
+		cwd: parentCwd,
+		agentDir: getAgentDir(),
+		settingsManager,
+		extensionFactories: [createSubagentsExtension({ service })],
+		noPromptTemplates: true,
+		noThemes: true,
+		noContextFiles: true,
+	});
+	await resourceLoader.reload();
+	const model = runtime.getModel("fauxa", "fauxa") as Model<string> | undefined;
+	if (!model) throw new Error("fauxa not registered");
+	const created = await createAgentSession({
+		cwd: parentCwd,
+		modelRuntime: runtime,
+		sessionManager: SessionManager.inMemory(parentCwd),
+		settingsManager,
+		resourceLoader,
+		model,
+	});
+	await created.session.bindExtensions({ mode: "print" });
+	return created.session;
 }
 
 async function waitFor(predicate: () => boolean, timeoutMs = 10_000): Promise<void> {
@@ -361,6 +387,35 @@ test("get_subagent_result collects a detached ERROR through the same reason-firs
 	expect(text).toContain("Run error: child exploded");
 	expect(text).toContain("partial work");
 	await service.disposeChildrenOf(parent.sessionId);
+});
+
+test("get_subagent_result rejects another parent's child — lineage is enforced on the shared service", async () => {
+	fauxA.setResponses([
+		fauxAssistantMessage(
+			fauxToolCall("Agent", { subagent_type: "bg-runner", task: "Mine.", run_in_background: true }),
+		),
+		fauxAssistantMessage("OWNER_ACK"),
+		fauxAssistantMessage("OWNER_SAW_COMPLETION"),
+	]);
+	fauxB.setResponses([fauxAssistantMessage("OWNER_RESULT")]);
+	await parent.prompt("Run mine.");
+	await waitFor(() => transcript().includes("OWNER_SAW_COMPLETION"));
+	const child = service.childrenOf(parent.sessionId).at(-1);
+	if (!child) throw new Error("no child spawned");
+
+	const other = await makeSession();
+	try {
+		fauxA.setResponses([
+			fauxAssistantMessage(fauxToolCall("get_subagent_result", { session_id: child.sessionId })),
+			fauxAssistantMessage("OTHER_HANDLED"),
+		]);
+		await other.prompt("Collect someone else's child.");
+		expect(lastToolResultText(other)).toContain(`Unknown subagent session ${child.sessionId}`);
+		expect(child.snapshot?.collected).toBe(false);
+	} finally {
+		other.dispose();
+		await service.disposeChildrenOf(parent.sessionId);
+	}
 });
 
 test("get_subagent_result on an unknown id explains the restart-loss case", async () => {

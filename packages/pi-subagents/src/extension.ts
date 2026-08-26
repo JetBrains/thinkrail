@@ -70,6 +70,16 @@ export function createSubagentsExtension(
 			erroredRunDetails.delete(event.toolCallId);
 			return event.isError ? { details } : undefined;
 		});
+		pi.on("turn_end", () => {
+			erroredRunDetails.clear();
+		});
+		pi.on("session_shutdown", async (_event, ctx) => {
+			erroredRunDetails.clear();
+			const service = fallbackService;
+			if (!service) return;
+			fallbackService = undefined;
+			await service.disposeChildrenOf(ctx.sessionManager.getSessionId());
+		});
 
 		let latestCtx: ExtensionContext | undefined;
 		let fallbackService: DelegationService | undefined;
@@ -200,7 +210,9 @@ ${known}`,
 				}),
 				async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
 					const service = serviceFor(ctx);
-					const child = service.findChild(params.session_id);
+					const found = service.findChild(params.session_id);
+					const child =
+						found?.record.parentSessionId === ctx.sessionManager.getSessionId() ? found : undefined;
 					if (!child) {
 						const transcript = deriveChildSessionFile(
 							delegationRoot,
