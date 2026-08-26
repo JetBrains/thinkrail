@@ -45,7 +45,6 @@ import { shouldApplyTemplatePick } from "./templatePick";
 import { stripFrontmatter } from "./templateText";
 import { useModelCatalog } from "./useModelCatalog";
 import "./tools/register"; // side-effect: register the built-in pi tool renderers (bash/read/edit/write)
-import { delegationRunStatus } from "./tools/subagent/runDetails";
 import { ChatTurnView } from "./turns";
 import type { ChatTurn } from "./types";
 import { useChatScroll } from "./useChatScroll";
@@ -578,15 +577,6 @@ export default function ChatView({
 		[sessionId],
 	);
 
-	// Is the viewed child's run still live? Derived from THIS chat's runtime (the run's REPLACE snapshots
-	// land in toolResults; a background run's terminal signal is its completion turn) — drives the
-	// transcript dialog's poll-while-live refresh, per the settled design.
-	const transcriptRunStatus = useMemo(
-		() =>
-			transcriptChildId ? delegationRunStatus(turns, toolResults, transcriptChildId) : undefined,
-		[transcriptChildId, turns, toolResults],
-	);
-
 	const onExtUiReply = (value: string | boolean | null) => {
 		if (!pendingExtUi) return;
 		const id = pendingExtUi.id;
@@ -743,7 +733,6 @@ export default function ChatView({
 							workspaceId={workspaceId}
 							parentSessionId={sessionId}
 							childSessionId={transcriptChildId}
-							live={transcriptRunStatus === "queued" || transcriptRunStatus === "running"}
 							onOpenChange={(open) => {
 								if (!open) setTranscriptChildId(null);
 							}}

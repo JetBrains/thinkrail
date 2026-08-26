@@ -17,55 +17,58 @@ import { ChatTurnView } from "./turns";
  *
  * Read-only by construction: the transcript renders under a `null` `ChatActions` provider, so nothing
  * inside can talk back (and a nested transcript link cannot exist); ask cards resolve via their own
- * derived `AskStates`. While the run is still live (`live` — ChatView derives it from this chat's own
- * runtime via `delegationRunStatus`) the open dialog refetches every ~2.5s; a terminal status flips
- * `live` off, which re-runs the effect for one final fetch and stops the interval. Works during the run,
- * after completion, and after a host restart — transcripts persist on disk, only the in-memory run
- * registry is lost.
+ * derived `AskStates`. Liveness comes from the HOST with each response: `subagent.getTranscript`
+ * carries the run's current registry `status` (absent once the host no longer knows the run —
+ * restart, dispose), so the dialog polls every ~2.5s exactly while the host reports queued/running
+ * and stops on anything else — a frozen background ack can never keep it polling a dead child.
+ * Works during the run, after completion, and after a host restart — transcripts persist on disk,
+ * only the in-memory run registry is lost.
  */
 export function SubagentTranscriptDialog({
 	workspaceId,
 	parentSessionId,
 	childSessionId,
-	live,
 	onOpenChange,
 }: {
 	workspaceId: string;
 	parentSessionId: string;
 	childSessionId: string;
-	/** The run is queued/running per the parent chat's runtime — keeps the snapshot fresh while true. */
-	live: boolean;
 	onOpenChange: (open: boolean) => void;
 }) {
 	const [messages, setMessages] = useState<TranscriptMessage[] | null>(null);
+	const [live, setLive] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 
 	useEffect(() => {
 		let cancelled = false;
-		const fetchTranscript = () => {
+		let timer: ReturnType<typeof setInterval> | undefined = setInterval(fetchTranscript, 2500);
+		const stopPolling = () => {
+			if (timer !== undefined) clearInterval(timer);
+			timer = undefined;
+		};
+		function fetchTranscript() {
 			getTransport()
 				.request("subagent.getTranscript", { workspaceId, parentSessionId, childSessionId })
 				.then((res) => {
 					if (cancelled) return;
 					setMessages(res.messages);
 					setError(null);
+					const stillLive = res.status === "queued" || res.status === "running";
+					setLive(stillLive);
+					if (!stillLive) stopPolling();
 				})
 				.catch((err) => {
-					if (!cancelled) setError(errorText(err));
+					if (cancelled) return;
+					setError(errorText(err));
+					stopPolling(); // an unreadable transcript won't become readable by asking again
 				});
-		};
-		fetchTranscript();
-		if (!live) {
-			return () => {
-				cancelled = true;
-			};
 		}
-		const timer = setInterval(fetchTranscript, 2500);
+		fetchTranscript();
 		return () => {
 			cancelled = true;
-			clearInterval(timer);
+			stopPolling();
 		};
-	}, [workspaceId, parentSessionId, childSessionId, live]);
+	}, [workspaceId, parentSessionId, childSessionId]);
 
 	const runtime = useMemo(() => (messages ? messagesToRuntime(messages) : null), [messages]);
 	// `live` marks the trailing activity run as the ticker, matching how the chat renders a streaming

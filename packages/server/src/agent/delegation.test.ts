@@ -46,14 +46,6 @@ function tmpDir(prefix: string): string {
 	return dir;
 }
 
-async function waitFor(predicate: () => boolean, timeoutMs = 5000): Promise<void> {
-	const deadline = Date.now() + timeoutMs;
-	while (!predicate()) {
-		if (Date.now() > deadline) throw new Error("timed out waiting for condition");
-		await Bun.sleep(10);
-	}
-}
-
 let priorAgentDir: string | undefined;
 let priorDataDir: string | undefined;
 let priorOffline: string | undefined;
@@ -134,21 +126,33 @@ test("host embedding: projection, per-workspace service, transcript store, casca
 	expect(outcome.status).toBe("completed");
 	expect(child.record.sessionFile.startsWith(join(delegationRootDir(), "ws-del"))).toBe(true);
 
-	// The transcript request reads the store by the (workspace, parent, child) triple.
-	const { messages } = readChildTranscript("ws-del", sessionId, child.sessionId);
-	expect(JSON.stringify(messages)).toContain("CHILD_DONE");
+	// The transcript request reads the store by the (workspace, parent, child) triple — and carries
+	// the run's live registry status while this host still knows the run.
+	const read = readChildTranscript("ws-del", sessionId, child.sessionId);
+	expect(JSON.stringify(read.messages)).toContain("CHILD_DONE");
+	expect(read.status).toBe("completed");
 
-	// Closing the parent cascades to its children…
-	removeSession(sessionId);
-	await waitFor(() => service.findChild(child.sessionId) === undefined);
-	// …but the transcript survives (closing a tab deletes nothing — same as parents).
-	expect(readChildTranscript("ws-del", sessionId, child.sessionId).messages.length).toBeGreaterThan(
-		0,
-	);
+	// Closing the parent cascades to its children — AWAITED, so callers that delete the store next
+	// (workspace archival below) never race a live child.
+	await removeSession(sessionId);
+	expect(service.findChild(child.sessionId)).toBeUndefined();
+	// …but the transcript survives (closing a tab deletes nothing — same as parents), now without a
+	// registry status (the run is gone from memory).
+	const afterDispose = readChildTranscript("ws-del", sessionId, child.sessionId);
+	expect(afterDispose.messages.length).toBeGreaterThan(0);
+	expect(afterDispose.status).toBeUndefined();
 
 	// Workspace archival deletes the workspace's delegation store — and only then.
 	await removeWorkspaceSessions("ws-del");
 	expect(() => readChildTranscript("ws-del", sessionId, child.sessionId)).toThrow(
 		"No transcript found",
 	);
+});
+
+test("transcript reads reject path-like ids — wire strings never escape the delegation root", () => {
+	expect(() => readChildTranscript("../../etc", "p", "c")).toThrow("Invalid workspaceId");
+	expect(() => readChildTranscript("ws", "..", "c")).toThrow("Invalid parentSessionId");
+	expect(() => readChildTranscript("ws", "p", "x/../y")).toThrow("Invalid childSessionId");
+	expect(() => readChildTranscript("ws", "a\\b", "c")).toThrow("Invalid parentSessionId");
+	expect(() => readChildTranscript("", "p", "c")).toThrow("Invalid workspaceId");
 });

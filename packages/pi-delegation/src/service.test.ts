@@ -1,6 +1,6 @@
 // The delegation service against REAL child sessions — a real ModelRuntime with an in-process faux
 // provider (no auth, no network), the same pattern as the server's agentSessionManager tests. The
-// loud V1 rejections are unit-pinned here (task-spec acceptance #2).
+// loud V1 rejections are unit-pinned here (SPEC: unexercised combinations reject loudly).
 
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
@@ -376,6 +376,42 @@ test("the per-parent semaphore paces runs FIFO", async () => {
 			`run-started:${childB.sessionId}`,
 			`run-terminal:${childB.sessionId}`,
 		]);
+	} finally {
+		await paced.disposeChildrenOf(parent.sessionId);
+	}
+});
+
+test("an abort while QUEUED releases immediately — not after a slot frees", async () => {
+	const paced = createDelegationService({
+		resolveParent: (id) =>
+			id === parent.sessionId
+				? { cwd: parentCwd, model: parent.model, thinkingLevel: parent.thinkingLevel }
+				: undefined,
+		delegationRoot,
+		scope: "ws-queued-abort",
+		modelRuntime: runtime,
+		maxConcurrentPerParent: 1,
+	});
+	// A slow first run occupies the only slot.
+	faux.setResponses([
+		async () => {
+			await Bun.sleep(300);
+			return fauxAssistantMessage("SLOW_DONE");
+		},
+	]);
+	const childA = await paced.createChild(subagentSpec());
+	const childB = await paced.createChild(subagentSpec());
+	try {
+		const runA = childA.runQueued("Slow.");
+		const controller = new AbortController();
+		const runB = childB.runQueued("Queued, then aborted.", { signal: controller.signal });
+		await Bun.sleep(20); // B is parked on the queue behind A
+		controller.abort();
+		const outcomeB = await runB; // resolves NOW — while A still holds the slot
+		expect(outcomeB.status).toBe("aborted");
+		expect(childA.snapshot?.status).toBe("running");
+		// A's slot was never touched — it finishes normally.
+		expect((await runA).status).toBe("completed");
 	} finally {
 		await paced.disposeChildrenOf(parent.sessionId);
 	}

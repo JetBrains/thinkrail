@@ -43,6 +43,24 @@ System prompt body.`,
 	});
 });
 
+test("quoted scalar values register unquoted — a quoted name must still match subagent_type", () => {
+	const parsed = parseAgentDefinition(
+		`---
+name: "my-agent"
+description: 'Does things'
+model: "claude-haiku-4-5"
+tools: "read", "grep"
+---
+
+Body.`,
+		"personal",
+	);
+	expect(parsed?.name).toBe("my-agent");
+	expect(parsed?.description).toBe("Does things");
+	expect(parsed?.model).toBe("claude-haiku-4-5");
+	expect(parsed?.tools).toEqual(["read", "grep"]);
+});
+
 test("malformed definitions are skipped, never fatal", () => {
 	// No frontmatter at all.
 	expect(parseAgentDefinition("just a body", "personal")).toBeUndefined();

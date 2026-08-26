@@ -22,7 +22,7 @@ import {
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import { createDelegationService, type DelegationService } from "pi-delegation";
-import { createSubagentsExtension, SUBAGENT_COMPLETION_MESSAGE } from "./extension";
+import { boundedText, createSubagentsExtension, SUBAGENT_COMPLETION_MESSAGE } from "./extension";
 
 function fauxCore(provider: string) {
 	return createFauxCore({
@@ -322,6 +322,54 @@ test("a detached run SURVIVES a parent-turn abort (only awaited runs ride the to
 	// Its completion still reaches the parent as a followUp-triggered turn.
 	await waitFor(() => transcript().includes("POST_ABORT_COMPLETION"));
 	expect(transcript()).toContain(SUBAGENT_COMPLETION_MESSAGE);
+	await service.disposeChildrenOf(parent.sessionId);
+});
+
+test("boundedText: reason-first errors, terminal fallbacks, and the 50k bound (every report path)", () => {
+	// An error's REASON leads; partial text follows — truncation must never mask the failure.
+	expect(boundedText({ status: "error", errorMessage: "boom", finalText: "partial" })).toBe(
+		"boom\n\npartial",
+	);
+	expect(boundedText({ status: "error" })).toBe("unknown error");
+	expect(boundedText({ status: "completed" })).toBe("(no output)");
+	expect(boundedText({ status: "aborted" })).toBe("Run aborted.");
+	// The bound: 50k + the truncation marker, never the raw report.
+	const huge = boundedText({ status: "completed", finalText: "Y".repeat(60_000) });
+	expect(huge.endsWith("[truncated]")).toBe(true);
+	expect(huge.length).toBeLessThan(50_100);
+});
+
+test("get_subagent_result collects a detached ERROR through the same reason-first shaping", async () => {
+	fauxA.setResponses([
+		fauxAssistantMessage(
+			fauxToolCall("Agent", {
+				subagent_type: "bg-runner",
+				task: "Doomed job.",
+				run_in_background: true,
+			}),
+		),
+		fauxAssistantMessage("ACK_BG"),
+		fauxAssistantMessage("SAW_FAILURE"), // the completion-triggered turn
+	]);
+	fauxB.setResponses([
+		fauxAssistantMessage("partial work", { stopReason: "error", errorMessage: "child exploded" }),
+	]);
+
+	await parent.prompt("Run the doomed job.");
+	await waitFor(() => transcript().includes("SAW_FAILURE"));
+	const child = service.childrenOf(parent.sessionId).at(-1);
+	if (!child) throw new Error("no child spawned");
+
+	fauxA.setResponses([
+		fauxAssistantMessage(fauxToolCall("get_subagent_result", { session_id: child.sessionId })),
+		fauxAssistantMessage("COLLECTED"),
+	]);
+	await parent.prompt("Collect it.");
+
+	// The collection rides boundedText: reason first, partial text after (decision #24 + the bound).
+	const text = lastToolResultText();
+	expect(text).toContain("Run error: child exploded");
+	expect(text).toContain("partial work");
 	await service.disposeChildrenOf(parent.sessionId);
 });
 

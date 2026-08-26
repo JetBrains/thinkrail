@@ -1,4 +1,7 @@
 import { expect, test } from "bun:test";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { AgentDefinition } from "./definitions";
 import {
 	buildChildSystemPrompt,
@@ -57,6 +60,39 @@ test("the child prompt is stable-first: body, then bridge, then env", () => {
 	expect(bridge).toBeGreaterThan(body);
 	expect(env).toBeGreaterThan(bridge);
 	expect(prompt).toContain("Working directory: /tmp/somewhere");
+});
+
+test("the env block reads the branch from .git/HEAD — plain repo, subdirectory, worktree, detached", () => {
+	const root = mkdtempSync(join(tmpdir(), "pi-subagents-git-"));
+	try {
+		// Plain repo: `.git` is a directory. No git binary anywhere — a plain file read.
+		const repo = join(root, "repo");
+		mkdirSync(join(repo, ".git"), { recursive: true });
+		writeFileSync(join(repo, ".git", "HEAD"), "ref: refs/heads/feature/x\n");
+		expect(buildChildSystemPrompt(definition(), repo)).toContain("Git branch: feature/x");
+
+		// Subdirectory: walks up to the repo root.
+		const sub = join(repo, "src", "deep");
+		mkdirSync(sub, { recursive: true });
+		expect(buildChildSystemPrompt(definition(), sub)).toContain("Git branch: feature/x");
+
+		// Worktree: `.git` is a FILE naming the real git dir (ThinkRail workspaces are worktrees).
+		const wtGitDir = join(root, "main", ".git", "worktrees", "wt1");
+		mkdirSync(wtGitDir, { recursive: true });
+		writeFileSync(join(wtGitDir, "HEAD"), "ref: refs/heads/wt-branch\n");
+		const wt = join(root, "wt1");
+		mkdirSync(wt, { recursive: true });
+		writeFileSync(join(wt, ".git"), `gitdir: ${wtGitDir}\n`);
+		expect(buildChildSystemPrompt(definition(), wt)).toContain("Git branch: wt-branch");
+
+		// Detached HEAD (a bare sha): the env block simply omits the branch line.
+		const detached = join(root, "detached");
+		mkdirSync(join(detached, ".git"), { recursive: true });
+		writeFileSync(join(detached, ".git", "HEAD"), "0123abc\n");
+		expect(buildChildSystemPrompt(definition(), detached)).not.toContain("Git branch:");
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
 });
 
 test("the mapping mirrors the definition onto SessionOptions with the recursion guard always on", () => {

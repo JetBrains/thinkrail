@@ -436,8 +436,8 @@ const handlers: Record<string, Handler> = {
 		await abortSession((params as { sessionId: string }).sessionId);
 		return { ok: true } as const;
 	},
-	"session.dispose": (params) => {
-		removeSession((params as { sessionId: string }).sessionId);
+	"session.dispose": async (params) => {
+		await removeSession((params as { sessionId: string }).sessionId);
 		return { ok: true } as const;
 	},
 	"session.setModel": async (params) => {
@@ -480,8 +480,11 @@ const handlers: Record<string, Handler> = {
 	},
 	// A hidden subagent child's transcript, read from the delegation store — works during the run,
 	// after completion, and after a host restart; throws when no transcript exists for the triple.
+	// The workspace is validated like every sibling read (unknown ids throw); the ids' path-segment
+	// shape is enforced inside `readChildTranscript` (wire strings become path segments there).
 	"subagent.getTranscript": (params) => {
 		const p = params as { workspaceId: string; parentSessionId: string; childSessionId: string };
+		getWorkspace(p.workspaceId);
 		return readChildTranscript(p.workspaceId, p.parentSessionId, p.childSessionId);
 	},
 	"session.extUiReply": (params) => {

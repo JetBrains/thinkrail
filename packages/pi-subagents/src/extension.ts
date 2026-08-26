@@ -1,5 +1,5 @@
-// The subagents extension — the LLM-facing capability side (task-spec: tools joined to renderers by
-// name). Registers `Agent` (spawn; Claude Code naming, decision 2) and `get_subagent_result`
+// The subagents extension — the LLM-facing capability side (tools joined to web renderers by
+// name). Registers `Agent` (spawn; Claude Code naming, SPEC decision 2) and `get_subagent_result`
 // (collect detached results) over a `DelegationService`. The tool layer contains ZERO private
 // child-assembly code (the core's acceptance criterion): it discovers a definition, maps it to
 // `SessionOptions`, and hands the core the spawn.
@@ -16,7 +16,7 @@ import {
 	type DelegationService,
 	defaultDelegationRoot,
 	deriveChildSessionFile,
-	type RunOutcome,
+	type RunStatus,
 } from "pi-delegation";
 import { Type } from "typebox";
 import { type AgentDefinition, discoverAgentDefinitions } from "./definitions";
@@ -55,13 +55,22 @@ function agentListLines(definitions: AgentDefinition[]): string {
 		.join("\n");
 }
 
-function boundedText(outcome: RunOutcome): string {
-	// An error's REASON leads; any partial text follows (a truncated report must not mask the failure).
+/**
+ * Reason-first, bounded report text for a TERMINAL run — the ONE shaping for everything a child
+ * hands back to the parent context (foreground result, completion message, and
+ * `get_subagent_result` collection): an error's REASON leads and any partial text follows (a
+ * truncated report must not mask the failure). `RunOutcome` and a terminal `RunSnapshot` both
+ * satisfy the shape. Exported for its unit tests only — not on the barrel.
+ */
+export function boundedText(run: {
+	status: RunStatus;
+	finalText?: string | undefined;
+	errorMessage?: string | undefined;
+}): string {
 	const text =
-		outcome.status === "error"
-			? `${outcome.errorMessage ?? "unknown error"}${outcome.finalText ? `\n\n${outcome.finalText}` : ""}`
-			: (outcome.finalText ??
-				(outcome.status === "completed" ? "(no output)" : `Run ${outcome.status}.`));
+		run.status === "error"
+			? `${run.errorMessage ?? "unknown error"}${run.finalText ? `\n\n${run.finalText}` : ""}`
+			: (run.finalText ?? (run.status === "completed" ? "(no output)" : `Run ${run.status}.`));
 	return text.length > MAX_RESULT_CHARS ? `${text.slice(0, MAX_RESULT_CHARS)}\n[truncated]` : text;
 }
 
@@ -234,17 +243,27 @@ ${known}`,
 							details: {},
 						};
 					}
-					const terminal =
-						snapshot.status === "completed" ||
-						snapshot.status === "error" ||
-						snapshot.status === "aborted";
-					const text = !terminal
-						? `Still ${snapshot.status}. Ask again later or continue with other work.`
-						: snapshot.status === "error"
-							? `Run error: ${snapshot.errorMessage ?? "unknown error"}${snapshot.finalText ? `\n\n${snapshot.finalText}` : ""}`
-							: (snapshot.finalText ?? `Run ${snapshot.status}.`);
+					const status = snapshot.status;
+					if (status === "queued" || status === "running") {
+						return {
+							content: [
+								{
+									type: "text",
+									text: `Still ${status}. Ask again later or continue with other work.`,
+								},
+							],
+							details: snapshot.details,
+						};
+					}
+					// Terminal: the same reason-first, bounded shaping as a foreground result — a collected
+					// report must never flood the parent context either.
+					const report = boundedText({
+						status,
+						finalText: snapshot.finalText,
+						errorMessage: snapshot.errorMessage,
+					});
 					return {
-						content: [{ type: "text", text }],
+						content: [{ type: "text", text: status === "error" ? `Run error: ${report}` : report }],
 						details: snapshot.details,
 					};
 				},

@@ -3,7 +3,8 @@
 // models, the assembled child system prompt (stable material first, for KV-cache prefix reuse:
 // definition body → subagent bridge → env block), and the recursion guard.
 
-import { execFileSync } from "node:child_process";
+import { readFileSync, statSync } from "node:fs";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 import type { Model } from "@earendil-works/pi-ai";
 import type { SessionOptions } from "pi-delegation";
 import type { AgentDefinition } from "./definitions";
@@ -49,16 +50,33 @@ You are a subagent: you run non-interactively on one delegated task. Nobody answ
 never ask; decide and note assumptions instead. Your final message is your entire report to the
 delegating agent: make it self-contained, concrete, and free of filler.`;
 
+/**
+ * The current branch, read straight from `.git/HEAD` — NO subprocess: this runs on the embedder's
+ * one shared event loop at every spawn, and shelling out to git blocked it (up to seconds on a
+ * cold FS). Walks up from a subdirectory and handles the worktree case (`.git` is a FILE naming
+ * the real git dir — ThinkRail workspaces are worktrees). Undefined outside a repo or on a
+ * detached HEAD.
+ */
 function gitBranch(cwd: string): string | undefined {
 	try {
-		const branch = execFileSync("git", ["rev-parse", "--abbrev-ref", "HEAD"], {
-			cwd,
-			stdio: ["ignore", "pipe", "ignore"],
-			timeout: 2000,
-		})
-			.toString()
-			.trim();
-		return branch.length > 0 ? branch : undefined;
+		for (let dir = resolve(cwd); ; dir = dirname(dir)) {
+			const dotGit = join(dir, ".git");
+			const stat = statSync(dotGit, { throwIfNoEntry: false });
+			if (stat) {
+				const gitDir = stat.isDirectory()
+					? dotGit
+					: readFileSync(dotGit, "utf8")
+							.match(/^gitdir: *(.+)$/m)?.[1]
+							?.trim();
+				if (!gitDir) return undefined;
+				const head = readFileSync(
+					join(isAbsolute(gitDir) ? gitDir : join(dir, gitDir), "HEAD"),
+					"utf8",
+				);
+				return head.match(/^ref: refs\/heads\/(.+)$/m)?.[1]?.trim();
+			}
+			if (dirname(dir) === dir) return undefined;
+		}
 	} catch {
 		return undefined;
 	}

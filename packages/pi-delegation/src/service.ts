@@ -97,6 +97,33 @@ function assertV1Combination(spec: CreateChildSpec): SessionOptions {
 	return spec.session;
 }
 
+/**
+ * Acquire a slot — or resolve `undefined` the moment the signal aborts while still QUEUED: an
+ * aborted caller must not stay parked behind live runs until a slot frees. Either way the eventual
+ * grant is handed straight back, so the queue never leaks a slot.
+ */
+async function acquireOrAbort(
+	semaphore: Semaphore,
+	signal: AbortSignal | undefined,
+): Promise<(() => void) | undefined> {
+	const slot = semaphore.acquire();
+	if (!signal) return slot;
+	const releaseEventually = () => void slot.then((release) => release());
+	if (signal.aborted) {
+		releaseEventually();
+		return undefined;
+	}
+	let onAbort = () => {};
+	const aborted = new Promise<undefined>((resolveAborted) => {
+		onAbort = () => resolveAborted(undefined);
+		signal.addEventListener("abort", onAbort, { once: true });
+	});
+	const winner = await Promise.race([slot, aborted]);
+	signal.removeEventListener("abort", onAbort);
+	if (winner === undefined) releaseEventually();
+	return winner;
+}
+
 /** The last assistant message — terminal status (stopReason) and final text live on it. */
 function lastAssistant(session: AgentSession): AssistantMessage | undefined {
 	for (let i = session.messages.length - 1; i >= 0; i--) {
@@ -289,10 +316,10 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 			},
 			entry,
 		);
-		const release = await semaphoreFor(entry.record.parentSessionId).acquire();
+		const release = await acquireOrAbort(semaphoreFor(entry.record.parentSessionId), opts.signal);
 		try {
 			let outcome: RunOutcome;
-			if (entry.disposed || opts.signal?.aborted) {
+			if (release === undefined || entry.disposed || opts.signal?.aborted) {
 				outcome = {
 					status: "aborted",
 					details: buildDetails(entry, task, "aborted", 0, undefined, startedAt),
@@ -329,7 +356,7 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 			);
 			return outcome;
 		} finally {
-			release();
+			release?.();
 		}
 	}
 
@@ -442,7 +469,7 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 			cwd,
 			agentDir: getAgentDir(),
 			settingsManager,
-			// Narrow by default (decision 7 of the subagent spec): no discovered extensions, prompts,
+			// Narrow by default (pi-subagents SPEC, decision 7): no discovered extensions, prompts,
 			// or themes in a child; context files, skills, and the curated extension set are explicit
 			// opt-ins in `SessionOptions`.
 			noExtensions: true,

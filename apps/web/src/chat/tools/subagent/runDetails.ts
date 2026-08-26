@@ -1,11 +1,11 @@
 // Pure readers/derivers over the `DelegationRunDetails` DTO (the pi-delegation mirror in contracts):
-// the defensive result narrowing, the counters line, the collapsed-header summary, and the run-status
-// lookup ChatView's transcript polling keys on. No React — unit-tested in runDetails.test.ts.
+// the defensive result narrowing, the counters line, and the collapsed-header summary. No React —
+// unit-tested in runDetails.test.ts. (Run LIVENESS is not derived here: the transcript dialog reads
+// the host's registry status off each `subagent.getTranscript` response — the one source of truth.)
 
 import type { DelegationRunDetails, DelegationRunStatus } from "@thinkrail/contracts";
 import { formatCost, formatElapsed, formatTokens } from "../../formatters";
 import type { ToolRenderProps } from "../../toolRegistry";
-import type { ChatTurn, ToolResultState } from "../../types";
 import { strArg } from "../toolHelpers";
 
 /**
@@ -78,31 +78,4 @@ export function agentSummary({ args, result }: ToolRenderProps): string {
 	parts.push(...runCounters(details));
 	if (details.status === "running" && details.activity) parts.push(details.activity);
 	return parts.join(" · ");
-}
-
-/**
- * A child run's current status as this chat's runtime knows it: the latest `DelegationRunDetails`
- * carried by any tool result (Agent / get_subagent_result — REPLACE snapshots, so the newest matching
- * entry wins), overridden by a `subagentCompletion` turn (the terminal signal for a background run,
- * whose tool result froze at the ack). `undefined` when this chat never saw the child — e.g. after a
- * reload, where hydrated tool results still carry the details, but an unknown id stays unknown.
- * ChatView keys the transcript dialog's polling on this.
- */
-export function delegationRunStatus(
-	turns: ChatTurn[],
-	toolResults: Record<string, ToolResultState>,
-	childSessionId: string,
-): DelegationRunStatus | undefined {
-	for (let i = turns.length - 1; i >= 0; i--) {
-		const turn = turns[i];
-		if (turn?.kind === "subagentCompletion" && turn.details.childSessionId === childSessionId) {
-			return turn.details.status;
-		}
-	}
-	let latest: DelegationRunStatus | undefined;
-	for (const state of Object.values(toolResults)) {
-		const details = readRunDetails(state.raw);
-		if (details?.childSessionId === childSessionId) latest = details.status;
-	}
-	return latest;
 }

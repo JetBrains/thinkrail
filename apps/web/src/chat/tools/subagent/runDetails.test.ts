@@ -1,8 +1,7 @@
 import { expect, test } from "bun:test";
 import type { DelegationRunDetails } from "@thinkrail/contracts";
 import type { ToolRenderProps } from "../../toolRegistry";
-import type { ChatTurn, ToolResultState } from "../../types";
-import { agentSummary, delegationRunStatus, readRunDetails, runCounters } from "./runDetails";
+import { agentSummary, readRunDetails, runCounters } from "./runDetails";
 
 function details(overrides: Partial<DelegationRunDetails> = {}): DelegationRunDetails {
 	return {
@@ -106,23 +105,4 @@ test("agentSummary is the live collapsed-header line, per status", () => {
 			}),
 		),
 	).toBe("child-1");
-});
-
-test("delegationRunStatus reads the latest tool snapshot and lets a completion turn override it", () => {
-	const toolResults: Record<string, ToolResultState> = {
-		tc1: { status: "done", raw: { content: [], details: details({ status: "queued" }) } },
-	};
-	expect(delegationRunStatus([], toolResults, "child-1")).toBe("queued");
-	expect(delegationRunStatus([], toolResults, "other-child")).toBeUndefined();
-
-	// The background run's terminal signal is its completion turn — the frozen ack must lose to it.
-	const turns: ChatTurn[] = [
-		{
-			kind: "subagentCompletion",
-			id: "t1",
-			details: details({ status: "completed" }),
-			text: "report",
-		},
-	];
-	expect(delegationRunStatus(turns, toolResults, "child-1")).toBe("completed");
 });

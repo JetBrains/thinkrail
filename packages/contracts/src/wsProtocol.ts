@@ -4,6 +4,7 @@ import type {
 	AppConfig,
 	BranchList,
 	DelegationRunDetails,
+	DelegationRunStatus,
 	DiffStats,
 	EditorInfo,
 	ExistingWorktreeCandidate,
@@ -702,10 +703,13 @@ export interface WsMethodMap {
 	// A hidden subagent child's transcript, read from the host's delegation store (never the default
 	// sessions root) — works while the run streams, after completion, and after a host restart (the
 	// registry is in-memory but transcripts persist). Read-only: children are driven exclusively
-	// through their parent's `Agent` tool. Throws when no transcript exists for the triple.
+	// through their parent's `Agent` tool. Throws when no transcript exists for the triple. `status`
+	// is the run's CURRENT registry status — present only while the host still knows the run (absent
+	// after a restart or dispose): the client's poll-while-live signal, so a transcript view never
+	// polls a dead child (a frozen background ack can't tell it the run is gone; the registry can).
 	"subagent.getTranscript": {
 		params: { workspaceId: string; parentSessionId: string; childSessionId: string };
-		result: { messages: TranscriptMessage[] };
+		result: { messages: TranscriptMessage[]; status?: DelegationRunStatus };
 	};
 	"model.list": { params: Record<string, never>; result: WireModel[] };
 	// pi's `clampThinkingLevel` for a model the client is about to select, by `{provider,id}` ref. The

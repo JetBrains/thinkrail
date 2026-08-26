@@ -7,7 +7,7 @@
 import { rmSync } from "node:fs";
 import { join } from "node:path";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
-import type { TranscriptMessage } from "@thinkrail/contracts";
+import type { DelegationRunStatus, TranscriptMessage } from "@thinkrail/contracts";
 import {
 	createDelegationService,
 	type DelegationService,
@@ -81,16 +81,32 @@ export function removeWorkspaceDelegation(workspaceId: string): void {
 }
 
 /**
+ * The three transcript-read keys arrive as raw wire strings and become path segments under the
+ * delegation root — reject anything that could traverse out of it (defense in depth behind the
+ * handler's workspace validation; ids are opaque slugs/UUIDs, never path-like).
+ */
+function assertPathSegment(value: string, label: string): void {
+	if (value.length === 0 || value.includes("/") || value.includes("\\") || value.includes("..")) {
+		throw new Error(`Invalid ${label}: not a plain id`);
+	}
+}
+
+/**
  * A hidden child's transcript, read from the delegation store (`subagent.getTranscript`): works
  * while the run streams, after completion, and after a host restart (the in-memory registry is
  * lost then; the transcript is not). Read-only — children are driven only through the parent's
- * `Agent` tool. Throws when no transcript exists for the triple.
+ * `Agent` tool. Throws when no transcript exists for the triple. `status` is the run's current
+ * registry status — present only while this host still knows the run (absent after a restart or
+ * dispose): the client's poll-while-live signal.
  */
 export function readChildTranscript(
 	workspaceId: string,
 	parentSessionId: string,
 	childSessionId: string,
-): { messages: TranscriptMessage[] } {
+): { messages: TranscriptMessage[]; status?: DelegationRunStatus } {
+	assertPathSegment(workspaceId, "workspaceId");
+	assertPathSegment(parentSessionId, "parentSessionId");
+	assertPathSegment(childSessionId, "childSessionId");
 	const path = deriveChildSessionFile(
 		delegationRootDir(),
 		workspaceId,
@@ -108,5 +124,6 @@ export function readChildTranscript(
 			messages.push(entry.message as TranscriptMessage);
 		}
 	}
-	return { messages };
+	const status = services.get(workspaceId)?.findChild(childSessionId)?.snapshot?.status;
+	return { messages, ...(status !== undefined ? { status } : {}) };
 }

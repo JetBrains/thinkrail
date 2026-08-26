@@ -1,7 +1,7 @@
 // Agent definitions — community-compatible `.md` files with frontmatter, plus the bundled TS-constant
 // builtins. Discovery is per invocation (definitions are editable mid-session) with first-name-wins
 // precedence: builtins → personal (`<agentDir>/agents/*.md`) → project (`<cwd>/.pi/agents/*.md` +
-// `<cwd>/.agents/agents/*.md`). The order IS the trust posture (task-spec decision 6): a worktree
+// `<cwd>/.agents/agents/*.md`). The order IS the trust posture (SPEC decision 6): a worktree
 // definition can never shadow a built-in or personal name, and project definitions load at all only
 // when the project is trusted (the caller passes `includeProject` from `ctx.isProjectTrusted()`).
 
@@ -39,6 +39,17 @@ export interface AgentDefinition {
 
 const THINKING_LEVELS = new Set(["off", "minimal", "low", "medium", "high", "xhigh", "max"]);
 
+/**
+ * Strip one symmetric pair of surrounding quotes — community files often quote scalars
+ * (`name: "my-agent"` must register as `my-agent`, or the tool's `subagent_type` can never match).
+ */
+function unquote(value: string): string {
+	const first = value[0];
+	return (first === '"' || first === "'") && value.length >= 2 && value.endsWith(first)
+		? value.slice(1, -1).trim()
+		: value;
+}
+
 /** `a, b` or `[a, b]` → trimmed non-empty names. */
 function parseNameList(value: string): string[] {
 	return value
@@ -66,7 +77,7 @@ export function parseAgentDefinition(
 		const separator = line.indexOf(":");
 		if (separator <= 0) continue;
 		const key = line.slice(0, separator).trim();
-		const value = line.slice(separator + 1).trim();
+		const value = unquote(line.slice(separator + 1).trim());
 		if (key && value) fields.set(key, value);
 	}
 	const name = fields.get("name");

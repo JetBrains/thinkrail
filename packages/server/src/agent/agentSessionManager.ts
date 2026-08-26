@@ -567,17 +567,21 @@ export function liveParentContext(sessionId: string): ParentContext | undefined 
 	};
 }
 
-/** Remove one session: stop forwarding its events, settle any open dialog, and dispose it. */
-export function removeSession(sessionId: string): void {
+/**
+ * Remove one session: stop forwarding its events, settle any open dialog, and dispose it. Returns
+ * the child-dispose cascade (this parent's hidden children aborted + disposed) so callers about to
+ * delete the delegation store (`removeWorkspaceSessions`) can await it — dropping the promise is
+ * safe (it never rejects), it just leaves the cascade running in the background.
+ */
+export function removeSession(sessionId: string): Promise<void> {
 	const entry = sessions.get(sessionId);
-	if (!entry) return;
-	// Cascade first (fire-and-forget: aborts + disposes any hidden children of this parent) — the
-	// service resolves parents through this module, so children must go before their parent does.
-	void disposeSessionChildren(entry.workspaceId, sessionId).catch(() => {});
+	if (!entry) return Promise.resolve();
+	const cascade = disposeSessionChildren(entry.workspaceId, sessionId).catch(() => {});
 	cancelExtUiForSession(sessionId);
 	entry.unsubscribe();
 	entry.session.dispose();
 	sessions.delete(sessionId);
+	return cascade;
 }
 
 /** Dispose every session — called on host shutdown. */
@@ -623,10 +627,11 @@ export async function removeWorkspaceSessions(workspaceId: string, cwd?: string)
 		if (!entry) continue;
 		// Abort a streaming turn before disposing — a mid-stream dispose drops it less cleanly.
 		if (entry.session.isStreaming) await entry.session.abort().catch(() => {});
-		removeSession(sessionId);
+		await removeSession(sessionId);
 	}
-	// After the parents (each removal cascaded its children): drop the workspace's delegation
-	// service + store — hidden children never outlive their workspace (task-spec retention).
+	// After the parents (each removal's child cascade AWAITED above — no live child remains): drop
+	// the workspace's delegation service + store (task-spec retention: hidden children never
+	// outlive their workspace).
 	removeWorkspaceDelegation(workspaceId);
 	if (cwd) await purgeDiskSessions(cwd);
 }
