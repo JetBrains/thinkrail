@@ -5,6 +5,7 @@ import { join } from "node:path";
 import {
 	type AppConfig,
 	DEFAULT_CONFIG,
+	isComposerGrowthLimit,
 	type Project,
 	type Workspace,
 	type WorkspaceLayoutSnapshot,
@@ -78,6 +79,9 @@ export function loadConfig(): AppConfig {
 			typeof value.terminalReplayKb === "number" && Number.isFinite(value.terminalReplayKb)
 				? value.terminalReplayKb
 				: DEFAULT_CONFIG.terminalReplayKb,
+		composerGrowthLimit: isComposerGrowthLimit(value.composerGrowthLimit)
+			? value.composerGrowthLimit
+			: DEFAULT_CONFIG.composerGrowthLimit,
 		layout: {
 			defaultPresetId:
 				typeof layoutValue.defaultPresetId === "string" &&
