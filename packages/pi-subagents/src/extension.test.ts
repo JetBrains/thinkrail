@@ -240,7 +240,7 @@ test("background: run_in_background returns immediately, completion arrives as a
 
 	await parent.prompt("Run it in the background.");
 	// The tool result came back before the child finished.
-	expect(transcript()).toContain("Started background subagent");
+	expect(transcript()).toContain("in the background:");
 
 	// The child completes → a subagent-completion custom message triggers a parent turn.
 	await waitFor(() => transcript().includes("GOT_COMPLETION"));
@@ -310,7 +310,7 @@ test("a detached run SURVIVES a parent-turn abort (only awaited runs ride the to
 	]);
 
 	const prompted = parent.prompt("Run it, then get interrupted.");
-	await waitFor(() => transcript().includes("Started background subagent"));
+	await waitFor(() => transcript().includes("in the background:"));
 	await Bun.sleep(30); // into parent turn 2, child still sleeping
 	await parent.abort();
 	await prompted;

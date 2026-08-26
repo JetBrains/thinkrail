@@ -176,10 +176,12 @@ ${known}`,
 							throw new Error("pi-delegation invariant violated: no run snapshot after runQueued");
 						}
 						return {
+							// Minimal by design — the completion/collection contract lives in the tool
+							// description; the id is the only fact the model needs from this ack.
 							content: [
 								{
 									type: "text",
-									text: `Started background subagent "${definition.name}" (session ${child.sessionId}). A completion message will arrive when it finishes; use get_subagent_result to collect it on demand.`,
+									text: `Started "${definition.name}" in the background: ${child.sessionId}`,
 								},
 							],
 							details,
