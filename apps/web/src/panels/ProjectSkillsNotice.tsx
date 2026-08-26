@@ -55,9 +55,9 @@ export function ProjectSkillsNotice({ projectId }: { projectId: string }) {
 			<p
 				data-testid="project-skills-notice"
 				data-state="trusted"
-				className="mt-lg flex items-center gap-xs text-text-muted tr-text-metadata"
+				className="mt-16 flex items-center gap-4 text-text-muted tr-text-metadata"
 			>
-				<ShieldCheck className="size-3.5 shrink-0 text-feedback-warning" />
+				<ShieldCheck className="size-14 shrink-0 text-feedback-warning" />
 				{count} project skill{plural(count)} trusted.
 			</p>
 		);
@@ -68,9 +68,9 @@ export function ProjectSkillsNotice({ projectId }: { projectId: string }) {
 		<div
 			data-testid="project-skills-notice"
 			data-state={isPending ? "pending" : "untrusted"}
-			className="mt-lg flex w-full max-w-[560px] items-center gap-sm rounded-[var(--radius-sm)] border border-border-default border-l-[3px] border-l-feedback-warning bg-feedback-warning-subtle px-md py-sm text-left"
+			className="mt-16 flex w-full max-w-[560px] items-center gap-8 rounded-[var(--radius-sm)] border border-border-default border-l-[3px] border-l-feedback-warning bg-feedback-warning-subtle px-12 py-8 text-left"
 		>
-			<TriangleAlert className="size-4 shrink-0 text-feedback-warning" />
+			<TriangleAlert className="size-16 shrink-0 text-feedback-warning" />
 			<span className="min-w-0 flex-1 tr-text-ui text-text-default">
 				{isPending
 					? `${pending.length} new skill${plural(pending.length)} appeared since you trusted this project.`

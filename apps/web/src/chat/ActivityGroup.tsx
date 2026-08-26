@@ -35,22 +35,22 @@ export function ActivityGroup({
 				data-testid="activity-group-toggle"
 				aria-expanded={expanded}
 				onClick={toggle}
-				className="flex w-full cursor-pointer select-none items-center gap-xs rounded-[var(--radius-sm)] px-xs py-xs text-left outline-none hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary"
+				className="flex w-full cursor-pointer select-none items-center gap-4 rounded-[var(--radius-sm)] px-4 py-4 text-left outline-none hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary"
 			>
 				<ChevronRight
-					className={`size-3 shrink-0 transition-transform ${expanded ? "rotate-90" : ""}`}
+					className={`size-12 shrink-0 transition-transform ${expanded ? "rotate-90" : ""}`}
 				/>
 				{live ? (
-					<Loader2 className="size-3 shrink-0 animate-spin motion-reduce:animate-none" />
+					<Loader2 className="size-12 shrink-0 animate-spin motion-reduce:animate-none" />
 				) : (
-					<Layers className="size-3 shrink-0" />
+					<Layers className="size-12 shrink-0" />
 				)}
 				<span className="min-w-0 truncate" title={summary}>
 					{summary}
 				</span>
 			</button>
 			{expanded ? (
-				<div className="flex flex-col gap-px pl-md">
+				<div className="flex flex-col gap-px pl-12">
 					{steps.map((step, i) => (
 						<ActivityStepRow
 							key={step.id}
@@ -125,16 +125,16 @@ function ActivityStepRow({
 					onToggle={toggle}
 					icon={
 						step.streaming && isCurrent ? (
-							<Loader2 className="size-3 shrink-0 animate-spin motion-reduce:animate-none" />
+							<Loader2 className="size-12 shrink-0 animate-spin motion-reduce:animate-none" />
 						) : (
-							<Brain className="size-3 shrink-0" />
+							<Brain className="size-12 shrink-0" />
 						)
 					}
 					name="thinking"
 					summary={`${formatChars(step.text.length)} chars`}
 				/>
 				{expanded ? (
-					<div className="whitespace-pre-wrap break-words px-sm pb-xs pl-lg">{step.text}</div>
+					<div className="whitespace-pre-wrap break-words px-8 pb-4 pl-16">{step.text}</div>
 				) : null}
 			</div>
 		);
@@ -157,18 +157,18 @@ function ActivityStepRow({
 				onToggle={toggle}
 				icon={
 					status === "running" ? (
-						<Loader2 className="size-3 shrink-0 animate-spin motion-reduce:animate-none" />
+						<Loader2 className="size-12 shrink-0 animate-spin motion-reduce:animate-none" />
 					) : status === "error" ? (
-						<X className="size-3 shrink-0 text-feedback-error" />
+						<X className="size-12 shrink-0 text-feedback-error" />
 					) : (
-						<Check className="size-3 shrink-0 text-feedback-success" />
+						<Check className="size-12 shrink-0 text-feedback-success" />
 					)
 				}
 				name={step.toolName}
 				summary={getToolSummary(step.toolName, renderProps)}
 			/>
 			{expanded ? (
-				<div className={cn("px-sm pb-xs pl-lg", status === "error" && "text-feedback-error")}>
+				<div className={cn("px-8 pb-4 pl-16", status === "error" && "text-feedback-error")}>
 					<Renderer {...renderProps} />
 				</div>
 			) : null}
@@ -195,7 +195,7 @@ function StepHeader({
 			data-testid="activity-step-toggle"
 			aria-expanded={expanded}
 			onClick={onToggle}
-			className="flex w-full cursor-pointer select-none items-center gap-xs rounded-[var(--radius-sm)] px-xs py-sm text-left outline-none hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary sm:py-0.5"
+			className="flex w-full cursor-pointer select-none items-center gap-4 rounded-[var(--radius-sm)] px-4 py-8 text-left outline-none hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary sm:py-2"
 		>
 			{icon}
 			<span className="shrink-0 text-text-default">{name}</span>
@@ -205,7 +205,7 @@ function StepHeader({
 				</span>
 			) : null}
 			<ChevronRight
-				className={`size-3 shrink-0 transition-transform ${expanded ? "rotate-90" : ""}`}
+				className={`size-12 shrink-0 transition-transform ${expanded ? "rotate-90" : ""}`}
 			/>
 		</button>
 	);

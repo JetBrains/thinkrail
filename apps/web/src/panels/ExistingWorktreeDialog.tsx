@@ -92,8 +92,8 @@ export function ExistingWorktreeDialog({
 		<Dialog open={open} onOpenChange={handleOpenChange}>
 			<DialogContent className="max-w-[36rem]" data-testid="existing-worktree-dialog">
 				<DialogHeader>
-					<div className="flex items-center gap-sm">
-						<FolderOpen className="size-4 shrink-0 text-primary" />
+					<div className="flex items-center gap-8">
+						<FolderOpen className="size-16 shrink-0 text-primary" />
 						<DialogTitle>Open existing worktree</DialogTitle>
 					</div>
 					<DialogDescription>
@@ -104,16 +104,16 @@ export function ExistingWorktreeDialog({
 
 				{candidates === null && loadError === null ? (
 					<div
-						className="flex min-h-28 items-center justify-center gap-sm text-text-muted tr-text-ui"
+						className="flex min-h-112 items-center justify-center gap-8 text-text-muted tr-text-ui"
 						data-testid="existing-worktree-loading"
 					>
-						<Loader2 className="size-4 animate-spin" />
+						<Loader2 className="size-16 animate-spin" />
 						Reading Git worktrees…
 					</div>
 				) : null}
 
 				{loadError ? (
-					<div className="flex flex-col items-start gap-sm rounded-[var(--radius-sm)] bg-feedback-error-subtle p-md text-feedback-error tr-text-ui">
+					<div className="flex flex-col items-start gap-8 rounded-[var(--radius-sm)] bg-feedback-error-subtle p-12 text-feedback-error tr-text-ui">
 						<p>{loadError}</p>
 						<Button
 							variant="outline"
@@ -121,7 +121,7 @@ export function ExistingWorktreeDialog({
 							data-testid="existing-worktree-retry"
 							onClick={loadCandidates}
 						>
-							<RefreshCw className="size-3.5" />
+							<RefreshCw className="size-14" />
 							Retry
 						</Button>
 					</div>
@@ -129,7 +129,7 @@ export function ExistingWorktreeDialog({
 
 				{candidates?.length === 0 ? (
 					<div
-						className="rounded-[var(--radius-sm)] border border-border-default bg-control-bg p-md text-text-muted tr-text-ui"
+						className="rounded-[var(--radius-sm)] border border-border-default bg-control-bg p-12 text-text-muted tr-text-ui"
 						data-testid="existing-worktree-empty"
 					>
 						No unattached worktrees found. Create one with Git, then reopen this chooser.
@@ -138,7 +138,7 @@ export function ExistingWorktreeDialog({
 
 				{candidates && candidates.length > 0 ? (
 					<div
-						className="flex max-h-[min(50vh,24rem)] flex-col gap-xs overflow-y-auto pr-xs"
+						className="flex max-h-[min(50vh,24rem)] flex-col gap-4 overflow-y-auto pr-4"
 						data-testid="existing-worktree-list"
 					>
 						{candidates.map((candidate) => {
@@ -153,16 +153,16 @@ export function ExistingWorktreeDialog({
 									data-testid="existing-worktree-candidate"
 									data-status={candidate.status}
 									onClick={() => void openCandidate(candidate)}
-									className="flex w-full items-start gap-md rounded-[var(--radius-sm)] border border-border-default bg-control-bg p-md text-left outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:border-control-disabled-border disabled:bg-control-disabled-bg disabled:text-control-disabled-text"
+									className="flex w-full items-start gap-12 rounded-[var(--radius-sm)] border border-border-default bg-control-bg p-12 text-left outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:border-control-disabled-border disabled:bg-control-disabled-bg disabled:text-control-disabled-text"
 								>
-									<div className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-container-elevated-bg text-text-muted">
+									<div className="mt-2 flex size-28 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-container-elevated-bg text-text-muted">
 										{opening ? (
-											<Loader2 className="size-4 animate-spin" />
+											<Loader2 className="size-16 animate-spin" />
 										) : (
-											<GitBranch className="size-4" />
+											<GitBranch className="size-16" />
 										)}
 									</div>
-									<span className="flex min-w-0 flex-1 flex-col gap-0.5">
+									<span className="flex min-w-0 flex-1 flex-col gap-2">
 										<span className="truncate text-text-default tr-text-ui">
 											{available ? candidate.branch : "Detached HEAD"}
 										</span>
@@ -183,7 +183,7 @@ export function ExistingWorktreeDialog({
 
 				{openError ? (
 					<p
-						className="rounded-[var(--radius-sm)] bg-feedback-error-subtle px-md py-sm text-feedback-error tr-text-ui"
+						className="rounded-[var(--radius-sm)] bg-feedback-error-subtle px-12 py-8 text-feedback-error tr-text-ui"
 						data-testid="existing-worktree-error"
 					>
 						{openError}

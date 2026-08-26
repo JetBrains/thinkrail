@@ -117,7 +117,7 @@ function userAttachments(content: UserMessage["content"], names?: string[]) {
 }
 
 const USER_BUBBLE =
-	"max-w-[85%] whitespace-pre-wrap break-words rounded-[var(--radius-lg)] border border-bubble-user-border bg-clip-padding bg-bubble-user-bg px-md py-sm tr-text-reading text-text-muted";
+	"max-w-[85%] whitespace-pre-wrap break-words rounded-[var(--radius-lg)] border border-bubble-user-border bg-clip-padding bg-bubble-user-bg px-12 py-8 tr-text-reading text-text-muted";
 
 function AttachmentChip({ label, img }: { label: string; img: ImageContent }) {
 	const [open, setOpen] = useState(false);
@@ -133,7 +133,7 @@ function AttachmentChip({ label, img }: { label: string; img: ImageContent }) {
 			<Dialog open={open} onOpenChange={setOpen}>
 				<DialogContent
 					data-testid="chat-attachment-dialog"
-					className="flex max-h-[90vh] w-auto max-w-[95vw] flex-col gap-sm"
+					className="flex max-h-[90vh] w-auto max-w-[95vw] flex-col gap-8"
 				>
 					<DialogHeader>
 						<DialogTitle>{label}</DialogTitle>
@@ -166,7 +166,7 @@ function UserTurn({
 	if (skill) {
 		return (
 			<div data-testid="chat-message" data-role="user" className="flex justify-end">
-				<div className="flex w-full flex-col items-end gap-xs">
+				<div className="flex w-full flex-col items-end gap-4">
 					<SkillInvocationCard foldId={`${id}:skill`} invocation={skill} />
 					{skill.userMessage ? (
 						<div data-testid="skill-user-request" className={USER_BUBBLE}>
@@ -183,7 +183,7 @@ function UserTurn({
 		<div data-testid="chat-message" data-role="user" className="flex justify-end">
 			<div className={USER_BUBBLE}>
 				{attachments.length > 0 ? (
-					<div className="flex flex-wrap gap-xs pb-xs" data-testid="chat-message-images">
+					<div className="flex flex-wrap gap-4 pb-4" data-testid="chat-message-images">
 						{attachments.map(({ key, label, img }) => (
 							<AttachmentChip key={key} label={label} img={img} />
 						))}
@@ -194,7 +194,7 @@ function UserTurn({
 						<span data-testid="review-package-summary" className="block text-text-default">
 							{reviewPackageLabel(review)}
 						</span>
-						<ul className="mt-xs flex flex-col">
+						<ul className="mt-4 flex flex-col">
 							{keyPackageItems(review.items).map(({ key, item }) => (
 								<PackageCommentRow key={key} foldId={`${id}:${key}`} item={item} />
 							))}
@@ -228,7 +228,7 @@ function SkillInvocationCard({
 				aria-expanded={expanded}
 				aria-label={`${expanded ? "Hide" : "Show"} instructions for ${invocation.name}`}
 				onClick={toggle}
-				className="flex w-full items-center gap-xs px-md py-sm text-left outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary"
+				className="flex w-full items-center gap-4 px-12 py-8 text-left outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary"
 			>
 				<BookOpen size={14} className="shrink-0 text-text-muted" aria-hidden="true" />
 				<span className="shrink-0 tr-text-ui text-text-muted">Skill</span>
@@ -250,7 +250,7 @@ function SkillInvocationCard({
 			{expanded ? (
 				<div
 					data-testid="skill-invocation-content"
-					className="border-bubble-user-border border-t px-md py-sm text-text-muted"
+					className="border-bubble-user-border border-t px-12 py-8 text-text-muted"
 				>
 					<Markdown text={invocation.content} />
 				</div>
@@ -278,11 +278,11 @@ function PackageCommentRow({ foldId, item }: { foldId: string; item: ReviewPacka
 				data-testid="review-package-item-toggle"
 				aria-expanded={expanded}
 				onClick={toggle}
-				className="flex w-full cursor-pointer select-none items-start gap-xs rounded-[var(--radius-sm)] px-xs py-xs text-left outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary"
+				className="flex w-full cursor-pointer select-none items-start gap-4 rounded-[var(--radius-sm)] px-4 py-4 text-left outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary"
 			>
 				<ChevronRight
 					className={cn(
-						"mt-0.5 size-3 shrink-0 text-text-subtle transition-transform",
+						"mt-2 size-12 shrink-0 text-text-subtle transition-transform",
 						expanded && "rotate-90",
 					)}
 				/>
@@ -299,7 +299,7 @@ function PackageCommentRow({ foldId, item }: { foldId: string; item: ReviewPacka
 				</span>
 			</button>
 			{expanded && item.fragment && (
-				<pre className="mb-xs ml-lg max-h-32 overflow-auto whitespace-pre-wrap rounded-[var(--radius-sm)] border border-border-muted bg-sunken px-sm py-xs tr-code-text text-text-muted">
+				<pre className="mb-4 ml-16 max-h-128 overflow-auto whitespace-pre-wrap rounded-[var(--radius-sm)] border border-border-muted bg-sunken px-8 py-4 tr-code-text text-text-muted">
 					{item.fragment}
 				</pre>
 			)}
@@ -366,15 +366,15 @@ function CompactionTurn({
 }) {
 	const [open, toggle] = useFold(id);
 	return (
-		<div data-testid="chat-compaction" className="flex flex-col gap-sm">
+		<div data-testid="chat-compaction" className="flex flex-col gap-8">
 			<button
 				type="button"
 				aria-expanded={open}
 				onClick={toggle}
-				className="flex items-center gap-sm text-text-muted tr-text-metadata hover:text-text-default"
+				className="flex items-center gap-8 text-text-muted tr-text-metadata hover:text-text-default"
 			>
 				<span className="h-px flex-1 bg-border-default" />
-				{open ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
+				{open ? <ChevronDown className="size-14" /> : <ChevronRight className="size-14" />}
 				<span>
 					Earlier messages summarized ({formatTokens(tokensBefore)} tokens of context compacted)
 				</span>
@@ -394,9 +394,9 @@ function ErrorTurn({ text }: { text: string }) {
 		<div
 			data-testid="chat-message"
 			data-role="error"
-			className="flex items-start gap-sm rounded-[var(--radius-sm)] border border-feedback-error-muted bg-clip-padding bg-feedback-error-subtle px-md py-sm text-feedback-error tr-text-ui"
+			className="flex items-start gap-8 rounded-[var(--radius-sm)] border border-feedback-error-muted bg-clip-padding bg-feedback-error-subtle px-12 py-8 text-feedback-error tr-text-ui"
 		>
-			<TriangleAlert className="mt-0.5 size-4 shrink-0" />
+			<TriangleAlert className="mt-2 size-16 shrink-0" />
 			<span className="min-w-0 whitespace-pre-wrap break-words">{text}</span>
 		</div>
 	);
@@ -414,9 +414,9 @@ function CompactionNotice({
 			<div
 				data-testid="compaction-notice"
 				data-status="failed"
-				className="flex items-start gap-sm rounded-[var(--radius-md)] border border-feedback-error-muted bg-clip-padding bg-feedback-error-subtle px-md py-sm text-feedback-error tr-text-ui"
+				className="flex items-start gap-8 rounded-[var(--radius-md)] border border-feedback-error-muted bg-clip-padding bg-feedback-error-subtle px-12 py-8 text-feedback-error tr-text-ui"
 			>
-				<TriangleAlert className="mt-0.5 size-4 shrink-0" />
+				<TriangleAlert className="mt-2 size-16 shrink-0" />
 				<span className="min-w-0 whitespace-pre-wrap break-words">
 					{detail || "Compaction failed."}
 				</span>
@@ -439,12 +439,12 @@ function CompactionNotice({
 		<div
 			data-testid="compaction-notice"
 			data-status={status}
-			className="flex items-center justify-center gap-sm text-text-muted tr-text-metadata"
+			className="flex items-center justify-center gap-8 text-text-muted tr-text-metadata"
 		>
 			{status === "running" ? (
-				<RotateCw className="size-3 shrink-0 animate-spin" />
+				<RotateCw className="size-12 shrink-0 animate-spin" />
 			) : (
-				<FoldVertical className="size-3 shrink-0" />
+				<FoldVertical className="size-12 shrink-0" />
 			)}
 			<span>{label}</span>
 			{tokens ? <span>({tokens})</span> : null}
@@ -473,14 +473,14 @@ function RetryIndicator({
 		<div
 			data-testid="retry-indicator"
 			data-source={source}
-			className="flex flex-col gap-xs rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-sm py-xs text-text-muted tr-text-metadata"
+			className="flex flex-col gap-4 rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-8 py-4 text-text-muted tr-text-metadata"
 		>
-			<span className="flex items-center gap-xs">
-				<RotateCw className="size-3 shrink-0" />
+			<span className="flex items-center gap-4">
+				<RotateCw className="size-12 shrink-0" />
 				{source === "summarization" ? "Retrying summarization" : "Retrying"} ({attempt}/
 				{maxAttempts})…
 			</span>
-			<div className="h-1 w-full overflow-hidden rounded-full bg-border-default">
+			<div className="h-4 w-full overflow-hidden rounded-full bg-border-default">
 				<div
 					className={`h-full bg-primary transition-[width] ease-linear ${draining ? "w-0" : "w-full"}`}
 					style={{ transitionDuration: `${delayMs}ms` }}
@@ -535,17 +535,17 @@ function ArtifactChip({
 				onSelect();
 			}}
 			className={cn(
-				"flex items-center gap-xs rounded-[var(--radius-sm)] px-xs text-primary hover:bg-control-bg-hovered",
+				"flex items-center gap-4 rounded-[var(--radius-sm)] px-4 text-primary hover:bg-control-bg-hovered",
 				many && expanded && "bg-control-bg-selected",
 			)}
 		>
-			<Icon className="size-3 shrink-0" />
+			<Icon className="size-12 shrink-0" />
 			{label(paths.length)}
 			{many ? (
 				expanded ? (
-					<ChevronDown className="size-3 shrink-0" />
+					<ChevronDown className="size-12 shrink-0" />
 				) : (
-					<ChevronRight className="size-3 shrink-0" />
+					<ChevronRight className="size-12 shrink-0" />
 				)
 			) : null}
 		</button>
@@ -572,9 +572,9 @@ function ArtifactList({
 						data-testid={`${testid}-list-item`}
 						onClick={() => onOpen(path)}
 						title={path}
-						className="flex w-full items-center gap-xs rounded-[var(--radius-sm)] px-xs py-0.5 text-left hover:bg-control-bg-hovered"
+						className="flex w-full items-center gap-4 rounded-[var(--radius-sm)] px-4 py-2 text-left hover:bg-control-bg-hovered"
 					>
-						<Icon className="size-3 shrink-0 text-text-muted" />
+						<Icon className="size-12 shrink-0 text-text-muted" />
 						<span className="min-w-0 flex-1 truncate text-text-muted">
 							{projectRelativePath(path, workspaceRoot)}
 						</span>
@@ -625,18 +625,18 @@ export function TurnDivider({
 	const groups = allGroups.filter((group) => group.paths.length > 0);
 
 	if (toolCount === 0 && groups.length === 0 && (elapsedMs == null || elapsedMs < 1000)) {
-		return <div data-testid="turn-divider" className="my-sm h-px bg-border-muted" />;
+		return <div data-testid="turn-divider" className="my-8 h-px bg-border-muted" />;
 	}
 	return (
 		<div
 			data-testid="turn-divider"
-			className="my-sm flex flex-col gap-xs text-text-muted tr-text-metadata"
+			className="my-8 flex flex-col gap-4 text-text-muted tr-text-metadata"
 		>
-			<div className="flex items-center gap-sm">
+			<div className="flex items-center gap-8">
 				<span className="h-px flex-1 bg-border-muted" />
 				{toolCount > 0 ? (
-					<span className="flex items-center gap-xs">
-						<Wrench className="size-3 shrink-0" />
+					<span className="flex items-center gap-4">
+						<Wrench className="size-12 shrink-0" />
 						{toolCount} {toolCount === 1 ? "tool call" : "tool calls"}
 					</span>
 				) : null}
@@ -649,8 +649,8 @@ export function TurnDivider({
 					/>
 				))}
 				{elapsedMs != null && elapsedMs >= 1000 ? (
-					<span className="flex items-center gap-xs">
-						<Clock className="size-3 shrink-0" />
+					<span className="flex items-center gap-4">
+						<Clock className="size-12 shrink-0" />
 						{formatElapsed(elapsedMs)}
 					</span>
 				) : null}

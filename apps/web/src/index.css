@@ -2,6 +2,7 @@
 @import "./styles/generated/fonts.css";
 @import "./styles/generated/typography.css";
 @import "./styles/generated/colors.css";
+@import "./styles/generated/spacing.css";
 @import "./styles/tokens.css";
 @import "./styles/global.css";
 
@@ -41,12 +42,6 @@
 	--font-sans: var(--tr-font-family-interface);
 	--font-mono: var(--tr-font-family-code);
 
-	--spacing-2xs: var(--space-2xs);
-	--spacing-xs: var(--space-xs);
-	--spacing-sm: var(--space-sm);
-	--spacing-md: var(--space-md);
-	--spacing-lg: var(--space-lg);
-	--spacing-xl: var(--space-xl);
 	--spacing-panel-header-row: var(--panel-header-row-height);
 
 	/* A block appearing in place (e.g. the ask-question card's atomic reveal once its args are final). */
@@ -99,8 +94,8 @@
 .review-add-icon-holder {
 	/* Right-above the cursor point: the nudge + the ABOVE placement make the standard floating
 	   "comment here" offset (see reviewWidgets.ts / PreviewCommenting.tsx). */
-	padding-left: var(--space-sm);
-	padding-bottom: var(--space-2xs);
+	padding-left: var(--space-8);
+	padding-bottom: var(--space-2);
 	/* Above the view zones: a thread card sitting right where the icon floats must not intercept its
 	   click (Monaco stacks zones and content widgets in one context). */
 	position: relative;
@@ -172,9 +167,9 @@
 	display: flex;
 	flex-direction: column;
 	align-items: stretch;
-	gap: 6px; /* space-exempt: off-scale tight gap between the composer's stacked rows */
-	margin-left: var(--space-md);
-	padding: var(--space-sm);
+	gap: var(--space-8);
+	margin-left: var(--space-12);
+	padding: var(--space-8);
 	border: 1px solid var(--border-default);
 	border-radius: var(--radius-md);
 	background: var(--container-header-bg);
@@ -193,7 +188,7 @@
 	overflow-x: hidden;
 	overflow-y: auto;
 	overflow-wrap: break-word;
-	padding: var(--space-sm) var(--space-md);
+	padding: var(--space-8) var(--space-12);
 	border-radius: var(--radius-sm);
 	border: 1px solid var(--control-border-default);
 	background: var(--control-bg);
@@ -211,11 +206,11 @@
 }
 .review-composer-row {
 	display: flex;
-	gap: 6px; /* space-exempt: off-scale tight gap between the composer's action buttons */
+	gap: var(--space-8);
 }
 /* Typography comes from the generated `tr-text-action` class on the node. */
 .review-composer-btn {
-	padding: var(--space-2xs) var(--space-sm);
+	padding: var(--space-2) var(--space-8);
 	border-radius: var(--radius-sm);
 	border: 1px solid var(--border-default);
 	background: var(--container-elevated-bg);
@@ -251,10 +246,10 @@
 	display: flex;
 	flex-direction: column;
 	align-items: stretch;
-	gap: 6px; /* space-exempt: off-scale tight gap between the thread card's stacked rows */
-	margin: var(--space-xs) 0 var(--space-xs) var(--space-md);
+	gap: var(--space-8);
+	margin: var(--space-4) 0 var(--space-4) var(--space-12);
 	max-width: 560px;
-	padding: var(--space-sm);
+	padding: var(--space-8);
 	border: 1px solid var(--border-default);
 	border-radius: var(--radius-md);
 	background: var(--container-header-bg);
@@ -262,13 +257,13 @@
 .review-thread-head {
 	display: flex;
 	align-items: center;
-	gap: var(--space-sm);
-	padding: 0 var(--space-xs);
+	gap: var(--space-8);
+	padding: 0 var(--space-4);
 }
 .review-thread-actions {
 	margin-left: auto;
 	display: flex;
-	gap: var(--space-xs);
+	gap: var(--space-4);
 }
 /* A 6px status circle. Full radius (a pill/circle, not a scale step) via the shared `rounded-full`
    utility on the node — see ReviewThreadCard.tsx / reviewWidgets.ts. */
@@ -292,7 +287,7 @@
 .review-thread-body {
 	margin: 0;
 	min-width: 0;
-	padding: 0 var(--space-xs);
+	padding: 0 var(--space-4);
 	overflow-wrap: break-word;
 	color: var(--text);
 }
@@ -304,7 +299,7 @@
 	min-height: 2.2em;
 	box-sizing: border-box;
 	margin: 0;
-	padding: var(--space-sm) var(--space-md);
+	padding: var(--space-8) var(--space-12);
 	border: 1px solid var(--control-border-default);
 	border-radius: var(--radius-sm);
 	resize: none;
@@ -344,7 +339,7 @@
 
 /* The preview's in-flow composer + the commented-region mark (parity with Monaco's decorations). */
 .review-composer-flow {
-	margin: var(--space-sm) 0 var(--space-sm) var(--space-md);
+	margin: var(--space-8) 0 var(--space-8) var(--space-12);
 	max-width: 560px;
 }
 /* The commented region in the preview: a thin LEFT RAIL only (the gutter-rail half of Monaco's
@@ -354,6 +349,6 @@
    impersonating the selection. Inset shadow, not border — zero layout shift. */
 .review-region {
 	box-shadow: inset 2px 0 0 var(--text-subtle);
-	padding-left: 10px; /* space-exempt: optical hanging indent — seats the inset rail in the gutter */
-	margin-left: -10px; /* space-exempt: optical pull matching the indent, so the rail adds zero net width */
+	padding-left: 10px;
+	margin-left: -10px;
 }

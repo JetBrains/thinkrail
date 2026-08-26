@@ -115,11 +115,11 @@ export function JetBrainsAiCard({
 			data-state={visibleState}
 			data-configured={configured}
 			data-installed={installed}
-			className="flex flex-col gap-sm rounded-[var(--radius-sm)] border border-border-default bg-control-bg p-md"
+			className="flex flex-col gap-8 rounded-[var(--radius-sm)] border border-border-default bg-control-bg p-12"
 		>
-			<div className="flex items-center gap-md">
-				<span className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-primary-subtle text-primary">
-					<Zap className="size-4" />
+			<div className="flex items-center gap-12">
+				<span className="flex size-32 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-primary-subtle text-primary">
+					<Zap className="size-16" />
 				</span>
 				<div className="flex min-w-0 flex-col">
 					<span className="tr-text-ui text-text-default">JetBrains AI</span>
@@ -127,10 +127,10 @@ export function JetBrainsAiCard({
 						Use models made available through your JetBrains subscription.
 					</span>
 				</div>
-				<div className="ml-auto flex shrink-0 items-center gap-xs">
+				<div className="ml-auto flex shrink-0 items-center gap-4">
 					{busyAction ? (
 						<Button size="sm" disabled data-testid="jetbrains-configuring">
-							<Loader2 className="size-3.5 animate-spin" />
+							<Loader2 className="size-14 animate-spin" />
 							{actionLabel(busyAction)}…
 						</Button>
 					) : signedOut ? (
@@ -147,7 +147,7 @@ export function JetBrainsAiCard({
 								data-testid="jetbrains-retry"
 								onClick={() => void runAction(retryAction)}
 							>
-								<RefreshCw className="size-3.5" />
+								<RefreshCw className="size-14" />
 								Retry
 							</Button>
 							{status.configured ? (
@@ -163,7 +163,7 @@ export function JetBrainsAiCard({
 							data-testid="jetbrains-recheck"
 							onClick={() => void onChanged()}
 						>
-							<RefreshCw className="size-3.5" />
+							<RefreshCw className="size-14" />
 							Recheck
 						</Button>
 					) : null}
@@ -173,7 +173,7 @@ export function JetBrainsAiCard({
 			<StatusBody status={status} install={install} onChanged={onChanged} />
 
 			{notice?.kind === "failed" || notice?.kind === "transport-failed" ? (
-				<div className="flex flex-col gap-xs" data-testid="jetbrains-error">
+				<div className="flex flex-col gap-4" data-testid="jetbrains-error">
 					<p className="text-feedback-error tr-text-metadata">
 						{notice.kind === "failed"
 							? failureText(notice.action, notice.reason)
@@ -192,7 +192,7 @@ export function JetBrainsAiCard({
 					Complete sign-in in the browser on the host, then Refresh.
 				</p>
 			) : notice?.kind === "login-failed" ? (
-				<div className="flex flex-col gap-xs" data-testid="jetbrains-login-failed">
+				<div className="flex flex-col gap-4" data-testid="jetbrains-login-failed">
 					<p className="text-feedback-error tr-text-metadata">
 						ThinkRail couldn't launch Central sign-in. Run this on the host instead:
 					</p>
@@ -213,13 +213,13 @@ function ActionButton({ action, onAction }: { action: JbcentralAction; onAction:
 			onClick={onAction}
 		>
 			{disconnect ? (
-				<LogOut className="size-3.5" />
+				<LogOut className="size-14" />
 			) : action === "update" ? (
-				<Wrench className="size-3.5" />
+				<Wrench className="size-14" />
 			) : action === "start-proxy" ? (
-				<Play className="size-3.5" />
+				<Play className="size-14" />
 			) : (
-				<Zap className="size-3.5" />
+				<Zap className="size-14" />
 			)}
 			{actionLabel(action)}
 		</Button>
@@ -240,7 +240,7 @@ function StatusBody({
 	switch (status.state) {
 		case "absent":
 			return (
-				<div className="flex flex-col gap-xs" data-testid="jetbrains-needs-install">
+				<div className="flex flex-col gap-4" data-testid="jetbrains-needs-install">
 					<p className="text-text-muted tr-text-metadata">
 						Install the JetBrains Central CLI (central), then Recheck:
 					</p>
@@ -252,7 +252,7 @@ function StatusBody({
 						onClick={() => void onChanged()}
 						className="self-start"
 					>
-						<RefreshCw className="size-3.5" />
+						<RefreshCw className="size-14" />
 						Recheck
 					</Button>
 				</div>
@@ -273,18 +273,18 @@ function StatusBody({
 		case "configured":
 			return status.proxyStopped ? (
 				<p
-					className="flex items-start gap-xs text-feedback-warning tr-text-metadata"
+					className="flex items-start gap-4 text-feedback-warning tr-text-metadata"
 					data-testid="jetbrains-proxy-stopped"
 				>
-					<AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+					<AlertTriangle className="mt-2 size-14 shrink-0" />
 					Central's proxy is not running. Start it to use JetBrains AI models.
 				</p>
 			) : (
 				<p
-					className="flex items-center gap-xs text-feedback-success tr-text-metadata"
+					className="flex items-center gap-4 text-feedback-success tr-text-metadata"
 					data-testid="jetbrains-connected"
 				>
-					<Check className="size-3.5 shrink-0" />
+					<Check className="size-14 shrink-0" />
 					Connected — Central's JetBrains AI models are available to new chats.
 				</p>
 			);
@@ -302,8 +302,8 @@ function StatusBody({
 			);
 		case "configuring":
 			return (
-				<p className="flex items-center gap-xs text-text-muted tr-text-metadata">
-					<Loader2 className="size-3.5 animate-spin" />
+				<p className="flex items-center gap-4 text-text-muted tr-text-metadata">
+					<Loader2 className="size-14 animate-spin" />
 					{status.action
 						? `Central is ${actionProgress(status.action)}. Keep ThinkRail open.`
 						: "ThinkRail is applying the latest Central configuration."}
@@ -312,10 +312,10 @@ function StatusBody({
 		case "load-failed":
 			return (
 				<p
-					className="flex items-start gap-xs text-feedback-error tr-text-metadata"
+					className="flex items-start gap-4 text-feedback-error tr-text-metadata"
 					data-testid="jetbrains-load-failed"
 				>
-					<AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+					<AlertTriangle className="mt-2 size-14 shrink-0" />
 					ThinkRail couldn't prepare the updated model runtime. The previous runtime remains
 					available; retry, or disconnect Central to rebuild without it.
 				</p>
@@ -344,9 +344,9 @@ function SignInButton({
 			className="self-start"
 		>
 			{signingIn ? (
-				<Loader2 className="size-3.5 animate-spin" />
+				<Loader2 className="size-14 animate-spin" />
 			) : (
-				<ExternalLink className="size-3.5" />
+				<ExternalLink className="size-14" />
 			)}
 			{label}
 		</Button>
@@ -355,7 +355,7 @@ function SignInButton({
 
 function SignInGuidance({ signingIn, onSignIn }: { signingIn: boolean; onSignIn: () => void }) {
 	return (
-		<div className="flex flex-col gap-xs" data-testid="jetbrains-signin-guidance">
+		<div className="flex flex-col gap-4" data-testid="jetbrains-signin-guidance">
 			<p className="text-text-muted tr-text-metadata">
 				If Central needs authentication, sign in and then retry Connect.
 			</p>
@@ -372,10 +372,10 @@ function SignInGuidance({ signingIn, onSignIn }: { signingIn: boolean; onSignIn:
 function SignedOutNotice() {
 	return (
 		<p
-			className="flex items-start gap-xs text-feedback-warning tr-text-metadata"
+			className="flex items-start gap-4 text-feedback-warning tr-text-metadata"
 			data-testid="jetbrains-signed-out"
 		>
-			<AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+			<AlertTriangle className="mt-2 size-14 shrink-0" />
 			Central is signed out. Sign in to use its JetBrains AI models.
 		</p>
 	);
@@ -456,7 +456,7 @@ function CopyableCommand({ command }: { command: string }) {
 		setTimeout(() => setCopied(false), 1500);
 	};
 	return (
-		<div className="flex items-center gap-sm rounded-[var(--radius-sm)] border border-border-default bg-container-workspace-bg px-sm py-xs">
+		<div className="flex items-center gap-8 rounded-[var(--radius-sm)] border border-border-default bg-container-workspace-bg px-8 py-4">
 			<code className="min-w-0 flex-1 select-all break-all tr-code-text text-text-default">
 				{command}
 			</code>
@@ -466,12 +466,12 @@ function CopyableCommand({ command }: { command: string }) {
 				aria-label={`Copy: ${command}`}
 				title="Copy"
 				onClick={() => void copy()}
-				className="flex size-6 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
+				className="flex size-24 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
 			>
 				{copied ? (
-					<Check className="size-3.5 text-feedback-success" />
+					<Check className="size-14 text-feedback-success" />
 				) : (
-					<Copy className="size-3.5" />
+					<Copy className="size-14" />
 				)}
 			</button>
 		</div>

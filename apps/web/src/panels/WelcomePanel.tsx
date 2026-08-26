@@ -95,7 +95,7 @@ export function WelcomePanel() {
 	return (
 		<div
 			data-testid="welcome"
-			className="flex h-full min-h-0 flex-col items-center justify-center overflow-auto px-xl py-xl text-center"
+			className="flex h-full min-h-0 flex-col items-center justify-center overflow-auto px-24 py-24 text-center"
 		>
 			<h1
 				data-testid="welcome-title"
@@ -107,7 +107,7 @@ export function WelcomePanel() {
 			<ProviderWarningBanner />
 			{project ? <ProjectSkillsNotice projectId={project.id} /> : null}
 
-			<div className="mt-xl flex flex-wrap justify-center gap-md">
+			<div className="mt-24 flex flex-wrap justify-center gap-12">
 				{noProjects ? (
 					openProjectCard()
 				) : hasSpecs === null ? null : hasSpecs ? (
@@ -187,7 +187,7 @@ const Card = forwardRef<HTMLButtonElement, CardProps>(function Card(
 			data-testid={cta ? "welcome-cta" : "welcome-action"}
 			{...rest}
 			className={cn(
-				"relative flex h-[150px] w-[220px] flex-col items-start justify-between rounded-[var(--radius-sm)] border bg-clip-padding p-lg text-left transition-colors",
+				"relative flex h-[150px] w-[220px] flex-col items-start justify-between rounded-[var(--radius-sm)] border bg-clip-padding p-16 text-left transition-colors",
 				primary
 					? "border-primary-muted bg-primary-subtle hover:bg-primary-soft"
 					: "border-border-default bg-container-workspace-bg hover:border-primary-muted hover:bg-container-elevated-bg",
@@ -195,23 +195,21 @@ const Card = forwardRef<HTMLButtonElement, CardProps>(function Card(
 			)}
 		>
 			{tag ? (
-				<span className="absolute top-md right-md rounded-full border border-primary-muted bg-clip-padding bg-primary-subtle px-sm py-0.5 tr-text-label-pill text-primary">
+				<span className="absolute top-12 right-12 rounded-full border border-primary-muted bg-clip-padding bg-primary-subtle px-8 py-2 tr-text-label-pill text-primary">
 					{tag}
 				</span>
 			) : null}
 			<span
 				className={cn(
-					"flex size-9 items-center justify-center rounded-[var(--radius-sm)]",
+					"flex size-36 items-center justify-center rounded-[var(--radius-sm)]",
 					primary ? "bg-primary text-text-on-primary" : "bg-control-bg-selected text-text-muted",
 				)}
 			>
-				<Icon className="size-4" />
+				<Icon className="size-16" />
 			</span>
 			<span className="w-full">
 				<span className="block tr-title-card text-text-default">{title}</span>
-				<span className="mt-0.5 block text-text-muted tr-text-metadata leading-snug">
-					{subtitle}
-				</span>
+				<span className="mt-2 block text-text-muted tr-text-metadata leading-snug">{subtitle}</span>
 			</span>
 		</button>
 	);

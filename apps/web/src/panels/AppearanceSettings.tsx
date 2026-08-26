@@ -18,14 +18,14 @@ export function AppearanceSettings() {
 	};
 
 	return (
-		<section data-testid="settings-appearance" className="flex flex-col gap-sm">
-			<div className="flex flex-col gap-xs">
+		<section data-testid="settings-appearance" className="flex flex-col gap-8">
+			<div className="flex flex-col gap-4">
 				<h3 className="tr-title-section text-text-default">Theme</h3>
 				<p className="text-text-muted tr-text-metadata">
 					Choose the app theme. Your choice is saved on the host and follows you across devices.
 				</p>
 			</div>
-			<div className="flex flex-col gap-xs">
+			<div className="flex flex-col gap-4">
 				{themes.map(({ id, label, appearance, contrast }) => {
 					const active = id === activeThemeId;
 					return (
@@ -40,14 +40,14 @@ export function AppearanceSettings() {
 							data-active={active}
 							onClick={() => select(id)}
 							className={cn(
-								"flex items-center gap-sm rounded-[var(--radius-sm)] border px-md py-sm text-left tr-text-ui outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary",
+								"flex items-center gap-8 rounded-[var(--radius-sm)] border px-12 py-8 text-left tr-text-ui outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary",
 								active
 									? "border-primary-muted bg-clip-padding bg-primary-subtle text-text-default"
 									: "border-border-default text-text-muted hover:bg-control-bg-hovered hover:text-text-default",
 							)}
 						>
 							<span className="flex-1">{label}</span>
-							{active ? <Check className="size-4 shrink-0 text-primary" /> : null}
+							{active ? <Check className="size-16 shrink-0 text-primary" /> : null}
 						</button>
 					);
 				})}

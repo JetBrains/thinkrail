@@ -33,22 +33,22 @@ export function GithubSettings() {
 	const connected = gh?.connected ?? false;
 
 	return (
-		<section data-testid="settings-github" className="flex flex-col gap-sm">
-			<div className="flex flex-col gap-xs">
+		<section data-testid="settings-github" className="flex flex-col gap-8">
+			<div className="flex flex-col gap-4">
 				<h3 className="tr-title-section text-text-default">Local GitHub</h3>
 				<p className="text-text-muted tr-text-metadata">
 					Authenticate the GitHub CLI to create workspaces from remote branches.
 				</p>
 			</div>
-			<div className="flex items-center gap-sm rounded-[var(--radius-sm)] border border-border-default bg-control-bg px-md py-sm">
+			<div className="flex items-center gap-8 rounded-[var(--radius-sm)] border border-border-default bg-control-bg px-12 py-8">
 				<span
 					data-testid="settings-gh-status"
 					data-connected={connected}
-					className={`inline-flex items-center gap-xs tr-text-ui ${
+					className={`inline-flex items-center gap-4 tr-text-ui ${
 						connected ? "text-feedback-success" : "text-text-muted"
 					}`}
 				>
-					{connected ? <Check className="size-3.5" /> : <X className="size-3.5" />}
+					{connected ? <Check className="size-14" /> : <X className="size-14" />}
 					{connected ? "Connected" : "Not connected"}
 				</span>
 				{connected && gh?.login ? (
@@ -62,7 +62,7 @@ export function GithubSettings() {
 					onClick={() => void refresh()}
 					className="ml-auto"
 				>
-					<RefreshCw className={`size-3.5 ${refreshing ? "animate-spin" : ""}`} />
+					<RefreshCw className={`size-14 ${refreshing ? "animate-spin" : ""}`} />
 					Refresh
 				</Button>
 			</div>

@@ -100,9 +100,9 @@ export function ProvidersSettings() {
 	const rowBusy = (id: string) => busyProvider === id || activeLogin !== null;
 
 	return (
-		<div data-testid="settings-providers" className="flex flex-col gap-lg">
-			<div className="flex items-start justify-between gap-sm">
-				<div className="flex flex-col gap-xs">
+		<div data-testid="settings-providers" className="flex flex-col gap-16">
+			<div className="flex items-start justify-between gap-8">
+				<div className="flex flex-col gap-4">
 					<h3 className="tr-title-section text-text-default">Model providers</h3>
 					<p className="text-text-muted tr-text-metadata">
 						Connect at least one provider so the agent can run — a subscription or an API key.
@@ -117,7 +117,7 @@ export function ProvidersSettings() {
 					disabled={refreshing}
 					onClick={() => void load()}
 				>
-					<RefreshCw className={`size-3.5 ${refreshing ? "animate-spin" : ""}`} />
+					<RefreshCw className={`size-14 ${refreshing ? "animate-spin" : ""}`} />
 					Refresh
 				</Button>
 			</div>
@@ -146,15 +146,15 @@ export function ProvidersSettings() {
 					{subscriptionRows.length > 0 ? (
 						<section
 							data-testid="providers-subscriptions"
-							className="flex flex-col gap-sm rounded-[var(--radius-sm)] border border-primary-muted bg-clip-padding bg-primary-subtle p-md"
+							className="flex flex-col gap-8 rounded-[var(--radius-sm)] border border-primary-muted bg-clip-padding bg-primary-subtle p-12"
 						>
-							<div className="flex flex-col gap-0.5">
+							<div className="flex flex-col gap-2">
 								<h4 className="tr-title-compact text-text-default">Sign in with a subscription</h4>
 								<p className="text-text-muted tr-text-metadata">
 									Use your existing Claude, ChatGPT, or Copilot plan — no API key needed.
 								</p>
 							</div>
-							<div className="flex flex-col gap-xs">
+							<div className="flex flex-col gap-4">
 								{subscriptionRows.map((p) => (
 									<ProviderActionRow
 										key={p.id}
@@ -244,9 +244,9 @@ export function ProvidersSettings() {
 
 function Group({ title, children }: { title: string; children: ReactNode }) {
 	return (
-		<section className="flex flex-col gap-sm">
+		<section className="flex flex-col gap-8">
 			<h4 className="tr-text-eyebrow text-text-muted">{title}</h4>
-			<div className="flex flex-col gap-xs">{children}</div>
+			<div className="flex flex-col gap-4">{children}</div>
 		</section>
 	);
 }
@@ -266,10 +266,10 @@ function ConnectedCard({
 			data-testid="provider-row"
 			data-provider={provider.id}
 			data-configured="true"
-			className="flex items-center gap-md rounded-[var(--radius-sm)] border border-border-default bg-control-bg px-md py-sm"
+			className="flex items-center gap-12 rounded-[var(--radius-sm)] border border-border-default bg-control-bg px-12 py-8"
 		>
-			<span className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-feedback-success-subtle text-feedback-success">
-				<Check className="size-4" />
+			<span className="flex size-32 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-feedback-success-subtle text-feedback-success">
+				<Check className="size-16" />
 			</span>
 			<div className="flex min-w-0 flex-col">
 				<span className="truncate tr-text-ui text-text-default">{provider.name}</span>
@@ -288,15 +288,15 @@ function ConnectedCard({
 					onClick={onSignOut}
 					className="ml-auto"
 				>
-					<LogOut className="size-3.5" />
+					<LogOut className="size-14" />
 					Sign out
 				</Button>
 			) : (
 				<span
-					className="ml-auto flex shrink-0 items-center gap-xs text-text-muted tr-text-metadata"
+					className="ml-auto flex shrink-0 items-center gap-4 text-text-muted tr-text-metadata"
 					title="Configured outside the app (environment / models.json)"
 				>
-					<Lock className="size-3" />
+					<Lock className="size-12" />
 					Managed
 				</span>
 			)}
@@ -320,14 +320,14 @@ function ProviderActionRow({
 			data-testid="provider-signin-row"
 			data-provider={provider.id}
 			data-configured="false"
-			className="flex flex-col gap-xs rounded-[var(--radius-sm)] border border-border-default bg-control-bg px-md py-sm"
+			className="flex flex-col gap-4 rounded-[var(--radius-sm)] border border-border-default bg-control-bg px-12 py-8"
 		>
-			<div className="flex items-center gap-sm tr-text-ui">
-				<span className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-control-bg-selected text-text-muted">
-					<Boxes className="size-4" />
+			<div className="flex items-center gap-8 tr-text-ui">
+				<span className="flex size-32 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-control-bg-selected text-text-muted">
+					<Boxes className="size-16" />
 				</span>
 				<span className="min-w-0 flex-1 truncate text-text-default">{provider.name}</span>
-				<div className="flex shrink-0 items-center gap-xs">
+				<div className="flex shrink-0 items-center gap-4">
 					{provider.canApiKey ? (
 						<Button
 							variant={provider.canOAuth ? "outline" : "default"}
@@ -337,7 +337,7 @@ function ProviderActionRow({
 							disabled={busy}
 							onClick={onApiKey}
 						>
-							<KeyRound className="size-3.5" />
+							<KeyRound className="size-14" />
 							API key
 						</Button>
 					) : null}
@@ -350,7 +350,7 @@ function ProviderActionRow({
 							disabled={busy}
 							onClick={onSignIn}
 						>
-							<LogIn className="size-3.5" />
+							<LogIn className="size-14" />
 							Sign in
 						</Button>
 					) : null}

@@ -38,15 +38,15 @@ export function ResizableHandle({
 				"relative flex shrink-0 items-center justify-center bg-border-default transition-colors",
 				"data-[resize-handle-state=hover]:bg-primary data-[resize-handle-state=drag]:bg-primary",
 				isVertical
-					? "h-px w-full cursor-row-resize after:absolute after:inset-x-0 after:top-1/2 after:h-2 after:-translate-y-1/2 after:content-['']"
-					: "w-px cursor-col-resize after:absolute after:inset-y-0 after:left-1/2 after:w-2 after:-translate-x-1/2 after:content-['']",
+					? "h-px w-full cursor-row-resize after:absolute after:inset-x-0 after:top-1/2 after:h-8 after:-translate-y-1/2 after:content-['']"
+					: "w-px cursor-col-resize after:absolute after:inset-y-0 after:left-1/2 after:w-8 after:-translate-x-1/2 after:content-['']",
 				className,
 			)}
 			{...props}
 		>
 			{withHandle && (
-				<div className="z-10 flex items-center justify-center rounded-[var(--radius-sm)] border border-border-default bg-control-bg px-px py-0.5">
-					<GripVertical className={cn("size-2.5 text-text-muted", isVertical && "rotate-90")} />
+				<div className="z-10 flex items-center justify-center rounded-[var(--radius-sm)] border border-border-default bg-control-bg px-px py-2">
+					<GripVertical className={cn("size-10 text-text-muted", isVertical && "rotate-90")} />
 				</div>
 			)}
 		</PanelResizeHandle>

@@ -51,14 +51,14 @@ export function ToolCard({
 				data-testid="tool-card-toggle"
 				aria-expanded={expanded}
 				onClick={toggle}
-				className="flex w-full cursor-pointer select-none items-center gap-xs px-sm py-xs text-left tr-text-metadata outline-none focus-visible:ring-2 focus-visible:ring-primary"
+				className="flex w-full cursor-pointer select-none items-center gap-4 px-8 py-4 text-left tr-text-metadata outline-none focus-visible:ring-2 focus-visible:ring-primary"
 			>
 				{status === "running" ? (
-					<Loader2 className="size-3 shrink-0 animate-spin text-text-muted motion-reduce:animate-none" />
+					<Loader2 className="size-12 shrink-0 animate-spin text-text-muted motion-reduce:animate-none" />
 				) : isError ? (
-					<X className="size-3 shrink-0 text-feedback-error" />
+					<X className="size-12 shrink-0 text-feedback-error" />
 				) : (
-					<Check className="size-3 shrink-0 text-feedback-success" />
+					<Check className="size-12 shrink-0 text-feedback-success" />
 				)}
 				<span className="shrink-0 text-text-default">{toolName}</span>
 				{summary ? (
@@ -69,11 +69,11 @@ export function ToolCard({
 					<span className="flex-1" />
 				)}
 				<ChevronRight
-					className={`size-3 shrink-0 text-text-muted transition-transform ${expanded ? "rotate-90" : ""}`}
+					className={`size-12 shrink-0 text-text-muted transition-transform ${expanded ? "rotate-90" : ""}`}
 				/>
 			</button>
 			{expanded ? (
-				<div className={cn("px-sm pb-xs", isError && "text-feedback-error")}>
+				<div className={cn("px-8 pb-4", isError && "text-feedback-error")}>
 					<Renderer {...renderProps} />
 				</div>
 			) : null}

@@ -21,9 +21,9 @@ export function ReadCard({ args, result, status, workspaceRoot }: ToolRenderProp
 	}
 
 	return (
-		<div data-testid="tool-read" className="flex flex-col gap-xs">
-			<div className="flex items-center gap-xs tr-text-metadata">
-				<FileText className="size-3.5 shrink-0 text-text-muted" />
+		<div data-testid="tool-read" className="flex flex-col gap-4">
+			<div className="flex items-center gap-4 tr-text-metadata">
+				<FileText className="size-14 shrink-0 text-text-muted" />
 				<span className="truncate text-primary" title={path}>
 					{displayPath}
 				</span>
@@ -32,7 +32,7 @@ export function ReadCard({ args, result, status, workspaceRoot }: ToolRenderProp
 			{status === "running" ? (
 				<span className="text-text-muted tr-text-metadata">Reading…</span>
 			) : status === "error" ? (
-				<pre className="overflow-auto px-sm py-xs text-feedback-error tr-code-text">{output}</pre>
+				<pre className="overflow-auto px-8 py-4 text-feedback-error tr-code-text">{output}</pre>
 			) : output ? (
 				<Collapsible lines={countLines(output)}>
 					<CodeBlock code={output} lang={lang} />

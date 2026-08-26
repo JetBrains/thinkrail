@@ -72,9 +72,9 @@ function PanelErrorFallback({
 		<div
 			data-testid="error-boundary-fallback"
 			role="alert"
-			className="flex h-full min-h-0 flex-col items-center justify-center gap-sm overflow-auto p-lg text-center"
+			className="flex h-full min-h-0 flex-col items-center justify-center gap-8 overflow-auto p-16 text-center"
 		>
-			<AlertTriangle className="size-6 text-feedback-error" />
+			<AlertTriangle className="size-24 text-feedback-error" />
 			<p className="tr-title-compact text-text-default">
 				{label ? `The ${label} panel hit an error` : "Something went wrong"}
 			</p>
@@ -83,24 +83,24 @@ function PanelErrorFallback({
 					? "Failed to load part of the app (a stale or unreachable resource). Reloading usually fixes it."
 					: error.message || "An unexpected error occurred while rendering this view."}
 			</p>
-			<div className="mt-xs flex items-center gap-sm">
+			<div className="mt-4 flex items-center gap-8">
 				{isChunkError ? (
 					<button
 						type="button"
 						data-testid="error-reload"
 						onClick={() => window.location.reload()}
-						className="flex items-center gap-xs rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-md py-xs tr-text-ui text-text-default hover:bg-control-bg-hovered"
+						className="flex items-center gap-4 rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-12 py-4 tr-text-ui text-text-default hover:bg-control-bg-hovered"
 					>
-						<RefreshCw className="size-4" /> Reload page
+						<RefreshCw className="size-16" /> Reload page
 					</button>
 				) : (
 					<button
 						type="button"
 						data-testid="error-retry"
 						onClick={reset}
-						className="flex items-center gap-xs rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-md py-xs tr-text-ui text-text-default hover:bg-control-bg-hovered"
+						className="flex items-center gap-4 rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-12 py-4 tr-text-ui text-text-default hover:bg-control-bg-hovered"
 					>
-						<RotateCcw className="size-4" /> Try again
+						<RotateCcw className="size-16" /> Try again
 					</button>
 				)}
 			</div>

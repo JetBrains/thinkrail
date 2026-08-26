@@ -505,7 +505,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 			{mentionOpen ? (
 				<div
 					data-testid="mention-menu"
-					className="absolute bottom-full left-sm mb-xs max-h-[40vh] w-[min(28rem,90%)] overflow-y-auto rounded-[var(--radius-md)] border border-border-default bg-container-elevated-bg p-xs shadow-[var(--shadow-md)]"
+					className="absolute bottom-full left-12 mb-4 max-h-[40vh] w-[min(28rem,90%)] overflow-y-auto rounded-[var(--radius-md)] border border-border-default bg-container-elevated-bg p-4 shadow-[var(--shadow-md)]"
 				>
 					{mentionCandidates.map((candidate, index) => (
 						<button
@@ -513,12 +513,12 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							type="button"
 							data-testid="mention-item"
 							onClick={() => pickMention(candidate)}
-							className={`flex w-full items-center gap-sm rounded-[var(--radius-sm)] px-sm py-xs text-left tr-text-ui ${index === mentionActiveIndex ? "bg-control-bg-selected text-text-default" : "text-text-muted"}`}
+							className={`flex w-full items-center gap-8 rounded-[var(--radius-sm)] px-8 py-4 text-left tr-text-ui ${index === mentionActiveIndex ? "bg-control-bg-selected text-text-default" : "text-text-muted"}`}
 						>
 							{candidate.kind === "dir" ? (
-								<FolderIcon className="size-3.5 shrink-0" />
+								<FolderIcon className="size-14 shrink-0" />
 							) : (
-								<FileIcon className="size-3.5 shrink-0" />
+								<FileIcon className="size-14 shrink-0" />
 							)}
 							<span className="truncate">{candidate.path}</span>
 						</button>
@@ -529,7 +529,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 					commands={slashCompletion.matches}
 					activeIndex={slashCompletion.activeIndex}
 					onSelect={slashCompletion.pick}
-					className="absolute bottom-full left-sm mb-xs"
+					className="absolute bottom-full left-12 mb-4"
 					footer={
 						templatesEmpty && onManageTemplates ? (
 							<button
@@ -539,9 +539,9 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 									replaceDraft("");
 									onManageTemplates();
 								}}
-								className="flex w-full items-center gap-sm rounded-[var(--radius-sm)] border-border-default border-t px-sm py-xs text-left text-text-muted tr-text-metadata hover:bg-control-bg-hovered hover:text-text-default"
+								className="flex w-full items-center gap-8 rounded-[var(--radius-sm)] border-border-default border-t px-8 py-4 text-left text-text-muted tr-text-metadata hover:bg-control-bg-hovered hover:text-text-default"
 							>
-								<Sparkles className="size-3 shrink-0" />
+								<Sparkles className="size-12 shrink-0" />
 								<span className="truncate">
 									No prompt templates yet — add starters in Settings → Templates
 								</span>
@@ -556,14 +556,14 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 					type="button"
 					data-testid="slot-hint"
 					onClick={() => stepSlot(1)}
-					className="absolute bottom-full left-sm mb-xs rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-sm py-xs text-text-muted tr-text-metadata shadow-[var(--shadow-md)] hover:bg-control-bg-hovered hover:text-text-default"
+					className="absolute bottom-full left-12 mb-4 rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-8 py-4 text-text-muted tr-text-metadata shadow-[var(--shadow-md)] hover:bg-control-bg-hovered hover:text-text-default"
 				>
 					slot {slotIdx + 1}/{slots.length} · ⇥ next · esc done
 				</button>
 			) : null}
 
 			{images.length > 0 || pendingImages > 0 || attachErrors.length > 0 ? (
-				<div className="flex flex-wrap gap-xs px-sm pt-sm" data-testid="composer-images">
+				<div className="flex flex-wrap gap-4 px-12 pt-12" data-testid="composer-images">
 					{attachErrors.map((err) => (
 						<FileChip
 							key={err.id}
@@ -580,7 +580,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 									onClick={() => setAttachErrors((prev) => prev.filter((p) => p.id !== err.id))}
 									className="hover:opacity-80"
 								>
-									<X className="size-3" />
+									<X className="size-12" />
 								</button>
 							}
 						/>
@@ -602,7 +602,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 									onClick={() => commitImages(imagesRef.current.filter((p) => p.id !== img.id))}
 									className="text-text-muted hover:text-text-default"
 								>
-									<X className="size-3" />
+									<X className="size-12" />
 								</button>
 							}
 						/>
@@ -620,7 +620,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 				</div>
 			) : null}
 
-			<div className="flex flex-col gap-sm p-sm">
+			<div className="flex flex-col gap-8 p-12">
 				<div className="relative rounded-[var(--radius-md)] border border-control-border-default bg-control-bg bg-clip-padding transition-colors focus-within:border-control-border-active">
 					{slots ? (
 						<div
@@ -629,7 +629,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							aria-hidden
 							className="pointer-events-none absolute inset-0 overflow-hidden rounded-[var(--radius-md)]"
 						>
-							<div className="w-full whitespace-pre-wrap break-words px-md py-sm tr-text-ui">
+							<div className="w-full whitespace-pre-wrap break-words px-12 py-8 tr-text-ui">
 								{withOffsets(highlightSegments(value, slots, slotIdx)).map((seg) => (
 									<span
 										key={seg.start}
@@ -702,11 +702,11 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 								? "Enter steers at the next step · Cmd/Ctrl+Enter queues for when it finishes"
 								: "Message the agent…  (@ files · / commands · Enter to send)"
 						}
-						className="relative min-h-[108px] w-full resize-none rounded-[var(--radius-sm)] bg-transparent px-md py-sm tr-text-ui text-text-default outline-none placeholder:text-text-muted"
+						className="relative min-h-[108px] w-full resize-none rounded-[var(--radius-sm)] bg-transparent px-12 py-8 tr-text-ui text-text-default outline-none placeholder:text-text-muted"
 					/>
 				</div>
-				<div className="flex flex-wrap items-center gap-sm">
-					<div className="flex min-w-0 flex-1 flex-wrap items-center gap-sm">
+				<div className="flex flex-wrap items-center gap-8">
+					<div className="flex min-w-0 flex-1 flex-wrap items-center gap-8">
 						<ModelSelector
 							models={models}
 							current={currentModel}
@@ -720,15 +720,15 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							onSelect={onSelectThinking}
 						/>
 					</div>
-					<div className="flex shrink-0 items-center gap-sm">
+					<div className="flex shrink-0 items-center gap-8">
 						<button
 							type="button"
 							data-testid="history-open"
 							aria-label="Search history"
 							onClick={openHistory}
-							className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg text-text-default hover:bg-control-bg-hovered"
+							className="flex size-32 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg text-text-default hover:bg-control-bg-hovered"
 						>
-							<History className="size-3.5" />
+							<History className="size-14" />
 						</button>
 						{isStreaming ? (
 							<button
@@ -736,9 +736,9 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 								data-testid="chat-abort"
 								aria-label="Stop"
 								onClick={onAbort}
-								className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg text-text-default hover:bg-control-bg-hovered"
+								className="flex size-32 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg text-text-default hover:bg-control-bg-hovered"
 							>
-								<Square className="size-3.5" />
+								<Square className="size-14" />
 							</button>
 						) : null}
 						{isStreaming ? (
@@ -748,13 +748,13 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 										type="button"
 										data-testid="send-menu"
 										aria-label="Send options"
-										className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg text-text-default hover:bg-control-bg-hovered"
+										className="flex size-32 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg text-text-default hover:bg-control-bg-hovered"
 									>
-										<ChevronUp className="size-3.5" />
+										<ChevronUp className="size-14" />
 									</button>
 								</PopoverTrigger>
-								<PopoverContent side="top" align="end" className="w-[320px] p-xs">
-									<div className="flex flex-col gap-2xs">
+								<PopoverContent side="top" align="end" className="w-[320px] p-4">
+									<div className="flex flex-col gap-2">
 										{STREAMING_SEND_MODES.map((mode) => (
 											<button
 												key={mode.behavior}
@@ -765,9 +765,9 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 													setSendMenuOpen(false);
 													submit(mode.behavior);
 												}}
-												className="flex w-full flex-col gap-2xs rounded-[var(--radius-sm)] px-sm py-xs text-left hover:bg-control-bg-hovered disabled:pointer-events-none disabled:opacity-50"
+												className="flex w-full flex-col gap-2 rounded-[var(--radius-sm)] px-8 py-4 text-left hover:bg-control-bg-hovered disabled:pointer-events-none disabled:opacity-50"
 											>
-												<span className="flex w-full items-baseline justify-between gap-sm">
+												<span className="flex w-full items-baseline justify-between gap-8">
 													<span className="text-text-default tr-text-ui">{mode.name}</span>
 													<span className="shrink-0 text-text-muted tr-text-metadata">
 														{mode.keys}
@@ -786,9 +786,9 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							aria-label={isStreaming ? "Steer" : "Send"}
 							onClick={() => submit(isStreaming ? "steer" : "send")}
 							disabled={!canSubmit(value)}
-							className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-control-primary-bg text-control-primary-text hover:bg-control-primary-bg-hovered disabled:pointer-events-none disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text"
+							className="flex size-32 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-control-primary-bg text-control-primary-text hover:bg-control-primary-bg-hovered disabled:pointer-events-none disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text"
 						>
-							<ArrowUp className="size-4" />
+							<ArrowUp className="size-16" />
 						</button>
 					</div>
 				</div>

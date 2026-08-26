@@ -48,7 +48,7 @@ export function FilePane({ tab }: { tab: FileTab }) {
 					data-testid="file-review-toolbar"
 					role="toolbar"
 					aria-label="Review actions"
-					className="flex h-8 shrink-0 items-center justify-end gap-xs border-border-default border-b bg-container-header-bg px-sm"
+					className="flex h-32 shrink-0 items-center justify-end gap-4 border-border-default border-b bg-container-header-bg px-12"
 				>
 					<SendReviewButton workspaceId={tab.workspaceId} path={tab.path} />
 				</div>
@@ -64,7 +64,7 @@ export function FilePane({ tab }: { tab: FileTab }) {
 				data-testid="markdown-view-toggle"
 				role="toolbar"
 				aria-label="Markdown view mode"
-				className="flex h-8 shrink-0 items-center justify-end gap-xs border-border-default border-b bg-container-header-bg px-sm"
+				className="flex h-32 shrink-0 items-center justify-end gap-4 border-border-default border-b bg-container-header-bg px-12"
 			>
 				<SendReviewButton workspaceId={tab.workspaceId} path={tab.path} />
 				<ToggleSegment

@@ -22,7 +22,7 @@ export function ChatPlanStripContent({
 	const { Icon, label, className } = glanceIcon(glance);
 	return (
 		<>
-			<Chevron className="size-3.5 shrink-0" />
+			<Chevron className="size-14 shrink-0" />
 			<span className="tr-text-emphasis shrink-0">TODO list</span>
 			<span className="shrink-0">
 				{done}/{total}
@@ -31,9 +31,9 @@ export function ChatPlanStripContent({
 				<span
 					data-testid="chat-plan-status"
 					data-glance={glance}
-					className={cn("flex min-w-0 items-center gap-xs", className)}
+					className={cn("flex min-w-0 items-center gap-4", className)}
 				>
-					<Icon className="size-3 shrink-0" />
+					<Icon className="size-12 shrink-0" />
 					{status.showLabel ? (
 						<span className="shrink-0">
 							{label}
@@ -62,9 +62,9 @@ export function ChatPlanContent({ plan, glance }: { plan: ChatTodos; glance: Pla
 			<div className="shrink-0 border-border-muted border-b">
 				<TodoAddRow onAdd={plan.add} onOpenPlan={plan.openPlan} />
 			</div>
-			<div className="min-h-0 flex-1 overflow-auto p-xs">
+			<div className="min-h-0 flex-1 overflow-auto p-4">
 				{empty ? (
-					<p className="px-xs py-xs text-text-muted tr-text-metadata">
+					<p className="px-4 py-4 text-text-muted tr-text-metadata">
 						No TODOs yet — the agent adds its plan here, or add one above.
 					</p>
 				) : (

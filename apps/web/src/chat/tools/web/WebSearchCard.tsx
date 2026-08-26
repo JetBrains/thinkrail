@@ -25,9 +25,9 @@ export function WebSearchCard({ args, result, status }: ToolRenderProps) {
 	const output = resultText(result);
 
 	return (
-		<div data-testid="tool-web_search" className="flex flex-col gap-xs">
-			<div className="flex items-center gap-xs tr-text-metadata">
-				<Search className="size-3.5 shrink-0 text-text-muted" />
+		<div data-testid="tool-web_search" className="flex flex-col gap-4">
+			<div className="flex items-center gap-4 tr-text-metadata">
+				<Search className="size-14 shrink-0 text-text-muted" />
 				<span className="truncate text-primary" title={query}>
 					{query}
 				</span>
@@ -36,7 +36,7 @@ export function WebSearchCard({ args, result, status }: ToolRenderProps) {
 			{status === "running" ? (
 				<span className="text-text-muted tr-text-metadata">Searching…</span>
 			) : status === "error" ? (
-				<pre className="overflow-auto px-sm py-xs text-feedback-error tr-code-text">{output}</pre>
+				<pre className="overflow-auto px-8 py-4 text-feedback-error tr-code-text">{output}</pre>
 			) : output ? (
 				<Collapsible lines={countLines(output)}>
 					<CodeBlock code={output} lang="markdown" />

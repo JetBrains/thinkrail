@@ -19,7 +19,7 @@ import { openDiffInTab } from "./openTabs";
 
 function FileStatusLetter({ status }: { status: GitFileChange["status"] }) {
 	return (
-		<span className={`w-4 shrink-0 text-center tr-text-metadata ${statusNameClass(status)}`}>
+		<span className={`w-16 shrink-0 text-center tr-text-metadata ${statusNameClass(status)}`}>
 			{statusLetter(status)}
 		</span>
 	);
@@ -33,7 +33,7 @@ function FileRow({ file, onOpen }: { file: GitFileChange; onOpen: () => void }) 
 				data-testid="plan-file-row"
 				onClick={onOpen}
 				title={file.path}
-				className="flex w-full min-w-0 items-center gap-sm rounded-[var(--radius-sm)] px-xs py-xs text-left hover:bg-control-bg-hovered"
+				className="flex w-full min-w-0 items-center gap-8 rounded-[var(--radius-sm)] px-4 py-4 text-left hover:bg-control-bg-hovered"
 			>
 				<FileStatusLetter status={file.status} />
 				<span
@@ -64,21 +64,21 @@ function ChangeSetBlock({
 	const count = set.kind === "paths" ? set.paths.length : (stat?.count ?? 0);
 	return (
 		<div
-			className="mt-xs"
+			className="mt-4"
 			data-testid="plan-change-set"
 			data-kind={set.kind}
 			data-expanded={expanded}
 		>
-			<div className="flex items-center gap-sm px-xs">
+			<div className="flex items-center gap-8 px-4">
 				<button
 					type="button"
 					data-testid="plan-change-set-toggle"
 					aria-expanded={expanded}
 					onClick={() => setExpanded((v) => !v)}
 					title={expanded ? "Hide changed files" : "Show changed files"}
-					className="flex min-w-0 items-center gap-xs rounded-[var(--radius-sm)] px-xs py-2xs text-left hover:bg-control-bg-hovered"
+					className="flex min-w-0 items-center gap-4 rounded-[var(--radius-sm)] px-4 py-2 text-left hover:bg-control-bg-hovered"
 				>
-					<Chevron className="size-3.5 shrink-0 text-text-muted" />
+					<Chevron className="size-14 shrink-0 text-text-muted" />
 					<span className="shrink-0 tr-text-metadata text-text-subtle">
 						{count} {count === 1 ? "file" : "files"}
 					</span>
@@ -90,9 +90,9 @@ function ChangeSetBlock({
 							data-testid="plan-commit-chip"
 							onClick={() => onOpenCommit(set.sha)}
 							title="Open this step's commit in the Changes panel"
-							className="flex shrink-0 items-center gap-xs rounded-[var(--radius-sm)] px-xs py-2xs tr-code-text text-text-subtle hover:bg-control-bg-hovered hover:text-text-default"
+							className="flex shrink-0 items-center gap-4 rounded-[var(--radius-sm)] px-4 py-2 tr-code-text text-text-subtle hover:bg-control-bg-hovered hover:text-text-default"
 						>
-							<GitCommitHorizontal className="size-3.5" />
+							<GitCommitHorizontal className="size-14" />
 							{set.sha.slice(0, 7)}
 						</button>
 						<DiffStatBadge added={stat?.added ?? 0} removed={stat?.removed ?? 0} />
@@ -143,9 +143,9 @@ function ItemBlock({
 	onOpenCommit: (sha: string) => void;
 }) {
 	return (
-		<li data-testid="plan-item" data-status={item.status} className="py-xs">
-			<div className="flex items-start gap-sm">
-				<span className="mt-2xs">
+		<li data-testid="plan-item" data-status={item.status} className="py-4">
+			<div className="flex items-start gap-8">
+				<span className="mt-2">
 					<StatusIcon status={item.status} glance="working" />
 				</span>
 				<div className="min-w-0 flex-1">
@@ -175,8 +175,8 @@ function GroupSection({
 }) {
 	const { done, total } = groupProgress(group);
 	return (
-		<section className="mb-lg" data-testid="plan-group">
-			<h2 className="mb-xs flex items-baseline gap-sm border-border-default border-b pb-xs tr-title-compact text-text-default">
+		<section className="mb-16" data-testid="plan-group">
+			<h2 className="mb-4 flex items-baseline gap-8 border-border-default border-b pb-4 tr-title-compact text-text-default">
 				<span className="min-w-0 flex-1 truncate">{group.title}</span>
 				<span className="shrink-0 tr-text-eyebrow text-text-subtle">
 					{done}/{total}
@@ -235,8 +235,8 @@ export default function PlanPane({
 
 	return (
 		<div data-testid="plan-pane" className="h-full overflow-auto bg-container-content-bg">
-			<div className="mx-auto max-w-[52rem] px-lg py-lg">
-				<header className="mb-lg flex items-center gap-md">
+			<div className="mx-auto max-w-[52rem] px-16 py-16">
+				<header className="mb-16 flex items-center gap-12">
 					<div className="min-w-0 flex-1">
 						<h1 className="truncate tr-title-section text-text-default">Plan · {title}</h1>
 						<div data-testid="plan-progress" className="tr-text-metadata text-text-subtle">
@@ -265,18 +265,18 @@ export default function PlanPane({
 								);
 						}}
 						title="Copy the plan as markdown"
-						className="flex shrink-0 items-center gap-xs rounded-[var(--radius-sm)] px-sm py-xs tr-text-ui text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+						className="flex shrink-0 items-center gap-4 rounded-[var(--radius-sm)] px-8 py-4 tr-text-ui text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 					>
-						<Copy className="size-3.5" /> Copy
+						<Copy className="size-14" /> Copy
 					</button>
 					<button
 						type="button"
 						data-testid="plan-save-markdown"
 						onClick={() => downloadMarkdown(exportMarkdown(), title)}
 						title="Save the plan as a .md file"
-						className="flex shrink-0 items-center gap-xs rounded-[var(--radius-sm)] px-sm py-xs tr-text-ui text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+						className="flex shrink-0 items-center gap-4 rounded-[var(--radius-sm)] px-8 py-4 tr-text-ui text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 					>
-						<Download className="size-3.5" /> Save .md
+						<Download className="size-14" /> Save .md
 					</button>
 				</header>
 				{empty ? (
@@ -294,9 +294,9 @@ export default function PlanPane({
 							/>
 						))}
 						{loose.length > 0 ? (
-							<section className="mb-lg" data-testid="plan-loose">
+							<section className="mb-16" data-testid="plan-loose">
 								{groups.length > 0 ? (
-									<h2 className="mb-xs border-border-default border-b pb-xs tr-title-compact text-text-default">
+									<h2 className="mb-4 border-border-default border-b pb-4 tr-title-compact text-text-default">
 										Other
 									</h2>
 								) : null}

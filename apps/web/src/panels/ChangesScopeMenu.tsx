@@ -62,13 +62,13 @@ export function ChangesScopeMenu({
 				data-open={open}
 				aria-label="Diff scope"
 				title={scopeTitle(scope, commits ?? [])}
-				className="flex h-6 min-w-0 items-center gap-xs rounded-[var(--radius-sm)] px-xs tr-text-metadata text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:bg-control-bg-selected data-[open=true]:text-text-default"
+				className="flex h-24 min-w-0 items-center gap-4 rounded-[var(--radius-sm)] px-4 tr-text-metadata text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:bg-control-bg-selected data-[open=true]:text-text-default"
 			>
-				<GitCompare className="size-3.5 shrink-0" />
+				<GitCompare className="size-14 shrink-0" />
 				<span data-testid="changes-scope-label" className="truncate">
 					{scopeLabel(scope, commits ?? [])}
 				</span>
-				<ChevronDown className="size-3 shrink-0" />
+				<ChevronDown className="size-12 shrink-0" />
 			</DropdownMenuTrigger>
 			<DropdownMenuContent align="start" className="max-w-[22rem]">
 				<DropdownMenuItem

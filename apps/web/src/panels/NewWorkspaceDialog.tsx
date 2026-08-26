@@ -58,7 +58,7 @@ export function reconcileModel(
 }
 
 const PILL =
-	"flex h-8 min-w-0 items-center gap-sm rounded-[var(--radius-sm)] border border-control-border-default bg-clip-padding bg-control-bg px-sm tr-text-ui text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:border-control-border-active data-[open=true]:bg-control-bg-selected";
+	"flex h-32 min-w-0 items-center gap-8 rounded-[var(--radius-sm)] border border-control-border-default bg-clip-padding bg-control-bg px-8 tr-text-ui text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:border-control-border-active data-[open=true]:bg-control-bg-selected";
 
 export function NewWorkspaceDialog({
 	open,
@@ -321,7 +321,7 @@ export function NewWorkspaceDialog({
 				ref={setDialogEl}
 				hideClose
 				data-testid="new-workspace-dialog"
-				className="max-w-[600px] gap-md p-md"
+				className="max-w-[600px] gap-12 p-12"
 				onEscapeKeyDown={(event) => {
 					if (!slashCompletion.open) return;
 					event.preventDefault();
@@ -343,7 +343,7 @@ export function NewWorkspaceDialog({
 
 				<fieldset
 					data-testid="ws-target"
-					className="flex w-fit items-center gap-0.5 rounded-[var(--radius-md)] border border-control-border-default bg-control-bg p-0.5"
+					className="flex w-fit items-center gap-2 rounded-[var(--radius-md)] border border-control-border-default bg-control-bg p-2"
 				>
 					<legend className="sr-only">Where the work runs</legend>
 					<TargetOption
@@ -364,7 +364,7 @@ export function NewWorkspaceDialog({
 					/>
 				</fieldset>
 
-				<div className="flex flex-wrap items-center gap-sm">
+				<div className="flex flex-wrap items-center gap-8">
 					<ProjectPicker
 						projects={projects}
 						current={selectedProject?.name ?? "Project"}
@@ -394,9 +394,9 @@ export function NewWorkspaceDialog({
 				{selectedProject && selectedProject.trusted !== true && aliasSkills.length > 0 ? (
 					<div
 						data-testid="ws-trust-notice"
-						className="flex w-full items-center gap-sm rounded-[var(--radius-sm)] border border-border-default border-l-[3px] border-l-feedback-warning bg-feedback-warning-subtle px-md py-sm text-left"
+						className="flex w-full items-center gap-8 rounded-[var(--radius-sm)] border border-border-default border-l-[3px] border-l-feedback-warning bg-feedback-warning-subtle px-12 py-8 text-left"
 					>
-						<TriangleAlert className="size-4 shrink-0 text-feedback-warning" />
+						<TriangleAlert className="size-16 shrink-0 text-feedback-warning" />
 						<span className="min-w-0 flex-1 tr-text-ui text-text-default">
 							This project ships {aliasSkills.length} skill{aliasSkills.length === 1 ? "" : "s"} —
 							off until you trust it. Your personal and ThinkRail's built-in skills are unaffected.
@@ -417,9 +417,9 @@ export function NewWorkspaceDialog({
 					{promptNote ? (
 						<p
 							data-testid="ws-prompt-note"
-							className="mb-xs flex items-start gap-sm rounded-[var(--radius-sm)] border border-primary-muted bg-clip-padding bg-primary-subtle px-md py-sm text-left text-text-muted tr-text-metadata leading-snug"
+							className="mb-4 flex items-start gap-8 rounded-[var(--radius-sm)] border border-primary-muted bg-clip-padding bg-primary-subtle px-12 py-8 text-left text-text-muted tr-text-metadata leading-snug"
 						>
-							<Sparkles className="mt-0.5 size-3.5 shrink-0 text-primary" />
+							<Sparkles className="mt-2 size-14 shrink-0 text-primary" />
 							<span>{promptNote}</span>
 						</p>
 					) : null}
@@ -445,25 +445,25 @@ export function NewWorkspaceDialog({
 							commands={slashCompletion.matches}
 							activeIndex={slashCompletion.activeIndex}
 							onSelect={slashCompletion.pick}
-							className="absolute top-full left-sm z-50 mt-xs"
+							className="absolute top-full left-8 z-50 mt-4"
 						/>
 					) : prompt.trim() && isolated ? (
 						<p
 							data-testid="workspace-naming-hint"
-							className="px-xs text-text-muted tr-text-metadata"
+							className="px-4 text-text-muted tr-text-metadata"
 						>
 							ThinkRail will name the workspace and branch from your request.
 						</p>
 					) : (
-						<p className="mt-xs text-text-muted tr-text-metadata">
+						<p className="mt-4 text-text-muted tr-text-metadata">
 							Type <span className="tr-code-text">/</span> for a project skill — previewed from the
 							current checkout; the created workspace's session is authoritative.
 						</p>
 					)}
 				</div>
 
-				<div className="flex flex-wrap items-center gap-sm">
-					<div className="flex min-w-0 flex-1 flex-wrap items-center gap-sm">
+				<div className="flex flex-wrap items-center gap-8">
+					<div className="flex min-w-0 flex-1 flex-wrap items-center gap-8">
 						<ModelSelector
 							models={models}
 							current={model}
@@ -486,10 +486,10 @@ export function NewWorkspaceDialog({
 						data-testid="create-workspace"
 						disabled={creating}
 						onClick={() => void create()}
-						className="flex h-8 shrink-0 items-center gap-sm rounded-[var(--radius-sm)] bg-control-primary-bg px-md tr-text-action text-control-primary-text outline-none transition-colors hover:bg-control-primary-bg-hovered focus-visible:ring-2 focus-visible:ring-primary disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text"
+						className="flex h-32 shrink-0 items-center gap-8 rounded-[var(--radius-sm)] bg-control-primary-bg px-12 tr-text-action text-control-primary-text outline-none transition-colors hover:bg-control-primary-bg-hovered focus-visible:ring-2 focus-visible:ring-primary disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text"
 					>
 						{isolated ? "Create" : "Start"}
-						<span className="inline-flex h-4 min-w-4 items-center justify-center rounded-[var(--radius-sm)] bg-on-primary-soft px-1 tr-code-text">
+						<span className="inline-flex h-16 min-w-16 items-center justify-center rounded-[var(--radius-sm)] bg-on-primary-soft px-4 tr-code-text">
 							↵
 						</span>
 					</button>
@@ -524,12 +524,12 @@ function TargetOption({
 			data-testid={testid}
 			data-active={active}
 			className={cn(
-				"flex h-7 cursor-pointer items-center gap-sm rounded-[var(--radius-sm)] px-md tr-text-ui transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary",
+				"flex h-28 cursor-pointer items-center gap-8 rounded-[var(--radius-sm)] px-12 tr-text-ui transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary",
 				active ? "bg-primary-subtle text-primary" : "text-text-muted hover:text-text-default",
 			)}
 		>
 			<input type="radio" name={name} className="sr-only" checked={active} onChange={onSelect} />
-			<Icon className="size-3.5 shrink-0" />
+			<Icon className="size-14 shrink-0" />
 			{label}
 		</label>
 	);
@@ -555,10 +555,10 @@ function ProjectPicker({
 				className={`${PILL} max-w-[180px]`}
 			>
 				<span className="flex size-[18px] shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-primary">
-					<Box className="size-3 text-text-on-primary" />
+					<Box className="size-12 text-text-on-primary" />
 				</span>
 				<span className="truncate">{current}</span>
-				<ChevronDown className="size-3 shrink-0 text-text-muted" />
+				<ChevronDown className="size-12 shrink-0 text-text-muted" />
 			</PopoverTrigger>
 			<PopoverContent align="start" container={container} className="w-[280px] p-0">
 				<Command>
@@ -576,7 +576,7 @@ function ProjectPicker({
 										setOpen(false);
 									}}
 								>
-									<Box className="size-3.5 shrink-0 text-text-muted" />
+									<Box className="size-14 shrink-0 text-text-muted" />
 									<span className="truncate">{p.name}</span>
 								</CommandItem>
 							))}

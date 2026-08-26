@@ -54,7 +54,7 @@ function statusLabel(status: TodoStatus, glance: PlanGlance): string {
 export function StatusIcon({ status, glance }: { status: TodoStatus; glance: PlanGlance }) {
 	if (status === "in_progress") {
 		const { Icon, className } = glanceIcon(glance);
-		return <Icon data-glance={glance} className={cn("size-4 shrink-0", className)} />;
+		return <Icon data-glance={glance} className={cn("size-16 shrink-0", className)} />;
 	}
 	return <PlanStatusIcon kind={status === "done" ? "done" : "pending"} />;
 }
@@ -76,8 +76,8 @@ export function TodoAddRow({
 		} catch {}
 	};
 	return (
-		<div className="flex items-center gap-sm px-sm py-xs">
-			<Plus className="size-3.5 shrink-0 text-text-muted" />
+		<div className="flex items-center gap-8 px-8 py-4">
+			<Plus className="size-14 shrink-0 text-text-muted" />
 			<input
 				data-testid="todo-add-input"
 				value={draft}
@@ -95,9 +95,9 @@ export function TodoAddRow({
 					onClick={onOpenPlan}
 					aria-label="Open the plan page"
 					title="Open the plan as a page — review each step's changes"
-					className="flex size-6 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted hover:bg-control-bg-hovered hover:text-text-default focus-visible:opacity-100"
+					className="flex size-24 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted hover:bg-control-bg-hovered hover:text-text-default focus-visible:opacity-100"
 				>
-					<FileText className="size-3.5" />
+					<FileText className="size-14" />
 				</button>
 			) : null}
 		</div>
@@ -118,12 +118,12 @@ function GroupBlock({
 	const status = group.status;
 	const { done, total } = groupProgress(group);
 	return (
-		<div className="mb-sm" data-testid="todo-group" data-status={status}>
-			<div className="flex items-center gap-sm px-xs py-xs">
+		<div className="mb-8" data-testid="todo-group" data-status={status}>
+			<div className="flex items-center gap-8 px-4 py-4">
 				{status === "active" ? (
 					<StatusIcon status="in_progress" glance={glance} />
 				) : (
-					<Circle className="size-4 shrink-0 text-text-muted" />
+					<Circle className="size-16 shrink-0 text-text-muted" />
 				)}
 				<span
 					className={cn(
@@ -142,7 +142,7 @@ function GroupBlock({
 					{done}/{total}
 				</span>
 			</div>
-			<ul className="ml-md flex flex-col border-border-default border-l pl-sm">
+			<ul className="ml-12 flex flex-col border-border-default border-l pl-8">
 				{group.todos.map((todo) => (
 					<TodoRow
 						key={todo.id}
@@ -233,23 +233,23 @@ function DoneGroup({
 	const [expanded, setExpanded] = useState(false);
 	const Chevron = expanded ? ChevronDown : ChevronRight;
 	return (
-		<div className="mb-sm">
+		<div className="mb-8">
 			<button
 				type="button"
 				data-testid="todo-group-done"
 				data-expanded={expanded}
 				onClick={() => setExpanded((v) => !v)}
-				className="flex w-full items-center gap-sm rounded-[var(--radius-sm)] px-xs py-xs text-left hover:bg-control-bg-hovered"
+				className="flex w-full items-center gap-8 rounded-[var(--radius-sm)] px-4 py-4 text-left hover:bg-control-bg-hovered"
 			>
-				<Chevron className="size-3.5 shrink-0 text-text-muted" />
-				<Check className="size-4 shrink-0 text-primary" />
+				<Chevron className="size-14 shrink-0 text-text-muted" />
+				<Check className="size-16 shrink-0 text-primary" />
 				<span className="min-w-0 flex-1 truncate tr-text-ui text-text-muted line-through">
 					{group.title}
 				</span>
 				<span className="shrink-0 tr-text-eyebrow text-text-muted">{group.todos.length} done</span>
 			</button>
 			{expanded ? (
-				<ul className="ml-md flex flex-col border-border-default border-l pl-sm">
+				<ul className="ml-12 flex flex-col border-border-default border-l pl-8">
 					{group.todos.map((todo) => (
 						<TodoRow
 							key={todo.id}
@@ -296,7 +296,7 @@ function ChangeSetChip({
 				{count} {count === 1 ? "file" : "files"}
 			</button>
 			{expanded && set.kind === "paths" ? (
-				<ul className="mt-xs flex flex-col gap-xs">
+				<ul className="mt-4 flex flex-col gap-4">
 					{set.paths.map((path) => (
 						<li key={path}>
 							<button
@@ -332,7 +332,7 @@ function TodoRow({
 		<li
 			data-testid="todo-row"
 			data-status={todo.status}
-			className="group flex items-center gap-sm rounded-[var(--radius-sm)] px-xs py-xs hover:bg-control-bg-hovered"
+			className="group flex items-center gap-8 rounded-[var(--radius-sm)] px-4 py-4 hover:bg-control-bg-hovered"
 		>
 			<span className="shrink-0" title={statusLabel(todo.status, glance)}>
 				<StatusIcon status={todo.status} glance={glance} />
@@ -359,7 +359,7 @@ function TodoRow({
 					title="Added by you — the agent won't drop it"
 					className="shrink-0 text-text-muted"
 				>
-					<UserRound className="size-3.5" />
+					<UserRound className="size-14" />
 				</span>
 			) : null}
 			<button
@@ -367,9 +367,9 @@ function TodoRow({
 				onClick={onRemove}
 				aria-label="Remove"
 				title="Remove"
-				className="flex size-6 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted opacity-0 transition-opacity hover:bg-container-elevated-bg hover:text-feedback-error group-hover:opacity-100 focus-visible:opacity-100"
+				className="flex size-24 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted opacity-0 transition-opacity hover:bg-container-elevated-bg hover:text-feedback-error group-hover:opacity-100 focus-visible:opacity-100"
 			>
-				<Trash2 className="size-3.5" />
+				<Trash2 className="size-14" />
 			</button>
 		</li>
 	);

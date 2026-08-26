@@ -12,9 +12,9 @@ export function EditCard({ args, result, status, workspaceRoot }: ToolRenderProp
 
 	if (status === "error") {
 		return (
-			<div data-testid="tool-edit" className="flex flex-col gap-xs">
+			<div data-testid="tool-edit" className="flex flex-col gap-4">
 				<EditHeader path={path} workspaceRoot={workspaceRoot} />
-				<pre className="overflow-auto px-sm py-xs text-feedback-error tr-code-text">{message}</pre>
+				<pre className="overflow-auto px-8 py-4 text-feedback-error tr-code-text">{message}</pre>
 			</div>
 		);
 	}
@@ -23,7 +23,7 @@ export function EditCard({ args, result, status, workspaceRoot }: ToolRenderProp
 	const newLines = newText ? newText.split("\n") : [];
 
 	return (
-		<div data-testid="tool-edit" className="flex flex-col gap-xs">
+		<div data-testid="tool-edit" className="flex flex-col gap-4">
 			<EditHeader path={path} workspaceRoot={workspaceRoot} />
 			<Collapsible
 				lines={oldLines.length + newLines.length}
@@ -34,10 +34,10 @@ export function EditCard({ args, result, status, workspaceRoot }: ToolRenderProp
 						const key = `old-${i}`;
 						return (
 							<div key={key} className="flex bg-feedback-error-subtle">
-								<span className="w-6 shrink-0 select-none px-1 text-right text-feedback-error-muted">
+								<span className="w-24 shrink-0 select-none px-4 text-right text-feedback-error-muted">
 									−
 								</span>
-								<pre className="min-w-0 flex-1 px-1 text-feedback-error tr-code-text">{line}</pre>
+								<pre className="min-w-0 flex-1 px-4 text-feedback-error tr-code-text">{line}</pre>
 							</div>
 						);
 					})}
@@ -45,10 +45,10 @@ export function EditCard({ args, result, status, workspaceRoot }: ToolRenderProp
 						const key = `new-${i}`;
 						return (
 							<div key={key} className="flex bg-feedback-success-subtle">
-								<span className="w-6 shrink-0 select-none px-1 text-right text-feedback-success-muted">
+								<span className="w-24 shrink-0 select-none px-4 text-right text-feedback-success-muted">
 									+
 								</span>
-								<pre className="min-w-0 flex-1 px-1 text-feedback-success tr-code-text">{line}</pre>
+								<pre className="min-w-0 flex-1 px-4 text-feedback-success tr-code-text">{line}</pre>
 							</div>
 						);
 					})}
@@ -61,8 +61,8 @@ export function EditCard({ args, result, status, workspaceRoot }: ToolRenderProp
 function EditHeader({ path, workspaceRoot }: { path: string; workspaceRoot?: string | undefined }) {
 	const displayPath = projectRelativePath(path, workspaceRoot);
 	return (
-		<div className="flex items-center gap-xs tr-text-metadata">
-			<Pencil className="size-3.5 shrink-0 text-feedback-warning" />
+		<div className="flex items-center gap-4 tr-text-metadata">
+			<Pencil className="size-14 shrink-0 text-feedback-warning" />
 			<span className="truncate text-text-default" title={path}>
 				{displayPath}
 			</span>

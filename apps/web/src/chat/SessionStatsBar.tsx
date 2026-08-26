@@ -40,17 +40,17 @@ export function SessionStatsBar({ stats }: { stats: SessionStats | null }) {
 	return (
 		<div
 			data-testid="session-stats"
-			className="flex shrink-0 flex-nowrap items-center justify-end gap-x-xs text-text-muted tr-text-metadata"
+			className="flex shrink-0 flex-nowrap items-center justify-end gap-x-4 text-text-muted tr-text-metadata"
 			title="Cumulative usage: ↑ input · ↓ output · R cache read · W cache write"
 		>
 			{parts.map((part, index) => (
-				<span key={part} className="flex items-center gap-xs whitespace-nowrap">
+				<span key={part} className="flex items-center gap-4 whitespace-nowrap">
 					{index > 0 ? <span aria-hidden="true">·</span> : null}
 					{part}
 				</span>
 			))}
 			{context ? (
-				<span className="flex items-center gap-xs whitespace-nowrap" title="Context window used">
+				<span className="flex items-center gap-4 whitespace-nowrap" title="Context window used">
 					{parts.length > 0 ? <span aria-hidden="true">·</span> : null}
 					<span aria-hidden="true" className="text-primary">
 						{context.bar}

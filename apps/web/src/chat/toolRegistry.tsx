@@ -77,7 +77,7 @@ export function DefaultToolRenderer({ args, result, status }: ToolRenderProps): 
 	const argsText = toText(args);
 	const resultText = toText(result);
 	return (
-		<div className="flex flex-col gap-xs">
+		<div className="flex flex-col gap-4">
 			{argsText && argsText !== "{}" ? (
 				<pre className="overflow-auto tr-code-text text-text-muted">{argsText}</pre>
 			) : null}

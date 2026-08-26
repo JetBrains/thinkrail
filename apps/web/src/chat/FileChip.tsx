@@ -2,7 +2,7 @@ import { FileIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
 const CHIP_BASE =
-	"flex max-w-full items-center gap-xs rounded-[var(--radius-sm)] border bg-clip-padding px-sm py-xs tr-text-metadata";
+	"flex max-w-full items-center gap-4 rounded-[var(--radius-sm)] border bg-clip-padding px-8 py-4 tr-text-metadata";
 const CHIP_TONE = {
 	default: "border-border-default bg-container-elevated-bg text-text-default",
 	error: "border-feedback-error-muted bg-feedback-error-subtle text-feedback-error",
@@ -35,7 +35,7 @@ export function FileChip({
 	const chip = `${CHIP_BASE} ${CHIP_TONE[tone]}`;
 	const content = (
 		<>
-			{icon ? <FileIcon className="size-3 shrink-0" /> : null}
+			{icon ? <FileIcon className="size-12 shrink-0" /> : null}
 			<span className="min-w-0 truncate">{label}</span>
 			{meta ? <span className="shrink-0">{meta}</span> : null}
 			{trailing ? <span className="flex shrink-0 items-center">{trailing}</span> : null}

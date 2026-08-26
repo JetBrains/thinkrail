@@ -70,7 +70,7 @@ export default function RenderedDiff({ tab }: { tab: DiffTab }) {
 	return (
 		<div data-testid="rendered-diff" className="h-full overflow-auto bg-container-content-bg">
 			<article
-				className={`mx-auto max-w-[78ch] px-xl py-lg ${DIFF_MARKS}`}
+				className={`mx-auto max-w-[78ch] px-24 py-16 ${DIFF_MARKS}`}
 				// biome-ignore lint/security/noDangerouslySetInnerHtml: htmldiff meshing of our own escaped react-markdown output (user-approved; same risk class as the shiki path in chat/Markdown)
 				dangerouslySetInnerHTML={{ __html: merge.html }}
 			/>

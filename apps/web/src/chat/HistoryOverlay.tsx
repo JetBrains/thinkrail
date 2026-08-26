@@ -86,11 +86,11 @@ function DeleteChatButton({
 				event.stopPropagation();
 				onDeleteChat(workspaceId, sessionId);
 			}}
-			className={`flex shrink-0 items-center justify-center rounded-[var(--radius-sm)] p-xs text-text-muted opacity-0 transition hover:bg-container-elevated-bg hover:text-feedback-error group-hover:opacity-100 ${
+			className={`flex shrink-0 items-center justify-center rounded-[var(--radius-sm)] p-4 text-text-muted opacity-0 transition hover:bg-container-elevated-bg hover:text-feedback-error group-hover:opacity-100 ${
 				isSelected ? "opacity-100" : ""
 			}`}
 		>
-			<Trash2 className="size-3.5" />
+			<Trash2 className="size-14" />
 		</button>
 	);
 }
@@ -124,7 +124,7 @@ function PromptRow({
 			data-testid="history-item"
 			data-kind="prompt"
 			data-selected={isSelected}
-			className={`group flex w-full items-center gap-xs rounded-[var(--radius-sm)] border-l-2 py-xs pl-sm pr-xs text-left tr-text-ui ${
+			className={`group flex w-full items-center gap-4 rounded-[var(--radius-sm)] border-l-2 py-4 pl-8 pr-4 text-left tr-text-ui ${
 				isSelected
 					? "border-l-primary bg-control-bg-selected text-text-default"
 					: "border-l-transparent text-text-muted"
@@ -133,13 +133,13 @@ function PromptRow({
 			<button
 				type="button"
 				onClick={onPick}
-				className="flex min-w-0 flex-1 items-center gap-sm overflow-hidden text-left"
+				className="flex min-w-0 flex-1 items-center gap-8 overflow-hidden text-left"
 			>
 				<span className="min-w-0 flex-1 overflow-hidden whitespace-nowrap text-ellipsis">
 					<Highlight text={firstLine} query={query} />
 				</span>
 				{showChip ? (
-					<span className="shrink-0 rounded-full border border-border-default bg-container-workspace-bg px-xs text-text-muted tr-text-metadata">
+					<span className="shrink-0 rounded-full border border-border-default bg-container-workspace-bg px-4 text-text-muted tr-text-metadata">
 						{workspaceName ?? "workspace"}
 					</span>
 				) : null}
@@ -164,11 +164,11 @@ function PromptRow({
 					e.stopPropagation();
 					onSaveAsTemplate();
 				}}
-				className={`flex shrink-0 items-center justify-center rounded-[var(--radius-sm)] p-xs text-text-muted opacity-0 transition hover:bg-container-elevated-bg hover:text-text-default group-hover:opacity-100 ${
+				className={`flex shrink-0 items-center justify-center rounded-[var(--radius-sm)] p-4 text-text-muted opacity-0 transition hover:bg-container-elevated-bg hover:text-text-default group-hover:opacity-100 ${
 					isSelected ? "opacity-100" : ""
 				}`}
 			>
-				<Save className="size-3.5" />
+				<Save className="size-14" />
 			</button>
 			{target ? (
 				<>
@@ -189,11 +189,11 @@ function PromptRow({
 							e.stopPropagation();
 							onOpenMessage(target);
 						}}
-						className={`flex shrink-0 items-center justify-center rounded-[var(--radius-sm)] p-xs text-text-muted opacity-0 transition hover:bg-container-elevated-bg hover:text-text-default group-hover:opacity-100 ${
+						className={`flex shrink-0 items-center justify-center rounded-[var(--radius-sm)] p-4 text-text-muted opacity-0 transition hover:bg-container-elevated-bg hover:text-text-default group-hover:opacity-100 ${
 							isSelected ? "opacity-100" : ""
 						}`}
 					>
-						<CornerUpRight className="size-3.5" />
+						<CornerUpRight className="size-14" />
 					</button>
 				</>
 			) : null}
@@ -226,7 +226,7 @@ function MessageRow({
 			data-testid="history-item"
 			data-kind="message"
 			data-selected={isSelected}
-			className={`group flex w-full items-center gap-xs rounded-[var(--radius-sm)] border-l-2 pr-xs tr-text-ui ${
+			className={`group flex w-full items-center gap-4 rounded-[var(--radius-sm)] border-l-2 pr-4 tr-text-ui ${
 				isSelected
 					? "border-l-primary bg-control-bg-selected text-text-default"
 					: "border-l-transparent text-text-muted"
@@ -236,9 +236,9 @@ function MessageRow({
 				type="button"
 				onClick={onPick}
 				disabled={unmapped}
-				className="flex min-w-0 flex-1 flex-col gap-0.5 px-sm py-xs text-left disabled:cursor-default"
+				className="flex min-w-0 flex-1 flex-col gap-2 px-8 py-4 text-left disabled:cursor-default"
 			>
-				<span className="flex items-center gap-xs text-text-muted tr-text-metadata">
+				<span className="flex items-center gap-4 text-text-muted tr-text-metadata">
 					<span className="truncate">
 						{hit.sessionTitle || hit.cwd.split("/").pop() || "session"}
 					</span>
@@ -292,10 +292,10 @@ function HistoryPreview({
 		<div data-testid="history-preview" className={`flex flex-col overflow-hidden ${className}`}>
 			{item ? (
 				<>
-					<div className="min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap break-words p-sm tr-text-ui text-text-default">
+					<div className="min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap break-words p-8 tr-text-ui text-text-default">
 						<Highlight text={item.hit.text} query={query} />
 					</div>
-					<div className="shrink-0 border-t border-border-default px-sm py-xs text-text-muted tr-text-metadata">
+					<div className="shrink-0 border-t border-border-default px-8 py-4 text-text-muted tr-text-metadata">
 						{item.kind === "prompt" ? (
 							<PromptPreviewFooter hit={item.hit} workspaceName={workspaceName} />
 						) : (
@@ -431,7 +431,7 @@ export function HistoryOverlay({
 		: undefined;
 
 	const resultsBody = error ? (
-		<div data-testid="history-error" className="p-md text-center text-feedback-error tr-text-ui">
+		<div data-testid="history-error" className="p-12 text-center text-feedback-error tr-text-ui">
 			search unavailable
 		</div>
 	) : !result ? null : (
@@ -439,16 +439,16 @@ export function HistoryOverlay({
 			{result.indexing ? (
 				<div
 					data-testid="history-indexing"
-					className="px-sm py-1 text-center text-text-muted tr-text-metadata"
+					className="px-8 py-4 text-center text-text-muted tr-text-metadata"
 				>
 					indexing history…
 				</div>
 			) : null}
 			{hasResults ? (
-				<div className="flex flex-col gap-xs p-xs">
+				<div className="flex flex-col gap-4 p-4">
 					{result.prompts.length > 0 ? (
-						<div className="flex flex-col gap-0.5">
-							<div className="flex items-center justify-between px-sm py-0.5 tr-text-eyebrow text-text-muted">
+						<div className="flex flex-col gap-2">
+							<div className="flex items-center justify-between px-8 py-2 tr-text-eyebrow text-text-muted">
 								<span>Prompts</span>
 								<span data-testid="history-counts">
 									{promptCount}/{result.promptTotal}
@@ -471,8 +471,8 @@ export function HistoryOverlay({
 						</div>
 					) : null}
 					{stage === "zoomed" && result.messages.length > 0 ? (
-						<div className="flex flex-col gap-0.5">
-							<div className="flex items-center justify-between px-sm py-0.5 tr-text-eyebrow text-text-muted">
+						<div className="flex flex-col gap-2">
+							<div className="flex items-center justify-between px-8 py-2 tr-text-eyebrow text-text-muted">
 								<span>Messages</span>
 								<span data-testid="history-counts">
 									{messageCount}/{result.messageTotal}
@@ -495,7 +495,7 @@ export function HistoryOverlay({
 					) : null}
 				</div>
 			) : isEmpty ? (
-				<div className="p-md text-center text-text-muted tr-text-ui">no matches</div>
+				<div className="p-12 text-center text-text-muted tr-text-ui">no matches</div>
 			) : null}
 		</>
 	);
@@ -504,9 +504,9 @@ export function HistoryOverlay({
 		<div
 			data-testid="history-overlay"
 			data-stage={stage}
-			className="absolute bottom-full left-sm right-sm mb-xs flex flex-col overflow-hidden rounded-[var(--radius-lg)] border border-border-default bg-container-elevated-bg shadow-[var(--shadow-md)]"
+			className="absolute bottom-full left-8 right-8 mb-4 flex flex-col overflow-hidden rounded-[var(--radius-lg)] border border-border-default bg-container-elevated-bg shadow-[var(--shadow-md)]"
 		>
-			<div className="flex items-center gap-sm border-b border-border-default p-sm">
+			<div className="flex items-center gap-8 border-b border-border-default p-8">
 				<input
 					ref={inputRef}
 					data-testid="history-query"
@@ -520,7 +520,7 @@ export function HistoryOverlay({
 					<DropdownMenuTrigger
 						data-testid="history-scope"
 						data-scope={scope.kind}
-						className="flex shrink-0 items-center gap-xs rounded-full border border-border-default bg-container-workspace-bg px-sm py-0.5 text-text-muted tr-text-metadata outline-none hover:bg-control-bg-hovered"
+						className="flex shrink-0 items-center gap-4 rounded-full border border-border-default bg-container-workspace-bg px-8 py-2 text-text-muted tr-text-metadata outline-none hover:bg-control-bg-hovered"
 					>
 						<span>{SCOPE_LABELS[scope.kind]}</span>
 						<span className="text-text-muted">⌃R</span>
@@ -539,7 +539,7 @@ export function HistoryOverlay({
 								data-scope={kind}
 								onSelect={() => onSetScope(kind)}
 							>
-								<Check className={kind === scope.kind ? "size-3.5" : "size-3.5 invisible"} />
+								<Check className={kind === scope.kind ? "size-14" : "size-14 invisible"} />
 								<span>{SCOPE_MENU_LABELS[kind]}</span>
 							</DropdownMenuItem>
 						))}
@@ -576,7 +576,7 @@ export function HistoryOverlay({
 					type="button"
 					data-testid="history-expand-hint"
 					onClick={onToggleStage}
-					className="border-t border-border-default p-xs text-center text-text-muted tr-text-metadata hover:bg-control-bg-hovered"
+					className="border-t border-border-default p-4 text-center text-text-muted tr-text-metadata hover:bg-control-bg-hovered"
 				>
 					{result.messageTotal} matches in conversations · ⇥ expand
 				</button>

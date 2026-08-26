@@ -23,12 +23,12 @@ export const CollapsedPanelRail = forwardRef<HTMLButtonElement, CollapsedPanelRa
 				title={accessibleLabel}
 				onClick={onOpen}
 				className={cn(
-					"flex h-full w-7 shrink-0 flex-col items-center gap-md bg-container-sidebar-bg pt-xs text-text-muted outline-none transition-colors",
+					"flex h-full w-28 shrink-0 flex-col items-center gap-12 bg-container-sidebar-bg pt-4 text-text-muted outline-none transition-colors",
 					"hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary",
 					side === "left" ? "border-border-default border-r" : "border-border-default border-l",
 				)}
 			>
-				<Icon aria-hidden="true" className="size-4 shrink-0" />
+				<Icon aria-hidden="true" className="size-16 shrink-0" />
 				<span aria-hidden="true" className="rotate-180 [writing-mode:vertical-rl] tr-text-eyebrow">
 					{label}
 				</span>

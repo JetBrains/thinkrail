@@ -102,7 +102,7 @@ test("workbench strips and feature toolbars keep one-row geometry with ARIA tabs
 	const rightStrip = page.getByTestId("right-tab-strip");
 	const bottomStrip = page.getByTestId("bottom-tab-strip");
 	for (const strip of [centerStrip, rightStrip, bottomStrip]) {
-		await expect(strip).toHaveCSS("height", "28px");
+		await expect(strip).toHaveCSS("height", "32px");
 		await expect(strip.getByRole("tablist")).toHaveCount(1);
 		await expect(strip.getByRole("button", { name: /^Scroll tabs (left|right)$/ })).toHaveCount(0);
 		const active = strip.locator('[role="tab"][aria-selected="true"]');
@@ -128,9 +128,9 @@ test("workbench strips and feature toolbars keep one-row geometry with ARIA tabs
 	await expect(bottomStrip.getByTestId("terminal-tab-close")).toHaveCount(1);
 
 	await page.getByTestId("tab-changes").click();
-	await expect(page.getByTestId("chat-toolbar")).toHaveCSS("height", "28px");
+	await expect(page.getByTestId("chat-toolbar")).toHaveCSS("height", "32px");
 	await expect(page.getByTestId("chat-toolbar")).toHaveCSS("overflow-x", "clip");
-	await expect(page.getByTestId("changes-view-toggle")).toHaveCSS("height", "28px");
+	await expect(page.getByTestId("changes-view-toggle")).toHaveCSS("height", "32px");
 });
 
 test("overflow uses directional fades without changing tab-strip geometry", async ({ page }) => {
@@ -155,7 +155,7 @@ test("overflow uses directional fades without changing tab-strip geometry", asyn
 			tablist.evaluate((element) => getComputedStyle(element, "::-webkit-scrollbar").display),
 		)
 		.toBe("none");
-	await expect(strip).toHaveCSS("height", "28px");
+	await expect(strip).toHaveCSS("height", "32px");
 	await expect.poll(() => height(strip.getByRole("tab").first())).toBeCloseTo(28, 1);
 
 	await tablist.evaluate((element) => {
@@ -183,7 +183,7 @@ test("overflow uses directional fades without changing tab-strip geometry", asyn
 			return tabBox.x >= listBox.x && tabBox.x + tabBox.width <= listBox.x + listBox.width + 1;
 		})
 		.toBe(true);
-	await expect(strip).toHaveCSS("height", "28px");
+	await expect(strip).toHaveCSS("height", "32px");
 	await expect.poll(() => height(last)).toBeCloseTo(28, 1);
 });
 
@@ -726,6 +726,15 @@ test("custom presets and independent group limits round-trip through synchronize
 	);
 });
 
+test("Layout settings controls keep their container-preset max-widths", async ({ page }) => {
+	await openDefaultWorkbench(page);
+	await page.getByTestId("open-settings").click();
+	await page.getByTestId("settings-nav-layout").click();
+
+	await expect(page.getByTestId("layout-preset-save-row")).toHaveCSS("max-width", "512px");
+	await expect(page.getByTestId("layout-group-limits")).toHaveCSS("max-width", "384px");
+});
+
 test("an accepted side-group overage is grandfathered without allowing further growth", async ({
 	page,
 }) => {
@@ -814,6 +823,7 @@ test("remote closures reconcile chat history and cached file reopening", async (
 	await expect(chat).toHaveCount(0);
 	const history = page.getByTestId("chat-history");
 	await expect(history).toBeVisible();
+	await expect(history).toHaveCSS("width", "32px");
 	await waitForLayoutSettled(page);
 	await history.press("Enter");
 	await expect(page.getByTestId("closed-chat-row")).toHaveCount(1);

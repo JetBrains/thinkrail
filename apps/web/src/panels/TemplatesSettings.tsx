@@ -71,7 +71,7 @@ function StarterTemplatesOffer() {
 	};
 
 	return (
-		<div className="flex flex-col items-start gap-sm">
+		<div className="flex flex-col items-start gap-8">
 			<p className="text-text-muted tr-text-metadata">
 				No templates yet. Add a few common ones to get started.
 			</p>
@@ -82,7 +82,7 @@ function StarterTemplatesOffer() {
 				disabled={adding}
 				onClick={() => void addStarters()}
 			>
-				<Sparkles className="size-3.5" />
+				<Sparkles className="size-14" />
 				Add starter templates
 			</Button>
 		</div>
@@ -163,8 +163,8 @@ export function TemplatesSettings() {
 		!failed && (globalTemplates == null || (workspaceId != null && projectTemplates == null));
 
 	return (
-		<section data-testid="settings-templates" className="flex flex-col gap-lg">
-			<div className="flex flex-col gap-xs">
+		<section data-testid="settings-templates" className="flex flex-col gap-16">
+			<div className="flex flex-col gap-4">
 				<h3 className="tr-title-section text-text-default">Prompt templates</h3>
 				<p className="text-text-muted tr-text-metadata">
 					Reusable prompts, expanded from the composer's <code className="tr-code-text">/</code>{" "}
@@ -233,16 +233,16 @@ function TemplateGroup({
 	onEdit: (template: TemplateInfo) => void;
 }) {
 	return (
-		<section className="flex flex-col gap-sm">
+		<section className="flex flex-col gap-8">
 			<div className="flex items-center justify-between">
 				<h4 className="tr-text-eyebrow text-text-muted">{title}</h4>
 				<button
 					type="button"
 					data-testid={`template-new-${scope}`}
 					onClick={onNew}
-					className="flex items-center gap-xs rounded-[var(--radius-sm)] px-sm py-xs text-text-muted tr-text-metadata transition-colors hover:bg-control-bg-hovered hover:text-text-default"
+					className="flex items-center gap-4 rounded-[var(--radius-sm)] px-8 py-4 text-text-muted tr-text-metadata transition-colors hover:bg-control-bg-hovered hover:text-text-default"
 				>
-					<Plus className="size-3.5" />
+					<Plus className="size-14" />
 					New
 				</button>
 			</div>
@@ -253,7 +253,7 @@ function TemplateGroup({
 					<p className="text-text-muted tr-text-metadata">No templates yet.</p>
 				)
 			) : (
-				<div className="flex flex-col gap-xs">
+				<div className="flex flex-col gap-4">
 					{templates.map((t) => (
 						<TemplateRow
 							key={t.name}
@@ -317,7 +317,7 @@ function TemplateRow({
 				data-testid="template-row"
 				data-name={template.name}
 				data-scope={template.scope}
-				className="group flex items-center gap-sm rounded-[var(--radius-sm)] border border-border-default bg-control-bg px-md py-sm"
+				className="group flex items-center gap-8 rounded-[var(--radius-sm)] border border-border-default bg-control-bg px-12 py-8"
 			>
 				<div className="flex min-w-0 flex-1 flex-col">
 					<span className="truncate tr-text-ui text-text-default">{template.name}</span>
@@ -327,7 +327,7 @@ function TemplateRow({
 						</span>
 					) : null}
 				</div>
-				<div className="flex shrink-0 items-center gap-xs">
+				<div className="flex shrink-0 items-center gap-4">
 					{showOpenAsFile ? (
 						<button
 							type="button"
@@ -335,9 +335,9 @@ function TemplateRow({
 							aria-label="Open as file"
 							title="Open as file"
 							onClick={openAsFile}
-							className="flex size-6 items-center justify-center rounded-[var(--radius-sm)] text-text-muted transition hover:bg-control-bg-hovered hover:text-text-default"
+							className="flex size-24 items-center justify-center rounded-[var(--radius-sm)] text-text-muted transition hover:bg-control-bg-hovered hover:text-text-default"
 						>
-							<FileText className="size-3.5" />
+							<FileText className="size-14" />
 						</button>
 					) : null}
 					<button
@@ -346,9 +346,9 @@ function TemplateRow({
 						aria-label="Edit"
 						title="Edit"
 						onClick={onEdit}
-						className="flex size-6 items-center justify-center rounded-[var(--radius-sm)] text-text-muted transition hover:bg-control-bg-hovered hover:text-text-default"
+						className="flex size-24 items-center justify-center rounded-[var(--radius-sm)] text-text-muted transition hover:bg-control-bg-hovered hover:text-text-default"
 					>
-						<Pencil className="size-3.5" />
+						<Pencil className="size-14" />
 					</button>
 					<PopoverTrigger asChild>
 						<button
@@ -356,9 +356,9 @@ function TemplateRow({
 							data-testid="template-delete"
 							aria-label="Delete"
 							title="Delete"
-							className="flex size-6 items-center justify-center rounded-[var(--radius-sm)] text-text-muted transition hover:bg-control-bg-hovered hover:text-feedback-error"
+							className="flex size-24 items-center justify-center rounded-[var(--radius-sm)] text-text-muted transition hover:bg-control-bg-hovered hover:text-feedback-error"
 						>
-							<Trash2 className="size-3.5" />
+							<Trash2 className="size-14" />
 						</button>
 					</PopoverTrigger>
 				</div>

@@ -41,11 +41,11 @@ export function ConfirmPopover({
 				aria-describedby={description ? descId : undefined}
 				side={side}
 				align={align}
-				className="flex w-72 flex-col gap-sm p-md"
+				className="flex w-288 flex-col gap-8 p-12"
 				data-testid="confirm-popover"
 			>
-				<div className="flex items-center gap-sm">
-					{destructive ? <TriangleAlert className="size-4 shrink-0 text-feedback-error" /> : null}
+				<div className="flex items-center gap-8">
+					{destructive ? <TriangleAlert className="size-16 shrink-0 text-feedback-error" /> : null}
 					<span id={titleId} className="tr-title-compact text-text-default">
 						{title}
 					</span>
@@ -55,7 +55,7 @@ export function ConfirmPopover({
 						{description}
 					</p>
 				) : null}
-				<div className="flex justify-end gap-sm pt-xs">
+				<div className="flex justify-end gap-8 pt-4">
 					<Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
 						{cancelLabel}
 					</Button>

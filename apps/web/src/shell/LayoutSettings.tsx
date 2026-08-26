@@ -112,23 +112,23 @@ export function LayoutSettings() {
 	};
 
 	return (
-		<div className="space-y-xl">
+		<div className="space-y-24">
 			<header>
 				<h2 className="tr-title-section text-text-default">Layout</h2>
-				<p className="mt-xs max-w-[42rem] tr-text-ui text-text-muted">
+				<p className="mt-4 max-w-[42rem] tr-text-ui text-text-muted">
 					Choose how new workspaces begin, save reusable arrangements, and control auxiliary group
 					density. Existing workspaces change only when you apply a preset.
 				</p>
 			</header>
 
-			<section className="space-y-sm">
+			<section className="space-y-8">
 				<div>
 					<h3 className="tr-title-section text-text-default">Default preset</h3>
 					<p className="tr-text-metadata text-text-muted">
 						New workspaces currently use {selected.name}.
 					</p>
 				</div>
-				<div className="grid gap-sm sm:grid-cols-2">
+				<div className="grid gap-8 sm:grid-cols-2">
 					{presets.map((preset) => {
 						const isStoredDefault = preset.id === settings.defaultPresetId;
 						const isEffectiveDefault = preset.id === selected.id;
@@ -140,12 +140,12 @@ export function LayoutSettings() {
 								key={preset.id}
 								data-testid="layout-preset"
 								data-default={isEffectiveDefault}
-								className="rounded-[var(--radius-md)] border border-border-default bg-container-elevated-bg p-md"
+								className="rounded-[var(--radius-md)] border border-border-default bg-container-elevated-bg p-12"
 							>
-								<div className="flex items-start gap-sm">
-									<LayoutPanelTop className="mt-0.5 size-4 shrink-0 text-primary" />
+								<div className="flex items-start gap-8">
+									<LayoutPanelTop className="mt-2 size-16 shrink-0 text-primary" />
 									<div className="min-w-0 flex-1">
-										<div className="flex items-center gap-xs">
+										<div className="flex items-center gap-4">
 											{renaming?.id === preset.id ? (
 												<input
 													value={renaming.name}
@@ -158,24 +158,24 @@ export function LayoutSettings() {
 													}}
 													aria-label={`Rename ${preset.name}`}
 													maxLength={200}
-													className="min-w-0 flex-1 rounded-[var(--radius-sm)] border border-border-default bg-control-bg px-xs py-0.5 tr-text-ui text-text-default outline-none focus:ring-2 focus:ring-primary"
+													className="min-w-0 flex-1 rounded-[var(--radius-sm)] border border-border-default bg-control-bg px-4 py-2 tr-text-ui text-text-default outline-none focus:ring-2 focus:ring-primary"
 												/>
 											) : (
 												<span className="truncate tr-text-ui text-text-default">{preset.name}</span>
 											)}
 											{isEffectiveDefault ? (
-												<span className="inline-flex items-center gap-0.5 rounded-full bg-primary-subtle px-xs py-0.5 tr-text-label-pill text-primary">
-													<Check className="size-3" /> {isStoredDefault ? "Default" : "Fallback"}
+												<span className="inline-flex items-center gap-2 rounded-full bg-primary-subtle px-4 py-2 tr-text-label-pill text-primary">
+													<Check className="size-12" /> {isStoredDefault ? "Default" : "Fallback"}
 												</span>
 											) : null}
 										</div>
-										<p className="mt-0.5 tr-text-metadata text-text-muted">
+										<p className="mt-2 tr-text-metadata text-text-muted">
 											{preset.left.groups.length} left · {preset.right.groups.length} right ·{" "}
 											{preset.bottom.groups.length} bottom groups
 										</p>
 									</div>
 								</div>
-								<div className="mt-md flex flex-wrap gap-xs">
+								<div className="mt-12 flex flex-wrap gap-4">
 									<button
 										type="button"
 										disabled={isStoredDefault || saving}
@@ -193,7 +193,7 @@ export function LayoutSettings() {
 												),
 											})
 										}
-										className="rounded-[var(--radius-sm)] border border-border-default px-sm py-xs tr-text-metadata text-text-default hover:bg-control-bg-hovered disabled:text-control-disabled-text"
+										className="rounded-[var(--radius-sm)] border border-border-default px-8 py-4 tr-text-metadata text-text-default hover:bg-control-bg-hovered disabled:text-control-disabled-text"
 									>
 										Set default
 									</button>
@@ -201,12 +201,12 @@ export function LayoutSettings() {
 										type="button"
 										disabled={saving || !activeWorkspaceId || !document}
 										onClick={() => setApplying(preset)}
-										className="rounded-[var(--radius-sm)] bg-control-primary-bg px-sm py-xs tr-text-metadata text-control-primary-text hover:bg-control-primary-bg-hovered disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text"
+										className="rounded-[var(--radius-sm)] bg-control-primary-bg px-8 py-4 tr-text-metadata text-control-primary-text hover:bg-control-primary-bg-hovered disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text"
 									>
 										Apply now…
 									</button>
 									{custom ? (
-										<div className="ml-auto flex items-center gap-0.5">
+										<div className="ml-auto flex items-center gap-2">
 											{renaming?.id === preset.id ? (
 												<>
 													<button
@@ -214,17 +214,17 @@ export function LayoutSettings() {
 														aria-label={`Save ${preset.name} name`}
 														disabled={!renaming.name.trim() || saving}
 														onClick={() => commitRename(preset.id)}
-														className="rounded-[var(--radius-sm)] p-xs text-primary hover:bg-control-bg-hovered disabled:text-control-disabled-text"
+														className="rounded-[var(--radius-sm)] p-4 text-primary hover:bg-control-bg-hovered disabled:text-control-disabled-text"
 													>
-														<Check className="size-3.5" />
+														<Check className="size-14" />
 													</button>
 													<button
 														type="button"
 														aria-label={`Cancel renaming ${preset.name}`}
 														onClick={() => setRenaming(null)}
-														className="rounded-[var(--radius-sm)] p-xs text-text-muted hover:bg-control-bg-hovered"
+														className="rounded-[var(--radius-sm)] p-4 text-text-muted hover:bg-control-bg-hovered"
 													>
-														<X className="size-3.5" />
+														<X className="size-14" />
 													</button>
 												</>
 											) : (
@@ -233,9 +233,9 @@ export function LayoutSettings() {
 													aria-label={`Rename ${preset.name}`}
 													disabled={saving}
 													onClick={() => setRenaming({ id: preset.id, name: preset.name })}
-													className="rounded-[var(--radius-sm)] p-xs text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+													className="rounded-[var(--radius-sm)] p-4 text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 												>
-													<Pencil className="size-3.5" />
+													<Pencil className="size-14" />
 												</button>
 											)}
 											<button
@@ -267,9 +267,9 @@ export function LayoutSettings() {
 														),
 													});
 												}}
-												className="rounded-[var(--radius-sm)] p-xs text-text-muted hover:bg-feedback-error-subtle hover:text-feedback-error"
+												className="rounded-[var(--radius-sm)] p-4 text-text-muted hover:bg-feedback-error-subtle hover:text-feedback-error"
 											>
-												<Trash2 className="size-3.5" />
+												<Trash2 className="size-14" />
 											</button>
 										</div>
 									) : null}
@@ -280,7 +280,7 @@ export function LayoutSettings() {
 				</div>
 			</section>
 
-			<section className="space-y-sm border-border-default border-t pt-lg">
+			<section className="space-y-8 border-border-default border-t pt-16">
 				<div>
 					<h3 className="tr-title-section text-text-default">Save current arrangement</h3>
 					<p className="tr-text-metadata text-text-muted">
@@ -288,14 +288,14 @@ export function LayoutSettings() {
 						placement.
 					</p>
 				</div>
-				<div className="flex max-w-lg gap-sm">
+				<div data-testid="layout-preset-save-row" className="flex max-w-lg gap-8">
 					<input
 						value={name}
 						onChange={(event) => setName(event.target.value)}
 						placeholder="Preset name"
 						aria-label="Custom preset name"
 						maxLength={200}
-						className="min-w-0 flex-1 rounded-[var(--radius-sm)] border border-border-default bg-control-bg px-sm py-xs tr-text-ui text-text-default outline-none placeholder:text-text-subtle focus:ring-2 focus:ring-primary"
+						className="min-w-0 flex-1 rounded-[var(--radius-sm)] border border-border-default bg-control-bg px-8 py-4 tr-text-ui text-text-default outline-none placeholder:text-text-subtle focus:ring-2 focus:ring-primary"
 					/>
 					<button
 						type="button"
@@ -330,24 +330,24 @@ export function LayoutSettings() {
 								if (saved) setName("");
 							});
 						}}
-						className="flex shrink-0 items-center gap-xs rounded-[var(--radius-sm)] bg-control-primary-bg px-md py-xs tr-text-ui text-control-primary-text hover:bg-control-primary-bg-hovered disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text"
+						className="flex shrink-0 items-center gap-4 rounded-[var(--radius-sm)] bg-control-primary-bg px-12 py-4 tr-text-ui text-control-primary-text hover:bg-control-primary-bg-hovered disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text"
 					>
-						<Plus className="size-4" /> Save preset
+						<Plus className="size-16" /> Save preset
 					</button>
 				</div>
 			</section>
 
-			<section className="space-y-sm border-border-default border-t pt-lg">
+			<section className="space-y-8 border-border-default border-t pt-16">
 				<div>
 					<h3 className="tr-title-section text-text-default">Group limits</h3>
 					<p className="tr-text-metadata text-text-muted">
 						Applies to new groups. Existing over-limit arrangements remain usable and reducible.
 					</p>
 				</div>
-				<div className="grid max-w-sm gap-sm">
-					<div className="space-y-xs tr-text-metadata text-text-muted">
+				<div data-testid="layout-group-limits" className="grid max-w-sm gap-8">
+					<div className="space-y-4 tr-text-metadata text-text-muted">
 						<label htmlFor="layout-side-group-limit">Side groups</label>
-						<div className="flex items-center gap-sm">
+						<div className="flex items-center gap-8">
 							<input
 								id="layout-side-group-limit"
 								type="number"
@@ -356,7 +356,7 @@ export function LayoutSettings() {
 								value={sideLimit}
 								onChange={(event) => setSideLimit(event.target.value)}
 								aria-label="Maximum side groups"
-								className="w-24 rounded-[var(--radius-sm)] border border-border-default bg-control-bg px-sm py-xs tr-text-ui text-text-default outline-none focus:ring-2 focus:ring-primary"
+								className="w-96 rounded-[var(--radius-sm)] border border-border-default bg-control-bg px-8 py-4 tr-text-ui text-text-default outline-none focus:ring-2 focus:ring-primary"
 							/>
 							<button
 								type="button"
@@ -369,15 +369,15 @@ export function LayoutSettings() {
 									saving
 								}
 								onClick={() => void saveSettings({ ...settings, maxSideGroups: Number(sideLimit) })}
-								className="rounded-[var(--radius-sm)] border border-border-default px-md py-xs tr-text-ui text-text-default hover:bg-control-bg-hovered disabled:text-control-disabled-text"
+								className="rounded-[var(--radius-sm)] border border-border-default px-12 py-4 tr-text-ui text-text-default hover:bg-control-bg-hovered disabled:text-control-disabled-text"
 							>
 								Save
 							</button>
 						</div>
 					</div>
-					<div className="space-y-xs tr-text-metadata text-text-muted">
+					<div className="space-y-4 tr-text-metadata text-text-muted">
 						<label htmlFor="layout-bottom-group-limit">Bottom groups</label>
-						<div className="flex items-center gap-sm">
+						<div className="flex items-center gap-8">
 							<input
 								id="layout-bottom-group-limit"
 								type="number"
@@ -386,7 +386,7 @@ export function LayoutSettings() {
 								value={bottomLimit}
 								onChange={(event) => setBottomLimit(event.target.value)}
 								aria-label="Maximum bottom groups"
-								className="w-24 rounded-[var(--radius-sm)] border border-border-default bg-control-bg px-sm py-xs tr-text-ui text-text-default outline-none focus:ring-2 focus:ring-primary"
+								className="w-96 rounded-[var(--radius-sm)] border border-border-default bg-control-bg px-8 py-4 tr-text-ui text-text-default outline-none focus:ring-2 focus:ring-primary"
 							/>
 							<button
 								type="button"
@@ -401,7 +401,7 @@ export function LayoutSettings() {
 								onClick={() =>
 									void saveSettings({ ...settings, maxBottomGroups: Number(bottomLimit) })
 								}
-								className="rounded-[var(--radius-sm)] border border-border-default px-md py-xs tr-text-ui text-text-default hover:bg-control-bg-hovered disabled:text-control-disabled-text"
+								className="rounded-[var(--radius-sm)] border border-border-default px-12 py-4 tr-text-ui text-text-default hover:bg-control-bg-hovered disabled:text-control-disabled-text"
 							>
 								Save
 							</button>

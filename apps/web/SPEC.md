@@ -42,12 +42,12 @@ convention; their boundary is held by convention + spec. Sibling edges live here
 | `themes` | validated single-file manifests, bundled catalog + atomic token application | yes | [themes/SPEC.md](src/themes/SPEC.md) |
 | `lib` | `cn()` + the shared UI/path/array primitives + highlighting | yes | [lib/SPEC.md](src/lib/SPEC.md) |
 
-Leaf utilities without their own spec: `constants/` (branding) and `styles/` — which holds the two
-design-system SOURCES (`typography.json`, `colors.json`), their generated CSS, and the structural token
-contract; per-theme palettes belong to `themes`. Each system is specced beside its source:
-[TYPOGRAPHY.md](src/styles/TYPOGRAPHY.md) and [COLOR.md](src/styles/COLOR.md).
+Leaf utilities without their own spec: `constants/` (branding) and `styles/` — which holds the three
+design-system SOURCES (`typography.json`, `colors.json`, `spacing.json`), their generated CSS, and the
+structural token contract; per-theme palettes belong to `themes`. Each system is specced beside its source:
+[TYPOGRAPHY.md](src/styles/TYPOGRAPHY.md), [COLOR.md](src/styles/COLOR.md) and [SPACING.md](src/styles/SPACING.md).
 Outside `src/`, **[`scripts/`](scripts/SPEC.md)** is the build-time generator module — it runs under Bun,
-never ships, and turns those two JSON sources into `styles/generated/`.
+never ships, and turns those three JSON sources into `styles/generated/`.
 `index.html` names the product and links the local, symbol-only SVG favicon derived from the same
 ThinkRail artwork as the shell logo (compact enough for browser-tab sizes and light/dark browser chrome).
 `main.tsx` is the entry/composition root — it synchronously builds the bundled theme catalog, applies the
@@ -85,7 +85,7 @@ themselves.
 - **Tailwind v4 utilities, mapped to the design tokens** (`src/index.css` `@theme inline`). Components
   use utilities for colour, spacing, borders and layout (`bg-container-header-bg`, `text-primary`,
   `border-border-default`,
-  `px-lg`) and a **generated semantic typography class** for type (`tr-text-ui`, `tr-title-dialog`,
+  `px-12`) and a **generated semantic typography class** for type (`tr-text-ui`, `tr-title-dialog`,
   `tr-code-text`, …) — **never inline `style` objects, never raw hex.** Responsive (`md:` …) and states (`hover:` / `focus-visible:`) come
   from Tailwind (inline styles can't express them, and the responsive shell needs them).
 - **The colour and type systems are this app's, not the monorepo's.** `apps/website` keeps its own
@@ -95,14 +95,17 @@ themselves.
   `bg-[var(--elevated)]`; and a tint is a token on the four-step alpha scale, not a `/40` modifier.
   `src/styles/COLOR.md` is the system; `src/styles/colorUsage.test.ts` is the adoption guard (Tailwind
   drops an unknown utility silently, so an unpublished token renders as nothing at all).
-- **A radius or spacing utility names a scale step, never a raw pixel length** — `rounded-[var(--radius-md)]`
-  and `p-md` / `py-0.5`, not `rounded-[7px]` or `py-[3px]`. Two scales are legitimate and both are
-  token-backed: the project family (`--radius-xs/sm/md/lg` — a small primitive geometry capped at 8px:
-  `sm` (4px) is the default corner, `md` (6px) the outer corner for surfaces nesting 4px children, `lg`
-  (8px) the exception for large standalone elevated surfaces (dialogs, user-message bubbles) — and
-  `--space-xs…xl`) and Tailwind's numeric steps
-  for the sub-`--space-xs` tier the project family does not cover. `src/styles/spacingUsage.test.ts` is
-  that adoption guard, and it exists because this class of drift is **invisible**: unlike a colour
+- **Ordinary radius and rhythm-spacing values come from their scales, never raw pixel lengths** — `rounded-[var(--radius-md)]`
+  and `p-8` / `gap-12`, not `rounded-[7px]` or `py-[3px]`. Radius is the project t-shirt family
+  (`--radius-xs/sm/md/lg` — a small primitive geometry capped at 8px: `sm` (4px) is the default corner,
+  `md` (6px) the outer corner for surfaces nesting 4px children, `lg` (8px) the exception for large
+  standalone elevated surfaces (dialogs, user-message bubbles)). Spacing is **one canonical numeric
+  scale** — `0 / 2 / 4 / 8 / 12 / 16 / 24 / 32 / 40 / 64` — where the step name *is* its pixel value, so
+  `p-8` / `gap-12` / `py-4` resolve to exactly that many pixels; it is generated from a single JSON source
+  (`src/styles/spacing.json` → `src/styles/generated/spacing.css`), so each canonical length is written
+  once in the JSON rather than re-declared at call sites.
+  `src/styles/SPACING.md` (`web-spacing`) is the authoritative system; `src/styles/spacingUsage.test.ts`
+  is that adoption guard, and it exists because this class of drift is **invisible**: unlike a colour
   utility, an arbitrary length always renders, so an off-scale value looks correct in review and passes
   every other gate. Lengths that are not scale steps at all — `max-w-[78ch]`, `w-[320px]`,
   `max-h-[40vh]`, a measured `pl-[calc(…)]` indent — stay allowed; they are layout constraints, not rhythm.

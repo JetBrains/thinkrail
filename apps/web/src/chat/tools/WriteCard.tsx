@@ -13,16 +13,16 @@ export function WriteCard({ args, result, status, workspaceRoot }: ToolRenderPro
 	const message = resultText(result);
 
 	return (
-		<div data-testid="tool-write" className="flex flex-col gap-xs">
-			<div className="flex items-center gap-xs tr-text-metadata">
-				<FilePlus className="size-3.5 shrink-0 text-feedback-success" />
+		<div data-testid="tool-write" className="flex flex-col gap-4">
+			<div className="flex items-center gap-4 tr-text-metadata">
+				<FilePlus className="size-14 shrink-0 text-feedback-success" />
 				<span className="truncate text-text-default" title={path}>
 					{displayPath}
 				</span>
 				<span className="shrink-0 text-text-muted">written</span>
 			</div>
 			{status === "error" ? (
-				<pre className="overflow-auto px-sm py-xs text-feedback-error tr-code-text">{message}</pre>
+				<pre className="overflow-auto px-8 py-4 text-feedback-error tr-code-text">{message}</pre>
 			) : content ? (
 				<Collapsible lines={countLines(content)}>
 					<CodeBlock code={content} lang={lang} />

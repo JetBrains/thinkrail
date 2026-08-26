@@ -12,8 +12,8 @@ export function PrivacySettings() {
 	};
 
 	return (
-		<section data-testid="settings-privacy" className="flex flex-col gap-lg">
-			<div className="flex flex-col gap-xs">
+		<section data-testid="settings-privacy" className="flex flex-col gap-16">
+			<div className="flex flex-col gap-4">
 				<h3 className="tr-title-section text-text-default">Usage analytics</h3>
 				<p className="text-text-muted tr-text-metadata">
 					Anonymous usage analytics help us understand which features matter. Your choice is saved
@@ -21,8 +21,8 @@ export function PrivacySettings() {
 				</p>
 			</div>
 
-			<div className="flex items-center justify-between gap-md rounded-[var(--radius-sm)] border border-border-default bg-control-bg px-md py-sm">
-				<div className="flex flex-col gap-0.5">
+			<div className="flex items-center justify-between gap-12 rounded-[var(--radius-sm)] border border-border-default bg-control-bg px-12 py-8">
+				<div className="flex flex-col gap-2">
 					<span className="tr-title-compact text-text-default">
 						Share anonymous usage analytics
 					</span>
@@ -39,20 +39,20 @@ export function PrivacySettings() {
 					data-active={enabled}
 					onClick={toggle}
 					className={cn(
-						"relative h-5 w-9 shrink-0 rounded-full outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary",
+						"relative h-20 w-36 shrink-0 rounded-full outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary",
 						enabled ? "bg-primary" : "bg-border-default",
 					)}
 				>
 					<span
 						className={cn(
-							"absolute top-0.5 left-0.5 size-4 rounded-full bg-container-workspace-bg transition-transform",
-							enabled && "translate-x-4",
+							"absolute top-2 left-2 size-16 rounded-full bg-container-workspace-bg transition-transform",
+							enabled && "translate-x-16",
 						)}
 					/>
 				</button>
 			</div>
 
-			<div className="flex flex-col gap-xs tr-text-metadata">
+			<div className="flex flex-col gap-4 tr-text-metadata">
 				<p className="text-text-muted">
 					<span className="tr-text-emphasis text-text-default">What is collected:</span> a random
 					anonymous install id, app version and release channel, OS and architecture, when a chat

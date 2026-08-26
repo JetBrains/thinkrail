@@ -68,7 +68,7 @@ function DropdownMenuSubContent({
 		<DropdownMenuPrimitive.Portal>
 			<DropdownMenuPrimitive.SubContent
 				className={cn(
-					"z-50 min-w-[10rem] max-h-[min(60vh,var(--radix-dropdown-menu-content-available-height))] overflow-y-auto overflow-x-hidden rounded-[var(--radius-md)] border border-border-default bg-container-elevated-bg p-xs text-text-default shadow-[var(--shadow-md)]",
+					"z-50 min-w-[10rem] max-h-[min(60vh,var(--radix-dropdown-menu-content-available-height))] overflow-y-auto overflow-x-hidden rounded-[var(--radius-md)] border border-border-default bg-container-elevated-bg p-4 text-text-default shadow-[var(--shadow-md)]",
 					className,
 				)}
 				{...props}
@@ -83,7 +83,7 @@ function DropdownMenuLabel({
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Label>) {
 	return (
 		<DropdownMenuPrimitive.Label
-			className={cn("px-sm py-xs tr-text-eyebrow text-text-muted", className)}
+			className={cn("px-8 py-4 tr-text-eyebrow text-text-muted", className)}
 			{...props}
 		/>
 	);

@@ -67,9 +67,9 @@ export function TerminalWorkbenchBody({ tab, onAdd }: { tab: TerminalTab; onAdd:
 				aria-label="New terminal"
 				title="New terminal"
 				onClick={onAdd}
-				className="absolute top-1 right-1 z-10 flex size-5 items-center justify-center rounded-[var(--radius-sm)] bg-container-elevated-bg text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+				className="absolute top-4 right-4 z-10 flex size-20 items-center justify-center rounded-[var(--radius-sm)] bg-container-elevated-bg text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 			>
-				<Plus className="size-4" />
+				<Plus className="size-16" />
 			</button>
 			<Suspense fallback={null}>
 				<TerminalInstance

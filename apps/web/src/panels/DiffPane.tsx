@@ -102,7 +102,7 @@ export function DiffPane({ tab }: { tab: DiffTab }) {
 				data-testid="diff-view-toggle"
 				role="toolbar"
 				aria-label="Diff view mode"
-				className="flex h-8 shrink-0 items-center gap-xs border-border-default border-b bg-container-header-bg px-sm"
+				className="flex h-32 shrink-0 items-center gap-4 border-border-default border-b bg-container-header-bg px-12"
 			>
 				<span
 					data-testid="diff-path"
@@ -129,14 +129,14 @@ export function DiffPane({ tab }: { tab: DiffTab }) {
 						active={ignoreWhitespace}
 						onClick={() => setDiffTabIgnoreWhitespace(tab.id, !ignoreWhitespace)}
 					>
-						<Pilcrow className="size-3.5" />
+						<Pilcrow className="size-14" />
 					</HeaderIconButton>
 				)}
 				<HeaderIconButton testid="diff-copy" label="Copy file contents" onClick={() => void copy()}>
 					{copied ? (
-						<Check className="size-3.5 text-feedback-success" />
+						<Check className="size-14 text-feedback-success" />
 					) : (
-						<Copy className="size-3.5" />
+						<Copy className="size-14" />
 					)}
 				</HeaderIconButton>
 				{toggles}
@@ -183,7 +183,7 @@ function HeaderIconButton({
 			aria-label={label}
 			title={label}
 			onClick={onClick}
-			className={`flex size-6 items-center justify-center rounded-[var(--radius-sm)] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary ${
+			className={`flex size-24 items-center justify-center rounded-[var(--radius-sm)] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary ${
 				active
 					? "bg-container-elevated-bg text-text-default"
 					: "text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
