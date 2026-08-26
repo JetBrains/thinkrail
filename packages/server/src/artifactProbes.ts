@@ -85,7 +85,11 @@ function assertExternalModel(models: unknown): asserts models is Record<string, 
 async function assertCentralConfigured(socket: WebSocket, label: string): Promise<void> {
 	let state: unknown;
 	for (let attempt = 0; attempt < 40; attempt += 1) {
-		const status = (await within(rpc(socket, "provider.status", {}), 10_000, `${label} status`)) as {
+		const status = (await within(
+			rpc(socket, "provider.status", {}),
+			10_000,
+			`${label} status`,
+		)) as {
 			jbcentral?: { state?: unknown };
 		};
 		state = status.jbcentral?.state;

@@ -54,7 +54,7 @@ where it will ship:
 
 | target             | runner             | CLI artifact                | desktop installer |
 | ------------------ | ------------------ | --------------------------- | ----------------- |
-| `bun-linux-x64`    | `ubuntu-latest`    | `thinkrail-linux-x64`       | Electrobun Linux x64 setup `.tar.gz` |
+| `bun-linux-x64`    | `ubuntu-24.04`     | `thinkrail-linux-x64`       | Electrobun Linux x64 setup `.tar.gz` |
 | `bun-linux-arm64`  | `ubuntu-24.04-arm` | `thinkrail-linux-arm64`     | Electrobun Linux ARM64 setup `.tar.gz` |
 | `bun-darwin-arm64` | `macos-14`         | `thinkrail-darwin-arm64`    | Electrobun macOS ARM64 `.dmg` |
 | `bun-windows-x64`  | `windows-latest`   | `thinkrail-windows-x64.exe` | Electrobun Windows x64 setup `.zip` |
