@@ -54,6 +54,7 @@ interface Entry {
 	unsubscribe: () => void;
 	workspaceId: string;
 	lastSettlement: AgentSettlement | null | undefined;
+	queuedImageLanes: Record<QueueLane, boolean>;
 }
 
 const sessions = new Map<string, Entry>();
@@ -198,8 +199,13 @@ async function prepareSessionEntry(
 		unsubscribe: () => {},
 		workspaceId,
 		lastSettlement,
+		queuedImageLanes: { steering: false, followUp: false },
 	};
 	entry.unsubscribe = session.subscribe((event) => {
+		if (event.type === "queue_update") {
+			if (event.steering.length === 0) entry.queuedImageLanes.steering = false;
+			if (event.followUp.length === 0) entry.queuedImageLanes.followUp = false;
+		}
 		if (event.type === "agent_start") {
 			entry.lastSettlement = null;
 		}
@@ -216,7 +222,11 @@ async function prepareSessionEntry(
 					}
 				: null;
 		}
-		const projected = projectSessionEvent(event, terminal);
+		const baseEvent = projectSessionEvent(event, terminal);
+		const projected =
+			baseEvent.type === "queue_update" && hasQueuedImages(entry)
+				? { ...baseEvent, hasImages: true as const }
+				: baseEvent;
 		if (event.type === "agent_settled") entry.lastSettlement = terminal;
 		if (sessions.get(sessionId) === entry) publish({ sessionId, event: projected });
 		if (event.type === "agent_settled") terminal = null;
@@ -290,7 +300,7 @@ function summaryOf(sessionId: string, entry: Entry): SessionSummary {
 		updatedAt: Date.now(),
 		live: true,
 		...(entry.lastSettlement !== undefined ? { lastSettlement: entry.lastSettlement } : {}),
-		...(session.pendingMessageCount > 0 ? { queue: queueStateOf(session) } : {}),
+		...(session.pendingMessageCount > 0 ? { queue: queueStateOf(entry) } : {}),
 	};
 }
 
@@ -564,25 +574,50 @@ export async function answerQuestion(
 	});
 }
 
+function hasQueuedImages(entry: Entry): boolean {
+	return entry.queuedImageLanes.steering || entry.queuedImageLanes.followUp;
+}
+
+async function queueSessionMessage(
+	entry: Entry,
+	kind: QueueLane,
+	images: ImageContent[] | undefined,
+	send: () => Promise<void>,
+): Promise<void> {
+	if (!images || images.length === 0) {
+		await send();
+		return;
+	}
+	const previous = entry.queuedImageLanes[kind];
+	entry.queuedImageLanes[kind] = true;
+	try {
+		await send();
+	} catch (error) {
+		entry.queuedImageLanes[kind] = previous;
+		throw error;
+	}
+}
+
 export async function promptSession(
 	sessionId: string,
 	text: string,
 	images?: ImageContent[],
 ): Promise<void> {
-	const session = mustGet(sessionId);
-	if (session.isStreaming) {
-		await session.steer(text, images);
+	const entry = mustGetEntry(sessionId);
+	if (entry.session.isStreaming) {
+		await queueSessionMessage(entry, "steering", images, () => entry.session.steer(text, images));
 		return;
 	}
-	await session.prompt(text, images ? { images } : undefined);
+	await entry.session.prompt(text, images ? { images } : undefined);
 }
 
-export function steerSession(
+export async function steerSession(
 	sessionId: string,
 	text: string,
 	images?: ImageContent[],
 ): Promise<void> {
-	return mustGet(sessionId).steer(text, images);
+	const entry = mustGetEntry(sessionId);
+	await queueSessionMessage(entry, "steering", images, () => entry.session.steer(text, images));
 }
 
 export async function followUpSession(
@@ -590,27 +625,34 @@ export async function followUpSession(
 	text: string,
 	images?: ImageContent[],
 ): Promise<void> {
-	const session = mustGet(sessionId);
-	if (session.isStreaming) {
-		await session.followUp(text, images);
+	const entry = mustGetEntry(sessionId);
+	if (entry.session.isStreaming) {
+		await queueSessionMessage(entry, "followUp", images, () =>
+			entry.session.followUp(text, images),
+		);
 		return;
 	}
-	await session.prompt(text, images ? { images } : undefined);
+	await entry.session.prompt(text, images ? { images } : undefined);
 }
 
 export async function compactSession(sessionId: string, instructions?: string): Promise<void> {
 	await mustGet(sessionId).compact(instructions);
 }
 
-function queueStateOf(session: AgentSession): SessionQueueState {
+function queueStateOf(entry: Entry): SessionQueueState {
 	return {
-		steering: [...session.getSteeringMessages()],
-		followUp: [...session.getFollowUpMessages()],
+		steering: [...entry.session.getSteeringMessages()],
+		followUp: [...entry.session.getFollowUpMessages()],
+		...(hasQueuedImages(entry) ? { hasImages: true as const } : {}),
 	};
 }
 
-export function clearQueueSession(sessionId: string): SessionQueueState {
-	return mustGet(sessionId).clearQueue();
+export function clearQueueSession(sessionId: string, requireTextOnly = false): SessionQueueState {
+	const entry = mustGetEntry(sessionId);
+	if (requireTextOnly && hasQueuedImages(entry)) {
+		throw new Error("Cannot restore queued image messages as text");
+	}
+	return entry.session.clearQueue();
 }
 
 export async function removeQueuedSession(
@@ -618,7 +660,8 @@ export async function removeQueuedSession(
 	kind: QueueLane,
 	index: number,
 ): Promise<RemovedQueuedMessage> {
-	const session = mustGet(sessionId);
+	const entry = mustGetEntry(sessionId);
+	const { session } = entry;
 	const drained = session.clearQueue();
 	const lane = [...drained[kind]];
 	const removed = index >= 0 && index < lane.length ? (lane.splice(index, 1)[0] ?? null) : null;
@@ -631,7 +674,7 @@ export async function removeQueuedSession(
 			await followUpSession(sessionId, text);
 		}
 	}
-	return { removed, queue: queueStateOf(session) };
+	return { removed, queue: queueStateOf(entry) };
 }
 
 export function abortSession(sessionId: string): Promise<void> {

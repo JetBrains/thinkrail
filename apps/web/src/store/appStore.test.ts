@@ -214,16 +214,25 @@ test("a host-fired USER message folds into the transcript; the composer's optimi
 });
 
 test("queue_update folds pi's queue into the runtime; the canonical echo lands the turn at its true position", () => {
-	const queueUpdate = (steering: string[], followUp: string[]) =>
-		({ type: "queue_update", steering, followUp }) as unknown as PiEvent;
+	const queueUpdate = (steering: string[], followUp: string[], hasImages = false) =>
+		({
+			type: "queue_update",
+			steering,
+			followUp,
+			...(hasImages ? { hasImages: true } : {}),
+		}) as unknown as PiEvent;
 	const store = useAppStore.getState();
 	store.openChatSession("ws1", "a", null, "medium");
 	store.handlePiEvent(agentStart, "a");
 	store.handlePiEvent(assistantStart, "a");
 	store.handlePiEvent(assistantText("first reply"), "a");
 
-	store.handlePiEvent(queueUpdate(["course-correct"], ["queued question"]), "a");
-	expect(rt("a").queue).toEqual({ steering: ["course-correct"], followUp: ["queued question"] });
+	store.handlePiEvent(queueUpdate(["course-correct"], ["queued question"], true), "a");
+	expect(rt("a").queue).toEqual({
+		steering: ["course-correct"],
+		followUp: ["queued question"],
+		hasImages: true,
+	});
 	expect(rt("a").turns.filter((t) => t.kind === "user")).toHaveLength(0);
 
 	store.handlePiEvent(queueUpdate([], ["queued question"]), "a");

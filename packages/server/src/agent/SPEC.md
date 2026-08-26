@@ -108,7 +108,9 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     cannot reappear mid-run, while disk sessions remain transcript-authoritative. A live summary also
     carries pi's queue snapshot (`SessionQueueState`, only when non-empty): `queue_update` fires only on
     changes, so this is the read-side seed that lets a client attaching mid-run render messages queued
-    before it connected.
+    before it connected. Each queue lane also retains a conservative `hasImages` bit for browser sends;
+    it clears only when that lane empties and enriches the summary/projected queue event without carrying
+    image bytes.
     New-session and pre-session entrypoints capture the current generation; operations on a live session use
     that session's retained runtime. `abort` remains available as the cancellation control path.
     `prompt`/`steer`/`followUp` (with images) /
@@ -117,9 +119,12 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     back to `steer`), and pi's `followUp()` only *enqueues* into a queue that a run already in flight
     drains (so on an idle session it falls back to `prompt`, else the message parks forever — the way a
     `review.sendBatch` into a re-attached review chat marked its comments sent to an agent that never
-    saw them) / **`clearQueueSession`** (pi's `clearQueue()`, verbatim: drains both queues and returns the
-    texts for the client's dequeue-to-composer; pi emits the emptying `queue_update`, so the host adds no
-    bookkeeping) / **`removeQueuedSession(sessionId, kind, index)`** — per-item queue removal, which pi's
+    saw them) / **`clearQueueSession`** (pi's `clearQueue()`: drains both queues but returns only text,
+    even when its internal queued user messages carry image blocks; pi emits the emptying `queue_update`).
+    Its optional text-only precondition rejects before touching pi whenever either tracked lane has queued
+    images; every browser queue-to-draft path uses it, so manual compaction and abort restoration can never
+    silently discard image content /
+    **`removeQueuedSession(sessionId, kind, index)`** — per-item queue removal, which pi's
     API lacks (queues are bare string arrays, `clearQueue` is all-or-nothing): drain via `clearQueue()`,
     drop `lane[index]` (out-of-range → `removed: null`, everything re-queued), re-queue the keepers in
     order (`steer()`/`followUp()` per lane — each re-queue emits its own `queue_update`, so clients

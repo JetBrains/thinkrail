@@ -499,7 +499,8 @@ const handlers: Record<string, Handler> = {
 		return { ok: true } as const;
 	},
 	"session.clearQueue": (params) => {
-		return clearQueueSession((params as { sessionId: string }).sessionId);
+		const p = params as { sessionId: string; requireTextOnly?: boolean };
+		return clearQueueSession(p.sessionId, p.requireTextOnly);
 	},
 	"session.removeQueued": async (params) => {
 		const p = params as { sessionId: string; kind: QueueLane; index: number };

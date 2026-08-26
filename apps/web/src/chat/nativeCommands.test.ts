@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import type { SlashCommandInfo } from "@thinkrail/contracts";
 import {
+	compactSubmissionError,
 	mergeNativeChatCommands,
 	NATIVE_CHAT_COMMANDS,
 	parseNativeChatCommand,
@@ -44,6 +45,14 @@ describe("native chat command parsing", () => {
 		]) {
 			expect(parseNativeChatCommand(text)).toBeNull();
 		}
+	});
+
+	it("rejects compaction before a text-only clear could discard draft or queued images", () => {
+		expect(compactSubmissionError(false, false)).toBeNull();
+		expect(compactSubmissionError(true, false)).toBe("Remove images to use /compact");
+		expect(compactSubmissionError(false, true)).toBe(
+			"Wait for queued image messages to send before using /compact",
+		);
 	});
 });
 

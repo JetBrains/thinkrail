@@ -37,7 +37,7 @@ import {
 import { ExtUiDialog } from "./ExtUiDialog";
 import { HistoryOverlay } from "./HistoryOverlay";
 import {
-	COMPACT_IMAGE_ERROR,
+	compactSubmissionError,
 	mergeNativeChatCommands,
 	parseNativeChatCommand,
 } from "./nativeCommands";
@@ -300,6 +300,7 @@ export default function ChatView({
 	const restoreQueueToDraft = async (): Promise<void> => {
 		const { steering, followUp } = await getTransport().request("session.clearQueue", {
 			sessionId,
+			requireTextOnly: true,
 		});
 		restoreTextToDraft([...steering, ...followUp].join("\n\n"));
 	};
@@ -351,7 +352,11 @@ export default function ChatView({
 	): ComposerSubmitDisposition => {
 		const nativeCommand = parseNativeChatCommand(text);
 		if (nativeCommand) {
-			if (attachments.length > 0) return { accepted: false, reason: COMPACT_IMAGE_ERROR };
+			const submissionError = compactSubmissionError(
+				attachments.length > 0,
+				queue.hasImages === true,
+			);
+			if (submissionError) return { accepted: false, reason: submissionError };
 			performCompact(nativeCommand.instructions);
 			return { accepted: true };
 		}
