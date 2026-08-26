@@ -11,7 +11,7 @@ export function FollowUpChips({
 	return (
 		<div
 			data-testid="followup-row"
-			className="flex w-full shrink-0 flex-wrap gap-xs bg-container-workspace-bg px-md pt-xs"
+			className="flex w-full shrink-0 flex-wrap gap-xs bg-linear-to-b from-transparent to-container-workspace-bg px-md pt-xs"
 		>
 			{items.map((item) => (
 				<button
