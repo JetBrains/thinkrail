@@ -1,4 +1,11 @@
-import { Brain, Check, ChevronRight, Layers, Loader2, X } from "lucide-react";
+import {
+	RiBrainLine as Brain,
+	RiCheckLine as Check,
+	RiArrowRightSLine as ChevronRight,
+	RiStackLine as Layers,
+	RiLoader4Line as Loader2,
+	RiCloseLine as X,
+} from "@remixicon/react";
 import { cn } from "@/lib";
 import { useFold } from "./foldState";
 import type { ActivityStep } from "./rows";
@@ -38,7 +45,7 @@ export function ActivityGroup({
 				className="flex w-full cursor-pointer select-none items-center gap-4 rounded-[var(--radius-sm)] px-4 py-4 text-left outline-none hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary"
 			>
 				<ChevronRight
-					className={`size-12 shrink-0 transition-transform ${expanded ? "rotate-90" : ""}`}
+					className={`size-16 shrink-0 transition-transform ${expanded ? "rotate-90" : ""}`}
 				/>
 				{live ? (
 					<Loader2 className="size-12 shrink-0 animate-spin motion-reduce:animate-none" />
@@ -205,7 +212,7 @@ function StepHeader({
 				</span>
 			) : null}
 			<ChevronRight
-				className={`size-12 shrink-0 transition-transform ${expanded ? "rotate-90" : ""}`}
+				className={`size-16 shrink-0 transition-transform ${expanded ? "rotate-90" : ""}`}
 			/>
 		</button>
 	);

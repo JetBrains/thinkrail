@@ -1,4 +1,4 @@
-import { Link as LinkIcon } from "lucide-react";
+import { RiLinksLine as LinkIcon } from "@remixicon/react";
 import type { ToolRenderProps } from "../../toolRegistry";
 import { CodeBlock } from "../CodeBlock";
 import { Collapsible, countLines } from "../Collapsible";
@@ -27,7 +27,7 @@ export function WebFetchCard({ args, result, status }: ToolRenderProps) {
 	return (
 		<div data-testid="tool-fetch_content" className="flex flex-col gap-4">
 			<div className="flex items-center gap-4 tr-text-metadata">
-				<LinkIcon className="size-14 shrink-0 text-text-muted" />
+				<LinkIcon className="size-12 shrink-0 text-text-muted" />
 				{url ? (
 					<a
 						href={url}

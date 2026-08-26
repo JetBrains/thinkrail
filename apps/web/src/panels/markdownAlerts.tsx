@@ -1,5 +1,12 @@
-import { CircleAlert, Info, Lightbulb, OctagonAlert, TriangleAlert } from "lucide-react";
-import type { ComponentType, ReactNode } from "react";
+import {
+	RiErrorWarningLine as CircleAlert,
+	RiInformationLine as Info,
+	RiLightbulbLine as Lightbulb,
+	RiAlarmWarningLine as OctagonAlert,
+	type RemixiconComponentType,
+	RiAlertLine as TriangleAlert,
+} from "@remixicon/react";
+import type { ReactNode } from "react";
 import type { Components } from "react-markdown";
 
 export type AlertVariant = "note" | "tip" | "important" | "warning" | "caution";
@@ -54,7 +61,7 @@ const ALERTS: Record<
 	AlertVariant,
 	{
 		label: string;
-		icon: ComponentType<{ className?: string }>;
+		icon: RemixiconComponentType;
 		border: string;
 		bg: string;
 		text: string;

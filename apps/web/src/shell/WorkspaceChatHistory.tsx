@@ -1,4 +1,8 @@
-import { History, RotateCcw, Trash2 } from "lucide-react";
+import {
+	RiHistoryLine as History,
+	RiArrowGoBackLine as RotateCcw,
+	RiDeleteBin6Line as Trash2,
+} from "@remixicon/react";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -29,7 +33,7 @@ export function WorkspaceChatHistory({
 				title="View chat history"
 				className="flex w-32 shrink-0 items-center justify-center border-border-default border-l text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
 			>
-				<History className="size-16" />
+				<History className="size-14" />
 			</DropdownMenuTrigger>
 			<DropdownMenuContent align="end" className="min-w-[16rem]">
 				<DropdownMenuLabel>Recently closed</DropdownMenuLabel>

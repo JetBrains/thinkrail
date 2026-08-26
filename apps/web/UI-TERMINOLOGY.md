@@ -64,7 +64,7 @@ Children (left → right):
 | — Scope Branch | inline `<span>` | `scope-branch` | Git branch of the active workspace |
 | — Scope Base | inline `<span>` | `scope-base` | `· from <baseBranch>` (hidden for the Default workspace) |
 | Connection Status | inline `<span>` | `connection-status` (`data-status`) | Connected / Connecting… / Disconnected pill with a color dot |
-| Settings Button | inline `<button>` (gear, `lucide-react` `Settings`) | `open-settings` | Opens the Settings Dialog via `store.openSettings()` |
+| Settings Button | inline `<button>` (gear, `@remixicon/react` `Settings`) | `open-settings` | Opens the Settings Dialog via `store.openSettings()` |
 
 **⚠ Naming note (Scope Context):** the `data-testid` is `scope-context` and the spec text calls it the
 "location context". This reference adopts **Scope Context** as canonical; "location context" is an

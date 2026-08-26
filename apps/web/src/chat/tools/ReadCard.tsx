@@ -1,4 +1,4 @@
-import { FileText } from "lucide-react";
+import { RiFileTextLine as FileText } from "@remixicon/react";
 import { projectRelativePath } from "@/lib";
 import type { ToolRenderProps } from "../toolRegistry";
 import { CodeBlock } from "./CodeBlock";
@@ -23,7 +23,7 @@ export function ReadCard({ args, result, status, workspaceRoot }: ToolRenderProp
 	return (
 		<div data-testid="tool-read" className="flex flex-col gap-4">
 			<div className="flex items-center gap-4 tr-text-metadata">
-				<FileText className="size-14 shrink-0 text-text-muted" />
+				<FileText className="size-12 shrink-0 text-text-muted" />
 				<span className="truncate text-primary" title={path}>
 					{displayPath}
 				</span>

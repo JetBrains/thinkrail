@@ -1,5 +1,10 @@
+import {
+	RiCheckLine as Check,
+	RiArrowDownSLine as ChevronDown,
+	RiGitBranchLine as GitBranch,
+	RiRefreshLine as RefreshCw,
+} from "@remixicon/react";
 import type { BranchList } from "@thinkrail/contracts";
-import { Check, ChevronDown, GitBranch, RefreshCw } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import {
 	Command,
@@ -72,7 +77,7 @@ export function BranchPicker({
 				<GitBranch className="size-14 shrink-0 text-text-muted" />
 				<span className="shrink-0 text-text-muted tr-text-metadata">{label}</span>
 				<span className="truncate text-text-muted tr-text-metadata">{selected || "branch"}</span>
-				<ChevronDown className="size-12 shrink-0 text-text-muted" />
+				<ChevronDown className="size-16 shrink-0 text-text-muted" />
 			</PopoverTrigger>
 			<PopoverContent align="start" container={container} className="w-[320px] p-0">
 				<div className="flex items-center justify-end border-border-muted border-b px-8 py-4">

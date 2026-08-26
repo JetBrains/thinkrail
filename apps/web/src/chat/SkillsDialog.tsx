@@ -1,5 +1,9 @@
+import {
+	RiPuzzleLine as Puzzle,
+	RiRefreshLine as RefreshCw,
+	RiShieldCheckLine as ShieldCheck,
+} from "@remixicon/react";
 import type { Project, SkillCatalogEntry, SkillDecision, Workspace } from "@thinkrail/contracts";
-import { Puzzle, RefreshCw, ShieldCheck } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";

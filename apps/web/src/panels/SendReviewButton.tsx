@@ -1,4 +1,4 @@
-import { Send } from "lucide-react";
+import { RiSendPlaneLine as Send } from "@remixicon/react";
 import { useMemo, useState } from "react";
 import { useAppStore } from "../store";
 import { allDraftIds, fileDraftIds } from "./reviewModel";

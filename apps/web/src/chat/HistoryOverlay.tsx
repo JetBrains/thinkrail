@@ -1,5 +1,10 @@
+import {
+	RiCheckLine as Check,
+	RiCornerUpRightLine as CornerUpRight,
+	RiSaveLine as Save,
+	RiDeleteBin6Line as Trash2,
+} from "@remixicon/react";
 import type { HistoryScope, MessageHit, PromptHit } from "@thinkrail/contracts";
-import { Check, CornerUpRight, Save, Trash2 } from "lucide-react";
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
 	DropdownMenu,

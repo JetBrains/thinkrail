@@ -1,14 +1,14 @@
 import {
-	GitBranch,
-	KeyRound,
-	LayoutPanelTop,
-	LayoutTemplate,
-	type LucideIcon,
-	Palette,
-	ShieldCheck,
-	SlidersHorizontal,
-	SquareTerminal,
-} from "lucide-react";
+	RiGitBranchLine as GitBranch,
+	RiKeyLine as KeyRound,
+	RiLayoutTop2Line as LayoutPanelTop,
+	RiLayoutGridLine as LayoutTemplate,
+	type RemixiconComponentType as LucideIcon,
+	RiPaletteLine as Palette,
+	RiShieldCheckLine as ShieldCheck,
+	RiEqualizerLine as SlidersHorizontal,
+	RiTerminalBoxLine as SquareTerminal,
+} from "@remixicon/react";
 import type { ReactNode } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib";

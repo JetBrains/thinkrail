@@ -1,10 +1,14 @@
+import {
+	RiGitBranchLine as GitBranch,
+	RiChatNewLine as MessageSquarePlus,
+	RiTerminalBoxLine as SquareTerminal,
+} from "@remixicon/react";
 import type {
 	LayoutCenterTab,
 	LayoutTab,
 	LayoutToolId,
 	WorkspaceLayoutDocument,
 } from "@thinkrail/contracts";
-import { GitBranch, MessageSquarePlus, SquareTerminal } from "lucide-react";
 import {
 	lazy,
 	type ReactNode,
@@ -675,7 +679,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 							onClick={() => startChat(groupId)}
 							className="mt-4 flex items-center gap-4 rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-12 py-4 tr-text-ui text-text-default hover:bg-control-bg-hovered"
 						>
-							<MessageSquarePlus className="size-16" /> New chat
+							<MessageSquarePlus className="size-14" /> New chat
 						</button>
 					</div>
 				)}
@@ -690,7 +694,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 							onClick={() => useAppStore.getState().addTerminal(workspaceId, undefined, groupId)}
 							className="flex w-32 shrink-0 items-center justify-center border-border-default border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 						>
-							<SquareTerminal className="size-16" />
+							<SquareTerminal className="size-14" />
 						</button>
 					</>
 				)}

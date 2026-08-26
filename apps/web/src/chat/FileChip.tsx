@@ -1,4 +1,4 @@
-import { FileIcon } from "lucide-react";
+import { RiFileLine as FileIcon } from "@remixicon/react";
 import type { ReactNode } from "react";
 
 const CHIP_BASE =

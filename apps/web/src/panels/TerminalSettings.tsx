@@ -1,5 +1,5 @@
+import { RiCheckLine as Check } from "@remixicon/react";
 import { TERMINAL_REPLAY_KB } from "@thinkrail/contracts";
-import { Check } from "lucide-react";
 import { cn } from "@/lib";
 import { toast, useAppStore } from "@/store";
 import { getTransport } from "@/transport";

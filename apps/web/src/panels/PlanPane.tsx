@@ -1,5 +1,11 @@
+import {
+	RiArrowDownSLine as ChevronDown,
+	RiArrowRightSLine as ChevronRight,
+	RiFileCopyLine as Copy,
+	RiDownloadLine as Download,
+	RiGitCommitLine as GitCommitHorizontal,
+} from "@remixicon/react";
 import type { GitFileChange, TodoGroupItem, TodoItem } from "@thinkrail/contracts";
-import { ChevronDown, ChevronRight, Copy, Download, GitCommitHorizontal } from "lucide-react";
 import { useState } from "react";
 import { planToMarkdown } from "../chat/planMarkdown";
 import {
@@ -78,7 +84,7 @@ function ChangeSetBlock({
 					title={expanded ? "Hide changed files" : "Show changed files"}
 					className="flex min-w-0 items-center gap-4 rounded-[var(--radius-sm)] px-4 py-2 text-left hover:bg-control-bg-hovered"
 				>
-					<Chevron className="size-14 shrink-0 text-text-muted" />
+					<Chevron className="size-16 shrink-0 text-text-muted" />
 					<span className="shrink-0 tr-text-metadata text-text-subtle">
 						{count} {count === 1 ? "file" : "files"}
 					</span>

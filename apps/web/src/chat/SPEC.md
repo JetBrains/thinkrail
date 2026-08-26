@@ -720,7 +720,7 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   detached refresh it triggers, so it is never a basis for concluding a model is gone);
   `react-markdown` / `remark-gfm` / `shiki` (via `lib/highlighter`); `mermaid`
   (**lazy, `tools/visualize` only** — `Markdown` consumes the `MermaidView` *component*, never the
-  package); `react-virtuoso`; `lucide-react`; `components/ui`; `lib`.
+  package); `react-virtuoso`; `@remixicon/react`; `components/ui`; `lib`.
 - **Forbidden:** value-importing any `pi` package; a **presentational** renderer importing
   `store`/`transport` (only the app-integration files enumerated above may — keep the renderers reusable).
 - **`ChatView`** is the primary app-integration file: wires this session's runtime

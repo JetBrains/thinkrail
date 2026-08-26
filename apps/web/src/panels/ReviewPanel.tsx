@@ -1,13 +1,13 @@
-import type { ReviewComment } from "@thinkrail/contracts";
 import {
-	CheckCircle2,
-	ChevronDown,
-	ChevronRight,
-	FileText,
-	MessageSquare,
-	Send,
-	Trash2,
-} from "lucide-react";
+	RiCheckboxCircleLine as CheckCircle2,
+	RiArrowDownSLine as ChevronDown,
+	RiArrowRightSLine as ChevronRight,
+	RiFileTextLine as FileText,
+	RiChat1Line as MessageSquare,
+	RiSendPlaneLine as Send,
+	RiDeleteBin6Line as Trash2,
+} from "@remixicon/react";
+import type { ReviewComment } from "@thinkrail/contracts";
 import { useState } from "react";
 import { PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
@@ -169,9 +169,9 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 											onClick={() => toggleFile(file)}
 										>
 											{isOpen ? (
-												<ChevronDown className="size-14 shrink-0 text-text-subtle" />
+												<ChevronDown className="size-16 shrink-0 text-text-subtle" />
 											) : (
-												<ChevronRight className="size-14 shrink-0 text-text-subtle" />
+												<ChevronRight className="size-16 shrink-0 text-text-subtle" />
 											)}
 											<span className="min-w-0 flex-1 truncate text-text-muted">
 												{file.path ?? "Whole change set"}

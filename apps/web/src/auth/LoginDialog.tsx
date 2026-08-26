@@ -1,4 +1,9 @@
-import { Check, ExternalLink, Loader2, TriangleAlert } from "lucide-react";
+import {
+	RiCheckLine as Check,
+	RiExternalLinkLine as ExternalLink,
+	RiLoader4Line as Loader2,
+	RiAlertLine as TriangleAlert,
+} from "@remixicon/react";
 import { useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import {

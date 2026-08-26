@@ -1,4 +1,4 @@
-import { Search } from "lucide-react";
+import { RiSearchLine as Search } from "@remixicon/react";
 import type { ToolRenderProps } from "../../toolRegistry";
 import { CodeBlock } from "../CodeBlock";
 import { Collapsible, countLines } from "../Collapsible";
@@ -27,7 +27,7 @@ export function WebSearchCard({ args, result, status }: ToolRenderProps) {
 	return (
 		<div data-testid="tool-web_search" className="flex flex-col gap-4">
 			<div className="flex items-center gap-4 tr-text-metadata">
-				<Search className="size-14 shrink-0 text-text-muted" />
+				<Search className="size-12 shrink-0 text-text-muted" />
 				<span className="truncate text-primary" title={query}>
 					{query}
 				</span>

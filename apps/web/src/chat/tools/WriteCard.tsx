@@ -1,4 +1,4 @@
-import { FilePlus } from "lucide-react";
+import { RiFileAddLine as FilePlus } from "@remixicon/react";
 import { projectRelativePath } from "@/lib";
 import type { ToolRenderProps } from "../toolRegistry";
 import { CodeBlock } from "./CodeBlock";
@@ -15,7 +15,7 @@ export function WriteCard({ args, result, status, workspaceRoot }: ToolRenderPro
 	return (
 		<div data-testid="tool-write" className="flex flex-col gap-4">
 			<div className="flex items-center gap-4 tr-text-metadata">
-				<FilePlus className="size-14 shrink-0 text-feedback-success" />
+				<FilePlus className="size-12 shrink-0 text-feedback-success" />
 				<span className="truncate text-text-default" title={path}>
 					{displayPath}
 				</span>

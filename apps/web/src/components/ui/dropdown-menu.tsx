@@ -1,5 +1,5 @@
 import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu";
-import { ChevronRight } from "lucide-react";
+import { RiArrowRightSLine as ChevronRight } from "@remixicon/react";
 import type * as React from "react";
 import { cn } from "@/lib";
 import { menuContentClass, menuItemClass, menuSeparatorClass } from "./menu-styles";

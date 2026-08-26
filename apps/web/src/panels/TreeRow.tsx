@@ -1,4 +1,11 @@
-import { ChevronDown, ChevronRight, File as FileIcon, Folder } from "lucide-react";
+import {
+	RiArrowDownSLine as ChevronDown,
+	RiArrowRightSLine as ChevronRight,
+	RiFileFill,
+	RiFileLine,
+	RiFolderFill,
+	RiFolderLine,
+} from "@remixicon/react";
 import type { MouseEvent, ReactNode } from "react";
 
 export function TreeRow({
@@ -29,6 +36,8 @@ export function TreeRow({
 	onContextMenu?: ((event: MouseEvent) => void) | undefined;
 }) {
 	const Chevron = expanded ? ChevronDown : ChevronRight;
+	const Folder = active ? RiFolderFill : RiFolderLine;
+	const FileIcon = active ? RiFileFill : RiFileLine;
 	return (
 		<button
 			type="button"
@@ -46,16 +55,18 @@ export function TreeRow({
 			}`}
 		>
 			{kind === "dir" ? (
-				<Chevron className="size-14 shrink-0 text-text-muted" />
+				<Chevron className="size-16 shrink-0 text-text-muted" />
 			) : (
 				<span className="size-14 shrink-0" />
 			)}
-			{kind === "dir" ? (
-				<Folder className="size-16 shrink-0 text-text-muted" />
-			) : (
-				<FileIcon className="size-16 shrink-0 text-text-muted" />
-			)}
-			<span className={`min-w-0 flex-1 truncate ${labelClassName ?? ""}`}>{label}</span>
+			<span className="flex min-w-0 flex-1 items-center gap-4">
+				{kind === "dir" ? (
+					<Folder className="size-14 shrink-0 text-text-muted" />
+				) : (
+					<FileIcon className="size-14 shrink-0 text-text-muted" />
+				)}
+				<span className={`min-w-0 flex-1 truncate ${labelClassName ?? ""}`}>{label}</span>
+			</span>
 			{trailing}
 		</button>
 	);

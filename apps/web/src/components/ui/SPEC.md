@@ -25,7 +25,7 @@ The shadcn/ui primitives (Radix), copied in and owned here, themed with our desi
 - **Public surface:** each primitive imported directly via `@/components/ui/<name>` (no barrel — preserves
   tree-shaking and the shadcn per-primitive convention).
 - **Allowed deps:** Radix (incl. `@radix-ui/react-context-menu`, `@radix-ui/react-popover`,
-  `@radix-ui/react-toast`), `cmdk`, `lucide-react`, `lib` (`cn`),
+  `@radix-ui/react-toast`), `cmdk`, `@remixicon/react`, `lib` (`cn`),
   `class-variance-authority`/`clsx`/`tailwind-merge`.
 - **Forbidden:** `store`/`transport`/`panels`/`shell` (primitives are leaf UI); `server`/`shared`/`pi`;
   shadcn's default oklch palette — themed with our token utilities only.

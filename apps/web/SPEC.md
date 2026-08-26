@@ -109,6 +109,31 @@ themselves.
   utility, an arbitrary length always renders, so an off-scale value looks correct in review and passes
   every other gate. Lengths that are not scale steps at all — `max-w-[78ch]`, `w-[320px]`,
   `max-h-[40vh]`, a measured `pl-[calc(…)]` indent — stay allowed; they are layout constraints, not rhythm.
+- **Icons are `@remixicon/react` (Remix Icon) glyphs sized by UI *context*, not location, on the
+  Tailwind `size-*` scale** — imported by name, no `<Icon>` wrapper and no `size=` prop, and never a
+  container added just to resize a glyph. Remix glyphs are `fill="currentColor"`, so the semantic
+  `text-*` utilities colour them. **Style is state-driven: the `Line` (outline) variant is the
+  default; the `Fill` (solid) variant marks the *active/selected* item** — the selected project &
+  active workspace rows (`ProjectTree`), the active/main-spec node (`SpecsPanel`), the active file/dir
+  row (`TreeRow`) and the active editor tab (`Workbench`) swap to `Ri…Fill`; everything else (buttons,
+  chevrons, status, composer, chat, menus) stays `Ri…Line`. Icons with no Line/Fill pair
+  (`RiParagraph`/`RiDraggable`/`RiLinkM`/`RiListCheck3`) render their single style in both states.
+  **Project-custom glyphs** that Remix lacks live as SVGs in `public/custom-icons/` and render through
+  the `CustomIcon` primitive (`components/CustomIcon`) — a `currentColor` CSS `mask-image` span, so they
+  theme and swap Line/Fill by state exactly like Remix glyphs. The **Changes** tool uses the custom
+  `file-diff` glyph; **Review** uses `RiDiscussLine`/`RiDiscussFill`.
+  Three tiers: `size-12` (12px) for **chat-content** indicators (tool activity, plan/todo status,
+  expand/collapse chat details — subordinate to chat text); `size-14` (14px) for **compact interface /
+  navigation chrome** (left/right panels, panel & toolbar headers, tabs, the mobile switcher rail, menu
+  items, standalone chrome icon-buttons); `size-16` (16px) for a **prominent dedicated icon-button
+  surface** — the app-chrome Settings gear and the composer's bottom controls (Send + peers) — **and
+  for every disclosure/expand chevron** (`ChevronDown/Right/Left/Up`), which are `size-16` in all
+  contexts regardless of tier. The **icon↔text gap is `gap-4` (4px)** across all icon+label rows (nav
+  rows, menu/command items, tabs). A **two-line** row (e.g. a
+  workspace whose branch differs from its name) **top-aligns** the icon to the first line (`items-start`
+  + `mt-2`) so the glyph hangs on its title, while a single-line row stays vertically centred
+  (`items-center`, no nudge). Menu-item icons are centralized once in `components/ui/menu-styles.ts` (`menuItemClass`
+  `[&_svg]:size-14` + `gap-4`).
 - **`src/themes` is the theme contract and catalog; `src/styles/tokens.css` is structural.** A bundled
   theme is one strict, complete `*.theme.json` manifest: appearance/contrast metadata + semantic UI
   colors + all 16 ANSI colors + a semantic syntax palette. Selected-text foreground overrides are the
@@ -181,7 +206,7 @@ themselves.
   code-only mono, the two prose systems, and how to add or change a style — is specced in
   [src/styles/TYPOGRAPHY.md](src/styles/TYPOGRAPHY.md)** (`web-typography`); check changes against it. The
   generator that turns it into CSS is [scripts/SPEC.md](scripts/SPEC.md).
-- **Icons: `lucide-react`. Components: shadcn/ui** (Radix primitives), copy-in under `src/components/ui/`
+- **Icons: `@remixicon/react` (Line default, Fill when active/selected). Components: shadcn/ui** (Radix primitives), copy-in under `src/components/ui/`
   and themed with our token utilities (`cn()` in `src/lib/utils.ts`) — never shadcn's default oklch
   palette. Use these for accessible menus / dialogs / tooltips.
 

@@ -1,4 +1,4 @@
-import { Pencil } from "lucide-react";
+import { RiPencilLine as Pencil } from "@remixicon/react";
 import { projectRelativePath } from "@/lib";
 import type { ToolRenderProps } from "../toolRegistry";
 import { Collapsible } from "./Collapsible";
@@ -62,7 +62,7 @@ function EditHeader({ path, workspaceRoot }: { path: string; workspaceRoot?: str
 	const displayPath = projectRelativePath(path, workspaceRoot);
 	return (
 		<div className="flex items-center gap-4 tr-text-metadata">
-			<Pencil className="size-14 shrink-0 text-feedback-warning" />
+			<Pencil className="size-12 shrink-0 text-feedback-warning" />
 			<span className="truncate text-text-default" title={path}>
 				{displayPath}
 			</span>

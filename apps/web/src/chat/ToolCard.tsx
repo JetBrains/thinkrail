@@ -1,4 +1,9 @@
-import { Check, ChevronRight, Loader2, X } from "lucide-react";
+import {
+	RiCheckLine as Check,
+	RiArrowRightSLine as ChevronRight,
+	RiLoader4Line as Loader2,
+	RiCloseLine as X,
+} from "@remixicon/react";
 import { cn } from "@/lib";
 import { useFold } from "./foldState";
 import { getToolRenderer, getToolSummary, resolveProminence } from "./toolRegistry";
@@ -69,7 +74,7 @@ export function ToolCard({
 					<span className="flex-1" />
 				)}
 				<ChevronRight
-					className={`size-12 shrink-0 text-text-muted transition-transform ${expanded ? "rotate-90" : ""}`}
+					className={`size-16 shrink-0 text-text-muted transition-transform ${expanded ? "rotate-90" : ""}`}
 				/>
 			</button>
 			{expanded ? (

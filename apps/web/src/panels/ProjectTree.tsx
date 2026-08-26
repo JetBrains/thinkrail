@@ -1,18 +1,22 @@
-import type { EditorInfo, Project, Workspace } from "@thinkrail/contracts";
 import {
-	ChevronDown,
-	ChevronRight,
-	Copy,
-	ExternalLink,
-	Folder,
-	FolderOpen,
-	GitBranch,
-	House,
-	MoreVertical,
-	Plus,
-	Trash2,
-	X,
-} from "lucide-react";
+	RiArrowDownSLine as ChevronDown,
+	RiArrowRightSLine as ChevronRight,
+	RiFileCopyLine as Copy,
+	RiExternalLinkLine as ExternalLink,
+	RiFolderOpenLine as FolderOpen,
+	RiGitBranchLine as GitBranch,
+	RiHome2Line as House,
+	RiMore2Line as MoreVertical,
+	RiAddLine as Plus,
+	RiFolderFill,
+	RiFolderLine,
+	RiFolderOpenFill,
+	RiGitBranchFill,
+	RiHome2Fill,
+	RiDeleteBin6Line as Trash2,
+	RiCloseLine as X,
+} from "@remixicon/react";
+import type { EditorInfo, Project, Workspace } from "@thinkrail/contracts";
 import { type MouseEvent, useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -224,7 +228,7 @@ export function ProjectTree() {
 						data-testid="add-project-menu"
 						aria-label="Add project"
 					>
-						<Plus className="size-16" />
+						<Plus className="size-14" />
 					</Button>
 				</AddProjectMenu>
 			</header>
@@ -334,6 +338,7 @@ function ProjectRow({
 	onRestoreFocus: () => void;
 }) {
 	const Chevron = isExpanded ? ChevronDown : ChevronRight;
+	const Folder = isSelected ? RiFolderFill : RiFolderLine;
 	const [menuOpen, setMenuOpen] = useState(false);
 	const [confirmOpen, setConfirmOpen] = useState(false);
 	const openingDialogRef = useRef(false);
@@ -366,9 +371,9 @@ function ProjectRow({
 				type="button"
 				data-testid="project-name"
 				onClick={onSelect}
-				className="flex min-w-0 flex-1 items-center gap-8 text-left"
+				className="flex min-w-0 flex-1 items-center gap-4 text-left"
 			>
-				<Folder className={`size-16 shrink-0 ${isSelected ? "text-primary" : "text-text-muted"}`} />
+				<Folder className={`size-14 shrink-0 ${isSelected ? "text-primary" : "text-text-muted"}`} />
 				<span
 					className={`truncate tr-text-ui ${isSelected ? "text-text-default" : "text-text-muted"}`}
 				>
@@ -383,15 +388,16 @@ function ProjectRow({
 					{workspaceCount}
 				</span>
 			)}
-			<button
-				type="button"
+			<Button
+				variant="ghost"
+				size="icon"
+				className="shrink-0"
 				data-testid="add-workspace"
 				aria-label="Create workspace"
 				onClick={onAddWorkspace}
-				className="flex size-20 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted transition-colors hover:bg-container-elevated-bg hover:text-text-default focus-visible:bg-container-elevated-bg focus-visible:text-text-default"
 			>
-				<Plus className="size-16" />
-			</button>
+				<Plus className="size-14" />
+			</Button>
 		</div>
 	);
 	return (
@@ -496,7 +502,18 @@ function WorkspaceRow({
 }) {
 	const isDefault = isDefaultWorkspace(workspace);
 	const isExternal = isExternalWorkspace(workspace);
-	const Icon = isDefault ? House : isExternal ? FolderOpen : GitBranch;
+	const Icon = isActive
+		? isDefault
+			? RiHome2Fill
+			: isExternal
+				? RiFolderOpenFill
+				: RiGitBranchFill
+		: isDefault
+			? House
+			: isExternal
+				? FolderOpen
+				: GitBranch;
+	const isTwoLine = workspace.branch !== workspace.name;
 	const [menuOpen, setMenuOpen] = useState(false);
 	const openMenuFromContext = (event: MouseEvent) => {
 		event.preventDefault();
@@ -518,17 +535,19 @@ function WorkspaceRow({
 				<button
 					type="button"
 					onClick={onSelect}
-					className="flex min-w-0 flex-1 items-center gap-8 text-left"
+					className={`flex min-w-0 flex-1 gap-4 text-left ${isTwoLine ? "items-start" : "items-center"}`}
 				>
-					<Icon className={`size-16 shrink-0 ${isActive ? "text-primary" : "text-text-muted"}`} />
-					<span className="flex min-w-0 flex-1 flex-col gap-2">
+					<Icon
+						className={`${isTwoLine ? "mt-2 " : ""}size-14 shrink-0 ${isActive ? "text-primary" : "text-text-muted"}`}
+					/>
+					<span className="flex min-w-0 flex-1 flex-col">
 						<span
 							data-testid="workspace-name"
 							className={`truncate tr-text-ui leading-tight ${isActive ? "text-primary" : "text-text-muted"}`}
 						>
 							{workspace.name}
 						</span>
-						{workspace.branch !== workspace.name && (
+						{isTwoLine && (
 							<span
 								data-testid="workspace-branch"
 								className="truncate text-text-subtle tr-text-metadata leading-tight"
@@ -544,7 +563,7 @@ function WorkspaceRow({
 						aria-label={`Actions for ${workspace.name}`}
 						className="flex size-20 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted opacity-100 outline-none transition hover:bg-container-elevated-bg hover:text-text-default [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-primary data-[state=open]:opacity-100"
 					>
-						<MoreVertical className="size-16" />
+						<MoreVertical className="size-14" />
 					</DropdownMenuTrigger>
 					<DropdownMenuContent align="end" data-testid="workspace-actions">
 						{editors.length > 0 && (

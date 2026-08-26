@@ -1,14 +1,19 @@
 import {
-	BookOpen,
-	Box,
-	Boxes,
-	ChevronDown,
-	ChevronRight,
-	FileText,
-	ListChecks,
-	Network,
-	RefreshCw,
-} from "lucide-react";
+	RiBookOpenLine as BookOpen,
+	RiBox3Line as Box,
+	RiStackLine as Boxes,
+	RiArrowDownSLine as ChevronDown,
+	RiArrowRightSLine as ChevronRight,
+	RiFileTextLine as FileText,
+	RiListCheck3 as ListChecks,
+	RiNetworkLine as Network,
+	RiRefreshLine as RefreshCw,
+	RiBookOpenFill,
+	RiBox3Fill,
+	RiFileTextFill,
+	RiNetworkFill,
+	RiStackFill,
+} from "@remixicon/react";
 import { useEffect, useMemo, useState } from "react";
 import { cn } from "../lib";
 import { selectActiveEditorTab, useAppStore } from "../store";
@@ -86,20 +91,20 @@ export function SpecsPanel({
 	);
 }
 
-function specRoleIcon(type: string) {
+function specRoleIcon(type: string, filled: boolean) {
 	switch (type) {
 		case "goal-and-requirements":
-			return BookOpen;
+			return filled ? RiBookOpenFill : BookOpen;
 		case "architecture-design":
-			return Network;
+			return filled ? RiNetworkFill : Network;
 		case "module-design":
-			return Box;
+			return filled ? RiBox3Fill : Box;
 		case "submodule-design":
-			return Boxes;
+			return filled ? RiStackFill : Boxes;
 		case "task-spec":
 			return ListChecks;
 		default:
-			return FileText;
+			return filled ? RiFileTextFill : FileText;
 	}
 }
 
@@ -120,7 +125,7 @@ function SpecNodeRow({
 	const isMainSpec = depth === 0 && node.type === "goal-and-requirements";
 	const role = specRoleLabel(node.type);
 	const trailingRole = isMainSpec ? "Main spec" : specRoleTag(node.type);
-	const DocumentIcon = specRoleIcon(node.type);
+	const DocumentIcon = specRoleIcon(node.type, isActive || isMainSpec);
 	const Chevron = expanded ? ChevronDown : ChevronRight;
 
 	return (
@@ -142,7 +147,7 @@ function SpecNodeRow({
 						onClick={() => setExpanded((value) => !value)}
 						className="flex w-20 shrink-0 items-center justify-center self-stretch rounded-[var(--radius-sm)] text-text-muted outline-none transition-colors hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
 					>
-						<Chevron className="size-14" />
+						<Chevron className="size-16" />
 					</button>
 				) : (
 					<span className="w-20 shrink-0" />

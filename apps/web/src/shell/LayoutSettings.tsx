@@ -1,9 +1,16 @@
 import {
+	RiCheckLine as Check,
+	RiLayoutTop2Line as LayoutPanelTop,
+	RiPencilLine as Pencil,
+	RiAddLine as Plus,
+	RiDeleteBin6Line as Trash2,
+	RiCloseLine as X,
+} from "@remixicon/react";
+import {
 	DEFAULT_CONFIG,
 	type LayoutPreset,
 	type LayoutSettings as LayoutSettingsValue,
 } from "@thinkrail/contracts";
-import { Check, LayoutPanelTop, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { randomId } from "../lib";
 import { ConfirmDialog } from "../panels/ConfirmDialog";

@@ -1,5 +1,5 @@
+import { RiCheckLine as Check } from "@remixicon/react";
 import type { ThemeId } from "@thinkrail/contracts";
-import { Check } from "lucide-react";
 import { cn } from "@/lib";
 import { toast, useAppStore } from "@/store";
 import { getThemes, resolveTheme } from "@/themes";

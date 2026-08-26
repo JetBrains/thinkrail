@@ -5,7 +5,12 @@ name: Website
 on:
   push:
     branches: [main]
-    paths: ["apps/website/**", ".github/workflows/site.yml"]
+    paths:
+      - "apps/website/**"
+      - "packages/website-analytics/**"
+      - "package.json"
+      - "bun.lock"
+      - ".github/workflows/site.yml"
   workflow_dispatch:
 
 permissions:

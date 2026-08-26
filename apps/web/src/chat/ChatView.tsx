@@ -1,3 +1,4 @@
+import { RiArrowDownLine as ArrowDown } from "@remixicon/react";
 import type {
 	AskUserQuestionResult,
 	PromptHit,
@@ -7,7 +8,6 @@ import type {
 	ThinkingLevel,
 	WireModel,
 } from "@thinkrail/contracts";
-import { ArrowDown } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { Popover, PopoverAnchor, PopoverTrigger } from "@/components/ui/popover";

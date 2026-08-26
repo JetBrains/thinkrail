@@ -1,4 +1,4 @@
-import { Maximize2 } from "lucide-react";
+import { RiFullscreenLine as Maximize2 } from "@remixicon/react";
 import { type ReactNode, useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { onThemeSwap } from "@/themes";

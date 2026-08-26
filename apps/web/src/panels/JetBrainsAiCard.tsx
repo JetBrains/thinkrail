@@ -1,3 +1,15 @@
+import {
+	RiAlertLine as AlertTriangle,
+	RiCheckLine as Check,
+	RiFileCopyLine as Copy,
+	RiExternalLinkLine as ExternalLink,
+	RiLoader4Line as Loader2,
+	RiLogoutBoxLine as LogOut,
+	RiPlayLine as Play,
+	RiRefreshLine as RefreshCw,
+	RiBardLine,
+	RiToolsLine as Wrench,
+} from "@remixicon/react";
 import type {
 	JbcentralAction,
 	JbcentralActionFailureReason,
@@ -5,18 +17,6 @@ import type {
 	JbcentralInstall,
 	JbcentralStatus,
 } from "@thinkrail/contracts";
-import {
-	AlertTriangle,
-	Check,
-	Copy,
-	ExternalLink,
-	Loader2,
-	LogOut,
-	Play,
-	RefreshCw,
-	Wrench,
-	Zap,
-} from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { copyText } from "@/lib";
@@ -119,7 +119,7 @@ export function JetBrainsAiCard({
 		>
 			<div className="flex items-center gap-12">
 				<span className="flex size-32 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-primary-subtle text-primary">
-					<Zap className="size-16" />
+					<RiBardLine className="size-16" />
 				</span>
 				<div className="flex min-w-0 flex-col">
 					<span className="tr-text-ui text-text-default">JetBrains AI</span>
@@ -219,7 +219,7 @@ function ActionButton({ action, onAction }: { action: JbcentralAction; onAction:
 			) : action === "start-proxy" ? (
 				<Play className="size-14" />
 			) : (
-				<Zap className="size-14" />
+				<RiBardLine className="size-14" />
 			)}
 			{actionLabel(action)}
 		</Button>

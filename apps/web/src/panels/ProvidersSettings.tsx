@@ -1,5 +1,13 @@
+import {
+	RiStackLine as Boxes,
+	RiCheckLine as Check,
+	RiKeyLine as KeyRound,
+	RiLockLine as Lock,
+	RiLoginBoxLine as LogIn,
+	RiLogoutBoxLine as LogOut,
+	RiRefreshLine as RefreshCw,
+} from "@remixicon/react";
 import type { ProviderAuthKind, ProviderStatus, ProviderStatusReport } from "@thinkrail/contracts";
-import { Boxes, Check, KeyRound, Lock, LogIn, LogOut, RefreshCw } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { LoginDialog } from "@/auth";
 import { Button } from "@/components/ui/button";

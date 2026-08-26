@@ -11,6 +11,35 @@ import {
 	useSensor,
 	useSensors,
 } from "@dnd-kit/core";
+import {
+	RiCheckFill as Check,
+	RiArrowLeftSLine as ChevronLeft,
+	RiFileLine as File,
+	RiGitPullRequestLine as GitCompareArrows,
+	RiListCheck3 as ListTodo,
+	RiChatNewLine as MessageSquarePlus,
+	RiMoreLine as MoreHorizontal,
+	RiLayoutBottomLine as PanelBottomOpen,
+	RiLayoutLeftLine as PanelLeftOpen,
+	RiLayoutRightLine as PanelRightOpen,
+	RiLayout2Line as PanelsTopLeft,
+	RiBookOpenFill,
+	RiBookOpenLine,
+	RiChat2Fill,
+	RiChat2Line,
+	RiCollapseVerticalLine,
+	RiDiscussFill,
+	RiDiscussLine,
+	RiExpandVerticalLine,
+	RiFileFill,
+	RiFolder2Fill,
+	RiFolder2Line,
+	RiGitPullRequestFill,
+	RiLayout2Fill,
+	RiTerminalBoxFill,
+	RiTerminalBoxLine as SquareTerminal,
+	RiCloseLine as X,
+} from "@remixicon/react";
 import type {
 	LayoutAuxiliaryRegion,
 	LayoutBottomAlignment,
@@ -25,24 +54,8 @@ import type {
 	LayoutToolId,
 	WorkspaceLayoutDocument,
 } from "@thinkrail/contracts";
-import {
-	Check,
-	ChevronDown,
-	ChevronLeft,
-	File,
-	GitCompareArrows,
-	ListTodo,
-	MessageSquare,
-	MessageSquarePlus,
-	MoreHorizontal,
-	PanelBottomOpen,
-	PanelLeftOpen,
-	PanelRightOpen,
-	PanelsTopLeft,
-	SquareTerminal,
-	X,
-} from "lucide-react";
 import { Fragment, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { CustomIcon } from "../../components/CustomIcon";
 import {
 	Command,
 	CommandEmpty,
@@ -376,20 +389,38 @@ function tabSearchKeywords(tab: LayoutTab): string[] {
 	}
 }
 
-function tabIcon(tab: LayoutTab): ReactNode {
+function tabIcon(tab: LayoutTab, active = false): ReactNode {
+	const cls = "size-14 shrink-0";
 	switch (tab.kind) {
 		case "file":
-			return <File className="size-14 shrink-0" />;
+			return active ? <RiFileFill className={cls} /> : <File className={cls} />;
 		case "diff":
-			return <GitCompareArrows className="size-14 shrink-0" />;
+			return active ? (
+				<RiGitPullRequestFill className={cls} />
+			) : (
+				<GitCompareArrows className={cls} />
+			);
 		case "chat":
-			return <MessageSquare className="size-14 shrink-0" />;
+			return active ? <RiChat2Fill className={cls} /> : <RiChat2Line className={cls} />;
 		case "document":
-			return <ListTodo className="size-14 shrink-0" />;
+			return <ListTodo className={cls} />;
 		case "terminal":
-			return <SquareTerminal className="size-14 shrink-0" />;
+			return active ? <RiTerminalBoxFill className={cls} /> : <SquareTerminal className={cls} />;
 		case "tool":
-			return <PanelsTopLeft className="size-14 shrink-0" />;
+			switch (tab.tool) {
+				case "projects":
+					return active ? <RiFolder2Fill className={cls} /> : <RiFolder2Line className={cls} />;
+				case "specs":
+					return active ? <RiBookOpenFill className={cls} /> : <RiBookOpenLine className={cls} />;
+				case "files":
+					return active ? <RiFileFill className={cls} /> : <File className={cls} />;
+				case "changes":
+					return <CustomIcon name={active ? "file-diff-fill" : "file-diff-line"} className={cls} />;
+				case "review":
+					return active ? <RiDiscussFill className={cls} /> : <RiDiscussLine className={cls} />;
+				default:
+					return active ? <RiLayout2Fill className={cls} /> : <PanelsTopLeft className={cls} />;
+			}
 	}
 }
 
@@ -705,7 +736,7 @@ function TabStrip({
 					aria-label="Search open tabs"
 					className="flex w-32 shrink-0 items-center justify-center border-border-muted border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 				>
-					<MoreHorizontal className="size-16" />
+					<MoreHorizontal className="size-14" />
 				</PopoverTrigger>
 				<PopoverContent
 					align="end"
@@ -936,7 +967,7 @@ function WorkbenchTab({
 						onKeyDown={onKeyDown}
 						className={`flex min-w-0 flex-1 items-center gap-4 py-4 pl-8 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary ${tab.kind === "tool" ? "pr-8" : ""}`}
 					>
-						{tabIcon(tab)}
+						{tabIcon(tab, active)}
 						<span className={`truncate ${preview ? "italic" : ""}`}>{name}</span>
 						{renderTabAdornment(tab)}
 					</button>
@@ -1243,7 +1274,7 @@ function CenterGroupView({
 							onClick={() => onNewChat(group.id)}
 							className="flex w-32 shrink-0 items-center justify-center text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 						>
-							<MessageSquarePlus className="size-16" />
+							<MessageSquarePlus className="size-14" />
 						</button>
 					</>
 				}
@@ -1514,9 +1545,11 @@ function SideGroupView({
 					}}
 					className="flex w-32 shrink-0 items-center justify-center border-border-muted border-b border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 				>
-					<ChevronDown
-						className={`size-14 transition-transform ${group.folded ? "-rotate-90" : ""}`}
-					/>
+					{group.folded ? (
+						<RiExpandVerticalLine className="size-16" />
+					) : (
+						<RiCollapseVerticalLine className="size-16" />
+					)}
 				</button>
 			</div>
 			<div
@@ -1832,7 +1865,7 @@ function BottomGroupView({
 					onClick={onFold}
 					className="flex w-32 shrink-0 items-center justify-center border-border-muted border-b border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 				>
-					<ChevronLeft className="size-14" />
+					<ChevronLeft className="size-16" />
 				</button>
 			</div>
 			<div
@@ -2204,9 +2237,9 @@ function HiddenSideRail({
 				className="flex size-24 items-center justify-center rounded-[var(--radius-sm)] text-text-muted hover:bg-control-bg-hovered hover:text-text-default disabled:text-control-disabled-text disabled:hover:bg-transparent"
 			>
 				{side === "left" ? (
-					<PanelLeftOpen className="size-16" />
+					<PanelLeftOpen className="size-14" />
 				) : (
-					<PanelRightOpen className="size-16" />
+					<PanelRightOpen className="size-14" />
 				)}
 			</button>
 		</div>

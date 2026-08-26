@@ -1,4 +1,7 @@
-import { ChevronDown, ChevronRight } from "lucide-react";
+import {
+	RiArrowDownSLine as ChevronDown,
+	RiArrowRightSLine as ChevronRight,
+} from "@remixicon/react";
 import { PopoverContent } from "@/components/ui/popover";
 import { cn } from "../lib";
 import { type PlanGlance, planSummary, stripStatus } from "./planView";
@@ -22,7 +25,7 @@ export function ChatPlanStripContent({
 	const { Icon, label, className } = glanceIcon(glance);
 	return (
 		<>
-			<Chevron className="size-14 shrink-0" />
+			<Chevron className="size-16 shrink-0" />
 			<span className="tr-text-emphasis shrink-0">TODO list</span>
 			<span className="shrink-0">
 				{done}/{total}

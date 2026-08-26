@@ -352,3 +352,22 @@
 	padding-left: 10px;
 	margin-left: -10px;
 }
+
+.custom-icon {
+	display: inline-block;
+	background-color: currentColor;
+	-webkit-mask-repeat: no-repeat;
+	mask-repeat: no-repeat;
+	-webkit-mask-position: center;
+	mask-position: center;
+	-webkit-mask-size: contain;
+	mask-size: contain;
+}
+.custom-icon-file-diff-line {
+	-webkit-mask-image: url("/custom-icons/file-diff-line.svg");
+	mask-image: url("/custom-icons/file-diff-line.svg");
+}
+.custom-icon-file-diff-fill {
+	-webkit-mask-image: url("/custom-icons/file-diff-fill.svg");
+	mask-image: url("/custom-icons/file-diff-fill.svg");
+}

@@ -1,5 +1,11 @@
+import {
+	RiFolderOpenLine as FolderOpen,
+	RiHome2Line as House,
+	type RemixiconComponentType as LucideIcon,
+	RiRocketLine as Rocket,
+	RiSparkling2Line as Sparkles,
+} from "@remixicon/react";
 import type { Workspace } from "@thinkrail/contracts";
-import { FolderOpen, House, type LucideIcon, Rocket, Sparkles } from "lucide-react";
 import { type ComponentPropsWithoutRef, forwardRef, useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { PRODUCT_NAME } from "../constants/branding";
@@ -199,14 +205,7 @@ const Card = forwardRef<HTMLButtonElement, CardProps>(function Card(
 					{tag}
 				</span>
 			) : null}
-			<span
-				className={cn(
-					"flex size-36 items-center justify-center rounded-[var(--radius-sm)]",
-					primary ? "bg-primary text-text-on-primary" : "bg-control-bg-selected text-text-muted",
-				)}
-			>
-				<Icon className="size-16" />
-			</span>
+			<Icon className={cn("size-24", primary ? "text-primary" : "text-text-muted")} />
 			<span className="w-full">
 				<span className="block tr-title-card text-text-default">{title}</span>
 				<span className="mt-2 block text-text-muted tr-text-metadata leading-snug">{subtitle}</span>

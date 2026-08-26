@@ -1,4 +1,4 @@
-import { MessageSquarePlus } from "lucide-react";
+import { RiChatNewLine as MessageSquarePlus } from "@remixicon/react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { mapPreviewSelection } from "./previewAnchor";

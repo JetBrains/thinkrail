@@ -1,17 +1,17 @@
-import type { ImageContent, UserMessage } from "@thinkrail/contracts";
 import {
-	BookOpen,
-	ChevronDown,
-	ChevronRight,
-	Clock,
-	FileDiff,
-	FileText,
-	FoldVertical,
-	RotateCw,
-	TriangleAlert,
-	Wrench,
-} from "lucide-react";
-import { useEffect, useState } from "react";
+	RiBookOpenLine as BookOpen,
+	RiArrowDownSLine as ChevronDown,
+	RiArrowRightSLine as ChevronRight,
+	RiTimeLine as Clock,
+	RiFileTextLine as FileText,
+	RiContractUpDownLine as FoldVertical,
+	RiLoopRightLine as RotateCw,
+	RiAlertLine as TriangleAlert,
+	RiToolsLine as Wrench,
+} from "@remixicon/react";
+import type { ImageContent, UserMessage } from "@thinkrail/contracts";
+import { type ReactNode, useEffect, useState } from "react";
+import { CustomIcon } from "@/components/CustomIcon";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
 	cn,
@@ -230,7 +230,7 @@ function SkillInvocationCard({
 				onClick={toggle}
 				className="flex w-full items-center gap-4 px-12 py-8 text-left outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary"
 			>
-				<BookOpen size={14} className="shrink-0 text-text-muted" aria-hidden="true" />
+				<BookOpen className="size-14 shrink-0 text-text-muted" aria-hidden="true" />
 				<span className="shrink-0 tr-text-ui text-text-muted">Skill</span>
 				<span className="shrink-0 text-text-subtle" aria-hidden="true">
 					·
@@ -242,9 +242,9 @@ function SkillInvocationCard({
 					{invocation.name}
 				</span>
 				{expanded ? (
-					<ChevronDown size={14} className="shrink-0 text-text-muted" aria-hidden="true" />
+					<ChevronDown className="size-16 shrink-0 text-text-muted" aria-hidden="true" />
 				) : (
-					<ChevronRight size={14} className="shrink-0 text-text-muted" aria-hidden="true" />
+					<ChevronRight className="size-16 shrink-0 text-text-muted" aria-hidden="true" />
 				)}
 			</button>
 			{expanded ? (
@@ -282,7 +282,7 @@ function PackageCommentRow({ foldId, item }: { foldId: string; item: ReviewPacka
 			>
 				<ChevronRight
 					className={cn(
-						"mt-2 size-12 shrink-0 text-text-subtle transition-transform",
+						"mt-2 size-16 shrink-0 text-text-subtle transition-transform",
 						expanded && "rotate-90",
 					)}
 				/>
@@ -374,7 +374,7 @@ function CompactionTurn({
 				className="flex items-center gap-8 text-text-muted tr-text-metadata hover:text-text-default"
 			>
 				<span className="h-px flex-1 bg-border-default" />
-				{open ? <ChevronDown className="size-14" /> : <ChevronRight className="size-14" />}
+				{open ? <ChevronDown className="size-16" /> : <ChevronRight className="size-16" />}
 				<span>
 					Earlier messages summarized ({formatTokens(tokensBefore)} tokens of context compacted)
 				</span>
@@ -396,7 +396,7 @@ function ErrorTurn({ text }: { text: string }) {
 			data-role="error"
 			className="flex items-start gap-8 rounded-[var(--radius-sm)] border border-feedback-error-muted bg-clip-padding bg-feedback-error-subtle px-12 py-8 text-feedback-error tr-text-ui"
 		>
-			<TriangleAlert className="mt-2 size-16 shrink-0" />
+			<TriangleAlert className="mt-2 size-12 shrink-0" />
 			<span className="min-w-0 whitespace-pre-wrap break-words">{text}</span>
 		</div>
 	);
@@ -416,7 +416,7 @@ function CompactionNotice({
 				data-status="failed"
 				className="flex items-start gap-8 rounded-[var(--radius-md)] border border-feedback-error-muted bg-clip-padding bg-feedback-error-subtle px-12 py-8 text-feedback-error tr-text-ui"
 			>
-				<TriangleAlert className="mt-2 size-16 shrink-0" />
+				<TriangleAlert className="mt-2 size-12 shrink-0" />
 				<span className="min-w-0 whitespace-pre-wrap break-words">
 					{detail || "Compaction failed."}
 				</span>
@@ -497,9 +497,13 @@ function formatElapsed(ms: number): string {
 	return m > 0 ? `${m}m ${s}s` : `${s}s`;
 }
 
+function FileDiffGlyph({ className }: { className?: string }) {
+	return <CustomIcon name="file-diff-line" className={className} />;
+}
+
 interface ArtifactGroup {
 	id: "specs" | "files";
-	icon: typeof FileText;
+	icon: typeof FileText | ((props: { className?: string }) => ReactNode);
 	paths: string[];
 	label: (count: number) => string;
 	expanded: boolean;
@@ -543,9 +547,9 @@ function ArtifactChip({
 			{label(paths.length)}
 			{many ? (
 				expanded ? (
-					<ChevronDown className="size-12 shrink-0" />
+					<ChevronDown className="size-16 shrink-0" />
 				) : (
-					<ChevronRight className="size-12 shrink-0" />
+					<ChevronRight className="size-16 shrink-0" />
 				)
 			) : null}
 		</button>
@@ -614,7 +618,7 @@ export function TurnDivider({
 		},
 		{
 			id: "files",
-			icon: FileDiff,
+			icon: FileDiffGlyph,
 			paths: changedFiles,
 			label: (n) => `${n} ${n === 1 ? "file changed" : "files changed"}`,
 			expanded: selected === "files",

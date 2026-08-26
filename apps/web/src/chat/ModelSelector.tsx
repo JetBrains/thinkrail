@@ -1,5 +1,9 @@
+import {
+	RiCheckLine as Check,
+	RiArrowDownSLine as ChevronDown,
+	RiRefreshLine as RefreshCw,
+} from "@remixicon/react";
 import type { WireModel } from "@thinkrail/contracts";
-import { Check, ChevronDown, RefreshCw } from "lucide-react";
 import { useState } from "react";
 import {
 	Command,
@@ -63,7 +67,7 @@ export function ModelSelector({
 				<span className="truncate text-text-muted tr-text-metadata">
 					{current?.name ?? "Select model"}
 				</span>
-				<ChevronDown className="size-12 shrink-0 text-text-muted" />
+				<ChevronDown className="size-16 shrink-0 text-text-muted" />
 			</PopoverTrigger>
 			<PopoverContent align="start" container={container} className="w-[320px] p-0">
 				<Command>

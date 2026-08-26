@@ -1,5 +1,11 @@
+import {
+	RiFileTextLine as FileText,
+	RiPencilLine as Pencil,
+	RiAddLine as Plus,
+	RiSparkling2Line as Sparkles,
+	RiDeleteBin6Line as Trash2,
+} from "@remixicon/react";
 import type { TemplateInfo, TemplateScope } from "@thinkrail/contracts";
-import { FileText, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { TemplateEditorDialog } from "@/chat/TemplateEditorDialog";
 import { assembleTemplate } from "@/chat/templateText";

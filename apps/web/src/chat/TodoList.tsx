@@ -1,17 +1,17 @@
-import type { TodoGroupItem, TodoItem, TodoPlan, TodoStatus } from "@thinkrail/contracts";
 import {
-	Check,
-	ChevronDown,
-	ChevronRight,
-	Circle,
-	CircleDot,
-	CirclePause,
-	FileText,
-	MessageCircleQuestion,
-	Plus,
-	Trash2,
-	UserRound,
-} from "lucide-react";
+	RiCheckLine as Check,
+	RiArrowDownSLine as ChevronDown,
+	RiArrowRightSLine as ChevronRight,
+	RiCircleLine as Circle,
+	RiRecordCircleLine as CircleDot,
+	RiPauseCircleLine as CirclePause,
+	RiFileTextLine as FileText,
+	RiQuestionnaireLine as MessageCircleQuestion,
+	RiAddLine as Plus,
+	RiDeleteBin6Line as Trash2,
+	RiUser3Line as UserRound,
+} from "@remixicon/react";
+import type { TodoGroupItem, TodoItem, TodoPlan, TodoStatus } from "@thinkrail/contracts";
 import { useState } from "react";
 import { cn } from "../lib";
 import { PlanStatusIcon, SectionLabel } from "./planKit";
@@ -54,7 +54,7 @@ function statusLabel(status: TodoStatus, glance: PlanGlance): string {
 export function StatusIcon({ status, glance }: { status: TodoStatus; glance: PlanGlance }) {
 	if (status === "in_progress") {
 		const { Icon, className } = glanceIcon(glance);
-		return <Icon data-glance={glance} className={cn("size-16 shrink-0", className)} />;
+		return <Icon data-glance={glance} className={cn("size-12 shrink-0", className)} />;
 	}
 	return <PlanStatusIcon kind={status === "done" ? "done" : "pending"} />;
 }
@@ -123,7 +123,7 @@ function GroupBlock({
 				{status === "active" ? (
 					<StatusIcon status="in_progress" glance={glance} />
 				) : (
-					<Circle className="size-16 shrink-0 text-text-muted" />
+					<Circle className="size-12 shrink-0 text-text-muted" />
 				)}
 				<span
 					className={cn(
@@ -241,8 +241,8 @@ function DoneGroup({
 				onClick={() => setExpanded((v) => !v)}
 				className="flex w-full items-center gap-8 rounded-[var(--radius-sm)] px-4 py-4 text-left hover:bg-control-bg-hovered"
 			>
-				<Chevron className="size-14 shrink-0 text-text-muted" />
-				<Check className="size-16 shrink-0 text-primary" />
+				<Chevron className="size-16 shrink-0 text-text-muted" />
+				<Check className="size-12 shrink-0 text-primary" />
 				<span className="min-w-0 flex-1 truncate tr-text-ui text-text-muted line-through">
 					{group.title}
 				</span>

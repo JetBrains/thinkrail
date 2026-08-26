@@ -1,5 +1,5 @@
+import { RiSearchLine as Search } from "@remixicon/react";
 import { Command as CommandPrimitive } from "cmdk";
-import { Search } from "lucide-react";
 import type * as React from "react";
 import { cn } from "@/lib";
 
@@ -20,7 +20,7 @@ function CommandInput({
 	...props
 }: React.ComponentProps<typeof CommandPrimitive.Input>) {
 	return (
-		<div className="flex items-center gap-8 border-border-muted border-b px-8">
+		<div className="flex items-center gap-4 border-border-muted border-b px-8">
 			<Search className="size-14 shrink-0 text-text-muted" />
 			<CommandPrimitive.Input
 				className={cn(
@@ -67,7 +67,7 @@ function CommandItem({ className, ...props }: React.ComponentProps<typeof Comman
 	return (
 		<CommandPrimitive.Item
 			className={cn(
-				"flex cursor-pointer items-center gap-8 rounded-[var(--radius-sm)] px-8 py-4 tr-text-ui text-text-default outline-none data-[selected=true]:bg-control-bg-selected",
+				"flex cursor-pointer items-center gap-4 rounded-[var(--radius-sm)] px-8 py-4 tr-text-ui text-text-default outline-none data-[selected=true]:bg-control-bg-selected",
 				className,
 			)}
 			{...props}

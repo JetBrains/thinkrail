@@ -1,19 +1,19 @@
 import {
+	RiArrowUpLine as ArrowUp,
+	RiArrowUpSLine as ChevronUp,
+	RiFileLine as FileIcon,
+	RiFolderLine as FolderIcon,
+	RiHistoryLine as History,
+	RiSparkling2Line as Sparkles,
+	RiStopLine as Square,
+	RiCloseLine as X,
+} from "@remixicon/react";
+import {
 	REQUEST_IMAGE_BASE64_BUDGET,
 	type SlashCommandInfo,
 	type ThinkingLevel,
 	type WireModel,
 } from "@thinkrail/contracts";
-import {
-	ArrowUp,
-	ChevronUp,
-	FileIcon,
-	FolderIcon,
-	History,
-	Sparkles,
-	Square,
-	X,
-} from "lucide-react";
 import {
 	type ClipboardEvent,
 	type DragEvent,
@@ -728,7 +728,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							onClick={openHistory}
 							className="flex size-32 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg text-text-default hover:bg-control-bg-hovered"
 						>
-							<History className="size-14" />
+							<History className="size-16" />
 						</button>
 						{isStreaming ? (
 							<button
@@ -738,7 +738,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 								onClick={onAbort}
 								className="flex size-32 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg text-text-default hover:bg-control-bg-hovered"
 							>
-								<Square className="size-14" />
+								<Square className="size-16" />
 							</button>
 						) : null}
 						{isStreaming ? (
@@ -750,7 +750,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 										aria-label="Send options"
 										className="flex size-32 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg text-text-default hover:bg-control-bg-hovered"
 									>
-										<ChevronUp className="size-14" />
+										<ChevronUp className="size-16" />
 									</button>
 								</PopoverTrigger>
 								<PopoverContent side="top" align="end" className="w-[320px] p-4">

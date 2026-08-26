@@ -1,4 +1,10 @@
-import { ChevronRight, GitBranch, Settings } from "lucide-react";
+import {
+	RiArrowRightSLine as ChevronRight,
+	RiCircleLine as Circle,
+	RiGitBranchLine as GitBranch,
+	RiCircleFill,
+	RiSettings3Line as Settings,
+} from "@remixicon/react";
 import { useEffect, useRef } from "react";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "../components/ui/resizable";
 import { ProjectTree } from "../panels/ProjectTree";
@@ -28,13 +34,14 @@ const STATUS_LABEL: Record<ConnectionStatus, string> = {
 };
 
 const STATUS_DOT: Record<ConnectionStatus, string> = {
-	connected: "bg-feedback-success",
-	connecting: "bg-feedback-warning",
-	disconnected: "bg-feedback-error",
+	connected: "text-feedback-success",
+	connecting: "text-feedback-warning",
+	disconnected: "text-feedback-error",
 };
 
 export function Shell() {
 	const status = useAppStore((s) => s.status);
+	const StatusDot = status === "connected" ? RiCircleFill : Circle;
 	const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
 	const activeWorkspace = useAppStore(selectActiveWorkspace);
 	const contextProject = useAppStore(selectContextProject);
@@ -98,14 +105,14 @@ export function Shell() {
 								>
 									{contextProject.name}
 								</span>
-								<ChevronRight className="size-12 shrink-0 text-text-muted" />
+								<ChevronRight className="size-16 shrink-0 text-text-muted" />
 							</span>
 							<span data-testid="scope-name" className="max-w-[220px] truncate text-text-default">
 								{activeWorkspace?.name ?? "Project home"}
 							</span>
 							{activeWorkspace ? (
 								<>
-									<GitBranch className="size-12 shrink-0 text-text-muted" />
+									<GitBranch className="size-14 shrink-0 text-text-muted" />
 									<span data-testid="scope-branch" className="truncate text-text-muted">
 										{activeWorkspace.branch}
 									</span>
@@ -139,7 +146,10 @@ export function Shell() {
 						aria-label={STATUS_LABEL[status]}
 						className="inline-flex items-center gap-8 tr-text-ui text-text-muted"
 					>
-						<span aria-hidden="true" className={`size-8 rounded-full ${STATUS_DOT[status]}`} />
+						<StatusDot
+							aria-hidden="true"
+							className={`size-8 shrink-0 fill-current ${STATUS_DOT[status]}`}
+						/>
 						<span aria-hidden="true" className="hidden sm:inline">
 							{STATUS_LABEL[status]}
 						</span>

@@ -10,14 +10,17 @@
 		"test": "bun test",
 		"preview": "astro preview"
 	},
+	"dependencies": {
+		"@thinkrail/website-analytics": "workspace:*"
+	},
 	"devDependencies": {
-		"@astrojs/check": "0.9.10",
+		"@astrojs/check": "catalog:",
 		"@astrojs/markdown-satteri": "0.3.7",
 		"@astrojs/rss": "4.0.19",
 		"@fontsource-variable/geist": "catalog:",
 		"@fontsource-variable/jetbrains-mono": "catalog:",
 		"@fontsource-variable/orbitron": "catalog:",
-		"astro": "7.2.4",
+		"astro": "catalog:",
 		"typescript": "catalog:"
 	}
 }

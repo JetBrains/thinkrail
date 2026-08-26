@@ -1,15 +1,15 @@
 import {
-	ArrowUpRight,
-	Braces,
-	ClipboardPaste,
-	Command,
-	Copy,
-	Eye,
-	Link2,
-	type LucideIcon,
-	MessageSquarePlus,
-	Scissors,
-} from "lucide-react";
+	RiArrowRightUpLine as ArrowUpRight,
+	RiBracesLine as Braces,
+	RiClipboardLine as ClipboardPaste,
+	RiCommandLine as Command,
+	RiFileCopyLine as Copy,
+	RiEyeLine as Eye,
+	RiLinkM as Link2,
+	type RemixiconComponentType as LucideIcon,
+	RiChatNewLine as MessageSquarePlus,
+	RiScissorsLine as Scissors,
+} from "@remixicon/react";
 import type * as monaco from "monaco-editor";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";

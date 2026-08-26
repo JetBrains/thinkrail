@@ -1,6 +1,6 @@
+import { RiAddLine as Plus } from "@remixicon/react";
 import type { TerminalTabsPush } from "@thinkrail/contracts";
 import { WS_CHANNELS } from "@thinkrail/contracts";
-import { Plus } from "lucide-react";
 import { lazy, type ReactNode, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import type { TerminalTab } from "../store";
 import { isConnectedGeneration, toast, useAppStore } from "../store";
@@ -69,7 +69,7 @@ export function TerminalWorkbenchBody({ tab, onAdd }: { tab: TerminalTab; onAdd:
 				onClick={onAdd}
 				className="absolute top-4 right-4 z-10 flex size-20 items-center justify-center rounded-[var(--radius-sm)] bg-container-elevated-bg text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 			>
-				<Plus className="size-16" />
+				<Plus className="size-14" />
 			</button>
 			<Suspense fallback={null}>
 				<TerminalInstance

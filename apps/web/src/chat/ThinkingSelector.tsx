@@ -1,5 +1,5 @@
+import { RiCheckLine as Check, RiArrowDownSLine as ChevronDown } from "@remixicon/react";
 import type { ThinkingLevel } from "@thinkrail/contracts";
-import { Check, ChevronDown } from "lucide-react";
 import { useState } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
@@ -25,7 +25,7 @@ export function ThinkingSelector({
 			>
 				<span className="tr-text-eyebrow text-text-muted">Effort</span>
 				<span className="capitalize">{level}</span>
-				<ChevronDown className="size-12 shrink-0 text-text-muted" />
+				<ChevronDown className="size-16 shrink-0 text-text-muted" />
 			</PopoverTrigger>
 			<PopoverContent align="start" container={container} className="w-[160px] p-4">
 				{levels.map((l) => (

@@ -1,6 +1,6 @@
 import * as ToastPrimitive from "@radix-ui/react-toast";
+import { RiCloseLine as X } from "@remixicon/react";
 import { cva, type VariantProps } from "class-variance-authority";
-import { X } from "lucide-react";
 import type * as React from "react";
 import { cn } from "@/lib";
 

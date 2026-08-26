@@ -1,4 +1,7 @@
-import { PanelLeftOpen, PanelRightOpen } from "lucide-react";
+import {
+	RiLayoutLeftLine as PanelLeftOpen,
+	RiLayoutRightLine as PanelRightOpen,
+} from "@remixicon/react";
 import { forwardRef } from "react";
 import { cn, platformShortcutLabel } from "../lib";
 
@@ -28,7 +31,7 @@ export const CollapsedPanelRail = forwardRef<HTMLButtonElement, CollapsedPanelRa
 					side === "left" ? "border-border-default border-r" : "border-border-default border-l",
 				)}
 			>
-				<Icon aria-hidden="true" className="size-16 shrink-0" />
+				<Icon aria-hidden="true" className="size-14 shrink-0" />
 				<span aria-hidden="true" className="rotate-180 [writing-mode:vertical-rl] tr-text-eyebrow">
 					{label}
 				</span>

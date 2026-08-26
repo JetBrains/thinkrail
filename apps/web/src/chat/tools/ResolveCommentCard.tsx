@@ -1,4 +1,4 @@
-import { CheckCircle2 } from "lucide-react";
+import { RiCheckboxCircleLine as CheckCircle2 } from "@remixicon/react";
 import type { ReactNode } from "react";
 import type { ToolRenderProps } from "../toolRegistry";
 import { strArg } from "./toolHelpers";
@@ -9,7 +9,7 @@ export function ResolveCommentCard({ args, status }: ToolRenderProps): ReactNode
 	return (
 		<div className="flex items-start gap-4 tr-text-ui">
 			<CheckCircle2
-				className={`mt-2 size-14 shrink-0 ${status === "error" ? "text-feedback-error" : "text-feedback-success"}`}
+				className={`mt-2 size-12 shrink-0 ${status === "error" ? "text-feedback-error" : "text-feedback-success"}`}
 			/>
 			<div className="min-w-0">
 				<span className="tr-code-text text-text-muted">{commentId}</span>

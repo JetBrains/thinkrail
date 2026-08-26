@@ -1,4 +1,4 @@
-import { TriangleAlert } from "lucide-react";
+import { RiAlertLine as TriangleAlert } from "@remixicon/react";
 import { type ComponentProps, type ReactNode, useId } from "react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent } from "@/components/ui/popover";

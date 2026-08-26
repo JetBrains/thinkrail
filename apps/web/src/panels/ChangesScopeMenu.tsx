@@ -1,5 +1,10 @@
+import {
+	RiCheckLine as Check,
+	RiArrowDownSLine as ChevronDown,
+	RiGitCommitLine as GitCommitHorizontal,
+	RiGitPullRequestLine as GitCompare,
+} from "@remixicon/react";
 import type { GitCommit, GitDiffScope } from "@thinkrail/contracts";
-import { Check, ChevronDown, GitCommitHorizontal, GitCompare } from "lucide-react";
 import { useRef, useState } from "react";
 import {
 	DropdownMenu,
@@ -68,7 +73,7 @@ export function ChangesScopeMenu({
 				<span data-testid="changes-scope-label" className="truncate">
 					{scopeLabel(scope, commits ?? [])}
 				</span>
-				<ChevronDown className="size-12 shrink-0" />
+				<ChevronDown className="size-16 shrink-0" />
 			</DropdownMenuTrigger>
 			<DropdownMenuContent align="start" className="max-w-[22rem]">
 				<DropdownMenuItem

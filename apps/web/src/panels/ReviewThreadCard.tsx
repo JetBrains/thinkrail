@@ -1,4 +1,4 @@
-import { Send, Trash2 } from "lucide-react";
+import { RiSendPlaneLine as Send, RiDeleteBin6Line as Trash2 } from "@remixicon/react";
 import { useEffect, useRef, useState } from "react";
 import type { ReviewThreadActions, ReviewThreadData } from "./reviewWidgets";
 

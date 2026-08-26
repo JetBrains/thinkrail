@@ -126,7 +126,7 @@ Architecture decisions live as spec-graph nodes, dogfooding the spec layer the p
   come from a four-step alpha scale as tokens, never Tailwind's `/40` modifier. `styles/COLOR.md` is
   the system, `styles/colorUsage.test.ts` the gate — Tailwind drops an unknown utility *silently*, so
   a token that isn't published renders as nothing.
-- **Icons: `lucide-react` only. UI primitives: shadcn/ui** (Radix), copied into
+- **Icons: `@remixicon/react` (Remix Icon; outline `Line` by default, solid `Fill` when the item is active/selected) only. UI primitives: shadcn/ui** (Radix), copied into
   `apps/web/src/components/ui/` (we own them) and themed with our token utilities — *not* shadcn's
   default palette. `cn()` lives in `apps/web/src/lib/utils.ts`.
 - The transport's **host endpoint is a parameter** (default same-origin); `server.welcome` carries a

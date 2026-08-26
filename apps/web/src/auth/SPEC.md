@@ -30,7 +30,7 @@ not here — `auth` stays presentational + types, so nothing here imports `store
     prompt renders **masked** (API keys, issue #97); progress/working spinner;
     terminal success/error) and calls back `onReply(value)` / `onCancel()` / `onClose()`. Copy says
     **"Connect"**, not "Sign in" — one dialog serves OAuth and API-key entry alike. Themed with token
-    utilities only; `lucide-react` icons; shadcn `Dialog`/`Button`.
+    utilities only; `@remixicon/react` icons; shadcn `Dialog`/`Button`.
 - **Public surface (barrel `index.ts`):** `LoginDialog`; `LoginState`/`LoginInput*` (types).
 - **Allowed deps:** `components/ui` (`Dialog`/`Button`). (The state types need no imports.)
 - **Forbidden:** importing `store`/`transport` (the dialog stays presentational — the **panel** is the

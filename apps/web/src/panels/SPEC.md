@@ -17,8 +17,10 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
 ## Boundary
 
 - **Owns:** `ProjectTree`. Each top-level project row is a compact 28px IDE-tree row:
-  **always-visible chevron** + folder/name + a collapsed-only plain workspace count + a **bare muted Create
-  workspace `+` always visible in a fixed right-edge column** (the Projects-header Add project `+` is unchanged).
+  **always-visible chevron** + folder/name + a collapsed-only plain workspace count + an **always-visible Create
+  workspace `+` in a fixed right-edge column**. That `+` is the **same control as the Projects-header Add
+  project `+`** — both are `Button variant="ghost" size="icon"`, so they render identically and their glyphs
+  line up on one vertical axis (both sit at the row's `pr-xs` right edge).
   Long names truncate before the count/action; there is deliberately **no visible Close or overflow icon**.
   Hover highlights the full row and the highlight remains while its **project context menu** is open.
   Right-click opens that PR-#167-styled menu at the pointer without selecting/navigating; a scroll-cancelled
@@ -458,7 +460,7 @@ a project picker, the prompt hero, and the reused
   dialog), `chat` (`ModelSelector`/`ThinkingSelector` + the `useModelCatalog` hook that feeds them,
   reused by `NewWorkspaceDialog`; `Markdown`,
   reused by `MarkdownPreview`; `TemplateEditorDialog`, reused by `TemplatesSettings`), `lib`, `themes` (catalog + generic application contract),
-  `contracts`; `lucide-react`; and the heavy libs each lazy panel owns (`monaco-editor`, `shiki`,
+  `contracts`; `@remixicon/react`; and the heavy libs each lazy panel owns (`monaco-editor`, `shiki`,
   `@xterm/*`) loaded via `import()`.
 - **Forbidden:** `server`/`shared`/`pi`; importing `shell`; reaching across unrelated panels.
 
@@ -549,7 +551,7 @@ a project picker, the prompt hero, and the reused
   Monaco surfaces the same action also sits in the editor's **right-click context menu** ("Comment on
   selection", right after Copy, `Cmd/Ctrl+Shift+M`; `editorHasSelection` precondition) — the «+» and
   the menu entry are one action pair into one composer (which is why `attachReviewCommenting` takes
-  an `IStandaloneCodeEditor` — `addAction` lives only there). The menu's rows wear the app's lucide
+  an `IStandaloneCodeEditor` — `addAction` lives only there). The menu's rows wear the app's Remix Icon
   icons via `monacoMenuIcons.ts`: Monaco's standalone menu is label-only (`action.class` icons are a
   workbench feature `addAction` can't reach), so `decorateEditorContextMenus` — installed on EVERY
   Monaco surface, review or not (`MonacoEditor` + both of `MonacoDiff`'s inner editors) — decorates
@@ -946,7 +948,7 @@ a project picker, the prompt hero, and the reused
   only what is *not* typography: h1/h2 section rules, a capped reading measure (~78ch) with wide
   tables/code scrolling inside it, zebra-striped bordered tables, muted accent blockquotes, crisp
   rules, and **GitHub-style alert callouts** (`> [!NOTE]`…`[!CAUTION]`, via the in-repo
-  `markdownAlerts` remark transform + a lucide/token `AlertCallout`, wired in only here — not chat), and
+  `markdownAlerts` remark transform + a Remix Icon/token `AlertCallout`, wired in only here — not chat), and
   **```mermaid fences render as themed diagrams** (the shared `Markdown` primitive's mermaid path —
   `chat/SPEC.md`; the rendered *diff* keeps the source-code degradation, like shiki) — in
   a centered reading column; strips a leading YAML frontmatter block via
