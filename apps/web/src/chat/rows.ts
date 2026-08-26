@@ -12,9 +12,16 @@ export interface ToolCallData {
 	streaming: boolean;
 }
 
-export type ActivityStep =
-	| ({ kind: "tool"; id: string } & ToolCallData)
-	| { kind: "thinking"; id: string; text: string; streaming: boolean };
+export type RoutineToolStep = { kind: "tool"; id: string } & ToolCallData;
+
+export interface ThinkingStep {
+	kind: "thinking";
+	id: string;
+	text: string;
+	streaming: boolean;
+}
+
+export type ActivityStep = RoutineToolStep | ThinkingStep;
 
 export type ChatRow =
 	| { kind: "user"; id: string; message: UserMessage; attachmentNames?: string[] }
@@ -32,12 +39,64 @@ export type ChatRow =
 	| { kind: "markdown"; id: string; text: string }
 	| ({ kind: "tool"; id: string } & ToolCallData)
 	| {
+			kind: "thinking";
+			id: string;
+			thought: ThinkingStep;
+			tools: RoutineToolStep[];
+			live: boolean;
+	  }
+	| {
 			kind: "activity";
 			id: string;
-			steps: ActivityStep[];
+			steps: RoutineToolStep[];
 			live: boolean;
 	  }
 	| { kind: "divider"; id: string; data: TurnDividerData };
+
+type RoutineRow = Extract<ChatRow, { kind: "thinking" | "activity" }>;
+
+function partitionRoutineRun(steps: ActivityStep[], live: boolean): RoutineRow[] {
+	const partitioned: RoutineRow[] = [];
+	let fallback: RoutineToolStep[] = [];
+	let thought: ThinkingStep | undefined;
+	let tools: RoutineToolStep[] = [];
+
+	const flushFallback = () => {
+		const first = fallback[0];
+		if (!first) return;
+		partitioned.push({
+			kind: "activity",
+			id: `activity:${first.id}`,
+			steps: fallback,
+			live: false,
+		});
+		fallback = [];
+	};
+	const flushThinking = () => {
+		if (!thought) return;
+		partitioned.push({ kind: "thinking", id: thought.id, thought, tools, live: false });
+		thought = undefined;
+		tools = [];
+	};
+
+	for (const step of steps) {
+		if (step.kind === "thinking") {
+			flushThinking();
+			flushFallback();
+			thought = step;
+		} else if (thought) {
+			tools.push(step);
+		} else {
+			fallback.push(step);
+		}
+	}
+	flushThinking();
+	flushFallback();
+
+	const trailing = partitioned[partitioned.length - 1];
+	if (trailing) trailing.live = live;
+	return partitioned;
+}
 
 export function deriveRows(
 	turns: ChatTurn[],
@@ -49,9 +108,7 @@ export function deriveRows(
 	let run: ActivityStep[] = [];
 
 	const flushRun = (live = false) => {
-		const first = run[0];
-		if (!first) return;
-		rows.push({ kind: "activity", id: `activity:${first.id}`, steps: run, live });
+		rows.push(...partitionRoutineRun(run, live));
 		run = [];
 	};
 

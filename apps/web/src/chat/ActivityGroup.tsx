@@ -8,7 +8,7 @@ import {
 } from "@remixicon/react";
 import { cn } from "@/lib";
 import { useFold } from "./foldState";
-import type { ActivityStep } from "./rows";
+import type { RoutineToolStep, ThinkingStep } from "./rows";
 import { getToolRenderer, getToolSummary, type ToolRenderProps } from "./toolRegistry";
 import type { ToolStatus } from "./types";
 
@@ -19,27 +19,103 @@ export function ActivityGroup({
 	workspaceRoot,
 }: {
 	id: string;
-	steps: ActivityStep[];
+	steps: RoutineToolStep[];
 	live: boolean;
 	workspaceRoot?: string | undefined;
 }) {
-	const [expanded, toggle] = useFold(id);
 	const single = steps.length === 1 ? steps[0] : undefined;
-	if (single)
-		return <ActivityStepRow step={single} isCurrent={live} workspaceRoot={workspaceRoot} />;
+	if (single) return <RoutineToolRow step={single} workspaceRoot={workspaceRoot} />;
 
-	const summary = live ? liveTicker(steps, workspaceRoot) : summarizeSteps(steps);
+	const summary = live ? liveToolTicker(steps, workspaceRoot) : summarizeSteps(steps);
+	return (
+		<GroupDisclosure
+			id={id}
+			testId="activity-group"
+			live={live}
+			stepCount={steps.length}
+			icon={<Layers className="size-12 shrink-0" />}
+			summary={summary}
+		>
+			{steps.map((step) => (
+				<RoutineToolRow key={step.id} step={step} workspaceRoot={workspaceRoot} />
+			))}
+		</GroupDisclosure>
+	);
+}
+
+export function ThinkingGroup({
+	id,
+	thought,
+	tools,
+	live,
+	workspaceRoot,
+}: {
+	id: string;
+	thought: ThinkingStep;
+	tools: RoutineToolStep[];
+	live: boolean;
+	workspaceRoot?: string | undefined;
+}) {
+	const summary =
+		tools.length > 0
+			? live
+				? liveToolTicker(tools, workspaceRoot)
+				: summarizeSteps(tools)
+			: `${formatChars(thought.text.length)} chars`;
+	return (
+		<GroupDisclosure
+			id={id}
+			testId="thinking-group"
+			live={live}
+			stepCount={tools.length}
+			icon={<Brain className="size-12 shrink-0" />}
+			label="Thinking"
+			summary={summary}
+		>
+			<div
+				data-testid="thinking-group-text"
+				className="whitespace-pre-wrap break-words px-8 py-4 pl-16"
+			>
+				{thought.text}
+			</div>
+			{tools.map((step) => (
+				<RoutineToolRow key={step.id} step={step} workspaceRoot={workspaceRoot} />
+			))}
+		</GroupDisclosure>
+	);
+}
+
+function GroupDisclosure({
+	id,
+	testId,
+	live,
+	stepCount,
+	icon,
+	label,
+	summary,
+	children,
+}: {
+	id: string;
+	testId: "activity-group" | "thinking-group";
+	live: boolean;
+	stepCount: number;
+	icon: React.ReactNode;
+	label?: string;
+	summary: string;
+	children: React.ReactNode;
+}) {
+	const [expanded, toggle] = useFold(id);
 	return (
 		<div
-			data-testid="activity-group"
+			data-testid={testId}
 			data-expanded={expanded}
 			data-live={live}
-			data-steps={steps.length}
+			data-steps={stepCount}
 			className="text-text-muted tr-text-metadata"
 		>
 			<button
 				type="button"
-				data-testid="activity-group-toggle"
+				data-testid={`${testId}-toggle`}
 				aria-expanded={expanded}
 				onClick={toggle}
 				className="flex w-full cursor-pointer select-none items-center gap-4 rounded-[var(--radius-sm)] px-4 py-4 text-left outline-none hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary"
@@ -50,34 +126,21 @@ export function ActivityGroup({
 				{live ? (
 					<Loader2 className="size-12 shrink-0 animate-spin motion-reduce:animate-none" />
 				) : (
-					<Layers className="size-12 shrink-0" />
+					icon
 				)}
+				{label ? <span className="shrink-0 text-text-default">{label}</span> : null}
 				<span className="min-w-0 truncate" title={summary}>
 					{summary}
 				</span>
 			</button>
-			{expanded ? (
-				<div className="flex flex-col gap-px pl-12">
-					{steps.map((step, i) => (
-						<ActivityStepRow
-							key={step.id}
-							step={step}
-							isCurrent={live && i === steps.length - 1}
-							workspaceRoot={workspaceRoot}
-						/>
-					))}
-				</div>
-			) : null}
+			{expanded ? <div className="flex flex-col gap-px pl-12">{children}</div> : null}
 		</div>
 	);
 }
 
-export function summarizeSteps(steps: ActivityStep[]): string {
+export function summarizeSteps(steps: RoutineToolStep[]): string {
 	const counts = new Map<string, number>();
-	for (const step of steps) {
-		const name = step.kind === "thinking" ? "thinking" : step.toolName;
-		counts.set(name, (counts.get(name) ?? 0) + 1);
-	}
+	for (const step of steps) counts.set(step.toolName, (counts.get(step.toolName) ?? 0) + 1);
 	const names = [...counts.entries()].map(([name, n]) => (n > 1 ? `${name} ×${n}` : name));
 	const MAX_NAMES = 4;
 	const shown = names.slice(0, MAX_NAMES).join(", ");
@@ -86,16 +149,15 @@ export function summarizeSteps(steps: ActivityStep[]): string {
 	return `${count} · ${shown}${more > 0 ? `, +${more} more` : ""}`;
 }
 
-function liveTicker(steps: ActivityStep[], workspaceRoot: string | undefined): string {
+function liveToolTicker(steps: RoutineToolStep[], workspaceRoot: string | undefined): string {
 	const current = steps[steps.length - 1];
 	if (!current) return "Working…";
-	if (current.kind === "thinking") return "Thinking…";
 	const summary = getToolSummary(current.toolName, toolRenderProps(current, workspaceRoot));
 	return summary ? `${current.toolName} · ${summary}` : `${current.toolName}…`;
 }
 
 function toolRenderProps(
-	step: Extract<ActivityStep, { kind: "tool" }>,
+	step: RoutineToolStep,
 	workspaceRoot: string | undefined,
 ): ToolRenderProps {
 	return {
@@ -109,44 +171,14 @@ function toolRenderProps(
 	};
 }
 
-function ActivityStepRow({
+function RoutineToolRow({
 	step,
-	isCurrent = false,
 	workspaceRoot,
 }: {
-	step: ActivityStep;
-	isCurrent?: boolean;
+	step: RoutineToolStep;
 	workspaceRoot?: string | undefined;
 }) {
 	const [expanded, toggle] = useFold(step.id);
-	if (step.kind === "thinking") {
-		return (
-			<div
-				data-testid="activity-step"
-				data-step="thinking"
-				data-expanded={expanded}
-				className="text-text-muted tr-text-metadata"
-			>
-				<StepHeader
-					expanded={expanded}
-					onToggle={toggle}
-					icon={
-						step.streaming && isCurrent ? (
-							<Loader2 className="size-12 shrink-0 animate-spin motion-reduce:animate-none" />
-						) : (
-							<Brain className="size-12 shrink-0" />
-						)
-					}
-					name="thinking"
-					summary={`${formatChars(step.text.length)} chars`}
-				/>
-				{expanded ? (
-					<div className="whitespace-pre-wrap break-words px-8 pb-4 pl-16">{step.text}</div>
-				) : null}
-			</div>
-		);
-	}
-
 	const status: ToolStatus = step.tool?.status ?? (step.dead ? "error" : "running");
 	const Renderer = getToolRenderer(step.toolName);
 	const renderProps = toolRenderProps(step, workspaceRoot);

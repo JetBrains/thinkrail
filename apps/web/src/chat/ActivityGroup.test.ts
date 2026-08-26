@@ -1,8 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import { summarizeSteps } from "./ActivityGroup";
-import type { ActivityStep } from "./rows";
+import type { RoutineToolStep } from "./rows";
 
-const tool = (id: string, toolName: string): ActivityStep => ({
+const tool = (id: string, toolName: string): RoutineToolStep => ({
 	kind: "tool",
 	id,
 	toolCallId: id,
@@ -13,23 +13,10 @@ const tool = (id: string, toolName: string): ActivityStep => ({
 	streaming: false,
 });
 
-const thinking = (id: string, text = "hmm"): ActivityStep => ({
-	kind: "thinking",
-	id,
-	text,
-	streaming: false,
-});
-
-describe("summarizeSteps (the collapsed activity-group header)", () => {
+describe("summarizeSteps (collapsed routine-tool headers)", () => {
 	it("counts steps and tallies per tool name in first-seen order", () => {
 		expect(summarizeSteps([tool("a", "bash"), tool("b", "read"), tool("c", "bash")])).toBe(
 			"3 steps · bash ×2, read",
-		);
-	});
-
-	it("labels thinking blocks as 'thinking' alongside tools", () => {
-		expect(summarizeSteps([thinking("t1"), tool("a", "bash"), thinking("t2")])).toBe(
-			"3 steps · thinking ×2, bash",
 		);
 	});
 
