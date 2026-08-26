@@ -1,7 +1,11 @@
 import { expect, test } from "bun:test";
 import type { SessionSummary } from "@thinkrail/contracts";
 import type { SessionRuntime } from "../store/appStore";
-import { synchronizeTranscript, transcriptSyncNeed } from "./useTranscriptSync";
+import {
+	synchronizeTranscript,
+	transcriptSyncNeed,
+	transcriptSyncRetryDelay,
+} from "./useTranscriptSync";
 
 function runtime(overrides: Partial<SessionRuntime> = {}): SessionRuntime {
 	return {
@@ -81,6 +85,7 @@ test("synchronizeTranscript compare-and-installs one canonical snapshot", async 
 			sessionId: "session-1",
 			expectedEventRevision: 9,
 			connectionGeneration: 6,
+			reason: "compaction",
 		},
 		{
 			read: async () => ({ result: { summary: hostSummary, messages: [] }, syncedTick: 0 }),
@@ -100,6 +105,79 @@ test("synchronizeTranscript compare-and-installs one canonical snapshot", async 
 	expect(installed).toEqual([hostSummary, hydrated, 9, 6]);
 });
 
+test("synchronizeTranscript defers a reconnect-only streaming snapshot without hydrating it", async () => {
+	let hydrated = false;
+	let reconciled = false;
+	const outcome = await synchronizeTranscript(
+		{
+			workspaceId: "workspace-1",
+			sessionId: "session-1",
+			expectedEventRevision: 9,
+			connectionGeneration: 6,
+			reason: "reconnect",
+		},
+		{
+			read: async () => ({
+				result: { summary: summary({ isStreaming: true }), messages: [] },
+				syncedTick: 0,
+			}),
+			hydrate: () => {
+				hydrated = true;
+				return { turns: [], toolResults: {}, askAnswers: {} };
+			},
+			state: () => ({
+				status: "connected",
+				connectionGeneration: 6,
+				reconcileSession: () => {
+					reconciled = true;
+					return true;
+				},
+			}),
+		},
+	);
+
+	expect(outcome).toBe("deferred-streaming");
+	expect(hydrated).toBe(false);
+	expect(reconciled).toBe(false);
+});
+
+test("synchronizeTranscript allows a revision-fenced streaming compaction snapshot", async () => {
+	let reconciled = false;
+	const outcome = await synchronizeTranscript(
+		{
+			workspaceId: "workspace-1",
+			sessionId: "session-1",
+			expectedEventRevision: 9,
+			connectionGeneration: 6,
+			reason: "compaction",
+		},
+		{
+			read: async () => ({
+				result: { summary: summary({ isStreaming: true }), messages: [] },
+				syncedTick: 0,
+			}),
+			hydrate: () => ({ turns: [], toolResults: {}, askAnswers: {} }),
+			state: () => ({
+				status: "connected",
+				connectionGeneration: 6,
+				reconcileSession: () => {
+					reconciled = true;
+					return true;
+				},
+			}),
+		},
+	);
+
+	expect(outcome).toBe("applied");
+	expect(reconciled).toBe(true);
+});
+
+test("transcript read failures use a bounded backoff", () => {
+	expect(transcriptSyncRetryDelay(1)).toBe(500);
+	expect(transcriptSyncRetryDelay(2)).toBe(1_500);
+	expect(transcriptSyncRetryDelay(3)).toBeNull();
+});
+
 test("synchronizeTranscript rejects a response from an overtaken connection generation", async () => {
 	let reconciled = false;
 	const outcome = await synchronizeTranscript(
@@ -108,6 +186,7 @@ test("synchronizeTranscript rejects a response from an overtaken connection gene
 			sessionId: "session-1",
 			expectedEventRevision: 2,
 			connectionGeneration: 4,
+			reason: "reconnect",
 		},
 		{
 			read: async () => ({ result: { summary: summary(), messages: [] }, syncedTick: 0 }),
@@ -134,6 +213,7 @@ test("synchronizeTranscript distinguishes an idle crossed snapshot so a stale st
 			sessionId: "session-1",
 			expectedEventRevision: 2,
 			connectionGeneration: 4,
+			reason: "reconnect",
 		},
 		{
 			read: async () => ({ result: { summary: summary(), messages: [] }, syncedTick: 0 }),

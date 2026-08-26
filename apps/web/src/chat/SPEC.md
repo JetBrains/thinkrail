@@ -60,8 +60,15 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   muted notice. These states are assertable via `data-testid="compaction-notice"` +
   `data-status="running|done|failed|cancelled"`. A successful live end asks the app-integration transcript
   synchronizer to read Pi's canonical summary-plus-tail; reconnect does the same for a runtime from an older
-  connection generation. Store reconciliation replaces only host-derived conversation state and preserves
-  browser-local state. The persisted `compactionSummary` then becomes the same row in place (the live id,
+  connection generation. A **generation-only reconnect snapshot is never installed while its host summary
+  is streaming**: Pi's persisted `session.messages` omits the in-flight assistant partial, so the synchronizer
+  waits for settlement and re-reads rather than deleting that partial and clearing its correlation id.
+  A compaction-triggered read may still install a streaming summary behind the Pi-event revision fence: at
+  that boundary the canonical summary-plus-tail is the intended replacement, and any intervening assistant
+  event rejects the snapshot. Transient transcript-read failures retry with a bounded backoff; only exhaustion
+  raises the refresh error, and a new generation/compaction key gets a fresh budget. Store reconciliation
+  replaces only host-derived conversation state and preserves browser-local state. The persisted
+  `compactionSummary` then becomes the same row in place (the live id,
   estimated-after count, and live `resuming` flag survive when they still apply), and the messages Pi
   summarized disappear immediately rather than only after reload. Its `summary` opens on click
   (`data-testid="chat-compaction"`). Hydration/reopen starts directly from that same durable form. Both forms

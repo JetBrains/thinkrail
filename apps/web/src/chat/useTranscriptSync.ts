@@ -17,6 +17,7 @@ interface TranscriptSyncInput {
 	sessionId: string;
 	expectedEventRevision: number;
 	connectionGeneration: number;
+	reason: "compaction" | "reconnect";
 }
 
 interface TranscriptSyncDependencies {
@@ -37,7 +38,7 @@ const transcriptSyncDependencies: TranscriptSyncDependencies = {
 export async function synchronizeTranscript(
 	input: TranscriptSyncInput,
 	deps: TranscriptSyncDependencies = transcriptSyncDependencies,
-): Promise<"applied" | "crossed-idle" | "crossed-streaming" | "stale"> {
+): Promise<"applied" | "crossed-idle" | "crossed-streaming" | "deferred-streaming" | "stale"> {
 	const { result } = await deps.read({
 		workspaceId: input.workspaceId,
 		sessionId: input.sessionId,
@@ -46,6 +47,7 @@ export async function synchronizeTranscript(
 	if (state.status !== "connected" || state.connectionGeneration !== input.connectionGeneration) {
 		return "stale";
 	}
+	if (input.reason === "reconnect" && result.summary.isStreaming) return "deferred-streaming";
 	const applied = state.reconcileSession(
 		result.summary,
 		deps.hydrate(result.messages, result.summary.lastSettlement),
@@ -54,6 +56,12 @@ export async function synchronizeTranscript(
 	);
 	if (applied) return "applied";
 	return result.summary.isStreaming ? "crossed-streaming" : "crossed-idle";
+}
+
+const TRANSCRIPT_SYNC_RETRY_DELAYS = [500, 1_500] as const;
+
+export function transcriptSyncRetryDelay(failureCount: number): number | null {
+	return TRANSCRIPT_SYNC_RETRY_DELAYS[failureCount - 1] ?? null;
 }
 
 export function transcriptSyncNeed(
@@ -88,53 +96,76 @@ export function useTranscriptSync({
 	enabled?: boolean;
 }): void {
 	const [retry, setRetry] = useState(0);
-	const waitingForIdle = useRef<string | null>(null);
-	const failed = useRef<string | null>(null);
+	const waitingForIdle = useRef<{ key: string; eventRevision: number } | null>(null);
+	const failure = useRef<{ key: string; count: number } | null>(null);
 	const need = transcriptSyncNeed(runtime, connectionGeneration);
 	const needKey = need ? `${connectionGeneration}:${need.compactionTurnId ?? "generation"}` : null;
+	const failureCount = failure.current?.key === needKey ? failure.current.count : 0;
+	const exhausted = failureCount > 0 && transcriptSyncRetryDelay(failureCount) === null;
 
 	useEffect(() => {
-		if (!enabled || !needKey || status !== "connected" || failed.current === needKey) return;
-		if (waitingForIdle.current === needKey && runtime.isStreaming) return;
+		if (!enabled || !needKey || status !== "connected" || exhausted) return;
+		const waiting = waitingForIdle.current;
+		if (waiting?.key === needKey) {
+			if (waiting.eventRevision === runtime.eventRevision || runtime.isStreaming) return;
+		} else if (waiting) {
+			waitingForIdle.current = null;
+		}
 		waitingForIdle.current = null;
 		let current = true;
+		let retryTimer: ReturnType<typeof setTimeout> | undefined;
 		const expectedEventRevision = runtime.eventRevision;
 		void synchronizeTranscript({
 			workspaceId,
 			sessionId,
 			expectedEventRevision,
 			connectionGeneration,
+			reason: need?.compactionTurnId ? "compaction" : "reconnect",
 		})
 			.then((outcome) => {
 				if (!current || outcome === "stale") return;
-				if (outcome === "applied") {
-					failed.current = null;
-					return;
-				}
+				failure.current = null;
+				if (outcome === "applied") return;
 				const latest = useAppStore.getState().sessions[sessionId];
 				if (!latest) return;
+				if (outcome === "deferred-streaming") {
+					waitingForIdle.current = { key: needKey, eventRevision: latest.eventRevision };
+					return;
+				}
 				if (outcome === "crossed-idle" || !latest.isStreaming) {
 					setRetry((value) => value + 1);
 					return;
 				}
-				waitingForIdle.current = needKey;
+				waitingForIdle.current = { key: needKey, eventRevision: latest.eventRevision };
 			})
 			.catch((error: unknown) => {
 				if (!current) return;
+				const previous = failure.current?.key === needKey ? failure.current.count : 0;
+				const count = previous + 1;
+				failure.current = { key: needKey, count };
+				const delay = transcriptSyncRetryDelay(count);
+				if (delay !== null) {
+					retryTimer = setTimeout(() => {
+						if (current) setRetry((value) => value + 1);
+					}, delay);
+					return;
+				}
 				const state = useAppStore.getState();
 				if (state.status === "connected" && state.connectionGeneration === connectionGeneration) {
 					toast.error(errorText(error), "Couldn't refresh this chat");
 				}
-				failed.current = needKey;
 			});
 		return () => {
 			current = false;
+			if (retryTimer !== undefined) clearTimeout(retryTimer);
 		};
 	}, [
 		connectionGeneration,
 		enabled,
 		needKey,
+		exhausted,
 		retry,
+		runtime.eventRevision,
 		runtime.isStreaming,
 		sessionId,
 		status,
