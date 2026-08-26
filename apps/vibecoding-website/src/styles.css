@@ -37,6 +37,11 @@
 	--color-control-bg-hovered: var(--control-bg-hovered);
 	--color-control-border-active: var(--control-border-active);
 	--color-control-border-default: var(--control-border-default);
+	--color-container-overlay-bg: var(--container-overlay-bg);
+	--color-primary-subtle: var(--primary-subtle);
+	--color-primary-soft: var(--primary-soft);
+	--color-primary-muted: var(--primary-muted);
+	--color-primary-strong: var(--primary-strong);
 
 	--font-display:
 		"Orbitron Variable", "Orbitron", "Geist Variable", "Geist", ui-sans-serif, system-ui, sans-serif;
@@ -75,7 +80,12 @@
 	--control-border-active: var(--zinc-700);
 	--control-border-default: var(--zinc-800);
 	--primary: oklch(0.899 0.233 136.7);
+	--primary-subtle: color-mix(in srgb, var(--primary) 10%, transparent);
+	--primary-soft: color-mix(in srgb, var(--primary) 20%, transparent);
+	--primary-muted: color-mix(in srgb, var(--primary) 40%, transparent);
+	--primary-strong: color-mix(in srgb, var(--primary) 60%, transparent);
 	--primary-foreground: var(--zinc-950);
+	--container-overlay-bg: color-mix(in srgb, var(--zinc-950) 90%, transparent);
 	--warn: oklch(0.85 0.15 90);
 	--background: var(--zinc-950);
 	--foreground: var(--text-default);
@@ -217,6 +227,10 @@ html[data-enhanced="true"] .reveal[data-visible="true"] {
 }
 
 @media (prefers-reduced-motion: reduce) {
+	.animate-in {
+		animation: none;
+	}
+
 	html[data-enhanced="true"] .reveal {
 		opacity: 1;
 		transform: none;

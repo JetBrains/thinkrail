@@ -358,7 +358,7 @@ export function Orchestration() {
 				{isMobile ? (
 					<div className="mt-8">
 						<div className="flex items-start gap-2">
-							<span className="flex min-w-0 flex-1 items-center rounded-sm border border-primary/35 bg-primary/10 px-3 py-2 text-xs text-text-default">
+							<span className="flex min-w-0 flex-1 items-center rounded-sm border border-primary-muted bg-primary-subtle px-3 py-2 text-xs text-text-default">
 								Project sharing · approved plan
 							</span>
 							<span className="flex h-[36px] w-[36px] shrink-0 items-center justify-center rounded-full bg-text-default text-background">
@@ -488,7 +488,7 @@ export function Orchestration() {
 									main
 								</span>
 								<div className="flex shrink-0 items-center gap-2">
-									<span className="flex h-[36px] items-center rounded-sm border border-primary/35 bg-primary/10 px-3.5 text-xs text-text-default">
+									<span className="flex h-[36px] items-center rounded-sm border border-primary-muted bg-primary-subtle px-3.5 text-xs text-text-default">
 										Project sharing · approved plan
 									</span>
 									<span className="flex h-[36px] w-[36px] items-center justify-center rounded-full bg-text-default text-background">

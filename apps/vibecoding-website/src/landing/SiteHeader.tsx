@@ -25,7 +25,7 @@ export function SiteHeader() {
 	}, []);
 
 	return (
-		<header className="sticky top-0 z-50 border-b border-border-muted bg-background/90 backdrop-blur-md">
+		<header className="sticky top-0 z-50 border-b border-border-muted bg-container-overlay-bg backdrop-blur-md">
 			<div className="mx-auto flex h-16 max-w-[1200px] items-center justify-between px-6">
 				<a href="#top" aria-label="ThinkRail home">
 					<Logo />
@@ -44,6 +44,7 @@ export function SiteHeader() {
 				<div className="flex items-center gap-4">
 					<div
 						aria-hidden={!showGithub}
+						inert={!showGithub}
 						className={`transition-opacity duration-200 ${
 							showGithub ? "opacity-100" : "pointer-events-none opacity-0"
 						}`}

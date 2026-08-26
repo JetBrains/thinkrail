@@ -70,10 +70,16 @@ export function ModelSelect() {
 				{current?.name} <ChevronDown className="size-3.5" />
 			</button>
 			{open && (
-				<div className="animate-in fade-in slide-in-from-bottom-1 absolute bottom-[calc(100%+6px)] left-0 z-30 max-h-64 w-72 overflow-y-auto rounded-sm border border-border bg-container-card-bg p-1 duration-150">
+				<div
+					role="listbox"
+					aria-label="Choose a model"
+					className="animate-in fade-in slide-in-from-bottom-1 absolute bottom-[calc(100%+6px)] left-0 z-30 max-h-64 w-72 overflow-y-auto rounded-sm border border-border bg-container-card-bg p-1 duration-150"
+				>
 					{MODEL_GROUPS.map((g) => (
-						<div key={g.provider}>
-							<div className="px-2.5 py-1.5 text-xs text-text-subtle">{g.provider}</div>
+						<fieldset key={g.provider}>
+							<legend className="w-full px-2.5 py-1.5 text-xs text-text-subtle">
+								{g.provider}
+							</legend>
 							{g.models.map((m) => (
 								<button
 									key={m.id}
@@ -93,7 +99,7 @@ export function ModelSelect() {
 									{m.id === value && <Check className="mt-0.5 size-3.5 shrink-0 text-primary" />}
 								</button>
 							))}
-						</div>
+						</fieldset>
 					))}
 				</div>
 			)}
@@ -119,7 +125,11 @@ export function EffortSelect() {
 				<ChevronDown className="size-3.5" />
 			</button>
 			{open && (
-				<div className="animate-in fade-in slide-in-from-bottom-1 absolute bottom-[calc(100%+6px)] left-0 z-30 w-36 rounded-sm border border-border bg-container-card-bg p-1 duration-150">
+				<div
+					role="listbox"
+					aria-label="Choose an effort level"
+					className="animate-in fade-in slide-in-from-bottom-1 absolute bottom-[calc(100%+6px)] left-0 z-30 w-36 rounded-sm border border-border bg-container-card-bg p-1 duration-150"
+				>
 					{EFFORTS.map((e) => (
 						<button
 							key={e}

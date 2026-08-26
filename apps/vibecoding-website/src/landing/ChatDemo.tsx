@@ -58,9 +58,15 @@ const SCRIPT: Block[] = [
 	{ type: "done" },
 ];
 
+const completedChoices = Object.fromEntries(
+	SCRIPT.flatMap((block, index) =>
+		block.type === "widget" && block.options[0] ? [[index, block.options[0].label]] : [],
+	),
+);
+
 function Bubble({ children }: { children: React.ReactNode }) {
 	return (
-		<div className="animate-in fade-in slide-in-from-bottom-1 max-w-[85%] self-end rounded-sm border border-primary/35 bg-primary/10 px-3.5 py-2.5 text-sm text-text-default duration-300">
+		<div className="animate-in fade-in slide-in-from-bottom-1 max-w-[85%] self-end rounded-sm border border-primary-muted bg-primary-subtle px-3.5 py-2.5 text-sm text-text-default duration-300">
 			{children}
 		</div>
 	);
@@ -100,7 +106,7 @@ function QuestionCard({
 		<div className="animate-in fade-in slide-in-from-bottom-1 flex flex-col gap-3 rounded-sm border border-border bg-container-card-bg p-3.5 duration-300">
 			<div className="flex items-center gap-2">
 				<HelpCircle className="size-4 text-primary" aria-hidden="true" />
-				<span className="rounded-sm border border-primary/35 bg-primary/12 px-1.5 py-0.5 text-[12.6px] tracking-[0.05em] text-primary uppercase">
+				<span className="rounded-sm border border-primary-muted bg-primary-subtle px-1.5 py-0.5 text-[12.6px] tracking-[0.05em] text-primary uppercase">
 					{chip}
 				</span>
 			</div>
@@ -114,7 +120,7 @@ function QuestionCard({
 							key={option.label}
 							className={`flex items-start gap-2.5 rounded-sm border px-2.5 py-2 text-left transition-colors focus-within:outline-2 focus-within:-outline-offset-2 focus-within:outline-ring ${
 								selected
-									? "border-primary/55 bg-primary/8"
+									? "border-primary-strong bg-primary-subtle"
 									: "border-border bg-control-bg hover:border-control-border-active"
 							}`}
 						>
@@ -129,7 +135,7 @@ function QuestionCard({
 							/>
 							<span
 								className={`mt-0.5 size-3.5 shrink-0 rounded-full border-[1.5px] ${
-									selected ? "border-primary bg-primary/70" : "border-text-subtle"
+									selected ? "border-primary bg-primary-strong" : "border-text-subtle"
 								}`}
 							/>
 							<span className="flex min-w-0 flex-col gap-0.5">
@@ -157,10 +163,18 @@ export function ChatDemo() {
 	const [started, setStarted] = useState(false);
 	const [revealed, setRevealed] = useState(0);
 	const [choices, setChoices] = useState<Record<number, string>>({});
+	const [reduced, setReduced] = useState(false);
 
 	useEffect(() => {
 		const el = ref.current;
 		if (!el) return;
+		if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+			setReduced(true);
+			setStarted(true);
+			setChoices(completedChoices);
+			setRevealed(SCRIPT.length);
+			return;
+		}
 		let timer: ReturnType<typeof setTimeout>;
 		const obs = new IntersectionObserver(
 			(entries) => {
@@ -194,8 +208,8 @@ export function ChatDemo() {
 
 	useEffect(() => {
 		const el = scrollRef.current;
-		if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
-	}, [revealed, choices]);
+		if (el) el.scrollTo({ top: el.scrollHeight, behavior: reduced ? "auto" : "smooth" });
+	}, [revealed, choices, reduced]);
 
 	const nextBlock = SCRIPT[revealed];
 	const pendingUser = started && nextBlock?.type === "user" ? nextBlock.text : null;
@@ -207,6 +221,11 @@ export function ChatDemo() {
 	};
 
 	const replay = () => {
+		if (reduced) {
+			setChoices(completedChoices);
+			setRevealed(SCRIPT.length);
+			return;
+		}
 		setChoices({});
 		setRevealed(1);
 	};
@@ -242,7 +261,7 @@ export function ChatDemo() {
 											onSelect={(label) => setChoices((c) => ({ ...c, [i]: label }))}
 										/>
 										{choices[i] && (
-											<div className="animate-in fade-in slide-in-from-bottom-1 inline-flex items-center gap-2 self-end rounded-full border border-primary/30 bg-primary/10 px-3 py-1.5 text-[15px] text-text-muted duration-300">
+											<div className="animate-in fade-in slide-in-from-bottom-1 inline-flex items-center gap-2 self-end rounded-full border border-primary-muted bg-primary-subtle px-3 py-1.5 text-[15px] text-text-muted duration-300">
 												<Check className="size-4 text-primary" aria-hidden="true" />
 												<span>{choices[i]}</span>
 											</div>

@@ -22,9 +22,9 @@ function StepCard({
 	);
 }
 
-export function HeroQuickStart({ id = "quick-start" }: { id?: string }) {
+export function HeroQuickStart() {
 	return (
-		<div id={id} className="flex flex-col gap-3">
+		<div className="flex flex-col gap-3">
 			<p className="label-mono">Quick start</p>
 
 			<StepCard title="Run ThinkRail in your terminal">

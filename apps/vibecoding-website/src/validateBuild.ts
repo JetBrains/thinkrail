@@ -25,6 +25,10 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 		if (!index.includes(required)) failures.push(`index.html missing: ${required}`);
 	}
 
+	const ids = [...index.matchAll(/\sid="([^"]+)"/g)].map((match) => match[1]);
+	const duplicateIds = ids.filter((id, index) => ids.indexOf(id) !== index);
+	for (const id of new Set(duplicateIds)) failures.push(`index.html duplicate id: ${id}`);
+
 	if (failures.length > 0) {
 		throw new Error(`Invalid vibecoding website build:\n${failures.join("\n")}`);
 	}
