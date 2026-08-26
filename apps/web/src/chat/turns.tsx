@@ -3,7 +3,6 @@ import {
 	RiArrowDownSLine as ChevronDown,
 	RiArrowRightSLine as ChevronRight,
 	RiTimeLine as Clock,
-	RiFileScanLine as FileDiff,
 	RiFileTextLine as FileText,
 	RiContractUpDownLine as FoldVertical,
 	RiLoopRightLine as RotateCw,
@@ -11,7 +10,8 @@ import {
 	RiToolsLine as Wrench,
 } from "@remixicon/react";
 import type { ImageContent, UserMessage } from "@thinkrail/contracts";
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
+import { CustomIcon } from "@/components/CustomIcon";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
 	cn,
@@ -497,9 +497,13 @@ function formatElapsed(ms: number): string {
 	return m > 0 ? `${m}m ${s}s` : `${s}s`;
 }
 
+function FileDiffGlyph({ className }: { className?: string }) {
+	return <CustomIcon name="file-diff-line" className={className} />;
+}
+
 interface ArtifactGroup {
 	id: "specs" | "files";
-	icon: typeof FileText;
+	icon: typeof FileText | ((props: { className?: string }) => ReactNode);
 	paths: string[];
 	label: (count: number) => string;
 	expanded: boolean;
@@ -614,7 +618,7 @@ export function TurnDivider({
 		},
 		{
 			id: "files",
-			icon: FileDiff,
+			icon: FileDiffGlyph,
 			paths: changedFiles,
 			label: (n) => `${n} ${n === 1 ? "file changed" : "files changed"}`,
 			expanded: selected === "files",
