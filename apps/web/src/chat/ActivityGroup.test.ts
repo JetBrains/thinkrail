@@ -1,6 +1,8 @@
 import { describe, expect, it } from "bun:test";
+import { renderToStaticMarkup } from "react-dom/server";
 import { summarizeSteps } from "./ActivityGroup";
-import type { RoutineToolStep } from "./rows";
+import type { ChatRow, RoutineToolStep } from "./rows";
+import { ChatTurnView } from "./turns";
 
 const tool = (id: string, toolName: string): RoutineToolStep => ({
 	kind: "tool",
@@ -34,5 +36,20 @@ describe("summarizeSteps (collapsed routine-tool headers)", () => {
 			tool("f", "glob"),
 		];
 		expect(summarizeSteps(steps)).toBe("6 steps · bash, read, edit, write, +2 more");
+	});
+
+	it("names a multi-tool fallback Activity without claiming that it is thinking", () => {
+		const row: ChatRow = {
+			kind: "activity",
+			id: "activity:a",
+			steps: [tool("a", "bash"), tool("b", "read")],
+			live: false,
+		};
+
+		const markup = renderToStaticMarkup(ChatTurnView({ row }));
+
+		expect(markup).toContain('data-testid="activity-group"');
+		expect(markup).toContain(">Activity<");
+		expect(markup).not.toContain("Thinking");
 	});
 });

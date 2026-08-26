@@ -34,6 +34,7 @@ export function ActivityGroup({
 			live={live}
 			stepCount={steps.length}
 			icon={<Layers className="size-12 shrink-0" />}
+			label="Activity"
 			summary={summary}
 		>
 			{steps.map((step) => (
