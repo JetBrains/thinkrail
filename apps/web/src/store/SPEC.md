@@ -170,8 +170,10 @@ snapshots plus device-local attention, terminal catalogs, and one **per-session 
   one chat's `turns` (pi-canonical) / `toolResults` / `askAnswers` (the `ask-user-answers` replies keyed
   by tool call id — indexed by the reducer and hydration, never turned into bubbles) /
   `currentAssistantId` / `attemptAssistantId` (scopes overflow removal to the attempt actually observed) /
-  `isStreaming` / `model` /
-  `thinkingLevel` / `stats` / `commands` / `draft` and its **extension-UI state** (`pendingExtUi` (typed by
+  `isStreaming` / `model` / `thinkingLevel` / **`eventRevision`** (browser-local, incremented for every
+  received Pi event; the compare-and-install fence for an authoritative transcript read) /
+  **`syncedConnectionGeneration`** (which connected host generation the runtime's transcript was last read
+  from) / `stats` / `commands` / `draft` and its **extension-UI state** (`pendingExtUi` (typed by
   `chat`'s `ExtUiDialogRequest`) + `extUiQueue` (overlapping dialogs FIFO so none orphans its server
   promise) + `extUiStatus` / `extUiWidget`). `openChatSession` creates a runtime; `closeChatRuntime` /
   `clearWorkspaceState` drop it; per-session mutators (`appendUserMessage` / **`appendErrorTurn`** / `setStats` / `setCommands` /
@@ -190,7 +192,9 @@ snapshots plus device-local attention, terminal catalogs, and one **per-session 
   cap — a failed compaction must be visible, never swallowed) or appends the settled turn when no
   running one exists (reconnect mid-compaction). A successful `compaction_end` with `willRetry: true`
   additionally marks the turn `resuming` (pi continues the same run; settlement clears the flag — a
-  settled transcript never claims ongoing work) and still removes the superseded assistant attempt. The
+  settled transcript never claims ongoing work) and still removes the superseded assistant attempt. A
+  successful live turn without a durable `summary` is also the chat integration's signal to read Pi's
+  canonical compacted transcript; the reducer never guesses the cut boundary itself. The
   reducer relies on pi's guarantee that every emitted `compaction_start` is paired with a
   `compaction_end` (both success and failure paths emit it), the same trust every other event pair gets.
   Manual-command transport rejection uses one atomic store mutation: given the compaction-turn ids observed
@@ -240,8 +244,16 @@ snapshots plus device-local attention, terminal catalogs, and one **per-session 
   live summary's `lastSettlement` is authoritative when present; otherwise only a failure on
   the persisted transcript's final conversational message is current (historical `length` attempts followed
   by later work must not become stale warnings). Hydration is a no-op if a runtime already exists, so a
-  live/ahead chat is never clobbered. The
-  pure **`reduceSessionEvent`** folds a `PiEvent` into a runtime. **Only idle sends enter the transcript
+  live/ahead chat is never clobbered. **`reconcileSession(summary, hydrated, expectedEventRevision,
+  connectionGeneration)`** is the separate authoritative path for an existing runtime after successful
+  compaction or reconnect. It compare-and-installs only at the expected Pi-event revision, rejects a removed
+  workspace/session or cross-workspace identity, replaces turns/tool results/ask answers/queue/model/thinking
+  + streaming state, and preserves draft/stats/commands/extension UI/placement/history/focus. It marks the
+  connected generation and advances the revision so two reads cannot regress one another. When the latest
+  live compaction matches the durable record, its id + estimated-after count survive, and `resuming` survives
+  only while the returned summary is still streaming. The
+  pure **`reduceSessionEvent`** folds a `PiEvent` into a runtime; **`handlePiEvent` increments the revision even
+  for a UI-ignored Pi event**, because ignored still means it crossed the snapshot ordering boundary. **Only idle sends enter the transcript
   optimistically** (`ChatView.onSubmit` → `appendUserMessage`); the last-turn echo dedup below is
   sufficient precisely because nothing intervenes before the echo. A **streaming send (`steer`/`followUp`)
   never appends a turn**: its text lives in `queue` (folded verbatim from the host-projected
