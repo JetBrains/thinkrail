@@ -28,6 +28,8 @@ import {
 	RiChat2Fill,
 	RiChat2Line,
 	RiCollapseVerticalLine,
+	RiDiscussFill,
+	RiDiscussLine,
 	RiExpandVerticalLine,
 	RiFileFill,
 	RiFolder2Fill,
@@ -53,6 +55,7 @@ import type {
 	WorkspaceLayoutDocument,
 } from "@thinkrail/contracts";
 import { Fragment, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { CustomIcon } from "../../components/CustomIcon";
 import {
 	Command,
 	CommandEmpty,
@@ -411,6 +414,10 @@ function tabIcon(tab: LayoutTab, active = false): ReactNode {
 					return active ? <RiBookOpenFill className={cls} /> : <RiBookOpenLine className={cls} />;
 				case "files":
 					return active ? <RiFileFill className={cls} /> : <File className={cls} />;
+				case "changes":
+					return <CustomIcon name={active ? "file-diff-fill" : "file-diff-line"} className={cls} />;
+				case "review":
+					return active ? <RiDiscussFill className={cls} /> : <RiDiscussLine className={cls} />;
 				default:
 					return active ? <RiLayout2Fill className={cls} /> : <PanelsTopLeft className={cls} />;
 			}
