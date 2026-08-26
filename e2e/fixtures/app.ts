@@ -178,15 +178,23 @@ export async function waitForDone(page: Page, timeout = 90_000): Promise<void> {
 	).toBeVisible({ timeout });
 }
 
-export async function expandAllActivityGroups(page: Page): Promise<void> {
-	const collapsed = page.locator('[data-testid="activity-group"][data-expanded="false"]');
+export function routineActivityRows(page: Page): Locator {
+	return page.locator(
+		'[data-testid="thinking-group"], [data-testid="activity-group"], [data-testid="activity-step"]',
+	);
+}
+
+export async function expandAllRoutineGroups(page: Page): Promise<void> {
+	const collapsed = page.locator(
+		'[data-testid="thinking-group"][data-expanded="false"], [data-testid="activity-group"][data-expanded="false"]',
+	);
 	while ((await collapsed.count()) > 0) {
-		await collapsed.first().getByTestId("activity-group-toggle").click();
+		await collapsed.first().getByRole("button").first().click();
 	}
 }
 
 export async function expandActivityStep(page: Page, tool: string): Promise<Locator> {
-	await expandAllActivityGroups(page);
+	await expandAllRoutineGroups(page);
 	const step = page.locator(`[data-testid="activity-step"][data-tool="${tool}"]`).first();
 	await expect(step).toBeVisible();
 	if ((await step.getAttribute("data-expanded")) !== "true") {
