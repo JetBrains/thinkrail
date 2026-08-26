@@ -302,13 +302,14 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   disabled while streaming) or project (`project.skills`, per-project-baseline toggles, no session) — the
   latter reused by `panels` pre-session). All props-driven; behavior detail lives in the components' jsdoc.
 - **Adaptive composer geometry** (`Composer`) — an idle draft that fits one visual line renders as a
-  **46px one-line dock**: model and effort share one compact visual group on the left while remaining two
-  independently focusable/clickable picker triggers; History and Send remain explicit on the right. A wrap,
-  explicit newline, or width change that makes the draft exceed one visual line unfolds the same shell into
-  a full-width textarea plus a stable 42px action footer; fitting one line again collapses it. This is one
-  persistent textarea, never conditional twins — the transition cannot lose focus, caret/selection, recall,
-  draft, or a template-slot session. Streaming deliberately uses the expanded form even with an empty draft,
-  because Stop + send options join the footer. `ChatView` passes the server-synced
+  shared two-tier shell: a full-width, one-visual-line message row above a stable action footer. Model and
+  effort share a compact visual group on the footer's left while remaining two independently
+  focusable/clickable picker triggers; History and Send remain explicit on the right. A wrap, explicit
+  newline, or width change that makes the draft exceed one visual line grows the message row without moving
+  the footer; fitting one line again shrinks only the message row. This is one persistent textarea, never
+  conditional twins — the transition cannot lose focus, caret/selection, recall, draft, or a template-slot
+  session. Streaming deliberately uses the expanded message row even with an empty draft, because Stop +
+  send options join the footer. `ChatView` passes the server-synced
   `ComposerGrowthLimit` prop: `compact` caps at 6 visual lines, `roomy` at 10, and the default `half-chat`
   caps the **editor shell** (textarea + footer) at 50% of the mounted chat panel, never the browser viewport;
   overflow then scrolls inside the textarea. Attachment chips, completion menus, slot hints, and QueueStrip
