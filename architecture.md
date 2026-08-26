@@ -29,7 +29,9 @@ independently of the host and dials it over the network; a phone reaches the sel
 apps/cli        host launcher (V1): boot server + open browser   ── depends on ─▶ packages/server
 apps/web        UI client (mobile-first)                          ── depends on ─▶ packages/contracts
 apps/desktop    Electrobun local-host launcher/shared client (deferred) ── depends on ─▶ packages/server, packages/contracts
-apps/website    public landing page (GitHub Pages)                ── standalone: no workspace deps
+apps/website    public landing page + blog (GitHub Pages)         ── depends on ─▶ packages/website-analytics
+apps/vibecoding-website  vibecoder landing (Cloudflare Pages)     ── depends on ─▶ packages/website-analytics
+packages/website-analytics  dependency-free browser analytics policy shared by the two static sites
 packages/server createServer(): Bun.serve(HTTP+WS) + AgentSessionManager (in-process pi) ── depends on ─▶ packages/contracts, packages/shared
 packages/contracts  the wire (types-only)
 packages/shared     shellEnv (server-side only)

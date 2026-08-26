@@ -1,40 +1,30 @@
-name: Website preview
+name: Vibecoding website preview
 
-# Deploys a PR preview of apps/website to Cloudflare Pages and surfaces the URL as a sticky PR
-# comment + commit status, so design review happens against the rendered site, not the diff.
-# Production (site.yml → GitHub Pages) is untouched. Design: apps/website/SPEC.md → "PR preview
-# deploys". One-time setup (already done): Cloudflare Pages project `thinkrail-previews` + repo
-# secrets CLOUDFLARE_API_TOKEN (Account → Cloudflare Pages → Edit) and CLOUDFLARE_ACCOUNT_ID.
 on:
   pull_request:
     paths:
-      - "apps/website/**"
+      - "apps/vibecoding-website/**"
       - "packages/website-analytics/**"
       - "package.json"
       - "bun.lock"
-      - ".github/workflows/site-preview.yml"
+      - ".github/workflows/vibecoding-site-preview.yml"
 
 permissions:
   contents: read
-  pull-requests: write # sticky preview comment
-  statuses: write # "Website preview" commit status
+  pull-requests: write
+  statuses: write
 
-# Previews are ephemeral: a newer push supersedes an in-flight deploy — the opposite of production's
-# cancel-in-progress: false, because a superseded preview has no value.
 concurrency:
-  group: site-preview-${{ github.event.pull_request.number }}
+  group: vibecoding-site-preview-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
   preview:
     name: Deploy PR preview
-    # Same-repo PRs only: secrets are never exposed to fork PRs, so fork previews skip silently
-    # (decision recorded in apps/website/SPEC.md).
     if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     env:
-      # Deterministic per-PR alias — stable across pushes, nothing parsed from wrangler output.
-      PREVIEW_URL: https://pr-${{ github.event.pull_request.number }}.thinkrail-previews.pages.dev
+      PREVIEW_URL: https://pr-${{ github.event.pull_request.number }}.thinkrail-vibecoding.pages.dev
     steps:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
@@ -47,42 +37,41 @@ jobs:
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
           restore-keys: ${{ runner.os }}-bun-
       - run: bun install --frozen-lockfile
-      - run: bun run --filter @thinkrail/website build
+      - run: bun run --filter @thinkrail/vibecoding-website build
       - name: Deploy to Cloudflare Pages
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: >
-          bunx wrangler@4.124.0 pages deploy apps/website/dist
-          --project-name=thinkrail-previews
+          bunx wrangler@4.124.0 pages deploy apps/vibecoding-website/dist
+          --project-name=thinkrail-vibecoding
           --branch="pr-${{ github.event.pull_request.number }}"
       - name: Wait for preview to serve
-        # A freshly created pr-<num> subdomain 522s for its first ~20s; never hand out a dead link.
         run: |
-          for i in $(seq 1 18); do
+          for attempt in $(seq 1 18); do
             code=$(curl -s -o /dev/null -w '%{http_code}' "$PREVIEW_URL/")
             [ "$code" = "200" ] && echo "preview live ($code)" && exit 0
-            echo "attempt $i: $code — retrying in 5s"
+            echo "attempt $attempt: $code — retrying in 5s"
             sleep 5
           done
           echo "preview never became reachable" >&2
           exit 1
-      - name: Sticky PR comment + commit status
+      - name: Sticky PR comment and commit status
         env:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          marker='<!-- thinkrail-site-preview -->'
+          marker='<!-- thinkrail-vibecoding-site-preview -->'
           body="$marker
-          ### 🌐 Website preview
+          ### 🌐 Vibecoding website preview
 
           | | |
           | --- | --- |
           | **Preview** | $PREVIEW_URL |
           | **Commit** | $HEAD_SHA |
 
-          _This comment updates in place on every push that touches the website or shared build inputs._"
+          _This comment updates in place on every push that touches the vibecoding website or shared build inputs._"
           comment_id=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate \
             --jq "[.[] | select(.body | startswith(\"$marker\")) | .id][0] // empty")
           if [ -n "$comment_id" ]; then
@@ -92,6 +81,6 @@ jobs:
           fi
           gh api "repos/$GITHUB_REPOSITORY/statuses/$HEAD_SHA" \
             -f state=success \
-            -f context="Website preview" \
-            -f description="pr-$PR.thinkrail-previews.pages.dev" \
+            -f context="Vibecoding website preview" \
+            -f description="pr-$PR.thinkrail-vibecoding.pages.dev" \
             -f target_url="$PREVIEW_URL" > /dev/null
