@@ -49,10 +49,9 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   and primary error-auto-expand are the safety nets).
 - `subagentCompletion` — a `subagent-completion` custom message: a detached (background) subagent run's
   terminal report, injected into the parent by `pi-subagents` when the run finishes. Rendered as a compact
-  self-framed card (`tools/subagent/SubagentCompletionCard`): role + outcome + usage/duration chips, the
-  bounded report behind a fold, and an Open-transcript action. It is **the** terminal signal for a
-  background run — pi ignores a tool's `onUpdate` once its promise settles, so the background `Agent`
-  tool card froze at its ack and can never go terminal itself. Never folded into activity groups.
+  self-framed card (`tools/subagent/SubagentCompletionCard`) — **the** terminal signal for a background
+  run, whose `Agent` tool card froze at its ack (why + card anatomy:
+  [tools/subagent/SPEC.md](tools/subagent/SPEC.md)). Never folded into activity groups.
 - `divider` — the round-end summary (`TurnDivider` + pure `turnDivider` deriver), anchored the instant a
   round ends: elapsed time, tool-call count, and the round's written files as **two chips split the way the
   right panel is** — "N specs" and "N files changed". The split is a **partition** (a path lands on exactly
@@ -122,12 +121,13 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   same primitives (`messagesToRuntime` → `deriveRows` → `ChatTurnView`), fetched via
   `subagent.getTranscript` keyed `(workspaceId, parentSessionId = this chat, childSessionId)`. Opened
   through `ChatActions.openSubagentTranscript`; rendered under a `null` `ChatActions` provider so
-  nothing inside can talk back (and a nested transcript link cannot exist). While the run is still live
-  — derived from this chat's own runtime via the pure `delegationRunStatus` (latest
-  `DelegationRunDetails` for the child across `toolResults`, overridden by a terminal
-  `subagentCompletion` turn) — the open dialog refetches every ~2.5s and stops on a terminal status.
-  Works during the run, after completion, and after a host restart (transcripts persist on disk; only
-  the in-memory registry is lost).
+  nothing inside can talk back (and a nested transcript link cannot exist). Liveness comes from the
+  **host** with each response: `subagent.getTranscript` carries the run's current registry `status`
+  (absent once the host no longer knows the run — restart, dispose), and the open dialog polls every
+  ~2.5s exactly while that reports queued/running — never from this chat's own runtime, whose frozen
+  background ack can't tell a live run from one lost to a restart. Works during the run, after
+  completion, and after a host restart (transcripts persist on disk; only the in-memory registry is
+  lost — and its absence is precisely what stops the polling).
 - **`askState`** — the questionnaire lifecycle seam: the pure `deriveAskStates(turns, askAnswers)` +
   `AskStatesContext`/`useAskState` (provided by `ChatView`, `null` standalone). The ask tool is **ack +
   terminate** (its tool result is just an ack; the reply arrives later as an `ask-user-answers` message),

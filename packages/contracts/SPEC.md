@@ -159,7 +159,9 @@ of the host.
   **mirrored** from `pi-delegation` (never imported): rides `tool_execution_update.partialResult`
   (REPLACE), the final `Agent` tool result, and the `subagent-completion` custom message; the
   child transcript itself is read via `subagent.getTranscript`, keyed
-  `(workspaceId, parentSessionId, childSessionId)`. The completion message's tag + pairing live in
+  `(workspaceId, parentSessionId, childSessionId)` — its result also carries the run's current
+  registry `status` (absent once the host no longer knows the run), the client's poll-while-live
+  signal. The completion message's tag + pairing live in
   `wsProtocol` (the value-bearing half), mirroring the ask-user-answers posture exactly: the
   **`SUBAGENT_COMPLETION_CUSTOM_TYPE`** constant (mirrors `pi-subagents`' `SUBAGENT_COMPLETION_MESSAGE`,
   never imported — the DTO posture again), **`SubagentCompletionMessage`** (the compile-held tag↔details

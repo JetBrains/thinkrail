@@ -58,11 +58,9 @@ registration runs once when the chat module mounts. Unregistered tools fall back
   `pi-visualize` extension.
 - **`web/`** — search/fetch renderers for `pi-web-access`; own child spec
   ([web/SPEC.md](web/SPEC.md)). Routine.
-- **`subagent/`** — delegation renderers for `pi-subagents`: `AgentCard` (the `Agent` tool — **primary**,
-  so a run never folds into an activity group; its collapsed header IS the live line, ticking
-  role/turns/tokens/cost/elapsed/current-step from `partialResult`) — also registered for
-  `get_subagent_result` (same details shape; routine) — plus the `SubagentCompletionCard` turn card and
-  the pure `runDetails` readers/formatters; own child spec ([subagent/SPEC.md](subagent/SPEC.md)).
+- **`subagent/`** — delegation renderers for `pi-subagents`: `AgentCard` (the `Agent` tool — **primary**;
+  also registered for `get_subagent_result`, routine), the `SubagentCompletionCard` turn card, and the
+  pure `runDetails` readers/formatters; own child spec ([subagent/SPEC.md](subagent/SPEC.md)).
 - **Shared pieces** — `CodeBlock` (shiki), `Collapsible` ("Show all N lines" fold for long output),
   pure `toolHelpers` (arg readers, `resultText`, `languageFromPath`) + `lib`'s `projectRelativePath`.
 

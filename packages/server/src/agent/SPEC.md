@@ -170,15 +170,20 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     decision #23), and the shared `ModelRuntime`. One `DelegationService` per workspace, cached
     (`delegationServiceFor`); `subagentsExtensionFor(workspaceId)` hands the bound service to the
     extension factory each session loads. Cascades: `removeSession`/`disposeAllSessions` fire
-    `disposeSessionChildren`; workspace archival calls `removeWorkspaceDelegation` (drops the
-    service + deletes `delegation/<workspaceId>` — hidden children never outlive their workspace).
+    `disposeSessionChildren` — `removeSession` returns that cascade, and workspace archival
+    **awaits it per session** before `removeWorkspaceDelegation` (drops the service + deletes
+    `delegation/<workspaceId>`), so the store is never deleted under a live child — hidden
+    children never outlive their workspace.
     `readChildTranscript` serves `subagent.getTranscript` from the store by
-    `(workspaceId, parentSessionId, childSessionId)`. Children opting into extensions
+    `(workspaceId, parentSessionId, childSessionId)` — the ids are wire strings that become path
+    segments, so it rejects path-like values (separators, `..`; the handler additionally validates
+    the workspace like every sibling read) — and returns the run's current registry `status`
+    alongside the messages (absent after restart/dispose; wire meaning: [[module-contracts]]).
+    Children opting into extensions
     (`extensions: true` in their definition) get the **curated child set**
     (`childExtensionFactories` in `extensions`): the headless-search policy + `pi-web-access` +
-    `pi-spec-graph` — deliberately not the parent's full set (ask_user_question would hang a
-    hidden child); future LISTED interactive children are first-class `createSession` sessions
-    and never pass through this set. Web-access reaches the child set via a **named bundled-seam
+    `pi-spec-graph` — deliberately not the parent's full set (rationale + the listed-children
+    carve-out: core decision #25). Web-access reaches the child set via a **named bundled-seam
     field** (`BundledExtensions.webAccessFactory`) in the binary and a Bun `require` in dev — its
     raw third-party `.ts` must stay out of the strict tsc graph.
   - `extensions` — Pi resource wiring. `buildResourceLoader(cwd, settingsManager, getAdmission,

@@ -5,7 +5,7 @@ status: active
 title: subagent renderers (Agent / get_subagent_result / completion card)
 parent: submodule-web-chat-tools
 depends-on: [module-contracts]
-references: [task-subagent-support]
+references: [module-pi-subagents]
 tags: [v1, chat, subagents]
 ---
 
@@ -16,8 +16,9 @@ type: `AgentCard` (the `Agent` tool — also registered for `get_subagent_result
 the same `DelegationRunDetails`), `SubagentCompletionCard` (the `subagent-completion` custom message a
 detached run injects — rendered by `turns.tsx` as its own `subagentCompletion` row, not through the tool
 registry), and the pure `runDetails` module (defensive `DelegationRunDetails` readers, token/cost/
-duration formatters, the collapsed-header summary line, and `delegationRunStatus` — a child run's
-current status derived from a chat runtime, which `ChatView` uses to decide transcript polling).
+duration formatters, and the collapsed-header summary line). Run *liveness* is deliberately not
+derived here: the transcript dialog reads the host's registry `status` off each
+`subagent.getTranscript` response (rationale: the parent chat SPEC's transcript-view seam).
 
 ## The rendering convention (user-settled, 2026-08, research-backed)
 
@@ -42,7 +43,7 @@ Adopted:
 - **Owns:** `AgentCard`, `SubagentCompletionCard`, `runDetails` (pure, unit-tested), and their
   registration (`register.ts`, side-effect imported by the parent `tools/register`).
 - **Public surface:** the side-effect `register`; `SubagentCompletionCard` (imported by the parent
-  chat's `turns.tsx`); `runDetails`'s pure helpers (`ChatView` uses `delegationRunStatus`).
+  chat's `turns.tsx`); `runDetails`'s pure helpers.
 - **Allowed deps:** parent chat primitives (`toolRegistry`, `ChatActions`, `Markdown`, `foldState`,
   chat `types`); sibling `toolHelpers`/`Collapsible`; `contracts` (type-only + the
   `SUBAGENT_COMPLETION_CUSTOM_TYPE` guard family); `lucide-react`; `lib`.
