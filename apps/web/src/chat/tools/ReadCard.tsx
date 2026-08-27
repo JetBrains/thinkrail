@@ -1,13 +1,12 @@
 import { RiFileTextLine as FileText } from "@remixicon/react";
-import { projectRelativePath } from "@/lib";
 import type { ToolRenderProps } from "../toolRegistry";
 import { CodeBlock } from "./CodeBlock";
 import { Collapsible, countLines } from "./Collapsible";
+import { ToolFileLink } from "./ToolFileLink";
 import { languageFromPath, numArg, resultText, strArg } from "./toolHelpers";
 
-export function ReadCard({ args, result, status, workspaceRoot }: ToolRenderProps) {
+export function ReadCard({ args, result, status, workspaceRoot, onOpenFile }: ToolRenderProps) {
 	const path = strArg(args, "path");
-	const displayPath = projectRelativePath(path, workspaceRoot);
 	const offset = numArg(args, "offset");
 	const limit = numArg(args, "limit");
 	const output = resultText(result);
@@ -24,9 +23,13 @@ export function ReadCard({ args, result, status, workspaceRoot }: ToolRenderProp
 		<div data-testid="tool-read" className="flex flex-col gap-4">
 			<div className="flex items-center gap-4 tr-text-metadata">
 				<FileText className="size-12 shrink-0 text-text-muted" />
-				<span className="truncate text-primary" title={path}>
-					{displayPath}
-				</span>
+				<ToolFileLink
+					path={path}
+					workspaceRoot={workspaceRoot}
+					onOpenFile={onOpenFile}
+					disabled={status === "running"}
+					className="text-primary"
+				/>
 				{range ? <span className="shrink-0 text-text-muted">{range}</span> : null}
 			</div>
 			{status === "running" ? (

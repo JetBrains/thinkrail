@@ -1,5 +1,7 @@
 import { RiSendPlaneLine as Send, RiDeleteBin6Line as Trash2 } from "@remixicon/react";
 import { useEffect, useRef, useState } from "react";
+import { IconTooltip } from "../components/ui/tooltip";
+import { threadLabel } from "./reviewModel";
 import type { ReviewThreadActions, ReviewThreadData } from "./reviewWidgets";
 
 function grow(el: HTMLTextAreaElement): void {
@@ -49,33 +51,37 @@ export function ReviewThreadCard({
 				<span
 					className={`review-thread-dot rounded-full review-thread-dot-${thread.status === "sent" ? "sent" : "draft"}`}
 				/>
-				<span className="review-thread-label tr-text-eyebrow">
-					{thread.anchorState === "outdated" ? `${thread.status} · outdated` : thread.status}
+				<span
+					className={`review-thread-label tr-text-eyebrow${thread.refuted ? " text-text-subtle" : thread.stale ? " text-feedback-warning" : ""}`}
+				>
+					{threadLabel(thread)}
 				</span>
 				{thread.status === "draft" && (
 					<span className="review-thread-actions">
-						<button
-							type="button"
-							data-testid="review-thread-send"
-							title="Send this comment to the file's review chat"
-							aria-label="Send this comment to the file's review chat"
-							className="review-thread-action"
-							disabled={busy}
-							onClick={() => run(actions.onSendComment)}
-						>
-							<Send className="size-12" />
-						</button>
-						<button
-							type="button"
-							data-testid="review-thread-delete"
-							title="Delete draft"
-							aria-label="Delete draft"
-							className="review-thread-action"
-							disabled={busy}
-							onClick={() => run(actions.onDeleteComment)}
-						>
-							<Trash2 className="size-12" />
-						</button>
+						<IconTooltip label="Send this comment to the file's review chat" wrapTrigger>
+							<button
+								type="button"
+								data-testid="review-thread-send"
+								aria-label="Send this comment to the file's review chat"
+								className="review-thread-action disabled:pointer-events-none"
+								disabled={busy}
+								onClick={() => run(actions.onSendComment)}
+							>
+								<Send className="size-12" />
+							</button>
+						</IconTooltip>
+						<IconTooltip label="Delete draft" wrapTrigger>
+							<button
+								type="button"
+								data-testid="review-thread-delete"
+								aria-label="Delete draft"
+								className="review-thread-action disabled:pointer-events-none"
+								disabled={busy}
+								onClick={() => run(actions.onDeleteComment)}
+							>
+								<Trash2 className="size-12" />
+							</button>
+						</IconTooltip>
 					</span>
 				)}
 			</div>

@@ -12,6 +12,7 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { IconTooltip } from "@/components/ui/tooltip";
 import { platformShortcutLabel, relativeTime } from "@/lib";
 import {
 	type ChatLocationRequest,
@@ -82,21 +83,22 @@ function DeleteChatButton({
 }) {
 	if (!workspaceId) return null;
 	return (
-		<button
-			type="button"
-			data-testid="history-delete-chat"
-			aria-label="Move chat to trash"
-			title="Move chat to trash"
-			onClick={(event) => {
-				event.stopPropagation();
-				onDeleteChat(workspaceId, sessionId);
-			}}
-			className={`flex shrink-0 items-center justify-center rounded-[var(--radius-sm)] p-4 text-text-muted opacity-0 transition hover:bg-container-elevated-bg hover:text-feedback-error group-hover:opacity-100 ${
-				isSelected ? "opacity-100" : ""
-			}`}
-		>
-			<Trash2 className="size-14" />
-		</button>
+		<IconTooltip label="Move chat to trash">
+			<button
+				type="button"
+				data-testid="history-delete-chat"
+				aria-label="Move chat to trash"
+				onClick={(event) => {
+					event.stopPropagation();
+					onDeleteChat(workspaceId, sessionId);
+				}}
+				className={`flex shrink-0 items-center justify-center rounded-[var(--radius-sm)] p-4 text-text-muted opacity-0 transition hover:bg-container-elevated-bg hover:text-feedback-error group-hover:opacity-100 ${
+					isSelected ? "opacity-100" : ""
+				}`}
+			>
+				<Trash2 className="size-14" />
+			</button>
+		</IconTooltip>
 	);
 }
 
@@ -160,21 +162,22 @@ function PromptRow({
 					{SAVE_SHORTCUT_LABEL}
 				</span>
 			) : null}
-			<button
-				type="button"
-				data-testid="history-save-template"
-				aria-label="Save as template"
-				title={`Save as template (${SAVE_SHORTCUT_LABEL})`}
-				onClick={(e) => {
-					e.stopPropagation();
-					onSaveAsTemplate();
-				}}
-				className={`flex shrink-0 items-center justify-center rounded-[var(--radius-sm)] p-4 text-text-muted opacity-0 transition hover:bg-container-elevated-bg hover:text-text-default group-hover:opacity-100 ${
-					isSelected ? "opacity-100" : ""
-				}`}
-			>
-				<Save className="size-14" />
-			</button>
+			<IconTooltip label={`Save as template (${SAVE_SHORTCUT_LABEL})`}>
+				<button
+					type="button"
+					data-testid="history-save-template"
+					aria-label="Save as template"
+					onClick={(e) => {
+						e.stopPropagation();
+						onSaveAsTemplate();
+					}}
+					className={`flex shrink-0 items-center justify-center rounded-[var(--radius-sm)] p-4 text-text-muted opacity-0 transition hover:bg-container-elevated-bg hover:text-text-default group-hover:opacity-100 ${
+						isSelected ? "opacity-100" : ""
+					}`}
+				>
+					<Save className="size-14" />
+				</button>
+			</IconTooltip>
 			{target ? (
 				<>
 					{isSelected ? (
@@ -185,21 +188,22 @@ function PromptRow({
 							⇧⏎
 						</span>
 					) : null}
-					<button
-						type="button"
-						data-testid="history-jump"
-						aria-label="Go to chat"
-						title="⇧⏎ go to chat"
-						onClick={(e) => {
-							e.stopPropagation();
-							onOpenMessage(target);
-						}}
-						className={`flex shrink-0 items-center justify-center rounded-[var(--radius-sm)] p-4 text-text-muted opacity-0 transition hover:bg-container-elevated-bg hover:text-text-default group-hover:opacity-100 ${
-							isSelected ? "opacity-100" : ""
-						}`}
-					>
-						<CornerUpRight className="size-14" />
-					</button>
+					<IconTooltip label="⇧⏎ go to chat">
+						<button
+							type="button"
+							data-testid="history-jump"
+							aria-label="Go to chat"
+							onClick={(e) => {
+								e.stopPropagation();
+								onOpenMessage(target);
+							}}
+							className={`flex shrink-0 items-center justify-center rounded-[var(--radius-sm)] p-4 text-text-muted opacity-0 transition hover:bg-container-elevated-bg hover:text-text-default group-hover:opacity-100 ${
+								isSelected ? "opacity-100" : ""
+							}`}
+						>
+							<CornerUpRight className="size-14" />
+						</button>
+					</IconTooltip>
 				</>
 			) : null}
 			<DeleteChatButton

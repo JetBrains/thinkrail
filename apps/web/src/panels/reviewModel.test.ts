@@ -49,6 +49,18 @@ test("draft ids: per-file counts only that file's drafts (null keys the anchorle
 	expect(allDraftIds(undefined)).toEqual([]);
 });
 
+test("agent comments ride the same lifecycle as the user's — drafts join the batch, badged only by author", () => {
+	const agentDraft = comment({ id: "f1", author: "agent" });
+	const agentSent = comment({ id: "f2", author: "agent", status: "sent" });
+	const agentResolved = comment({ id: "f3", author: "agent", status: "resolved" });
+	const userDraft = comment({ id: "u1" });
+	expect(fileDraftIds([agentDraft, userDraft], "src/a.ts")).toEqual(["f1", "u1"]);
+	expect(allDraftIds([agentDraft, agentSent, userDraft])).toEqual(["f1", "u1"]);
+	expect(fileSummaries([agentDraft, agentSent, agentResolved, userDraft])).toEqual([
+		{ path: "src/a.ts", total: 3, drafts: 2, resolved: 1 },
+	]);
+});
+
 test("groupComments: review-level first, then files alphabetically, creation order kept", () => {
 	const groups = groupComments([
 		comment({ id: "c1", anchor: { path: "z.ts", side: "worktree", selectors: [] } }),

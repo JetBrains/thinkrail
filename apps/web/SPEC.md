@@ -53,7 +53,18 @@ ThinkRail artwork as the shell logo (compact enough for browser-tab sizes and li
 `main.tsx` is the entry/composition root — it synchronously builds the bundled theme catalog, applies the
 cached first-paint theme hint pre-React, initializes transport + client-local navigation, then wraps `<Shell />` in
 `components/ErrorBoundary` as the last-resort boundary (a crash escaping every region shows a reload
-screen, not a blank root).
+screen, not a blank root) plus the app's single `TooltipProvider`.
+
+**React is one exact, matching `react` + `react-dom` 19.3 canary pin until the first stable release carrying
+upstream fix #34803.** React 19.2's development Performance Tracks retained every
+`performance.measure()` record; Pi-rate chat renders grew a Vite tab past 10 GB while the JS heap stayed
+flat, then Chrome killed the renderer and Vite reported the dead socket as `EPIPE` / `ECONNRESET` (React
+#34770). The selected canary contains React's own `clearMeasures` fix; ThinkRail deliberately carries no
+second measure-reaping policy. Because prereleases do not satisfy dependencies' stable React peer ranges,
+the root package-manager overrides resolve both runtime packages through their catalog entries; `check:deps`
+reads `bun.lock` and rejects any second `react` or `react-dom` version. Every React move upgrades both
+packages together and repeats the mounted-chat memory stress probe before this temporary canary pin can
+return to stable.
 
 ### Dependency graph
 
@@ -208,7 +219,8 @@ themselves.
   generator that turns it into CSS is [scripts/SPEC.md](scripts/SPEC.md).
 - **Icons: `@remixicon/react` (Line default, Fill when active/selected). Components: shadcn/ui** (Radix primitives), copy-in under `src/components/ui/`
   and themed with our token utilities (`cn()` in `src/lib/utils.ts`) — never shadcn's default oklch
-  palette. Use these for accessible menus / dialogs / tooltips.
+  palette. Use these for accessible menus / dialogs / tooltips; icon-only controls label themselves with
+  `IconTooltip`, never native `title`.
 
 ## Get right
 

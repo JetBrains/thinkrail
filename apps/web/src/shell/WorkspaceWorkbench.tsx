@@ -20,11 +20,14 @@ import {
 	useState,
 } from "react";
 import { ErrorBoundary } from "../components/ErrorBoundary";
+import { DropdownMenuItem } from "../components/ui/dropdown-menu";
+import { IconTooltip } from "../components/ui/tooltip";
 import { type LayoutAttention, layoutResourceIdentity } from "../lib";
 import { ChangesPanel } from "../panels/ChangesPanel";
 import { DiffPane } from "../panels/DiffPane";
 import { FilePane } from "../panels/FilePane";
 import { FileTree } from "../panels/FileTree";
+import { openFileInTab } from "../panels/openTabs";
 import { ProjectTree } from "../panels/ProjectTree";
 import { ReviewPanel, selectActiveReviewedPath } from "../panels/ReviewPanel";
 import { reviewFlags } from "../panels/reviewModel";
@@ -173,6 +176,12 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	const activeReviewedPath = useAppStore((state) => selectActiveReviewedPath(state, workspaceId));
 	const readActiveReviewedPath = useCallback(
 		() => selectActiveReviewedPath(useAppStore.getState(), workspaceId),
+		[workspaceId],
+	);
+	const openToolFile = useCallback(
+		(path: string) => {
+			void openFileInTab(workspaceId, path, "preview");
+		},
 		[workspaceId],
 	);
 
@@ -414,7 +423,11 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				return sessions[tab.sessionId] ? (
 					<ErrorBoundary label="chat" resetKeys={[workspaceId, tab.id]}>
 						<Suspense fallback={<MissingResource label="chat" />}>
-							<ChatView sessionId={tab.sessionId} workspaceId={workspaceId} />
+							<ChatView
+								sessionId={tab.sessionId}
+								workspaceId={workspaceId}
+								onOpenFile={openToolFile}
+							/>
 						</Suspense>
 					</ErrorBoundary>
 				) : (
@@ -504,7 +517,16 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				</ErrorBoundary>
 			);
 		},
-		[deletedSessions, document, editorById, editorByResource, sessions, terminalByKey, workspaceId],
+		[
+			deletedSessions,
+			document,
+			editorById,
+			editorByResource,
+			openToolFile,
+			sessions,
+			terminalByKey,
+			workspaceId,
+		],
 	);
 
 	const renderToolBody = useCallback(
@@ -686,18 +708,31 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				renderCenterActions={(groupId) => (
 					<>
 						<WorkspaceChatHistory workspaceId={workspaceId} targetGroupId={groupId} />
-						<button
-							type="button"
-							data-testid="new-terminal"
-							aria-label="New terminal in this group"
-							title="New terminal in this group"
-							onClick={() => useAppStore.getState().addTerminal(workspaceId, undefined, groupId)}
-							className="flex w-32 shrink-0 items-center justify-center border-border-default border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
-						>
-							<SquareTerminal className="size-14" />
-						</button>
+						<IconTooltip label="New terminal in this group">
+							<button
+								type="button"
+								data-testid="new-terminal"
+								aria-label="New terminal in this group"
+								onClick={() => useAppStore.getState().addTerminal(workspaceId, undefined, groupId)}
+								className="flex w-32 shrink-0 items-center justify-center border-border-default border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+							>
+								<SquareTerminal className="size-14" />
+							</button>
+						</IconTooltip>
 					</>
 				)}
+				renderSideMenuActions={(side, groupId) =>
+					side === "right" ? (
+						<DropdownMenuItem
+							data-testid="side-new-terminal"
+							onSelect={() =>
+								useAppStore.getState().addTerminal(workspaceId, undefined, groupId, side)
+							}
+						>
+							New terminal
+						</DropdownMenuItem>
+					) : null
+				}
 				onCommit={commit}
 				onAttentionChange={changeAttention}
 				onUserNavigation={() => useAppStore.getState().noteNavigation(workspaceId)}

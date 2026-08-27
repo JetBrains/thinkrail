@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { join, normalize } from "node:path";
 import type {
+	HostPlatform,
 	LayoutChangedPayload,
 	ServerWelcome,
 	SessionDeletedPayload,
@@ -73,6 +74,14 @@ import { handleRequest, requestMethodDiagnostic } from "./handlers";
 import { trackLoginOutcome } from "./loginAnalytics";
 import { RequestReplayCache } from "./requestReplayCache";
 import { terminalDeliveryForSendStatus } from "./terminalSend";
+import {
+	handleReviewerSettled,
+	installTodoReviewSeams,
+	markClientStale,
+	maybeAutoReReview,
+	maybeResumeReflection,
+	reconcilePendingReviewsOnBoot,
+} from "./todoReview";
 
 export interface CreateServerOptions {
 	port?: number;
@@ -183,8 +192,13 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				ws.subscribe(WS_CHANNELS.settingsChanged);
 				ws.subscribe(WS_CHANNELS.layoutChanged);
 				ws.subscribe(WS_CHANNELS.reviewChanged);
+				const hostPlatform: HostPlatform =
+					process.platform === "darwin" || process.platform === "win32"
+						? process.platform
+						: "linux";
 				const welcome: ServerWelcome = {
 					protocolVersion: PROTOCOL_VERSION,
+					hostPlatform,
 					projects: listProjects(),
 					recentProjects: listRecentProjects(),
 					config: getConfig(),
@@ -362,12 +376,17 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	setReviewPublisher((payload) => {
 		server.publish(
 			WS_CHANNELS.reviewChanged,
-			JSON.stringify({ channel: WS_CHANNELS.reviewChanged, data: payload }),
+			JSON.stringify({
+				channel: WS_CHANNELS.reviewChanged,
+				data: markClientStale(payload, payload.workspaceId),
+			}),
 		);
 	});
-	setReviewCommentHandler((commentId, note) => ({
-		resolvedBody: resolveCommentFromAgent(commentId, note).body,
+	setReviewCommentHandler((sessionId, commentId, note) => ({
+		resolvedBody: resolveCommentFromAgent(sessionId, commentId, note).body,
 	}));
+	installTodoReviewSeams();
+	reconcilePendingReviewsOnBoot();
 
 	setLayoutPublisher((payload: LayoutChangedPayload) => {
 		server.publish(
@@ -402,10 +421,15 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		} else if (isSettledTurn(payload.event)) {
 			const workspaceId = getSessionWorkspaceId(payload.sessionId);
 			if (workspaceId) void maybeAutoRenameWorkspace(payload.sessionId, workspaceId);
+			handleReviewerSettled(payload.sessionId, payload.event);
+			maybeResumeReflection(payload.sessionId);
 		}
 		if (isTodoToolEnd(payload.event)) {
 			const workspaceId = getSessionWorkspaceId(payload.sessionId);
-			if (workspaceId) void maybeAttachChangeArtifacts(workspaceId, payload.sessionId);
+			if (workspaceId)
+				void maybeAttachChangeArtifacts(workspaceId, payload.sessionId).then(() =>
+					maybeAutoReReview(workspaceId, payload.sessionId),
+				);
 		}
 	});
 

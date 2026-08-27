@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { githubAuthStatus, parseGhAuthStatus } from "./github";
+import { ghSetupProblem, ghSetupProblemFrom, githubAuthStatus, parseGhAuthStatus } from "./github";
 
 const saved = process.env.THINKRAIL_GH_OFFLINE;
 afterEach(() => {
@@ -10,6 +10,17 @@ afterEach(() => {
 test("THINKRAIL_GH_OFFLINE forces a disconnected status without shelling out", () => {
 	process.env.THINKRAIL_GH_OFFLINE = "1";
 	expect(githubAuthStatus()).toEqual({ connected: false });
+});
+
+test("ghSetupProblemFrom names the missing piece: no binary, then a failed auth probe, then nothing", () => {
+	expect(ghSetupProblemFrom(null, false)).toBe("missing");
+	expect(ghSetupProblemFrom("/usr/local/bin/gh", false)).toBe("unauthenticated");
+	expect(ghSetupProblemFrom("/usr/local/bin/gh", true)).toBeNull();
+});
+
+test("THINKRAIL_GH_OFFLINE suppresses the gh setup probe entirely", async () => {
+	process.env.THINKRAIL_GH_OFFLINE = "1";
+	expect(await ghSetupProblem()).toBeNull();
 });
 
 test("parseGhAuthStatus extracts the account login and token scopes", () => {

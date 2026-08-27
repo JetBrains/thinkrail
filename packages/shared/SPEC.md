@@ -37,7 +37,7 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
 ## Contents
 
 - **/shellEnv** — `resolveShellEnv()`: make the host's environment safe for the shells it spawns, because a
-  GUI-launched host (Finder/Dock, launchd, a systemd unit, a container) inherits a stripped-down one. Two
+  GUI-launched host (Finder/Dock, launchd, a systemd unit, a container) inherits a stripped-down one. Three
   independent repairs, each applied only when needed:
   - **`PATH`** — ensure it is the user's full login PATH so the in-process agent's bash/tools find
     `git`/`node`/etc. Skipped when `pathLooksComplete()`.
@@ -46,8 +46,13 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
     so one backspace over a multi-byte character (Cyrillic, umlauts, CJK) deletes half of it and desyncs the
     line. Only `LANG` is set, never `LC_ALL`, so a user's per-category settings (`LC_NUMERIC`, `LC_TIME`, …)
     survive.
+  - **`SSH_AUTH_SOCK`** (darwin only) — when absent, recover the launchd ssh-agent socket via
+    `launchctl getenv SSH_AUTH_SOCK` (3s timeout, never throws, no-op when launchd reports none).
+    Without it both the host's own git pushes (`pr`) and every embedded terminal lose the user's
+    ssh-agent: `ssh-add` inside a ThinkRail terminal answers "Could not open a connection to your
+    authentication agent", and a key loaded in Terminal.app never reaches the host's push.
 
-  Both repairs land on `process.env`, which is what makes them reach *every* shell the host spawns: the PTY
+  All repairs land on `process.env`, which is what makes them reach *every* shell the host spawns: the PTY
   terminals copy it (`server/src/terminal`), and so does the in-process agent's own bash.
 - **/freePort** — `findFreePort(preferred, host?)`: the first free port at or above `preferred`, so a
   host can pick an open port instead of colliding with one already running. `isPortFree(port, host?)`:

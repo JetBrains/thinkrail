@@ -2,12 +2,18 @@
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { isExactVersion } from "./exactVersion";
 
 interface Manifest {
 	workspaces?: { packages?: string[]; catalog?: Record<string, string> } | string[];
+	overrides?: Record<string, string>;
 	dependencies?: Record<string, string>;
 	devDependencies?: Record<string, string>;
 	optionalDependencies?: Record<string, string>;
+}
+
+interface BunLock {
+	packages?: Record<string, unknown>;
 }
 
 const root = join(import.meta.dir, "..");
@@ -37,11 +43,15 @@ function manifestPaths(): string[] {
 const SECTIONS = ["dependencies", "devDependencies", "optionalDependencies"] as const;
 const violations: string[] = [];
 
-const EXACT_VERSION = /^\d+\.\d+\.\d+(?:[-+][\w.]+)?$/;
-
 for (const [name, version] of Object.entries(catalog)) {
-	if (!EXACT_VERSION.test(version)) {
+	if (!isExactVersion(version)) {
 		violations.push(`package.json: catalog.${name} is "${version}" — catalog entries pin exact`);
+	}
+}
+
+for (const name of ["react", "react-dom"]) {
+	if (rootManifest.overrides?.[name] !== "catalog:") {
+		violations.push(`package.json: overrides.${name} must be "catalog:" to keep one runtime`);
 	}
 }
 
@@ -63,12 +73,30 @@ for (const path of [join(root, "package.json"), ...manifestPaths()]) {
 				continue;
 			}
 			if (version.includes(":")) continue;
-			if (!EXACT_VERSION.test(version)) {
+			if (!isExactVersion(version)) {
 				violations.push(
 					`${rel}: ${section}.${name} pins "${version}" — pin an exact version (no ranges)`,
 				);
 			}
 		}
+	}
+}
+
+const lock = Bun.JSONC.parse(readFileSync(join(root, "bun.lock"), "utf8")) as BunLock;
+for (const name of ["react", "react-dom"]) {
+	const prefix = `${name}@`;
+	const versions = new Set<string>();
+	for (const entry of Object.values(lock.packages ?? {})) {
+		if (!Array.isArray(entry) || typeof entry[0] !== "string") continue;
+		if (entry[0].startsWith(prefix)) versions.add(entry[0].slice(prefix.length));
+	}
+	const resolved = [...versions].sort();
+	if (resolved.length > 1) {
+		violations.push(`bun.lock: ${name} resolves to multiple versions: ${resolved.join(", ")}`);
+	} else if (resolved[0] !== catalog[name]) {
+		violations.push(
+			`bun.lock: ${name} resolves to ${resolved[0] ?? "nothing"}; expected catalog pin ${catalog[name] ?? "missing"}`,
+		);
 	}
 }
 

@@ -1,15 +1,16 @@
 import { beforeEach, expect, test } from "bun:test";
-import type {
-	ExtUiRequest,
-	PiEvent,
-	Project,
-	SessionSummary,
-	SpecGraphNode,
-	WireModel,
-	Workspace,
-	WorkspaceFsChangedPayload,
-	WorkspaceLayoutDocument,
-	WorkspaceSkillChange,
+import {
+	DEFAULT_CONFIG,
+	type ExtUiRequest,
+	type PiEvent,
+	type Project,
+	type SessionSummary,
+	type SpecGraphNode,
+	type WireModel,
+	type Workspace,
+	type WorkspaceFsChangedPayload,
+	type WorkspaceLayoutDocument,
+	type WorkspaceSkillChange,
 } from "@thinkrail/contracts";
 import type { ChatTurn } from "../chat/types";
 import { userText } from "../lib";
@@ -112,6 +113,7 @@ beforeEach(() => {
 		routeChatTarget: null,
 		routeChatTargetGeneration: 0,
 		sessions: {},
+		extUiOrphans: [],
 		layoutSnapshotsByWorkspace: {},
 		layoutDocumentsByWorkspace: {},
 		layoutAttentionByWorkspace: {},
@@ -368,7 +370,9 @@ test("message_end finalizes the turn the moment its message completes (not at ag
 		{ type: "message_end", message: { role: "toolResult" } } as unknown as PiEvent,
 		"a",
 	);
-	expect(rt("a")).toBe(before);
+	const ignored = rt("a");
+	expect(ignored.turns).toBe(before.turns);
+	expect(ignored.eventRevision).toBe(before.eventRevision + 1);
 });
 
 test("an ask-user-answers custom message_end indexes into askAnswers (never the turn list)", () => {
@@ -403,7 +407,10 @@ test("an ask-user-answers custom message_end indexes into askAnswers (never the 
 		} as unknown as PiEvent,
 		"a",
 	);
-	expect(rt("a")).toBe(before);
+	const ignored = rt("a");
+	expect(ignored.turns).toBe(before.turns);
+	expect(ignored.askAnswers).toBe(before.askAnswers);
+	expect(ignored.eventRevision).toBe(before.eventRevision + 1);
 });
 
 test("the tool lifecycle folds into toolResults (the status + raw the renderers read)", () => {
@@ -864,6 +871,171 @@ test("applyExtUi routes a dialog to its session; the reply clears only that one"
 	expect(rt("a").pendingExtUi).toBeNull();
 });
 
+test("applyExtUi reads a notify's level: only an error becomes an error turn", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", null, "medium");
+
+	store.applyExtUi({
+		id: "n1",
+		sessionId: "a",
+		kind: "notify",
+		message: "Just so you know",
+		level: "info",
+	});
+	store.applyExtUi({
+		id: "n2",
+		sessionId: "a",
+		kind: "notify",
+		message: "Careful",
+		level: "warning",
+	});
+	store.applyExtUi({
+		id: "n3",
+		sessionId: "a",
+		kind: "notify",
+		message: "Extension theme-probe.ts failed on session_start: theme.fg is not a function",
+		level: "error",
+	});
+
+	expect(rt("a").turns.slice(-3)).toMatchObject([
+		{ kind: "system", text: "Just so you know" },
+		{ kind: "system", text: "Careful" },
+		{
+			kind: "error",
+			text: "Extension theme-probe.ts failed on session_start: theme.fg is not a function",
+		},
+	]);
+});
+
+test("an ext-UI frame that beats its session.create response is replayed, not dropped", () => {
+	const store = useAppStore.getState();
+
+	store.applyExtUi({
+		id: "s1",
+		sessionId: "late",
+		kind: "setStatus",
+		key: "test",
+		text: "Theme works",
+	});
+	store.applyExtUi({
+		id: "n1",
+		sessionId: "late",
+		kind: "notify",
+		message: "Extension theme-probe.ts failed on session_start: theme.fg is not a function",
+		level: "error",
+	});
+	expect(useAppStore.getState().sessions.late).toBeUndefined();
+
+	store.openChatSession("ws1", "late", null, "medium");
+
+	expect(rt("late").extUiStatus).toEqual({ test: "Theme works" });
+	expect(rt("late").turns.at(-1)).toMatchObject({
+		kind: "error",
+		text: "Extension theme-probe.ts failed on session_start: theme.fg is not a function",
+	});
+	expect(useAppStore.getState().extUiOrphans).toEqual([]);
+});
+
+test("a dialog for an unknown session is dropped, never replayed as a phantom", () => {
+	const store = useAppStore.getState();
+
+	store.applyExtUi({
+		id: "d-late",
+		sessionId: "dialog",
+		kind: "confirm",
+		title: "Proceed?",
+		message: "Apply?",
+	});
+	expect(useAppStore.getState().extUiOrphans).toEqual([]);
+
+	store.openChatSession("ws1", "dialog", null, "medium");
+	expect(rt("dialog").pendingExtUi).toBeNull();
+	expect(rt("dialog").extUiQueue).toEqual([]);
+});
+
+test("a frame for a chat closed to history still applies, and orphans stay bounded", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "closed", null, "medium");
+	store.closeChatToHistory("closed", true, "ws1");
+
+	store.applyExtUi({ id: "t1", sessionId: "closed", kind: "setTitle", title: "Renamed later" });
+	const closed = useAppStore
+		.getState()
+		.closedChatsByWorkspace.ws1?.find((chat) => chat.sessionId === "closed");
+	expect(closed?.title).toBe("Renamed later");
+	expect(useAppStore.getState().extUiOrphans).toEqual([]);
+
+	for (let i = 0; i < 70; i++) {
+		store.applyExtUi({
+			id: `f${i}`,
+			sessionId: "never-opened",
+			kind: "setStatus",
+			key: "k",
+			text: String(i),
+		});
+	}
+	const orphans = useAppStore.getState().extUiOrphans;
+	expect(orphans).toHaveLength(64);
+	expect(orphans.at(-1)).toMatchObject({ id: "f69" });
+});
+
+test("a frame for a chat known only as a tab is buffered, never silently dropped", () => {
+	const store = useAppStore.getState();
+	useAppStore.setState({
+		tabsByWorkspace: {
+			ws1: [
+				{
+					kind: "chat",
+					id: chatTabId("ws1", "tab-only"),
+					workspaceId: "ws1",
+					name: "Chat",
+					sessionId: "tab-only",
+				},
+			],
+		},
+	});
+
+	store.applyExtUi({
+		id: "s1",
+		sessionId: "tab-only",
+		kind: "setStatus",
+		key: "test",
+		text: "Theme works",
+	});
+
+	expect(useAppStore.getState().sessions["tab-only"]).toBeUndefined();
+	expect(useAppStore.getState().extUiOrphans).toMatchObject([{ id: "s1" }]);
+});
+
+test("a frame that beats a reopened chat's transcript is replayed by hydrateSession", () => {
+	const store = useAppStore.getState();
+
+	store.applyExtUi({
+		id: "s1",
+		sessionId: "reopened",
+		kind: "setStatus",
+		key: "test",
+		text: "Theme works",
+	});
+	expect(useAppStore.getState().extUiOrphans).toMatchObject([{ id: "s1" }]);
+
+	const summary: SessionSummary = {
+		sessionId: "reopened",
+		workspaceId: "ws1",
+		title: "Chat",
+		model: null,
+		thinkingLevel: "medium",
+		isStreaming: false,
+		messageCount: 0,
+		updatedAt: 0,
+		live: true,
+	};
+	store.hydrateSession(summary, { turns: [], toolResults: {}, askAnswers: {} });
+
+	expect(rt("reopened").extUiStatus).toEqual({ test: "Theme works" });
+	expect(useAppStore.getState().extUiOrphans).toEqual([]);
+});
+
 test("setTitle refreshes shared chat metadata without requesting activation", () => {
 	const store = useAppStore.getState();
 	const cacheId = chatTabId("ws1", "a");
@@ -1258,6 +1430,110 @@ test("hydrateSession rebuilds a runtime + tab on connect, and never clobbers a l
 		{ turns: [], toolResults: {}, askAnswers: {}, turnIdByMessageIndex: [] },
 	);
 	expect(useAppStore.getState().sessions.h1?.turns).toHaveLength(1);
+});
+
+test("reconcileSession replaces stale host state while preserving browser-local state", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "sync", null, "medium");
+	store.setChatDraft("sync", "keep my draft");
+	store.appendUserMessage("sync", "old summarized prompt");
+	store.handlePiEvent(agentStart, "sync");
+	store.handlePiEvent({ type: "compaction_start", reason: "overflow" }, "sync");
+	store.handlePiEvent(
+		{
+			type: "compaction_end",
+			reason: "overflow",
+			result: { tokensBefore: 268_000, estimatedTokensAfter: 24_000 },
+			aborted: false,
+			willRetry: true,
+		},
+		"sync",
+	);
+
+	const before = rt("sync");
+	const liveCompaction = before.turns.findLast((turn) => turn.kind === "compaction");
+	if (liveCompaction?.kind !== "compaction") throw new Error("live compaction missing");
+	const summary: SessionSummary = {
+		sessionId: "sync",
+		workspaceId: "ws1",
+		title: "Chat",
+		model: null,
+		thinkingLevel: "high",
+		isStreaming: true,
+		messageCount: 2,
+		updatedAt: 2,
+		live: true,
+		queue: { steering: [], followUp: ["continue afterward"] },
+	};
+	const applied = store.reconcileSession(
+		summary,
+		{
+			turns: [
+				{
+					kind: "compaction",
+					id: "persisted-compaction",
+					status: "done",
+					summary: "## Earlier work\nFinished the investigation.",
+					tokensBefore: 268_000,
+				},
+			],
+			toolResults: {},
+			askAnswers: {},
+			turnIdByMessageIndex: [null],
+		},
+		before.eventRevision,
+		7,
+	);
+
+	expect(applied).toBe(true);
+	const after = rt("sync");
+	expect(after.turns).toHaveLength(1);
+	expect(after.turns[0]).toEqual({
+		kind: "compaction",
+		id: liveCompaction.id,
+		status: "done",
+		summary: "## Earlier work\nFinished the investigation.",
+		tokensBefore: 268_000,
+		tokensAfter: 24_000,
+		resuming: true,
+	});
+	expect(after.draft).toBe("keep my draft");
+	expect(after.queue).toEqual({ steering: [], followUp: ["continue afterward"] });
+	expect(after.thinkingLevel).toBe("high");
+	expect(after.syncedConnectionGeneration).toBe(7);
+	expect(after.eventRevision).toBe(before.eventRevision + 1);
+});
+
+test("reconcileSession rejects a transcript read crossed by even a UI-ignored Pi event", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "sync-race", null, "medium");
+	store.appendUserMessage("sync-race", "keep this turn");
+	const expectedRevision = rt("sync-race").eventRevision;
+
+	store.handlePiEvent({ type: "turn_start" } as PiEvent, "sync-race");
+	const crossed = rt("sync-race");
+	expect(crossed.eventRevision).toBe(expectedRevision + 1);
+
+	const applied = store.reconcileSession(
+		{
+			sessionId: "sync-race",
+			workspaceId: "ws1",
+			title: "Chat",
+			model: null,
+			thinkingLevel: "medium",
+			isStreaming: false,
+			messageCount: 0,
+			updatedAt: 2,
+			live: true,
+		},
+		{ turns: [], toolResults: {}, askAnswers: {}, turnIdByMessageIndex: [] },
+		expectedRevision,
+		3,
+	);
+
+	expect(applied).toBe(false);
+	expect(rt("sync-race").turns).toHaveLength(1);
+	expect(rt("sync-race").syncedConnectionGeneration).not.toBe(3);
 });
 
 test("noteClosedChats surfaces disk-only sessions in history, skipping live/open/known ones", () => {
@@ -2506,6 +2782,14 @@ test("applyConfig folds the server-synced app config in (theme is an opaque host
 	expect(useAppStore.getState().theme).toBe("acme.solarized");
 	useAppStore.getState().applyConfig({ theme: "custom.high-contrast" });
 	expect(useAppStore.getState().theme).toBe("custom.high-contrast");
+});
+
+test("applyConfig projects the composer growth limit", () => {
+	useAppStore.getState().applyConfig({
+		...DEFAULT_CONFIG,
+		composerGrowthLimit: "roomy",
+	});
+	expect(useAppStore.getState()).toHaveProperty("composerGrowthLimit", "roomy");
 });
 
 test("diff tabs: openTab dedupes by id + activates; view + contents update in place", () => {

@@ -1,5 +1,11 @@
 import { expect, test } from "@playwright/test";
-import { createWorkspaceViaDialog, openFixtureProject, worktreeRows } from "./fixtures/app";
+import {
+	createWorkspaceViaDialog,
+	hideAuxiliaryWorkbench,
+	openFixtureProject,
+	PHONE_VIEWPORT,
+	worktreeRows,
+} from "./fixtures/app";
 
 async function openChat(page: import("@playwright/test").Page): Promise<void> {
 	await openFixtureProject(page);
@@ -14,35 +20,45 @@ async function openChat(page: import("@playwright/test").Page): Promise<void> {
 	await expect(page.getByTestId("chat-input")).toBeVisible();
 }
 
-test("composer prompt is moderately tall with model and effort controls underneath", {
+test("streaming unfolds the one-line draft into a complete action rail", {
 	tag: "@agent",
 }, async ({ page }) => {
+	test.setTimeout(90_000);
 	await openChat(page);
+	await hideAuxiliaryWorkbench(page);
+	await page.setViewportSize(PHONE_VIEWPORT);
 
 	const input = page.getByTestId("chat-input");
-	const modelSelector = page.getByTestId("model-selector");
-	const effortSelector = page.getByTestId("thinking-selector");
-	const send = page.getByTestId("chat-send");
+	await input.fill("Use the bash tool to run `sleep 8`, then reply with done.");
+	await page.getByTestId("chat-send").click();
 
-	await expect(input).toBeVisible();
-	await expect(modelSelector).toBeVisible();
-	await expect(effortSelector).toBeVisible();
-	await expect(send).toBeVisible();
-
+	const composer = page.getByTestId("chat-composer");
+	await expect(page.getByTestId("chat-abort")).toBeVisible();
+	await expect(page.getByTestId("send-menu")).toBeVisible();
+	await expect(composer).toHaveAttribute("data-expanded", "true");
 	const inputBox = await input.boundingBox();
-	const modelBox = await modelSelector.boundingBox();
-	const effortBox = await effortSelector.boundingBox();
-	const sendBox = await send.boundingBox();
-	if (!inputBox || !modelBox || !effortBox || !sendBox) {
-		throw new Error("Composer layout boxes were not measurable");
+	const modelBox = await page.getByTestId("model-selector").boundingBox();
+	if (!inputBox || !modelBox) throw new Error("Composer layout boxes were not measurable");
+	expect(inputBox.height).toBeLessThanOrEqual(40);
+	expect(modelBox.y).toBeGreaterThanOrEqual(inputBox.y + inputBox.height);
+	const shellBox = await page.getByTestId("chat-composer-shell").boundingBox();
+	if (!shellBox) throw new Error("Composer shell was not measurable");
+	expect(shellBox.x).toBeGreaterThanOrEqual(0);
+	expect(shellBox.x + shellBox.width).toBeLessThanOrEqual(PHONE_VIEWPORT.width);
+	for (const control of [
+		page.getByTestId("history-open"),
+		page.getByTestId("chat-abort"),
+		page.getByTestId("send-menu"),
+		page.getByTestId("chat-send"),
+	]) {
+		const controlBox = await control.boundingBox();
+		if (!controlBox) throw new Error("Streaming composer control was not measurable");
+		expect(controlBox.x).toBeGreaterThanOrEqual(0);
+		expect(controlBox.x + controlBox.width).toBeLessThanOrEqual(PHONE_VIEWPORT.width);
 	}
 
-	expect(inputBox.height).toBeGreaterThanOrEqual(100);
-	expect(inputBox.height).toBeLessThanOrEqual(130);
-	const belowInputY = inputBox.y + inputBox.height;
-	expect(modelBox.y).toBeGreaterThanOrEqual(belowInputY);
-	expect(effortBox.y).toBeGreaterThanOrEqual(belowInputY);
-	expect(sendBox.y).toBeGreaterThanOrEqual(belowInputY);
+	await page.getByTestId("chat-abort").click();
+	await expect(page.getByTestId("chat-abort")).toBeHidden();
 });
 
 test("model picker plus file and portable-skill completion use the live session catalog", {
@@ -97,7 +113,14 @@ test("stats refresh after a turn completes (cheap win #3)", { tag: "@agent" }, a
 	await expect(stats).toBeVisible();
 	await expect(stats).toContainText(/[↑↓RW]/);
 
-	await page.setViewportSize({ width: 320, height: 720 });
+	await hideAuxiliaryWorkbench(page);
+	await page.setViewportSize(PHONE_VIEWPORT);
+	await expect
+		.poll(async () => {
+			const chatBox = await page.getByTestId("chat-view").boundingBox();
+			return chatBox ? chatBox.x + chatBox.width : Number.POSITIVE_INFINITY;
+		})
+		.toBeLessThanOrEqual(PHONE_VIEWPORT.width);
 	const skills = page.getByTestId("open-skills");
 	await expect(skills).toBeVisible();
 	const statsBox = await stats.boundingBox();
@@ -105,6 +128,6 @@ test("stats refresh after a turn completes (cheap win #3)", { tag: "@agent" }, a
 	if (!statsBox || !skillsBox) throw new Error("chat header item has no bounding box");
 	for (const box of [statsBox, skillsBox]) {
 		expect(box.x).toBeGreaterThanOrEqual(0);
-		expect(box.x + box.width).toBeLessThanOrEqual(320);
+		expect(box.x + box.width).toBeLessThanOrEqual(PHONE_VIEWPORT.width);
 	}
 });

@@ -9,6 +9,7 @@ import {
 	RiCloseLine as X,
 } from "@remixicon/react";
 import {
+	type ComposerGrowthLimit,
 	REQUEST_IMAGE_BASE64_BUDGET,
 	type ThinkingLevel,
 	type WireModel,
@@ -26,6 +27,7 @@ import {
 	useState,
 } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib";
 import { FileChip } from "./FileChip";
 import { type AttachedImage, fileToAttachedImage } from "./imageAttachment";
 import { ModelSelector } from "./ModelSelector";
@@ -50,6 +52,13 @@ import type { ChatAttachment } from "./types";
 export type SubmitBehavior = "send" | "steer" | "followUp" | "interrupt";
 
 export type ComposerSubmitDisposition = { accepted: true } | { accepted: false; reason: string };
+
+const COMPOSER_EDITOR_LIMIT_CLASS = {
+	compact: "max-h-[calc(6lh+var(--space-8)+var(--space-8))]",
+	roomy: "max-h-[calc(10lh+var(--space-8)+var(--space-8))]",
+	"half-chat":
+		"max-h-[calc(50cqh-var(--space-16)-var(--space-16)-var(--space-4)-var(--space-4)-var(--space-4)-var(--space-4))]",
+} satisfies Record<ComposerGrowthLimit, string>;
 
 const STREAMING_SEND_MODES = [
 	{
@@ -153,6 +162,7 @@ interface ComposerProps {
 	value: string;
 	onChange: (value: string) => void;
 	isStreaming: boolean;
+	growthLimit: ComposerGrowthLimit;
 	commands: SlashCommandItem[];
 	mentionCandidates: MentionCandidate[];
 	recentPrompts: string[];
@@ -191,6 +201,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		value,
 		onChange,
 		isStreaming,
+		growthLimit,
 		commands,
 		mentionCandidates,
 		recentPrompts,
@@ -231,14 +242,46 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	const [slots, setSlots] = useState<TemplateSlot[] | null>(null);
 	const [slotIdx, setSlotIdx] = useState(0);
 	const backdropRef = useRef<HTMLDivElement | null>(null);
-	const attachBackdrop = (el: HTMLDivElement | null) => {
-		backdropRef.current = el;
+	const editorSizerRef = useRef<HTMLDivElement | null>(null);
+	const [draftNeedsExpansion, setDraftNeedsExpansion] = useState(false);
+	const expanded = isStreaming || draftNeedsExpansion;
+	const syncBackdropScroll = useCallback(() => {
+		const backdrop = backdropRef.current;
 		const textarea = ref.current;
-		if (el && textarea) {
-			el.scrollLeft = textarea.scrollLeft;
-			el.scrollTop = textarea.scrollTop;
-		}
-	};
+		if (!backdrop || !textarea) return;
+		backdrop.scrollLeft = textarea.scrollLeft;
+		backdrop.scrollTop = textarea.scrollTop;
+	}, []);
+	const attachBackdrop = useCallback(
+		(el: HTMLDivElement | null) => {
+			backdropRef.current = el;
+			syncBackdropScroll();
+		},
+		[syncBackdropScroll],
+	);
+	const measureDraftExpansion = useCallback(() => {
+		const sizer = editorSizerRef.current;
+		if (!sizer) return;
+		const styles = getComputedStyle(sizer);
+		const oneLineHeight =
+			Number.parseFloat(styles.lineHeight) +
+			Number.parseFloat(styles.paddingTop) +
+			Number.parseFloat(styles.paddingBottom);
+		setDraftNeedsExpansion(value.includes("\n") || sizer.scrollHeight > oneLineHeight + 1);
+	}, [value]);
+
+	useLayoutEffect(() => {
+		const sizer = editorSizerRef.current;
+		if (!sizer) return;
+		measureDraftExpansion();
+		const observer = new ResizeObserver(measureDraftExpansion);
+		observer.observe(sizer);
+		return () => observer.disconnect();
+	}, [measureDraftExpansion]);
+
+	useLayoutEffect(() => {
+		syncBackdropScroll();
+	});
 
 	const { token, start } = activeToken(value, caret);
 	const mentionQuery = token.startsWith("@") ? token.slice(1) : null;
@@ -528,7 +571,12 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	};
 
 	return (
-		<div className="relative flex shrink-0 flex-col border-border-muted border-t bg-container-workspace-bg">
+		<div
+			data-testid="chat-composer"
+			data-expanded={expanded}
+			data-streaming={isStreaming}
+			className="relative flex shrink-0 flex-col border-border-muted border-t bg-container-workspace-bg"
+		>
 			{mentionOpen ? (
 				<div
 					data-testid="mention-menu"
@@ -656,108 +704,134 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 				</div>
 			) : null}
 
-			<div className="flex flex-col gap-8 p-12">
-				<div className="relative rounded-[var(--radius-md)] border border-control-border-default bg-control-bg bg-clip-padding transition-colors focus-within:border-control-border-active">
-					{slots ? (
-						<div
-							ref={attachBackdrop}
-							data-testid="slot-backdrop"
-							aria-hidden
-							className="pointer-events-none absolute inset-0 overflow-hidden rounded-[var(--radius-md)]"
-						>
-							<div className="w-full whitespace-pre-wrap break-words px-12 py-8 tr-text-ui">
-								{withOffsets(highlightSegments(value, slots, slotIdx)).map((seg) => (
-									<span
-										key={seg.start}
-										data-testid={seg.state === "plain" ? undefined : "slot-highlight"}
-										data-slot-state={seg.state === "plain" ? undefined : seg.state}
-										className={`text-transparent ${highlightTint(seg.state)}`}
-									>
-										{seg.text}
-									</span>
-								))}
-							</div>
-						</div>
-					) : null}
-					<textarea
-						ref={ref}
-						data-testid="chat-input"
-						value={value}
-						onScroll={(e) => {
-							const backdrop = backdropRef.current;
-							if (backdrop) {
-								backdrop.scrollLeft = e.currentTarget.scrollLeft;
-								backdrop.scrollTop = e.currentTarget.scrollTop;
-							}
-						}}
-						onChange={(e) => {
-							const next = e.target.value;
-							const nextCaret = e.target.selectionStart;
-							setSubmitError(null);
-							const recalled = recallIdxRef.current;
-							if (recalled !== null && next !== recentPrompts[recalled]) {
-								recallIdxRef.current = null;
-							}
-							if (slots) {
-								const { editStart, removedLen, insertedLen } = diffValues(value, next, nextCaret);
-								if (editStart === 0 && removedLen === value.length) {
-									setSlots(null);
-								} else {
-									const editEnd = editStart + removedLen;
-									const active = slots[slotIdx];
-									const growing =
-										removedLen === 0 &&
-										insertedLen > 0 &&
-										active !== undefined &&
-										active.end === editStart;
-									const shifted = shiftSlots(slots, editStart, removedLen, insertedLen).map(
-										(slot, i) => {
-											const grown =
-												growing && i === slotIdx
-													? { ...slot, end: slot.end + insertedLen, filled: true, edited: true }
-													: slot;
-											const original = slots[i];
-											return original && touches(original, editStart, editEnd)
-												? { ...grown, filled: true, edited: true }
-												: grown;
-										},
-									);
-									setSlots(shifted);
-								}
-							}
-							onChange(next);
-							setCaret(nextCaret);
-						}}
-						onKeyUp={(e) => setCaret(e.currentTarget.selectionStart)}
-						onClick={(e) => setCaret(e.currentTarget.selectionStart)}
-						onKeyDown={onKeyDown}
-						onPaste={onPaste}
-						onDrop={onDrop}
-						rows={4}
-						placeholder={
-							isStreaming
-								? "Enter steers at the next step · Cmd/Ctrl+Enter queues for when it finishes"
-								: "Message the agent…  (@ files · / commands · Enter to send)"
-						}
-						className="relative min-h-[108px] w-full resize-none rounded-[var(--radius-sm)] bg-transparent px-12 py-8 tr-text-ui text-text-default outline-none placeholder:text-text-muted"
-					/>
-				</div>
-				<div className="flex flex-wrap items-center gap-8">
-					<div className="flex min-w-0 flex-1 flex-wrap items-center gap-8">
+			<div className="p-12">
+				<div
+					data-testid="chat-composer-shell"
+					className={cn(
+						"relative grid grid-cols-[auto_minmax(0,1fr)_auto] grid-rows-[minmax(0,1fr)_auto] items-end gap-x-4 gap-y-4 overflow-hidden rounded-[var(--radius-md)] border border-control-border-default bg-control-bg bg-clip-padding p-4 transition-colors focus-within:border-control-border-active",
+						expanded && growthLimit === "half-chat" && "max-h-[50cqh]",
+					)}
+				>
+					<div className="col-start-1 row-start-2 flex min-w-0 items-center gap-4 self-end sm:gap-8">
 						<ModelSelector
 							models={models}
 							current={currentModel}
 							refreshing={modelsRefreshing}
 							onRefresh={onRefreshModels}
 							onSelect={onSelectModel}
+							className="max-w-80 gap-4 px-4 sm:max-w-144"
 						/>
 						<ThinkingSelector
 							level={thinkingLevel}
 							levels={currentModel?.thinkingLevels ?? []}
 							onSelect={onSelectThinking}
+							showLabel={false}
+							className="gap-4 px-4"
 						/>
 					</div>
-					<div className="flex shrink-0 items-center gap-8">
+					<div
+						className={cn(
+							"relative col-span-3 col-start-1 row-start-1 min-h-0 overflow-hidden rounded-[var(--radius-sm)] tr-text-ui",
+							COMPOSER_EDITOR_LIMIT_CLASS[growthLimit],
+						)}
+					>
+						<div
+							ref={editorSizerRef}
+							data-testid="chat-input-sizer"
+							aria-hidden
+							className="invisible w-full whitespace-pre-wrap break-words px-12 py-8 tr-text-ui"
+						>
+							{`${value}\u200b`}
+						</div>
+						{slots ? (
+							<div
+								ref={attachBackdrop}
+								data-testid="slot-backdrop"
+								aria-hidden
+								className="pointer-events-none absolute inset-0 overflow-hidden rounded-[var(--radius-sm)]"
+							>
+								<div className="w-full whitespace-pre-wrap break-words px-12 py-8 tr-text-ui">
+									{withOffsets(highlightSegments(value, slots, slotIdx)).map((seg) => (
+										<span
+											key={seg.start}
+											data-testid={seg.state === "plain" ? undefined : "slot-highlight"}
+											data-slot-state={seg.state === "plain" ? undefined : seg.state}
+											className={`text-transparent ${highlightTint(seg.state)}`}
+										>
+											{seg.text}
+										</span>
+									))}
+								</div>
+							</div>
+						) : null}
+						<textarea
+							ref={ref}
+							data-testid="chat-input"
+							value={value}
+							onScroll={syncBackdropScroll}
+							onChange={(e) => {
+								const next = e.target.value;
+								const nextCaret = e.target.selectionStart;
+								setSubmitError(null);
+								const recalled = recallIdxRef.current;
+								if (recalled !== null && next !== recentPrompts[recalled]) {
+									recallIdxRef.current = null;
+								}
+								if (slots) {
+									const { editStart, removedLen, insertedLen } = diffValues(value, next, nextCaret);
+									if (editStart === 0 && removedLen === value.length) {
+										setSlots(null);
+									} else {
+										const editEnd = editStart + removedLen;
+										const active = slots[slotIdx];
+										const growing =
+											removedLen === 0 &&
+											insertedLen > 0 &&
+											active !== undefined &&
+											active.end === editStart;
+										const shifted = shiftSlots(slots, editStart, removedLen, insertedLen).map(
+											(slot, i) => {
+												const grown =
+													growing && i === slotIdx
+														? {
+																...slot,
+																end: slot.end + insertedLen,
+																filled: true,
+																edited: true,
+															}
+														: slot;
+												const original = slots[i];
+												return original && touches(original, editStart, editEnd)
+													? { ...grown, filled: true, edited: true }
+													: grown;
+											},
+										);
+										setSlots(shifted);
+									}
+								}
+								onChange(next);
+								setCaret(nextCaret);
+							}}
+							onKeyUp={(e) => setCaret(e.currentTarget.selectionStart)}
+							onClick={(e) => setCaret(e.currentTarget.selectionStart)}
+							onKeyDown={onKeyDown}
+							onPaste={onPaste}
+							onDrop={onDrop}
+							rows={1}
+							placeholder={
+								isStreaming
+									? "Enter steers at the next step · Cmd/Ctrl+Enter queues for when it finishes"
+									: expanded
+										? "Message the agent…  (@ files · / commands · Enter to send)"
+										: "Message…"
+							}
+							className={cn(
+								"absolute inset-0 size-full resize-none overflow-x-hidden overflow-y-auto rounded-[var(--radius-sm)] bg-transparent px-12 py-8 tr-text-ui text-text-default outline-none placeholder:text-text-muted",
+								expanded ? "whitespace-pre-wrap" : "whitespace-nowrap",
+							)}
+						/>
+					</div>
+					<div className="col-start-3 row-start-2 flex shrink-0 items-center gap-4 self-end">
 						<button
 							type="button"
 							data-testid="history-open"

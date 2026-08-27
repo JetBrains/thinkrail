@@ -24,8 +24,23 @@ stores them; it does not resolve paths, compute diffs, or touch git. `file`/`spe
 agent (a `spec` naturally from `spec_create`'s `{path,id}`); `change` **and** `commit` are attached by the
 host when an item reaches `done` — the host commits the item's work and records just the sha, or falls
 back to a `change` path-list when it couldn't commit (see `server/src/todos` — the store stays git-free). `sanitize` drops an entry lacking its key (a `commit` with
-no `sha`, any other kind with no `path`). The on-disk `version` is `4` (`3` added `artifacts`, `4` added
-the `commit` kind); an older file reads cleanly and is upgraded on the next write.
+no `sha`, any other kind with no `path`). The on-disk `version` is `5` (`3` added `artifacts`, `4` added
+the `commit` kind, `5` added the `summary` fields); an older file reads cleanly and is upgraded on the
+next write.
+
+**Summaries (the review trail).** An item may carry `summary` — the agent's completion note (what/why,
+the decisions the diff can't show) — and **`verification`**, a separate field for the exact check run +
+result (or the honest "not verified"), kept apart from the prose so the UI renders it as a status badge
+and a missing line is visible at a glance; both set via `TodoPatch` when the item flips `done`; the plan itself may carry a
+plan-level `summary` (`TodoFile.summary`, written by `TodoStore.setSummary`) — the overall handoff note
+the agent writes when the whole plan completes. Both are stored verbatim across later edits, with one
+invalidation rule: `update` clears an item's `summary`/`verification`, and drops the plan-level `summary`
+with it, the moment that item's `status` leaves `done` — unless the same patch also supplies fresh values
+for them, which win. A UI reader can gate display on "everything done", but a non-UI consumer (a generated
+PR body, a work report) has no such gate, so a reopened item's stale completion story must not survive on
+disk, not merely be hidden. `replaceAll` deliberately does **not** carry the plan summary over — a
+fresh plan is new work. Review *state* is never stored here: it is user-owned and lives in a host sidecar
+(see `server/src/todos`), so an agent re-plan can't flip a review decision.
 
 **Group = task.** A group models one user ask; its items are the steps. A group's lifecycle is
 **derived, never stored**: `groupStatus(group)` — all done → `done`, any in_progress → `active`, else
@@ -44,7 +59,8 @@ surgical mid-plan insert (`after` wins over `group`; an unknown id throws).
 ## Public surface
 
 The `index.ts` barrel:
-- `TodoStore` (constructed per `(root, sessionId)`), `STORE_DIR` / `storeRel`, and the `countItems(plan)`
+- `TodoStore` (constructed per `(root, sessionId)`, incl. `setSummary` — the plan-level completion
+  summary), `STORE_DIR` / `storeRel`, and the `countItems(plan)`
   + `flatItems(plan)` (every item in display order: groups first, the user's loose lane last — the one
   flatten reused by reads/updates/rendering) + `groupStatus(group)` helpers.
 - The model types: `Todo`, `TodoGroup`, `TodoPlan`, `TodoFile`, `TodoInput`, `TodoPatch`,

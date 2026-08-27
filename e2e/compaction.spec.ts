@@ -41,7 +41,7 @@ test("a compacted transcript marks where the summarized messages were", async ({
 	await expect(page.getByText("summarized question")).toHaveCount(0);
 
 	const marker = page.getByTestId("chat-compaction");
-	await expect(marker).toContainText("Earlier messages summarized");
+	await expect(marker).toContainText("Context compacted");
 	await expect(marker).toContainText("148k tokens");
 	await expect(page.getByText("Renamed the widget factory.")).toHaveCount(0);
 	await marker.getByRole("button").click();

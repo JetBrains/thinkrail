@@ -58,8 +58,14 @@ describe("activity disclosure summaries", () => {
 		const markup = renderToStaticMarkup(ChatTurnView({ row }));
 
 		expect(markup).toContain('data-testid="activity-group"');
+		expect(markup).toContain('data-activity-node-id="activity:a"');
+		expect(markup).toContain('data-activity-node-kind="activity"');
+		expect(markup).toContain("data-activity-node-toggle");
 		expect(markup).toContain("4 steps · read ×3, thinking");
 		expect(markup).not.toContain(">Activity<");
 		expect(markup).not.toContain("inspect first");
+
+		const liveMarkup = renderToStaticMarkup(ChatTurnView({ row: { ...row, live: true } }));
+		expect(liveMarkup).toContain('data-activity-node-label="4 steps"');
 	});
 });

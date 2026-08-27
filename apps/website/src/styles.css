@@ -2217,19 +2217,26 @@ html:not(.anim) .term-caret {
 	gap: var(--space-md);
 }
 
-.blog-post-date {
-	font-size: var(--text-sm);
-	color: var(--blog-text-hint);
-}
-
+.blog-post-author,
+.blog-post-date,
 .blog-post-reading-time {
 	font-size: var(--text-sm);
 	color: var(--blog-text-hint);
 }
 
+.blog-post-author::after,
 .blog-post-date::after {
 	content: "·";
 	margin: 0 var(--space-sm);
+}
+
+.blog-post-author-link {
+	color: inherit;
+	text-decoration: none;
+}
+
+.blog-post-author-link:hover {
+	color: var(--blog-accent);
 }
 
 .blog-post-tags {

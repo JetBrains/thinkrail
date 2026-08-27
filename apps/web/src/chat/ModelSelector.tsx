@@ -35,6 +35,10 @@ export function ModelSelector({
 	refreshing,
 	onRefresh,
 	container,
+	className,
+	placeholder,
+	defaultOption,
+	onSelectDefault,
 }: {
 	models: WireModel[];
 	current: WireModel | null;
@@ -42,6 +46,10 @@ export function ModelSelector({
 	refreshing: boolean;
 	onRefresh: (force: boolean) => void;
 	container?: HTMLElement | null;
+	className?: string;
+	placeholder?: string;
+	defaultOption?: string;
+	onSelectDefault?: () => void;
 }) {
 	const [open, setOpen] = useState(false);
 	const providers = [...new Set(models.map((m) => m.provider))];
@@ -62,10 +70,13 @@ export function ModelSelector({
 			<PopoverTrigger
 				data-testid="model-selector"
 				data-open={open}
-				className="flex h-32 max-w-[220px] items-center gap-8 rounded-[var(--radius-sm)] border border-control-border-default bg-clip-padding bg-control-bg px-8 tr-text-ui text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:border-control-border-active data-[open=true]:bg-control-bg-selected"
+				className={cn(
+					"flex h-32 max-w-[220px] items-center gap-8 rounded-[var(--radius-sm)] border border-control-border-default bg-clip-padding bg-control-bg px-8 tr-text-ui text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:border-control-border-active data-[open=true]:bg-control-bg-selected",
+					className,
+				)}
 			>
 				<span className="truncate text-text-muted tr-text-metadata">
-					{current?.name ?? "Select model"}
+					{current?.name ?? (placeholder || "Select model")}
 				</span>
 				<ChevronDown className="size-16 shrink-0 text-text-muted" />
 			</PopoverTrigger>
@@ -74,6 +85,23 @@ export function ModelSelector({
 					<CommandInput placeholder="Search models…" />
 					<CommandList>
 						<CommandEmpty>No models found.</CommandEmpty>
+						{defaultOption !== undefined && onSelectDefault !== undefined && (
+							<CommandGroup>
+								<CommandItem
+									value={defaultOption}
+									data-testid="model-option-default"
+									onSelect={() => {
+										onSelectDefault();
+										setOpen(false);
+									}}
+								>
+									<span className="flex w-14 shrink-0 justify-center">
+										{current === null ? <Check className="size-14 text-primary" /> : null}
+									</span>
+									<span className="truncate">{defaultOption}</span>
+								</CommandItem>
+							</CommandGroup>
+						)}
 						{providers.map((provider) => (
 							<CommandGroup key={provider} heading={provider}>
 								{models

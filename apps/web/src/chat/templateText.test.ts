@@ -6,6 +6,15 @@ test("no frontmatter at all: content that doesn't start with --- is the body unt
 	expect(stripFrontmatter(content)).toBe(content);
 });
 
+test("a leading UTF-8 BOM is stripped before returning plain content", () => {
+	expect(stripFrontmatter("\uFEFFPlain body")).toBe("Plain body");
+});
+
+test("a leading UTF-8 BOM is stripped before frontmatter detection", () => {
+	const content = '\uFEFF---\ndescription: "d"\n---\n\nBody text\n';
+	expect(stripFrontmatter(content)).toBe("Body text");
+});
+
 test("an opener with no closing fence: the whole content is body, completely untouched (not even trimmed)", () => {
 	const content = "---\ndescription: never closes\nstill going\n\n";
 	expect(stripFrontmatter(content)).toBe(content);
@@ -42,6 +51,13 @@ test("a body starting with --- gets an explicit (empty) wrapper even with no key
 	const assembled = assembleTemplate("", "", body);
 	expect(assembled).toBe(`---\n---\n\n${body}`);
 	expect(stripFrontmatter(assembled)).toBe(body);
+});
+
+test("a BOM-prefixed body starting with --- gets the protective wrapper and canonicalizes the BOM away", () => {
+	const body = "\uFEFF---\nMeeting notes\n---\nAfter the second fence";
+	const assembled = assembleTemplate("", "", body);
+	expect(assembled).toBe(`---\n---\n\n${body}`);
+	expect(stripFrontmatter(assembled)).toBe("---\nMeeting notes\n---\nAfter the second fence");
 });
 
 test("emits only the keys with non-empty values", () => {

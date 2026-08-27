@@ -5,6 +5,7 @@ import { join } from "node:path";
 import type { Workspace } from "@thinkrail/contracts";
 import { changedFileArgs, diffBaseRef, resolveDiffRange } from "./diffScope";
 import {
+	countUnpushedCommits,
 	gitCommitPaths,
 	gitDiffFile,
 	gitHeadSha,
@@ -677,4 +678,16 @@ test("gitCommitPaths refuses to commit over a conflicted index (unmerged entries
 	const head = gitHeadSha("w1");
 	expect(gitCommitPaths("w1", "todo: mid-merge", ["impl.ts"])).toBeNull();
 	expect(gitHeadSha("w1")).toBe(head ?? "");
+});
+
+test("countUnpushedCommits counts what origin/<branch> lacks; null without the remote ref", async () => {
+	expect(await countUnpushedCommits(repo, "main")).toBeNull();
+	git(dataDir, "init", "--bare", "origin.git");
+	git(repo, "remote", "add", "origin", join(dataDir, "origin.git"));
+	git(repo, "push", "-u", "origin", "main");
+	expect(await countUnpushedCommits(repo, "main")).toBe(0);
+	writeFileSync(join(repo, "next.txt"), "next\n");
+	git(repo, "add", "-A");
+	git(repo, "commit", "-m", "next");
+	expect(await countUnpushedCommits(repo, "main")).toBe(1);
 });

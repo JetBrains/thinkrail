@@ -105,3 +105,28 @@ test("a commit artifact without decorated files (unresolvable sha) degrades to a
 		["# TODO — c", "", "Progress: 1/1", "", "- [x] Old step", ""].join("\n"),
 	);
 });
+
+test("unattributed changes compile as their own section, after the items", () => {
+	const plan: TodoPlan = {
+		todos: [item("Fix bar", "done")],
+		groups: [],
+		unattributed: [
+			{ path: "src/loose.ts", status: "modified", added: 4, removed: 1 },
+			{ path: "NOTES.md", status: "untracked" },
+		],
+	};
+	expect(planToMarkdown(plan, "c")).toBe(
+		[
+			"# TODO — c",
+			"",
+			"Progress: 1/1",
+			"",
+			"- [x] Fix bar",
+			"",
+			"## Outside the plan",
+			"- `M` src/loose.ts · +4 −1",
+			"- `A` NOTES.md",
+			"",
+		].join("\n"),
+	);
+});
