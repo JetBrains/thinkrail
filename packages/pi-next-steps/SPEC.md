@@ -22,6 +22,8 @@ Zero suggestions means the agent does not call the tool. A call carries one to t
 
 The tool is an optional final action after a complete answer and returns `terminate: true`, avoiding an empty follow-up model turn. Its active prompt metadata names the tool explicitly, asks for only concrete useful continuations, and distinguishes it from `ask_user_question`: required input uses the question tool; optional ways to continue use `offer_next_steps`.
 
+An explicit user request for follow-up actions, ways to continue after the answer, or what to do next makes the tool required when concrete continuations exist. The assistant first completes any substantive answer, then puts those continuations in `offer_next_steps` instead of duplicating them as a prose list. This is a semantic instruction to the agent, not a client keyword heuristic; ordinary turns remain omit-by-default.
+
 ## Native interaction
 
 Tool execution never waits for a person. In TUI mode, `agent_settled` first confirms that a successful `offer_next_steps` result is the latest message on the active branch, then opens pi’s native selector. Choosing sends the normalized prompt as a real user message; if another extension started work first, it is delivered as a follow-up. Escape cancels without consuming the offer, and `/next-steps` reopens the selector while that result remains current, including after a resumed session. Non-TUI modes keep the durable fallback and perform no interaction at all — `/next-steps` says so rather than opening a second, competing surface beside a host's own presentation.
