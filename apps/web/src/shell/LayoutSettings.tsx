@@ -24,7 +24,7 @@ import {
 	minimumSideGroupLimit,
 	resolveLayoutPreset,
 } from "./layout";
-import { commitWorkspaceLayout } from "./layoutSync";
+import { commitWorkspaceLayout } from "./layoutState";
 
 const BUILTIN_PRESET_IDS = new Set(BUILTIN_LAYOUT_PRESETS.map((preset) => preset.id));
 const MAX_CUSTOM_PRESETS = 32;

@@ -24,7 +24,7 @@ import {
 	removeSessionLayoutTabs,
 	selectTab,
 } from "../layout";
-import { commitWorkspaceLayout } from "../layoutSync";
+import { commitWorkspaceLayout } from "../layoutState";
 
 const sessionHydration = new Map<string, Promise<boolean>>();
 const AUTO_OPEN_CHAT_LIMIT = 4;
@@ -443,9 +443,6 @@ export function useChatLocationReconciliation(
 	const status = useAppStore((state) => state.status);
 	const connectionGeneration = useAppStore((state) => state.connectionGeneration);
 	const document = useAppStore((state) => state.layoutDocumentsByWorkspace[workspaceId]);
-	const pendingLayoutWrites = useAppStore(
-		(state) => state.layoutPendingByWorkspace[workspaceId]?.length ?? 0,
-	);
 	const chatLocationRequest = useAppStore((state) => state.chatLocationRequest);
 	const chatLocationFlight = useRef<{
 		request: object;
@@ -453,12 +450,7 @@ export function useChatLocationReconciliation(
 	} | null>(null);
 
 	useEffect(() => {
-		if (
-			!chatLocationRequest ||
-			chatLocationRequest.workspaceId !== workspaceId ||
-			!document ||
-			pendingLayoutWrites > 0
-		) {
+		if (!chatLocationRequest || chatLocationRequest.workspaceId !== workspaceId || !document) {
 			return;
 		}
 		const stateAtRequest = useAppStore.getState();
@@ -619,13 +611,5 @@ export function useChatLocationReconciliation(
 		return () => {
 			current = false;
 		};
-	}, [
-		changeAttention,
-		chatLocationRequest,
-		connectionGeneration,
-		document,
-		pendingLayoutWrites,
-		status,
-		workspaceId,
-	]);
+	}, [changeAttention, chatLocationRequest, connectionGeneration, document, status, workspaceId]);
 }

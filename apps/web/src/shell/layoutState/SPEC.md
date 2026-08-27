@@ -5,7 +5,6 @@ status: active
 title: shell/layoutState — frontend-local layout ownership
 parent: submodule-web-shell
 depends-on: [module-contracts]
-references: [submodule-web-shell-layout-sync]
 tags: [layout, local-state, persistence, migration]
 ---
 

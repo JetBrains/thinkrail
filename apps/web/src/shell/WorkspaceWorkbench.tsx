@@ -70,8 +70,8 @@ import { toLayoutTab, useLayoutIntentProcessing } from "./layoutIntents";
 import {
 	commitWorkspaceLayout,
 	persistLayoutAttention,
-	useWorkspaceLayoutSynchronization,
-} from "./layoutSync";
+	useWorkspaceLayoutState,
+} from "./layoutState";
 import { syncLegacySelectionFromAttention, useLegacySelectionAdapter } from "./legacySelection";
 import { useTerminalPlacementReconciliation } from "./terminalReconciliation";
 import { WorkspaceChatHistory } from "./WorkspaceChatHistory";
@@ -208,12 +208,6 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	const document = useAppStore((state) => state.layoutDocumentsByWorkspace[workspaceId]);
 	const attention = useAppStore((state) => state.layoutAttentionByWorkspace[workspaceId]);
 	const remoteEpoch = useAppStore((state) => state.layoutRemoteEpochByWorkspace[workspaceId] ?? 0);
-	const pendingLayoutWrites = useAppStore(
-		(state) => state.layoutPendingByWorkspace[workspaceId]?.length ?? 0,
-	);
-	const layoutRevision = useAppStore(
-		(state) => state.layoutSnapshotsByWorkspace[workspaceId]?.revision,
-	);
 	const layoutSettings = useAppStore((state) => state.layoutSettings);
 	const workspace = useAppStore((state) => selectWorkspaceById(state, workspaceId));
 	const initialTerminalEligible = workspace?.initialTerminalEligible === true;
@@ -240,17 +234,12 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 		[workspaceId],
 	);
 
-	useWorkspaceLayoutSynchronization(workspaceId);
+	useWorkspaceLayoutState(workspaceId);
 
 	useEffect(() => {
-		if (!document || pendingLayoutWrites > 0) return;
+		if (!document) return;
 		const state = useAppStore.getState();
-		if (
-			state.layoutDocumentsByWorkspace[workspaceId] !== document ||
-			(state.layoutPendingByWorkspace[workspaceId]?.length ?? 0) > 0
-		) {
-			return;
-		}
+		if (state.layoutDocumentsByWorkspace[workspaceId] !== document) return;
 		const placed = new Set(
 			collectAllGroups(document)
 				.flatMap((group) => group.tabs)
@@ -268,12 +257,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 			const identity = resource ? layoutResourceIdentity(resource) : null;
 			if (identity && (placed.has(identity) || opening.has(identity))) continue;
 			const latest = useAppStore.getState();
-			if (
-				latest.layoutDocumentsByWorkspace[workspaceId] !== document ||
-				(latest.layoutPendingByWorkspace[workspaceId]?.length ?? 0) > 0
-			) {
-				return;
-			}
+			if (latest.layoutDocumentsByWorkspace[workspaceId] !== document) return;
 			const current = (latest.tabsByWorkspace[workspaceId] ?? []).find(
 				(candidate) => candidate.id === tab.id,
 			);
@@ -292,7 +276,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				latest.closeTab(current.id, false, false, workspaceId);
 			}
 		}
-	}, [document, editorTabs, pendingLayoutWrites, workspaceId]);
+	}, [document, editorTabs, workspaceId]);
 
 	const changeAttention = useCallback(
 		(next: LayoutAttention) => {
@@ -328,10 +312,8 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 			!document ||
 			!attention ||
 			!terminalCatalogReady ||
-			pendingLayoutWrites > 0 ||
 			status !== "connected" ||
-			!initialTerminalEligible ||
-			layoutRevision !== 1
+			!initialTerminalEligible
 		) {
 			return;
 		}
@@ -357,8 +339,6 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 		connectionGeneration,
 		document,
 		initialTerminalEligible,
-		layoutRevision,
-		pendingLayoutWrites,
 		status,
 		terminalCatalogReady,
 		terminals,
@@ -627,11 +607,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	}
 
 	return (
-		<div
-			data-testid="workspace-workbench"
-			data-layout-status={pendingLayoutWrites > 0 ? "saving" : "settled"}
-			className="contents"
-		>
+		<div data-testid="workspace-workbench" data-layout-status="settled" className="contents">
 			<Workbench
 				document={document}
 				attention={attention}

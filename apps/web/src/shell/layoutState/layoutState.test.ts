@@ -1,0 +1,165 @@
+import { beforeEach, describe, expect, test } from "bun:test";
+import type { WorkspaceLayoutDocument, WorkspaceLayoutSnapshot } from "@thinkrail/contracts";
+import { useAppStore } from "../../store";
+import { resizeSideRegion, toolTab } from "../layout";
+import {
+	commitWorkspaceLayout,
+	ensureWorkspaceLayoutState,
+	localLayoutStorageKey,
+	resetLayoutStateForTests,
+	setLayoutStateStorageForTests,
+	setLegacyLayoutRequesterForTests,
+} from "./layoutState";
+
+class MemoryStorage implements Storage {
+	readonly values = new Map<string, string>();
+
+	get length(): number {
+		return this.values.size;
+	}
+
+	clear(): void {
+		this.values.clear();
+	}
+
+	getItem(key: string): string | null {
+		return this.values.get(key) ?? null;
+	}
+
+	key(index: number): string | null {
+		return [...this.values.keys()][index] ?? null;
+	}
+
+	removeItem(key: string): void {
+		this.values.delete(key);
+	}
+
+	setItem(key: string, value: string): void {
+		this.values.set(key, value);
+	}
+}
+
+const endpoint = "http://host.test";
+
+function legacyDocument(): WorkspaceLayoutDocument {
+	return {
+		version: 2,
+		center: {
+			kind: "group",
+			id: "center",
+			tabs: [{ kind: "file", id: "readme", name: "README.md", path: "README.md" }],
+			previewTabId: "readme",
+		},
+		left: {
+			visible: true,
+			width: 0.18,
+			groups: [{ id: "left", weight: 1, folded: false, tabs: [toolTab("projects")] }],
+		},
+		right: {
+			visible: true,
+			width: 0.28,
+			groups: [{ id: "right", weight: 1, folded: false, tabs: [toolTab("files")] }],
+		},
+		bottom: {
+			visible: true,
+			height: 0.3,
+			alignment: "center",
+			groups: [{ id: "bottom", weight: 1, folded: false, tabs: [] }],
+		},
+		toolRestoreTargets: {},
+	};
+}
+
+function snapshot(): WorkspaceLayoutSnapshot {
+	return { workspaceId: "workspace", revision: 8, document: legacyDocument() };
+}
+
+function resetStore(): void {
+	useAppStore.setState({
+		status: "connected",
+		connectionGeneration: 1,
+		removedWorkspaceIds: {},
+		workbenchFrame: null,
+		workspaceViewsByWorkspace: {},
+		layoutStateReady: false,
+		localLayoutPreferences: {
+			defaultPresetId: "balanced",
+			maxSideGroups: 6,
+			maxBottomGroups: 3,
+		},
+		legacyLayoutImportAttempted: {},
+		layoutDocumentsByWorkspace: {},
+		layoutAttentionByWorkspace: {},
+		layoutRemoteEpochByWorkspace: {},
+	});
+}
+
+beforeEach(() => {
+	resetLayoutStateForTests();
+	resetStore();
+});
+
+describe("frontend-local layout state", () => {
+	test("imports a legacy workspace once and persists the normalized local state", async () => {
+		const local = new MemoryStorage();
+		const session = new MemoryStorage();
+		session.setItem("thinkrail:layout-surface-id", "surface-a");
+		setLayoutStateStorageForTests({ local, session }, endpoint);
+		let requests = 0;
+		setLegacyLayoutRequesterForTests(async () => {
+			requests += 1;
+			return snapshot();
+		});
+
+		const first = await ensureWorkspaceLayoutState("workspace");
+		const second = await ensureWorkspaceLayoutState("workspace");
+
+		expect(first).toEqual(legacyDocument());
+		expect(second).toBe(first);
+		expect(requests).toBe(1);
+		expect(useAppStore.getState().legacyLayoutImportAttempted.workspace).toBe(true);
+		expect(local.getItem(localLayoutStorageKey(endpoint, "surface-a"))).not.toBeNull();
+	});
+
+	test("reload restores the same surface without another host read", async () => {
+		const local = new MemoryStorage();
+		const session = new MemoryStorage();
+		session.setItem("thinkrail:layout-surface-id", "surface-a");
+		setLayoutStateStorageForTests({ local, session }, endpoint);
+		setLegacyLayoutRequesterForTests(async () => snapshot());
+		const imported = await ensureWorkspaceLayoutState("workspace");
+		await commitWorkspaceLayout("workspace", resizeSideRegion(imported, "left", 0.31));
+
+		resetLayoutStateForTests();
+		resetStore();
+		setLayoutStateStorageForTests({ local, session }, endpoint);
+		setLegacyLayoutRequesterForTests(async () => {
+			throw new Error("unexpected legacy read");
+		});
+
+		const restored = await ensureWorkspaceLayoutState("workspace");
+		expect(restored.left.width).toBe(0.31);
+	});
+
+	test("simultaneous surface identities use independent persisted frames", async () => {
+		const local = new MemoryStorage();
+		const firstSession = new MemoryStorage();
+		firstSession.setItem("thinkrail:layout-surface-id", "surface-a");
+		setLayoutStateStorageForTests({ local, session: firstSession }, endpoint);
+		setLegacyLayoutRequesterForTests(async () => snapshot());
+		const first = await ensureWorkspaceLayoutState("workspace");
+		await commitWorkspaceLayout("workspace", resizeSideRegion(first, "left", 0.33));
+
+		resetLayoutStateForTests();
+		resetStore();
+		const secondSession = new MemoryStorage();
+		secondSession.setItem("thinkrail:layout-surface-id", "surface-b");
+		setLayoutStateStorageForTests({ local, session: secondSession }, endpoint);
+		setLegacyLayoutRequesterForTests(async () => snapshot());
+
+		const second = await ensureWorkspaceLayoutState("workspace");
+		expect(second.left.width).toBe(0.18);
+		expect(local.getItem(localLayoutStorageKey(endpoint, "surface-a"))).not.toBeNull();
+		expect(local.getItem(localLayoutStorageKey(endpoint, "surface-b"))).not.toBeNull();
+	});
+});

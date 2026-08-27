@@ -83,8 +83,10 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   singleton tools, and restore targets for this frontend surface; `workspaceViewsByWorkspace` carries each
   workspace's resource placements, order, and preview identities; `layoutAttentionByWorkspace` carries its
   selection, last focus, and navigation clocks; and local preset/limit preferences sit beside the frame.
-  These are web-local types from `shell/layout`, not wire snapshots. There is no accepted/projected pair,
-  revision, mutation id, pending write, rollback queue, or conflict state.
+  These are web-local types from `shell/layout`, not wire snapshots. `layoutDocumentsByWorkspace` is an
+  identity-stable **derived projection cache** rebuilt only from frame + view for existing selectors/effects;
+  it is neither persisted nor writable as authority. There is no accepted/projected pair, revision, mutation
+  id, pending write, rollback queue, or conflict state.
 
   `applyLocalLayoutTransition(result)` is the one atomic installation boundary for pure layout results. A
   resource-only result updates one workspace view and attention. A frame result replaces the singular frame
@@ -96,8 +98,8 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   The store owns values and actions, never persistence. `shell/layoutState` validates and hydrates one
   endpoint/surface-qualified local document, subscribes to relevant state edges, and persists the normalized
   frame/views/attention/preferences. `hydrateLocalLayoutState` installs that document once. During the bounded
-  compatibility release, `markLegacyLayoutImportAttempted(workspaceId)` prevents reconnect or an old peer
-  snapshot from being re-adopted after the one-time import. `clearWorkspaceTabs` removes the workspace view,
+  compatibility release, the atomic import payload records `legacyLayoutImportAttempted[workspaceId]`, so
+  reconnect cannot re-adopt the old snapshot. `clearWorkspaceTabs` removes the workspace view,
   attention, and associated local state when the workspace disappears. A page-lifetime
   `removedWorkspaceIds` tombstone rejects stale catalog/session/cache/workspace arrivals so an in-flight read
   cannot recreate it.

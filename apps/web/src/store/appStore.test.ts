@@ -115,10 +115,12 @@ beforeEach(() => {
 		routeChatTargetGeneration: 0,
 		sessions: {},
 		extUiOrphans: [],
-		layoutSnapshotsByWorkspace: {},
+		workbenchFrame: null,
+		workspaceViewsByWorkspace: {},
+		layoutStateReady: false,
+		legacyLayoutImportAttempted: {},
 		layoutDocumentsByWorkspace: {},
 		layoutAttentionByWorkspace: {},
-		layoutPendingByWorkspace: {},
 		layoutRemoteEpochByWorkspace: {},
 		layoutIntents: [],
 		tabsByWorkspace: {},
@@ -2359,16 +2361,6 @@ test("applyWorkspaceRemoved drops the row, clears its tabs, and returns the acti
 	expect(s.historyOpenRequest).toBeNull();
 	expect(s.reviewFocusRequest).toBeNull();
 
-	const lateDocument: WorkspaceLayoutDocument = {
-		version: 2,
-		center: { kind: "group", id: "center", tabs: [] },
-		left: { visible: false, width: 0.2, groups: [] },
-		right: { visible: false, width: 0.2, groups: [] },
-		bottom: emptyBottomRegion(),
-		toolRestoreTargets: {},
-	};
-	s.installLayoutSnapshot({ workspaceId: "w1", revision: 1, document: lateDocument });
-	s.beginLayoutCommit("w1", lateDocument, "late-write");
 	s.setLayoutAttention("w1", {
 		selectedByGroup: {},
 		lastFocusedCenterGroupId: "center",

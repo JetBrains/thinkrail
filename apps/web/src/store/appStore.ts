@@ -6,7 +6,6 @@ import type {
 	GitDiffScope,
 	HostPlatform,
 	LayoutAuxiliaryRegion,
-	LayoutChangedPayload,
 	LayoutSettings,
 	LayoutToolId,
 	LoginFrame,
@@ -30,7 +29,6 @@ import type {
 	Workspace,
 	WorkspaceFsChangedPayload,
 	WorkspaceLayoutDocument,
-	WorkspaceLayoutSnapshot,
 } from "@thinkrail/contracts";
 import {
 	customMessageText,
@@ -61,6 +59,7 @@ import {
 	tupleKey,
 	userText,
 } from "../lib";
+import type { WorkbenchFrame, WorkspaceViewState } from "../shell/layout";
 import type { ConnectionStatus } from "../transport";
 import {
 	type HistoryTarget,
@@ -154,10 +153,19 @@ function availableEditorTabId(tabs: readonly EditorTab[], tab: EditorTab): strin
 
 export type TabIntent = "preview" | "keep";
 
-export interface PendingLayoutWrite {
-	mutationId: string;
-	expectedRevision: number | null;
-	document: WorkspaceLayoutDocument;
+export interface LocalLayoutPreferences {
+	defaultPresetId: string;
+	maxSideGroups: number;
+	maxBottomGroups: number;
+}
+
+export interface LocalLayoutStatePayload {
+	frame: WorkbenchFrame;
+	viewsByWorkspace: Record<string, WorkspaceViewState>;
+	documentsByWorkspace: Record<string, WorkspaceLayoutDocument>;
+	attentionByWorkspace: Record<string, LayoutAttention>;
+	preferences: LocalLayoutPreferences;
+	legacyImportAttempted: Record<string, true>;
 }
 
 export interface CenterNavigationStamp {
@@ -694,10 +702,13 @@ interface AppState {
 	workspaceSelectionHistory: string[];
 	routeChatTarget: RouteChatTarget | null;
 	routeChatTargetGeneration: number;
-	layoutSnapshotsByWorkspace: Record<string, WorkspaceLayoutSnapshot>;
+	workbenchFrame: WorkbenchFrame | null;
+	workspaceViewsByWorkspace: Record<string, WorkspaceViewState>;
+	layoutStateReady: boolean;
+	localLayoutPreferences: LocalLayoutPreferences;
+	legacyLayoutImportAttempted: Record<string, true>;
 	layoutDocumentsByWorkspace: Record<string, WorkspaceLayoutDocument>;
 	layoutAttentionByWorkspace: Record<string, LayoutAttention>;
-	layoutPendingByWorkspace: Record<string, PendingLayoutWrite[]>;
 	layoutRemoteEpochByWorkspace: Record<string, number>;
 	layoutIntents: LayoutIntent[];
 	tabsByWorkspace: Record<string, EditorTab[]>;
@@ -773,19 +784,12 @@ interface AppState {
 	) => void;
 	validateRouteChatTarget: (sessionId: string) => void;
 	clearRouteChatTarget: () => void;
-	installLayoutSnapshot: (snapshot: WorkspaceLayoutSnapshot, mutationId?: string) => void;
-	applyLayoutChanged: (payload: LayoutChangedPayload) => void;
-	beginLayoutCommit: (
-		workspaceId: string,
-		document: WorkspaceLayoutDocument,
-		mutationId: string,
+	hydrateLocalLayoutState: (payload: LocalLayoutStatePayload) => void;
+	applyLocalLayoutState: (
+		payload: LocalLayoutStatePayload,
+		changedWorkspaceIds: readonly string[],
 	) => void;
-	rejectLayoutCommit: (workspaceId: string, mutationId: string) => void;
-	applyLayoutConflict: (
-		workspaceId: string,
-		mutationId: string,
-		current: WorkspaceLayoutSnapshot | null,
-	) => void;
+	setLocalLayoutPreferences: (preferences: LocalLayoutPreferences) => void;
 	setLayoutAttention: (workspaceId: string, attention: LayoutAttention) => void;
 	syncLegacySelection: (
 		workspaceId: string,
@@ -1078,21 +1082,6 @@ function sameSpecNode(a: SpecGraphNode, b: SpecGraphNode): boolean {
 
 function bumpNav(s: AppState, workspaceId: string): Record<string, number> {
 	return { ...s.navTickByWorkspace, [workspaceId]: selectWorkspaceNavTick(s, workspaceId) + 1 };
-}
-
-function bumpLayoutProjectionEpoch(s: AppState, workspaceId: string): Record<string, number> {
-	return {
-		...s.layoutRemoteEpochByWorkspace,
-		[workspaceId]: (s.layoutRemoteEpochByWorkspace[workspaceId] ?? 0) + 1,
-	};
-}
-
-function nextExpectedLayoutRevision(state: AppState, workspaceId: string): number | null {
-	const predecessor = state.layoutPendingByWorkspace[workspaceId]?.at(-1);
-	if (predecessor) {
-		return predecessor.expectedRevision === null ? 1 : predecessor.expectedRevision + 1;
-	}
-	return state.layoutSnapshotsByWorkspace[workspaceId]?.revision ?? null;
 }
 
 function advanceCenterNavigation(
@@ -1511,10 +1500,17 @@ export const useAppStore = create<AppState>((set, get) => ({
 	workspaceSelectionHistory: [],
 	routeChatTarget: null,
 	routeChatTargetGeneration: 0,
-	layoutSnapshotsByWorkspace: {},
+	workbenchFrame: null,
+	workspaceViewsByWorkspace: {},
+	layoutStateReady: false,
+	localLayoutPreferences: {
+		defaultPresetId: "balanced",
+		maxSideGroups: 6,
+		maxBottomGroups: 3,
+	},
+	legacyLayoutImportAttempted: {},
 	layoutDocumentsByWorkspace: {},
 	layoutAttentionByWorkspace: {},
-	layoutPendingByWorkspace: {},
 	layoutRemoteEpochByWorkspace: {},
 	layoutIntents: [],
 	tabsByWorkspace: {},
@@ -1757,131 +1753,39 @@ export const useAppStore = create<AppState>((set, get) => ({
 		}),
 	clearRouteChatTarget: () =>
 		set((state) => (state.routeChatTarget ? { routeChatTarget: null } : state)),
-	installLayoutSnapshot: (snapshot, mutationId) =>
-		set((state) => {
-			const workspaceId = snapshot.workspaceId;
-			if (state.removedWorkspaceIds[workspaceId]) return {};
-			const current = state.layoutSnapshotsByWorkspace[workspaceId];
-			const pending = state.layoutPendingByWorkspace[workspaceId] ?? [];
-			const matched = mutationId
-				? pending.findIndex((write) => write.mutationId === mutationId)
-				: -1;
-			const remaining = matched >= 0 ? pending.slice(matched + 1) : pending;
-			const newer = !current || snapshot.revision > current.revision;
-			const accepted = newer ? snapshot : current;
-			if (!accepted) return {};
-			const projected = remaining.at(-1)?.document ?? accepted.document;
-			return {
-				layoutSnapshotsByWorkspace: {
-					...state.layoutSnapshotsByWorkspace,
-					[workspaceId]: accepted,
-				},
-				layoutDocumentsByWorkspace: {
-					...state.layoutDocumentsByWorkspace,
-					[workspaceId]: projected,
-				},
-				layoutPendingByWorkspace: {
-					...state.layoutPendingByWorkspace,
-					[workspaceId]: remaining,
-				},
-				layoutRemoteEpochByWorkspace:
-					newer && matched < 0
-						? bumpLayoutProjectionEpoch(state, workspaceId)
-						: state.layoutRemoteEpochByWorkspace,
-			};
-		}),
-	applyLayoutChanged: (payload) =>
-		get().installLayoutSnapshot(payload.snapshot, payload.mutationId),
-	beginLayoutCommit: (workspaceId, document, mutationId) =>
+	hydrateLocalLayoutState: (payload) =>
 		set((state) =>
-			state.removedWorkspaceIds[workspaceId]
+			state.layoutStateReady
 				? {}
 				: {
-						layoutDocumentsByWorkspace: {
-							...state.layoutDocumentsByWorkspace,
-							[workspaceId]: document,
-						},
-						layoutPendingByWorkspace: {
-							...state.layoutPendingByWorkspace,
-							[workspaceId]: [
-								...(state.layoutPendingByWorkspace[workspaceId] ?? []),
-								{
-									mutationId,
-									expectedRevision: nextExpectedLayoutRevision(state, workspaceId),
-									document,
-								},
-							],
-						},
+						workbenchFrame: payload.frame,
+						workspaceViewsByWorkspace: payload.viewsByWorkspace,
+						layoutDocumentsByWorkspace: payload.documentsByWorkspace,
+						layoutAttentionByWorkspace: payload.attentionByWorkspace,
+						localLayoutPreferences: payload.preferences,
+						legacyLayoutImportAttempted: payload.legacyImportAttempted,
+						layoutStateReady: true,
 					},
 		),
-	rejectLayoutCommit: (workspaceId, mutationId) =>
+	applyLocalLayoutState: (payload, changedWorkspaceIds) =>
 		set((state) => {
-			const pending = state.layoutPendingByWorkspace[workspaceId] ?? [];
-			const rejectedIndex = pending.findIndex((write) => write.mutationId === mutationId);
-			if (rejectedIndex < 0) return {};
-			const remaining = pending.slice(0, rejectedIndex);
-			const fallback = remaining.at(-1)?.document;
-			const accepted = state.layoutSnapshotsByWorkspace[workspaceId];
-			if (!accepted) {
-				return {
-					layoutPendingByWorkspace: {
-						...state.layoutPendingByWorkspace,
-						[workspaceId]: remaining,
-					},
-					layoutDocumentsByWorkspace: fallback
-						? {
-								...state.layoutDocumentsByWorkspace,
-								[workspaceId]: fallback,
-							}
-						: omitKey(state.layoutDocumentsByWorkspace, workspaceId),
-					layoutRemoteEpochByWorkspace: bumpLayoutProjectionEpoch(state, workspaceId),
-				};
+			const changed = new Set(changedWorkspaceIds);
+			const layoutRemoteEpochByWorkspace = { ...state.layoutRemoteEpochByWorkspace };
+			for (const workspaceId of changed) {
+				layoutRemoteEpochByWorkspace[workspaceId] =
+					(layoutRemoteEpochByWorkspace[workspaceId] ?? 0) + 1;
 			}
 			return {
-				layoutPendingByWorkspace: {
-					...state.layoutPendingByWorkspace,
-					[workspaceId]: remaining,
-				},
-				layoutDocumentsByWorkspace: {
-					...state.layoutDocumentsByWorkspace,
-					[workspaceId]: remaining.at(-1)?.document ?? accepted.document,
-				},
-				layoutRemoteEpochByWorkspace: bumpLayoutProjectionEpoch(state, workspaceId),
+				workbenchFrame: payload.frame,
+				workspaceViewsByWorkspace: payload.viewsByWorkspace,
+				layoutDocumentsByWorkspace: payload.documentsByWorkspace,
+				layoutAttentionByWorkspace: payload.attentionByWorkspace,
+				localLayoutPreferences: payload.preferences,
+				legacyLayoutImportAttempted: payload.legacyImportAttempted,
+				layoutRemoteEpochByWorkspace,
 			};
 		}),
-	applyLayoutConflict: (workspaceId, mutationId, current) =>
-		set((state) => {
-			if (state.removedWorkspaceIds[workspaceId]) return {};
-			const pending = state.layoutPendingByWorkspace[workspaceId] ?? [];
-			const conflictingIndex = pending.findIndex((write) => write.mutationId === mutationId);
-			if (conflictingIndex < 0) return {};
-			const remaining = pending.slice(0, conflictingIndex);
-			const expectedRevision = pending[conflictingIndex]?.expectedRevision;
-			const alreadyAccepted = state.layoutSnapshotsByWorkspace[workspaceId];
-			const accepted = current
-				? !alreadyAccepted || current.revision >= alreadyAccepted.revision
-					? current
-					: alreadyAccepted
-				: alreadyAccepted &&
-						(expectedRevision === null ||
-							(expectedRevision !== undefined && alreadyAccepted.revision > expectedRevision))
-					? alreadyAccepted
-					: null;
-			const projected = remaining.at(-1)?.document ?? accepted?.document;
-			return {
-				layoutSnapshotsByWorkspace: accepted
-					? { ...state.layoutSnapshotsByWorkspace, [workspaceId]: accepted }
-					: omitKey(state.layoutSnapshotsByWorkspace, workspaceId),
-				layoutDocumentsByWorkspace: projected
-					? { ...state.layoutDocumentsByWorkspace, [workspaceId]: projected }
-					: omitKey(state.layoutDocumentsByWorkspace, workspaceId),
-				layoutPendingByWorkspace: {
-					...state.layoutPendingByWorkspace,
-					[workspaceId]: remaining,
-				},
-				layoutRemoteEpochByWorkspace: bumpLayoutProjectionEpoch(state, workspaceId),
-			};
-		}),
+	setLocalLayoutPreferences: (preferences) => set({ localLayoutPreferences: preferences }),
 	setLayoutAttention: (workspaceId, attention) =>
 		set((state) =>
 			state.removedWorkspaceIds[workspaceId]
@@ -2228,10 +2132,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 				delete skillsSyncedTickBySession[sessionId];
 			}
 			return {
-				layoutSnapshotsByWorkspace: omitKey(s.layoutSnapshotsByWorkspace, workspaceId),
+				workspaceViewsByWorkspace: omitKey(s.workspaceViewsByWorkspace, workspaceId),
+				legacyLayoutImportAttempted: omitKey(s.legacyLayoutImportAttempted, workspaceId),
 				layoutDocumentsByWorkspace: omitKey(s.layoutDocumentsByWorkspace, workspaceId),
 				layoutAttentionByWorkspace: omitKey(s.layoutAttentionByWorkspace, workspaceId),
-				layoutPendingByWorkspace: omitKey(s.layoutPendingByWorkspace, workspaceId),
 				layoutRemoteEpochByWorkspace: omitKey(s.layoutRemoteEpochByWorkspace, workspaceId),
 				layoutIntents: s.layoutIntents.filter((intent) => intent.workspaceId !== workspaceId),
 				tabsByWorkspace: omitKey(s.tabsByWorkspace, workspaceId),

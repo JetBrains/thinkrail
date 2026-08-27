@@ -376,15 +376,37 @@ export function applyProjectedLayoutDocument(
 	workspaceId: string,
 	document: WorkspaceLayoutDocument,
 ): NormalizedLayoutState {
-	const frame = workbenchFrameFromDocument(document);
+	const candidateFrame = workbenchFrameFromDocument(document);
+	const frame = sameWorkbenchFrame(state.frame, candidateFrame) ? state.frame : candidateFrame;
+	const activeView = workspaceViewFromDocument(document);
+	const previousActiveView = state.viewsByWorkspace[workspaceId];
+	const nextActiveView =
+		previousActiveView && sameWorkspaceView(previousActiveView, activeView)
+			? previousActiveView
+			: activeView;
+	if (frame === state.frame) {
+		return {
+			frame,
+			viewsByWorkspace:
+				nextActiveView === previousActiveView
+					? state.viewsByWorkspace
+					: { ...state.viewsByWorkspace, [workspaceId]: nextActiveView },
+		};
+	}
 	const viewsByWorkspace = Object.fromEntries(
 		Object.entries(state.viewsByWorkspace).map(([id, view]) => [
 			id,
-			id === workspaceId
-				? workspaceViewFromDocument(document)
-				: reconcileWorkspaceView(state.frame, frame, view),
+			id === workspaceId ? nextActiveView : reconcileWorkspaceView(state.frame, frame, view),
 		]),
 	);
-	viewsByWorkspace[workspaceId] = workspaceViewFromDocument(document);
+	viewsByWorkspace[workspaceId] = nextActiveView;
 	return { frame, viewsByWorkspace };
+}
+
+export function sameWorkbenchFrame(first: WorkbenchFrame, second: WorkbenchFrame): boolean {
+	return JSON.stringify(first) === JSON.stringify(second);
+}
+
+export function sameWorkspaceView(first: WorkspaceViewState, second: WorkspaceViewState): boolean {
+	return JSON.stringify(first) === JSON.stringify(second);
 }

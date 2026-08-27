@@ -53,9 +53,6 @@ export function useTerminalPlacementReconciliation(
 	const layoutIntent = useAppStore(
 		(state) => state.layoutIntents.find((intent) => intent.workspaceId === workspaceId) ?? null,
 	);
-	const pendingLayoutWrites = useAppStore(
-		(state) => state.layoutPendingByWorkspace[workspaceId]?.length ?? 0,
-	);
 	const attention = useAppStore((state) => state.layoutAttentionByWorkspace[workspaceId]);
 	const maxBottomGroups = useAppStore((state) => state.layoutSettings.maxBottomGroups);
 	const terminals = useAppStore((state) => state.terminalsByWorkspace[workspaceId] ?? NO_TERMINALS);
@@ -67,13 +64,7 @@ export function useTerminalPlacementReconciliation(
 	} | null>(null);
 
 	useEffect(() => {
-		if (
-			!document ||
-			!terminalCatalogReady ||
-			layoutIntent ||
-			pendingLayoutWrites > 0 ||
-			status !== "connected"
-		) {
+		if (!document || !terminalCatalogReady || layoutIntent || status !== "connected") {
 			return;
 		}
 		if (useAppStore.getState().layoutDocumentsByWorkspace[workspaceId] !== document) return;
@@ -131,7 +122,6 @@ export function useTerminalPlacementReconciliation(
 		document,
 		layoutIntent,
 		maxBottomGroups,
-		pendingLayoutWrites,
 		status,
 		terminalCatalogReady,
 		terminals,

@@ -1,7 +1,6 @@
 import type {
 	AppConfig,
 	ExtUiRequest,
-	LayoutChangedPayload,
 	LoginPush,
 	Project,
 	ReviewChangedPayload,
@@ -111,10 +110,6 @@ export function initTransport(): WsTransport {
 
 	transport.subscribe(WS_CHANNELS.settingsChanged, (data) => {
 		useAppStore.getState().applyConfig(data as AppConfig);
-	});
-
-	transport.subscribe(WS_CHANNELS.layoutChanged, (data) => {
-		useAppStore.getState().applyLayoutChanged(data as LayoutChangedPayload);
 	});
 
 	transport.connect();
