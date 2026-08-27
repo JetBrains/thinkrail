@@ -19,9 +19,10 @@ registration runs once when the chat module mounts. Unregistered tools fall back
 ## What's here
 
 - **Core pi tools** — `BashCard` (terminal block), `ReadCard`/`WriteCard` (project-relative path +
-  highlighted textual file), `EditCard` (path + removed/added line diff). All **routine**. A settled
-  `read`/`write`/`edit` path uses the shared structured file-link primitive when it belongs to the active
-  worktree, opening the shell's preview slot; a running mutation or foreign path stays text. Image content
+  highlighted textual file), `EditCard` (path + removed/added line diff). All **routine**. A settled `read`
+  (success or error) and a successful `write`/`edit` use the shared structured file-link primitive when the
+  path belongs to the active worktree, opening the shell's preview slot; a running/failed mutation or foreign
+  path stays text. Image content
   returned by `read` is previewed by the parent chat module's common result-content layer, the same path as
   every other image-producing tool; `ReadCard` does not special-case image payloads.
 - **`ResolveCommentCard`** — the compact receipt for the host-owned `resolve_comment` review tool
@@ -188,8 +189,8 @@ registration runs once when the chat module mounts. Unregistered tools fall back
   `pi-visualize` extension.
 - **Spec-graph tools** — one defensive `SpecToolCard` registered for all seven `spec_*` names. Each keeps
   the capability's readable text, folds long output, replaces redundant args JSON with a meaningful
-  activity summary, and turns only exact worktree paths obtained from the known result `details` shapes
-  into preview actions. `spec_delete` never links its successful deleted path. Routine.
+  activity summary, and turns only exact worktree paths obtained from known successful result `details`
+  shapes into preview actions. `spec_delete` never links its successful deleted path. Routine.
 - **`web/`** — search/fetch/stored-content renderers for `pi-web-access`; own child spec
   ([web/SPEC.md](web/SPEC.md)). Routine.
 - **The five `todo_*` tools** deliberately keep routine fallback receipts: their connected product surface

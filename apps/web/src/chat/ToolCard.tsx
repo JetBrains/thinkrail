@@ -18,6 +18,7 @@ export function ToolCard({
 	dead = false,
 	streaming,
 	workspaceRoot,
+	onOpenFile,
 }: {
 	toolCallId: string;
 	toolName: string;
@@ -26,6 +27,7 @@ export function ToolCard({
 	dead?: boolean;
 	streaming: boolean;
 	workspaceRoot?: string | undefined;
+	onOpenFile?: ((path: string) => void) | undefined;
 }) {
 	const status = tool?.status ?? (dead ? "error" : "running");
 	const isError = status === "error";
@@ -36,6 +38,7 @@ export function ToolCard({
 		result: tool?.raw,
 		status,
 		workspaceRoot,
+		onOpenFile,
 		streaming,
 	};
 	const summary = getToolSummary(toolName, renderProps);

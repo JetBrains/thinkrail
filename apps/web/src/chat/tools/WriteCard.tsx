@@ -1,13 +1,12 @@
 import { RiFileAddLine as FilePlus } from "@remixicon/react";
-import { projectRelativePath } from "@/lib";
 import type { ToolRenderProps } from "../toolRegistry";
 import { CodeBlock } from "./CodeBlock";
 import { Collapsible, countLines } from "./Collapsible";
+import { ToolFileLink } from "./ToolFileLink";
 import { languageFromPath, resultText, strArg } from "./toolHelpers";
 
-export function WriteCard({ args, result, status, workspaceRoot }: ToolRenderProps) {
+export function WriteCard({ args, result, status, workspaceRoot, onOpenFile }: ToolRenderProps) {
 	const path = strArg(args, "path");
-	const displayPath = projectRelativePath(path, workspaceRoot);
 	const content = strArg(args, "content");
 	const lang = languageFromPath(path);
 	const message = resultText(result);
@@ -16,9 +15,13 @@ export function WriteCard({ args, result, status, workspaceRoot }: ToolRenderPro
 		<div data-testid="tool-write" className="flex flex-col gap-4">
 			<div className="flex items-center gap-4 tr-text-metadata">
 				<FilePlus className="size-12 shrink-0 text-feedback-success" />
-				<span className="truncate text-text-default" title={path}>
-					{displayPath}
-				</span>
+				<ToolFileLink
+					path={path}
+					workspaceRoot={workspaceRoot}
+					onOpenFile={onOpenFile}
+					disabled={status !== "done"}
+					className="text-text-default"
+				/>
 				<span className="shrink-0 text-text-muted">written</span>
 			</div>
 			{status === "error" ? (

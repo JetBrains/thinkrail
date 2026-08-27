@@ -110,9 +110,11 @@ const CHAT_LIST_COMPONENTS = { Footer: StreamFooter };
 export default function ChatView({
 	sessionId,
 	workspaceId,
+	onOpenFile,
 }: {
 	sessionId: string;
 	workspaceId: string;
+	onOpenFile?: ((path: string) => void) | undefined;
 }) {
 	const sessionRuntime = useAppStore((s) => s.sessions[sessionId]);
 	const runtime = sessionRuntime ?? EMPTY_RUNTIME;
@@ -652,6 +654,7 @@ export default function ChatView({
 									<ChatTurnView
 										row={row}
 										workspaceRoot={workspaceRoot}
+										onOpenFile={onOpenFile}
 										onOpenSpec={onOpenSpec}
 										onOpenChange={onOpenChange}
 										onReveal={onReveal}

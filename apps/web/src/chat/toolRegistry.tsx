@@ -9,6 +9,7 @@ export interface ToolRenderProps {
 	result: unknown;
 	status: ToolStatus;
 	workspaceRoot?: string | undefined;
+	onOpenFile?: ((path: string) => void) | undefined;
 	streaming: boolean;
 }
 

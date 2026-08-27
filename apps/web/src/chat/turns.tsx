@@ -35,12 +35,14 @@ import type { CompactionState } from "./types";
 export function ChatTurnView({
 	row,
 	workspaceRoot,
+	onOpenFile,
 	onOpenSpec,
 	onOpenChange,
 	onReveal,
 }: {
 	row: ChatRow;
 	workspaceRoot?: string | undefined;
+	onOpenFile?: ((path: string) => void) | undefined;
 	onOpenSpec?: ((path: string) => void) | undefined;
 	onOpenChange?: ((path: string) => void) | undefined;
 	onReveal?: ((tab: "specs" | "changes") => void) | undefined;
@@ -84,7 +86,7 @@ export function ChatTurnView({
 				</div>
 			);
 		case "tool":
-			return <ToolRow row={row} workspaceRoot={workspaceRoot} />;
+			return <ToolRow row={row} workspaceRoot={workspaceRoot} onOpenFile={onOpenFile} />;
 		case "activity":
 			return (
 				<ActivityGroup
@@ -92,6 +94,7 @@ export function ChatTurnView({
 					steps={row.steps}
 					live={row.live}
 					workspaceRoot={workspaceRoot}
+					onOpenFile={onOpenFile}
 				/>
 			);
 		case "divider":
@@ -317,9 +320,11 @@ function PackageCommentRow({ foldId, item }: { foldId: string; item: ReviewPacka
 function ToolRow({
 	row,
 	workspaceRoot,
+	onOpenFile,
 }: {
 	row: Extract<ChatRow, { kind: "tool" }>;
 	workspaceRoot?: string | undefined;
+	onOpenFile?: ((path: string) => void) | undefined;
 }) {
 	if (getToolChrome(row.toolName) === "bare") {
 		const renderProps: ToolRenderProps = {
@@ -329,6 +334,7 @@ function ToolRow({
 			result: row.tool?.raw,
 			status: row.tool?.status ?? (row.dead ? "error" : "running"),
 			workspaceRoot,
+			onOpenFile,
 			streaming: row.streaming,
 		};
 		return (
@@ -346,6 +352,7 @@ function ToolRow({
 			dead={row.dead}
 			streaming={row.streaming}
 			workspaceRoot={workspaceRoot}
+			onOpenFile={onOpenFile}
 		/>
 	);
 }
