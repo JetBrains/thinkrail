@@ -473,10 +473,18 @@ export interface LayoutSettings {
 	maxBottomGroups: number;
 }
 
+export const COMPOSER_GROWTH_LIMITS = ["compact", "roomy", "half-chat"] as const;
+export type ComposerGrowthLimit = (typeof COMPOSER_GROWTH_LIMITS)[number];
+
+export function isComposerGrowthLimit(value: unknown): value is ComposerGrowthLimit {
+	return COMPOSER_GROWTH_LIMITS.some((limit) => limit === value);
+}
+
 export interface AppConfig {
 	theme: ThemeId;
 	analyticsEnabled: boolean;
 	terminalReplayKb: number;
+	composerGrowthLimit: ComposerGrowthLimit;
 	layout: LayoutSettings;
 }
 
@@ -486,6 +494,7 @@ export const DEFAULT_CONFIG: AppConfig = {
 	theme: "dark",
 	analyticsEnabled: true,
 	terminalReplayKb: TERMINAL_REPLAY_KB.default,
+	composerGrowthLimit: "half-chat",
 	layout: {
 		defaultPresetId: "balanced",
 		customPresets: [],

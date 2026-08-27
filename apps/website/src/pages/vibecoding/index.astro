@@ -1,9 +1,8 @@
 ---
-import { Landing } from "../landing";
-import { siteMetadata } from "../siteMetadata";
-import "../styles.css";
+import Analytics from "../../components/Analytics.astro";
+import { Landing, siteMetadata } from "../../vibecoding";
 
-const canonicalUrl = new URL("/", siteMetadata.origin);
+const canonicalUrl = new URL(siteMetadata.path, siteMetadata.origin);
 const ogImageUrl = new URL(siteMetadata.openGraphImagePath, siteMetadata.origin);
 ---
 
@@ -21,7 +20,7 @@ const ogImageUrl = new URL(siteMetadata.openGraphImagePath, siteMetadata.origin)
 		<meta name="twitter:card" content="summary_large_image" />
 		<meta name="twitter:image" content={ogImageUrl} />
 		<link rel="canonical" href={canonicalUrl} />
-		<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+		<link rel="icon" href="/vibecoding/favicon.svg" type="image/svg+xml" />
 		<script is:inline>
 			document.documentElement.dataset.enhanced = "true";
 			window.setTimeout(() => {
@@ -30,14 +29,10 @@ const ogImageUrl = new URL(siteMetadata.openGraphImagePath, siteMetadata.origin)
 				}
 			}, 3000);
 		</script>
+		<Analytics />
 		<title>{siteMetadata.title}</title>
 	</head>
 	<body>
 		<Landing client:load />
-		<script>
-			import { initMarketingAnalytics } from "../analytics";
-
-			initMarketingAnalytics();
-		</script>
 	</body>
 </html>

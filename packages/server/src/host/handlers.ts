@@ -499,15 +499,20 @@ const handlers: Record<string, Handler> = {
 		return { ok: true } as const;
 	},
 	"session.clearQueue": (params) => {
-		return clearQueueSession((params as { sessionId: string }).sessionId);
+		const p = params as { sessionId: string; requireTextOnly?: boolean };
+		return clearQueueSession(p.sessionId, p.requireTextOnly);
 	},
 	"session.removeQueued": async (params) => {
 		const p = params as { sessionId: string; kind: QueueLane; index: number };
 		return removeQueuedSession(p.sessionId, p.kind, p.index);
 	},
 	"session.abort": async (params) => {
-		await abortSession((params as { sessionId: string }).sessionId);
-		return { ok: true } as const;
+		const p = params as { sessionId: string; restoreQueue?: boolean };
+		const restoredQueue = await abortSession(p.sessionId, p.restoreQueue);
+		return {
+			ok: true,
+			...(restoredQueue ? { restoredQueue } : {}),
+		} as const;
 	},
 	"session.dispose": (params) => {
 		removeSession((params as { sessionId: string }).sessionId);

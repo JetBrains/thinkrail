@@ -1,9 +1,0 @@
-{
-	"extends": "astro/tsconfigs/strict",
-	"compilerOptions": {
-		"jsx": "react-jsx",
-		"jsxImportSource": "react",
-		"types": ["bun"]
-	},
-	"include": [".astro/types.d.ts", "src/**/*", "astro.config.ts"]
-}

@@ -1,7 +1,5 @@
 name: Website
 
-# Publishes apps/website (the project's landing page) to GitHub Pages whenever it changes on main.
-# One-time repo setting required: Settings → Pages → Source: "GitHub Actions".
 on:
   push:
     branches: [main]
@@ -15,19 +13,21 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
-# One deploy at a time; a newer push supersedes a *queued* one. An in-flight deploy is never cancelled —
-# a production publish should finish. (Same setting, same reason, as GitHub's own Pages starter.)
 concurrency:
   group: site-deploy
   cancel-in-progress: false
 
 jobs:
-  build:
-    name: Build site
+  deploy:
+    name: Build and deploy
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: website
+      url: https://thinkrail.ai/
+    env:
+      PAGES_URL: https://thinkrail-website.pages.dev
     steps:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
@@ -41,25 +41,24 @@ jobs:
           restore-keys: ${{ runner.os }}-bun-
       - run: bun install --frozen-lockfile
       - run: bun run --filter @thinkrail/website build
-      - uses: actions/upload-pages-artifact@v4
-        with:
-          path: apps/website/dist
-          # The action defaults to 1 day; deploy-pages resolves the artifact by name at run time, so 7
-          # (as in ci.yml/_build.yml) keeps "re-run the deploy job" a usable remedy for a week.
-          retention-days: 7
-
-  deploy:
-    name: Deploy to GitHub Pages
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      # A healthy deploy reports `succeed` in ~10s. When the Pages backend never dequeues the deployment
-      # it just sits in `deployment_queued` and the action can only keep polling — so cap the wait far
-      # below the 10min default: go red in 3min with the real error, not 10min (run 31107056870).
-      - id: deployment
-        uses: actions/deploy-pages@v5
-        with:
-          timeout: 180000
+      - name: Deploy static site
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: >
+          bunx wrangler@4.124.0 pages deploy apps/website/dist
+          --project-name=thinkrail-website
+          --branch=main
+      - name: Verify deployment
+        run: |
+          for attempt in $(seq 1 18); do
+            ready=true
+            for path in / /blog/ /vibecoding/ /robots.txt /sitemap-index.xml; do
+              code=$(curl --connect-timeout 5 --max-time 15 -s -o /dev/null -w '%{http_code}' "$PAGES_URL$path" || true)
+              [ "$code" = "200" ] || ready=false
+            done
+            [ "$ready" = "true" ] && exit 0
+            echo "attempt $attempt: deployment not ready"
+            sleep 5
+          done
+          exit 1

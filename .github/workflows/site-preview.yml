@@ -1,10 +1,5 @@
 name: Website preview
 
-# Deploys a PR preview of apps/website to Cloudflare Pages and surfaces the URL as a sticky PR
-# comment + commit status, so design review happens against the rendered site, not the diff.
-# Production (site.yml → GitHub Pages) is untouched. Design: apps/website/SPEC.md → "PR preview
-# deploys". One-time setup (already done): Cloudflare Pages project `thinkrail-previews` + repo
-# secrets CLOUDFLARE_API_TOKEN (Account → Cloudflare Pages → Edit) and CLOUDFLARE_ACCOUNT_ID.
 on:
   pull_request:
     paths:
@@ -16,11 +11,9 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write # sticky preview comment
-  statuses: write # "Website preview" commit status
+  pull-requests: write
+  statuses: write
 
-# Previews are ephemeral: a newer push supersedes an in-flight deploy — the opposite of production's
-# cancel-in-progress: false, because a superseded preview has no value.
 concurrency:
   group: site-preview-${{ github.event.pull_request.number }}
   cancel-in-progress: true
@@ -28,13 +21,10 @@ concurrency:
 jobs:
   preview:
     name: Deploy PR preview
-    # Same-repo PRs only: secrets are never exposed to fork PRs, so fork previews skip silently
-    # (decision recorded in apps/website/SPEC.md).
     if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     env:
-      # Deterministic per-PR alias — stable across pushes, nothing parsed from wrangler output.
-      PREVIEW_URL: https://pr-${{ github.event.pull_request.number }}.thinkrail-previews.pages.dev
+      PREVIEW_URL: https://pr-${{ github.event.pull_request.number }}.thinkrail-website.pages.dev
     steps:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
@@ -54,20 +44,22 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: >
           bunx wrangler@4.124.0 pages deploy apps/website/dist
-          --project-name=thinkrail-previews
+          --project-name=thinkrail-website
           --branch="pr-${{ github.event.pull_request.number }}"
       - name: Wait for preview to serve
-        # A freshly created pr-<num> subdomain 522s for its first ~20s; never hand out a dead link.
         run: |
-          for i in $(seq 1 18); do
-            code=$(curl -s -o /dev/null -w '%{http_code}' "$PREVIEW_URL/")
-            [ "$code" = "200" ] && echo "preview live ($code)" && exit 0
-            echo "attempt $i: $code — retrying in 5s"
+          for attempt in $(seq 1 18); do
+            ready=true
+            for path in / /blog/ /vibecoding/; do
+              code=$(curl --connect-timeout 5 --max-time 15 -s -o /dev/null -w '%{http_code}' "$PREVIEW_URL$path" || true)
+              [ "$code" = "200" ] || ready=false
+            done
+            [ "$ready" = "true" ] && exit 0
+            echo "attempt $attempt: preview not ready"
             sleep 5
           done
-          echo "preview never became reachable" >&2
           exit 1
-      - name: Sticky PR comment + commit status
+      - name: Publish preview
         env:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
@@ -80,6 +72,7 @@ jobs:
           | | |
           | --- | --- |
           | **Preview** | $PREVIEW_URL |
+          | **Routes** | [Landing]($PREVIEW_URL/) · [Blog]($PREVIEW_URL/blog/) · [Vibecoding]($PREVIEW_URL/vibecoding/) |
           | **Commit** | $HEAD_SHA |
 
           _This comment updates in place on every push that touches the website or shared build inputs._"
@@ -93,5 +86,5 @@ jobs:
           gh api "repos/$GITHUB_REPOSITORY/statuses/$HEAD_SHA" \
             -f state=success \
             -f context="Website preview" \
-            -f description="pr-$PR.thinkrail-previews.pages.dev" \
+            -f description="pr-$PR.thinkrail-website.pages.dev" \
             -f target_url="$PREVIEW_URL" > /dev/null

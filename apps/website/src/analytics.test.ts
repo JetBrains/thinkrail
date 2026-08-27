@@ -12,6 +12,8 @@ describe("website analytics configuration", () => {
 		"localhost",
 		"127.0.0.1",
 		"jetbrains.github.io",
+		"thinkrail-website.pages.dev",
+		"pr-42.thinkrail-website.pages.dev",
 		"www.thinkrail.ai",
 		"vibecoding.thinkrail.ai",
 	])("stays disabled on %s", (hostname) => {

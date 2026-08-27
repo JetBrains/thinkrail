@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import "./styles.css";
 import { CallToAction } from "./CallToAction";
 import { Capabilities } from "./Capabilities";
 import { ChatDemo } from "./ChatDemo";

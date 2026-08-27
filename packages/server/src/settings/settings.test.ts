@@ -65,6 +65,15 @@ test("an older host preserves unknown top-level config extensions when updating 
 	expect(onDisk.futureSetting).toEqual({ mode: "new" });
 });
 
+test("loadConfig replaces an invalid composer growth preset with the default", () => {
+	writeFileSync(
+		join(dataDir, "config.json"),
+		JSON.stringify({ ...DEFAULT_CONFIG, composerGrowthLimit: "enormous" }),
+	);
+	resetConfigCache();
+	expect(getConfig()).toHaveProperty("composerGrowthLimit", "half-chat");
+});
+
 test("loadConfig normalizes nested layout fields independently", () => {
 	writeFileSync(
 		join(dataDir, "config.json"),

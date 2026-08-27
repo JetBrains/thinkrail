@@ -1,5 +1,6 @@
 ---
 import "../styles.css";
+import Analytics from "./Analytics.astro";
 ---
 
 <meta charset="UTF-8" />
@@ -22,8 +23,4 @@ import "../styles.css";
 		document.documentElement.setAttribute("data-theme", theme);
 	} catch {}
 </script>
-<script>
-	import { initAnalytics } from "../analytics";
-
-	initAnalytics();
-</script>
+<Analytics />

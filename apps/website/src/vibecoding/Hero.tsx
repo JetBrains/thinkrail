@@ -20,7 +20,7 @@ export function Hero() {
 					<div className="lg:flex-1">
 						<Reveal delay={60}>
 							<img
-								src="/thinkrail-text-logo-gradient.svg"
+								src="/vibecoding/thinkrail-text-logo-gradient.svg"
 								alt="ThinkRail"
 								className="mx-auto h-[41px] w-auto max-w-full sm:mx-0 sm:-ml-2 md:h-[58px]"
 							/>
