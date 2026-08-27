@@ -184,7 +184,7 @@ assumption; re-verify on a pi version bump.
   `argumentHint`. Never touches any other path — no `resolvePath` / symlink-following of caller input,
   only `join(dir, \`${name}.md\`)` after `name` has passed `isValidTemplateName`.
 - **Public surface (barrel):** `templateDirs`, `TemplateDirs`, `listTemplates`, `getTemplate`,
-  `saveTemplate`, `deleteTemplate`, `isValidTemplateName`.
+  `saveTemplate`, `deleteTemplate`, `isValidTemplateName`, `MAX_TEMPLATE_BYTES`.
 - **Allowed deps:** `@earendil-works/pi-coding-agent` (`getAgentDir`, `CONFIG_DIR_NAME`,
   `parseFrontmatter` — root exports only), `@thinkrail/contracts` (`TemplateInfo`, `TemplateScope`),
   `node:fs`, `node:path`.
