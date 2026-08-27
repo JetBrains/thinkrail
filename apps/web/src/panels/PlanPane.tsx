@@ -43,6 +43,7 @@ import {
 } from "../chat/planView";
 import { StatusIcon } from "../chat/TodoList";
 import { useChatTodos } from "../chat/useChatTodos";
+import { IconTooltip } from "../components/ui/tooltip";
 import {
 	selectAgentReviewCommentCount,
 	selectChatTitle,
@@ -80,31 +81,33 @@ function ChangeSetBlock({
 			data-expanded={expanded}
 		>
 			<div className="flex items-center gap-8 px-4">
-				<button
-					type="button"
-					data-testid="plan-change-set-toggle"
-					aria-expanded={expanded}
-					onClick={() => setExpanded((v) => !v)}
-					title={expanded ? "Hide changed files" : "Show changed files"}
-					className="flex min-h-32 min-w-0 items-center gap-4 rounded-[var(--radius-sm)] px-4 py-2 text-left hover:bg-control-bg-hovered"
-				>
-					<Chevron className="size-16 shrink-0 text-text-muted" />
-					<span className="shrink-0 tr-text-metadata text-text-subtle">
-						{count} {count === 1 ? "file" : "files"}
-					</span>
-				</button>
+				<IconTooltip label={expanded ? "Hide changed files" : "Show changed files"}>
+					<button
+						type="button"
+						data-testid="plan-change-set-toggle"
+						aria-expanded={expanded}
+						onClick={() => setExpanded((v) => !v)}
+						className="flex min-h-32 min-w-0 items-center gap-4 rounded-[var(--radius-sm)] px-4 py-2 text-left hover:bg-control-bg-hovered"
+					>
+						<Chevron className="size-16 shrink-0 text-text-muted" />
+						<span className="shrink-0 tr-text-metadata text-text-subtle">
+							{count} {count === 1 ? "file" : "files"}
+						</span>
+					</button>
+				</IconTooltip>
 				{set.kind === "commit" ? (
 					<>
-						<button
-							type="button"
-							data-testid="plan-commit-chip"
-							onClick={() => onOpenCommit(set.sha)}
-							title="Open this step's commit in the Changes panel"
-							className="flex min-h-32 shrink-0 items-center gap-4 rounded-[var(--radius-sm)] px-4 py-2 tr-code-text text-text-subtle hover:bg-control-bg-hovered hover:text-text-default"
-						>
-							<GitCommitHorizontal className="size-14" />
-							{set.sha.slice(0, 7)}
-						</button>
+						<IconTooltip label="Open this step's commit in the Changes panel">
+							<button
+								type="button"
+								data-testid="plan-commit-chip"
+								onClick={() => onOpenCommit(set.sha)}
+								className="flex min-h-32 shrink-0 items-center gap-4 rounded-[var(--radius-sm)] px-4 py-2 tr-code-text text-text-subtle hover:bg-control-bg-hovered hover:text-text-default"
+							>
+								<GitCommitHorizontal className="size-14" />
+								{set.sha.slice(0, 7)}
+							</button>
+						</IconTooltip>
 						<DiffStatBadge added={added} removed={removed} />
 					</>
 				) : null}

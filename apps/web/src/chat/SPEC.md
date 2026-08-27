@@ -446,7 +446,7 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   filters; see `packages/server/src/history/SPEC.md`): a user-role hit is always a textual duplicate of
   its own `PromptHit` entry, so the location it used to add moved onto the prompt row instead. Every
   prompt row now renders a go-to-chat icon (`data-testid="history-jump"`, `aria-label="Go to chat"`,
-  `title="⇧⏎ go to chat"`, next to the existing save-as-template icon) **when jumpable** —
+  an `IconTooltip` reading "⇧⏎ go to chat", next to the existing save-as-template icon) **when jumpable** —
   `workspaceId` present and `messageIndex != null` (absent for an unmapped-cwd hit, or a host that
   doesn't populate the prompt's anchor fields). Clicking it, or **`Shift+Enter`** while a prompt row
   is the keyboard selection, routes through the exact same `onOpenMessage` path a message hit's
