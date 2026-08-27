@@ -98,6 +98,12 @@ browser's render cache and history membership without selecting the tab; placed-
 semantic placement after the read before installing its cache, and resource hydration otherwise remains a
 separate background concern.
 
+Session-runtime invalidation is leaf-scoped. `WorkspaceWorkbench` never subscribes to the mutable runtime
+map: each mounted chat resource body observes only whether its own session id is present, while `ChatView`
+observes that session's content. Runtime arrival/removal still swaps the missing-resource retry and live chat,
+but an update from a retained background session cannot rerender the active workbench or sibling resource
+bodies.
+
 Project/file/change/review/chat/terminal views receive only resource identity, visibility, and container
 bounds. Moving a view cannot change its module dependencies or make it inspect the layout tree. A visible
 terminal is mounted through the layout visibility gate; hidden terminal tabs stay unmounted while their PTYs
