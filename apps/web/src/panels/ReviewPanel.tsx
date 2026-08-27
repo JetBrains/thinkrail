@@ -10,6 +10,7 @@ import {
 } from "@remixicon/react";
 import type { ReviewComment } from "@thinkrail/contracts";
 import { useState } from "react";
+import { QuietScrollArea } from "@/components/QuietScrollArea";
 import { PopoverTrigger } from "@/components/ui/popover";
 import { IconTooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
@@ -146,7 +147,7 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 					</ConfirmPopover>
 				</div>
 			)}
-			<div className="min-h-0 flex-1 overflow-auto p-12">
+			<QuietScrollArea className="min-h-0 flex-1" viewportClassName="p-12">
 				{files.length === 0 ? (
 					<p data-testid="review-empty" className="px-8 py-4 tr-text-metadata text-text-subtle">
 						{hasComments
@@ -220,7 +221,7 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 						})}
 					</ul>
 				)}
-			</div>
+			</QuietScrollArea>
 		</div>
 	);
 }

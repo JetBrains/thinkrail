@@ -11,6 +11,7 @@ import { WebFontsAddon } from "@xterm/addon-web-fonts";
 import { type ITheme, Terminal as XTerm } from "@xterm/xterm";
 import { useCallback, useEffect, useRef, useState } from "react";
 import "@xterm/xterm/css/xterm.css";
+import { QuietScrollFrame } from "@/components/QuietScrollArea";
 import { cssColorToHex } from "@/lib";
 import { useAppStore } from "../store";
 import { onThemeSwap } from "../themes";
@@ -330,9 +331,15 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 			data-failed={failed}
 			data-detached={detached}
 			data-visible="true"
-			className="absolute inset-0"
+			className="absolute inset-0 z-0"
 		>
-			<div ref={hostRef} className="absolute inset-12" />
+			<QuietScrollFrame
+				viewportSelector=".xterm-viewport"
+				surface="terminal"
+				className="absolute inset-12"
+			>
+				<div ref={hostRef} className="absolute inset-0" />
+			</QuietScrollFrame>
 			{detached ? (
 				<div className="absolute inset-0 flex flex-col items-center justify-center gap-8 bg-overlay">
 					<p className="tr-text-metadata text-text-muted">This terminal is open somewhere else.</p>

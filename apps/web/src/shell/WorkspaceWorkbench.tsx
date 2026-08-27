@@ -5,6 +5,7 @@ import {
 } from "@remixicon/react";
 import { lazy, type ReactNode, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { ErrorBoundary } from "../components/ErrorBoundary";
+import { QuietScrollArea } from "../components/QuietScrollArea";
 import { DropdownMenuItem } from "../components/ui/dropdown-menu";
 import { IconTooltip } from "../components/ui/tooltip";
 import { type LayoutAttention, layoutResourceIdentity } from "../lib";
@@ -467,27 +468,27 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 			switch (tool) {
 				case "projects":
 					body = (
-						<div data-testid="left-nav" className="h-full overflow-auto p-12">
+						<QuietScrollArea data-testid="left-nav" className="h-full" viewportClassName="p-12">
 							<ProjectTree />
-						</div>
+						</QuietScrollArea>
 					);
 					break;
 				case "specs":
 					body = (
-						<div className="p-12">
+						<QuietScrollArea className="h-full" viewportClassName="p-12">
 							<SpecsPanel
 								workspaceId={workspaceId}
 								failed={specs.failed}
 								onRefresh={specs.reload}
 							/>
-						</div>
+						</QuietScrollArea>
 					);
 					break;
 				case "files":
 					body = (
-						<div className="p-12">
+						<QuietScrollArea className="h-full" viewportClassName="p-12">
 							<FileTree key={workspaceId} workspaceId={workspaceId} />
-						</div>
+						</QuietScrollArea>
 					);
 					break;
 				case "changes":

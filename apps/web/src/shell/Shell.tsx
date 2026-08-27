@@ -6,6 +6,7 @@ import {
 	RiSettings3Line as Settings,
 } from "@remixicon/react";
 import { useEffect, useRef } from "react";
+import { QuietScrollArea } from "../components/QuietScrollArea";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "../components/ui/resizable";
 import { IconTooltip } from "../components/ui/tooltip";
 import { ProjectTree } from "../panels/ProjectTree";
@@ -212,9 +213,11 @@ export function Shell() {
 								tabIndex={-1}
 								aria-hidden={welcomeProjects.collapsed || undefined}
 								inert={welcomeProjects.collapsed ? true : undefined}
-								className="h-full overflow-auto bg-container-sidebar-bg p-12 outline-none"
+								className="h-full bg-container-sidebar-bg outline-none"
 							>
-								<ProjectTree />
+								<QuietScrollArea className="h-full" viewportClassName="p-12">
+									<ProjectTree />
+								</QuietScrollArea>
 							</aside>
 						</ResizablePanel>
 						<ResizableHandle
