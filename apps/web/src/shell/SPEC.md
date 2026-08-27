@@ -15,7 +15,7 @@ The responsive composition root: top-level app chrome, active-project/workspace 
 
 - **Owns:** `Shell` as the one composition root; topbar and persistent location context; active-workspace versus Project Home/Welcome branching; single Settings and Toaster mounts; the theme DOM side effect; global keyboard chords; the injected Layout settings section; and integration of the pure workbench engine with Zustand, local persistence, panel renderers, transport-backed domain state, and region error boundaries.
 - **Public surface:** `Shell`.
-- **Allowed deps:** child layout modules; `panels`; `chat` app-integration hydration/rendering; `store`, `transport`, contracts (types only), `components/ui`, `components/ErrorBoundary`, `constants`, `lib`, and `themes`.
+- **Allowed deps:** child layout modules; `panels`; `chat` app-integration hydration/rendering; `store`, `transport`, contracts (types only), `components/ui`, `components/ErrorBoundary`, `components/QuietScrollArea`, `constants`, `lib`, and `themes`.
 - **Forbidden:** server/shared/pi imports; being imported by panels/store/transport; putting arrangement knowledge into a feature panel; or sending current frame/view state through transport.
 
 ## Internal modules
@@ -41,7 +41,7 @@ workspace use `text-text-default`, while branch/trailing metadata use `text-text
 responsive degradation. A selected project without an active workspace shows Project Home. No selected
 project leaves the logo alone.
 
-With an active workspace, `Shell` mounts the workbench projection of the window's singular frame and that workspace's local view. Switching workspace changes resource contents and attention but never frame topology, Projects/Specs/Files/Changes/Review placement, side/bottom geometry, folds, visibility, or alignment. Without an active workspace, Shell mounts Welcome beside the projects navigator using separate local geometry. Toasts mount once above both branches.
+With an active workspace, `Shell` mounts the workbench projection of the window's singular frame and that workspace's local view. Switching workspace changes resource contents and attention but never frame topology, Projects/Specs/Files/Changes/Review placement, side/bottom geometry, folds, visibility, or alignment. Shell-owned wrappers around Projects, Files, and Specs use `components/QuietScrollArea`, as does the Project Home navigator; Changes/Review and xterm own their internal quiet-scroll surfaces in `panels`. These primitives never receive or infer placement. Without an active workspace, Shell mounts Welcome beside the projects navigator using separate local geometry. Toasts mount once above both branches.
 
 Shell is the sole theme side-effect owner: store receives the host-selected opaque theme through transport; shell applies it atomically through `themes` and writes the local first-paint hint. No other component mutates `[data-theme]`.
 

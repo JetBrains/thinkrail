@@ -14,6 +14,12 @@ tags: [v1, ui]
 The layout-agnostic, store-driven feature views. A panel fills its container and never knows its
 arrangement (so the mobile shell is an additive layer, not a rewrite).
 
+Changes and Review keep their fixed toolbars outside a panel-owned `components/QuietScrollArea`; Projects,
+Files, and Specs expose content for the shell-owned scroll wrapper described in `shell/SPEC.md`.
+`TerminalInstance` wraps xterm with `QuietScrollFrame`, which observes xterm's descendant viewport and applies
+the same neutral intent-revealed thumb + directional curtains wherever the terminal is placed. The feature
+views never receive or derive left/right/bottom placement to achieve that treatment.
+
 ## Boundary
 
 - **Owns:** `ProjectTree`. Each top-level project row is a compact 28px IDE-tree row:
