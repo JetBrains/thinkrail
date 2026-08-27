@@ -8,6 +8,15 @@ export {
 	listSkillCommands,
 	registerBundledRuntime,
 } from "./extensions";
+export {
+	FINALIZE_PROJECT_TOOL_NAME,
+	type FinalizeProjectOutcome,
+	setProjectFinalizeHandler,
+} from "./finalizeProjectTool";
+export {
+	OFFER_NEXT_STEPS_TOOL_NAME,
+	offerNextStepsExtension,
+} from "./offerNextSteps";
 export * from "./oneshot";
 export {
 	activatePiRuntimeGeneration,

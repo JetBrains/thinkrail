@@ -1886,6 +1886,49 @@ test("applyProjectUpdated closes the last project to the no-project state", () =
 	expect(state.activeWorkspaceId).toBeNull();
 });
 
+test("requestNewWorkspace stores a project request (with kickoff) and clear resets it", () => {
+	useAppStore.setState({ newWorkspaceRequest: null });
+	useAppStore.getState().requestNewWorkspace("p1", { kickoff: true });
+	expect(useAppStore.getState().newWorkspaceRequest).toEqual({ projectId: "p1", kickoff: true });
+	useAppStore.getState().clearNewWorkspaceRequest();
+	expect(useAppStore.getState().newWorkspaceRequest).toBeNull();
+	useAppStore.getState().requestNewWorkspace("p2");
+	expect(useAppStore.getState().newWorkspaceRequest).toEqual({ projectId: "p2" });
+});
+
+test("applyProjectRemoved drops a discarded draft from rail + Recents and clears its nav", () => {
+	const draft = project({ id: "pd", name: "Project draft", slug: "project-draft", draft: true });
+	const ws: Workspace = {
+		id: "wd",
+		projectId: "pd",
+		name: "Default",
+		branch: "main",
+		worktreePath: "/data/projects/pd",
+		baseBranch: "main",
+		kind: "default",
+	};
+	useAppStore.setState({
+		projects: [draft],
+		recentProjects: [draft],
+		workspaces: { pd: [ws] },
+		selectedProjectId: "pd",
+		activeWorkspaceId: "wd",
+		expandedProjectIds: { pd: true },
+	});
+	useAppStore.getState().openChatSession("wd", "sd", null, "medium");
+
+	useAppStore.getState().applyProjectRemoved("pd");
+
+	const state = useAppStore.getState();
+	expect(state.projects).toEqual([]);
+	expect(state.recentProjects).toEqual([]);
+	expect(state.workspaces.pd).toBeUndefined();
+	expect(state.removedWorkspaceIds.wd).toBe(true);
+	expect(state.selectedProjectId).toBeNull();
+	expect(state.activeWorkspaceId).toBeNull();
+	expect(state.expandedProjectIds.pd).toBeUndefined();
+});
+
 function pushedWorkspace(over: Partial<Workspace> = {}): Workspace {
 	return {
 		id: "w1",

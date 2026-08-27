@@ -11,6 +11,64 @@ The workspace is empty: no code, no decisions. Turn the user's idea into one cle
 **Hold the writing-specs bar.** Read that concept skill before saving anything — it carries the
 short / honest / on-rails rules every section you save must meet.
 
+## Hosted create-from-scratch entry
+
+When the **`finalize_project` tool is available**, ThinkRail has already created a real but *unnamed*
+project and dropped you into its setup chat — the user arrived with only an idea and no repo. This
+section **overrides** the Method/Flow below: keep the brief lightweight and let the conversation, not a
+preset questionnaire, decide what you ask.
+
+1. **Open with exactly this message — nothing more** (plain chat; the user has said nothing yet). Do
+   **not** mention specs, git, repositories, workspaces, `goal-and-requirements.md`, or any technical
+   setup here:
+
+   > Tell me what you want to build. A few things that help:
+   >
+   > 1. What do you want to build?
+   > 2. Who is it for?
+   > 3. What should users be able to do?
+   >
+   > You don't need to answer everything — just tell me what you know.
+
+   Those three lines are *guidance* for one freeform reply in the composer — **not** a questionnaire
+   widget and **not** required fields. Wait for the user's single freeform message.
+
+2. **Then generate contextual follow-ups — never walk a preset list.** Read what the user actually
+   wrote, work out which important **product decision** is still genuinely open, and ask about *that*.
+   Never re-ask the three opening questions, anything already answered, or anything you can reasonably
+   infer/decide yourself. Each follow-up is an **`ask_user_question`** round (the existing widget,
+   composed per the **asking-user-questions** concept): one contextual question, a few sensible
+   suggested answers when you can, and the widget's own freeform/custom answer. **Group** related
+   decisions into a single round rather than many tiny interruptions. Favor questions that shape the
+   product (how something works, whether accounts/persistence exist, how data combines) over trivia.
+
+3. **Accumulate context; stop early.** Every round must account for **all** previous answers — the loop
+   is: understand → find the single most important missing decision → one contextual round → fold the
+   answer in → repeat only if something important is still open. Ask the **minimum** rounds for a
+   useful initial concept; there is no fixed number, and often one round is enough.
+
+4. **Name the project last**, once you have enough context — a final `ask_user_question` round:
+   suggest one concise name inferred from the conversation as the first option and let the user confirm
+   or replace it (the widget's freeform answer). If the user **already named it** earlier, reuse that
+   name and only ask to confirm when there is real doubt — never finalize a name the user hasn't seen.
+
+5. Then run the tail: save `goal-and-requirements.md` titled with the confirmed name (the Saving steps
+   below), call **`finalize_project({ name })`** once with that exact name, post a **concise** ready
+   confirmation (one line, e.g. "Your project is ready. I created *<name>* and captured the initial
+   concept in `goal-and-requirements.md`." — **no** git/workspace tutorial), then call
+   **`offer_next_steps({ projectName })`** once. That renders the two next-step cards and ends your turn.
+6. **Branch on the choice** (it arrives as the next message):
+   - **Continue in the Default workspace** → reply with a short acknowledgement that the Default
+     workspace is the main version (one or two sentences, no git terms), then ask **one** contextual
+     next-step decision via `ask_user_question`, generated from the brief (e.g. what the first screen
+     should show) with a few suggested directions + freeform. Do not start implementation.
+   - **Start a separate task** → the app is opening a fresh isolated workspace for the user; acknowledge
+     briefly in one line and stop — the new workspace's own chat takes over from there.
+   This replaces the **Next** hand-off for the hosted entry.
+
+Without the `finalize_project` tool (the `setting-up-a-project` dispatcher in a real repo), ignore this
+section entirely and follow the flow below as written.
+
 ## Method
 
 1. **Build on what's already said.** Never re-ask what the request already told you.

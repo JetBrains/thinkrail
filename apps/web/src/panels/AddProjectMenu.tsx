@@ -1,4 +1,9 @@
-import { RiFolderLine as Folder, RiGlobalLine as Globe } from "@remixicon/react";
+import {
+	RiFolderLine as Folder,
+	RiFolderOpenLine as FolderOpen,
+	RiFolderAddLine as FolderPlus,
+	RiGlobalLine as Globe,
+} from "@remixicon/react";
 import type { Project } from "@thinkrail/contracts";
 import type { ReactNode } from "react";
 import {
@@ -14,12 +19,14 @@ import {
 export function AddProjectMenu({
 	recentProjects,
 	onOpen,
+	onCreate,
 	onOpenRecent,
 	align = "end",
 	children,
 }: {
 	recentProjects: Project[];
 	onOpen: () => void;
+	onCreate: () => void;
 	onOpenRecent: (path: string) => void;
 	align?: "start" | "center" | "end";
 	children: ReactNode;
@@ -28,9 +35,13 @@ export function AddProjectMenu({
 		<DropdownMenu>
 			<DropdownMenuTrigger asChild>{children}</DropdownMenuTrigger>
 			<DropdownMenuContent align={align}>
+				<DropdownMenuItem data-testid="menu-create-project" onSelect={() => onCreate()}>
+					<FolderPlus />
+					<span>New project from scratch</span>
+				</DropdownMenuItem>
 				<DropdownMenuItem data-testid="menu-open-project" onSelect={() => onOpen()}>
-					<Folder />
-					<span>Open project</span>
+					<FolderOpen />
+					<span>Open existing project</span>
 				</DropdownMenuItem>
 				<DropdownMenuItem disabled>
 					<Globe />

@@ -276,7 +276,10 @@ of the host.
   duplicating it. Resource references carry placement identity only; their domain DTO remains authoritative
   for lifetime.
 - **wsProtocol.ts** — `WS_METHODS` (`project.*` — incl. **`project.close`** (mark the stable record
-  closed without deleting associated state), **`project.inspect`** (classify a path) + **`project.init`**
+  closed without deleting associated state), **`project.create`** (bootstrap an unnamed **draft** project
+  — managed dir + `git init` + Default workspace — for create-from-scratch) + **`project.finalize`**
+  (apply the user-confirmed name + clear `draft`) + **`project.discardDraft`** (abandon a draft: delete its
+  managed dir + records), **`project.inspect`** (classify a path) + **`project.init`**
   (`git init` + commit, then open) + **`project.hasSpecs`** (lazy per-project "contains a registered
   spec?" for the Welcome screen — a full-tree walk, so requested only for the shown project,
   never eagerly for every project) / `workspace.*` — notably **`workspace.list { projectId,
@@ -388,8 +391,10 @@ of the host.
   (`darwin | linux | win32`, optional for older hosts) — the OS the *host* runs on, so a client that
   offers host-executed commands (the PR setup dialog) picks the right ones instead of guessing from
   the browser / **`project.updated`** — the
-  full persisted `Project` snapshot after open/reopen/close, including `closed` membership, so every client
-  atomically converges its rail + Recents without optimistic removal / `pi.event` / `pi.extensionUi` /
+  full persisted `Project` snapshot after open/reopen/close/create/finalize, including `closed`/`draft`
+  membership, so every client atomically converges its rail + Recents without optimistic removal /
+  **`project.removed`** (`{ id }`; a discarded **draft** — the record is gone, so every client drops it from
+  rail + Recents, the removed counterpart of `project.updated`) / `pi.event` / `pi.extensionUi` /
   **`session.deleted`** (workspace + session id; a non-replayable domain event broadcast after permanent
   deletion so every client removes the chat and blocks stale hydration) /
   **`settings.changed`** (the full `AppConfig`, broadcast so every client

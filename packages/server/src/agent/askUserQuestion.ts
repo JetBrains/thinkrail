@@ -214,23 +214,26 @@ export function isAckDetails(details: unknown): details is AskUserQuestionAckDet
 }
 
 export type Answerability =
-	| { ok: true; args: AskUserQuestionArgs }
+	| { ok: true; args: AskUserQuestionArgs; toolName: string }
 	| { ok: false; reason: "unknown_call" | "already_answered" | "not_awaiting" | "superseded" };
 
 export function assessAnswerability(
 	messages: readonly AgentMessage[],
 	toolCallId: string,
+	toolNames: readonly string[] = [ASK_USER_QUESTION_TOOL_NAME],
 ): Answerability {
 	const views = messages as readonly MessageView[];
 	let callIndex = -1;
 	let args: AskUserQuestionArgs | null = null;
+	let toolName = "";
 	for (let i = 0; i < views.length; i++) {
 		const view = views[i];
 		if (!view) continue;
 		for (const block of toolCallsOf(view)) {
-			if (block.id === toolCallId && block.name === ASK_USER_QUESTION_TOOL_NAME) {
+			if (block.id === toolCallId && block.name && toolNames.includes(block.name)) {
 				callIndex = i;
 				args = (block.arguments ?? { questions: [] }) as AskUserQuestionArgs;
+				toolName = block.name;
 			}
 		}
 	}
@@ -245,7 +248,7 @@ export function assessAnswerability(
 			return { ok: false, reason: "not_awaiting" };
 		if (view.role === "user") return { ok: false, reason: "superseded" };
 	}
-	return { ok: true, args };
+	return { ok: true, args, toolName };
 }
 
 export const ANSWERABILITY_ERRORS: Record<Extract<Answerability, { ok: false }>["reason"], string> =

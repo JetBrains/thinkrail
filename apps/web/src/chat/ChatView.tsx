@@ -629,8 +629,11 @@ export default function ChatView({
 					.request("session.answerQuestion", { sessionId, toolCallId, result })
 					.then(() => undefined),
 			focusComposer: () => composerRef.current?.refocus(),
+			startSeparateTask: () => {
+				if (projectId) useAppStore.getState().requestNewWorkspace(projectId, { kickoff: true });
+			},
 		}),
-		[sessionId],
+		[sessionId, projectId],
 	);
 
 	const onExtUiReply = (value: string | boolean | null) => {

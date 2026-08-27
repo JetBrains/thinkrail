@@ -15,7 +15,9 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import type { SkillCatalogEntry, SlashCommandInfo } from "@thinkrail/contracts";
 import { askUserQuestionExtension } from "./askUserQuestion";
+import { finalizeProjectToolExtension } from "./finalizeProjectTool";
 import { oversizedImageGuard } from "./imageGuard";
+import { offerNextStepsExtension } from "./offerNextSteps";
 import { reviewToolExtension } from "./reviewTool";
 import { decideSkill, type SkillAdmissionContext } from "./skillAdmission";
 import {
@@ -171,11 +173,13 @@ export async function buildResourceLoader(
 	settingsManager: SettingsManager,
 	getAdmission: () => SkillAdmissionContext,
 	excludedExtensionPaths: readonly string[] = [],
+	opts: { draftProjectSetup?: boolean } = {},
 ): Promise<ResourceLoader> {
 	const sharedFactories = [
 		headlessSearchPolicy,
 		askUserQuestionExtension,
 		reviewToolExtension,
+		...(opts.draftProjectSetup ? [finalizeProjectToolExtension, offerNextStepsExtension] : []),
 		oversizedImageGuard,
 	];
 	const skillInputs = resolveSkillInputs(cwd, getAdmission);

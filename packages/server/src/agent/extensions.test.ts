@@ -325,4 +325,41 @@ describe("buildResourceLoader", () => {
 			rmSync(root, { recursive: true, force: true });
 		}
 	});
+
+	const toolNames = (loader: Awaited<ReturnType<typeof buildResourceLoader>>): string[] =>
+		loader.getExtensions().extensions.flatMap((extension) => [...extension.tools.keys()]);
+
+	const adm = (): SkillAdmissionContext => ({
+		trusted: true,
+		acknowledged: [],
+		disabled: [],
+		disabledGroups: [],
+		overrides: {},
+	});
+
+	it("exposes finalize_project + offer_next_steps ONLY for a draft-project setup session", async () => {
+		const root = mkdtempSync(join(tmpdir(), "thinkrail-draft-caps-"));
+		const project = join(root, "project");
+		const agentDir = join(root, "pi-agent");
+		mkdirSync(project, { recursive: true });
+		mkdirSync(agentDir, { recursive: true });
+		const restore = stubSkillEnv(join(root, "home"), agentDir);
+		try {
+			const settingsManager = SettingsManager.create(project, agentDir, { projectTrusted: true });
+
+			const ordinary = await buildResourceLoader(project, settingsManager, adm);
+			expect(toolNames(ordinary)).not.toContain("finalize_project");
+			expect(toolNames(ordinary)).not.toContain("offer_next_steps");
+			expect(toolNames(ordinary)).toContain("ask_user_question");
+
+			const draft = await buildResourceLoader(project, settingsManager, adm, [], {
+				draftProjectSetup: true,
+			});
+			expect(toolNames(draft)).toContain("finalize_project");
+			expect(toolNames(draft)).toContain("offer_next_steps");
+		} finally {
+			restore();
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
 });

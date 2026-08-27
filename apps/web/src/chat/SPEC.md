@@ -185,7 +185,10 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   plus `focusComposer()`, for a renderer that resolves *itself*: it unmounts the control the user was
   standing on, and focus would otherwise fall to `<body>` and swallow every following keystroke (the same
   stranding the history overlay's dismiss refocus avoids). Only the card's own reply path calls it, and
-  only while the card still holds focus.
+  only while the card still holds focus. Plus **`startSeparateTask()`** — the post-creation
+  `NextStepsCard`'s "Start a separate task" action: `ChatView` (which knows the session's workspace →
+  project) asks the shell to open the existing New-Workspace flow via `store.requestNewWorkspace` rather
+  than the renderer reaching into store/transport itself.
 - **`askState`** — the questionnaire lifecycle seam: the pure `deriveAskStates(turns, askAnswers)` +
   `AskStatesContext`/`useAskState` (provided by `ChatView`, `null` standalone). The ask tool is **ack +
   terminate** (its tool result is just an ack; the reply arrives later as an `ask-user-answers` message),

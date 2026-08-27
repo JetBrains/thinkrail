@@ -9,6 +9,7 @@ export interface Project {
 	slug: string;
 	lastOpened: number;
 	closed?: true;
+	draft?: true;
 	trusted?: boolean;
 	acknowledgedSkills?: string[];
 	disabledSkills?: string[];

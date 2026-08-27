@@ -4,6 +4,7 @@ import type {
 	LayoutChangedPayload,
 	LoginPush,
 	Project,
+	ProjectRemoved,
 	ReviewChangedPayload,
 	ServerWelcome,
 	SessionDeletedPayload,
@@ -45,6 +46,10 @@ export function initTransport(): WsTransport {
 
 	transport.subscribe(WS_CHANNELS.projectUpdated, (data) => {
 		useAppStore.getState().applyProjectUpdated(data as Project);
+	});
+
+	transport.subscribe(WS_CHANNELS.projectRemoved, (data) => {
+		useAppStore.getState().applyProjectRemoved((data as ProjectRemoved).id);
 	});
 
 	transport.subscribe(WS_CHANNELS.piEvent, (data) => {

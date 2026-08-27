@@ -20,7 +20,10 @@ export function deriveAskStates(
 			lastUserIndex = i;
 		} else if (turn.kind === "assistant") {
 			for (const block of turn.message.content) {
-				if (block.type === "toolCall" && block.name === "ask_user_question")
+				if (
+					block.type === "toolCall" &&
+					(block.name === "ask_user_question" || block.name === "offer_next_steps")
+				)
 					callTurnIndex[block.id] = i;
 			}
 		}

@@ -3,6 +3,7 @@ import { join, normalize } from "node:path";
 import type {
 	HostPlatform,
 	LayoutChangedPayload,
+	ProjectRemoved,
 	ServerWelcome,
 	SessionDeletedPayload,
 	TerminalTabsPush,
@@ -14,7 +15,9 @@ import {
 	disposeAllSessions,
 	getSessionWorkspaceId,
 	isProjectSkillPath,
+	setDraftProjectSetupResolver,
 	setExtUiPublisher,
+	setProjectFinalizeHandler,
 	setReviewCommentHandler,
 	setSessionDeletedPublisher,
 	setSessionPublisher,
@@ -39,11 +42,14 @@ import { resolveWorktreeFile } from "../fs";
 import { normalizeStoredLayoutSettings, setLayoutPublisher } from "../layout";
 import { logger } from "../log";
 import {
+	finalizeProjectByPath,
 	getProjects,
+	isDraftProject,
 	listProjects,
 	listRecentProjects,
 	openProject,
 	setProjectPublisher,
+	setProjectRemovedPublisher,
 } from "../projects";
 import { reanchorWorkspace, resolveCommentFromAgent, setReviewPublisher } from "../reviews";
 import { getConfig, setSettingsPublisher, updateConfig } from "../settings";
@@ -184,6 +190,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				ws.subscribe(WS_CHANNELS.providerLogin);
 				ws.subscribe(WS_CHANNELS.providerChanged);
 				ws.subscribe(WS_CHANNELS.projectUpdated);
+				ws.subscribe(WS_CHANNELS.projectRemoved);
 				ws.subscribe(WS_CHANNELS.terminalTabs);
 				ws.subscribe(WS_CHANNELS.workspaceCreated);
 				ws.subscribe(WS_CHANNELS.workspaceUpdated);
@@ -330,10 +337,26 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		}
 	});
 
+	setDraftProjectSetupResolver((workspaceId) => {
+		try {
+			return isDraftProject(getWorkspace(workspaceId).projectId);
+		} catch {
+			return false;
+		}
+	});
+
 	setProjectPublisher((project) => {
 		server.publish(
 			WS_CHANNELS.projectUpdated,
 			JSON.stringify({ channel: WS_CHANNELS.projectUpdated, data: project }),
+		);
+	});
+
+	setProjectRemovedPublisher((id) => {
+		const data: ProjectRemoved = { id };
+		server.publish(
+			WS_CHANNELS.projectRemoved,
+			JSON.stringify({ channel: WS_CHANNELS.projectRemoved, data }),
 		);
 	});
 
@@ -387,6 +410,10 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	}));
 	installTodoReviewSeams();
 	reconcilePendingReviewsOnBoot();
+	setProjectFinalizeHandler((cwd, name) => {
+		const project = finalizeProjectByPath(cwd, name);
+		return { projectId: project.id, name: project.name };
+	});
 
 	setLayoutPublisher((payload: LayoutChangedPayload) => {
 		server.publish(

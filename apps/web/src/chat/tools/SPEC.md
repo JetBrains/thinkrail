@@ -29,6 +29,20 @@ registration runs once when the chat module mounts. Unregistered tools fall back
   (capability: the server's `agent` module + `reviews` seam; see [[submodule-server-reviews]]): a ✓ +
   the resolved comment id/note. **Routine** — the review sidebar is where resolution state lives; the
   card is just the in-transcript trace.
+- **`FinalizeProjectCard`** — the compact receipt for the host-owned `finalize_project` tool, the
+  create-from-scratch capability (server: `agent/finalizeProjectTool` + the `projects` finalize seam; see
+  [[submodule-server-agent]] and [[submodule-server-projects]]): a 🚀 + "Project ready: <name>". Marked
+  **primary** (it's the milestone that closes new-project setup); the rail reveal itself rides the normal
+  `project.updated` stream, so the card is presentational only.
+- **`NextStepsCard`** — the post-creation branching UI for the host-owned `offer_next_steps` tool
+  (server: `agent/offerNextSteps`; see [[submodule-server-agent]]). Registered `"bare"`: two action
+  cards ("Start a separate task" / "Continue in the Default workspace", no git terms) whose
+  answered/superseded lifecycle is derived from the transcript via `useAskState` exactly like the
+  questionnaire (`deriveAskStates` recognizes `offer_next_steps` too). "Continue" answers the tool
+  (agent continues with the next-step question); "Start a separate task" answers **and** calls
+  `ChatActions.startSeparateTask()`, which asks the shell to open the existing New-Workspace flow for
+  this project. A one-time decision — once answered it renders a compact resolved line, never a live
+  choice again.
 - **`AskUserQuestionCard`** — the inline questionnaire for the host-owned `ask_user_question` tool
   (capability + rationale: the server's `agent/askUserQuestion` SPEC). Registered `"bare"`: it owns its
   full-width frame, never folds, and answers through the `ChatActions` context (correlated by

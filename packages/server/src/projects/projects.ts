@@ -1,20 +1,42 @@
 import { randomUUID } from "node:crypto";
-import { rmSync, statSync } from "node:fs";
-import { basename, join } from "node:path";
+import { existsSync, mkdirSync, rmSync, statSync } from "node:fs";
+import { basename, join, sep } from "node:path";
 import type { Project, ProjectPathStatus } from "@thinkrail/contracts";
 import { canonicalPath, git } from "../git";
-import { loadProjects, loadWorkspaces, saveProjects } from "../persistence";
+import {
+	dataDir,
+	loadProjects,
+	loadWorkspaces,
+	saveProjects,
+	saveWorkspaces,
+} from "../persistence";
+
+function createdProjectsRoot(): string {
+	return join(dataDir(), "projects");
+}
+
+const DRAFT_PROVISIONAL_NAME = "Project draft";
 
 type ProjectPublisher = (project: Project) => void;
+type ProjectRemovedPublisher = (id: string) => void;
 
 let publishProject: ProjectPublisher | null = null;
+let publishProjectRemoved: ProjectRemovedPublisher | null = null;
 
 export function setProjectPublisher(fn: ProjectPublisher | null): void {
 	publishProject = fn;
 }
 
+export function setProjectRemovedPublisher(fn: ProjectRemovedPublisher | null): void {
+	publishProjectRemoved = fn;
+}
+
 function emit(project: Project): void {
 	publishProject?.(project);
+}
+
+function emitRemoved(id: string): void {
+	publishProjectRemoved?.(id);
 }
 
 function gitToplevel(path: string): string | null {
@@ -162,6 +184,10 @@ export function isProjectTrusted(id: string): boolean {
 	return getProjects().find((p) => p.id === id)?.trusted === true;
 }
 
+export function isDraftProject(id: string): boolean {
+	return getProjects().find((p) => p.id === id)?.draft === true;
+}
+
 export function inspectProjectPath(path: string): ProjectPathStatus {
 	let stat: ReturnType<typeof statSync>;
 	try {
@@ -171,6 +197,95 @@ export function inspectProjectPath(path: string): ProjectPathStatus {
 	}
 	if (!stat.isDirectory()) return { kind: "notDirectory" };
 	return { kind: gitToplevel(path) ? "repo" : "initable" };
+}
+
+export function createDraftProject(): Project {
+	const root = createdProjectsRoot();
+	const dir = join(root, randomUUID());
+	mkdirSync(dir, { recursive: true });
+	try {
+		const project = initProject(dir);
+		const projects = getProjects();
+		const record = projects.find((candidate) => candidate.id === project.id);
+		if (!record) throw new Error(`Draft project vanished after init: ${dir}`);
+		record.draft = true;
+		record.name = DRAFT_PROVISIONAL_NAME;
+		record.slug = uniqueSlug(
+			slugify(DRAFT_PROVISIONAL_NAME),
+			new Set(projects.filter((p) => p.id !== record.id).map((p) => p.slug)),
+		);
+		saveProjects(projects);
+		emit(record);
+		return record;
+	} catch (err) {
+		rmSync(dir, { recursive: true, force: true });
+		throw err;
+	}
+}
+
+export function finalizeProjectByPath(cwd: string, name: string): Project {
+	const wanted = canonicalPath(cwd);
+	const projects = getProjects();
+	const project = projects.find((candidate) => canonicalPath(candidate.path) === wanted);
+	if (!project) throw new Error(`No project found for ${cwd}`);
+	if (project.draft !== true) throw new Error(`Project is not a draft: ${project.name}`);
+	return applyFinalize(projects, project, name);
+}
+
+export function finalizeProject(id: string, name: string): Project {
+	const projects = getProjects();
+	const project = projects.find((candidate) => candidate.id === id);
+	if (!project) throw new Error(`Unknown project: ${id}`);
+	if (project.draft !== true) throw new Error(`Project is not a draft: ${project.name}`);
+	return applyFinalize(projects, project, name);
+}
+
+function applyFinalize(projects: Project[], project: Project, name: string): Project {
+	const trimmed = name.trim();
+	if (!trimmed) throw new Error("A project name is required");
+	project.name = trimmed;
+	project.slug = uniqueSlug(
+		slugify(trimmed),
+		new Set(projects.filter((p) => p.id !== project.id).map((p) => p.slug)),
+	);
+	delete project.draft;
+	commitProjectBrief(project.path);
+	saveProjects(projects);
+	emit(project);
+	return project;
+}
+
+const PROJECT_BRIEF = "goal-and-requirements.md";
+
+function commitProjectBrief(path: string): void {
+	if (!existsSync(join(path, PROJECT_BRIEF))) return;
+	if (!git(path, ["add", "--", PROJECT_BRIEF]).ok) return;
+	const identity: string[] = [];
+	if (!git(path, ["config", "user.name"]).out) identity.push("-c", "user.name=ThinkRail");
+	if (!git(path, ["config", "user.email"]).out)
+		identity.push("-c", "user.email=thinkrail@localhost");
+	git(path, [...identity, "commit", "-m", "Capture initial project concept"]);
+}
+
+export async function discardDraftProject(
+	id: string,
+	teardown?: (project: Project) => void | Promise<void>,
+): Promise<Project> {
+	const project = getProjects().find((candidate) => candidate.id === id);
+	if (!project) throw new Error(`Unknown project: ${id}`);
+	if (project.draft !== true) throw new Error(`Project is not a draft: ${project.name}`);
+	// Draft guard has passed: only now may any destructive teardown run (see projects/SPEC.md).
+	if (teardown) await teardown(project);
+	const root = createdProjectsRoot();
+	if (canonicalPath(project.path).startsWith(canonicalPath(root) + sep)) {
+		rmSync(project.path, { recursive: true, force: true });
+	}
+	saveProjects(getProjects().filter((candidate) => candidate.id !== id));
+	const workspaces = loadWorkspaces();
+	const remaining = workspaces.filter((ws) => ws.projectId !== id);
+	if (remaining.length !== workspaces.length) saveWorkspaces(remaining);
+	emitRemoved(id);
+	return project;
 }
 
 export function initProject(path: string): Project {

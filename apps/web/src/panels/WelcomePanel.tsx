@@ -1,5 +1,6 @@
 import {
 	RiFolderOpenLine as FolderOpen,
+	RiFolderAddLine as FolderPlus,
 	RiHome2Line as House,
 	type RemixiconComponentType as LucideIcon,
 	RiRocketLine as Rocket,
@@ -12,6 +13,7 @@ import { PRODUCT_NAME } from "../constants/branding";
 import { useAppStore } from "../store";
 import { getTransport } from "../transport";
 import { AddProjectMenu } from "./AddProjectMenu";
+import { createProjectFromScratch } from "./createProject";
 import { enterDefaultWorkspace } from "./defaultWorkspace";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
 import { ProjectSkillsNotice } from "./ProjectSkillsNotice";
@@ -85,6 +87,7 @@ export function WelcomePanel() {
 		<AddProjectMenu
 			recentProjects={recentProjects}
 			onOpen={() => void pickAndOpen()}
+			onCreate={() => void createProjectFromScratch()}
 			onOpenRecent={(path) => void openProject(path)}
 			align="start"
 		>
@@ -96,6 +99,16 @@ export function WelcomePanel() {
 				subtitle="Choose a local git repository to work in."
 			/>
 		</AddProjectMenu>
+	);
+
+	const createProjectCard = () => (
+		<Card
+			primary
+			icon={FolderPlus}
+			title="Create project from scratch"
+			subtitle="No repo yet? Describe your idea and the agent sets up a new project with you."
+			onClick={() => void createProjectFromScratch()}
+		/>
 	);
 
 	return (
@@ -115,7 +128,10 @@ export function WelcomePanel() {
 
 			<div className="mt-24 flex flex-wrap justify-center gap-12">
 				{noProjects ? (
-					openProjectCard()
+					<>
+						{openProjectCard()}
+						{createProjectCard()}
+					</>
 				) : hasSpecs === null ? null : hasSpecs ? (
 					<>
 						<Card

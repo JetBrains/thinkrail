@@ -47,11 +47,16 @@ import {
 import { errorText, getTransport, prewarmWorkspaceSkillLoad } from "../transport";
 import { AddProjectMenu } from "./AddProjectMenu";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { createProjectFromScratch } from "./createProject";
 import { ExistingWorktreeDialog } from "./ExistingWorktreeDialog";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
 import { useOpenProject } from "./useOpenProject";
 
 const PREWARM_WORKSPACE_LIMIT = 8;
+
+const KICKOFF_PROMPT = "/skill:kicking-off-a-workspace ";
+const KICKOFF_NOTE =
+	"Runs the kicking-off-a-workspace skill — the agent reads your project brief and suggests a first task for this isolated workspace.";
 
 export function ProjectTree() {
 	const projects = useAppStore((s) => s.projects);
@@ -70,6 +75,8 @@ export function ProjectTree() {
 
 	const expandedProjectIds = useAppStore((s) => s.expandedProjectIds);
 	const [dialogProjectId, setDialogProjectId] = useState<string | null>(null);
+	const [dialogKickoff, setDialogKickoff] = useState(false);
+	const newWorkspaceRequest = useAppStore((s) => s.newWorkspaceRequest);
 	const [existingDialogProjectId, setExistingDialogProjectId] = useState<string | null>(null);
 	const addProjectButtonRef = useRef<HTMLButtonElement>(null);
 	const projectNameButtonsRef = useRef(new Map<string, HTMLButtonElement>());
@@ -106,6 +113,13 @@ export function ProjectTree() {
 	useEffect(() => {
 		if (activeProjectId) useAppStore.getState().expandProject(activeProjectId);
 	}, [activeProjectId]);
+
+	useEffect(() => {
+		if (!newWorkspaceRequest) return;
+		setDialogProjectId(newWorkspaceRequest.projectId);
+		setDialogKickoff(newWorkspaceRequest.kickoff === true);
+		useAppStore.getState().clearNewWorkspaceRequest();
+	}, [newWorkspaceRequest]);
 
 	const loadWorkspaces = useCallback(async (projectId: string) => {
 		const rows = await getTransport().request("workspace.list", { projectId });
@@ -202,6 +216,19 @@ export function ProjectTree() {
 			});
 	};
 
+	const discardDraft = (project: Project) => {
+		pendingCloseFocusProjectIdRef.current = project.id;
+		void getTransport()
+			.request("project.discardDraft", { id: project.id })
+			.catch((err) => {
+				if (pendingCloseFocusProjectIdRef.current === project.id) {
+					pendingCloseFocusProjectIdRef.current = null;
+				}
+				focusProjectNameOrAdd(project.id);
+				toast.error(errorText(err, `Couldn't delete ${project.name}`));
+			});
+	};
+
 	const openWorkspaceDialog = (projectId: string, returnFocusToProject: boolean) => {
 		workspaceDialogReturnFocusIdRef.current = returnFocusToProject ? projectId : null;
 		setDialogProjectId(projectId);
@@ -219,6 +246,7 @@ export function ProjectTree() {
 				<AddProjectMenu
 					recentProjects={recentProjects}
 					onOpen={() => void pickAndOpen()}
+					onCreate={() => void createProjectFromScratch()}
 					onOpenRecent={(p) => void openProject(p)}
 				>
 					<Button
@@ -247,6 +275,7 @@ export function ProjectTree() {
 								onToggle={() => toggleExpand(project.id)}
 								onSelect={() => void selectProject(project.id)}
 								onClose={() => closeProject(project)}
+								onDiscardDraft={() => discardDraft(project)}
 								onAddWorkspace={() => openWorkspaceDialog(project.id, false)}
 								onAddWorkspaceFromMenu={() => openWorkspaceDialog(project.id, true)}
 								onOpenExistingWorktree={() => openExistingWorktreeDialog(project.id)}
@@ -279,9 +308,11 @@ export function ProjectTree() {
 				<NewWorkspaceDialog
 					open
 					projectId={dialogProjectId}
+					{...(dialogKickoff ? { initialPrompt: KICKOFF_PROMPT, promptNote: KICKOFF_NOTE } : {})}
 					onOpenChange={(o) => {
 						if (o) return;
 						setDialogProjectId(null);
+						setDialogKickoff(false);
 						const returnFocusId = workspaceDialogReturnFocusIdRef.current;
 						workspaceDialogReturnFocusIdRef.current = null;
 						if (returnFocusId) focusProjectNameOrAdd(returnFocusId);
@@ -318,6 +349,7 @@ function ProjectRow({
 	onToggle,
 	onSelect,
 	onClose,
+	onDiscardDraft,
 	onAddWorkspace,
 	onAddWorkspaceFromMenu,
 	onOpenExistingWorktree,
@@ -331,6 +363,7 @@ function ProjectRow({
 	onToggle: () => void;
 	onSelect: () => void;
 	onClose: () => void;
+	onDiscardDraft: () => void;
 	onAddWorkspace: () => void;
 	onAddWorkspaceFromMenu: () => void;
 	onOpenExistingWorktree: () => void;
@@ -339,6 +372,7 @@ function ProjectRow({
 }) {
 	const Chevron = isExpanded ? ChevronDown : ChevronRight;
 	const Folder = isSelected ? RiFolderFill : RiFolderLine;
+	const isDraft = project.draft === true;
 	const [menuOpen, setMenuOpen] = useState(false);
 	const [confirmOpen, setConfirmOpen] = useState(false);
 	const openingDialogRef = useRef(false);
@@ -449,34 +483,68 @@ function ProjectRow({
 						Open existing worktree…
 					</ContextMenuItem>
 					<ContextMenuSeparator />
-					<ContextMenuItem
-						data-testid="project-menu-close"
-						onSelect={(event) => {
-							event.preventDefault();
-							openDialogAfterMenu(() => setConfirmOpen(true));
-						}}
-					>
-						<X />
-						Close project
-					</ContextMenuItem>
+					{isDraft ? (
+						<ContextMenuItem
+							data-testid="project-menu-delete-draft"
+							className="text-feedback-error focus:bg-feedback-error-subtle [&_svg]:text-feedback-error"
+							onSelect={(event) => {
+								event.preventDefault();
+								openDialogAfterMenu(() => setConfirmOpen(true));
+							}}
+						>
+							<Trash2 />
+							Delete draft
+						</ContextMenuItem>
+					) : (
+						<ContextMenuItem
+							data-testid="project-menu-close"
+							onSelect={(event) => {
+								event.preventDefault();
+								openDialogAfterMenu(() => setConfirmOpen(true));
+							}}
+						>
+							<X />
+							Close project
+						</ContextMenuItem>
+					)}
 				</ContextMenuContent>
 			</ContextMenu>
-			<ConfirmDialog
-				open={confirmOpen}
-				onOpenChange={setConfirmOpen}
-				title={`Close ${project.name}?`}
-				description="Removes this project from the open projects list. Its repository, workspaces, chats, and running activity are kept. Reopen it from Add project → Recents."
-				confirmLabel="Close project"
-				confirmTestId="confirm-close-project"
-				onConfirm={() => {
-					closeConfirmedRef.current = true;
-					onClose();
-				}}
-				onClosedAutoFocus={() => {
-					if (!closeConfirmedRef.current) onRestoreFocus();
-					closeConfirmedRef.current = false;
-				}}
-			/>
+			{isDraft ? (
+				<ConfirmDialog
+					open={confirmOpen}
+					onOpenChange={setConfirmOpen}
+					title={`Delete ${project.name}?`}
+					description="This project is still being set up. Deleting it discards its folder on disk — its git repo, the setup chat, and everything in it — permanently. This can't be undone."
+					confirmLabel="Delete draft"
+					destructive
+					confirmTestId="confirm-delete-draft"
+					onConfirm={() => {
+						closeConfirmedRef.current = true;
+						onDiscardDraft();
+					}}
+					onClosedAutoFocus={() => {
+						if (!closeConfirmedRef.current) onRestoreFocus();
+						closeConfirmedRef.current = false;
+					}}
+				/>
+			) : (
+				<ConfirmDialog
+					open={confirmOpen}
+					onOpenChange={setConfirmOpen}
+					title={`Close ${project.name}?`}
+					description="Removes this project from the open projects list. Its repository, workspaces, chats, and running activity are kept. Reopen it from Add project → Recents."
+					confirmLabel="Close project"
+					confirmTestId="confirm-close-project"
+					onConfirm={() => {
+						closeConfirmedRef.current = true;
+						onClose();
+					}}
+					onClosedAutoFocus={() => {
+						if (!closeConfirmedRef.current) onRestoreFocus();
+						closeConfirmedRef.current = false;
+					}}
+				/>
+			)}
 		</>
 	);
 }
