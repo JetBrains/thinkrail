@@ -206,9 +206,13 @@ function GroupDisclosure({
 					</span>
 				) : null}
 				{!expanded && headline ? (
-					<strong className="min-w-0 flex-1 truncate text-text-default" title={headline}>
+					<span
+						data-testid={`${testId}-headline`}
+						className="min-w-0 flex-1 truncate text-text-default"
+						title={headline}
+					>
 						{headline}
-					</strong>
+					</span>
 				) : null}
 				<span className="min-w-0 truncate" title={summary}>
 					{summary}

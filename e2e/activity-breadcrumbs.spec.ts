@@ -86,10 +86,12 @@ test("a model-authored Thinking heading stays bounded and appears only while fol
 	await activity.getByTestId("activity-group-toggle").click();
 	const thinking = activity.getByTestId("thinking-group").first();
 	const toggle = thinking.getByTestId("thinking-group-toggle");
-	const heading = thinking.locator("strong", { hasText: "Evaluating formatting process" });
+	const heading = thinking.getByTestId("thinking-group-headline");
 	const thinkingLabel = toggle.locator("span", { hasText: /^Thinking$/ });
 	const metadata = "5 steps · get_search_content, fetch_content, web_search, spec_grep, +1 more";
 	await expect(heading).toBeVisible();
+	await expect(heading).toHaveText("Evaluating formatting process");
+	await expect(heading).toHaveCSS("font-weight", "370");
 	await expect(thinkingLabel).toHaveClass(/sr-only/);
 	await expect(toggle).toContainText(metadata);
 
@@ -101,7 +103,9 @@ test("a model-authored Thinking heading stays bounded and appears only while fol
 		const metadataElement = [...element.querySelectorAll<HTMLElement>("span")].find(
 			(candidate) => candidate.title === title,
 		);
-		const headingElement = element.querySelector<HTMLElement>("strong");
+		const headingElement = element.querySelector<HTMLElement>(
+			'[data-testid="thinking-group-headline"]',
+		);
 		if (!metadataElement || !headingElement)
 			throw new Error("missing folded Thinking header parts");
 		return {
