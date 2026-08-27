@@ -184,6 +184,10 @@ export function isProjectTrusted(id: string): boolean {
 	return getProjects().find((p) => p.id === id)?.trusted === true;
 }
 
+export function isDraftProject(id: string): boolean {
+	return getProjects().find((p) => p.id === id)?.draft === true;
+}
+
 export function inspectProjectPath(path: string): ProjectPathStatus {
 	let stat: ReturnType<typeof statSync>;
 	try {

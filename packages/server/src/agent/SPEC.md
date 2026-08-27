@@ -434,10 +434,20 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     `extensionFactories`: a **headless-search policy** (a `tool_call` hook defaulting
     `web_search`'s `workflow` to `"none"`, since pi-web-access would otherwise open a browser curator our
     `rpc` host can't render), `askUserQuestionExtension` (registers the `ask_user_question` tool),
-    `reviewToolExtension` (the `resolve_comment` tool), **`finalizeProjectToolExtension`** (the
-    **`finalize_project`** tool — the create-from-scratch capability), **`offerNextStepsExtension`**
-    (the **`offer_next_steps`** tool — the post-creation two-card next-step branch), **and**
+    `reviewToolExtension` (the `resolve_comment` tool), **and**
     `oversizedImageGuard` (the context-level image-size guard, see the `imageGuard` bullet).
+    **The create-from-scratch capability — `finalizeProjectToolExtension` (`finalize_project`) +
+    `offerNextStepsExtension` (`offer_next_steps`) — is *not* global.** `buildResourceLoader` adds the
+    pair **only when `opts.draftProjectSetup` is true**, i.e. only for a session whose workspace belongs
+    to a **draft** project (the create-from-scratch setup chat); ordinary project/workspace sessions never
+    see them, so the reused `starting-a-new-project` flow in a normal empty repo runs unchanged (its
+    hosted-entry section is inert without the tool). The flag is resolved by the host via the explicit
+    **`setDraftProjectSetupResolver`** seam (keyed by `workspaceId`, fails closed to `false`; host maps
+    `workspaceId` → `projects.isDraftProject`), captured at session-create / re-attach time — so it
+    stays true for the setup session's whole life even after `finalize_project` clears the draft, which is
+    why `offer_next_steps` (called *after* finalize) is still available in that same live session.
+    `agent` never imports `projects`; the host owns the project-type knowledge. `finalize_project`'s
+    `ctx.cwd` draft check via `setProjectFinalizeHandler` remains as defense-in-depth, not the gate.
     **`offer_next_steps`** is `ack + terminate` like `ask_user_question`, and is **answered through the
     same `session.answerQuestion` path**: `assessAnswerability(messages, toolCallId, toolNames?)` matches
     any of the given tool names (default `[ask]`; the manager passes `[ask, offer]`) and returns the
@@ -445,13 +455,13 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     `buildAnswersMessage` (ask). `buildNextStepsMessage` emits the same `ask-user-answers` custom message
     keyed by tool-call id, so the web's questionnaire-resolve lifecycle marks the two cards resolved; its
     text names the chosen path so the agent continues per the setup skill. See [[submodule-web-chat]].
-    Like `resolve_comment`, `finalize_project` is registered on **every** session but its host-installed
-    handler (**`setProjectFinalizeHandler`** seam, wired in `host` to `projects.finalizeProjectByPath`)
-    **fails closed** unless the calling session's `cwd` is a **draft** project's folder — so it is inert
-    everywhere except the one setup chat, and `agent` never imports `projects`. `execute` keys on
-    `ctx.cwd` (the Default workspace's cwd is the project folder), applies the user-confirmed name, and
-    returns `{ projectId, name }`; the client reveals the renamed project via the normal `project.updated`
-    stream (no client-owned domain state). See [[submodule-server-projects]].
+    `finalize_project` is registered **only on draft-project setup sessions** (the `draftProjectSetup`
+    gate above), not globally. Its host-installed handler (**`setProjectFinalizeHandler`** seam, wired in
+    `host` to `projects.finalizeProjectByPath`) additionally **fails closed** unless the calling session's
+    `cwd` is a **draft** project's folder — defense-in-depth, not the gate — and `agent` never imports
+    `projects`. `execute` keys on `ctx.cwd` (the Default workspace's cwd is the project folder), applies
+    the user-confirmed name, and returns `{ projectId, name }`; the client reveals the renamed project via
+    the normal `project.updated` stream (no client-owned domain state). See [[submodule-server-projects]].
     Both session paths pass it as `resourceLoader`. `buildResourceLoader` stays internal; the seam +
     its types are on the barrel.
 - **Public surface (barrel):** the manager operations (incl. `answerQuestion` +
@@ -467,7 +477,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   (unfiltered, the manager's `skills.state`) / `listProjectAliasSkillNames(cwd)` (present-alias count) /
   `isProjectSkillPath(relativePath)` (watch-classification predicate);
   `reloadSessionResources(sessionId)` (active-chat reload); the **`setSkillAdmissionResolver`** seam (host
-  wires `workspaceId` → the admission context); the **`setProjectFinalizeHandler`** seam +
+  wires `workspaceId` → the admission context); the **`setDraftProjectSetupResolver`** seam (host wires
+  `workspaceId` → is-its-project-a-draft, gating the create-from-scratch tools); the **`setProjectFinalizeHandler`** seam +
   `FINALIZE_PROJECT_TOOL_NAME` + `FinalizeProjectOutcome` (the create-from-scratch finalize tool);
   `OFFER_NEXT_STEPS_TOOL_NAME` + `offerNextStepsExtension` (the post-creation next-step tool; answered via
   the shared `answerQuestion` path);

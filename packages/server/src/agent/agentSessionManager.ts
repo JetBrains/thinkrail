@@ -126,6 +126,11 @@ export function setSkillAdmissionResolver(
 	skillAdmissionResolver = resolver;
 }
 
+let draftProjectSetupResolver: (workspaceId: string) => boolean = () => false;
+export function setDraftProjectSetupResolver(resolver: (workspaceId: string) => boolean): void {
+	draftProjectSetupResolver = resolver;
+}
+
 function hasDeletionTombstone(sessionId: string): boolean {
 	return deletedSessions.has(sessionId);
 }
@@ -329,6 +334,7 @@ export async function createSession(input: CreateSessionInput): Promise<CreateSe
 			settingsManager,
 			() => skillAdmissionResolver(input.workspaceId),
 			generation.excludedSessionExtensionPaths,
+			{ draftProjectSetup: draftProjectSetupResolver(input.workspaceId) },
 		),
 		...(model ? { model } : {}),
 		...(input.thinkingLevel ? { thinkingLevel: input.thinkingLevel } : {}),
@@ -543,6 +549,7 @@ async function openDiskSession(sessionId: string, workspaceId: string, cwd: stri
 			settingsManager,
 			() => skillAdmissionResolver(workspaceId),
 			generation.excludedSessionExtensionPaths,
+			{ draftProjectSetup: draftProjectSetupResolver(workspaceId) },
 		),
 		...(exactModel ? { model: exactModel } : {}),
 	});

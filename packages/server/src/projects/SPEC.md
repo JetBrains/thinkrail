@@ -64,7 +64,9 @@ bootstrap it into one so it can be opened.
   of any spec dependency.)
 - **Public surface (barrel):** `openProject`, `listProjects`, `listRecentProjects`, `closeProject`,
   `getProjects`, `setProjectPublisher`, `setProjectRemovedPublisher`, `inspectProjectPath`,
-  `initProject`, `createDraftProject`, `finalizeProject`, `finalizeProjectByPath`, `discardDraftProject`.
+  `initProject`, `createDraftProject`, `finalizeProject`, `finalizeProjectByPath`, `discardDraftProject`,
+  `isDraftProject` (the host's draft-setup capability gate for agent sessions — see
+  [[submodule-server-agent]]).
 - **Allowed deps:** `persistence`; the `git` sub-module (shared `git()` runner, which now owns the
   environment its children spawn under — this module passes none); `contracts` (`Project`, `ProjectPathStatus`); Node/Bun.
 - **Forbidden:** `host`; sibling features other than `git` (`workspaces` depends on `projects`, never the

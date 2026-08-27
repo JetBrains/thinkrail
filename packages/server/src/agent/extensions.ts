@@ -173,13 +173,13 @@ export async function buildResourceLoader(
 	settingsManager: SettingsManager,
 	getAdmission: () => SkillAdmissionContext,
 	excludedExtensionPaths: readonly string[] = [],
+	opts: { draftProjectSetup?: boolean } = {},
 ): Promise<ResourceLoader> {
 	const sharedFactories = [
 		headlessSearchPolicy,
 		askUserQuestionExtension,
 		reviewToolExtension,
-		finalizeProjectToolExtension,
-		offerNextStepsExtension,
+		...(opts.draftProjectSetup ? [finalizeProjectToolExtension, offerNextStepsExtension] : []),
 		oversizedImageGuard,
 	];
 	const skillInputs = resolveSkillInputs(cwd, getAdmission);

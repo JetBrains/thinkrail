@@ -15,6 +15,7 @@ import {
 	disposeAllSessions,
 	getSessionWorkspaceId,
 	isProjectSkillPath,
+	setDraftProjectSetupResolver,
 	setExtUiPublisher,
 	setProjectFinalizeHandler,
 	setReviewCommentHandler,
@@ -43,6 +44,7 @@ import { logger } from "../log";
 import {
 	finalizeProjectByPath,
 	getProjects,
+	isDraftProject,
 	listProjects,
 	listRecentProjects,
 	openProject,
@@ -332,6 +334,14 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			};
 		} catch {
 			return { trusted: false, acknowledged: [], disabled: [], disabledGroups: [], overrides: {} };
+		}
+	});
+
+	setDraftProjectSetupResolver((workspaceId) => {
+		try {
+			return isDraftProject(getWorkspace(workspaceId).projectId);
+		} catch {
+			return false;
 		}
 	});
 
