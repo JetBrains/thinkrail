@@ -8,10 +8,15 @@ const TAIL_RUNWAY_RATIO = 1 - EDGE_SETTLE_RATIO;
 const ADVANCE_DURATION_MS = 220;
 const GEOMETRY_EPSILON = 0.5;
 
-export interface ReadingBandGeometry {
-	viewportHeight: number;
+export type ReadingBandLatestEdge = "top" | "bottom";
+
+export interface ReadingBandScrollBounds {
 	scrollTop: number;
 	maxScrollTop: number;
+}
+
+export interface ReadingBandGeometry extends ReadingBandScrollBounds {
+	viewportHeight: number;
 	edgeBottom: number;
 }
 
@@ -24,6 +29,7 @@ export interface ReadingBandSnapshot {
 
 export interface ReadingBandEnvironment {
 	readGeometry: () => ReadingBandGeometry | null;
+	readScrollBounds: () => ReadingBandScrollBounds | null;
 	writeScrollTop: (top: number) => void;
 	writeRunwayHeight: (height: number) => void;
 	anchorTurn: (index: number, inset: number) => void;
@@ -38,12 +44,14 @@ export interface ReadingBandController {
 	getSnapshot: () => ReadingBandSnapshot;
 	armImmediateTurn: () => void;
 	userTurnArrived: (index: number, source: "immediate" | "queued") => void;
+	latestRowArrived: (index: number) => void;
 	contentChanged: () => void;
 	readerLeft: () => void;
 	readerReachedEdge: () => void;
 	returnToEdge: () => void;
 	setStreaming: (streaming: boolean) => void;
 	reconstructActiveStream: () => void;
+	setLatestEdge: (edge: ReadingBandLatestEdge) => void;
 	dispose: () => void;
 }
 
@@ -77,7 +85,7 @@ function easeOutCubic(progress: number): number {
 
 export function createReadingBandController(
 	environment: ReadingBandEnvironment,
-	{ streaming }: { streaming: boolean },
+	{ streaming, latestEdge = "bottom" }: { streaming: boolean; latestEdge?: ReadingBandLatestEdge },
 ): ReadingBandController {
 	let state: ReadingBandState = {
 		following: true,
@@ -87,7 +95,7 @@ export function createReadingBandController(
 	};
 	let frame: number | null = null;
 	let anchorFrame: number | null = null;
-	const activeStreamMount = streaming;
+	let activeStreamMount = streaming;
 	let reconstructed = false;
 	let runwayMode: "turn" | "floor" | null = null;
 	let runwayStartEdge: number | null = null;
@@ -152,6 +160,41 @@ export function createReadingBandController(
 		writeRunwayHeight(viewportChanged ? next : Math.min(runwayHeight, next));
 	};
 
+	const latestScrollTop = (bounds: ReadingBandScrollBounds) =>
+		latestEdge === "top" ? 0 : bounds.maxScrollTop;
+
+	const moveTo = (target: number, requireStreaming: boolean, reevaluate: boolean) => {
+		const bounds = environment.readScrollBounds();
+		if (!bounds || Math.abs(target - bounds.scrollTop) <= GEOMETRY_EPSILON) return;
+		cancelMotion();
+		if (environment.prefersReducedMotion()) {
+			environment.writeScrollTop(target);
+			return;
+		}
+
+		const start = bounds.scrollTop;
+		const distance = target - start;
+		const startedAt = environment.now();
+		publish({ moving: true });
+		const advance = (time: number) => {
+			if (!state.following || (requireStreaming && !state.streaming)) {
+				frame = null;
+				publish({ moving: false });
+				return;
+			}
+			const progress = Math.min(1, Math.max(0, (time - startedAt) / ADVANCE_DURATION_MS));
+			environment.writeScrollTop(start + distance * easeOutCubic(progress));
+			if (progress < 1) {
+				frame = environment.requestFrame(advance);
+				return;
+			}
+			frame = null;
+			publish({ moving: false });
+			if (reevaluate) contentChanged();
+		};
+		frame = environment.requestFrame(advance);
+	};
+
 	const contentChanged = () => {
 		let geometry = environment.readGeometry();
 		if (!geometry || geometry.viewportHeight <= 0) return;
@@ -165,28 +208,7 @@ export function createReadingBandController(
 			geometry.scrollTop + geometry.edgeBottom - geometry.viewportHeight * EDGE_SETTLE_RATIO,
 		);
 		if (target <= geometry.scrollTop + GEOMETRY_EPSILON) return;
-		if (environment.prefersReducedMotion()) {
-			environment.writeScrollTop(target);
-			return;
-		}
-
-		const start = geometry.scrollTop;
-		const distance = target - start;
-		const startedAt = environment.now();
-		publish({ moving: true });
-		const advance = (time: number) => {
-			if (!state.following || !state.streaming) return;
-			const progress = Math.min(1, Math.max(0, (time - startedAt) / ADVANCE_DURATION_MS));
-			environment.writeScrollTop(start + distance * easeOutCubic(progress));
-			if (progress < 1) {
-				frame = environment.requestFrame(advance);
-				return;
-			}
-			frame = null;
-			publish({ moving: false });
-			contentChanged();
-		};
-		frame = environment.requestFrame(advance);
+		moveTo(target, true, true);
 	};
 
 	return {
@@ -209,6 +231,11 @@ export function createReadingBandController(
 				if (state.following) environment.anchorTurn(index, inset);
 			});
 		},
+		latestRowArrived: (index) => {
+			if (latestEdge !== "top" || index !== 0 || !state.following) return;
+			const bounds = environment.readScrollBounds();
+			if (bounds) moveTo(latestScrollTop(bounds), false, false);
+		},
 		contentChanged,
 		readerLeft: () => {
 			cancelMotion();
@@ -220,8 +247,8 @@ export function createReadingBandController(
 			cancelMotion();
 			cancelAnchor();
 			publish({ following: true });
-			const geometry = environment.readGeometry();
-			if (geometry) environment.writeScrollTop(geometry.maxScrollTop);
+			const bounds = environment.readScrollBounds();
+			if (bounds) environment.writeScrollTop(latestScrollTop(bounds));
 		},
 		setStreaming: (nextStreaming) => {
 			if (!nextStreaming) cancelMotion();
@@ -241,7 +268,20 @@ export function createReadingBandController(
 			runwayViewportHeight = geometry.viewportHeight;
 			writeRunwayHeight(geometry.viewportHeight * TAIL_RUNWAY_RATIO);
 			geometry = environment.readGeometry() ?? geometry;
-			environment.writeScrollTop(geometry.maxScrollTop);
+			environment.writeScrollTop(latestScrollTop(geometry));
+		},
+		setLatestEdge: (edge) => {
+			if (edge === latestEdge) return;
+			cancelMotion();
+			cancelAnchor();
+			latestEdge = edge;
+			activeStreamMount = state.streaming;
+			reconstructed = false;
+			runwayMode = null;
+			runwayStartEdge = null;
+			runwayHeight = null;
+			runwayViewportHeight = null;
+			publish({ following: true, runway: state.streaming });
 		},
 		dispose: () => {
 			cancelMotion();

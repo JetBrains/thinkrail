@@ -96,9 +96,7 @@ function RadioCards<T extends string>({
 								{choice.label}
 								<span className="text-text-muted tr-text-metadata">{choice.hint}</span>
 							</span>
-							<span className="block text-text-muted tr-text-metadata">
-								{choice.description}
-							</span>
+							<span className="block text-text-muted tr-text-metadata">{choice.description}</span>
 						</span>
 						{active ? <Check className="size-16 shrink-0 text-primary" /> : null}
 					</label>

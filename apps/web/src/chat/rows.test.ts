@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { AssistantMessage } from "@thinkrail/contracts";
-import { deriveRows, projectRows, turnDivider, type ChatRow } from "./rows";
+import { type ChatRow, deriveRows, projectRows, turnDivider } from "./rows";
 import { registerToolRenderer } from "./toolRegistry";
 import type { ChatTurn, ToolResultState } from "./types";
 

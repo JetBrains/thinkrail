@@ -1,5 +1,5 @@
 import { realpathSync, rmSync, utimesSync } from "node:fs";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 import { enterDefaultWorkspace, openFixtureProject } from "./fixtures/app";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { seedWorkspaceSession } from "./fixtures/sessions";
@@ -57,6 +57,63 @@ test("the synchronized message-order setting reverses groups and their rows", as
 			"oldest answer",
 			"oldest request",
 		]);
+
+		await selectMessageOrder(page, "oldest-first");
+	} finally {
+		rmSync(session.path, { force: true });
+	}
+});
+
+test("newest-first scrolls down into history and returns upward to the latest group", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const session = seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), {
+		name: "long newest-first chat",
+		messages: Array.from({ length: 30 }, (_, index) => [
+			{
+				role: "user" as const,
+				text: `request ${index + 1}: inspect the deliberately verbose fixture`,
+				timestamp: BASE_TS + index * 2_000,
+			},
+			{
+				role: "assistant" as const,
+				text: `answer ${index + 1}: the deliberately verbose fixture has been inspected`,
+				timestamp: BASE_TS + index * 2_000 + 1_000,
+			},
+		]).flat(),
+	});
+	utimesSync(session.path, new Date(BASE_TS + 20_000), new Date(BASE_TS + 20_000));
+
+	try {
+		await selectMessageOrder(page, "newest-first");
+		await enterDefaultWorkspace(page);
+		const chatScroll = page.getByTestId("chat-scroll");
+		await expect(
+			page.getByText("answer 30: the deliberately verbose fixture has been inspected"),
+		).toBeInViewport();
+
+		const scrollPoint = await chatScroll.evaluate((root) => {
+			const scroller = root.querySelector<HTMLElement>("[data-virtuoso-scroller]");
+			if (!scroller || scroller.scrollHeight <= scroller.clientHeight + 8) return null;
+			const rect = scroller.getBoundingClientRect();
+			return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+		});
+		expect(scrollPoint).not.toBeNull();
+		if (!scrollPoint) return;
+		await page.mouse.move(scrollPoint.x, scrollPoint.y);
+		await page.mouse.wheel(0, 10_000);
+
+		const latest = page.getByTestId("scroll-to-top");
+		await expect(latest).toBeVisible();
+		await expect(latest).toContainText("Latest");
+		await expect(chatScroll).toHaveAttribute("data-follow-state", "detached");
+		await latest.click();
+		await expect(latest).toHaveCount(0);
+		await expect(chatScroll).toHaveAttribute("data-follow-state", "following");
+		await expect(
+			page.getByText("answer 30: the deliberately verbose fixture has been inspected"),
+		).toBeInViewport();
 
 		await selectMessageOrder(page, "oldest-first");
 	} finally {

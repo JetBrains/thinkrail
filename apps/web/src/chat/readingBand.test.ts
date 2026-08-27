@@ -21,11 +21,13 @@ function createHarness({
 	reducedMotion = false,
 	viewportHeight = 600,
 	latestEdge = "bottom",
+	geometryAvailable = true,
 }: {
 	streaming?: boolean;
 	reducedMotion?: boolean;
 	viewportHeight?: number;
 	latestEdge?: "top" | "bottom";
+	geometryAvailable?: boolean;
 } = {}): Harness {
 	let geometry: ReadingBandGeometry = {
 		viewportHeight,
@@ -42,7 +44,8 @@ function createHarness({
 	const runwayHeights: number[] = [];
 
 	const environment: ReadingBandEnvironment = {
-		readGeometry: () => geometry,
+		readGeometry: () => (geometryAvailable ? geometry : null),
+		readScrollBounds: () => geometry,
 		writeScrollTop: (top) => {
 			writes.push(top);
 			const delta = top - geometry.scrollTop;
@@ -206,6 +209,43 @@ describe("reading-band movement", () => {
 	});
 });
 
+describe("reading-band newest-row arrival", () => {
+	it("returns a following newest-first reader to the new top row with the shared smooth move", () => {
+		const harness = createHarness({ latestEdge: "top" });
+		harness.setGeometry({ scrollTop: 300, maxScrollTop: 900 });
+		harness.controller.latestRowArrived(0);
+		expect(harness.pendingFrames()).toBe(1);
+		harness.advance(219);
+		expect(harness.writes.at(-1)).toBeGreaterThan(0);
+		harness.advance(1);
+		expect(harness.writes.at(-1)).toBe(0);
+		expect(harness.controller.getSnapshot().moving).toBe(false);
+	});
+
+	it("returns to a prepended row even before its stream marker mounts", () => {
+		const harness = createHarness({ latestEdge: "top", geometryAvailable: false });
+		harness.setGeometry({ scrollTop: 300, maxScrollTop: 900 });
+		harness.controller.latestRowArrived(0);
+		expect(harness.pendingFrames()).toBe(1);
+		harness.advance(220);
+		expect(harness.writes.at(-1)).toBe(0);
+	});
+
+	it("does not move a detached reader or the bottom-latest mode for a prepended row", () => {
+		for (const [latestEdge, detached] of [
+			["top", true],
+			["bottom", false],
+		] as const) {
+			const harness = createHarness({ latestEdge });
+			harness.setGeometry({ scrollTop: 300, maxScrollTop: 900 });
+			if (detached) harness.controller.readerLeft();
+			harness.controller.latestRowArrived(0);
+			expect(harness.pendingFrames()).toBe(0);
+			expect(harness.writes).toEqual([]);
+		}
+	});
+});
+
 describe("reading-band reader intent", () => {
 	it("cancels an in-flight advance immediately and ignores later content growth", () => {
 		const harness = createHarness();
@@ -244,6 +284,14 @@ describe("reading-band reader intent", () => {
 		harness.controller.returnToEdge();
 		expect(harness.writes.at(-1)).toBe(900);
 		expect(harness.controller.getSnapshot().following).toBe(true);
+	});
+
+	it("returns to the latest edge even when a settled list has no active stream marker", () => {
+		const harness = createHarness({ latestEdge: "top", geometryAvailable: false });
+		harness.controller.readerLeft();
+		harness.setGeometry({ scrollTop: 300, maxScrollTop: 900 });
+		harness.controller.returnToEdge();
+		expect(harness.writes).toEqual([0]);
 	});
 
 	it("returns and reconstructs at the physical top when newest-first makes top the latest edge", () => {
@@ -299,5 +347,16 @@ describe("reading-band reader intent", () => {
 		harness.setGeometry({ scrollTop: 200, maxScrollTop: 900 });
 		harness.controller.reconstructActiveStream();
 		expect(harness.writes).toEqual([]);
+	});
+
+	it("reconstructs fresh runway geometry after message order switches during a stream", () => {
+		const harness = createHarness();
+		harness.setGeometry({ scrollTop: 200, maxScrollTop: 900 });
+		harness.controller.reconstructActiveStream();
+		harness.controller.setLatestEdge("top");
+		harness.setGeometry({ scrollTop: 300, maxScrollTop: 900 });
+		harness.controller.reconstructActiveStream();
+		expect(harness.runwayHeights).toEqual([252, 252]);
+		expect(harness.writes).toEqual([900, 0]);
 	});
 });
