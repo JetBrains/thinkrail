@@ -60,13 +60,12 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   muted notice. These states are assertable via `data-testid="compaction-notice"` +
   `data-status="running|done|failed|cancelled"`. A successful live end asks the app-integration transcript
   synchronizer to read Pi's canonical summary-plus-tail; reconnect does the same for a runtime from an older
-  connection generation. A **generation-only reconnect snapshot is never installed while its host summary
-  is streaming**: Pi's persisted `session.messages` omits the in-flight assistant partial, so the synchronizer
-  waits for settlement and re-reads rather than deleting that partial and clearing its correlation id.
-  A pending connection-generation sync dominates even when the same read also satisfies an unresolved
-  compaction need. Only a compaction-only read may install a streaming summary behind the Pi-event revision
-  fence: at that boundary the canonical summary-plus-tail is the intended replacement, and any intervening assistant
-  event rejects the snapshot. Transient transcript-read failures retry with a bounded backoff; only exhaustion
+  connection generation. **No snapshot is installed while its host summary is streaming**, whether the need
+  came from reconnect or compaction: Pi's persisted `session.messages` omits the in-flight assistant partial,
+  and a revision fence cannot protect an update already folded before the read began. The synchronizer waits
+  for settlement and re-reads rather than deleting that partial and clearing its correlation id. A pending
+  connection-generation sync dominates even when the same read also satisfies an unresolved compaction need.
+  Transient transcript-read failures retry with a bounded backoff; only exhaustion
   raises the refresh error, and a new generation/compaction key gets a fresh budget. Store reconciliation
   replaces only host-derived conversation state and preserves browser-local state. The persisted
   `compactionSummary` then becomes the same row in place (the live id,

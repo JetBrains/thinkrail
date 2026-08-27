@@ -48,7 +48,7 @@ export async function synchronizeTranscript(
 	if (state.status !== "connected" || state.connectionGeneration !== input.connectionGeneration) {
 		return "stale";
 	}
-	if (input.reason === "reconnect" && result.summary.isStreaming) return "deferred-streaming";
+	if (result.summary.isStreaming) return "deferred-streaming";
 	const applied = state.reconcileSession(
 		result.summary,
 		deps.hydrate(result.messages, result.summary.lastSettlement),

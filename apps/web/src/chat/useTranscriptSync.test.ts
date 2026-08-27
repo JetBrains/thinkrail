@@ -143,7 +143,8 @@ test("synchronizeTranscript defers a reconnect-only streaming snapshot without h
 	expect(reconciled).toBe(false);
 });
 
-test("synchronizeTranscript allows a revision-fenced streaming compaction snapshot", async () => {
+test("synchronizeTranscript defers a streaming compaction snapshot without hydrating it", async () => {
+	let hydrated = false;
 	let reconciled = false;
 	const outcome = await synchronizeTranscript(
 		{
@@ -158,7 +159,10 @@ test("synchronizeTranscript allows a revision-fenced streaming compaction snapsh
 				result: { summary: summary({ isStreaming: true }), messages: [] },
 				syncedTick: 0,
 			}),
-			hydrate: () => ({ turns: [], toolResults: {}, askAnswers: {} }),
+			hydrate: () => {
+				hydrated = true;
+				return { turns: [], toolResults: {}, askAnswers: {} };
+			},
 			state: () => ({
 				status: "connected",
 				connectionGeneration: 6,
@@ -170,8 +174,9 @@ test("synchronizeTranscript allows a revision-fenced streaming compaction snapsh
 		},
 	);
 
-	expect(outcome).toBe("applied");
-	expect(reconciled).toBe(true);
+	expect(outcome).toBe("deferred-streaming");
+	expect(hydrated).toBe(false);
+	expect(reconciled).toBe(false);
 });
 
 test("transcript read failures use a bounded backoff", () => {
