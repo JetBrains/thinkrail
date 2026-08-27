@@ -61,6 +61,8 @@ import { useChatTodos } from "./useChatTodos";
 import { useHistorySearch } from "./useHistorySearch";
 import { useTranscriptSync } from "./useTranscriptSync";
 
+const TRY_AGAIN_PROMPT = "Try again.";
+
 function turnAnchorText(turn: ChatTurn): string {
 	if (turn.kind === "user") {
 		const { content } = turn.message;
@@ -714,6 +716,7 @@ export default function ChatView({
 										onOpenSpec={onOpenSpec}
 										onOpenChange={onOpenChange}
 										onReveal={onReveal}
+										onTryAgain={() => performSend(TRY_AGAIN_PROMPT, [], "send")}
 									/>
 								</div>
 							)}

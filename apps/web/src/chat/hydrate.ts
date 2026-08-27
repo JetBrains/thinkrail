@@ -63,7 +63,13 @@ export function messagesToRuntime(
 	const failure = assistantFailureText(
 		lastSettlement === undefined ? persistedTerminal : lastSettlement,
 	);
-	if (failure) turns.push({ kind: "error", id: crypto.randomUUID(), text: failure });
+	if (failure)
+		turns.push({
+			kind: "error",
+			id: crypto.randomUUID(),
+			text: failure,
+			recovery: "try-again",
+		});
 
 	return { turns, toolResults, askAnswers, turnIdByMessageIndex };
 }
