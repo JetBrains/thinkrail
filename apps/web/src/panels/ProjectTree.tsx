@@ -54,6 +54,10 @@ import { useOpenProject } from "./useOpenProject";
 
 const PREWARM_WORKSPACE_LIMIT = 8;
 
+const KICKOFF_PROMPT = "/skill:kicking-off-a-workspace ";
+const KICKOFF_NOTE =
+	"Runs the kicking-off-a-workspace skill — the agent reads your project brief and suggests a first task for this isolated workspace.";
+
 export function ProjectTree() {
 	const projects = useAppStore((s) => s.projects);
 	const recentProjects = useAppStore((s) => s.recentProjects);
@@ -71,6 +75,8 @@ export function ProjectTree() {
 
 	const expandedProjectIds = useAppStore((s) => s.expandedProjectIds);
 	const [dialogProjectId, setDialogProjectId] = useState<string | null>(null);
+	const [dialogKickoff, setDialogKickoff] = useState(false);
+	const newWorkspaceRequest = useAppStore((s) => s.newWorkspaceRequest);
 	const [existingDialogProjectId, setExistingDialogProjectId] = useState<string | null>(null);
 	const addProjectButtonRef = useRef<HTMLButtonElement>(null);
 	const projectNameButtonsRef = useRef(new Map<string, HTMLButtonElement>());
@@ -107,6 +113,13 @@ export function ProjectTree() {
 	useEffect(() => {
 		if (activeProjectId) useAppStore.getState().expandProject(activeProjectId);
 	}, [activeProjectId]);
+
+	useEffect(() => {
+		if (!newWorkspaceRequest) return;
+		setDialogProjectId(newWorkspaceRequest.projectId);
+		setDialogKickoff(newWorkspaceRequest.kickoff === true);
+		useAppStore.getState().clearNewWorkspaceRequest();
+	}, [newWorkspaceRequest]);
 
 	const loadWorkspaces = useCallback(async (projectId: string) => {
 		const rows = await getTransport().request("workspace.list", { projectId });
@@ -295,9 +308,11 @@ export function ProjectTree() {
 				<NewWorkspaceDialog
 					open
 					projectId={dialogProjectId}
+					{...(dialogKickoff ? { initialPrompt: KICKOFF_PROMPT, promptNote: KICKOFF_NOTE } : {})}
 					onOpenChange={(o) => {
 						if (o) return;
 						setDialogProjectId(null);
+						setDialogKickoff(false);
 						const returnFocusId = workspaceDialogReturnFocusIdRef.current;
 						workspaceDialogReturnFocusIdRef.current = null;
 						if (returnFocusId) focusProjectNameOrAdd(returnFocusId);

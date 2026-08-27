@@ -416,6 +416,11 @@ components. The **Skills-reload badge** rides the same tick without a separate s
   tool may still highlight the item but the stale completion cannot steal focus. Both intents are consumed
   after handling so remount/re-read cannot replay a structural open. Two fields remain necessary because a
   gitignored spec belongs to the spec graph, not the git-derived Changes view.
+  **`newWorkspaceRequest`** (`{ projectId; kickoff? }`, set by `requestNewWorkspace`, cleared by
+  `clearNewWorkspaceRequest`) is the same one-shot pattern for a *chat renderer* asking the shell to open
+  the existing New-Workspace flow: the post-creation `NextStepsCard`'s "Start a separate task" fires it
+  (via `ChatActions.startSeparateTask`), and `panels/ProjectTree` consumes it once to open its
+  `NewWorkspaceDialog` for that project (seeded to kick off the task when `kickoff`).
   **`specsByWorkspace`** +
   **`setWorkspaceSpecs`** hold each workspace's `spec.graph` snapshot (fetched by `panels`'
   `useWorkspaceSpecs`, kept fresh on the workspace fs tick) so

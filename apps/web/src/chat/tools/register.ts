@@ -4,6 +4,7 @@ import { AskUserQuestionCard } from "./AskUserQuestionCard";
 import { BashCard } from "./BashCard";
 import { EditCard } from "./EditCard";
 import { FinalizeProjectCard } from "./FinalizeProjectCard";
+import { NextStepsCard } from "./NextStepsCard";
 import { ReadCard } from "./ReadCard";
 import { ResolveCommentCard } from "./ResolveCommentCard";
 import { SpecToolCard, specToolSummary } from "./SpecToolCard";
@@ -45,3 +46,5 @@ registerToolRenderer("finalize_project", FinalizeProjectCard, {
 });
 
 registerToolRenderer("ask_user_question", AskUserQuestionCard, { chrome: "bare" });
+
+registerToolRenderer("offer_next_steps", NextStepsCard, { chrome: "bare" });

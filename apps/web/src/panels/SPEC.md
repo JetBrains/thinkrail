@@ -31,7 +31,10 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   project), where that last item is instead a destructive **Trash2 Delete draft** whose confirm
   (`confirm-delete-draft`, destructive) warns it discards the draft's folder on disk permanently and fires
   **`project.discardDraft`** (converging via the `project.removed` push, no optimistic removal). Create is
-  exactly the direct `+` flow. Open existing worktree opens the
+  exactly the direct `+` flow. `ProjectTree` also consumes the store's **`newWorkspaceRequest`** one-shot
+  (fired by the chat's post-creation "Start a separate task" card) to open the same `NewWorkspaceDialog`
+  for that project — seeded with `/skill:kicking-off-a-workspace` + a prompt note when the request carries
+  `kickoff`, so the new isolated workspace's first chat turn greets + offers first tasks. Open existing worktree opens the
   `ExistingWorktreeDialog` chooser fed by `workspace.listExisting` (branch + absolute path per row;
   detached-HEAD rows stay visible but disabled); choosing one calls `workspace.openExisting`, then expands
   the project and activates the attached row without starting a chat. Close

@@ -683,6 +683,7 @@ interface AppState {
 	} | null;
 	chatLocationRequest: ChatLocationRequest | null;
 	historyOpenRequest: { id: string; sessionId: string } | null;
+	newWorkspaceRequest: { projectId: string; kickoff?: boolean } | null;
 	specRequest: {
 		workspaceId: string;
 		path: string;
@@ -879,6 +880,8 @@ interface AppState {
 	setSettingsSection: (section: SettingsSection) => void;
 	applyConfig: (config: AppConfig) => void;
 	requestToolView: (workspaceId: string, tool: LayoutToolId) => void;
+	requestNewWorkspace: (projectId: string, opts?: { kickoff?: boolean }) => void;
+	clearNewWorkspaceRequest: () => void;
 	requestChangesView: (workspaceId: string, path: string) => void;
 	clearChangesRequest: () => void;
 	requestChatLocation: (req: ChatLocationRequest) => void;
@@ -1493,6 +1496,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	modelsRefreshing: false,
 	modelsFresh: false,
 	changesRequest: null,
+	newWorkspaceRequest: null,
 	specRequest: null,
 	specsByWorkspace: {},
 	reviewsByWorkspace: {},
@@ -2955,6 +2959,11 @@ export const useAppStore = create<AppState>((set, get) => ({
 			};
 		}),
 	clearChangesRequest: () => set({ changesRequest: null }),
+	requestNewWorkspace: (projectId, opts) =>
+		set({
+			newWorkspaceRequest: { projectId, ...(opts?.kickoff ? { kickoff: true } : {}) },
+		}),
+	clearNewWorkspaceRequest: () => set({ newWorkspaceRequest: null }),
 	requestChatLocation: (req) =>
 		set((state) => {
 			if (
