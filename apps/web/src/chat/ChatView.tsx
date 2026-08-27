@@ -3,6 +3,7 @@ import type {
 	AskUserQuestionResult,
 	PromptHit,
 	QueueLane,
+	SessionQueueContent,
 	SlashCommandInfo,
 	TemplateInfo,
 	ThinkingLevel,
@@ -15,6 +16,7 @@ import {
 	EMPTY_RUNTIME,
 	SettingsSection,
 	selectCatalogModel,
+	selectCompactionTurnIds,
 	selectSkillsStale,
 	selectWorkspaceById,
 	specPathMatcher,
@@ -29,12 +31,18 @@ import { ChatPlanContent, ChatPlanStripContent } from "./ChatPlan";
 import {
 	Composer,
 	type ComposerHandle,
+	type ComposerSubmitDisposition,
 	type MentionCandidate,
 	type SubmitBehavior,
 } from "./Composer";
 import { ComposerToolSlot } from "./ComposerToolSlot";
 import { ExtUiDialog } from "./ExtUiDialog";
 import { HistoryOverlay } from "./HistoryOverlay";
+import {
+	compactSubmissionError,
+	mergeNativeChatCommands,
+	parseNativeChatCommand,
+} from "./nativeCommands";
 import { planGlance } from "./planView";
 import { QueueStrip } from "./QueueStrip";
 import { type ChatRow, deriveComposerTool, deriveRows, rowIndexForTurn } from "./rows";
@@ -225,7 +233,11 @@ export default function ChatView({
 	}, [slashActive, workspaceId]);
 
 	const mergedCommands = useMemo(
-		() => [...commands.filter((c) => c.source !== "prompt"), ...templates.map(templateToCommand)],
+		() =>
+			mergeNativeChatCommands([
+				...commands.filter((command) => command.source !== "prompt"),
+				...templates.map(templateToCommand),
+			]),
 		[commands, templates],
 	);
 
@@ -295,6 +307,42 @@ export default function ChatView({
 		[sessionId],
 	);
 
+	const restoreQueueContentToDraft = (content: SessionQueueContent): void => {
+		const messages = [...content.steering, ...content.followUp];
+		restoreTextToDraft(messages.map((message) => message.text).join("\n\n"));
+		const images = messages.flatMap((message) => message.images ?? []);
+		composerRef.current?.restoreAttachments(
+			images.map((image, index) => ({
+				name: `queued-image-${index + 1}`,
+				content: image,
+			})),
+		);
+	};
+
+	const drainQueueToDraft = async (): Promise<void> => {
+		const content = await getTransport().request("session.clearQueue", {
+			sessionId,
+			requireTextOnly: true,
+		});
+		restoreQueueContentToDraft(content);
+	};
+
+	const performCompact = (instructions?: string) => {
+		const observedTurnIds = selectCompactionTurnIds(useAppStore.getState(), sessionId);
+		void drainQueueToDraft()
+			.then(() =>
+				getTransport().request("session.compact", {
+					sessionId,
+					...(instructions ? { instructions } : {}),
+				}),
+			)
+			.catch((err) =>
+				useAppStore
+					.getState()
+					.appendCompactionFailureUnlessObserved(sessionId, observedTurnIds, errorText(err)),
+			);
+	};
+
 	const performSend = useCallback(
 		(
 			text: string,
@@ -322,10 +370,24 @@ export default function ChatView({
 		[sessionId, restoreTextToDraft],
 	);
 
-	const onSubmit = (text: string, attachments: ChatAttachment[], behavior: SubmitBehavior) => {
+	const onSubmit = (
+		text: string,
+		attachments: ChatAttachment[],
+		behavior: SubmitBehavior,
+	): ComposerSubmitDisposition => {
+		const nativeCommand = parseNativeChatCommand(text);
+		if (nativeCommand) {
+			const submissionError = compactSubmissionError(
+				attachments.length > 0,
+				queue.hasImages === true,
+			);
+			if (submissionError) return { accepted: false, reason: submissionError };
+			performCompact(nativeCommand.instructions);
+			return { accepted: true };
+		}
 		if (behavior !== "interrupt") {
 			performSend(text, attachments, behavior);
-			return;
+			return { accepted: true };
 		}
 		getTransport()
 			.request("session.abort", { sessionId })
@@ -334,6 +396,7 @@ export default function ChatView({
 				useAppStore.getState().appendErrorTurn(sessionId, errorText(err));
 				restoreTextToDraft(text);
 			});
+		return { accepted: true };
 	};
 
 	const removeQueued = (kind: QueueLane, index: number) =>
@@ -342,24 +405,20 @@ export default function ChatView({
 	const onEditQueued = (kind: QueueLane, index: number) =>
 		void removeQueued(kind, index)
 			.then(({ removed }) => {
-				if (removed !== null) restoreTextToDraft(removed);
+				if (removed === null) return;
+				restoreQueueContentToDraft({ steering: [removed], followUp: [] });
 			})
 			.catch(() => {});
 
 	const onRemoveQueued = (kind: QueueLane, index: number) =>
 		void removeQueued(kind, index).catch(() => {});
 
-	const restoreQueueToDraft = async (): Promise<void> => {
-		const { steering, followUp } = await getTransport().request("session.clearQueue", {
-			sessionId,
-		});
-		restoreTextToDraft([...steering, ...followUp].join("\n\n"));
-	};
-
 	const onAbort = () => {
-		void restoreQueueToDraft().catch(() => {});
-		getTransport()
-			.request("session.abort", { sessionId })
+		void getTransport()
+			.request("session.abort", { sessionId, restoreQueue: true })
+			.then(({ restoredQueue }) => {
+				if (restoredQueue) restoreQueueContentToDraft(restoredQueue);
+			})
 			.catch(() => {});
 	};
 

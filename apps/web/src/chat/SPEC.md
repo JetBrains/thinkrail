@@ -71,14 +71,15 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   `defaultExpanded`; errors auto-expand; a manual toggle wins), or a `"bare"` renderer that owns its
   frame. A `"bare"` call on a dead message (`stopReason` aborted/error — pi never executes those calls)
   renders as errored rather than staying interactive forever.
-- `activity` — a contiguous run of **routine** steps (thinking blocks + routine tool calls), merged
-  across consecutive assistant messages in a round and broken by non-empty text, primary tools, and
-  non-assistant turns. `ActivityGroup` renders it **collapsed by default** behind one header ("N steps ·
-  bash ×2, read ×4"); expanded, steps are slim borderless rows that individually reveal the step's full
-  renderer body. While the trailing run streams, the header is a **live ticker** (spinner + current
-  step's summary), collapsing when answer text starts. A single-step run renders its step row directly.
-  Errored *routine* steps get **no special treatment** (deliberate — agents often recover; `ErrorTurn`
-  and primary error-auto-expand are the safety nets).
+- `activity` — one contiguous run of routine work stays one **collapsed outer disclosure** whose header
+  summarizes every atomic step (thinking blocks + routine tool calls). Expanding it preserves tools before
+  the first thought as direct rows, then renders each non-empty thinking block as a nested disclosure that
+  contains its exact text and every following routine tool call until the next thinking block or activity
+  boundary. Those thinking groups are siblings **inside** the outer run, even across assistant-message
+  boundaries; the hierarchy is presentational, never invented pi entry parentage. A single atomic step
+  still renders directly. Non-empty text, primary tools, and non-assistant turns break the outer run. Only
+  its trailing instance carries the live ticker. Errored routine tools get **no special treatment**
+  (deliberate — agents often recover; `ErrorTurn` and primary error-auto-expand are the safety nets).
 - `divider` — the round-end summary (`TurnDivider` + pure `turnDivider` deriver), anchored the instant a
   round ends: elapsed time, tool-call count, and the round's written files as **two chips split by owning
   tool** — “N specs” and “N files changed”. The split is a **partition** (a path lands on exactly
@@ -102,10 +103,10 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   read as switching between Specs and Changes; closing is “never mind” and leaves the tool where the user
   last sent it.
 
-Row/step ids are stable across streaming snapshots (first step's `toolCallId`, or message-anchored index —
-pi appends, never reorders), so fold state survives re-derivation and virtualization: **every fold surface
-(activity groups, step rows, `ToolCard`, the divider's multi-artifact chips) records manual toggles in the
-shared `foldState` cache**
+Row/step ids are stable across streaming snapshots (the outer run's first atomic-step id, each thinking
+block's message-anchored index, and each tool's own id — pi appends, never reorders), so fold state survives
+re-derivation and virtualization: **every fold surface (outer activity groups, nested thinking groups, tool
+rows, `ToolCard`, the divider's multi-artifact chips) records manual toggles in the shared `foldState` cache**
 (`foldState.ts`, keyed by row/step id. Two hooks over that module: **`useFold`** for independent booleans,
 and **`useSelection`** for a single-choice group — the divider's chips, which store the *selected key* under
 `${rowId}:artifacts` rather than a boolean per side, so "only one list open" cannot be violated;
@@ -131,8 +132,9 @@ the **capability** registers with the pi session server-side (custom tool or pi 
   offer is never silently invisible. Success is the pivot on both sides, which is what keeps the row and
   the slot from ever showing the same call twice. The round divider's tool count follows the same
   predicate, so its summary can never name a call the round does not show,
-- **prominence metadata** — `prominence`: `"routine"` (default, incl. unregistered tools — folds into
-  activity groups) or `"primary"` (escapes the fold; `"bare"` chrome implies it **unconditionally**, even
+- **prominence metadata** — `prominence`: `"routine"` (default, incl. unregistered tools — enters the
+  outer Activity run, directly before the first thought or under the current nested Thinking disclosure)
+  or `"primary"` (escapes the fold; `"bare"` chrome implies it **unconditionally**, even
   over an explicit `prominence: "routine"` — a self-framed renderer can't live inside a fold's step
   rows, so a misregistration must not silently break the fold), and `defaultExpanded` (a
   primary card renders expanded once complete, e.g. `visualize`). Read through the single
@@ -297,15 +299,18 @@ extension-UI bridge (`pi.extensionUi` → `ExtUiDialog`) or — for a rich inlin
   `queue-item` testids, `data-kind` + `data-index`; full text + delivery meaning in the row `title`),
   sourced from the runtime's `queue`. **Each row carries its own edit and remove actions**
   (`queue-item-edit` / `queue-item-remove`) — both call `session.removeQueued { kind, index }` (rows
-  are position-addressed, matching the wire op); edit additionally prepends the removed text to the
-  draft and refocuses. Per-row actions exist because the original all-or-nothing dequeue (click strip
-  → `clearQueue` → every message merged into one draft blob) proved undiscoverable and lossy in use.
-  **Abort still restores the whole queue** (`onAbort` → `session.clearQueue` → texts prepended
-  `\n\n`-joined, pi's restore order, then `session.abort`) — pi's Escape parity: an aborted run must
-  not silently discard messages queued behind it. A **rejected** streaming send likewise restores its
-  text to the draft alongside the `appendErrorTurn`. Trade-off, accepted: `queue_update` carries text
-  only, so a queued image attachment shows no chip in the strip; the canonical transcript turn later
-  renders its image blocks with the hydrated-turn fallback labels. E2e: `queue.live.spec.ts` (@agent).
+  are position-addressed, matching the wire op); edit additionally restores the removed message's text
+  and images to the draft and refocuses. Per-row actions exist because the original all-or-nothing dequeue
+  (click strip → `clearQueue` → every message merged into one draft blob) proved undiscoverable and lossy
+  in use. **Abort atomically restores the complete queue** (`onAbort` →
+  `session.abort { restoreQueue: true }`): the host drains both Pi lanes and signals abort as one operation,
+  waits for idle, then returns each queued message's text + image content; the web prepends the texts and
+  reattaches every image. Stop therefore cannot let a queued continuation run or silently discard an
+  attachment. A **rejected** streaming send likewise restores its text to the draft alongside the
+  `appendErrorTurn`. The ordinary `queue_update` projection still carries only displayable text plus a
+  conservative `hasImages` aggregate — no image bytes — so a queued image shows no chip in the strip; the
+  canonical transcript turn later renders its image blocks with hydrated fallback labels. E2e:
+  `queue.live.spec.ts` (@agent).
 - **Agent-chosen next-step chips** — the current successful `offer_next_steps` composer tool renders
   between `QueueStrip` and the composer as `NextStepChips`; capability and native pi behavior belong to
   [[module-pi-next-steps]]. The row is idle + empty-draft only, wraps within the viewport, and consumes the
@@ -438,7 +443,23 @@ extension-UI bridge (`pi.extensionUi` → `ExtUiDialog`) or — for a rich inlin
   `source === "prompt"` entries, plus a fresh `template.list { workspaceId }` fetch mapped to
   `SlashCommandInfo` rows (`source: "prompt"`, `sourceInfo` synthesized to match pi's own prompt-template
   convention exactly: `{ path: filePath, source: "local", scope: scope === "global" ? "user" : "project",
-  origin: "top-level" }`) — one merged list. When a `template.list` response comes back **empty**,
+  origin: "top-level" }`) — one merged list. The chat prepends its one **browser-native command**,
+  `/compact [instructions]`, as a display-local `builtin` row labelled `Pi/built-in`; contracts' Pi-mirrored
+  command source stays unchanged. Native `compact` is reserved over an exact-name extension/template
+  collision (skill commands remain namespaced), and the exact Pi parser recognizes only `/compact` or
+  `/compact ` plus trimmed instructions — every near-miss remains an ordinary prompt. A compact submit
+  bypasses the optimistic user echo and every streaming send mode: completed draft images **or the queue's
+  host-authored `hasImages` aggregate** reject it in place with an actionable composer chip (draft + queue
+  preserved; pending draft images already hold all submits). Otherwise the command clears, drains
+  `session.clearQueue { requireTextOnly: true }` back into the composer in steering-then-follow-up order,
+  then calls `session.compact`; the host rechecks the image precondition at the destructive operation, so a
+  stale client or cross-client race still cannot drop queued bytes. The host atomically rejects a second
+  manual compaction while one is already in flight for that session; Pi owns abort, summarization,
+  persistence, and lifecycle. The request snapshots
+  existing compaction-turn ids, and a rejected clear/compact asks the store to append a failed compaction row
+  only when no new lifecycle turn appeared, so Pi's emitted failure and a pre-lifecycle wire failure share one
+  surface without duplicating. Existing live/hydrated compaction rendering is unchanged. When a
+  `template.list` response comes back **empty**,
   `SlashCommandMenu` renders a `footer` nudge (`data-testid="slash-templates-empty"`) that
   deep-links to Settings → Templates via `ChatView`'s `onManageTemplates` — the discoverability half of
   the starter-templates offer (`panels/SPEC.md`), since a fresh install has an empty global prompts dir
@@ -783,7 +804,7 @@ deriver — `working` → `thinking` → `running-tool` → `writing`, plus `com
 trailing turn is a running compaction) — not a per-turn cursor — so it can't
 duplicate and it fills the post-send gap. Outside the streaming window (a manual compact, or the
 pre-prompt compaction pi runs inside `prompt()` before `agent_start`) the footer is absent by design —
-the running `CompactionNotice` row itself carries the spinner, so the beat is never dead air. The activity fold's live ticker is a *status* line (spinner,
+the running `CompactionNotice` row itself carries the spinner, so the beat is never dead air. The trailing Activity fold's live ticker is a *status* line (spinner,
 like a running card header), not a second loader. `data-testid="stream-indicator"` + `data-phase` make
 the lifecycle assertable.
 

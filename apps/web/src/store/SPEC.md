@@ -34,7 +34,10 @@ snapshots plus device-local attention, terminal catalogs, and one **per-session 
   All project response call sites use the same updater, so the open and recent copies cannot drift.
   Explicit local transitions are **`selectMain()`**, **`selectProject(projectId, opts?)`**, and
   **`activateWorkspace(workspace)`**; each updates its coupled scope ids atomically, and there is no generic
-  active-workspace setter that can split the invariant. **`expandedProjectIds: Record<string, true>`** is the
+  active-workspace setter that can split the invariant. **`workspaceSelectionHistory: string[]`** is this
+  page's most-recent-first workspace attention: every ordinary, route-driven, and history-search activation
+  moves its destination to the front, while project/main selection leaves the recency intact. It is not host
+  state, URL history, or reload persistence. **`expandedProjectIds: Record<string, true>`** is the
   Projects rail's per-browser expansion — store-held (it must survive the rail's remounts and be writable by
   non-rail gestures) with **`toggleProjectExpanded(projectId)`** (the chevron), **`expandProject(projectId)`**
   (idempotent reveal: workspace creation / worktree attach / the active-workspace visibility rule), and
@@ -68,9 +71,12 @@ snapshots plus device-local attention, terminal catalogs, and one **per-session 
   leaving the client labelling and keying reads off a value the host no longer has; a project never fetched or an id absent from its list is a **no-op** — the next
   `workspace.list` reconciles; **`applyWorkspaceRemoved(projectId, id)`** is the **entire** removal
   reaction (`removeWorkspace` drops the row + `clearWorkspaceState` drops its
-  layout/attention/terminal maps and chat runtimes,
-  and **if it was this client's active workspace** → `selectProject(projectId)` (shell falls back to its
-  owning Project Home) + a neutral toast that reads right for both the initiator and an observer); the
+  layout/attention/terminal maps and chat runtimes + recency drops the dead id,
+  and **if it was this client's active workspace** → activate the most recently selected loaded workspace
+  whose project remains open, even across projects; when none remains, `selectProject(projectId)` falls back
+  to the removed workspace's Project Home; either active fallback gets the same neutral toast that reads right
+  for both the initiator and an observer). A background removal never moves focus. Because the lifecycle event
+  is shared but selection history is browser-local, each observing client restores its own prior context. The
   primitive **`removeWorkspace(projectId, id)`** just drops the row (unknown project/id is a no-op);
   **workspace layout state** — `layoutSnapshotsByWorkspace` holds the latest accepted
   `WorkspaceLayoutSnapshot` for each workspace; `installLayoutSnapshot` is a revision-aware whole-value
@@ -187,6 +193,10 @@ snapshots plus device-local attention, terminal catalogs, and one **per-session 
   settled transcript never claims ongoing work) and still removes the superseded assistant attempt. The
   reducer relies on pi's guarantee that every emitted `compaction_start` is paired with a
   `compaction_end` (both success and failure paths emit it), the same trust every other event pair gets.
+  Manual-command transport rejection uses one atomic store mutation: given the compaction-turn ids observed
+  before the request, append a failed compaction turn only if none of the current ids is new. Thus a Pi failure
+  already represented by `compaction_end` is never duplicated, while rejection before lifecycle begins is
+  still visible on the same compaction surface.
   **`auto_retry_start` mirrors pi's live-context surgery**: pi's `_prepareRetry` trims the failed
   attempt's assistant message from the live context before re-running the turn (the retry re-streams it
   as a new message) while *keeping it in the session file*, so the reducer drops the superseded failed
@@ -234,8 +244,10 @@ snapshots plus device-local attention, terminal catalogs, and one **per-session 
   pure **`reduceSessionEvent`** folds a `PiEvent` into a runtime. **Only idle sends enter the transcript
   optimistically** (`ChatView.onSubmit` → `appendUserMessage`); the last-turn echo dedup below is
   sufficient precisely because nothing intervenes before the echo. A **streaming send (`steer`/`followUp`)
-  never appends a turn**: its text lives in `queue` (folded verbatim from pi's `queue_update`, seeded from
-  the summary's snapshot at hydration) and the turn lands only via pi's canonical user `message_start` —
+  never appends a turn**: its text lives in `queue` (folded verbatim from the host-projected
+  `queue_update`, seeded from the summary at hydration), alongside the optional conservative `hasImages`
+  aggregate that guards destructive text-only queue restoration; the turn lands only via pi's canonical
+  user `message_start` —
   at its true position, converging live with hydrated. (Mirrors pi's own interactive mode; replaces the
   optimistic-append-for-everything model whose last-turn dedup missed whenever assistant content landed
   between the append and the echo — reproduced live as a duplicated, mispositioned queued bubble.)

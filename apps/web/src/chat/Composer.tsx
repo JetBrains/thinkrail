@@ -10,7 +10,6 @@ import {
 } from "@remixicon/react";
 import {
 	REQUEST_IMAGE_BASE64_BUDGET,
-	type SlashCommandInfo,
 	type ThinkingLevel,
 	type WireModel,
 } from "@thinkrail/contracts";
@@ -31,6 +30,7 @@ import { FileChip } from "./FileChip";
 import { type AttachedImage, fileToAttachedImage } from "./imageAttachment";
 import { ModelSelector } from "./ModelSelector";
 import {
+	type SlashCommandItem,
 	SlashCommandMenu,
 	selectedSlashCommandValue,
 	slashCommandQuery,
@@ -48,6 +48,8 @@ import { ThinkingSelector } from "./ThinkingSelector";
 import type { ChatAttachment } from "./types";
 
 export type SubmitBehavior = "send" | "steer" | "followUp" | "interrupt";
+
+export type ComposerSubmitDisposition = { accepted: true } | { accepted: false; reason: string };
 
 const STREAMING_SEND_MODES = [
 	{
@@ -151,7 +153,7 @@ interface ComposerProps {
 	value: string;
 	onChange: (value: string) => void;
 	isStreaming: boolean;
-	commands: SlashCommandInfo[];
+	commands: SlashCommandItem[];
 	mentionCandidates: MentionCandidate[];
 	recentPrompts: string[];
 	models: WireModel[];
@@ -163,7 +165,11 @@ interface ComposerProps {
 	onSlashActive: (active: boolean) => void;
 	onSelectModel: (model: WireModel) => void;
 	onSelectThinking: (level: ThinkingLevel) => void;
-	onSubmit: (text: string, attachments: ChatAttachment[], behavior: SubmitBehavior) => void;
+	onSubmit: (
+		text: string,
+		attachments: ChatAttachment[],
+		behavior: SubmitBehavior,
+	) => ComposerSubmitDisposition;
 	onAbort: () => void;
 	onHistoryOpen?: () => void;
 	onPickTemplate?: (name: string) => void;
@@ -175,6 +181,7 @@ export interface ComposerHandle {
 	insertText: (text: string) => void;
 	insertAndSubmit: (text: string, behavior: SubmitBehavior) => void;
 	insertTemplate: (parsed: ParsedTemplate) => void;
+	restoreAttachments: (attachments: ChatAttachment[]) => void;
 	openHistory: () => void;
 	refocus: () => void;
 }
@@ -209,9 +216,11 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	const [caret, setCaret] = useState(0);
 	const [images, setImages] = useState<PendingImage[]>([]);
 	const imagesRef = useRef<PendingImage[]>([]);
+	const [submitError, setSubmitError] = useState<string | null>(null);
 	const commitImages = (next: PendingImage[]) => {
 		imagesRef.current = next;
 		setImages(next);
+		if (next.length === 0) setSubmitError(null);
 	};
 	const [pendingImages, setPendingImages] = useState(0);
 	const [attachErrors, setAttachErrors] = useState<AttachError[]>([]);
@@ -268,6 +277,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		(text: string, caret: number = text.length) => {
 			recallIdxRef.current = null;
 			setSlots(null);
+			setSubmitError(null);
 			onChange(text);
 			focusSelection(caret);
 		},
@@ -279,11 +289,16 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	const submitText = (raw: string, behavior: SubmitBehavior) => {
 		if (!canSubmit(raw)) return;
 		const text = raw.trim();
-		onSubmit(
+		const disposition = onSubmit(
 			text,
 			images.map(({ name, content }) => ({ name, content })),
 			behavior,
 		);
+		if (!disposition.accepted) {
+			setSubmitError(disposition.reason);
+			return;
+		}
+		setSubmitError(null);
 		onChange("");
 		commitImages([]);
 		setAttachErrors([]);
@@ -334,6 +349,18 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 			setSlots(parsed.slots);
 			setSlotIdx(0);
 			focusSelection(first.start, first.end);
+		},
+		restoreAttachments: (attachments: ChatAttachment[]) => {
+			if (attachments.length === 0) return;
+			commitImages([
+				...attachments.map((attachment) => ({
+					id: crypto.randomUUID(),
+					...attachment,
+				})),
+				...imagesRef.current,
+			]);
+			setSubmitError(null);
+			focusSelection(caret);
 		},
 		openHistory,
 		refocus: () => {
@@ -562,8 +589,17 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 				</button>
 			) : null}
 
-			{images.length > 0 || pendingImages > 0 || attachErrors.length > 0 ? (
+			{images.length > 0 || pendingImages > 0 || attachErrors.length > 0 || submitError ? (
 				<div className="flex flex-wrap gap-4 px-12 pt-12" data-testid="composer-images">
+					{submitError ? (
+						<FileChip
+							data-testid="composer-command-error"
+							tone="error"
+							icon={false}
+							title={submitError}
+							label={submitError}
+						/>
+					) : null}
 					{attachErrors.map((err) => (
 						<FileChip
 							key={err.id}
@@ -657,6 +693,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 						onChange={(e) => {
 							const next = e.target.value;
 							const nextCaret = e.target.selectionStart;
+							setSubmitError(null);
 							const recalled = recallIdxRef.current;
 							if (recalled !== null && next !== recentPrompts[recalled]) {
 								recallIdxRef.current = null;

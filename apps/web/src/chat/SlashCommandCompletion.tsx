@@ -2,6 +2,10 @@ import type { SlashCommandInfo } from "@thinkrail/contracts";
 import { type ReactNode, useState } from "react";
 import { cn } from "@/lib/utils";
 
+export type SlashCommandItem = Omit<SlashCommandInfo, "source"> & {
+	source: SlashCommandInfo["source"] | "builtin";
+};
+
 const MAX_MATCHES = 8;
 
 export async function slashCommandCatalogOrEmpty(
@@ -18,10 +22,10 @@ export function slashCommandQuery(value: string): string | null {
 	return value.startsWith("/") && !/\s/.test(value) ? value.slice(1) : null;
 }
 
-export function matchSlashCommands(
+export function matchSlashCommands<T extends SlashCommandItem>(
 	value: string,
-	commands: readonly SlashCommandInfo[],
-): SlashCommandInfo[] {
+	commands: readonly T[],
+): T[] {
 	const query = slashCommandQuery(value);
 	if (query === null) return [];
 	const normalized = query.toLowerCase();
@@ -30,7 +34,7 @@ export function matchSlashCommands(
 		.slice(0, MAX_MATCHES);
 }
 
-export function selectedSlashCommandValue(command: SlashCommandInfo): string {
+export function selectedSlashCommandValue(command: SlashCommandItem): string {
 	return `/${command.name} `;
 }
 
@@ -62,14 +66,14 @@ interface CompletionKeyEvent {
 	stopPropagation: () => void;
 }
 
-export function useSlashCommandCompletion({
+export function useSlashCommandCompletion<T extends SlashCommandItem>({
 	value,
 	commands,
 	onSelect,
 }: {
 	value: string;
-	commands: readonly SlashCommandInfo[];
-	onSelect: (command: SlashCommandInfo) => void;
+	commands: readonly T[];
+	onSelect: (command: T) => void;
 }) {
 	const [activeIndex, setActiveIndex] = useState(0);
 	const [dismissed, setDismissed] = useState(false);
@@ -89,7 +93,7 @@ export function useSlashCommandCompletion({
 
 	const dismiss = () => setDismissed(true);
 
-	const pick = (command: SlashCommandInfo) => {
+	const pick = (command: T) => {
 		onSelect(command);
 		dismiss();
 	};
@@ -111,16 +115,16 @@ export function useSlashCommandCompletion({
 	return { activeIndex: visibleActiveIndex, dismiss, handleKeyDown, matches, open, pick };
 }
 
-export function SlashCommandMenu({
+export function SlashCommandMenu<T extends SlashCommandItem>({
 	commands,
 	activeIndex,
 	onSelect,
 	className,
 	footer,
 }: {
-	commands: readonly SlashCommandInfo[];
+	commands: readonly T[];
 	activeIndex: number;
-	onSelect: (command: SlashCommandInfo) => void;
+	onSelect: (command: T) => void;
 	className?: string;
 	footer?: ReactNode;
 }) {
@@ -149,7 +153,9 @@ export function SlashCommandMenu({
 						<span className="truncate tr-text-metadata">{command.description}</span>
 					) : null}
 					<span className="ml-auto shrink-0 text-text-muted tr-text-metadata">
-						{command.source}/{command.sourceInfo.scope}
+						{command.source === "builtin"
+							? "Pi/built-in"
+							: `${command.source}/${command.sourceInfo.scope}`}
 					</span>
 				</button>
 			))}

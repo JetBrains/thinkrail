@@ -1,8 +1,10 @@
 import { describe, expect, it } from "bun:test";
+import { renderToStaticMarkup } from "react-dom/server";
 import { summarizeSteps } from "./ActivityGroup";
-import type { ActivityStep } from "./rows";
+import type { ChatRow, RoutineToolStep } from "./rows";
+import { ChatTurnView } from "./turns";
 
-const tool = (id: string, toolName: string): ActivityStep => ({
+const tool = (id: string, toolName: string): RoutineToolStep => ({
 	kind: "tool",
 	id,
 	toolCallId: id,
@@ -13,23 +15,10 @@ const tool = (id: string, toolName: string): ActivityStep => ({
 	streaming: false,
 });
 
-const thinking = (id: string, text = "hmm"): ActivityStep => ({
-	kind: "thinking",
-	id,
-	text,
-	streaming: false,
-});
-
-describe("summarizeSteps (the collapsed activity-group header)", () => {
+describe("activity disclosure summaries", () => {
 	it("counts steps and tallies per tool name in first-seen order", () => {
 		expect(summarizeSteps([tool("a", "bash"), tool("b", "read"), tool("c", "bash")])).toBe(
 			"3 steps · bash ×2, read",
-		);
-	});
-
-	it("labels thinking blocks as 'thinking' alongside tools", () => {
-		expect(summarizeSteps([thinking("t1"), tool("a", "bash"), thinking("t2")])).toBe(
-			"3 steps · thinking ×2, bash",
 		);
 	});
 
@@ -47,5 +36,30 @@ describe("summarizeSteps (the collapsed activity-group header)", () => {
 			tool("f", "glob"),
 		];
 		expect(summarizeSteps(steps)).toBe("6 steps · bash, read, edit, write, +2 more");
+	});
+
+	it("counts nested thinking and tools in one outer N-step disclosure", () => {
+		const row: ChatRow = {
+			kind: "activity",
+			id: "activity:a",
+			steps: [
+				tool("a", "read"),
+				{
+					kind: "thinking",
+					id: "thinking-1",
+					text: "inspect first",
+					streaming: false,
+					tools: [tool("b", "read"), tool("c", "read")],
+				},
+			],
+			live: false,
+		};
+
+		const markup = renderToStaticMarkup(ChatTurnView({ row }));
+
+		expect(markup).toContain('data-testid="activity-group"');
+		expect(markup).toContain("4 steps · read ×3, thinking");
+		expect(markup).not.toContain(">Activity<");
+		expect(markup).not.toContain("inspect first");
 	});
 });
