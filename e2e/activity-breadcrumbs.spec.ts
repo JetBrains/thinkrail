@@ -29,6 +29,65 @@ function appendMessage(path: string, id: string, parentId: string, message: obje
 	return id;
 }
 
+test("a model-authored Thinking heading is visible only while its disclosure is folded", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const chat = seedWorkspaceSession(repoCwd(), {
+		name: "thinking summary",
+		messages: [{ role: "user", text: "Check the formatter output.", timestamp: BASE_TS }],
+	});
+	const assistantId = `${chat.id}-a1`;
+	appendMessage(chat.path, assistantId, `${chat.id}-m0`, {
+		role: "assistant",
+		content: [
+			{
+				type: "thinking",
+				thinking:
+					"**Evaluating formatting process**\n\nI should inspect the formatted file before continuing.",
+			},
+			{ type: "toolCall", id: "read-format", name: "read", arguments: { path: "format.ts" } },
+		],
+		usage,
+		stopReason: "toolUse",
+		timestamp: BASE_TS + 1_000,
+	});
+	const resultId = appendMessage(chat.path, `${chat.id}-read-format`, assistantId, {
+		role: "toolResult",
+		toolCallId: "read-format",
+		toolName: "read",
+		content: [{ type: "text", text: "formatted source" }],
+		isError: false,
+		timestamp: BASE_TS + 2_000,
+	});
+	appendMessage(chat.path, `${chat.id}-a2`, resultId, {
+		role: "assistant",
+		content: [{ type: "text", text: "The formatter output is consistent." }],
+		usage,
+		stopReason: "stop",
+		timestamp: BASE_TS + 3_000,
+	});
+	utimesSync(chat.path, new Date(BASE_TS), new Date(BASE_TS));
+
+	await expect(defaultWorkspaceRow(page)).toBeVisible();
+	await enterDefaultWorkspace(page);
+
+	const activity = page.getByTestId("activity-group").first();
+	await activity.getByTestId("activity-group-toggle").click();
+	const thinking = activity.getByTestId("thinking-group").first();
+	const heading = thinking.locator("strong", { hasText: "Evaluating formatting process" });
+	await expect(heading).toBeVisible();
+	await expect(thinking.getByTestId("thinking-group-toggle")).toContainText("1 step · read");
+
+	await thinking.getByTestId("thinking-group-toggle").click();
+
+	await expect(thinking).toHaveAttribute("data-expanded", "true");
+	await expect(heading).toHaveCount(0);
+	await expect(thinking.getByTestId("thinking-group-text")).toContainText(
+		"**Evaluating formatting process**",
+	);
+});
+
 test("sticky activity breadcrumbs expose the off-screen Activity → Thinking → tool path", async ({
 	page,
 }) => {
