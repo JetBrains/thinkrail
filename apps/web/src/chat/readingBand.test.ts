@@ -20,10 +20,12 @@ function createHarness({
 	streaming = true,
 	reducedMotion = false,
 	viewportHeight = 600,
+	latestEdge = "bottom",
 }: {
 	streaming?: boolean;
 	reducedMotion?: boolean;
 	viewportHeight?: number;
+	latestEdge?: "top" | "bottom";
 } = {}): Harness {
 	let geometry: ReadingBandGeometry = {
 		viewportHeight,
@@ -60,7 +62,8 @@ function createHarness({
 		},
 		onStateChange: () => undefined,
 	};
-	const controller = createReadingBandController(environment, { streaming });
+	const controllerOptions = { streaming, latestEdge };
+	const controller = createReadingBandController(environment, controllerOptions);
 
 	return {
 		controller,
@@ -241,6 +244,20 @@ describe("reading-band reader intent", () => {
 		harness.controller.returnToEdge();
 		expect(harness.writes.at(-1)).toBe(900);
 		expect(harness.controller.getSnapshot().following).toBe(true);
+	});
+
+	it("returns and reconstructs at the physical top when newest-first makes top the latest edge", () => {
+		const returning = createHarness({ latestEdge: "top" });
+		returning.controller.readerLeft();
+		returning.setGeometry({ scrollTop: 300, maxScrollTop: 900 });
+		returning.controller.returnToEdge();
+		expect(returning.writes.at(-1)).toBe(0);
+		expect(returning.controller.getSnapshot().following).toBe(true);
+
+		const remounted = createHarness({ latestEdge: "top" });
+		remounted.setGeometry({ scrollTop: 200, maxScrollTop: 900 });
+		remounted.controller.reconstructActiveStream();
+		expect(remounted.writes).toEqual([0]);
 	});
 
 	it("settles without catch-up or runway collapse and changes the detached action to Latest", () => {

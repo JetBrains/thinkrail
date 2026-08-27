@@ -2792,6 +2792,12 @@ test("applyConfig projects the composer growth limit", () => {
 	expect(useAppStore.getState()).toHaveProperty("composerGrowthLimit", "roomy");
 });
 
+test("applyConfig projects the host-synchronized chat message order", () => {
+	const config = { ...DEFAULT_CONFIG, chatMessageOrder: "newest-first" };
+	useAppStore.getState().applyConfig(config);
+	expect(Reflect.get(useAppStore.getState(), "chatMessageOrder")).toBe("newest-first");
+});
+
 test("diff tabs: openTab dedupes by id + activates; view + contents update in place", () => {
 	const s = () => useAppStore.getState();
 	useAppStore.setState({ activeWorkspaceId: "ws1" });

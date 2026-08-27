@@ -47,6 +47,13 @@ export type ChatRow =
 	  }
 	| { kind: "divider"; id: string; data: TurnDividerData };
 
+export function projectRows(
+	rows: ChatRow[],
+	_messageOrder: "oldest-first" | "newest-first",
+): ChatRow[] {
+	return rows;
+}
+
 function nestRoutineRun(steps: ActivityStep[]): ActivityStep[] {
 	const nested: ActivityStep[] = [];
 	let currentThinking: ThinkingStep | undefined;

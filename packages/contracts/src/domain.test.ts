@@ -48,6 +48,10 @@ describe("config defaults", () => {
 	test("the composer grows to half the chat by default", () => {
 		expect(DEFAULT_CONFIG).toHaveProperty("composerGrowthLimit", "half-chat");
 	});
+
+	test("existing chats keep oldest-first message order by default", () => {
+		expect(Reflect.get(DEFAULT_CONFIG, "chatMessageOrder")).toBe("oldest-first");
+	});
 });
 
 describe("image payload ceiling", () => {
