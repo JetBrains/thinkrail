@@ -34,7 +34,7 @@ bootstrap it into one so it can be opened.
   **Create-from-scratch (agent-led new project).** `createDraftProject()` bootstraps a brand-new
   project the user has no repo for yet: it mkdirs a fresh managed dir under the **created-projects root**
   `<dataDir>/projects/<uuid>` (uuid → **never a path collision, never an overwrite**), `initProject`s it,
-  then marks the record **`draft: true`** with a provisional display **`name` ("Untitled project")** and a
+  then marks the record **`draft: true`** with a provisional display **`name` ("Project draft")** and a
   slug from it. `draft` is a lifecycle flag (mirroring `closed`), **not** a project type — a draft is a
   real, server-owned project that simply hasn't been named/finalized yet; it hydrates and lists like any
   open project. The setup chat runs in the draft's real Default workspace ([[submodule-server-workspaces]]),

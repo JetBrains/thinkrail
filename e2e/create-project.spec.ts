@@ -17,9 +17,7 @@ test("Create project from scratch (Welcome card) creates a draft project in its 
 		.click();
 
 	// A real project now exists in the rail with a provisional name, entered in its Default workspace.
-	await expect(
-		page.getByTestId("project-item").filter({ hasText: "Untitled project" }),
-	).toBeVisible();
+	await expect(page.getByTestId("project-item").filter({ hasText: "Project draft" })).toBeVisible();
 	await expect(page.getByTestId("center-tabs")).toBeVisible();
 	await expect(defaultWorkspaceRow(page)).toHaveAttribute("data-active", "true");
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]').first()).toBeVisible();
@@ -35,8 +33,6 @@ test("the add-project menu offers both New project from scratch and Open existin
 	await expect(page.getByTestId("menu-open-project")).toBeVisible();
 
 	await page.getByTestId("menu-create-project").click();
-	await expect(
-		page.getByTestId("project-item").filter({ hasText: "Untitled project" }),
-	).toBeVisible();
+	await expect(page.getByTestId("project-item").filter({ hasText: "Project draft" })).toBeVisible();
 	await expect(defaultWorkspaceRow(page)).toHaveAttribute("data-active", "true");
 });

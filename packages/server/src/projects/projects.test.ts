@@ -64,7 +64,7 @@ afterEach(() => {
 test("createDraftProject bootstraps a real draft repo under the managed projects root", () => {
 	const project = createDraftProject();
 	expect(project.draft).toBe(true);
-	expect(project.name).toBe("Untitled project");
+	expect(project.name).toBe("Project draft");
 	expect(project.path.startsWith(realpathSync(join(dataDir, "projects")))).toBe(true);
 	expect(inspectProjectPath(project.path).kind).toBe("repo");
 	expect(listProjects().map((p) => p.id)).toContain(project.id);

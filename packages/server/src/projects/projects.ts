@@ -15,7 +15,7 @@ function createdProjectsRoot(): string {
 	return join(dataDir(), "projects");
 }
 
-const DRAFT_PROVISIONAL_NAME = "Untitled project";
+const DRAFT_PROVISIONAL_NAME = "Project draft";
 
 type ProjectPublisher = (project: Project) => void;
 
