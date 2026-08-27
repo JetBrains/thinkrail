@@ -161,6 +161,13 @@ the **capability** registers with the pi session server-side (custom tool or pi 
 - a **`summary`** — a pure one-liner for collapsed headers and activity-step rows,
 - a **`chrome`** — `"card"` (default, the `ToolCard` frame) or `"bare"` (owns its frame; for
   interactive/primary tools like `ask_user_question`),
+- a **`placement`** — `"transcript"` (default) or `"composer"`; a **successful** composer call is omitted
+  from historical rows and only the current one is rendered in the composer accessory slot
+  (`ComposerToolSlot`, which resolves the registered renderer and hands it the completed result), while
+  any other outcome — errored, or dead with no result — keeps the ordinary transcript row, so a failed
+  offer is never silently invisible. Success is the pivot on both sides, which is what keeps the row and
+  the slot from ever showing the same call twice. The round divider's tool count follows the same
+  predicate, so its summary can never name a call the round does not show,
 - **prominence metadata** — `prominence`: `"routine"` (default, incl. unregistered tools — enters the
   outer Activity run, directly before the first thought or under the current nested Thinking disclosure)
   or `"primary"` (escapes the fold; `"bare"` chrome implies it **unconditionally**, even
@@ -169,10 +176,16 @@ the **capability** registers with the pi session server-side (custom tool or pi 
   primary card renders expanded once complete, e.g. `visualize`). Read through the single
   **`resolveProminence`** seam — where a per-user override map (settings) can plug in later.
 
-Unregistered tools fall back to `DefaultToolRenderer`. Tools needing user input mid-run either route
-through the extension-UI bridge (`pi.extensionUi` → `ExtUiDialog`) or — for a rich inline card — render
-from their `toolCall` args and reply through **`ChatActions`** (see below). Worked example: the
-`ask_user_question` flow in [tools/SPEC.md](tools/SPEC.md).
+Unregistered tools fall back to `DefaultToolRenderer`. `deriveComposerTool` (`rows.ts`, pure over
+`turns`/`toolResults`/`isStreaming`) exposes a composer-placed renderer only when the session is idle, the
+final meaningful assistant content ends with its successful call, and no later user/error turn exists —
+"meaningful" skipping blank text/thinking blocks exactly as `deriveRows` does, and an aborted/errored
+assistant message never offering at all. It reads *past* a trailing `system` turn, because only the live
+path appends the settlement success marker: live settlement and hydration therefore resolve identically
+without client persistence. Tools needing user input mid-run either route through the
+extension-UI bridge (`pi.extensionUi` → `ExtUiDialog`) or — for a rich inline card — render from their
+`toolCall` args and reply through **`ChatActions`** (see below). Worked examples: `ask_user_question` and
+`offer_next_steps` in [tools/SPEC.md](tools/SPEC.md).
 
 ## Interaction seams
 
@@ -185,8 +198,9 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   semantics belong to [[submodule-web-panels]].
 - **`ChatActions`** — a React context (provided by `ChatView`, `null` standalone): how a renderer talks
   **back** to the agent without importing store/transport. Today: `answerQuestion(toolCallId, result)` —
-  it rejects when the host refuses (unknown/answered/superseded call), and the caller owns the failure UX —
-  plus `focusComposer()`, for a renderer that resolves *itself*: it unmounts the control the user was
+  it rejects when the host refuses (unknown/answered/superseded call), and the caller owns the failure UX;
+  `sendPrompt(text)` sends a composer action through the ordinary idle prompt path; plus `focusComposer()`,
+  for a renderer that resolves *itself*: it unmounts the control the user was
   standing on, and focus would otherwise fall to `<body>` and swallow every following keystroke (the same
   stranding the history overlay's dismiss refocus avoids). Only the card's own reply path calls it, and
   only while the card still holds focus.
@@ -371,6 +385,21 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   conservative `hasImages` aggregate — no image bytes — so a queued image shows no chip in the strip; the
   canonical transcript turn later renders its image blocks with hydrated fallback labels. E2e:
   `queue.live.spec.ts` (@agent).
+- **Agent-chosen next-step chips** — the current successful `offer_next_steps` composer tool renders
+  between `QueueStrip` and the composer as `NextStepChips`; capability and native pi behavior belong to
+  [[module-pi-next-steps]]. The row is idle + empty-draft only, wraps within the viewport, and consumes the
+  tool's validated result details rather than trusting raw arguments. Activating one chip latches the row
+  against a second activation and sends its complete prompt immediately through `ChatActions.sendPrompt` —
+  never draft insertion and never a tool-specific wire method. The optimistic user turn makes the offer
+  stale immediately; a rejected send appends an error after it, so old chips cannot revive. Successful
+  historical calls have no transcript row, while failed/dead calls retain the normal tool fallback.
+  E2e: `next-steps.spec.ts` (no-agent — a seeded transcript supplies the offer and the send is answered
+  on the socket, so the row and both send outcomes are covered without a provider) +
+  `next-steps.live.spec.ts` (@agent — its natural request asks for follow-up suggestions without naming
+  the tool, so a real model must follow the portable prompt contract and author the offer; the *live*
+  event path and `terminate` ending the turn are covered too. After chip activation it waits for the next
+  `agent_settled` socket event rather than counting mounted `Done` rows, because transcript virtualization
+  may retain only the latest settlement marker after a long response).
 - **Streaming send modes: split send + interrupt** (`Composer`) — steer/queue semantics are pi's loop
   design (steer = injected at the next turn boundary, after the current assistant message + its tool
   calls; queue = runs after the agent settles; only abort halts an in-flight response) and proved
@@ -810,8 +839,9 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
 
 ## Boundary
 
-- **Public surface:** the registry API (`toolRegistry`), the props-driven slash-completion primitive, and
-  the renderers (incl. the presentational `Markdown` — GFM + shiki, no store/transport; the rendering is fixed but the **prose skin** is the
+- **Public surface:** the registry API (`toolRegistry`), the pure transcript derivations (`rows.ts`'s
+  `deriveRows` + `deriveComposerTool`), the composer accessory slot (`ComposerToolSlot`), the props-driven
+  slash-completion primitive, and the renderers (incl. the presentational `Markdown` — GFM + shiki, no store/transport; the rendering is fixed but the **prose skin** is the
   caller's via an optional `className` — chat uses the compact bubble skin (`tr-prose-chat`),
   `panels/MarkdownPreview` the document skin (`tr-prose-doc`). A skin names exactly one generated
   `tr-prose-*` system and then carries only spacing/measure/chrome — no size, weight, leading or

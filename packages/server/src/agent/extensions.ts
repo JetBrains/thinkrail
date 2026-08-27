@@ -54,11 +54,19 @@ function resolveDevPaths(): { extensionPaths: string[]; skillPaths: string[] } {
 	const require = createRequire(import.meta.url);
 	const webAccessPath = require.resolve("pi-web-access/index.ts");
 	const visualizePath = require.resolve("pi-visualize/index.ts");
+	const nextStepsPath = require.resolve("pi-next-steps/index.ts");
 	const specGraphPath = require.resolve("pi-spec-graph/index.ts");
 	const workflowPath = require.resolve("pi-thinkrail-workflow/index.ts");
 	const todosPath = require.resolve("pi-todos/index.ts");
 	devPaths = {
-		extensionPaths: [webAccessPath, visualizePath, specGraphPath, workflowPath, todosPath],
+		extensionPaths: [
+			webAccessPath,
+			visualizePath,
+			nextStepsPath,
+			specGraphPath,
+			workflowPath,
+			todosPath,
+		],
 		skillPaths: [
 			join(dirname(specGraphPath), "skills"),
 			join(dirname(workflowPath), "skills"),

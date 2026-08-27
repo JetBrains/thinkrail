@@ -6,6 +6,7 @@ title: tools — built-in tool renderers
 parent: submodule-web-chat
 depends-on: [module-contracts]
 tags: [v1, chat]
+references: [module-pi-next-steps]
 ---
 
 ## Responsibility
@@ -177,6 +178,16 @@ registration runs once when the chat module mounts. Unregistered tools fall back
     color). Shown up front for every recommended option, not gated on selection: more discoverable than
     a tooltip and, being ordinary visible text, it reads on touch and for AT without a popover.
     **Active card only** — the resolved record shows selections only, no rationale.
+- **`NextStepChips`** — the composer-placed renderer for the standalone
+  [[module-pi-next-steps]] `offer_next_steps` tool. It reads only the completed tool result's validated
+  one-to-three `{ label, prompt }` items (one unreadable item discards the whole offer rather than
+  rendering a partial row), renders compact wrapping action chips, and sends the selected
+  prompt immediately through `ChatActions`; a local one-shot latch prevents duplicate activation before
+  the optimistic user turn unmounts the row. **The latch is a ref, not state**: two activations dispatched
+  in one task both read the same render's closure, so a state flag would let the second through — the very
+  double-send the latch exists to stop. Chips render only for a completed call; any other status hands the
+  props straight to `DefaultToolRenderer`, which is how a failed offer keeps a visible transcript row.
+  Props/context only, no store or transport.
 - **`visualize/`** — `VisualizationCard` dispatches on `args.type` to `DiagramCard` (mermaid → themed
   SVG via the **lazy-loaded** `mermaid`, source fallback on parse error) and `ComparisonCard` (option
   cards with pros/cons + `recommended` highlight); shared `MermaidView` re-renders on `[data-theme]`

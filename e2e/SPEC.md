@@ -135,7 +135,10 @@ irrelevant expensive setup with equivalent fixture state and wait for observable
 arbitrary sleeps, and assertion weakening are not synchronization policy. Scenarios whose subject is a
 client-side send transformation assert the exact outgoing `session.prompt` frame rather than treating a
 mounted optimistic transcript row as delivery evidence: a fast provider rejection can add a taller error,
-scroll to the latest row, and legitimately virtualize the preceding user row. Before handoff, every
+scroll to the latest row, and legitimately virtualize the preceding user row. Such a scenario may also
+**answer that one frame on the socket** — accepting or refusing it — when the send's *outcome* is the
+subject: it makes the accepted and rejected paths deterministic in the no-agent gate and reaches no
+provider, while every other frame still travels to the real host. Before handoff, every
 app-affecting change runs the complete `bun run e2e` no-agent gate. Binary-only regressions remain covered by
 `e2e:binary`: a synthetic opaque external extension loads in the compiled single-file host with no `pi`
 executable on `PATH`, for default and custom `PI_CODING_AGENT_DIR`. Real Central acceptance remains

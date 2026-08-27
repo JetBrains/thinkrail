@@ -36,6 +36,7 @@ import {
 	type MentionCandidate,
 	type SubmitBehavior,
 } from "./Composer";
+import { ComposerToolSlot } from "./ComposerToolSlot";
 import { ExtUiDialog } from "./ExtUiDialog";
 import { HistoryOverlay } from "./HistoryOverlay";
 import {
@@ -45,7 +46,7 @@ import {
 } from "./nativeCommands";
 import { planGlance } from "./planView";
 import { QueueStrip } from "./QueueStrip";
-import { type ChatRow, deriveRows, rowIndexForTurn } from "./rows";
+import { type ChatRow, deriveComposerTool, deriveRows, rowIndexForTurn } from "./rows";
 import { SkillsDialog } from "./SkillsDialog";
 import { StreamIndicator, type StreamStatus, streamStatus } from "./StreamIndicator";
 import { parseTemplateSlots } from "./slotSession";
@@ -196,6 +197,11 @@ export default function ChatView({
 	const rows = useMemo(
 		() => deriveRows(turns, toolResults, isStreaming, isSpec),
 		[turns, toolResults, isStreaming, isSpec],
+	);
+
+	const composerTool = useMemo(
+		() => deriveComposerTool(turns, toolResults, isStreaming),
+		[turns, toolResults, isStreaming],
 	);
 
 	const currentStreamStatus = useMemo<StreamStatus | null>(() => {
@@ -351,13 +357,16 @@ export default function ChatView({
 			.catch(() => {});
 	};
 
-	const restoreTextToDraft = (text: string) => {
-		if (!text.trim()) return;
-		const current = useAppStore.getState().sessions[sessionId]?.draft ?? "";
-		const combined = [text, current].filter((t) => t.trim()).join("\n\n");
-		useAppStore.getState().setChatDraft(sessionId, combined);
-		composerRef.current?.refocus();
-	};
+	const restoreTextToDraft = useCallback(
+		(text: string) => {
+			if (!text.trim()) return;
+			const current = useAppStore.getState().sessions[sessionId]?.draft ?? "";
+			const combined = [text, current].filter((t) => t.trim()).join("\n\n");
+			useAppStore.getState().setChatDraft(sessionId, combined);
+			composerRef.current?.refocus();
+		},
+		[sessionId],
+	);
 
 	const restoreQueueContentToDraft = (content: SessionQueueContent): void => {
 		const messages = [...content.steering, ...content.followUp];
@@ -395,31 +404,34 @@ export default function ChatView({
 			);
 	};
 
-	const performSend = (
-		text: string,
-		attachments: ChatAttachment[],
-		behavior: Exclude<SubmitBehavior, "interrupt">,
-	) => {
-		const queued = behavior !== "send";
-		if (!queued && (text || attachments.length > 0)) {
-			armImmediateTurn();
-			useAppStore.getState().appendUserMessage(sessionId, text, attachments);
-		}
-		const images = attachments.map((a) => a.content);
-		const params = { sessionId, text, ...(images.length > 0 ? { images } : {}) };
-		const method =
-			behavior === "steer"
-				? "session.steer"
-				: behavior === "followUp"
-					? "session.followUp"
-					: "session.prompt";
-		getTransport()
-			.request(method, params)
-			.catch((err) => {
-				useAppStore.getState().appendErrorTurn(sessionId, errorText(err));
-				if (queued) restoreTextToDraft(text);
-			});
-	};
+	const performSend = useCallback(
+		(
+			text: string,
+			attachments: ChatAttachment[],
+			behavior: Exclude<SubmitBehavior, "interrupt">,
+		) => {
+			const queued = behavior !== "send";
+			if (!queued && (text || attachments.length > 0)) {
+				armImmediateTurn();
+				useAppStore.getState().appendUserMessage(sessionId, text, attachments);
+			}
+			const images = attachments.map((a) => a.content);
+			const params = { sessionId, text, ...(images.length > 0 ? { images } : {}) };
+			const method =
+				behavior === "steer"
+					? "session.steer"
+					: behavior === "followUp"
+						? "session.followUp"
+						: "session.prompt";
+			getTransport()
+				.request(method, params)
+				.catch((err) => {
+					useAppStore.getState().appendErrorTurn(sessionId, errorText(err));
+					if (queued) restoreTextToDraft(text);
+				});
+		},
+		[sessionId, restoreTextToDraft, armImmediateTurn],
+	);
 
 	const onSubmit = (
 		text: string,
@@ -628,9 +640,10 @@ export default function ChatView({
 				getTransport()
 					.request("session.answerQuestion", { sessionId, toolCallId, result })
 					.then(() => undefined),
+			sendPrompt: (text: string) => performSend(text, [], "send"),
 			focusComposer: () => composerRef.current?.refocus(),
 		}),
-		[sessionId],
+		[sessionId, performSend],
 	);
 
 	const onExtUiReply = (value: string | boolean | null) => {
@@ -739,6 +752,13 @@ export default function ChatView({
 						</div>
 					) : null}
 					<QueueStrip queue={queue} onEdit={onEditQueued} onRemove={onRemoveQueued} />
+					{composerTool && draft.trim().length === 0 ? (
+						<ComposerToolSlot
+							key={composerTool.toolCallId}
+							call={composerTool}
+							workspaceRoot={workspaceRoot}
+						/>
+					) : null}
 					<div className="relative shrink-0">
 						<HistoryOverlay
 							state={historyState}

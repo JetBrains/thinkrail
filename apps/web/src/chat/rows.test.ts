@@ -1,11 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import type { AssistantMessage } from "@thinkrail/contracts";
-import { deriveRows, turnDivider } from "./rows";
+import { deriveComposerTool, deriveRows, turnDivider } from "./rows";
 import { registerToolRenderer } from "./toolRegistry";
 import type { ChatTurn, ToolResultState } from "./types";
 
 registerToolRenderer("primary-tool", () => null, { prominence: "primary" });
 registerToolRenderer("bare-tool", () => null, { chrome: "bare" });
+registerToolRenderer("composer-tool", () => null, { placement: "composer" });
 
 type Block =
 	| { type: "text"; text: string }
@@ -470,4 +471,124 @@ test("turnDivider treats every written file as a change when no classifier is su
 	const d = turnDivider(turns, 2);
 	expect(d?.specs).toEqual([]);
 	expect(d?.changedFiles).toEqual(["SPEC.md"]);
+});
+
+describe("composer-placed tools", () => {
+	const ok: Record<string, ToolResultState> = {
+		c1: { status: "done", raw: { details: { n: 1 } } },
+	};
+
+	test("a successful call has no transcript row and does not split the surrounding run", () => {
+		const turns = [
+			user("u1"),
+			assistant("a1", [tc("t1"), tc("c1", "composer-tool"), tc("t2")]),
+			done("s1"),
+		];
+		const rows = deriveRows(turns, ok, false);
+		expect(kinds(rows)).toEqual(["user", "activity", "system", "divider"]);
+		const activity = rows[1];
+		if (activity?.kind !== "activity") throw new Error("expected activity row");
+		expect(activity.steps.map((step) => step.id)).toEqual(["t1", "t2"]);
+	});
+
+	test("the round summary does not count a call it hides", () => {
+		const turns = [user("u1"), assistant("a1", [tc("t1"), tc("c1", "composer-tool")]), done("s1")];
+		expect(turnDivider(turns, 1, undefined, ok)?.toolCount).toBe(1);
+		expect(turnDivider(turns, 1)?.toolCount).toBe(2);
+	});
+
+	test("an errored call keeps the normal transcript fallback", () => {
+		const turns = [user("u1"), assistant("a1", [tc("c1", "composer-tool")]), done("s1")];
+		const results: Record<string, ToolResultState> = { c1: { status: "error", raw: "boom" } };
+		const rows = deriveRows(turns, results, false);
+		const activity = rows[1];
+		if (activity?.kind !== "activity") throw new Error("expected activity row");
+		expect(activity.steps.map((step) => step.id)).toEqual(["c1"]);
+	});
+
+	test("a dead call (no result on an aborted message) keeps the normal transcript fallback", () => {
+		const turns = [
+			user("u1"),
+			assistant("a1", [tc("c1", "composer-tool")], { stopReason: "aborted" }),
+		];
+		const rows = deriveRows(turns, {}, false);
+		const activity = rows[1];
+		if (activity?.kind !== "activity") throw new Error("expected activity row");
+		expect(activity.steps[0]?.kind === "tool" && activity.steps[0].dead).toBe(true);
+	});
+});
+
+describe("deriveComposerTool", () => {
+	const ok: Record<string, ToolResultState> = {
+		c1: { status: "done", raw: { details: { n: 1 } } },
+	};
+	const offered = (blocks: Block[] = [text("here you go"), tc("c1", "composer-tool")]) =>
+		assistant("a1", blocks);
+
+	test("exposes the trailing successful call with its args and result", () => {
+		const call = deriveComposerTool([user("u1"), offered()], ok, false);
+		expect(call).toEqual({
+			toolCallId: "c1",
+			toolName: "composer-tool",
+			args: {},
+			result: { details: { n: 1 } },
+		});
+	});
+
+	test("live settlement's trailing success marker and a hydrated transcript resolve identically", () => {
+		const live = deriveComposerTool([user("u1"), offered(), done("s1")], ok, false);
+		const hydrated = deriveComposerTool([user("u1"), offered()], ok, false);
+		expect(live).toEqual(hydrated);
+	});
+
+	test("stays hidden while the session is streaming", () => {
+		expect(deriveComposerTool([user("u1"), offered()], ok, true)).toBeNull();
+		expect(
+			deriveComposerTool(
+				[user("u1"), assistant("a1", [tc("c1", "composer-tool")], { streaming: true })],
+				ok,
+				false,
+			),
+		).toBeNull();
+	});
+
+	test("a later user turn makes the offer stale — the optimistic echo is enough", () => {
+		expect(deriveComposerTool([offered(), user("u2")], ok, false)).toBeNull();
+	});
+
+	test("a later error turn makes the offer stale, so a rejected send cannot revive it", () => {
+		const turns: ChatTurn[] = [offered(), user("u2"), { kind: "error", id: "e1", text: "nope" }];
+		expect(deriveComposerTool(turns, ok, false)).toBeNull();
+	});
+
+	test("meaningful assistant content after the call hides it; empty blocks do not", () => {
+		expect(
+			deriveComposerTool([offered([tc("c1", "composer-tool"), text("and also…")])], ok, false),
+		).toBeNull();
+		expect(
+			deriveComposerTool(
+				[offered([tc("c1", "composer-tool"), text("   "), think("  ")])],
+				ok,
+				false,
+			),
+		).not.toBeNull();
+	});
+
+	test("an unsuccessful, dead, or transcript-placed trailing call is never exposed", () => {
+		expect(deriveComposerTool([offered()], { c1: { status: "error", raw: "" } }, false)).toBeNull();
+		expect(deriveComposerTool([offered()], {}, false)).toBeNull();
+		expect(
+			deriveComposerTool(
+				[assistant("a1", [tc("c1", "composer-tool")], { stopReason: "aborted" })],
+				ok,
+				false,
+			),
+		).toBeNull();
+		expect(deriveComposerTool([assistant("a1", [tc("c1")])], ok, false)).toBeNull();
+	});
+
+	test("an empty transcript, or one with no assistant turn, has no composer tool", () => {
+		expect(deriveComposerTool([], {}, false)).toBeNull();
+		expect(deriveComposerTool([user("u1")], ok, false)).toBeNull();
+	});
 });

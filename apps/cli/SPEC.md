@@ -175,12 +175,14 @@ and `trash`'s **native helper sidecars** (which macOS/Windows must execute from 
   when the `.ts` is absent:
   - `src/web-assets.generated.ts` — enumerates `apps/web/dist`: a Bun file-attribute import per asset +
     a `{ route, data }[]` manifest + a content-hash version.
-  - `src/bundled-extensions.generated.ts` — **value-imports the five bundled extension entries**
-    (`pi-web-access`, `pi-visualize`, `pi-spec-graph`, `pi-thinkrail-workflow`, `pi-todos`), resolved from the
+  - `src/bundled-extensions.generated.ts` — **value-imports the six bundled extension entries**
+    (`pi-web-access`, `pi-visualize`, `pi-next-steps`, `pi-spec-graph`, `pi-thinkrail-workflow`, `pi-todos`), resolved from the
     *server package's* module context (absolute paths — they aren't deps of `cli`), so Bun compiles the
     raw `.ts` and their real deps (`yaml`, `linkedom`, `unpdf`, …) into the binary; plus the
     `pi-spec-graph`/`pi-thinkrail-workflow`/`pi-todos` `skills/` files embedded like web assets (matching what dev
-    wires via `additionalSkillPaths` — parity, not a superset). Its `.d.ts` types the factories via the
+    wires via `additionalSkillPaths` — parity, not a superset). **One declaration list drives both** the
+    generated factory array and the skill roots — each entry says whether it ships skills — so adding an
+    extension cannot silently shift a skill package's position. Its `.d.ts` types the factories via the
     server's exported `BundledExtensionFactory`, so `cli` still never imports
     `@earendil-works/pi-coding-agent`.
   - `src/runtime-assets.generated.ts` — embeds `trash`'s `macos-trash` and `windows-trash.exe` helper

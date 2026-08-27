@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import type { ToolRenderProps } from "./toolRegistry";
 import {
 	getToolChrome,
+	getToolPlacement,
 	getToolRenderer,
 	getToolSummary,
 	registerToolRenderer,
@@ -52,6 +53,25 @@ describe("toolRegistry chrome", () => {
 	it("honors a registered 'bare' chrome (renderer owns its frame)", () => {
 		registerToolRenderer("bare-chrome-tool", () => null, { chrome: "bare" });
 		expect(getToolChrome("bare-chrome-tool")).toBe("bare");
+	});
+});
+
+describe("toolRegistry placement", () => {
+	it("defaults to 'transcript' — including unregistered tools", () => {
+		registerToolRenderer("transcript-tool", () => null);
+		expect(getToolPlacement("transcript-tool")).toBe("transcript");
+		expect(getToolPlacement("never-registered-placement")).toBe("transcript");
+	});
+
+	it("honors a registered 'composer' placement (the offer_next_steps shape)", () => {
+		registerToolRenderer("composer-placed-tool", () => null, { placement: "composer" });
+		expect(getToolPlacement("composer-placed-tool")).toBe("composer");
+	});
+
+	it("placement is independent of chrome and prominence", () => {
+		registerToolRenderer("composer-plain-tool", () => null, { placement: "composer" });
+		expect(getToolChrome("composer-plain-tool")).toBe("card");
+		expect(resolveProminence("composer-plain-tool").prominence).toBe("routine");
 	});
 });
 

@@ -1,0 +1,37 @@
+{
+	"name": "pi-next-steps",
+	"version": "0.1.0",
+	"type": "module",
+	"exports": {
+		".": "./index.ts",
+		"./index.ts": "./index.ts",
+		"./package.json": "./package.json"
+	},
+	"description": "A pi extension adding an `offer_next_steps` tool: agent-authored optional continuations, offered as a terminating tool result and a native selector.",
+	"keywords": [
+		"pi-package",
+		"pi",
+		"pi-coding-agent",
+		"extension",
+		"next-steps"
+	],
+	"scripts": {
+		"typecheck": "tsc --noEmit",
+		"test": "bun test"
+	},
+	"peerDependencies": {
+		"@earendil-works/pi-coding-agent": "*",
+		"typebox": "*"
+	},
+	"devDependencies": {
+		"@earendil-works/pi-coding-agent": "catalog:",
+		"@types/bun": "catalog:",
+		"typebox": "catalog:",
+		"typescript": "catalog:"
+	},
+	"pi": {
+		"extensions": [
+			"./index.ts"
+		]
+	}
+}
