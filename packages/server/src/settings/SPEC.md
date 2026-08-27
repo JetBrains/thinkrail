@@ -11,8 +11,8 @@ tags: [v1]
 ## Responsibility
 
 The server-synced app config — OUR settings (an opaque theme selection, the analytics switch, terminal
-replay budget, the chat composer growth preset, workbench default/custom presets + independent
-side/bottom group limits, and the plan-review policy — `reviewModel`/`reviewEffort` (the model + effort
+replay budget, the chat composer growth preset + oldest/newest-first message order, workbench default/custom
+presets + independent side/bottom group limits, and the plan-review policy — `reviewModel`/`reviewEffort` (the model + effort
 the reviewer & reflector sessions run on; unset ⇒ pi default) and `reviewAutoFix` (default true; when
 false a `request_changes` verdict records findings and waits instead of auto-sending a fix —
 `host/todoReview` reads it at the verdict gate)), an extensible `AppConfig` bag.
@@ -40,7 +40,8 @@ web client owns the available theme manifests; settings stores only the selected
   initiating client applies on the `settings.changed` push like everyone else (the workspace-lifecycle
   pattern). `getConfig()` is the same value `server.welcome` seeds on connect.
 - Theme availability/labels/palettes are not server settings concerns. An id unknown to a given web client
-  remains persisted unchanged; that client owns visual fallback.
+  remains persisted unchanged; that client owns visual fallback. Message order is likewise semantic host
+  state only: settings persists the closed id while the web owns row projection and scroll geometry.
 - `settings.update` remains a top-level partial merge; a supplied `layout` field is a complete validated
   `LayoutSettings` replacement, never a nested partial that could drop catalog/default/limit siblings.
 - **`null` clears an optional override** (`AppConfigUpdate`: `reviewModel`/`reviewEffort` only): JSON

@@ -341,9 +341,11 @@ a project picker, the prompt hero, and the reused
   one fires `settings.update` and the UI **converges on the `settings.changed` broadcast** (no optimistic
   apply), a rejected update raising a toast; the picker never owns a theme list — it renders the catalog
   the glob discovered at build time); **`ChatSettings`** (the live section immediately after Appearance —
-  three radio cards over `store.composerGrowthLimit`, updating `AppConfig.composerGrowthLimit` with the same
-  converge-on-`settings.changed`, toast-on-rejection pattern; the labels explain when the one-line composer
-  stops growing, while `contracts` owns the closed preset ids/default); the **shell-owned injected Layout
+  **Message order** radio cards over `store.chatMessageOrder` (Oldest first, the compatibility default /
+  Newest first, the opt-in) followed by the three existing composer-growth cards. Both update their own
+  top-level `AppConfig` field with the same converge-on-`settings.changed`, toast-on-rejection pattern;
+  `contracts` owns both closed id sets and defaults, while labels use “message box” rather than the internal
+  “composer” name when explaining where the user types); the **shell-owned injected Layout
   section** (Balanced/Focus/Review
   plus named custom preset cards, one host-synchronized default selection, capture-current/rename/delete
   for customs, and the default-6 maximum side groups per side; settings changes converge through

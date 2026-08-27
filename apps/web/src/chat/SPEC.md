@@ -132,6 +132,15 @@ the `AskUserQuestionCard` pattern, see tools/SPEC.md; deliberately
 never evicted — growth is bounded by manual toggles). A manual toggle always wins — over auto-expand
 defaults *and* over a virtualization remount.
 
+**Message-order projection.** `deriveRows` remains canonical and chronological. The pure
+`projectRows(rows, chatMessageOrder)` partitions that sequence at user rows (a pre-user notice span is its
+own group); oldest-first returns the input unchanged, while newest-first reverses the group order **and**
+every group's top-level rows: `1,2,3 | 4,5,6 → 6,5,4 | 3,2,1`. Stable row ids survive verbatim, so folds,
+flashes, tool state, and history anchors do not fork. The projection never reaches inside one row: Markdown
+paragraphs/code, a tool card body, review-package comments, and an Activity row's own disclosure hierarchy
+retain their semantic order. Virtuoso and DOM traversal consume the projected rows; Pi turns, persistence,
+stream status, and every non-presentation derivation remain chronological.
+
 **Sticky activity breadcrumb.** While the transcript's top visible content remains inside expanded
 Activity → Thinking → tool disclosures whose original headers have scrolled above the viewport, one
 opaque compact row overlays the scroller with that active root-to-leaf path. Segments join only after
@@ -140,7 +149,7 @@ leaf tool. A segment label scrolls and focuses its original header just below th
 changing fold state; its separate chevron writes through the existing fold-state source. The trail is
 always one line: metadata truncates before names, then a narrow pane preserves the outermost and active
 segments while compressing middle ancestry to `…`. It never reflows transcript content, creates parallel
-navigation/fold state, or disturbs Virtuoso's initial-bottom, follow-output, and jump-to-message behavior.
+navigation/fold state, or disturbs Virtuoso's mode-aware latest-edge, reading-band, and jump-to-message behavior.
 The root-to-leaf labels and chevrons are distinct keyboard targets in a labelled navigation region; visual
 entry/exit obeys reduced motion.
 
@@ -228,33 +237,41 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   one), falling back to scanning `turns` for the newest whose own text contains `anchorText`'s prefix — the
   same fallback also covers a hydrated map entry whose turn no longer contains the anchor (e.g. the
   transcript changed underneath it). The resolved turn maps to a row via the pure **`rowIndexForTurn(rows,
-  turnId)`** (`rows.ts`) — a turn's own row for `user`/`system`/`error`/`retry`, or its first `:text:` row
+  turnId)`** (`rows.ts`), called with the projected rows — a turn's own row for `user`/`system`/`error`/`retry`, or its first `:text:` row
   for `assistant` (whose turns dissolve into `markdown`/`tool`/`activity` rows, never a row of their own)
   — then `virtuosoRef.scrollToIndex({ align: "center" })` plus a transient `flashRowId` (rendered as
   `data-flash` + a `bg-primary-subtle` transition on the row wrapper, cleared after 1600ms) draw the
   eye to it. Either resolving a row or giving up (toasted as "couldn't locate the message") clears that
   exact still-current request; an older effect may not clear a newer jump. `ChatView` is its only terminal
   consumer, so an unresolved current request must never linger.
-- **Open at the latest message** — a settled chat `Virtuoso` mounts with `initialTopMostItemIndex = {
-  index: last row, align: "end" }`, so every freshly shown transcript (new tab, reopen from history,
-  auto-open, reload) starts at the bottom instead of mid-scroll; jump-to-message (above) runs post-mount
-  and overrides with its centered `scrollToIndex`. E2e: `auto-open-chats.spec.ts` asserts a long seeded
-  transcript's last message is in view without scrolling.
-- **Streaming reading band** — `useChatScroll` owns one imperative, cancellable follow controller for
-  every kind of live row growth; renderers never scroll themselves. An immediate local send arms follow,
-  aligns its user row at 10% of transcript height clamped to 48–80px, and gives the response a one-way
-  60%-viewport runway. A transient list header makes that inset possible even for the first row; the tail
-  spacer starts as the 60% budget plus a 42% reading-band floor, shrinks one-for-one with response growth,
-  never re-inflates except to recalibrate after a viewport resize, and survives settlement in place. The
-  active edge grows without movement until it crosses 82% of the viewport, then
-  one 220ms ease-out advances it to 58% (immediate under reduced motion); a large layout change is still
-  one move and moves never overlap. A queued continuation anchors only if follow stayed armed after it was
-  queued. Upward wheel/touch/scrollbar intent, keyboard transcript navigation, selection, interactive
-  focus, and message/history jumps cancel follow even within the bottom threshold. A deliberate manual
-  return, **Follow response**, or a new immediate send re-arms it; geometry changes alone do not. Settlement
-  neither catches up nor collapses remaining runway. An active-stream remount reconstructs band geometry
-  without animating; a settled remount has no runway and keeps the latest-message rule above. The detached
-  control reads **Follow response** during streaming and **Latest** after settlement.
+- **Open at the latest message** — `ChatMessageOrder` chooses the mounted edge: oldest-first starts at
+  `{ index: last row, align: "end" }`; newest-first starts at `{ index: 0, align: "start" }`. Thus every
+  freshly shown transcript (new tab, reopen from history, auto-open, reload) shows the latest work without
+  an intermediate wrong-edge paint. Switching the global preference remounts the projection and lands at
+  its new latest edge; preserving a pixel position across total reversal has no stable meaning.
+  Jump-to-message runs post-mount and overrides either rule with its centered `scrollToIndex`. E2e:
+  `auto-open-chats.spec.ts` pins latest visibility in both orders for a long seeded transcript.
+- **One direction-aware streaming controller** — `useChatScroll` remains the sole imperative,
+  cancellable owner for every kind of live row growth; renderers and the message-order projection never
+  scroll themselves. Both orders share explicit immediate-turn arming, queued-continuation currency,
+  reader-intent cancellation, one non-overlapping 220ms ease-out, reduced-motion immediacy, active-stream
+  reconstruction, and **Follow response** / **Latest** detached labels. The latest edge is bottom for
+  oldest-first and top for newest-first; wheel, touch/scrollbar, and keyboard directions invert with it.
+  Selection, interactive focus, and message/history jumps cancel either mode. Geometry alone never re-arms
+  a detached reader.
+- **Oldest-first reading band** — the established behavior remains intact. An immediate local send aligns its
+  user row at 10% of transcript height clamped to 48–80px and gives the response a one-way 60%-viewport
+  runway. A transient list header makes that inset possible even for the first row; the tail spacer starts
+  as the 60% budget plus a 42% reading-band floor, shrinks one-for-one with response growth, never
+  re-inflates except to recalibrate after a viewport resize, and survives settlement in place. The active
+  edge grows without movement until it crosses 82% of the viewport, then advances to 58%. Settlement
+  neither catches up nor collapses remaining runway.
+- **Newest-first reading band** — the newest projected row occupies the same 48–80px top inset. While
+  follow is armed, appended content inside that row uses the same sparse 82%→58% advance; a newly inserted
+  top row returns to the latest band in one controller-owned move. Scrolling downward into older groups
+  detaches immediately, and no insertion moves that reader; upward return to the top or the floating
+  **↑ Follow response** / **↑ Latest** action re-arms. The synthetic tail space stays after the oldest
+  group, never between reversed request/answer rows, so it cannot split the selected group semantics.
 - **Composer & chrome** — `Composer` (prompt field + send/steer/followUp/abort, `@`-mentions, `/`
   commands + template **slot sessions** (Tab-through placeholders — see the Template slots bullet
   below), image paste/drop — routed through **`imageAttachment.ts`**: `fileToAttachedImage` decodes in

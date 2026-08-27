@@ -340,8 +340,11 @@ snapshots plus device-local attention, terminal catalogs, and one **per-session 
   `server.welcome` / the `settings.changed` broadcast) — lives here too; it's a **pure value only** (the
   theme-application side-effect is the shell's, keyed off `theme`), and defaults to
   `DEFAULT_CONFIG.theme` until the welcome arrives. **`composerGrowthLimit: ComposerGrowthLimit`**,
-  **`layoutSettings: LayoutSettings`**, and **`analyticsEnabled: boolean`** ride the same `applyConfig` fold
-  (host-owned, defaulted from `DEFAULT_CONFIG`) — the Chat, Layout, and Privacy sections' read sides. Layout settings are not a second copy of
+  **`chatMessageOrder: ChatMessageOrder`**, **`layoutSettings: LayoutSettings`**, and
+  **`analyticsEnabled: boolean`** ride the same `applyConfig` fold (host-owned, defaulted from
+  `DEFAULT_CONFIG`) — the Chat, Layout, and Privacy sections' read sides. Message order remains one global
+  preference rather than per-session render state; `ChatView` projects each runtime from it without
+  rewriting canonical turns. Layout settings are not a second copy of
   any workspace document: they carry only the portable preset catalog/default and group limit. The
   **toast queue** — **`toasts: Toast[]`** (oldest-first) with **`pushToast(toast) → id`** / **`dismissToast(id)`**
   and the ergonomic **`toast.error/success/info(message, title?)`** helper (wraps `pushToast` so a non-React
