@@ -584,12 +584,13 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
     earlier `splitTemplate` here handled only bare/double-quoted scalars, so a pi-native
     `description: 'single-quoted'` loaded into the form with literal quotes and saved back corrupted).
     Its boundary
-    rule is ported byte-for-byte from pi's own `extractFrontmatter` (`@earendil-works/pi-coding-agent`'s
-    `dist/utils/frontmatter.js`, pinned against pi v0.84.1 — the same pin `packages/server/src/templates/
-    SPEC.md` uses server-side; re-verify both on a pi version bump): the frontmatter block ends at the
-    FIRST later `\n---` line, and the body is everything after that fence run through `.trim()` — not a
-    single optional `\n`. A prior version had two independently hand-rolled regex splitters (one per
-    file), each consuming only one *optional* `\n` after the closing fence instead of trimming — a
+    rule mirrors pi's own `extractFrontmatter` (`@earendil-works/pi-coding-agent`'s
+    `dist/utils/frontmatter.js` + `dist/utils/text.js`, pinned against pi v0.84.3 — the same pin
+    `packages/server/src/templates/SPEC.md` uses server-side; re-verify both on a pi version bump): strip
+    one leading UTF-8 BOM, normalize newlines, then end the frontmatter block at the FIRST later `\n---`
+    line; the body is everything after that fence run through `.trim()` — not a single optional `\n`.
+    A prior version had two independently hand-rolled regex splitters (one per file), each consuming only
+    one *optional* `\n` after the closing fence instead of trimming — a
     leading blank line leaked into the body on every pick and every edit-reopen, and **compounded** by one
     more `\n` per edit-save cycle (the leaked line got saved back into the body field and re-wrapped the
     next save). `templateText.test.ts` pins the round-trip/stability properties this fix depends on.

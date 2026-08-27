@@ -104,6 +104,21 @@ describe("saveTemplate -> listTemplates -> getTemplate", () => {
 		expect(getTemplate(dirs, "plain", "project").content).toBe(content);
 	});
 
+	test("a leading UTF-8 BOM is ignored for metadata while full content stays raw", () => {
+		const content = '\uFEFF---\ndescription: "BOM template"\nargument-hint: "[file]"\n---\nBody';
+		const saved = saveTemplate(dirs, "global", "bom", content);
+
+		expect(saved).toMatchObject({
+			description: "BOM template",
+			argumentHint: "[file]",
+			content,
+		});
+		expect(listTemplates(dirs)).toEqual([
+			expect.objectContaining({ name: "bom", description: "BOM template", argumentHint: "[file]" }),
+		]);
+		expect(getTemplate(dirs, "bom", "global").content).toBe(content);
+	});
+
 	test("saveTemplate creates the scope dir if missing and writes content verbatim", () => {
 		expect(existsSync(globalDir)).toBe(false);
 		const content = "line one\nline two\n";

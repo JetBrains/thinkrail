@@ -15,12 +15,12 @@ save / delete `.md` files, surfacing pi's own frontmatter (`description`, `argum
 Consumed by the `template.*` host handlers (Task B3); this module owns no WS surface itself — `cwd` is
 passed in by the caller (a resolved workspace), never looked up here.
 
-## pi facts (pinned against pi v0.84.1 — `@earendil-works/pi-coding-agent`)
+## pi facts (pinned against pi v0.84.3 — `@earendil-works/pi-coding-agent`)
 
 Verified by reading `dist/core/prompt-templates.js` (`loadTemplateFromFile` / `loadTemplatesFromDir` /
 `loadPromptTemplates`), `dist/core/resource-loader.js` (`dedupePrompts`, `updatePromptsFromPaths`), and
-`dist/utils/frontmatter.js` in the installed package — source of truth over assumption; re-verify on a
-pi version bump.
+`dist/utils/frontmatter.js` + `dist/utils/text.js` in the installed package — source of truth over
+assumption; re-verify on a pi version bump.
 
 - **Directories:** global = `join(agentDir, "prompts")`; project = `resolve(cwd, CONFIG_DIR_NAME,
   "prompts")` (`CONFIG_DIR_NAME = ".pi"`, pi root export) — exactly `templateDirs`'s two fields.
@@ -47,12 +47,12 @@ pi version bump.
   is the caller's own assertion, exactly as pi's own loader trusts it). We use the default
   `Record<string, unknown>` and narrow with `typeof` before trusting a value as a `string`.
 - **No-frontmatter files parse to `{ frontmatter: {}, body: <normalized content> }`.** Reading
-  `frontmatter.js` itself: newlines are normalized (`\r\n`/`\r` → `\n`) first; if the content doesn't
-  start with `"---"`, or a `"---"` opener never finds a closing `"\n---"`, the whole (normalized)
-  content becomes `body`, un-trimmed. Only a *successfully closed* frontmatter block yields a `body`
-  that's `.trim()`ed. This module never reads pi's `body` at all (see "content" below), so none of that
-  trim/normalize behavior leaks into `TemplateInfo` — it only matters for the description-extraction
-  path, and even there we don't lean on it.
+  `frontmatter.js` itself: one leading UTF-8 BOM is stripped and newlines are normalized (`\r\n`/`\r` →
+  `\n`) before fence detection; if the remaining content doesn't start with `"---"`, or a `"---"`
+  opener never finds a closing `"\n---"`, that normalized content becomes `body`, un-trimmed. Only a
+  *successfully closed* frontmatter block yields a `body` that's `.trim()`ed. This module never reads
+  pi's `body` at all (see "content" below), so none of that BOM/trim/normalize behavior leaks into
+  `Template.content` — it only matters for the metadata-extraction path.
 - **pi's loader synthesizes a fallback `description`** from the body's first non-empty line (truncated
   to 60 chars + `"…"`) when frontmatter has none — used for pi's own `/` menu blurbs. We deliberately do
   **not** replicate this: `TemplateInfo.description` is optional on the wire (`contracts/domain.ts`), so
