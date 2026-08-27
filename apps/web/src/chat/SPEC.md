@@ -243,7 +243,10 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
 - **Streaming reading band** — `useChatScroll` owns one imperative, cancellable follow controller for
   every kind of live row growth; renderers never scroll themselves. An immediate local send arms follow,
   aligns its user row at 10% of transcript height clamped to 48–80px, and gives the response a one-way
-  60%-viewport runway. The active edge grows without movement until it crosses 82% of the viewport, then
+  60%-viewport runway. A transient list header makes that inset possible even for the first row; the tail
+  spacer starts as the 60% budget plus a 42% reading-band floor, shrinks one-for-one with response growth,
+  never re-inflates except to recalibrate after a viewport resize, and survives settlement in place. The
+  active edge grows without movement until it crosses 82% of the viewport, then
   one 220ms ease-out advances it to 58% (immediate under reduced motion); a large layout change is still
   one move and moves never overlap. A queued continuation anchors only if follow stayed armed after it was
   queued. Upward wheel/touch/scrollbar intent, keyboard transcript navigation, selection, interactive

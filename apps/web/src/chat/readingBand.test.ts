@@ -3,7 +3,6 @@ import {
 	createReadingBandController,
 	type ReadingBandEnvironment,
 	type ReadingBandGeometry,
-	type ReadingBandSnapshot,
 } from "./readingBand";
 
 interface Harness {
@@ -11,7 +10,6 @@ interface Harness {
 	anchors: Array<{ index: number; inset: number }>;
 	writes: number[];
 	runwayHeights: number[];
-	states: ReadingBandSnapshot[];
 	setGeometry: (patch: Partial<ReadingBandGeometry>) => void;
 	advance: (milliseconds: number) => void;
 	pendingFrames: () => number;
@@ -40,7 +38,6 @@ function createHarness({
 	const anchors: Array<{ index: number; inset: number }> = [];
 	const writes: number[] = [];
 	const runwayHeights: number[] = [];
-	const states: ReadingBandSnapshot[] = [];
 
 	const environment: ReadingBandEnvironment = {
 		readGeometry: () => geometry,
@@ -61,7 +58,7 @@ function createHarness({
 		cancelFrame: (id) => {
 			if (frames.delete(id)) cancelled += 1;
 		},
-		onStateChange: (state) => states.push(state),
+		onStateChange: () => undefined,
 	};
 	const controller = createReadingBandController(environment, { streaming });
 
@@ -70,7 +67,6 @@ function createHarness({
 		anchors,
 		writes,
 		runwayHeights,
-		states,
 		setGeometry: (patch) => {
 			geometry = { ...geometry, ...patch };
 		},
@@ -129,8 +125,12 @@ describe("reading-band movement", () => {
 		harness.controller.contentChanged();
 		expect(harness.pendingFrames()).toBe(1);
 
-		harness.advance(220);
-		expect(harness.writes).toEqual([252]);
+		harness.advance(219);
+		expect(harness.writes.at(-1)).toBeLessThan(252);
+		expect(harness.controller.getSnapshot().moving).toBe(true);
+
+		harness.advance(1);
+		expect(harness.writes.at(-1)).toBe(252);
 		expect(harness.controller.getSnapshot().moving).toBe(false);
 	});
 
