@@ -37,9 +37,7 @@ describe("ThinkingGroup", () => {
 		expect(markup).toContain('data-activity-node-kind="thinking"');
 		expect(markup).toContain('data-activity-parent-id="activity:a1"');
 		expect(markup).toContain("data-activity-node-toggle");
-		expect(markup).toContain(
-			'<span class="shrink-0 text-text-default">Thinking</span>',
-		);
+		expect(markup).toContain('<span class="shrink-0 text-text-default">Thinking</span>');
 		expect(markup).not.toContain(
 			'<span class="shrink-0 text-text-default sr-only">Thinking</span>',
 		);
@@ -65,9 +63,7 @@ describe("ThinkingGroup", () => {
 		);
 
 		expect(markup).toContain("Evaluating formatting process");
-		expect(markup).toContain(
-			'<span class="shrink-0 text-text-default sr-only">Thinking</span>',
-		);
+		expect(markup).toContain('<span class="shrink-0 text-text-default sr-only">Thinking</span>');
 		expect(markup).not.toContain("**Evaluating formatting process**");
 		expect(markup).not.toContain("I should inspect the formatted file.");
 		expect(markup).toContain("1 step · read");

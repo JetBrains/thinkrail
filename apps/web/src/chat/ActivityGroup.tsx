@@ -201,12 +201,7 @@ function GroupDisclosure({
 					icon
 				)}
 				{label ? (
-					<span
-						className={cn(
-							"shrink-0 text-text-default",
-							!expanded && headline && "sr-only",
-						)}
-					>
+					<span className={cn("shrink-0 text-text-default", !expanded && headline && "sr-only")}>
 						{label}
 					</span>
 				) : null}
