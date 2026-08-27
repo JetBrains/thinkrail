@@ -422,14 +422,19 @@ positioning gate in the `add_review_comment` seam (`reviews.anchorProblem`). The
   await a sub-session (sends are fire-and-forget — see "Get right"), so resumption rides the settle tee:
   `maybeResumeReflection(settledSessionId)` sends the fix once the reflector settles, carrying only
   `reflection.verdict !== "refuted"` findings; refuted ones stay drafts, badged, for the human.
-  **Zero survivors sends nothing.** If every candidate is refuted, `sendReflectedFix` skips the
-  `followUpSession` entirely instead of delivering a bare fix request with no findings attached — the
-  worker would make no change (nothing to act on), so no fresh artifact delta ever lands and
-  `maybeAutoReReview`'s trigger has nothing to fire on, stranding the item at `changes_requested`
-  forever with its one auto cycle spent but never resolved. Instead it calls
-  `recordAgentChangesRequested({..., autoCycles: 2})` directly — the SAME terminal settlement
-  `review_verdict` uses when the cycle is already spent or auto-fix is off — so the item reads as a
-  normal "the human decides now" state, and notifies the reviewer chat why nothing was sent.
+  **A refuted-empty candidate set sends nothing; a candidate-empty verdict still sends.** These are
+  different states, and `sendReflectedFix` tells them apart by `pending.candidateIds.length`, not just by
+  "nothing survived": when the verdict came with **no inline findings at all** (a whole-change concern
+  living only in the verdict `note`, `candidateIds` empty from the start — this never goes through
+  `fireReflection`, which only fires over a non-empty candidate set), the plain `renderFixPackage` (the
+  note is embedded in it) still goes to the worker with no comment package attached — that *is* the fix
+  request. Only when candidates existed and reflection refuted **every one of them** does the send skip
+  entirely: delivering a bare fix request with no surviving findings would ask the worker to act on
+  nothing, so no fresh artifact delta ever lands and `maybeAutoReReview`'s trigger has nothing to fire on,
+  stranding the item at `changes_requested` forever with its one auto cycle spent but never resolved.
+  That branch calls `recordAgentChangesRequested({..., autoCycles: 2})` directly — the SAME terminal
+  settlement `review_verdict` uses when the cycle is already spent or auto-fix is off — so the item reads
+  as a normal "the human decides now" state, and notifies the reviewer chat why nothing was sent.
   The send follows the same pre-turn rollback guarantee as every review send: a rejected
   `followUpSession` (worker busy/detached) `rollbackSend`s the just-marked findings back to draft —
   without it they'd strand as falsely-sent on a `changes_requested` item whose one auto cycle is

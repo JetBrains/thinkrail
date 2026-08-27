@@ -451,12 +451,8 @@ function sendReflectedFix(pending: PendingFix): void {
 		const surviving = getReviewSnapshot(pending.workspaceId).comments.filter(
 			(c) => ids.has(c.id) && c.status === "draft" && c.reflection?.verdict !== "refuted",
 		);
-		if (surviving.length === 0) {
-			// Every candidate was refuted — there is nothing to send. Sending the bare fix request
-			// anyway would ask the worker to act on no findings: it makes no change, so no fresh
-			// artifact delta lands and maybeAutoReReview never re-triggers, stranding the item at
-			// changes_requested forever (autoCycles already 1 from the verdict). Settle the cycle as
-			// spent instead — the refuted findings stay drafts, badged, for the human to judge.
+		if (pending.candidateIds.length > 0 && surviving.length === 0) {
+			// see host/SPEC.md "Reflection layer" — zero survivors of a non-empty candidate set
 			recordAgentChangesRequested({
 				workspaceId: pending.workspaceId,
 				sessionId: pending.workerSessionId,
@@ -472,8 +468,12 @@ function sendReflectedFix(pending: PendingFix): void {
 			return;
 		}
 		const survivingIds = surviving.map((c) => c.id);
-		markCommentsSent(pending.workspaceId, survivingIds, pending.workerSessionId);
-		const fixText = `${renderFixPackage(pending.item, pending.note)}\n\n${buildSendPackage(pending.workspaceId, surviving)}`;
+		if (survivingIds.length > 0)
+			markCommentsSent(pending.workspaceId, survivingIds, pending.workerSessionId);
+		const fixText =
+			survivingIds.length > 0
+				? `${renderFixPackage(pending.item, pending.note)}\n\n${buildSendPackage(pending.workspaceId, surviving)}`
+				: renderFixPackage(pending.item, pending.note);
 		void ackSend(followUpSession(pending.workerSessionId, fixText))
 			.then(undefined, (err) => {
 				if (survivingIds.length > 0)

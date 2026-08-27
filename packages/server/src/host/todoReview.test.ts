@@ -614,3 +614,46 @@ test("when reflection refutes every candidate, no empty fix request is sent — 
 	handleReviewerSettled(reviewerSessionId, { type: "agent_settled", terminal: null });
 	handleReviewerSettled(reflectorSessionId, { type: "agent_settled", terminal: null });
 });
+
+test("request_changes with no inline findings (a whole-change note only) still sends the fix — candidateIds empty from the start is not 'every candidate refuted'", async () => {
+	installTodoReviewSeams();
+	fauxReviewer.setResponses([
+		fauxAssistantMessage("Looks wrong overall, no specific line to cite."),
+	]);
+
+	const todo = new TodoStore(worktree, SESSION).add({
+		title: "t",
+		artifacts: [{ kind: "commit", sha: "sha1", label: "a" }],
+	});
+	const ref = { workspaceId: WS, sessionId: SESSION, id: todo.id };
+
+	const { reviewerSessionId } = await startTodoReviewFlow({
+		workspaceId: WS,
+		sessionId: SESSION,
+		id: todo.id,
+	});
+
+	// The reviewer never files an inline comment — the concern lives only in the verdict note.
+	expect(itemFixFindings(ref)).toHaveLength(0);
+
+	const result = await createReviewVerdictTool().execute(
+		"tc-verdict",
+		{
+			todoId: todo.id,
+			verdict: "request_changes",
+			note: "the whole approach here is wrong, please redo it",
+		} as never,
+		undefined,
+		undefined,
+		reviewerCtx(reviewerSessionId),
+	);
+	const [content] = (result as { content: { type: "text"; text: string }[] }).content;
+	expect(content?.text).toMatch(/no findings to send/);
+
+	// The empty-candidate path (no reflection ever ran) must not be mistaken for "every candidate was
+	// refuted": the cycle stays spent-but-pending-worker-reply (1), never jumps straight to the
+	// terminal settlement (2) that only fits a non-empty candidate set reflection wiped out.
+	expect(todoReviewAutoCycles(ref)).toBe(1);
+
+	handleReviewerSettled(reviewerSessionId, { type: "agent_settled", terminal: null });
+});
