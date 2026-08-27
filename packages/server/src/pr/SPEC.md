@@ -99,7 +99,11 @@ value. Then:
    won't be in the PR. Dirty state never blocks.
 
 The open-PR *read* side stays `workspace.openReview` (`branch-review`) — this module persists
-nothing; the client re-derives button/chip state from that lookup plus this call's result.
+nothing; the client re-derives button/chip state from that lookup plus this call's result. That
+lookup is cached, so every successful push drops the worktree's prior answer: pushing may change the
+branch's remote configuration even when the remote is not GitHub or the action falls back to compare.
+A GitHub mutation attempt drops it again after settlement, so a concurrent "no PR" read cannot survive
+an update, a create, or an ambiguous create result.
 
 ## Boundary
 
@@ -107,7 +111,8 @@ nothing; the client re-derives button/chip state from that lookup plus this call
   derivation.
 - **Public surface (barrel):** `openPr`, `previewPr`.
 - **Allowed deps:** `workspaces` (workspace record, `refreshUserOwnedWorkspace`), `git` (exec + status), `todos` (`listTodos` for
-  the body), `branch-review` (provider detection, existing-PR lookup, the shared command runner),
+  the body), `branch-review` (provider detection, existing-PR lookup, the shared command runner,
+  `forgetOpenBranchReview`),
   `github` (`ghSetupProblem` — the named compare-fallback reason); `contracts` types;
   `shared/codedError` (`PUSH_AUTH_FAILED`).
 - **Forbidden:** `host`; provider HTTP APIs or stored tokens (auth stays external — the user's `gh`

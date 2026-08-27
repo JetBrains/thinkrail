@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import type { TodoPlan } from "@thinkrail/contracts";
+import { findOpenBranchReview, forgetOpenBranchReview } from "../branch-review";
 import {
 	compareQuickPullUrl,
 	ghPrFlow,
@@ -301,6 +302,213 @@ describe("ghPrFlow", () => {
 				"release/x",
 			]);
 		}
+	});
+});
+
+describe("openPr — invalidates the open-review cache", () => {
+	let dataDir: string;
+	let repo: string;
+	let remote: string;
+	let reviewMode: string;
+	const environmentKeys = [
+		"THINKRAIL_DATA_DIR",
+		"THINKRAIL_GH_OFFLINE",
+		"THINKRAIL_TEST_REVIEW_MODE",
+		"PATH",
+		"HOME",
+		"XDG_CONFIG_HOME",
+		"GIT_CONFIG_NOSYSTEM",
+		"GIT_CONFIG_GLOBAL",
+		"GIT_CONFIG_COUNT",
+		"GIT_CONFIG_KEY_0",
+		"GIT_CONFIG_VALUE_0",
+		"GIT_CONFIG_KEY_1",
+		"GIT_CONFIG_VALUE_1",
+		"GIT_CONFIG_PARAMETERS",
+		"GIT_CONFIG",
+		"GIT_ALLOW_PROTOCOL",
+		"GIT_TEMPLATE_DIR",
+		"GIT_DIR",
+		"GIT_WORK_TREE",
+		"GIT_COMMON_DIR",
+		"GIT_INDEX_FILE",
+		"GIT_OBJECT_DIRECTORY",
+		"GIT_ALTERNATE_OBJECT_DIRECTORIES",
+		"GIT_NAMESPACE",
+		"PATHEXT",
+	] as const;
+	const savedEnvironment = new Map<string, string | undefined>();
+	for (const key of environmentKeys) savedEnvironment.set(key, process.env[key]);
+
+	const sh = (cwd: string, ...args: string[]) => {
+		const result = Bun.spawnSync(["git", "-C", cwd, ...args], {
+			stdout: "ignore",
+			stderr: "pipe",
+			env: process.env,
+		});
+		if (!result.success) throw new Error(new TextDecoder().decode(result.stderr));
+	};
+
+	beforeEach(() => {
+		dataDir = mkdtempSync(join(tmpdir(), "trpi-pr-cache-"));
+		repo = join(dataDir, "repo");
+		remote = join(dataDir, "remote.git");
+		const bin = join(dataDir, "bin");
+		const home = join(dataDir, "home");
+		const hooks = join(dataDir, "hooks");
+		const template = join(dataDir, "template");
+		reviewMode = join(dataDir, "review-mode");
+		for (const path of [repo, remote, bin, home, hooks, template]) mkdirSync(path);
+		for (const key of [
+			"GIT_CONFIG_PARAMETERS",
+			"GIT_CONFIG",
+			"GIT_DIR",
+			"GIT_WORK_TREE",
+			"GIT_COMMON_DIR",
+			"GIT_INDEX_FILE",
+			"GIT_OBJECT_DIRECTORY",
+			"GIT_ALTERNATE_OBJECT_DIRECTORIES",
+			"GIT_NAMESPACE",
+		]) {
+			delete process.env[key];
+		}
+
+		process.env.THINKRAIL_DATA_DIR = dataDir;
+		process.env.THINKRAIL_TEST_REVIEW_MODE = reviewMode;
+		process.env.PATH = `${bin}${delimiter}${savedEnvironment.get("PATH") ?? ""}`;
+		process.env.HOME = home;
+		process.env.XDG_CONFIG_HOME = join(home, ".config");
+		process.env.GIT_CONFIG_NOSYSTEM = "1";
+		process.env.GIT_CONFIG_GLOBAL = process.platform === "win32" ? "NUL" : "/dev/null";
+		process.env.GIT_CONFIG_COUNT = "2";
+		process.env.GIT_CONFIG_KEY_0 = "commit.gpgSign";
+		process.env.GIT_CONFIG_VALUE_0 = "false";
+		process.env.GIT_CONFIG_KEY_1 = "core.hooksPath";
+		process.env.GIT_CONFIG_VALUE_1 = hooks;
+		process.env.GIT_ALLOW_PROTOCOL = "file";
+		process.env.GIT_TEMPLATE_DIR = template;
+		if (process.platform === "win32") {
+			const pathExtensions = savedEnvironment.get("PATHEXT") ?? ".COM;.EXE;.BAT;.CMD";
+			process.env.PATHEXT = pathExtensions.toUpperCase().split(";").includes(".CMD")
+				? pathExtensions
+				: `${pathExtensions};.CMD`;
+		}
+		delete process.env.THINKRAIL_GH_OFFLINE;
+
+		sh(repo, "init", "-q", "-b", "main");
+		sh(repo, "config", "user.email", "t@thinkrail.test");
+		sh(repo, "config", "user.name", "test");
+		writeFileSync(join(repo, "README.md"), "# repo\n");
+		sh(repo, "add", "-A");
+		sh(repo, "commit", "-q", "-m", "init");
+		sh(repo, "switch", "-q", "-c", "feature");
+		writeFileSync(join(repo, "feature.txt"), "feature\n");
+		sh(repo, "add", "-A");
+		sh(repo, "commit", "-q", "-m", "feature");
+		sh(remote, "init", "-q", "--bare");
+		sh(repo, "remote", "add", "origin", "https://github.com/acme/widgets.git");
+		sh(repo, "remote", "set-url", "--push", "origin", remote);
+
+		writeFileSync(reviewMode, "closed\n");
+		if (process.platform === "win32") {
+			writeFileSync(
+				join(bin, "gh.cmd"),
+				'@echo off\r\nset /p MODE=<"%THINKRAIL_TEST_REVIEW_MODE%"\r\nif "%MODE%"=="open" (\r\n  echo [{"number":7}]\r\n) else (\r\n  echo []\r\n)\r\n',
+			);
+		} else {
+			const gh = join(bin, "gh");
+			writeFileSync(
+				gh,
+				"#!/bin/sh\nif [ \"$(cat \"$THINKRAIL_TEST_REVIEW_MODE\")\" = \"open\" ]; then\n  printf '%s\\n' '[{\"number\":7}]'\nelse\n  printf '%s\\n' '[]'\nfi\n",
+			);
+			chmodSync(gh, 0o755);
+		}
+
+		writeFileSync(
+			join(dataDir, "projects.json"),
+			JSON.stringify([{ id: "p1", name: "repo", path: repo, slug: "repo", lastOpened: 1 }]),
+		);
+		writeFileSync(
+			join(dataDir, "workspaces.json"),
+			JSON.stringify([
+				{
+					id: "w1",
+					projectId: "p1",
+					name: "Feature",
+					branch: "feature",
+					baseBranch: "main",
+					worktreePath: repo,
+					createdAt: 1,
+				},
+			]),
+		);
+	});
+
+	afterEach(() => {
+		forgetOpenBranchReview(repo);
+		rmSync(dataDir, { recursive: true, force: true });
+		for (const key of environmentKeys) {
+			const value = savedEnvironment.get(key);
+			if (value === undefined) delete process.env[key];
+			else process.env[key] = value;
+		}
+	});
+
+	test("a successful push clears a settled answer even when gh is offline", async () => {
+		expect(await findOpenBranchReview(repo, "feature")).toBeNull();
+		writeFileSync(reviewMode, "open\n");
+		process.env.THINKRAIL_GH_OFFLINE = "1";
+
+		const result = await openPr({
+			workspaceId: "w1",
+			sessionId: "s1",
+			title: "Feature",
+			body: "Body",
+		});
+		expect(result.action).toBe("compare");
+		expect(await findOpenBranchReview(repo, "feature")).toEqual({
+			kind: "pull-request",
+			number: 7,
+		});
+	});
+
+	test("an ambiguous gh mutation clears a null cached concurrently with the attempt", async () => {
+		expect(await findOpenBranchReview(repo, "feature")).toBeNull();
+		const run: PrCommandRunner = async (_cwd, command) => {
+			if (command[2] === "create") {
+				expect(await findOpenBranchReview(repo, "feature")).toBeNull();
+				writeFileSync(reviewMode, "open\n");
+				return { ok: true, out: "ambiguous" };
+			}
+			return { ok: true, out: "[]" };
+		};
+
+		const result = await openPr(
+			{ workspaceId: "w1", sessionId: "s1", title: "Feature", body: "Body" },
+			run,
+			async () => null,
+		);
+		expect(result.action).toBe("compare");
+		expect(await findOpenBranchReview(repo, "feature")).toEqual({
+			kind: "pull-request",
+			number: 7,
+		});
+	});
+
+	test("a successful non-GitHub push clears an answer before the pushed return", async () => {
+		expect(await findOpenBranchReview(repo, "feature")).toBeNull();
+		sh(repo, "remote", "set-url", "origin", remote);
+		const result = await openPr({ workspaceId: "w1", sessionId: "s1" }, async () => {
+			throw new Error("a non-GitHub push must not run gh");
+		});
+		expect(result.action).toBe("pushed");
+
+		sh(repo, "remote", "set-url", "origin", "https://github.com/acme/widgets.git");
+		writeFileSync(reviewMode, "open\n");
+		expect(await findOpenBranchReview(repo, "feature")).toEqual({
+			kind: "pull-request",
+			number: 7,
+		});
 	});
 });
 

@@ -3,35 +3,48 @@ import { git, nonInteractiveGitEnv } from "../git";
 import { runBounded } from "../subprocess";
 
 const LOOKUP_TIMEOUT_MS = 8_000;
+export const OPEN_BRANCH_REVIEW_CACHE_TTL_MS = 60_000;
 
 type ReviewProvider = "github" | "gitlab";
+type ProviderDetection = { provider: ReviewProvider | null; cacheable: boolean };
 type CommandResult = { ok: boolean; out: string };
 type CommandRunner = (cwd: string, command: string[]) => Promise<CommandResult>;
+type LookupResult = { value: OpenBranchReview | null; cacheable: boolean };
+type LookupOptions = { fresh?: boolean; now?: () => number };
+type ParsedReviewNumber = { valid: true; value: number | null } | { valid: false };
 
-export function detectReviewProvider(cwd: string, branch: string): ReviewProvider | null {
+function detectReviewProviderResult(cwd: string, branch: string): ProviderDetection {
 	const configured = [
 		git(cwd, ["config", "--get", `branch.${branch}.pushRemote`]).out,
 		git(cwd, ["config", "--get", "remote.pushDefault"]).out,
 		git(cwd, ["config", "--get", `branch.${branch}.remote`]).out,
 	];
 	const listed = git(cwd, ["remote"]);
-	const names = [
-		...new Set([...configured, "origin", ...(listed.ok ? listed.out.split("\n") : [])]),
-	];
+	if (!listed.ok) return { provider: null, cacheable: false };
+	const listedNames = new Set(listed.out.split("\n").filter(Boolean));
+	const names = [...new Set([...configured, "origin", ...listedNames])];
+	let failedListedRemote = false;
 
 	for (const name of names) {
 		if (!name || name === ".") continue;
+		let resolved = false;
 		for (const args of [
 			["remote", "get-url", "--push", name],
 			["remote", "get-url", name],
 		]) {
 			const remote = git(cwd, args);
 			if (!remote.ok) continue;
+			resolved = true;
 			const provider = providerFromRemoteUrl(remote.out);
-			if (provider) return provider;
+			if (provider) return { provider, cacheable: true };
 		}
+		if (listedNames.has(name) && !resolved) failedListedRemote = true;
 	}
-	return null;
+	return { provider: null, cacheable: !failedListedRemote };
+}
+
+export function detectReviewProvider(cwd: string, branch: string): ReviewProvider | null {
+	return detectReviewProviderResult(cwd, branch).provider;
 }
 
 export function providerFromRemoteUrl(remoteUrl: string): ReviewProvider | null {
@@ -49,21 +62,73 @@ function remoteHost(remoteUrl: string): string | null {
 	return /^(?:[^@/:\s]+@)?([^/:\s]+):/.exec(remoteUrl)?.[1]?.toLowerCase() ?? null;
 }
 
+const cached = new Map<string, { at: number; value: OpenBranchReview | null }>();
+const inFlight = new Map<string, Promise<OpenBranchReview | null>>();
+
+const cacheKey = (cwd: string, branch: string) => `${cwd}\u0000${branch}`;
+
 export function findOpenBranchReview(
 	cwd: string,
 	branch: string,
+	options: { fresh?: boolean } = {},
 ): Promise<OpenBranchReview | null> {
-	return findOpenBranchReviewWithRunner(cwd, branch, runProviderCommand);
+	return findOpenBranchReviewWithRunner(cwd, branch, runProviderCommand, options);
 }
 
-export async function findOpenBranchReviewWithRunner(
+export function forgetOpenBranchReview(cwd: string): void {
+	const prefix = `${cwd}\u0000`;
+	for (const map of [cached, inFlight]) {
+		for (const key of map.keys()) if (key.startsWith(prefix)) map.delete(key);
+	}
+}
+
+function pruneCached(now: number): void {
+	for (const [key, entry] of cached) {
+		if (now - entry.at >= OPEN_BRANCH_REVIEW_CACHE_TTL_MS) cached.delete(key);
+	}
+}
+
+export function findOpenBranchReviewWithRunner(
 	cwd: string,
 	branch: string,
 	run: CommandRunner,
+	options: LookupOptions = {},
 ): Promise<OpenBranchReview | null> {
+	const now = options.now ?? Date.now;
+	const key = cacheKey(cwd, branch);
+	pruneCached(now());
+	const running = inFlight.get(key);
+	if (running) return running;
+	if (!options.fresh) {
+		const hit = cached.get(key);
+		if (hit) return Promise.resolve(hit.value);
+	} else {
+		cached.delete(key);
+	}
+	const lookup: Promise<OpenBranchReview | null> = lookupOpenBranchReview(cwd, branch, run).then(
+		(result) => {
+			if (inFlight.get(key) !== lookup) {
+				return findOpenBranchReviewWithRunner(cwd, branch, run, { now });
+			}
+			inFlight.delete(key);
+			if (result.cacheable) cached.set(key, { at: now(), value: result.value });
+			else cached.delete(key);
+			return result.value;
+		},
+	);
+	inFlight.set(key, lookup);
+	return lookup;
+}
+
+async function lookupOpenBranchReview(
+	cwd: string,
+	branch: string,
+	run: CommandRunner,
+): Promise<LookupResult> {
 	try {
-		const provider = detectReviewProvider(cwd, branch);
-		if (!provider) return null;
+		const detection = detectReviewProviderResult(cwd, branch);
+		const provider = detection.provider;
+		if (!provider) return { value: null, cacheable: detection.cacheable };
 
 		const command =
 			provider === "github"
@@ -82,27 +147,44 @@ export async function findOpenBranchReviewWithRunner(
 					]
 				: ["glab", "mr", "list", "--source-branch", branch, "--output", "json", "--per-page", "1"];
 		const result = await run(cwd, command);
-		if (!result.ok) return null;
+		if (!result.ok) return { value: null, cacheable: false };
 
-		const number = reviewNumber(result.out, provider === "github" ? "number" : "iid");
-		if (number === null) return null;
-		return { kind: provider === "github" ? "pull-request" : "merge-request", number };
+		const parsed = parseReviewNumber(result.out, provider === "github" ? "number" : "iid");
+		if (!parsed.valid) return { value: null, cacheable: false };
+		return {
+			value:
+				parsed.value === null
+					? null
+					: {
+							kind: provider === "github" ? "pull-request" : "merge-request",
+							number: parsed.value,
+						},
+			cacheable: true,
+		};
 	} catch {
-		return null;
+		return { value: null, cacheable: false };
+	}
+}
+
+function parseReviewNumber(output: string, field: "number" | "iid"): ParsedReviewNumber {
+	try {
+		const rows: unknown = JSON.parse(output);
+		if (!Array.isArray(rows)) return { valid: false };
+		if (rows.length === 0) return { valid: true, value: null };
+		const first: unknown = rows[0];
+		if (typeof first !== "object" || first === null) return { valid: false };
+		const value = (first as Record<string, unknown>)[field];
+		return typeof value === "number" && Number.isSafeInteger(value) && value > 0
+			? { valid: true, value }
+			: { valid: false };
+	} catch {
+		return { valid: false };
 	}
 }
 
 export function reviewNumber(output: string, field: "number" | "iid"): number | null {
-	try {
-		const rows: unknown = JSON.parse(output);
-		if (!Array.isArray(rows) || rows.length === 0) return null;
-		const first: unknown = rows[0];
-		if (typeof first !== "object" || first === null) return null;
-		const value = (first as Record<string, unknown>)[field];
-		return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : null;
-	} catch {
-		return null;
-	}
+	const parsed = parseReviewNumber(output, field);
+	return parsed.valid ? parsed.value : null;
 }
 
 export async function runProviderCommand(

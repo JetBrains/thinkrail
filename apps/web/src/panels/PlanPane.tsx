@@ -517,6 +517,7 @@ export default function PlanPane({
 		review: openReview,
 		url: openReviewUrl,
 		noteOpenReview,
+		refreshOpenReview,
 	} = useOpenBranchReview(workspace, connection);
 	const [prBusy, setPrBusy] = useState(false);
 	const [prSetup, setPrSetup] = useState<PrSetupState | null>(null);
@@ -623,8 +624,7 @@ export default function PlanPane({
 			);
 			setPrCompose(null);
 			if (result.review) noteOpenReview(result.review, result.url);
-			else if (openReview?.unpushedCommits)
-				noteOpenReview({ kind: openReview.kind, number: openReview.number }, openReviewUrl);
+			refreshOpenReview();
 			const dirty =
 				result.dirtyFiles > 0
 					? `${result.dirtyFiles} uncommitted ${result.dirtyFiles === 1 ? "file" : "files"} stayed local.`

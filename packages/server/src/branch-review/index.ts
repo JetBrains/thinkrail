@@ -1,5 +1,6 @@
 export {
 	findOpenBranchReview,
+	forgetOpenBranchReview,
 	providerFromRemoteUrl,
 	reviewNumber,
 	runProviderCommand,

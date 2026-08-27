@@ -8,7 +8,7 @@ import { recordAcceptedMessage, resetFeedbackForTests, setFeedbackPublisher } fr
 import { addComment, getReviewSnapshot } from "../reviews";
 import { todoReviewRecord } from "../todos";
 import { stopAllWatches } from "../watch";
-import { handleRequest, requestMethodDiagnostic } from "./handlers";
+import { handleRequest, requestMethodDiagnostic, shouldRefreshOpenReview } from "./handlers";
 
 const CTX = { clientKey: "test-client" };
 
@@ -51,6 +51,12 @@ afterEach(() => {
 	rmSync(dataDir, { recursive: true, force: true });
 	if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
 	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
+});
+
+test("open-review cache reuse is opt-in so older clients remain fresh", () => {
+	expect(shouldRefreshOpenReview(undefined)).toBe(true);
+	expect(shouldRefreshOpenReview(false)).toBe(true);
+	expect(shouldRefreshOpenReview(true)).toBe(false);
 });
 
 test("request diagnostics expose only registered method names", async () => {
