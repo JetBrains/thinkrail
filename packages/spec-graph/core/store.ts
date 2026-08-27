@@ -1,10 +1,51 @@
-import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join, relative, sep } from "node:path";
+import { existsSync, lstatSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { isAbsolute, join, normalize, relative, sep } from "node:path";
 import { buildGraph, type SpecGraph } from "./graph.ts";
 import { FIELDS, type Frontmatter, isSpec, parseFile, scalar } from "./parse.ts";
 import type { SpecContentEntry } from "./query.ts";
 
 const IGNORED_DIRS = new Set(["node_modules", ".git", "dist", "build"]);
+
+export const SPEC_FILE_EXTENSION = ".md";
+
+function isSymlink(target: string): boolean {
+	try {
+		return lstatSync(target).isSymbolicLink();
+	} catch {
+		return false;
+	}
+}
+
+export type SpecPathResolution = { rel: string; abs: string } | { error: string };
+
+export function resolveSpecPath(root: string, path: string): SpecPathResolution {
+	if (path.trim() === "") return { error: "Path must not be empty." };
+	if (isAbsolute(path)) return { error: `Path must be root-relative, not absolute: ${path}` };
+	if (!path.endsWith(SPEC_FILE_EXTENSION)) {
+		return { error: `Spec files must end in ${SPEC_FILE_EXTENSION}: ${path}` };
+	}
+
+	const lexical = normalize(path);
+	const segments = lexical.split(sep);
+	if (segments[0] === "..") return { error: `Path must stay inside the project root: ${path}` };
+	const ignored = segments.find((segment) => IGNORED_DIRS.has(segment));
+	if (ignored !== undefined) {
+		return {
+			error: `Path is inside an ignored directory ("${ignored}") and would not be indexed: ${path}`,
+		};
+	}
+	if (!existsSync(root)) return { error: `Project root does not exist: ${root}` };
+
+	let walked = root;
+	for (const segment of segments) {
+		walked = join(walked, segment);
+		if (isSymlink(walked)) {
+			return { error: `Path passes through a symlink, which the index never follows: ${path}` };
+		}
+	}
+
+	return { rel: lexical.split(sep).join("/"), abs: join(root, lexical) };
+}
 
 export interface SpecFileRecord {
 	abs: string;
@@ -45,12 +86,18 @@ export class SpecIndex {
 		} catch {
 			return;
 		}
+		const order = new Map(dirents.map((d) => [d.name, d.name.normalize("NFC")]));
+		dirents.sort((a, b) => {
+			const left = order.get(a.name) ?? a.name;
+			const right = order.get(b.name) ?? b.name;
+			return left < right ? -1 : left > right ? 1 : 0;
+		});
 		for (const dirent of dirents) {
 			const abs = join(dir, dirent.name);
 			if (dirent.isDirectory()) {
 				if (IGNORED_DIRS.has(dirent.name)) continue;
 				yield* this.walk(abs);
-			} else if (dirent.isFile() && dirent.name.endsWith(".md")) {
+			} else if (dirent.isFile() && dirent.name.endsWith(SPEC_FILE_EXTENSION)) {
 				yield abs;
 			}
 		}

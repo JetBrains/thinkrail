@@ -34,6 +34,7 @@ export {
 } from "./parse.ts";
 
 export {
+	DEFAULT_GREP_LIMIT,
 	type GraphSlice,
 	type GrepMatch,
 	type GrepOptions,
@@ -46,7 +47,13 @@ export {
 	type SpecContentEntry,
 	type SpecFilters,
 } from "./query.ts";
-export { type SpecFileRecord, SpecIndex } from "./store.ts";
+export {
+	resolveSpecPath,
+	SPEC_FILE_EXTENSION,
+	type SpecFileRecord,
+	SpecIndex,
+	type SpecPathResolution,
+} from "./store.ts";
 export {
 	type DanglingLink,
 	type DuplicateId,

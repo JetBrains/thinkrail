@@ -6,6 +6,9 @@ import { Type } from "typebox";
 import {
 	FIELDS,
 	type Frontmatter,
+	isSpec,
+	parseFile,
+	resolveSpecPath,
 	SPEC_STATUSES,
 	SPEC_TYPES,
 	serializeFrontmatter,
@@ -14,7 +17,8 @@ import { errorResult, getIndex, scaffoldBody, textResult } from "./shared.ts";
 
 const parameters = Type.Object({
 	path: Type.String({
-		description: "Root-relative path for the new spec file (e.g. src/foo/SPEC.md).",
+		description:
+			"Root-relative path for the new spec file, ending in .md (e.g. src/foo/SPEC.md). Must stay inside the project root.",
 	}),
 	id: Type.String({ description: "Unique spec id." }),
 	type: StringEnum(SPEC_TYPES, {
@@ -40,14 +44,17 @@ export function registerSpecCreate(pi: ExtensionAPI): void {
 		name: "spec_create",
 		label: "Spec Create",
 		description:
-			"Create a new spec file with scaffolded frontmatter (id, type, title, an optional status, and any links) and a heading-only body stub chosen by type. Fails if the file already exists or the id is already in use. Edit prose afterward with the write/edit tools.",
+			"Create a new spec file with scaffolded frontmatter (id, type, title, an optional status, and any links) and a heading-only body stub chosen by type. Fails if the file already exists, the id is already in use, or the path is not an indexable root-relative .md path. Edit prose afterward with the write/edit tools.",
 		promptSnippet:
 			"spec_create — create a new spec file with scaffolded frontmatter (id/type/title/links) and heading stubs.",
 		parameters,
 		async execute(_callId, params, _signal, _onUpdate, ctx) {
+			const resolved = resolveSpecPath(ctx.cwd, params.path);
+			if ("error" in resolved) return errorResult(resolved.error);
+			const { rel, abs } = resolved;
+
 			const index = getIndex(ctx.cwd);
-			const abs = index.absPath(params.path);
-			if (existsSync(abs)) return errorResult(`File already exists: ${params.path}`);
+			if (existsSync(abs)) return errorResult(`File already exists: ${rel}`);
 			if (index.graph().nodes.has(params.id)) {
 				return errorResult(`Spec id "${params.id}" is already in use.`);
 			}
@@ -63,16 +70,18 @@ export function registerSpecCreate(pi: ExtensionAPI): void {
 			if (params.tags?.length) fm[FIELDS.tags] = params.tags;
 
 			const content = `${serializeFrontmatter(fm)}\n${scaffoldBody(params.type)}`;
+			if (!isSpec(parseFile(content).frontmatter)) {
+				return errorResult(
+					`Refusing to write ${rel}: the frontmatter would not be a spec (id and type must be non-empty).`,
+				);
+			}
 			try {
 				mkdirSync(dirname(abs), { recursive: true });
-				writeFileSync(abs, content, "utf8");
+				writeFileSync(abs, content, { encoding: "utf8", flag: "wx" });
 			} catch (err) {
-				return errorResult(`Failed to write ${params.path}: ${(err as Error).message}`);
+				return errorResult(`Failed to write ${rel}: ${(err as Error).message}`);
 			}
-			return textResult(`Created ${params.path} (id: ${params.id}).`, {
-				path: params.path,
-				id: params.id,
-			});
+			return textResult(`Created ${rel} (id: ${params.id}).`, { path: rel, id: params.id });
 		},
 	});
 }

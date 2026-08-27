@@ -1,5 +1,13 @@
 import { expect, test } from "bun:test";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+	symlinkSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type {
@@ -8,7 +16,13 @@ import type {
 	ExtensionContext,
 	ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
-import { LINK_KINDS, SLICE_DIRECTIONS, SPEC_STATUSES, SPEC_TYPES } from "../core/index.ts";
+import {
+	LINK_KINDS,
+	resolveSpecPath,
+	SLICE_DIRECTIONS,
+	SPEC_STATUSES,
+	SPEC_TYPES,
+} from "../core/index.ts";
 import { registerSpecTools } from "./index.ts";
 
 const tools = new Map<string, ToolDefinition>();
@@ -173,6 +187,83 @@ test("spec_create rejects a duplicate id and an existing path", async () => {
 				),
 			),
 		).toBe(true);
+	});
+});
+
+test("spec_create refuses a path the index could never see, and writes nothing", async () => {
+	await withRoot(async (outer) => {
+		const root = join(outer, "project");
+		mkdirSync(root, { recursive: true });
+		const rejected = [
+			"../escape.md",
+			"pkg/../../escape.md",
+			"/tmp/escape.md",
+			"notes/spec.txt",
+			"node_modules/dep/SPEC.md",
+			"",
+		];
+		let n = 0;
+		for (const path of rejected) {
+			const res = await run(
+				"spec_create",
+				{ path, id: `id-${n++}`, type: "module-design", title: "T" },
+				root,
+			);
+			expect(isError(res)).toBe(true);
+			const expected = resolveSpecPath(root, path);
+			expect(text(res)).toContain((expected as { error: string }).error);
+		}
+		expect(existsSync(join(outer, "escape.md"))).toBe(false);
+		expect(existsSync(join(root, "notes/spec.txt"))).toBe(false);
+	});
+});
+
+test("spec_create writes nothing through a symlink, dangling leaf included", async () => {
+	await withRoot(async (outer) => {
+		const root = join(outer, "project");
+		mkdirSync(join(outer, "elsewhere"), { recursive: true });
+		mkdirSync(root, { recursive: true });
+		symlinkSync(join(outer, "elsewhere"), join(root, "link"), "dir");
+		symlinkSync(join(outer, "leaf.md"), join(root, "leaf.md"));
+
+		for (const path of ["link/evil.md", "leaf.md"]) {
+			const res = await run(
+				"spec_create",
+				{ path, id: `evil-${path}`, type: "module-design", title: "E" },
+				root,
+			);
+			expect(isError(res)).toBe(true);
+		}
+		expect(existsSync(join(outer, "elsewhere", "evil.md"))).toBe(false);
+		expect(existsSync(join(outer, "leaf.md"))).toBe(false);
+	});
+});
+
+test("spec_create reports the canonical path the index will produce, not the caller's spelling", async () => {
+	await withRoot(async (root) => {
+		const res = await run(
+			"spec_create",
+			{ path: "./pkg/sub/../SPEC.md", id: "pkg", type: "module-design", title: "P" },
+			root,
+		);
+		expect(isError(res)).toBe(false);
+		expect(res.details).toMatchObject({ path: "pkg/SPEC.md" });
+		expect(text(res)).toContain("pkg/SPEC.md");
+
+		const got = await run("spec_get", { id: "pkg" }, root);
+		expect(text(got)).toContain("path: pkg/SPEC.md");
+	});
+});
+
+test("spec_create refuses params that would write a file born a non-spec", async () => {
+	await withRoot(async (root) => {
+		const res = await run(
+			"spec_create",
+			{ path: "blank.md", id: "", type: "module-design", title: "T" },
+			root,
+		);
+		expect(isError(res)).toBe(true);
+		expect(existsSync(join(root, "blank.md"))).toBe(false);
 	});
 });
 

@@ -32,6 +32,8 @@ export interface GrepResult {
 	truncated: boolean;
 }
 
+export const DEFAULT_GREP_LIMIT = 200;
+
 function matchesFilters(fm: Frontmatter, filters: SpecFilters): boolean {
 	if (filters.type !== undefined && scalar(fm, FIELDS.type) !== filters.type) return false;
 	if (filters.parent !== undefined && scalar(fm, FIELDS.parent) !== filters.parent) return false;
@@ -56,14 +58,16 @@ function buildMatcher(opts: GrepOptions): (line: string) => boolean {
 }
 
 export function grepSpecs(entries: SpecContentEntry[], opts: GrepOptions): GrepResult {
-	const limit = opts.limit ?? 200;
+	const requested = Math.trunc(opts.limit ?? DEFAULT_GREP_LIMIT);
+	const limit = requested > 0 ? requested : DEFAULT_GREP_LIMIT;
 	const matcher = buildMatcher(opts);
 	const matches: GrepMatch[] = [];
 	for (const entry of entries) {
 		if (!matchesFilters(entry.frontmatter, opts)) continue;
 		const lines = entry.content.split("\n");
 		for (let i = 0; i < lines.length; i++) {
-			const line = lines[i] ?? "";
+			const raw = (i === 0 ? (lines[0]?.replace(/^\ufeff/, "") ?? "") : (lines[i] ?? "")) as string;
+			const line = raw.endsWith("\r") ? raw.slice(0, -1) : raw;
 			if (matcher(line)) {
 				if (matches.length >= limit) return { matches, truncated: true };
 				matches.push({ path: entry.path, line: i + 1, snippet: line.trim() });

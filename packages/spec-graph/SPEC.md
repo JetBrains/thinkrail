@@ -19,7 +19,8 @@ It manages the frontmatter schema the repo's specs use — a file is a spec once
 `id` and `type`; the schema itself is documented in the skill. Frontmatter is handled with the `yaml`
 library, link/metadata lists inline. `spec_create` writes new frontmatter in a canonical field order;
 `spec_update` edits an existing file **in place** — it preserves the file's own field order and any
-comments / nested fields, and writes back the original line ending (LF or CRLF).
+comments / nested fields, rewrites the frontmatter block alone (in the line ending that block already
+used), and leaves every byte of the body untouched.
 
 ## Boundary
 
@@ -45,22 +46,24 @@ own boundary and leaves.
 ## Derived read index
 
 The filesystem is the source of truth; the model the tools read is **derived, in-memory, read-only, and
-revalidated on demand**. Each read re-globs the spec set (ignoring `node_modules`/`.git`/`dist`/`build`)
-and revalidates every file by `(mtimeMs, size)`: unchanged files reuse their cached parse, changed/new
-files are re-parsed, vanished files are evicted, and the derived graph is rebuilt only when the spec set
-actually changed. So specs added, deleted, or edited from any source — including pi's normal `write`/`edit`
-— are always current, while redundant re-parse/rebuild is skipped when nothing moved. One `SpecIndex` is
-reused per root (keyed by cwd) so the cache pays off across an agent's calls. The one theoretical miss is
-an edit landing within the same mtime tick *and* keeping byte length identical (negligible; a content hash
-is the sanctioned escalation).
+revalidated on demand**. Each read re-globs the spec set in a name-sorted walk (ignoring
+`node_modules`/`.git`/`dist`/`build`) and revalidates every file by `(mtimeMs, size)`: unchanged files
+reuse their cached parse, changed/new files are re-parsed, vanished files are evicted, and the derived
+graph is rebuilt only when the spec set actually changed. So specs added, deleted, or edited from any
+source — including pi's normal `write`/`edit` — are always current, while redundant re-parse/rebuild is
+skipped when nothing moved. One `SpecIndex` is reused per root (keyed by cwd) so the cache pays off
+across an agent's calls. The one theoretical miss is an edit landing within the same mtime tick *and*
+keeping byte length identical (negligible; a content hash is the sanctioned escalation).
 
 ## Tools
 
 Read — `spec_grep` (content search, narrowable by metadata), `spec_get` (a node's frontmatter, resolved
 links, and path — no body), `spec_graph` (a bounded subtree/ancestors/neighbors slice). Manage —
-`spec_create`, `spec_update` (frontmatter only), `spec_delete`, `spec_validate`. Per-tool usage lives in
-the skill and in each tool's `description`; **none edit prose** — prose is written/edited with pi's normal
-`read`/`write`/`edit`.
+`spec_create` (which refuses any path the index could never see — see `resolveSpecPath` in
+`submodule-spec-graph-core` — and any parameters that would write a file born a non-spec),
+`spec_update` (frontmatter only), `spec_delete`, `spec_validate`. Per-tool
+usage lives in the skill and in each tool's `description`; **none edit prose** — prose is written/edited
+with pi's normal `read`/`write`/`edit`.
 
 ## Knowledge delivery
 

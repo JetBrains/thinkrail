@@ -1,9 +1,10 @@
 import { expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
 	buildGraph,
+	DEFAULT_GREP_LIMIT,
 	FIELD_ORDER,
 	FIELDS,
 	graphSlice,
@@ -15,8 +16,10 @@ import {
 	LIST_LINK_FIELDS,
 	parseFile,
 	REQUIRED_FIELDS,
+	resolveSpecPath,
 	SINGLE_LINK_FIELDS,
 	SLICE_DIRECTIONS,
+	SPEC_FILE_EXTENSION,
 	SPEC_STATUSES,
 	SPEC_TYPES,
 	SpecIndex,
@@ -203,6 +206,30 @@ test("updateFrontmatterText writes the file back in its original CRLF line endin
 	expect(/(?<!\r)\n/.test(res.content)).toBe(false);
 });
 
+test("updateFrontmatterText leaves the prose body byte-identical, mixed line endings included", () => {
+	const body = "# Body\nplain line\r\nanother\n";
+	const res = updateFrontmatterText(`---\nid: a\ntype: module-design\ntitle: T\n---\n${body}`, {
+		set: { title: "T2" },
+	}) as { content: string };
+	expect(res.content).toBe(`---\nid: a\ntype: module-design\ntitle: T2\n---\n${body}`);
+});
+
+test("updateFrontmatterText reads the line ending from the frontmatter, not from any body line", () => {
+	const lfWithOneCrlfInProse = "---\nid: a\ntype: module-design\ntitle: T\n---\nprose\r\n";
+	const res = updateFrontmatterText(lfWithOneCrlfInProse, { set: { title: "T2" } }) as {
+		content: string;
+	};
+	expect(res.content.startsWith("---\nid: a\n")).toBe(true);
+	expect(res.content.endsWith("prose\r\n")).toBe(true);
+});
+
+test("updateFrontmatterText keeps a leading BOM the split step strips off", () => {
+	const file = "\ufeff---\nid: a\ntype: module-design\ntitle: T\n---\nbody\n";
+	const res = updateFrontmatterText(file, { set: { title: "T2" } }) as { content: string };
+	expect(res.content.startsWith("\ufeff")).toBe(true);
+	expect(parseFile(res.content).frontmatter?.title).toBe("T2");
+});
+
 test("updateFrontmatterText rejects set on a list field (use addList/removeList instead)", () => {
 	const res = updateFrontmatterText("---\nid: a\ntype: t\n---\nbody\n", { set: { tags: "a, b" } });
 	expect("error" in res).toBe(true);
@@ -315,6 +342,30 @@ test("grepSpecs marks truncated only when a match exists beyond the limit", () =
 	const cut = grepSpecs(content, { pattern: "x", limit: 2 });
 	expect(cut.matches).toHaveLength(2);
 	expect(cut.truncated).toBe(true);
+});
+
+test("grepSpecs strips the CR of a CRLF spec so anchored patterns still match", () => {
+	const entries = [
+		{
+			path: "a.md",
+			content: "---\r\nid: a\r\ntype: t\r\n---\r\nhello world\r\n",
+			frontmatter: { id: "a", type: "t" },
+		},
+	];
+	expect(grepSpecs(entries, { pattern: "world$", regex: true }).matches).toHaveLength(1);
+	expect(grepSpecs(entries, { pattern: "^hello", regex: true }).matches[0]?.snippet).toBe(
+		"hello world",
+	);
+});
+
+test("grepSpecs falls back to the default limit rather than reporting a silent truncation", () => {
+	const content = [{ path: "a.md", content: "x\nx", frontmatter: { id: "a", type: "t" } }];
+	for (const limit of [0, -5, 0.5]) {
+		const res = grepSpecs(content, { pattern: "x", limit });
+		expect(res.matches).toHaveLength(2);
+		expect(res.truncated).toBe(false);
+	}
+	expect(DEFAULT_GREP_LIMIT).toBe(200);
 });
 
 test("validateGraph flags dangling links, duplicate ids, and parent cycles", () => {
@@ -437,5 +488,98 @@ test("SpecIndex tracks a file entering and leaving spec-hood via its frontmatter
 		expect([...index.graph().nodes.keys()]).toEqual(["x"]);
 		writeFileSync(abs, "---\ntype: module-design\ntitle: X\n---\nbody\n");
 		expect([...index.graph().nodes.keys()]).toEqual([]);
+	});
+});
+
+function withProject(fn: (root: string, outer: string) => void): void {
+	withIndexRoot((outer) => {
+		const root = join(outer, "project");
+		mkdirSync(root, { recursive: true });
+		fn(root, outer);
+	});
+}
+
+const ok = (r: ReturnType<typeof resolveSpecPath>): string => {
+	if ("error" in r) throw new Error(`expected a resolved path, got: ${r.error}`);
+	return r.rel;
+};
+
+test("resolveSpecPath returns the canonical relative path the index would report", () => {
+	withProject((root) => {
+		expect(ok(resolveSpecPath(root, "SPEC.md"))).toBe("SPEC.md");
+		expect(ok(resolveSpecPath(root, "packages/core/SPEC.md"))).toBe("packages/core/SPEC.md");
+		expect(ok(resolveSpecPath(root, "./packages/core/SPEC.md"))).toBe("packages/core/SPEC.md");
+		expect(ok(resolveSpecPath(root, "pkg/./sub/../SPEC.md"))).toBe("pkg/SPEC.md");
+		expect(SPEC_FILE_EXTENSION).toBe(".md");
+	});
+});
+
+test("resolveSpecPath rejects every path the index could never see", () => {
+	withProject((root) => {
+		for (const path of [
+			"",
+			"../outside.md",
+			"pkg/../../outside.md",
+			"/etc/outside.md",
+			"notes/spec.txt",
+			"node_modules/dep/SPEC.md",
+			"pkg/dist/SPEC.md",
+		]) {
+			expect(resolveSpecPath(root, path)).toHaveProperty("error");
+		}
+	});
+});
+
+test("resolveSpecPath rejects a symlinked directory even when it points back inside the root", () => {
+	withProject((root, outer) => {
+		mkdirSync(join(root, "real"), { recursive: true });
+		mkdirSync(join(root, "node_modules", "hidden"), { recursive: true });
+		mkdirSync(join(outer, "elsewhere"), { recursive: true });
+		symlinkSync(join(outer, "elsewhere"), join(root, "away"), "dir");
+		symlinkSync(join(outer, "never-created"), join(root, "gone"), "dir");
+		symlinkSync(join(root, "node_modules", "hidden"), join(root, "docs"), "dir");
+		symlinkSync(join(root, "real"), join(root, "alias"), "dir");
+
+		expect(resolveSpecPath(root, "away/evil.md")).toHaveProperty("error");
+		expect(resolveSpecPath(root, "gone/evil.md")).toHaveProperty("error");
+		expect(resolveSpecPath(root, "docs/ghost.md")).toHaveProperty("error");
+		expect(resolveSpecPath(root, "alias/SPEC.md")).toHaveProperty("error");
+		expect(ok(resolveSpecPath(root, "real/SPEC.md"))).toBe("real/SPEC.md");
+	});
+});
+
+test("resolveSpecPath rejects a symlink at the leaf, dangling or not", () => {
+	withProject((root, outer) => {
+		symlinkSync(join(outer, "never-created.md"), join(root, "dangling.md"));
+		writeFileSync(join(outer, "real-outside.md"), "outside\n");
+		symlinkSync(join(outer, "real-outside.md"), join(root, "live.md"));
+
+		expect(resolveSpecPath(root, "dangling.md")).toHaveProperty("error");
+		expect(resolveSpecPath(root, "live.md")).toHaveProperty("error");
+	});
+});
+
+test("resolveSpecPath fails closed when the root does not exist", () => {
+	expect(resolveSpecPath(join(tmpdir(), "spec-index-definitely-absent"), "SPEC.md")).toHaveProperty(
+		"error",
+	);
+});
+
+test("SpecIndex walks in a stable order, so a duplicate id resolves the same everywhere", () => {
+	withIndexRoot((root) => {
+		for (const name of ["z-later", "a-earlier", "m-middle"]) {
+			mkdirSync(join(root, name), { recursive: true });
+			writeFileSync(
+				join(root, name, "SPEC.md"),
+				"---\nid: dup\ntype: module-design\ntitle: Dup\n---\n",
+			);
+		}
+		const graph = new SpecIndex(root).graph();
+		expect(graph.nodes.get("dup")?.path).toBe("a-earlier/SPEC.md");
+		expect(graph.duplicateIds.get("dup")).toEqual([
+			"a-earlier/SPEC.md",
+			"m-middle/SPEC.md",
+			"z-later/SPEC.md",
+		]);
 	});
 });

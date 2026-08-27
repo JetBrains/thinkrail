@@ -46,6 +46,11 @@ file; the other four are read-only.
   `spec_create.status` ← `SPEC_STATUSES`, `spec_graph.direction` ← `SLICE_DIRECTIONS`,
   `spec_graph.edge` ← `LINK_KINDS`) — never re-typed literals, so a `core` rename flows here with no edit
   (pinned by `tools/tools.test.ts`).
+- `spec_create` writes only what the index can later read back, and it checks that in three places: the
+  target path goes through `core`'s `resolveSpecPath` (which also yields the canonical relative path the
+  tool reports, so its `Created <path>` never disagrees with what `spec_get` will say), the assembled
+  bytes must parse back as a spec before anything is written, and the write itself is exclusive
+  (`flag: "wx"`) so the existence check cannot be raced or satisfied by a link.
 - The spec root is `ctx.cwd`; one `SpecIndex` is reused per root (freshness handled in `core/` — see
   `module-spec-graph`). `spec_update` reads via `recordForId` to reuse the scan's cached read; write tools
   just write, and the next read picks the change up.

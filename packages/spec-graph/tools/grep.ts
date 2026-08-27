@@ -1,6 +1,6 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { type GrepResult, grepSpecs } from "../core/index.ts";
+import { DEFAULT_GREP_LIMIT, type GrepResult, grepSpecs } from "../core/index.ts";
 import { errorResult, getIndex, textResult } from "./shared.ts";
 
 const parameters = Type.Object({
@@ -19,7 +19,9 @@ const parameters = Type.Object({
 	dependsOn: Type.Optional(
 		Type.String({ description: "Only search specs that depend-on this id." }),
 	),
-	limit: Type.Optional(Type.Number({ description: "Max matches to return (default: 200)." })),
+	limit: Type.Optional(
+		Type.Number({ description: `Max matches to return (default: ${DEFAULT_GREP_LIMIT}).` }),
+	),
 });
 
 export function registerSpecGrep(pi: ExtensionAPI): void {

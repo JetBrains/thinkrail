@@ -53,7 +53,14 @@ export const FIELD_ORDER = [
 export type LinkKind = (typeof SINGLE_LINK_FIELDS)[number] | (typeof LIST_LINK_FIELDS)[number];
 
 const FENCE = "---";
+const BOM = "\ufeff";
+const CRLF = "\r\n";
 const TO_STRING = { lineWidth: 0, flowCollectionPadding: false } as const;
+
+function lineEnding(text: string): string {
+	const first = text.indexOf("\n");
+	return first > 0 && text[first - 1] === "\r" ? CRLF : "\n";
+}
 
 export interface ParsedFile {
 	frontmatter: Frontmatter | null;
@@ -76,7 +83,7 @@ function toFrontmatter(loaded: unknown): Frontmatter | null {
 }
 
 function splitFrontmatter(content: string): { fmText: string | null; body: string } {
-	const normalized = content.startsWith("\ufeff") ? content.slice(1) : content;
+	const normalized = content.startsWith(BOM) ? content.slice(1) : content;
 	const lines = normalized.split("\n");
 	if (lines[0]?.trim() !== FENCE) return { fmText: null, body: content };
 	let end = -1;
@@ -215,6 +222,7 @@ export function updateFrontmatterText(
 	}
 
 	inlineLists(doc);
-	const out = `${FENCE}\n${doc.toString(TO_STRING)}${FENCE}\n${body}`;
-	return { content: fileText.includes("\r\n") ? out.replace(/\r?\n/g, "\r\n") : out };
+	const block = `${FENCE}\n${doc.toString(TO_STRING)}${FENCE}\n`;
+	const rewritten = lineEnding(fileText) === CRLF ? block.replace(/\n/g, CRLF) : block;
+	return { content: `${fileText.startsWith(BOM) ? BOM : ""}${rewritten}${body}` };
 }
