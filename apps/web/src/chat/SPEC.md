@@ -235,12 +235,23 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   eye to it. Either resolving a row or giving up (toasted as "couldn't locate the message") clears that
   exact still-current request; an older effect may not clear a newer jump. `ChatView` is its only terminal
   consumer, so an unresolved current request must never linger.
-- **Open at the latest message** — the chat `Virtuoso` mounts with `initialTopMostItemIndex = { index:
-  last row, align: "end" }`, so every freshly shown transcript (new tab, reopen from history, auto-open,
-  reload) starts at the bottom instead of mid-scroll; jump-to-message (above) runs post-mount and
-  overrides with its centered `scrollToIndex`. Streaming follow stays `useChatScroll`'s job
-  (pointer-aware `followOutput` — unchanged). E2e: `auto-open-chats.spec.ts` asserts a long seeded
+- **Open at the latest message** — a settled chat `Virtuoso` mounts with `initialTopMostItemIndex = {
+  index: last row, align: "end" }`, so every freshly shown transcript (new tab, reopen from history,
+  auto-open, reload) starts at the bottom instead of mid-scroll; jump-to-message (above) runs post-mount
+  and overrides with its centered `scrollToIndex`. E2e: `auto-open-chats.spec.ts` asserts a long seeded
   transcript's last message is in view without scrolling.
+- **Streaming reading band** — `useChatScroll` owns one imperative, cancellable follow controller for
+  every kind of live row growth; renderers never scroll themselves. An immediate local send arms follow,
+  aligns its user row at 10% of transcript height clamped to 48–80px, and gives the response a one-way
+  60%-viewport runway. The active edge grows without movement until it crosses 82% of the viewport, then
+  one 220ms ease-out advances it to 58% (immediate under reduced motion); a large layout change is still
+  one move and moves never overlap. A queued continuation anchors only if follow stayed armed after it was
+  queued. Upward wheel/touch/scrollbar intent, keyboard transcript navigation, selection, interactive
+  focus, and message/history jumps cancel follow even within the bottom threshold. A deliberate manual
+  return, **Follow response**, or a new immediate send re-arms it; geometry changes alone do not. Settlement
+  neither catches up nor collapses remaining runway. An active-stream remount reconstructs band geometry
+  without animating; a settled remount has no runway and keeps the latest-message rule above. The detached
+  control reads **Follow response** during streaming and **Latest** after settlement.
 - **Composer & chrome** — `Composer` (prompt field + send/steer/followUp/abort, `@`-mentions, `/`
   commands + template **slot sessions** (Tab-through placeholders — see the Template slots bullet
   below), image paste/drop — routed through **`imageAttachment.ts`**: `fileToAttachedImage` decodes in
