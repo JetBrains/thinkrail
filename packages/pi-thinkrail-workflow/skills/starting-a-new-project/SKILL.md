@@ -14,24 +14,51 @@ short / honest / on-rails rules every section you save must meet.
 ## Hosted create-from-scratch entry
 
 When the **`finalize_project` tool is available**, ThinkRail has already created a real but *unnamed*
-project for the user and dropped you into its setup chat — the user came with only an idea and no repo.
-In that mode:
+project and dropped you into its setup chat — the user arrived with only an idea and no repo. This
+section **overrides** the Method/Flow below: keep the brief lightweight and let the conversation, not a
+preset questionnaire, decide what you ask.
 
-1. **Open by asking what they want to build** (a plain chat message — the user has said nothing yet).
-   Let them describe it freely; do not present a form.
-2. Run the normal Method/Flow below, but keep clarifying questions to the genuine minimum via
-   `ask_user_question` (per the **asking-user-questions** concept). Infer or defer anything the answer
-   can wait for; never force a fixed questionnaire.
-3. **Ask the project name LAST**, via `ask_user_question` — suggest one concise name inferred from the
-   conversation as the first option, but let the user provide their own (never finalize a name they
-   haven't seen and approved).
-4. Save `goal-and-requirements.md` titled with the confirmed name (the Saving steps below).
-5. Call **`finalize_project({ name })`** once with that exact confirmed name.
-6. End with a short, contextual ready message, preserving this model: **Project → its Default workspace
-   for the main checkout → additional Workspaces for isolated branch/worktree tasks.** e.g. "Your
-   project is ready. I created *<name>* and captured the concept in `goal-and-requirements.md`. Start
-   working here in the Default workspace, or spin up a separate workspace when you want an isolated
-   task/branch." This replaces the normal **Next** hand-off for the hosted entry.
+1. **Open with exactly this message — nothing more** (plain chat; the user has said nothing yet). Do
+   **not** mention specs, git, repositories, workspaces, `goal-and-requirements.md`, or any technical
+   setup here:
+
+   > Tell me what you want to build. A few things that help:
+   >
+   > 1. What do you want to build?
+   > 2. Who is it for?
+   > 3. What should users be able to do?
+   >
+   > You don't need to answer everything — just tell me what you know.
+
+   Those three lines are *guidance* for one freeform reply in the composer — **not** a questionnaire
+   widget and **not** required fields. Wait for the user's single freeform message.
+
+2. **Then generate contextual follow-ups — never walk a preset list.** Read what the user actually
+   wrote, work out which important **product decision** is still genuinely open, and ask about *that*.
+   Never re-ask the three opening questions, anything already answered, or anything you can reasonably
+   infer/decide yourself. Each follow-up is an **`ask_user_question`** round (the existing widget,
+   composed per the **asking-user-questions** concept): one contextual question, a few sensible
+   suggested answers when you can, and the widget's own freeform/custom answer. **Group** related
+   decisions into a single round rather than many tiny interruptions. Favor questions that shape the
+   product (how something works, whether accounts/persistence exist, how data combines) over trivia.
+
+3. **Accumulate context; stop early.** Every round must account for **all** previous answers — the loop
+   is: understand → find the single most important missing decision → one contextual round → fold the
+   answer in → repeat only if something important is still open. Ask the **minimum** rounds for a
+   useful initial concept; there is no fixed number, and often one round is enough.
+
+4. **Name the project last**, once you have enough context — a final `ask_user_question` round:
+   suggest one concise name inferred from the conversation as the first option and let the user confirm
+   or replace it (the widget's freeform answer). If the user **already named it** earlier, reuse that
+   name and only ask to confirm when there is real doubt — never finalize a name the user hasn't seen.
+
+5. Then run the unchanged tail: save `goal-and-requirements.md` titled with the confirmed name (the
+   Saving steps below), call **`finalize_project({ name })`** once with that exact name, and end with a
+   short contextual ready message preserving the model **Project → its Default workspace for the main
+   checkout → additional Workspaces for isolated branch/worktree tasks** (e.g. "Your project is ready.
+   I created *<name>* and captured the concept in `goal-and-requirements.md`. Start working here in the
+   Default workspace, or spin up a separate workspace for an isolated task/branch."). This replaces the
+   **Next** hand-off for the hosted entry.
 
 Without the `finalize_project` tool (the `setting-up-a-project` dispatcher in a real repo), ignore this
 section entirely and follow the flow below as written.
