@@ -198,10 +198,10 @@ The `/blog` subsite is a typed Astro content collection over Markdown posts in `
 (each post: a folder with `index.md` + optional `images/`), rendered by `src/pages/blog/` through
 `src/layouts/BlogLayout.astro`.
 
-- **Schema is the gate** (`src/content.config.ts`, zod): required `title`/`slug`/`date`, optional
-  `excerpt`/`draft`/`tags`. A malformed or reserved slug, a missing field, or two posts sharing a
-  slug **fails the build** — no silent green deploys. Drafts render in `astro dev` (author preview,
-  hot reload) and are excluded from production builds (`src/blogCollection.ts`, the one
+- **Schema is the gate** (`src/content.config.ts`, zod): required `title`/`slug`/`date`/`author`,
+  optional `excerpt`/`draft`/`tags`. A malformed or reserved slug, a missing field, an unknown
+  `author` key, or two posts sharing a slug **fails the build** — no silent green deploys. Drafts
+  render in `astro dev` (author preview, hot reload) and are excluded from production builds (`src/blogCollection.ts`, the one
   query — newest-first, draft-filtered — that the index, post pages, and RSS all share).
 - **URLs are directory-style** (`/blog/<slug>/`), decided while the blog was unpublished so nothing
   broke; RSS at `/blog/rss.xml` (`@astrojs/rss`). Post pages carry meta description (the excerpt),
@@ -227,8 +227,21 @@ The `/blog` subsite is a typed Astro content collection over Markdown posts in `
   and share the landing feature cards' surface, which keeps the `--elevated` tag chips visible on
   them. Theming: BaseHead (theme guard, fonts, analytics) + the `src/theme.ts` toggle via the
   shell's `main.ts` — same behavior as the landing page, one implementation.
-- **Author guide**: `content/blog/BLOG.md` documents the frontmatter schema, Markdown features,
-  embeds, and the local preview loop (`bun run dev` hot-reloads posts).
+- **Authors are a shared entity, not a per-post string.** A second collection (`authors`) loads
+  `content/authors.json` through Astro's `file()` loader — one object keyed by author key, schema
+  `name` required + `url` optional (present ⇒ the byline name renders as a link). Posts carry
+  `author: reference("authors")`, **required**, so referential integrity is the framework's check:
+  a misspelled key is a build failure, and a renamed author or a new link updates every post at once.
+  Resolution is centralized as `postAuthor()` in `src/blogCollection.ts`; no page inlines the lookup.
+  Avatar/role fields are deliberately absent — a schema field with no renderer is dead surface;
+  both are additive later.
+  - *Byline placement (decision, 2026-08):* the **post header only**, as the first item of the
+    `.blog-post-meta` row (`author · date · reading time`), sharing the date's hint colour, size, and
+    one grouped `·` separator rule. Index cards, RSS items, OG/`article:author` meta, an end-of-post
+    author card, and `/blog/authors/<key>/` pages were each considered and declined for now — the
+    shared entity keeps every one of them a cheap follow-up.
+- **Author guide**: `content/blog/BLOG.md` documents the frontmatter schema, the author profiles,
+  Markdown features, embeds, and the local preview loop (`bun run dev` hot-reloads posts).
 - **Deployment**: alongside the main site via the same `site.yml` workflow; changes to
   `apps/website/content/blog/**` trigger a rebuild.
 
