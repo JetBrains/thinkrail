@@ -25,6 +25,7 @@ import { ChangesPanel } from "../panels/ChangesPanel";
 import { DiffPane } from "../panels/DiffPane";
 import { FilePane } from "../panels/FilePane";
 import { FileTree } from "../panels/FileTree";
+import { openFileInTab } from "../panels/openTabs";
 import { ProjectTree } from "../panels/ProjectTree";
 import { ReviewPanel, selectActiveReviewedPath } from "../panels/ReviewPanel";
 import { reviewFlags } from "../panels/reviewModel";
@@ -173,6 +174,12 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	const activeReviewedPath = useAppStore((state) => selectActiveReviewedPath(state, workspaceId));
 	const readActiveReviewedPath = useCallback(
 		() => selectActiveReviewedPath(useAppStore.getState(), workspaceId),
+		[workspaceId],
+	);
+	const openToolFile = useCallback(
+		(path: string) => {
+			void openFileInTab(workspaceId, path, "preview");
+		},
 		[workspaceId],
 	);
 
@@ -414,7 +421,11 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				return sessions[tab.sessionId] ? (
 					<ErrorBoundary label="chat" resetKeys={[workspaceId, tab.id]}>
 						<Suspense fallback={<MissingResource label="chat" />}>
-							<ChatView sessionId={tab.sessionId} workspaceId={workspaceId} />
+							<ChatView
+								sessionId={tab.sessionId}
+								workspaceId={workspaceId}
+								onOpenFile={openToolFile}
+							/>
 						</Suspense>
 					</ErrorBoundary>
 				) : (
@@ -504,7 +515,16 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				</ErrorBoundary>
 			);
 		},
-		[deletedSessions, document, editorById, editorByResource, sessions, terminalByKey, workspaceId],
+		[
+			deletedSessions,
+			document,
+			editorById,
+			editorByResource,
+			openToolFile,
+			sessions,
+			terminalByKey,
+			workspaceId,
+		],
 	);
 
 	const renderToolBody = useCallback(

@@ -10,7 +10,8 @@ import { cn } from "@/lib";
 import type { ActivityBreadcrumbKind } from "./activityBreadcrumbs";
 import { useFold } from "./foldState";
 import type { ActivityStep, RoutineToolStep, ThinkingStep } from "./rows";
-import { getToolRenderer, getToolSummary, type ToolRenderProps } from "./toolRegistry";
+import { ToolRendererBody } from "./ToolRendererBody";
+import { getToolSummary, type ToolRenderProps } from "./toolRegistry";
 import type { ToolStatus } from "./types";
 
 export function ActivityGroup({
@@ -18,11 +19,13 @@ export function ActivityGroup({
 	steps,
 	live,
 	workspaceRoot,
+	onOpenFile,
 }: {
 	id: string;
 	steps: ActivityStep[];
 	live: boolean;
 	workspaceRoot?: string | undefined;
+	onOpenFile?: ((path: string) => void) | undefined;
 }) {
 	const flatSteps = flattenActivitySteps(steps);
 	const single = flatSteps.length === 1 ? steps[0] : undefined;
@@ -34,9 +37,10 @@ export function ActivityGroup({
 				tools={single.tools}
 				live={live}
 				workspaceRoot={workspaceRoot}
+				onOpenFile={onOpenFile}
 			/>
 		) : (
-			<RoutineToolRow step={single} workspaceRoot={workspaceRoot} />
+			<RoutineToolRow step={single} workspaceRoot={workspaceRoot} onOpenFile={onOpenFile} />
 		);
 
 	const settledSummary = summarizeSteps(steps);
@@ -64,9 +68,16 @@ export function ActivityGroup({
 						tools={step.tools}
 						live={false}
 						workspaceRoot={workspaceRoot}
+						onOpenFile={onOpenFile}
 					/>
 				) : (
-					<RoutineToolRow key={step.id} step={step} parentId={id} workspaceRoot={workspaceRoot} />
+					<RoutineToolRow
+						key={step.id}
+						step={step}
+						parentId={id}
+						workspaceRoot={workspaceRoot}
+						onOpenFile={onOpenFile}
+					/>
 				),
 			)}
 		</GroupDisclosure>
@@ -80,6 +91,7 @@ export function ThinkingGroup({
 	tools,
 	live,
 	workspaceRoot,
+	onOpenFile,
 }: {
 	id: string;
 	parentId?: string;
@@ -87,6 +99,7 @@ export function ThinkingGroup({
 	tools: RoutineToolStep[];
 	live: boolean;
 	workspaceRoot?: string | undefined;
+	onOpenFile?: ((path: string) => void) | undefined;
 }) {
 	const summary =
 		tools.length > 0
@@ -115,7 +128,13 @@ export function ThinkingGroup({
 				{thought.text}
 			</div>
 			{tools.map((step) => (
-				<RoutineToolRow key={step.id} step={step} parentId={id} workspaceRoot={workspaceRoot} />
+				<RoutineToolRow
+					key={step.id}
+					step={step}
+					parentId={id}
+					workspaceRoot={workspaceRoot}
+					onOpenFile={onOpenFile}
+				/>
 			))}
 		</GroupDisclosure>
 	);
@@ -226,6 +245,7 @@ function liveActivityTicker(steps: ActivityStep[], workspaceRoot: string | undef
 function toolRenderProps(
 	step: RoutineToolStep,
 	workspaceRoot: string | undefined,
+	onOpenFile?: ((path: string) => void) | undefined,
 ): ToolRenderProps {
 	return {
 		toolCallId: step.toolCallId,
@@ -234,6 +254,7 @@ function toolRenderProps(
 		result: step.tool?.raw,
 		status: step.tool?.status ?? (step.dead ? "error" : "running"),
 		workspaceRoot,
+		onOpenFile,
 		streaming: step.streaming,
 	};
 }
@@ -242,15 +263,16 @@ function RoutineToolRow({
 	step,
 	parentId,
 	workspaceRoot,
+	onOpenFile,
 }: {
 	step: RoutineToolStep;
 	parentId?: string;
 	workspaceRoot?: string | undefined;
+	onOpenFile?: ((path: string) => void) | undefined;
 }) {
 	const [expanded, toggle] = useFold(step.id);
 	const status: ToolStatus = step.tool?.status ?? (step.dead ? "error" : "running");
-	const Renderer = getToolRenderer(step.toolName);
-	const renderProps = toolRenderProps(step, workspaceRoot);
+	const renderProps = toolRenderProps(step, workspaceRoot, onOpenFile);
 	const summary = getToolSummary(step.toolName, renderProps);
 	return (
 		<div
@@ -283,7 +305,7 @@ function RoutineToolRow({
 			/>
 			{expanded ? (
 				<div className={cn("px-8 pb-4 pl-16", status === "error" && "text-feedback-error")}>
-					<Renderer {...renderProps} />
+					<ToolRendererBody {...renderProps} imageLabel={summary} />
 				</div>
 			) : null}
 		</div>

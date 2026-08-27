@@ -35,6 +35,11 @@ export function initTransport(): WsTransport {
 				welcome.projects,
 				Array.isArray(welcome.recentProjects) ? welcome.recentProjects : welcome.projects,
 				welcome.config,
+				welcome.hostPlatform === "darwin" ||
+					welcome.hostPlatform === "linux" ||
+					welcome.hostPlatform === "win32"
+					? welcome.hostPlatform
+					: undefined,
 			);
 	});
 

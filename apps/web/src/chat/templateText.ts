@@ -1,9 +1,10 @@
-function normalizeNewlines(value: string): string {
-	return value.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+function normalizeFrontmatterText(value: string): string {
+	const withoutBom = value.startsWith("\uFEFF") ? value.slice(1) : value;
+	return withoutBom.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
 }
 
 export function stripFrontmatter(content: string): string {
-	const normalized = normalizeNewlines(content);
+	const normalized = normalizeFrontmatterText(content);
 	if (!normalized.startsWith("---")) return normalized;
 	const endIndex = normalized.indexOf("\n---", 3);
 	if (endIndex === -1) return normalized;
@@ -17,7 +18,7 @@ export function assembleTemplate(description: string, argumentHint: string, body
 	if (d) lines.push(`description: ${JSON.stringify(d)}`);
 	if (a) lines.push(`argument-hint: ${JSON.stringify(a)}`);
 	if (lines.length === 0) {
-		return body.startsWith("---") ? `---\n---\n\n${body}` : body;
+		return normalizeFrontmatterText(body).startsWith("---") ? `---\n---\n\n${body}` : body;
 	}
 	return `---\n${lines.join("\n")}\n---\n\n${body}`;
 }

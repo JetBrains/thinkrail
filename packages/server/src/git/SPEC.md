@@ -19,12 +19,15 @@ ref off the workspace-create critical path.
 
 - **Owns:** `git(cwd, args)` (spawn git *sync*, capture trimmed stdout/stderr + ok; `opts.raw` keeps
   stdout byte-exact for file-content reads) and `gitAsync(cwd,
-  args)` (its async twin — off the event loop through `subprocess`' `runBounded`, for network-bound ops
-  like `fetch` that must not block the host: it owns only the git-shaped part, the 55s budget and the
-  stalled/stderr wording, never the child-lifetime mechanics). **A timeout keeps whatever git wrote before
-  the kill**: the runner drains continuously, so on expiry its `err` already holds the real diagnosis —
-  a publickey rejection, a proxy's refusal, `remote:` progress proving a large transfer was simply still
-  running. The ssh-key hint is what we say when git wrote *nothing*, never advice pasted over an
+- **Owns:** `git(cwd, args)` (spawn git *sync*, capture trimmed stdout/stderr + ok; `opts.raw` keeps
+  stdout byte-exact for file-content reads) and `gitAsync(cwd,
+  args, opts?)` (its async twin — off the event loop through `subprocess`' `runBounded`, for network-bound ops
+  like `fetch` that must not block the host: it owns only the git-shaped part, the 55s budget (`opts.timeoutMs`
+  overrides it) and the stalled/stderr wording, never the child-lifetime mechanics; `opts.env` lets a caller
+  run prompt-free with its own environment, e.g. `pr`'s non-interactive push). **A timeout keeps whatever git
+  wrote before the kill**: the runner drains continuously, so on expiry its `err` already holds the real
+  diagnosis — a publickey rejection, a proxy's refusal, `remote:` progress proving a large transfer was simply
+  still running. The ssh-key hint is what we say when git wrote *nothing*, never advice pasted over an
   observation we already have (the message never names a cause we did not observe);
   **`remoteTrackingRef(ref)`** → `refs/remotes/<ref>` for an `origin/` ref, else `null` — **the one place
   that spelling is built**, so the probe below and `workspaces`' `worktree add` cannot drift apart. Its
@@ -40,9 +43,10 @@ ref off the workspace-create critical path.
   `--end-of-options`: the `origin/<b>` shorthand goes through git's disambiguation and can resolve to a
   tag or a local branch of that name, so the call sites would have raced over different objects. "One way"
   is literal — no caller re-spells the `rev-parse` by hand;
-  **`nonInteractiveGitEnv()`** — the environment *both* runners spawn under, with no caller override
-  (`git`'s only option is `raw`): `process.env` plus `GIT_TERMINAL_PROMPT=0`, and **nothing else**. It reads
-  no config and rewrites none of the user's ssh setup;
+  **`nonInteractiveGitEnv()`** — the default environment both runners spawn under (`git`'s only option is
+  `raw`; `gitAsync` alone accepts an `opts.env` override, e.g. `pr`'s non-interactive push, which layers its
+  own SSH batch-mode settings): `process.env` plus `GIT_TERMINAL_PROMPT=0`, and **nothing else** by default.
+  It reads no config and rewrites none of the user's ssh setup on its own;
   **the scope→range resolver** — `resolveDiffRange(ws, scope?)` → `DiffRange` — **the one definition of what
   a `GitDiffScope` means** (`branch`: `git diff <merge-base(base, HEAD)>` + untracked, sides = **fork
   point** ↔ worktree — what the workspace changed *since diverging*, so a base that advanced underneath it
@@ -104,7 +108,11 @@ ref off the workspace-create critical path.
   deception** — bidi overrides/isolates, zero-width and format characters — before they go on the wire, while
   ordinary international text and emoji survive;
   an unreadable range (deleted base, unborn HEAD) degrades to an empty list so the scope menu still offers its
-  other scopes; `listBranches(projectId)` → `{ local, remote,
+  other scopes; **`countUnpushedCommits(worktreePath, branch)`** (async — the sync twin would block the shared
+  event loop on every window-focus refetch) → `rev-list --count origin/<branch>..HEAD` (local
+  remote-tracking ref, no network), `null` when that ref doesn't exist (never pushed) — the host's
+  `workspace.openReview` composes it onto an open review (in parallel with the gh lookup, not after
+  it) so the plan page can flag commits the PR doesn't have yet; `listBranches(projectId)` → `{ local, remote,
   defaultBranch }` (local `refs/heads`, remote `refs/remotes/origin` minus `origin/HEAD`, default =
   `origin/HEAD`→`origin/main`→repo `HEAD`); **`resolveDefaultBranch(repoPath)`** — that default-branch
   resolution factored out (named once), shared by `listBranches` and the `workspaces` module's

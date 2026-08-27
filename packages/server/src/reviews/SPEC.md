@@ -44,7 +44,10 @@ re-anchoring, and package rendering. Design + user-confirmed decisions: [[task-r
   survives an unreadable base instead of vanishing with
   it. `reviewBaseRef` is how `host` reads it.
 - **`ReviewComment`**: `kind` inline/diff/file/review; `status` draft → sent → resolved (or
-  dismissed). The wire (`review.commentUpdate`) may only land the terminal manual outcomes
+  dismissed); **`author`** — the human (default, absent) or `"agent"`: the plan's reviewer agent files
+  findings through the same `addComment` (worktree-side anchors), badged in the panel and picked up by
+  the same send machinery (the TODO fix package rides `buildSendPackage`, see [[submodule-server-todos]]
+  §agent reviewer). The wire (`review.commentUpdate`) may only land the terminal manual outcomes
   (resolved/dismissed, from draft or sent); `draft`↔`sent` moves are owned exclusively by the send
   path (`markCommentsSent`/`rollbackSend`) — a client that could un-send a comment could rewrite or
   delete a remark whose id an agent chat already quotes;
@@ -118,7 +121,14 @@ rollback runs DETACHED (after the send's lock released) and fully synchronously,
 `review.close` Clear that lands first makes it a clean no-op against the fresh review instead of
 resurrecting the cleared comments. The **`resolve_comment`** capability is an agent-module custom tool
 (`agent/reviewTool.ts`, registered on every session like `ask_user_question`) whose execution is
-delegated back here through a host-installed seam — the agent module stays dependency-free. Resolution
+delegated back here through a host-installed seam — the agent module stays dependency-free. **Session-bound**:
+the tool thread's `ctx.sessionManager.getSessionId()` through to `resolveCommentFromAgent`, and
+`applyAgentResolution` only resolves a comment whose `status === "sent"` AND `sessionId` equals the
+caller — the chat `markCommentsSent` recorded as the actual recipient. A `draft` comment is
+unconditionally unresolvable through this tool (a comment resolves only the chat it was truly delivered
+to can call it; nothing, agent or human, resolves its own unsent draft) — this is what keeps a reviewer
+agent from filing a finding and immediately clearing it itself (see [[submodule-server-host]]'s approve
+gate). Resolution
 searches the active snapshots first, then closed archives, so a tool call already in flight when Clear
 lands can still finish its record; archived updates persist without publishing an inactive snapshot.
 
@@ -168,5 +178,10 @@ lands can still finish its record; archived updates persist without publishing a
   is logged and skipped, never allowed to fail a resolve belonging to a healthy review.
 - An **unknown/duplicate agent resolve fails loud** (error text back to the model), never silently. A
   resolve that arrives after Clear updates the archived record in place and emits no active-review push.
+  An agent resolve accepts `sent` comments AND **agent-authored `draft`s**: with auto-fix off, a
+  reviewer's findings are recorded but never sent, and the re-review package still tells the reviewer to
+  resolve each finding the fix addressed — a sent-only gate would make that instruction unsatisfiable
+  and strand the findings open under an approved item. Human drafts stay unresolvable by the agent
+  (they're the user's unsent scratch).
 - Workspace removal purges both the active review and its archive directory (`removeWorkspaceReviews`,
   called by the workspace-archive handler).

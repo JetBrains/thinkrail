@@ -45,8 +45,22 @@ function resolvePath(): void {
 	if (path) process.env.PATH = path;
 }
 
+function resolveSshAgentSock(): void {
+	if (process.env.SSH_AUTH_SOCK || process.platform !== "darwin") return;
+	try {
+		const result = Bun.spawnSync(["launchctl", "getenv", "SSH_AUTH_SOCK"], {
+			timeout: 3000,
+			stdout: "pipe",
+			stderr: "ignore",
+		});
+		const sock = new TextDecoder().decode(result.stdout).trim();
+		if (result.success && sock) process.env.SSH_AUTH_SOCK = sock;
+	} catch {}
+}
+
 export function resolveShellEnv(): void {
 	if (process.platform === "win32") return;
 	resolveLocale();
 	resolvePath();
+	resolveSshAgentSock();
 }

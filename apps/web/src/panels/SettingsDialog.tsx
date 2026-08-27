@@ -6,6 +6,7 @@ import {
 	type RemixiconComponentType as LucideIcon,
 	RiChat2Line as MessageSquareText,
 	RiPaletteLine as Palette,
+	RiSearchEyeLine as ScanEye,
 	RiShieldCheckLine as ShieldCheck,
 	RiEqualizerLine as SlidersHorizontal,
 	RiTerminalBoxLine as SquareTerminal,
@@ -19,6 +20,7 @@ import { ChatSettings } from "./ChatSettings";
 import { GithubSettings } from "./GithubSettings";
 import { PrivacySettings } from "./PrivacySettings";
 import { ProvidersSettings } from "./ProvidersSettings";
+import { ReviewSettings } from "./ReviewSettings";
 import { TemplatesSettings } from "./TemplatesSettings";
 import { TerminalSettings } from "./TerminalSettings";
 
@@ -30,6 +32,7 @@ const SECTIONS: { id: SettingsSection; label: string; icon: LucideIcon }[] = [
 	{ id: SettingsSection.Layout, label: "Layout", icon: LayoutPanelTop },
 	{ id: SettingsSection.Terminal, label: "Terminal", icon: SquareTerminal },
 	{ id: SettingsSection.Templates, label: "Templates", icon: LayoutTemplate },
+	{ id: SettingsSection.Review, label: "Review", icon: ScanEye },
 	{ id: SettingsSection.Privacy, label: "Privacy", icon: ShieldCheck },
 ];
 const SOON: { label: string; icon: LucideIcon }[] = [{ label: "General", icon: SlidersHorizontal }];
@@ -106,6 +109,8 @@ export function SettingsDialog({ layoutSettings }: { layoutSettings: ReactNode }
 							<TerminalSettings />
 						) : section === SettingsSection.Templates ? (
 							<TemplatesSettings />
+						) : section === SettingsSection.Review ? (
+							<ReviewSettings />
 						) : section === SettingsSection.Privacy ? (
 							<PrivacySettings />
 						) : (

@@ -81,7 +81,14 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
 - `tool` — a **primary** tool call: the collapsible `ToolCard` frame (collapsed unless registered
   `defaultExpanded`; errors auto-expand; a manual toggle wins), or a `"bare"` renderer that owns its
   frame. A `"bare"` call on a dead message (`stopReason` aborted/error — pi never executes those calls)
-  renders as errored rather than staying interactive forever.
+  renders as errored rather than staying interactive forever. Every renderer invocation — registered or
+  fallback, routine or primary, card or bare — passes through one common result-content layer. Once a result
+  completes, each valid canonical image block appends a bounded in-card preview with an explicit full-screen
+  dialog action; multiple images retain block order. This is content-type behavior, not a `read` special case,
+  and it does not promote or auto-expand the tool. The result bytes are already in the transcript, so preview
+  needs no host fetch and works for paths outside the workspace. Previewable blocks require non-empty data
+  and one of `contracts`' shared raster media types (PNG/JPEG/GIF/WebP); malformed shapes and unsupported
+  media types are ignored, while canonical content arrays are never serialized into base64 JSON.
 - `activity` — one contiguous run of routine work stays one **collapsed outer disclosure** whose header
   summarizes every atomic step (thinking blocks + routine tool calls). Expanding it preserves tools before
   the first thought as direct rows, then renders each non-empty thinking block as a nested disclosure that
@@ -143,8 +150,10 @@ entry/exit obeys reduced motion.
 the **capability** registers with the pi session server-side (custom tool or pi extension/skill), the
 **presentation** registers here. A registration is:
 
-- a **renderer** (the card body; `ToolRenderProps` carries `toolCallId`/`args`/`result`/`status`/
-  `workspaceRoot`/`streaming` — enough to stay props-driven), plus optionally
+- a **renderer** (the specialized card body; `ToolRenderProps` carries `toolCallId`/`args`/`result`/
+  `status`/`workspaceRoot`/`streaming` plus an optional shell-injected `onOpenFile` callback — enough to
+  stay props-driven; the common invocation seam decorates its completed canonical image results
+  consistently), plus optionally
 - a **`summary`** — a pure one-liner for collapsed headers and activity-step rows,
 - a **`chrome`** — `"card"` (default, the `ToolCard` frame) or `"bare"` (owns its frame; for
   interactive/primary tools like `ask_user_question`),
@@ -163,6 +172,13 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
 
 ## Interaction seams
 
+- **Structured tool-file navigation** — `ChatView` accepts an optional `onOpenFile(path)` from the shell and
+  passes it through every `ToolRenderProps` path (routine, primary, card, or bare). The shared tool-file
+  primitive offers that action only for a non-empty relative path or an absolute path contained by
+  `workspaceRoot`; URLs, escaping relatives, and foreign absolute paths remain selectable text. Renderers
+  source candidates only from explicit tool args/details — never regex guesses over Bash output, code, or
+  prose. A standalone renderer has no callback and therefore stays inert. The callback's preview-slot
+  semantics belong to [[submodule-web-panels]].
 - **`ChatActions`** — a React context (provided by `ChatView`, `null` standalone): how a renderer talks
   **back** to the agent without importing store/transport. Today: `answerQuestion(toolCallId, result)` —
   it rejects when the host refuses (unknown/answered/superseded call), and the caller owns the failure UX —
@@ -219,12 +235,26 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   eye to it. Either resolving a row or giving up (toasted as "couldn't locate the message") clears that
   exact still-current request; an older effect may not clear a newer jump. `ChatView` is its only terminal
   consumer, so an unresolved current request must never linger.
-- **Open at the latest message** — the chat `Virtuoso` mounts with `initialTopMostItemIndex = { index:
-  last row, align: "end" }`, so every freshly shown transcript (new tab, reopen from history, auto-open,
-  reload) starts at the bottom instead of mid-scroll; jump-to-message (above) runs post-mount and
-  overrides with its centered `scrollToIndex`. Streaming follow stays `useChatScroll`'s job
-  (pointer-aware `followOutput` — unchanged). E2e: `auto-open-chats.spec.ts` asserts a long seeded
+- **Open at the latest message** — a settled chat `Virtuoso` mounts with `initialTopMostItemIndex = {
+  index: last row, align: "end" }`, so every freshly shown transcript (new tab, reopen from history,
+  auto-open, reload) starts at the bottom instead of mid-scroll; jump-to-message (above) runs post-mount
+  and overrides with its centered `scrollToIndex`. E2e: `auto-open-chats.spec.ts` asserts a long seeded
   transcript's last message is in view without scrolling.
+- **Streaming reading band** — `useChatScroll` owns one imperative, cancellable follow controller for
+  every kind of live row growth; renderers never scroll themselves. An immediate local send arms follow,
+  aligns its user row at 10% of transcript height clamped to 48–80px, and gives the response a one-way
+  60%-viewport runway. A transient list header makes that inset possible even for the first row; the tail
+  spacer starts as the 60% budget plus a 42% reading-band floor, shrinks one-for-one with response growth,
+  never re-inflates except to recalibrate after a viewport resize, and survives settlement in place. The
+  active edge grows without movement until it crosses 82% of the viewport, then
+  one 220ms ease-out advances it to 58% (immediate under reduced motion); a large layout change is still
+  one move and moves never overlap. A queued continuation anchors only if follow stayed armed after it was
+  queued. Upward wheel/touch/scrollbar intent, keyboard transcript navigation, selection, interactive
+  focus, and message/history jumps cancel follow even within the bottom threshold. A deliberate manual
+  return, **Follow response**, or a new immediate send re-arms it; geometry changes alone do not. Settlement
+  neither catches up nor collapses remaining runway. An active-stream remount reconstructs band geometry
+  without animating; a settled remount has no runway and keeps the latest-message rule above. The detached
+  control reads **Follow response** during streaming and **Latest** after settlement.
 - **Composer & chrome** — `Composer` (prompt field + send/steer/followUp/abort, `@`-mentions, `/`
   commands + template **slot sessions** (Tab-through placeholders — see the Template slots bullet
   below), image paste/drop — routed through **`imageAttachment.ts`**: `fileToAttachedImage` decodes in
@@ -268,7 +298,10 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   in every connected client), and a
   **zoomed-stage preview pane** + **scope picker** — see the next bullet),
   `ModelSelector` + `ThinkingSelector` (also shared with `NewWorkspaceDialog`;
-  optional `container` prop portals their popovers into a host Dialog; `ModelSelector` takes
+  optional `container` prop portals their popovers into a host Dialog; optional
+  `defaultOption`/`onSelectDefault` render an explicit use-the-default row above the provider groups
+  (checked when `current` is null) for callers whose selection is an *override* — `ReviewSettings` —
+  since a plain model list can only ever narrow, never restore the unset state; `ModelSelector` takes
   `refreshing`/`onRefresh(force)` — a footer “Refresh catalog” row that passes **`force: true`** (the
   user asked, so bypass pi's freshness throttle) and spins while that awaited refresh runs, plus an
   **unforced** auto-fire on each open, which `useModelCatalog` serves from the host snapshot
@@ -584,12 +617,13 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
     earlier `splitTemplate` here handled only bare/double-quoted scalars, so a pi-native
     `description: 'single-quoted'` loaded into the form with literal quotes and saved back corrupted).
     Its boundary
-    rule is ported byte-for-byte from pi's own `extractFrontmatter` (`@earendil-works/pi-coding-agent`'s
-    `dist/utils/frontmatter.js`, pinned against pi v0.84.1 — the same pin `packages/server/src/templates/
-    SPEC.md` uses server-side; re-verify both on a pi version bump): the frontmatter block ends at the
-    FIRST later `\n---` line, and the body is everything after that fence run through `.trim()` — not a
-    single optional `\n`. A prior version had two independently hand-rolled regex splitters (one per
-    file), each consuming only one *optional* `\n` after the closing fence instead of trimming — a
+    rule mirrors pi's own `extractFrontmatter` (`@earendil-works/pi-coding-agent`'s
+    `dist/utils/frontmatter.js` + `dist/utils/text.js`, pinned against pi v0.84.3 — the same pin
+    `packages/server/src/templates/SPEC.md` uses server-side; re-verify both on a pi version bump): strip
+    one leading UTF-8 BOM, normalize newlines, then end the frontmatter block at the FIRST later `\n---`
+    line; the body is everything after that fence run through `.trim()` — not a single optional `\n`.
+    A prior version had two independently hand-rolled regex splitters (one per file), each consuming only
+    one *optional* `\n` after the closing fence instead of trimming — a
     leading blank line leaked into the body on every pick and every edit-reopen, and **compounded** by one
     more `\n` per edit-save cycle (the leaked line got saved back into the body field and re-wrapped the
     next save). `templateText.test.ts` pins the round-trip/stability properties this fix depends on.
@@ -685,8 +719,21 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   `openMarkdown` snapshot action; tool completion refreshes immediately and `agent_settled` supplies the
   final refresh; overlapping list reads are latest-wins and connection-generation stamped, accepted adds
   fold by item id, and a failed optimistic removal re-reads authority rather than restoring a stale whole-plan
-  capture over concurrent edits), `planView` (pure derivations over the DTO: `groupProgress`,
-  `planSummary`, `planGlance`/`sessionGlance`, `planSections`, and `shouldNudgeOnAdd`. A group's *status* is
+  capture over concurrent edits; plus the agent-review ops `startReview` (`todo.startReview`) and
+  `reviewAll` (`todo.reviewAll`) — both re-read the plan, since the review decoration is host-derived
+  and never patched locally; the manual-verdict ops were removed with the plan page's manual mode —
+  `todo.review`/`todo.requestFix` remain on the wire, host-side), `planView` (pure derivations over the DTO: `groupProgress`,
+  `planSummary`, `planGlance`/`sessionGlance`, `planSections`, `shouldNudgeOnAdd`, and the review-trail
+  set — `itemRevisions` (the commit history, 1 TODO = N commits), `reviewableItems`/`reviewProgress`
+  (host-gated by `TodoItem.review` presence — the reviewable rule has ONE home, server-side),
+  `reviewChangesRequested` + `itemOpenFindings` (the changes_requested warning marking: the flag and
+  the count of the reviewer's open comments — matched by the finding's `origin` provenance
+  (todoId + optional sessionId) when stamped, falling back to the change-set path join only for
+  provenance-less comments, so two steps touching one file don't count each other's findings; the
+  Review tab is the truth), and
+  `planCompletionSummary` (the plan-level note gated on "everything done", so a re-opened plan never
+  shows a stale all-done note). `itemChangeSet`'s precedence: live `change` paths win (a fallback redo's
+  latest delta), else the NEWEST resolvable commit. A group's *status* is
   **not** derived here — the host computes it and ships it on `TodoGroupItem.status`, so the rule has one
   home; a user edit therefore re-reads the plan rather than patching it locally, see `useChatTodos`), `TodoList` (the
   **status-ordered, group-first** rendering (`planSections`) — group = task: the **in-progress** task
@@ -696,7 +743,21 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   one collapse over all of Done). Finished *steps* stay inline in their (active/pending)
   group; only whole done tasks move to Done. Each group is a header row (derived status icon + title +
   done/total badge), the `active` group emphasized; the user's loose items carry a per-row `user` badge
-  (no separate "Your requests" header — they're placed by status). **A row whose item carries a host
+  (no separate "Your requests" header — they're placed by status). **The compact list is title-only**
+  (status glyph + title + the change-set chip) — a row's `note`, a done item's agent-authored `summary`,
+  and its `verification` are **not** shown here, so a long plan reads at a glance without overloading;
+  the **full plan page** (`PlanPane`) is where those surface: the `summary` as a clamped muted line
+  (`todo-summary`) and the `verification` as the shared **`VerificationBadge`** (`planKit`; the
+  "Tests ✓" element — check glyph for a named check, warning glyph for an honest "not verified", the
+  split derived by `planView.verificationStatus`, ONE home; the badge's title labels it self-reported —
+  never a host-run gate). The plan page has no in-page review list
+  — its header kebab offers **Review All** (host-side queue, `todo.reviewAll`) and a comment chip that
+  focuses the right-panel Review tab (see `panels/SPEC.md`). A row whose review is **settled** (`planView.reviewSettled` — approved and
+  nothing landed since) upgrades its done check to the **circled Verified glyph**
+  (`StatusIcon reviewed`, hover "Verified", `data-reviewed`) — the at-a-glance "this step was
+  reviewed" state, popup and plan page alike; a **changes_requested** verdict flips the glyph to the
+  warning `CircleAlert` instead (`StatusIcon changesRequested`, hover "Changes requested",
+  `data-changes-requested`) — the plan page adds the chip + feedback note (see `panels/SPEC.md`). **A row whose item carries a host
   change set grows a quiet "N files" chip** (`itemChangeSet` in `planView` — the one derivation shared
   with the markdown snapshot below, so the two can never disagree): a **committed** item's chip opens the
   Changes panel at its `commit:{sha}` scope via `useChatTodos.openChanges` (`setDiffScope` + a

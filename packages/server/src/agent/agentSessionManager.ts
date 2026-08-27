@@ -6,6 +6,7 @@ import { clampThinkingLevel, getSupportedThinkingLevels } from "@earendil-works/
 import {
 	type AgentSession,
 	createAgentSession,
+	type ExtensionError,
 	getAgentDir,
 	type SessionInfo,
 	SessionManager,
@@ -46,7 +47,7 @@ import { projectSessionEvent } from "./sessionEventProjection";
 import { repairDanglingToolCalls } from "./sessionRepair";
 import type { SkillAdmissionContext } from "./skillAdmission";
 import { trashFile } from "./trash";
-import { cancelExtUiForSession, createWebUiContext, notifyExtUi } from "./webUiContext";
+import { cancelExtUiForSession, createWebUiContext, notifyExtensionError } from "./webUiContext";
 
 const log = logger("agent");
 
@@ -66,6 +67,7 @@ interface Entry {
 	nextQueuedMessageId: number;
 	manualCompactionInProgress: boolean;
 	piCompactionInProgress: boolean;
+	registered: boolean;
 }
 
 const sessions = new Map<string, Entry>();
@@ -162,6 +164,8 @@ export interface CreateSessionInput {
 	workspaceId: string;
 	model?: WireModel;
 	thinkingLevel?: ThinkingLevel;
+	/** True: an unresolvable `model` falls back to the default instead of throwing. */
+	modelOptional?: boolean;
 }
 
 export interface CreateSessionResult {
@@ -214,6 +218,7 @@ async function prepareSessionEntry(
 		nextQueuedMessageId: 1,
 		manualCompactionInProgress: false,
 		piCompactionInProgress: false,
+		registered: false,
 	};
 	entry.unsubscribe = session.subscribe((event) => {
 		if (event.type === "queue_update") {
@@ -248,11 +253,24 @@ async function prepareSessionEntry(
 		if (event.type === "agent_settled") terminal = null;
 	});
 
+	const reportExtensionError = (failure: ExtensionError): void => {
+		const line = `extension ${failure.extensionPath} failed on ${failure.event}: ${failure.error}`;
+		if (failure.stack) {
+			const cause = new Error(failure.error);
+			cause.stack = failure.stack;
+			log.warn(line, cause);
+		} else {
+			log.warn(line);
+		}
+		if (!entry.registered || sessions.get(sessionId) === entry)
+			notifyExtensionError(sessionId, failure);
+	};
+
 	try {
 		await session.bindExtensions({
 			mode: "rpc",
 			uiContext: createWebUiContext(sessionId),
-			onError: () => notifyExtUi(sessionId, "An extension failed.", "error"),
+			onError: reportExtensionError,
 		});
 		if (isSessionDeleted(sessionId, workspaceId)) throw new Error(`Unknown session: ${sessionId}`);
 	} catch (error) {
@@ -278,6 +296,7 @@ async function registerSession(
 	generation: PiRuntimeGeneration,
 ): Promise<CreateSessionResult> {
 	const prepared = await prepareSessionEntry(session, workspaceId, generation);
+	prepared.entry.registered = true;
 	sessions.set(session.sessionId, prepared.entry);
 	log.debug(`session ${session.sessionId} attached (workspace ${workspaceId})`);
 	return prepared.result;
@@ -286,6 +305,14 @@ async function registerSession(
 export async function createSession(input: CreateSessionInput): Promise<CreateSessionResult> {
 	const generation = await getPiRuntimeGeneration();
 	const settingsManager = buildSessionSettings(input.cwd);
+	let model: Model<string> | undefined;
+	if (input.model) {
+		try {
+			model = resolveWireModel(generation.runtime, input.model);
+		} catch (err) {
+			if (!input.modelOptional) throw err;
+		}
+	}
 	const { session } = await createAgentSession({
 		cwd: input.cwd,
 		modelRuntime: generation.runtime,
@@ -297,7 +324,7 @@ export async function createSession(input: CreateSessionInput): Promise<CreateSe
 			() => skillAdmissionResolver(input.workspaceId),
 			generation.excludedSessionExtensionPaths,
 		),
-		...(input.model ? { model: resolveWireModel(generation.runtime, input.model) } : {}),
+		...(model ? { model } : {}),
 		...(input.thinkingLevel ? { thinkingLevel: input.thinkingLevel } : {}),
 	});
 	return registerSession(session, input.workspaceId, generation);

@@ -1,5 +1,10 @@
+import { rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import { openWorkspaceChat } from "./fixtures/app";
+import { E2E_DATA_DIR } from "./fixtures/paths";
+
+const worktree = () => join(E2E_DATA_DIR, "worktrees", "sample-project", "workspace-1");
 
 test("the chat plan opens as a popup from the header strip and takes a user item", async ({
 	page,
@@ -59,8 +64,34 @@ test("the plan opens as a live plan page tab (markdown is its export)", async ({
 	await expect(pane.getByTestId("plan-item").filter({ hasText: "Second thought" })).toBeVisible();
 	await expect(pane.getByTestId("plan-progress")).toContainText("0/2");
 
-	await pane.getByTestId("plan-copy-markdown").click();
+	await pane.getByTestId("plan-menu").click();
+	await page.getByTestId("plan-copy-markdown").click();
 	const clipboard = await page.evaluate(() => navigator.clipboard.readText());
 	expect(clipboard).toContain("# TODO");
 	expect(clipboard).toContain("Draft the outline");
+});
+
+test("uncommitted work no step claims shows on the plan page as Outside the plan", async ({
+	page,
+}) => {
+	await openWorkspaceChat(page);
+	const loosePath = join(worktree(), "loose-note.md");
+	writeFileSync(loosePath, "work the plan never captured\n");
+	try {
+		await page.getByTestId("chat-plan-toggle").click();
+		const popover = page.getByTestId("chat-plan-popover");
+		await popover.getByTestId("todo-add-input").fill("Planned step");
+		await popover.getByTestId("todo-add-input").press("Enter");
+		await expect(popover.getByTestId("todo-row").filter({ hasText: "Planned step" })).toBeVisible();
+		await popover.getByTestId("todo-open-plan").click();
+
+		const pane = page.getByTestId("plan-pane");
+		await expect(pane).toBeVisible();
+		const section = pane.getByTestId("plan-unattributed");
+		await expect(section).toBeVisible();
+		await expect(section).toContainText("Outside the plan");
+		await expect(section).toContainText("loose-note.md");
+	} finally {
+		rmSync(loosePath, { force: true });
+	}
 });

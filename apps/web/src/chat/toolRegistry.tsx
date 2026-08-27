@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { parseToolResultContent, toolValueText } from "./toolResultContent";
 import type { ToolStatus } from "./types";
 
 export interface ToolRenderProps {
@@ -8,6 +9,7 @@ export interface ToolRenderProps {
 	result: unknown;
 	status: ToolStatus;
 	workspaceRoot?: string | undefined;
+	onOpenFile?: ((path: string) => void) | undefined;
 	streaming: boolean;
 }
 
@@ -63,19 +65,9 @@ export function resolveProminence(toolName: string): ResolvedProminence {
 	return { prominence, defaultExpanded: reg?.defaultExpanded ?? false };
 }
 
-export function toText(value: unknown): string {
-	if (value == null) return "";
-	if (typeof value === "string") return value;
-	try {
-		return JSON.stringify(value, null, 2);
-	} catch {
-		return String(value);
-	}
-}
-
 export function DefaultToolRenderer({ args, result, status }: ToolRenderProps): ReactNode {
-	const argsText = toText(args);
-	const resultText = toText(result);
+	const argsText = toolValueText(args);
+	const resultText = parseToolResultContent(result).text;
 	return (
 		<div className="flex flex-col gap-4">
 			{argsText && argsText !== "{}" ? (

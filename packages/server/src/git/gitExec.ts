@@ -42,11 +42,11 @@ export function git(cwd: string, args: string[], opts: { raw?: boolean } = {}): 
 export async function gitAsync(
 	cwd: string,
 	args: string[],
-	opts: { timeoutMs?: number } = {},
+	opts: { timeoutMs?: number; env?: Record<string, string | undefined> } = {},
 ): Promise<GitResult> {
 	const run = await runBounded(["git", "-C", cwd, ...args], {
 		timeoutMs: opts.timeoutMs ?? NETWORK_TIMEOUT_MS,
-		env: nonInteractiveGitEnv(),
+		env: opts.env ?? nonInteractiveGitEnv(),
 	});
 	if (run.timedOut) {
 		const captured = boundedStderr(run.err);

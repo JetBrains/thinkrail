@@ -1,5 +1,5 @@
 import type {
-	AppConfig,
+	AppConfigUpdate,
 	AskUserQuestionResult,
 	ExtUiResponse,
 	GitDiffScope,
@@ -35,6 +35,7 @@ import {
 	getSessionMessages,
 	getSessionStats,
 	hasSession,
+	isSessionStreaming,
 	listAvailableModels,
 	listProjectAliasSkillNames,
 	listSessions,
@@ -69,7 +70,14 @@ import { findOpenBranchReview } from "../branch-review";
 import { selectDirectory } from "../dialog";
 import { listAvailableEditors, openEditor, revealInFileManager } from "../editors";
 import { readDir, readFile } from "../fs";
-import { gitDiffFile, gitStatus, listBranches, listCommits, prefetchBranch } from "../git";
+import {
+	countUnpushedCommits,
+	gitDiffFile,
+	gitStatus,
+	listBranches,
+	listCommits,
+	prefetchBranch,
+} from "../git";
 import { githubAuthStatus, githubRefresh } from "../github";
 import { clampLimit, getHistoryIndex } from "../history";
 import {
@@ -79,6 +87,7 @@ import {
 	validateLayoutSettings,
 } from "../layout";
 import { logger } from "../log";
+import { openPr, previewPr } from "../pr";
 import {
 	acknowledgeProjectSkills,
 	closeProject,
@@ -126,10 +135,14 @@ import {
 } from "../terminal";
 import {
 	addTodo,
+	approveTodoReview,
 	countOpenTodos,
 	listTodos,
 	removeSessionTodoWindows,
 	removeTodo,
+	requestTodoFix,
+	rollbackTodoFix,
+	type TodoReviewRecord,
 	updateTodo,
 } from "../todos";
 import { ensureWatch, stopWatch } from "../watch";
@@ -152,6 +165,13 @@ import { nudgeBaseRefWorkspaces } from "./fsNudge";
 import { buildHistoryScope } from "./historyScope";
 import { dropLogin, recordLoginStart } from "./loginAnalytics";
 import { withReviewLock } from "./reviewLock";
+import {
+	isItemUnderActiveReview,
+	itemFixFindings,
+	markClientStale,
+	startReviewAllFlow,
+	startTodoReviewFlow,
+} from "./todoReview";
 
 const log = logger("host");
 
@@ -193,6 +213,27 @@ function fireReviewPrompt(
 		})
 		.catch(() => {
 			log.warn("review send rollback failed");
+		});
+}
+
+function fireTodoFixPrompt(
+	p: { workspaceId: string; sessionId: string; id: string },
+	pkg: string,
+	previous: TodoReviewRecord | undefined,
+	findingIds: string[] = [],
+): void {
+	void ackSend(followUpSession(p.sessionId, pkg))
+		.then(undefined, (err) => {
+			rollbackTodoFix(p, previous);
+			if (findingIds.length > 0) rollbackSend(p.workspaceId, findingIds, p.sessionId);
+			notifyExtUi(
+				p.sessionId,
+				`Fix request send failed: ${err instanceof Error ? err.message : String(err)}`,
+				"error",
+			);
+		})
+		.catch((err) => {
+			console.warn(`todo fix rollback failed: ${err instanceof Error ? err.message : err}`);
 		});
 }
 
@@ -275,9 +316,14 @@ const handlers: Record<string, Handler> = {
 		const p = params as { projectId: string; includeDiffStats?: boolean };
 		return listWorkspaces(p.projectId, { includeDiffStats: p.includeDiffStats ?? true });
 	},
-	"workspace.openReview": (params) => {
+	"workspace.openReview": async (params) => {
 		const ws = getWorkspace((params as { workspaceId: string }).workspaceId);
-		return findOpenBranchReview(ws.worktreePath, ws.branch);
+		const [review, unpushed] = await Promise.all([
+			findOpenBranchReview(ws.worktreePath, ws.branch),
+			countUnpushedCommits(ws.worktreePath, ws.branch),
+		]);
+		if (!review) return review;
+		return unpushed ? { ...review, unpushedCommits: unpushed } : review;
 	},
 	"workspace.remove": (params) => {
 		const id = (params as { id: string }).id;
@@ -312,6 +358,19 @@ const handlers: Record<string, Handler> = {
 	},
 	"github.authStatus": () => githubAuthStatus(),
 	"github.refresh": () => githubRefresh(),
+	"pr.preview": (params) =>
+		previewPr(params as { workspaceId: string; sessionId: string; title?: string }),
+	"pr.open": (params) =>
+		openPr(
+			params as {
+				workspaceId: string;
+				sessionId: string;
+				title?: string;
+				titleEdited?: boolean;
+				body?: string;
+				draft?: boolean;
+			},
+		),
 	"dialog.selectDirectory": () => selectDirectory(),
 	"fs.readDir": (params) => {
 		const p = params as { workspaceId: string; path: string };
@@ -342,8 +401,40 @@ const handlers: Record<string, Handler> = {
 				note?: string;
 			},
 		),
-	"todo.remove": (params) =>
-		removeTodo(params as { workspaceId: string; sessionId: string; id: string }),
+	"todo.remove": (params) => {
+		const p = params as { workspaceId: string; sessionId: string; id: string };
+		// See host/SPEC.md (todo.remove) — this covers the tail removeTodo's own pending check can't.
+		if (isItemUnderActiveReview(p.sessionId, p.id)) {
+			throw new Error(
+				`TODO "${p.id}" is currently under review — cancel or wait for the review to finish before removing it.`,
+			);
+		}
+		return removeTodo(p);
+	},
+	"todo.review": (params) =>
+		approveTodoReview(params as { workspaceId: string; sessionId: string; id: string }),
+	"todo.startReview": (params) =>
+		startTodoReviewFlow(params as { workspaceId: string; sessionId: string; id: string }),
+	"todo.reviewAll": (params) =>
+		startReviewAllFlow(params as { workspaceId: string; sessionId: string }),
+	"todo.requestFix": async (params) => {
+		const p = params as { workspaceId: string; sessionId: string; id: string; feedback: string };
+		const ws = getWorkspace(p.workspaceId);
+		const { pkg, previous } = requestTodoFix(p);
+		if (!(await ensureSessionAttached(p.sessionId, p.workspaceId, ws.worktreePath))) {
+			rollbackTodoFix(p, previous);
+			throw new Error("This plan's chat is no longer on disk — can't send the fix request.");
+		}
+		const { fixText, findingIds } = await withReviewLock(p.workspaceId, async () => {
+			const findings = itemFixFindings(p);
+			if (findings.length === 0) return { fixText: pkg, findingIds: [] as string[] };
+			const ids = findings.map((c) => c.id);
+			markCommentsSent(p.workspaceId, ids, p.sessionId);
+			return { fixText: `${pkg}\n\n${buildSendPackage(p.workspaceId, findings)}`, findingIds: ids };
+		});
+		fireTodoFixPrompt(p, fixText, previous, findingIds);
+		return { ok: true } as const;
+	},
 	"git.status": (params) => {
 		const p = params as { workspaceId: string; scope?: GitDiffScope };
 		void ensureWatch(p.workspaceId);
@@ -514,8 +605,10 @@ const handlers: Record<string, Handler> = {
 			...(restoredQueue ? { restoredQueue } : {}),
 		} as const;
 	},
-	"session.dispose": (params) => {
-		removeSession((params as { sessionId: string }).sessionId);
+	"session.dispose": async (params) => {
+		const { sessionId } = params as { sessionId: string };
+		if (isSessionStreaming(sessionId)) await abortSession(sessionId).catch(() => {});
+		removeSession(sessionId);
 		return { ok: true } as const;
 	},
 	"session.delete": async (params) => {
@@ -621,7 +714,7 @@ const handlers: Record<string, Handler> = {
 		return replaceWorkspaceLayout(replacement, { maxSideGroups, maxBottomGroups });
 	},
 	"settings.update": (params) => {
-		const config = (params as { config: Partial<AppConfig> }).config;
+		const config = (params as { config: AppConfigUpdate }).config;
 		if (config.layout !== undefined) validateLayoutSettings(config.layout);
 		return updateConfig(config);
 	},
@@ -640,7 +733,7 @@ const handlers: Record<string, Handler> = {
 	"review.get": (params) => {
 		const p = params as { workspaceId: string };
 		ensureWatch(p.workspaceId);
-		return getReviewSnapshot(p.workspaceId);
+		return markClientStale(getReviewSnapshot(p.workspaceId), p.workspaceId);
 	},
 	"review.commentAdd": (params) => {
 		const p = params as {

@@ -11,8 +11,11 @@ tags: [v1]
 ## Responsibility
 
 The server-synced app config — OUR settings (an opaque theme selection, the analytics switch, terminal
-replay budget, the chat composer growth preset, and workbench default/custom presets + independent
-side/bottom group limits), an extensible `AppConfig` bag.
+replay budget, the chat composer growth preset, workbench default/custom presets + independent
+side/bottom group limits, and the plan-review policy — `reviewModel`/`reviewEffort` (the model + effort
+the reviewer & reflector sessions run on; unset ⇒ pi default) and `reviewAutoFix` (default true; when
+false a `request_changes` verdict records findings and waits instead of auto-sending a fix —
+`host/todoReview` reads it at the verdict gate)), an extensible `AppConfig` bag.
 Reads/merges/persists it and fans changes out to every client,
 so a preference set on one client follows the user to the others (architecture #9: shared domain state). The
 web client owns the available theme manifests; settings stores only the selected string id.
@@ -40,6 +43,10 @@ web client owns the available theme manifests; settings stores only the selected
   remains persisted unchanged; that client owns visual fallback.
 - `settings.update` remains a top-level partial merge; a supplied `layout` field is a complete validated
   `LayoutSettings` replacement, never a nested partial that could drop catalog/default/limit siblings.
+- **`null` clears an optional override** (`AppConfigUpdate`: `reviewModel`/`reviewEffort` only): JSON
+  can't carry `undefined`, so without a null sentinel a client could set a reviewer model but never
+  restore the pi default. `updateConfig` deletes a null-valued key from the merged config before
+  persisting; `null` is a wire-only signal and never lands on disk.
 - Layout preset payloads are portable structure/tool placement only; settings never accepts workspace
   resource identities in a preset. Empty bottom groups are structural terminal slots, not terminal identity or
   count. `host` runs custom payloads through `layout`'s portable-preset validator before calling settings,
