@@ -87,8 +87,10 @@ test("a model-authored Thinking heading stays bounded and appears only while fol
 	const thinking = activity.getByTestId("thinking-group").first();
 	const toggle = thinking.getByTestId("thinking-group-toggle");
 	const heading = thinking.locator("strong", { hasText: "Evaluating formatting process" });
+	const thinkingLabel = toggle.locator("span", { hasText: /^Thinking$/ });
 	const metadata = "5 steps · get_search_content, fetch_content, web_search, spec_grep, +1 more";
 	await expect(heading).toBeVisible();
+	await expect(thinkingLabel).toHaveClass(/sr-only/);
 	await expect(toggle).toContainText(metadata);
 
 	await page.setViewportSize({ width: 390, height: 780 });
@@ -117,6 +119,7 @@ test("a model-authored Thinking heading stays bounded and appears only while fol
 	await toggle.click();
 
 	await expect(thinking).toHaveAttribute("data-expanded", "true");
+	await expect(thinkingLabel).not.toHaveClass(/sr-only/);
 	await expect(heading).toHaveCount(0);
 	await expect(thinking.getByTestId("thinking-group-text")).toContainText(
 		"**Evaluating formatting process**",
