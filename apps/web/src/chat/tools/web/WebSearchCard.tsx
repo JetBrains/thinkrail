@@ -1,14 +1,17 @@
 import { RiSearchLine as Search } from "@remixicon/react";
 import type { ToolRenderProps } from "../../toolRegistry";
-import { CodeBlock } from "../CodeBlock";
-import { Collapsible, countLines } from "../Collapsible";
 import { resultText, strArg } from "../toolHelpers";
+import { WebResultBody } from "./WebResultBody";
 
 function firstQuery(args: Record<string, unknown>): string {
 	const single = strArg(args, "query");
 	if (single) return single;
 	const many = args.queries;
 	return Array.isArray(many) && typeof many[0] === "string" ? many[0] : "";
+}
+
+export function webSearchSummary({ args }: ToolRenderProps): string {
+	return firstQuery(args);
 }
 
 function providerOf(result: unknown): string {
@@ -33,17 +36,12 @@ export function WebSearchCard({ args, result, status }: ToolRenderProps) {
 				</span>
 				{provider ? <span className="shrink-0 text-text-muted">via {provider}</span> : null}
 			</div>
-			{status === "running" ? (
-				<span className="text-text-muted tr-text-metadata">Searching…</span>
-			) : status === "error" ? (
-				<pre className="overflow-auto px-8 py-4 text-feedback-error tr-code-text">{output}</pre>
-			) : output ? (
-				<Collapsible lines={countLines(output)}>
-					<CodeBlock code={output} lang="markdown" />
-				</Collapsible>
-			) : (
-				<span className="text-text-muted tr-text-metadata italic">No results.</span>
-			)}
+			<WebResultBody
+				output={output}
+				status={status}
+				runningLabel="Searching…"
+				emptyLabel="No results."
+			/>
 		</div>
 	);
 }

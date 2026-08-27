@@ -90,6 +90,8 @@ never sends anyway, since the analytics module mutes on `CI`.
 
 - `CODEOWNERS` — every path is owned by @rsolmano, @danyaberezun, @OLavrik; the `main` ruleset's
   pull-request rule (`require_code_owner_review`) makes an approval from one of them required to merge.
+- `site.yml`, `site-preview.yml`, and `site-preview-cleanup.yml` — publish the website's production and
+  PR artifacts; closing a preview-bearing PR removes its Cloudflare deployments and retires the link.
 - `scripts/next-version.sh` — channel-aware semver from tags; carries a `--tags=` override for testing.
 - The native build action: stamp the shared version → `build:web` → build/smoke the CLI binary →
   package/native-smoke/shared-probe the expanded desktop app → create and execute Electrobun's

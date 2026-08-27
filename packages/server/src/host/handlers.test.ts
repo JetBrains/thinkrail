@@ -3,6 +3,9 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Workspace, WorkspaceWatchReadyResult } from "@thinkrail/contracts";
+import { TodoStore } from "pi-todos/core";
+import { addComment, getReviewSnapshot } from "../reviews";
+import { todoReviewRecord } from "../todos";
 import { stopAllWatches } from "../watch";
 import { handleRequest, requestMethodDiagnostic } from "./handlers";
 
@@ -65,6 +68,43 @@ test("workspace.watchReady waits for startup once, then reports an already-ready
 		CTX,
 	)) as WorkspaceWatchReadyResult;
 	expect(second).toEqual({ startupNudge: false });
+});
+
+test("todo.requestFix on a chat that isn't on disk rolls the record back and never marks findings sent", async () => {
+	const rows = (await handleRequest("workspace.list", { projectId: "p1" }, CTX)) as Workspace[];
+	const workspace = rows[0];
+	if (!workspace) throw new Error("expected a workspace");
+	const sessionId = "sess-fix";
+	const todo = new TodoStore(workspace.worktreePath, sessionId).add({
+		title: "t",
+		artifacts: [{ kind: "commit", sha: "sha1", label: "a" }],
+	});
+	const finding = addComment({
+		workspaceId: workspace.id,
+		kind: "inline",
+		author: "agent",
+		anchor: {
+			path: "README.md",
+			side: "worktree",
+			contentHash: "",
+			selectors: [{ kind: "lineRange", startLine: 1, endLine: 1 }],
+		},
+		body: "finding",
+		origin: { todoId: todo.id, sessionId, reviewedSha: "sha1" },
+	});
+
+	await expect(
+		handleRequest(
+			"todo.requestFix",
+			{ workspaceId: workspace.id, sessionId, id: todo.id, feedback: "please fix" },
+			CTX,
+		),
+	).rejects.toThrow("no longer on disk");
+
+	expect(todoReviewRecord({ workspaceId: workspace.id, sessionId, id: todo.id })).toBeUndefined();
+	const after = getReviewSnapshot(workspace.id).comments.find((c) => c.id === finding.id);
+	expect(after?.status).toBe("draft");
+	expect(after?.sessionId).toBeUndefined();
 });
 
 test("workspace.remove rejects the Default at the handler level, before any teardown side-effect", async () => {

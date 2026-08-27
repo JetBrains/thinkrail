@@ -65,20 +65,34 @@ const text = (t: string): Block => ({ type: "text", text: t });
 const kinds = (rows: ReturnType<typeof deriveRows>) => rows.map((r) => r.kind);
 
 describe("deriveRows grouping", () => {
-	test("merges contiguous routine steps ACROSS assistant-message boundaries into one activity run", () => {
+	test("keeps one outer activity run and nests tools under the preceding thinking block", () => {
 		const turns = [
 			user("u1"),
-			assistant("a1", [think("plan"), tc("t1", "bash")]),
-			assistant("a2", [tc("t2", "read"), tc("t3", "read")]),
+			assistant("a1", [tc("t0", "read"), think("plan"), tc("t1", "bash")]),
+			assistant("a2", [tc("t2", "read"), think("revise"), tc("t3", "edit")]),
 			assistant("a3", [text("the answer")]),
 			done("s1"),
 		];
 		const rows = deriveRows(turns, {}, false);
 		expect(kinds(rows)).toEqual(["user", "activity", "markdown", "system", "divider"]);
 		const activity = rows[1];
-		if (activity?.kind !== "activity") throw new Error("expected activity row");
-		expect(activity.steps.map((s) => s.id)).toEqual(["a1:thinking:0", "t1", "t2", "t3"]);
-		expect(activity.id).toBe("activity:a1:thinking:0");
+		if (activity?.kind !== "activity") throw new Error("expected one activity row");
+		expect(activity).toMatchObject({ id: "activity:t0", live: false });
+		expect(activity.steps).toMatchObject([
+			{ kind: "tool", id: "t0" },
+			{
+				kind: "thinking",
+				id: "a1:thinking:1",
+				text: "plan",
+				tools: [{ id: "t1" }, { id: "t2" }],
+			},
+			{
+				kind: "thinking",
+				id: "a2:thinking:1",
+				text: "revise",
+				tools: [{ id: "t3" }],
+			},
+		]);
 	});
 
 	test("non-empty text splits the run; empty/whitespace text and empty thinking do not", () => {
@@ -224,13 +238,24 @@ describe("deriveRows compaction notices", () => {
 });
 
 describe("deriveRows live trailing run", () => {
-	test("the trailing run of a streaming transcript is live", () => {
-		const turns = [user("u1"), assistant("a1", [think("hmm"), tc("t1")], { streaming: true })];
+	test("the one trailing outer activity run is live while its nested groups stay structural", () => {
+		const turns = [
+			user("u1"),
+			assistant("a1", [think("first"), tc("t1"), think("second"), tc("t2")], {
+				streaming: true,
+			}),
+		];
 		const rows = deriveRows(turns, {}, true);
-		const last = rows[rows.length - 1];
-		if (last?.kind !== "activity") throw new Error("expected trailing activity row");
-		expect(last.live).toBe(true);
-		expect(last.steps.every((s) => s.streaming)).toBe(true);
+		expect(kinds(rows)).toEqual(["user", "activity"]);
+		const activity = rows[1];
+		if (activity?.kind !== "activity") throw new Error("expected activity row");
+		expect(activity.live).toBe(true);
+		expect(activity.steps.map((step) => step.kind)).toEqual(["thinking", "thinking"]);
+		expect(
+			activity.steps.every(
+				(step) => step.kind === "thinking" && step.tools.every((tool) => tool.streaming),
+			),
+		).toBe(true);
 	});
 
 	test("the run stops being live the moment answer text starts (auto-collapse trigger)", () => {
@@ -284,7 +309,14 @@ describe("deriveRows live trailing run", () => {
 		const a2 = late[1];
 		if (a1?.kind !== "activity" || a2?.kind !== "activity") throw new Error("bad rows");
 		expect(a2.id).toBe(a1.id);
-		expect(a2.steps.slice(0, 2).map((s) => s.id)).toEqual(a1.steps.map((s) => s.id));
+		const firstEarly = a1.steps[0];
+		const firstLate = a2.steps[0];
+		if (firstEarly?.kind !== "thinking" || firstLate?.kind !== "thinking")
+			throw new Error("expected nested thinking");
+		expect(firstLate.id).toBe(firstEarly.id);
+		expect(firstLate.tools.slice(0, 1).map((step) => step.id)).toEqual(
+			firstEarly.tools.map((step) => step.id),
+		);
 	});
 });
 

@@ -21,6 +21,8 @@ export interface Todo {
 	status: TodoStatus;
 	origin: TodoOrigin;
 	note?: string;
+	summary?: string;
+	verification?: string;
 	artifacts?: TodoArtifact[];
 	createdAt: string;
 	updatedAt: string;
@@ -38,12 +40,15 @@ export interface TodoGroup {
 export interface TodoPlan {
 	todos: Todo[];
 	groups: TodoGroup[];
+	// see core/SPEC.md "Summaries" for storage + reopen-invalidation rules
+	summary?: string;
 }
 
 export interface TodoFile {
-	version: 4;
+	version: 5;
 	todos: Todo[];
 	groups: TodoGroup[];
+	summary?: string;
 }
 
 export interface TodoInput {
@@ -64,6 +69,8 @@ export interface TodoPatch {
 	title?: string;
 	status?: TodoStatus;
 	note?: string;
+	summary?: string;
+	verification?: string;
 	artifacts?: TodoArtifact[];
 }
 
@@ -71,6 +78,8 @@ export interface WriteItem {
 	title: string;
 	status?: TodoStatus;
 	note?: string;
+	summary?: string;
+	verification?: string;
 	artifacts?: TodoArtifact[];
 }
 

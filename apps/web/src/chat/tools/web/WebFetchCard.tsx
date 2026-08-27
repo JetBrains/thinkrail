@@ -1,14 +1,15 @@
 import { RiLinksLine as LinkIcon } from "@remixicon/react";
 import type { ToolRenderProps } from "../../toolRegistry";
-import { CodeBlock } from "../CodeBlock";
-import { Collapsible, countLines } from "../Collapsible";
+import { ToolFileLink } from "../ToolFileLink";
 import { resultText, strArg } from "../toolHelpers";
+import { WebResultBody } from "./WebResultBody";
 
-function hostOf(url: string): string {
+function httpUrl(value: string): URL | null {
 	try {
-		return new URL(url).hostname.replace(/^www\./, "");
+		const url = new URL(value);
+		return url.protocol === "http:" || url.protocol === "https:" ? url : null;
 	} catch {
-		return url;
+		return null;
 	}
 }
 
@@ -19,18 +20,23 @@ function firstUrl(args: Record<string, unknown>): string {
 	return Array.isArray(many) && typeof many[0] === "string" ? many[0] : "";
 }
 
-export function WebFetchCard({ args, result, status }: ToolRenderProps) {
+export function webFetchSummary({ args }: ToolRenderProps): string {
+	return firstUrl(args);
+}
+
+export function WebFetchCard({ args, result, status, workspaceRoot, onOpenFile }: ToolRenderProps) {
 	const url = firstUrl(args);
-	const label = url ? hostOf(url) : "fetch";
+	const external = httpUrl(url);
+	const label = external ? external.hostname.replace(/^www\./, "") : "fetch";
 	const output = resultText(result);
 
 	return (
 		<div data-testid="tool-fetch_content" className="flex flex-col gap-4">
 			<div className="flex items-center gap-4 tr-text-metadata">
 				<LinkIcon className="size-12 shrink-0 text-text-muted" />
-				{url ? (
+				{external ? (
 					<a
-						href={url}
+						href={external.href}
 						target="_blank"
 						rel="noreferrer"
 						className="truncate text-primary hover:underline"
@@ -38,21 +44,24 @@ export function WebFetchCard({ args, result, status }: ToolRenderProps) {
 					>
 						{label}
 					</a>
+				) : url ? (
+					<ToolFileLink
+						path={url}
+						workspaceRoot={workspaceRoot}
+						onOpenFile={onOpenFile}
+						disabled={status === "running"}
+						className="text-primary"
+					/>
 				) : (
 					<span className="text-primary">{label}</span>
 				)}
 			</div>
-			{status === "running" ? (
-				<span className="text-text-muted tr-text-metadata">Fetching…</span>
-			) : status === "error" ? (
-				<pre className="overflow-auto px-8 py-4 text-feedback-error tr-code-text">{output}</pre>
-			) : output ? (
-				<Collapsible lines={countLines(output)}>
-					<CodeBlock code={output} lang="markdown" />
-				</Collapsible>
-			) : (
-				<span className="text-text-muted tr-text-metadata italic">(no content)</span>
-			)}
+			<WebResultBody
+				output={output}
+				status={status}
+				runningLabel="Fetching…"
+				emptyLabel="(no content)"
+			/>
 		</div>
 	);
 }

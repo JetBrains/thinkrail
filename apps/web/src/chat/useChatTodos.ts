@@ -18,6 +18,8 @@ export interface ChatTodos {
 	remove: (id: string) => Promise<void>;
 	openPlan: () => void;
 	openChanges: (target: { sha: string } | { path: string }) => void;
+	startReview: (id: string) => Promise<void>;
+	reviewAll: () => Promise<{ total: number; alreadyRunning?: boolean }>;
 }
 
 export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos {
@@ -41,6 +43,7 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 		},
 		[sessionId, workspaceId],
 	);
+	const reviewerRef = useRef<string | undefined>(undefined);
 
 	useEffect(() => {
 		if (status !== "connected" || connectionGeneration === 0) return;
@@ -62,6 +65,7 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 						isConnectedGeneration(useAppStore.getState(), effectConnectionGeneration) &&
 						live(effectIdentity)
 					) {
+						reviewerRef.current = plan.reviewerSessionId;
 						setData(plan);
 						setFailed(false);
 					}
@@ -88,7 +92,7 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 		};
 		const unsubscribe = getTransport().subscribe(WS_CHANNELS.piEvent, (payload) => {
 			const event = payload as SessionEventPayload;
-			if (event.sessionId !== sessionId) return;
+			if (event.sessionId !== sessionId && event.sessionId !== reviewerRef.current) return;
 			if (shouldRefreshTodos(event.event)) scheduleRefetch();
 		});
 		return () => {
@@ -135,6 +139,7 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 				return reloadPlan();
 			}
 			if (readGeneration.current !== mine || !live(requestIdentity)) return false;
+			reviewerRef.current = plan.reviewerSessionId;
 			setData(plan);
 			return true;
 		} catch {
@@ -188,7 +193,30 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 		store.requestChangesView(workspaceId, target.path);
 	};
 
-	return { data, failed, add, remove, openPlan, openChanges };
+	const startReview = async (id: string) => {
+		await getTransport().request("todo.startReview", { workspaceId, sessionId, id });
+		await reloadPlan(); // the `reviewing` mark is host-derived — never patched locally
+	};
+
+	const reviewAll = async () => {
+		const { total, alreadyRunning } = await getTransport().request("todo.reviewAll", {
+			workspaceId,
+			sessionId,
+		});
+		await reloadPlan(); // the first item's `reviewing` mark is host-derived — re-read to show it
+		return { total, ...(alreadyRunning ? { alreadyRunning } : {}) };
+	};
+
+	return {
+		data,
+		failed,
+		add,
+		remove,
+		openPlan,
+		openChanges,
+		startReview,
+		reviewAll,
+	};
 }
 
 async function nudgeAgent(workspaceId: string, sessionId: string, title: string): Promise<void> {

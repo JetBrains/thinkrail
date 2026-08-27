@@ -23,9 +23,15 @@ export {
 	settledAvailableModels,
 } from "./piRuntime";
 export {
+	type AddReviewCommentParams,
 	RESOLVE_COMMENT_TOOL_NAME,
+	type ReflectFindingParams,
 	type ResolveCommentOutcome,
+	type ReviewVerdictParams,
+	setAddReviewCommentHandler,
+	setReflectFindingHandler,
 	setReviewCommentHandler,
+	setReviewVerdictHandler,
 } from "./reviewTool";
 export * from "./sessionRepair";
 export type { SkillAdmissionContext, SkillDecision, SkillFacts } from "./skillAdmission";

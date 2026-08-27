@@ -85,7 +85,7 @@ to preserve).
 - **`custom_message` entries:** `{ type: "custom_message", customType: string, content: string|array, timestamp: ISO-string, display: boolean, ... }`
   — top-level structure (no `message` wrapper); always renderable as role "custom"; `timestamp` is ISO 8601 string at entry level.
 
-## pi file format (pinned v0.84.1 — `@earendil-works/pi-coding-agent`)
+## pi file format (pinned v0.84.3 — `@earendil-works/pi-coding-agent`)
 Verified by reading `dist/core/session-manager.{js,d.ts}` in the installed package (source of truth over
 any assumption — re-verify on a pi version bump). These facts now pin **two** consumers: the fixtures
 below, and `historyIndex.ts`'s own discovery walk (which must see exactly the files pi's `SessionManager`

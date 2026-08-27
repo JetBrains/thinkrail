@@ -10,8 +10,8 @@ tags: [pi-extension, todos, v2]
 
 ## Responsibility
 
-The five `pi` custom tools that expose the backlog to the agent — `todo_list`, `todo_add`, `todo_update`,
-`todo_remove`, `todo_write`. Each is a **thin wrapper** over `core/`: a TypeBox `parameters` schema, an
+The six `pi` custom tools that expose the backlog to the agent — `todo_list`, `todo_add`, `todo_update`,
+`todo_remove`, `todo_write`, `todo_plan_summary`. Each is a **thin wrapper** over `core/`: a TypeBox `parameters` schema, an
 `execute` that calls one `TodoStore` method against `ctx.cwd`, and a `textResult`/`errorResult` return.
 The finite-vocabulary `status` param derives its enum from the `core/` tuple via
 `StringEnum`, so the schema and the model move together (pinned by `tools.test.ts`).
@@ -28,7 +28,16 @@ the host wire still use loose items):
 - **In-band nudges** (the status-discipline feedback): every mutating/list result appends
   `consistencyNudge` when open items exist but none is `in_progress`; a `todo_update` → `done` names
   the group's next open step instead (suggest-only, never auto-started); auto-demoted items are
-  reported as `(paused: …)`.
+  reported as `(paused: …)`. A `done` that leaves **no open item anywhere** additionally nudges
+  `todo_plan_summary` — the overall completion summary is asked for at exactly the moment it becomes due.
+- **Completion summaries (the review trail):** `todo_update` takes optional `summary` (what/why — the
+  decisions the diff can't show, plus any scope drift) and **`verification`** (the exact check run +
+  result, or "not verified" — a separate field so the UI renders it as a status badge and a vague or
+  missing line is visible at a glance), both set together with `status: done` (skill-mandated for
+  code-changing steps, never a tool gate: the tool can't know whether the step changed code — git
+  lives host-side). `todo_plan_summary` sets the plan-level handoff note
+  (`TodoStore.setSummary`); it accepts an early call but flags how many items are still open (the UI
+  shows the note only once everything is done).
 - **Group-first output:** `formatPlan` renders each group under `formatGroupHeader` — `▸ <title>
   [<derived status> <done>/<total>]` — with its steps indented, **then the loose lane (the user's own
   adds) last** under a `Your requests:` header. The user's lane is last on purpose: a request added

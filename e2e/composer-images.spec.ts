@@ -112,3 +112,27 @@ test("an undecodable provider-unsupported file is refused with an error chip, ne
 	await error.getByRole("button", { name: "Dismiss" }).click();
 	await expect(error).toHaveCount(0);
 });
+
+test("/compact preserves attached images and its draft until the images are removed", async ({
+	page,
+}) => {
+	await openChatComposer(page);
+	await pastePng(page, 640, 480);
+
+	const input = page.getByTestId("chat-input");
+	const command = "/compact preserve exact filenames";
+	await input.fill(command);
+	await page.getByTestId("chat-send").click();
+
+	await expect(page.getByTestId("composer-command-error")).toContainText(
+		"Remove images to use /compact",
+	);
+	await expect(input).toHaveValue(command);
+	await expect(page.getByTestId("composer-image")).toHaveCount(1);
+	await expect(page.getByTestId("compaction-notice")).toHaveCount(0);
+	await expect(page.locator('[data-testid="chat-message"][data-role="user"]')).toHaveCount(0);
+
+	await page.getByRole("button", { name: "Remove image" }).click();
+	await expect(page.getByTestId("composer-command-error")).toHaveCount(0);
+	await expect(input).toHaveValue(command);
+});

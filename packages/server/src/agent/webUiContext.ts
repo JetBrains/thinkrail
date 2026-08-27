@@ -1,5 +1,11 @@
-import type { ExtensionUIContext, ExtensionUIDialogOptions } from "@earendil-works/pi-coding-agent";
+import { basename, dirname } from "node:path";
+import type {
+	ExtensionError,
+	ExtensionUIContext,
+	ExtensionUIDialogOptions,
+} from "@earendil-works/pi-coding-agent";
 import type { ExtUiRequest, ExtUiResponse } from "@thinkrail/contracts";
+import { plainTextTheme } from "./plainTextTheme";
 
 let publish: (request: ExtUiRequest) => void = () => {};
 export function setExtUiPublisher(fn: (request: ExtUiRequest) => void): void {
@@ -33,6 +39,27 @@ export function notifyExtUi(
 	publish({ id: nextId(), sessionId, kind: "notify", message, level });
 }
 
+const MAX_EXTENSION_ERROR_CHARS = 500;
+const ANONYMOUS_ENTRYPOINTS = new Set(["SKILL.md", "index.ts", "index.js"]);
+
+function extensionName(extensionPath: string): string {
+	const file = basename(extensionPath);
+	if (!ANONYMOUS_ENTRYPOINTS.has(file)) return file || extensionPath;
+	return basename(dirname(extensionPath)) || file;
+}
+
+export function notifyExtensionError(sessionId: string, error: ExtensionError): void {
+	const cause =
+		error.error.length > MAX_EXTENSION_ERROR_CHARS
+			? `${error.error.slice(0, MAX_EXTENSION_ERROR_CHARS)}…`
+			: error.error;
+	notifyExtUi(
+		sessionId,
+		`Extension ${extensionName(error.extensionPath)} failed on ${error.event}: ${cause}`,
+		"error",
+	);
+}
+
 export function createWebUiContext(sessionId: string): ExtensionUIContext {
 	const bridgeDialog = (
 		request: ExtUiRequest,
@@ -61,8 +88,6 @@ export function createWebUiContext(sessionId: string): ExtensionUIContext {
 				timer = setTimeout(() => finish(null, true), opts.timeout);
 			publish(request);
 		});
-
-	const inertTheme = {} as ExtensionUIContext["theme"];
 
 	return {
 		async select(title, options, opts) {
@@ -128,7 +153,7 @@ export function createWebUiContext(sessionId: string): ExtensionUIContext {
 		addAutocompleteProvider: () => {},
 		setEditorComponent: () => {},
 		getEditorComponent: () => undefined,
-		theme: inertTheme,
+		theme: plainTextTheme,
 		getAllThemes: () => [],
 		getTheme: () => undefined,
 		setTheme: () => ({ success: true }),

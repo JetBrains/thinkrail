@@ -21,11 +21,30 @@ const parameters = Type.Object({
 	),
 	title: Type.Optional(Type.String({ description: "New title." })),
 	note: Type.Optional(Type.String({ description: "New note (empty string clears it)." })),
+	summary: Type.Optional(
+		Type.String({
+			description:
+				"Completion summary, set together with status=done when the step changed code: 1–3 short sentences — what changed, why (decisions not visible in the diff), and any scope drift (things touched beyond this step). Verification goes in the separate verification field, not here. Empty string clears it.",
+		}),
+	),
+	verification: Type.Optional(
+		Type.String({
+			description:
+				'Verification line, set together with status=done: the EXACT check you ran and its result ("bun test src/todos — 34 pass", "typecheck green") — or "not verified" when you ran nothing. Never claim a check you did not run. Empty string clears it.',
+		}),
+	),
 });
 
 function nextOpenStep(plan: TodoPlan, id: string): Todo | undefined {
 	const group = plan.groups.find((g) => g.todos.some((t) => t.id === id));
 	return group?.todos.find((t) => t.status !== "done");
+}
+
+/** Plan-complete nudge: every item everywhere is done — ask for the overall summary, once per flip. */
+function planCompleteNudge(plan: TodoPlan): string | undefined {
+	const items = [...plan.todos, ...plan.groups.flatMap((g) => g.todos)];
+	if (items.length === 0 || items.some((t) => t.status !== "done")) return undefined;
+	return "plan complete — write a short overall summary with todo_plan_summary (what was done, across all tasks).";
 }
 
 export function registerTodoUpdate(pi: ExtensionAPI): void {
@@ -42,6 +61,8 @@ export function registerTodoUpdate(pi: ExtensionAPI): void {
 			if (params.status !== undefined) patch.status = params.status;
 			if (params.title !== undefined) patch.title = params.title;
 			if (params.note !== undefined) patch.note = params.note;
+			if (params.summary !== undefined) patch.summary = params.summary;
+			if (params.verification !== undefined) patch.verification = params.verification;
 			const store = storeFor(ctx);
 			const result = store.update(params.id, patch);
 			if (!result) return errorResult(`No TODO with id "${params.id}".`);
@@ -55,6 +76,7 @@ export function registerTodoUpdate(pi: ExtensionAPI): void {
 				text,
 				next ? `next: ${next.id} "${next.title}" — mark it in_progress when you start.` : undefined,
 				next ? undefined : consistencyNudge(plan),
+				params.status === "done" ? planCompleteNudge(plan) : undefined,
 			);
 			return textResult(text, { todo, paused });
 		},

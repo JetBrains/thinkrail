@@ -20,7 +20,7 @@ of the host.
 
 - **Owns:** the wire — entity types, the `pi` event/message types (re-exported), the WS method & channel
   registries, and the protocol version. Including **`WsErrorCode`** — the closed set of failures the *host
-  names* (`WsResponse.errorCode`, today only `UNKNOWN_COMMIT`), so a client can react to one specific failure
+  names* (`WsResponse.errorCode`, today `UNKNOWN_COMMIT` and `PUSH_AUTH_FAILED`), so a client can react to one specific failure
   instead of pattern-matching an error message. A failure earns a code only when a client behaves differently
   for it; everything else stays a plain `error` string. Expected method-specific synchronization outcomes,
   such as a stale layout replacement, remain typed method results rather than generic WS failures.
@@ -87,10 +87,14 @@ of the host.
     summary's optional **`lastSettlement`** retains the host-observed terminal (`null` = the live run is
     active or settled without an assistant) so reconnect can surface a final failure Pi removed from its rebuilt context; absent
     means this host process has not observed a settlement and the persisted transcript is authoritative.
-    The optional **`queue`** (**`SessionQueueState`**: pi's pending `steering`/`followUp` texts) rides a
-    live summary only when non-empty — the hydration seed for the client's pending strip, since
-    `queue_update` fires only on changes and a client attaching mid-run would otherwise never learn of
-    messages queued before it connected.
+    The optional **`queue`** (**`SessionQueueState`**: pi's pending `steering`/`followUp` texts plus
+    `hasImages?: true`, the host's conservative aggregate over queued browser sends) rides a live summary
+    only when non-empty — the hydration seed for the client's pending strip, since `queue_update` fires only
+    on changes and a client attaching mid-run would otherwise never learn of messages queued before it
+    connected. The same aggregate enriches projected `queue_update` events; image bytes never ride this
+    read-side queue state. Destructive operations use the separate **`SessionQueueContent`** /
+    **`QueuedMessageContent`** shapes, which return each drained message's text and optional images exactly
+    once so the composer can restore complete content without making ordinary queue broadcasts heavy.
     `session.getMessages` returns `{ summary, messages }` (the transcript is
     **`TranscriptMessage[]`** — the pi-canonical `Message` union widened with **`WireCustomMessage`**, a
     type-only mirror of pi-coding-agent's Node-only `CustomMessage`, so extension-injected messages like
@@ -187,7 +191,11 @@ of the host.
   and raw PI models are structurally absent; server and web map codes to their own generic copy);
   the **theme/config selection** — **`ThemeId`** is an open string on the wire, because the host persists
   an opaque selection while the independently shipped web client owns the available manifest catalog;
-  **`AppConfig`** (`{ theme, analyticsEnabled, terminalReplayKb, layout }` — an extensible bag; `layout` is the
+  **`ComposerGrowthLimit`** (`"compact" | "roomy" | "half-chat"`) is the closed, server-synced composer
+  height preference: 6 visual lines, 10 visual lines, or 50% of the mounted chat panel respectively;
+  `"half-chat"` is the default, and the web owns translating these semantic ids into geometry;
+  **`AppConfig`** (`{ theme, analyticsEnabled, terminalReplayKb, composerGrowthLimit, layout }` — an
+  extensible bag; `layout` is the
   **`LayoutSettings`** selection (`defaultPresetId`, named portable `customPresets`, `maxSideGroups`
   defaulting to 6, and independent `maxBottomGroups` defaulting to 3); `analyticsEnabled` is the
   anonymous-usage-analytics switch, default `true`
@@ -209,6 +217,17 @@ of the host.
   artifact additionally carries **`files?: GitFileChange[]`** (path + status + `+/−` — the same rows
   the Changes panel renders at the commit scope) — host-derived from git by `todo.list`'s decoration
   (same one-home rationale), never stored; absent = the sha no longer resolves, degrade silently.
+  `TodoItem.summary` / `TodoPlan.summary` are the agent's completion notes (per step / whole plan, as
+  stored) and `TodoItem.verification` the separate self-reported check line (exact command + result, or
+  "not verified" — clients render it as a badge labeled as the agent's own claim, never a host gate); **`TodoItem.review?: TodoReviewInfo`** (+ the **`TodoReviewState`** union) is the host-derived
+  review decoration, present only on reviewable items (those with a host change set): `state`
+  (`unreviewed`/`reviewed`/`changes_requested` — `unreviewed` = no stored record), `revision` (commit
+  count — 1 TODO = N commits), `unreviewedShas` (commits since the user's watermark — the "changed since
+  review" delta), `feedback` + `at`. Review state lives in a host sidecar, never the agent-writable plan;
+  see [[submodule-server-todos]]. **`TodoPlan.unattributed?: GitFileChange[]`** is the host-derived
+  remainder shipped by the same `todo.list` decoration, present only when non-empty: the worktree's
+  uncommitted rows attributed to no item of the plan — the changes that would otherwise be invisible in
+  the review map (derivation and rationale: [[submodule-server-todos]]).
   **history-search read DTOs** — **`HistoryScope`** (the overlay's cycle: this chat → workspace →
   project → everywhere); **`PromptHit`** (a recalled prompt; carries optional `messageIndex` +
   `anchorText` — the kept-newest occurrence's jump anchor) and **`MessageHit`** (a full-text
@@ -266,7 +285,13 @@ of the host.
   fan-out used nowhere by navigation restoration / `fs.*` / `git.*` / **`spec.graph`**
   (the Specs-viewer whole-graph read, per workspace) / **`todo.*`** — **`list`**/**`add`**/**`update`**/
   **`remove`**, the chat's per-session TODO plan (keyed by `workspaceId` + `sessionId`; `add` tags the
-  item `origin:"user"`) / **`terminal.*`** — **`reserve`** (idempotently establishes a host-catalog tab
+  item `origin:"user"`), plus the review ops **`review`** (approve: record `reviewed` + the sha
+  watermark), **`requestFix`** (record `changes_requested` + feedback, then the host fires the fix
+  package into the item's own chat — detached, rolled back on a pre-turn rejection) and
+  **`startReview`** (the AGENT review: the plan's pinned reviewer chat gets the item's package; findings
+  arrive as `author: "agent"` review comments, the verdict via the reviewer-only `review_verdict` tool;
+  `TodoItem.review` carries `reviewing` while the verdict is pending and `reviewedBy` on an agent
+  approve) / **`terminal.*`** — **`reserve`** (idempotently establishes a host-catalog tab
   without starting its PTY) / **`attach`** (idempotent get-or-create keyed by `(workspaceId, tabKey)`,
   returning `created` + the `replay` to repaint; the only way a PTY is born, and it replaced
   `create`+`alive`) / **`list`** (the host owns the tab list) / `write` / `resize` /
@@ -316,12 +341,15 @@ of the host.
   per-skill `decision` + `group` — for a `workspaceId`) / **`project.skills`** (the same, project-scoped, for
   the pre-session manager) / **`session.reloadResources`** (re-scan skills + rebuild the system prompt for one
   running session; rejected while streaming) /
-  `session.*` — `create`/`prompt`/`steer`/`followUp`/**`clearQueue`** (drain pi's steering+followUp
-  queues, returning the texts — the client's abort-restores-queue path; pi itself emits the emptying
-  `queue_update`)/**`removeQueued`** (`{ kind, index }` → `RemovedQueuedMessage`: drop or extract ONE
-  queued message — the strip rows' edit/remove; position-addressed because pi's queue entries are bare
-  strings with no id, and the host emulates per-item removal over pi's all-or-nothing `clearQueue`, see
-  the server agent SPEC)/`abort`/`dispose`/**`delete`**/`setModel`/
+  `session.*` — `create`/`prompt`/`steer`/`followUp`/**`clearQueue`** (drain Pi's steering+followUp
+  queues, returning complete `SessionQueueContent`; Pi itself emits the emptying `queue_update`; optional
+  `requireTextOnly` rejects without draining when the host has observed queued images, which is the manual
+  compaction precondition)/**`removeQueued`** (`{ kind, index }` → `RemovedQueuedMessage`: drop or extract ONE
+  queued message with its complete content — the strip rows' edit/remove; position-addressed because Pi's
+  queue entries are bare strings with no id, and the host emulates per-item removal over Pi's all-or-nothing
+  `clearQueue`, see the server agent SPEC)/**`abort`** (ordinary abort preserves queued lanes for Interrupt;
+  `{ restoreQueue: true }` atomically drains complete content before signalling abort and returns it after the
+  session reaches idle, which is Stop's lossless path)/`dispose`/**`delete`**/`setModel`/
   `setThinkingLevel`/`compact`/`getStats`/`getCommands`/`extUiReply`/**`answerQuestion`** (the inline
   `ask_user_question` reply, correlated by tool call id)/**`list`**/**`getMessages`** (the
   read side) / **`layout.get`** (hydrate one workspace snapshot, or `null` before first seeding) /
@@ -356,7 +384,10 @@ of the host.
   — `scope` optional, project wins over global, **`template.save`**, **`template.delete`**) — all
   read/write pi's prompt dirs (global + project), so templates stay CLI-portable,
   `WS_CHANNELS` (`server.welcome` — which carries the initial `config: AppConfig` alongside **`projects`**
-  (open records) and **`recentProjects`** (all known records, open + closed) / **`project.updated`** — the
+  (open records) and **`recentProjects`** (all known records, open + closed), plus **`hostPlatform`**
+  (`darwin | linux | win32`, optional for older hosts) — the OS the *host* runs on, so a client that
+  offers host-executed commands (the PR setup dialog) picks the right ones instead of guessing from
+  the browser / **`project.updated`** — the
   full persisted `Project` snapshot after open/reopen/close, including `closed` membership, so every client
   atomically converges its rail + Recents without optimistic removal / `pi.event` / `pi.extensionUi` /
   **`session.deleted`** (workspace + session id; a non-replayable domain event broadcast after permanent

@@ -7,9 +7,11 @@ import {
 	RiCloseLine as X,
 } from "@remixicon/react";
 import { cn } from "@/lib";
+import type { ActivityBreadcrumbKind } from "./activityBreadcrumbs";
 import { useFold } from "./foldState";
-import type { ActivityStep } from "./rows";
-import { getToolRenderer, getToolSummary, type ToolRenderProps } from "./toolRegistry";
+import type { ActivityStep, RoutineToolStep, ThinkingStep } from "./rows";
+import { ToolRendererBody } from "./ToolRendererBody";
+import { getToolSummary, type ToolRenderProps } from "./toolRegistry";
 import type { ToolStatus } from "./types";
 
 export function ActivityGroup({
@@ -17,29 +19,172 @@ export function ActivityGroup({
 	steps,
 	live,
 	workspaceRoot,
+	onOpenFile,
 }: {
 	id: string;
 	steps: ActivityStep[];
 	live: boolean;
 	workspaceRoot?: string | undefined;
+	onOpenFile?: ((path: string) => void) | undefined;
+}) {
+	const flatSteps = flattenActivitySteps(steps);
+	const single = flatSteps.length === 1 ? steps[0] : undefined;
+	if (single)
+		return single.kind === "thinking" ? (
+			<ThinkingGroup
+				id={single.id}
+				thought={single}
+				tools={single.tools}
+				live={live}
+				workspaceRoot={workspaceRoot}
+				onOpenFile={onOpenFile}
+			/>
+		) : (
+			<RoutineToolRow step={single} workspaceRoot={workspaceRoot} onOpenFile={onOpenFile} />
+		);
+
+	const settledSummary = summarizeSteps(steps);
+	const summary = live ? liveActivityTicker(steps, workspaceRoot) : settledSummary;
+	const breadcrumb = splitSummary(settledSummary);
+	return (
+		<GroupDisclosure
+			id={id}
+			kind="activity"
+			testId="activity-group"
+			live={live}
+			stepCount={flatSteps.length}
+			icon={<Layers className="size-12 shrink-0" />}
+			breadcrumbLabel={breadcrumb.label}
+			breadcrumbMeta={breadcrumb.meta}
+			summary={summary}
+		>
+			{steps.map((step) =>
+				step.kind === "thinking" ? (
+					<ThinkingGroup
+						key={step.id}
+						id={step.id}
+						parentId={id}
+						thought={step}
+						tools={step.tools}
+						live={false}
+						workspaceRoot={workspaceRoot}
+						onOpenFile={onOpenFile}
+					/>
+				) : (
+					<RoutineToolRow
+						key={step.id}
+						step={step}
+						parentId={id}
+						workspaceRoot={workspaceRoot}
+						onOpenFile={onOpenFile}
+					/>
+				),
+			)}
+		</GroupDisclosure>
+	);
+}
+
+export function ThinkingGroup({
+	id,
+	parentId,
+	thought,
+	tools,
+	live,
+	workspaceRoot,
+	onOpenFile,
+}: {
+	id: string;
+	parentId?: string;
+	thought: ThinkingStep;
+	tools: RoutineToolStep[];
+	live: boolean;
+	workspaceRoot?: string | undefined;
+	onOpenFile?: ((path: string) => void) | undefined;
+}) {
+	const summary =
+		tools.length > 0
+			? live
+				? liveActivityTicker(tools, workspaceRoot)
+				: summarizeSteps(tools)
+			: `${formatChars(thought.text.length)} chars`;
+	return (
+		<GroupDisclosure
+			id={id}
+			{...(parentId ? { parentId } : {})}
+			kind="thinking"
+			testId="thinking-group"
+			live={live}
+			stepCount={tools.length}
+			icon={<Brain className="size-12 shrink-0" />}
+			label="Thinking"
+			breadcrumbLabel="Thinking"
+			breadcrumbMeta={summary}
+			summary={summary}
+		>
+			<div
+				data-testid="thinking-group-text"
+				className="whitespace-pre-wrap break-words px-8 py-4 pl-16"
+			>
+				{thought.text}
+			</div>
+			{tools.map((step) => (
+				<RoutineToolRow
+					key={step.id}
+					step={step}
+					parentId={id}
+					workspaceRoot={workspaceRoot}
+					onOpenFile={onOpenFile}
+				/>
+			))}
+		</GroupDisclosure>
+	);
+}
+
+function GroupDisclosure({
+	id,
+	parentId,
+	kind,
+	testId,
+	live,
+	stepCount,
+	icon,
+	label,
+	breadcrumbLabel,
+	breadcrumbMeta,
+	summary,
+	children,
+}: {
+	id: string;
+	parentId?: string;
+	kind: ActivityBreadcrumbKind;
+	testId: "activity-group" | "thinking-group";
+	live: boolean;
+	stepCount: number;
+	icon: React.ReactNode;
+	label?: string;
+	breadcrumbLabel: string;
+	breadcrumbMeta: string;
+	summary: string;
+	children: React.ReactNode;
 }) {
 	const [expanded, toggle] = useFold(id);
-	const single = steps.length === 1 ? steps[0] : undefined;
-	if (single)
-		return <ActivityStepRow step={single} isCurrent={live} workspaceRoot={workspaceRoot} />;
-
-	const summary = live ? liveTicker(steps, workspaceRoot) : summarizeSteps(steps);
 	return (
 		<div
-			data-testid="activity-group"
+			data-testid={testId}
+			data-activity-node-id={id}
+			data-activity-parent-id={parentId}
+			data-activity-node-kind={kind}
+			data-activity-node-label={breadcrumbLabel}
+			data-activity-node-meta={breadcrumbMeta}
 			data-expanded={expanded}
 			data-live={live}
-			data-steps={steps.length}
+			data-steps={stepCount}
 			className="text-text-muted tr-text-metadata"
 		>
 			<button
 				type="button"
-				data-testid="activity-group-toggle"
+				data-testid={`${testId}-toggle`}
+				data-activity-node-toggle
 				aria-expanded={expanded}
 				onClick={toggle}
 				className="flex w-full cursor-pointer select-none items-center gap-4 rounded-[var(--radius-sm)] px-4 py-4 text-left outline-none hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary"
@@ -50,31 +195,33 @@ export function ActivityGroup({
 				{live ? (
 					<Loader2 className="size-12 shrink-0 animate-spin motion-reduce:animate-none" />
 				) : (
-					<Layers className="size-12 shrink-0" />
+					icon
 				)}
+				{label ? <span className="shrink-0 text-text-default">{label}</span> : null}
 				<span className="min-w-0 truncate" title={summary}>
 					{summary}
 				</span>
 			</button>
-			{expanded ? (
-				<div className="flex flex-col gap-px pl-12">
-					{steps.map((step, i) => (
-						<ActivityStepRow
-							key={step.id}
-							step={step}
-							isCurrent={live && i === steps.length - 1}
-							workspaceRoot={workspaceRoot}
-						/>
-					))}
-				</div>
-			) : null}
+			{expanded ? <div className="flex flex-col gap-px pl-12">{children}</div> : null}
 		</div>
 	);
 }
 
+function splitSummary(summary: string): { label: string; meta: string } {
+	const separator = summary.indexOf(" · ");
+	return separator < 0
+		? { label: summary, meta: "" }
+		: { label: summary.slice(0, separator), meta: summary.slice(separator + 3) };
+}
+
+function flattenActivitySteps(steps: ActivityStep[]): ActivityStep[] {
+	return steps.flatMap((step) => (step.kind === "thinking" ? [step, ...step.tools] : [step]));
+}
+
 export function summarizeSteps(steps: ActivityStep[]): string {
+	const flatSteps = flattenActivitySteps(steps);
 	const counts = new Map<string, number>();
-	for (const step of steps) {
+	for (const step of flatSteps) {
 		const name = step.kind === "thinking" ? "thinking" : step.toolName;
 		counts.set(name, (counts.get(name) ?? 0) + 1);
 	}
@@ -82,12 +229,13 @@ export function summarizeSteps(steps: ActivityStep[]): string {
 	const MAX_NAMES = 4;
 	const shown = names.slice(0, MAX_NAMES).join(", ");
 	const more = names.length - MAX_NAMES;
-	const count = `${steps.length} ${steps.length === 1 ? "step" : "steps"}`;
+	const count = `${flatSteps.length} ${flatSteps.length === 1 ? "step" : "steps"}`;
 	return `${count} · ${shown}${more > 0 ? `, +${more} more` : ""}`;
 }
 
-function liveTicker(steps: ActivityStep[], workspaceRoot: string | undefined): string {
-	const current = steps[steps.length - 1];
+function liveActivityTicker(steps: ActivityStep[], workspaceRoot: string | undefined): string {
+	const flatSteps = flattenActivitySteps(steps);
+	const current = flatSteps[flatSteps.length - 1];
 	if (!current) return "Working…";
 	if (current.kind === "thinking") return "Thinking…";
 	const summary = getToolSummary(current.toolName, toolRenderProps(current, workspaceRoot));
@@ -95,8 +243,9 @@ function liveTicker(steps: ActivityStep[], workspaceRoot: string | undefined): s
 }
 
 function toolRenderProps(
-	step: Extract<ActivityStep, { kind: "tool" }>,
+	step: RoutineToolStep,
 	workspaceRoot: string | undefined,
+	onOpenFile?: ((path: string) => void) | undefined,
 ): ToolRenderProps {
 	return {
 		toolCallId: step.toolCallId,
@@ -105,54 +254,34 @@ function toolRenderProps(
 		result: step.tool?.raw,
 		status: step.tool?.status ?? (step.dead ? "error" : "running"),
 		workspaceRoot,
+		onOpenFile,
 		streaming: step.streaming,
 	};
 }
 
-function ActivityStepRow({
+function RoutineToolRow({
 	step,
-	isCurrent = false,
+	parentId,
 	workspaceRoot,
+	onOpenFile,
 }: {
-	step: ActivityStep;
-	isCurrent?: boolean;
+	step: RoutineToolStep;
+	parentId?: string;
 	workspaceRoot?: string | undefined;
+	onOpenFile?: ((path: string) => void) | undefined;
 }) {
 	const [expanded, toggle] = useFold(step.id);
-	if (step.kind === "thinking") {
-		return (
-			<div
-				data-testid="activity-step"
-				data-step="thinking"
-				data-expanded={expanded}
-				className="text-text-muted tr-text-metadata"
-			>
-				<StepHeader
-					expanded={expanded}
-					onToggle={toggle}
-					icon={
-						step.streaming && isCurrent ? (
-							<Loader2 className="size-12 shrink-0 animate-spin motion-reduce:animate-none" />
-						) : (
-							<Brain className="size-12 shrink-0" />
-						)
-					}
-					name="thinking"
-					summary={`${formatChars(step.text.length)} chars`}
-				/>
-				{expanded ? (
-					<div className="whitespace-pre-wrap break-words px-8 pb-4 pl-16">{step.text}</div>
-				) : null}
-			</div>
-		);
-	}
-
 	const status: ToolStatus = step.tool?.status ?? (step.dead ? "error" : "running");
-	const Renderer = getToolRenderer(step.toolName);
-	const renderProps = toolRenderProps(step, workspaceRoot);
+	const renderProps = toolRenderProps(step, workspaceRoot, onOpenFile);
+	const summary = getToolSummary(step.toolName, renderProps);
 	return (
 		<div
 			data-testid="activity-step"
+			data-activity-node-id={step.id}
+			data-activity-parent-id={parentId}
+			data-activity-node-kind="tool"
+			data-activity-node-label={step.toolName}
+			data-activity-node-meta={summary}
 			data-step="tool"
 			data-tool={step.toolName}
 			data-status={status}
@@ -172,11 +301,11 @@ function ActivityStepRow({
 					)
 				}
 				name={step.toolName}
-				summary={getToolSummary(step.toolName, renderProps)}
+				summary={summary}
 			/>
 			{expanded ? (
 				<div className={cn("px-8 pb-4 pl-16", status === "error" && "text-feedback-error")}>
-					<Renderer {...renderProps} />
+					<ToolRendererBody {...renderProps} imageLabel={summary} />
 				</div>
 			) : null}
 		</div>
@@ -200,6 +329,7 @@ function StepHeader({
 		<button
 			type="button"
 			data-testid="activity-step-toggle"
+			data-activity-node-toggle
 			aria-expanded={expanded}
 			onClick={onToggle}
 			className="flex w-full cursor-pointer select-none items-center gap-4 rounded-[var(--radius-sm)] px-4 py-8 text-left outline-none hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary sm:py-2"

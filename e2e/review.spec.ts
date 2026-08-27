@@ -65,6 +65,23 @@ function markSentOnDisk(commentId: string, sessionId = "sess-e2e"): void {
 	throw new Error(`No persisted review comment ${commentId} under ${dir}`);
 }
 
+function setReflectionOnDisk(
+	commentId: string,
+	reflection: { verdict: "kept" | "refuted"; confidence: string; reason: string },
+): void {
+	const dir = join(E2E_DATA_DIR, "reviews");
+	for (const name of readdirSync(dir).filter((f) => f.endsWith(".json"))) {
+		const file = join(dir, name);
+		const snapshot = JSON.parse(readFileSync(file, "utf8"));
+		const comment = snapshot.comments.find((c: { id: string }) => c.id === commentId);
+		if (!comment) continue;
+		comment.reflection = reflection;
+		writeFileSync(file, `${JSON.stringify(snapshot, null, "\t")}\n`);
+		return;
+	}
+	throw new Error(`No persisted review comment ${commentId} under ${dir}`);
+}
+
 interface PersistedComment {
 	id: string;
 	body: string;
@@ -795,4 +812,33 @@ test("Done is undone by a fresh remark: the file re-lists the moment a new comme
 	await page.getByTestId("tab-review").click();
 	await expect(page.getByTestId("review-file-row")).toContainText("script.ts");
 	await expect(page.getByTestId("review-file-row")).toContainText("1 draft");
+});
+
+test("a finding refuted by reflection wears the 'refuted by reflection' badge", async ({
+	page,
+	browser,
+}) => {
+	await openDiff(page);
+	await composeComment(page, "two = 2", "BUG: `two` is wrong.");
+	await page.getByTestId("review-composer-save").click();
+	await expect(page.getByTestId("review-composer")).toHaveCount(0);
+
+	const [comment] = await persistedComments(page);
+	if (!comment) throw new Error("expected a persisted draft comment");
+	setReflectionOnDisk(comment.id, {
+		verdict: "refuted",
+		confidence: "high",
+		reason: "`two` is fine as named",
+	});
+
+	// A fresh client re-fetches the snapshot (review.get) — the refuted verdict rides it to the panel.
+	const client = await openReviewClient(browser);
+	const section = client.locator('[data-testid="review-file-section"][data-path="script.ts"]');
+	await expect(section.getByTestId("review-file-row")).toBeVisible();
+	if ((await section.getAttribute("data-expanded")) !== "true")
+		await section.getByTestId("review-file-row").click();
+	const badge = client.getByTestId("review-comment-refuted");
+	await expect(badge).toBeVisible();
+	await expect(badge).toHaveText("refuted by reflection");
+	await client.context().close();
 });

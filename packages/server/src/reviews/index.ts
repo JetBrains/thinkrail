@@ -8,6 +8,7 @@ export {
 export { renderPackage } from "./packageRender";
 export {
 	addComment,
+	anchorProblem,
 	buildSendPackage,
 	clearReview,
 	deleteComment,
@@ -22,6 +23,7 @@ export {
 	reviewSessionKey,
 	rollbackSend,
 	sendableComments,
+	setReflection,
 	setReviewPublisher,
 	updateComment,
 } from "./reviews";

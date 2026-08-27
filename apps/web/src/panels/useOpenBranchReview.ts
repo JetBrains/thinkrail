@@ -1,13 +1,19 @@
 import type { OpenBranchReview, Workspace } from "@thinkrail/contracts";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { type ConnectionStatus, getTransport } from "../transport";
 
-type LoadedReview = { key: string; review: OpenBranchReview | null };
+type LoadedReview = { key: string; review: OpenBranchReview | null; url?: string };
+
+export interface OpenBranchReviewState {
+	review: OpenBranchReview | null;
+	url?: string;
+	noteOpenReview: (review: OpenBranchReview, url?: string) => void;
+}
 
 export function useOpenBranchReview(
 	workspace: Workspace | null,
 	status: ConnectionStatus,
-): OpenBranchReview | null {
+): OpenBranchReviewState {
 	const workspaceId = workspace?.id ?? null;
 	const key = workspace ? `${workspace.id}\0${workspace.branch}` : null;
 	const [loaded, setLoaded] = useState<LoadedReview | null>(null);
@@ -23,7 +29,17 @@ export function useOpenBranchReview(
 				.request("workspace.openReview", { workspaceId })
 				.then(
 					(review) => {
-						if (requestToken.current === token) setLoaded({ key, review });
+						if (requestToken.current !== token) return;
+						setLoaded((prev) => {
+							const url =
+								review !== null &&
+								prev?.key === key &&
+								prev.review?.kind === review.kind &&
+								prev.review.number === review.number
+									? prev.url
+									: undefined;
+							return { key, review, ...(url ? { url } : {}) };
+						});
 					},
 					() => {
 						if (requestToken.current === token) setLoaded({ key, review: null });
@@ -39,7 +55,19 @@ export function useOpenBranchReview(
 		};
 	}, [key, status, workspaceId]);
 
-	return status === "connected" && loaded?.key === key ? loaded.review : null;
+	const noteOpenReview = useCallback(
+		(review: OpenBranchReview, url?: string) => {
+			if (key) setLoaded({ key, review, ...(url ? { url } : {}) });
+		},
+		[key],
+	);
+
+	const current = status === "connected" && loaded?.key === key ? loaded : null;
+	return {
+		review: current?.review ?? null,
+		...(current?.url ? { url: current.url } : {}),
+		noteOpenReview,
+	};
 }
 
 export function openReviewLabel(review: OpenBranchReview): string {

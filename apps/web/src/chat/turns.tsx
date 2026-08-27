@@ -28,18 +28,21 @@ import { parseReviewPackage, type ReviewPackageItem, reviewPackageLabel } from "
 import type { ChatRow, TurnDividerData } from "./rows";
 import { formatTokens } from "./SessionStatsBar";
 import { ToolCard } from "./ToolCard";
-import { getToolChrome, getToolRenderer } from "./toolRegistry";
+import { ToolRendererBody } from "./ToolRendererBody";
+import { getToolChrome, getToolSummary, type ToolRenderProps } from "./toolRegistry";
 import type { CompactionState } from "./types";
 
 export function ChatTurnView({
 	row,
 	workspaceRoot,
+	onOpenFile,
 	onOpenSpec,
 	onOpenChange,
 	onReveal,
 }: {
 	row: ChatRow;
 	workspaceRoot?: string | undefined;
+	onOpenFile?: ((path: string) => void) | undefined;
 	onOpenSpec?: ((path: string) => void) | undefined;
 	onOpenChange?: ((path: string) => void) | undefined;
 	onReveal?: ((tab: "specs" | "changes") => void) | undefined;
@@ -53,7 +56,13 @@ export function ChatTurnView({
 			return <ErrorTurn text={row.text} />;
 		case "compaction":
 			return row.summary !== undefined && row.tokensBefore !== undefined ? (
-				<CompactionTurn id={row.id} summary={row.summary} tokensBefore={row.tokensBefore} />
+				<CompactionTurn
+					id={row.id}
+					summary={row.summary}
+					tokensBefore={row.tokensBefore}
+					tokensAfter={row.tokensAfter}
+					resuming={row.resuming}
+				/>
 			) : (
 				<CompactionNotice {...row} />
 			);
@@ -77,7 +86,7 @@ export function ChatTurnView({
 				</div>
 			);
 		case "tool":
-			return <ToolRow row={row} workspaceRoot={workspaceRoot} />;
+			return <ToolRow row={row} workspaceRoot={workspaceRoot} onOpenFile={onOpenFile} />;
 		case "activity":
 			return (
 				<ActivityGroup
@@ -85,6 +94,7 @@ export function ChatTurnView({
 					steps={row.steps}
 					live={row.live}
 					workspaceRoot={workspaceRoot}
+					onOpenFile={onOpenFile}
 				/>
 			);
 		case "divider":
@@ -310,23 +320,26 @@ function PackageCommentRow({ foldId, item }: { foldId: string; item: ReviewPacka
 function ToolRow({
 	row,
 	workspaceRoot,
+	onOpenFile,
 }: {
 	row: Extract<ChatRow, { kind: "tool" }>;
 	workspaceRoot?: string | undefined;
+	onOpenFile?: ((path: string) => void) | undefined;
 }) {
 	if (getToolChrome(row.toolName) === "bare") {
-		const Renderer = getToolRenderer(row.toolName);
+		const renderProps: ToolRenderProps = {
+			toolCallId: row.toolCallId,
+			toolName: row.toolName,
+			args: row.args,
+			result: row.tool?.raw,
+			status: row.tool?.status ?? (row.dead ? "error" : "running"),
+			workspaceRoot,
+			onOpenFile,
+			streaming: row.streaming,
+		};
 		return (
 			<div className="tr-text-ui text-text-default">
-				<Renderer
-					toolCallId={row.toolCallId}
-					toolName={row.toolName}
-					args={row.args}
-					result={row.tool?.raw}
-					status={row.tool?.status ?? (row.dead ? "error" : "running")}
-					workspaceRoot={workspaceRoot}
-					streaming={row.streaming}
-				/>
+				<ToolRendererBody {...renderProps} imageLabel={getToolSummary(row.toolName, renderProps)} />
 			</div>
 		);
 	}
@@ -339,6 +352,7 @@ function ToolRow({
 			dead={row.dead}
 			streaming={row.streaming}
 			workspaceRoot={workspaceRoot}
+			onOpenFile={onOpenFile}
 		/>
 	);
 }
@@ -359,12 +373,21 @@ function CompactionTurn({
 	id,
 	summary,
 	tokensBefore,
+	tokensAfter,
+	resuming,
 }: {
 	id: string;
 	summary: string;
 	tokensBefore: number;
+	tokensAfter?: number | undefined;
+	resuming?: boolean | undefined;
 }) {
 	const [open, toggle] = useFold(id);
+	const label = resuming ? "Context compacted — resuming…" : "Context compacted";
+	const tokens =
+		tokensAfter === undefined
+			? `${formatTokens(tokensBefore)} tokens`
+			: `${formatTokens(tokensBefore)} → ${formatTokens(tokensAfter)} tokens`;
 	return (
 		<div data-testid="chat-compaction" className="flex flex-col gap-8">
 			<button
@@ -376,7 +399,7 @@ function CompactionTurn({
 				<span className="h-px flex-1 bg-border-default" />
 				{open ? <ChevronDown className="size-16" /> : <ChevronRight className="size-16" />}
 				<span>
-					Earlier messages summarized ({formatTokens(tokensBefore)} tokens of context compacted)
+					{label} ({tokens})
 				</span>
 				<span className="h-px flex-1 bg-border-default" />
 			</button>

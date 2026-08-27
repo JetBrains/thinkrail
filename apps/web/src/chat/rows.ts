@@ -12,9 +12,17 @@ export interface ToolCallData {
 	streaming: boolean;
 }
 
-export type ActivityStep =
-	| ({ kind: "tool"; id: string } & ToolCallData)
-	| { kind: "thinking"; id: string; text: string; streaming: boolean };
+export type RoutineToolStep = { kind: "tool"; id: string } & ToolCallData;
+
+export interface ThinkingStep {
+	kind: "thinking";
+	id: string;
+	text: string;
+	streaming: boolean;
+	tools: RoutineToolStep[];
+}
+
+export type ActivityStep = RoutineToolStep | ThinkingStep;
 
 export type ChatRow =
 	| { kind: "user"; id: string; message: UserMessage; attachmentNames?: string[] }
@@ -39,6 +47,22 @@ export type ChatRow =
 	  }
 	| { kind: "divider"; id: string; data: TurnDividerData };
 
+function nestRoutineRun(steps: ActivityStep[]): ActivityStep[] {
+	const nested: ActivityStep[] = [];
+	let currentThinking: ThinkingStep | undefined;
+	for (const step of steps) {
+		if (step.kind === "thinking") {
+			currentThinking = { ...step, tools: [] };
+			nested.push(currentThinking);
+		} else if (currentThinking) {
+			currentThinking.tools.push(step);
+		} else {
+			nested.push(step);
+		}
+	}
+	return nested;
+}
+
 export function deriveRows(
 	turns: ChatTurn[],
 	toolResults: Record<string, ToolResultState>,
@@ -51,7 +75,7 @@ export function deriveRows(
 	const flushRun = (live = false) => {
 		const first = run[0];
 		if (!first) return;
-		rows.push({ kind: "activity", id: `activity:${first.id}`, steps: run, live });
+		rows.push({ kind: "activity", id: `activity:${first.id}`, steps: nestRoutineRun(run), live });
 		run = [];
 	};
 
@@ -71,6 +95,7 @@ export function deriveRows(
 						id: `${turn.id}:thinking:${b}`,
 						text: block.thinking,
 						streaming: turn.streaming,
+						tools: [],
 					});
 				} else if (block.type === "text") {
 					if (block.text.trim().length === 0) continue;
