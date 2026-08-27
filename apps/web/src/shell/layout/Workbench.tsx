@@ -11,6 +11,35 @@ import {
 	useSensor,
 	useSensors,
 } from "@dnd-kit/core";
+import {
+	RiCheckFill as Check,
+	RiArrowLeftSLine as ChevronLeft,
+	RiFileLine as File,
+	RiGitPullRequestLine as GitCompareArrows,
+	RiListCheck3 as ListTodo,
+	RiChatNewLine as MessageSquarePlus,
+	RiMoreLine as MoreHorizontal,
+	RiLayoutBottomLine as PanelBottomOpen,
+	RiLayoutLeftLine as PanelLeftOpen,
+	RiLayoutRightLine as PanelRightOpen,
+	RiLayout2Line as PanelsTopLeft,
+	RiBookOpenFill,
+	RiBookOpenLine,
+	RiChat2Fill,
+	RiChat2Line,
+	RiCollapseVerticalLine,
+	RiDiscussFill,
+	RiDiscussLine,
+	RiExpandVerticalLine,
+	RiFileFill,
+	RiFolder2Fill,
+	RiFolder2Line,
+	RiGitPullRequestFill,
+	RiLayout2Fill,
+	RiTerminalBoxFill,
+	RiTerminalBoxLine as SquareTerminal,
+	RiCloseLine as X,
+} from "@remixicon/react";
 import type {
 	LayoutAuxiliaryRegion,
 	LayoutBottomAlignment,
@@ -25,24 +54,8 @@ import type {
 	LayoutToolId,
 	WorkspaceLayoutDocument,
 } from "@thinkrail/contracts";
-import {
-	Check,
-	ChevronDown,
-	ChevronLeft,
-	File,
-	GitCompareArrows,
-	ListTodo,
-	MessageSquare,
-	MessageSquarePlus,
-	MoreHorizontal,
-	PanelBottomOpen,
-	PanelLeftOpen,
-	PanelRightOpen,
-	PanelsTopLeft,
-	SquareTerminal,
-	X,
-} from "lucide-react";
 import { Fragment, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { CustomIcon } from "../../components/CustomIcon";
 import {
 	Command,
 	CommandEmpty,
@@ -376,20 +389,38 @@ function tabSearchKeywords(tab: LayoutTab): string[] {
 	}
 }
 
-function tabIcon(tab: LayoutTab): ReactNode {
+function tabIcon(tab: LayoutTab, active = false): ReactNode {
+	const cls = "size-14 shrink-0";
 	switch (tab.kind) {
 		case "file":
-			return <File className="size-3.5 shrink-0" />;
+			return active ? <RiFileFill className={cls} /> : <File className={cls} />;
 		case "diff":
-			return <GitCompareArrows className="size-3.5 shrink-0" />;
+			return active ? (
+				<RiGitPullRequestFill className={cls} />
+			) : (
+				<GitCompareArrows className={cls} />
+			);
 		case "chat":
-			return <MessageSquare className="size-3.5 shrink-0" />;
+			return active ? <RiChat2Fill className={cls} /> : <RiChat2Line className={cls} />;
 		case "document":
-			return <ListTodo className="size-3.5 shrink-0" />;
+			return <ListTodo className={cls} />;
 		case "terminal":
-			return <SquareTerminal className="size-3.5 shrink-0" />;
+			return active ? <RiTerminalBoxFill className={cls} /> : <SquareTerminal className={cls} />;
 		case "tool":
-			return <PanelsTopLeft className="size-3.5 shrink-0" />;
+			switch (tab.tool) {
+				case "projects":
+					return active ? <RiFolder2Fill className={cls} /> : <RiFolder2Line className={cls} />;
+				case "specs":
+					return active ? <RiBookOpenFill className={cls} /> : <RiBookOpenLine className={cls} />;
+				case "files":
+					return active ? <RiFileFill className={cls} /> : <File className={cls} />;
+				case "changes":
+					return <CustomIcon name={active ? "file-diff-fill" : "file-diff-line"} className={cls} />;
+				case "review":
+					return active ? <RiDiscussFill className={cls} /> : <RiDiscussLine className={cls} />;
+				default:
+					return active ? <RiLayout2Fill className={cls} /> : <PanelsTopLeft className={cls} />;
+			}
 	}
 }
 
@@ -680,7 +711,7 @@ function TabStrip({
 							)}
 							target={{ kind: "insert", location, index: tabs.length }}
 							label="Insert at end"
-							className="relative h-full w-5 shrink-0"
+							className="relative h-full w-20 shrink-0"
 						/>
 					) : null}
 				</div>
@@ -688,14 +719,14 @@ function TabStrip({
 					<div
 						aria-hidden="true"
 						data-testid="tab-overflow-before"
-						className="pointer-events-none absolute inset-y-0 left-0 z-20 w-lg bg-[linear-gradient(to_right,var(--color-container-workspace-bg),transparent)]"
+						className="pointer-events-none absolute inset-y-0 left-0 z-20 w-16 bg-[linear-gradient(to_right,var(--color-container-workspace-bg),transparent)]"
 					/>
 				) : null}
 				{scrollOverflow.after ? (
 					<div
 						aria-hidden="true"
 						data-testid="tab-overflow-after"
-						className="pointer-events-none absolute inset-y-0 right-0 z-20 w-lg bg-[linear-gradient(to_left,var(--color-container-workspace-bg),transparent)]"
+						className="pointer-events-none absolute inset-y-0 right-0 z-20 w-16 bg-[linear-gradient(to_left,var(--color-container-workspace-bg),transparent)]"
 					/>
 				) : null}
 			</div>
@@ -703,13 +734,13 @@ function TabStrip({
 			<Popover open={overflowOpen} onOpenChange={setOverflowOpen}>
 				<PopoverTrigger
 					aria-label="Search open tabs"
-					className="flex w-7 shrink-0 items-center justify-center border-border-muted border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+					className="flex w-32 shrink-0 items-center justify-center border-border-muted border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 				>
-					<MoreHorizontal className="size-4" />
+					<MoreHorizontal className="size-14" />
 				</PopoverTrigger>
 				<PopoverContent
 					align="end"
-					className="w-72 p-0"
+					className="w-288 p-0"
 					onCloseAutoFocus={(event) => {
 						const targetId = overflowFocusTarget.current;
 						if (!targetId) return;
@@ -903,7 +934,7 @@ function WorkbenchTab({
 					data-preview={preview}
 					data-kind={tab.kind === "document" ? "plan" : tab.kind}
 					data-dragging={drag.isDragging || undefined}
-					className="group relative flex min-w-24 max-w-48 shrink-0 items-center border-border-default border-r text-text-muted after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:z-10 after:h-[2px] after:rounded-full after:content-[''] data-[active=true]:bg-control-bg-selected data-[active=true]:text-text-default data-[active=true]:after:bg-primary data-[dragging]:opacity-40"
+					className="group relative flex min-w-96 max-w-192 shrink-0 items-center border-border-default border-r text-text-muted after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:z-10 after:h-[2px] after:rounded-full after:content-[''] data-[active=true]:bg-control-bg-selected data-[active=true]:text-text-default data-[active=true]:after:bg-primary data-[dragging]:opacity-40"
 				>
 					<div
 						ref={before.setNodeRef}
@@ -934,9 +965,9 @@ function WorkbenchTab({
 						onClick={selectFromClick}
 						onDoubleClick={selectFromDoubleClick}
 						onKeyDown={onKeyDown}
-						className={`flex min-w-0 flex-1 items-center gap-xs py-xs pl-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary ${tab.kind === "tool" ? "pr-sm" : ""}`}
+						className={`flex min-w-0 flex-1 items-center gap-4 py-4 pl-8 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary ${tab.kind === "tool" ? "pr-8" : ""}`}
 					>
-						{tabIcon(tab)}
+						{tabIcon(tab, active)}
 						<span className={`truncate ${preview ? "italic" : ""}`}>{name}</span>
 						{renderTabAdornment(tab)}
 					</button>
@@ -947,9 +978,9 @@ function WorkbenchTab({
 							data-testid={tab.kind === "terminal" ? "terminal-tab-close" : "editor-tab-close"}
 							aria-label={`Close ${name}`}
 							onClick={onClose}
-							className="mr-xs rounded-[var(--radius-sm)] p-0.5 opacity-0 hover:bg-control-bg-hovered group-hover:opacity-100 focus:opacity-100"
+							className="mr-4 rounded-[var(--radius-sm)] p-2 opacity-0 hover:bg-control-bg-hovered group-hover:opacity-100 focus:opacity-100"
 						>
-							<X className="size-3.5" />
+							<X className="size-14" />
 						</button>
 					) : null}
 				</div>
@@ -1241,9 +1272,9 @@ function CenterGroupView({
 							aria-label="New chat"
 							title="New chat"
 							onClick={() => onNewChat(group.id)}
-							className="flex w-7 shrink-0 items-center justify-center text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+							className="flex w-32 shrink-0 items-center justify-center text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 						>
-							<MessageSquarePlus className="size-4" />
+							<MessageSquarePlus className="size-14" />
 						</button>
 					</>
 				}
@@ -1271,13 +1302,13 @@ function CenterGroupView({
 								id={tupleKey("dnd-split", group.id, "left")}
 								target={{ kind: "split", groupId: group.id, direction: "left" }}
 								label="Split left"
-								className="absolute inset-y-1/4 left-1 w-1/5"
+								className="absolute inset-y-1/4 left-4 w-1/5"
 							/>
 							<DropZone
 								id={tupleKey("dnd-split", group.id, "right")}
 								target={{ kind: "split", groupId: group.id, direction: "right" }}
 								label="Split right"
-								className="absolute inset-y-1/4 right-1 w-1/5"
+								className="absolute inset-y-1/4 right-4 w-1/5"
 							/>
 						</>
 					) : null}
@@ -1287,13 +1318,13 @@ function CenterGroupView({
 								id={tupleKey("dnd-split", group.id, "up")}
 								target={{ kind: "split", groupId: group.id, direction: "up" }}
 								label="Split up"
-								className="absolute inset-x-1/4 top-8 h-1/5"
+								className="absolute inset-x-1/4 top-32 h-1/5"
 							/>
 							<DropZone
 								id={tupleKey("dnd-split", group.id, "down")}
 								target={{ kind: "split", groupId: group.id, direction: "down" }}
 								label="Split down"
-								className="absolute inset-x-1/4 bottom-1 h-1/5"
+								className="absolute inset-x-1/4 bottom-4 h-1/5"
 							/>
 						</>
 					) : null}
@@ -1448,7 +1479,7 @@ function SideGroupView({
 						id={tupleKey("dnd-side-group", side, group.id, "above")}
 						target={{ kind: "auxiliary-edge", region: side, index: groupIndex }}
 						label={`Create ${side} group above`}
-						className="absolute inset-x-1 top-1 bottom-1/2"
+						className="absolute inset-x-4 top-4 bottom-1/2"
 					/>
 				) : null}
 				{canCreateBelow ? (
@@ -1456,7 +1487,7 @@ function SideGroupView({
 						id={tupleKey("dnd-side-group", side, group.id, "below")}
 						target={{ kind: "auxiliary-edge", region: side, index: groupIndex + 1 }}
 						label={`Create ${side} group below`}
-						className="absolute inset-x-1 top-1/2 bottom-1"
+						className="absolute inset-x-4 top-1/2 bottom-4"
 					/>
 				) : null}
 			</div>
@@ -1512,11 +1543,13 @@ function SideGroupView({
 						event.preventDefault();
 						onFold();
 					}}
-					className="flex w-7 shrink-0 items-center justify-center border-border-muted border-b border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+					className="flex w-32 shrink-0 items-center justify-center border-border-muted border-b border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 				>
-					<ChevronDown
-						className={`size-3.5 transition-transform ${group.folded ? "-rotate-90" : ""}`}
-					/>
+					{group.folded ? (
+						<RiExpandVerticalLine className="size-16" />
+					) : (
+						<RiCollapseVerticalLine className="size-16" />
+					)}
 				</button>
 			</div>
 			<div
@@ -1669,11 +1702,11 @@ function BottomAlignmentMenu({
 			<DropdownMenuTrigger
 				aria-label="Bottom panel alignment"
 				title={`Bottom panel alignment: ${BOTTOM_ALIGNMENT_LABELS[alignment]}`}
-				className="flex w-7 shrink-0 items-center justify-center border-border-muted border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+				className="flex w-32 shrink-0 items-center justify-center border-border-muted border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 			>
-				<MoreHorizontal className="size-4" />
+				<MoreHorizontal className="size-16" />
 			</DropdownMenuTrigger>
-			<DropdownMenuContent align="end" className="w-56">
+			<DropdownMenuContent align="end" className="w-224">
 				<DropdownMenuRadioGroup
 					value={alignment}
 					onValueChange={(value) => onChange(value as LayoutBottomAlignment)}
@@ -1732,7 +1765,7 @@ function BottomCreationTargets({
 					id={tupleKey("dnd-bottom-group", group.id, "left")}
 					target={{ kind: "auxiliary-edge", region: "bottom", index: groupIndex }}
 					label="Create bottom group to the left"
-					className="absolute inset-y-1 left-1 right-1/2"
+					className="absolute inset-y-4 left-4 right-1/2"
 				/>
 			) : null}
 			{canCreateRight ? (
@@ -1740,7 +1773,7 @@ function BottomCreationTargets({
 					id={tupleKey("dnd-bottom-group", group.id, "right")}
 					target={{ kind: "auxiliary-edge", region: "bottom", index: groupIndex + 1 }}
 					label="Create bottom group to the right"
-					className="absolute inset-y-1 left-1/2 right-1"
+					className="absolute inset-y-4 left-1/2 right-4"
 				/>
 			) : null}
 		</div>
@@ -1830,9 +1863,9 @@ function BottomGroupView({
 					aria-label="Fold bottom group"
 					aria-expanded="true"
 					onClick={onFold}
-					className="flex w-7 shrink-0 items-center justify-center border-border-muted border-b border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+					className="flex w-32 shrink-0 items-center justify-center border-border-muted border-b border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 				>
-					<ChevronLeft className="size-3.5" />
+					<ChevronLeft className="size-16" />
 				</button>
 			</div>
 			<div
@@ -1850,14 +1883,14 @@ function BottomGroupView({
 								: null}
 					</Fragment>
 				) : (
-					<div className="flex h-full items-center justify-center p-md">
+					<div className="flex h-full items-center justify-center p-12">
 						<button
 							type="button"
 							data-testid="bottom-new-terminal"
 							onClick={onNewTerminal}
-							className="flex items-center gap-xs rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-md py-xs tr-text-ui text-text-default hover:bg-control-bg-hovered"
+							className="flex items-center gap-4 rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-12 py-4 tr-text-ui text-text-default hover:bg-control-bg-hovered"
 						>
-							<SquareTerminal className="size-4" /> New terminal
+							<SquareTerminal className="size-16" /> New terminal
 						</button>
 					</div>
 				)}
@@ -2116,16 +2149,16 @@ function HiddenBottomRail({
 			data-testid="bottom-layout-rail"
 			data-drop-label={dropEnabled ? "Create group in hidden bottom region" : undefined}
 			data-drop-active={drop.isOver || undefined}
-			className="flex h-7 shrink-0 items-center justify-center border-border-default border-t bg-container-sidebar-bg data-[drop-active]:bg-primary-subtle data-[drop-active]:ring-2 data-[drop-active]:ring-inset data-[drop-active]:ring-primary"
+			className="flex h-28 shrink-0 items-center justify-center border-border-default border-t bg-container-sidebar-bg data-[drop-active]:bg-primary-subtle data-[drop-active]:ring-2 data-[drop-active]:ring-inset data-[drop-active]:ring-primary"
 		>
 			<button
 				type="button"
 				aria-label="Show bottom panel"
 				title="Show bottom panel (Mod+Shift+J)"
 				onClick={onShow}
-				className="flex h-6 items-center gap-xs rounded-[var(--radius-sm)] px-sm tr-text-metadata text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+				className="flex h-24 items-center gap-4 rounded-[var(--radius-sm)] px-8 tr-text-metadata text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 			>
-				<PanelBottomOpen className="size-4" /> Bottom
+				<PanelBottomOpen className="size-16" /> Bottom
 			</button>
 		</div>
 	);
@@ -2193,7 +2226,7 @@ function HiddenSideRail({
 			data-testid={`${side}-layout-rail`}
 			data-drop-label={dropEnabled ? `Create ${side} group in hidden side` : undefined}
 			data-drop-active={drop.isOver || undefined}
-			className="flex w-7 shrink-0 flex-col items-center border-border-default bg-container-sidebar-bg py-xs first:border-r last:border-l data-[drop-active]:bg-primary-subtle data-[drop-active]:ring-2 data-[drop-active]:ring-inset data-[drop-active]:ring-primary"
+			className="flex w-28 shrink-0 flex-col items-center border-border-default bg-container-sidebar-bg py-4 first:border-r last:border-l data-[drop-active]:bg-primary-subtle data-[drop-active]:ring-2 data-[drop-active]:ring-inset data-[drop-active]:ring-primary"
 		>
 			<button
 				type="button"
@@ -2201,12 +2234,12 @@ function HiddenSideRail({
 				title={showEnabled ? `Show ${side} side` : `No ${side} groups to show`}
 				disabled={!showEnabled}
 				onClick={onShow}
-				className="flex size-6 items-center justify-center rounded-[var(--radius-sm)] text-text-muted hover:bg-control-bg-hovered hover:text-text-default disabled:text-control-disabled-text disabled:hover:bg-transparent"
+				className="flex size-24 items-center justify-center rounded-[var(--radius-sm)] text-text-muted hover:bg-control-bg-hovered hover:text-text-default disabled:text-control-disabled-text disabled:hover:bg-transparent"
 			>
 				{side === "left" ? (
-					<PanelLeftOpen className="size-4" />
+					<PanelLeftOpen className="size-14" />
 				) : (
-					<PanelRightOpen className="size-4" />
+					<PanelRightOpen className="size-14" />
 				)}
 			</button>
 		</div>
@@ -2919,7 +2952,7 @@ export function Workbench({
 	) : (
 		<div className="flex h-full min-h-0 min-w-0 flex-col">
 			<div className="min-h-0 min-w-0 flex-1">{alignedTopRow}</div>
-			<div className="h-7 shrink-0">
+			<div className="h-28 shrink-0">
 				<BottomAlignedRow document={document}>
 					<HiddenBottomRail
 						onShow={showBottomRegion}
@@ -3074,7 +3107,7 @@ export function Workbench({
 			</div>
 			<DragOverlay dropAnimation={null}>
 				{draggingTab ? (
-					<div className="flex max-w-56 items-center gap-xs rounded-[var(--radius-sm)] border border-primary bg-container-elevated-bg px-sm py-xs tr-text-ui text-text-default shadow-lg">
+					<div className="flex max-w-224 items-center gap-4 rounded-[var(--radius-sm)] border border-primary bg-container-elevated-bg px-8 py-4 tr-text-ui text-text-default shadow-lg">
 						{tabIcon(draggingTab)}
 						<span className="truncate">{layoutTabName(draggingTab)}</span>
 					</div>

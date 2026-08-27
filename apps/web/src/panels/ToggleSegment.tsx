@@ -15,7 +15,7 @@ export function ToggleSegment({
 			data-testid={testid}
 			data-active={active}
 			aria-pressed={active}
-			className={`rounded-[var(--radius-sm)] px-sm py-0.5 tr-text-metadata ${
+			className={`rounded-[var(--radius-sm)] px-8 py-2 tr-text-metadata ${
 				active
 					? "bg-control-bg-selected text-text-default"
 					: "text-text-muted hover:bg-control-bg-hovered hover:text-text-default"

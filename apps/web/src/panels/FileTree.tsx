@@ -34,10 +34,9 @@ export function FileTree({ workspaceId }: { workspaceId: string }) {
 		},
 	);
 
-	if (nodes === null)
-		return <p className="px-xs py-xs tr-text-metadata text-text-muted">Loading…</p>;
+	if (nodes === null) return <p className="px-4 py-4 tr-text-metadata text-text-muted">Loading…</p>;
 	if (nodes.length === 0)
-		return <p className="px-xs py-xs tr-text-metadata text-text-muted">Empty</p>;
+		return <p className="px-4 py-4 tr-text-metadata text-text-muted">Empty</p>;
 	return (
 		<ul className="flex flex-col">
 			{nodes.map((node) => (
@@ -111,7 +110,7 @@ function FileNodeRow({
 				onDoubleClick={isDir ? undefined : () => open("keep")}
 			/>
 			{isDir && expanded && children && (
-				<ul className="flex flex-col pl-md">
+				<ul className="flex flex-col pl-12">
 					{children.map((child) => (
 						<FileNodeRow
 							key={child.path}

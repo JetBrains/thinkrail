@@ -1,0 +1,38 @@
+---
+import Analytics from "../../components/Analytics.astro";
+import { Landing, siteMetadata } from "../../vibecoding";
+
+const canonicalUrl = new URL(siteMetadata.path, siteMetadata.origin);
+const ogImageUrl = new URL(siteMetadata.openGraphImagePath, siteMetadata.origin);
+---
+
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="description" content={siteMetadata.description} />
+		<meta property="og:title" content={siteMetadata.title} />
+		<meta property="og:description" content={siteMetadata.description} />
+		<meta property="og:type" content="website" />
+		<meta property="og:url" content={canonicalUrl} />
+		<meta property="og:image" content={ogImageUrl} />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:image" content={ogImageUrl} />
+		<link rel="canonical" href={canonicalUrl} />
+		<link rel="icon" href="/vibecoding/favicon.svg" type="image/svg+xml" />
+		<script is:inline>
+			document.documentElement.dataset.enhanced = "true";
+			window.setTimeout(() => {
+				if (document.documentElement.dataset.landingReady !== "true") {
+					delete document.documentElement.dataset.enhanced;
+				}
+			}, 3000);
+		</script>
+		<Analytics />
+		<title>{siteMetadata.title}</title>
+	</head>
+	<body>
+		<Landing client:load />
+	</body>
+</html>

@@ -1,0 +1,22 @@
+/*
+ * GENERATED — do not edit. Source: `src/styles/spacing.json` (v1.1.0).
+ * Regenerate with `bun run spacing:generate`; `spacing:check` fails when this file is stale.
+ * See src/styles/SPACING.md (web-spacing).
+ */
+
+:root {
+	--space-0: 0px;
+	--space-2: 2px;
+	--space-4: 4px;
+	--space-8: 8px;
+	--space-12: 12px;
+	--space-16: 16px;
+	--space-24: 24px;
+	--space-32: 32px;
+	--space-40: 40px;
+	--space-64: 64px;
+}
+
+@theme inline {
+	--spacing: 1px;
+}

@@ -1,4 +1,8 @@
-import { History, RotateCcw, Trash2 } from "lucide-react";
+import {
+	RiHistoryLine as History,
+	RiArrowGoBackLine as RotateCcw,
+	RiDeleteBin6Line as Trash2,
+} from "@remixicon/react";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -27,9 +31,9 @@ export function WorkspaceChatHistory({
 				data-testid="chat-history"
 				aria-label="Reopen a closed chat"
 				title="View chat history"
-				className="flex w-7 shrink-0 items-center justify-center border-border-default border-l text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
+				className="flex w-32 shrink-0 items-center justify-center border-border-default border-l text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
 			>
-				<History className="size-4" />
+				<History className="size-14" />
 			</DropdownMenuTrigger>
 			<DropdownMenuContent align="end" className="min-w-[16rem]">
 				<DropdownMenuLabel>Recently closed</DropdownMenuLabel>
@@ -54,7 +58,7 @@ export function WorkspaceChatHistory({
 							<span className="shrink-0 tr-text-metadata text-text-muted">
 								{relativeTime(chat.closedAt)}
 							</span>
-							<RotateCcw className="size-3.5 shrink-0 text-text-muted" />
+							<RotateCcw className="size-14 shrink-0 text-text-muted" />
 						</DropdownMenuItem>
 						<DropdownMenuItem
 							data-testid="closed-chat-delete"
@@ -74,9 +78,9 @@ export function WorkspaceChatHistory({
 										}
 									});
 							}}
-							className="shrink-0 px-xs text-text-muted focus:text-feedback-error"
+							className="shrink-0 px-4 text-text-muted focus:text-feedback-error"
 						>
-							<Trash2 className="size-3.5" />
+							<Trash2 className="size-14" />
 						</DropdownMenuItem>
 					</DropdownMenuGroup>
 				))}

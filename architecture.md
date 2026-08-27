@@ -29,7 +29,8 @@ independently of the host and dials it over the network; a phone reaches the sel
 apps/cli        host launcher (V1): boot server + open browser   ── depends on ─▶ packages/server
 apps/web        UI client (mobile-first)                          ── depends on ─▶ packages/contracts
 apps/desktop    Electrobun local-host launcher/shared client (deferred) ── depends on ─▶ packages/server, packages/contracts
-apps/website    public landing page (GitHub Pages)                ── standalone: no workspace deps
+apps/website    public landing + blog + /vibecoding (Cloudflare Pages) ── depends on ─▶ packages/website-analytics
+packages/website-analytics  dependency-free browser analytics policy for the public website
 packages/server createServer(): Bun.serve(HTTP+WS) + AgentSessionManager (in-process pi) ── depends on ─▶ packages/contracts, packages/shared
 packages/contracts  the wire (types-only)
 packages/shared     shellEnv (server-side only)
@@ -116,8 +117,12 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
     explicit, reviewable diff. Cross-cutting deps (pi, TypeScript, typebox, bun types) are pinned **once** in
     the root `workspaces.catalog` and referenced via `catalog:`, so their version lives in exactly one place.
     **Enforced**, not just documented: `scripts/check-catalog.ts` (`bun run check:deps`, in pre-commit + CI)
-    rejects any range and any catalog drift. Exempt: `peerDependencies` (extension packages declare `"*"` on
-    purpose — the host provides the dep) and local protocols (`workspace:` / `link:` / `file:`).
+    rejects any range, any catalog drift, and a lockfile graph that resolves `react` or `react-dom` outside
+    its one catalog pin (the temporary prerelease override rationale belongs to [[module-web]]). Exempt:
+    `peerDependencies` (extension packages declare `"*"` on purpose — the host provides the dep) and local
+    protocols (`workspace:` / `link:` / `file:`). An exact SemVer prerelease/build suffix is still an exact
+    pin (`19.3.0-canary-a1124489-20260826`); the checker accepts the full identifier grammar, including
+    hyphens, without admitting a range.
 
 11. **Terminal = xterm.js on the DOM renderer.** The browser terminal is `@xterm/xterm`, driven from
     `apps/web/src/panels/TerminalInstance.tsx` against a real PTY (`bun-pty`) in
@@ -151,6 +156,13 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
     wire status, and card remain in their bounded modules; the correspondence between those surfaces and
     their liveness obligations belongs to [[central-integration]]. This keeps feature-specific mechanics in
     their leaf specs while making a non-terminating composition visible at the architecture layer.
+
+14. **The public website is one origin, artifact, and production deployment.** `apps/website` owns `/`,
+    `/blog/`, and `/vibecoding/` in one static Astro build deployed through one Cloudflare Pages project.
+    React and Tailwind are permitted only inside [[submodule-website-vibecoding]]; unrelated routes retain
+    their vanilla runtime and hand-written stylesheet. Browser analytics and consent initialize once on the
+    exact `thinkrail.ai` origin. The retired `vibecoding.thinkrail.ai` hostname is an edge redirect that
+    preserves path and query, never a proxy to a second site.
 
 ## Invariants
 

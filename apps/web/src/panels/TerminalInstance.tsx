@@ -332,15 +332,15 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 			data-visible="true"
 			className="absolute inset-0"
 		>
-			<div ref={hostRef} className="absolute inset-md" />
+			<div ref={hostRef} className="absolute inset-12" />
 			{detached ? (
-				<div className="absolute inset-0 flex flex-col items-center justify-center gap-sm bg-overlay">
+				<div className="absolute inset-0 flex flex-col items-center justify-center gap-8 bg-overlay">
 					<p className="tr-text-metadata text-text-muted">This terminal is open somewhere else.</p>
 					<button
 						type="button"
 						data-testid="terminal-take-back"
 						onClick={takeBack}
-						className="rounded-[var(--radius-sm)] bg-control-bg px-sm py-xs tr-text-ui text-text-default hover:bg-control-bg-hovered"
+						className="rounded-[var(--radius-sm)] bg-control-bg px-8 py-4 tr-text-ui text-text-default hover:bg-control-bg-hovered"
 					>
 						Take it back
 					</button>

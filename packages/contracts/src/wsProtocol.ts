@@ -44,7 +44,7 @@ import type {
 	QueueLane,
 	RefreshedModels,
 	RemovedQueuedMessage,
-	SessionQueueState,
+	SessionQueueContent,
 	SessionStats,
 	SessionSummary,
 	SkillCatalogEntry,
@@ -81,7 +81,7 @@ export interface TerminalTabsPush {
 	tabs: TerminalTabInfo[];
 }
 
-export const PROTOCOL_VERSION = 50;
+export const PROTOCOL_VERSION = 52;
 
 export interface ServerWelcome {
 	protocolVersion: number;
@@ -383,12 +383,18 @@ export interface WsMethodMap {
 		params: { sessionId: string; text: string; images?: ImageContent[] };
 		result: Ack;
 	};
-	"session.clearQueue": { params: { sessionId: string }; result: SessionQueueState };
+	"session.clearQueue": {
+		params: { sessionId: string; requireTextOnly?: boolean };
+		result: SessionQueueContent;
+	};
 	"session.removeQueued": {
 		params: { sessionId: string; kind: QueueLane; index: number };
 		result: RemovedQueuedMessage;
 	};
-	"session.abort": { params: { sessionId: string }; result: Ack };
+	"session.abort": {
+		params: { sessionId: string; restoreQueue?: boolean };
+		result: Ack & { restoredQueue?: SessionQueueContent };
+	};
 	"session.dispose": { params: { sessionId: string }; result: Ack };
 	"session.delete": { params: { workspaceId: string; sessionId: string }; result: Ack };
 	"session.setModel": { params: { sessionId: string; model: WireModel }; result: Ack };

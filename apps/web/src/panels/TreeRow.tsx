@@ -1,4 +1,11 @@
-import { ChevronDown, ChevronRight, File as FileIcon, Folder } from "lucide-react";
+import {
+	RiArrowDownSLine as ChevronDown,
+	RiArrowRightSLine as ChevronRight,
+	RiFileFill,
+	RiFileLine,
+	RiFolderFill,
+	RiFolderLine,
+} from "@remixicon/react";
 import type { MouseEvent, ReactNode } from "react";
 
 export function TreeRow({
@@ -29,6 +36,8 @@ export function TreeRow({
 	onContextMenu?: ((event: MouseEvent) => void) | undefined;
 }) {
 	const Chevron = expanded ? ChevronDown : ChevronRight;
+	const Folder = active ? RiFolderFill : RiFolderLine;
+	const FileIcon = active ? RiFileFill : RiFileLine;
 	return (
 		<button
 			type="button"
@@ -39,23 +48,25 @@ export function TreeRow({
 			onClick={onClick}
 			onDoubleClick={onDoubleClick}
 			onContextMenu={onContextMenu}
-			className={`flex h-6 w-full min-w-0 items-center gap-xs rounded-[var(--radius-sm)] px-xs text-left tr-text-ui text-text-muted ${
+			className={`flex h-24 w-full min-w-0 items-center gap-4 rounded-[var(--radius-sm)] px-4 text-left tr-text-ui text-text-muted ${
 				highlight === "self"
 					? `hover:bg-control-bg-hovered ${active ? "bg-control-bg-selected" : ""}`
 					: ""
 			}`}
 		>
 			{kind === "dir" ? (
-				<Chevron className="size-3.5 shrink-0 text-text-muted" />
+				<Chevron className="size-16 shrink-0 text-text-muted" />
 			) : (
-				<span className="size-3.5 shrink-0" />
+				<span className="size-14 shrink-0" />
 			)}
-			{kind === "dir" ? (
-				<Folder className="size-4 shrink-0 text-text-muted" />
-			) : (
-				<FileIcon className="size-4 shrink-0 text-text-muted" />
-			)}
-			<span className={`min-w-0 flex-1 truncate ${labelClassName ?? ""}`}>{label}</span>
+			<span className="flex min-w-0 flex-1 items-center gap-4">
+				{kind === "dir" ? (
+					<Folder className="size-14 shrink-0 text-text-muted" />
+				) : (
+					<FileIcon className="size-14 shrink-0 text-text-muted" />
+				)}
+				<span className={`min-w-0 flex-1 truncate ${labelClassName ?? ""}`}>{label}</span>
+			</span>
 			{trailing}
 		</button>
 	);

@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { expandAllActivityGroups, openWorkspaceChat, waitForDone } from "./fixtures/app";
+import { openWorkspaceChat, waitForDone } from "./fixtures/app";
 
 async function openChatAndSend(
 	page: import("@playwright/test").Page,
@@ -42,23 +42,28 @@ test("jump button appears when scrolled up and returns to the latest on click", 
 	await expect(page.getByTestId("scroll-to-bottom")).toHaveCount(0);
 });
 
-test("thinking folds into the activity run and its step reveals the text on click", {
+test("the outer activity run reveals a thinking subtree that owns its following tools", {
 	tag: "@agent",
 }, async ({ page }) => {
 	test.setTimeout(120_000);
 	await openChatAndSend(
 		page,
-		"Reason step by step, then give the answer: what is 17 multiplied by 23?",
+		"Reason step by step, use the bash tool to multiply 17 by 23, then give the answer.",
 	);
 
 	await waitForDone(page);
-	await expandAllActivityGroups(page);
 
-	const thinking = page.locator('[data-testid="activity-step"][data-step="thinking"]').first();
+	const activity = page.getByTestId("activity-group").filter({ hasText: "bash" }).first();
+	await expect(activity).toBeVisible();
+	await expect(activity).toHaveAttribute("data-expanded", "false");
+	await activity.getByTestId("activity-group-toggle").click();
+
+	const thinking = activity.getByTestId("thinking-group").filter({ hasText: "bash" }).first();
 	await expect(thinking).toBeVisible();
 	await expect(thinking).toHaveAttribute("data-expanded", "false");
-	await expect(thinking).toContainText("chars");
+	await thinking.getByTestId("thinking-group-toggle").click();
 
-	await thinking.getByTestId("activity-step-toggle").click();
 	await expect(thinking).toHaveAttribute("data-expanded", "true");
+	await expect(thinking.getByTestId("thinking-group-text")).toBeVisible();
+	await expect(thinking.locator('[data-testid="activity-step"][data-tool="bash"]')).toBeVisible();
 });

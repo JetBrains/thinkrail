@@ -1,5 +1,5 @@
+import { RiFolderLine as Folder, RiGlobalLine as Globe } from "@remixicon/react";
 import type { Project } from "@thinkrail/contracts";
-import { Folder, Globe } from "lucide-react";
 import type { ReactNode } from "react";
 import {
 	DropdownMenu,

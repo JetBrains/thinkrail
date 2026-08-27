@@ -18,7 +18,7 @@ import { assembleTemplate, stripFrontmatter } from "./templateText";
 const SYNTAX_HINT = `$1, $ARGUMENTS, \${1:-default} — pi prompt-template syntax`;
 
 const INPUT_CLASS =
-	"w-full rounded-[var(--radius-sm)] border border-control-border-default bg-control-bg px-md py-sm tr-text-ui text-text-default outline-none transition-colors placeholder:text-text-muted focus-visible:border-control-border-active disabled:bg-control-disabled-bg disabled:text-control-disabled-text";
+	"w-full rounded-[var(--radius-sm)] border border-control-border-default bg-control-bg px-12 py-8 tr-text-ui text-text-default outline-none transition-colors placeholder:text-text-muted focus-visible:border-control-border-active disabled:bg-control-disabled-bg disabled:text-control-disabled-text";
 
 function isValidTemplateName(name: string): boolean {
 	if (name.length === 0) return false;
@@ -124,12 +124,12 @@ export function TemplateEditorDialog({
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent data-testid="template-editor-dialog" className="max-w-[36rem] gap-md">
+			<DialogContent data-testid="template-editor-dialog" className="max-w-[36rem] gap-12">
 				<DialogHeader>
 					<DialogTitle>{editing ? `Edit ${template.name}` : "New template"}</DialogTitle>
 				</DialogHeader>
 
-				<div className="flex max-h-[60vh] flex-col gap-md overflow-y-auto">
+				<div className="flex max-h-[60vh] flex-col gap-12 overflow-y-auto">
 					<Field id="template-name" label="Name">
 						<input
 							id="template-name"
@@ -143,9 +143,9 @@ export function TemplateEditorDialog({
 						/>
 					</Field>
 
-					<div className="flex flex-col gap-xs">
+					<div className="flex flex-col gap-4">
 						<span className="tr-title-compact text-text-default">Scope</span>
-						<div className="flex gap-sm">
+						<div className="flex gap-8">
 							<ScopeOption
 								id="global"
 								label="Global"
@@ -238,7 +238,7 @@ export function TemplateEditorDialog({
 
 function Field({ id, label, children }: { id: string; label: string; children: ReactNode }) {
 	return (
-		<div className="flex flex-col gap-xs tr-text-ui">
+		<div className="flex flex-col gap-4 tr-text-ui">
 			<label htmlFor={id} className="tr-text-emphasis text-text-default">
 				{label}
 			</label>
@@ -269,7 +269,7 @@ function ScopeOption({
 			disabled={disabled}
 			onClick={onSelect}
 			className={cn(
-				"flex-1 rounded-[var(--radius-sm)] border px-md py-sm text-left tr-text-ui outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:bg-control-disabled-bg disabled:text-control-disabled-text",
+				"flex-1 rounded-[var(--radius-sm)] border px-12 py-8 text-left tr-text-ui outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:bg-control-disabled-bg disabled:text-control-disabled-text",
 				active
 					? "border-primary-muted bg-clip-padding bg-primary-subtle text-text-default"
 					: "border-border-default text-text-muted hover:bg-control-bg-hovered hover:text-text-default",

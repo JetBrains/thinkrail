@@ -2,18 +2,19 @@
 id: module-website
 type: module-design
 status: active
-title: Project website (thinkrail.ai landing)
+title: Project website (thinkrail.ai)
 parent: architecture
 tags: [website, marketing]
+depends-on: [module-website-analytics]
 ---
 
 ## Responsibility
 
-The project's public website — a landing page and blog whose creative conceit is that **the site IS
+The project's public website at `thinkrail.ai`: the IDE-shell landing, its blog, and the audience-specific
+vibecoding experience at `/vibecoding/`. The landing and blog's creative conceit is that **the site IS
 the IDE**: a faithful HTML/CSS recreation of the ThinkRail shell (title bar, project rail, tab strip,
-files rail, terminal, status bar) whose center "editor" is the normally-scrolling page content — the
-blog included (see Blog below). Each
-section poses as a file of a `website` workspace (`README.md`, `why.md`, `features/*.md`,
+files rail, terminal, status bar) whose center "editor" is the normally-scrolling page content. Each
+landing section poses as a file of a `website` workspace (`README.md`, `why.md`, `features/*.md`,
 `install.sh`, `CONTRIBUTING.md`). The **file tree is the source of truth for the page's navigation
 structure**, and its selection reacts to scroll (scroll-spy) like the editor is switching files. The
 top editor **tab strip is derived from that file-tree navigation** — not a hand-maintained list — and
@@ -26,31 +27,48 @@ must stay reachable. Its bottom divider is drawn **per tab**, not on the strip: 
 outside the scrollport, where the active tab cannot paint over it to merge into the content. The
 status bar is a plain copyright footer, not a live line counter.
 
-Not part of the product: nothing in the app depends on it, and it ships to GitHub Pages, not in the
+`/vibecoding/` deliberately uses a separate visual grammar: [[submodule-website-vibecoding]] owns the
+animated product story and install experience as a route-local React island with route-local Tailwind.
+It shares the website origin, artifact, analytics initializer, SEO outputs, and deployment—not the
+IDE-shell presentation.
+
+Not part of the product: nothing in the app depends on the public website, and it never ships in the
 binary.
 
 ## Boundary
 
-- **Standalone leaf.** No workspace deps — it must never import `@thinkrail/contracts`, `server`,
-  `shared`, or `web`. It is not on the wire and has no protocol knowledge.
-- **Astro (static output) + vanilla TypeScript + hand-written CSS.** No client-side framework
-  runtime: Astro ships zero JS by default and every interactive bit stays hand-written TS
-  (`src/main.ts`, `src/theme.ts`). No Tailwind, no runtime deps at all — `devDependencies` only
-  (`astro` + `@astrojs/*` pinned exact, `typescript` via `catalog:`). The two
-  `@fontsource-variable/*` packages are build-time asset sources, not runtime deps: the build emits
+- **Independently deployed leaf.** Its only workspace dependency is [[module-website-analytics]]; it
+  must never import contracts, server, shared, or web. It is not on the wire and has no protocol
+  knowledge.
+- **One static Astro artifact, with a route-local framework exception.** The landing and blog retain
+  vanilla TypeScript + hand-written CSS: no React island and no Tailwind stylesheet or runtime reaches
+  those routes. [[submodule-website-vibecoding]] alone may use one React island and Tailwind v4. Astro's
+  React integration and Tailwind Vite plugin are build-wide tooling, but generated page references are
+  the runtime boundary; package build validation fails if unrelated routes reference the island renderer,
+  component chunks, or vibecoding stylesheet. The browser analytics workspace module is compiled into
+  the static output. The `@fontsource-variable/*` packages are build-time asset sources: the build emits
   their woff2 files into `dist/`. They are shared with `apps/web`, so they come from the root
   `workspaces.catalog` — one pin for both apps, which is what keeps the site's faces identical to the
   app's.
   - *Why Astro (decision, 2026-08):* the blog + planned docs fired the "bespoke SSG" tripwires
     (RSS, OG, typed frontmatter, content DX). Astro is Vite underneath — the landing page ported
-    verbatim, `bun test` suites unchanged — and React 19 islands are available the day a page needs
-    one (none do today). Rejected: Next.js static export (ships the React runtime to static pages,
-    non-Vite culture), VitePress (Vue), Eleventy (docs features assemble-yourself — the bespoke trap
-    again), Hugo/Zola (non-TS toolchain, token/tests integration lost). The prior bespoke pipeline
+    verbatim, `bun test` suites unchanged — and React 19 islands are available only where a route needs
+    one. Rejected: Next.js static export (ships the React runtime to static pages, non-Vite culture),
+    VitePress (Vue), Eleventy (docs features assemble-yourself — the bespoke trap again), Hugo/Zola
+    (non-TS toolchain, token/tests integration lost). The prior bespoke pipeline
     (`scripts/build-blog.ts` + HTML string templates) is deleted.
   - *Lint caveat:* Biome parses only `.astro` frontmatter, so `noUnusedVariables`/`noUnusedImports`
     are disabled for `*.astro` in `biome.json` (template usage is invisible to it — every flag would
     be a false positive). `astro check` covers the templates instead.
+
+The parent owns the route-composition edges; the vibecoding leaf has no sibling dependency:
+
+```text
+src/pages/vibecoding/index.astro ──▶ src/vibecoding (through index.ts)
+src/pages/vibecoding/index.astro ──▶ src/components/Analytics.astro
+landing + blog shells             ──▶ src/components/Analytics.astro
+```
+
 - **Fonts are self-hosted; the site makes no external font request.** Packages and stacks are copied
   from the app's `typography.json`, not imported — and `src/fonts.test.ts` reads that JSON at test time
   and fails on drift, which is what makes copying safe. `--font-display` mirrors the app's `brand`
@@ -61,10 +79,11 @@ binary.
   `apps/web/src/themes/bundled/*.theme.json` (dark = default, darcula, light, gruvbox) into the site's
   own CSS custom properties under `[data-theme]`; the site never reaches into `apps/web` at build time
   (the app's tokens assume the theme engine's runtime swap).
-- **Shared page chrome is single-sourced in components.** `src/components/BaseHead.astro` is the one
-  head every page uses: charset/viewport, favicon, global stylesheet (which bundles the fonts), the
-  pre-paint theme guard, and the analytics loaders. `src/components/IdeShell.astro` is the one IDE
-  shell every page's body renders through — icon sprite, skip link, title bar (workspace name
+- **IDE-shell page chrome is single-sourced in components.** `src/components/BaseHead.astro` is the one
+  head the landing and blog use: charset/viewport, favicon, their global stylesheet (which bundles the
+  fonts), and the pre-paint theme guard. `src/components/Analytics.astro` is presentation-free and is
+  included once by every route family. `src/components/IdeShell.astro` is the one IDE shell the landing
+  and blog render through — icon sprite, skip link, title bar (workspace name
   parameterized: `website` on the landing, `blog` on blog pages, each with the matching
   `workspace/<name> · from main` branch label), the left project rail, the right files rail +
   terminal, the status bar, and the `main.ts` script import; the center column is its default slot
@@ -123,111 +142,65 @@ binary.
   static DOM; JS turns the complete fallback into the tabbed view. The detailed Install section keeps
   its complete mixed-platform reference and labels the distinct PowerShell and Command Prompt (cmd) lines.
 
-## Analytics
+## Analytics and consent
 
-PostHog (the team's existing project, **EU** cloud). Loaded as **progressive enhancement, production
-only**: `src/analytics.ts` injects PostHog's `array.js` from the first-party proxy at runtime and
-calls `posthog.init()` **only when `location.hostname === "thinkrail.ai"`** — localhost, `astro dev`,
-`preview`, and the `jetbrains.github.io` apex send nothing. The prod gate + config are a pure
-`analyticsConfig(hostname)` function, unit-tested in `src/analytics.test.ts` (`bun:test`, no browser).
-**Every page — landing and blog alike — loads analytics through the one `BaseHead.astro` script that
-imports `initAnalytics()`/`initGtm()`**; no page carries its own copy of the gate or config.
+`src/analytics.ts` is the site-local facade over [[module-website-analytics]]. It supplies the exact
+production hostname `thinkrail.ai`; the shared module owns the PostHog and GTM identifiers, privacy
+configuration, and typed script loaders. Localhost, `astro dev`, every `pages.dev` deployment, the
+`jetbrains.github.io` address, and sibling subdomains send nothing.
 
-- **No npm dep.** We inject the CDN script at runtime rather than importing `posthog-js`, so the
-  no-runtime-deps boundary holds. We also do **not** paste PostHog's minified bootstrap snippet: Biome
-  lints JS inside `<script>` and the snippet trips it (`noCommaOperator`, `noAssignInExpressions`, …),
-  which would force a forbidden `biome-ignore`. A clean typed loader avoids both. Safe because
-  `array.js` self-assigns `window.posthog` on load (its stub-queue replay is guarded), so `init()` in
-  the load handler needs no bootstrap stub.
-- **Genuinely cookieless — stores nothing on the device.** `cookieless_mode: "always"`: PostHog sets
-  **no cookie and no local/session storage**; visitor identity is a privacy-preserving hash computed
-  server-side from a daily-rotating salt + IP + host + user-agent. Nothing persistent lands in the
-  browser, so **no consent banner is required** under GDPR/ePrivacy. Also `respect_dnt: true`,
-  `disable_session_recording: true`; autocapture + pageviews stay on. `person_profiles:
-  "identified_only"` — the site never calls `identify()` (cookieless mode forbids it anyway).
-  - **Operational dependency:** requires **"Cookieless server hash mode" enabled in the PostHog
-    project settings** (Project Settings → Web analytics). If it is off, cookieless events are dropped.
-  - Trade-off: the daily salt makes cross-day identity coarse (a visitor returning on a later day
-    counts as new); pageview counts stay accurate, unique-visitor counts are approximate.
-- **First-party ingest via PostHog's managed reverse proxy** — `p.thinkrail.ai`, so ad blockers (which
-  match on `*.posthog.com`) don't drop the beacon. One host covers both PostHog EU origins: the proxy
-  routes `/static/*` + `/array/*` to `eu-assets.i.posthog.com` and everything else to
-  `eu.i.posthog.com`, so `api_host` **and** the injected `array.js` URL are the proxy. `ui_host:
-  "https://eu.posthog.com"` stays PostHog's real app origin — mandatory with a proxy, or in-app links
-  and the toolbar point at the proxy. Both are pinned in `analytics.test.ts`.
-  - **Managed, not self-hosted:** PostHog operates it (DNS `CNAME` → their Cloudflare edge; SSL +
-    routing theirs). Consequence: traffic also transits **Cloudflare**, a PostHog
-    [subprocessor](https://posthog.com/subprocessors) under their DPA — no new controller, still EU.
-    We run no proxy infrastructure; the site stays static on GitHub Pages.
-  - Cookieless server-hash identity is unaffected: the proxy forwards `X-Forwarded-For`, so the
-    daily-salt hash still sees the real client IP.
-  - **The host-side sink is deliberately NOT proxied** (`packages/server/src/analytics` keeps
-    `eu.i.posthog.com`): `posthog-node` runs in our own process, where no ad blocker exists — a proxy
-    would add a hop and a subprocessor for nothing.
-- The `phc_…` project key is **public/client-safe** by design (meant to ship in browser code) — not a
-  secret, so embedding it in the static build is expected.
+`src/components/Analytics.astro` initializes that facade once per document and is the only analytics
+composition point for the IDE-shell and vibecoding routes. No page or child module carries vendor
+configuration or another loader. The existing GTM container remains Cookiebot's control plane; route-
+specific downstream tags use a `thinkrail.ai` hostname condition plus Page Path, never another GTM
+container. Sharing the exact apex origin means Cookiebot scans and browser consent state apply to all
+three route families.
 
-**Google Tag Manager** (container `GTM-WDW2DZW4`) runs **alongside** PostHog, under the same rules:
-production-only typed loader (`src/gtm.ts`, no pasted minified snippet — same Biome reasoning as
-PostHog), gated on `location.hostname === "thinkrail.ai"` with the pure `gtmConfig(hostname)`
-unit-tested in `src/gtm.test.ts`. GTM lives **only in this module** — it must never appear in
-`apps/web` or anything that ships in user instances (local or cloud).
-- **No `<noscript>` iframe** (deliberate): it is static HTML that can't be hostname-gated, and
-  JS-disabled tracking isn't worth loosening the production-only gate.
-- **Consent caveat:** the site's "no consent banner required" stance rests on cookieless PostHog. GTM
-  itself stores nothing, but tags configured *inside* the container (e.g. GA4) typically set cookies —
-  whoever adds such tags in the GTM UI owns re-opening the consent question.
+The site test pins its production-host identity and disabled hosts, while the shared package tests the
+common PostHog/GTM contract. The shared contract deliberately has no `posthog-js` dependency, pasted
+bootstrap, or static GTM `noscript` iframe; its spec owns the cookieless behavior and consent caveat.
 
 ## Deploy
 
-`.github/workflows/site.yml` builds (`bun run --filter @thinkrail/website build`, which runs
-`astro check && astro build`) and publishes `apps/website/dist` to GitHub Pages on pushes to `main`
-that touch this module (plus manual dispatch). Asset URLs are root-absolute against
-`site: "https://thinkrail.ai"` (astro.config.ts) — the `jetbrains.github.io/thinkrail` address is
-not independently servable, which is fine because it redirects to the custom domain. One-time repo
-settings: Pages → Source: GitHub Actions, and Pages → Custom domain: `thinkrail.ai` — the public
-identity. Canonical/OG URLs in `index.html` (and the README website link) point at
-`https://thinkrail.ai/`, never the `jetbrains.github.io/thinkrail` address (which redirects there).
+Cloudflare Pages project `thinkrail-website` owns production and previews for the one static artifact.
+`.github/workflows/site.yml` runs `bun run --filter @thinkrail/website build` (`astro check && astro
+build` plus artifact validation) and direct-uploads `apps/website/dist` to branch `main` on pushes that
+touch this module, [[module-website-analytics]], the root package manifest, or the lockfile (plus manual
+dispatch). It verifies the provider URL before succeeding. `thinkrail.ai` is the project's custom apex
+domain; provider URLs are deployment probes, not product identities.
 
-**The deploy fails fast rather than hanging.** `deploy-pages` only creates the Pages deployment and then
-polls it, so a stalled backend hangs the step until timeout — 10min on 2026-08-06 (`31107056870`),
-leaving `main` red and the site stale. Hence `timeout: 180000` (a healthy deploy reports `succeed` in
-~10s), `retention-days: 7` on the artifact so re-running the `deploy` job stays a valid remedy for a
-week, and `cancel-in-progress: false` so an in-flight publish finishes. Don't add an in-job retry: the
-deployment is keyed by `GITHUB_SHA` and the timeout cancels it, so a second attempt moments later only
-reads back `deployment_cancelled`. Re-deploying that SHA *later* is fine — hence the remedy above.
+Production concurrency never cancels an in-flight publish. Cloudflare retains successful production
+deployments as rollback targets, so rollback selects the prior `main` deployment instead of running a
+second hosting pipeline.
 
 ### PR preview deploys
 
-PRs that touch this module get a **preview URL** so design review happens against the rendered site,
-not the diff: `.github/workflows/site-preview.yml` runs the *same build command* as `site.yml` (one
-build definition — never let the two drift) and uploads `apps/website/dist` to **Cloudflare Pages**
-via `bunx wrangler@<pinned> pages deploy --project-name=thinkrail-previews --branch=pr-<num>`. The
-per-PR alias URL is deterministic — `https://pr-<num>.thinkrail-previews.pages.dev` — and is surfaced
-as a sticky PR comment (marker `<!-- thinkrail-site-preview -->`, edited in place each push, via
-`gh api` — no third-party comment action) plus a `Website preview` commit status on the head SHA.
-The workflow polls the URL until it serves 200 before posting (a fresh `pr-<num>` subdomain 522s for
-its first ~20s — observed at setup, 2026-08-20) so the designer never receives a dead link.
+`.github/workflows/site-preview.yml` runs the same build command and uploads to branch `pr-<number>` in
+`thinkrail-website`. The deterministic alias `https://pr-<number>.thinkrail-website.pages.dev` is
+surfaced as one sticky PR comment and one `Website preview` commit status covering `/`, `/blog/`, and
+`/vibecoding/`. It waits for all three route families to serve before publishing the URL.
 
-Boundaries of the preview path (decisions, 2026-08):
-- **Production is untouched**: GitHub Pages + `thinkrail.ai` remain the only production host;
-  Cloudflare Pages hosts previews *only* (the project's production branch is `main`, which we never
-  deploy there, so every upload is a preview deployment).
-- **Same-repo PRs only**: the job is guarded by `head.repo.full_name == github.repository`. Fork PRs
-  skip silently — repo secrets are never exposed to forks, and the split-workflow machinery for safe
-  fork previews was deliberately rejected until outside contributors need it.
-- **Preview URLs are public** (unauthenticated, not search-indexed) — accepted for a public marketing
-  site; no Cloudflare Access gating.
-- Previews work unmodified because assets are root-absolute (served at a `pages.dev` domain root),
-  analytics stay silent off `thinkrail.ai` (the hostname gate), and canonical/OG URLs keep pointing
-  at production. Drafts stay excluded — the preview shows exactly what would ship.
-- **No cleanup job**: closed-PR preview deployments are inert and free; the alias just stops updating.
-- Concurrency is per-PR with `cancel-in-progress: true` — the opposite of production, because a
-  superseded preview has no value.
+Same-repository PRs only receive previews; fork PRs skip because Cloudflare credentials never cross the
+repository boundary. Preview URLs are public, analytics-silent, and left inert after a PR closes. A
+newer push cancels only the superseded preview for that PR.
 
-One-time setup: Cloudflare Pages project `thinkrail-previews` (`wrangler pages project create
-thinkrail-previews --production-branch main`) and repo secrets `CLOUDFLARE_API_TOKEN` (Pages:Edit) +
-`CLOUDFLARE_ACCOUNT_ID`.
+One-time setup creates `thinkrail-website` with production branch `main`, using the existing
+`CLOUDFLARE_API_TOKEN` (Pages:Edit) and `CLOUDFLARE_ACCOUNT_ID` repository secrets, then attaches the
+`thinkrail.ai` custom domain after the provider-hosted main deployment is verified.
+
+### Hosting cutover and retired hostname
+
+The apex cutover records and removes the four GitHub Pages A records only after the new Pages main
+deployment passes direct-route and resource probes; Cloudflare then creates the apex Pages CNAME. The
+GitHub Pages custom-domain setting and last deployment remain untouched for the observation window.
+Rollback restores the recorded A records, returning to the prior split deployment; a later re-cutover
+must allow the Pages custom domain to reactivate before moving traffic back.
+
+After the apex is accepted, `vibecoding.thinkrail.ai` becomes a Cloudflare Single Redirect: hostname
+match, dynamic target `concat("https://thinkrail.ai/vibecoding", http.request.uri.path)`, status 301,
+and query preservation enabled. During its rollback window, disabling the rule exposes the retained
+`thinkrail-vibecoding` deployment. After both windows, GitHub Pages and the old Cloudflare projects are
+decommissioned; the redirect-only hostname uses Cloudflare's originless proxied `192.0.2.1` record.
 
 ## Blog
 
@@ -262,16 +235,22 @@ The `/blog` subsite is a typed Astro content collection over Markdown posts in `
   landing-only enhancement inert (no sections → no scroll-spy, no picker → no terminal replay).
   Post cards are whole-card links that signal hover on the border alone (no underline, no movement)
   and share the landing feature cards' surface, which keeps the `--elevated` tag chips visible on
-  them. Theming: BaseHead (theme guard, fonts, analytics) + the `src/theme.ts` toggle via the
-  shell's `main.ts` — same behavior as the landing page, one implementation.
+  them. Theming: BaseHead (theme guard + fonts) + the `src/theme.ts` toggle via the shell's `main.ts`
+  — same behavior as the landing page, one implementation; Analytics remains the separate shared head
+  initializer.
 - **Author guide**: `content/blog/BLOG.md` documents the frontmatter schema, Markdown features,
   embeds, and the local preview loop (`bun run dev` hot-reloads posts).
 - **Deployment**: alongside the main site via the same `site.yml` workflow; changes to
   `apps/website/content/blog/**` trigger a rebuild.
 
-## Assets
+## Discovery and assets
 
-`public/favicon.svg` is the site tab icon: a rounded tile in the brand primary green carrying the
+One apex `robots.txt` allows the public site and points crawlers at Astro's generated sitemap. The
+sitemap derives from the same static route build and therefore covers `/`, the blog index and published
+posts, and `/vibecoding/`; previews keep production canonical URLs and do not become a second search
+identity.
+
+`public/favicon.svg` is the IDE-shell landing/blog tab icon: a rounded tile in the brand primary green carrying the
 **header wordmark's TR mark** (same `viewBox` + paths, not redrawn) in black, centred with balanced
 padding for legibility at tab sizes. It is wired via `<link rel="icon" type="image/svg+xml">` in
 `index.html`; there is no `.ico` fallback.
@@ -282,3 +261,7 @@ selected, terminal install transcript finished, worktree note visible). The tran
 this repo. Re-capture: `astro preview` the built site, view it at a 1200×630 viewport with
 deviceScaleFactor 2 (dark theme), wait for the terminal replay + the rail note (~7s), screenshot the
 viewport, and downscale the 2400×1260 capture to 1200×630.
+
+`public/vibecoding/` owns that route's distinct favicon, 1200×630 Open Graph image, and gradient
+wordmark. Their public URLs remain under `/vibecoding/`, while Vite-generated chunks stay under the
+site-wide `/_astro/` root because one Astro base serves all route families.

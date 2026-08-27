@@ -9,11 +9,13 @@ import {
 } from "@earendil-works/pi-ai";
 import { createFauxCore, fauxAssistantMessage } from "@earendil-works/pi-ai/providers/faux";
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
-import type { AgentSettlement, ExtUiRequest } from "@thinkrail/contracts";
+import type { AgentSettlement, ExtUiRequest, ImageContent } from "@thinkrail/contracts";
 import {
+	abortSession,
 	buildSessionSettings,
 	clampThinkingForModel,
 	clearQueueSession,
+	compactSession,
 	createSession,
 	deleteSession,
 	disposeAllSessions,
@@ -853,7 +855,7 @@ test("followUpSession on an IDLE session runs the turn — pi's follow-up queue 
 	}
 });
 
-test("mid-stream followUpSession queues: the summary snapshot carries it, clearQueueSession hands it back", async () => {
+test("stop losslessly restores an image-bearing queue before aborting", async () => {
 	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
 	const slow = createFauxCore({
 		provider: "fauxq",
@@ -878,7 +880,12 @@ test("mid-stream followUpSession queues: the summary snapshot carries it, clearQ
 			await new Promise((resolve) => setTimeout(resolve, 20));
 		}
 		await followUpSession(s.sessionId, "queued line");
-		await followUpSession(s.sessionId, "queued line two");
+		const queuedImage = {
+			type: "image",
+			data: "AA==",
+			mimeType: "image/png",
+		} satisfies ImageContent;
+		await followUpSession(s.sessionId, "queued line two", [queuedImage]);
 
 		const summary = (await listSessions("ws-queue", cwd)).find(
 			(row) => row.sessionId === s.sessionId,
@@ -886,26 +893,130 @@ test("mid-stream followUpSession queues: the summary snapshot carries it, clearQ
 		expect(summary?.queue).toEqual({
 			steering: [],
 			followUp: ["queued line", "queued line two"],
+			hasImages: true,
 		});
-		expect(seen(s.sessionId)).toContain("queue_update");
+		expect(seen(s.sessionId)).toContain('"type":"queue_update"');
+		expect(seen(s.sessionId)).toContain('"hasImages":true');
 
-		expect(await removeQueuedSession(s.sessionId, "followUp", 5)).toEqual({
-			removed: null,
-			queue: { steering: [], followUp: ["queued line", "queued line two"] },
+		expect(() => clearQueueSession(s.sessionId, true)).toThrow("queued image");
+		expect(
+			(await listSessions("ws-queue", cwd)).find((row) => row.sessionId === s.sessionId)?.queue,
+		).toEqual(summary?.queue);
+
+		expect(await abortSession(s.sessionId, true)).toEqual({
+			steering: [],
+			followUp: [{ text: "queued line" }, { text: "queued line two", images: [queuedImage] }],
 		});
-		expect(await removeQueuedSession(s.sessionId, "followUp", 0)).toEqual({
-			removed: "queued line",
-			queue: { steering: [], followUp: ["queued line two"] },
-		});
+		await turn.catch(() => {});
 
-		expect(clearQueueSession(s.sessionId)).toEqual({ steering: [], followUp: ["queued line two"] });
-		expect(clearQueueSession(s.sessionId)).toEqual({ steering: [], followUp: [] });
-
-		await turn;
+		expect(
+			(await listSessions("ws-queue", cwd)).find((row) => row.sessionId === s.sessionId)?.queue,
+		).toBeUndefined();
+		const transcript = await getSessionMessages(s.sessionId, "ws-queue", cwd);
+		expect(transcript.messages.filter((message) => message.role === "user")).toHaveLength(1);
 		removeSession(s.sessionId);
 	} finally {
 		runtime.unregisterProvider("fauxq");
 		setSessionManagerFactory(() => SessionManager.inMemory());
+	}
+}, 20000);
+
+test("removing one queued image message returns its complete content", async () => {
+	const s = await createSession({
+		cwd: tmpCwd("trpi-remove-image-"),
+		workspaceId: "ws-remove-image",
+		model: toWireModel(fauxA.getModel()),
+	});
+	const queuedImage = {
+		type: "image",
+		data: "AA==",
+		mimeType: "image/png",
+	} satisfies ImageContent;
+	await steerSession(s.sessionId, "edit this", [queuedImage]);
+
+	expect(await removeQueuedSession(s.sessionId, "steering", 0)).toEqual({
+		removed: { text: "edit this", images: [queuedImage] },
+		queue: { steering: [], followUp: [] },
+	});
+	removeSession(s.sessionId);
+});
+
+test("compactSession rejects an overlapping manual compaction", async () => {
+	const slow = createFauxCore({
+		provider: "faux-compact-lock",
+		api: "faux-compact-lock",
+		models: [modelDef("faux-compact-lock")],
+		tokensPerSecond: 1000,
+	});
+	runtime.registerProvider("faux-compact-lock", cfg(slow, "faux-compact-lock"));
+	let releaseCompaction = () => {};
+	const compactionGate = new Promise<void>((resolve) => {
+		releaseCompaction = resolve;
+	});
+	let sessionId: string | undefined;
+	let firstCompaction: Promise<void> | undefined;
+	let overlappingCompaction: Promise<void> | undefined;
+	try {
+		slow.setResponses([
+			fauxAssistantMessage("seeded oldest turn"),
+			fauxAssistantMessage("seeded large turn"),
+			fauxAssistantMessage("seeded recent turn"),
+			async () => {
+				await compactionGate;
+				return fauxAssistantMessage("FIRST_SUMMARY");
+			},
+			fauxAssistantMessage("SECOND_SUMMARY"),
+		]);
+		const cwd = tmpCwd("trpi-compact-lock-");
+		mkdirSync(join(cwd, ".pi"), { recursive: true });
+		writeFileSync(
+			join(cwd, ".pi", "settings.json"),
+			JSON.stringify({
+				compaction: { enabled: false, keepRecentTokens: 1, reserveTokens: 4096 },
+			}),
+		);
+		const session = await createSession({
+			cwd,
+			workspaceId: "ws-compact-lock",
+			model: toWireModel(slow.getModel()),
+		});
+		sessionId = session.sessionId;
+		await promptSession(sessionId, "old context");
+		await promptSession(sessionId, "middle context");
+		await promptSession(sessionId, "recent context");
+
+		firstCompaction = compactSession(sessionId, "first");
+		firstCompaction.catch(() => {});
+		const deadline = Date.now() + 5000;
+		while (!seen(sessionId).includes('"type":"compaction_start"') || slow.state.callCount < 4) {
+			if (Date.now() > deadline) throw new Error("first compaction never started");
+			await new Promise((resolve) => setTimeout(resolve, 20));
+		}
+
+		overlappingCompaction = compactSession(sessionId, "second");
+		overlappingCompaction.catch(() => {});
+		const overlapOutcome = await Promise.race([
+			overlappingCompaction.then(
+				() => ({ status: "resolved" as const }),
+				(error: unknown) => ({
+					status: "rejected" as const,
+					message: error instanceof Error ? error.message : String(error),
+				}),
+			),
+			new Promise<{ status: "pending" }>((resolve) =>
+				setTimeout(() => resolve({ status: "pending" }), 250),
+			),
+		]);
+		expect(overlapOutcome).toEqual({
+			status: "rejected",
+			message: "Compaction is already in progress for this session",
+		});
+		releaseCompaction();
+		await firstCompaction;
+	} finally {
+		releaseCompaction();
+		if (sessionId) removeSession(sessionId);
+		runtime.unregisterProvider("faux-compact-lock");
 	}
 }, 20000);
 
@@ -920,7 +1031,7 @@ test("removeQueuedSession on an idle session never strands the keepers — they 
 	await steerSession(s.sessionId, "parked two");
 
 	const result = await removeQueuedSession(s.sessionId, "steering", 0);
-	expect(result.removed).toBe("parked one");
+	expect(result.removed).toEqual({ text: "parked one" });
 	expect(result.queue).toEqual({ steering: [], followUp: [] });
 	expect(seen(s.sessionId)).toContain("PARKED_DELIVERED");
 	removeSession(s.sessionId);

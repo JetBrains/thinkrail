@@ -86,6 +86,7 @@ async function runShards(shardCount: number, playwrightArgs: string[]): Promise<
 			...childEnv(),
 			THINKRAIL_E2E_LANE: String(shard - 1),
 			PLAYWRIGHT_BLOB_OUTPUT_FILE: join(reportDir, `report-${shard}.zip`),
+			PWTEST_CACHE_DIR: join(reportDir, `transform-cache-${shard}`),
 		};
 		const outputDir = join(reportDir, `artifacts-${shard}`);
 		const command = playwrightCommand([

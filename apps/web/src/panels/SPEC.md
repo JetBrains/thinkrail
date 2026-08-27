@@ -17,8 +17,10 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
 ## Boundary
 
 - **Owns:** `ProjectTree`. Each top-level project row is a compact 28px IDE-tree row:
-  **always-visible chevron** + folder/name + a collapsed-only plain workspace count + a **bare muted Create
-  workspace `+` always visible in a fixed right-edge column** (the Projects-header Add project `+` is unchanged).
+  **always-visible chevron** + folder/name + a collapsed-only plain workspace count + an **always-visible Create
+  workspace `+` in a fixed right-edge column**. That `+` is the **same control as the Projects-header Add
+  project `+`** — both are `Button variant="ghost" size="icon"`, so they render identically and their glyphs
+  line up on one vertical axis (both sit at the row's `pr-xs` right edge).
   Long names truncate before the count/action; there is deliberately **no visible Close or overflow icon**.
   Hover highlights the full row and the highlight remains while its **project context menu** is open.
   Right-click opens that PR-#167-styled menu at the pointer without selecting/navigating; a scroll-cancelled
@@ -118,12 +120,15 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   the active request until it settles (the dialog may close, but a second request cannot orphan it), failures
   surface to the user, and an authoritative catalog removal dismisses a now-stale confirmation instead of
   leaving a modal for a terminal another client already closed. Also `FileTree`, `SpecsPanel`, `ReviewPanel`,
-  `ChangesPanel` (the changed files under a fixed **28px panel-header row** — shared structural geometry
-  with workbench Group Headers and the chat header — that says **what** is being diffed via the
+  `ChangesPanel` (the changed files under a fixed **panel-header row** — `h-panel-header-row`
+  (`--panel-header-row-height`, currently 32px), shared structural geometry with workbench Group Headers
+  and the chat header, not a value pinned here — that says **what** is being diffed via the
   **`ChangesScopeMenu`** scope pill + the shared **`BranchPicker`** target-branch pill, plus the
   **List | Tree** toggle (`store.changesView`, app-wide) switching a flat list and a folder
   **`ChangesTree`**; clicking a file in either opens/focuses its **center Monaco diff tab**, and every file
-  row carries the shared **`ChangeRowActions`** menu),
+  row carries the shared **`ChangeRowActions`** menu. The row wrapper paints the complete hover/selected
+  band, including the trailing menu slot; its inner open-file button remains transparent so that band
+  cannot look clipped before the menu),
   `FilePane` (+ its lazy `MonacoEditor` / `MarkdownPreview`) + `DiffPane` (+ its lazy
   `MonacoDiff`), plus lazy `TerminalInstance`. The Monaco plumbing both editors share —
   worker wiring, the local loader, the token-driven `thinkrail` theme + the `[data-theme]` re-theme
@@ -335,7 +340,11 @@ a project picker, the prompt hero, and the reused
   bundled catalog from `themes`, with the resolved active selection from `store.theme` marked; clicking
   one fires `settings.update` and the UI **converges on the `settings.changed` broadcast** (no optimistic
   apply), a rejected update raising a toast; the picker never owns a theme list — it renders the catalog
-  the glob discovered at build time); the **shell-owned injected Layout section** (Balanced/Focus/Review
+  the glob discovered at build time); **`ChatSettings`** (the live section immediately after Appearance —
+  three radio cards over `store.composerGrowthLimit`, updating `AppConfig.composerGrowthLimit` with the same
+  converge-on-`settings.changed`, toast-on-rejection pattern; the labels explain when the one-line composer
+  stops growing, while `contracts` owns the closed preset ids/default); the **shell-owned injected Layout
+  section** (Balanced/Focus/Review
   plus named custom preset cards, one host-synchronized default selection, capture-current/rename/delete
   for customs, and the default-6 maximum side groups per side; settings changes converge through
   `settings.changed`. With an active workspace each preset offers confirmable **Apply now…**, which asks
@@ -378,8 +387,8 @@ a project picker, the prompt hero, and the reused
   toggle** — a switch over `store.analyticsEnabled`, fired via `settings.update { analyticsEnabled }`
   with the same converge-on-broadcast pattern as the theme, plus the what-is/isn't-collected copy; only
   the boolean ever crosses the wire, see `submodule-server-analytics`. A single dimmed "General" nav item ("Soon") still signals the shell is
-  built to grow. `ProvidersSettings`/`AppearanceSettings`/`TemplatesSettings`/`PrivacySettings` are the
-  panels-owned **integration pieces** (store + transport); `SettingsDialog` receives the Layout section
+  built to grow. `ProvidersSettings`/`AppearanceSettings`/`ChatSettings`/`TemplatesSettings`/
+  `PrivacySettings` are the panels-owned **integration pieces** (store + transport); `SettingsDialog` receives the Layout section
   from the shell composition root so no panel reaches sideways into shell, and the `LoginDialog` stays
   presentational (`auth` module).
 
@@ -455,7 +464,7 @@ a project picker, the prompt hero, and the reused
   dialog), `chat` (`ModelSelector`/`ThinkingSelector` + the `useModelCatalog` hook that feeds them,
   reused by `NewWorkspaceDialog`; `Markdown`,
   reused by `MarkdownPreview`; `TemplateEditorDialog`, reused by `TemplatesSettings`), `lib`, `themes` (catalog + generic application contract),
-  `contracts`; `lucide-react`; and the heavy libs each lazy panel owns (`monaco-editor`, `shiki`,
+  `contracts`; `@remixicon/react`; and the heavy libs each lazy panel owns (`monaco-editor`, `shiki`,
   `@xterm/*`) loaded via `import()`.
 - **Forbidden:** `server`/`shared`/`pi`; importing `shell`; reaching across unrelated panels.
 
@@ -546,7 +555,7 @@ a project picker, the prompt hero, and the reused
   Monaco surfaces the same action also sits in the editor's **right-click context menu** ("Comment on
   selection", right after Copy, `Cmd/Ctrl+Shift+M`; `editorHasSelection` precondition) — the «+» and
   the menu entry are one action pair into one composer (which is why `attachReviewCommenting` takes
-  an `IStandaloneCodeEditor` — `addAction` lives only there). The menu's rows wear the app's lucide
+  an `IStandaloneCodeEditor` — `addAction` lives only there). The menu's rows wear the app's Remix Icon
   icons via `monacoMenuIcons.ts`: Monaco's standalone menu is label-only (`action.class` icons are a
   workbench feature `addAction` can't reach), so `decorateEditorContextMenus` — installed on EVERY
   Monaco surface, review or not (`MonacoEditor` + both of `MonacoDiff`'s inner editors) — decorates
@@ -943,7 +952,7 @@ a project picker, the prompt hero, and the reused
   only what is *not* typography: h1/h2 section rules, a capped reading measure (~78ch) with wide
   tables/code scrolling inside it, zebra-striped bordered tables, muted accent blockquotes, crisp
   rules, and **GitHub-style alert callouts** (`> [!NOTE]`…`[!CAUTION]`, via the in-repo
-  `markdownAlerts` remark transform + a lucide/token `AlertCallout`, wired in only here — not chat), and
+  `markdownAlerts` remark transform + a Remix Icon/token `AlertCallout`, wired in only here — not chat), and
   **```mermaid fences render as themed diagrams** (the shared `Markdown` primitive's mermaid path —
   `chat/SPEC.md`; the rendered *diff* keeps the source-code degradation, like shiki) — in
   a centered reading column; strips a leading YAML frontmatter block via
@@ -1005,7 +1014,7 @@ a project picker, the prompt hero, and the reused
   over a light canvas caps ≈ 3.3:1. So in **high-contrast themes the dim attribute is stripped from
   terminal output** (`stripAnsiDim`), rendering that text at full foreground contrast (≥ AA). The
   `terminalContrast.test.ts` gate reproduces xterm's colour maths to hold both HC themes at the threshold. The **12px
-  content inset** lives on the xterm **mount host's own box** (absolutely positioned, `inset-md` on every
+  content inset** lives on the xterm **mount host's own box** (absolutely positioned, `inset-12` on every
   side) rather than as padding on it — FitAddon derives cols/rows from that host's measured size, so
   padding would overcount the grid and clip the last row/column; insetting the box keeps the measured
   area equal to the visible content area.

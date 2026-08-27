@@ -14,7 +14,7 @@ export function DiagramCard({ args, status }: ToolRenderProps) {
 		);
 	}
 	return (
-		<div data-testid="tool-visualize-diagram" className="flex flex-col gap-xs">
+		<div data-testid="tool-visualize-diagram" className="flex flex-col gap-4">
 			{title ? <div className="tr-title-compact text-text-default">{title}</div> : null}
 			<MermaidView source={source} title={title} />
 		</div>

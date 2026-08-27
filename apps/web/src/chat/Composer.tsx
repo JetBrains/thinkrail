@@ -1,19 +1,19 @@
 import {
+	RiArrowUpLine as ArrowUp,
+	RiArrowUpSLine as ChevronUp,
+	RiFileLine as FileIcon,
+	RiFolderLine as FolderIcon,
+	RiHistoryLine as History,
+	RiSparkling2Line as Sparkles,
+	RiStopLine as Square,
+	RiCloseLine as X,
+} from "@remixicon/react";
+import {
+	type ComposerGrowthLimit,
 	REQUEST_IMAGE_BASE64_BUDGET,
-	type SlashCommandInfo,
 	type ThinkingLevel,
 	type WireModel,
 } from "@thinkrail/contracts";
-import {
-	ArrowUp,
-	ChevronUp,
-	FileIcon,
-	FolderIcon,
-	History,
-	Sparkles,
-	Square,
-	X,
-} from "lucide-react";
 import {
 	type ClipboardEvent,
 	type DragEvent,
@@ -27,10 +27,12 @@ import {
 	useState,
 } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib";
 import { FileChip } from "./FileChip";
 import { type AttachedImage, fileToAttachedImage } from "./imageAttachment";
 import { ModelSelector } from "./ModelSelector";
 import {
+	type SlashCommandItem,
 	SlashCommandMenu,
 	selectedSlashCommandValue,
 	slashCommandQuery,
@@ -48,6 +50,15 @@ import { ThinkingSelector } from "./ThinkingSelector";
 import type { ChatAttachment } from "./types";
 
 export type SubmitBehavior = "send" | "steer" | "followUp" | "interrupt";
+
+export type ComposerSubmitDisposition = { accepted: true } | { accepted: false; reason: string };
+
+const COMPOSER_EDITOR_LIMIT_CLASS = {
+	compact: "max-h-[calc(6lh+var(--space-8)+var(--space-8))]",
+	roomy: "max-h-[calc(10lh+var(--space-8)+var(--space-8))]",
+	"half-chat":
+		"max-h-[calc(50cqh-var(--space-16)-var(--space-16)-var(--space-4)-var(--space-4)-var(--space-4)-var(--space-4))]",
+} satisfies Record<ComposerGrowthLimit, string>;
 
 const STREAMING_SEND_MODES = [
 	{
@@ -151,7 +162,8 @@ interface ComposerProps {
 	value: string;
 	onChange: (value: string) => void;
 	isStreaming: boolean;
-	commands: SlashCommandInfo[];
+	growthLimit: ComposerGrowthLimit;
+	commands: SlashCommandItem[];
 	mentionCandidates: MentionCandidate[];
 	recentPrompts: string[];
 	models: WireModel[];
@@ -163,7 +175,11 @@ interface ComposerProps {
 	onSlashActive: (active: boolean) => void;
 	onSelectModel: (model: WireModel) => void;
 	onSelectThinking: (level: ThinkingLevel) => void;
-	onSubmit: (text: string, attachments: ChatAttachment[], behavior: SubmitBehavior) => void;
+	onSubmit: (
+		text: string,
+		attachments: ChatAttachment[],
+		behavior: SubmitBehavior,
+	) => ComposerSubmitDisposition;
 	onAbort: () => void;
 	onHistoryOpen?: () => void;
 	onPickTemplate?: (name: string) => void;
@@ -175,6 +191,7 @@ export interface ComposerHandle {
 	insertText: (text: string) => void;
 	insertAndSubmit: (text: string, behavior: SubmitBehavior) => void;
 	insertTemplate: (parsed: ParsedTemplate) => void;
+	restoreAttachments: (attachments: ChatAttachment[]) => void;
 	openHistory: () => void;
 	refocus: () => void;
 }
@@ -184,6 +201,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		value,
 		onChange,
 		isStreaming,
+		growthLimit,
 		commands,
 		mentionCandidates,
 		recentPrompts,
@@ -209,9 +227,11 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	const [caret, setCaret] = useState(0);
 	const [images, setImages] = useState<PendingImage[]>([]);
 	const imagesRef = useRef<PendingImage[]>([]);
+	const [submitError, setSubmitError] = useState<string | null>(null);
 	const commitImages = (next: PendingImage[]) => {
 		imagesRef.current = next;
 		setImages(next);
+		if (next.length === 0) setSubmitError(null);
 	};
 	const [pendingImages, setPendingImages] = useState(0);
 	const [attachErrors, setAttachErrors] = useState<AttachError[]>([]);
@@ -222,14 +242,46 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	const [slots, setSlots] = useState<TemplateSlot[] | null>(null);
 	const [slotIdx, setSlotIdx] = useState(0);
 	const backdropRef = useRef<HTMLDivElement | null>(null);
-	const attachBackdrop = (el: HTMLDivElement | null) => {
-		backdropRef.current = el;
+	const editorSizerRef = useRef<HTMLDivElement | null>(null);
+	const [draftNeedsExpansion, setDraftNeedsExpansion] = useState(false);
+	const expanded = isStreaming || draftNeedsExpansion;
+	const syncBackdropScroll = useCallback(() => {
+		const backdrop = backdropRef.current;
 		const textarea = ref.current;
-		if (el && textarea) {
-			el.scrollLeft = textarea.scrollLeft;
-			el.scrollTop = textarea.scrollTop;
-		}
-	};
+		if (!backdrop || !textarea) return;
+		backdrop.scrollLeft = textarea.scrollLeft;
+		backdrop.scrollTop = textarea.scrollTop;
+	}, []);
+	const attachBackdrop = useCallback(
+		(el: HTMLDivElement | null) => {
+			backdropRef.current = el;
+			syncBackdropScroll();
+		},
+		[syncBackdropScroll],
+	);
+	const measureDraftExpansion = useCallback(() => {
+		const sizer = editorSizerRef.current;
+		if (!sizer) return;
+		const styles = getComputedStyle(sizer);
+		const oneLineHeight =
+			Number.parseFloat(styles.lineHeight) +
+			Number.parseFloat(styles.paddingTop) +
+			Number.parseFloat(styles.paddingBottom);
+		setDraftNeedsExpansion(value.includes("\n") || sizer.scrollHeight > oneLineHeight + 1);
+	}, [value]);
+
+	useLayoutEffect(() => {
+		const sizer = editorSizerRef.current;
+		if (!sizer) return;
+		measureDraftExpansion();
+		const observer = new ResizeObserver(measureDraftExpansion);
+		observer.observe(sizer);
+		return () => observer.disconnect();
+	}, [measureDraftExpansion]);
+
+	useLayoutEffect(() => {
+		syncBackdropScroll();
+	});
 
 	const { token, start } = activeToken(value, caret);
 	const mentionQuery = token.startsWith("@") ? token.slice(1) : null;
@@ -268,6 +320,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		(text: string, caret: number = text.length) => {
 			recallIdxRef.current = null;
 			setSlots(null);
+			setSubmitError(null);
 			onChange(text);
 			focusSelection(caret);
 		},
@@ -279,11 +332,16 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	const submitText = (raw: string, behavior: SubmitBehavior) => {
 		if (!canSubmit(raw)) return;
 		const text = raw.trim();
-		onSubmit(
+		const disposition = onSubmit(
 			text,
 			images.map(({ name, content }) => ({ name, content })),
 			behavior,
 		);
+		if (!disposition.accepted) {
+			setSubmitError(disposition.reason);
+			return;
+		}
+		setSubmitError(null);
 		onChange("");
 		commitImages([]);
 		setAttachErrors([]);
@@ -334,6 +392,18 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 			setSlots(parsed.slots);
 			setSlotIdx(0);
 			focusSelection(first.start, first.end);
+		},
+		restoreAttachments: (attachments: ChatAttachment[]) => {
+			if (attachments.length === 0) return;
+			commitImages([
+				...attachments.map((attachment) => ({
+					id: crypto.randomUUID(),
+					...attachment,
+				})),
+				...imagesRef.current,
+			]);
+			setSubmitError(null);
+			focusSelection(caret);
 		},
 		openHistory,
 		refocus: () => {
@@ -501,11 +571,16 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	};
 
 	return (
-		<div className="relative flex shrink-0 flex-col border-border-muted border-t bg-container-workspace-bg">
+		<div
+			data-testid="chat-composer"
+			data-expanded={expanded}
+			data-streaming={isStreaming}
+			className="relative flex shrink-0 flex-col border-border-muted border-t bg-container-workspace-bg"
+		>
 			{mentionOpen ? (
 				<div
 					data-testid="mention-menu"
-					className="absolute bottom-full left-sm mb-xs max-h-[40vh] w-[min(28rem,90%)] overflow-y-auto rounded-[var(--radius-md)] border border-border-default bg-container-elevated-bg p-xs shadow-[var(--shadow-md)]"
+					className="absolute bottom-full left-12 mb-4 max-h-[40vh] w-[min(28rem,90%)] overflow-y-auto rounded-[var(--radius-md)] border border-border-default bg-container-elevated-bg p-4 shadow-[var(--shadow-md)]"
 				>
 					{mentionCandidates.map((candidate, index) => (
 						<button
@@ -513,12 +588,12 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							type="button"
 							data-testid="mention-item"
 							onClick={() => pickMention(candidate)}
-							className={`flex w-full items-center gap-sm rounded-[var(--radius-sm)] px-sm py-xs text-left tr-text-ui ${index === mentionActiveIndex ? "bg-control-bg-selected text-text-default" : "text-text-muted"}`}
+							className={`flex w-full items-center gap-8 rounded-[var(--radius-sm)] px-8 py-4 text-left tr-text-ui ${index === mentionActiveIndex ? "bg-control-bg-selected text-text-default" : "text-text-muted"}`}
 						>
 							{candidate.kind === "dir" ? (
-								<FolderIcon className="size-3.5 shrink-0" />
+								<FolderIcon className="size-14 shrink-0" />
 							) : (
-								<FileIcon className="size-3.5 shrink-0" />
+								<FileIcon className="size-14 shrink-0" />
 							)}
 							<span className="truncate">{candidate.path}</span>
 						</button>
@@ -529,7 +604,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 					commands={slashCompletion.matches}
 					activeIndex={slashCompletion.activeIndex}
 					onSelect={slashCompletion.pick}
-					className="absolute bottom-full left-sm mb-xs"
+					className="absolute bottom-full left-12 mb-4"
 					footer={
 						templatesEmpty && onManageTemplates ? (
 							<button
@@ -539,9 +614,9 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 									replaceDraft("");
 									onManageTemplates();
 								}}
-								className="flex w-full items-center gap-sm rounded-[var(--radius-sm)] border-border-default border-t px-sm py-xs text-left text-text-muted tr-text-metadata hover:bg-control-bg-hovered hover:text-text-default"
+								className="flex w-full items-center gap-8 rounded-[var(--radius-sm)] border-border-default border-t px-8 py-4 text-left text-text-muted tr-text-metadata hover:bg-control-bg-hovered hover:text-text-default"
 							>
-								<Sparkles className="size-3 shrink-0" />
+								<Sparkles className="size-12 shrink-0" />
 								<span className="truncate">
 									No prompt templates yet — add starters in Settings → Templates
 								</span>
@@ -556,14 +631,23 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 					type="button"
 					data-testid="slot-hint"
 					onClick={() => stepSlot(1)}
-					className="absolute bottom-full left-sm mb-xs rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-sm py-xs text-text-muted tr-text-metadata shadow-[var(--shadow-md)] hover:bg-control-bg-hovered hover:text-text-default"
+					className="absolute bottom-full left-12 mb-4 rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-8 py-4 text-text-muted tr-text-metadata shadow-[var(--shadow-md)] hover:bg-control-bg-hovered hover:text-text-default"
 				>
 					slot {slotIdx + 1}/{slots.length} · ⇥ next · esc done
 				</button>
 			) : null}
 
-			{images.length > 0 || pendingImages > 0 || attachErrors.length > 0 ? (
-				<div className="flex flex-wrap gap-xs px-sm pt-sm" data-testid="composer-images">
+			{images.length > 0 || pendingImages > 0 || attachErrors.length > 0 || submitError ? (
+				<div className="flex flex-wrap gap-4 px-12 pt-12" data-testid="composer-images">
+					{submitError ? (
+						<FileChip
+							data-testid="composer-command-error"
+							tone="error"
+							icon={false}
+							title={submitError}
+							label={submitError}
+						/>
+					) : null}
 					{attachErrors.map((err) => (
 						<FileChip
 							key={err.id}
@@ -580,7 +664,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 									onClick={() => setAttachErrors((prev) => prev.filter((p) => p.id !== err.id))}
 									className="hover:opacity-80"
 								>
-									<X className="size-3" />
+									<X className="size-12" />
 								</button>
 							}
 						/>
@@ -602,7 +686,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 									onClick={() => commitImages(imagesRef.current.filter((p) => p.id !== img.id))}
 									className="text-text-muted hover:text-text-default"
 								>
-									<X className="size-3" />
+									<X className="size-12" />
 								</button>
 							}
 						/>
@@ -620,115 +704,142 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 				</div>
 			) : null}
 
-			<div className="flex flex-col gap-sm p-sm">
-				<div className="relative rounded-[var(--radius-md)] border border-control-border-default bg-control-bg bg-clip-padding transition-colors focus-within:border-control-border-active">
-					{slots ? (
-						<div
-							ref={attachBackdrop}
-							data-testid="slot-backdrop"
-							aria-hidden
-							className="pointer-events-none absolute inset-0 overflow-hidden rounded-[var(--radius-md)]"
-						>
-							<div className="w-full whitespace-pre-wrap break-words px-md py-sm tr-text-ui">
-								{withOffsets(highlightSegments(value, slots, slotIdx)).map((seg) => (
-									<span
-										key={seg.start}
-										data-testid={seg.state === "plain" ? undefined : "slot-highlight"}
-										data-slot-state={seg.state === "plain" ? undefined : seg.state}
-										className={`text-transparent ${highlightTint(seg.state)}`}
-									>
-										{seg.text}
-									</span>
-								))}
-							</div>
-						</div>
-					) : null}
-					<textarea
-						ref={ref}
-						data-testid="chat-input"
-						value={value}
-						onScroll={(e) => {
-							const backdrop = backdropRef.current;
-							if (backdrop) {
-								backdrop.scrollLeft = e.currentTarget.scrollLeft;
-								backdrop.scrollTop = e.currentTarget.scrollTop;
-							}
-						}}
-						onChange={(e) => {
-							const next = e.target.value;
-							const nextCaret = e.target.selectionStart;
-							const recalled = recallIdxRef.current;
-							if (recalled !== null && next !== recentPrompts[recalled]) {
-								recallIdxRef.current = null;
-							}
-							if (slots) {
-								const { editStart, removedLen, insertedLen } = diffValues(value, next, nextCaret);
-								if (editStart === 0 && removedLen === value.length) {
-									setSlots(null);
-								} else {
-									const editEnd = editStart + removedLen;
-									const active = slots[slotIdx];
-									const growing =
-										removedLen === 0 &&
-										insertedLen > 0 &&
-										active !== undefined &&
-										active.end === editStart;
-									const shifted = shiftSlots(slots, editStart, removedLen, insertedLen).map(
-										(slot, i) => {
-											const grown =
-												growing && i === slotIdx
-													? { ...slot, end: slot.end + insertedLen, filled: true, edited: true }
-													: slot;
-											const original = slots[i];
-											return original && touches(original, editStart, editEnd)
-												? { ...grown, filled: true, edited: true }
-												: grown;
-										},
-									);
-									setSlots(shifted);
-								}
-							}
-							onChange(next);
-							setCaret(nextCaret);
-						}}
-						onKeyUp={(e) => setCaret(e.currentTarget.selectionStart)}
-						onClick={(e) => setCaret(e.currentTarget.selectionStart)}
-						onKeyDown={onKeyDown}
-						onPaste={onPaste}
-						onDrop={onDrop}
-						rows={4}
-						placeholder={
-							isStreaming
-								? "Enter steers at the next step · Cmd/Ctrl+Enter queues for when it finishes"
-								: "Message the agent…  (@ files · / commands · Enter to send)"
-						}
-						className="relative min-h-[108px] w-full resize-none rounded-[var(--radius-sm)] bg-transparent px-md py-sm tr-text-ui text-text-default outline-none placeholder:text-text-muted"
-					/>
-				</div>
-				<div className="flex flex-wrap items-center gap-sm">
-					<div className="flex min-w-0 flex-1 flex-wrap items-center gap-sm">
+			<div className="p-12">
+				<div
+					data-testid="chat-composer-shell"
+					className={cn(
+						"relative grid grid-cols-[auto_minmax(0,1fr)_auto] grid-rows-[minmax(0,1fr)_auto] items-end gap-x-4 gap-y-4 overflow-hidden rounded-[var(--radius-md)] border border-control-border-default bg-control-bg bg-clip-padding p-4 transition-colors focus-within:border-control-border-active",
+						expanded && growthLimit === "half-chat" && "max-h-[50cqh]",
+					)}
+				>
+					<div className="col-start-1 row-start-2 flex min-w-0 items-center gap-4 self-end sm:gap-8">
 						<ModelSelector
 							models={models}
 							current={currentModel}
 							refreshing={modelsRefreshing}
 							onRefresh={onRefreshModels}
 							onSelect={onSelectModel}
+							className="max-w-80 gap-4 px-4 sm:max-w-144"
 						/>
 						<ThinkingSelector
 							level={thinkingLevel}
 							levels={currentModel?.thinkingLevels ?? []}
 							onSelect={onSelectThinking}
+							showLabel={false}
+							className="gap-4 px-4"
 						/>
 					</div>
-					<div className="flex shrink-0 items-center gap-sm">
+					<div
+						className={cn(
+							"relative col-span-3 col-start-1 row-start-1 min-h-0 overflow-hidden rounded-[var(--radius-sm)] tr-text-ui",
+							COMPOSER_EDITOR_LIMIT_CLASS[growthLimit],
+						)}
+					>
+						<div
+							ref={editorSizerRef}
+							data-testid="chat-input-sizer"
+							aria-hidden
+							className="invisible w-full whitespace-pre-wrap break-words px-12 py-8 tr-text-ui"
+						>
+							{`${value}\u200b`}
+						</div>
+						{slots ? (
+							<div
+								ref={attachBackdrop}
+								data-testid="slot-backdrop"
+								aria-hidden
+								className="pointer-events-none absolute inset-0 overflow-hidden rounded-[var(--radius-sm)]"
+							>
+								<div className="w-full whitespace-pre-wrap break-words px-12 py-8 tr-text-ui">
+									{withOffsets(highlightSegments(value, slots, slotIdx)).map((seg) => (
+										<span
+											key={seg.start}
+											data-testid={seg.state === "plain" ? undefined : "slot-highlight"}
+											data-slot-state={seg.state === "plain" ? undefined : seg.state}
+											className={`text-transparent ${highlightTint(seg.state)}`}
+										>
+											{seg.text}
+										</span>
+									))}
+								</div>
+							</div>
+						) : null}
+						<textarea
+							ref={ref}
+							data-testid="chat-input"
+							value={value}
+							onScroll={syncBackdropScroll}
+							onChange={(e) => {
+								const next = e.target.value;
+								const nextCaret = e.target.selectionStart;
+								setSubmitError(null);
+								const recalled = recallIdxRef.current;
+								if (recalled !== null && next !== recentPrompts[recalled]) {
+									recallIdxRef.current = null;
+								}
+								if (slots) {
+									const { editStart, removedLen, insertedLen } = diffValues(value, next, nextCaret);
+									if (editStart === 0 && removedLen === value.length) {
+										setSlots(null);
+									} else {
+										const editEnd = editStart + removedLen;
+										const active = slots[slotIdx];
+										const growing =
+											removedLen === 0 &&
+											insertedLen > 0 &&
+											active !== undefined &&
+											active.end === editStart;
+										const shifted = shiftSlots(slots, editStart, removedLen, insertedLen).map(
+											(slot, i) => {
+												const grown =
+													growing && i === slotIdx
+														? {
+																...slot,
+																end: slot.end + insertedLen,
+																filled: true,
+																edited: true,
+															}
+														: slot;
+												const original = slots[i];
+												return original && touches(original, editStart, editEnd)
+													? { ...grown, filled: true, edited: true }
+													: grown;
+											},
+										);
+										setSlots(shifted);
+									}
+								}
+								onChange(next);
+								setCaret(nextCaret);
+							}}
+							onKeyUp={(e) => setCaret(e.currentTarget.selectionStart)}
+							onClick={(e) => setCaret(e.currentTarget.selectionStart)}
+							onKeyDown={onKeyDown}
+							onPaste={onPaste}
+							onDrop={onDrop}
+							rows={1}
+							placeholder={
+								isStreaming
+									? "Enter steers at the next step · Cmd/Ctrl+Enter queues for when it finishes"
+									: expanded
+										? "Message the agent…  (@ files · / commands · Enter to send)"
+										: "Message…"
+							}
+							className={cn(
+								"absolute inset-0 size-full resize-none overflow-x-hidden overflow-y-auto rounded-[var(--radius-sm)] bg-transparent px-12 py-8 tr-text-ui text-text-default outline-none placeholder:text-text-muted",
+								expanded ? "whitespace-pre-wrap" : "whitespace-nowrap",
+							)}
+						/>
+					</div>
+					<div className="col-start-3 row-start-2 flex shrink-0 items-center gap-4 self-end">
 						<button
 							type="button"
 							data-testid="history-open"
 							aria-label="Search history"
 							onClick={openHistory}
-							className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg text-text-default hover:bg-control-bg-hovered"
+							className="flex size-32 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg text-text-default hover:bg-control-bg-hovered"
 						>
-							<History className="size-3.5" />
+							<History className="size-16" />
 						</button>
 						{isStreaming ? (
 							<button
@@ -736,9 +847,9 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 								data-testid="chat-abort"
 								aria-label="Stop"
 								onClick={onAbort}
-								className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg text-text-default hover:bg-control-bg-hovered"
+								className="flex size-32 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg text-text-default hover:bg-control-bg-hovered"
 							>
-								<Square className="size-3.5" />
+								<Square className="size-16" />
 							</button>
 						) : null}
 						{isStreaming ? (
@@ -748,13 +859,13 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 										type="button"
 										data-testid="send-menu"
 										aria-label="Send options"
-										className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg text-text-default hover:bg-control-bg-hovered"
+										className="flex size-32 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg text-text-default hover:bg-control-bg-hovered"
 									>
-										<ChevronUp className="size-3.5" />
+										<ChevronUp className="size-16" />
 									</button>
 								</PopoverTrigger>
-								<PopoverContent side="top" align="end" className="w-[320px] p-xs">
-									<div className="flex flex-col gap-2xs">
+								<PopoverContent side="top" align="end" className="w-[320px] p-4">
+									<div className="flex flex-col gap-2">
 										{STREAMING_SEND_MODES.map((mode) => (
 											<button
 												key={mode.behavior}
@@ -765,9 +876,9 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 													setSendMenuOpen(false);
 													submit(mode.behavior);
 												}}
-												className="flex w-full flex-col gap-2xs rounded-[var(--radius-sm)] px-sm py-xs text-left hover:bg-control-bg-hovered disabled:pointer-events-none disabled:opacity-50"
+												className="flex w-full flex-col gap-2 rounded-[var(--radius-sm)] px-8 py-4 text-left hover:bg-control-bg-hovered disabled:pointer-events-none disabled:opacity-50"
 											>
-												<span className="flex w-full items-baseline justify-between gap-sm">
+												<span className="flex w-full items-baseline justify-between gap-8">
 													<span className="text-text-default tr-text-ui">{mode.name}</span>
 													<span className="shrink-0 text-text-muted tr-text-metadata">
 														{mode.keys}
@@ -786,9 +897,9 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							aria-label={isStreaming ? "Steer" : "Send"}
 							onClick={() => submit(isStreaming ? "steer" : "send")}
 							disabled={!canSubmit(value)}
-							className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-control-primary-bg text-control-primary-text hover:bg-control-primary-bg-hovered disabled:pointer-events-none disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text"
+							className="flex size-32 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-control-primary-bg text-control-primary-text hover:bg-control-primary-bg-hovered disabled:pointer-events-none disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text"
 						>
-							<ArrowUp className="size-4" />
+							<ArrowUp className="size-16" />
 						</button>
 					</div>
 				</div>

@@ -124,9 +124,9 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 				data-testid="changes-view-toggle"
 				role="toolbar"
 				aria-label="Changes scope and view"
-				className="flex h-panel-header-row shrink-0 items-center gap-xs overflow-clip border-border-default border-b px-sm"
+				className="flex h-panel-header-row shrink-0 items-center gap-4 overflow-clip border-border-default border-b px-12"
 			>
-				<div className="mr-auto flex min-w-0 items-center gap-xs">
+				<div className="mr-auto flex min-w-0 items-center gap-4">
 					<ChangesScopeMenu
 						key={`${workspaceId}:${baseRef}`}
 						workspaceId={workspaceId}
@@ -140,7 +140,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 							refreshing={branchesRefreshing}
 							label="vs"
 							testid="changes-target-picker"
-							triggerClassName="flex h-6 min-w-0 max-w-[200px] items-center gap-xs rounded-[var(--radius-sm)] px-xs outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:bg-control-bg-selected"
+							triggerClassName="flex h-24 min-w-0 max-w-[200px] items-center gap-4 rounded-[var(--radius-sm)] px-4 outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:bg-control-bg-selected"
 							onSelect={(ref) => void pointAt(ref)}
 							onRefresh={refreshBranches}
 						/>
@@ -159,9 +159,9 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 					onClick={() => setChangesView("tree")}
 				/>
 			</div>
-			<div className="min-h-0 flex-1 overflow-auto">
+			<div className="min-h-0 flex-1 overflow-auto p-12">
 				{status === null && error !== null ? (
-					<div data-testid="changes-error" className="flex flex-col items-start gap-xs px-sm py-xs">
+					<div data-testid="changes-error" className="flex flex-col items-start gap-4 px-8 py-4">
 						<p className="tr-text-metadata text-feedback-error">
 							Could not read the changes: {error}
 						</p>
@@ -169,15 +169,15 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 							type="button"
 							data-testid="changes-retry"
 							onClick={reload}
-							className="rounded-[var(--radius-sm)] px-xs py-0.5 tr-text-metadata text-text-muted transition-colors hover:bg-control-bg-hovered hover:text-text-default"
+							className="rounded-[var(--radius-sm)] px-4 py-2 tr-text-metadata text-text-muted transition-colors hover:bg-control-bg-hovered hover:text-text-default"
 						>
 							Retry
 						</button>
 					</div>
 				) : status === null ? (
-					<p className="px-sm py-xs tr-text-metadata text-text-muted">Loading…</p>
+					<p className="px-8 py-4 tr-text-metadata text-text-muted">Loading…</p>
 				) : status.changes.length === 0 ? (
-					<p data-testid="changes-empty" className="px-sm py-xs tr-text-metadata text-text-muted">
+					<p data-testid="changes-empty" className="px-8 py-4 tr-text-metadata text-text-muted">
 						No changes in this scope.
 					</p>
 				) : changesView === "tree" ? (
@@ -203,7 +203,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 												onClick={() => openDiff(change.path, "preview")}
 												onDoubleClick={() => openDiff(change.path, "keep")}
 												title={change.path}
-												className="flex min-w-0 flex-1 items-center gap-sm px-sm py-xs text-left tr-text-ui"
+												className="flex min-w-0 flex-1 items-center gap-8 px-4 py-4 text-left tr-text-ui"
 											>
 												<span className="flex min-w-0 flex-1 items-baseline">
 													{dir ? (

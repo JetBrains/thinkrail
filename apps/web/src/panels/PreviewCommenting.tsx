@@ -1,4 +1,4 @@
-import { MessageSquarePlus } from "lucide-react";
+import { RiChatNewLine as MessageSquarePlus } from "@remixicon/react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { mapPreviewSelection } from "./previewAnchor";
@@ -220,7 +220,7 @@ export function PreviewCommenting({
 					onClick={openComposer}
 					className="review-add-icon review-add-icon-float"
 				>
-					<MessageSquarePlus className="size-3.5" />
+					<MessageSquarePlus className="size-14" />
 				</button>,
 				document.body,
 			)}
