@@ -173,6 +173,10 @@ try {
 		if (ui.mode !== "ui" || ui.windowUrl !== `${ui.origin}/#/v1/projects/desktop-smoke`) {
 			throw new Error(`desktop native window reported an unexpected URL: ${ui.windowUrl}`);
 		}
+		const applicationMenuExpected = process.platform === "darwin" || process.platform === "win32";
+		if (ui.applicationMenuInstalled !== applicationMenuExpected) {
+			throw new Error("desktop native application menu registration did not match this platform");
+		}
 	} finally {
 		if (ui) await ui.stop();
 	}
