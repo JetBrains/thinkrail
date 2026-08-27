@@ -6,7 +6,7 @@ import type {
 	GitDiffScope,
 	HostPlatform,
 	LayoutAuxiliaryRegion,
-	LayoutSettings,
+	LayoutPreset,
 	LayoutToolId,
 	LoginFrame,
 	LoginPush,
@@ -755,7 +755,7 @@ interface AppState {
 	reviewModel: WireModel | undefined;
 	reviewEffort: ThinkingLevel | undefined;
 	reviewAutoFix: boolean;
-	layoutSettings: LayoutSettings;
+	customLayoutPresets: LayoutPreset[];
 	toasts: Toast[];
 	setStatus: (status: ConnectionStatus) => void;
 	installWelcomeSnapshot: (
@@ -951,7 +951,7 @@ function configPatch(config: AppConfig) {
 		analyticsEnabled: config.analyticsEnabled,
 		terminalReplayKb: config.terminalReplayKb,
 		composerGrowthLimit: config.composerGrowthLimit ?? DEFAULT_CONFIG.composerGrowthLimit,
-		layoutSettings: config.layout ?? DEFAULT_CONFIG.layout,
+		customLayoutPresets: config.customLayoutPresets ?? DEFAULT_CONFIG.customLayoutPresets,
 		reviewModel: config.reviewModel,
 		reviewEffort: config.reviewEffort,
 		reviewAutoFix: config.reviewAutoFix ?? DEFAULT_CONFIG.reviewAutoFix,
@@ -1548,7 +1548,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	analyticsEnabled: DEFAULT_CONFIG.analyticsEnabled,
 	terminalReplayKb: DEFAULT_CONFIG.terminalReplayKb,
 	composerGrowthLimit: DEFAULT_CONFIG.composerGrowthLimit,
-	layoutSettings: DEFAULT_CONFIG.layout,
+	customLayoutPresets: DEFAULT_CONFIG.customLayoutPresets,
 	reviewModel: DEFAULT_CONFIG.reviewModel,
 	reviewEffort: DEFAULT_CONFIG.reviewEffort,
 	reviewAutoFix: DEFAULT_CONFIG.reviewAutoFix,

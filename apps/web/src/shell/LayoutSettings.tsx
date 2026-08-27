@@ -6,7 +6,7 @@ import {
 	RiDeleteBin6Line as Trash2,
 	RiCloseLine as X,
 } from "@remixicon/react";
-import type { LayoutPreset, LayoutSettings as LayoutSettingsValue } from "@thinkrail/contracts";
+import type { LayoutPreset } from "@thinkrail/contracts";
 import { useEffect, useMemo, useState } from "react";
 import { randomId } from "../lib";
 import { ConfirmDialog } from "../panels/ConfirmDialog";
@@ -24,13 +24,10 @@ import { applyLayoutPresetLocally } from "./layoutState";
 const BUILTIN_PRESET_IDS = new Set(BUILTIN_LAYOUT_PRESETS.map((preset) => preset.id));
 const MAX_CUSTOM_PRESETS = 32;
 
-async function updateCustomPresets(
-	settings: LayoutSettingsValue,
-	customPresets: LayoutPreset[],
-): Promise<void> {
+async function updateCustomPresets(customLayoutPresets: LayoutPreset[]): Promise<void> {
 	try {
 		await getTransport().request("settings.update", {
-			config: { layout: { ...settings, customPresets } },
+			config: { customLayoutPresets },
 		});
 	} catch (error) {
 		toast.error(errorText(error), "Couldn't save custom layout presets");
@@ -39,7 +36,7 @@ async function updateCustomPresets(
 }
 
 export function LayoutSettings() {
-	const settings = useAppStore((state) => state.layoutSettings);
+	const customLayoutPresets = useAppStore((state) => state.customLayoutPresets);
 	const preferences = useAppStore((state) => state.localLayoutPreferences);
 	const frame = useAppStore((state) => state.workbenchFrame);
 	const activeWorkspaceId = useAppStore((state) => state.activeWorkspaceId);
@@ -57,11 +54,11 @@ export function LayoutSettings() {
 	const presets = useMemo(
 		() => [
 			...BUILTIN_LAYOUT_PRESETS,
-			...settings.customPresets.filter((preset) => !BUILTIN_PRESET_IDS.has(preset.id)),
+			...customLayoutPresets.filter((preset) => !BUILTIN_PRESET_IDS.has(preset.id)),
 		],
-		[settings.customPresets],
+		[customLayoutPresets],
 	);
-	const selected = resolveLayoutPreset(preferences.defaultPresetId, settings.customPresets);
+	const selected = resolveLayoutPreset(preferences.defaultPresetId, customLayoutPresets);
 	const minimumSideLimit = Math.max(
 		1,
 		frame?.left.groups.length ?? 0,
@@ -72,7 +69,7 @@ export function LayoutSettings() {
 	const saveCustomPresets = async (customPresets: LayoutPreset[]): Promise<boolean> => {
 		setSaving(true);
 		try {
-			await updateCustomPresets(settings, customPresets);
+			await updateCustomPresets(customPresets);
 			return true;
 		} catch {
 			return false;
@@ -96,7 +93,7 @@ export function LayoutSettings() {
 		const nextName = renaming?.id === presetId ? renaming.name.trim() : "";
 		if (!nextName) return;
 		void saveCustomPresets(
-			settings.customPresets.map((preset) =>
+			customLayoutPresets.map((preset) =>
 				preset.id === presetId ? { ...preset, name: nextName } : preset,
 			),
 		).then((saved) => {
@@ -127,7 +124,7 @@ export function LayoutSettings() {
 						const isEffectiveDefault = preset.id === selected.id;
 						const custom =
 							!BUILTIN_PRESET_IDS.has(preset.id) &&
-							settings.customPresets.some((candidate) => candidate.id === preset.id);
+							customLayoutPresets.some((candidate) => candidate.id === preset.id);
 						return (
 							<div
 								key={preset.id}
@@ -236,7 +233,7 @@ export function LayoutSettings() {
 												aria-label={`Delete ${preset.name}`}
 												disabled={saving}
 												onClick={() => {
-													const customPresets = settings.customPresets.filter(
+													const customPresets = customLayoutPresets.filter(
 														(candidate) => candidate.id !== preset.id,
 													);
 													void saveCustomPresets(customPresets).then((saved) => {
@@ -281,20 +278,17 @@ export function LayoutSettings() {
 					<button
 						type="button"
 						disabled={
-							!frame ||
-							!name.trim() ||
-							settings.customPresets.length >= MAX_CUSTOM_PRESETS ||
-							saving
+							!frame || !name.trim() || customLayoutPresets.length >= MAX_CUSTOM_PRESETS || saving
 						}
 						title={
-							settings.customPresets.length >= MAX_CUSTOM_PRESETS
+							customLayoutPresets.length >= MAX_CUSTOM_PRESETS
 								? `Custom presets are limited to ${MAX_CUSTOM_PRESETS}.`
 								: undefined
 						}
 						onClick={() => {
 							if (!frame || !name.trim()) return;
 							const preset = captureWorkbenchPreset(frame, randomId("preset"), name.trim());
-							void saveCustomPresets([...settings.customPresets, preset]).then((saved) => {
+							void saveCustomPresets([...customLayoutPresets, preset]).then((saved) => {
 								if (saved) setName("");
 							});
 						}}

@@ -1,17 +1,16 @@
-import {
-	DEFAULT_CONFIG,
-	type LayoutBottomRegion,
-	type LayoutCenterTab,
-	type LayoutPreset,
-	type LayoutPresetBottomRegion,
-	type LayoutPresetCenterNode,
-	type LayoutPresetSideRegion,
-	type LayoutSideGroup,
-	type LayoutSideRegion,
-	type LayoutTerminalTab,
-	type LayoutToolId,
-	type LayoutToolTab,
-	type WorkspaceLayoutDocument,
+import type {
+	LayoutBottomRegion,
+	LayoutCenterTab,
+	LayoutPreset,
+	LayoutPresetBottomRegion,
+	LayoutPresetCenterNode,
+	LayoutPresetSideRegion,
+	LayoutSideGroup,
+	LayoutSideRegion,
+	LayoutTerminalTab,
+	LayoutToolId,
+	LayoutToolTab,
+	WorkspaceLayoutDocument,
 } from "@thinkrail/contracts";
 import {
 	collectAllGroups,
@@ -74,6 +73,8 @@ const bottom = (
 	groups: weightedGroups(groups),
 });
 
+export const DEFAULT_LAYOUT_PRESET_ID = "balanced";
+
 export const BUILTIN_LAYOUT_PRESETS: readonly LayoutPreset[] = [
 	{
 		id: "balanced",
@@ -129,7 +130,7 @@ export function resolveLayoutPreset(
 	const resolved =
 		BUILTIN_LAYOUT_PRESETS.find((preset) => preset.id === id) ??
 		customPresets.find((preset) => preset.id === id) ??
-		BUILTIN_LAYOUT_PRESETS.find((preset) => preset.id === DEFAULT_CONFIG.layout.defaultPresetId);
+		BUILTIN_LAYOUT_PRESETS.find((preset) => preset.id === DEFAULT_LAYOUT_PRESET_ID);
 	if (!resolved) throw new Error("The default layout preset is missing");
 	return resolved;
 }

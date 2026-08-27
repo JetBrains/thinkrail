@@ -12,6 +12,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+	completeInitialTerminalReservation,
 	createWorkspace,
 	ensureWorkspaceScratchDir,
 	forgetWorkspace,
@@ -81,27 +82,43 @@ test("createWorkspace cuts a fresh branch from baseRef and records it as the bas
 
 	const ws = await createWorkspace("p1", undefined, "feature/base");
 	expect(ws.baseBranch).toBe("feature/base");
-	expect(ws.initialTerminalEligible).toBe(true);
+	expect(ws.initialTerminalPending).toBe(true);
 	expect(gitOut(ws.worktreePath, "rev-parse", "HEAD")).toBe(baseSha);
 	expect(gitOut(ws.worktreePath, "rev-parse", "--abbrev-ref", "HEAD")).toBe(ws.branch);
 	expect(ws.branch).not.toBe("feature/base");
 });
 
-test("legacy workspace records never gain initial-terminal eligibility on read", async () => {
+test("legacy workspace records never gain initial-terminal provisioning on read", async () => {
 	const ws = await createWorkspace("p1");
 	const file = join(dataDir, "workspaces.json");
 	const records = JSON.parse(readFileSync(file, "utf8")) as Array<Record<string, unknown>>;
 	const record = records.find((candidate) => candidate.id === ws.id);
 	if (!record) throw new Error("missing workspace record");
-	delete record.initialTerminalEligible;
+	delete record.initialTerminalPending;
 	writeFileSync(file, JSON.stringify(records));
 
 	expect(listWorkspaceRecords("p1").find((candidate) => candidate.id === ws.id)).not.toHaveProperty(
-		"initialTerminalEligible",
+		"initialTerminalPending",
 	);
 	expect(listWorkspaces("p1").find((candidate) => candidate.id === ws.id)).not.toHaveProperty(
-		"initialTerminalEligible",
+		"initialTerminalPending",
 	);
+});
+
+test("completing initial-terminal reservation clears the durable marker exactly once", async () => {
+	const workspace = await createWorkspace("p1");
+	const events: WorkspaceLifecycleEvent[] = [];
+	setWorkspacePublisher((event) => events.push(event));
+
+	const completed = completeInitialTerminalReservation(workspace.id);
+	const repeated = completeInitialTerminalReservation(workspace.id);
+
+	expect(completed).not.toHaveProperty("initialTerminalPending");
+	expect(repeated).not.toHaveProperty("initialTerminalPending");
+	expect(events).toEqual([{ kind: "updated", workspace: completed }]);
+	expect(
+		listWorkspaceRecords("p1").find((candidate) => candidate.id === workspace.id),
+	).not.toHaveProperty("initialTerminalPending");
 });
 
 test("createWorkspace branches off a locally-present remote ref without a network fetch", async () => {
@@ -232,7 +249,7 @@ test("openExistingWorktree adopts idempotently and removal never reclaims the ch
 		worktreePath: external,
 		baseBranch: "main",
 		renamed: true,
-		initialTerminalEligible: true,
+		initialTerminalPending: true,
 	});
 	expect(events).toEqual([{ kind: "created", workspace }]);
 	expect(listExistingWorktrees("p1")).toHaveLength(0);
@@ -572,7 +589,7 @@ test("listWorkspaces ensures exactly one Default workspace, pinned first, with f
 	expect(def?.branch).toBe("main");
 	expect(def?.baseBranch).toBe("main");
 	expect(def?.renamed).toBe(true);
-	expect(def?.initialTerminalEligible).toBe(true);
+	expect(def?.initialTerminalPending).toBe(true);
 
 	const again = listWorkspaces("p1");
 	expect(again.filter((w) => w.kind === "default")).toHaveLength(1);

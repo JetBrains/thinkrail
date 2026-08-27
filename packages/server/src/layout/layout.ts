@@ -1,20 +1,13 @@
 import { posix } from "node:path";
 import type {
-	LayoutChangedPayload,
-	LayoutPreset,
-	LayoutReplaceParams,
-	LayoutReplaceResult,
-	LayoutSettings,
 	LayoutToolId,
 	WorkspaceLayoutDocument,
 	WorkspaceLayoutSnapshot,
 } from "@thinkrail/contracts";
-import { DEFAULT_CONFIG } from "@thinkrail/contracts";
 import {
 	loadWorkspaceLayout,
 	loadWorkspaceLayoutBackup,
 	removeWorkspaceLayout as removePersistedWorkspaceLayout,
-	saveWorkspaceLayout,
 } from "../persistence";
 
 const MAX_LAYOUT_BYTES = 512 * 1024;
@@ -30,23 +23,13 @@ const DEFAULT_BOTTOM = {
 	alignment: "center",
 	groups: [],
 } as const;
-const MAX_CUSTOM_PRESETS = 32;
 const MAX_NAME_LENGTH = 200;
 const MAX_TAB_NAME_LENGTH = 1000;
 const MAX_TAB_ID_LENGTH = 5000;
 
 const TOOL_IDS = new Set<LayoutToolId>(["projects", "specs", "files", "changes", "review"]);
 
-type LayoutPublisher = (payload: LayoutChangedPayload) => void;
-let publishLayout: LayoutPublisher | null = null;
 const cache = new Map<string, WorkspaceLayoutSnapshot | null>();
-const queues = new Map<string, Promise<void>>();
-const removalEpochs = new Map<string, number>();
-const futureProtected = new Set<string>();
-
-export function setLayoutPublisher(publisher: LayoutPublisher | null): void {
-	publishLayout = publisher;
-}
 
 function record(value: unknown): Record<string, unknown> | null {
 	return value !== null && typeof value === "object" && !Array.isArray(value)
@@ -54,7 +37,10 @@ function record(value: unknown): Record<string, unknown> | null {
 		: null;
 }
 
-type LayoutGroupLimits = Pick<LayoutSettings, "maxSideGroups" | "maxBottomGroups">;
+interface LayoutGroupLimits {
+	maxSideGroups: number;
+	maxBottomGroups: number;
+}
 
 function migrateRestoreTargets(value: unknown): unknown {
 	const targets = record(value);
@@ -80,12 +66,6 @@ function migrateWorkspaceDocument(value: unknown): unknown {
 	};
 }
 
-function migrateStoredPreset(value: unknown): unknown {
-	const preset = record(value);
-	if (!preset || preset.bottom !== undefined) return value;
-	return { ...preset, bottom: structuredClone(DEFAULT_BOTTOM) };
-}
-
 function nonEmptyString(value: unknown, max = MAX_NAME_LENGTH): value is string {
 	return typeof value === "string" && value.length > 0 && value.length <= max;
 }
@@ -107,15 +87,6 @@ function validateKeys(
 ): void {
 	const extras = unknownKeys(value, allowed);
 	if (extras.length > 0) state.errors.push(`${label} has unknown field: ${extras[0]}`);
-}
-
-function assertKeys(
-	value: Record<string, unknown>,
-	allowed: readonly string[],
-	label: string,
-): void {
-	const extras = unknownKeys(value, allowed);
-	if (extras.length > 0) throw new Error(`${label} has unknown field: ${extras[0]}`);
 }
 
 function normalizedWidth(value: unknown): value is number {
@@ -548,233 +519,6 @@ export function validateWorkspaceLayout(
 	return value as WorkspaceLayoutDocument;
 }
 
-function validatePresetCenter(value: unknown, depth: number, ids: Set<string>): number {
-	const node = record(value);
-	if (!node || !nonEmptyString(node.id, 200) || (node.kind !== "group" && node.kind !== "split")) {
-		throw new Error("Malformed layout preset center");
-	}
-	if (ids.has(node.id)) throw new Error(`Duplicate preset id: ${node.id}`);
-	ids.add(node.id);
-	if (depth > MAX_DEPTH) throw new Error("Preset center is too deep");
-	if (node.kind === "group") {
-		assertKeys(node, ["kind", "id"], `Preset center group ${node.id}`);
-		return 1;
-	}
-	assertKeys(
-		node,
-		["kind", "id", "direction", "weights", "children"],
-		`Preset center split ${node.id}`,
-	);
-	if (
-		(node.direction !== "horizontal" && node.direction !== "vertical") ||
-		!Array.isArray(node.weights) ||
-		node.weights.length !== 2 ||
-		!positive(node.weights[0]) ||
-		!positive(node.weights[1]) ||
-		Math.abs(node.weights[0] + node.weights[1] - 1) > 1e-6 ||
-		!Array.isArray(node.children) ||
-		node.children.length !== 2
-	) {
-		throw new Error("Malformed layout preset split");
-	}
-	return (
-		validatePresetCenter(node.children[0], depth + 1, ids) +
-		validatePresetCenter(node.children[1], depth + 1, ids)
-	);
-}
-
-export function validateLayoutPreset(value: unknown): LayoutPreset {
-	if (exceedsLayoutBudget(value)) throw new Error("Layout preset is too large");
-	const preset = record(value);
-	if (!preset || !nonEmptyString(preset.id, 200) || !nonEmptyString(preset.name, MAX_NAME_LENGTH)) {
-		throw new Error("Malformed layout preset");
-	}
-	assertKeys(preset, ["id", "name", "center", "left", "right", "bottom"], "Layout preset");
-	const ids = new Set<string>();
-	if (validatePresetCenter(preset.center, 1, ids) > MAX_CENTER_GROUPS) {
-		throw new Error("Preset has too many center groups");
-	}
-	const tools = new Set<string>();
-	for (const side of ["left", "right"] as const) {
-		const region = record(preset[side]);
-		if (
-			!region ||
-			typeof region.visible !== "boolean" ||
-			!normalizedWidth(region.width) ||
-			!Array.isArray(region.groups)
-		) {
-			throw new Error(`Malformed preset ${side} side`);
-		}
-		assertKeys(region, ["visible", "width", "groups"], `Preset ${side} side`);
-		if (region.visible && region.groups.length === 0) {
-			throw new Error(`Preset ${side} side cannot be visible while empty`);
-		}
-		if (region.groups.length > MAX_SIDE_GROUPS_SAFETY)
-			throw new Error("Preset has too many side groups");
-		let weightTotal = 0;
-		for (const rawGroup of region.groups) {
-			const group = record(rawGroup);
-			if (
-				!group ||
-				!nonEmptyString(group.id, 200) ||
-				!positive(group.weight) ||
-				typeof group.folded !== "boolean" ||
-				!Array.isArray(group.tools) ||
-				group.tools.length === 0 ||
-				!group.tools.every((tool) => typeof tool === "string" && TOOL_IDS.has(tool as LayoutToolId))
-			) {
-				throw new Error("Malformed preset side group");
-			}
-			assertKeys(group, ["id", "weight", "folded", "tools"], `Preset ${side} group`);
-			weightTotal += group.weight;
-			if (ids.has(group.id)) throw new Error(`Duplicate preset id: ${group.id}`);
-			ids.add(group.id);
-			for (const tool of group.tools) {
-				if (tools.has(String(tool))) throw new Error(`Duplicate preset singleton tool: ${tool}`);
-				tools.add(String(tool));
-			}
-		}
-		if (region.groups.length > 0 && Math.abs(weightTotal - 1) > 1e-6) {
-			throw new Error(`Preset ${side} side group weights are not normalized`);
-		}
-	}
-	const bottom = record(preset.bottom);
-	if (
-		!bottom ||
-		typeof bottom.visible !== "boolean" ||
-		!positive(bottom.height) ||
-		Number(bottom.height) > MAX_BOTTOM_HEIGHT ||
-		(bottom.alignment !== "center" &&
-			bottom.alignment !== "center-left" &&
-			bottom.alignment !== "center-right" &&
-			bottom.alignment !== "full") ||
-		!Array.isArray(bottom.groups)
-	) {
-		throw new Error("Malformed preset bottom region");
-	}
-	assertKeys(bottom, ["visible", "height", "alignment", "groups"], "Preset bottom region");
-	if (bottom.visible && bottom.groups.length === 0) {
-		throw new Error("Preset bottom region cannot be visible without a group");
-	}
-	if (bottom.groups.length > MAX_SIDE_GROUPS_SAFETY) {
-		throw new Error("Preset has too many bottom groups");
-	}
-	let bottomWeightTotal = 0;
-	for (const rawGroup of bottom.groups) {
-		const group = record(rawGroup);
-		if (
-			!group ||
-			!nonEmptyString(group.id, 200) ||
-			!positive(group.weight) ||
-			typeof group.folded !== "boolean" ||
-			!Array.isArray(group.tools) ||
-			!group.tools.every((tool) => typeof tool === "string" && TOOL_IDS.has(tool as LayoutToolId))
-		) {
-			throw new Error("Malformed preset bottom group");
-		}
-		assertKeys(group, ["id", "weight", "folded", "tools"], "Preset bottom group");
-		bottomWeightTotal += Number(group.weight);
-		if (ids.has(group.id)) throw new Error(`Duplicate preset id: ${group.id}`);
-		ids.add(group.id);
-		for (const tool of group.tools) {
-			if (tools.has(String(tool))) throw new Error(`Duplicate preset singleton tool: ${tool}`);
-			tools.add(String(tool));
-		}
-	}
-	if (bottom.groups.length > 0 && Math.abs(bottomWeightTotal - 1) > 1e-6) {
-		throw new Error("Preset bottom group weights are not normalized");
-	}
-	const left = record(preset.left);
-	const right = record(preset.right);
-	if (
-		typeof left?.width === "number" &&
-		typeof right?.width === "number" &&
-		left.width + right.width >= 1
-	) {
-		throw new Error("Preset side widths leave no center region");
-	}
-	return value as LayoutPreset;
-}
-
-export function normalizeStoredLayoutSettings(current: LayoutSettings): LayoutSettings {
-	const customPresets: LayoutPreset[] = [];
-	const seen = new Set<string>();
-	const selectedWasCustom = current.customPresets.some(
-		(candidate) => record(candidate)?.id === current.defaultPresetId,
-	);
-	let maxSideGroups = current.maxSideGroups;
-	let maxBottomGroups = current.maxBottomGroups ?? DEFAULT_CONFIG.layout.maxBottomGroups;
-	for (const candidate of current.customPresets.slice(0, MAX_CUSTOM_PRESETS)) {
-		try {
-			const preset = validateLayoutPreset(migrateStoredPreset(candidate));
-			if (seen.has(preset.id)) continue;
-			seen.add(preset.id);
-			customPresets.push(preset);
-			maxSideGroups = Math.max(
-				maxSideGroups,
-				preset.left.groups.length,
-				preset.right.groups.length,
-			);
-			maxBottomGroups = Math.max(maxBottomGroups, preset.bottom.groups.length);
-		} catch {}
-	}
-	const selectedCustomSurvived = customPresets.some(
-		(preset) => preset.id === current.defaultPresetId,
-	);
-	const fellBackToDefault = selectedWasCustom && !selectedCustomSurvived;
-	return {
-		defaultPresetId: fellBackToDefault
-			? DEFAULT_CONFIG.layout.defaultPresetId
-			: current.defaultPresetId,
-		customPresets,
-		maxSideGroups: fellBackToDefault
-			? Math.max(maxSideGroups, DEFAULT_CONFIG.layout.maxSideGroups)
-			: maxSideGroups,
-		maxBottomGroups: fellBackToDefault
-			? Math.max(maxBottomGroups, DEFAULT_CONFIG.layout.maxBottomGroups)
-			: maxBottomGroups,
-	};
-}
-
-export function validateLayoutSettings(value: unknown): LayoutSettings {
-	if (exceedsLayoutBudget(value)) throw new Error("Layout settings are too large");
-	const settings = record(value);
-	if (
-		!settings ||
-		!nonEmptyString(settings.defaultPresetId, 200) ||
-		!Number.isInteger(settings.maxSideGroups) ||
-		Number(settings.maxSideGroups) < 1 ||
-		Number(settings.maxSideGroups) > MAX_SIDE_GROUPS_SAFETY ||
-		!Number.isInteger(settings.maxBottomGroups) ||
-		Number(settings.maxBottomGroups) < 1 ||
-		Number(settings.maxBottomGroups) > MAX_SIDE_GROUPS_SAFETY ||
-		!Array.isArray(settings.customPresets) ||
-		settings.customPresets.length > MAX_CUSTOM_PRESETS
-	) {
-		throw new Error("Invalid layout settings");
-	}
-	assertKeys(
-		settings,
-		["defaultPresetId", "customPresets", "maxSideGroups", "maxBottomGroups"],
-		"Layout settings",
-	);
-	for (const rawPreset of settings.customPresets) {
-		const preset = validateLayoutPreset(rawPreset);
-		if (
-			preset.left.groups.length > Number(settings.maxSideGroups) ||
-			preset.right.groups.length > Number(settings.maxSideGroups)
-		) {
-			throw new Error("Custom preset exceeds the configured side-group limit");
-		}
-		if (preset.bottom.groups.length > Number(settings.maxBottomGroups)) {
-			throw new Error("Custom preset exceeds the configured bottom-group limit");
-		}
-	}
-	const ids = settings.customPresets.map((preset) => preset.id);
-	if (new Set(ids).size !== ids.length) throw new Error("Custom preset ids must be unique");
-	return value as LayoutSettings;
-}
-
 function parseSnapshot(value: unknown, workspaceId: string): WorkspaceLayoutSnapshot | null {
 	const snapshot = record(value);
 	if (
@@ -812,89 +556,21 @@ export function getWorkspaceLayout(workspaceId: string): WorkspaceLayoutSnapshot
 	const primaryRaw = loadWorkspaceLayout(workspaceId);
 	const primary = parseSnapshot(primaryRaw, workspaceId);
 	if (primary) {
-		futureProtected.delete(workspaceId);
 		cache.set(workspaceId, primary);
 		return primary;
 	}
 	const future = hasFutureLayoutVersion(primaryRaw);
 	const backup = parseSnapshot(loadWorkspaceLayoutBackup(workspaceId), workspaceId);
-	if (future) {
-		futureProtected.add(workspaceId);
-		if (!backup) throw new Error("Workspace layout was written by a newer host");
-	} else {
-		futureProtected.delete(workspaceId);
-	}
+	if (future && !backup) throw new Error("Workspace layout was written by a newer host");
 	cache.set(workspaceId, backup);
 	return backup;
 }
 
-export function replaceWorkspaceLayout(
-	params: LayoutReplaceParams,
-	limits: LayoutGroupLimits,
-): Promise<LayoutReplaceResult> {
-	if (!nonEmptyString(params.mutationId, 200))
-		return Promise.reject(new Error("Invalid layout mutation id"));
-	if (
-		params.expectedRevision !== null &&
-		(!Number.isSafeInteger(params.expectedRevision) || params.expectedRevision < 0)
-	) {
-		return Promise.reject(new Error("Invalid expected layout revision"));
-	}
-	const prior = queues.get(params.workspaceId) ?? Promise.resolve();
-	const removalEpoch = removalEpochs.get(params.workspaceId) ?? 0;
-	const operation = prior
-		.catch(() => {})
-		.then((): LayoutReplaceResult => {
-			if ((removalEpochs.get(params.workspaceId) ?? 0) !== removalEpoch) {
-				throw new Error("Workspace layout was removed before the write completed");
-			}
-			const current = getWorkspaceLayout(params.workspaceId);
-			const revisionMatches =
-				params.expectedRevision === null
-					? current === null
-					: current?.revision === params.expectedRevision;
-			if (!revisionMatches) return { status: "conflict", current };
-			if (futureProtected.has(params.workspaceId)) {
-				throw new Error("Workspace layout is read-only because it was written by a newer host");
-			}
-			const document = validateWorkspaceLayout(params.document, limits, current?.document);
-			if ((current?.revision ?? 0) >= Number.MAX_SAFE_INTEGER) {
-				throw new Error("Workspace layout revision limit reached");
-			}
-			const snapshot: WorkspaceLayoutSnapshot = {
-				workspaceId: params.workspaceId,
-				revision: (current?.revision ?? 0) + 1,
-				document,
-			};
-			saveWorkspaceLayout(snapshot, current);
-			cache.set(params.workspaceId, snapshot);
-			const payload: LayoutChangedPayload = { snapshot, mutationId: params.mutationId };
-			publishLayout?.(payload);
-			return { status: "accepted", payload };
-		});
-	const tail = operation.then(
-		() => {},
-		() => {},
-	);
-	queues.set(params.workspaceId, tail);
-	void tail.finally(() => {
-		if (queues.get(params.workspaceId) === tail) queues.delete(params.workspaceId);
-	});
-	return operation;
-}
-
 export function removeWorkspaceLayout(workspaceId: string): void {
-	removalEpochs.set(workspaceId, (removalEpochs.get(workspaceId) ?? 0) + 1);
 	cache.delete(workspaceId);
-	queues.delete(workspaceId);
-	futureProtected.delete(workspaceId);
 	removePersistedWorkspaceLayout(workspaceId);
 }
 
 export function resetLayoutsForTests(): void {
 	cache.clear();
-	queues.clear();
-	removalEpochs.clear();
-	futureProtected.clear();
-	publishLayout = null;
 }

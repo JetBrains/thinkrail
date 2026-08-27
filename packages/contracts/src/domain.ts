@@ -32,7 +32,7 @@ export interface Workspace {
 	baseBranch: string;
 	diffBase?: string;
 	renamed?: boolean;
-	initialTerminalEligible?: true;
+	initialTerminalPending?: true;
 	diffStats?: DiffStats;
 	skillOverrides?: Record<string, "on" | "off">;
 }
@@ -513,22 +513,6 @@ export interface WorkspaceLayoutSnapshot {
 	document: WorkspaceLayoutDocument;
 }
 
-export interface LayoutReplaceParams {
-	workspaceId: string;
-	mutationId: string;
-	expectedRevision: number | null;
-	document: WorkspaceLayoutDocument;
-}
-
-export interface LayoutChangedPayload {
-	snapshot: WorkspaceLayoutSnapshot;
-	mutationId: string;
-}
-
-export type LayoutReplaceResult =
-	| { status: "accepted"; payload: LayoutChangedPayload }
-	| { status: "conflict"; current: WorkspaceLayoutSnapshot | null };
-
 export interface LayoutPresetCenterGroup {
 	kind: "group";
 	id: string;
@@ -577,13 +561,6 @@ export interface LayoutPreset {
 	bottom: LayoutPresetBottomRegion;
 }
 
-export interface LayoutSettings {
-	defaultPresetId: string;
-	customPresets: LayoutPreset[];
-	maxSideGroups: number;
-	maxBottomGroups: number;
-}
-
 export const COMPOSER_GROWTH_LIMITS = ["compact", "roomy", "half-chat"] as const;
 export type ComposerGrowthLimit = (typeof COMPOSER_GROWTH_LIMITS)[number];
 
@@ -596,7 +573,7 @@ export interface AppConfig {
 	analyticsEnabled: boolean;
 	terminalReplayKb: number;
 	composerGrowthLimit: ComposerGrowthLimit;
-	layout: LayoutSettings;
+	customLayoutPresets: LayoutPreset[];
 	/** The model the plan reviewer + reflector run on; unset ⇒ the pi default. */
 	reviewModel?: WireModel;
 	/** Reviewer + reflector thinking level; unset ⇒ the model's default. */
@@ -618,12 +595,7 @@ export const DEFAULT_CONFIG: AppConfig = {
 	analyticsEnabled: true,
 	terminalReplayKb: TERMINAL_REPLAY_KB.default,
 	composerGrowthLimit: "half-chat",
-	layout: {
-		defaultPresetId: "balanced",
-		customPresets: [],
-		maxSideGroups: 6,
-		maxBottomGroups: 3,
-	},
+	customLayoutPresets: [],
 	reviewAutoFix: true,
 };
 

@@ -16,7 +16,6 @@ import {
 	useCallback,
 	useEffect,
 	useMemo,
-	useRef,
 	useState,
 } from "react";
 import { ErrorBoundary } from "../components/ErrorBoundary";
@@ -80,7 +79,6 @@ const ChatView = lazy(() => import("../chat/ChatView"));
 const PlanPane = lazy(() => import("../panels/PlanPane"));
 
 const NO_EDITOR_TABS: EditorTab[] = [];
-const INITIAL_TERMINAL_TAB_KEY = "thinkrail-initial";
 
 function MissingResource({ label }: { label: string }) {
 	return (
@@ -212,7 +210,6 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	);
 	const layoutPreferences = useAppStore((state) => state.localLayoutPreferences);
 	const workspace = useAppStore((state) => selectWorkspaceById(state, workspaceId));
-	const initialTerminalEligible = workspace?.initialTerminalEligible === true;
 	const contextProject = useAppStore(selectContextProject);
 	const editorTabs = useAppStore((state) => state.tabsByWorkspace[workspaceId] ?? NO_EDITOR_TABS);
 	const deletedSessions = useAppStore((state) => state.deletedSessionsByWorkspace[workspaceId]);
@@ -223,7 +220,6 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	const reviewDraftCount = useAppStore((state) => selectReviewDraftCount(state, workspaceId));
 	const reviewFlagByPath = useMemo(() => reviewFlags(reviewComments), [reviewComments]);
 	const [focusRequest, setFocusRequest] = useState<LayoutTabFocusRequest | null>(null);
-	const attemptedInitialTerminalGeneration = useRef<number | null>(null);
 	const activeReviewedPath = useAppStore((state) => selectActiveReviewedPath(state, workspaceId));
 	const readActiveReviewedPath = useCallback(
 		() => selectActiveReviewedPath(useAppStore.getState(), workspaceId),
@@ -303,49 +299,8 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	useTerminalReservation(workspaceId);
 	useLayoutIntentProcessing(workspaceId, commit, changeAttention, setFocusRequest);
 	useWorkspaceChatCatalogReconciliation(workspaceId, commit);
-	const { terminals, catalogReady: terminalCatalogReady } = useTerminalPlacementReconciliation(
-		workspaceId,
-		commit,
-	);
+	const { terminals } = useTerminalPlacementReconciliation(workspaceId, commit);
 	useChatLocationReconciliation(workspaceId, changeAttention);
-
-	useEffect(() => {
-		if (
-			!document ||
-			!attention ||
-			!terminalCatalogReady ||
-			status !== "connected" ||
-			!initialTerminalEligible
-		) {
-			return;
-		}
-		const placedTerminal = collectAllGroups(document)
-			.flatMap((group) => group.tabs)
-			.some((tab) => tab.kind === "terminal");
-		if (
-			terminals.length > 0 ||
-			placedTerminal ||
-			attemptedInitialTerminalGeneration.current === connectionGeneration
-		) {
-			return;
-		}
-		const preferredId = attention.lastFocusedSideGroupId.bottom;
-		const target =
-			document.bottom.groups.find((group) => group.id === preferredId) ?? document.bottom.groups[0];
-		attemptedInitialTerminalGeneration.current = connectionGeneration;
-		useAppStore
-			.getState()
-			.addTerminal(workspaceId, undefined, target?.id, "bottom", false, INITIAL_TERMINAL_TAB_KEY);
-	}, [
-		attention,
-		connectionGeneration,
-		document,
-		initialTerminalEligible,
-		status,
-		terminalCatalogReady,
-		terminals,
-		workspaceId,
-	]);
 
 	useEffect(() => {
 		if (!document || status !== "connected") return;

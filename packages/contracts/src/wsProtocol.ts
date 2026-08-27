@@ -17,8 +17,6 @@ import type {
 	JbcentralActionResult,
 	JbcentralConnectResult,
 	JbcentralLoginResult,
-	LayoutReplaceParams,
-	LayoutReplaceResult,
 	LoginReply,
 	OpenBranchReview,
 	OpenPrResult,
@@ -200,7 +198,6 @@ export const WS_METHODS = {
 	providerJbcentralLogin: "provider.jbcentralLogin",
 	providerJbcentralUpdate: "provider.jbcentralUpdate",
 	layoutGet: "layout.get",
-	layoutReplace: "layout.replace",
 	settingsUpdate: "settings.update",
 	historySearch: "history.search",
 	reviewGet: "review.get",
@@ -234,7 +231,6 @@ export const WS_CHANNELS = {
 	workspaceRemoved: "workspace.removed",
 	workspaceFsChanged: "workspace.fsChanged",
 	settingsChanged: "settings.changed",
-	layoutChanged: "layout.changed",
 	reviewChanged: "review.changed",
 } as const;
 
@@ -512,7 +508,6 @@ export interface WsMethodMap {
 		params: { workspaceId: string };
 		result: WorkspaceLayoutSnapshot | null;
 	};
-	"layout.replace": { params: LayoutReplaceParams; result: LayoutReplaceResult };
 	"settings.update": { params: { config: AppConfigUpdate }; result: AppConfig };
 	"history.search": {
 		params: { query: string; scope: HistoryScope; limit?: number };
