@@ -203,7 +203,18 @@ Fast gates (also the husky pre-commit): `bun run check:deps` (dependency pins) +
 `bun run check:boundaries` (workspace dependency/import edges) + `bun run check:seams`
 (the pi binary-seam canary — fails when a pi bump adds a bundler-opaque dynamic import that
 `registerBundledRuntime` doesn't statically register) + `bun run lint` (biome) + `bun run typecheck`. Unit tests:
-`bun run test` (bun test, per package). One-time setup for a fresh machine: `bunx playwright install chromium`.
+`bun run test` (bun test, per workspace via turbo, then the repo-root `scripts/` tests — those live outside
+any workspace, so turbo cannot see them). One-time setup for a fresh machine: `bunx playwright install chromium`.
+
+`bun run check:spec-surface` holds a module's **`Public surface`** bullet to its barrel: the names the
+bullet lists must be exactly what the barrel exports, star re-exports followed through the TypeScript AST.
+It is deliberately narrow — a bullet written as prose (`the three skill-load-safe wrappers`) is skipped
+rather than guessed at, so a module with a barrel opts into the gate by writing its surface as a bare list
+of backticked identifiers and nothing else. A bullet declares only what its own bold label names, so
+another bullet (`**Forbidden:** … use only its public surface`) that merely mentions the phrase is not a
+declaration. A **relative** star re-export that cannot be resolved fails rather than dropping the module
+quietly; one pointing outside the module is skipped, since its names are that package's surface, not this one's.
+`--list-skipped` names every spec the run passed over and why. In CI, not in the pre-commit hook.
 
 ## Handoff hygiene (before any commit, PR, or "done" summary)
 

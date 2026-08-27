@@ -95,6 +95,6 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
   panels fall back to read-on-demand until a later read re-creates it. No idle-stop in V1 (bounded by
   workspaces actually visited plus the capped prewarm tier).
 - **Public surface (barrel):** `ensureWatch`, `stopWatch`, `stopAllWatches`, `setWatchPublisher`,
-  `setRepoMetaPublisher`, `setSkillPathClassifier`.
+  `setRepoMetaPublisher`, `setSkillPathClassifier`, `isIgnoredPath`.
 - **Allowed deps:** `persistence` (workspace lookup), `log`; `contracts` (payload type); Bun/Node.
 - **Forbidden:** `host`; sibling features; any pi package.

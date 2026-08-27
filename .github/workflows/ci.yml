@@ -34,6 +34,7 @@ jobs:
       # Canary for the compiled-binary seam: fails when a pi bump introduces a new bundler-opaque
       # dynamic import that registerBundledRuntime doesn't statically register (see the script header).
       - run: bun run check:seams
+      - run: bun run check:spec-surface
       - run: bun run lint
       - run: bun run typecheck
 

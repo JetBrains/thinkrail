@@ -43,7 +43,7 @@ worktree in the host's file manager — the workspace row's "Open in" menu.
   uses, so its darwin/win32/linux branches are each asserted directly rather than only on whichever OS
   runs the test.
 - **Public surface (barrel):** `listAvailableEditors`, `openEditor`, `revealInFileManager`, `WhichFn`,
-  `SpawnFn`.
+  `SpawnFn`, `defaultWhich`, `defaultSpawn`.
 - **Allowed deps:** Bun (`Bun.which`, `Bun.spawn`), `process.env`/`process.platform`, `contracts` (the
   `EditorInfo` wire type).
 - **Forbidden:** `host`; sibling features (`workspaces` resolves `worktreePath` before calling in — this

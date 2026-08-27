@@ -200,7 +200,7 @@ ref off the workspace-create critical path.
   `gitCommitPaths`, `gitHeadSha`, `listCommits`,
   `resolveDiffRange`, `changedFileArgs`, `diffBaseRef`, `resolveCommitOid`, `DiffRange`, `isSafeRef`,
   `assertSafeRef`, `listBranches`, `resolveDefaultBranch`, `tryCurrentBranch`, `currentBranch`,
-  `canonicalPath`, `prefetchBranch`.
+  `canonicalPath`, `prefetchBranch`, `numstatPath`, `countUnpushedCommits`.
 - **Allowed deps:** `persistence` (workspace + project lookup), `log`; `contracts` (`Git*`/`BranchList` types);
   `subprocess` (`runBounded`, the bounded child behind `gitAsync`);
   `@thinkrail/shared/codedError` (naming a failure for the wire); Bun (spawn, for the sync runner).

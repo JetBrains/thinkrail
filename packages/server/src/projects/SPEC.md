@@ -46,7 +46,8 @@ bootstrap it into one so it can be opened.
   — `host` answers the lazy `project.hasSpecs` query via `spec.projectHasSpecs`, keeping this module free
   of any spec dependency.)
 - **Public surface (barrel):** `openProject`, `listProjects`, `listRecentProjects`, `closeProject`,
-  `getProjects`, `setProjectPublisher`, `inspectProjectPath`, `initProject`.
+  `getProjects`, `setProjectPublisher`, `inspectProjectPath`, `initProject`, `isProjectTrusted`,
+  `setProjectTrust`, `setProjectSkillEnabled`, `setProjectGroupEnabled`, `acknowledgeProjectSkills`.
 - **Allowed deps:** `persistence`; the `git` sub-module (shared `git()` runner, which now owns the
   environment its children spawn under — this module passes none); `contracts` (`Project`, `ProjectPathStatus`); Node/Bun.
 - **Forbidden:** `host`; sibling features other than `git` (`workspaces` depends on `projects`, never the
