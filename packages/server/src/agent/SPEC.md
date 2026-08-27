@@ -108,7 +108,11 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     cannot reappear mid-run, while disk sessions remain transcript-authoritative. A live summary also
     carries pi's queue snapshot (`SessionQueueState`, only when non-empty): `queue_update` fires only on
     changes, so this is the read-side seed that lets a client attaching mid-run render messages queued
-    before it connected.
+    before it connected. Each queue lane also retains the complete content of browser-queued messages only
+    while Pi reports the corresponding text entry pending. That transient mirror exists solely because Pi's
+    destructive queue API returns text but drops image blocks; Pi's queue events remain authoritative for
+    membership/order. The host projects only a conservative `hasImages` aggregate into summaries/events, so
+    image bytes do not ride the ordinary read stream.
     New-session and pre-session entrypoints capture the current generation; operations on a live session use
     that session's retained runtime. `abort` remains available as the cancellation control path.
     `prompt`/`steer`/`followUp` (with images) /
@@ -117,18 +121,24 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     back to `steer`), and pi's `followUp()` only *enqueues* into a queue that a run already in flight
     drains (so on an idle session it falls back to `prompt`, else the message parks forever — the way a
     `review.sendBatch` into a re-attached review chat marked its comments sent to an agent that never
-    saw them) / **`clearQueueSession`** (pi's `clearQueue()`, verbatim: drains both queues and returns the
-    texts for the client's dequeue-to-composer; pi emits the emptying `queue_update`, so the host adds no
-    bookkeeping) / **`removeQueuedSession(sessionId, kind, index)`** — per-item queue removal, which pi's
-    API lacks (queues are bare string arrays, `clearQueue` is all-or-nothing): drain via `clearQueue()`,
-    drop `lane[index]` (out-of-range → `removed: null`, everything re-queued), re-queue the keepers in
-    order (`steer()`/`followUp()` per lane — each re-queue emits its own `queue_update`, so clients
-    converge by events alone). **No-loss guarantee:** if the run settled during the operation the
-    re-queued keepers would park forever (pi's queues only drain inside a run), so the idle case drains
-    them through the same idle-delivery fallback as `followUpSession` — the first becomes a `prompt`,
-    the rest steer into the run it starts; delivery timing may degrade across that race window, content
-    is never lost (pinned by the idle-fallback unit test) —
-    `setModel` / `setThinkingLevel` / `compact` / `getSessionStats` (+ contextUsage) / `getSessionCommands` /
+    saw them) / **`clearQueueSession`** (Pi's `clearQueue()`: drains both queues but returns only text,
+    while the host snapshots its reconciled transient mirror first and returns complete per-message text +
+    images. Pi emits the emptying `queue_update`). Its optional text-only precondition rejects before
+    touching Pi whenever either tracked lane has queued images; manual compaction uses that guard, while
+    **`abortSession(..., true)`** snapshots/drains and synchronously signals abort in one manager operation,
+    then waits for idle and returns the complete queue so Stop cannot race a continuation or lose images /
+    **`removeQueuedSession(sessionId, kind, index)`** — per-item queue removal, which Pi's
+    API lacks (queues are bare string arrays, `clearQueue` is all-or-nothing): drain via the complete-content
+    path, drop `lane[index]` (out-of-range → `removed: null`, everything re-queued), and re-queue each keeper
+    with its images in order (`steer()`/`followUp()` per lane — each re-queue emits its own `queue_update`, so
+    clients converge by events alone). **No-loss guarantee:** if the run settled during the operation the
+    re-queued keepers would park forever (Pi's queues only drain inside a run), so the idle case drains them
+    through the same idle-delivery fallback as `followUpSession` — the first becomes a `prompt`, the rest
+    steer into the run it starts; delivery timing may degrade across that race window, content is never lost
+    (pinned by the idle-fallback unit test) —
+    `setModel` / `setThinkingLevel` / **manual `compact` guarded per session** (a second overlapping request
+    is rejected before Pi can overwrite its one compaction controller; an active Pi compaction also blocks
+    entry) / `getSessionStats` (+ contextUsage) / `getSessionCommands` /
     `listAvailableModels` / **`clampThinkingForModel`** (pi's `clampThinkingLevel` for a `{model, level}`
     pair — `model.clampThinking`; the host owns it so the pre-session picker, `getDefaultModel`, and a live
     session all adjust effort identically) / `getDefaultModel` (the model + thinking a fresh session resolves to — settings

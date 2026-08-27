@@ -38,7 +38,12 @@ export type PiEvent =
 	| Exclude<AgentEvent, { type: "agent_end" }>
 	| { type: "agent_end"; messages: AgentMessage[]; willRetry: boolean }
 	| { type: "agent_settled"; terminal: AgentSettlement | null }
-	| { type: "queue_update"; steering: readonly string[]; followUp: readonly string[] }
+	| {
+			type: "queue_update";
+			steering: readonly string[];
+			followUp: readonly string[];
+			hasImages?: true;
+	  }
 	| { type: "compaction_start"; reason: "manual" | "threshold" | "overflow" }
 	| { type: "session_info_changed"; name: string | undefined }
 	| { type: "thinking_level_changed"; level: ThinkingLevel }
@@ -103,10 +108,21 @@ export type QueueLane = "steering" | "followUp";
 export interface SessionQueueState {
 	steering: readonly string[];
 	followUp: readonly string[];
+	hasImages?: true;
+}
+
+export interface QueuedMessageContent {
+	text: string;
+	images?: readonly ImageContent[];
+}
+
+export interface SessionQueueContent {
+	steering: readonly QueuedMessageContent[];
+	followUp: readonly QueuedMessageContent[];
 }
 
 export interface RemovedQueuedMessage {
-	removed: string | null;
+	removed: QueuedMessageContent | null;
 	queue: SessionQueueState;
 }
 

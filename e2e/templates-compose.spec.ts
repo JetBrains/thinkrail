@@ -185,6 +185,50 @@ test.describe("prompt templates in the composer", () => {
 		await expect(backdrop).not.toBeVisible();
 	});
 
+	test("the slot backdrop shares dynamic textarea geometry and capped scrolling", async ({
+		page,
+	}) => {
+		await openWorkspaceChat(page);
+		const input = page.getByTestId("chat-input");
+
+		await input.fill("/rena");
+		await page.locator('[data-testid="slash-command"][data-source="prompt"]').first().click();
+		await expect(input).toHaveValue(/^Rename ⟨name⟩ and update every ⟨name⟩ reference\.\s*$/);
+		await page.keyboard.insertText("Widget ".repeat(300));
+		await expect(page.getByTestId("chat-composer")).toHaveAttribute("data-expanded", "true");
+
+		const backdrop = page.getByTestId("slot-backdrop");
+		const geometry = await input.evaluate((element) => {
+			const overlay = document.querySelector<HTMLElement>('[data-testid="slot-backdrop"]');
+			if (!overlay) throw new Error("slot backdrop missing");
+			const inputRect = element.getBoundingClientRect();
+			const backdropRect = overlay.getBoundingClientRect();
+			return {
+				input: { x: inputRect.x, y: inputRect.y, width: inputRect.width, height: inputRect.height },
+				backdrop: {
+					x: backdropRect.x,
+					y: backdropRect.y,
+					width: backdropRect.width,
+					height: backdropRect.height,
+				},
+				scrollHeight: element.scrollHeight,
+				clientHeight: element.clientHeight,
+			};
+		});
+		expect(geometry.input.height).toBeGreaterThan(108);
+		expect(geometry.backdrop.x).toBeCloseTo(geometry.input.x, 0);
+		expect(geometry.backdrop.y).toBeCloseTo(geometry.input.y, 0);
+		expect(geometry.backdrop.width).toBeCloseTo(geometry.input.width, 0);
+		expect(geometry.backdrop.height).toBeCloseTo(geometry.input.height, 0);
+		expect(geometry.scrollHeight).toBeGreaterThan(geometry.clientHeight);
+
+		await input.evaluate((element) => {
+			element.scrollTop = element.scrollHeight;
+			element.dispatchEvent(new Event("scroll"));
+		});
+		await expect.poll(() => backdrop.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+	});
+
 	test("sending directly (no Tab) still mirrors a filled slot's text into its same-group sibling", async ({
 		page,
 	}) => {
