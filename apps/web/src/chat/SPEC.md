@@ -94,7 +94,8 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   the first thought as direct rows, then renders each non-empty thinking block as a nested disclosure. When
   that block's first non-empty line is a complete standalone Markdown strong span (`**…**` or `__…__`),
   its folded header surfaces the model-authored inner text in place of the redundant visible `Thinking`
-  label, before the trailing tool/character metadata; the teaser truncates before that metadata and
+  label, using the row's ordinary inherited weight while retaining its default text colour, before the
+  trailing tool/character metadata; the teaser truncates before that metadata and
   disappears when expanded, where the disclosure retains the generic label and contains the exact text.
   Blocks without that convention keep the generic label while folded. Semantic breadcrumb and assistive
   labels remain `Thinking` in every state. Every following routine
