@@ -4,6 +4,7 @@ import {
 	createWorkspaceViaDialog,
 	openFixtureProject,
 	openTerminal,
+	pseudoBackgroundColor,
 	revealFirstProjectWorkspaces,
 	runInTerminal,
 	visibleTerminal,
@@ -37,6 +38,59 @@ test("a workspace opens a terminal automatically, rooted in the worktree, with w
 
 	await runInTerminal(page, "echo TR_MARKER_IO");
 	await expect(term).toContainText("TR_MARKER_IO");
+});
+
+test("xterm uses the shared quiet rail and directional curtains", async ({ page }) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await waitTerminalReady(page);
+
+	const terminal = visibleTerminal(page);
+	const frame = terminal.locator('[data-quiet-scroll-surface="terminal"]');
+	const viewport = frame.locator(".xterm-scrollable-element");
+	const scrollbar = viewport.locator(".scrollbar.vertical");
+	const slider = scrollbar.locator(".slider");
+	const cues = frame.getByTestId("quiet-scroll-cues");
+	await expect(viewport).toHaveClass(/quiet-scroll-viewport/);
+
+	await runInTerminal(page, "for i in $(seq 1 80); do echo TR_SCROLL_$i; done");
+	await expect(visibleTerminalScreen(page)).toContainText("TR_SCROLL_80");
+	await expect(cues).toHaveAttribute("data-scroll-top", "true");
+	await expect(cues).not.toHaveAttribute("data-scroll-bottom", "true");
+
+	await page.getByTestId("terminal-tab").getByRole("tab").focus();
+	await page.getByTestId("terminal-tab").hover();
+	await expect
+		.poll(() => viewport.getAttribute("data-quiet-scroll-intent"), { timeout: 2_000 })
+		.toBeNull();
+	await expect(slider).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+	await expect.poll(() => pseudoBackgroundColor(slider, "::before")).toBe("rgba(0, 0, 0, 0)");
+	await expect
+		.poll(async () => {
+			const [trackBox, sliderBox] = await Promise.all([
+				scrollbar.boundingBox(),
+				slider.boundingBox(),
+			]);
+			return trackBox?.width === sliderBox?.width;
+		})
+		.toBe(true);
+
+	const html = page.locator("html");
+	const originalContrast = await html.getAttribute("data-theme-contrast");
+	await html.evaluate((node) => node.setAttribute("data-theme-contrast", "high"));
+	await expect.poll(() => pseudoBackgroundColor(slider, "::before")).not.toBe("rgba(0, 0, 0, 0)");
+	await html.evaluate((node, contrast) => {
+		if (contrast) node.setAttribute("data-theme-contrast", contrast);
+		else node.removeAttribute("data-theme-contrast");
+	}, originalContrast);
+	await expect.poll(() => pseudoBackgroundColor(slider, "::before")).toBe("rgba(0, 0, 0, 0)");
+
+	await frame.hover({ position: { x: 20, y: 20 } });
+	await expect(viewport).toHaveAttribute("data-quiet-scroll-intent", "");
+	await expect.poll(() => pseudoBackgroundColor(slider, "::before")).not.toBe("rgba(0, 0, 0, 0)");
+
+	await page.mouse.wheel(0, -10_000);
+	await expect(cues).toHaveAttribute("data-scroll-bottom", "true");
 });
 
 test("terminals are workspace-scoped and survive workspace switches", async ({ page }) => {

@@ -57,6 +57,33 @@ a {
 	border-width: 2px;
 	background-color: var(--text-muted);
 }
+.quiet-scroll-viewport.xterm-scrollable-element > .scrollbar.vertical > .slider {
+	background: transparent;
+}
+.quiet-scroll-viewport.xterm-scrollable-element > .scrollbar.vertical > .slider::before {
+	position: absolute;
+	inset-block: 0;
+	left: 50%;
+	width: 5px;
+	border-radius: var(--radius-sm);
+	background-color: transparent;
+	content: "";
+	transform: translateX(-50%);
+	transition:
+		width var(--transition-fast),
+		background-color var(--transition-fast);
+}
+.quiet-scroll-viewport.xterm-scrollable-element[data-quiet-scroll-intent]
+	> .scrollbar.vertical
+	> .slider::before {
+	background-color: var(--text-subtle);
+}
+.quiet-scroll-viewport.xterm-scrollable-element[data-quiet-scroll-intent]
+	> .scrollbar.vertical
+	> .slider:hover::before {
+	width: 6px;
+	background-color: var(--text-muted);
+}
 [data-theme-contrast="high"] .quiet-scroll-viewport::-webkit-scrollbar-thumb {
 	border-width: 3.5px;
 	background-color: var(--text-subtle);
@@ -64,6 +91,19 @@ a {
 [data-theme-contrast="high"]
 	.quiet-scroll-viewport[data-quiet-scroll-intent]::-webkit-scrollbar-thumb {
 	border-width: 2.5px;
+}
+[data-theme-contrast="high"]
+	.quiet-scroll-viewport.xterm-scrollable-element
+	> .scrollbar.vertical
+	> .slider::before {
+	width: 3px;
+	background-color: var(--text-subtle);
+}
+[data-theme-contrast="high"]
+	.quiet-scroll-viewport.xterm-scrollable-element[data-quiet-scroll-intent]
+	> .scrollbar.vertical
+	> .slider::before {
+	width: 5px;
 }
 .quiet-scroll-curtain {
 	transition: opacity var(--transition-fast);
@@ -82,6 +122,7 @@ a {
 
 @media (prefers-reduced-motion: reduce) {
 	.quiet-scroll-viewport::-webkit-scrollbar-thumb,
+	.quiet-scroll-viewport.xterm-scrollable-element > .scrollbar.vertical > .slider::before,
 	.quiet-scroll-curtain {
 		transition: none;
 	}
@@ -93,6 +134,14 @@ a {
 	[data-theme-contrast="high"] .quiet-scroll-viewport::-webkit-scrollbar-thumb {
 		border-width: 2px;
 		border-color: Canvas;
+		background-color: CanvasText;
+	}
+	.quiet-scroll-viewport.xterm-scrollable-element > .scrollbar.vertical > .slider::before,
+	[data-theme-contrast="high"]
+		.quiet-scroll-viewport.xterm-scrollable-element
+		> .scrollbar.vertical
+		> .slider::before {
+		width: 5px;
 		background-color: CanvasText;
 	}
 	.quiet-scroll-curtain {

@@ -16,9 +16,11 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
 
 Changes and Review keep their fixed toolbars outside a panel-owned `components/QuietScrollArea`; Projects,
 Files, and Specs expose content for the shell-owned scroll wrapper described in `shell/SPEC.md`.
-`TerminalInstance` wraps xterm with `QuietScrollFrame`, which observes xterm's descendant viewport and applies
-the same neutral intent-revealed thumb + directional curtains wherever the terminal is placed. The feature
-views never receive or derive left/right/bottom placement to achieve that treatment.
+`TerminalInstance` wraps xterm with `QuietScrollFrame`, which skins xterm's descendant custom scroll control
+without shrinking its hit target; top/bottom state comes from xterm's public `buffer.active.viewportY/baseY`
+and `onScroll`/`onWriteParsed` API rather than pretending its non-native viewport has DOM scroll metrics.
+The same neutral intent-revealed thumb + directional curtains therefore follow the terminal wherever it is
+placed. Feature views never receive or derive left/right/bottom placement to achieve that treatment.
 
 ## Boundary
 

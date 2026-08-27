@@ -29,17 +29,21 @@ Also houses the `ui/` sub-module (shadcn primitives), which has its own spec.
   (`CustomIconName`); today: `file-diff-line`/`file-diff-fill` (the Changes tool glyph).
 - **`QuietScrollArea.tsx`** — the store-free overflow observer and two presentation surfaces:
   `QuietScrollArea` owns an ordinary native scroll viewport, while `QuietScrollFrame` observes a
-  third-party descendant viewport without taking over its content or input. Both reserve the native 10px
-  gutter, make the thumb visually transparent at rest in normal themes, reveal a 5px optical thumb on
+  third-party descendant scroll control without taking over its content or input and can receive the
+  library's authoritative edge state. The native area retains its existing 10px gutter; a third-party
+  frame preserves that library's hit geometry while replacing only the optical slider. Both make the
+  thumb visually transparent at rest in normal themes, reveal a 5px optical thumb on
   hover/focus-within/drag/active scrolling, and paint pointer-transparent 16px curtains only on clipped
-  directions. The observer follows scroll, viewport/content resize, and descendant replacement. Bundled
-  high-contrast themes retain a resting hairline; OS forced-colours mode keeps a visible system-colour
-  thumb and removes the cosmetic curtains; reduced motion removes the opacity transition only. Surface
-  colour is an explicit semantic prop (`sidebar` or `terminal`), never inferred from arrangement.
+  directions. Native measurement follows scroll, viewport/content resize, and descendant replacement.
+  Bundled high-contrast themes retain a resting hairline; OS forced-colours mode keeps a visible
+  system-colour thumb and removes the cosmetic curtains; reduced motion removes the opacity transition
+  only. Surface colour is an explicit semantic prop (`sidebar` or `terminal`), never inferred from
+  arrangement.
 - **Public surface:** `ErrorBoundary`, `isChunkLoadError` — imported directly via
   `@/components/ErrorBoundary` (no barrel); `CustomIcon`, `CustomIconName` via `@/components/CustomIcon`;
-  `QuietScrollArea`, `QuietScrollFrame` via `@/components/QuietScrollArea`. The `ui/` primitives are their
-  own sub-module ([components/ui/SPEC.md](ui/SPEC.md)).
+  `QuietScrollArea`, `QuietScrollFrame`, and the `QuietScrollEdges` type via
+  `@/components/QuietScrollArea`. The `ui/` primitives are their own sub-module
+  ([components/ui/SPEC.md](ui/SPEC.md)).
 - **Allowed deps:** React, `@remixicon/react`, `lib` (`shallowEqualArrays` — the reset-keys comparison, shared
   rather than re-stated). Kept dependency-light on purpose, and `lib` is a leaf, so *any* region (shell,
   panels, `main.tsx`) can still wrap in it without creating a cycle.

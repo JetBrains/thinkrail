@@ -5,14 +5,14 @@ type QuietScrollAxis = "vertical" | "both";
 type QuietScrollSurface = "sidebar" | "terminal";
 type ScrollEdge = "top" | "right" | "bottom" | "left";
 
-interface ScrollEdges {
+export interface QuietScrollEdges {
 	top: boolean;
 	right: boolean;
 	bottom: boolean;
 	left: boolean;
 }
 
-const NO_EDGES: ScrollEdges = {
+const NO_EDGES: QuietScrollEdges = {
 	top: false,
 	right: false,
 	bottom: false,
@@ -41,7 +41,7 @@ const CURTAIN_CLASSES: Record<QuietScrollSurface, Record<ScrollEdge, string>> = 
 const SCROLL_INTENT_GRACE_MS = 700;
 const EDGE_EPSILON_PX = 1;
 
-function sameEdges(left: ScrollEdges, right: ScrollEdges): boolean {
+function sameEdges(left: QuietScrollEdges, right: QuietScrollEdges): boolean {
 	return (
 		left.top === right.top &&
 		left.right === right.right &&
@@ -50,7 +50,7 @@ function sameEdges(left: ScrollEdges, right: ScrollEdges): boolean {
 	);
 }
 
-function readEdges(viewport: HTMLElement, axis: QuietScrollAxis): ScrollEdges {
+function readEdges(viewport: HTMLElement, axis: QuietScrollAxis): QuietScrollEdges {
 	const maximumTop = Math.max(0, viewport.scrollHeight - viewport.clientHeight);
 	const maximumLeft = Math.max(0, viewport.scrollWidth - viewport.clientWidth);
 	return {
@@ -61,18 +61,9 @@ function readEdges(viewport: HTMLElement, axis: QuietScrollAxis): ScrollEdges {
 	};
 }
 
-function useScrollEdges(
-	viewport: HTMLElement | null,
-	intentRoot: HTMLElement | null,
-	axis: QuietScrollAxis,
-): ScrollEdges {
-	const [edges, setEdges] = useState<ScrollEdges>(NO_EDGES);
-
+function useScrollIntent(viewport: HTMLElement | null, intentRoot: HTMLElement | null): void {
 	useEffect(() => {
-		if (!viewport || !intentRoot) {
-			setEdges((current) => (sameEdges(current, NO_EDGES) ? current : NO_EDGES));
-			return;
-		}
+		if (!viewport || !intentRoot) return;
 
 		const hadViewportClass = viewport.classList.contains("quiet-scroll-viewport");
 		viewport.classList.add("quiet-scroll-viewport");
@@ -81,19 +72,31 @@ function useScrollEdges(
 		let scrolling = false;
 		let scrollTimer: ReturnType<typeof setTimeout> | undefined;
 
-		const updateEdges = () => {
-			const next = readEdges(viewport, axis);
-			setEdges((current) => (sameEdges(current, next) ? current : next));
-		};
 		const updateIntent = () => {
 			viewport.toggleAttribute(
 				"data-quiet-scroll-intent",
 				pointerInside || focusInside || scrolling,
 			);
 		};
-		const onPointerEnter = (event: PointerEvent) => {
-			pointerInside = event.pointerType !== "touch";
+		const markScrolling = () => {
+			scrolling = true;
 			updateIntent();
+			clearTimeout(scrollTimer);
+			scrollTimer = setTimeout(() => {
+				scrolling = false;
+				updateIntent();
+			}, SCROLL_INTENT_GRACE_MS);
+		};
+		const onPointerEnter = (event: PointerEvent) => {
+			if (event.pointerType === "touch") {
+				markScrolling();
+				return;
+			}
+			pointerInside = true;
+			updateIntent();
+		};
+		const onPointerDown = (event: PointerEvent) => {
+			if (event.pointerType === "touch") markScrolling();
 		};
 		const onPointerLeave = () => {
 			pointerInside = false;
@@ -107,26 +110,49 @@ function useScrollEdges(
 			focusInside = event.relatedTarget instanceof Node && intentRoot.contains(event.relatedTarget);
 			updateIntent();
 		};
-		const onScroll = () => {
-			updateEdges();
-			scrolling = true;
-			updateIntent();
-			clearTimeout(scrollTimer);
-			scrollTimer = setTimeout(() => {
-				scrolling = false;
-				updateIntent();
-			}, SCROLL_INTENT_GRACE_MS);
-		};
 
-		updateEdges();
 		updateIntent();
-		const frame = requestAnimationFrame(updateEdges);
-		viewport.addEventListener("scroll", onScroll, { passive: true });
+		viewport.addEventListener("scroll", markScrolling, { passive: true });
 		intentRoot.addEventListener("pointerenter", onPointerEnter);
+		intentRoot.addEventListener("pointerdown", onPointerDown);
 		intentRoot.addEventListener("pointerleave", onPointerLeave);
 		intentRoot.addEventListener("focusin", onFocusIn);
 		intentRoot.addEventListener("focusout", onFocusOut);
 
+		return () => {
+			clearTimeout(scrollTimer);
+			viewport.removeEventListener("scroll", markScrolling);
+			intentRoot.removeEventListener("pointerenter", onPointerEnter);
+			intentRoot.removeEventListener("pointerdown", onPointerDown);
+			intentRoot.removeEventListener("pointerleave", onPointerLeave);
+			intentRoot.removeEventListener("focusin", onFocusIn);
+			intentRoot.removeEventListener("focusout", onFocusOut);
+			viewport.removeAttribute("data-quiet-scroll-intent");
+			if (!hadViewportClass) viewport.classList.remove("quiet-scroll-viewport");
+		};
+	}, [intentRoot, viewport]);
+}
+
+function useMeasuredScrollEdges(
+	viewport: HTMLElement | null,
+	axis: QuietScrollAxis,
+): QuietScrollEdges {
+	const [edges, setEdges] = useState<QuietScrollEdges>(NO_EDGES);
+
+	useEffect(() => {
+		if (!viewport) {
+			setEdges((current) => (sameEdges(current, NO_EDGES) ? current : NO_EDGES));
+			return;
+		}
+
+		const updateEdges = () => {
+			const next = readEdges(viewport, axis);
+			setEdges((current) => (sameEdges(current, next) ? current : next));
+		};
+
+		updateEdges();
+		const frame = requestAnimationFrame(updateEdges);
+		viewport.addEventListener("scroll", updateEdges, { passive: true });
 		const resize = new ResizeObserver(updateEdges);
 		const observeSizes = () => {
 			resize.disconnect();
@@ -142,18 +168,11 @@ function useScrollEdges(
 
 		return () => {
 			cancelAnimationFrame(frame);
-			clearTimeout(scrollTimer);
-			viewport.removeEventListener("scroll", onScroll);
-			intentRoot.removeEventListener("pointerenter", onPointerEnter);
-			intentRoot.removeEventListener("pointerleave", onPointerLeave);
-			intentRoot.removeEventListener("focusin", onFocusIn);
-			intentRoot.removeEventListener("focusout", onFocusOut);
+			viewport.removeEventListener("scroll", updateEdges);
 			resize.disconnect();
 			mutations.disconnect();
-			viewport.removeAttribute("data-quiet-scroll-intent");
-			if (!hadViewportClass) viewport.classList.remove("quiet-scroll-viewport");
 		};
-	}, [axis, intentRoot, viewport]);
+	}, [axis, viewport]);
 
 	return edges;
 }
@@ -163,32 +182,36 @@ function QuietScrollCurtains({
 	intentRoot,
 	axis,
 	surface,
+	edges,
 }: {
 	viewport: HTMLElement | null;
 	intentRoot: HTMLElement | null;
 	axis: QuietScrollAxis;
 	surface: QuietScrollSurface;
+	edges?: QuietScrollEdges | undefined;
 }) {
-	const edges = useScrollEdges(viewport, intentRoot, axis);
+	useScrollIntent(viewport, intentRoot);
+	const measuredEdges = useMeasuredScrollEdges(edges ? null : viewport, axis);
+	const visibleEdges = edges ?? measuredEdges;
 	return (
 		<div
 			aria-hidden="true"
 			data-testid="quiet-scroll-cues"
-			data-scroll-top={edges.top || undefined}
-			data-scroll-right={edges.right || undefined}
-			data-scroll-bottom={edges.bottom || undefined}
-			data-scroll-left={edges.left || undefined}
+			data-scroll-top={visibleEdges.top || undefined}
+			data-scroll-right={visibleEdges.right || undefined}
+			data-scroll-bottom={visibleEdges.bottom || undefined}
+			data-scroll-left={visibleEdges.left || undefined}
 			className="pointer-events-none absolute inset-0 z-20 overflow-hidden"
 		>
 			{(["top", "right", "bottom", "left"] as const).map((edge) => (
 				<span
 					key={edge}
 					data-testid={`quiet-scroll-${edge}`}
-					data-visible={edges[edge] || undefined}
+					data-visible={visibleEdges[edge] || undefined}
 					className={cn(
 						"quiet-scroll-curtain pointer-events-none absolute",
 						CURTAIN_CLASSES[surface][edge],
-						edges[edge] ? "opacity-100" : "opacity-0",
+						visibleEdges[edge] ? "opacity-100" : "opacity-0",
 					)}
 				/>
 			))}
@@ -239,6 +262,7 @@ interface QuietScrollFrameProps extends Omit<ComponentPropsWithoutRef<"div">, "c
 	viewportSelector: string;
 	surface?: QuietScrollSurface | undefined;
 	axis?: QuietScrollAxis | undefined;
+	edges?: QuietScrollEdges | undefined;
 }
 
 export function QuietScrollFrame({
@@ -247,6 +271,7 @@ export function QuietScrollFrame({
 	viewportSelector,
 	surface = "sidebar",
 	axis = "vertical",
+	edges,
 	...props
 }: QuietScrollFrameProps) {
 	const [root, setRoot] = useState<HTMLDivElement | null>(null);
@@ -254,15 +279,22 @@ export function QuietScrollFrame({
 
 	useEffect(() => {
 		if (!root) return;
-		const findViewport = () => {
-			setViewport((current) => {
-				const next = root.querySelector<HTMLElement>(viewportSelector);
-				return current === next ? current : next;
-			});
+		let current = root.querySelector<HTMLElement>(viewportSelector);
+		const mutations = new MutationObserver(() => {
+			if (current && root.contains(current)) return;
+			const next = root.querySelector<HTMLElement>(viewportSelector);
+			if (next === current) return;
+			current = next;
+			setViewport(next);
+			observeTarget();
+		});
+		const observeTarget = () => {
+			mutations.disconnect();
+			if (current?.parentElement) mutations.observe(current.parentElement, { childList: true });
+			else mutations.observe(root, { childList: true, subtree: true });
 		};
-		findViewport();
-		const mutations = new MutationObserver(findViewport);
-		mutations.observe(root, { childList: true, subtree: true });
+		setViewport(current);
+		observeTarget();
 		return () => mutations.disconnect();
 	}, [root, viewportSelector]);
 
@@ -274,7 +306,13 @@ export function QuietScrollFrame({
 			{...props}
 		>
 			{children}
-			<QuietScrollCurtains viewport={viewport} intentRoot={root} axis={axis} surface={surface} />
+			<QuietScrollCurtains
+				viewport={viewport}
+				intentRoot={root}
+				axis={axis}
+				surface={surface}
+				edges={edges}
+			/>
 		</div>
 	);
 }
