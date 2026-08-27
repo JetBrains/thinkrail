@@ -326,7 +326,10 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   newline, or width change that makes the draft exceed one visual line grows the message row without moving
   the footer; fitting one line again shrinks only the message row. This is one persistent textarea, never
   conditional twins — the transition cannot lose focus, caret/selection, recall, draft, or a template-slot
-  session. Streaming deliberately uses the expanded message row even with an empty draft, because Stop +
+  session. Every composer keyboard shortcut stands down when the native key event reports IME composition,
+  including Safari's `229` sentinel after `compositionend`, leaving candidate confirmation and navigation to
+  the input method instead of sending or transforming the unfinished draft. Streaming deliberately uses the
+  expanded message row even with an empty draft, because Stop +
   send options join the footer. `ChatView` passes the server-synced
   `ComposerGrowthLimit` prop: `compact` caps at 6 visual lines, `roomy` at 10, and the default `half-chat`
   caps the **editor shell** (textarea + footer) at 50% of the mounted chat panel, never the browser viewport;

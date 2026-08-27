@@ -60,6 +60,8 @@ const COMPOSER_EDITOR_LIMIT_CLASS = {
 		"max-h-[calc(50cqh-var(--space-16)-var(--space-16)-var(--space-4)-var(--space-4)-var(--space-4)-var(--space-4))]",
 } satisfies Record<ComposerGrowthLimit, string>;
 
+const IME_SENTINEL_KEYCODE = 229;
+
 const STREAMING_SEND_MODES = [
 	{
 		behavior: "steer" as const,
@@ -475,6 +477,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	};
 
 	const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+		if (e.nativeEvent.isComposing || e.nativeEvent.keyCode === IME_SENTINEL_KEYCODE) return;
 		if (slots && !menuOpen) {
 			if (e.key === "Tab") {
 				e.preventDefault();

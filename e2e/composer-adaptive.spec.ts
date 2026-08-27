@@ -7,6 +7,61 @@ async function box(locator: import("@playwright/test").Locator) {
 	return value;
 }
 
+test("IME composition owns Enter before composer shortcuts", async ({ page }) => {
+	await openWorkspaceChat(page);
+
+	const input = page.getByTestId("chat-input");
+	await input.fill("ni hao ma");
+	await input.evaluate((element) => {
+		const event = new KeyboardEvent("keydown", {
+			key: "Enter",
+			code: "Enter",
+			bubbles: true,
+			cancelable: true,
+		});
+		Object.defineProperty(event, "isComposing", { value: true });
+		element.dispatchEvent(event);
+	});
+
+	await expect(input).toHaveValue("ni hao ma");
+	await expect(page.locator('[data-testid="chat-message"][data-role="user"]')).toHaveCount(0);
+});
+
+test("Safari IME sentinel owns Enter after composition ends", async ({ page }) => {
+	await openWorkspaceChat(page);
+
+	const input = page.getByTestId("chat-input");
+	await input.fill("ni hao ma");
+	await input.evaluate((element) => {
+		const event = new KeyboardEvent("keydown", {
+			key: "Enter",
+			code: "Enter",
+			bubbles: true,
+			cancelable: true,
+		});
+		Object.defineProperty(event, "keyCode", { value: 229 });
+		element.dispatchEvent(event);
+	});
+
+	await expect(input).toHaveValue("ni hao ma");
+	await expect(page.locator('[data-testid="chat-message"][data-role="user"]')).toHaveCount(0);
+});
+
+test("ordinary Enter submits after IME composition ends", async ({ page }) => {
+	await openWorkspaceChat(page);
+
+	const input = page.getByTestId("chat-input");
+	await input.fill("How are you?");
+	await input.dispatchEvent("compositionstart");
+	await input.dispatchEvent("compositionend");
+	await input.press("Enter");
+
+	await expect(input).toHaveValue("");
+	await expect(page.locator('[data-testid="chat-message"][data-role="user"]')).toHaveText([
+		"How are you?",
+	]);
+});
+
 test("idle composer keeps one message line above a stable controls row", async ({ page }) => {
 	await openWorkspaceChat(page);
 
