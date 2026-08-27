@@ -716,6 +716,7 @@ interface AppState {
 	) => void;
 	installProjectSnapshot: (projects: Project[], recentProjects: Project[]) => void;
 	applyProjectUpdated: (project: Project) => void;
+	applyProjectRemoved: (projectId: string) => void;
 	setWorkspaces: (projectId: string, workspaces: Workspace[]) => void;
 	addWorkspace: (workspace: Workspace) => void;
 	updateWorkspace: (workspace: Workspace) => void;
@@ -1558,6 +1559,57 @@ export const useAppStore = create<AppState>((set, get) => ({
 				...pruneExpandedProjects(state, projects),
 			};
 		}),
+	applyProjectRemoved: (projectId) => {
+		const s = get();
+		const wsIds = (s.workspaces[projectId] ?? []).map((w) => w.id);
+		const wsSet = new Set(wsIds);
+		const removedSessions = new Set(wsIds.flatMap((id) => selectWorkspaceSessionIds(s, id)));
+		set((state) => {
+			const projects = state.projects.filter((p) => p.id !== projectId);
+			const dropWsKeys = <T>(rec: Record<string, T>): Record<string, T> =>
+				wsIds.reduce((acc, id) => omitKey(acc, id), rec);
+			return {
+				projects,
+				recentProjects: state.recentProjects.filter((p) => p.id !== projectId),
+				workspaces: omitKey(state.workspaces, projectId),
+				removedWorkspaceIds: Object.assign(
+					Object.create(null),
+					state.removedWorkspaceIds,
+					Object.fromEntries(wsIds.map((id) => [id, true as const])),
+				) as Record<string, true>,
+				fsChangesByWorkspace: dropWsKeys(state.fsChangesByWorkspace),
+				skillChangeTickByWorkspace: dropWsKeys(state.skillChangeTickByWorkspace),
+				specsByWorkspace: dropWsKeys(state.specsByWorkspace),
+				diffScopeByWorkspace: dropWsKeys(state.diffScopeByWorkspace),
+				reviewsByWorkspace: dropWsKeys(state.reviewsByWorkspace),
+				changesRequest:
+					state.changesRequest && wsSet.has(state.changesRequest.workspaceId)
+						? null
+						: state.changesRequest,
+				specRequest:
+					state.specRequest && wsSet.has(state.specRequest.workspaceId) ? null : state.specRequest,
+				chatLocationRequest:
+					state.chatLocationRequest && wsSet.has(state.chatLocationRequest.workspaceId)
+						? null
+						: state.chatLocationRequest,
+				routeChatTarget:
+					state.routeChatTarget && wsSet.has(state.routeChatTarget.workspaceId)
+						? null
+						: state.routeChatTarget,
+				historyOpenRequest:
+					state.historyOpenRequest && removedSessions.has(state.historyOpenRequest.sessionId)
+						? null
+						: state.historyOpenRequest,
+				reviewFocusRequest:
+					state.reviewFocusRequest && wsSet.has(state.reviewFocusRequest.workspaceId)
+						? null
+						: state.reviewFocusRequest,
+				...reconcileProjectNavigation(state, projects),
+				...pruneExpandedProjects(state, projects),
+			};
+		});
+		for (const id of wsIds) s.clearWorkspaceTabs(id);
+	},
 	setWorkspaces: (projectId, workspaces) =>
 		set((s) => ({
 			workspaces: {

@@ -18,15 +18,25 @@ function createdProjectsRoot(): string {
 const DRAFT_PROVISIONAL_NAME = "Project draft";
 
 type ProjectPublisher = (project: Project) => void;
+type ProjectRemovedPublisher = (id: string) => void;
 
 let publishProject: ProjectPublisher | null = null;
+let publishProjectRemoved: ProjectRemovedPublisher | null = null;
 
 export function setProjectPublisher(fn: ProjectPublisher | null): void {
 	publishProject = fn;
 }
 
+export function setProjectRemovedPublisher(fn: ProjectRemovedPublisher | null): void {
+	publishProjectRemoved = fn;
+}
+
 function emit(project: Project): void {
 	publishProject?.(project);
+}
+
+function emitRemoved(id: string): void {
+	publishProjectRemoved?.(id);
 }
 
 function gitToplevel(path: string): string | null {
@@ -253,6 +263,7 @@ export function discardDraftProject(id: string): Project | null {
 	const workspaces = loadWorkspaces();
 	const remaining = workspaces.filter((ws) => ws.projectId !== id);
 	if (remaining.length !== workspaces.length) saveWorkspaces(remaining);
+	emitRemoved(id);
 	return project;
 }
 

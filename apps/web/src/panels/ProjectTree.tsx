@@ -203,6 +203,19 @@ export function ProjectTree() {
 			});
 	};
 
+	const discardDraft = (project: Project) => {
+		pendingCloseFocusProjectIdRef.current = project.id;
+		void getTransport()
+			.request("project.discardDraft", { id: project.id })
+			.catch((err) => {
+				if (pendingCloseFocusProjectIdRef.current === project.id) {
+					pendingCloseFocusProjectIdRef.current = null;
+				}
+				focusProjectNameOrAdd(project.id);
+				toast.error(errorText(err, `Couldn't delete ${project.name}`));
+			});
+	};
+
 	const openWorkspaceDialog = (projectId: string, returnFocusToProject: boolean) => {
 		workspaceDialogReturnFocusIdRef.current = returnFocusToProject ? projectId : null;
 		setDialogProjectId(projectId);
@@ -249,6 +262,7 @@ export function ProjectTree() {
 								onToggle={() => toggleExpand(project.id)}
 								onSelect={() => void selectProject(project.id)}
 								onClose={() => closeProject(project)}
+								onDiscardDraft={() => discardDraft(project)}
 								onAddWorkspace={() => openWorkspaceDialog(project.id, false)}
 								onAddWorkspaceFromMenu={() => openWorkspaceDialog(project.id, true)}
 								onOpenExistingWorktree={() => openExistingWorktreeDialog(project.id)}
@@ -320,6 +334,7 @@ function ProjectRow({
 	onToggle,
 	onSelect,
 	onClose,
+	onDiscardDraft,
 	onAddWorkspace,
 	onAddWorkspaceFromMenu,
 	onOpenExistingWorktree,
@@ -333,6 +348,7 @@ function ProjectRow({
 	onToggle: () => void;
 	onSelect: () => void;
 	onClose: () => void;
+	onDiscardDraft: () => void;
 	onAddWorkspace: () => void;
 	onAddWorkspaceFromMenu: () => void;
 	onOpenExistingWorktree: () => void;
@@ -341,6 +357,7 @@ function ProjectRow({
 }) {
 	const Chevron = isExpanded ? ChevronDown : ChevronRight;
 	const Folder = isSelected ? RiFolderFill : RiFolderLine;
+	const isDraft = project.draft === true;
 	const [menuOpen, setMenuOpen] = useState(false);
 	const [confirmOpen, setConfirmOpen] = useState(false);
 	const openingDialogRef = useRef(false);
@@ -451,34 +468,68 @@ function ProjectRow({
 						Open existing worktree…
 					</ContextMenuItem>
 					<ContextMenuSeparator />
-					<ContextMenuItem
-						data-testid="project-menu-close"
-						onSelect={(event) => {
-							event.preventDefault();
-							openDialogAfterMenu(() => setConfirmOpen(true));
-						}}
-					>
-						<X />
-						Close project
-					</ContextMenuItem>
+					{isDraft ? (
+						<ContextMenuItem
+							data-testid="project-menu-delete-draft"
+							className="text-feedback-error focus:bg-feedback-error-subtle [&_svg]:text-feedback-error"
+							onSelect={(event) => {
+								event.preventDefault();
+								openDialogAfterMenu(() => setConfirmOpen(true));
+							}}
+						>
+							<Trash2 />
+							Delete draft
+						</ContextMenuItem>
+					) : (
+						<ContextMenuItem
+							data-testid="project-menu-close"
+							onSelect={(event) => {
+								event.preventDefault();
+								openDialogAfterMenu(() => setConfirmOpen(true));
+							}}
+						>
+							<X />
+							Close project
+						</ContextMenuItem>
+					)}
 				</ContextMenuContent>
 			</ContextMenu>
-			<ConfirmDialog
-				open={confirmOpen}
-				onOpenChange={setConfirmOpen}
-				title={`Close ${project.name}?`}
-				description="Removes this project from the open projects list. Its repository, workspaces, chats, and running activity are kept. Reopen it from Add project → Recents."
-				confirmLabel="Close project"
-				confirmTestId="confirm-close-project"
-				onConfirm={() => {
-					closeConfirmedRef.current = true;
-					onClose();
-				}}
-				onClosedAutoFocus={() => {
-					if (!closeConfirmedRef.current) onRestoreFocus();
-					closeConfirmedRef.current = false;
-				}}
-			/>
+			{isDraft ? (
+				<ConfirmDialog
+					open={confirmOpen}
+					onOpenChange={setConfirmOpen}
+					title={`Delete ${project.name}?`}
+					description="This project is still being set up. Deleting it discards its folder on disk — its git repo, the setup chat, and everything in it — permanently. This can't be undone."
+					confirmLabel="Delete draft"
+					destructive
+					confirmTestId="confirm-delete-draft"
+					onConfirm={() => {
+						closeConfirmedRef.current = true;
+						onDiscardDraft();
+					}}
+					onClosedAutoFocus={() => {
+						if (!closeConfirmedRef.current) onRestoreFocus();
+						closeConfirmedRef.current = false;
+					}}
+				/>
+			) : (
+				<ConfirmDialog
+					open={confirmOpen}
+					onOpenChange={setConfirmOpen}
+					title={`Close ${project.name}?`}
+					description="Removes this project from the open projects list. Its repository, workspaces, chats, and running activity are kept. Reopen it from Add project → Recents."
+					confirmLabel="Close project"
+					confirmTestId="confirm-close-project"
+					onConfirm={() => {
+						closeConfirmedRef.current = true;
+						onClose();
+					}}
+					onClosedAutoFocus={() => {
+						if (!closeConfirmedRef.current) onRestoreFocus();
+						closeConfirmedRef.current = false;
+					}}
+				/>
+			)}
 		</>
 	);
 }

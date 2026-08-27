@@ -26,7 +26,12 @@ snapshots plus device-local attention, terminal catalogs, and one **per-session 
   callers. **`projects`** is the open rail, while **`recentProjects`** is the last-opened-ordered set of every
   known open + closed project. **`applyProjectUpdated(project)`** is the one full-snapshot updater for
   `project.updated` pushes and authoritative project-mutation responses: it upserts/sorts Recents and either
-  upserts/sorts the rail or removes the row when `closed === true`. Both actions reconcile stale navigation
+  upserts/sorts the rail or removes the row when `closed === true`. **`applyProjectRemoved(projectId)`** is
+  its hard-removal counterpart for the `project.removed` push (a discarded **draft**): it drops the record
+  from **both** the rail and Recents (unlike close, which keeps it in Recents) and tears down every
+  workspace of that project (tombstone ids, clear tabs/sessions, drop the per-workspace fs/spec/review/
+  diff-scope maps, null any request pointing into it) — the project-level analogue of
+  `applyWorkspaceRemoved`. Both project actions reconcile stale navigation
   too: only when this client's selected project or active workspace belongs to a record no longer open,
   they clear the active workspace and select the first remaining project's Home (or `null` when none
   remain), while deliberately retaining every workspace layout/attention/resource-render/terminal/session

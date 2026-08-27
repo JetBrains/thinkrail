@@ -27,7 +27,11 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   ~700ms long press is its touch equivalent. With a project-name button focused, the standard Context Menu
   key or Shift+F10 opens the same menu for keyboard-only use; arrow/activate/Escape keys work normally.
   The menu is neutral: **Plus Create workspace**, **FolderOpen Open existing worktree…**, separator,
-  **X Close project**. Create is exactly the direct `+` flow. Open existing worktree opens the
+  then **X Close project** — **except for a `draft` project** (a not-yet-finalized create-from-scratch
+  project), where that last item is instead a destructive **Trash2 Delete draft** whose confirm
+  (`confirm-delete-draft`, destructive) warns it discards the draft's folder on disk permanently and fires
+  **`project.discardDraft`** (converging via the `project.removed` push, no optimistic removal). Create is
+  exactly the direct `+` flow. Open existing worktree opens the
   `ExistingWorktreeDialog` chooser fed by `workspace.listExisting` (branch + absolute path per row;
   detached-HEAD rows stay visible but disabled); choosing one calls `workspace.openExisting`, then expands
   the project and activates the attached row without starting a chat. Close

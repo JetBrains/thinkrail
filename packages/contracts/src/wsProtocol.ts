@@ -84,7 +84,7 @@ export interface TerminalTabsPush {
 	tabs: TerminalTabInfo[];
 }
 
-export const PROTOCOL_VERSION = 52;
+export const PROTOCOL_VERSION = 53;
 
 export type HostPlatform = "darwin" | "linux" | "win32";
 
@@ -99,6 +99,10 @@ export interface ServerWelcome {
 
 export interface WorkspaceRemoved {
 	projectId: string;
+	id: string;
+}
+
+export interface ProjectRemoved {
 	id: string;
 }
 
@@ -219,6 +223,7 @@ export const WS_METHODS = {
 export const WS_CHANNELS = {
 	serverWelcome: "server.welcome",
 	projectUpdated: "project.updated",
+	projectRemoved: "project.removed",
 	piEvent: "pi.event",
 	piExtensionUi: "pi.extensionUi",
 	sessionDeleted: "session.deleted",

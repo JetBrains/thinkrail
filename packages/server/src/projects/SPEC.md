@@ -46,9 +46,11 @@ one-shot). The
   `cwd` variant is the seam the host-owned `finalize_project` agent tool keys on (the Default workspace's
   cwd is the project folder). `discardDraftProject(id)` is the abandon/recovery path (section 9): it
   **refuses a non-draft**, removes the project record **and its workspace records** (via `persistence` —
-  the same sibling-free access the open-guard uses), and `rmSync`s the managed dir **only when it resolves
-  under the created-projects root** (a hand-edited record pointing at a user dir is never removed). A
-  failed `createDraftProject` rolls back its dir so nothing is left registered.
+  the same sibling-free access the open-guard uses), `rmSync`s the managed dir **only when it resolves
+  under the created-projects root** (a hand-edited record pointing at a user dir is never removed), and
+  **publishes a `project.removed` push** via the injected `setProjectRemovedPublisher` seam so every
+  client drops the record (the removed counterpart of `setProjectPublisher`). A failed
+  `createDraftProject` rolls back its dir so nothing is left registered.
   It also owns **`inspectProjectPath`** (classify a path — `repo` / `initable` / `missing` /
   `notDirectory` — so the UI picks between opening, an init offer, or an error) and **`initProject`**
   (bootstrap a plain directory: `git init` + `git add -A` + an **allow-empty** initial commit — committing
@@ -59,8 +61,8 @@ one-shot). The
   — `host` answers the lazy `project.hasSpecs` query via `spec.projectHasSpecs`, keeping this module free
   of any spec dependency.)
 - **Public surface (barrel):** `openProject`, `listProjects`, `listRecentProjects`, `closeProject`,
-  `getProjects`, `setProjectPublisher`, `inspectProjectPath`, `initProject`, `createDraftProject`,
-  `finalizeProject`, `finalizeProjectByPath`, `discardDraftProject`.
+  `getProjects`, `setProjectPublisher`, `setProjectRemovedPublisher`, `inspectProjectPath`,
+  `initProject`, `createDraftProject`, `finalizeProject`, `finalizeProjectByPath`, `discardDraftProject`.
 - **Allowed deps:** `persistence`; the `git` sub-module (shared `git()` runner, which now owns the
   environment its children spawn under — this module passes none); `contracts` (`Project`, `ProjectPathStatus`); Node/Bun.
 - **Forbidden:** `host`; sibling features other than `git` (`workspaces` depends on `projects`, never the
