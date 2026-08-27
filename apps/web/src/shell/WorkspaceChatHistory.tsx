@@ -11,6 +11,7 @@ import {
 	DropdownMenuLabel,
 	DropdownMenuTrigger,
 } from "../components/ui/dropdown-menu";
+import { IconTooltip } from "../components/ui/tooltip";
 import { relativeTime } from "../lib";
 import { openChatInTab } from "../panels/openChat";
 import { type ClosedChat, toast, useAppStore } from "../store";
@@ -27,14 +28,15 @@ export function WorkspaceChatHistory({
 	if (closed.length === 0) return null;
 	return (
 		<DropdownMenu>
-			<DropdownMenuTrigger
-				data-testid="chat-history"
-				aria-label="Reopen a closed chat"
-				title="View chat history"
-				className="flex w-32 shrink-0 items-center justify-center border-border-default border-l text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
-			>
-				<History className="size-14" />
-			</DropdownMenuTrigger>
+			<IconTooltip label="View chat history" wrapTrigger>
+				<DropdownMenuTrigger
+					data-testid="chat-history"
+					aria-label="Reopen a closed chat"
+					className="flex w-32 shrink-0 items-center justify-center border-border-default border-l text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
+				>
+					<History className="size-14" />
+				</DropdownMenuTrigger>
+			</IconTooltip>
 			<DropdownMenuContent align="end" className="min-w-[16rem]">
 				<DropdownMenuLabel>Recently closed</DropdownMenuLabel>
 				{closed.map((chat) => (
@@ -60,28 +62,29 @@ export function WorkspaceChatHistory({
 							</span>
 							<RotateCcw className="size-14 shrink-0 text-text-muted" />
 						</DropdownMenuItem>
-						<DropdownMenuItem
-							data-testid="closed-chat-delete"
-							aria-label={`Move ${chat.title} to trash`}
-							title="Move chat to trash"
-							onSelect={() => {
-								void getTransport()
-									.request("session.delete", { workspaceId, sessionId: chat.sessionId })
-									.then(() => useAppStore.getState().deleteChat(workspaceId, chat.sessionId))
-									.catch((error) => {
-										const state = useAppStore.getState();
-										if (
-											!state.removedWorkspaceIds[workspaceId] &&
-											!state.deletedSessionsByWorkspace[workspaceId]?.[chat.sessionId]
-										) {
-											toast.error(errorText(error), "Couldn't delete the chat");
-										}
-									});
-							}}
-							className="shrink-0 px-4 text-text-muted focus:text-feedback-error"
-						>
-							<Trash2 className="size-14" />
-						</DropdownMenuItem>
+						<IconTooltip label="Move chat to trash">
+							<DropdownMenuItem
+								data-testid="closed-chat-delete"
+								aria-label={`Move ${chat.title} to trash`}
+								onSelect={() => {
+									void getTransport()
+										.request("session.delete", { workspaceId, sessionId: chat.sessionId })
+										.then(() => useAppStore.getState().deleteChat(workspaceId, chat.sessionId))
+										.catch((error) => {
+											const state = useAppStore.getState();
+											if (
+												!state.removedWorkspaceIds[workspaceId] &&
+												!state.deletedSessionsByWorkspace[workspaceId]?.[chat.sessionId]
+											) {
+												toast.error(errorText(error), "Couldn't delete the chat");
+											}
+										});
+								}}
+								className="shrink-0 px-4 text-text-muted focus:text-feedback-error"
+							>
+								<Trash2 className="size-14" />
+							</DropdownMenuItem>
+						</IconTooltip>
 					</DropdownMenuGroup>
 				))}
 			</DropdownMenuContent>

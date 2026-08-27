@@ -181,6 +181,15 @@ test("selection → icon → inline composer → draft; the tab wears the violet
 	await expect(page.getByTestId("review-comment-revert")).toHaveCount(0);
 	await page.getByTestId("review-comment-delete").click();
 	await expect(page.getByTestId("confirm-popover")).toBeVisible();
+	await page.mouse.move(0, 0);
+	await expect
+		.poll(() =>
+			page.getByTestId("review-comment-delete").evaluate((node) => {
+				const actions = node.closest('[class*="opacity-0"]');
+				return actions ? getComputedStyle(actions).opacity : null;
+			}),
+		)
+		.toBe("1");
 	await page.getByTestId("review-comment-delete-confirm").click();
 	await expect(rows).toHaveCount(0);
 	await expect(page.getByTestId("review-tab-flag")).toHaveCount(0);
