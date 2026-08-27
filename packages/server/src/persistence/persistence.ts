@@ -82,6 +82,8 @@ export function loadConfig(): AppConfig {
 		composerGrowthLimit: isComposerGrowthLimit(value.composerGrowthLimit)
 			? value.composerGrowthLimit
 			: DEFAULT_CONFIG.composerGrowthLimit,
+		reviewAutoFix:
+			typeof value.reviewAutoFix === "boolean" ? value.reviewAutoFix : DEFAULT_CONFIG.reviewAutoFix,
 		layout: {
 			defaultPresetId:
 				typeof layoutValue.defaultPresetId === "string" &&

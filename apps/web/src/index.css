@@ -248,7 +248,8 @@
 	align-items: stretch;
 	gap: var(--space-8);
 	margin: var(--space-4) 0 var(--space-4) var(--space-12);
-	max-width: 560px;
+	/* Keep in sync with reviewWidgets.ts' CARD_MAX_WIDTH (the Monaco view-zone clamp). */
+	max-width: 832px;
 	padding: var(--space-8);
 	border: 1px solid var(--border-default);
 	border-radius: var(--radius-md);
@@ -340,7 +341,8 @@
 /* The preview's in-flow composer + the commented-region mark (parity with Monaco's decorations). */
 .review-composer-flow {
 	margin: var(--space-8) 0 var(--space-8) var(--space-12);
-	max-width: 560px;
+	/* Keep in sync with reviewWidgets.ts' CARD_MAX_WIDTH (the Monaco view-zone clamp). */
+	max-width: 832px;
 }
 /* The commented region in the preview: a thin LEFT RAIL only (the gutter-rail half of Monaco's
    decoration — `.review-comment-rail`), never a background wash. A full-block wash reads as a broken

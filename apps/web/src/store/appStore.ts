@@ -4,6 +4,7 @@ import type {
 	ComposerGrowthLimit,
 	ExtUiRequest,
 	GitDiffScope,
+	HostPlatform,
 	LayoutAuxiliaryRegion,
 	LayoutChangedPayload,
 	LayoutSettings,
@@ -231,6 +232,7 @@ export const SettingsSection = {
 	Layout: "layout",
 	Terminal: "terminal",
 	Templates: "templates",
+	Review: "review",
 	Privacy: "privacy",
 } as const;
 export type SettingsSection = (typeof SettingsSection)[keyof typeof SettingsSection];
@@ -641,6 +643,7 @@ interface AppState {
 	connectionGeneration: number;
 	welcomeGeneration: number;
 	protocolVersion: number | null;
+	hostPlatform: HostPlatform | null;
 	projects: Project[];
 	recentProjects: Project[];
 	workspaces: Record<string, Workspace[]>;
@@ -698,6 +701,9 @@ interface AppState {
 	analyticsEnabled: boolean;
 	terminalReplayKb: number;
 	composerGrowthLimit: ComposerGrowthLimit;
+	reviewModel: WireModel | undefined;
+	reviewEffort: ThinkingLevel | undefined;
+	reviewAutoFix: boolean;
 	layoutSettings: LayoutSettings;
 	toasts: Toast[];
 	setStatus: (status: ConnectionStatus) => void;
@@ -706,6 +712,7 @@ interface AppState {
 		projects: Project[],
 		recentProjects: Project[],
 		config?: AppConfig,
+		hostPlatform?: HostPlatform,
 	) => void;
 	installProjectSnapshot: (projects: Project[], recentProjects: Project[]) => void;
 	applyProjectUpdated: (project: Project) => void;
@@ -899,6 +906,9 @@ function configPatch(config: AppConfig) {
 		terminalReplayKb: config.terminalReplayKb,
 		composerGrowthLimit: config.composerGrowthLimit ?? DEFAULT_CONFIG.composerGrowthLimit,
 		layoutSettings: config.layout ?? DEFAULT_CONFIG.layout,
+		reviewModel: config.reviewModel,
+		reviewEffort: config.reviewEffort,
+		reviewAutoFix: config.reviewAutoFix ?? DEFAULT_CONFIG.reviewAutoFix,
 	};
 }
 
@@ -1449,6 +1459,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	connectionGeneration: 0,
 	welcomeGeneration: 0,
 	protocolVersion: null,
+	hostPlatform: null,
 	projects: [],
 	recentProjects: [],
 	workspaces: {},
@@ -1500,6 +1511,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 	terminalReplayKb: DEFAULT_CONFIG.terminalReplayKb,
 	composerGrowthLimit: DEFAULT_CONFIG.composerGrowthLimit,
 	layoutSettings: DEFAULT_CONFIG.layout,
+	reviewModel: DEFAULT_CONFIG.reviewModel,
+	reviewEffort: DEFAULT_CONFIG.reviewEffort,
+	reviewAutoFix: DEFAULT_CONFIG.reviewAutoFix,
 	toasts: [],
 	setStatus: (status) =>
 		set((state) => ({
@@ -1507,13 +1521,14 @@ export const useAppStore = create<AppState>((set, get) => ({
 			connectionGeneration:
 				status === "connected" ? state.connectionGeneration + 1 : state.connectionGeneration,
 		})),
-	installWelcomeSnapshot: (protocolVersion, projects, recentProjects, config) =>
+	installWelcomeSnapshot: (protocolVersion, projects, recentProjects, config, hostPlatform) =>
 		set((state) => {
 			const openProjects = sortProjects(projects.filter((project) => project.closed !== true));
 			return {
 				protocolVersion,
 				projects: openProjects,
 				recentProjects: sortProjects(recentProjects),
+				hostPlatform: hostPlatform ?? null,
 				...(config ? configPatch(config) : {}),
 				...reconcileProjectNavigation(state, openProjects),
 				...pruneExpandedProjects(state, openProjects),

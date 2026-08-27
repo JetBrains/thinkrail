@@ -61,6 +61,7 @@ internals**. The edges between them are owned here (see the dependency graph), n
 | `subprocess` | `runBounded(argv, …)`: one child, one budget, killed by process group on expiry | [subprocess/SPEC.md](src/subprocess/SPEC.md) |
 | `github` | read-only local `gh` auth status (shell-out) for the New-Workspace surface | [github/SPEC.md](src/github/SPEC.md) |
 | `branch-review` | best-effort open GitHub PR / GitLab MR number for a workspace branch | [branch-review/SPEC.md](src/branch-review/SPEC.md) |
+| `pr` | `pr.open`: push the workspace branch + open/update its GitHub PR, body rendered from the plan | [pr/SPEC.md](src/pr/SPEC.md) |
 | `fs` | read dirs/files inside a worktree (path-contained) | [fs/SPEC.md](src/fs/SPEC.md) |
 | `spec` | the worktree's spec-graph snapshot (`spec.graph`) + project-level `projectHasSpecs`, via `pi-spec-graph/core` | [spec/SPEC.md](src/spec/SPEC.md) |
 | `todos` | a chat's per-session TODO plan read/write (`todo.*`), via `pi-todos/core` | [todos/SPEC.md](src/todos/SPEC.md) |
@@ -83,9 +84,10 @@ the host from env via `bootHost` for dev/e2e.
 
 `host` is the **only composition root** — it wires each feature's handlers into the WS registry.
 
-- `host` → `projects`, `workspaces`, `git`, `github`, `branch-review`, `fs`, `spec`, `todos`, `reviews`, `watch`, `terminal`, `dialog`, `editors`, `agent`, `auth`, `assist`, `settings`, `layout`, `history`, `templates`, `analytics`, `log`, `persistence` (`dataDir`, for the crash report)
+- `host` → `projects`, `workspaces`, `git`, `github`, `branch-review`, `pr`, `fs`, `spec`, `todos`, `reviews`, `watch`, `terminal`, `dialog`, `editors`, `agent`, `auth`, `assist`, `settings`, `layout`, `history`, `templates`, `analytics`, `log`, `persistence` (`dataDir`, for the crash report)
 - `workspaces` → `projects`, `git`, `persistence`
 - `branch-review` → `git`, `subprocess`
+- `pr` → `workspaces`, `git`, `todos`, `branch-review` (provider detection + gh-output parsing + the shared CLI runner), `github` (`ghSetupProblem` — the named compare-fallback reason)
 - `projects` → `git` (shared runner), `persistence`
 - `git` → `subprocess` (every child that talks to a network or another CLI)
 - `git`, `fs`, `spec`, `watch`, `terminal`, `settings`, `layout`, `analytics` → `persistence` (`spec` also → `pi-spec-graph/core`, external; `analytics` also → the pi-ai built-in provider/model catalog + `posthog-node`, external — the identity-bucketing vocabulary and the delivery SDK)

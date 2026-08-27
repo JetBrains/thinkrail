@@ -386,9 +386,20 @@ a project picker, the prompt hero, and the reused
   ever seeds global files. No server change. **`PrivacySettings`** is the **anonymous-usage-analytics
   toggle** — a switch over `store.analyticsEnabled`, fired via `settings.update { analyticsEnabled }`
   with the same converge-on-broadcast pattern as the theme, plus the what-is/isn't-collected copy; only
-  the boolean ever crosses the wire, see `submodule-server-analytics`. A single dimmed "General" nav item ("Soon") still signals the shell is
+  the boolean ever crosses the wire, see `submodule-server-analytics`. **`ReviewSettings`** is the
+  **plan-review policy** section: the reviewer **model + effort** (`ModelSelector`/`ThinkingSelector` over
+  `useModelCatalog`, written as `settings.update { reviewModel | reviewEffort }`; unset ⇒ default). The
+  selector carries an **explicit default-model row** (`model-option-default`, labelled with the host's
+  `model.default` result) that writes `{ reviewModel: null, reviewEffort: null }` — the null-clears wire
+  form, see `submodule-server-settings` — so a chosen reviewer model can be restored to the pi default
+  without hand-editing host state; while unset, the effort control runs on the default model's supported
+  levels (fetched once from `model.default`) instead of an empty list. And an
+  **auto-fix toggle** (`review-autofix-toggle`, a switch over `store.reviewAutoFix` →
+  `settings.update { reviewAutoFix }`) — off means a `request_changes` verdict records findings and waits
+  (the host gates its auto-fix cycle on it, see `submodule-server-todos`). A single dimmed "General" nav item ("Soon") still signals the shell is
   built to grow. `ProvidersSettings`/`AppearanceSettings`/`ChatSettings`/`TemplatesSettings`/
-  `PrivacySettings` are the panels-owned **integration pieces** (store + transport); `SettingsDialog` receives the Layout section
+  `PrivacySettings`/`ReviewSettings` are the panels-owned **integration pieces** (store + transport);
+  `SettingsDialog` receives the Layout section
   from the shell composition root so no panel reaches sideways into shell, and the `LoginDialog` stays
   presentational (`auth` module).
 
@@ -406,15 +417,175 @@ a project picker, the prompt hero, and the reused
   registered **`plan`** tabs (`PlanTab`) via the lazy **`PlanPane`** — the chat plan's **live review-map
   page**. Shared layout stores only the `todo-plan` resolver kind + session identity, never inline plan
   content, so every client can rehydrate the same page. It renders the session's TODO plan document-scale
-  (groups as sections, items with status glyphs), each done item carrying a **collapsible** change set — a
-  disclosure whose summary line (sha chip + `N files` + `DiffStatBadge`) toggles the commit's
-  `GitFileChange[]` rows, **collapsed by default** so a long plan stays compact; the chevron/summary is the
+  (groups as sections, items with status glyphs) with a **scan-first item anatomy**: the item TITLE is
+  the only full-size text (`tr-text-ui font-medium`), every detail is a step down (`tr-text-metadata`,
+  subtle/muted) — so titles never blend into prose. A **done item collapses to a compact two-line
+  block**: line 1 is a LEADING chevron (matching the change-set disclosure's anatomy; non-collapsible
+  rows reserve the chevron's width with a ghost spacer so every title in the list aligns) + the title,
+  with the **review slot at its right edge**; line 2 is a quiet meta strip UNDER the title (the
+  verification glyph — `ShieldCheck`/`CircleAlert` off `verificationStatus`, `N files`, and — hidden
+  below `sm` so the title keeps its width on phones — short sha + `DiffStatBadge`), aligned to the
+  title via the same ghost-chevron spacer. The meta lives on its own line precisely so the title row's
+  right edge is free for the review slot — the reveal-on-hover action never collides with the title or
+  the meta. **The whole row is the hover target** (`group` on the `<li>`, ProjectTree's pattern):
+  hovering the row tints it and **reveals `Start review` — WITHOUT changing the row's height** (the
+  button reserves its slot in-flow and only fades in; hover never resizes the row). **Expansion is a
+  click, not a hover** (`plan-item-toggle` → `data-expanded`): the detail block is always mounted but
+  CSS-hidden (`hidden` → `group-data-[expanded=true]:flex`), so a click persists it (and it works on
+  touch, which has no hover) and the meta line yields to it (`group-data-[expanded=true]:hidden`);
+  the chevron rotates the same way. No JS hover state — a static `<div>` with mouse/focus handlers is
+  an a11y smell the lint rightly rejects. The detail block is an indented
+  left-rail (`border-l`) block holding the note, the agent's `summary`, the full `VerificationBadge`,
+  a changes_requested `feedback` note, the change set, **and — when the item accumulated 2+ commits
+  (fix cycles) — a REVISIONS mini-timeline** (`plan-revisions`/`plan-revision`, off
+  `planView.itemRevisions`): one row per commit in order (`#n` + sha chip routing the Changes panel +
+  `DiffStatBadge` when the sha still resolves), the last marked *current*, and any sha in the
+  review's `unreviewedShas` delta marked *unreviewed* (`data-unreviewed`) — the honest
+  how-the-agent-got-here story (commit → review → fix → commit) no final-diff view can tell.
+  Non-done items keep their note inline (no toggle — they rarely carry details). Inside the details, the change set stays its own **collapsible**
+  disclosure — a summary line (sha chip + `N files` + `DiffStatBadge`) toggling the commit's
+  `GitFileChange[]` rows; the chevron/summary is the
   toggle while the sha chip stays a separate button (routing the Changes panel, never toggling). Expanded,
   file rows open Monaco diff tabs at the item's `commit:{sha}` scope (`openDiffInTab`, preview intent; the
-  path-list fallback opens at branch scope, no counts because they would drift), and header **Copy** / **Save
-  .md** actions compile through `chat/planMarkdown`. Live by construction, it reads through the same
-  `useChatTodos` hook as the plan popup (per-mount fetch + `pi.event` refetch), so it cannot show a stale
-  snapshot. `TerminalWorkbench` owns one visibility-gated terminal body per semantic terminal identity and
+  path-list fallback opens at branch scope, no counts because they would drift), **and the review verdict
+  ON the item row itself**: the row's right edge is ONE review slot rendering exactly one of, in
+  precedence order, the clickable `Reviewing…` label (`plan-item-reviewing`, off the host-derived
+  `review.reviewing`, opens the reviewer chat), the warning `Changes requested · N` chip, or the
+  primary-filled `Start review` button (`plan-start-review` — the standard **small** action button:
+  `h-6`/`tr-text-action`/`control-primary-bg`, the same size as `SendReviewButton`, not an oversized
+  `min-h-8` block) for an unsettled reviewable item. The two **status**
+  readouts stay always visible (state, not an action); the **`Start review` action reveals on the
+  row's hover / keyboard focus**, exactly like the ProjectTree kebab: `[@media(hover:hover)]:opacity-0`
+  + `[@media(hover:hover)]:group-hover:opacity-100` + `focus-visible:opacity-100` — so a wall of
+  primary buttons never paints across every reviewable row on desktop, yet on a **touch** device (no
+  hover) it stays visible, and it never sticks the way `group-focus-within` did. It is an **in-flow**
+  button on the title line (the meta on line 2 frees that right edge, so the title simply shrinks for
+  it — no overlap, no empty reserved slot). Still one slot, no duplicates — the change-set disclosure
+  row carries NO review affordance.
+  `Start review` fires the AGENT review (`todo.startReview` — the plan's reviewer chat) and STAYS on
+  the plan page: the row's `Reviewing…` pulse and a toast are the only signals, success AND failure —
+  the detached error notice lands in a reviewer chat nobody has open, so the toast must carry it.
+  Row controls (`plan-item-toggle`, the change-set toggle, the sha chip, the review slot, `FileRow`)
+  wear `min-h-8` — the dense metadata rows stay tappable on touch. `planView.changeSetCounts` is the
+  one count/stat derivation (paths → count only; commit → `changeSetStat`), shared by the row's meta
+  strip and the disclosure line. There is **no in-page manual verdict UI** — the former `manually` toggle
+  + `ReviewActions` pair (Approve / Ask to fix) was removed with `PlanReview.tsx`; the `todo.review` /
+  `todo.requestFix` wire methods and host handlers stay, so a manual-override surface can return without
+  protocol work; agent-authored findings appear in the Review
+  panel badged `agent` (`review-comment-agent`), and an agent-settled card reads `Reviewed · agent`;
+  a **changes_requested** verdict marks the item loudly: the status glyph flips to the warning
+  `CircleAlert` (`StatusIcon changesRequested`, `data-changes-requested` — popup row and plan page
+  alike), the plan page's title row grows a warning **`Changes requested · N`** chip
+  (`plan-item-changes-requested`; N = `planView.itemOpenFindings`, the reviewer's open comments
+  matched by `origin` provenance (path-join fallback for provenance-less ones) — the Review tab is
+  the truth; the chip
+  `requestToolView`s the Review tab) and the verdict's `feedback` note renders inline
+  (`plan-item-review-feedback`); approving settles the item — its status glyph upgrades to the **circled Verified check**
+  (`StatusIcon reviewed`, hover "Verified", `data-reviewed` on the row; `planView.reviewSettled` is the
+  one derivation — approved AND no unreviewed delta, so a fresh revision drops the item back out of both
+  the glyph and the reviewed counter). **The header is a title + a lifecycle STEPPER and a kebab menu**. The stepper (`plan-progress`)
+  renders the plan's shipping funnel — **Build (`d/t done`) → Review (`r/k reviewed`,
+  `plan-review-progress`, only when the plan has reviewable items) → PR (`plan-pr-stage`,
+  `data-state`)** — each stage wearing a glyph for its state: done (check), active (the stage the
+  plan is currently at), pending (muted). The PR stage reads the same `useOpenBranchReview` lookup
+  as the button and shows `PR #N` once one is open; "merged" is unknowable in V1 (the lookup only
+  sees OPEN reviews), so the funnel honestly ends at PR-open. Under the stepper sits the **work
+  CONTEXT line** (`plan-context`): `branch ← baseBranch · N commits · +A −R` — commits summed over
+  `itemRevisions`, the total diff from the workspace record's `diffStats`; each piece hides when
+  unknown. Between header and summary lives the **NEXT-ACTION banner** (`plan-next-action`,
+  `data-kind`) — the report's one "what now", rendering the FIRST matching state by urgency:
+  `fix` (N steps carry changes_requested → **Show step** scrolls to the first flagged item and
+  auto-expands it via the `focusRequest` token — `{ id, tick }`, tick bumped per click and consumed
+  once per tick by the target `ItemBlock`, so a re-click re-expands a manually collapsed row and a
+  stale request can't reopen it later) → `review`
+  (N unsettled reviewables → an inline **Review All** button, same `todo.reviewAll` flow as the
+  kebab item, which stays) → `ship` (all done + reviewed, no open PR → an inline **Open PR**,
+  same `pr.open` flow as the header button) → hidden when nothing demands action. The plan-level
+  completion note wears a `Summary` eyebrow so the report reads in labeled sections. After the item
+sections the page renders **`Outside the plan`** (`plan-unattributed`, only when
+`TodoPlan.unattributed` is non-empty — including on an otherwise empty plan): the host-derived
+uncommitted rows no item claims (derivation: [[submodule-server-todos]]), rendered as `FileRow`s
+opening the **uncommitted-scope** diff — the honesty section that keeps un-planned work visible in
+the review map instead of reading as "nothing else changed"; `chat/planMarkdown` exports it as its
+own section. The kebab menu (`plan-menu`, a
+  `DropdownMenu`) holding **Copy** (clipboard) / **Save .md** (browser download) — both compiling through
+  `chat/planMarkdown` — and, when the plan has reviewable items, **Review All** (`plan-review-all`): fires
+  `todo.reviewAll`, the host-side queue that agent-reviews every *unsettled* reviewable item one at a time
+  (disabled when none are unsettled; a toast reports how many were queued, the per-row `Reviewing…` pulses
+  track progress), plus **Open draft PR** (`plan-open-draft-pr`, hidden once a PR exists). **The header
+  also owns the plan's finish line — Open PR** (`plan-open-pr`, task-open-pr): a deterministic
+  host-side flow (push + `gh`, NEVER an agent prompt) that goes through the **compose dialog**
+  (`PrComposeDialog.tsx`, `pr-compose-dialog`): the click fetches `pr.preview` and opens editable
+  Title (`pr-compose-title`) + Description (`pr-compose-body`, prefilled from the plan) fields;
+  only the submit (`pr-compose-submit`, label follows the action — Open PR / Open draft PR / Push
+  updates) runs `pr.open` with the edited `title`/`body`. The dialog closes on success, stays open
+  on a generic failure (edits survive the toast), and hands off to `PrSetupDialog` on
+  `PUSH_AUTH_FAILED` — whose Try again re-submits the LAST edited title/body (kept in a ref), never
+  a re-rendered draft. The header button is primary-filled when the plan is
+  *ready* (all done + all reviews settled) and quiet otherwise; once an open PR exists (the same
+  `workspace.openReview` lookup the shell's scope label uses, via `useOpenBranchReview` — the hook
+  lives in `panels` because nothing may import `shell`) the label flips to **Push updates**
+  (same call — the host pushes to the SAME branch/PR and refreshes its body); when the lookup reports
+  **`unpushedCommits`** the label appends the count (`Push updates (N)`), the button turns
+  primary-filled, and the next-action banner grows a `push` arm ("N new commits aren't in PR #N
+  yet" + Push updates) so new work after the PR never sits silently local — a successful push
+  reseeds the state without the count, clearing both. Also a **`PR #N` chip**
+  (`plan-pr-chip`) links out when the URL is known. The hook owns the ONE keyed PR state:
+  `noteOpenReview(review, url?)` seeds it right after `pr.open` (no separate shadow state in the
+  page), and the focus-refetch overwrites it — a PR closed/merged on GitHub drops out of the chip,
+  the label, and the stepper on the next refetch instead of sticking until remount (the url is kept
+  across refetches while the review number matches). A `compare` result opens the prefilled GitHub
+  compare page (`window.open`); every outcome toasts, uncommitted files get a separate info toast.
+  The `pr.open` request runs with a **180s timeout** (push + gh mutation can outlast the transport's
+  60s default) and the header button wears a spinner while any PR work is in flight — the
+  **Pushing…** label only during the actual submit (a preview fetch is not a push, and its failure
+  toasts "Couldn't prepare the PR", never "Open PR failed"). The uncommitted-files info toast fires
+  once, before the outcome branches. A successful submit with no `review` in the result (gh broken
+  or non-GitHub remote) reseeds the open-review state WITHOUT `unpushedCommits` — the push
+  succeeded, so the count and the push banner must clear even when the PR lookup payload is absent —
+  but only when a count was actually showing, so the render-time closure can't overwrite a fresher
+  focus-refetch in the no-count case. The compose submit also reports whether the title was touched
+  (`titleEdited`) so the host never rewrites a GitHub-side rename with the regenerated prefill.
+  **Failures that name a fixable setup gap open `PrSetupDialog` (`PrSetupDialog.tsx`,
+  `pr-setup-dialog`) instead of a toast**: a `PUSH_AUTH_FAILED` rejection (matched via the
+  transport's `wsErrorCode`) explains that the host pushes without a terminal and shows git's
+  stderr (`pr-setup-detail`) plus copyable fixes (`ssh-add --apple-use-keychain …` for SSH,
+  `gh auth login` for HTTPS); a `compare` result carrying `ghProblem` explains the missing/
+  unauthenticated GitHub CLI with install/sign-in commands and offers the compare page as an
+  in-dialog link (`pr-setup-compare` — a real anchor, so no popup-blocker risk) instead of the
+  blind `window.open`. Both variants keep a **Try again** (`pr-setup-retry`) that re-runs the same
+  flow — always with the LAST edited title/body (the `lastPrSubmit` ref, set on every submit,
+  cleared only when the flow fully succeeded, when the user explicitly cancels the compose dialog,
+  or when they take the compare-page hand-off (external completion the client can't observe) — a
+  `ghProblem` outcome otherwise keeps it, so the gh dialog's Try again actually re-submits;
+  reopening Open PR after a failure reuses those edits (including the edited-title baseline, so a
+  reopened draft doesn't lose its `titleEdited` flag) instead of refetching a regenerated draft); command rows copy via
+  `copyText` (`pr-setup-copy`) and carry a **Run** (`pr-setup-run`) that closes the dialog and
+  executes the command in a fresh workspace terminal via the store's
+  `addTerminal(workspaceId, initialCommand)` — the pty is a real interactive shell, so
+  passphrase/login prompts are answered right there instead of asking the user to find an external
+  terminal. Command sets are **host-platform-aware** (the welcome's `hostPlatform`, validated on
+  intake and RESET on every welcome so switching hosts can't leave a stale platform; there is **no
+  darwin fallback** — a null/unknown platform gets the generic commands: plain `ssh-add`, no
+  package-manager guess, a cli.github.com install hint): `ssh-add --apple-use-keychain` / `brew` on
+  macOS, plain `ssh-add` + the distro hint on Linux, `$env:USERPROFILE` + winget on Windows — the
+  commands run on the HOST, so the browser's own platform is never consulted. A push-auth detail
+  matching `Host key verification failed` adds an approve-the-host-key row (`ssh -T git@github.com`
+  run interactively) — the ssh-add/gh remedies don't fix known_hosts. A `compare`
+  *without* `ghProblem` (offline seam, transient gh failure) keeps the window.open + toast path.
+  This dialog is unit/e2e-pinned on the server side (`isPushAuthFailure`, `ghSetupProblem`); the
+  browser-side arms need a real broken push / missing gh, so they stay convention-held.
+  The agent's plan-level completion note (`plan-overall-summary`) renders **clamped to
+  3 lines** with a `Show more`/`Show less` toggle (`plan-overall-summary-toggle`, shown only for long
+  notes) — the page opens on the plan, not on a wall of prose. There is **no in-page "Review mode"** — findings live in the right-panel **Review** tab;
+  when the reviewer agent has open comments (`selectAgentReviewCommentCount` — open, `author: "agent"`) the
+  header shows a **`N comments`** chip (`plan-review-comments`) that `requestToolView(ws, "review")` to
+  focus that tab. The header also shows the agent's plan-level completion note
+  (`planCompletionSummary`-gated `plan-overall-summary`). `FileRow` (`planFileRow.tsx`, its own module so plan surfaces
+  share one row without cycles) is the shared change-set row. Live by
+  construction, it reads through the same `useChatTodos` hook as the plan popup (per-mount fetch +
+  `pi.event` refetch), so it cannot show a stale snapshot.
+  `TerminalWorkbench` owns one visibility-gated terminal body per semantic terminal identity and
   the host-atomic close flow. A busy close remains one correlated request through confirmation and forced
   retry; dialog auto-close cannot release that request, authoritative catalog removal dismisses stale
   confirmation, and a rejected force clears exactly that request with an error so a later close can start
@@ -495,11 +666,18 @@ a project picker, the prompt hero, and the reused
   calls `review.fileDone`, and only that removes the file (`Review.doneFiles`; a new comment
   re-opens it). An unfolded section shows the file's comments in
   the TODO plan's exact section flow, built from the SHARED plan atoms (`chat/planKit`:
-  `SectionLabel` + `PlanStatusIcon` — the same pieces `TodoList` renders with): **In progress** (sent — the chat took them; the glyph is GLANCE-AWARE exactly like a TODO's
+  `SectionLabel` + `PlanStatusIcon` — the same pieces `TodoList` renders with). **The reviewer
+  agent's comments and the user's ride ONE lifecycle** — the only difference an author badge
+  (`review-comment-agent`: a `Bot` + "ThinkRail" chip): they share the same sections, glyphs,
+  navigation, per-row send/delete/resolve, and draft counts (`fileDraftIds`/`allDraftIds` and the
+  host's implicit `sendableComments` are all author-agnostic; the verdict's fix package still sweeps
+  any agent draft the user hasn't already sent). Sections, by status — **Drafts** first (the
+  user's actionable, unsent remarks; the call-to-action sits under the file's `Send review (N)`
+  strip, not buried below sent rows) → **In
+  progress** (the sent — the chat took them; the glyph is GLANCE-AWARE exactly like a TODO's
   in-progress item, via `sessionGlance` + `TodoList.glanceIcon`: working dot / **(?)** while the
   session waits on an `ask_user_question` / pause when it's idle on the user — no loaded runtime reads
-  as waiting) →
-  **Drafts** (open circle) → **Resolved** (muted Done styling: primary check + struck hint text;
+  as waiting) → **Resolved** (muted Done styling: primary check + struck hint text;
   the chat action reveals on hover — resolved is final, no reopen). No per-row status words — the section names the status; rows carry
   only the glyph, the clamped text, and the `L3` ref (+ an `outdated` eyebrow when the anchor died).
   The locally selected center resource's section **auto-unfolds** when it is a reviewed file, and an
@@ -508,10 +686,11 @@ a project picker, the prompt hero, and the reused
   the pending glyph — and the workbench tool router **reveals the Review tool** when such a tab is
   ACTIVATED (keyed on the local selected-resource change, so a draft saved in an already selected resource
   never yanks attention; `selectActiveReviewedPath` is the shared derivation). Each
-  comment row is a **navigation gesture**, status-dependent: a DRAFT row (and a sent one without a
-  linked chat) opens the file **focused on the comment**; an IN-PROGRESS row with a chat opens **the
-  discussion** (its chat tab) — the file stays one hover-action away (the `FileText` glyph runs the
-  file+focus navigation; the chat glyph is gone from open rows). The file focus works through (the store's
+  comment row is a **navigation gesture**, one rule for every author: a row with a linked chat
+  (`comment.sessionId`) opens **the discussion** (its chat tab); one without — every draft, since a
+  draft is never sent — opens the file **focused on the comment**. The file stays one hover-action
+  away (the `FileText` glyph runs the file+focus navigation; the chat glyph is gone from open rows).
+  The file focus works through (the store's
   `reviewFocusRequest`, consumed exactly once by the pane: Monaco reveals the anchor line — including
   on a fresh mount, via `onMount` — the preview scrolls the in-flow card into view). **No editing
   here** — the in-file card is the editor; the row's action icons (their own layer, never triggering

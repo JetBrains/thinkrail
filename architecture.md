@@ -72,7 +72,11 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
    worktree model; and an **existing worktree** the user explicitly attaches in place
    (`kind: "external"`), which ThinkRail may forget but never mutates (see
    [[submodule-server-workspaces]]). The shell is built first,
-   `pi` connected last. Provider-backed PR / Checks stay V2 beyond a best-effort open GitHub PR or GitLab MR number in active-workspace metadata; workspace-local Review is V1.
+   `pi` connected last. **Open PR is V1**: a deterministic, host-side push + open/update of the branch's
+   GitHub PR through the user's own `gh` CLI (no stored tokens, no provider REST API), body rendered from
+   the verified plan, with a compare-URL fallback when `gh`/GitHub isn't available (see
+   [[submodule-server-pr]]). CI/Checks status, merge/squash from the app, and `glab` support stay V2;
+   workspace-local Review is V1.
 7. **Auth is external.** Tailscale ACLs / device identity are the auth; the app carries an `owner` field,
    not a login UI.
 8. **Hydrate-then-stream (every client reconstructs from the host).** A client never relies on having
@@ -183,4 +187,5 @@ The workflow **product layer** (a runtime/engine, configurable pipelines) — th
 rule, no runtime machinery); the spec-graph **product layer** beyond the read-only viewer (drift detection, pre-build
 approval, living graph) — the pi-side spec-graph *capability* ships in V1 as a bundled extension
 (`module-spec-graph`), and the V1 viewer is a read-only Specs tab over a `spec.graph` wire read;
-provider-backed PR / Checks, self-improvement, automations, per-step model routing, cost ledger.
+CI/Checks status and provider REST API integration beyond `gh`-CLI push/open/update (see
+[[submodule-server-pr]]), self-improvement, automations, per-step model routing, cost ledger.

@@ -97,7 +97,7 @@ export function createPinoOptions(level: LogLevel): LoggerOptions {
 		},
 		level,
 		redact: { paths: SECRET_PATHS, remove: true },
-		serializers: { err: (error) => error },
+		serializers: { err: (error: unknown) => error },
 		timestamp: pino.stdTimeFunctions.isoTime,
 	};
 }

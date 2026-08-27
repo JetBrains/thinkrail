@@ -7,12 +7,14 @@ This guide documents how to write and publish blog posts for thinkrail.ai/blog.
 Each post lives in its own directory under `content/blog/`:
 
 ```
-content/blog/
-└── YYYY-MM-DD-post-slug/
-    ├── index.md          # The post content
-    └── images/           # Optional: local images
-        ├── screenshot.png
-        └── diagram.svg
+content/
+├── authors.json          # Author profiles, keyed by author key
+└── blog/
+    └── YYYY-MM-DD-post-slug/
+        ├── index.md      # The post content
+        └── images/       # Optional: local images
+            ├── screenshot.png
+            └── diagram.svg
 ```
 
 The directory name should follow the pattern `YYYY-MM-DD-slug` for sorting, though the
@@ -27,6 +29,7 @@ Every post requires YAML frontmatter at the top of `index.md`:
 title: "Your Post Title"        # Required: displayed as H1 and in browser tab
 slug: post-url-slug             # Required: becomes /blog/post-url-slug/
 date: 2026-01-15                # Required: YYYY-MM-DD format (UTC)
+author: author-key              # Required: a key from content/authors.json
 excerpt: "A brief summary..."   # Optional: shown on blog index cards and as the page description
 draft: true                     # Optional: if true, post is skipped in production builds
 tags:                           # Optional: displayed on post and index cards
@@ -36,8 +39,8 @@ tags:                           # Optional: displayed on post and index cards
 ```
 
 The schema is validated at build time (`src/content.config.ts`): a missing required field, a
-malformed slug, a reserved slug (`rss`, `images`, …), or two posts sharing one slug **fail the
-build** — broken posts cannot reach production.
+malformed slug, a reserved slug (`rss`, `images`, …), an author key that isn't in `authors.json`,
+or two posts sharing one slug **fail the build** — broken posts cannot reach production.
 
 ### Field Details
 
@@ -46,9 +49,31 @@ build** — broken posts cannot reach production.
 | `title`   | Yes      | Post title (don't repeat as H1 in body — it's rendered from frontmatter) |
 | `slug`    | Yes      | URL slug (lowercase, hyphens, no spaces); becomes the permanent `/blog/<slug>/` URL |
 | `date`    | Yes      | Publish date in `YYYY-MM-DD` format (interpreted as UTC) |
+| `author`  | Yes      | Author key from `content/authors.json`; rendered as the post byline |
 | `excerpt` | No       | 1-2 sentence summary for index cards, SEO description, and the RSS feed |
 | `draft`   | No       | Set `true` to exclude from production builds (still visible in `bun run dev`) |
 | `tags`    | No       | Array of lowercase tags for categorization               |
+
+## Authors
+
+Authors are a shared entity, not a per-post name: profiles live in `content/authors.json` and posts
+reference one by key. Fixing a name or adding a link updates every post at once.
+
+```json
+{
+  "maciej-gorywoda": { "name": "Maciej Gorywoda" },
+  "jane-doe": { "name": "Jane Doe", "url": "https://example.com/jane" }
+}
+```
+
+| Field  | Required | Description                                                       |
+|--------|----------|-------------------------------------------------------------------|
+| `name` | Yes      | Display name shown in the byline                                  |
+| `url`  | No       | Profile/homepage link; the byline name becomes a link when present |
+
+Adding a new author means adding an entry here, then using its key as a post's `author`. The byline
+renders in the post header as `Author · Date · N min read`; the blog index cards and the RSS feed
+intentionally don't show it.
 
 ## Markdown Features
 
