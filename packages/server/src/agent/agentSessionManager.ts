@@ -918,10 +918,32 @@ export function liveParentContext(sessionId: string): ParentContext | undefined 
 	};
 }
 
+const pendingCascades = new Map<string, Set<Promise<void>>>();
+
+function trackCascade(workspaceId: string, cascade: Promise<void>): Promise<void> {
+	let pending = pendingCascades.get(workspaceId);
+	if (!pending) {
+		pending = new Set();
+		pendingCascades.set(workspaceId, pending);
+	}
+	const scope = pending;
+	const tracked: Promise<void> = cascade.then(() => {
+		scope.delete(tracked);
+		if (scope.size === 0 && pendingCascades.get(workspaceId) === scope) {
+			pendingCascades.delete(workspaceId);
+		}
+	});
+	scope.add(tracked);
+	return tracked;
+}
+
 function disposeSession(sessionId: string): Promise<void> {
 	const entry = sessions.get(sessionId);
 	if (!entry) return Promise.resolve();
-	const cascade = disposeSessionChildren(entry.workspaceId, sessionId).catch(() => {});
+	const cascade = trackCascade(
+		entry.workspaceId,
+		disposeSessionChildren(entry.workspaceId, sessionId).catch(() => {}),
+	);
 	cancelExtUiForSession(sessionId);
 	entry.unsubscribe();
 	entry.session.dispose();
@@ -965,6 +987,7 @@ async function removeWorkspaceSessionsInternal(workspaceId: string, cwd?: string
 		if (entry.session.isStreaming) await entry.session.abort().catch(() => {});
 		await disposeSession(sessionId);
 	}
+	await Promise.all([...(pendingCascades.get(workspaceId) ?? [])]);
 	removeWorkspaceDelegation(workspaceId);
 	if (cwd) await purgeDiskSessions(cwd);
 }
@@ -1043,6 +1066,6 @@ async function runDeleteTransaction(
 		if (installedTombstone) deletedSessions.delete(sessionId);
 		throw error;
 	}
-	if (liveEntry && sessions.get(sessionId) === liveEntry) void disposeSession(sessionId);
+	if (liveEntry && sessions.get(sessionId) === liveEntry) await disposeSession(sessionId);
 	publishDeleted({ workspaceId, sessionId });
 }

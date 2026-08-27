@@ -2,6 +2,7 @@ import { rmSync } from "node:fs";
 import { join } from "node:path";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 import type { DelegationRunStatus, TranscriptMessage } from "@thinkrail/contracts";
+import { CodedError } from "@thinkrail/shared/codedError";
 import {
 	createDelegationService,
 	type DelegationService,
@@ -75,7 +76,10 @@ export function readChildTranscript(
 		childSessionId,
 	);
 	if (!path) {
-		throw new Error(`No transcript found for subagent session ${childSessionId}`);
+		throw new CodedError(
+			"SUBAGENT_TRANSCRIPT_NOT_FOUND",
+			`No transcript found for subagent session ${childSessionId}`,
+		);
 	}
 	const sessionManager = SessionManager.open(path);
 	const renderable = new Set(["user", "assistant", "toolResult", "custom"]);

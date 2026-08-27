@@ -121,7 +121,9 @@ the host from env via `bootHost` for dev/e2e.
   `host` installs (`agent.setReviewCommentHandler` → `reviews.resolveCommentFromAgent`)
 - `assist` → `agent` (the one-shot completion primitive)
 - `auth` → `agent` (the current runtime/auth facade plus candidate prepare/activate; one-way, `agent` never imports `auth`)
-- `agent` → `log` only (otherwise the pi runtime alone; auth passes desired opaque Central paths through its public generation seam)
+- `agent` → `log`, `persistence` (`dataDir` — the static state-root resolver; the delegation store lives at
+  `<dataDir>/delegation`, bound in the agent's delegation embedding) — otherwise the pi runtime alone; auth
+  passes desired opaque Central paths through its public generation seam
 - `persistence`, `dialog`, `github`, `history`, `templates`, `subprocess` → (leaves)
 
 Rules: features never import `host`, and never each other except the edges above. The graph is acyclic.

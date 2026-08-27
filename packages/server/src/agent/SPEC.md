@@ -358,8 +358,20 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     `DelegationService` per workspace is cached (`delegationServiceFor`, synchronous — nothing awaits
     at bind time); `subagentsExtensionFor(workspaceId)` hands the bound service to the
     extension factory each session loads. Cascades: `removeSession`/`disposeAllSessions` fire
-    `disposeSessionChildren` — `removeSession` returns that cascade, and workspace archival
-    **awaits it per session** before `removeWorkspaceDelegation` (drops the service + deletes
+    `disposeSessionChildren` — `removeSession` returns that cascade, the **delete transaction
+    awaits it before `publishDeleted`/resolving** (safe: the cascade carries its own swallow, so a
+    failing child abort can never fail a delete whose transcript is already trashed), and workspace
+    archival **awaits it per session** — plus every **pending cascade registered for the
+    workspace** (`disposeSession` removes the entry from `sessions` at cascade *start*, so a
+    concurrent archive would otherwise see no parent to await while a delete's or remove's child
+    cascade is still running; every `disposeSession` cascade registers in a per-workspace registry
+    the archive drains — PR #303 review finding + the concurrent half found in the same sweep,
+    both test-pinned via a test-gated child turn, deterministic in both directions: red because a
+    pre-fix archive `rm -rf`s in its synchronous prefix while the gate is provably closed, green
+    because the archive's completion is await-chained behind the cascade. Deliberately **cascades,
+    not delete transactions**: archival must stay unblocked by a delete wedged mid-trash — the
+    recycle-bin step has unbounded latency and never touches the store; that independence is its
+    own pinned behavior) — before `removeWorkspaceDelegation` (drops the service + deletes
     `delegation/<workspaceId>`), so the store is never deleted under a live child — hidden
     children never outlive their workspace.
     `readChildTranscript` serves `subagent.getTranscript` from the store by
@@ -367,6 +379,10 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     segments, so it rejects path-like values (separators, `..`; the handler additionally validates
     the workspace like every sibling read) — and returns the run's current registry `status`
     alongside the messages (absent after restart/dispose; wire meaning: [[module-contracts]]).
+    A missing transcript throws `CodedError("SUBAGENT_TRANSCRIPT_NOT_FOUND")` — the **permanent**
+    miss the web dialog stops polling on, named on the wire instead of pattern-matched from the
+    message ([[module-contracts]] owns the code set; this is the agent module's one
+    `@thinkrail/shared` import, mirroring `git`'s `CodedError` use).
     Children opting into extensions
     (`extensions: true` in their definition) get the **curated child set**
     (`childExtensionFactories` in `extensions`): the headless-search policy + `pi-web-access` +
