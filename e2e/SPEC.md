@@ -37,7 +37,9 @@ exercise the wrong product branch under browser/platform emulation.
 Provider-backed browser tests (`e2e:agent`) and the separate headless workflow suite are not parallelized by
 this runner: concurrent provider turns would alter rate limits, cost, and determinism. The compiled-binary
 and packaged-desktop suites remain distinct artifact gates. Each has an unsharded, non-overlapping
-namespace; any artifact run and `e2e:serial` still run sequentially in the same worktree.
+namespace; any artifact run and `e2e:serial` still run sequentially in the same worktree. A future launcher
+or deployment adds another host adapter for this same suite, never copied feature specs; shared behavior is
+therefore proven through every composition root.
 
 ## Desktop-backed mode
 

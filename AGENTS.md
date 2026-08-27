@@ -189,7 +189,8 @@ Separate from the browser suite: `bun run test:workflows` — the headless **wor
 through the workflow skills). On-demand only: needs pi auth and spends real provider tokens — never a
 commit/CI gate. Design: `e2e/workflows/SPEC.md`.
 
-Fast gates (also the husky pre-commit): `bun run check:deps` (dependency pins) + `bun run check:seams`
+Fast gates (also the husky pre-commit): `bun run check:deps` (dependency pins) +
+`bun run check:boundaries` (workspace dependency/import edges) + `bun run check:seams`
 (the pi binary-seam canary — fails when a pi bump adds a bundler-opaque dynamic import that
 `registerBundledRuntime` doesn't statically register) + `bun run lint` (biome) + `bun run typecheck`. Unit tests:
 `bun run test` (bun test, per package). One-time setup for a fresh machine: `bunx playwright install chromium`.

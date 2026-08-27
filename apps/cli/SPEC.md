@@ -286,8 +286,9 @@ and `trash`'s **native helper sidecars** (which macOS/Windows must execute from 
   signature renderer) + `@thinkrail/shared/version` (the shared release identity), Bun/Node; the generated build module may
   value-import the bundled extension packages' entries (resolved via the server package — build-time
   only, deleted after compile).
-- **Forbidden:** reaching into the server's internals (use only its public surface), the browser/`contracts`
-  UI layer, `@earendil-works/pi-coding-agent` directly.
+- **Forbidden:** product feature/domain logic; reaching into the server's internals (use only its public
+  surface); importing the web, desktop, or `contracts` UI layers; `@earendil-works/pi-coding-agent`
+  directly. An ordinary product feature must not need a CLI implementation.
 
 ## Get right
 

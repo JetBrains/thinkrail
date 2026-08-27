@@ -27,9 +27,10 @@ engine architecture.
 - **Allowed deps:** `server` for the embedded host, build-support manifest, and artifact probes; `shared`
   for release identity; `contracts` for compatibility/native-bridge types; the completed built web
   artifact; Electrobun `1.18.1`; Bun/Node.
-- **Forbidden:** spawning the CLI or a second engine process; reimplementing agent/domain logic;
-  importing web source at runtime; introducing a desktop-only wire or UI state model; storing one active
-  location on the backend; or bundling CEF without a new acceptance failure that justifies it.
+- **Forbidden:** spawning the CLI or a second engine process; implementing ordinary product feature or
+  agent/domain logic; importing web source at runtime; introducing a desktop-only wire or UI state model;
+  storing one active location on the backend; or bundling CEF without a new acceptance failure that
+  justifies it. Native shell, lifecycle, and packaging concerns are the only desktop-specific behavior.
 
 ## V1 profile and topology
 

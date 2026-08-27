@@ -17,8 +17,9 @@ workflows and composite actions.
 
 ## CI vs release
 
-- **CI** (`ci.yml`, on PRs to `main`): lint+typecheck (incl. `check:seams` — the pi binary-seam canary,
-  see `scripts/check-binary-seams.ts`), unit tests, no-agent e2e, and a **host-target** binary
+- **CI** (`ci.yml`, on PRs to `main`): dependency/module-boundary checks, lint+typecheck (incl.
+  `check:seams` — the pi binary-seam canary, see `scripts/check-binary-seams.ts`), unit tests, no-agent e2e,
+  and a **host-target** binary
   build+smoke+**e2e-vs-binary** (`bun run e2e:binary`: the same no-agent suite against the compiled
   artifact, minus the `@dev-seam` fake-login specs), a **windows-latest binary build+smoke**
   (`binary-windows`), plus a host-target Electrobun package, native-window smoke, shared artifact probes,

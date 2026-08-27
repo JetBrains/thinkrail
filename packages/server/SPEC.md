@@ -49,7 +49,12 @@ e2e).
 - **Allowed deps:** `contracts` (types + WS constants), `shared` (`shellEnv` + the Central adapter), `bun-pty`,
   `@earendil-works/pi-coding-agent` + `@earendil-works/pi-ai` (runtime), `pino` + its pretty/rolling
   destinations (host diagnostics), Bun/Node.
-- **Forbidden:** importing `web`/`cli`/`desktop`; being bundled into the browser.
+- **Deployment obligation:** product behavior lives in the owning server feature module and is composed by
+  `host`; launchers only supply boot options and packaged resources. When a demonstrated second environment
+  needs a different implementation, the owning feature defines one narrow injected port rather than a
+  host-wide platform adapter.
+- **Forbidden:** importing `web`/`cli`/`desktop`; being bundled into the browser; branching product behavior
+  on launcher identity.
 
 ## Internal modules
 

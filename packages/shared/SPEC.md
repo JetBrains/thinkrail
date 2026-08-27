@@ -4,7 +4,7 @@ type: module-design
 status: active
 title: Shared server-side utilities
 parent: architecture
-depends-on: []
+depends-on: [module-contracts]
 references: [central-integration]
 tags: [v1, host]
 ---
