@@ -206,10 +206,7 @@ function GroupDisclosure({
 						{headline}
 					</strong>
 				) : null}
-				<span
-					className={cn("min-w-0 truncate", !expanded && headline && "shrink-0")}
-					title={summary}
-				>
+				<span className="min-w-0 truncate" title={summary}>
 					{summary}
 				</span>
 			</button>
@@ -226,6 +223,9 @@ function extractThinkingHeading(text: string): string | undefined {
 	if (!firstLine) return undefined;
 	for (const delimiter of ["**", "__"]) {
 		if (!firstLine.startsWith(delimiter) || !firstLine.endsWith(delimiter)) continue;
+		const marker = delimiter[0];
+		if (firstLine[delimiter.length] === marker || firstLine.at(-delimiter.length - 1) === marker)
+			return undefined;
 		const heading = firstLine.slice(delimiter.length, -delimiter.length);
 		return heading && heading === heading.trim() && !heading.includes(delimiter)
 			? heading

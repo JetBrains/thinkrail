@@ -125,4 +125,29 @@ describe("ThinkingGroup", () => {
 		expect(markup).not.toContain("Not actually strong");
 		expect(markup).not.toContain("This is ordinary reasoning.");
 	});
+
+	test("rejects triple-emphasis runs instead of exposing leftover Markdown", () => {
+		for (const [id, text] of [
+			["stars", "***Evaluating formatter output***"],
+			["underscores", "___Evaluating formatter output___"],
+		] as const) {
+			const markup = renderToStaticMarkup(
+				<ThinkingGroup
+					id={`a1:thinking:${id}`}
+					thought={{
+						kind: "thinking",
+						id: `a1:thinking:${id}`,
+						text: `${text}\n\nThis uses bold italic emphasis.`,
+						streaming: false,
+						tools: [],
+					}}
+					tools={[]}
+					live={false}
+				/>,
+			);
+
+			expect(markup).not.toContain("Evaluating formatter output");
+			expect(markup).not.toContain("This uses bold italic emphasis.");
+		}
+	});
 });
