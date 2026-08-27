@@ -237,8 +237,9 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   one), falling back to scanning `turns` for the newest whose own text contains `anchorText`'s prefix — the
   same fallback also covers a hydrated map entry whose turn no longer contains the anchor (e.g. the
   transcript changed underneath it). The resolved turn maps to a row via the pure **`rowIndexForTurn(rows,
-  turnId)`** (`rows.ts`), called with the projected rows — a turn's own row for `user`/`system`/`error`/`retry`, or its first `:text:` row
-  for `assistant` (whose turns dissolve into `markdown`/`tool`/`activity` rows, never a row of their own)
+  turnId)`** (`rows.ts`), called with the projected rows — a turn's own row for
+  `user`/`system`/`error`/`retry`, or its first `:text:` row for `assistant` (whose turns dissolve
+  into `markdown`/`tool`/`activity` rows, never a row of their own)
   — then `virtuosoRef.scrollToIndex({ align: "center" })` plus a transient `flashRowId` (rendered as
   `data-flash` + a `bg-primary-subtle` transition on the row wrapper, cleared after 1600ms) draw the
   eye to it. Either resolving a row or giving up (toasted as "couldn't locate the message") clears that
@@ -249,8 +250,8 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   freshly shown transcript (new tab, reopen from history, auto-open, reload) shows the latest work without
   an intermediate wrong-edge paint. Switching the global preference remounts the projection and lands at
   its new latest edge; preserving a pixel position across total reversal has no stable meaning.
-  Jump-to-message runs post-mount and overrides either rule with its centered `scrollToIndex`. E2e:
-  `auto-open-chats.spec.ts` pins latest visibility in both orders for a long seeded transcript.
+  Jump-to-message runs post-mount and overrides either rule with its centered `scrollToIndex`.
+  `auto-open-chats.spec.ts` pins the default latest edge; `chat-order.spec.ts` pins both projections.
 - **One direction-aware streaming controller** — `useChatScroll` remains the sole imperative,
   cancellable owner for every kind of live row growth; renderers and the message-order projection never
   scroll themselves. Both orders share explicit immediate-turn arming, queued-continuation currency,
@@ -259,16 +260,17 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   oldest-first and top for newest-first; wheel, touch/scrollbar, and keyboard directions invert with it.
   Selection, interactive focus, and message/history jumps cancel either mode. Geometry alone never re-arms
   a detached reader.
-- **Oldest-first reading band** — the established behavior remains intact. An immediate local send aligns its
-  user row at 10% of transcript height clamped to 48–80px and gives the response a one-way 60%-viewport
+- **Oldest-first reading band** — the established behavior remains intact. An immediate local send aligns
+  its user row at 10% of transcript height clamped to 48–80px and gives the response a one-way 60%-viewport
   runway. A transient list header makes that inset possible even for the first row; the tail spacer starts
   as the 60% budget plus a 42% reading-band floor, shrinks one-for-one with response growth, never
   re-inflates except to recalibrate after a viewport resize, and survives settlement in place. The active
   edge grows without movement until it crosses 82% of the viewport, then advances to 58%. Settlement
   neither catches up nor collapses remaining runway.
-- **Newest-first reading band** — the newest projected row occupies the same 48–80px top inset. While
-  follow is armed, appended content inside that row uses the same sparse 82%→58% advance; a newly inserted
-  top row returns to the latest band in one controller-owned move. Scrolling downward into older groups
+- **Newest-first reading band** — the newest stream surface begins after the same 48–80px top inset; its
+  live phase indicator leads the newest projected row. While follow is armed, appended content inside that
+  row uses the same sparse 82%→58% advance; a newly inserted top row returns to the latest band in one
+  controller-owned move. Scrolling downward into older groups
   detaches immediately, and no insertion moves that reader; upward return to the top or the floating
   **↑ Follow response** / **↑ Latest** action re-arms. The synthetic tail space stays after the oldest
   group, never between reversed request/answer rows, so it cannot split the selected group semantics.

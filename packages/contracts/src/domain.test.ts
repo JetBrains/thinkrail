@@ -50,7 +50,7 @@ describe("config defaults", () => {
 	});
 
 	test("existing chats keep oldest-first message order by default", () => {
-		expect(Reflect.get(DEFAULT_CONFIG, "chatMessageOrder")).toBe("oldest-first");
+		expect(DEFAULT_CONFIG.chatMessageOrder).toBe("oldest-first");
 	});
 });
 

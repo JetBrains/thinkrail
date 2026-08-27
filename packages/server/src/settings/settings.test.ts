@@ -80,22 +80,22 @@ test("newest-first chat order round-trips through the synchronized config", () =
 		chatMessageOrder: "newest-first",
 	} satisfies AppConfigUpdate;
 	const next = updateConfig(update);
-	expect(Reflect.get(next, "chatMessageOrder")).toBe("newest-first");
+	expect(next.chatMessageOrder).toBe("newest-first");
 	resetConfigCache();
-	expect(Reflect.get(getConfig(), "chatMessageOrder")).toBe("newest-first");
+	expect(getConfig().chatMessageOrder).toBe("newest-first");
 });
 
 test("loadConfig replaces a missing or invalid chat message order with oldest-first", () => {
 	writeFileSync(join(dataDir, "config.json"), JSON.stringify({ theme: "dark" }));
 	resetConfigCache();
-	expect(Reflect.get(getConfig(), "chatMessageOrder")).toBe("oldest-first");
+	expect(getConfig().chatMessageOrder).toBe("oldest-first");
 
 	writeFileSync(
 		join(dataDir, "config.json"),
 		JSON.stringify({ ...DEFAULT_CONFIG, chatMessageOrder: "inside-out" }),
 	);
 	resetConfigCache();
-	expect(Reflect.get(getConfig(), "chatMessageOrder")).toBe("oldest-first");
+	expect(getConfig().chatMessageOrder).toBe("oldest-first");
 });
 
 test("reviewAutoFix defaults on; an old config without it loads the default; toggling off round-trips", () => {

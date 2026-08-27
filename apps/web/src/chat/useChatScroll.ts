@@ -18,6 +18,7 @@ import {
 	initialReadingBandSnapshot,
 	type ReadingBandController,
 	type ReadingBandLatestEdge,
+	type ReadingBandScrollBounds,
 	type ReadingBandSnapshot,
 } from "./readingBand";
 
@@ -66,6 +67,13 @@ function latestEdge(messageOrder: ChatMessageOrder): ReadingBandLatestEdge {
 	return messageOrder === "newest-first" ? "top" : "bottom";
 }
 
+function scrollBounds(scroller: HTMLElement): ReadingBandScrollBounds {
+	return {
+		scrollTop: scroller.scrollTop,
+		maxScrollTop: Math.max(0, scroller.scrollHeight - scroller.clientHeight),
+	};
+}
+
 export function useChatScroll(
 	virtuosoRef: RefObject<VirtuosoHandle | null>,
 	isStreaming: boolean,
@@ -99,20 +107,14 @@ export function useChatScroll(
 					const viewport = scroller.getBoundingClientRect();
 					const marker = edgeElement.getBoundingClientRect();
 					return {
+						...scrollBounds(scroller),
 						viewportHeight: scroller.clientHeight,
-						scrollTop: scroller.scrollTop,
-						maxScrollTop: Math.max(0, scroller.scrollHeight - scroller.clientHeight),
 						edgeBottom: marker.bottom - viewport.top,
 					};
 				},
 				readScrollBounds: () => {
 					const scroller = scrollerRef.current;
-					return scroller
-						? {
-								scrollTop: scroller.scrollTop,
-								maxScrollTop: Math.max(0, scroller.scrollHeight - scroller.clientHeight),
-							}
-						: null;
+					return scroller ? scrollBounds(scroller) : null;
 				},
 				writeScrollTop: (top) => {
 					const scroller = scrollerRef.current;

@@ -12,9 +12,9 @@ tags: [v1]
 
 The server-synced app config — OUR settings (an opaque theme selection, the analytics switch, terminal
 replay budget, the chat composer growth preset + oldest/newest-first message order, workbench default/custom
-presets + independent side/bottom group limits, and the plan-review policy — `reviewModel`/`reviewEffort` (the model + effort
-the reviewer & reflector sessions run on; unset ⇒ pi default) and `reviewAutoFix` (default true; when
-false a `request_changes` verdict records findings and waits instead of auto-sending a fix —
+presets + independent side/bottom group limits, and the plan-review policy — `reviewModel`/`reviewEffort`
+(the model + effort the reviewer & reflector sessions run on; unset ⇒ pi default) and `reviewAutoFix`
+(default true; when false a `request_changes` verdict records findings and waits instead of auto-sending a fix —
 `host/todoReview` reads it at the verdict gate)), an extensible `AppConfig` bag.
 Reads/merges/persists it and fans changes out to every client,
 so a preference set on one client follows the user to the others (architecture #9: shared domain state). The
