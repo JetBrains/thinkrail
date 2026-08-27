@@ -349,6 +349,13 @@ export function selectChatTitle(
 	return (chatTab?.name ?? "Chat").trim() || "Chat";
 }
 
+export function selectSessionRuntimePresent(
+	state: { sessions: Readonly<Record<string, unknown>> },
+	sessionId: string,
+): boolean {
+	return state.sessions[sessionId] !== undefined;
+}
+
 export function selectCompactionTurnIds(
 	state: { sessions: Record<string, SessionRuntime> },
 	sessionId: string,

@@ -489,7 +489,9 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   (that ref *as an open diff tab's live dimension*: the target for a branch-scope tab, `""` for a
   commit/uncommitted one whose sides can't move — derived here, never re-assembled in a panel),
   `selectWorkspaceTick` (the sync-baseline snapshot), `selectWorkspaceSessionIds` (the deduplicated chat
-  layout-reference + history membership used as a reconnect-reconciliation baseline);
+  layout-reference + history membership used as a reconnect-reconciliation baseline),
+  `selectSessionRuntimePresent` (the allocation-free boolean leaf gate for a mounted chat resource; runtime
+  content replacement leaves it stable);
   `matchesWorktreePath` (line an agent-reported path — relative or absolute — up against a worktree-relative
   one; shared by the Changes deep link and the spec classifier. The suffix rule is for **absolute reports
   only** and is anchored at a separator: unanchored, `/wt/src/a-foo.ts` would match `src/foo.ts`; applied to

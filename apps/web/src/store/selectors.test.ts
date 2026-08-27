@@ -21,6 +21,7 @@ import {
 	selectLayoutResourcePlacement,
 	selectLayoutTabPlaced,
 	selectLayoutTabPlacement,
+	selectSessionRuntimePresent,
 	selectSkillsStale,
 	specPathMatcher,
 } from "./selectors";
@@ -43,6 +44,24 @@ test("connection generations reject stale or disconnected read settlements", () 
 	expect(isConnectedGeneration({ status: "connected", connectionGeneration: 4 }, 4)).toBe(true);
 	expect(isConnectedGeneration({ status: "connected", connectionGeneration: 5 }, 4)).toBe(false);
 	expect(isConnectedGeneration({ status: "disconnected", connectionGeneration: 4 }, 4)).toBe(false);
+});
+
+test("session runtime presence changes only at membership boundaries", () => {
+	const initial = { sessions: { active: { eventRevision: 1 } } };
+	const contentReplaced = {
+		sessions: {
+			...initial.sessions,
+			active: { eventRevision: 2 },
+			background: { eventRevision: 1 },
+		},
+	};
+
+	expect(selectSessionRuntimePresent(initial, "active")).toBe(true);
+	expect(selectSessionRuntimePresent(contentReplaced, "active")).toBe(true);
+	expect(selectSessionRuntimePresent(contentReplaced, "missing")).toBe(false);
+	expect(
+		selectSessionRuntimePresent({ sessions: { background: { eventRevision: 2 } } }, "active"),
+	).toBe(false);
 });
 
 test("workspace kind predicates distinguish managed and user-owned checkouts", () => {

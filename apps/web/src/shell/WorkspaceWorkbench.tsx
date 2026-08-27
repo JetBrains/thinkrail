@@ -45,6 +45,7 @@ import {
 	selectContextProject,
 	selectDiffTabTargetRef,
 	selectReviewDraftCount,
+	selectSessionRuntimePresent,
 	selectWorkspaceById,
 	selectWorkspaceNavTick,
 	selectWorkspaceTick,
@@ -86,6 +87,62 @@ function MissingResource({ label }: { label: string }) {
 	return (
 		<div className="flex h-full items-center justify-center px-16 text-center tr-text-ui text-text-muted">
 			Restoring {label}…
+		</div>
+	);
+}
+
+function ChatResourceBody({
+	tab,
+	workspaceId,
+	onOpenFile,
+}: {
+	tab: Extract<LayoutCenterTab, { kind: "chat" }>;
+	workspaceId: string;
+	onOpenFile: (path: string) => void;
+}) {
+	const sessionPresent = useAppStore((state) => selectSessionRuntimePresent(state, tab.sessionId));
+	if (sessionPresent) {
+		return (
+			<ErrorBoundary label="chat" resetKeys={[workspaceId, tab.id]}>
+				<Suspense fallback={<MissingResource label="chat" />}>
+					<ChatView sessionId={tab.sessionId} workspaceId={workspaceId} onOpenFile={onOpenFile} />
+				</Suspense>
+			</ErrorBoundary>
+		);
+	}
+	return (
+		<div className="flex h-full flex-col items-center justify-center gap-8 text-text-muted">
+			<MissingResource label="chat" />
+			<button
+				type="button"
+				onClick={() => {
+					void hydrateChatResource(workspaceId, tab.sessionId)
+						.then((installed) => {
+							if (installed) return;
+							const { state, current } = currentChatDestination(workspaceId, tab, undefined);
+							if (
+								current &&
+								!state.removedWorkspaceIds[workspaceId] &&
+								!state.deletedSessionsByWorkspace[workspaceId]?.[tab.sessionId]
+							) {
+								toast.error("The chat could not be restored.", "Couldn't restore the chat");
+							}
+						})
+						.catch((error) => {
+							const { state, current } = currentChatDestination(workspaceId, tab, undefined);
+							if (
+								current &&
+								!state.removedWorkspaceIds[workspaceId] &&
+								!state.deletedSessionsByWorkspace[workspaceId]?.[tab.sessionId]
+							) {
+								toast.error(errorText(error), "Couldn't restore the chat");
+							}
+						});
+				}}
+				className="rounded-[var(--radius-sm)] border border-border-default px-8 py-4 tr-text-ui hover:bg-control-bg-hovered"
+			>
+				Retry
+			</button>
 		</div>
 	);
 }
@@ -163,7 +220,6 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	const initialTerminalEligible = workspace?.initialTerminalEligible === true;
 	const contextProject = useAppStore(selectContextProject);
 	const editorTabs = useAppStore((state) => state.tabsByWorkspace[workspaceId] ?? NO_EDITOR_TABS);
-	const sessions = useAppStore((state) => state.sessions);
 	const deletedSessions = useAppStore((state) => state.deletedSessionsByWorkspace[workspaceId]);
 	const terminalClose = useTerminalClose();
 	const specs = useWorkspaceSpecs(workspaceId);
@@ -420,51 +476,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	const renderTabBody = useCallback(
 		(tab: LayoutCenterTab | Extract<LayoutTab, { kind: "terminal" }>) => {
 			if (tab.kind === "chat") {
-				return sessions[tab.sessionId] ? (
-					<ErrorBoundary label="chat" resetKeys={[workspaceId, tab.id]}>
-						<Suspense fallback={<MissingResource label="chat" />}>
-							<ChatView
-								sessionId={tab.sessionId}
-								workspaceId={workspaceId}
-								onOpenFile={openToolFile}
-							/>
-						</Suspense>
-					</ErrorBoundary>
-				) : (
-					<div className="flex h-full flex-col items-center justify-center gap-8 text-text-muted">
-						<MissingResource label="chat" />
-						<button
-							type="button"
-							onClick={() => {
-								void hydrateChatResource(workspaceId, tab.sessionId)
-									.then((installed) => {
-										if (installed) return;
-										const { state, current } = currentChatDestination(workspaceId, tab, undefined);
-										if (
-											current &&
-											!state.removedWorkspaceIds[workspaceId] &&
-											!state.deletedSessionsByWorkspace[workspaceId]?.[tab.sessionId]
-										) {
-											toast.error("The chat could not be restored.", "Couldn't restore the chat");
-										}
-									})
-									.catch((error) => {
-										const { state, current } = currentChatDestination(workspaceId, tab, undefined);
-										if (
-											current &&
-											!state.removedWorkspaceIds[workspaceId] &&
-											!state.deletedSessionsByWorkspace[workspaceId]?.[tab.sessionId]
-										) {
-											toast.error(errorText(error), "Couldn't restore the chat");
-										}
-									});
-							}}
-							className="rounded-[var(--radius-sm)] border border-border-default px-8 py-4 tr-text-ui hover:bg-control-bg-hovered"
-						>
-							Retry
-						</button>
-					</div>
-				);
+				return <ChatResourceBody tab={tab} workspaceId={workspaceId} onOpenFile={openToolFile} />;
 			}
 			if (tab.kind === "document") {
 				if (deletedSessions?.[tab.sourceId]) return <MissingResource label="plan" />;
@@ -523,7 +535,6 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 			editorById,
 			editorByResource,
 			openToolFile,
-			sessions,
 			terminalByKey,
 			workspaceId,
 		],
