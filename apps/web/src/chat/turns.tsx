@@ -53,7 +53,13 @@ export function ChatTurnView({
 			return <ErrorTurn text={row.text} />;
 		case "compaction":
 			return row.summary !== undefined && row.tokensBefore !== undefined ? (
-				<CompactionTurn id={row.id} summary={row.summary} tokensBefore={row.tokensBefore} />
+				<CompactionTurn
+					id={row.id}
+					summary={row.summary}
+					tokensBefore={row.tokensBefore}
+					tokensAfter={row.tokensAfter}
+					resuming={row.resuming}
+				/>
 			) : (
 				<CompactionNotice {...row} />
 			);
@@ -359,12 +365,21 @@ function CompactionTurn({
 	id,
 	summary,
 	tokensBefore,
+	tokensAfter,
+	resuming,
 }: {
 	id: string;
 	summary: string;
 	tokensBefore: number;
+	tokensAfter?: number | undefined;
+	resuming?: boolean | undefined;
 }) {
 	const [open, toggle] = useFold(id);
+	const label = resuming ? "Context compacted — resuming…" : "Context compacted";
+	const tokens =
+		tokensAfter === undefined
+			? `${formatTokens(tokensBefore)} tokens`
+			: `${formatTokens(tokensBefore)} → ${formatTokens(tokensAfter)} tokens`;
 	return (
 		<div data-testid="chat-compaction" className="flex flex-col gap-8">
 			<button
@@ -376,7 +391,7 @@ function CompactionTurn({
 				<span className="h-px flex-1 bg-border-default" />
 				{open ? <ChevronDown className="size-16" /> : <ChevronRight className="size-16" />}
 				<span>
-					Earlier messages summarized ({formatTokens(tokensBefore)} tokens of context compacted)
+					{label} ({tokens})
 				</span>
 				<span className="h-px flex-1 bg-border-default" />
 			</button>

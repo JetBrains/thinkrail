@@ -11,8 +11,8 @@ tags: [v1]
 ## Responsibility
 
 The server-synced app config — OUR settings (an opaque theme selection, the analytics switch, terminal
-replay budget, and workbench default/custom presets + independent side/bottom group limits), an extensible
-`AppConfig` bag.
+replay budget, the chat composer growth preset, and workbench default/custom presets + independent
+side/bottom group limits), an extensible `AppConfig` bag.
 Reads/merges/persists it and fans changes out to every client,
 so a preference set on one client follows the user to the others (architecture #9: shared domain state). The
 web client owns the available theme manifests; settings stores only the selected string id.

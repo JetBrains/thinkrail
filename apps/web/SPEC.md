@@ -55,6 +55,17 @@ cached first-paint theme hint pre-React, initializes transport + client-local na
 `components/ErrorBoundary` as the last-resort boundary (a crash escaping every region shows a reload
 screen, not a blank root).
 
+**React is one exact, matching `react` + `react-dom` 19.3 canary pin until the first stable release carrying
+upstream fix #34803.** React 19.2's development Performance Tracks retained every
+`performance.measure()` record; Pi-rate chat renders grew a Vite tab past 10 GB while the JS heap stayed
+flat, then Chrome killed the renderer and Vite reported the dead socket as `EPIPE` / `ECONNRESET` (React
+#34770). The selected canary contains React's own `clearMeasures` fix; ThinkRail deliberately carries no
+second measure-reaping policy. Because prereleases do not satisfy dependencies' stable React peer ranges,
+the root package-manager overrides resolve both runtime packages through their catalog entries; `check:deps`
+reads `bun.lock` and rejects any second `react` or `react-dom` version. Every React move upgrades both
+packages together and repeats the mounted-chat memory stress probe before this temporary canary pin can
+return to stable.
+
 ### Dependency graph
 
 - `navigation` → `store`, `transport`, `contracts` (type-only); neither dependency imports it, and `main.tsx` initializes the integration

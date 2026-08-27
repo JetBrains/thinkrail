@@ -1,6 +1,7 @@
 import type {
 	AppConfig,
 	AskUserQuestionResult,
+	ComposerGrowthLimit,
 	ExtUiRequest,
 	GitDiffScope,
 	LayoutAuxiliaryRegion,
@@ -57,6 +58,7 @@ import {
 	type HistoryTarget,
 	selectActiveWorkspaceProjectId,
 	selectLayoutResourcePlacement,
+	selectWorkspaceById,
 	selectWorkspaceNavTick,
 	selectWorkspaceSessionIds,
 	selectWorkspaceTick,
@@ -225,6 +227,7 @@ export const SettingsSection = {
 	Providers: "providers",
 	Github: "github",
 	Appearance: "appearance",
+	Chat: "chat",
 	Layout: "layout",
 	Terminal: "terminal",
 	Templates: "templates",
@@ -275,6 +278,8 @@ export interface SessionRuntime {
 	queue: SessionQueueState;
 	model: WireModel | null;
 	thinkingLevel: ThinkingLevel;
+	eventRevision: number;
+	syncedConnectionGeneration: number;
 	stats: SessionStats | null;
 	commands: SlashCommandInfo[];
 	draft: string;
@@ -286,7 +291,11 @@ export interface SessionRuntime {
 
 const EMPTY_QUEUE: SessionQueueState = { steering: [], followUp: [] };
 
-function newRuntime(model: WireModel | null, thinkingLevel: ThinkingLevel): SessionRuntime {
+function newRuntime(
+	model: WireModel | null,
+	thinkingLevel: ThinkingLevel,
+	syncedConnectionGeneration = 0,
+): SessionRuntime {
 	return {
 		turns: [],
 		toolResults: {},
@@ -297,6 +306,8 @@ function newRuntime(model: WireModel | null, thinkingLevel: ThinkingLevel): Sess
 		queue: EMPTY_QUEUE,
 		model,
 		thinkingLevel,
+		eventRevision: 0,
+		syncedConnectionGeneration,
 		stats: null,
 		commands: [],
 		draft: "",
@@ -360,6 +371,34 @@ function settleCompactionTurn(
 	return turns.map((t, i) => (i === index ? { kind: "compaction", id: t.id, ...outcome } : t));
 }
 
+function reconcileCompactionTurns(
+	current: ChatTurn[],
+	hydrated: ChatTurn[],
+	isStreaming: boolean,
+): ChatTurn[] {
+	const live = current.findLast(
+		(turn) => turn.kind === "compaction" && turn.status === "done" && turn.summary === undefined,
+	);
+	if (live?.kind !== "compaction") return hydrated;
+	const index = hydrated.findLastIndex(
+		(turn) =>
+			turn.kind === "compaction" &&
+			turn.summary !== undefined &&
+			(live.tokensBefore === undefined || turn.tokensBefore === live.tokensBefore),
+	);
+	if (index < 0) return hydrated;
+	return hydrated.map((turn, turnIndex) =>
+		turnIndex === index && turn.kind === "compaction"
+			? {
+					...turn,
+					id: live.id,
+					...(live.tokensAfter !== undefined ? { tokensAfter: live.tokensAfter } : {}),
+					...(isStreaming && live.resuming ? { resuming: true as const } : {}),
+				}
+			: turn,
+	);
+}
+
 type RetrySource = Extract<ChatTurn, { kind: "retry" }>["source"];
 
 function appendRetryTurn(
@@ -394,7 +433,14 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 		case "agent_start":
 			return { ...rt, isStreaming: true, attemptAssistantId: null };
 		case "queue_update":
-			return { ...rt, queue: { steering: event.steering, followUp: event.followUp } };
+			return {
+				...rt,
+				queue: {
+					steering: event.steering,
+					followUp: event.followUp,
+					...(event.hasImages ? { hasImages: true as const } : {}),
+				},
+			};
 		case "message_start": {
 			if (event.message.role === "assistant")
 				return {
@@ -600,6 +646,7 @@ interface AppState {
 	expandedProjectIds: Record<string, true>;
 	selectedProjectId: string | null;
 	activeWorkspaceId: string | null;
+	workspaceSelectionHistory: string[];
 	routeChatTarget: RouteChatTarget | null;
 	routeChatTargetGeneration: number;
 	layoutSnapshotsByWorkspace: Record<string, WorkspaceLayoutSnapshot>;
@@ -647,6 +694,7 @@ interface AppState {
 	theme: ThemeId;
 	analyticsEnabled: boolean;
 	terminalReplayKb: number;
+	composerGrowthLimit: ComposerGrowthLimit;
 	layoutSettings: LayoutSettings;
 	toasts: Toast[];
 	setStatus: (status: ConnectionStatus) => void;
@@ -784,8 +832,19 @@ interface AppState {
 		syncedTick?: number,
 		options?: LayoutOpenOptions,
 	) => void;
+	reconcileSession: (
+		summary: SessionSummary,
+		hydrated: HydratedRuntime,
+		expectedEventRevision: number,
+		connectionGeneration: number,
+	) => boolean;
 	appendUserMessage: (sessionId: string, text: string, attachments?: ChatAttachment[]) => void;
 	appendErrorTurn: (sessionId: string, text: string) => void;
+	appendCompactionFailureUnlessObserved: (
+		sessionId: string,
+		observedTurnIds: ReadonlySet<string>,
+		detail: string,
+	) => void;
 	handlePiEvent: (event: PiEvent, sessionId: string) => void;
 	setModelsForProviderVersion: (providerVersion: number, models: WireModel[]) => void;
 	noteProviderChanged: () => void;
@@ -835,6 +894,7 @@ function configPatch(config: AppConfig) {
 		theme: config.theme,
 		analyticsEnabled: config.analyticsEnabled,
 		terminalReplayKb: config.terminalReplayKb,
+		composerGrowthLimit: config.composerGrowthLimit ?? DEFAULT_CONFIG.composerGrowthLimit,
 		layoutSettings: config.layout ?? DEFAULT_CONFIG.layout,
 	};
 }
@@ -850,6 +910,32 @@ function withExpandedProject(
 	projectId: string,
 ): Record<string, true> {
 	return record[projectId] ? record : { ...record, [projectId]: true };
+}
+
+function withWorkspaceSelected(history: string[], workspaceId: string): string[] {
+	return history[0] === workspaceId
+		? history
+		: [workspaceId, ...history.filter((id) => id !== workspaceId)];
+}
+
+function recentWorkspaceFallback(
+	state: Pick<
+		AppState,
+		| "projects"
+		| "workspaces"
+		| "activeWorkspaceId"
+		| "removedWorkspaceIds"
+		| "workspaceSelectionHistory"
+	>,
+	excludedWorkspaceId: string,
+): Workspace | null {
+	const openProjectIds = new Set(state.projects.map((project) => project.id));
+	for (const workspaceId of state.workspaceSelectionHistory) {
+		if (workspaceId === excludedWorkspaceId || state.removedWorkspaceIds[workspaceId]) continue;
+		const workspace = selectWorkspaceById(state, workspaceId);
+		if (workspace && openProjectIds.has(workspace.projectId)) return workspace;
+	}
+	return null;
 }
 
 function pruneExpandedProjects(
@@ -1273,6 +1359,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	expandedProjectIds: Object.create(null) as Record<string, true>,
 	selectedProjectId: null,
 	activeWorkspaceId: null,
+	workspaceSelectionHistory: [],
 	routeChatTarget: null,
 	routeChatTargetGeneration: 0,
 	layoutSnapshotsByWorkspace: {},
@@ -1313,6 +1400,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	theme: DEFAULT_CONFIG.theme,
 	analyticsEnabled: DEFAULT_CONFIG.analyticsEnabled,
 	terminalReplayKb: DEFAULT_CONFIG.terminalReplayKb,
+	composerGrowthLimit: DEFAULT_CONFIG.composerGrowthLimit,
 	layoutSettings: DEFAULT_CONFIG.layout,
 	toasts: [],
 	setStatus: (status) =>
@@ -1404,6 +1492,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	applyWorkspaceRemoved: (projectId, workspaceId) => {
 		const s = get();
 		const wasActive = s.activeWorkspaceId === workspaceId;
+		const fallbackWorkspace = wasActive ? recentWorkspaceFallback(s, workspaceId) : null;
 		const name = s.workspaces[projectId]?.find((w) => w.id === workspaceId)?.name;
 		set((state) => {
 			const removedSessions = new Set(selectWorkspaceSessionIds(state, workspaceId));
@@ -1411,6 +1500,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 				removedWorkspaceIds: Object.assign(Object.create(null), state.removedWorkspaceIds, {
 					[workspaceId]: true,
 				}) as Record<string, true>,
+				workspaceSelectionHistory: state.workspaceSelectionHistory.filter(
+					(id) => id !== workspaceId,
+				),
 				fsChangesByWorkspace: omitKey(state.fsChangesByWorkspace, workspaceId),
 				skillChangeTickByWorkspace: omitKey(state.skillChangeTickByWorkspace, workspaceId),
 				specsByWorkspace: omitKey(state.specsByWorkspace, workspaceId),
@@ -1434,7 +1526,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 		s.removeWorkspace(projectId, workspaceId);
 		s.clearWorkspaceTabs(workspaceId);
 		if (wasActive) {
-			s.selectProject(projectId);
+			if (fallbackWorkspace) s.activateWorkspace(fallbackWorkspace);
+			else s.selectProject(projectId);
 			toast.info(`Workspace "${name ?? "?"}" was removed`);
 		}
 	},
@@ -1467,7 +1560,14 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((state) =>
 			state.removedWorkspaceIds[workspace.id]
 				? {}
-				: { selectedProjectId: workspace.projectId, activeWorkspaceId: workspace.id },
+				: {
+						selectedProjectId: workspace.projectId,
+						activeWorkspaceId: workspace.id,
+						workspaceSelectionHistory: withWorkspaceSelected(
+							state.workspaceSelectionHistory,
+							workspace.id,
+						),
+					},
 		),
 	activateWorkspaceFromRoute: (workspace, sessionId) =>
 		set((state) => {
@@ -1477,6 +1577,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 				...advanced.patch,
 				selectedProjectId: workspace.projectId,
 				activeWorkspaceId: workspace.id,
+				workspaceSelectionHistory: withWorkspaceSelected(
+					state.workspaceSelectionHistory,
+					workspace.id,
+				),
 				routeChatTarget: sessionId
 					? {
 							workspaceId: workspace.id,
@@ -2193,7 +2297,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 						? s.navTickByWorkspace
 						: bumpNav(s, workspaceId),
 				sessions: fresh
-					? { ...s.sessions, [sessionId]: newRuntime(model, thinkingLevel) }
+					? {
+							...s.sessions,
+							[sessionId]: newRuntime(model, thinkingLevel, s.connectionGeneration),
+						}
 					: s.sessions,
 				...(fresh
 					? {
@@ -2401,7 +2508,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 			if (s.sessions[summary.sessionId]) return {};
 			const wsId = summary.workspaceId;
 			const runtime: SessionRuntime = {
-				...newRuntime(summary.model, summary.thinkingLevel),
+				...newRuntime(summary.model, summary.thinkingLevel, s.connectionGeneration),
 				turns: hydrated.turns,
 				toolResults: hydrated.toolResults,
 				askAnswers: hydrated.askAnswers,
@@ -2472,6 +2579,46 @@ export const useAppStore = create<AppState>((set, get) => ({
 					: s.closedChatsByWorkspace,
 			};
 		}),
+	reconcileSession: (summary, hydrated, expectedEventRevision, connectionGeneration) => {
+		let applied = false;
+		set((s) => {
+			const current = s.sessions[summary.sessionId];
+			if (
+				!current ||
+				current.eventRevision !== expectedEventRevision ||
+				s.removedWorkspaceIds[summary.workspaceId] ||
+				isSessionDeleted(s, summary.workspaceId, summary.sessionId) ||
+				!selectWorkspaceSessionIds(s, summary.workspaceId).includes(summary.sessionId)
+			) {
+				return {};
+			}
+			const { turnIdByMessageIndex: _previousMessageIndex, ...preserved } = current;
+			void _previousMessageIndex;
+			const runtime: SessionRuntime = {
+				...preserved,
+				turns: reconcileCompactionTurns(current.turns, hydrated.turns, summary.isStreaming),
+				toolResults: hydrated.toolResults,
+				askAnswers: hydrated.askAnswers,
+				currentAssistantId: null,
+				attemptAssistantId: null,
+				isStreaming: summary.isStreaming,
+				queue: summary.queue ?? EMPTY_QUEUE,
+				model: summary.model,
+				thinkingLevel: summary.thinkingLevel,
+				eventRevision: current.eventRevision + 1,
+				syncedConnectionGeneration: Math.max(
+					current.syncedConnectionGeneration,
+					connectionGeneration,
+				),
+				...(hydrated.turnIdByMessageIndex
+					? { turnIdByMessageIndex: hydrated.turnIdByMessageIndex }
+					: {}),
+			};
+			applied = true;
+			return { sessions: { ...s.sessions, [summary.sessionId]: runtime } };
+		});
+		return applied;
+	},
 	appendUserMessage: (sessionId, text, attachments) =>
 		set((s) =>
 			withRuntime(s, sessionId, (rt) => ({
@@ -2509,8 +2656,30 @@ export const useAppStore = create<AppState>((set, get) => ({
 				turns: [...clearTurnStreaming(rt.turns), { kind: "error", id: crypto.randomUUID(), text }],
 			})),
 		),
+	appendCompactionFailureUnlessObserved: (sessionId, observedTurnIds, detail) =>
+		set((s) =>
+			withRuntime(s, sessionId, (rt) => {
+				const lifecycleObserved = rt.turns.some(
+					(turn) => turn.kind === "compaction" && !observedTurnIds.has(turn.id),
+				);
+				return lifecycleObserved
+					? rt
+					: {
+							...rt,
+							turns: [
+								...rt.turns,
+								{ kind: "compaction", id: crypto.randomUUID(), status: "failed", detail },
+							],
+						};
+			}),
+		),
 	handlePiEvent: (event, sessionId) =>
-		set((s) => withRuntime(s, sessionId, (rt) => reduceSessionEvent(rt, event))),
+		set((s) =>
+			withRuntime(s, sessionId, (rt) => ({
+				...reduceSessionEvent(rt, event),
+				eventRevision: rt.eventRevision + 1,
+			})),
+		),
 	setModelsForProviderVersion: (providerVersion, models) =>
 		set((s) => (s.providerVersion === providerVersion ? { models, modelsFresh: false } : s)),
 	noteProviderChanged: () =>
@@ -2698,6 +2867,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 				},
 				selectedProjectId: req.projectId,
 				activeWorkspaceId: req.workspaceId,
+				workspaceSelectionHistory: withWorkspaceSelected(
+					state.workspaceSelectionHistory,
+					req.workspaceId,
+				),
 			};
 		}),
 	clearChatLocation: () => set({ chatLocationRequest: null }),

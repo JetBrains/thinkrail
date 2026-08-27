@@ -340,7 +340,11 @@ a project picker, the prompt hero, and the reused
   bundled catalog from `themes`, with the resolved active selection from `store.theme` marked; clicking
   one fires `settings.update` and the UI **converges on the `settings.changed` broadcast** (no optimistic
   apply), a rejected update raising a toast; the picker never owns a theme list — it renders the catalog
-  the glob discovered at build time); the **shell-owned injected Layout section** (Balanced/Focus/Review
+  the glob discovered at build time); **`ChatSettings`** (the live section immediately after Appearance —
+  three radio cards over `store.composerGrowthLimit`, updating `AppConfig.composerGrowthLimit` with the same
+  converge-on-`settings.changed`, toast-on-rejection pattern; the labels explain when the one-line composer
+  stops growing, while `contracts` owns the closed preset ids/default); the **shell-owned injected Layout
+  section** (Balanced/Focus/Review
   plus named custom preset cards, one host-synchronized default selection, capture-current/rename/delete
   for customs, and the default-6 maximum side groups per side; settings changes converge through
   `settings.changed`. With an active workspace each preset offers confirmable **Apply now…**, which asks
@@ -383,8 +387,8 @@ a project picker, the prompt hero, and the reused
   toggle** — a switch over `store.analyticsEnabled`, fired via `settings.update { analyticsEnabled }`
   with the same converge-on-broadcast pattern as the theme, plus the what-is/isn't-collected copy; only
   the boolean ever crosses the wire, see `submodule-server-analytics`. A single dimmed "General" nav item ("Soon") still signals the shell is
-  built to grow. `ProvidersSettings`/`AppearanceSettings`/`TemplatesSettings`/`PrivacySettings` are the
-  panels-owned **integration pieces** (store + transport); `SettingsDialog` receives the Layout section
+  built to grow. `ProvidersSettings`/`AppearanceSettings`/`ChatSettings`/`TemplatesSettings`/
+  `PrivacySettings` are the panels-owned **integration pieces** (store + transport); `SettingsDialog` receives the Layout section
   from the shell composition root so no panel reaches sideways into shell, and the `LoginDialog` stays
   presentational (`auth` module).
 
