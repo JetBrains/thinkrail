@@ -75,6 +75,8 @@ export default defineConfig({
 			THINKRAIL_PORT: String(PORT),
 			THINKRAIL_STATIC_DIR: staticDir,
 			THINKRAIL_DATA_DIR: E2E_DATA_DIR,
+			DISPLAY: "",
+			WAYLAND_DISPLAY: "",
 			// Stub the host's native directory picker so "Open project" is drivable headlessly. It names a
 			// control *file* (seeded to the git fixture in globalSetup); a test can rewrite it to hand the
 			// picker a different folder (e.g. a non-git one) without restarting the shared host.

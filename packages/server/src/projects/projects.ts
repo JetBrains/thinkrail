@@ -19,8 +19,9 @@ function emit(project: Project): void {
 }
 
 function resolveProjectPath(path: string): string {
-	const expanded =
-		path === "~" ? homedir() : path.startsWith("~/") ? join(homedir(), path.slice(2)) : path;
+	const home =
+		(process.platform === "win32" ? process.env.USERPROFILE : process.env.HOME) || homedir();
+	const expanded = path === "~" ? home : path.startsWith("~/") ? join(home, path.slice(2)) : path;
 	if (!isAbsolute(expanded)) {
 		throw new Error(`Project path must be absolute or start with ~/: ${path}`);
 	}

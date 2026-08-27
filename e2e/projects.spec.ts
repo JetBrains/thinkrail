@@ -50,6 +50,54 @@ test("opens a git repo as a project via the directory picker", async ({ page }) 
 	).toBeVisible();
 });
 
+test("opens a project from an explicit host path", async ({ page }) => {
+	await page.goto("/");
+	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+
+	await page.getByTestId("add-project-menu").click();
+	await page.getByTestId("menu-enter-host-path").click();
+
+	const dialog = page.getByTestId("open-project-path-dialog");
+	await expect(dialog).toBeVisible();
+	await expect(dialog).toContainText("computer running ThinkRail");
+	await expect(dialog.getByTestId("open-project-picker-error")).toHaveCount(0);
+	const input = dialog.getByTestId("open-project-path-input");
+	await expect(input).toBeFocused();
+	await input.fill(E2E_FIXTURE_REPO);
+	await input.press("Enter");
+
+	await expect(dialog).toHaveCount(0);
+	await expect(
+		page.getByTestId("project-item").filter({ hasText: basename(E2E_FIXTURE_REPO) }),
+	).toBeVisible();
+});
+
+test("headless picker failure falls back to host-path entry", async ({ page }) => {
+	writeFileSync(E2E_PICK_DIR_POINTER, "");
+	try {
+		await page.goto("/");
+		await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+
+		await page.getByTestId("add-project-menu").click();
+		await page.getByTestId("menu-open-project").click();
+
+		const dialog = page.getByTestId("open-project-path-dialog");
+		await expect(dialog).toBeVisible();
+		await expect(dialog.getByTestId("open-project-picker-error")).toContainText(
+			"No graphical session",
+		);
+		await dialog.getByTestId("open-project-path-input").fill(E2E_FIXTURE_REPO);
+		await dialog.getByTestId("open-project-path-submit").click();
+
+		await expect(dialog).toHaveCount(0);
+		await expect(
+			page.getByTestId("project-item").filter({ hasText: basename(E2E_FIXTURE_REPO) }),
+		).toBeVisible();
+	} finally {
+		writeFileSync(E2E_PICK_DIR_POINTER, E2E_FIXTURE_REPO);
+	}
+});
+
 test("opening a non-git folder offers to initialise a repo, then opens it end-to-end", async ({
 	page,
 }) => {

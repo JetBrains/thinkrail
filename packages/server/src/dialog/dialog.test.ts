@@ -72,6 +72,65 @@ test("no runnable picker points at the fix on Linux, names the platform elsewher
 	expect(noPickerMessage("sunos" as NodeJS.Platform)).toContain("(sunos)");
 });
 
+test("headless Linux fails before spawning a graphical picker", async () => {
+	let spawned = false;
+	await expect(
+		selectDirectory({
+			platform: "linux",
+			env: {},
+			runPicker: async () => {
+				spawned = true;
+				return { stdout: "", stderr: "", code: 0 };
+			},
+		}),
+	).rejects.toThrow("No graphical session");
+	expect(spawned).toBe(false);
+});
+
+test("a genuine Linux cancel returns null and does not open the fallback picker", async () => {
+	const commands: string[] = [];
+	const result = await selectDirectory({
+		platform: "linux",
+		env: { DISPLAY: ":1" },
+		runPicker: async ([command]) => {
+			commands.push(command ?? "");
+			return { stdout: "", stderr: "", code: 1 };
+		},
+	});
+	expect(result).toEqual({ path: null });
+	expect(commands).toEqual(["zenity"]);
+});
+
+test("a failed Linux picker falls through to the next candidate", async () => {
+	const commands: string[] = [];
+	const result = await selectDirectory({
+		platform: "linux",
+		env: { DISPLAY: ":1" },
+		runPicker: async ([command]) => {
+			commands.push(command ?? "");
+			return command === "zenity"
+				? { stdout: "", stderr: "Gtk-WARNING: Failed to open display", code: 1 }
+				: { stdout: "/repos/fallback\n", stderr: "", code: 0 };
+		},
+	});
+	expect(result).toEqual({ path: "/repos/fallback" });
+	expect(commands).toEqual(["zenity", "kdialog"]);
+});
+
+test("picker exhaustion throws a diagnostic instead of cancellation", async () => {
+	await expect(
+		selectDirectory({
+			platform: "linux",
+			env: { WAYLAND_DISPLAY: "wayland-0" },
+			runPicker: async ([command]) => ({
+				stdout: "",
+				stderr: command === "zenity" ? "Gtk-WARNING: Failed to open display" : "",
+				code: command === "zenity" ? 1 : 254,
+			}),
+		}),
+	).rejects.toThrow("Failed to open display");
+});
+
 test("picker output is trimmed, trailing separators dropped, empty → null", () => {
 	const parse = pickersFor("darwin")[0]?.parse;
 	if (!parse) throw new Error("expected a darwin picker");
