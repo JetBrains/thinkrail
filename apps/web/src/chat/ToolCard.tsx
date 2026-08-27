@@ -6,7 +6,8 @@ import {
 } from "@remixicon/react";
 import { cn } from "@/lib";
 import { useFold } from "./foldState";
-import { getToolRenderer, getToolSummary, resolveProminence } from "./toolRegistry";
+import { ToolRendererBody } from "./ToolRendererBody";
+import { getToolSummary, resolveProminence } from "./toolRegistry";
 import type { ToolResultState } from "./types";
 
 export function ToolCard({
@@ -28,7 +29,6 @@ export function ToolCard({
 }) {
 	const status = tool?.status ?? (dead ? "error" : "running");
 	const isError = status === "error";
-	const Renderer = getToolRenderer(toolName);
 	const renderProps = {
 		toolCallId,
 		toolName,
@@ -79,7 +79,7 @@ export function ToolCard({
 			</button>
 			{expanded ? (
 				<div className={cn("px-8 pb-4", isError && "text-feedback-error")}>
-					<Renderer {...renderProps} />
+					<ToolRendererBody {...renderProps} imageLabel={summary} />
 				</div>
 			) : null}
 		</div>

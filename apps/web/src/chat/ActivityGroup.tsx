@@ -10,7 +10,8 @@ import { cn } from "@/lib";
 import type { ActivityBreadcrumbKind } from "./activityBreadcrumbs";
 import { useFold } from "./foldState";
 import type { ActivityStep, RoutineToolStep, ThinkingStep } from "./rows";
-import { getToolRenderer, getToolSummary, type ToolRenderProps } from "./toolRegistry";
+import { ToolRendererBody } from "./ToolRendererBody";
+import { getToolSummary, type ToolRenderProps } from "./toolRegistry";
 import type { ToolStatus } from "./types";
 
 export function ActivityGroup({
@@ -249,7 +250,6 @@ function RoutineToolRow({
 }) {
 	const [expanded, toggle] = useFold(step.id);
 	const status: ToolStatus = step.tool?.status ?? (step.dead ? "error" : "running");
-	const Renderer = getToolRenderer(step.toolName);
 	const renderProps = toolRenderProps(step, workspaceRoot);
 	const summary = getToolSummary(step.toolName, renderProps);
 	return (
@@ -283,7 +283,7 @@ function RoutineToolRow({
 			/>
 			{expanded ? (
 				<div className={cn("px-8 pb-4 pl-16", status === "error" && "text-feedback-error")}>
-					<Renderer {...renderProps} />
+					<ToolRendererBody {...renderProps} imageLabel={summary} />
 				</div>
 			) : null}
 		</div>
