@@ -1683,6 +1683,17 @@ test("noteClosedChats surfaces disk-only sessions in history, skipping live/open
 	store.noteClosedChats("ws1", [{ sessionId: "disk1", title: "Old chat", closedAt: 200 }]);
 	history = useAppStore.getState().closedChatsByWorkspace.ws1 ?? [];
 	expect(history).toHaveLength(2);
+	store.noteClosedChats("ws1", [{ sessionId: "disk1", title: "Renamed chat", closedAt: 400 }]);
+	history = useAppStore.getState().closedChatsByWorkspace.ws1 ?? [];
+	expect(history.find((chat) => chat.sessionId === "disk1")).toEqual({
+		sessionId: "disk1",
+		title: "Renamed chat",
+		closedAt: 200,
+	});
+
+	store.openChatSession("ws1", "disk1", null, "medium");
+	history = useAppStore.getState().closedChatsByWorkspace.ws1 ?? [];
+	expect(history.map((chat) => chat.sessionId)).toEqual(["disk2"]);
 });
 
 test("opening a chat never steals another resource's canonical cache id", () => {

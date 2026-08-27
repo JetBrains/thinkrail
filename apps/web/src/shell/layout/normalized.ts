@@ -143,7 +143,7 @@ function nextToolAnchor(tabs: readonly LayoutTab[], tabIndex: number): LayoutToo
 }
 
 export function workspaceViewFromDocument(document: WorkspaceLayoutDocument): WorkspaceViewState {
-	const groups: Record<string, WorkspaceGroupView> = {};
+	const groups = Object.create(null) as Record<string, WorkspaceGroupView>;
 	const visitCenter = (node: LayoutCenterNode): void => {
 		if (node.kind === "split") {
 			visitCenter(node.children[0]);
@@ -161,7 +161,7 @@ export function workspaceViewFromDocument(document: WorkspaceLayoutDocument): Wo
 	for (const region of [document.left, document.right, document.bottom]) {
 		for (const group of region.groups) {
 			const tabs: LayoutTerminalTab[] = [];
-			const beforeToolByTabId: Record<string, LayoutToolId> = {};
+			const beforeToolByTabId = Object.create(null) as Record<string, LayoutToolId>;
 			group.tabs.forEach((tab, index) => {
 				if (tab.kind !== "terminal") return;
 				tabs.push(tab);
@@ -265,7 +265,7 @@ export function projectWorkspaceLayout(
 }
 
 export function emptyWorkspaceView(): WorkspaceViewState {
-	return { groups: {} };
+	return { groups: Object.create(null) as Record<string, WorkspaceGroupView> };
 }
 
 function frameLocations(frame: WorkbenchFrame): FrameGroupLocation[] {
@@ -333,7 +333,7 @@ export function reconcileWorkspaceView(
 	const previousLocations = frameLocations(previousFrame);
 	const previousById = new Map(previousLocations.map((location) => [location.groupId, location]));
 	const nextById = locationMap(nextFrame);
-	const groups: Record<string, WorkspaceGroupView> = {};
+	const groups = Object.create(null) as Record<string, WorkspaceGroupView>;
 	const resourceKeys = new Set<string>();
 	const append = (
 		tab: LayoutCenterTab,

@@ -130,7 +130,7 @@ the host from env via `bootHost` for dev/e2e.
 Rules: features never import `host`, and never each other except the edges above. The graph is acyclic.
 `agent`'s WS surface (`session.*` + `pi.event` forwarding) attaches to `host`. Features that push on their
 own never import `host` either: they expose a **publisher-injection seam** (`setTerminalPublisher`,
-`setSessionPublisher`, `setLoginPublisher`, `projects`' `setProjectPublisher` for the full-snapshot
+`setSessionPublisher` + `setSessionCreatedPublisher` + `setSessionDeletedPublisher`, `setLoginPublisher`, `projects`' `setProjectPublisher` for the full-snapshot
 `project.updated` lifecycle, `workspaces`' `setWorkspacePublisher` for the
 `workspace.created`/`updated`/`removed` lifecycle trio, `settings`' `setSettingsPublisher` for
 `settings.changed`, and auth's Central action analytics + `provider.changed` invalidation publishers) that

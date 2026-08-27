@@ -86,12 +86,13 @@ Each auxiliary strip trails an add-to-this-group menu. It offers shell-injected 
 ## Presets and local persistence
 
 Balanced, Focus, and Review are web-owned resource-free frame definitions with a below-center bottom slot:
-Balanced and Review show it; Focus hides it. Custom presets use the same grammar and capture geometry,
+Balanced and Review show it; Focus hides it. Balanced and Focus start with one center group; Review provides
+its deliberate vertical pair. Custom presets use the same grammar and capture geometry,
 topology, tools, folds, and empty structural slots, never workspace resources or terminal count. Preset node
 ids are template-local labels: instantiation mints frontend-local frame ids and returns the old→new group map
 used to rehome every workspace view. Only custom definitions cross the wire through settings.
 
-Applying a preset creates one replacement frame, raises this surface's local side/bottom limits if required, and remaps all retained workspace views atomically. Center resources preserve visual order and distribute across destination leaves; terminals map into compatible slots; singleton tool placement ids survive where possible. Omitted tools keep default/prior restore targets, so a sparse preset cannot strand Projects or another tool. Current/default preset selection and limits persist locally, not in host settings.
+Applying a preset creates one replacement frame, raises this surface's local side/bottom limits if required, and remaps all retained workspace views atomically. Center resources preserve visual order and distribute across destination leaves; terminals map into compatible slots; singleton tool placement ids survive where possible. Omitted tools receive deterministic restore targets, so a sparse preset cannot strand Projects or another tool. Current/default preset selection and limits persist locally, not in host settings.
 
 `layoutState` validates and persists the normalized frame/views/attention document under endpoint + frontend-surface identity. Reload and supported session restoration reuse it; simultaneous windows never consume each other's storage events. Persistence contains references only. Failure leaves live state intact; unknown schema falls back to the local default.
 

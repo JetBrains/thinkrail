@@ -4,8 +4,9 @@ import type {
 	WorkspaceLayoutSnapshot,
 } from "@thinkrail/contracts";
 import { useEffect } from "react";
-import { type LayoutAttention, randomId } from "../../lib";
+import { type LayoutAttention, randomId, tupleKey } from "../../lib";
 import {
+	DEFAULT_LOCAL_LAYOUT_PREFERENCES,
 	type LocalLayoutPreferences,
 	type LocalLayoutStatePayload,
 	toast,
@@ -16,8 +17,11 @@ import {
 	applyProjectedLayoutDocument,
 	applyWorkbenchPreset,
 	BUILTIN_LAYOUT_PRESETS,
+	DEFAULT_LAYOUT_PRESET_ID,
 	emptyWorkspaceView,
+	ensureWorkbenchToolPlacementIds,
 	instantiateWorkbenchFrame,
+	LAYOUT_TOOLS,
 	minimumBottomGroupLimit,
 	minimumSideGroupLimit,
 	projectWorkspaceLayout,
@@ -32,11 +36,7 @@ import {
 
 const LOCAL_LAYOUT_VERSION = 1;
 const SURFACE_ID_KEY = "thinkrail:layout-surface-id";
-const DEFAULT_PREFERENCES: LocalLayoutPreferences = {
-	defaultPresetId: "balanced",
-	maxSideGroups: 6,
-	maxBottomGroups: 3,
-};
+const TOOL_IDS = new Set<string>(LAYOUT_TOOLS);
 
 interface PersistedLocalLayout {
 	version: 1;
@@ -56,6 +56,7 @@ let storageOverride: StoragePair | null = null;
 let endpointOverride: string | null = null;
 let persistenceKey: string | null = null;
 let stopPersistence: (() => void) | null = null;
+let freshBootstrap = false;
 let legacyLayoutRequesterForTests:
 	| ((workspaceId: string) => Promise<WorkspaceLayoutSnapshot | null>)
 	| null = null;
@@ -87,6 +88,11 @@ function currentPersistenceKey(storage: StoragePair): string {
 	return localLayoutStorageKey(endpointOverride ?? getTransport().httpBase(), surfaceId(storage));
 }
 
+function hasOnlyKeys(value: Record<string, unknown>, allowed: readonly string[]): boolean {
+	const keys = new Set(allowed);
+	return Object.keys(value).every((key) => keys.has(key));
+}
+
 function parseAttention(value: unknown): LayoutAttention | undefined {
 	if (!isRecord(value)) return undefined;
 	const selected = value.selectedByGroup;
@@ -116,12 +122,20 @@ function parseAttention(value: unknown): LayoutAttention | undefined {
 }
 
 function isResourceFreeFrame(value: unknown): value is WorkbenchFrame {
-	if (!isRecord(value) || value.version !== 1 || !isRecord(value.center)) return false;
+	if (
+		!isRecord(value) ||
+		!hasOnlyKeys(value, ["version", "center", "left", "right", "bottom", "toolRestoreTargets"]) ||
+		value.version !== 1 ||
+		!isRecord(value.center)
+	) {
+		return false;
+	}
 	const visitCenter = (node: unknown): boolean => {
 		if (!isRecord(node) || typeof node.id !== "string") return false;
-		if (node.kind === "group") return !Object.hasOwn(node, "tabs");
+		if (node.kind === "group") return hasOnlyKeys(node, ["kind", "id"]);
 		return (
 			node.kind === "split" &&
+			hasOnlyKeys(node, ["kind", "id", "direction", "weights", "children"]) &&
 			(node.direction === "horizontal" || node.direction === "vertical") &&
 			Array.isArray(node.weights) &&
 			node.weights.length === 2 &&
@@ -134,24 +148,151 @@ function isResourceFreeFrame(value: unknown): value is WorkbenchFrame {
 	if (!visitCenter(value.center)) return false;
 	for (const area of ["left", "right", "bottom"] as const) {
 		const region = value[area];
-		if (!isRecord(region) || !Array.isArray(region.groups)) return false;
+		const regionKeys =
+			area === "bottom"
+				? ["visible", "height", "alignment", "groups"]
+				: ["visible", "width", "groups"];
+		if (
+			!isRecord(region) ||
+			!hasOnlyKeys(region, regionKeys) ||
+			typeof region.visible !== "boolean" ||
+			(area === "bottom"
+				? typeof region.height !== "number" || typeof region.alignment !== "string"
+				: typeof region.width !== "number") ||
+			!Array.isArray(region.groups)
+		) {
+			return false;
+		}
 		for (const group of region.groups) {
-			if (!isRecord(group) || !Array.isArray(group.tools)) return false;
+			if (
+				!isRecord(group) ||
+				!hasOnlyKeys(group, ["id", "weight", "folded", "tools"]) ||
+				typeof group.id !== "string" ||
+				typeof group.weight !== "number" ||
+				typeof group.folded !== "boolean" ||
+				!Array.isArray(group.tools)
+			) {
+				return false;
+			}
 			if (
 				group.tools.some(
 					(tool) =>
 						!isRecord(tool) ||
+						!hasOnlyKeys(tool, ["kind", "id", "name", "tool"]) ||
 						tool.kind !== "tool" ||
 						typeof tool.id !== "string" ||
 						typeof tool.name !== "string" ||
-						typeof tool.tool !== "string",
+						typeof tool.tool !== "string" ||
+						!TOOL_IDS.has(tool.tool),
 				)
 			) {
 				return false;
 			}
 		}
 	}
-	return true;
+	if (!isRecord(value.toolRestoreTargets)) return false;
+	return Object.entries(value.toolRestoreTargets).every(([tool, candidate]) => {
+		if (!TOOL_IDS.has(tool) || !isRecord(candidate)) return false;
+		return (
+			hasOnlyKeys(candidate, ["region", "groupId", "index"]) &&
+			(candidate.region === "left" ||
+				candidate.region === "right" ||
+				candidate.region === "bottom") &&
+			(candidate.groupId === undefined || typeof candidate.groupId === "string") &&
+			Number.isInteger(candidate.index) &&
+			Number(candidate.index) >= 0
+		);
+	});
+}
+
+function isWorkspaceView(value: unknown): value is WorkspaceViewState {
+	if (!isRecord(value) || !hasOnlyKeys(value, ["groups"]) || !isRecord(value.groups)) {
+		return false;
+	}
+	const validDiffScope = (scope: unknown): boolean => {
+		if (!isRecord(scope) || typeof scope.kind !== "string") return false;
+		switch (scope.kind) {
+			case "branch":
+			case "uncommitted":
+				return hasOnlyKeys(scope, ["kind"]);
+			case "commit":
+				return hasOnlyKeys(scope, ["kind", "sha"]) && typeof scope.sha === "string";
+			case "pinned":
+				return hasOnlyKeys(scope, ["kind", "baseRef"]) && typeof scope.baseRef === "string";
+			default:
+				return false;
+		}
+	};
+	const validTab = (tab: unknown): boolean => {
+		if (
+			!isRecord(tab) ||
+			typeof tab.kind !== "string" ||
+			typeof tab.id !== "string" ||
+			typeof tab.name !== "string"
+		) {
+			return false;
+		}
+		switch (tab.kind) {
+			case "file":
+				return hasOnlyKeys(tab, ["kind", "id", "name", "path"]) && typeof tab.path === "string";
+			case "diff":
+				return (
+					hasOnlyKeys(tab, ["kind", "id", "name", "path", "scope"]) &&
+					typeof tab.path === "string" &&
+					validDiffScope(tab.scope)
+				);
+			case "chat":
+				return (
+					hasOnlyKeys(tab, ["kind", "id", "name", "sessionId"]) && typeof tab.sessionId === "string"
+				);
+			case "document":
+				return (
+					hasOnlyKeys(tab, ["kind", "id", "name", "documentKind", "sourceId", "docPath"]) &&
+					tab.documentKind === "todo-plan" &&
+					typeof tab.sourceId === "string" &&
+					typeof tab.docPath === "string"
+				);
+			case "terminal":
+				return hasOnlyKeys(tab, ["kind", "id", "name", "tabKey"]) && typeof tab.tabKey === "string";
+			default:
+				return false;
+		}
+	};
+	return Object.values(value.groups).every((candidate) => {
+		if (
+			!isRecord(candidate) ||
+			!hasOnlyKeys(candidate, ["tabs", "previewTabId", "beforeToolByTabId"]) ||
+			!Array.isArray(candidate.tabs) ||
+			candidate.tabs.some((tab) => !validTab(tab)) ||
+			(candidate.previewTabId !== undefined && typeof candidate.previewTabId !== "string") ||
+			(candidate.beforeToolByTabId !== undefined && !isRecord(candidate.beforeToolByTabId))
+		) {
+			return false;
+		}
+		return (
+			candidate.beforeToolByTabId === undefined ||
+			Object.values(candidate.beforeToolByTabId).every(
+				(tool) => typeof tool === "string" && TOOL_IDS.has(tool),
+			)
+		);
+	});
+}
+
+function frameGroupIds(frame: WorkbenchFrame): Set<string> {
+	const ids = new Set<string>();
+	const visitCenter = (node: WorkbenchFrame["center"]): void => {
+		if (node.kind === "group") {
+			ids.add(node.id);
+			return;
+		}
+		visitCenter(node.children[0]);
+		visitCenter(node.children[1]);
+	};
+	visitCenter(frame.center);
+	for (const region of [frame.left, frame.right, frame.bottom]) {
+		for (const group of region.groups) ids.add(group.id);
+	}
+	return ids;
 }
 
 function parsePreferences(value: unknown): LocalLayoutPreferences | undefined {
@@ -185,10 +326,15 @@ function decodeLocalLayout(raw: string): LocalLayoutStatePayload | undefined {
 		const preferences = parsePreferences(parsed.preferences);
 		if (!preferences) return undefined;
 		const frame = parsed.frame;
-		const viewsByWorkspace = parsed.viewsByWorkspace as Record<string, WorkspaceViewState>;
+		const validGroupIds = frameGroupIds(frame);
+		const viewsByWorkspace: Record<string, WorkspaceViewState> = {};
 		const documentsByWorkspace: Record<string, WorkspaceLayoutDocument> = {};
 		const attentionByWorkspace: Record<string, LayoutAttention> = {};
-		for (const [workspaceId, view] of Object.entries(viewsByWorkspace)) {
+		for (const [workspaceId, view] of Object.entries(parsed.viewsByWorkspace)) {
+			if (!isWorkspaceView(view) || Object.keys(view.groups).some((id) => !validGroupIds.has(id))) {
+				return undefined;
+			}
+			viewsByWorkspace[workspaceId] = view;
 			const document = projectWorkspaceLayout(frame, view);
 			if (validateLayoutDocument(document, 32, 32).length > 0) return undefined;
 			documentsByWorkspace[workspaceId] = document;
@@ -257,6 +403,7 @@ function startPersistence(): void {
 		) {
 			return;
 		}
+		freshBootstrap = false;
 		persistCurrentLayout();
 	});
 }
@@ -293,7 +440,9 @@ function loadLegacyAttention(workspaceId: string): LayoutAttention | undefined {
 }
 
 function balancedFrame(): WorkbenchFrame {
-	const preset = BUILTIN_LAYOUT_PRESETS.find((candidate) => candidate.id === "balanced");
+	const preset = BUILTIN_LAYOUT_PRESETS.find(
+		(candidate) => candidate.id === DEFAULT_LAYOUT_PRESET_ID,
+	);
 	if (!preset) throw new Error("The Balanced layout preset is missing");
 	return instantiateWorkbenchFrame(preset);
 }
@@ -320,6 +469,7 @@ function requestLegacyLayout(workspaceId: string): Promise<WorkspaceLayoutSnapsh
 function initialPayload(
 	workspaceId: string,
 	snapshot: WorkspaceLayoutSnapshot | null,
+	preferences: LocalLayoutPreferences = DEFAULT_LOCAL_LAYOUT_PREFERENCES,
 ): LocalLayoutStatePayload {
 	const frame = snapshot ? workbenchFrameFromDocument(snapshot.document) : balancedFrame();
 	const view = snapshot ? workspaceViewFromDocument(snapshot.document) : emptyWorkspaceView();
@@ -335,7 +485,7 @@ function initialPayload(
 				snapshot?.document,
 			),
 		},
-		preferences: DEFAULT_PREFERENCES,
+		preferences,
 		legacyImportAttempted: { [workspaceId]: true },
 	};
 }
@@ -355,39 +505,63 @@ function importedPayload(
 			)
 		: emptyWorkspaceView();
 	const viewsByWorkspace = { ...state.workspaceViewsByWorkspace, [workspaceId]: view };
-	const document = projectWorkspaceLayout(frame, view);
-	const documentsByWorkspace = {
-		...state.layoutDocumentsByWorkspace,
-		[workspaceId]: document,
-	};
+	const safeFrame = ensureWorkbenchToolPlacementIds(frame, viewsByWorkspace);
+	const documentsByWorkspace =
+		safeFrame === frame
+			? {
+					...state.layoutDocumentsByWorkspace,
+					[workspaceId]: projectWorkspaceLayout(safeFrame, view),
+				}
+			: documentsForViews(safeFrame, viewsByWorkspace);
+	const attentionByWorkspace = { ...state.layoutAttentionByWorkspace };
+	for (const [id, document] of Object.entries(documentsByWorkspace)) {
+		if (id !== workspaceId && safeFrame === frame) continue;
+		attentionByWorkspace[id] = reconcileAttention(
+			document,
+			id === workspaceId ? loadLegacyAttention(id) : state.layoutAttentionByWorkspace[id],
+			id === workspaceId ? snapshot?.document : state.layoutDocumentsByWorkspace[id],
+		);
+	}
 	return {
-		frame,
+		frame: safeFrame,
 		viewsByWorkspace,
 		documentsByWorkspace,
-		attentionByWorkspace: {
-			...state.layoutAttentionByWorkspace,
-			[workspaceId]: reconcileAttention(
-				document,
-				loadLegacyAttention(workspaceId),
-				snapshot?.document,
-			),
-		},
+		attentionByWorkspace,
 		preferences: state.localLayoutPreferences,
 		legacyImportAttempted: { ...state.legacyLayoutImportAttempted, [workspaceId]: true },
 	};
 }
 
+export function initializeLocalLayoutState(): void {
+	const state = useAppStore.getState();
+	if (!state.layoutStateReady) {
+		const persisted = loadPersistedLayout();
+		if (persisted) {
+			state.hydrateLocalLayoutState(persisted);
+		} else {
+			freshBootstrap = true;
+			state.hydrateLocalLayoutState({
+				frame: balancedFrame(),
+				viewsByWorkspace: {},
+				documentsByWorkspace: {},
+				attentionByWorkspace: {},
+				preferences: { ...DEFAULT_LOCAL_LAYOUT_PREFERENCES },
+				legacyImportAttempted: {},
+			});
+		}
+	}
+	startPersistence();
+}
+
 export function ensureWorkspaceLayoutState(workspaceId: string): Promise<WorkspaceLayoutDocument> {
-	const existing = workspaceImports.get(workspaceId);
+	const stateAtStart = useAppStore.getState();
+	const importKey = tupleKey(workspaceId, String(stateAtStart.connectionGeneration));
+	const existing = workspaceImports.get(importKey);
 	if (existing) return existing;
 	const request = (async () => {
-		const current = useAppStore.getState();
+		const current = stateAtStart;
 		if (current.removedWorkspaceIds[workspaceId]) throw new Error("Workspace has been removed");
-		if (!current.layoutStateReady) {
-			const persisted = loadPersistedLayout();
-			if (persisted) current.hydrateLocalLayoutState(persisted);
-			startPersistence();
-		}
+		if (!current.layoutStateReady) initializeLocalLayoutState();
 		const loaded = useAppStore.getState();
 		const localDocument = loaded.layoutDocumentsByWorkspace[workspaceId];
 		if (localDocument && loaded.legacyLayoutImportAttempted[workspaceId]) return localDocument;
@@ -403,22 +577,20 @@ export function ensureWorkspaceLayoutState(workspaceId: string): Promise<Workspa
 		) {
 			throw new Error("The layout import was superseded by a newer connection");
 		}
-		const payload = latest.layoutStateReady
-			? importedPayload(workspaceId, snapshot)
-			: initialPayload(workspaceId, snapshot);
-		if (latest.layoutStateReady) {
-			latest.applyLocalLayoutState(payload, [workspaceId]);
-		} else {
-			latest.hydrateLocalLayoutState(payload);
-		}
-		persistCurrentLayout();
+		const replaceFreshBootstrap =
+			freshBootstrap && Object.keys(latest.workspaceViewsByWorkspace).length === 0;
+		const payload = replaceFreshBootstrap
+			? initialPayload(workspaceId, snapshot, latest.localLayoutPreferences)
+			: importedPayload(workspaceId, snapshot);
+		freshBootstrap = false;
+		latest.applyLocalLayoutState(payload, [workspaceId], replaceFreshBootstrap);
 		const document = useAppStore.getState().layoutDocumentsByWorkspace[workspaceId];
 		if (!document) throw new Error("The workspace layout could not be initialized");
 		return document;
 	})().finally(() => {
-		if (workspaceImports.get(workspaceId) === request) workspaceImports.delete(workspaceId);
+		if (workspaceImports.get(importKey) === request) workspaceImports.delete(importKey);
 	});
-	workspaceImports.set(workspaceId, request);
+	workspaceImports.set(importKey, request);
 	return request;
 }
 
@@ -494,14 +666,17 @@ export async function commitWorkspaceLayout(
 		baseDocument && currentDocument
 			? rebaseProjectedDocument(baseDocument, document, currentDocument)
 			: document;
-	const next = applyProjectedLayoutDocument(
+	const validationErrors = validateLayoutDocument(effectiveDocument, 32, 32);
+	if (validationErrors.length > 0) throw new Error(validationErrors.join(" "));
+	const projected = applyProjectedLayoutDocument(
 		{ frame: state.workbenchFrame, viewsByWorkspace: state.workspaceViewsByWorkspace },
 		workspaceId,
 		effectiveDocument,
 	);
-	const frameChanged = next.frame !== state.workbenchFrame;
+	const frame = ensureWorkbenchToolPlacementIds(projected.frame, projected.viewsByWorkspace);
+	const frameChanged = frame !== state.workbenchFrame;
 	const documentsByWorkspace = frameChanged
-		? documentsForViews(next.frame, next.viewsByWorkspace)
+		? documentsForViews(frame, projected.viewsByWorkspace)
 		: { ...state.layoutDocumentsByWorkspace, [workspaceId]: effectiveDocument };
 	const changedWorkspaceIds = frameChanged ? Object.keys(documentsByWorkspace) : [workspaceId];
 	const attentionByWorkspace = { ...state.layoutAttentionByWorkspace };
@@ -516,8 +691,8 @@ export async function commitWorkspaceLayout(
 	}
 	state.applyLocalLayoutState(
 		{
-			frame: next.frame,
-			viewsByWorkspace: next.viewsByWorkspace,
+			frame,
+			viewsByWorkspace: projected.viewsByWorkspace,
 			documentsByWorkspace,
 			attentionByWorkspace,
 			preferences: state.localLayoutPreferences,
@@ -526,12 +701,11 @@ export async function commitWorkspaceLayout(
 		changedWorkspaceIds,
 		frameChanged,
 	);
-	persistCurrentLayout();
 	return useAppStore.getState().layoutDocumentsByWorkspace[workspaceId] ?? document;
 }
 
-export function persistLayoutAttention(_workspaceId: string, _attention: LayoutAttention): void {
-	persistCurrentLayout();
+export function useLocalLayoutState(): void {
+	useEffect(() => initializeLocalLayoutState(), []);
 }
 
 export function useWorkspaceLayoutState(workspaceId: string): void {
@@ -571,6 +745,7 @@ export function resetLayoutStateForTests(): void {
 	stopPersistence?.();
 	stopPersistence = null;
 	persistenceKey = null;
+	freshBootstrap = false;
 	storageOverride = null;
 	endpointOverride = null;
 	legacyLayoutRequesterForTests = null;

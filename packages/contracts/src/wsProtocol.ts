@@ -75,6 +75,8 @@ export interface TerminalDetachedPush {
 	tabKey: string;
 }
 
+export const INITIAL_TERMINAL_TAB_KEY = "thinkrail-initial";
+
 export interface TerminalTabInfo {
 	tabKey: string;
 	title: string;
@@ -102,6 +104,8 @@ export interface WorkspaceRemoved {
 	projectId: string;
 	id: string;
 }
+
+export type SessionCreatedPayload = SessionSummary;
 
 export interface SessionDeletedPayload {
 	workspaceId: string;
@@ -219,6 +223,7 @@ export const WS_CHANNELS = {
 	projectUpdated: "project.updated",
 	piEvent: "pi.event",
 	piExtensionUi: "pi.extensionUi",
+	sessionCreated: "session.created",
 	sessionDeleted: "session.deleted",
 	providerLogin: "provider.login",
 	providerChanged: "provider.changed",

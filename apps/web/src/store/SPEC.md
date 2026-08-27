@@ -199,8 +199,10 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   intent. No peer can restore placement remotely. **`reopenChat(workspaceId, …)`** restores runtime/history
   membership in its captured workspace even after another workspace becomes active; shell adds placement to
   that workspace's locally chosen center group through the one transition path. **`noteClosedChats`** records
-  disk-only sessions (from `session.list`) there too — idempotently (skips live/open/already-listed) — so a
-  chat that survived a host restart is reopenable. **`deleteChat(workspaceId, sessionId)`** is the idempotent
+  disk-only sessions (from `session.list`) and peer-created sessions (from the `session.created` summary)
+  there too—idempotently, skipping live/open sessions while refreshing an existing history row from a newer
+  summary—so a chat that survived a host restart or was created in another frontend is reopenable without
+  gaining local placement. **`deleteChat(workspaceId, sessionId)`** is the idempotent
   fold for both a confirmed local `session.delete` and the `session.deleted` broadcast: it atomically drops
   every tab the chat owns — its transcript, live plan page, and any dependent legacy document cache — plus
   its history row/runtime + skill baseline, records a page-lifetime tombstone, removes queued opens for the

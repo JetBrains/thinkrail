@@ -159,6 +159,12 @@ export interface LocalLayoutPreferences {
 	maxBottomGroups: number;
 }
 
+export const DEFAULT_LOCAL_LAYOUT_PREFERENCES: LocalLayoutPreferences = {
+	defaultPresetId: "balanced",
+	maxSideGroups: 6,
+	maxBottomGroups: 3,
+};
+
 export interface LocalLayoutStatePayload {
 	frame: WorkbenchFrame;
 	viewsByWorkspace: Record<string, WorkspaceViewState>;
@@ -1504,11 +1510,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	workbenchFrame: null,
 	workspaceViewsByWorkspace: {},
 	layoutStateReady: false,
-	localLayoutPreferences: {
-		defaultPresetId: "balanced",
-		maxSideGroups: 6,
-		maxBottomGroups: 3,
-	},
+	localLayoutPreferences: { ...DEFAULT_LOCAL_LAYOUT_PREFERENCES },
 	legacyLayoutImportAttempted: {},
 	layoutDocumentsByWorkspace: {},
 	layoutAttentionByWorkspace: {},
@@ -2337,6 +2339,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 			const id = existing?.id ?? availableEditorTabId(tabs, preferred);
 			const tab: ChatTab = id === preferred.id ? preferred : { ...preferred, id };
 			const fresh = !s.sessions[sessionId];
+			const history = s.closedChatsByWorkspace[workspaceId] ?? [];
+			const inHistory = history.some((entry) => entry.sessionId === sessionId);
 			return {
 				layoutIntents: appendLayoutIntent(s.layoutIntents, {
 					kind: "open",
@@ -2348,6 +2352,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 				tabsByWorkspace: existing
 					? s.tabsByWorkspace
 					: { ...s.tabsByWorkspace, [workspaceId]: [...tabs, tab] },
+				closedChatsByWorkspace: inHistory
+					? {
+							...s.closedChatsByWorkspace,
+							[workspaceId]: history.filter((entry) => entry.sessionId !== sessionId),
+						}
+					: s.closedChatsByWorkspace,
 				activeTabByWorkspace:
 					options.activate === false
 						? s.activeTabByWorkspace
@@ -2539,23 +2549,38 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((s) => {
 			if (s.removedWorkspaceIds[workspaceId]) return {};
 			const existing = s.closedChatsByWorkspace[workspaceId] ?? [];
-			const known = new Set([
-				...existing.map((c) => c.sessionId),
-				...(s.tabsByWorkspace[workspaceId] ?? [])
-					.filter((t): t is ChatTab => t.kind === "chat")
-					.map((t) => t.sessionId),
-			]);
-			const fresh = entries.filter(
-				(e) =>
-					!isSessionDeleted(s, workspaceId, e.sessionId) &&
-					!known.has(e.sessionId) &&
-					!s.sessions[e.sessionId],
+			const open = new Set(
+				(s.tabsByWorkspace[workspaceId] ?? [])
+					.filter((tab): tab is ChatTab => tab.kind === "chat")
+					.map((tab) => tab.sessionId),
 			);
-			if (fresh.length === 0) return {};
+			const incoming = new Map(
+				entries
+					.filter(
+						(entry) =>
+							!isSessionDeleted(s, workspaceId, entry.sessionId) &&
+							!open.has(entry.sessionId) &&
+							!s.sessions[entry.sessionId],
+					)
+					.map((entry) => [entry.sessionId, entry]),
+			);
+			let changed = false;
+			const refreshed = existing.map((entry) => {
+				const replacement = incoming.get(entry.sessionId);
+				if (!replacement) return entry;
+				incoming.delete(entry.sessionId);
+				if (replacement.title === entry.title) return entry;
+				changed = true;
+				return { ...entry, title: replacement.title };
+			});
+			if (incoming.size > 0) changed = true;
+			if (!changed) return {};
 			return {
 				closedChatsByWorkspace: {
 					...s.closedChatsByWorkspace,
-					[workspaceId]: [...existing, ...fresh].sort((a, b) => b.closedAt - a.closedAt),
+					[workspaceId]: [...refreshed, ...incoming.values()].sort(
+						(a, b) => b.closedAt - a.closedAt,
+					),
 				},
 			};
 		}),

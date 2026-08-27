@@ -1,16 +1,12 @@
 import type {
-	LayoutBottomRegion,
 	LayoutCenterTab,
 	LayoutPreset,
 	LayoutPresetBottomRegion,
 	LayoutPresetCenterNode,
 	LayoutPresetSideRegion,
-	LayoutSideGroup,
-	LayoutSideRegion,
 	LayoutTerminalTab,
 	LayoutToolId,
 	LayoutToolTab,
-	WorkspaceLayoutDocument,
 } from "@thinkrail/contracts";
 import {
 	collectAllGroups,
@@ -79,12 +75,7 @@ export const BUILTIN_LAYOUT_PRESETS: readonly LayoutPreset[] = [
 	{
 		id: "balanced",
 		name: "Balanced",
-		center: split(
-			"balanced-center",
-			"horizontal",
-			group("balanced-primary"),
-			group("balanced-secondary"),
-		),
+		center: group("balanced-primary"),
 		left: side(true, 0.18, [{ id: "balanced-left", tools: ["projects"] }]),
 		right: side(true, 0.28, [
 			{ id: "balanced-right-top", tools: ["specs", "files"], weight: 1.25 },
@@ -145,9 +136,7 @@ function defaultRestoreTarget(tool: LayoutToolId) {
 	};
 }
 
-function restoreTargetsForPreset(
-	preset: LayoutPreset,
-): WorkspaceLayoutDocument["toolRestoreTargets"] {
+function restoreTargetsForPreset(preset: LayoutPreset): WorkbenchFrame["toolRestoreTargets"] {
 	const placed = new Set(
 		[...preset.left.groups, ...preset.right.groups, ...preset.bottom.groups].flatMap(
 			(group) => group.tools,
@@ -161,244 +150,6 @@ function restoreTargetsForPreset(
 	);
 }
 
-function instantiateSide(
-	region: LayoutPresetSideRegion,
-	resolveTool: (tool: LayoutToolId) => ReturnType<typeof toolTab> = toolTab,
-): LayoutSideRegion {
-	const weightTotal = region.groups.reduce((sum, candidate) => sum + candidate.weight, 0);
-	const groups: LayoutSideGroup[] = region.groups.map((candidate) => ({
-		id: createLayoutId("side"),
-		weight: candidate.weight / weightTotal,
-		folded: candidate.folded,
-		tabs: candidate.tools.map(resolveTool),
-	}));
-	return { visible: region.visible && groups.length > 0, width: region.width, groups };
-}
-
-function instantiateBottom(
-	region: LayoutPresetBottomRegion,
-	resolveTool: (tool: LayoutToolId) => ReturnType<typeof toolTab> = toolTab,
-): LayoutBottomRegion {
-	const weightTotal = region.groups.reduce((sum, candidate) => sum + candidate.weight, 0);
-	const groups = region.groups.map((candidate) => ({
-		id: createLayoutId("bottom"),
-		weight: candidate.weight / weightTotal,
-		folded: candidate.folded,
-		tabs: candidate.tools.map(resolveTool),
-	}));
-	return {
-		visible: region.visible && groups.length > 0,
-		height: region.height,
-		alignment: region.alignment,
-		groups,
-	};
-}
-
-export function instantiateLayoutPreset(preset: LayoutPreset): WorkspaceLayoutDocument {
-	return {
-		version: 2,
-		center: { kind: "group", id: createLayoutId("center"), tabs: [] },
-		left: instantiateSide(preset.left),
-		right: instantiateSide(preset.right),
-		bottom: instantiateBottom(preset.bottom),
-		toolRestoreTargets: restoreTargetsForPreset(preset),
-	};
-}
-
-function flattenCenterTabs(document: WorkspaceLayoutDocument): LayoutCenterTab[] {
-	return collectCenterGroups(document.center).flatMap((candidate) => candidate.tabs);
-}
-
-function flattenTerminals(document: WorkspaceLayoutDocument): LayoutTerminalTab[] {
-	return collectAllGroups(document)
-		.flatMap((group) => group.tabs)
-		.filter((tab): tab is LayoutTerminalTab => tab.kind === "terminal");
-}
-
-function presetLeafCount(node: LayoutPresetCenterNode): number {
-	return node.kind === "group"
-		? 1
-		: presetLeafCount(node.children[0]) + presetLeafCount(node.children[1]);
-}
-
-function fillPresetCenter(
-	node: LayoutPresetCenterNode,
-	buckets: LayoutCenterTab[][],
-	cursor: { value: number },
-): WorkspaceLayoutDocument["center"] | null {
-	if (node.kind === "group") {
-		const tabs = buckets[cursor.value] ?? [];
-		cursor.value += 1;
-		return tabs.length > 0 ? { kind: "group", id: createLayoutId("center"), tabs } : null;
-	}
-	const first = fillPresetCenter(node.children[0], buckets, cursor);
-	const second = fillPresetCenter(node.children[1], buckets, cursor);
-	if (!first) return second;
-	if (!second) return first;
-	const total = node.weights[0] + node.weights[1];
-	return {
-		kind: "split",
-		id: createLayoutId("split"),
-		direction: node.direction,
-		weights: [node.weights[0] / total, node.weights[1] / total],
-		children: [first, second],
-	};
-}
-
-function putTerminalsInBottom(
-	region: LayoutBottomRegion,
-	terminals: LayoutTerminalTab[],
-): LayoutBottomRegion {
-	if (region.groups.length === 0 && terminals.length === 0) return region;
-	const seeded =
-		region.groups.length > 0
-			? region.groups
-			: [{ id: createLayoutId("bottom"), weight: 1, folded: false, tabs: [] }];
-	const groups = seeded.map((group, index) => ({
-		...group,
-		tabs: [...group.tabs, ...(terminals[index] ? [terminals[index]] : [])],
-	}));
-	if (groups[0] && terminals.length > groups.length) {
-		groups[0] = { ...groups[0], tabs: [...groups[0].tabs, ...terminals.slice(groups.length)] };
-	}
-	return { ...region, groups };
-}
-
-function restoreTargetsForOmittedTools(
-	document: WorkspaceLayoutDocument,
-	left: LayoutSideRegion,
-	right: LayoutSideRegion,
-	bottomRegion: LayoutBottomRegion,
-): WorkspaceLayoutDocument["toolRestoreTargets"] {
-	const placed = new Set(
-		[...left.groups, ...right.groups, ...bottomRegion.groups]
-			.flatMap((group) => group.tabs)
-			.filter((tab) => tab.kind === "tool")
-			.map((tab) => tab.tool),
-	);
-	const targets = { ...document.toolRestoreTargets };
-	for (const region of ["left", "right", "bottom"] as const) {
-		for (const group of document[region].groups) {
-			group.tabs.forEach((tab, index) => {
-				if (tab.kind === "tool" && !placed.has(tab.tool)) {
-					targets[tab.tool] = { region, index };
-				}
-			});
-		}
-	}
-	for (const tool of LAYOUT_TOOLS) {
-		if (placed.has(tool) || targets[tool]) continue;
-		targets[tool] = defaultRestoreTarget(tool);
-	}
-	return targets;
-}
-
-export function applyLayoutPreset(
-	document: WorkspaceLayoutDocument,
-	preset: LayoutPreset,
-): WorkspaceLayoutDocument {
-	const centerTabs = flattenCenterTabs(document).filter((tab) => tab.kind !== "terminal");
-	const leafCount = presetLeafCount(preset.center);
-	const buckets = Array.from({ length: leafCount }, () => [] as LayoutCenterTab[]);
-	for (let index = 0; index < centerTabs.length; index += 1) {
-		const tab = centerTabs[index];
-		if (!tab) continue;
-		if (index < leafCount) buckets[index]?.push(tab);
-		else buckets[0]?.push(tab);
-	}
-	const filled = fillPresetCenter(preset.center, buckets, { value: 0 });
-	const fallback = { kind: "group" as const, id: createLayoutId("center"), tabs: [] };
-	const center = filled ?? fallback;
-	const allTabs = collectAllGroups(document).flatMap((group) => group.tabs);
-	const existingTools = new Map(
-		allTabs.filter((tab) => tab.kind === "tool").map((tab) => [tab.tool, tab] as const),
-	);
-	const claimedIds = new Set(allTabs.map((tab) => tab.id));
-	const resolveTool = (tool: LayoutToolId): ReturnType<typeof toolTab> => {
-		const existing = existingTools.get(tool);
-		if (existing) {
-			claimedIds.add(existing.id);
-			return existing;
-		}
-		const canonical = toolTab(tool);
-		if (!claimedIds.has(canonical.id)) {
-			claimedIds.add(canonical.id);
-			return canonical;
-		}
-		let id = createLayoutId("tool-placement");
-		while (claimedIds.has(id)) id = createLayoutId("tool-placement");
-		claimedIds.add(id);
-		return { ...canonical, id };
-	};
-	const left = instantiateSide(preset.left, resolveTool);
-	const right = instantiateSide(preset.right, resolveTool);
-	const bottomRegion = putTerminalsInBottom(
-		instantiateBottom(preset.bottom, resolveTool),
-		flattenTerminals(document),
-	);
-	return {
-		version: 2,
-		center,
-		left,
-		right,
-		bottom: bottomRegion,
-		toolRestoreTargets: restoreTargetsForOmittedTools(document, left, right, bottomRegion),
-	};
-}
-
-export function captureLayoutPreset(
-	document: WorkspaceLayoutDocument,
-	id: string,
-	name: string,
-): LayoutPreset {
-	const center = (node: WorkspaceLayoutDocument["center"]): LayoutPresetCenterNode =>
-		node.kind === "group"
-			? { kind: "group", id: node.id }
-			: {
-					kind: "split",
-					id: node.id,
-					direction: node.direction,
-					weights: node.weights,
-					children: [center(node.children[0]), center(node.children[1])],
-				};
-	const portableSide = (region: LayoutSideRegion): LayoutPresetSideRegion => {
-		const portableGroups = region.groups.map((candidate) => ({
-			id: candidate.id,
-			weight: candidate.weight,
-			folded: candidate.folded,
-			tools: candidate.tabs.filter((tab) => tab.kind === "tool").map((tab) => tab.tool),
-		}));
-		const total = portableGroups.reduce((sum, candidate) => sum + candidate.weight, 0);
-		const groups = portableGroups.map((candidate) => ({
-			...candidate,
-			weight: candidate.weight / total,
-		}));
-		return { visible: region.visible && groups.length > 0, width: region.width, groups };
-	};
-	const portableBottom = (region: LayoutBottomRegion): LayoutPresetBottomRegion => {
-		const total = region.groups.reduce((sum, candidate) => sum + candidate.weight, 0);
-		return {
-			visible: region.visible && region.groups.length > 0,
-			height: region.height,
-			alignment: region.alignment,
-			groups: region.groups.map((candidate) => ({
-				id: candidate.id,
-				weight: candidate.weight / total,
-				folded: candidate.folded,
-				tools: candidate.tabs.filter((tab) => tab.kind === "tool").map((tab) => tab.tool),
-			})),
-		};
-	};
-	return {
-		id,
-		name,
-		center: center(document.center),
-		left: portableSide(document.left),
-		right: portableSide(document.right),
-		bottom: portableBottom(document.bottom),
-	};
-}
-
 function instantiateFrameCenter(node: LayoutPresetCenterNode): WorkbenchCenterNode {
 	if (node.kind === "group") return { kind: "group", id: createLayoutId("center") };
 	return {
@@ -408,6 +159,17 @@ function instantiateFrameCenter(node: LayoutPresetCenterNode): WorkbenchCenterNo
 		weights: node.weights,
 		children: [instantiateFrameCenter(node.children[0]), instantiateFrameCenter(node.children[1])],
 	};
+}
+
+function claimToolPlacementId(tool: LayoutToolTab, claimedIds: Set<string>): LayoutToolTab {
+	if (!claimedIds.has(tool.id)) {
+		claimedIds.add(tool.id);
+		return tool;
+	}
+	let id = createLayoutId("tool-placement");
+	while (claimedIds.has(id)) id = createLayoutId("tool-placement");
+	claimedIds.add(id);
+	return { ...tool, id };
 }
 
 function instantiateFrameGroups(
@@ -427,6 +189,7 @@ function instantiateFrameGroups(
 export function instantiateWorkbenchFrame(
 	preset: LayoutPreset,
 	existing?: WorkbenchFrame,
+	claimedResourceIds: readonly string[] = [],
 ): WorkbenchFrame {
 	const existingTools = new Map<LayoutToolId, LayoutToolTab>();
 	if (existing) {
@@ -436,8 +199,9 @@ export function instantiateWorkbenchFrame(
 			}
 		}
 	}
+	const claimedIds = new Set(claimedResourceIds);
 	const resolveTool = (tool: LayoutToolId): LayoutToolTab =>
-		existingTools.get(tool) ?? toolTab(tool);
+		claimToolPlacementId(existingTools.get(tool) ?? toolTab(tool), claimedIds);
 	const leftGroups = instantiateFrameGroups(preset.left.groups, "left-group", resolveTool);
 	const rightGroups = instantiateFrameGroups(preset.right.groups, "right-group", resolveTool);
 	const bottomGroups = instantiateFrameGroups(preset.bottom.groups, "bottom-group", resolveTool);
@@ -498,7 +262,7 @@ export function reflowWorkspaceViewForFrame(
 		.flatMap((group) => group.tabs)
 		.filter((tab): tab is LayoutTerminalTab => tab.kind === "terminal");
 	const centerGroups = collectWorkbenchCenterGroups(nextFrame.center);
-	const groups: Record<string, WorkspaceGroupView> = {};
+	const groups = Object.create(null) as Record<string, WorkspaceGroupView>;
 	for (let index = 0; index < centerTabs.length; index += 1) {
 		const tab = centerTabs[index];
 		const target = index < centerGroups.length ? centerGroups[index] : centerGroups[0];
@@ -514,11 +278,53 @@ export function reflowWorkspaceViewForFrame(
 	return { groups };
 }
 
+function workspaceResourcePlacementIds(
+	viewsByWorkspace: Record<string, WorkspaceViewState>,
+): string[] {
+	return Object.values(viewsByWorkspace).flatMap((view) =>
+		Object.values(view.groups).flatMap((group) => group.tabs.map((tab) => tab.id)),
+	);
+}
+
+export function ensureWorkbenchToolPlacementIds(
+	frame: WorkbenchFrame,
+	viewsByWorkspace: Record<string, WorkspaceViewState>,
+): WorkbenchFrame {
+	const claimedIds = new Set(workspaceResourcePlacementIds(viewsByWorkspace));
+	let changed = false;
+	const groups = (values: readonly WorkbenchAuxiliaryGroup[]): WorkbenchAuxiliaryGroup[] =>
+		values.map((group) => {
+			const tools = group.tools.map((tool) => {
+				const claimed = claimToolPlacementId(tool, claimedIds);
+				if (claimed !== tool) changed = true;
+				return claimed;
+			});
+			return tools.every((tool, index) => tool === group.tools[index])
+				? group
+				: { ...group, tools };
+		});
+	const left = groups(frame.left.groups);
+	const right = groups(frame.right.groups);
+	const bottom = groups(frame.bottom.groups);
+	return changed
+		? {
+				...frame,
+				left: { ...frame.left, groups: left },
+				right: { ...frame.right, groups: right },
+				bottom: { ...frame.bottom, groups: bottom },
+			}
+		: frame;
+}
+
 export function applyWorkbenchPreset(
 	state: NormalizedLayoutState,
 	preset: LayoutPreset,
 ): NormalizedLayoutState {
-	const frame = instantiateWorkbenchFrame(preset, state.frame);
+	const frame = instantiateWorkbenchFrame(
+		preset,
+		state.frame,
+		workspaceResourcePlacementIds(state.viewsByWorkspace),
+	);
 	return {
 		frame,
 		viewsByWorkspace: Object.fromEntries(

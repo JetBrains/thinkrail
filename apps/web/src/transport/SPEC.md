@@ -32,7 +32,7 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   response can, and the request it named is already gone from `pending`, so nothing would replay or re-ack it;
   `resume` repairs them all at once by restating the truth rather than confirming the confirmations —, channel
   `subscribe` with last-value replay for snapshots; append-only terminal data and the one-shot terminal
-  exit/detach + session-deletion + `provider.changed` invalidation channels are never cached or replayed to
+  exit/detach + session-creation/deletion + `provider.changed` invalidation channels are never cached or replayed to
   late subscribers, reconnect/backoff;
   `inferUrl` defaults to
   same-origin; **`httpBase()`** derives the host's HTTP origin
@@ -42,7 +42,7 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   one atomic delivery at roughly 30 Hz, a 128-event forced-flush ceiling, and `flush`/`dispose` lifecycle);
   `wireTransport.ts` (`initTransport`/
   `getTransport` singleton; routes `server.welcome`, **`project.updated`**, `pi.event`, `pi.extensionUi`,
-  **`session.deleted`**, **`provider.changed`**, **the `workspace.created`/`updated`/`removed` lifecycle
+  **`session.created`**, **`session.deleted`**, **`provider.changed`**, **the `workspace.created`/`updated`/`removed` lifecycle
   trio, and `workspace.fsChanged`** into the store — and
   folds every connection transition through
   `setStatus`, whose connected generation gives active-workspace hydration a distinct trigger on every
@@ -51,7 +51,8 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   project snapshots via `applyProjectUpdated`, consecutive `pi.event` frames through the batcher into one
   `handlePiEvents(payloads)` store commit, `pi.extensionUi` via `applyExtUi(request)`,
   `workspace.created` via `addWorkspace(workspace)`, `workspace.updated` via `updateWorkspace(workspace)`,
-  `workspace.removed` via `applyWorkspaceRemoved(projectId, id)`, `session.deleted` via the idempotent
+  `workspace.removed` via `applyWorkspaceRemoved(projectId, id)`, `session.created` via `noteClosedChats`
+  (peer-created domain state enters history only, never local placement), `session.deleted` via the idempotent
   `deleteChat(workspaceId, sessionId)` tombstone fold (an online fast path; because this event channel is
   deliberately not replayed, workbench hydration repairs any deletion missed while disconnected from the next
   authoritative `session.list`), `provider.changed` via the atomic store invalidation
@@ -90,7 +91,8 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   `TransportOptions`.
 - **Allowed deps:** `contracts` (method maps, `WS_CHANNELS`, `Project` for welcome + `project.updated`, `SessionEventPayload`
   for `pi.event`, `ExtUiRequest` for `pi.extensionUi`, `Workspace` for `workspace.created`/`updated`,
-  `WorkspaceRemoved` for `workspace.removed`, `SessionDeletedPayload` for `session.deleted`,
+  `WorkspaceRemoved` for `workspace.removed`, `SessionCreatedPayload` for `session.created`,
+  `SessionDeletedPayload` for `session.deleted`,
   `provider.changed`, `WorkspaceFsChangedPayload` for `workspace.fsChanged`, and `AppConfig` for
   `server.welcome`'s config + `settings.changed`); `store`
   (welcome + event routing — a runtime edge owned by the parent graph); `lib` (plain-HTTP-safe random page

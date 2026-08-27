@@ -218,7 +218,10 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     restores command access to the same
     transcript/live entry, and publishes nothing; there is deliberately no permanent-unlink fallback behind
     a recoverable UI action);
-    `setSessionPublisher` + `setSessionDeletedPublisher` + `setSessionManagerFactory` seams.
+    `setSessionPublisher` + `setSessionCreatedPublisher` (broadcast the initial `SessionSummary` after
+    `createSession` registers a new host-owned session—not when an existing transcript reattaches—so peer
+    frontends discover it without inheriting placement) +
+    `setSessionDeletedPublisher` + `setSessionManagerFactory` seams.
   - `oneshot` — one-shot LLM completions **without** an `AgentSession` (no tools/extensions/disk):
     `completeOnce(request)` picks a model from the shared runtime's authenticated set and dispatches a
     single `runtime.completeSimple()` — pi's canonical provider-agnostic request path, which resolves
@@ -527,9 +530,10 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   dev equivalent); `typebox` (the `ask_user_question` parameter schema); `trash` (the cross-platform OS
   recycle-bin implementation; called with globbing disabled and allowed to throw — never degraded to
   `unlink`); `@stroncium/procfs` (directly pinned solely for the compiled Linux trash parser inclusion seam);
-  `contracts` (`PiEvent`/`Model`/`ThinkingLevel`/`ImageContent`/`SessionStats`/`SlashCommandInfo`/`ExtUi*`/
-  `AskUserQuestion*`/`ProviderStatus*`); `log` (diagnostics + session-lifecycle debug traces); `persistence`
-  (`dataDir` only, to root the host-owned delegation transcript store); Node.
+  `contracts` (`PiEvent`/`Model`/`ThinkingLevel`/`ImageContent`/`SessionStats`/`SessionSummary`/
+  `Session*Payload`/`SlashCommandInfo`/`ExtUi*`/`AskUserQuestion*`/`ProviderStatus*`); `log` (diagnostics +
+  session-lifecycle debug traces); `persistence` (`dataDir` only, to root the host-owned delegation
+  transcript store); Node.
 - **Forbidden:** `host`; sibling features other than `log` and the narrow `persistence.dataDir` edge (session
   worktree `cwd` remains an input, never a persistence lookup); Central process/filesystem knowledge—the
   caller supplies only the desired opaque extension paths for a candidate.

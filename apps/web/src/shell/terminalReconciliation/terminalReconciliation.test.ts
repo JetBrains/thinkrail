@@ -47,11 +47,14 @@ describe("recovered terminal placement", () => {
 		expect(result.document.bottom.visible).toBe(false);
 	});
 
-	test("does not reshape the frame when bottom has no compatible group", () => {
+	test("uses an existing center group without reshaping when bottom has no group", () => {
 		const empty = document();
 		empty.bottom.groups = [];
 		const result = placeRecoveredTerminal(empty, attention, terminal);
-		expect(result.document).toBe(empty);
-		expect(findTabLocation(result.document, terminal.id)).toBeNull();
+		expect(findTabLocation(result.document, terminal.id)).toEqual({
+			area: "center",
+			groupId: "center",
+		});
+		expect(result.document.bottom.groups).toHaveLength(0);
 	});
 });

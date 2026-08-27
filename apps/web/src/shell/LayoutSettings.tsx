@@ -15,6 +15,7 @@ import { errorText, getTransport } from "../transport";
 import {
 	BUILTIN_LAYOUT_PRESETS,
 	captureWorkbenchPreset,
+	DEFAULT_LAYOUT_PRESET_ID,
 	minimumBottomGroupLimit,
 	minimumSideGroupLimit,
 	resolveLayoutPreset,
@@ -236,7 +237,7 @@ export function LayoutSettings() {
 														if (saved && preferences.defaultPresetId === preset.id) {
 															useAppStore.getState().setLocalLayoutPreferences({
 																...preferences,
-																defaultPresetId: "balanced",
+																defaultPresetId: DEFAULT_LAYOUT_PRESET_ID,
 															});
 														}
 													});

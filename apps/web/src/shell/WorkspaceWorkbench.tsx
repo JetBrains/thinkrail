@@ -58,11 +58,7 @@ import {
 	Workbench,
 } from "./layout";
 import { toLayoutTab, useLayoutIntentProcessing } from "./layoutIntents";
-import {
-	commitWorkspaceLayout,
-	persistLayoutAttention,
-	useWorkspaceLayoutState,
-} from "./layoutState";
+import { commitWorkspaceLayout, useWorkspaceLayoutState } from "./layoutState";
 import { syncLegacySelectionFromAttention, useLegacySelectionAdapter } from "./legacySelection";
 import { useTerminalPlacementReconciliation } from "./terminalReconciliation";
 import { WorkspaceChatHistory } from "./WorkspaceChatHistory";
@@ -273,7 +269,6 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 			const state = useAppStore.getState();
 			if (state.removedWorkspaceIds[workspaceId]) return;
 			state.setLayoutAttention(workspaceId, next);
-			persistLayoutAttention(workspaceId, next);
 			syncLegacySelectionFromAttention(workspaceId);
 		},
 		[workspaceId],

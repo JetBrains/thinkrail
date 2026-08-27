@@ -3,6 +3,7 @@ import { join, normalize } from "node:path";
 import type {
 	HostPlatform,
 	ServerWelcome,
+	SessionCreatedPayload,
 	SessionDeletedPayload,
 	TerminalTabsPush,
 	WorkspaceFsChangedPayload,
@@ -15,6 +16,7 @@ import {
 	isProjectSkillPath,
 	setExtUiPublisher,
 	setReviewCommentHandler,
+	setSessionCreatedPublisher,
 	setSessionDeletedPublisher,
 	setSessionPublisher,
 	setSkillAdmissionResolver,
@@ -177,6 +179,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				}
 				ws.subscribe(WS_CHANNELS.piEvent);
 				ws.subscribe(WS_CHANNELS.piExtensionUi);
+				ws.subscribe(WS_CHANNELS.sessionCreated);
 				ws.subscribe(WS_CHANNELS.sessionDeleted);
 				ws.subscribe(WS_CHANNELS.providerLogin);
 				ws.subscribe(WS_CHANNELS.providerChanged);
@@ -390,6 +393,13 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			JSON.stringify({ channel: WS_CHANNELS.settingsChanged, data: config }),
 		);
 		setAnalyticsSending(config.analyticsEnabled);
+	});
+
+	setSessionCreatedPublisher((payload: SessionCreatedPayload) => {
+		server.publish(
+			WS_CHANNELS.sessionCreated,
+			JSON.stringify({ channel: WS_CHANNELS.sessionCreated, data: payload }),
+		);
 	});
 
 	setSessionDeletedPublisher((payload: SessionDeletedPayload) => {

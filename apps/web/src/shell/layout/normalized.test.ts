@@ -13,6 +13,7 @@ import {
 	workspaceViewFromDocument,
 } from "./normalized";
 import {
+	applyWorkbenchPreset,
 	BUILTIN_LAYOUT_PRESETS,
 	captureWorkbenchPreset,
 	instantiateWorkbenchFrame,
@@ -84,6 +85,22 @@ describe("normalized workbench layout", () => {
 		expect(projectWorkspaceLayout(frame, view)).toEqual(projected);
 	});
 
+	test("opaque group ids cannot escape the workspace-view record", () => {
+		const projected = document();
+		if (projected.center.kind !== "split") throw new Error("expected center split");
+		projected.center.children[0].id = "__proto__";
+		const left = projected.left.groups[0];
+		if (!left) throw new Error("missing left group");
+		left.id = "constructor";
+		const frame = workbenchFrameFromDocument(projected);
+		const view = workspaceViewFromDocument(projected);
+
+		expect(Object.getPrototypeOf(view.groups)).toBeNull();
+		expect(Object.hasOwn(view.groups, "__proto__")).toBe(true);
+		expect(Object.hasOwn(view.groups, "constructor")).toBe(true);
+		expect(projectWorkspaceLayout(frame, view)).toEqual(projected);
+	});
+
 	test("resource-only changes update one workspace while preserving the singular frame", () => {
 		const first = document();
 		const frame = workbenchFrameFromDocument(first);
@@ -152,6 +169,89 @@ describe("normalized workbench layout", () => {
 		expect(second.center.id).not.toBe(first.center.id);
 		expect(captureWorkbenchPreset(first, "custom", "Custom").bottom.groups).toHaveLength(1);
 		expect(captureWorkbenchPreset(first, "custom", "Custom").bottom.groups[0]?.tools).toEqual([]);
+	});
+
+	test("preset tools are reminted when any workspace resource owns their placement id", () => {
+		const projected = document();
+		if (projected.center.kind !== "split") throw new Error("expected center split");
+		projected.center.children[0] = {
+			kind: "group",
+			id: "center-a",
+			tabs: [{ ...terminal("collision"), id: "tool:review" }],
+		};
+		const frame = workbenchFrameFromDocument(projected);
+		const view = workspaceViewFromDocument(projected);
+		const balanced = BUILTIN_LAYOUT_PRESETS.find((preset) => preset.id === "balanced");
+		if (!balanced) throw new Error("missing Balanced preset");
+
+		const applied = applyWorkbenchPreset(
+			{ frame, viewsByWorkspace: { workspace: view } },
+			balanced,
+		);
+		const workspaceView = applied.viewsByWorkspace.workspace;
+		if (!workspaceView) throw new Error("missing workspace view");
+		const documentAfter = projectWorkspaceLayout(applied.frame, workspaceView);
+		const review = documentAfter.right.groups
+			.flatMap((group) => group.tabs)
+			.find((tab) => tab.kind === "tool" && tab.tool === "review");
+		expect(review?.id).not.toBe("tool:review");
+	});
+
+	test("preset reflow distributes terminals across bottom slots without duplicating frame state", () => {
+		const projected = document();
+		projected.bottom.groups[0]?.tabs.push(terminal("third"));
+		const frame = workbenchFrameFromDocument(projected);
+		const view = workspaceViewFromDocument(projected);
+		const balanced = BUILTIN_LAYOUT_PRESETS[0];
+		if (!balanced) throw new Error("missing Balanced preset");
+		const preset = {
+			...balanced,
+			bottom: {
+				visible: true,
+				height: 0.4,
+				alignment: "full" as const,
+				groups: [
+					{ id: "first", weight: 0.6, folded: false, tools: [] },
+					{ id: "second", weight: 0.4, folded: true, tools: [] },
+				],
+			},
+		};
+		const applied = applyWorkbenchPreset({ frame, viewsByWorkspace: { workspace: view } }, preset);
+		const workspaceView = applied.viewsByWorkspace.workspace;
+		if (!workspaceView) throw new Error("missing workspace view");
+		const documentAfter = projectWorkspaceLayout(applied.frame, workspaceView);
+
+		expect(documentAfter.bottom.groups.map((group) => group.tabs.map((tab) => tab.id))).toEqual([
+			["before-projects", "third"],
+			["after-projects"],
+		]);
+		expect(documentAfter.bottom).toMatchObject({ visible: true, height: 0.4, alignment: "full" });
+	});
+
+	test("a slotless preset keeps its frame slotless and reflows terminals into center", () => {
+		const projected = document();
+		const frame = workbenchFrameFromDocument(projected);
+		const view = workspaceViewFromDocument(projected);
+		const balanced = BUILTIN_LAYOUT_PRESETS[0];
+		if (!balanced) throw new Error("missing Balanced preset");
+		const preset = {
+			...balanced,
+			bottom: { visible: false, height: 0.3, alignment: "center" as const, groups: [] },
+		};
+		const applied = applyWorkbenchPreset({ frame, viewsByWorkspace: { workspace: view } }, preset);
+		const workspaceView = applied.viewsByWorkspace.workspace;
+		if (!workspaceView) throw new Error("missing workspace view");
+		const documentAfter = projectWorkspaceLayout(applied.frame, workspaceView);
+
+		expect(documentAfter.bottom.groups).toHaveLength(0);
+		expect(documentAfter.center.kind).toBe("group");
+		if (documentAfter.center.kind !== "group") throw new Error("missing center group");
+		expect(documentAfter.center.tabs.map((tab) => tab.id)).toEqual([
+			"a",
+			"b",
+			"before-projects",
+			"after-projects",
+		]);
 	});
 
 	test("reconciliation maps removed auxiliary resources without copying tool placement", () => {

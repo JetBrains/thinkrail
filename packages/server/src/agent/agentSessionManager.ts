@@ -21,6 +21,7 @@ import type {
 	QueueLane,
 	RefreshedModels,
 	RemovedQueuedMessage,
+	SessionCreatedPayload,
 	SessionDeletedPayload,
 	SessionEventPayload,
 	SessionQueueContent,
@@ -101,6 +102,11 @@ export type { SessionEventPayload };
 let publish: (payload: SessionEventPayload) => void = () => {};
 export function setSessionPublisher(fn: (payload: SessionEventPayload) => void): void {
 	publish = fn;
+}
+
+let publishCreated: (payload: SessionCreatedPayload) => void = () => {};
+export function setSessionCreatedPublisher(fn: (payload: SessionCreatedPayload) => void): void {
+	publishCreated = fn;
 }
 
 let publishDeleted: (payload: SessionDeletedPayload) => void = () => {};
@@ -300,11 +306,13 @@ async function registerSession(
 	session: AgentSession,
 	workspaceId: string,
 	generation: PiRuntimeGeneration,
+	announceCreation = false,
 ): Promise<CreateSessionResult> {
 	const prepared = await prepareSessionEntry(session, workspaceId, generation);
 	prepared.entry.registered = true;
 	sessions.set(session.sessionId, prepared.entry);
 	log.debug(`session ${session.sessionId} attached (workspace ${workspaceId})`);
+	if (announceCreation) publishCreated(summaryOf(session.sessionId, prepared.entry));
 	return prepared.result;
 }
 
@@ -334,7 +342,7 @@ export async function createSession(input: CreateSessionInput): Promise<CreateSe
 		...(model ? { model } : {}),
 		...(input.thinkingLevel ? { thinkingLevel: input.thinkingLevel } : {}),
 	});
-	return registerSession(session, input.workspaceId, generation);
+	return registerSession(session, input.workspaceId, generation, true);
 }
 
 function summaryOf(sessionId: string, entry: Entry): SessionSummary {

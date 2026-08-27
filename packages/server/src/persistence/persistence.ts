@@ -37,7 +37,8 @@ export function saveProjects(projects: Project[]): void {
 
 export function loadWorkspaces(): Workspace[] {
 	return readJson<Array<Workspace & { initialTerminalEligible?: true }>>("workspaces.json", []).map(
-		({ initialTerminalEligible: _legacyMarker, ...workspace }) => workspace,
+		({ initialTerminalEligible, ...workspace }) =>
+			initialTerminalEligible ? { ...workspace, initialTerminalPending: true } : workspace,
 	);
 }
 

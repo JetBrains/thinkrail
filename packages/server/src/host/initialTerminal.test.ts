@@ -2,10 +2,10 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Workspace } from "@thinkrail/contracts";
+import { INITIAL_TERMINAL_TAB_KEY, type Workspace } from "@thinkrail/contracts";
 import { loadWorkspaces, saveWorkspaces } from "../persistence";
 import { listTerminals, resetTerminalState } from "../terminal";
-import { INITIAL_TERMINAL_TAB_KEY, provisionInitialTerminal } from "./initialTerminal";
+import { provisionInitialTerminal } from "./initialTerminal";
 
 let dataDir: string;
 const savedDataDir = process.env.THINKRAIL_DATA_DIR;

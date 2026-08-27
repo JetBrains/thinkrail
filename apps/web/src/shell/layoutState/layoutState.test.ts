@@ -12,6 +12,7 @@ import {
 	applyLayoutPresetLocally,
 	commitWorkspaceLayout,
 	ensureWorkspaceLayoutState,
+	initializeLocalLayoutState,
 	localLayoutStorageKey,
 	resetLayoutStateForTests,
 	setLayoutStateStorageForTests,
@@ -107,6 +108,29 @@ beforeEach(() => {
 });
 
 describe("frontend-local layout state", () => {
+	test("local preferences persist before any workspace is opened", () => {
+		const local = new MemoryStorage();
+		const session = new MemoryStorage();
+		session.setItem("thinkrail:layout-surface-id", "surface-a");
+		setLayoutStateStorageForTests({ local, session }, endpoint);
+		initializeLocalLayoutState();
+		useAppStore.getState().setLocalLayoutPreferences({
+			defaultPresetId: "focused",
+			maxSideGroups: 8,
+			maxBottomGroups: 4,
+		});
+
+		resetLayoutStateForTests();
+		resetStore();
+		setLayoutStateStorageForTests({ local, session }, endpoint);
+		initializeLocalLayoutState();
+		expect(useAppStore.getState().localLayoutPreferences).toEqual({
+			defaultPresetId: "focused",
+			maxSideGroups: 8,
+			maxBottomGroups: 4,
+		});
+	});
+
 	test("imports a legacy workspace once and persists the normalized local state", async () => {
 		const local = new MemoryStorage();
 		const session = new MemoryStorage();
@@ -126,6 +150,33 @@ describe("frontend-local layout state", () => {
 		expect(requests).toBe(1);
 		expect(useAppStore.getState().legacyLayoutImportAttempted.workspace).toBe(true);
 		expect(local.getItem(localLayoutStorageKey(endpoint, "surface-a"))).not.toBeNull();
+	});
+
+	test("a reconnect starts a fresh import instead of joining the superseded generation", async () => {
+		const local = new MemoryStorage();
+		const session = new MemoryStorage();
+		session.setItem("thinkrail:layout-surface-id", "surface-a");
+		setLayoutStateStorageForTests({ local, session }, endpoint);
+		const resolve: Array<(value: WorkspaceLayoutSnapshot | null) => void> = [];
+		setLegacyLayoutRequesterForTests(
+			() =>
+				new Promise((done) => {
+					resolve.push(done);
+				}),
+		);
+
+		const first = ensureWorkspaceLayoutState("workspace").then(
+			() => true,
+			() => false,
+		);
+		expect(resolve).toHaveLength(1);
+		useAppStore.setState({ connectionGeneration: 2 });
+		const second = ensureWorkspaceLayoutState("workspace");
+		expect(resolve).toHaveLength(2);
+		resolve[0]?.(snapshot());
+		expect(await first).toBe(false);
+		resolve[1]?.(snapshot());
+		expect(await second).toEqual(legacyDocument());
 	});
 
 	test("rejects a local frame that smuggles resource state and falls back to legacy import", async () => {
@@ -200,6 +251,48 @@ describe("frontend-local layout state", () => {
 		const current = useAppStore.getState().layoutDocumentsByWorkspace.workspace;
 		expect(current?.bottom.height).toBe(0.45);
 		expect(current?.left.width).toBe(0.31);
+	});
+
+	test("a newly shown singleton tool cannot collide with a hidden workspace resource", async () => {
+		const local = new MemoryStorage();
+		const session = new MemoryStorage();
+		session.setItem("thinkrail:layout-surface-id", "surface-a");
+		setLayoutStateStorageForTests({ local, session }, endpoint);
+		setLegacyLayoutRequesterForTests(async (workspaceId) => snapshot(workspaceId));
+		await ensureWorkspaceLayoutState("workspace-one");
+		await ensureWorkspaceLayoutState("workspace-two");
+
+		const hidden = structuredClone(
+			useAppStore.getState().layoutDocumentsByWorkspace["workspace-two"],
+		);
+		if (hidden?.center.kind !== "group") throw new Error("missing hidden group");
+		hidden.center.tabs = [
+			{
+				kind: "terminal",
+				id: "tool:review",
+				name: "Collision",
+				tabKey: "collision",
+			},
+		];
+		delete hidden.center.previewTabId;
+		await commitWorkspaceLayout("workspace-two", hidden);
+
+		const active = structuredClone(
+			useAppStore.getState().layoutDocumentsByWorkspace["workspace-one"],
+		);
+		if (!active?.right.groups[0]) throw new Error("missing active right group");
+		active.right.groups[0].tabs.push(toolTab("review"));
+		await commitWorkspaceLayout("workspace-one", active);
+
+		const hiddenAfter = useAppStore.getState().layoutDocumentsByWorkspace["workspace-two"];
+		const allIds = hiddenAfter
+			? collectAllGroups(hiddenAfter).flatMap((group) => group.tabs.map((tab) => tab.id))
+			: [];
+		expect(new Set(allIds).size).toBe(allIds.length);
+		const review = hiddenAfter?.right.groups
+			.flatMap((group) => group.tabs)
+			.find((tab) => tab.kind === "tool" && tab.tool === "review");
+		expect(review?.id).not.toBe("tool:review");
 	});
 
 	test("applying a preset changes one frame and reflows every local workspace view", async () => {

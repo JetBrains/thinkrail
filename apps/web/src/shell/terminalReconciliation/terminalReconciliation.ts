@@ -1,4 +1,8 @@
-import type { LayoutTerminalTab, WorkspaceLayoutDocument } from "@thinkrail/contracts";
+import {
+	INITIAL_TERMINAL_TAB_KEY,
+	type LayoutTerminalTab,
+	type WorkspaceLayoutDocument,
+} from "@thinkrail/contracts";
 import { useEffect, useRef } from "react";
 import type { LayoutAttention } from "../../lib";
 import { useTerminalCatalog } from "../../panels/TerminalWorkbench";
@@ -6,6 +10,7 @@ import { type TerminalTab, useAppStore } from "../../store";
 import {
 	closeLayoutTab,
 	collectAllGroups,
+	collectCenterGroups,
 	isLayoutUnavailable,
 	moveTabToGroup,
 	openCenterTab,
@@ -24,20 +29,31 @@ export function placeRecoveredTerminal(
 	attention: LayoutAttention | undefined,
 	tab: LayoutTerminalTab,
 ): { document: WorkspaceLayoutDocument } {
-	const preferredId = attention?.lastFocusedSideGroupId.bottom;
-	const target =
-		document.bottom.groups.find((group) => group.id === preferredId) ??
+	const preferredBottomId = attention?.lastFocusedSideGroupId.bottom;
+	const bottomTarget =
+		document.bottom.groups.find((group) => group.id === preferredBottomId) ??
 		document.bottom.groups.at(-1);
-	if (!target) return { document };
-	const visible = document.bottom.visible;
-	const placed = moveTabToGroup(document, tab, { area: "bottom", groupId: target.id });
-	if (isLayoutUnavailable(placed)) return { document };
-	return {
-		document: {
-			...placed.document,
-			bottom: { ...placed.document.bottom, visible },
-		},
-	};
+	if (bottomTarget) {
+		const visible = document.bottom.visible;
+		const placed = moveTabToGroup(document, tab, {
+			area: "bottom",
+			groupId: bottomTarget.id,
+		});
+		if (isLayoutUnavailable(placed)) return { document };
+		return {
+			document: {
+				...placed.document,
+				bottom: { ...placed.document.bottom, visible },
+			},
+		};
+	}
+	const centerGroups = collectCenterGroups(document.center);
+	const centerTarget =
+		centerGroups.find((group) => group.id === attention?.lastFocusedCenterGroupId) ??
+		centerGroups[0];
+	if (!centerTarget) return { document };
+	const placed = moveTabToGroup(document, tab, { area: "center", groupId: centerTarget.id });
+	return isLayoutUnavailable(placed) ? { document } : { document: placed.document };
 }
 
 export function useTerminalPlacementReconciliation(
@@ -96,7 +112,12 @@ export function useTerminalPlacementReconciliation(
 			if (!isLayoutUnavailable(refreshed)) next = refreshed.document;
 		}
 		const placed = new Set(placedTabs.map((tab) => tab.tabKey));
-		const missing = terminals.filter((tab) => !tab.reservationPending && !placed.has(tab.tabKey));
+		const missing = terminals.filter(
+			(tab) =>
+				tab.tabKey === INITIAL_TERMINAL_TAB_KEY &&
+				!tab.reservationPending &&
+				!placed.has(tab.tabKey),
+		);
 		for (const terminal of missing) {
 			const tab = withAvailablePlacementId(next, {
 				kind: "terminal" as const,

@@ -1,9 +1,7 @@
-import type { Workspace } from "@thinkrail/contracts";
+import { INITIAL_TERMINAL_TAB_KEY, type Workspace } from "@thinkrail/contracts";
 import { logger } from "../log";
 import { reserveTerminal } from "../terminal";
 import { completeInitialTerminalReservation } from "../workspaces";
-
-export const INITIAL_TERMINAL_TAB_KEY = "thinkrail-initial";
 
 const log = logger("host");
 

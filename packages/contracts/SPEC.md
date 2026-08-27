@@ -308,7 +308,8 @@ of the host.
   arrive as `author: "agent"` review comments, the verdict via the reviewer-only `review_verdict` tool;
   `TodoItem.review` carries `reviewing` while the verdict is pending and `reviewedBy` on an agent
   approve) / **`terminal.*`** — **`reserve`** (idempotently establishes a host-catalog tab
-  without starting its PTY) / **`attach`** (idempotent get-or-create keyed by `(workspaceId, tabKey)`,
+  without starting its PTY; `INITIAL_TERMINAL_TAB_KEY` names the one host-seeded tab that every frontend
+  may place passively) / **`attach`** (idempotent get-or-create keyed by `(workspaceId, tabKey)`,
   returning `created` + the `replay` to repaint; the only way a PTY is born, and it replaced
   `create`+`alive`) / **`list`** (the host owns the tab list) / `write` / `resize` /
   **`close`** (by `tabKey`, refusing a busy shell unless `force`) / `model.list` + **`model.refresh`** (awaits the host's
@@ -402,8 +403,10 @@ of the host.
   the browser / **`project.updated`** — the
   full persisted `Project` snapshot after open/reopen/close, including `closed` membership, so every client
   atomically converges its rail + Recents without optimistic removal / `pi.event` / `pi.extensionUi` /
-  **`session.deleted`** (workspace + session id; a non-replayable domain event broadcast after permanent
-  deletion so every client removes the chat and blocks stale hydration) /
+  **`session.created`** (the initial `SessionSummary`, broadcast when a new host-owned session registers so
+  other frontends can list it in history without opening local placement) / **`session.deleted`** (workspace +
+  session id; a non-replayable domain event broadcast after permanent deletion so every client removes the chat
+  and blocks stale hydration) /
   **`settings.changed`** (the full `AppConfig`, including custom preset definitions, broadcast so every
   client converges) / **`provider.login`** — the session-less
   in-app login stream (a `LoginPush`

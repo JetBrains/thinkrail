@@ -103,7 +103,9 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
    **`session.getMessages`** alongside `pi.event`. A reload, second tab, phone, or **host restart** therefore
    rebuilds the same projects, workspaces, sessions, and transcripts. `session.list` unions in-memory sessions
    with pi's on-disk sessions; a surface hydrates its locally placed chats and lists all others in history for
-   explicit reopen. It does not inherit another surface's tab placement. The client is a **stateless
+   explicit reopen. `session.created` supplies that history-only live delta when another frontend starts a
+   session; reconnect repairs a missed delta through `session.list`. It does not inherit another surface's tab
+   placement. The client is a **stateless
    projection of domain state**, never a second domain source of truth; it separately owns frontend-local
    navigation and workbench view state. An automatic agent run
    remains active through retries, compaction, and queued continuations: pi's `agent_end` is only an

@@ -557,7 +557,10 @@ test("closing an idle tab does not ask", async ({ page }) => {
 	await expect(page.getByTestId("confirm-dialog")).toHaveCount(0);
 });
 
-test("a tab opened or closed in one browser reaches the other", async ({ page, context }) => {
+test("a terminal opened in one browser never creates placement in another", async ({
+	page,
+	context,
+}) => {
 	await openFixtureProject(page);
 	await createWorkspaceViaDialog(page);
 	await waitTerminalReady(page);
@@ -573,7 +576,7 @@ test("a tab opened or closed in one browser reaches the other", async ({ page, c
 
 	await openTerminal(page2);
 	await expect(page2.getByTestId("terminal-tab")).toHaveCount(2);
-	await expect(page.getByTestId("terminal-tab")).toHaveCount(2);
+	await expect(page.getByTestId("terminal-tab")).toHaveCount(1);
 
 	await waitTerminalReady(page2);
 	await expect(visibleTerminal(page2)).toHaveAttribute("data-detached", "false");

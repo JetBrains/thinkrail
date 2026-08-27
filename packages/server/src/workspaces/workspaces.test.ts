@@ -105,6 +105,21 @@ test("legacy workspace records never gain initial-terminal provisioning on read"
 	);
 });
 
+test("the old frontend eligibility marker migrates into host-owned pending provisioning", async () => {
+	const ws = await createWorkspace("p1");
+	const file = join(dataDir, "workspaces.json");
+	const records = JSON.parse(readFileSync(file, "utf8")) as Array<Record<string, unknown>>;
+	const record = records.find((candidate) => candidate.id === ws.id);
+	if (!record) throw new Error("missing workspace record");
+	delete record.initialTerminalPending;
+	record.initialTerminalEligible = true;
+	writeFileSync(file, JSON.stringify(records));
+
+	const migrated = listWorkspaceRecords("p1").find((candidate) => candidate.id === ws.id);
+	expect(migrated?.initialTerminalPending).toBe(true);
+	expect(migrated).not.toHaveProperty("initialTerminalEligible");
+});
+
 test("completing initial-terminal reservation clears the durable marker exactly once", async () => {
 	const workspace = await createWorkspace("p1");
 	const events: WorkspaceLifecycleEvent[] = [];
