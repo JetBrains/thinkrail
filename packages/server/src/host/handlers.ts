@@ -299,19 +299,20 @@ const handlers: Record<string, Handler> = {
 	},
 	"project.discardDraft": async (params) => {
 		const id = (params as { id: string }).id;
-		for (const ws of listWorkspaceRecords(id)) {
-			removeWorkspaceLayout(ws.id);
-			evictSpecIndex(ws.id);
-			removeWorkspaceReviews(ws.id);
-			stopWatch(ws.id);
-			closeWorkspaceTerminals(ws.id);
-			try {
-				await removeWorkspaceSessions(ws.id, ws.worktreePath);
-			} catch {
-				log.warn(`discard draft: session teardown failed for ${ws.id}`);
+		await discardDraftProject(id, async () => {
+			for (const ws of listWorkspaceRecords(id)) {
+				removeWorkspaceLayout(ws.id);
+				evictSpecIndex(ws.id);
+				removeWorkspaceReviews(ws.id);
+				stopWatch(ws.id);
+				closeWorkspaceTerminals(ws.id);
+				try {
+					await removeWorkspaceSessions(ws.id, ws.worktreePath);
+				} catch {
+					log.warn(`discard draft: session teardown failed for ${ws.id}`);
+				}
 			}
-		}
-		discardDraftProject(id);
+		});
 		return { ok: true } as const;
 	},
 	"project.inspect": (params) => inspectProjectPath((params as { path: string }).path),

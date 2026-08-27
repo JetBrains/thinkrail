@@ -267,16 +267,20 @@ function commitProjectBrief(path: string): void {
 	git(path, [...identity, "commit", "-m", "Capture initial project concept"]);
 }
 
-export function discardDraftProject(id: string): Project | null {
-	const projects = getProjects();
-	const project = projects.find((candidate) => candidate.id === id);
-	if (!project) return null;
+export async function discardDraftProject(
+	id: string,
+	teardown?: (project: Project) => void | Promise<void>,
+): Promise<Project> {
+	const project = getProjects().find((candidate) => candidate.id === id);
+	if (!project) throw new Error(`Unknown project: ${id}`);
 	if (project.draft !== true) throw new Error(`Project is not a draft: ${project.name}`);
+	// Draft guard has passed: only now may any destructive teardown run (see projects/SPEC.md).
+	if (teardown) await teardown(project);
 	const root = createdProjectsRoot();
 	if (canonicalPath(project.path).startsWith(canonicalPath(root) + sep)) {
 		rmSync(project.path, { recursive: true, force: true });
 	}
-	saveProjects(projects.filter((candidate) => candidate.id !== id));
+	saveProjects(getProjects().filter((candidate) => candidate.id !== id));
 	const workspaces = loadWorkspaces();
 	const remaining = workspaces.filter((ws) => ws.projectId !== id);
 	if (remaining.length !== workspaces.length) saveWorkspaces(remaining);

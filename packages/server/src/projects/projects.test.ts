@@ -89,7 +89,7 @@ test("finalizeProjectByPath finalizes the draft whose folder is the given cwd", 
 	expect(() => finalizeProjectByPath(join(dataDir, "nope"), "X")).toThrow("No project found");
 });
 
-test("discardDraftProject removes the record, its workspaces, and the managed dir", () => {
+test("discardDraftProject removes the record, its workspaces, and the managed dir", async () => {
 	const project = createDraftProject();
 	writeFileSync(
 		join(dataDir, "workspaces.json"),
@@ -105,18 +105,40 @@ test("discardDraftProject removes the record, its workspaces, and the managed di
 			},
 		]),
 	);
-	const removed = discardDraftProject(project.id);
+	let tornDown = false;
+	const removed = await discardDraftProject(project.id, () => {
+		tornDown = true;
+	});
+	expect(tornDown).toBe(true);
 	expect(removed?.id).toBe(project.id);
 	expect(existsSync(project.path)).toBe(false);
 	expect(listProjects().map((p) => p.id)).not.toContain(project.id);
 	expect(JSON.parse(readFileSync(join(dataDir, "workspaces.json"), "utf8"))).toEqual([]);
 });
 
-test("discardDraftProject refuses a finalized (non-draft) project", () => {
+test("discardDraftProject rejects a finalized project BEFORE any teardown runs", async () => {
 	const project = createDraftProject();
 	finalizeProject(project.id, "Real");
-	expect(() => discardDraftProject(project.id)).toThrow("not a draft");
-	expect(discardDraftProject("unknown-id")).toBeNull();
+	let tornDown = false;
+	await expect(
+		discardDraftProject(project.id, () => {
+			tornDown = true;
+		}),
+	).rejects.toThrow("not a draft");
+	expect(tornDown).toBe(false);
+	// the finalized project + its dir are untouched
+	expect(existsSync(project.path)).toBe(true);
+	expect(listProjects().map((p) => p.id)).toContain(project.id);
+});
+
+test("discardDraftProject rejects a missing project BEFORE any teardown runs", async () => {
+	let tornDown = false;
+	await expect(
+		discardDraftProject("unknown-id", () => {
+			tornDown = true;
+		}),
+	).rejects.toThrow("Unknown project");
+	expect(tornDown).toBe(false);
 });
 
 function seedWorkspace(worktreePath: string, kind?: "default" | "external"): void {
