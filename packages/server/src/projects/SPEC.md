@@ -41,8 +41,10 @@ bootstrap it into one so it can be opened.
   and the agent-led interview asks the name **last**, writes `goal-and-requirements.md`, then finalizes.
   `finalizeProjectByPath(cwd, name)` / `finalizeProject(id, name)` apply the user-confirmed display
   **`name`** (decoupled from `path` — a managed dir's basename is a uuid), re-uniquify the `slug`, clear
-  `draft`, persist, and publish the full snapshot; both **throw** on a non-draft (finalize is
-one-shot). The
+  `draft`, **commit `goal-and-requirements.md`** if present (`git add` + commit with the same fallback
+  identity as `initProject`; a no-op/failed commit is ignored — finalize never fails on it) so a later
+  isolated worktree inherits the brief, persist, and publish the full snapshot; both **throw** on a
+  non-draft (finalize is one-shot). The
   `cwd` variant is the seam the host-owned `finalize_project` agent tool keys on (the Default workspace's
   cwd is the project folder). `discardDraftProject(id)` is the abandon/recovery path (section 9): it
   **refuses a non-draft**, removes the project record **and its workspace records** (via `persistence` —

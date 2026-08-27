@@ -34,8 +34,14 @@ import type {
 } from "@thinkrail/contracts";
 import { isTranscriptMessageRole } from "@thinkrail/contracts";
 import { logger } from "../log";
-import { ANSWERABILITY_ERRORS, assessAnswerability, buildAnswersMessage } from "./askUserQuestion";
+import {
+	ANSWERABILITY_ERRORS,
+	ASK_USER_QUESTION_TOOL_NAME,
+	assessAnswerability,
+	buildAnswersMessage,
+} from "./askUserQuestion";
 import { buildResourceLoader, toSkillCommands } from "./extensions";
+import { buildNextStepsMessage, OFFER_NEXT_STEPS_TOOL_NAME } from "./offerNextSteps";
 import {
 	getPiRuntime,
 	getPiRuntimeGeneration,
@@ -610,11 +616,16 @@ export async function answerQuestion(
 	result: AskUserQuestionResult,
 ): Promise<void> {
 	const session = mustGet(sessionId);
-	const verdict = assessAnswerability(session.messages, toolCallId);
+	const verdict = assessAnswerability(session.messages, toolCallId, [
+		ASK_USER_QUESTION_TOOL_NAME,
+		OFFER_NEXT_STEPS_TOOL_NAME,
+	]);
 	if (!verdict.ok) throw new Error(`${ANSWERABILITY_ERRORS[verdict.reason]}: ${toolCallId}`);
-	await session.sendCustomMessage(buildAnswersMessage(toolCallId, verdict.args, result), {
-		triggerTurn: true,
-	});
+	const message =
+		verdict.toolName === OFFER_NEXT_STEPS_TOOL_NAME
+			? buildNextStepsMessage(toolCallId, result)
+			: buildAnswersMessage(toolCallId, verdict.args, result);
+	await session.sendCustomMessage(message, { triggerTurn: true });
 }
 
 function synchronizeQueuedLane(entry: Entry, kind: QueueLane, texts: readonly string[]): void {

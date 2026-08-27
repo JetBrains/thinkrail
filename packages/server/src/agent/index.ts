@@ -13,6 +13,10 @@ export {
 	type FinalizeProjectOutcome,
 	setProjectFinalizeHandler,
 } from "./finalizeProjectTool";
+export {
+	OFFER_NEXT_STEPS_TOOL_NAME,
+	offerNextStepsExtension,
+} from "./offerNextSteps";
 export * from "./oneshot";
 export {
 	activatePiRuntimeGeneration,

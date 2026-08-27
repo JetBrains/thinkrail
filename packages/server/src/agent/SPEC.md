@@ -435,8 +435,17 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     `web_search`'s `workflow` to `"none"`, since pi-web-access would otherwise open a browser curator our
     `rpc` host can't render), `askUserQuestionExtension` (registers the `ask_user_question` tool),
     `reviewToolExtension` (the `resolve_comment` tool), **`finalizeProjectToolExtension`** (the
-    **`finalize_project`** tool — the create-from-scratch capability), **and**
+    **`finalize_project`** tool — the create-from-scratch capability), **`offerNextStepsExtension`**
+    (the **`offer_next_steps`** tool — the post-creation two-card next-step branch), **and**
     `oversizedImageGuard` (the context-level image-size guard, see the `imageGuard` bullet).
+    **`offer_next_steps`** is `ack + terminate` like `ask_user_question`, and is **answered through the
+    same `session.answerQuestion` path**: `assessAnswerability(messages, toolCallId, toolNames?)` matches
+    any of the given tool names (default `[ask]`; the manager passes `[ask, offer]`) and returns the
+    matched `toolName`, and `answerQuestion` dispatches `buildNextStepsMessage` (offer) vs
+    `buildAnswersMessage` (ask). `buildNextStepsMessage` emits the same `ask-user-answers` custom message
+    keyed by tool-call id, so the web's questionnaire-resolve lifecycle marks the two cards resolved; its
+    text names the chosen path so the agent continues per the setup skill. See [[submodule-web-chat]] and
+    [[task-post-creation-next-steps]].
     Like `resolve_comment`, `finalize_project` is registered on **every** session but its host-installed
     handler (**`setProjectFinalizeHandler`** seam, wired in `host` to `projects.finalizeProjectByPath`)
     **fails closed** unless the calling session's `cwd` is a **draft** project's folder — so it is inert
@@ -462,6 +471,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   `reloadSessionResources(sessionId)` (active-chat reload); the **`setSkillAdmissionResolver`** seam (host
   wires `workspaceId` → the admission context); the **`setProjectFinalizeHandler`** seam +
   `FINALIZE_PROJECT_TOOL_NAME` + `FinalizeProjectOutcome` (the create-from-scratch finalize tool);
+  `OFFER_NEXT_STEPS_TOOL_NAME` + `offerNextStepsExtension` (the post-creation next-step tool; answered via
+  the shared `answerQuestion` path);
   the compiled-binary seam (`registerBundledRuntime` +
   `BundledExtensions`/`BundledExtensionFactory`).
 - **Allowed deps:** `@earendil-works/pi-coding-agent` (runtime); `@earendil-works/pi-ai` (types + test

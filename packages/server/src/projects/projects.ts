@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdirSync, rmSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync, statSync } from "node:fs";
 import { basename, join, sep } from "node:path";
 import type { Project, ProjectPathStatus } from "@thinkrail/contracts";
 import { canonicalPath, git } from "../git";
@@ -245,9 +245,22 @@ function applyFinalize(projects: Project[], project: Project, name: string): Pro
 		new Set(projects.filter((p) => p.id !== project.id).map((p) => p.slug)),
 	);
 	delete project.draft;
+	commitProjectBrief(project.path);
 	saveProjects(projects);
 	emit(project);
 	return project;
+}
+
+const PROJECT_BRIEF = "goal-and-requirements.md";
+
+function commitProjectBrief(path: string): void {
+	if (!existsSync(join(path, PROJECT_BRIEF))) return;
+	if (!git(path, ["add", "--", PROJECT_BRIEF]).ok) return;
+	const identity: string[] = [];
+	if (!git(path, ["config", "user.name"]).out) identity.push("-c", "user.name=ThinkRail");
+	if (!git(path, ["config", "user.email"]).out)
+		identity.push("-c", "user.email=thinkrail@localhost");
+	git(path, [...identity, "commit", "-m", "Capture initial project concept"]);
 }
 
 export function discardDraftProject(id: string): Project | null {
