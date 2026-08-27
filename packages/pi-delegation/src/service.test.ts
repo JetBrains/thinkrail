@@ -495,6 +495,47 @@ test("an abort while QUEUED releases immediately — not after a slot frees", as
 	}
 });
 
+test("disposeChildrenOf marks every child before awaiting aborts — a queued sibling never starts", async () => {
+	const paced = createDelegationService({
+		resolveParent: (id) =>
+			id === parent.sessionId
+				? { cwd: parentCwd, model: parent.model, thinkingLevel: parent.thinkingLevel }
+				: undefined,
+		delegationRoot,
+		scope: "ws-dispose-atomic",
+		modelRuntime: runtime,
+		maxConcurrentPerParent: 2,
+	});
+	const started: string[] = [];
+	paced.onLifecycle((event) => {
+		if (event.type === "run-started") started.push(event.sessionId);
+	});
+	const slow = async () => {
+		await Bun.sleep(300);
+		return fauxAssistantMessage("SLOW_DONE");
+	};
+	faux.setResponses([slow, slow, fauxAssistantMessage("C_MUST_NOT_RUN")]);
+	const childA = await paced.createChild(subagentSpec());
+	const childB = await paced.createChild(subagentSpec());
+	const childC = await paced.createChild(subagentSpec());
+	const runA = childA.runQueued("Slow A.");
+	const runB = childB.runQueued("Slow B.");
+	const runC = childC.runQueued("Queued behind both.");
+	await Bun.sleep(20);
+	expect(childA.snapshot?.status).toBe("running");
+	expect(childB.snapshot?.status).toBe("running");
+	expect(childC.snapshot?.status).toBe("queued");
+
+	await paced.disposeChildrenOf(parent.sessionId);
+
+	const [outcomeA, outcomeB, outcomeC] = await Promise.all([runA, runB, runC]);
+	expect(outcomeA.status).toBe("aborted");
+	expect(outcomeB.status).toBe("aborted");
+	expect(outcomeC.status).toBe("aborted");
+	expect(outcomeC.errorMessage).toBe("disposed before start");
+	expect(started.sort()).toEqual([childA.sessionId, childB.sessionId].sort());
+});
+
 test("extensions opt-in loads ONLY the embedder-bound curated set — and only when asked", async () => {
 	let factoryLoads = 0;
 	const curated = createDelegationService({

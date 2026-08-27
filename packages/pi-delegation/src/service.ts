@@ -365,6 +365,10 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 	async function disposeChild(entry: ChildEntry): Promise<void> {
 		if (entry.disposed) return;
 		entry.disposed = true;
+		await teardownChild(entry);
+	}
+
+	async function teardownChild(entry: ChildEntry): Promise<void> {
 		if (entry.session.isStreaming) await entry.session.abort().catch(() => {});
 		const lastStatus = entry.snapshot?.status;
 		const terminal: RunStatus =
@@ -544,11 +548,12 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 			return () => lifecycleListeners.delete(listener);
 		},
 		disposeChildrenOf: async (parentSessionId) => {
-			const ids = [...(byParent.get(parentSessionId) ?? [])];
-			for (const id of ids) {
+			const entries = [...(byParent.get(parentSessionId) ?? [])].flatMap((id) => {
 				const entry = children.get(id);
-				if (entry) await disposeChild(entry);
-			}
+				return entry && !entry.disposed ? [entry] : [];
+			});
+			for (const entry of entries) entry.disposed = true;
+			for (const entry of entries) await teardownChild(entry);
 			byParent.delete(parentSessionId);
 			semaphores.delete(parentSessionId);
 		},
