@@ -16,8 +16,12 @@ bootstrap it into one so it can be opened.
 
 ## Boundary
 
-- **Owns:** validate a path is a repo (`git rev-parse --show-toplevel`), dedupe by root, assign a stable
-  unique readable `slug`; `getProjects` (all known records, with slug backfill), `listProjects` (open
+- **Owns:** resolve every external project-folder input against the **host filesystem** before inspecting
+  or mutating it: host-absolute paths pass, exact `~` and `~/…` expand against the host account, and every
+  other relative path is rejected rather than interpreted against the host process cwd. The same resolved
+  path feeds `openProject`, `inspectProjectPath`, and `initProject`, so their classifications and actions
+  cannot disagree. It then validates a path is a repo (`git rev-parse --show-toplevel`), dedupes by root,
+  and assigns a stable unique readable `slug`; `getProjects` (all known records, with slug backfill), `listProjects` (open
   records only, by `lastOpened`), and `listRecentProjects` (open + closed, by `lastOpened`). A persisted
   optional **`Project.closed: true`** is the entire membership state: absence means open, so existing
   records migrate as open. **`openProject`** finds a known root even when closed, clears `closed`, bumps

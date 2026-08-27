@@ -106,11 +106,18 @@ treatment.
   Home while every client receives `project.updated`; on failure `project.inspect` → either offers to
   bootstrap the folder into a repo — a modal **`ConfirmDialog`**
   (confirm → `project.init`) — when it's `initable`, or surfaces the error in a **`NoticeDialog`** — so a
-  non-git folder is never a silent no-op — and neither is a host that couldn't *show* a folder dialog (that
-  throws; the notice carries the reason, and the request runs on a raised `timeoutMs` since the picker waits
-  on a human). Both are modals on `components/ui/dialog` (the init offer has no
-  on-screen anchor, unlike the Remove popover); `NoticeDialog` is a single-button info modal for failures
-  with no yes/no follow-up. The hook returns a `dialogs` node each consumer renders. **Selecting a
+  non-git folder is never a silent no-op. The native picker remains the local fast path and keeps its raised
+  timeout because it waits on a human; if the host cannot present it, the rejection instead opens an
+  **Open project from host path** dialog carrying the reason and an autofocused path field. The dialog says
+  the path belongs to the computer running ThinkRail, accepts a host-absolute path or `~` / `~/…`, and
+  submits through this same open/inspect/init flow. **Enter host path…** is also always present beside Open
+  project in `AddProjectMenu`: a remote client cannot tell whether a successful native picker opened on an
+  unseen host display, so recovery cannot be failure-only. Entering the manual path flow supersedes the
+  hook's current picker generation, so a hidden picker reply that arrives later cannot open another project.
+  These are modals on `components/ui/dialog` (the
+  init offer has no on-screen anchor, unlike the Remove popover); `NoticeDialog` remains the single-button
+  surface for failures with no recovery inside that notice. The hook returns a `dialogs` node each consumer
+  renders. **Selecting a
   project** (clicking its row — the chevron expands/collapses separately) **deselects any active
   workspace**, so the shell returns to that project's Welcome — a deliberate "project home" gesture. Both
   select-project gestures — the rail row click and adopting a just-opened project (`ProjectTree` *and*
