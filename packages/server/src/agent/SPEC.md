@@ -444,16 +444,14 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     matched `toolName`, and `answerQuestion` dispatches `buildNextStepsMessage` (offer) vs
     `buildAnswersMessage` (ask). `buildNextStepsMessage` emits the same `ask-user-answers` custom message
     keyed by tool-call id, so the web's questionnaire-resolve lifecycle marks the two cards resolved; its
-    text names the chosen path so the agent continues per the setup skill. See [[submodule-web-chat]] and
-    [[task-post-creation-next-steps]].
+    text names the chosen path so the agent continues per the setup skill. See [[submodule-web-chat]].
     Like `resolve_comment`, `finalize_project` is registered on **every** session but its host-installed
     handler (**`setProjectFinalizeHandler`** seam, wired in `host` to `projects.finalizeProjectByPath`)
     **fails closed** unless the calling session's `cwd` is a **draft** project's folder — so it is inert
     everywhere except the one setup chat, and `agent` never imports `projects`. `execute` keys on
     `ctx.cwd` (the Default workspace's cwd is the project folder), applies the user-confirmed name, and
     returns `{ projectId, name }`; the client reveals the renamed project via the normal `project.updated`
-    stream (no client-owned domain state). See [[submodule-server-projects]] and
-    [[task-create-project-from-scratch]].
+    stream (no client-owned domain state). See [[submodule-server-projects]].
     Both session paths pass it as `resourceLoader`. `buildResourceLoader` stays internal; the seam +
     its types are on the barrel.
 - **Public surface (barrel):** the manager operations (incl. `answerQuestion` +
