@@ -633,7 +633,6 @@ test("request_changes with no inline findings (a whole-change note only) still s
 		id: todo.id,
 	});
 
-	// The reviewer never files an inline comment — the concern lives only in the verdict note.
 	expect(itemFixFindings(ref)).toHaveLength(0);
 
 	const result = await createReviewVerdictTool().execute(
@@ -650,9 +649,6 @@ test("request_changes with no inline findings (a whole-change note only) still s
 	const [content] = (result as { content: { type: "text"; text: string }[] }).content;
 	expect(content?.text).toMatch(/no findings to send/);
 
-	// The empty-candidate path (no reflection ever ran) must not be mistaken for "every candidate was
-	// refuted": the cycle stays spent-but-pending-worker-reply (1), never jumps straight to the
-	// terminal settlement (2) that only fits a non-empty candidate set reflection wiped out.
 	expect(todoReviewAutoCycles(ref)).toBe(1);
 
 	handleReviewerSettled(reviewerSessionId, { type: "agent_settled", terminal: null });
