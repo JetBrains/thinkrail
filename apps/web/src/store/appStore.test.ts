@@ -113,6 +113,7 @@ beforeEach(() => {
 		routeChatTarget: null,
 		routeChatTargetGeneration: 0,
 		sessions: {},
+		extUiOrphans: [],
 		layoutSnapshotsByWorkspace: {},
 		layoutDocumentsByWorkspace: {},
 		layoutAttentionByWorkspace: {},
@@ -868,6 +869,171 @@ test("applyExtUi routes a dialog to its session; the reply clears only that one"
 
 	store.clearPendingExtUi("a", "d1");
 	expect(rt("a").pendingExtUi).toBeNull();
+});
+
+test("applyExtUi reads a notify's level: only an error becomes an error turn", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", null, "medium");
+
+	store.applyExtUi({
+		id: "n1",
+		sessionId: "a",
+		kind: "notify",
+		message: "Just so you know",
+		level: "info",
+	});
+	store.applyExtUi({
+		id: "n2",
+		sessionId: "a",
+		kind: "notify",
+		message: "Careful",
+		level: "warning",
+	});
+	store.applyExtUi({
+		id: "n3",
+		sessionId: "a",
+		kind: "notify",
+		message: "Extension theme-probe.ts failed on session_start: theme.fg is not a function",
+		level: "error",
+	});
+
+	expect(rt("a").turns.slice(-3)).toMatchObject([
+		{ kind: "system", text: "Just so you know" },
+		{ kind: "system", text: "Careful" },
+		{
+			kind: "error",
+			text: "Extension theme-probe.ts failed on session_start: theme.fg is not a function",
+		},
+	]);
+});
+
+test("an ext-UI frame that beats its session.create response is replayed, not dropped", () => {
+	const store = useAppStore.getState();
+
+	store.applyExtUi({
+		id: "s1",
+		sessionId: "late",
+		kind: "setStatus",
+		key: "test",
+		text: "Theme works",
+	});
+	store.applyExtUi({
+		id: "n1",
+		sessionId: "late",
+		kind: "notify",
+		message: "Extension theme-probe.ts failed on session_start: theme.fg is not a function",
+		level: "error",
+	});
+	expect(useAppStore.getState().sessions.late).toBeUndefined();
+
+	store.openChatSession("ws1", "late", null, "medium");
+
+	expect(rt("late").extUiStatus).toEqual({ test: "Theme works" });
+	expect(rt("late").turns.at(-1)).toMatchObject({
+		kind: "error",
+		text: "Extension theme-probe.ts failed on session_start: theme.fg is not a function",
+	});
+	expect(useAppStore.getState().extUiOrphans).toEqual([]);
+});
+
+test("a dialog for an unknown session is dropped, never replayed as a phantom", () => {
+	const store = useAppStore.getState();
+
+	store.applyExtUi({
+		id: "d-late",
+		sessionId: "dialog",
+		kind: "confirm",
+		title: "Proceed?",
+		message: "Apply?",
+	});
+	expect(useAppStore.getState().extUiOrphans).toEqual([]);
+
+	store.openChatSession("ws1", "dialog", null, "medium");
+	expect(rt("dialog").pendingExtUi).toBeNull();
+	expect(rt("dialog").extUiQueue).toEqual([]);
+});
+
+test("a frame for a chat closed to history still applies, and orphans stay bounded", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "closed", null, "medium");
+	store.closeChatToHistory("closed", true, "ws1");
+
+	store.applyExtUi({ id: "t1", sessionId: "closed", kind: "setTitle", title: "Renamed later" });
+	const closed = useAppStore
+		.getState()
+		.closedChatsByWorkspace.ws1?.find((chat) => chat.sessionId === "closed");
+	expect(closed?.title).toBe("Renamed later");
+	expect(useAppStore.getState().extUiOrphans).toEqual([]);
+
+	for (let i = 0; i < 70; i++) {
+		store.applyExtUi({
+			id: `f${i}`,
+			sessionId: "never-opened",
+			kind: "setStatus",
+			key: "k",
+			text: String(i),
+		});
+	}
+	const orphans = useAppStore.getState().extUiOrphans;
+	expect(orphans).toHaveLength(64);
+	expect(orphans.at(-1)).toMatchObject({ id: "f69" });
+});
+
+test("a frame for a chat known only as a tab is buffered, never silently dropped", () => {
+	const store = useAppStore.getState();
+	useAppStore.setState({
+		tabsByWorkspace: {
+			ws1: [
+				{
+					kind: "chat",
+					id: chatTabId("ws1", "tab-only"),
+					workspaceId: "ws1",
+					name: "Chat",
+					sessionId: "tab-only",
+				},
+			],
+		},
+	});
+
+	store.applyExtUi({
+		id: "s1",
+		sessionId: "tab-only",
+		kind: "setStatus",
+		key: "test",
+		text: "Theme works",
+	});
+
+	expect(useAppStore.getState().sessions["tab-only"]).toBeUndefined();
+	expect(useAppStore.getState().extUiOrphans).toMatchObject([{ id: "s1" }]);
+});
+
+test("a frame that beats a reopened chat's transcript is replayed by hydrateSession", () => {
+	const store = useAppStore.getState();
+
+	store.applyExtUi({
+		id: "s1",
+		sessionId: "reopened",
+		kind: "setStatus",
+		key: "test",
+		text: "Theme works",
+	});
+	expect(useAppStore.getState().extUiOrphans).toMatchObject([{ id: "s1" }]);
+
+	const summary: SessionSummary = {
+		sessionId: "reopened",
+		workspaceId: "ws1",
+		title: "Chat",
+		model: null,
+		thinkingLevel: "medium",
+		isStreaming: false,
+		messageCount: 0,
+		updatedAt: 0,
+		live: true,
+	};
+	store.hydrateSession(summary, { turns: [], toolResults: {}, askAnswers: {} });
+
+	expect(rt("reopened").extUiStatus).toEqual({ test: "Theme works" });
+	expect(useAppStore.getState().extUiOrphans).toEqual([]);
 });
 
 test("setTitle refreshes shared chat metadata without requesting activation", () => {

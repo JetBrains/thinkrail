@@ -6,6 +6,7 @@ import { clampThinkingLevel, getSupportedThinkingLevels } from "@earendil-works/
 import {
 	type AgentSession,
 	createAgentSession,
+	type ExtensionError,
 	getAgentDir,
 	type SessionInfo,
 	SessionManager,
@@ -46,7 +47,7 @@ import { projectSessionEvent } from "./sessionEventProjection";
 import { repairDanglingToolCalls } from "./sessionRepair";
 import type { SkillAdmissionContext } from "./skillAdmission";
 import { trashFile } from "./trash";
-import { cancelExtUiForSession, createWebUiContext, notifyExtUi } from "./webUiContext";
+import { cancelExtUiForSession, createWebUiContext, notifyExtensionError } from "./webUiContext";
 
 const log = logger("agent");
 
@@ -66,6 +67,7 @@ interface Entry {
 	nextQueuedMessageId: number;
 	manualCompactionInProgress: boolean;
 	piCompactionInProgress: boolean;
+	registered: boolean;
 }
 
 const sessions = new Map<string, Entry>();
@@ -214,6 +216,7 @@ async function prepareSessionEntry(
 		nextQueuedMessageId: 1,
 		manualCompactionInProgress: false,
 		piCompactionInProgress: false,
+		registered: false,
 	};
 	entry.unsubscribe = session.subscribe((event) => {
 		if (event.type === "queue_update") {
@@ -248,11 +251,24 @@ async function prepareSessionEntry(
 		if (event.type === "agent_settled") terminal = null;
 	});
 
+	const reportExtensionError = (failure: ExtensionError): void => {
+		const line = `extension ${failure.extensionPath} failed on ${failure.event}: ${failure.error}`;
+		if (failure.stack) {
+			const cause = new Error(failure.error);
+			cause.stack = failure.stack;
+			log.warn(line, cause);
+		} else {
+			log.warn(line);
+		}
+		if (!entry.registered || sessions.get(sessionId) === entry)
+			notifyExtensionError(sessionId, failure);
+	};
+
 	try {
 		await session.bindExtensions({
 			mode: "rpc",
 			uiContext: createWebUiContext(sessionId),
-			onError: () => notifyExtUi(sessionId, "An extension failed.", "error"),
+			onError: reportExtensionError,
 		});
 		if (isSessionDeleted(sessionId, workspaceId)) throw new Error(`Unknown session: ${sessionId}`);
 	} catch (error) {
@@ -278,6 +294,7 @@ async function registerSession(
 	generation: PiRuntimeGeneration,
 ): Promise<CreateSessionResult> {
 	const prepared = await prepareSessionEntry(session, workspaceId, generation);
+	prepared.entry.registered = true;
 	sessions.set(session.sessionId, prepared.entry);
 	log.debug(`session ${session.sessionId} attached (workspace ${workspaceId})`);
 	return prepared.result;

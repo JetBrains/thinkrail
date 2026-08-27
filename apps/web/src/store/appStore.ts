@@ -614,11 +614,13 @@ function reduceExtUi(
 			return rt.pendingExtUi
 				? { ...rt, extUiQueue: [...rt.extUiQueue, request] }
 				: { ...rt, pendingExtUi: request };
-		case "notify":
+		case "notify": {
+			const kind = request.level === "error" ? "error" : "system";
 			return {
 				...rt,
-				turns: [...rt.turns, { kind: "system", id: crypto.randomUUID(), text: request.message }],
+				turns: [...rt.turns, { kind, id: crypto.randomUUID(), text: request.message }],
 			};
+		}
 		case "setStatus": {
 			if (request.text === null)
 				return { ...rt, extUiStatus: omitKey(rt.extUiStatus, request.key) };
@@ -664,6 +666,7 @@ interface AppState {
 	terminalsByWorkspace: Record<string, TerminalTab[]>;
 	activeTerminalByWorkspace: Record<string, string | null>;
 	sessions: Record<string, SessionRuntime>;
+	extUiOrphans: ExtUiRequest[];
 	models: WireModel[];
 	providerVersion: number;
 	templatesVersion: number;
@@ -1278,6 +1281,100 @@ function sameReviewSnapshot(prev: ReviewSnapshot | undefined, next: ReviewSnapsh
 	return prev !== undefined && JSON.stringify(prev) === JSON.stringify(next);
 }
 
+const EXT_UI_ORPHAN_LIMIT = 64;
+const REPLAYABLE_EXT_UI: ReadonlySet<ExtUiRequest["kind"]> = new Set([
+	"notify",
+	"setStatus",
+	"setWidget",
+	"setTitle",
+]);
+
+function bufferExtUiOrphan(s: AppState, request: ExtUiRequest): Partial<AppState> {
+	return REPLAYABLE_EXT_UI.has(request.kind)
+		? { extUiOrphans: [...s.extUiOrphans, request].slice(-EXT_UI_ORPHAN_LIMIT) }
+		: {};
+}
+
+function replayExtUiOrphans(
+	sessionId: string,
+	set: (updater: (s: AppState) => Partial<AppState>) => void,
+	get: () => AppState,
+): void {
+	if (!get().sessions[sessionId]) return;
+	const replay = get().extUiOrphans.filter((frame) => frame.sessionId === sessionId);
+	if (replay.length === 0) return;
+	set((s) => ({ extUiOrphans: s.extUiOrphans.filter((frame) => frame.sessionId !== sessionId) }));
+	for (const frame of replay) get().applyExtUi(frame);
+}
+
+function renameChat(s: AppState, sessionId: string, title: string): Partial<AppState> | null {
+	let found = false;
+	for (const [wsId, tabs] of Object.entries(s.tabsByWorkspace)) {
+		const chat = tabs.find(
+			(tab): tab is ChatTab => tab.kind === "chat" && tab.sessionId === sessionId,
+		);
+		if (!chat) continue;
+		found = true;
+		const cacheChanged = chat.name !== title;
+		const renamed = cacheChanged ? { ...chat, name: title } : chat;
+		const matchesQueuedOpen = (
+			intent: LayoutIntent,
+		): intent is Extract<LayoutIntent, { kind: "open" }> =>
+			intent.kind === "open" &&
+			intent.workspaceId === wsId &&
+			intent.tab.kind === "chat" &&
+			intent.tab.sessionId === chat.sessionId;
+		const queuedOpen = s.layoutIntents.find(matchesQueuedOpen);
+		const placement = selectLayoutResourcePlacement(s, wsId, chat);
+		const queuedChanged = queuedOpen !== undefined && queuedOpen.tab.name !== title;
+		const placementChanged = placement !== null && placement.tab.name !== title;
+		if (!cacheChanged && !queuedChanged && !placementChanged) continue;
+		return {
+			layoutIntents: queuedOpen
+				? queuedChanged || placementChanged
+					? s.layoutIntents.map((intent) =>
+							matchesQueuedOpen(intent)
+								? {
+										...intent,
+										tab: {
+											...intent.tab,
+											...(placementChanged && placement ? { id: placement.tabId } : {}),
+											name: title,
+										},
+									}
+								: intent,
+						)
+					: s.layoutIntents
+				: placementChanged && placement
+					? appendLayoutIntent(s.layoutIntents, {
+							kind: "open",
+							workspaceId: wsId,
+							tab: { ...renamed, id: placement.tabId },
+							intent: "keep",
+							activate: false,
+						})
+					: s.layoutIntents,
+			tabsByWorkspace: cacheChanged
+				? {
+						...s.tabsByWorkspace,
+						[wsId]: tabs.map((tab) => (tab.id === chat.id ? renamed : tab)),
+					}
+				: s.tabsByWorkspace,
+		};
+	}
+	for (const [wsId, chats] of Object.entries(s.closedChatsByWorkspace)) {
+		if (!chats.some((chat) => chat.sessionId === sessionId)) continue;
+		found = true;
+		return {
+			closedChatsByWorkspace: {
+				...s.closedChatsByWorkspace,
+				[wsId]: chats.map((chat) => (chat.sessionId === sessionId ? { ...chat, title } : chat)),
+			},
+		};
+	}
+	return found ? {} : null;
+}
+
 function withRuntime(
 	s: AppState,
 	sessionId: string,
@@ -1377,6 +1474,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	terminalsByWorkspace: {},
 	activeTerminalByWorkspace: {},
 	sessions: {},
+	extUiOrphans: [],
 	models: [],
 	providerVersion: 0,
 	templatesVersion: 0,
@@ -2257,7 +2355,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 						activeTerminalByWorkspace: { ...s.activeTerminalByWorkspace, [workspaceId]: tabKey },
 					},
 		),
-	openChatSession: (workspaceId, sessionId, model, thinkingLevel, syncedTick, options = {}) =>
+	openChatSession: (workspaceId, sessionId, model, thinkingLevel, syncedTick, options = {}) => {
 		set((s) => {
 			if (s.removedWorkspaceIds[workspaceId] || isSessionDeleted(s, workspaceId, sessionId)) {
 				return {};
@@ -2311,7 +2409,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 						}
 					: {}),
 			};
-		}),
+		});
+		replayExtUiOrphans(sessionId, set, get);
+	},
 	closeChatRuntime: (sessionId) =>
 		set((s) => {
 			if (!s.sessions[sessionId]) return {};
@@ -2497,7 +2597,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				},
 			};
 		}),
-	hydrateSession: (summary, hydrated, activate = false, syncedTick, options = {}) =>
+	hydrateSession: (summary, hydrated, activate = false, syncedTick, options = {}) => {
 		set((s) => {
 			if (
 				s.removedWorkspaceIds[summary.workspaceId] ||
@@ -2578,7 +2678,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 						}
 					: s.closedChatsByWorkspace,
 			};
-		}),
+		});
+		replayExtUiOrphans(summary.sessionId, set, get);
+	},
 	reconcileSession: (summary, hydrated, expectedEventRevision, connectionGeneration) => {
 		let applied = false;
 		set((s) => {
@@ -2725,72 +2827,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 		),
 	applyExtUi: (request) =>
 		set((s): Partial<AppState> => {
-			if (request.kind === "setTitle") {
-				for (const [wsId, tabs] of Object.entries(s.tabsByWorkspace)) {
-					const chat = tabs.find(
-						(tab): tab is ChatTab => tab.kind === "chat" && tab.sessionId === request.sessionId,
-					);
-					if (!chat) continue;
-					const cacheChanged = chat.name !== request.title;
-					const renamed = cacheChanged ? { ...chat, name: request.title } : chat;
-					const matchesQueuedOpen = (
-						intent: LayoutIntent,
-					): intent is Extract<LayoutIntent, { kind: "open" }> =>
-						intent.kind === "open" &&
-						intent.workspaceId === wsId &&
-						intent.tab.kind === "chat" &&
-						intent.tab.sessionId === chat.sessionId;
-					const queuedOpen = s.layoutIntents.find(matchesQueuedOpen);
-					const placement = selectLayoutResourcePlacement(s, wsId, chat);
-					const queuedChanged = queuedOpen !== undefined && queuedOpen.tab.name !== request.title;
-					const placementChanged = placement !== null && placement.tab.name !== request.title;
-					if (!cacheChanged && !queuedChanged && !placementChanged) continue;
-					return {
-						layoutIntents: queuedOpen
-							? queuedChanged || placementChanged
-								? s.layoutIntents.map((intent) =>
-										matchesQueuedOpen(intent)
-											? {
-													...intent,
-													tab: {
-														...intent.tab,
-														...(placementChanged && placement ? { id: placement.tabId } : {}),
-														name: request.title,
-													},
-												}
-											: intent,
-									)
-								: s.layoutIntents
-							: placementChanged && placement
-								? appendLayoutIntent(s.layoutIntents, {
-										kind: "open",
-										workspaceId: wsId,
-										tab: { ...renamed, id: placement.tabId },
-										intent: "keep",
-										activate: false,
-									})
-								: s.layoutIntents,
-						tabsByWorkspace: cacheChanged
-							? {
-									...s.tabsByWorkspace,
-									[wsId]: tabs.map((tab) => (tab.id === chat.id ? renamed : tab)),
-								}
-							: s.tabsByWorkspace,
-					};
-				}
-				for (const [wsId, chats] of Object.entries(s.closedChatsByWorkspace)) {
-					if (!chats.some((chat) => chat.sessionId === request.sessionId)) continue;
-					return {
-						closedChatsByWorkspace: {
-							...s.closedChatsByWorkspace,
-							[wsId]: chats.map((chat) =>
-								chat.sessionId === request.sessionId ? { ...chat, title: request.title } : chat,
-							),
-						},
-					};
-				}
-				return {};
-			}
+			if (request.kind === "setTitle")
+				return renameChat(s, request.sessionId, request.title) ?? bufferExtUiOrphan(s, request);
+			if (!s.sessions[request.sessionId]) return bufferExtUiOrphan(s, request);
 			return withRuntime(s, request.sessionId, (rt) => reduceExtUi(rt, request));
 		}),
 	beginLogin: (loginId, providerId) =>

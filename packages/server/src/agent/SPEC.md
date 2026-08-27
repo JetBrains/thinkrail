@@ -225,9 +225,62 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     = first available; `null` when nothing is authenticated. This is the primitive the `assist` tasks
     (workspace naming, PR drafting) run on — the only place model **dispatch** happens outside a session.
   - `webUiContext` — `createWebUiContext(sessionId)` builds the `ExtensionUIContext` pi calls (dialogs
-    round-trip to the browser, fire-and-forget methods push, TUI-only members inert); `setExtUiPublisher`
+    round-trip to the browser, fire-and-forget methods push); `setExtUiPublisher`
     (server→client push seam), `resolveExtUi` (browser reply), `cancelExtUiForSession` (on dispose),
-    `notifyExtUi`.
+    `notifyExtUi`, `notifyExtensionError` (pi's `ExtensionError` → one client-visible `error` notify
+    carrying extension + event + cause — the cause capped at 500 chars because `error.error` is
+    remote-shaped, and the extension named by its **directory** when its file is an anonymous
+    entrypoint (`SKILL.md`, `index.ts`), never "Extension SKILL.md failed"; a bare
+    "An extension failed." is what made #277 unreadable from the UI alone). The manager's
+    `bindExtensions({onError})` wraps it in `reportExtensionError`, which does **two** things the notify
+    cannot: it writes one `warn` to the rotated host log carrying the **full** `extensionPath` and the
+    extension's own `stack` (rehydrated onto an `Error` so it lands in the structured `err` field — the
+    chat gets the short name, the log gets the unambiguous one, and a crash stays findable after the tab
+    is closed), and it **gates the client push** on `entry.registered`, the explicit flag
+    `registerSession` sets when it puts the entry in the map. The event path's `sessions.get(id) === entry`
+    cannot be reused: `bindExtensions` runs inside `prepareSessionEntry`, *before* registration, so the
+    stricter form would suppress the `session_start` failure #277 is about. Nor can *absence* from the map
+    stand in for "not registered yet" — `disposeSession` deletes without leaving a tombstone, so a disposed
+    entry is indistinguishable from an unregistered one, and a late error would be pushed at a client that
+    can never drain it. The log is never gated (a superseded session's crash is still worth recording) and
+    it attaches an `Error` **only when pi supplied a stack**: several of pi's own `emitError` sites omit it
+    (`runner.js` message_end, `agent-session.js` command/`<runtime>`), and synthesising one there would
+    record the *host's* stack — pointing the reader at `prepareSessionEntry` instead of the extension,
+    which is the opposite of why the line exists.
+    **Members split three ways, not two.** *Untranslatable* ones are inert no-ops and rightly so — they take a
+    TUI `Component` factory a web host cannot render (`setFooter`, `setHeader`, `setEditorComponent`,
+    `custom`, `setWidget`'s factory overload; the string-array overload **is** rendered).
+    *Translatable* ones must behave: **`theme` is a real `Theme`** (`plainTextTheme`) whose every
+    decorator returns its input unchanged. *Translatable but unimplemented* is the third group and is named
+    here so the split does not read as exhaustive: `setEditorText` / `pasteToEditor` are forwarded to the
+    host by pi's own rpc mode and a web composer could honour them; ours stay inert until something needs
+    them. What separates the theme from that group is the cost of being inert — an unimplemented editor
+    call loses one feature, an unimplemented theme kills the whole extension on its first line. `getAllThemes: []` / `getTheme: undefined` match pi's own
+    rpc mode; `setTheme`'s `{success:true}` is a known lie, tracked separately — a web host has no TUI
+    theme to switch to, so pi's rpc-mode form (`{success:false}`) is the honest answer.
+    `plainTextTheme` subclasses pi's `Theme` and overrides `fg`/`bg`/`bold`/`italic`/`underline`/
+    `inverse`/`strikethrough`/`getFgAnsi`/`getBgAnsi`; `getThinkingBorderColor` /
+    `getBashModeBorderColor` stay plain only because pi routes them through `this.fg` — an inherited
+    guarantee, so `webUiContext.test.ts` pins them explicitly. **`getColorMode` is the one member left
+    answering for the terminal** (`truecolor`, from the constructor): pi's `ColorMode` is
+    `"truecolor" | "256color"` with no "renders no colour" value, so no honest answer exists to give. It
+    costs nothing while an extension colours *through* the theme — every such path returns plain text —
+    and only bites one that reads the mode and then emits ANSI on its own, which is the unsanitised-bridge
+    gap tracked outside this module. Its colour table exists **only** to satisfy
+    the constructor signature: every method that would look a colour up in it is overridden, and the one
+    member that still answers for the terminal reads the constructor's *mode* argument, not the table. A pi
+    bump that changes the palette breaks the build as a *notice that the theme surface moved*, not as a
+    defect.
+    **Rejected alternatives** (the one place these decisions are recorded): (1) `{} as
+    ExtensionUIContext["theme"]` — the #277 bug itself. It assumed the TUI members are unreachable in
+    `rpc` mode, but `ctx.ui.theme` is called by the **extension**, not by pi's renderer, and pi's own rpc
+    mode hands out a live theme. (2) An object literal implementing `Theme` structurally — impossible
+    without a cast: `Theme` carries private fields. (3) A real `Theme` built from blank colours, no
+    overrides — pi maps `""` to the *default-colour* escape (`\x1b[39m`), not to nothing, so status text
+    would reach the browser as literal escape bytes. (4) Forwarding pi's exported `theme` singleton — it
+    is a `Proxy` that throws `Theme not initialized` until `initTheme()` runs, and `initTheme` is called
+    only from pi's own CLI entrypoints, never when pi is embedded via `createAgentSession`. Every
+    embedder of pi-as-a-library hits this; an upstream fix would not reach us until a deliberate pi bump.
   - `askUserQuestion` — the host-owned **`ask_user_question`** pi custom tool (`createAskUserQuestionTool`,
     registered on every session via the `askUserQuestionExtension` factory in `extensions`), designed
     **ack + terminate** so a questionnaire survives host restarts: `execute` renders nothing and **awaits
