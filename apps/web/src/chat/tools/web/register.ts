@@ -1,7 +1,10 @@
 import { registerToolRenderer } from "../../toolRegistry";
-import { strArg } from "../toolHelpers";
-import { WebFetchCard } from "./WebFetchCard";
-import { WebSearchCard } from "./WebSearchCard";
+import { WebFetchCard, webFetchSummary } from "./WebFetchCard";
+import { WebSearchCard, webSearchSummary } from "./WebSearchCard";
+import { storedContentSummary, WebStoredContentCard } from "./WebStoredContentCard";
 
-registerToolRenderer("web_search", WebSearchCard, { summary: ({ args }) => strArg(args, "query") });
-registerToolRenderer("fetch_content", WebFetchCard, { summary: ({ args }) => strArg(args, "url") });
+registerToolRenderer("web_search", WebSearchCard, { summary: webSearchSummary });
+registerToolRenderer("fetch_content", WebFetchCard, { summary: webFetchSummary });
+registerToolRenderer("get_search_content", WebStoredContentCard, {
+	summary: storedContentSummary,
+});

@@ -1,23 +1,7 @@
+import { parseToolResultContent } from "../toolResultContent";
+
 export function resultText(result: unknown): string {
-	if (result == null) return "";
-	if (typeof result === "string") return result;
-	if (typeof result === "object" && "content" in result) {
-		const content = (result as { content: unknown }).content;
-		if (Array.isArray(content)) {
-			return content
-				.filter(
-					(c): c is { type: "text"; text: string } =>
-						typeof c === "object" && c !== null && (c as { type?: string }).type === "text",
-				)
-				.map((c) => c.text)
-				.join("");
-		}
-	}
-	try {
-		return JSON.stringify(result, null, 2);
-	} catch {
-		return String(result);
-	}
+	return parseToolResultContent(result).text;
 }
 
 export function strArg(args: Record<string, unknown>, key: string): string {

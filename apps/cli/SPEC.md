@@ -228,7 +228,12 @@ and `trash`'s **native helper sidecars** (which macOS/Windows must execute from 
   `playwright.binary.config.ts`): the whole no-agent e2e suite executed against this binary — also in CI
   on every PR. And `bun run check:seams` (root `scripts/check-binary-seams.ts`) is the build-time canary
   for the seam class: it fails when a pi bump introduces a new bundler-opaque dynamic import the server's
-  `registerBundledRuntime` doesn't statically register.
+  `registerBundledRuntime` doesn't statically register. The scan **excludes `pi-coding-agent/dist/bundle/`**
+  (recorded as a skipped dir in the script, stale-checked like the allowlist): pi ≥ 0.84.3 ships a bundled
+  runtime there for its own CLI `bin` and `./rpc-entry` export — the only two ways to reach it — while the
+  in-process library import (`.` → `dist/index.js`) stays on the modular runtime, so the bundle's opaque
+  imports (content-hashed chunk duplicates of the allowlisted modular seams) are dead code in ThinkRail and
+  allowlisting them by chunk name would churn on every pi release.
 - **The smoke's fixtures are host-OS-shaped, not POSIX-shaped.** Every one of them was a Windows failure
   in a green-on-Linux suite:
   - The **fake Central CLI is compiled** (`bun build --compile` into `central`/`central.exe`), not written

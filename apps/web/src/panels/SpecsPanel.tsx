@@ -15,6 +15,7 @@ import {
 	RiStackFill,
 } from "@remixicon/react";
 import { useEffect, useMemo, useState } from "react";
+import { IconTooltip } from "../components/ui/tooltip";
 import { cn } from "../lib";
 import { selectActiveEditorTab, useAppStore } from "../store";
 import { openFileInTab } from "./openTabs";
@@ -74,16 +75,17 @@ export function SpecsPanel({
 		<div className="flex min-h-0 flex-col">
 			{onRefresh ? (
 				<div className="flex h-panel-header-row shrink-0 items-center justify-end border-border-muted border-b px-12">
-					<button
-						type="button"
-						data-testid="specs-refresh"
-						aria-label="Refresh specs"
-						title="Refresh specs"
-						onClick={onRefresh}
-						className="flex size-24 items-center justify-center rounded-[var(--radius-sm)] text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
-					>
-						<RefreshCw className="size-14" />
-					</button>
+					<IconTooltip label="Refresh specs">
+						<button
+							type="button"
+							data-testid="specs-refresh"
+							aria-label="Refresh specs"
+							onClick={onRefresh}
+							className="flex size-24 items-center justify-center rounded-[var(--radius-sm)] text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+						>
+							<RefreshCw className="size-14" />
+						</button>
+					</IconTooltip>
 				</div>
 			) : null}
 			{content}

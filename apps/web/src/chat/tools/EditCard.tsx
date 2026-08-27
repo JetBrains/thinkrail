@@ -1,10 +1,10 @@
 import { RiPencilLine as Pencil } from "@remixicon/react";
-import { projectRelativePath } from "@/lib";
 import type { ToolRenderProps } from "../toolRegistry";
 import { Collapsible } from "./Collapsible";
+import { ToolFileLink } from "./ToolFileLink";
 import { resultText, strArg } from "./toolHelpers";
 
-export function EditCard({ args, result, status, workspaceRoot }: ToolRenderProps) {
+export function EditCard({ args, result, status, workspaceRoot, onOpenFile }: ToolRenderProps) {
 	const path = strArg(args, "path");
 	const oldText = strArg(args, "oldText") || strArg(args, "old_string") || strArg(args, "old");
 	const newText = strArg(args, "newText") || strArg(args, "new_string") || strArg(args, "new");
@@ -13,7 +13,12 @@ export function EditCard({ args, result, status, workspaceRoot }: ToolRenderProp
 	if (status === "error") {
 		return (
 			<div data-testid="tool-edit" className="flex flex-col gap-4">
-				<EditHeader path={path} workspaceRoot={workspaceRoot} />
+				<EditHeader
+					path={path}
+					workspaceRoot={workspaceRoot}
+					onOpenFile={onOpenFile}
+					disabled={true}
+				/>
 				<pre className="overflow-auto px-8 py-4 text-feedback-error tr-code-text">{message}</pre>
 			</div>
 		);
@@ -24,7 +29,12 @@ export function EditCard({ args, result, status, workspaceRoot }: ToolRenderProp
 
 	return (
 		<div data-testid="tool-edit" className="flex flex-col gap-4">
-			<EditHeader path={path} workspaceRoot={workspaceRoot} />
+			<EditHeader
+				path={path}
+				workspaceRoot={workspaceRoot}
+				onOpenFile={onOpenFile}
+				disabled={status !== "done"}
+			/>
 			<Collapsible
 				lines={oldLines.length + newLines.length}
 				fadeClass="bg-[linear-gradient(to_top,var(--container-elevated-bg),transparent)]"
@@ -58,14 +68,27 @@ export function EditCard({ args, result, status, workspaceRoot }: ToolRenderProp
 	);
 }
 
-function EditHeader({ path, workspaceRoot }: { path: string; workspaceRoot?: string | undefined }) {
-	const displayPath = projectRelativePath(path, workspaceRoot);
+function EditHeader({
+	path,
+	workspaceRoot,
+	onOpenFile,
+	disabled,
+}: {
+	path: string;
+	workspaceRoot?: string | undefined;
+	onOpenFile?: ((path: string) => void) | undefined;
+	disabled: boolean;
+}) {
 	return (
 		<div className="flex items-center gap-4 tr-text-metadata">
 			<Pencil className="size-12 shrink-0 text-feedback-warning" />
-			<span className="truncate text-text-default" title={path}>
-				{displayPath}
-			</span>
+			<ToolFileLink
+				path={path}
+				workspaceRoot={workspaceRoot}
+				onOpenFile={onOpenFile}
+				disabled={disabled}
+				className="text-text-default"
+			/>
 			<span className="shrink-0 text-text-muted">edited</span>
 		</div>
 	);

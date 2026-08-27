@@ -282,6 +282,28 @@ test("dragging outer separators hides both sides and preserves their restore sta
 	await waitTerminalReady(page);
 });
 
+test("the side group menu shows tools for its own side and opens terminals in that group", async ({
+	page,
+}) => {
+	await openDefaultWorkbench(page);
+	const specsGroup = sideGroups(page, "right").first();
+	await expect(specsGroup.getByTestId("terminal-tab")).toHaveCount(0);
+
+	await specsGroup.getByRole("button", { name: "Add to this group" }).click();
+	await page.getByTestId("side-new-terminal").click();
+	await expect(specsGroup.getByTestId("terminal-tab")).toHaveCount(1);
+	await expect(page.getByTestId("center-tab-strip").getByTestId("terminal-tab")).toHaveCount(0);
+
+	await page.getByTestId("tab-projects").click({ button: "right" });
+	await page.getByRole("menuitem", { name: "Close", exact: true }).click();
+	await page.getByTestId("tab-changes").click({ button: "right" });
+	await page.getByRole("menuitem", { name: "Close", exact: true }).click();
+
+	await specsGroup.getByRole("button", { name: "Add to this group" }).click();
+	await expect(page.getByTestId("show-tool-changes")).toBeVisible();
+	await expect(page.getByTestId("show-tool-projects")).toHaveCount(0);
+});
+
 test("a terminal can move to its own side group; resize, fold, and visibility gate its one body", async ({
 	page,
 }) => {
@@ -289,6 +311,7 @@ test("a terminal can move to its own side group; resize, fold, and visibility ga
 	await pressPlatformShortcut(page, "b");
 	await expect(page.getByTestId("left-layout-rail")).toBeVisible();
 	const terminalTab = page.getByTestId("terminal-tab");
+	await terminalTab.scrollIntoViewIfNeeded();
 	const terminalBox = await terminalTab.boundingBox();
 	if (!terminalBox) throw new Error("terminal tab has no box");
 	await page.mouse.move(
@@ -297,7 +320,7 @@ test("a terminal can move to its own side group; resize, fold, and visibility ga
 	);
 	await page.mouse.down();
 	await page.mouse.move(
-		terminalBox.x + terminalBox.width / 2 + 12,
+		terminalBox.x + terminalBox.width / 2 - 12,
 		terminalBox.y + terminalBox.height / 2 + 8,
 		{ steps: 4 },
 	);
@@ -445,13 +468,13 @@ test("keyboard and menu commands reorder, search, recursively split, and collaps
 	await page.getByRole("menuitem", { name: "Close", exact: true }).click();
 	await expect(page.getByTestId("tab-files")).toHaveCount(0);
 	await page.getByTestId("tab-changes").click({ button: "right" });
-	await page.getByRole("menuitem", { name: "Restore Files" }).click();
+	await page.getByRole("menuitem", { name: "Show Files" }).click();
 	await expect(page.getByTestId("tab-files")).toBeVisible();
 	await page.getByTestId("tab-specs").getByRole("tab").focus();
 	await page.keyboard.press("Delete");
 	await expect(page.getByTestId("tab-specs")).toHaveCount(0);
 	await page.getByTestId("tab-changes").click({ button: "right" });
-	await page.getByRole("menuitem", { name: "Restore Specs" }).click();
+	await page.getByRole("menuitem", { name: "Show Specs" }).click();
 	await expect(page.getByTestId("tab-specs")).toBeVisible();
 
 	await openKeptFiles(page, ["README.md", "notes.txt", "LINKS.md"]);
@@ -462,11 +485,28 @@ test("keyboard and menu commands reorder, search, recursively split, and collaps
 	await expect(tabs.nth(1)).toContainText("README.md");
 
 	const centerStrip = page.getByTestId("center-tab-strip");
-	await centerStrip.getByRole("button", { name: "Search open tabs" }).click();
+	const searchTabs = centerStrip.getByRole("button", { name: "Search open tabs" });
+	await expect(searchTabs).toHaveCount(0);
+
+	await page.setViewportSize({ width: 620, height: 800 });
+	await expect(searchTabs).toBeVisible();
+	await searchTabs.click();
 	await page.getByPlaceholder("Find an open tab…").fill("notes");
 	await page.getByRole("option", { name: /notes\.txt/ }).click();
 	await expect(tabs.filter({ hasText: "notes.txt" })).toHaveAttribute("data-active", "true");
 	await expect(tabs.filter({ hasText: "notes.txt" }).getByRole("tab")).toBeFocused();
+	await page.setViewportSize({ width: 1280, height: 720 });
+	await expect(searchTabs).toHaveCount(0);
+
+	await page.setViewportSize({ width: 620, height: 800 });
+	await searchTabs.click();
+	await expect(page.getByPlaceholder("Find an open tab…")).toBeVisible();
+	await page.setViewportSize({ width: 1280, height: 720 });
+	await expect(searchTabs).toHaveCount(0);
+	await page.setViewportSize({ width: 620, height: 800 });
+	await expect(searchTabs).toBeVisible();
+	await expect(page.getByPlaceholder("Find an open tab…")).toHaveCount(0);
+	await page.setViewportSize({ width: 1280, height: 720 });
 
 	await tabs.filter({ hasText: "notes.txt" }).click({ button: "right" });
 	await page.getByRole("menuitem", { name: "Split right" }).click();

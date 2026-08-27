@@ -19,7 +19,12 @@ registration runs once when the chat module mounts. Unregistered tools fall back
 ## What's here
 
 - **Core pi tools** — `BashCard` (terminal block), `ReadCard`/`WriteCard` (project-relative path +
-  highlighted file), `EditCard` (path + removed/added line diff). All **routine**.
+  highlighted textual file), `EditCard` (path + removed/added line diff). All **routine**. A settled `read`
+  (success or error) and a successful `write`/`edit` use the shared structured file-link primitive when the
+  path belongs to the active worktree, opening the shell's preview slot; a running/failed mutation or foreign
+  path stays text. Image content
+  returned by `read` is previewed by the parent chat module's common result-content layer, the same path as
+  every other image-producing tool; `ReadCard` does not special-case image payloads.
 - **`ResolveCommentCard`** — the compact receipt for the host-owned `resolve_comment` review tool
   (capability: the server's `agent` module + `reviews` seam; see [[submodule-server-reviews]]): a ✓ +
   the resolved comment id/note. **Routine** — the review sidebar is where resolution state lives; the
@@ -182,10 +187,20 @@ registration runs once when the chat module mounts. Unregistered tools fall back
   visualization is output *for the user*, not plumbing: it escapes the activity fold and renders open on
   completion (while its args stream it stays a slim running row). Capability: the bundled
   `pi-visualize` extension.
-- **`web/`** — search/fetch renderers for `pi-web-access`; own child spec
+- **Spec-graph tools** — one defensive `SpecToolCard` registered for all seven `spec_*` names. Each keeps
+  the capability's readable text, folds long output, replaces redundant args JSON with a meaningful
+  activity summary, and turns only exact standalone worktree-path tokens obtained from known successful
+  result `details` shapes into preview actions; a shorter known path never links a suffix inside another
+  path. `spec_delete` never links its successful deleted path. Routine.
+- **`web/`** — search/fetch/stored-content renderers for `pi-web-access`; own child spec
   ([web/SPEC.md](web/SPEC.md)). Routine.
+- **The five `todo_*` tools** deliberately keep routine fallback receipts: their connected product surface
+  is the chat plan, not a second renderer system in this module.
 - **Shared pieces** — `CodeBlock` (shiki), `Collapsible` ("Show all N lines" fold for long output),
-  pure `toolHelpers` (arg readers, `resultText`, `languageFromPath`) + `lib`'s `projectRelativePath`.
+  `ToolFileLink` + exact-reference linked text, pure `toolHelpers` (arg readers, `resultText`,
+  `languageFromPath`) + `lib`'s `projectRelativePath`. `resultText` delegates canonical result parsing to
+  the parent chat primitive, so text extraction and the common image layer cannot disagree about what
+  constitutes a valid content block.
 
 ## Boundary
 
@@ -200,6 +215,8 @@ registration runs once when the chat module mounts. Unregistered tools fall back
 ## Get right
 
 - **Render defensively:** a tool's `details` result shape is not a stable API — read best-effort and
-  fall back to its text content (`resultText`).
+  fall back to its text content (`resultText`). Missing structured references remove links, never prose.
+- File actions come only from explicit args/details and only through `ToolRenderProps.onOpenFile`; never
+  infer them from arbitrary result text or import app integration into a renderer.
 - Tool names must match the capability exactly — the name is the join key.
 - Token-utility styling only (no raw hex / inline `style`).
