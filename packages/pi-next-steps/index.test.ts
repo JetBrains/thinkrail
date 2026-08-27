@@ -135,15 +135,20 @@ describe("offer_next_steps tool", () => {
 		);
 	});
 
-	test("prompt metadata pins the four rules the tool depends on", () => {
-		const guidelines = load().tool.promptGuidelines ?? [];
+	test("prompt metadata pins the five rules the tool depends on", () => {
+		const tool = load().tool;
+		const guidelines = tool.promptGuidelines ?? [];
 		const text = guidelines.join("\n");
 		expect(guidelines.every((line) => line.includes("offer_next_steps"))).toBe(true);
+		expect(text).toMatch(/explicitly asks for follow-up actions/);
+		expect(text).toMatch(/MUST call offer_next_steps/);
+		expect(text).toMatch(/instead of listing or duplicating them in prose/);
 		expect(text).toMatch(/final action of a turn/);
 		expect(text).toMatch(/no further assistant response/);
 		expect(text).toMatch(/Omit offer_next_steps entirely/);
 		expect(text).toMatch(/in place of ask_user_question/);
-		expect(load().tool.promptSnippet).toBeTruthy();
+		expect(tool.description).toMatch(/MUST use offer_next_steps/);
+		expect(tool.promptSnippet).toMatch(/MUST use offer_next_steps/);
 	});
 });
 

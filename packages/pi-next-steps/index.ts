@@ -14,17 +14,20 @@ const COMMAND_NAME = "next-steps";
 
 const DESCRIPTION =
 	`Offer the user up to ${MAX_ITEMS} optional ways to continue. Each item is a short action label plus the ` +
-	"complete message sent verbatim as the user's next turn if they pick that item. Call this only as the " +
-	"very last action of a turn, after your complete answer, and only when there are concrete continuations " +
-	"worth offering — when there are none, omit the call entirely. This is not a way to ask a question: if " +
-	"you need information before you can proceed, use ask_user_question instead. The call ends the turn — " +
-	"write no further assistant response after it.";
+	"complete message sent verbatim as the user's next turn if they pick that item. If the user explicitly " +
+	"asks for follow-up actions, ways to continue after the answer, or what to do next, and concrete options " +
+	`exist, you MUST use ${TOOL_NAME} for those options instead of listing them in prose. First complete any ` +
+	"substantive answer, then call this as the very last action of the turn. Otherwise call it only when " +
+	"concrete continuations add value — when there are none, omit the call entirely. This is not a way to " +
+	"ask a question: if you need information before you can proceed, use ask_user_question instead. The " +
+	"call ends the turn — write no further assistant response after it.";
 
-const PROMPT_SNIPPET = `Offer up to ${MAX_ITEMS} optional next steps as a turn's final action — never to ask for information you need.`;
+const PROMPT_SNIPPET = `When the user explicitly asks for follow-up actions or ways to continue, you MUST use ${TOOL_NAME} instead of a prose list; otherwise offer up to ${MAX_ITEMS} optional next steps only when useful. Call it as the turn's final action, never to ask for information you need.`;
 
 const PROMPT_GUIDELINES = [
+	`When the user explicitly asks for follow-up actions, ways to continue after the answer, or what to do next, and concrete options exist, you MUST call ${TOOL_NAME} for those options instead of listing or duplicating them in prose.`,
 	`Call ${TOOL_NAME} only as the final action of a turn, after a complete answer, and emit no further assistant response after it.`,
-	`Omit ${TOOL_NAME} entirely when no concrete optional continuation adds value — zero suggestions means no call at all.`,
+	`Omit ${TOOL_NAME} entirely on ordinary turns when no concrete optional continuation adds value — zero suggestions means no call at all.`,
 	`Never use ${TOOL_NAME} in place of ask_user_question: information you need to proceed is a question, optional ways to continue are next steps.`,
 	`Each ${TOOL_NAME} prompt is the whole message that will be sent, self-contained enough to read without its label.`,
 ];
