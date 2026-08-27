@@ -91,9 +91,13 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   media types are ignored, while canonical content arrays are never serialized into base64 JSON.
 - `activity` — one contiguous run of routine work stays one **collapsed outer disclosure** whose header
   summarizes every atomic step (thinking blocks + routine tool calls). Expanding it preserves tools before
-  the first thought as direct rows, then renders each non-empty thinking block as a nested disclosure that
-  contains its exact text and every following routine tool call until the next thinking block or activity
-  boundary. Those thinking groups are siblings **inside** the outer run, even across assistant-message
+  the first thought as direct rows, then renders each non-empty thinking block as a nested disclosure. When
+  that block's first non-empty line is a complete standalone Markdown strong span (`**…**` or `__…__`),
+  its folded header surfaces the model-authored inner text between `Thinking` and the trailing tool/character
+  metadata; the teaser truncates before that metadata and disappears when expanded, where the disclosure
+  contains the exact text. Blocks without that convention keep the generic header. Every following routine
+  tool call stays under that thought until the next thinking block or activity boundary. Those thinking
+  groups are siblings **inside** the outer run, even across assistant-message
   boundaries; the hierarchy is presentational, never invented pi entry parentage. A single atomic step
   still renders directly. Non-empty text, primary tools, and non-assistant turns break the outer run. Only
   its trailing instance carries the live ticker. Errored routine tools get **no special treatment**
