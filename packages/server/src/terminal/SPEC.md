@@ -126,8 +126,8 @@ separate layout snapshot and merely references `tabKey`.
 - `shellBusy.test.ts` — child detection, including that an unanswerable platform reports *not* busy.
 - `terminalManager.test.ts` — transactional durable reservation without spawn, catalog bounds, attach
   idempotency (incl. concurrent), takeover, displaced-client rejection, tab-list broadcast, close/busy,
-  revive. PTY integration cases use bounded publisher-observed data/exit conditions as readiness edges,
-  never elapsed time; an output marker is absent as a contiguous string from the command input so terminal
-  echo cannot impersonate command execution.
+  revive. Replay-persistence and natural-exit cases use bounded publisher-observed data/exit conditions as
+  readiness edges, never elapsed time; their expected output marker never appears contiguously in the command
+  input, so terminal echo cannot impersonate command execution.
 - `e2e/terminals.spec.ts` — the rapid re-entry regression, reload survival, second-client takeover,
   cross-client tab convergence.
