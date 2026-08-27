@@ -9,15 +9,7 @@ import type {
 	LayoutToolId,
 	WorkspaceLayoutDocument,
 } from "@thinkrail/contracts";
-import {
-	lazy,
-	type ReactNode,
-	Suspense,
-	useCallback,
-	useEffect,
-	useMemo,
-	useState,
-} from "react";
+import { lazy, type ReactNode, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { DropdownMenuItem } from "../components/ui/dropdown-menu";
 import { IconTooltip } from "../components/ui/tooltip";
@@ -289,9 +281,9 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 
 	const commit = useCallback(
 		(next: WorkspaceLayoutDocument) => {
-			void commitWorkspaceLayout(workspaceId, next).catch(() => {});
+			void commitWorkspaceLayout(workspaceId, next, document).catch(() => {});
 		},
-		[workspaceId],
+		[document, workspaceId],
 	);
 
 	useLegacySelectionAdapter(workspaceId, activeReviewedPath, readActiveReviewedPath);
@@ -687,7 +679,9 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 							if (state.removedWorkspaceIds[workspaceId]) return;
 							const latest = state.layoutDocumentsByWorkspace[workspaceId];
 							const prepared = prepare(latest);
-							if (!latest || prepared.document !== latest) commit(prepared.document);
+							if (!latest || prepared.document !== latest) {
+								void commitWorkspaceLayout(workspaceId, prepared.document, latest).catch(() => {});
+							}
 							prepared.onAccepted(useAppStore.getState().layoutDocumentsByWorkspace[workspaceId]);
 						};
 						const terminal = terminalByKey.get(tab.tabKey);
@@ -697,7 +691,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 					}
 					const prepared = prepare();
 					const closedIdentity = layoutResourceIdentity(tab);
-					void commitWorkspaceLayout(workspaceId, prepared.document)
+					void commitWorkspaceLayout(workspaceId, prepared.document, document)
 						.then(() => {
 							const state = useAppStore.getState();
 							const current = state.layoutDocumentsByWorkspace[workspaceId];

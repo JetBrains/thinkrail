@@ -92,13 +92,21 @@ function sideGroups(page: Page, side: "left" | "right"): Locator {
 	return page.locator(`[data-side="${side}"][data-group-id]`);
 }
 
+async function collapseToOneCenterGroup(page: Page): Promise<void> {
+	const remove = page.locator(
+		'[data-testid="center-group"] [data-testid="remove-layout-group"]:not([disabled])',
+	);
+	if ((await remove.count()) > 0) await remove.last().click();
+	await expect(page.getByTestId("center-group")).toHaveCount(1);
+}
+
 test("workbench strips and feature toolbars keep one-row geometry with ARIA tabs", async ({
 	page,
 }) => {
 	await openDefaultWorkbench(page);
-	await page.getByTestId("start-chat").click();
+	await page.getByTestId("start-chat").first().click();
 
-	const centerStrip = page.getByTestId("center-tab-strip");
+	const centerStrip = page.getByTestId("center-tab-strip").first();
 	const rightStrip = page.getByTestId("right-tab-strip");
 	const bottomStrip = page.getByTestId("bottom-tab-strip");
 	for (const strip of [centerStrip, rightStrip, bottomStrip]) {
@@ -136,6 +144,7 @@ test("workbench strips and feature toolbars keep one-row geometry with ARIA tabs
 test("overflow uses directional fades without changing tab-strip geometry", async ({ page }) => {
 	await page.setViewportSize({ width: 800, height: 720 });
 	await openDefaultWorkbench(page);
+	await collapseToOneCenterGroup(page);
 	await openKeptFiles(page, [
 		"README.md",
 		"notes.txt",
@@ -144,7 +153,7 @@ test("overflow uses directional fades without changing tab-strip geometry", asyn
 		"LARGE.md",
 		"LINKS.md",
 	]);
-	const strip = page.getByTestId("center-tab-strip");
+	const strip = page.getByTestId("center-tab-strip").first();
 	const tablist = strip.getByRole("tablist");
 	await expect
 		.poll(() => tablist.evaluate((element) => element.scrollWidth > element.clientWidth))
@@ -246,6 +255,31 @@ test("outer side widths publish on pointer-up and restore after reload", async (
 	expect(Math.abs((await width(page.getByTestId("right-stack"))) - resized)).toBeLessThan(24);
 });
 
+test("one local frame survives workspace switches while resource tabs stay workspace-specific", async ({
+	page,
+}) => {
+	await openDefaultWorkbench(page);
+	await page.getByTestId("tab-files").click();
+	await page.getByTestId("file-node").filter({ hasText: "README.md" }).dblclick();
+	const handle = page.getByTestId("resize-right");
+	const handleBox = await handle.boundingBox();
+	if (!handleBox) throw new Error("right resize handle has no box");
+	await dragHandle(page, handle, handleBox.x - 70, handleBox.y + handleBox.height / 2);
+	const resized = await width(page.getByTestId("right-stack"));
+	await pressPlatformShortcut(page, "Shift+j");
+	await expect(page.getByTestId("bottom-layout-rail")).toBeVisible();
+
+	await createWorkspaceViaDialog(page);
+	await expect(page.getByTestId("editor-tab").filter({ hasText: "README.md" })).toHaveCount(0);
+	await expect(page.getByTestId("bottom-layout-rail")).toBeVisible();
+	await expect.poll(() => width(page.getByTestId("right-stack"))).toBeCloseTo(resized, 0);
+
+	await defaultWorkspaceRow(page).getByRole("button").first().click();
+	await expect(page.getByTestId("editor-tab").filter({ hasText: "README.md" })).toHaveCount(1);
+	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(0);
+	await expect(page.getByTestId("bottom-layout-rail")).toBeVisible();
+});
+
 test("dragging outer separators hides both sides and preserves their restore state", async ({
 	page,
 }) => {
@@ -341,8 +375,8 @@ test("a terminal can move to its own side group; resize, fold, and visibility ga
 	await expect(page.getByTestId("terminal-instance")).toHaveCount(1);
 	await page.getByTestId("terminal-tab").click({ button: "right" });
 	await expect(
-		page.getByRole("menuitem", { name: "New left group at bottom — already at end" }),
-	).toBeDisabled();
+		page.getByRole("menuitem", { name: "New left group at bottom", exact: true }),
+	).toBeEnabled();
 	await expect(page.getByRole("menuitem", { name: "New left group at top" })).toBeEnabled();
 	await page.keyboard.press("Escape");
 
@@ -408,10 +442,11 @@ test("side groups expose broad per-panel above and below split targets", async (
 	expect(belowHeight).toBeGreaterThan(40);
 
 	groups = sideGroups(page, "right");
-	await expect(groups).toHaveCount(3);
+	await expect(groups).toHaveCount(4);
 	await expect(groups.nth(0).getByTestId("tab-specs")).toBeVisible();
-	await expect(groups.nth(1).getByTestId("tab-changes")).toBeVisible();
-	await expect(groups.nth(2).getByTestId("tab-files")).toBeVisible();
+	await expect(groups.nth(1)).toContainText("Empty group");
+	await expect(groups.nth(2).getByTestId("tab-changes")).toBeVisible();
+	await expect(groups.nth(3).getByTestId("tab-files")).toBeVisible();
 
 	changesGroup = groups.filter({ has: page.getByTestId("tab-changes") });
 	await waitForLayoutSettled(page);
@@ -422,15 +457,14 @@ test("side groups expose broad per-panel above and below split targets", async (
 	await dragTabToTarget(page, page.getByTestId("tab-files"), foldedAboveTarget);
 
 	groups = sideGroups(page, "right");
+	await expect(groups).toHaveCount(5);
 	await expect(groups.nth(0).getByTestId("tab-specs")).toBeVisible();
-	await expect(groups.nth(1).getByTestId("tab-files")).toBeVisible();
-	await expect(groups.nth(2).getByTestId("tab-changes")).toBeVisible();
-	await expect(groups.nth(2)).toHaveAttribute("data-folded", "true");
+	await expect(groups.nth(2).getByTestId("tab-files")).toBeVisible();
+	await expect(groups.nth(3).getByTestId("tab-changes")).toBeVisible();
+	await expect(groups.nth(3)).toHaveAttribute("data-folded", "true");
 });
 
-test("Mod+B and Mod+J hide and restore synchronized sides without affecting bottom", async ({
-	page,
-}) => {
+test("Mod+B and Mod+J hide and restore local sides without affecting bottom", async ({ page }) => {
 	await openDefaultWorkbench(page);
 
 	await pressPlatformShortcut(page, "b");
@@ -454,10 +488,11 @@ test("Mod+B and Mod+J hide and restore synchronized sides without affecting bott
 	await waitTerminalReady(page);
 });
 
-test("keyboard and menu commands reorder, search, recursively split, and collapse empty leaves", async ({
+test("keyboard and menu commands reorder, search, recursively split, and explicitly remove empty groups", async ({
 	page,
 }) => {
 	await openDefaultWorkbench(page);
+	await collapseToOneCenterGroup(page);
 	await page.getByTestId("tab-projects").click({ button: "right" });
 	await page.getByRole("menuitem", { name: "Hide left side" }).click();
 	await expect(page.getByTestId("left-layout-rail")).toBeVisible();
@@ -484,7 +519,7 @@ test("keyboard and menu commands reorder, search, recursively split, and collaps
 	await page.keyboard.press("Alt+Shift+ArrowRight");
 	await expect(tabs.nth(1)).toContainText("README.md");
 
-	const centerStrip = page.getByTestId("center-tab-strip");
+	const centerStrip = page.getByTestId("center-tab-strip").first();
 	const searchTabs = centerStrip.getByRole("button", { name: "Search open tabs" });
 	await expect(searchTabs).toHaveCount(0);
 
@@ -533,12 +568,17 @@ test("keyboard and menu commands reorder, search, recursively split, and collaps
 	const links = tabs.filter({ hasText: "LINKS.md" });
 	await links.hover();
 	await links.getByTestId("editor-tab-close").click();
+	await expect(page.getByTestId("center-group")).toHaveCount(3);
+	await page
+		.locator('[data-testid="center-group"] [data-testid="remove-layout-group"]:not([disabled])')
+		.click();
 	await expect(page.getByTestId("center-group")).toHaveCount(2);
 	await expect(page.locator('[role="tab"]:focus')).toHaveCount(1);
 });
 
 test("each center group owns an independent preview slot", async ({ page }) => {
 	await openDefaultWorkbench(page);
+	await collapseToOneCenterGroup(page);
 	await page.getByTestId("tab-files").click();
 	await page.getByTestId("file-node").filter({ hasText: "notes.txt" }).dblclick();
 	await page.getByTestId("file-node").filter({ hasText: "README.md" }).click();
@@ -616,6 +656,7 @@ test("deferred opens stay with their request-time group and reroute only when it
 	};
 
 	await openDefaultWorkbench(page);
+	await collapseToOneCenterGroup(page);
 	await openKeptFiles(page, ["README.md", "notes.txt"]);
 	await page.getByTestId("editor-tab").filter({ hasText: "notes.txt" }).click({ button: "right" });
 	await page.getByRole("menuitem", { name: "Split right" }).click();
@@ -630,6 +671,8 @@ test("deferred opens stay with their request-time group and reroute only when it
 	await release("LINKS.md");
 
 	const origin = page.getByTestId("center-group").filter({ has: readme });
+	const originId = await origin.getAttribute("data-group-id");
+	if (!originId) throw new Error("origin group has no id");
 	await expect(origin.getByTestId("editor-tab").filter({ hasText: "LINKS.md" })).toHaveAttribute(
 		"data-active",
 		"false",
@@ -644,6 +687,10 @@ test("deferred opens stay with their request-time group and reroute only when it
 		await tab.hover();
 		await tab.getByTestId("editor-tab-close").click();
 	}
+	await page
+		.locator(`[data-testid="center-group"][data-group-id="${originId}"]`)
+		.getByTestId("remove-layout-group")
+		.click();
 	await expect(page.getByTestId("center-group")).toHaveCount(1);
 	await release("ALERTS.md");
 	await expect(page.getByTestId("editor-tab").filter({ hasText: "ALERTS.md" })).toHaveAttribute(
@@ -654,6 +701,7 @@ test("deferred opens stay with their request-time group and reroute only when it
 
 test("pointer drag exposes deterministic split targets and moves one tab", async ({ page }) => {
 	await openDefaultWorkbench(page);
+	await collapseToOneCenterGroup(page);
 	await openKeptFiles(page, ["README.md", "notes.txt"]);
 	const readme = page.getByTestId("editor-tab").filter({ hasText: "README.md" });
 	const readmeBox = await readme.boundingBox();
@@ -727,8 +775,9 @@ test("applying the Review preset preserves resources and installs its vertical c
 	);
 });
 
-test("custom presets and independent group limits round-trip through synchronized Layout settings", async ({
+test("custom presets synchronize while defaults and group limits remain window-local", async ({
 	page,
+	context,
 }) => {
 	await openDefaultWorkbench(page);
 	await page.getByTestId("open-settings").click();
@@ -758,8 +807,20 @@ test("custom presets and independent group limits round-trip through synchronize
 	await expect(bottomLimit).toHaveValue("4");
 	await expect(page.getByRole("button", { name: "Save bottom group limit" })).toBeDisabled();
 
+	const peer = await context.newPage();
+	await peer.goto("/");
+	await expect(peer.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+	await peer.getByTestId("open-settings").click();
+	await peer.getByTestId("settings-nav-layout").click();
+	const peerCustom = peer.getByTestId("layout-preset").filter({ hasText: "My renamed workbench" });
+	await expect(peerCustom).toBeVisible();
+	await expect(peerCustom).not.toHaveAttribute("data-default", "true");
+	await expect(peer.getByRole("spinbutton", { name: "Maximum side groups" })).toHaveValue("6");
+
 	await custom.getByRole("button", { name: "Delete My renamed workbench" }).click();
 	await expect(custom).toHaveCount(0);
+	await expect(peerCustom).toHaveCount(0);
+	await peer.close();
 	await expect(page.getByTestId("layout-preset").filter({ hasText: "Balanced" })).toHaveAttribute(
 		"data-default",
 		"true",
@@ -808,10 +869,12 @@ test("an accepted side-group overage is grandfathered without allowing further g
 
 	await page.getByTestId("terminal-tab").click({ button: "right" });
 	await expect(
-		page.getByRole("menuitem", { name: "New right group at bottom — already at end" }),
+		page.getByRole("menuitem", { name: /New right group at bottom — limited to 2/ }),
 	).toBeDisabled();
-	await expect(page.getByRole("menuitem", { name: "New right group at top" })).toBeEnabled();
-	await page.getByRole("menuitem", { name: "New right group at top" }).click();
+	await expect(
+		page.getByRole("menuitem", { name: /New right group at top — limited to 2/ }),
+	).toBeDisabled();
+	await page.keyboard.press("Escape");
 	await expect(sideGroups(page, "right")).toHaveCount(3);
 });
 
@@ -819,6 +882,7 @@ test("a narrow viewport compresses locally without rewriting recursive topology"
 	page,
 }) => {
 	await openDefaultWorkbench(page);
+	await collapseToOneCenterGroup(page);
 	await openKeptFiles(page, ["README.md", "notes.txt"]);
 	await page.getByTestId("editor-tab").filter({ hasText: "notes.txt" }).click({ button: "right" });
 	await page.getByRole("menuitem", { name: "Split right" }).click();
@@ -840,12 +904,9 @@ test("a narrow viewport compresses locally without rewriting recursive topology"
 	await expect(page.getByTestId("center-group")).toHaveCount(2);
 });
 
-test("remote closures reconcile chat history and cached file reopening", async ({
-	page,
-	context,
-}) => {
+test("frontend windows keep chat and file placement independent", async ({ page, context }) => {
 	await openDefaultWorkbench(page);
-	await page.getByTestId("start-chat").click();
+	await page.getByTestId("start-chat").first().click();
 	const chat = page.locator('[data-testid="editor-tab"][data-kind="chat"]');
 	await expect(chat).toHaveCount(1);
 
@@ -855,37 +916,32 @@ test("remote closures reconcile chat history and cached file reopening", async (
 	await revealFirstProjectWorkspaces(peer);
 	await defaultWorkspaceRow(peer).click();
 	const peerChat = peer.locator('[data-testid="editor-tab"][data-kind="chat"]');
-	await expect(peerChat).toHaveCount(1);
-	await expect(peer.getByTestId("chat-input")).toBeVisible();
-	await peerChat.hover();
-	await peerChat.getByTestId("editor-tab-close").click();
+	await expect(peerChat).toHaveCount(0);
+	await expect(chat).toHaveCount(1);
 
-	await expect(chat).toHaveCount(0);
-	const history = page.getByTestId("chat-history");
-	await expect(history).toBeVisible();
-	await expect(history).toHaveCSS("width", "32px");
-	await waitForLayoutSettled(page);
-	await history.press("Enter");
-	await expect(page.getByTestId("closed-chat-row")).toHaveCount(1);
-	await page.keyboard.press("Escape");
-
-	await waitForLayoutSettled(peer);
-	const peerHistory = peer.getByTestId("chat-history");
+	const peerHistory = peer.getByTestId("chat-history").first();
 	await expect(peerHistory).toBeVisible();
 	await peerHistory.press("Enter");
 	await peer.getByTestId("closed-chat-item").click();
+	await expect(peerChat).toHaveCount(1);
 	await expect(chat).toHaveCount(1);
-	await expect(page.getByTestId("chat-history")).toHaveCount(0);
+	await peerChat.hover();
+	await peerChat.getByTestId("editor-tab-close").click();
+	await expect(peerChat).toHaveCount(0);
+	await expect(chat).toHaveCount(1);
 
 	await page.getByTestId("tab-files").click();
 	await page.getByTestId("file-node").filter({ hasText: "README.md" }).dblclick();
 	const localFile = page.getByTestId("editor-tab").filter({ hasText: "README.md" });
 	const peerFile = peer.getByTestId("editor-tab").filter({ hasText: "README.md" });
+	await expect(localFile).toHaveCount(1);
+	await expect(peerFile).toHaveCount(0);
+	await peer.getByTestId("tab-files").click();
+	await peer.getByTestId("file-node").filter({ hasText: "README.md" }).dblclick();
 	await expect(peerFile).toHaveCount(1);
 	await peerFile.hover();
 	await peerFile.getByTestId("editor-tab-close").click();
-	await expect(localFile).toHaveCount(0);
-	await page.getByTestId("file-node").filter({ hasText: "README.md" }).click();
+	await expect(peerFile).toHaveCount(0);
 	await expect(localFile).toHaveCount(1);
 	await peer.close();
 });
@@ -911,11 +967,9 @@ test("layout survives a transport reconnect and remains writable", async ({ page
 	await expect(page.getByTestId("left-nav")).toBeVisible();
 });
 
-test("a nonmatching remote revision cancels an active drag and both clients converge", async ({
-	page,
-	context,
-}) => {
+test("another window cannot cancel or rearrange an active tab drag", async ({ page, context }) => {
 	await openDefaultWorkbench(page);
+	await collapseToOneCenterGroup(page);
 	await openKeptFiles(page, ["README.md", "notes.txt"]);
 
 	const page2 = await context.newPage();
@@ -923,7 +977,6 @@ test("a nonmatching remote revision cancels an active drag and both clients conv
 	await expect(page2.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 	await revealFirstProjectWorkspaces(page2);
 	await defaultWorkspaceRow(page2).getByRole("button").first().click();
-	await expect(page2.getByTestId("center-group")).toHaveCount(1);
 
 	const dragged = page.getByTestId("editor-tab").filter({ hasText: "notes.txt" });
 	const box = await dragged.boundingBox();
@@ -931,34 +984,30 @@ test("a nonmatching remote revision cancels an active drag and both clients conv
 	await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
 	await page.mouse.down();
 	await page.mouse.move(box.x + box.width / 2 + 12, box.y + box.height / 2 + 8, { steps: 4 });
-	await expect(page.locator('[data-drop-label="Split right"]')).toBeVisible();
+	const splitTarget = page.locator('[data-drop-label="Split right"]');
+	await expect(splitTarget).toBeVisible();
 
 	await pressPlatformShortcut(page2, "b");
 	await expect(page2.getByTestId("left-layout-rail")).toBeVisible();
-	await expect(
-		page.getByTestId("toast").getByText("The shared layout changed. Your drag was canceled."),
-	).toBeVisible();
+	await expect(page.getByTestId("left-nav")).toBeVisible();
+	await expect(page.getByTestId("toast")).toHaveCount(0);
+	const target = await splitTarget.boundingBox();
+	if (!target) throw new Error("split target has no box");
+	await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2, { steps: 6 });
 	await page.mouse.up();
-
-	await expect(page.getByTestId("left-layout-rail")).toBeVisible();
-	await expect(page.getByTestId("center-group")).toHaveCount(1);
-	await expect(page2.getByTestId("center-group")).toHaveCount(1);
-	await expect(page.getByTestId("editor-tab")).toHaveCount(2);
+	await expect(page.getByTestId("center-group")).toHaveCount(2);
 	await page2.close();
 });
 
-test("a nonmatching remote revision cancels an active resize without publishing its release", async ({
-	page,
-	context,
-}) => {
+test("another window cannot cancel or adopt an active side resize", async ({ page, context }) => {
 	await openDefaultWorkbench(page);
 	const page2 = await context.newPage();
 	await page2.goto("/");
 	await expect(page2.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 	await revealFirstProjectWorkspaces(page2);
 	await defaultWorkspaceRow(page2).getByRole("button").first().click();
-	await expect(page2.getByTestId("right-panel")).toBeVisible();
 
+	const before = await width(page.getByTestId("right-stack"));
 	const handle = page.getByTestId("resize-right");
 	const handleBox = await handle.boundingBox();
 	if (!handleBox) throw new Error("right resize handle has no box");
@@ -968,21 +1017,10 @@ test("a nonmatching remote revision cancels an active resize without publishing 
 
 	await pressPlatformShortcut(page2, "j");
 	await expect(page2.getByTestId("right-layout-rail")).toBeVisible();
-	await expect(
-		page.getByTestId("toast").getByText("The shared layout changed. Your drag was canceled."),
-	).toBeVisible();
-	await page.mouse.up();
-	await expect(page.getByTestId("right-layout-rail")).toBeVisible();
-
-	await pressPlatformShortcut(page2, "j");
-	await expect(page2.getByTestId("right-panel")).toBeVisible();
 	await expect(page.getByTestId("right-panel")).toBeVisible();
-	await expect
-		.poll(async () => {
-			const first = await page.getByTestId("right-panel").boundingBox();
-			const second = await page2.getByTestId("right-panel").boundingBox();
-			return first && second ? Math.abs(first.width - second.width) : Number.POSITIVE_INFINITY;
-		})
-		.toBeLessThan(3);
+	await expect(page.getByTestId("toast")).toHaveCount(0);
+	await page.mouse.up();
+	await expect.poll(() => width(page.getByTestId("right-stack"))).not.toBeCloseTo(before, 0);
+	await expect(page2.getByTestId("right-layout-rail")).toBeVisible();
 	await page2.close();
 });

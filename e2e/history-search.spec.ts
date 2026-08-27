@@ -18,7 +18,7 @@ type SeededMessages = Parameters<typeof seedWorkspaceSession>[1]["messages"];
 async function openSeededClosedChat(page: Page, messages: SeededMessages) {
 	await openFixtureProject(page);
 	await enterDefaultWorkspace(page);
-	await page.getByTestId("start-chat").click();
+	await page.getByTestId("start-chat").first().click();
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 
 	await page.reload();
@@ -29,7 +29,7 @@ async function openSeededClosedChat(page: Page, messages: SeededMessages) {
 	await defaultWorkspaceRow(page).click();
 	await expect(defaultWorkspaceRow(page)).toHaveAttribute("data-active", "true");
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
-	const history = page.getByTestId("chat-history");
+	const history = page.getByTestId("chat-history").first();
 	await expect(history).toBeVisible();
 	await history.click();
 	const closedChat = page.getByTestId("closed-chat-item").first();

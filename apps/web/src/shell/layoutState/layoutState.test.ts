@@ -1,7 +1,13 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import type { WorkspaceLayoutDocument, WorkspaceLayoutSnapshot } from "@thinkrail/contracts";
 import { useAppStore } from "../../store";
-import { BUILTIN_LAYOUT_PRESETS, collectAllGroups, resizeSideRegion, toolTab } from "../layout";
+import {
+	BUILTIN_LAYOUT_PRESETS,
+	collectAllGroups,
+	resizeBottomRegion,
+	resizeSideRegion,
+	toolTab,
+} from "../layout";
 import {
 	applyLayoutPresetLocally,
 	commitWorkspaceLayout,
@@ -122,6 +128,44 @@ describe("frontend-local layout state", () => {
 		expect(local.getItem(localLayoutStorageKey(endpoint, "surface-a"))).not.toBeNull();
 	});
 
+	test("rejects a local frame that smuggles resource state and falls back to legacy import", async () => {
+		const local = new MemoryStorage();
+		const session = new MemoryStorage();
+		session.setItem("thinkrail:layout-surface-id", "surface-a");
+		local.setItem(
+			localLayoutStorageKey(endpoint, "surface-a"),
+			JSON.stringify({
+				version: 1,
+				frame: {
+					version: 1,
+					center: { kind: "group", id: "center", tabs: ["not-frame-state"] },
+					left: { visible: false, width: 0.2, groups: [] },
+					right: { visible: false, width: 0.2, groups: [] },
+					bottom: { visible: false, height: 0.3, alignment: "center", groups: [] },
+					toolRestoreTargets: {},
+				},
+				viewsByWorkspace: {},
+				attentionByWorkspace: {},
+				preferences: {
+					defaultPresetId: "balanced",
+					maxSideGroups: 6,
+					maxBottomGroups: 3,
+				},
+				legacyImportAttempted: {},
+			}),
+		);
+		setLayoutStateStorageForTests({ local, session }, endpoint);
+		let requests = 0;
+		setLegacyLayoutRequesterForTests(async () => {
+			requests += 1;
+			return snapshot();
+		});
+
+		const restored = await ensureWorkspaceLayoutState("workspace");
+		expect(restored).toEqual(legacyDocument());
+		expect(requests).toBe(1);
+	});
+
 	test("reload restores the same surface without another host read", async () => {
 		const local = new MemoryStorage();
 		const session = new MemoryStorage();
@@ -140,6 +184,22 @@ describe("frontend-local layout state", () => {
 
 		const restored = await ensureWorkspaceLayoutState("workspace");
 		expect(restored.left.width).toBe(0.31);
+	});
+
+	test("a stale region callback rebases its change without reverting a newer frame region", async () => {
+		const local = new MemoryStorage();
+		const session = new MemoryStorage();
+		session.setItem("thinkrail:layout-surface-id", "surface-a");
+		setLayoutStateStorageForTests({ local, session }, endpoint);
+		setLegacyLayoutRequesterForTests(async () => snapshot());
+		const base = await ensureWorkspaceLayoutState("workspace");
+
+		await commitWorkspaceLayout("workspace", resizeBottomRegion(base, 0.45), base);
+		await commitWorkspaceLayout("workspace", resizeSideRegion(base, "left", 0.31), base);
+
+		const current = useAppStore.getState().layoutDocumentsByWorkspace.workspace;
+		expect(current?.bottom.height).toBe(0.45);
+		expect(current?.left.width).toBe(0.31);
 	});
 
 	test("applying a preset changes one frame and reflows every local workspace view", async () => {

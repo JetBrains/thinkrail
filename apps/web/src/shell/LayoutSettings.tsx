@@ -59,12 +59,8 @@ export function LayoutSettings() {
 		[customLayoutPresets],
 	);
 	const selected = resolveLayoutPreset(preferences.defaultPresetId, customLayoutPresets);
-	const minimumSideLimit = Math.max(
-		1,
-		frame?.left.groups.length ?? 0,
-		frame?.right.groups.length ?? 0,
-	);
-	const minimumBottomLimit = Math.max(1, frame?.bottom.groups.length ?? 0);
+	const minimumSideLimit = 1;
+	const minimumBottomLimit = 1;
 
 	const saveCustomPresets = async (customPresets: LayoutPreset[]): Promise<boolean> => {
 		setSaving(true);

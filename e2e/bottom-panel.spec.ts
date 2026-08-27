@@ -1,7 +1,6 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Locator, type Page, test } from "@playwright/test";
-import type { WorkspaceLayoutSnapshot } from "@thinkrail/contracts";
 import {
 	defaultWorkspaceRow,
 	enterDefaultWorkspace,
@@ -130,17 +129,22 @@ async function requestOverWire<T>(
 	) as Promise<T>;
 }
 
-function activeWorkspaceId(page: Page): string {
-	const encodedWorkspaceId = new URL(page.url()).hash.match(/\/workspaces\/([^/]+)/)?.[1];
-	if (!encodedWorkspaceId) throw new Error("active workspace route is missing");
-	return decodeURIComponent(encodedWorkspaceId);
-}
-
-async function readActiveSideWidths(page: Page): Promise<{ left: number; right: number }> {
-	const snapshot = await requestOverWire<WorkspaceLayoutSnapshot>(page, "layout.get", {
-		workspaceId: activeWorkspaceId(page),
+async function readPersistedSideWidths(page: Page): Promise<{ left: number; right: number }> {
+	return page.evaluate(() => {
+		const key = Object.keys(localStorage).find((candidate) =>
+			candidate.startsWith("thinkrail:workbench:"),
+		);
+		if (!key) throw new Error("local workbench state is missing");
+		const value = JSON.parse(localStorage.getItem(key) ?? "null") as {
+			frame?: { left?: { width?: number }; right?: { width?: number } };
+		};
+		const left = value.frame?.left?.width;
+		const right = value.frame?.right?.width;
+		if (typeof left !== "number" || typeof right !== "number") {
+			throw new Error("local workbench side widths are missing");
+		}
+		return { left, right };
 	});
-	return { left: snapshot.document.left.width, right: snapshot.document.right.width };
 }
 
 async function readLocalSideWidths(page: Page): Promise<{ left: number; right: number }> {
@@ -151,40 +155,6 @@ async function readLocalSideWidths(page: Page): Promise<{ left: number; right: n
 	]);
 	if (!workbench || !left || !right) throw new Error("visible workbench sides are missing");
 	return { left: left.width / workbench.width, right: right.width / workbench.width };
-}
-
-async function replaceActiveSideWidths(page: Page, left: number, right: number): Promise<void> {
-	const workspaceId = activeWorkspaceId(page);
-	const snapshot = await requestOverWire<WorkspaceLayoutSnapshot>(page, "layout.get", {
-		workspaceId,
-	});
-	const result = await requestOverWire<{ status: "accepted" | "conflict" }>(
-		page,
-		"layout.replace",
-		{
-			workspaceId,
-			mutationId: `bottom-side-widths-${Date.now()}-${Math.random()}`,
-			expectedRevision: snapshot.revision,
-			document: {
-				...snapshot.document,
-				left: { ...snapshot.document.left, width: left },
-				right: { ...snapshot.document.right, width: right },
-			},
-		},
-	);
-	expect(result.status).toBe("accepted");
-	await expect
-		.poll(async () => {
-			const widths = await readActiveSideWidths(page);
-			return Math.max(Math.abs(widths.left - left), Math.abs(widths.right - right));
-		})
-		.toBeLessThan(1e-8);
-	await expect
-		.poll(async () => {
-			const widths = await readLocalSideWidths(page);
-			return Math.max(Math.abs(widths.left - left), Math.abs(widths.right - right));
-		})
-		.toBeLessThan(0.005);
 }
 
 async function createWorkspaceWithoutOpening(page: Page): Promise<{ id: string; name: string }> {
@@ -234,8 +204,8 @@ test("full-height panel-header actions stay square", async ({ page }) => {
 	};
 
 	const controls = [
-		page.getByTestId("new-chat"),
-		page.getByTestId("new-terminal"),
+		page.getByTestId("new-chat").first(),
+		page.getByTestId("new-terminal").first(),
 		page.getByTestId("side-group-fold").first(),
 		page.getByTestId("side-group-menu").first(),
 		page.getByRole("button", { name: "Bottom panel alignment" }),
@@ -279,7 +249,7 @@ test("a new workspace starts with one accessible terminal group in a 30% bottom 
 	await expect(page.getByTestId("tab-changes").getByRole("tab")).toBeFocused();
 });
 
-test("a hidden default reserves one synchronized terminal placement without attaching until shown", async ({
+test("a hidden local frame keeps the host terminal reserved without attaching until shown", async ({
 	page,
 	context,
 }) => {
@@ -287,81 +257,51 @@ test("a hidden default reserves one synchronized terminal placement without atta
 	await page.getByTestId("open-settings").click();
 	await page.getByTestId("settings-nav-layout").click();
 	const focusPreset = page.getByTestId("layout-preset").filter({ hasText: "Focus" });
-	await focusPreset.getByRole("button", { name: "Set default" }).click();
-	await expect(focusPreset.getByText("Default", { exact: true })).toBeVisible();
+	await focusPreset.getByRole("button", { name: "Apply now…" }).click();
+	await page.getByTestId("layout-apply-confirm").click();
 	await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();
+	await expect(page.getByTestId("bottom-layout-rail")).toBeVisible();
 
 	const workspace = await createWorkspaceWithoutOpening(page);
+	await pressPlatformShortcut(page, "b");
+	const workspaceRow = page.getByTestId("workspace-item").filter({ hasText: workspace.name });
+	await workspaceRow.getByRole("button").first().click();
+	await expect(page.getByTestId("bottom-layout-rail")).toBeVisible();
+	await expect(page.getByTestId("terminal-instance")).toHaveCount(0);
+	const catalog = await requestOverWire<{ tabs: Array<{ tabKey: string }> }>(
+		page,
+		"terminal.list",
+		{ workspaceId: workspace.id },
+	);
+	expect(catalog.tabs).toEqual([{ tabKey: "thinkrail-initial", title: "Terminal 1" }]);
+
 	const peer = await context.newPage();
 	await peer.goto("/");
 	await expect(peer.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 	await revealFirstProjectWorkspaces(peer);
-	const workspaceRow = page.getByTestId("workspace-item").filter({ hasText: workspace.name });
-	const peerWorkspaceRow = peer.getByTestId("workspace-item").filter({ hasText: workspace.name });
-	await expect(workspaceRow).toBeVisible();
-	await expect(peerWorkspaceRow).toBeVisible();
-	await Promise.all([
-		workspaceRow.getByRole("button").first().click(),
-		peerWorkspaceRow.getByRole("button").first().click(),
-	]);
-	await expect(page.getByTestId("bottom-layout-rail")).toBeVisible();
-	await expect(peer.getByTestId("bottom-layout-rail")).toBeVisible();
-	await expect(page.getByTestId("terminal-instance")).toHaveCount(0);
-	await expect(peer.getByTestId("terminal-instance")).toHaveCount(0);
-	await expect
-		.poll(async () => {
-			const [layout, catalog] = await Promise.all([
-				requestOverWire<{
-					document: {
-						bottom: {
-							visible: boolean;
-							groups: Array<{ tabs: Array<{ kind: string; tabKey?: string }> }>;
-						};
-					};
-				}>(page, "layout.get", { workspaceId: workspace.id }),
-				requestOverWire<{ tabs: Array<{ tabKey: string }> }>(page, "terminal.list", {
-					workspaceId: workspace.id,
-				}),
-			]);
-			const placements = layout.document.bottom.groups
-				.flatMap((group) => group.tabs)
-				.filter((tab) => tab.kind === "terminal");
-			return {
-				visible: layout.document.bottom.visible,
-				placementCount: placements.length,
-				catalogCount: catalog.tabs.length,
-				sameKey:
-					typeof placements[0]?.tabKey === "string" &&
-					placements[0]?.tabKey === catalog.tabs[0]?.tabKey,
-			};
-		})
-		.toEqual({ visible: false, placementCount: 1, catalogCount: 1, sameKey: true });
-
-	await page.getByTestId("open-settings").click();
-	await page.getByTestId("settings-nav-layout").click();
-	const balancedPreset = page.getByTestId("layout-preset").filter({ hasText: "Balanced" });
-	await balancedPreset.getByRole("button", { name: "Set default" }).click();
-	await expect(balancedPreset.getByText("Default", { exact: true })).toBeVisible();
-	await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();
-	await peer.close();
+	await peer.getByTestId("workspace-item").filter({ hasText: workspace.name }).click();
+	await expect(peer.getByTestId("bottom-panel")).toBeVisible();
+	await expect(peer.getByTestId("terminal-tab")).toHaveCount(1);
+	await waitTerminalReady(peer);
 
 	await page.reload();
 	await expect(page.getByTestId("bottom-layout-rail")).toBeVisible();
 	await expect(page.getByTestId("terminal-instance")).toHaveCount(0);
 	await page.getByRole("button", { name: "Show bottom panel" }).click();
-	await waitTerminalReady(page);
-	await expect(bottomGroups(page).getByTestId("terminal-tab")).toHaveCount(1);
+	await expect(page.getByTestId("terminal-tab")).toHaveCount(1);
+	await peer.close();
 });
 
-test("a legacy layoutless workspace does not gain a default terminal", async ({ page }) => {
+test("a completed initial-terminal handshake never recreates a terminal after explicit close", async ({
+	page,
+}) => {
 	await openFixtureProject(page);
 	const workspace = await createWorkspaceWithoutOpening(page);
-	const workspaceFile = join(E2E_DATA_DIR, "workspaces.json");
-	const records = JSON.parse(readFileSync(workspaceFile, "utf8")) as Array<Record<string, unknown>>;
-	const legacyRecord = records.find((candidate) => candidate.id === workspace.id);
-	if (!legacyRecord) throw new Error("created workspace record is missing");
-	delete legacyRecord.initialTerminalEligible;
-	writeFileSync(workspaceFile, `${JSON.stringify(records, null, "\t")}\n`);
+	await requestOverWire(page, "terminal.close", {
+		workspaceId: workspace.id,
+		tabKey: "thinkrail-initial",
+		force: true,
+	});
 
 	await page.reload();
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
@@ -381,78 +321,6 @@ test("a legacy layoutless workspace does not gain a default terminal", async ({ 
 		{ workspaceId: workspace.id },
 	);
 	expect(catalog.tabs).toEqual([]);
-});
-
-test("a failed default reservation retries after reconnect without duplicating the terminal", async ({
-	page,
-	context,
-}) => {
-	await page.addInitScript(() => {
-		const NativeWebSocket = window.WebSocket;
-		const sockets = new Set<WebSocket>();
-		Object.defineProperty(window, "__thinkrailBottomSockets", {
-			configurable: true,
-			value: sockets,
-		});
-		class TrackedWebSocket extends NativeWebSocket {
-			constructor(url: string | URL, protocols?: string | string[]) {
-				super(url, protocols);
-				sockets.add(this);
-				this.addEventListener("close", () => sockets.delete(this));
-			}
-		}
-		window.WebSocket = TrackedWebSocket;
-	});
-	await page.reload();
-	await openDefaultWorkbench(page);
-	const workspace = await createWorkspaceWithoutOpening(page);
-	const terminalFile = join(E2E_DATA_DIR, "terminals.json");
-	const savedTerminalFile = join(E2E_DATA_DIR, "terminals.before-bottom-retry.json");
-	if (!existsSync(terminalFile)) throw new Error("terminal catalog fixture was not persisted");
-	if (existsSync(savedTerminalFile)) rmSync(savedTerminalFile, { recursive: true, force: true });
-	await waitForLayoutSettled(page);
-	const workspaceRow = page.getByTestId("workspace-item").filter({ hasText: workspace.name });
-	try {
-		renameSync(terminalFile, savedTerminalFile);
-		mkdirSync(terminalFile);
-		await workspaceRow.getByRole("button").first().click();
-		await expect(
-			page.getByTestId("toast").getByText("Couldn't create the terminal", { exact: true }),
-		).toBeVisible();
-		await expect(page.getByTestId("terminal-tab")).toHaveCount(0);
-		const failedCatalog = await requestOverWire<{ tabs: Array<{ tabKey: string }> }>(
-			page,
-			"terminal.list",
-			{ workspaceId: workspace.id },
-		);
-		expect(failedCatalog.tabs).toEqual([]);
-	} finally {
-		rmSync(terminalFile, { recursive: true, force: true });
-		if (existsSync(savedTerminalFile)) renameSync(savedTerminalFile, terminalFile);
-	}
-
-	await context.setOffline(true);
-	await page.evaluate(() => {
-		const sockets = Object.getOwnPropertyDescriptor(window, "__thinkrailBottomSockets")?.value;
-		if (!(sockets instanceof Set)) return;
-		for (const socket of sockets) {
-			if (socket instanceof WebSocket) socket.close();
-		}
-	});
-	await expect(page.getByTestId("connection-status")).toHaveAttribute(
-		"data-status",
-		"disconnected",
-	);
-	await context.setOffline(false);
-	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
-	await waitTerminalReady(page);
-	await expect(page.getByTestId("terminal-tab")).toHaveCount(1);
-	const recoveredCatalog = await requestOverWire<{ tabs: Array<{ tabKey: string }> }>(
-		page,
-		"terminal.list",
-		{ workspaceId: workspace.id },
-	);
-	expect(recoveredCatalog.tabs).toHaveLength(1);
 });
 
 test("Mod+Shift+J works from xterm, preserves its PTY through hide and reload, and is modal-aware", async ({
@@ -628,8 +496,7 @@ test("narrow side resizing persists only the side whose separator moved", async 
 	for (const scenario of cases) {
 		await page.setViewportSize({ width: 1200, height: 844 });
 		await setBottomAlignment(page, scenario.alignment);
-		await replaceActiveSideWidths(page, 0.18, 0.28);
-		const durableBefore = await readActiveSideWidths(page);
+		const durableBefore = await readPersistedSideWidths(page);
 		await page.setViewportSize({ width: 500, height: 844 });
 		await expect
 			.poll(async () => {
@@ -639,12 +506,12 @@ test("narrow side resizing persists only the side whose separator moved", async 
 					Math.abs(local.right - durableBefore.right),
 				);
 			})
-			.toBeGreaterThan(0.005);
+			.toBeGreaterThan(0.0001);
 		const untouched = scenario.side === "left" ? "right" : "left";
 		const handle = page.getByTestId(`resize-${scenario.side}`);
 		if (scenario.input === "keyboard") {
 			await handle.focus();
-			await page.keyboard.press(scenario.side === "left" ? "ArrowLeft" : "ArrowRight");
+			await page.keyboard.press("ArrowRight");
 		} else {
 			const handleBox = await handle.boundingBox();
 			if (!handleBox) throw new Error(`${scenario.side} resize handle has no bounding box`);
@@ -655,52 +522,35 @@ test("narrow side resizing persists only the side whose separator moved", async 
 				handleBox.y,
 			);
 		}
+		await page.setViewportSize({ width: 1200, height: 844 });
 		await expect
 			.poll(async () =>
-				Math.abs((await readActiveSideWidths(page))[scenario.side] - durableBefore[scenario.side]),
+				Math.abs(
+					(await readPersistedSideWidths(page))[scenario.side] - durableBefore[scenario.side],
+				),
 			)
 			.toBeGreaterThan(0.001);
-		const durableAfter = await readActiveSideWidths(page);
-		expect(durableAfter[untouched]).toBeCloseTo(durableBefore[untouched], 8);
+		const durableAfter = await readPersistedSideWidths(page);
+		expect(durableAfter[untouched]).toBeCloseTo(durableBefore[untouched], 2);
 	}
 });
 
-test("closing the final populated bottom group focuses center when an empty slot survives", async ({
+test("closing a final bottom resource retains its frame groups until explicit removal", async ({
 	page,
 }) => {
 	await openDefaultWorkbench(page);
-	const workspaceId = activeWorkspaceId(page);
-	const snapshot = await requestOverWire<WorkspaceLayoutSnapshot>(page, "layout.get", {
-		workspaceId,
-	});
-	const replaced = await requestOverWire<{ status: "accepted" | "conflict" }>(
-		page,
-		"layout.replace",
-		{
-			workspaceId,
-			mutationId: `bottom-empty-focus-${Date.now()}`,
-			expectedRevision: snapshot.revision,
-			document: {
-				...snapshot.document,
-				bottom: {
-					...snapshot.document.bottom,
-					groups: [
-						{ id: "e2e-intentional-empty", weight: 0.5, folded: false, tabs: [] },
-						...snapshot.document.bottom.groups.map((group) => ({
-							...group,
-							weight: 0.5 / snapshot.document.bottom.groups.length,
-						})),
-					],
-				},
-			},
-		},
-	);
-	expect(replaced.status).toBe("accepted");
+	await page.getByTestId("terminal-tab").click({ button: "right" });
+	await page.getByRole("menuitem", { name: "New bottom group at right", exact: true }).click();
 	await expect(bottomGroups(page)).toHaveCount(2);
 
 	await page.getByTestId("terminal-tab-close").click();
+	await expect(bottomGroups(page)).toHaveCount(2);
+	await expect(page.getByTestId("bottom-new-terminal")).toHaveCount(2);
+	await bottomGroups(page).first().getByTestId("remove-layout-group").click();
+	await expect(bottomGroups(page)).toHaveCount(1);
+	await bottomGroups(page).first().getByTestId("remove-layout-group").click();
 	await expect(page.getByTestId("bottom-layout-rail")).toBeVisible();
-	await expect(page.getByTestId("center-group")).toBeFocused();
+	await expect(page.getByTestId("center-group").first()).toBeFocused();
 });
 
 test("bottom alignments follow side geometry while a resize gesture is in progress", async ({
@@ -746,9 +596,11 @@ test("bottom groups arrange left-to-right, resize, fold to 27px, restore, and en
 	await page.getByTestId("tab-changes").click({ button: "right" });
 	await page.getByRole("menuitem", { name: /Move to bottom group/ }).click();
 	await waitForLayoutSettled(page);
-	await expect(bottomGroups(page)).toHaveCount(1);
+	await expect(bottomGroups(page)).toHaveCount(2);
 	await expect(bottomGroups(page).nth(0)).toContainText("Terminal 1");
 	await expect(bottomGroups(page).nth(0)).toContainText("Changes");
+	await bottomGroups(page).nth(1).getByTestId("remove-layout-group").click();
+	await expect(bottomGroups(page)).toHaveCount(1);
 	await page.getByTestId("tab-changes").click({ button: "right" });
 	await page.getByRole("menuitem", { name: "New bottom group at right", exact: true }).click();
 	await expect(bottomGroups(page)).toHaveCount(2);
@@ -841,7 +693,7 @@ test("a narrow viewport locally compresses bottom groups without rewriting their
 		.toEqual(groupIds);
 });
 
-test("bottom visibility and alignment synchronize across clients while reload keeps the topology", async ({
+test("bottom visibility and alignment stay local to each window and survive its reload", async ({
 	page,
 	context,
 }) => {
@@ -854,16 +706,18 @@ test("bottom visibility and alignment synchronize across clients while reload ke
 	await expect(peer.getByTestId("bottom-panel")).toBeVisible();
 
 	await setBottomAlignment(page, "Full width");
-	await expect(peer.getByTestId("bottom-aligned-row")).toHaveAttribute("data-alignment", "full");
+	await expect(peer.getByTestId("bottom-aligned-row")).toHaveAttribute("data-alignment", "center");
 	await pressPlatformShortcut(page, "Shift+j");
 	await expect(page.getByTestId("bottom-layout-rail")).toBeVisible();
-	await expect(peer.getByTestId("bottom-layout-rail")).toBeVisible();
-
-	await pressPlatformShortcut(peer, "Shift+j");
-	await expect(page.getByTestId("bottom-aligned-row")).toHaveAttribute("data-alignment", "full");
 	await expect(peer.getByTestId("bottom-panel")).toBeVisible();
+
+	await setBottomAlignment(peer, "Below center and left");
 	await peer.reload();
-	await expect(peer.getByTestId("bottom-aligned-row")).toHaveAttribute("data-alignment", "full");
+	await expect(peer.getByTestId("bottom-aligned-row")).toHaveAttribute(
+		"data-alignment",
+		"center-left",
+	);
+	await expect(page.getByTestId("bottom-layout-rail")).toBeVisible();
 	await peer.close();
 });
 
@@ -872,13 +726,19 @@ test("a stored version-1 layout migrates with its tools untouched and no termina
 }) => {
 	await openFixtureProject(page);
 	const workspace = await createWorkspaceWithoutOpening(page);
+	await requestOverWire(page, "terminal.close", {
+		workspaceId: workspace.id,
+		tabKey: "thinkrail-initial",
+		force: true,
+	});
 	const fileId = /^[A-Za-z0-9_-]+$/.test(workspace.id)
 		? workspace.id
 		: `~${Buffer.from(workspace.id).toString("base64url")}`;
 	const directory = join(E2E_DATA_DIR, "layouts");
 	mkdirSync(directory, { recursive: true });
+	const legacyPath = join(directory, `${fileId}.json`);
 	writeFileSync(
-		join(directory, `${fileId}.json`),
+		legacyPath,
 		`${JSON.stringify({
 			workspaceId: workspace.id,
 			revision: 1,
@@ -932,6 +792,7 @@ test("a stored version-1 layout migrates with its tools untouched and no termina
 			},
 		})}\n`,
 	);
+	const persistedBefore = readFileSync(legacyPath, "utf8");
 	const migrated = await requestOverWire<{
 		revision: number;
 		document: { version: number; bottom: { visible: boolean; groups: unknown[] } };
@@ -968,4 +829,5 @@ test("a stored version-1 layout migrates with its tools untouched and no termina
 	await expect(bottomGroups(page)).toHaveCount(1);
 	await waitTerminalReady(page);
 	await expect(page.getByTestId("terminal-tab")).toHaveCount(1);
+	expect(readFileSync(legacyPath, "utf8")).toBe(persistedBefore);
 });

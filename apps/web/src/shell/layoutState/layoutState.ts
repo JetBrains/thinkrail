@@ -462,22 +462,47 @@ export function applyLayoutPresetLocally(preset: LayoutPreset): void {
 	);
 }
 
+function rebaseProjectedDocument(
+	base: WorkspaceLayoutDocument,
+	next: WorkspaceLayoutDocument,
+	current: WorkspaceLayoutDocument,
+): WorkspaceLayoutDocument {
+	if (current === base) return next;
+	return {
+		version: 2,
+		center: next.center === base.center ? current.center : next.center,
+		left: next.left === base.left ? current.left : next.left,
+		right: next.right === base.right ? current.right : next.right,
+		bottom: next.bottom === base.bottom ? current.bottom : next.bottom,
+		toolRestoreTargets:
+			next.toolRestoreTargets === base.toolRestoreTargets
+				? current.toolRestoreTargets
+				: next.toolRestoreTargets,
+	};
+}
+
 export async function commitWorkspaceLayout(
 	workspaceId: string,
 	document: WorkspaceLayoutDocument,
+	baseDocument?: WorkspaceLayoutDocument,
 ): Promise<WorkspaceLayoutDocument> {
 	const state = useAppStore.getState();
 	if (state.removedWorkspaceIds[workspaceId]) throw new Error("Workspace has been removed");
 	if (!state.workbenchFrame) throw new Error("The local workbench frame is not ready");
+	const currentDocument = state.layoutDocumentsByWorkspace[workspaceId];
+	const effectiveDocument =
+		baseDocument && currentDocument
+			? rebaseProjectedDocument(baseDocument, document, currentDocument)
+			: document;
 	const next = applyProjectedLayoutDocument(
 		{ frame: state.workbenchFrame, viewsByWorkspace: state.workspaceViewsByWorkspace },
 		workspaceId,
-		document,
+		effectiveDocument,
 	);
 	const frameChanged = next.frame !== state.workbenchFrame;
 	const documentsByWorkspace = frameChanged
 		? documentsForViews(next.frame, next.viewsByWorkspace)
-		: { ...state.layoutDocumentsByWorkspace, [workspaceId]: document };
+		: { ...state.layoutDocumentsByWorkspace, [workspaceId]: effectiveDocument };
 	const changedWorkspaceIds = frameChanged ? Object.keys(documentsByWorkspace) : [workspaceId];
 	const attentionByWorkspace = { ...state.layoutAttentionByWorkspace };
 	for (const id of changedWorkspaceIds) {

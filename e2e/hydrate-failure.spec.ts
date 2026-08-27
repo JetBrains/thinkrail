@@ -77,7 +77,7 @@ test("a transcript that fails to load says so and stays in history", async ({ pa
 			.filter({ hasText: "transcript read failed" }),
 	).toBeVisible();
 
-	await page.getByTestId("chat-history").click();
+	await page.getByTestId("chat-history").first().click();
 	await expect(
 		page.getByTestId("closed-chat-item").filter({ hasText: "the unreadable chat" }),
 	).toHaveCount(1);
@@ -104,8 +104,8 @@ test("a failed never-empty fallback keeps its chat reachable too", async ({ page
 			.filter({ hasText: "transcript read failed" }),
 	).toBeVisible();
 
-	await page.getByTestId("start-chat").click();
-	await page.getByTestId("chat-history").click();
+	await page.getByTestId("start-chat").first().click();
+	await page.getByTestId("chat-history").first().click();
 	await expect(
 		page.getByTestId("closed-chat-item").filter({ hasText: "the only chat" }),
 	).toHaveCount(1);
