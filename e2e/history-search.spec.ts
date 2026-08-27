@@ -15,6 +15,27 @@ import { seedExternalCwdSessions, seedWorkspaceSession } from "./fixtures/sessio
 
 type SeededMessages = Parameters<typeof seedWorkspaceSession>[1]["messages"];
 
+function captureSentFrames(page: Page): string[] {
+	const sentFrames: string[] = [];
+	page.on("websocket", (socket) => {
+		socket.on("framesent", ({ payload }) => {
+			sentFrames.push(typeof payload === "string" ? payload : payload.toString());
+		});
+	});
+	return sentFrames;
+}
+
+function promptFrame(sentFrames: string[], text: string): string | undefined {
+	return sentFrames.find((frame) => {
+		try {
+			const request = JSON.parse(frame) as { method?: unknown; params?: { text?: unknown } };
+			return request.method === "session.prompt" && request.params?.text === text;
+		} catch {
+			return false;
+		}
+	});
+}
+
 async function openSeededClosedChat(page: Page, messages: SeededMessages) {
 	await openFixtureProject(page);
 	await enterDefaultWorkspace(page);
@@ -75,6 +96,7 @@ async function revealUserTurn(page: Page, text: string) {
 test("Ctrl+R opens history recall, cycles scope to all, zooms to messages, inserts a prompt, and Esc preserves the draft", async ({
 	page,
 }) => {
+	const sentFrames = captureSentFrames(page);
 	await openWorkspaceChat(page);
 	seedExternalCwdSessions();
 
@@ -135,6 +157,11 @@ test("Ctrl+R opens history recall, cycles scope to all, zooms to messages, inser
 	await query.press("ControlOrMeta+Enter");
 	await expect(overlay).toBeHidden();
 	await expect(input).toHaveValue("");
+	await expect(() =>
+		expect(promptFrame(sentFrames, "fix the flaky watcher test")).toBeDefined(),
+	).toPass({
+		timeout: 5000,
+	});
 	await settleSubmittedTurn(page);
 	await revealUserTurn(page, "fix the flaky watcher test");
 });
@@ -142,12 +169,7 @@ test("Ctrl+R opens history recall, cycles scope to all, zooms to messages, inser
 test("Cmd/Ctrl+Enter from the overlay sends pending image attachments with the recalled prompt and clears them", async ({
 	page,
 }) => {
-	const sentFrames: string[] = [];
-	page.on("websocket", (ws) => {
-		ws.on("framesent", (frame) => {
-			sentFrames.push(typeof frame.payload === "string" ? frame.payload : frame.payload.toString());
-		});
-	});
+	const sentFrames = captureSentFrames(page);
 
 	await openWorkspaceChat(page);
 	seedExternalCwdSessions();
@@ -185,9 +207,7 @@ test("Cmd/Ctrl+Enter from the overlay sends pending image attachments with the r
 	await expect(thumbnails).toBeHidden();
 
 	await expect(() => {
-		const prompt = sentFrames.find(
-			(f) => f.includes('"session.prompt"') && f.includes("fix the flaky watcher test"),
-		);
+		const prompt = promptFrame(sentFrames, "fix the flaky watcher test");
 		expect(prompt).toBeDefined();
 		expect(prompt).toContain('"images"');
 		expect(prompt).toContain('"image/png"');
