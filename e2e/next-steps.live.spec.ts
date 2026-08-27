@@ -1,36 +1,44 @@
 import { expect, type Page, test } from "@playwright/test";
 import { openWorkspaceChat, waitForDone } from "./fixtures/app";
 
-const REQUEST = [
-	"In one short sentence, say what a mutex is.",
-	"Then call the offer_next_steps tool exactly once, offering two ways I could continue.",
-	"Give each item a label of at most four words and a prompt that is a full sentence,",
-	"clearly longer than its own label. Use no other tools.",
-].join(" ");
+const REQUEST =
+	"Explain what a mutex is in one sentence, then suggest two useful ways I could explore the topic further.";
 
-const sentPrompts = new WeakMap<Page, string[]>();
+interface ObservedFrames {
+	prompts: string[];
+	settlements: number;
+}
 
-function promptText(payload: string | Buffer): string | null {
+const observedFrames = new WeakMap<Page, ObservedFrames>();
+
+function parsedFrame(payload: string | Buffer): {
+	method?: unknown;
+	params?: { text?: unknown };
+	channel?: unknown;
+	data?: { event?: { type?: unknown } };
+} | null {
 	try {
-		const frame = JSON.parse(typeof payload === "string" ? payload : payload.toString()) as {
-			method?: unknown;
-			params?: { text?: unknown };
-		};
-		return frame.method === "session.prompt" && typeof frame.params?.text === "string"
-			? frame.params.text
-			: null;
+		return JSON.parse(typeof payload === "string" ? payload : payload.toString());
 	} catch {
 		return null;
 	}
 }
 
 test.beforeEach(({ page }) => {
-	const prompts: string[] = [];
-	sentPrompts.set(page, prompts);
+	const observed: ObservedFrames = { prompts: [], settlements: 0 };
+	observedFrames.set(page, observed);
 	page.on("websocket", (socket) => {
 		socket.on("framesent", ({ payload }) => {
-			const text = promptText(payload);
-			if (text !== null) prompts.push(text);
+			const frame = parsedFrame(payload);
+			if (frame?.method === "session.prompt" && typeof frame.params?.text === "string") {
+				observed.prompts.push(frame.params.text);
+			}
+		});
+		socket.on("framereceived", ({ payload }) => {
+			const frame = parsedFrame(payload);
+			if (frame?.channel === "pi.event" && frame.data?.event?.type === "agent_settled") {
+				observed.settlements++;
+			}
 		});
 	});
 });
@@ -59,13 +67,15 @@ test("a real agent's offer reaches the composer as chips and a chip sends that i
 	const label = ((await chips.nth(0).textContent()) ?? "").trim();
 	expect(label.length).toBeGreaterThan(0);
 
-	const before = sentPrompts.get(page)?.length ?? 0;
+	const observed = observedFrames.get(page);
+	const promptsBefore = observed?.prompts.length ?? 0;
+	const settlementsBefore = observed?.settlements ?? 0;
 	await chips.nth(0).click();
 
 	await expect
-		.poll(() => (sentPrompts.get(page)?.length ?? 0) - before, { timeout: 15_000 })
+		.poll(() => (observed?.prompts.length ?? 0) - promptsBefore, { timeout: 15_000 })
 		.toBe(1);
-	const sent = sentPrompts.get(page)?.[before] ?? "";
+	const sent = observed?.prompts[promptsBefore] ?? "";
 	expect(sent.length).toBeGreaterThan(label.length);
 
 	await expect(row).toHaveCount(0);
@@ -74,7 +84,7 @@ test("a real agent's offer reaches the composer as chips and a chip sends that i
 	);
 	await expect(page.getByTestId("chat-input")).toHaveValue("");
 
-	await expect(
-		page.locator('[data-testid="chat-message"][data-role="system"]').filter({ hasText: "Done" }),
-	).toHaveCount(2, { timeout: 150_000 });
+	await expect
+		.poll(() => (observed?.settlements ?? 0) - settlementsBefore, { timeout: 150_000 })
+		.toBe(1);
 });

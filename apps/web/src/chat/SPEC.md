@@ -321,8 +321,11 @@ extension-UI bridge (`pi.extensionUi` → `ExtUiDialog`) or — for a rich inlin
   historical calls have no transcript row, while failed/dead calls retain the normal tool fallback.
   E2e: `next-steps.spec.ts` (no-agent — a seeded transcript supplies the offer and the send is answered
   on the socket, so the row and both send outcomes are covered without a provider) +
-  `next-steps.live.spec.ts` (@agent — a real model authors the offer, so the *live* event path and
-  `terminate` ending the turn are covered too; its assertions are model-agnostic by design).
+  `next-steps.live.spec.ts` (@agent — its natural request asks for follow-up suggestions without naming
+  the tool, so a real model must follow the portable prompt contract and author the offer; the *live*
+  event path and `terminate` ending the turn are covered too. After chip activation it waits for the next
+  `agent_settled` socket event rather than counting mounted `Done` rows, because transcript virtualization
+  may retain only the latest settlement marker after a long response).
 - **Streaming send modes: split send + interrupt** (`Composer`) — steer/queue semantics are pi's loop
   design (steer = injected at the next turn boundary, after the current assistant message + its tool
   calls; queue = runs after the agent settles; only abort halts an in-flight response) and proved
