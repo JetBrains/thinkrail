@@ -37,3 +37,72 @@ a {
 	background: var(--border-default);
 	border-radius: var(--radius-sm);
 }
+
+.quiet-scroll-viewport::-webkit-scrollbar-track,
+.quiet-scroll-viewport::-webkit-scrollbar-corner {
+	background: transparent;
+}
+.quiet-scroll-viewport::-webkit-scrollbar-thumb {
+	border: 2.5px solid transparent;
+	background: transparent;
+	background-clip: padding-box;
+	transition:
+		background-color var(--transition-fast),
+		border-width var(--transition-fast);
+}
+.quiet-scroll-viewport[data-quiet-scroll-intent]::-webkit-scrollbar-thumb {
+	background-color: var(--text-subtle);
+}
+.quiet-scroll-viewport[data-quiet-scroll-intent]::-webkit-scrollbar-thumb:hover {
+	border-width: 2px;
+	background-color: var(--text-muted);
+}
+[data-theme-contrast="high"] .quiet-scroll-viewport::-webkit-scrollbar-thumb {
+	border-width: 3.5px;
+	background-color: var(--text-subtle);
+}
+[data-theme-contrast="high"]
+	.quiet-scroll-viewport[data-quiet-scroll-intent]::-webkit-scrollbar-thumb {
+	border-width: 2.5px;
+}
+.quiet-scroll-curtain {
+	transition: opacity var(--transition-fast);
+}
+
+@supports not selector(::-webkit-scrollbar) {
+	.quiet-scroll-viewport {
+		scrollbar-color: transparent transparent;
+		scrollbar-width: thin;
+	}
+	.quiet-scroll-viewport[data-quiet-scroll-intent],
+	[data-theme-contrast="high"] .quiet-scroll-viewport {
+		scrollbar-color: var(--text-subtle) transparent;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.quiet-scroll-viewport::-webkit-scrollbar-thumb,
+	.quiet-scroll-curtain {
+		transition: none;
+	}
+}
+
+@media (forced-colors: active) {
+	.quiet-scroll-viewport::-webkit-scrollbar-thumb,
+	.quiet-scroll-viewport[data-quiet-scroll-intent]::-webkit-scrollbar-thumb,
+	[data-theme-contrast="high"] .quiet-scroll-viewport::-webkit-scrollbar-thumb {
+		border-width: 2px;
+		border-color: Canvas;
+		background-color: CanvasText;
+	}
+	.quiet-scroll-curtain {
+		display: none;
+	}
+	@supports not selector(::-webkit-scrollbar) {
+		.quiet-scroll-viewport,
+		.quiet-scroll-viewport[data-quiet-scroll-intent],
+		[data-theme-contrast="high"] .quiet-scroll-viewport {
+			scrollbar-color: CanvasText Canvas;
+		}
+	}
+}
