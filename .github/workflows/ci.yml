@@ -28,6 +28,7 @@ jobs:
           restore-keys: ${{ runner.os }}-bun-
       - run: bun install --frozen-lockfile
       - run: bun run check:deps
+      - run: bun run check:boundaries
       # Canary for the compiled-binary seam: fails when a pi bump introduces a new bundler-opaque
       # dynamic import that registerBundledRuntime doesn't statically register (see the script header).
       - run: bun run check:seams
