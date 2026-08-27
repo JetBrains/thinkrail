@@ -540,7 +540,7 @@ export default function PlanPane({
 			);
 		}
 		return (
-			<div className="h-full p-md">
+			<div className="h-full p-12">
 				<SkeletonRows rows={8} />
 			</div>
 		);

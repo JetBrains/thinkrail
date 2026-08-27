@@ -20,7 +20,7 @@ export function SkeletonRows({ rows = 6 }: { rows?: number }) {
 			aria-label="Loading"
 			aria-busy="true"
 			data-testid="skeleton-rows"
-			className="flex flex-col gap-sm"
+			className="flex flex-col gap-8"
 		>
 			{ROWS.slice(0, Math.min(rows, ROWS.length)).map(({ key, width }) => (
 				<span

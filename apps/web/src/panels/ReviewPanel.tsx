@@ -89,7 +89,7 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 	}
 	if (!snapshot) {
 		return (
-			<div className="px-sm py-xs">
+			<div className="px-8 py-4">
 				<SkeletonRows rows={5} />
 			</div>
 		);

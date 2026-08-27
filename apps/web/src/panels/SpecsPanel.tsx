@@ -56,7 +56,7 @@ export function SpecsPanel({
 				Couldn't load specs — Refresh to retry.
 			</p>
 		) : nodes === null || roots === null ? (
-			<div className="px-xs py-xs">
+			<div className="px-4 py-4">
 				<SkeletonRows rows={6} />
 			</div>
 		) : nodes.length === 0 ? (

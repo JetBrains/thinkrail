@@ -20,7 +20,7 @@ const MonacoDiff = lazy(() => import("./MonacoDiff"));
 const RenderedDiff = lazy(() => import("./RenderedDiff"));
 
 const loading = (
-	<div className="h-full p-md">
+	<div className="h-full p-12">
 		<SkeletonRows rows={12} />
 	</div>
 );

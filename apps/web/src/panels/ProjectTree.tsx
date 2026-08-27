@@ -257,14 +257,14 @@ export function ProjectTree() {
 								onRestoreFocus={() => focusProjectNameOrAdd(project.id)}
 							/>
 							{isExpanded && list === undefined && (
-								<div className="py-xs pr-sm pl-lg">
+								<div className="py-4 pr-8 pl-16">
 									<SkeletonRows rows={2} />
 								</div>
 							)}
 							{isExpanded && (worktreeCreations[project.id] ?? 0) > 0 && (
 								<div
 									data-testid="worktree-creating-row"
-									className="flex items-center gap-sm py-xs pr-sm pl-lg tr-text-ui text-text-muted"
+									className="flex items-center gap-8 py-4 pr-8 pl-16 tr-text-ui text-text-muted"
 								>
 									<Loader2 className="size-3.5 shrink-0 animate-spin motion-reduce:animate-none" />
 									Creating worktree…

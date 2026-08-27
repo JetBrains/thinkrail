@@ -37,7 +37,7 @@ export function FileTree({ workspaceId }: { workspaceId: string }) {
 
 	if (nodes === null)
 		return (
-			<div className="px-xs py-xs">
+			<div className="px-4 py-4">
 				<SkeletonRows rows={8} />
 			</div>
 		);

@@ -272,7 +272,7 @@ export function SkillsDialog({
 
 				<div className="max-h-[50vh] overflow-y-auto">
 					{entries === null ? (
-						<div className="px-sm py-md">
+						<div className="px-8 py-12">
 							<SkeletonRows rows={4} />
 						</div>
 					) : entries.length === 0 ? (

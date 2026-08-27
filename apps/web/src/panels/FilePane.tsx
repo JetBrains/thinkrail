@@ -14,7 +14,7 @@ const MonacoEditor = lazy(() => import("./MonacoEditor"));
 const MarkdownPreview = lazy(() => import("./MarkdownPreview"));
 
 const loading = (
-	<div className="h-full p-md">
+	<div className="h-full p-12">
 		<SkeletonRows rows={12} />
 	</div>
 );

@@ -177,7 +177,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 						</button>
 					</div>
 				) : status === null ? (
-					<div className="px-sm py-xs">
+					<div className="px-8 py-4">
 						<SkeletonRows rows={5} />
 					</div>
 				) : status.changes.length === 0 ? (

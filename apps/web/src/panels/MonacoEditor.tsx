@@ -97,7 +97,7 @@ export default function MonacoEditor({
 			beforeMount={beforeMount}
 			onMount={onMount}
 			loading={
-				<div className="h-full w-full p-md">
+				<div className="h-full w-full p-12">
 					<SkeletonRows rows={12} />
 				</div>
 			}
