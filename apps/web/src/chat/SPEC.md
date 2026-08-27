@@ -151,8 +151,9 @@ the **capability** registers with the pi session server-side (custom tool or pi 
 **presentation** registers here. A registration is:
 
 - a **renderer** (the specialized card body; `ToolRenderProps` carries `toolCallId`/`args`/`result`/
-  `status`/`workspaceRoot`/`streaming` — enough to stay props-driven; the common invocation seam decorates
-  its completed canonical image results consistently), plus optionally
+  `status`/`workspaceRoot`/`streaming` plus an optional shell-injected `onOpenFile` callback — enough to
+  stay props-driven; the common invocation seam decorates its completed canonical image results
+  consistently), plus optionally
 - a **`summary`** — a pure one-liner for collapsed headers and activity-step rows,
 - a **`chrome`** — `"card"` (default, the `ToolCard` frame) or `"bare"` (owns its frame; for
   interactive/primary tools like `ask_user_question`),
@@ -171,6 +172,13 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
 
 ## Interaction seams
 
+- **Structured tool-file navigation** — `ChatView` accepts an optional `onOpenFile(path)` from the shell and
+  passes it through every `ToolRenderProps` path (routine, primary, card, or bare). The shared tool-file
+  primitive offers that action only for a non-empty relative path or an absolute path contained by
+  `workspaceRoot`; URLs, escaping relatives, and foreign absolute paths remain selectable text. Renderers
+  source candidates only from explicit tool args/details — never regex guesses over Bash output, code, or
+  prose. A standalone renderer has no callback and therefore stays inert. The callback's preview-slot
+  semantics belong to [[submodule-web-panels]].
 - **`ChatActions`** — a React context (provided by `ChatView`, `null` standalone): how a renderer talks
   **back** to the agent without importing store/transport. Today: `answerQuestion(toolCallId, result)` —
   it rejects when the host refuses (unknown/answered/superseded call), and the caller owns the failure UX —
