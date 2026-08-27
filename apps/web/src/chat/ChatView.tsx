@@ -98,7 +98,12 @@ type ChatListContext = {
 	status: StreamStatus | null;
 	runwayActive: boolean;
 	streamEdgeRef: RefCallback<HTMLDivElement>;
+	runwayRef: RefCallback<HTMLDivElement>;
 };
+
+function StreamHeader({ context }: { context: ChatListContext }) {
+	return context.runwayActive ? <div className="h-[clamp(48px,10cqh,80px)]" aria-hidden /> : null;
+}
 
 function StreamFooter({ context }: { context: ChatListContext }) {
 	if (!context.status && !context.runwayActive) return null;
@@ -112,14 +117,19 @@ function StreamFooter({ context }: { context: ChatListContext }) {
 			{context.runwayActive ? (
 				<>
 					<div ref={context.streamEdgeRef} data-testid="chat-stream-edge" className="h-0" />
-					<div data-testid="chat-stream-runway" className="h-[42cqh]" aria-hidden />
+					<div
+						ref={context.runwayRef}
+						data-testid="chat-stream-runway"
+						className="h-[42cqh]"
+						aria-hidden
+					/>
 				</>
 			) : null}
 		</>
 	);
 }
 
-const CHAT_LIST_COMPONENTS = { Footer: StreamFooter };
+const CHAT_LIST_COMPONENTS = { Header: StreamHeader, Footer: StreamFooter };
 
 export default function ChatView({
 	sessionId,
@@ -222,6 +232,7 @@ export default function ChatView({
 		handleContentHeight,
 		handleScrollerRef,
 		streamEdgeRef,
+		runwayRef,
 		scrollerElement,
 		showScrollButton,
 		scrollButtonLabel,
@@ -233,8 +244,8 @@ export default function ChatView({
 		containerProps,
 	} = useChatScroll(virtuosoRef, isStreaming, latestUserRow);
 	const listContext = useMemo<ChatListContext>(
-		() => ({ status: currentStreamStatus, runwayActive, streamEdgeRef }),
-		[currentStreamStatus, runwayActive, streamEdgeRef],
+		() => ({ status: currentStreamStatus, runwayActive, streamEdgeRef, runwayRef }),
+		[currentStreamStatus, runwayActive, streamEdgeRef, runwayRef],
 	);
 	const composerRef = useRef<ComposerHandle>(null);
 	const askFocusScope = useRef<object>({}).current;
@@ -674,6 +685,7 @@ export default function ChatView({
 					<div
 						data-testid="chat-scroll"
 						data-follow-state={followState}
+						data-streaming={isStreaming}
 						className="relative flex min-h-0 flex-1 flex-col [container-type:size]"
 						{...containerProps}
 					>

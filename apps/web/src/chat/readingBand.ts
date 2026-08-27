@@ -1,8 +1,10 @@
 const TURN_INSET_RATIO = 0.1;
 const TURN_INSET_MIN = 48;
 const TURN_INSET_MAX = 80;
+const RESPONSE_RUNWAY_RATIO = 0.6;
 const EDGE_TRIGGER_RATIO = 0.82;
 const EDGE_SETTLE_RATIO = 0.58;
+const TAIL_RUNWAY_RATIO = 1 - EDGE_SETTLE_RATIO;
 const ADVANCE_DURATION_MS = 220;
 const GEOMETRY_EPSILON = 0.5;
 
@@ -23,6 +25,7 @@ export interface ReadingBandSnapshot {
 export interface ReadingBandEnvironment {
 	readGeometry: () => ReadingBandGeometry | null;
 	writeScrollTop: (top: number) => void;
+	writeRunwayHeight: (height: number) => void;
 	anchorTurn: (index: number, inset: number) => void;
 	prefersReducedMotion: () => boolean;
 	now: () => number;
@@ -83,7 +86,12 @@ export function createReadingBandController(
 		streaming,
 	};
 	let frame: number | null = null;
+	const activeStreamMount = streaming;
 	let reconstructed = false;
+	let runwayMode: "turn" | "floor" | null = null;
+	let runwayStartEdge: number | null = null;
+	let runwayHeight: number | null = null;
+	let runwayViewportHeight: number | null = null;
 
 	const publish = (patch: Partial<ReadingBandState>) => {
 		const next = { ...state, ...patch };
@@ -105,10 +113,45 @@ export function createReadingBandController(
 		if (state.moving) publish({ moving: false });
 	};
 
+	const writeRunwayHeight = (height: number) => {
+		const pixels = Math.round(height);
+		if (runwayHeight !== null && Math.abs(runwayHeight - pixels) <= GEOMETRY_EPSILON) return;
+		runwayHeight = pixels;
+		environment.writeRunwayHeight(pixels);
+	};
+
+	const beginTurnRunway = (geometry: ReadingBandGeometry) => {
+		runwayMode = "turn";
+		runwayStartEdge = geometry.scrollTop + geometry.edgeBottom;
+		runwayViewportHeight = geometry.viewportHeight;
+		writeRunwayHeight(geometry.viewportHeight * (RESPONSE_RUNWAY_RATIO + TAIL_RUNWAY_RATIO));
+	};
+
+	const resizeRunway = (geometry: ReadingBandGeometry) => {
+		if (runwayMode === null || runwayHeight === null) return;
+		const viewportChanged =
+			runwayViewportHeight === null ||
+			Math.abs(runwayViewportHeight - geometry.viewportHeight) > GEOMETRY_EPSILON;
+		runwayViewportHeight = geometry.viewportHeight;
+		const floor = geometry.viewportHeight * TAIL_RUNWAY_RATIO;
+		if (runwayMode === "floor") {
+			if (viewportChanged) writeRunwayHeight(floor);
+			return;
+		}
+		if (runwayStartEdge === null) return;
+		const growth = Math.max(0, geometry.scrollTop + geometry.edgeBottom - runwayStartEdge);
+		const available =
+			geometry.viewportHeight * (RESPONSE_RUNWAY_RATIO + TAIL_RUNWAY_RATIO) - growth;
+		const next = Math.max(floor, available);
+		writeRunwayHeight(viewportChanged ? next : Math.min(runwayHeight, next));
+	};
+
 	const contentChanged = () => {
-		if (!state.streaming || !state.following || state.moving) return;
-		const geometry = environment.readGeometry();
+		let geometry = environment.readGeometry();
 		if (!geometry || geometry.viewportHeight <= 0) return;
+		resizeRunway(geometry);
+		if (!state.streaming || !state.following || state.moving) return;
+		geometry = environment.readGeometry() ?? geometry;
 		const trigger = geometry.viewportHeight * EDGE_TRIGGER_RATIO;
 		if (geometry.edgeBottom <= trigger + GEOMETRY_EPSILON) return;
 		const target = Math.min(
@@ -151,6 +194,7 @@ export function createReadingBandController(
 			if (source === "immediate") publish({ following: true, runway: true });
 			const geometry = environment.readGeometry();
 			if (!geometry || geometry.viewportHeight <= 0) return;
+			beginTurnRunway(geometry);
 			environment.anchorTurn(index, turnInset(geometry.viewportHeight));
 		},
 		contentChanged,
@@ -173,11 +217,16 @@ export function createReadingBandController(
 			});
 		},
 		reconstructActiveStream: () => {
-			if (!state.streaming || reconstructed) return;
-			const geometry = environment.readGeometry();
+			if (!activeStreamMount || !state.streaming || reconstructed) return;
+			let geometry = environment.readGeometry();
 			if (!geometry) return;
 			reconstructed = true;
 			publish({ runway: true });
+			runwayMode = "floor";
+			runwayStartEdge = null;
+			runwayViewportHeight = geometry.viewportHeight;
+			writeRunwayHeight(geometry.viewportHeight * TAIL_RUNWAY_RATIO);
+			geometry = environment.readGeometry() ?? geometry;
 			environment.writeScrollTop(geometry.maxScrollTop);
 		},
 		dispose: cancelMotion,

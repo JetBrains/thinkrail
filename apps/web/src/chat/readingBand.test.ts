@@ -10,6 +10,7 @@ interface Harness {
 	controller: ReturnType<typeof createReadingBandController>;
 	anchors: Array<{ index: number; inset: number }>;
 	writes: number[];
+	runwayHeights: number[];
 	states: ReadingBandSnapshot[];
 	setGeometry: (patch: Partial<ReadingBandGeometry>) => void;
 	advance: (milliseconds: number) => void;
@@ -38,6 +39,7 @@ function createHarness({
 	const frames = new Map<number, (time: number) => void>();
 	const anchors: Array<{ index: number; inset: number }> = [];
 	const writes: number[] = [];
+	const runwayHeights: number[] = [];
 	const states: ReadingBandSnapshot[] = [];
 
 	const environment: ReadingBandEnvironment = {
@@ -47,6 +49,7 @@ function createHarness({
 			const delta = top - geometry.scrollTop;
 			geometry = { ...geometry, scrollTop: top, edgeBottom: geometry.edgeBottom - delta };
 		},
+		writeRunwayHeight: (height) => runwayHeights.push(height),
 		anchorTurn: (index, inset) => anchors.push({ index, inset }),
 		prefersReducedMotion: () => reducedMotion,
 		now: () => now,
@@ -66,6 +69,7 @@ function createHarness({
 		controller,
 		anchors,
 		writes,
+		runwayHeights,
 		states,
 		setGeometry: (patch) => {
 			geometry = { ...geometry, ...patch };
@@ -128,6 +132,44 @@ describe("reading-band movement", () => {
 		harness.advance(220);
 		expect(harness.writes).toEqual([252]);
 		expect(harness.controller.getSnapshot().moving).toBe(false);
+	});
+
+	it("consumes a 60% runway down to the 42% reading-band floor without re-inflating", () => {
+		const harness = createHarness({ streaming: false });
+		harness.setGeometry({ edgeBottom: 300 });
+		harness.controller.armImmediateTurn();
+		harness.controller.userTurnArrived(2, "immediate");
+		expect(harness.runwayHeights).toEqual([612]);
+
+		harness.controller.setStreaming(true);
+		harness.controller.readerLeft();
+		harness.setGeometry({ edgeBottom: 400 });
+		harness.controller.contentChanged();
+		expect(harness.runwayHeights.at(-1)).toBe(512);
+
+		harness.setGeometry({ edgeBottom: 900 });
+		harness.controller.contentChanged();
+		expect(harness.runwayHeights.at(-1)).toBe(252);
+
+		harness.setGeometry({ edgeBottom: 500 });
+		harness.controller.contentChanged();
+		expect(harness.runwayHeights.at(-1)).toBe(252);
+	});
+
+	it("recalibrates retained runway when the transcript viewport resizes", () => {
+		const harness = createHarness({ streaming: false });
+		harness.setGeometry({ edgeBottom: 300 });
+		harness.controller.armImmediateTurn();
+		harness.controller.userTurnArrived(2, "immediate");
+		harness.controller.setStreaming(false);
+
+		harness.setGeometry({ viewportHeight: 800 });
+		harness.controller.contentChanged();
+		expect(harness.runwayHeights.at(-1)).toBe(816);
+
+		harness.setGeometry({ viewportHeight: 400 });
+		harness.controller.contentChanged();
+		expect(harness.runwayHeights.at(-1)).toBe(408);
 	});
 
 	it("turns one large layout expansion into one advance to the settle line", () => {
@@ -211,6 +253,7 @@ describe("reading-band reader intent", () => {
 		active.setGeometry({ scrollTop: 200, maxScrollTop: 900 });
 		active.controller.reconstructActiveStream();
 		active.controller.reconstructActiveStream();
+		expect(active.runwayHeights).toEqual([252]);
 		expect(active.writes).toEqual([900]);
 		expect(active.controller.getSnapshot().runway).toBe(true);
 
@@ -218,5 +261,14 @@ describe("reading-band reader intent", () => {
 		settled.controller.reconstructActiveStream();
 		expect(settled.writes).toEqual([]);
 		expect(settled.controller.getSnapshot().runway).toBe(false);
+	});
+
+	it("does not mistake a newly started turn for an active-stream remount", () => {
+		const harness = createHarness({ streaming: false });
+		harness.controller.armImmediateTurn();
+		harness.controller.setStreaming(true);
+		harness.setGeometry({ scrollTop: 200, maxScrollTop: 900 });
+		harness.controller.reconstructActiveStream();
+		expect(harness.writes).toEqual([]);
 	});
 });

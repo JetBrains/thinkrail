@@ -39,6 +39,7 @@ export interface ChatScroll {
 	handleContentHeight: () => void;
 	handleScrollerRef: (element: HTMLElement | Window | null) => void;
 	streamEdgeRef: RefCallback<HTMLDivElement>;
+	runwayRef: RefCallback<HTMLDivElement>;
 	scrollerElement: HTMLElement | null;
 	showScrollButton: boolean;
 	scrollButtonLabel: "Follow response" | "Latest" | null;
@@ -65,6 +66,7 @@ export function useChatScroll(
 ): ChatScroll {
 	const scrollerRef = useRef<HTMLElement | null>(null);
 	const edgeRef = useRef<HTMLDivElement | null>(null);
+	const runwayElementRef = useRef<HTMLDivElement | null>(null);
 	const atBottom = useRef(true);
 	const interacting = useRef(false);
 	const interactionStartScrollTop = useRef(0);
@@ -95,6 +97,10 @@ export function useChatScroll(
 				writeScrollTop: (top) => {
 					const scroller = scrollerRef.current;
 					if (scroller) scroller.scrollTop = top;
+				},
+				writeRunwayHeight: (height) => {
+					const runway = runwayElementRef.current;
+					if (runway) runway.style.height = `${height}px`;
 				},
 				anchorTurn: (index, inset) => {
 					virtuosoRef.current?.scrollToIndex({
@@ -170,6 +176,10 @@ export function useChatScroll(
 	const streamEdgeRef = useCallback<RefCallback<HTMLDivElement>>((element) => {
 		edgeRef.current = element;
 		setStreamEdgeElement(element);
+	}, []);
+
+	const runwayRef = useCallback<RefCallback<HTMLDivElement>>((element) => {
+		runwayElementRef.current = element;
 	}, []);
 
 	const armImmediateTurn = useCallback(() => {
@@ -258,6 +268,7 @@ export function useChatScroll(
 		handleContentHeight,
 		handleScrollerRef,
 		streamEdgeRef,
+		runwayRef,
 		scrollerElement,
 		showScrollButton: snapshot.buttonLabel !== null,
 		scrollButtonLabel: snapshot.buttonLabel,
