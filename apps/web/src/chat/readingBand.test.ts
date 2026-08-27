@@ -91,6 +91,8 @@ describe("reading-band turn anchoring", () => {
 			const harness = createHarness({ streaming: false, viewportHeight });
 			harness.controller.armImmediateTurn();
 			harness.controller.userTurnArrived(7, "immediate");
+			expect(harness.anchors).toEqual([]);
+			harness.advance(0);
 			expect(harness.anchors).toEqual([{ index: 7, inset }]);
 			expect(harness.controller.getSnapshot()).toEqual({
 				following: true,
@@ -104,9 +106,19 @@ describe("reading-band turn anchoring", () => {
 	it("anchors a queued turn only while the reader is still following", () => {
 		const harness = createHarness();
 		harness.controller.userTurnArrived(4, "queued");
+		harness.advance(0);
 		harness.controller.readerLeft();
 		harness.controller.userTurnArrived(8, "queued");
 		expect(harness.anchors).toEqual([{ index: 4, inset: 60 }]);
+	});
+
+	it("cancels a pending turn anchor when the reader moves first", () => {
+		const harness = createHarness({ streaming: false });
+		harness.controller.armImmediateTurn();
+		harness.controller.userTurnArrived(3, "immediate");
+		harness.controller.readerLeft();
+		harness.advance(16);
+		expect(harness.anchors).toEqual([]);
 	});
 });
 

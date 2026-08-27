@@ -86,6 +86,7 @@ export function createReadingBandController(
 		streaming,
 	};
 	let frame: number | null = null;
+	let anchorFrame: number | null = null;
 	const activeStreamMount = streaming;
 	let reconstructed = false;
 	let runwayMode: "turn" | "floor" | null = null;
@@ -111,6 +112,11 @@ export function createReadingBandController(
 		if (frame !== null) environment.cancelFrame(frame);
 		frame = null;
 		if (state.moving) publish({ moving: false });
+	};
+
+	const cancelAnchor = () => {
+		if (anchorFrame !== null) environment.cancelFrame(anchorFrame);
+		anchorFrame = null;
 	};
 
 	const writeRunwayHeight = (height: number) => {
@@ -187,6 +193,7 @@ export function createReadingBandController(
 		getSnapshot: () => snapshotOf(state),
 		armImmediateTurn: () => {
 			cancelMotion();
+			cancelAnchor();
 			publish({ following: true, runway: true });
 		},
 		userTurnArrived: (index, source) => {
@@ -195,16 +202,23 @@ export function createReadingBandController(
 			const geometry = environment.readGeometry();
 			if (!geometry || geometry.viewportHeight <= 0) return;
 			beginTurnRunway(geometry);
-			environment.anchorTurn(index, turnInset(geometry.viewportHeight));
+			const inset = turnInset(geometry.viewportHeight);
+			cancelAnchor();
+			anchorFrame = environment.requestFrame(() => {
+				anchorFrame = null;
+				if (state.following) environment.anchorTurn(index, inset);
+			});
 		},
 		contentChanged,
 		readerLeft: () => {
 			cancelMotion();
+			cancelAnchor();
 			publish({ following: false });
 		},
 		readerReachedEdge: () => publish({ following: true }),
 		returnToEdge: () => {
 			cancelMotion();
+			cancelAnchor();
 			publish({ following: true });
 			const geometry = environment.readGeometry();
 			if (geometry) environment.writeScrollTop(geometry.maxScrollTop);
@@ -229,6 +243,9 @@ export function createReadingBandController(
 			geometry = environment.readGeometry() ?? geometry;
 			environment.writeScrollTop(geometry.maxScrollTop);
 		},
-		dispose: cancelMotion,
+		dispose: () => {
+			cancelMotion();
+			cancelAnchor();
+		},
 	};
 }
