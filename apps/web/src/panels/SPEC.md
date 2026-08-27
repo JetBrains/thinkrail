@@ -114,8 +114,8 @@ treatment.
   project in `AddProjectMenu`: a remote client cannot tell whether a successful native picker opened on an
   unseen host display, so recovery cannot be failure-only. Entering the manual path flow supersedes the
   hook's current picker generation, so a hidden picker reply that arrives later cannot open another project.
-  These are modals on `components/ui/dialog` (the
-  init offer has no on-screen anchor, unlike the Remove popover); `NoticeDialog` remains the single-button
+  These are modals on `components/ui/dialog` (the init offer has no on-screen anchor, unlike the Remove
+  popover); `NoticeDialog` remains the single-button
   surface for failures with no recovery inside that notice. The hook returns a `dialogs` node each consumer
   renders. **Selecting a
   project** (clicking its row — the chevron expands/collapses separately) **deselects any active
@@ -200,8 +200,8 @@ project folder"; **project + no specs** → a spec-first **"Set up project"** (p
 only possible action; once a project is shown, opening another is the projects-rail **"+"** (the same
 dropdown), so Welcome stays the *work-in-this-project* surface. That card hangs the shared
 **`AddProjectMenu`** dropdown off it (same menu as the projects-rail "+": Open project / Enter host
-path… / Open GitHub (soon) / Recents). Recents is the store's `recentProjects`: one last-opened path list containing open + closed
-records with no status badge; selecting either runs the shared open flow and lands at Project Home, with a
+path… / Open GitHub (soon) / Recents). Recents is the store's `recentProjects`: one last-opened path list
+containing open + closed records with no status badge; selecting either runs the shared open flow and lands at Project Home, with a
 closed record retaining its id and workspace state. `Card` is a `forwardRef` usable as a Radix `asChild`
 trigger. **"Work in project folder"**
 (`House` icon, matching the rail's Default row) **direct-enters** the Default workspace — no dialog: the

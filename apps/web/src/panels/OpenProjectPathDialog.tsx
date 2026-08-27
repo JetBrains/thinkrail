@@ -35,8 +35,8 @@ export function OpenProjectPathDialog({
 				<DialogHeader>
 					<DialogTitle>Open project from host path</DialogTitle>
 					<DialogDescription>
-						Enter a folder path on the computer running ThinkRail. Use <code>~/</code> for the host
-						account&apos;s home folder.
+						Enter a folder path on the computer running ThinkRail. Use{" "}
+						<code className="tr-code-text">~/</code> for the host account&apos;s home folder.
 					</DialogDescription>
 				</DialogHeader>
 
@@ -69,7 +69,7 @@ export function OpenProjectPathDialog({
 							spellCheck={false}
 							value={path}
 							onChange={(event) => setPath(event.target.value)}
-							placeholder="~/projects/my-project"
+							placeholder="~/projects/example"
 							className="w-full rounded-[var(--radius-sm)] border border-control-border-default bg-control-bg px-12 py-8 tr-text-ui text-text-default outline-none transition-colors placeholder:text-text-muted focus-visible:border-control-border-active"
 						/>
 					</label>
