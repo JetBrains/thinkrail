@@ -32,7 +32,7 @@ function appendMessage(path: string, id: string, parentId: string, message: obje
 test("a model-authored Thinking heading stays bounded and appears only while folded", async ({
 	page,
 }) => {
-	await page.setViewportSize({ width: 390, height: 780 });
+	await page.setViewportSize({ width: 1280, height: 780 });
 	await openFixtureProject(page);
 	const chat = seedWorkspaceSession(repoCwd(), {
 		name: "thinking summary",
@@ -91,6 +91,7 @@ test("a model-authored Thinking heading stays bounded and appears only while fol
 	await expect(heading).toBeVisible();
 	await expect(toggle).toContainText(metadata);
 
+	await page.setViewportSize({ width: 390, height: 780 });
 	await thinking.evaluate((element) => {
 		element.style.width = "280px";
 	});
