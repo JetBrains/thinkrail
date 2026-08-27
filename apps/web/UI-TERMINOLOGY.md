@@ -27,7 +27,7 @@ mutually-exclusive states.
 - **App Shell** — the root frame (`Shell`).
   - **Top Bar** (`<header>`) — always present.
   - **Body** — one of two states:
-    - **Workspace Workbench** — the host-synchronized IDE arrangement for an active workspace.
+    - **Workspace Workbench** — the projection of this window's local frame and active workspace view.
     - **Welcome Layout** — the projects rail beside the Welcome screen when no workspace is active.
   - **Toaster** — app-wide notification host, mounted once over either state.
 
@@ -35,7 +35,7 @@ mutually-exclusive states.
 |---|---|---|---|
 | App Shell | `shell/Shell.tsx` → `Shell` | `shell` | Composition root; owns the theme DOM side-effect + global hotkeys |
 | Top Bar | `<header>` inside `Shell` | — | ⚠ Naming note below |
-| Workspace Workbench | `shell/WorkspaceWorkbench.tsx` + `shell/layout/Workbench.tsx` | `workbench` | Recursive center and independently stacked sides |
+| Workspace Workbench | `shell/WorkspaceWorkbench.tsx` + `shell/layout/Workbench.tsx` | `workbench` | One window-local frame; workspace-specific resource projection |
 | Welcome Layout | `ResizablePanelGroup` (`autoSaveId="thinkrail-shell-welcome"`) | — | Projects rail + Welcome |
 | Toaster | `panels/Toaster.tsx` → `Toaster` | — | See Shared Primitives |
 

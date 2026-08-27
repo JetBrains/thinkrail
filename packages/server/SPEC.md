@@ -66,10 +66,10 @@ internals**. The edges between them are owned here (see the dependency graph), n
 | module | owns | spec |
 | --- | --- | --- |
 | `host` | `Bun.serve` HTTP+WS, static SPA, the WS dispatch registry, channel publish | [host/SPEC.md](src/host/SPEC.md) |
-| `persistence` | JSON app state under the data dir, including workspace-layout snapshots | [persistence/SPEC.md](src/persistence/SPEC.md) |
+| `persistence` | JSON domain/config state under the data dir; legacy workspace-layout files only during import compatibility | [persistence/SPEC.md](src/persistence/SPEC.md) |
 | `log` | explicit leveled diagnostics → pretty stderr + agent-oriented JSONL under `<dataDir>/logs` (pino-roll daily/10 MB rotation, 14 rotated + active); arbitrary console output stays terminal-only | [log/SPEC.md](src/log/SPEC.md) |
-| `settings` | server-synced app config, including layout presets/default and independent side/bottom limits | [settings/SPEC.md](src/settings/SPEC.md) |
-| `layout` | validated, revisioned, persisted per-workspace workbench snapshots | [layout/SPEC.md](src/layout/SPEC.md) |
+| `settings` | server-synced app config, including the shared custom-layout-preset catalog (never current/default layout) | [settings/SPEC.md](src/settings/SPEC.md) |
+| `layout` | deprecated read-only legacy snapshot adapter for one-time frontend import | [layout/SPEC.md](src/layout/SPEC.md) |
 | `projects` | stable known-repo registry: open/recent views + lossless close/reopen (validate, dedupe, slug) | [projects/SPEC.md](src/projects/SPEC.md) |
 | `workspaces` | workspaces = `git worktree`s on their own branch | [workspaces/SPEC.md](src/workspaces/SPEC.md) |
 | `git` | the `git(cwd, args)` runner + worktree status/diff vs base + branch list | [git/SPEC.md](src/git/SPEC.md) |
@@ -106,7 +106,8 @@ the host from env via `bootHost` for dev/e2e.
 - `pr` → `workspaces`, `git`, `todos`, `branch-review` (provider detection + gh-output parsing + the shared CLI runner), `github` (`ghSetupProblem` — the named compare-fallback reason)
 - `projects` → `git` (shared runner), `persistence`
 - `git` → `subprocess` (every child that talks to a network or another CLI)
-- `git`, `fs`, `spec`, `watch`, `terminal`, `settings`, `layout`, `analytics` → `persistence` (`spec` also → `pi-spec-graph/core`, external; `analytics` also → the pi-ai built-in provider/model catalog + `posthog-node`, external — the identity-bucketing vocabulary and the delivery SDK)
+- `git`, `fs`, `spec`, `watch`, `terminal`, `settings`, `analytics` → `persistence` (`spec` also → `pi-spec-graph/core`, external; `analytics` also → the pi-ai built-in provider/model catalog + `posthog-node`, external—the identity-bucketing vocabulary and delivery SDK)
+- deprecated `layout` → `persistence` for legacy snapshot reads/removal only; the edge disappears with the next protocol
 - `log` → `persistence` (`dataDir`) — and **any feature module (+ `host`) may → `log`**: it is the one
   cross-cutting edge, like `persistence`, exempt from the never-each-other rule (today: `host`,
   `agent`, `workspaces`, `watch`, `git`, `todos`, `reviews`, `analytics`). `persistence` never imports
@@ -132,14 +133,15 @@ own never import `host` either: they expose a **publisher-injection seam** (`set
 `setSessionPublisher`, `setLoginPublisher`, `projects`' `setProjectPublisher` for the full-snapshot
 `project.updated` lifecycle, `workspaces`' `setWorkspacePublisher` for the
 `workspace.created`/`updated`/`removed` lifecycle trio, `settings`' `setSettingsPublisher` for
-`settings.changed`, `layout`'s full-snapshot publisher for `layout.changed`, and auth's Central action
-analytics + `provider.changed` invalidation publishers) that `host` installs at `createServer` — so
-channel/analytics wiring lives only in
-`host`.
-For layout writes, `host` passes the current side + bottom group-limit policy from
-`settings.getConfig().layout` into the `layout` validator; for layout-setting writes it runs the complete
-nested value through `layout.validateLayoutSettings` before calling `settings`.
-Neither sibling imports the other.
+`settings.changed`, and auth's Central action analytics + `provider.changed` invalidation publishers) that
+`host` installs at `createServer`—so channel/analytics wiring lives only in `host`. Current layout has no
+publisher; the migration protocol exposes only generic request/response `layout.get`, removed next protocol.
+
+`settings` validates the bounded resource-free custom-layout-preset catalog it owns. Current/default preset,
+group limits, frame, workspace resource placement, selection, and geometry never reach the host. The
+workspace-create and boot-recovery paths compose `workspaces` with `terminal`: reserve the deterministic
+process-free default terminal, then clear the workspace's pending marker only after durable catalog success. No sibling imports
+another for that handshake.
 `history` stays registry-free (never imports `projects`/`workspaces`); `host` injects the scope filter
 + labels from the registries at the handler layer (`history.search` handler). `templates` stays
 registry-free too — it takes a plain `cwd`, never a `workspaceId`; the `template.*` handler resolves

@@ -10,8 +10,8 @@ tags: [v1]
 
 ## Responsibility
 
-The single Zustand store: connection status, projects/workspaces, accepted host-synchronized workbench
-snapshots plus device-local attention, terminal catalogs, and one **per-session chat runtime** for every live
+The single Zustand store: connection status, projects/workspaces, one frontend-local workbench frame plus
+per-workspace views/attention, terminal catalogs, and one **per-session chat runtime** for every live
 `AgentSession` (so several chats stream concurrently).
 
 ## Boundary
@@ -29,7 +29,7 @@ snapshots plus device-local attention, terminal catalogs, and one **per-session 
   upserts/sorts the rail or removes the row when `closed === true`. Both actions reconcile stale navigation
   too: only when this client's selected project or active workspace belongs to a record no longer open,
   they clear the active workspace and select the first remaining project's Home (or `null` when none
-  remain), while deliberately retaining every workspace layout/attention/resource-render/terminal/session
+  remain), while deliberately retaining every local workspace view/attention/resource-render/terminal/session
   map for lossless reopen. Other-client opens never steal navigation, and a background close never moves it.
   All project response call sites use the same updater, so the open and recent copies cannot drift.
   Explicit local transitions are **`selectMain()`**, **`selectProject(projectId, opts?)`**, and
@@ -55,8 +55,9 @@ snapshots plus device-local attention, terminal catalogs, and one **per-session 
   derivation may then canonicalize it to an already-selected chat. **`routeChatTargetGeneration`** advances
   only on target installation (including same-workspace deep links), so consumption cannot duplicate the
   shell reconciliation pass. `selectCurrentRouteChatTarget` is the one check that the target's workspace and
-  navigation stamp still hold. The shell's chat-reconciliation module validates/hydrates that target before
-  passive auto-open; a successful authoritative absence consumes it, while failures retain it for reconnect.
+  navigation stamp still hold. The shell's chat-reconciliation module validates/hydrates that exact target
+  before ordinary locally placed-chat hydration; successful authoritative absence consumes it, while failures
+  retain it for reconnect.
   The store owns no URL/history/storage access — `navigation` owns serialization and drivers. It also owns
   the **workspace lifecycle reactions** every client runs
   identically on the `workspace.created`/`updated`/`removed` pushes (no per-client optimism — the backend
@@ -71,101 +72,70 @@ snapshots plus device-local attention, terminal catalogs, and one **per-session 
   leaving the client labelling and keying reads off a value the host no longer has; a project never fetched or an id absent from its list is a **no-op** — the next
   `workspace.list` reconciles; **`applyWorkspaceRemoved(projectId, id)`** is the **entire** removal
   reaction (`removeWorkspace` drops the row + `clearWorkspaceState` drops its
-  layout/attention/terminal maps and chat runtimes + recency drops the dead id,
+  local view/attention/terminal maps and chat runtimes + recency drops the dead id,
   and **if it was this client's active workspace** → activate the most recently selected loaded workspace
   whose project remains open, even across projects; when none remains, `selectProject(projectId)` falls back
   to the removed workspace's Project Home; either active fallback gets the same neutral toast that reads right
   for both the initiator and an observer). A background removal never moves focus. Because the lifecycle event
   is shared but selection history is browser-local, each observing client restores its own prior context. The
   primitive **`removeWorkspace(projectId, id)`** just drops the row (unknown project/id is a no-op);
-  **workspace layout state** — `layoutSnapshotsByWorkspace` holds the latest accepted
-  `WorkspaceLayoutSnapshot` for each workspace; `installLayoutSnapshot` is a revision-aware whole-value
-  replacement (older/duplicate revisions are inert), while one atomic optimistic-commit action installs the
-  shell integration's next complete document and appends a pending write carrying both its correlation
-  `mutationId` and captured `expectedRevision`. The first write expects the accepted revision (or `null` for
-  absence); each dependent write expects the revision its predecessor will produce. The browser sends those
-  full snapshots to `layout.replace` serially per workspace while projecting all of them immediately; if one
-  write rejects or conflicts, dependent later projections are rolled back before they ever reach the host, so
-  a queued snapshot cannot resurrect the rejected base. Accepted state and the latest optimistic projection
-  remain distinct, so an acknowledgement removes its matching pending entry without rolling back a newer
-  projection. Correlation settlement is independent of revision installation: even an acknowledgement whose
-  snapshot is already older than the accepted base clears its mutation id without reinstalling that document.
-  If that matching broadcast settles optimism but its request response is then lost, the accepted snapshot is
-  still success—no false rollback or save error. A nonmatching accepted write advances the canonical base; it
-  does not rewrite captured expectations or erase optimistic snapshots still awaiting host order. A typed
-  conflict installs the returned current snapshot (including authoritative absence), cancels the conflicting
-  mutation and every dependent projection, and advances the projection epoch; if a newer accepted broadcast
-  overtook the response in transit, the revision-aware fold preserves that newer authority instead of
-  regressing to the conflict-time snapshot or absence. A conflict is expected synchronization, not a generic
-  save failure, and never triggers an automatic stale-document resend.
-  Components never splice group/tab arrays independently. Installing an accepted document also reconciles
-  browser-local resource projections without changing attention: a peer-restored chat placement immediately
-  restores its render-cache identity/label and removes duplicate closed-history membership, then hydrates its
-  runtime in the background if needed; a removed-but-live chat enters history
-  while its runtime
-  remains; tombstoned or authoritatively absent references queue structural cleanup instead of hydrating.
-  An empty pre-hydration cache never counts as absence: each resource catalog/read must be current for the
-  connection generation before it can trigger pruning. Any rejected write drops dependent optimism,
-  restores the latest accepted snapshot, advances the projection epoch (remounting uncontrolled resize
-  geometry and cancelling any newer draft based on the rejected projection), and surfaces only unexpected
-  failures through the generic save-error path.
-  `clearWorkspaceTabs` removes the snapshot and all associated local state when the workspace itself
-  disappears. A page-lifetime `removedWorkspaceIds` tombstone then rejects stale layout, catalog, session,
-  cache, and workspace-list arrivals, so an already-in-flight read cannot recreate the removed workspace.
+  **frontend-local workbench state** — one `workbenchFrame` carries the resource-free topology, geometry,
+  singleton tools, and restore targets for this frontend surface; `workspaceViewsByWorkspace` carries each
+  workspace's resource placements, order, and preview identities; `layoutAttentionByWorkspace` carries its
+  selection, last focus, and navigation clocks; and local preset/limit preferences sit beside the frame.
+  These are web-local types from `shell/layout`, not wire snapshots. There is no accepted/projected pair,
+  revision, mutation id, pending write, rollback queue, or conflict state.
+
+  `applyLocalLayoutTransition(result)` is the one atomic installation boundary for pure layout results. A
+  resource-only result updates one workspace view and attention. A frame result replaces the singular frame
+  together with every retained workspace-view remap, so an explicit group removal or preset application can
+  never leave a hidden workspace referencing a dead group. Components never splice group/tab arrays. Empty
+  groups are valid frame state and closing a final resource does not delete them. `layoutProjectionEpoch`
+  advances only when a local transition invalidates an uncontrolled pointer/resize draft.
+
+  The store owns values and actions, never persistence. `shell/layoutState` validates and hydrates one
+  endpoint/surface-qualified local document, subscribes to relevant state edges, and persists the normalized
+  frame/views/attention/preferences. `hydrateLocalLayoutState` installs that document once. During the bounded
+  compatibility release, `markLegacyLayoutImportAttempted(workspaceId)` prevents reconnect or an old peer
+  snapshot from being re-adopted after the one-time import. `clearWorkspaceTabs` removes the workspace view,
+  attention, and associated local state when the workspace disappears. A page-lifetime
+  `removedWorkspaceIds` tombstone rejects stale catalog/session/cache/workspace arrivals so an in-flight read
+  cannot recreate it.
 
   **Browser-local resource render state** is keyed by workspace + canonical resource id, never embedded in
-  the shared layout reference: loaded file/diff content and ticks, editor view modes, live chat runtimes, and
-  any resolved legacy-document markdown stay local caches over their domain sources. Shared placement ids stay
-  stable, but a placement id that is already owned by another semantic browser cache falls back to a distinct
-  collision-safe cache id; hydration must never overwrite that other resource's metadata. A virtual document is
-  legal only when its shared reference names a registered resolver plus durable source identity; `todo-plan`
-  resolves by session to the live `PlanPane` over the host-owned TODO plan. Arbitrary inline markdown cannot
-  enter the layout.
+  the frame. Loaded file/diff content and ticks, editor modes, live chat runtimes, and resolved document
+  markdown remain caches over their domain sources. Placement ids are stable within a workspace view; an id
+  already owned by another semantic cache gets a collision-safe cache id. A virtual document is legal only
+  when its local resource reference names a registered resolver plus durable source identity; `todo-plan`
+  resolves by session to the live `PlanPane`. Arbitrary inline markdown cannot enter persisted layout state.
+  An empty pre-hydration cache is never absence: a domain read must be authoritative for the current connection
+  generation before reconciliation may prune a local reference.
 
-  **Device-local layout attention** is separate: selected tab per stable group, last-focused center group,
-  last-focused group per auxiliary region (left/right/bottom), and per-group navigation clocks keyed by
-  host/workspace. Selection/focus
-  mutations never alter or publish
-  the shared document. Installing a structural snapshot reconciles attention deterministically to the nearest
-  surviving tab/group. Navigation clocks advance at request time for every local focus-changing open and
-  for an explicit re-selection of the already-active center tab (that click still supersedes older work); that
-  stamp travels with the layout intent, so accepting the resulting open/select never increments the same
-  group a second time. If structural reconciliation removed the stamped group, the completion reroutes and
-  advances its surviving destination exactly once. A slow preview completion is discarded if a newer
-  navigation overtook it. Preview identity itself is structural
-  and shared per center group; `preview` replaces only that group's slot, while `keep` promotes it one-way.
-  A coalesced preview→keep gesture carries `claimPreview` on its single final open intent so the kept tab
-  replaces that slot without publishing an intermediate structural snapshot.
-  Arrangement-agnostic open intents enter the store, but only the shell layout integration resolves them
-  against local last focus and commits placement. `syncLegacySelection` mirrors the selected workbench
-  resource into the temporary file/chat/terminal render-cache projection without incrementing navigation,
-  atomically clearing the incompatible editor/terminal mirror (and clearing both while the selected resource
-  has no cache yet); its reactive selector returns the matched cache/catalog key (not only a readiness
-  boolean), so replacing a canonical cache id with a stable shared placement id retriggers the mirror.
-  this keeps migration-era feature selectors coherent after initial or remote hydration without making cache
-  state a second placement authority. Reopening an existing canonical resource changes attention
-  only unless its non-identity metadata changed; for example, pi's `setTitle` updates a queued open in place
-  (retargeting a cache alias to the stable placement id when needed) or emits a non-activating refresh for an
-  actually placed chat. A structurally accepted close is never undone
-  by a late title event; that event instead repairs the retained cache/history label without stealing focus.
+  **Workspace-local attention** is selected tab per stable frame group, last-focused center group,
+  last-focused auxiliary group, and group navigation clocks. Selection/focus never mutates the frame.
+  Frame replacement reconciles each workspace's attention to a surviving group/tab. Navigation clocks advance
+  at request time for local focus-changing opens and explicit re-selection; the stamp travels with the intent
+  so acceptance does not count twice. A slow completion is discarded when newer navigation overtakes it.
+  Preview identity is workspace-local per center group: `preview` replaces that group's slot and `keep`
+  promotes one-way. A coalesced preview→keep gesture carries `claimPreview` on its single final intent, so no
+  intermediate state persists. Arrangement-agnostic opens enter the store, but only shell layout integration
+  resolves them against that workspace's last focus and commits local placement. Reopening an existing
+  canonical resource changes attention only unless non-identity metadata changed. A late chat-title event may
+  repair cache/history labels or a still-queued open, but cannot recreate a locally closed placement or steal
+  focus. `syncLegacySelection` mirrors the selected resource into temporary editor/terminal compatibility
+  state without becoming placement authority; its selector includes the matched cache/catalog key so identity
+  repair retriggers the mirror.
 
   **`terminalsByWorkspace` remains a mirror of terminal domain state, never placement authority.** The host
-  owns terminal existence and keys shells by `(workspaceId, tabKey)`; the layout snapshot merely references a
-  tab key at one eligible location. `setWorkspaceTerminals` adopts `terminal.list` / `terminal.tabs`, retaining
-  an omitted local tab only while its host-catalog reservation is in flight. `addTerminal` mints a durable key
-  and emits one placement intent (it never edits topology itself): a captured group destination preserves
-  contextual Group Header creation, while an uncaptured request resolves to bottom. An optional caller key
-  makes the one first-workspace seed idempotent across clients; duplicate local requests for that key are a
-  no-op. The parent shell reserves that key without a process before intent consumption. The initial-workspace
-  request may then establish a hidden placement without revealing, unfolding, or attaching it; attach waits for
-  the visibility gate and
-  consumes any initial command only for a newly created shell. A failed same-generation reservation atomically
-  rejects both the pending mirror and its placement intent. Confirmed
-  close removes the domain tab and queues a resource-removal intent; the shell layout integration prunes
-  every stale placement through the next whole-document commit. A stale layout reference never reattaches or
-  recreates an absent catalog entry. There is no workspace-global
-  `activeTerminal`: each browser's selected tab per group decides which terminal body mounts, while the host's
-  existing exclusive attach/takeover contract decides which client controls a given PTY. The
+  owns terminal existence keyed by `(workspaceId, tabKey)`; a workspace view locally references that key.
+  `setWorkspaceTerminals` adopts `terminal.list` / `terminal.tabs`, retaining an omitted local tab only while
+  reservation is in flight, removes dead references, and offers unrepresented catalog tabs to local placement
+  reconciliation without changing frame geometry or attention. `addTerminal` mints a durable key and emits one
+  local placement intent; captured group destination preserves contextual creation, while an uncaptured request
+  resolves to bottom. Default-terminal reservation is a host-owned workspace-creation handshake and surfaces
+  receive the resulting catalog entry. Confirmed close removes domain membership and every local reference;
+  rejection preserves placement. There is no workspace-global `activeTerminal`: workspace attention decides
+  which bodies mount, while host exclusive attach/takeover decides which client controls a PTY. The
   **per-session chat state** — `sessions: Record<sessionId, SessionRuntime>`, where a `SessionRuntime` holds
   one chat's `turns` (pi-canonical) / `toolResults` / `askAnswers` (the `ask-user-answers` replies keyed
   by tool call id — indexed by the reducer and hydration, never turned into bubbles; the sibling
@@ -218,19 +188,15 @@ snapshots plus device-local attention, terminal catalogs, and one **per-session 
   the same presentation rule to the persisted copy (`chat/hydrate.ts` hides retried attempts — an
   errored assistant followed by another assistant before any user message), so live and reloaded clients
   agree. Closed
-  chats are reopenable: the workbench close command first publishes the shared placement removal and only
-  after host acceptance invokes **`closeChatToHistory`**, which **keeps the runtime + session alive** and
-  records it in **`closedChatsByWorkspace`** (`ClosedChat[]`, per workspace, most-recent-first) and clears
-  any pending jump/history-open request for that session — but **never a `routeChatTarget`**: the close
-  acceptance is a delayed echo of an older click, while a route target may have been installed by a newer
-  Back/Forward to that very chat; target lifecycle belongs to navigation supersession (`navTick` currency)
-  and reconciliation consumption/absence, not to tab closure. File, diff, and registered-document render caches
-  follow the same acceptance-before-removal order; once no layout
-  write is pending, the shell reclaims only caches absent from both accepted placement and queued opens,
-  without advancing user-navigation clocks. A newer remote restoration keeps or rehydrates them instead of
-  losing the placement. **`reopenChat(workspaceId, …)`** restores
-  runtime/history membership in its captured workspace even after another workspace becomes active; the shell layout integration adds
-  placement to the locally chosen center group through the one structural commit path. **`noteClosedChats`** records
+  chats are reopenable: the workbench close command atomically removes local placement and invokes
+  **`closeChatToHistory`**, which **keeps the runtime + host session alive**, records it in
+  **`closedChatsByWorkspace`** (`ClosedChat[]`, per workspace, most-recent-first), and clears pending
+  jump/history-open requests—but never a newer `routeChatTarget`, whose lifecycle belongs to navigation
+  supersession and reconciliation. File, diff, and registered-document render caches follow the same local
+  transition; after queued opens settle, shell reclaims only caches absent from local placement and queued
+  intent. No peer can restore placement remotely. **`reopenChat(workspaceId, …)`** restores runtime/history
+  membership in its captured workspace even after another workspace becomes active; shell adds placement to
+  that workspace's locally chosen center group through the one transition path. **`noteClosedChats`** records
   disk-only sessions (from `session.list`) there too — idempotently (skips live/open/already-listed) — so a
   chat that survived a host restart is reopenable. **`deleteChat(workspaceId, sessionId)`** is the idempotent
   fold for both a confirmed local `session.delete` and the `session.deleted` broadcast: it atomically drops
@@ -238,8 +204,8 @@ snapshots plus device-local attention, terminal catalogs, and one **per-session 
   its history row/runtime + skill baseline, records a page-lifetime tombstone, removes queued opens for the
   chat or its dependent documents, and queues a resource-removal intent. The shell layout integration
   removes every matching chat placement and session-backed plan reference through its pure mutation path,
-  then reconciles local attention before publishing the complete document. Until then the tombstone renders
-  no body, so a stale shared reference cannot recreate or hydrate the session. **`noteClosedChats`** and
+  then reconciles local attention in the same transition. Until then the tombstone renders no body, so a
+  stale local reference cannot recreate or hydrate the session. **`noteClosedChats`** and
   **`hydrateSession`** reject tombstoned session ids, so
   stale `session.list` / `session.getMessages` results already in flight cannot recreate a deleted chat;
   the tombstone survives workspace teardown because an older read can still settle afterward. The
@@ -249,7 +215,8 @@ snapshots plus device-local attention, terminal catalogs, and one **per-session 
   deleting a session created after the read began or advancing a user-navigation clock. Otherwise
   **`hydrateSession`** rebuilds browser-local
   runtime/render state from a host `SessionSummary` + converted transcript on connect; placement comes only
-  from the accepted layout, the bounded live/unfinished auto-open policy, or an explicit reopen commit — the
+  from this surface's local workspace view, a local create intent, or an explicit reopen—peer-created/live
+  sessions remain discoverable in history without opening a tab—the
   live summary's `lastSettlement` is authoritative when present; otherwise only a failure on
   the persisted transcript's final conversational message is current (historical `length` attempts followed
   by later work must not become stale warnings). Hydration is a no-op if a runtime already exists, so a
@@ -353,9 +320,10 @@ snapshots plus device-local attention, terminal catalogs, and one **per-session 
   `server.welcome` / the `settings.changed` broadcast) — lives here too; it's a **pure value only** (the
   theme-application side-effect is the shell's, keyed off `theme`), and defaults to
   `DEFAULT_CONFIG.theme` until the welcome arrives. **`composerGrowthLimit: ComposerGrowthLimit`**,
-  **`layoutSettings: LayoutSettings`**, and **`analyticsEnabled: boolean`** ride the same `applyConfig` fold
-  (host-owned, defaulted from `DEFAULT_CONFIG`) — the Chat, Layout, and Privacy sections' read sides. Layout settings are not a second copy of
-  any workspace document: they carry only the portable preset catalog/default and group limit. The
+  **`customLayoutPresets: LayoutPreset[]`**, and **`analyticsEnabled: boolean`** ride the same `applyConfig`
+  fold (host-owned, defaulted from `DEFAULT_CONFIG`) — the Chat, shared Layout catalog, and Privacy read
+  sides. The instantiated frame, current/default preset id, and group limits are separate local values
+  hydrated by `shell/layoutState`; `applyConfig` can never overwrite them. The
   **toast queue** — **`toasts: Toast[]`** (oldest-first) with **`pushToast(toast) → id`** / **`dismissToast(id)`**
   and the ergonomic **`toast.error/success/info(message, title?)`** helper (wraps `pushToast` so a non-React
   call site — a `.catch` in a fire-and-forget wire call — can fire one) — lives here so any surface can raise
@@ -433,7 +401,7 @@ components. The **Skills-reload badge** rides the same tick without a separate s
   the re-read found no change** — most fs ticks touch no spec, and a fresh identity would invalidate
   `ChatView`'s matcher memo and re-derive every open chat's whole transcript about once a second.
   **`openDoc(tab)`** caches and places either a resolved **`DocTab`** or a **`PlanTab`** (`kind: "plan"`,
-  id `${workspaceId}:plan:${sessionId}` — one page per chat, re-open focuses). The shared layout conversion
+  id `${workspaceId}:plan:${sessionId}` — one page per chat, re-open focuses). Local placement persistence
   keeps only resolver kind + durable session identity, never cached content. `PlanPane` reads the host-owned
   plan live, so the page has no snapshot to go stale. **`DiffTab`** is a read-only Monaco diff of one
 changed file over **one diff scope** (id `${workspaceId}:diff:${scopeKey}:${path}` — one tab per *(file,
@@ -501,8 +469,8 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   it is measured against — the client-side mirror of the host's one resolution), **`selectDiffTabTargetRef`**
   (that ref *as an open diff tab's live dimension*: the target for a branch-scope tab, `""` for a
   commit/uncommitted one whose sides can't move — derived here, never re-assembled in a panel),
-  `selectWorkspaceTick` (the sync-baseline snapshot), `selectWorkspaceSessionIds` (the deduplicated chat
-  layout-reference + history membership used as a reconnect-reconciliation baseline);
+  `selectWorkspaceTick` (the sync-baseline snapshot), `selectWorkspaceSessionIds` (deduplicated local chat
+  placement + history membership used as a reconnect-reconciliation baseline);
   `matchesWorktreePath` (line an agent-reported path — relative or absolute — up against a worktree-relative
   one; shared by the Changes deep link and the spec classifier. The suffix rule is for **absolute reports
   only** and is anchored at a separator: unanchored, `/wt/src/a-foo.ts` would match `src/foo.ts`; applied to
@@ -512,16 +480,15 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   is the snapshot it was created with, so host-computed facts on it, today `thinkingLevels`, are read
   through this; callers fall back to the snapshot when the ref has left the catalog);
   `toast` (the fire-from-anywhere helper),
-  `Toast` (type), `WorkspaceLayoutSnapshot`/attention selectors and actions, resource render-state types
+  `Toast` (type), web-local frame/workspace-view/attention selectors and atomic actions, resource render-state types
   (file/diff/virtual-document/plan/chat), `TerminalTab`, `ClosedChat`, `SessionRuntime` +
   `EMPTY_RUNTIME` (ChatView's pre-creation fallback), `ChatLocationRequest` (type), `reduceSessionEvent`.
 - **Allowed deps:** `contracts` (`Project`/`Workspace`/`Model`/`ThinkingLevel`/`SessionStats`/
-  `SlashCommandInfo`/`ExtUiRequest`/`LoginPush`/`WorkspaceFsChangedPayload`/`WorkspaceLayoutSnapshot`/
-  `LayoutChangedPayload`/`AppConfig`/`ThemeId`;
+  `SlashCommandInfo`/`ExtUiRequest`/`LoginPush`/`WorkspaceFsChangedPayload`/`LayoutPreset`/`AppConfig`/`ThemeId`;
   `DEFAULT_CONFIG` for the pre-welcome default; `PiEvent`/`LoginFrame`, **type-only**); `lib` (the shared
   path + array + canonical-message primitives — `normalizePath`/`isAbsolutePath` for
   `matchesWorktreePath`, `shallowEqualArrays` for the snapshot-identity guard, `userText` plus the skill
   invocation parser/matcher for user-message echo reconciliation; a leaf, so the edge adds no cycle); `chat`
   (`ChatTurn`/`ToolResultState`, **type-only**); `auth` (`LoginState`, **type-only**); `transport`
   (`ConnectionStatus`, **type-only**); `zustand`.
-- **Forbidden:** `server`/`shared`/`pi`; importing `panels`/`shell` or transport runtime.
+- **Forbidden:** `server`/`shared`/`pi`; importing `panels`, shell runtime (the web-local layout state edge is type-only), or transport runtime.

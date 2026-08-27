@@ -42,8 +42,8 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   one atomic delivery at roughly 30 Hz, a 128-event forced-flush ceiling, and `flush`/`dispose` lifecycle);
   `wireTransport.ts` (`initTransport`/
   `getTransport` singleton; routes `server.welcome`, **`project.updated`**, `pi.event`, `pi.extensionUi`,
-  **`session.deleted`**, **`provider.changed`**, **`layout.changed`**, **the
-  `workspace.created`/`updated`/`removed` lifecycle trio, and `workspace.fsChanged`** into the store — and
+  **`session.deleted`**, **`provider.changed`**, **the `workspace.created`/`updated`/`removed` lifecycle
+  trio, and `workspace.fsChanged`** into the store — and
   folds every connection transition through
   `setStatus`, whose connected generation gives active-workspace hydration a distinct trigger on every
   reconnect; the complete welcome (protocol + open/recent project views + optional config) via the atomic
@@ -58,12 +58,7 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   `noteProviderChanged()` plus a `model.list` re-read installed through the store's monotonic provider-version
   guard (the model-catalog hook uses the same guarded write for every list/refresh, so an older reply cannot
   restore a removed generation's models; provider settings observes the same version and re-reads
-  `provider.status`), `layout.changed` via a revision-aware store fold (older or duplicate
-  documents are not reinstalled, though their echoed mutation ids still settle matching pending writes;
-  mutation ids distinguish this client's acknowledgements from remote commits,
-  and the shell layout integration cancels an in-progress pointer draft only for a nonmatching accepted
-  revision before rendering it),
-  `workspace.fsChanged` via `noteFsChanged(payload)`, and
+  `provider.status`), `workspace.fsChanged` via `noteFsChanged(payload)`, and
   **`settings.changed`** via `applyConfig(config)` — the post-startup server-synced app config broadcast;
   welcome config lands in the atomic install above. Before `WsTransport` dispatches any response or non-Pi
   push, `wireTransport` flushes queued Pi events synchronously; connection-status transitions do the same.
@@ -96,12 +91,11 @@ batches high-frequency Pi events without allowing later wire messages to overtak
 - **Allowed deps:** `contracts` (method maps, `WS_CHANNELS`, `Project` for welcome + `project.updated`, `SessionEventPayload`
   for `pi.event`, `ExtUiRequest` for `pi.extensionUi`, `Workspace` for `workspace.created`/`updated`,
   `WorkspaceRemoved` for `workspace.removed`, `SessionDeletedPayload` for `session.deleted`,
-  `provider.changed`,
-  `WorkspaceFsChangedPayload` for `workspace.fsChanged`, `LayoutChangedPayload` for `layout.changed`,
-  `AppConfig` for `server.welcome`'s config + `settings.changed`); `store`
+  `provider.changed`, `WorkspaceFsChangedPayload` for `workspace.fsChanged`, and `AppConfig` for
+  `server.welcome`'s config + `settings.changed`); `store`
   (welcome + event routing — a runtime edge owned by the parent graph); `lib` (plain-HTTP-safe random page
   identity); the browser `WebSocket`.
-- **Forbidden:** `server`/`shared`/any `pi` package; importing `panels`/`shell`.
+- **Forbidden:** `server`/`shared`/any `pi` package; importing `panels`/`shell`; subscribing to or folding current-layout state. The one-release legacy `layout.get` call is initiated by shell `layoutState` through the generic request surface and never becomes transport-owned routing.
 
 ## Get right
 

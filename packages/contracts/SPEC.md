@@ -25,8 +25,8 @@ of the host.
   signal that stops the transcript dialog's polling, while transport blips stay plain-`error` transients
   worth retrying), so a client can react to one specific failure
   instead of pattern-matching an error message. A failure earns a code only when a client behaves differently
-  for it; everything else stays a plain `error` string. Expected method-specific synchronization outcomes,
-  such as a stale layout replacement, remain typed method results rather than generic WS failures.
+  for it; everything else stays a plain `error` string. Expected method-specific outcomes remain typed method
+  results rather than generic WS failures; current-layout synchronization has no steady-state wire outcome.
 - **Public surface (`index.ts`):** `export type *` of `piProtocol` + `domain`; the value re-exports
   `DEFAULT_CONFIG`, `MAX_HISTORY_LIMIT`, `MAX_HISTORY_QUERY_LENGTH`, `TODO_NUDGE_PREFIX` +
   **`isControlMessage(text)`** (the one shared reading of that marker — the client hides such sends on
@@ -85,10 +85,10 @@ of the host.
     `skill.list`), and **`SkillCatalogEntry`** + **`SkillDecision`** (`load`/`untrusted`/`pending-ack`/
     `disabled`) — the workspace Skills manager's `skills.state` rows.
   - **`SessionSummary`** — a chat session as the host reports it for hydration (read side); `live`
-    distinguishes an in-memory session (auto-restored) from a disk-only one (surfaced in chat-history,
-    re-opened on demand — except one carrying unfinished TODOs, which a client auto-opens). The optional
-    **`openTodos`** (count of non-`done` items in the chat's TODO plan) is populated only by
-    `session.list` (the host decorates via the todos module); absent = unknown, treated as 0. A live
+    distinguishes an in-memory session from a disk-only one. A frontend hydrates locally placed sessions and
+    lists the rest in chat history for explicit reopen. The optional **`openTodos`** (count of non-`done`
+    items in the chat's TODO plan) is populated only by `session.list` (the host decorates via the todos
+    module) for history/status presentation; absent = unknown, treated as 0. A live
     summary's optional **`lastSettlement`** retains the host-observed terminal (`null` = the live run is
     active or settled without an assistant) so reconnect can surface a final failure Pi removed from its rebuilt context; absent
     means this host process has not observed a settlement and the persisted transcript is authoritative.
@@ -149,9 +149,10 @@ of the host.
   project folder itself as a workspace, exactly one per project, pinned first in `workspace.list`,
   non-removable and non-renamable server-side; **`kind: "external"`** marks an explicitly attached,
   user-owned worktree ThinkRail may forget but must never rename or reclaim; absent = a ThinkRail-managed
-  worktree workspace; optional literal **`initialTerminalEligible: true`** is the host-owned creation marker
-  carried only by newly persisted workspace records, while absence is the backward-compatible legacy value
-  that forbids automatic default-terminal seeding — explicit wire fields, never id conventions),
+  worktree workspace; optional literal **`initialTerminalPending: true`** is the host-owned provisioning
+  marker carried only by newly persisted workspace records: host reserves the deterministic terminal then
+  clears it, while absence is the backward-compatible legacy-or-complete value that forbids automatic
+  reseeding—explicit wire fields, never id conventions),
   **`OpenBranchReview`** (the optional open review reference for the active branch: PR vs MR + number; no status/actions),
   **`ExistingWorktreeCandidate`** (a `workspace.listExisting` row: absolute `path` + `branch`, or a
   `detached` row the chooser disables), `Session` (chat tab),
@@ -199,11 +200,10 @@ of the host.
   **`ComposerGrowthLimit`** (`"compact" | "roomy" | "half-chat"`) is the closed, server-synced composer
   height preference: 6 visual lines, 10 visual lines, or 50% of the mounted chat panel respectively;
   `"half-chat"` is the default, and the web owns translating these semantic ids into geometry;
-  **`AppConfig`** (`{ theme, analyticsEnabled, terminalReplayKb, composerGrowthLimit, layout }` — an
-  extensible bag; `layout` is the
-  **`LayoutSettings`** selection (`defaultPresetId`, named portable `customPresets`, `maxSideGroups`
-  defaulting to 6, and independent `maxBottomGroups` defaulting to 3); `analyticsEnabled` is the
-  anonymous-usage-analytics switch, default `true`
+  **`AppConfig`** (`{ theme, analyticsEnabled, terminalReplayKb, composerGrowthLimit,
+  customLayoutPresets }`—an extensible bag; `customLayoutPresets` is the bounded resource-free catalog and
+  is the **only** layout value synchronized by the host; current/default preset and group limits are web-local);
+  `analyticsEnabled` is the anonymous-usage-analytics switch, default `true`
   — it is the **only** analytics fact on the wire:
   the installation id stays server-side by design, see `submodule-server-analytics`) carries it with the
   **`DEFAULT_CONFIG`** fallback
@@ -281,23 +281,16 @@ of the host.
   what `template.list` returns; deliberately body-free so a listing never ships every file's full text),
   and **`Template`** (`TemplateInfo` + full `content` — frontmatter + body — the by-name
   `template.get`/`template.save` shape);
-  **workbench layout DTOs** — version-2 **`WorkspaceLayoutDocument`** (stable recursive center plus
-  left/right auxiliary stacks and a bottom auxiliary row; group/tab references, normalized side widths and
-  bottom height, bottom alignment, preview identities, folds/visibility, and singleton-tool restore targets;
-  explicitly no active/focused tab; virtual-document references name a registered resolver and durable source
-  identity, never inline client-only content), **`WorkspaceLayoutSnapshot`**
-  (`workspaceId` +
-  monotonic `revision` + document), **`LayoutReplaceParams`** (complete document + client-generated
-  `mutationId` + explicit `expectedRevision`, where `null` is create-only and a number is exact
-  replace-only), **`LayoutReplaceResult`** (discriminated accepted payload or conflict carrying the current
-  snapshot, including `null`), **`LayoutChangedPayload`** (snapshot + echoed origin `mutationId`), and
-  portable **`LayoutPreset`** / **`LayoutSettings`**. Presets carry resource-free bottom group slots, so a
-  terminal-only group survives capture without carrying terminal identity/count. The mutation id is
-  correlation metadata, not the concurrency token or durable document state. A tab `id` is an opaque stable
-  placement key—including for singleton tools—not semantic identity;
-  the kind-specific path/scope/session/source/tabKey/tool fields define the resource and prevent aliases from
-  duplicating it. Resource references carry placement identity only; their domain DTO remains authoritative
-  for lifetime.
+  **layout preset DTO** — portable **`LayoutPreset`**, the bounded resource-free frame grammar synchronized
+  in `AppConfig.customLayoutPresets`: center topology, left/right/bottom group geometry, visibility/folds,
+  bottom alignment, and singleton tools, but no workspace, file, diff, chat, document, terminal, preview,
+  attention, or current/default-selection identity. Current `WorkbenchFrame` and `WorkspaceViewState` are
+  web-local and deliberately absent from contracts.
+
+  During one compatibility protocol only, version-2 **`WorkspaceLayoutDocument`** and
+  **`WorkspaceLayoutSnapshot`** remain deprecated exports for the new client's read-once importer. They are
+  removed with `layout.get` in the following protocol. Replace params/results, mutation ids,
+  `LayoutChangedPayload`, and wire `LayoutSettings` are removed in the first new protocol.
 - **wsProtocol.ts** — `WS_METHODS` (`project.*` — incl. **`project.close`** (mark the stable record
   closed without deleting associated state), **`project.inspect`** (classify a path) + **`project.init`**
   (`git init` + commit, then open) + **`project.hasSpecs`** (lazy per-project "contains a registered
@@ -375,13 +368,9 @@ of the host.
   session reaches idle, which is Stop's lossless path)/`dispose`/**`delete`**/`setModel`/
   `setThinkingLevel`/`compact`/`getStats`/`getCommands`/`extUiReply`/**`answerQuestion`** (the inline
   `ask_user_question` reply, correlated by tool call id)/**`list`**/**`getMessages`** (the
-  read side) / **`layout.get`** (hydrate one workspace snapshot, or `null` before first seeding) /
-  **`layout.replace`** (inside the per-workspace serialization queue, compare `expectedRevision` with the
-  current snapshot immediately before validation/persistence; accept and atomically replace one complete
-  document only on equality, otherwise return a typed conflict with the current snapshot and do not persist,
-  increment, or broadcast; accepted snapshots echo the request's mutation id) /
-  **`settings.update`** (merge + persist a top-level partial `AppConfig`; when present, `layout` is one
-  complete validated `LayoutSettings` value rather than a nested patch; returns the merged config) /
+  read side) / deprecated read-only **`layout.get`** (one compatibility protocol for read-once import;
+  removed next protocol) / **`settings.update`** (merge + validate + persist a top-level partial `AppConfig`; when present,
+  `customLayoutPresets` is one complete bounded catalog replacement; returns the merged config) /
   **`history.search`** (the prompt-recall + conversation-search read; results capped,
   recency-ordered; the messages section is assistant-only — a user-role hit surfaces as a jumpable
   `PromptHit` instead, never a separate `MessageHit`) / the **`review.*` set** — **`get`** (the open
@@ -415,9 +404,8 @@ of the host.
   atomically converges its rail + Recents without optimistic removal / `pi.event` / `pi.extensionUi` /
   **`session.deleted`** (workspace + session id; a non-replayable domain event broadcast after permanent
   deletion so every client removes the chat and blocks stale hydration) /
-  **`settings.changed`** (the full `AppConfig`, broadcast so every client
-  converges) / **`layout.changed`** (the full accepted `WorkspaceLayoutSnapshot` plus origin mutation id;
-  idempotent by monotonic revision and broadcast to every client) / **`provider.login`** — the session-less
+  **`settings.changed`** (the full `AppConfig`, including custom preset definitions, broadcast so every
+  client converges) / **`provider.login`** — the session-less
   in-app login stream (a `LoginPush`
   per frame, keyed by `loginId`; the sibling of `pi.extensionUi`, since a login runs on the Welcome screen
   before any session exists) / **`provider.changed`** — a data-free invalidation broadcast after a watched

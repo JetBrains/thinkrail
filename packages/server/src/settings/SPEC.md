@@ -10,45 +10,29 @@ tags: [v1]
 
 ## Responsibility
 
-The server-synced app config — OUR settings (an opaque theme selection, the analytics switch, terminal
-replay budget, the chat composer growth preset, workbench default/custom presets + independent
-side/bottom group limits, and the plan-review policy — `reviewModel`/`reviewEffort` (the model + effort
-the reviewer & reflector sessions run on; unset ⇒ pi default) and `reviewAutoFix` (default true; when
-false a `request_changes` verdict records findings and waits instead of auto-sending a fix —
-`host/todoReview` reads it at the verdict gate)), an extensible `AppConfig` bag.
-Reads/merges/persists it and fans changes out to every client,
-so a preference set on one client follows the user to the others (architecture #9: shared domain state). The
-web client owns the available theme manifests; settings stores only the selected string id.
+The server-synchronized app config: opaque theme selection, analytics switch, terminal replay budget, chat
+composer growth preset, bounded custom layout-preset catalog, and plan-review policy. `reviewModel` /
+`reviewEffort` select the reviewer/reflector runtime (unset means pi default); `reviewAutoFix: false` records a
+`request_changes` verdict and waits instead of auto-sending a fix. The module reads, normalizes, persists,
+caches, and broadcasts values that intentionally follow the owner across frontends.
 
-**A numeric setting is clamped by its consumer, not here** — `terminalReplayKb` sizes a per-terminal buffer, so
-`terminal` bounds it against `TERMINAL_REPLAY_KB` on read. This bag persists what it is given; a hand-edited
-`config.json` must not be able to exhaust memory.
+Current workbench frame, workspace resource placement, current/default preset selection, side/bottom group limits, selection, and focus are explicitly absent. Those are frontend-surface-local view state under [[submodule-web-shell-layout-state]]. Built-in layout presets remain web-owned.
+
+A numeric setting is bounded by its consumer when the domain owns the safety cap—for example `terminal`
+clamps `terminalReplayKb`, so a hand-edited config cannot exhaust memory. Settings itself validates custom
+layout presets because it owns their cross-frontend storage contract.
 
 ## Boundary
 
-- **Owns:** the cached current `AppConfig` (lazy-loaded, so the per-connect `getConfig()` for
-  `server.welcome` doesn't hit disk each time); `getConfig()`, `updateConfig(partial)` (merge → persist →
-  broadcast), the `setSettingsPublisher` seam, and `resetConfigCache()` (the e2e reset).
-- **Public surface (barrel):** `getConfig`, `updateConfig`, `setSettingsPublisher`, `resetConfigCache`.
-- **Allowed deps:** `persistence` (`loadConfig`/`saveConfig`), `contracts` (`AppConfig`).
-- **Forbidden:** importing `host` or any other sibling; owning WS channels — it emits a domain value
-  through the injected publisher; `host` maps it onto `settings.changed`.
+- **Owns:** cached current `AppConfig`; `getConfig()`; `updateConfig(partial)` (merge → validate known fields → persist → broadcast); resource-free custom-preset validation/normalization and safety caps; `setSettingsPublisher`; and `resetConfigCache` for tests.
+- **Public surface (barrel):** `getConfig`, `updateConfig`, `setSettingsPublisher`, `resetConfigCache`, plus pure custom-preset normalization used by host startup after persistence load.
+- **Allowed deps:** `persistence` (`loadConfig`/`saveConfig`); `contracts` (`AppConfig`, `LayoutPreset`).
+- **Forbidden:** host or another feature sibling; current-layout document/snapshot types; workspace ids/resources; current frame validation; owning WS channels; or importing web preset definitions.
 
 ## Get right
 
-- **Converge on the broadcast, no per-client optimism.** `updateConfig` persists then publishes; the
-  initiating client applies on the `settings.changed` push like everyone else (the workspace-lifecycle
-  pattern). `getConfig()` is the same value `server.welcome` seeds on connect.
-- Theme availability/labels/palettes are not server settings concerns. An id unknown to a given web client
-  remains persisted unchanged; that client owns visual fallback.
-- `settings.update` remains a top-level partial merge; a supplied `layout` field is a complete validated
-  `LayoutSettings` replacement, never a nested partial that could drop catalog/default/limit siblings.
-- **`null` clears an optional override** (`AppConfigUpdate`: `reviewModel`/`reviewEffort` only): JSON
-  can't carry `undefined`, so without a null sentinel a client could set a reviewer model but never
-  restore the pi default. `updateConfig` deletes a null-valued key from the merged config before
-  persisting; `null` is a wire-only signal and never lands on disk.
-- Layout preset payloads are portable structure/tool placement only; settings never accepts workspace
-  resource identities in a preset. Empty bottom groups are structural terminal slots, not terminal identity or
-  count. `host` runs custom payloads through `layout`'s portable-preset validator before calling settings,
-  preserving sibling boundaries without duplicating the parser. Built-in definitions may evolve with the
-  independently shipped UI, while the host preserves the selected opaque id and custom payloads.
+- **Converge on broadcast, no client optimism.** `updateConfig` persists before publishing; every frontend, including the initiator, adopts `settings.changed`. `server.welcome` seeds the same cached value.
+- Theme availability/labels/palettes are not server concerns. Unknown theme ids remain persisted; each independently shipped frontend resolves visual fallback.
+- Custom layout presets are a complete top-level catalog replacement, not a nested per-item patch. Each value is bounded, resource-free, uniquely identified, and contains no workspace/tab/session/terminal identity. A malformed member is isolated during persisted-config normalization; a wire mutation with any malformed member is rejected as a whole. On first load after upgrade, `customLayoutPresets` falls back to the old `layout.customPresets` value; old host-wide default/limit fields are intentionally discarded because their replacements are surface-local.
+- Deleting or editing a custom preset changes only the shared definition. It cannot mutate any frontend's instantiated frame or local default selection.
+- `null` clears optional `reviewModel`/`reviewEffort` overrides; it is a wire-only sentinel and never persists.

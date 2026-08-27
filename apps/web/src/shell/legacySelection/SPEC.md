@@ -19,8 +19,8 @@ terminal mirrors used by feature render caches.
   a stable placement.
 - **Public surface (`index.ts`):** the mounted compatibility hook and the imperative attention-change adapter
   used by the workbench callback.
-- **External deps:** contracts center-tab types; store selectors and the single legacy mirror action; React.
-- **Forbidden:** changing shared placement, incrementing navigation, transport calls, panel/session/terminal
+- **External deps:** web-local center-resource types; store selectors and the single legacy mirror action; React.
+- **Forbidden:** changing frame or workspace placement, incrementing navigation, transport calls, panel/session/terminal
   lifetime, server/shared/pi imports, or becoming a second attention authority.
 
 All shell writes to `activeTabByWorkspace` / `activeTerminalByWorkspace` compatibility state pass through
