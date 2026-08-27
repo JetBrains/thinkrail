@@ -34,7 +34,10 @@ snapshots plus device-local attention, terminal catalogs, and one **per-session 
   All project response call sites use the same updater, so the open and recent copies cannot drift.
   Explicit local transitions are **`selectMain()`**, **`selectProject(projectId, opts?)`**, and
   **`activateWorkspace(workspace)`**; each updates its coupled scope ids atomically, and there is no generic
-  active-workspace setter that can split the invariant. **`expandedProjectIds: Record<string, true>`** is the
+  active-workspace setter that can split the invariant. **`workspaceSelectionHistory: string[]`** is this
+  page's most-recent-first workspace attention: every ordinary, route-driven, and history-search activation
+  moves its destination to the front, while project/main selection leaves the recency intact. It is not host
+  state, URL history, or reload persistence. **`expandedProjectIds: Record<string, true>`** is the
   Projects rail's per-browser expansion — store-held (it must survive the rail's remounts and be writable by
   non-rail gestures) with **`toggleProjectExpanded(projectId)`** (the chevron), **`expandProject(projectId)`**
   (idempotent reveal: workspace creation / worktree attach / the active-workspace visibility rule), and
@@ -68,9 +71,12 @@ snapshots plus device-local attention, terminal catalogs, and one **per-session 
   leaving the client labelling and keying reads off a value the host no longer has; a project never fetched or an id absent from its list is a **no-op** — the next
   `workspace.list` reconciles; **`applyWorkspaceRemoved(projectId, id)`** is the **entire** removal
   reaction (`removeWorkspace` drops the row + `clearWorkspaceState` drops its
-  layout/attention/terminal maps and chat runtimes,
-  and **if it was this client's active workspace** → `selectProject(projectId)` (shell falls back to its
-  owning Project Home) + a neutral toast that reads right for both the initiator and an observer); the
+  layout/attention/terminal maps and chat runtimes + recency drops the dead id,
+  and **if it was this client's active workspace** → activate the most recently selected loaded workspace
+  whose project remains open, even across projects; when none remains, `selectProject(projectId)` falls back
+  to the removed workspace's Project Home; either active fallback gets the same neutral toast that reads right
+  for both the initiator and an observer). A background removal never moves focus. Because the lifecycle event
+  is shared but selection history is browser-local, each observing client restores its own prior context. The
   primitive **`removeWorkspace(projectId, id)`** just drops the row (unknown project/id is a no-op);
   **workspace layout state** — `layoutSnapshotsByWorkspace` holds the latest accepted
   `WorkspaceLayoutSnapshot` for each workspace; `installLayoutSnapshot` is a revision-aware whole-value
@@ -164,8 +170,10 @@ snapshots plus device-local attention, terminal catalogs, and one **per-session 
   one chat's `turns` (pi-canonical) / `toolResults` / `askAnswers` (the `ask-user-answers` replies keyed
   by tool call id — indexed by the reducer and hydration, never turned into bubbles) /
   `currentAssistantId` / `attemptAssistantId` (scopes overflow removal to the attempt actually observed) /
-  `isStreaming` / `model` /
-  `thinkingLevel` / `stats` / `commands` / `draft` and its **extension-UI state** (`pendingExtUi` (typed by
+  `isStreaming` / `model` / `thinkingLevel` / **`eventRevision`** (browser-local, incremented for every
+  received Pi event; the compare-and-install fence for an authoritative transcript read) /
+  **`syncedConnectionGeneration`** (which connected host generation the runtime's transcript was last read
+  from) / `stats` / `commands` / `draft` and its **extension-UI state** (`pendingExtUi` (typed by
   `chat`'s `ExtUiDialogRequest`) + `extUiQueue` (overlapping dialogs FIFO so none orphans its server
   promise) + `extUiStatus` / `extUiWidget`). `openChatSession` creates a runtime; `closeChatRuntime` /
   `clearWorkspaceState` drop it; per-session mutators (`appendUserMessage` / **`appendErrorTurn`** / `setStats` / `setCommands` /
@@ -184,9 +192,15 @@ snapshots plus device-local attention, terminal catalogs, and one **per-session 
   cap — a failed compaction must be visible, never swallowed) or appends the settled turn when no
   running one exists (reconnect mid-compaction). A successful `compaction_end` with `willRetry: true`
   additionally marks the turn `resuming` (pi continues the same run; settlement clears the flag — a
-  settled transcript never claims ongoing work) and still removes the superseded assistant attempt. The
+  settled transcript never claims ongoing work) and still removes the superseded assistant attempt. A
+  successful live turn without a durable `summary` is also the chat integration's signal to read Pi's
+  canonical compacted transcript; the reducer never guesses the cut boundary itself. The
   reducer relies on pi's guarantee that every emitted `compaction_start` is paired with a
   `compaction_end` (both success and failure paths emit it), the same trust every other event pair gets.
+  Manual-command transport rejection uses one atomic store mutation: given the compaction-turn ids observed
+  before the request, append a failed compaction turn only if none of the current ids is new. Thus a Pi failure
+  already represented by `compaction_end` is never duplicated, while rejection before lifecycle begins is
+  still visible on the same compaction surface.
   **`auto_retry_start` mirrors pi's live-context surgery**: pi's `_prepareRetry` trims the failed
   attempt's assistant message from the live context before re-running the turn (the retry re-streams it
   as a new message) while *keeping it in the session file*, so the reducer drops the superseded failed
@@ -230,12 +244,22 @@ snapshots plus device-local attention, terminal catalogs, and one **per-session 
   live summary's `lastSettlement` is authoritative when present; otherwise only a failure on
   the persisted transcript's final conversational message is current (historical `length` attempts followed
   by later work must not become stale warnings). Hydration is a no-op if a runtime already exists, so a
-  live/ahead chat is never clobbered. The
-  pure **`reduceSessionEvent`** folds a `PiEvent` into a runtime. **Only idle sends enter the transcript
+  live/ahead chat is never clobbered. **`reconcileSession(summary, hydrated, expectedEventRevision,
+  connectionGeneration)`** is the separate authoritative path for an existing runtime after successful
+  compaction or reconnect. It compare-and-installs only at the expected Pi-event revision, rejects a removed
+  workspace/session or cross-workspace identity, replaces turns/tool results/ask answers/queue/model/thinking
+  + streaming state, and preserves draft/stats/commands/extension UI/placement/history/focus. It marks the
+  connected generation and advances the revision so two reads cannot regress one another. When the latest
+  live compaction matches the durable record, its id + estimated-after count survive, and `resuming` survives
+  only while the returned summary is still streaming. The
+  pure **`reduceSessionEvent`** folds a `PiEvent` into a runtime; **`handlePiEvent` increments the revision even
+  for a UI-ignored Pi event**, because ignored still means it crossed the snapshot ordering boundary. **Only idle sends enter the transcript
   optimistically** (`ChatView.onSubmit` → `appendUserMessage`); the last-turn echo dedup below is
   sufficient precisely because nothing intervenes before the echo. A **streaming send (`steer`/`followUp`)
-  never appends a turn**: its text lives in `queue` (folded verbatim from pi's `queue_update`, seeded from
-  the summary's snapshot at hydration) and the turn lands only via pi's canonical user `message_start` —
+  never appends a turn**: its text lives in `queue` (folded verbatim from the host-projected
+  `queue_update`, seeded from the summary at hydration), alongside the optional conservative `hasImages`
+  aggregate that guards destructive text-only queue restoration; the turn lands only via pi's canonical
+  user `message_start` —
   at its true position, converging live with hydrated. (Mirrors pi's own interactive mode; replaces the
   optimistic-append-for-everything model whose last-turn dedup missed whenever assistant content landed
   between the append and the echo — reproduced live as a duplicated, mispositioned queued bubble.)
@@ -307,7 +331,7 @@ snapshots plus device-local attention, terminal catalogs, and one **per-session 
   `provider.login` frame (creating `activeLogin` if the frame arrived first; ignoring frames for a different
   live login), **`clearLoginInput()`** drops the live input the instant a reply is sent (no double-submit),
   and **`clearLogin()`** dismisses it. The **settings surface** state — **`settingsOpen`** +
-  **`settingsSection`** (a const-object enum: `Providers`/`Github`/`Appearance`/`Layout`/`Terminal`/`Templates`/`Privacy`) with
+  **`settingsSection`** (a const-object enum: `Providers`/`Github`/`Appearance`/`Chat`/`Layout`/`Terminal`/`Templates`/`Privacy`) with
   **`openSettings(section?)`** (deep-links to a section, defaults to Providers) / **`closeSettings()`** /
   **`setSettingsSection()`** — lives here so the top-bar gear AND the Welcome provider warning open Settings
   to a section without prop-drilling through the shell. The **theme** state — **`theme: ThemeId`** (the
@@ -315,9 +339,9 @@ snapshots plus device-local attention, terminal catalogs, and one **per-session 
   (folds the server-synced `AppConfig` in from
   `server.welcome` / the `settings.changed` broadcast) — lives here too; it's a **pure value only** (the
   theme-application side-effect is the shell's, keyed off `theme`), and defaults to
-  `DEFAULT_CONFIG.theme` until the welcome arrives. **`layoutSettings: LayoutSettings`** and
-  **`analyticsEnabled: boolean`** ride the same `applyConfig` fold (host-owned, defaulted from
-  `DEFAULT_CONFIG`) — the Layout and Privacy sections' read sides. Layout settings are not a second copy of
+  `DEFAULT_CONFIG.theme` until the welcome arrives. **`composerGrowthLimit: ComposerGrowthLimit`**,
+  **`layoutSettings: LayoutSettings`**, and **`analyticsEnabled: boolean`** ride the same `applyConfig` fold
+  (host-owned, defaulted from `DEFAULT_CONFIG`) — the Chat, Layout, and Privacy sections' read sides. Layout settings are not a second copy of
   any workspace document: they carry only the portable preset catalog/default and group limit. The
   **toast queue** — **`toasts: Toast[]`** (oldest-first) with **`pushToast(toast) → id`** / **`dismissToast(id)`**
   and the ergonomic **`toast.error/success/info(message, title?)`** helper (wraps `pushToast` so a non-React

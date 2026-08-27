@@ -117,8 +117,12 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
     explicit, reviewable diff. Cross-cutting deps (pi, TypeScript, typebox, bun types) are pinned **once** in
     the root `workspaces.catalog` and referenced via `catalog:`, so their version lives in exactly one place.
     **Enforced**, not just documented: `scripts/check-catalog.ts` (`bun run check:deps`, in pre-commit + CI)
-    rejects any range and any catalog drift. Exempt: `peerDependencies` (extension packages declare `"*"` on
-    purpose — the host provides the dep) and local protocols (`workspace:` / `link:` / `file:`).
+    rejects any range, any catalog drift, and a lockfile graph that resolves `react` or `react-dom` outside
+    its one catalog pin (the temporary prerelease override rationale belongs to [[module-web]]). Exempt:
+    `peerDependencies` (extension packages declare `"*"` on purpose — the host provides the dep) and local
+    protocols (`workspace:` / `link:` / `file:`). An exact SemVer prerelease/build suffix is still an exact
+    pin (`19.3.0-canary-a1124489-20260826`); the checker accepts the full identifier grammar, including
+    hyphens, without admitting a range.
 
 11. **Terminal = xterm.js on the DOM renderer.** The browser terminal is `@xterm/xterm`, driven from
     `apps/web/src/panels/TerminalInstance.tsx` against a real PTY (`bun-pty`) in

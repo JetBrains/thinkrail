@@ -17,8 +17,9 @@ and the install identity — as JSON under the data dir.
 
 - **Owns:** `dataDir()` (`THINKRAIL_DATA_DIR` for dev/e2e isolation, else `~/.thinkrail`);
   `loadProjects`/`saveProjects`, `loadWorkspaces`/`saveWorkspaces`, `loadConfig`/`saveConfig`
-  (`config.json`, fieldwise-normalized over `DEFAULT_CONFIG`—including both nested layout group limits—so a
-  missing file or key degrades cleanly, while unknown top-level extension fields survive known-field updates),
+  (`config.json`, fieldwise-normalized over `DEFAULT_CONFIG`—including the closed composer-growth preset and
+  both nested layout group limits—so a missing/invalid known value or key degrades cleanly, while unknown
+  top-level extension fields survive known-field updates),
   `loadWorkspaceLayout`/`loadWorkspaceLayoutBackup`/`saveWorkspaceLayout`/`removeWorkspaceLayout`
   (versioned full snapshots in traversal-safe workspace-keyed filenames; atomic replacement with a
   last-known-good copy so a torn/corrupt write cannot blank a workspace; complete cleanup when its
