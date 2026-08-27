@@ -10,6 +10,7 @@ import {
 	type LayoutSideRegion,
 	type LayoutTerminalTab,
 	type LayoutToolId,
+	type LayoutToolTab,
 	type WorkspaceLayoutDocument,
 } from "@thinkrail/contracts";
 import {
@@ -20,6 +21,7 @@ import {
 	LAYOUT_TOOLS,
 	toolTab,
 } from "./model";
+import type { WorkbenchAuxiliaryGroup, WorkbenchCenterNode, WorkbenchFrame } from "./normalized";
 
 const group = (id: string): LayoutPresetCenterNode => ({ kind: "group", id });
 const split = (
@@ -350,14 +352,12 @@ export function captureLayoutPreset(
 					children: [center(node.children[0]), center(node.children[1])],
 				};
 	const portableSide = (region: LayoutSideRegion): LayoutPresetSideRegion => {
-		const portableGroups = region.groups
-			.map((candidate) => ({
-				id: candidate.id,
-				weight: candidate.weight,
-				folded: candidate.folded,
-				tools: candidate.tabs.filter((tab) => tab.kind === "tool").map((tab) => tab.tool),
-			}))
-			.filter((candidate) => candidate.tools.length > 0);
+		const portableGroups = region.groups.map((candidate) => ({
+			id: candidate.id,
+			weight: candidate.weight,
+			folded: candidate.folded,
+			tools: candidate.tabs.filter((tab) => tab.kind === "tool").map((tab) => tab.tool),
+		}));
 		const total = portableGroups.reduce((sum, candidate) => sum + candidate.weight, 0);
 		const groups = portableGroups.map((candidate) => ({
 			...candidate,
@@ -386,5 +386,116 @@ export function captureLayoutPreset(
 		left: portableSide(document.left),
 		right: portableSide(document.right),
 		bottom: portableBottom(document.bottom),
+	};
+}
+
+function instantiateFrameCenter(node: LayoutPresetCenterNode): WorkbenchCenterNode {
+	if (node.kind === "group") return { kind: "group", id: createLayoutId("center") };
+	return {
+		kind: "split",
+		id: createLayoutId("split"),
+		direction: node.direction,
+		weights: node.weights,
+		children: [instantiateFrameCenter(node.children[0]), instantiateFrameCenter(node.children[1])],
+	};
+}
+
+function instantiateFrameGroups(
+	groups: readonly { weight: number; folded: boolean; tools: LayoutToolId[] }[],
+	prefix: string,
+	resolveTool: (tool: LayoutToolId) => LayoutToolTab,
+): WorkbenchAuxiliaryGroup[] {
+	const total = groups.reduce((sum, group) => sum + group.weight, 0);
+	return groups.map((group) => ({
+		id: createLayoutId(prefix),
+		weight: group.weight / total,
+		folded: group.folded,
+		tools: group.tools.map(resolveTool),
+	}));
+}
+
+export function instantiateWorkbenchFrame(
+	preset: LayoutPreset,
+	existing?: WorkbenchFrame,
+): WorkbenchFrame {
+	const existingTools = new Map<LayoutToolId, LayoutToolTab>();
+	if (existing) {
+		for (const region of [existing.left, existing.right, existing.bottom]) {
+			for (const group of region.groups) {
+				for (const tool of group.tools) existingTools.set(tool.tool, tool);
+			}
+		}
+	}
+	const resolveTool = (tool: LayoutToolId): LayoutToolTab =>
+		existingTools.get(tool) ?? toolTab(tool);
+	const leftGroups = instantiateFrameGroups(preset.left.groups, "left-group", resolveTool);
+	const rightGroups = instantiateFrameGroups(preset.right.groups, "right-group", resolveTool);
+	const bottomGroups = instantiateFrameGroups(preset.bottom.groups, "bottom-group", resolveTool);
+	const restoreTargets = restoreTargetsForPreset(preset);
+	return {
+		version: 1,
+		center: instantiateFrameCenter(preset.center),
+		left: {
+			visible: preset.left.visible && leftGroups.length > 0,
+			width: preset.left.width,
+			groups: leftGroups,
+		},
+		right: {
+			visible: preset.right.visible && rightGroups.length > 0,
+			width: preset.right.width,
+			groups: rightGroups,
+		},
+		bottom: {
+			visible: preset.bottom.visible && bottomGroups.length > 0,
+			height: preset.bottom.height,
+			alignment: preset.bottom.alignment,
+			groups: bottomGroups,
+		},
+		toolRestoreTargets: restoreTargets,
+	};
+}
+
+export function captureWorkbenchPreset(
+	frame: WorkbenchFrame,
+	id: string,
+	name: string,
+): LayoutPreset {
+	const center = (node: WorkbenchCenterNode): LayoutPresetCenterNode =>
+		node.kind === "group"
+			? { kind: "group", id: node.id }
+			: {
+					kind: "split",
+					id: node.id,
+					direction: node.direction,
+					weights: node.weights,
+					children: [center(node.children[0]), center(node.children[1])],
+				};
+	const groups = (values: readonly WorkbenchAuxiliaryGroup[]) =>
+		values.map((group) => ({
+			id: group.id,
+			weight: group.weight,
+			folded: group.folded,
+			tools: group.tools.map((tool) => tool.tool),
+		}));
+	return {
+		id,
+		name,
+		center: center(frame.center),
+		left: {
+			visible: frame.left.visible,
+			width: frame.left.width,
+			groups: groups(frame.left.groups),
+		},
+		right: {
+			visible: frame.right.visible,
+			width: frame.right.width,
+			groups: groups(frame.right.groups),
+		},
+		bottom: {
+			visible: frame.bottom.visible,
+			height: frame.bottom.height,
+			alignment: frame.bottom.alignment,
+			groups: groups(frame.bottom.groups),
+		},
 	};
 }

@@ -11,6 +11,7 @@ import type {
 	LayoutSideTab,
 	LayoutTab,
 	LayoutToolId,
+	LayoutToolTab,
 	WorkspaceLayoutDocument,
 } from "@thinkrail/contracts";
 import {
@@ -94,7 +95,7 @@ export function layoutTabName(tab: LayoutTab): string {
 	return tab.kind === "tool" ? LAYOUT_TOOL_NAMES[tab.tool] : tab.name;
 }
 
-export function toolTab(tool: LayoutToolId): LayoutSideTab {
+export function toolTab(tool: LayoutToolId): LayoutToolTab {
 	return { kind: "tool", id: `tool:${tool}`, name: LAYOUT_TOOL_NAMES[tool], tool };
 }
 
@@ -224,22 +225,6 @@ function removeCenterGroup(node: LayoutCenterNode, groupId: string): LayoutCente
 	return { ...node, children: [first, second] };
 }
 
-function normalizeEmptyCenterLeaves(
-	node: LayoutCenterNode,
-	preferredEmptyGroupId?: string,
-): LayoutCenterNode {
-	const empty = collectCenterGroups(node).filter((group) => group.tabs.length === 0);
-	if (empty.length <= 1) return node;
-	const keep = empty.some((group) => group.id === preferredEmptyGroupId)
-		? preferredEmptyGroupId
-		: empty[0]?.id;
-	return empty.reduce(
-		(current, group) =>
-			group.id === keep ? current : (removeCenterGroup(current, group.id) ?? current),
-		node,
-	);
-}
-
 function normalizeWeights(weights: [number, number]): [number, number] {
 	const first = Number.isFinite(weights[0]) && weights[0] > 0 ? weights[0] : 1;
 	const second = Number.isFinite(weights[1]) && weights[1] > 0 ? weights[1] : 1;
@@ -261,7 +246,7 @@ function removeTabFromCenter(
 	tabId: string,
 ): { node: LayoutCenterNode; sourceGroupId: string | null } {
 	let sourceGroupId: string | null = null;
-	let next = mapCenter(node, (group) => {
+	const next = mapCenter(node, (group) => {
 		if (!group.tabs.some((tab) => tab.id === tabId)) return group;
 		sourceGroupId = group.id;
 		const tabs = group.tabs.filter((tab) => tab.id !== tabId);
@@ -271,10 +256,6 @@ function removeTabFromCenter(
 			group.previewTabId === tabId ? undefined : group.previewTabId,
 		);
 	});
-	if (sourceGroupId && collectCenterGroups(next).length > 1) {
-		const source = findCenterGroup(next, sourceGroupId);
-		if (source && source.tabs.length === 0) next = removeCenterGroup(next, sourceGroupId) ?? next;
-	}
 	return { node: next, sourceGroupId };
 }
 
@@ -290,29 +271,24 @@ function mapCenter(
 }
 
 function removeTabFromSide(region: LayoutSideRegion, tabId: string): LayoutSideRegion {
-	const remaining = region.groups
-		.map((group) => ({ ...group, tabs: group.tabs.filter((tab) => tab.id !== tabId) }))
-		.filter((group) => group.tabs.length > 0);
-	const total = remaining.reduce((sum, group) => sum + group.weight, 0);
-	const groups =
-		total > 0 ? remaining.map((group) => ({ ...group, weight: group.weight / total })) : remaining;
-	return { ...region, visible: groups.length > 0 && region.visible, groups };
+	if (!region.groups.some((group) => group.tabs.some((tab) => tab.id === tabId))) return region;
+	return {
+		...region,
+		groups: region.groups.map((group) => ({
+			...group,
+			tabs: group.tabs.filter((tab) => tab.id !== tabId),
+		})),
+	};
 }
 
 function removeTabFromBottom(region: LayoutBottomRegion, tabId: string): LayoutBottomRegion {
 	if (!region.groups.some((group) => group.tabs.some((tab) => tab.id === tabId))) return region;
-	const remaining = region.groups.flatMap((group) => {
-		if (!group.tabs.some((tab) => tab.id === tabId)) return [group];
-		const tabs = group.tabs.filter((tab) => tab.id !== tabId);
-		return tabs.length > 0 ? [{ ...group, tabs }] : [];
-	});
-	const total = remaining.reduce((sum, group) => sum + group.weight, 0);
-	const groups =
-		total > 0 ? remaining.map((group) => ({ ...group, weight: group.weight / total })) : remaining;
 	return {
 		...region,
-		visible: region.visible && groups.some((group) => group.tabs.length > 0),
-		groups,
+		groups: region.groups.map((group) => ({
+			...group,
+			tabs: group.tabs.filter((tab) => tab.id !== tabId),
+		})),
 	};
 }
 
@@ -327,6 +303,74 @@ function removeTabEverywhere(
 		left: removeTabFromSide(document.left, tabId),
 		right: removeTabFromSide(document.right, tabId),
 		bottom: removeTabFromBottom(document.bottom, tabId),
+	};
+}
+
+export function removeLayoutGroup(
+	document: WorkspaceLayoutDocument,
+	location: LayoutGroupLocation,
+): LayoutOperationResult {
+	if (location.area === "center") {
+		const groups = collectCenterGroups(document.center);
+		if (groups.length === 1) return { reason: "The final center group cannot be removed." };
+		const sourceIndex = groups.findIndex((group) => group.id === location.groupId);
+		if (sourceIndex < 0) return { reason: "The center group no longer exists." };
+		const source = groups[sourceIndex];
+		const target = groups[sourceIndex > 0 ? sourceIndex - 1 : 1];
+		if (!source || !target) return { reason: "The center group no longer exists." };
+		const moved = updateCenterGroup(document.center, target.id, (group) =>
+			withGroupTabs(
+				group,
+				[...group.tabs, ...source.tabs],
+				group.previewTabId ?? source.previewTabId,
+			),
+		);
+		const center = removeCenterGroup(moved, source.id);
+		if (!center) return { reason: "The final center group cannot be removed." };
+		const focusTab = source.tabs[0] ?? target.tabs[0];
+		return {
+			document: { ...document, center },
+			focusGroupId: target.id,
+			...(focusTab ? { focusTabId: focusTab.id } : {}),
+		};
+	}
+	const region = document[location.area];
+	const sourceIndex = region.groups.findIndex((group) => group.id === location.groupId);
+	if (sourceIndex < 0) return { reason: "The auxiliary group no longer exists." };
+	const source = region.groups[sourceIndex];
+	if (!source) return { reason: "The auxiliary group no longer exists." };
+	if (region.groups.length === 1) {
+		if (source.tabs.length > 0)
+			return { reason: "Move or hide this group's tabs before removing it." };
+		const centerId = primaryCenterGroupId(document);
+		return {
+			document: {
+				...document,
+				[location.area]: { ...region, visible: false, groups: [] },
+			},
+			focusGroupId: centerId,
+		};
+	}
+	const targetIndex = sourceIndex > 0 ? sourceIndex - 1 : 1;
+	const target = region.groups[targetIndex];
+	if (!target) return { reason: "The auxiliary group no longer exists." };
+	const groups = region.groups
+		.filter((group) => group.id !== source.id)
+		.map((group) =>
+			group.id === target.id
+				? { ...group, weight: group.weight + source.weight, tabs: [...group.tabs, ...source.tabs] }
+				: group,
+		);
+	const total = groups.reduce((sum, group) => sum + group.weight, 0);
+	const normalized = groups.map((group) => ({ ...group, weight: group.weight / total }));
+	const focusTab = source.tabs[0] ?? target.tabs[0];
+	return {
+		document: {
+			...document,
+			[location.area]: { ...region, groups: normalized },
+		},
+		focusGroupId: target.id,
+		...(focusTab ? { focusTabId: focusTab.id } : {}),
 	};
 }
 
@@ -649,47 +693,23 @@ export function splitCenterGroup(
 	return {
 		document: {
 			...cleaned,
-			center: normalizeEmptyCenterLeaves(
-				replaceCenterGroup(cleaned.center, groupId, split),
-				current.tabs.length === 0 ? current.id : undefined,
-			),
+			center: replaceCenterGroup(cleaned.center, groupId, split),
 		},
 		focusGroupId: newGroup.id,
 		focusTabId: placedTab.id,
 	};
 }
 
-function sideGroupInsertionIndex(
-	groupCount: number,
-	sourceGroupIndex: number,
-	removesSourceGroup: boolean,
-	insertAt: number,
-): number {
-	const boundary = Math.max(0, Math.min(insertAt, groupCount));
-	return removesSourceGroup && sourceGroupIndex < boundary ? boundary - 1 : boundary;
-}
-
 export function canCreateAuxiliaryGroup(
 	document: WorkspaceLayoutDocument,
 	region: LayoutAuxiliaryRegion,
-	tab: LayoutTab,
+	_tab: LayoutTab,
 	maxGroups: number,
 	insertAt?: number,
 ): boolean {
-	const groups = document[region].groups;
-	const currentCount = groups.length;
-	const source = findTabLocation(document, tab.id);
-	const sourceGroupIndex =
-		source?.area === region ? groups.findIndex((group) => group.id === source.groupId) : -1;
-	const sourceGroup = sourceGroupIndex >= 0 ? groups[sourceGroupIndex] : undefined;
-	const removesSourceGroup = sourceGroup?.tabs.length === 1;
-	if (currentCount - (removesSourceGroup ? 1 : 0) + 1 > Math.max(maxGroups, currentCount)) {
-		return false;
-	}
-	if (insertAt === undefined || !removesSourceGroup) return true;
-	return (
-		sideGroupInsertionIndex(currentCount, sourceGroupIndex, true, insertAt) !== sourceGroupIndex
-	);
+	const currentCount = document[region].groups.length;
+	if (currentCount + 1 > Math.max(maxGroups, currentCount)) return false;
+	return insertAt === undefined || (insertAt >= 0 && insertAt <= currentCount);
 }
 
 export function canCreateSideGroup(
@@ -719,40 +739,21 @@ export function createAuxiliaryGroup(
 	if (!canCreateAuxiliaryGroup(document, region, movingTab, maxGroups, insertAt)) {
 		return { reason: "That tab is already at this position." };
 	}
-	const source = findTabLocation(document, movingTab.id);
-	const sourceGroupIndex =
-		source?.area === region
-			? document[region].groups.findIndex((group) => group.id === source.groupId)
-			: -1;
-	const sourceGroup = sourceGroupIndex >= 0 ? document[region].groups[sourceGroupIndex] : undefined;
-	const removesSourceGroup = sourceGroup?.tabs.length === 1;
-	const insertionIndex = sideGroupInsertionIndex(
-		document[region].groups.length,
-		sourceGroupIndex,
-		removesSourceGroup,
-		insertAt,
-	);
-	const movedWeight = removesSourceGroup ? sourceGroup.weight : undefined;
 	const removed = removeTabEverywhere(document, movingTab.id);
 	const retained = removed[region].groups;
-	const retainedTotal = retained.reduce((sum, group) => sum + group.weight, 0);
+	const newWeight = 1 / (retained.length + 1);
+	const retainedWeight = 1 - newWeight;
 	const groups = retained.map((group) => ({
 		...group,
-		weight: retainedTotal > 0 ? group.weight / retainedTotal : group.weight,
+		weight: group.weight * retainedWeight,
 	}));
-	const newWeight = movedWeight ?? 1 / (groups.length + 1);
-	const retainedWeight = 1 - newWeight;
 	const group: LayoutSideGroup = {
 		id: createLayoutId(`${region}-group`),
 		weight: newWeight,
 		folded: false,
 		tabs: [movingTab],
 	};
-	for (let index = 0; index < groups.length; index += 1) {
-		const current = groups[index];
-		if (current) groups[index] = { ...current, weight: current.weight * retainedWeight };
-	}
-	groups.splice(Math.max(0, Math.min(insertionIndex, groups.length)), 0, group);
+	groups.splice(Math.max(0, Math.min(insertAt, groups.length)), 0, group);
 	return {
 		document: { ...removed, [region]: { ...removed[region], visible: true, groups } },
 		focusGroupId: group.id,
@@ -927,9 +928,23 @@ export function showSide(
 		if (!group) return { document: shown };
 		const selectedId = attention ? readLayoutSelection(attention, group.id) : undefined;
 		const tab = group.tabs.find((candidate) => candidate.id === selectedId) ?? group.tabs[0];
+		if (!tab) {
+			const restore =
+				TOOL_RESTORE_ORDER.find(
+					(candidate) =>
+						document.toolRestoreTargets[candidate]?.region === side &&
+						!findPlacedResource(document, toolTab(candidate)),
+				) ??
+				TOOL_RESTORE_ORDER.find(
+					(candidate) =>
+						LAYOUT_TOOL_DEFAULT_SIDES[candidate] === side &&
+						!findPlacedResource(document, toolTab(candidate)),
+				);
+			if (restore) return revealTool(shown, restore, maxSideGroups);
+		}
 		return {
 			document: shown,
-			...(tab ? { focusGroupId: group.id, focusTabId: tab.id } : {}),
+			...(tab ? { focusGroupId: group.id, focusTabId: tab.id } : { focusGroupId: group.id }),
 		};
 	}
 	const tool =
@@ -1303,9 +1318,6 @@ export function validateLayoutDocument(
 	visit(document.center, 1);
 	const centerGroups = collectCenterGroups(document.center);
 	if (centerGroups.length > LAYOUT_LIMITS.maxCenterGroups) errors.push("Too many center groups.");
-	if (centerGroups.filter((group) => group.tabs.length === 0).length > 1) {
-		errors.push("Only one empty center group may remain.");
-	}
 	for (const side of ["left", "right"] as const) {
 		const region = document[side];
 		if (!Number.isFinite(region.width) || region.width <= 0 || region.width >= 1) {
@@ -1325,7 +1337,6 @@ export function validateLayoutDocument(
 			groupIds.add(group.id);
 			if (!Number.isFinite(group.weight) || group.weight <= 0)
 				errors.push(`Invalid group weight: ${group.id}`);
-			if (group.tabs.length === 0) errors.push(`Empty side group: ${group.id}`);
 			for (const tab of group.tabs) trackTab(tab, side);
 		}
 	}
