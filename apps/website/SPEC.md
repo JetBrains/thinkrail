@@ -181,26 +181,25 @@ surfaced as one sticky PR comment and one `Website preview` commit status coveri
 `/vibecoding/`. It waits for all three route families to serve before publishing the URL.
 
 Same-repository PRs only receive previews; fork PRs skip because Cloudflare credentials never cross the
-repository boundary. Preview URLs are public, analytics-silent, and left inert after a PR closes. A
-newer push cancels only the superseded preview for that PR.
+repository boundary. Preview URLs are public and analytics-silent while their PR is open. A separate
+close workflow recognizes the sticky preview marker, deletes every deployment for that PR branch, and
+marks its preview metadata retired; PRs without that marker are no-ops. The shared concurrency group
+prevents cleanup racing an in-flight publish. A newer push cancels only the superseded preview for that
+PR.
 
 One-time setup creates `thinkrail-website` with production branch `main`, using the existing
 `CLOUDFLARE_API_TOKEN` (Pages:Edit) and `CLOUDFLARE_ACCOUNT_ID` repository secrets, then attaches the
 `thinkrail.ai` custom domain after the provider-hosted main deployment is verified.
 
-### Hosting cutover and retired hostname
+### Hosting and retired hostname
 
-The apex cutover records and removes the four GitHub Pages A records only after the new Pages main
-deployment passes direct-route and resource probes; Cloudflare then creates the apex Pages CNAME. The
-GitHub Pages custom-domain setting and last deployment remain untouched for the observation window.
-Rollback restores the recorded A records, returning to the prior split deployment; a later re-cutover
-must allow the Pages custom domain to reactivate before moving traffic back.
+Cloudflare-managed DNS routes `thinkrail.ai` to the verified `main` deployment. Production rollback
+selects a prior successful `main` deployment through Pages; legacy hosting is not part of the steady
+state.
 
-After the apex is accepted, `vibecoding.thinkrail.ai` becomes a Cloudflare Single Redirect: hostname
-match, dynamic target `concat("https://thinkrail.ai/vibecoding", http.request.uri.path)`, status 301,
-and query preservation enabled. During its rollback window, disabling the rule exposes the retained
-`thinkrail-vibecoding` deployment. After both windows, GitHub Pages and the old Cloudflare projects are
-decommissioned; the redirect-only hostname uses Cloudflare's originless proxied `192.0.2.1` record.
+`vibecoding.thinkrail.ai` is a Cloudflare Single Redirect: hostname match, dynamic target
+`concat("https://thinkrail.ai/vibecoding", http.request.uri.path)`, status 301, and query preservation
+enabled. Its originless proxied `192.0.2.1` record keeps the redirect resolvable without a deployment.
 
 ## Blog
 

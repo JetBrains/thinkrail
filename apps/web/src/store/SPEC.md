@@ -268,7 +268,38 @@ snapshots plus device-local attention, terminal catalogs, and one **per-session 
   so live and hydrated transcripts both contain one canonical skill invocation; a malformed or mismatched
   block appends normally. **`handlePiEvent(event,
   sessionId)`** and **`applyExtUi(request)`** route by id via the `withRuntime` helper (a no-op for an
-  unknown session). The host-wide **`models`** list stays global (not per session), plus
+  unknown session). A `notify` at `error` level becomes an **`error`** turn (the same
+  banner a session error gets — an extension crash must not read as chatter); every other level stays a
+  `system` turn. Level is the *only* input, so the host's own error notifies ride the same road: the
+  `Review send failed: …` that `host/handlers` publishes after a rolled-back send renders as that banner
+  too. That is deliberate — a send that silently rolled back is exactly what a user must not scroll past. A **fire-and-forget** ext-UI frame (`notify`/`setStatus`/`setWidget`/`setTitle`)
+  that has **no runtime to land in** is held in **`extUiOrphans`** (bounded, newest 64) instead of being
+  dropped, and **both** runtime-installing actions — `openChatSession` *and* `hydrateSession` — drain that
+  session's frames through the shared `replayExtUiOrphans` the moment its runtime exists. The admission
+  test is **"no runtime"**, not "unknown session": every kind except `setTitle` is reduced by
+  `withRuntime`, so a session that merely has a tab or a `closedChats` entry would pass a "do we know it"
+  test and then be dropped by `withRuntime` — neither applied nor buffered. **No path builds that state
+  today** — `closeChatToHistory` keeps the runtime, `closeChatRuntime` has no production caller, and both
+  `openTab` sites that place a chat tab are guarded by its runtime already existing — so this rule is a
+  guard, not a live fix, and it is pinned by seeding the store directly rather than through an action
+  sequence no user can perform. It starts earning its keep the moment anything places a chat tab before
+  its transcript is hydrated. `setTitle` is
+  the one exception, and it decides for itself: `renameChat` renames the tab or the `closedChats` entry
+  and reports whether it found the session **at all**, so only a title for a session in neither map is
+  buffered. Admission falls out of the rename instead of being computed beside it — one walk over
+  `tabsByWorkspace`/`closedChatsByWorkspace`, not the same two predicates twice. A **dialog** (`select`/`confirm`/
+  `input`/`editor`) is never buffered: it is one half of a round trip whose other half may already have
+  been answered by another client or lost to a host restart, so a replayed one would block the chat on
+  a question nobody is waiting for. Why buffer at all: the host publishes what an extension does in
+  `session_start` *before* it answers the RPC that installs the runtime, so an unbuffered client silently
+  loses every status, title, widget and notify an extension sets at startup. This is **not only the
+  create path** — pi re-emits `session_start` (`reason: "resume"`/`"startup"`) whenever the host attaches
+  a session from disk, i.e. on every chat opened after a host restart, and those paths install the
+  runtime through `hydrateSession`, not `openChatSession`. **Known gaps:** the 64-slot ring is one global
+  list, and the host broadcasts ext-UI frames to every client, so a burst of sessions attaching at once
+  can evict frames a client still needs; and nothing purges frames for a session that is deleted or whose
+  workspace is removed. Per-session buckets plus a purge on those two events are the fix when either
+  becomes real. The host-wide **`models`** list stays global (not per session), plus
   **`modelsRefreshing`** — the awaited `model.refresh` in-flight flag — and **`modelsFresh`**, the
   *provenance* of that list: true only while it holds the installed result of an awaited forced refresh,
   which `NewWorkspaceDialog` needs before it may substitute a model the catalog lacks. It lives here,
