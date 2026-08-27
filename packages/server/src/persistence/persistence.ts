@@ -5,6 +5,7 @@ import { join } from "node:path";
 import {
 	type AppConfig,
 	DEFAULT_CONFIG,
+	isChatMessageOrder,
 	isComposerGrowthLimit,
 	type Project,
 	type Workspace,
@@ -82,6 +83,9 @@ export function loadConfig(): AppConfig {
 		composerGrowthLimit: isComposerGrowthLimit(value.composerGrowthLimit)
 			? value.composerGrowthLimit
 			: DEFAULT_CONFIG.composerGrowthLimit,
+		chatMessageOrder: isChatMessageOrder(value.chatMessageOrder)
+			? value.chatMessageOrder
+			: DEFAULT_CONFIG.chatMessageOrder,
 		reviewAutoFix:
 			typeof value.reviewAutoFix === "boolean" ? value.reviewAutoFix : DEFAULT_CONFIG.reviewAutoFix,
 		layout: {

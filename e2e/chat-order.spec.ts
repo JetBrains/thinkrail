@@ -16,6 +16,7 @@ async function selectMessageOrder(page: Page, order: "oldest-first" | "newest-fi
 }
 
 test("the synchronized message-order setting reverses groups and their rows", async ({ page }) => {
+	await openFixtureProject(page);
 	const session = seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), {
 		name: "message order chat",
 		messages: [
@@ -28,7 +29,6 @@ test("the synchronized message-order setting reverses groups and their rows", as
 	utimesSync(session.path, new Date(BASE_TS + 10_000), new Date(BASE_TS + 10_000));
 
 	try {
-		await openFixtureProject(page);
 		await selectMessageOrder(page, "oldest-first");
 		await enterDefaultWorkspace(page);
 

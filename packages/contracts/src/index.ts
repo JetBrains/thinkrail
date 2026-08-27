@@ -2,9 +2,11 @@ export type * from "./domain";
 export {
 	ACCEPTED_IMAGE_TYPES,
 	base64EncodedLength,
+	CHAT_MESSAGE_ORDERS,
 	COMPOSER_GROWTH_LIMITS,
 	DEFAULT_CONFIG,
 	IMAGE_MAX_BASE64_BYTES,
+	isChatMessageOrder,
 	isComposerGrowthLimit,
 	isControlMessage,
 	isRetriedAttempt,

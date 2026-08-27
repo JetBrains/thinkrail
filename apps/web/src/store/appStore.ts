@@ -1,6 +1,7 @@
 import type {
 	AppConfig,
 	AskUserQuestionResult,
+	ChatMessageOrder,
 	ComposerGrowthLimit,
 	ExtUiRequest,
 	GitDiffScope,
@@ -701,6 +702,7 @@ interface AppState {
 	analyticsEnabled: boolean;
 	terminalReplayKb: number;
 	composerGrowthLimit: ComposerGrowthLimit;
+	chatMessageOrder: ChatMessageOrder;
 	reviewModel: WireModel | undefined;
 	reviewEffort: ThinkingLevel | undefined;
 	reviewAutoFix: boolean;
@@ -905,6 +907,7 @@ function configPatch(config: AppConfig) {
 		analyticsEnabled: config.analyticsEnabled,
 		terminalReplayKb: config.terminalReplayKb,
 		composerGrowthLimit: config.composerGrowthLimit ?? DEFAULT_CONFIG.composerGrowthLimit,
+		chatMessageOrder: config.chatMessageOrder ?? DEFAULT_CONFIG.chatMessageOrder,
 		layoutSettings: config.layout ?? DEFAULT_CONFIG.layout,
 		reviewModel: config.reviewModel,
 		reviewEffort: config.reviewEffort,
@@ -1510,6 +1513,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	analyticsEnabled: DEFAULT_CONFIG.analyticsEnabled,
 	terminalReplayKb: DEFAULT_CONFIG.terminalReplayKb,
 	composerGrowthLimit: DEFAULT_CONFIG.composerGrowthLimit,
+	chatMessageOrder: DEFAULT_CONFIG.chatMessageOrder,
 	layoutSettings: DEFAULT_CONFIG.layout,
 	reviewModel: DEFAULT_CONFIG.reviewModel,
 	reviewEffort: DEFAULT_CONFIG.reviewEffort,

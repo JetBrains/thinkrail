@@ -538,11 +538,19 @@ export function isComposerGrowthLimit(value: unknown): value is ComposerGrowthLi
 	return COMPOSER_GROWTH_LIMITS.some((limit) => limit === value);
 }
 
+export const CHAT_MESSAGE_ORDERS = ["oldest-first", "newest-first"] as const;
+export type ChatMessageOrder = (typeof CHAT_MESSAGE_ORDERS)[number];
+
+export function isChatMessageOrder(value: unknown): value is ChatMessageOrder {
+	return CHAT_MESSAGE_ORDERS.some((order) => order === value);
+}
+
 export interface AppConfig {
 	theme: ThemeId;
 	analyticsEnabled: boolean;
 	terminalReplayKb: number;
 	composerGrowthLimit: ComposerGrowthLimit;
+	chatMessageOrder: ChatMessageOrder;
 	layout: LayoutSettings;
 	/** The model the plan reviewer + reflector run on; unset ⇒ the pi default. */
 	reviewModel?: WireModel;
@@ -565,6 +573,7 @@ export const DEFAULT_CONFIG: AppConfig = {
 	analyticsEnabled: true,
 	terminalReplayKb: TERMINAL_REPLAY_KB.default,
 	composerGrowthLimit: "half-chat",
+	chatMessageOrder: "oldest-first",
 	layout: {
 		defaultPresetId: "balanced",
 		customPresets: [],

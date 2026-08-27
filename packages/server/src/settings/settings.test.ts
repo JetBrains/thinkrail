@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { DEFAULT_CONFIG } from "@thinkrail/contracts";
+import { type AppConfigUpdate, DEFAULT_CONFIG } from "@thinkrail/contracts";
 import { getConfig, resetConfigCache, setSettingsPublisher, updateConfig } from "./settings";
 
 let dataDir: string;
@@ -75,7 +75,10 @@ test("loadConfig replaces an invalid composer growth preset with the default", (
 });
 
 test("newest-first chat order round-trips through the synchronized config", () => {
-	const update = { theme: DEFAULT_CONFIG.theme, chatMessageOrder: "newest-first" };
+	const update = {
+		theme: DEFAULT_CONFIG.theme,
+		chatMessageOrder: "newest-first",
+	} satisfies AppConfigUpdate;
 	const next = updateConfig(update);
 	expect(Reflect.get(next, "chatMessageOrder")).toBe("newest-first");
 	resetConfigCache();
