@@ -27,6 +27,13 @@ const ALLOWLIST: Record<string, { reason: string; imports: string[] }> = {
 	},
 };
 
+const SKIPPED_DIST_DIRS: Record<string, string> = {
+	"pi-coding-agent/dist/bundle":
+		"CLI/RPC-only bundled runtime (reachable only via pi's bin and the ./rpc-entry export) — " +
+		"the in-process library import ('.' → dist/index.js) never loads it, so its opaque imports " +
+		"(content-hashed chunk duplicates of the allowlisted modular seams) never run in the compiled binary",
+};
+
 function packageRoot(name: string, entry: string): string {
 	const marker = `${sep}@earendil-works${sep}${name}${sep}`;
 	const at = entry.lastIndexOf(marker);
@@ -92,19 +99,23 @@ for (let next = queue.shift(); next !== undefined; next = queue.shift()) {
 }
 
 const found = new Map<string, string[]>();
+const usedSkips = new Set<string>();
 for (const [name, root] of roots) {
 	for (const file of listJsFiles(join(root, "dist"))) {
+		const id = `${name}/${file
+			.slice(root.length + 1)
+			.split(sep)
+			.join("/")}`;
+		const skipped = Object.keys(SKIPPED_DIST_DIRS).find((dir) => id.startsWith(`${dir}/`));
+		if (skipped !== undefined) {
+			usedSkips.add(skipped);
+			continue;
+		}
 		const source = readFileSync(file, "utf8");
 		if (!/\bimport\s*\(/.test(source)) continue;
 		const imports = opaqueImportsIn(file, source);
 		if (imports.length === 0) continue;
-		found.set(
-			`${name}/${file
-				.slice(root.length + 1)
-				.split(sep)
-				.join("/")}`,
-			imports,
-		);
+		found.set(id, imports);
 	}
 }
 
@@ -119,6 +130,9 @@ for (const id of new Set([...found.keys(), ...Object.keys(ALLOWLIST)])) {
 		else stale.push(`${id}: import(${imp})  (${ALLOWLIST[id]?.reason})`);
 	}
 	unexpected.push(...actual.map((imp) => `${id}: import(${imp})`));
+}
+for (const [dir, reason] of Object.entries(SKIPPED_DIST_DIRS)) {
+	if (!usedSkips.has(dir)) stale.push(`${dir}: skipped dist dir no longer present  (${reason})`);
 }
 
 if (unexpected.length > 0) {
