@@ -137,7 +137,7 @@ import { installCommands, windowsShellLabels } from "../installCommands";
 							<h3>Agents deserve worktrees, not your working tree.</h3>
 							<p>
 								Every workspace is a real <code>git worktree</code> — its own branch, its own
-								cwd. Run several agents in parallel; each one's mess stays on its branch, and{" "}
+								cwd. Run several agents in parallel; each one's mess stays on its branch, and
 								<code>main</code> stays clean until you say otherwise.
 							</p>
 						</div>
@@ -152,7 +152,7 @@ import { installCommands, windowsShellLabels } from "../installCommands";
 						<div class="beat">
 							<h3>A thin host, a real engine.</h3>
 							<p>
-								The <a href="https://pi.dev"><code>pi</code> coding agent</a>{" "}
+								The <a href="https://pi.dev"><code>pi</code> coding agent</a>
 								runs in-process and owns models, skills, compaction, and cost. ThinkRail owns
 								the workspace, the editor, and the wire — it never assembles prompts behind
 								your back.
@@ -233,8 +233,8 @@ import { installCommands, windowsShellLabels } from "../installCommands";
 							<p data-step>The <strong>three rings</strong>:</p>
 							<ol>
 								<li data-step>
-									<strong>Engine host</strong> (<code>packages/server</code>) —{" "}
-									<code>createServer()</code> runs an HTTP+WS host plus an{" "}
+									<strong>Engine host</strong> (<code>packages/server</code>) —
+									<code>createServer()</code> runs an HTTP+WS host plus an
 									<code>AgentSessionManager</code>: one in-process <code>pi</code> session per tab.
 								</li>
 								<li data-step>
@@ -342,8 +342,8 @@ import { installCommands, windowsShellLabels } from "../installCommands";
 						<li><strong>Prebuilt:</strong> macOS (Apple Silicon), Linux arm64 + x64, Windows x64.</li>
 						<li><strong>Needs:</strong> <code>git</code> on PATH and an authenticated <code>pi</code> provider — the agent runs against your real credentials.</li>
 						<li>
-							Prefer manual? Grab a binary + <code>SHA256SUMS</code> from the{" "}
-							<a href="https://github.com/JetBrains/thinkrail/releases">releases page</a>, verify,{" "}
+							Prefer manual? Grab a binary + <code>SHA256SUMS</code> from the
+							<a href="https://github.com/JetBrains/thinkrail/releases">releases page</a>, verify,
 							<code>chmod +x</code>, done. App state lives under <code>~/.thinkrail</code>.
 						</li>
 					</ul>
