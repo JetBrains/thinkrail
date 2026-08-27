@@ -52,6 +52,15 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
    loopback host. Neither owns engine logic or spawns the other. The CLI remains a complete independent
    artifact and rollback. A later desktop shared-client profile may omit the local host; every profile uses
    the same wire and web artifact.
+
+   **One feature path across deployments.** An ordinary product feature changes its contract, the owning
+   server feature module, the shared web client, and their tests — never each launcher. Launchers and future
+   deployments own only composition, lifecycle, endpoint selection, native presentation, and artifact
+   packaging. A real second environment that cannot supply an existing host operation earns one narrow port
+   in the feature module that owns that behavior; do not pre-abstract the host behind a global platform
+   adapter. Physical runtime requirements are declared once through the server-owned build-support manifest,
+   then transformed by each packager. The same behavior and artifact suites run through every launcher, so
+   reuse is enforced by boundaries and conformance rather than parallel implementations.
 3. **The wire is versioned.** `contracts` is types-only; `server.welcome` carries a protocol version so
    an independently-shipped UI can detect host-version drift.
 4. **Transport endpoint is a parameter.** Defaults to same-origin (`location.host`); a remote browser,
