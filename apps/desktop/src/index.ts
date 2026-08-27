@@ -25,10 +25,7 @@ function writeReady(path: string, payload: unknown): void {
 }
 
 async function start(): Promise<void> {
-	const applicationMenuInstalled = installDesktopApplicationMenu(
-		ApplicationMenu,
-		process.platform,
-	);
+	const applicationMenuInstalled = installDesktopApplicationMenu(ApplicationMenu, process.platform);
 	const runtimeDir = join(PATHS.RESOURCES_FOLDER, "app", "runtime");
 	process.env.BUN_PTY_LIB = join(
 		runtimeDir,
