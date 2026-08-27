@@ -1,7 +1,11 @@
 import { rmSync } from "node:fs";
 import { join } from "node:path";
-import { SessionManager } from "@earendil-works/pi-coding-agent";
-import type { DelegationRunStatus, TranscriptMessage } from "@thinkrail/contracts";
+import { buildSessionContext, SessionManager } from "@earendil-works/pi-coding-agent";
+import {
+	type DelegationRunStatus,
+	isTranscriptMessageRole,
+	type TranscriptMessage,
+} from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import {
 	createDelegationService,
@@ -82,13 +86,9 @@ export function readChildTranscript(
 		);
 	}
 	const sessionManager = SessionManager.open(path);
-	const renderable = new Set(["user", "assistant", "toolResult", "custom"]);
-	const messages: TranscriptMessage[] = [];
-	for (const entry of sessionManager.getEntries()) {
-		if (entry.type === "message" && renderable.has(entry.message.role)) {
-			messages.push(entry.message as TranscriptMessage);
-		}
-	}
+	const messages = buildSessionContext(sessionManager.getEntries()).messages.filter((message) =>
+		isTranscriptMessageRole(message.role),
+	) as TranscriptMessage[];
 	const status = services.get(workspaceId)?.findChild(childSessionId)?.snapshot?.status;
 	return { messages, ...(status !== undefined ? { status } : {}) };
 }

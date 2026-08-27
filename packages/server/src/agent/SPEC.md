@@ -378,7 +378,12 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     `(workspaceId, parentSessionId, childSessionId)` — the ids are wire strings that become path
     segments, so it rejects path-like values (separators, `..`; the handler additionally validates
     the workspace like every sibling read) — and returns the run's current registry `status`
-    alongside the messages (absent after restart/dispose; wire meaning: [[module-contracts]]).
+    alongside the messages, built from the raw entries via pi's canonical projection
+    (`buildSessionContext` — the same entry→message path a live `session.messages` takes) and
+    filtered through contracts' shared `isTranscriptMessageRole` exactly like `getSessionMessages`
+    (a private message-entry loop here once drifted: compaction is an entry *type*, not a message
+    role, so a compacted child's transcript lost its `compactionSummary` marker — PR #303 review
+    finding, test-pinned; absent after restart/dispose; wire meaning: [[module-contracts]]).
     A missing transcript throws `CodedError("SUBAGENT_TRANSCRIPT_NOT_FOUND")` — the **permanent**
     miss the web dialog stops polling on, named on the wire instead of pattern-matched from the
     message ([[module-contracts]] owns the code set; this is the agent module's one

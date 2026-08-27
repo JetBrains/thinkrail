@@ -132,6 +132,17 @@ test("host embedding: projection, per-workspace service, transcript store, casca
 	expect(JSON.stringify(read.messages)).toContain("CHILD_DONE");
 	expect(read.status).toBe("completed");
 
+	const childManager = SessionManager.open(child.record.sessionFile);
+	const lastEntryId = childManager.getEntries().at(-1)?.id;
+	if (!lastEntryId) throw new Error("expected child entries");
+	childManager.appendCompaction("COMPACTED_CONTEXT", lastEntryId, 12_345);
+	const compacted = readChildTranscript("ws-del", sessionId, child.sessionId);
+	expect(
+		compacted.messages.some(
+			(message) => message.role === "compactionSummary" && message.summary === "COMPACTED_CONTEXT",
+		),
+	).toBe(true);
+
 	await removeSession(sessionId);
 	expect(service.findChild(child.sessionId)).toBeUndefined();
 	const afterDispose = readChildTranscript("ws-del", sessionId, child.sessionId);
