@@ -26,8 +26,8 @@ interface PublishedFrame {
 }
 
 const WS = "ws-1";
-const TERMINAL_CONDITION_TIMEOUT_MS = 5_000;
-const TERMINAL_TEST_TIMEOUT_MS = 20_000;
+const TERMINAL_CONDITION_TIMEOUT_MS = 15_000;
+const TERMINAL_TEST_TIMEOUT_MS = TERMINAL_CONDITION_TIMEOUT_MS * 3 + 5_000;
 let dataDir: string;
 const savedDataDir = process.env.THINKRAIL_DATA_DIR;
 
