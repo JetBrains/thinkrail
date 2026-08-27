@@ -189,8 +189,9 @@ registration runs once when the chat module mounts. Unregistered tools fall back
   `pi-visualize` extension.
 - **Spec-graph tools** — one defensive `SpecToolCard` registered for all seven `spec_*` names. Each keeps
   the capability's readable text, folds long output, replaces redundant args JSON with a meaningful
-  activity summary, and turns only exact worktree paths obtained from known successful result `details`
-  shapes into preview actions. `spec_delete` never links its successful deleted path. Routine.
+  activity summary, and turns only exact standalone worktree-path tokens obtained from known successful
+  result `details` shapes into preview actions; a shorter known path never links a suffix inside another
+  path. `spec_delete` never links its successful deleted path. Routine.
 - **`web/`** — search/fetch/stored-content renderers for `pi-web-access`; own child spec
   ([web/SPEC.md](web/SPEC.md)). Routine.
 - **The five `todo_*` tools** deliberately keep routine fallback receipts: their connected product surface

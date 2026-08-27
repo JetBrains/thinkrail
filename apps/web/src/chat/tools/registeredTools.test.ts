@@ -112,6 +112,14 @@ describe("intentional bundled tool renderers", () => {
 		expect(segments.map((segment) => segment.text).join("")).toBe(text);
 	});
 
+	it("does not link a known path as a suffix inside another path", () => {
+		const text = "foreign /tmp/SPEC.md; local SPEC.md:12; backup SPEC.md.bak; nested other/SPEC.md";
+		const segments = splitKnownPathReferences(text, ["SPEC.md"]);
+
+		expect(segments.map((segment) => segment.path).filter(Boolean)).toEqual(["SPEC.md"]);
+		expect(segments.map((segment) => segment.text).join("")).toBe(text);
+	});
+
 	it("registers every non-TODO tool exposed by a normal session", () => {
 		for (const toolName of INTENTIONAL_TOOLS) {
 			expect(getToolRenderer(toolName)).not.toBe(DefaultToolRenderer);

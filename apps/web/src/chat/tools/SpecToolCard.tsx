@@ -9,6 +9,28 @@ interface LinkedTextSegment {
 	path?: string;
 }
 
+const PATH_PREFIX_BOUNDARY = /[\s([{"'=]/;
+const PATH_SUFFIX_BOUNDARY = /[\s)\]}"',;:]/;
+
+function boundedPathIndex(text: string, path: string, cursor: number): number {
+	let from = cursor;
+	while (from < text.length) {
+		const index = text.indexOf(path, from);
+		if (index < 0) return -1;
+		const before = index === 0 ? "" : text[index - 1];
+		const afterIndex = index + path.length;
+		const after = afterIndex === text.length ? "" : text[afterIndex];
+		if (
+			(!before || PATH_PREFIX_BOUNDARY.test(before)) &&
+			(!after || PATH_SUFFIX_BOUNDARY.test(after))
+		) {
+			return index;
+		}
+		from = index + 1;
+	}
+	return -1;
+}
+
 function objectValue(value: unknown): Record<string, unknown> | null {
 	return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : null;
 }
@@ -81,7 +103,7 @@ export function splitKnownPathReferences(text: string, paths: string[]): LinkedT
 		let nextIndex = -1;
 		let nextPath = "";
 		for (const path of references) {
-			const index = text.indexOf(path, cursor);
+			const index = boundedPathIndex(text, path, cursor);
 			if (index < 0) continue;
 			if (
 				nextIndex < 0 ||
