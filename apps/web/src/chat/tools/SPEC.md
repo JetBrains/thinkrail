@@ -19,7 +19,9 @@ registration runs once when the chat module mounts. Unregistered tools fall back
 ## What's here
 
 - **Core pi tools** — `BashCard` (terminal block), `ReadCard`/`WriteCard` (project-relative path +
-  highlighted file), `EditCard` (path + removed/added line diff). All **routine**.
+  highlighted textual file), `EditCard` (path + removed/added line diff). All **routine**. Image content
+  returned by `read` is previewed by the parent chat module's common result-content layer, the same path as
+  every other image-producing tool; `ReadCard` does not special-case image payloads.
 - **`ResolveCommentCard`** — the compact receipt for the host-owned `resolve_comment` review tool
   (capability: the server's `agent` module + `reviews` seam; see [[submodule-server-reviews]]): a ✓ +
   the resolved comment id/note. **Routine** — the review sidebar is where resolution state lives; the
@@ -186,6 +188,8 @@ registration runs once when the chat module mounts. Unregistered tools fall back
   ([web/SPEC.md](web/SPEC.md)). Routine.
 - **Shared pieces** — `CodeBlock` (shiki), `Collapsible` ("Show all N lines" fold for long output),
   pure `toolHelpers` (arg readers, `resultText`, `languageFromPath`) + `lib`'s `projectRelativePath`.
+  `resultText` delegates canonical result parsing to the parent chat primitive, so text extraction and the
+  common image layer cannot disagree about what constitutes a valid content block.
 
 ## Boundary
 

@@ -81,7 +81,14 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
 - `tool` — a **primary** tool call: the collapsible `ToolCard` frame (collapsed unless registered
   `defaultExpanded`; errors auto-expand; a manual toggle wins), or a `"bare"` renderer that owns its
   frame. A `"bare"` call on a dead message (`stopReason` aborted/error — pi never executes those calls)
-  renders as errored rather than staying interactive forever.
+  renders as errored rather than staying interactive forever. Every renderer invocation — registered or
+  fallback, routine or primary, card or bare — passes through one common result-content layer. Once a result
+  completes, each valid canonical image block appends a bounded in-card preview with an explicit full-screen
+  dialog action; multiple images retain block order. This is content-type behavior, not a `read` special case,
+  and it does not promote or auto-expand the tool. The result bytes are already in the transcript, so preview
+  needs no host fetch and works for paths outside the workspace. Previewable blocks require non-empty data
+  and one of `contracts`' shared raster media types (PNG/JPEG/GIF/WebP); malformed shapes and unsupported
+  media types are ignored, while canonical content arrays are never serialized into base64 JSON.
 - `activity` — one contiguous run of routine work stays one **collapsed outer disclosure** whose header
   summarizes every atomic step (thinking blocks + routine tool calls). Expanding it preserves tools before
   the first thought as direct rows, then renders each non-empty thinking block as a nested disclosure that
@@ -143,8 +150,9 @@ entry/exit obeys reduced motion.
 the **capability** registers with the pi session server-side (custom tool or pi extension/skill), the
 **presentation** registers here. A registration is:
 
-- a **renderer** (the card body; `ToolRenderProps` carries `toolCallId`/`args`/`result`/`status`/
-  `workspaceRoot`/`streaming` — enough to stay props-driven), plus optionally
+- a **renderer** (the specialized card body; `ToolRenderProps` carries `toolCallId`/`args`/`result`/
+  `status`/`workspaceRoot`/`streaming` — enough to stay props-driven; the common invocation seam decorates
+  its completed canonical image results consistently), plus optionally
 - a **`summary`** — a pure one-liner for collapsed headers and activity-step rows,
 - a **`chrome`** — `"card"` (default, the `ToolCard` frame) or `"bare"` (owns its frame; for
   interactive/primary tools like `ask_user_question`),
