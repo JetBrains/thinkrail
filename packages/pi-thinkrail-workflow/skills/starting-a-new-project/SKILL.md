@@ -52,13 +52,19 @@ preset questionnaire, decide what you ask.
    or replace it (the widget's freeform answer). If the user **already named it** earlier, reuse that
    name and only ask to confirm when there is real doubt — never finalize a name the user hasn't seen.
 
-5. Then run the unchanged tail: save `goal-and-requirements.md` titled with the confirmed name (the
-   Saving steps below), call **`finalize_project({ name })`** once with that exact name, and end with a
-   short contextual ready message preserving the model **Project → its Default workspace for the main
-   checkout → additional Workspaces for isolated branch/worktree tasks** (e.g. "Your project is ready.
-   I created *<name>* and captured the concept in `goal-and-requirements.md`. Start working here in the
-   Default workspace, or spin up a separate workspace for an isolated task/branch."). This replaces the
-   **Next** hand-off for the hosted entry.
+5. Then run the tail: save `goal-and-requirements.md` titled with the confirmed name (the Saving steps
+   below), call **`finalize_project({ name })`** once with that exact name, post a **concise** ready
+   confirmation (one line, e.g. "Your project is ready. I created *<name>* and captured the initial
+   concept in `goal-and-requirements.md`." — **no** git/workspace tutorial), then call
+   **`offer_next_steps({ projectName })`** once. That renders the two next-step cards and ends your turn.
+6. **Branch on the choice** (it arrives as the next message):
+   - **Continue in the Default workspace** → reply with a short acknowledgement that the Default
+     workspace is the main version (one or two sentences, no git terms), then ask **one** contextual
+     next-step decision via `ask_user_question`, generated from the brief (e.g. what the first screen
+     should show) with a few suggested directions + freeform. Do not start implementation.
+   - **Start a separate task** → the app is opening a fresh isolated workspace for the user; acknowledge
+     briefly in one line and stop — the new workspace's own chat takes over from there.
+   This replaces the **Next** hand-off for the hosted entry.
 
 Without the `finalize_project` tool (the `setting-up-a-project` dispatcher in a real repo), ignore this
 section entirely and follow the flow below as written.
