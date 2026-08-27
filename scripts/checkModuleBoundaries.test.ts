@@ -73,7 +73,7 @@ test("accepts the contracts-server-web rings and thin launcher edges", () => {
 	expect(moduleBoundaryViolations(root)).toEqual([]);
 });
 
-test("rejects manifest, type-only, dynamic, and relative cross-boundary edges", () => {
+test("rejects manifest, type-only, dynamic, CommonJS, and relative cross-boundary edges", () => {
 	const root = fixture();
 	write(
 		root,
@@ -92,12 +92,14 @@ test("rejects manifest, type-only, dynamic, and relative cross-boundary edges", 
 		"apps/web/src/typeLeak.ts",
 		'import type { RunningServer } from "@thinkrail/server";',
 	);
+	write(root, "apps/web/src/commonJsLeak.cjs", 'require("@thinkrail/server");');
 	write(root, "apps/cli/src/dynamicLeak.ts", 'void import("@thinkrail/web");');
 	write(root, "packages/shared/src/relativeLeak.ts", 'export * from "../../server/src/index";');
 
 	expect(moduleBoundaryViolations(root)).toEqual([
 		'apps/cli/src/dynamicLeak.ts: import "@thinkrail/web" creates forbidden apps/cli -> apps/web edge',
 		"apps/desktop/package.json: dependencies.@thinkrail/web creates forbidden apps/desktop -> apps/web edge",
+		'apps/web/src/commonJsLeak.cjs: import "@thinkrail/server" creates forbidden apps/web -> packages/server edge',
 		'apps/web/src/typeLeak.ts: import "@thinkrail/server" creates forbidden apps/web -> packages/server edge',
 		'packages/shared/src/relativeLeak.ts: import "../../server/src/index" creates forbidden packages/shared -> packages/server edge',
 	]);

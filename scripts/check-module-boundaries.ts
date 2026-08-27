@@ -45,7 +45,7 @@ const DEPENDENCY_SECTIONS = [
 	"optionalDependencies",
 	"peerDependencies",
 ] as const;
-const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".mts", ".cts", ".js", ".jsx"]);
+const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"]);
 const EXCLUDED_DIRECTORIES = new Set([
 	".git",
 	".stage",
