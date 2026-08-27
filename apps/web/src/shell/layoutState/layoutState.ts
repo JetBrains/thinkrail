@@ -1,4 +1,8 @@
-import type { WorkspaceLayoutDocument, WorkspaceLayoutSnapshot } from "@thinkrail/contracts";
+import type {
+	LayoutPreset,
+	WorkspaceLayoutDocument,
+	WorkspaceLayoutSnapshot,
+} from "@thinkrail/contracts";
 import { useEffect } from "react";
 import { type LayoutAttention, randomId } from "../../lib";
 import {
@@ -10,9 +14,12 @@ import {
 import { errorText, getTransport } from "../../transport";
 import {
 	applyProjectedLayoutDocument,
+	applyWorkbenchPreset,
 	BUILTIN_LAYOUT_PRESETS,
 	emptyWorkspaceView,
 	instantiateWorkbenchFrame,
+	minimumBottomGroupLimit,
+	minimumSideGroupLimit,
 	projectWorkspaceLayout,
 	reconcileAttention,
 	reconcileWorkspaceView,
@@ -386,6 +393,9 @@ export function ensureWorkspaceLayoutState(workspaceId: string): Promise<Workspa
 		if (localDocument && loaded.legacyLayoutImportAttempted[workspaceId]) return localDocument;
 		const connectionGeneration = loaded.connectionGeneration;
 		const snapshot = await requestLegacyLayout(workspaceId);
+		if (snapshot && snapshot.workspaceId !== workspaceId) {
+			throw new Error("The legacy layout did not match the requested workspace");
+		}
 		const latest = useAppStore.getState();
 		if (
 			latest.removedWorkspaceIds[workspaceId] ||
@@ -410,6 +420,46 @@ export function ensureWorkspaceLayoutState(workspaceId: string): Promise<Workspa
 	});
 	workspaceImports.set(workspaceId, request);
 	return request;
+}
+
+export function applyLayoutPresetLocally(preset: LayoutPreset): void {
+	const state = useAppStore.getState();
+	if (!state.workbenchFrame) throw new Error("The local workbench frame is not ready");
+	const next = applyWorkbenchPreset(
+		{ frame: state.workbenchFrame, viewsByWorkspace: state.workspaceViewsByWorkspace },
+		preset,
+	);
+	const documentsByWorkspace = documentsForViews(next.frame, next.viewsByWorkspace);
+	const attentionByWorkspace: Record<string, LayoutAttention> = {};
+	for (const [workspaceId, document] of Object.entries(documentsByWorkspace)) {
+		attentionByWorkspace[workspaceId] = reconcileAttention(
+			document,
+			state.layoutAttentionByWorkspace[workspaceId],
+			state.layoutDocumentsByWorkspace[workspaceId],
+		);
+	}
+	state.applyLocalLayoutState(
+		{
+			frame: next.frame,
+			viewsByWorkspace: next.viewsByWorkspace,
+			documentsByWorkspace,
+			attentionByWorkspace,
+			preferences: {
+				...state.localLayoutPreferences,
+				maxSideGroups: Math.max(
+					state.localLayoutPreferences.maxSideGroups,
+					minimumSideGroupLimit(preset),
+				),
+				maxBottomGroups: Math.max(
+					state.localLayoutPreferences.maxBottomGroups,
+					minimumBottomGroupLimit(preset),
+				),
+			},
+			legacyImportAttempted: state.legacyLayoutImportAttempted,
+		},
+		Object.keys(documentsByWorkspace),
+		true,
+	);
 }
 
 export async function commitWorkspaceLayout(
@@ -449,6 +499,7 @@ export async function commitWorkspaceLayout(
 			legacyImportAttempted: state.legacyLayoutImportAttempted,
 		},
 		changedWorkspaceIds,
+		frameChanged,
 	);
 	persistCurrentLayout();
 	return useAppStore.getState().layoutDocumentsByWorkspace[workspaceId] ?? document;

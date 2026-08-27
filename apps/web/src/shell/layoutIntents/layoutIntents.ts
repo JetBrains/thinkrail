@@ -184,8 +184,8 @@ export function useLayoutIntentProcessing(
 	const layoutIntent = useAppStore(
 		(state) => state.layoutIntents.find((intent) => intent.workspaceId === workspaceId) ?? null,
 	);
-	const maxSideGroups = useAppStore((state) => state.layoutSettings.maxSideGroups);
-	const maxBottomGroups = useAppStore((state) => state.layoutSettings.maxBottomGroups);
+	const maxSideGroups = useAppStore((state) => state.localLayoutPreferences.maxSideGroups);
+	const maxBottomGroups = useAppStore((state) => state.localLayoutPreferences.maxBottomGroups);
 	const terminalReservationPending = useAppStore((state) => {
 		if (layoutIntent?.kind !== "place-terminal") return false;
 		return (

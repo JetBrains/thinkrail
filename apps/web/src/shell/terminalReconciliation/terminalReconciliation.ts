@@ -6,7 +6,6 @@ import { type TerminalTab, useAppStore } from "../../store";
 import {
 	closeLayoutTab,
 	collectAllGroups,
-	createAuxiliaryGroup,
 	isLayoutUnavailable,
 	moveTabToGroup,
 	openCenterTab,
@@ -24,16 +23,14 @@ export function placeRecoveredTerminal(
 	document: WorkspaceLayoutDocument,
 	attention: LayoutAttention | undefined,
 	tab: LayoutTerminalTab,
-	maxBottomGroups: number,
 ): { document: WorkspaceLayoutDocument } {
 	const preferredId = attention?.lastFocusedSideGroupId.bottom;
 	const target =
 		document.bottom.groups.find((group) => group.id === preferredId) ??
 		document.bottom.groups.at(-1);
+	if (!target) return { document };
 	const visible = document.bottom.visible;
-	const placed = target
-		? moveTabToGroup(document, tab, { area: "bottom", groupId: target.id })
-		: createAuxiliaryGroup(document, "bottom", tab, 0, maxBottomGroups);
+	const placed = moveTabToGroup(document, tab, { area: "bottom", groupId: target.id });
 	if (isLayoutUnavailable(placed)) return { document };
 	return {
 		document: {
@@ -54,7 +51,6 @@ export function useTerminalPlacementReconciliation(
 		(state) => state.layoutIntents.find((intent) => intent.workspaceId === workspaceId) ?? null,
 	);
 	const attention = useAppStore((state) => state.layoutAttentionByWorkspace[workspaceId]);
-	const maxBottomGroups = useAppStore((state) => state.layoutSettings.maxBottomGroups);
 	const terminals = useAppStore((state) => state.terminalsByWorkspace[workspaceId] ?? NO_TERMINALS);
 	const terminalCatalogReady = useTerminalCatalog(workspaceId);
 	const reconciledTerminalCatalog = useRef<{
@@ -108,7 +104,7 @@ export function useTerminalPlacementReconciliation(
 				name: terminal.title,
 				tabKey: terminal.tabKey,
 			});
-			next = placeRecoveredTerminal(next, attention, tab, maxBottomGroups).document;
+			next = placeRecoveredTerminal(next, attention, tab).document;
 		}
 		if (next !== document) {
 			commit(next);
@@ -121,7 +117,6 @@ export function useTerminalPlacementReconciliation(
 		connectionGeneration,
 		document,
 		layoutIntent,
-		maxBottomGroups,
 		status,
 		terminalCatalogReady,
 		terminals,

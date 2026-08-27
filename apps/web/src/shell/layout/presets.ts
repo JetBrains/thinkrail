@@ -21,7 +21,16 @@ import {
 	LAYOUT_TOOLS,
 	toolTab,
 } from "./model";
-import type { WorkbenchAuxiliaryGroup, WorkbenchCenterNode, WorkbenchFrame } from "./normalized";
+import {
+	collectWorkbenchCenterGroups,
+	type NormalizedLayoutState,
+	projectWorkspaceLayout,
+	type WorkbenchAuxiliaryGroup,
+	type WorkbenchCenterNode,
+	type WorkbenchFrame,
+	type WorkspaceGroupView,
+	type WorkspaceViewState,
+} from "./normalized";
 
 const group = (id: string): LayoutPresetCenterNode => ({ kind: "group", id });
 const split = (
@@ -452,6 +461,71 @@ export function instantiateWorkbenchFrame(
 			groups: bottomGroups,
 		},
 		toolRestoreTargets: restoreTargets,
+	};
+}
+
+function appendWorkspaceTab(
+	groups: Record<string, WorkspaceGroupView>,
+	groupId: string,
+	tab: LayoutCenterTab,
+	preview: boolean,
+): void {
+	const current = groups[groupId] ?? { tabs: [] };
+	groups[groupId] = {
+		tabs: [...current.tabs, tab],
+		...(current.previewTabId || (preview && (tab.kind === "file" || tab.kind === "diff"))
+			? { previewTabId: current.previewTabId ?? tab.id }
+			: {}),
+	};
+}
+
+export function reflowWorkspaceViewForFrame(
+	currentFrame: WorkbenchFrame,
+	view: WorkspaceViewState,
+	nextFrame: WorkbenchFrame,
+): WorkspaceViewState {
+	const current = projectWorkspaceLayout(currentFrame, view);
+	const centerTabs = collectCenterGroups(current.center)
+		.flatMap((group) => group.tabs)
+		.filter((tab) => tab.kind !== "terminal");
+	const previewIds = new Set(
+		collectCenterGroups(current.center).flatMap((group) =>
+			group.previewTabId ? [group.previewTabId] : [],
+		),
+	);
+	const terminals = collectAllGroups(current)
+		.flatMap((group) => group.tabs)
+		.filter((tab): tab is LayoutTerminalTab => tab.kind === "terminal");
+	const centerGroups = collectWorkbenchCenterGroups(nextFrame.center);
+	const groups: Record<string, WorkspaceGroupView> = {};
+	for (let index = 0; index < centerTabs.length; index += 1) {
+		const tab = centerTabs[index];
+		const target = index < centerGroups.length ? centerGroups[index] : centerGroups[0];
+		if (tab && target) appendWorkspaceTab(groups, target.id, tab, previewIds.has(tab.id));
+	}
+	const terminalTargets =
+		nextFrame.bottom.groups.length > 0 ? nextFrame.bottom.groups : centerGroups.slice(0, 1);
+	for (let index = 0; index < terminals.length; index += 1) {
+		const tab = terminals[index];
+		const target = index < terminalTargets.length ? terminalTargets[index] : terminalTargets[0];
+		if (tab && target) appendWorkspaceTab(groups, target.id, tab, false);
+	}
+	return { groups };
+}
+
+export function applyWorkbenchPreset(
+	state: NormalizedLayoutState,
+	preset: LayoutPreset,
+): NormalizedLayoutState {
+	const frame = instantiateWorkbenchFrame(preset, state.frame);
+	return {
+		frame,
+		viewsByWorkspace: Object.fromEntries(
+			Object.entries(state.viewsByWorkspace).map(([workspaceId, view]) => [
+				workspaceId,
+				reflowWorkspaceViewForFrame(state.frame, view, frame),
+			]),
+		),
 	};
 }
 

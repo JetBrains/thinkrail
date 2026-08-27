@@ -39,21 +39,19 @@ const terminal: LayoutTerminalTab = {
 
 describe("recovered terminal placement", () => {
 	test("uses the last-focused surviving bottom group without revealing the region", () => {
-		const result = placeRecoveredTerminal(document(), attention, terminal, 3);
+		const result = placeRecoveredTerminal(document(), attention, terminal);
 		expect(findTabLocation(result.document, terminal.id)).toEqual({
 			area: "bottom",
 			groupId: "bottom-two",
 		});
 		expect(result.document.bottom.visible).toBe(false);
-		expect(result.focusGroupId).toBeUndefined();
 	});
 
-	test("creates one hidden structural slot when bottom has no groups", () => {
+	test("does not reshape the frame when bottom has no compatible group", () => {
 		const empty = document();
 		empty.bottom.groups = [];
-		const result = placeRecoveredTerminal(empty, attention, terminal, 1);
-		expect(result.document.bottom.groups).toHaveLength(1);
-		expect(result.document.bottom.groups[0]?.tabs).toEqual([terminal]);
-		expect(result.document.bottom.visible).toBe(false);
+		const result = placeRecoveredTerminal(empty, attention, terminal);
+		expect(result.document).toBe(empty);
+		expect(findTabLocation(result.document, terminal.id)).toBeNull();
 	});
 });

@@ -123,6 +123,7 @@ import {
 	layoutTabName,
 	moveTabToGroup,
 	reconcileAttention,
+	removeLayoutGroup,
 	resizeAuxiliaryGroups,
 	resizeBottomRegion,
 	resizeCenterSplit,
@@ -157,7 +158,7 @@ export interface WorkbenchProps {
 	attention: LayoutAttention;
 	maxSideGroups: number;
 	maxBottomGroups: number;
-	remoteEpoch: number;
+	projectionEpoch: number;
 	focusRequest?: LayoutTabFocusRequest;
 	renderTabBody: (tab: LayoutCenterTab | Extract<LayoutSideTab, { kind: "terminal" }>) => ReactNode;
 	renderTabAdornment: (tab: LayoutTab) => ReactNode;
@@ -175,7 +176,7 @@ export interface WorkbenchProps {
 	) => void;
 	onNewChat: (groupId: string) => void;
 	onNewTerminal: (groupId: string, area: "center" | LayoutAuxiliaryRegion) => void;
-	onRemoteGestureCanceled?: () => void;
+	onGestureCanceled?: () => void;
 }
 
 type DropTarget =
@@ -201,7 +202,7 @@ function isResizeArrowKey(key: string): boolean {
 
 function useCommittedSizes(
 	current: readonly number[],
-	remoteEpoch: number,
+	projectionEpoch: number,
 	commit: (sizes: number[]) => void,
 	onCanceled?: () => void,
 ): {
@@ -213,12 +214,12 @@ function useCommittedSizes(
 	const dragging = useRef(false);
 	const keyboard = useRef(false);
 	const pending = useRef<number[] | null>(null);
-	const startEpoch = useRef(remoteEpoch);
-	const observedEpoch = useRef(remoteEpoch);
-	const epoch = useRef(remoteEpoch);
+	const startEpoch = useRef(projectionEpoch);
+	const observedEpoch = useRef(projectionEpoch);
+	const epoch = useRef(projectionEpoch);
 	const currentRef = useRef(current);
 	const commitRef = useRef(commit);
-	epoch.current = remoteEpoch;
+	epoch.current = projectionEpoch;
 	currentRef.current = current;
 	commitRef.current = commit;
 
@@ -235,13 +236,13 @@ function useCommittedSizes(
 	}, [onCanceled]);
 
 	useEffect(() => {
-		if (observedEpoch.current === remoteEpoch) return;
+		if (observedEpoch.current === projectionEpoch) return;
 		if (dragging.current || keyboard.current) {
 			cancelStaleGesture();
 			return;
 		}
-		observedEpoch.current = remoteEpoch;
-	}, [cancelStaleGesture, remoteEpoch]);
+		observedEpoch.current = projectionEpoch;
+	}, [cancelStaleGesture, projectionEpoch]);
 
 	const flush = useCallback(() => {
 		const sizes = pending.current;
@@ -918,6 +919,7 @@ function WorkbenchTab({
 		: -1;
 	const currentAuxiliaryLimit = currentAuxiliary === "bottom" ? maxBottomGroups : maxSideGroups;
 	const name = layoutTabName(tab);
+	const groupRemoval = removeLayoutGroup(document, location);
 
 	const move = (target: LayoutGroupLocation, targetIndex?: number) => {
 		const result = moveTabToGroup(document, tab, target, targetIndex);
@@ -1170,6 +1172,17 @@ function WorkbenchTab({
 					</ContextMenuItem>
 				) : null}
 				<ContextMenuItem
+					disabled={isLayoutUnavailable(groupRemoval)}
+					title={isLayoutUnavailable(groupRemoval) ? groupRemoval.reason : undefined}
+					onSelect={() => {
+						if (!isLayoutUnavailable(groupRemoval)) onApply(groupRemoval);
+					}}
+				>
+					{isLayoutUnavailable(groupRemoval)
+						? `Remove group — ${groupRemoval.reason}`
+						: "Remove group"}
+				</ContextMenuItem>
+				<ContextMenuItem
 					onSelect={onClose}
 					className="text-feedback-error focus:text-feedback-error"
 				>
@@ -1204,7 +1217,7 @@ interface SharedGroupProps {
 	renderSideMenuActions: WorkbenchProps["renderSideMenuActions"];
 	onAttentionChange: WorkbenchProps["onAttentionChange"];
 	onUserNavigation: WorkbenchProps["onUserNavigation"];
-	onRemoteGestureCanceled: (() => void) | undefined;
+	onGestureCanceled: (() => void) | undefined;
 	onApply: (result: LayoutMutationResult) => void;
 	onClose: (tab: LayoutTab) => void;
 	onFocusAdjacentGroup: (delta: -1 | 1, fromGroupId?: string) => void;
@@ -1233,6 +1246,7 @@ function CenterGroupView({
 	};
 	const selectedId = readLayoutSelection(shared.attention, group.id);
 	const selected = group.tabs.find((tab) => tab.id === selectedId) ?? group.tabs[0];
+	const groupRemoval = removeLayoutGroup(shared.document, location);
 	const applySelect = (tabId: string, keep?: boolean) => {
 		shared.onUserNavigation();
 		const document = shared.document;
@@ -1282,6 +1296,24 @@ function CenterGroupView({
 				trailing={
 					<>
 						{renderCenterActions(group.id)}
+						{group.tabs.length === 0 ? (
+							<IconTooltip
+								label={isLayoutUnavailable(groupRemoval) ? groupRemoval.reason : "Remove group"}
+							>
+								<button
+									type="button"
+									data-testid="remove-layout-group"
+									aria-label="Remove group"
+									disabled={isLayoutUnavailable(groupRemoval)}
+									onClick={() => {
+										if (!isLayoutUnavailable(groupRemoval)) shared.onApply(groupRemoval);
+									}}
+									className="flex w-32 shrink-0 items-center justify-center text-text-muted hover:bg-control-bg-hovered hover:text-text-default disabled:text-control-disabled-text"
+								>
+									<X className="size-14" />
+								</button>
+							</IconTooltip>
+						) : null}
 						<IconTooltip label="New chat">
 							<button
 								type="button"
@@ -1353,14 +1385,20 @@ function CenterGroupView({
 
 type CenterNodeProps = SharedGroupProps & {
 	node: LayoutCenterNode;
-	remoteEpoch: number;
+	projectionEpoch: number;
 	onCommit: WorkbenchProps["onCommit"];
 	onNewChat: WorkbenchProps["onNewChat"];
 	renderEmptyCenter: WorkbenchProps["renderEmptyCenter"];
 	renderCenterActions: WorkbenchProps["renderCenterActions"];
 };
 
-function CenterNodeView({ node, remoteEpoch, onCommit, onNewChat, ...shared }: CenterNodeProps) {
+function CenterNodeView({
+	node,
+	projectionEpoch,
+	onCommit,
+	onNewChat,
+	...shared
+}: CenterNodeProps) {
 	return node.kind === "group" ? (
 		<CenterGroupView
 			key={tupleKey("center-node", node.id)}
@@ -1372,7 +1410,7 @@ function CenterNodeView({ node, remoteEpoch, onCommit, onNewChat, ...shared }: C
 		<CenterSplitView
 			key={tupleKey("center-node", node.id)}
 			node={node}
-			remoteEpoch={remoteEpoch}
+			projectionEpoch={projectionEpoch}
 			onCommit={onCommit}
 			onNewChat={onNewChat}
 			{...shared}
@@ -1382,7 +1420,7 @@ function CenterNodeView({ node, remoteEpoch, onCommit, onNewChat, ...shared }: C
 
 function CenterSplitView({
 	node,
-	remoteEpoch,
+	projectionEpoch,
 	onCommit,
 	onNewChat,
 	...shared
@@ -1391,12 +1429,12 @@ function CenterSplitView({
 	const weights = node.weights.map((weight) => weight * 100);
 	const resize = useCommittedSizes(
 		weights,
-		remoteEpoch,
+		projectionEpoch,
 		(sizes) => {
 			const next = resizeCenterSplit(shared.document, node.id, [sizes[0] ?? 50, sizes[1] ?? 50]);
 			if (next !== shared.document) onCommit(next);
 		},
-		shared.onRemoteGestureCanceled,
+		shared.onGestureCanceled,
 	);
 	const dimension = node.direction === "horizontal" ? size.width : size.height;
 	const minimumPixels =
@@ -1405,7 +1443,7 @@ function CenterSplitView({
 	return (
 		<div ref={size.ref} className="h-full min-h-0 min-w-0 overflow-hidden">
 			<ResizablePanelGroup
-				key={tupleKey("center-split", node.id, String(remoteEpoch))}
+				key={tupleKey("center-split", node.id, String(projectionEpoch))}
 				direction={node.direction}
 				onLayout={resize.onLayout}
 				className="min-h-0 min-w-0"
@@ -1418,7 +1456,7 @@ function CenterSplitView({
 				>
 					<CenterNodeView
 						node={node.children[0]}
-						remoteEpoch={remoteEpoch}
+						projectionEpoch={projectionEpoch}
 						onCommit={onCommit}
 						onNewChat={onNewChat}
 						{...shared}
@@ -1440,7 +1478,7 @@ function CenterSplitView({
 				>
 					<CenterNodeView
 						node={node.children[1]}
-						remoteEpoch={remoteEpoch}
+						projectionEpoch={projectionEpoch}
 						onCommit={onCommit}
 						onNewChat={onNewChat}
 						{...shared}
@@ -1468,6 +1506,7 @@ function SideGroupView({
 	onFold: () => void;
 }) {
 	const location: LayoutGroupLocation = { area: side, groupId: group.id };
+	const groupRemoval = removeLayoutGroup(shared.document, location);
 	const selectedId = readLayoutSelection(shared.attention, group.id);
 	const selected = group.tabs.find((tab) => tab.id === selectedId) ?? group.tabs[0];
 	const draggedSideTab =
@@ -1583,6 +1622,24 @@ function SideGroupView({
 						</button>
 					</IconTooltip>
 				) : null}
+				{group.tabs.length === 0 ? (
+					<IconTooltip
+						label={isLayoutUnavailable(groupRemoval) ? groupRemoval.reason : "Remove group"}
+					>
+						<button
+							type="button"
+							data-testid="remove-layout-group"
+							aria-label="Remove group"
+							disabled={isLayoutUnavailable(groupRemoval)}
+							onClick={() => {
+								if (!isLayoutUnavailable(groupRemoval)) shared.onApply(groupRemoval);
+							}}
+							className="flex w-32 shrink-0 items-center justify-center border-border-muted border-b border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default disabled:text-control-disabled-text"
+						>
+							<X className="size-14" />
+						</button>
+					</IconTooltip>
+				) : null}
 			</div>
 			<div
 				id={groupPanelId(location)}
@@ -1599,6 +1656,10 @@ function SideGroupView({
 								? shared.renderTabBody(selected)
 								: null}
 					</Fragment>
+				) : !group.folded ? (
+					<div className="flex h-full items-center justify-center tr-text-metadata text-text-muted">
+						Empty group
+					</div>
 				) : null}
 				{group.folded ? null : creationTargets}
 			</div>
@@ -1654,14 +1715,14 @@ function SideGroupMenu({
 function SideStack({
 	side,
 	region,
-	remoteEpoch,
+	projectionEpoch,
 	renderToolBody,
 	onCommit,
 	...shared
 }: SharedGroupProps & {
 	side: LayoutSide;
 	region: WorkspaceLayoutDocument[LayoutSide];
-	remoteEpoch: number;
+	projectionEpoch: number;
 	renderToolBody: WorkbenchProps["renderToolBody"];
 	onCommit: WorkbenchProps["onCommit"];
 }) {
@@ -1670,12 +1731,12 @@ function SideStack({
 	const current = region.groups.map((group) => (group.weight / total) * 100);
 	const resize = useCommittedSizes(
 		current,
-		remoteEpoch,
+		projectionEpoch,
 		(sizes) => {
 			const next = resizeSideGroups(shared.document, side, sizes);
 			if (next !== shared.document) onCommit(next);
 		},
-		shared.onRemoteGestureCanceled,
+		shared.onGestureCanceled,
 	);
 	const foldedCount = region.groups.filter((group) => group.folded).length;
 	const expandedCount = region.groups.length - foldedCount;
@@ -1704,7 +1765,7 @@ function SideStack({
 				key={tupleKey(
 					"side-stack",
 					side,
-					String(remoteEpoch),
+					String(projectionEpoch),
 					...region.groups.flatMap((group) => [group.id, String(group.folded)]),
 				)}
 				direction="vertical"
@@ -1874,6 +1935,7 @@ function BottomGroupView({
 	onAlignmentChange: (alignment: LayoutBottomAlignment) => void;
 }) {
 	const location: LayoutGroupLocation = { area: "bottom", groupId: group.id };
+	const groupRemoval = removeLayoutGroup(shared.document, location);
 	const selectedId = readLayoutSelection(shared.attention, group.id);
 	const selected = group.tabs.find((tab) => tab.id === selectedId) ?? group.tabs[0];
 	const selectedName = selected ? layoutTabName(selected) : undefined;
@@ -1934,6 +1996,24 @@ function BottomGroupView({
 						}
 					/>
 				</div>
+				{group.tabs.length === 0 ? (
+					<IconTooltip
+						label={isLayoutUnavailable(groupRemoval) ? groupRemoval.reason : "Remove group"}
+					>
+						<button
+							type="button"
+							data-testid="remove-layout-group"
+							aria-label="Remove group"
+							disabled={isLayoutUnavailable(groupRemoval)}
+							onClick={() => {
+								if (!isLayoutUnavailable(groupRemoval)) shared.onApply(groupRemoval);
+							}}
+							className="flex w-32 shrink-0 items-center justify-center border-border-muted border-b border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default disabled:text-control-disabled-text"
+						>
+							<X className="size-14" />
+						</button>
+					</IconTooltip>
+				) : null}
 				<button
 					type="button"
 					data-testid="bottom-group-fold"
@@ -2045,12 +2125,12 @@ function BottomFoldedGroup({
 }
 
 function BottomStack({
-	remoteEpoch,
+	projectionEpoch,
 	onCommit,
 	onNewTerminal,
 	...shared
 }: SharedGroupProps & {
-	remoteEpoch: number;
+	projectionEpoch: number;
 	onCommit: WorkbenchProps["onCommit"];
 	onNewTerminal: WorkbenchProps["onNewTerminal"];
 }) {
@@ -2066,12 +2146,12 @@ function BottomStack({
 	const current = region.groups.map((group) => (group.weight / total) * 100);
 	const resize = useCommittedSizes(
 		current,
-		remoteEpoch,
+		projectionEpoch,
 		(sizes) => {
 			const next = resizeAuxiliaryGroups(shared.document, "bottom", sizes);
 			if (next !== shared.document) onCommit(next);
 		},
-		shared.onRemoteGestureCanceled,
+		shared.onGestureCanceled,
 	);
 	const foldedCount = region.groups.filter((group) => group.folded).length;
 	const expandedCount = region.groups.length - foldedCount;
@@ -2100,7 +2180,7 @@ function BottomStack({
 			<ResizablePanelGroup
 				key={tupleKey(
 					"bottom-stack",
-					String(remoteEpoch),
+					String(projectionEpoch),
 					...region.groups.flatMap((group) => [group.id, String(group.folded)]),
 				)}
 				direction="horizontal"
@@ -2332,7 +2412,7 @@ export function Workbench({
 	attention,
 	maxSideGroups,
 	maxBottomGroups,
-	remoteEpoch,
+	projectionEpoch,
 	focusRequest,
 	renderTabBody,
 	renderTabAdornment,
@@ -2347,14 +2427,14 @@ export function Workbench({
 	onRequestClose,
 	onNewChat,
 	onNewTerminal,
-	onRemoteGestureCanceled,
+	onGestureCanceled,
 }: WorkbenchProps) {
 	const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 	const [draggingTab, setDraggingTab] = useState<LayoutTab | null>(null);
 	const tabSelectionEpoch = useRef(0);
-	const selectionRemoteEpoch = useRef(remoteEpoch);
-	if (selectionRemoteEpoch.current !== remoteEpoch) {
-		selectionRemoteEpoch.current = remoteEpoch;
+	const selectionProjectionEpoch = useRef(projectionEpoch);
+	if (selectionProjectionEpoch.current !== projectionEpoch) {
+		selectionProjectionEpoch.current = projectionEpoch;
 		tabSelectionEpoch.current += 1;
 	}
 	const { ref: workbenchRef, width: workbenchWidth, height: workbenchHeight } = useElementSize();
@@ -2367,7 +2447,7 @@ export function Workbench({
 	documentRef.current = document;
 	attentionRef.current = attention;
 	const [localFocusRequest, setLocalFocusRequest] = useState<LayoutTabFocusRequest | null>(null);
-	const dragStartEpoch = useRef(remoteEpoch);
+	const dragStartEpoch = useRef(projectionEpoch);
 	const canceled = useRef(false);
 
 	useEffect(() => {
@@ -2383,11 +2463,11 @@ export function Workbench({
 	}, [localFocusRequest]);
 
 	useEffect(() => {
-		if (!draggingTab || dragStartEpoch.current === remoteEpoch) return;
+		if (!draggingTab || dragStartEpoch.current === projectionEpoch) return;
 		canceled.current = true;
 		setDraggingTab(null);
-		onRemoteGestureCanceled?.();
-	}, [draggingTab, onRemoteGestureCanceled, remoteEpoch]);
+		onGestureCanceled?.();
+	}, [draggingTab, onGestureCanceled, projectionEpoch]);
 
 	const updateAttentionForResult = useCallback(
 		(result: LayoutMutationResult) => {
@@ -2555,14 +2635,14 @@ export function Workbench({
 		const data = event.active.data.current as DragData | undefined;
 		if (!data?.tab) return;
 		tabSelectionEpoch.current += 1;
-		dragStartEpoch.current = remoteEpoch;
+		dragStartEpoch.current = projectionEpoch;
 		canceled.current = false;
 		setDraggingTab(data.tab);
 	};
 	const handleDragEnd = (event: DragEndEvent) => {
 		const tab = draggingTab;
 		setDraggingTab(null);
-		if (!tab || canceled.current || dragStartEpoch.current !== remoteEpoch) return;
+		if (!tab || canceled.current || dragStartEpoch.current !== projectionEpoch) return;
 		const target = event.over?.data.current?.target as DropTarget | undefined;
 		if (!target) return;
 		let result: LayoutOperationResult;
@@ -2647,7 +2727,7 @@ export function Workbench({
 		"outer-workbench",
 		String(leftOwnsBottomCorner),
 		String(rightOwnsBottomCorner),
-		String(remoteEpoch),
+		String(projectionEpoch),
 	);
 	const [alignedProjection, setAlignedProjection] = useState({
 		topology: outerTopology,
@@ -2683,7 +2763,7 @@ export function Workbench({
 	}, [outerCurrent]);
 	const outerResize = useCommittedSizes(
 		outerCurrent,
-		remoteEpoch,
+		projectionEpoch,
 		(sizes) => {
 			const side = activeSideResize.current;
 			if (side === "left" && leftOwnsBottomCorner) {
@@ -2693,7 +2773,7 @@ export function Workbench({
 				commitSideSizes([["right", sizes.at(-1) ?? globalRightCurrent]]);
 			}
 		},
-		onRemoteGestureCanceled,
+		onGestureCanceled,
 	);
 	const projectOuterLayout = useCallback(
 		(sizes: number[]) => {
@@ -2737,7 +2817,7 @@ export function Workbench({
 	}, [alignedRowCurrent]);
 	const alignedRowResize = useCommittedSizes(
 		alignedRowCurrent,
-		remoteEpoch,
+		projectionEpoch,
 		(sizes) => {
 			const side = activeSideResize.current;
 			if (side === "left" && leftInAlignedRow) {
@@ -2747,7 +2827,7 @@ export function Workbench({
 				commitSideSizes([["right", ((sizes.at(-1) ?? 0) * projectedAlignedWidth) / 100]]);
 			}
 		},
-		onRemoteGestureCanceled,
+		onGestureCanceled,
 	);
 	const outerLeftResize = bindSideResize("left", outerResize, activeSideResize);
 	const outerRightResize = bindSideResize("right", outerResize, activeSideResize);
@@ -2768,7 +2848,7 @@ export function Workbench({
 	}, [bottomCurrent]);
 	const bottomResize = useCommittedSizes(
 		bottomCurrent,
-		remoteEpoch,
+		projectionEpoch,
 		(sizes) => {
 			const bottomSize = sizes[1] ?? bottomCurrent[1] ?? 30;
 			if (bottomSize <= Number.EPSILON) {
@@ -2778,7 +2858,7 @@ export function Workbench({
 			const next = resizeBottomRegion(document, bottomSize / 100);
 			if (next !== document) onCommit(next);
 		},
-		onRemoteGestureCanceled,
+		onGestureCanceled,
 	);
 	const bottomMinimumPercent = Math.min(
 		LAYOUT_LIMITS.maxBottomHeight * 100,
@@ -2893,7 +2973,7 @@ export function Workbench({
 		renderSideMenuActions,
 		onAttentionChange,
 		onUserNavigation,
-		onRemoteGestureCanceled,
+		onGestureCanceled,
 		onApply: apply,
 		onClose: close,
 		onFocusAdjacentGroup: focusAdjacentGroup,
@@ -2912,7 +2992,7 @@ export function Workbench({
 		<SideStack
 			side={side}
 			region={document[side]}
-			remoteEpoch={remoteEpoch}
+			projectionEpoch={projectionEpoch}
 			onCommit={onCommit}
 			{...shared}
 		/>
@@ -2921,7 +3001,7 @@ export function Workbench({
 		<main data-testid="center-tabs" className="h-full min-h-0 min-w-0">
 			<CenterNodeView
 				node={document.center}
-				remoteEpoch={remoteEpoch}
+				projectionEpoch={projectionEpoch}
 				onCommit={onCommit}
 				onNewChat={onNewChat}
 				renderEmptyCenter={renderEmptyCenter}
@@ -2937,7 +3017,7 @@ export function Workbench({
 				"aligned-workbench-row",
 				String(leftInAlignedRow),
 				String(rightInAlignedRow),
-				String(remoteEpoch),
+				String(projectionEpoch),
 			)}
 			direction="horizontal"
 			onLayout={alignedRowResize.onLayout}
@@ -2998,7 +3078,7 @@ export function Workbench({
 	const alignedColumn = bottomVisible ? (
 		<ResizablePanelGroup
 			ref={bottomGroupRef}
-			key={tupleKey("workbench-bottom", String(remoteEpoch))}
+			key={tupleKey("workbench-bottom", String(projectionEpoch))}
 			direction="vertical"
 			onLayout={bottomResize.onLayout}
 			className="min-h-0 min-w-0 flex-1"
@@ -3024,7 +3104,7 @@ export function Workbench({
 			>
 				<BottomAlignedRow document={document}>
 					<BottomStack
-						remoteEpoch={remoteEpoch}
+						projectionEpoch={projectionEpoch}
 						onCommit={onCommit}
 						onNewTerminal={onNewTerminal}
 						{...shared}

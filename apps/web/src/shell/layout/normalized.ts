@@ -91,9 +91,12 @@ function frameCenterFromDocument(node: LayoutCenterNode): WorkbenchCenterNode {
 	};
 }
 
-function frameCenterGroups(node: WorkbenchCenterNode): WorkbenchCenterGroup[] {
+export function collectWorkbenchCenterGroups(node: WorkbenchCenterNode): WorkbenchCenterGroup[] {
 	if (node.kind === "group") return [node];
-	return [...frameCenterGroups(node.children[0]), ...frameCenterGroups(node.children[1])];
+	return [
+		...collectWorkbenchCenterGroups(node.children[0]),
+		...collectWorkbenchCenterGroups(node.children[1]),
+	];
 }
 
 function auxiliaryFrameFromDocument(
@@ -267,7 +270,7 @@ export function emptyWorkspaceView(): WorkspaceViewState {
 
 function frameLocations(frame: WorkbenchFrame): FrameGroupLocation[] {
 	return [
-		...frameCenterGroups(frame.center).map((group, index) => ({
+		...collectWorkbenchCenterGroups(frame.center).map((group, index) => ({
 			area: "center" as const,
 			groupId: group.id,
 			index,

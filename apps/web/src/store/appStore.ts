@@ -709,7 +709,7 @@ interface AppState {
 	legacyLayoutImportAttempted: Record<string, true>;
 	layoutDocumentsByWorkspace: Record<string, WorkspaceLayoutDocument>;
 	layoutAttentionByWorkspace: Record<string, LayoutAttention>;
-	layoutRemoteEpochByWorkspace: Record<string, number>;
+	layoutProjectionEpochByWorkspace: Record<string, number>;
 	layoutIntents: LayoutIntent[];
 	tabsByWorkspace: Record<string, EditorTab[]>;
 	activeTabByWorkspace: Record<string, string | null>;
@@ -788,6 +788,7 @@ interface AppState {
 	applyLocalLayoutState: (
 		payload: LocalLayoutStatePayload,
 		changedWorkspaceIds: readonly string[],
+		invalidateProjection?: boolean,
 	) => void;
 	setLocalLayoutPreferences: (preferences: LocalLayoutPreferences) => void;
 	setLayoutAttention: (workspaceId: string, attention: LayoutAttention) => void;
@@ -1511,7 +1512,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	legacyLayoutImportAttempted: {},
 	layoutDocumentsByWorkspace: {},
 	layoutAttentionByWorkspace: {},
-	layoutRemoteEpochByWorkspace: {},
+	layoutProjectionEpochByWorkspace: {},
 	layoutIntents: [],
 	tabsByWorkspace: {},
 	activeTabByWorkspace: {},
@@ -1767,13 +1768,14 @@ export const useAppStore = create<AppState>((set, get) => ({
 						layoutStateReady: true,
 					},
 		),
-	applyLocalLayoutState: (payload, changedWorkspaceIds) =>
+	applyLocalLayoutState: (payload, changedWorkspaceIds, invalidateProjection = false) =>
 		set((state) => {
-			const changed = new Set(changedWorkspaceIds);
-			const layoutRemoteEpochByWorkspace = { ...state.layoutRemoteEpochByWorkspace };
-			for (const workspaceId of changed) {
-				layoutRemoteEpochByWorkspace[workspaceId] =
-					(layoutRemoteEpochByWorkspace[workspaceId] ?? 0) + 1;
+			const layoutProjectionEpochByWorkspace = { ...state.layoutProjectionEpochByWorkspace };
+			if (invalidateProjection) {
+				for (const workspaceId of changedWorkspaceIds) {
+					layoutProjectionEpochByWorkspace[workspaceId] =
+						(layoutProjectionEpochByWorkspace[workspaceId] ?? 0) + 1;
+				}
 			}
 			return {
 				workbenchFrame: payload.frame,
@@ -1782,7 +1784,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				layoutAttentionByWorkspace: payload.attentionByWorkspace,
 				localLayoutPreferences: payload.preferences,
 				legacyLayoutImportAttempted: payload.legacyImportAttempted,
-				layoutRemoteEpochByWorkspace,
+				layoutProjectionEpochByWorkspace,
 			};
 		}),
 	setLocalLayoutPreferences: (preferences) => set({ localLayoutPreferences: preferences }),
@@ -2136,7 +2138,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				legacyLayoutImportAttempted: omitKey(s.legacyLayoutImportAttempted, workspaceId),
 				layoutDocumentsByWorkspace: omitKey(s.layoutDocumentsByWorkspace, workspaceId),
 				layoutAttentionByWorkspace: omitKey(s.layoutAttentionByWorkspace, workspaceId),
-				layoutRemoteEpochByWorkspace: omitKey(s.layoutRemoteEpochByWorkspace, workspaceId),
+				layoutProjectionEpochByWorkspace: omitKey(s.layoutProjectionEpochByWorkspace, workspaceId),
 				layoutIntents: s.layoutIntents.filter((intent) => intent.workspaceId !== workspaceId),
 				tabsByWorkspace: omitKey(s.tabsByWorkspace, workspaceId),
 				activeTabByWorkspace: omitKey(s.activeTabByWorkspace, workspaceId),

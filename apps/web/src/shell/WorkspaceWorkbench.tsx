@@ -207,8 +207,10 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	const connectionGeneration = useAppStore((state) => state.connectionGeneration);
 	const document = useAppStore((state) => state.layoutDocumentsByWorkspace[workspaceId]);
 	const attention = useAppStore((state) => state.layoutAttentionByWorkspace[workspaceId]);
-	const remoteEpoch = useAppStore((state) => state.layoutRemoteEpochByWorkspace[workspaceId] ?? 0);
-	const layoutSettings = useAppStore((state) => state.layoutSettings);
+	const projectionEpoch = useAppStore(
+		(state) => state.layoutProjectionEpochByWorkspace[workspaceId] ?? 0,
+	);
+	const layoutPreferences = useAppStore((state) => state.localLayoutPreferences);
 	const workspace = useAppStore((state) => selectWorkspaceById(state, workspaceId));
 	const initialTerminalEligible = workspace?.initialTerminalEligible === true;
 	const contextProject = useAppStore(selectContextProject);
@@ -611,9 +613,9 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 			<Workbench
 				document={document}
 				attention={attention}
-				maxSideGroups={layoutSettings.maxSideGroups}
-				maxBottomGroups={layoutSettings.maxBottomGroups}
-				remoteEpoch={remoteEpoch}
+				maxSideGroups={layoutPreferences.maxSideGroups}
+				maxBottomGroups={layoutPreferences.maxBottomGroups}
+				projectionEpoch={projectionEpoch}
 				{...(focusRequest ? { focusRequest } : {})}
 				renderTabBody={renderTabBody}
 				renderTabAdornment={(tab) => {
@@ -770,9 +772,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				onNewTerminal={(groupId, area) =>
 					useAppStore.getState().addTerminal(workspaceId, undefined, groupId, area)
 				}
-				onRemoteGestureCanceled={() =>
-					toast.info("The shared layout changed. Your drag was canceled.")
-				}
+				onGestureCanceled={() => toast.info("The layout changed. Your drag was canceled.")}
 			/>
 			{terminalClose.confirmation}
 		</div>

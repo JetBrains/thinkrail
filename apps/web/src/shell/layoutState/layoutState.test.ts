@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import type { WorkspaceLayoutDocument, WorkspaceLayoutSnapshot } from "@thinkrail/contracts";
 import { useAppStore } from "../../store";
-import { resizeSideRegion, toolTab } from "../layout";
+import { BUILTIN_LAYOUT_PRESETS, collectAllGroups, resizeSideRegion, toolTab } from "../layout";
 import {
+	applyLayoutPresetLocally,
 	commitWorkspaceLayout,
 	ensureWorkspaceLayoutState,
 	localLayoutStorageKey,
@@ -70,8 +71,8 @@ function legacyDocument(): WorkspaceLayoutDocument {
 	};
 }
 
-function snapshot(): WorkspaceLayoutSnapshot {
-	return { workspaceId: "workspace", revision: 8, document: legacyDocument() };
+function snapshot(workspaceId = "workspace"): WorkspaceLayoutSnapshot {
+	return { workspaceId, revision: 8, document: legacyDocument() };
 }
 
 function resetStore(): void {
@@ -90,7 +91,7 @@ function resetStore(): void {
 		legacyLayoutImportAttempted: {},
 		layoutDocumentsByWorkspace: {},
 		layoutAttentionByWorkspace: {},
-		layoutRemoteEpochByWorkspace: {},
+		layoutProjectionEpochByWorkspace: {},
 	});
 }
 
@@ -139,6 +140,36 @@ describe("frontend-local layout state", () => {
 
 		const restored = await ensureWorkspaceLayoutState("workspace");
 		expect(restored.left.width).toBe(0.31);
+	});
+
+	test("applying a preset changes one frame and reflows every local workspace view", async () => {
+		const local = new MemoryStorage();
+		const session = new MemoryStorage();
+		session.setItem("thinkrail:layout-surface-id", "surface-a");
+		setLayoutStateStorageForTests({ local, session }, endpoint);
+		setLegacyLayoutRequesterForTests(async (workspaceId) => snapshot(workspaceId));
+		await ensureWorkspaceLayoutState("workspace");
+		await ensureWorkspaceLayoutState("other");
+		const focus = BUILTIN_LAYOUT_PRESETS.find((preset) => preset.id === "focus");
+		if (!focus) throw new Error("missing Focus preset");
+
+		applyLayoutPresetLocally(focus);
+
+		const state = useAppStore.getState();
+		const first = state.layoutDocumentsByWorkspace.workspace;
+		const second = state.layoutDocumentsByWorkspace.other;
+		if (!first || !second) throw new Error("missing projected workspace document");
+		expect(first.center.id).toBe(second.center.id);
+		expect(
+			collectAllGroups(first).flatMap((group) =>
+				group.tabs.filter((tab) => tab.kind === "file").map((tab) => tab.path),
+			),
+		).toEqual(["README.md"]);
+		expect(
+			collectAllGroups(second).flatMap((group) =>
+				group.tabs.filter((tab) => tab.kind === "file").map((tab) => tab.path),
+			),
+		).toEqual(["README.md"]);
 	});
 
 	test("simultaneous surface identities use independent persisted frames", async () => {

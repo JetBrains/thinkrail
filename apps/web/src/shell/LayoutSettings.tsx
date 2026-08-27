@@ -6,52 +6,54 @@ import {
 	RiDeleteBin6Line as Trash2,
 	RiCloseLine as X,
 } from "@remixicon/react";
-import {
-	DEFAULT_CONFIG,
-	type LayoutPreset,
-	type LayoutSettings as LayoutSettingsValue,
-} from "@thinkrail/contracts";
+import type { LayoutPreset, LayoutSettings as LayoutSettingsValue } from "@thinkrail/contracts";
 import { useEffect, useMemo, useState } from "react";
 import { randomId } from "../lib";
 import { ConfirmDialog } from "../panels/ConfirmDialog";
 import { toast, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
 import {
-	applyLayoutPreset,
 	BUILTIN_LAYOUT_PRESETS,
-	captureLayoutPreset,
+	captureWorkbenchPreset,
 	minimumBottomGroupLimit,
 	minimumSideGroupLimit,
 	resolveLayoutPreset,
 } from "./layout";
-import { commitWorkspaceLayout } from "./layoutState";
+import { applyLayoutPresetLocally } from "./layoutState";
 
 const BUILTIN_PRESET_IDS = new Set(BUILTIN_LAYOUT_PRESETS.map((preset) => preset.id));
 const MAX_CUSTOM_PRESETS = 32;
 
-async function updateLayoutSettings(layout: LayoutSettingsValue): Promise<void> {
+async function updateCustomPresets(
+	settings: LayoutSettingsValue,
+	customPresets: LayoutPreset[],
+): Promise<void> {
 	try {
-		await getTransport().request("settings.update", { config: { layout } });
+		await getTransport().request("settings.update", {
+			config: { layout: { ...settings, customPresets } },
+		});
 	} catch (error) {
-		toast.error(errorText(error), "Couldn't save layout settings");
+		toast.error(errorText(error), "Couldn't save custom layout presets");
 		throw error;
 	}
 }
 
 export function LayoutSettings() {
 	const settings = useAppStore((state) => state.layoutSettings);
+	const preferences = useAppStore((state) => state.localLayoutPreferences);
+	const frame = useAppStore((state) => state.workbenchFrame);
 	const activeWorkspaceId = useAppStore((state) => state.activeWorkspaceId);
-	const document = useAppStore((state) =>
-		activeWorkspaceId ? state.layoutDocumentsByWorkspace[activeWorkspaceId] : undefined,
-	);
 	const [name, setName] = useState("");
 	const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
-	const [sideLimit, setSideLimit] = useState(String(settings.maxSideGroups));
-	const [bottomLimit, setBottomLimit] = useState(String(settings.maxBottomGroups));
+	const [sideLimit, setSideLimit] = useState(String(preferences.maxSideGroups));
+	const [bottomLimit, setBottomLimit] = useState(String(preferences.maxBottomGroups));
 	const [applying, setApplying] = useState<LayoutPreset | null>(null);
 	const [saving, setSaving] = useState(false);
-	useEffect(() => setSideLimit(String(settings.maxSideGroups)), [settings.maxSideGroups]);
-	useEffect(() => setBottomLimit(String(settings.maxBottomGroups)), [settings.maxBottomGroups]);
+	useEffect(() => setSideLimit(String(preferences.maxSideGroups)), [preferences.maxSideGroups]);
+	useEffect(
+		() => setBottomLimit(String(preferences.maxBottomGroups)),
+		[preferences.maxBottomGroups],
+	);
 	const presets = useMemo(
 		() => [
 			...BUILTIN_LAYOUT_PRESETS,
@@ -59,20 +61,18 @@ export function LayoutSettings() {
 		],
 		[settings.customPresets],
 	);
-	const selected = resolveLayoutPreset(settings.defaultPresetId, settings.customPresets);
+	const selected = resolveLayoutPreset(preferences.defaultPresetId, settings.customPresets);
 	const minimumSideLimit = Math.max(
-		minimumSideGroupLimit(selected),
-		...settings.customPresets.map(minimumSideGroupLimit),
+		1,
+		frame?.left.groups.length ?? 0,
+		frame?.right.groups.length ?? 0,
 	);
-	const minimumBottomLimit = Math.max(
-		minimumBottomGroupLimit(selected),
-		...settings.customPresets.map(minimumBottomGroupLimit),
-	);
+	const minimumBottomLimit = Math.max(1, frame?.bottom.groups.length ?? 0);
 
-	const saveSettings = async (next: LayoutSettingsValue): Promise<boolean> => {
+	const saveCustomPresets = async (customPresets: LayoutPreset[]): Promise<boolean> => {
 		setSaving(true);
 		try {
-			await updateLayoutSettings(next);
+			await updateCustomPresets(settings, customPresets);
 			return true;
 		} catch {
 			return false;
@@ -82,38 +82,24 @@ export function LayoutSettings() {
 	};
 
 	const apply = (preset: LayoutPreset) => {
-		if (!activeWorkspaceId || !document) return;
-		const requiredSideLimit = Math.max(settings.maxSideGroups, minimumSideGroupLimit(preset));
-		const requiredBottomLimit = Math.max(settings.maxBottomGroups, minimumBottomGroupLimit(preset));
-		void (async () => {
-			if (
-				(requiredSideLimit !== settings.maxSideGroups ||
-					requiredBottomLimit !== settings.maxBottomGroups) &&
-				!(await saveSettings({
-					...settings,
-					maxSideGroups: requiredSideLimit,
-					maxBottomGroups: requiredBottomLimit,
-				}))
-			) {
-				return;
-			}
-			const latestDocument = useAppStore.getState().layoutDocumentsByWorkspace[activeWorkspaceId];
-			if (!latestDocument) return;
-			await commitWorkspaceLayout(activeWorkspaceId, applyLayoutPreset(latestDocument, preset));
+		if (!activeWorkspaceId || !frame) return;
+		try {
+			applyLayoutPresetLocally(preset);
 			toast.success(`${preset.name} layout applied`);
-		})().catch(() => {});
+		} catch (error) {
+			toast.error(errorText(error), "Couldn't apply the layout");
+		}
 	};
 
 	const commitRename = (presetId: string) => {
 		if (saving) return;
 		const nextName = renaming?.id === presetId ? renaming.name.trim() : "";
 		if (!nextName) return;
-		void saveSettings({
-			...settings,
-			customPresets: settings.customPresets.map((preset) =>
+		void saveCustomPresets(
+			settings.customPresets.map((preset) =>
 				preset.id === presetId ? { ...preset, name: nextName } : preset,
 			),
-		}).then((saved) => {
+		).then((saved) => {
 			if (saved) setRenaming(null);
 		});
 	};
@@ -123,8 +109,8 @@ export function LayoutSettings() {
 			<header>
 				<h2 className="tr-title-section text-text-default">Layout</h2>
 				<p className="mt-4 max-w-[42rem] tr-text-ui text-text-muted">
-					Choose how new workspaces begin, save reusable arrangements, and control auxiliary group
-					density. Existing workspaces change only when you apply a preset.
+					Choose how this window begins, save reusable arrangements, and control local auxiliary
+					group density. Applying a preset reflows every workspace in this window only.
 				</p>
 			</header>
 
@@ -137,7 +123,7 @@ export function LayoutSettings() {
 				</div>
 				<div className="grid gap-8 sm:grid-cols-2">
 					{presets.map((preset) => {
-						const isStoredDefault = preset.id === settings.defaultPresetId;
+						const isStoredDefault = preset.id === preferences.defaultPresetId;
 						const isEffectiveDefault = preset.id === selected.id;
 						const custom =
 							!BUILTIN_PRESET_IDS.has(preset.id) &&
@@ -187,15 +173,15 @@ export function LayoutSettings() {
 										type="button"
 										disabled={isStoredDefault || saving}
 										onClick={() =>
-											void saveSettings({
-												...settings,
+											useAppStore.getState().setLocalLayoutPreferences({
+												...preferences,
 												defaultPresetId: preset.id,
 												maxSideGroups: Math.max(
-													settings.maxSideGroups,
+													preferences.maxSideGroups,
 													minimumSideGroupLimit(preset),
 												),
 												maxBottomGroups: Math.max(
-													settings.maxBottomGroups,
+													preferences.maxBottomGroups,
 													minimumBottomGroupLimit(preset),
 												),
 											})
@@ -206,7 +192,7 @@ export function LayoutSettings() {
 									</button>
 									<button
 										type="button"
-										disabled={saving || !activeWorkspaceId || !document}
+										disabled={saving || !activeWorkspaceId || !frame}
 										onClick={() => setApplying(preset)}
 										className="rounded-[var(--radius-sm)] bg-control-primary-bg px-8 py-4 tr-text-metadata text-control-primary-text hover:bg-control-primary-bg-hovered disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text"
 									>
@@ -253,25 +239,13 @@ export function LayoutSettings() {
 													const customPresets = settings.customPresets.filter(
 														(candidate) => candidate.id !== preset.id,
 													);
-													const defaultPresetId =
-														settings.defaultPresetId === preset.id
-															? DEFAULT_CONFIG.layout.defaultPresetId
-															: settings.defaultPresetId;
-													const nextDefault = resolveLayoutPreset(defaultPresetId, customPresets);
-													void saveSettings({
-														...settings,
-														customPresets,
-														defaultPresetId,
-														maxSideGroups: Math.max(
-															settings.maxSideGroups,
-															minimumSideGroupLimit(nextDefault),
-															...customPresets.map(minimumSideGroupLimit),
-														),
-														maxBottomGroups: Math.max(
-															settings.maxBottomGroups,
-															minimumBottomGroupLimit(nextDefault),
-															...customPresets.map(minimumBottomGroupLimit),
-														),
+													void saveCustomPresets(customPresets).then((saved) => {
+														if (saved && preferences.defaultPresetId === preset.id) {
+															useAppStore.getState().setLocalLayoutPreferences({
+																...preferences,
+																defaultPresetId: "balanced",
+															});
+														}
 													});
 												}}
 												className="rounded-[var(--radius-sm)] p-4 text-text-muted hover:bg-feedback-error-subtle hover:text-feedback-error"
@@ -307,7 +281,7 @@ export function LayoutSettings() {
 					<button
 						type="button"
 						disabled={
-							!document ||
+							!frame ||
 							!name.trim() ||
 							settings.customPresets.length >= MAX_CUSTOM_PRESETS ||
 							saving
@@ -318,22 +292,9 @@ export function LayoutSettings() {
 								: undefined
 						}
 						onClick={() => {
-							if (!document || !name.trim()) return;
-							const preset = captureLayoutPreset(document, randomId("preset"), name.trim());
-							const requiredSideLimit = Math.max(
-								settings.maxSideGroups,
-								minimumSideGroupLimit(preset),
-							);
-							const requiredBottomLimit = Math.max(
-								settings.maxBottomGroups,
-								minimumBottomGroupLimit(preset),
-							);
-							void saveSettings({
-								...settings,
-								maxSideGroups: requiredSideLimit,
-								maxBottomGroups: requiredBottomLimit,
-								customPresets: [...settings.customPresets, preset],
-							}).then((saved) => {
+							if (!frame || !name.trim()) return;
+							const preset = captureWorkbenchPreset(frame, randomId("preset"), name.trim());
+							void saveCustomPresets([...settings.customPresets, preset]).then((saved) => {
 								if (saved) setName("");
 							});
 						}}
@@ -372,10 +333,14 @@ export function LayoutSettings() {
 									!Number.isInteger(Number(sideLimit)) ||
 									Number(sideLimit) < minimumSideLimit ||
 									Number(sideLimit) > 32 ||
-									Number(sideLimit) === settings.maxSideGroups ||
-									saving
+									Number(sideLimit) === preferences.maxSideGroups
 								}
-								onClick={() => void saveSettings({ ...settings, maxSideGroups: Number(sideLimit) })}
+								onClick={() =>
+									useAppStore.getState().setLocalLayoutPreferences({
+										...preferences,
+										maxSideGroups: Number(sideLimit),
+									})
+								}
 								className="rounded-[var(--radius-sm)] border border-border-default px-12 py-4 tr-text-ui text-text-default hover:bg-control-bg-hovered disabled:text-control-disabled-text"
 							>
 								Save
@@ -402,11 +367,13 @@ export function LayoutSettings() {
 									!Number.isInteger(Number(bottomLimit)) ||
 									Number(bottomLimit) < minimumBottomLimit ||
 									Number(bottomLimit) > 32 ||
-									Number(bottomLimit) === settings.maxBottomGroups ||
-									saving
+									Number(bottomLimit) === preferences.maxBottomGroups
 								}
 								onClick={() =>
-									void saveSettings({ ...settings, maxBottomGroups: Number(bottomLimit) })
+									useAppStore.getState().setLocalLayoutPreferences({
+										...preferences,
+										maxBottomGroups: Number(bottomLimit),
+									})
 								}
 								className="rounded-[var(--radius-sm)] border border-border-default px-12 py-4 tr-text-ui text-text-default hover:bg-control-bg-hovered disabled:text-control-disabled-text"
 							>
@@ -423,7 +390,7 @@ export function LayoutSettings() {
 					if (!open) setApplying(null);
 				}}
 				title="Apply this layout?"
-				description="Open files, chats, documents, and terminals are preserved, but their groups and proportions will be rearranged for every client in this workspace. Group limits are raised if this preset needs more groups."
+				description="Open files, chats, documents, and terminals are preserved, but their groups and proportions will be rearranged across every workspace in this window. Other windows are unaffected."
 				confirmLabel="Apply layout"
 				confirmTestId="layout-apply-confirm"
 				onConfirm={() => {

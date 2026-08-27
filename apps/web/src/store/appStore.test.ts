@@ -121,7 +121,7 @@ beforeEach(() => {
 		legacyLayoutImportAttempted: {},
 		layoutDocumentsByWorkspace: {},
 		layoutAttentionByWorkspace: {},
-		layoutRemoteEpochByWorkspace: {},
+		layoutProjectionEpochByWorkspace: {},
 		layoutIntents: [],
 		tabsByWorkspace: {},
 		terminalsByWorkspace: {},
