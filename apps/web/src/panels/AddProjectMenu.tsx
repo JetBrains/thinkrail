@@ -1,7 +1,8 @@
 import {
 	RiFolderLine as Folder,
+	RiFolderOpenLine as FolderOpen,
+	RiFolderAddLine as FolderPlus,
 	RiGlobalLine as Globe,
-	RiSparkling2Line as Sparkles,
 } from "@remixicon/react";
 import type { Project } from "@thinkrail/contracts";
 import type { ReactNode } from "react";
@@ -35,11 +36,11 @@ export function AddProjectMenu({
 			<DropdownMenuTrigger asChild>{children}</DropdownMenuTrigger>
 			<DropdownMenuContent align={align}>
 				<DropdownMenuItem data-testid="menu-create-project" onSelect={() => onCreate()}>
-					<Sparkles />
+					<FolderPlus />
 					<span>New project from scratch</span>
 				</DropdownMenuItem>
 				<DropdownMenuItem data-testid="menu-open-project" onSelect={() => onOpen()}>
-					<Folder />
+					<FolderOpen />
 					<span>Open existing project</span>
 				</DropdownMenuItem>
 				<DropdownMenuItem disabled>

@@ -1,5 +1,6 @@
 import {
 	RiFolderOpenLine as FolderOpen,
+	RiFolderAddLine as FolderPlus,
 	RiHome2Line as House,
 	type RemixiconComponentType as LucideIcon,
 	RiRocketLine as Rocket,
@@ -103,7 +104,7 @@ export function WelcomePanel() {
 	const createProjectCard = () => (
 		<Card
 			primary
-			icon={Sparkles}
+			icon={FolderPlus}
 			title="Create project from scratch"
 			subtitle="No repo yet? Describe your idea and the agent sets up a new project with you."
 			onClick={() => void createProjectFromScratch()}
