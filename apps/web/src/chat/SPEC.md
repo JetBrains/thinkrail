@@ -50,9 +50,15 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   end event clears only its own), and `RetryIndicator` labels them apart ("Retrying" vs "Retrying
   summarization"). **`ErrorTurn`** is a persistent tinted failure notice
   (provider/model error, an unrecovered `length` truncation, or a rejected send) — **never folded**, so
-  a failed turn can't look like nothing happened. Live settlement and transcript hydration share the
-  same assistant-failure classifier, so reload cannot turn the latest unresolved failure into success;
-  recovered historical `length` attempts followed by later work are not re-labeled as current failures.
+  a failed turn can't look like nothing happened. Only the current settlement-derived failure carries the
+  web-local `try-again` recovery action; its **Try again** button sends one visible ordinary `Try again.` user
+  message through `ChatView`'s existing immediate-send path. Rejected sends, extension notifications, and
+  generic app errors stay non-actionable because the missing prompt or repair may not be in Pi's context.
+  The optimistic user append consumes the action immediately, and any later `agent_start` consumes it for
+  other-client/custom-message starts, so a historical error never regains the affordance. Live settlement
+  and transcript hydration share the same assistant-failure classifier and action derivation, so reload
+  cannot turn the latest unresolved failure into success or lose its recovery; recovered historical
+  `length` attempts followed by later work are not re-labeled as current failures.
 - `compaction` — a 1:1, fold-breaking row with two sources that converge. Live `compaction_start` /
   `compaction_end` events produce `CompactionNotice` (see the store SPEC): running "Compacting context…"
   (spinner), done **"Context compacted"** (+ "— resuming…" while pi's overflow retry continues the run, +
@@ -860,7 +866,8 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   **`useTranscriptSync.ts`** (the guarded authoritative read that converges an existing runtime), and
   **`TemplateEditorDialog.tsx`** (the shared template save form), the other integration points. A
   **rejected** send (`prompt`/`steer`/`followUp`) lands in the chat via the store's `appendErrorTurn` —
-  never swallowed; *streaming* faults arrive as pi events instead.
+  never swallowed and never given the settlement-only Try again affordance; *streaming* faults arrive as pi
+  events instead.
 
 ## Streaming model
 

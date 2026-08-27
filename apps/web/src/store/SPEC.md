@@ -180,11 +180,17 @@ snapshots plus device-local attention, terminal catalogs, and one **per-session 
   `setCurrentModel` / `setThinkingLevel` / `setChatDraft` / `clearPendingExtUi`) take a `sessionId`.
   **`appendErrorTurn(sessionId, text)`** appends an `error` turn for a **rejected** turn-driving wire call
   (`session.prompt`/`steer`/`followUp`/`create`) — e.g. `prompt()` throwing "no API key" / a bad model —
-  so a failed send lands in the chat instead of being swallowed; a *streaming* fault instead ends the run
-  through **`reduceSessionEvent`** at `agent_settled`, using the host-projected final terminal metadata:
+  so a failed send lands in the chat instead of being swallowed; it carries no recovery action because Pi
+  never accepted the missing turn. A *streaming* fault instead ends the run through
+  **`reduceSessionEvent`** at `agent_settled`, using the host-projected final terminal metadata:
   `stopReason: "error"` carries Pi's `errorMessage`, and `stopReason: "length"` becomes an actionable
-  truncation error — neither may become "✓ Done". `agent_end` is attempt-level and never clears
-  `isStreaming`; settlement alone finishes retries, compaction, and queued continuations. The
+  truncation error — neither may become "✓ Done". That settlement-created error turn alone carries the
+  web-local `recovery: "try-again"` marker; hydration gives the same marker only to its synthesized current
+  final failure. `appendUserMessage` consumes every prior marker in the same optimistic write that adds the
+  follow-on user turn, while `agent_start` consumes it for work begun by another client or a custom message.
+  Thus the renderer can offer one ordinary `Try again.` send without parsing errors or leaving an actionable
+  historical failure. `agent_end` is attempt-level and never clears `isStreaming`; settlement alone finishes
+  retries, compaction, and queued continuations. The
   **compaction lifecycle is a first-class turn**: `compaction_start` appends a `compaction` turn
   (`running`), `compaction_end` settles the trailing running one in place (success → `done` +
   tokens-before/after from the typed `CompactionEndResult`, guarded — wire data is untrusted; `aborted`
