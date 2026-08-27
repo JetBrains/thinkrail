@@ -137,9 +137,22 @@ fixed previous/next controls: wheel, trackpad, touch, roving-keyboard navigation
 searchable keyboard overflow list all scroll the same tab list. Its native scrollbar stays hidden; subtle,
 pointer-transparent edge fades appear only on directions with clipped tabs and update with scroll, resize, and
 tab changes without altering the fixed 32 px strip or tab geometry. Full-height strip actions share that 32 px
-width, keeping search, creation, alignment, and fold controls square. Singleton tool tabs
+width, keeping search, creation, alignment, and fold controls square. A strip control renders only when it
+can act: the searchable overflow list while the tab list overflows its scroller, the fold button while the
+side holds more than one group (or the group is already folded) — folding a lone group buys no space from a
+neighbour. Singleton tool tabs
 (Projects, Specs, Files, Changes, Review) carry no inline close glyph; Close remains in their context menu
 and on the Delete key, while terminals and center resources retain the direct glyph.
+
+Every side strip trails an add-to-this-group menu, so recovery does not depend on discovering the tab
+context menu. It offers app actions injected via `renderSideMenuActions(side, groupId)` (New terminal, right
+side only — the render prop keeps store-bound creation out of this module) above the tools
+`unplacedToolsForSide` reports for **this** side, so the two rails never offer the same tool. A side tab's
+context menu stays document-wide; a center tab's offers no tools at all — they open in the side regions, and
+listing them under a terminal tab put "Show Review" in a menu that is neither where it would open nor
+anything to do with the tab clicked. Both read "Show <tool>" — a tool may never have been opened. A terminal
+placed here lands in the group whose menu was used: the action names that side as the intent's target area,
+so no center navigation routing applies.
 
 ## Presets and synchronization
 

@@ -11,6 +11,7 @@ import { TemplateEditorDialog } from "@/chat/TemplateEditorDialog";
 import { assembleTemplate } from "@/chat/templateText";
 import { Button } from "@/components/ui/button";
 import { PopoverTrigger } from "@/components/ui/popover";
+import { IconTooltip } from "@/components/ui/tooltip";
 import { toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
 import { ConfirmPopover } from "./ConfirmPopover";
@@ -335,38 +336,41 @@ function TemplateRow({
 				</div>
 				<div className="flex shrink-0 items-center gap-4">
 					{showOpenAsFile ? (
+						<IconTooltip label="Open as file">
+							<button
+								type="button"
+								data-testid="template-open-file"
+								aria-label="Open as file"
+								onClick={openAsFile}
+								className="flex size-24 items-center justify-center rounded-[var(--radius-sm)] text-text-muted transition hover:bg-control-bg-hovered hover:text-text-default"
+							>
+								<FileText className="size-14" />
+							</button>
+						</IconTooltip>
+					) : null}
+					<IconTooltip label="Edit">
 						<button
 							type="button"
-							data-testid="template-open-file"
-							aria-label="Open as file"
-							title="Open as file"
-							onClick={openAsFile}
+							data-testid="template-edit"
+							aria-label="Edit"
+							onClick={onEdit}
 							className="flex size-24 items-center justify-center rounded-[var(--radius-sm)] text-text-muted transition hover:bg-control-bg-hovered hover:text-text-default"
 						>
-							<FileText className="size-14" />
+							<Pencil className="size-14" />
 						</button>
-					) : null}
-					<button
-						type="button"
-						data-testid="template-edit"
-						aria-label="Edit"
-						title="Edit"
-						onClick={onEdit}
-						className="flex size-24 items-center justify-center rounded-[var(--radius-sm)] text-text-muted transition hover:bg-control-bg-hovered hover:text-text-default"
-					>
-						<Pencil className="size-14" />
-					</button>
-					<PopoverTrigger asChild>
-						<button
-							type="button"
-							data-testid="template-delete"
-							aria-label="Delete"
-							title="Delete"
-							className="flex size-24 items-center justify-center rounded-[var(--radius-sm)] text-text-muted transition hover:bg-control-bg-hovered hover:text-feedback-error"
-						>
-							<Trash2 className="size-14" />
-						</button>
-					</PopoverTrigger>
+					</IconTooltip>
+					<IconTooltip label="Delete" wrapTrigger>
+						<PopoverTrigger asChild>
+							<button
+								type="button"
+								data-testid="template-delete"
+								aria-label="Delete"
+								className="flex size-24 items-center justify-center rounded-[var(--radius-sm)] text-text-muted transition hover:bg-control-bg-hovered hover:text-feedback-error"
+							>
+								<Trash2 className="size-14" />
+							</button>
+						</PopoverTrigger>
+					</IconTooltip>
 				</div>
 			</div>
 		</ConfirmPopover>

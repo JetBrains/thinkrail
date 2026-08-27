@@ -729,7 +729,8 @@ own section. The kebab menu (`plan-menu`, a
   preview icon's position/visibility are **imperative DOM (refs + custom properties + `data-visible`),
   never React state**: the markdown components are per-render-typed, so a state flip mid-drag remounts
   the text nodes under the LIVE selection, which Chrome "restores" by flooding whole blocks — a few
-  selected words painted the entire bullet; clicking it opens an **inline
+  selected words painted the entire bullet. Outside React, these widgets cannot reach the root
+  `TooltipProvider`, so their buttons keep native `title`. Clicking it opens an **inline
   composer under the selection** (a view zone: textarea + Save draft / Send now / Esc cancels). In
   Monaco surfaces the same action also sits in the editor's **right-click context menu** ("Comment on
   selection", right after Copy, `Cmd/Ctrl+Shift+M`; `editorHasSelection` precondition) — the «+» and

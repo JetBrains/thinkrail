@@ -226,20 +226,28 @@ async function createWorkspaceWithoutOpening(page: Page): Promise<{ id: string; 
 test("full-height panel-header actions stay square", async ({ page }) => {
 	await openDefaultWorkbench(page);
 
-	const controls = [
-		page.getByRole("button", { name: "Search open tabs" }).first(),
-		page.getByTestId("new-chat"),
-		page.getByTestId("new-terminal"),
-		page.getByTestId("side-group-fold").first(),
-		page.getByRole("button", { name: "Bottom panel alignment" }),
-		page.getByTestId("bottom-group-fold"),
-	];
-	for (const control of controls) {
+	const square = async (control: Locator): Promise<void> => {
 		await expect(control).toHaveCSS("width", "32px");
 		const box = await control.boundingBox();
 		if (!box) throw new Error("panel-header control has no bounding box");
 		expect(Math.abs(box.width - box.height)).toBeLessThanOrEqual(1);
-	}
+	};
+
+	const controls = [
+		page.getByTestId("new-chat"),
+		page.getByTestId("new-terminal"),
+		page.getByTestId("side-group-fold").first(),
+		page.getByTestId("side-group-menu").first(),
+		page.getByRole("button", { name: "Bottom panel alignment" }),
+		page.getByTestId("bottom-group-fold"),
+	];
+	for (const control of controls) await square(control);
+
+	await page.getByTestId("tab-files").click();
+	for (const name of ["README.md", "notes.txt", "LINKS.md"])
+		await page.getByTestId("file-node").filter({ hasText: name }).dblclick();
+	await page.setViewportSize({ width: 620, height: 800 });
+	await square(page.getByRole("button", { name: "Search open tabs" }).first());
 });
 
 test("a new workspace starts with one accessible terminal group in a 30% bottom panel", async ({
