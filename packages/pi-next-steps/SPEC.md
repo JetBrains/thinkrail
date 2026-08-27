@@ -22,7 +22,9 @@ Zero suggestions means the agent does not call the tool. A call carries one to t
 
 The tool is an optional final action after a complete answer and returns `terminate: true`, avoiding an empty follow-up model turn. Its active prompt metadata names the tool explicitly, asks for only concrete useful continuations, and distinguishes it from `ask_user_question`: required input uses the question tool; optional ways to continue use `offer_next_steps`.
 
-An explicit user request for follow-up actions, ways to continue after the answer, or what to do next makes the tool required when concrete continuations exist. The assistant first completes any substantive answer, then puts those continuations in `offer_next_steps` instead of duplicating them as a prose list. This is a semantic instruction to the agent, not a client keyword heuristic; ordinary turns remain omit-by-default.
+An explicit user request for follow-up actions, ways to continue after the answer, or what to do next makes the tool required when concrete continuations exist. The assistant first completes any substantive answer, then includes `offer_next_steps` as the final action of that same assistant response instead of stopping after the answer text or duplicating the continuations as a prose list. This is a semantic instruction to the agent, not a client keyword heuristic; ordinary turns remain omit-by-default.
+
+A non-displayed, ephemeral context reminder repeats that semantic check after any other tool result. This keeps the requirement salient across multi-step agent turns without inspecting the user’s prose or synthesizing options itself. It explicitly preserves omit-by-default behavior when the user did not request continuations, and it does not run after `offer_next_steps` itself.
 
 ## Native interaction
 
@@ -42,9 +44,10 @@ The package root is a pi extension factory declared by its `pi.extensions` manif
 duplicate labels/prompts, the numbered fallback, and that every rejection names the tool).
 `src/offer.test.ts` pins currency against hand-built branches — looking past non-message entries, and going
 stale on a later message, a failed result, or details that no longer validate. `index.test.ts` drives the
-registered surface through a fake `ExtensionAPI`: termination, the prompt-metadata rules, and the selector
-lifecycle (immediate send, cancellation leaving the offer intact, a stale offer never opening it, the busy
-follow-up path, non-TUI silence, and `/next-steps` after a resume).
+registered surface through a fake `ExtensionAPI`: termination, the prompt-metadata rules, the ephemeral
+post-tool reminder without prompt parsing, and the selector lifecycle (immediate send, cancellation leaving
+the offer intact, a stale offer never opening it, the busy follow-up path, non-TUI silence, and `/next-steps`
+after a resume).
 
 ## Boundary
 

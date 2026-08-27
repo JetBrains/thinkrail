@@ -17,8 +17,20 @@ interface CapturedTool {
 	execute: (toolCallId: string, params: unknown) => Promise<ToolResult>;
 }
 
+interface ContextMessage {
+	role: string;
+	toolName?: string;
+	[key: string]: unknown;
+}
+
+type ContextHandler = (
+	event: { type: "context"; messages: ContextMessage[] },
+	ctx: ExtensionContext,
+) => { messages: ContextMessage[] } | undefined;
+
 interface Loaded {
 	tool: CapturedTool;
+	remind: (messages: ContextMessage[]) => ContextMessage[] | undefined;
 	settle: (ctx: ExtensionContext) => void;
 	command: {
 		name: string;
@@ -30,6 +42,7 @@ interface Loaded {
 
 function load(): Loaded {
 	let tool: CapturedTool | undefined;
+	let context: ContextHandler | undefined;
 	let settled: ((event: unknown, ctx: ExtensionContext) => void) | undefined;
 	let command: Loaded["command"] | undefined;
 	const sent: Loaded["sent"] = [];
@@ -37,7 +50,8 @@ function load(): Loaded {
 		registerTool: (def: CapturedTool) => {
 			tool = def;
 		},
-		on: (event: string, handler: (event: unknown, ctx: ExtensionContext) => void) => {
+		on: (event: string, handler: (event: unknown, ctx: ExtensionContext) => unknown) => {
+			if (event === "context") context = handler as ContextHandler;
 			if (event === "agent_settled") settled = handler;
 		},
 		registerCommand: (name: string, options: Omit<Loaded["command"], "name">) => {
@@ -48,9 +62,19 @@ function load(): Loaded {
 		},
 	};
 	factory(pi as unknown as ExtensionAPI);
-	if (!tool || !settled || !command) throw new Error("factory did not register its full surface");
-	const handler = settled;
-	return { tool, settle: (ctx) => handler({ type: "agent_settled" }, ctx), command, sent };
+	if (!tool || !context || !settled || !command) {
+		throw new Error("factory did not register its full surface");
+	}
+	const contextHandler = context;
+	const settleHandler = settled;
+	return {
+		tool,
+		remind: (messages) =>
+			contextHandler({ type: "context", messages }, {} as ExtensionContext)?.messages,
+		settle: (ctx) => settleHandler({ type: "agent_settled" }, ctx),
+		command,
+		sent,
+	};
 }
 
 interface FakeCtx {
@@ -135,20 +159,43 @@ describe("offer_next_steps tool", () => {
 		);
 	});
 
-	test("prompt metadata pins the five rules the tool depends on", () => {
+	test("prompt metadata pins the rules and required response shape", () => {
 		const tool = load().tool;
 		const guidelines = tool.promptGuidelines ?? [];
 		const text = guidelines.join("\n");
 		expect(guidelines.every((line) => line.includes("offer_next_steps"))).toBe(true);
-		expect(text).toMatch(/explicitly asks for follow-up actions/);
+		expect(text).toMatch(/explicitly asks you to suggest follow-up actions/);
 		expect(text).toMatch(/MUST call offer_next_steps/);
 		expect(text).toMatch(/instead of listing or duplicating them in prose/);
-		expect(text).toMatch(/final action of a turn/);
-		expect(text).toMatch(/no further assistant response/);
+		expect(text).toMatch(/final action of the SAME assistant response/);
+		expect(text).toMatch(/never stop after the answer text/);
+		expect(text).toMatch(/emit nothing after the tool call/);
+		expect(text).toMatch(/Explain mutexes, then suggest two ways to explore further/);
 		expect(text).toMatch(/Omit offer_next_steps entirely/);
 		expect(text).toMatch(/in place of ask_user_question/);
-		expect(tool.description).toMatch(/MUST use offer_next_steps/);
-		expect(tool.promptSnippet).toMatch(/MUST use offer_next_steps/);
+		expect(tool.description).toMatch(/MUST call offer_next_steps/);
+		expect(tool.description).toMatch(/SAME assistant response/);
+		expect(tool.promptSnippet).toMatch(/REQUIRED/);
+		expect(tool.promptSnippet).toMatch(/SAME assistant response/);
+	});
+
+	test("refreshes the required choice check after another tool without parsing the prompt", () => {
+		const loaded = load();
+		const original = [
+			{ role: "user", content: "A request" },
+			{ role: "assistant", content: [] },
+			{ role: "toolResult", toolName: "read" },
+		];
+		const messages = loaded.remind(original);
+		expect(messages?.slice(0, -1)).toEqual(original);
+		expect(messages?.at(-1)).toMatchObject({
+			role: "custom",
+			customType: "offer-next-steps-reminder",
+			display: false,
+			content: expect.stringContaining("MUST include an offer_next_steps call"),
+		});
+		expect(loaded.remind([{ role: "user" }])).toBeUndefined();
+		expect(loaded.remind([{ role: "toolResult", toolName: "offer_next_steps" }])).toBeUndefined();
 	});
 });
 
