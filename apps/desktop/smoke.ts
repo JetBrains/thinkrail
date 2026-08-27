@@ -56,7 +56,9 @@ async function launchDesktop(
 	env: Record<string, string>,
 	label: string,
 	mode: "host" | "ui",
-): Promise<RunningArtifactHost & { windowUrl: string; mode: string }> {
+): Promise<
+	RunningArtifactHost & { windowUrl: string; mode: string; applicationMenuInstalled: boolean }
+> {
 	const id = sequence++;
 	const readyPath = join(root, `${id}-${label}.ready.json`);
 	const controlPath = join(root, `${id}-${label}.control`);
@@ -110,12 +112,14 @@ async function launchDesktop(
 			runtimeDir: string;
 			windowUrl: string;
 			mode: string;
+			applicationMenuInstalled: boolean;
 		};
 		let stopped = false;
 		return {
 			origin: ready.origin,
 			windowUrl: ready.windowUrl,
 			mode: ready.mode,
+			applicationMenuInstalled: ready.applicationMenuInstalled,
 			resources: {
 				skillsDir: join(ready.runtimeDir, "skills"),
 				trashHelpers: {

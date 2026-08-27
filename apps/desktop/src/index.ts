@@ -2,7 +2,14 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { channel, version } from "@thinkrail/shared/version";
-import Electrobun, { BrowserView, BrowserWindow, PATHS, Utils } from "electrobun/bun";
+import Electrobun, {
+	ApplicationMenu,
+	BrowserView,
+	BrowserWindow,
+	PATHS,
+	Utils,
+} from "electrobun/bun";
+import { installDesktopApplicationMenu } from "./applicationMenu";
 import { externalNavigationUrl } from "./externalNavigation";
 import { RouteStore } from "./routeStore";
 import type { DesktopRpc } from "./rpc";
@@ -18,6 +25,10 @@ function writeReady(path: string, payload: unknown): void {
 }
 
 async function start(): Promise<void> {
+	const applicationMenuInstalled = installDesktopApplicationMenu(
+		ApplicationMenu,
+		process.platform,
+	);
 	const runtimeDir = join(PATHS.RESOURCES_FOLDER, "app", "runtime");
 	process.env.BUN_PTY_LIB = join(
 		runtimeDir,
@@ -79,6 +90,7 @@ async function start(): Promise<void> {
 			writeReady(readyPath, {
 				origin,
 				runtimeDir,
+				applicationMenuInstalled,
 				pid: process.pid,
 				windowUrl: neutral ? "about:blank" : `${origin}/${initialRoute}`,
 				mode: neutral ? "host" : "ui",

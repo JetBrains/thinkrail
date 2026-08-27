@@ -26,6 +26,19 @@ type BunMessageHandlers<T extends RpcShape> = {
 	[K in keyof T["bun"]["messages"]]: (payload: T["bun"]["messages"][K]) => void;
 };
 
+export type ApplicationMenuItemConfig =
+	| { type: "divider" | "separator" }
+	| {
+			type?: "normal";
+			label?: string;
+			role?: string;
+			submenu?: ApplicationMenuItemConfig[];
+	  };
+
+export const ApplicationMenu: {
+	setApplicationMenu(menu: ApplicationMenuItemConfig[]): void;
+};
+
 export const BrowserView: {
 	defineRPC<T extends RpcShape>(definition: {
 		maxRequestTime: number;
