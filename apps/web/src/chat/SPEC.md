@@ -53,15 +53,26 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   a failed turn can't look like nothing happened. Live settlement and transcript hydration share the
   same assistant-failure classifier, so reload cannot turn the latest unresolved failure into success;
   recovered historical `length` attempts followed by later work are not re-labeled as current failures.
-- `compaction` — a 1:1, fold-breaking row with two sources. Live `compaction_start` / `compaction_end`
-  events produce `CompactionNotice` (see the store SPEC): running "Compacting context…" (spinner), done
-  "Context compacted" (+ "— resuming…" while pi's overflow retry continues the run, + tokens before→after
-  when the result carried them), failed with the actionable error text, or cancelled as a muted notice.
-  These states are assertable via `data-testid="compaction-notice"` +
-  `data-status="running|done|failed|cancelled"`. Hydration turns the persisted `compactionSummary` into the
-  same `compaction` state (`done`) at its canonical position, plus the durable `summary`; that richer record
-  renders as `CompactionTurn`, a labelled rule whose summary opens on click (`data-testid="chat-compaction"`).
-  Thus a live run exposes every beat, while reload preserves main's explanation of the messages pi replaced.
+- `compaction` — a 1:1, fold-breaking row with two sources that converge. Live `compaction_start` /
+  `compaction_end` events produce `CompactionNotice` (see the store SPEC): running "Compacting context…"
+  (spinner), done **"Context compacted"** (+ "— resuming…" while pi's overflow retry continues the run, +
+  tokens before→after when the result carried them), failed with the actionable error text, or cancelled as a
+  muted notice. These states are assertable via `data-testid="compaction-notice"` +
+  `data-status="running|done|failed|cancelled"`. A successful live end asks the app-integration transcript
+  synchronizer to read Pi's canonical summary-plus-tail; reconnect does the same for a runtime from an older
+  connection generation. **No snapshot is installed while its host summary is streaming**, whether the need
+  came from reconnect or compaction: Pi's persisted `session.messages` omits the in-flight assistant partial,
+  and a revision fence cannot protect an update already folded before the read began. The synchronizer waits
+  for settlement and re-reads rather than deleting that partial and clearing its correlation id. A pending
+  connection-generation sync dominates even when the same read also satisfies an unresolved compaction need.
+  Transient transcript-read failures retry with a bounded backoff; only exhaustion
+  raises the refresh error, and a new generation/compaction key gets a fresh budget. Store reconciliation
+  replaces only host-derived conversation state and preserves browser-local state. The persisted
+  `compactionSummary` then becomes the same row in place (the live id,
+  estimated-after count, and live `resuming` flag survive when they still apply), and the messages Pi
+  summarized disappear immediately rather than only after reload. Its `summary` opens on click
+  (`data-testid="chat-compaction"`). Hydration/reopen starts directly from that same durable form. Both forms
+  share the **"Context compacted"** title; only facts unavailable after reload disappear.
 - `markdown` — a non-empty assistant text block (react-markdown + remark-gfm + shiki). A fenced
   ```mermaid block renders as a themed diagram via `tools/visualize`'s `MermaidView` (fullscreen
   pan-zoom, error → source fallback) — uniform across every `Markdown` surface (chat, file/specs
@@ -71,14 +82,15 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   `defaultExpanded`; errors auto-expand; a manual toggle wins), or a `"bare"` renderer that owns its
   frame. A `"bare"` call on a dead message (`stopReason` aborted/error — pi never executes those calls)
   renders as errored rather than staying interactive forever.
-- `activity` — a contiguous run of **routine** steps (thinking blocks + routine tool calls), merged
-  across consecutive assistant messages in a round and broken by non-empty text, primary tools, and
-  non-assistant turns. `ActivityGroup` renders it **collapsed by default** behind one header ("N steps ·
-  bash ×2, read ×4"); expanded, steps are slim borderless rows that individually reveal the step's full
-  renderer body. While the trailing run streams, the header is a **live ticker** (spinner + current
-  step's summary), collapsing when answer text starts. A single-step run renders its step row directly.
-  Errored *routine* steps get **no special treatment** (deliberate — agents often recover; `ErrorTurn`
-  and primary error-auto-expand are the safety nets).
+- `activity` — one contiguous run of routine work stays one **collapsed outer disclosure** whose header
+  summarizes every atomic step (thinking blocks + routine tool calls). Expanding it preserves tools before
+  the first thought as direct rows, then renders each non-empty thinking block as a nested disclosure that
+  contains its exact text and every following routine tool call until the next thinking block or activity
+  boundary. Those thinking groups are siblings **inside** the outer run, even across assistant-message
+  boundaries; the hierarchy is presentational, never invented pi entry parentage. A single atomic step
+  still renders directly. Non-empty text, primary tools, and non-assistant turns break the outer run. Only
+  its trailing instance carries the live ticker. Errored routine tools get **no special treatment**
+  (deliberate — agents often recover; `ErrorTurn` and primary error-auto-expand are the safety nets).
 - `divider` — the round-end summary (`TurnDivider` + pure `turnDivider` deriver), anchored the instant a
   round ends: elapsed time, tool-call count, and the round's written files as **two chips split by owning
   tool** — “N specs” and “N files changed”. The split is a **partition** (a path lands on exactly
@@ -102,16 +114,28 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   read as switching between Specs and Changes; closing is “never mind” and leaves the tool where the user
   last sent it.
 
-Row/step ids are stable across streaming snapshots (first step's `toolCallId`, or message-anchored index —
-pi appends, never reorders), so fold state survives re-derivation and virtualization: **every fold surface
-(activity groups, step rows, `ToolCard`, the divider's multi-artifact chips) records manual toggles in the
-shared `foldState` cache**
+Row/step ids are stable across streaming snapshots (the outer run's first atomic-step id, each thinking
+block's message-anchored index, and each tool's own id — pi appends, never reorders), so fold state survives
+re-derivation and virtualization: **every fold surface (outer activity groups, nested thinking groups, tool
+rows, `ToolCard`, the divider's multi-artifact chips) records manual toggles in the shared `foldState` cache**
 (`foldState.ts`, keyed by row/step id. Two hooks over that module: **`useFold`** for independent booleans,
 and **`useSelection`** for a single-choice group — the divider's chips, which store the *selected key* under
 `${rowId}:artifacts` rather than a boolean per side, so "only one list open" cannot be violated;
 the `AskUserQuestionCard` pattern, see tools/SPEC.md; deliberately
 never evicted — growth is bounded by manual toggles). A manual toggle always wins — over auto-expand
 defaults *and* over a virtualization remount.
+
+**Sticky activity breadcrumb.** While the transcript's top visible content remains inside expanded
+Activity → Thinking → tool disclosures whose original headers have scrolled above the viewport, one
+opaque compact row overlays the scroller with that active root-to-leaf path. Segments join only after
+their own header crosses the top, leave at sibling/end boundaries or when folded, and include the active
+leaf tool. A segment label scrolls and focuses its original header just below the sticky row without
+changing fold state; its separate chevron writes through the existing fold-state source. The trail is
+always one line: metadata truncates before names, then a narrow pane preserves the outermost and active
+segments while compressing middle ancestry to `…`. It never reflows transcript content, creates parallel
+navigation/fold state, or disturbs Virtuoso's initial-bottom, follow-output, and jump-to-message behavior.
+The root-to-leaf labels and chevrons are distinct keyboard targets in a labelled navigation region; visual
+entry/exit obeys reduced motion.
 
 ## Extension point — the tool registry
 
@@ -124,8 +148,9 @@ the **capability** registers with the pi session server-side (custom tool or pi 
 - a **`summary`** — a pure one-liner for collapsed headers and activity-step rows,
 - a **`chrome`** — `"card"` (default, the `ToolCard` frame) or `"bare"` (owns its frame; for
   interactive/primary tools like `ask_user_question`),
-- **prominence metadata** — `prominence`: `"routine"` (default, incl. unregistered tools — folds into
-  activity groups) or `"primary"` (escapes the fold; `"bare"` chrome implies it **unconditionally**, even
+- **prominence metadata** — `prominence`: `"routine"` (default, incl. unregistered tools — enters the
+  outer Activity run, directly before the first thought or under the current nested Thinking disclosure)
+  or `"primary"` (escapes the fold; `"bare"` chrome implies it **unconditionally**, even
   over an explicit `prominence: "routine"` — a self-framed renderer can't live inside a fold's step
   rows, so a misregistration must not silently break the fold), and `defaultExpanded` (a
   primary card renders expanded once complete, e.g. `visualize`). Read through the single
@@ -243,7 +268,10 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   in every connected client), and a
   **zoomed-stage preview pane** + **scope picker** — see the next bullet),
   `ModelSelector` + `ThinkingSelector` (also shared with `NewWorkspaceDialog`;
-  optional `container` prop portals their popovers into a host Dialog; `ModelSelector` takes
+  optional `container` prop portals their popovers into a host Dialog; optional
+  `defaultOption`/`onSelectDefault` render an explicit use-the-default row above the provider groups
+  (checked when `current` is null) for callers whose selection is an *override* — `ReviewSettings` —
+  since a plain model list can only ever narrow, never restore the unset state; `ModelSelector` takes
   `refreshing`/`onRefresh(force)` — a footer “Refresh catalog” row that passes **`force: true`** (the
   user asked, so bypass pi's freshness throttle) and spins while that awaited refresh runs, plus an
   **unforced** auto-fire on each open, which `useModelCatalog` serves from the host snapshot
@@ -275,6 +303,20 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   skill overrides, + a **Reload** that applies changes to this chat's session via `session.reloadResources`,
   disabled while streaming) or project (`project.skills`, per-project-baseline toggles, no session) — the
   latter reused by `panels` pre-session). All props-driven; behavior detail lives in the components' jsdoc.
+- **Adaptive composer geometry** (`Composer`) — an idle draft that fits one visual line renders as a
+  shared two-tier shell: a full-width, one-visual-line message row above a stable action footer. Model and
+  effort share a compact visual group on the footer's left while remaining two independently
+  focusable/clickable picker triggers; History and Send remain explicit on the right. A wrap, explicit
+  newline, or width change that makes the draft exceed one visual line grows the message row without moving
+  the footer; fitting one line again shrinks only the message row. This is one persistent textarea, never
+  conditional twins — the transition cannot lose focus, caret/selection, recall, draft, or a template-slot
+  session. Streaming deliberately uses the expanded message row even with an empty draft, because Stop +
+  send options join the footer. `ChatView` passes the server-synced
+  `ComposerGrowthLimit` prop: `compact` caps at 6 visual lines, `roomy` at 10, and the default `half-chat`
+  caps the **editor shell** (textarea + footer) at 50% of the mounted chat panel, never the browser viewport;
+  overflow then scrolls inside the textarea. Attachment chips, completion menus, slot hints, and QueueStrip
+  keep their existing separate chrome. The slot-highlight backdrop must follow every dynamic textarea box
+  change with the exact box-model and scroll-sync invariants under Template slots below.
 - **Queued messages: the pending strip** (`QueueStrip.tsx`, props-driven: `queue` + `onEdit`/`onRemove`)
   — the web mirror of pi's interactive-mode pending-messages area. A **streaming send never renders an
   optimistic transcript bubble** (see the store SPEC's echo contract): `ChatView.onSubmit` skips
@@ -283,15 +325,18 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   `queue-item` testids, `data-kind` + `data-index`; full text + delivery meaning in the row `title`),
   sourced from the runtime's `queue`. **Each row carries its own edit and remove actions**
   (`queue-item-edit` / `queue-item-remove`) — both call `session.removeQueued { kind, index }` (rows
-  are position-addressed, matching the wire op); edit additionally prepends the removed text to the
-  draft and refocuses. Per-row actions exist because the original all-or-nothing dequeue (click strip
-  → `clearQueue` → every message merged into one draft blob) proved undiscoverable and lossy in use.
-  **Abort still restores the whole queue** (`onAbort` → `session.clearQueue` → texts prepended
-  `\n\n`-joined, pi's restore order, then `session.abort`) — pi's Escape parity: an aborted run must
-  not silently discard messages queued behind it. A **rejected** streaming send likewise restores its
-  text to the draft alongside the `appendErrorTurn`. Trade-off, accepted: `queue_update` carries text
-  only, so a queued image attachment shows no chip in the strip; the canonical transcript turn later
-  renders its image blocks with the hydrated-turn fallback labels. E2e: `queue.live.spec.ts` (@agent).
+  are position-addressed, matching the wire op); edit additionally restores the removed message's text
+  and images to the draft and refocuses. Per-row actions exist because the original all-or-nothing dequeue
+  (click strip → `clearQueue` → every message merged into one draft blob) proved undiscoverable and lossy
+  in use. **Abort atomically restores the complete queue** (`onAbort` →
+  `session.abort { restoreQueue: true }`): the host drains both Pi lanes and signals abort as one operation,
+  waits for idle, then returns each queued message's text + image content; the web prepends the texts and
+  reattaches every image. Stop therefore cannot let a queued continuation run or silently discard an
+  attachment. A **rejected** streaming send likewise restores its text to the draft alongside the
+  `appendErrorTurn`. The ordinary `queue_update` projection still carries only displayable text plus a
+  conservative `hasImages` aggregate — no image bytes — so a queued image shows no chip in the strip; the
+  canonical transcript turn later renders its image blocks with hydrated fallback labels. E2e:
+  `queue.live.spec.ts` (@agent).
 - **Streaming send modes: split send + interrupt** (`Composer`) — steer/queue semantics are pi's loop
   design (steer = injected at the next turn boundary, after the current assistant message + its tool
   calls; queue = runs after the agent settles; only abort halts an in-flight response) and proved
@@ -412,7 +457,23 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   `source === "prompt"` entries, plus a fresh `template.list { workspaceId }` fetch mapped to
   `SlashCommandInfo` rows (`source: "prompt"`, `sourceInfo` synthesized to match pi's own prompt-template
   convention exactly: `{ path: filePath, source: "local", scope: scope === "global" ? "user" : "project",
-  origin: "top-level" }`) — one merged list. When a `template.list` response comes back **empty**,
+  origin: "top-level" }`) — one merged list. The chat prepends its one **browser-native command**,
+  `/compact [instructions]`, as a display-local `builtin` row labelled `Pi/built-in`; contracts' Pi-mirrored
+  command source stays unchanged. Native `compact` is reserved over an exact-name extension/template
+  collision (skill commands remain namespaced), and the exact Pi parser recognizes only `/compact` or
+  `/compact ` plus trimmed instructions — every near-miss remains an ordinary prompt. A compact submit
+  bypasses the optimistic user echo and every streaming send mode: completed draft images **or the queue's
+  host-authored `hasImages` aggregate** reject it in place with an actionable composer chip (draft + queue
+  preserved; pending draft images already hold all submits). Otherwise the command clears, drains
+  `session.clearQueue { requireTextOnly: true }` back into the composer in steering-then-follow-up order,
+  then calls `session.compact`; the host rechecks the image precondition at the destructive operation, so a
+  stale client or cross-client race still cannot drop queued bytes. The host atomically rejects a second
+  manual compaction while one is already in flight for that session; Pi owns abort, summarization,
+  persistence, and lifecycle. The request snapshots
+  existing compaction-turn ids, and a rejected clear/compact asks the store to append a failed compaction row
+  only when no new lifecycle turn appeared, so Pi's emitted failure and a pre-lifecycle wire failure share one
+  surface without duplicating. Existing live/hydrated compaction rendering is unchanged. When a
+  `template.list` response comes back **empty**,
   `SlashCommandMenu` renders a `footer` nudge (`data-testid="slash-templates-empty"`) that
   deep-links to Settings → Templates via `ChatView`'s `onManageTemplates` — the discoverability half of
   the starter-templates offer (`panels/SPEC.md`), since a fresh install has an empty global prompts dir
@@ -627,8 +688,21 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   `openMarkdown` snapshot action; tool completion refreshes immediately and `agent_settled` supplies the
   final refresh; overlapping list reads are latest-wins and connection-generation stamped, accepted adds
   fold by item id, and a failed optimistic removal re-reads authority rather than restoring a stale whole-plan
-  capture over concurrent edits), `planView` (pure derivations over the DTO: `groupProgress`,
-  `planSummary`, `planGlance`/`sessionGlance`, `planSections`, and `shouldNudgeOnAdd`. A group's *status* is
+  capture over concurrent edits; plus the agent-review ops `startReview` (`todo.startReview`) and
+  `reviewAll` (`todo.reviewAll`) — both re-read the plan, since the review decoration is host-derived
+  and never patched locally; the manual-verdict ops were removed with the plan page's manual mode —
+  `todo.review`/`todo.requestFix` remain on the wire, host-side), `planView` (pure derivations over the DTO: `groupProgress`,
+  `planSummary`, `planGlance`/`sessionGlance`, `planSections`, `shouldNudgeOnAdd`, and the review-trail
+  set — `itemRevisions` (the commit history, 1 TODO = N commits), `reviewableItems`/`reviewProgress`
+  (host-gated by `TodoItem.review` presence — the reviewable rule has ONE home, server-side),
+  `reviewChangesRequested` + `itemOpenFindings` (the changes_requested warning marking: the flag and
+  the count of the reviewer's open comments — matched by the finding's `origin` provenance
+  (todoId + optional sessionId) when stamped, falling back to the change-set path join only for
+  provenance-less comments, so two steps touching one file don't count each other's findings; the
+  Review tab is the truth), and
+  `planCompletionSummary` (the plan-level note gated on "everything done", so a re-opened plan never
+  shows a stale all-done note). `itemChangeSet`'s precedence: live `change` paths win (a fallback redo's
+  latest delta), else the NEWEST resolvable commit. A group's *status* is
   **not** derived here — the host computes it and ships it on `TodoGroupItem.status`, so the rule has one
   home; a user edit therefore re-reads the plan rather than patching it locally, see `useChatTodos`), `TodoList` (the
   **status-ordered, group-first** rendering (`planSections`) — group = task: the **in-progress** task
@@ -638,7 +712,21 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   one collapse over all of Done). Finished *steps* stay inline in their (active/pending)
   group; only whole done tasks move to Done. Each group is a header row (derived status icon + title +
   done/total badge), the `active` group emphasized; the user's loose items carry a per-row `user` badge
-  (no separate "Your requests" header — they're placed by status). **A row whose item carries a host
+  (no separate "Your requests" header — they're placed by status). **The compact list is title-only**
+  (status glyph + title + the change-set chip) — a row's `note`, a done item's agent-authored `summary`,
+  and its `verification` are **not** shown here, so a long plan reads at a glance without overloading;
+  the **full plan page** (`PlanPane`) is where those surface: the `summary` as a clamped muted line
+  (`todo-summary`) and the `verification` as the shared **`VerificationBadge`** (`planKit`; the
+  "Tests ✓" element — check glyph for a named check, warning glyph for an honest "not verified", the
+  split derived by `planView.verificationStatus`, ONE home; the badge's title labels it self-reported —
+  never a host-run gate). The plan page has no in-page review list
+  — its header kebab offers **Review All** (host-side queue, `todo.reviewAll`) and a comment chip that
+  focuses the right-panel Review tab (see `panels/SPEC.md`). A row whose review is **settled** (`planView.reviewSettled` — approved and
+  nothing landed since) upgrades its done check to the **circled Verified glyph**
+  (`StatusIcon reviewed`, hover "Verified", `data-reviewed`) — the at-a-glance "this step was
+  reviewed" state, popup and plan page alike; a **changes_requested** verdict flips the glyph to the
+  warning `CircleAlert` instead (`StatusIcon changesRequested`, hover "Changes requested",
+  `data-changes-requested`) — the plan page adds the chip + feedback note (see `panels/SPEC.md`). **A row whose item carries a host
   change set grows a quiet "N files" chip** (`itemChangeSet` in `planView` — the one derivation shared
   with the markdown snapshot below, so the two can never disagree): a **committed** item's chip opens the
   Changes panel at its `commit:{sha}` scope via `useChatTodos.openChanges` (`setDiffScope` + a
@@ -707,7 +795,8 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
 - **Allowed deps:** `contracts` (pi message/content-block types, **type-only**); `store` + `transport`
   (**app-integration files only** — a renderer that takes props must never reach for either. Today that
   is `ChatView.tsx` plus the hooks and dialogs it composes: `useChatTodos.ts`, `useHistorySearch.ts`,
-  `useModelCatalog.ts`, `SkillsDialog.tsx`, `TemplateEditorDialog.tsx`. `useModelCatalog` is the shared
+  `useModelCatalog.ts`, **`useTranscriptSync.ts`** (successful-compaction + connection-generation canonical
+  transcript reconciliation), `SkillsDialog.tsx`, `TemplateEditorDialog.tsx`. `useModelCatalog` is the shared
   models-catalog seam `panels/NewWorkspaceDialog` also imports per-file, so the two pickers cannot
   drift; on activation it **drops catalog authority synchronously** (a flag an earlier consumer set says
   nothing about the list this one inherited) and reads `model.list` only when the shared list is **empty** —
@@ -729,8 +818,9 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   receives the single path the user picked) plus its view switch (`onReveal` → the tool-reveal intent), and the
   `isSpec` classifier it builds from the store's `specsByWorkspace` snapshot (subscribed as the stored array
   — a stable ref — and memoized into a matcher here, never a fresh Set inside the selector) — together with
-  **`useHistorySearch.ts`** (the Ctrl+R history-recall overlay's store/transport edge) and
-  **`TemplateEditorDialog.tsx`** (the shared template save form), the other two integration points. A
+  **`useHistorySearch.ts`** (the Ctrl+R history-recall overlay's store/transport edge),
+  **`useTranscriptSync.ts`** (the guarded authoritative read that converges an existing runtime), and
+  **`TemplateEditorDialog.tsx`** (the shared template save form), the other integration points. A
   **rejected** send (`prompt`/`steer`/`followUp`) lands in the chat via the store's `appendErrorTurn` —
   never swallowed; *streaming* faults arrive as pi events instead.
 
@@ -756,7 +846,7 @@ deriver — `working` → `thinking` → `running-tool` → `writing`, plus `com
 trailing turn is a running compaction) — not a per-turn cursor — so it can't
 duplicate and it fills the post-send gap. Outside the streaming window (a manual compact, or the
 pre-prompt compaction pi runs inside `prompt()` before `agent_start`) the footer is absent by design —
-the running `CompactionNotice` row itself carries the spinner, so the beat is never dead air. The activity fold's live ticker is a *status* line (spinner,
+the running `CompactionNotice` row itself carries the spinner, so the beat is never dead air. The trailing Activity fold's live ticker is a *status* line (spinner,
 like a running card header), not a second loader. `data-testid="stream-indicator"` + `data-phase` make
 the lifecycle assertable.
 

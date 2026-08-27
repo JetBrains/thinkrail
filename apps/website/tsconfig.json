@@ -3,10 +3,10 @@
 	"compilerOptions": {
 		"noEmit": true,
 		"lib": ["ES2023", "DOM", "DOM.Iterable"],
-		"types": ["astro/client"]
+		"jsx": "react-jsx",
+		"jsxImportSource": "react",
+		"types": ["astro/client", "bun"]
 	},
 	"include": ["src", "astro.config.ts", ".astro/types.d.ts"],
-	// Tests run under `bun test` (which provides `bun:test` natively); keep them out of the browser
-	// `astro check` pass so this DOM-typed project doesn't need Bun types.
 	"exclude": ["src/**/*.test.ts", "dist"]
 }

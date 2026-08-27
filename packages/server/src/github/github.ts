@@ -1,4 +1,4 @@
-import type { GithubAuthStatus } from "@thinkrail/contracts";
+import type { GhSetupProblem, GithubAuthStatus } from "@thinkrail/contracts";
 
 export function githubAuthStatus(): GithubAuthStatus {
 	if (process.env.THINKRAIL_GH_OFFLINE === "1") return { connected: false };
@@ -33,4 +33,36 @@ export function parseGhAuthStatus(text: string): GithubAuthStatus {
 
 export function githubRefresh(): GithubAuthStatus {
 	return githubAuthStatus();
+}
+
+export function ghSetupProblemFrom(ghPath: string | null, authOk: boolean): GhSetupProblem | null {
+	if (ghPath === null) return "missing";
+	return authOk ? null : "unauthenticated";
+}
+
+const GH_PROBE_TIMEOUT_MS = 8_000;
+
+export async function ghSetupProblem(): Promise<GhSetupProblem | null> {
+	if (process.env.THINKRAIL_GH_OFFLINE === "1") return null;
+	const ghPath = Bun.which("gh");
+	if (ghPath === null) return "missing";
+	try {
+		const proc = Bun.spawn(["gh", "auth", "status"], { stdout: "ignore", stderr: "ignore" });
+		let timedOut = false;
+		const term = setTimeout(() => {
+			timedOut = true;
+			proc.kill();
+		}, GH_PROBE_TIMEOUT_MS);
+		const kill = setTimeout(() => proc.kill(9), GH_PROBE_TIMEOUT_MS + 2_000);
+		try {
+			const exitCode = await proc.exited;
+			if (timedOut) return null;
+			return ghSetupProblemFrom(ghPath, exitCode === 0);
+		} finally {
+			clearTimeout(term);
+			clearTimeout(kill);
+		}
+	} catch {
+		return "missing";
+	}
 }

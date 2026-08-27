@@ -29,9 +29,8 @@ independently of the host and dials it over the network; a phone reaches the sel
 apps/cli        host launcher (V1): boot server + open browser   ── depends on ─▶ packages/server
 apps/web        UI client (mobile-first)                          ── depends on ─▶ packages/contracts
 apps/desktop    Electrobun local-host launcher/shared client (deferred) ── depends on ─▶ packages/server, packages/contracts
-apps/website    public landing page + blog (GitHub Pages)         ── depends on ─▶ packages/website-analytics
-apps/vibecoding-website  vibecoder landing (Cloudflare Pages)     ── depends on ─▶ packages/website-analytics
-packages/website-analytics  dependency-free browser analytics policy shared by the two static sites
+apps/website    public landing + blog + /vibecoding (Cloudflare Pages) ── depends on ─▶ packages/website-analytics
+packages/website-analytics  dependency-free browser analytics policy for the public website
 packages/server createServer(): Bun.serve(HTTP+WS) + AgentSessionManager (in-process pi) ── depends on ─▶ packages/contracts, packages/shared
 packages/contracts  the wire (types-only)
 packages/shared     shellEnv (server-side only)
@@ -73,7 +72,11 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
    worktree model; and an **existing worktree** the user explicitly attaches in place
    (`kind: "external"`), which ThinkRail may forget but never mutates (see
    [[submodule-server-workspaces]]). The shell is built first,
-   `pi` connected last. Provider-backed PR / Checks stay V2 beyond a best-effort open GitHub PR or GitLab MR number in active-workspace metadata; workspace-local Review is V1.
+   `pi` connected last. **Open PR is V1**: a deterministic, host-side push + open/update of the branch's
+   GitHub PR through the user's own `gh` CLI (no stored tokens, no provider REST API), body rendered from
+   the verified plan, with a compare-URL fallback when `gh`/GitHub isn't available (see
+   [[submodule-server-pr]]). CI/Checks status, merge/squash from the app, and `glab` support stay V2;
+   workspace-local Review is V1.
 7. **Auth is external.** Tailscale ACLs / device identity are the auth; the app carries an `owner` field,
    not a login UI.
 8. **Hydrate-then-stream (every client reconstructs from the host).** A client never relies on having
@@ -118,8 +121,12 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
     explicit, reviewable diff. Cross-cutting deps (pi, TypeScript, typebox, bun types) are pinned **once** in
     the root `workspaces.catalog` and referenced via `catalog:`, so their version lives in exactly one place.
     **Enforced**, not just documented: `scripts/check-catalog.ts` (`bun run check:deps`, in pre-commit + CI)
-    rejects any range and any catalog drift. Exempt: `peerDependencies` (extension packages declare `"*"` on
-    purpose — the host provides the dep) and local protocols (`workspace:` / `link:` / `file:`).
+    rejects any range, any catalog drift, and a lockfile graph that resolves `react` or `react-dom` outside
+    its one catalog pin (the temporary prerelease override rationale belongs to [[module-web]]). Exempt:
+    `peerDependencies` (extension packages declare `"*"` on purpose — the host provides the dep) and local
+    protocols (`workspace:` / `link:` / `file:`). An exact SemVer prerelease/build suffix is still an exact
+    pin (`19.3.0-canary-a1124489-20260826`); the checker accepts the full identifier grammar, including
+    hyphens, without admitting a range.
 
 11. **Terminal = xterm.js on the DOM renderer.** The browser terminal is `@xterm/xterm`, driven from
     `apps/web/src/panels/TerminalInstance.tsx` against a real PTY (`bun-pty`) in
@@ -154,6 +161,13 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
     their liveness obligations belongs to [[central-integration]]. This keeps feature-specific mechanics in
     their leaf specs while making a non-terminating composition visible at the architecture layer.
 
+14. **The public website is one origin, artifact, and production deployment.** `apps/website` owns `/`,
+    `/blog/`, and `/vibecoding/` in one static Astro build deployed through one Cloudflare Pages project.
+    React and Tailwind are permitted only inside [[submodule-website-vibecoding]]; unrelated routes retain
+    their vanilla runtime and hand-written stylesheet. Browser analytics and consent initialize once on the
+    exact `thinkrail.ai` origin. The retired `vibecoding.thinkrail.ai` hostname is an edge redirect that
+    preserves path and query, never a proxy to a second site.
+
 ## Invariants
 
 - Never **value**-import `pi` in browser-bundled code; import types only, from the `pi-ai` /
@@ -173,4 +187,5 @@ The workflow **product layer** (a runtime/engine, configurable pipelines) — th
 rule, no runtime machinery); the spec-graph **product layer** beyond the read-only viewer (drift detection, pre-build
 approval, living graph) — the pi-side spec-graph *capability* ships in V1 as a bundled extension
 (`module-spec-graph`), and the V1 viewer is a read-only Specs tab over a `spec.graph` wire read;
-provider-backed PR / Checks, self-improvement, automations, per-step model routing, cost ledger.
+CI/Checks status and provider REST API integration beyond `gh`-CLI push/open/update (see
+[[submodule-server-pr]]), self-improvement, automations, per-step model routing, cost ledger.

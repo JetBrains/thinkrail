@@ -473,7 +473,7 @@ test("artifact sanitize is per-kind: a commit needs a sha, every other kind a pa
 	}
 });
 
-test("a version-3 file (pre-commit-kind) reads cleanly and upgrades to 4 on the next write", () => {
+test("a version-3 file (pre-commit-kind) reads cleanly and upgrades to the current version on the next write", () => {
 	const root = tempRoot();
 	try {
 		const file = join(root, storeRel(SESSION));
@@ -497,8 +497,95 @@ test("a version-3 file (pre-commit-kind) reads cleanly and upgrades to 4 on the 
 			}),
 		);
 		expect(store(root).get("t_old")?.artifacts).toEqual([{ kind: "change", path: "a.ts" }]);
-		store(root).add({ title: "new" });
-		expect(JSON.parse(readFileSync(file, "utf8")).version).toBe(4);
+		store(root).add({ title: "new" }); // any write upgrades the file version
+		expect(JSON.parse(readFileSync(file, "utf8")).version).toBe(5);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test("item summary: set with done, cleared by empty string, sanitized on read", () => {
+	const root = tempRoot();
+	try {
+		const todo = store(root).add({ title: "Implement FloodWait handling" });
+		store(root).update(todo.id, {
+			status: "done",
+			summary: "Added throttling and fallback for failed batch sends.",
+			verification: "bun test src/todos — 34 pass",
+		});
+		expect(store(root).get(todo.id)?.summary).toBe(
+			"Added throttling and fallback for failed batch sends.",
+		);
+		expect(store(root).get(todo.id)?.verification).toBe("bun test src/todos — 34 pass");
+		store(root).update(todo.id, { summary: "", verification: "" });
+		expect(store(root).get(todo.id)?.summary).toBeUndefined();
+		expect(store(root).get(todo.id)?.verification).toBeUndefined();
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test("reopening a done item clears its stale completion summary/verification and the plan summary", () => {
+	const root = tempRoot();
+	try {
+		const s = store(root);
+		const todo = s.add({ title: "Implement FloodWait handling" });
+		s.update(todo.id, {
+			status: "done",
+			summary: "Added throttling and fallback for failed batch sends.",
+			verification: "bun test src/todos — 34 pass",
+		});
+		s.setSummary("All tasks landed; e2e suite green.");
+
+		s.update(todo.id, { status: "in_progress" });
+
+		expect(s.get(todo.id)?.summary).toBeUndefined();
+		expect(s.get(todo.id)?.verification).toBeUndefined();
+		expect(s.read().summary).toBeUndefined();
+
+		s.update(todo.id, {
+			status: "done",
+			summary: "Retried with the corrected backoff window.",
+			verification: "bun test src/todos — 35 pass",
+		});
+		expect(s.get(todo.id)?.summary).toBe("Retried with the corrected backoff window.");
+		expect(s.get(todo.id)?.verification).toBe("bun test src/todos — 35 pass");
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test("reopen and re-done in one patch keeps the freshly supplied summary/verification", () => {
+	const root = tempRoot();
+	try {
+		const s = store(root);
+		const todo = s.add({ title: "step" });
+		s.update(todo.id, { status: "done", summary: "old claim", verification: "old check" });
+		s.update(todo.id, {
+			status: "pending",
+			summary: "new claim",
+			verification: "new check",
+		});
+		expect(s.get(todo.id)?.summary).toBe("new claim");
+		expect(s.get(todo.id)?.verification).toBe("new check");
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test("plan summary: setSummary round-trips, empty clears, survives item edits, dropped by replaceAll", () => {
+	const root = tempRoot();
+	try {
+		const todo = store(root).add({ title: "step" });
+		store(root).setSummary("All tasks landed; e2e suite green.");
+		expect(store(root).read().summary).toBe("All tasks landed; e2e suite green.");
+		store(root).update(todo.id, { status: "done" });
+		expect(store(root).read().summary).toBe("All tasks landed; e2e suite green.");
+		store(root).replaceAll({ groups: [{ title: "next task", todos: [{ title: "a" }] }] });
+		expect(store(root).read().summary).toBeUndefined();
+		store(root).setSummary("v2");
+		store(root).setSummary("   ");
+		expect(store(root).read().summary).toBeUndefined();
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}

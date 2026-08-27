@@ -6,6 +6,7 @@ import { clampThinkingLevel, getSupportedThinkingLevels } from "@earendil-works/
 import {
 	type AgentSession,
 	createAgentSession,
+	type ExtensionError,
 	getAgentDir,
 	type SessionInfo,
 	SessionManager,
@@ -16,11 +17,13 @@ import type {
 	AskUserQuestionResult,
 	ImageContent,
 	Model,
+	QueuedMessageContent,
 	QueueLane,
 	RefreshedModels,
 	RemovedQueuedMessage,
 	SessionDeletedPayload,
 	SessionEventPayload,
+	SessionQueueContent,
 	SessionQueueState,
 	SessionStats,
 	SessionSummary,
@@ -44,9 +47,15 @@ import { projectSessionEvent } from "./sessionEventProjection";
 import { repairDanglingToolCalls } from "./sessionRepair";
 import type { SkillAdmissionContext } from "./skillAdmission";
 import { trashFile } from "./trash";
-import { cancelExtUiForSession, createWebUiContext, notifyExtUi } from "./webUiContext";
+import { cancelExtUiForSession, createWebUiContext, notifyExtensionError } from "./webUiContext";
 
 const log = logger("agent");
+
+interface TrackedQueuedMessage {
+	id: number;
+	text: string;
+	images?: ImageContent[];
+}
 
 interface Entry {
 	session: AgentSession;
@@ -54,6 +63,11 @@ interface Entry {
 	unsubscribe: () => void;
 	workspaceId: string;
 	lastSettlement: AgentSettlement | null | undefined;
+	queuedMessages: Record<QueueLane, TrackedQueuedMessage[]>;
+	nextQueuedMessageId: number;
+	manualCompactionInProgress: boolean;
+	piCompactionInProgress: boolean;
+	registered: boolean;
 }
 
 const sessions = new Map<string, Entry>();
@@ -150,6 +164,8 @@ export interface CreateSessionInput {
 	workspaceId: string;
 	model?: WireModel;
 	thinkingLevel?: ThinkingLevel;
+	/** True: an unresolvable `model` falls back to the default instead of throwing. */
+	modelOptional?: boolean;
 }
 
 export interface CreateSessionResult {
@@ -198,8 +214,19 @@ async function prepareSessionEntry(
 		unsubscribe: () => {},
 		workspaceId,
 		lastSettlement,
+		queuedMessages: { steering: [], followUp: [] },
+		nextQueuedMessageId: 1,
+		manualCompactionInProgress: false,
+		piCompactionInProgress: false,
+		registered: false,
 	};
 	entry.unsubscribe = session.subscribe((event) => {
+		if (event.type === "queue_update") {
+			synchronizeQueuedLane(entry, "steering", event.steering);
+			synchronizeQueuedLane(entry, "followUp", event.followUp);
+		}
+		if (event.type === "compaction_start") entry.piCompactionInProgress = true;
+		if (event.type === "compaction_end") entry.piCompactionInProgress = false;
 		if (event.type === "agent_start") {
 			entry.lastSettlement = null;
 		}
@@ -216,17 +243,34 @@ async function prepareSessionEntry(
 					}
 				: null;
 		}
-		const projected = projectSessionEvent(event, terminal);
+		const baseEvent = projectSessionEvent(event, terminal);
+		const projected =
+			baseEvent.type === "queue_update" && hasQueuedImages(entry)
+				? { ...baseEvent, hasImages: true as const }
+				: baseEvent;
 		if (event.type === "agent_settled") entry.lastSettlement = terminal;
 		if (sessions.get(sessionId) === entry) publish({ sessionId, event: projected });
 		if (event.type === "agent_settled") terminal = null;
 	});
 
+	const reportExtensionError = (failure: ExtensionError): void => {
+		const line = `extension ${failure.extensionPath} failed on ${failure.event}: ${failure.error}`;
+		if (failure.stack) {
+			const cause = new Error(failure.error);
+			cause.stack = failure.stack;
+			log.warn(line, cause);
+		} else {
+			log.warn(line);
+		}
+		if (!entry.registered || sessions.get(sessionId) === entry)
+			notifyExtensionError(sessionId, failure);
+	};
+
 	try {
 		await session.bindExtensions({
 			mode: "rpc",
 			uiContext: createWebUiContext(sessionId),
-			onError: () => notifyExtUi(sessionId, "An extension failed.", "error"),
+			onError: reportExtensionError,
 		});
 		if (isSessionDeleted(sessionId, workspaceId)) throw new Error(`Unknown session: ${sessionId}`);
 	} catch (error) {
@@ -252,6 +296,7 @@ async function registerSession(
 	generation: PiRuntimeGeneration,
 ): Promise<CreateSessionResult> {
 	const prepared = await prepareSessionEntry(session, workspaceId, generation);
+	prepared.entry.registered = true;
 	sessions.set(session.sessionId, prepared.entry);
 	log.debug(`session ${session.sessionId} attached (workspace ${workspaceId})`);
 	return prepared.result;
@@ -260,6 +305,14 @@ async function registerSession(
 export async function createSession(input: CreateSessionInput): Promise<CreateSessionResult> {
 	const generation = await getPiRuntimeGeneration();
 	const settingsManager = buildSessionSettings(input.cwd);
+	let model: Model<string> | undefined;
+	if (input.model) {
+		try {
+			model = resolveWireModel(generation.runtime, input.model);
+		} catch (err) {
+			if (!input.modelOptional) throw err;
+		}
+	}
 	const { session } = await createAgentSession({
 		cwd: input.cwd,
 		modelRuntime: generation.runtime,
@@ -271,7 +324,7 @@ export async function createSession(input: CreateSessionInput): Promise<CreateSe
 			() => skillAdmissionResolver(input.workspaceId),
 			generation.excludedSessionExtensionPaths,
 		),
-		...(input.model ? { model: resolveWireModel(generation.runtime, input.model) } : {}),
+		...(model ? { model } : {}),
 		...(input.thinkingLevel ? { thinkingLevel: input.thinkingLevel } : {}),
 	});
 	return registerSession(session, input.workspaceId, generation);
@@ -290,7 +343,7 @@ function summaryOf(sessionId: string, entry: Entry): SessionSummary {
 		updatedAt: Date.now(),
 		live: true,
 		...(entry.lastSettlement !== undefined ? { lastSettlement: entry.lastSettlement } : {}),
-		...(session.pendingMessageCount > 0 ? { queue: queueStateOf(session) } : {}),
+		...(session.pendingMessageCount > 0 ? { queue: queueStateOf(entry) } : {}),
 	};
 }
 
@@ -564,25 +617,100 @@ export async function answerQuestion(
 	});
 }
 
+function synchronizeQueuedLane(entry: Entry, kind: QueueLane, texts: readonly string[]): void {
+	const current = entry.queuedMessages[kind];
+	if (texts.length >= current.length) {
+		entry.queuedMessages[kind] = texts.map((text, index) => {
+			const tracked = current[index];
+			return tracked ? { ...tracked, text } : { id: entry.nextQueuedMessageId++, text };
+		});
+		return;
+	}
+
+	const reconciled: TrackedQueuedMessage[] = [];
+	let currentIndex = current.length - 1;
+	for (let textIndex = texts.length - 1; textIndex >= 0; textIndex--) {
+		const text = texts[textIndex];
+		if (text === undefined) continue;
+		while (currentIndex >= 0 && current[currentIndex]?.text !== text) currentIndex--;
+		const tracked = currentIndex >= 0 ? current[currentIndex] : undefined;
+		reconciled.unshift(tracked ? { ...tracked, text } : { id: entry.nextQueuedMessageId++, text });
+		currentIndex--;
+	}
+	entry.queuedMessages[kind] = reconciled;
+}
+
+function synchronizeQueueFromSession(entry: Entry): void {
+	synchronizeQueuedLane(entry, "steering", entry.session.getSteeringMessages());
+	synchronizeQueuedLane(entry, "followUp", entry.session.getFollowUpMessages());
+}
+
+function hasQueuedImages(entry: Entry): boolean {
+	return (["steering", "followUp"] as const).some((kind) =>
+		entry.queuedMessages[kind].some((message) => (message.images?.length ?? 0) > 0),
+	);
+}
+
+function queueContentOf(entry: Entry): SessionQueueContent {
+	synchronizeQueueFromSession(entry);
+	const project = (message: TrackedQueuedMessage): QueuedMessageContent => ({
+		text: message.text,
+		...(message.images && message.images.length > 0 ? { images: [...message.images] } : {}),
+	});
+	return {
+		steering: entry.queuedMessages.steering.map(project),
+		followUp: entry.queuedMessages.followUp.map(project),
+	};
+}
+
+async function queueSessionMessage(
+	entry: Entry,
+	kind: QueueLane,
+	text: string,
+	images: ImageContent[] | undefined,
+	send: () => Promise<void>,
+): Promise<void> {
+	const tracked: TrackedQueuedMessage = {
+		id: entry.nextQueuedMessageId++,
+		text,
+		...(images && images.length > 0 ? { images: [...images] } : {}),
+	};
+	entry.queuedMessages[kind].push(tracked);
+	try {
+		await send();
+	} catch (error) {
+		entry.queuedMessages[kind] = entry.queuedMessages[kind].filter(
+			(message) => message.id !== tracked.id,
+		);
+		synchronizeQueueFromSession(entry);
+		throw error;
+	}
+}
+
 export async function promptSession(
 	sessionId: string,
 	text: string,
 	images?: ImageContent[],
 ): Promise<void> {
-	const session = mustGet(sessionId);
-	if (session.isStreaming) {
-		await session.steer(text, images);
+	const entry = mustGetEntry(sessionId);
+	if (entry.session.isStreaming) {
+		await queueSessionMessage(entry, "steering", text, images, () =>
+			entry.session.steer(text, images),
+		);
 		return;
 	}
-	await session.prompt(text, images ? { images } : undefined);
+	await entry.session.prompt(text, images ? { images } : undefined);
 }
 
-export function steerSession(
+export async function steerSession(
 	sessionId: string,
 	text: string,
 	images?: ImageContent[],
 ): Promise<void> {
-	return mustGet(sessionId).steer(text, images);
+	const entry = mustGetEntry(sessionId);
+	await queueSessionMessage(entry, "steering", text, images, () =>
+		entry.session.steer(text, images),
+	);
 }
 
 export async function followUpSession(
@@ -590,27 +718,46 @@ export async function followUpSession(
 	text: string,
 	images?: ImageContent[],
 ): Promise<void> {
-	const session = mustGet(sessionId);
-	if (session.isStreaming) {
-		await session.followUp(text, images);
+	const entry = mustGetEntry(sessionId);
+	if (entry.session.isStreaming) {
+		await queueSessionMessage(entry, "followUp", text, images, () =>
+			entry.session.followUp(text, images),
+		);
 		return;
 	}
-	await session.prompt(text, images ? { images } : undefined);
+	await entry.session.prompt(text, images ? { images } : undefined);
 }
 
 export async function compactSession(sessionId: string, instructions?: string): Promise<void> {
-	await mustGet(sessionId).compact(instructions);
+	const entry = mustGetEntry(sessionId);
+	if (entry.manualCompactionInProgress || entry.piCompactionInProgress) {
+		throw new Error("Compaction is already in progress for this session");
+	}
+	entry.manualCompactionInProgress = true;
+	try {
+		await entry.session.compact(instructions);
+	} finally {
+		entry.manualCompactionInProgress = false;
+	}
 }
 
-function queueStateOf(session: AgentSession): SessionQueueState {
+function queueStateOf(entry: Entry): SessionQueueState {
+	synchronizeQueueFromSession(entry);
 	return {
-		steering: [...session.getSteeringMessages()],
-		followUp: [...session.getFollowUpMessages()],
+		steering: [...entry.session.getSteeringMessages()],
+		followUp: [...entry.session.getFollowUpMessages()],
+		...(hasQueuedImages(entry) ? { hasImages: true as const } : {}),
 	};
 }
 
-export function clearQueueSession(sessionId: string): SessionQueueState {
-	return mustGet(sessionId).clearQueue();
+export function clearQueueSession(sessionId: string, requireTextOnly = false): SessionQueueContent {
+	const entry = mustGetEntry(sessionId);
+	const content = queueContentOf(entry);
+	if (requireTextOnly && hasQueuedImages(entry)) {
+		throw new Error("Cannot restore queued image messages as text");
+	}
+	entry.session.clearQueue();
+	return content;
 }
 
 export async function removeQueuedSession(
@@ -618,24 +765,43 @@ export async function removeQueuedSession(
 	kind: QueueLane,
 	index: number,
 ): Promise<RemovedQueuedMessage> {
-	const session = mustGet(sessionId);
-	const drained = session.clearQueue();
+	const entry = mustGetEntry(sessionId);
+	const { session } = entry;
+	const drained = clearQueueSession(sessionId);
 	const lane = [...drained[kind]];
 	const removed = index >= 0 && index < lane.length ? (lane.splice(index, 1)[0] ?? null) : null;
 	const keep = { ...drained, [kind]: lane };
-	for (const text of keep.steering) await session.steer(text);
-	for (const text of keep.followUp) await session.followUp(text);
+	for (const message of keep.steering) {
+		await steerSession(sessionId, message.text, message.images ? [...message.images] : undefined);
+	}
+	for (const message of keep.followUp) {
+		await followUpSession(
+			sessionId,
+			message.text,
+			message.images ? [...message.images] : undefined,
+		);
+	}
 	if (!session.isStreaming && session.pendingMessageCount > 0) {
-		const parked = session.clearQueue();
-		for (const text of [...parked.steering, ...parked.followUp]) {
-			await followUpSession(sessionId, text);
+		const parked = clearQueueSession(sessionId);
+		for (const message of [...parked.steering, ...parked.followUp]) {
+			await followUpSession(
+				sessionId,
+				message.text,
+				message.images ? [...message.images] : undefined,
+			);
 		}
 	}
-	return { removed, queue: queueStateOf(session) };
+	return { removed, queue: queueStateOf(entry) };
 }
 
-export function abortSession(sessionId: string): Promise<void> {
-	return mustGet(sessionId).abort();
+export async function abortSession(
+	sessionId: string,
+	restoreQueue = false,
+): Promise<SessionQueueContent | undefined> {
+	const entry = mustGetEntry(sessionId);
+	const restoredQueue = restoreQueue ? clearQueueSession(sessionId) : undefined;
+	await entry.session.abort();
+	return restoredQueue;
 }
 
 export async function setSessionModel(sessionId: string, model: WireModel): Promise<void> {

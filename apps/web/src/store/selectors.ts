@@ -16,7 +16,13 @@ import {
 	normalizePath,
 	readLayoutSelection,
 } from "../lib";
-import type { ClosedChat, EditorTab, RouteChatTarget, TerminalTab } from "./appStore";
+import type {
+	ClosedChat,
+	EditorTab,
+	RouteChatTarget,
+	SessionRuntime,
+	TerminalTab,
+} from "./appStore";
 
 interface ConnectionGenerationState {
 	status: string;
@@ -343,6 +349,17 @@ export function selectChatTitle(
 	return (chatTab?.name ?? "Chat").trim() || "Chat";
 }
 
+export function selectCompactionTurnIds(
+	state: { sessions: Record<string, SessionRuntime> },
+	sessionId: string,
+): ReadonlySet<string> {
+	return new Set(
+		(state.sessions[sessionId]?.turns ?? [])
+			.filter((turn) => turn.kind === "compaction")
+			.map((turn) => turn.id),
+	);
+}
+
 export function selectWorkspaceTick(
 	state: { fsChangesByWorkspace: Record<string, { tick: number }> },
 	workspaceId: string,
@@ -426,4 +443,18 @@ export function selectReviewDraftCount(
 	if (!workspaceId) return 0;
 	const snapshot = state.reviewsByWorkspace[workspaceId];
 	return snapshot ? snapshot.comments.filter((c) => c.status === "draft").length : 0;
+}
+
+export function selectAgentReviewCommentCount(
+	state: {
+		reviewsByWorkspace: Record<string, { comments: { status: string; author?: string }[] }>;
+	},
+	workspaceId: string | null,
+): number {
+	if (!workspaceId) return 0;
+	const snapshot = state.reviewsByWorkspace[workspaceId];
+	if (!snapshot) return 0;
+	return snapshot.comments.filter(
+		(c) => c.author === "agent" && c.status !== "resolved" && c.status !== "dismissed",
+	).length;
 }

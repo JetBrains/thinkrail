@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { openWorkspaceChat, waitForDone } from "./fixtures/app";
+import { openWorkspaceChat, routineActivityRows, waitForDone } from "./fixtures/app";
 
 test("turn-divider files-changed chip opens the file's diff and highlights its row in Changes", {
 	tag: "@agent",
@@ -13,12 +13,9 @@ test("turn-divider files-changed chip opens the file's diff and highlights its r
 			"Use the write tool to create a new file notes.txt whose only content is the line: hello",
 		);
 	await page.getByTestId("chat-send").click();
-	await expect(
-		page
-			.locator('[data-testid="activity-group"], [data-testid="activity-step"]')
-			.filter({ hasText: "write" })
-			.first(),
-	).toBeVisible({ timeout: 90_000 });
+	await expect(routineActivityRows(page).filter({ hasText: "write" }).first()).toBeVisible({
+		timeout: 90_000,
+	});
 	await waitForDone(page);
 
 	const chip = page.getByTestId("turn-divider-files").first();
@@ -47,12 +44,9 @@ test("turn-divider counts a scratch task-spec as a spec and opens it from the Sp
 				"Then stop — do not edit any other file.",
 		);
 	await page.getByTestId("chat-send").click();
-	await expect(
-		page
-			.locator('[data-testid="activity-group"], [data-testid="activity-step"]')
-			.filter({ hasText: "spec_create" })
-			.first(),
-	).toBeVisible({ timeout: 90_000 });
+	await expect(routineActivityRows(page).filter({ hasText: "spec_create" }).first()).toBeVisible({
+		timeout: 90_000,
+	});
 	await waitForDone(page);
 
 	const specChip = page.getByTestId("turn-divider-specs").first();
@@ -127,17 +121,10 @@ test("a spec written while the Specs tab is closed still counts as a spec", {
 				"Do NOT use the spec_create tool — use write. Then stop.",
 		);
 	await page.getByTestId("chat-send").click();
-	await expect(
-		page
-			.locator('[data-testid="activity-group"], [data-testid="activity-step"]')
-			.filter({ hasText: "write" })
-			.first(),
-	).toBeVisible({ timeout: 90_000 });
-	await expect(
-		page.locator('[data-testid="activity-group"], [data-testid="activity-step"]').filter({
-			hasText: "spec_create",
-		}),
-	).toHaveCount(0);
+	await expect(routineActivityRows(page).filter({ hasText: "write" }).first()).toBeVisible({
+		timeout: 90_000,
+	});
+	await expect(routineActivityRows(page).filter({ hasText: "spec_create" })).toHaveCount(0);
 	await waitForDone(page);
 
 	const specChip = page.getByTestId("turn-divider-specs").first();

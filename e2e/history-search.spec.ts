@@ -174,11 +174,6 @@ test("Cmd/Ctrl+Enter from the overlay sends pending image attachments with the r
 	await query.press("ControlOrMeta+Enter");
 	await expect(overlay).toBeHidden();
 
-	await expect(
-		page
-			.locator('[data-testid="chat-message"][data-role="user"]')
-			.filter({ hasText: "fix the flaky watcher test" }),
-	).toBeVisible();
 	await expect(input).toHaveValue("");
 	await expect(thumbnails).toBeHidden();
 
@@ -191,6 +186,14 @@ test("Cmd/Ctrl+Enter from the overlay sends pending image attachments with the r
 		expect(prompt).toContain('"image/png"');
 	}).toPass({ timeout: 5000 });
 	await settleSubmittedTurn(page);
+	await page.getByTestId("virtuoso-scroller").evaluate((element) => {
+		element.scrollTop = 0;
+	});
+	const sentTurn = page
+		.locator('[data-testid="chat-message"][data-role="user"]')
+		.filter({ hasText: "fix the flaky watcher test" });
+	await expect(sentTurn).toBeVisible();
+	await expect(sentTurn.getByTestId("chat-attachment-chip")).toContainText("pixel.png");
 });
 
 test("empty query in chat scope shows the empty state for a session with no history yet", async ({

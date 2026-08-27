@@ -1,4 +1,5 @@
 import {
+	RiRobotLine as Bot,
 	RiCheckboxCircleLine as CheckCircle2,
 	RiArrowDownSLine as ChevronDown,
 	RiArrowRightSLine as ChevronRight,
@@ -20,6 +21,7 @@ import { ConfirmPopover } from "./ConfirmPopover";
 import { openChatInTab } from "./openChat";
 import { openDiffInTab, openFileInTab } from "./openTabs";
 import {
+	allDraftIds,
 	commentSurface,
 	fileSummaries,
 	lineRef,
@@ -99,7 +101,7 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 			toast.error(errorText(err), "Couldn't clear the review");
 		}
 	};
-	const hasDrafts = snapshot.comments.some((c) => c.status === "draft");
+	const hasDrafts = allDraftIds(snapshot.comments).length > 0;
 	const hasComments = snapshot.comments.length > 0;
 	const toggleFile = (file: ReviewFileSummary) => {
 		const isOpen = expanded.has(file.path);
@@ -248,22 +250,6 @@ function FileSection({
 					<SendReviewButton workspaceId={workspaceId} path={path} testid="review-panel-send" />
 				</div>
 			)}
-			{inProgress.length > 0 && (
-				<>
-					<SectionLabel label="In progress" />
-					{inProgress.map((comment) => (
-						<CommentRow
-							key={comment.id}
-							workspaceId={workspaceId}
-							comment={comment}
-							sending={sending}
-							onSend={() => void onSend(comment)}
-							onOpenChat={onOpenChat}
-							onNavigate={() => onNavigate(comment)}
-						/>
-					))}
-				</>
-			)}
 			{drafts.length > 0 && (
 				<>
 					<SectionLabel label="Drafts" />
@@ -273,6 +259,22 @@ function FileSection({
 							workspaceId={workspaceId}
 							comment={comment}
 							ordinal={index + 1}
+							sending={sending}
+							onSend={() => void onSend(comment)}
+							onOpenChat={onOpenChat}
+							onNavigate={() => onNavigate(comment)}
+						/>
+					))}
+				</>
+			)}
+			{inProgress.length > 0 && (
+				<>
+					<SectionLabel label="In progress" />
+					{inProgress.map((comment) => (
+						<CommentRow
+							key={comment.id}
+							workspaceId={workspaceId}
+							comment={comment}
 							sending={sending}
 							onSend={() => void onSend(comment)}
 							onOpenChat={onOpenChat}
@@ -368,10 +370,8 @@ function CommentRow({
 			<button
 				type="button"
 				data-testid="review-comment-open"
-				onClick={() =>
-					!isDraft && comment.sessionId ? onOpenChat(comment.sessionId) : onNavigate()
-				}
-				title={!isDraft && comment.sessionId ? "Open the discussion" : "Show in file"}
+				onClick={() => (comment.sessionId ? onOpenChat(comment.sessionId) : onNavigate())}
+				title={comment.sessionId ? "Open the discussion" : "Show in file"}
 				className="flex w-full items-start gap-8 rounded-[var(--radius-sm)] px-4 py-4 text-left hover:bg-control-bg-hovered"
 			>
 				{ordinal !== undefined ? (
@@ -386,9 +386,36 @@ function CommentRow({
 				<span className="min-w-0 flex-1">
 					<span className="line-clamp-2 block tr-text-ui text-text-default">{comment.body}</span>
 					<span className="flex items-center gap-4">
+						{comment.author === "agent" && (
+							<span
+								data-testid="review-comment-agent"
+								title="Filed by ThinkRail's reviewer agent — not by you"
+								className="flex items-center gap-2 tr-text-eyebrow text-text-subtle"
+							>
+								<Bot className="size-12" /> ThinkRail
+							</span>
+						)}
 						{ref && <span className="tr-code-text text-text-subtle">{ref}</span>}
-						{comment.anchorState === "outdated" && (
-							<span className="tr-text-eyebrow text-text-subtle">outdated</span>
+						{comment.reflection?.verdict === "refuted" ? (
+							<span
+								data-testid="review-comment-refuted"
+								title={`An independent reflector judged this finding refuted: ${comment.reflection.reason} — it was held back from the auto-fix cycle.`}
+								className="tr-text-eyebrow text-text-subtle"
+							>
+								refuted by reflection
+							</span>
+						) : comment.stale ? (
+							<span
+								data-testid="review-comment-stale"
+								title="The code this finding was filed against was rewritten after review — it won't ride the auto-fix cycle"
+								className="tr-text-eyebrow text-feedback-warning"
+							>
+								changed since review
+							</span>
+						) : (
+							comment.anchorState === "outdated" && (
+								<span className="tr-text-eyebrow text-text-subtle">outdated</span>
+							)
 						)}
 					</span>
 				</span>
@@ -429,7 +456,7 @@ function CommentRow({
 						</ConfirmPopover>
 					</>
 				)}
-				{!isDraft && comment.sessionId && (
+				{comment.sessionId && (
 					<button
 						type="button"
 						data-testid="review-comment-file"

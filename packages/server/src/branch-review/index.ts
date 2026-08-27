@@ -1,1 +1,6 @@
-export { findOpenBranchReview } from "./branchReview";
+export {
+	findOpenBranchReview,
+	providerFromRemoteUrl,
+	reviewNumber,
+	runProviderCommand,
+} from "./branchReview";

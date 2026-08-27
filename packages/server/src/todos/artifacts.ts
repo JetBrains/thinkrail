@@ -1,4 +1,4 @@
-import type { PiEvent } from "@thinkrail/contracts";
+import type { GitFileChange, PiEvent } from "@thinkrail/contracts";
 import { WORKSPACE_INTERNAL_DIR } from "@thinkrail/shared/paths";
 import { type TodoArtifact, type TodoPlan, TodoStore } from "pi-todos/core";
 import { gitCommitPaths, gitHeadSha, gitStatus } from "../git";
@@ -11,6 +11,7 @@ import {
 	readBaselines,
 	writeBaselines,
 } from "./baselines";
+import { dropReviewRecord } from "./reviews";
 
 const log = logger("todos");
 
@@ -78,6 +79,29 @@ function hasChangeSet(artifacts: TodoArtifact[] | undefined): boolean {
 	return artifacts?.some((a) => a.kind === "change" || a.kind === "commit") ?? false;
 }
 
+export function unattributedChanges(
+	changes: GitFileChange[],
+	plan: TodoPlan,
+	baselines: Record<string, Baseline>,
+): GitFileChange[] {
+	const items = flatten(plan);
+	const attributed = new Set(
+		items.flatMap((t) =>
+			(t.artifacts ?? []).flatMap((a) => (a.kind === "change" && a.path ? [a.path] : [])),
+		),
+	);
+	const openWindows = items.flatMap((t) => {
+		const base = baselines[t.id];
+		return t.status === "in_progress" && base ? [base] : [];
+	});
+	return changes.filter(
+		(c) =>
+			!isAppStatePath(c.path) &&
+			!attributed.has(c.path) &&
+			openWindows.every((b) => b.paths.includes(c.path)),
+	);
+}
+
 export function reconcileChangeArtifacts(
 	store: TodoStore,
 	root: string,
@@ -130,7 +154,7 @@ export function reconcileChangeArtifacts(
 		const now = currentChanged();
 		const deltaPaths = base ? now.filter((p) => !base.paths.includes(p)) : now;
 		if (deltaPaths.length === 0) continue;
-		const preserved = existing.filter((a) => a.kind !== "change" && a.kind !== "commit");
+		const preserved = existing.filter((a) => a.kind !== "change");
 		const exclusive = base?.shared !== true && !otherChatWorking();
 		const committed =
 			commit && base?.paths.every((p) => !now.includes(p)) && exclusive
@@ -145,6 +169,7 @@ export function reconcileChangeArtifacts(
 		}
 		const changes = deltaPaths.map((path): TodoArtifact => ({ kind: "change", path }));
 		store.update(todo.id, { artifacts: [...preserved, ...changes] });
+		dropReviewRecord(root, sessionId, todo.id);
 	}
 	if (baselinesDirty) writeBaselines(root, sessionId, baselines);
 }
