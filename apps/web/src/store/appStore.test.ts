@@ -587,6 +587,7 @@ test("a turn that ends in a provider error surfaces the error (not a false ✓ D
 	expect(after.isStreaming).toBe(false);
 	const err = after.turns.find((t) => t.kind === "error");
 	expect(err?.kind === "error" && err.text).toContain("gpt-5.5");
+	expect(err?.kind === "error" ? err.recovery : undefined).toBe("try-again");
 	expect(after.turns.some((t) => t.kind === "system" && t.text === "✓ Done")).toBe(false);
 });
 
@@ -601,8 +602,29 @@ test("a terminal length stop is a visible failure, never a false ✓ Done", () =
 	const after = rt("a");
 	const error = after.turns.find((turn) => turn.kind === "error");
 	expect(error?.kind === "error" && error.text.toLowerCase()).toContain("truncated");
+	expect(error?.kind === "error" ? error.recovery : undefined).toBe("try-again");
 	expect(after.turns.some((turn) => turn.kind === "system" && turn.text === "✓ Done")).toBe(false);
 	expect(after.isStreaming).toBe(false);
+});
+
+test("a local follow-on or another client's agent start consumes the failure recovery", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", null, "medium");
+	store.openChatSession("ws1", "b", null, "medium");
+	for (const sessionId of ["a", "b"]) {
+		store.handlePiEvent(
+			agentSettled({ stopReason: "error", errorMessage: "fetch failed" }),
+			sessionId,
+		);
+	}
+
+	store.appendUserMessage("a", "Try again.");
+	store.handlePiEvent(agentStart, "b");
+
+	for (const sessionId of ["a", "b"]) {
+		const error = rt(sessionId).turns.find((turn) => turn.kind === "error");
+		expect(error?.kind === "error" ? error.recovery : undefined).toBeUndefined();
+	}
 });
 
 test("a successful overflow compaction removes the superseded assistant attempt", () => {
@@ -817,6 +839,7 @@ test("appendErrorTurn surfaces a failed send (a rejected prompt) as a visible er
 
 	const err = rt("a").turns.find((t) => t.kind === "error");
 	expect(err?.kind === "error" && err.text).toContain("No API key");
+	expect(err?.kind === "error" ? err.recovery : undefined).toBeUndefined();
 	expect(rt("a").isStreaming).toBe(false);
 });
 

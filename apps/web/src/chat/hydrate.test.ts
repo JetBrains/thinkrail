@@ -46,6 +46,7 @@ test("an assistant turn that ended in a provider error hydrates a following erro
 	expect(turns.map((t) => t.kind)).toEqual(["user", "assistant", "error"]);
 	const err = turns.find((t) => t.kind === "error");
 	expect(err?.kind === "error" && err.text).toContain("gpt-5.5");
+	expect(err?.kind === "error" ? err.recovery : undefined).toBe("try-again");
 });
 
 test("an assistant turn that ended at length hydrates a visible truncation failure", () => {
@@ -57,6 +58,7 @@ test("an assistant turn that ended at length hydrates a visible truncation failu
 	expect(turns.map((turn) => turn.kind)).toEqual(["user", "assistant", "error"]);
 	const error = turns.find((turn) => turn.kind === "error");
 	expect(error?.kind === "error" && error.text.toLowerCase()).toContain("truncated");
+	expect(error?.kind === "error" ? error.recovery : undefined).toBe("try-again");
 });
 
 test("a recovered historical length stop does not become the current chat failure", () => {
@@ -77,6 +79,7 @@ test("a recovered historical length stop does not become the current chat failur
 	] as unknown as Message[]);
 
 	expect(turns.filter((turn) => turn.kind === "error")).toHaveLength(0);
+	expect(turns.some((turn) => turn.kind === "error" && turn.recovery)).toBe(false);
 });
 
 test("settlement metadata restores a failure Pi removed from a live session's context", () => {
