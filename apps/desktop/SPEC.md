@@ -70,6 +70,19 @@ Packaged resources remain physical and unpacked: web assets and skills are read 
 the PTY uses FFI, trash helpers are executable sidecars, and the preload is read as source text. ASAR is
 not part of this design.
 
+## Native application menu
+
+The shell installs Electrobun's native application menu before creating the main window. Native roles,
+not browser-level key handlers, own standard editing commands so Command/Ctrl-C, V, X, A, Z, and Shift-Z
+flow through the operating-system responder chain across ordinary inputs, Monaco, xterm, and future
+webview surfaces without competing with their local key handling.
+
+macOS receives the conventional application, Edit, and Window role menus. Windows receives the supported
+Edit role menu. Linux skips registration because Electrobun 1.18.1 does not support application menus
+there; WebKitGTK keeps its renderer-native editing behavior. The policy is platform-pure and the packaged
+ready seam reports whether registration ran, so unit tests pin menu composition while expanded-app smoke
+pins production wiring.
+
 ## Navigation and window security
 
 The native window permits navigation only within its exact loopback origin. User-requested external URLs
@@ -119,8 +132,9 @@ CI-only and are never shipped as user configuration.
 ## Verification
 
 - Expanded-app smoke uses isolated HOME/data/PI/cache paths and ready/control files. It requires the
-  real webview to reach DOM-ready, runs the shared artifact probes with repository reads denied, quits
-  through normal lifecycle, and observes clean process exit.
+  real webview to reach DOM-ready, confirms native application-menu registration on supported targets,
+  runs the shared artifact probes with repository reads denied, quits through normal lifecycle, and
+  observes clean process exit.
 - First-install smoke executes the produced DMG app, Windows setup ZIP, or Linux setup tarball against
   isolated installation roots, boots the installed host, checks health, and requires graceful exit. The
   release matrix must pass both smoke layers before uploading the installer.
