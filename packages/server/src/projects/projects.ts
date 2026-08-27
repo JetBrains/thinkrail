@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { rmSync, statSync } from "node:fs";
-import { basename, join } from "node:path";
+import { homedir } from "node:os";
+import { basename, isAbsolute, join, resolve } from "node:path";
 import type { Project, ProjectPathStatus } from "@thinkrail/contracts";
 import { canonicalPath, git } from "../git";
 import { loadProjects, loadWorkspaces, saveProjects } from "../persistence";
@@ -15,6 +16,15 @@ export function setProjectPublisher(fn: ProjectPublisher | null): void {
 
 function emit(project: Project): void {
 	publishProject?.(project);
+}
+
+function resolveProjectPath(path: string): string {
+	const expanded =
+		path === "~" ? homedir() : path.startsWith("~/") ? join(homedir(), path.slice(2)) : path;
+	if (!isAbsolute(expanded)) {
+		throw new Error(`Project path must be absolute or start with ~/: ${path}`);
+	}
+	return resolve(expanded);
 }
 
 function gitToplevel(path: string): string | null {
@@ -57,7 +67,8 @@ export function getProjects(): Project[] {
 	return projects;
 }
 
-export function openProject(path: string): Project {
+export function openProject(inputPath: string): Project {
+	const path = resolveProjectPath(inputPath);
 	const root = gitToplevel(path);
 	if (!root) throw new Error(`Not a git repository: ${path}`);
 
@@ -162,7 +173,7 @@ export function isProjectTrusted(id: string): boolean {
 	return getProjects().find((p) => p.id === id)?.trusted === true;
 }
 
-export function inspectProjectPath(path: string): ProjectPathStatus {
+function inspectResolvedProjectPath(path: string): ProjectPathStatus {
 	let stat: ReturnType<typeof statSync>;
 	try {
 		stat = statSync(path);
@@ -173,8 +184,13 @@ export function inspectProjectPath(path: string): ProjectPathStatus {
 	return { kind: gitToplevel(path) ? "repo" : "initable" };
 }
 
-export function initProject(path: string): Project {
-	const status = inspectProjectPath(path);
+export function inspectProjectPath(inputPath: string): ProjectPathStatus {
+	return inspectResolvedProjectPath(resolveProjectPath(inputPath));
+}
+
+export function initProject(inputPath: string): Project {
+	const path = resolveProjectPath(inputPath);
+	const status = inspectResolvedProjectPath(path);
 	if (status.kind === "missing") throw new Error(`No such folder: ${path}`);
 	if (status.kind === "notDirectory") throw new Error(`Not a folder: ${path}`);
 	if (status.kind === "repo") return openProject(path);

@@ -199,8 +199,8 @@ project folder"; **project + no specs** → a spec-first **"Set up project"** (p
 + "Work in project folder". **"Open project" appears only in the no-projects state** — where it's the
 only possible action; once a project is shown, opening another is the projects-rail **"+"** (the same
 dropdown), so Welcome stays the *work-in-this-project* surface. That card hangs the shared
-**`AddProjectMenu`** dropdown off it (same menu as the projects-rail "+": Open project / Open GitHub (soon)
-/ Recents). Recents is the store's `recentProjects`: one last-opened path list containing open + closed
+**`AddProjectMenu`** dropdown off it (same menu as the projects-rail "+": Open project / Enter host
+path… / Open GitHub (soon) / Recents). Recents is the store's `recentProjects`: one last-opened path list containing open + closed
 records with no status badge; selecting either runs the shared open flow and lands at Project Home, with a
 closed record retaining its id and workspace state. `Card` is a `forwardRef` usable as a Radix `asChild`
 trigger. **"Work in project folder"**

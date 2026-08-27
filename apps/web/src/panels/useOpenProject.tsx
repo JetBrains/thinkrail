@@ -1,19 +1,23 @@
 import type { Project } from "@thinkrail/contracts";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useRef, useState } from "react";
 import { useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { NoticeDialog } from "./NoticeDialog";
+import { OpenProjectPathDialog } from "./OpenProjectPathDialog";
 
 const PICK_TIMEOUT_MS = 30 * 60_000;
 
 export function useOpenProject(onOpened: (project: Project) => void | Promise<void>): {
 	openProject: (rawPath: string) => Promise<void>;
 	pickAndOpen: () => Promise<void>;
+	enterHostPath: () => void;
 	dialogs: ReactNode;
 } {
 	const [initTarget, setInitTarget] = useState<string | null>(null);
 	const [openError, setOpenError] = useState<string | null>(null);
+	const [pathEntry, setPathEntry] = useState<{ reason: string | null } | null>(null);
+	const pickerGeneration = useRef(0);
 
 	const adopt = async (project: Project) => {
 		useAppStore.getState().applyProjectUpdated(project);
@@ -21,6 +25,7 @@ export function useOpenProject(onOpened: (project: Project) => void | Promise<vo
 	};
 
 	const openProject = async (rawPath: string) => {
+		pickerGeneration.current += 1;
 		const trimmed = rawPath.trim();
 		if (!trimmed) return;
 		try {
@@ -45,7 +50,14 @@ export function useOpenProject(onOpened: (project: Project) => void | Promise<vo
 		}
 	};
 
+	const enterHostPath = () => {
+		pickerGeneration.current += 1;
+		setPathEntry({ reason: null });
+	};
+
 	const pickAndOpen = async () => {
+		const generation = pickerGeneration.current + 1;
+		pickerGeneration.current = generation;
 		let path: string | null;
 		try {
 			({ path } = await getTransport().request(
@@ -54,9 +66,11 @@ export function useOpenProject(onOpened: (project: Project) => void | Promise<vo
 				{ timeoutMs: PICK_TIMEOUT_MS },
 			));
 		} catch (err) {
-			setOpenError(errorText(err, "Couldn't open the folder picker on the host."));
+			if (pickerGeneration.current !== generation) return;
+			setPathEntry({ reason: errorText(err, "Couldn't open the folder picker on the host.") });
 			return;
 		}
+		if (pickerGeneration.current !== generation) return;
 		if (path) await openProject(path);
 	};
 
@@ -81,6 +95,14 @@ export function useOpenProject(onOpened: (project: Project) => void | Promise<vo
 					if (initTarget) void initProject(initTarget);
 				}}
 			/>
+			<OpenProjectPathDialog
+				open={pathEntry !== null}
+				reason={pathEntry?.reason ?? null}
+				onOpenChange={(open) => {
+					if (!open) setPathEntry(null);
+				}}
+				onSubmit={(path) => void openProject(path)}
+			/>
 			<NoticeDialog
 				open={openError !== null}
 				onOpenChange={(o) => {
@@ -93,5 +115,5 @@ export function useOpenProject(onOpened: (project: Project) => void | Promise<vo
 		</>
 	);
 
-	return { openProject, pickAndOpen, dialogs };
+	return { openProject, pickAndOpen, enterHostPath, dialogs };
 }

@@ -37,10 +37,22 @@ test("Windows picker: a PowerShell FolderBrowserDialog, -Sta, owned by a top-mos
 	}
 });
 
-test("only PowerShell reads a non-zero exit as a failure — the others cancel", () => {
-	expect(pickersFor("darwin").map((p) => p.nonZeroExit)).toEqual(["cancel"]);
-	expect(pickersFor("linux").map((p) => p.nonZeroExit)).toEqual(["cancel", "cancel"]);
-	expect(pickersFor("win32").map((p) => p.nonZeroExit)).toEqual(["error", "error"]);
+test("pickers distinguish cancellation from a failed non-zero exit", () => {
+	const execution = { stdout: "", stderr: "", code: 1 };
+	expect(
+		pickersFor("darwin")[0]?.isCancellation({
+			...execution,
+			stderr: "execution error: User canceled. (-128)",
+		}),
+	).toBe(true);
+	expect(pickersFor("darwin")[0]?.isCancellation(execution)).toBe(false);
+	for (const picker of pickersFor("linux")) {
+		expect(picker.isCancellation(execution)).toBe(true);
+		expect(picker.isCancellation({ ...execution, stderr: "Failed to open display" })).toBe(false);
+	}
+	for (const picker of pickersFor("win32")) {
+		expect(picker.isCancellation(execution)).toBe(false);
+	}
 });
 
 test("unknown platform has no native picker", () => {

@@ -1,12 +1,31 @@
 import { readFileSync, statSync } from "node:fs";
 
+interface PickerExecution {
+	stdout: string;
+	stderr: string;
+	code: number;
+}
+
 export interface Picker {
 	cmd: string[];
 	parse: (stdout: string) => string | null;
-	nonZeroExit: "cancel" | "error";
+	isCancellation: (execution: PickerExecution) => boolean;
+}
+
+type PickerRunner = (cmd: string[], env: NodeJS.ProcessEnv) => Promise<PickerExecution>;
+
+interface SelectDirectoryOptions {
+	platform?: NodeJS.Platform;
+	env?: NodeJS.ProcessEnv;
+	runPicker?: PickerRunner;
 }
 
 const toPath = (stdout: string): string | null => stdout.trim().replace(/[/\\]+$/, "") || null;
+
+const appleScriptCancellation = ({ stderr }: PickerExecution): boolean => stderr.includes("(-128)");
+const linuxCancellation = ({ code, stderr }: PickerExecution): boolean =>
+	code === 1 && stderr.trim() === "";
+const noNonZeroCancellation = (): boolean => false;
 
 const WINDOWS_PICKER = [
 	"$ErrorActionPreference = 'Stop'",
@@ -45,7 +64,7 @@ export function pickersFor(platform: NodeJS.Platform): Picker[] {
 				{
 					cmd: ["osascript", "-e", 'POSIX path of (choose folder with prompt "Open project")'],
 					parse: toPath,
-					nonZeroExit: "cancel",
+					isCancellation: appleScriptCancellation,
 				},
 			];
 		case "linux":
@@ -53,27 +72,27 @@ export function pickersFor(platform: NodeJS.Platform): Picker[] {
 				{
 					cmd: ["zenity", "--file-selection", "--directory", "--title=Open project"],
 					parse: toPath,
-					nonZeroExit: "cancel",
+					isCancellation: linuxCancellation,
 				},
 				{
 					cmd: ["kdialog", "--getexistingdirectory", ".", "--title", "Open project"],
 					parse: toPath,
-					nonZeroExit: "cancel",
+					isCancellation: linuxCancellation,
 				},
 			];
 		case "win32":
 			return ["powershell.exe", "pwsh.exe"].map((shell) => ({
 				cmd: [shell, "-NoProfile", "-Sta", "-EncodedCommand", ENCODED_WINDOWS_PICKER],
 				parse: toPath,
-				nonZeroExit: "error" as const,
+				isCancellation: noNonZeroCancellation,
 			}));
 		default:
 			return [];
 	}
 }
 
-function resolveOverride(): string | null {
-	const value = process.env.THINKRAIL_PICK_DIR;
+function resolveOverride(env: NodeJS.ProcessEnv): string | null {
+	const value = env.THINKRAIL_PICK_DIR;
 	if (!value) return null;
 	try {
 		if (statSync(value).isFile()) return readFileSync(value, "utf8").trim() || null;
@@ -92,27 +111,41 @@ export function noPickerMessage(platform: NodeJS.Platform): string {
 		: `No native folder picker is available on this host (${platform}).`;
 }
 
-export async function selectDirectory(): Promise<{ path: string | null }> {
-	const override = resolveOverride();
-	if (override) return { path: override };
+const defaultRunPicker: PickerRunner = async (cmd, env) => {
+	const proc = Bun.spawn(cmd, { stdout: "pipe", stderr: "pipe", env });
+	const [stdout, stderr, code] = await Promise.all([
+		new Response(proc.stdout).text(),
+		new Response(proc.stderr).text(),
+		proc.exited,
+	]);
+	return { stdout, stderr, code };
+};
 
-	for (const picker of pickersFor(process.platform)) {
-		let out: string;
-		let err: string;
-		let code: number;
+export async function selectDirectory({
+	platform = process.platform,
+	env = process.env,
+	runPicker = defaultRunPicker,
+}: SelectDirectoryOptions = {}): Promise<{ path: string | null }> {
+	const override = resolveOverride(env);
+	if (override) return { path: override };
+	if (platform === "linux" && !env.DISPLAY && !env.WAYLAND_DISPLAY) {
+		throw new Error("No graphical session is available for the folder picker on this Linux host.");
+	}
+
+	let firstFailure: string | null = null;
+	let diagnosticFailure: string | null = null;
+	for (const picker of pickersFor(platform)) {
+		let execution: PickerExecution;
 		try {
-			const proc = Bun.spawn(picker.cmd, { stdout: "pipe", stderr: "pipe" });
-			[out, err, code] = await Promise.all([
-				new Response(proc.stdout).text(),
-				new Response(proc.stderr).text(),
-				proc.exited,
-			]);
+			execution = await runPicker(picker.cmd, env);
 		} catch {
 			continue;
 		}
-		if (code === 0) return { path: picker.parse(out) };
-		if (picker.nonZeroExit === "cancel") return { path: null };
-		throw new Error(pickerFailure(err, code));
+		if (execution.code === 0) return { path: picker.parse(execution.stdout) };
+		if (picker.isCancellation(execution)) return { path: null };
+		const failure = pickerFailure(execution.stderr, execution.code);
+		firstFailure ??= failure;
+		if (execution.stderr.trim()) diagnosticFailure ??= failure;
 	}
-	throw new Error(noPickerMessage(process.platform));
+	throw new Error(diagnosticFailure ?? firstFailure ?? noPickerMessage(platform));
 }
