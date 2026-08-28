@@ -456,7 +456,7 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
       file-path entries — their `skills/` dirs (`pi-spec-graph`, `pi-thinkrail-workflow`, `pi-todos`) are
       wired via **`additionalSkillPaths`**.
     - **Bundled launchers (compiled CLI binary and packaged desktop runtime):** the launcher awaits the
-      **`registerBundledRuntime({ factories, skillsDir, trashHelpers })` seam** before the first session — the same bundled extensions as
+      **`registerBundledRuntime({ factories, skillsDir, trashHelpers, webAccessFactory })` seam** before the first session — the same bundled extensions as
       **value-imported default-export factories** (pi gives `extensionFactories` full API parity with path loading; what's lost —
       file-relative `baseDir`, per-reload re-evaluation — none of them use) plus a staged on-disk
       skills dir (pi reads `SKILL.md` via plain fs, so skills must live on the real filesystem). The

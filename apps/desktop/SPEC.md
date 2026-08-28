@@ -57,9 +57,12 @@ lease is released by graceful shutdown or automatically by process death, with n
    modules to external extensions. Flattening PI into Electrobun's normal `.js` entry makes it select
    built-Node aliases that are absent from a self-contained app and breaks Central/external extensions.
 3. The runtime value-imports the five bundled extension factories and calls `registerBundledRuntime()`
-   with the staged skills and macOS/Windows trash helpers, then calls `bootHost()` on loopback port `0`
-   with the staged web directory, baked version, and `desktop` analytics provenance. `bootHost()` acquires
-   ownership before its mutable initialization.
+   with those factories, the named `pi-web-access` factory needed by delegation children, the staged skills,
+   and macOS/Windows trash helpers. The generator's key map must satisfy every key of the server-owned
+   `BundledExtensions` contract, so adding a required launcher field fails desktop typecheck instead of
+   producing a packaged-only `undefined`. It then calls `bootHost()` on loopback port `0` with the staged web
+   directory, baked version, and `desktop` analytics provenance. `bootHost()` acquires ownership before its
+   mutable initialization.
 4. Restore the valid route fragment for `{ backendProfileId: "local", windowId: "main" }`, append it to
    the fresh origin, and open one normal native `BrowserWindow` with the system renderer.
 
