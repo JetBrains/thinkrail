@@ -109,11 +109,22 @@ export function LayoutSettings() {
 			</header>
 
 			<section className="space-y-8">
-				<div>
-					<h3 className="tr-title-section text-text-default">Default preset</h3>
-					<p className="tr-text-metadata text-text-muted">
-						New workspaces currently use {selected.name}.
-					</p>
+				<div className="flex flex-wrap items-end justify-between gap-8">
+					<div>
+						<h3 className="tr-title-section text-text-default">Default preset</h3>
+						<p className="tr-text-metadata text-text-muted">
+							Resetting this window uses {selected.name}.
+						</p>
+					</div>
+					<button
+						type="button"
+						data-testid="layout-reset-default"
+						disabled={!activeWorkspaceId || !frame}
+						onClick={() => setApplying(selected)}
+						className="rounded-[var(--radius-sm)] border border-border-default px-12 py-4 tr-text-ui text-text-default hover:bg-control-bg-hovered disabled:text-control-disabled-text"
+					>
+						Reset frame…
+					</button>
 				</div>
 				<div className="grid gap-8 sm:grid-cols-2">
 					{presets.map((preset) => {

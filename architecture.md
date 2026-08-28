@@ -124,8 +124,8 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
    adapter. Switching workspace changes only the projected workspace view. Empty groups remain until an
    explicit frame command removes or merges them; such a command atomically rehomes affected resources in
    every locally retained workspace view. Applying a preset does the same. Another browser, device, or window
-   neither receives nor adopts those changes. Built-in presets and the current/default selection remain
-   client-owned; only bounded, resource-free custom preset definitions are host-persisted and broadcast as
+   neither receives nor adopts those changes. Built-in presets and the default used by an explicit local frame
+   reset remain client-owned; only bounded, resource-free custom preset definitions are host-persisted and broadcast as
    settings. Current snapshot revisions, mutation ids, optimistic conflicts, and `layout.changed` have no
    steady-state role.
 

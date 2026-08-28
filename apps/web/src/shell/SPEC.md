@@ -61,13 +61,13 @@ Default-terminal creation no longer depends on a host layout revision. The works
 
 ## Layout settings
 
-Built-in presets remain web-owned. The Layout section presents built-ins plus the host-synchronized custom preset catalog, while current/default preset selection and independent side/bottom limits are local to this frontend surface. Capture/rename/delete changes only the shared custom definition. Apply replaces this window's frame and reflows all retained workspace views, preserving resource identities, then persists locally; another frontend is unaffected.
+Built-in presets remain web-owned. The Layout section presents built-ins plus the host-synchronized custom preset catalog, while default preset selection and independent side/bottom limits are local to this frontend surface. The selected default is the explicit Reset frame target; it is not reapplied on workspace switches because every workspace shares the current frame. Capture/rename/delete changes only the shared custom definition. Apply or Reset replaces this window's frame and reflows all retained workspace views, preserving resource identities, then persists locally; another frontend is unaffected.
 
 ## Error resilience
 
 Every independently mounted workbench resource body—including documents, terminals, and singleton tools—has its own keyed region boundary, so one bad lazy panel cannot blank workbench chrome, sibling groups, or shell. Switching workspace or resource resets stuck region errors. Failed dynamic chunks offer a page reload rather than retrying the same stale module. `main.tsx` retains the last-resort boundary around `Shell`.
 
-Invalid local layout state falls back to the local default preset without contaminating domain state. A local persistence failure leaves the live frame usable and reports one actionable error. A custom-preset settings failure leaves both the instantiated current frame and catalog unchanged.
+Invalid local layout state falls back to the Balanced safe frame without contaminating domain state. A local persistence failure leaves the live frame usable and reports one actionable error. A custom-preset settings failure leaves both the instantiated current frame and catalog unchanged.
 
 ## Global chords
 

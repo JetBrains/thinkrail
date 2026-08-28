@@ -821,6 +821,32 @@ test("applying the Review preset preserves resources and installs its vertical c
 	);
 });
 
+test("the local default preset drives an explicit frame reset", async ({ page }) => {
+	await openDefaultWorkbench(page);
+	await page.getByTestId("open-settings").click();
+	await page.getByTestId("settings-nav-layout").click();
+	const reviewPreset = page.getByTestId("layout-preset").filter({ hasText: "Review" });
+	await reviewPreset.getByRole("button", { name: "Set default" }).click();
+	await expect(reviewPreset).toHaveAttribute("data-default", "true");
+	await page.getByTestId("layout-reset-default").click();
+	await page.getByTestId("layout-apply-confirm").click();
+	await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();
+	await expect(page.getByTestId("center-group")).toHaveCount(2);
+	await expect(page.getByTestId("center-split-resize")).toHaveAttribute(
+		"aria-orientation",
+		"horizontal",
+	);
+
+	await reloadDefaultWorkbench(page);
+	await expect(page.getByTestId("center-group")).toHaveCount(2);
+	await page.getByTestId("open-settings").click();
+	await page.getByTestId("settings-nav-layout").click();
+	await expect(page.getByTestId("layout-preset").filter({ hasText: "Review" })).toHaveAttribute(
+		"data-default",
+		"true",
+	);
+});
+
 test("custom presets synchronize while defaults and group limits remain window-local", async ({
 	page,
 	context,
