@@ -20,12 +20,16 @@ interface ModuleRule {
 const MODULE_RULES: readonly ModuleRule[] = [
 	{ root: "packages/contracts", allowed: [] },
 	{ root: "packages/shared", allowed: ["packages/contracts"] },
+	{ root: "packages/pi-delegation", allowed: [] },
+	{ root: "packages/pi-subagents", allowed: ["packages/pi-delegation"] },
 	{
 		root: "packages/server",
 		allowed: [
 			"packages/contracts",
 			"packages/shared",
 			"packages/spec-graph",
+			"packages/pi-delegation",
+			"packages/pi-subagents",
 			"packages/pi-thinkrail-workflow",
 			"packages/pi-todos",
 			"packages/pi-visualize",

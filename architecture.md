@@ -32,7 +32,7 @@ apps/web        UI client (mobile-first)                           ── depend
 apps/desktop    Electrobun local-host launcher (V1)                ── depends on ─▶ packages/server, packages/contracts, packages/shared
 apps/website    public landing + blog + /vibecoding (Cloudflare Pages) ── depends on ─▶ packages/website-analytics
 packages/website-analytics  dependency-free browser analytics policy for the public website
-packages/server createServer(): Bun.serve(HTTP+WS) + AgentSessionManager (in-process pi) ── depends on ─▶ packages/contracts, packages/shared
+packages/server createServer(): Bun.serve(HTTP+WS) + AgentSessionManager (in-process pi) ── depends on ─▶ packages/contracts, packages/shared, packages/pi-delegation, packages/pi-subagents
 packages/contracts  the wire (types-only)
 packages/shared     shellEnv (server-side only)
 packages/spec-graph portable pi extension: spec_* tools + skill (bundled into every session by packages/server;
@@ -41,7 +41,7 @@ packages/pi-visualize          portable pi extension: the visualize tool (bundle
 packages/pi-delegation         portable pure-pi package: the delegation core — agent sessions spawned
                     from agent sessions (createChild + run-owning handle, lineage, registry, events)
 packages/pi-subagents          portable pure-pi extension: Agent + get_subagent_result tools over
-                    pi-delegation; host composition remains a separate change
+                    pi-delegation (bundled into every ThinkRail parent session by packages/server)
 packages/pi-thinkrail-workflow pi extension: the workflow skill system + its always-on routing rule
                     (bundled into every session; workspace-internal, not portable)
 ```
@@ -193,15 +193,17 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
     Desktop artifacts are additive and unsigned initially; native WebKitGTK on Ubuntu 24.04+/glibc 2.38 is
     the supported Linux floor. Detail: [[module-desktop]].
 
-16. **Delegation begins as a portable pure-pi layer.** `packages/pi-delegation` owns the session
+16. **Delegation is portable; ThinkRail is one embedder.** `packages/pi-delegation` owns the session
     fabric: one creation primitive with orthogonal axes, a run-owning handle, lineage, registry, and
     lifecycle events. `packages/pi-subagents` consumes it to expose the `Agent` tools. Both work under
     vanilla pi with the SDK as a `peerDependency` (peer deps are exempt from the exact-pin rule,
-    decision #10), create in-process hidden pi sessions, and keep their host bindings optional. An
-    embedder may supply storage, scope, live-parent resolution, a shared runtime, and curated child
-    extensions through `DelegationBindings`; wiring those packages into the ThinkRail host and wire is
-    a separate composition change. Contract, semantics, and the full decision log:
-    [[module-pi-delegation]] and [[module-pi-subagents]].
+    decision #10), create in-process hidden pi sessions, and keep their host bindings optional.
+    ThinkRail composes them in `packages/server`: one service per workspace, child transcripts under
+    the host data dir, a curated child-extension set, and the exact `ModelRuntime` retained by each
+    parent session so children stay on that parent's provider generation across Central changes. The
+    wire mirrors only the UI-facing run details and exposes transcript reads; neither portable package
+    depends on ThinkRail. Contract, semantics, and the full decision log:
+    [[module-pi-delegation]], [[module-pi-subagents]], and [[submodule-server-agent]].
 
 ## Invariants
 
