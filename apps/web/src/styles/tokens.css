@@ -35,6 +35,8 @@
 	--space-md: calc(var(--space-base) * 0.92);
 	--space-lg: calc(var(--space-base) * 1.23);
 	--space-xl: calc(var(--space-base) * 1.85);
+	--space-xxl: calc(var(--space-base) * 2.46);
+	--space-xxxl: calc(var(--space-base) * 4.92);
 
 	/* Shared chrome geometry stays independent from typography. */
 	--panel-header-row-height: 28px;

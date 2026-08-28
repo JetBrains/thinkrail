@@ -20,8 +20,6 @@ import { cn } from "../lib";
 import { useAppStore } from "../store";
 import { useTargetRect } from "./anchor";
 
-const DOCS_URL = "https://thinkrail.ai";
-
 const TASK_1 = "Implement a search feature in my To Do app.";
 const TASK_2 = "Add filtering by tags so I can quickly show tasks with a specific tag.";
 const WS_NAMES = ["Search feature", "Tag filtering"];
@@ -337,11 +335,11 @@ function Simulation({
 						onOpenProject={() => setStep("picker")}
 						onPickFolder={() => setStep("ws1-create")}
 						onAnswer={onAnswer}
-						onFinish={() => closeDemo()}
 					/>
 				</div>
 
-				{step === "intro" ? <Intro onDone={startTour} /> : null}
+				{step === "intro" ? <IntroScreen onStart={startTour} /> : null}
+				{step === "final" ? <FinalScreen onFinish={() => closeDemo()} /> : null}
 				{coach?.scope === "card" ? (
 					<CardSpotlight
 						cardRect={cardRect}
@@ -471,14 +469,12 @@ function SimMain({
 	onOpenProject,
 	onPickFolder,
 	onAnswer,
-	onFinish,
 }: {
 	step: Step;
 	rows: Activity[];
 	onOpenProject: () => void;
 	onPickFolder: () => void;
 	onAnswer: (choice: string) => void;
-	onFinish: () => void;
 }) {
 	if (step === "open") {
 		return (
@@ -522,30 +518,6 @@ function SimMain({
 					branch, so two features never collide.
 				</p>
 			</Center>
-		);
-	}
-	if (step === "final") {
-		return (
-			<div className="flex min-h-0 flex-1 items-center justify-center bg-container-content-bg p-xl">
-				<div className="w-[420px] rounded-[var(--radius-md)] border border-primary-muted bg-clip-padding bg-primary-subtle p-lg text-center">
-					<p className="tr-brand-hero text-primary">That's the workflow.</p>
-					<p className="mt-sm text-text-muted tr-text-ui">Now try it with your own project.</p>
-					<div className="mt-lg flex items-center justify-center gap-md">
-						<Button size="sm" data-testid="onboarding-finish" onClick={onFinish}>
-							Finish
-						</Button>
-						<a
-							href={DOCS_URL}
-							target="_blank"
-							rel="noreferrer"
-							data-testid="onboarding-docs"
-							className="tr-text-ui text-primary underline underline-offset-2 hover:text-text-default"
-						>
-							Learn more in the docs
-						</a>
-					</div>
-				</div>
-			</div>
 		);
 	}
 	return (
@@ -930,62 +902,181 @@ function ViewportCoach({
 	);
 }
 
-function Intro({ onDone }: { onDone: () => void }) {
+type Gap = "md" | "xxl" | "xxxl";
+
+const GAP_CLASS: Record<Gap, string> = {
+	md: "mt-md",
+	xxl: "mt-xxl",
+	xxxl: "mt-xxxl",
+};
+
+type OnboardingSection = {
+	key: string;
+	gapBefore?: Gap;
+	render: () => ReactNode;
+};
+
+function useSequentialReveal(count: number): number {
 	const [phase, setPhase] = useState(0);
-	const [gitReady, setGitReady] = useState(false);
 	useEffect(() => {
-		const timers = [
-			setTimeout(() => setPhase(1), 200),
-			setTimeout(() => setPhase(2), 1000),
-			setTimeout(() => setPhase(3), 1900),
-			setTimeout(() => setGitReady(true), 3200),
-			setTimeout(() => setPhase(4), 3900),
-			setTimeout(onDone, 5200),
-		];
+		const timers: ReturnType<typeof setTimeout>[] = [];
+		for (let index = 1; index <= count; index++) {
+			timers.push(setTimeout(() => setPhase(index), 200 + (index - 1) * 700));
+		}
 		return () => timers.forEach(clearTimeout);
-	}, [onDone]);
-	const reveal = (index: number) =>
-		`transition-all duration-500 ease-out motion-reduce:transition-none ${
-			phase >= index ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0"
-		}`;
+	}, [count]);
+	return phase;
+}
+
+function revealClass(shown: boolean): string {
+	return cn(
+		"transition-all duration-500 ease-out motion-reduce:transition-none",
+		shown ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0",
+	);
+}
+
+function OnboardingScreen({
+	testId,
+	sections,
+	cta,
+}: {
+	testId: string;
+	sections: OnboardingSection[];
+	cta: { label: string; testId: string; onClick: () => void };
+}) {
+	const steps = sections.length + 1;
+	const phase = useSequentialReveal(steps);
+	const ctaRevealed = phase >= steps;
 	return (
 		<div
-			data-testid="onboarding-intro"
-			className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-md bg-container-workspace-bg p-xl text-center"
+			data-testid={testId}
+			className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-container-workspace-bg p-xl text-center"
 		>
-			<h1 className={`tr-brand-hero text-primary ${reveal(1)}`}>Welcome to ThinkRail</h1>
-			<p className={`max-w-[520px] tr-text-ui text-text-default ${reveal(2)}`}>
-				ThinkRail is a worktree IDE built for working with AI agents in parallel.
-			</p>
-			<div className={`flex flex-col items-center gap-sm ${reveal(3)}`}>
-				<p className="tr-title-card text-text-default">Before we start</p>
-				<p className="max-w-[460px] text-text-muted tr-text-metadata">
-					ThinkRail works with Git projects. Let's make sure your computer is ready.
-				</p>
-				<div
-					data-testid="onboarding-git"
-					className="mt-xs inline-flex items-center gap-sm rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-md py-sm"
-				>
-					<GitBranch className="size-4 shrink-0 text-text-muted" />
-					<span className="tr-text-ui text-text-default">Git</span>
-					{gitReady ? (
-						<span className="inline-flex items-center gap-xs tr-text-metadata text-feedback-success">
-							<Check className="size-3.5" />
-							Git is ready
-						</span>
-					) : (
-						<span className="inline-flex items-center gap-xs text-text-muted tr-text-metadata">
-							<Loader2 className="size-3.5 motion-safe:animate-spin" />
-							Checking Git…
-						</span>
-					)}
+			<div className="flex w-full max-w-[720px] flex-col items-center">
+				{sections.map((section, index) => {
+					const revealed = phase >= index + 1;
+					return (
+						<div
+							key={section.key}
+							data-revealed={revealed ? "true" : "false"}
+							className={cn(
+								section.gapBefore && GAP_CLASS[section.gapBefore],
+								revealClass(revealed),
+							)}
+						>
+							{section.render()}
+						</div>
+					);
+				})}
+				<div className={cn("mt-xxxl", revealClass(ctaRevealed))}>
+					<Button
+						data-testid={cta.testId}
+						data-revealed={ctaRevealed ? "true" : "false"}
+						onClick={cta.onClick}
+					>
+						{cta.label}
+					</Button>
 				</div>
 			</div>
-			<p
-				className={`max-w-[520px] whitespace-pre-line text-text-muted tr-text-metadata ${reveal(4)}`}
-			>
-				{"Let's set up a demo project first.\nIt takes about 2 minutes."}
-			</p>
 		</div>
+	);
+}
+
+function GitReadinessRow() {
+	const [ready, setReady] = useState(false);
+	useEffect(() => {
+		const timer = setTimeout(() => setReady(true), 3500);
+		return () => clearTimeout(timer);
+	}, []);
+	return (
+		<div
+			data-testid="onboarding-git"
+			className="inline-flex items-center gap-sm rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-md py-sm"
+		>
+			<GitBranch className="size-4 shrink-0 text-text-muted" />
+			<span className="tr-text-ui text-text-default">Git</span>
+			{ready ? (
+				<span className="inline-flex items-center gap-xs tr-text-metadata text-feedback-success">
+					<Check className="size-3.5" />
+					Git is ready
+				</span>
+			) : (
+				<span className="inline-flex items-center gap-xs text-text-muted tr-text-metadata">
+					<Loader2 className="size-3.5 motion-safe:animate-spin" />
+					Checking Git…
+				</span>
+			)}
+		</div>
+	);
+}
+
+function IntroScreen({ onStart }: { onStart: () => void }) {
+	const sections: OnboardingSection[] = [
+		{
+			key: "title",
+			render: () => <h1 className="tr-brand-hero text-primary">Welcome to {PRODUCT_NAME}</h1>,
+		},
+		{
+			key: "lede",
+			gapBefore: "xxl",
+			render: () => (
+				<p className="max-w-[560px] tr-heading-md text-text-default">
+					{PRODUCT_NAME} is a worktree IDE built for working with AI agents in parallel.
+				</p>
+			),
+		},
+		{
+			key: "before",
+			gapBefore: "xxxl",
+			render: () => <p className="tr-heading-sm text-text-default">Before we start</p>,
+		},
+		{
+			key: "git",
+			gapBefore: "xxl",
+			render: () => (
+				<div className="flex flex-col items-center gap-md">
+					<p className="max-w-[520px] tr-text-ui text-text-muted">
+						{PRODUCT_NAME} works with Git projects. Let's make sure your computer is ready.
+					</p>
+					<GitReadinessRow />
+				</div>
+			),
+		},
+	];
+	return (
+		<OnboardingScreen
+			testId="onboarding-intro"
+			sections={sections}
+			cta={{ label: "Start demo project", testId: "onboarding-start", onClick: onStart }}
+		/>
+	);
+}
+
+function FinalScreen({ onFinish }: { onFinish: () => void }) {
+	const sections: OnboardingSection[] = [
+		{
+			key: "title",
+			render: () => <p className="tr-brand-hero text-primary">That's the workflow.</p>,
+		},
+		{
+			key: "lede",
+			gapBefore: "xxl",
+			render: () => (
+				<p className="max-w-[560px] tr-heading-md text-text-default">
+					Now try it with your own project.
+				</p>
+			),
+		},
+	];
+	return (
+		<OnboardingScreen
+			testId="onboarding-final"
+			sections={sections}
+			cta={{
+				label: "Start working on your own project",
+				testId: "onboarding-finish",
+				onClick: onFinish,
+			}}
+		/>
 	);
 }

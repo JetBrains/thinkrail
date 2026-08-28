@@ -26,15 +26,30 @@ App" card); both flip one **view flag** (`store.demoOpen`, a top-level, non-pers
 - A centered modal (~`90vw × 90vh`) over a `bg-overlay` scrim; the card is an opaque `container-workspace-bg`
   sandbox rendering a simplified but faithful ThinkRail chrome (header / left `Projects` panel / center),
   built from the existing semantic tokens and `components/ui` — **not** wired to any store domain state.
-- **Animated intro** (`step: "intro"`, first): lines reveal in sequence with restrained fade/translate
-  transitions (`motion-reduce:transition-none`) — "Welcome to ThinkRail" (`tr-brand-hero`), the one-line
-  product explanation (`tr-text-ui`), then a short **environment-readiness moment** ("Before we start" /
-  "ThinkRail works with Git projects…") with **one compact, fully mocked Git row** that animates
-  `Checking Git…` (spinner) → `Git is ready` (the semantic **success** role + check) — no clicks, always
-  ends ready, no terminal/install/Git-config detail; it exists to reveal the Git prerequisite before a
-  real project could error. Then the ~2-minute setup note (`tr-text-metadata`) and auto-advance into the
-  first interactive action. **Nothing here detects/invokes Git** or touches any real state; it is not a
-  numbered onboarding step, and no coach mark shows during the intro. (The missing-Git install flow is
+- **Shared intro/outro layout (`OnboardingScreen`).** The first (`step: "intro"`) and final
+  (`step: "final"`) screens render through **one** private `OnboardingScreen` component — same full-card
+  overlay (`absolute inset-0`, `bg-container-workspace-bg`, centered, `text-center`), same content column
+  (`max-w-[720px]`, hero heading unconstrained so it sits on one line and wraps only when the viewport is
+  genuinely narrow — the future mobile single-view), same sequential fade/translate reveal
+  (`useSequentialReveal`, `motion-reduce:transition-none`; each section + the CTA carry
+  `data-revealed`), and a **single primary `Button` CTA** revealed last as the only action in the content
+  area. Vertical rhythm is layout-owned via per-section `gapBefore` mapped to the spacing scale — the
+  requested 32px / 64px use the `xxl` / `xxxl` scale steps (`mt-xxl` / `mt-xxxl`) — named outside
+  Tailwind's `--container-*` t-shirt scale on purpose: `2xl`/`3xl` there would make Tailwind v4 emit a
+  spacing-derived `max-w-3xl` that silently shadows the container one `ChatView` relies on
+  (`mx-auto max-w-3xl`), collapsing the chat column. Typography is mapped to
+  existing semantic roles only (`tr-brand-hero` hero, `tr-heading-md` subtitle, `tr-heading-sm` section
+  heading, `tr-text-ui`/`tr-text-metadata` support) — no component-specific type — and colour uses the
+  existing Primary/text/container/border semantics only (no card, no success-green surface).
+- **Intro** (`onboarding-intro`, first): reveals in sequence — "Welcome to ThinkRail" (`tr-brand-hero`),
+  32px, the product subtitle (`tr-heading-md`), 64px, a **"Before we start"** heading (`tr-heading-sm`),
+  32px, the Git prerequisite explanation (`tr-text-ui`) with **one compact, fully mocked Git row**
+  (`onboarding-git`) that animates `Checking Git…` (spinner) → `Git is ready` (the semantic **success**
+  role + check) — no clicks, always ends ready, no terminal/install/Git-config detail; it reveals the Git
+  prerequisite before a real project could error. The intro **does not auto-advance**: it stays visible
+  indefinitely until the user clicks the **"Start demo project"** CTA (`onboarding-start`), which enters
+  the first interactive action. **Nothing here detects/invokes Git** or touches any real state; it is not
+  a numbered onboarding step, and no coach mark shows during the intro. (The missing-Git install flow is
   deliberately out of scope — a future state once Git is bundled vs. externally installed is decided.)
 - **Close demo** (`onboarding-close`, a quiet `Button variant="ghost"` in the card's top-right) is present
   throughout — intro included — and is the only explicit pre-completion exit. It only clears the mocked
@@ -119,10 +134,11 @@ App" card); both flip one **view flag** (`store.demoOpen`, a top-level, non-pers
 8. **Return to the first workspace** — clicking it shows the first agent **completed** (result + a small
    Changes summary), making the "I left, worked elsewhere, came back done" point.
 
-**Completion** (`step: "final"`, progress 100%) — a central **primary-subtle** surface: **"That's the
-workflow." / "Now try it with your own project."** with a **Finish** action (`closeDemo`) and a **"Learn
-more in the docs"** link to the existing `https://thinkrail.ai`. Local state, so reopening replays from
-the intro. The agent activity, workbench sides, terminal, and question widget are **faithful mocks** (the
+**Completion** (`step: "final"`, progress 100%) — the **same `OnboardingScreen` layout** as the intro
+(no card, no success-green treatment): **"That's the workflow."** (`tr-brand-hero`), 32px, **"Now try it
+with your own project."** (`tr-heading-md`), revealed sequentially, then a single **"Start working on your
+own project"** CTA (`onboarding-finish`, `closeDemo`) as the only action in the content area — no docs
+link. The global **Close demo** control stays. Local state, so reopening replays from the intro. The agent activity, workbench sides, terminal, and question widget are **faithful mocks** (the
 real chat/panels/terminal/question components are chat-runtime/store-coupled and can't mount in an
 isolated mock); only `NewWorkspaceDialog` is the real component (preview seam).
 

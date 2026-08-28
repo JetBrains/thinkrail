@@ -17,6 +17,12 @@ test("the mocked demo runs intro → parallel-agents payoff, never touching real
 	await expect(page.getByTestId("onboarding-progress")).toBeAttached();
 
 	const coach = page.getByTestId("onboarding-coach");
+
+	await expect(page.getByTestId("onboarding-start")).toHaveAttribute("data-revealed", "true");
+	await expect(coach).toHaveCount(0);
+
+	await page.getByTestId("onboarding-start").click();
+
 	await expect(coach).toContainText("Open a project");
 	await page.getByTestId("sim-open-project").click();
 
@@ -43,12 +49,60 @@ test("the mocked demo runs intro → parallel-agents payoff, never touching real
 	await expect(coach).toContainText("Your agents work in parallel");
 	await page.getByTestId("sim-ws-0").click();
 
-	await expect(page.getByTestId("onboarding-finish")).toBeVisible();
-	await expect(page.getByTestId("onboarding-docs")).toHaveAttribute("href", "https://thinkrail.ai");
-	await page.getByTestId("onboarding-finish").click();
+	await expect(page.getByTestId("onboarding-final")).toBeVisible();
+	await expect(page.getByTestId("onboarding-final")).toContainText("That's the workflow.");
+	await expect(page.getByTestId("onboarding-final")).toContainText(
+		"Now try it with your own project.",
+	);
+	await expect(page.getByTestId("onboarding-docs")).toHaveCount(0);
+	const finish = page.getByTestId("onboarding-finish");
+	await expect(finish).toHaveText("Start working on your own project");
+	await finish.click();
 
 	await expect(page.getByTestId("onboarding-sim")).toHaveCount(0);
 	await expect(page.getByTestId("project-item")).toHaveCount(0);
+});
+
+test("the intro reveals sequentially and only the CTA starts the demo", async ({ page }) => {
+	await openAppFresh(page);
+	await page.getByTestId("onboarding-launch").click();
+
+	const intro = page.getByTestId("onboarding-intro");
+	await expect(intro).toBeVisible();
+	await expect(intro).toContainText("Before we start");
+
+	const start = page.getByTestId("onboarding-start");
+	await expect(start).toHaveAttribute("data-revealed", "false");
+	await expect(start).toHaveAttribute("data-revealed", "true");
+
+	await expect(page.getByTestId("onboarding-coach")).toHaveCount(0);
+	await page.getByTestId("onboarding-start").click();
+	await expect(intro).toHaveCount(0);
+	await expect(page.getByTestId("onboarding-coach")).toContainText("Open a project");
+});
+
+test("the final screen shares the intro layout and reveals sequentially", async ({ page }) => {
+	await openAppFresh(page);
+	await page.getByTestId("onboarding-launch").click();
+	await page.getByTestId("onboarding-start").click();
+
+	// Drive to the final screen.
+	await page.getByTestId("sim-open-project").click();
+	await page.getByTestId("sim-folder").click();
+	await page.getByTestId("sim-add-workspace").click();
+	await page.getByTestId("create-workspace").click();
+	await page.getByTestId("sim-add-workspace").click();
+	await page.getByTestId("create-workspace").click();
+	await page.getByTestId("sim-question-option").first().click();
+	await page.getByTestId("sim-ws-0").click();
+
+	await expect(page.getByTestId("onboarding-final")).toBeVisible();
+	await expect(page.getByTestId("onboarding-progress")).toBeAttached();
+	await expect(page.getByTestId("onboarding-close")).toBeVisible();
+
+	const finish = page.getByTestId("onboarding-finish");
+	await expect(finish).toHaveAttribute("data-revealed", "false");
+	await expect(finish).toHaveAttribute("data-revealed", "true");
 });
 
 test("Close demo leaves the demo at any time without touching real state", async ({ page }) => {
