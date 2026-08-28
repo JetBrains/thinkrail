@@ -4,7 +4,7 @@ type: module-design
 status: active
 title: Browser E2E harness
 parent: architecture
-depends-on: [module-server, module-web, module-cli, module-desktop]
+depends-on: [module-server, module-web, module-cli, module-desktop, module-shared]
 references: [module-ci-release]
 tags: [testing, playwright, e2e]
 ---
@@ -141,7 +141,8 @@ Windows lane into the real profile (see `module-shared`).
 - **Owns:** browser scenarios and fixtures under `e2e/`, their Playwright configuration/runner entrypoints,
   isolation and port-allocation rules, report orchestration, and the public `e2e*` package commands.
 - **Consumes:** the built web artifact, the host's public boot/wire behavior, sanctioned server test-fixture
-  exports, CLI binary, packaged desktop adapter, git, Chromium, and Playwright.
+  exports, CLI binary, packaged desktop adapter, shared retrying teardown helper, git, Chromium, and
+  Playwright.
 - **Forbidden:** fake application backends, provider fakes in production boot paths, browser imports into
   product modules, tests depending on developer state, or parallel workers sharing one mutable host.
 
