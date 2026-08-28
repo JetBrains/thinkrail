@@ -11,6 +11,7 @@ import {
 import {
 	type AgentSession,
 	createAgentSession,
+	ModelRegistry,
 	ModelRuntime,
 	SessionManager,
 	SettingsManager,
@@ -207,7 +208,9 @@ test("a foreground run completes: outcome, registry, lineage storage, lifecycle 
 	).toBe(true);
 
 	const updates: string[] = [];
-	let startedView: { snapshotStatus?: string; detailsStatus?: string; updates: string[] } | undefined;
+	let startedView:
+		| { snapshotStatus: string | undefined; detailsStatus: string | undefined; updates: string[] }
+		| undefined;
 	child.onEvent((event) => {
 		if (event.type !== "run-started") return;
 		startedView = {
@@ -297,6 +300,72 @@ test("sequential runs report per-run finalText and usage deltas, never cumulativ
 	} finally {
 		await child.dispose();
 	}
+});
+
+test("the self-created runtime mirrors public provider registrations and removes stale ones", async () => {
+	const sourceRuntime = await ModelRuntime.create({
+		credentials: new InMemoryCredentialStore(),
+		modelsPath: null,
+		allowModelNetwork: false,
+	});
+	sourceRuntime.registerProvider("mirrored", {
+		api: faux.api,
+		baseUrl: "http://faux.local",
+		apiKey: "faux",
+		streamSimple: faux.streamSimple,
+		models: [
+			{
+				id: "mirrored",
+				name: "mirrored",
+				api: faux.api,
+				reasoning: false,
+				input: ["text"],
+				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+				contextWindow: 100_000,
+				maxTokens: 4096,
+			},
+		],
+	});
+	const sourceModel = sourceRuntime.getModel("mirrored", "mirrored");
+	if (!sourceModel) throw new Error("mirrored model not registered");
+	const fallback = createDelegationService({
+		resolveParent: (id) =>
+			id === parent.sessionId
+				? {
+						cwd: parentCwd,
+						model: sourceModel,
+						thinkingLevel: parent.thinkingLevel,
+						modelRegistry: new ModelRegistry(sourceRuntime),
+					}
+				: undefined,
+		delegationRoot,
+		scope: "ws-registry-mirror",
+	});
+	const mirroredSpec = subagentSpec({
+		session: {
+			systemPrompt: "probe",
+			model: { provider: "mirrored", id: "mirrored" },
+			tools: [],
+		},
+	});
+	faux.setResponses([fauxAssistantMessage("MIRRORED_DONE")]);
+	const child = await fallback.createChild(mirroredSpec);
+	try {
+		const outcome = await child.runQueued("Probe.");
+		expect(outcome.status).toBe("completed");
+		expect(outcome.details.model).toBe("mirrored/mirrored");
+	} finally {
+		await child.dispose();
+	}
+
+	sourceRuntime.unregisterProvider("mirrored");
+	const staleResult = await fallback.createChild(mirroredSpec).then(
+		() => undefined,
+		(error: unknown) => error,
+	);
+	if (!(staleResult instanceof Error)) throw new Error("expected stale model resolution to fail");
+	expect(staleResult.message).toContain("Unknown model mirrored/mirrored");
+	await fallback.disposeChildrenOf(parent.sessionId);
 });
 
 test("a modelRuntime provider is resolved per createChild, never captured at service creation", async () => {

@@ -14,6 +14,7 @@ import {
 	DefaultResourceLoader,
 	getAgentDir,
 	ModelRuntime,
+	type ProviderConfig,
 	SessionManager,
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
@@ -57,8 +58,8 @@ let parentCwd: string;
 let service: DelegationService;
 const liveParents = new Map<string, AgentSession>();
 
-function registerFaux(core: typeof fauxA, id: string): void {
-	runtime.registerProvider(id, {
+function fauxConfig(core: typeof fauxA, id: string): ProviderConfig {
+	return {
 		api: core.api,
 		baseUrl: "http://faux.local",
 		apiKey: "faux",
@@ -75,7 +76,11 @@ function registerFaux(core: typeof fauxA, id: string): void {
 				maxTokens: 4096,
 			},
 		],
-	});
+	};
+}
+
+function registerFaux(core: typeof fauxA, id: string): void {
+	runtime.registerProvider(id, fauxConfig(core, id));
 }
 
 beforeAll(async () => {
@@ -93,6 +98,10 @@ beforeAll(async () => {
 	writeFileSync(
 		join(agentDir, "agents", "capped.md"),
 		"---\nname: capped\ndescription: Turn-capped test agent\ntools: read, ls\nmax_turns: 1\n---\n\nWork until stopped.\n",
+	);
+	writeFileSync(
+		join(agentDir, "agents", "extension-provider.md"),
+		"---\nname: extension-provider\ndescription: Extension-provider test agent\nmodel: extension-faux\n---\n\nRun through the extension-registered provider.\n",
 	);
 
 	runtime = await ModelRuntime.create({
@@ -229,6 +238,63 @@ test("foreground: one Agent call runs a builtin scout and returns its report to 
 	});
 	expect(children[0]?.snapshot?.status).toBe("completed");
 	await service.disposeChildrenOf(parent.sessionId);
+});
+
+test("zero-config fallback mirrors a provider registered by another extension", async () => {
+	const extensionFaux = fauxCore("extension-faux");
+	const settingsManager = SettingsManager.inMemory({});
+	const standaloneDelegationRoot = tmpDir("pi-subagents-standalone-delegation-");
+	const resourceLoader = new DefaultResourceLoader({
+		cwd: parentCwd,
+		agentDir: getAgentDir(),
+		settingsManager,
+		extensionFactories: [
+			(pi) => pi.registerProvider("extension-faux", fauxConfig(extensionFaux, "extension-faux")),
+			createSubagentsExtension({
+				delegationRoot: standaloneDelegationRoot,
+				scope: "standalone",
+			}),
+		],
+		noPromptTemplates: true,
+		noThemes: true,
+		noContextFiles: true,
+	});
+	await resourceLoader.reload();
+	const model = runtime.getModel("fauxa", "fauxa") as Model<string> | undefined;
+	if (!model) throw new Error("fauxa not registered");
+	const standalone = (
+		await createAgentSession({
+			cwd: parentCwd,
+			modelRuntime: runtime,
+			sessionManager: SessionManager.inMemory(parentCwd),
+			settingsManager,
+			resourceLoader,
+			model,
+		})
+	).session;
+
+	try {
+		await standalone.bindExtensions({ mode: "print" });
+		fauxA.setResponses([
+			fauxAssistantMessage(
+				fauxToolCall("Agent", {
+					subagent_type: "extension-provider",
+					task: "Use the mirrored provider.",
+				}),
+			),
+			fauxAssistantMessage("PARENT_USED_EXTENSION_PROVIDER"),
+		]);
+		extensionFaux.setResponses([fauxAssistantMessage("EXTENSION_PROVIDER_CHILD_OK")]);
+
+		await standalone.prompt("Delegate through the extension provider.");
+
+		expect(JSON.stringify(standalone.messages)).toContain("EXTENSION_PROVIDER_CHILD_OK");
+		expect(JSON.stringify(standalone.messages)).toContain("PARENT_USED_EXTENSION_PROVIDER");
+	} finally {
+		await standalone.extensionRunner.emit({ type: "session_shutdown", reason: "quit" });
+		standalone.dispose();
+		runtime.unregisterProvider("extension-faux");
+	}
 });
 
 test("an unknown subagent_type surfaces as a tool error listing the available types", async () => {
