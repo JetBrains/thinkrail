@@ -52,7 +52,7 @@ Adopted:
   chat's `turns.tsx`); `runDetails`'s pure helpers.
 - **Allowed deps:** parent chat primitives (`toolRegistry`, `ChatActions`, `Markdown`, `foldState`,
   chat `types`); sibling `toolHelpers`/`Collapsible`; `contracts` (type-only + the
-  `SUBAGENT_COMPLETION_CUSTOM_TYPE` guard family); `lucide-react`; `lib`.
+  `SUBAGENT_COMPLETION_CUSTOM_TYPE` guard family); `@remixicon/react`; `lib`.
 - **Forbidden:** value-importing any `pi` package, `pi-subagents`, or `pi-delegation`; `store`/
   `transport` (renderers stay presentational — the transcript dialog lives in `chat/` as an
   integration file, reached only through `ChatActions.openSubagentTranscript`).

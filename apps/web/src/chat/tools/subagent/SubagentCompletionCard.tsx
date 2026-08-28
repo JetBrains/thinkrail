@@ -1,5 +1,13 @@
+import {
+	RiRobotLine as Bot,
+	RiCheckLine as Check,
+	RiArrowDownSLine as ChevronDown,
+	RiArrowRightSLine as ChevronRight,
+	RiFileList3Line as ScrollText,
+	RiAlertLine as TriangleAlert,
+	RiCloseLine as X,
+} from "@remixicon/react";
 import type { DelegationRunDetails } from "@thinkrail/contracts";
-import { Bot, Check, ChevronDown, ChevronRight, ScrollText, TriangleAlert, X } from "lucide-react";
 import { useChatActions } from "../../ChatActions";
 import { useFold } from "../../foldState";
 
@@ -36,13 +44,13 @@ export function SubagentCompletionCard({
 		>
 			<div className="flex items-center gap-4">
 				{details.status === "error" ? (
-					<X className="size-3 shrink-0 text-feedback-error" />
+					<X className="size-12 shrink-0 text-feedback-error" />
 				) : details.status === "completed" ? (
-					<Check className="size-3 shrink-0 text-feedback-success" />
+					<Check className="size-12 shrink-0 text-feedback-success" />
 				) : (
-					<TriangleAlert className="size-3 shrink-0 text-feedback-warning" />
+					<TriangleAlert className="size-12 shrink-0 text-feedback-warning" />
 				)}
-				<Bot className="size-3.5 shrink-0 text-text-muted" />
+				<Bot className="size-12 shrink-0 text-text-muted" />
 				<span className="shrink-0 text-text-default">
 					{role} {OUTCOME_WORD[details.status]}
 				</span>
@@ -61,7 +69,7 @@ export function SubagentCompletionCard({
 						title="Open transcript"
 						className="ml-auto flex shrink-0 items-center gap-4 text-primary hover:underline"
 					>
-						<ScrollText className="size-3 shrink-0" />
+						<ScrollText className="size-12 shrink-0" />
 						Transcript
 					</button>
 				) : null}
@@ -76,9 +84,9 @@ export function SubagentCompletionCard({
 						className="flex items-center gap-4 self-start text-primary hover:underline"
 					>
 						{reportOpen ? (
-							<ChevronDown className="size-3 shrink-0" />
+							<ChevronDown className="size-16 shrink-0" />
 						) : (
-							<ChevronRight className="size-3 shrink-0" />
+							<ChevronRight className="size-16 shrink-0" />
 						)}
 						Report
 					</button>

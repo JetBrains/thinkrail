@@ -34,6 +34,27 @@ test("messagesToRuntime folds a transcript into ordered turns + a toolResults ma
 	expect(toolResults.tc1?.status).toBe("done");
 });
 
+test("a scoped append-only hydration preserves existing turn ids", () => {
+	const first = messagesToRuntime(messages, undefined, { idScope: "subagent:child-1" });
+	const second = messagesToRuntime(
+		[
+			...messages,
+			{
+				role: "assistant",
+				content: [{ type: "text", text: "one more thing" }],
+				timestamp: 4,
+			},
+		] as unknown as Message[],
+		undefined,
+		{ idScope: "subagent:child-1" },
+	);
+
+	expect(second.turns.slice(0, first.turns.length).map((turn) => turn.id)).toEqual(
+		first.turns.map((turn) => turn.id),
+	);
+	expect(new Set(second.turns.map((turn) => turn.id)).size).toBe(second.turns.length);
+});
+
 test("an assistant turn that ended in a provider error hydrates a following error turn", () => {
 	const { turns } = messagesToRuntime([
 		{ role: "user", content: "hi", timestamp: 1 },

@@ -213,11 +213,15 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   through `ChatActions.openSubagentTranscript`; rendered under a `null` `ChatActions` provider so
   nothing inside can talk back (and a nested transcript link cannot exist). Liveness comes from the
   **host** with each response: `subagent.getTranscript` carries the run's current registry `status`
-  (absent once the host no longer knows the run — restart, dispose), and the open dialog polls every
-  ~2.5s exactly while that reports queued/running — never from this chat's own runtime, whose frozen
-  background ack can't tell a live run from one lost to a restart. Works during the run, after
-  completion, and after a host restart (transcripts persist on disk; only the in-memory registry is
-  lost — and its absence is precisely what stops the polling).
+  (absent once the host no longer knows the run — restart, dispose). The open dialog keeps exactly one
+  read in flight, scheduling the next ~2.5s poll only after a response while status is queued/running —
+  never from this chat's own runtime, whose frozen background ack can't tell a live run from one lost to
+  a restart. A terminal/absent status or the wire's permanent `SUBAGENT_TRANSCRIPT_NOT_FOUND` stops;
+  plain transport failures retry while the dialog stays open with a capped backoff. Poll snapshots
+  hydrate with child-scoped ids derived from each persisted message's role/timestamp/index, so an
+  append-only refresh preserves row identity and manual folds instead of remounting the transcript.
+  Works during the run, after completion, and after a host restart (transcripts persist on disk; only
+  the in-memory registry is lost — and its absence is precisely what stops the polling).
 - **`askState`** — the questionnaire lifecycle seam: the pure `deriveAskStates(turns, askAnswers)` +
   `AskStatesContext`/`useAskState` (provided by `ChatView`, `null` standalone). The ask tool is **ack +
   terminate** (its tool result is just an ack; the reply arrives later as an `ask-user-answers` message),
@@ -231,10 +235,11 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   intended read (you returned to the chat that needs you), not just a side effect. It carries no store or
   transport state.
 - **Hydration** (`hydrate.ts`) — the pure
-  `messagesToRuntime(TranscriptMessage[], lastSettlement?)` converter (read-side counterpart of the event
-  reducer): rebuilds `{ turns, toolResults, askAnswers, turnIdByMessageIndex }` (a `HydratedRuntime`) from a
-  persisted transcript so a reconnecting/second client renders identically to the live path (same `raw`
-  result shape). When supplied, the live summary's `lastSettlement` is authoritative; otherwise only the
+  `messagesToRuntime(TranscriptMessage[], lastSettlement?, { idScope? })` converter (read-side counterpart
+  of the event reducer): rebuilds `{ turns, toolResults, askAnswers, turnIdByMessageIndex }` (a
+  `HydratedRuntime`) from a persisted transcript so a reconnecting/second client renders identically to
+  the live path (same `raw` result shape). One-shot consumers keep freshly minted ids; a repeated-snapshot
+  consumer supplies its session scope to derive stable role/timestamp/index ids for persisted turns. When supplied, the live summary's `lastSettlement` is authoritative; otherwise only the
   final conversational assistant can synthesize an error/length turn. Compacted historical length attempts
   followed by later messages remain history, not a stale current warning. One retry-presentation rule on
   both paths: pi persists a superseded auto-retry attempt ("keep in session for history") that the live

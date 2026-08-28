@@ -1,12 +1,21 @@
-import type { TranscriptMessage } from "@thinkrail/contracts";
+import type { DelegationRunStatus, TranscriptMessage } from "@thinkrail/contracts";
 import { useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { errorText, getTransport } from "@/transport";
+import { errorText, getTransport, wsErrorCode } from "@/transport";
 import { AskStatesContext, deriveAskStates } from "./askState";
 import { ChatActionsContext } from "./ChatActions";
 import { messagesToRuntime } from "./hydrate";
 import { deriveRows } from "./rows";
+import { startSubagentTranscriptPolling } from "./subagentTranscriptPolling";
 import { ChatTurnView } from "./turns";
+
+function isLiveTranscriptStatus(status: DelegationRunStatus | undefined): boolean {
+	return status === "queued" || status === "running";
+}
+
+function isPermanentTranscriptError(error: unknown): boolean {
+	return wsErrorCode(error) === "SUBAGENT_TRANSCRIPT_NOT_FOUND";
+}
 
 export function SubagentTranscriptDialog({
 	workspaceId,
@@ -23,38 +32,37 @@ export function SubagentTranscriptDialog({
 	const [live, setLive] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 
-	useEffect(() => {
-		let cancelled = false;
-		let timer: ReturnType<typeof setInterval> | undefined = setInterval(fetchTranscript, 2500);
-		const stopPolling = () => {
-			if (timer !== undefined) clearInterval(timer);
-			timer = undefined;
-		};
-		function fetchTranscript() {
-			getTransport()
-				.request("subagent.getTranscript", { workspaceId, parentSessionId, childSessionId })
-				.then((res) => {
-					if (cancelled) return;
-					setMessages(res.messages);
+	useEffect(
+		() =>
+			startSubagentTranscriptPolling({
+				read: () =>
+					getTransport().request("subagent.getTranscript", {
+						workspaceId,
+						parentSessionId,
+						childSessionId,
+					}),
+				isLive: (response) => isLiveTranscriptStatus(response.status),
+				isPermanentError: isPermanentTranscriptError,
+				onResult: (response) => {
+					setMessages(response.messages);
 					setError(null);
-					const stillLive = res.status === "queued" || res.status === "running";
-					setLive(stillLive);
-					if (!stillLive) stopPolling();
-				})
-				.catch((err) => {
-					if (cancelled) return;
-					setError(errorText(err));
-					stopPolling(); // an unreadable transcript won't become readable by asking again
-				});
-		}
-		fetchTranscript();
-		return () => {
-			cancelled = true;
-			stopPolling();
-		};
-	}, [workspaceId, parentSessionId, childSessionId]);
+					setLive(isLiveTranscriptStatus(response.status));
+				},
+				onError: (requestError) => {
+					setError(errorText(requestError));
+					if (isPermanentTranscriptError(requestError)) setLive(false);
+				},
+			}),
+		[workspaceId, parentSessionId, childSessionId],
+	);
 
-	const runtime = useMemo(() => (messages ? messagesToRuntime(messages) : null), [messages]);
+	const runtime = useMemo(
+		() =>
+			messages
+				? messagesToRuntime(messages, undefined, { idScope: `subagent:${childSessionId}` })
+				: null,
+		[messages, childSessionId],
+	);
 	const rows = useMemo(
 		() => (runtime ? deriveRows(runtime.turns, runtime.toolResults, live) : []),
 		[runtime, live],

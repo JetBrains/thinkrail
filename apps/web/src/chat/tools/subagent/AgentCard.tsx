@@ -1,4 +1,10 @@
-import { Bot, ChevronDown, ChevronRight, Loader2, ScrollText } from "lucide-react";
+import {
+	RiRobotLine as Bot,
+	RiArrowDownSLine as ChevronDown,
+	RiArrowRightSLine as ChevronRight,
+	RiLoader4Line as Loader2,
+	RiFileList3Line as ScrollText,
+} from "@remixicon/react";
 import { useChatActions } from "../../ChatActions";
 import { useFold } from "../../foldState";
 import { Markdown } from "../../Markdown";
@@ -21,7 +27,7 @@ export function AgentCard({ toolCallId, args, result, status }: ToolRenderProps)
 	return (
 		<div data-testid="tool-agent" className="flex flex-col gap-4">
 			<div className="flex items-center gap-4 tr-text-metadata">
-				<Bot className="size-3.5 shrink-0 text-text-muted" />
+				<Bot className="size-12 shrink-0 text-text-muted" />
 				<span className="shrink-0 text-primary">{role || "subagent"}</span>
 				{details?.childSessionId ? (
 					<span className="min-w-0 truncate text-text-muted" title={details.childSessionId}>
@@ -46,7 +52,7 @@ export function AgentCard({ toolCallId, args, result, status }: ToolRenderProps)
 						data-testid="agent-activity"
 						className="flex items-center gap-4 text-text-muted tr-text-metadata"
 					>
-						<Loader2 className="size-3 shrink-0 animate-spin motion-reduce:animate-none" />
+						<Loader2 className="size-12 shrink-0 animate-spin motion-reduce:animate-none" />
 						<span className="min-w-0 truncate">{details?.activity ?? "Working…"}</span>
 					</span>
 				)
@@ -75,9 +81,9 @@ export function AgentCard({ toolCallId, args, result, status }: ToolRenderProps)
 						className="flex items-center gap-4 self-start text-primary tr-text-metadata hover:underline"
 					>
 						{reportOpen ? (
-							<ChevronDown className="size-3 shrink-0" />
+							<ChevronDown className="size-16 shrink-0" />
 						) : (
-							<ChevronRight className="size-3 shrink-0" />
+							<ChevronRight className="size-16 shrink-0" />
 						)}
 						Report
 					</button>
@@ -95,7 +101,7 @@ export function AgentCard({ toolCallId, args, result, status }: ToolRenderProps)
 					onClick={() => actions.openSubagentTranscript(details.childSessionId)}
 					className="flex items-center gap-4 self-start text-primary tr-text-metadata hover:underline"
 				>
-					<ScrollText className="size-3 shrink-0" />
+					<ScrollText className="size-12 shrink-0" />
 					Open transcript
 				</button>
 			) : null}
