@@ -1,0 +1,103 @@
+name: Probe windows teardown fix
+
+on:
+  push:
+    branches: [ci/probe-nightly-33166583594]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  lock:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: fix/windows-smoke-teardown-retry
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - run: bun install --frozen-lockfile
+
+      - name: Measure retry behaviour against a genuinely locked tree
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          cat > probe-lock.ts <<'EOF'
+          import { cpSync, existsSync, mkdtempSync, rmSync } from "node:fs";
+          import { tmpdir } from "node:os";
+          import { join } from "node:path";
+          import { removeTree } from "@thinkrail/shared/removeTree";
+
+          const root = mkdtempSync(join(tmpdir(), "thinkrail-lock-probe-"));
+          const exe = join(root, "sleeper.exe");
+          cpSync(process.execPath, exe);
+          const held = Bun.spawn([exe, "-e", "await Bun.sleep(120000)"], {
+            cwd: root,
+            stdout: "inherit",
+            stderr: "inherit",
+          });
+          await Bun.sleep(2000);
+
+          function timed(what: string, remove: () => void): void {
+            const started = Date.now();
+            try {
+              remove();
+              console.log(`${what}: removed after ${Date.now() - started}ms`);
+            } catch (error) {
+              console.log(
+                `${what}: threw ${(error as { code?: string }).code} after ${Date.now() - started}ms`,
+              );
+            }
+          }
+
+          timed("rmSync-maxRetries-10-retryDelay-100", () =>
+            rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }),
+          );
+          timed("removeTree-while-locked", () => removeTree(root));
+          held.kill();
+          await held.exited;
+          timed("removeTree-right-after-exit", () => removeTree(root));
+          console.log(`root exists after probe: ${existsSync(root)}`);
+          EOF
+          bun probe-lock.ts > lock.log 2>&1
+          echo "probe_exit=$?" >> lock.log
+          exit 0
+
+      - name: Report
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          body=$(sed -e 's/%/%25/g' lock.log | awk '{printf "%s%%0A", $0}')
+          echo "::error title=lock-probe::${body}"
+          exit 0
+
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: fix/windows-smoke-teardown-retry
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - run: bun install --frozen-lockfile
+
+      - name: Verify native host ownership
+        run: bun test packages/server/src/host/ownership.test.ts
+
+      - id: build
+        uses: ./.github/actions/build-binary
+        with:
+          version: 0.0.0-probe.1
+          channel: nightly
+          target: bun-windows-x64
