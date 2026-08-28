@@ -10,6 +10,7 @@ import {
 } from "../layout";
 import {
 	applyLayoutPresetLocally,
+	claimLayoutSurfaceId,
 	commitWorkspaceLayout,
 	ensureWorkspaceLayoutState,
 	initializeLocalLayoutState,
@@ -108,12 +109,29 @@ beforeEach(() => {
 });
 
 describe("frontend-local layout state", () => {
-	test("local preferences persist before any workspace is opened", () => {
+	test("a copied live surface id is reminted while an available reload id is retained", async () => {
+		const copied = new MemoryStorage();
+		copied.setItem("thinkrail:layout-surface-id", "surface-a");
+		const occupied = new Set(["surface-a"]);
+		const reminted = await claimLayoutSurfaceId(copied, async (id) => {
+			if (occupied.has(id)) return false;
+			occupied.add(id);
+			return true;
+		});
+		expect(reminted).not.toBe("surface-a");
+		expect(copied.getItem("thinkrail:layout-surface-id")).toBe(reminted);
+
+		const reload = new MemoryStorage();
+		reload.setItem("thinkrail:layout-surface-id", "surface-reload");
+		expect(await claimLayoutSurfaceId(reload, async () => true)).toBe("surface-reload");
+	});
+
+	test("local preferences persist before any workspace is opened", async () => {
 		const local = new MemoryStorage();
 		const session = new MemoryStorage();
 		session.setItem("thinkrail:layout-surface-id", "surface-a");
 		setLayoutStateStorageForTests({ local, session }, endpoint);
-		initializeLocalLayoutState();
+		await initializeLocalLayoutState();
 		useAppStore.getState().setLocalLayoutPreferences({
 			defaultPresetId: "focused",
 			maxSideGroups: 8,
@@ -123,7 +141,7 @@ describe("frontend-local layout state", () => {
 		resetLayoutStateForTests();
 		resetStore();
 		setLayoutStateStorageForTests({ local, session }, endpoint);
-		initializeLocalLayoutState();
+		await initializeLocalLayoutState();
 		expect(useAppStore.getState().localLayoutPreferences).toEqual({
 			defaultPresetId: "focused",
 			maxSideGroups: 8,
@@ -169,9 +187,11 @@ describe("frontend-local layout state", () => {
 			() => true,
 			() => false,
 		);
+		await Bun.sleep(0);
 		expect(resolve).toHaveLength(1);
 		useAppStore.setState({ connectionGeneration: 2 });
 		const second = ensureWorkspaceLayoutState("workspace");
+		await Bun.sleep(0);
 		expect(resolve).toHaveLength(2);
 		resolve[0]?.(snapshot());
 		expect(await first).toBe(false);

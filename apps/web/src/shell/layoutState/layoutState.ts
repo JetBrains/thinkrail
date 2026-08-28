@@ -56,6 +56,8 @@ let storageOverride: StoragePair | null = null;
 let endpointOverride: string | null = null;
 let persistenceKey: string | null = null;
 let stopPersistence: (() => void) | null = null;
+let releaseSurfaceLease: (() => void) | null = null;
+let initialization: Promise<void> | null = null;
 let freshBootstrap = false;
 let legacyLayoutRequesterForTests:
 	| ((workspaceId: string) => Promise<WorkspaceLayoutSnapshot | null>)
@@ -72,20 +74,121 @@ function stores(): StoragePair | null {
 	return { local: localStorage, session: sessionStorage };
 }
 
-function surfaceId(storage: StoragePair): string {
-	const current = storage.session.getItem(SURFACE_ID_KEY);
-	if (current) return current;
-	const created = randomId("surface");
-	storage.session.setItem(SURFACE_ID_KEY, created);
-	return created;
+export async function claimLayoutSurfaceId(
+	storage: Storage,
+	claim: (id: string) => Promise<boolean>,
+): Promise<string> {
+	let id = storage.getItem(SURFACE_ID_KEY) || randomId("surface");
+	while (!(await claim(id))) id = randomId("surface");
+	storage.setItem(SURFACE_ID_KEY, id);
+	return id;
+}
+
+function acquireWebLock(name: string): Promise<(() => void) | null | undefined> {
+	if (typeof navigator === "undefined" || !navigator.locks) return Promise.resolve(undefined);
+	return new Promise((resolve) => {
+		let reported = false;
+		void navigator.locks
+			.request(name, { mode: "exclusive", ifAvailable: true }, async (lock) => {
+				reported = true;
+				if (!lock) {
+					resolve(null);
+					return;
+				}
+				let release: (() => void) | undefined;
+				const held = new Promise<void>((done) => {
+					release = done;
+				});
+				resolve(() => release?.());
+				await held;
+			})
+			.catch(() => {
+				if (!reported) resolve(undefined);
+			});
+	});
+}
+
+function acquireBroadcastLease(
+	endpoint: string,
+	id: string,
+): Promise<(() => void) | null | undefined> {
+	if (typeof BroadcastChannel === "undefined") return Promise.resolve(undefined);
+	const channel = new BroadcastChannel(`thinkrail:layout-surfaces:${endpoint}`);
+	const token = randomId("surface-claim");
+	let occupied = false;
+	return new Promise((resolve) => {
+		channel.onmessage = (event: MessageEvent<unknown>) => {
+			if (!isRecord(event.data) || event.data.id !== id) return;
+			if (event.data.type === "probe" && event.data.token !== token) {
+				occupied = true;
+				channel.postMessage({ type: "occupied", id, token: event.data.token });
+				return;
+			}
+			if (event.data.type === "occupied" && event.data.token === token) occupied = true;
+		};
+		channel.postMessage({ type: "probe", id, token });
+		setTimeout(() => {
+			if (occupied) {
+				channel.close();
+				resolve(null);
+				return;
+			}
+			channel.onmessage = (event: MessageEvent<unknown>) => {
+				if (
+					isRecord(event.data) &&
+					event.data.type === "probe" &&
+					event.data.id === id &&
+					typeof event.data.token === "string"
+				) {
+					channel.postMessage({ type: "occupied", id, token: event.data.token });
+				}
+			};
+			resolve(() => channel.close());
+		}, 60);
+	});
+}
+
+function retainSurfaceLease(release: () => void): void {
+	let active = true;
+	const releaseOnce = () => {
+		if (!active) return;
+		active = false;
+		window.removeEventListener("pagehide", onPageHide);
+		release();
+		if (releaseSurfaceLease === releaseOnce) releaseSurfaceLease = null;
+	};
+	const onPageHide = (event: PageTransitionEvent) => {
+		if (!event.persisted) releaseOnce();
+	};
+	releaseSurfaceLease = releaseOnce;
+	window.addEventListener("pagehide", onPageHide);
+}
+
+async function resolveSurfaceId(storage: StoragePair, endpoint: string): Promise<string> {
+	if (storageOverride) return claimLayoutSurfaceId(storage.session, async () => true);
+	const pendingLease: { release?: () => void } = {};
+	try {
+		const id = await claimLayoutSurfaceId(storage.session, async (candidate) => {
+			const name = `thinkrail:layout-surface:${JSON.stringify([endpoint, candidate])}`;
+			const webLock = await acquireWebLock(name);
+			if (webLock === null) return false;
+			const lease = webLock ?? (await acquireBroadcastLease(endpoint, candidate));
+			if (lease === null) return false;
+			if (lease) pendingLease.release = lease;
+			return true;
+		});
+		if (pendingLease.release && typeof window !== "undefined") {
+			retainSurfaceLease(pendingLease.release);
+		}
+		return id;
+	} catch (error) {
+		pendingLease.release?.();
+		throw error;
+	}
 }
 
 export function localLayoutStorageKey(endpoint: string, id: string): string {
 	return `thinkrail:workbench:${JSON.stringify([endpoint, id])}`;
-}
-
-function currentPersistenceKey(storage: StoragePair): string {
-	return localLayoutStorageKey(endpointOverride ?? getTransport().httpBase(), surfaceId(storage));
 }
 
 function hasOnlyKeys(value: Record<string, unknown>, allowed: readonly string[]): boolean {
@@ -408,11 +511,13 @@ function startPersistence(): void {
 	});
 }
 
-function loadPersistedLayout(): LocalLayoutStatePayload | undefined {
+async function loadPersistedLayout(): Promise<LocalLayoutStatePayload | undefined> {
 	const storage = stores();
 	if (!storage) return undefined;
 	try {
-		persistenceKey = currentPersistenceKey(storage);
+		const endpoint = endpointOverride ?? getTransport().httpBase();
+		const id = await resolveSurfaceId(storage, endpoint);
+		persistenceKey = localLayoutStorageKey(endpoint, id);
 		const raw = storage.local.getItem(persistenceKey);
 		return raw ? decodeLocalLayout(raw) : undefined;
 	} catch {
@@ -532,25 +637,33 @@ function importedPayload(
 	};
 }
 
-export function initializeLocalLayoutState(): void {
-	const state = useAppStore.getState();
-	if (!state.layoutStateReady) {
-		const persisted = loadPersistedLayout();
-		if (persisted) {
-			state.hydrateLocalLayoutState(persisted);
-		} else {
-			freshBootstrap = true;
-			state.hydrateLocalLayoutState({
-				frame: balancedFrame(),
-				viewsByWorkspace: {},
-				documentsByWorkspace: {},
-				attentionByWorkspace: {},
-				preferences: { ...DEFAULT_LOCAL_LAYOUT_PREFERENCES },
-				legacyImportAttempted: {},
-			});
+export function initializeLocalLayoutState(): Promise<void> {
+	if (initialization) return initialization;
+	const run = (async () => {
+		const state = useAppStore.getState();
+		if (!state.layoutStateReady) {
+			const persisted = await loadPersistedLayout();
+			if (persisted) {
+				state.hydrateLocalLayoutState(persisted);
+			} else {
+				freshBootstrap = true;
+				state.hydrateLocalLayoutState({
+					frame: balancedFrame(),
+					viewsByWorkspace: {},
+					documentsByWorkspace: {},
+					attentionByWorkspace: {},
+					preferences: { ...DEFAULT_LOCAL_LAYOUT_PREFERENCES },
+					legacyImportAttempted: {},
+				});
+			}
 		}
-	}
-	startPersistence();
+		startPersistence();
+	})();
+	initialization = run.catch((error) => {
+		initialization = null;
+		throw error;
+	});
+	return initialization;
 }
 
 export function ensureWorkspaceLayoutState(workspaceId: string): Promise<WorkspaceLayoutDocument> {
@@ -561,7 +674,7 @@ export function ensureWorkspaceLayoutState(workspaceId: string): Promise<Workspa
 	const request = (async () => {
 		const current = stateAtStart;
 		if (current.removedWorkspaceIds[workspaceId]) throw new Error("Workspace has been removed");
-		if (!current.layoutStateReady) initializeLocalLayoutState();
+		await initializeLocalLayoutState();
 		const loaded = useAppStore.getState();
 		const localDocument = loaded.layoutDocumentsByWorkspace[workspaceId];
 		if (localDocument && loaded.legacyLayoutImportAttempted[workspaceId]) return localDocument;
@@ -705,7 +818,11 @@ export async function commitWorkspaceLayout(
 }
 
 export function useLocalLayoutState(): void {
-	useEffect(() => initializeLocalLayoutState(), []);
+	useEffect(() => {
+		void initializeLocalLayoutState().catch((error) => {
+			toast.error(errorText(error), "Couldn't load the local layout");
+		});
+	}, []);
 }
 
 export function useWorkspaceLayoutState(workspaceId: string): void {
@@ -744,6 +861,9 @@ export function resetLayoutStateForTests(): void {
 	workspaceImports.clear();
 	stopPersistence?.();
 	stopPersistence = null;
+	releaseSurfaceLease?.();
+	releaseSurfaceLease = null;
+	initialization = null;
 	persistenceKey = null;
 	freshBootstrap = false;
 	storageOverride = null;

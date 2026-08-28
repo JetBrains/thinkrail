@@ -234,12 +234,13 @@ export function LayoutSettings() {
 														(candidate) => candidate.id !== preset.id,
 													);
 													void saveCustomPresets(customPresets).then((saved) => {
-														if (saved && preferences.defaultPresetId === preset.id) {
-															useAppStore.getState().setLocalLayoutPreferences({
-																...preferences,
-																defaultPresetId: DEFAULT_LAYOUT_PRESET_ID,
-															});
-														}
+														if (!saved) return;
+														const state = useAppStore.getState();
+														if (state.localLayoutPreferences.defaultPresetId !== preset.id) return;
+														state.setLocalLayoutPreferences({
+															...state.localLayoutPreferences,
+															defaultPresetId: DEFAULT_LAYOUT_PRESET_ID,
+														});
 													});
 												}}
 												className="rounded-[var(--radius-sm)] p-4 text-text-muted hover:bg-feedback-error-subtle hover:text-feedback-error"

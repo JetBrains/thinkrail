@@ -280,6 +280,52 @@ test("one local frame survives workspace switches while resource tabs stay works
 	await expect(page.getByTestId("bottom-layout-rail")).toBeVisible();
 });
 
+test("a duplicated tab remints copied surface storage and preserves both layouts on reload", async ({
+	page,
+	context,
+}) => {
+	await openDefaultWorkbench(page);
+	const originalSurfaceId = await page.evaluate(() =>
+		sessionStorage.getItem("thinkrail:layout-surface-id"),
+	);
+	if (!originalSurfaceId) throw new Error("original surface id is missing");
+
+	const clone = await context.newPage();
+	await clone.addInitScript((copiedId) => {
+		if (sessionStorage.getItem("thinkrail:e2e-clone-seeded")) return;
+		sessionStorage.setItem("thinkrail:e2e-clone-seeded", "true");
+		sessionStorage.setItem("thinkrail:layout-surface-id", copiedId);
+	}, originalSurfaceId);
+	await clone.goto("/");
+	await expect(clone.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+	await revealFirstProjectWorkspaces(clone);
+	await defaultWorkspaceRow(clone).getByRole("button").first().click();
+	await expect(clone.getByTestId("left-nav")).toBeVisible();
+	const cloneSurfaceId = await clone.evaluate(() =>
+		sessionStorage.getItem("thinkrail:layout-surface-id"),
+	);
+	if (!cloneSurfaceId) throw new Error("clone surface id is missing");
+	expect(cloneSurfaceId).not.toBe(originalSurfaceId);
+
+	await pressPlatformShortcut(page, "b");
+	await expect(page.getByTestId("left-layout-rail")).toBeVisible();
+	await expect(clone.getByTestId("left-nav")).toBeVisible();
+
+	await reloadDefaultWorkbench(page);
+	expect(await page.evaluate(() => sessionStorage.getItem("thinkrail:layout-surface-id"))).toBe(
+		originalSurfaceId,
+	);
+	await expect(page.getByTestId("left-layout-rail")).toBeVisible();
+
+	await clone.reload();
+	await expect(clone.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+	await expect(clone.getByTestId("left-nav")).toBeVisible();
+	expect(await clone.evaluate(() => sessionStorage.getItem("thinkrail:layout-surface-id"))).toBe(
+		cloneSurfaceId,
+	);
+	await clone.close();
+});
+
 test("dragging outer separators hides both sides and preserves their restore state", async ({
 	page,
 }) => {
