@@ -226,7 +226,7 @@ test("a foreground run completes: outcome, registry, lineage storage, lifecycle 
 	expect(startedView).toEqual({
 		snapshotStatus: "running",
 		detailsStatus: "running",
-		updates: ["queued", "running"],
+		updates: ["running"],
 	});
 	expect(outcome.status).toBe("completed");
 	expect(outcome.finalText).toBe("CHILD_DONE");

@@ -88,9 +88,10 @@ lands (the enumeration: scope & readiness rules below).
 Every `runQueued` run passes through `queued` — `run-queued` is emitted even when a slot is free
 and `running` follows immediately (a uniform event stream is simpler for consumers than a
 conditional first state; the diagram's direct `running` entry remains the semantic for `runNow`
-when it lands). Entering `queued` or `running` updates `RunSnapshot.status`,
-`RunSnapshot.details.status`, and the run's `onUpdate` callback together before its lifecycle event
-is emitted, so consumers never observe contradictory in-flight status surfaces.
+when it lands). Entering `queued` initializes matching `RunSnapshot.status` and
+`RunSnapshot.details.status`; the transition to `running` updates both fields and the run's
+`onUpdate` callback together before `run-started` is emitted, so consumers never observe
+contradictory in-flight status surfaces.
 
 ```mermaid
 stateDiagram-v2

@@ -339,7 +339,6 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 			details: queuedDetails,
 			collected: false,
 		};
-		opts.onUpdate?.(queuedDetails);
 		emit(
 			{
 				type: "run-queued",
