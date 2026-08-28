@@ -21,8 +21,11 @@ choice was settled: the decision log below.
 
 - **default export** — the zero-config pure-pi extension entry (the `pi` manifest points here);
   builds its own `DelegationService` with default bindings, projecting the parent off the tool
-  `ExtensionContext` at spawn time. **The fallback service is session-scoped in lifetime**: on
-  `session_shutdown` the extension awaits `disposeChildrenOf(parent)` and drops the service, so a
+  `ExtensionContext` at spawn time. The projection includes the public `modelRegistry`, allowing
+  the core's self-created runtime to mirror provider registrations made by other extensions before
+  each child spawn without inspecting their configuration or relying on pi's private runtime field.
+  **The fallback service is session-scoped in lifetime**: on `session_shutdown` the extension
+  awaits `disposeChildrenOf(parent)` and drops the service, so a
   vanilla-pi background child never outlives its parent session burning tokens with an
   undeliverable completion (PR #302 review finding). An embedder-injected service is deliberately
   untouched — its lifecycle belongs to the embedder (ThinkRail cascades in `removeSession`).
@@ -90,11 +93,13 @@ extensions that set holds is the **embedder's** choice, never this package's.
 
 ## Verification
 
-Unit suites in-package (`bun test`). End to end: `e2e/subagents.live.spec.ts` (`@agent` — the real
-host driving real children: foreground fan-out, background completion, transcript reads). The
-core SPEC's pure-pi bar: **`bun run smoke:subagents`** — this extension with default
-bindings under the repo-pinned vanilla pi CLI, in an isolated throwaway agent dir; on-demand only
-(needs pi auth, spends real tokens), never a commit/CI gate.
+Unit suites in-package (`bun test`), including a two-extension regression where one extension
+registers a synthetic provider and the zero-config subagents extension delegates through it. End to
+end: `e2e/subagents.live.spec.ts` (`@agent` — the real host driving real children: foreground
+fan-out, background completion, transcript reads). The core SPEC's pure-pi bar: **`bun run
+smoke:subagents`** — this extension with default bindings under the repo-pinned vanilla pi CLI, in
+an isolated throwaway agent dir; on-demand only (needs pi auth, spends real tokens), never a
+commit/CI gate.
 
 ## Decision log (settled with the user, 2026-08)
 

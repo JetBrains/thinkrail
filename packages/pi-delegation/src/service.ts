@@ -18,6 +18,7 @@ import {
 	type DelegationRunDetails,
 	type DelegationService,
 	type LifecycleEvent,
+	type ParentContext,
 	type RunLifecycleStatus,
 	type RunOptions,
 	type RunOutcome,
@@ -156,12 +157,39 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 	const lifecycleListeners = new Set<(e: LifecycleEvent) => void>();
 
 	let selfCreatedRuntime: Promise<ModelRuntime> | undefined;
-	function getRuntime(): Promise<ModelRuntime> {
+	const mirroredProviderIds = new Set<string>();
+
+	function synchronizeRegisteredProviders(runtime: ModelRuntime, parent: ParentContext): void {
+		const registry = parent.modelRegistry;
+		if (!registry) return;
+		const registeredIds = new Set(registry.getRegisteredProviderIds());
+		for (const providerId of mirroredProviderIds) {
+			if (!registeredIds.has(providerId)) runtime.unregisterProvider(providerId);
+		}
+		mirroredProviderIds.clear();
+		for (const providerId of registeredIds) {
+			const nativeProvider = registry.getRegisteredNativeProvider(providerId);
+			if (nativeProvider) {
+				runtime.registerNativeProvider(nativeProvider);
+				mirroredProviderIds.add(providerId);
+				continue;
+			}
+			const providerConfig = registry.getRegisteredProviderConfig(providerId);
+			if (providerConfig) {
+				runtime.registerProvider(providerId, providerConfig);
+				mirroredProviderIds.add(providerId);
+			}
+		}
+	}
+
+	async function getFallbackRuntime(parent: ParentContext): Promise<ModelRuntime> {
 		const bound = bindings.modelRuntime;
-		if (typeof bound === "function") return Promise.resolve(bound());
-		if (bound) return Promise.resolve(bound);
+		if (typeof bound === "function") return bound();
+		if (bound) return bound;
 		selfCreatedRuntime ??= ModelRuntime.create();
-		return selfCreatedRuntime;
+		const runtime = await selfCreatedRuntime;
+		synchronizeRegisteredProviders(runtime, parent);
+		return runtime;
 	}
 
 	function semaphoreFor(parentSessionId: string): Semaphore {
@@ -216,9 +244,9 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 		task: string,
 		opts: RunOptions,
 		baseline: RunBaseline,
+		startedAt: number,
 	): Promise<RunOutcome> {
 		const { session } = entry;
-		const startedAt = Date.now();
 		const cap = opts.maxTurns;
 		let turns = 0;
 		let activity: string | undefined;
@@ -304,12 +332,14 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 		}
 		const startedAt = Date.now();
 		const baseline = baselineOf(entry.session);
+		const queuedDetails = buildDetails(entry, task, "queued", 0, undefined, startedAt, baseline);
 		entry.snapshot = {
 			status: "queued",
 			task,
-			details: buildDetails(entry, task, "queued", 0, undefined, startedAt, baseline),
+			details: queuedDetails,
 			collected: false,
 		};
+		opts.onUpdate?.(queuedDetails);
 		emit(
 			{
 				type: "run-queued",
@@ -328,7 +358,18 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 					errorMessage: entry.disposed ? "disposed before start" : "aborted before start",
 				};
 			} else {
-				entry.snapshot = { ...entry.snapshot, status: "running" };
+				const runStartedAt = Date.now();
+				const runningDetails = buildDetails(
+					entry,
+					task,
+					"running",
+					0,
+					undefined,
+					runStartedAt,
+					baseline,
+				);
+				entry.snapshot = { ...entry.snapshot, status: "running", details: runningDetails };
+				opts.onUpdate?.(runningDetails);
 				emit(
 					{
 						type: "run-started",
@@ -337,7 +378,7 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 					},
 					entry,
 				);
-				outcome = await driveRun(entry, task, opts, baseline);
+				outcome = await driveRun(entry, task, opts, baseline, runStartedAt);
 			}
 			entry.snapshot = {
 				status: outcome.status,
@@ -451,7 +492,7 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 				`Parent session ${spec.parent} is not live — children derive their defaults from a live parent`,
 			);
 		}
-		const runtime = parent.modelRuntime ?? (await getRuntime());
+		const runtime = parent.modelRuntime ?? (await getFallbackRuntime(parent));
 		const model = options.model
 			? runtime.getModel(options.model.provider, options.model.id)
 			: parent.model;

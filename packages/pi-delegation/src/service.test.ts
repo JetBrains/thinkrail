@@ -207,10 +207,24 @@ test("a foreground run completes: outcome, registry, lineage storage, lifecycle 
 	).toBe(true);
 
 	const updates: string[] = [];
+	let startedView: { snapshotStatus?: string; detailsStatus?: string; updates: string[] } | undefined;
+	child.onEvent((event) => {
+		if (event.type !== "run-started") return;
+		startedView = {
+			snapshotStatus: child.snapshot?.status,
+			detailsStatus: child.snapshot?.details.status,
+			updates: [...updates],
+		};
+	});
 	const outcome = await child.runQueued("Report done.", {
 		onUpdate: (details) => updates.push(details.status),
 	});
 
+	expect(startedView).toEqual({
+		snapshotStatus: "running",
+		detailsStatus: "running",
+		updates: ["queued", "running"],
+	});
 	expect(outcome.status).toBe("completed");
 	expect(outcome.finalText).toBe("CHILD_DONE");
 	expect(outcome.details.childSessionId).toBe(child.sessionId);

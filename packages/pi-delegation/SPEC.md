@@ -27,13 +27,16 @@ lands (the enumeration: scope & readiness rules below).
 - `createDelegationService(bindings)` — the service (`DelegationService`): `createChild` /
   `findChild` / `childrenOf` / `onLifecycle` / `disposeChildrenOf`.
 - `DelegationBindings` — everything host-specific: `resolveParent` (required; returns
-  `ParentContext` — `Pick<ExtensionContext, "cwd" | "model" | "thinkingLevel">` plus an optional
-  **`modelRuntime`**: the parent's own retained runtime, which `createChild` **prefers over the
-  service-level binding** — an embedder whose sessions each retain their creation-time runtime
-  generation (ThinkRail) must give a child its *parent's* generation, or a parent kept alive on a
-  Central-only model after a disconnect would delegate into a runtime lacking its provider (PR
-  #303 review follow-up). ThinkRail projects the manager's live session incl. the entry's
-  generation runtime; pure pi passes the extension's own `ctx`, no runtime), `delegationRoot`, `scope`,
+  `ParentContext` — `Pick<ExtensionContext, "cwd" | "model" | "thinkingLevel">` plus optional
+  `modelRuntime` and `modelRegistry` fields. The parent's own retained `modelRuntime` is preferred
+  over every fallback: an embedder whose sessions each retain their creation-time runtime generation
+  (ThinkRail) must give a child its *parent's* generation, or a parent kept alive on a Central-only
+  model after a disconnect would delegate into a runtime lacking its provider (PR #303 review
+  follow-up). `modelRegistry` is the public pure-pi compatibility path: when neither a parent nor
+  service runtime is bound, the core mirrors its opaque extension-provider registrations into the
+  self-created runtime before each child is resolved, including removing registrations that have
+  disappeared. ThinkRail projects the manager's live session incl. the entry's generation runtime;
+  pure pi passes the extension's own `ctx`, including its registry), `delegationRoot`, `scope`,
   `modelRuntime` (a `ModelRuntime` value **or a live provider** `() => ModelRuntime |
   Promise<ModelRuntime>`, resolved **per `createChild`**: an embedder's runtime can be generational
   — ThinkRail swaps runtime generations on Central connect/disconnect — and a value captured at
@@ -85,7 +88,9 @@ lands (the enumeration: scope & readiness rules below).
 Every `runQueued` run passes through `queued` — `run-queued` is emitted even when a slot is free
 and `running` follows immediately (a uniform event stream is simpler for consumers than a
 conditional first state; the diagram's direct `running` entry remains the semantic for `runNow`
-when it lands).
+when it lands). Entering `queued` or `running` updates `RunSnapshot.status`,
+`RunSnapshot.details.status`, and the run's `onUpdate` callback together before its lifecycle event
+is emitted, so consumers never observe contradictory in-flight status surfaces.
 
 ```mermaid
 stateDiagram-v2
@@ -145,7 +150,13 @@ The child's resource loader is **narrow by default**: no discovered extensions, 
 templates, no themes; context files, skills, and the embedder's curated extension set
 (`extensions: true` — decision #25) are explicit `SessionOptions` opt-ins; `systemPrompt` maps to
 `systemPromptOverride`. Model/thinking default to the live parent's current values; `cwd` is the
-parent's. Storage: the lineage section above.
+parent's. Runtime precedence is parent `modelRuntime` → service `modelRuntime` → cached self-created
+runtime. Only the last path mirrors the parent's public `modelRegistry` registrations: native
+providers are replayed as native providers, configured providers as their opaque configs, and stale
+mirrors are removed before model resolution. This preserves extension-supplied provider behavior and
+config-contained auth without reading either; it cannot reproduce credentials or mutable state held
+only inside the original runtime, which is why exact runtime injection remains the stronger embedder
+contract. Storage: the lineage section above.
 
 ## Extension points (exactly three, plus one seam)
 
@@ -301,3 +312,11 @@ lineage.
     a listed child's loader is built by the host's normal session path (ThinkRail:
     `createSession`'s own loader — full bundled set incl. visualize + ask_user_question, skills,
     admission) and the child registers in the host's manager (tab, WS streaming, hydration).
+26. **Public provider replay for the pure-pi fallback; exact runtime reuse for embedders.** Pi's
+    extension context exposes `modelRegistry` but not its backing `ModelRuntime`, while
+    `createAgentSession` requires a runtime. A self-created child runtime therefore synchronizes the
+    registry's public `getRegisteredProviderIds` / `getRegisteredNativeProvider` /
+    `getRegisteredProviderConfig` values before every spawn and unregisters stale mirrors. This is
+    opaque replay, not provider interpretation, private-field access, or extension re-execution.
+    It makes standalone children compatible with provider-registering extensions while preserving
+    the stronger parent-runtime path for runtime-only credentials and state.

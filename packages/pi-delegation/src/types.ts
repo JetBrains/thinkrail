@@ -152,6 +152,7 @@ export interface DelegationService {
 
 export type ParentContext = Pick<ExtensionContext, "cwd" | "model" | "thinkingLevel"> & {
 	modelRuntime?: ModelRuntime;
+	modelRegistry?: ExtensionContext["modelRegistry"];
 };
 
 export interface DelegationBindings {
