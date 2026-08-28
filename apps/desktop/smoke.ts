@@ -1,14 +1,6 @@
 #!/usr/bin/env bun
 
-import {
-	cpSync,
-	existsSync,
-	mkdirSync,
-	mkdtempSync,
-	readFileSync,
-	rmSync,
-	writeFileSync,
-} from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import {
@@ -16,6 +8,7 @@ import {
 	type RunningArtifactHost,
 	runArtifactHostProbes,
 } from "@thinkrail/server/artifact-probes";
+import { removeTree } from "@thinkrail/shared/removeTree";
 import { locateDesktopLauncher } from "./src/artifact";
 
 const desktopDir = import.meta.dir;
@@ -186,5 +179,5 @@ try {
 	console.error(`desktop smoke FAILED: ${error instanceof Error ? error.message : error}`);
 	process.exitCode = 1;
 } finally {
-	rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+	removeTree(root);
 }

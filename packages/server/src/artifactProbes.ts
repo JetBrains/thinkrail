@@ -1,7 +1,8 @@
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { defaultSessionDirFor, writeFixtureSession } from "@thinkrail/server/history-test-fixtures";
+import { removeTree } from "@thinkrail/shared/removeTree";
 
 export interface ArtifactResources {
 	readonly skillsDir: string;
@@ -429,6 +430,6 @@ export default function syntheticExternalExtension(pi) {
 		socket?.close();
 		await defaultHost?.stop().catch(() => {});
 		await customHost?.stop().catch(() => {});
-		rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+		removeTree(root);
 	}
 }

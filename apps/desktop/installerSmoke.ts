@@ -7,11 +7,11 @@ import {
 	mkdirSync,
 	mkdtempSync,
 	readFileSync,
-	rmSync,
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { removeTree } from "@thinkrail/shared/removeTree";
 import { locateWindowsSetupExecutable } from "./src/artifact";
 
 function resolveArtifact(value: string | undefined): string {
@@ -169,5 +169,5 @@ try {
 	if (appPid && processAlive(appPid)) process.kill(appPid, "SIGKILL");
 	throw error;
 } finally {
-	rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+	removeTree(root);
 }
