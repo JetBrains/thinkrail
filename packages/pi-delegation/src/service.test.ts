@@ -618,6 +618,41 @@ test("an abort while QUEUED releases immediately — not after a slot frees", as
 	}
 });
 
+test("ChildHandle.abort cancels a queued run before it can start provider work", async () => {
+	const paced = createDelegationService({
+		resolveParent: (id) =>
+			id === parent.sessionId
+				? { cwd: parentCwd, model: parent.model, thinkingLevel: parent.thinkingLevel }
+				: undefined,
+		delegationRoot,
+		scope: "ws-handle-queued-abort",
+		modelRuntime: runtime,
+		maxConcurrentPerParent: 1,
+	});
+	faux.setResponses([
+		async () => {
+			await Bun.sleep(300);
+			return fauxAssistantMessage("SLOW_DONE");
+		},
+	]);
+	const childA = await paced.createChild(subagentSpec());
+	const childB = await paced.createChild(subagentSpec());
+	try {
+		const runA = childA.runQueued("Slow.");
+		const runB = childB.runQueued("Queued, then handle-aborted.");
+		await Bun.sleep(20);
+		expect(childB.snapshot?.status).toBe("queued");
+
+		await childB.abort();
+		const outcomeB = await runB;
+		expect(outcomeB.status).toBe("aborted");
+		expect(childA.snapshot?.status).toBe("running");
+		expect((await runA).status).toBe("completed");
+	} finally {
+		await paced.disposeChildrenOf(parent.sessionId);
+	}
+});
+
 test("disposeChildrenOf marks every child before awaiting aborts — a queued sibling never starts", async () => {
 	const paced = createDelegationService({
 		resolveParent: (id) =>

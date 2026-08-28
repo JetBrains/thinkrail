@@ -34,6 +34,11 @@ const WRAP_UP_INSTRUCTION =
 	"You have reached your turn limit. Stop calling tools now and reply with your final result: " +
 	"summarize what you completed, what remains, and any findings.";
 
+interface ActiveRun {
+	readonly controller: AbortController;
+	sessionAbort?: Promise<void>;
+}
+
 interface ChildEntry {
 	readonly record: SpawnRecord;
 	readonly session: AgentSession;
@@ -41,7 +46,17 @@ interface ChildEntry {
 	handle?: ChildHandle;
 	workspaceDispose?: (outcome: { status: RunStatus }) => { resultAddendum?: string } | undefined;
 	snapshot?: RunSnapshot;
+	activeRun?: ActiveRun;
 	disposed: boolean;
+}
+
+function abortActiveRun(entry: ChildEntry): Promise<void> {
+	const activeRun = entry.activeRun;
+	if (!activeRun) return Promise.resolve();
+	activeRun.controller.abort();
+	if (!entry.session.isStreaming) return activeRun.sessionAbort ?? Promise.resolve();
+	activeRun.sessionAbort ??= entry.session.abort();
+	return activeRun.sessionAbort;
 }
 
 function assertV1Combination(spec: CreateChildSpec): SessionOptions {
@@ -296,13 +311,14 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 
 		const onAbort = () => {
 			abortRequested = true;
-			void session.abort().catch(() => {});
+			void abortActiveRun(entry).catch(() => {});
 		};
 		opts.signal?.addEventListener("abort", onAbort, { once: true });
+		if (opts.signal?.aborted) onAbort();
 
 		let thrownMessage: string | undefined;
 		try {
-			await session.prompt(task);
+			if (!abortRequested) await session.prompt(task);
 		} catch (error) {
 			thrownMessage = error instanceof Error ? error.message : String(error);
 		} finally {
@@ -343,75 +359,90 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 				`Child ${entry.record.sessionId} already has a run in flight — steer() it instead`,
 			);
 		}
-		const startedAt = Date.now();
-		const baseline = baselineOf(entry.session);
-		const queuedDetails = buildDetails(entry, task, "queued", 0, undefined, startedAt, baseline);
-		entry.snapshot = {
-			status: "queued",
-			task,
-			details: queuedDetails,
-			collected: false,
-		};
-		emit(
-			{
-				type: "run-queued",
-				sessionId: entry.record.sessionId,
-				parentSessionId: entry.record.parentSessionId,
-			},
-			entry,
-		);
-		const release = await acquireOrAbort(semaphoreFor(entry.record.parentSessionId), opts.signal);
+		const activeRun: ActiveRun = { controller: new AbortController() };
+		entry.activeRun = activeRun;
+		const forwardCallerAbort = () => activeRun.controller.abort(opts.signal?.reason);
+		if (opts.signal?.aborted) forwardCallerAbort();
+		else opts.signal?.addEventListener("abort", forwardCallerAbort, { once: true });
+		const runOpts: RunOptions = { ...opts, signal: activeRun.controller.signal };
+
 		try {
-			let outcome: RunOutcome;
-			if (release === undefined || entry.disposed || opts.signal?.aborted) {
-				outcome = {
-					status: "aborted",
-					details: buildDetails(entry, task, "aborted", 0, undefined, startedAt, baseline),
-					errorMessage: entry.disposed ? "disposed before start" : "aborted before start",
-				};
-			} else {
-				const runStartedAt = Date.now();
-				const runningDetails = buildDetails(
-					entry,
-					task,
-					"running",
-					0,
-					undefined,
-					runStartedAt,
-					baseline,
-				);
-				entry.snapshot = { ...entry.snapshot, status: "running", details: runningDetails };
-				opts.onUpdate?.(runningDetails);
-				emit(
-					{
-						type: "run-started",
-						sessionId: entry.record.sessionId,
-						parentSessionId: entry.record.parentSessionId,
-					},
-					entry,
-				);
-				outcome = await driveRun(entry, task, opts, baseline, runStartedAt);
-			}
+			const startedAt = Date.now();
+			const baseline = baselineOf(entry.session);
+			const queuedDetails = buildDetails(entry, task, "queued", 0, undefined, startedAt, baseline);
 			entry.snapshot = {
-				status: outcome.status,
+				status: "queued",
 				task,
-				details: outcome.details,
-				...(outcome.finalText !== undefined ? { finalText: outcome.finalText } : {}),
-				...(outcome.errorMessage !== undefined ? { errorMessage: outcome.errorMessage } : {}),
+				details: queuedDetails,
 				collected: false,
 			};
 			emit(
 				{
-					type: "run-terminal",
+					type: "run-queued",
 					sessionId: entry.record.sessionId,
 					parentSessionId: entry.record.parentSessionId,
-					outcome,
 				},
 				entry,
 			);
-			return outcome;
+			const release = await acquireOrAbort(
+				semaphoreFor(entry.record.parentSessionId),
+				runOpts.signal,
+			);
+			try {
+				let outcome: RunOutcome;
+				if (release === undefined || entry.disposed || runOpts.signal?.aborted) {
+					outcome = {
+						status: "aborted",
+						details: buildDetails(entry, task, "aborted", 0, undefined, startedAt, baseline),
+						errorMessage: entry.disposed ? "disposed before start" : "aborted before start",
+					};
+				} else {
+					const runStartedAt = Date.now();
+					const runningDetails = buildDetails(
+						entry,
+						task,
+						"running",
+						0,
+						undefined,
+						runStartedAt,
+						baseline,
+					);
+					entry.snapshot = { ...entry.snapshot, status: "running", details: runningDetails };
+					runOpts.onUpdate?.(runningDetails);
+					emit(
+						{
+							type: "run-started",
+							sessionId: entry.record.sessionId,
+							parentSessionId: entry.record.parentSessionId,
+						},
+						entry,
+					);
+					outcome = await driveRun(entry, task, runOpts, baseline, runStartedAt);
+				}
+				entry.snapshot = {
+					status: outcome.status,
+					task,
+					details: outcome.details,
+					...(outcome.finalText !== undefined ? { finalText: outcome.finalText } : {}),
+					...(outcome.errorMessage !== undefined ? { errorMessage: outcome.errorMessage } : {}),
+					collected: false,
+				};
+				emit(
+					{
+						type: "run-terminal",
+						sessionId: entry.record.sessionId,
+						parentSessionId: entry.record.parentSessionId,
+						outcome,
+					},
+					entry,
+				);
+				return outcome;
+			} finally {
+				release?.();
+			}
 		} finally {
-			release?.();
+			opts.signal?.removeEventListener("abort", forwardCallerAbort);
+			if (entry.activeRun === activeRun) delete entry.activeRun;
 		}
 	}
 
@@ -472,7 +503,7 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 			},
 			abort: async () => {
 				if (entry.disposed) return;
-				await entry.session.abort();
+				await abortActiveRun(entry);
 			},
 			dispose: () => disposeChild(entry),
 			onEvent: (listener) => {
