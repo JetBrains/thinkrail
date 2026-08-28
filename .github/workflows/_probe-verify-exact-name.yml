@@ -52,6 +52,13 @@ jobs:
           }
           grep -E "^(install|web|package|smoke)_exit=|^source=" probe.log > exits.txt
           emit "exits" exits.txt
-          grep -E "smoke OK|does not contain|Setup-canary\.exe|error:" probe.log | tail -20 > verdict.txt
-          emit "verdict" verdict.txt
+          awk '/installer smoke OK/{found=1} found' probe.log | tail -c 6000 > after.txt
+          emit "after-ok" after.txt
+          tr -d '\r' < probe.log | tail -c 12000 > tail.txt
+          split -n l/4 -d tail.txt part-
+          i=0
+          for p in part-*; do
+            emit "tail-$i" "$p"
+            i=$((i+1))
+          done
           exit 0
