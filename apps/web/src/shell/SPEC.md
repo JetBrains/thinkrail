@@ -49,9 +49,11 @@ Every child is a directory module with `index.ts` as its public surface:
 The sibling dependency graph is: `layoutSync → layout`; `chatReconciliation → layout + layoutSync`;
 `terminalReconciliation → layout`; `layoutIntents → layout + chatReconciliation +
 terminalReconciliation`; `legacySelection` reaches store selectors/actions only; and
-`WorkspaceWorkbench` composes every orchestration barrel with `layout`, panels, and render callbacks. Siblings
-import only through these barrels. Tests live with the orchestration module that owns the behavior rather than
-making store tests import shell runtime synchronization.
+`WorkspaceWorkbench` composes every orchestration barrel with `layout`, panels, and render callbacks. Chat
+resource availability is isolated behind a per-session selector component; the parent workbench never
+subscribes to the whole `sessions` record, so a streaming runtime cannot invalidate every tab renderer and
+side tool behind it. Siblings import only through these barrels. Tests live with the orchestration module that
+owns the behavior rather than making store tests import shell runtime synchronization.
 
 ## Composition
 
