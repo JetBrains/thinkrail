@@ -210,6 +210,7 @@ test("an ordered Pi-event batch commits once while preserving every session revi
 		{ sessionId: "a", event: toolStart("t1") },
 		{ sessionId: "b", event: agentStart },
 		{ sessionId: "a", event: toolUpdate("t1", partial) },
+		{ sessionId: "a", event: agentEnd },
 		{ sessionId: "missing", event: agentStart },
 	];
 	let commits = 0;
@@ -221,7 +222,7 @@ test("an ordered Pi-event batch commits once while preserving every session revi
 	unsubscribe();
 
 	expect(commits).toBe(1);
-	expect(rt("a").eventRevision).toBe(3);
+	expect(rt("a").eventRevision).toBe(4);
 	expect(rt("a").isStreaming).toBe(true);
 	expect(rt("a").toolResults.t1).toEqual({ status: "running", raw: partial });
 	expect(rt("b").eventRevision).toBe(1);
