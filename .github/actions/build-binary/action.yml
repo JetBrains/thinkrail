@@ -1,35 +1,36 @@
-name: Build ThinkRail binary
+name: Build ThinkRail native artifacts
 description: >-
-  Builds the web UI, stamps the release version into the CLI, compiles the single-file `thinkrail`
-  binary for one Bun target, and boot-smokes it on this (native) runner. Assumes the repo is checked out
-  with Bun set up and `bun install` already run. Output: apps/cli/dist/<artifact-name>.
+  Stamps the shared release identity, builds the web UI, compiles and smokes the native CLI binary,
+  packages and smokes the native Electrobun desktop app, and exposes both release artifacts.
 
 inputs:
   version:
-    description: "Version to bake into the binary (e.g. 0.2.0-nightly.5)"
+    description: "Version to bake into both launchers (e.g. 0.2.0-nightly.5)"
     required: true
   channel:
-    description: "Release channel: nightly, stable, or dev"
+    description: "Release channel: nightly or stable"
     required: true
   target:
-    description: "Bun compile target for this runner (e.g. bun-darwin-arm64 / bun-windows-x64)"
+    description: "Bun compile target matching this native runner"
     required: true
 outputs:
   artifact-name:
-    description: "Final artifact filename (thinkrail-<os>-<arch>[.exe])"
-    value: ${{ steps.resolve.outputs.name }}
+    description: "CLI artifact filename"
+    value: ${{ steps.resolve-cli.outputs.name }}
   artifact-path:
-    description: "Path to the built binary"
-    value: ${{ steps.resolve.outputs.path }}
+    description: "CLI artifact path"
+    value: ${{ steps.resolve-cli.outputs.path }}
+  desktop-artifact-name:
+    description: "Desktop first-install artifact filename"
+    value: ${{ steps.resolve-desktop.outputs.name }}
+  desktop-artifact-path:
+    description: "Desktop first-install artifact path"
+    value: ${{ steps.resolve-desktop.outputs.path }}
 
 runs:
   using: composite
   steps:
-    - name: Build web UI
-      shell: bash
-      run: bun run build:web
-
-    - name: Stamp version into the CLI
+    - name: Stamp shared release identity
       shell: bash
       env:
         VERSION: ${{ inputs.version }}
@@ -37,39 +38,136 @@ runs:
       run: |
         set -eu
         commit=$(git rev-parse --short HEAD)
-        cat > apps/cli/src/version.ts <<EOF
-        // Stamped at release time by .github/actions/build-binary. Do not commit this edit.
+        cat > packages/shared/src/version.ts <<EOF
         export const version = "${VERSION}";
         export const channel = "${CHANNEL}";
         export const commit = "${commit}";
         EOF
-        echo "Stamped apps/cli/src/version.ts:"
-        cat apps/cli/src/version.ts
+        cat packages/shared/src/version.ts
 
-    - name: Compile single-file binary
+    - name: Build web UI
+      shell: bash
+      run: bun run build:web
+
+    - name: Compile single-file CLI binary
       shell: bash
       env:
         TARGET: ${{ inputs.target }}
       run: bun apps/cli/scripts/build-binary.ts --target="$TARGET"
 
-    - id: resolve
-      name: Resolve artifact path
+    - id: resolve-cli
+      name: Resolve CLI artifact
       shell: bash
       env:
         TARGET: ${{ inputs.target }}
       run: |
         set -eu
-        # build-binary.ts names the output thinkrail-<target-without-bun-> (Bun appends .exe on Windows).
         name="thinkrail-${TARGET#bun-}"
         case "$TARGET" in *windows*) name="${name}.exe" ;; esac
         path="apps/cli/dist/${name}"
-        [ -f "$path" ] || { echo "::error::expected binary not found at $path"; ls -la apps/cli/dist; exit 1; }
+        [ -f "$path" ] || { echo "::error::expected CLI artifact not found at $path"; exit 1; }
         {
           echo "name=$name"
           echo "path=$path"
         } >> "$GITHUB_OUTPUT"
-        echo "Built $path"
 
-    - name: Boot-smoke the binary (native)
+    - name: Smoke CLI binary
       shell: bash
-      run: bun run smoke:binary "${{ steps.resolve.outputs.path }}"
+      run: bun run smoke:binary "${{ steps.resolve-cli.outputs.path }}"
+
+    - name: Build and smoke desktop app
+      shell: bash
+      env:
+        TARGET: ${{ inputs.target }}
+      run: |
+        set -eu
+        bun apps/desktop/build.ts --env=dev
+        case "$TARGET" in
+          bun-darwin-arm64) folder="dev-macos-arm64"; name="launcher" ;;
+          bun-windows-x64) folder="dev-win-x64"; name="launcher.exe" ;;
+          bun-linux-x64) folder="dev-linux-x64"; name="launcher" ;;
+          bun-linux-arm64) folder="dev-linux-arm64"; name="launcher" ;;
+          *) echo "::error::unsupported desktop target $TARGET"; exit 1 ;;
+        esac
+        launcher=$(find "apps/desktop/build/$folder" -type f -name "$name" | head -1)
+        [ -n "$launcher" ] || { echo "::error::desktop launcher not found in $folder"; exit 1; }
+        case "$TARGET" in
+          bun-linux-*)
+            env LIBGL_ALWAYS_SOFTWARE=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 \
+              xvfb-run -a bun apps/desktop/smoke.ts "$launcher"
+            ;;
+          *) bun apps/desktop/smoke.ts "$launcher" ;;
+        esac
+
+    - name: Package desktop installer
+      shell: bash
+      env:
+        CHANNEL: ${{ inputs.channel }}
+      run: |
+        set -eu
+        case "$CHANNEL" in
+          nightly) environment="canary" ;;
+          stable) environment="stable" ;;
+          *) echo "::error::unsupported release channel $CHANNEL"; exit 1 ;;
+        esac
+        bun apps/desktop/build.ts --env="$environment"
+
+    - id: resolve-desktop
+      name: Resolve desktop installer
+      shell: bash
+      env:
+        TARGET: ${{ inputs.target }}
+      run: |
+        set -eu
+        mkdir -p apps/desktop/dist
+        case "$TARGET" in
+          bun-darwin-arm64)
+            pattern='*.dmg'
+            name='thinkrail-desktop-darwin-arm64.dmg'
+            ;;
+          bun-windows-x64)
+            pattern='*.zip'
+            name='thinkrail-desktop-windows-x64.zip'
+            ;;
+          bun-linux-x64)
+            pattern='*-Setup.tar.gz'
+            name='thinkrail-desktop-linux-x64.tar.gz'
+            ;;
+          bun-linux-arm64)
+            pattern='*-Setup.tar.gz'
+            name='thinkrail-desktop-linux-arm64.tar.gz'
+            ;;
+          *) echo "::error::unsupported desktop target $TARGET"; exit 1 ;;
+        esac
+        source=$(find apps/desktop/artifacts -maxdepth 1 -type f -name "$pattern" | head -1)
+        [ -n "$source" ] || { echo "::error::desktop installer matching $pattern not found"; exit 1; }
+        path="apps/desktop/dist/$name"
+        cp "$source" "$path"
+        {
+          echo "name=$name"
+          echo "path=$path"
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Smoke desktop first-install artifact
+      shell: bash
+      env:
+        CHANNEL: ${{ inputs.channel }}
+        TARGET: ${{ inputs.target }}
+      run: |
+        set -eu
+        case "$CHANNEL" in
+          nightly) environment="canary" ;;
+          stable) environment="stable" ;;
+          *) echo "::error::unsupported release channel $CHANNEL"; exit 1 ;;
+        esac
+        case "$TARGET" in
+          bun-linux-*)
+            env LIBGL_ALWAYS_SOFTWARE=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 \
+              xvfb-run -a bun apps/desktop/installerSmoke.ts \
+              "${{ steps.resolve-desktop.outputs.path }}" "$environment"
+            ;;
+          *)
+            bun apps/desktop/installerSmoke.ts \
+              "${{ steps.resolve-desktop.outputs.path }}" "$environment"
+            ;;
+        esac

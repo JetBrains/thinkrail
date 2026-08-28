@@ -16,6 +16,7 @@ import type {
 	RefreshedModels,
 	ReviewChangedPayload,
 	ReviewSnapshot,
+	SessionEventPayload,
 	SessionQueueState,
 	SessionStats,
 	SessionSummary,
@@ -327,6 +328,15 @@ function clearTurnStreaming(turns: ChatTurn[]): ChatTurn[] {
 	return turns.map((t) => (t.kind === "assistant" && t.streaming ? { ...t, streaming: false } : t));
 }
 
+function consumeFailureRecoveries(turns: ChatTurn[]): ChatTurn[] {
+	if (!turns.some((turn) => turn.kind === "error" && turn.recovery)) return turns;
+	return turns.map((turn) => {
+		if (turn.kind !== "error" || !turn.recovery) return turn;
+		const { recovery, ...rest } = turn;
+		return rest;
+	});
+}
+
 function removeSupersededAssistant(
 	turns: ChatTurn[],
 	attemptAssistantId: string | null,
@@ -433,7 +443,12 @@ function clearRetryTurns(rt: SessionRuntime, source: RetrySource): SessionRuntim
 export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionRuntime {
 	switch (event.type) {
 		case "agent_start":
-			return { ...rt, isStreaming: true, attemptAssistantId: null };
+			return {
+				...rt,
+				turns: consumeFailureRecoveries(rt.turns),
+				isStreaming: true,
+				attemptAssistantId: null,
+			};
 		case "queue_update":
 			return {
 				...rt,
@@ -543,7 +558,12 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 		case "agent_settled": {
 			const failure = assistantFailureText(event.terminal);
 			const closer: ChatTurn = failure
-				? { kind: "error", id: crypto.randomUUID(), text: failure }
+				? {
+						kind: "error",
+						id: crypto.randomUUID(),
+						text: failure,
+						recovery: "try-again",
+					}
 				: { kind: "system", id: crypto.randomUUID(), text: "✓ Done", endedAt: Date.now() };
 			return {
 				...rt,
@@ -856,6 +876,7 @@ interface AppState {
 		detail: string,
 	) => void;
 	handlePiEvent: (event: PiEvent, sessionId: string) => void;
+	handlePiEvents: (payloads: readonly SessionEventPayload[]) => void;
 	setModelsForProviderVersion: (providerVersion: number, models: WireModel[]) => void;
 	noteProviderChanged: () => void;
 	bumpTemplatesVersion: () => void;
@@ -2741,7 +2762,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 			withRuntime(s, sessionId, (rt) => ({
 				...rt,
 				turns: [
-					...rt.turns,
+					...consumeFailureRecoveries(rt.turns),
 					{
 						kind: "user",
 						id: crypto.randomUUID(),
@@ -2790,13 +2811,22 @@ export const useAppStore = create<AppState>((set, get) => ({
 						};
 			}),
 		),
-	handlePiEvent: (event, sessionId) =>
-		set((s) =>
-			withRuntime(s, sessionId, (rt) => ({
-				...reduceSessionEvent(rt, event),
-				eventRevision: rt.eventRevision + 1,
-			})),
-		),
+	handlePiEvent: (event, sessionId) => get().handlePiEvents([{ event, sessionId }]),
+	handlePiEvents: (payloads) =>
+		set((s) => {
+			let sessions = s.sessions;
+			for (const { event, sessionId } of payloads) {
+				const runtime = sessions[sessionId];
+				if (!runtime) continue;
+				if (sessions === s.sessions) sessions = { ...sessions };
+				const next = reduceSessionEvent(runtime, event);
+				sessions[sessionId] = {
+					...next,
+					eventRevision: runtime.eventRevision + 1,
+				};
+			}
+			return sessions === s.sessions ? s : { sessions };
+		}),
 	setModelsForProviderVersion: (providerVersion, models) =>
 		set((s) => (s.providerVersion === providerVersion ? { models, modelsFresh: false } : s)),
 	noteProviderChanged: () =>

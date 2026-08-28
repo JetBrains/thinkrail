@@ -19,6 +19,7 @@ import {
 	setSessionDeletedPublisher,
 	setSessionPublisher,
 	setSkillAdmissionResolver,
+	settleSessionsForShutdown,
 } from "../agent";
 import {
 	type AnalyticsOptions,
@@ -98,6 +99,7 @@ export interface CreateServerOptions {
 export interface RunningServer {
 	readonly port: number;
 	stop: () => void;
+	shutdown: () => Promise<void>;
 }
 
 interface SocketData {
@@ -133,6 +135,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	const requestReplays = new RequestReplayCache<string>();
 	const terminalBackpressured = new Set<string>();
 	let stopping = false;
+	let shutdownPromise: Promise<void> | undefined;
 
 	const armClientReap = (clientKey: string): void => {
 		reapTimers.set(
@@ -473,30 +476,41 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		}
 	}
 
+	const stop = (): void => {
+		if (stopping) return;
+		stopping = true;
+		void shutdownAnalytics();
+		cancelAllLogins();
+		stopJbcentralRuntime();
+		stopAllWatches();
+		disposeAllSessions();
+		for (const timer of reapTimers.values()) clearTimeout(timer);
+		reapTimers.clear();
+		sockets.clear();
+		terminalBackpressured.clear();
+		requestReplays.clear();
+		persistTerminalSessions();
+		closeAllTerminals();
+		setLayoutPublisher(null);
+		setSettingsPublisher(null);
+		setJbcentralAppliedPublisher(() => {});
+		setJbcentralChangedPublisher(() => {});
+		server.stop(true);
+	};
+	const shutdown = (): Promise<void> => {
+		shutdownPromise ??= (async () => {
+			await Promise.allSettled([settleSessionsForShutdown(), shutdownAnalytics()]);
+			stop();
+		})();
+		return shutdownPromise;
+	};
+
 	return {
 		get port() {
 			return server.port ?? port;
 		},
-		stop() {
-			void shutdownAnalytics();
-			cancelAllLogins();
-			stopJbcentralRuntime();
-			stopAllWatches();
-			disposeAllSessions();
-			stopping = true;
-			for (const timer of reapTimers.values()) clearTimeout(timer);
-			reapTimers.clear();
-			sockets.clear();
-			terminalBackpressured.clear();
-			requestReplays.clear();
-			persistTerminalSessions();
-			closeAllTerminals();
-			setLayoutPublisher(null);
-			setSettingsPublisher(null);
-			setJbcentralAppliedPublisher(() => {});
-			setJbcentralChangedPublisher(() => {});
-			server.stop(true);
-		},
+		stop,
+		shutdown,
 	};
 }
 

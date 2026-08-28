@@ -575,6 +575,7 @@ test("a tab opened or closed in one browser reaches the other", async ({ page, c
 	await expect(page2.getByTestId("terminal-tab")).toHaveCount(2);
 	await expect(page.getByTestId("terminal-tab")).toHaveCount(2);
 
+	await waitTerminalReady(page2);
 	await expect(visibleTerminal(page2)).toHaveAttribute("data-detached", "false");
 	await runInTerminal(page2, "echo TR_STILL_B");
 	await expect(visibleTerminalScreen(page2)).toContainText("TR_STILL_B");

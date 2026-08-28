@@ -11,6 +11,10 @@ export interface TransportOptions {
 	onStatus?: (status: ConnectionStatus) => void;
 }
 
+interface TransportDispatchHooks {
+	beforeDispatch?: (message: WsServerMessage) => void;
+}
+
 const DEFAULT_TIMEOUT_MS = 60_000;
 
 const NON_REPLAYABLE_CHANNELS: ReadonlySet<string> = new Set([
@@ -43,6 +47,7 @@ export class WsTransport {
 	private ws: WebSocket | null = null;
 	private readonly url: string;
 	private readonly onStatus: ((status: ConnectionStatus) => void) | undefined;
+	private readonly beforeDispatch: ((message: WsServerMessage) => void) | undefined;
 	private seq = 0;
 	private readonly pending = new Map<
 		string,
@@ -59,9 +64,10 @@ export class WsTransport {
 	private ackScheduled = false;
 	private backoff = 500;
 
-	constructor(opts: TransportOptions = {}) {
+	constructor(opts: TransportOptions = {}, dispatchHooks: TransportDispatchHooks = {}) {
 		this.url = opts.url ?? inferUrl();
 		this.onStatus = opts.onStatus;
+		this.beforeDispatch = dispatchHooks.beforeDispatch;
 	}
 
 	httpBase(): string {
@@ -166,6 +172,7 @@ export class WsTransport {
 		} catch {
 			return;
 		}
+		this.beforeDispatch?.(msg);
 		if ("channel" in msg) {
 			if (!NON_REPLAYABLE_CHANNELS.has(msg.channel)) this.latest.set(msg.channel, msg.data);
 			const set = this.subscribers.get(msg.channel);

@@ -199,14 +199,18 @@ test("sticky activity breadcrumbs expose the off-screen Activity â†’ Thinking â†
 	const tool = thinking.locator('[data-testid="activity-step"][data-tool="bash"]');
 	await tool.getByTestId("activity-step-toggle").click();
 
-	await tool.evaluate((element) => {
-		const scroller = element.closest<HTMLElement>('[data-virtuoso-scroller="true"]');
-		if (!scroller) throw new Error("missing Virtuoso scroller");
-		scroller.scrollTop +=
-			element.getBoundingClientRect().top - scroller.getBoundingClientRect().top + 80;
-	});
-
 	const trail = page.getByTestId("activity-breadcrumb-trail");
+	await expect
+		.poll(async () => {
+			await tool.evaluate((element) => {
+				const scroller = element.closest<HTMLElement>('[data-virtuoso-scroller="true"]');
+				if (!scroller) throw new Error("missing Virtuoso scroller");
+				scroller.scrollTop +=
+					element.getBoundingClientRect().top - scroller.getBoundingClientRect().top + 80;
+			});
+			return trail.count();
+		})
+		.toBe(1);
 	await expect(trail).toBeVisible();
 	await expect(trail.getByTestId("activity-breadcrumb-segment")).toHaveCount(3);
 	await expect(trail.locator('[data-kind="activity"]')).toBeVisible();

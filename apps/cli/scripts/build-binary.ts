@@ -10,8 +10,8 @@ import {
 	statSync,
 	writeFileSync,
 } from "node:fs";
-import { createRequire } from "node:module";
 import { dirname, join, relative, resolve, sep } from "node:path";
+import { resolveBuildRuntimeSources } from "@thinkrail/server/build-support";
 import { binaryArtifactName } from "./artifactName";
 
 const cliDir = resolve(import.meta.dir, "..");
@@ -22,7 +22,7 @@ const extGeneratedPath = join(cliDir, "src", "bundled-extensions.generated.ts");
 const runtimeGeneratedPath = join(cliDir, "src", "runtime-assets.generated.ts");
 const entryPath = join(cliDir, "src", "compiled-entry.ts");
 const outDir = join(cliDir, "dist");
-const serverRequire = createRequire(join(repoRoot, "packages", "server", "package.json"));
+const runtimeSources = resolveBuildRuntimeSources();
 
 function listFiles(dir: string): string[] {
 	const out: string[] = [];
@@ -68,17 +68,10 @@ function generateWebManifest(): void {
 }
 
 function generateBundledExtensions(): void {
-	const entrySpecifiers = [
-		"pi-web-access/index.ts",
-		"pi-visualize/index.ts",
-		"pi-spec-graph/index.ts",
-		"pi-thinkrail-workflow/index.ts",
-		"pi-todos/index.ts",
-	];
-	const entryPaths = entrySpecifiers.map((specifier) => serverRequire.resolve(specifier));
+	const entryPaths = runtimeSources.extensions.map((extension) => extension.entry);
 	const factoryImports = entryPaths.map((path, i) => `import x${i} from ${JSON.stringify(path)};`);
-	const skillRoots = [entryPaths[2], entryPaths[3], entryPaths[4]].map((entry) =>
-		join(dirname(entry), "skills"),
+	const skillRoots = runtimeSources.extensions.flatMap((extension) =>
+		extension.skills ? [extension.skills] : [],
 	);
 	const skillFiles = skillRoots.flatMap((root) =>
 		listFiles(root)
@@ -93,11 +86,9 @@ function generateBundledExtensions(): void {
 }
 
 function generateRuntimeManifest(): void {
-	const trashLibDir = join(dirname(serverRequire.resolve("trash")), "lib");
-	const files = ["macos-trash", "windows-trash.exe"].map((name) => ({
-		root: trashLibDir,
-		file: join(trashLibDir, name),
-	}));
+	const files = [runtimeSources.trashHelpers.macos, runtimeSources.trashHelpers.windows].map(
+		(file) => ({ root: dirname(file), file }),
+	);
 	const { imports, entries, version } = embedFiles(files, "r");
 	writeFileSync(
 		runtimeGeneratedPath,

@@ -10,15 +10,16 @@ tags: [v1, architecture]
 
 ## Drivers
 
-The product is built around the `pi` agent, run **in-process** (`createAgentSession`). The V1 entrypoint
-is a CLI you run that boots the engine host and opens a browser UI. Electrobun later supports a local-host
-profile over that same host library and a shared-client profile that dials an existing host. The UI ships
-independently of the host and dials it over the network; a phone reaches the selected host over Tailscale.
+The product is built around the `pi` agent, run **in-process** (`createAgentSession`). V1 has two
+additive launchers over the same host library: the retained CLI boots the engine host and opens a browser,
+while Electrobun packages that host with a native system-webview shell. The desktop V1 profile is local
+only; a later shared-client profile can dial an existing host. The UI ships independently of the host and
+dials it over the network; a phone reaches the selected host over Tailscale.
 
 ## Topology — three rings
 
-- **Engine host** (`packages/server` + `packages/shared`, launched by `apps/cli` now / `apps/desktop`
-  in local-host mode later): owns `pi`, session state, persistence, and serves the wire endpoint. It bundles pi extensions
+- **Engine host** (`packages/server` + `packages/shared`, launched by `apps/cli` or `apps/desktop`
+  in local-host mode): owns `pi`, session state, persistence, and serves the wire endpoint. It bundles pi extensions
   (`pi-web-access`, `pi-visualize`, `pi-spec-graph`, `pi-thinkrail-workflow`) into every session.
 - **The wire** (`packages/contracts`): the typed, versioned protocol — the only coupling between client
   and host.
@@ -26,9 +27,9 @@ independently of the host and dials it over the network; a phone reaches the sel
   shippable as static assets independent of the host.
 
 ```
-apps/cli        host launcher (V1): boot server + open browser   ── depends on ─▶ packages/server
-apps/web        UI client (mobile-first)                          ── depends on ─▶ packages/contracts
-apps/desktop    Electrobun local-host launcher/shared client (deferred) ── depends on ─▶ packages/server, packages/contracts
+apps/cli        browser host launcher: boot server + open browser ── depends on ─▶ packages/server
+apps/web        UI client (mobile-first)                           ── depends on ─▶ packages/contracts
+apps/desktop    Electrobun local-host launcher (V1)                ── depends on ─▶ packages/server, packages/contracts, packages/shared
 apps/website    public landing + blog + /vibecoding (Cloudflare Pages) ── depends on ─▶ packages/website-analytics
 packages/website-analytics  dependency-free browser analytics policy for the public website
 packages/server createServer(): Bun.serve(HTTP+WS) + AgentSessionManager (in-process pi) ── depends on ─▶ packages/contracts, packages/shared
@@ -46,10 +47,20 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
 1. **Client/host split.** Engine host owns `pi` and state; the UI is a portable client; the wire is the
    only coupling. **Rule: `apps/web` depends on `packages/contracts` only** — never on `server` or
    `shared`. That single edge is what makes the UI shippable without the host.
-2. **CLI is the V1 launcher; `createServer()` is a library.** `apps/cli` is a thin launcher
-   (`resolveShellEnv` → `createServer` → open browser → signal handling). `apps/desktop` keeps that local
-   profile with a native window and may also run as a shared client without starting a second host; both
-   profiles use the same wire and web artifact.
+2. **Launchers are thin; the host is a library.** `apps/cli` and `apps/desktop` both embed the shared
+   boot path in-process. CLI opens a browser; desktop opens a native system webview on a fresh one-origin
+   loopback host. Neither owns engine logic or spawns the other. The CLI remains a complete independent
+   artifact and rollback. A later desktop shared-client profile may omit the local host; every profile uses
+   the same wire and web artifact.
+
+   **One feature path across deployments.** An ordinary product feature changes its contract, the owning
+   server feature module, the shared web client, and their tests — never each launcher. Launchers and future
+   deployments own only composition, lifecycle, endpoint selection, native presentation, and artifact
+   packaging. A real second environment that cannot supply an existing host operation earns one narrow port
+   in the feature module that owns that behavior; do not pre-abstract the host behind a global platform
+   adapter. Physical runtime requirements are declared once through the server-owned build-support manifest,
+   then transformed by each packager. The same behavior and artifact suites run through every launcher, so
+   reuse is enforced by boundaries and conformance rather than parallel implementations.
 3. **The wire is versioned.** `contracts` is types-only; `server.welcome` carries a protocol version so
    an independently-shipped UI can detect host-version drift.
 4. **Transport endpoint is a parameter.** Defaults to same-origin (`location.host`); a remote browser,
@@ -167,6 +178,16 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
     their vanilla runtime and hand-written stylesheet. Browser analytics and consent initialize once on the
     exact `thinkrail.ai` origin. The retired `vibecoding.thinkrail.ai` hostname is an edge redirect that
     preserves path and query, never a proxy to a second site.
+
+15. **Desktop packaging preserves the host/runtime boundary.** Electrobun `1.18.1` packages Bun `1.3.14`
+    and embeds the host in its Bun process; it never wraps or spawns the CLI. The native window loads the
+    packaged web build from the host's actual loopback port so UI, wire, files, and SPA fallback keep one
+    origin. Native resources that require paths stay unpacked. The shell sets the staged `bun-pty` library
+    before server import and loads PI from a separately bundled `.ts` runtime so external TypeScript
+    extensions receive PI's bundled virtual modules rather than nonexistent built-Node aliases. The CLI
+    and desktop acquire the same canonical-data-directory ownership lease and share graceful shutdown.
+    Desktop artifacts are additive and unsigned initially; native WebKitGTK on Ubuntu 24.04+/glibc 2.38 is
+    the supported Linux floor. Detail: [[module-desktop]].
 
 ## Invariants
 

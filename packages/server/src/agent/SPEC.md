@@ -406,20 +406,21 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
       compiled binary lacks). The workspace packages' `pi.skills` manifests aren't auto-discovered for
       file-path entries — their `skills/` dirs (`pi-spec-graph`, `pi-thinkrail-workflow`, `pi-todos`) are
       wired via **`additionalSkillPaths`**.
-    - **Compiled binary:** the launcher awaits the **`registerBundledRuntime({ factories, skillsDir,
-      trashHelpers })` seam** before the first session — the same bundled extensions as
+    - **Bundled launchers (compiled CLI binary and packaged desktop runtime):** the launcher awaits the
+      **`registerBundledRuntime({ factories, skillsDir, trashHelpers })` seam** before the first session — the same bundled extensions as
       **value-imported default-export factories** (pi gives `extensionFactories` full API parity with path loading; what's lost —
       file-relative `baseDir`, per-reload re-evaluation — none of them use) plus a staged on-disk
       skills dir (pi reads `SKILL.md` via plain fs, so skills must live on the real filesystem). The
-      seam also performs the **binary-only pi registrations**: pi hides Node-only provider code behind
+      seam also performs the **bundled-artifact pi registrations**: pi hides Node-only provider code behind
       bundler-opaque variable-specifier dynamic imports (so browser bundles can't reach `node:http`
       OAuth servers / the AWS SDK), which a single-file binary can't resolve at runtime — every OAuth
       sign-in died with `Cannot find module './openai-codex.js'`. pi ships static registration seams
       for exactly this, and we mirror pi's own binary entry (`pi-coding-agent` `dist/bun/cli.js`):
       **`registerBunOAuthFlows()`** (`@earendil-works/pi-ai/bun-oauth`) + **`setBedrockProviderModule(
       bedrockProviderModule)`** (`…/compat` + `…/bedrock-provider`). Both load via **dynamic literal
-      imports inside the seam** — literal specifiers are statically bundled by `bun build --compile`,
-      while dev (which never calls the seam) never loads the flow modules or the AWS SDK. Registration
+      imports inside the seam** — literal specifiers are statically bundled by both `bun build --compile`
+      and the desktop server-runtime build, while dev (which never calls the seam) never loads the flow
+      modules or the AWS SDK. Registration
       lands in the same `pi-ai` instance pi consults at login time because the catalog pins one exact
       `pi-ai` version repo-wide (one store entry → one bundled module instance). Chat trash has two
       artifact seams behind the same registration: the wrapper statically installs `@stroncium/procfs`'s
@@ -429,8 +430,13 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
       package's internal `new URL(…, import.meta.url)` points inside `/$bunfs/` after compilation. The
       wrapper executes an injected helper on macOS/Windows and otherwise delegates to `trash`; source mode stays on
       `trash` entirely. No platform degrades to permanent unlink.
-    In both modes, the optional Central artifact remains an external filesystem path loaded by PI's public
-    binary-capable Jiti seam; it is never bundled, staged, or copied into ThinkRail. Both modes append
+    The desktop server/factory bundle is staged with a `.ts` filename on purpose. PI uses that module
+    extension to select its TypeScript source-runtime Jiti configuration with bundled virtual modules;
+    Electrobun's ordinary flattened `.js` output selects built-Node aliases that do not exist inside the
+    package and rejects the Central candidate. The filename is therefore a tested artifact seam, not a
+    cosmetic build choice.
+    In every mode, the optional Central artifact remains an external filesystem path loaded by PI's public
+    Jiti seam; it is never bundled, staged, or copied into ThinkRail. Both modes append
     `extensionFactories`: a **headless-search policy** (a `tool_call` hook defaulting
     `web_search`'s `workflow` to `"none"`, since pi-web-access would otherwise open a browser curator our
     `rpc` host can't render), `askUserQuestionExtension` (registers the `ask_user_question` tool), **and**
@@ -451,15 +457,15 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   `isProjectSkillPath(relativePath)` (watch-classification predicate);
   `reloadSessionResources(sessionId)` (active-chat reload); the **`setSkillAdmissionResolver`** seam (host
   wires `workspaceId` → the admission context);
-  the compiled-binary seam (`registerBundledRuntime` +
+  the bundled-artifact seam (`registerBundledRuntime` +
   `BundledExtensions`/`BundledExtensionFactory`).
 - **Allowed deps:** `@earendil-works/pi-coding-agent` (runtime); `@earendil-works/pi-ai` (types + test
   fixtures + **pure catalog helpers value-imported from the package root** — today exactly
   `getSupportedThinkingLevels` + `clampThinkingLevel`, data-only projections over `Model`; *dispatch*
   still goes through the shared `ModelRuntime`, never pi-ai's stream/complete — plus the `/bun-oauth` + `/bedrock-provider`
   + `/compat` subpaths, value-imported **only** inside `registerBundledRuntime`'s dynamic imports); `pi-web-access` + `pi-visualize` + `pi-spec-graph` +
-  `pi-thinkrail-workflow` + `pi-todos` (the bundled extensions — loaded by path, never value-imported here; the
-  compiled binary's value-imports live in `apps/cli`'s generated build module); `typebox` (the
+  `pi-thinkrail-workflow` + `pi-todos` (the bundled extensions — loaded by path, never value-imported here;
+  launcher-generated modules own the CLI binary and desktop runtime value imports); `typebox` (the
   `ask_user_question` parameter schema); `trash` (the cross-platform OS recycle-bin implementation;
   called with globbing disabled and allowed to throw — never degraded to `unlink`);
   `@stroncium/procfs` (directly pinned solely for the compiled Linux trash parser inclusion seam);

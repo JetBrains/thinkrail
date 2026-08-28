@@ -149,7 +149,7 @@ describe("deriveRows grouping", () => {
 		const turns: ChatTurn[] = [
 			user("u1"),
 			assistant("a1", [tc("t1")]),
-			{ kind: "error", id: "e1", text: "boom" },
+			{ kind: "error", id: "e1", text: "boom", recovery: "try-again" },
 			{
 				kind: "retry",
 				id: "r1",
@@ -162,6 +162,7 @@ describe("deriveRows grouping", () => {
 		];
 		const rows = deriveRows(turns, {}, true);
 		expect(kinds(rows)).toEqual(["user", "activity", "error", "retry", "activity"]);
+		expect(rows[2]?.kind === "error" ? rows[2].recovery : undefined).toBe("try-again");
 		expect(rows[3]?.kind === "retry" && rows[3].source).toBe("summarization");
 		expect(rows[1]?.kind === "activity" && rows[1].steps.length).toBe(1);
 		expect(rows[4]?.kind === "activity" && rows[4].steps.length).toBe(1);

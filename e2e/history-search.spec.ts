@@ -61,6 +61,17 @@ async function settleSubmittedTurn(page: Page): Promise<void> {
 	await expect(settled).toBeVisible({ timeout: 20_000 });
 }
 
+async function revealUserTurn(page: Page, text: string) {
+	await page.getByTestId("virtuoso-scroller").evaluate((element) => {
+		element.scrollTop = 0;
+	});
+	const turn = page
+		.locator('[data-testid="chat-message"][data-role="user"]')
+		.filter({ hasText: text });
+	await expect(turn).toBeVisible();
+	return turn;
+}
+
 test("Ctrl+R opens history recall, cycles scope to all, zooms to messages, inserts a prompt, and Esc preserves the draft", async ({
 	page,
 }) => {
@@ -124,12 +135,8 @@ test("Ctrl+R opens history recall, cycles scope to all, zooms to messages, inser
 	await query.press("ControlOrMeta+Enter");
 	await expect(overlay).toBeHidden();
 	await expect(input).toHaveValue("");
-	await expect(
-		page
-			.locator('[data-testid="chat-message"][data-role="user"]')
-			.filter({ hasText: "fix the flaky watcher test" }),
-	).toBeVisible();
 	await settleSubmittedTurn(page);
+	await revealUserTurn(page, "fix the flaky watcher test");
 });
 
 test("Cmd/Ctrl+Enter from the overlay sends pending image attachments with the recalled prompt and clears them", async ({
@@ -186,13 +193,7 @@ test("Cmd/Ctrl+Enter from the overlay sends pending image attachments with the r
 		expect(prompt).toContain('"image/png"');
 	}).toPass({ timeout: 5000 });
 	await settleSubmittedTurn(page);
-	await page.getByTestId("virtuoso-scroller").evaluate((element) => {
-		element.scrollTop = 0;
-	});
-	const sentTurn = page
-		.locator('[data-testid="chat-message"][data-role="user"]')
-		.filter({ hasText: "fix the flaky watcher test" });
-	await expect(sentTurn).toBeVisible();
+	const sentTurn = await revealUserTurn(page, "fix the flaky watcher test");
 	await expect(sentTurn.getByTestId("chat-attachment-chip")).toContainText("pixel.png");
 });
 
