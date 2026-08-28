@@ -54,6 +54,27 @@ let delegationRoot: string;
 let service: DelegationService;
 const events: LifecycleEvent[] = [];
 
+function registerFauxProvider(target: ModelRuntime, id: string): void {
+	target.registerProvider(id, {
+		api: faux.api,
+		baseUrl: "http://faux.local",
+		apiKey: "faux",
+		streamSimple: faux.streamSimple,
+		models: [
+			{
+				id,
+				name: id,
+				api: faux.api,
+				reasoning: false,
+				input: ["text"],
+				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+				contextWindow: 100_000,
+				maxTokens: 4096,
+			},
+		],
+	});
+}
+
 function fauxModel(): Model<string> {
 	const model = runtime.getModel("faux", "faux");
 	if (!model) throw new Error("faux model not registered");
@@ -71,24 +92,7 @@ beforeAll(async () => {
 		modelsPath: null,
 		allowModelNetwork: false,
 	});
-	runtime.registerProvider("faux", {
-		api: faux.api,
-		baseUrl: "http://faux.local",
-		apiKey: "faux",
-		streamSimple: faux.streamSimple,
-		models: [
-			{
-				id: "faux",
-				name: "faux",
-				api: faux.api,
-				reasoning: false,
-				input: ["text"],
-				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-				contextWindow: 100_000,
-				maxTokens: 4096,
-			},
-		],
-	});
+	registerFauxProvider(runtime, "faux");
 
 	parentCwd = tmpDir("pi-delegation-parent-");
 	const created = await createAgentSession({
@@ -308,24 +312,7 @@ test("the self-created runtime mirrors public provider registrations and removes
 		modelsPath: null,
 		allowModelNetwork: false,
 	});
-	sourceRuntime.registerProvider("mirrored", {
-		api: faux.api,
-		baseUrl: "http://faux.local",
-		apiKey: "faux",
-		streamSimple: faux.streamSimple,
-		models: [
-			{
-				id: "mirrored",
-				name: "mirrored",
-				api: faux.api,
-				reasoning: false,
-				input: ["text"],
-				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-				contextWindow: 100_000,
-				maxTokens: 4096,
-			},
-		],
-	});
+	registerFauxProvider(sourceRuntime, "mirrored");
 	const sourceModel = sourceRuntime.getModel("mirrored", "mirrored");
 	if (!sourceModel) throw new Error("mirrored model not registered");
 	const fallback = createDelegationService({
@@ -368,6 +355,76 @@ test("the self-created runtime mirrors public provider registrations and removes
 	await fallback.disposeChildrenOf(parent.sessionId);
 });
 
+test("self-created runtimes isolate provider synchronization per parent lineage", async () => {
+	const sourceA = await ModelRuntime.create({
+		credentials: new InMemoryCredentialStore(),
+		modelsPath: null,
+		allowModelNetwork: false,
+	});
+	const sourceB = await ModelRuntime.create({
+		credentials: new InMemoryCredentialStore(),
+		modelsPath: null,
+		allowModelNetwork: false,
+	});
+	registerFauxProvider(sourceA, "lineage-a");
+	registerFauxProvider(sourceB, "lineage-b");
+	const modelA = sourceA.getModel("lineage-a", "lineage-a");
+	const modelB = sourceB.getModel("lineage-b", "lineage-b");
+	if (!modelA || !modelB) throw new Error("lineage models not registered");
+	const multiParent = createDelegationService({
+		resolveParent: (id) => {
+			if (id === "parent-a") {
+				return {
+					cwd: parentCwd,
+					model: modelA,
+					thinkingLevel: parent.thinkingLevel,
+					modelRegistry: new ModelRegistry(sourceA),
+				};
+			}
+			if (id === "parent-b") {
+				return {
+					cwd: parentCwd,
+					model: modelB,
+					thinkingLevel: parent.thinkingLevel,
+					modelRegistry: new ModelRegistry(sourceB),
+				};
+			}
+			return undefined;
+		},
+		delegationRoot,
+		scope: "ws-multi-parent-registry",
+	});
+	const childA = await multiParent.createChild(
+		subagentSpec({
+			parent: "parent-a",
+			session: {
+				systemPrompt: "lineage a",
+				model: { provider: "lineage-a", id: "lineage-a" },
+				tools: [],
+			},
+		}),
+	);
+	await multiParent.createChild(
+		subagentSpec({
+			parent: "parent-b",
+			session: {
+				systemPrompt: "lineage b",
+				model: { provider: "lineage-b", id: "lineage-b" },
+				tools: [],
+			},
+		}),
+	);
+	faux.setResponses([fauxAssistantMessage("LINEAGE_A_STILL_WORKS")]);
+	try {
+		const outcome = await childA.runQueued("Run after parent B synchronized.");
+		expect(outcome.status).toBe("completed");
+		expect(outcome.finalText).toBe("LINEAGE_A_STILL_WORKS");
+	} finally {
+		await multiParent.disposeChildrenOf("parent-a");
+		await multiParent.disposeChildrenOf("parent-b");
+	}
+});
+
 test("a modelRuntime provider is resolved per createChild, never captured at service creation", async () => {
 	let resolves = 0;
 	const generational = createDelegationService({
@@ -398,24 +455,7 @@ test("a parent's retained runtime wins over the service-level binding", async ()
 		modelsPath: null,
 		allowModelNetwork: false,
 	});
-	parentRuntime.registerProvider("fauxp", {
-		api: faux.api,
-		baseUrl: "http://faux.local",
-		apiKey: "faux",
-		streamSimple: faux.streamSimple,
-		models: [
-			{
-				id: "fauxp",
-				name: "fauxp",
-				api: faux.api,
-				reasoning: false,
-				input: ["text"],
-				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-				contextWindow: 100_000,
-				maxTokens: 4096,
-			},
-		],
-	});
+	registerFauxProvider(parentRuntime, "fauxp");
 	const generational = createDelegationService({
 		resolveParent: (id) =>
 			id === parent.sessionId

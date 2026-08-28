@@ -41,9 +41,11 @@ lands (the enumeration: scope & readiness rules below).
   Promise<ModelRuntime>`, resolved **per `createChild`**: an embedder's runtime can be generational
   — ThinkRail swaps runtime generations on Central connect/disconnect — and a value captured at
   service creation would pin every later child to the first generation while new parent chats move
-  on (PR #303 review finding); absent → the service self-creates one runtime and caches it for its
-  own lifetime), `maxConcurrentPerParent`, `childExtensionFactories` (the curated set a child MAY
-  load — decision #25).
+  on (PR #303 review finding); absent → the service self-creates one runtime **per parent lineage**
+  and caches it until `disposeChildrenOf(parent)` — a service may resolve parents backed by different
+  registries, so one mutable fallback must never synchronize provider state across them),
+  `maxConcurrentPerParent`, `childExtensionFactories` (the curated set a child MAY load — decision
+  #25).
 - Storage helpers: `defaultDelegationRoot` / `delegationSessionDir` / `deriveChildSessionFile`
   (post-restart transcript reads) / `DEFAULT_SCOPE`.
 - The contract types themselves (incl. `DelegationError`/`DelegationErrorCode`) — enumerated and
@@ -152,12 +154,14 @@ templates, no themes; context files, skills, and the embedder's curated extensio
 (`extensions: true` — decision #25) are explicit `SessionOptions` opt-ins; `systemPrompt` maps to
 `systemPromptOverride`. Model/thinking default to the live parent's current values; `cwd` is the
 parent's. Runtime precedence is parent `modelRuntime` → service `modelRuntime` → cached self-created
-runtime. Only the last path mirrors the parent's public `modelRegistry` registrations: native
-providers are replayed as native providers, configured providers as their opaque configs, and stale
-mirrors are removed before model resolution. This preserves extension-supplied provider behavior and
-config-contained auth without reading either; it cannot reproduce credentials or mutable state held
-only inside the original runtime, which is why exact runtime injection remains the stronger embedder
-contract. Storage: the lineage section above.
+runtime. The self-created path caches a separate runtime and mirrored-registration set per parent
+lineage; `disposeChildrenOf(parent)` drops that cache entry with the lineage. It mirrors the parent's
+public `modelRegistry` registrations before each spawn: native providers are replayed as native
+providers, configured providers as their opaque configs, and stale mirrors are removed before model
+resolution. This preserves extension-supplied provider behavior and config-contained auth without
+reading either; it cannot reproduce credentials or mutable state held only inside the original
+runtime, which is why exact runtime injection remains the stronger embedder contract. Storage: the
+lineage section above.
 
 ## Extension points (exactly three, plus one seam)
 
@@ -317,7 +321,9 @@ lineage.
     extension context exposes `modelRegistry` but not its backing `ModelRuntime`, while
     `createAgentSession` requires a runtime. A self-created child runtime therefore synchronizes the
     registry's public `getRegisteredProviderIds` / `getRegisteredNativeProvider` /
-    `getRegisteredProviderConfig` values before every spawn and unregisters stale mirrors. This is
-    opaque replay, not provider interpretation, private-field access, or extension re-execution.
-    It makes standalone children compatible with provider-registering extensions while preserving
-    the stronger parent-runtime path for runtime-only credentials and state.
+    `getRegisteredProviderConfig` values before every spawn and unregisters stale mirrors. The
+    runtime and mirror set are keyed by parent lineage and dropped by `disposeChildrenOf`; otherwise
+    syncing a second parent could remove or replace a provider still used by the first parent's
+    children. This is opaque replay, not provider interpretation, private-field access, or extension
+    re-execution. It makes standalone children compatible with provider-registering extensions while
+    preserving the stronger parent-runtime path for runtime-only credentials and state.

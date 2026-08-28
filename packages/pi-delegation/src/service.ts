@@ -156,10 +156,16 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 	const semaphores = new Map<string, Semaphore>();
 	const lifecycleListeners = new Set<(e: LifecycleEvent) => void>();
 
-	let selfCreatedRuntime: Promise<ModelRuntime> | undefined;
-	const mirroredProviderIds = new Set<string>();
+	const fallbackRuntimes = new Map<
+		string,
+		{ runtime: Promise<ModelRuntime>; mirroredProviderIds: Set<string> }
+	>();
 
-	function synchronizeRegisteredProviders(runtime: ModelRuntime, parent: ParentContext): void {
+	function synchronizeRegisteredProviders(
+		runtime: ModelRuntime,
+		mirroredProviderIds: Set<string>,
+		parent: ParentContext,
+	): void {
 		const registry = parent.modelRegistry;
 		if (!registry) return;
 		const registeredIds = new Set(registry.getRegisteredProviderIds());
@@ -182,13 +188,20 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 		}
 	}
 
-	async function getFallbackRuntime(parent: ParentContext): Promise<ModelRuntime> {
+	async function getFallbackRuntime(
+		parentSessionId: string,
+		parent: ParentContext,
+	): Promise<ModelRuntime> {
 		const bound = bindings.modelRuntime;
 		if (typeof bound === "function") return bound();
 		if (bound) return bound;
-		selfCreatedRuntime ??= ModelRuntime.create();
-		const runtime = await selfCreatedRuntime;
-		synchronizeRegisteredProviders(runtime, parent);
+		let fallback = fallbackRuntimes.get(parentSessionId);
+		if (!fallback) {
+			fallback = { runtime: ModelRuntime.create(), mirroredProviderIds: new Set() };
+			fallbackRuntimes.set(parentSessionId, fallback);
+		}
+		const runtime = await fallback.runtime;
+		synchronizeRegisteredProviders(runtime, fallback.mirroredProviderIds, parent);
 		return runtime;
 	}
 
@@ -491,7 +504,7 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 				`Parent session ${spec.parent} is not live — children derive their defaults from a live parent`,
 			);
 		}
-		const runtime = parent.modelRuntime ?? (await getFallbackRuntime(parent));
+		const runtime = parent.modelRuntime ?? (await getFallbackRuntime(spec.parent, parent));
 		const model = options.model
 			? runtime.getModel(options.model.provider, options.model.id)
 			: parent.model;
@@ -596,6 +609,7 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 			for (const entry of entries) await teardownChild(entry);
 			byParent.delete(parentSessionId);
 			semaphores.delete(parentSessionId);
+			fallbackRuntimes.delete(parentSessionId);
 		},
 	};
 }
