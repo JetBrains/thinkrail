@@ -37,12 +37,15 @@ describe("ThinkingGroup", () => {
 		expect(markup).toContain('data-activity-node-kind="thinking"');
 		expect(markup).toContain('data-activity-parent-id="activity:a1"');
 		expect(markup).toContain("data-activity-node-toggle");
-		expect(markup).toContain("Thinking");
+		expect(markup).toContain('<span class="shrink-0 text-text-default">Thinking</span>');
+		expect(markup).not.toContain(
+			'<span class="shrink-0 text-text-default sr-only">Thinking</span>',
+		);
 		expect(markup).toContain("2 steps · read, bash");
 		expect(markup).not.toContain("I should inspect the files first.");
 	});
 
-	test("surfaces a standalone bold first line in the collapsed header", () => {
+	test("surfaces a standalone bold first line as a normal-weight collapsed summary", () => {
 		const tools = [tool("t1", "read")];
 		const markup = renderToStaticMarkup(
 			<ThinkingGroup
@@ -60,6 +63,9 @@ describe("ThinkingGroup", () => {
 		);
 
 		expect(markup).toContain("Evaluating formatting process");
+		expect(markup).toContain('data-testid="thinking-group-headline"');
+		expect(markup).not.toContain("<strong");
+		expect(markup).toContain('<span class="shrink-0 text-text-default sr-only">Thinking</span>');
 		expect(markup).not.toContain("**Evaluating formatting process**");
 		expect(markup).not.toContain("I should inspect the formatted file.");
 		expect(markup).toContain("1 step · read");

@@ -200,11 +200,19 @@ function GroupDisclosure({
 				) : (
 					icon
 				)}
-				{label ? <span className="shrink-0 text-text-default">{label}</span> : null}
+				{label ? (
+					<span className={cn("shrink-0 text-text-default", !expanded && headline && "sr-only")}>
+						{label}
+					</span>
+				) : null}
 				{!expanded && headline ? (
-					<strong className="min-w-0 flex-1 truncate text-text-default" title={headline}>
+					<span
+						data-testid={`${testId}-headline`}
+						className="min-w-0 flex-1 truncate text-text-default"
+						title={headline}
+					>
 						{headline}
-					</strong>
+					</span>
 				) : null}
 				<span className="min-w-0 truncate" title={summary}>
 					{summary}
