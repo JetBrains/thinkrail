@@ -1,0 +1,47 @@
+name: Probe fetch nightly log
+
+on:
+  push:
+    branches: [ci/probe-nightly-33166583594]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch failing nightly windows job log
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          gh api "repos/${GITHUB_REPOSITORY}/actions/jobs/98833375382/logs" > job.log 2> fetch.err
+          echo "gh_exit=$?" >> status.txt
+          wc -c job.log >> status.txt 2>&1
+          exit 0
+
+      - name: Report
+        if: always()
+        run: |
+          set +e
+          emit() {
+            body=$(sed -e 's/%/%25/g' "$2" | awk '{printf "%s%%0A", $0}')
+            echo "::error title=$1::${body}"
+          }
+          cat status.txt fetch.err > head.txt 2>/dev/null
+          emit "status" head.txt
+          if [ -s job.log ]; then
+            tail -c 48000 job.log | tr -d '\r' > tail.txt
+            split -n l/12 -d tail.txt part-
+            i=0
+            for p in part-*; do
+              emit "log-$i" "$p"
+              i=$((i+1))
+            done
+          else
+            echo "::error title=log::no log body retrieved"
+          fi
+          exit 0
