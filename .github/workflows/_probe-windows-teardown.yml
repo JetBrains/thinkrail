@@ -9,91 +9,35 @@ permissions:
   actions: read
 
 jobs:
-  lock:
-    runs-on: windows-latest
-    timeout-minutes: 20
+  fetch:
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-        with:
-          ref: fix/windows-smoke-teardown-retry
-
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version-file: package.json
-
-      - run: bun install --frozen-lockfile
-
-      - name: Measure retry behaviour against a cwd-pinned tree
+      - name: Fetch failing CI windows binary smoke log
         continue-on-error: true
-        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set +e
-          cat > probe-lock.ts <<'EOF'
-          import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-          import { tmpdir } from "node:os";
-          import { join } from "node:path";
-          import { removeTree } from "@thinkrail/shared/removeTree";
-
-          function pinnedRoot(): { root: string; held: ReturnType<typeof Bun.spawn> } {
-            const root = mkdtempSync(join(tmpdir(), "thinkrail-lock-probe-"));
-            writeFileSync(join(root, "payload.txt"), "content");
-            const held = Bun.spawn([process.execPath, "-e", "await Bun.sleep(120000)"], {
-              cwd: root,
-              stdout: "inherit",
-              stderr: "inherit",
-            });
-            return { root, held };
-          }
-
-          function timed(what: string, remove: () => void): void {
-            const started = Date.now();
-            try {
-              remove();
-              console.log(`${what}: removed after ${Date.now() - started}ms`);
-            } catch (error) {
-              console.log(
-                `${what}: threw ${(error as { code?: string }).code} after ${Date.now() - started}ms`,
-              );
-            }
-          }
-
-          const legacy = pinnedRoot();
-          await Bun.sleep(2000);
-          timed("rmSync-maxRetries-10-retryDelay-100 (locked)", () =>
-            rmSync(legacy.root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }),
-          );
-          legacy.held.kill();
-          await legacy.held.exited;
-
-          const bounded = pinnedRoot();
-          await Bun.sleep(2000);
-          timed("removeTree (locked)", () => removeTree(bounded.root));
-          bounded.held.kill();
-          await bounded.held.exited;
-
-          const race = pinnedRoot();
-          await Bun.sleep(2000);
-          race.held.kill();
-          timed("removeTree (right after kill, no wait)", () => removeTree(race.root));
-          console.log(`race root exists after probe: ${existsSync(race.root)}`);
-
-          const legacyRace = pinnedRoot();
-          await Bun.sleep(2000);
-          legacyRace.held.kill();
-          timed("rmSync-maxRetries (right after kill, no wait)", () =>
-            rmSync(legacyRace.root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }),
-          );
-          console.log(`legacy race root exists after probe: ${existsSync(legacyRace.root)}`);
-          EOF
-          bun probe-lock.ts > lock.log 2>&1
-          echo "probe_exit=$?" >> lock.log
+          curl -sSL -H "Authorization: Bearer ${GH_TOKEN}" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/jobs/98840219695/logs" \
+            -o job.log -w "curl_http=%{http_code}\n" >> status.txt 2>> fetch.err
+          wc -c job.log >> status.txt 2>&1
           exit 0
 
       - name: Report
         if: always()
-        shell: bash
         run: |
           set +e
-          body=$(sed -e 's/%/%25/g' lock.log | awk '{printf "%s%%0A", $0}')
-          echo "::error title=lock-probe::${body}"
+          emit() {
+            body=$(sed -e 's/%/%25/g' "$2" | awk '{printf "%s%%0A", $0}')
+            echo "::error title=$1::${body}"
+          }
+          tr -d '\r' < job.log | sed -e 's/\x1b\[[0-9;]*m//g' > clean.log
+          cat status.txt fetch.err > head.txt 2>/dev/null
+          emit "status" head.txt
+          tail -c 20000 clean.log > tail.txt
+          split -n l/5 -d tail.txt part-
+          for p in $(ls part-* | sort -r); do
+            emit "tailrev-$p" "$p"
+          done
           exit 0
