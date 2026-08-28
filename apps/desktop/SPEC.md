@@ -23,7 +23,7 @@ engine architecture.
   packaged resource staging; the PI-compatible server-runtime bundle; desktop route preload/persistence;
   desktop package smoke; and the desktop artifact adapter used by shared host probes.
 - **Public surface:** the packaged desktop application and unsigned installers; the build/test-only
-  `@thinkrail/desktop/artifact` launcher locator consumed by smoke and E2E harnesses.
+  `@thinkrail/desktop/artifact` launcher and installer locators consumed by smoke and E2E harnesses.
 - **Allowed deps:** `server` for the embedded host, build-support manifest, and artifact probes; `shared`
   for release identity; `contracts` for compatibility/native-bridge types; the completed built web
   artifact; Electrobun `1.18.1`; Bun/Node.
@@ -139,6 +139,13 @@ CI-only and are never shipped as user configuration.
 - First-install smoke executes the produced DMG app, Windows setup ZIP, or Linux setup tarball against
   isolated installation roots, boots the installed host, checks health, and requires graceful exit. The
   release matrix must pass both smoke layers before uploading the installer.
+- Electrobun names installer artifacts per channel, and the channel lands in a different position on each
+  platform: the Linux setup tarball carries it in the app-file stem (`ThinkRail-canary-Setup.tar.gz`)
+  while the Windows setup executable inside the ZIP carries it after `-Setup`
+  (`ThinkRail-Setup-canary.exe`; only `stable` is unsuffixed). First-install smoke therefore resolves the
+  Windows setup executable from the requested channel and `src/artifact.test.ts` pins that derivation: a
+  channel-blind `*Setup.exe` match passes stable and fails every nightly, which is how the first Windows
+  nightly after desktop packaging landed failed while every other target published.
 - The shared host-agnostic artifact suite runs through a desktop adapter and the CLI adapter. Both must
   load an external synthetic PI extension with no `pi` executable under default and custom agent dirs,
   create a session through all bundled factories, expose bundled and project-portable skills, reach an

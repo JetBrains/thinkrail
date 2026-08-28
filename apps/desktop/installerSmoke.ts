@@ -12,6 +12,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { locateWindowsSetupExecutable } from "./src/artifact";
 
 function resolveArtifact(value: string | undefined): string {
 	if (!value) throw new Error("desktop installer path is required");
@@ -83,9 +84,7 @@ function installedLauncher(): string {
 			"-Command",
 			`Expand-Archive -LiteralPath '${artifact.replaceAll("'", "''")}' -DestinationPath '${packageDir.replaceAll("'", "''")}' -Force`,
 		]);
-		const installer = globSync(join(packageDir, "**", "*Setup.exe"))[0];
-		if (!installer) throw new Error("desktop ZIP does not contain Setup.exe");
-		run([installer]);
+		run([locateWindowsSetupExecutable(packageDir, channel)]);
 		return join(root, "local", "ai.thinkrail.app", channel, "app", "bin", "launcher.exe");
 	}
 	run(["tar", "-xzf", artifact, "-C", packageDir]);

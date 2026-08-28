@@ -1,4 +1,4 @@
-import { existsSync, globSync } from "node:fs";
+import { existsSync, globSync, readdirSync } from "node:fs";
 import { join, resolve, sep } from "node:path";
 
 export function locateDesktopLauncher(desktopDir: string, explicit?: string): string {
@@ -21,4 +21,19 @@ export function locateDesktopLauncher(desktopDir: string, explicit?: string): st
 		throw new Error("packaged desktop launcher not found — run `bun run desktop:build` first");
 	}
 	return launcher;
+}
+
+export function windowsSetupExecutableSuffix(channel: string): string {
+	return channel === "stable" ? "-Setup.exe" : `-Setup-${channel}.exe`;
+}
+
+export function locateWindowsSetupExecutable(packageDir: string, channel: string): string {
+	const suffix = windowsSetupExecutableSuffix(channel);
+	const entry = readdirSync(packageDir, { recursive: true })
+		.map(String)
+		.find((name) => name.endsWith(suffix));
+	if (!entry) {
+		throw new Error(`desktop ZIP does not contain an installer matching *${suffix}`);
+	}
+	return join(packageDir, entry);
 }
