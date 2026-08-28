@@ -82,6 +82,8 @@ function MissingResource({ label }: { label: string }) {
 	);
 }
 
+const CHAT_RETRY_DELAY_MS = 4000;
+
 function ChatResourceBody({
 	workspaceId,
 	tab,
@@ -92,6 +94,13 @@ function ChatResourceBody({
 	onOpenFile: (path: string) => void;
 }) {
 	const available = useAppStore((state) => state.sessions[tab.sessionId] !== undefined);
+	const [stalled, setStalled] = useState(false);
+	useEffect(() => {
+		if (available) return;
+		setStalled(false);
+		const timer = setTimeout(() => setStalled(true), CHAT_RETRY_DELAY_MS);
+		return () => clearTimeout(timer);
+	}, [available, tab.sessionId]);
 	if (available) {
 		return (
 			<ErrorBoundary label="chat" resetKeys={[workspaceId, tab.id]}>
@@ -101,35 +110,37 @@ function ChatResourceBody({
 			</ErrorBoundary>
 		);
 	}
+	const retry = () => {
+		void hydrateChatResource(workspaceId, tab.sessionId)
+			.then((installed) => {
+				if (installed) return;
+				const { state, current } = currentChatDestination(workspaceId, tab, undefined);
+				if (
+					current &&
+					!state.removedWorkspaceIds[workspaceId] &&
+					!state.deletedSessionsByWorkspace[workspaceId]?.[tab.sessionId]
+				) {
+					toast.error("The chat could not be restored.", "Couldn't restore the chat");
+				}
+			})
+			.catch((error) => {
+				const { state, current } = currentChatDestination(workspaceId, tab, undefined);
+				if (
+					current &&
+					!state.removedWorkspaceIds[workspaceId] &&
+					!state.deletedSessionsByWorkspace[workspaceId]?.[tab.sessionId]
+				) {
+					toast.error(errorText(error), "Couldn't restore the chat");
+				}
+			});
+	};
+	if (!stalled) return <MissingResource label="chat" />;
 	return (
 		<div className="flex h-full flex-col items-center justify-center gap-8 text-text-muted">
-			<MissingResource label="chat" />
+			<span className="tr-text-ui">The chat is taking longer than usual to restore.</span>
 			<button
 				type="button"
-				onClick={() => {
-					void hydrateChatResource(workspaceId, tab.sessionId)
-						.then((installed) => {
-							if (installed) return;
-							const { state, current } = currentChatDestination(workspaceId, tab, undefined);
-							if (
-								current &&
-								!state.removedWorkspaceIds[workspaceId] &&
-								!state.deletedSessionsByWorkspace[workspaceId]?.[tab.sessionId]
-							) {
-								toast.error("The chat could not be restored.", "Couldn't restore the chat");
-							}
-						})
-						.catch((error) => {
-							const { state, current } = currentChatDestination(workspaceId, tab, undefined);
-							if (
-								current &&
-								!state.removedWorkspaceIds[workspaceId] &&
-								!state.deletedSessionsByWorkspace[workspaceId]?.[tab.sessionId]
-							) {
-								toast.error(errorText(error), "Couldn't restore the chat");
-							}
-						});
-				}}
+				onClick={retry}
 				className="rounded-[var(--radius-sm)] border border-border-default px-8 py-4 tr-text-ui hover:bg-control-bg-hovered"
 			>
 				Retry
@@ -207,7 +218,6 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	const contextProject = useAppStore(selectContextProject);
 	const editorTabs = useAppStore((state) => state.tabsByWorkspace[workspaceId] ?? NO_EDITOR_TABS);
 	const chatStarting = useAppStore((state) => (state.chatStartsByWorkspace[workspaceId] ?? 0) > 0);
-	const sessions = useAppStore((state) => state.sessions);
 	const deletedSessions = useAppStore((state) => state.deletedSessionsByWorkspace[workspaceId]);
 	const terminalClose = useTerminalClose();
 	const specs = useWorkspaceSpecs(workspaceId);

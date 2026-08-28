@@ -81,6 +81,14 @@ Every independently mounted workbench resource body—including documents, termi
 
 Invalid local layout state falls back to the Balanced safe frame without contaminating domain state. A local persistence failure leaves the live frame usable and reports one actionable error. A custom-preset settings failure leaves both the instantiated current frame and catalog unchanged.
 
+A chat tab whose session isn't in the local runtime cache yet renders the same content skeleton as every
+other restoring resource — never a manual "Retry" affordance up front, because `chatReconciliation`'s
+placement/catalog convergence already auto-hydrates it in the overwhelming majority of cases within a
+second or two, and a retry button shown immediately reads as "this failed" for what is normal loading.
+`ChatResourceBody` only swaps the skeleton for an explicit retry message once hydration has stayed
+stalled past a short grace window (`CHAT_RETRY_DELAY_MS`), so the retry affordance surfaces solely for the
+genuinely-stuck case it exists for.
+
 ## Global chords
 
 `useGlobalHotkeys` remains the one capture-phase owner of app-wide chords. It routes commands through the workbench command surface rather than imperative feature-panel refs:
