@@ -12,32 +12,47 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Dump failing nightly job log as annotations
+      - name: Fetch failing nightly job log
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          set -eu
-          gh api "repos/${GITHUB_REPOSITORY}/actions/jobs/98805937554/logs" > job.log
-          wc -l job.log
-          {
-            echo '## Windows nightly job log (tail 400)'
-            echo '```'
-            tail -400 job.log
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
-          python3 - <<'PY'
-          import re
-          lines = open('job.log', errors='replace').read().splitlines()
-          tail = lines[-260:]
-          chunks, cur = [], []
-          size = 0
-          for line in tail:
-              cur.append(line)
-              size += len(line) + 1
-              if size > 2500:
-                  chunks.append(cur); cur = []; size = 0
-          if cur: chunks.append(cur)
-          for i, chunk in enumerate(chunks[-9:]):
-              body = "%0A".join(l.replace('%','%25').replace('\r','') for l in chunk)
-              print(f"::error title=logchunk-{i}::{body}")
-          PY
+          set +e
+          gh api "repos/${GITHUB_REPOSITORY}/actions/jobs/98805937554/logs" > job.log 2> fetch.err
+          echo "gh_exit=$?" >> status.txt
+          curl -sSL -H "Authorization: Bearer ${GH_TOKEN}" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/jobs/98805937554/logs" \
+            -o job2.log -w "curl_http=%{http_code}\n" >> status.txt 2>> fetch.err
+          wc -c job.log job2.log >> status.txt 2>&1
+          exit 0
+
+      - name: Report
+        if: always()
+        run: |
+          set +e
+          emit() {
+            body=$(sed -e 's/%/%25/g' "$2" | awk '{printf "%s%%0A", $0}')
+            echo "::error title=$1::${body}"
+          }
+          cat status.txt fetch.err > head.txt 2>/dev/null
+          emit "status" head.txt
+          best=job.log
+          if [ -s job2.log ] && [ ! -s job.log ]; then best=job2.log; fi
+          if [ -s "$best" ]; then
+            tail -c 40000 "$best" | tr -d '\r' > tail.txt
+            split -n l/8 -d tail.txt part-
+            i=0
+            for p in part-*; do
+              emit "log-$i" "$p"
+              i=$((i+1))
+            done
+            {
+              echo '## nightly windows job log (tail)'
+              echo '```'
+              cat tail.txt
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::error title=log::no log body retrieved"
+          fi
+          exit 0
