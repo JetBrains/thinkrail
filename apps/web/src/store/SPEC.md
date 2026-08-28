@@ -252,8 +252,12 @@ snapshots plus device-local attention, terminal catalogs, and one **per-session 
   connected generation and advances the revision so two reads cannot regress one another. When the latest
   live compaction matches the durable record, its id + estimated-after count survive, and `resuming` survives
   only while the returned summary is still streaming. The
-  pure **`reduceSessionEvent`** folds a `PiEvent` into a runtime; **`handlePiEvent` increments the revision even
-  for a UI-ignored Pi event**, because ignored still means it crossed the snapshot ordering boundary. **Only idle sends enter the transcript
+  pure **`reduceSessionEvent`** folds a `PiEvent` into a runtime; **`handlePiEvents` folds an ordered batch in
+  one atomic store write while incrementing each affected runtime's revision once per event, even for a
+  UI-ignored event**, because ignored still means it crossed the snapshot ordering boundary. The
+  single-event **`handlePiEvent`** delegates to that same path so tests and non-wire callers cannot drift.
+  Transport flushes a pending batch before delivering any later response or non-Pi push, preserving the
+  revision fence's received-message ordering. **Only idle sends enter the transcript
   optimistically** (`ChatView.onSubmit` → `appendUserMessage`); the last-turn echo dedup below is
   sufficient precisely because nothing intervenes before the echo. A **streaming send (`steer`/`followUp`)
   never appends a turn**: its text lives in `queue` (folded verbatim from the host-projected
