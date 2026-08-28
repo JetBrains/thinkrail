@@ -245,8 +245,9 @@ of the host.
   never imported — the DTO posture again), **`SubagentCompletionMessage`** (the compile-held tag↔details
   shape) and the shared **`isSubagentCompletionMessage`** guard — wire data is untrusted, so the
   details validate through **`isDelegationRunDetails`** (domain): the **closed status union**, every
-  required **numeric usage field**, and `durationMs`, never just "an object is present" (PR #303
-  review finding). That validator is the one home for the shape check — the web's Agent-card reader
+  required **numeric usage field**, `durationMs`, and every present optional display field as a string,
+  never just "an object is present" (PR #303 review finding). That validator is the one home for the
+  shape check — the web's Agent-card reader
   narrows through it too — plus **`customMessageText`** — the one text extraction over
   `WireCustomMessage.content` (string | blocks), shared by the web's event reducer and hydration so the
   completion card's text derives once.

@@ -97,7 +97,15 @@ describe("isDelegationRunDetails", () => {
 	};
 
 	test("accepts a complete details shape", () => {
-		expect(isDelegationRunDetails(valid)).toBe(true);
+		expect(
+			isDelegationRunDetails({
+				...valid,
+				roleName: "researcher",
+				roleSource: "builtin",
+				model: "provider/model",
+				activity: "reading",
+			}),
+		).toBe(true);
 	});
 
 	test("rejects a status outside the closed union", () => {
@@ -112,5 +120,11 @@ describe("isDelegationRunDetails", () => {
 		const { durationMs: _durationMs, ...noDuration } = valid;
 		expect(isDelegationRunDetails(noDuration)).toBe(false);
 		expect(isDelegationRunDetails({ ...valid, usage: { ...usage, cost: "0.01" } })).toBe(false);
+	});
+
+	test("rejects every optional display field when present with a non-string value", () => {
+		for (const field of ["roleName", "roleSource", "model", "activity"]) {
+			expect(isDelegationRunDetails({ ...valid, [field]: { malformed: true } })).toBe(false);
+		}
 	});
 });

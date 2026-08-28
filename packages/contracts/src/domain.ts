@@ -207,6 +207,9 @@ export function isDelegationRunDetails(value: unknown): value is DelegationRunDe
 	if (typeof d.childSessionId !== "string" || typeof d.task !== "string") return false;
 	if (typeof d.status !== "string" || !DELEGATION_RUN_STATUSES.includes(d.status)) return false;
 	if (typeof d.durationMs !== "number") return false;
+	for (const field of [d.roleName, d.roleSource, d.model, d.activity]) {
+		if (field !== undefined && typeof field !== "string") return false;
+	}
 	const u = d.usage as Partial<DelegationRunDetails["usage"]> | undefined;
 	return (
 		!!u &&
