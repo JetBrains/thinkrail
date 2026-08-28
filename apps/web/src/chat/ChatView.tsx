@@ -247,6 +247,49 @@ export default function ChatView({
 	}
 	const firstItemIndex = virtualRows.firstItemIndex;
 
+	// Per user row: has the agent started responding to it? Drives the large-user-message auto-collapse
+	// (client view state only — no wire). "Responded" = a later assistant-derived row exists after it,
+	// or it is the trailing user row while the session is still streaming (covers the pre-content gap).
+	const userResponded = useMemo(() => {
+		const map = new Map<string, boolean>();
+		for (let i = 0; i < rows.length; i++) {
+			if (rows[i]?.kind !== "user") continue;
+			let responded = false;
+			let hasUserAfter = false;
+			for (let j = i + 1; j < rows.length; j++) {
+				const k = rows[j]?.kind;
+				if (k === "markdown" || k === "tool" || k === "activity" || k === "divider")
+					responded = true;
+				if (k === "user") hasUserAfter = true;
+			}
+			if (!responded && !hasUserAfter && isStreaming) responded = true;
+			map.set(rows[i]?.id ?? "", responded);
+		}
+		return map;
+	}, [rows, isStreaming]);
+
+	// The concluding answer of each round — the only `markdown` row that carries the Copy action, so it
+	// rides the work summary rather than the intermediate narration the agent emits between tool steps. A
+	// markdown row is "final" when no further assistant-content row (`markdown`/`tool`/`activity`) follows
+	// it before the next user turn (a `divider`/`system`/`retry` in between doesn't disqualify it).
+	const finalAnswerRowIds = useMemo(() => {
+		const ids = new Set<string>();
+		for (let i = 0; i < rows.length; i++) {
+			if (rows[i]?.kind !== "markdown") continue;
+			let isFinal = true;
+			for (let j = i + 1; j < rows.length; j++) {
+				const k = rows[j]?.kind;
+				if (k === "user") break;
+				if (k === "markdown" || k === "tool" || k === "activity") {
+					isFinal = false;
+					break;
+				}
+			}
+			if (isFinal) ids.add(rows[i]?.id ?? "");
+		}
+		return ids;
+	}, [rows]);
+
 	const currentStreamStatus = useMemo<StreamStatus | null>(() => {
 		const last = turns[turns.length - 1];
 		return isStreaming && last?.kind !== "retry" ? streamStatus(turns, currentAssistantId) : null;
@@ -786,6 +829,9 @@ export default function ChatView({
 							totalListHeightChanged={handleContentHeight}
 							atBottomThreshold={50}
 							atTopThreshold={50}
+							// Keep a generous off-screen render buffer so a short transcript stays fully mounted
+							// even when opened scrolled to the bottom (rows now carry a per-message copy action).
+							increaseViewportBy={{ top: 1600, bottom: 1600 }}
 							computeItemKey={(_, row) => row.id}
 							itemContent={(index, row) => (
 								<div
@@ -796,6 +842,10 @@ export default function ChatView({
 										row={row}
 										workspaceRoot={workspaceRoot}
 										onOpenFile={onOpenFile}
+										agentResponded={row.kind === "user" ? userResponded.get(row.id) : undefined}
+										isFinalAnswer={
+											row.kind === "markdown" ? finalAnswerRowIds.has(row.id) : undefined
+										}
 										onOpenSpec={onOpenSpec}
 										onOpenChange={onOpenChange}
 										onReveal={onReveal}

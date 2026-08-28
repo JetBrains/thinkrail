@@ -2,6 +2,7 @@ import {
 	RiBookOpenLine as BookOpen,
 	RiArrowDownSLine as ChevronDown,
 	RiArrowRightSLine as ChevronRight,
+	RiArrowUpSLine as ChevronUp,
 	RiTimeLine as Clock,
 	RiFileTextLine as FileText,
 	RiContractUpDownLine as FoldVertical,
@@ -23,6 +24,7 @@ import {
 } from "@/lib";
 import { ActivityGroup } from "./ActivityGroup";
 import { AssistantMarkdown } from "./assistantLinks";
+import { CopyButton } from "./CopyButton";
 import { FileChip } from "./FileChip";
 import { useFold, useSelection } from "./foldState";
 import { Markdown } from "./Markdown";
@@ -39,6 +41,8 @@ export function ChatTurnView({
 	row,
 	workspaceRoot,
 	onOpenFile,
+	agentResponded,
+	isFinalAnswer,
 	onOpenSpec,
 	onOpenChange,
 	onReveal,
@@ -47,6 +51,10 @@ export function ChatTurnView({
 	row: ChatRow;
 	workspaceRoot?: string | undefined;
 	onOpenFile?: ((path: string) => void) | undefined;
+	/** For a `user` row: has the agent started responding to it yet (drives large-message auto-collapse). */
+	agentResponded?: boolean | undefined;
+	/** For a `markdown` row: is it the round's concluding answer (only that one carries the Copy action). */
+	isFinalAnswer?: boolean | undefined;
 	onOpenSpec?: ((path: string) => void) | undefined;
 	onOpenChange?: ((path: string) => void) | undefined;
 	onReveal?: ((tab: "specs" | "changes") => void) | undefined;
@@ -54,7 +62,14 @@ export function ChatTurnView({
 }) {
 	switch (row.kind) {
 		case "user":
-			return <UserTurn id={row.id} message={row.message} attachmentNames={row.attachmentNames} />;
+			return (
+				<UserTurn
+					id={row.id}
+					message={row.message}
+					attachmentNames={row.attachmentNames}
+					agentResponded={agentResponded ?? false}
+				/>
+			);
 		case "system":
 			return <SystemTurn text={row.text} />;
 		case "error":
@@ -86,7 +101,15 @@ export function ChatTurnView({
 				/>
 			);
 		case "markdown":
-			return (
+			// Copy rides only the round's concluding answer (the work summary) — not the intermediate
+			// narration the agent emits between tool steps.
+			return isFinalAnswer ? (
+				<MessageWithCopy messageRole="assistant" side="left" getText={() => row.text}>
+					<div className="w-full min-w-0 tr-text-reading text-text-default">
+						<Markdown text={row.text} />
+					</div>
+				</MessageWithCopy>
+			) : (
 				<div
 					data-testid="chat-message"
 					data-role="assistant"
@@ -142,8 +165,9 @@ function userAttachments(content: UserMessage["content"], names?: string[]) {
 		});
 }
 
-const USER_BUBBLE =
-	"max-w-[85%] whitespace-pre-wrap break-words rounded-[var(--radius-lg)] border border-bubble-user-border bg-clip-padding bg-bubble-user-bg px-12 py-8 tr-text-reading text-text-muted";
+const USER_BUBBLE_BASE =
+	"whitespace-pre-wrap break-words rounded-[var(--radius-lg)] border border-bubble-user-border bg-clip-padding bg-bubble-user-bg px-12 py-8 tr-text-reading text-text-muted";
+const USER_BUBBLE = cn("max-w-[85%]", USER_BUBBLE_BASE);
 
 function AttachmentChip({ label, img }: { label: string; img: ImageContent }) {
 	const [open, setOpen] = useState(false);
@@ -176,15 +200,57 @@ function AttachmentChip({ label, img }: { label: string; img: ImageContent }) {
 		</>
 	);
 }
+/**
+ * Shared message + Copy layout, so both message types position the action the same way instead of each
+ * carrying its own hack. The Copy sits **below** the message content (never an overlay on the text),
+ * aligned to the message's own side: agent = bottom-**left** under the message, user = bottom-**right**
+ * under the bubble. Hover-reveal (the button's own styling) keeps it visually secondary. The
+ * `data-testid`/`data-role` hooks stay on this outer element, where the transcript's jump/flash and tests
+ * expect them.
+ */
+function MessageWithCopy({
+	messageRole,
+	side,
+	getText,
+	children,
+}: {
+	messageRole: "user" | "assistant";
+	side: "left" | "right";
+	getText: () => string;
+	children: ReactNode;
+}) {
+	return (
+		<div
+			data-testid="chat-message"
+			data-role={messageRole}
+			className={cn("group flex flex-col gap-4", side === "right" ? "items-end" : "items-start")}
+		>
+			{children}
+			<CopyButton getText={getText} />
+		</div>
+	);
+}
+
+/** The user bubble. Pi's canonical expanded skill block renders as a compact, collapsed invocation with
+ * any user-supplied request kept visible beneath it. A review send's context package renders as a compact
+ * card — the "Sent N review comments on <file>" line with the COMMENT rows right under it (a send is one
+ * message per file, so a file level would always hold exactly one entry — the summary already names the
+ * file); each comment unfolds to its full text + the quoted fragment — instead of the structured XML the
+ * agent needs. Everything is parsed from the message itself (the transcript IS the history), so any old
+ * chat unfolds the same way; the folds survive virtualization via the shared cache. */
+const LARGE_USER_MESSAGE = 500;
 
 function UserTurn({
 	id,
 	message,
 	attachmentNames,
+	agentResponded,
 }: {
 	id: string;
 	message: UserMessage;
 	attachmentNames?: string[] | undefined;
+	/** Once the agent has started responding, a large (>500-char) plain message auto-collapses. */
+	agentResponded: boolean;
 }) {
 	const text = userText(message.content);
 	const attachments = userAttachments(message.content, attachmentNames);
@@ -205,17 +271,17 @@ function UserTurn({
 	}
 
 	const review = parseReviewPackage(text);
-	return (
-		<div data-testid="chat-message" data-role="user" className="flex justify-end">
-			<div className={USER_BUBBLE}>
-				{attachments.length > 0 ? (
-					<div className="flex flex-wrap gap-4 pb-4" data-testid="chat-message-images">
-						{attachments.map(({ key, label, img }) => (
-							<AttachmentChip key={key} label={label} img={img} />
-						))}
-					</div>
-				) : null}
-				{review ? (
+	if (review) {
+		return (
+			<div data-testid="chat-message" data-role="user" className="flex justify-end">
+				<div className={USER_BUBBLE}>
+					{attachments.length > 0 ? (
+						<div className="flex flex-wrap gap-4 pb-4" data-testid="chat-message-images">
+							{attachments.map(({ key, label, img }) => (
+								<AttachmentChip key={key} label={label} img={img} />
+							))}
+						</div>
+					) : null}
 					<div data-testid="review-package-card" className="whitespace-normal">
 						<span data-testid="review-package-summary" className="block text-text-default">
 							{reviewPackageLabel(review)}
@@ -226,11 +292,79 @@ function UserTurn({
 							))}
 						</ul>
 					</div>
-				) : (
-					text
-				)}
+				</div>
 			</div>
-		</div>
+		);
+	}
+
+	return (
+		<PlainUserTurn id={id} text={text} attachments={attachments} agentResponded={agentResponded} />
+	);
+}
+
+/**
+ * A plain user message bubble (its Copy action lives in the enclosing {@link MessageWithCopy}, below the
+ * bubble on the right) — and, only above {@link LARGE_USER_MESSAGE} chars, auto-collapse. The fold's fallback is
+ * `agentResponded` (expanded until the agent starts responding, collapsed after), so the shared cache's
+ * "a manual toggle always wins over a fallback flip" gives the required behavior for free: shown
+ * expanded right after send, auto-collapsed the instant the agent produces anything, and a manual
+ * `Show more` then survives continued streaming. Copy always yields the full text, never the preview.
+ */
+function PlainUserTurn({
+	id,
+	text,
+	attachments,
+	agentResponded,
+}: {
+	id: string;
+	text: string;
+	attachments: ReturnType<typeof userAttachments>;
+	agentResponded: boolean;
+}) {
+	const large = text.length > LARGE_USER_MESSAGE;
+	const [expanded, toggle] = useFold(`${id}:user-collapse`, !agentResponded);
+	const collapsed = large && !expanded;
+	return (
+		<MessageWithCopy messageRole="user" side="right" getText={() => text}>
+			{/* w-fit so the bubble still hugs its content (up to 85%). Copy lives OUTSIDE this bubble column
+			    (in MessageWithCopy's gutter); the bubble holds message content only. */}
+			<div className="flex w-fit max-w-[85%] flex-col items-end">
+				<div className={USER_BUBBLE_BASE}>
+					{attachments.length > 0 ? (
+						<div className="flex flex-wrap gap-4 pb-4" data-testid="chat-message-images">
+							{attachments.map(({ key, label, img }) => (
+								<AttachmentChip key={key} label={label} img={img} />
+							))}
+						</div>
+					) : null}
+					{/* The Show more/less control lives INSIDE the card, within its padding, below the text — so
+					    line-clamp truncates only the message body (its own element), never the control. */}
+					<div
+						data-testid="user-message-body"
+						data-collapsed={collapsed || undefined}
+						className={cn(collapsed && "line-clamp-3")}
+					>
+						{text}
+					</div>
+					{large ? (
+						<button
+							type="button"
+							data-testid="user-message-toggle"
+							aria-expanded={expanded}
+							onClick={toggle}
+							className="mt-4 flex items-center gap-4 tr-text-metadata text-text-subtle hover:text-text-default"
+						>
+							{expanded ? (
+								<ChevronUp className="size-12 shrink-0" />
+							) : (
+								<ChevronDown className="size-12 shrink-0" />
+							)}
+							{expanded ? "Show less" : "Show more"}
+						</button>
+					) : null}
+				</div>
+			</div>
+		</MessageWithCopy>
 	);
 }
 
