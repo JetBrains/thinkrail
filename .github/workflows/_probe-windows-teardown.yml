@@ -9,35 +9,16 @@ permissions:
   actions: read
 
 jobs:
-  fetch:
-    runs-on: ubuntu-latest
+  binary-windows:
+    runs-on: windows-latest
+    timeout-minutes: 30
     steps:
-      - name: Fetch failing CI windows binary smoke log
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set +e
-          curl -sSL -H "Authorization: Bearer ${GH_TOKEN}" \
-            "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/jobs/98840219695/logs" \
-            -o job.log -w "curl_http=%{http_code}\n" >> status.txt 2>> fetch.err
-          wc -c job.log >> status.txt 2>&1
-          exit 0
-
-      - name: Report
-        if: always()
-        run: |
-          set +e
-          emit() {
-            body=$(sed -e 's/%/%25/g' "$2" | awk '{printf "%s%%0A", $0}')
-            echo "::error title=$1::${body}"
-          }
-          tr -d '\r' < job.log | sed -e 's/\x1b\[[0-9;]*m//g' > clean.log
-          cat status.txt fetch.err > head.txt 2>/dev/null
-          emit "status" head.txt
-          wc -l clean.log >> head.txt
-          grep -n -E "@thinkrail/web|turbo|ERROR|error|Error|WARN" clean.log | tail -c 6000 > webbuild.txt
-          emit "webbuild" webbuild.txt
-          sed -n "/Run bun run build:binary/,\$p" clean.log | tail -c 6000 > region.txt
-          emit "region" region.txt
-          exit 0
+      - uses: actions/checkout@v5
+        with:
+          ref: fix/windows-smoke-teardown-retry
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+      - run: bun install --frozen-lockfile
+      - run: bun run build:binary
+      - run: bun run smoke:binary
