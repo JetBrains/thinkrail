@@ -1,0 +1,68 @@
+name: Probe windows installer smoke
+
+on:
+  push:
+    branches: [ci/probe-nightly-windows-logs]
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - name: Package and smoke the canary Windows installer
+        id: probe
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          {
+            bun install --frozen-lockfile
+            echo "install_exit=$?"
+            bun run build:web
+            echo "web_exit=$?"
+            bun apps/desktop/build.ts --env=canary
+            echo "package_exit=$?"
+            ls -la apps/desktop/artifacts
+            source=$(find apps/desktop/artifacts -maxdepth 1 -type f -name '*.zip' | head -1)
+            echo "source=$source"
+            mkdir -p apps/desktop/dist
+            cp "$source" apps/desktop/dist/thinkrail-desktop-windows-x64.zip
+            bun apps/desktop/installerSmoke.ts apps/desktop/dist/thinkrail-desktop-windows-x64.zip canary
+            echo "smoke_exit=$?"
+          } > probe.log 2>&1
+          tail -5 probe.log
+          exit 0
+
+      - name: Report
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          emit() {
+            body=$(sed -e 's/%/%25/g' "$2" | awk '{printf "%s%%0A", $0}')
+            echo "::error title=$1::${body}"
+          }
+          tr -d '\r' < probe.log | tail -c 30000 > tail.txt
+          split -n l/6 -d tail.txt part-
+          i=0
+          for p in part-*; do
+            emit "probe-$i" "$p"
+            i=$((i+1))
+          done
+          {
+            echo '## windows installer probe log (tail)'
+            echo '```'
+            cat tail.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          grep -E "^(install|web|package|smoke)_exit=|^source=" probe.log > exits.txt
+          emit "exits" exits.txt
+          exit 0
