@@ -49,6 +49,7 @@ interface ChildEntry {
 	workspaceDispose?: (outcome: { status: RunStatus }) => { resultAddendum?: string } | undefined;
 	snapshot?: RunSnapshot;
 	activeRun?: ActiveRun;
+	teardown?: Promise<void>;
 	disposed: boolean;
 }
 
@@ -456,10 +457,11 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 		}
 	}
 
-	async function disposeChild(entry: ChildEntry): Promise<void> {
-		if (entry.disposed) return;
+	function disposeChild(entry: ChildEntry): Promise<void> {
 		entry.disposed = true;
-		await teardownChild(entry);
+		void abortActiveRun(entry).catch(() => {});
+		entry.teardown ??= Promise.resolve().then(() => teardownChild(entry));
+		return entry.teardown;
 	}
 
 	async function teardownChild(entry: ChildEntry): Promise<void> {
@@ -649,11 +651,11 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 		disposeChildrenOf: async (parentSessionId) => {
 			const entries = [...(byParent.get(parentSessionId) ?? [])].flatMap((id) => {
 				const entry = children.get(id);
-				return entry && !entry.disposed ? [entry] : [];
+				return entry ? [entry] : [];
 			});
 			for (const entry of entries) entry.disposed = true;
 			for (const entry of entries) void abortActiveRun(entry).catch(() => {});
-			for (const entry of entries) await teardownChild(entry);
+			await Promise.all(entries.map(disposeChild));
 			byParent.delete(parentSessionId);
 			semaphores.delete(parentSessionId);
 			fallbackRuntimes.delete(parentSessionId);

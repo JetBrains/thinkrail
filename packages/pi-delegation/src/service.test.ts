@@ -693,6 +693,44 @@ test("ChildHandle.dispose settles a queued run before removing the child", async
 	}
 });
 
+test("concurrent child and parent disposal share one teardown and both await it", async () => {
+	const paced = createDelegationService({
+		resolveParent: (id) =>
+			id === parent.sessionId
+				? { cwd: parentCwd, model: parent.model, thinkingLevel: parent.thinkingLevel }
+				: undefined,
+		delegationRoot,
+		scope: "ws-concurrent-dispose",
+		modelRuntime: runtime,
+	});
+	faux.setResponses([
+		async () => {
+			await Bun.sleep(300);
+			return fauxAssistantMessage("SLOW_DONE");
+		},
+	]);
+	const child = await paced.createChild(subagentSpec());
+	const events: string[] = [];
+	paced.onLifecycle((event) => {
+		if ("sessionId" in event && event.sessionId === child.sessionId) events.push(event.type);
+	});
+	const run = child.runQueued("Slow.");
+	await Bun.sleep(20);
+	expect(child.snapshot?.status).toBe("running");
+	const childDisposal = child.dispose();
+
+	try {
+		await paced.disposeChildrenOf(parent.sessionId);
+		expect(paced.findChild(child.sessionId)).toBeUndefined();
+		expect((await run).status).toBe("aborted");
+		await childDisposal;
+		expect(events).toEqual(["run-queued", "run-started", "run-terminal", "child-disposed"]);
+	} finally {
+		await Promise.allSettled([childDisposal, run]);
+		await paced.disposeChildrenOf(parent.sessionId);
+	}
+});
+
 test("disposeChildrenOf marks every child before awaiting aborts — a queued sibling never starts", async () => {
 	const paced = createDelegationService({
 		resolveParent: (id) =>
