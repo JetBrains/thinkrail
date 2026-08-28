@@ -36,6 +36,8 @@ const WRAP_UP_INSTRUCTION =
 
 interface ActiveRun {
 	readonly controller: AbortController;
+	readonly settled: Promise<void>;
+	readonly resolveSettled: () => void;
 	sessionAbort?: Promise<void>;
 }
 
@@ -359,7 +361,14 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 				`Child ${entry.record.sessionId} already has a run in flight — steer() it instead`,
 			);
 		}
-		const activeRun: ActiveRun = { controller: new AbortController() };
+		let resolveSettled = () => {};
+		const activeRun: ActiveRun = {
+			controller: new AbortController(),
+			settled: new Promise<void>((resolve) => {
+				resolveSettled = resolve;
+			}),
+			resolveSettled: () => resolveSettled(),
+		};
 		entry.activeRun = activeRun;
 		const forwardCallerAbort = () => activeRun.controller.abort(opts.signal?.reason);
 		if (opts.signal?.aborted) forwardCallerAbort();
@@ -442,6 +451,7 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 			}
 		} finally {
 			opts.signal?.removeEventListener("abort", forwardCallerAbort);
+			activeRun.resolveSettled();
 			if (entry.activeRun === activeRun) delete entry.activeRun;
 		}
 	}
@@ -453,6 +463,11 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 	}
 
 	async function teardownChild(entry: ChildEntry): Promise<void> {
+		const activeRun = entry.activeRun;
+		if (activeRun) {
+			await abortActiveRun(entry).catch(() => {});
+			await activeRun.settled;
+		}
 		if (entry.session.isStreaming) await entry.session.abort().catch(() => {});
 		const lastStatus = entry.snapshot?.status;
 		const terminal: RunStatus =
@@ -637,6 +652,7 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 				return entry && !entry.disposed ? [entry] : [];
 			});
 			for (const entry of entries) entry.disposed = true;
+			for (const entry of entries) void abortActiveRun(entry).catch(() => {});
 			for (const entry of entries) await teardownChild(entry);
 			byParent.delete(parentSessionId);
 			semaphores.delete(parentSessionId);
