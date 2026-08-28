@@ -186,5 +186,5 @@ try {
 	console.error(`desktop smoke FAILED: ${error instanceof Error ? error.message : error}`);
 	process.exitCode = 1;
 } finally {
-	rmSync(root, { recursive: true, force: true });
+	rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
 }

@@ -429,6 +429,6 @@ export default function syntheticExternalExtension(pi) {
 		socket?.close();
 		await defaultHost?.stop().catch(() => {});
 		await customHost?.stop().catch(() => {});
-		rmSync(root, { recursive: true, force: true });
+		rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
 	}
 }

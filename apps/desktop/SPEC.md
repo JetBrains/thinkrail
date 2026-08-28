@@ -126,6 +126,11 @@ Unsigned desktop installers ship beside the CLI artifacts for macOS ARM64, Windo
 Linux ARM64. Nightly maps to Electrobun canary and stable maps to stable. Signing, notarization, and updater
 UX are deferred.
 
+Smoke teardown of a temp tree that a launcher ran from must pass `maxRetries`/`retryDelay` to `rmSync`.
+Windows releases handles asynchronously after a child exits, so a bare recursive remove throws `EBUSY`
+and fails the release *after* every assertion has already passed. The retry is teardown resilience, not
+error suppression: a tree that stays locked past the backoff still throws.
+
 Linux uses native WebKitGTK without CEF and declares Ubuntu 24.04+/glibc 2.38 plus `libgtk-3-0`,
 `libwebkit2gtk-4.1-0`, `libayatana-appindicator3-1`, and `librsvg2-2`. Xvfb software-rendering flags are
 CI-only and are never shipped as user configuration.
