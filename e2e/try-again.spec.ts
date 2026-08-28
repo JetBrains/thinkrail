@@ -10,7 +10,7 @@ const BASE_TS = 1_700_700_000_000;
 interface ClientFrame {
 	id?: string;
 	method?: string;
-	params?: { sessionId?: string; text?: string };
+	params?: { sessionId?: string; text?: string; images?: unknown[] };
 }
 
 async function interceptTryAgain(page: Page, prompts: ClientFrame[]): Promise<void> {
@@ -79,5 +79,6 @@ test("a final agent failure offers Try again as an ordinary visible prompt", asy
 	).toHaveCount(1);
 	await expect
 		.poll(() => prompts.at(-1)?.params)
-		.toMatchObject({ sessionId: chat.id, text: "Try again." });
+		.toEqual({ sessionId: chat.id, text: "Try again." });
+	expect(prompts).toHaveLength(1);
 });
