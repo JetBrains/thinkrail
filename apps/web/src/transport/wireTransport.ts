@@ -14,16 +14,30 @@ import type {
 } from "@thinkrail/contracts";
 import { WS_CHANNELS } from "@thinkrail/contracts";
 import { useAppStore } from "../store";
+import { createPiEventBatcher, shouldFlushPiEventsBefore } from "./piEventBatcher";
 import { WsTransport } from "./transport";
 
 let transport: WsTransport | null = null;
 
 export function initTransport(): WsTransport {
 	if (transport) return transport;
+	const piEvents = createPiEventBatcher((payloads) =>
+		useAppStore.getState().handlePiEvents(payloads),
+	);
 
-	transport = new WsTransport({
-		onStatus: (status) => useAppStore.getState().setStatus(status),
-	});
+	transport = new WsTransport(
+		{
+			onStatus: (status) => {
+				piEvents.flush();
+				useAppStore.getState().setStatus(status);
+			},
+		},
+		{
+			beforeDispatch: (message) => {
+				if (shouldFlushPiEventsBefore(message)) piEvents.flush();
+			},
+		},
+	);
 
 	transport.subscribe(WS_CHANNELS.serverWelcome, (data) => {
 		const welcome = data as Partial<ServerWelcome>;
@@ -48,8 +62,7 @@ export function initTransport(): WsTransport {
 	});
 
 	transport.subscribe(WS_CHANNELS.piEvent, (data) => {
-		const { sessionId, event } = data as SessionEventPayload;
-		useAppStore.getState().handlePiEvent(event, sessionId);
+		piEvents.enqueue(data as SessionEventPayload);
 	});
 
 	transport.subscribe(WS_CHANNELS.piExtensionUi, (data) => {

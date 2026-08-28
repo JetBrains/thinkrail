@@ -16,6 +16,7 @@ import type {
 	RefreshedModels,
 	ReviewChangedPayload,
 	ReviewSnapshot,
+	SessionEventPayload,
 	SessionQueueState,
 	SessionStats,
 	SessionSummary,
@@ -856,6 +857,7 @@ interface AppState {
 		detail: string,
 	) => void;
 	handlePiEvent: (event: PiEvent, sessionId: string) => void;
+	handlePiEvents: (payloads: readonly SessionEventPayload[]) => void;
 	setModelsForProviderVersion: (providerVersion: number, models: WireModel[]) => void;
 	noteProviderChanged: () => void;
 	bumpTemplatesVersion: () => void;
@@ -2790,13 +2792,22 @@ export const useAppStore = create<AppState>((set, get) => ({
 						};
 			}),
 		),
-	handlePiEvent: (event, sessionId) =>
-		set((s) =>
-			withRuntime(s, sessionId, (rt) => ({
-				...reduceSessionEvent(rt, event),
-				eventRevision: rt.eventRevision + 1,
-			})),
-		),
+	handlePiEvent: (event, sessionId) => get().handlePiEvents([{ event, sessionId }]),
+	handlePiEvents: (payloads) =>
+		set((s) => {
+			let sessions = s.sessions;
+			for (const { event, sessionId } of payloads) {
+				const runtime = sessions[sessionId];
+				if (!runtime) continue;
+				if (sessions === s.sessions) sessions = { ...sessions };
+				const next = reduceSessionEvent(runtime, event);
+				sessions[sessionId] = {
+					...next,
+					eventRevision: runtime.eventRevision + 1,
+				};
+			}
+			return sessions === s.sessions ? s : { sessions };
+		}),
 	setModelsForProviderVersion: (providerVersion, models) =>
 		set((s) => (s.providerVersion === providerVersion ? { models, modelsFresh: false } : s)),
 	noteProviderChanged: () =>
