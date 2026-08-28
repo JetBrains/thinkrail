@@ -73,7 +73,9 @@ test("a final agent failure offers Try again as an ordinary visible prompt", asy
 
 	await expect(page.getByTestId("agent-try-again")).toHaveCount(0);
 	await expect(
-		page.locator('[data-testid="chat-message"][data-role="user"]').filter({ hasText: "Try again." }),
+		page
+			.locator('[data-testid="chat-message"][data-role="user"]')
+			.filter({ hasText: "Try again." }),
 	).toHaveCount(1);
 	await expect
 		.poll(() => prompts.at(-1)?.params)

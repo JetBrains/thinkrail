@@ -64,9 +64,7 @@ export function writeFixtureSession(
 					role: m.role,
 					content,
 					timestamp: m.timestamp,
-					...(m.role === "assistant" && m.stopReason
-						? { stopReason: m.stopReason }
-						: {}),
+					...(m.role === "assistant" && m.stopReason ? { stopReason: m.stopReason } : {}),
 					...(m.role === "assistant" && m.errorMessage !== undefined
 						? { errorMessage: m.errorMessage }
 						: {}),

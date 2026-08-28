@@ -420,13 +420,7 @@ function CompactionTurn({
 	);
 }
 
-function ErrorTurn({
-	text,
-	onTryAgain,
-}: {
-	text: string;
-	onTryAgain?: (() => void) | undefined;
-}) {
+function ErrorTurn({ text, onTryAgain }: { text: string; onTryAgain?: (() => void) | undefined }) {
 	return (
 		<div
 			data-testid="chat-message"
