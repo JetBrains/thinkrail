@@ -47,9 +47,17 @@ its own spec.
   uses (tool panels, project tree expansion, Monaco editor/diff boot, settings lists, plan tabs). One
   primitive, not per-panel ad-hoc "Loading…" lines: a loading state must occupy content-shaped space so
   the arriving data replaces it without the layout jumping. The app's loading vocabulary is exactly
-  **two-tier**: `SkeletonRows` for a *content region* whose data is on the way, and a `Loader2` spinner
-  (usually beside a short label) for an *in-flight action or transient state* pinned to its control
-  (buttons, menu items, tab-body restores). Bare "Loading…" text without either is a defect.
+  **two-tier**: `SkeletonRows` for a *content region* — any area that will fill with substantial content,
+  however that region is framed (a tool panel, a dialog's list, a menu's list section, **or a tab
+  body/Suspense fallback restoring a chat, plan, or editor** — size of surface, not its container, decides
+  the tier) — and a `Loader2` spinner (usually beside a short label) for an *in-flight action or transient
+  state* pinned to its control (a button, a single menu item, an icon). A spinner centred in a large empty
+  region reads as a different, heavier kind of wait than the content-shaped skeleton used one panel over
+  for the same "data is on the way" situation, so it is never the right choice for a region —
+  `shell/WorkspaceWorkbench.tsx`'s `MissingResource` (the chat/plan/editor tab-body and Suspense
+  fallback), `panels/ExistingWorktreeDialog.tsx`'s worktree-candidate list, and
+  `panels/ChangesScopeMenu.tsx`'s commit list all render `SkeletonRows` for exactly this reason. Bare
+  "Loading…" text without either is a defect.
 - **Public surface:** `ErrorBoundary`, `isChunkLoadError`, `SkeletonRows` — imported directly via
   `@/components/ErrorBoundary` / `@/components/Skeleton` (no barrel); `CustomIcon`, `CustomIconName` via
   `@/components/CustomIcon`; `QuietScrollArea`, `QuietScrollFrame`, and the `QuietScrollEdges` type via

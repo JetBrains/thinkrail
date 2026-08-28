@@ -3,10 +3,10 @@ import {
 	RiArrowDownSLine as ChevronDown,
 	RiGitCommitLine as GitCommitHorizontal,
 	RiGitPullRequestLine as GitCompare,
-	RiLoader4Line as Loader2,
 } from "@remixicon/react";
 import type { GitCommit, GitDiffScope } from "@thinkrail/contracts";
 import { useRef, useState } from "react";
+import { SkeletonRows } from "@/components/Skeleton";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -97,10 +97,9 @@ export function ChangesScopeMenu({
 				<DropdownMenuSeparator />
 				<DropdownMenuLabel>Commits</DropdownMenuLabel>
 				{commits === null ? (
-					<DropdownMenuItem disabled>
-						<Loader2 className="size-3.5 animate-spin motion-reduce:animate-none" />
-						Loading commits…
-					</DropdownMenuItem>
+					<div role="status" aria-label="Loading commits" aria-busy="true" className="px-8 py-4">
+						<SkeletonRows rows={3} />
+					</div>
 				) : commits.length === 0 ? (
 					<DropdownMenuItem disabled>No commits on this branch</DropdownMenuItem>
 				) : (

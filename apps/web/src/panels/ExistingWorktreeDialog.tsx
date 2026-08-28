@@ -6,6 +6,7 @@ import {
 } from "@remixicon/react";
 import type { ExistingWorktreeCandidate, Workspace } from "@thinkrail/contracts";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { SkeletonRows } from "@/components/Skeleton";
 import { Button } from "@/components/ui/button";
 import {
 	Dialog,
@@ -109,11 +110,13 @@ export function ExistingWorktreeDialog({
 
 				{candidates === null && loadError === null ? (
 					<div
-						className="flex min-h-112 items-center justify-center gap-8 text-text-muted tr-text-ui"
+						role="status"
+						aria-label="Reading Git worktrees"
+						aria-busy="true"
+						className="min-h-112 p-4"
 						data-testid="existing-worktree-loading"
 					>
-						<Loader2 className="size-16 animate-spin" />
-						Reading Git worktrees…
+						<SkeletonRows rows={4} />
 					</div>
 				) : null}
 
