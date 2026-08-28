@@ -35,9 +35,9 @@ jobs:
           tr -d '\r' < job.log | sed -e 's/\x1b\[[0-9;]*m//g' > clean.log
           cat status.txt fetch.err > head.txt 2>/dev/null
           emit "status" head.txt
-          tail -c 20000 clean.log > tail.txt
-          split -n l/5 -d tail.txt part-
-          for p in $(ls part-* | sort -r); do
-            emit "tailrev-$p" "$p"
-          done
+          wc -l clean.log >> head.txt
+          grep -n -E "@thinkrail/web|turbo|ERROR|error|Error|WARN" clean.log | tail -c 6000 > webbuild.txt
+          emit "webbuild" webbuild.txt
+          sed -n "/Run bun run build:binary/,\$p" clean.log | tail -c 6000 > region.txt
+          emit "region" region.txt
           exit 0
