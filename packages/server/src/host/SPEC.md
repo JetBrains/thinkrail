@@ -96,7 +96,9 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `stop()` → immediate agent-session cleanup, then `persistTerminalSessions()` **before**
   `closeAllTerminals()`, then watcher/socket disposal; `shutdown()` memoizes one asynchronous graceful
   path: bounded `settleSessionsForShutdown()` + awaited `shutdownAnalytics()` first, then `stop()` and
-  ownership-lease close); `crashLog.ts` (`installCrashLog` — the `uncaughtException`/`unhandledRejection` report
+  ownership-lease close). The bounded settle includes hidden delegation children even when their parent is
+  idle, plus child cascades already started by a concurrent removal, so graceful quit does not let a
+  background child lose its terminal abort/tool result; `crashLog.ts` (`installCrashLog` — the `uncaughtException`/`unhandledRejection` report
   appended to `<dataDir>/logs/crash.log` and echoed to stderr, then `exit(1)`: in-process pi means such a
   fault is the whole host's, and a launcher started without a terminal otherwise loses its only trace.
   Never a recovery, and never installed under `NODE_ENV=test` — a unit-test process reports its own

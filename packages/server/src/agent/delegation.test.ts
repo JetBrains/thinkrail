@@ -21,6 +21,7 @@ import {
 	removeWorkspaceSessions,
 	setSessionManagerFactory,
 	setSessionPublisher,
+	settleSessionsForShutdown,
 } from "./agentSessionManager";
 import { delegationRootDir, delegationServiceFor, readChildTranscript } from "./delegation";
 import { configurePiRuntime } from "./piRuntime";
@@ -236,6 +237,28 @@ test("workspace archival awaits in-flight delete transactions before deleting th
 	await Promise.all([done, archived, run]);
 	unsubscribe();
 	expect(storeAliveAtCascadeEnd).toBe(true);
+});
+
+test("graceful shutdown waits for a background child cascade", async () => {
+	const cwd = tmpDir("trdel-shutdown-");
+	const { sessionId } = await createSession({ cwd, workspaceId: "ws-shutdown" });
+	const service = delegationServiceFor("ws-shutdown");
+	const { release } = gatedChildResponse();
+	const child = await service.createChild({
+		parent: sessionId,
+		visibility: "hidden",
+		info: { createdBy: "tool:Agent", roleName: "scout", roleSource: "builtin" },
+		session: { systemPrompt: "You are a test scout." },
+	});
+	const run = child.runQueued("Long background job.");
+	await waitFor(() => child.snapshot?.status === "running");
+
+	const settled = settleSessionsForShutdown(10_000).then(() => "settled" as const);
+	expect(await Promise.race([settled, Promise.resolve("pending" as const)])).toBe("pending");
+	release();
+	await Promise.all([settled, run]);
+	expect(service.findChild(child.sessionId)).toBeUndefined();
+	await removeSession(sessionId);
 });
 
 test("children follow their parent's retained runtime generation across a flip", async () => {

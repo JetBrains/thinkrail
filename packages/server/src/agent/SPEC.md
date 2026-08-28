@@ -186,9 +186,12 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     cancelled:true}`), so its card hydrates as the normal skipped record;
     **`answerQuestion(sessionId, toolCallId, result)`** — the `ask_user_question` reply path (see the
     `askUserQuestion` bullet); **`settleSessionsForShutdown(timeoutMs)`** — the polite half of shutdown:
-    abort every streaming session and wait (bounded) so pi persists their "Operation aborted" tool results
-    before `process.exit` (the launcher's SIGINT/SIGTERM handler awaits it; whatever misses the window is
-    healed by the restart repair); `getSessionWorkspaceId(sessionId)` (the live session→workspace
+    abort every streaming parent, dispose every hidden child (including background children whose parent is
+    idle), include cascades already pending from concurrent removal, and wait for all of them under the one
+    bound so pi can persist their "Operation aborted" tool results before `process.exit` (the launcher's
+    SIGINT/SIGTERM handler awaits it; whatever misses the window is healed by the restart repair).
+    `disposeAllSessions` remains the synchronous emergency stop, but registers its best-effort child cascades
+    in the same pending set; `getSessionWorkspaceId(sessionId)` (the live session→workspace
     lookup the host's auto-rename hook keys on); `removeSession`/`disposeAllSessions`;
     **`removeWorkspaceSessions(workspaceId, cwd?)`** (the **archive teardown**: abort a streaming turn,
     then dispose every live session for the workspace **unconditionally** — bypassing the per-chat delete

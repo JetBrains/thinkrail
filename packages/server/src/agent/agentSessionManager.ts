@@ -959,7 +959,10 @@ export function removeSession(sessionId: string): Promise<void> {
 
 export function disposeAllSessions(): void {
 	for (const [sessionId, entry] of sessions) {
-		void disposeSessionChildren(entry.workspaceId, sessionId).catch(() => {});
+		void trackCascade(
+			entry.workspaceId,
+			disposeSessionChildren(entry.workspaceId, sessionId).catch(() => {}),
+		);
 		cancelExtUiForSession(sessionId);
 		entry.unsubscribe();
 		entry.session.dispose();
@@ -969,10 +972,22 @@ export function disposeAllSessions(): void {
 }
 
 export async function settleSessionsForShutdown(timeoutMs = 2000): Promise<void> {
-	const streaming = [...sessions.values()].filter((entry) => entry.session.isStreaming);
-	if (streaming.length === 0) return;
+	const settling = new Set<Promise<unknown>>();
+	for (const [sessionId, entry] of sessions) {
+		if (entry.session.isStreaming) settling.add(entry.session.abort());
+		settling.add(
+			trackCascade(
+				entry.workspaceId,
+				disposeSessionChildren(entry.workspaceId, sessionId).catch(() => {}),
+			),
+		);
+	}
+	for (const pending of pendingCascades.values()) {
+		for (const cascade of pending) settling.add(cascade);
+	}
+	if (settling.size === 0) return;
 	await Promise.race([
-		Promise.allSettled(streaming.map((entry) => entry.session.abort())),
+		Promise.allSettled(settling),
 		new Promise<void>((resolve) => setTimeout(resolve, timeoutMs)),
 	]);
 }
