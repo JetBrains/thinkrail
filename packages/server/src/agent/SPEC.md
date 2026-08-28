@@ -4,7 +4,7 @@ type: submodule-design
 status: active
 title: agent — in-process pi sessions
 parent: module-server
-depends-on: [module-contracts]
+depends-on: [module-contracts, module-pi-delegation, module-pi-subagents]
 references: [module-spec-graph, central-integration]
 tags: [v1, pi]
 ---
@@ -518,17 +518,21 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   fixtures + **pure catalog helpers value-imported from the package root** — today exactly
   `getSupportedThinkingLevels` + `clampThinkingLevel`, data-only projections over `Model`; *dispatch*
   still goes through the shared `ModelRuntime`, never pi-ai's stream/complete — plus the `/bun-oauth` + `/bedrock-provider`
-  + `/compat` subpaths, value-imported **only** inside `registerBundledRuntime`'s dynamic imports); `pi-web-access` + `pi-visualize` + `pi-spec-graph` +
-  `pi-thinkrail-workflow` + `pi-todos` (the bundled extensions — loaded by path, never value-imported here;
-  launcher-generated modules own the CLI binary and desktop runtime value imports); `typebox` (the
-  `ask_user_question` parameter schema); `trash` (the cross-platform OS recycle-bin implementation;
-  called with globbing disabled and allowed to throw — never degraded to `unlink`);
-  `@stroncium/procfs` (directly pinned solely for the compiled Linux trash parser inclusion seam);
+  + `/compat` subpaths, value-imported **only** inside `registerBundledRuntime`'s dynamic imports);
+  `pi-delegation` + `pi-subagents` (the portable delegation runtime and Agent-tool composition,
+  value-imported by the host embedding); `pi-web-access` + `pi-visualize` + `pi-spec-graph` +
+  `pi-thinkrail-workflow` + `pi-todos` (the bundled extension set — parent sessions load the set through
+  resource-loader paths or launcher factories; delegated children value-import `pi-spec-graph` and receive
+  the named `pi-web-access` factory through the bundled runtime seam, with source-mode Bun `require` as the
+  dev equivalent); `typebox` (the `ask_user_question` parameter schema); `trash` (the cross-platform OS
+  recycle-bin implementation; called with globbing disabled and allowed to throw — never degraded to
+  `unlink`); `@stroncium/procfs` (directly pinned solely for the compiled Linux trash parser inclusion seam);
   `contracts` (`PiEvent`/`Model`/`ThinkingLevel`/`ImageContent`/`SessionStats`/`SlashCommandInfo`/`ExtUi*`/
-  `AskUserQuestion*`/`ProviderStatus*`); `log` (diagnostics + session-lifecycle debug traces); Node.
-- **Forbidden:** `host`; sibling features other than `log` (the `cwd` is passed in, not looked up via `persistence`);
-  Central process/filesystem knowledge—the caller supplies only the desired opaque extension paths for a
-  candidate.
+  `AskUserQuestion*`/`ProviderStatus*`); `log` (diagnostics + session-lifecycle debug traces); `persistence`
+  (`dataDir` only, to root the host-owned delegation transcript store); Node.
+- **Forbidden:** `host`; sibling features other than `log` and the narrow `persistence.dataDir` edge (session
+  worktree `cwd` remains an input, never a persistence lookup); Central process/filesystem knowledge—the
+  caller supplies only the desired opaque extension paths for a candidate.
 
 ## Get right
 
