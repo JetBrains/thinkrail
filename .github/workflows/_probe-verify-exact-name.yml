@@ -1,0 +1,57 @@
+name: Probe windows installer smoke (exact-name fix)
+
+on:
+  push:
+    branches: [ci/probe-nightly-windows-logs]
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: fix/windows-nightly-installer-smoke
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - name: Package and smoke the canary Windows installer
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          {
+            bun install --frozen-lockfile
+            echo "install_exit=$?"
+            bun run build:web
+            echo "web_exit=$?"
+            bun apps/desktop/build.ts --env=canary
+            echo "package_exit=$?"
+            source=$(find apps/desktop/artifacts -maxdepth 1 -type f -name '*.zip' | head -1)
+            echo "source=$source"
+            mkdir -p apps/desktop/dist
+            cp "$source" apps/desktop/dist/thinkrail-desktop-windows-x64.zip
+            bun apps/desktop/installerSmoke.ts apps/desktop/dist/thinkrail-desktop-windows-x64.zip canary
+            echo "smoke_exit=$?"
+          } > probe.log 2>&1
+          exit 0
+
+      - name: Report
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          emit() {
+            body=$(sed -e 's/%/%25/g' "$2" | awk '{printf "%s%%0A", $0}')
+            echo "::error title=$1::${body}"
+          }
+          grep -E "^(install|web|package|smoke)_exit=|^source=" probe.log > exits.txt
+          emit "exits" exits.txt
+          grep -E "smoke OK|does not contain|Setup-canary\.exe|error:" probe.log | tail -20 > verdict.txt
+          emit "verdict" verdict.txt
+          exit 0
