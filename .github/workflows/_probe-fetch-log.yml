@@ -32,20 +32,13 @@ jobs:
             body=$(sed -e 's/%/%25/g' "$2" | awk '{printf "%s%%0A", $0}')
             echo "::error title=$1::${body}"
           }
-          cat status.txt fetch.err > head.txt 2>/dev/null
-          emit "status" head.txt
-          if [ -s job.log ]; then
-            tr -d '\r' < job.log | sed -e 's/\x1b\[[0-9;]*m//g' > clean.log
-            grep -n -E '^\S+ ##\[(group|error|endgroup)\]' clean.log | sed -e 's/^\([0-9]*\).*##\[/\1 [/' | tail -c 3500 > markers.txt
-            emit "markers" markers.txt
-            tail -c 48000 clean.log > tail.txt
-            split -n l/12 -d tail.txt part-
-            i=0
-            for p in part-*; do
-              emit "log-$i" "$p"
-              i=$((i+1))
-            done
-          else
-            echo "::error title=log::no log body retrieved"
-          fi
+          tr -d '\r' < job.log | sed -e 's/\x1b\[[0-9;]*m//g' > clean.log
+          grep -n -i -E 'error|fail|EBUSY|ENOENT|timed out|exited|throw|at [A-Za-z]+ \(' clean.log \
+            | grep -v -i -E 'DEBUG|Creating file|Creating parent' | tail -c 3500 > errs.txt
+          emit "errors" errs.txt
+          tail -c 24000 clean.log > tail.txt
+          split -n l/6 -d tail.txt part-
+          for p in $(ls part-* | sort -r); do
+            emit "tailrev-$p" "$p"
+          done
           exit 0
