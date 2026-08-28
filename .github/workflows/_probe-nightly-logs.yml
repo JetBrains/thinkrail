@@ -1,0 +1,43 @@
+name: Probe nightly logs
+
+on:
+  push:
+    branches: [ci/probe-nightly-windows-logs]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dump failing nightly job log as annotations
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          gh api "repos/${GITHUB_REPOSITORY}/actions/jobs/98805937554/logs" > job.log
+          wc -l job.log
+          {
+            echo '## Windows nightly job log (tail 400)'
+            echo '```'
+            tail -400 job.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          python3 - <<'PY'
+          import re
+          lines = open('job.log', errors='replace').read().splitlines()
+          tail = lines[-260:]
+          chunks, cur = [], []
+          size = 0
+          for line in tail:
+              cur.append(line)
+              size += len(line) + 1
+              if size > 2500:
+                  chunks.append(cur); cur = []; size = 0
+          if cur: chunks.append(cur)
+          for i, chunk in enumerate(chunks[-9:]):
+              body = "%0A".join(l.replace('%','%25').replace('\r','') for l in chunk)
+              print(f"::error title=logchunk-{i}::{body}")
+          PY
