@@ -156,9 +156,11 @@ templates, no themes; context files, skills, and the embedder's curated extensio
 parent's. Runtime precedence is parent `modelRuntime` → service `modelRuntime` → cached self-created
 runtime. The self-created path caches a separate runtime and mirrored-registration set per parent
 lineage; `disposeChildrenOf(parent)` drops that cache entry with the lineage. It mirrors the parent's
-public `modelRegistry` registrations before each spawn: native providers are replayed as native
-providers, configured providers as their opaque configs, and stale mirrors are removed before model
-resolution. This preserves extension-supplied provider behavior and config-contained auth without
+public `modelRegistry` registrations before each spawn: every previously mirrored id is unregistered
+before the current native providers and opaque configured-provider configs are replayed. Rebuilding
+rather than merging is required because pi provider re-registration preserves omitted fields; without
+the unregister, a same-id replacement can retain stale config such as secret headers. This preserves
+extension-supplied provider behavior and config-contained auth without
 reading either; it cannot reproduce credentials or mutable state held only inside the original
 runtime, which is why exact runtime injection remains the stronger embedder contract. Storage: the
 lineage section above.

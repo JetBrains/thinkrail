@@ -187,9 +187,7 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 		const registry = parent.modelRegistry;
 		if (!registry) return;
 		const registeredIds = new Set(registry.getRegisteredProviderIds());
-		for (const providerId of mirroredProviderIds) {
-			if (!registeredIds.has(providerId)) runtime.unregisterProvider(providerId);
-		}
+		for (const providerId of mirroredProviderIds) runtime.unregisterProvider(providerId);
 		mirroredProviderIds.clear();
 		for (const providerId of registeredIds) {
 			const nativeProvider = registry.getRegisteredNativeProvider(providerId);

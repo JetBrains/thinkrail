@@ -2,7 +2,7 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { InMemoryCredentialStore, type Model } from "@earendil-works/pi-ai";
+import { InMemoryCredentialStore, type Model, type ProviderHeaders } from "@earendil-works/pi-ai";
 import {
 	createFauxCore,
 	fauxAssistantMessage,
@@ -54,12 +54,23 @@ let delegationRoot: string;
 let service: DelegationService;
 const events: LifecycleEvent[] = [];
 
-function registerFauxProvider(target: ModelRuntime, id: string): void {
+function registerFauxProvider(
+	target: ModelRuntime,
+	id: string,
+	options: {
+		headers?: Record<string, string>;
+		onRequestHeaders?: (headers: ProviderHeaders | undefined) => void;
+	} = {},
+): void {
 	target.registerProvider(id, {
 		api: faux.api,
 		baseUrl: "http://faux.local",
 		apiKey: "faux",
-		streamSimple: faux.streamSimple,
+		streamSimple: (model, context, streamOptions) => {
+			options.onRequestHeaders?.(streamOptions?.headers);
+			return faux.streamSimple(model, context, streamOptions);
+		},
+		...(options.headers ? { headers: options.headers } : {}),
 		models: [
 			{
 				id,
@@ -353,6 +364,61 @@ test("the self-created runtime mirrors public provider registrations and removes
 	if (!(staleResult instanceof Error)) throw new Error("expected stale model resolution to fail");
 	expect(staleResult.message).toContain("Unknown model mirrored/mirrored");
 	await fallback.disposeChildrenOf(parent.sessionId);
+});
+
+test("the self-created runtime replaces same-id provider configs without retaining omitted fields", async () => {
+	const sourceRuntime = await ModelRuntime.create({
+		credentials: new InMemoryCredentialStore(),
+		modelsPath: null,
+		allowModelNetwork: false,
+	});
+	const requestHeaders: (ProviderHeaders | undefined)[] = [];
+	const captureHeaders = (headers: ProviderHeaders | undefined) => requestHeaders.push(headers);
+	registerFauxProvider(sourceRuntime, "replaced", {
+		headers: { "x-stale-secret": "secret" },
+		onRequestHeaders: captureHeaders,
+	});
+	const sourceModel = sourceRuntime.getModel("replaced", "replaced");
+	if (!sourceModel) throw new Error("replacement model not registered");
+	const fallback = createDelegationService({
+		resolveParent: (id) =>
+			id === parent.sessionId
+				? {
+						cwd: parentCwd,
+						model: sourceModel,
+						thinkingLevel: parent.thinkingLevel,
+						modelRegistry: new ModelRegistry(sourceRuntime),
+					}
+				: undefined,
+		delegationRoot,
+		scope: "ws-registry-replacement",
+	});
+	const replacedSpec = subagentSpec({
+		session: {
+			systemPrompt: "probe",
+			model: { provider: "replaced", id: "replaced" },
+			tools: [],
+		},
+	});
+	faux.setResponses([fauxAssistantMessage("OLD_CONFIG"), fauxAssistantMessage("NEW_CONFIG")]);
+	const first = await fallback.createChild(replacedSpec);
+	try {
+		expect((await first.runQueued("Use old config.")).status).toBe("completed");
+		expect(requestHeaders.at(-1)?.["x-stale-secret"]).toBe("secret");
+	} finally {
+		await first.dispose();
+	}
+
+	sourceRuntime.unregisterProvider("replaced");
+	registerFauxProvider(sourceRuntime, "replaced", { onRequestHeaders: captureHeaders });
+	const second = await fallback.createChild(replacedSpec);
+	try {
+		expect((await second.runQueued("Use new config.")).status).toBe("completed");
+		expect(requestHeaders.at(-1)?.["x-stale-secret"]).toBeUndefined();
+	} finally {
+		await second.dispose();
+		await fallback.disposeChildrenOf(parent.sessionId);
+	}
 });
 
 test("self-created runtimes isolate provider synchronization per parent lineage", async () => {
