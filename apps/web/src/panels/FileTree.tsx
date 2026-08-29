@@ -44,7 +44,7 @@ export function FileTree({ workspaceId }: { workspaceId: string }) {
 	if (nodes.length === 0)
 		return <p className="px-4 py-4 tr-text-metadata text-text-muted">Empty</p>;
 	return (
-		<ul className="flex flex-col">
+		<ul className="flex flex-col motion-safe:animate-reveal">
 			{nodes.map((node) => (
 				<FileNodeRow
 					key={node.path}

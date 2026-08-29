@@ -108,6 +108,33 @@ Beyond picking the right tier:
   region is guaranteed to fill; reach for nothing only when it may legitimately never fill and the caller
   already treats absence as absence, not as a pending state.
 - Bare "Loading…"/"Restoring…" text with neither a skeleton nor a spinner is a defect, full stop.
+- **The resolved content fades in rather than popping in.** Once a skeleton's data arrives, the element that
+  replaces it carries `motion-safe:animate-reveal` (`index.css`'s shared `reveal` keyframe — 150ms
+  opacity+translateY, the same primitive `chat/tools/AskUserQuestionCard.tsx` already uses for a card
+  settling into place; `motion-safe:` so `prefers-reduced-motion` gets an instant swap instead). It goes on
+  the resolved branch's own root — never the skeleton, never a wrapper that also encloses the skeleton
+  branch (a `Suspense` boundary's *children*, not the `Suspense` element itself) — because the animation
+  plays once on that element's mount, and a shared wrapper around both branches would fire on first paint,
+  before the data (or the resolved content itself) exists to fade in. It never re-fires on ordinary
+  re-renders (a longer todo list, a new chat message) because React reconciles the same persistent DOM node
+  across those — only the branch switch is a real mount. `panels/DiffPane.tsx`/`panels/FilePane.tsx` wrap
+  `RenderedDiff`/`MarkdownPreview`'s lazy `Suspense` children in it — but pointedly **not** `MonacoDiff`/
+  `MonacoEditor`'s: `@monaco-editor/react` shows its own second `loading={<SkeletonRows/>}` internally while
+  Monaco's own runtime boots, *after* our `Suspense` chunk has already resolved, so wrapping our `Suspense`
+  boundary there fades in — a still-loading skeleton, not the real editor, an animated flash into a second,
+  unanimated skeleton swap that reads as two different loading indicators blinking rather than one. The
+  correct fix for that stacked case would live inside `MonacoEditor`/`MonacoDiff`'s own `loading` render
+  (an internal library-boot state we don't otherwise touch), not at the outer call site — left unanimated
+  until that's worth doing. A terminal body (`TerminalWorkbenchBody`) skips the reveal too, since a
+  terminal's PTY attach is gated on its own visibility mount and is not worth risking for a cosmetic fade,
+  and a Radix menu's items skip it as well, since wrapping bare `DropdownMenuItem`s in a div breaks the
+  primitive's direct-child keyboard/typeahead traversal (`panels/ChangesScopeMenu.tsx`'s commit list stays
+  skeleton-then-pop for this reason). `chat/ChatView.tsx`
+  skips it for a sharper reason: a non-`none` `transform` on an ancestor — including mid-animation, before
+  the keyframe settles at `none` — establishes a new containing block, which broke the sticky positioning
+  of `chat/activityBreadcrumbs.tsx`'s breadcrumb bar nested inside it (`e2e/activity-breadcrumbs.spec.ts`
+  caught this in review). Anything with a `position: sticky`/`fixed` descendant is disqualified from this
+  transform-based reveal outright, no exception list needed — check for one before adding it.
 
 ## Get right
 

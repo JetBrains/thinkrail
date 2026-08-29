@@ -78,6 +78,7 @@ export function WelcomePanel() {
 			title="Work in project folder"
 			subtitle="Chats, changes, and terminals run directly in your project folder — no isolation."
 			onClick={() => void enterDefaultWorkspace(projectId)}
+			className="motion-safe:animate-reveal"
 		/>
 	);
 
@@ -130,6 +131,7 @@ export function WelcomePanel() {
 							title="Start building"
 							subtitle="Cut an isolated worktree + branch, then pair with the agent to build it."
 							onClick={() => setDialog({ projectId: project.id, prompt: "" })}
+							className="motion-safe:animate-reveal"
 						/>
 						{projectFolderCard(project.id)}
 					</>
@@ -149,12 +151,14 @@ export function WelcomePanel() {
 									note: SETUP_NOTE,
 								})
 							}
+							className="motion-safe:animate-reveal"
 						/>
 						<Card
 							icon={Rocket}
 							title="Start building"
 							subtitle="Cut an isolated worktree + branch and pair with the agent."
 							onClick={() => setDialog({ projectId: project.id, prompt: "" })}
+							className="motion-safe:animate-reveal"
 						/>
 						{projectFolderCard(project.id)}
 					</>

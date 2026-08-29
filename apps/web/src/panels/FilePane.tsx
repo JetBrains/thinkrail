@@ -86,12 +86,14 @@ export function FilePane({ tab }: { tab: FileTab }) {
 			<div className="min-h-0 flex-1">
 				{view === "rendered" ? (
 					<Suspense fallback={loading}>
-						<MarkdownPreview
-							content={tab.content}
-							workspaceId={tab.workspaceId}
-							path={tab.path}
-							review={review}
-						/>
+						<div className="h-full motion-safe:animate-reveal">
+							<MarkdownPreview
+								content={tab.content}
+								workspaceId={tab.workspaceId}
+								path={tab.path}
+								review={review}
+							/>
+						</div>
 					</Suspense>
 				) : (
 					editor

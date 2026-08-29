@@ -187,7 +187,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 				) : changesView === "tree" ? (
 					<ChangesTree changes={status.changes} onOpen={openDiff} isActive={isActive} />
 				) : (
-					<ul>
+					<ul className="motion-safe:animate-reveal">
 						{status.changes.map((change) => {
 							const { dir, base } = splitPath(change.path);
 							return (

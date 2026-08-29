@@ -271,7 +271,7 @@ export function ProjectTree() {
 								</div>
 							)}
 							{isExpanded && list !== undefined && (
-								<ul className="mt-4 flex flex-col gap-4">
+								<ul className="mt-4 flex flex-col gap-4 motion-safe:animate-reveal">
 									{list.map((ws) => (
 										<WorkspaceRow
 											key={ws.id}

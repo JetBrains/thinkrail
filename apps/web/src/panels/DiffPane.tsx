@@ -152,7 +152,9 @@ export function DiffPane({ tab }: { tab: DiffTab }) {
 			<div className="min-h-0 flex-1">
 				<Suspense fallback={loading}>
 					{rendered ? (
-						<RenderedDiff tab={tab} />
+						<div className="h-full motion-safe:animate-reveal">
+							<RenderedDiff tab={tab} />
+						</div>
 					) : (
 						<MonacoDiff
 							path={tab.path}

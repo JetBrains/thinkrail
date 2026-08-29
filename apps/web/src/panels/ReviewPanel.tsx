@@ -162,7 +162,7 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 							: "No review comments yet. Select lines in a file or diff and click the comment icon."}
 					</p>
 				) : (
-					<ul>
+					<ul className="motion-safe:animate-reveal">
 						{files.map((file) => {
 							const isOpen = expanded.has(file.path);
 							const finishable = file.total === 0 && file.resolved > 0;

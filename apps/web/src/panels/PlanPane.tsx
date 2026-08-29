@@ -752,7 +752,10 @@ export default function PlanPane({
 	const exportMarkdown = () => planToMarkdown(data, title);
 
 	return (
-		<div data-testid="plan-pane" className="h-full overflow-auto bg-container-content-bg">
+		<div
+			data-testid="plan-pane"
+			className="h-full overflow-auto bg-container-content-bg motion-safe:animate-reveal"
+		>
 			<PrComposeDialog
 				state={prCompose}
 				updating={Boolean(openReview)}

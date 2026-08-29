@@ -146,7 +146,7 @@ export function ExistingWorktreeDialog({
 
 				{candidates && candidates.length > 0 ? (
 					<div
-						className="flex max-h-[min(50vh,24rem)] flex-col gap-4 overflow-y-auto pr-4"
+						className="flex max-h-[min(50vh,24rem)] flex-col gap-4 overflow-y-auto pr-4 motion-safe:animate-reveal"
 						data-testid="existing-worktree-list"
 					>
 						{candidates.map((candidate) => {
