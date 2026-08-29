@@ -22,7 +22,11 @@ of the host.
   registries, and the protocol version. Including **`WsErrorCode`** — the closed set of failures the *host
   names* (`WsResponse.errorCode`, today `UNKNOWN_COMMIT`, `PUSH_AUTH_FAILED`, and
   `SUBAGENT_TRANSCRIPT_NOT_FOUND` — the latter is `subagent.getTranscript`'s **permanent** miss, the
-  signal that stops the transcript dialog's polling, while transport blips stay plain-`error` transients
+  signal that stops the transcript dialog's polling, and it is thrown only when **neither disk nor the
+  host's live run registry** knows the child (a queued or not-yet-flushed child answers
+  `{ messages: [], status }` instead — pi creates the child's file only at its first assistant message);
+  `subagent.abort` reuses the same code for an unknown or foreign-parent child, while transport blips
+  stay plain-`error` transients
   worth retrying), so a client can react to one specific failure
   instead of pattern-matching an error message. A failure earns a code only when a client behaves differently
   for it; everything else stays a plain `error` string. Expected method-specific synchronization outcomes,
@@ -239,7 +243,10 @@ of the host.
   child transcript itself is read via `subagent.getTranscript`, keyed
   `(workspaceId, parentSessionId, childSessionId)` — its result also carries the run's current
   registry `status` (absent once the host no longer knows the run), the client's poll-while-live
-  signal. The completion message's tag + pairing live in
+  signal, and **`subagent.abort`** (same key triple → `Ack`) stops a live child run — the transcript
+  dialog's Stop control for a background subagent; an unknown child or a foreign parent id fails with
+  the same `SUBAGENT_TRANSCRIPT_NOT_FOUND` code as a transcript miss, never touching another parent's
+  child. The completion message's tag + pairing live in
   `wsProtocol` (the value-bearing half), mirroring the ask-user-answers posture exactly: the
   **`SUBAGENT_COMPLETION_CUSTOM_TYPE`** constant (mirrors `pi-subagents`' `SUBAGENT_COMPLETION_MESSAGE`,
   never imported — the DTO posture again), **`SubagentCompletionMessage`** (the compile-held tag↔details

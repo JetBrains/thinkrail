@@ -2,7 +2,12 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { InMemoryCredentialStore, type Model, type ProviderHeaders } from "@earendil-works/pi-ai";
+import {
+	type Context,
+	InMemoryCredentialStore,
+	type Model,
+	type ProviderHeaders,
+} from "@earendil-works/pi-ai";
 import {
 	createFauxCore,
 	fauxAssistantMessage,
@@ -148,6 +153,33 @@ function subagentSpec(overrides: Record<string, unknown> = {}) {
 	};
 }
 
+function llmContextText(context: Context): string {
+	const parts: string[] = [];
+	for (const message of context.messages) {
+		if (typeof message.content === "string") {
+			parts.push(message.content);
+			continue;
+		}
+		for (const block of message.content) {
+			if (block.type === "text") parts.push(block.text);
+		}
+	}
+	return parts.join("\n");
+}
+
+function compactionEntryCount(sessionFile: string): Promise<number> {
+	return Bun.file(sessionFile)
+		.text()
+		.then(
+			(transcript) =>
+				transcript
+					.split("\n")
+					.filter((line) => line.length > 0)
+					.map((line) => JSON.parse(line) as { type?: string })
+					.filter((entry) => entry.type === "compaction").length,
+		);
+}
+
 async function codeOf(promise: Promise<unknown>): Promise<string> {
 	const error = await promise.then(
 		() => {
@@ -241,7 +273,7 @@ test("a foreground run completes: outcome, registry, lineage storage, lifecycle 
 	expect(startedView).toEqual({
 		snapshotStatus: "running",
 		detailsStatus: "running",
-		updates: ["running"],
+		updates: ["queued", "running"],
 	});
 	expect(outcome.status).toBe("completed");
 	expect(outcome.finalText).toBe("CHILD_DONE");
@@ -361,7 +393,10 @@ test("the self-created runtime mirrors public provider registrations and removes
 		() => undefined,
 		(error: unknown) => error,
 	);
-	if (!(staleResult instanceof Error)) throw new Error("expected stale model resolution to fail");
+	if (!(staleResult instanceof DelegationError)) {
+		throw new Error("expected stale model resolution to fail with a DelegationError");
+	}
+	expect(staleResult.code).toBe("unknown-model");
 	expect(staleResult.message).toContain("Unknown model mirrored/mirrored");
 	await fallback.disposeChildrenOf(parent.sessionId);
 });
@@ -904,4 +939,334 @@ test("disposeChildrenOf cascades: children disposed, steer rejects disposed", as
 	expect(service.childrenOf(parent.sessionId)).toEqual([]);
 	expect(await codeOf(child.steer("hello?"))).toBe("disposed");
 	expect(await codeOf(child.runQueued("again?"))).toBe("disposed");
+});
+
+test("an abort landing during prompt() preflight still aborts the run", async () => {
+	let releaseGate = () => {};
+	const gate = new Promise<void>((resolve) => {
+		releaseGate = resolve;
+	});
+	let markPreflightEntered = () => {};
+	const preflightEntered = new Promise<void>((resolve) => {
+		markPreflightEntered = resolve;
+	});
+	const gated = createDelegationService({
+		resolveParent: (id) =>
+			id === parent.sessionId
+				? { cwd: parentCwd, model: parent.model, thinkingLevel: parent.thinkingLevel }
+				: undefined,
+		delegationRoot,
+		scope: "ws-preflight-abort",
+		modelRuntime: runtime,
+		childExtensionFactories: [
+			(pi) => {
+				pi.on("before_agent_start", async () => {
+					markPreflightEntered();
+					await gate;
+				});
+			},
+		],
+	});
+	faux.setResponses([fauxAssistantMessage("MUST_NOT_COMPLETE")]);
+	const child = await gated.createChild(
+		subagentSpec({ session: { systemPrompt: "gated", tools: [], extensions: true } }),
+	);
+	try {
+		const run = child.runQueued("Park in preflight.");
+		await preflightEntered;
+		await child.abort();
+		releaseGate();
+		const outcome = await run;
+		expect(outcome.status).toBe("aborted");
+		expect(outcome.finalText).toBeUndefined();
+	} finally {
+		releaseGate();
+		await gated.disposeChildrenOf(parent.sessionId);
+		faux.setResponses([]);
+	}
+});
+
+test("a run that compacts mid-flight still reports its own finalText", async () => {
+	const compacting = createDelegationService({
+		resolveParent: (id) =>
+			id === parent.sessionId
+				? { cwd: parentCwd, model: parent.model, thinkingLevel: parent.thinkingLevel }
+				: undefined,
+		delegationRoot,
+		scope: "ws-compaction-final-text",
+		modelRuntime: runtime,
+		settingsManager: () =>
+			SettingsManager.inMemory({
+				compaction: { enabled: true, reserveTokens: 150_000, keepRecentTokens: 50 },
+			}),
+	});
+	faux.setResponses([
+		() => fauxAssistantMessage("OK1"),
+		() => fauxAssistantMessage("OK2"),
+		() => fauxAssistantMessage("SUMMARY_ONE"),
+		() => fauxAssistantMessage("OK3"),
+		() => fauxAssistantMessage("SUMMARY_TWO"),
+	]);
+	const child = await compacting.createChild(subagentSpec());
+	try {
+		const filler = "x".repeat(600);
+		expect((await child.runQueued(`First. ${filler}`)).finalText).toBe("OK1");
+		await Bun.sleep(10);
+		expect((await child.runQueued(`Second. ${filler}`)).finalText).toBe("OK2");
+		await Bun.sleep(10);
+		const third = await child.runQueued(`Third. ${filler}`);
+		expect(third.status).toBe("completed");
+		expect(third.finalText).toBe("OK3");
+		expect(await compactionEntryCount(child.record.sessionFile)).toBe(2);
+	} finally {
+		await compacting.disposeChildrenOf(parent.sessionId);
+		faux.setResponses([]);
+	}
+});
+
+test("steer without a run in flight rejects: not-running", async () => {
+	faux.setResponses([fauxAssistantMessage("DONE")]);
+	const child = await service.createChild(subagentSpec());
+	try {
+		expect(await codeOf(child.steer("too early"))).toBe("not-running");
+		expect((await child.runQueued("Run.")).status).toBe("completed");
+		expect(await codeOf(child.steer("too late"))).toBe("not-running");
+	} finally {
+		await child.dispose();
+	}
+});
+
+test("an aborted-before-start run clears queued steers — the next run starts clean", async () => {
+	const paced = createDelegationService({
+		resolveParent: (id) =>
+			id === parent.sessionId
+				? { cwd: parentCwd, model: parent.model, thinkingLevel: parent.thinkingLevel }
+				: undefined,
+		delegationRoot,
+		scope: "ws-queued-steer",
+		modelRuntime: runtime,
+		maxConcurrentPerParent: 1,
+	});
+	const contexts: string[] = [];
+	faux.setResponses([
+		async () => {
+			await Bun.sleep(150);
+			return fauxAssistantMessage("SLOW_DONE");
+		},
+		(context) => {
+			contexts.push(llmContextText(context));
+			return fauxAssistantMessage("B_SECOND_DONE");
+		},
+	]);
+	const childA = await paced.createChild(subagentSpec());
+	const childB = await paced.createChild(subagentSpec());
+	try {
+		const runA = childA.runQueued("Slow.");
+		const runB = childB.runQueued("Queued run.");
+		await Bun.sleep(20);
+		expect(childB.snapshot?.status).toBe("queued");
+		await childB.steer("STALE_STEER_TEXT");
+		await childB.abort();
+		expect((await runB).status).toBe("aborted");
+		expect((await runA).status).toBe("completed");
+
+		const second = await childB.runQueued("Second task for B.");
+		expect(second.status).toBe("completed");
+		expect(second.finalText).toBe("B_SECOND_DONE");
+		expect(contexts.join("\n")).not.toContain("STALE_STEER_TEXT");
+	} finally {
+		await paced.disposeChildrenOf(parent.sessionId);
+	}
+});
+
+test("a throwing lifecycle listener does not reject a completing run", async () => {
+	const isolated = createDelegationService({
+		resolveParent: (id) =>
+			id === parent.sessionId
+				? { cwd: parentCwd, model: parent.model, thinkingLevel: parent.thinkingLevel }
+				: undefined,
+		delegationRoot,
+		scope: "ws-throwing-listener",
+		modelRuntime: runtime,
+	});
+	isolated.onLifecycle((event) => {
+		if (event.type === "run-terminal") throw new Error("listener boom");
+	});
+	faux.setResponses([fauxAssistantMessage("STILL_COMPLETES")]);
+	const child = await isolated.createChild(subagentSpec());
+	try {
+		const outcome = await child.runQueued("Run.");
+		expect(outcome.status).toBe("completed");
+		expect(outcome.finalText).toBe("STILL_COMPLETES");
+	} finally {
+		await isolated.disposeChildrenOf(parent.sessionId);
+	}
+});
+
+test("a throwing child-disposed listener does not abandon the disposal cascade", async () => {
+	const isolated = createDelegationService({
+		resolveParent: (id) =>
+			id === parent.sessionId
+				? { cwd: parentCwd, model: parent.model, thinkingLevel: parent.thinkingLevel }
+				: undefined,
+		delegationRoot,
+		scope: "ws-throwing-dispose",
+		modelRuntime: runtime,
+	});
+	isolated.onLifecycle((event) => {
+		if (event.type === "child-disposed") throw new Error("dispose boom");
+	});
+	const childA = await isolated.createChild(subagentSpec());
+	const childB = await isolated.createChild(subagentSpec());
+	await isolated.disposeChildrenOf(parent.sessionId);
+	expect(isolated.findChild(childA.sessionId)).toBeUndefined();
+	expect(isolated.findChild(childB.sessionId)).toBeUndefined();
+	expect(isolated.childrenOf(parent.sessionId)).toEqual([]);
+});
+
+test("a throwing onUpdate callback never alters the run outcome", async () => {
+	faux.setResponses([fauxAssistantMessage("UPDATE_PROOF")]);
+	const child = await service.createChild(subagentSpec());
+	try {
+		const outcome = await child.runQueued("Run.", {
+			onUpdate: () => {
+				throw new Error("onUpdate boom");
+			},
+		});
+		expect(outcome.status).toBe("completed");
+		expect(outcome.finalText).toBe("UPDATE_PROOF");
+	} finally {
+		await child.dispose();
+	}
+});
+
+test("a queued run delivers queued details to onUpdate before running", async () => {
+	const paced = createDelegationService({
+		resolveParent: (id) =>
+			id === parent.sessionId
+				? { cwd: parentCwd, model: parent.model, thinkingLevel: parent.thinkingLevel }
+				: undefined,
+		delegationRoot,
+		scope: "ws-queued-updates",
+		modelRuntime: runtime,
+		maxConcurrentPerParent: 1,
+	});
+	faux.setResponses([
+		async () => {
+			await Bun.sleep(150);
+			return fauxAssistantMessage("SLOW_DONE");
+		},
+		fauxAssistantMessage("B_DONE"),
+	]);
+	const childA = await paced.createChild(subagentSpec());
+	const childB = await paced.createChild(subagentSpec());
+	try {
+		const runA = childA.runQueued("Slow.");
+		const statuses: string[] = [];
+		const runB = childB.runQueued("Queued.", {
+			onUpdate: (details) => statuses.push(details.status),
+		});
+		await Promise.all([runA, runB]);
+		expect(statuses.slice(0, 2)).toEqual(["queued", "running"]);
+	} finally {
+		await paced.disposeChildrenOf(parent.sessionId);
+	}
+});
+
+test("an unknown model rejects: unknown-model", async () => {
+	expect(
+		await codeOf(
+			service.createChild(
+				subagentSpec({
+					session: { systemPrompt: "x", tools: [], model: { provider: "faux", id: "no-such" } },
+				}),
+			),
+		),
+	).toBe("unknown-model");
+});
+
+test("a rejected fallback runtime is evicted so the next createChild retries", async () => {
+	const sourceRuntime = await ModelRuntime.create({
+		credentials: new InMemoryCredentialStore(),
+		modelsPath: null,
+		allowModelNetwork: false,
+	});
+	registerFauxProvider(sourceRuntime, "fallback-retry");
+	const sourceModel = sourceRuntime.getModel("fallback-retry", "fallback-retry");
+	if (!sourceModel) throw new Error("fallback-retry model not registered");
+	const fallback = createDelegationService({
+		resolveParent: (id) =>
+			id === parent.sessionId
+				? {
+						cwd: parentCwd,
+						model: sourceModel,
+						thinkingLevel: parent.thinkingLevel,
+						modelRegistry: new ModelRegistry(sourceRuntime),
+					}
+				: undefined,
+		delegationRoot,
+		scope: "ws-fallback-retry",
+	});
+	const spec = subagentSpec({
+		session: {
+			systemPrompt: "probe",
+			model: { provider: "fallback-retry", id: "fallback-retry" },
+			tools: [],
+		},
+	});
+	const originalCreate = ModelRuntime.create;
+	ModelRuntime.create = () => Promise.reject(new Error("runtime create failed"));
+	let firstError: unknown;
+	try {
+		firstError = await fallback.createChild(spec).then(
+			() => undefined,
+			(error: unknown) => error,
+		);
+	} finally {
+		ModelRuntime.create = originalCreate;
+	}
+	if (!(firstError instanceof Error)) throw new Error("expected the first createChild to fail");
+	expect(firstError.message).toContain("runtime create failed");
+
+	const child = await fallback.createChild(spec);
+	try {
+		expect(child.record.parentSessionId).toBe(parent.sessionId);
+	} finally {
+		await fallback.disposeChildrenOf(parent.sessionId);
+	}
+});
+
+test("a binding-supplied settings manager reaches the child", async () => {
+	const cwds: string[] = [];
+	const managed = createDelegationService({
+		resolveParent: (id) =>
+			id === parent.sessionId
+				? { cwd: parentCwd, model: parent.model, thinkingLevel: parent.thinkingLevel }
+				: undefined,
+		delegationRoot,
+		scope: "ws-settings-binding",
+		modelRuntime: runtime,
+		settingsManager: (cwd) => {
+			cwds.push(cwd);
+			return SettingsManager.inMemory({
+				compaction: { enabled: true, reserveTokens: 150_000, keepRecentTokens: 50 },
+			});
+		},
+	});
+	faux.setResponses([
+		fauxAssistantMessage("OK1"),
+		fauxAssistantMessage("OK2"),
+		fauxAssistantMessage("SETTINGS_SUMMARY"),
+	]);
+	const child = await managed.createChild(subagentSpec());
+	try {
+		const filler = "x".repeat(600);
+		expect((await child.runQueued(`First. ${filler}`)).status).toBe("completed");
+		expect((await child.runQueued(`Second. ${filler}`)).status).toBe("completed");
+		expect(cwds).toEqual([parentCwd]);
+		expect(await compactionEntryCount(child.record.sessionFile)).toBe(1);
+	} finally {
+		await managed.disposeChildrenOf(parent.sessionId);
+		faux.setResponses([]);
+	}
 });

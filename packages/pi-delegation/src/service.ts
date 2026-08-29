@@ -154,6 +154,12 @@ function lastAssistant(session: AgentSession, fromIndex: number): AssistantMessa
 	return undefined;
 }
 
+function notifyUpdate(opts: RunOptions, details: DelegationRunDetails): void {
+	try {
+		opts.onUpdate?.(details);
+	} catch {}
+}
+
 function textOf(message: AssistantMessage | undefined): string | undefined {
 	if (!message) return undefined;
 	const text = message.content
@@ -213,8 +219,14 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 		if (bound) return bound;
 		let fallback = fallbackRuntimes.get(parentSessionId);
 		if (!fallback) {
-			fallback = { runtime: ModelRuntime.create(), mirroredProviderIds: new Set() };
-			fallbackRuntimes.set(parentSessionId, fallback);
+			const created = { runtime: ModelRuntime.create(), mirroredProviderIds: new Set<string>() };
+			void created.runtime.catch(() => {
+				if (fallbackRuntimes.get(parentSessionId) === created) {
+					fallbackRuntimes.delete(parentSessionId);
+				}
+			});
+			fallbackRuntimes.set(parentSessionId, created);
+			fallback = created;
 		}
 		const runtime = await fallback.runtime;
 		synchronizeRegisteredProviders(runtime, fallback.mirroredProviderIds, parent);
@@ -231,8 +243,16 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 	}
 
 	function emit(event: LifecycleEvent, entry: ChildEntry): void {
-		for (const listener of lifecycleListeners) listener(event);
-		for (const listener of entry.listeners) listener(event);
+		for (const listener of lifecycleListeners) {
+			try {
+				listener(event);
+			} catch {}
+		}
+		for (const listener of entry.listeners) {
+			try {
+				listener(event);
+			} catch {}
+		}
 	}
 
 	function buildDetails(
@@ -281,22 +301,28 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 		let activity: string | undefined;
 		let capSteered = false;
 		let abortRequested = false;
+		let lastRunAssistant: AssistantMessage | undefined;
 
 		const pushUpdate = (status: RunLifecycleStatus) => {
 			const details = buildDetails(entry, task, status, turns, activity, startedAt, baseline);
 			if (entry.snapshot?.task === task) entry.snapshot = { ...entry.snapshot, status, details };
-			opts.onUpdate?.(details);
+			notifyUpdate(opts, details);
 		};
 
 		const unsubscribe = session.subscribe((event) => {
+			if (abortRequested && !entry.activeRun?.sessionAbort) {
+				void abortActiveRun(entry).catch(() => {});
+			}
 			if (event.type === "tool_execution_start") {
 				activity = event.toolName;
 				pushUpdate("running");
 			} else if (event.type === "turn_end") {
+				let continues = false;
 				turns++;
-				const continues =
-					event.message.role === "assistant" &&
-					event.message.content.some((block) => block.type === "toolCall");
+				if (event.message.role === "assistant") {
+					lastRunAssistant = event.message;
+					continues = event.message.content.some((block) => block.type === "toolCall");
+				}
 				if (cap !== undefined && turns >= cap && continues && !capSteered) {
 					capSteered = true;
 					void session.steer(WRAP_UP_INSTRUCTION).catch(() => {});
@@ -328,7 +354,7 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 			session.clearQueue();
 		}
 
-		const last = lastAssistant(session, baseline.messageCount);
+		const last = lastRunAssistant ?? lastAssistant(session, baseline.messageCount);
 		let status: RunStatus;
 		let errorMessage = thrownMessage;
 		if (abortRequested || last?.stopReason === "aborted") {
@@ -384,6 +410,7 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 				details: queuedDetails,
 				collected: false,
 			};
+			notifyUpdate(runOpts, queuedDetails);
 			emit(
 				{
 					type: "run-queued",
@@ -399,6 +426,7 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 			try {
 				let outcome: RunOutcome;
 				if (release === undefined || entry.disposed || runOpts.signal?.aborted) {
+					entry.session.clearQueue();
 					outcome = {
 						status: "aborted",
 						details: buildDetails(entry, task, "aborted", 0, undefined, startedAt, baseline),
@@ -416,7 +444,7 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 						baseline,
 					);
 					entry.snapshot = { ...entry.snapshot, status: "running", details: runningDetails };
-					runOpts.onUpdate?.(runningDetails);
+					notifyUpdate(runOpts, runningDetails);
 					emit(
 						{
 							type: "run-started",
@@ -514,6 +542,13 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 				if (entry.disposed) {
 					throw new DelegationError("disposed", `Child ${entry.record.sessionId} is disposed`);
 				}
+				const status = entry.snapshot?.status;
+				if (status !== "queued" && status !== "running") {
+					throw new DelegationError(
+						"not-running",
+						`Child ${entry.record.sessionId} has no run in flight — steer() targets a queued or running run`,
+					);
+				}
 				await entry.session.steer(text);
 			},
 			abort: async () => {
@@ -555,14 +590,15 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 			? runtime.getModel(options.model.provider, options.model.id)
 			: parent.model;
 		if (options.model && !model) {
-			throw new Error(
+			throw new DelegationError(
+				"unknown-model",
 				`Unknown model ${options.model.provider}/${options.model.id} — resolve against available models before createChild`,
 			);
 		}
 		const thinkingLevel = options.thinkingLevel ?? parent.thinkingLevel;
 		const cwd = parent.cwd;
 
-		const settingsManager = SettingsManager.create(cwd);
+		const settingsManager = bindings.settingsManager?.(cwd) ?? SettingsManager.create(cwd);
 		const skills = options.skills ?? [];
 		const systemPrompt = options.systemPrompt;
 		const childFactories =

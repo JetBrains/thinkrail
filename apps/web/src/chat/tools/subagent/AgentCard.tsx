@@ -5,6 +5,8 @@ import {
 	RiLoader4Line as Loader2,
 	RiFileList3Line as ScrollText,
 } from "@remixicon/react";
+import type { DelegationRunStatus } from "@thinkrail/contracts";
+import { useEffect, useState } from "react";
 import { useChatActions } from "../../ChatActions";
 import { useFold } from "../../foldState";
 import { Markdown } from "../../Markdown";
@@ -12,6 +14,31 @@ import type { ToolRenderProps } from "../../toolRegistry";
 import { Collapsible, countLines } from "../Collapsible";
 import { resultText, strArg } from "../toolHelpers";
 import { isTerminalRunStatus, readRunDetails, runCounters } from "./runDetails";
+
+export async function isBackgroundRunLost(
+	probe: (childSessionId: string) => Promise<DelegationRunStatus | undefined>,
+	childSessionId: string,
+): Promise<boolean> {
+	try {
+		return (await probe(childSessionId)) === undefined;
+	} catch {
+		return false;
+	}
+}
+
+export function BackgroundAckNote({ lost }: { lost: boolean }) {
+	return (
+		<span
+			data-testid="agent-background-ack"
+			data-status={lost ? "lost" : "pending"}
+			className="text-text-muted tr-text-metadata italic"
+		>
+			{lost
+				? "No longer running (likely a host restart) — no completion message will arrive; the transcript is still available below."
+				: "Running in the background — it keeps running after a chat Stop (stop it from the transcript); a completion message lands in this chat when it finishes, and the transcript below follows it live."}
+		</span>
+	);
+}
 
 export function AgentCard({ toolCallId, args, result, status }: ToolRenderProps) {
 	const actions = useChatActions();
@@ -23,9 +50,22 @@ export function AgentCard({ toolCallId, args, result, status }: ToolRenderProps)
 	const meta = details ? [details.model, ...runCounters(details, "split")].filter(Boolean) : [];
 	const output = resultText(result);
 	const [reportOpen, toggleReport] = useFold(`${toolCallId}:report`, false);
+	const [ackLost, setAckLost] = useState(false);
+	const probe = actions?.probeSubagentStatus;
+	const probeChildId = backgroundAck && status === "done" ? details?.childSessionId : undefined;
+	useEffect(() => {
+		if (!probe || probeChildId === undefined) return;
+		let cancelled = false;
+		void isBackgroundRunLost(probe, probeChildId).then((lost) => {
+			if (lost && !cancelled) setAckLost(true);
+		});
+		return () => {
+			cancelled = true;
+		};
+	}, [probe, probeChildId]);
 
 	return (
-		<div data-testid="tool-agent" className="flex flex-col gap-4">
+		<div data-testid="tool-agent" data-status={details?.status} className="flex flex-col gap-4">
 			<div className="flex items-center gap-4 tr-text-metadata">
 				<Bot className="size-12 shrink-0 text-text-muted" />
 				<span className="shrink-0 text-primary">{role || "subagent"}</span>
@@ -65,10 +105,7 @@ export function AgentCard({ toolCallId, args, result, status }: ToolRenderProps)
 					{output}
 				</pre>
 			) : backgroundAck ? (
-				<span className="text-text-muted tr-text-metadata italic">
-					Running in the background — a completion message lands in this chat when it finishes; the
-					transcript below follows it live.
-				</span>
+				<BackgroundAckNote lost={ackLost} />
 			) : status === "done" && !terminal ? (
 				<span className="whitespace-pre-wrap text-text-muted tr-text-metadata">{output}</span>
 			) : status === "done" && output ? (

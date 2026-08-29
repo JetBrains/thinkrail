@@ -18,7 +18,9 @@ detached run injects — rendered by `turns.tsx` as its own `subagentCompletion`
 registry), and the pure `runDetails` module (defensive `DelegationRunDetails` readers, token/cost/
 duration formatters, and the collapsed-header summary line). Run *liveness* is deliberately not
 derived here: the transcript dialog reads the host's registry `status` off each
-`subagent.getTranscript` response (rationale: the parent chat SPEC's transcript-view seam).
+`subagent.getTranscript` response, and the ack card's one-shot restart probe asks the integration
+layer through `ChatActions.probeSubagentStatus` — same source, same rule (rationale: the parent chat
+SPEC's transcript-view seam).
 
 ## The rendering convention (user-settled, 2026-08, research-backed)
 
@@ -34,19 +36,36 @@ Adopted:
   (existing chrome). **Failed runs keep the transcript action**: an error outcome's thrown tool
   result still carries the run's final details — `pi-subagents` re-injects them via its
   `tool_result` override (its SPEC, PR #304 review finding) — so the `details.childSessionId` gate
-  lights on both the live and hydrated paths (hydrate-pinned).
+  lights on both the live and hydrated paths (hydrate-pinned). The card root's `data-status` carries
+  the raw run status. **The `ToolCard` header icon is three-state too**: the registry's `outcome`
+  seam (`agentOutcome` in `runDetails`, registered for both tool names) maps the result's
+  `details.status` — `aborted` → warning triangle (`data-outcome="warning"`), `error` → red X,
+  `completed` → green check — because an aborted foreground run's tool result is NOT an error result
+  (only `error` outcomes throw), so the generic done→green mapping dressed a turn-capped run as
+  success (hardening-review finding). A queued live run renders the queued line on the live path:
+  `pi-delegation` delivers the `queued` details snapshot through `onUpdate` → `partialResult` before
+  the first `running` one.
 - **The completion card's icon is three-state**: green check only for `completed`, red X for
   `error`, warning triangle for `aborted` — an aborted (e.g. turn-capped) run must not read as
   success (PR #304 review finding); `data-status` carries the raw status for tests.
 - **A background run's tool card freezes at its ack** (pi ignores `onUpdate` after the tool promise
   settles) — deliberate: the card says "started in the background", and the **completion card** is the
   terminal signal (OpenCode's notice pattern), carrying the final details + report fold + transcript
-  link.
+  link. The ack note (`agent-background-ack`, `data-status="pending"`) also says the run **survives a
+  chat Stop** and points at the transcript dialog's Stop control (the abort path lives there, not on
+  the card — renderers stay presentational). **Restart reconciliation:** a settled non-terminal ack
+  card fires **one status probe per mount** through `ChatActions.probeSubagentStatus`
+  (`isBackgroundRunLost`); when the host's registry no longer knows the run (absent status, or the
+  permanent transcript miss), the note swaps to the `data-status="lost"` state — "no longer running
+  (likely a host restart), no completion message will arrive, transcript still available" — instead
+  of promising a completion forever. A live/terminal status or a transient probe failure leaves the
+  pending note standing.
 - `get_subagent_result` stays **routine** (folds into activity) with the same body + summary.
 
 ## Boundary
 
-- **Owns:** `AgentCard`, `SubagentCompletionCard`, `runDetails` (pure, unit-tested), and their
+- **Owns:** `AgentCard` (plus its exported `BackgroundAckNote` / `isBackgroundRunLost` test seams),
+  `SubagentCompletionCard`, `runDetails` (pure, unit-tested), and their
   registration (`register.ts`, side-effect imported by the parent `tools/register`).
 - **Public surface:** the side-effect `register`; `SubagentCompletionCard` (imported by the parent
   chat's `turns.tsx`); `runDetails`'s pure helpers.

@@ -112,7 +112,9 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   its trailing instance carries the live ticker. Errored routine tools get **no special treatment**
   (deliberate — agents often recover; `ErrorTurn` and primary error-auto-expand are the safety nets).
 - `subagentCompletion` — a `subagent-completion` custom message: a detached (background) subagent run's
-  terminal report, injected into the parent by `pi-subagents` when the run finishes. Rendered as a compact
+  terminal report, injected into the parent by `pi-subagents` when the run finishes (or by the host's
+  undelivered-completion sweep — identical shape by contract, indistinguishable here by design).
+  Rendered as a compact
   self-framed card (`tools/subagent/SubagentCompletionCard`) — **the** terminal signal for a background
   run, whose `Agent` tool card froze at its ack (why + card anatomy:
   [tools/subagent/SPEC.md](tools/subagent/SPEC.md)). Never folded into activity groups.
@@ -173,6 +175,11 @@ the **capability** registers with the pi session server-side (custom tool or pi 
   stay props-driven; the common invocation seam decorates its completed canonical image results
   consistently), plus optionally
 - a **`summary`** — a pure one-liner for collapsed headers and activity-step rows,
+- an **`outcome`** — a pure settled-header verdict (`success` / `warning` / `error`) derived from the
+  tool's own result, for a domain whose non-error result must still refuse the green check (the
+  `Agent` card's aborted run → warning triangle); `undefined` or no registration falls back to the
+  status mapping (error → red X, else green). `ToolCard` consults it once settled and surfaces it as
+  `data-outcome` beside the raw `data-status`,
 - a **`chrome`** — `"card"` (default, the `ToolCard` frame) or `"bare"` (owns its frame; for
   interactive/primary tools like `ask_user_question`),
 - **prominence metadata** — `prominence`: `"routine"` (default, incl. unregistered tools — enters the
@@ -205,7 +212,11 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   standing on, and focus would otherwise fall to `<body>` and swallow every following keystroke (the same
   stranding the history overlay's dismiss refocus avoids). Only the card's own reply path calls it, and
   only while the card still holds focus. Plus `openSubagentTranscript(childSessionId)` — the subagent
-  cards' transcript link (no provider → the cards hide the action).
+  cards' transcript link (no provider → the cards hide the action) — and
+  `probeSubagentStatus(childSessionId)` — one `subagent.getTranscript` read mapped to the run's
+  registry status (`probeSubagentRunStatus`: the permanent `SUBAGENT_TRANSCRIPT_NOT_FOUND` reads as
+  run-unknown/`undefined`, transient failures reject), the background-ack card's one-shot restart
+  reconciliation (its semantics: [tools/subagent/SPEC.md](tools/subagent/SPEC.md)).
 - **Subagent transcript view** (`SubagentTranscriptDialog.tsx` — an integration file, like
   `SkillsDialog`): a **read-only overlay** over the chat rendering a hidden child's transcript with the
   same primitives (`messagesToRuntime` → `deriveRows` → `ChatTurnView`), fetched via
@@ -216,8 +227,15 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   (absent once the host no longer knows the run — restart, dispose). The open dialog keeps exactly one
   read in flight, scheduling the next ~2.5s poll only after a response while status is queued/running —
   never from this chat's own runtime, whose frozen background ack can't tell a live run from one lost to
-  a restart. A terminal/absent status or the wire's permanent `SUBAGENT_TRANSCRIPT_NOT_FOUND` stops;
-  plain transport failures retry while the dialog stays open with a capped backoff. Poll snapshots
+  a restart. A terminal/absent status or the wire's permanent `SUBAGENT_TRANSCRIPT_NOT_FOUND` stops —
+  the code is thrown only when **neither disk nor the host's live registry** knows the child (a
+  registry-known queued/not-yet-flushed child answers empty messages plus its `status`, so polling
+  survives the window before pi creates the child's file at its first assistant message);
+  plain transport failures retry while the dialog stays open with a capped backoff. **A live
+  (queued/running) status also gates the header's Stop control** (`subagent-stop`): it fires
+  `subagent.abort` with the same key triple, disables while the abort is in flight, and lets the next
+  poll's status flip unmount it; the abort path's own `SUBAGENT_TRANSCRIPT_NOT_FOUND` means "run no
+  longer live" and is swallowed (the poll reconciles), other failures re-enable and toast. Poll snapshots
   hydrate with child-scoped ids derived from each persisted message's role/timestamp/index, so an
   append-only refresh preserves row identity and manual folds instead of remounting the transcript.
   Works during the run, after completion, and after a host restart (transcripts persist on disk; only

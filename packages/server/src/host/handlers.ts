@@ -21,6 +21,7 @@ import type {
 } from "@thinkrail/contracts";
 import { isControlMessage } from "@thinkrail/contracts";
 import {
+	abortChildRun,
 	abortSession,
 	answerQuestion,
 	clampThinkingForModel,
@@ -658,6 +659,12 @@ const handlers: Record<string, Handler> = {
 		const p = params as { workspaceId: string; parentSessionId: string; childSessionId: string };
 		getWorkspace(p.workspaceId);
 		return readChildTranscript(p.workspaceId, p.parentSessionId, p.childSessionId);
+	},
+	"subagent.abort": async (params) => {
+		const p = params as { workspaceId: string; parentSessionId: string; childSessionId: string };
+		getWorkspace(p.workspaceId);
+		await abortChildRun(p.workspaceId, p.parentSessionId, p.childSessionId);
+		return { ok: true } as const;
 	},
 	"session.extUiReply": (params) => {
 		resolveExtUi((params as { response: ExtUiResponse }).response);

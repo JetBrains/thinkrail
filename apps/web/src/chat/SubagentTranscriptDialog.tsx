@@ -1,6 +1,8 @@
+import { RiStopLine as Square } from "@remixicon/react";
 import type { DelegationRunStatus, TranscriptMessage } from "@thinkrail/contracts";
 import { useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { toast } from "@/store";
 import { errorText, getTransport, wsErrorCode } from "@/transport";
 import { AskStatesContext, deriveAskStates } from "./askState";
 import { ChatActionsContext } from "./ChatActions";
@@ -17,6 +19,30 @@ function isPermanentTranscriptError(error: unknown): boolean {
 	return wsErrorCode(error) === "SUBAGENT_TRANSCRIPT_NOT_FOUND";
 }
 
+export function SubagentStopButton({
+	live,
+	stopping,
+	onStop,
+}: {
+	live: boolean;
+	stopping: boolean;
+	onStop: () => void;
+}) {
+	if (!live) return null;
+	return (
+		<button
+			type="button"
+			data-testid="subagent-stop"
+			disabled={stopping}
+			onClick={onStop}
+			className="ml-auto flex shrink-0 items-center gap-4 self-center rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-8 py-2 text-text-default tr-text-metadata hover:bg-control-bg-hovered disabled:pointer-events-none disabled:opacity-50"
+		>
+			<Square className="size-12 shrink-0" />
+			{stopping ? "Stopping…" : "Stop"}
+		</button>
+	);
+}
+
 export function SubagentTranscriptDialog({
 	workspaceId,
 	parentSessionId,
@@ -31,6 +57,18 @@ export function SubagentTranscriptDialog({
 	const [messages, setMessages] = useState<TranscriptMessage[] | null>(null);
 	const [live, setLive] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	const [stopping, setStopping] = useState(false);
+
+	const onStop = () => {
+		setStopping(true);
+		getTransport()
+			.request("subagent.abort", { workspaceId, parentSessionId, childSessionId })
+			.catch((requestError) => {
+				if (isPermanentTranscriptError(requestError)) return;
+				setStopping(false);
+				toast.error(errorText(requestError));
+			});
+	};
 
 	useEffect(
 		() =>
@@ -81,7 +119,7 @@ export function SubagentTranscriptDialog({
 				data-testid="subagent-transcript-dialog"
 				className="h-[85vh] max-w-3xl gap-16 p-16"
 			>
-				<div className="flex min-w-0 items-baseline gap-8 pr-8">
+				<div className="flex min-w-0 items-baseline gap-8 pr-24">
 					<DialogTitle className="shrink-0 tr-text-ui text-text-default">
 						Subagent transcript
 					</DialogTitle>
@@ -89,6 +127,7 @@ export function SubagentTranscriptDialog({
 						{childSessionId}
 						{live ? " · live" : ""}
 					</span>
+					<SubagentStopButton live={live} stopping={stopping} onStop={onStop} />
 				</div>
 				<ChatActionsContext.Provider value={null}>
 					<AskStatesContext.Provider value={askContext}>

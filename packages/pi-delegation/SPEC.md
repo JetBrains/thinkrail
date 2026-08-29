@@ -14,7 +14,7 @@ tags: [pi-package, delegation, subagents]
 sessions *from* agent sessions. One creation primitive (`createChild`) with orthogonal axes; a
 handle that owns the run loop (per-parent FIFO pacing, turn caps, usage aggregation); lineage as
 the storage layout; an in-memory run registry; and lifecycle events. The contract itself lives on
-the barrel (`src/types.ts`, every type documented in place); this SPEC records the semantics, the
+the barrel (`src/types.ts`, every type declared in place); this SPEC records the semantics, the
 boundary, and the decision log.
 
 **V1 implements exactly one axis combination** — hidden, non-interactive, fresh-origin children
@@ -44,17 +44,19 @@ lands (the enumeration: scope & readiness rules below).
   on (PR #303 review finding); absent → the service self-creates one runtime **per parent lineage**
   and caches it until `disposeChildrenOf(parent)` — a service may resolve parents backed by different
   registries, so one mutable fallback must never synchronize provider state across them),
-  `maxConcurrentPerParent`, `childExtensionFactories` (the curated set a child MAY load — decision
-  #25).
+  `settingsManager` (a `(cwd) => SettingsManager` factory for child settings assembly; absent →
+  `SettingsManager.create(cwd)`), `maxConcurrentPerParent`, `childExtensionFactories` (the curated
+  set a child MAY load — decision #25).
 - Storage helpers: `defaultDelegationRoot` / `delegationSessionDir` / `deriveChildSessionFile`
   (post-restart transcript reads) / `DEFAULT_SCOPE`.
-- The contract types themselves (incl. `DelegationError`/`DelegationErrorCode`) — enumerated and
-  documented in place in `src/types.ts`, not restated here.
+- The contract types themselves (incl. `DelegationError`/`DelegationErrorCode`) — declared in
+  place in `src/types.ts`, not restated here.
 
 ## Boundary
 
-- **Allowed deps:** the pi SDK (`@earendil-works/pi-coding-agent`, `@earendil-works/pi-ai`) as
-  **peerDependencies** — the loading runtime supplies them; `node:*`.
+- **Allowed deps:** the pi SDK (`@earendil-works/pi-coding-agent`, `@earendil-works/pi-ai`,
+  `@earendil-works/pi-agent-core`) as **peerDependencies** — the loading runtime supplies them;
+  `node:*`.
 - **Forbidden:** any `@thinkrail/*` package (this package must work under vanilla pi);
   `@earendil-works/pi-tui` (headless by design — rendering is the embedder's);
   importing another workspace package's internals.
@@ -93,7 +95,14 @@ conditional first state; the diagram's direct `running` entry remains the semant
 when it lands). Entering `queued` initializes matching `RunSnapshot.status` and
 `RunSnapshot.details.status`; the transition to `running` updates both fields and the run's
 `onUpdate` callback together before `run-started` is emitted, so consumers never observe
-contradictory in-flight status surfaces.
+contradictory in-flight status surfaces. `onUpdate` receives the `queued` details the same way —
+right after the queued snapshot is set, before the semaphore acquire — so every run's update
+stream starts with `queued` even when a slot is free (subagents-hardening review finding,
+regression-pinned; a UI's queued rendering would otherwise never fire on the live path). Listener
+exceptions are the consumer's bug, never the run's: lifecycle listeners and `onUpdate` callbacks
+are invoked exception-isolated (swallowed), because an unguarded throw would reject a completing
+run, abandon a disposal cascade mid-way, or — thrown from inside pi's synchronous event emit —
+convert the child run itself into an error outcome (same review round, regression-pinned).
 
 ```mermaid
 stateDiagram-v2
@@ -114,13 +123,14 @@ stateDiagram-v2
 | Mechanism | Behavior |
 |---|---|
 | Foreground | `await child.runQueued(task)`. pi executes a batch's tool calls concurrently (verified: `pi-agent-core` `executeToolCallsParallel`), so N `Agent` calls = N children in flight — no `tasks[]`/chain DSL needed. |
-| Per-run outcome | A `RunOutcome`'s `finalText` and `details.usage` belong to **that run alone**: the run captures a baseline (message count + session stats) before `prompt()`, derives `finalText` only from messages the run added, and reports usage/cost/token **deltas** against the baseline — never the child session's cumulative totals. A reusable child running sequential tasks would otherwise return the previous run's text after a preflight failure and double-count usage (PR #302 review finding). `contextTokens` stays a point-in-time snapshot by design. |
+| Per-run outcome | A `RunOutcome`'s `finalText` and `details.usage` belong to **that run alone**: the run captures a baseline (message count + session stats) before `prompt()`, derives `finalText` only from messages the run added, and reports usage/cost/token **deltas** against the baseline — never the child session's cumulative totals. A reusable child running sequential tasks would otherwise return the previous run's text after a preflight failure and double-count usage (PR #302 review finding). The run's final assistant is captured from its own `turn_end` events, falling back to an index scan from the baseline only when no turn completed (e.g. aborted before any turn): pi compaction **reassigns** the session's message array to a shorter rebuilt one, so an index baseline is not compaction-safe and a run that compacts would lose its own `finalText` (subagents-hardening review finding, regression-pinned). `contextTokens` stays a point-in-time snapshot by design. |
 | Concurrency | Semaphore **per parent session**, default 4; FIFO. Why: the model decides how many spawns to emit — each child is a full LLM session, so unbounded spawn multiplies token spend, provider 429 pressure, and load on the one shared event loop (no crash isolation). Resource governance, not correctness. Host-wide ceiling: config follow-up. |
 | Background | Don't await the promise. Completion → `run-terminal` event; the subagent tool layer additionally injects a `subagent-completion` custom message into the parent. |
 | Result collection | Registry snapshot via `findChild(id)`: terminal → final output + details, marks `collected`; running → status snapshot (not an error); unknown id → error naming the restart-loss case + the derived transcript path. |
 | Join / wait-all | **Not core.** Engine control flow over `run-terminal` events / run promises: join = `Promise.all` over run outcomes; fan-out = spawns sharing a dependency (the semaphore paces them); fail-fast = one shared `AbortController` across sibling `RunOptions.signal`s. |
+| Steer | `ChildHandle.steer()` applies only to a run in flight: unless the snapshot is `queued` or `running` it rejects with the typed `not-running` — pi enqueues steering messages even on an idle session, so an unguarded steer would contaminate the child's **next** run (subagents-hardening review finding, regression-pinned). A steer accepted while queued targets the upcoming run; if that run is aborted before start, the branch clears the pi session's queues so the stale steer never reaches a later run (same finding, regression-pinned). |
 | Turn cap | `RunOptions.maxTurns`: on cap, `steer()` a wrap-up instruction, then `abort()`. No wall-clock timeout (provider retries are pi's job). |
-| Abort / dispose | `signal` in `RunOptions` (tool abort, engine fail-fast) and `ChildHandle.abort()` both cancel the active run through one run-scoped signal. The handle path must cancel a run that is still **queued**, not merely call `abort()` on its idle pi session: queued cancellation resolves immediately while the eventual slot grant is handed straight back, and no provider work starts (PR #302 review finding, regression-pinned). A running cancellation aborts the pi session. `ChildHandle.dispose()` first marks the child disposed, cancels through that same signal, and awaits the run's terminal settlement before disposing the pi session and removing the child; a queued run therefore cannot hang behind a sibling or emit terminal lifecycle work after `child-disposed` (follow-up PR #302 review finding, regression-pinned). Every child owns one shared teardown promise: concurrent handle disposal and parent disposal both await it, so `disposed` means admission is closed rather than teardown is already complete. Parent dispose → `disposeChildrenOf` cascade, which includes already-disposing children still registered to that parent, then **marks every captured child disposed and signals every active run synchronously before awaiting any shared teardown**; it cannot return while child work is still settling (second follow-up PR #302 review finding, regression-pinned). Aborting a running child frees its semaphore slot, and an unmarked or uncancelled queued sibling could otherwise issue provider work or remain pending during the cascade. A mid-turn parent abort kills only awaited (foreground) runs via their signals; detached runs survive turn aborts. |
+| Abort / dispose | `signal` in `RunOptions` (tool abort, engine fail-fast) and `ChildHandle.abort()` both cancel the active run through one run-scoped signal. The handle path must cancel a run that is still **queued**, not merely call `abort()` on its idle pi session: queued cancellation resolves immediately while the eventual slot grant is handed straight back, and no provider work starts (PR #302 review finding, regression-pinned). A running cancellation aborts the pi session. An abort that lands during pi's `prompt()` **preflight** (before_agent_start handlers, auth check, preflight compaction — the agent run not yet active, so pi's `abort()` is a no-op there) is **re-delivered on the run's first agent event**, when the session is actually streaming; without the re-delivery the run would stream to completion billed, return the completed text under an "aborted" status, and block `dispose()` behind the whole natural run (subagents-hardening review finding, regression-pinned). `ChildHandle.dispose()` first marks the child disposed, cancels through that same signal, and awaits the run's terminal settlement before disposing the pi session and removing the child; a queued run therefore cannot hang behind a sibling or emit terminal lifecycle work after `child-disposed` (follow-up PR #302 review finding, regression-pinned). Every child owns one shared teardown promise: concurrent handle disposal and parent disposal both await it, so `disposed` means admission is closed rather than teardown is already complete. Parent dispose → `disposeChildrenOf` cascade, which includes already-disposing children still registered to that parent, then **marks every captured child disposed and signals every active run synchronously before awaiting any shared teardown**; it cannot return while child work is still settling (second follow-up PR #302 review finding, regression-pinned). Aborting a running child frees its semaphore slot, and an unmarked or uncancelled queued sibling could otherwise issue provider work or remain pending during the cascade. A mid-turn parent abort kills only awaited (foreground) runs via their signals; detached runs survive turn aborts. |
 | Restart | Foreground dangling toolCalls → healed by the embedder's generic transcript repair (ThinkRail: `repairDanglingToolCalls`). Registry is in-memory: detached runs are lost (accepted); transcripts remain on disk and stay openable. |
 
 ### Storage & lineage
@@ -152,10 +162,17 @@ stateDiagram-v2
 The child's resource loader is **narrow by default**: no discovered extensions, no prompt
 templates, no themes; context files, skills, and the embedder's curated extension set
 (`extensions: true` — decision #25) are explicit `SessionOptions` opt-ins; `systemPrompt` maps to
-`systemPromptOverride`. Model/thinking default to the live parent's current values; `cwd` is the
-parent's. Runtime precedence is parent `modelRuntime` → service `modelRuntime` → cached self-created
-runtime. The self-created path caches a separate runtime and mirrored-registration set per parent
-lineage; `disposeChildrenOf(parent)` drops that cache entry with the lineage. It mirrors the parent's
+`systemPromptOverride`. Model/thinking default to the live parent's current values; a
+`SessionOptions.model` that the resolved runtime does not know rejects with the typed
+`unknown-model`. `cwd` is the parent's. The child's `SettingsManager` comes from the embedder seam
+`DelegationBindings.settingsManager(cwd)` when bound — so a host can give children the same
+settings assembly its own sessions use (ThinkRail: `buildSessionSettings`) — and defaults to
+`SettingsManager.create(cwd)` under pure pi (subagents-hardening review finding,
+regression-pinned). Runtime precedence is parent `modelRuntime` → service `modelRuntime` → cached
+self-created runtime. The self-created path caches a separate runtime and mirrored-registration set
+per parent lineage; `disposeChildrenOf(parent)` drops that cache entry with the lineage, and a
+`ModelRuntime.create()` rejection evicts its own entry so the next `createChild` retries instead of
+replaying the cached rejection forever (same review round, regression-pinned). It mirrors the parent's
 public `modelRegistry` registrations before each spawn: every previously mirrored id is unregistered
 before the current native providers and opaque configured-provider configs are replayed. Rebuilding
 rather than merging is required because pi provider re-registration preserves omitted fields; without
@@ -209,8 +226,10 @@ renderer's job). Verified on demand by `bun run smoke:subagents` (described in
 but the core must be ready: the **contract carries the full axis space; the implementation stays
 minimal**. Unexercised combinations (`listed`, `fork`, `seeded`, `interactive: true`, `runNow`,
 `session` absent, a `workspace` provider) **reject loudly** with typed errors — the seam is real,
-the dead code is not. A future pattern's first consumer must only *fill in* its combination, never
-reshape the contract.
+the dead code is not. Contract misuse rejects typed across the board: `unknown-model` for a
+`SessionOptions.model` the resolved runtime doesn't know, `not-running` for a steer with no run in
+flight — never a bare `Error` a consumer would have to string-match. A future pattern's first
+consumer must only *fill in* its combination, never reshape the contract.
 
 The contract was checked on paper against each future pattern (2026-08, post-implementation):
 *subsession* — `{origin: fresh|fork, listed, interactive}` is expressible; run methods on an

@@ -21,8 +21,13 @@ export type ToolRenderer = (props: ToolRenderProps) => ReactNode;
 
 export type ToolSummary = (props: ToolRenderProps) => string;
 
+export type ToolOutcome = "success" | "warning" | "error";
+
+export type ToolOutcomeDeriver = (props: ToolRenderProps) => ToolOutcome | undefined;
+
 export interface ToolRegistrationOptions {
 	summary?: ToolSummary;
+	outcome?: ToolOutcomeDeriver;
 	chrome?: ToolChrome;
 	prominence?: ToolProminence;
 	defaultExpanded?: boolean;
@@ -48,6 +53,12 @@ export function getToolRenderer(toolName: string): ToolRenderer {
 
 export function getToolSummary(toolName: string, props: ToolRenderProps): string {
 	return registry.get(toolName)?.summary?.(props) ?? "";
+}
+
+export function getToolOutcome(toolName: string, props: ToolRenderProps): ToolOutcome {
+	return (
+		registry.get(toolName)?.outcome?.(props) ?? (props.status === "error" ? "error" : "success")
+	);
 }
 
 export function getToolChrome(toolName: string): ToolChrome {

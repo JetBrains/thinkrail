@@ -86,6 +86,7 @@ export function createSubagentsExtension(
 		let latestCtx: ExtensionContext | undefined;
 		let fallbackService: DelegationService | undefined;
 		function serviceFor(ctx: ExtensionContext): DelegationService {
+			if (shuttingDown) throw new Error("session is shutting down");
 			latestCtx = ctx;
 			if (options.service) return options.service;
 			fallbackService ??= createDelegationService({
@@ -224,10 +225,10 @@ ${known}`,
 							params.session_id,
 						);
 						throw new Error(
-							`Unknown subagent session ${params.session_id}. If the host restarted, the in-memory run registry was lost${
+							`Unknown subagent session ${params.session_id} — it may have been disposed, or the host restarted and the in-memory run registry was lost${
 								transcript
 									? `; the transcript survives at ${transcript}`
-									: " and no transcript was found for it under this session"
+									: ", and no transcript was found for it under this session"
 							}.`,
 						);
 					}

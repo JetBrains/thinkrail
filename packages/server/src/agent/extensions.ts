@@ -180,7 +180,7 @@ function webAccessFactory(): BundledExtensionFactory {
 }
 
 export function childExtensionFactories(): ExtensionFactory[] {
-	return [headlessSearchPolicy, webAccessFactory(), specGraphExtension];
+	return [headlessSearchPolicy, oversizedImageGuard, webAccessFactory(), specGraphExtension];
 }
 
 export async function buildResourceLoader(

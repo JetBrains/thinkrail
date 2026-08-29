@@ -50,6 +50,7 @@ import { SkillsDialog } from "./SkillsDialog";
 import { StreamIndicator, type StreamStatus, streamStatus } from "./StreamIndicator";
 import { SubagentTranscriptDialog } from "./SubagentTranscriptDialog";
 import { parseTemplateSlots } from "./slotSession";
+import { probeSubagentRunStatus } from "./subagentStatusProbe";
 import { TemplateEditorDialog } from "./TemplateEditorDialog";
 import { shouldApplyTemplatePick } from "./templatePick";
 import { stripFrontmatter } from "./templateText";
@@ -634,8 +635,13 @@ export default function ChatView({
 					.then(() => undefined),
 			focusComposer: () => composerRef.current?.refocus(),
 			openSubagentTranscript: setTranscriptChildId,
+			probeSubagentStatus: (childSessionId: string) =>
+				probeSubagentRunStatus(
+					(params) => getTransport().request("subagent.getTranscript", params),
+					{ workspaceId, parentSessionId: sessionId, childSessionId },
+				),
 		}),
-		[sessionId],
+		[sessionId, workspaceId],
 	);
 
 	const onExtUiReply = (value: string | boolean | null) => {

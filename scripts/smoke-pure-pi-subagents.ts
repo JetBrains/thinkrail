@@ -7,9 +7,10 @@ const repoRoot = join(import.meta.dir, "..");
 const piBin = join(repoRoot, "node_modules", ".bin", "pi");
 const extensionEntry = join(repoRoot, "packages", "pi-subagents", "index.ts");
 
+class SmokeFailure extends Error {}
+
 function fail(message: string): never {
-	console.error(`smoke-pure-pi-subagents: FAIL — ${message}`);
-	process.exit(1);
+	throw new SmokeFailure(message);
 }
 
 const agentDir = mkdtempSync(join(tmpdir(), "thinkrail-smoke-pi-agent-"));
@@ -101,6 +102,10 @@ try {
 	console.log(
 		`smoke-pure-pi-subagents: OK — Agent tool completed under vanilla pi; ${transcripts.length} child transcript(s) in ${delegationRoot}`,
 	);
+} catch (error) {
+	if (!(error instanceof SmokeFailure)) throw error;
+	console.error(`smoke-pure-pi-subagents: FAIL — ${error.message}`);
+	process.exitCode = 1;
 } finally {
 	rmSync(agentDir, { recursive: true, force: true });
 	rmSync(workDir, { recursive: true, force: true });

@@ -3,7 +3,13 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SettingsManager } from "@earendil-works/pi-coding-agent";
-import { buildResourceLoader, listProjectAliasSkillNames, listSkillCommands } from "./extensions";
+import {
+	buildResourceLoader,
+	childExtensionFactories,
+	listProjectAliasSkillNames,
+	listSkillCommands,
+} from "./extensions";
+import { oversizedImageGuard } from "./imageGuard";
 import type { SkillAdmissionContext } from "./skillAdmission";
 
 function ctx(trusted: boolean, acknowledged: string[] = []): SkillAdmissionContext {
@@ -324,5 +330,11 @@ describe("buildResourceLoader", () => {
 			restore();
 			rmSync(root, { recursive: true, force: true });
 		}
+	});
+});
+
+describe("childExtensionFactories", () => {
+	it("carries the oversized-image guard in the curated child set", () => {
+		expect(childExtensionFactories()).toContain(oversizedImageGuard);
 	});
 });

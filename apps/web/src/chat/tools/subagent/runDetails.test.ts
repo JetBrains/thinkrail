@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import type { DelegationRunDetails } from "@thinkrail/contracts";
 import type { ToolRenderProps } from "../../toolRegistry";
-import { agentSummary, readRunDetails, runCounters } from "./runDetails";
+import { agentOutcome, agentSummary, readRunDetails, runCounters } from "./runDetails";
 
 function details(overrides: Partial<DelegationRunDetails> = {}): DelegationRunDetails {
 	return {
@@ -79,6 +79,17 @@ test("runCounters formats turns/tokens/cost/duration, skipping zeros", () => {
 		durationMs: 0,
 	});
 	expect(runCounters(fresh)).toEqual([]);
+});
+
+test("agentOutcome maps terminal run statuses to header tones, else defers", () => {
+	const outcomeFor = (status: DelegationRunDetails["status"]) =>
+		agentOutcome(props({ result: { content: [], details: details({ status }) } }));
+	expect(outcomeFor("aborted")).toBe("warning");
+	expect(outcomeFor("error")).toBe("error");
+	expect(outcomeFor("completed")).toBe("success");
+	expect(outcomeFor("running")).toBeUndefined();
+	expect(outcomeFor("queued")).toBeUndefined();
+	expect(agentOutcome(props({ result: undefined }))).toBeUndefined();
 });
 
 test("agentSummary is the live collapsed-header line, per status", () => {

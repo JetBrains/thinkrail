@@ -115,6 +115,17 @@ side ratio, vacated bottom-group cleanup with center-focus recovery beside a sur
 height/group resizing, 27 px folding with `Ctrl+F6` restore focus, modal-aware visibility chords,
 PTY continuity while hidden, peer synchronization, and version-1 migration without terminal creation.
 
+The subagent UI scenarios stay in the no-agent lane by seeding what a real delegation leaves behind:
+a parent transcript fixture holding foreground `Agent` toolCalls (completed and aborted details), a
+background ack, and a `subagent-completion` custom message, plus child session files under the host's
+delegation root (`<data>/delegation/<workspaceId>/<parentSessionId>/<ts>_<childSessionId>.jsonl`).
+Against that state the suite pins the hydrated rendering path: the ToolCard outcome hooks (an aborted
+run wears `data-outcome="warning"`, never the success check; a frozen background ack keeps the ack's
+own success), the completion turn with its report fold, the transcript dialog reading the child session
+from disk with no Stop control for a non-live run, and the restart-reconciliation probe swapping a
+registry-unknown background ack to its `lost` state. Live delegation — real children, queued
+snapshots, the dialog's live Stop path — remains `@agent` coverage in `subagents.live.spec.ts`.
+
 ## Isolation contract
 
 Every concurrent lane derives a distinct data dir, HOME, pi-agent dir, fixture repository, binary cache,

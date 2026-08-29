@@ -31,11 +31,14 @@ choice was settled: the decision log below.
   untouched — its lifecycle belongs to the embedder (ThinkRail cascades in `removeSession`).
   `session_shutdown` also flips a closure-level `shuttingDown` flag that **suppresses background
   completion delivery**: without it each detached run's continuation still sends its (now aborted)
-  completion with `triggerTurn: true` into the dying session — in pi 0.84.1 an idle parent answers
+  completion with `triggerTurn: true` into the dying session — in the pinned pi an idle parent answers
   that with a provider turn racing teardown (second PR #302 review finding). The flag is set before
   the dispose await so completions arriving *during* teardown are already suppressed, and it
   applies to embedder-injected services too — a completion aimed at a session being shut down is
-  undeliverable regardless of who owns the service. A parent-turn *abort* never sets the flag: a
+  undeliverable regardless of who owns the service. The same flag gates `serviceFor`: once shutting
+  down, any tool call throws a clean "session is shutting down" error instead of reaching a service
+  — without the gate, a tool call racing teardown recreated the dropped fallback service and spawned
+  unowned children (subagents-hardening review finding; test-pinned). A parent-turn *abort* never sets the flag: a
   detached run survives it and still delivers (both sides test-pinned — the suppression via
   `session_shutdown` emitted through pi's public extension runner in the package suite). The
   detached run's late `onUpdate` calls need no such guard: pi-agent-core drops updates after the
@@ -43,7 +46,9 @@ choice was settled: the decision log below.
 - `createSubagentsExtension({ service?, delegationRoot?, scope? })` — the embedder entry: ThinkRail
   passes its host-bound service (and the matching storage bindings, used for restart-loss error
   messages).
-- `SUBAGENT_COMPLETION_MESSAGE` — the custom-message type the web's completion card keys on.
+- `SUBAGENT_COMPLETION_MESSAGE` — the custom-message type the web's completion card keys on — and
+  `boundedText` — the reason-first, 50k-bounded result shaping: an embedder re-delivering a lost
+  completion (ThinkRail's host sweep) mirrors the exact message shape this extension sends.
 - Definitions: `AgentDefinition`, `discoverAgentDefinitions`, `parseAgentDefinition`,
   `BUILTIN_AGENTS`.
 - Mapping: `toSpawnMapping`, `resolveModelRef`, `buildChildSystemPrompt`, `RECURSION_GUARD_TOOLS`.
@@ -53,7 +58,7 @@ choice was settled: the decision log below.
 | Tool | Behavior |
 | --- | --- |
 | `Agent({ subagent_type, task, run_in_background? })` | Discovers definitions per call (editable mid-session), maps the named one to `SessionOptions`, spawns via `createChild` + `runQueued`. Foreground: awaits the outcome and rides the tool signal; `error` outcomes throw (tool error, reason-first) — and the error tool result **still carries the run's final `details`**: pi replaces a thrown tool error's result with `{content, details: {}}`, so the extension stashes the outcome details by `toolCallId` before throwing and re-injects them via a `tool_result` hook override (the stash is swept on `turn_end` — after finalization — and on `session_shutdown`, so a turn aborted before tool finalization cannot strand entries); a failed run's card keeps its child session id and the transcript stays openable (PR #304 review finding). Background: **never rides the parent turn's abort signal** (a detached run survives a parent abort — core-spec semantics, test-pinned); returns `{childSessionId}` text immediately; the terminal event injects a `subagent-completion` custom message (`deliverAs: "followUp", triggerTurn: true`). Live `onUpdate` details flow to `partialResult` (REPLACE). Results bounded to 50k chars — the full text stays in the child transcript. |
-| `get_subagent_result({ session_id })` | **Lineage-checked**: a child whose `record.parentSessionId` is not the calling session takes the unknown-id error path — with a shared (workspace-scoped) service, one tab must not read or mark-collected another parent's child (PR #302 review finding). Reads the core registry via `findChild` + `collectResult`: terminal → final text + details through the **same reason-first, 50k-bounded shaping** as a foreground result (marks collected; an errored run reports its `errorMessage` first — core decision #24); running → status snapshot; unknown id → error naming the restart-loss case + the derived transcript path. |
+| `get_subagent_result({ session_id })` | **Lineage-checked**: a child whose `record.parentSessionId` is not the calling session takes the unknown-id error path — with a shared (workspace-scoped) service, one tab must not read or mark-collected another parent's child (PR #302 review finding). Reads the core registry via `findChild` + `collectResult`: terminal → final text + details through the **same reason-first, 50k-bounded shaping** as a foreground result (marks collected; an errored run reports its `errorMessage` first — core decision #24); running → status snapshot; unknown id → error naming both loss cases (disposed, or host restart losing the in-memory run registry) + the derived transcript path. |
 
 Both tools register inside `session_start` (emitted by `bindExtensions`), so the `Agent`
 description enumerates the definitions actually visible to that session.
@@ -67,7 +72,12 @@ shadow a built-in or personal name (decision 6 below), and project definitions l
 reviewer — user-settled), not `.md` files, so they survive `bun build --compile` and get
 typechecked; user-authored definitions keep the community `.md` + frontmatter convention
 (`name`, `description`, `tools`, `model`, `thinking`, `max_turns`, `inherit_project_context`,
-`skills`, `extensions`; body = system prompt). Malformed files are skipped, never fatal. All four
+`skills`, `extensions`; body = system prompt). The list-valued keys (`tools`, `skills`) accept flow
+style (`tools: read, grep` / `[read, grep]`) and YAML block lists (items on following `- ` lines);
+a present `tools:`/`skills:` key that yields zero items **fails closed** — the definition is
+skipped, never spawned unrestricted (subagents-hardening review finding: the earlier parser dropped
+block-list keys silently, handing a "read-only" project agent pi's default read+bash+edit+write in
+a trusted worktree). Malformed files are skipped, never fatal. All four
 builtins set `extensions: true` (the embedder's curated child set — inert under pure-pi
 zero-config) with the spec READ tools (`spec_grep`/`spec_get`/`spec_graph`) allowlisted for the
 read-only roles and web tools (`web_search`/`fetch_content`) for the scout.

@@ -3,6 +3,7 @@ import type {
 	ExtensionContext,
 	ExtensionFactory,
 	ModelRuntime,
+	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 
 export type RunStatus = "completed" | "error" | "aborted";
@@ -116,7 +117,9 @@ export type DelegationErrorCode =
 	| "not-implemented"
 	| "invalid-combination"
 	| "unknown-parent"
+	| "unknown-model"
 	| "already-running"
+	| "not-running"
 	| "disposed";
 
 export class DelegationError extends Error {
@@ -160,6 +163,7 @@ export interface DelegationBindings {
 	delegationRoot?: string;
 	scope?: string;
 	modelRuntime?: ModelRuntime | (() => ModelRuntime | Promise<ModelRuntime>);
+	settingsManager?: (cwd: string) => SettingsManager;
 	maxConcurrentPerParent?: number;
 	childExtensionFactories?: ExtensionFactory[];
 }

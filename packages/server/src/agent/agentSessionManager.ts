@@ -40,6 +40,7 @@ import {
 	disposeSessionChildren,
 	removeWorkspaceDelegation,
 	subagentsExtensionFor,
+	sweepUndeliveredCompletions,
 } from "./delegation";
 import { buildResourceLoader, toSkillCommands } from "./extensions";
 import {
@@ -74,6 +75,7 @@ interface Entry {
 	manualCompactionInProgress: boolean;
 	piCompactionInProgress: boolean;
 	registered: boolean;
+	shutdownEmitted: boolean;
 }
 
 const sessions = new Map<string, Entry>();
@@ -150,18 +152,25 @@ export function getSessionWorkspaceId(sessionId: string): string | undefined {
 }
 
 export async function reloadSessionResources(sessionId: string): Promise<void> {
-	const session = mustGet(sessionId);
-	if (session.isStreaming) {
+	const entry = mustGetEntry(sessionId);
+	if (entry.session.isStreaming) {
 		throw new Error(
 			"Can't reload skills while the session is streaming — try again after the turn.",
 		);
 	}
-	await session.reload();
+	await entry.session.reload();
+	void sweepUndeliveredCompletions(entry.workspaceId, sessionId, entry.session).catch(() => {});
 }
 
 export function buildSessionSettings(cwd: string): SettingsManager {
 	const settings = SettingsManager.create(cwd, undefined, { projectTrusted: true });
-	settings.applyOverrides({ images: { autoResize: false } });
+	const applySessionOverrides = () => settings.applyOverrides({ images: { autoResize: false } });
+	const reload = settings.reload.bind(settings);
+	settings.reload = async () => {
+		await reload();
+		applySessionOverrides();
+	};
+	applySessionOverrides();
 	return settings;
 }
 
@@ -225,6 +234,7 @@ async function prepareSessionEntry(
 		manualCompactionInProgress: false,
 		piCompactionInProgress: false,
 		registered: false,
+		shutdownEmitted: false,
 	};
 	entry.unsubscribe = session.subscribe((event) => {
 		if (event.type === "queue_update") {
@@ -255,7 +265,12 @@ async function prepareSessionEntry(
 				? { ...baseEvent, hasImages: true as const }
 				: baseEvent;
 		if (event.type === "agent_settled") entry.lastSettlement = terminal;
-		if (sessions.get(sessionId) === entry) publish({ sessionId, event: projected });
+		if (sessions.get(sessionId) === entry) {
+			publish({ sessionId, event: projected });
+			if (event.type === "agent_settled" && !hasDeletionTombstone(sessionId)) {
+				void sweepUndeliveredCompletions(entry.workspaceId, sessionId, session).catch(() => {});
+			}
+		}
 		if (event.type === "agent_settled") terminal = null;
 	});
 
@@ -937,19 +952,31 @@ function trackCascade(workspaceId: string, cascade: Promise<void>): Promise<void
 	return tracked;
 }
 
+async function emitSessionShutdown(entry: Entry): Promise<void> {
+	if (entry.shutdownEmitted) return;
+	entry.shutdownEmitted = true;
+	try {
+		await entry.session.extensionRunner.emit({ type: "session_shutdown", reason: "quit" });
+	} catch {}
+}
+
 function disposeSession(sessionId: string): Promise<void> {
 	const entry = sessions.get(sessionId);
 	if (!entry) return Promise.resolve();
-	const cascade = trackCascade(
-		entry.workspaceId,
-		disposeSessionChildren(entry.workspaceId, sessionId).catch(() => {}),
-	);
+	sessions.delete(sessionId);
 	cancelExtUiForSession(sessionId);
 	entry.unsubscribe();
-	entry.session.dispose();
-	sessions.delete(sessionId);
 	log.debug(`session ${sessionId} disposed`);
-	return cascade;
+	return trackCascade(
+		entry.workspaceId,
+		(async () => {
+			await emitSessionShutdown(entry);
+			try {
+				entry.session.dispose();
+			} catch {}
+			await disposeSessionChildren(entry.workspaceId, sessionId).catch(() => {});
+		})(),
+	);
 }
 
 export function removeSession(sessionId: string): Promise<void> {
@@ -1076,6 +1103,7 @@ async function runDeleteTransaction(
 				(candidate) => candidate.id === sessionId && candidate.cwd === cwd,
 			)?.path;
 		}
+		if (liveEntry) await emitSessionShutdown(liveEntry);
 		if (path && existsSync(path)) await trashFile(path);
 	} catch (error) {
 		if (installedTombstone) deletedSessions.delete(sessionId);

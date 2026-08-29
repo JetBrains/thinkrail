@@ -21,6 +21,8 @@ export interface AgentDefinition {
 
 const THINKING_LEVELS = new Set(["off", "minimal", "low", "medium", "high", "xhigh", "max"]);
 
+const LIST_VALUED_KEYS = new Set(["tools", "skills"]);
+
 function unquote(value: string): string {
 	const first = value[0];
 	return (first === '"' || first === "'") && value.length >= 2 && value.endsWith(first)
@@ -45,36 +47,60 @@ export function parseAgentDefinition(
 	if (!match) return undefined;
 	const [, frontmatter = "", body = ""] = match;
 	const fields = new Map<string, string>();
-	for (const line of frontmatter.split(/\r?\n/)) {
+	const listFields = new Map<string, string[]>();
+	const lines = frontmatter.split(/\r?\n/);
+	for (let index = 0; index < lines.length; index++) {
+		const line = lines[index] ?? "";
 		const separator = line.indexOf(":");
 		if (separator <= 0) continue;
 		const key = line.slice(0, separator).trim();
+		if (!key) continue;
 		const value = unquote(line.slice(separator + 1).trim());
-		if (key && value) fields.set(key, value);
+		if (LIST_VALUED_KEYS.has(key)) {
+			const items = value ? parseNameList(value) : [];
+			while (value === "" && /^\s*-\s+/.test(lines[index + 1] ?? "")) {
+				index++;
+				const item = (lines[index] ?? "")
+					.replace(/^\s*-\s+/, "")
+					.trim()
+					.replace(/^["']|["']$/g, "");
+				if (item) items.push(item);
+			}
+			listFields.set(key, items);
+			continue;
+		}
+		if (value) fields.set(key, value);
 	}
 	const name = fields.get("name");
 	const description = fields.get("description");
 	const systemPrompt = body.trim();
 	if (!name || !description || !systemPrompt) return undefined;
 
+	const tools = listFields.get("tools");
+	const skills = listFields.get("skills");
+	if (
+		(tools !== undefined && tools.length === 0) ||
+		(skills !== undefined && skills.length === 0)
+	) {
+		return undefined;
+	}
+
 	const thinking = fields.get("thinking");
 	const maxTurns = Number.parseInt(fields.get("max_turns") ?? "", 10);
-	const tools = fields.get("tools");
-	const skills = fields.get("skills");
 	const model = fields.get("model");
 	return {
 		name,
 		description,
 		source,
 		...(filePath !== undefined ? { filePath } : {}),
-		...(tools !== undefined ? { tools: parseNameList(tools) } : {}),
+		...(tools !== undefined ? { tools } : {}),
 		...(model !== undefined ? { model } : {}),
 		...(thinking !== undefined && THINKING_LEVELS.has(thinking)
 			? { thinking: thinking as ThinkingLevel }
 			: {}),
 		...(Number.isFinite(maxTurns) && maxTurns > 0 ? { maxTurns } : {}),
 		...(fields.get("inherit_project_context") === "true" ? { inheritProjectContext: true } : {}),
-		...(skills !== undefined ? { skills: parseNameList(skills) } : {}),
+		...(skills !== undefined ? { skills } : {}),
 		...(fields.get("extensions") === "true" ? { extensions: true } : {}),
 		systemPrompt,
 	};

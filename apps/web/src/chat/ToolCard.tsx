@@ -2,12 +2,13 @@ import {
 	RiCheckLine as Check,
 	RiArrowRightSLine as ChevronRight,
 	RiLoader4Line as Loader2,
+	RiAlertLine as TriangleAlert,
 	RiCloseLine as X,
 } from "@remixicon/react";
 import { cn } from "@/lib";
 import { useFold } from "./foldState";
 import { ToolRendererBody } from "./ToolRendererBody";
-import { getToolSummary, resolveProminence } from "./toolRegistry";
+import { getToolOutcome, getToolSummary, resolveProminence } from "./toolRegistry";
 import type { ToolResultState } from "./types";
 
 export function ToolCard({
@@ -42,6 +43,7 @@ export function ToolCard({
 		streaming,
 	};
 	const summary = getToolSummary(toolName, renderProps);
+	const outcome = status === "running" ? undefined : getToolOutcome(toolName, renderProps);
 
 	const autoExpand = isError || (resolveProminence(toolName).defaultExpanded && status === "done");
 	const [expanded, toggle] = useFold(toolCallId, autoExpand);
@@ -51,6 +53,7 @@ export function ToolCard({
 			data-testid="tool-card"
 			data-tool={toolName}
 			data-status={status}
+			data-outcome={outcome}
 			data-expanded={expanded}
 			className="rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg"
 		>
@@ -63,8 +66,10 @@ export function ToolCard({
 			>
 				{status === "running" ? (
 					<Loader2 className="size-12 shrink-0 animate-spin text-text-muted motion-reduce:animate-none" />
-				) : isError ? (
+				) : outcome === "error" ? (
 					<X className="size-12 shrink-0 text-feedback-error" />
+				) : outcome === "warning" ? (
+					<TriangleAlert className="size-12 shrink-0 text-feedback-warning" />
 				) : (
 					<Check className="size-12 shrink-0 text-feedback-success" />
 				)}

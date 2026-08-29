@@ -1,5 +1,6 @@
+import { join } from "node:path";
 import { defaultSessionDirFor, writeFixtureSession } from "@thinkrail/server/history-test-fixtures";
-import { E2E_PI_AGENT_DIR } from "./paths";
+import { E2E_DATA_DIR, E2E_PI_AGENT_DIR } from "./paths";
 
 export const E2E_EXTERNAL_CWD = "/tmp/thinkrail-e2e-external";
 
@@ -40,4 +41,14 @@ export function seedWorkspaceSession(
 ): { id: string; path: string } {
 	const dir = defaultSessionDirFor(E2E_PI_AGENT_DIR, worktreePath);
 	return writeFixtureSession(dir, { ...opts, cwd: worktreePath });
+}
+
+export function seedSubagentChildTranscript(
+	workspaceId: string,
+	parentSessionId: string,
+	childSessionId: string,
+	opts: Omit<Parameters<typeof writeFixtureSession>[1], "id">,
+): { id: string; path: string } {
+	const dir = join(E2E_DATA_DIR, "delegation", workspaceId, parentSessionId);
+	return writeFixtureSession(dir, { ...opts, id: childSessionId });
 }

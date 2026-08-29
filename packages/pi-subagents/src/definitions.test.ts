@@ -61,6 +61,50 @@ Body.`,
 	expect(parsed?.tools).toEqual(["read", "grep"]);
 });
 
+test("block-list tools/skills parse their item lines — a restricted definition stays restricted", () => {
+	const parsed = parseAgentDefinition(
+		`---
+name: read-only
+description: Reads things
+tools:
+  - read
+  - "grep"
+skills:
+  - alpha
+---
+
+Body.`,
+		"project",
+	);
+	expect(parsed?.tools).toEqual(["read", "grep"]);
+	expect(parsed?.skills).toEqual(["alpha"]);
+});
+
+test("a present tools:/skills: key with zero items fails closed — skipped, never unrestricted", () => {
+	expect(
+		parseAgentDefinition("---\nname: x\ndescription: y\ntools:\n---\nbody", "project"),
+	).toBeUndefined();
+	expect(
+		parseAgentDefinition("---\nname: x\ndescription: y\ntools: []\n---\nbody", "project"),
+	).toBeUndefined();
+	expect(
+		parseAgentDefinition("---\nname: x\ndescription: y\nskills:\nmodel: m\n---\nbody", "project"),
+	).toBeUndefined();
+});
+
+test("flow-style lists stay supported: bare and bracketed", () => {
+	const bare = parseAgentDefinition(
+		"---\nname: x\ndescription: y\ntools: read, grep\n---\nbody",
+		"project",
+	);
+	expect(bare?.tools).toEqual(["read", "grep"]);
+	const bracketed = parseAgentDefinition(
+		"---\nname: x\ndescription: y\ntools: [read, grep]\n---\nbody",
+		"project",
+	);
+	expect(bracketed?.tools).toEqual(["read", "grep"]);
+});
+
 test("malformed definitions are skipped, never fatal", () => {
 	expect(parseAgentDefinition("just a body", "personal")).toBeUndefined();
 	expect(parseAgentDefinition("---\nname: x\n---\nbody", "personal")).toBeUndefined();

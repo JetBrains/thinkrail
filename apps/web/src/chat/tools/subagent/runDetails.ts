@@ -1,7 +1,7 @@
 import type { DelegationRunDetails, DelegationRunStatus } from "@thinkrail/contracts";
 import { isDelegationRunDetails } from "@thinkrail/contracts";
 import { formatCost, formatElapsed, formatTokens } from "../../SessionStatsBar";
-import type { ToolRenderProps } from "../../toolRegistry";
+import type { ToolOutcome, ToolRenderProps } from "../../toolRegistry";
 import { strArg } from "../toolHelpers";
 
 export function readRunDetails(value: unknown): DelegationRunDetails | undefined {
@@ -12,6 +12,14 @@ export function readRunDetails(value: unknown): DelegationRunDetails | undefined
 
 export function isTerminalRunStatus(status: DelegationRunStatus): boolean {
 	return status === "completed" || status === "error" || status === "aborted";
+}
+
+export function agentOutcome({ result }: ToolRenderProps): ToolOutcome | undefined {
+	const status = readRunDetails(result)?.status;
+	if (status === "aborted") return "warning";
+	if (status === "error") return "error";
+	if (status === "completed") return "success";
+	return undefined;
 }
 
 export function runCounters(

@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { InMemoryCredentialStore, type Model } from "@earendil-works/pi-ai";
@@ -12,6 +12,7 @@ import {
 	type AgentSession,
 	createAgentSession,
 	DefaultResourceLoader,
+	type ExtensionFactory,
 	getAgentDir,
 	ModelRuntime,
 	type ProviderConfig,
@@ -102,6 +103,10 @@ beforeAll(async () => {
 	writeFileSync(
 		join(agentDir, "agents", "extension-provider.md"),
 		"---\nname: extension-provider\ndescription: Extension-provider test agent\nmodel: extension-faux\n---\n\nRun through the extension-registered provider.\n",
+	);
+	writeFileSync(
+		join(agentDir, "agents", "gated.md"),
+		"---\nname: gated\ndescription: Gated background test agent\nmodel: gate-faux\ntools: read, ls\n---\n\nWork slowly.\n",
 	);
 
 	runtime = await ModelRuntime.create({
@@ -206,6 +211,36 @@ async function makeSession(): Promise<AgentSession> {
 	return created.session;
 }
 
+async function makeZeroConfigSession(
+	delegationRoot: string,
+	scope: string,
+	extraFactories: ExtensionFactory[] = [],
+): Promise<AgentSession> {
+	const settingsManager = SettingsManager.inMemory({});
+	const resourceLoader = new DefaultResourceLoader({
+		cwd: parentCwd,
+		agentDir: getAgentDir(),
+		settingsManager,
+		extensionFactories: [...extraFactories, createSubagentsExtension({ delegationRoot, scope })],
+		noPromptTemplates: true,
+		noThemes: true,
+		noContextFiles: true,
+	});
+	await resourceLoader.reload();
+	const model = runtime.getModel("fauxa", "fauxa") as Model<string> | undefined;
+	if (!model) throw new Error("fauxa not registered");
+	const created = await createAgentSession({
+		cwd: parentCwd,
+		modelRuntime: runtime,
+		sessionManager: SessionManager.inMemory(parentCwd),
+		settingsManager,
+		resourceLoader,
+		model,
+	});
+	await created.session.bindExtensions({ mode: "print" });
+	return created.session;
+}
+
 async function waitFor(predicate: () => boolean, timeoutMs = 10_000): Promise<void> {
 	const deadline = Date.now() + timeoutMs;
 	while (!predicate()) {
@@ -242,39 +277,13 @@ test("foreground: one Agent call runs a builtin scout and returns its report to 
 
 test("zero-config fallback mirrors a provider registered by another extension", async () => {
 	const extensionFaux = fauxCore("extension-faux");
-	const settingsManager = SettingsManager.inMemory({});
-	const standaloneDelegationRoot = tmpDir("pi-subagents-standalone-delegation-");
-	const resourceLoader = new DefaultResourceLoader({
-		cwd: parentCwd,
-		agentDir: getAgentDir(),
-		settingsManager,
-		extensionFactories: [
-			(pi) => pi.registerProvider("extension-faux", fauxConfig(extensionFaux, "extension-faux")),
-			createSubagentsExtension({
-				delegationRoot: standaloneDelegationRoot,
-				scope: "standalone",
-			}),
-		],
-		noPromptTemplates: true,
-		noThemes: true,
-		noContextFiles: true,
-	});
-	await resourceLoader.reload();
-	const model = runtime.getModel("fauxa", "fauxa") as Model<string> | undefined;
-	if (!model) throw new Error("fauxa not registered");
-	const standalone = (
-		await createAgentSession({
-			cwd: parentCwd,
-			modelRuntime: runtime,
-			sessionManager: SessionManager.inMemory(parentCwd),
-			settingsManager,
-			resourceLoader,
-			model,
-		})
-	).session;
+	const standalone = await makeZeroConfigSession(
+		tmpDir("pi-subagents-standalone-delegation-"),
+		"standalone",
+		[(pi) => pi.registerProvider("extension-faux", fauxConfig(extensionFaux, "extension-faux"))],
+	);
 
 	try {
-		await standalone.bindExtensions({ mode: "print" });
 		fauxA.setResponses([
 			fauxAssistantMessage(
 				fauxToolCall("Agent", {
@@ -294,6 +303,25 @@ test("zero-config fallback mirrors a provider registered by another extension", 
 		await standalone.extensionRunner.emit({ type: "session_shutdown", reason: "quit" });
 		standalone.dispose();
 		runtime.unregisterProvider("extension-faux");
+	}
+});
+
+test("a tool call racing session_shutdown gets a clean error — no fallback service is recreated", async () => {
+	const delegationRoot = tmpDir("pi-subagents-postshutdown-delegation-");
+	const session = await makeZeroConfigSession(delegationRoot, "post-shutdown");
+	try {
+		await session.extensionRunner.emit({ type: "session_shutdown", reason: "quit" });
+		fauxA.setResponses([
+			fauxAssistantMessage(fauxToolCall("Agent", { subagent_type: "scout", task: "Too late." })),
+			fauxAssistantMessage("SHUTDOWN_RACE_HANDLED"),
+		]);
+
+		await session.prompt("Race the teardown.");
+
+		expect(lastToolResultText(session)).toContain("session is shutting down");
+		expect(existsSync(join(delegationRoot, "post-shutdown"))).toBe(false);
+	} finally {
+		session.dispose();
 	}
 });
 
@@ -380,6 +408,19 @@ test("max_turns flows from the definition into the run: the cap steers the wrap-
 });
 
 test("a detached run SURVIVES a parent-turn abort (only awaited runs ride the tool signal)", async () => {
+	let openParentTurn = () => {};
+	const parentTurnGate = new Promise<void>((resolve) => {
+		openParentTurn = resolve;
+	});
+	let parentTurnStarted = () => {};
+	const parentTurnReached = new Promise<void>((resolve) => {
+		parentTurnStarted = resolve;
+	});
+	let releaseChild = () => {};
+	const childGate = new Promise<void>((resolve) => {
+		releaseChild = resolve;
+	});
+
 	fauxA.setResponses([
 		fauxAssistantMessage(
 			fauxToolCall("Agent", {
@@ -389,24 +430,33 @@ test("a detached run SURVIVES a parent-turn abort (only awaited runs ride the to
 			}),
 		),
 		async () => {
-			await Bun.sleep(150);
+			parentTurnStarted();
+			await parentTurnGate;
 			return fauxAssistantMessage("SLOW_ACK");
 		},
 		fauxAssistantMessage("POST_ABORT_COMPLETION"),
 	]);
 	fauxB.setResponses([
 		async () => {
-			await Bun.sleep(250);
+			await childGate;
 			return fauxAssistantMessage("SURVIVED");
 		},
 	]);
 
 	const prompted = parent.prompt("Run it, then get interrupted.");
-	await waitFor(() => transcript().includes("in the background:"));
-	await Bun.sleep(30);
-	await parent.abort();
+	await parentTurnReached;
+	const aborting = parent.abort();
+	openParentTurn();
+	await aborting;
 	await prompted;
 
+	const lastMessage = parent.messages.at(-1);
+	if (lastMessage?.role !== "assistant") {
+		throw new Error("expected the aborted parent turn to end on an assistant message");
+	}
+	expect(lastMessage.stopReason).toBe("aborted");
+
+	releaseChild();
 	const child = service.childrenOf(parent.sessionId).at(-1);
 	await waitFor(() => child?.snapshot?.status === "completed");
 	expect(child?.snapshot?.finalText).toBe("SURVIVED");
@@ -526,7 +576,68 @@ test("session_shutdown suppresses a detached run's completion delivery into the 
 	}
 });
 
-test("get_subagent_result on an unknown id explains the restart-loss case", async () => {
+test("session_shutdown disposes the fallback service's children — a mid-run background child stops", async () => {
+	const gateFaux = fauxCore("gate-faux");
+	let openGate = () => {};
+	const gate = new Promise<void>((resolve) => {
+		openGate = resolve;
+	});
+	let childStarted = () => {};
+	const started = new Promise<void>((resolve) => {
+		childStarted = resolve;
+	});
+	gateFaux.setResponses([
+		async (_context, streamOptions) => {
+			childStarted();
+			const signal = streamOptions?.signal;
+			await Promise.race([
+				gate,
+				new Promise<void>((resolve) => {
+					if (signal?.aborted) resolve();
+					else signal?.addEventListener("abort", () => resolve(), { once: true });
+				}),
+			]);
+			return fauxAssistantMessage(fauxToolCall("ls", {}));
+		},
+		fauxAssistantMessage("SECOND_STEP_MUST_NOT_RUN"),
+	]);
+	const session = await makeZeroConfigSession(
+		tmpDir("pi-subagents-shutdown-delegation-"),
+		"shutdown-pin",
+		[(pi) => pi.registerProvider("gate-faux", fauxConfig(gateFaux, "gate-faux"))],
+	);
+	try {
+		fauxA.setResponses([
+			fauxAssistantMessage(
+				fauxToolCall("Agent", {
+					subagent_type: "gated",
+					task: "Slow job.",
+					run_in_background: true,
+				}),
+			),
+			fauxAssistantMessage("GATED_ACK"),
+			fauxAssistantMessage("COMPLETION_TURN_MUST_NOT_HAPPEN"),
+		]);
+
+		await session.prompt("Run the gated job, then shut down.");
+		expect(JSON.stringify(session.messages)).toContain("in the background:");
+		await started;
+
+		const shutdown = session.extensionRunner.emit({ type: "session_shutdown", reason: "quit" });
+		await Bun.sleep(50);
+		openGate();
+		await shutdown;
+
+		await Bun.sleep(150);
+		expect(gateFaux.state.callCount).toBe(1);
+		expect(JSON.stringify(session.messages)).not.toContain(SUBAGENT_COMPLETION_MESSAGE);
+	} finally {
+		session.dispose();
+		runtime.unregisterProvider("gate-faux");
+	}
+});
+
+test("get_subagent_result on an unknown id explains the disposed-or-restart loss cases", async () => {
 	fauxA.setResponses([
 		fauxAssistantMessage(fauxToolCall("get_subagent_result", { session_id: "bogus" })),
 		fauxAssistantMessage("OK_HANDLED"),
@@ -534,5 +645,7 @@ test("get_subagent_result on an unknown id explains the restart-loss case", asyn
 
 	await parent.prompt("Collect bogus.");
 
-	expect(lastToolResultText()).toContain("Unknown subagent session bogus");
+	const text = lastToolResultText();
+	expect(text).toContain("Unknown subagent session bogus");
+	expect(text).toContain("may have been disposed, or the host restarted");
 });

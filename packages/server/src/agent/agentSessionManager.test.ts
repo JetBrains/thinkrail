@@ -199,8 +199,11 @@ test("agent_settled carries the final attempt's terminal metadata", async () => 
 	expect(hydrated.summary.lastSettlement).toEqual(settled?.terminal);
 });
 
-test("buildSessionSettings disables image autoResize (in-memory, so the read tool sends images raw)", () => {
-	expect(buildSessionSettings(tmpCwd("trpi-settings-")).getImageAutoResize()).toBe(false);
+test("buildSessionSettings disables image autoResize (in-memory, so the read tool sends images raw)", async () => {
+	const settings = buildSessionSettings(tmpCwd("trpi-settings-"));
+	expect(settings.getImageAutoResize()).toBe(false);
+	await settings.reload();
+	expect(settings.getImageAutoResize()).toBe(false);
 });
 
 test("listAvailableModels returns the configured (faux) models", async () => {

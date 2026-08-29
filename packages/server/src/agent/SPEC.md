@@ -93,7 +93,12 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     `workspaceId`), `createSession({ cwd, workspaceId, model?, thinkingLevel? })` → `createAgentSession(...)`
     with a per-session `SessionManager` **and a `buildSessionSettings(cwd)` settings manager** (the user's
     real settings + an in-memory `images.autoResize:false` override — never persisted — so the `read` tool
-    sends image files **raw**, bypassing pi's photon/WASM resizer that the single-file binary can't bundle;
+    sends image files **raw**, bypassing pi's photon/WASM resizer that the single-file binary can't bundle.
+    The override is **reload-durable**: pi's `SettingsManager.reload()` recomputes settings from disk and
+    drops `applyOverrides`, and every resource loader reloads settings during session assembly — which
+    silently undid the override before the read tool was even wired — so the builder wraps `reload` to
+    re-apply it (subagents-hardening review finding; pinned in-unit across a reload and end-to-end through
+    a child spawn);
     the web UI downsizes user-attached images itself at attach time — `apps/web`'s `chat/imageAttachment`
     caps the long edge at 1568px — and the `imageGuard` extension below is the in-context second line of
     defense); a shared `registerSession` publishes each event
@@ -357,7 +362,12 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     decision #23), including the exact `ModelRuntime` retained by that parent session. Existing
     parents and their children therefore stay on their runtime generation across a Central change,
     while parents created afterward project the new generation. The host-wide `getPiRuntime` resolver
-    is passed as the core's dynamic fallback rather than captured at service creation. One
+    is passed as the core's dynamic fallback rather than captured at service creation. The core's
+    `settingsManager` seam is bound to **`buildSessionSettings(cwd)`**, so a child session honors the
+    same session settings as its parent — notably `images.autoResize:false`, without which a child's
+    `read` tool re-enters pi's photon resizer the host deliberately bypasses (the open #303 air-bot
+    finding; pinned end-to-end: a >2000px PNG read by a workspace child reaches the provider
+    byte-identical). One
     `DelegationService` per workspace is cached (`delegationServiceFor`, synchronous — nothing awaits
     at bind time); `subagentsExtensionFor(workspaceId)` hands the bound service to the
     extension factory each session loads. Cascades: `removeSession`/`disposeAllSessions` fire
@@ -387,13 +397,56 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     (a private message-entry loop here once drifted: compaction is an entry *type*, not a message
     role, so a compacted child's transcript lost its `compactionSummary` marker — PR #303 review
     finding, test-pinned; absent after restart/dispose; wire meaning: [[module-contracts]]).
-    A missing transcript throws `CodedError("SUBAGENT_TRANSCRIPT_NOT_FOUND")` — the **permanent**
+    The read is **registry-first when the disk file is missing**: pi creates a child's session file
+    only at its first assistant message, so a queued child (or a running one before its first
+    response) has no transcript yet — when the run registry still knows the child (lineage-checked),
+    the read answers `{ messages: [], status }` instead of a false permanent miss that would stop
+    the web dialog's polling forever (subagents-hardening review finding, test-pinned via a
+    slot-starved queued child).
+    A missing transcript throws `CodedError("SUBAGENT_TRANSCRIPT_NOT_FOUND")` **only when neither
+    disk nor registry knows the child** — the **permanent**
     miss the web dialog stops polling on, named on the wire instead of pattern-matched from the
     message ([[module-contracts]] owns the code set; this is the agent module's one
     `@thinkrail/shared` import, mirroring `git`'s `CodedError` use).
+    **`abortChildRun(workspaceId, parentSessionId, childSessionId)`** serves the additive
+    `subagent.abort` wire method: the same lineage check as the transcript read (an unknown child or
+    foreign parent id gets the same not-found code, leaving the child untouched), then the core
+    handle's `abort()` — the web dialog's Stop control for a live background run (test-pinned in both
+    directions).
+    **Undelivered-completion sweep** (`sweepUndeliveredCompletions`): pi-subagents' background
+    completion delivery is a queued in-memory followUp, lost when Stop-with-restore drains pi's
+    queues (`clearQueue` also clears the agent-level lanes the host's text mirror never sees) and
+    suppressed forever once a `session.reload()` flips the old extension closure's `shuttingDown`.
+    The delivery record is the parent transcript itself — a `subagent-completion` custom message
+    whose `details.childSessionId` matches — so on every parent `agent_settled` (tombstone-gated,
+    fire-and-forget) and once after `reloadSessionResources`, the host re-delivers, via the public
+    `sendCustomMessage({triggerTurn: true})` and the same content shape as the extension
+    (`boundedText` + tag imported from `pi-subagents`), for exactly the children that are
+    terminal, uncollected, background-acked (their persisted `Agent` toolResult carries
+    run details with a **non-terminal** status — a foreground result's details are terminal, which is
+    what keeps foreground outcomes out of the sweep), and absent from the transcript. The whole sweep
+    skips while `agent.hasQueuedMessages()` — a queued-but-not-yet-drained completion must not be
+    double-delivered (pi itself delivers a queued completion as a post-abort continuation, pinned
+    exactly-once). Residual: a completion suppressed by a mid-run reload lands at the parent's *next*
+    settle or reload, not instantly — deliberate; no hook fires on a bare run-terminal without racing
+    the extension's own delivery.
+    **Delete/dispose emit `session_shutdown`**: the host never emitted it, so pi-subagents'
+    shutting-down suppression was dead here — a background child completing during
+    `runDeleteTransaction`'s trash await triggered a billed provider turn on the chat being deleted.
+    `disposeSession` now emits `{type: "session_shutdown", reason: "quit"}` through the session's
+    public extension runner before disposing (once per entry, error-swallowed), and the delete
+    transaction emits it explicitly after quiesce and **before the trash window** (test-pinned via a
+    gated trash seam: a child completing mid-trash produces no provider request). Residuals,
+    deliberate: a *failed* trash rolls the tombstone back but cannot un-emit — that chat's subagent
+    tools stay declined until re-open; and `settleSessionsForShutdown`/`disposeAllSessions` still
+    start cascades without emitting or quiescing parents — bounded by imminent process exit, while
+    every user-reachable path (delete, remove, archive) holds quiesce-then-cascade.
     Children opting into extensions
     (`extensions: true` in their definition) get the **curated child set**
-    (`childExtensionFactories` in `extensions`): the headless-search policy + `pi-web-access` +
+    (`childExtensionFactories` in `extensions`): the headless-search policy + the
+    `oversizedImageGuard` (parents pair `autoResize:false` with the guard, so children must too —
+    else a raw oversized image reaches the provider unresized; residual, deliberate: an
+    `extensions: false` definition gets no guard, the rare >8000px/5MB read) + `pi-web-access` +
     `pi-spec-graph` — deliberately not the parent's full set (rationale + the listed-children
     carve-out: core decision #25). Web-access reaches the child set via a **named bundled-seam
     field** (`BundledExtensions.webAccessFactory`) in the binary and a Bun `require` in dev — its
@@ -505,7 +558,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   `completeOnce`/`pickModel` +
   `OneShotRequest`/`OneShotResult`/`ModelTier`; the `webUiContext` seams; the `askUserQuestion` pure
   helpers (`validateQuestionnaire`/`buildQuestionnaireResponse`/`assessAnswerability`/
-  `buildAnswersMessage`); `repairDanglingToolCalls`; `liveParentContext` + `readChildTranscript`
+  `buildAnswersMessage`); `repairDanglingToolCalls`; `liveParentContext` + `readChildTranscript` +
+  `abortChildRun`
   (the delegation embedding); the skill catalog helpers
   `listSkillCommands(cwd, admission)` (filtered, pre-session autocomplete) / `listSkillCatalog(cwd, admission)`
   (unfiltered, the manager's `skills.state`) / `listProjectAliasSkillNames(cwd)` (present-alias count) /

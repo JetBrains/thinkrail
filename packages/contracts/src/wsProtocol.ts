@@ -87,7 +87,7 @@ export interface TerminalTabsPush {
 	tabs: TerminalTabInfo[];
 }
 
-export const PROTOCOL_VERSION = 53;
+export const PROTOCOL_VERSION = 54;
 
 export type HostPlatform = "darwin" | "linux" | "win32";
 
@@ -185,6 +185,7 @@ export const WS_METHODS = {
 	sessionList: "session.list",
 	sessionGetMessages: "session.getMessages",
 	subagentGetTranscript: "subagent.getTranscript",
+	subagentAbort: "subagent.abort",
 	modelList: "model.list",
 	modelRefresh: "model.refresh",
 	modelDefault: "model.default",
@@ -484,6 +485,10 @@ export interface WsMethodMap {
 	"subagent.getTranscript": {
 		params: { workspaceId: string; parentSessionId: string; childSessionId: string };
 		result: { messages: TranscriptMessage[]; status?: DelegationRunStatus };
+	};
+	"subagent.abort": {
+		params: { workspaceId: string; parentSessionId: string; childSessionId: string };
+		result: Ack;
 	};
 	"model.list": { params: Record<string, never>; result: WireModel[] };
 	"model.clampThinking": {
