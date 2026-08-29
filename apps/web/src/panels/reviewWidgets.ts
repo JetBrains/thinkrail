@@ -159,6 +159,7 @@ export function attachReviewCommenting(
 		send.addEventListener("click", () => submit(callbacks.onSend));
 		cancel.addEventListener("click", closeComposer);
 		textarea.addEventListener("keydown", (e) => {
+			if (e.isComposing) return;
 			if (e.key === "Escape") closeComposer();
 			if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) submit(callbacks.onSave);
 			e.stopPropagation();
@@ -319,6 +320,7 @@ export function attachReviewThreads(
 			edit.addEventListener("input", grow);
 			edit.addEventListener("keydown", (e) => {
 				e.stopPropagation();
+				if (e.isComposing) return;
 				if (e.key === "Escape") {
 					edit.value = thread.body;
 					edit.blur();

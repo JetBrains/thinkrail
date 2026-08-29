@@ -46,6 +46,7 @@ export function useGlobalHotkeys(actions: GlobalHotkeyActions): void {
 
 	useEffect(() => {
 		const onKeyDown = (event: KeyboardEvent) => {
+			if (event.isComposing) return;
 			const command = panelHotkeyCommand(
 				event,
 				{

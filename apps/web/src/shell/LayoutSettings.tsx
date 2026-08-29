@@ -151,6 +151,7 @@ export function LayoutSettings() {
 														setRenaming({ id: preset.id, name: event.target.value })
 													}
 													onKeyDown={(event) => {
+														if (event.nativeEvent.isComposing) return;
 														if (event.key === "Enter") commitRename(preset.id);
 														if (event.key === "Escape") setRenaming(null);
 													}}

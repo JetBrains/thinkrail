@@ -114,6 +114,7 @@ export function TodoAddRow({
 				value={draft}
 				onChange={(e) => setDraft(e.target.value)}
 				onKeyDown={(e) => {
+					if (e.nativeEvent.isComposing) return;
 					if (e.key === "Enter") void submit();
 				}}
 				placeholder="Add a TODO for the agent…"

@@ -59,6 +59,7 @@ export function ExtUiDialog({
 						placeholder={request.placeholder ?? ""}
 						onChange={(e) => setText(e.target.value)}
 						onKeyDown={(e) => {
+							if (e.nativeEvent.isComposing) return;
 							if (e.key === "Enter") {
 								e.preventDefault();
 								onReply(text);

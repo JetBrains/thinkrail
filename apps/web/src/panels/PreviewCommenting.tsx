@@ -165,6 +165,7 @@ export function PreviewCommenting({
 							disabled={busy}
 							onChange={(e) => setText(e.target.value)}
 							onKeyDown={(e) => {
+								if (e.nativeEvent.isComposing) return;
 								if (e.key === "Escape") close();
 								if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) submit(commenting.onSave);
 							}}

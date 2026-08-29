@@ -64,6 +64,8 @@ interface CompletionKeyEvent {
 	key: string;
 	preventDefault: () => void;
 	stopPropagation: () => void;
+	nativeEvent?: { isComposing?: boolean };
+	isComposing?: boolean;
 }
 
 export function useSlashCommandCompletion<T extends SlashCommandItem>({
@@ -99,6 +101,7 @@ export function useSlashCommandCompletion<T extends SlashCommandItem>({
 	};
 
 	const handleKeyDown = (event: CompletionKeyEvent): boolean => {
+		if (event.nativeEvent?.isComposing || event.isComposing) return false;
 		const action = slashCompletionKeyAction(event.key, open, visibleActiveIndex, matches.length);
 		if (action.type === "none") return false;
 		event.preventDefault();

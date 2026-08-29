@@ -100,6 +100,7 @@ export function ReviewThreadCard({
 					}}
 					onBlur={saveEdit}
 					onKeyDown={(e) => {
+						if (e.nativeEvent.isComposing) return;
 						if (e.key === "Escape") {
 							setDraftText(thread.body);
 							editRef.current?.blur();
