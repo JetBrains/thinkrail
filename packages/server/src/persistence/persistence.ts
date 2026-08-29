@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import {
@@ -36,10 +36,7 @@ export function saveProjects(projects: Project[]): void {
 }
 
 export function loadWorkspaces(): Workspace[] {
-	return readJson<Array<Workspace & { initialTerminalEligible?: true }>>("workspaces.json", []).map(
-		({ initialTerminalEligible, ...workspace }) =>
-			initialTerminalEligible ? { ...workspace, initialTerminalPending: true } : workspace,
-	);
+	return readJson<Workspace[]>("workspaces.json", []);
 }
 
 export function saveWorkspaces(workspaces: Workspace[]): void {
@@ -66,10 +63,6 @@ export function loadConfig(): AppConfig {
 	const raw = readJson<unknown>("config.json", {});
 	if (!raw || typeof raw !== "object" || Array.isArray(raw)) return structuredClone(DEFAULT_CONFIG);
 	const value = raw as Record<string, unknown>;
-	const legacyLayout =
-		value.layout && typeof value.layout === "object" && !Array.isArray(value.layout)
-			? (value.layout as Record<string, unknown>)
-			: {};
 	const extensions = { ...value };
 	delete extensions.layout;
 	return {
@@ -90,64 +83,12 @@ export function loadConfig(): AppConfig {
 			typeof value.reviewAutoFix === "boolean" ? value.reviewAutoFix : DEFAULT_CONFIG.reviewAutoFix,
 		customLayoutPresets: Array.isArray(value.customLayoutPresets)
 			? value.customLayoutPresets
-			: Array.isArray(legacyLayout.customPresets)
-				? legacyLayout.customPresets
-				: DEFAULT_CONFIG.customLayoutPresets,
+			: DEFAULT_CONFIG.customLayoutPresets,
 	};
 }
 
 export function saveConfig(config: AppConfig): void {
 	writeJson("config.json", config);
-}
-
-function workspaceLayoutFileId(workspaceId: string): string {
-	return /^[A-Za-z0-9_-]+$/.test(workspaceId)
-		? workspaceId
-		: `~${Buffer.from(workspaceId).toString("base64url")}`;
-}
-
-function workspaceLayoutPaths(workspaceId: string): {
-	file: string;
-	backup: string;
-	temp: string;
-	backupTemp: string;
-} {
-	const directory = join(dataDir(), "layouts");
-	const file = join(directory, `${workspaceLayoutFileId(workspaceId)}.json`);
-	const backup = `${file}.bak`;
-	return {
-		file,
-		backup,
-		temp: `${file}.${process.pid}.tmp`,
-		backupTemp: `${backup}.${process.pid}.tmp`,
-	};
-}
-
-export function loadWorkspaceLayout(workspaceId: string): unknown | null {
-	const { file } = workspaceLayoutPaths(workspaceId);
-	try {
-		return JSON.parse(readFileSync(file, "utf8")) as unknown;
-	} catch {
-		return null;
-	}
-}
-
-export function loadWorkspaceLayoutBackup(workspaceId: string): unknown | null {
-	const { backup } = workspaceLayoutPaths(workspaceId);
-	try {
-		return JSON.parse(readFileSync(backup, "utf8")) as unknown;
-	} catch {
-		return null;
-	}
-}
-
-export function removeWorkspaceLayout(workspaceId: string): void {
-	const { file, backup, temp, backupTemp } = workspaceLayoutPaths(workspaceId);
-	for (const path of [file, backup, temp, backupTemp]) {
-		try {
-			unlinkSync(path);
-		} catch {}
-	}
 }
 
 export interface InstallationRecord {

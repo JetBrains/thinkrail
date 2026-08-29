@@ -97,10 +97,9 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
 
   The store owns values and actions, never persistence. `shell/layoutState` validates and hydrates one
   endpoint/surface-qualified local document, subscribes to relevant state edges, and persists the normalized
-  frame/views/attention/preferences. `hydrateLocalLayoutState` installs that document once. During the bounded
-  compatibility release, the atomic import payload records `legacyLayoutImportAttempted[workspaceId]`, so
-  reconnect cannot re-adopt the old snapshot. `clearWorkspaceTabs` removes the workspace view,
-  attention, and associated local state when the workspace disappears. A page-lifetime
+  frame/views/attention/preferences. `hydrateLocalLayoutState` installs that document once; a missing or invalid
+  document is represented by a Balanced frame with no workspace views. `clearWorkspaceTabs` removes the
+  workspace view, attention, and associated local state when the workspace disappears. A page-lifetime
   `removedWorkspaceIds` tombstone rejects stale catalog/session/cache/workspace arrivals so an in-flight read
   cannot recreate it.
 

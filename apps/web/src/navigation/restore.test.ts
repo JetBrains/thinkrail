@@ -1,8 +1,12 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import type { PiEvent, Project, Workspace, WorkspaceLayoutDocument } from "@thinkrail/contracts";
+import type { PiEvent, Project, Workspace } from "@thinkrail/contracts";
 import { layoutOpenOptionsForNavigation, selectAttentionCenterTab, useAppStore } from "../store";
 import type { NavigationDriver } from "./driver";
 import { startNavigation } from "./restore";
+
+type WorkspaceLayoutDocument = Parameters<
+	typeof selectAttentionCenterTab
+>[0]["layoutDocumentsByWorkspace"][string];
 
 function project(id: string): Project {
 	return { id, name: id, path: `/tmp/${id}`, slug: id, lastOpened: 1 };
@@ -143,7 +147,6 @@ beforeEach(() => {
 		workbenchFrame: null,
 		workspaceViewsByWorkspace: {},
 		layoutStateReady: false,
-		legacyLayoutImportAttempted: {},
 		layoutDocumentsByWorkspace: {},
 		layoutAttentionByWorkspace: {},
 		layoutProjectionEpochByWorkspace: {},

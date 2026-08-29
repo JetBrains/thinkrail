@@ -37,7 +37,6 @@ import type {
 	TodoPlan,
 	TodoStatus,
 	Workspace,
-	WorkspaceLayoutSnapshot,
 } from "./domain";
 import { isDelegationRunDetails } from "./domain";
 import type {
@@ -87,7 +86,7 @@ export interface TerminalTabsPush {
 	tabs: TerminalTabInfo[];
 }
 
-export const PROTOCOL_VERSION = 53;
+export const PROTOCOL_VERSION = 54;
 
 export type HostPlatform = "darwin" | "linux" | "win32";
 
@@ -201,7 +200,6 @@ export const WS_METHODS = {
 	providerJbcentralStartProxy: "provider.jbcentralStartProxy",
 	providerJbcentralLogin: "provider.jbcentralLogin",
 	providerJbcentralUpdate: "provider.jbcentralUpdate",
-	layoutGet: "layout.get",
 	settingsUpdate: "settings.update",
 	historySearch: "history.search",
 	reviewGet: "review.get",
@@ -509,10 +507,6 @@ export interface WsMethodMap {
 	"provider.jbcentralStartProxy": { params: Record<string, never>; result: JbcentralActionResult };
 	"provider.jbcentralLogin": { params: Record<string, never>; result: JbcentralLoginResult };
 	"provider.jbcentralUpdate": { params: Record<string, never>; result: JbcentralActionResult };
-	"layout.get": {
-		params: { workspaceId: string };
-		result: WorkspaceLayoutSnapshot | null;
-	};
 	"settings.update": { params: { config: AppConfigUpdate }; result: AppConfig };
 	"history.search": {
 		params: { query: string; scope: HistoryScope; limit?: number };

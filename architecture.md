@@ -126,17 +126,18 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
    every locally retained workspace view. Applying a preset does the same. Another browser, device, or window
    neither receives nor adopts those changes. Built-in presets and the default used by an explicit local frame
    reset remain client-owned; only bounded, resource-free custom preset definitions are host-persisted and broadcast as
-   settings. Current snapshot revisions, mutation ids, optimistic conflicts, and `layout.changed` have no
-   steady-state role.
+   settings. No current-layout snapshot, revision, mutation, read/write method, or push channel exists on
+   the wire.
 
    This remains placement only, never resource lifetime. Closing a file/chat placement is local and the
    session remains; terminal close retains its explicit host-domain PTY semantics. The active client location
    is likewise local: one backend-relative route names main / Project Home / workspace / exact chat; web stores
    it in a versioned fragment, while native shells persist it per backend profile and window. Incoming ids are
    validated against hydrated host state, and no backend-owned “current screen” or current layout lets one
-   client move another. One compatibility release may expose legacy workspace snapshots read-only for a
-   per-frontend import; new clients never write or subscribe to them. Detail:
-   [[submodule-web-shell-layout]] and [[submodule-web-shell-layout-state]].
+   client move another. A frontend surface with no valid local document starts directly from the Balanced
+   frame. Previously persisted host layout snapshots and old browser attention entries are never read,
+   migrated, or deleted; retired config, preset, and terminal-marker shapes are ignored rather than upgraded.
+   Detail: [[submodule-web-shell-layout]] and [[submodule-web-shell-layout-state]].
 10. **Dependencies pin exact versions.** Every dependency in every manifest pins an **exact** version — no
     ranges (`^` `~` `>` `<` `.x` `*`). Rationale: `pi` ships breaking releases daily, so a floating range is
     a live wire; more broadly, a silent minor/patch bump is the classic irreproducible-build trap. Exact

@@ -10,11 +10,11 @@ import {
 	type WireModel,
 	type Workspace,
 	type WorkspaceFsChangedPayload,
-	type WorkspaceLayoutDocument,
 	type WorkspaceSkillChange,
 } from "@thinkrail/contracts";
 import type { ChatTurn, FailureRecovery } from "../chat/types";
 import { userText } from "../lib";
+import type { WorkspaceLayoutDocument } from "../shell/layout";
 import {
 	captureCenterNavigation,
 	chatTabId,
@@ -118,7 +118,6 @@ beforeEach(() => {
 		workbenchFrame: null,
 		workspaceViewsByWorkspace: {},
 		layoutStateReady: false,
-		legacyLayoutImportAttempted: {},
 		layoutDocumentsByWorkspace: {},
 		layoutAttentionByWorkspace: {},
 		layoutProjectionEpochByWorkspace: {},

@@ -1,5 +1,5 @@
 import { beforeEach, expect, mock, test } from "bun:test";
-import type { Workspace, WorkspaceLayoutDocument } from "@thinkrail/contracts";
+import type { Workspace } from "@thinkrail/contracts";
 import { diffTabId } from "./changesModel";
 
 let pending: { resolve: (value: unknown) => void } | null = null;
@@ -18,6 +18,9 @@ mock.module("../transport", () => ({
 }));
 
 const { useAppStore } = await import("../store");
+type WorkspaceLayoutDocument = ReturnType<
+	typeof useAppStore.getState
+>["layoutDocumentsByWorkspace"][string];
 const { openDiffInTab } = await import("./openTabs");
 
 const workspace = (overrides: Partial<Workspace> = {}): Workspace => ({

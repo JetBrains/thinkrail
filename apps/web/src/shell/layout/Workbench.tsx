@@ -42,20 +42,6 @@ import {
 	RiTerminalBoxLine as SquareTerminal,
 	RiCloseLine as X,
 } from "@remixicon/react";
-import type {
-	LayoutAuxiliaryRegion,
-	LayoutBottomAlignment,
-	LayoutBottomGroup,
-	LayoutCenterGroup,
-	LayoutCenterNode,
-	LayoutCenterSplit,
-	LayoutCenterTab,
-	LayoutSideGroup,
-	LayoutSideTab,
-	LayoutTab,
-	LayoutToolId,
-	WorkspaceLayoutDocument,
-} from "@thinkrail/contracts";
 import { Fragment, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CustomIcon } from "../../components/CustomIcon";
 import {
@@ -141,6 +127,20 @@ import {
 	unplacedTools,
 	unplacedToolsForSide,
 } from "./model";
+import type {
+	LayoutAuxiliaryRegion,
+	LayoutBottomAlignment,
+	LayoutBottomGroup,
+	LayoutCenterGroup,
+	LayoutCenterNode,
+	LayoutCenterSplit,
+	LayoutCenterTab,
+	LayoutSideGroup,
+	LayoutSideTab,
+	LayoutTab,
+	LayoutToolId,
+	WorkspaceLayoutDocument,
+} from "./types";
 
 export interface LayoutTabFocusRequest {
 	key: string;

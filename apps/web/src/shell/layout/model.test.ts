@@ -1,9 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import type {
-	LayoutCenterTab,
-	LayoutTerminalTab,
-	WorkspaceLayoutDocument,
-} from "@thinkrail/contracts";
 import type { LayoutAttention } from "../../lib";
 import {
 	canShowSide,
@@ -44,6 +39,7 @@ import {
 	withAvailablePlacementId,
 } from "./model";
 import { BUILTIN_LAYOUT_PRESETS } from "./presets";
+import type { LayoutCenterTab, LayoutTerminalTab, WorkspaceLayoutDocument } from "./types";
 
 const file = (id: string): LayoutCenterTab => ({
 	kind: "file",

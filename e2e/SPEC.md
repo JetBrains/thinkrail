@@ -111,9 +111,7 @@ geometry/tool placement survives workspace switches while resource tabs and atte
 resource retains its empty group; explicit group removal rehomes hidden-workspace resources; reload restores
 endpoint/surface-qualified local state; a tab initialized with cloned session storage remints its live surface
 id and both tabs retain independent frames through reload; a simultaneous second page neither adopts peer
-file/terminal/chat placement nor misses the peer-created chat's history-only domain event; custom preset CRUD synchronizes, the local default drives explicit frame Reset, and Apply affects only its page; and each legacy host workspace snapshot imports at most once.
-The suite asserts that reconnect does not repeat an attempted legacy import and that steady-state mutations
-issue no current-layout request.
+file/terminal/chat placement nor misses the peer-created chat's history-only domain event; custom preset CRUD synchronizes, the local default drives explicit frame Reset, and Apply affects only its page. A pristine or invalid local document starts directly from Balanced, and the suite asserts that no current-layout request exists.
 
 Bottom-workbench coverage retains all four alignments with real side-stack ownership of excluded lower
 corners, live alignment during side resizing and narrow-width compression, pointer/keyboard persistence of

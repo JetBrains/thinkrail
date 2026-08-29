@@ -109,21 +109,30 @@ async function requestOverWire<T>(
 				socket.onopen = () => resolve();
 			});
 			const id = `bottom_${Math.random()}`;
-			const result = await new Promise<unknown>((resolve, reject) => {
-				socket.addEventListener("message", (event: MessageEvent<string>) => {
-					const message = JSON.parse(event.data) as {
-						id?: string;
-						result?: unknown;
-						error?: { message?: string };
-					};
-					if (message.id !== id) return;
-					if (message.error) reject(new Error(message.error.message ?? "request failed"));
-					else resolve(message.result);
+			try {
+				return await new Promise<unknown>((resolve, reject) => {
+					socket.addEventListener("message", (event: MessageEvent<string>) => {
+						const message = JSON.parse(event.data) as {
+							id?: string;
+							result?: unknown;
+							error?: string | { message?: string };
+						};
+						if (message.id !== id) return;
+						if (message.error) {
+							reject(
+								new Error(
+									typeof message.error === "string"
+										? message.error
+										: (message.error.message ?? "request failed"),
+								),
+							);
+						} else resolve(message.result);
+					});
+					socket.send(JSON.stringify({ id, method: requestMethod, params: requestParams }));
 				});
-				socket.send(JSON.stringify({ id, method: requestMethod, params: requestParams }));
-			});
-			socket.close();
-			return result;
+			} finally {
+				socket.close();
+			}
 		},
 		{ requestMethod: method, requestParams: params },
 	) as Promise<T>;
@@ -186,7 +195,7 @@ async function createWorkspaceWithoutOpening(page: Page): Promise<{ id: string; 
 		if (!project) throw new Error("fixture project is not open");
 		const workspace = await request<{ id: string; name: string }>("workspace.create", {
 			projectId: project.id,
-			name: `legacy-layout-${Date.now()}`,
+			name: `inert-layout-${Date.now()}`,
 		});
 		socket.close();
 		return workspace;
@@ -721,7 +730,7 @@ test("bottom visibility and alignment stay local to each window and survive its 
 	await peer.close();
 });
 
-test("a stored version-1 layout migrates with its tools untouched and no terminal process started", async ({
+test("an old host layout stays inert while a pristine surface starts Balanced", async ({
 	page,
 }) => {
 	await openFixtureProject(page);
@@ -736,98 +745,38 @@ test("a stored version-1 layout migrates with its tools untouched and no termina
 		: `~${Buffer.from(workspace.id).toString("base64url")}`;
 	const directory = join(E2E_DATA_DIR, "layouts");
 	mkdirSync(directory, { recursive: true });
-	const legacyPath = join(directory, `${fileId}.json`);
+	const oldPath = join(directory, `${fileId}.json`);
 	writeFileSync(
-		legacyPath,
+		oldPath,
 		`${JSON.stringify({
 			workspaceId: workspace.id,
-			revision: 1,
+			revision: 99,
 			document: {
 				version: 1,
-				center: { kind: "group", id: "legacy-center", tabs: [] },
-				left: {
-					visible: true,
-					width: 0.18,
-					groups: [
-						{
-							id: "legacy-left",
-							weight: 1,
-							folded: false,
-							tabs: [
-								{
-									kind: "tool",
-									id: "tool:projects",
-									name: "Projects",
-									tool: "projects",
-								},
-							],
-						},
-					],
-				},
-				right: {
-					visible: true,
-					width: 0.28,
-					groups: [
-						{
-							id: "legacy-right-top",
-							weight: 0.5,
-							folded: false,
-							tabs: [
-								{ kind: "tool", id: "tool:specs", name: "Specs", tool: "specs" },
-								{ kind: "tool", id: "tool:files", name: "All files", tool: "files" },
-							],
-						},
-						{
-							id: "legacy-right-bottom",
-							weight: 0.5,
-							folded: false,
-							tabs: [
-								{ kind: "tool", id: "tool:changes", name: "Changes", tool: "changes" },
-								{ kind: "tool", id: "tool:review", name: "Review", tool: "review" },
-							],
-						},
-					],
-				},
-				toolRestoreTargets: { changes: { side: "right", index: 1 } },
+				center: { kind: "group", id: "old-center", tabs: [] },
+				left: { visible: false, width: 0.4, groups: [] },
+				right: { visible: false, width: 0.4, groups: [] },
+				toolRestoreTargets: {},
 			},
 		})}\n`,
 	);
-	const persistedBefore = readFileSync(legacyPath, "utf8");
-	const migrated = await requestOverWire<{
-		revision: number;
-		document: { version: number; bottom: { visible: boolean; groups: unknown[] } };
-	}>(page, "layout.get", { workspaceId: workspace.id });
-	expect(migrated.revision).toBe(2);
-	expect(migrated.document.version).toBe(2);
-	expect(migrated.document.bottom).toMatchObject({ visible: false, groups: [] });
+	const persistedBefore = readFileSync(oldPath, "utf8");
 
-	const workspaceRow = page.getByTestId("workspace-item").filter({ hasText: workspace.name });
-	await expect(workspaceRow).toBeVisible();
-	await workspaceRow.getByRole("button").first().click();
-	const installed = await requestOverWire<{
-		revision: number;
-		document: { bottom: { visible: boolean; groups: unknown[] } };
-	}>(page, "layout.get", { workspaceId: workspace.id });
-	expect(installed.revision).toBeGreaterThanOrEqual(2);
-	expect(installed.document.bottom).toMatchObject({ visible: false, groups: [] });
-	await expect(page.getByTestId("left-nav")).toContainText("Projects");
+	await expect(requestOverWire(page, "layout.get", { workspaceId: workspace.id })).rejects.toThrow(
+		"Unknown method",
+	);
+	await page.getByTestId("workspace-item").filter({ hasText: workspace.name }).click();
+
+	await expect(page.getByTestId("left-nav")).toBeVisible();
 	await expect(page.getByTestId("right-stack")).toContainText("Specs");
 	await expect(page.getByTestId("tab-files")).toContainText("Files");
-	await expect(page.getByTestId("tab-files")).not.toContainText("All files");
 	await expect(page.getByTestId("right-stack")).toContainText("Changes");
-	await expect(page.getByTestId("bottom-layout-rail")).toBeVisible();
+	await expect(page.getByTestId("bottom-panel")).toBeVisible();
+	await expect(page.getByTestId("bottom-new-terminal")).toBeVisible();
+	await expect(page.getByTestId("center-group")).toHaveCount(1);
 	await expect(page.getByTestId("terminal-tab")).toHaveCount(0);
-	await expect(page.getByTestId("terminal-instance")).toHaveCount(0);
-	const emptyCatalog = await requestOverWire<{ tabs: Array<{ tabKey: string }> }>(
-		page,
-		"terminal.list",
-		{ workspaceId: workspace.id },
-	);
-	expect(emptyCatalog.tabs).toEqual([]);
+	expect(readFileSync(oldPath, "utf8")).toBe(persistedBefore);
 
-	await page.getByRole("button", { name: "Show bottom panel" }).click();
-	await expect(bottomGroups(page)).toHaveCount(1);
-	await waitTerminalReady(page);
-	await expect(page.getByTestId("terminal-tab")).toHaveCount(1);
-	expect(readFileSync(legacyPath, "utf8")).toBe(persistedBefore);
+	await requestOverWire(page, "workspace.remove", { id: workspace.id });
+	expect(readFileSync(oldPath, "utf8")).toBe(persistedBefore);
 });

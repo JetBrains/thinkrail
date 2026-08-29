@@ -1,12 +1,9 @@
 import type {
-	LayoutCenterTab,
 	LayoutPreset,
 	LayoutPresetBottomRegion,
 	LayoutPresetCenterNode,
 	LayoutPresetSideRegion,
-	LayoutTerminalTab,
 	LayoutToolId,
-	LayoutToolTab,
 } from "@thinkrail/contracts";
 import {
 	collectAllGroups,
@@ -26,6 +23,7 @@ import {
 	type WorkspaceGroupView,
 	type WorkspaceViewState,
 } from "./normalized";
+import type { LayoutCenterTab, LayoutTerminalTab, LayoutToolTab } from "./types";
 
 const group = (id: string): LayoutPresetCenterNode => ({ kind: "group", id });
 const split = (

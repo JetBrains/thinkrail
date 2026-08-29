@@ -1,3 +1,10 @@
+import {
+	type LayoutAttention,
+	layoutResourceIdentity,
+	randomId,
+	readLayoutNavigationClock,
+	readLayoutSelection,
+} from "../../lib";
 import type {
 	LayoutAuxiliaryRegion,
 	LayoutBottomAlignment,
@@ -13,14 +20,7 @@ import type {
 	LayoutToolId,
 	LayoutToolTab,
 	WorkspaceLayoutDocument,
-} from "@thinkrail/contracts";
-import {
-	type LayoutAttention,
-	layoutResourceIdentity,
-	randomId,
-	readLayoutNavigationClock,
-	readLayoutSelection,
-} from "../../lib";
+} from "./types";
 
 export const LAYOUT_LIMITS = {
 	maxCenterGroups: 4,

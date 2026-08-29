@@ -166,9 +166,9 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   `initialTerminalPending: true`. `host` idempotently reserves the deterministic process-free terminal tab,
   then calls `completeInitialTerminalReservation(id)`, which clears the marker, persists, and publishes the
   updated workspace. Reservation failure leaves it pending for the host's boot/create recovery pass; success
-  clears before any frontend placement. A deprecated explicit `initialTerminalEligible: true` marker migrates
-  to pending; records with no marker are never backfilled—absence means legacy or complete—so an upgrade cannot
-  resurrect a default terminal the user previously closed. No layout revision participates.
+  clears before any frontend placement. Only records created by the current code receive the marker; records
+  without it are treated as complete and never backfilled, so an upgrade cannot resurrect a default terminal
+  the user previously closed. No layout revision participates.
 - **`ensureWorkspaceScratchDir(ws)`** — idempotent seed of the gitignored `WORKSPACE_CONTEXT_DIR`
   scratch dir (mkdir + self-ignoring `*` `.gitignore`); the host calls it on **session create** for
   every workspace, so the Default workspace writes into the user's repo only when a chat actually

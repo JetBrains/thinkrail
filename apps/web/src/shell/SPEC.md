@@ -23,7 +23,7 @@ The responsive composition root: top-level app chrome, active-project/workspace 
 Every child is a directory module with `index.ts` as its public surface:
 
 - `layout/` ([[submodule-web-shell-layout]]) is the pure frame/view mutation, projection, and rendering engine. It never imports feature panels, store/transport runtime, or persistence.
-- `layoutState/` ([[submodule-web-shell-layout-state]]) owns local hydration, validation, persistence, and atomic installation of pure layout results, plus the bounded legacy import.
+- `layoutState/` ([[submodule-web-shell-layout-state]]) owns local hydration, validation, persistence, pristine Balanced initialization, and atomic installation of pure layout results.
 - `layoutIntents/` ([[submodule-web-shell-layout-intents]]) owns consume-once arrangement intent routing into pure layout transitions.
 - `chatReconciliation/` ([[submodule-web-shell-chat-reconciliation]]) owns host session/local placement/cache/history convergence and chat deep-link orchestration.
 - `terminalReconciliation/` ([[submodule-web-shell-terminal-reconciliation]]) owns host terminal-catalog/local placement convergence without owning PTY lifetime.
@@ -51,7 +51,7 @@ The durable frame grammar and pure operations belong to [[submodule-web-shell-la
 
 Resource opens route to that workspace's last-focused surviving center group. Reopening a canonical resource selects its local placement rather than duplicating it. Resource close does not remove the frame group when it becomes empty. Explicit split/add/remove/merge commands own topology; group removal deterministically rehomes resources from every locally retained workspace view before one state commit. Applying a preset follows the same all-views rule. Moving a singleton tool or resizing/folding/showing a region changes the one frame; moving a file/chat/diff/document/terminal among existing groups changes only the active workspace view. Pointer/resize drafts stay runtime-local and publish one local transition on completion.
 
-The browser persistence boundary is `layoutState`, not the store. State is qualified by backend endpoint and frontend-surface identity, schema-validated on load, and restored on reload or supported window-session restoration. Simultaneous windows do not observe each other's storage writes. The migration protocol may import each legacy host workspace snapshot once; after that marker is written, reconnect cannot read or replace it again.
+The browser persistence boundary is `layoutState`, not the store. State is qualified by backend endpoint and frontend-surface identity, schema-validated on load, and restored on reload or supported window-session restoration. Simultaneous windows do not observe each other's storage writes. A surface with no valid local document starts from the Balanced frame; old host snapshots and old browser attention keys are never read.
 
 Project/file/change/review/chat/terminal views receive only resource identity, visibility, and container bounds. Moving a view cannot change module dependencies or make it inspect the frame. A terminal body mounts only while that terminal is locally selected in a visible, unfolded group; hidden terminal tabs stay unmounted while their host PTYs continue running.
 

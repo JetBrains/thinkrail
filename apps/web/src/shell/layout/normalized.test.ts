@@ -1,9 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import type {
-	LayoutCenterTab,
-	LayoutTerminalTab,
-	WorkspaceLayoutDocument,
-} from "@thinkrail/contracts";
 import { closeLayoutTab, removeLayoutGroup, toolTab } from "./model";
 import {
 	applyProjectedLayoutDocument,
@@ -18,6 +13,7 @@ import {
 	captureWorkbenchPreset,
 	instantiateWorkbenchFrame,
 } from "./presets";
+import type { LayoutCenterTab, LayoutTerminalTab, WorkspaceLayoutDocument } from "./types";
 
 const file = (id: string): LayoutCenterTab => ({
 	kind: "file",

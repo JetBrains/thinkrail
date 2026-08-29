@@ -80,7 +80,6 @@ import {
 } from "../git";
 import { githubAuthStatus, githubRefresh } from "../github";
 import { clampLimit, getHistoryIndex } from "../history";
-import { getWorkspaceLayout, removeWorkspaceLayout } from "../layout";
 import { logger } from "../log";
 import { openPr, previewPr } from "../pr";
 import {
@@ -327,7 +326,6 @@ const handlers: Record<string, Handler> = {
 		const id = (params as { id: string }).id;
 		const ws = forgetWorkspace(id);
 		if (ws) {
-			removeWorkspaceLayout(ws.id);
 			evictSpecIndex(ws.id);
 			removeWorkspaceReviews(ws.id);
 			stopWatch(ws.id);
@@ -705,11 +703,6 @@ const handlers: Record<string, Handler> = {
 	"provider.jbcentralStartProxy": () => startProxyJbcentral(),
 	"provider.jbcentralLogin": () => jbcentralLogin(),
 	"provider.jbcentralUpdate": () => updateJbcentral(),
-	"layout.get": (params) => {
-		const { workspaceId } = params as { workspaceId: string };
-		getWorkspace(workspaceId);
-		return getWorkspaceLayout(workspaceId);
-	},
 	"settings.update": (params) => {
 		const config = (params as { config: AppConfigUpdate }).config;
 		return updateConfig(config);

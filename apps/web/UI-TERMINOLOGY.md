@@ -12,8 +12,7 @@ pi agent in design discussions.
 - Every region lists, where applicable: **canonical name** (the heading), **implementation name** (the
   React component / file), **`data-testid`** hook (the app's stable identity anchors), **parent**,
   **children**, **position**, and **responsibility**.
-- The active-workspace layout is a synchronized desktop workbench with recursive center groups and
-  movable side groups. The mobile single-view shell is designed but not yet built.
+- The active-workspace layout projects this window's frontend-local frame and workspace view into a desktop workbench with recursive center groups and movable side groups. The mobile single-view shell is designed but not yet built.
 
 The document proceeds top-down: Application Layout → each region → shared primitives → glossary.
 
@@ -144,7 +143,7 @@ separators resize adjacent groups.
 
 - **Canonical name:** Center Workbench (a.k.a. Center Tabbed Area / Editor Area).
 - **Implementation:** `shell/layout/Workbench.tsx` (topology and container chrome), integrated by
-  `shell/WorkspaceWorkbench.tsx` (feature bodies and synchronization).
+  `shell/WorkspaceWorkbench.tsx` (feature bodies and local-state orchestration).
 - **`data-testid`:** compatibility wrapper `center-tabs`; leaves are `center-group`, Group Headers are
   `center-tab-strip` (a legacy name), and split separators are `center-split-resize`.
 - **Parent:** Workspace Workbench.

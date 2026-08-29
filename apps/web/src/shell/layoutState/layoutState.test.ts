@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, test } from "bun:test";
-import type { WorkspaceLayoutDocument, WorkspaceLayoutSnapshot } from "@thinkrail/contracts";
 import { useAppStore } from "../../store";
 import {
 	BUILTIN_LAYOUT_PRESETS,
+	closeLayoutTab,
 	collectAllGroups,
 	resizeBottomRegion,
 	resizeSideRegion,
@@ -17,7 +17,6 @@ import {
 	localLayoutStorageKey,
 	resetLayoutStateForTests,
 	setLayoutStateStorageForTests,
-	setLegacyLayoutRequesterForTests,
 } from "./layoutState";
 
 class MemoryStorage implements Storage {
@@ -50,39 +49,6 @@ class MemoryStorage implements Storage {
 
 const endpoint = "http://host.test";
 
-function legacyDocument(): WorkspaceLayoutDocument {
-	return {
-		version: 2,
-		center: {
-			kind: "group",
-			id: "center",
-			tabs: [{ kind: "file", id: "readme", name: "README.md", path: "README.md" }],
-			previewTabId: "readme",
-		},
-		left: {
-			visible: true,
-			width: 0.18,
-			groups: [{ id: "left", weight: 1, folded: false, tabs: [toolTab("projects")] }],
-		},
-		right: {
-			visible: true,
-			width: 0.28,
-			groups: [{ id: "right", weight: 1, folded: false, tabs: [toolTab("files")] }],
-		},
-		bottom: {
-			visible: true,
-			height: 0.3,
-			alignment: "center",
-			groups: [{ id: "bottom", weight: 1, folded: false, tabs: [] }],
-		},
-		toolRestoreTargets: {},
-	};
-}
-
-function snapshot(workspaceId = "workspace"): WorkspaceLayoutSnapshot {
-	return { workspaceId, revision: 8, document: legacyDocument() };
-}
-
 function resetStore(): void {
 	useAppStore.setState({
 		status: "connected",
@@ -96,7 +62,6 @@ function resetStore(): void {
 			maxSideGroups: 6,
 			maxBottomGroups: 3,
 		},
-		legacyLayoutImportAttempted: {},
 		layoutDocumentsByWorkspace: {},
 		layoutAttentionByWorkspace: {},
 		layoutProjectionEpochByWorkspace: {},
@@ -149,57 +114,29 @@ describe("frontend-local layout state", () => {
 		});
 	});
 
-	test("imports a legacy workspace once and persists the normalized local state", async () => {
+	test("a pristine surface initializes a Balanced workspace locally without transport", async () => {
 		const local = new MemoryStorage();
 		const session = new MemoryStorage();
 		session.setItem("thinkrail:layout-surface-id", "surface-a");
 		setLayoutStateStorageForTests({ local, session }, endpoint);
-		let requests = 0;
-		setLegacyLayoutRequesterForTests(async () => {
-			requests += 1;
-			return snapshot();
-		});
 
 		const first = await ensureWorkspaceLayoutState("workspace");
 		const second = await ensureWorkspaceLayoutState("workspace");
 
-		expect(first).toEqual(legacyDocument());
+		expect(first.center).toMatchObject({ kind: "group", tabs: [] });
+		expect(first.left.groups[0]?.tabs).toEqual([toolTab("projects")]);
+		expect(first.right.groups.flatMap((group) => group.tabs)).toEqual([
+			toolTab("specs"),
+			toolTab("files"),
+			toolTab("changes"),
+			toolTab("review"),
+		]);
+		expect(first.bottom).toMatchObject({ visible: true, groups: [{ tabs: [] }] });
 		expect(second).toBe(first);
-		expect(requests).toBe(1);
-		expect(useAppStore.getState().legacyLayoutImportAttempted.workspace).toBe(true);
 		expect(local.getItem(localLayoutStorageKey(endpoint, "surface-a"))).not.toBeNull();
 	});
 
-	test("a reconnect starts a fresh import instead of joining the superseded generation", async () => {
-		const local = new MemoryStorage();
-		const session = new MemoryStorage();
-		session.setItem("thinkrail:layout-surface-id", "surface-a");
-		setLayoutStateStorageForTests({ local, session }, endpoint);
-		const resolve: Array<(value: WorkspaceLayoutSnapshot | null) => void> = [];
-		setLegacyLayoutRequesterForTests(
-			() =>
-				new Promise((done) => {
-					resolve.push(done);
-				}),
-		);
-
-		const first = ensureWorkspaceLayoutState("workspace").then(
-			() => true,
-			() => false,
-		);
-		await Bun.sleep(0);
-		expect(resolve).toHaveLength(1);
-		useAppStore.setState({ connectionGeneration: 2 });
-		const second = ensureWorkspaceLayoutState("workspace");
-		await Bun.sleep(0);
-		expect(resolve).toHaveLength(2);
-		resolve[0]?.(snapshot());
-		expect(await first).toBe(false);
-		resolve[1]?.(snapshot());
-		expect(await second).toEqual(legacyDocument());
-	});
-
-	test("rejects a local frame that smuggles resource state and falls back to legacy import", async () => {
+	test("an invalid local frame falls back directly to Balanced", async () => {
 		const local = new MemoryStorage();
 		const session = new MemoryStorage();
 		session.setItem("thinkrail:layout-surface-id", "surface-a");
@@ -222,19 +159,14 @@ describe("frontend-local layout state", () => {
 					maxSideGroups: 6,
 					maxBottomGroups: 3,
 				},
-				legacyImportAttempted: {},
 			}),
 		);
 		setLayoutStateStorageForTests({ local, session }, endpoint);
-		let requests = 0;
-		setLegacyLayoutRequesterForTests(async () => {
-			requests += 1;
-			return snapshot();
-		});
 
 		const restored = await ensureWorkspaceLayoutState("workspace");
-		expect(restored).toEqual(legacyDocument());
-		expect(requests).toBe(1);
+		expect(restored.center).toMatchObject({ kind: "group", tabs: [] });
+		expect(restored.left.groups[0]?.tabs).toEqual([toolTab("projects")]);
+		expect(restored.bottom.visible).toBe(true);
 	});
 
 	test("reload restores the same surface without another host read", async () => {
@@ -242,16 +174,12 @@ describe("frontend-local layout state", () => {
 		const session = new MemoryStorage();
 		session.setItem("thinkrail:layout-surface-id", "surface-a");
 		setLayoutStateStorageForTests({ local, session }, endpoint);
-		setLegacyLayoutRequesterForTests(async () => snapshot());
-		const imported = await ensureWorkspaceLayoutState("workspace");
-		await commitWorkspaceLayout("workspace", resizeSideRegion(imported, "left", 0.31));
+		const initial = await ensureWorkspaceLayoutState("workspace");
+		await commitWorkspaceLayout("workspace", resizeSideRegion(initial, "left", 0.31));
 
 		resetLayoutStateForTests();
 		resetStore();
 		setLayoutStateStorageForTests({ local, session }, endpoint);
-		setLegacyLayoutRequesterForTests(async () => {
-			throw new Error("unexpected legacy read");
-		});
 
 		const restored = await ensureWorkspaceLayoutState("workspace");
 		expect(restored.left.width).toBe(0.31);
@@ -262,7 +190,6 @@ describe("frontend-local layout state", () => {
 		const session = new MemoryStorage();
 		session.setItem("thinkrail:layout-surface-id", "surface-a");
 		setLayoutStateStorageForTests({ local, session }, endpoint);
-		setLegacyLayoutRequesterForTests(async () => snapshot());
 		const base = await ensureWorkspaceLayoutState("workspace");
 
 		await commitWorkspaceLayout("workspace", resizeBottomRegion(base, 0.45), base);
@@ -278,9 +205,14 @@ describe("frontend-local layout state", () => {
 		const session = new MemoryStorage();
 		session.setItem("thinkrail:layout-surface-id", "surface-a");
 		setLayoutStateStorageForTests({ local, session }, endpoint);
-		setLegacyLayoutRequesterForTests(async (workspaceId) => snapshot(workspaceId));
 		await ensureWorkspaceLayoutState("workspace-one");
 		await ensureWorkspaceLayoutState("workspace-two");
+		const withReview = useAppStore.getState().layoutDocumentsByWorkspace["workspace-one"];
+		if (!withReview) throw new Error("missing first workspace");
+		await commitWorkspaceLayout(
+			"workspace-one",
+			closeLayoutTab(withReview, "tool:review").document,
+		);
 
 		const hidden = structuredClone(
 			useAppStore.getState().layoutDocumentsByWorkspace["workspace-two"],
@@ -320,9 +252,15 @@ describe("frontend-local layout state", () => {
 		const session = new MemoryStorage();
 		session.setItem("thinkrail:layout-surface-id", "surface-a");
 		setLayoutStateStorageForTests({ local, session }, endpoint);
-		setLegacyLayoutRequesterForTests(async (workspaceId) => snapshot(workspaceId));
-		await ensureWorkspaceLayoutState("workspace");
-		await ensureWorkspaceLayoutState("other");
+		for (const [workspaceId, path] of [
+			["workspace", "one.ts"],
+			["other", "two.ts"],
+		] as const) {
+			const document = structuredClone(await ensureWorkspaceLayoutState(workspaceId));
+			if (document.center.kind !== "group") throw new Error("missing center group");
+			document.center.tabs = [{ kind: "file", id: path, name: path, path }];
+			await commitWorkspaceLayout(workspaceId, document);
+		}
 		const focus = BUILTIN_LAYOUT_PRESETS.find((preset) => preset.id === "focus");
 		if (!focus) throw new Error("missing Focus preset");
 
@@ -337,12 +275,12 @@ describe("frontend-local layout state", () => {
 			collectAllGroups(first).flatMap((group) =>
 				group.tabs.filter((tab) => tab.kind === "file").map((tab) => tab.path),
 			),
-		).toEqual(["README.md"]);
+		).toEqual(["one.ts"]);
 		expect(
 			collectAllGroups(second).flatMap((group) =>
 				group.tabs.filter((tab) => tab.kind === "file").map((tab) => tab.path),
 			),
-		).toEqual(["README.md"]);
+		).toEqual(["two.ts"]);
 	});
 
 	test("simultaneous surface identities use independent persisted frames", async () => {
@@ -350,7 +288,6 @@ describe("frontend-local layout state", () => {
 		const firstSession = new MemoryStorage();
 		firstSession.setItem("thinkrail:layout-surface-id", "surface-a");
 		setLayoutStateStorageForTests({ local, session: firstSession }, endpoint);
-		setLegacyLayoutRequesterForTests(async () => snapshot());
 		const first = await ensureWorkspaceLayoutState("workspace");
 		await commitWorkspaceLayout("workspace", resizeSideRegion(first, "left", 0.33));
 
@@ -359,7 +296,6 @@ describe("frontend-local layout state", () => {
 		const secondSession = new MemoryStorage();
 		secondSession.setItem("thinkrail:layout-surface-id", "surface-b");
 		setLayoutStateStorageForTests({ local, session: secondSession }, endpoint);
-		setLegacyLayoutRequesterForTests(async () => snapshot());
 
 		const second = await ensureWorkspaceLayoutState("workspace");
 		expect(second.left.width).toBe(0.18);

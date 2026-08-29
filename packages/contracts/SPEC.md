@@ -26,7 +26,7 @@ of the host.
   worth retrying), so a client can react to one specific failure
   instead of pattern-matching an error message. A failure earns a code only when a client behaves differently
   for it; everything else stays a plain `error` string. Expected method-specific outcomes remain typed method
-  results rather than generic WS failures; current-layout synchronization has no steady-state wire outcome.
+  results rather than generic WS failures; no current-layout protocol exists.
 - **Public surface (`index.ts`):** `export type *` of `piProtocol` + `domain`; the value re-exports
   `DEFAULT_CONFIG`, `MAX_HISTORY_LIMIT`, `MAX_HISTORY_QUERY_LENGTH`, `TODO_NUDGE_PREFIX` +
   **`isControlMessage(text)`** (the one shared reading of that marker — the client hides such sends on
@@ -150,9 +150,9 @@ of the host.
   non-removable and non-renamable server-side; **`kind: "external"`** marks an explicitly attached,
   user-owned worktree ThinkRail may forget but must never rename or reclaim; absent = a ThinkRail-managed
   worktree workspace; optional literal **`initialTerminalPending: true`** is the host-owned provisioning
-  marker carried only by newly persisted workspace records: host reserves the deterministic terminal then
-  clears it, while absence is the backward-compatible legacy-or-complete value that forbids automatic
-  reseeding—explicit wire fields, never id conventions),
+  marker carried only while a workspace still needs host reservation: the host reserves the deterministic
+  terminal then clears it; absence means no provisioning work remains—explicit wire fields, never id
+  conventions),
   **`OpenBranchReview`** (the optional open review reference for the active branch: PR vs MR + number; no status/actions),
   **`ExistingWorktreeCandidate`** (a `workspace.listExisting` row: absolute `path` + `branch`, or a
   `detached` row the chooser disables), `Session` (chat tab),
@@ -284,13 +284,9 @@ of the host.
   **layout preset DTO** — portable **`LayoutPreset`**, the bounded resource-free frame grammar synchronized
   in `AppConfig.customLayoutPresets`: center topology, left/right/bottom group geometry, visibility/folds,
   bottom alignment, and singleton tools, but no workspace, file, diff, chat, document, terminal, preview,
-  attention, or current/default-selection identity. Current `WorkbenchFrame` and `WorkspaceViewState` are
-  web-local and deliberately absent from contracts.
-
-  During one compatibility protocol only, version-2 **`WorkspaceLayoutDocument`** and
-  **`WorkspaceLayoutSnapshot`** remain deprecated exports for the new client's read-once importer. They are
-  removed with `layout.get` in the following protocol. Replace params/results, mutation ids,
-  `LayoutChangedPayload`, and wire `LayoutSettings` are removed in the first new protocol.
+  attention, or current/default-selection identity. Every current-layout type—including the projected
+  `WorkspaceLayoutDocument`, `WorkbenchFrame`, and `WorkspaceViewState`—is web-local and deliberately absent
+  from contracts. There is no current-layout method or push channel.
 - **wsProtocol.ts** — `WS_METHODS` (`project.*` — incl. **`project.close`** (mark the stable record
   closed without deleting associated state), **`project.inspect`** (classify a path) + **`project.init`**
   (`git init` + commit, then open) + **`project.hasSpecs`** (lazy per-project "contains a registered
@@ -369,8 +365,7 @@ of the host.
   session reaches idle, which is Stop's lossless path)/`dispose`/**`delete`**/`setModel`/
   `setThinkingLevel`/`compact`/`getStats`/`getCommands`/`extUiReply`/**`answerQuestion`** (the inline
   `ask_user_question` reply, correlated by tool call id)/**`list`**/**`getMessages`** (the
-  read side) / deprecated read-only **`layout.get`** (one compatibility protocol for read-once import;
-  removed next protocol) / **`settings.update`** (merge + validate + persist a top-level partial `AppConfig`; when present,
+  read side) / **`settings.update`** (merge + validate + persist a top-level partial `AppConfig`; when present,
   `customLayoutPresets` is one complete bounded catalog replacement; returns the merged config) /
   **`history.search`** (the prompt-recall + conversation-search read; results capped,
   recency-ordered; the messages section is assistant-only — a user-role hit surfaces as a jumpable

@@ -1,3 +1,4 @@
+import { layoutResourceIdentity } from "../../lib";
 import type {
 	LayoutAuxiliaryRegion,
 	LayoutBottomAlignment,
@@ -9,8 +10,7 @@ import type {
 	LayoutToolRestoreTarget,
 	LayoutToolTab,
 	WorkspaceLayoutDocument,
-} from "@thinkrail/contracts";
-import { layoutResourceIdentity } from "../../lib";
+} from "./types";
 
 export interface WorkbenchCenterGroup {
 	kind: "group";

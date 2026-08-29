@@ -5,9 +5,7 @@ import type {
 	ExtUiRequest,
 	GitDiffScope,
 	HostPlatform,
-	LayoutAuxiliaryRegion,
 	LayoutPreset,
-	LayoutToolId,
 	LoginFrame,
 	LoginPush,
 	PiEvent,
@@ -28,7 +26,6 @@ import type {
 	WireModel,
 	Workspace,
 	WorkspaceFsChangedPayload,
-	WorkspaceLayoutDocument,
 } from "@thinkrail/contracts";
 import {
 	customMessageText,
@@ -59,7 +56,13 @@ import {
 	tupleKey,
 	userText,
 } from "../lib";
-import type { WorkbenchFrame, WorkspaceViewState } from "../shell/layout";
+import type {
+	LayoutAuxiliaryRegion,
+	LayoutToolId,
+	WorkbenchFrame,
+	WorkspaceLayoutDocument,
+	WorkspaceViewState,
+} from "../shell/layout";
 import type { ConnectionStatus } from "../transport";
 import {
 	type HistoryTarget,
@@ -171,7 +174,6 @@ export interface LocalLayoutStatePayload {
 	documentsByWorkspace: Record<string, WorkspaceLayoutDocument>;
 	attentionByWorkspace: Record<string, LayoutAttention>;
 	preferences: LocalLayoutPreferences;
-	legacyImportAttempted: Record<string, true>;
 }
 
 export interface CenterNavigationStamp {
@@ -712,7 +714,6 @@ interface AppState {
 	workspaceViewsByWorkspace: Record<string, WorkspaceViewState>;
 	layoutStateReady: boolean;
 	localLayoutPreferences: LocalLayoutPreferences;
-	legacyLayoutImportAttempted: Record<string, true>;
 	layoutDocumentsByWorkspace: Record<string, WorkspaceLayoutDocument>;
 	layoutAttentionByWorkspace: Record<string, LayoutAttention>;
 	layoutProjectionEpochByWorkspace: Record<string, number>;
@@ -1511,7 +1512,6 @@ export const useAppStore = create<AppState>((set, get) => ({
 	workspaceViewsByWorkspace: {},
 	layoutStateReady: false,
 	localLayoutPreferences: { ...DEFAULT_LOCAL_LAYOUT_PREFERENCES },
-	legacyLayoutImportAttempted: {},
 	layoutDocumentsByWorkspace: {},
 	layoutAttentionByWorkspace: {},
 	layoutProjectionEpochByWorkspace: {},
@@ -1766,7 +1766,6 @@ export const useAppStore = create<AppState>((set, get) => ({
 						layoutDocumentsByWorkspace: payload.documentsByWorkspace,
 						layoutAttentionByWorkspace: payload.attentionByWorkspace,
 						localLayoutPreferences: payload.preferences,
-						legacyLayoutImportAttempted: payload.legacyImportAttempted,
 						layoutStateReady: true,
 					},
 		),
@@ -1785,7 +1784,6 @@ export const useAppStore = create<AppState>((set, get) => ({
 				layoutDocumentsByWorkspace: payload.documentsByWorkspace,
 				layoutAttentionByWorkspace: payload.attentionByWorkspace,
 				localLayoutPreferences: payload.preferences,
-				legacyLayoutImportAttempted: payload.legacyImportAttempted,
 				layoutProjectionEpochByWorkspace,
 			};
 		}),
@@ -2137,7 +2135,6 @@ export const useAppStore = create<AppState>((set, get) => ({
 			}
 			return {
 				workspaceViewsByWorkspace: omitKey(s.workspaceViewsByWorkspace, workspaceId),
-				legacyLayoutImportAttempted: omitKey(s.legacyLayoutImportAttempted, workspaceId),
 				layoutDocumentsByWorkspace: omitKey(s.layoutDocumentsByWorkspace, workspaceId),
 				layoutAttentionByWorkspace: omitKey(s.layoutAttentionByWorkspace, workspaceId),
 				layoutProjectionEpochByWorkspace: omitKey(s.layoutProjectionEpochByWorkspace, workspaceId),

@@ -1,8 +1,4 @@
-import {
-	INITIAL_TERMINAL_TAB_KEY,
-	type LayoutTerminalTab,
-	type WorkspaceLayoutDocument,
-} from "@thinkrail/contracts";
+import { INITIAL_TERMINAL_TAB_KEY } from "@thinkrail/contracts";
 import { useEffect, useRef } from "react";
 import type { LayoutAttention } from "../../lib";
 import { useTerminalCatalog } from "../../panels/TerminalWorkbench";
@@ -12,9 +8,11 @@ import {
 	collectAllGroups,
 	collectCenterGroups,
 	isLayoutUnavailable,
+	type LayoutTerminalTab,
 	moveTabToGroup,
 	openCenterTab,
 	primaryCenterGroupId,
+	type WorkspaceLayoutDocument,
 	withAvailablePlacementId,
 } from "../layout";
 

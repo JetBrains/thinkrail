@@ -8,12 +8,6 @@ const MAX_DEPTH = 8;
 const MAX_NAME_LENGTH = 200;
 const MAX_BOTTOM_HEIGHT = 0.7;
 const TOOL_IDS = new Set<LayoutToolId>(["projects", "specs", "files", "changes", "review"]);
-const EMPTY_BOTTOM = {
-	visible: false,
-	height: 0.3,
-	alignment: "center",
-	groups: [],
-} as const;
 
 function record(value: unknown): Record<string, unknown> | null {
 	return value !== null && typeof value === "object" && !Array.isArray(value)
@@ -190,12 +184,7 @@ export function normalizeStoredCustomLayoutPresets(value: unknown): LayoutPreset
 	const ids = new Set<string>();
 	for (const candidate of value.slice(0, MAX_PRESETS)) {
 		try {
-			const current = record(candidate);
-			const migrated =
-				current && current.bottom === undefined
-					? { ...current, bottom: structuredClone(EMPTY_BOTTOM) }
-					: candidate;
-			const preset = validateLayoutPreset(migrated);
+			const preset = validateLayoutPreset(candidate);
 			if (ids.has(preset.id)) continue;
 			ids.add(preset.id);
 			presets.push(preset);

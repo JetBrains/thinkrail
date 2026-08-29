@@ -3,12 +3,6 @@ import {
 	RiChatNewLine as MessageSquarePlus,
 	RiTerminalBoxLine as SquareTerminal,
 } from "@remixicon/react";
-import type {
-	LayoutCenterTab,
-	LayoutTab,
-	LayoutToolId,
-	WorkspaceLayoutDocument,
-} from "@thinkrail/contracts";
 import { lazy, type ReactNode, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { DropdownMenuItem } from "../components/ui/dropdown-menu";
@@ -54,8 +48,12 @@ import {
 	collectAllGroups,
 	findPlacedResource,
 	findTabLocation,
+	type LayoutCenterTab,
+	type LayoutTab,
 	type LayoutTabFocusRequest,
+	type LayoutToolId,
 	Workbench,
+	type WorkspaceLayoutDocument,
 } from "./layout";
 import { toLayoutTab, useLayoutIntentProcessing } from "./layoutIntents";
 import { commitWorkspaceLayout, useWorkspaceLayoutState } from "./layoutState";

@@ -88,24 +88,7 @@ test("createWorkspace cuts a fresh branch from baseRef and records it as the bas
 	expect(ws.branch).not.toBe("feature/base");
 });
 
-test("legacy workspace records never gain initial-terminal provisioning on read", async () => {
-	const ws = await createWorkspace("p1");
-	const file = join(dataDir, "workspaces.json");
-	const records = JSON.parse(readFileSync(file, "utf8")) as Array<Record<string, unknown>>;
-	const record = records.find((candidate) => candidate.id === ws.id);
-	if (!record) throw new Error("missing workspace record");
-	delete record.initialTerminalPending;
-	writeFileSync(file, JSON.stringify(records));
-
-	expect(listWorkspaceRecords("p1").find((candidate) => candidate.id === ws.id)).not.toHaveProperty(
-		"initialTerminalPending",
-	);
-	expect(listWorkspaces("p1").find((candidate) => candidate.id === ws.id)).not.toHaveProperty(
-		"initialTerminalPending",
-	);
-});
-
-test("the old frontend eligibility marker migrates into host-owned pending provisioning", async () => {
+test("the retired eligibility marker never gains initial-terminal provisioning on read", async () => {
 	const ws = await createWorkspace("p1");
 	const file = join(dataDir, "workspaces.json");
 	const records = JSON.parse(readFileSync(file, "utf8")) as Array<Record<string, unknown>>;
@@ -115,9 +98,12 @@ test("the old frontend eligibility marker migrates into host-owned pending provi
 	record.initialTerminalEligible = true;
 	writeFileSync(file, JSON.stringify(records));
 
-	const migrated = listWorkspaceRecords("p1").find((candidate) => candidate.id === ws.id);
-	expect(migrated?.initialTerminalPending).toBe(true);
-	expect(migrated).not.toHaveProperty("initialTerminalEligible");
+	expect(listWorkspaceRecords("p1").find((candidate) => candidate.id === ws.id)).not.toHaveProperty(
+		"initialTerminalPending",
+	);
+	expect(listWorkspaces("p1").find((candidate) => candidate.id === ws.id)).not.toHaveProperty(
+		"initialTerminalPending",
+	);
 });
 
 test("completing initial-terminal reservation clears the durable marker exactly once", async () => {

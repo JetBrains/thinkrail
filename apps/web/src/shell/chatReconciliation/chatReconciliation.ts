@@ -1,4 +1,3 @@
-import type { LayoutCenterTab, WorkspaceLayoutDocument } from "@thinkrail/contracts";
 import { useEffect, useRef } from "react";
 import { messagesToRuntime } from "../../chat/hydrate";
 import { type LayoutAttention, readLayoutSelection, tupleKey } from "../../lib";
@@ -20,8 +19,10 @@ import {
 	collectAllGroups,
 	findPlacedResource,
 	findTabLocation,
+	type LayoutCenterTab,
 	removeSessionLayoutTabs,
 	selectTab,
+	type WorkspaceLayoutDocument,
 } from "../layout";
 import { commitWorkspaceLayout } from "../layoutState";
 

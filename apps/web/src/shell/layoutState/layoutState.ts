@@ -1,10 +1,6 @@
-import type {
-	LayoutPreset,
-	WorkspaceLayoutDocument,
-	WorkspaceLayoutSnapshot,
-} from "@thinkrail/contracts";
+import type { LayoutPreset } from "@thinkrail/contracts";
 import { useEffect } from "react";
-import { type LayoutAttention, randomId, tupleKey } from "../../lib";
+import { type LayoutAttention, randomId } from "../../lib";
 import {
 	DEFAULT_LOCAL_LAYOUT_PREFERENCES,
 	type LocalLayoutPreferences,
@@ -26,12 +22,10 @@ import {
 	minimumSideGroupLimit,
 	projectWorkspaceLayout,
 	reconcileAttention,
-	reconcileWorkspaceView,
 	validateLayoutDocument,
 	type WorkbenchFrame,
+	type WorkspaceLayoutDocument,
 	type WorkspaceViewState,
-	workbenchFrameFromDocument,
-	workspaceViewFromDocument,
 } from "../layout";
 
 const LOCAL_LAYOUT_VERSION = 1;
@@ -44,7 +38,6 @@ interface PersistedLocalLayout {
 	viewsByWorkspace: Record<string, WorkspaceViewState>;
 	attentionByWorkspace: Record<string, LayoutAttention>;
 	preferences: LocalLayoutPreferences;
-	legacyImportAttempted: Record<string, true>;
 }
 
 interface StoragePair {
@@ -58,11 +51,7 @@ let persistenceKey: string | null = null;
 let stopPersistence: (() => void) | null = null;
 let releaseSurfaceLease: (() => void) | null = null;
 let initialization: Promise<void> | null = null;
-let freshBootstrap = false;
-let legacyLayoutRequesterForTests:
-	| ((workspaceId: string) => Promise<WorkspaceLayoutSnapshot | null>)
-	| null = null;
-const workspaceImports = new Map<string, Promise<WorkspaceLayoutDocument>>();
+const workspaceInitializations = new Map<string, Promise<WorkspaceLayoutDocument>>();
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -421,7 +410,19 @@ function parsePreferences(value: unknown): LocalLayoutPreferences | undefined {
 function decodeLocalLayout(raw: string): LocalLayoutStatePayload | undefined {
 	try {
 		const parsed = JSON.parse(raw) as unknown;
-		if (!isRecord(parsed) || parsed.version !== LOCAL_LAYOUT_VERSION) return undefined;
+		if (
+			!isRecord(parsed) ||
+			parsed.version !== LOCAL_LAYOUT_VERSION ||
+			!hasOnlyKeys(parsed, [
+				"version",
+				"frame",
+				"viewsByWorkspace",
+				"attentionByWorkspace",
+				"preferences",
+			])
+		) {
+			return undefined;
+		}
 		if (!isResourceFreeFrame(parsed.frame)) return undefined;
 		if (!isRecord(parsed.viewsByWorkspace) || !isRecord(parsed.attentionByWorkspace)) {
 			return undefined;
@@ -450,18 +451,12 @@ function decodeLocalLayout(raw: string): LocalLayoutStatePayload | undefined {
 			const frameDocument = projectWorkspaceLayout(frame, emptyWorkspaceView());
 			if (validateLayoutDocument(frameDocument, 32, 32).length > 0) return undefined;
 		}
-		const legacyImportAttempted = Object.fromEntries(
-			isRecord(parsed.legacyImportAttempted)
-				? Object.entries(parsed.legacyImportAttempted).filter(([, attempted]) => attempted === true)
-				: [],
-		) as Record<string, true>;
 		return {
 			frame,
 			viewsByWorkspace,
 			documentsByWorkspace,
 			attentionByWorkspace,
 			preferences,
-			legacyImportAttempted,
 		};
 	} catch {
 		return undefined;
@@ -476,7 +471,6 @@ function encodeLocalLayout(state: ReturnType<typeof useAppStore.getState>): stri
 		viewsByWorkspace: state.workspaceViewsByWorkspace,
 		attentionByWorkspace: state.layoutAttentionByWorkspace,
 		preferences: state.localLayoutPreferences,
-		legacyImportAttempted: state.legacyLayoutImportAttempted,
 	};
 	return JSON.stringify(value);
 }
@@ -501,12 +495,10 @@ function startPersistence(): void {
 			state.workspaceViewsByWorkspace === previous.workspaceViewsByWorkspace &&
 			state.layoutAttentionByWorkspace === previous.layoutAttentionByWorkspace &&
 			state.localLayoutPreferences === previous.localLayoutPreferences &&
-			state.legacyLayoutImportAttempted === previous.legacyLayoutImportAttempted &&
 			state.layoutStateReady === previous.layoutStateReady
 		) {
 			return;
 		}
-		freshBootstrap = false;
 		persistCurrentLayout();
 	});
 }
@@ -522,24 +514,6 @@ async function loadPersistedLayout(): Promise<LocalLayoutStatePayload | undefine
 		return raw ? decodeLocalLayout(raw) : undefined;
 	} catch {
 		persistenceKey = null;
-		return undefined;
-	}
-}
-
-function legacyAttentionStorageKey(workspaceId: string): string {
-	return `thinkrail:layout-attention:${JSON.stringify([
-		endpointOverride ?? getTransport().httpBase(),
-		workspaceId,
-	])}`;
-}
-
-function loadLegacyAttention(workspaceId: string): LayoutAttention | undefined {
-	const storage = stores();
-	if (!storage) return undefined;
-	try {
-		const raw = storage.local.getItem(legacyAttentionStorageKey(workspaceId));
-		return raw ? parseAttention(JSON.parse(raw) as unknown) : undefined;
-	} catch {
 		return undefined;
 	}
 }
@@ -564,79 +538,6 @@ function documentsForViews(
 	);
 }
 
-function requestLegacyLayout(workspaceId: string): Promise<WorkspaceLayoutSnapshot | null> {
-	return (
-		legacyLayoutRequesterForTests?.(workspaceId) ??
-		getTransport().request("layout.get", { workspaceId })
-	);
-}
-
-function initialPayload(
-	workspaceId: string,
-	snapshot: WorkspaceLayoutSnapshot | null,
-	preferences: LocalLayoutPreferences = DEFAULT_LOCAL_LAYOUT_PREFERENCES,
-): LocalLayoutStatePayload {
-	const frame = snapshot ? workbenchFrameFromDocument(snapshot.document) : balancedFrame();
-	const view = snapshot ? workspaceViewFromDocument(snapshot.document) : emptyWorkspaceView();
-	const document = projectWorkspaceLayout(frame, view);
-	return {
-		frame,
-		viewsByWorkspace: { [workspaceId]: view },
-		documentsByWorkspace: { [workspaceId]: document },
-		attentionByWorkspace: {
-			[workspaceId]: reconcileAttention(
-				document,
-				loadLegacyAttention(workspaceId),
-				snapshot?.document,
-			),
-		},
-		preferences,
-		legacyImportAttempted: { [workspaceId]: true },
-	};
-}
-
-function importedPayload(
-	workspaceId: string,
-	snapshot: WorkspaceLayoutSnapshot | null,
-): LocalLayoutStatePayload {
-	const state = useAppStore.getState();
-	const frame = state.workbenchFrame;
-	if (!frame) return initialPayload(workspaceId, snapshot);
-	const view = snapshot
-		? reconcileWorkspaceView(
-				workbenchFrameFromDocument(snapshot.document),
-				frame,
-				workspaceViewFromDocument(snapshot.document),
-			)
-		: emptyWorkspaceView();
-	const viewsByWorkspace = { ...state.workspaceViewsByWorkspace, [workspaceId]: view };
-	const safeFrame = ensureWorkbenchToolPlacementIds(frame, viewsByWorkspace);
-	const documentsByWorkspace =
-		safeFrame === frame
-			? {
-					...state.layoutDocumentsByWorkspace,
-					[workspaceId]: projectWorkspaceLayout(safeFrame, view),
-				}
-			: documentsForViews(safeFrame, viewsByWorkspace);
-	const attentionByWorkspace = { ...state.layoutAttentionByWorkspace };
-	for (const [id, document] of Object.entries(documentsByWorkspace)) {
-		if (id !== workspaceId && safeFrame === frame) continue;
-		attentionByWorkspace[id] = reconcileAttention(
-			document,
-			id === workspaceId ? loadLegacyAttention(id) : state.layoutAttentionByWorkspace[id],
-			id === workspaceId ? snapshot?.document : state.layoutDocumentsByWorkspace[id],
-		);
-	}
-	return {
-		frame: safeFrame,
-		viewsByWorkspace,
-		documentsByWorkspace,
-		attentionByWorkspace,
-		preferences: state.localLayoutPreferences,
-		legacyImportAttempted: { ...state.legacyLayoutImportAttempted, [workspaceId]: true },
-	};
-}
-
 export function initializeLocalLayoutState(): Promise<void> {
 	if (initialization) return initialization;
 	const run = (async () => {
@@ -646,14 +547,12 @@ export function initializeLocalLayoutState(): Promise<void> {
 			if (persisted) {
 				state.hydrateLocalLayoutState(persisted);
 			} else {
-				freshBootstrap = true;
 				state.hydrateLocalLayoutState({
 					frame: balancedFrame(),
 					viewsByWorkspace: {},
 					documentsByWorkspace: {},
 					attentionByWorkspace: {},
 					preferences: { ...DEFAULT_LOCAL_LAYOUT_PREFERENCES },
-					legacyImportAttempted: {},
 				});
 			}
 		}
@@ -667,43 +566,45 @@ export function initializeLocalLayoutState(): Promise<void> {
 }
 
 export function ensureWorkspaceLayoutState(workspaceId: string): Promise<WorkspaceLayoutDocument> {
-	const stateAtStart = useAppStore.getState();
-	const importKey = tupleKey(workspaceId, String(stateAtStart.connectionGeneration));
-	const existing = workspaceImports.get(importKey);
+	const existing = workspaceInitializations.get(workspaceId);
 	if (existing) return existing;
 	const request = (async () => {
-		const current = stateAtStart;
-		if (current.removedWorkspaceIds[workspaceId]) throw new Error("Workspace has been removed");
+		if (useAppStore.getState().removedWorkspaceIds[workspaceId]) {
+			throw new Error("Workspace has been removed");
+		}
 		await initializeLocalLayoutState();
-		const loaded = useAppStore.getState();
-		const localDocument = loaded.layoutDocumentsByWorkspace[workspaceId];
-		if (localDocument && loaded.legacyLayoutImportAttempted[workspaceId]) return localDocument;
-		const connectionGeneration = loaded.connectionGeneration;
-		const snapshot = await requestLegacyLayout(workspaceId);
-		if (snapshot && snapshot.workspaceId !== workspaceId) {
-			throw new Error("The legacy layout did not match the requested workspace");
-		}
-		const latest = useAppStore.getState();
-		if (
-			latest.removedWorkspaceIds[workspaceId] ||
-			latest.connectionGeneration !== connectionGeneration
-		) {
-			throw new Error("The layout import was superseded by a newer connection");
-		}
-		const replaceFreshBootstrap =
-			freshBootstrap && Object.keys(latest.workspaceViewsByWorkspace).length === 0;
-		const payload = replaceFreshBootstrap
-			? initialPayload(workspaceId, snapshot, latest.localLayoutPreferences)
-			: importedPayload(workspaceId, snapshot);
-		freshBootstrap = false;
-		latest.applyLocalLayoutState(payload, [workspaceId], replaceFreshBootstrap);
-		const document = useAppStore.getState().layoutDocumentsByWorkspace[workspaceId];
-		if (!document) throw new Error("The workspace layout could not be initialized");
-		return document;
+		const state = useAppStore.getState();
+		if (state.removedWorkspaceIds[workspaceId]) throw new Error("Workspace has been removed");
+		const existingDocument = state.layoutDocumentsByWorkspace[workspaceId];
+		if (existingDocument) return existingDocument;
+		if (!state.workbenchFrame) throw new Error("The local workbench frame is not ready");
+		const view = emptyWorkspaceView();
+		const document = projectWorkspaceLayout(state.workbenchFrame, view);
+		state.applyLocalLayoutState(
+			{
+				frame: state.workbenchFrame,
+				viewsByWorkspace: { ...state.workspaceViewsByWorkspace, [workspaceId]: view },
+				documentsByWorkspace: {
+					...state.layoutDocumentsByWorkspace,
+					[workspaceId]: document,
+				},
+				attentionByWorkspace: {
+					...state.layoutAttentionByWorkspace,
+					[workspaceId]: reconcileAttention(document, undefined),
+				},
+				preferences: state.localLayoutPreferences,
+			},
+			[workspaceId],
+		);
+		const installed = useAppStore.getState().layoutDocumentsByWorkspace[workspaceId];
+		if (!installed) throw new Error("The workspace layout could not be initialized");
+		return installed;
 	})().finally(() => {
-		if (workspaceImports.get(importKey) === request) workspaceImports.delete(importKey);
+		if (workspaceInitializations.get(workspaceId) === request) {
+			workspaceInitializations.delete(workspaceId);
+		}
 	});
-	workspaceImports.set(importKey, request);
+	workspaceInitializations.set(workspaceId, request);
 	return request;
 }
 
@@ -740,7 +641,6 @@ export function applyLayoutPresetLocally(preset: LayoutPreset): void {
 					minimumBottomGroupLimit(preset),
 				),
 			},
-			legacyImportAttempted: state.legacyLayoutImportAttempted,
 		},
 		Object.keys(documentsByWorkspace),
 		true,
@@ -809,7 +709,6 @@ export async function commitWorkspaceLayout(
 			documentsByWorkspace,
 			attentionByWorkspace,
 			preferences: state.localLayoutPreferences,
-			legacyImportAttempted: state.legacyLayoutImportAttempted,
 		},
 		changedWorkspaceIds,
 		frameChanged,
@@ -826,27 +725,13 @@ export function useLocalLayoutState(): void {
 }
 
 export function useWorkspaceLayoutState(workspaceId: string): void {
-	const status = useAppStore((state) => state.status);
-	const connectionGeneration = useAppStore((state) => state.connectionGeneration);
 	useEffect(() => {
-		if (status !== "connected" || connectionGeneration === 0) return;
 		void ensureWorkspaceLayoutState(workspaceId).catch((error) => {
-			const state = useAppStore.getState();
-			if (
-				state.status === "connected" &&
-				state.connectionGeneration === connectionGeneration &&
-				!state.removedWorkspaceIds[workspaceId]
-			) {
+			if (!useAppStore.getState().removedWorkspaceIds[workspaceId]) {
 				toast.error(errorText(error), "Couldn't load the local layout");
 			}
 		});
-	}, [connectionGeneration, status, workspaceId]);
-}
-
-export function setLegacyLayoutRequesterForTests(
-	requester: ((workspaceId: string) => Promise<WorkspaceLayoutSnapshot | null>) | null,
-): void {
-	legacyLayoutRequesterForTests = requester;
+	}, [workspaceId]);
 }
 
 export function setLayoutStateStorageForTests(
@@ -858,15 +743,13 @@ export function setLayoutStateStorageForTests(
 }
 
 export function resetLayoutStateForTests(): void {
-	workspaceImports.clear();
+	workspaceInitializations.clear();
 	stopPersistence?.();
 	stopPersistence = null;
 	releaseSurfaceLease?.();
 	releaseSurfaceLease = null;
 	initialization = null;
 	persistenceKey = null;
-	freshBootstrap = false;
 	storageOverride = null;
 	endpointOverride = null;
-	legacyLayoutRequesterForTests = null;
 }

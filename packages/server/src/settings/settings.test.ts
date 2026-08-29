@@ -139,7 +139,7 @@ test("a null reviewModel/reviewEffort clears the override back to unset, and it 
 	expect(getConfig().reviewEffort).toBeUndefined();
 });
 
-test("loadConfig lifts the old custom preset catalog and discards host-wide layout preferences", () => {
+test("loadConfig ignores the old layout settings object", () => {
 	writeFileSync(
 		join(dataDir, "config.json"),
 		JSON.stringify({
@@ -156,7 +156,6 @@ test("loadConfig lifts the old custom preset catalog and discards host-wide layo
 	expect(getConfig()).toEqual({
 		...DEFAULT_CONFIG,
 		theme: "acme.persisted",
-		customLayoutPresets: [preset()],
 	});
 });
 
@@ -172,12 +171,13 @@ test("custom preset updates validate the complete catalog and permit empty struc
 	);
 });
 
-test("stored custom presets are isolated and capped during normalization", () => {
+test("stored custom presets keep only complete current-schema entries", () => {
+	const { bottom: _bottom, ...bottomless } = preset("bottomless");
 	writeFileSync(
 		join(dataDir, "config.json"),
 		JSON.stringify({
 			...DEFAULT_CONFIG,
-			customLayoutPresets: [preset("valid"), { id: "broken" }],
+			customLayoutPresets: [preset("valid"), bottomless, { id: "broken" }],
 		}),
 	);
 	resetConfigCache();

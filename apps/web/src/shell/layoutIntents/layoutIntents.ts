@@ -1,8 +1,3 @@
-import type {
-	LayoutCenterTab,
-	LayoutTerminalTab,
-	WorkspaceLayoutDocument,
-} from "@thinkrail/contracts";
 import { useEffect } from "react";
 import type { LayoutAttention } from "../../lib";
 import {
@@ -27,9 +22,11 @@ import {
 	hideSide,
 	isLayoutUnavailable,
 	keepPreview,
+	type LayoutCenterTab,
 	type LayoutGroupLocation,
 	type LayoutOperationResult,
 	type LayoutTabFocusRequest,
+	type LayoutTerminalTab,
 	moveTabToGroup,
 	openCenterTab,
 	primaryCenterGroupId,
@@ -40,6 +37,7 @@ import {
 	setAuxiliaryGroupFolded,
 	showBottom,
 	showSide,
+	type WorkspaceLayoutDocument,
 	withAvailablePlacementId,
 } from "../layout";
 import { terminalLayoutId } from "../terminalReconciliation";
