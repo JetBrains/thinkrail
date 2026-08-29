@@ -1,4 +1,5 @@
 import {
+	RiRobotLine as Bot,
 	RiCheckboxCircleLine as CheckCircle2,
 	RiArrowDownSLine as ChevronDown,
 	RiArrowRightSLine as ChevronRight,
@@ -10,6 +11,7 @@ import {
 import type { ReviewComment } from "@thinkrail/contracts";
 import { useState } from "react";
 import { PopoverTrigger } from "@/components/ui/popover";
+import { IconTooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { PlanStatusIcon, SectionLabel } from "../chat/planKit";
 import { sessionGlance } from "../chat/planView";
@@ -20,6 +22,7 @@ import { ConfirmPopover } from "./ConfirmPopover";
 import { openChatInTab } from "./openChat";
 import { openDiffInTab, openFileInTab } from "./openTabs";
 import {
+	allDraftIds,
 	commentSurface,
 	fileSummaries,
 	lineRef,
@@ -99,7 +102,7 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 			toast.error(errorText(err), "Couldn't clear the review");
 		}
 	};
-	const hasDrafts = snapshot.comments.some((c) => c.status === "draft");
+	const hasDrafts = allDraftIds(snapshot.comments).length > 0;
 	const hasComments = snapshot.comments.length > 0;
 	const toggleFile = (file: ReviewFileSummary) => {
 		const isOpen = expanded.has(file.path);
@@ -127,18 +130,19 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 						onConfirm={() => void clearReview()}
 						align="end"
 					>
-						<PopoverTrigger asChild>
-							<button
-								type="button"
-								data-testid="review-clear"
-								title="Clear review — archive sent comments"
-								aria-label="Clear review"
-								className="flex shrink-0 items-center gap-4 px-4 tr-text-metadata text-text-subtle hover:text-feedback-error"
-							>
-								<Trash2 className="size-14" />
-								Clear
-							</button>
-						</PopoverTrigger>
+						<IconTooltip label="Clear review — archive sent comments" wrapTrigger>
+							<PopoverTrigger asChild>
+								<button
+									type="button"
+									data-testid="review-clear"
+									aria-label="Clear review"
+									className="flex shrink-0 items-center gap-4 px-4 tr-text-metadata text-text-subtle hover:text-feedback-error"
+								>
+									<Trash2 className="size-14" />
+									Clear
+								</button>
+							</PopoverTrigger>
+						</IconTooltip>
 					</ConfirmPopover>
 				</div>
 			)}
@@ -187,16 +191,17 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 											</span>
 										</button>
 										{finishable && (
-											<button
-												type="button"
-												data-testid="review-file-done"
-												title="Done — finish this file's review"
-												aria-label="Done — finish this file's review"
-												onClick={() => void finishFile(file.path)}
-												className="flex shrink-0 items-center py-4 pr-4 pl-4 text-text-subtle hover:text-feedback-success"
-											>
-												<CheckCircle2 className="size-14" />
-											</button>
+											<IconTooltip label="Done — finish this file's review">
+												<button
+													type="button"
+													data-testid="review-file-done"
+													aria-label="Done — finish this file's review"
+													onClick={() => void finishFile(file.path)}
+													className="flex shrink-0 items-center py-4 pr-4 pl-4 text-text-subtle hover:text-feedback-success"
+												>
+													<CheckCircle2 className="size-14" />
+												</button>
+											</IconTooltip>
 										)}
 									</div>
 									{isOpen && (
@@ -248,22 +253,6 @@ function FileSection({
 					<SendReviewButton workspaceId={workspaceId} path={path} testid="review-panel-send" />
 				</div>
 			)}
-			{inProgress.length > 0 && (
-				<>
-					<SectionLabel label="In progress" />
-					{inProgress.map((comment) => (
-						<CommentRow
-							key={comment.id}
-							workspaceId={workspaceId}
-							comment={comment}
-							sending={sending}
-							onSend={() => void onSend(comment)}
-							onOpenChat={onOpenChat}
-							onNavigate={() => onNavigate(comment)}
-						/>
-					))}
-				</>
-			)}
 			{drafts.length > 0 && (
 				<>
 					<SectionLabel label="Drafts" />
@@ -273,6 +262,22 @@ function FileSection({
 							workspaceId={workspaceId}
 							comment={comment}
 							ordinal={index + 1}
+							sending={sending}
+							onSend={() => void onSend(comment)}
+							onOpenChat={onOpenChat}
+							onNavigate={() => onNavigate(comment)}
+						/>
+					))}
+				</>
+			)}
+			{inProgress.length > 0 && (
+				<>
+					<SectionLabel label="In progress" />
+					{inProgress.map((comment) => (
+						<CommentRow
+							key={comment.id}
+							workspaceId={workspaceId}
+							comment={comment}
 							sending={sending}
 							onSend={() => void onSend(comment)}
 							onOpenChat={onOpenChat}
@@ -368,10 +373,8 @@ function CommentRow({
 			<button
 				type="button"
 				data-testid="review-comment-open"
-				onClick={() =>
-					!isDraft && comment.sessionId ? onOpenChat(comment.sessionId) : onNavigate()
-				}
-				title={!isDraft && comment.sessionId ? "Open the discussion" : "Show in file"}
+				onClick={() => (comment.sessionId ? onOpenChat(comment.sessionId) : onNavigate())}
+				title={comment.sessionId ? "Open the discussion" : "Show in file"}
 				className="flex w-full items-start gap-8 rounded-[var(--radius-sm)] px-4 py-4 text-left hover:bg-control-bg-hovered"
 			>
 				{ordinal !== undefined ? (
@@ -386,9 +389,36 @@ function CommentRow({
 				<span className="min-w-0 flex-1">
 					<span className="line-clamp-2 block tr-text-ui text-text-default">{comment.body}</span>
 					<span className="flex items-center gap-4">
+						{comment.author === "agent" && (
+							<span
+								data-testid="review-comment-agent"
+								title="Filed by ThinkRail's reviewer agent — not by you"
+								className="flex items-center gap-2 tr-text-eyebrow text-text-subtle"
+							>
+								<Bot className="size-12" /> ThinkRail
+							</span>
+						)}
 						{ref && <span className="tr-code-text text-text-subtle">{ref}</span>}
-						{comment.anchorState === "outdated" && (
-							<span className="tr-text-eyebrow text-text-subtle">outdated</span>
+						{comment.reflection?.verdict === "refuted" ? (
+							<span
+								data-testid="review-comment-refuted"
+								title={`An independent reflector judged this finding refuted: ${comment.reflection.reason} — it was held back from the auto-fix cycle.`}
+								className="tr-text-eyebrow text-text-subtle"
+							>
+								refuted by reflection
+							</span>
+						) : comment.stale ? (
+							<span
+								data-testid="review-comment-stale"
+								title="The code this finding was filed against was rewritten after review — it won't ride the auto-fix cycle"
+								className="tr-text-eyebrow text-feedback-warning"
+							>
+								changed since review
+							</span>
+						) : (
+							comment.anchorState === "outdated" && (
+								<span className="tr-text-eyebrow text-text-subtle">outdated</span>
+							)
 						)}
 					</span>
 				</span>
@@ -396,16 +426,18 @@ function CommentRow({
 			<span className="absolute top-4 right-8 flex items-center gap-4 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 has-[[data-state=open]]:opacity-100">
 				{isDraft && (
 					<>
-						<button
-							type="button"
-							data-testid="review-comment-send"
-							title="Send this comment to the file's review chat"
-							disabled={sending}
-							onClick={onSend}
-							className="text-text-subtle hover:text-text-default"
-						>
-							<Send className="size-14" />
-						</button>
+						<IconTooltip label="Send this comment to the file's review chat" wrapTrigger>
+							<button
+								type="button"
+								data-testid="review-comment-send"
+								aria-label="Send this comment to the file's review chat"
+								disabled={sending}
+								onClick={onSend}
+								className="text-text-subtle hover:text-text-default disabled:pointer-events-none"
+							>
+								<Send className="size-14" />
+							</button>
+						</IconTooltip>
 						<ConfirmPopover
 							open={confirmDelete}
 							onOpenChange={setConfirmDelete}
@@ -416,40 +448,46 @@ function CommentRow({
 							onConfirm={() => void removeDraft()}
 							align="end"
 						>
-							<PopoverTrigger asChild>
-								<button
-									type="button"
-									data-testid="review-comment-delete"
-									title="Delete draft"
-									className="text-text-subtle hover:text-feedback-error"
-								>
-									<Trash2 className="size-14" />
-								</button>
-							</PopoverTrigger>
+							<IconTooltip label="Delete draft" wrapTrigger>
+								<PopoverTrigger asChild>
+									<button
+										type="button"
+										data-testid="review-comment-delete"
+										aria-label="Delete draft"
+										className="text-text-subtle hover:text-feedback-error"
+									>
+										<Trash2 className="size-14" />
+									</button>
+								</PopoverTrigger>
+							</IconTooltip>
 						</ConfirmPopover>
 					</>
 				)}
-				{!isDraft && comment.sessionId && (
-					<button
-						type="button"
-						data-testid="review-comment-file"
-						title="Show in file"
-						onClick={onNavigate}
-						className="text-text-subtle hover:text-text-default"
-					>
-						<FileText className="size-14" />
-					</button>
+				{comment.sessionId && (
+					<IconTooltip label="Show in file">
+						<button
+							type="button"
+							data-testid="review-comment-file"
+							aria-label="Show in file"
+							onClick={onNavigate}
+							className="text-text-subtle hover:text-text-default"
+						>
+							<FileText className="size-14" />
+						</button>
+					</IconTooltip>
 				)}
 				{comment.status === "sent" && (
-					<button
-						type="button"
-						data-testid="review-comment-resolve"
-						title="Mark resolved"
-						onClick={() => void update({ status: "resolved" })}
-						className="text-text-subtle hover:text-feedback-success"
-					>
-						<CheckCircle2 className="size-14" />
-					</button>
+					<IconTooltip label="Mark resolved">
+						<button
+							type="button"
+							data-testid="review-comment-resolve"
+							aria-label="Mark resolved"
+							onClick={() => void update({ status: "resolved" })}
+							className="text-text-subtle hover:text-feedback-success"
+						>
+							<CheckCircle2 className="size-14" />
+						</button>
+					</IconTooltip>
 				)}
 			</span>
 		</div>
@@ -477,15 +515,17 @@ function ResolvedRow({
 			</span>
 			<span className="flex shrink-0 items-center gap-4 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
 				{comment.sessionId && (
-					<button
-						type="button"
-						data-testid="review-comment-chat"
-						title="Open the linked chat"
-						onClick={() => comment.sessionId && onOpenChat(comment.sessionId)}
-						className="text-text-subtle hover:text-text-default"
-					>
-						<MessageSquare className="size-14" />
-					</button>
+					<IconTooltip label="Open the linked chat">
+						<button
+							type="button"
+							data-testid="review-comment-chat"
+							aria-label="Open the linked chat"
+							onClick={() => comment.sessionId && onOpenChat(comment.sessionId)}
+							className="text-text-subtle hover:text-text-default"
+						>
+							<MessageSquare className="size-14" />
+						</button>
+					</IconTooltip>
 				)}
 			</span>
 		</div>

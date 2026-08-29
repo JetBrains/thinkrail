@@ -3,9 +3,12 @@ import {
 	RiArrowDownSLine as ChevronDown,
 	RiArrowRightSLine as ChevronRight,
 	RiCircleLine as Circle,
+	RiErrorWarningLine as CircleAlert,
+	RiCheckboxCircleLine as CircleCheck,
 	RiRecordCircleLine as CircleDot,
 	RiPauseCircleLine as CirclePause,
 	RiFileTextLine as FileText,
+	RiLoaderLine as LoaderCircle,
 	RiQuestionnaireLine as MessageCircleQuestion,
 	RiAddLine as Plus,
 	RiDeleteBin6Line as Trash2,
@@ -13,6 +16,7 @@ import {
 } from "@remixicon/react";
 import type { TodoGroupItem, TodoItem, TodoPlan, TodoStatus } from "@thinkrail/contracts";
 import { useState } from "react";
+import { IconTooltip } from "../components/ui/tooltip";
 import { cn } from "../lib";
 import { PlanStatusIcon, SectionLabel } from "./planKit";
 import {
@@ -21,6 +25,8 @@ import {
 	itemChangeSet,
 	type PlanGlance,
 	planSections,
+	reviewChangesRequested,
+	reviewSettled,
 } from "./planView";
 
 export type ChangeTarget = { sha: string } | { path: string };
@@ -51,11 +57,36 @@ function statusLabel(status: TodoStatus, glance: PlanGlance): string {
 	return status === "in_progress" ? glanceIcon(glance).label : STATUS_LABEL[status];
 }
 
-export function StatusIcon({ status, glance }: { status: TodoStatus; glance: PlanGlance }) {
+export function StatusIcon({
+	status,
+	glance,
+	reviewed = false,
+	reviewing = false,
+	changesRequested = false,
+}: {
+	status: TodoStatus;
+	glance: PlanGlance;
+	reviewed?: boolean;
+	reviewing?: boolean;
+	changesRequested?: boolean;
+}) {
+	if (reviewing)
+		return (
+			<LoaderCircle data-reviewing="true" className="size-12 shrink-0 animate-spin text-primary" />
+		);
 	if (status === "in_progress") {
 		const { Icon, className } = glanceIcon(glance);
 		return <Icon data-glance={glance} className={cn("size-12 shrink-0", className)} />;
 	}
+	if (status === "done" && changesRequested)
+		return (
+			<CircleAlert
+				data-changes-requested="true"
+				className="size-12 shrink-0 text-feedback-warning"
+			/>
+		);
+	if (status === "done" && reviewed)
+		return <CircleCheck data-reviewed="true" className="size-12 shrink-0 text-feedback-success" />;
 	return <PlanStatusIcon kind={status === "done" ? "done" : "pending"} />;
 }
 
@@ -89,16 +120,17 @@ export function TodoAddRow({
 				className="min-w-0 flex-1 bg-transparent tr-text-ui text-text-default outline-none placeholder:text-text-muted"
 			/>
 			{onOpenPlan ? (
-				<button
-					type="button"
-					data-testid="todo-open-plan"
-					onClick={onOpenPlan}
-					aria-label="Open the plan page"
-					title="Open the plan as a page — review each step's changes"
-					className="flex size-24 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted hover:bg-control-bg-hovered hover:text-text-default focus-visible:opacity-100"
-				>
-					<FileText className="size-14" />
-				</button>
+				<IconTooltip label="Open the plan as a page — review each step's changes">
+					<button
+						type="button"
+						data-testid="todo-open-plan"
+						onClick={onOpenPlan}
+						aria-label="Open the plan page"
+						className="flex size-24 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted hover:bg-control-bg-hovered hover:text-text-default focus-visible:opacity-100"
+					>
+						<FileText className="size-14" />
+					</button>
+				</IconTooltip>
 			) : null}
 		</div>
 	);
@@ -328,14 +360,37 @@ function TodoRow({
 	onOpenChanges?: ((target: ChangeTarget) => void) | undefined;
 }) {
 	const changeSet = onOpenChanges ? itemChangeSet(todo) : null;
+	const reviewed = reviewSettled(todo);
+	const reviewing = todo.review?.reviewing === true;
+	const changesRequested = reviewChangesRequested(todo);
 	return (
 		<li
 			data-testid="todo-row"
 			data-status={todo.status}
+			data-reviewed={reviewed}
+			data-reviewing={reviewing}
+			data-changes-requested={changesRequested}
 			className="group flex items-center gap-8 rounded-[var(--radius-sm)] px-4 py-4 hover:bg-control-bg-hovered"
 		>
-			<span className="shrink-0" title={statusLabel(todo.status, glance)}>
-				<StatusIcon status={todo.status} glance={glance} />
+			<span
+				className="shrink-0"
+				title={
+					reviewing
+						? "Reviewing…"
+						: changesRequested && todo.status === "done"
+							? "Changes requested"
+							: reviewed
+								? "Verified"
+								: statusLabel(todo.status, glance)
+				}
+			>
+				<StatusIcon
+					status={todo.status}
+					glance={glance}
+					reviewed={reviewed}
+					reviewing={reviewing}
+					changesRequested={changesRequested}
+				/>
 			</span>
 			<div className="min-w-0 flex-1">
 				<div
@@ -346,9 +401,6 @@ function TodoRow({
 				>
 					{todo.title}
 				</div>
-				{todo.note ? (
-					<div className="truncate text-text-muted tr-text-metadata">{todo.note}</div>
-				) : null}
 				{changeSet && onOpenChanges ? (
 					<ChangeSetChip set={changeSet} onOpen={onOpenChanges} />
 				) : null}
@@ -362,15 +414,19 @@ function TodoRow({
 					<UserRound className="size-14" />
 				</span>
 			) : null}
-			<button
-				type="button"
-				onClick={onRemove}
-				aria-label="Remove"
-				title="Remove"
-				className="flex size-24 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted opacity-0 transition-opacity hover:bg-container-elevated-bg hover:text-feedback-error group-hover:opacity-100 focus-visible:opacity-100"
+			<IconTooltip
+				label={reviewing ? "Reviewing… — wait for the review to finish before removing" : "Remove"}
 			>
-				<Trash2 className="size-14" />
-			</button>
+				<button
+					type="button"
+					onClick={onRemove}
+					disabled={reviewing}
+					aria-label="Remove"
+					className="flex size-24 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted opacity-0 transition-opacity hover:bg-container-elevated-bg hover:text-feedback-error group-hover:opacity-100 focus-visible:opacity-100 disabled:pointer-events-none disabled:opacity-0"
+				>
+					<Trash2 className="size-14" />
+				</button>
+			</IconTooltip>
 		</li>
 	);
 }

@@ -5,12 +5,19 @@ import {
 	flatItems,
 	groupProgress,
 	itemChangeSet,
+	itemOpenFindings,
+	itemRevisions,
+	planCompletionSummary,
 	planGlance,
 	planSections,
 	planSummary,
+	reviewableItems,
+	reviewChangesRequested,
+	reviewProgress,
 	sessionGlance,
 	shouldNudgeOnAdd,
 	stripStatus,
+	verificationStatus,
 } from "./planView";
 import type { ChatTurn } from "./types";
 
@@ -133,7 +140,7 @@ test("sessionGlance derives the glance straight from a runtime (deriveAskStates 
 	expect(sessionGlance({ isStreaming: false, turns: [], askAnswers: {} })).toBe("waiting");
 });
 
-test("itemChangeSet: a commit artifact with decorated files wins over any change rows", () => {
+test("itemChangeSet: the LATEST resolvable commit wins; live change paths (a fallback redo) win over commits", () => {
 	const done: TodoItem = {
 		...item("step", "done"),
 		artifacts: [
@@ -141,21 +148,44 @@ test("itemChangeSet: a commit artifact with decorated files wins over any change
 			{
 				kind: "commit",
 				sha: "abc123",
-				files: [
-					{ path: "a.ts", status: "modified", added: 2, removed: 1 },
-					{ path: "b.ts", status: "added", added: 5 },
-				],
+				files: [{ path: "a.ts", status: "modified", added: 2, removed: 1 }],
 			},
-			{ kind: "change", path: "stale.ts" },
+			// A second fix-cycle commit — revisions accumulate; the newest resolvable one is "the" change set.
+			{
+				kind: "commit",
+				sha: "def456",
+				files: [{ path: "b.ts", status: "added", added: 5 }],
+			},
 		],
 	};
 	expect(itemChangeSet(done)).toEqual({
 		kind: "commit",
-		sha: "abc123",
-		files: [
-			{ path: "a.ts", status: "modified", added: 2, removed: 1 },
-			{ path: "b.ts", status: "added", added: 5 },
+		sha: "def456",
+		files: [{ path: "b.ts", status: "added", added: 5 }],
+	});
+	// A redo that could NOT commit keeps its commit history but attaches live `change` paths — those are
+	// the item's latest delta, so they win over the (older) commits.
+	const fallbackRedo: TodoItem = {
+		...done,
+		artifacts: [...(done.artifacts ?? []), { kind: "change", path: "c.ts" }],
+	};
+	expect(itemChangeSet(fallbackRedo)).toEqual({ kind: "paths", paths: ["c.ts"] });
+	// An unresolvable newest sha (no files) degrades to the previous resolvable revision.
+	const gcd: TodoItem = {
+		...item("step", "done"),
+		artifacts: [
+			{
+				kind: "commit",
+				sha: "abc123",
+				files: [{ path: "a.ts", status: "modified", added: 2, removed: 1 }],
+			},
+			{ kind: "commit", sha: "gone000" },
 		],
+	};
+	expect(itemChangeSet(gcd)).toEqual({
+		kind: "commit",
+		sha: "abc123",
+		files: [{ path: "a.ts", status: "modified", added: 2, removed: 1 }],
 	});
 });
 
@@ -182,4 +212,80 @@ test("itemChangeSet: change rows alone are the paths fallback; file/spec alone a
 	};
 	expect(itemChangeSet(agentOnly)).toBeNull();
 	expect(itemChangeSet(item("bare", "done"))).toBeNull();
+});
+
+test("itemRevisions lists the commit history in order; review derivations follow the host decoration", () => {
+	const reviewable: TodoItem = {
+		...item("step", "done"),
+		artifacts: [
+			{ kind: "commit", sha: "abc123" },
+			{ kind: "commit", sha: "def456" },
+		],
+		review: { state: "unreviewed", revision: 2 },
+	};
+	expect(itemRevisions(reviewable).map((r) => r.sha)).toEqual(["abc123", "def456"]);
+	const research = item("research", "done"); // no review decoration → not reviewable
+	const approved: TodoItem = {
+		...item("approved", "done"),
+		artifacts: [{ kind: "commit", sha: "aaa" }],
+		review: { state: "reviewed", revision: 1, at: "2026-01-01T00:00:00Z" },
+	};
+	const plan = { todos: [reviewable, research, approved], groups: [] };
+	expect(reviewableItems(plan).map((t) => t.id)).toEqual([reviewable.id, approved.id]);
+	expect(reviewProgress(plan)).toEqual({ reviewed: 1, total: 2 });
+});
+
+test("itemOpenFindings: counts open agent comments anchored in the item's change set; reviewChangesRequested reads the verdict", () => {
+	const flagged: TodoItem = {
+		...item("flagged", "done"),
+		artifacts: [{ kind: "commit", sha: "abc", files: [{ path: "src/a.ts", status: "modified" }] }],
+		review: { state: "changes_requested", revision: 1, feedback: "fix it" },
+	};
+	const c = (over: { author?: "agent"; status: "draft" | "sent" | "resolved"; path?: string }) => ({
+		author: over.author,
+		status: over.status,
+		anchor: over.path ? { path: over.path, side: "worktree" as const, selectors: [] } : null,
+	});
+	expect(
+		itemOpenFindings(flagged, [
+			c({ author: "agent", status: "draft", path: "src/a.ts" }), // counts
+			c({ author: "agent", status: "sent", path: "src/a.ts" }), // counts (still open)
+			c({ author: "agent", status: "resolved", path: "src/a.ts" }), // settled
+			c({ author: "agent", status: "draft", path: "other.ts" }), // another change set
+			c({ status: "draft", path: "src/a.ts" }), // the user's own draft
+		]),
+	).toBe(2);
+	expect(itemOpenFindings(flagged, undefined)).toBe(0);
+	expect(itemOpenFindings(item("no-set", "done"), [])).toBe(0);
+	// Origin provenance wins over path overlap: same file, another step's finding never counts here.
+	const stamped = (todoId: string, sessionId: string) => ({
+		author: "agent" as const,
+		status: "draft" as const,
+		anchor: { path: "src/a.ts", side: "worktree" as const, selectors: [] },
+		origin: { todoId, sessionId, reviewedSha: "abc" },
+	});
+	expect(
+		itemOpenFindings(flagged, [stamped("t_flagged", "s1"), stamped("t_other", "s1")], "s1"),
+	).toBe(1);
+	expect(itemOpenFindings(flagged, [stamped("t_flagged", "s2")], "s1")).toBe(0);
+	expect(reviewChangesRequested(flagged)).toBe(true);
+	expect(reviewChangesRequested(item("plain", "done"))).toBe(false);
+});
+
+test("planCompletionSummary shows only while every item is done", () => {
+	const done = { todos: [item("a", "done")], groups: [], summary: "All landed." };
+	expect(planCompletionSummary(done)).toBe("All landed.");
+	// A re-opened plan (open items) hides the stale note; an empty plan never shows one.
+	expect(planCompletionSummary({ ...done, todos: [item("a", "done"), item("b")] })).toBeUndefined();
+	expect(planCompletionSummary({ todos: [], groups: [], summary: "x" })).toBeUndefined();
+	expect(planCompletionSummary({ todos: [item("a", "done")], groups: [] })).toBeUndefined();
+});
+
+test("verificationStatus: an honest 'not verified' reads unverified; a named check reads claimed", () => {
+	expect(verificationStatus("bun test src/todos — 34 pass")).toBe("claimed");
+	expect(verificationStatus("typecheck green")).toBe("claimed");
+	expect(verificationStatus("not verified")).toBe("unverified");
+	expect(verificationStatus("Not Verified — ran out of budget")).toBe("unverified");
+	expect(verificationStatus("unverified")).toBe("unverified");
+	expect(verificationStatus("no verification performed")).toBe("unverified");
 });

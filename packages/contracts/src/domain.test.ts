@@ -4,6 +4,7 @@ import {
 	base64EncodedLength,
 	DEFAULT_CONFIG,
 	IMAGE_MAX_BASE64_BYTES,
+	isDelegationRunDetails,
 	isRetriedAttempt,
 	REQUEST_IMAGE_BASE64_BUDGET,
 } from "./domain";
@@ -74,5 +75,56 @@ describe("image payload ceiling", () => {
 			"image/png",
 			"image/webp",
 		]);
+	});
+});
+
+describe("isDelegationRunDetails", () => {
+	const usage = {
+		input: 1,
+		output: 2,
+		cacheRead: 0,
+		cacheWrite: 0,
+		cost: 0.01,
+		turns: 1,
+		contextTokens: 3,
+	};
+	const valid = {
+		childSessionId: "child-1",
+		task: "map the repo",
+		status: "completed",
+		usage,
+		durationMs: 42,
+	};
+
+	test("accepts a complete details shape", () => {
+		expect(
+			isDelegationRunDetails({
+				...valid,
+				roleName: "researcher",
+				roleSource: "builtin",
+				model: "provider/model",
+				activity: "reading",
+			}),
+		).toBe(true);
+	});
+
+	test("rejects a status outside the closed union", () => {
+		expect(isDelegationRunDetails({ ...valid, status: "done" })).toBe(false);
+	});
+
+	test("rejects an empty usage object", () => {
+		expect(isDelegationRunDetails({ ...valid, usage: {} })).toBe(false);
+	});
+
+	test("rejects a missing durationMs and non-numeric usage fields", () => {
+		const { durationMs: _durationMs, ...noDuration } = valid;
+		expect(isDelegationRunDetails(noDuration)).toBe(false);
+		expect(isDelegationRunDetails({ ...valid, usage: { ...usage, cost: "0.01" } })).toBe(false);
+	});
+
+	test("rejects every optional display field when present with a non-string value", () => {
+		for (const field of ["roleName", "roleSource", "model", "activity"]) {
+			expect(isDelegationRunDetails({ ...valid, [field]: { malformed: true } })).toBe(false);
+		}
 	});
 });

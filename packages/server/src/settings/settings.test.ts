@@ -74,6 +74,50 @@ test("loadConfig replaces an invalid composer growth preset with the default", (
 	expect(getConfig()).toHaveProperty("composerGrowthLimit", "half-chat");
 });
 
+test("reviewAutoFix defaults on; an old config without it loads the default; toggling off round-trips", () => {
+	expect(DEFAULT_CONFIG.reviewAutoFix).toBe(true);
+	writeFileSync(join(dataDir, "config.json"), JSON.stringify({ theme: "dark" }));
+	resetConfigCache();
+	expect(getConfig().reviewAutoFix).toBe(true);
+	const next = updateConfig({ reviewAutoFix: false });
+	expect(next.reviewAutoFix).toBe(false);
+	resetConfigCache();
+	expect(getConfig().reviewAutoFix).toBe(false);
+});
+
+test("reviewModel/reviewEffort persist through the top-level partial merge", () => {
+	const model = {
+		id: "m",
+		name: "M",
+		provider: "p",
+		contextWindow: 1,
+		reasoning: false,
+		thinkingLevels: [],
+	};
+	updateConfig({ reviewModel: model, reviewEffort: "high" });
+	resetConfigCache();
+	expect(getConfig().reviewModel).toEqual(model);
+	expect(getConfig().reviewEffort).toBe("high");
+});
+
+test("a null reviewModel/reviewEffort clears the override back to unset, and it stays cleared on disk", () => {
+	const model = {
+		id: "m",
+		name: "M",
+		provider: "p",
+		contextWindow: 1,
+		reasoning: false,
+		thinkingLevels: [],
+	};
+	updateConfig({ reviewModel: model, reviewEffort: "high" });
+	const next = updateConfig({ reviewModel: null, reviewEffort: null });
+	expect("reviewModel" in next).toBe(false);
+	expect("reviewEffort" in next).toBe(false);
+	resetConfigCache();
+	expect(getConfig().reviewModel).toBeUndefined();
+	expect(getConfig().reviewEffort).toBeUndefined();
+});
+
 test("loadConfig normalizes nested layout fields independently", () => {
 	writeFileSync(
 		join(dataDir, "config.json"),

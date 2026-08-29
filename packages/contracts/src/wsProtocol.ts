@@ -1,6 +1,9 @@
 import type {
 	AppConfig,
+	AppConfigUpdate,
 	BranchList,
+	DelegationRunDetails,
+	DelegationRunStatus,
 	DiffStats,
 	EditorInfo,
 	ExistingWorktreeCandidate,
@@ -18,6 +21,8 @@ import type {
 	LayoutReplaceResult,
 	LoginReply,
 	OpenBranchReview,
+	OpenPrResult,
+	PrDraft,
 	Project,
 	ProjectPathStatus,
 	ProviderStatusReport,
@@ -36,6 +41,7 @@ import type {
 	Workspace,
 	WorkspaceLayoutSnapshot,
 } from "./domain";
+import { isDelegationRunDetails } from "./domain";
 import type {
 	AskUserAnswersDetails,
 	AskUserQuestionResult,
@@ -81,11 +87,14 @@ export interface TerminalTabsPush {
 	tabs: TerminalTabInfo[];
 }
 
-export const PROTOCOL_VERSION = 52;
+export const PROTOCOL_VERSION = 53;
+
+export type HostPlatform = "darwin" | "linux" | "win32";
 
 export interface ServerWelcome {
 	protocolVersion: number;
 	appVersion?: string;
+	hostPlatform?: HostPlatform;
 	projects: Project[];
 	recentProjects: Project[];
 	config: AppConfig;
@@ -131,6 +140,8 @@ export const WS_METHODS = {
 	gitPrefetch: "git.prefetch",
 	githubAuthStatus: "github.authStatus",
 	githubRefresh: "github.refresh",
+	prPreview: "pr.preview",
+	prOpen: "pr.open",
 	fsReadDir: "fs.readDir",
 	fsReadFile: "fs.readFile",
 	specGraph: "spec.graph",
@@ -138,6 +149,10 @@ export const WS_METHODS = {
 	todoAdd: "todo.add",
 	todoUpdate: "todo.update",
 	todoRemove: "todo.remove",
+	todoReview: "todo.review",
+	todoRequestFix: "todo.requestFix",
+	todoStartReview: "todo.startReview",
+	todoReviewAll: "todo.reviewAll",
 	gitStatus: "git.status",
 	gitDiffFile: "git.diffFile",
 	gitListCommits: "git.listCommits",
@@ -169,6 +184,7 @@ export const WS_METHODS = {
 	sessionAnswerQuestion: "session.answerQuestion",
 	sessionList: "session.list",
 	sessionGetMessages: "session.getMessages",
+	subagentGetTranscript: "subagent.getTranscript",
 	modelList: "model.list",
 	modelRefresh: "model.refresh",
 	modelDefault: "model.default",
@@ -245,6 +261,30 @@ export function isAskUserAnswersMessage(message: unknown): message is AskUserAns
 	);
 }
 
+export const SUBAGENT_COMPLETION_CUSTOM_TYPE = "subagent-completion";
+
+export interface SubagentCompletionMessage extends WireCustomMessage<DelegationRunDetails> {
+	customType: typeof SUBAGENT_COMPLETION_CUSTOM_TYPE;
+	details: DelegationRunDetails;
+}
+
+export function isSubagentCompletionMessage(
+	message: unknown,
+): message is SubagentCompletionMessage {
+	if (!message || typeof message !== "object") return false;
+	const m = message as { role?: unknown; customType?: unknown; details?: unknown };
+	if (m.role !== "custom" || m.customType !== SUBAGENT_COMPLETION_CUSTOM_TYPE) return false;
+	return isDelegationRunDetails(m.details);
+}
+
+export function customMessageText(content: WireCustomMessage["content"]): string {
+	if (typeof content === "string") return content;
+	return content
+		.filter((c): c is Extract<typeof c, { type: "text" }> => c.type === "text")
+		.map((c) => c.text)
+		.join("");
+}
+
 export interface Ack {
 	ok: true;
 }
@@ -317,6 +357,21 @@ export interface WsMethodMap {
 	"git.prefetch": { params: { projectId: string; ref: string }; result: { ok: boolean } };
 	"github.authStatus": { params: Record<string, never>; result: GithubAuthStatus };
 	"github.refresh": { params: Record<string, never>; result: GithubAuthStatus };
+	"pr.preview": {
+		params: { workspaceId: string; sessionId: string; title?: string };
+		result: PrDraft;
+	};
+	"pr.open": {
+		params: {
+			workspaceId: string;
+			sessionId: string;
+			title?: string;
+			titleEdited?: boolean;
+			body?: string;
+			draft?: boolean;
+		};
+		result: OpenPrResult;
+	};
 	"fs.readDir": { params: { workspaceId: string; path: string }; result: FileNode[] };
 	"fs.readFile": { params: { workspaceId: string; path: string }; result: { content: string } };
 	"spec.graph": { params: { workspaceId: string }; result: SpecGraphSnapshot };
@@ -340,6 +395,19 @@ export interface WsMethodMap {
 		result: TodoItem;
 	};
 	"todo.remove": { params: { workspaceId: string; sessionId: string; id: string }; result: Ack };
+	"todo.review": { params: { workspaceId: string; sessionId: string; id: string }; result: Ack };
+	"todo.requestFix": {
+		params: { workspaceId: string; sessionId: string; id: string; feedback: string };
+		result: Ack;
+	};
+	"todo.startReview": {
+		params: { workspaceId: string; sessionId: string; id: string };
+		result: { ok: true; reviewerSessionId: string };
+	};
+	"todo.reviewAll": {
+		params: { workspaceId: string; sessionId: string };
+		result: { ok: true; total: number; alreadyRunning?: true };
+	};
 	"git.status": { params: { workspaceId: string; scope?: GitDiffScope }; result: GitStatus };
 	"git.diffFile": {
 		params: { workspaceId: string; path: string; scope?: GitDiffScope };
@@ -413,6 +481,10 @@ export interface WsMethodMap {
 		params: { sessionId: string; workspaceId: string };
 		result: { summary: SessionSummary; messages: TranscriptMessage[] };
 	};
+	"subagent.getTranscript": {
+		params: { workspaceId: string; parentSessionId: string; childSessionId: string };
+		result: { messages: TranscriptMessage[]; status?: DelegationRunStatus };
+	};
 	"model.list": { params: Record<string, never>; result: WireModel[] };
 	"model.clampThinking": {
 		params: { provider: string; id: string; level: ThinkingLevel };
@@ -441,7 +513,7 @@ export interface WsMethodMap {
 		result: WorkspaceLayoutSnapshot | null;
 	};
 	"layout.replace": { params: LayoutReplaceParams; result: LayoutReplaceResult };
-	"settings.update": { params: { config: Partial<AppConfig> }; result: AppConfig };
+	"settings.update": { params: { config: AppConfigUpdate }; result: AppConfig };
 	"history.search": {
 		params: { query: string; scope: HistoryScope; limit?: number };
 		result: HistorySearchResult;
@@ -528,7 +600,7 @@ export interface WsResume {
 
 export type WsClientMessage = WsRequest | WsAck | WsResume;
 
-export type WsErrorCode = "UNKNOWN_COMMIT";
+export type WsErrorCode = "UNKNOWN_COMMIT" | "PUSH_AUTH_FAILED" | "SUBAGENT_TRANSCRIPT_NOT_FOUND";
 
 export interface WsResponse {
 	id: string;

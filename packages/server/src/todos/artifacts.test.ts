@@ -3,11 +3,15 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Workspace } from "@thinkrail/contracts";
+import type { GitFileChange, Workspace } from "@thinkrail/contracts";
 import { WORKSPACE_TODOS_DIR } from "@thinkrail/shared/paths";
 import { STORE_DIR, storeRel, TodoStore } from "pi-todos/core";
 import { saveWorkspaces } from "../persistence";
-import { maybeAttachChangeArtifacts, reconcileChangeArtifacts } from "./artifacts";
+import {
+	maybeAttachChangeArtifacts,
+	reconcileChangeArtifacts,
+	unattributedChanges,
+} from "./artifacts";
 import {
 	dropItemBaseline,
 	otherSessionWindows,
@@ -375,7 +379,7 @@ test("commit gate: foreign dirt resolved by done → commit proceeds", async () 
 	}
 });
 
-test("re-done replaces the old commit/change artifacts, keeping the agent's spec/file artifacts", async () => {
+test("re-done APPENDS the new commit (revision history), keeping the agent's spec/file artifacts", async () => {
 	const { store, root } = tempStore();
 	try {
 		const todo = store.add({
@@ -409,6 +413,7 @@ test("re-done replaces the old commit/change artifacts, keeping the agent's spec
 		);
 		expect(store.get(todo.id)?.artifacts).toEqual([
 			{ kind: "spec", path: "SPEC.md", specId: "s1" },
+			{ kind: "commit", sha: "sha1", label: "step" },
 			{ kind: "commit", sha: "sha2", label: "step" },
 		]);
 	} finally {
@@ -511,5 +516,52 @@ test("a UI removal landing during an in-flight reconcile leaves no orphan window
 		else process.env.THINKRAIL_DATA_DIR = prevDataDir;
 		rmSync(dataDir, { recursive: true, force: true });
 		rmSync(worktree, { recursive: true, force: true });
+	}
+});
+
+test("unattributedChanges keeps only what no item claims — change paths and app state drop", async () => {
+	const { store, root } = tempStore();
+	try {
+		const todo = store.add({ title: "step" });
+		store.update(todo.id, { status: "done" });
+		await reconcileChangeArtifacts(store, root, SESSION, async () => ["claimed.ts"]);
+		const rows: GitFileChange[] = [
+			{ path: "claimed.ts", status: "modified" },
+			{ path: "loose.ts", status: "modified" },
+			{ path: ".thinkrail/context/todos/x.json", status: "modified" },
+		];
+		expect(unattributedChanges(rows, store.read(), readBaselines(root, SESSION))).toEqual([
+			{ path: "loose.ts", status: "modified" },
+		]);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test("unattributedChanges: an open window keeps only its baseline's pre-existing dirt", async () => {
+	const { store, root } = tempStore();
+	try {
+		const todo = store.add({ title: "step" });
+		store.update(todo.id, { status: "in_progress" });
+		await reconcileChangeArtifacts(store, root, SESSION, async () => ["preexisting.ts"]);
+		const rows: GitFileChange[] = [
+			{ path: "preexisting.ts", status: "modified" },
+			{ path: "in-flight.ts", status: "modified" },
+		];
+		expect(unattributedChanges(rows, store.read(), readBaselines(root, SESSION))).toEqual([
+			{ path: "preexisting.ts", status: "modified" },
+		]);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test("unattributedChanges: with no items and no windows, everything dirty is unattributed", () => {
+	const { store, root } = tempStore();
+	try {
+		const rows: GitFileChange[] = [{ path: "anything.ts", status: "untracked" }];
+		expect(unattributedChanges(rows, store.read(), readBaselines(root, SESSION))).toEqual(rows);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
 	}
 });

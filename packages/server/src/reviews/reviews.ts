@@ -238,12 +238,25 @@ export function reanchorWorkspace(workspaceId: string): void {
 	} catch {}
 }
 
+export function anchorProblem(workspaceId: string, path: string, startLine: number): string | null {
+	const ws = getWorkspace(workspaceId);
+	const content = readWorktreeFile(ws.worktreePath, path);
+	if (content === null)
+		return `No file "${path}" in the worktree — a finding must cite a real changed file (check the path).`;
+	const lines = content.split("\n").length;
+	if (startLine > lines)
+		return `"${path}" has ${lines} line(s); line ${startLine} is past the end — cite a line that exists.`;
+	return null;
+}
+
 export interface AddCommentInput {
 	workspaceId: string;
 	kind: ReviewCommentKind;
 	anchor: ReviewAnchor | null;
 	body: string;
 	scope?: GitDiffScope;
+	author?: "user" | "agent";
+	origin?: { todoId: string; reviewedSha: string; sessionId: string };
 }
 
 function captureAnchor(anchor: ReviewAnchor, content: string): ReviewAnchor {
@@ -293,6 +306,8 @@ export async function addComment(input: AddCommentInput): Promise<ReviewComment>
 		body,
 		status: "draft",
 		anchorState: "anchored",
+		...(input.author === "agent" ? { author: "agent" as const } : {}),
+		...(input.origin ? { origin: input.origin } : {}),
 		createdAt: Date.now(),
 	};
 	snapshot.comments.push(comment);
@@ -345,6 +360,18 @@ export async function updateComment(input: {
 		}
 	}
 	persistAndPublish(input.workspaceId, snapshot);
+	return comment;
+}
+
+export async function setReflection(
+	workspaceId: string,
+	commentId: string,
+	reflection: NonNullable<ReviewComment["reflection"]>,
+): Promise<ReviewComment> {
+	const snapshot = await ensureSnapshot(workspaceId);
+	const comment = mustFind(snapshot, commentId);
+	comment.reflection = reflection;
+	persistAndPublish(workspaceId, snapshot);
 	return comment;
 }
 
@@ -456,6 +483,7 @@ export async function fileReviewSession(
 
 function applyAgentResolution(
 	snapshot: ReviewSnapshot,
+	sessionId: string,
 	commentId: string,
 	note?: string,
 ): ReviewComment | null {
@@ -464,6 +492,8 @@ function applyAgentResolution(
 	if (comment.status === "resolved") throw new Error(`Comment ${commentId} is already resolved.`);
 	if (comment.status !== "sent")
 		throw new Error(`Comment ${commentId} was not sent to a session (status: ${comment.status}).`);
+	if (comment.sessionId !== sessionId)
+		throw new Error(`Comment ${commentId} was not sent to this chat.`);
 	comment.status = "resolved";
 	comment.resolvedBy = "agent";
 	comment.resolvedAt = Date.now();
@@ -471,7 +501,11 @@ function applyAgentResolution(
 	return comment;
 }
 
-export function resolveCommentFromAgent(commentId: string, note?: string): ReviewComment {
+export function resolveCommentFromAgent(
+	sessionId: string,
+	commentId: string,
+	note?: string,
+): ReviewComment {
 	let files: string[] = [];
 	try {
 		files = readdirSync(reviewsDir()).filter((file) => file.endsWith(".json"));
@@ -487,7 +521,7 @@ export function resolveCommentFromAgent(commentId: string, note?: string): Revie
 			continue;
 		}
 		if (snapshot?.review.status !== "open") continue;
-		const comment = applyAgentResolution(snapshot, commentId, note);
+		const comment = applyAgentResolution(snapshot, sessionId, commentId, note);
 		if (!comment) continue;
 		persistAndPublish(workspaceId, snapshot);
 		return comment;
@@ -502,7 +536,7 @@ export function resolveCommentFromAgent(commentId: string, note?: string): Revie
 			continue;
 		}
 		if (snapshot?.review.status !== "closed") continue;
-		const comment = applyAgentResolution(snapshot, commentId, note);
+		const comment = applyAgentResolution(snapshot, sessionId, commentId, note);
 		if (!comment) continue;
 		saveFile(file, snapshot);
 		return comment;

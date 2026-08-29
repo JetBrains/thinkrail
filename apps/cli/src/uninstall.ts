@@ -13,6 +13,7 @@ import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { dataDir } from "@thinkrail/server";
+import { channel, version } from "@thinkrail/shared/version";
 import {
 	type InstallMeta,
 	installConfigDir,
@@ -21,7 +22,6 @@ import {
 	stagingRoot,
 } from "./paths";
 import { psQuote, runPowerShellScript, spawnDetachedPowerShell } from "./powershell";
-import { channel, version } from "./version";
 
 export const RC_BLOCK_BEGIN = "# >>> thinkrail PATH >>>";
 export const RC_BLOCK_END = "# <<< thinkrail PATH <<<";

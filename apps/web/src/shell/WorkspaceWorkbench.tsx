@@ -20,11 +20,14 @@ import {
 	useState,
 } from "react";
 import { ErrorBoundary } from "../components/ErrorBoundary";
+import { DropdownMenuItem } from "../components/ui/dropdown-menu";
+import { IconTooltip } from "../components/ui/tooltip";
 import { type LayoutAttention, layoutResourceIdentity } from "../lib";
 import { ChangesPanel } from "../panels/ChangesPanel";
 import { DiffPane } from "../panels/DiffPane";
 import { FilePane } from "../panels/FilePane";
 import { FileTree } from "../panels/FileTree";
+import { openFileInTab } from "../panels/openTabs";
 import { ProjectTree } from "../panels/ProjectTree";
 import { ReviewPanel, selectActiveReviewedPath } from "../panels/ReviewPanel";
 import { reviewFlags } from "../panels/reviewModel";
@@ -83,6 +86,62 @@ function MissingResource({ label }: { label: string }) {
 	return (
 		<div className="flex h-full items-center justify-center px-16 text-center tr-text-ui text-text-muted">
 			Restoring {label}…
+		</div>
+	);
+}
+
+function ChatResourceBody({
+	workspaceId,
+	tab,
+	onOpenFile,
+}: {
+	workspaceId: string;
+	tab: Extract<LayoutCenterTab, { kind: "chat" }>;
+	onOpenFile: (path: string) => void;
+}) {
+	const available = useAppStore((state) => state.sessions[tab.sessionId] !== undefined);
+	if (available) {
+		return (
+			<ErrorBoundary label="chat" resetKeys={[workspaceId, tab.id]}>
+				<Suspense fallback={<MissingResource label="chat" />}>
+					<ChatView sessionId={tab.sessionId} workspaceId={workspaceId} onOpenFile={onOpenFile} />
+				</Suspense>
+			</ErrorBoundary>
+		);
+	}
+	return (
+		<div className="flex h-full flex-col items-center justify-center gap-8 text-text-muted">
+			<MissingResource label="chat" />
+			<button
+				type="button"
+				onClick={() => {
+					void hydrateChatResource(workspaceId, tab.sessionId)
+						.then((installed) => {
+							if (installed) return;
+							const { state, current } = currentChatDestination(workspaceId, tab, undefined);
+							if (
+								current &&
+								!state.removedWorkspaceIds[workspaceId] &&
+								!state.deletedSessionsByWorkspace[workspaceId]?.[tab.sessionId]
+							) {
+								toast.error("The chat could not be restored.", "Couldn't restore the chat");
+							}
+						})
+						.catch((error) => {
+							const { state, current } = currentChatDestination(workspaceId, tab, undefined);
+							if (
+								current &&
+								!state.removedWorkspaceIds[workspaceId] &&
+								!state.deletedSessionsByWorkspace[workspaceId]?.[tab.sessionId]
+							) {
+								toast.error(errorText(error), "Couldn't restore the chat");
+							}
+						});
+				}}
+				className="rounded-[var(--radius-sm)] border border-border-default px-8 py-4 tr-text-ui hover:bg-control-bg-hovered"
+			>
+				Retry
+			</button>
 		</div>
 	);
 }
@@ -160,7 +219,6 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	const initialTerminalEligible = workspace?.initialTerminalEligible === true;
 	const contextProject = useAppStore(selectContextProject);
 	const editorTabs = useAppStore((state) => state.tabsByWorkspace[workspaceId] ?? NO_EDITOR_TABS);
-	const sessions = useAppStore((state) => state.sessions);
 	const deletedSessions = useAppStore((state) => state.deletedSessionsByWorkspace[workspaceId]);
 	const terminalClose = useTerminalClose();
 	const specs = useWorkspaceSpecs(workspaceId);
@@ -173,6 +231,12 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	const activeReviewedPath = useAppStore((state) => selectActiveReviewedPath(state, workspaceId));
 	const readActiveReviewedPath = useCallback(
 		() => selectActiveReviewedPath(useAppStore.getState(), workspaceId),
+		[workspaceId],
+	);
+	const openToolFile = useCallback(
+		(path: string) => {
+			void openFileInTab(workspaceId, path, "preview");
+		},
 		[workspaceId],
 	);
 
@@ -411,47 +475,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	const renderTabBody = useCallback(
 		(tab: LayoutCenterTab | Extract<LayoutTab, { kind: "terminal" }>) => {
 			if (tab.kind === "chat") {
-				return sessions[tab.sessionId] ? (
-					<ErrorBoundary label="chat" resetKeys={[workspaceId, tab.id]}>
-						<Suspense fallback={<MissingResource label="chat" />}>
-							<ChatView sessionId={tab.sessionId} workspaceId={workspaceId} />
-						</Suspense>
-					</ErrorBoundary>
-				) : (
-					<div className="flex h-full flex-col items-center justify-center gap-8 text-text-muted">
-						<MissingResource label="chat" />
-						<button
-							type="button"
-							onClick={() => {
-								void hydrateChatResource(workspaceId, tab.sessionId)
-									.then((installed) => {
-										if (installed) return;
-										const { state, current } = currentChatDestination(workspaceId, tab, undefined);
-										if (
-											current &&
-											!state.removedWorkspaceIds[workspaceId] &&
-											!state.deletedSessionsByWorkspace[workspaceId]?.[tab.sessionId]
-										) {
-											toast.error("The chat could not be restored.", "Couldn't restore the chat");
-										}
-									})
-									.catch((error) => {
-										const { state, current } = currentChatDestination(workspaceId, tab, undefined);
-										if (
-											current &&
-											!state.removedWorkspaceIds[workspaceId] &&
-											!state.deletedSessionsByWorkspace[workspaceId]?.[tab.sessionId]
-										) {
-											toast.error(errorText(error), "Couldn't restore the chat");
-										}
-									});
-							}}
-							className="rounded-[var(--radius-sm)] border border-border-default px-8 py-4 tr-text-ui hover:bg-control-bg-hovered"
-						>
-							Retry
-						</button>
-					</div>
-				);
+				return <ChatResourceBody workspaceId={workspaceId} tab={tab} onOpenFile={openToolFile} />;
 			}
 			if (tab.kind === "document") {
 				if (deletedSessions?.[tab.sourceId]) return <MissingResource label="plan" />;
@@ -504,7 +528,15 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				</ErrorBoundary>
 			);
 		},
-		[deletedSessions, document, editorById, editorByResource, sessions, terminalByKey, workspaceId],
+		[
+			deletedSessions,
+			document,
+			editorById,
+			editorByResource,
+			openToolFile,
+			terminalByKey,
+			workspaceId,
+		],
 	);
 
 	const renderToolBody = useCallback(
@@ -686,18 +718,31 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				renderCenterActions={(groupId) => (
 					<>
 						<WorkspaceChatHistory workspaceId={workspaceId} targetGroupId={groupId} />
-						<button
-							type="button"
-							data-testid="new-terminal"
-							aria-label="New terminal in this group"
-							title="New terminal in this group"
-							onClick={() => useAppStore.getState().addTerminal(workspaceId, undefined, groupId)}
-							className="flex w-32 shrink-0 items-center justify-center border-border-default border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
-						>
-							<SquareTerminal className="size-14" />
-						</button>
+						<IconTooltip label="New terminal in this group">
+							<button
+								type="button"
+								data-testid="new-terminal"
+								aria-label="New terminal in this group"
+								onClick={() => useAppStore.getState().addTerminal(workspaceId, undefined, groupId)}
+								className="flex w-32 shrink-0 items-center justify-center border-border-default border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+							>
+								<SquareTerminal className="size-14" />
+							</button>
+						</IconTooltip>
 					</>
 				)}
+				renderSideMenuActions={(side, groupId) =>
+					side === "right" ? (
+						<DropdownMenuItem
+							data-testid="side-new-terminal"
+							onSelect={() =>
+								useAppStore.getState().addTerminal(workspaceId, undefined, groupId, side)
+							}
+						>
+							New terminal
+						</DropdownMenuItem>
+					) : null
+				}
 				onCommit={commit}
 				onAttentionChange={changeAttention}
 				onUserNavigation={() => useAppStore.getState().noteNavigation(workspaceId)}

@@ -1,6 +1,7 @@
-import { type CollectionEntry, getCollection } from "astro:content";
+import { type CollectionEntry, getCollection, getEntry } from "astro:content";
 
 export type BlogPost = CollectionEntry<"blog">;
+export type BlogAuthor = CollectionEntry<"authors">;
 
 export async function publishedPosts(): Promise<BlogPost[]> {
 	const posts = (await getCollection("blog")).filter(
@@ -23,4 +24,12 @@ export async function publishedPosts(): Promise<BlogPost[]> {
 
 export function postPath(post: BlogPost): string {
 	return `/blog/${post.data.slug}/`;
+}
+
+export async function postAuthor(post: BlogPost): Promise<BlogAuthor> {
+	const author = await getEntry(post.data.author);
+	if (!author) {
+		throw new Error(`Unknown blog author "${post.data.author.id}" in ${post.id}`);
+	}
+	return author;
 }

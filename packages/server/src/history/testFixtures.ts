@@ -1,6 +1,17 @@
 import { randomUUID } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import type { StopReason } from "@thinkrail/contracts";
+
+type FixtureMessage =
+	| { role: "user"; text: string; timestamp: number }
+	| {
+			role: "assistant";
+			text: string;
+			timestamp: number;
+			stopReason?: StopReason;
+			errorMessage?: string;
+	  };
 
 export function writeFixtureSession(
 	dir: string,
@@ -8,7 +19,7 @@ export function writeFixtureSession(
 		id?: string;
 		cwd: string;
 		name?: string;
-		messages: Array<{ role: "user" | "assistant"; text: string; timestamp: number }>;
+		messages: FixtureMessage[];
 	},
 ): { id: string; path: string } {
 	mkdirSync(dir, { recursive: true });
@@ -49,7 +60,15 @@ export function writeFixtureSession(
 				id,
 				parentId,
 				timestamp: new Date(m.timestamp).toISOString(),
-				message: { role: m.role, content, timestamp: m.timestamp },
+				message: {
+					role: m.role,
+					content,
+					timestamp: m.timestamp,
+					...(m.role === "assistant" && m.stopReason ? { stopReason: m.stopReason } : {}),
+					...(m.role === "assistant" && m.errorMessage !== undefined
+						? { errorMessage: m.errorMessage }
+						: {}),
+				},
 			}),
 		);
 		parentId = id;

@@ -2,10 +2,10 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { type BuildKind, bootHost } from "@thinkrail/server";
 import { printStartupMark } from "@thinkrail/shared/startupMark";
+import { channel, version } from "@thinkrail/shared/version";
 import { type CliOptions, parseArgs, parseSubcommand, USAGE } from "./args";
 import { runUninstall } from "./uninstall";
 import { runUpdate } from "./update";
-import { channel, version } from "./version";
 
 const DEFAULT_STATIC_DIR = resolve(import.meta.dir, "../../web/dist");
 

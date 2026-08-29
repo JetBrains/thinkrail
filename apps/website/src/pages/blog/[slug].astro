@@ -1,6 +1,6 @@
 ---
 import { render } from "astro:content";
-import { type BlogPost, postPath, publishedPosts } from "../../blogCollection";
+import { type BlogPost, postAuthor, postPath, publishedPosts } from "../../blogCollection";
 import BlogLayout from "../../layouts/BlogLayout.astro";
 import { formatPostDate, readingTimeMinutes } from "../../postMeta";
 
@@ -24,6 +24,7 @@ interface Props {
 
 const { post, newer, older } = Astro.props;
 const { Content } = await render(post);
+const author = await postAuthor(post);
 ---
 
 <BlogLayout
@@ -35,6 +36,17 @@ const { Content } = await render(post);
 		<header class="blog-post-header">
 			<h1 class="blog-post-title">{post.data.title}</h1>
 			<div class="blog-post-meta">
+				<span class="blog-post-author">
+					{
+						author.data.url ? (
+							<a class="blog-post-author-link" href={author.data.url} rel="author">
+								{author.data.name}
+							</a>
+						) : (
+							author.data.name
+						)
+					}
+				</span>
 				<time class="blog-post-date" datetime={post.data.date.toISOString()}>
 					{formatPostDate(post.data.date)}
 				</time>

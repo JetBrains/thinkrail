@@ -41,12 +41,7 @@ import {
 } from "./agentSessionManager";
 import { configurePiRuntime } from "./piRuntime";
 import { setTrashImplementationForTests } from "./trash";
-import {
-	cancelExtUiForSession,
-	createWebUiContext,
-	resolveExtUi,
-	setExtUiPublisher,
-} from "./webUiContext";
+import { setExtUiPublisher } from "./webUiContext";
 
 function modelDef(id: string) {
 	return {
@@ -1076,32 +1071,39 @@ test("removeWorkspaceSessions: archives a workspace's live sessions + purges the
 	}
 });
 
-test("extension-UI bridge: confirm round-trips, a cancel resolves undefined, dispose dismisses", async () => {
+test("an extension failing in session_start reaches the client, named, before the session registers", async () => {
+	const agentDir = process.env.PI_CODING_AGENT_DIR;
+	if (!agentDir) throw new Error("agent dir not isolated");
+	const extensionsDir = join(agentDir, "extensions");
+	mkdirSync(extensionsDir, { recursive: true });
+	const extensionPath = join(extensionsDir, "theme-probe.ts");
+	writeFileSync(
+		extensionPath,
+		[
+			'import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";',
+			"export default function (pi: ExtensionAPI) {",
+			'\tpi.on("session_start", async (_event, ctx) => {',
+			'\t\tctx.ui.setStatus("test", ctx.ui.theme.fg("accent", "Theme works"));',
+			'\t\tthrow new Error("boom from session_start");',
+			"\t});",
+			"}",
+			"",
+		].join("\n"),
+	);
 	const frames: ExtUiRequest[] = [];
-	setExtUiPublisher((f) => frames.push(f));
-	const lastFrame = (): ExtUiRequest => {
-		const f = frames.at(-1);
-		if (!f) throw new Error("expected an ext-ui frame to have been pushed");
-		return f;
-	};
-	const ui = createWebUiContext("sess-extui");
-
-	const confirmP = ui.confirm("Proceed?", "Apply the change?");
-	const confirmFrame = lastFrame();
-	expect(confirmFrame.kind).toBe("confirm");
-	expect(confirmFrame.sessionId).toBe("sess-extui");
-	resolveExtUi({ id: confirmFrame.id, value: true });
-	expect(await confirmP).toBe(true);
-
-	const selectP = ui.select("Pick one", ["a", "b"]);
-	resolveExtUi({ id: lastFrame().id, value: null });
-	expect(await selectP).toBeUndefined();
-
-	const inputP = ui.input("Name?");
-	const inputFrame = lastFrame();
-	cancelExtUiForSession("sess-extui");
-	expect(await inputP).toBeUndefined();
-	expect(frames.some((f) => f.kind === "dismiss" && f.id === inputFrame.id)).toBe(true);
-
-	setExtUiPublisher(() => {});
+	setExtUiPublisher((frame) => frames.push(frame));
+	try {
+		const s = await createSession({ cwd: tmpCwd("trpi-extfail-"), workspaceId: "ws-extfail" });
+		expect(frames.filter((frame) => frame.sessionId === s.sessionId)).toMatchObject([
+			{ kind: "setStatus", key: "test", text: "Theme works" },
+			{
+				kind: "notify",
+				level: "error",
+				message: "Extension theme-probe.ts failed on session_start: boom from session_start",
+			},
+		]);
+	} finally {
+		setExtUiPublisher(() => {});
+		rmSync(extensionPath, { force: true });
+	}
 });

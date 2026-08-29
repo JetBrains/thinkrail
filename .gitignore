@@ -21,6 +21,9 @@ docs/*
 
 # Build-only manifests written transiently by apps/cli/scripts/build-binary.ts
 apps/cli/src/*.generated.ts
+apps/desktop/.stage/
+apps/desktop/build/
+apps/desktop/artifacts/
 # Scratch files `bun build --compile` leaves behind when a binary build is interrupted
 *.bun-build
 
@@ -30,6 +33,8 @@ apps/cli/src/*.generated.ts
 .env.*.local
 test-results-binary/
 playwright-report-binary/
+test-results-desktop/
+playwright-report-desktop/
 
 # Astro's generated type cache
 .astro/

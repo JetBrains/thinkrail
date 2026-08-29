@@ -10,15 +10,16 @@ tags: [v1, architecture]
 
 ## Drivers
 
-The product is built around the `pi` agent, run **in-process** (`createAgentSession`). The V1 entrypoint
-is a CLI you run that boots the engine host and opens a browser UI. Electrobun later supports a local-host
-profile over that same host library and a shared-client profile that dials an existing host. The UI ships
-independently of the host and dials it over the network; a phone reaches the selected host over Tailscale.
+The product is built around the `pi` agent, run **in-process** (`createAgentSession`). V1 has two
+additive launchers over the same host library: the retained CLI boots the engine host and opens a browser,
+while Electrobun packages that host with a native system-webview shell. The desktop V1 profile is local
+only; a later shared-client profile can dial an existing host. The UI ships independently of the host and
+dials it over the network; a phone reaches the selected host over Tailscale.
 
 ## Topology — three rings
 
-- **Engine host** (`packages/server` + `packages/shared`, launched by `apps/cli` now / `apps/desktop`
-  in local-host mode later): owns `pi`, session state, persistence, and serves the wire endpoint. It bundles pi extensions
+- **Engine host** (`packages/server` + `packages/shared`, launched by `apps/cli` or `apps/desktop`
+  in local-host mode): owns `pi`, session state, persistence, and serves the wire endpoint. It bundles pi extensions
   (`pi-web-access`, `pi-visualize`, `pi-spec-graph`, `pi-thinkrail-workflow`) into every session.
 - **The wire** (`packages/contracts`): the typed, versioned protocol — the only coupling between client
   and host.
@@ -26,17 +27,21 @@ independently of the host and dials it over the network; a phone reaches the sel
   shippable as static assets independent of the host.
 
 ```
-apps/cli        host launcher (V1): boot server + open browser   ── depends on ─▶ packages/server
-apps/web        UI client (mobile-first)                          ── depends on ─▶ packages/contracts
-apps/desktop    Electrobun local-host launcher/shared client (deferred) ── depends on ─▶ packages/server, packages/contracts
+apps/cli        browser host launcher: boot server + open browser ── depends on ─▶ packages/server
+apps/web        UI client (mobile-first)                           ── depends on ─▶ packages/contracts
+apps/desktop    Electrobun local-host launcher (V1)                ── depends on ─▶ packages/server, packages/contracts, packages/shared
 apps/website    public landing + blog + /vibecoding (Cloudflare Pages) ── depends on ─▶ packages/website-analytics
 packages/website-analytics  dependency-free browser analytics policy for the public website
-packages/server createServer(): Bun.serve(HTTP+WS) + AgentSessionManager (in-process pi) ── depends on ─▶ packages/contracts, packages/shared
+packages/server createServer(): Bun.serve(HTTP+WS) + AgentSessionManager (in-process pi) ── depends on ─▶ packages/contracts, packages/shared, packages/pi-delegation, packages/pi-subagents
 packages/contracts  the wire (types-only)
 packages/shared     shellEnv (server-side only)
 packages/spec-graph portable pi extension: spec_* tools + skill (bundled into every session by packages/server;
                     its pi-free core/ read model also backs the host's spec.graph read method)
 packages/pi-visualize          portable pi extension: the visualize tool (bundled into every session)
+packages/pi-delegation         portable pure-pi package: the delegation core — agent sessions spawned
+                    from agent sessions (createChild + run-owning handle, lineage, registry, events)
+packages/pi-subagents          portable pure-pi extension: Agent + get_subagent_result tools over
+                    pi-delegation (bundled into every ThinkRail parent session by packages/server)
 packages/pi-thinkrail-workflow pi extension: the workflow skill system + its always-on routing rule
                     (bundled into every session; workspace-internal, not portable)
 ```
@@ -46,10 +51,20 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
 1. **Client/host split.** Engine host owns `pi` and state; the UI is a portable client; the wire is the
    only coupling. **Rule: `apps/web` depends on `packages/contracts` only** — never on `server` or
    `shared`. That single edge is what makes the UI shippable without the host.
-2. **CLI is the V1 launcher; `createServer()` is a library.** `apps/cli` is a thin launcher
-   (`resolveShellEnv` → `createServer` → open browser → signal handling). `apps/desktop` keeps that local
-   profile with a native window and may also run as a shared client without starting a second host; both
-   profiles use the same wire and web artifact.
+2. **Launchers are thin; the host is a library.** `apps/cli` and `apps/desktop` both embed the shared
+   boot path in-process. CLI opens a browser; desktop opens a native system webview on a fresh one-origin
+   loopback host. Neither owns engine logic or spawns the other. The CLI remains a complete independent
+   artifact and rollback. A later desktop shared-client profile may omit the local host; every profile uses
+   the same wire and web artifact.
+
+   **One feature path across deployments.** An ordinary product feature changes its contract, the owning
+   server feature module, the shared web client, and their tests — never each launcher. Launchers and future
+   deployments own only composition, lifecycle, endpoint selection, native presentation, and artifact
+   packaging. A real second environment that cannot supply an existing host operation earns one narrow port
+   in the feature module that owns that behavior; do not pre-abstract the host behind a global platform
+   adapter. Physical runtime requirements are declared once through the server-owned build-support manifest,
+   then transformed by each packager. The same behavior and artifact suites run through every launcher, so
+   reuse is enforced by boundaries and conformance rather than parallel implementations.
 3. **The wire is versioned.** `contracts` is types-only; `server.welcome` carries a protocol version so
    an independently-shipped UI can detect host-version drift.
 4. **Transport endpoint is a parameter.** Defaults to same-origin (`location.host`); a remote browser,
@@ -72,7 +87,11 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
    worktree model; and an **existing worktree** the user explicitly attaches in place
    (`kind: "external"`), which ThinkRail may forget but never mutates (see
    [[submodule-server-workspaces]]). The shell is built first,
-   `pi` connected last. Provider-backed PR / Checks stay V2 beyond a best-effort open GitHub PR or GitLab MR number in active-workspace metadata; workspace-local Review is V1.
+   `pi` connected last. **Open PR is V1**: a deterministic, host-side push + open/update of the branch's
+   GitHub PR through the user's own `gh` CLI (no stored tokens, no provider REST API), body rendered from
+   the verified plan, with a compare-URL fallback when `gh`/GitHub isn't available (see
+   [[submodule-server-pr]]). CI/Checks status, merge/squash from the app, and `glab` support stay V2;
+   workspace-local Review is V1.
 7. **Auth is external.** Tailscale ACLs / device identity are the auth; the app carries an `owner` field,
    not a login UI.
 8. **Hydrate-then-stream (every client reconstructs from the host).** A client never relies on having
@@ -164,6 +183,28 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
     exact `thinkrail.ai` origin. The retired `vibecoding.thinkrail.ai` hostname is an edge redirect that
     preserves path and query, never a proxy to a second site.
 
+15. **Desktop packaging preserves the host/runtime boundary.** Electrobun `1.18.1` packages Bun `1.3.14`
+    and embeds the host in its Bun process; it never wraps or spawns the CLI. The native window loads the
+    packaged web build from the host's actual loopback port so UI, wire, files, and SPA fallback keep one
+    origin. Native resources that require paths stay unpacked. The shell sets the staged `bun-pty` library
+    before server import and loads PI from a separately bundled `.ts` runtime so external TypeScript
+    extensions receive PI's bundled virtual modules rather than nonexistent built-Node aliases. The CLI
+    and desktop acquire the same canonical-data-directory ownership lease and share graceful shutdown.
+    Desktop artifacts are additive and unsigned initially; native WebKitGTK on Ubuntu 24.04+/glibc 2.38 is
+    the supported Linux floor. Detail: [[module-desktop]].
+
+16. **Delegation is portable; ThinkRail is one embedder.** `packages/pi-delegation` owns the session
+    fabric: one creation primitive with orthogonal axes, a run-owning handle, lineage, registry, and
+    lifecycle events. `packages/pi-subagents` consumes it to expose the `Agent` tools. Both work under
+    vanilla pi with the SDK as a `peerDependency` (peer deps are exempt from the exact-pin rule,
+    decision #10), create in-process hidden pi sessions, and keep their host bindings optional.
+    ThinkRail composes them in `packages/server`: one service per workspace, child transcripts under
+    the host data dir, a curated child-extension set, and the exact `ModelRuntime` retained by each
+    parent session so children stay on that parent's provider generation across Central changes. The
+    wire mirrors only the UI-facing run details and exposes transcript reads; neither portable package
+    depends on ThinkRail. Contract, semantics, and the full decision log:
+    [[module-pi-delegation]], [[module-pi-subagents]], and [[submodule-server-agent]].
+
 ## Invariants
 
 - Never **value**-import `pi` in browser-bundled code; import types only, from the `pi-ai` /
@@ -183,4 +224,5 @@ The workflow **product layer** (a runtime/engine, configurable pipelines) — th
 rule, no runtime machinery); the spec-graph **product layer** beyond the read-only viewer (drift detection, pre-build
 approval, living graph) — the pi-side spec-graph *capability* ships in V1 as a bundled extension
 (`module-spec-graph`), and the V1 viewer is a read-only Specs tab over a `spec.graph` wire read;
-provider-backed PR / Checks, self-improvement, automations, per-step model routing, cost ledger.
+CI/Checks status and provider REST API integration beyond `gh`-CLI push/open/update (see
+[[submodule-server-pr]]), self-improvement, automations, per-step model routing, cost ledger.

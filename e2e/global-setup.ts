@@ -1,6 +1,7 @@
 import { chmodSync, copyFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { seedAgentDefinitionFixtures } from "./fixtures/agents";
 import {
 	E2E_CENTRAL_BAD_EXTENSION_SOURCE,
 	E2E_CENTRAL_EXTENSION_SOURCE,
@@ -61,6 +62,8 @@ export default function globalSetup(): void {
 	seedExternalCwdSessions();
 
 	seedTemplateFixtures();
+
+	seedAgentDefinitionFixtures();
 
 	seedFixtureRepo();
 

@@ -7,12 +7,13 @@ import { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { isPortFree } from "@thinkrail/shared/freePort";
 import { configurePiRuntime, configurePiRuntimeFactory } from "../agent";
 import { resetJbcentralStateForTests } from "../auth";
-import { type BootedHost, bootHost } from "./boot";
+import { type BootedHost, bootHost, HostAlreadyRunningError } from "./boot";
 
 process.setMaxListeners(50);
 
 const booted: BootedHost[] = [];
 const tmpDirs: string[] = [];
+const originalDataDir = process.env.THINKRAIL_DATA_DIR;
 let testRuntime: ModelRuntime;
 
 beforeAll(async () => {
@@ -27,11 +28,16 @@ beforeEach(async () => {
 	await resetJbcentralStateForTests();
 	configurePiRuntime(null);
 	configurePiRuntimeFactory(async () => testRuntime);
+	const dir = mkdtempSync(join(tmpdir(), "thinkrail-boot-data-"));
+	tmpDirs.push(dir);
+	process.env.THINKRAIL_DATA_DIR = dir;
 });
 
 afterEach(async () => {
-	while (booted.length) booted.pop()?.server.stop();
+	while (booted.length) await booted.pop()?.server.shutdown();
 	while (tmpDirs.length) rmSync(tmpDirs.pop() as string, { recursive: true, force: true });
+	if (originalDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
+	else process.env.THINKRAIL_DATA_DIR = originalDataDir;
 	await resetJbcentralStateForTests();
 	configurePiRuntimeFactory();
 	configurePiRuntime(null);
@@ -104,4 +110,20 @@ test("stop() releases the port", async () => {
 	expect(await isPortFree(b.port)).toBe(false);
 	b.server.stop();
 	expect(await isPortFree(b.port)).toBe(true);
+});
+
+test("boot refuses a second host for the same data directory", async () => {
+	await boot({ port: grabFreePort(), host: "localhost", portMode: "exact" });
+	await expect(
+		bootHost({ port: grabFreePort(), host: "localhost", portMode: "exact" }),
+	).rejects.toBeInstanceOf(HostAlreadyRunningError);
+});
+
+test("shutdown is idempotent and releases ownership", async () => {
+	const options = { port: grabFreePort(), host: "localhost", portMode: "exact" as const };
+	const first = await boot(options);
+	await Promise.all([first.server.shutdown(), first.server.shutdown()]);
+	booted.splice(booted.indexOf(first), 1);
+	const second = await boot(options);
+	expect(second.port).toBe(options.port);
 });

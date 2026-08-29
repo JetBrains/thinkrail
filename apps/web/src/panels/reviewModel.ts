@@ -54,11 +54,24 @@ export function lineRef(comment: ReviewComment): string {
 		: `L${range.startLine}–${range.endLine}`;
 }
 
-export function statusLabel(comment: Pick<ReviewComment, "status" | "anchorState">): string {
+export function statusLabel(
+	comment: Pick<ReviewComment, "status" | "anchorState" | "stale" | "reflection">,
+): string {
 	if (comment.status !== "resolved" && comment.status !== "dismissed") {
+		if (comment.reflection?.verdict === "refuted") return `${comment.status} · refuted`;
+		if (comment.stale) return `${comment.status} · stale`;
 		if (comment.anchorState === "outdated") return `${comment.status} · outdated`;
 	}
 	return comment.status;
+}
+
+export function threadLabel(
+	t: Pick<ReviewThreadData, "status" | "anchorState" | "stale" | "refuted">,
+): string {
+	if (t.refuted) return `${t.status} · refuted`;
+	if (t.stale) return `${t.status} · stale`;
+	if (t.anchorState === "outdated") return `${t.status} · outdated`;
+	return t.status;
 }
 
 export type ReviewFlag = "draft" | "sent";
@@ -110,6 +123,8 @@ export function fileThreads(
 			body: comment.body,
 			status: comment.status,
 			anchorState: comment.anchorState,
+			...(comment.stale ? { stale: true } : {}),
+			...(comment.reflection?.verdict === "refuted" ? { refuted: true } : {}),
 		});
 	}
 	return threads.sort((a, b) => a.endLine - b.endLine);
@@ -147,7 +162,7 @@ export function fileSummaries(
 	const overall = byPath.get(null);
 	if (overall && keep(null, overall)) rows.push({ path: null, ...overall });
 	for (const path of [...byPath.keys()].filter((p): p is string => p !== null).sort()) {
-		const entry = byPath.get(path) as { total: number; drafts: number; resolved: number };
+		const entry = byPath.get(path) as Omit<ReviewFileSummary, "path">;
 		if (keep(path, entry)) rows.push({ path, ...entry });
 	}
 	return rows;

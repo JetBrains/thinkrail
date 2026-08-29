@@ -375,6 +375,20 @@ export function findPlacedResource(
 	);
 }
 
+export function unplacedTools(document: WorkspaceLayoutDocument): readonly LayoutToolId[] {
+	return LAYOUT_TOOLS.filter((tool) => findPlacedResource(document, toolTab(tool)) === null);
+}
+
+export function unplacedToolsForSide(
+	document: WorkspaceLayoutDocument,
+	side: LayoutSide,
+): readonly LayoutToolId[] {
+	return unplacedTools(document).filter(
+		(tool) =>
+			(document.toolRestoreTargets[tool]?.region ?? LAYOUT_TOOL_DEFAULT_SIDES[tool]) === side,
+	);
+}
+
 function resolvePlacedResource(
 	document: WorkspaceLayoutDocument,
 	tab: LayoutTab,
@@ -844,14 +858,7 @@ export function hideBottom(
 }
 
 export function canShowSide(document: WorkspaceLayoutDocument, side: LayoutSide): boolean {
-	return (
-		document[side].groups.length > 0 ||
-		TOOL_RESTORE_ORDER.some(
-			(tool) =>
-				(document.toolRestoreTargets[tool]?.region ?? LAYOUT_TOOL_DEFAULT_SIDES[tool]) === side &&
-				findPlacedResource(document, toolTab(tool)) === null,
-		)
-	);
+	return document[side].groups.length > 0 || unplacedToolsForSide(document, side).length > 0;
 }
 
 export function showBottom(

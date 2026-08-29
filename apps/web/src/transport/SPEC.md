@@ -10,7 +10,8 @@ tags: [v1]
 
 ## Responsibility
 
-The single WebSocket client to the host, and its app-wide singleton.
+The single WebSocket client to the host, its app-wide singleton, and the ordered delivery boundary that
+batches high-frequency Pi events without allowing later wire messages to overtake them.
 
 ## Boundary
 
@@ -36,7 +37,10 @@ The single WebSocket client to the host, and its app-wide singleton.
   `inferUrl` defaults to
   same-origin; **`httpBase()`** derives the host's HTTP origin
   from the WS `url` — for building host HTTP URLs like the `/files/<workspaceId>/<path>` worktree-file
-  endpoint the markdown viewer points relative `<img>`s at, targeting the same host the transport dials); `wireTransport.ts` (`initTransport`/
+  endpoint the markdown viewer points relative `<img>`s at, targeting the same host the transport dials); `piEventBatcher.ts`
+  (the browser-side bounded queue for consecutive `pi.event` frames: exact arrival order, no dropped events,
+  one atomic delivery at roughly 30 Hz, a 128-event forced-flush ceiling, and `flush`/`dispose` lifecycle);
+  `wireTransport.ts` (`initTransport`/
   `getTransport` singleton; routes `server.welcome`, **`project.updated`**, `pi.event`, `pi.extensionUi`,
   **`session.deleted`**, **`provider.changed`**, **`layout.changed`**, **the
   `workspace.created`/`updated`/`removed` lifecycle trio, and `workspace.fsChanged`** into the store — and
@@ -44,7 +48,8 @@ The single WebSocket client to the host, and its app-wide singleton.
   `setStatus`, whose connected generation gives active-workspace hydration a distinct trigger on every
   reconnect; the complete welcome (protocol + open/recent project views + optional config) via the atomic
   `installWelcomeSnapshot`, whose separate `welcomeGeneration` is the cold-navigation readiness edge;
-  project snapshots via `applyProjectUpdated`, `pi.event` via `handlePiEvent(event, sessionId)`, `pi.extensionUi` via `applyExtUi(request)`,
+  project snapshots via `applyProjectUpdated`, consecutive `pi.event` frames through the batcher into one
+  `handlePiEvents(payloads)` store commit, `pi.extensionUi` via `applyExtUi(request)`,
   `workspace.created` via `addWorkspace(workspace)`, `workspace.updated` via `updateWorkspace(workspace)`,
   `workspace.removed` via `applyWorkspaceRemoved(projectId, id)`, `session.deleted` via the idempotent
   `deleteChat(workspaceId, sessionId)` tombstone fold (an online fast path; because this event channel is
@@ -60,8 +65,10 @@ The single WebSocket client to the host, and its app-wide singleton.
   revision before rendering it),
   `workspace.fsChanged` via `noteFsChanged(payload)`, and
   **`settings.changed`** via `applyConfig(config)` — the post-startup server-synced app config broadcast;
-  welcome config lands in the atomic install above. All subscriptions happen once at init, never in
-  component effects);
+  welcome config lands in the atomic install above. Before `WsTransport` dispatches any response or non-Pi
+  push, `wireTransport` flushes queued Pi events synchronously; connection-status transitions do the same.
+  This dispatch barrier preserves cross-message order and the store's transcript-revision fence while still
+  collapsing consecutive stream frames. All subscriptions happen once at init, never in component effects);
   `errorText.ts` (**`errorText(err, fallback?)`** — normalizes a rejected `request` (the host's error
   string / a timeout / a thrown non-Error) into a short, display-ready line for an error turn/notice);
   `requestError.ts` (**`RequestError`** + **`wsErrorCode(err)`** — a rejection that carries the host's named

@@ -4,6 +4,7 @@ import type {
 	ComposerGrowthLimit,
 	ExtUiRequest,
 	GitDiffScope,
+	HostPlatform,
 	LayoutAuxiliaryRegion,
 	LayoutChangedPayload,
 	LayoutSettings,
@@ -15,6 +16,7 @@ import type {
 	RefreshedModels,
 	ReviewChangedPayload,
 	ReviewSnapshot,
+	SessionEventPayload,
 	SessionQueueState,
 	SessionStats,
 	SessionSummary,
@@ -30,7 +32,13 @@ import type {
 	WorkspaceLayoutDocument,
 	WorkspaceLayoutSnapshot,
 } from "@thinkrail/contracts";
-import { DEFAULT_CONFIG, isAskUserAnswersMessage, isControlMessage } from "@thinkrail/contracts";
+import {
+	customMessageText,
+	DEFAULT_CONFIG,
+	isAskUserAnswersMessage,
+	isControlMessage,
+	isSubagentCompletionMessage,
+} from "@thinkrail/contracts";
 import { create } from "zustand";
 import type { LoginState } from "../auth";
 import { assistantFailureText } from "../chat/assistantFailure";
@@ -231,6 +239,7 @@ export const SettingsSection = {
 	Layout: "layout",
 	Terminal: "terminal",
 	Templates: "templates",
+	Review: "review",
 	Privacy: "privacy",
 } as const;
 export type SettingsSection = (typeof SettingsSection)[keyof typeof SettingsSection];
@@ -323,6 +332,15 @@ export const EMPTY_RUNTIME: SessionRuntime = newRuntime(null, "medium");
 function clearTurnStreaming(turns: ChatTurn[]): ChatTurn[] {
 	if (!turns.some((t) => t.kind === "assistant" && t.streaming)) return turns;
 	return turns.map((t) => (t.kind === "assistant" && t.streaming ? { ...t, streaming: false } : t));
+}
+
+function consumeFailureRecoveries(turns: ChatTurn[]): ChatTurn[] {
+	if (!turns.some((turn) => turn.kind === "error" && turn.recovery)) return turns;
+	return turns.map((turn) => {
+		if (turn.kind !== "error" || !turn.recovery) return turn;
+		const { recovery, ...rest } = turn;
+		return rest;
+	});
 }
 
 function removeSupersededAssistant(
@@ -431,7 +449,12 @@ function clearRetryTurns(rt: SessionRuntime, source: RetrySource): SessionRuntim
 export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionRuntime {
 	switch (event.type) {
 		case "agent_start":
-			return { ...rt, isStreaming: true, attemptAssistantId: null };
+			return {
+				...rt,
+				turns: consumeFailureRecoveries(rt.turns),
+				isStreaming: true,
+				attemptAssistantId: null,
+			};
 		case "queue_update":
 			return {
 				...rt,
@@ -500,6 +523,20 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 				const { toolCallId, result } = event.message.details;
 				return { ...rt, askAnswers: { ...rt.askAnswers, [toolCallId]: result } };
 			}
+			if (isSubagentCompletionMessage(event.message)) {
+				return {
+					...rt,
+					turns: [
+						...rt.turns,
+						{
+							kind: "subagentCompletion",
+							id: crypto.randomUUID(),
+							details: event.message.details,
+							text: customMessageText(event.message.content),
+						},
+					],
+				};
+			}
 			if (event.message.role !== "assistant" || !rt.currentAssistantId) return rt;
 			const id = rt.currentAssistantId;
 			const turn: ChatTurn = { kind: "assistant", id, message: event.message, streaming: false };
@@ -541,7 +578,12 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 		case "agent_settled": {
 			const failure = assistantFailureText(event.terminal);
 			const closer: ChatTurn = failure
-				? { kind: "error", id: crypto.randomUUID(), text: failure }
+				? {
+						kind: "error",
+						id: crypto.randomUUID(),
+						text: failure,
+						recovery: "try-again",
+					}
 				: { kind: "system", id: crypto.randomUUID(), text: "✓ Done", endedAt: Date.now() };
 			return {
 				...rt,
@@ -614,11 +656,13 @@ function reduceExtUi(
 			return rt.pendingExtUi
 				? { ...rt, extUiQueue: [...rt.extUiQueue, request] }
 				: { ...rt, pendingExtUi: request };
-		case "notify":
+		case "notify": {
+			const kind = request.level === "error" ? "error" : "system";
 			return {
 				...rt,
-				turns: [...rt.turns, { kind: "system", id: crypto.randomUUID(), text: request.message }],
+				turns: [...rt.turns, { kind, id: crypto.randomUUID(), text: request.message }],
 			};
+		}
 		case "setStatus": {
 			if (request.text === null)
 				return { ...rt, extUiStatus: omitKey(rt.extUiStatus, request.key) };
@@ -639,6 +683,7 @@ interface AppState {
 	connectionGeneration: number;
 	welcomeGeneration: number;
 	protocolVersion: number | null;
+	hostPlatform: HostPlatform | null;
 	projects: Project[];
 	recentProjects: Project[];
 	workspaces: Record<string, Workspace[]>;
@@ -664,6 +709,7 @@ interface AppState {
 	terminalsByWorkspace: Record<string, TerminalTab[]>;
 	activeTerminalByWorkspace: Record<string, string | null>;
 	sessions: Record<string, SessionRuntime>;
+	extUiOrphans: ExtUiRequest[];
 	models: WireModel[];
 	providerVersion: number;
 	templatesVersion: number;
@@ -695,6 +741,9 @@ interface AppState {
 	analyticsEnabled: boolean;
 	terminalReplayKb: number;
 	composerGrowthLimit: ComposerGrowthLimit;
+	reviewModel: WireModel | undefined;
+	reviewEffort: ThinkingLevel | undefined;
+	reviewAutoFix: boolean;
 	layoutSettings: LayoutSettings;
 	toasts: Toast[];
 	setStatus: (status: ConnectionStatus) => void;
@@ -703,6 +752,7 @@ interface AppState {
 		projects: Project[],
 		recentProjects: Project[],
 		config?: AppConfig,
+		hostPlatform?: HostPlatform,
 	) => void;
 	installProjectSnapshot: (projects: Project[], recentProjects: Project[]) => void;
 	applyProjectUpdated: (project: Project) => void;
@@ -846,6 +896,7 @@ interface AppState {
 		detail: string,
 	) => void;
 	handlePiEvent: (event: PiEvent, sessionId: string) => void;
+	handlePiEvents: (payloads: readonly SessionEventPayload[]) => void;
 	setModelsForProviderVersion: (providerVersion: number, models: WireModel[]) => void;
 	noteProviderChanged: () => void;
 	bumpTemplatesVersion: () => void;
@@ -896,6 +947,9 @@ function configPatch(config: AppConfig) {
 		terminalReplayKb: config.terminalReplayKb,
 		composerGrowthLimit: config.composerGrowthLimit ?? DEFAULT_CONFIG.composerGrowthLimit,
 		layoutSettings: config.layout ?? DEFAULT_CONFIG.layout,
+		reviewModel: config.reviewModel,
+		reviewEffort: config.reviewEffort,
+		reviewAutoFix: config.reviewAutoFix ?? DEFAULT_CONFIG.reviewAutoFix,
 	};
 }
 
@@ -1278,6 +1332,100 @@ function sameReviewSnapshot(prev: ReviewSnapshot | undefined, next: ReviewSnapsh
 	return prev !== undefined && JSON.stringify(prev) === JSON.stringify(next);
 }
 
+const EXT_UI_ORPHAN_LIMIT = 64;
+const REPLAYABLE_EXT_UI: ReadonlySet<ExtUiRequest["kind"]> = new Set([
+	"notify",
+	"setStatus",
+	"setWidget",
+	"setTitle",
+]);
+
+function bufferExtUiOrphan(s: AppState, request: ExtUiRequest): Partial<AppState> {
+	return REPLAYABLE_EXT_UI.has(request.kind)
+		? { extUiOrphans: [...s.extUiOrphans, request].slice(-EXT_UI_ORPHAN_LIMIT) }
+		: {};
+}
+
+function replayExtUiOrphans(
+	sessionId: string,
+	set: (updater: (s: AppState) => Partial<AppState>) => void,
+	get: () => AppState,
+): void {
+	if (!get().sessions[sessionId]) return;
+	const replay = get().extUiOrphans.filter((frame) => frame.sessionId === sessionId);
+	if (replay.length === 0) return;
+	set((s) => ({ extUiOrphans: s.extUiOrphans.filter((frame) => frame.sessionId !== sessionId) }));
+	for (const frame of replay) get().applyExtUi(frame);
+}
+
+function renameChat(s: AppState, sessionId: string, title: string): Partial<AppState> | null {
+	let found = false;
+	for (const [wsId, tabs] of Object.entries(s.tabsByWorkspace)) {
+		const chat = tabs.find(
+			(tab): tab is ChatTab => tab.kind === "chat" && tab.sessionId === sessionId,
+		);
+		if (!chat) continue;
+		found = true;
+		const cacheChanged = chat.name !== title;
+		const renamed = cacheChanged ? { ...chat, name: title } : chat;
+		const matchesQueuedOpen = (
+			intent: LayoutIntent,
+		): intent is Extract<LayoutIntent, { kind: "open" }> =>
+			intent.kind === "open" &&
+			intent.workspaceId === wsId &&
+			intent.tab.kind === "chat" &&
+			intent.tab.sessionId === chat.sessionId;
+		const queuedOpen = s.layoutIntents.find(matchesQueuedOpen);
+		const placement = selectLayoutResourcePlacement(s, wsId, chat);
+		const queuedChanged = queuedOpen !== undefined && queuedOpen.tab.name !== title;
+		const placementChanged = placement !== null && placement.tab.name !== title;
+		if (!cacheChanged && !queuedChanged && !placementChanged) continue;
+		return {
+			layoutIntents: queuedOpen
+				? queuedChanged || placementChanged
+					? s.layoutIntents.map((intent) =>
+							matchesQueuedOpen(intent)
+								? {
+										...intent,
+										tab: {
+											...intent.tab,
+											...(placementChanged && placement ? { id: placement.tabId } : {}),
+											name: title,
+										},
+									}
+								: intent,
+						)
+					: s.layoutIntents
+				: placementChanged && placement
+					? appendLayoutIntent(s.layoutIntents, {
+							kind: "open",
+							workspaceId: wsId,
+							tab: { ...renamed, id: placement.tabId },
+							intent: "keep",
+							activate: false,
+						})
+					: s.layoutIntents,
+			tabsByWorkspace: cacheChanged
+				? {
+						...s.tabsByWorkspace,
+						[wsId]: tabs.map((tab) => (tab.id === chat.id ? renamed : tab)),
+					}
+				: s.tabsByWorkspace,
+		};
+	}
+	for (const [wsId, chats] of Object.entries(s.closedChatsByWorkspace)) {
+		if (!chats.some((chat) => chat.sessionId === sessionId)) continue;
+		found = true;
+		return {
+			closedChatsByWorkspace: {
+				...s.closedChatsByWorkspace,
+				[wsId]: chats.map((chat) => (chat.sessionId === sessionId ? { ...chat, title } : chat)),
+			},
+		};
+	}
+	return found ? {} : null;
+}
+
 function withRuntime(
 	s: AppState,
 	sessionId: string,
@@ -1352,6 +1500,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	connectionGeneration: 0,
 	welcomeGeneration: 0,
 	protocolVersion: null,
+	hostPlatform: null,
 	projects: [],
 	recentProjects: [],
 	workspaces: {},
@@ -1377,6 +1526,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	terminalsByWorkspace: {},
 	activeTerminalByWorkspace: {},
 	sessions: {},
+	extUiOrphans: [],
 	models: [],
 	providerVersion: 0,
 	templatesVersion: 0,
@@ -1402,6 +1552,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 	terminalReplayKb: DEFAULT_CONFIG.terminalReplayKb,
 	composerGrowthLimit: DEFAULT_CONFIG.composerGrowthLimit,
 	layoutSettings: DEFAULT_CONFIG.layout,
+	reviewModel: DEFAULT_CONFIG.reviewModel,
+	reviewEffort: DEFAULT_CONFIG.reviewEffort,
+	reviewAutoFix: DEFAULT_CONFIG.reviewAutoFix,
 	toasts: [],
 	setStatus: (status) =>
 		set((state) => ({
@@ -1409,13 +1562,14 @@ export const useAppStore = create<AppState>((set, get) => ({
 			connectionGeneration:
 				status === "connected" ? state.connectionGeneration + 1 : state.connectionGeneration,
 		})),
-	installWelcomeSnapshot: (protocolVersion, projects, recentProjects, config) =>
+	installWelcomeSnapshot: (protocolVersion, projects, recentProjects, config, hostPlatform) =>
 		set((state) => {
 			const openProjects = sortProjects(projects.filter((project) => project.closed !== true));
 			return {
 				protocolVersion,
 				projects: openProjects,
 				recentProjects: sortProjects(recentProjects),
+				hostPlatform: hostPlatform ?? null,
 				...(config ? configPatch(config) : {}),
 				...reconcileProjectNavigation(state, openProjects),
 				...pruneExpandedProjects(state, openProjects),
@@ -2257,7 +2411,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 						activeTerminalByWorkspace: { ...s.activeTerminalByWorkspace, [workspaceId]: tabKey },
 					},
 		),
-	openChatSession: (workspaceId, sessionId, model, thinkingLevel, syncedTick, options = {}) =>
+	openChatSession: (workspaceId, sessionId, model, thinkingLevel, syncedTick, options = {}) => {
 		set((s) => {
 			if (s.removedWorkspaceIds[workspaceId] || isSessionDeleted(s, workspaceId, sessionId)) {
 				return {};
@@ -2311,7 +2465,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 						}
 					: {}),
 			};
-		}),
+		});
+		replayExtUiOrphans(sessionId, set, get);
+	},
 	closeChatRuntime: (sessionId) =>
 		set((s) => {
 			if (!s.sessions[sessionId]) return {};
@@ -2497,7 +2653,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				},
 			};
 		}),
-	hydrateSession: (summary, hydrated, activate = false, syncedTick, options = {}) =>
+	hydrateSession: (summary, hydrated, activate = false, syncedTick, options = {}) => {
 		set((s) => {
 			if (
 				s.removedWorkspaceIds[summary.workspaceId] ||
@@ -2578,7 +2734,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 						}
 					: s.closedChatsByWorkspace,
 			};
-		}),
+		});
+		replayExtUiOrphans(summary.sessionId, set, get);
+	},
 	reconcileSession: (summary, hydrated, expectedEventRevision, connectionGeneration) => {
 		let applied = false;
 		set((s) => {
@@ -2624,7 +2782,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 			withRuntime(s, sessionId, (rt) => ({
 				...rt,
 				turns: [
-					...rt.turns,
+					...consumeFailureRecoveries(rt.turns),
 					{
 						kind: "user",
 						id: crypto.randomUUID(),
@@ -2673,13 +2831,22 @@ export const useAppStore = create<AppState>((set, get) => ({
 						};
 			}),
 		),
-	handlePiEvent: (event, sessionId) =>
-		set((s) =>
-			withRuntime(s, sessionId, (rt) => ({
-				...reduceSessionEvent(rt, event),
-				eventRevision: rt.eventRevision + 1,
-			})),
-		),
+	handlePiEvent: (event, sessionId) => get().handlePiEvents([{ event, sessionId }]),
+	handlePiEvents: (payloads) =>
+		set((s) => {
+			let sessions = s.sessions;
+			for (const { event, sessionId } of payloads) {
+				const runtime = sessions[sessionId];
+				if (!runtime) continue;
+				if (sessions === s.sessions) sessions = { ...sessions };
+				const next = reduceSessionEvent(runtime, event);
+				sessions[sessionId] = {
+					...next,
+					eventRevision: runtime.eventRevision + 1,
+				};
+			}
+			return sessions === s.sessions ? s : { sessions };
+		}),
 	setModelsForProviderVersion: (providerVersion, models) =>
 		set((s) => (s.providerVersion === providerVersion ? { models, modelsFresh: false } : s)),
 	noteProviderChanged: () =>
@@ -2725,72 +2892,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 		),
 	applyExtUi: (request) =>
 		set((s): Partial<AppState> => {
-			if (request.kind === "setTitle") {
-				for (const [wsId, tabs] of Object.entries(s.tabsByWorkspace)) {
-					const chat = tabs.find(
-						(tab): tab is ChatTab => tab.kind === "chat" && tab.sessionId === request.sessionId,
-					);
-					if (!chat) continue;
-					const cacheChanged = chat.name !== request.title;
-					const renamed = cacheChanged ? { ...chat, name: request.title } : chat;
-					const matchesQueuedOpen = (
-						intent: LayoutIntent,
-					): intent is Extract<LayoutIntent, { kind: "open" }> =>
-						intent.kind === "open" &&
-						intent.workspaceId === wsId &&
-						intent.tab.kind === "chat" &&
-						intent.tab.sessionId === chat.sessionId;
-					const queuedOpen = s.layoutIntents.find(matchesQueuedOpen);
-					const placement = selectLayoutResourcePlacement(s, wsId, chat);
-					const queuedChanged = queuedOpen !== undefined && queuedOpen.tab.name !== request.title;
-					const placementChanged = placement !== null && placement.tab.name !== request.title;
-					if (!cacheChanged && !queuedChanged && !placementChanged) continue;
-					return {
-						layoutIntents: queuedOpen
-							? queuedChanged || placementChanged
-								? s.layoutIntents.map((intent) =>
-										matchesQueuedOpen(intent)
-											? {
-													...intent,
-													tab: {
-														...intent.tab,
-														...(placementChanged && placement ? { id: placement.tabId } : {}),
-														name: request.title,
-													},
-												}
-											: intent,
-									)
-								: s.layoutIntents
-							: placementChanged && placement
-								? appendLayoutIntent(s.layoutIntents, {
-										kind: "open",
-										workspaceId: wsId,
-										tab: { ...renamed, id: placement.tabId },
-										intent: "keep",
-										activate: false,
-									})
-								: s.layoutIntents,
-						tabsByWorkspace: cacheChanged
-							? {
-									...s.tabsByWorkspace,
-									[wsId]: tabs.map((tab) => (tab.id === chat.id ? renamed : tab)),
-								}
-							: s.tabsByWorkspace,
-					};
-				}
-				for (const [wsId, chats] of Object.entries(s.closedChatsByWorkspace)) {
-					if (!chats.some((chat) => chat.sessionId === request.sessionId)) continue;
-					return {
-						closedChatsByWorkspace: {
-							...s.closedChatsByWorkspace,
-							[wsId]: chats.map((chat) =>
-								chat.sessionId === request.sessionId ? { ...chat, title: request.title } : chat,
-							),
-						},
-					};
-				}
-				return {};
-			}
+			if (request.kind === "setTitle")
+				return renameChat(s, request.sessionId, request.title) ?? bufferExtUiOrphan(s, request);
+			if (!s.sessions[request.sessionId]) return bufferExtUiOrphan(s, request);
 			return withRuntime(s, request.sessionId, (rt) => reduceExtUi(rt, request));
 		}),
 	beginLogin: (loginId, providerId) =>

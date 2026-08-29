@@ -6,6 +6,8 @@
 	"exports": {
 		".": "./src/index.ts",
 		"./agent": "./src/agent/index.ts",
+		"./artifact-probes": "./src/artifactProbes.ts",
+		"./build-support": "./src/buildSupport.ts",
 		"./history-test-fixtures": "./src/history/testFixtures.ts"
 	},
 	"scripts": {
@@ -20,7 +22,9 @@
 		"@thinkrail/contracts": "workspace:*",
 		"@thinkrail/shared": "workspace:*",
 		"bun-pty": "0.4.10",
+		"pi-delegation": "workspace:*",
 		"pi-spec-graph": "workspace:*",
+		"pi-subagents": "workspace:*",
 		"pi-thinkrail-workflow": "workspace:*",
 		"pi-todos": "workspace:*",
 		"pi-visualize": "workspace:*",

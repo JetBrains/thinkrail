@@ -42,10 +42,11 @@ function paramEnum(toolName: string, prop: string): readonly string[] {
 	return schema.properties?.[prop]?.enum ?? [];
 }
 
-test("registers the five todo tools", () => {
+test("registers the six todo tools", () => {
 	expect([...tools.keys()].sort()).toEqual([
 		"todo_add",
 		"todo_list",
+		"todo_plan_summary",
 		"todo_remove",
 		"todo_update",
 		"todo_write",
@@ -253,6 +254,34 @@ test("todo_add refuses an `after` anchor in the user's lane, and a re-plan keeps
 		const after = new TodoStore(cwd, "sess-test").read();
 		expect(after.todos.map((t) => t.title)).toEqual(["user ask"]);
 		expect(after.groups[0]?.todos.map((t) => t.title)).toEqual(["step"]);
+	} finally {
+		rmSync(cwd, { recursive: true, force: true });
+	}
+});
+
+test("done-with-summary stores it and the last done nudges todo_plan_summary; the tool sets the plan note", async () => {
+	const cwd = mkdtempSync(join(tmpdir(), "pi-todos-tools-"));
+	try {
+		const added = (await run(
+			"todo_add",
+			{ title: "Implement handling", group: "Task" },
+			cwd,
+		)) as AgentToolResult<{ todo: { id: string } }>;
+		const done = await run(
+			"todo_update",
+			{ id: added.details.todo.id, status: "done", summary: "Added throttling. Tests pass." },
+			cwd,
+		);
+		const store = new TodoStore(cwd, "sess-test");
+		expect(store.get(added.details.todo.id)?.summary).toBe("Added throttling. Tests pass.");
+		// The whole plan just completed → the in-band nudge asks for the overall summary.
+		expect(done.content[0]?.type === "text" ? done.content[0].text : "").toContain(
+			"todo_plan_summary",
+		);
+
+		const set = await run("todo_plan_summary", { summary: "Task landed; suite green." }, cwd);
+		expect(isError(set)).toBe(false);
+		expect(store.read().summary).toBe("Task landed; suite green.");
 	} finally {
 		rmSync(cwd, { recursive: true, force: true });
 	}

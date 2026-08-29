@@ -1,5 +1,5 @@
-import { defineCollection } from "astro:content";
-import { glob } from "astro/loaders";
+import { defineCollection, reference } from "astro:content";
+import { file, glob } from "astro/loaders";
 import { z } from "astro/zod";
 
 const RESERVED_SLUGS = new Set([
@@ -18,6 +18,14 @@ const RESERVED_SLUGS = new Set([
 
 const SLUG_PATTERN = /^[a-z][a-z0-9-]{2,99}$/;
 
+const authors = defineCollection({
+	loader: file("./content/authors.json"),
+	schema: z.object({
+		name: z.string().min(1),
+		url: z.url().optional(),
+	}),
+});
+
 const blog = defineCollection({
 	loader: glob({ pattern: "*/index.md", base: "./content/blog" }),
 	schema: z.object({
@@ -32,10 +40,11 @@ const blog = defineCollection({
 				message: `slug is a reserved name (${[...RESERVED_SLUGS].join(", ")})`,
 			}),
 		date: z.coerce.date(),
+		author: reference("authors"),
 		draft: z.boolean().default(false),
 		excerpt: z.string().optional(),
 		tags: z.array(z.string()).default([]),
 	}),
 });
 
-export const collections = { blog };
+export const collections = { authors, blog };

@@ -36,6 +36,9 @@ export function ModelSelector({
 	onRefresh,
 	container,
 	className,
+	placeholder,
+	defaultOption,
+	onSelectDefault,
 }: {
 	models: WireModel[];
 	current: WireModel | null;
@@ -44,6 +47,9 @@ export function ModelSelector({
 	onRefresh: (force: boolean) => void;
 	container?: HTMLElement | null;
 	className?: string;
+	placeholder?: string;
+	defaultOption?: string;
+	onSelectDefault?: () => void;
 }) {
 	const [open, setOpen] = useState(false);
 	const providers = [...new Set(models.map((m) => m.provider))];
@@ -70,7 +76,7 @@ export function ModelSelector({
 				)}
 			>
 				<span className="truncate text-text-muted tr-text-metadata">
-					{current?.name ?? "Select model"}
+					{current?.name ?? (placeholder || "Select model")}
 				</span>
 				<ChevronDown className="size-16 shrink-0 text-text-muted" />
 			</PopoverTrigger>
@@ -79,6 +85,23 @@ export function ModelSelector({
 					<CommandInput placeholder="Search models…" />
 					<CommandList>
 						<CommandEmpty>No models found.</CommandEmpty>
+						{defaultOption !== undefined && onSelectDefault !== undefined && (
+							<CommandGroup>
+								<CommandItem
+									value={defaultOption}
+									data-testid="model-option-default"
+									onSelect={() => {
+										onSelectDefault();
+										setOpen(false);
+									}}
+								>
+									<span className="flex w-14 shrink-0 justify-center">
+										{current === null ? <Check className="size-14 text-primary" /> : null}
+									</span>
+									<span className="truncate">{defaultOption}</span>
+								</CommandItem>
+							</CommandGroup>
+						)}
 						{providers.map((provider) => (
 							<CommandGroup key={provider} heading={provider}>
 								{models

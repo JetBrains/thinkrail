@@ -15,6 +15,7 @@ import type { ReviewChangedPayload, ReviewSnapshot, Workspace } from "@thinkrail
 import { saveWorkspaces } from "../persistence";
 import {
 	addComment,
+	anchorProblem,
 	buildSendPackage,
 	clearReview,
 	deleteComment,
@@ -30,6 +31,7 @@ import {
 	reviewSessionKey,
 	rollbackSend,
 	sendableComments,
+	setReflection,
 	setReviewPublisher,
 	updateComment,
 } from "./reviews";
@@ -123,6 +125,30 @@ function archivedSnapshots(): ReviewSnapshot[] {
 		.map((file) => JSON.parse(readFileSync(join(archiveDir(), file), "utf8")) as ReviewSnapshot);
 }
 
+test("anchorProblem: real path + in-range line passes, hallucinated path and past-EOF line fail", () => {
+	expect(anchorProblem(WS_ID, "a.ts", 1)).toBeNull();
+	expect(anchorProblem(WS_ID, "a.ts", 3)).toBeNull();
+	expect(anchorProblem(WS_ID, "nope.ts", 1)).toContain("No file");
+	expect(anchorProblem(WS_ID, "a.ts", 99)).toContain("past the end");
+});
+
+test("setReflection records the verdict on a finding and publishes it", async () => {
+	const comment = await addInline();
+	const updated = await setReflection(WS_ID, comment.id, {
+		verdict: "refuted",
+		confidence: "high",
+		reason: "the cited API does exist",
+	});
+	expect(updated.reflection).toEqual({
+		verdict: "refuted",
+		confidence: "high",
+		reason: "the cited API does exist",
+	});
+	expect(pushes.at(-1)?.comments.find((c) => c.id === comment.id)?.reflection?.verdict).toBe(
+		"refuted",
+	);
+});
+
 test("add fills contentHash + textQuote, publishes a full snapshot", async () => {
 	const comment = await addInline();
 	expect(comment.status).toBe("draft");
@@ -213,6 +239,22 @@ test("send lifecycle: sendable drafts → sent with session link; the file's cha
 	await expect(sendableComments(WS_ID)).rejects.toThrow("No draft comments");
 });
 
+test("the implicit batch sweeps agent drafts too — findings ride the user's send on equal terms", async () => {
+	const mine = await addInline("mine");
+	const theirs = await addComment({
+		workspaceId: WS_ID,
+		kind: "inline",
+		author: "agent",
+		anchor: {
+			path: "a.ts",
+			side: "worktree",
+			selectors: [{ kind: "lineRange", startLine: 3, endLine: 3 }],
+		},
+		body: "reviewer finding",
+	});
+	expect((await sendableComments(WS_ID)).map((c) => c.id)).toEqual([mine.id, theirs.id]);
+});
+
 test("rollbackSend undoes an optimistic markSent (pre-turn rejection) → drafts again, chat unpinned", async () => {
 	const c1 = await addInline("one");
 	const c2 = await addInline("two");
@@ -279,13 +321,37 @@ test("a review-level remark pins its own bucket chat, so a second one continues 
 
 test("agent resolve: sent → resolved with note; unknown/duplicate fail loud", async () => {
 	const comment = await addInline();
-	expect(() => resolveCommentFromAgent(comment.id)).toThrow("not sent");
+	expect(() => resolveCommentFromAgent("sess1", comment.id)).toThrow("not sent");
 	await markCommentsSent(WS_ID, [comment.id], "sess1");
-	const resolved = resolveCommentFromAgent(comment.id, "renamed the constant");
+	const resolved = resolveCommentFromAgent("sess1", comment.id, "renamed the constant");
 	expect(resolved.resolvedBy).toBe("agent");
 	expect(resolved.resolveNote).toBe("renamed the constant");
-	expect(() => resolveCommentFromAgent(comment.id)).toThrow("already resolved");
-	expect(() => resolveCommentFromAgent("rc_nope")).toThrow("Unknown review comment");
+	expect(() => resolveCommentFromAgent("sess1", comment.id)).toThrow("already resolved");
+	expect(() => resolveCommentFromAgent("sess1", "rc_nope")).toThrow("Unknown review comment");
+});
+
+test("agent resolve is bound to the chat the comment was actually sent to — no other session, sent or not", async () => {
+	const comment = await addInline();
+	await markCommentsSent(WS_ID, [comment.id], "sess1");
+	expect(() => resolveCommentFromAgent("sess2", comment.id)).toThrow("not sent to this chat");
+	expect(resolveCommentFromAgent("sess1", comment.id).status).toBe("resolved");
+});
+
+test("a draft finding is unresolvable through resolve_comment even when self-authored by the agent — the reviewer must not clear its own unsent finding", async () => {
+	const finding = await addComment({
+		workspaceId: WS_ID,
+		kind: "inline",
+		author: "agent",
+		anchor: {
+			path: "a.ts",
+			side: "worktree",
+			selectors: [{ kind: "lineRange", startLine: 3, endLine: 3 }],
+		},
+		body: "reviewer finding",
+	});
+	expect(() => resolveCommentFromAgent("reviewer-sess", finding.id)).toThrow("not sent");
+	const scratch = await addInline("human scratch");
+	expect(() => resolveCommentFromAgent("any-sess", scratch.id)).toThrow("not sent");
 });
 
 test("clear archives records, discards drafts, and publishes only the fresh snapshot", async () => {
@@ -307,7 +373,7 @@ test("clear archives records, discards drafts, and publishes only the fresh snap
 	expect(archived?.comments.map((comment) => comment.id)).toEqual([sent.id]);
 
 	const beforeResolve = pushes.length;
-	expect(resolveCommentFromAgent(sent.id, "fixed after clear").status).toBe("resolved");
+	expect(resolveCommentFromAgent("sess1", sent.id, "fixed after clear").status).toBe("resolved");
 	expect(pushes).toHaveLength(beforeResolve);
 	expect(archivedSnapshots()[0]?.comments[0]).toMatchObject({
 		id: sent.id,
@@ -505,7 +571,7 @@ test("resolve_comment skips a damaged sibling review rather than failing the res
 	});
 	await markCommentsSent(WS_ID, [comment.id], "sess-x");
 	writeFileSync(join(dataDir, "reviews", "ws-broken.json"), "{ truncated");
-	expect(resolveCommentFromAgent(comment.id).status).toBe("resolved");
+	expect(resolveCommentFromAgent("sess-x", comment.id).status).toBe("resolved");
 });
 
 test("markFileDone: only a fully-resolved file; a new comment re-opens it", async () => {
@@ -513,7 +579,7 @@ test("markFileDone: only a fully-resolved file; a new comment re-opens it", asyn
 	await expect(markFileDone(WS_ID, "a.ts")).rejects.toThrow(/unresolved/);
 	await markCommentsSent(WS_ID, [comment.id], "sess1");
 	await expect(markFileDone(WS_ID, "a.ts")).rejects.toThrow(/unresolved/);
-	resolveCommentFromAgent(comment.id);
+	resolveCommentFromAgent("sess1", comment.id);
 	await markFileDone(WS_ID, "a.ts");
 	expect((await getReviewSnapshot(WS_ID)).review.doneFiles).toEqual(["a.ts"]);
 	await addInline("more to say");
