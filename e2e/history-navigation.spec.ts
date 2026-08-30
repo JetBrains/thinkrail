@@ -11,7 +11,7 @@ async function openTwoChats(page: Page): Promise<{ chat1Hash: string; chat2Hash:
 	await expect.poll(() => currentHash(page)).toContain("/chats/");
 	const chat1Hash = await currentHash(page);
 
-	await page.getByTestId("new-chat").click();
+	await page.getByTestId("new-chat").first().click();
 	await expect(chatTabs(page)).toHaveCount(2);
 	await expect.poll(() => currentHash(page)).not.toBe(chat1Hash);
 	const chat2Hash = await currentHash(page);
@@ -64,61 +64,34 @@ test("Back returns to a deep-linked chat entry", async ({ page }) => {
 	await expect(chatTabs(page).first()).toHaveAttribute("data-active", "true");
 });
 
-test("Back to a just-closed chat wins over the close's delayed layout acceptance", async ({
+test("Back reopens a just-closed local chat without a current-layout wire write", async ({
 	page,
 }) => {
-	const holds = new Map<string, { requestId: string | null; response: string | null }>();
-	let sendHeld: ((raw: string) => void) | null = null;
-	const arm = (method: string) => holds.set(method, { requestId: null, response: null });
-	const release = (method: string) => {
-		const hold = holds.get(method);
-		holds.delete(method);
-		if (hold?.response) sendHeld?.(hold.response);
-	};
+	const methods: string[] = [];
 	await page.routeWebSocket(/\/ws(\?|$)/, (ws) => {
 		const server = ws.connectToServer();
-		sendHeld = (raw) => ws.send(raw);
 		ws.onMessage((message) => {
 			const raw = typeof message === "string" ? message : message.toString();
 			try {
-				const frame = JSON.parse(raw) as { id?: string; method?: string };
-				const hold = frame.method ? holds.get(frame.method) : undefined;
-				if (hold && hold.requestId === null && frame.id) hold.requestId = frame.id;
+				const frame = JSON.parse(raw) as { method?: string };
+				if (frame.method) methods.push(frame.method);
 			} catch {}
 			server.send(raw);
 		});
-		server.onMessage((message) => {
-			const raw = typeof message === "string" ? message : message.toString();
-			try {
-				const frame = JSON.parse(raw) as { id?: string };
-				for (const hold of holds.values()) {
-					if (frame.id && frame.id === hold.requestId && hold.response === null) {
-						hold.response = raw;
-						return;
-					}
-				}
-			} catch {}
-			ws.send(raw);
-		});
+		server.onMessage((message) => ws.send(message));
 	});
 
 	const { chat1Hash, chat2Hash } = await openTwoChats(page);
-
-	arm("layout.replace");
+	methods.length = 0;
 	await chatTabs(page).last().getByTestId("editor-tab-close").click();
 	await expect(chatTabs(page)).toHaveCount(1);
 	await expect.poll(() => currentHash(page)).toBe(chat1Hash);
+	expect(methods).not.toContain("layout.replace");
 
-	arm("session.list");
 	await page.goBack();
 	await expect.poll(() => currentHash(page)).toBe(chat2Hash);
-	release("layout.replace");
-	await page.waitForTimeout(100);
-	release("session.list");
-
 	await expect(chatTabs(page)).toHaveCount(2);
 	await expect(chatTabs(page).last()).toHaveAttribute("data-active", "true");
-	await expect.poll(() => currentHash(page)).toBe(chat2Hash);
 });
 
 test("a closed chat's entry survives Back; a deleted chat's entry falls back", async ({ page }) => {
@@ -136,7 +109,7 @@ test("a closed chat's entry survives Back; a deleted chat's entry falls back", a
 	await chatTabs(page).last().getByTestId("editor-tab-close").click();
 	await expect(chatTabs(page)).toHaveCount(1);
 	await expect.poll(() => currentHash(page)).toBe(chat1Hash);
-	await page.getByTestId("chat-history").click();
+	await page.getByTestId("chat-history").first().click();
 	await page.getByTestId("closed-chat-row").first().getByTestId("closed-chat-delete").click();
 	await expect(page.getByTestId("closed-chat-row")).toHaveCount(0);
 	await page.keyboard.press("Escape");

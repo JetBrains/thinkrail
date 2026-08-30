@@ -10,11 +10,11 @@ import {
 	type WireModel,
 	type Workspace,
 	type WorkspaceFsChangedPayload,
-	type WorkspaceLayoutDocument,
 	type WorkspaceSkillChange,
 } from "@thinkrail/contracts";
 import type { ChatTurn, FailureRecovery } from "../chat/types";
 import { userText } from "../lib";
+import type { WorkspaceLayoutDocument } from "../shell/layout";
 import {
 	captureCenterNavigation,
 	chatTabId,
@@ -115,11 +115,12 @@ beforeEach(() => {
 		routeChatTargetGeneration: 0,
 		sessions: {},
 		extUiOrphans: [],
-		layoutSnapshotsByWorkspace: {},
+		workbenchFrame: null,
+		workspaceViewsByWorkspace: {},
+		layoutStateReady: false,
 		layoutDocumentsByWorkspace: {},
 		layoutAttentionByWorkspace: {},
-		layoutPendingByWorkspace: {},
-		layoutRemoteEpochByWorkspace: {},
+		layoutProjectionEpochByWorkspace: {},
 		layoutIntents: [],
 		tabsByWorkspace: {},
 		terminalsByWorkspace: {},
@@ -1681,6 +1682,17 @@ test("noteClosedChats surfaces disk-only sessions in history, skipping live/open
 	store.noteClosedChats("ws1", [{ sessionId: "disk1", title: "Old chat", closedAt: 200 }]);
 	history = useAppStore.getState().closedChatsByWorkspace.ws1 ?? [];
 	expect(history).toHaveLength(2);
+	store.noteClosedChats("ws1", [{ sessionId: "disk1", title: "Renamed chat", closedAt: 400 }]);
+	history = useAppStore.getState().closedChatsByWorkspace.ws1 ?? [];
+	expect(history.find((chat) => chat.sessionId === "disk1")).toEqual({
+		sessionId: "disk1",
+		title: "Renamed chat",
+		closedAt: 200,
+	});
+
+	store.openChatSession("ws1", "disk1", null, "medium");
+	history = useAppStore.getState().closedChatsByWorkspace.ws1 ?? [];
+	expect(history.map((chat) => chat.sessionId)).toEqual(["disk2"]);
 });
 
 test("opening a chat never steals another resource's canonical cache id", () => {
@@ -2359,16 +2371,6 @@ test("applyWorkspaceRemoved drops the row, clears its tabs, and returns the acti
 	expect(s.historyOpenRequest).toBeNull();
 	expect(s.reviewFocusRequest).toBeNull();
 
-	const lateDocument: WorkspaceLayoutDocument = {
-		version: 2,
-		center: { kind: "group", id: "center", tabs: [] },
-		left: { visible: false, width: 0.2, groups: [] },
-		right: { visible: false, width: 0.2, groups: [] },
-		bottom: emptyBottomRegion(),
-		toolRestoreTargets: {},
-	};
-	s.installLayoutSnapshot({ workspaceId: "w1", revision: 1, document: lateDocument });
-	s.beginLayoutCommit("w1", lateDocument, "late-write");
 	s.setLayoutAttention("w1", {
 		selectedByGroup: {},
 		lastFocusedCenterGroupId: "center",

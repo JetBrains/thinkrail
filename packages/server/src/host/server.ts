@@ -2,8 +2,8 @@ import { createHash, randomUUID } from "node:crypto";
 import { join, normalize } from "node:path";
 import type {
 	HostPlatform,
-	LayoutChangedPayload,
 	ServerWelcome,
+	SessionCreatedPayload,
 	SessionDeletedPayload,
 	TerminalTabsPush,
 	WorkspaceFsChangedPayload,
@@ -16,6 +16,7 @@ import {
 	isProjectSkillPath,
 	setExtUiPublisher,
 	setReviewCommentHandler,
+	setSessionCreatedPublisher,
 	setSessionDeletedPublisher,
 	setSessionPublisher,
 	setSkillAdmissionResolver,
@@ -37,8 +38,8 @@ import {
 	stopJbcentralRuntime,
 } from "../auth";
 import { resolveWorktreeFile } from "../fs";
-import { normalizeStoredLayoutSettings, setLayoutPublisher } from "../layout";
 import { logger } from "../log";
+import { loadWorkspaces } from "../persistence";
 import {
 	getProjects,
 	listProjects,
@@ -47,7 +48,7 @@ import {
 	setProjectPublisher,
 } from "../projects";
 import { reanchorWorkspace, resolveCommentFromAgent, setReviewPublisher } from "../reviews";
-import { getConfig, setSettingsPublisher, updateConfig } from "../settings";
+import { getConfig, setSettingsPublisher } from "../settings";
 import {
 	closeAllTerminals,
 	persistTerminalSessions,
@@ -72,6 +73,7 @@ import {
 } from "./autoRename";
 import { setFsNudgePublisher } from "./fsNudge";
 import { handleRequest, requestMethodDiagnostic } from "./handlers";
+import { provisionInitialTerminal } from "./initialTerminal";
 import { trackLoginOutcome } from "./loginAnalytics";
 import { RequestReplayCache } from "./requestReplayCache";
 import { terminalDeliveryForSendStatus } from "./terminalSend";
@@ -112,15 +114,9 @@ const log = logger("host");
 
 const isRequestId = (id: unknown): id is string => typeof id === "string";
 
-function normalizePersistedLayoutSettings(): void {
-	const current = getConfig().layout;
-	const normalized = normalizeStoredLayoutSettings(current);
-	if (JSON.stringify(normalized) !== JSON.stringify(current)) updateConfig({ layout: normalized });
-}
-
 export async function createServer(options: CreateServerOptions = {}): Promise<RunningServer> {
 	await initializeJbcentralRuntime();
-	normalizePersistedLayoutSettings();
+	getConfig();
 	const {
 		port = 24242,
 		host = "localhost",
@@ -183,6 +179,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				}
 				ws.subscribe(WS_CHANNELS.piEvent);
 				ws.subscribe(WS_CHANNELS.piExtensionUi);
+				ws.subscribe(WS_CHANNELS.sessionCreated);
 				ws.subscribe(WS_CHANNELS.sessionDeleted);
 				ws.subscribe(WS_CHANNELS.providerLogin);
 				ws.subscribe(WS_CHANNELS.providerChanged);
@@ -193,7 +190,6 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				ws.subscribe(WS_CHANNELS.workspaceRemoved);
 				ws.subscribe(WS_CHANNELS.workspaceFsChanged);
 				ws.subscribe(WS_CHANNELS.settingsChanged);
-				ws.subscribe(WS_CHANNELS.layoutChanged);
 				ws.subscribe(WS_CHANNELS.reviewChanged);
 				const hostPlatform: HostPlatform =
 					process.platform === "darwin" || process.platform === "win32"
@@ -391,19 +387,19 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	installTodoReviewSeams();
 	reconcilePendingReviewsOnBoot();
 
-	setLayoutPublisher((payload: LayoutChangedPayload) => {
-		server.publish(
-			WS_CHANNELS.layoutChanged,
-			JSON.stringify({ channel: WS_CHANNELS.layoutChanged, data: payload }),
-		);
-	});
-
 	setSettingsPublisher((config) => {
 		server.publish(
 			WS_CHANNELS.settingsChanged,
 			JSON.stringify({ channel: WS_CHANNELS.settingsChanged, data: config }),
 		);
 		setAnalyticsSending(config.analyticsEnabled);
+	});
+
+	setSessionCreatedPublisher((payload: SessionCreatedPayload) => {
+		server.publish(
+			WS_CHANNELS.sessionCreated,
+			JSON.stringify({ channel: WS_CHANNELS.sessionCreated, data: payload }),
+		);
 	});
 
 	setSessionDeletedPublisher((payload: SessionDeletedPayload) => {
@@ -467,6 +463,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	});
 
 	reviveTerminalSessions();
+	for (const workspace of loadWorkspaces()) provisionInitialTerminal(workspace);
 
 	if (projectPath) {
 		try {
@@ -491,7 +488,6 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		requestReplays.clear();
 		persistTerminalSessions();
 		closeAllTerminals();
-		setLayoutPublisher(null);
 		setSettingsPublisher(null);
 		setJbcentralAppliedPublisher(() => {});
 		setJbcentralChangedPublisher(() => {});

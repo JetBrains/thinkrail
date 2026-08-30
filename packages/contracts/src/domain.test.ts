@@ -42,8 +42,8 @@ describe("isRetriedAttempt", () => {
 });
 
 describe("config defaults", () => {
-	test("bottom groups have an independent default limit", () => {
-		expect(DEFAULT_CONFIG.layout.maxBottomGroups).toBe(3);
+	test("the shared custom layout-preset catalog starts empty", () => {
+		expect(DEFAULT_CONFIG.customLayoutPresets).toEqual([]);
 	});
 
 	test("the composer grows to half the chat by default", () => {

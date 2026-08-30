@@ -106,8 +106,9 @@ arrangement (so the mobile shell is an additive layer, not a rewrite).
   `WelcomePanel`) — also **reveal the project's workspaces** (`selectProject(id, { reveal: true })`): a
   gesture that enters a project promises its workspace list, so opening from the Welcome screen never
   lands with a collapsed rail row; the
-  workspace's shared layout survives on the host, so re-selecting it restores the workbench. That round
-  trip unmounts the whole workspace surface, but terminals keep no client-side lifetime to lose: the host owns
+  workspace's frontend-local view survives through shell layout persistence, so re-selecting it restores
+  that window's resource tabs inside the unchanged frame. The round trip unmounts the workspace surface, but
+  terminals keep no client-side lifetime to lose: the host owns
   each tab and PTY, and unmounting kills nothing. Several distinct terminals may be visible in different
   workbench groups; the shell layout visibility gate mounts one body for each locally selected terminal
   identity and no inactive body. `TerminalWorkbenchBody` receives its New-terminal callback from the shell,
@@ -345,11 +346,11 @@ a project picker, the prompt hero, and the reused
   converge-on-`settings.changed`, toast-on-rejection pattern; the labels explain when the one-line composer
   stops growing, while `contracts` owns the closed preset ids/default); the **shell-owned injected Layout
   section** (Balanced/Focus/Review
-  plus named custom preset cards, one host-synchronized default selection, capture-current/rename/delete
-  for customs, and the default-6 maximum side groups per side; settings changes converge through
-  `settings.changed`. With an active workspace each preset offers confirmable **Apply now…**, which asks
-  the shell workbench to preserve open resource identities while reflowing them and publishes one layout
-  snapshot); and
+  plus named custom preset cards. Custom capture/rename/delete updates the host-synchronized catalog and
+  converges through `settings.changed`; current/default selection and independent side/bottom limits are
+  frontend-local. With an active workspace each preset offers confirmable **Apply now…**, which asks shell
+  to replace this window's frame and atomically preserve/reflow open resource identities in every retained
+  workspace view; no current layout is published); and
   **`TemplatesSettings`** — two groups, **Global** and **This
   project** (the project group renders only with an active workspace), each a header with a **New**
   button plus its rows, fetched via **two independent `template.list` calls** (both refetched whenever the
@@ -415,8 +416,8 @@ a project picker, the prompt hero, and the reused
   `from <base>` to claim. It is neither one-time nor dismissible, so it also helps
   after the last tab closes without introducing onboarding state. The workbench resource renderer handles
   registered **`plan`** tabs (`PlanTab`) via the lazy **`PlanPane`** — the chat plan's **live review-map
-  page**. Shared layout stores only the `todo-plan` resolver kind + session identity, never inline plan
-  content, so every client can rehydrate the same page. It renders the session's TODO plan document-scale
+  page**. Frontend-local placement stores only the `todo-plan` resolver kind + session identity, never inline
+  plan content; another client can explicitly reopen the same host-owned page without inheriting placement. It renders the session's TODO plan document-scale
   (groups as sections, items with status glyphs) with a **scan-first item anatomy**: the item TITLE is
   the only full-size text (`tr-text-ui font-medium`), every detail is a step down (`tr-text-metadata`,
   subtle/muted) — so titles never blend into prose. A **done item collapses to a compact two-line
@@ -596,25 +597,16 @@ own section. The kebab menu (`plan-menu`, a
   `session.deleted` broadcast drives the same fold in every connected client. On workspace activation and
   every reconnect, `session.list` first reconciles the client membership snapshot (runtime/cache identities
   plus placed chat/TODO-document references) captured when the read began, so a baseline session now absent
-  from the authoritative result goes through the normal tombstone and placement-prune folds while a chat
-  created during the read survives. Chats already referenced by the accepted layout hydrate through
-  `session.getMessages` → `messagesToRuntime` → `store.hydrateSession`. Of the remaining sessions, up to the
-  newest four that are live or carry unfinished TODOs auto-open into shared placement; only the first
-  successful hydration may activate, while later successes populate in the background. The batch captures
-  one request-time destination/clock before transcript reads leave, so navigation during a slow restore
-  suppresses even that first activation without discarding placement. The automatic activation may update
-  selection but does not advance a user-navigation clock, so it cannot supersede an earlier user request that
-  is still in flight. If no chat is placed or already known and none meets that rule, the newest disk chat is
-  the fallback. Failed auto-opens and every remaining summary enter local history. A failed transcript read
-  raises an error toast and leaves that summary retryable in history; a failed `session.list` also raises an
-  error instead of presenting an unexplained empty workspace. Both toasts fall silent once the reconciliation
-  pass is cancelled, disconnected, or archived. Live hydration deliberately carries no current-disk skill
-  baseline; only disk-only attachment receives its captured `syncedTick`.
-  The same placement reconciliation runs incrementally for accepted `layout.changed` snapshots: remotely
-  added chat references repair local cache/history and hydrate without taking focus, while remotely removed
-  live chats move into this browser's history after pending layout writes settle and keep their runtime.
-  Missing/deleted referenced sessions are pruned through the ordinary layout commit, and
-  `session.deleted` drives the same idempotent runtime/history/placement fold in every client. Reopening a
+  from the authoritative result goes through the normal tombstone and local-placement prune while a chat
+  created during the read survives. Chats referenced by this surface's local workspace view hydrate through
+  `session.getMessages` → `messagesToRuntime` → `store.hydrateSession`. Every remaining session enters local
+  history without opening or selecting a tab: another frontend creating or using a chat is domain activity,
+  not a placement instruction. A failed transcript read raises an error toast and leaves that summary
+  retryable in history; a failed `session.list` also raises an error instead of presenting an unexplained
+  empty workspace. Both toasts fall silent once reconciliation is cancelled, disconnected, or archived.
+  Live hydration deliberately carries no current-disk skill baseline; only disk-only attachment receives its
+  captured `syncedTick`. `session.deleted` drives the same idempotent runtime/history/local-placement fold in
+  every client; no current-layout push exists. Reopening a
   history row adds its existing session identity to the request-time center destination captured from that
   Group Header (including an empty group); a rejected read leaves the row in history and raises an error
   toast. The workbench shell integration also resolves the history-search **`chatLocationRequest`** deep link
@@ -1071,8 +1063,8 @@ own section. The kebab menu (`plan-menu`, a
   of `--numstat`), folder counts are summed client-side. Both views share `ChangesPanel`'s `openDiff` + `isActive`.
   The **List shows the full worktree-relative path** — muted directory prefix (which yields first when the
   row overflows) + the status-colored basename, so the name a user scans stays visible.
-- **Browsing reuses one tab per center group: preview versus keep.** Each group has one shared preview
-  identity; its label is italic and carries `data-preview="true"`. Single-clicking a file/spec/change row or
+- **Browsing reuses one tab per center group: preview versus keep.** Each workspace view has one local
+  preview identity per frame group; its label is italic and carries `data-preview="true"`. Single-clicking a file/spec/change row or
   following a rendered-document/chat artifact link opens into the browser's last-focused destination group
   as preview. Double-click keeps; clicking an already active preview keeps as the touch path. An explicit
   Settings/open-as-file action starts kept. Chat and registered plan/document tabs never enter preview.
@@ -1081,15 +1073,15 @@ own section. The kebab menu (`plan-menu`, a
 
   A preview replaces only that group's slot at the same index, so browsing never reshuffles the strip. A
   double click composes preview then promote; `openTabs.ts` single-flights the underlying read and carries
-  the leading click's slot claim into one final kept mutation, so no intermediate preview snapshot is
-  published and network latency cannot reverse the intents. Freshness stamps (`loadedTick`, plus a diff's `loadedTarget`) are
+  the leading click's slot claim into one final kept local transition, so no intermediate preview state is
+  persisted and network latency cannot reverse the intents. Freshness stamps (`loadedTick`, plus a diff's `loadedTarget`) are
   captured before the read leaves, never from newer state at response time. The local per-group navigation
   clock is captured at request time: a stale preview completion loses to later attention; deliberate keep
   still commits. If the destination group disappeared, the shell reroutes to current last focus, and if a
-  remote snapshot already placed the canonical resource, completion selects that existing placement instead
-  of duplicating it. Preview placement publishes structurally; active selection and the ordering clock stay
-  local. Unit and E2E tests pin double-click coalescing, stale-read rejection, per-group isolation, remote
-  identity convergence, and promote-by-keyboard/touch.
+  a newer local transition already placed the canonical resource, completion selects that placement instead
+  of duplicating it. Preview placement and attention commit locally. Unit and E2E tests pin double-click
+  coalescing, stale-read rejection, per-group isolation, local identity convergence, and
+  promote-by-keyboard/touch.
 - **Row actions: one menu, two triggers.** Every **file** row (both views) is wrapped in
   **`ChangeRowActions`**: a hover/focus-revealed `⌄` button *and* right-click on the row open the same
   dropdown. The `⌄` is not garnish — it is the **touch path**, where right-click does not exist (mobile-first).

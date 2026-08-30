@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import {
@@ -8,7 +8,6 @@ import {
 	isComposerGrowthLimit,
 	type Project,
 	type Workspace,
-	type WorkspaceLayoutSnapshot,
 } from "@thinkrail/contracts";
 
 export function dataDir(): string {
@@ -64,12 +63,10 @@ export function loadConfig(): AppConfig {
 	const raw = readJson<unknown>("config.json", {});
 	if (!raw || typeof raw !== "object" || Array.isArray(raw)) return structuredClone(DEFAULT_CONFIG);
 	const value = raw as Record<string, unknown>;
-	const layoutValue =
-		value.layout && typeof value.layout === "object" && !Array.isArray(value.layout)
-			? (value.layout as Record<string, unknown>)
-			: {};
+	const extensions = { ...value };
+	delete extensions.layout;
 	return {
-		...value,
+		...extensions,
 		theme: typeof value.theme === "string" ? value.theme : DEFAULT_CONFIG.theme,
 		analyticsEnabled:
 			typeof value.analyticsEnabled === "boolean"
@@ -84,100 +81,14 @@ export function loadConfig(): AppConfig {
 			: DEFAULT_CONFIG.composerGrowthLimit,
 		reviewAutoFix:
 			typeof value.reviewAutoFix === "boolean" ? value.reviewAutoFix : DEFAULT_CONFIG.reviewAutoFix,
-		layout: {
-			defaultPresetId:
-				typeof layoutValue.defaultPresetId === "string" &&
-				layoutValue.defaultPresetId.length > 0 &&
-				layoutValue.defaultPresetId.length <= 200
-					? layoutValue.defaultPresetId
-					: DEFAULT_CONFIG.layout.defaultPresetId,
-			customPresets: Array.isArray(layoutValue.customPresets)
-				? layoutValue.customPresets
-				: DEFAULT_CONFIG.layout.customPresets,
-			maxSideGroups:
-				typeof layoutValue.maxSideGroups === "number" &&
-				Number.isInteger(layoutValue.maxSideGroups) &&
-				layoutValue.maxSideGroups >= 1 &&
-				layoutValue.maxSideGroups <= 32
-					? layoutValue.maxSideGroups
-					: DEFAULT_CONFIG.layout.maxSideGroups,
-			maxBottomGroups:
-				typeof layoutValue.maxBottomGroups === "number" &&
-				Number.isInteger(layoutValue.maxBottomGroups) &&
-				layoutValue.maxBottomGroups >= 1 &&
-				layoutValue.maxBottomGroups <= 32
-					? layoutValue.maxBottomGroups
-					: DEFAULT_CONFIG.layout.maxBottomGroups,
-		},
+		customLayoutPresets: Array.isArray(value.customLayoutPresets)
+			? value.customLayoutPresets
+			: DEFAULT_CONFIG.customLayoutPresets,
 	};
 }
 
 export function saveConfig(config: AppConfig): void {
 	writeJson("config.json", config);
-}
-
-function workspaceLayoutFileId(workspaceId: string): string {
-	return /^[A-Za-z0-9_-]+$/.test(workspaceId)
-		? workspaceId
-		: `~${Buffer.from(workspaceId).toString("base64url")}`;
-}
-
-function workspaceLayoutPaths(workspaceId: string): {
-	file: string;
-	backup: string;
-	temp: string;
-	backupTemp: string;
-} {
-	const directory = join(dataDir(), "layouts");
-	const file = join(directory, `${workspaceLayoutFileId(workspaceId)}.json`);
-	const backup = `${file}.bak`;
-	return {
-		file,
-		backup,
-		temp: `${file}.${process.pid}.tmp`,
-		backupTemp: `${backup}.${process.pid}.tmp`,
-	};
-}
-
-export function loadWorkspaceLayout(workspaceId: string): unknown | null {
-	const { file } = workspaceLayoutPaths(workspaceId);
-	try {
-		return JSON.parse(readFileSync(file, "utf8")) as unknown;
-	} catch {
-		return null;
-	}
-}
-
-export function loadWorkspaceLayoutBackup(workspaceId: string): unknown | null {
-	const { backup } = workspaceLayoutPaths(workspaceId);
-	try {
-		return JSON.parse(readFileSync(backup, "utf8")) as unknown;
-	} catch {
-		return null;
-	}
-}
-
-export function saveWorkspaceLayout(
-	snapshot: WorkspaceLayoutSnapshot,
-	previous: WorkspaceLayoutSnapshot | null,
-): void {
-	const { file, backup, temp, backupTemp } = workspaceLayoutPaths(snapshot.workspaceId);
-	mkdirSync(join(dataDir(), "layouts"), { recursive: true });
-	if (previous) {
-		writeFileSync(backupTemp, `${JSON.stringify(previous, null, "\t")}\n`);
-		renameSync(backupTemp, backup);
-	}
-	writeFileSync(temp, `${JSON.stringify(snapshot, null, "\t")}\n`);
-	renameSync(temp, file);
-}
-
-export function removeWorkspaceLayout(workspaceId: string): void {
-	const { file, backup, temp, backupTemp } = workspaceLayoutPaths(workspaceId);
-	for (const path of [file, backup, temp, backupTemp]) {
-		try {
-			unlinkSync(path);
-		} catch {}
-	}
 }
 
 export interface InstallationRecord {

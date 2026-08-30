@@ -1,6 +1,11 @@
 import { realpathSync } from "node:fs";
 import { expect, test } from "@playwright/test";
-import { defaultWorkspaceRow, enterDefaultWorkspace, openFixtureProject } from "./fixtures/app";
+import {
+	defaultWorkspaceRow,
+	enterDefaultWorkspace,
+	openChatFromHistory,
+	openFixtureProject,
+} from "./fixtures/app";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { seedWorkspaceSession } from "./fixtures/sessions";
 
@@ -36,6 +41,7 @@ test("a persisted expanded skill renders as one collapsed invocation with its re
 
 	await expect(defaultWorkspaceRow(page)).toBeVisible();
 	await enterDefaultWorkspace(page);
+	await openChatFromHistory(page, "skill invocation chat");
 
 	const userTurns = page.locator('[data-testid="chat-message"][data-role="user"]');
 	await expect(userTurns).toHaveCount(1);

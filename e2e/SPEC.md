@@ -106,14 +106,19 @@ assertion — a state that only a picture would catch is a missing `data-testid`
 scenarios are a finding, not a defect: they are how the suite shows two distinct host situations rendering
 one indistinguishable card.
 
-The bottom-workbench scenarios exercise the integrated layout-v2 path rather than only the pure model: first
-seeding and process-free hidden reservation, a legacy layoutless workspace without the host creation marker
-remaining terminal-free, transactional-failure retry after reconnect, reload survival before attach, all four
-alignments with real side-stack ownership of excluded lower corners, live alignment
-during side resizing and narrow-width compression, pointer/keyboard persistence of only the separator-owned
-side ratio, vacated bottom-group cleanup with center-focus recovery beside a surviving empty slot, independent
-height/group resizing, 27 px folding with `Ctrl+F6` restore focus, modal-aware visibility chords,
-PTY continuity while hidden, peer synchronization, and version-1 migration without terminal creation.
+Workbench scenarios exercise the normalized frontend-local frame rather than only the pure model: frame
+geometry/tool placement survives workspace switches while resource tabs and attention differ; closing a final
+resource retains its empty group; explicit group removal rehomes hidden-workspace resources; reload restores
+endpoint/surface-qualified local state; a tab initialized with cloned session storage remints its live surface
+id and both tabs retain independent frames through reload; a simultaneous second page neither adopts peer
+file/terminal/chat placement nor misses the peer-created chat's history-only domain event; custom preset CRUD synchronizes, the local default drives explicit frame Reset, and Apply affects only its page. A pristine or invalid local document starts directly from Balanced, and the suite asserts that no current-layout request exists.
+
+Bottom-workbench coverage retains all four alignments with real side-stack ownership of excluded lower
+corners, live alignment during side resizing and narrow-width compression, pointer/keyboard persistence of
+only the separator-owned side ratio, independent height/group resizing, 27 px folding with `Ctrl+F6` restore
+focus, modal-aware visibility chords, PTY continuity while hidden, and process-free default-terminal
+reservation. Terminal creation now exercises the host pending-marker handshake plus independent local
+placement, not a layout revision or peer geometry synchronization.
 
 ## Isolation contract
 

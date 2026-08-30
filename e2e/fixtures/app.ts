@@ -138,6 +138,11 @@ export async function enterDefaultWorkspace(page: Page): Promise<void> {
 	await expect(page.getByTestId("center-tabs")).toBeVisible();
 }
 
+export async function openChatFromHistory(page: Page, title: string): Promise<void> {
+	await page.getByTestId("chat-history").first().click();
+	await page.getByTestId("closed-chat-item").filter({ hasText: title }).click();
+}
+
 export async function revealFirstProjectWorkspaces(page: Page): Promise<void> {
 	const expand = page.getByTestId("project-expand").first();
 	await expect(expand).toBeVisible();

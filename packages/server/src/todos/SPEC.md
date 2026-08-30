@@ -208,9 +208,9 @@ it resolves immediately when nothing is in flight, and never rejects.
 - **Owns / public surface (barrel):** `listTodos({workspaceId, sessionId}) → Promise<TodoPlan>` (async
   only for the read barrier above),
   `countOpenTodos({workspaceId, sessionId}) → number` + its pure rule `openTodoCount(plan)` (unfinished =
-  any status but `done`, loose + grouped — the `SessionSummary.openTodos` decoration the host's
-  `session.list` handler attaches so a client can auto-open chats with work in progress; a session with
-  no todo file counts 0),
+  any status but `done`, loose + grouped—the `SessionSummary.openTodos` decoration the host's
+  `session.list` handler attaches for client history/status presentation; a session with no todo file counts
+  0),
   `addTodo(...) → TodoItem` (validates a non-empty title; tags `origin: "user"`),
   `updateTodo(...) → TodoItem` (throws on unknown id → a `{ ok:false }` WS response),
   `removeTodo(...) → Promise<{ ok:true }>` (idempotent; enqueued on the per-workspace reconcile chain —

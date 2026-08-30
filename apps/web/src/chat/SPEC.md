@@ -276,9 +276,9 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   exact still-current request; an older effect may not clear a newer jump. `ChatView` is its only terminal
   consumer, so an unresolved current request must never linger.
 - **Open at the latest message** — a settled chat `Virtuoso` mounts with `initialTopMostItemIndex = {
-  index: last row, align: "end" }`, so every freshly shown transcript (new tab, reopen from history,
-  auto-open, reload) starts at the bottom instead of mid-scroll; jump-to-message (above) runs post-mount
-  and overrides with its centered `scrollToIndex`. E2e: `auto-open-chats.spec.ts` asserts a long seeded
+  index: last row, align: "end" }`, so every freshly shown transcript (new tab, history reopen,
+  local-placement restore, reload) starts at the bottom instead of mid-scroll; jump-to-message (above) runs
+  post-mount and overrides with its centered `scrollToIndex`. The restored-chat e2e asserts a long seeded
   transcript's last message is in view without scrolling.
 - **Streaming reading band** — `useChatScroll` owns one imperative, cancellable follow controller for
   every kind of live row growth; renderers never scroll themselves. An immediate local send arms follow,
@@ -817,9 +817,9 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   `ChatPlanContent` — a header strip that opens the plan in a `Popover` over the chat; `ChatView` composes
   the `Popover` anchored to the header, so the popup hangs flush under it at the chat's left edge). There
   is no right-panel Todo tab — the plan lives in the conversation; the plan *page* is a center tab, a
-  document-scale view of the same plan, not a panel. Shared layout persists that page as a registered
-  `todo-plan` document reference (resolver kind + session identity, never plan content), so another client
-  can hydrate the same live page from the host-owned TODO plan. (An earlier design compiled the plan to a
+  document-scale view of the same plan, not a panel. Frontend-local workspace view state persists that page
+  as a registered `todo-plan` reference (resolver kind + session identity, never plan content); another
+  client may explicitly reopen the same live page from the host-owned TODO plan without inheriting placement. (An earlier design compiled the plan to a
   static markdown `doc` tab with a custom `thinkrail-diff:` link scheme — replaced: a snapshot lies the
   moment the agent flips a status, and markdown can't carry the Changes-panel affordances; the page is live
   and markdown is demoted to its export.)

@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
-import type { Project, WireModel, Workspace, WorkspaceLayoutDocument } from "@thinkrail/contracts";
+import type { Project, WireModel, Workspace } from "@thinkrail/contracts";
+import type { WorkspaceLayoutDocument } from "../shell/layout";
 import type { EditorTab } from "./appStore";
 import {
 	isConnectedGeneration,

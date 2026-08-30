@@ -5,7 +5,6 @@ import type {
 	GitDiffScope,
 	HistoryScope,
 	ImageContent,
-	LayoutReplaceParams,
 	LoginReply,
 	QueueLane,
 	ReviewAnchor,
@@ -81,12 +80,6 @@ import {
 } from "../git";
 import { githubAuthStatus, githubRefresh } from "../github";
 import { clampLimit, getHistoryIndex } from "../history";
-import {
-	getWorkspaceLayout,
-	removeWorkspaceLayout,
-	replaceWorkspaceLayout,
-	validateLayoutSettings,
-} from "../layout";
 import { logger } from "../log";
 import { openPr, previewPr } from "../pr";
 import {
@@ -116,7 +109,7 @@ import {
 	sendableComments,
 	updateComment,
 } from "../reviews";
-import { getConfig, updateConfig } from "../settings";
+import { updateConfig } from "../settings";
 import { evictSpecIndex, projectHasSpecs, specGraph } from "../spec";
 import {
 	deleteTemplate,
@@ -165,6 +158,7 @@ import {
 import { ackSend } from "./ackSend";
 import { nudgeBaseRefWorkspaces } from "./fsNudge";
 import { buildHistoryScope } from "./historyScope";
+import { provisionInitialTerminal } from "./initialTerminal";
 import { dropLogin, recordLoginStart } from "./loginAnalytics";
 import { withReviewLock } from "./reviewLock";
 import {
@@ -305,19 +299,21 @@ const handlers: Record<string, Handler> = {
 		const acknowledged = p.trusted ? await listProjectAliasSkillNames(project.path) : undefined;
 		return setProjectTrust(p.id, p.trusted, acknowledged);
 	},
-	"workspace.create": (params) => {
+	"workspace.create": async (params) => {
 		const p = params as { projectId: string; name?: string; baseRef?: string };
-		return createWorkspace(p.projectId, p.name, p.baseRef);
+		return provisionInitialTerminal(await createWorkspace(p.projectId, p.name, p.baseRef));
 	},
 	"workspace.listExisting": (params) =>
 		listExistingWorktrees((params as { projectId: string }).projectId),
 	"workspace.openExisting": (params) => {
 		const p = params as { projectId: string; path: string };
-		return openExistingWorktree(p.projectId, p.path);
+		return provisionInitialTerminal(openExistingWorktree(p.projectId, p.path));
 	},
-	"workspace.list": (params) => {
+	"workspace.list": async (params) => {
 		const p = params as { projectId: string; includeDiffStats?: boolean };
-		return listWorkspaces(p.projectId, { includeDiffStats: p.includeDiffStats ?? true });
+		return (
+			await listWorkspaces(p.projectId, { includeDiffStats: p.includeDiffStats ?? true })
+		).map((workspace) => ({ ...workspace, ...provisionInitialTerminal(workspace) }));
 	},
 	"workspace.openReview": async (params) => {
 		const ws = getWorkspace((params as { workspaceId: string }).workspaceId);
@@ -332,7 +328,6 @@ const handlers: Record<string, Handler> = {
 		const id = (params as { id: string }).id;
 		const ws = forgetWorkspace(id);
 		if (ws) {
-			removeWorkspaceLayout(ws.id);
 			evictSpecIndex(ws.id);
 			removeWorkspaceReviews(ws.id);
 			stopWatch(ws.id);
@@ -713,20 +708,8 @@ const handlers: Record<string, Handler> = {
 	"provider.jbcentralStartProxy": () => startProxyJbcentral(),
 	"provider.jbcentralLogin": () => jbcentralLogin(),
 	"provider.jbcentralUpdate": () => updateJbcentral(),
-	"layout.get": (params) => {
-		const { workspaceId } = params as { workspaceId: string };
-		getWorkspace(workspaceId);
-		return getWorkspaceLayout(workspaceId);
-	},
-	"layout.replace": (params) => {
-		const replacement = params as LayoutReplaceParams;
-		getWorkspace(replacement.workspaceId);
-		const { maxSideGroups, maxBottomGroups } = getConfig().layout;
-		return replaceWorkspaceLayout(replacement, { maxSideGroups, maxBottomGroups });
-	},
 	"settings.update": (params) => {
 		const config = (params as { config: AppConfigUpdate }).config;
-		if (config.layout !== undefined) validateLayoutSettings(config.layout);
 		return updateConfig(config);
 	},
 	"history.search": (params) => {

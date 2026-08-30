@@ -89,7 +89,7 @@ test("Open PR is disabled in the Default workspace, whose branch is its own base
 }) => {
 	await openFixtureProject(page);
 	await enterDefaultWorkspace(page);
-	await page.getByTestId("new-chat").click();
+	await page.getByTestId("new-chat").first().click();
 	await expect(page.getByTestId("chat-input")).toBeVisible();
 
 	await page.getByTestId("chat-plan-toggle").click();

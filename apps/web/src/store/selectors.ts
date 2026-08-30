@@ -1,13 +1,9 @@
 import type {
 	GitDiffScope,
-	LayoutAuxiliaryRegion,
-	LayoutCenterTab,
-	LayoutTab,
 	Project,
 	SpecGraphNode,
 	WireModel,
 	Workspace,
-	WorkspaceLayoutDocument,
 } from "@thinkrail/contracts";
 import {
 	isAbsolutePath,
@@ -16,6 +12,12 @@ import {
 	normalizePath,
 	readLayoutSelection,
 } from "../lib";
+import type {
+	LayoutAuxiliaryRegion,
+	LayoutCenterTab,
+	LayoutTab,
+	WorkspaceLayoutDocument,
+} from "../shell/layout";
 import type {
 	ClosedChat,
 	EditorTab,

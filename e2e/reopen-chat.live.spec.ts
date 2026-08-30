@@ -10,7 +10,7 @@ test("a closed chat reopens from history with its transcript intact", { tag: "@a
 	await expect(worktreeRows(page).first()).toHaveAttribute("data-active", "true");
 
 	const chatTabs = page.locator('[data-testid="editor-tab"][data-kind="chat"]');
-	const history = page.getByTestId("chat-history");
+	const history = page.getByTestId("chat-history").first();
 	const userMsg = page
 		.locator('[data-testid="chat-message"][data-role="user"]')
 		.filter({ hasText: "pong" });
