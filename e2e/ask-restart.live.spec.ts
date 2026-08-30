@@ -5,16 +5,20 @@ import {
 	existsSync,
 	mkdirSync,
 	openSync,
+	readFileSync,
 	rmSync,
 	writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, type Page, test } from "@playwright/test";
+import type { Workspace } from "@thinkrail/contracts";
 import { jbcentralExtensionPath } from "@thinkrail/shared/jbcentral";
+import { stripAmbientPiCredentials } from "./ambientCredentials";
 import { activeWorktreeRow } from "./fixtures/app";
 import {
 	CENTRAL_STUB_READ_ONLY_ENV,
+	CentralSetupError,
 	REAL_CENTRAL_E2E_ENV,
 	removeLocalAgentModelAndAuth,
 	restoreStagedCentralArtifact,
@@ -30,7 +34,7 @@ import {
 	E2E_RESTART_HOST_LOG,
 	E2E_RESTART_PORT,
 } from "./fixtures/paths";
-import { E2eWire } from "./fixtures/wire";
+import { E2eWire, E2eWireTransientError } from "./fixtures/wire";
 
 const PORT = E2E_RESTART_PORT;
 const BASE = `http://localhost:${PORT}`;
@@ -83,7 +87,7 @@ async function startHost(): Promise<void> {
 	host = spawn(bunExecutable, ["packages/server/src/dev.ts"], {
 		cwd: rootDir,
 		stdio: ["ignore", log, log],
-		env: {
+		env: stripAmbientPiCredentials({
 			...process.env,
 			THINKRAIL_PORT: String(PORT),
 			THINKRAIL_STATIC_DIR: staticDir,
@@ -105,24 +109,35 @@ async function startHost(): Promise<void> {
 			CENTRAL_STUB_EXTENSION_SOURCE: E2E_CENTRAL_EXTENSION_SOURCE,
 			CENTRAL_STUB_BAD_EXTENSION_SOURCE: E2E_CENTRAL_BAD_EXTENSION_SOURCE,
 			[CENTRAL_STUB_READ_ONLY_ENV]: "1",
-		},
+		}),
 	});
 	const deadline = Date.now() + 60_000;
 	while (Date.now() < deadline) {
+		let healthy = false;
 		try {
-			const res = await fetch(`${BASE}/health`);
-			if (res.ok) {
-				const wire = await E2eWire.connect(PORT);
-				try {
-					await waitForCentralTarget(wire);
-					removeLocalAgentModelAndAuth(AGENT_DIR);
-					return;
-				} finally {
-					wire.close();
-				}
-			}
+			healthy = (await fetch(`${BASE}/health`)).ok;
 		} catch {}
-		await new Promise((r) => setTimeout(r, 250));
+		if (healthy) {
+			let wire: E2eWire;
+			try {
+				wire = await E2eWire.connect(PORT);
+			} catch (error) {
+				if (!(error instanceof E2eWireTransientError)) throw error;
+				await new Promise((resolve) => setTimeout(resolve, 250));
+				continue;
+			}
+			try {
+				await waitForCentralTarget(wire);
+				removeLocalAgentModelAndAuth(AGENT_DIR);
+				return;
+			} catch (error) {
+				if (error instanceof CentralSetupError) throw error;
+				if (!(error instanceof E2eWireTransientError)) throw error;
+			} finally {
+				wire.close();
+			}
+		}
+		await new Promise((resolve) => setTimeout(resolve, 250));
 	}
 	throw new Error(`private e2e host did not become healthy on :${PORT} (see ${HOST_LOG})`);
 }
@@ -143,6 +158,18 @@ test.afterEach(async () => {
 
 function activeCard(page: Page) {
 	return page.locator('[data-testid="ask-user-question"][data-tone="active"]').first();
+}
+
+function persistedWorkspaceId(): string {
+	const workspaces = JSON.parse(
+		readFileSync(join(DATA_DIR, "workspaces.json"), "utf8"),
+	) as Workspace[];
+	const nonDefault = workspaces.filter((workspace) => workspace.kind !== "default");
+	const workspace = nonDefault[0];
+	if (nonDefault.length !== 1 || !workspace) {
+		throw new Error(`Expected one persisted non-default workspace, found ${nonDefault.length}`);
+	}
+	return workspace.id;
 }
 
 test("a pending questionnaire survives a host kill -9: reboot, reopen, answer, agent resumes", {
@@ -190,18 +217,48 @@ test("a pending questionnaire survives a host kill -9: reboot, reopen, answer, a
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 
 	await expect(activeWorktreeRow(page)).toHaveCount(1, { timeout: 15_000 });
-	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
+	const chatTab = page.locator('[data-testid="editor-tab"][data-kind="chat"]');
+	await expect(chatTab).toHaveCount(1);
+	const sessionId = await chatTab.getAttribute("data-session-id");
+	if (!sessionId) throw new Error("Restarted chat tab is missing its session id");
+	const workspaceId = persistedWorkspaceId();
+	const wire = await E2eWire.connect(PORT);
+	try {
+		const before = await wire.request("session.getMessages", { sessionId, workspaceId });
+		const assistantCount = before.messages.filter((message) => message.role === "assistant").length;
+		const card = activeCard(page);
+		await expect(card).toBeVisible({ timeout: 30_000 });
+		await card.getByTestId("ask-option").first().click();
+		await card.getByTestId("ask-submit").click();
 
-	const card = activeCard(page);
-	await expect(card).toBeVisible({ timeout: 30_000 });
-	await card.getByTestId("ask-option").first().click();
-	await card.getByTestId("ask-submit").click();
-
-	await expect(
-		page.locator('[data-testid="ask-user-question"][data-tone="answered"]').first(),
-	).toBeVisible({ timeout: 60_000 });
-	await expect(
-		page.locator('[data-testid="chat-message"][data-role="assistant"]').last(),
-	).toBeVisible({ timeout: 90_000 });
-	await expect(page.getByTestId("chat-scroll")).toHaveAttribute("data-streaming", "false");
+		await expect(
+			page.locator('[data-testid="ask-user-question"][data-tone="answered"]').first(),
+		).toBeVisible({ timeout: 60_000 });
+		await expect
+			.poll(
+				async () => {
+					const transcript = await wire.request("session.getMessages", {
+						sessionId,
+						workspaceId,
+					});
+					return transcript.messages.filter((message) => message.role === "assistant").length;
+				},
+				{ timeout: 90_000 },
+			)
+			.toBeGreaterThan(assistantCount);
+		await expect
+			.poll(
+				async () =>
+					(
+						await wire.request("session.getMessages", {
+							sessionId,
+							workspaceId,
+						})
+					).summary.isStreaming,
+				{ timeout: 30_000 },
+			)
+			.toBe(false);
+	} finally {
+		wire.close();
+	}
 });

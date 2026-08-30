@@ -1,6 +1,8 @@
 import type { WsMethodName, WsParams, WsRequest, WsResult } from "@thinkrail/contracts";
 import { E2E_PORT } from "./paths";
 
+export class E2eWireTransientError extends Error {}
+
 function readResponse(data: unknown, id: string): { ok: boolean; result?: unknown } | null {
 	if (typeof data !== "object" || data === null) return null;
 	const frame = data as Record<string, unknown>;
@@ -18,7 +20,7 @@ export class E2eWire {
 		await new Promise<void>((resolve, reject) => {
 			const timer = setTimeout(() => {
 				socket.close();
-				reject(new Error("Timed out connecting to the isolated host wire"));
+				reject(new E2eWireTransientError("Timed out connecting to the isolated host wire"));
 			}, timeoutMs);
 			const settle = (callback: () => void) => {
 				clearTimeout(timer);
@@ -28,7 +30,9 @@ export class E2eWire {
 			};
 			const onOpen = () => settle(resolve);
 			const onError = () =>
-				settle(() => reject(new Error("Could not connect to the isolated host wire")));
+				settle(() =>
+					reject(new E2eWireTransientError("Could not connect to the isolated host wire")),
+				);
 			socket.addEventListener("open", onOpen, { once: true });
 			socket.addEventListener("error", onError, { once: true });
 		});
@@ -45,7 +49,7 @@ export class E2eWire {
 		return new Promise<WsResult<M>>((resolve, reject) => {
 			const timer = setTimeout(() => {
 				cleanup();
-				reject(new Error(`Timed out waiting for ${method}`));
+				reject(new E2eWireTransientError(`Timed out waiting for ${method}`));
 			}, timeoutMs);
 			const cleanup = () => {
 				clearTimeout(timer);
@@ -69,11 +73,11 @@ export class E2eWire {
 			};
 			const onClose = () => {
 				cleanup();
-				reject(new Error("The isolated host wire closed during setup"));
+				reject(new E2eWireTransientError("The isolated host wire closed during setup"));
 			};
 			const onError = () => {
 				cleanup();
-				reject(new Error("The isolated host wire failed during setup"));
+				reject(new E2eWireTransientError("The isolated host wire failed during setup"));
 			};
 			this.socket.addEventListener("message", onMessage);
 			this.socket.addEventListener("close", onClose, { once: true });

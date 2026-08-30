@@ -1,4 +1,4 @@
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import {
 	existsSync,
 	mkdirSync,
@@ -12,7 +12,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "@playwright/test";
-import { createAgentRunPlan } from "./agentRunPlan";
+import {
+	assertCentralPlaywrightRunner,
+	CENTRAL_PLAYWRIGHT_RUNNER_AUTH_ENV,
+	createAgentRunPlan,
+	WEB_BUILD_READY_ENV,
+} from "./agentRunPlan";
+import { AMBIENT_PI_CREDENTIAL_ENV_NAMES, stripAmbientPiCredentials } from "./ambientCredentials";
 import {
 	CENTRAL_STUB_READ_ONLY_ENV,
 	DEFAULT_E2E_MODEL,
@@ -24,6 +30,9 @@ import {
 	stageGlobalCentralArtifact,
 	writeE2eAgentSettings,
 } from "./fixtures/centralAgent";
+import { resolveBunExecutable } from "./fixtures/executables";
+import { countSelectedPlaywrightTests, selectFocusedFullRunPhases } from "./fullRunPlan";
+import { signalExitCode } from "./processRunner";
 
 function temporaryDirectory(): string {
 	return mkdtempSync(join(tmpdir(), "thinkrail-agent-harness-"));
@@ -85,9 +94,57 @@ test("Central agent staging copies only the restricted artifact and settings", (
 	}
 });
 
-test("agent run plan builds before Playwright and enables isolated Central mode", () => {
-	const sourceEnv = {
+test("credential denylist covers every environment name in pi-ai's pinned discovery source", () => {
+	const source = readFileSync(
+		fileURLToPath(
+			new URL(
+				"../packages/contracts/node_modules/@earendil-works/pi-ai/dist/env-api-keys.js",
+				import.meta.url,
+			),
+		),
+		"utf8",
+	);
+	const discoveredNames = new Set(
+		[...source.matchAll(/"([A-Z][A-Z0-9_]{3,})"/g)]
+			.map((match) => match[1])
+			.filter((name): name is string => name !== undefined),
+	);
+	const denied = new Set<string>(AMBIENT_PI_CREDENTIAL_ENV_NAMES);
+	expect(discoveredNames.size).toBeGreaterThan(0);
+	for (const name of discoveredNames) expect(denied.has(name)).toBe(true);
+});
+
+test("ambient credential removal is case-insensitive", () => {
+	const env: NodeJS.ProcessEnv = {
+		aNtHrOpIc_ApI_kEy: "secret",
+		AwS_pRoFiLe: "developer",
+		UNRELATED_E2E_ENV: "preserved",
+	};
+	expect(stripAmbientPiCredentials(env)).toBe(env);
+	expect(env).toEqual({ UNRELATED_E2E_ENV: "preserved" });
+});
+
+test("Central Playwright execution requires the public runner authorization and skip-build", () => {
+	const centralEnv = { [REAL_CENTRAL_E2E_ENV]: "1" };
+	expect(() => assertCentralPlaywrightRunner(centralEnv, [])).toThrow(/e2e:agent.*e2e:full/);
+	expect(() =>
+		assertCentralPlaywrightRunner({ ...centralEnv, THINKRAIL_E2E_SKIP_BUILD: "1" }, []),
+	).toThrow(/e2e:agent.*e2e:full/);
+	const plan = createAgentRunPlan("bun", [], centralEnv);
+	expect(() => assertCentralPlaywrightRunner(plan.env, [])).not.toThrow();
+	expect(() => assertCentralPlaywrightRunner(centralEnv, ["--list"])).not.toThrow();
+	expect(() => assertCentralPlaywrightRunner({}, [])).not.toThrow();
+});
+
+test("agent run plan ignores ambient skip, trusts only internal build readiness, and sanitizes Playwright", () => {
+	const ambientCredentials = Object.fromEntries(
+		AMBIENT_PI_CREDENTIAL_ENV_NAMES.map((name) => [name, `ambient-${name}`]),
+	);
+	const sourceEnv: NodeJS.ProcessEnv = {
+		...ambientCredentials,
 		PATH: "/developer/bin:/usr/bin",
+		UNRELATED_E2E_ENV: "preserved",
+		THINKRAIL_E2E_SKIP_BUILD: "1",
 		THINKRAIL_E2E_LANE: "4",
 		PLAYWRIGHT_BLOB_OUTPUT_FILE: "/tmp/report.zip",
 	};
@@ -102,13 +159,132 @@ test("agent run plan builds before Playwright and enables isolated Central mode"
 		"--workers=1",
 	]);
 	expect(plan.env.PATH).toBe(sourceEnv.PATH);
+	expect(plan.env.UNRELATED_E2E_ENV).toBe("preserved");
+	for (const name of AMBIENT_PI_CREDENTIAL_ENV_NAMES) {
+		expect(plan.env[name]).toBeUndefined();
+		expect(sourceEnv[name]).toBe(`ambient-${name}`);
+	}
 	expect(plan.env.THINKRAIL_E2E_SKIP_BUILD).toBe("1");
+	expect(plan.env[CENTRAL_PLAYWRIGHT_RUNNER_AUTH_ENV]).toBe("1");
 	expect(plan.env[REAL_CENTRAL_E2E_ENV]).toBe("1");
 	expect(plan.env.THINKRAIL_E2E_LANE).toBeUndefined();
 	expect(plan.env.PLAYWRIGHT_BLOB_OUTPUT_FILE).toBeUndefined();
+	expect(plan.env[WEB_BUILD_READY_ENV]).toBeUndefined();
 	expect(isRealCentralE2e(plan.env)).toBe(true);
+	expect(
+		createAgentRunPlan("bun", ["e2e/agent.live.spec.ts"], sourceEnv, {
+			webBuildReady: true,
+		}).buildCommand,
+	).toBeNull();
 	expect(createAgentRunPlan("bun", ["--list"], sourceEnv).buildCommand).toBeNull();
 });
+
+test("focused full-run planning skips empty phases and rejects an empty selection", () => {
+	const report = JSON.stringify({
+		suites: [
+			{
+				specs: [{ tests: [{}, {}] }],
+				suites: [{ specs: [{ tests: [{}] }], suites: [] }],
+			},
+		],
+		errors: [],
+	});
+	const emptyReport = JSON.stringify({
+		suites: [],
+		errors: [{ message: "Error: No tests found." }],
+	});
+	expect(countSelectedPlaywrightTests(report)).toBe(3);
+	expect(countSelectedPlaywrightTests(emptyReport)).toBe(0);
+	expect(selectFocusedFullRunPhases(0, 2)).toEqual(["agent"]);
+	expect(selectFocusedFullRunPhases(2, 0)).toEqual(["no-agent"]);
+	expect(selectFocusedFullRunPhases(2, 3)).toEqual(["no-agent", "agent"]);
+	expect(() => selectFocusedFullRunPhases(0, 0)).toThrow(/No tests matched/);
+	expect(() =>
+		countSelectedPlaywrightTests(
+			JSON.stringify({ suites: [], errors: [{ message: "configuration failed" }] }),
+		),
+	).toThrow(/configuration failed/);
+});
+
+function processExists(pid: number): boolean {
+	try {
+		process.kill(pid, 0);
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+function forceKillFixtureProcess(pid: number): void {
+	for (const target of [-pid, pid]) {
+		try {
+			process.kill(target, "SIGKILL");
+		} catch {}
+	}
+}
+
+interface SignalTreeState {
+	innerRunner: number;
+	child: number;
+	grandchild: number;
+}
+
+for (const signal of ["SIGINT", "SIGTERM"] as const) {
+	test(`nested managed runner preserves cleanup and kills every descendant after ${signal}`, async () => {
+		test.skip(process.platform === "win32");
+		test.setTimeout(10_000);
+		const root = temporaryDirectory();
+		const statePath = join(root, `signal-tree-${signal}.json`);
+		const cleanupPath = join(root, `signal-tree-${signal}.cleaned`);
+		const runner = spawn(
+			resolveBunExecutable(),
+			["e2e/fixtures/nested-signal-runner.ts", statePath, cleanupPath],
+			{
+				cwd: fileURLToPath(new URL("..", import.meta.url)),
+				stdio: "ignore",
+			},
+		);
+		let state: SignalTreeState | null = null;
+		try {
+			await expect.poll(() => existsSync(statePath), { timeout: 3_000 }).toBe(true);
+			const runningState = JSON.parse(readFileSync(statePath, "utf8")) as SignalTreeState;
+			state = runningState;
+			expect(processExists(runningState.innerRunner)).toBe(true);
+			expect(processExists(runningState.child)).toBe(true);
+			expect(processExists(runningState.grandchild)).toBe(true);
+			const startedAt = Date.now();
+			const exited = new Promise<number>((resolve, reject) => {
+				runner.once("error", reject);
+				runner.once("exit", (code) => resolve(code ?? 1));
+			});
+			runner.kill(signal);
+			await expect
+				.poll(() => existsSync(cleanupPath), { intervals: [10], timeout: 400 })
+				.toBe(true);
+			expect(readFileSync(cleanupPath, "utf8")).toBe("cleaned\n");
+			expect(processExists(runningState.grandchild)).toBe(true);
+			expect(await exited).toBe(signalExitCode(signal));
+			expect(Date.now() - startedAt).toBeLessThan(3_000);
+			await expect
+				.poll(
+					() =>
+						!processExists(runningState.innerRunner) &&
+						!processExists(runningState.child) &&
+						!processExists(runningState.grandchild),
+					{ timeout: 3_000 },
+				)
+				.toBe(true);
+		} finally {
+			runner.kill("SIGKILL");
+			if (state) {
+				forceKillFixtureProcess(state.innerRunner);
+				forceKillFixtureProcess(state.child);
+				forceKillFixtureProcess(state.grandchild);
+			}
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+}
 
 test("read-only Central fake permits inspection and rejects mutations", () => {
 	test.skip(process.platform === "win32");

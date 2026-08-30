@@ -164,18 +164,26 @@ clamped to 1–8). Every lane owns one serial worker + host and its own per-work
 HOME, pi-agent dir, fixture repo, and control files; reports merge into one result. Override with
 `THINKRAIL_E2E_SHARDS=N` or `--shards=N` (1–16); use `bun run e2e:serial` for one-lane debugging. The
 paths derive in `e2e/fixtures/paths.ts`, never touch `~/.thinkrail`, and parallel runs from different
-worktrees never collide. Two complete invocations in the same worktree remain sequential. Each lane
-seeds fixtures (`globalSetup`), drives the real web UI, then tears its host down and cleans up
-(`globalTeardown`). Tests live in `e2e/` and assert via `data-testid` / `data-status` hooks. Design:
-`e2e/SPEC.md`. The same suite also has packaged CLI-binary and Electrobun-desktop host modes.
+worktrees never collide. Two complete invocations in the same worktree remain sequential. Focused
+`e2e:full` runs preflight both modes and skips a mode with no selected tests; selecting nothing fails, while
+an argument-free run and `--list` retain both phases. Cancellation in the no-agent, agent, and full runners
+signals their complete child trees (POSIX snapshot; Windows tree-aware termination), then force-kills
+survivors after a bounded grace; this does not describe the separate binary or desktop artifact runners. Each
+lane seeds fixtures (`globalSetup`), drives the real web UI, then tears its host down and cleans up
+(`globalTeardown`). Tests live in `e2e/` and
+assert via `data-testid` / `data-status` hooks. Design: `e2e/SPEC.md`. The same suite also has
+packaged CLI-binary and Electrobun-desktop host modes.
 
 **Agent tests are tagged, not faked.** Specs that drive a real `pi` agent are tagged `@agent` (Playwright
 `{ tag: "@agent" }`). `bun run e2e:agent` enables the dedicated real-Central mode: setup copies the user's
 global Central extension into the lane's isolated HOME, gives the isolated `PI_CODING_AGENT_DIR` only a
 `settings.json`, and requires `provider.status` plus `model.default` to prove the exact configured model
-before a test starts. It never copies `auth.json` or `models.json`, and the host resolves only the read-only
-test Central CLI. Override the deterministic default with
-`THINKRAIL_E2E_MODEL=<provider>/<modelId>`. Do not let an `@agent` test select a model — it would pin a
+before a test starts. The web build alone preserves the caller environment; before Playwright and every
+Central-mode host, the harness removes PI provider API/token variables plus Google and AWS ambient credential
+sources. Central test execution must use the public `e2e:agent` or `e2e:full` runner (direct Playwright is
+limited to `--list`) so the build finishes before that sanitization. It never copies `auth.json` or
+`models.json`, and the host resolves only the read-only test Central CLI. Override the deterministic default
+with `THINKRAIL_E2E_MODEL=<provider>/<modelId>`. Do not let an `@agent` test select a model — it would pin a
 default mid-run. `bun run e2e` runs the fast **no-agent** suite; `bun run e2e:full` runs no-agent first,
 then the isolated Central agent suite. There is **no fake agent** — agent coverage runs against a real
 provider. The separate `bun run test:workflows` harness deliberately retains local PI-auth seeding in its

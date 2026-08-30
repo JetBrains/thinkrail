@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { delimiter, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig, devices } from "@playwright/test";
+import { assertCentralPlaywrightRunner } from "./e2e/agentRunPlan";
 import {
 	CENTRAL_STUB_READ_ONLY_ENV,
 	isRealCentralE2e,
@@ -31,6 +32,7 @@ const staticDir = fileURLToPath(new URL("./apps/web/dist", import.meta.url));
 // (THINKRAIL_E2E_PORT_BASE pins the whole per-worktree block explicitly when ever needed).
 const PORT = E2E_PORT;
 const centralMode = isRealCentralE2e();
+assertCentralPlaywrightRunner(process.env, process.argv);
 const bunExecutable = resolveBunExecutable();
 const hostPath = hermeticE2ePath(E2E_FAKE_BIN_DIR);
 if (hostPath.split(delimiter).some((directory) => existsSync(join(directory, "pi"))))

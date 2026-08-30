@@ -29,17 +29,41 @@ is one or many.
 The automatic count is half the available CPU parallelism, clamped to 1–8. Developers may explicitly
 select 1–16 lanes; `e2e:serial` is the stable debugging fallback. A focused invocation carrying Playwright
 arguments defaults to one lane unless its shard count is explicit, so an iteration on one spec stays cheap.
-Direct use of the Playwright config remains self-contained and builds the web app when the shard runner has
-not already done so. Tests for primary-modifier chords read the page's browser-reported platform through one
-fixture helper and inject Meta on Apple or Control elsewhere; hard-coding the runner host's modifier would
-exercise the wrong product branch under browser/platform emulation.
+Direct no-agent use of the Playwright config remains self-contained and builds the web app when the shard
+runner has not already done so. Real-Central execution enters through the public `e2e:agent` or `e2e:full`
+runner; direct Central-mode test execution is rejected (while `--list` remains available), because the public
+runner must own the build before giving Playwright its credential-stripped environment. Standalone agent
+runs always build outside `--list`; ambient skip-build cannot suppress that phase. Only the full runner's
+post-build internal readiness marker may select the already-built agent plan. The plan then adds both
+skip-build and a dedicated Central-runner authorization marker to the Playwright environment; Central
+execution requires both, so skip-build alone cannot bypass the public runner. A focused `e2e:full` invocation
+lists the selection independently in no-agent and agent mode, runs only phases with selected tests, and fails
+when neither mode selected anything; the argument-free full gate and its two-phase `--list` behavior stay
+unchanged. The no-agent, agent, and full runners own the trees they launch. When full composes a phase runner,
+an internal parent-owner marker leaves full as the only signal manager; standalone no-agent and agent runners
+retain ownership. On POSIX, the owner snapshots every descendant PID with its safe non-runner process group,
+forwards SIGINT/SIGTERM to each tracked group exactly once and individually only to PIDs without such a group,
+then force-kills those same non-overlapping targets after a bounded grace even if the root exited. Windows
+first snapshots and retains
+descendant PIDs through PowerShell's `Get-CimInstance Win32_Process`, gracefully falls back when unavailable,
+and uses `taskkill /T` before a root fallback; force targets every retained PID with `taskkill /T /F`. This
+guarantee does not extend to the separate binary or desktop artifact runners. Tests for primary-modifier
+chords read the page's browser-reported platform through one fixture helper and inject Meta on Apple or
+Control elsewhere; hard-coding the runner host's modifier would exercise the wrong product branch under
+browser/platform emulation.
 
 Provider-backed browser tests (`e2e:agent`) use a dedicated serial real-Central mode; the separate
 headless workflow suite keeps its local PI-auth mode. Concurrent provider turns would alter rate limits,
 cost, and determinism, so neither is sharded. The agent runner builds the web artifact under the caller's
-normal executable environment, then starts the host with the same complete hermetic `PATH` as the default
-suite. This split is load-bearing: build tooling may need a developer-installed Node executable, while the
-host must never discover a real `central`, `pi`, or editor executable. The compiled-binary and
+normal environment, then removes PI's complete ambient provider/cloud credential environment surface before
+starting Playwright or any host. The hosts also receive the same complete hermetic `PATH` as the default
+suite. This split is load-bearing: build
+tooling may need developer-installed executables and caller environment, while exact-model preflight must
+prove Central without an API key, token, Google ADC/project/location, or AWS profile/key/token/container/
+web-identity/config source making another provider available. A drift canary derives every uppercase
+environment literal from pi-ai's pinned credential-discovery distribution and requires it in the denylist;
+defensive cloud-source extras remain even when that distribution does not currently name them. No host may
+discover a real `central`, `pi`, or editor executable. The compiled-binary and
 packaged-desktop suites remain distinct artifact gates. Each has an unsharded, non-overlapping namespace;
 any artifact run and `e2e:serial` still run sequentially in the same worktree. A future launcher or
 deployment adds another host adapter for this same suite, never copied feature specs; shared behavior is

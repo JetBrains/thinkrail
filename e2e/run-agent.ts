@@ -1,32 +1,22 @@
 import { rmSync } from "node:fs";
-import { dirname } from "node:path";
-import { fileURLToPath } from "node:url";
-import { createAgentRunPlan } from "./agentRunPlan";
+import { createAgentRunPlan, WEB_BUILD_READY_ENV } from "./agentRunPlan";
 import { E2E_DATA_DIR } from "./fixtures/paths";
+import { PARENT_SIGNAL_OWNER_ENV, runE2eProcess } from "./processRunner";
 
-const rootDir = dirname(dirname(fileURLToPath(import.meta.url)));
 const bun = process.execPath;
-
-async function run(command: string[], env: NodeJS.ProcessEnv = process.env): Promise<number> {
-	const child = Bun.spawn(command, {
-		cwd: rootDir,
-		env,
-		stdin: "ignore",
-		stdout: "inherit",
-		stderr: "inherit",
-	});
-	return child.exited;
-}
 
 async function main(): Promise<number> {
 	const playwrightArgs = process.argv.slice(2);
-	const plan = createAgentRunPlan(bun, playwrightArgs);
+	const plan = createAgentRunPlan(bun, playwrightArgs, process.env, {
+		webBuildReady: process.env[WEB_BUILD_READY_ENV] === "1",
+	});
 	if (plan.buildCommand) {
-		const buildCode = await run(plan.buildCommand);
-		if (buildCode !== 0) return buildCode;
+		const { exitCode } = await runE2eProcess(plan.buildCommand);
+		if (exitCode !== 0) return exitCode;
 	}
 	if (!playwrightArgs.includes("--list")) rmSync(E2E_DATA_DIR, { recursive: true, force: true });
-	return run(plan.playwrightCommand, plan.env);
+	delete plan.env[PARENT_SIGNAL_OWNER_ENV];
+	return (await runE2eProcess(plan.playwrightCommand, { env: plan.env })).exitCode;
 }
 
 try {
