@@ -11,6 +11,7 @@ import { WebFontsAddon } from "@xterm/addon-web-fonts";
 import { type ITheme, Terminal as XTerm } from "@xterm/xterm";
 import { useCallback, useEffect, useRef, useState } from "react";
 import "@xterm/xterm/css/xterm.css";
+import { type QuietScrollEdges, QuietScrollFrame } from "@/components/QuietScrollArea";
 import { cssColorToHex } from "@/lib";
 import { useAppStore } from "../store";
 import { onThemeSwap } from "../themes";
@@ -115,6 +116,12 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 	const [exited, setExited] = useState(false);
 	const [failed, setFailed] = useState(false);
 	const [detached, setDetached] = useState(false);
+	const [scrollEdges, setScrollEdges] = useState<QuietScrollEdges>({
+		top: false,
+		right: false,
+		bottom: false,
+		left: false,
+	});
 
 	useEffect(() => {
 		const host = hostRef.current;
@@ -140,6 +147,22 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 		tryLoad(() => term.loadAddon(webFonts));
 		termRef.current = term;
 		term.open(host);
+		const updateScrollEdges = () => {
+			const buffer = term.buffer.active;
+			const next = {
+				top: buffer.viewportY > 0,
+				right: false,
+				bottom: buffer.viewportY < buffer.baseY,
+				left: false,
+			};
+			setScrollEdges((current) =>
+				current.top === next.top && current.bottom === next.bottom ? current : next,
+			);
+		};
+		const onViewportScroll = term.onScroll(updateScrollEdges);
+		const onBufferWrite = term.onWriteParsed(updateScrollEdges);
+		const onTerminalResize = term.onResize(updateScrollEdges);
+		updateScrollEdges();
 
 		term.attachCustomKeyEventHandler((event) => {
 			if (event.type !== "keydown" || event.keyCode !== IME_SENTINEL_KEYCODE) return true;
@@ -302,6 +325,9 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 			resizeObserver.disconnect();
 			stopThemeWatch();
 			onData.dispose();
+			onViewportScroll.dispose();
+			onBufferWrite.dispose();
+			onTerminalResize.dispose();
 			unsubscribe();
 			unsubscribeExit();
 			unsubscribeDetached();
@@ -330,11 +356,21 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 			data-failed={failed}
 			data-detached={detached}
 			data-visible="true"
-			className="absolute inset-0"
+			className="absolute inset-0 z-0"
 		>
-			<div ref={hostRef} className="absolute inset-12" />
+			<QuietScrollFrame
+				viewportSelector=".xterm-scrollable-element"
+				surface="terminal"
+				edges={scrollEdges}
+				className="absolute inset-12"
+			>
+				<div ref={hostRef} className="absolute inset-0" />
+			</QuietScrollFrame>
 			{detached ? (
-				<div className="absolute inset-0 flex flex-col items-center justify-center gap-8 bg-overlay">
+				<div
+					data-testid="terminal-detached-overlay"
+					className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-8 bg-overlay"
+				>
 					<p className="tr-text-metadata text-text-muted">This terminal is open somewhere else.</p>
 					<button
 						type="button"
