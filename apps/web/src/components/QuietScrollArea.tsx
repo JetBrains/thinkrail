@@ -126,8 +126,8 @@ function useScrollIntent(viewport: HTMLElement | null, intentRoot: HTMLElement |
 		intentRoot.addEventListener("pointerleave", onPointerLeave);
 		intentRoot.addEventListener("focusin", onFocusIn);
 		intentRoot.addEventListener("focusout", onFocusOut);
-		window.addEventListener("pointerup", onPointerEnd);
-		window.addEventListener("pointercancel", onPointerEnd);
+		window.addEventListener("pointerup", onPointerEnd, { capture: true });
+		window.addEventListener("pointercancel", onPointerEnd, { capture: true });
 
 		return () => {
 			clearTimeout(scrollTimer);
@@ -137,8 +137,8 @@ function useScrollIntent(viewport: HTMLElement | null, intentRoot: HTMLElement |
 			intentRoot.removeEventListener("pointerleave", onPointerLeave);
 			intentRoot.removeEventListener("focusin", onFocusIn);
 			intentRoot.removeEventListener("focusout", onFocusOut);
-			window.removeEventListener("pointerup", onPointerEnd);
-			window.removeEventListener("pointercancel", onPointerEnd);
+			window.removeEventListener("pointerup", onPointerEnd, { capture: true });
+			window.removeEventListener("pointercancel", onPointerEnd, { capture: true });
 			viewport.removeAttribute("data-quiet-scroll-intent");
 			if (!hadViewportClass) viewport.classList.remove("quiet-scroll-viewport");
 		};

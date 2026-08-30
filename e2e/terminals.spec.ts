@@ -126,6 +126,10 @@ test("xterm uses the shared quiet rail and directional curtains", async ({ page 
 
 	await terminalTab.focus();
 	await terminalTab.hover();
+	await expect
+		.poll(() => viewport.getAttribute("data-quiet-scroll-intent"), { timeout: 2_000 })
+		.toBeNull();
+	await expect.poll(() => scrollbar.evaluate((node) => getComputedStyle(node).opacity)).toBe("0");
 	await page.emulateMedia({ forcedColors: "active" });
 	await expect.poll(() => scrollbar.evaluate((node) => getComputedStyle(node).opacity)).toBe("1");
 	await expect(scrollbar).toHaveCSS("pointer-events", "auto");
