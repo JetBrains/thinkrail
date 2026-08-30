@@ -1,7 +1,7 @@
 import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
-import { createWorkspaceViaDialog, openFixtureProject, waitForDone } from "./fixtures/app";
+import { createWorkspaceViaDialog, openFixtureProject, waitForAgentSettled } from "./fixtures/app";
 
 function hasGoalSpec(dir: string): boolean {
 	for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -71,7 +71,7 @@ test("`/skill:setting-up-a-project` routes an existing codebase to import and dr
 			.filter({ hasText: "/skill:setting-up-a-project" }),
 	).toHaveCount(1);
 
-	await waitForDone(page, 320_000);
+	await waitForAgentSettled(page, 320_000);
 
 	expect(hasGoalSpec(worktree)).toBe(true);
 

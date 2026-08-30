@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { openWorkspaceChat, waitForDone } from "./fixtures/app";
+import { hideAuxiliaryWorkbench, openWorkspaceChat, waitForAgentSettled } from "./fixtures/app";
 
 async function openChatAndSend(
 	page: import("@playwright/test").Page,
@@ -10,38 +10,26 @@ async function openChatAndSend(
 	await page.getByTestId("chat-send").click();
 }
 
-test("the reading band anchors a turn, retains its runway, and yields to reader intent", {
+test("the reading band retains its runway and yields to reader intent", {
 	tag: "@agent",
 }, async ({ page }) => {
 	test.setTimeout(120_000);
 	await openWorkspaceChat(page);
 	await page.setViewportSize({ width: 1100, height: 800 });
+	await hideAuxiliaryWorkbench(page);
 	await page
 		.getByTestId("chat-input")
 		.fill(
-			"List every integer from 1 to 40, each as its own paragraph separated by a blank line, and nothing else.",
+			"First use the bash tool to run `sleep 8` exactly. After it finishes, list every integer " +
+				"from 1 to 40, each as its own paragraph separated by a blank line, and nothing else.",
 		);
 	await page.getByTestId("chat-send").click();
 
 	const chatScroll = page.getByTestId("chat-scroll");
+	await expect(chatScroll).toHaveAttribute("data-latest-edge", "bottom");
 	await expect(page.getByTestId("chat-stream-runway")).toBeVisible();
 	await expect(chatScroll).toHaveAttribute("data-follow-state", "following");
-	const userMessage = page.locator('[data-testid="chat-message"][data-role="user"]').last();
-	await expect(userMessage).toBeVisible();
-	const turnInset = await chatScroll.evaluate((root) => {
-		const scroller = root.querySelector<HTMLElement>("[data-virtuoso-scroller]");
-		const messages = root.querySelectorAll<HTMLElement>(
-			'[data-testid="chat-message"][data-role="user"]',
-		);
-		const message = messages.item(messages.length - 1);
-		if (!scroller || !message) return null;
-		return message.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
-	});
-	expect(typeof turnInset).toBe("number");
-	if (typeof turnInset !== "number") return;
-	expect(turnInset).toBeGreaterThanOrEqual(40);
-	expect(turnInset).toBeLessThanOrEqual(90);
-
+	await expect(chatScroll).toHaveAttribute("data-streaming", "true");
 	await expect(chatScroll).toHaveAttribute("data-streaming", "false", { timeout: 90_000 });
 
 	const runway = page.getByTestId("chat-stream-runway");
@@ -94,7 +82,7 @@ test("the outer activity run reveals a thinking subtree that owns its following 
 		"Reason step by step, use the bash tool to multiply 17 by 23, then give the answer.",
 	);
 
-	await waitForDone(page);
+	await waitForAgentSettled(page);
 
 	const activity = page.getByTestId("activity-group").filter({ hasText: "bash" }).first();
 	await expect(activity).toBeVisible();

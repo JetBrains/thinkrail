@@ -1,6 +1,6 @@
 import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
-import { expandActivityStep, openWorkspaceChat, waitForDone } from "./fixtures/app";
+import { expandActivityStep, openWorkspaceChat, waitForAgentSettled } from "./fixtures/app";
 
 async function openChatAndSend(page: Page, prompt: string): Promise<void> {
 	await openWorkspaceChat(page);
@@ -9,7 +9,7 @@ async function openChatAndSend(page: Page, prompt: string): Promise<void> {
 }
 
 async function expandToolStep(page: Page, tool: string): Promise<Locator> {
-	await waitForDone(page);
+	await waitForAgentSettled(page);
 	return expandActivityStep(page, tool);
 }
 

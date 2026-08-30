@@ -197,8 +197,10 @@ Windows lane into the real profile (see `module-shared`).
 
 During iteration, run the affected specs and use Playwright's last-failed mode. Flake repairs replace
 irrelevant expensive setup with equivalent fixture state and wait for observable readiness; blanket retries,
-arbitrary sleeps, and assertion weakening are not synchronization policy. Scenarios whose subject is a
-client-side send transformation assert the exact outgoing `session.prompt` frame rather than treating a
+arbitrary sleeps, and assertion weakening are not synchronization policy. Live-provider completion waits on
+the session's streaming state after response evidence appears; the optional rendered `Done` row is not a
+terminal-state contract. Scenarios whose subject is a client-side send transformation assert the exact
+outgoing `session.prompt` frame rather than treating a
 mounted optimistic transcript row as delivery evidence: a fast provider rejection can add a taller error,
 scroll to the latest row, and legitimately virtualize the preceding user row. Chat-order coverage seeds
 multi-round transcripts and asserts both latest edges, host-qualified browser-local persistence, and

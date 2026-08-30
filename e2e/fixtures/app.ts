@@ -201,13 +201,20 @@ export async function openWorkspaceChat(page: Page): Promise<Workspace> {
 	return workspace;
 }
 
-export async function waitForDone(page: Page, timeout = 90_000): Promise<void> {
-	await expect(
-		page
-			.locator('[data-testid="chat-message"][data-role="system"]')
-			.filter({ hasText: "Done" })
-			.last(),
-	).toBeVisible({ timeout });
+export async function waitForAgentSettled(page: Page, timeout = 90_000): Promise<void> {
+	const chatScroll = page.getByTestId("chat-scroll");
+	const responseSurface = page.locator(
+		'[data-testid="chat-message"][data-role="assistant"], [data-testid="activity-group"], [data-testid="activity-step"], [data-testid="review-package-summary"]',
+	);
+	await expect
+		.poll(
+			async () =>
+				(await chatScroll.getAttribute("data-streaming")) === "true" ||
+				(await responseSurface.count()) > 0,
+			{ timeout },
+		)
+		.toBe(true);
+	await expect(chatScroll).toHaveAttribute("data-streaming", "false", { timeout });
 }
 
 export function routineActivityRows(page: Page): Locator {

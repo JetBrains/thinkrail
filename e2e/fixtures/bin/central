@@ -49,6 +49,9 @@ fi
 # Only the Auth/Proxy rows' *shape* is modelled: styled indicators, padded labels, and styled values. The
 # strings are test-owned, and the extra line asserts ThinkRail never surfaces this output.
 if [ "$1" = "status" ]; then
+	if has slow-status && ! has needs-login; then
+		sleep 1
+	fi
 	if has needs-login; then
 		printf '\033[38;2;198;40;40m\xe2\xa0\xa4\033[m \033[1mAuth      \033[m \033[1;38;2;198;40;40mnot connected\033[m\n'
 	else

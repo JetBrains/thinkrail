@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { activeWorktreeRow, openWorkspaceChat, waitForDone } from "./fixtures/app";
+import { activeWorktreeRow, openWorkspaceChat, waitForAgentSettled } from "./fixtures/app";
 import { E2eWire } from "./fixtures/wire";
 
 test("picking the seeded template from the / menu sends the expanded text and gets a reply", {
@@ -29,7 +29,7 @@ test("picking the seeded template from the / menu sends the expanded text and ge
 	await expect(bubble).not.toContainText("⟨");
 	await expect(bubble).not.toContainText("/review");
 
-	await waitForDone(page);
+	await waitForAgentSettled(page);
 });
 
 test("a typed-through /name command is expanded by pi itself, not the composer's slot parser", {
@@ -50,7 +50,7 @@ test("a typed-through /name command is expanded by pi itself, not the composer's
 	const bubble = page.locator('[data-testid="chat-message"][data-role="user"]').first();
 	await expect(bubble).toHaveText("/review SPEC.md repository");
 
-	await waitForDone(page);
+	await waitForAgentSettled(page);
 
 	await page.reload();
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
