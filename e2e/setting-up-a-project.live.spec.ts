@@ -69,7 +69,7 @@ test("`/skill:setting-up-a-project` routes an existing codebase to import and dr
 		page
 			.locator('[data-testid="chat-message"][data-role="user"]')
 			.filter({ hasText: "/skill:setting-up-a-project" }),
-	).toBeVisible();
+	).toHaveCount(1);
 
 	await waitForDone(page, 320_000);
 

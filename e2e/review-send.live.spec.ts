@@ -44,8 +44,9 @@ test("a review send reads back from the chat: summary → file → comment + fra
 	await unfoldAndAssert();
 
 	await expect(
-		page.locator('[data-testid="chat-message"][data-role="system"]').filter({ hasText: "Done" }),
+		page.locator('[data-testid="chat-message"][data-role="assistant"]').last(),
 	).toBeVisible({ timeout: 90_000 });
+	await expect(page.getByTestId("chat-scroll")).toHaveAttribute("data-streaming", "false");
 
 	const chatTabs = page.locator('[data-testid="editor-tab"][data-kind="chat"]');
 	await chatTabs.first().getByTestId("editor-tab-close").click();

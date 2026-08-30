@@ -175,9 +175,9 @@ test("a pending questionnaire survives a host kill -9: reboot, reopen, answer, a
 		);
 	await page.getByTestId("chat-send").click();
 	await expect(activeCard(page)).toBeVisible({ timeout: 90_000 });
-	await expect(
-		page.locator('[data-testid="chat-message"][data-role="system"]').filter({ hasText: "Done" }),
-	).toBeVisible({ timeout: 30_000 });
+	await expect(page.getByTestId("chat-scroll")).toHaveAttribute("data-streaming", "false", {
+		timeout: 30_000,
+	});
 
 	await stopHost("SIGKILL");
 	await expect(page.getByTestId("connection-status")).not.toHaveAttribute(
@@ -201,12 +201,7 @@ test("a pending questionnaire survives a host kill -9: reboot, reopen, answer, a
 		page.locator('[data-testid="ask-user-question"][data-tone="answered"]').first(),
 	).toBeVisible({ timeout: 60_000 });
 	await expect(
-		page
-			.locator('[data-testid="chat-message"][data-role="system"]')
-			.filter({ hasText: "Done" })
-			.last(),
-	).toBeVisible({ timeout: 90_000 });
-	await expect(
 		page.locator('[data-testid="chat-message"][data-role="assistant"]').last(),
-	).toBeVisible();
+	).toBeVisible({ timeout: 90_000 });
+	await expect(page.getByTestId("chat-scroll")).toHaveAttribute("data-streaming", "false");
 });

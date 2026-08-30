@@ -9,6 +9,7 @@ import {
 	isRealCentralE2e,
 	preserveStagedCentralArtifact,
 	removeCentralModeLocalSeeds,
+	writeE2eAgentSettings,
 } from "./centralAgent";
 import {
 	E2E_CENTRAL_ARTIFACT,
@@ -49,6 +50,7 @@ function resetState(): void {
 	removeTree(join(E2E_PI_AGENT_DIR, "sessions"));
 	if (isRealCentralE2e()) {
 		preserveStagedCentralArtifact();
+		writeE2eAgentSettings();
 		removeCentralModeLocalSeeds();
 	} else {
 		rmSync(E2E_CENTRAL_ARTIFACT, { force: true });
@@ -180,11 +182,12 @@ export async function goProjectHome(page: Page): Promise<void> {
 	await expect(page.getByTestId("welcome")).toBeVisible();
 }
 
-export async function openWorkspaceChat(page: Page): Promise<void> {
+export async function openWorkspaceChat(page: Page): Promise<Workspace> {
 	await openFixtureProject(page);
+	let workspace: Workspace | undefined;
 	await expect(async () => {
 		if ((await worktreeRows(page).count()) === 0) {
-			await createWorkspaceViaDialog(page);
+			workspace = await createWorkspaceViaDialog(page);
 		}
 		await worktreeRows(page).first().getByRole("button").first().click();
 		await expect(activeWorktreeRow(page)).toHaveCount(1, {
@@ -193,6 +196,9 @@ export async function openWorkspaceChat(page: Page): Promise<void> {
 	}).toPass({ timeout: 30_000 });
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 	await expect(page.getByTestId("chat-input")).toBeVisible();
+	workspace ??= loadPersistedWorkspaces().find((candidate) => candidate.kind !== "default");
+	if (!workspace) throw new Error("Workspace chat opened without a persisted worktree");
+	return workspace;
 }
 
 export async function waitForDone(page: Page, timeout = 90_000): Promise<void> {
