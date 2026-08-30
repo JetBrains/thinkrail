@@ -103,6 +103,7 @@ type ChatListContext = {
 	messageOrder: ChatMessageOrder;
 	status: StreamStatus | null;
 	runwayActive: boolean;
+	headerRef: RefCallback<HTMLDivElement>;
 	streamEdgeRef: RefCallback<HTMLDivElement>;
 	runwayRef: RefCallback<HTMLDivElement>;
 };
@@ -111,17 +112,15 @@ function StreamHeader({ context }: { context: ChatListContext }) {
 	const inset = context.runwayActive ? (
 		<div className="h-[clamp(48px,10cqh,80px)]" aria-hidden />
 	) : null;
-	if (context.messageOrder === "oldest-first") return inset;
-	if (!context.status && !inset) return null;
 	return (
-		<>
+		<div ref={context.headerRef}>
 			{inset}
-			{context.status ? (
+			{context.messageOrder === "newest-first" && context.status ? (
 				<div className="mx-auto max-w-3xl px-12 pb-8">
 					<StreamIndicator status={context.status} />
 				</div>
 			) : null}
-		</>
+		</div>
 	);
 }
 
@@ -283,13 +282,19 @@ export default function ChatView({
 		const row = rows[index];
 		return row ? { id: row.id, index } : null;
 	}, [chatMessageOrder, rows]);
+	const runwayMarkerRowId =
+		chatMessageOrder === "newest-first"
+			? (latestUserRow?.id ?? rows[rows.length - 1]?.id ?? null)
+			: null;
 	const {
 		followOutput,
 		handleAtBottom,
 		handleAtTop,
 		handleContentHeight,
 		handleScrollerRef,
+		headerRef,
 		streamEdgeRef,
+		runwayEdgeRef,
 		runwayRef,
 		scrollerElement,
 		showScrollButton,
@@ -306,10 +311,11 @@ export default function ChatView({
 			messageOrder: chatMessageOrder,
 			status: currentStreamStatus,
 			runwayActive,
+			headerRef,
 			streamEdgeRef,
 			runwayRef,
 		}),
-		[chatMessageOrder, currentStreamStatus, runwayActive, streamEdgeRef, runwayRef],
+		[chatMessageOrder, currentStreamStatus, headerRef, runwayActive, runwayRef, streamEdgeRef],
 	);
 	const composerRef = useRef<ComposerHandle>(null);
 	const askFocusScope = useRef<object>({}).current;
@@ -799,6 +805,11 @@ export default function ChatView({
 									runwayActive &&
 									index === firstItemIndex ? (
 										<div ref={streamEdgeRef} data-testid="chat-stream-edge" className="h-0" />
+									) : null}
+									{chatMessageOrder === "newest-first" &&
+									runwayActive &&
+									row.id === runwayMarkerRowId ? (
+										<div ref={runwayEdgeRef} data-testid="chat-runway-edge" className="h-0" />
 									) : null}
 								</div>
 							)}

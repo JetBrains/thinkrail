@@ -135,7 +135,7 @@ export function ChatSettings() {
 					<h3 className="tr-title-section text-text-default">Message order</h3>
 					<p className="text-text-muted tr-text-metadata">
 						Choose whether the oldest or newest work appears first. The message box stays at the
-						bottom. Your choice is saved in this browser for this host only.
+						bottom. Your choice is saved in this client for this host only.
 					</p>
 				</div>
 				<RadioCards

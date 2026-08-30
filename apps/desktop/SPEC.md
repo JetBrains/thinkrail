@@ -21,7 +21,8 @@ engine architecture.
 
 - **Owns:** Electrobun configuration and lifecycle; native window policy; local `bootHost()` startup;
   packaged resource staging; the PI-compatible server-runtime bundle; desktop route preload/persistence;
-  desktop package smoke; and the desktop artifact adapter used by shared host probes.
+  a bounded generic client-preference adapter under stable backend-profile/window identity; desktop package
+  smoke; and the desktop artifact adapter used by shared host probes.
 - **Public surface:** the packaged desktop application and unsigned installers; the build/test-only
   `@thinkrail/desktop/artifact` launcher and installer locators consumed by smoke and E2E harnesses.
 - **Allowed deps:** `server` for the embedded host, build-support manifest, and artifact probes; `shared`
@@ -63,8 +64,11 @@ lease is released by graceful shutdown or automatically by process death, with n
    producing a packaged-only `undefined`. It then calls `bootHost()` on loopback port `0` with the staged web
    directory, baked version, and `desktop` analytics provenance. `bootHost()` acquires ownership before its
    mutable initialization.
-4. Restore the valid route fragment for `{ backendProfileId: "local", windowId: "main" }`, append it to
-   the fresh origin, and open one normal native `BrowserWindow` with the system renderer.
+4. Restore the valid route fragment and bounded client-preference map for
+   `{ backendProfileId: "local", windowId: "main" }`. The route is appended to the fresh origin; the
+   preference map is serialized as data and prepended to the preload source so the web client can hydrate
+   before React mounts despite the changing port. Open one normal native `BrowserWindow` with the system
+   renderer.
 
 The Electrobun entry bundle contains native-shell code only. A static server import there is forbidden:
 it can load `bun-pty` before `BUN_PTY_LIB` and flatten PI into the wrong extension-loader mode. Startup
@@ -93,12 +97,17 @@ pins production wiring.
 The native window permits navigation only within its exact loopback origin. User-requested external URLs
 open through the OS instead of replacing the app surface.
 
-A desktop preload sends one typed, one-way `route.changed { hash }` message. It wraps
+A desktop preload sends typed, one-way route and local-preference messages. It wraps
 `history.replaceState` and `history.pushState` before page scripts and also reports initial/hash/pop
 navigation, because Electrobun's native navigation events do not observe History API route changes. The
-main process accepts messages only from the main window and persists only a bounded fragment string in a
-versioned channel-scoped route document; unreadable/invalid state falls back to `#/v1`. The web router
-remains the route grammar validator. The preload exposes no host/domain capability.
+main process accepts messages only from the main window. Routes persist as bounded fragment strings in a
+versioned channel-scoped document; unreadable/invalid state falls back to `#/v1`. Preferences persist in a
+separate bounded, versioned generic string map scoped by `{ backendProfileId, windowId }`; the native side
+validates only size/shape and never learns feature meaning. Its frozen preload adapter exposes `getItem`,
+`setItem`, and `removeItem` only, with writes returning over the typed one-way channel. Malformed messages
+are ignored; a filesystem refusal is logged without changing the in-memory document or terminating the
+client. The web feature still owns each value's validation and default. The web router remains the route
+grammar validator, and the preload exposes no host/domain capability.
 
 The host reads the staged preload bundle and passes its JavaScript **source text** to
 `BrowserWindow.preload`. A `views://` preload URL is forbidden: Electrobun 1.18.1 resolves it on macOS but

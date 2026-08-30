@@ -17,7 +17,8 @@ export interface ReadingBandScrollBounds {
 
 export interface ReadingBandGeometry extends ReadingBandScrollBounds {
 	viewportHeight: number;
-	edgeBottom: number;
+	edgeBottom: number | null;
+	runwayBottom?: number | null;
 }
 
 export interface ReadingBandSnapshot {
@@ -84,6 +85,33 @@ function easeOutCubic(progress: number): number {
 	return 1 - (1 - progress) ** 3;
 }
 
+export function headerHeightScrollTarget(
+	previousScrollTop: number,
+	previousHeight: number,
+	nextHeight: number,
+	bounds: ReadingBandScrollBounds,
+	latestEdge: ReadingBandLatestEdge,
+	following: boolean,
+): number {
+	if (latestEdge !== "top" || following) return bounds.scrollTop;
+	return Math.min(
+		bounds.maxScrollTop,
+		Math.max(0, previousScrollTop + nextHeight - previousHeight),
+	);
+}
+
+export function markerBottomWithoutHeader(
+	markerBottom: number,
+	viewportTop: number,
+	headerHeight: number,
+): number {
+	return markerBottom - viewportTop - headerHeight;
+}
+
+function runwayBottom(geometry: ReadingBandGeometry): number | null {
+	return geometry.runwayBottom === undefined ? geometry.edgeBottom : geometry.runwayBottom;
+}
+
 export function createReadingBandController(
 	environment: ReadingBandEnvironment,
 	{ streaming, latestEdge = "bottom" }: { streaming: boolean; latestEdge?: ReadingBandLatestEdge },
@@ -136,12 +164,15 @@ export function createReadingBandController(
 		environment.writeRunwayHeight(pixels);
 	};
 
-	const beginTurnRunway = (geometry: ReadingBandGeometry) => {
+	const beginTurnRunway = (geometry: ReadingBandGeometry): boolean => {
+		const bottom = runwayBottom(geometry);
+		if (bottom === null) return false;
 		pendingTurnRunway = false;
 		runwayMode = "turn";
-		runwayStartEdge = geometry.scrollTop + geometry.edgeBottom;
+		runwayStartEdge = geometry.scrollTop + bottom;
 		runwayViewportHeight = geometry.viewportHeight;
 		writeRunwayHeight(geometry.viewportHeight * (RESPONSE_RUNWAY_RATIO + TAIL_RUNWAY_RATIO));
+		return true;
 	};
 
 	const resizeRunway = (geometry: ReadingBandGeometry) => {
@@ -149,14 +180,17 @@ export function createReadingBandController(
 		const viewportChanged =
 			runwayViewportHeight === null ||
 			Math.abs(runwayViewportHeight - geometry.viewportHeight) > GEOMETRY_EPSILON;
-		runwayViewportHeight = geometry.viewportHeight;
 		const floor = geometry.viewportHeight * TAIL_RUNWAY_RATIO;
 		if (runwayMode === "floor") {
+			runwayViewportHeight = geometry.viewportHeight;
 			if (viewportChanged) writeRunwayHeight(floor);
 			return;
 		}
 		if (runwayStartEdge === null) return;
-		const growth = Math.max(0, geometry.scrollTop + geometry.edgeBottom - runwayStartEdge);
+		const bottom = runwayBottom(geometry);
+		if (bottom === null) return;
+		runwayViewportHeight = geometry.viewportHeight;
+		const growth = Math.max(0, geometry.scrollTop + bottom - runwayStartEdge);
 		const available =
 			geometry.viewportHeight * (RESPONSE_RUNWAY_RATIO + TAIL_RUNWAY_RATIO) - growth;
 		const next = Math.max(floor, available);
@@ -205,11 +239,13 @@ export function createReadingBandController(
 		resizeRunway(geometry);
 		if (!state.streaming || !state.following || state.moving) return;
 		geometry = environment.readGeometry() ?? geometry;
+		const bottom = geometry.edgeBottom;
+		if (bottom === null) return;
 		const trigger = geometry.viewportHeight * EDGE_TRIGGER_RATIO;
-		if (geometry.edgeBottom <= trigger + GEOMETRY_EPSILON) return;
+		if (bottom <= trigger + GEOMETRY_EPSILON) return;
 		const target = Math.min(
 			geometry.maxScrollTop,
-			geometry.scrollTop + geometry.edgeBottom - geometry.viewportHeight * EDGE_SETTLE_RATIO,
+			geometry.scrollTop + bottom - geometry.viewportHeight * EDGE_SETTLE_RATIO,
 		);
 		if (target <= geometry.scrollTop + GEOMETRY_EPSILON) return;
 		moveTo(target, true, true);
@@ -230,8 +266,7 @@ export function createReadingBandController(
 			const viewportHeight = environment.readViewportHeight();
 			if (viewportHeight <= 0) return;
 			const geometry = environment.readGeometry();
-			if (geometry) beginTurnRunway(geometry);
-			else pendingTurnRunway = true;
+			if (!geometry || !beginTurnRunway(geometry)) pendingTurnRunway = true;
 			const inset = turnInset(viewportHeight);
 			cancelAnchor();
 			anchorFrame = environment.requestFrame(() => {

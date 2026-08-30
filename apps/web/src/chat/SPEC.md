@@ -158,9 +158,11 @@ flashes, tool state, and history anchors do not fork. The projection never reach
 paragraphs/code, a tool card body, review-package comments, and an Activity row's own disclosure hierarchy
 retain their semantic order. Virtuoso and DOM traversal consume the projected rows; Pi turns, persistence,
 stream status, and every non-presentation derivation remain chronological. `messageOrder.ts` owns the
-closed preference and its oldest-first default, reads/writes a host-qualified browser localStorage key, and
-hydrates the store before React mounts; it never enters `AppConfig`, so choosing newest-first cannot change
-another browser, device, or host.
+closed preference and its oldest-first default, then hydrates the store before React mounts. Browser clients
+read/write a host-qualified localStorage key and synchronize that key across same-origin tabs; a native shell
+may inject the same narrow string-storage adapter under its stable backend-profile/window identity so a
+dynamic loopback port cannot erase the preference on restart. It never enters `AppConfig`, so choosing
+newest-first cannot change another browser, device, host, or native window.
 
 **Sticky activity breadcrumb.** While the transcript's top visible content remains inside expanded
 Activity → Thinking → tool disclosures whose original headers have scrolled above the viewport, one
@@ -317,12 +319,15 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
 - **Newest-first reading band** — the newest stream surface begins after the same 48–80px top inset; its
   live phase indicator leads the newest projected row. While follow is armed, appended content inside that
   row uses the same sparse 82%→58% advance; a newly inserted top row returns to the latest band in one
-  controller-owned move. `firstItemIndex` assigns stable logical indices across projected prefix insertion
-  and removal, preserving a detached reader's visible historical anchor and pixel offset without invoking
-  follow. Scrolling downward into older groups detaches immediately, and no insertion moves that reader;
-  upward return to the top or the floating **↑ Follow response** / **↑ Latest** action re-arms. The
-  synthetic tail space stays after the oldest group, never between reversed request/answer rows, so it
-  cannot split the selected group semantics.
+  controller-owned move. Runway consumption is measured separately at the stable trailing edge of the
+  latest request/answer group, excluding the changing header, so newly prepended assistant rows consume
+  their cumulative height instead of comparing unrelated first-row markers. `firstItemIndex` assigns
+  stable logical indices across projected prefix insertion and removal. The header's measured height delta
+  is applied directly to `scrollTop` only while detached; together those mechanisms preserve a detached
+  reader's visible historical anchor and pixel offset without invoking follow. Scrolling downward into
+  older groups detaches immediately, and no insertion moves that reader; upward return to the top or the
+  floating **↑ Follow response** / **↑ Latest** action re-arms. The synthetic tail space stays after the
+  oldest group, never between reversed request/answer rows, so it cannot split the selected group semantics.
 - **Composer & chrome** — `Composer` (prompt field + send/steer/followUp/abort, `@`-mentions, `/`
   commands + template **slot sessions** (Tab-through placeholders — see the Template slots bullet
   below), image paste/drop — routed through **`imageAttachment.ts`**: `fileToAttachedImage` decodes in
@@ -893,7 +898,7 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   **per-file**; the registry is importable from `chat/toolRegistry` **without** pulling shiki.
 - **Allowed deps:** `contracts` (pi message/content-block types, **type-only**); `store` + `transport`
   (**app-integration files only** — a renderer that takes props must never reach for either. Today that
-  is `ChatView.tsx`, `messageOrder.ts` (the browser-local persistence adapter), plus the hooks and dialogs
+  is `ChatView.tsx`, `messageOrder.ts` (the client-local persistence adapter), plus the hooks and dialogs
   it composes: `useChatTodos.ts`, `useHistorySearch.ts`,
   `useModelCatalog.ts`, **`useTranscriptSync.ts`** (successful-compaction + connection-generation canonical
   transcript reconciliation), `SkillsDialog.tsx`, `TemplateEditorDialog.tsx`,
