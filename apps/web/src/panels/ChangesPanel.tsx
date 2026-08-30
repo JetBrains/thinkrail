@@ -1,7 +1,7 @@
 import type { GitStatus } from "@thinkrail/contracts";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { QuietScrollArea } from "@/components/QuietScrollArea";
-import { SkeletonRows } from "../components/Skeleton";
+import { LoadingRegion } from "../components/Skeleton";
 import {
 	type CenterNavigationStamp,
 	isCenterNavigationCurrent,
@@ -177,9 +177,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 						</button>
 					</div>
 				) : status === null ? (
-					<div className="px-8 py-4">
-						<SkeletonRows rows={5} />
-					</div>
+					<LoadingRegion rows={5} className="px-8 py-4" />
 				) : status.changes.length === 0 ? (
 					<p data-testid="changes-empty" className="px-8 py-4 tr-text-metadata text-text-muted">
 						No changes in this scope.

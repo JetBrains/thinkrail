@@ -13,11 +13,11 @@ const ROWS = [
 	{ key: "r12", width: "w-3/4" },
 ] as const;
 
-export function SkeletonRows({ rows = 6 }: { rows?: number }) {
+export function SkeletonRows({ rows = 6, label = "Loading" }: { rows?: number; label?: string }) {
 	return (
 		<div
 			role="status"
-			aria-label="Loading"
+			aria-label={label}
 			aria-busy="true"
 			data-testid="skeleton-rows"
 			className="flex flex-col gap-8"
@@ -28,6 +28,24 @@ export function SkeletonRows({ rows = 6 }: { rows?: number }) {
 					className={`h-3 animate-pulse rounded-[var(--radius-sm)] bg-control-bg-hovered ${width}`}
 				/>
 			))}
+		</div>
+	);
+}
+
+export function LoadingRegion({
+	rows = 6,
+	label,
+	className,
+	testId,
+}: {
+	rows?: number;
+	label?: string;
+	className?: string;
+	testId?: string;
+}) {
+	return (
+		<div className={className} data-testid={testId}>
+			<SkeletonRows rows={rows} {...(label ? { label } : {})} />
 		</div>
 	);
 }

@@ -7,7 +7,7 @@ import {
 import { lazy, type ReactNode, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { QuietScrollArea } from "../components/QuietScrollArea";
-import { SkeletonRows } from "../components/Skeleton";
+import { LoadingRegion } from "../components/Skeleton";
 import { DropdownMenuItem } from "../components/ui/dropdown-menu";
 import { IconTooltip } from "../components/ui/tooltip";
 import { type LayoutAttention, layoutResourceIdentity } from "../lib";
@@ -71,14 +71,7 @@ const NO_EDITOR_TABS: EditorTab[] = [];
 
 function MissingResource({ label }: { label: string }) {
 	return (
-		<div
-			role="status"
-			aria-label={`Restoring ${label}`}
-			aria-busy="true"
-			className="h-full overflow-hidden p-16"
-		>
-			<SkeletonRows rows={12} />
-		</div>
+		<LoadingRegion rows={12} label={`Restoring ${label}`} className="h-full overflow-hidden p-16" />
 	);
 }
 

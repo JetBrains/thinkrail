@@ -44,11 +44,14 @@ its own spec.
   transitions. Surface colour is an explicit semantic prop (`sidebar` or `terminal`), never inferred from
   arrangement.
 - **Also owns:** `Skeleton.tsx` — `SkeletonRows`, the one pulsing-rows placeholder every loading surface
-  uses. The full loading vocabulary and its rules are below.
-- **Public surface:** `ErrorBoundary`, `isChunkLoadError`, `SkeletonRows` — imported directly via
-  `@/components/ErrorBoundary` / `@/components/Skeleton` (no barrel); `CustomIcon`, `CustomIconName` via
-  `@/components/CustomIcon`; `QuietScrollArea`, `QuietScrollFrame`, and the `QuietScrollEdges` type via
-  `@/components/QuietScrollArea`. The `ui/` primitives are their own sub-module
+  uses, and `LoadingRegion`, the sized-wrapper shape around it that most call sites actually want (a
+  `className` for the region's own padding/sizing, an optional `label` threaded to `SkeletonRows`'
+  `role="status"` region rather than opening a second one, and an optional `testId`). The full loading
+  vocabulary and its rules are below.
+- **Public surface:** `ErrorBoundary`, `isChunkLoadError`, `SkeletonRows`, `LoadingRegion` — imported
+  directly via `@/components/ErrorBoundary` / `@/components/Skeleton` (no barrel); `CustomIcon`,
+  `CustomIconName` via `@/components/CustomIcon`; `QuietScrollArea`, `QuietScrollFrame`, and the
+  `QuietScrollEdges` type via `@/components/QuietScrollArea`. The `ui/` primitives are their own sub-module
   ([components/ui/SPEC.md](ui/SPEC.md)).
 - **Allowed deps:** React, `@remixicon/react`, `lib` (`shallowEqualArrays` — the reset-keys comparison, shared
   rather than re-stated). Kept dependency-light on purpose, and `lib` is a leaf, so *any* region (shell,
@@ -61,7 +64,7 @@ its own spec.
 The app's loading vocabulary is exactly **two-tier** — every async gap renders one of these two, never a
 third thing, never bare text, never nothing:
 
-1. **`SkeletonRows` — for a *content region***: any area that will fill with substantial content, however
+1. **`SkeletonRows` (usually via `LoadingRegion`) — for a *content region***: any area that will fill with substantial content, however
    that region is framed (a tool panel, a dialog's list, a menu's list section, a tab body, a `Suspense`
    fallback restoring a chat/plan/editor). **Surface size decides the tier, not the container type** — a
    spinner centred in a large empty region reads as a heavier, more alarming kind of wait than the

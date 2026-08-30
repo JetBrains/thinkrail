@@ -6,7 +6,7 @@ import {
 import { lazy, Suspense, useState } from "react";
 import { IconTooltip } from "@/components/ui/tooltip";
 import { copyText, isMarkdownPath } from "@/lib/utils";
-import { SkeletonRows } from "../components/Skeleton";
+import { LoadingRegion } from "../components/Skeleton";
 import type { DiffTab } from "../store";
 import { selectDiffTabTargetRef, useAppStore } from "../store";
 import { getTransport } from "../transport";
@@ -19,11 +19,7 @@ import { useFileReview } from "./useReviewCommenting";
 const MonacoDiff = lazy(() => import("./MonacoDiff"));
 const RenderedDiff = lazy(() => import("./RenderedDiff"));
 
-const loading = (
-	<div className="h-full p-12">
-		<SkeletonRows rows={12} />
-	</div>
-);
+const loading = <LoadingRegion rows={12} className="h-full p-12" />;
 
 export function DiffPane({ tab }: { tab: DiffTab }) {
 	const setDiffTabView = useAppStore((s) => s.setDiffTabView);

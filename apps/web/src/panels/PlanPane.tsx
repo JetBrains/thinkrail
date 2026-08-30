@@ -43,7 +43,7 @@ import {
 } from "../chat/planView";
 import { StatusIcon } from "../chat/TodoList";
 import { useChatTodos } from "../chat/useChatTodos";
-import { SkeletonRows } from "../components/Skeleton";
+import { LoadingRegion } from "../components/Skeleton";
 import { IconTooltip } from "../components/ui/tooltip";
 import {
 	selectAgentReviewCommentCount,
@@ -539,11 +539,7 @@ export default function PlanPane({
 				</div>
 			);
 		}
-		return (
-			<div className="h-full p-12">
-				<SkeletonRows rows={8} />
-			</div>
-		);
+		return <LoadingRegion rows={8} className="h-full p-12" />;
 	}
 	const data = plan.data;
 	const { done, total } = planSummary(data);

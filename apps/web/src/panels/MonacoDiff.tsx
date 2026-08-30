@@ -6,7 +6,7 @@ import {
 } from "@monaco-editor/react";
 import type { editor } from "monaco-editor";
 import { useCallback, useEffect, useRef } from "react";
-import { SkeletonRows } from "../components/Skeleton";
+import { LoadingRegion } from "../components/Skeleton";
 import { decorateEditorContextMenus } from "./monacoMenuIcons";
 import {
 	defineThinkrailTheme,
@@ -148,11 +148,7 @@ export default function MonacoDiff({
 			keepCurrentModifiedModel
 			beforeMount={beforeMount}
 			onMount={onMount}
-			loading={
-				<div className="h-full w-full p-12">
-					<SkeletonRows rows={12} />
-				</div>
-			}
+			loading={<LoadingRegion rows={12} className="h-full w-full p-12" />}
 			options={{
 				...sharedEditorOptions(),
 				renderSideBySide: view === "split",

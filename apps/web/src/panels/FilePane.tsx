@@ -1,6 +1,6 @@
 import { lazy, Suspense, useMemo } from "react";
 import { isMarkdownPath } from "@/lib/utils";
-import { SkeletonRows } from "../components/Skeleton";
+import { LoadingRegion } from "../components/Skeleton";
 import type { FileTab } from "../store";
 import { useAppStore } from "../store";
 import { getTransport } from "../transport";
@@ -13,11 +13,7 @@ import { useFileReview } from "./useReviewCommenting";
 const MonacoEditor = lazy(() => import("./MonacoEditor"));
 const MarkdownPreview = lazy(() => import("./MarkdownPreview"));
 
-const loading = (
-	<div className="h-full p-12">
-		<SkeletonRows rows={12} />
-	</div>
-);
+const loading = <LoadingRegion rows={12} className="h-full p-12" />;
 
 export function FilePane({ tab }: { tab: FileTab }) {
 	const setFileTabView = useAppStore((s) => s.setFileTabView);

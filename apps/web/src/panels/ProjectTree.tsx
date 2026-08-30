@@ -38,7 +38,7 @@ import {
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { copyText } from "@/lib";
-import { SkeletonRows } from "../components/Skeleton";
+import { LoadingRegion } from "../components/Skeleton";
 import {
 	isDefaultWorkspace,
 	isExternalWorkspace,
@@ -257,9 +257,7 @@ export function ProjectTree() {
 								onRestoreFocus={() => focusProjectNameOrAdd(project.id)}
 							/>
 							{isExpanded && list === undefined && (
-								<div className="py-4 pr-8 pl-16">
-									<SkeletonRows rows={2} />
-								</div>
+								<LoadingRegion rows={2} className="py-4 pr-8 pl-16" />
 							)}
 							{isExpanded && list !== undefined && (
 								<ul className="mt-4 flex flex-col gap-4 motion-safe:animate-reveal">

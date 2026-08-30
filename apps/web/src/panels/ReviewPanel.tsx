@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
 import { PlanStatusIcon, SectionLabel } from "../chat/planKit";
 import { sessionGlance } from "../chat/planView";
 import { glanceIcon } from "../chat/TodoList";
-import { SkeletonRows } from "../components/Skeleton";
+import { LoadingRegion } from "../components/Skeleton";
 import { selectDiffScope, toast, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
 import { ConfirmPopover } from "./ConfirmPopover";
@@ -88,11 +88,7 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 		);
 	}
 	if (!snapshot) {
-		return (
-			<div className="px-8 py-4">
-				<SkeletonRows rows={5} />
-			</div>
-		);
+		return <LoadingRegion rows={5} className="px-8 py-4" />;
 	}
 
 	const files = fileSummaries(snapshot.comments, snapshot.review.doneFiles);

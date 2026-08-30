@@ -15,7 +15,7 @@ import {
 	RiStackFill,
 } from "@remixicon/react";
 import { useEffect, useMemo, useState } from "react";
-import { SkeletonRows } from "../components/Skeleton";
+import { LoadingRegion } from "../components/Skeleton";
 import { IconTooltip } from "../components/ui/tooltip";
 import { cn } from "../lib";
 import { selectActiveEditorTab, useAppStore } from "../store";
@@ -56,9 +56,7 @@ export function SpecsPanel({
 				Couldn't load specs — Refresh to retry.
 			</p>
 		) : nodes === null || roots === null ? (
-			<div className="px-4 py-4">
-				<SkeletonRows rows={6} />
-			</div>
+			<LoadingRegion rows={6} className="px-4 py-4" />
 		) : nodes.length === 0 ? (
 			<p className="px-4 py-4 tr-text-metadata text-text-muted">No specs</p>
 		) : (
