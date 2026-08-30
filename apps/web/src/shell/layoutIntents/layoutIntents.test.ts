@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import type { LayoutTerminalTab, WorkspaceLayoutDocument } from "@thinkrail/contracts";
 import type { LayoutAttention } from "../../lib";
+import type { LayoutTerminalTab, WorkspaceLayoutDocument } from "../layout";
 import { findTabLocation } from "../layout";
 import { placeTerminalForIntent } from "./layoutIntents";
 

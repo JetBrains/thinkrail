@@ -4,6 +4,7 @@ import { join } from "node:path";
 import type { Locator, Page } from "@playwright/test";
 import { expect } from "@playwright/test";
 import type { Workspace } from "@thinkrail/contracts";
+import { removeTree } from "@thinkrail/shared/removeTree";
 import {
 	E2E_CENTRAL_ARTIFACT,
 	E2E_CENTRAL_LOG,
@@ -18,10 +19,6 @@ import {
 import { fixtureRepoHealthy, seedFixtureRepo } from "./repo";
 
 export const PHONE_VIEWPORT = { width: 390, height: 780 } as const;
-
-function removeTree(path: string): void {
-	rmSync(path, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
-}
 
 export async function pressPlatformShortcut(page: Page, key: string): Promise<void> {
 	const apple = await page.evaluate(() => /Mac|iPhone|iPad|iPod/.test(navigator.platform ?? ""));
@@ -139,6 +136,11 @@ export async function enterDefaultWorkspace(page: Page): Promise<void> {
 	await page.getByTestId("welcome-action").filter({ hasText: "Work in project folder" }).click();
 	await expect(defaultWorkspaceRow(page)).toHaveAttribute("data-active", "true");
 	await expect(page.getByTestId("center-tabs")).toBeVisible();
+}
+
+export async function openChatFromHistory(page: Page, title: string): Promise<void> {
+	await page.getByTestId("chat-history").first().click();
+	await page.getByTestId("closed-chat-item").filter({ hasText: title }).click();
 }
 
 export async function revealFirstProjectWorkspaces(page: Page): Promise<void> {

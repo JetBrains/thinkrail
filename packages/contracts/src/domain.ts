@@ -32,7 +32,7 @@ export interface Workspace {
 	baseBranch: string;
 	diffBase?: string;
 	renamed?: boolean;
-	initialTerminalEligible?: true;
+	initialTerminalPending?: true;
 	diffStats?: DiffStats;
 	skillOverrides?: Record<string, "on" | "off">;
 }
@@ -191,6 +191,59 @@ export interface TodoPlan {
 	unattributed?: GitFileChange[];
 }
 
+export type DelegationRunStatus = "queued" | "running" | "completed" | "error" | "aborted";
+
+const DELEGATION_RUN_STATUSES: readonly string[] = [
+	"queued",
+	"running",
+	"completed",
+	"error",
+	"aborted",
+];
+
+export function isDelegationRunDetails(value: unknown): value is DelegationRunDetails {
+	if (!value || typeof value !== "object") return false;
+	const d = value as Partial<DelegationRunDetails>;
+	if (typeof d.childSessionId !== "string" || typeof d.task !== "string") return false;
+	if (typeof d.status !== "string" || !DELEGATION_RUN_STATUSES.includes(d.status)) return false;
+	if (typeof d.durationMs !== "number") return false;
+	for (const field of [d.roleName, d.roleSource, d.model, d.activity]) {
+		if (field !== undefined && typeof field !== "string") return false;
+	}
+	const u = d.usage as Partial<DelegationRunDetails["usage"]> | undefined;
+	return (
+		!!u &&
+		typeof u === "object" &&
+		typeof u.input === "number" &&
+		typeof u.output === "number" &&
+		typeof u.cacheRead === "number" &&
+		typeof u.cacheWrite === "number" &&
+		typeof u.cost === "number" &&
+		typeof u.turns === "number" &&
+		typeof u.contextTokens === "number"
+	);
+}
+
+export interface DelegationRunDetails {
+	childSessionId: string;
+	roleName?: string;
+	roleSource?: string;
+	task: string;
+	status: DelegationRunStatus;
+	model?: string;
+	usage: {
+		input: number;
+		output: number;
+		cacheRead: number;
+		cacheWrite: number;
+		cost: number;
+		turns: number;
+		contextTokens: number;
+	};
+	durationMs: number;
+	activity?: string;
+}
+
 export type GitFileStatus = "added" | "modified" | "deleted" | "renamed" | "untracked";
 
 export interface GitFileChange {
@@ -336,145 +389,7 @@ export type ThemeId = string;
 
 export type LayoutToolId = "projects" | "specs" | "files" | "changes" | "review";
 
-export interface LayoutFileTab {
-	kind: "file";
-	id: string;
-	name: string;
-	path: string;
-}
-
-export interface LayoutDiffTab {
-	kind: "diff";
-	id: string;
-	name: string;
-	path: string;
-	scope: GitDiffScope;
-}
-
-export interface LayoutChatTab {
-	kind: "chat";
-	id: string;
-	name: string;
-	sessionId: string;
-}
-
-export interface LayoutDocumentTab {
-	kind: "document";
-	id: string;
-	name: string;
-	documentKind: "todo-plan";
-	sourceId: string;
-	docPath: string;
-}
-
-export interface LayoutTerminalTab {
-	kind: "terminal";
-	id: string;
-	name: string;
-	tabKey: string;
-}
-
-export interface LayoutToolTab {
-	kind: "tool";
-	id: string;
-	name: string;
-	tool: LayoutToolId;
-}
-
-export type LayoutCenterTab =
-	| LayoutFileTab
-	| LayoutDiffTab
-	| LayoutChatTab
-	| LayoutDocumentTab
-	| LayoutTerminalTab;
-export type LayoutAuxiliaryTab = LayoutToolTab | LayoutTerminalTab;
-export type LayoutSideTab = LayoutAuxiliaryTab;
-export type LayoutTab = LayoutCenterTab | LayoutAuxiliaryTab;
-
-export interface LayoutCenterGroup {
-	kind: "group";
-	id: string;
-	tabs: LayoutCenterTab[];
-	previewTabId?: string;
-}
-
-export interface LayoutCenterSplit {
-	kind: "split";
-	id: string;
-	direction: "horizontal" | "vertical";
-	weights: [number, number];
-	children: [LayoutCenterNode, LayoutCenterNode];
-}
-
-export type LayoutCenterNode = LayoutCenterGroup | LayoutCenterSplit;
-
-export interface LayoutSideGroup {
-	id: string;
-	weight: number;
-	folded: boolean;
-	tabs: LayoutAuxiliaryTab[];
-}
-
-export interface LayoutSideRegion {
-	visible: boolean;
-	width: number;
-	groups: LayoutSideGroup[];
-}
-
 export type LayoutBottomAlignment = "center" | "center-left" | "center-right" | "full";
-
-export interface LayoutBottomGroup {
-	id: string;
-	weight: number;
-	folded: boolean;
-	tabs: LayoutAuxiliaryTab[];
-}
-
-export interface LayoutBottomRegion {
-	visible: boolean;
-	height: number;
-	alignment: LayoutBottomAlignment;
-	groups: LayoutBottomGroup[];
-}
-
-export type LayoutAuxiliaryRegion = "left" | "right" | "bottom";
-
-export interface LayoutToolRestoreTarget {
-	region: LayoutAuxiliaryRegion;
-	groupId?: string;
-	index: number;
-}
-
-export interface WorkspaceLayoutDocument {
-	version: 2;
-	center: LayoutCenterNode;
-	left: LayoutSideRegion;
-	right: LayoutSideRegion;
-	bottom: LayoutBottomRegion;
-	toolRestoreTargets: Partial<Record<LayoutToolId, LayoutToolRestoreTarget>>;
-}
-
-export interface WorkspaceLayoutSnapshot {
-	workspaceId: string;
-	revision: number;
-	document: WorkspaceLayoutDocument;
-}
-
-export interface LayoutReplaceParams {
-	workspaceId: string;
-	mutationId: string;
-	expectedRevision: number | null;
-	document: WorkspaceLayoutDocument;
-}
-
-export interface LayoutChangedPayload {
-	snapshot: WorkspaceLayoutSnapshot;
-	mutationId: string;
-}
-
-export type LayoutReplaceResult =
-	| { status: "accepted"; payload: LayoutChangedPayload }
-	| { status: "conflict"; current: WorkspaceLayoutSnapshot | null };
 
 export interface LayoutPresetCenterGroup {
 	kind: "group";
@@ -524,13 +439,6 @@ export interface LayoutPreset {
 	bottom: LayoutPresetBottomRegion;
 }
 
-export interface LayoutSettings {
-	defaultPresetId: string;
-	customPresets: LayoutPreset[];
-	maxSideGroups: number;
-	maxBottomGroups: number;
-}
-
 export const COMPOSER_GROWTH_LIMITS = ["compact", "roomy", "half-chat"] as const;
 export type ComposerGrowthLimit = (typeof COMPOSER_GROWTH_LIMITS)[number];
 
@@ -551,7 +459,7 @@ export interface AppConfig {
 	terminalReplayKb: number;
 	composerGrowthLimit: ComposerGrowthLimit;
 	chatMessageOrder: ChatMessageOrder;
-	layout: LayoutSettings;
+	customLayoutPresets: LayoutPreset[];
 	/** The model the plan reviewer + reflector run on; unset ⇒ the pi default. */
 	reviewModel?: WireModel;
 	/** Reviewer + reflector thinking level; unset ⇒ the model's default. */
@@ -574,12 +482,7 @@ export const DEFAULT_CONFIG: AppConfig = {
 	terminalReplayKb: TERMINAL_REPLAY_KB.default,
 	composerGrowthLimit: "half-chat",
 	chatMessageOrder: "oldest-first",
-	layout: {
-		defaultPresetId: "balanced",
-		customPresets: [],
-		maxSideGroups: 6,
-		maxBottomGroups: 3,
-	},
+	customLayoutPresets: [],
 	reviewAutoFix: true,
 };
 

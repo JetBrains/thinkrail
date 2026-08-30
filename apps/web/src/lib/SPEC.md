@@ -50,8 +50,8 @@ Tiny UI helpers shared across components.
   CSS-variable registration. It is imported per-file (`@/lib/highlighter`) from lazy chunks only; theme
   identity/palettes never live in `lib`. Collision-safe browser identity composition lives here too:
   **`tupleKey()`** length-prefixes independent strings, **`parseTupleKey()`** reads only its requested
-  namespace, and **`layoutResourceIdentity()`** gives every shared placement/cache alias one semantic
-  resource key, so delimiters and stable noncanonical placement ids cannot split or alias identities.
+  namespace, and **`layoutResourceIdentity()`** gives every frontend-local placement/cache alias one
+  semantic resource key, so delimiters and stable noncanonical placement ids cannot split or alias identities.
 - **Public surface (barrel):** `cn`, `isMarkdownPath`, `stripFrontmatter`, `cssColorToHex`,
   `normalizePath`, `isAbsolutePath`, `projectRelativePath` (canonical worktree-relative POSIX identity;
   collapses in-root `.`/`..` aliases but preserves an attempted leading escape for host rejection),
@@ -59,7 +59,7 @@ Tiny UI helpers shared across components.
   `relativeTime`, `platformShortcutLabel`, `hasPlatformModifier`, `copyText`, `randomId`,
   `DOUBLE_CLICK_SETTLE_MS`, `tupleKey`, `parseTupleKey`, `layoutResourceIdentity`,
   `readLayoutSelection`, `readLayoutNavigationClock`, and the `LayoutAttention` type.
-- **Allowed deps:** `clsx`, `tailwind-merge`; `@thinkrail/contracts` (types only — `userText` and
-  shared-layout resource parameters); `shiki`/`@shikijs/*` (the per-file shiki modules only — never reachable
+- **Allowed deps:** `clsx`, `tailwind-merge`; `@thinkrail/contracts` (types only for canonical messages;
+  the layout-resource identity input is a local structural type); `shiki`/`@shikijs/*` (the per-file shiki modules only — never reachable
   through the barrel).
 - **Forbidden:** every app-internal module — this is a leaf.

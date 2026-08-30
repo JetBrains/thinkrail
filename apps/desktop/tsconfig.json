@@ -1,0 +1,10 @@
+{
+	"extends": "../../tsconfig.base.json",
+	"compilerOptions": {
+		"noEmit": true,
+		"allowImportingTsExtensions": true,
+		"types": ["bun"]
+	},
+	"include": ["src", "*.ts"],
+	"exclude": [".stage", "build", "artifacts"]
+}

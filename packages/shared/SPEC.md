@@ -4,7 +4,7 @@ type: module-design
 status: active
 title: Shared server-side utilities
 parent: architecture
-depends-on: []
+depends-on: [module-contracts]
 references: [central-integration]
 tags: [v1, host]
 ---
@@ -22,9 +22,13 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   `@thinkrail/shared/freePort` → `findFreePort()`, `isPortFree()`;
   `@thinkrail/shared/startupMark` → the static recursive wordmark plus the pure responsive/ANSI renderer
   and interactive-output gate used by every launcher;
+  `@thinkrail/shared/version` → the baked `{ version, channel, commit }` release identity shared by CLI,
+  desktop, and host provenance (with a committed `0.0.0-dev` source default);
   `@thinkrail/shared/paths` → the worktree-relative path conventions (`WORKSPACE_INTERNAL_DIR`,
   `WORKSPACE_CONTEXT_DIR`, `WORKSPACE_TODOS_DIR`);
   `@thinkrail/shared/codedError` → `CodedError` + `errorCodeOf()`;
+  `@thinkrail/shared/removeTree` → `removeTree()`, the retrying recursive remove every teardown of a tree
+  a child process ran from goes through;
   `@thinkrail/shared/jbcentral` → the native Central CLI adapter: absolute executable/version/status
   probing; the minimum supported version and the global opaque PI-extension path; a one-directional auth
   verdict; an artifact-location watcher; `add pi` / `remove pi` / `login` / `update --install` actions; and
@@ -66,11 +70,25 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   non-interactive stdout. The root dev runner calls it before spawning concurrent tasks (`starting`);
   the source/compiled CLI calls it after `bootHost` resolves the actual URL (`host ready`). SVG/image
   conversion is never a runtime concern.
+- **/version** — the one permanent release-stamping seam. Source runs report `0.0.0-dev`; release CI
+  overwrites this module in its throwaway checkout before building either artifact family so CLI
+  `--version`, desktop package metadata, analytics, and `server.welcome.appVersion` cannot drift. It
+  contains identity data only and has no launcher dependency.
 - **/codedError** — `CodedError(code, message)` + `errorCodeOf(err)`: an error carrying a wire
   `WsErrorCode`, so a failure a client must react to *specifically* travels as a name rather than a string
   to pattern-match. It lives here because both ends of the seam need it and neither may import the other:
   the module that knows the failure throws it (today `server/src/git`, for a vanished commit scope) and the
   host's request handler reads it onto `WsResponse.errorCode`.
+- **/removeTree** — `removeTree(path, options?)`: delete a tree that a child process ran from, and keep
+  trying while the failure is one a short wait can resolve (`EBUSY`, `EMFILE`, `ENFILE`, `ENOTEMPTY`,
+  `EPERM`) — ten attempts with a linear 100 ms backoff by default. It exists because Windows releases
+  executable handles asynchronously after a child exits, so a bare recursive remove of a smoke/e2e temp
+  tree throws `EBUSY` *after* every assertion has already passed, and because **`rmSync`'s own
+  `maxRetries`/`retryDelay` are inert under Bun** — nightly run 33166583594 threw `EBUSY` 252 ms after
+  printing `installer smoke OK` under a policy that mandated seconds of backoff. The retry is teardown
+  resilience, not error suppression: a tree still locked past the backoff throws, and a failure no delay
+  can fix (`EACCES`, `ENOTDIR`, …) throws on the first attempt. `options.remove` is the injected-remover
+  seam the unit test drives; `attempts`/`delayMs` let a caller trade patience for speed.
 - **/paths** — the worktree-relative path conventions ThinkRail owns, named once so current and future
   consumers agree (today: `workspaces` *creates* the scratch dir and git *ignores* it):
   `WORKSPACE_INTERNAL_DIR` (`.thinkrail` — the repo-local host-managed dir, today holding the ephemeral

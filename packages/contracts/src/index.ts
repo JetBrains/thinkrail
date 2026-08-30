@@ -9,6 +9,7 @@ export {
 	isChatMessageOrder,
 	isComposerGrowthLimit,
 	isControlMessage,
+	isDelegationRunDetails,
 	isRetriedAttempt,
 	MAX_HISTORY_LIMIT,
 	MAX_HISTORY_QUERY_LENGTH,

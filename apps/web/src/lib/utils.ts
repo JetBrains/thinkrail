@@ -1,4 +1,4 @@
-import type { LayoutTab, UserMessage } from "@thinkrail/contracts";
+import type { UserMessage } from "@thinkrail/contracts";
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 
@@ -12,7 +12,22 @@ export function tupleKey(namespace: string, ...parts: string[]): string {
 	return `${namespace}:${parts.map((part) => `${part.length}:${part}`).join("")}`;
 }
 
-export function layoutResourceIdentity(tab: LayoutTab): string {
+type LayoutResourceIdentityInput =
+	| { kind: "file"; path: string }
+	| {
+			kind: "diff";
+			path: string;
+			scope:
+				| { kind: "branch" | "uncommitted" }
+				| { kind: "commit"; sha: string }
+				| { kind: "pinned"; baseRef: string };
+	  }
+	| { kind: "chat"; sessionId: string }
+	| { kind: "document"; documentKind: string; sourceId: string }
+	| { kind: "terminal"; tabKey: string }
+	| { kind: "tool"; tool: string };
+
+export function layoutResourceIdentity<T extends LayoutResourceIdentityInput>(tab: T): string {
 	switch (tab.kind) {
 		case "file":
 			return tupleKey("layout-resource", "file", tab.path);

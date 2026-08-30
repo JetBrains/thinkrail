@@ -13,7 +13,7 @@ tags: [v1, analytics, privacy]
 Anonymous, no-personal-data usage analytics, emitted **host-side only**. Answers product questions —
 unique users, version/platform, model preference, provider auth — via a **closed event set** delivered
 to **PostHog (EU cloud)** through the official `posthog-node` SDK. **Every channel reports** (a release
-binary, a locally compiled binary, and a run from source alike); what a run is gets *reported*, via
+binary, a packaged desktop app, a locally compiled artifact, and a run from source alike); what a run is gets *reported*, via
 `channel` + `build`, not gated on. What never reports is an **automated** run — CI, `bun test`, e2e. The SDK is an implementation detail
 **inside** the sink: the delivery backend hides behind the `AnalyticsSink` interface — swapping vendors
 is implementing a new sink, nothing else moves (exercised for real twice: GA4's Measurement Protocol →
@@ -107,8 +107,8 @@ PostHog won on free tier, EU residency, and a self-host path).
   the endpoint.
 - **Never sent:** paths, file/spec names, prompts, code, transcripts, token counts, hostnames,
   usernames, IP-derived fields, or any free-form user string. Params on every event: `app_version`,
-  `channel`, `os`, `arch`, `build` (`source` | `binary` — declared by the launching entry, see
-  `module-cli`, so `channel = dev` still separates a locally compiled binary from a run out of the repo)
+  `channel`, `os`, `arch`, `build` (`source` | `binary` | `desktop` — declared by the launching entry,
+  see `module-cli` / `module-desktop`, so `channel = dev` still separates local artifact kinds)
   — plus only the closed per-event params above; the unit tests pin each
   variant's exact non-`$` properties (transport framing — the SDK's `$lib*` fields, `$geoip_disable`,
   and the personless flag — is the sink's, never an event param).

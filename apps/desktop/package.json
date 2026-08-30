@@ -1,0 +1,28 @@
+{
+	"name": "@thinkrail/desktop",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"exports": {
+		"./artifact": "./src/artifact.ts"
+	},
+	"scripts": {
+		"package:dev": "bun build.ts --env=dev",
+		"dev": "bun build.ts --env=dev --run",
+		"package:canary": "bun build.ts --env=canary",
+		"package:stable": "bun build.ts --env=stable",
+		"smoke": "bun smoke.ts",
+		"smoke:installer": "bun installerSmoke.ts",
+		"typecheck": "tsc --noEmit -p tsconfig.typecheck.json",
+		"test": "bun test"
+	},
+	"dependencies": {
+		"@thinkrail/server": "workspace:*",
+		"@thinkrail/shared": "workspace:*",
+		"electrobun": "1.18.1"
+	},
+	"devDependencies": {
+		"@types/bun": "catalog:",
+		"typescript": "catalog:"
+	}
+}

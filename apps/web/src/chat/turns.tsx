@@ -12,6 +12,7 @@ import {
 import type { ImageContent, UserMessage } from "@thinkrail/contracts";
 import { type ReactNode, useEffect, useState } from "react";
 import { CustomIcon } from "@/components/CustomIcon";
+import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
 	cn,
@@ -26,10 +27,11 @@ import { useFold, useSelection } from "./foldState";
 import { Markdown } from "./Markdown";
 import { parseReviewPackage, type ReviewPackageItem, reviewPackageLabel } from "./reviewPackage";
 import type { ChatRow, TurnDividerData } from "./rows";
-import { formatTokens } from "./SessionStatsBar";
+import { formatElapsed, formatTokens } from "./SessionStatsBar";
 import { ToolCard } from "./ToolCard";
 import { ToolRendererBody } from "./ToolRendererBody";
 import { getToolChrome, getToolSummary, type ToolRenderProps } from "./toolRegistry";
+import { SubagentCompletionCard } from "./tools/subagent/SubagentCompletionCard";
 import type { CompactionState } from "./types";
 
 export function ChatTurnView({
@@ -39,6 +41,7 @@ export function ChatTurnView({
 	onOpenSpec,
 	onOpenChange,
 	onReveal,
+	onTryAgain,
 }: {
 	row: ChatRow;
 	workspaceRoot?: string | undefined;
@@ -46,6 +49,7 @@ export function ChatTurnView({
 	onOpenSpec?: ((path: string) => void) | undefined;
 	onOpenChange?: ((path: string) => void) | undefined;
 	onReveal?: ((tab: "specs" | "changes") => void) | undefined;
+	onTryAgain?: (() => void) | undefined;
 }) {
 	switch (row.kind) {
 		case "user":
@@ -53,7 +57,12 @@ export function ChatTurnView({
 		case "system":
 			return <SystemTurn text={row.text} />;
 		case "error":
-			return <ErrorTurn text={row.text} />;
+			return (
+				<ErrorTurn
+					text={row.text}
+					onTryAgain={row.recovery === "try-again" ? onTryAgain : undefined}
+				/>
+			);
 		case "compaction":
 			return row.summary !== undefined && row.tokensBefore !== undefined ? (
 				<CompactionTurn
@@ -85,6 +94,8 @@ export function ChatTurnView({
 					<Markdown text={row.text} />
 				</div>
 			);
+		case "subagentCompletion":
+			return <SubagentCompletionCard id={row.id} details={row.details} text={row.text} />;
 		case "tool":
 			return <ToolRow row={row} workspaceRoot={workspaceRoot} onOpenFile={onOpenFile} />;
 		case "activity":
@@ -412,7 +423,7 @@ function CompactionTurn({
 	);
 }
 
-function ErrorTurn({ text }: { text: string }) {
+function ErrorTurn({ text, onTryAgain }: { text: string; onTryAgain?: (() => void) | undefined }) {
 	return (
 		<div
 			data-testid="chat-message"
@@ -420,7 +431,19 @@ function ErrorTurn({ text }: { text: string }) {
 			className="flex items-start gap-8 rounded-[var(--radius-sm)] border border-feedback-error-muted bg-clip-padding bg-feedback-error-subtle px-12 py-8 text-feedback-error tr-text-ui"
 		>
 			<TriangleAlert className="mt-2 size-12 shrink-0" />
-			<span className="min-w-0 whitespace-pre-wrap break-words">{text}</span>
+			<span className="min-w-0 flex-1 whitespace-pre-wrap break-words">{text}</span>
+			{onTryAgain ? (
+				<Button
+					variant="outline"
+					size="sm"
+					data-testid="agent-try-again"
+					className="shrink-0"
+					onClick={onTryAgain}
+				>
+					<RotateCw className="size-12" />
+					Try again
+				</Button>
+			) : null}
 		</div>
 	);
 }
@@ -511,13 +534,6 @@ function RetryIndicator({
 			</div>
 		</div>
 	);
-}
-
-function formatElapsed(ms: number): string {
-	const totalSec = Math.round(ms / 1000);
-	const m = Math.floor(totalSec / 60);
-	const s = totalSec % 60;
-	return m > 0 ? `${m}m ${s}s` : `${s}s`;
 }
 
 function FileDiffGlyph({ className }: { className?: string }) {

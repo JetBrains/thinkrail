@@ -24,6 +24,7 @@ import type { ConnectionStatus } from "../transport";
 import { BrandLogo } from "./BrandLogo";
 import { CollapsedPanelRail } from "./CollapsedPanelRail";
 import { LayoutSettings } from "./LayoutSettings";
+import { useLocalLayoutState } from "./layoutState";
 import { useCollapsibleRegion } from "./useCollapsibleRegion";
 import { useGlobalHotkeys } from "./useGlobalHotkeys";
 import { WorkspaceWorkbench } from "./WorkspaceWorkbench";
@@ -41,6 +42,7 @@ const STATUS_DOT: Record<ConnectionStatus, string> = {
 };
 
 export function Shell() {
+	useLocalLayoutState();
 	const status = useAppStore((s) => s.status);
 	const StatusDot = status === "connected" ? RiCircleFill : Circle;
 	const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);

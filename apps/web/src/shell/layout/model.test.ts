@@ -1,9 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import type {
-	LayoutCenterTab,
-	LayoutTerminalTab,
-	WorkspaceLayoutDocument,
-} from "@thinkrail/contracts";
 import type { LayoutAttention } from "../../lib";
 import {
 	canShowSide,
@@ -22,6 +17,7 @@ import {
 	moveTabToGroup,
 	openCenterTab,
 	reconcileAttention,
+	removeLayoutGroup,
 	removeSessionLayoutTabs,
 	resizeAuxiliaryGroups,
 	resizeBottomRegion,
@@ -42,12 +38,8 @@ import {
 	validateLayoutDocument,
 	withAvailablePlacementId,
 } from "./model";
-import {
-	applyLayoutPreset,
-	BUILTIN_LAYOUT_PRESETS,
-	captureLayoutPreset,
-	instantiateLayoutPreset,
-} from "./presets";
+import { BUILTIN_LAYOUT_PRESETS } from "./presets";
+import type { LayoutCenterTab, LayoutTerminalTab, WorkspaceLayoutDocument } from "./types";
 
 const file = (id: string): LayoutCenterTab => ({
 	kind: "file",
@@ -173,6 +165,10 @@ describe("workspace layout model", () => {
 		const source = collectCenterGroups(document.center).find((group) => group.tabs.length > 0);
 		if (!source) throw new Error("missing populated center group");
 		for (const tab of [...source.tabs]) document = closeLayoutTab(document, tab.id).document;
+		expect(collectCenterGroups(document.center)).toHaveLength(4);
+		document = mutation(
+			removeLayoutGroup(document, { area: "center", groupId: source.id }),
+		).document;
 		expect(collectCenterGroups(document.center)).toHaveLength(3);
 
 		let singleton = baseDocument([file("alpha"), file("beta")]);
@@ -261,13 +257,13 @@ describe("workspace layout model", () => {
 		expect(document.bottom.alignment).toBe("full");
 		expect(document.bottom.height).toBe(0.7);
 		document = closeLayoutTab(document, terminal.id).document;
-		expect(document.bottom.groups).toHaveLength(1);
-		expect(document.bottom.groups[0]?.tabs).toEqual([toolTab("changes")]);
-		expect(document.bottom.groups[0]?.weight).toBe(1);
+		expect(document.bottom.groups).toHaveLength(2);
+		expect(document.bottom.groups[0]?.tabs).toEqual([]);
+		expect(document.bottom.groups[1]?.tabs).toEqual([toolTab("changes")]);
 		expect(document.bottom.visible).toBe(true);
 		document = closeLayoutTab(document, "tool:changes").document;
-		expect(document.bottom.groups).toEqual([]);
-		expect(document.bottom.visible).toBe(false);
+		expect(document.bottom.groups.map((group) => group.tabs)).toEqual([[], []]);
+		expect(document.bottom.visible).toBe(true);
 		expect(document.toolRestoreTargets.changes?.region).toBe("bottom");
 		const revealed = mutation(revealTool(document, "changes", 6, 2));
 		expect(findTabLocation(revealed.document, revealed.focusTabId ?? "missing")?.area).toBe(
@@ -277,7 +273,7 @@ describe("workspace layout model", () => {
 		expect(validateLayoutDocument(revealed.document, 6, 2)).toEqual([]);
 	});
 
-	test("bottom removal drops only the group newly vacated by its final tab", () => {
+	test("bottom removal preserves every frame group after its final tab closes", () => {
 		const terminal: LayoutTerminalTab = {
 			kind: "terminal",
 			id: "terminal:bottom",
@@ -298,12 +294,13 @@ describe("workspace layout model", () => {
 		const closed = closeLayoutTab(document, terminal.id).document;
 
 		expect(closed.bottom.groups).toEqual([
-			{ id: "deliberate-empty", weight: 1, folded: false, tabs: [] },
+			{ id: "deliberate-empty", weight: 0.25, folded: false, tabs: [] },
+			{ id: "vacated", weight: 0.75, folded: false, tabs: [] },
 		]);
-		expect(closed.bottom.visible).toBe(false);
+		expect(closed.bottom.visible).toBe(true);
 	});
 
-	test("moving a bottom group's final tab removes its source group", () => {
+	test("moving a bottom group's final tab preserves its source frame group", () => {
 		const terminal: LayoutTerminalTab = {
 			kind: "terminal",
 			id: "terminal:bottom",
@@ -326,9 +323,10 @@ describe("workspace layout model", () => {
 		).document;
 
 		expect(moved.bottom.groups).toEqual([
+			{ id: "source", weight: 0.4, folded: false, tabs: [] },
 			{
 				id: "destination",
-				weight: 1,
+				weight: 0.6,
 				folded: false,
 				tabs: [toolTab("changes"), terminal],
 			},
@@ -417,8 +415,9 @@ describe("workspace layout model", () => {
 		let document = baseDocument();
 		document = mutation(setSideGroupFolded(document, "right", "right-a", true)).document;
 		document = closeLayoutTab(document, "tool:files").document;
-		expect(document.right.groups).toHaveLength(0);
-		expect(document.right.visible).toBe(false);
+		expect(document.right.groups).toHaveLength(1);
+		expect(document.right.groups[0]?.tabs).toEqual([]);
+		expect(document.right.visible).toBe(true);
 		expect(document.toolRestoreTargets.files).toEqual({
 			region: "right",
 			groupId: "right-a",
@@ -487,24 +486,23 @@ describe("workspace layout model", () => {
 		expect(validateLayoutDocument(collisionReveal.document, 6)).toEqual([]);
 	});
 
-	test("blocks growth at the side limit but permits a count-neutral edge reorder", () => {
+	test("blocks every new frame group at the side limit", () => {
 		const document = baseDocument();
 		expect(resizeSideRegion(document, "right", document.right.width)).toBe(document);
 		expect(resizeSideGroups(document, "right", [100])).toBe(document);
 		const blocked = createSideGroup(document, "right", toolTab("changes"), 1, 1);
 		expect(isLayoutUnavailable(blocked)).toBe(true);
-		const noOp = createSideGroup(document, "right", toolTab("files"), 0, 1);
-		expect(noOp).toEqual({ reason: "That tab is already at this position." });
+		const retainedSource = createSideGroup(document, "right", toolTab("files"), 0, 1);
+		expect(retainedSource).toEqual({ reason: "This region is limited to 1 groups." });
 
 		let grown = mutation(createSideGroup(document, "right", toolTab("changes"), 1, 2)).document;
-		const reordered = mutation(
-			createSideGroup(grown, "right", toolTab("files"), grown.right.groups.length, 1),
+		expect(createSideGroup(grown, "right", toolTab("files"), grown.right.groups.length, 1)).toEqual(
+			{ reason: "This region is limited to 1 groups." },
 		);
-		grown = reordered.document;
 		expect(grown.right.groups).toHaveLength(2);
 		expect(grown.right.groups.map((group) => group.tabs[0]?.id)).toEqual([
-			"tool:changes",
 			"tool:files",
+			"tool:changes",
 		]);
 		expect(grown.right.groups.map((group) => group.weight)).toEqual([0.5, 0.5]);
 		expect(validateLayoutDocument(grown, 1)).toContain("Too many right groups.");
@@ -525,26 +523,26 @@ describe("workspace layout model", () => {
 		expect(validateLayoutDocument(grown, 2)).toEqual([]);
 	});
 
-	test("inserts side groups at per-group boundaries after removing a singleton source", () => {
+	test("inserts side groups at boundaries while retaining the source frame slot", () => {
 		let document = baseDocument();
 		document = mutation(createSideGroup(document, "right", toolTab("changes"), 1, 6)).document;
 		document = mutation(createSideGroup(document, "right", toolTab("review"), 2, 6)).document;
 
 		document = mutation(createSideGroup(document, "right", toolTab("files"), 2, 6)).document;
 		expect(document.right.groups.map((group) => group.tabs[0]?.id)).toEqual([
+			undefined,
 			"tool:changes",
 			"tool:files",
 			"tool:review",
 		]);
-		expect(createSideGroup(document, "right", toolTab("files"), 2, 6)).toEqual({
-			reason: "That tab is already at this position.",
-		});
 
 		document = mutation(createSideGroup(document, "right", toolTab("files"), 3, 6)).document;
 		expect(document.right.groups.map((group) => group.tabs[0]?.id)).toEqual([
+			undefined,
 			"tool:changes",
-			"tool:review",
+			undefined,
 			"tool:files",
+			"tool:review",
 		]);
 
 		let joined = baseDocument();
@@ -673,194 +671,6 @@ describe("workspace layout model", () => {
 		expect(focus?.bottom.groups).toHaveLength(1);
 		expect(review?.bottom).toMatchObject({ visible: true, alignment: "center" });
 		expect(review?.bottom.groups).toHaveLength(1);
-	});
-
-	test("preset application preserves resources and routes every terminal through bottom slots", () => {
-		const terminal: LayoutTerminalTab = {
-			kind: "terminal",
-			id: "terminal:t1",
-			name: "Terminal 1",
-			tabKey: "t1",
-		};
-		const sourceDocument = baseDocument([file("one")]);
-		const sourceFilesGroup = sourceDocument.right.groups[0];
-		if (!sourceFilesGroup) throw new Error("missing source tool group fixture");
-		sourceDocument.right.groups[0] = {
-			...sourceFilesGroup,
-			tabs: [{ ...toolTab("files"), id: "legacy-files-placement" }],
-		};
-		const source = mutation(
-			moveTabToGroup(sourceDocument, terminal, {
-				area: "right",
-				groupId: "right-a",
-			}),
-		).document;
-		const bottomPreset = {
-			id: "empty-sides",
-			name: "Empty sides",
-			center: { kind: "group" as const, id: "only" },
-			left: { visible: false, width: 0.2, groups: [] },
-			right: { visible: false, width: 0.2, groups: [] },
-			bottom: {
-				visible: true,
-				height: 0.3,
-				alignment: "center" as const,
-				groups: [{ id: "bottom-slot", weight: 1, folded: false, tools: [] }],
-			},
-		};
-		const seeded = instantiateLayoutPreset({
-			...bottomPreset,
-			center: { kind: "group", id: "x".repeat(200) },
-		});
-		expect(seeded.center.id.length).toBeLessThanOrEqual(200);
-		expect(validateLayoutDocument(seeded, 6, 3)).toEqual([]);
-		expect(canShowSide(seeded, "left")).toBe(true);
-		expect(canShowSide(seeded, "right")).toBe(true);
-		const applied = applyLayoutPreset(source, bottomPreset);
-		expect(validateLayoutDocument(applied, 6, 3)).toEqual([]);
-		expect(collectCenterGroups(applied.center)[0]?.tabs.map((tab) => tab.id)).toEqual(["one"]);
-		expect(applied.bottom.groups[0]?.tabs.map((tab) => tab.id)).toEqual(["terminal:t1"]);
-		expect(applied.toolRestoreTargets).toEqual({
-			projects: { region: "left", index: 0 },
-			specs: { region: "right", index: 0 },
-			files: { region: "right", index: 0 },
-			changes: { region: "right", index: 2 },
-			review: { region: "right", index: 3 },
-		});
-		expect(canShowSide(applied, "left")).toBe(true);
-		expect(
-			findTabLocation(mutation(revealTool(applied, "projects", 6)).document, "tool:projects"),
-		).toMatchObject({ area: "left" });
-
-		const focus = BUILTIN_LAYOUT_PRESETS.find((preset) => preset.id === "focus");
-		if (!focus) throw new Error("missing Focus preset");
-		const focused = applyLayoutPreset(source, focus);
-		expect(focused.left.visible).toBe(false);
-		expect(focused.right.visible).toBe(false);
-		expect(focused.bottom.visible).toBe(false);
-		expect(
-			focused.bottom.groups.flatMap((group) => group.tabs).some((tab) => tab.id === "terminal:t1"),
-		).toBe(true);
-		expect(
-			focused.right.groups
-				.flatMap((group) => group.tabs)
-				.find((tab) => tab.kind === "tool" && tab.tool === "files")?.id,
-		).toBe("legacy-files-placement");
-
-		const balanced = BUILTIN_LAYOUT_PRESETS.find((preset) => preset.id === "balanced");
-		if (!balanced) throw new Error("missing Balanced preset");
-		const collidingTerminal: LayoutTerminalTab = {
-			kind: "terminal",
-			id: "tool:review",
-			name: "Terminal",
-			tabKey: "collision",
-		};
-		const collisionApplied = applyLayoutPreset(baseDocument([collidingTerminal]), balanced);
-		expect(validateLayoutDocument(collisionApplied, 6, 3)).toEqual([]);
-		expect(
-			collisionApplied.right.groups
-				.flatMap((group) => group.tabs)
-				.find((tab) => tab.kind === "tool" && tab.tool === "review")?.id,
-		).not.toBe("tool:review");
-	});
-
-	test("a slotless hidden preset stays slotless until it has terminals to preserve", () => {
-		const preset = {
-			...BUILTIN_LAYOUT_PRESETS[0],
-			bottom: {
-				visible: false,
-				height: 0.3,
-				alignment: "center" as const,
-				groups: [],
-			},
-		};
-		const withoutTerminal = applyLayoutPreset(baseDocument([file("one")]), preset);
-		expect(withoutTerminal.bottom.groups).toEqual([]);
-
-		const terminal = {
-			kind: "terminal" as const,
-			id: "terminal:one",
-			name: "Terminal",
-			tabKey: "one",
-		};
-		const withTerminal = applyLayoutPreset(baseDocument([terminal]), preset);
-		expect(withTerminal.bottom).toMatchObject({ visible: false });
-		expect(withTerminal.bottom.groups).toHaveLength(1);
-		expect(withTerminal.bottom.groups[0]?.tabs).toEqual([terminal]);
-	});
-
-	test("preset terminal distribution is one per bottom group before extras join the first", () => {
-		const document = baseDocument(
-			["one", "two", "three"].map((tabKey) => ({
-				kind: "terminal" as const,
-				id: `terminal:${tabKey}`,
-				name: tabKey,
-				tabKey,
-			})),
-		);
-		const preset = {
-			...BUILTIN_LAYOUT_PRESETS[0],
-			bottom: {
-				visible: true,
-				height: 0.4,
-				alignment: "full" as const,
-				groups: [
-					{ id: "bottom-one", weight: 0.6, folded: false, tools: [] },
-					{ id: "bottom-two", weight: 0.4, folded: true, tools: [] },
-				],
-			},
-		};
-		const applied = applyLayoutPreset(document, preset);
-		expect(applied.bottom.groups.map((group) => group.tabs.map((tab) => tab.id))).toEqual([
-			["terminal:one", "terminal:three"],
-			["terminal:two"],
-		]);
-		expect(applied.bottom).toMatchObject({ visible: true, height: 0.4, alignment: "full" });
-	});
-
-	test("portable capture drops side terminal-only groups but retains empty bottom structure", () => {
-		const terminalOnly = baseDocument();
-		const terminal = {
-			kind: "terminal" as const,
-			id: "terminal:t1",
-			name: "Terminal",
-			tabKey: "t1",
-		};
-		terminalOnly.right.groups = [
-			{ id: "terminal-only", weight: 1, folded: false, tabs: [terminal] },
-		];
-		terminalOnly.bottom = {
-			visible: true,
-			height: 0.44,
-			alignment: "center-right",
-			groups: [
-				{ id: "bottom-one", weight: 0.4, folded: false, tabs: [terminal] },
-				{ id: "bottom-two", weight: 0.6, folded: true, tabs: [] },
-			],
-		};
-		const preset = captureLayoutPreset(terminalOnly, "portable", "Portable");
-		expect(preset.right).toEqual({ visible: false, width: 0.28, groups: [] });
-		expect(preset.bottom).toEqual({
-			visible: true,
-			height: 0.44,
-			alignment: "center-right",
-			groups: [
-				{ id: "bottom-one", weight: 0.4, folded: false, tools: [] },
-				{ id: "bottom-two", weight: 0.6, folded: true, tools: [] },
-			],
-		});
-
-		terminalOnly.right.groups.unshift({
-			id: "tool-group",
-			weight: 0.25,
-			folded: false,
-			tabs: [toolTab("files")],
-		});
-		const terminalGroup = terminalOnly.right.groups[1];
-		if (!terminalGroup) throw new Error("missing terminal-only group fixture");
-		terminalOnly.right.groups[1] = { ...terminalGroup, weight: 0.75 };
-		const mixed = captureLayoutPreset(terminalOnly, "mixed", "Mixed");
-		expect(mixed.right.groups[0]?.weight).toBe(1);
 	});
 
 	test("successful generated mutation sequences preserve every layout invariant", () => {

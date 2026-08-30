@@ -125,6 +125,13 @@ test("every event is stamped with the env metadata", async () => {
 	expect(entry?.properties.arch).toBeString();
 });
 
+test("desktop provenance is reported without collapsing it into binary", async () => {
+	const sent: SentPayload[] = [];
+	bootSending(sent, { build: "desktop" });
+	await drained(sent, 2);
+	expect(allEntries(sent).every((entry) => entry.properties.build === "desktop")).toBe(true);
+});
+
 test("the batch goes to the EU cloud by default; THINKRAIL_POSTHOG_HOST retargets it", async () => {
 	const sent: SentPayload[] = [];
 	bootSending(sent);

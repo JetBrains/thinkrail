@@ -6,10 +6,7 @@ import type {
 	ExtUiRequest,
 	GitDiffScope,
 	HostPlatform,
-	LayoutAuxiliaryRegion,
-	LayoutChangedPayload,
-	LayoutSettings,
-	LayoutToolId,
+	LayoutPreset,
 	LoginFrame,
 	LoginPush,
 	PiEvent,
@@ -17,6 +14,7 @@ import type {
 	RefreshedModels,
 	ReviewChangedPayload,
 	ReviewSnapshot,
+	SessionEventPayload,
 	SessionQueueState,
 	SessionStats,
 	SessionSummary,
@@ -29,10 +27,14 @@ import type {
 	WireModel,
 	Workspace,
 	WorkspaceFsChangedPayload,
-	WorkspaceLayoutDocument,
-	WorkspaceLayoutSnapshot,
 } from "@thinkrail/contracts";
-import { DEFAULT_CONFIG, isAskUserAnswersMessage, isControlMessage } from "@thinkrail/contracts";
+import {
+	customMessageText,
+	DEFAULT_CONFIG,
+	isAskUserAnswersMessage,
+	isControlMessage,
+	isSubagentCompletionMessage,
+} from "@thinkrail/contracts";
 import { create } from "zustand";
 import type { LoginState } from "../auth";
 import { assistantFailureText } from "../chat/assistantFailure";
@@ -55,6 +57,13 @@ import {
 	tupleKey,
 	userText,
 } from "../lib";
+import type {
+	LayoutAuxiliaryRegion,
+	LayoutToolId,
+	WorkbenchFrame,
+	WorkspaceLayoutDocument,
+	WorkspaceViewState,
+} from "../shell/layout";
 import type { ConnectionStatus } from "../transport";
 import {
 	type HistoryTarget,
@@ -148,10 +157,24 @@ function availableEditorTabId(tabs: readonly EditorTab[], tab: EditorTab): strin
 
 export type TabIntent = "preview" | "keep";
 
-export interface PendingLayoutWrite {
-	mutationId: string;
-	expectedRevision: number | null;
-	document: WorkspaceLayoutDocument;
+export interface LocalLayoutPreferences {
+	defaultPresetId: string;
+	maxSideGroups: number;
+	maxBottomGroups: number;
+}
+
+export const DEFAULT_LOCAL_LAYOUT_PREFERENCES: LocalLayoutPreferences = {
+	defaultPresetId: "balanced",
+	maxSideGroups: 6,
+	maxBottomGroups: 3,
+};
+
+export interface LocalLayoutStatePayload {
+	frame: WorkbenchFrame;
+	viewsByWorkspace: Record<string, WorkspaceViewState>;
+	documentsByWorkspace: Record<string, WorkspaceLayoutDocument>;
+	attentionByWorkspace: Record<string, LayoutAttention>;
+	preferences: LocalLayoutPreferences;
 }
 
 export interface CenterNavigationStamp {
@@ -328,6 +351,15 @@ function clearTurnStreaming(turns: ChatTurn[]): ChatTurn[] {
 	return turns.map((t) => (t.kind === "assistant" && t.streaming ? { ...t, streaming: false } : t));
 }
 
+function consumeFailureRecoveries(turns: ChatTurn[]): ChatTurn[] {
+	if (!turns.some((turn) => turn.kind === "error" && turn.recovery)) return turns;
+	return turns.map((turn) => {
+		if (turn.kind !== "error" || !turn.recovery) return turn;
+		const { recovery, ...rest } = turn;
+		return rest;
+	});
+}
+
 function removeSupersededAssistant(
 	turns: ChatTurn[],
 	attemptAssistantId: string | null,
@@ -434,7 +466,12 @@ function clearRetryTurns(rt: SessionRuntime, source: RetrySource): SessionRuntim
 export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionRuntime {
 	switch (event.type) {
 		case "agent_start":
-			return { ...rt, isStreaming: true, attemptAssistantId: null };
+			return {
+				...rt,
+				turns: consumeFailureRecoveries(rt.turns),
+				isStreaming: true,
+				attemptAssistantId: null,
+			};
 		case "queue_update":
 			return {
 				...rt,
@@ -503,6 +540,20 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 				const { toolCallId, result } = event.message.details;
 				return { ...rt, askAnswers: { ...rt.askAnswers, [toolCallId]: result } };
 			}
+			if (isSubagentCompletionMessage(event.message)) {
+				return {
+					...rt,
+					turns: [
+						...rt.turns,
+						{
+							kind: "subagentCompletion",
+							id: crypto.randomUUID(),
+							details: event.message.details,
+							text: customMessageText(event.message.content),
+						},
+					],
+				};
+			}
 			if (event.message.role !== "assistant" || !rt.currentAssistantId) return rt;
 			const id = rt.currentAssistantId;
 			const turn: ChatTurn = { kind: "assistant", id, message: event.message, streaming: false };
@@ -544,7 +595,12 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 		case "agent_settled": {
 			const failure = assistantFailureText(event.terminal);
 			const closer: ChatTurn = failure
-				? { kind: "error", id: crypto.randomUUID(), text: failure }
+				? {
+						kind: "error",
+						id: crypto.randomUUID(),
+						text: failure,
+						recovery: "try-again",
+					}
 				: { kind: "system", id: crypto.randomUUID(), text: "✓ Done", endedAt: Date.now() };
 			return {
 				...rt,
@@ -655,11 +711,13 @@ interface AppState {
 	workspaceSelectionHistory: string[];
 	routeChatTarget: RouteChatTarget | null;
 	routeChatTargetGeneration: number;
-	layoutSnapshotsByWorkspace: Record<string, WorkspaceLayoutSnapshot>;
+	workbenchFrame: WorkbenchFrame | null;
+	workspaceViewsByWorkspace: Record<string, WorkspaceViewState>;
+	layoutStateReady: boolean;
+	localLayoutPreferences: LocalLayoutPreferences;
 	layoutDocumentsByWorkspace: Record<string, WorkspaceLayoutDocument>;
 	layoutAttentionByWorkspace: Record<string, LayoutAttention>;
-	layoutPendingByWorkspace: Record<string, PendingLayoutWrite[]>;
-	layoutRemoteEpochByWorkspace: Record<string, number>;
+	layoutProjectionEpochByWorkspace: Record<string, number>;
 	layoutIntents: LayoutIntent[];
 	tabsByWorkspace: Record<string, EditorTab[]>;
 	activeTabByWorkspace: Record<string, string | null>;
@@ -706,7 +764,7 @@ interface AppState {
 	reviewModel: WireModel | undefined;
 	reviewEffort: ThinkingLevel | undefined;
 	reviewAutoFix: boolean;
-	layoutSettings: LayoutSettings;
+	customLayoutPresets: LayoutPreset[];
 	toasts: Toast[];
 	setStatus: (status: ConnectionStatus) => void;
 	installWelcomeSnapshot: (
@@ -735,19 +793,13 @@ interface AppState {
 	) => void;
 	validateRouteChatTarget: (sessionId: string) => void;
 	clearRouteChatTarget: () => void;
-	installLayoutSnapshot: (snapshot: WorkspaceLayoutSnapshot, mutationId?: string) => void;
-	applyLayoutChanged: (payload: LayoutChangedPayload) => void;
-	beginLayoutCommit: (
-		workspaceId: string,
-		document: WorkspaceLayoutDocument,
-		mutationId: string,
+	hydrateLocalLayoutState: (payload: LocalLayoutStatePayload) => void;
+	applyLocalLayoutState: (
+		payload: LocalLayoutStatePayload,
+		changedWorkspaceIds: readonly string[],
+		invalidateProjection?: boolean,
 	) => void;
-	rejectLayoutCommit: (workspaceId: string, mutationId: string) => void;
-	applyLayoutConflict: (
-		workspaceId: string,
-		mutationId: string,
-		current: WorkspaceLayoutSnapshot | null,
-	) => void;
+	setLocalLayoutPreferences: (preferences: LocalLayoutPreferences) => void;
 	setLayoutAttention: (workspaceId: string, attention: LayoutAttention) => void;
 	syncLegacySelection: (
 		workspaceId: string,
@@ -858,6 +910,7 @@ interface AppState {
 		detail: string,
 	) => void;
 	handlePiEvent: (event: PiEvent, sessionId: string) => void;
+	handlePiEvents: (payloads: readonly SessionEventPayload[]) => void;
 	setModelsForProviderVersion: (providerVersion: number, models: WireModel[]) => void;
 	noteProviderChanged: () => void;
 	bumpTemplatesVersion: () => void;
@@ -908,7 +961,7 @@ function configPatch(config: AppConfig) {
 		terminalReplayKb: config.terminalReplayKb,
 		composerGrowthLimit: config.composerGrowthLimit ?? DEFAULT_CONFIG.composerGrowthLimit,
 		chatMessageOrder: config.chatMessageOrder ?? DEFAULT_CONFIG.chatMessageOrder,
-		layoutSettings: config.layout ?? DEFAULT_CONFIG.layout,
+		customLayoutPresets: config.customLayoutPresets ?? DEFAULT_CONFIG.customLayoutPresets,
 		reviewModel: config.reviewModel,
 		reviewEffort: config.reviewEffort,
 		reviewAutoFix: config.reviewAutoFix ?? DEFAULT_CONFIG.reviewAutoFix,
@@ -1040,21 +1093,6 @@ function sameSpecNode(a: SpecGraphNode, b: SpecGraphNode): boolean {
 
 function bumpNav(s: AppState, workspaceId: string): Record<string, number> {
 	return { ...s.navTickByWorkspace, [workspaceId]: selectWorkspaceNavTick(s, workspaceId) + 1 };
-}
-
-function bumpLayoutProjectionEpoch(s: AppState, workspaceId: string): Record<string, number> {
-	return {
-		...s.layoutRemoteEpochByWorkspace,
-		[workspaceId]: (s.layoutRemoteEpochByWorkspace[workspaceId] ?? 0) + 1,
-	};
-}
-
-function nextExpectedLayoutRevision(state: AppState, workspaceId: string): number | null {
-	const predecessor = state.layoutPendingByWorkspace[workspaceId]?.at(-1);
-	if (predecessor) {
-		return predecessor.expectedRevision === null ? 1 : predecessor.expectedRevision + 1;
-	}
-	return state.layoutSnapshotsByWorkspace[workspaceId]?.revision ?? null;
 }
 
 function advanceCenterNavigation(
@@ -1473,11 +1511,13 @@ export const useAppStore = create<AppState>((set, get) => ({
 	workspaceSelectionHistory: [],
 	routeChatTarget: null,
 	routeChatTargetGeneration: 0,
-	layoutSnapshotsByWorkspace: {},
+	workbenchFrame: null,
+	workspaceViewsByWorkspace: {},
+	layoutStateReady: false,
+	localLayoutPreferences: { ...DEFAULT_LOCAL_LAYOUT_PREFERENCES },
 	layoutDocumentsByWorkspace: {},
 	layoutAttentionByWorkspace: {},
-	layoutPendingByWorkspace: {},
-	layoutRemoteEpochByWorkspace: {},
+	layoutProjectionEpochByWorkspace: {},
 	layoutIntents: [],
 	tabsByWorkspace: {},
 	activeTabByWorkspace: {},
@@ -1514,7 +1554,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	terminalReplayKb: DEFAULT_CONFIG.terminalReplayKb,
 	composerGrowthLimit: DEFAULT_CONFIG.composerGrowthLimit,
 	chatMessageOrder: DEFAULT_CONFIG.chatMessageOrder,
-	layoutSettings: DEFAULT_CONFIG.layout,
+	customLayoutPresets: DEFAULT_CONFIG.customLayoutPresets,
 	reviewModel: DEFAULT_CONFIG.reviewModel,
 	reviewEffort: DEFAULT_CONFIG.reviewEffort,
 	reviewAutoFix: DEFAULT_CONFIG.reviewAutoFix,
@@ -1720,131 +1760,38 @@ export const useAppStore = create<AppState>((set, get) => ({
 		}),
 	clearRouteChatTarget: () =>
 		set((state) => (state.routeChatTarget ? { routeChatTarget: null } : state)),
-	installLayoutSnapshot: (snapshot, mutationId) =>
-		set((state) => {
-			const workspaceId = snapshot.workspaceId;
-			if (state.removedWorkspaceIds[workspaceId]) return {};
-			const current = state.layoutSnapshotsByWorkspace[workspaceId];
-			const pending = state.layoutPendingByWorkspace[workspaceId] ?? [];
-			const matched = mutationId
-				? pending.findIndex((write) => write.mutationId === mutationId)
-				: -1;
-			const remaining = matched >= 0 ? pending.slice(matched + 1) : pending;
-			const newer = !current || snapshot.revision > current.revision;
-			const accepted = newer ? snapshot : current;
-			if (!accepted) return {};
-			const projected = remaining.at(-1)?.document ?? accepted.document;
-			return {
-				layoutSnapshotsByWorkspace: {
-					...state.layoutSnapshotsByWorkspace,
-					[workspaceId]: accepted,
-				},
-				layoutDocumentsByWorkspace: {
-					...state.layoutDocumentsByWorkspace,
-					[workspaceId]: projected,
-				},
-				layoutPendingByWorkspace: {
-					...state.layoutPendingByWorkspace,
-					[workspaceId]: remaining,
-				},
-				layoutRemoteEpochByWorkspace:
-					newer && matched < 0
-						? bumpLayoutProjectionEpoch(state, workspaceId)
-						: state.layoutRemoteEpochByWorkspace,
-			};
-		}),
-	applyLayoutChanged: (payload) =>
-		get().installLayoutSnapshot(payload.snapshot, payload.mutationId),
-	beginLayoutCommit: (workspaceId, document, mutationId) =>
+	hydrateLocalLayoutState: (payload) =>
 		set((state) =>
-			state.removedWorkspaceIds[workspaceId]
+			state.layoutStateReady
 				? {}
 				: {
-						layoutDocumentsByWorkspace: {
-							...state.layoutDocumentsByWorkspace,
-							[workspaceId]: document,
-						},
-						layoutPendingByWorkspace: {
-							...state.layoutPendingByWorkspace,
-							[workspaceId]: [
-								...(state.layoutPendingByWorkspace[workspaceId] ?? []),
-								{
-									mutationId,
-									expectedRevision: nextExpectedLayoutRevision(state, workspaceId),
-									document,
-								},
-							],
-						},
+						workbenchFrame: payload.frame,
+						workspaceViewsByWorkspace: payload.viewsByWorkspace,
+						layoutDocumentsByWorkspace: payload.documentsByWorkspace,
+						layoutAttentionByWorkspace: payload.attentionByWorkspace,
+						localLayoutPreferences: payload.preferences,
+						layoutStateReady: true,
 					},
 		),
-	rejectLayoutCommit: (workspaceId, mutationId) =>
+	applyLocalLayoutState: (payload, changedWorkspaceIds, invalidateProjection = false) =>
 		set((state) => {
-			const pending = state.layoutPendingByWorkspace[workspaceId] ?? [];
-			const rejectedIndex = pending.findIndex((write) => write.mutationId === mutationId);
-			if (rejectedIndex < 0) return {};
-			const remaining = pending.slice(0, rejectedIndex);
-			const fallback = remaining.at(-1)?.document;
-			const accepted = state.layoutSnapshotsByWorkspace[workspaceId];
-			if (!accepted) {
-				return {
-					layoutPendingByWorkspace: {
-						...state.layoutPendingByWorkspace,
-						[workspaceId]: remaining,
-					},
-					layoutDocumentsByWorkspace: fallback
-						? {
-								...state.layoutDocumentsByWorkspace,
-								[workspaceId]: fallback,
-							}
-						: omitKey(state.layoutDocumentsByWorkspace, workspaceId),
-					layoutRemoteEpochByWorkspace: bumpLayoutProjectionEpoch(state, workspaceId),
-				};
+			const layoutProjectionEpochByWorkspace = { ...state.layoutProjectionEpochByWorkspace };
+			if (invalidateProjection) {
+				for (const workspaceId of changedWorkspaceIds) {
+					layoutProjectionEpochByWorkspace[workspaceId] =
+						(layoutProjectionEpochByWorkspace[workspaceId] ?? 0) + 1;
+				}
 			}
 			return {
-				layoutPendingByWorkspace: {
-					...state.layoutPendingByWorkspace,
-					[workspaceId]: remaining,
-				},
-				layoutDocumentsByWorkspace: {
-					...state.layoutDocumentsByWorkspace,
-					[workspaceId]: remaining.at(-1)?.document ?? accepted.document,
-				},
-				layoutRemoteEpochByWorkspace: bumpLayoutProjectionEpoch(state, workspaceId),
+				workbenchFrame: payload.frame,
+				workspaceViewsByWorkspace: payload.viewsByWorkspace,
+				layoutDocumentsByWorkspace: payload.documentsByWorkspace,
+				layoutAttentionByWorkspace: payload.attentionByWorkspace,
+				localLayoutPreferences: payload.preferences,
+				layoutProjectionEpochByWorkspace,
 			};
 		}),
-	applyLayoutConflict: (workspaceId, mutationId, current) =>
-		set((state) => {
-			if (state.removedWorkspaceIds[workspaceId]) return {};
-			const pending = state.layoutPendingByWorkspace[workspaceId] ?? [];
-			const conflictingIndex = pending.findIndex((write) => write.mutationId === mutationId);
-			if (conflictingIndex < 0) return {};
-			const remaining = pending.slice(0, conflictingIndex);
-			const expectedRevision = pending[conflictingIndex]?.expectedRevision;
-			const alreadyAccepted = state.layoutSnapshotsByWorkspace[workspaceId];
-			const accepted = current
-				? !alreadyAccepted || current.revision >= alreadyAccepted.revision
-					? current
-					: alreadyAccepted
-				: alreadyAccepted &&
-						(expectedRevision === null ||
-							(expectedRevision !== undefined && alreadyAccepted.revision > expectedRevision))
-					? alreadyAccepted
-					: null;
-			const projected = remaining.at(-1)?.document ?? accepted?.document;
-			return {
-				layoutSnapshotsByWorkspace: accepted
-					? { ...state.layoutSnapshotsByWorkspace, [workspaceId]: accepted }
-					: omitKey(state.layoutSnapshotsByWorkspace, workspaceId),
-				layoutDocumentsByWorkspace: projected
-					? { ...state.layoutDocumentsByWorkspace, [workspaceId]: projected }
-					: omitKey(state.layoutDocumentsByWorkspace, workspaceId),
-				layoutPendingByWorkspace: {
-					...state.layoutPendingByWorkspace,
-					[workspaceId]: remaining,
-				},
-				layoutRemoteEpochByWorkspace: bumpLayoutProjectionEpoch(state, workspaceId),
-			};
-		}),
+	setLocalLayoutPreferences: (preferences) => set({ localLayoutPreferences: preferences }),
 	setLayoutAttention: (workspaceId, attention) =>
 		set((state) =>
 			state.removedWorkspaceIds[workspaceId]
@@ -2191,11 +2138,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 				delete skillsSyncedTickBySession[sessionId];
 			}
 			return {
-				layoutSnapshotsByWorkspace: omitKey(s.layoutSnapshotsByWorkspace, workspaceId),
+				workspaceViewsByWorkspace: omitKey(s.workspaceViewsByWorkspace, workspaceId),
 				layoutDocumentsByWorkspace: omitKey(s.layoutDocumentsByWorkspace, workspaceId),
 				layoutAttentionByWorkspace: omitKey(s.layoutAttentionByWorkspace, workspaceId),
-				layoutPendingByWorkspace: omitKey(s.layoutPendingByWorkspace, workspaceId),
-				layoutRemoteEpochByWorkspace: omitKey(s.layoutRemoteEpochByWorkspace, workspaceId),
+				layoutProjectionEpochByWorkspace: omitKey(s.layoutProjectionEpochByWorkspace, workspaceId),
 				layoutIntents: s.layoutIntents.filter((intent) => intent.workspaceId !== workspaceId),
 				tabsByWorkspace: omitKey(s.tabsByWorkspace, workspaceId),
 				activeTabByWorkspace: omitKey(s.activeTabByWorkspace, workspaceId),
@@ -2394,6 +2340,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 			const id = existing?.id ?? availableEditorTabId(tabs, preferred);
 			const tab: ChatTab = id === preferred.id ? preferred : { ...preferred, id };
 			const fresh = !s.sessions[sessionId];
+			const history = s.closedChatsByWorkspace[workspaceId] ?? [];
+			const inHistory = history.some((entry) => entry.sessionId === sessionId);
 			return {
 				layoutIntents: appendLayoutIntent(s.layoutIntents, {
 					kind: "open",
@@ -2405,6 +2353,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 				tabsByWorkspace: existing
 					? s.tabsByWorkspace
 					: { ...s.tabsByWorkspace, [workspaceId]: [...tabs, tab] },
+				closedChatsByWorkspace: inHistory
+					? {
+							...s.closedChatsByWorkspace,
+							[workspaceId]: history.filter((entry) => entry.sessionId !== sessionId),
+						}
+					: s.closedChatsByWorkspace,
 				activeTabByWorkspace:
 					options.activate === false
 						? s.activeTabByWorkspace
@@ -2596,23 +2550,38 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((s) => {
 			if (s.removedWorkspaceIds[workspaceId]) return {};
 			const existing = s.closedChatsByWorkspace[workspaceId] ?? [];
-			const known = new Set([
-				...existing.map((c) => c.sessionId),
-				...(s.tabsByWorkspace[workspaceId] ?? [])
-					.filter((t): t is ChatTab => t.kind === "chat")
-					.map((t) => t.sessionId),
-			]);
-			const fresh = entries.filter(
-				(e) =>
-					!isSessionDeleted(s, workspaceId, e.sessionId) &&
-					!known.has(e.sessionId) &&
-					!s.sessions[e.sessionId],
+			const open = new Set(
+				(s.tabsByWorkspace[workspaceId] ?? [])
+					.filter((tab): tab is ChatTab => tab.kind === "chat")
+					.map((tab) => tab.sessionId),
 			);
-			if (fresh.length === 0) return {};
+			const incoming = new Map(
+				entries
+					.filter(
+						(entry) =>
+							!isSessionDeleted(s, workspaceId, entry.sessionId) &&
+							!open.has(entry.sessionId) &&
+							!s.sessions[entry.sessionId],
+					)
+					.map((entry) => [entry.sessionId, entry]),
+			);
+			let changed = false;
+			const refreshed = existing.map((entry) => {
+				const replacement = incoming.get(entry.sessionId);
+				if (!replacement) return entry;
+				incoming.delete(entry.sessionId);
+				if (replacement.title === entry.title) return entry;
+				changed = true;
+				return { ...entry, title: replacement.title };
+			});
+			if (incoming.size > 0) changed = true;
+			if (!changed) return {};
 			return {
 				closedChatsByWorkspace: {
 					...s.closedChatsByWorkspace,
-					[workspaceId]: [...existing, ...fresh].sort((a, b) => b.closedAt - a.closedAt),
+					[workspaceId]: [...refreshed, ...incoming.values()].sort(
+						(a, b) => b.closedAt - a.closedAt,
+					),
 				},
 			};
 		}),
@@ -2745,7 +2714,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 			withRuntime(s, sessionId, (rt) => ({
 				...rt,
 				turns: [
-					...rt.turns,
+					...consumeFailureRecoveries(rt.turns),
 					{
 						kind: "user",
 						id: crypto.randomUUID(),
@@ -2794,13 +2763,22 @@ export const useAppStore = create<AppState>((set, get) => ({
 						};
 			}),
 		),
-	handlePiEvent: (event, sessionId) =>
-		set((s) =>
-			withRuntime(s, sessionId, (rt) => ({
-				...reduceSessionEvent(rt, event),
-				eventRevision: rt.eventRevision + 1,
-			})),
-		),
+	handlePiEvent: (event, sessionId) => get().handlePiEvents([{ event, sessionId }]),
+	handlePiEvents: (payloads) =>
+		set((s) => {
+			let sessions = s.sessions;
+			for (const { event, sessionId } of payloads) {
+				const runtime = sessions[sessionId];
+				if (!runtime) continue;
+				if (sessions === s.sessions) sessions = { ...sessions };
+				const next = reduceSessionEvent(runtime, event);
+				sessions[sessionId] = {
+					...next,
+					eventRevision: runtime.eventRevision + 1,
+				};
+			}
+			return sessions === s.sessions ? s : { sessions };
+		}),
 	setModelsForProviderVersion: (providerVersion, models) =>
 		set((s) => (s.providerVersion === providerVersion ? { models, modelsFresh: false } : s)),
 	noteProviderChanged: () =>

@@ -1,6 +1,11 @@
 import { appendFileSync, realpathSync, utimesSync } from "node:fs";
 import { expect, test } from "@playwright/test";
-import { defaultWorkspaceRow, enterDefaultWorkspace, openFixtureProject } from "./fixtures/app";
+import {
+	defaultWorkspaceRow,
+	enterDefaultWorkspace,
+	openChatFromHistory,
+	openFixtureProject,
+} from "./fixtures/app";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { seedWorkspaceSession } from "./fixtures/sessions";
 
@@ -81,14 +86,19 @@ test("a model-authored Thinking heading stays bounded and appears only while fol
 
 	await expect(defaultWorkspaceRow(page)).toBeVisible();
 	await enterDefaultWorkspace(page);
+	await openChatFromHistory(page, "thinking summary");
 
 	const activity = page.getByTestId("activity-group").first();
 	await activity.getByTestId("activity-group-toggle").click();
 	const thinking = activity.getByTestId("thinking-group").first();
 	const toggle = thinking.getByTestId("thinking-group-toggle");
-	const heading = thinking.locator("strong", { hasText: "Evaluating formatting process" });
+	const heading = thinking.getByTestId("thinking-group-headline");
+	const thinkingLabel = toggle.locator("span", { hasText: /^Thinking$/ });
 	const metadata = "5 steps Â· get_search_content, fetch_content, web_search, spec_grep, +1 more";
 	await expect(heading).toBeVisible();
+	await expect(heading).toHaveText("Evaluating formatting process");
+	await expect(heading).toHaveCSS("font-weight", "370");
+	await expect(thinkingLabel).toHaveClass(/sr-only/);
 	await expect(toggle).toContainText(metadata);
 
 	await page.setViewportSize({ width: 390, height: 780 });
@@ -99,7 +109,9 @@ test("a model-authored Thinking heading stays bounded and appears only while fol
 		const metadataElement = [...element.querySelectorAll<HTMLElement>("span")].find(
 			(candidate) => candidate.title === title,
 		);
-		const headingElement = element.querySelector<HTMLElement>("strong");
+		const headingElement = element.querySelector<HTMLElement>(
+			'[data-testid="thinking-group-headline"]',
+		);
 		if (!metadataElement || !headingElement)
 			throw new Error("missing folded Thinking header parts");
 		return {
@@ -117,6 +129,7 @@ test("a model-authored Thinking heading stays bounded and appears only while fol
 	await toggle.click();
 
 	await expect(thinking).toHaveAttribute("data-expanded", "true");
+	await expect(thinkingLabel).not.toHaveClass(/sr-only/);
 	await expect(heading).toHaveCount(0);
 	await expect(thinking.getByTestId("thinking-group-text")).toContainText(
 		"**Evaluating formatting process**",
@@ -184,6 +197,7 @@ test("sticky activity breadcrumbs expose the off-screen Activity â†’ Thinking â†
 
 	await expect(defaultWorkspaceRow(page)).toBeVisible();
 	await enterDefaultWorkspace(page);
+	await openChatFromHistory(page, "sticky activity");
 
 	const activity = page.getByTestId("activity-group").first();
 	await activity.getByTestId("activity-group-toggle").click();
@@ -192,14 +206,18 @@ test("sticky activity breadcrumbs expose the off-screen Activity â†’ Thinking â†
 	const tool = thinking.locator('[data-testid="activity-step"][data-tool="bash"]');
 	await tool.getByTestId("activity-step-toggle").click();
 
-	await tool.evaluate((element) => {
-		const scroller = element.closest<HTMLElement>('[data-virtuoso-scroller="true"]');
-		if (!scroller) throw new Error("missing Virtuoso scroller");
-		scroller.scrollTop +=
-			element.getBoundingClientRect().top - scroller.getBoundingClientRect().top + 80;
-	});
-
 	const trail = page.getByTestId("activity-breadcrumb-trail");
+	await expect
+		.poll(async () => {
+			await tool.evaluate((element) => {
+				const scroller = element.closest<HTMLElement>('[data-virtuoso-scroller="true"]');
+				if (!scroller) throw new Error("missing Virtuoso scroller");
+				scroller.scrollTop +=
+					element.getBoundingClientRect().top - scroller.getBoundingClientRect().top + 80;
+			});
+			return trail.count();
+		})
+		.toBe(1);
 	await expect(trail).toBeVisible();
 	await expect(trail.getByTestId("activity-breadcrumb-segment")).toHaveCount(3);
 	await expect(trail.locator('[data-kind="activity"]')).toBeVisible();

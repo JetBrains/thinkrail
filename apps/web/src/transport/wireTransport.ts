@@ -1,11 +1,11 @@
 import type {
 	AppConfig,
 	ExtUiRequest,
-	LayoutChangedPayload,
 	LoginPush,
 	Project,
 	ReviewChangedPayload,
 	ServerWelcome,
+	SessionCreatedPayload,
 	SessionDeletedPayload,
 	SessionEventPayload,
 	Workspace,
@@ -14,16 +14,30 @@ import type {
 } from "@thinkrail/contracts";
 import { WS_CHANNELS } from "@thinkrail/contracts";
 import { useAppStore } from "../store";
+import { createPiEventBatcher, shouldFlushPiEventsBefore } from "./piEventBatcher";
 import { WsTransport } from "./transport";
 
 let transport: WsTransport | null = null;
 
 export function initTransport(): WsTransport {
 	if (transport) return transport;
+	const piEvents = createPiEventBatcher((payloads) =>
+		useAppStore.getState().handlePiEvents(payloads),
+	);
 
-	transport = new WsTransport({
-		onStatus: (status) => useAppStore.getState().setStatus(status),
-	});
+	transport = new WsTransport(
+		{
+			onStatus: (status) => {
+				piEvents.flush();
+				useAppStore.getState().setStatus(status);
+			},
+		},
+		{
+			beforeDispatch: (message) => {
+				if (shouldFlushPiEventsBefore(message)) piEvents.flush();
+			},
+		},
+	);
 
 	transport.subscribe(WS_CHANNELS.serverWelcome, (data) => {
 		const welcome = data as Partial<ServerWelcome>;
@@ -48,12 +62,20 @@ export function initTransport(): WsTransport {
 	});
 
 	transport.subscribe(WS_CHANNELS.piEvent, (data) => {
-		const { sessionId, event } = data as SessionEventPayload;
-		useAppStore.getState().handlePiEvent(event, sessionId);
+		piEvents.enqueue(data as SessionEventPayload);
 	});
 
 	transport.subscribe(WS_CHANNELS.piExtensionUi, (data) => {
 		useAppStore.getState().applyExtUi(data as ExtUiRequest);
+	});
+
+	transport.subscribe(WS_CHANNELS.sessionCreated, (data) => {
+		const summary = data as SessionCreatedPayload;
+		useAppStore
+			.getState()
+			.noteClosedChats(summary.workspaceId, [
+				{ sessionId: summary.sessionId, title: summary.title, closedAt: summary.updatedAt },
+			]);
 	});
 
 	transport.subscribe(WS_CHANNELS.sessionDeleted, (data) => {
@@ -98,10 +120,6 @@ export function initTransport(): WsTransport {
 
 	transport.subscribe(WS_CHANNELS.settingsChanged, (data) => {
 		useAppStore.getState().applyConfig(data as AppConfig);
-	});
-
-	transport.subscribe(WS_CHANNELS.layoutChanged, (data) => {
-		useAppStore.getState().applyLayoutChanged(data as LayoutChangedPayload);
 	});
 
 	transport.connect();

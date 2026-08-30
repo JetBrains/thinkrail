@@ -18,7 +18,7 @@ test("two chats in one workspace stream independently; closing one keeps the oth
 	await page.getByTestId("chat-input").fill("Reply with the single word: alpha");
 	await page.getByTestId("chat-send").click();
 
-	await page.getByTestId("new-chat").click();
+	await page.getByTestId("new-chat").first().click();
 	await expect(chatTabs).toHaveCount(2);
 	await page.getByTestId("chat-input").fill("Reply with the single word: bravo");
 	await page.getByTestId("chat-send").click();

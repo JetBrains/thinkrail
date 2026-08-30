@@ -1,4 +1,4 @@
-import type { Workspace, WorkspaceLayoutDocument } from "@thinkrail/contracts";
+import type { Workspace } from "@thinkrail/contracts";
 import {
 	selectAttentionCenterTab,
 	selectCurrentRouteChatTarget,
@@ -13,6 +13,10 @@ export interface NavigationDeps {
 	driver: NavigationDriver;
 	listWorkspaces: (projectId: string) => Promise<Workspace[]>;
 }
+
+type WorkspaceLayoutDocument = Parameters<
+	typeof selectAttentionCenterTab
+>[0]["layoutDocumentsByWorkspace"][string];
 
 export function deriveLocation(state: {
 	activeWorkspaceId: string | null;

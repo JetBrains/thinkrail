@@ -12,8 +12,7 @@ pi agent in design discussions.
 - Every region lists, where applicable: **canonical name** (the heading), **implementation name** (the
   React component / file), **`data-testid`** hook (the app's stable identity anchors), **parent**,
   **children**, **position**, and **responsibility**.
-- The active-workspace layout is a synchronized desktop workbench with recursive center groups and
-  movable side groups. The mobile single-view shell is designed but not yet built.
+- The active-workspace layout projects this window's frontend-local frame and workspace view into a desktop workbench with recursive center groups and movable side groups. The mobile single-view shell is designed but not yet built.
 
 The document proceeds top-down: Application Layout → each region → shared primitives → glossary.
 
@@ -27,7 +26,7 @@ mutually-exclusive states.
 - **App Shell** — the root frame (`Shell`).
   - **Top Bar** (`<header>`) — always present.
   - **Body** — one of two states:
-    - **Workspace Workbench** — the host-synchronized IDE arrangement for an active workspace.
+    - **Workspace Workbench** — the projection of this window's local frame and active workspace view.
     - **Welcome Layout** — the projects rail beside the Welcome screen when no workspace is active.
   - **Toaster** — app-wide notification host, mounted once over either state.
 
@@ -35,7 +34,7 @@ mutually-exclusive states.
 |---|---|---|---|
 | App Shell | `shell/Shell.tsx` → `Shell` | `shell` | Composition root; owns the theme DOM side-effect + global hotkeys |
 | Top Bar | `<header>` inside `Shell` | — | ⚠ Naming note below |
-| Workspace Workbench | `shell/WorkspaceWorkbench.tsx` + `shell/layout/Workbench.tsx` | `workbench` | Recursive center and independently stacked sides |
+| Workspace Workbench | `shell/WorkspaceWorkbench.tsx` + `shell/layout/Workbench.tsx` | `workbench` | One window-local frame; workspace-specific resource projection |
 | Welcome Layout | `ResizablePanelGroup` (`autoSaveId="thinkrail-shell-welcome"`) | — | Projects rail + Welcome |
 | Toaster | `panels/Toaster.tsx` → `Toaster` | — | See Shared Primitives |
 
@@ -144,7 +143,7 @@ separators resize adjacent groups.
 
 - **Canonical name:** Center Workbench (a.k.a. Center Tabbed Area / Editor Area).
 - **Implementation:** `shell/layout/Workbench.tsx` (topology and container chrome), integrated by
-  `shell/WorkspaceWorkbench.tsx` (feature bodies and synchronization).
+  `shell/WorkspaceWorkbench.tsx` (feature bodies and local-state orchestration).
 - **`data-testid`:** compatibility wrapper `center-tabs`; leaves are `center-group`, Group Headers are
   `center-tab-strip` (a legacy name), and split separators are `center-split-resize`.
 - **Parent:** Workspace Workbench.

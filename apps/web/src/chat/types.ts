@@ -1,5 +1,6 @@
 import type {
 	AssistantMessage,
+	DelegationRunDetails,
 	ExtUiRequest,
 	ImageContent,
 	UserMessage,
@@ -15,12 +16,15 @@ export type ExtUiDialogRequest = Extract<
 	{ kind: "select" | "confirm" | "input" | "editor" }
 >;
 
+export type FailureRecovery = "try-again";
+
 export type ChatTurn =
 	| { kind: "user"; id: string; message: UserMessage; attachmentNames?: string[] }
 	| { kind: "assistant"; id: string; message: AssistantMessage; streaming: boolean }
 	| { kind: "system"; id: string; text: string; endedAt?: number }
 	| ({ kind: "compaction"; id: string } & CompactionState)
-	| { kind: "error"; id: string; text: string }
+	| { kind: "error"; id: string; text: string; recovery?: FailureRecovery }
+	| { kind: "subagentCompletion"; id: string; details: DelegationRunDetails; text: string }
 	| {
 			kind: "retry";
 			id: string;

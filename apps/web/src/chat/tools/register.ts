@@ -7,6 +7,7 @@ import { ReadCard } from "./ReadCard";
 import { ResolveCommentCard } from "./ResolveCommentCard";
 import { SpecToolCard, specToolSummary } from "./SpecToolCard";
 import { strArg } from "./toolHelpers";
+import "./subagent/register";
 import "./visualize/register";
 import "./web/register";
 import { WriteCard } from "./WriteCard";

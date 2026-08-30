@@ -1,7 +1,7 @@
-import type { ChatMessageOrder, UserMessage } from "@thinkrail/contracts";
+import type { ChatMessageOrder, DelegationRunDetails, UserMessage } from "@thinkrail/contracts";
 import { resolveProminence } from "./toolRegistry";
 import { strArg } from "./tools/toolHelpers";
-import type { ChatTurn, CompactionState, ToolResultState } from "./types";
+import type { ChatTurn, CompactionState, FailureRecovery, ToolResultState } from "./types";
 
 export interface ToolCallData {
 	toolCallId: string;
@@ -27,7 +27,7 @@ export type ActivityStep = RoutineToolStep | ThinkingStep;
 export type ChatRow =
 	| { kind: "user"; id: string; message: UserMessage; attachmentNames?: string[] }
 	| { kind: "system"; id: string; text: string }
-	| { kind: "error"; id: string; text: string }
+	| { kind: "error"; id: string; text: string; recovery?: FailureRecovery }
 	| ({ kind: "compaction"; id: string } & CompactionState)
 	| {
 			kind: "retry";
@@ -38,6 +38,7 @@ export type ChatRow =
 			delayMs: number;
 	  }
 	| { kind: "markdown"; id: string; text: string }
+	| { kind: "subagentCompletion"; id: string; details: DelegationRunDetails; text: string }
 	| ({ kind: "tool"; id: string } & ToolCallData)
 	| {
 			kind: "activity";
@@ -158,7 +159,12 @@ export function deriveRows(
 					rows.push({ kind: "system", id: turn.id, text: turn.text });
 					break;
 				case "error":
-					rows.push({ kind: "error", id: turn.id, text: turn.text });
+					rows.push({
+						kind: "error",
+						id: turn.id,
+						text: turn.text,
+						...(turn.recovery ? { recovery: turn.recovery } : {}),
+					});
 					break;
 				case "compaction":
 					rows.push(turn);
@@ -171,6 +177,14 @@ export function deriveRows(
 						attempt: turn.attempt,
 						maxAttempts: turn.maxAttempts,
 						delayMs: turn.delayMs,
+					});
+					break;
+				case "subagentCompletion":
+					rows.push({
+						kind: "subagentCompletion",
+						id: turn.id,
+						details: turn.details,
+						text: turn.text,
 					});
 					break;
 			}
