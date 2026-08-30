@@ -11,8 +11,13 @@ export function assistantFileTarget(
 	if (!candidate || !workspaceRoot || candidate.startsWith("#") || candidate.startsWith("//")) {
 		return null;
 	}
-	const path = candidate.split(/[?#]/, 1)[0];
-	return path ? toolFileTarget(path, workspaceRoot) : null;
+	const encodedPath = candidate.split(/[?#]/, 1)[0];
+	if (!encodedPath) return null;
+	try {
+		return toolFileTarget(decodeURIComponent(encodedPath), workspaceRoot);
+	} catch {
+		return null;
+	}
 }
 
 function AssistantLink({
@@ -35,17 +40,15 @@ function AssistantLink({
 		);
 	}
 	return (
-		<a
-			href={href}
+		<button
+			type="button"
 			data-testid="chat-file-link"
 			data-path={target}
-			onClick={(event) => {
-				event.preventDefault();
-				onOpenFile(target);
-			}}
+			onClick={() => onOpenFile(target)}
+			className="cursor-pointer text-left text-primary underline"
 		>
 			{children}
-		</a>
+		</button>
 	);
 }
 

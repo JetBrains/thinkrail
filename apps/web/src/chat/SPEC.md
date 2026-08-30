@@ -79,7 +79,17 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   summarized disappear immediately rather than only after reload. Its `summary` opens on click
   (`data-testid="chat-compaction"`). Hydration/reopen starts directly from that same durable form. Both forms
   share the **"Context compacted"** title; only facts unavailable after reload disappear.
-- `markdown` — a non-empty assistant text block (react-markdown + remark-gfm + shiki). Safe worktree-relative links in assistant prose open the target in ThinkRail through `ChatTurnView`'s existing workspace-file callback; absolute paths are accepted only when they normalize inside the active worktree, while URL schemes, protocol-relative URLs, fragments, and unsafe/outside paths retain ordinary safe new-tab anchor behavior. The generic `Markdown` primitive remains props-driven and receives this behavior as an `a` component override only at the assistant-turn integration edge. That override keeps a stable component identity while its workspace inputs are unchanged: workbench focus can rerender a chat row between pointer-down and click, and replacing the anchor in that interval cancels activation. A fenced
+- `markdown` — a non-empty assistant text block (react-markdown + remark-gfm + shiki). Safe
+  worktree-relative links in assistant prose open the target in ThinkRail through `ChatTurnView`'s existing
+  workspace-file callback; absolute paths are accepted only when they normalize inside the active worktree,
+  while URL schemes, protocol-relative URLs, fragments, and unsafe/outside paths retain ordinary safe
+  new-tab anchor behavior. Percent-encoded file paths are decoded once before validation, so encoded
+  separators and traversal cannot bypass containment. The generic `Markdown` primitive remains props-driven
+  and receives this behavior as an `a` component override only at the assistant-turn integration edge;
+  accepted workspace targets render as button controls without a raw browser `href`, so alternate native
+  anchor activation cannot escape into the SPA fallback. That override keeps a stable component identity
+  while its workspace inputs are unchanged: workbench focus can rerender a chat row between pointer-down and
+  click, and replacing the control in that interval cancels activation. A fenced
   ```mermaid block renders as a themed diagram via `tools/visualize`'s `MermaidView` (fullscreen
   pan-zoom, error → source fallback) — uniform across every `Markdown` surface (chat, file/specs
   preview); until mounted it renders as highlighted source, so static contexts (`RenderedDiff`'s

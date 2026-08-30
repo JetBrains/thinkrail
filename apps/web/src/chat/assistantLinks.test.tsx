@@ -8,6 +8,9 @@ describe("assistantFileTarget", () => {
 			".thinkrail/context/report.md",
 		);
 		expect(assistantFileTarget("docs/../README.md#usage", "/repo")).toBe("README.md");
+		expect(assistantFileTarget("reports/manual%20report.md", "/repo")).toBe(
+			"reports/manual report.md",
+		);
 		expect(assistantFileTarget("/repo/docs/report.md?raw=1", "/repo")).toBe("docs/report.md");
 	});
 
@@ -18,7 +21,9 @@ describe("assistantFileTarget", () => {
 			"//example.com/report",
 			"#report",
 			"../report.md",
+			"%2e%2e/report.md",
 			"/tmp/report.md",
+			"report%E0%A4%A.md",
 		]) {
 			expect(assistantFileTarget(href, "/repo")).toBeNull();
 		}
@@ -30,7 +35,7 @@ test("assistant Markdown distinguishes workspace files from ordinary anchors", (
 	const html = renderToStaticMarkup(
 		<AssistantMarkdown
 			text={[
-				"[report](.thinkrail/context/report.md)",
+				"[report](<.thinkrail/context/manual report.md>)",
 				"[site](https://example.com/report)",
 				"[outside](../report.md)",
 			].join("\n\n")}
@@ -39,8 +44,9 @@ test("assistant Markdown distinguishes workspace files from ordinary anchors", (
 		/>,
 	);
 
-	expect(html).toContain('data-testid="chat-file-link"');
-	expect(html).toContain('data-path=".thinkrail/context/report.md"');
+	expect(html).toContain('<button type="button" data-testid="chat-file-link"');
+	expect(html).toContain('data-path=".thinkrail/context/manual report.md"');
+	expect(html).not.toContain('href=".thinkrail/context/manual%20report.md"');
 	expect(html.match(/target="_blank"/g)).toHaveLength(2);
 	expect(html).toContain('href="https://example.com/report"');
 	expect(html).toContain('href="../report.md"');

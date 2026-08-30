@@ -200,9 +200,10 @@ test("assistant Markdown opens safe relative files without navigating the browse
 	await openChatFromHistory(page, "assistant file links");
 
 	const message = page.locator('[data-testid="chat-message"][data-role="assistant"]').last();
-	const local = message.getByRole("link", { name: "Open README" });
+	const local = message.getByRole("button", { name: "Open README" });
 	await expect(local).toHaveAttribute("data-testid", "chat-file-link");
 	await expect(local).toHaveAttribute("data-path", "README.md");
+	await expect(local).not.toHaveAttribute("href", "README.md");
 	await expect(local).not.toHaveAttribute("target", "_blank");
 	await expect(message.getByRole("link", { name: "Open docs" })).toHaveAttribute(
 		"target",
