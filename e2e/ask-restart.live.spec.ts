@@ -1,15 +1,36 @@
 import { type ChildProcess, execFileSync, spawn } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, openSync, rmSync, writeFileSync } from "node:fs";
+import {
+	chmodSync,
+	copyFileSync,
+	existsSync,
+	mkdirSync,
+	openSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, type Page, test } from "@playwright/test";
+import { jbcentralExtensionPath } from "@thinkrail/shared/jbcentral";
 import { activeWorktreeRow } from "./fixtures/app";
 import {
+	CENTRAL_STUB_READ_ONLY_ENV,
+	REAL_CENTRAL_E2E_ENV,
+	removeLocalAgentModelAndAuth,
+	restoreStagedCentralArtifact,
+	waitForCentralTarget,
+} from "./fixtures/centralAgent";
+import { hermeticE2ePath, resolveBunExecutable } from "./fixtures/executables";
+import {
+	E2E_CENTRAL_BAD_EXTENSION_SOURCE,
+	E2E_CENTRAL_EXTENSION_SOURCE,
+	E2E_FAKE_BIN_DIR,
 	E2E_PI_AGENT_DIR,
 	E2E_RESTART_DATA_DIR,
 	E2E_RESTART_HOST_LOG,
 	E2E_RESTART_PORT,
 } from "./fixtures/paths";
+import { E2eWire } from "./fixtures/wire";
 
 const PORT = E2E_RESTART_PORT;
 const BASE = `http://localhost:${PORT}`;
@@ -19,8 +40,15 @@ const AGENT_DIR = join(DATA_DIR, "pi-agent");
 const HOME_DIR = join(DATA_DIR, "home");
 const PICK_POINTER = join(DATA_DIR, "pick-dir");
 const HOST_LOG = E2E_RESTART_HOST_LOG;
+const CENTRAL_STATE = join(DATA_DIR, "central-state");
+const CENTRAL_LOG = join(DATA_DIR, "central-invocations.log");
+const CENTRAL_ARTIFACT = jbcentralExtensionPath({
+	env: { HOME: HOME_DIR, USERPROFILE: HOME_DIR },
+});
 const rootDir = fileURLToPath(new URL("..", import.meta.url));
 const staticDir = join(rootDir, "apps", "web", "dist");
+const bunExecutable = resolveBunExecutable();
+const hostPath = hermeticE2ePath(E2E_FAKE_BIN_DIR);
 
 function seedState(): void {
 	rmSync(DATA_DIR, { recursive: true, force: true });
@@ -37,10 +65,14 @@ function seedState(): void {
 	git("commit", "-m", "init");
 
 	mkdirSync(AGENT_DIR, { recursive: true });
-	for (const file of ["auth.json", "models.json", "settings.json"]) {
-		const src = join(E2E_PI_AGENT_DIR, file);
-		if (existsSync(src)) copyFileSync(src, join(AGENT_DIR, file));
-	}
+	const settingsSource = join(E2E_PI_AGENT_DIR, "settings.json");
+	if (!existsSync(settingsSource)) throw new Error("Central E2E settings seed is missing");
+	const settingsTarget = join(AGENT_DIR, "settings.json");
+	copyFileSync(settingsSource, settingsTarget);
+	chmodSync(settingsTarget, 0o600);
+	removeLocalAgentModelAndAuth(AGENT_DIR);
+	restoreStagedCentralArtifact(CENTRAL_ARTIFACT);
+	writeFileSync(CENTRAL_STATE, "");
 	writeFileSync(PICK_POINTER, REPO);
 }
 
@@ -48,7 +80,7 @@ let host: ChildProcess | null = null;
 
 async function startHost(): Promise<void> {
 	const log = openSync(HOST_LOG, "a");
-	host = spawn("bun", ["packages/server/src/dev.ts"], {
+	host = spawn(bunExecutable, ["packages/server/src/dev.ts"], {
 		cwd: rootDir,
 		stdio: ["ignore", log, log],
 		env: {
@@ -58,18 +90,37 @@ async function startHost(): Promise<void> {
 			THINKRAIL_DATA_DIR: DATA_DIR,
 			THINKRAIL_PICK_DIR: PICK_POINTER,
 			THINKRAIL_GH_OFFLINE: "1",
+			THINKRAIL_NO_ANALYTICS: "1",
+			[REAL_CENTRAL_E2E_ENV]: "1",
 			HOME: HOME_DIR,
+			USERPROFILE: HOME_DIR,
 			CLAUDE_CONFIG_DIR: join(HOME_DIR, ".claude"),
 			CODEX_HOME: join(HOME_DIR, ".codex"),
 			GEMINI_CLI_HOME: HOME_DIR,
 			PI_CODING_AGENT_DIR: AGENT_DIR,
+			PI_OFFLINE: "1",
+			PATH: hostPath,
+			CENTRAL_STUB_STATE: CENTRAL_STATE,
+			CENTRAL_STUB_LOG: CENTRAL_LOG,
+			CENTRAL_STUB_EXTENSION_SOURCE: E2E_CENTRAL_EXTENSION_SOURCE,
+			CENTRAL_STUB_BAD_EXTENSION_SOURCE: E2E_CENTRAL_BAD_EXTENSION_SOURCE,
+			[CENTRAL_STUB_READ_ONLY_ENV]: "1",
 		},
 	});
 	const deadline = Date.now() + 60_000;
 	while (Date.now() < deadline) {
 		try {
 			const res = await fetch(`${BASE}/health`);
-			if (res.ok) return;
+			if (res.ok) {
+				const wire = await E2eWire.connect(PORT);
+				try {
+					await waitForCentralTarget(wire);
+					removeLocalAgentModelAndAuth(AGENT_DIR);
+					return;
+				} finally {
+					wire.close();
+				}
+			}
 		} catch {}
 		await new Promise((r) => setTimeout(r, 250));
 	}

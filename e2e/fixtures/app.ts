@@ -6,6 +6,11 @@ import { expect } from "@playwright/test";
 import type { Workspace } from "@thinkrail/contracts";
 import { removeTree } from "@thinkrail/shared/removeTree";
 import {
+	isRealCentralE2e,
+	preserveStagedCentralArtifact,
+	removeCentralModeLocalSeeds,
+} from "./centralAgent";
+import {
 	E2E_CENTRAL_ARTIFACT,
 	E2E_CENTRAL_LOG,
 	E2E_CENTRAL_STATE,
@@ -42,14 +47,18 @@ function resetState(): void {
 	rmSync(join(E2E_DATA_DIR, "projects.json"), { force: true });
 	removeTree(join(E2E_DATA_DIR, "worktrees"));
 	removeTree(join(E2E_PI_AGENT_DIR, "sessions"));
-	rmSync(E2E_CENTRAL_ARTIFACT, { force: true });
+	if (isRealCentralE2e()) {
+		preserveStagedCentralArtifact();
+		removeCentralModeLocalSeeds();
+	} else {
+		rmSync(E2E_CENTRAL_ARTIFACT, { force: true });
+		const modelsPath = join(E2E_PI_AGENT_DIR, "models.json");
+		if (existsSync(E2E_PI_MODELS_SEED)) copyFileSync(E2E_PI_MODELS_SEED, modelsPath);
+		else rmSync(modelsPath, { force: true });
+		rmSync(`${modelsPath}.bak`, { force: true });
+	}
 	writeFileSync(E2E_CENTRAL_STATE, "");
 	rmSync(E2E_CENTRAL_LOG, { force: true });
-
-	const modelsPath = join(E2E_PI_AGENT_DIR, "models.json");
-	if (existsSync(E2E_PI_MODELS_SEED)) copyFileSync(E2E_PI_MODELS_SEED, modelsPath);
-	else rmSync(modelsPath, { force: true });
-	rmSync(`${modelsPath}.bak`, { force: true });
 
 	if (!fixtureRepoHealthy()) seedFixtureRepo();
 

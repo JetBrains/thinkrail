@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSyn
 import { availableParallelism, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { REAL_CENTRAL_E2E_ENV } from "./fixtures/centralAgent";
 import { parseRunnerArgs, resolveShardCount } from "./shardPlan";
 
 const rootDir = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -23,13 +24,14 @@ async function run(command: string[], env: NodeJS.ProcessEnv = process.env): Pro
 }
 
 function playwrightCommand(args: string[]): string[] {
-	return [bun, "x", "playwright", "test", "--grep-invert", "@agent", ...args];
+	return [bun, "x", "playwright", "test", ...args];
 }
 
 function childEnv(): NodeJS.ProcessEnv {
 	const env: NodeJS.ProcessEnv = { ...process.env, THINKRAIL_E2E_SKIP_BUILD: "1" };
 	delete env.THINKRAIL_E2E_LANE;
 	delete env.PLAYWRIGHT_BLOB_OUTPUT_FILE;
+	delete env[REAL_CENTRAL_E2E_ENV];
 	return env;
 }
 
@@ -162,7 +164,7 @@ async function main(): Promise<number> {
 		hasPlaywrightArgs: playwrightArgs.length > 0,
 	});
 
-	if (!playwrightArgs.includes("--list")) {
+	if (!playwrightArgs.includes("--list") && process.env.THINKRAIL_E2E_SKIP_BUILD !== "1") {
 		const buildStartedAt = performance.now();
 		console.log("E2E: building web once before host startup");
 		const buildCode = await run([bun, "run", "build:web"]);

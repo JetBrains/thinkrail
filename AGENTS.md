@@ -170,21 +170,21 @@ seeds fixtures (`globalSetup`), drives the real web UI, then tears its host down
 `e2e/SPEC.md`. The same suite also has packaged CLI-binary and Electrobun-desktop host modes.
 
 **Agent tests are tagged, not faked.** Specs that drive a real `pi` agent are tagged `@agent` (Playwright
-`{ tag: "@agent" }`). The host runs against an **isolated pi agent dir** (`PI_CODING_AGENT_DIR` → a
-throwaway dir under the e2e data dir; `globalSetup` copies the user's pi auth config (`auth.json` **+
-`models.json`** — auth lives in both: OAuth providers in `auth.json`, apiKey providers in `models.json`) so a
-real provider works, and seeds a `settings.json` pinning a **deterministic default model** — override with
-`THINKRAIL_E2E_MODEL=<provider>/<modelId>`) — so a test's `setModel`/`setThinkingLevel` persists *there*,
-**never the user's real `~/.pi/agent`**. (Corollary: don't let an `@agent` test *select* a model — it would
-pin a default mid-run.) Select suites by marker: `bun run e2e`
-runs the **no-agent** suite (`--grep-invert @agent`) — projects/workspaces/files/editor/changes/terminals,
-fast, no auth, run anytime; `bun run e2e:full` runs everything; `bun run e2e:agent` runs only the
-`@agent` specs (which need `pi` authenticated + more time). There is **no fake agent** — agent coverage
-runs against a real provider. **`bun run e2e:binary`** (after `bun run build:binary`) runs the no-agent
-suite against the **compiled single-file binary** instead of the dev host (skipping the `@dev-seam`
-fake-login specs — those fakes live only in the dev boot): the gate for the regression class that only
-exists inside the artifact (e.g. pi's dynamic imports resolving from `node_modules`), alongside the
-targeted probes in `smoke:binary`.
+`{ tag: "@agent" }`). `bun run e2e:agent` enables the dedicated real-Central mode: setup copies the user's
+global Central extension into the lane's isolated HOME, gives the isolated `PI_CODING_AGENT_DIR` only a
+`settings.json`, and requires `provider.status` plus `model.default` to prove the exact configured model
+before a test starts. It never copies `auth.json` or `models.json`, and the host resolves only the read-only
+test Central CLI. Override the deterministic default with
+`THINKRAIL_E2E_MODEL=<provider>/<modelId>`. Do not let an `@agent` test select a model — it would pin a
+default mid-run. `bun run e2e` runs the fast **no-agent** suite; `bun run e2e:full` runs no-agent first,
+then the isolated Central agent suite. There is **no fake agent** — agent coverage runs against a real
+provider. The separate `bun run test:workflows` harness deliberately retains local PI-auth seeding in its
+per-worker isolated agent directories.
+
+**`bun run e2e:binary`** (after `bun run build:binary`) runs the no-agent suite against the **compiled
+single-file binary** instead of the dev host (skipping the `@dev-seam` fake-login specs — those fakes live
+only in the dev boot): the gate for the regression class that only exists inside the artifact (e.g. pi's
+dynamic imports resolving from `node_modules`), alongside the targeted probes in `smoke:binary`.
 
 Separate from the browser suite: `bun run test:workflows` — the headless **workflow-skill suite**
 (`e2e/workflows/`, own Playwright config, no browser/webServer; drives a real in-process pi agent

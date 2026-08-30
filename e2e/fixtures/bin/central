@@ -63,6 +63,10 @@ if [ "$1" = "status" ]; then
 	exit 0
 fi
 
+if [ "${CENTRAL_STUB_READ_ONLY:-}" = "1" ]; then
+	exit 15
+fi
+
 if [ "$1" = "add" ] && [ "${2:-}" = "pi" ]; then
 	if has needs-login || has add-error; then
 		printf 'E2E_CENTRAL_CHILD_SENTINEL_add\n' >&2
