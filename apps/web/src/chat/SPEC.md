@@ -157,7 +157,10 @@ every group's top-level rows: `1,2,3 | 4,5,6 → 6,5,4 | 3,2,1`. Stable row ids 
 flashes, tool state, and history anchors do not fork. The projection never reaches inside one row: Markdown
 paragraphs/code, a tool card body, review-package comments, and an Activity row's own disclosure hierarchy
 retain their semantic order. Virtuoso and DOM traversal consume the projected rows; Pi turns, persistence,
-stream status, and every non-presentation derivation remain chronological.
+stream status, and every non-presentation derivation remain chronological. `messageOrder.ts` owns the
+closed preference and its oldest-first default, reads/writes a host-qualified browser localStorage key, and
+hydrates the store before React mounts; it never enters `AppConfig`, so choosing newest-first cannot change
+another browser, device, or host.
 
 **Sticky activity breadcrumb.** While the transcript's top visible content remains inside expanded
 Activity → Thinking → tool disclosures whose original headers have scrolled above the viewport, one
@@ -296,8 +299,11 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   cancellable owner for every kind of live row growth; renderers and the message-order projection never
   scroll themselves. Both orders share explicit immediate-turn arming, queued-continuation currency,
   reader-intent cancellation, one non-overlapping 220ms ease-out, reduced-motion immediacy, active-stream
-  reconstruction, and **Follow response** / **Latest** detached labels. The latest edge is bottom for
-  oldest-first and top for newest-first; wheel, touch/scrollbar, and keyboard directions invert with it.
+  reconstruction, and **Follow response** / **Latest** detached labels. Immediate turns derive their anchor
+  inset from the scroller even when the stream marker is virtualized, then initialize runway geometry once
+  that marker mounts. The latest edge is bottom for oldest-first and top for newest-first; wheel,
+  touch/scrollbar, and keyboard directions invert with it. Touch return intent survives pointer release or
+  cancellation through the momentum tail and re-arms only if that explicit motion reaches the latest edge.
   Selection, interactive focus, and message/history jumps cancel either mode. Geometry alone never re-arms
   a detached reader.
 - **Oldest-first reading band** — the established behavior remains intact. An immediate local send aligns
@@ -311,9 +317,11 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
 - **Newest-first reading band** — the newest stream surface begins after the same 48–80px top inset; its
   live phase indicator leads the newest projected row. While follow is armed, appended content inside that
   row uses the same sparse 82%→58% advance; a newly inserted top row returns to the latest band in one
-  controller-owned move. Scrolling downward into older groups detaches immediately, and no insertion moves
-  that reader; upward return to the top or the floating **↑ Follow response** / **↑ Latest** action re-arms.
-  The synthetic tail space stays after the oldest group, never between reversed request/answer rows, so it
+  controller-owned move. `firstItemIndex` assigns stable logical indices across projected prefix insertion
+  and removal, preserving a detached reader's visible historical anchor and pixel offset without invoking
+  follow. Scrolling downward into older groups detaches immediately, and no insertion moves that reader;
+  upward return to the top or the floating **↑ Follow response** / **↑ Latest** action re-arms. The
+  synthetic tail space stays after the oldest group, never between reversed request/answer rows, so it
   cannot split the selected group semantics.
 - **Composer & chrome** — `Composer` (prompt field + send/steer/followUp/abort, `@`-mentions, `/`
   commands + template **slot sessions** (Tab-through placeholders — see the Template slots bullet
@@ -885,7 +893,8 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   **per-file**; the registry is importable from `chat/toolRegistry` **without** pulling shiki.
 - **Allowed deps:** `contracts` (pi message/content-block types, **type-only**); `store` + `transport`
   (**app-integration files only** — a renderer that takes props must never reach for either. Today that
-  is `ChatView.tsx` plus the hooks and dialogs it composes: `useChatTodos.ts`, `useHistorySearch.ts`,
+  is `ChatView.tsx`, `messageOrder.ts` (the browser-local persistence adapter), plus the hooks and dialogs
+  it composes: `useChatTodos.ts`, `useHistorySearch.ts`,
   `useModelCatalog.ts`, **`useTranscriptSync.ts`** (successful-compaction + connection-generation canonical
   transcript reconciliation), `SkillsDialog.tsx`, `TemplateEditorDialog.tsx`,
   `SubagentTranscriptDialog.tsx`. `useModelCatalog` is the shared

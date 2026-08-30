@@ -1,5 +1,6 @@
 import { RiCheckLine as Check } from "@remixicon/react";
-import type { AppConfigUpdate, ChatMessageOrder, ComposerGrowthLimit } from "@thinkrail/contracts";
+import type { AppConfigUpdate, ComposerGrowthLimit } from "@thinkrail/contracts";
+import type { ChatMessageOrder } from "@/chat/messageOrder";
 import { cn } from "@/lib";
 import { toast, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
@@ -115,10 +116,11 @@ function saveSetting(config: AppConfigUpdate, errorMessage: string): void {
 export function ChatSettings() {
 	const messageOrder = useAppStore((state) => state.chatMessageOrder);
 	const growthLimit = useAppStore((state) => state.composerGrowthLimit);
+	const setChatMessageOrder = useAppStore((state) => state.setChatMessageOrder);
 
 	const selectMessageOrder = (chatMessageOrder: ChatMessageOrder) => {
 		if (chatMessageOrder === messageOrder) return;
-		saveSetting({ chatMessageOrder }, "Couldn't change message order");
+		setChatMessageOrder(chatMessageOrder);
 	};
 
 	const selectGrowthLimit = (composerGrowthLimit: ComposerGrowthLimit) => {
@@ -133,7 +135,7 @@ export function ChatSettings() {
 					<h3 className="tr-title-section text-text-default">Message order</h3>
 					<p className="text-text-muted tr-text-metadata">
 						Choose whether the oldest or newest work appears first. The message box stays at the
-						bottom. Your choice is saved on the host and follows you across devices.
+						bottom. Your choice is saved in this browser for this host only.
 					</p>
 				</div>
 				<RadioCards

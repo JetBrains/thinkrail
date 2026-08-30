@@ -323,12 +323,14 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   `server.welcome` / the `settings.changed` broadcast) — lives here too; it's a **pure value only** (the
   theme-application side-effect is the shell's, keyed off `theme`), and defaults to
   `DEFAULT_CONFIG.theme` until the welcome arrives. **`composerGrowthLimit: ComposerGrowthLimit`**,
-  **`chatMessageOrder: ChatMessageOrder`**, **`customLayoutPresets: LayoutPreset[]`**, and
-  **`analyticsEnabled: boolean`** ride the same `applyConfig` fold (host-owned, defaulted from
-  `DEFAULT_CONFIG`) — the Chat, shared Layout catalog, and Privacy read sides. Message order remains one
-  global preference rather than per-session render state; `ChatView` projects each runtime from it without
-  rewriting canonical turns. The instantiated workbench frame, current/default preset id, and group limits
-  are separate local values hydrated by `shell/layoutState`; `applyConfig` can never overwrite them. The
+  **`customLayoutPresets: LayoutPreset[]`**, and **`analyticsEnabled: boolean`** ride the same `applyConfig`
+  fold (host-owned, defaulted from `DEFAULT_CONFIG`) — the Chat, shared Layout catalog, and Privacy read
+  sides. **`chatMessageOrder: ChatMessageOrder`** is instead one browser-local presentation preference,
+  initialized to oldest-first and hydrated by `chat/messageOrder` from a host-qualified localStorage key;
+  `setChatMessageOrder` changes it without a server round trip, and `applyConfig` can never overwrite it.
+  `ChatView` projects each runtime from that value without rewriting canonical turns. The instantiated
+  workbench frame, current/default preset id, and group limits are separate local values hydrated by
+  `shell/layoutState`; `applyConfig` can never overwrite them. The
   **toast queue** — **`toasts: Toast[]`** (oldest-first) with **`pushToast(toast) → id`** / **`dismissToast(id)`**
   and the ergonomic **`toast.error/success/info(message, title?)`** helper (wraps `pushToast` so a non-React
   call site — a `.catch` in a fire-and-forget wire call — can fire one) — lives here so any surface can raise

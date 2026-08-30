@@ -5,7 +5,6 @@ import { join } from "node:path";
 import {
 	type AppConfig,
 	DEFAULT_CONFIG,
-	isChatMessageOrder,
 	isComposerGrowthLimit,
 	type Project,
 	type Workspace,
@@ -65,6 +64,7 @@ export function loadConfig(): AppConfig {
 	if (!raw || typeof raw !== "object" || Array.isArray(raw)) return structuredClone(DEFAULT_CONFIG);
 	const value = raw as Record<string, unknown>;
 	const extensions = { ...value };
+	delete extensions.chatMessageOrder;
 	delete extensions.layout;
 	return {
 		...extensions,
@@ -80,9 +80,6 @@ export function loadConfig(): AppConfig {
 		composerGrowthLimit: isComposerGrowthLimit(value.composerGrowthLimit)
 			? value.composerGrowthLimit
 			: DEFAULT_CONFIG.composerGrowthLimit,
-		chatMessageOrder: isChatMessageOrder(value.chatMessageOrder)
-			? value.chatMessageOrder
-			: DEFAULT_CONFIG.chatMessageOrder,
 		reviewAutoFix:
 			typeof value.reviewAutoFix === "boolean" ? value.reviewAutoFix : DEFAULT_CONFIG.reviewAutoFix,
 		customLayoutPresets: Array.isArray(value.customLayoutPresets)

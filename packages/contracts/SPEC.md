@@ -200,11 +200,8 @@ of the host.
   **`ComposerGrowthLimit`** (`"compact" | "roomy" | "half-chat"`) is the closed, server-synced composer
   height preference: 6 visual lines, 10 visual lines, or 50% of the mounted chat panel respectively;
   `"half-chat"` is the default, and the web owns translating these semantic ids into geometry;
-  **`ChatMessageOrder`** (`"oldest-first" | "newest-first"`) is the closed, server-synced transcript
-  presentation preference. `"oldest-first"` preserves the existing default; newest-first changes only
-  the web's display projection, never canonical transcript persistence or wire event order;
   **`AppConfig`** (`{ theme, analyticsEnabled, terminalReplayKb, composerGrowthLimit,
-  chatMessageOrder, customLayoutPresets, reviewModel?, reviewEffort?, reviewAutoFix }` — an extensible bag;
+  customLayoutPresets, reviewModel?, reviewEffort?, reviewAutoFix }` — an extensible bag;
   `customLayoutPresets` is the bounded resource-free catalog and is the **only** layout value synchronized
   by the host; current/default preset and group limits are web-local); `analyticsEnabled` is the anonymous
   usage-analytics switch, default `true`

@@ -100,28 +100,23 @@ test("loadConfig replaces an invalid composer growth preset with the default", (
 	expect(getConfig()).toHaveProperty("composerGrowthLimit", "half-chat");
 });
 
-test("newest-first chat order round-trips through the synchronized config", () => {
-	const update = {
-		theme: DEFAULT_CONFIG.theme,
-		chatMessageOrder: "newest-first",
-	} satisfies AppConfigUpdate;
-	const next = updateConfig(update);
-	expect(next.chatMessageOrder).toBe("newest-first");
-	resetConfigCache();
-	expect(getConfig().chatMessageOrder).toBe("newest-first");
-});
-
-test("loadConfig replaces a missing or invalid chat message order with oldest-first", () => {
-	writeFileSync(join(dataDir, "config.json"), JSON.stringify({ theme: "dark" }));
-	resetConfigCache();
-	expect(getConfig().chatMessageOrder).toBe("oldest-first");
-
+test("retired chat message order is stripped from disk and stale updates", () => {
 	writeFileSync(
 		join(dataDir, "config.json"),
-		JSON.stringify({ ...DEFAULT_CONFIG, chatMessageOrder: "inside-out" }),
+		JSON.stringify({ ...DEFAULT_CONFIG, chatMessageOrder: "newest-first" }),
 	);
 	resetConfigCache();
-	expect(getConfig().chatMessageOrder).toBe("oldest-first");
+	expect(getConfig()).not.toHaveProperty("chatMessageOrder");
+
+	const published: AppConfig[] = [];
+	setSettingsPublisher((config) => published.push(config));
+	const staleUpdate = { chatMessageOrder: "newest-first" } as AppConfigUpdate;
+	const next = updateConfig(staleUpdate);
+	expect(next).not.toHaveProperty("chatMessageOrder");
+	expect(published).toHaveLength(1);
+	expect(published[0]).not.toHaveProperty("chatMessageOrder");
+	const onDisk = JSON.parse(readFileSync(join(dataDir, "config.json"), "utf8"));
+	expect(onDisk).not.toHaveProperty("chatMessageOrder");
 });
 
 test("reviewAutoFix defaults on; an old config without it loads the default; toggling off round-trips", () => {

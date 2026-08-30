@@ -144,6 +144,7 @@ beforeEach(() => {
 		activeLogin: null,
 		settingsOpen: false,
 		settingsSection: "providers",
+		chatMessageOrder: "oldest-first",
 		toasts: [],
 	});
 });
@@ -2923,9 +2924,10 @@ test("applyConfig projects the composer growth limit", () => {
 	expect(useAppStore.getState()).toHaveProperty("composerGrowthLimit", "roomy");
 });
 
-test("applyConfig projects the host-synchronized chat message order", () => {
-	const config = { ...DEFAULT_CONFIG, chatMessageOrder: "newest-first" };
-	useAppStore.getState().applyConfig(config);
+test("chat message order is browser-local and cannot be overwritten by host config", () => {
+	useAppStore.getState().setChatMessageOrder("newest-first");
+	const legacyConfig = { ...DEFAULT_CONFIG, chatMessageOrder: "oldest-first" };
+	useAppStore.getState().applyConfig(legacyConfig);
 	expect(useAppStore.getState().chatMessageOrder).toBe("newest-first");
 });
 

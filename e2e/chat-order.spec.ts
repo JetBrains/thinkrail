@@ -1,6 +1,6 @@
 import { realpathSync, rmSync, utimesSync } from "node:fs";
 import { expect, type Page, test } from "@playwright/test";
-import { enterDefaultWorkspace, openFixtureProject } from "./fixtures/app";
+import { enterDefaultWorkspace, openChatFromHistory, openFixtureProject } from "./fixtures/app";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { seedWorkspaceSession } from "./fixtures/sessions";
 
@@ -15,7 +15,10 @@ async function selectMessageOrder(page: Page, order: "oldest-first" | "newest-fi
 	await page.keyboard.press("Escape");
 }
 
-test("the synchronized message-order setting reverses groups and their rows", async ({ page }) => {
+test("the browser-local message-order preference reverses rows without changing another browser", async ({
+	browser,
+	page,
+}) => {
 	await openFixtureProject(page);
 	const session = seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), {
 		name: "message order chat",
@@ -31,6 +34,7 @@ test("the synchronized message-order setting reverses groups and their rows", as
 	try {
 		await selectMessageOrder(page, "oldest-first");
 		await enterDefaultWorkspace(page);
+		await openChatFromHistory(page, "message order chat");
 
 		const messages = page.getByTestId("chat-message");
 		await expect(messages).toHaveText([
@@ -58,7 +62,23 @@ test("the synchronized message-order setting reverses groups and their rows", as
 			"oldest request",
 		]);
 
-		await selectMessageOrder(page, "oldest-first");
+		const isolatedContext = await browser.newContext();
+		try {
+			const isolatedPage = await isolatedContext.newPage();
+			await isolatedPage.goto(new URL("/", page.url()).href);
+			await expect(isolatedPage.getByTestId("connection-status")).toHaveAttribute(
+				"data-status",
+				"connected",
+			);
+			await isolatedPage.getByTestId("open-settings").click();
+			await isolatedPage.getByTestId("settings-nav-chat").click();
+			await expect(isolatedPage.getByTestId("chat-order-oldest-first")).toHaveAttribute(
+				"data-active",
+				"true",
+			);
+		} finally {
+			await isolatedContext.close();
+		}
 	} finally {
 		rmSync(session.path, { force: true });
 	}
@@ -88,6 +108,7 @@ test("newest-first scrolls down into history and returns upward to the latest gr
 	try {
 		await selectMessageOrder(page, "newest-first");
 		await enterDefaultWorkspace(page);
+		await openChatFromHistory(page, "long newest-first chat");
 		const chatScroll = page.getByTestId("chat-scroll");
 		await expect(
 			page.getByText("answer 30: the deliberately verbose fixture has been inspected"),
@@ -115,7 +136,33 @@ test("newest-first scrolls down into history and returns upward to the latest gr
 			page.getByText("answer 30: the deliberately verbose fixture has been inspected"),
 		).toBeInViewport();
 
-		await selectMessageOrder(page, "oldest-first");
+		await page.mouse.wheel(0, 10_000);
+		await expect(latest).toBeVisible();
+		await chatScroll.evaluate((root) => {
+			const scroller = root.querySelector<HTMLElement>("[data-virtuoso-scroller]");
+			if (!scroller) return;
+			scroller.scrollTop = Math.max(50, scroller.scrollTop / 2);
+			scroller.dispatchEvent(new Event("scroll"));
+		});
+		await chatScroll.dispatchEvent("pointerdown", { pointerType: "touch" });
+		await chatScroll.evaluate((root) => {
+			const scroller = root.querySelector<HTMLElement>("[data-virtuoso-scroller]");
+			if (!scroller) return;
+			scroller.scrollTop = Math.max(1, scroller.scrollTop - 20);
+			scroller.dispatchEvent(new Event("scroll"));
+		});
+		await page.waitForTimeout(300);
+		await chatScroll.dispatchEvent("pointercancel", { pointerType: "touch" });
+		await chatScroll.evaluate((root) => {
+			const scroller = root.querySelector<HTMLElement>("[data-virtuoso-scroller]");
+			if (!scroller) return;
+			scroller.scrollTop += 40;
+			scroller.dispatchEvent(new Event("scroll"));
+			scroller.scrollTop = 0;
+			scroller.dispatchEvent(new Event("scroll"));
+		});
+		await expect(latest).toHaveCount(0);
+		await expect(chatScroll).toHaveAttribute("data-follow-state", "following");
 	} finally {
 		rmSync(session.path, { force: true });
 	}

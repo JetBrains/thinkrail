@@ -1,7 +1,6 @@
 import type {
 	AppConfig,
 	AskUserQuestionResult,
-	ChatMessageOrder,
 	ComposerGrowthLimit,
 	ExtUiRequest,
 	GitDiffScope,
@@ -39,6 +38,7 @@ import { create } from "zustand";
 import type { LoginState } from "../auth";
 import { assistantFailureText } from "../chat/assistantFailure";
 import type { HydratedRuntime } from "../chat/hydrate";
+import type { ChatMessageOrder } from "../chat/messageOrder";
 import type {
 	ChatAttachment,
 	ChatTurn,
@@ -931,6 +931,7 @@ interface AppState {
 	openSettings: (section?: SettingsSection) => void;
 	closeSettings: () => void;
 	setSettingsSection: (section: SettingsSection) => void;
+	setChatMessageOrder: (order: ChatMessageOrder) => void;
 	applyConfig: (config: AppConfig) => void;
 	requestToolView: (workspaceId: string, tool: LayoutToolId) => void;
 	requestChangesView: (workspaceId: string, path: string) => void;
@@ -960,7 +961,6 @@ function configPatch(config: AppConfig) {
 		analyticsEnabled: config.analyticsEnabled,
 		terminalReplayKb: config.terminalReplayKb,
 		composerGrowthLimit: config.composerGrowthLimit ?? DEFAULT_CONFIG.composerGrowthLimit,
-		chatMessageOrder: config.chatMessageOrder ?? DEFAULT_CONFIG.chatMessageOrder,
 		customLayoutPresets: config.customLayoutPresets ?? DEFAULT_CONFIG.customLayoutPresets,
 		reviewModel: config.reviewModel,
 		reviewEffort: config.reviewEffort,
@@ -1553,7 +1553,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	analyticsEnabled: DEFAULT_CONFIG.analyticsEnabled,
 	terminalReplayKb: DEFAULT_CONFIG.terminalReplayKb,
 	composerGrowthLimit: DEFAULT_CONFIG.composerGrowthLimit,
-	chatMessageOrder: DEFAULT_CONFIG.chatMessageOrder,
+	chatMessageOrder: "oldest-first",
 	customLayoutPresets: DEFAULT_CONFIG.customLayoutPresets,
 	reviewModel: DEFAULT_CONFIG.reviewModel,
 	reviewEffort: DEFAULT_CONFIG.reviewEffort,
@@ -2852,6 +2852,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set({ settingsOpen: true, settingsSection: section }),
 	closeSettings: () => set({ settingsOpen: false }),
 	setSettingsSection: (section) => set({ settingsSection: section }),
+	setChatMessageOrder: (chatMessageOrder) => set({ chatMessageOrder }),
 	applyConfig: (config) => set(configPatch(config)),
 	requestToolView: (workspaceId, tool) =>
 		set((state) =>

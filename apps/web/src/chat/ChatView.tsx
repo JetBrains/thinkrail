@@ -1,7 +1,6 @@
 import { RiArrowDownLine as ArrowDown, RiArrowUpLine as ArrowUp } from "@remixicon/react";
 import type {
 	AskUserQuestionResult,
-	ChatMessageOrder,
 	PromptHit,
 	QueueLane,
 	SessionQueueContent,
@@ -39,6 +38,7 @@ import {
 } from "./Composer";
 import { ExtUiDialog } from "./ExtUiDialog";
 import { HistoryOverlay } from "./HistoryOverlay";
+import type { ChatMessageOrder } from "./messageOrder";
 import {
 	compactSubmissionError,
 	mergeNativeChatCommands,
@@ -62,6 +62,7 @@ import { useChatScroll } from "./useChatScroll";
 import { useChatTodos } from "./useChatTodos";
 import { useHistorySearch } from "./useHistorySearch";
 import { useTranscriptSync } from "./useTranscriptSync";
+import { advanceVirtualRows, initialVirtualRows } from "./virtualRows";
 
 const TRY_AGAIN_PROMPT = "Try again.";
 
@@ -231,6 +232,21 @@ export default function ChatView({
 		() => projectRows(chronologicalRows, chatMessageOrder),
 		[chronologicalRows, chatMessageOrder],
 	);
+	const visibleAnchorRowId = useRef<string | null>(null);
+	const [storedVirtualRows, setStoredVirtualRows] = useState(() =>
+		initialVirtualRows(rows, chatMessageOrder),
+	);
+	let virtualRows = storedVirtualRows;
+	if (storedVirtualRows.rows !== rows || storedVirtualRows.order !== chatMessageOrder) {
+		virtualRows = advanceVirtualRows(
+			storedVirtualRows,
+			rows,
+			chatMessageOrder,
+			visibleAnchorRowId.current,
+		);
+		setStoredVirtualRows(virtualRows);
+	}
+	const firstItemIndex = virtualRows.firstItemIndex;
 
 	const currentStreamStatus = useMemo<StreamStatus | null>(() => {
 		const last = turns[turns.length - 1];
@@ -744,6 +760,7 @@ export default function ChatView({
 							key={chatMessageOrder}
 							ref={virtuosoRef}
 							data={rows}
+							firstItemIndex={firstItemIndex}
 							scrollerRef={handleScrollerRef}
 							context={listContext}
 							components={CHAT_LIST_COMPONENTS}
@@ -756,6 +773,10 @@ export default function ChatView({
 							followOutput={followOutput}
 							atBottomStateChange={handleAtBottom}
 							atTopStateChange={handleAtTop}
+							rangeChanged={({ startIndex }) => {
+								const localIndex = startIndex - firstItemIndex;
+								visibleAnchorRowId.current = rows[localIndex]?.id ?? null;
+							}}
 							totalListHeightChanged={handleContentHeight}
 							atBottomThreshold={50}
 							atTopThreshold={50}
@@ -774,7 +795,9 @@ export default function ChatView({
 										onReveal={onReveal}
 										onTryAgain={() => performSend(TRY_AGAIN_PROMPT, [], "send")}
 									/>
-									{chatMessageOrder === "newest-first" && runwayActive && index === 0 ? (
+									{chatMessageOrder === "newest-first" &&
+									runwayActive &&
+									index === firstItemIndex ? (
 										<div ref={streamEdgeRef} data-testid="chat-stream-edge" className="h-0" />
 									) : null}
 								</div>

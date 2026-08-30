@@ -30,6 +30,7 @@ export interface ReadingBandSnapshot {
 export interface ReadingBandEnvironment {
 	readGeometry: () => ReadingBandGeometry | null;
 	readScrollBounds: () => ReadingBandScrollBounds | null;
+	readViewportHeight: () => number;
 	writeScrollTop: (top: number) => void;
 	writeRunwayHeight: (height: number) => void;
 	anchorTurn: (index: number, inset: number) => void;
@@ -101,6 +102,7 @@ export function createReadingBandController(
 	let runwayStartEdge: number | null = null;
 	let runwayHeight: number | null = null;
 	let runwayViewportHeight: number | null = null;
+	let pendingTurnRunway = false;
 
 	const publish = (patch: Partial<ReadingBandState>) => {
 		const next = { ...state, ...patch };
@@ -135,6 +137,7 @@ export function createReadingBandController(
 	};
 
 	const beginTurnRunway = (geometry: ReadingBandGeometry) => {
+		pendingTurnRunway = false;
 		runwayMode = "turn";
 		runwayStartEdge = geometry.scrollTop + geometry.edgeBottom;
 		runwayViewportHeight = geometry.viewportHeight;
@@ -198,6 +201,7 @@ export function createReadingBandController(
 	const contentChanged = () => {
 		let geometry = environment.readGeometry();
 		if (!geometry || geometry.viewportHeight <= 0) return;
+		if (pendingTurnRunway) beginTurnRunway(geometry);
 		resizeRunway(geometry);
 		if (!state.streaming || !state.following || state.moving) return;
 		geometry = environment.readGeometry() ?? geometry;
@@ -216,15 +220,19 @@ export function createReadingBandController(
 		armImmediateTurn: () => {
 			cancelMotion();
 			cancelAnchor();
+			pendingTurnRunway = false;
 			publish({ following: true, runway: true });
 		},
 		userTurnArrived: (index, source) => {
 			if (source === "queued" && !state.following) return;
+			cancelMotion();
 			if (source === "immediate") publish({ following: true, runway: true });
+			const viewportHeight = environment.readViewportHeight();
+			if (viewportHeight <= 0) return;
 			const geometry = environment.readGeometry();
-			if (!geometry || geometry.viewportHeight <= 0) return;
-			beginTurnRunway(geometry);
-			const inset = turnInset(geometry.viewportHeight);
+			if (geometry) beginTurnRunway(geometry);
+			else pendingTurnRunway = true;
+			const inset = turnInset(viewportHeight);
 			cancelAnchor();
 			anchorFrame = environment.requestFrame(() => {
 				anchorFrame = null;
@@ -262,6 +270,7 @@ export function createReadingBandController(
 			let geometry = environment.readGeometry();
 			if (!geometry) return;
 			reconstructed = true;
+			pendingTurnRunway = false;
 			publish({ runway: true });
 			runwayMode = "floor";
 			runwayStartEdge = null;
@@ -277,6 +286,7 @@ export function createReadingBandController(
 			latestEdge = edge;
 			activeStreamMount = state.streaming;
 			reconstructed = false;
+			pendingTurnRunway = false;
 			runwayMode = null;
 			runwayStartEdge = null;
 			runwayHeight = null;
@@ -286,6 +296,7 @@ export function createReadingBandController(
 		dispose: () => {
 			cancelMotion();
 			cancelAnchor();
+			pendingTurnRunway = false;
 		},
 	};
 }

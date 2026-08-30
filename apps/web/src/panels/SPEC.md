@@ -343,10 +343,12 @@ a project picker, the prompt hero, and the reused
   apply), a rejected update raising a toast; the picker never owns a theme list — it renders the catalog
   the glob discovered at build time); **`ChatSettings`** (the live section immediately after Appearance —
   **Message order** radio cards over `store.chatMessageOrder` (Oldest first, the compatibility default /
-  Newest first, the opt-in) followed by the three existing composer-growth cards. Both update their own
-  top-level `AppConfig` field with the same converge-on-`settings.changed`, toast-on-rejection pattern;
-  `contracts` owns both closed id sets and defaults, while labels use “message box” rather than the internal
-  “composer” name when explaining where the user types); the **shell-owned injected Layout
+  Newest first, the opt-in) followed by the three existing composer-growth cards. Message order applies
+  immediately and persists only in this browser under the current host-qualified key, so another browser or
+  host is unaffected; `chat/messageOrder` owns its closed ids and default. Composer growth remains a
+  top-level `AppConfig` field and converges on `settings.changed`, with a toast on rejection. Labels use
+  “message box” rather than the internal “composer” name when explaining where the user types); the
+  **shell-owned injected Layout
   section** (Balanced/Focus/Review
   plus named custom preset cards. Custom capture/rename/delete updates the host-synchronized catalog and
   converges through `settings.changed`; current/default selection and independent side/bottom limits are

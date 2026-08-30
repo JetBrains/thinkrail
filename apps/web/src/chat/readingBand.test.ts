@@ -11,6 +11,7 @@ interface Harness {
 	writes: number[];
 	runwayHeights: number[];
 	setGeometry: (patch: Partial<ReadingBandGeometry>) => void;
+	setGeometryAvailable: (available: boolean) => void;
 	advance: (milliseconds: number) => void;
 	pendingFrames: () => number;
 	cancelledFrames: () => number;
@@ -35,6 +36,7 @@ function createHarness({
 		maxScrollTop: 1_000,
 		edgeBottom: viewportHeight * 0.5,
 	};
+	let hasGeometry = geometryAvailable;
 	let now = 0;
 	let frameId = 0;
 	let cancelled = 0;
@@ -44,8 +46,9 @@ function createHarness({
 	const runwayHeights: number[] = [];
 
 	const environment: ReadingBandEnvironment = {
-		readGeometry: () => (geometryAvailable ? geometry : null),
+		readGeometry: () => (hasGeometry ? geometry : null),
 		readScrollBounds: () => geometry,
+		readViewportHeight: () => geometry.viewportHeight,
 		writeScrollTop: (top) => {
 			writes.push(top);
 			const delta = top - geometry.scrollTop;
@@ -75,6 +78,9 @@ function createHarness({
 		runwayHeights,
 		setGeometry: (patch) => {
 			geometry = { ...geometry, ...patch };
+		},
+		setGeometryAvailable: (available) => {
+			hasGeometry = available;
 		},
 		advance: (milliseconds) => {
 			now += milliseconds;
@@ -107,6 +113,26 @@ describe("reading-band turn anchoring", () => {
 				buttonLabel: null,
 			});
 		}
+	});
+
+	it("anchors without a mounted stream marker and initializes runway when it appears", () => {
+		const harness = createHarness({
+			streaming: false,
+			viewportHeight: 600,
+			latestEdge: "top",
+			geometryAvailable: false,
+		});
+		harness.controller.armImmediateTurn();
+		harness.controller.userTurnArrived(0, "immediate");
+		harness.advance(0);
+		expect(harness.anchors).toEqual([{ index: 0, inset: 60 }]);
+		expect(harness.runwayHeights).toEqual([]);
+
+		harness.setGeometryAvailable(true);
+		harness.controller.contentChanged();
+		expect(harness.runwayHeights).toEqual([612]);
+		harness.controller.contentChanged();
+		expect(harness.runwayHeights).toEqual([612]);
 	});
 
 	it("anchors a queued turn only while the reader is still following", () => {
@@ -229,6 +255,19 @@ describe("reading-band newest-row arrival", () => {
 		expect(harness.pendingFrames()).toBe(1);
 		harness.advance(220);
 		expect(harness.writes.at(-1)).toBe(0);
+	});
+
+	it("cancels a prepended-row move before anchoring a queued continuation", () => {
+		const harness = createHarness({ latestEdge: "top" });
+		harness.setGeometry({ scrollTop: 300, maxScrollTop: 900 });
+		harness.controller.latestRowArrived(0);
+		expect(harness.pendingFrames()).toBe(1);
+
+		harness.controller.userTurnArrived(0, "queued");
+		expect(harness.cancelledFrames()).toBe(1);
+		harness.advance(220);
+		expect(harness.writes).toEqual([]);
+		expect(harness.anchors).toEqual([{ index: 0, inset: 60 }]);
 	});
 
 	it("does not move a detached reader or the bottom-latest mode for a prepended row", () => {

@@ -1,4 +1,3 @@
-import type { ChatMessageOrder } from "@thinkrail/contracts";
 import {
 	type FocusEventHandler,
 	type KeyboardEventHandler,
@@ -13,6 +12,7 @@ import {
 	type WheelEventHandler,
 } from "react";
 import type { VirtuosoHandle } from "react-virtuoso";
+import type { ChatMessageOrder } from "./messageOrder";
 import {
 	createReadingBandController,
 	initialReadingBandSnapshot,
@@ -74,6 +74,16 @@ function scrollBounds(scroller: HTMLElement): ReadingBandScrollBounds {
 	};
 }
 
+function boundedScrollTop(scroller: HTMLElement): number {
+	const bounds = scrollBounds(scroller);
+	return Math.min(bounds.maxScrollTop, Math.max(0, bounds.scrollTop));
+}
+
+function reachedLatestEdge(scroller: HTMLElement, edge: ReadingBandLatestEdge): boolean {
+	const bounds = scrollBounds(scroller);
+	return edge === "top" ? bounds.scrollTop <= 1 : bounds.maxScrollTop - bounds.scrollTop <= 1;
+}
+
 export function useChatScroll(
 	virtuosoRef: RefObject<VirtuosoHandle | null>,
 	isStreaming: boolean,
@@ -86,12 +96,19 @@ export function useChatScroll(
 	const edgeRef = useRef<HTMLDivElement | null>(null);
 	const runwayElementRef = useRef<HTMLDivElement | null>(null);
 	const atLatest = useRef(true);
-	const interacting = useRef(false);
 	const interactionStartScrollTop = useRef(0);
 	const returnIntentUntil = useRef(0);
+	const activePointerId = useRef<number | null>(null);
+	const activePointerType = useRef<string | null>(null);
+	const touchPointerActive = useRef(false);
+	const touchMomentum = useRef(false);
+	const touchMovingTowardLatest = useRef<boolean | null>(null);
+	const previousTouchScrollTop = useRef(0);
+	const touchSettleTimer = useRef<number | null>(null);
 	const pendingImmediateTurn = useRef(false);
 	const previousUserRowId = useRef(latestUserRow?.id ?? null);
 	const previousLatestRowId = useRef(latestRow?.id ?? null);
+	const latestRowFrame = useRef<number | null>(null);
 	const [scrollerElement, setScrollerElement] = useState<HTMLElement | null>(null);
 	const [streamEdgeElement, setStreamEdgeElement] = useState<HTMLDivElement | null>(null);
 	const [snapshot, setSnapshot] = useState<ReadingBandSnapshot>(() =>
@@ -116,6 +133,7 @@ export function useChatScroll(
 					const scroller = scrollerRef.current;
 					return scroller ? scrollBounds(scroller) : null;
 				},
+				readViewportHeight: () => scrollerRef.current?.clientHeight ?? 0,
 				writeScrollTop: (top) => {
 					const scroller = scrollerRef.current;
 					if (scroller) scroller.scrollTop = top;
@@ -142,10 +160,55 @@ export function useChatScroll(
 		),
 	);
 
+	const clearReturnIntent = useCallback(() => {
+		returnIntentUntil.current = 0;
+		activePointerId.current = null;
+		activePointerType.current = null;
+		touchPointerActive.current = false;
+		touchMomentum.current = false;
+		touchMovingTowardLatest.current = null;
+		if (touchSettleTimer.current !== null) window.clearTimeout(touchSettleTimer.current);
+		touchSettleTimer.current = null;
+	}, []);
+
+	const settleTouch = useCallback(() => {
+		if (touchPointerActive.current) return;
+		const scroller = scrollerRef.current;
+		if (
+			touchMomentum.current &&
+			touchMovingTowardLatest.current === true &&
+			scroller &&
+			reachedLatestEdge(scroller, edge)
+		) {
+			controller.readerReachedEdge();
+		}
+		clearReturnIntent();
+	}, [clearReturnIntent, controller, edge]);
+
+	const scheduleTouchSettle = useCallback(
+		(delay = 250) => {
+			if (touchSettleTimer.current !== null) window.clearTimeout(touchSettleTimer.current);
+			touchSettleTimer.current = window.setTimeout(settleTouch, delay);
+		},
+		[settleTouch],
+	);
+
+	const readerLeft = useCallback(() => {
+		clearReturnIntent();
+		controller.readerLeft();
+	}, [clearReturnIntent, controller]);
+
 	useLayoutEffect(() => {
 		atLatest.current = true;
+		clearReturnIntent();
+		if (latestRowFrame.current !== null) cancelAnimationFrame(latestRowFrame.current);
+		latestRowFrame.current = null;
 		controller.setLatestEdge(edge);
-	}, [controller, edge]);
+		return () => {
+			if (latestRowFrame.current !== null) cancelAnimationFrame(latestRowFrame.current);
+			latestRowFrame.current = null;
+		};
+	}, [clearReturnIntent, controller, edge]);
 
 	useLayoutEffect(() => {
 		controller.setStreaming(isStreaming);
@@ -162,16 +225,23 @@ export function useChatScroll(
 	}, [controller, isStreaming, latestUserRow]);
 
 	useLayoutEffect(() => {
-		const row = latestRow;
-		if (!row) return;
-		if (row.id === previousLatestRowId.current) return;
-		previousLatestRowId.current = row.id;
-		if (edge === "top" && row.id !== latestUserRow?.id) controller.latestRowArrived(row.index);
+		const rowId = latestRow?.id ?? null;
+		if (rowId === previousLatestRowId.current) return;
+		previousLatestRowId.current = rowId;
+		if (latestRowFrame.current !== null) cancelAnimationFrame(latestRowFrame.current);
+		latestRowFrame.current = null;
+		if (!latestRow || edge !== "top" || rowId === latestUserRow?.id) return;
+		latestRowFrame.current = requestAnimationFrame(() => {
+			latestRowFrame.current = null;
+			if (previousLatestRowId.current !== rowId) return;
+			controller.latestRowArrived(latestRow.index);
+		});
 	}, [controller, edge, latestRow, latestUserRow?.id]);
 
 	useLayoutEffect(() => {
-		if (!scrollerElement || !streamEdgeElement || !isStreaming) return;
-		controller.reconstructActiveStream();
+		if (!scrollerElement || !streamEdgeElement) return;
+		if (isStreaming) controller.reconstructActiveStream();
+		controller.contentChanged();
 	}, [controller, isStreaming, scrollerElement, streamEdgeElement]);
 
 	useEffect(() => {
@@ -180,6 +250,29 @@ export function useChatScroll(
 		observer.observe(scrollerElement);
 		return () => observer.disconnect();
 	}, [controller, scrollerElement]);
+
+	useEffect(() => {
+		if (!scrollerElement) return;
+		previousTouchScrollTop.current = boundedScrollTop(scrollerElement);
+		const onScroll = () => {
+			const nextScrollTop = boundedScrollTop(scrollerElement);
+			const delta = nextScrollTop - previousTouchScrollTop.current;
+			previousTouchScrollTop.current = nextScrollTop;
+			if (!touchMomentum.current || delta === 0) return;
+			const movedTowardLatest = edge === "bottom" ? delta > 0 : delta < 0;
+			touchMovingTowardLatest.current = movedTowardLatest;
+			returnIntentUntil.current = 0;
+			if (!movedTowardLatest) controller.readerLeft();
+			if (!touchPointerActive.current) scheduleTouchSettle(1_000);
+		};
+		const onScrollEnd = () => settleTouch();
+		scrollerElement.addEventListener("scroll", onScroll, { passive: true });
+		scrollerElement.addEventListener("scrollend", onScrollEnd);
+		return () => {
+			scrollerElement.removeEventListener("scroll", onScroll);
+			scrollerElement.removeEventListener("scrollend", onScrollEnd);
+		};
+	}, [controller, edge, scheduleTouchSettle, scrollerElement, settleTouch]);
 
 	useEffect(() => {
 		const onSelectionChange = () => {
@@ -194,13 +287,21 @@ export function useChatScroll(
 			) {
 				return;
 			}
-			controller.readerLeft();
+			readerLeft();
 		};
 		document.addEventListener("selectionchange", onSelectionChange);
 		return () => document.removeEventListener("selectionchange", onSelectionChange);
-	}, [controller]);
+	}, [readerLeft]);
 
-	useEffect(() => () => controller.dispose(), [controller]);
+	useEffect(
+		() => () => {
+			clearReturnIntent();
+			if (latestRowFrame.current !== null) cancelAnimationFrame(latestRowFrame.current);
+			latestRowFrame.current = null;
+			controller.dispose();
+		},
+		[clearReturnIntent, controller],
+	);
 
 	const handleScrollerRef = useCallback((element: HTMLElement | Window | null) => {
 		const next = element instanceof HTMLElement ? element : null;
@@ -218,22 +319,31 @@ export function useChatScroll(
 	}, []);
 
 	const armImmediateTurn = useCallback(() => {
+		clearReturnIntent();
 		pendingImmediateTurn.current = true;
 		controller.armImmediateTurn();
-	}, [controller]);
+	}, [clearReturnIntent, controller]);
 
-	const releaseFollow = useCallback(() => controller.readerLeft(), [controller]);
-	const scrollToLatest = useCallback(() => controller.returnToEdge(), [controller]);
+	const releaseFollow = readerLeft;
+	const scrollToLatest = useCallback(() => {
+		clearReturnIntent();
+		controller.returnToEdge();
+	}, [clearReturnIntent, controller]);
 	const handleContentHeight = useCallback(() => controller.contentChanged(), [controller]);
 
 	const handleLatestState = useCallback(
 		(next: boolean) => {
 			atLatest.current = next;
-			if (next && performance.now() <= returnIntentUntil.current) {
+			if (
+				next &&
+				!touchMomentum.current &&
+				performance.now() <= returnIntentUntil.current
+			) {
 				controller.readerReachedEdge();
+				clearReturnIntent();
 			}
 		},
-		[controller],
+		[clearReturnIntent, controller],
 	);
 
 	const handleAtBottom = useCallback(
@@ -250,35 +360,91 @@ export function useChatScroll(
 		[edge, handleLatestState],
 	);
 
-	const onPointerDown = useCallback<PointerEventHandler>(() => {
-		interacting.current = true;
-		interactionStartScrollTop.current = scrollerRef.current?.scrollTop ?? 0;
-		controller.readerLeft();
-	}, [controller]);
+	const onPointerDown = useCallback<PointerEventHandler>(
+		(event) => {
+			clearReturnIntent();
+			const scroller = scrollerRef.current;
+			const scrollTop = scroller ? boundedScrollTop(scroller) : 0;
+			interactionStartScrollTop.current = scrollTop;
+			previousTouchScrollTop.current = scrollTop;
+			activePointerId.current = event.pointerId;
+			activePointerType.current = event.pointerType;
+			touchPointerActive.current = event.pointerType === "touch";
+			touchMomentum.current = event.pointerType === "touch";
+			touchMovingTowardLatest.current = null;
+			controller.readerLeft();
+		},
+		[clearReturnIntent, controller],
+	);
 
-	const onPointerUp = useCallback<PointerEventHandler>(() => {
-		interacting.current = false;
-		const delta = (scrollerRef.current?.scrollTop ?? 0) - interactionStartScrollTop.current;
-		const movedTowardLatest = edge === "bottom" ? delta > 1 : delta < -1;
-		if (movedTowardLatest && atLatest.current) controller.readerReachedEdge();
-	}, [controller, edge]);
+	const finishPointerInteraction = useCallback(
+		(pointerType: string, pointerId: number, terminal: "up" | "cancel") => {
+			if (
+				activePointerId.current !== pointerId ||
+				activePointerType.current !== pointerType
+			) {
+				return;
+			}
+			activePointerId.current = null;
+			activePointerType.current = null;
+			const scroller = scrollerRef.current;
+			const delta = (scroller ? boundedScrollTop(scroller) : 0) - interactionStartScrollTop.current;
+			const totalMovedTowardLatest = edge === "bottom" ? delta > 1 : delta < -1;
+			if (pointerType === "touch") {
+				touchPointerActive.current = false;
+				touchMomentum.current = true;
+				const movedTowardLatest =
+					touchMovingTowardLatest.current ?? totalMovedTowardLatest;
+				touchMovingTowardLatest.current = movedTowardLatest;
+				returnIntentUntil.current = 0;
+				if (
+					terminal === "up" &&
+					movedTowardLatest &&
+					scroller &&
+					reachedLatestEdge(scroller, edge)
+				) {
+					controller.readerReachedEdge();
+					clearReturnIntent();
+					return;
+				}
+				scheduleTouchSettle(terminal === "cancel" ? 1_000 : 500);
+				return;
+			}
+			if (totalMovedTowardLatest) {
+				returnIntentUntil.current = performance.now() + 500;
+				if (scroller && reachedLatestEdge(scroller, edge)) {
+					controller.readerReachedEdge();
+					clearReturnIntent();
+				}
+				return;
+			}
+			clearReturnIntent();
+		},
+		[clearReturnIntent, controller, edge, scheduleTouchSettle],
+	);
 
-	const onPointerCancel = useCallback<PointerEventHandler>(() => {
-		interacting.current = false;
-	}, []);
+	const onPointerUp = useCallback<PointerEventHandler>(
+		(event) => finishPointerInteraction(event.pointerType, event.pointerId, "up"),
+		[finishPointerInteraction],
+	);
+
+	const onPointerCancel = useCallback<PointerEventHandler>(
+		(event) => finishPointerInteraction(event.pointerType, event.pointerId, "cancel"),
+		[finishPointerInteraction],
+	);
 
 	const onWheel = useCallback<WheelEventHandler>(
 		(event) => {
 			if (event.deltaY === 0) return;
 			const movesTowardLatest = edge === "bottom" ? event.deltaY > 0 : event.deltaY < 0;
 			if (!movesTowardLatest) {
-				controller.readerLeft();
+				readerLeft();
 				return;
 			}
 			returnIntentUntil.current = performance.now() + 500;
 			if (atLatest.current) controller.readerReachedEdge();
 		},
-		[controller, edge],
+		[controller, edge, readerLeft],
 	);
 
 	const onKeyDown = useCallback<KeyboardEventHandler>(
@@ -296,21 +462,21 @@ export function useChatScroll(
 			const movesTowardLatest = edge === "top" ? movesTowardTop : movesTowardBottom;
 			const movesTowardHistory = edge === "top" ? movesTowardBottom : movesTowardTop;
 			if (movesTowardHistory) {
-				controller.readerLeft();
+				readerLeft();
 				return;
 			}
 			if (!movesTowardLatest) return;
 			returnIntentUntil.current = performance.now() + 500;
 			if (atLatest.current) controller.readerReachedEdge();
 		},
-		[controller, edge],
+		[controller, edge, readerLeft],
 	);
 
 	const onFocusCapture = useCallback<FocusEventHandler>(
 		(event) => {
-			if (isInteractiveTarget(event.target)) controller.readerLeft();
+			if (isInteractiveTarget(event.target)) readerLeft();
 		},
-		[controller],
+		[readerLeft],
 	);
 
 	return {
