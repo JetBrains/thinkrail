@@ -325,8 +325,13 @@ per-workspace views/attention, terminal catalogs, and one **per-session chat run
   `DEFAULT_CONFIG.theme` until the welcome arrives. **`composerGrowthLimit: ComposerGrowthLimit`**,
   **`customLayoutPresets: LayoutPreset[]`**, and **`analyticsEnabled: boolean`** ride the same `applyConfig`
   fold (host-owned, defaulted from `DEFAULT_CONFIG`) — the Chat, shared Layout catalog, and Privacy read
-  sides. The instantiated frame, current/default preset id, and group limits are separate local values
-  hydrated by `shell/layoutState`; `applyConfig` can never overwrite them. The
+  sides. **`chatMessageOrder: ChatMessageOrder`** is instead one client-local presentation preference,
+  initialized to oldest-first and hydrated by `chat/messageOrder` from a host-qualified browser
+  localStorage key or the native shell's injected backend-profile/window-scoped adapter;
+  `setChatMessageOrder` changes it without a server round trip, and `applyConfig` can never overwrite it.
+  `ChatView` projects each runtime from that value without rewriting canonical turns. The instantiated
+  workbench frame, current/default preset id, and group limits are separate local values hydrated by
+  `shell/layoutState`; `applyConfig` can never overwrite them. The
   **toast queue** — **`toasts: Toast[]`** (oldest-first) with **`pushToast(toast) → id`** / **`dismissToast(id)`**
   and the ergonomic **`toast.error/success/info(message, title?)`** helper (wraps `pushToast` so a non-React
   call site — a `.catch` in a fire-and-forget wire call — can fire one) — lives here so any surface can raise

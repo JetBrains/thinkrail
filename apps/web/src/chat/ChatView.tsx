@@ -1,4 +1,4 @@
-import { RiArrowDownLine as ArrowDown } from "@remixicon/react";
+import { RiArrowDownLine as ArrowDown, RiArrowUpLine as ArrowUp } from "@remixicon/react";
 import type {
 	AskUserQuestionResult,
 	PromptHit,
@@ -38,6 +38,7 @@ import {
 } from "./Composer";
 import { ExtUiDialog } from "./ExtUiDialog";
 import { HistoryOverlay } from "./HistoryOverlay";
+import type { ChatMessageOrder } from "./messageOrder";
 import {
 	compactSubmissionError,
 	mergeNativeChatCommands,
@@ -45,7 +46,7 @@ import {
 } from "./nativeCommands";
 import { planGlance } from "./planView";
 import { QueueStrip } from "./QueueStrip";
-import { type ChatRow, deriveRows, rowIndexForTurn } from "./rows";
+import { type ChatRow, deriveRows, projectRows, rowIndexForTurn } from "./rows";
 import { SkillsDialog } from "./SkillsDialog";
 import { StreamIndicator, type StreamStatus, streamStatus } from "./StreamIndicator";
 import { SubagentTranscriptDialog } from "./SubagentTranscriptDialog";
@@ -61,6 +62,7 @@ import { useChatScroll } from "./useChatScroll";
 import { useChatTodos } from "./useChatTodos";
 import { useHistorySearch } from "./useHistorySearch";
 import { useTranscriptSync } from "./useTranscriptSync";
+import { advanceVirtualRows, initialVirtualRows } from "./virtualRows";
 
 const TRY_AGAIN_PROMPT = "Try again.";
 
@@ -98,17 +100,41 @@ function templateToCommand(t: TemplateInfo): SlashCommandInfo {
 }
 
 type ChatListContext = {
+	messageOrder: ChatMessageOrder;
 	status: StreamStatus | null;
 	runwayActive: boolean;
+	headerRef: RefCallback<HTMLDivElement>;
 	streamEdgeRef: RefCallback<HTMLDivElement>;
 	runwayRef: RefCallback<HTMLDivElement>;
 };
 
 function StreamHeader({ context }: { context: ChatListContext }) {
-	return context.runwayActive ? <div className="h-[clamp(48px,10cqh,80px)]" aria-hidden /> : null;
+	const inset = context.runwayActive ? (
+		<div className="h-[clamp(48px,10cqh,80px)]" aria-hidden />
+	) : null;
+	return (
+		<div ref={context.headerRef}>
+			{inset}
+			{context.messageOrder === "newest-first" && context.status ? (
+				<div className="mx-auto max-w-3xl px-12 pb-8">
+					<StreamIndicator status={context.status} />
+				</div>
+			) : null}
+		</div>
+	);
 }
 
 function StreamFooter({ context }: { context: ChatListContext }) {
+	if (context.messageOrder === "newest-first") {
+		return context.runwayActive ? (
+			<div
+				ref={context.runwayRef}
+				data-testid="chat-stream-runway"
+				className="h-[42cqh]"
+				aria-hidden
+			/>
+		) : null;
+	}
 	if (!context.status && !context.runwayActive) return null;
 	return (
 		<>
@@ -156,6 +182,7 @@ export default function ChatView({
 		enabled: sessionRuntime !== undefined,
 	});
 	const composerGrowthLimit = useAppStore((state) => state.composerGrowthLimit);
+	const chatMessageOrder = useAppStore((state) => state.chatMessageOrder);
 	const { models, refreshing: modelsRefreshing, refresh: onRefreshModels } = useModelCatalog();
 	const projectId = useAppStore(
 		(s) =>
@@ -196,10 +223,29 @@ export default function ChatView({
 
 	const currentModel = selectCatalogModel(models, sessionModel) ?? sessionModel;
 
-	const rows = useMemo(
+	const chronologicalRows = useMemo(
 		() => deriveRows(turns, toolResults, isStreaming, isSpec),
 		[turns, toolResults, isStreaming, isSpec],
 	);
+	const rows = useMemo(
+		() => projectRows(chronologicalRows, chatMessageOrder),
+		[chronologicalRows, chatMessageOrder],
+	);
+	const visibleAnchorRowId = useRef<string | null>(null);
+	const [storedVirtualRows, setStoredVirtualRows] = useState(() =>
+		initialVirtualRows(rows, chatMessageOrder),
+	);
+	let virtualRows = storedVirtualRows;
+	if (storedVirtualRows.rows !== rows || storedVirtualRows.order !== chatMessageOrder) {
+		virtualRows = advanceVirtualRows(
+			storedVirtualRows,
+			rows,
+			chatMessageOrder,
+			visibleAnchorRowId.current,
+		);
+		setStoredVirtualRows(virtualRows);
+	}
+	const firstItemIndex = virtualRows.firstItemIndex;
 
 	const currentStreamStatus = useMemo<StreamStatus | null>(() => {
 		const last = turns[turns.length - 1];
@@ -226,30 +272,50 @@ export default function ChatView({
 
 	const virtuosoRef = useRef<VirtuosoHandle>(null);
 	const latestUserRow = useMemo(() => {
-		const index = rows.findLastIndex((row) => row.kind === "user");
+		const row = chronologicalRows.findLast((candidate) => candidate.kind === "user");
+		if (!row) return null;
+		const index = rows.findIndex((candidate) => candidate.id === row.id);
+		return index >= 0 ? { id: row.id, index } : null;
+	}, [chronologicalRows, rows]);
+	const latestRow = useMemo(() => {
+		const index = chatMessageOrder === "newest-first" ? 0 : rows.length - 1;
 		const row = rows[index];
-		return index >= 0 && row ? { id: row.id, index } : null;
-	}, [rows]);
+		return row ? { id: row.id, index } : null;
+	}, [chatMessageOrder, rows]);
+	const runwayMarkerRowId =
+		chatMessageOrder === "newest-first"
+			? (latestUserRow?.id ?? rows[rows.length - 1]?.id ?? null)
+			: null;
 	const {
 		followOutput,
 		handleAtBottom,
+		handleAtTop,
 		handleContentHeight,
 		handleScrollerRef,
+		headerRef,
 		streamEdgeRef,
+		runwayEdgeRef,
 		runwayRef,
 		scrollerElement,
 		showScrollButton,
 		scrollButtonLabel,
-		scrollToBottom,
+		scrollToLatest,
 		armImmediateTurn,
 		releaseFollow,
 		runwayActive,
 		followState,
 		containerProps,
-	} = useChatScroll(virtuosoRef, isStreaming, latestUserRow);
+	} = useChatScroll(virtuosoRef, isStreaming, chatMessageOrder, latestUserRow, latestRow);
 	const listContext = useMemo<ChatListContext>(
-		() => ({ status: currentStreamStatus, runwayActive, streamEdgeRef, runwayRef }),
-		[currentStreamStatus, runwayActive, streamEdgeRef, runwayRef],
+		() => ({
+			messageOrder: chatMessageOrder,
+			status: currentStreamStatus,
+			runwayActive,
+			headerRef,
+			streamEdgeRef,
+			runwayRef,
+		}),
+		[chatMessageOrder, currentStreamStatus, headerRef, runwayActive, runwayRef, streamEdgeRef],
 	);
 	const composerRef = useRef<ComposerHandle>(null);
 	const askFocusScope = useRef<object>({}).current;
@@ -654,6 +720,7 @@ export default function ChatView({
 			<AskStatesContext.Provider value={askContext}>
 				<div
 					data-testid="chat-view"
+					data-message-order={chatMessageOrder}
 					className="flex h-full min-h-0 min-w-0 flex-col bg-container-workspace-bg [container-type:size]"
 				>
 					<Popover open={planOpen} onOpenChange={setPlanOpen}>
@@ -690,24 +757,37 @@ export default function ChatView({
 					<div
 						data-testid="chat-scroll"
 						data-follow-state={followState}
+						data-latest-edge={chatMessageOrder === "newest-first" ? "top" : "bottom"}
 						data-streaming={isStreaming}
 						className="relative flex min-h-0 flex-1 flex-col [container-type:size]"
 						{...containerProps}
 					>
 						<Virtuoso<ChatRow, ChatListContext>
+							key={chatMessageOrder}
 							ref={virtuosoRef}
 							data={rows}
+							firstItemIndex={firstItemIndex}
 							scrollerRef={handleScrollerRef}
 							context={listContext}
 							components={CHAT_LIST_COMPONENTS}
 							className="min-h-0 flex-1 overflow-x-hidden"
-							initialTopMostItemIndex={{ index: Math.max(rows.length - 1, 0), align: "end" }}
+							initialTopMostItemIndex={
+								chatMessageOrder === "newest-first"
+									? { index: 0, align: "start" }
+									: { index: Math.max(rows.length - 1, 0), align: "end" }
+							}
 							followOutput={followOutput}
 							atBottomStateChange={handleAtBottom}
+							atTopStateChange={handleAtTop}
+							rangeChanged={({ startIndex }) => {
+								const localIndex = startIndex - firstItemIndex;
+								visibleAnchorRowId.current = rows[localIndex]?.id ?? null;
+							}}
 							totalListHeightChanged={handleContentHeight}
 							atBottomThreshold={50}
+							atTopThreshold={50}
 							computeItemKey={(_, row) => row.id}
-							itemContent={(_, row) => (
+							itemContent={(index, row) => (
 								<div
 									data-flash={row.id === flashRowId || undefined}
 									className="mx-auto max-w-3xl rounded-[var(--radius-sm)] px-12 py-4 transition-colors data-[flash]:bg-primary-subtle"
@@ -721,6 +801,16 @@ export default function ChatView({
 										onReveal={onReveal}
 										onTryAgain={() => performSend(TRY_AGAIN_PROMPT, [], "send")}
 									/>
+									{chatMessageOrder === "newest-first" &&
+									runwayActive &&
+									index === firstItemIndex ? (
+										<div ref={streamEdgeRef} data-testid="chat-stream-edge" className="h-0" />
+									) : null}
+									{chatMessageOrder === "newest-first" &&
+									runwayActive &&
+									row.id === runwayMarkerRowId ? (
+										<div ref={runwayEdgeRef} data-testid="chat-runway-edge" className="h-0" />
+									) : null}
 								</div>
 							)}
 						/>
@@ -728,11 +818,17 @@ export default function ChatView({
 						{showScrollButton ? (
 							<button
 								type="button"
-								data-testid="scroll-to-bottom"
-								onClick={scrollToBottom}
+								data-testid={
+									chatMessageOrder === "newest-first" ? "scroll-to-top" : "scroll-to-bottom"
+								}
+								onClick={scrollToLatest}
 								className="-translate-x-1/2 absolute bottom-12 left-1/2 flex items-center gap-4 rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-8 py-4 text-text-muted tr-text-metadata shadow-[var(--shadow-md)] hover:bg-control-bg-hovered hover:text-text-default"
 							>
-								<ArrowDown className="size-12" />
+								{chatMessageOrder === "newest-first" ? (
+									<ArrowUp className="size-12" />
+								) : (
+									<ArrowDown className="size-12" />
+								)}
 								{scrollButtonLabel}
 							</button>
 						) : null}

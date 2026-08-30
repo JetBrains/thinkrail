@@ -158,9 +158,14 @@ irrelevant expensive setup with equivalent fixture state and wait for observable
 arbitrary sleeps, and assertion weakening are not synchronization policy. Scenarios whose subject is a
 client-side send transformation assert the exact outgoing `session.prompt` frame rather than treating a
 mounted optimistic transcript row as delivery evidence: a fast provider rejection can add a taller error,
-scroll to the latest row, and legitimately virtualize the preceding user row. Before handoff, every
-app-affecting change runs the complete `bun run e2e` no-agent gate. Artifact-only regressions remain covered
-by `e2e:binary`, `e2e:desktop`, and their shared host probe: a synthetic opaque external extension loads with
-no `pi` executable on `PATH` for default and custom `PI_CODING_AGENT_DIR`; desktop additionally proves its
-staged `.ts` PI runtime and physical resources. Real Central acceptance remains authorized and external;
-real agent behavior remains covered by explicitly selected `@agent` suites rather than a fake agent.
+scroll to the latest row, and legitimately virtualize the preceding user row. Chat-order coverage seeds
+multi-round transcripts and asserts both latest edges, host-qualified browser-local persistence, and
+cross-browser isolation without involving a provider; desktop package tests separately pin the stable
+backend-profile/window adapter required across dynamic-port restarts. Streaming-band coverage remains
+`@agent` because only Pi's real row growth exercises that lifecycle. Before
+handoff, every app-affecting change runs the complete `bun run e2e` no-agent gate. Artifact-only regressions
+remain covered by `e2e:binary`, `e2e:desktop`, and their shared host probe: a synthetic opaque external
+extension loads with no `pi` executable on `PATH` for default and custom `PI_CODING_AGENT_DIR`; desktop
+additionally proves its staged `.ts` PI runtime and physical resources. Real Central acceptance remains
+authorized and external; real agent behavior remains covered by explicitly selected `@agent` suites rather
+than a fake agent.

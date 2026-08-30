@@ -3,7 +3,10 @@ import { loadConfig, saveConfig } from "../persistence";
 import { normalizeStoredCustomLayoutPresets, validateCustomLayoutPresets } from "./layoutPresets";
 
 type SettingsPublisher = (config: AppConfig) => void;
-type RuntimeAppConfigUpdate = AppConfigUpdate & { layout?: unknown };
+type RuntimeAppConfigUpdate = AppConfigUpdate & {
+	chatMessageOrder?: unknown;
+	layout?: unknown;
+};
 
 let publishSettings: SettingsPublisher | null = null;
 
@@ -26,6 +29,7 @@ export function getConfig(): AppConfig {
 
 export function updateConfig(partial: AppConfigUpdate): AppConfig {
 	const runtimeUpdate: RuntimeAppConfigUpdate = { ...partial };
+	delete runtimeUpdate.chatMessageOrder;
 	delete runtimeUpdate.layout;
 	const { reviewModel, reviewEffort, customLayoutPresets, ...rest } = runtimeUpdate;
 	const next: AppConfig = {

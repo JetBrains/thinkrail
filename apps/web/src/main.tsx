@@ -1,6 +1,7 @@
 import "./index.css";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import { initChatMessageOrderPersistence } from "./chat/messageOrder";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { TooltipProvider } from "./components/ui/tooltip";
 import { initNavigation } from "./navigation";
@@ -12,6 +13,7 @@ import { initTransport } from "./transport";
 initializeBundledThemes();
 applyTheme(readThemeHint());
 initTransport();
+initChatMessageOrderPersistence();
 initProjectExpansionPersistence();
 initNavigation();
 

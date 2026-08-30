@@ -12,9 +12,10 @@ tags: [v1]
 
 The server-synchronized app config: opaque theme selection, analytics switch, terminal replay budget, chat
 composer growth preset, bounded custom layout-preset catalog, and plan-review policy. `reviewModel` /
-`reviewEffort` select the reviewer/reflector runtime (unset means pi default); `reviewAutoFix: false` records a
-`request_changes` verdict and waits instead of auto-sending a fix. The module reads, normalizes, persists,
-caches, and broadcasts values that intentionally follow the owner across frontends.
+`reviewEffort` select the reviewer/reflector runtime (unset means pi
+default); `reviewAutoFix: false` records a `request_changes` verdict and waits instead of auto-sending a fix.
+The module reads, normalizes, persists, caches, and broadcasts values that intentionally follow the owner
+across frontends.
 
 Current workbench frame, workspace resource placement, current/default preset selection, side/bottom group limits, selection, and focus are explicitly absent. Those are frontend-surface-local view state under [[submodule-web-shell-layout-state]]. Built-in layout presets remain web-owned.
 
@@ -33,6 +34,7 @@ layout presets because it owns their cross-frontend storage contract.
 
 - **Converge on broadcast, no client optimism.** `updateConfig` persists before publishing; every frontend, including the initiator, adopts `settings.changed`. `server.welcome` seeds the same cached value.
 - Theme availability/labels/palettes are not server concerns. Unknown theme ids remain persisted; each independently shipped frontend resolves visual fallback.
+- Retired host-layout and chat-message-order fields are ignored rather than persisted or broadcast. Layout instantiation and transcript order are frontend-local preferences.
 - Custom layout presets are a complete top-level catalog replacement, not a nested per-item patch. Each value is bounded, resource-free, uniquely identified, uses only the current preset schema, and contains no workspace/tab/session/terminal identity. A malformed persisted member is isolated during config validation; a wire mutation with any malformed member is rejected as a whole. No alternate config key or old preset schema is read or upgraded.
 - Deleting or editing a custom preset changes only the shared definition. It cannot mutate any frontend's instantiated frame or local default selection.
 - `null` clears optional `reviewModel`/`reviewEffort` overrides; it is a wire-only sentinel and never persists.

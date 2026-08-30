@@ -1,6 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import {
 	createReadingBandController,
+	headerHeightScrollTarget,
+	markerBottomWithoutHeader,
 	type ReadingBandEnvironment,
 	type ReadingBandGeometry,
 } from "./readingBand";
@@ -11,6 +13,7 @@ interface Harness {
 	writes: number[];
 	runwayHeights: number[];
 	setGeometry: (patch: Partial<ReadingBandGeometry>) => void;
+	setGeometryAvailable: (available: boolean) => void;
 	advance: (milliseconds: number) => void;
 	pendingFrames: () => number;
 	cancelledFrames: () => number;
@@ -20,10 +23,14 @@ function createHarness({
 	streaming = true,
 	reducedMotion = false,
 	viewportHeight = 600,
+	latestEdge = "bottom",
+	geometryAvailable = true,
 }: {
 	streaming?: boolean;
 	reducedMotion?: boolean;
 	viewportHeight?: number;
+	latestEdge?: "top" | "bottom";
+	geometryAvailable?: boolean;
 } = {}): Harness {
 	let geometry: ReadingBandGeometry = {
 		viewportHeight,
@@ -31,6 +38,7 @@ function createHarness({
 		maxScrollTop: 1_000,
 		edgeBottom: viewportHeight * 0.5,
 	};
+	let hasGeometry = geometryAvailable;
 	let now = 0;
 	let frameId = 0;
 	let cancelled = 0;
@@ -40,11 +48,22 @@ function createHarness({
 	const runwayHeights: number[] = [];
 
 	const environment: ReadingBandEnvironment = {
-		readGeometry: () => geometry,
+		readGeometry: () => (hasGeometry ? geometry : null),
+		readScrollBounds: () => geometry,
+		readViewportHeight: () => geometry.viewportHeight,
 		writeScrollTop: (top) => {
 			writes.push(top);
 			const delta = top - geometry.scrollTop;
-			geometry = { ...geometry, scrollTop: top, edgeBottom: geometry.edgeBottom - delta };
+			geometry = {
+				...geometry,
+				scrollTop: top,
+				edgeBottom: geometry.edgeBottom === null ? null : geometry.edgeBottom - delta,
+				...(geometry.runwayBottom === undefined
+					? {}
+					: {
+							runwayBottom: geometry.runwayBottom === null ? null : geometry.runwayBottom - delta,
+						}),
+			};
 		},
 		writeRunwayHeight: (height) => runwayHeights.push(height),
 		anchorTurn: (index, inset) => anchors.push({ index, inset }),
@@ -60,7 +79,8 @@ function createHarness({
 		},
 		onStateChange: () => undefined,
 	};
-	const controller = createReadingBandController(environment, { streaming });
+	const controllerOptions = { streaming, latestEdge };
+	const controller = createReadingBandController(environment, controllerOptions);
 
 	return {
 		controller,
@@ -69,6 +89,9 @@ function createHarness({
 		runwayHeights,
 		setGeometry: (patch) => {
 			geometry = { ...geometry, ...patch };
+		},
+		setGeometryAvailable: (available) => {
+			hasGeometry = available;
 		},
 		advance: (milliseconds) => {
 			now += milliseconds;
@@ -80,6 +103,26 @@ function createHarness({
 		cancelledFrames: () => cancelled,
 	};
 }
+
+describe("reading-band newest-first header", () => {
+	it("compensates a detached reader from its pre-resize scroll position", () => {
+		const bounds = { scrollTop: 500, maxScrollTop: 1_000 };
+		expect(headerHeightScrollTarget(400, 48, 92, bounds, "top", false)).toBe(444);
+		expect(headerHeightScrollTarget(400, 92, 60, bounds, "top", false)).toBe(368);
+	});
+
+	it("does not double-apply an implicit bottom clamp after header shrink", () => {
+		expect(
+			headerHeightScrollTarget(1_000, 92, 60, { scrollTop: 968, maxScrollTop: 968 }, "top", false),
+		).toBe(968);
+	});
+
+	it("does not compensate while following or in oldest-first", () => {
+		const bounds = { scrollTop: 400, maxScrollTop: 1_000 };
+		expect(headerHeightScrollTarget(400, 48, 92, bounds, "top", true)).toBe(400);
+		expect(headerHeightScrollTarget(400, 48, 92, bounds, "bottom", false)).toBe(400);
+	});
+});
 
 describe("reading-band turn anchoring", () => {
 	it("anchors an immediate turn at 10% of the viewport, clamped to 48–80px", () => {
@@ -101,6 +144,26 @@ describe("reading-band turn anchoring", () => {
 				buttonLabel: null,
 			});
 		}
+	});
+
+	it("anchors without a mounted stream marker and initializes runway when it appears", () => {
+		const harness = createHarness({
+			streaming: false,
+			viewportHeight: 600,
+			latestEdge: "top",
+			geometryAvailable: false,
+		});
+		harness.controller.armImmediateTurn();
+		harness.controller.userTurnArrived(0, "immediate");
+		harness.advance(0);
+		expect(harness.anchors).toEqual([{ index: 0, inset: 60 }]);
+		expect(harness.runwayHeights).toEqual([]);
+
+		harness.setGeometryAvailable(true);
+		harness.controller.contentChanged();
+		expect(harness.runwayHeights).toEqual([612]);
+		harness.controller.contentChanged();
+		expect(harness.runwayHeights).toEqual([612]);
 	});
 
 	it("anchors a queued turn only while the reader is still following", () => {
@@ -168,6 +231,74 @@ describe("reading-band movement", () => {
 		expect(harness.runwayHeights.at(-1)).toBe(252);
 	});
 
+	it("consumes cumulative group growth from a stable header-excluded marker", () => {
+		const harness = createHarness({ streaming: false, latestEdge: "top" });
+		harness.setGeometry({
+			edgeBottom: 300,
+			runwayBottom: markerBottomWithoutHeader(340, 0, 40),
+		});
+		harness.controller.armImmediateTurn();
+		harness.controller.userTurnArrived(0, "immediate");
+		expect(harness.runwayHeights).toEqual([612]);
+
+		harness.controller.setStreaming(true);
+		harness.controller.readerLeft();
+		harness.setGeometry({
+			edgeBottom: 180,
+			runwayBottom: markerBottomWithoutHeader(470, 0, 70),
+		});
+		harness.controller.contentChanged();
+		expect(harness.runwayHeights.at(-1)).toBe(512);
+
+		harness.setGeometry({
+			edgeBottom: 140,
+			runwayBottom: markerBottomWithoutHeader(650, 0, 100),
+		});
+		harness.controller.contentChanged();
+		expect(harness.runwayHeights.at(-1)).toBe(362);
+
+		harness.setGeometry({
+			edgeBottom: 200,
+			runwayBottom: markerBottomWithoutHeader(710, 0, 160),
+		});
+		harness.controller.contentChanged();
+		expect(harness.runwayHeights).toEqual([612, 512, 362]);
+	});
+
+	it("defers runway measurement while its stable marker is virtualized", () => {
+		const harness = createHarness({ streaming: false, latestEdge: "top" });
+		harness.setGeometry({ edgeBottom: 300, runwayBottom: null });
+		harness.controller.armImmediateTurn();
+		harness.controller.userTurnArrived(0, "immediate");
+		expect(harness.runwayHeights).toEqual([]);
+
+		harness.setGeometry({ runwayBottom: 300 });
+		harness.controller.contentChanged();
+		expect(harness.runwayHeights).toEqual([612]);
+
+		harness.setGeometry({ edgeBottom: 180, runwayBottom: null });
+		harness.controller.contentChanged();
+		harness.setGeometry({ edgeBottom: 140, runwayBottom: 550 });
+		harness.controller.contentChanged();
+		expect(harness.runwayHeights).toEqual([612, 362]);
+	});
+
+	it("recalibrates after a resize that occurred while the runway marker was virtualized", () => {
+		const harness = createHarness({ streaming: false, latestEdge: "top" });
+		harness.setGeometry({ edgeBottom: 300, runwayBottom: 300 });
+		harness.controller.armImmediateTurn();
+		harness.controller.userTurnArrived(0, "immediate");
+		expect(harness.runwayHeights).toEqual([612]);
+
+		harness.setGeometry({ viewportHeight: 800, runwayBottom: null });
+		harness.controller.contentChanged();
+		expect(harness.runwayHeights).toEqual([612]);
+
+		harness.setGeometry({ runwayBottom: 300 });
+		harness.controller.contentChanged();
+		expect(harness.runwayHeights).toEqual([612, 816]);
+	});
+
 	it("recalibrates retained runway when the transcript viewport resizes", () => {
 		const harness = createHarness({ streaming: false });
 		harness.setGeometry({ edgeBottom: 300 });
@@ -200,6 +331,63 @@ describe("reading-band movement", () => {
 		expect(harness.writes).toEqual([252]);
 		expect(harness.pendingFrames()).toBe(0);
 		expect(harness.controller.getSnapshot().moving).toBe(false);
+	});
+
+	it("keeps reading motion on the first-row edge instead of the runway marker", () => {
+		const harness = createHarness({ reducedMotion: true, latestEdge: "top" });
+		harness.setGeometry({ edgeBottom: 500, runwayBottom: 300 });
+		harness.controller.contentChanged();
+		expect(harness.writes).toEqual([252]);
+	});
+});
+
+describe("reading-band newest-row arrival", () => {
+	it("returns a following newest-first reader to the new top row with the shared smooth move", () => {
+		const harness = createHarness({ latestEdge: "top" });
+		harness.setGeometry({ scrollTop: 300, maxScrollTop: 900 });
+		harness.controller.latestRowArrived(0);
+		expect(harness.pendingFrames()).toBe(1);
+		harness.advance(219);
+		expect(harness.writes.at(-1)).toBeGreaterThan(0);
+		harness.advance(1);
+		expect(harness.writes.at(-1)).toBe(0);
+		expect(harness.controller.getSnapshot().moving).toBe(false);
+	});
+
+	it("returns to a prepended row even before its stream marker mounts", () => {
+		const harness = createHarness({ latestEdge: "top", geometryAvailable: false });
+		harness.setGeometry({ scrollTop: 300, maxScrollTop: 900 });
+		harness.controller.latestRowArrived(0);
+		expect(harness.pendingFrames()).toBe(1);
+		harness.advance(220);
+		expect(harness.writes.at(-1)).toBe(0);
+	});
+
+	it("cancels a prepended-row move before anchoring a queued continuation", () => {
+		const harness = createHarness({ latestEdge: "top" });
+		harness.setGeometry({ scrollTop: 300, maxScrollTop: 900 });
+		harness.controller.latestRowArrived(0);
+		expect(harness.pendingFrames()).toBe(1);
+
+		harness.controller.userTurnArrived(0, "queued");
+		expect(harness.cancelledFrames()).toBe(1);
+		harness.advance(220);
+		expect(harness.writes).toEqual([]);
+		expect(harness.anchors).toEqual([{ index: 0, inset: 60 }]);
+	});
+
+	it("does not move a detached reader or the bottom-latest mode for a prepended row", () => {
+		for (const [latestEdge, detached] of [
+			["top", true],
+			["bottom", false],
+		] as const) {
+			const harness = createHarness({ latestEdge });
+			harness.setGeometry({ scrollTop: 300, maxScrollTop: 900 });
+			if (detached) harness.controller.readerLeft();
+			harness.controller.latestRowArrived(0);
+			expect(harness.pendingFrames()).toBe(0);
+			expect(harness.writes).toEqual([]);
+		}
 	});
 });
 
@@ -243,6 +431,28 @@ describe("reading-band reader intent", () => {
 		expect(harness.controller.getSnapshot().following).toBe(true);
 	});
 
+	it("returns to the latest edge even when a settled list has no active stream marker", () => {
+		const harness = createHarness({ latestEdge: "top", geometryAvailable: false });
+		harness.controller.readerLeft();
+		harness.setGeometry({ scrollTop: 300, maxScrollTop: 900 });
+		harness.controller.returnToEdge();
+		expect(harness.writes).toEqual([0]);
+	});
+
+	it("returns and reconstructs at the physical top when newest-first makes top the latest edge", () => {
+		const returning = createHarness({ latestEdge: "top" });
+		returning.controller.readerLeft();
+		returning.setGeometry({ scrollTop: 300, maxScrollTop: 900 });
+		returning.controller.returnToEdge();
+		expect(returning.writes.at(-1)).toBe(0);
+		expect(returning.controller.getSnapshot().following).toBe(true);
+
+		const remounted = createHarness({ latestEdge: "top" });
+		remounted.setGeometry({ scrollTop: 200, maxScrollTop: 900 });
+		remounted.controller.reconstructActiveStream();
+		expect(remounted.writes).toEqual([0]);
+	});
+
 	it("settles without catch-up or runway collapse and changes the detached action to Latest", () => {
 		const harness = createHarness();
 		harness.setGeometry({ edgeBottom: 500 });
@@ -282,5 +492,16 @@ describe("reading-band reader intent", () => {
 		harness.setGeometry({ scrollTop: 200, maxScrollTop: 900 });
 		harness.controller.reconstructActiveStream();
 		expect(harness.writes).toEqual([]);
+	});
+
+	it("reconstructs fresh runway geometry after message order switches during a stream", () => {
+		const harness = createHarness();
+		harness.setGeometry({ scrollTop: 200, maxScrollTop: 900 });
+		harness.controller.reconstructActiveStream();
+		harness.controller.setLatestEdge("top");
+		harness.setGeometry({ scrollTop: 300, maxScrollTop: 900 });
+		harness.controller.reconstructActiveStream();
+		expect(harness.runwayHeights).toEqual([252, 252]);
+		expect(harness.writes).toEqual([900, 0]);
 	});
 });
