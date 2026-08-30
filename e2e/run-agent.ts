@@ -1,7 +1,7 @@
 import { rmSync } from "node:fs";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { REAL_CENTRAL_E2E_ENV } from "./fixtures/centralAgent";
+import { createAgentRunPlan } from "./agentRunPlan";
 import { E2E_DATA_DIR } from "./fixtures/paths";
 
 const rootDir = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -20,21 +20,13 @@ async function run(command: string[], env: NodeJS.ProcessEnv = process.env): Pro
 
 async function main(): Promise<number> {
 	const playwrightArgs = process.argv.slice(2);
-	const listOnly = playwrightArgs.includes("--list");
-	if (!listOnly && process.env.THINKRAIL_E2E_SKIP_BUILD !== "1") {
-		const buildCode = await run([bun, "run", "build:web"]);
+	const plan = createAgentRunPlan(bun, playwrightArgs);
+	if (plan.buildCommand) {
+		const buildCode = await run(plan.buildCommand);
 		if (buildCode !== 0) return buildCode;
 	}
-	if (!listOnly) rmSync(E2E_DATA_DIR, { recursive: true, force: true });
-
-	const env: NodeJS.ProcessEnv = {
-		...process.env,
-		THINKRAIL_E2E_SKIP_BUILD: "1",
-		[REAL_CENTRAL_E2E_ENV]: "1",
-	};
-	delete env.THINKRAIL_E2E_LANE;
-	delete env.PLAYWRIGHT_BLOB_OUTPUT_FILE;
-	return run([bun, "x", "playwright", "test", ...playwrightArgs, "--workers=1"], env);
+	if (!playwrightArgs.includes("--list")) rmSync(E2E_DATA_DIR, { recursive: true, force: true });
+	return run(plan.playwrightCommand, plan.env);
 }
 
 try {

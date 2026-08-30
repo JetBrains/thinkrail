@@ -89,18 +89,35 @@ function copyRestricted(source: string, destination: string): void {
 	chmodSync(destination, 0o600);
 }
 
-export function stageGlobalCentralArtifact(source: string): void {
-	copyRestricted(source, E2E_CENTRAL_ARTIFACT_SEED);
-	copyRestricted(E2E_CENTRAL_ARTIFACT_SEED, E2E_CENTRAL_ARTIFACT);
+export function stageGlobalCentralArtifact(
+	source: string,
+	seed: string = E2E_CENTRAL_ARTIFACT_SEED,
+	destination: string = E2E_CENTRAL_ARTIFACT,
+): void {
+	copyRestricted(source, seed);
+	copyRestricted(seed, destination);
 }
 
-export function restoreStagedCentralArtifact(destination: string = E2E_CENTRAL_ARTIFACT): void {
-	copyRestricted(E2E_CENTRAL_ARTIFACT_SEED, destination);
+export function restoreStagedCentralArtifact(
+	destination: string = E2E_CENTRAL_ARTIFACT,
+	seed: string = E2E_CENTRAL_ARTIFACT_SEED,
+): void {
+	copyRestricted(seed, destination);
 }
 
-export function preserveStagedCentralArtifact(destination: string = E2E_CENTRAL_ARTIFACT): void {
+export function preserveStagedCentralArtifact(
+	destination: string = E2E_CENTRAL_ARTIFACT,
+	seed: string = E2E_CENTRAL_ARTIFACT_SEED,
+): void {
 	if (existsSync(destination)) chmodSync(destination, 0o600);
-	else restoreStagedCentralArtifact(destination);
+	else restoreStagedCentralArtifact(destination, seed);
+}
+
+export function isExactE2eModel(
+	model: E2eModelTarget | null | undefined,
+	target: E2eModelTarget,
+): boolean {
+	return model?.provider === target.provider && model.id === target.id;
 }
 
 export async function waitForCentralTarget(
@@ -129,7 +146,7 @@ export async function waitForCentralTarget(
 		);
 	}
 	const selected = await wire.request("model.default", {});
-	if (selected.model?.provider !== target.provider || selected.model.id !== target.id) {
+	if (!isExactE2eModel(selected.model, target)) {
 		throw new CentralSetupError(
 			"THINKRAIL_E2E_MODEL is not available as the isolated Central default. Choose an exact model exposed by the authorized Central extension, then retry.",
 		);
