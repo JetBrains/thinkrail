@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { DEFAULT_CONFIG, type LayoutPreset } from "@thinkrail/contracts";
+import { type AppConfig, DEFAULT_CONFIG, type LayoutPreset } from "@thinkrail/contracts";
 import { validateCustomLayoutPresets } from "./layoutPresets";
 import { getConfig, resetConfigCache, setSettingsPublisher, updateConfig } from "./settings";
 
@@ -157,6 +157,28 @@ test("loadConfig ignores the old layout settings object", () => {
 		...DEFAULT_CONFIG,
 		theme: "acme.persisted",
 	});
+});
+
+test("updateConfig ignores the old layout settings object from an untrusted client", () => {
+	const published: AppConfig[] = [];
+	setSettingsPublisher((config) => published.push(config));
+	const update = {
+		theme: "acme.updated",
+		layout: {
+			defaultPresetId: "review",
+			customPresets: [preset()],
+			maxSideGroups: 12,
+			maxBottomGroups: 9,
+		},
+	};
+
+	const next = updateConfig(update);
+	const onDisk = JSON.parse(readFileSync(join(dataDir, "config.json"), "utf8"));
+
+	expect(next.theme).toBe("acme.updated");
+	expect("layout" in next).toBe(false);
+	expect(published).toEqual([next]);
+	expect(onDisk).not.toHaveProperty("layout");
 });
 
 test("custom preset updates validate the complete catalog and permit empty structural slots", () => {
