@@ -223,6 +223,9 @@ test("auxiliary panel scrollbars stay quiet at rest and expose only clipped edge
 		.toBeGreaterThan(4);
 	await expect(cues).not.toHaveAttribute("data-scroll-top", "true");
 	await expect(cues).toHaveAttribute("data-scroll-bottom", "true");
+	await expect
+		.poll(() => viewport.evaluate((node) => getComputedStyle(node, "::-webkit-scrollbar").width))
+		.toBe("6px");
 	await expect.poll(() => viewport.getAttribute("data-quiet-scroll-intent")).toBeNull();
 	await expect
 		.poll(() => pseudoBackgroundColor(viewport, "::-webkit-scrollbar-thumb"))

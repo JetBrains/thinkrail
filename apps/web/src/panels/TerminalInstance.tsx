@@ -367,7 +367,10 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 				<div ref={hostRef} className="absolute inset-0" />
 			</QuietScrollFrame>
 			{detached ? (
-				<div className="absolute inset-0 flex flex-col items-center justify-center gap-8 bg-overlay">
+				<div
+					data-testid="terminal-detached-overlay"
+					className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-8 bg-overlay"
+				>
 					<p className="tr-text-metadata text-text-muted">This terminal is open somewhere else.</p>
 					<button
 						type="button"

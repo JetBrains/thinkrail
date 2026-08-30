@@ -70,12 +70,13 @@ function useScrollIntent(viewport: HTMLElement | null, intentRoot: HTMLElement |
 		let pointerInside = intentRoot.matches(":hover");
 		let focusInside = intentRoot.contains(document.activeElement);
 		let scrolling = false;
+		const activePointers = new Set<number>();
 		let scrollTimer: ReturnType<typeof setTimeout> | undefined;
 
 		const updateIntent = () => {
 			viewport.toggleAttribute(
 				"data-quiet-scroll-intent",
-				pointerInside || focusInside || scrolling,
+				pointerInside || activePointers.size > 0 || focusInside || scrolling,
 			);
 		};
 		const markScrolling = () => {
@@ -96,7 +97,14 @@ function useScrollIntent(viewport: HTMLElement | null, intentRoot: HTMLElement |
 			updateIntent();
 		};
 		const onPointerDown = (event: PointerEvent) => {
+			activePointers.add(event.pointerId);
 			if (event.pointerType === "touch") markScrolling();
+			else updateIntent();
+		};
+		const onPointerEnd = (event: PointerEvent) => {
+			if (!activePointers.delete(event.pointerId)) return;
+			if (event.pointerType === "touch") markScrolling();
+			else updateIntent();
 		};
 		const onPointerLeave = () => {
 			pointerInside = false;
@@ -118,6 +126,8 @@ function useScrollIntent(viewport: HTMLElement | null, intentRoot: HTMLElement |
 		intentRoot.addEventListener("pointerleave", onPointerLeave);
 		intentRoot.addEventListener("focusin", onFocusIn);
 		intentRoot.addEventListener("focusout", onFocusOut);
+		window.addEventListener("pointerup", onPointerEnd);
+		window.addEventListener("pointercancel", onPointerEnd);
 
 		return () => {
 			clearTimeout(scrollTimer);
@@ -127,6 +137,8 @@ function useScrollIntent(viewport: HTMLElement | null, intentRoot: HTMLElement |
 			intentRoot.removeEventListener("pointerleave", onPointerLeave);
 			intentRoot.removeEventListener("focusin", onFocusIn);
 			intentRoot.removeEventListener("focusout", onFocusOut);
+			window.removeEventListener("pointerup", onPointerEnd);
+			window.removeEventListener("pointercancel", onPointerEnd);
 			viewport.removeAttribute("data-quiet-scroll-intent");
 			if (!hadViewportClass) viewport.classList.remove("quiet-scroll-viewport");
 		};
@@ -298,10 +310,12 @@ export function QuietScrollFrame({
 		return () => mutations.disconnect();
 	}, [root, viewportSelector]);
 
+	const hasVerticalOverflow = edges ? edges.top || edges.bottom : false;
 	return (
 		<div
 			ref={setRoot}
 			data-quiet-scroll-surface={surface}
+			data-quiet-scroll-overflow-y={hasVerticalOverflow || undefined}
 			className={cn("quiet-scroll-host relative min-h-0 min-w-0 overflow-hidden", className)}
 			{...props}
 		>

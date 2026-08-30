@@ -28,6 +28,7 @@ test("third-party frames observe their child instead of adding a competing viewp
 	expect(markup).not.toContain("quiet-scroll-viewport");
 	expect(markup).toContain("--color-container-terminal-bg");
 	expect(markup).not.toContain("--color-container-sidebar-bg");
+	expect(markup).toContain('data-quiet-scroll-overflow-y="true"');
 	expect(markup).toContain('data-scroll-top="true"');
 	expect(markup).not.toContain("data-scroll-bottom");
 });

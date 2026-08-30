@@ -2,7 +2,7 @@
 id: submodule-web-components
 type: submodule-design
 status: active
-title: components — ErrorBoundary primitive (+ ui/)
+title: components — shared UI primitives
 parent: module-web
 tags: [v1, ui, resilience]
 ---
@@ -30,14 +30,17 @@ Also houses the `ui/` sub-module (shadcn primitives), which has its own spec.
 - **`QuietScrollArea.tsx`** — the store-free overflow observer and two presentation surfaces:
   `QuietScrollArea` owns an ordinary native scroll viewport, while `QuietScrollFrame` observes a
   third-party descendant scroll control without taking over its content or input and can receive the
-  library's authoritative edge state. The native area retains its existing 10px gutter; a third-party
-  frame preserves that library's hit geometry while replacing only the optical slider. Both make the
-  thumb visually transparent at rest in normal themes, reveal a 5px optical thumb on
-  hover/focus-within/drag/active scrolling, and paint pointer-transparent 16px curtains only on clipped
-  directions. Native measurement follows scroll, viewport/content resize, and descendant replacement.
-  Bundled high-contrast themes retain a resting hairline; OS forced-colours mode keeps a visible
-  system-colour thumb and removes the cosmetic curtains; reduced motion removes the opacity transition
-  only. Surface colour is an explicit semantic prop (`sidebar` or `terminal`), never inferred from
+  library's authoritative edge state. Native areas use the shared 6px scrollbar gutter, revealing a 5px
+  optical thumb on hover/focus-within/drag/active scrolling and the full 6px thumb on direct hover. A
+  third-party frame preserves that library's wider hit geometry while replacing only the optical slider;
+  the underlying slider stays transparent through its base, hover, and active states. Authoritative edges
+  also declare vertical overflow, so xterm's controller can remain visible for local intent and accessibility
+  modes only when scrollback exists. Pointer intent lasts through release or cancellation, including a drag
+  that leaves the frame. Both surfaces paint pointer-transparent 16px curtains only on clipped directions.
+  Native measurement follows scroll, viewport/content resize, and descendant replacement. Bundled
+  high-contrast themes retain a resting hairline; OS forced-colours mode keeps a visible system-colour thumb
+  and removes the cosmetic curtains; reduced motion removes both optical and third-party controller opacity
+  transitions. Surface colour is an explicit semantic prop (`sidebar` or `terminal`), never inferred from
   arrangement.
 - **Public surface:** `ErrorBoundary`, `isChunkLoadError` — imported directly via
   `@/components/ErrorBoundary` (no barrel); `CustomIcon`, `CustomIconName` via `@/components/CustomIcon`;

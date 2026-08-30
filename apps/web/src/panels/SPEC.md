@@ -19,8 +19,11 @@ Files, and Specs expose content for the shell-owned scroll wrapper described in 
 `TerminalInstance` wraps xterm with `QuietScrollFrame`, which skins xterm's descendant custom scroll control
 without shrinking its hit target; top/bottom state comes from xterm's public `buffer.active.viewportY/baseY`
 and `onScroll`/`onWriteParsed` API rather than pretending its non-native viewport has DOM scroll metrics.
-The same neutral intent-revealed thumb + directional curtains therefore follow the terminal wherever it is
-placed. Feature views never receive or derive left/right/bottom placement to achieve that treatment.
+Those edges also authoritatively signal whether vertical scrollback exists, allowing the frame to expose
+xterm's otherwise-invisible controller for local intent and accessibility modes without inventing a second
+scroll model. The same neutral intent-revealed thumb + directional curtains therefore follow the terminal
+wherever it is placed. Feature views never receive or derive left/right/bottom placement to achieve that
+treatment.
 
 ## Boundary
 
