@@ -138,6 +138,11 @@ export async function enterDefaultWorkspace(page: Page): Promise<void> {
 	await expect(page.getByTestId("center-tabs")).toBeVisible();
 }
 
+export async function openChatFromHistory(page: Page, title: string): Promise<void> {
+	await page.getByTestId("chat-history").first().click();
+	await page.getByTestId("closed-chat-item").filter({ hasText: title }).click();
+}
+
 export async function revealFirstProjectWorkspaces(page: Page): Promise<void> {
 	const expand = page.getByTestId("project-expand").first();
 	await expect(expand).toBeVisible();
@@ -222,6 +227,13 @@ export function visibleTerminal(page: Page): Locator {
 
 export function visibleTerminalScreen(page: Page): Locator {
 	return visibleTerminal(page).locator(".xterm-rows");
+}
+
+export function pseudoBackgroundColor(element: Locator, pseudo: string): Promise<string> {
+	return element.evaluate(
+		(node, pseudoElement) => getComputedStyle(node, pseudoElement).backgroundColor,
+		pseudo,
+	);
 }
 
 export async function waitTerminalReady(page: Page): Promise<void> {

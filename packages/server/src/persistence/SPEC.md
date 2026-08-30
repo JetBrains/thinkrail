@@ -10,27 +10,13 @@ tags: [v1]
 
 ## Responsibility
 
-Durable app state — projects, workspaces, server-synced app config, per-workspace workbench snapshots,
-and the install identity — as JSON under the data dir.
+Durable host state—projects, workspaces, cross-frontend app config, terminal catalogs, and installation identity—as JSON under the data dir. Current workbench frame and workspace placement are frontend-local and have no host persistence.
 
 ## Boundary
 
-- **Owns:** `dataDir()` (`THINKRAIL_DATA_DIR` for dev/e2e isolation, else `~/.thinkrail`);
-  `loadProjects`/`saveProjects`, `loadWorkspaces`/`saveWorkspaces`, `loadConfig`/`saveConfig`
-  (`config.json`, fieldwise-normalized over `DEFAULT_CONFIG`—including the closed composer-growth preset and
-  both nested layout group limits—so a missing/invalid known value or key degrades cleanly, while unknown
-  top-level extension fields survive known-field updates),
-  `loadWorkspaceLayout`/`loadWorkspaceLayoutBackup`/`saveWorkspaceLayout`/`removeWorkspaceLayout`
-  (versioned full snapshots in traversal-safe workspace-keyed filenames; atomic replacement with a
-  last-known-good copy so a torn/corrupt write cannot blank a workspace; complete cleanup when its
-  workspace is archived), and
-  `ensureInstallation`/`saveInstallation` (**`installation.json`** — `{ id, announced }`, the
-  per-install uuid4 + the `app_installed`-sent bit; **server-only by design**: it must never ride
-  the wire-broadcast `config.json` — see `submodule-server-analytics`; `ensureInstallation` mints
-  the id on first read and never rotates it) — all tab-indented JSON.
-- **Public surface (barrel):** `dataDir`, `loadProjects`, `saveProjects`, `loadWorkspaces`,
-  `saveWorkspaces`, `loadConfig`, `saveConfig`, `loadWorkspaceLayout`, `loadWorkspaceLayoutBackup`,
-  `saveWorkspaceLayout`, `removeWorkspaceLayout`, `ensureInstallation`, `saveInstallation`.
-- **Allowed deps:** `contracts` (`Project`/`Workspace`/`AppConfig`/`WorkspaceLayoutSnapshot` types + `DEFAULT_CONFIG`); Node
-  `fs`/`os`/`path`.
-- **Forbidden:** importing any sibling module or `host` — this is a leaf others depend on.
+- **Owns:** `dataDir()` (`THINKRAIL_DATA_DIR` for dev/e2e isolation, else `~/.thinkrail`); project/workspace/config load-save operations; fieldwise config validation over `DEFAULT_CONFIG` while preserving unknown top-level extension fields; and `ensureInstallation` / `saveInstallation` over `installation.json` (`{ id, announced }`, the non-rotating per-install uuid4 plus `app_installed`-sent bit, server-only and never wire-broadcast). JSON remains tab-indented.
+- **Public surface (barrel):** `dataDir`, project/workspace/config and terminal-catalog load-save operations, and installation identity operations.
+- **Allowed deps:** `contracts` (`Project`, `Workspace`, `AppConfig`, `LayoutPreset`, `DEFAULT_CONFIG`); Node `fs`/`os`/`path`.
+- **Forbidden:** importing feature siblings or `host`; persisting a current frame/view, selection/focus, or frontend-surface identity; reading alternate config keys or old schemas; or reading, rewriting, or deleting old host layout snapshots.
+
+Config validation accepts only the current bounded `customLayoutPresets` catalog as synchronized layout data. Current/default preset ids and group limits are not config fields, and retired config shapes are ignored rather than upgraded. Historical `layouts/` files remain untouched and inert.

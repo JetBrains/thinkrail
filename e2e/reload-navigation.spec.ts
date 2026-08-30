@@ -41,7 +41,7 @@ test("reloading from the older of two chats returns to that exact chat without r
 	await openFixtureProject(page);
 	await createWorkspaceViaDialog(page);
 	await expect(chatTabs(page)).toHaveCount(1);
-	await page.getByTestId("new-chat").click();
+	await page.getByTestId("new-chat").first().click();
 	await expect(chatTabs(page)).toHaveCount(2);
 
 	const older = chatTabs(page).first();
@@ -70,7 +70,7 @@ test("a directly opened exact-chat fragment restores that chat; two tabs keep in
 	await openFixtureProject(page);
 	await createWorkspaceViaDialog(page);
 	await expect(chatTabs(page)).toHaveCount(1);
-	await page.getByTestId("new-chat").click();
+	await page.getByTestId("new-chat").first().click();
 	await expect(chatTabs(page)).toHaveCount(2);
 
 	const first = chatTabs(page).first();

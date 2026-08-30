@@ -9,7 +9,12 @@ import {
 } from "@earendil-works/pi-ai";
 import { createFauxCore, fauxAssistantMessage } from "@earendil-works/pi-ai/providers/faux";
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
-import type { AgentSettlement, ExtUiRequest, ImageContent } from "@thinkrail/contracts";
+import type {
+	AgentSettlement,
+	ExtUiRequest,
+	ImageContent,
+	SessionSummary,
+} from "@thinkrail/contracts";
 import {
 	abortSession,
 	buildSessionSettings,
@@ -33,6 +38,7 @@ import {
 	removeQueuedSession,
 	removeSession,
 	removeWorkspaceSessions,
+	setSessionCreatedPublisher,
 	setSessionDeletedPublisher,
 	setSessionManagerFactory,
 	setSessionPublisher,
@@ -127,6 +133,28 @@ afterAll(() => {
 	else process.env.PI_CODING_AGENT_DIR = priorAgentDir;
 	if (priorOffline === undefined) delete process.env.PI_OFFLINE;
 	else process.env.PI_OFFLINE = priorOffline;
+});
+
+test("session creation publishes a domain summary for other frontends", async () => {
+	const published: SessionSummary[] = [];
+	setSessionCreatedPublisher((summary) => published.push(summary));
+	try {
+		const created = await createSession({
+			cwd: tmpCwd("trpi-created-push-"),
+			workspaceId: "ws-created-push",
+			model: toWireModel(fauxA.getModel()),
+		});
+		expect(published).toHaveLength(1);
+		expect(published[0]).toMatchObject({
+			sessionId: created.sessionId,
+			workspaceId: "ws-created-push",
+			title: "Chat",
+			live: true,
+		});
+		removeSession(created.sessionId);
+	} finally {
+		setSessionCreatedPublisher(() => {});
+	}
 });
 
 test("two sessions in two worktrees stream independently; disposing one leaves the other working", async () => {

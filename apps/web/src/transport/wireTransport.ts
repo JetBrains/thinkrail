@@ -1,11 +1,11 @@
 import type {
 	AppConfig,
 	ExtUiRequest,
-	LayoutChangedPayload,
 	LoginPush,
 	Project,
 	ReviewChangedPayload,
 	ServerWelcome,
+	SessionCreatedPayload,
 	SessionDeletedPayload,
 	SessionEventPayload,
 	Workspace,
@@ -69,6 +69,15 @@ export function initTransport(): WsTransport {
 		useAppStore.getState().applyExtUi(data as ExtUiRequest);
 	});
 
+	transport.subscribe(WS_CHANNELS.sessionCreated, (data) => {
+		const summary = data as SessionCreatedPayload;
+		useAppStore
+			.getState()
+			.noteClosedChats(summary.workspaceId, [
+				{ sessionId: summary.sessionId, title: summary.title, closedAt: summary.updatedAt },
+			]);
+	});
+
 	transport.subscribe(WS_CHANNELS.sessionDeleted, (data) => {
 		const { workspaceId, sessionId } = data as SessionDeletedPayload;
 		useAppStore.getState().deleteChat(workspaceId, sessionId, false);
@@ -111,10 +120,6 @@ export function initTransport(): WsTransport {
 
 	transport.subscribe(WS_CHANNELS.settingsChanged, (data) => {
 		useAppStore.getState().applyConfig(data as AppConfig);
-	});
-
-	transport.subscribe(WS_CHANNELS.layoutChanged, (data) => {
-		useAppStore.getState().applyLayoutChanged(data as LayoutChangedPayload);
 	});
 
 	transport.connect();

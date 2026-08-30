@@ -172,7 +172,7 @@ export function openExistingWorktree(projectId: string, requestedPath: string): 
 		worktreePath: entry.path,
 		baseBranch,
 		renamed: true,
-		initialTerminalEligible: true,
+		initialTerminalPending: true,
 	};
 	all.push(workspace);
 	saveWorkspaces(all);
@@ -263,7 +263,7 @@ export async function createWorkspace(
 		branch,
 		worktreePath,
 		baseBranch,
-		initialTerminalEligible: true,
+		initialTerminalPending: true,
 		...(displayName ? { renamed: true } : {}),
 	};
 	ensureWorkspaceScratchDir(workspace);
@@ -322,11 +322,22 @@ function ensureDefaultWorkspace(project: Project): Workspace {
 		worktreePath: project.path,
 		baseBranch,
 		renamed: true,
-		initialTerminalEligible: true,
+		initialTerminalPending: true,
 	};
 	all.push(workspace);
 	saveWorkspaces(all);
 	emit({ kind: "created", workspace });
+	return workspace;
+}
+
+export function completeInitialTerminalReservation(workspaceId: string): Workspace {
+	const all = loadWorkspaces();
+	const workspace = all.find((candidate) => candidate.id === workspaceId);
+	if (!workspace) throw new Error(`Unknown workspace: ${workspaceId}`);
+	if (!workspace.initialTerminalPending) return workspace;
+	delete workspace.initialTerminalPending;
+	saveWorkspaces(all);
+	emit({ kind: "updated", workspace });
 	return workspace;
 }
 

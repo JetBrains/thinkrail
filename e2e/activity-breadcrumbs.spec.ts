@@ -1,6 +1,11 @@
 import { appendFileSync, realpathSync, utimesSync } from "node:fs";
 import { expect, test } from "@playwright/test";
-import { defaultWorkspaceRow, enterDefaultWorkspace, openFixtureProject } from "./fixtures/app";
+import {
+	defaultWorkspaceRow,
+	enterDefaultWorkspace,
+	openChatFromHistory,
+	openFixtureProject,
+} from "./fixtures/app";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { seedWorkspaceSession } from "./fixtures/sessions";
 
@@ -81,6 +86,7 @@ test("a model-authored Thinking heading stays bounded and appears only while fol
 
 	await expect(defaultWorkspaceRow(page)).toBeVisible();
 	await enterDefaultWorkspace(page);
+	await openChatFromHistory(page, "thinking summary");
 
 	const activity = page.getByTestId("activity-group").first();
 	await activity.getByTestId("activity-group-toggle").click();
@@ -191,6 +197,7 @@ test("sticky activity breadcrumbs expose the off-screen Activity â†’ Thinking â†
 
 	await expect(defaultWorkspaceRow(page)).toBeVisible();
 	await enterDefaultWorkspace(page);
+	await openChatFromHistory(page, "sticky activity");
 
 	const activity = page.getByTestId("activity-group").first();
 	await activity.getByTestId("activity-group-toggle").click();

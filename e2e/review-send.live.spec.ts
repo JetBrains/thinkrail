@@ -50,7 +50,7 @@ test("a review send reads back from the chat: summary → file → comment + fra
 	const chatTabs = page.locator('[data-testid="editor-tab"][data-kind="chat"]');
 	await chatTabs.first().getByTestId("editor-tab-close").click();
 	await expect(chatTabs).toHaveCount(0);
-	await page.getByTestId("chat-history").click();
+	await page.getByTestId("chat-history").first().click();
 	await page.getByTestId("closed-chat-item").first().click();
 	await expect(chatTabs).toHaveCount(1);
 	await expect(page.getByTestId("review-package-summary")).toContainText(
