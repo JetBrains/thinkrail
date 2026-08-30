@@ -306,8 +306,8 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   that marker mounts. The latest edge is bottom for oldest-first and top for newest-first; wheel,
   touch/scrollbar, and keyboard directions invert with it. Touch return intent survives pointer release or
   cancellation through the momentum tail and re-arms only if that explicit motion reaches the latest edge.
-  Selection, interactive focus, and message/history jumps cancel either mode. Geometry alone never re-arms
-  a detached reader.
+  Selection, interactive focus, and message/history jumps cancel either mode; navigation keys bubbling from
+  an interactive descendant never undo that cancellation. Geometry alone never re-arms a detached reader.
 - **Oldest-first reading band** — the established behavior remains intact. An immediate local send aligns
   its user row at 10% of transcript height clamped to 48–80px and gives the response a one-way 60%-viewport
   runway. A transient list header makes that inset possible even for the first row; the tail spacer starts

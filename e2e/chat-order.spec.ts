@@ -129,12 +129,34 @@ test("newest-first scrolls down into history and returns upward to the latest gr
 		await expect(latest).toBeVisible();
 		await expect(latest).toContainText("Latest");
 		await expect(chatScroll).toHaveAttribute("data-follow-state", "detached");
-		await latest.click();
+		await latest.focus();
+		await page.keyboard.press("ArrowUp");
+		await expect(latest).toBeVisible();
+		await expect(chatScroll).toHaveAttribute("data-follow-state", "detached");
+
+		const scroller = chatScroll.locator("[data-virtuoso-scroller]");
+		await scroller.focus();
+		await scroller.evaluate((element) => {
+			element.addEventListener("keydown", (event) => event.preventDefault(), {
+				capture: true,
+				once: true,
+			});
+		});
+		await page.keyboard.press("Home");
+		await expect(latest).toBeVisible();
+		await expect(chatScroll).toHaveAttribute("data-follow-state", "detached");
+		await page.keyboard.press("Home");
 		await expect(latest).toHaveCount(0);
 		await expect(chatScroll).toHaveAttribute("data-follow-state", "following");
 		await expect(
 			page.getByText("answer 30: the deliberately verbose fixture has been inspected"),
 		).toBeInViewport();
+
+		await page.mouse.wheel(0, 10_000);
+		await expect(latest).toBeVisible();
+		await latest.click();
+		await expect(latest).toHaveCount(0);
+		await expect(chatScroll).toHaveAttribute("data-follow-state", "following");
 
 		await page.mouse.wheel(0, 10_000);
 		await expect(latest).toBeVisible();

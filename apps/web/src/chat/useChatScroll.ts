@@ -526,6 +526,12 @@ export function useChatScroll(
 
 	const onKeyDown = useCallback<KeyboardEventHandler>(
 		(event) => {
+			if (
+				event.defaultPrevented ||
+				(event.target !== scrollerRef.current && isInteractiveTarget(event.target))
+			) {
+				return;
+			}
 			const movesTowardTop =
 				event.key === "ArrowUp" ||
 				event.key === "PageUp" ||
@@ -543,10 +549,15 @@ export function useChatScroll(
 				return;
 			}
 			if (!movesTowardLatest) return;
+			if ((edge === "top" && event.key === "Home") || (edge === "bottom" && event.key === "End")) {
+				event.preventDefault();
+				scrollToLatest();
+				return;
+			}
 			returnIntentUntil.current = performance.now() + 500;
 			if (atLatest.current) controller.readerReachedEdge();
 		},
-		[controller, edge, readerLeft],
+		[controller, edge, readerLeft, scrollToLatest],
 	);
 
 	const onFocusCapture = useCallback<FocusEventHandler>(
