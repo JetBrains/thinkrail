@@ -334,11 +334,7 @@ export function useChatScroll(
 	const handleLatestState = useCallback(
 		(next: boolean) => {
 			atLatest.current = next;
-			if (
-				next &&
-				!touchMomentum.current &&
-				performance.now() <= returnIntentUntil.current
-			) {
+			if (next && !touchMomentum.current && performance.now() <= returnIntentUntil.current) {
 				controller.readerReachedEdge();
 				clearReturnIntent();
 			}
@@ -379,10 +375,7 @@ export function useChatScroll(
 
 	const finishPointerInteraction = useCallback(
 		(pointerType: string, pointerId: number, terminal: "up" | "cancel") => {
-			if (
-				activePointerId.current !== pointerId ||
-				activePointerType.current !== pointerType
-			) {
+			if (activePointerId.current !== pointerId || activePointerType.current !== pointerType) {
 				return;
 			}
 			activePointerId.current = null;
@@ -393,8 +386,7 @@ export function useChatScroll(
 			if (pointerType === "touch") {
 				touchPointerActive.current = false;
 				touchMomentum.current = true;
-				const movedTowardLatest =
-					touchMovingTowardLatest.current ?? totalMovedTowardLatest;
+				const movedTowardLatest = touchMovingTowardLatest.current ?? totalMovedTowardLatest;
 				touchMovingTowardLatest.current = movedTowardLatest;
 				returnIntentUntil.current = 0;
 				if (
