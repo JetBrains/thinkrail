@@ -261,15 +261,6 @@ export function ProjectTree() {
 									<SkeletonRows rows={2} />
 								</div>
 							)}
-							{isExpanded && (worktreeCreations[project.id] ?? 0) > 0 && (
-								<div
-									data-testid="worktree-creating-row"
-									className="flex items-center gap-8 py-4 pr-8 pl-16 tr-text-ui text-text-muted"
-								>
-									<Loader2 className="size-3.5 shrink-0 animate-spin motion-reduce:animate-none" />
-									Creating worktree…
-								</div>
-							)}
 							{isExpanded && list !== undefined && (
 								<ul className="mt-4 flex flex-col gap-4 motion-safe:animate-reveal">
 									{list.map((ws) => (
@@ -286,6 +277,15 @@ export function ProjectTree() {
 										/>
 									))}
 								</ul>
+							)}
+							{isExpanded && (worktreeCreations[project.id] ?? 0) > 0 && (
+								<div
+									data-testid="worktree-creating-row"
+									className="flex items-center gap-8 py-4 pr-8 pl-16 tr-text-ui text-text-muted"
+								>
+									<Loader2 className="size-3.5 shrink-0 animate-spin motion-reduce:animate-none" />
+									Creating worktree…
+								</div>
 							)}
 						</li>
 					);

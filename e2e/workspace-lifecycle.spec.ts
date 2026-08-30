@@ -52,6 +52,7 @@ test("removing the active workspace restores the previously selected workspace",
 	await expect(page.getByTestId("welcome")).toHaveCount(0);
 });
 
+
 test("workspace creation propagates to a second tab's rail", async ({ page, context }) => {
 	await openFixtureProject(page);
 
