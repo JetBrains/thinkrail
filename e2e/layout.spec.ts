@@ -5,6 +5,7 @@ import {
 	enterDefaultWorkspace,
 	openFixtureProject,
 	pressPlatformShortcut,
+	pseudoBackgroundColor,
 	revealFirstProjectWorkspaces,
 	waitTerminalReady,
 } from "./fixtures/app";
@@ -194,6 +195,87 @@ test("overflow uses directional fades without changing tab-strip geometry", asyn
 		.toBe(true);
 	await expect(strip).toHaveCSS("height", "32px");
 	await expect.poll(() => height(last)).toBeCloseTo(28, 1);
+});
+
+test("auxiliary panel scrollbars stay quiet at rest and expose only clipped edges", async ({
+	page,
+}) => {
+	await page.setViewportSize({ width: 900, height: 420 });
+	await openDefaultWorkbench(page);
+	for (const tool of ["projects", "specs", "files", "changes", "review"]) {
+		const tab = page.getByTestId(`tab-${tool}`).getByRole("tab");
+		await tab.click();
+		const panelId = await tab.getAttribute("aria-controls");
+		expect(panelId).toBeTruthy();
+		await expect(
+			page.locator(`[id="${panelId}"]`).locator('[data-quiet-scroll-surface="sidebar"]'),
+		).toHaveCount(1);
+	}
+	await page.getByTestId("tab-files").click();
+	await expect(page.getByTestId("file-node").first()).toBeVisible();
+
+	const panel = page.getByTestId("right-panel");
+	const viewport = panel.locator(".quiet-scroll-viewport");
+	const cues = panel.getByTestId("quiet-scroll-cues");
+	await expect(viewport).toHaveCount(1);
+	await expect
+		.poll(() => viewport.evaluate((node) => node.scrollHeight - node.clientHeight))
+		.toBeGreaterThan(4);
+	await expect(cues).not.toHaveAttribute("data-scroll-top", "true");
+	await expect(cues).toHaveAttribute("data-scroll-bottom", "true");
+	await expect
+		.poll(() => viewport.evaluate((node) => getComputedStyle(node, "::-webkit-scrollbar").width))
+		.toBe("6px");
+	await expect.poll(() => viewport.getAttribute("data-quiet-scroll-intent")).toBeNull();
+	await expect
+		.poll(() => pseudoBackgroundColor(viewport, "::-webkit-scrollbar-thumb"))
+		.toBe("rgba(0, 0, 0, 0)");
+
+	await viewport.hover({ position: { x: 20, y: 20 } });
+	await expect(viewport).toHaveAttribute("data-quiet-scroll-intent", "");
+	await expect
+		.poll(() => pseudoBackgroundColor(viewport, "::-webkit-scrollbar-thumb"))
+		.not.toBe("rgba(0, 0, 0, 0)");
+
+	await page.getByTestId("tab-files").hover();
+	await page.getByTestId("file-node").first().focus();
+	await expect(viewport).toHaveAttribute("data-quiet-scroll-intent", "");
+	await page.getByTestId("tab-files").getByRole("tab").focus();
+	await expect.poll(() => viewport.getAttribute("data-quiet-scroll-intent")).toBeNull();
+
+	await viewport.evaluate((node) => {
+		node.scrollTop = (node.scrollHeight - node.clientHeight) / 2;
+	});
+	await expect(cues).toHaveAttribute("data-scroll-top", "true");
+	await expect(cues).toHaveAttribute("data-scroll-bottom", "true");
+	await expect(viewport).toHaveAttribute("data-quiet-scroll-intent", "");
+	await expect
+		.poll(() => viewport.getAttribute("data-quiet-scroll-intent"), { timeout: 2_000 })
+		.toBeNull();
+
+	await viewport.evaluate((node) => {
+		node.scrollTop = node.scrollHeight;
+	});
+	await expect(cues).toHaveAttribute("data-scroll-top", "true");
+	await expect(cues).not.toHaveAttribute("data-scroll-bottom", "true");
+	await expect
+		.poll(() => viewport.getAttribute("data-quiet-scroll-intent"), { timeout: 2_000 })
+		.toBeNull();
+
+	const html = page.locator("html");
+	const originalContrast = await html.getAttribute("data-theme-contrast");
+	await html.evaluate((node) => node.setAttribute("data-theme-contrast", "high"));
+	await expect
+		.poll(() => pseudoBackgroundColor(viewport, "::-webkit-scrollbar-thumb"))
+		.not.toBe("rgba(0, 0, 0, 0)");
+	await html.evaluate((node, contrast) => {
+		if (contrast) node.setAttribute("data-theme-contrast", contrast);
+		else node.removeAttribute("data-theme-contrast");
+	}, originalContrast);
+
+	await page.emulateMedia({ forcedColors: "active" });
+	await expect(cues.getByTestId("quiet-scroll-top")).toHaveCSS("display", "none");
+	await page.emulateMedia({ forcedColors: "none" });
 });
 
 test("ARIA tabs use roving keyboard focus, recover after close, and expose keyboard separators", async ({

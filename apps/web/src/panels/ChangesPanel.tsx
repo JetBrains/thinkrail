@@ -1,5 +1,6 @@
 import type { GitStatus } from "@thinkrail/contracts";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { QuietScrollArea } from "@/components/QuietScrollArea";
 import {
 	type CenterNavigationStamp,
 	isCenterNavigationCurrent,
@@ -159,7 +160,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 					onClick={() => setChangesView("tree")}
 				/>
 			</div>
-			<div className="min-h-0 flex-1 overflow-auto p-12">
+			<QuietScrollArea className="min-h-0 flex-1" viewportClassName="p-12">
 				{status === null && error !== null ? (
 					<div data-testid="changes-error" className="flex flex-col items-start gap-4 px-8 py-4">
 						<p className="tr-text-metadata text-feedback-error">
@@ -230,7 +231,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 						})}
 					</ul>
 				)}
-			</div>
+			</QuietScrollArea>
 		</div>
 	);
 }

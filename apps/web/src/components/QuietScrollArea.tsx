@@ -1,0 +1,332 @@
+import { type ComponentPropsWithoutRef, type ReactNode, useEffect, useState } from "react";
+import { cn } from "@/lib";
+
+type QuietScrollAxis = "vertical" | "both";
+type QuietScrollSurface = "sidebar" | "terminal";
+type ScrollEdge = "top" | "right" | "bottom" | "left";
+
+export interface QuietScrollEdges {
+	top: boolean;
+	right: boolean;
+	bottom: boolean;
+	left: boolean;
+}
+
+const NO_EDGES: QuietScrollEdges = {
+	top: false,
+	right: false,
+	bottom: false,
+	left: false,
+};
+
+const CURTAIN_CLASSES: Record<QuietScrollSurface, Record<ScrollEdge, string>> = {
+	sidebar: {
+		top: "inset-x-0 top-0 h-16 bg-[linear-gradient(to_bottom,var(--color-container-sidebar-bg),transparent)]",
+		right:
+			"inset-y-0 right-0 w-16 bg-[linear-gradient(to_left,var(--color-container-sidebar-bg),transparent)]",
+		bottom:
+			"inset-x-0 bottom-0 h-16 bg-[linear-gradient(to_top,var(--color-container-sidebar-bg),transparent)]",
+		left: "inset-y-0 left-0 w-16 bg-[linear-gradient(to_right,var(--color-container-sidebar-bg),transparent)]",
+	},
+	terminal: {
+		top: "inset-x-0 top-0 h-16 bg-[linear-gradient(to_bottom,var(--color-container-terminal-bg),transparent)]",
+		right:
+			"inset-y-0 right-0 w-16 bg-[linear-gradient(to_left,var(--color-container-terminal-bg),transparent)]",
+		bottom:
+			"inset-x-0 bottom-0 h-16 bg-[linear-gradient(to_top,var(--color-container-terminal-bg),transparent)]",
+		left: "inset-y-0 left-0 w-16 bg-[linear-gradient(to_right,var(--color-container-terminal-bg),transparent)]",
+	},
+};
+
+const SCROLL_INTENT_GRACE_MS = 700;
+const EDGE_EPSILON_PX = 1;
+
+function sameEdges(left: QuietScrollEdges, right: QuietScrollEdges): boolean {
+	return (
+		left.top === right.top &&
+		left.right === right.right &&
+		left.bottom === right.bottom &&
+		left.left === right.left
+	);
+}
+
+function readEdges(viewport: HTMLElement, axis: QuietScrollAxis): QuietScrollEdges {
+	const maximumTop = Math.max(0, viewport.scrollHeight - viewport.clientHeight);
+	const maximumLeft = Math.max(0, viewport.scrollWidth - viewport.clientWidth);
+	return {
+		top: viewport.scrollTop > EDGE_EPSILON_PX,
+		right: axis === "both" && viewport.scrollLeft < maximumLeft - EDGE_EPSILON_PX,
+		bottom: viewport.scrollTop < maximumTop - EDGE_EPSILON_PX,
+		left: axis === "both" && viewport.scrollLeft > EDGE_EPSILON_PX,
+	};
+}
+
+function useScrollIntent(viewport: HTMLElement | null, intentRoot: HTMLElement | null): void {
+	useEffect(() => {
+		if (!viewport || !intentRoot) return;
+
+		const hadViewportClass = viewport.classList.contains("quiet-scroll-viewport");
+		viewport.classList.add("quiet-scroll-viewport");
+		let pointerInside = intentRoot.matches(":hover");
+		let focusInside = intentRoot.contains(document.activeElement);
+		let scrolling = false;
+		const activePointers = new Set<number>();
+		let scrollTimer: ReturnType<typeof setTimeout> | undefined;
+
+		const updateIntent = () => {
+			viewport.toggleAttribute(
+				"data-quiet-scroll-intent",
+				pointerInside || activePointers.size > 0 || focusInside || scrolling,
+			);
+		};
+		const markScrolling = () => {
+			scrolling = true;
+			updateIntent();
+			clearTimeout(scrollTimer);
+			scrollTimer = setTimeout(() => {
+				scrolling = false;
+				updateIntent();
+			}, SCROLL_INTENT_GRACE_MS);
+		};
+		const onPointerEnter = (event: PointerEvent) => {
+			if (event.pointerType === "touch") {
+				markScrolling();
+				return;
+			}
+			pointerInside = true;
+			updateIntent();
+		};
+		const onPointerDown = (event: PointerEvent) => {
+			activePointers.add(event.pointerId);
+			if (event.pointerType === "touch") markScrolling();
+			else updateIntent();
+		};
+		const onPointerEnd = (event: PointerEvent) => {
+			if (!activePointers.delete(event.pointerId)) return;
+			if (event.pointerType === "touch") markScrolling();
+			else updateIntent();
+		};
+		const onPointerLeave = () => {
+			pointerInside = false;
+			updateIntent();
+		};
+		const onFocusIn = () => {
+			focusInside = true;
+			updateIntent();
+		};
+		const onFocusOut = (event: FocusEvent) => {
+			focusInside = event.relatedTarget instanceof Node && intentRoot.contains(event.relatedTarget);
+			updateIntent();
+		};
+
+		updateIntent();
+		viewport.addEventListener("scroll", markScrolling, { passive: true });
+		intentRoot.addEventListener("pointerenter", onPointerEnter);
+		intentRoot.addEventListener("pointerdown", onPointerDown);
+		intentRoot.addEventListener("pointerleave", onPointerLeave);
+		intentRoot.addEventListener("focusin", onFocusIn);
+		intentRoot.addEventListener("focusout", onFocusOut);
+		window.addEventListener("pointerup", onPointerEnd, { capture: true });
+		window.addEventListener("pointercancel", onPointerEnd, { capture: true });
+
+		return () => {
+			clearTimeout(scrollTimer);
+			viewport.removeEventListener("scroll", markScrolling);
+			intentRoot.removeEventListener("pointerenter", onPointerEnter);
+			intentRoot.removeEventListener("pointerdown", onPointerDown);
+			intentRoot.removeEventListener("pointerleave", onPointerLeave);
+			intentRoot.removeEventListener("focusin", onFocusIn);
+			intentRoot.removeEventListener("focusout", onFocusOut);
+			window.removeEventListener("pointerup", onPointerEnd, { capture: true });
+			window.removeEventListener("pointercancel", onPointerEnd, { capture: true });
+			viewport.removeAttribute("data-quiet-scroll-intent");
+			if (!hadViewportClass) viewport.classList.remove("quiet-scroll-viewport");
+		};
+	}, [intentRoot, viewport]);
+}
+
+function useMeasuredScrollEdges(
+	viewport: HTMLElement | null,
+	axis: QuietScrollAxis,
+): QuietScrollEdges {
+	const [edges, setEdges] = useState<QuietScrollEdges>(NO_EDGES);
+
+	useEffect(() => {
+		if (!viewport) {
+			setEdges((current) => (sameEdges(current, NO_EDGES) ? current : NO_EDGES));
+			return;
+		}
+
+		const updateEdges = () => {
+			const next = readEdges(viewport, axis);
+			setEdges((current) => (sameEdges(current, next) ? current : next));
+		};
+
+		updateEdges();
+		const frame = requestAnimationFrame(updateEdges);
+		viewport.addEventListener("scroll", updateEdges, { passive: true });
+		const resize = new ResizeObserver(updateEdges);
+		const observeSizes = () => {
+			resize.disconnect();
+			resize.observe(viewport);
+			for (const child of viewport.children) resize.observe(child);
+		};
+		observeSizes();
+		const mutations = new MutationObserver(() => {
+			observeSizes();
+			updateEdges();
+		});
+		mutations.observe(viewport, { childList: true, subtree: true });
+
+		return () => {
+			cancelAnimationFrame(frame);
+			viewport.removeEventListener("scroll", updateEdges);
+			resize.disconnect();
+			mutations.disconnect();
+		};
+	}, [axis, viewport]);
+
+	return edges;
+}
+
+function QuietScrollCurtains({
+	viewport,
+	intentRoot,
+	axis,
+	surface,
+	edges,
+}: {
+	viewport: HTMLElement | null;
+	intentRoot: HTMLElement | null;
+	axis: QuietScrollAxis;
+	surface: QuietScrollSurface;
+	edges?: QuietScrollEdges | undefined;
+}) {
+	useScrollIntent(viewport, intentRoot);
+	const measuredEdges = useMeasuredScrollEdges(edges ? null : viewport, axis);
+	const visibleEdges = edges ?? measuredEdges;
+	return (
+		<div
+			aria-hidden="true"
+			data-testid="quiet-scroll-cues"
+			data-scroll-top={visibleEdges.top || undefined}
+			data-scroll-right={visibleEdges.right || undefined}
+			data-scroll-bottom={visibleEdges.bottom || undefined}
+			data-scroll-left={visibleEdges.left || undefined}
+			className="pointer-events-none absolute inset-0 z-20 overflow-hidden"
+		>
+			{(["top", "right", "bottom", "left"] as const).map((edge) => (
+				<span
+					key={edge}
+					data-testid={`quiet-scroll-${edge}`}
+					data-visible={visibleEdges[edge] || undefined}
+					className={cn(
+						"quiet-scroll-curtain pointer-events-none absolute",
+						CURTAIN_CLASSES[surface][edge],
+						visibleEdges[edge] ? "opacity-100" : "opacity-0",
+					)}
+				/>
+			))}
+		</div>
+	);
+}
+
+interface QuietScrollAreaProps extends Omit<ComponentPropsWithoutRef<"div">, "children"> {
+	children: ReactNode;
+	viewportClassName?: string | undefined;
+	viewportTestId?: string | undefined;
+	surface?: QuietScrollSurface | undefined;
+	axis?: QuietScrollAxis | undefined;
+}
+
+export function QuietScrollArea({
+	children,
+	className,
+	viewportClassName,
+	viewportTestId,
+	surface = "sidebar",
+	axis = "vertical",
+	...props
+}: QuietScrollAreaProps) {
+	const [root, setRoot] = useState<HTMLDivElement | null>(null);
+	const [viewport, setViewport] = useState<HTMLDivElement | null>(null);
+	return (
+		<div
+			ref={setRoot}
+			data-quiet-scroll-surface={surface}
+			className={cn("quiet-scroll-host relative min-h-0 min-w-0 overflow-hidden", className)}
+			{...props}
+		>
+			<div
+				ref={setViewport}
+				data-testid={viewportTestId}
+				className={cn("quiet-scroll-viewport size-full overflow-auto", viewportClassName)}
+			>
+				{children}
+			</div>
+			<QuietScrollCurtains viewport={viewport} intentRoot={root} axis={axis} surface={surface} />
+		</div>
+	);
+}
+
+interface QuietScrollFrameProps extends Omit<ComponentPropsWithoutRef<"div">, "children"> {
+	children: ReactNode;
+	viewportSelector: string;
+	surface?: QuietScrollSurface | undefined;
+	axis?: QuietScrollAxis | undefined;
+	edges?: QuietScrollEdges | undefined;
+}
+
+export function QuietScrollFrame({
+	children,
+	className,
+	viewportSelector,
+	surface = "sidebar",
+	axis = "vertical",
+	edges,
+	...props
+}: QuietScrollFrameProps) {
+	const [root, setRoot] = useState<HTMLDivElement | null>(null);
+	const [viewport, setViewport] = useState<HTMLElement | null>(null);
+
+	useEffect(() => {
+		if (!root) return;
+		let current = root.querySelector<HTMLElement>(viewportSelector);
+		const mutations = new MutationObserver(() => {
+			if (current && root.contains(current)) return;
+			const next = root.querySelector<HTMLElement>(viewportSelector);
+			if (next === current) return;
+			current = next;
+			setViewport(next);
+			observeTarget();
+		});
+		const observeTarget = () => {
+			mutations.disconnect();
+			if (current?.parentElement) mutations.observe(current.parentElement, { childList: true });
+			else mutations.observe(root, { childList: true, subtree: true });
+		};
+		setViewport(current);
+		observeTarget();
+		return () => mutations.disconnect();
+	}, [root, viewportSelector]);
+
+	const hasVerticalOverflow = edges ? edges.top || edges.bottom : false;
+	return (
+		<div
+			ref={setRoot}
+			data-quiet-scroll-surface={surface}
+			data-quiet-scroll-overflow-y={hasVerticalOverflow || undefined}
+			className={cn("quiet-scroll-host relative min-h-0 min-w-0 overflow-hidden", className)}
+			{...props}
+		>
+			{children}
+			<QuietScrollCurtains
+				viewport={viewport}
+				intentRoot={root}
+				axis={axis}
+				surface={surface}
+				edges={edges}
+			/>
+		</div>
+	);
+}
