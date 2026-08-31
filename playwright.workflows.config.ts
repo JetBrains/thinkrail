@@ -1,11 +1,14 @@
 import { defineConfig } from "@playwright/test";
+import { REAL_CENTRAL_E2E_ENV } from "./e2e/fixtures/centralAgent";
+
+delete process.env[REAL_CENTRAL_E2E_ENV];
 
 /**
  * The headless workflow-test suite (`bun run test:workflows`): drives a REAL in-process pi agent through
  * the workflow skills — no browser, no webServer, no page fixture. Shares the browser suite's global
- * setup/teardown, so it gets the same isolation: a fresh E2E_DATA_DIR, isolated HOME/vendor skill homes,
- * and an isolated PI_CODING_AGENT_DIR seeded with a copy of the user's auth + a pinned deterministic model
- * (THINKRAIL_E2E_MODEL overrides).
+ * setup/teardown with Central mode disabled, so it gets a fresh E2E_DATA_DIR, isolated HOME/vendor skill
+ * homes, and the deliberately local-auth PI_CODING_AGENT_DIR seed (auth.json + models.json + pinned model).
+ * THINKRAIL_E2E_MODEL overrides the pin. Unlike browser `e2e:agent`, it does not stage Central.
  * On-demand only — needs pi auth and spends real provider tokens; never part of `bun run e2e` / CI gates.
  * Design: e2e/workflows/SPEC.md (module-workflow-tests).
  */

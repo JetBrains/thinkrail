@@ -6,6 +6,12 @@ import { expect } from "@playwright/test";
 import type { Workspace } from "@thinkrail/contracts";
 import { removeTree } from "@thinkrail/shared/removeTree";
 import {
+	isRealCentralE2e,
+	preserveStagedCentralArtifact,
+	removeCentralModeLocalSeeds,
+	writeE2eAgentSettings,
+} from "./centralAgent";
+import {
 	E2E_CENTRAL_ARTIFACT,
 	E2E_CENTRAL_LOG,
 	E2E_CENTRAL_STATE,
@@ -42,14 +48,19 @@ function resetState(): void {
 	rmSync(join(E2E_DATA_DIR, "projects.json"), { force: true });
 	removeTree(join(E2E_DATA_DIR, "worktrees"));
 	removeTree(join(E2E_PI_AGENT_DIR, "sessions"));
-	rmSync(E2E_CENTRAL_ARTIFACT, { force: true });
+	if (isRealCentralE2e()) {
+		preserveStagedCentralArtifact();
+		writeE2eAgentSettings();
+		removeCentralModeLocalSeeds();
+	} else {
+		rmSync(E2E_CENTRAL_ARTIFACT, { force: true });
+		const modelsPath = join(E2E_PI_AGENT_DIR, "models.json");
+		if (existsSync(E2E_PI_MODELS_SEED)) copyFileSync(E2E_PI_MODELS_SEED, modelsPath);
+		else rmSync(modelsPath, { force: true });
+		rmSync(`${modelsPath}.bak`, { force: true });
+	}
 	writeFileSync(E2E_CENTRAL_STATE, "");
 	rmSync(E2E_CENTRAL_LOG, { force: true });
-
-	const modelsPath = join(E2E_PI_AGENT_DIR, "models.json");
-	if (existsSync(E2E_PI_MODELS_SEED)) copyFileSync(E2E_PI_MODELS_SEED, modelsPath);
-	else rmSync(modelsPath, { force: true });
-	rmSync(`${modelsPath}.bak`, { force: true });
 
 	if (!fixtureRepoHealthy()) seedFixtureRepo();
 
@@ -171,11 +182,12 @@ export async function goProjectHome(page: Page): Promise<void> {
 	await expect(page.getByTestId("welcome")).toBeVisible();
 }
 
-export async function openWorkspaceChat(page: Page): Promise<void> {
+export async function openWorkspaceChat(page: Page): Promise<Workspace> {
 	await openFixtureProject(page);
+	let workspace: Workspace | undefined;
 	await expect(async () => {
 		if ((await worktreeRows(page).count()) === 0) {
-			await createWorkspaceViaDialog(page);
+			workspace = await createWorkspaceViaDialog(page);
 		}
 		await worktreeRows(page).first().getByRole("button").first().click();
 		await expect(activeWorktreeRow(page)).toHaveCount(1, {
@@ -184,15 +196,25 @@ export async function openWorkspaceChat(page: Page): Promise<void> {
 	}).toPass({ timeout: 30_000 });
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 	await expect(page.getByTestId("chat-input")).toBeVisible();
+	workspace ??= loadPersistedWorkspaces().find((candidate) => candidate.kind !== "default");
+	if (!workspace) throw new Error("Workspace chat opened without a persisted worktree");
+	return workspace;
 }
 
-export async function waitForDone(page: Page, timeout = 90_000): Promise<void> {
-	await expect(
-		page
-			.locator('[data-testid="chat-message"][data-role="system"]')
-			.filter({ hasText: "Done" })
-			.last(),
-	).toBeVisible({ timeout });
+export async function waitForAgentSettled(page: Page, timeout = 90_000): Promise<void> {
+	const chatScroll = page.getByTestId("chat-scroll");
+	const responseSurface = page.locator(
+		'[data-testid="chat-message"][data-role="assistant"], [data-testid="activity-group"], [data-testid="activity-step"], [data-testid="review-package-summary"]',
+	);
+	await expect
+		.poll(
+			async () =>
+				(await chatScroll.getAttribute("data-streaming")) === "true" ||
+				(await responseSurface.count()) > 0,
+			{ timeout },
+		)
+		.toBe(true);
+	await expect(chatScroll).toHaveAttribute("data-streaming", "false", { timeout });
 }
 
 export function routineActivityRows(page: Page): Locator {

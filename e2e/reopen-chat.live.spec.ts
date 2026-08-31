@@ -16,6 +16,8 @@ test("a closed chat reopens from history with its transcript intact", { tag: "@a
 		.filter({ hasText: "pong" });
 
 	await expect(chatTabs).toHaveCount(1);
+	const sessionId = await chatTabs.first().getAttribute("data-session-id");
+	if (!sessionId) throw new Error("Reopen test chat is missing its session id");
 	await page.getByTestId("chat-input").fill("Reply with the single word: pong");
 	await page.getByTestId("chat-send").click();
 	await expect(
@@ -23,15 +25,13 @@ test("a closed chat reopens from history with its transcript intact", { tag: "@a
 	).toBeVisible({ timeout: 80_000 });
 	await expect(userMsg).toBeVisible();
 
-	await expect(history).toHaveCount(0);
-
 	await chatTabs.first().getByTestId("editor-tab-close").click();
 	await expect(chatTabs).toHaveCount(0);
 	await expect(history).toBeVisible();
 
 	await history.click();
-	await page.getByTestId("closed-chat-item").first().click();
+	await page.locator(`[data-testid="closed-chat-item"][data-session-id="${sessionId}"]`).click();
 	await expect(chatTabs).toHaveCount(1);
+	await expect(chatTabs.first()).toHaveAttribute("data-session-id", sessionId);
 	await expect(userMsg).toBeVisible();
-	await expect(history).toHaveCount(0);
 });
