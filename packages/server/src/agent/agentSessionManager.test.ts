@@ -33,15 +33,19 @@ import {
 	hasSession,
 	listAvailableModels,
 	listSessions,
+	liveParentSessionForDelegation,
 	promptSession,
 	refreshAvailableModels,
+	reloadSessionResources,
 	removeQueuedSession,
 	removeSession,
 	removeWorkspaceSessions,
+	resetSessionAdmissionForTests,
 	setSessionCreatedPublisher,
 	setSessionDeletedPublisher,
 	setSessionManagerFactory,
 	setSessionPublisher,
+	settleSessionsForShutdown,
 	steerSession,
 	toWireModel,
 } from "./agentSessionManager";
@@ -538,7 +542,7 @@ test("disk-reopen: a disposed session is re-listed from disk and re-opened with 
 			model: fauxA.getModel() as any,
 		});
 		await promptSession(s.sessionId, "persist me");
-		removeSession(s.sessionId);
+		await removeSession(s.sessionId);
 
 		const fromDisk = (await listSessions("ws-disk", cwd)).find((x) => x.sessionId === s.sessionId);
 		expect(fromDisk).toBeDefined();
@@ -552,7 +556,7 @@ test("disk-reopen: a disposed session is re-listed from disk and re-opened with 
 		const { summary, messages } = await getSessionMessages(s.sessionId, "ws-disk", cwd);
 		expect(summary.live).toBe(true);
 		expect(messages.some((m) => m.role === "user")).toBe(true);
-		removeSession(s.sessionId);
+		await removeSession(s.sessionId);
 
 		const [a, b] = await Promise.all([
 			getSessionMessages(s.sessionId, "ws-disk", cwd),
@@ -562,8 +566,360 @@ test("disk-reopen: a disposed session is re-listed from disk and re-opened with 
 		expect(
 			(await listSessions("ws-disk", cwd)).filter((x) => x.sessionId === s.sessionId),
 		).toHaveLength(1);
-		removeSession(s.sessionId);
+		await removeSession(s.sessionId);
 	} finally {
+		setSessionManagerFactory(() => SessionManager.inMemory());
+	}
+});
+
+test("a foreign delete cannot fence an owner's in-flight disk attachment", async () => {
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	const agentDir = process.env.PI_CODING_AGENT_DIR;
+	if (!agentDir) throw new Error("agent dir not isolated");
+	const extensionsDir = join(agentDir, "extensions");
+	mkdirSync(extensionsDir, { recursive: true });
+	const extensionPath = join(extensionsDir, "attach-gate.ts");
+	const gateDir = tmpCwd("trpi-attach-gate-");
+	const startedPath = join(gateDir, "started");
+	const releasePath = join(gateDir, "release");
+	let sessionId: string | undefined;
+	let reopening: ReturnType<typeof getSessionMessages> | undefined;
+	try {
+		fauxA.setResponses([fauxAssistantMessage("ATTACH_ME")]);
+		const cwd = tmpCwd("trpi-attach-owner-");
+		const session = await createSession({
+			cwd,
+			workspaceId: "ws-attach-owner",
+			model: toWireModel(fauxA.getModel()),
+		});
+		sessionId = session.sessionId;
+		await promptSession(sessionId, "persist before attachment");
+		await removeSession(sessionId);
+		writeFileSync(
+			extensionPath,
+			[
+				'import { existsSync, writeFileSync } from "node:fs";',
+				'import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";',
+				"export default function (pi: ExtensionAPI) {",
+				'\tpi.on("session_start", async () => {',
+				`\t\twriteFileSync(${JSON.stringify(startedPath)}, "started");`,
+				`\t\twhile (!existsSync(${JSON.stringify(releasePath)})) await new Promise((resolve) => setTimeout(resolve, 10));`,
+				"\t});",
+				"}",
+				"",
+			].join("\n"),
+		);
+
+		reopening = getSessionMessages(sessionId, "ws-attach-owner", cwd);
+		const deadline = Date.now() + 5_000;
+		while (!existsSync(startedPath)) {
+			if (Date.now() > deadline) throw new Error("disk attachment did not reach session_start");
+			await Bun.sleep(10);
+		}
+		const foreignDelete = deleteSession(
+			sessionId,
+			"ws-attach-foreign",
+			tmpCwd("trpi-attach-foreign-"),
+		).then(
+			() => ({ status: "resolved" as const }),
+			(error: unknown) => ({
+				status: "rejected" as const,
+				message: error instanceof Error ? error.message : String(error),
+			}),
+		);
+		const outcome = await Promise.race([
+			foreignDelete,
+			new Promise<{ status: "pending" }>((resolve) =>
+				setTimeout(() => resolve({ status: "pending" }), 250),
+			),
+		]);
+		expect(outcome).toEqual({
+			status: "rejected",
+			message: `Unknown session: ${sessionId}`,
+		});
+
+		writeFileSync(releasePath, "release");
+		const restored = await reopening;
+		expect(restored.summary.sessionId).toBe(sessionId);
+		expect(hasSession(sessionId)).toBe(true);
+	} finally {
+		writeFileSync(releasePath, "release");
+		await reopening?.catch(() => {});
+		if (sessionId && hasSession(sessionId)) await removeSession(sessionId);
+		rmSync(extensionPath, { force: true });
+		setSessionManagerFactory(() => SessionManager.inMemory());
+	}
+});
+
+test("workspace archival fences and drains an in-flight disk attachment before purging transcripts", async () => {
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	const agentDir = process.env.PI_CODING_AGENT_DIR;
+	if (!agentDir) throw new Error("agent dir not isolated");
+	const extensionsDir = join(agentDir, "extensions");
+	mkdirSync(extensionsDir, { recursive: true });
+	const extensionPath = join(extensionsDir, "archive-attach-gate.ts");
+	const gateDir = tmpCwd("trpi-archive-attach-gate-");
+	const startedPath = join(gateDir, "started");
+	const releasePath = join(gateDir, "release");
+	let reopening: ReturnType<typeof getSessionMessages> | undefined;
+	let archiving: Promise<void> | undefined;
+	try {
+		fauxA.setResponses([fauxAssistantMessage("ARCHIVE_ATTACH")]);
+		const cwd = tmpCwd("trpi-archive-attach-");
+		const created = await createSession({
+			cwd,
+			workspaceId: "ws-archive-attach",
+			model: toWireModel(fauxA.getModel()),
+		});
+		await promptSession(created.sessionId, "persist before archive");
+		const info = (await SessionManager.list(cwd)).find(
+			(candidate) => candidate.id === created.sessionId,
+		);
+		if (!info) throw new Error("persisted session missing");
+		await removeSession(created.sessionId);
+		writeFileSync(
+			extensionPath,
+			[
+				'import { existsSync, writeFileSync } from "node:fs";',
+				'import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";',
+				"export default function (pi: ExtensionAPI) {",
+				'\tpi.on("session_start", async () => {',
+				`\t\twriteFileSync(${JSON.stringify(startedPath)}, "started");`,
+				`\t\twhile (!existsSync(${JSON.stringify(releasePath)})) await new Promise((resolve) => setTimeout(resolve, 10));`,
+				"\t});",
+				"}",
+				"",
+			].join("\n"),
+		);
+
+		reopening = getSessionMessages(created.sessionId, "ws-archive-attach", cwd);
+		const deadline = Date.now() + 5_000;
+		while (!existsSync(startedPath)) {
+			if (Date.now() > deadline) throw new Error("disk attachment did not reach session_start");
+			await Bun.sleep(10);
+		}
+		archiving = removeWorkspaceSessions("ws-archive-attach", cwd);
+		expect(
+			await Promise.race([
+				archiving.then(() => "archived" as const),
+				Bun.sleep(100).then(() => "pending" as const),
+			]),
+		).toBe("pending");
+		writeFileSync(releasePath, "release");
+		await expect(reopening).rejects.toThrow("Unknown workspace: ws-archive-attach");
+		await archiving;
+		expect(hasSession(created.sessionId)).toBe(false);
+		expect(existsSync(info.path)).toBe(false);
+	} finally {
+		writeFileSync(releasePath, "release");
+		await reopening?.catch(() => {});
+		await archiving?.catch(() => {});
+		rmSync(extensionPath, { force: true });
+		setSessionManagerFactory(() => SessionManager.inMemory());
+	}
+});
+
+test("shutdown admission rejects a session still assembling after the settlement snapshot", async () => {
+	const agentDir = process.env.PI_CODING_AGENT_DIR;
+	if (!agentDir) throw new Error("agent dir not isolated");
+	const extensionsDir = join(agentDir, "extensions");
+	mkdirSync(extensionsDir, { recursive: true });
+	const extensionPath = join(extensionsDir, "shutdown-create-gate.ts");
+	const gateDir = tmpCwd("trpi-shutdown-create-gate-");
+	const startedPath = join(gateDir, "started");
+	const releasePath = join(gateDir, "release");
+	let creating: ReturnType<typeof createSession> | undefined;
+	let settling: Promise<void> | undefined;
+	const published: SessionSummary[] = [];
+	setSessionCreatedPublisher((summary) => published.push(summary));
+	try {
+		writeFileSync(
+			extensionPath,
+			[
+				'import { existsSync, writeFileSync } from "node:fs";',
+				'import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";',
+				"export default function (pi: ExtensionAPI) {",
+				'\tpi.on("session_start", async () => {',
+				`\t\twriteFileSync(${JSON.stringify(startedPath)}, "started");`,
+				`\t\twhile (!existsSync(${JSON.stringify(releasePath)})) await new Promise((resolve) => setTimeout(resolve, 10));`,
+				"\t});",
+				"}",
+				"",
+			].join("\n"),
+		);
+		creating = createSession({
+			cwd: tmpCwd("trpi-shutdown-create-"),
+			workspaceId: "ws-shutdown-create",
+			model: toWireModel(fauxA.getModel()),
+		});
+		const deadline = Date.now() + 5_000;
+		while (!existsSync(startedPath)) {
+			if (Date.now() > deadline) throw new Error("session creation did not reach session_start");
+			await Bun.sleep(10);
+		}
+		settling = settleSessionsForShutdown(10_000);
+		writeFileSync(releasePath, "release");
+		await expect(creating).rejects.toThrow("Server is shutting down");
+		await settling;
+		expect(() =>
+			createSession({
+				cwd: tmpCwd("trpi-shutdown-late-create-"),
+				workspaceId: "ws-shutdown-late-create",
+			}),
+		).toThrow("Server is shutting down");
+		expect(published).toHaveLength(0);
+	} finally {
+		writeFileSync(releasePath, "release");
+		await creating?.catch(() => {});
+		await settling?.catch(() => {});
+		resetSessionAdmissionForTests();
+		rmSync(extensionPath, { force: true });
+		setSessionCreatedPublisher(() => {});
+	}
+});
+
+test("shutdown admission covers ensureSessionAttached's strict disk preflight", async () => {
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	let releaseList = () => {};
+	let ensuring: ReturnType<typeof ensureSessionAttached> | undefined;
+	let settling: Promise<void> | undefined;
+	const originalList = SessionManager.list.bind(SessionManager);
+	try {
+		const cwd = tmpCwd("trpi-shutdown-ensure-");
+		const missingSessionId = "missing-shutdown-session";
+		let markListStarted = () => {};
+		const listStarted = new Promise<void>((resolve) => {
+			markListStarted = resolve;
+		});
+		const listGate = new Promise<void>((resolve) => {
+			releaseList = resolve;
+		});
+		Reflect.set(SessionManager, "list", async (...args: Parameters<typeof SessionManager.list>) => {
+			markListStarted();
+			await listGate;
+			return originalList(...args);
+		});
+
+		ensuring = ensureSessionAttached(missingSessionId, "ws-shutdown-ensure", cwd);
+		await listStarted;
+		settling = settleSessionsForShutdown(10_000);
+		expect(
+			await Promise.race([
+				settling.then(() => "settled" as const),
+				Bun.sleep(100).then(() => "pending" as const),
+			]),
+		).toBe("pending");
+		releaseList();
+		await expect(ensuring).rejects.toThrow("Server is shutting down");
+		await settling;
+		expect(hasSession(missingSessionId)).toBe(false);
+	} finally {
+		releaseList();
+		await ensuring?.catch(() => {});
+		await settling?.catch(() => {});
+		resetSessionAdmissionForTests();
+		Reflect.set(SessionManager, "list", originalList);
+		setSessionManagerFactory(() => SessionManager.inMemory());
+	}
+});
+
+test("a disposal flight blocks re-attachment and makes deletion wait for resource reload", async () => {
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	let releaseReload = () => {};
+	let reloading: Promise<void> | undefined;
+	let disposing: Promise<void> | undefined;
+	let deleting: Promise<void> | undefined;
+	let sessionId: string | undefined;
+	let reloadReleased = false;
+	let disposedBeforeRelease = false;
+	try {
+		fauxA.setResponses([fauxAssistantMessage("RELOAD_DELETE")]);
+		const cwd = tmpCwd("trpi-reload-delete-");
+		const created = await createSession({
+			cwd,
+			workspaceId: "ws-reload-delete",
+			model: toWireModel(fauxA.getModel()),
+		});
+		sessionId = created.sessionId;
+		await promptSession(sessionId, "persist before reload delete");
+		const session = liveParentSessionForDelegation(sessionId, "ws-reload-delete");
+		if (!session) throw new Error("live session missing");
+		const originalReload = session.reload.bind(session);
+		const originalDispose = session.dispose.bind(session);
+		let markReloadStarted = () => {};
+		const reloadStarted = new Promise<void>((resolve) => {
+			markReloadStarted = resolve;
+		});
+		const reloadGate = new Promise<void>((resolve) => {
+			releaseReload = () => {
+				reloadReleased = true;
+				resolve();
+			};
+		});
+		Reflect.set(session, "reload", async () => {
+			markReloadStarted();
+			await reloadGate;
+			await originalReload();
+		});
+		Reflect.set(session, "dispose", () => {
+			if (!reloadReleased) disposedBeforeRelease = true;
+			originalDispose();
+		});
+		setTrashImplementationForTests(async (path) => {
+			for (const item of typeof path === "string" ? [path] : path) rmSync(item, { force: true });
+		});
+
+		reloading = reloadSessionResources(sessionId);
+		expect(reloadSessionResources(sessionId)).toBe(reloading);
+		await reloadStarted;
+		disposing = removeSession(sessionId);
+		await expect(getSessionMessages(sessionId, "ws-reload-delete", cwd)).rejects.toThrow(
+			`Unknown session: ${sessionId}`,
+		);
+		deleting = deleteSession(sessionId, "ws-reload-delete", cwd);
+		expect(
+			await Promise.race([
+				deleting.then(() => "deleted" as const),
+				Bun.sleep(100).then(() => "pending" as const),
+			]),
+		).toBe("pending");
+		expect(disposedBeforeRelease).toBe(false);
+		releaseReload();
+		await Promise.all([reloading, disposing, deleting]);
+		expect(disposedBeforeRelease).toBe(false);
+		expect(hasSession(sessionId)).toBe(false);
+	} finally {
+		releaseReload();
+		await reloading?.catch(() => {});
+		await disposing?.catch(() => {});
+		await deleting?.catch(() => {});
+		if (sessionId && hasSession(sessionId)) await removeSession(sessionId);
+		setTrashImplementationForTests(undefined);
+		setSessionManagerFactory(() => SessionManager.inMemory());
+	}
+});
+
+test("an owned disposal flight preserves empty-chat existence for concurrent deletion", async () => {
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	const published: unknown[] = [];
+	setSessionDeletedPublisher((payload) => published.push(payload));
+	let sessionId: string | undefined;
+	try {
+		const cwd = tmpCwd("trpi-dispose-delete-empty-");
+		const created = await createSession({
+			cwd,
+			workspaceId: "ws-dispose-delete-empty",
+			model: toWireModel(fauxA.getModel()),
+		});
+		sessionId = created.sessionId;
+		const disposing = removeSession(sessionId);
+		const deleting = deleteSession(sessionId, "ws-dispose-delete-empty", cwd);
+		await Promise.all([disposing, deleting]);
+		expect(hasSession(sessionId)).toBe(false);
+		expect(published).toHaveLength(1);
+	} finally {
+		if (sessionId && hasSession(sessionId)) await removeSession(sessionId);
+		setSessionDeletedPublisher(() => {});
 		setSessionManagerFactory(() => SessionManager.inMemory());
 	}
 });
@@ -621,12 +977,32 @@ test("deleteSession tombstones its id so a stale transcript cannot reattach in t
 		expect(existsSync(info.path)).toBe(false);
 
 		writeFileSync(info.path, staleTranscript);
+		await expect(deleteSession(session.sessionId, "ws-delete-foreign", cwd)).rejects.toThrow(
+			`Unknown session: ${session.sessionId}`,
+		);
+		await deleteSession(session.sessionId, "ws-delete", cwd);
 		await expect(getSessionMessages(session.sessionId, "ws-delete", cwd)).rejects.toThrow(
 			`Unknown session: ${session.sessionId}`,
 		);
 		rmSync(info.path, { force: true });
 	} finally {
 		setTrashImplementationForTests(undefined);
+		setSessionManagerFactory(() => SessionManager.inMemory());
+	}
+});
+
+test("deleteSession rejects an unknown detached chat without publishing a deletion", async () => {
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	const published: string[] = [];
+	setSessionDeletedPublisher(({ sessionId }) => published.push(sessionId));
+	try {
+		const cwd = tmpCwd("trpi-delete-unknown-");
+		await expect(deleteSession("unknown-session", "ws-delete-unknown", cwd)).rejects.toThrow(
+			"Unknown session: unknown-session",
+		);
+		expect(published).toEqual([]);
+	} finally {
+		setSessionDeletedPublisher(() => {});
 		setSessionManagerFactory(() => SessionManager.inMemory());
 	}
 });
@@ -711,11 +1087,15 @@ test("a pending delete blocks live commands, then trash failure restores the sam
 			`Unknown session: ${session.sessionId}`,
 		);
 		expect(() => removeSession(session.sessionId)).toThrow(`Unknown session: ${session.sessionId}`);
+		await expect(
+			ensureSessionAttached(session.sessionId, "ws-delete-failure", cwd),
+		).rejects.toThrow(`Unknown session: ${session.sessionId}`);
 		expect(readFileSync(info.path, "utf8")).not.toContain("must not be accepted");
 
 		failTrash();
 		await expect(deleting).rejects.toThrow("recycle bin unavailable");
 		expect(hasSession(session.sessionId)).toBe(true);
+		expect(await ensureSessionAttached(session.sessionId, "ws-delete-failure", cwd)).toBe(true);
 		expect(readFileSync(info.path, "utf8")).toContain("persist before failed deletion");
 		const restored = await getSessionMessages(session.sessionId, "ws-delete-failure", cwd);
 		expect(restored.summary.live).toBe(true);

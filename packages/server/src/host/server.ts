@@ -11,6 +11,7 @@ import type {
 import { PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
 import { errorCodeOf } from "@thinkrail/shared/codedError";
 import {
+	beginSessionShutdown,
 	disposeAllSessions,
 	getSessionWorkspaceId,
 	isProjectSkillPath,
@@ -130,8 +131,24 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	const reapTimers = new Map<string, ReturnType<typeof setTimeout>>();
 	const requestReplays = new RequestReplayCache<string>();
 	const terminalBackpressured = new Set<string>();
+	const activeRequests = new Set<Promise<string>>();
+	let shuttingDown = false;
 	let stopping = false;
 	let shutdownPromise: Promise<void> | undefined;
+
+	const trackRequest = (request: Promise<string>): Promise<string> => {
+		activeRequests.add(request);
+		void request.finally(() => activeRequests.delete(request)).catch(() => {});
+		return request;
+	};
+
+	const settleActiveRequests = async (timeoutMs = 2000): Promise<void> => {
+		if (activeRequests.size === 0) return;
+		await Promise.race([
+			Promise.allSettled([...activeRequests]),
+			new Promise<void>((resolve) => setTimeout(resolve, timeoutMs)),
+		]);
+	};
 
 	const armClientReap = (clientKey: string): void => {
 		reapTimers.set(
@@ -243,6 +260,16 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				}
 				const requestId = req.id;
 				const method = req.method;
+				if (shuttingDown) {
+					if (
+						ws.send(
+							JSON.stringify({ id: requestId, ok: false, error: "Server is shutting down" }),
+						) === 0
+					) {
+						ws.close();
+					}
+					return;
+				}
 				const methodDiagnostic = requestMethodDiagnostic(method);
 				const params = "params" in req ? req.params : undefined;
 				const sessionId = "sessionId" in req ? req.sessionId : undefined;
@@ -251,28 +278,27 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 					.digest("hex");
 				log.debug(`ws ${methodDiagnostic}`);
 				try {
-					const response = await requestReplays.run(
-						ws.data.clientKey,
-						requestId,
-						fingerprint,
-						async () => {
-							try {
-								const result = await handleRequest(method, params, {
-									clientKey: ws.data.clientKey,
-								});
-								return JSON.stringify({ id: requestId, ok: true, result });
-							} catch (err) {
-								const error = err instanceof Error ? err.message : String(err);
-								log.debug(`ws ${methodDiagnostic} failed`);
-								const code = errorCodeOf(err);
-								return JSON.stringify({
-									id: requestId,
-									ok: false,
-									error,
-									...(code ? { errorCode: code } : {}),
-								});
-							}
-						},
+					const response = await requestReplays.run(ws.data.clientKey, requestId, fingerprint, () =>
+						trackRequest(
+							(async () => {
+								try {
+									const result = await handleRequest(method, params, {
+										clientKey: ws.data.clientKey,
+									});
+									return JSON.stringify({ id: requestId, ok: true, result });
+								} catch (err) {
+									const error = err instanceof Error ? err.message : String(err);
+									log.debug(`ws ${methodDiagnostic} failed`);
+									const code = errorCodeOf(err);
+									return JSON.stringify({
+										id: requestId,
+										ok: false,
+										error,
+										...(code ? { errorCode: code } : {}),
+									});
+								}
+							})(),
+						),
 					);
 					if (ws.send(response) === 0) ws.close();
 				} catch (err) {
@@ -475,7 +501,9 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 
 	const stop = (): void => {
 		if (stopping) return;
+		shuttingDown = true;
 		stopping = true;
+		beginSessionShutdown();
 		void shutdownAnalytics();
 		cancelAllLogins();
 		stopJbcentralRuntime();
@@ -494,10 +522,17 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		server.stop(true);
 	};
 	const shutdown = (): Promise<void> => {
-		shutdownPromise ??= (async () => {
-			await Promise.allSettled([settleSessionsForShutdown(), shutdownAnalytics()]);
-			stop();
-		})();
+		if (!shutdownPromise) {
+			shuttingDown = true;
+			shutdownPromise = (async () => {
+				const startedAt = Date.now();
+				const analyticsSettlement = shutdownAnalytics();
+				await settleActiveRequests();
+				const remainingMs = Math.max(0, 2000 - (Date.now() - startedAt));
+				await Promise.allSettled([settleSessionsForShutdown(remainingMs), analyticsSettlement]);
+				stop();
+			})();
+		}
 		return shutdownPromise;
 	};
 

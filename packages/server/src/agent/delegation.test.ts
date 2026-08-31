@@ -9,7 +9,7 @@ import {
 	fauxAssistantMessage,
 	fauxToolCall,
 } from "@earendil-works/pi-ai/providers/faux";
-import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
+import { buildSessionContext, ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
 import {
 	customMessageText,
 	isSubagentCompletionMessage,
@@ -21,16 +21,19 @@ import type { DelegationRunDetails as CoreRunDetails } from "pi-delegation";
 import { SUBAGENT_COMPLETION_MESSAGE } from "pi-subagents";
 import {
 	abortSession,
+	compactSession,
 	createSession,
 	deleteSession,
 	disposeAllSessions,
 	getSessionMessages,
+	hasSession,
 	liveParentContext,
 	liveParentSessionForDelegation,
 	promptSession,
 	reloadSessionResources,
 	removeSession,
 	removeWorkspaceSessions,
+	resetSessionAdmissionForTests,
 	setSessionManagerFactory,
 	setSessionPublisher,
 	settleSessionsForShutdown,
@@ -223,6 +226,60 @@ function gatedChildResponse(): { release: () => void } {
 	return { release };
 }
 
+test("a workspace delegation service rejects a parent owned by another workspace", async () => {
+	const first = await createSession({
+		cwd: tmpDir("trdel-scope-a-"),
+		workspaceId: "ws-scope-a",
+	});
+	const second = await createSession({
+		cwd: tmpDir("trdel-scope-b-"),
+		workspaceId: "ws-scope-b",
+	});
+	try {
+		await expect(
+			delegationServiceFor("ws-scope-a").createChild({
+				parent: second.sessionId,
+				visibility: "hidden",
+				info: scoutInfo(),
+				session: { systemPrompt: "You are a test scout." },
+			}),
+		).rejects.toThrow(
+			`Parent session ${second.sessionId} is not live — children derive their defaults from a live parent`,
+		);
+		expect(delegationServiceFor("ws-scope-a").childrenOf(second.sessionId)).toEqual([]);
+	} finally {
+		await Promise.all([removeSession(first.sessionId), removeSession(second.sessionId)]);
+	}
+});
+
+test("ordinary disposal releases delegation quiescence for a later disk re-attachment", async () => {
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	let sessionId: string | undefined;
+	try {
+		faux.setResponses([fauxAssistantMessage("PERSIST_PARENT")]);
+		const cwd = tmpDir("trdel-dispose-reattach-");
+		const created = await createSession({ cwd, workspaceId: "ws-dispose-reattach" });
+		sessionId = created.sessionId;
+		await promptSession(sessionId, "persist parent");
+		await removeSession(sessionId);
+		await getSessionMessages(sessionId, "ws-dispose-reattach", cwd);
+		const service = delegationServiceFor("ws-dispose-reattach");
+		const child = await service.createChild({
+			parent: sessionId,
+			visibility: "hidden",
+			info: scoutInfo(),
+			session: { systemPrompt: "You are a test scout." },
+		});
+		expect(service.childrenOf(sessionId).map((candidate) => candidate.sessionId)).toContain(
+			child.sessionId,
+		);
+		await child.dispose();
+	} finally {
+		if (sessionId && hasSession(sessionId)) await removeSession(sessionId);
+		setSessionManagerFactory((cwd) => SessionManager.inMemory(cwd));
+	}
+});
+
 test("deleteSession resolves only after its child cascade settles", async () => {
 	const cwd = tmpDir("trdel-await-");
 	const { sessionId } = await createSession({ cwd, workspaceId: "ws-await" });
@@ -299,6 +356,7 @@ test("graceful shutdown waits for a background child cascade", async () => {
 	await Promise.all([settled, run]);
 	expect(service.findChild(child.sessionId)).toBeUndefined();
 	await removeSession(sessionId);
+	resetSessionAdmissionForTests();
 });
 
 test("children follow their parent's retained runtime generation across a flip", async () => {
@@ -554,6 +612,170 @@ function backgroundAgentCall() {
 		fauxToolCall("Agent", { subagent_type: "bg", task: "Slow job.", run_in_background: true }),
 	);
 }
+
+test("a foreign delete cannot fence a live owner's background completion", async () => {
+	const cwd = tmpDir("trdel-foreign-delete-");
+	const { sessionId } = await createSession({ cwd, workspaceId: "ws-foreign-delete" });
+	const { releaseChild } = gatedBackgroundResponses();
+	faux.setResponses([
+		backgroundAgentCall(),
+		fauxAssistantMessage("PARENT_IDLE"),
+		fauxAssistantMessage("COMPLETION_ACK"),
+	]);
+	try {
+		await promptSession(sessionId, "Delegate in background.");
+		const child = delegationServiceFor("ws-foreign-delete").childrenOf(sessionId).at(-1);
+		if (!child) throw new Error("no child spawned");
+		await waitFor(() => child.snapshot?.status === "running");
+
+		const foreignDelete = deleteSession(
+			sessionId,
+			"ws-foreign-delete-other",
+			tmpDir("trdel-foreign-delete-other-"),
+		);
+		expect(hasSession(sessionId)).toBe(true);
+		releaseChild();
+		await expect(foreignDelete).rejects.toThrow(`Unknown session: ${sessionId}`);
+		await waitFor(
+			async () => (await subagentCompletions(sessionId, "ws-foreign-delete", cwd)).length === 1,
+		);
+		expect(await subagentCompletions(sessionId, "ws-foreign-delete", cwd)).toHaveLength(1);
+	} finally {
+		releaseChild();
+		await removeSession(sessionId);
+	}
+});
+
+test("subagent.abort delivers one aborted background completion to an idle parent", async () => {
+	const cwd = tmpDir("trdel-abort-completion-");
+	const { sessionId } = await createSession({ cwd, workspaceId: "ws-abort-completion" });
+	const { releaseChild } = gatedBackgroundResponses();
+	faux.setResponses([
+		backgroundAgentCall(),
+		fauxAssistantMessage("PARENT_IDLE"),
+		fauxAssistantMessage("ABORT_ACK"),
+	]);
+	try {
+		await promptSession(sessionId, "Delegate in background.");
+		const child = delegationServiceFor("ws-abort-completion").childrenOf(sessionId).at(-1);
+		if (!child) throw new Error("no child spawned");
+		await waitFor(() => child.snapshot?.status === "running");
+
+		const aborting = abortChildRun("ws-abort-completion", sessionId, child.sessionId);
+		releaseChild();
+		await aborting;
+		await waitFor(
+			async () => (await subagentCompletions(sessionId, "ws-abort-completion", cwd)).length === 1,
+		);
+		const completions = await subagentCompletions(sessionId, "ws-abort-completion", cwd);
+		expect(completions).toHaveLength(1);
+		expect(completions[0]?.details.status).toBe("aborted");
+	} finally {
+		releaseChild();
+		await removeSession(sessionId);
+	}
+});
+
+test("a background child completing during compaction is delivered exactly once afterward", async () => {
+	const cwd = tmpDir("trdel-compaction-wait-");
+	const { sessionId } = await createSession({ cwd, workspaceId: "ws-compaction-wait" });
+	const { releaseChild } = gatedBackgroundResponses();
+	let releaseCompaction = () => {};
+	const compactionGate = new Promise<void>((resolve) => {
+		releaseCompaction = resolve;
+	});
+	let reportCompactionStarted = () => {};
+	const compactionStarted = new Promise<void>((resolve) => {
+		reportCompactionStarted = resolve;
+	});
+	faux.setResponses([
+		backgroundAgentCall(),
+		fauxAssistantMessage("PARENT_IDLE"),
+		fauxAssistantMessage("COMPLETION_ACK"),
+	]);
+	const parent = liveParentSessionForDelegation(sessionId);
+	if (!parent) throw new Error("parent session not live");
+	const originalCompact = parent.compact.bind(parent);
+	let compacting = false;
+	Object.defineProperty(parent, "isCompacting", {
+		configurable: true,
+		get: () => compacting,
+	});
+	parent.compact = async () => {
+		compacting = true;
+		reportCompactionStarted();
+		await compactionGate;
+		compacting = false;
+		return { summary: "compacted", firstKeptEntryId: "kept", tokensBefore: 1000 };
+	};
+	let compaction: Promise<void> | undefined;
+	try {
+		await promptSession(sessionId, "Delegate in background.");
+		const child = delegationServiceFor("ws-compaction-wait").childrenOf(sessionId).at(-1);
+		if (!child) throw new Error("no child spawned");
+		await waitFor(() => child.snapshot?.status === "running");
+
+		compaction = compactSession(sessionId);
+		await compactionStarted;
+		releaseChild();
+		await waitFor(() => child.snapshot?.status === "completed");
+		await Bun.sleep(25);
+		expect(await subagentCompletions(sessionId, "ws-compaction-wait", cwd)).toHaveLength(0);
+
+		releaseCompaction();
+		await compaction;
+		await waitFor(
+			async () => (await subagentCompletions(sessionId, "ws-compaction-wait", cwd)).length === 1,
+		);
+		await sweepUndeliveredCompletions("ws-compaction-wait", sessionId, parent);
+		expect(await subagentCompletions(sessionId, "ws-compaction-wait", cwd)).toHaveLength(1);
+	} finally {
+		releaseChild();
+		releaseCompaction();
+		await compaction?.catch(() => {});
+		parent.compact = originalCompact;
+		Reflect.deleteProperty(parent, "isCompacting");
+		await removeSession(sessionId);
+	}
+});
+
+test("a compacted background acknowledgement still authorizes one completion", async () => {
+	const cwd = tmpDir("trdel-compacted-ack-");
+	const { sessionId } = await createSession({ cwd, workspaceId: "ws-compacted-ack" });
+	const { releaseChild } = gatedBackgroundResponses();
+	faux.setResponses([
+		backgroundAgentCall(),
+		fauxAssistantMessage("PARENT_IDLE"),
+		fauxAssistantMessage("COMPLETION_ACK"),
+	]);
+	try {
+		await promptSession(sessionId, "Delegate in background.");
+		const child = delegationServiceFor("ws-compacted-ack").childrenOf(sessionId).at(-1);
+		if (!child) throw new Error("no child spawned");
+		await waitFor(() => child.snapshot?.status === "running");
+		const parent = liveParentSessionForDelegation(sessionId);
+		if (!parent) throw new Error("parent session not live");
+		const branch = parent.sessionManager.getBranch();
+		const firstKeptEntryId = branch.at(-1)?.id;
+		if (!firstKeptEntryId) throw new Error("parent transcript is empty");
+		expect(
+			branch.some((entry) => entry.type === "message" && entry.message.role === "toolResult"),
+		).toBe(true);
+		parent.sessionManager.appendCompaction("BACKGROUND_ACK_COMPACTED", firstKeptEntryId, 1000);
+		parent.agent.state.messages = buildSessionContext(parent.sessionManager.getEntries()).messages;
+		expect(parent.messages.some((message) => message.role === "toolResult")).toBe(false);
+
+		releaseChild();
+		await waitFor(
+			async () => (await subagentCompletions(sessionId, "ws-compacted-ack", cwd)).length === 1,
+		);
+		await sweepUndeliveredCompletions("ws-compacted-ack", sessionId, parent);
+		expect(await subagentCompletions(sessionId, "ws-compacted-ack", cwd)).toHaveLength(1);
+	} finally {
+		releaseChild();
+		await removeSession(sessionId);
+	}
+});
 
 test("a background child completing inside the delete window triggers no parent turn", async () => {
 	const cwd = tmpDir("trdel-delwin-");
@@ -887,7 +1109,57 @@ test("a completion drained by Stop is re-delivered exactly once at settle", asyn
 	}
 });
 
-test("a reload-suppressed completion is re-delivered by the post-reload sweep", async () => {
+test("a child completing during resource reload waits for the post-reload sweep", async () => {
+	const cwd = tmpDir("trdel-sweep-reload-gate-");
+	const { sessionId } = await createSession({ cwd, workspaceId: "ws-sweep-reload-gate" });
+	const { releaseChild } = gatedBackgroundResponses();
+	faux.setResponses([backgroundAgentCall(), fauxAssistantMessage("PARENT_IDLE")]);
+	const session = liveParentSessionForDelegation(sessionId, "ws-sweep-reload-gate");
+	if (!session) throw new Error("parent session not registered");
+	const originalReload = session.reload.bind(session);
+	let reportReloadStarted: () => void = () => {};
+	const reloadStarted = new Promise<void>((resolve) => {
+		reportReloadStarted = resolve;
+	});
+	let releaseReload: () => void = () => {};
+	const reloadGate = new Promise<void>((resolve) => {
+		releaseReload = resolve;
+	});
+	let reloading: Promise<void> | undefined;
+	try {
+		await promptSession(sessionId, "Delegate in background.");
+		const child = delegationServiceFor("ws-sweep-reload-gate").childrenOf(sessionId).at(-1);
+		if (!child) throw new Error("no child spawned");
+		await waitFor(() => child.snapshot?.status === "running");
+		Reflect.set(session, "reload", async () => {
+			reportReloadStarted();
+			await reloadGate;
+			await originalReload();
+		});
+
+		reloading = reloadSessionResources(sessionId);
+		await reloadStarted;
+		faux.setResponses([fauxAssistantMessage("RELOAD_SWEEP_ACK")]);
+		releaseChild();
+		await waitFor(() => child.snapshot?.status === "completed");
+		await sweepUndeliveredCompletions("ws-sweep-reload-gate", sessionId, session);
+		expect(await subagentCompletions(sessionId, "ws-sweep-reload-gate", cwd)).toHaveLength(0);
+
+		releaseReload();
+		await reloading;
+		await waitFor(
+			async () => (await subagentCompletions(sessionId, "ws-sweep-reload-gate", cwd)).length === 1,
+		);
+	} finally {
+		releaseReload();
+		releaseChild();
+		await reloading?.catch(() => {});
+		Reflect.set(session, "reload", originalReload);
+		await removeSession(sessionId);
+	}
+});
+
+test("a child completing after resource reload is delivered by its service lifecycle", async () => {
 	const cwd = tmpDir("trdel-sweep2-");
 	const { sessionId } = await createSession({ cwd, workspaceId: "ws-sweep2" });
 	const { releaseChild } = gatedBackgroundResponses();
@@ -900,21 +1172,52 @@ test("a reload-suppressed completion is re-delivered by the post-reload sweep", 
 		await waitFor(() => child.snapshot?.status === "running");
 
 		await reloadSessionResources(sessionId);
+		faux.setResponses([fauxAssistantMessage("SWEEP_ACK_2")]);
 		releaseChild();
 		await waitFor(() => child.snapshot?.status === "completed");
-		await Bun.sleep(50);
-		expect(await subagentCompletions(sessionId, "ws-sweep2", cwd)).toHaveLength(0);
-
-		faux.setResponses([fauxAssistantMessage("SWEEP_ACK_2")]);
-		await reloadSessionResources(sessionId);
 		await waitFor(
 			async () => (await subagentCompletions(sessionId, "ws-sweep2", cwd)).length === 1,
 		);
 		const completions = await subagentCompletions(sessionId, "ws-sweep2", cwd);
 		expect(customMessageText(completions[0]?.content ?? "")).toContain("BG_RESULT");
+
+		await reloadSessionResources(sessionId);
+		expect(await subagentCompletions(sessionId, "ws-sweep2", cwd)).toHaveLength(1);
 	} finally {
 		releaseChild();
 		await removeSession(sessionId);
+	}
+});
+
+test("graceful shutdown suppresses a post-reload child terminal completion", async () => {
+	const cwd = tmpDir("trdel-shutdown-reload-");
+	const { sessionId } = await createSession({ cwd, workspaceId: "ws-shutdown-reload" });
+	const { releaseChild } = gatedBackgroundResponses();
+	faux.setResponses([backgroundAgentCall(), fauxAssistantMessage("PARENT_IDLE")]);
+	const session = liveParentSessionForDelegation(sessionId, "ws-shutdown-reload");
+	if (!session) throw new Error("parent session not registered");
+	const originalSend = session.sendCustomMessage.bind(session);
+	let sendAttempts = 0;
+	try {
+		await promptSession(sessionId, "Delegate in background.");
+		const child = delegationServiceFor("ws-shutdown-reload").childrenOf(sessionId).at(-1);
+		if (!child) throw new Error("no child spawned");
+		await waitFor(() => child.snapshot?.status === "running");
+		await reloadSessionResources(sessionId);
+		Reflect.set(session, "sendCustomMessage", async () => {
+			sendAttempts++;
+		});
+
+		const settling = settleSessionsForShutdown(10_000);
+		releaseChild();
+		await settling;
+		expect(sendAttempts).toBe(0);
+		expect(await subagentCompletions(sessionId, "ws-shutdown-reload", cwd)).toHaveLength(0);
+	} finally {
+		Reflect.set(session, "sendCustomMessage", originalSend);
+		releaseChild();
+		await removeSession(sessionId);
+		resetSessionAdmissionForTests();
 	}
 });
 

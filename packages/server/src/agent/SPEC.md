@@ -191,33 +191,56 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     cancelled:true}`), so its card hydrates as the normal skipped record;
     **`answerQuestion(sessionId, toolCallId, result)`** — the `ask_user_question` reply path (see the
     `askUserQuestion` bullet); **`settleSessionsForShutdown(timeoutMs)`** — the polite half of shutdown:
-    abort every streaming parent, dispose every hidden child (including background children whose parent is
-    idle), include cascades already pending from concurrent removal, and wait for all of them under the one
-    bound so pi can persist their "Operation aborted" tool results before `process.exit` (the launcher's
-    SIGINT/SIGTERM handler awaits it; whatever misses the window is healed by the restart repair).
-    `disposeAllSessions` remains the synchronous emergency stop, but registers its best-effort child cascades
-    in the same pending set; `getSessionWorkspaceId(sessionId)` (the live session→workspace
-    lookup the host's auto-rename hook keys on); `removeSession`/`disposeAllSessions`;
-    **`removeWorkspaceSessions(workspaceId, cwd?)`** (the **archive teardown**: abort a streaming turn,
-    then dispose every live session for the workspace **unconditionally** — bypassing the per-chat delete
-    guard that `removeSession` enforces, so a chat whose recoverable delete is mid-trash cannot abort the
-    teardown loop and strand its siblings — then delete pi's on-disk transcripts rooted at
-    the worktree `cwd` — pi's `SessionManager` is append-only, so purge = `list(cwd)` then `rm` the files
-    whose recorded `cwd` matches, never `rm -rf` the encoded dir since pi's cwd→dir encoding can alias
-    distinct cwds; `cwd` omitted on a double-archive skips only the disk purge);
-    **`deleteSession(sessionId, workspaceId, cwd)`** (mark it deleted before any await so an in-flight disk
-    attach cannot register afterward; that tombstone also makes a retained live entry non-addressable to
-    **every session command, including `session.dispose`, for the full delete transaction**, so another
-    client cannot append a turn behind the pending trash move or destroy the rollback target. **The
+    close manager command/session admission irreversibly and advance the session-admission epoch before its
+    first await, so a previously admitted host request that outlives the bounded request drain cannot start
+    new work after settlement and every create/re-attach already assembling (including the strict
+    disk-discovery preflight) either registers in the captured set or self-disposes at registration;
+    synchronously quiesce every registered parent before any child abort begins, await resource reloads and
+    session-preparation flights, abort every streaming parent, dispose every hidden child (including
+    background children whose parent is idle), include cascades already pending from concurrent removal, and
+    wait for all of them under the one bound so pi can persist their "Operation aborted" tool results before
+    `process.exit` (the launcher's SIGINT/SIGTERM handler awaits it; whatever misses the window is healed by
+    the restart repair). `disposeAllSessions` remains the synchronous emergency stop, but synchronously
+    removes addressability and quiesces every parent while its best-effort disposal flights wait behind any
+    active resource reload and register their child cascades in the same pending set. Every ordinary disposal
+    installs an owned `{workspaceId,cwd,persisted,path?,done}` flight before yielding: commands and
+    re-attachment reject while it is active, while a concurrent recoverable delete of the same owner waits
+    for it before trash and publication and uses the captured transcript identity (including a valid
+    never-materialized empty chat) instead of losing existence proof to a post-disposal directory scan.
+    Ordinary disposal's delegation quiescence is scoped to that flight and released after reload, runner
+    shutdown, and child teardown, so later disk re-attachment of the same session id gets a usable workspace
+    service; archive/shutdown/delete retain their own wider fences. `getSessionWorkspaceId(sessionId)` (the
+    live session→workspace lookup the host's auto-rename hook keys on); `removeSession`/`disposeAllSessions`;
+    **`removeWorkspaceSessions(workspaceId, cwd?)`** (the **archive teardown**: synchronously install a
+    permanent workspace-admission fence, quiesce all current parents, and drain every create/re-attach flight
+    that entered before the fence; late registration self-disposes. Then abort and dispose every live session
+    for the workspace **unconditionally** — bypassing the per-chat delete guard that `removeSession` enforces,
+    so a chat whose recoverable delete is mid-trash cannot abort the teardown loop and strand its siblings —
+    and only after the registry and child cascades are stably empty remove delegation state and delete pi's
+    on-disk transcripts rooted at the worktree `cwd`. Pi's `SessionManager` is append-only, so purge =
+    `list(cwd)` then `rm` the files whose recorded `cwd` matches, never `rm -rf` the encoded dir since pi's
+    cwd→dir encoding can alias distinct cwds; `cwd` omitted on a double-archive skips only the disk purge);
+    **`deleteSession(sessionId, workspaceId, cwd)`** (install a pending-delete fence synchronously before
+    any await so an in-flight disk attach cannot register afterward; that fence also makes a retained live
+    entry non-addressable to **every session command, including `session.dispose`, for the full delete
+    transaction**, so another client cannot append a turn behind the pending trash move or destroy the
+    rollback target. `ensureSessionAttached` rejects while that recoverable transaction is pending rather
+    than returning the authoritative-absence `false` that lets callers create a replacement chat; rollback
+    therefore restores one conversation, never a fork. Live workspace/cwd ownership and the owner/cwd metadata of any in-flight disk attach
+    are validated before installing the fence; detached existence is resolved under it, then promoted to
+    the owning workspace's permanent tombstone before trash. **The
     transaction is single-flighted per session id**: a concurrent second trash click (another tab/client)
     for the same chat joins the running transaction (or is rejected as unknown when a foreign workspace
     names the id) rather than starting a rival one — two owners of the shared tombstone would let the
     loser's failure roll it back mid-move and briefly re-open the chat — and **only the transaction that
     installed the tombstone clears it on failure**, so an earlier successful deletion's permanent tombstone
-    survives a later spurious re-delete. Abort a live turn if needed but retain the live entry, resolve a
-    live transcript from that session's own `SessionManager` (never a lossy directory listing), otherwise
-    use the same strict disk lookup above, move the exact matching-cwd transcript to the OS trash via
-    `trashFile`, then dispose the live entry and publish `SessionDeletedPayload` for client convergence;
+    survives a later spurious re-delete. Repeating a completed delete from its owning workspace is
+    idempotent; a foreign workspace or an id absent from both the live registry and strict disk lookup is
+    rejected as unknown and never creates or reassigns a tombstone. Abort a live turn if needed but retain
+    the live entry, resolve a live transcript from that session's own `SessionManager` (never a lossy
+    directory listing), otherwise use the same strict disk lookup above, move the exact matching-cwd
+    transcript to the OS trash via `trashFile`, then dispose the live entry and publish
+    `SessionDeletedPayload` for client convergence;
     a newly created empty live chat whose reserved JSONL path has not materialized has nothing recoverable to
     trash and is disposed directly. Any lookup or trash failure throws, rolls back the tombstone it installed,
     restores command access to the same
@@ -361,9 +384,11 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   - `delegation` — ThinkRail's embedding of the portable **`pi-delegation`** core +
     **`pi-subagents`** layer ([[module-pi-delegation]], [[module-pi-subagents]]): binds what only
     the host knows — the delegation root under the data dir (`<dataDir>/delegation`),
-    `scope = workspaceId`, and the manager's `liveParentContext` projection (`ParentContext`, core
-    decision #23), including the exact `ModelRuntime` retained by that parent session. Existing
-    parents and their children therefore stay on their runtime generation across a Central change,
+    `scope = workspaceId`, and the manager's workspace-matching `liveParentContext` projection
+    (`ParentContext`, core decision #23), including the exact `ModelRuntime` retained by that parent
+    session. Both child admission and terminal-completion eligibility reject a parent registered to a
+    different workspace even when its session id is known. Existing parents and their children
+    therefore stay on their runtime generation across a Central change,
     while parents created afterward project the new generation. The host-wide `getPiRuntime` resolver
     is passed as the core's dynamic fallback rather than captured at service creation. The core's
     `settingsManager` seam is bound to **`buildSessionSettings(cwd)`**, so a child session honors the
@@ -418,13 +443,25 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     directions).
     **Host-owned background completion delivery** (`sweepUndeliveredCompletions`): the embedded
     pi-subagents extension routes terminal background runs into the workspace delegation state's
-    completion sink instead of sending independently. That sink, parent `agent_settled`, and
-    `reloadSessionResources` all request the same per-parent single-flight sweep; a request arriving
-    during a pass marks it dirty so one fresh pass follows rather than being lost behind stale checks.
+    completion sink instead of sending independently. The workspace service's `run-terminal` lifecycle
+    listener also requests the sweep independently of the extension runner that launched the child, so a
+    resource reload cannot strand a child that finishes after its old runner shuts down. Resource reload is
+    single-flighted per parent and holds the parent's reversible delegation-quiescence gate across
+    `AgentSession.reload()` so a terminal child cannot start a provider turn against a runner being rebuilt.
+    Irreversible chat deletion, ordinary disposal, workspace archival, and process shutdown wait behind that
+    flight before disposing the runner or purging its transcript; emergency disposal removes the entry first
+    and performs the final dispose as soon as reload settles. Reload then releases the gate and requests
+    recovery even when it failed. That listener, the extension sink, parent `agent_settled`, parent
+    `compaction_end`, manual-compaction settlement, and `reloadSessionResources` all request the same
+    per-parent single-flight sweep; a request arriving during a pass marks it dirty so one fresh pass follows
+    rather than being lost behind stale checks. A sweep declines while the parent is compacting so completion
+    delivery cannot race pi's transcript replacement.
     The delivery record remains the parent transcript — a `subagent-completion` custom message whose
-    `details.childSessionId` matches — and the pass re-reads every eligibility fact while it owns the
-    flight: the live parent session, deletion quiescence, queued-message state, child terminal/uncollected
-    snapshot, non-terminal background acknowledgement, and absence of a completion record. It sends via
+    `details.childSessionId` matches — and acknowledgement/delivery detection reads raw messages on the
+    durable active session branch, not pi's compaction-aware context view, so compaction cannot hide either
+    marker. The pass re-reads every eligibility fact while it owns the flight: the live parent session,
+    deletion quiescence, compaction and queued-message state, child terminal/uncollected snapshot,
+    non-terminal background acknowledgement, and absence of a completion record. It sends via
     public `sendCustomMessage({triggerTurn: true})` with the extension's exact bounded content shape.
     Serializing the check and send removes direct-vs-sweep and sweep-vs-sweep duplicate provider turns;
     no permanent in-memory delivered bit is used, because Stop-with-restore may drain a queued completion
@@ -441,8 +478,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     are fully restored. Only a successful trash (or an ordinary irreversible dispose) emits
     `{type: "session_shutdown", reason: "quit"}` through the public extension runner before the existing
     child cascade; the entry's once guard prevents a duplicate emission. `settleSessionsForShutdown` and
-    `disposeAllSessions` still start cascades without quiescing parents — bounded by imminent process exit,
-    while every user-reachable delete/remove/archive path owns a quiesce-or-shutdown cascade.
+    `disposeAllSessions` irreversibly quiesce every registered parent before starting child cascades, so an
+    abort terminal event cannot race imminent process exit by starting a fresh completion/provider turn.
     Children opting into extensions
     (`extensions: true` in their definition) get the **curated child set**
     (`childExtensionFactories` in `extensions`): the headless-search policy + the

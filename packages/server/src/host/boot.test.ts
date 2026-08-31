@@ -5,7 +5,11 @@ import { join } from "node:path";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { isPortFree } from "@thinkrail/shared/freePort";
-import { configurePiRuntime, configurePiRuntimeFactory } from "../agent";
+import {
+	configurePiRuntime,
+	configurePiRuntimeFactory,
+	resetSessionAdmissionForTests,
+} from "../agent";
 import { resetJbcentralStateForTests } from "../auth";
 import { type BootedHost, bootHost, HostAlreadyRunningError } from "./boot";
 
@@ -25,6 +29,7 @@ beforeAll(async () => {
 });
 
 beforeEach(async () => {
+	resetSessionAdmissionForTests();
 	await resetJbcentralStateForTests();
 	configurePiRuntime(null);
 	configurePiRuntimeFactory(async () => testRuntime);
@@ -39,6 +44,7 @@ afterEach(async () => {
 	if (originalDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
 	else process.env.THINKRAIL_DATA_DIR = originalDataDir;
 	await resetJbcentralStateForTests();
+	resetSessionAdmissionForTests();
 	configurePiRuntimeFactory();
 	configurePiRuntime(null);
 });

@@ -4,6 +4,7 @@ import {
 	type AgentSession,
 	buildSessionContext,
 	SessionManager,
+	sessionEntryToContextMessages,
 } from "@earendil-works/pi-coding-agent";
 import {
 	type DelegationRunStatus,
@@ -48,18 +49,26 @@ interface WorkspaceDelegationState {
 const delegations = new Map<string, WorkspaceDelegationState>();
 
 function createWorkspaceDelegationState(workspaceId: string): WorkspaceDelegationState {
-	return {
-		service: createDelegationService({
-			resolveParent: liveParentContext,
-			delegationRoot: delegationRootDir(),
-			scope: workspaceId,
-			modelRuntime: getPiRuntime,
-			settingsManager: (cwd) => buildSessionSettings(cwd),
-			childExtensionFactories: childExtensionFactories(),
-		}),
+	const service = createDelegationService({
+		resolveParent: (parentSessionId) => liveParentContext(parentSessionId, workspaceId),
+		delegationRoot: delegationRootDir(),
+		scope: workspaceId,
+		modelRuntime: getPiRuntime,
+		settingsManager: (cwd) => buildSessionSettings(cwd),
+		childExtensionFactories: childExtensionFactories(),
+	});
+	const state: WorkspaceDelegationState = {
+		service,
 		quiescedParents: new Map(),
 		completionSweeps: new Map(),
 	};
+	service.onLifecycle((event) => {
+		if (event.type !== "run-terminal") return;
+		const session = liveParentSessionForDelegation(event.parentSessionId, workspaceId);
+		if (!session) return;
+		void sweepUndeliveredCompletions(workspaceId, event.parentSessionId, session).catch(() => {});
+	});
+	return state;
 }
 
 function delegationStateFor(workspaceId: string): WorkspaceDelegationState {
@@ -87,7 +96,7 @@ export function subagentsExtensionFor(workspaceId: string): BundledExtensionFact
 		scope: workspaceId,
 		isParentQuiesced: (parentSessionId) => isParentQuiesced(state, parentSessionId),
 		deliverBackgroundCompletion: ({ parentSessionId }) => {
-			const session = liveParentSessionForDelegation(parentSessionId);
+			const session = liveParentSessionForDelegation(parentSessionId, workspaceId);
 			return session
 				? sweepUndeliveredCompletions(workspaceId, parentSessionId, session)
 				: undefined;
@@ -203,8 +212,9 @@ function canSweepUndeliveredCompletions(
 	return (
 		delegations.get(workspaceId) === state &&
 		!isParentQuiesced(state, parentSessionId) &&
-		liveParentSessionForDelegation(parentSessionId) === session &&
+		liveParentSessionForDelegation(parentSessionId, workspaceId) === session &&
 		!session.isStreaming &&
+		!session.isCompacting &&
 		!session.agent.hasQueuedMessages()
 	);
 }
@@ -221,13 +231,15 @@ async function sweepUndeliveredCompletionsOnce(
 		if (!canSweepUndeliveredCompletions(workspaceId, parentSessionId, session, state)) return;
 		const snapshot = child.snapshot;
 		if (!snapshot || !TERMINAL_RUN_STATUSES.has(snapshot.status) || snapshot.collected) continue;
-		const messages = session.messages;
-		const acked = messages.some(
+		const durableMessages = session.sessionManager
+			.getBranch()
+			.flatMap(sessionEntryToContextMessages);
+		const acked = durableMessages.some(
 			(message) =>
 				message.role === "toolResult" &&
 				isNonTerminalBackgroundAck(message.details, child.sessionId),
 		);
-		const delivered = messages.some(
+		const delivered = durableMessages.some(
 			(message) =>
 				isSubagentCompletionMessage(message) && message.details.childSessionId === child.sessionId,
 		);

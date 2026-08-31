@@ -156,8 +156,11 @@ broadcast — `analytics` has no `settings` edge and no feature module knows ana
   kernel-held loopback listener keyed by the canonical data-directory fingerprint, not a staleable file.
   Same-owner refusal is immediate, different-owner port collisions advance deterministically, and an
   occupied endpoint that cannot prove its identity fails closed.
-- **One graceful shutdown** — launchers await `RunningServer.shutdown()`; repeated calls share one promise,
-  while abrupt death relies on kernel release of the ownership listener.
+- **One graceful shutdown** — launchers await `RunningServer.shutdown()`; repeated calls share one promise.
+  Shutdown closes WS request admission synchronously before its first await, lets already-admitted handlers
+  settle within the bounded drain, then settles sessions; a manager admission epoch prevents any timed-out
+  create/re-attach from registering after that snapshot. Abrupt death relies on kernel release of the
+  ownership listener.
 - **WS commands return values directly**; only events + extension-UI use push channels.
 - Binds beyond localhost via `host` option (the Tailscale seam).
 
