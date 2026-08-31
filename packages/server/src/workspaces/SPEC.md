@@ -101,7 +101,8 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   Cached stats attach to a fresh row **only when its diff-defining fields (`worktreePath`, `baseBranch`,
   `diffBase`) still match the snapshot they were computed from** — a `setDiffBase` landing while the
   badges resolved drops that row's badge the same way, never pairing the new ref with the old ref's
-  totals.
+  totals. `workspaceDiffKey` is this identity's single public definition, shared with `reviews` so a
+  review created across the same race retries against the new target instead of pinning the old one.
   Diff stats default **on** for compatibility, while `includeDiffStats: false` skips the per-workspace
   fan-out for cold navigation — an automatic reload on a shared host must not diff every worktree),
   `listWorkspaceRecords`
@@ -201,7 +202,7 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   self-publishes), so registry membership stays shared domain state across every client (architecture #9).
 - **Public surface (barrel):** `createWorkspace`, `listExistingWorktrees`, `openExistingWorktree`,
   `listWorkspaces`, `listWorkspaceRecords`, `forgetWorkspace`, `reclaimWorktree`, `removeWorkspace`,
-  `workspaceDiffStats`, `getWorkspace`, `renameWorkspace`, `refreshUserOwnedWorkspace`,
+  `workspaceDiffStats`, `workspaceDiffKey`, `getWorkspace`, `renameWorkspace`, `refreshUserOwnedWorkspace`,
   `completeInitialTerminalReservation`, `ensureWorkspaceScratchDir`, `setWorkspacePublisher`,
   `WorkspaceLifecycleEvent`.
 - **Allowed deps:** `projects` (repo lookup), `git` (the runner), `persistence`, `log`; `contracts`;

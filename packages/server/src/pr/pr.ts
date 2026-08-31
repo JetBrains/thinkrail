@@ -207,6 +207,7 @@ export async function openPr(
 	const hasSshCommandConfig = git(cwd, ["config", "core.sshCommand"]).ok;
 	const pushed = await gitAsync(cwd, ["push", "--set-upstream", "origin", ws.branch], {
 		env: nonInteractiveGitEnv(process.env, hasSshCommandConfig),
+		network: true,
 	});
 	if (!pushed.ok) {
 		const detail = pushed.err || "git push failed";

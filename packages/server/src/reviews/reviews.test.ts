@@ -13,6 +13,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ReviewChangedPayload, ReviewSnapshot, Workspace } from "@thinkrail/contracts";
 import { saveWorkspaces } from "../persistence";
+import { setWorkspaceDiffBase } from "../workspaces";
 import {
 	addComment,
 	anchorProblem,
@@ -180,6 +181,30 @@ test("a workspace removed while creation awaits git gets no resurrected review f
 	expect(
 		statSync(join(dataDir, "reviews", `${WS_ID}.json`), { throwIfNoEntry: false }),
 	).toBeUndefined();
+});
+
+test("review creation retries when the diff target changes during base resolution", async () => {
+	gitIn(worktree, ["switch", "-c", "feature"]);
+	writeFileSync(join(worktree, "feature.ts"), "feature\n");
+	gitIn(worktree, ["add", "feature.ts"]);
+	gitIn(worktree, [
+		"-c",
+		"user.email=t@t",
+		"-c",
+		"user.name=t",
+		"commit",
+		"-m",
+		"feature",
+	]);
+	const featureHead = execFileSync("git", ["rev-parse", "HEAD"], {
+		cwd: worktree,
+		encoding: "utf8",
+	}).trim();
+
+	const pending = getReviewSnapshot(WS_ID);
+	setWorkspaceDiffBase(WS_ID, "feature");
+
+	expect((await pending).review.baseSha).toBe(featureHead);
 });
 
 test("a concurrent get's re-anchor persist can't delete a mutation's just-saved comment", async () => {
@@ -352,6 +377,21 @@ test("a draft finding is unresolvable through resolve_comment even when self-aut
 	expect(() => resolveCommentFromAgent("reviewer-sess", finding.id)).toThrow("not sent");
 	const scratch = await addInline("human scratch");
 	expect(() => resolveCommentFromAgent("any-sess", scratch.id)).toThrow("not sent");
+});
+
+test("clear keeps an agent resolution that lands while the fresh base resolves", async () => {
+	const sent = await addInline("agent record");
+	await markCommentsSent(WS_ID, [sent.id], "sess1");
+
+	const clearing = clearReview(WS_ID);
+	resolveCommentFromAgent("sess1", sent.id, "resolved during clear");
+	await clearing;
+
+	expect(archivedSnapshots()[0]?.comments[0]).toMatchObject({
+		id: sent.id,
+		status: "resolved",
+		resolveNote: "resolved during clear",
+	});
 });
 
 test("clear archives records, discards drafts, and publishes only the fresh snapshot", async () => {

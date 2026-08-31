@@ -21,15 +21,16 @@ ref off the workspace-create critical path.
   stdout byte-exact for file-content reads) and `gitAsync(cwd,
   args, opts?)` (its async twin — off the event loop through `subprocess`' `runBounded`, same `raw` option,
   for network-bound ops like `fetch` **and** the request-path reads below, neither of which may block the
-  host: it owns only the git-shaped part, the 55s budget and the
-  stalled/stderr wording, never the child-lifetime mechanics; `opts.env` lets a caller
-  run prompt-free with its own environment, e.g. `pr`'s non-interactive push). **A timeout keeps whatever git
-  wrote before the kill**: the runner drains continuously, so on expiry its `err` already holds the real
-  diagnosis — a publickey rejection, a proxy's refusal, `remote:` progress proving a large transfer was simply
-  still running. The ssh-key hint is what we say when git wrote *nothing*, never advice pasted over an
-  observation we already have (the message never names a cause we did not observe). The reads take that
-  same 55s default (`opts.timeoutMs` overrides it): a local read that has to be *bounded* at all is a
-  wedged git, and every one of them was unbounded before it moved off the loop;
+  host: it owns only the git-shaped part, the 55s budget and the stalled/stderr wording, never the
+  child-lifetime mechanics; `opts.env` lets a caller run prompt-free with its own environment, e.g. `pr`'s
+  non-interactive push, and `opts.network` marks fetch/push solely so a no-output timeout can name the
+  remote). **A timeout keeps whatever git wrote before the kill**: the runner drains continuously, so on
+  expiry its `err` already holds the real diagnosis — a publickey rejection, a proxy's refusal, `remote:`
+  progress proving a large transfer was simply still running. When git wrote *nothing*, an explicitly
+  networked operation gets the conditional ssh-key hint; a local `diff`/`log`/ref read gets only the
+  observed fact that git did not exit — never a fabricated remote cause. The reads take that same 55s
+  default (`opts.timeoutMs` overrides it): a local read that has to be *bounded* at all is a wedged git,
+  and every one of them was unbounded before it moved off the loop;
   **`remoteTrackingRef(ref)`** → `refs/remotes/<ref>` for an `origin/` ref, else `null` — **the one place
   that spelling is built**, so the probe below and `workspaces`' `worktree add` cannot drift apart. Its
   reach is **creation only**, and `resolveDiffRange` is the named survivor: `diffBaseRef` hands git the

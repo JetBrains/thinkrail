@@ -22,17 +22,18 @@ re-anchoring, and package rendering. Design + user-confirmed decisions: [[task-r
   awaits git (the pinned base resolves through the async scope resolver), so it is **single-flighted per
   workspace**: the unlocked `review.get` read and a locked mutation racing through that window would
   otherwise each save a distinct fresh review, the last silently replacing the other's (possibly
-  already-mutated) snapshot. `freshSnapshot` re-checks workspace liveness **after** its git await, so
-  neither the creation flight nor `clearReview` can save past a `workspace.remove` that already purged
-  the review file (`removeWorkspaceReviews`) — an unchecked save would resurrect it as an orphan in the
-  data dir. Creation is the **only** await a snapshot pass may span: every
-  load→mutate→persist over the open snapshot runs synchronously — the unlocked read's re-anchor pass
-  (`getReviewSnapshot`) included, and `addComment` resolves its base-side ref *before* taking the
-  snapshot — because the review lock covers only mutations, and a pass holding a snapshot across an
-  await would save over whatever a concurrent writer (a locked mutation, `rollbackSend`, an agent
-  resolve) persisted in the gap, silently deleting it. The one loss that discipline still allows is a
-  locked mutation (whose snapshot predates its awaits) overwriting a re-anchor persist — benign:
-  anchor state is derived from worktree content and recomputed on the next read. Wire
+  already-mutated) snapshot. `freshSnapshot` re-reads the workspace **after** its git await: removal
+  throws before anything persists, while a changed diff identity (`worktreePath`, `baseBranch`,
+  `diffBase`) retries base resolution rather than pinning the new review to the old target. Creation is
+  the **only** await a snapshot pass may span: every load→mutate→persist over the open snapshot runs
+  synchronously — the unlocked read's re-anchor pass (`getReviewSnapshot`) included, `addComment`
+  resolves its base-side ref *before* taking the snapshot, and `clearReview` resolves the fresh base
+  *before* loading the active snapshot it archives — because the review lock covers only mutations, and
+  a pass holding a snapshot across an await would save over whatever a concurrent writer (a locked
+  mutation, `rollbackSend`, an agent resolve) persisted in the gap, silently deleting it. The one loss
+  that discipline still allows is a locked mutation (whose snapshot predates its awaits) overwriting a
+  re-anchor persist — benign: anchor state is derived from worktree content and recomputed on the next
+  read. Wire
   **`review.close` is the Clear operation**: under the host's workspace review lock, `clearReview`
   first persists the current review's non-draft records as a closed snapshot under
   `reviews/archive/<workspaceId>/<reviewId>.json`, then replaces the active snapshot with a fresh open

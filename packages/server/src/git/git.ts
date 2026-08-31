@@ -130,12 +130,11 @@ export async function prefetchBranch(
 	const project = loadProjects().find((p) => p.id === projectId);
 	if (!project || !ref.startsWith("origin/") || !isSafeRef(ref)) return { ok: false, moved: false };
 	const before = remoteRefOid(project.path, ref);
-	const result = await gitAsync(project.path, [
-		"fetch",
-		"origin",
-		"--",
-		ref.slice("origin/".length),
-	]);
+	const result = await gitAsync(
+		project.path,
+		["fetch", "origin", "--", ref.slice("origin/".length)],
+		{ network: true },
+	);
 	if (!result.ok) return { ok: false, moved: false };
 	const after = remoteRefOid(project.path, ref);
 	const moved = after !== null && after !== before;

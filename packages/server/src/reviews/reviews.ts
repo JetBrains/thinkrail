@@ -21,7 +21,7 @@ import type {
 import { diffBaseRef, readBlobAt, resolveCommitOid, resolveDiffRange } from "../git";
 import { logger } from "../log";
 import { dataDir } from "../persistence";
-import { getWorkspace } from "../workspaces";
+import { getWorkspace, workspaceDiffKey } from "../workspaces";
 import { buildTextQuote, hashContent, lineRangeOf, reanchor, textQuoteOf } from "./anchoring";
 import { renderPackage } from "./packageRender";
 
@@ -154,20 +154,24 @@ function readWorktreeFile(worktreePath: string, path: string): string | null {
 }
 
 async function freshSnapshot(workspaceId: string): Promise<ReviewSnapshot> {
-	const ws = getWorkspace(workspaceId);
-	const ref = (await resolveDiffRange(ws)).originalRef ?? diffBaseRef(ws);
-	const base = resolveCommitOid(ws.worktreePath, ref);
-	getWorkspace(workspaceId);
-	return {
-		review: {
-			id: `rev_${randomUUID().slice(0, 8)}`,
-			workspaceId,
-			status: "open",
-			baseSha: base ?? ref,
-			createdAt: Date.now(),
-		},
-		comments: [],
-	};
+	for (;;) {
+		const ws = getWorkspace(workspaceId);
+		const diffKey = workspaceDiffKey(ws);
+		const ref = (await resolveDiffRange(ws)).originalRef ?? diffBaseRef(ws);
+		const current = getWorkspace(workspaceId);
+		if (workspaceDiffKey(current) !== diffKey) continue;
+		const base = resolveCommitOid(current.worktreePath, ref);
+		return {
+			review: {
+				id: `rev_${randomUUID().slice(0, 8)}`,
+				workspaceId,
+				status: "open",
+				baseSha: base ?? ref,
+				createdAt: Date.now(),
+			},
+			comments: [],
+		};
+	}
 }
 
 function archiveRecords(workspaceId: string, snapshot: ReviewSnapshot): void {
@@ -385,8 +389,8 @@ export async function deleteComment(workspaceId: string, id: string): Promise<vo
 }
 
 export async function clearReview(workspaceId: string): Promise<ReviewSnapshot> {
-	const existing = load(workspaceId);
 	const fresh = await freshSnapshot(workspaceId);
+	const existing = load(workspaceId);
 	if (existing) archiveRecords(workspaceId, existing);
 	persistAndPublish(workspaceId, fresh);
 	return fresh;

@@ -231,12 +231,11 @@ export async function createWorkspace(
 	const remoteBase = remoteTrackingRef(baseBranch);
 	const baseMissing = () => remoteRefOid(project.path, baseBranch) === null;
 	if (remoteBase && baseMissing()) {
-		const fetched = await gitAsync(project.path, [
-			"fetch",
-			"origin",
-			"--",
-			baseBranch.slice("origin/".length),
-		]);
+		const fetched = await gitAsync(
+			project.path,
+			["fetch", "origin", "--", baseBranch.slice("origin/".length)],
+			{ network: true },
+		);
 		if (baseMissing())
 			throw new Error(
 				fetched.ok
@@ -460,10 +459,10 @@ export async function listWorkspaces(
 	const rows = projectRows(projectId);
 	if (opts.includeDiffStats === false) return rows;
 	const statsByKey = new Map(
-		await Promise.all(rows.map(async (w) => [diffStatsKey(w), await diffStats(w)] as const)),
+		await Promise.all(rows.map(async (w) => [workspaceDiffKey(w), await diffStats(w)] as const)),
 	);
 	return projectRows(projectId).map((w) => {
-		const stats = statsByKey.get(diffStatsKey(w));
+		const stats = statsByKey.get(workspaceDiffKey(w));
 		return stats ? { ...w, diffStats: stats } : w;
 	});
 }
@@ -474,7 +473,9 @@ function projectRows(projectId: string): Workspace[] {
 	return rows;
 }
 
-function diffStatsKey(ws: Workspace): string {
+export function workspaceDiffKey(
+	ws: Pick<Workspace, "id" | "worktreePath" | "baseBranch" | "diffBase">,
+): string {
 	return `${ws.id}\u0000${ws.worktreePath}\u0000${ws.baseBranch}\u0000${ws.diffBase ?? ""}`;
 }
 
