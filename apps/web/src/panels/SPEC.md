@@ -53,16 +53,19 @@ treatment.
   workspace row's hover-revealed **kebab menu** (`MoreVertical`, controlled `DropdownMenu`) — right-clicking
   anywhere on the row opens that exact menu at the kebab without selecting/activating the workspace, while
   the kebab remains the touch and keyboard-focus path. Its actions are a `DropdownMenuSub` **"Open in"**
-  (rendered only when at least one editor was detected), **Copy path**, **Reveal in file manager**, and
-  (worktrees only) **Remove workspace** — worded **Remove from ThinkRail** on an external row, whose
-  confirm promises the checkout and its branch stay untouched. "Open in" comes from the
-  host-wide `editor.list`;
-  GUI entries call `workspace.openIn`, while terminal-kind Vim activates the workspace and runs through
-  `addTerminal`'s one-shot `initialCommand`. Copy writes `worktreePath`; Reveal calls `workspace.reveal`.
-  Remove is styled destructive and opens a centered `ConfirmDialog`; confirming fires
-  `workspace.remove` and lets every client react to the host's `workspace.removed` push via the store's
-  `applyWorkspaceRemoved`; a rejected request (no event will come) surfaces an error toast, leaving the row
-  in place. Each **workspace row** is **two-line**: the display
+  (rendered only when at least one editor was detected), **Copy path**, and **Reveal in file manager**. A
+  ThinkRail-managed worktree additionally gets **Rename workspace** and **Remove workspace**; an external
+  row gets only **Remove from ThinkRail**, whose confirm promises the checkout and its branch stay untouched.
+  The Default gets neither mutation. "Open in" comes from the host-wide `editor.list`; GUI entries call
+  `workspace.openIn`, while terminal-kind Vim activates the workspace and runs through `addTerminal`'s
+  one-shot `initialCommand`. Copy writes `worktreePath`; Reveal calls `workspace.reveal`.
+  Rename opens a focused dialog prefilled with the display name and states that the managed branch changes
+  while the worktree folder stays put. Blank names cannot submit; a request in flight holds the dialog open;
+  rejection renders inline, while success closes it and every surface adopts only the host's full-snapshot
+  `workspace.updated` push. The client never predicts the collision-safe branch. Remove is styled destructive
+  and opens a centered `ConfirmDialog`; confirming fires `workspace.remove` and lets every client react to the
+  host's `workspace.removed` push via the store's `applyWorkspaceRemoved`; a rejected request (no event will
+  come) surfaces an error toast, leaving the row in place. Each **workspace row** is **two-line**: the display
   `name` on top with the git **branch on a second line beneath it** (muted, monospace), rendered only when
   it differs from the name (so pristine/legacy `workspace-N` rows stay a single compact line) — the display
   name is decoupled from the git branch (see [[submodule-server-workspaces]]). Workspace rows deliberately
@@ -70,8 +73,9 @@ treatment.
   the dedicated Changes views. The **Default workspace**
   (`kind === "default"` — the project folder itself) renders **pinned first** (the server pins it in
   `workspace.list`; `addWorkspace` appends created worktree rows after it), with a **`House` icon** in
-  place of the `GitBranch` glyph and **no Remove item** (non-removable — the server enforces it; the menu
-  simply omits it) — it still gets "Open in" / Copy path / Reveal, same as any worktree. Its branch line
+  place of the `GitBranch` glyph and **no Rename or Remove item** (non-renamable/non-removable — the server
+  enforces both; the menu simply omits them) — it still gets "Open in" / Copy path / Reveal, same as any
+  worktree. Its branch line
   shows the folder's real current branch. When the **selected project's** authoritative workspace list lands,
   `ProjectTree` fire-and-forgets transport's `prewarmWorkspaceSkillLoad` for at most the first eight rows:
   the common visible set begins the conservative watcher-readiness window before a workspace click. The
