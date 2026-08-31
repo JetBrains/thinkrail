@@ -5,9 +5,15 @@ import { TodoStore } from "pi-todos/core";
 import {
 	defaultWorkspaceRow,
 	enterDefaultWorkspace,
+	openChatFromHistory,
 	openFixtureProject,
 	revealFirstProjectWorkspaces,
 } from "./fixtures/app";
+import {
+	moveMouseToChatViewport,
+	readChatScrollGeometry,
+	readChatViewportIntersection,
+} from "./fixtures/chatScroll";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { seedWorkspaceSession } from "./fixtures/sessions";
 
@@ -74,6 +80,101 @@ test("disk chats stay in local history until explicitly reopened, including unfi
 	await page.getByTestId("closed-chat-item").filter({ hasText: "the migration chat" }).click();
 	await expect(chatTabs).toHaveCount(1);
 	await expect(page.getByText("stopped before the final verification pass")).toBeVisible();
+});
+
+test("coarse wheel input crosses realistic virtual geometry before a giant history row mounts", async ({
+	page,
+}) => {
+	await page.setViewportSize({ width: 1280, height: 760 });
+	await openFixtureProject(page);
+
+	const longBlockMarker = "canonical giant history block";
+	const longBlock = [
+		longBlockMarker,
+		...Array.from(
+			{ length: 100 },
+			(_, index) =>
+				`Paragraph ${index + 1} records enough deterministic transcript detail to wrap across the chat column while preserving this assistant response as one canonical Markdown row.`,
+		),
+	].join("\n\n");
+	seedWorkspaceSession(repoCwd(), {
+		name: "giant hydrated history",
+		messages: [
+			{ role: "user", text: "Write the complete migration record.", timestamp: BASE_TS },
+			{ role: "assistant", text: longBlock, timestamp: BASE_TS + 1_000 },
+			...Array.from({ length: 14 }, (_, index) => [
+				{
+					role: "user" as const,
+					text: `short follow-up ${index + 1}`,
+					timestamp: BASE_TS + 2_000 + index * 2_000,
+				},
+				{
+					role: "assistant" as const,
+					text: `short answer ${index + 1}`,
+					timestamp: BASE_TS + 3_000 + index * 2_000,
+				},
+			]).flat(),
+		],
+	});
+
+	await enterDefaultWorkspace(page);
+	await openChatFromHistory(page, "giant hydrated history");
+
+	const chatScroll = page.getByTestId("chat-scroll");
+	const latestRow = page
+		.locator('[data-testid="chat-message"][data-role="assistant"]')
+		.filter({ hasText: "short answer 14" });
+	await expect(latestRow).toBeVisible();
+	await expect
+		.poll(async () => (await readChatViewportIntersection(latestRow)).intersects)
+		.toBe(true);
+	await expect(page.getByText(longBlockMarker, { exact: true })).toHaveCount(0);
+
+	const coarseDelta = 1_000;
+	const substantialTravelFloor = coarseDelta * 1.5;
+	await expect
+		.poll(async () => {
+			const geometry = await readChatScrollGeometry(chatScroll);
+			return geometry.distanceFromEnd <= geometry.clientHeight * 0.02;
+		})
+		.toBe(true);
+	const initial = await readChatScrollGeometry(chatScroll);
+	expect(initial.maxScrollTop).toBeGreaterThan(coarseDelta * 2 + initial.clientHeight);
+
+	await moveMouseToChatViewport(page, chatScroll);
+	await page.mouse.wheel(0, -coarseDelta);
+	await page.mouse.wheel(0, -coarseDelta);
+
+	await expect
+		.poll(async () => {
+			const geometry = await readChatScrollGeometry(chatScroll);
+			return {
+				substantialTravel: geometry.distanceFromEnd > substantialTravelFloor,
+				clearOfHistoryStart: geometry.distanceFromStart > geometry.clientHeight,
+			};
+		})
+		.toEqual({ substantialTravel: true, clearOfHistoryStart: true });
+	const after = await readChatScrollGeometry(chatScroll);
+	await expect(chatScroll).toHaveAttribute("data-follow-state", "detached");
+	const latest = page.getByTestId("scroll-to-bottom");
+	await expect(latest).toBeVisible();
+	await expect(latest).toContainText("Latest");
+
+	expect(after.distanceFromEnd).toBeGreaterThan(substantialTravelFloor);
+	expect(after.distanceFromStart).toBeGreaterThan(after.clientHeight);
+
+	await latest.click();
+	await expect(latest).toHaveCount(0);
+	await expect(chatScroll).toHaveAttribute("data-follow-state", "following");
+	await expect
+		.poll(async () => {
+			const geometry = await readChatScrollGeometry(chatScroll);
+			return {
+				atPhysicalLatestEdge: geometry.distanceFromEnd <= geometry.clientHeight * 0.02,
+				latestRowIntersectsViewport: (await readChatViewportIntersection(latestRow)).intersects,
+			};
+		})
+		.toEqual({ atPhysicalLatestEdge: true, latestRowIntersectsViewport: true });
 });
 
 test("a closed chat can be moved to trash from history", async ({ page }) => {

@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
+import type { AskUserQuestionAckDetails, AskUserQuestionArgs } from "@thinkrail/contracts";
 import { defaultSessionDirFor, writeFixtureSession } from "./testFixtures";
 
 describe("writeFixtureSession — pinned against pi's real SessionManager", () => {
@@ -28,6 +29,72 @@ describe("writeFixtureSession — pinned against pi's real SessionManager", () =
 				cwd,
 				name: "Pin test session",
 				messageCount: 2,
+			});
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
+	test("canonical ask_user_question toolCall + ack details round-trip through SessionManager", () => {
+		const dir = mkdtempSync(join(tmpdir(), "trpi-fixture-toolcall-"));
+		try {
+			const toolCallId = "ask-fixture-1";
+			const args: AskUserQuestionArgs = {
+				questions: [
+					{
+						question: "Which rollout?",
+						header: "Rollout",
+						options: [
+							{ label: "Canary", description: "Start with a small cohort." },
+							{ label: "Everyone", description: "Release in one step." },
+						],
+					},
+				],
+			};
+			const ack: AskUserQuestionAckDetails = { kind: "ack" };
+			const { path } = writeFixtureSession(dir, {
+				id: "pin-toolcall-1",
+				cwd: "/tmp/thinkrail-toolcall-pin",
+				messages: [
+					{ role: "user", text: "Help choose a rollout.", timestamp: 1_700_000_000_000 },
+					{
+						role: "assistant",
+						content: [
+							{
+								type: "toolCall",
+								id: toolCallId,
+								name: "ask_user_question",
+								arguments: args,
+							},
+						],
+						stopReason: "toolUse",
+						timestamp: 1_700_000_001_000,
+					},
+					{
+						role: "toolResult",
+						toolCallId,
+						toolName: "ask_user_question",
+						content: [{ type: "text", text: "Questions shown to the user." }],
+						details: ack,
+						isError: false,
+						timestamp: 1_700_000_002_000,
+					},
+				],
+			});
+
+			const messages = SessionManager.open(path).buildSessionContext().messages;
+			expect(messages).toHaveLength(3);
+			expect(messages[1]).toMatchObject({
+				role: "assistant",
+				stopReason: "toolUse",
+				content: [{ type: "toolCall", id: toolCallId, name: "ask_user_question", arguments: args }],
+			});
+			expect(messages[2]).toMatchObject({
+				role: "toolResult",
+				toolCallId,
+				toolName: "ask_user_question",
+				details: { kind: "ack" },
+				isError: false,
 			});
 		} finally {
 			rmSync(dir, { recursive: true, force: true });
