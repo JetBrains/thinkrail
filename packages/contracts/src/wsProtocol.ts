@@ -87,6 +87,7 @@ export interface TerminalTabsPush {
 }
 
 export const PROTOCOL_VERSION = 55;
+export const WORKSPACE_RENAME_PROTOCOL_VERSION = 55;
 
 export type HostPlatform = "darwin" | "linux" | "win32";
 

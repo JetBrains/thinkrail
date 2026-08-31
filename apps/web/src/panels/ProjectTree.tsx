@@ -52,6 +52,7 @@ import { ExistingWorktreeDialog } from "./ExistingWorktreeDialog";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
 import { RenameWorkspaceDialog } from "./RenameWorkspaceDialog";
 import { useOpenProject } from "./useOpenProject";
+import { canRenameWorkspace } from "./workspaceActions";
 
 const PREWARM_WORKSPACE_LIMIT = 8;
 
@@ -61,6 +62,7 @@ export function ProjectTree() {
 	const selectedProjectId = useAppStore((s) => s.selectedProjectId);
 	const workspaces = useAppStore((s) => s.workspaces);
 	const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
+	const protocolVersion = useAppStore((s) => s.protocolVersion);
 
 	const [editors, setEditors] = useState<EditorInfo[]>([]);
 	useEffect(() => {
@@ -262,6 +264,7 @@ export function ProjectTree() {
 											key={ws.id}
 											workspace={ws}
 											isActive={activeWorkspaceId === ws.id}
+											canRename={canRenameWorkspace(protocolVersion, ws)}
 											editors={editors}
 											onSelect={() => selectWorkspace(ws)}
 											onOpenIn={(editor) => openWorkspaceIn(ws, editor)}
@@ -486,6 +489,7 @@ function ProjectRow({
 function WorkspaceRow({
 	workspace,
 	isActive,
+	canRename,
 	editors,
 	onSelect,
 	onOpenIn,
@@ -495,6 +499,7 @@ function WorkspaceRow({
 }: {
 	workspace: Workspace;
 	isActive: boolean;
+	canRename: boolean;
 	editors: EditorInfo[];
 	onSelect: () => void;
 	onOpenIn: (editor: EditorInfo) => void;
@@ -504,7 +509,6 @@ function WorkspaceRow({
 }) {
 	const isDefault = isDefaultWorkspace(workspace);
 	const isExternal = isExternalWorkspace(workspace);
-	const canRename = !isDefault && !isExternal;
 	const Icon = isActive
 		? isDefault
 			? RiHome2Fill
@@ -629,8 +633,13 @@ function WorkspaceRow({
 					</DropdownMenuContent>
 				</DropdownMenu>
 			</fieldset>
-			{canRename && renameOpen ? (
-				<RenameWorkspaceDialog open workspace={workspace} onOpenChange={setRenameOpen} />
+			{renameOpen ? (
+				<RenameWorkspaceDialog
+					open
+					workspace={workspace}
+					canSubmit={canRename}
+					onOpenChange={setRenameOpen}
+				/>
 			) : null}
 			{!isDefault && (
 				<ConfirmDialog

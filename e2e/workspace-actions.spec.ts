@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, rmSync } from "node:fs";
-import { expect, test } from "@playwright/test";
+import { expect, test, type WebSocketRoute } from "@playwright/test";
 import {
 	createWorkspaceViaDialog,
 	openFixtureProject,
@@ -84,6 +84,50 @@ test("a managed workspace can be renamed with its branch while its worktree path
 		}).trim(),
 	).toBe("manual-workspace-name");
 	expect(existsSync(created.worktreePath)).toBe(true);
+});
+
+test("an open rename dialog survives reconnect and waits for the current welcome", async ({
+	page,
+}) => {
+	let firstSocket: WebSocketRoute | undefined;
+	let socketsOpened = 0;
+	let releaseReconnect: () => void = () => {};
+	const reconnectAllowed = new Promise<void>((resolve) => {
+		releaseReconnect = resolve;
+	});
+	await page.routeWebSocket(/\/ws(\?|$)/, async (socket) => {
+		socketsOpened += 1;
+		if (socketsOpened > 1) await reconnectAllowed;
+		firstSocket ??= socket;
+		socket.connectToServer();
+	});
+
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await settleAfterCreate(page);
+	const row = worktreeRows(page).first();
+	await openWorkspaceMenu(row);
+	await page.getByTestId("workspace-rename").click();
+	const dialog = page.getByTestId("rename-workspace-dialog");
+	const submit = page.getByTestId("rename-workspace-submit");
+	await expect(dialog).toBeVisible();
+
+	await firstSocket?.close();
+	await expect(page.getByTestId("connection-status")).not.toHaveAttribute(
+		"data-status",
+		"connected",
+	);
+	await expect(dialog).toBeVisible();
+	await expect(submit).toBeDisabled();
+
+	releaseReconnect();
+	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+	await expect.poll(() => socketsOpened).toBeGreaterThan(1);
+	await expect(dialog).toBeVisible();
+	await expect(submit).toBeEnabled();
+	await page.getByTestId("rename-workspace-input").fill("Rename After Reconnect");
+	await submit.click();
+	await expect(row.getByTestId("workspace-name")).toHaveText("Rename After Reconnect");
 });
 
 test("the Default workspace's kebab menu offers only non-mutating actions", async ({ page }) => {

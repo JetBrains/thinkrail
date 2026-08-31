@@ -54,14 +54,17 @@ treatment.
   anywhere on the row opens that exact menu at the kebab without selecting/activating the workspace, while
   the kebab remains the touch and keyboard-focus path. Its actions are a `DropdownMenuSub` **"Open in"**
   (rendered only when at least one editor was detected), **Copy path**, and **Reveal in file manager**. A
-  ThinkRail-managed worktree additionally gets **Rename workspace** and **Remove workspace**; an external
-  row gets only **Remove from ThinkRail**, whose confirm promises the checkout and its branch stay untouched.
+  ThinkRail-managed worktree additionally gets **Rename workspace** when the connected host's protocol is
+  at least `WORKSPACE_RENAME_PROTOCOL_VERSION`, plus **Remove workspace**; an external row gets only
+  **Remove from ThinkRail**, whose confirm promises the checkout and its branch stay untouched.
   The Default gets neither mutation. "Open in" comes from the host-wide `editor.list`; GUI entries call
   `workspace.openIn`, while terminal-kind Vim activates the workspace and runs through `addTerminal`'s
   one-shot `initialCommand`. Copy writes `worktreePath`; Reveal calls `workspace.reveal`.
   Rename opens a focused dialog prefilled with the display name and states that the managed branch changes
-  while the worktree folder stays put. Blank names cannot submit; a request in flight holds the dialog open;
-  rejection renders inline, while success closes it and every surface adopts only the host's full-snapshot
+  while the worktree folder stays put. Blank names cannot submit; a request in flight holds the dialog open.
+  An opened dialog also remains mounted across a disconnect so its request state is not lost, while submission
+  stays disabled until the current socket's welcome confirms support again. Rejection renders inline, while
+  success closes it and every surface adopts only the host's full-snapshot
   `workspace.updated` push. The client never predicts the collision-safe branch. Remove is styled destructive
   and opens a centered `ConfirmDialog`; confirming fires `workspace.remove` and lets every client react to the
   host's `workspace.removed` push via the store's `applyWorkspaceRemoved`; a rejected request (no event will
@@ -90,7 +93,8 @@ treatment.
   hydrated at boot from `main.tsx`, best-effort writes, untrusted reads), a page reload — the rail
   looks the same after reloading. Rows whose persisted expansion outlives this client's fetched lists
   (a fresh reload) fetch their missing `workspace.list` lazily; an already-fetched list is refreshed on
-  an explicit expand gesture, never refetched in a loop. The active workspace must
+  an explicit expand gesture and by transport after a new welcome/reconnect generation, never refetched in
+  a loop. The active workspace must
   also stay visible: when `ProjectTree` mounts with an active workspace, or the active workspace's derived
   owning project changes or first becomes resolvable, it expands that parent project — this reveal applies
   *on top of* the persisted baseline (a persisted collapse never hides the active workspace). A manual collapse

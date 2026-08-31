@@ -15,10 +15,12 @@ import { errorText, getTransport } from "../transport";
 export function RenameWorkspaceDialog({
 	workspace,
 	open,
+	canSubmit,
 	onOpenChange,
 }: {
 	workspace: Workspace;
 	open: boolean;
+	canSubmit: boolean;
 	onOpenChange: (open: boolean) => void;
 }) {
 	const inputId = useId();
@@ -28,7 +30,7 @@ export function RenameWorkspaceDialog({
 	const [error, setError] = useState<string | null>(null);
 
 	const rename = async () => {
-		if (!name.trim() || renaming) return;
+		if (!canSubmit || !name.trim() || renaming) return;
 		setRenaming(true);
 		setError(null);
 		try {
@@ -107,7 +109,7 @@ export function RenameWorkspaceDialog({
 						<Button
 							type="submit"
 							data-testid="rename-workspace-submit"
-							disabled={renaming || !name.trim()}
+							disabled={!canSubmit || renaming || !name.trim()}
 						>
 							{renaming ? <Loader2 className="size-14 animate-spin" /> : null}
 							Rename

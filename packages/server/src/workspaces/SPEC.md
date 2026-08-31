@@ -75,8 +75,17 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   the pre-await snapshot is stale by then, and saving it would clobber a concurrent list's Default-ensure
   (same discipline as `renameWorkspace`'s re-load after its git subprocess)),
   `renameWorkspace` (**sync**; sets the **display `name`** (sanitized, casing preserved) and derives the
-  **git branch** from it via `toBranch`, uniqued against refs + worktree dirs, `git branch -m` from the
-  project repo — the branch ref moves and the worktree's HEAD follows, but the **worktree dir never moves**
+  **git branch** from it via `toBranch`, uniqued against refs + worktree dirs; before mutation it verifies
+  that the managed worktree's current symbolic branch still equals the persisted source branch and rejects
+  an out-of-band switch or detached HEAD rather than rename an inactive ref and publish a false checkout.
+  A branch known under any local remote-tracking ref **or carrying branch upstream config** is also rejected;
+  this probe runs from the managed worktree so `extensions.worktreeConfig` cannot hide a per-worktree upstream
+  (the config covers a successful `push --set-upstream` when a narrowed fetch refspec deliberately does not
+  materialize that tracking ref). V1 does not migrate published branches, because moving only the local ref
+  would orphan the branch identity used by an existing PR and let `pr.open`
+  create a duplicate. `git branch -m` runs from the project repo, then the checkout is revalidated before any
+  record save/event; a concurrent switch makes the host roll the moved ref back and reject (a failed rollback
+  is reported as such). The branch ref moves and the worktree's HEAD follows, but the **worktree dir never moves**
   (pi keys sessions by exact cwd; terminals/tabs are cwd'd there — the stale dir name is the accepted cost);
   **`name` and `branch` deliberately differ** (e.g. `Fix Auth Redirect` / `fix-auth-redirect`) — the name
   is display-only, never a path/id; only the branch is uniqued (display names may repeat, the branch
