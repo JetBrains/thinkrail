@@ -665,8 +665,6 @@ test("when reflection refutes every candidate, no empty fix request is sent — 
 		await new Promise((resolve) => setTimeout(resolve, 20));
 	}
 
-	// sendReflectedFix now reads the snapshot asynchronously — wait for its effect to land before
-	// asserting on it.
 	const settleDeadline = Date.now() + 5000;
 	while (todoReviewAutoCycles(ref) !== 2) {
 		if (Date.now() > settleDeadline) throw new Error("sendReflectedFix never settled");
