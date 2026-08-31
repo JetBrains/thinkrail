@@ -33,8 +33,26 @@ ref off the workspace-create critical path.
   execution failure, so semantic probes can distinguish "ref absent" from "Git never answered". The
   reads take that same 55s default (`opts.timeoutMs` overrides it): a local read that has to be *bounded*
   at all is a wedged git, and every one of them was unbounded before it moved off the loop;
-  **`remoteTrackingRef(ref)`** → `refs/remotes/<ref>` for an `origin/` ref, else `null` — **the one place
-  that spelling is built**, so the probe below and `workspaces`' `worktree add` cannot drift apart. Its
+  **`remoteTrackingRef(ref, remotes)`** → `refs/remotes/<ref>` when the ref's first component names one
+  of the repository's remotes (`remoteNameOf`, fed by `listRemotes`), else `null` — **the one place that
+  spelling is built**, so the probe below and `workspaces`' `worktree add` cannot drift apart.
+  Remote-ness is decided against the actual remote list, never the string's shape: `upstream/main` and a
+  local `feature/main` are the same shape, and a repository with a fork workflow lives on two remotes —
+  hiding every remote but `origin` hid the one ref such a repo branches from. So `listBranches`
+  enumerates all of `refs/remotes` (each remote's HEAD symref skipped), `prefetchBranch` fetches from
+  whichever remote the ref names, `workspaces`' create fetches its base from that same remote and names it
+  in the failure, and `resolveDefaultBranch` asks origin's HEAD first, any other remote's only when origin
+  has none, then the `origin/main` guess. **Its spawn budget is the constraint, not a detail** — it is one
+  of the sync leaf helpers below, called from async `listBranches` and from every Default-workspace
+  `folderTruth`, and an extra sync spawn there is loop time every workspace listing pays. So it stays at
+  the counts it had when it knew only origin: origin's HEAD is a lone **`symbolic-ref`** (the answer
+  almost always, and the only read that sees a *dangling* `refs/remotes/origin/HEAD` — a target-deleted
+  symref, which `for-each-ref` omits as broken, and the case `workspaces`' create fetch-failure path
+  exists for), and a single **`for-each-ref refs/remotes`** then answers *both* remaining questions at
+  once: any other remote's HEAD (a row carrying a symref), else whether `origin/main` is present (a row
+  that does not), replacing the `remoteRefOid` probe that used to ask the second alone. A dangling HEAD on
+  a *non-origin* remote is the one thing that enumeration cannot see, and it degrades to the guess —
+  the behaviour every non-origin remote already had. Its
   reach is **creation only**, and `resolveDiffRange` is the named survivor: `diffBaseRef` hands git the
   `origin/<b>` shorthand recorded in `baseBranch`, so in the very setup create now guards against — a local
   branch literally named `origin/main` — the worktree is cut from `refs/remotes/origin/main` while the diff
@@ -42,7 +60,9 @@ ref off the workspace-create critical path.
   ref, so qualifying it is a change to what a *pinned* base means, not a spelling fix;
   **`remoteRefOid(repoPath, ref)`** → the oid `refs/remotes/<ref>` resolves to, or `null` — **the one way
   to ask whether a remote-tracking ref is present**, shared by `prefetchBranch` (which compares oids to
-  report `moved`), `resolveDefaultBranch`'s `origin/main` fallback, and `workspaces`' create fallback. It
+  report `moved`) and `workspaces`' create fallback. It
+  gates on `isSafeRef` rather than the remote list, because whether the tracking ref *resolves* is the
+  whole of what it answers and such a ref outlives the remote's configuration. It
   probes the **full** `refs/remotes/` path behind
   `--end-of-options`: the `origin/<b>` shorthand goes through git's disambiguation and can resolve to a
   tag or a local branch of that name, so the call sites would have raced over different objects. "One way"
@@ -138,9 +158,12 @@ ref off the workspace-create critical path.
   remote-tracking ref, no network), `null` only when that ref doesn't exist (never pushed); timeout/launch
   failures throw, and a normal nonzero with a still-present ref throws instead of impersonating absence — the host's
   `workspace.openReview` composes it onto an open review (in parallel with the gh lookup, not after
-  it) so the plan page can flag commits the PR doesn't have yet; `listBranches(projectId)` → `{ local, remote,
-  defaultBranch }` (local `refs/heads`, remote `refs/remotes/origin` minus `origin/HEAD`, default =
-  `origin/HEAD`→`origin/main`→repo `HEAD`; either ref-list failure throws, never a successful partial catalog),
+  it) so the plan page can flag commits the PR doesn't have yet — the `origin/` here is the second
+  deliberate survivor of the all-remotes sweep, because it asks where *this* workspace's own branch was
+  pushed, not which remote a base was branched from; `listBranches(projectId)` → `{ local, remote,
+  defaultBranch }` (local `refs/heads`, remote all of `refs/remotes` minus each remote's `HEAD` symref,
+  default = any remote's `HEAD` with origin first→`origin/main`→repo `HEAD`; either ref-list failure
+  throws, never a successful partial catalog),
   **`resolveDefaultBranch(repoPath)`** — that default-branch
   resolution factored out (named once), shared by `listBranches` and the `workspaces` module's
   Default-workspace ensure (its `baseBranch`); its last fallback is `currentBranch`, so an unborn `HEAD`
@@ -201,7 +224,7 @@ ref off the workspace-create critical path.
   `gitCommitPaths`, `gitHeadSha`, `listCommits`,
   `resolveDiffRange`, `changedFileArgs`, `diffBaseRef`, `resolveCommitOid`, `DiffRange`, `isSafeRef`,
   `assertSafeRef`, `listBranches`, `resolveDefaultBranch`, `tryCurrentBranch`, `currentBranch`,
-  `canonicalPath`, `prefetchBranch`, `countUnpushedCommits`.
+  `canonicalPath`, `prefetchBranch`, `countUnpushedCommits`, `listRemotes`, `remoteNameOf`.
 - **Allowed deps:** `persistence` (workspace + project lookup), `log`; `contracts` (`Git*`/`BranchList` types);
   `subprocess` (`runBounded`, the bounded child behind `gitAsync`);
   `@thinkrail/shared/codedError` (naming a failure for the wire); Bun (spawn, for the sync runner).

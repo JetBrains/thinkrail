@@ -186,8 +186,17 @@ treatment.
   used by both the flat list's path rows and the diff header's path chip. The **branch combobox** is the
   shared **`BranchPicker`** (searchable, grouped Remote/Local, current pick check-marked, refreshed on every
   open with an explicit Refresh control as well) — one component for the New-Workspace dialog's *base* branch
-  and the Changes header's *target* branch; the whole state *around* it — the list, `refreshing`, `refresh()` —
-  is the shared
+  and the Changes header's *target* branch. **Remote is two layers, Local one**: a `Remote` heading over one
+  nested group per remote (`origin`, `upstream`, from the pure `branchGroups.ts`' `groupBranchesByRemote`,
+  unit-tested — first-seen remote order, branch order kept), whose rows carry the branch alone because the
+  heading above them already names the remote. A fork works two remotes, so a list that shows only `origin`
+  hides the ref it branches from. The full ref stays each row's `value` and `data-branch`, so searching
+  `upstream/main` still finds it and the trigger still names the remote it picked. The nesting is **cmdk
+  groups inside cmdk groups, never a plain wrapper**: cmdk re-parents every `[cmdk-group]` to the list root
+  on each sort, so a `div` around them is torn out, while a nested group is kept inside its parent's items.
+  Only the leaf groups register items, so the `Remote` parent would hide itself the moment a search runs —
+  it is `forceMount`ed and instead hides on `not-has-[[cmdk-group]:not([hidden])]`, i.e. exactly when cmdk
+  has hidden every remote under it. The whole state *around* it — the list, `refreshing`, `refresh()` — is the shared
   **`useBranchList(projectId, onLoaded?)`** (`branches.ts`, over the offline-degrading
   `listBranchesOrEmpty`), so both pickers are identical **by construction**: the list is **keyed to the
   project** (it clears on a project change, and both reads are generation-stamped, so a switch can never

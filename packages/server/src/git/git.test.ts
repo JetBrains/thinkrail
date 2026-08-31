@@ -213,6 +213,56 @@ test("listBranches surfaces origin branches and the origin default", async () =>
 	expect(defaultBranch).toBe("origin/main");
 });
 
+function addSecondRemote(): void {
+	const originRepo = join(dataDir, "origin.git");
+	const upstreamRepo = join(dataDir, "upstream.git");
+	git(repo, "init", "--bare", originRepo);
+	git(repo, "init", "--bare", upstreamRepo);
+	git(repo, "remote", "add", "origin", originRepo);
+	git(repo, "remote", "add", "upstream", upstreamRepo);
+	git(repo, "push", "origin", "main");
+	git(repo, "push", "upstream", "main:trunk");
+	git(repo, "fetch", "upstream");
+	git(repo, "remote", "set-head", "upstream", "trunk");
+}
+
+test("listBranches lists every remote's branches, each remote's HEAD symref dropped", async () => {
+	addSecondRemote();
+
+	const { remote } = await listBranches("p1");
+	expect(remote).toContain("origin/main");
+	expect(remote).toContain("upstream/trunk");
+	expect(remote).not.toContain("upstream/HEAD");
+	expect(remote).not.toContain("origin/HEAD");
+});
+
+test("another remote's HEAD is the default when origin has none, over the origin/main guess", async () => {
+	addSecondRemote();
+
+	expect((await listBranches("p1")).defaultBranch).toBe("upstream/trunk");
+
+	git(repo, "remote", "set-head", "origin", "main");
+	expect((await listBranches("p1")).defaultBranch).toBe("origin/main");
+});
+
+test("a remote HEAD still answers once its target is gone, so create can report the failed fetch", async () => {
+	addSecondRemote();
+	git(repo, "remote", "set-head", "origin", "main");
+	git(repo, "update-ref", "-d", "refs/remotes/origin/main");
+
+	expect((await listBranches("p1")).defaultBranch).toBe("origin/main");
+});
+
+test("prefetch fetches from the remote the ref names, and refuses a remote-shaped local branch", async () => {
+	addSecondRemote();
+
+	git(repo, "update-ref", "-d", "refs/remotes/upstream/trunk");
+	expect(await prefetchBranch("p1", "upstream/trunk")).toEqual({ ok: true, moved: true });
+
+	git(repo, "branch", "upstairs/trunk");
+	expect(await prefetchBranch("p1", "upstairs/trunk")).toEqual({ ok: false, moved: false });
+});
+
 test("listBranches throws on an unknown project", async () => {
 	await expect(listBranches("nope")).rejects.toThrow(/Unknown project/);
 });

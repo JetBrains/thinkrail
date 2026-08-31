@@ -218,7 +218,7 @@ export function NewWorkspaceDialog({
 	}, [open, model, thinkingLevel]);
 
 	const prefetchBase = (ref: string) => {
-		if (!ref.startsWith("origin/")) return;
+		if (!branches?.remote.includes(ref)) return;
 		getTransport()
 			.request("git.prefetch", { projectId: selectedProjectId, ref })
 			.catch(() => {});

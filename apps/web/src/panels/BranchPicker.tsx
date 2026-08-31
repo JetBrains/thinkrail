@@ -15,6 +15,7 @@ import {
 	CommandList,
 } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { groupBranchesByRemote } from "./branchGroups";
 
 export function BranchPicker({
 	branches,
@@ -42,7 +43,7 @@ export function BranchPicker({
 	const local = branches?.local ?? [];
 	const defaultBranch = branches?.defaultBranch;
 
-	const renderItem = (ref: string) => (
+	const renderItem = (ref: string, label = ref) => (
 		<CommandItem
 			key={ref}
 			value={ref}
@@ -58,7 +59,7 @@ export function BranchPicker({
 				{ref === selected ? <Check className="size-14 text-primary" /> : null}
 			</span>
 			<GitBranch className="size-14 shrink-0 text-text-muted" />
-			<span className="truncate tr-text-metadata">{ref}</span>
+			<span className="truncate tr-text-metadata">{label}</span>
 			{ref === defaultBranch ? (
 				<span className="ml-auto shrink-0 text-text-muted tr-text-metadata">default</span>
 			) : null}
@@ -97,10 +98,20 @@ export function BranchPicker({
 					<CommandList>
 						<CommandEmpty>No branches found.</CommandEmpty>
 						{remote.length > 0 ? (
-							<CommandGroup heading="Remote">{remote.map(renderItem)}</CommandGroup>
+							<CommandGroup
+								heading="Remote"
+								forceMount
+								className="not-has-[[cmdk-group]:not([hidden])]:hidden"
+							>
+								{groupBranchesByRemote(remote).map((group) => (
+									<CommandGroup key={group.remote} heading={group.remote} className="pl-8">
+										{group.branches.map(({ ref, name }) => renderItem(ref, name))}
+									</CommandGroup>
+								))}
+							</CommandGroup>
 						) : null}
 						{local.length > 0 ? (
-							<CommandGroup heading="Local">{local.map(renderItem)}</CommandGroup>
+							<CommandGroup heading="Local">{local.map((ref) => renderItem(ref))}</CommandGroup>
 						) : null}
 					</CommandList>
 				</Command>
