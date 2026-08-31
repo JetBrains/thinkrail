@@ -416,34 +416,33 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     foreign parent id gets the same not-found code, leaving the child untouched), then the core
     handle's `abort()` — the web dialog's Stop control for a live background run (test-pinned in both
     directions).
-    **Undelivered-completion sweep** (`sweepUndeliveredCompletions`): pi-subagents' background
-    completion delivery is a queued in-memory followUp, lost when Stop-with-restore drains pi's
-    queues (`clearQueue` also clears the agent-level lanes the host's text mirror never sees) and
-    suppressed forever once a `session.reload()` flips the old extension closure's `shuttingDown`.
-    The delivery record is the parent transcript itself — a `subagent-completion` custom message
-    whose `details.childSessionId` matches — so on every parent `agent_settled` (tombstone-gated,
-    fire-and-forget) and once after `reloadSessionResources`, the host re-delivers, via the public
-    `sendCustomMessage({triggerTurn: true})` and the same content shape as the extension
-    (`boundedText` + tag imported from `pi-subagents`), for exactly the children that are
-    terminal, uncollected, background-acked (their persisted `Agent` toolResult carries
-    run details with a **non-terminal** status — a foreground result's details are terminal, which is
-    what keeps foreground outcomes out of the sweep), and absent from the transcript. The whole sweep
-    skips while `agent.hasQueuedMessages()` — a queued-but-not-yet-drained completion must not be
-    double-delivered (pi itself delivers a queued completion as a post-abort continuation, pinned
-    exactly-once). Residual: a completion suppressed by a mid-run reload lands at the parent's *next*
-    settle or reload, not instantly — deliberate; no hook fires on a bare run-terminal without racing
-    the extension's own delivery.
-    **Delete/dispose emit `session_shutdown`**: the host never emitted it, so pi-subagents'
-    shutting-down suppression was dead here — a background child completing during
-    `runDeleteTransaction`'s trash await triggered a billed provider turn on the chat being deleted.
-    `disposeSession` now emits `{type: "session_shutdown", reason: "quit"}` through the session's
-    public extension runner before disposing (once per entry, error-swallowed), and the delete
-    transaction emits it explicitly after quiesce and **before the trash window** (test-pinned via a
-    gated trash seam: a child completing mid-trash produces no provider request). Residuals,
-    deliberate: a *failed* trash rolls the tombstone back but cannot un-emit — that chat's subagent
-    tools stay declined until re-open; and `settleSessionsForShutdown`/`disposeAllSessions` still
-    start cascades without emitting or quiescing parents — bounded by imminent process exit, while
-    every user-reachable path (delete, remove, archive) holds quiesce-then-cascade.
+    **Host-owned background completion delivery** (`sweepUndeliveredCompletions`): the embedded
+    pi-subagents extension routes terminal background runs into the workspace delegation state's
+    completion sink instead of sending independently. That sink, parent `agent_settled`, and
+    `reloadSessionResources` all request the same per-parent single-flight sweep; a request arriving
+    during a pass marks it dirty so one fresh pass follows rather than being lost behind stale checks.
+    The delivery record remains the parent transcript — a `subagent-completion` custom message whose
+    `details.childSessionId` matches — and the pass re-reads every eligibility fact while it owns the
+    flight: the live parent session, deletion quiescence, queued-message state, child terminal/uncollected
+    snapshot, non-terminal background acknowledgement, and absence of a completion record. It sends via
+    public `sendCustomMessage({triggerTurn: true})` with the extension's exact bounded content shape.
+    Serializing the check and send removes direct-vs-sweep and sweep-vs-sweep duplicate provider turns;
+    no permanent in-memory delivered bit is used, because Stop-with-restore may drain a queued completion
+    before it reaches the transcript and a later settle must retry it. A completion whose child terminates
+    before its Agent tool result is persisted is picked up by the parent settle's fresh pass. Host restart
+    still loses the run registry by accepted design; the child transcript remains.
+    **Delete quiescence and final `session_shutdown`**: recoverable chat deletion installs the session
+    tombstone and a reversible parent quiescence gate before its first await. The embedded Agent tool
+    checks that gate before assembly and again after `createChild`; a child assembled across the boundary
+    is disposed without running. Both terminal completion delivery and recovery sweeps decline while the
+    gate is held, so a background child completing during the OS-trash await cannot trigger a billed
+    parent turn. Trash failure removes the tombstone, releases quiescence, and requests a completion
+    sweep while retaining the unchanged extension runner — Agent tools and eventual completion delivery
+    are fully restored. Only a successful trash (or an ordinary irreversible dispose) emits
+    `{type: "session_shutdown", reason: "quit"}` through the public extension runner before the existing
+    child cascade; the entry's once guard prevents a duplicate emission. `settleSessionsForShutdown` and
+    `disposeAllSessions` still start cascades without quiescing parents — bounded by imminent process exit,
+    while every user-reachable delete/remove/archive path owns a quiesce-or-shutdown cascade.
     Children opting into extensions
     (`extensions: true` in their definition) get the **curated child set**
     (`childExtensionFactories` in `extensions`): the headless-search policy + the

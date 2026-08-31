@@ -53,6 +53,11 @@ interface ChildEntry {
 	disposed: boolean;
 }
 
+interface ParentCreationFence {
+	readonly assemblies: Set<Promise<void>>;
+	disposal?: Promise<void>;
+}
+
 function abortActiveRun(entry: ChildEntry): Promise<void> {
 	const activeRun = entry.activeRun;
 	if (!activeRun) return Promise.resolve();
@@ -154,10 +159,17 @@ function lastAssistant(session: AgentSession, fromIndex: number): AssistantMessa
 	return undefined;
 }
 
-function notifyUpdate(opts: RunOptions, details: DelegationRunDetails): void {
+function invokeIsolated(callback: () => unknown): void {
 	try {
-		opts.onUpdate?.(details);
+		const result = callback();
+		if (result !== null && (typeof result === "object" || typeof result === "function")) {
+			void Promise.resolve(result).catch(() => {});
+		}
 	} catch {}
+}
+
+function notifyUpdate(opts: RunOptions, details: DelegationRunDetails): void {
+	if (opts.onUpdate) invokeIsolated(() => opts.onUpdate?.(details));
 }
 
 function textOf(message: AssistantMessage | undefined): string | undefined {
@@ -179,6 +191,7 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 	const byParent = new Map<string, Set<string>>();
 	const semaphores = new Map<string, Semaphore>();
 	const lifecycleListeners = new Set<(e: LifecycleEvent) => void>();
+	const parentCreationFences = new Map<string, ParentCreationFence>();
 
 	const fallbackRuntimes = new Map<
 		string,
@@ -243,16 +256,8 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 	}
 
 	function emit(event: LifecycleEvent, entry: ChildEntry): void {
-		for (const listener of lifecycleListeners) {
-			try {
-				listener(event);
-			} catch {}
-		}
-		for (const listener of entry.listeners) {
-			try {
-				listener(event);
-			} catch {}
-		}
+		for (const listener of lifecycleListeners) invokeIsolated(() => listener(event));
+		for (const listener of entry.listeners) invokeIsolated(() => listener(event));
 	}
 
 	function buildDetails(
@@ -576,93 +581,215 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 		};
 	}
 
-	async function createChild(spec: CreateChildSpec): Promise<ChildHandle> {
-		const options = assertV1Combination(spec);
-		const parent = bindings.resolveParent(spec.parent);
-		if (!parent) {
-			throw new DelegationError(
-				"unknown-parent",
-				`Parent session ${spec.parent} is not live — children derive their defaults from a live parent`,
-			);
+	function parentFenceFor(parentSessionId: string): ParentCreationFence {
+		let fence = parentCreationFences.get(parentSessionId);
+		if (!fence) {
+			fence = { assemblies: new Set() };
+			parentCreationFences.set(parentSessionId, fence);
 		}
-		const runtime = parent.modelRuntime ?? (await getFallbackRuntime(spec.parent, parent));
-		const model = options.model
-			? runtime.getModel(options.model.provider, options.model.id)
-			: parent.model;
-		if (options.model && !model) {
-			throw new DelegationError(
-				"unknown-model",
-				`Unknown model ${options.model.provider}/${options.model.id} — resolve against available models before createChild`,
-			);
-		}
-		const thinkingLevel = options.thinkingLevel ?? parent.thinkingLevel;
-		const cwd = parent.cwd;
+		return fence;
+	}
 
-		const settingsManager = bindings.settingsManager?.(cwd) ?? SettingsManager.create(cwd);
-		const skills = options.skills ?? [];
-		const systemPrompt = options.systemPrompt;
-		const childFactories =
-			options.extensions === true ? (bindings.childExtensionFactories ?? []) : [];
-		const resourceLoader = new DefaultResourceLoader({
-			cwd,
-			agentDir: getAgentDir(),
-			settingsManager,
-			noExtensions: true,
-			...(childFactories.length > 0 ? { extensionFactories: childFactories } : {}),
-			noPromptTemplates: true,
-			noThemes: true,
-			...(options.contextFiles === true ? {} : { noContextFiles: true }),
-			...(systemPrompt !== undefined ? { systemPromptOverride: () => systemPrompt } : {}),
-			skillsOverride: (current) => ({
-				skills: current.skills.filter((skill) => skills.includes(skill.name)),
-				diagnostics: current.diagnostics,
-			}),
+	function parentDisposedError(parentSessionId: string): DelegationError {
+		return new DelegationError(
+			"disposed",
+			`Parent ${parentSessionId} is being disposed and is not accepting child creation`,
+		);
+	}
+
+	function assertCreationOpen(parentSessionId: string, fence: ParentCreationFence): void {
+		if (fence.disposal) throw parentDisposedError(parentSessionId);
+	}
+
+	async function assembleChild(
+		spec: CreateChildSpec,
+		options: SessionOptions,
+		fence: ParentCreationFence,
+	): Promise<ChildHandle> {
+		let session: AgentSession | undefined;
+		try {
+			const parent = bindings.resolveParent(spec.parent);
+			if (!parent) {
+				throw new DelegationError(
+					"unknown-parent",
+					`Parent session ${spec.parent} is not live — children derive their defaults from a live parent`,
+				);
+			}
+			assertCreationOpen(spec.parent, fence);
+			const runtime = parent.modelRuntime ?? (await getFallbackRuntime(spec.parent, parent));
+			assertCreationOpen(spec.parent, fence);
+			const model = options.model
+				? runtime.getModel(options.model.provider, options.model.id)
+				: parent.model;
+			if (options.model && !model) {
+				throw new DelegationError(
+					"unknown-model",
+					`Unknown model ${options.model.provider}/${options.model.id} — resolve against available models before createChild`,
+				);
+			}
+			const thinkingLevel = options.thinkingLevel ?? parent.thinkingLevel;
+			const cwd = parent.cwd;
+
+			const settingsManager = bindings.settingsManager?.(cwd) ?? SettingsManager.create(cwd);
+			const skills = options.skills ?? [];
+			const systemPrompt = options.systemPrompt;
+			const childFactories =
+				options.extensions === true ? (bindings.childExtensionFactories ?? []) : [];
+			const resourceLoader = new DefaultResourceLoader({
+				cwd,
+				agentDir: getAgentDir(),
+				settingsManager,
+				noExtensions: true,
+				...(childFactories.length > 0 ? { extensionFactories: childFactories } : {}),
+				noPromptTemplates: true,
+				noThemes: true,
+				...(options.contextFiles === true ? {} : { noContextFiles: true }),
+				...(systemPrompt !== undefined ? { systemPromptOverride: () => systemPrompt } : {}),
+				skillsOverride: (current) => ({
+					skills: current.skills.filter((skill) => skills.includes(skill.name)),
+					diagnostics: current.diagnostics,
+				}),
+			});
+			await resourceLoader.reload();
+			assertCreationOpen(spec.parent, fence);
+
+			const sessionDir = delegationSessionDir(delegationRoot, scope, spec.parent);
+			const created = await createAgentSession({
+				cwd,
+				modelRuntime: runtime,
+				sessionManager: SessionManager.create(cwd, sessionDir),
+				settingsManager,
+				resourceLoader,
+				...(model ? { model } : {}),
+				...(thinkingLevel !== undefined ? { thinkingLevel } : {}),
+				...(options.tools !== undefined ? { tools: options.tools } : {}),
+				...(options.excludeTools !== undefined ? { excludeTools: options.excludeTools } : {}),
+			});
+			session = created.session;
+			assertCreationOpen(spec.parent, fence);
+			if (childFactories.length > 0) {
+				await session.bindExtensions({ mode: "print" });
+				assertCreationOpen(spec.parent, fence);
+			}
+
+			const record: SpawnRecord = {
+				sessionId: session.sessionId,
+				parentSessionId: spec.parent,
+				scope,
+				originKind: "fresh",
+				info: spec.info,
+				interactive: false,
+				visibility: "hidden",
+				createdAt: new Date().toISOString(),
+				sessionFile: session.sessionManager.getSessionFile() ?? "",
+			};
+			const entry: ChildEntry = {
+				record,
+				session,
+				listeners: new Set(),
+				disposed: false,
+			};
+			const handle = makeHandle(entry);
+			entry.handle = handle;
+			session = undefined;
+
+			children.set(record.sessionId, entry);
+			let siblings = byParent.get(spec.parent);
+			if (!siblings) {
+				siblings = new Set();
+				byParent.set(spec.parent, siblings);
+			}
+			siblings.add(record.sessionId);
+			emit({ type: "child-created", record }, entry);
+			return handle;
+		} catch (error) {
+			try {
+				session?.dispose();
+			} catch {}
+			throw error;
+		}
+	}
+
+	function createChild(spec: CreateChildSpec): Promise<ChildHandle> {
+		const currentFence = parentCreationFences.get(spec.parent);
+		if (currentFence?.disposal) return Promise.reject(parentDisposedError(spec.parent));
+		let options: SessionOptions;
+		try {
+			options = assertV1Combination(spec);
+		} catch (error) {
+			return Promise.reject(error);
+		}
+		const fence = currentFence ?? parentFenceFor(spec.parent);
+		let resolveSettled = () => {};
+		const settled = new Promise<void>((resolve) => {
+			resolveSettled = resolve;
 		});
-		await resourceLoader.reload();
-
-		const sessionDir = delegationSessionDir(delegationRoot, scope, spec.parent);
-		const { session } = await createAgentSession({
-			cwd,
-			modelRuntime: runtime,
-			sessionManager: SessionManager.create(cwd, sessionDir),
-			settingsManager,
-			resourceLoader,
-			...(model ? { model } : {}),
-			...(thinkingLevel !== undefined ? { thinkingLevel } : {}),
-			...(options.tools !== undefined ? { tools: options.tools } : {}),
-			...(options.excludeTools !== undefined ? { excludeTools: options.excludeTools } : {}),
+		fence.assemblies.add(settled);
+		const assembly = assembleChild(spec, options, fence);
+		void assembly.then(resolveSettled, resolveSettled);
+		void settled.then(() => {
+			fence.assemblies.delete(settled);
+			if (
+				fence.assemblies.size === 0 &&
+				!fence.disposal &&
+				parentCreationFences.get(spec.parent) === fence
+			) {
+				parentCreationFences.delete(spec.parent);
+			}
 		});
-		if (childFactories.length > 0) await session.bindExtensions({ mode: "print" });
+		return assembly;
+	}
 
-		const record: SpawnRecord = {
-			sessionId: session.sessionId,
-			parentSessionId: spec.parent,
-			scope,
-			originKind: "fresh",
-			info: spec.info,
-			interactive: false,
-			visibility: "hidden",
-			createdAt: new Date().toISOString(),
-			sessionFile: session.sessionManager.getSessionFile() ?? "",
-		};
-		const entry: ChildEntry = {
-			record,
-			session,
-			listeners: new Set(),
-			disposed: false,
-		};
-		const handle = makeHandle(entry);
-		entry.handle = handle;
-
-		children.set(record.sessionId, entry);
-		let siblings = byParent.get(spec.parent);
-		if (!siblings) {
-			siblings = new Set();
-			byParent.set(spec.parent, siblings);
+	async function settleParentDisposal(
+		parentSessionId: string,
+		assemblies: Promise<void>[],
+		teardowns: Promise<void>[],
+	): Promise<void> {
+		try {
+			await Promise.all(assemblies);
+			const results = await Promise.allSettled(teardowns);
+			const rejected = results.find(
+				(result): result is PromiseRejectedResult => result.status === "rejected",
+			);
+			if (rejected) throw rejected.reason;
+		} finally {
+			byParent.delete(parentSessionId);
+			semaphores.delete(parentSessionId);
+			fallbackRuntimes.delete(parentSessionId);
 		}
-		siblings.add(record.sessionId);
-		emit({ type: "child-created", record }, entry);
-		return handle;
+	}
+
+	function disposeChildrenOf(parentSessionId: string): Promise<void> {
+		const fence = parentFenceFor(parentSessionId);
+		if (fence.disposal) return fence.disposal;
+		let resolveDisposal = () => {};
+		let rejectDisposal = (_error: unknown) => {};
+		const disposal = new Promise<void>((resolve, reject) => {
+			resolveDisposal = resolve;
+			rejectDisposal = reject;
+		});
+		fence.disposal = disposal;
+
+		const entries = [...(byParent.get(parentSessionId) ?? [])].flatMap((id) => {
+			const entry = children.get(id);
+			return entry ? [entry] : [];
+		});
+		const assemblies = [...fence.assemblies];
+		for (const entry of entries) entry.disposed = true;
+		for (const entry of entries) void abortActiveRun(entry).catch(() => {});
+		const teardowns = entries.map(disposeChild);
+		const settling = settleParentDisposal(parentSessionId, assemblies, teardowns);
+		void settling.then(resolveDisposal, rejectDisposal);
+
+		const reopen = () => {
+			if (fence.disposal !== disposal) return;
+			delete fence.disposal;
+			if (fence.assemblies.size === 0 && parentCreationFences.get(parentSessionId) === fence) {
+				parentCreationFences.delete(parentSessionId);
+			}
+		};
+		void disposal.then(reopen, reopen);
+		return disposal;
 	}
 
 	return {
@@ -682,17 +809,6 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 			lifecycleListeners.add(listener);
 			return () => lifecycleListeners.delete(listener);
 		},
-		disposeChildrenOf: async (parentSessionId) => {
-			const entries = [...(byParent.get(parentSessionId) ?? [])].flatMap((id) => {
-				const entry = children.get(id);
-				return entry ? [entry] : [];
-			});
-			for (const entry of entries) entry.disposed = true;
-			for (const entry of entries) void abortActiveRun(entry).catch(() => {});
-			await Promise.all(entries.map(disposeChild));
-			byParent.delete(parentSessionId);
-			semaphores.delete(parentSessionId);
-			fallbackRuntimes.delete(parentSessionId);
-		},
+		disposeChildrenOf,
 	};
 }

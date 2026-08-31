@@ -8,6 +8,7 @@ export {
 	parseAgentDefinition,
 } from "./src/definitions";
 export {
+	type BackgroundCompletionDelivery,
 	boundedText,
 	createSubagentsExtension,
 	SUBAGENT_COMPLETION_MESSAGE,

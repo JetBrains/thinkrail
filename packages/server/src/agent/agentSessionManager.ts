@@ -39,6 +39,7 @@ import { logger } from "../log";
 import { ANSWERABILITY_ERRORS, assessAnswerability, buildAnswersMessage } from "./askUserQuestion";
 import {
 	disposeSessionChildren,
+	quiesceParentDelegation,
 	removeWorkspaceDelegation,
 	subagentsExtensionFor,
 	sweepUndeliveredCompletions,
@@ -929,10 +930,14 @@ export function isSessionStreaming(sessionId: string): boolean {
 	return mustGet(sessionId).isStreaming;
 }
 
+export function liveParentSessionForDelegation(sessionId: string): AgentSession | undefined {
+	if (hasDeletionTombstone(sessionId)) return undefined;
+	return sessions.get(sessionId)?.session;
+}
+
 export function liveParentContext(sessionId: string): ParentContext | undefined {
-	const entry = sessions.get(sessionId);
-	if (!entry) return undefined;
-	const { session } = entry;
+	const session = liveParentSessionForDelegation(sessionId);
+	if (!session) return undefined;
 	return {
 		cwd: session.sessionManager.getCwd(),
 		model: session.model,
@@ -1087,8 +1092,10 @@ async function runDeleteTransaction(
 ): Promise<void> {
 	const installedTombstone = !deletedSessions.has(sessionId);
 	deletedSessions.set(sessionId, workspaceId);
+	let releaseDelegation = () => {};
 	let liveEntry: Entry | undefined;
 	try {
+		releaseDelegation = quiesceParentDelegation(workspaceId, sessionId);
 		await attaching.get(sessionId)?.catch(() => {});
 		const entry = sessions.get(sessionId);
 		if (entry && entry.workspaceId !== workspaceId) {
@@ -1111,12 +1118,22 @@ async function runDeleteTransaction(
 				(candidate) => candidate.id === sessionId && candidate.cwd === cwd,
 			)?.path;
 		}
-		if (liveEntry) await emitSessionShutdown(liveEntry);
 		if (path && existsSync(path)) await trashFile(path);
 	} catch (error) {
 		if (installedTombstone) deletedSessions.delete(sessionId);
+		releaseDelegation();
+		if (liveEntry && sessions.get(sessionId) === liveEntry) {
+			void sweepUndeliveredCompletions(workspaceId, sessionId, liveEntry.session).catch(() => {});
+		}
 		throw error;
 	}
-	if (liveEntry && sessions.get(sessionId) === liveEntry) await disposeSession(sessionId);
-	publishDeleted({ workspaceId, sessionId });
+	try {
+		if (liveEntry && sessions.get(sessionId) === liveEntry) {
+			await emitSessionShutdown(liveEntry);
+			await disposeSession(sessionId);
+		}
+		publishDeleted({ workspaceId, sessionId });
+	} finally {
+		releaseDelegation();
+	}
 }

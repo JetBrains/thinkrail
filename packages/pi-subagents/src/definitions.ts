@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
-import { CONFIG_DIR_NAME } from "@earendil-works/pi-coding-agent";
+import { CONFIG_DIR_NAME, parseFrontmatter } from "@earendil-works/pi-coding-agent";
 import { BUILTIN_AGENTS } from "./builtins";
 
 export interface AgentDefinition {
@@ -21,21 +21,27 @@ export interface AgentDefinition {
 
 const THINKING_LEVELS = new Set(["off", "minimal", "low", "medium", "high", "xhigh", "max"]);
 
-const LIST_VALUED_KEYS = new Set(["tools", "skills"]);
-
-function unquote(value: string): string {
-	const first = value[0];
-	return (first === '"' || first === "'") && value.length >= 2 && value.endsWith(first)
-		? value.slice(1, -1).trim()
-		: value;
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function parseNameList(value: string): string[] {
-	return value
-		.replace(/^\[|\]$/g, "")
-		.split(",")
-		.map((name) => name.trim().replace(/^["']|["']$/g, ""))
-		.filter((name) => name.length > 0);
+function nonEmptyString(value: unknown): string | undefined {
+	if (typeof value !== "string") return undefined;
+	const normalized = value.trim();
+	return normalized || undefined;
+}
+
+function parseNameList(value: unknown): string[] | undefined {
+	let values: string[];
+	if (typeof value === "string") {
+		values = value.split(",");
+	} else if (Array.isArray(value) && value.every((item) => typeof item === "string")) {
+		values = value;
+	} else {
+		return undefined;
+	}
+	const names = values.map((name) => name.trim());
+	return names.length > 0 && names.every((name) => name.length > 0) ? names : undefined;
 }
 
 export function parseAgentDefinition(
@@ -43,67 +49,52 @@ export function parseAgentDefinition(
 	source: AgentDefinition["source"],
 	filePath?: string,
 ): AgentDefinition | undefined {
-	const match = markdown.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/);
-	if (!match) return undefined;
-	const [, frontmatter = "", body = ""] = match;
-	const fields = new Map<string, string>();
-	const listFields = new Map<string, string[]>();
-	const lines = frontmatter.split(/\r?\n/);
-	for (let index = 0; index < lines.length; index++) {
-		const line = lines[index] ?? "";
-		const separator = line.indexOf(":");
-		if (separator <= 0) continue;
-		const key = line.slice(0, separator).trim();
-		if (!key) continue;
-		const value = unquote(line.slice(separator + 1).trim());
-		if (LIST_VALUED_KEYS.has(key)) {
-			const items = value ? parseNameList(value) : [];
-			while (value === "" && /^\s*-\s+/.test(lines[index + 1] ?? "")) {
-				index++;
-				const item = (lines[index] ?? "")
-					.replace(/^\s*-\s+/, "")
-					.trim()
-					.replace(/^["']|["']$/g, "");
-				if (item) items.push(item);
-			}
-			listFields.set(key, items);
-			continue;
-		}
-		if (value) fields.set(key, value);
-	}
-	const name = fields.get("name");
-	const description = fields.get("description");
-	const systemPrompt = body.trim();
-	if (!name || !description || !systemPrompt) return undefined;
+	try {
+		const { frontmatter: parsedFrontmatter, body } = parseFrontmatter(markdown);
+		const frontmatter: unknown = parsedFrontmatter;
+		if (!isRecord(frontmatter)) return undefined;
 
-	const tools = listFields.get("tools");
-	const skills = listFields.get("skills");
-	if (
-		(tools !== undefined && tools.length === 0) ||
-		(skills !== undefined && skills.length === 0)
-	) {
+		const name = nonEmptyString(frontmatter.name);
+		const description = nonEmptyString(frontmatter.description);
+		const systemPrompt = body.trim();
+		if (!name || !description || !systemPrompt) return undefined;
+
+		let tools: string[] | undefined;
+		if (Object.hasOwn(frontmatter, "tools")) {
+			tools = parseNameList(frontmatter.tools);
+			if (!tools) return undefined;
+		}
+
+		let skills: string[] | undefined;
+		if (Object.hasOwn(frontmatter, "skills")) {
+			skills = parseNameList(frontmatter.skills);
+			if (!skills) return undefined;
+		}
+
+		const model = nonEmptyString(frontmatter.model);
+		const thinking = frontmatter.thinking;
+		const maxTurns = frontmatter.max_turns;
+		return {
+			name,
+			description,
+			source,
+			...(filePath !== undefined ? { filePath } : {}),
+			...(tools !== undefined ? { tools } : {}),
+			...(model !== undefined ? { model } : {}),
+			...(typeof thinking === "string" && THINKING_LEVELS.has(thinking)
+				? { thinking: thinking as ThinkingLevel }
+				: {}),
+			...(typeof maxTurns === "number" && Number.isInteger(maxTurns) && maxTurns > 0
+				? { maxTurns }
+				: {}),
+			...(frontmatter.inherit_project_context === true ? { inheritProjectContext: true } : {}),
+			...(skills !== undefined ? { skills } : {}),
+			...(frontmatter.extensions === true ? { extensions: true } : {}),
+			systemPrompt,
+		};
+	} catch {
 		return undefined;
 	}
-
-	const thinking = fields.get("thinking");
-	const maxTurns = Number.parseInt(fields.get("max_turns") ?? "", 10);
-	const model = fields.get("model");
-	return {
-		name,
-		description,
-		source,
-		...(filePath !== undefined ? { filePath } : {}),
-		...(tools !== undefined ? { tools } : {}),
-		...(model !== undefined ? { model } : {}),
-		...(thinking !== undefined && THINKING_LEVELS.has(thinking)
-			? { thinking: thinking as ThinkingLevel }
-			: {}),
-		...(Number.isFinite(maxTurns) && maxTurns > 0 ? { maxTurns } : {}),
-		...(fields.get("inherit_project_context") === "true" ? { inheritProjectContext: true } : {}),
-		...(skills !== undefined ? { skills } : {}),
-		...(fields.get("extensions") === "true" ? { extensions: true } : {}),
-		systemPrompt,
-	};
 }
 
 function readDefinitionDir(dir: string, source: AgentDefinition["source"]): AgentDefinition[] {

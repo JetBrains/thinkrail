@@ -49,7 +49,7 @@ test("quoted scalar values register unquoted — a quoted name must still match 
 name: "my-agent"
 description: 'Does things'
 model: "claude-haiku-4-5"
-tools: "read", "grep"
+tools: "read, grep"
 ---
 
 Body.`,
@@ -80,16 +80,21 @@ Body.`,
 	expect(parsed?.skills).toEqual(["alpha"]);
 });
 
-test("a present tools:/skills: key with zero items fails closed — skipped, never unrestricted", () => {
-	expect(
-		parseAgentDefinition("---\nname: x\ndescription: y\ntools:\n---\nbody", "project"),
-	).toBeUndefined();
-	expect(
-		parseAgentDefinition("---\nname: x\ndescription: y\ntools: []\n---\nbody", "project"),
-	).toBeUndefined();
-	expect(
-		parseAgentDefinition("---\nname: x\ndescription: y\nskills:\nmodel: m\n---\nbody", "project"),
-	).toBeUndefined();
+test("present wrong-shaped tools/skills fail closed — skipped, never unrestricted", () => {
+	for (const field of [
+		"tools:",
+		"tools: []",
+		'tools: ""',
+		"tools: null",
+		"tools: { read: true }",
+		"tools: [read, 1]",
+		"tools: 1",
+		"skills: false",
+	]) {
+		expect(
+			parseAgentDefinition(`---\nname: x\ndescription: y\n${field}\n---\nbody`, "project"),
+		).toBeUndefined();
+	}
 });
 
 test("flow-style lists stay supported: bare and bracketed", () => {
@@ -99,16 +104,34 @@ test("flow-style lists stay supported: bare and bracketed", () => {
 	);
 	expect(bare?.tools).toEqual(["read", "grep"]);
 	const bracketed = parseAgentDefinition(
-		"---\nname: x\ndescription: y\ntools: [read, grep]\n---\nbody",
+		'---\nname: x\ndescription: y\ntools: ["read", "grep"]\n---\nbody',
 		"project",
 	);
 	expect(bracketed?.tools).toEqual(["read", "grep"]);
+});
+
+test("definitions with tools absent stay valid", () => {
+	const parsed = parseAgentDefinition("---\nname: x\ndescription: y\n---\nbody", "project");
+	expect(parsed?.name).toBe("x");
+	expect(parsed?.tools).toBeUndefined();
 });
 
 test("malformed definitions are skipped, never fatal", () => {
 	expect(parseAgentDefinition("just a body", "personal")).toBeUndefined();
 	expect(parseAgentDefinition("---\nname: x\n---\nbody", "personal")).toBeUndefined();
 	expect(parseAgentDefinition("---\nname: x\ndescription: y\n---\n", "personal")).toBeUndefined();
+	expect(
+		parseAgentDefinition(
+			'---\nname: x\ndescription: y\ntools: "read", "grep"\n---\nbody',
+			"personal",
+		),
+	).toBeUndefined();
+	expect(
+		parseAgentDefinition("---\nname: x\ndescription y\ntools: read\n---\nbody", "personal"),
+	).toBeUndefined();
+	expect(
+		parseAgentDefinition("---\nname: x\ndescription: y\ntools: [read, grep\n---\nbody", "personal"),
+	).toBeUndefined();
 	const parsed = parseAgentDefinition(
 		"---\nname: x\ndescription: y\nthinking: turbo\nmax_turns: many\n---\nbody",
 		"project",

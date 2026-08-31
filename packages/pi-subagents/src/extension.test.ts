@@ -20,7 +20,12 @@ import {
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import { createDelegationService, type DelegationService } from "pi-delegation";
-import { boundedText, createSubagentsExtension, SUBAGENT_COMPLETION_MESSAGE } from "./extension";
+import {
+	boundedText,
+	createSubagentsExtension,
+	SUBAGENT_COMPLETION_MESSAGE,
+	type SubagentsExtensionOptions,
+} from "./extension";
 
 function fauxCore(provider: string) {
 	return createFauxCore({
@@ -184,13 +189,13 @@ function lastToolResultText(session: AgentSession = parent): string {
 		.join("\n");
 }
 
-async function makeSession(): Promise<AgentSession> {
+async function makeSession(options: SubagentsExtensionOptions = {}): Promise<AgentSession> {
 	const settingsManager = SettingsManager.inMemory({});
 	const resourceLoader = new DefaultResourceLoader({
 		cwd: parentCwd,
 		agentDir: getAgentDir(),
 		settingsManager,
-		extensionFactories: [createSubagentsExtension({ service })],
+		extensionFactories: [createSubagentsExtension({ service, ...options })],
 		noPromptTemplates: true,
 		noThemes: true,
 		noContextFiles: true,
@@ -364,6 +369,123 @@ test("background: run_in_background returns immediately, completion arrives as a
 	expect(child?.collectResult()?.finalText).toBe("BG_RESULT");
 	expect(child?.snapshot?.collected).toBe(true);
 	await service.disposeChildrenOf(parent.sessionId);
+});
+
+test("an embedder completion sink replaces direct parent delivery", async () => {
+	const deliveries: Array<{
+		parentSessionId: string;
+		childSessionId: string;
+		finalText: string | undefined;
+	}> = [];
+	const session = await makeSession({
+		deliverBackgroundCompletion: (completion) => {
+			deliveries.push({
+				parentSessionId: completion.parentSessionId,
+				childSessionId: completion.childSessionId,
+				finalText: completion.outcome.finalText,
+			});
+		},
+	});
+	try {
+		fauxA.setResponses([
+			fauxAssistantMessage(
+				fauxToolCall("Agent", {
+					subagent_type: "bg-runner",
+					task: "Deliver through the host.",
+					run_in_background: true,
+				}),
+			),
+			fauxAssistantMessage("HOST_SINK_ACK"),
+		]);
+		fauxB.setResponses([fauxAssistantMessage("HOST_SINK_RESULT")]);
+
+		await session.prompt("Use the embedder sink.");
+		await waitFor(() => deliveries.length === 1);
+		expect(deliveries[0]?.parentSessionId).toBe(session.sessionId);
+		expect(deliveries[0]?.finalText).toBe("HOST_SINK_RESULT");
+		expect(JSON.stringify(session.messages)).not.toContain(SUBAGENT_COMPLETION_MESSAGE);
+	} finally {
+		session.dispose();
+		await service.disposeChildrenOf(session.sessionId);
+	}
+});
+
+test("a child assembled across embedder quiescence is disposed before it can run", async () => {
+	let quiesced = false;
+	let releaseChild = () => {};
+	const childGate = new Promise<void>((resolve) => {
+		releaseChild = resolve;
+	});
+	let markChildCreated = () => {};
+	const childCreated = new Promise<void>((resolve) => {
+		markChildCreated = resolve;
+	});
+	const delayedService: DelegationService = {
+		...service,
+		createChild: async (spec) => {
+			const child = await service.createChild(spec);
+			markChildCreated();
+			await childGate;
+			return child;
+		},
+	};
+	const session = await makeSession({
+		service: delayedService,
+		isParentQuiesced: () => quiesced,
+	});
+	try {
+		const childCallsBefore = fauxA.state.callCount;
+		fauxA.setResponses([
+			fauxAssistantMessage(fauxToolCall("Agent", { subagent_type: "scout", task: "Race." })),
+			fauxAssistantMessage("QUIESCED_RACE_HANDLED"),
+		]);
+		const prompted = session.prompt("Race quiescence.");
+		await childCreated;
+		quiesced = true;
+		releaseChild();
+		await prompted;
+		expect(lastToolResultText(session)).toContain("session is temporarily unavailable");
+		expect(service.childrenOf(session.sessionId)).toEqual([]);
+		expect(fauxA.state.callCount).toBe(childCallsBefore + 2);
+	} finally {
+		releaseChild();
+		session.dispose();
+		await service.disposeChildrenOf(session.sessionId);
+	}
+});
+
+test("embedder quiescence is reversible while session_shutdown remains final", async () => {
+	let quiesced = true;
+	const session = await makeSession({ isParentQuiesced: () => quiesced });
+	try {
+		fauxA.setResponses([
+			fauxAssistantMessage(fauxToolCall("Agent", { subagent_type: "scout", task: "Too soon." })),
+			fauxAssistantMessage("QUIESCENCE_HANDLED"),
+		]);
+		await session.prompt("Try while quiesced.");
+		expect(lastToolResultText(session)).toContain("session is temporarily unavailable");
+		expect(service.childrenOf(session.sessionId)).toEqual([]);
+
+		quiesced = false;
+		fauxA.setResponses([
+			fauxAssistantMessage(fauxToolCall("Agent", { subagent_type: "scout", task: "Now run." })),
+			fauxAssistantMessage("QUIESCENCE_CHILD"),
+			fauxAssistantMessage("QUIESCENCE_PARENT"),
+		]);
+		await session.prompt("Try after rollback.");
+		expect(lastToolResultText(session)).toContain("QUIESCENCE_CHILD");
+
+		await session.extensionRunner.emit({ type: "session_shutdown", reason: "quit" });
+		fauxA.setResponses([
+			fauxAssistantMessage(fauxToolCall("Agent", { subagent_type: "scout", task: "Too late." })),
+			fauxAssistantMessage("SHUTDOWN_HANDLED"),
+		]);
+		await session.prompt("Try after shutdown.");
+		expect(lastToolResultText(session)).toContain("session is shutting down");
+	} finally {
+		session.dispose();
+		await service.disposeChildrenOf(session.sessionId);
+	}
 });
 
 test("a foreground error outcome surfaces as a tool error carrying the reason", async () => {

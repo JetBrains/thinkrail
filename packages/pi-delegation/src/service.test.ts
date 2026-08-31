@@ -14,7 +14,7 @@ import {
 	fauxToolCall,
 } from "@earendil-works/pi-ai/providers/faux";
 import {
-	type AgentSession,
+	AgentSession,
 	createAgentSession,
 	ModelRegistry,
 	ModelRuntime,
@@ -873,6 +873,141 @@ test("disposeChildrenOf marks every child before awaiting aborts — a queued si
 	expect(started.sort()).toEqual([childA.sessionId, childB.sessionId].sort());
 });
 
+test("disposeChildrenOf fences in-progress assembly and reopens admission only after settling", async () => {
+	let releaseRuntime = () => {};
+	const runtimeGate = new Promise<void>((resolve) => {
+		releaseRuntime = resolve;
+	});
+	let markRuntimeEntered = () => {};
+	const runtimeEntered = new Promise<void>((resolve) => {
+		markRuntimeEntered = resolve;
+	});
+	let runtimeResolutions = 0;
+	const fenced = createDelegationService({
+		resolveParent: (id) =>
+			id === parent.sessionId
+				? { cwd: parentCwd, model: parent.model, thinkingLevel: parent.thinkingLevel }
+				: undefined,
+		delegationRoot,
+		scope: "ws-create-dispose-fence",
+		modelRuntime: async () => {
+			runtimeResolutions++;
+			if (runtimeResolutions === 1) {
+				markRuntimeEntered();
+				await runtimeGate;
+			}
+			return runtime;
+		},
+	});
+	const lifecycle: string[] = [];
+	fenced.onLifecycle((event) => lifecycle.push(event.type));
+	const creation = fenced.createChild(subagentSpec());
+	await runtimeEntered;
+	const disposal = fenced.disposeChildrenOf(parent.sessionId);
+	let disposalSettled = false;
+	void disposal.then(() => {
+		disposalSettled = true;
+	});
+	await new Promise<void>((resolve) => setImmediate(resolve));
+	let later: Awaited<ReturnType<DelegationService["createChild"]>> | undefined;
+	try {
+		expect(disposalSettled).toBe(false);
+		expect(await codeOf(fenced.createChild(subagentSpec()))).toBe("disposed");
+		expect(runtimeResolutions).toBe(1);
+		releaseRuntime();
+		expect(await codeOf(creation)).toBe("disposed");
+		await disposal;
+		expect(fenced.childrenOf(parent.sessionId)).toEqual([]);
+		expect(lifecycle).not.toContain("child-created");
+
+		later = await fenced.createChild(subagentSpec());
+		expect(runtimeResolutions).toBe(2);
+		expect(fenced.findChild(later.sessionId)).toBeDefined();
+	} finally {
+		releaseRuntime();
+		await Promise.allSettled([creation, disposal]);
+		await later?.dispose();
+		await fenced.disposeChildrenOf(parent.sessionId);
+	}
+});
+
+test("a reentrant disposal from child assembly fences that same creation", async () => {
+	let disposal: Promise<void> | undefined;
+	let reentrant: DelegationService;
+	reentrant = createDelegationService({
+		resolveParent: (id) =>
+			id === parent.sessionId
+				? { cwd: parentCwd, model: parent.model, thinkingLevel: parent.thinkingLevel }
+				: undefined,
+		delegationRoot,
+		scope: "ws-reentrant-create-dispose",
+		modelRuntime: () => {
+			disposal = reentrant.disposeChildrenOf(parent.sessionId);
+			return runtime;
+		},
+	});
+	const lifecycle: string[] = [];
+	reentrant.onLifecycle((event) => lifecycle.push(event.type));
+
+	expect(await codeOf(reentrant.createChild(subagentSpec()))).toBe("disposed");
+	await disposal;
+	expect(reentrant.childrenOf(parent.sessionId)).toEqual([]);
+	expect(lifecycle).not.toContain("child-created");
+});
+
+test("disposeChildrenOf disposes a partial session assembled behind the fence", async () => {
+	let releaseSessionStart = () => {};
+	const sessionStartGate = new Promise<void>((resolve) => {
+		releaseSessionStart = resolve;
+	});
+	let markSessionStartEntered = () => {};
+	const sessionStartEntered = new Promise<void>((resolve) => {
+		markSessionStartEntered = resolve;
+	});
+	const fenced = createDelegationService({
+		resolveParent: (id) =>
+			id === parent.sessionId
+				? { cwd: parentCwd, model: parent.model, thinkingLevel: parent.thinkingLevel }
+				: undefined,
+		delegationRoot,
+		scope: "ws-partial-session-fence",
+		modelRuntime: runtime,
+		childExtensionFactories: [
+			(pi) => {
+				pi.on("session_start", async () => {
+					markSessionStartEntered();
+					await sessionStartGate;
+				});
+			},
+		],
+	});
+	const originalDispose = AgentSession.prototype.dispose;
+	const disposedSessionIds: string[] = [];
+	AgentSession.prototype.dispose = function (this: AgentSession) {
+		disposedSessionIds.push(this.sessionId);
+		originalDispose.call(this);
+	};
+	let creation: ReturnType<DelegationService["createChild"]> | undefined;
+	let disposal: Promise<void> | undefined;
+	try {
+		creation = fenced.createChild(
+			subagentSpec({ session: { systemPrompt: "gated", tools: [], extensions: true } }),
+		);
+		await sessionStartEntered;
+		disposal = fenced.disposeChildrenOf(parent.sessionId);
+		releaseSessionStart();
+		expect(await codeOf(creation)).toBe("disposed");
+		await disposal;
+		expect(disposedSessionIds).toHaveLength(1);
+		expect(fenced.childrenOf(parent.sessionId)).toEqual([]);
+	} finally {
+		releaseSessionStart();
+		await Promise.allSettled([creation, disposal].filter((value) => value !== undefined));
+		AgentSession.prototype.dispose = originalDispose;
+		await fenced.disposeChildrenOf(parent.sessionId);
+	}
+});
+
 test("extensions opt-in loads ONLY the embedder-bound curated set — and only when asked", async () => {
 	let factoryLoads = 0;
 	const curated = createDelegationService({
@@ -1103,6 +1238,51 @@ test("a throwing lifecycle listener does not reject a completing run", async () 
 	}
 });
 
+test("a rejected lifecycle listener promise is isolated without being awaited", async () => {
+	const isolated = createDelegationService({
+		resolveParent: (id) =>
+			id === parent.sessionId
+				? { cwd: parentCwd, model: parent.model, thinkingLevel: parent.thinkingLevel }
+				: undefined,
+		delegationRoot,
+		scope: "ws-rejected-listener",
+		modelRuntime: runtime,
+	});
+	let releaseListener = () => {};
+	const listenerGate = new Promise<void>((resolve) => {
+		releaseListener = resolve;
+	});
+	let markListenerEntered = () => {};
+	const listenerEntered = new Promise<void>((resolve) => {
+		markListenerEntered = resolve;
+	});
+	isolated.onLifecycle(async (event) => {
+		if (event.type !== "run-terminal") return;
+		markListenerEntered();
+		await listenerGate;
+		throw new Error("async listener boom");
+	});
+	faux.setResponses([fauxAssistantMessage("ASYNC_LISTENER_PROOF")]);
+	const child = await isolated.createChild(subagentSpec());
+	const run = child.runQueued("Run.");
+	let settled: Awaited<typeof run> | undefined;
+	void run.then((outcome) => {
+		settled = outcome;
+	});
+	try {
+		await listenerEntered;
+		await new Promise<void>((resolve) => setImmediate(resolve));
+		expect(settled?.status).toBe("completed");
+		expect(settled?.finalText).toBe("ASYNC_LISTENER_PROOF");
+		releaseListener();
+		await new Promise<void>((resolve) => setImmediate(resolve));
+	} finally {
+		releaseListener();
+		await run;
+		await isolated.disposeChildrenOf(parent.sessionId);
+	}
+});
+
 test("a throwing child-disposed listener does not abandon the disposal cascade", async () => {
 	const isolated = createDelegationService({
 		resolveParent: (id) =>
@@ -1136,6 +1316,43 @@ test("a throwing onUpdate callback never alters the run outcome", async () => {
 		expect(outcome.status).toBe("completed");
 		expect(outcome.finalText).toBe("UPDATE_PROOF");
 	} finally {
+		await child.dispose();
+	}
+});
+
+test("a rejected onUpdate promise is isolated without being awaited", async () => {
+	let releaseUpdate = () => {};
+	const updateGate = new Promise<void>((resolve) => {
+		releaseUpdate = resolve;
+	});
+	let markUpdateEntered = () => {};
+	const updateEntered = new Promise<void>((resolve) => {
+		markUpdateEntered = resolve;
+	});
+	const child = await service.createChild(subagentSpec());
+	const controller = new AbortController();
+	controller.abort();
+	const run = child.runQueued("Never runs.", {
+		signal: controller.signal,
+		onUpdate: async () => {
+			markUpdateEntered();
+			await updateGate;
+			throw new Error("async onUpdate boom");
+		},
+	});
+	let settled: Awaited<typeof run> | undefined;
+	void run.then((outcome) => {
+		settled = outcome;
+	});
+	try {
+		await updateEntered;
+		await new Promise<void>((resolve) => setImmediate(resolve));
+		expect(settled?.status).toBe("aborted");
+		releaseUpdate();
+		await new Promise<void>((resolve) => setImmediate(resolve));
+	} finally {
+		releaseUpdate();
+		await run;
 		await child.dispose();
 	}
 });

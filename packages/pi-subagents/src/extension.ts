@@ -11,6 +11,7 @@ import {
 	type DelegationService,
 	defaultDelegationRoot,
 	deriveChildSessionFile,
+	type RunOutcome,
 	type RunStatus,
 } from "pi-delegation";
 import { Type } from "typebox";
@@ -21,10 +22,19 @@ export const SUBAGENT_COMPLETION_MESSAGE = "subagent-completion";
 
 const MAX_RESULT_CHARS = 50_000;
 
+export interface BackgroundCompletionDelivery {
+	parentSessionId: string;
+	childSessionId: string;
+	roleName: string;
+	outcome: RunOutcome;
+}
+
 export interface SubagentsExtensionOptions {
 	service?: DelegationService;
 	delegationRoot?: string;
 	scope?: string;
+	isParentQuiesced?: (parentSessionId: string) => boolean;
+	deliverBackgroundCompletion?: (completion: BackgroundCompletionDelivery) => void | Promise<void>;
 }
 
 function discoverFor(ctx: ExtensionContext): AgentDefinition[] {
@@ -85,8 +95,17 @@ export function createSubagentsExtension(
 
 		let latestCtx: ExtensionContext | undefined;
 		let fallbackService: DelegationService | undefined;
-		function serviceFor(ctx: ExtensionContext): DelegationService {
+		function parentSessionId(ctx: ExtensionContext): string {
+			return ctx.sessionManager.getSessionId();
+		}
+		function assertParentAvailable(ctx: ExtensionContext): void {
 			if (shuttingDown) throw new Error("session is shutting down");
+			if (options.isParentQuiesced?.(parentSessionId(ctx))) {
+				throw new Error("session is temporarily unavailable");
+			}
+		}
+		function serviceFor(ctx: ExtensionContext): DelegationService {
+			assertParentAvailable(ctx);
 			latestCtx = ctx;
 			if (options.service) return options.service;
 			fallbackService ??= createDelegationService({
@@ -141,8 +160,9 @@ ${known}`,
 						cwd: ctx.cwd,
 						availableModels: ctx.modelRegistry.getAvailable(),
 					});
+					const parentId = parentSessionId(ctx);
 					const child = await service.createChild({
-						parent: ctx.sessionManager.getSessionId(),
+						parent: parentId,
 						visibility: "hidden",
 						info: {
 							createdBy: "tool:Agent",
@@ -151,6 +171,12 @@ ${known}`,
 						},
 						session: mapping.session,
 					});
+					try {
+						assertParentAvailable(ctx);
+					} catch (error) {
+						await child.dispose();
+						throw error;
+					}
 
 					const run = child.runQueued(params.task, {
 						...(mapping.maxTurns !== undefined ? { maxTurns: mapping.maxTurns } : {}),
@@ -162,8 +188,17 @@ ${known}`,
 
 					if (params.run_in_background) {
 						run
-							.then((outcome) => {
-								if (shuttingDown) return;
+							.then(async (outcome) => {
+								if (shuttingDown || options.isParentQuiesced?.(parentId)) return;
+								if (options.deliverBackgroundCompletion) {
+									await options.deliverBackgroundCompletion({
+										parentSessionId: parentId,
+										childSessionId: child.sessionId,
+										roleName: definition.name,
+										outcome,
+									});
+									return;
+								}
 								pi.sendMessage(
 									{
 										customType: SUBAGENT_COMPLETION_MESSAGE,

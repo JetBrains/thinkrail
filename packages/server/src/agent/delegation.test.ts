@@ -26,6 +26,7 @@ import {
 	disposeAllSessions,
 	getSessionMessages,
 	liveParentContext,
+	liveParentSessionForDelegation,
 	promptSession,
 	reloadSessionResources,
 	removeSession,
@@ -38,7 +39,9 @@ import {
 	abortChildRun,
 	delegationRootDir,
 	delegationServiceFor,
+	quiesceParentDelegation,
 	readChildTranscript,
+	sweepUndeliveredCompletions,
 } from "./delegation";
 import { configurePiRuntime } from "./piRuntime";
 import { setTrashImplementationForTests } from "./trash";
@@ -591,6 +594,250 @@ test("a background child completing inside the delete window triggers no parent 
 		releaseTrash();
 		setTrashImplementationForTests(undefined);
 		setSessionManagerFactory((sessionCwd) => SessionManager.inMemory(sessionCwd));
+	}
+});
+
+test("a delete starting during one completion turn prevents the next completion send", async () => {
+	const cwd = tmpDir("trdel-delbetween-");
+	setSessionManagerFactory((sessionCwd) => SessionManager.create(sessionCwd));
+	let releaseChildren = () => {};
+	const childrenGate = new Promise<void>((resolve) => {
+		releaseChildren = resolve;
+	});
+	let releaseParent = () => {};
+	const parentGate = new Promise<void>((resolve) => {
+		releaseParent = resolve;
+	});
+	let reportParentStarted = () => {};
+	const parentStarted = new Promise<void>((resolve) => {
+		reportParentStarted = resolve;
+	});
+	let releaseTrash = () => {};
+	const trashGate = new Promise<void>((resolve) => {
+		releaseTrash = resolve;
+	});
+	let reportTrashStarted = () => {};
+	const trashStarted = new Promise<void>((resolve) => {
+		reportTrashStarted = resolve;
+	});
+	let sessionId: string | undefined;
+	try {
+		({ sessionId } = await createSession({ cwd, workspaceId: "ws-delbetween" }));
+		faux.setResponses([
+			backgroundAgentCall(),
+			fauxAssistantMessage("PARENT_ONE_IDLE"),
+			backgroundAgentCall(),
+			fauxAssistantMessage("PARENT_TWO_IDLE"),
+		]);
+		fauxbg.setResponses([
+			async () => {
+				await childrenGate;
+				return fauxAssistantMessage("BG_ONE");
+			},
+			async () => {
+				await childrenGate;
+				return fauxAssistantMessage("BG_TWO");
+			},
+		]);
+		await promptSession(sessionId, "Delegate first.");
+		await promptSession(sessionId, "Delegate second.");
+		const service = delegationServiceFor("ws-delbetween");
+		const children = service.childrenOf(sessionId);
+		expect(children).toHaveLength(2);
+		await waitFor(() => children.every((child) => child.snapshot?.status === "running"));
+		const releaseQuiescence = quiesceParentDelegation("ws-delbetween", sessionId);
+		releaseChildren();
+		await waitFor(() => children.every((child) => child.snapshot?.status === "completed"));
+		await Bun.sleep(25);
+		releaseQuiescence();
+
+		const session = liveParentSessionForDelegation(sessionId);
+		if (!session) throw new Error("parent session is not live");
+		const parentCallsBefore = faux.state.callCount;
+		faux.setResponses([
+			async () => {
+				reportParentStarted();
+				await parentGate;
+				return fauxAssistantMessage("FIRST_COMPLETION_ACK");
+			},
+		]);
+		const sweeping = sweepUndeliveredCompletions("ws-delbetween", sessionId, session).catch(
+			() => {},
+		);
+		await parentStarted;
+		setTrashImplementationForTests(async (input) => {
+			reportTrashStarted();
+			await trashGate;
+			for (const path of typeof input === "string" ? [input] : input) {
+				rmSync(path, { force: true });
+			}
+		});
+		const deleting = deleteSession(sessionId, "ws-delbetween", cwd);
+		await waitFor(() => liveParentContext(sessionId ?? "") === undefined);
+		releaseParent();
+		await trashStarted;
+		await sweeping;
+		const completions = session.messages.filter((message) => isSubagentCompletionMessage(message));
+		expect(completions).toHaveLength(1);
+		expect(faux.state.callCount).toBe(parentCallsBefore + 1);
+		releaseTrash();
+		await deleting;
+	} finally {
+		releaseChildren();
+		releaseParent();
+		releaseTrash();
+		setTrashImplementationForTests(undefined);
+		if (sessionId && liveParentContext(sessionId)) await removeSession(sessionId);
+		setSessionManagerFactory((sessionCwd) => SessionManager.inMemory(sessionCwd));
+	}
+});
+
+test("trash failure restores completion delivery and Agent on the same extension runner", async () => {
+	const cwd = tmpDir("trdel-delrollback-");
+	setSessionManagerFactory((sessionCwd) => SessionManager.create(sessionCwd));
+	let reportTrashStarted = () => {};
+	const trashStarted = new Promise<void>((resolve) => {
+		reportTrashStarted = resolve;
+	});
+	let failTrash = () => {};
+	const trashOutcome = new Promise<void>((_resolve, reject) => {
+		failTrash = () => reject(new Error("recycle bin unavailable"));
+	});
+	let sessionId: string | undefined;
+	try {
+		({ sessionId } = await createSession({ cwd, workspaceId: "ws-delrollback" }));
+		const { releaseChild } = gatedBackgroundResponses();
+		faux.setResponses([backgroundAgentCall(), fauxAssistantMessage("PARENT_IDLE")]);
+		await promptSession(sessionId, "Delegate before failed deletion.");
+		const service = delegationServiceFor("ws-delrollback");
+		const child = service.childrenOf(sessionId).at(-1);
+		if (!child) throw new Error("no child spawned");
+		await waitFor(() => child.snapshot?.status === "running");
+
+		setTrashImplementationForTests(async () => {
+			reportTrashStarted();
+			await trashOutcome;
+		});
+		const deleting = deleteSession(sessionId, "ws-delrollback", cwd);
+		await trashStarted;
+		const callsDuringTrash = faux.state.callCount + fauxbg.state.callCount;
+		releaseChild();
+		await waitFor(() => child.snapshot?.status === "completed");
+		await Bun.sleep(25);
+		expect(faux.state.callCount + fauxbg.state.callCount).toBe(callsDuringTrash);
+
+		faux.setResponses([fauxAssistantMessage("ROLLBACK_COMPLETION")]);
+		failTrash();
+		await expect(deleting).rejects.toThrow("recycle bin unavailable");
+		await waitFor(
+			async () => (await subagentCompletions(sessionId ?? "", "ws-delrollback", cwd)).length === 1,
+		);
+		await waitFor(() => liveParentSessionForDelegation(sessionId ?? "")?.isStreaming === false);
+		expect(liveParentContext(sessionId)).toBeDefined();
+
+		faux.setResponses([
+			fauxAssistantMessage(fauxToolCall("Agent", { subagent_type: "bg", task: "Run again." })),
+			fauxAssistantMessage("ROLLBACK_AGENT_OK"),
+		]);
+		fauxbg.setResponses([fauxAssistantMessage("ROLLBACK_CHILD_OK")]);
+		await promptSession(sessionId, "Delegate after rollback.");
+		const restored = await getSessionMessages(sessionId, "ws-delrollback", cwd);
+		expect(JSON.stringify(restored.messages)).toContain("ROLLBACK_CHILD_OK");
+		expect(JSON.stringify(restored.messages)).toContain("ROLLBACK_AGENT_OK");
+	} finally {
+		failTrash();
+		setTrashImplementationForTests(undefined);
+		if (sessionId && liveParentContext(sessionId)) await removeSession(sessionId);
+		setSessionManagerFactory((sessionCwd) => SessionManager.inMemory(sessionCwd));
+	}
+});
+
+test("concurrent completion sweep requests deliver one completion and one parent turn", async () => {
+	const cwd = tmpDir("trdel-sweep-race-");
+	const { sessionId } = await createSession({ cwd, workspaceId: "ws-sweep-race" });
+	const { releaseChild } = gatedBackgroundResponses();
+	faux.setResponses([backgroundAgentCall(), fauxAssistantMessage("PARENT_IDLE")]);
+	try {
+		await promptSession(sessionId, "Delegate in background.");
+		const service = delegationServiceFor("ws-sweep-race");
+		const child = service.childrenOf(sessionId).at(-1);
+		if (!child) throw new Error("no child spawned");
+		await waitFor(() => child.snapshot?.status === "running");
+		const releaseQuiescence = quiesceParentDelegation("ws-sweep-race", sessionId);
+		releaseChild();
+		await waitFor(() => child.snapshot?.status === "completed");
+		await Bun.sleep(25);
+		expect(await subagentCompletions(sessionId, "ws-sweep-race", cwd)).toHaveLength(0);
+		releaseQuiescence();
+
+		const session = liveParentSessionForDelegation(sessionId);
+		if (!session) throw new Error("parent session is not live");
+		faux.setResponses([fauxAssistantMessage("SWEEP_RACE_ACK")]);
+		await Promise.all([
+			sweepUndeliveredCompletions("ws-sweep-race", sessionId, session),
+			sweepUndeliveredCompletions("ws-sweep-race", sessionId, session),
+		]);
+		const completions = await subagentCompletions(sessionId, "ws-sweep-race", cwd);
+		expect(completions).toHaveLength(1);
+		expect(faux.getPendingResponseCount()).toBe(0);
+	} finally {
+		releaseChild();
+		await removeSession(sessionId);
+	}
+});
+
+test("a completion sweep request arriving during a failed pass retries successfully", async () => {
+	const cwd = tmpDir("trdel-sweep-retry-");
+	const { sessionId } = await createSession({ cwd, workspaceId: "ws-sweep-retry" });
+	const { releaseChild } = gatedBackgroundResponses();
+	faux.setResponses([backgroundAgentCall(), fauxAssistantMessage("PARENT_IDLE")]);
+	const session = liveParentSessionForDelegation(sessionId);
+	if (!session) throw new Error("parent session is not live");
+	const originalSend = session.sendCustomMessage.bind(session);
+	let releaseFailure = () => {};
+	const failureGate = new Promise<void>((resolve) => {
+		releaseFailure = resolve;
+	});
+	let reportFirstAttempt = () => {};
+	const firstAttempt = new Promise<void>((resolve) => {
+		reportFirstAttempt = resolve;
+	});
+	let sendAttempts = 0;
+	try {
+		await promptSession(sessionId, "Delegate in background.");
+		const service = delegationServiceFor("ws-sweep-retry");
+		const child = service.childrenOf(sessionId).at(-1);
+		if (!child) throw new Error("no child spawned");
+		await waitFor(() => child.snapshot?.status === "running");
+		const releaseQuiescence = quiesceParentDelegation("ws-sweep-retry", sessionId);
+		releaseChild();
+		await waitFor(() => child.snapshot?.status === "completed");
+		await Bun.sleep(25);
+		releaseQuiescence();
+
+		Reflect.set(session, "sendCustomMessage", async (...args: Parameters<typeof originalSend>) => {
+			sendAttempts++;
+			if (sendAttempts === 1) {
+				reportFirstAttempt();
+				await failureGate;
+				throw new Error("synthetic delivery failure");
+			}
+			return originalSend(...args);
+		});
+		faux.setResponses([fauxAssistantMessage("SWEEP_RETRY_ACK")]);
+		const first = sweepUndeliveredCompletions("ws-sweep-retry", sessionId, session);
+		await firstAttempt;
+		const second = sweepUndeliveredCompletions("ws-sweep-retry", sessionId, session);
+		releaseFailure();
+		await Promise.all([first, second]);
+		expect(sendAttempts).toBe(2);
+		expect(await subagentCompletions(sessionId, "ws-sweep-retry", cwd)).toHaveLength(1);
+		expect(faux.getPendingResponseCount()).toBe(0);
+	} finally {
+		releaseFailure();
+		Reflect.set(session, "sendCustomMessage", originalSend);
+		releaseChild();
+		await removeSession(sessionId);
 	}
 });
 

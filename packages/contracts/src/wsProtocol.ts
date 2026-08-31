@@ -86,7 +86,7 @@ export interface TerminalTabsPush {
 	tabs: TerminalTabInfo[];
 }
 
-export const PROTOCOL_VERSION = 54;
+export const PROTOCOL_VERSION = 55;
 
 export type HostPlatform = "darwin" | "linux" | "win32";
 

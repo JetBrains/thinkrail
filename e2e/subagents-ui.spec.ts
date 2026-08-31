@@ -3,7 +3,12 @@ import { join } from "node:path";
 import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
 import type { DelegationRunDetails, Workspace } from "@thinkrail/contracts";
-import { defaultWorkspaceRow, enterDefaultWorkspace, openFixtureProject } from "./fixtures/app";
+import {
+	defaultWorkspaceRow,
+	enterDefaultWorkspace,
+	openChatFromHistory,
+	openFixtureProject,
+} from "./fixtures/app";
 import { E2E_DATA_DIR, E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { seedSubagentChildTranscript, seedWorkspaceSession } from "./fixtures/sessions";
 
@@ -199,6 +204,7 @@ test("hydrated Agent cards carry three-state outcomes, the completion turn rende
 
 	await expect(defaultWorkspaceRow(page)).toBeVisible();
 	await enterDefaultWorkspace(page);
+	await openChatFromHistory(page, "subagent outcomes");
 	const workspaceId = defaultWorkspaceId();
 	seedChildTranscript(workspaceId, chat.id, "child-fg-done", "FG-CHILD-TRANSCRIPT reply");
 	seedChildTranscript(workspaceId, chat.id, "child-bg-finished", "BG-CHILD-TRANSCRIPT reply");
@@ -255,6 +261,7 @@ test("a hydrated background ack with no registry entry reconciles to the lost st
 
 	await expect(defaultWorkspaceRow(page)).toBeVisible();
 	await enterDefaultWorkspace(page);
+	await openChatFromHistory(page, "background subagent");
 	seedChildTranscript(defaultWorkspaceId(), chat.id, "child-bg", "BG-LIVE-TRANSCRIPT reply");
 
 	const card = page.locator(agentCards).first();
