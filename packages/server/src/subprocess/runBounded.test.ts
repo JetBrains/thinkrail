@@ -54,6 +54,7 @@ test("captures stdout, stderr and the exit code", async () => {
 		out: "out",
 		err: "err",
 		timedOut: false,
+		launchFailed: false,
 		waitedMs: expect.any(Number),
 	});
 });
@@ -72,6 +73,7 @@ test("a failed launch is a result, not a throw", async () => {
 
 	expect(result.ok).toBe(false);
 	expect(result.timedOut).toBe(false);
+	expect(result.launchFailed).toBe(true);
 	expect(result.err).not.toBe("");
 });
 

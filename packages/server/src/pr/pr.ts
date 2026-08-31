@@ -183,6 +183,18 @@ export async function ghPrFlow(
 	return null;
 }
 
+function prWorkspace(workspaceId: string) {
+	refreshUserOwnedWorkspace(workspaceId);
+	const ws = getWorkspace(workspaceId);
+	assertSafeRef(ws.branch);
+	if (ws.branch === baseRef(ws.baseBranch)) {
+		throw new Error(
+			`"${ws.branch}" is this workspace's base branch — there's nothing to open a PR against. Switch to a feature branch first.`,
+		);
+	}
+	return ws;
+}
+
 export async function openPr(
 	params: OpenPrParams,
 	run: PrCommandRunner = runProviderCommand,
@@ -192,21 +204,16 @@ export async function openPr(
 	// resolve the live branch synchronously here so a switch made in a terminal just before Open PR
 	// can never push/open/compare against a stale one (see SPEC). A no-op for created workspaces,
 	// whose branch is ThinkRail-owned and never drifts externally.
-	refreshUserOwnedWorkspace(params.workspaceId);
-	const ws = getWorkspace(params.workspaceId);
-	assertSafeRef(ws.branch);
-	if (ws.branch === baseRef(ws.baseBranch)) {
-		throw new Error(
-			`"${ws.branch}" is this workspace's base branch — there's nothing to open a PR against. Switch to a feature branch first.`,
-		);
-	}
+	prWorkspace(params.workspaceId);
+	const dirtyFiles = (await gitStatus(params.workspaceId, { kind: "uncommitted" })).changes.length;
+	const ws = prWorkspace(params.workspaceId);
 	const cwd = ws.worktreePath;
 	const origin = git(cwd, ["remote", "get-url", "origin"]);
 	if (!origin.ok) throw new Error("This workspace's repository has no 'origin' remote to push to.");
-	const dirtyFiles = gitStatus(params.workspaceId, { kind: "uncommitted" }).changes.length;
 	const hasSshCommandConfig = git(cwd, ["config", "core.sshCommand"]).ok;
 	const pushed = await gitAsync(cwd, ["push", "--set-upstream", "origin", ws.branch], {
 		env: nonInteractiveGitEnv(process.env, hasSshCommandConfig),
+		network: true,
 	});
 	if (!pushed.ok) {
 		const detail = pushed.err || "git push failed";

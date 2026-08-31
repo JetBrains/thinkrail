@@ -12,8 +12,8 @@ import {
 	maybeNaiveNameWorkspace,
 } from "./autoRename";
 
-function worktrees(projectId = "p1") {
-	return listWorkspaces(projectId).filter((w) => w.kind !== "default");
+async function worktrees(projectId = "p1") {
+	return (await listWorkspaces(projectId)).filter((w) => w.kind !== "default");
 }
 
 let dataDir: string;
@@ -94,7 +94,7 @@ test("renames the workspace off the first settled turn and flags it", async () =
 	expect(renamed?.renamed).toBe(true);
 	expect(renamed?.worktreePath).toBe(ws.worktreePath);
 	expect(runner.calls()).toBe(1);
-	expect(worktrees()[0]?.name).toBe("Add Login Flow");
+	expect((await worktrees())[0]?.name).toBe("Add Login Flow");
 });
 
 test("a renamed workspace is never touched again", async () => {
@@ -119,7 +119,7 @@ test("a failed suggestion leaves the flag unset so a later turn retries", async 
 	fakeRunner("!!! ???");
 
 	expect(await maybeAutoRenameWorkspace("s1", ws.id, firstTurn)).toBeNull();
-	expect(worktrees()[0]?.renamed).toBeUndefined();
+	expect((await worktrees())[0]?.renamed).toBeUndefined();
 
 	fakeRunner("Fix The Parser");
 	const retried = await maybeAutoRenameWorkspace("s1", ws.id, firstTurn);
@@ -133,7 +133,7 @@ test("a throwing runner degrades to null", async () => {
 	});
 
 	expect(await maybeAutoRenameWorkspace("s1", ws.id, firstTurn)).toBeNull();
-	expect(worktrees()[0]?.renamed).toBeUndefined();
+	expect((await worktrees())[0]?.renamed).toBeUndefined();
 });
 
 test("an errored or aborted run never names the workspace", async () => {
@@ -181,7 +181,7 @@ test("a workspace archived during the one-shot is not renamed or resurrected", a
 	release();
 
 	expect(await pending).toBeNull();
-	expect(worktrees()).toHaveLength(0);
+	expect(await worktrees()).toHaveLength(0);
 });
 
 test("a user rename landing during the one-shot wins; the late suggestion is dropped", async () => {
@@ -200,7 +200,7 @@ test("a user rename landing during the one-shot wins; the late suggestion is dro
 	release();
 
 	expect(await pending).toBeNull();
-	expect(worktrees()[0]?.name).toBe("user picked this");
+	expect((await worktrees())[0]?.name).toBe("user picked this");
 });
 
 test("naive-rename names the workspace instantly from the first prompt, provisionally", async () => {
@@ -212,7 +212,7 @@ test("naive-rename names the workspace instantly from the first prompt, provisio
 	expect(named?.branch).toBe("add-a-login-form-to");
 	expect(named?.worktreePath).toBe(ws.worktreePath);
 	expect(named?.renamed).toBeUndefined();
-	expect(worktrees()[0]?.renamed).toBeUndefined();
+	expect((await worktrees())[0]?.renamed).toBeUndefined();
 });
 
 test("naive-rename fires only while the name is pristine (workspace-N)", async () => {
@@ -220,14 +220,14 @@ test("naive-rename fires only while the name is pristine (workspace-N)", async (
 	await maybeNaiveNameWorkspace("s1", ws.id, firstTurn);
 
 	expect(await maybeNaiveNameWorkspace("s1", ws.id, firstTurn)).toBeNull();
-	expect(worktrees()[0]?.name).toBe("Add A Login Form To");
+	expect((await worktrees())[0]?.name).toBe("Add A Login Form To");
 });
 
 test("naive-rename never touches a user-named workspace", async () => {
 	const ws = await createWorkspace("p1", "chosen name");
 
 	expect(await maybeNaiveNameWorkspace("s1", ws.id, firstTurn)).toBeNull();
-	expect(worktrees()[0]?.name).toBe("chosen name");
+	expect((await worktrees())[0]?.name).toBe("chosen name");
 });
 
 test("the agentic pass refines a provisional naive name and locks it", async () => {
@@ -243,7 +243,7 @@ test("the agentic pass refines a provisional naive name and locks it", async () 
 	expect(refined?.renamed).toBe(true);
 
 	expect(await maybeNaiveNameWorkspace("s1", ws.id, firstTurn)).toBeNull();
-	expect(worktrees()[0]?.name).toBe("Add Login Flow");
+	expect((await worktrees())[0]?.name).toBe("Add Login Flow");
 });
 
 test("naive-rename resolves null when the first prompt is blank or unusable", async () => {
@@ -251,11 +251,11 @@ test("naive-rename resolves null when the first prompt is blank or unusable", as
 	const punctOnly = async (): Promise<Message[]> => [user("!!! ??? ..."), assistant("hm")];
 
 	expect(await maybeNaiveNameWorkspace("s1", ws.id, punctOnly)).toBeNull();
-	expect(worktrees()[0]?.name).toBe("workspace-1");
+	expect((await worktrees())[0]?.name).toBe("workspace-1");
 	expect(await maybeNaiveNameWorkspace("s1", ws.id, async () => [])).toBeNull();
 });
 
-test("isPromptCommitted: only a user message_end has the prompt in the transcript", () => {
+test("isPromptCommitted: only a user message_end has the prompt in the transcript", async () => {
 	expect(
 		isPromptCommitted({ type: "message_end", message: { role: "user" } } as unknown as PiEvent),
 	).toBe(true);
@@ -269,7 +269,7 @@ test("isPromptCommitted: only a user message_end has the prompt in the transcrip
 	expect(isPromptCommitted({ type: "turn_start" } as PiEvent)).toBe(false);
 });
 
-test("isSettledTurn: only agent_settled closes automatic work", () => {
+test("isSettledTurn: only agent_settled closes automatic work", async () => {
 	expect(isSettledTurn({ type: "agent_settled", terminal: null })).toBe(true);
 	expect(isSettledTurn({ type: "agent_end", messages: [], willRetry: false } as PiEvent)).toBe(
 		false,
