@@ -62,7 +62,8 @@ async function openSeededClosedChat(page: Page, messages: SeededMessages) {
 		await expect(
 			page
 				.locator('[data-testid="chat-message"][data-role="user"]')
-				.filter({ hasText: latestUserMessage.text }),
+				.filter({ hasText: latestUserMessage.text })
+				.last(),
 		).toBeVisible({ timeout: 20_000 });
 	}
 	const input = page.getByTestId("chat-input");
