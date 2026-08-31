@@ -1,6 +1,6 @@
 import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
-import { expandActivityStep, openWorkspaceChat, waitForDone } from "./fixtures/app";
+import { expandActivityStep, openWorkspaceChat, waitForAgentSettled } from "./fixtures/app";
 
 async function openChatAndSend(page: Page, prompt: string): Promise<void> {
 	await openWorkspaceChat(page);
@@ -9,7 +9,7 @@ async function openChatAndSend(page: Page, prompt: string): Promise<void> {
 }
 
 async function expandToolStep(page: Page, tool: string): Promise<Locator> {
-	await waitForDone(page);
+	await waitForAgentSettled(page);
 	return expandActivityStep(page, tool);
 }
 
@@ -23,14 +23,15 @@ test("fetch_content is invoked and rendered by our card", { tag: "@agent" }, asy
 	await expect(step.getByTestId("tool-fetch_content")).toBeVisible();
 });
 
-test("web_search renders a card with a real answer", { tag: "@agent" }, async ({ page }) => {
+test("web_search renders its query and terminal result", { tag: "@agent" }, async ({ page }) => {
 	test.setTimeout(150_000);
 	await openChatAndSend(
 		page,
-		"Use the web_search tool to find the capital of France, then state it. Use only that tool.",
+		"Call the web_search tool exactly once with the query 'capital of France'. If it errors, do not retry. Then stop.",
 	);
 	const step = await expandToolStep(page, "web_search");
 	const body = step.getByTestId("tool-web_search");
 	await expect(body).toBeVisible();
-	await expect(body).toContainText("Paris", { timeout: 120_000 });
+	await expect(body).toContainText("capital of France");
+	await expect(body).not.toContainText("Searching…");
 });

@@ -29,16 +29,44 @@ is one or many.
 The automatic count is half the available CPU parallelism, clamped to 1–8. Developers may explicitly
 select 1–16 lanes; `e2e:serial` is the stable debugging fallback. A focused invocation carrying Playwright
 arguments defaults to one lane unless its shard count is explicit, so an iteration on one spec stays cheap.
-Direct use of the Playwright config remains self-contained and builds the web app when the shard runner has
-not already done so. Tests for primary-modifier chords read the page's browser-reported platform through one
-fixture helper and inject Meta on Apple or Control elsewhere; hard-coding the runner host's modifier would
-exercise the wrong product branch under browser/platform emulation.
+Direct no-agent use of the Playwright config remains self-contained and builds the web app when the shard
+runner has not already done so. Real-Central execution enters through the public `e2e:agent` or `e2e:full`
+runner; direct Central-mode test execution is rejected (while `--list` remains available), because the public
+runner must own the build before giving Playwright its credential-stripped environment. Standalone agent
+runs always build outside `--list`; ambient skip-build cannot suppress that phase. Only the full runner's
+post-build internal readiness marker may select the already-built agent plan. The plan then adds both
+skip-build and a dedicated Central-runner authorization marker to the Playwright environment; Central
+execution requires both, so skip-build alone cannot bypass the public runner. A focused `e2e:full` invocation
+lists the selection independently in no-agent and agent mode, runs only phases with selected tests, and fails
+when neither mode selected anything; the argument-free full gate and its two-phase `--list` behavior stay
+unchanged. The no-agent, agent, and full runners own the trees they launch. When full composes a phase runner,
+an internal parent-owner marker leaves full as the only signal manager; standalone no-agent and agent runners
+retain ownership. On POSIX, the owner snapshots every descendant PID with its safe non-runner process group,
+forwards SIGINT/SIGTERM to each tracked group exactly once and individually only to PIDs without such a group,
+then force-kills those same non-overlapping targets after a bounded grace even if the root exited. Windows
+first snapshots and retains
+descendant PIDs through PowerShell's `Get-CimInstance Win32_Process`, gracefully falls back when unavailable,
+and uses `taskkill /T` before a root fallback; force targets every retained PID with `taskkill /T /F`. This
+guarantee does not extend to the separate binary or desktop artifact runners. Tests for primary-modifier
+chords read the page's browser-reported platform through one fixture helper and inject Meta on Apple or
+Control elsewhere; hard-coding the runner host's modifier would exercise the wrong product branch under
+browser/platform emulation.
 
-Provider-backed browser tests (`e2e:agent`) and the separate headless workflow suite are not parallelized by
-this runner: concurrent provider turns would alter rate limits, cost, and determinism. The compiled-binary
-and packaged-desktop suites remain distinct artifact gates. Each has an unsharded, non-overlapping
-namespace; any artifact run and `e2e:serial` still run sequentially in the same worktree. A future launcher
-or deployment adds another host adapter for this same suite, never copied feature specs; shared behavior is
+Provider-backed browser tests (`e2e:agent`) use a dedicated serial real-Central mode; the separate
+headless workflow suite keeps its local PI-auth mode. Concurrent provider turns would alter rate limits,
+cost, and determinism, so neither is sharded. The agent runner builds the web artifact under the caller's
+normal environment, then removes PI's complete ambient provider/cloud credential environment surface before
+starting Playwright or any host. The hosts also receive the same complete hermetic `PATH` as the default
+suite. This split is load-bearing: build
+tooling may need developer-installed executables and caller environment, while exact-model preflight must
+prove Central without an API key, token, Google ADC/project/location, or AWS profile/key/token/container/
+web-identity/config source making another provider available. A drift canary derives every uppercase
+environment literal from pi-ai's pinned credential-discovery distribution and requires it in the denylist;
+defensive cloud-source extras remain even when that distribution does not currently name them. No host may
+discover a real `central`, `pi`, or editor executable. The compiled-binary and
+packaged-desktop suites remain distinct artifact gates. Each has an unsharded, non-overlapping namespace;
+any artifact run and `e2e:serial` still run sequentially in the same worktree. A future launcher or
+deployment adds another host adapter for this same suite, never copied feature specs; shared behavior is
 therefore proven through every composition root.
 
 ## Desktop-backed mode
@@ -106,6 +134,17 @@ assertion — a state that only a picture would catch is a missing `data-testid`
 scenarios are a finding, not a defect: they are how the suite shows two distinct host situations rendering
 one indistinguishable card.
 
+The real-Central agent mode is explicit and read-only. Its setup takes the already-authorized global Central
+extension as an opaque source and stages one permission-restricted copy under the lane's isolated HOME; the
+host still resolves only the test-owned Central executable, and that executable refuses every mutating
+action in this mode. The isolated PI agent directory receives `settings.json` only — never the developer's
+`auth.json` or `models.json` — so Central is the sole provider source and unrelated local models cannot enter
+the picker. Setup waits for the watched runtime generation to report configured over the public wire, then
+requires `model.default` to equal the exact `THINKRAIL_E2E_MODEL` pair (the deterministic suite default is
+used when the variable is absent). A missing artifact, failed generation, or unavailable exact pair aborts
+before any provider turn; PI's ordinary first-available fallback is never accepted as test configuration.
+The same copy and hermetic environment seed the private restart host.
+
 Workbench scenarios exercise the normalized frontend-local frame rather than only the pure model: frame
 geometry/tool placement survives workspace switches while resource tabs and attention differ; closing a final
 resource retains its empty group; explicit group removal rehomes hidden-workspace resources; reload restores
@@ -136,8 +175,10 @@ still valid.
 
 Different worktrees may run concurrently. Two complete E2E invocations in one worktree remain sequential;
 the lane ids are deliberately stable across runs so interrupted state is reclaimed rather than leaked.
-No path may fall back to `~/.thinkrail`, the developer's HOME/config trees, or the real pi agent dir. A
-sandboxed home is handed to the host as **both `HOME` and `USERPROFILE`**: `homedir()` — pi's own home
+No path may fall back to `~/.thinkrail`, the developer's HOME/config trees, or the real pi agent dir. The
+explicit agent-mode setup is the narrow exception: it reads one known global Central artifact into the
+lane-owned copy, never runs from or writes to the source, and removes the copy on setup failure or teardown.
+A sandboxed home is handed to every host as **both `HOME` and `USERPROFILE`**: `homedir()` — pi's own home
 resolution — reads `USERPROFILE` on Windows and ignores `HOME`, so `HOME` alone would silently leak a
 Windows lane into the real profile (see `module-shared`).
 
@@ -149,23 +190,26 @@ Windows lane into the real profile (see `module-shared`).
   exports, CLI binary, packaged desktop adapter, shared retrying teardown helper, git, Chromium, and
   Playwright.
 - **Forbidden:** fake application backends, provider fakes in production boot paths, browser imports into
-  product modules, tests depending on developer state, or parallel workers sharing one mutable host.
+  product modules, default/no-agent tests depending on developer state, agent tests reading anything beyond
+  the explicitly authorized Central artifact, or parallel workers sharing one mutable host.
 
 ## Verification policy
 
 During iteration, run the affected specs and use Playwright's last-failed mode. Flake repairs replace
 irrelevant expensive setup with equivalent fixture state and wait for observable readiness; blanket retries,
-arbitrary sleeps, and assertion weakening are not synchronization policy. Scenarios whose subject is a
-client-side send transformation assert the exact outgoing `session.prompt` frame rather than treating a
+arbitrary sleeps, and assertion weakening are not synchronization policy. Live-provider completion waits on
+the session's streaming state after response evidence appears; the optional rendered `Done` row is not a
+terminal-state contract. Scenarios whose subject is a client-side send transformation assert the exact
+outgoing `session.prompt` frame rather than treating a
 mounted optimistic transcript row as delivery evidence: a fast provider rejection can add a taller error,
 scroll to the latest row, and legitimately virtualize the preceding user row. Chat-order coverage seeds
 multi-round transcripts and asserts both latest edges, host-qualified browser-local persistence, and
 cross-browser isolation without involving a provider; desktop package tests separately pin the stable
 backend-profile/window adapter required across dynamic-port restarts. Streaming-band coverage remains
-`@agent` because only Pi's real row growth exercises that lifecycle. Before
-handoff, every app-affecting change runs the complete `bun run e2e` no-agent gate. Artifact-only regressions
-remain covered by `e2e:binary`, `e2e:desktop`, and their shared host probe: a synthetic opaque external
-extension loads with no `pi` executable on `PATH` for default and custom `PI_CODING_AGENT_DIR`; desktop
-additionally proves its staged `.ts` PI runtime and physical resources. Real Central acceptance remains
-authorized and external; real agent behavior remains covered by explicitly selected `@agent` suites rather
-than a fake agent.
+`@agent` because only Pi's real row growth exercises that lifecycle. Before handoff, every app-affecting
+change runs the complete `bun run e2e` no-agent gate. Artifact-only regressions remain covered by
+`e2e:binary`, `e2e:desktop`, and their shared host probe: a synthetic opaque external extension loads with
+no `pi` executable on `PATH` for default and custom `PI_CODING_AGENT_DIR`; desktop additionally proves its
+staged `.ts` PI runtime and physical resources. Real Central acceptance remains explicitly authorized and
+isolated: the dedicated `@agent` suite stages the opaque artifact, validates the exact model, and proves a
+real turn rather than accepting another provider or a fake agent.

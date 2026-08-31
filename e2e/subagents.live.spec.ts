@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { openWorkspaceChat, waitForDone } from "./fixtures/app";
+import { openWorkspaceChat, waitForAgentSettled } from "./fixtures/app";
 
 const agentCards = '[data-testid="tool-card"][data-tool="Agent"]';
 
@@ -19,7 +19,7 @@ test("foreground parallel fan-out: live Agent cards, report fold, child transcri
 	await expect(cards).toHaveCount(2, { timeout: 180_000 });
 	await expect(cards.first()).toHaveAttribute("data-status", "done", { timeout: 180_000 });
 	await expect(cards.nth(1)).toHaveAttribute("data-status", "done", { timeout: 180_000 });
-	await waitForDone(page, 120_000);
+	await waitForAgentSettled(page, 120_000);
 
 	const header = cards.first().getByTestId("tool-card-toggle");
 	await expect(header).toContainText("echo");

@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { openWorkspaceChat, routineActivityRows, waitForDone } from "./fixtures/app";
+import { openWorkspaceChat, routineActivityRows, waitForAgentSettled } from "./fixtures/app";
 
 test("turn-divider files-changed chip opens the file's diff and highlights its row in Changes", {
 	tag: "@agent",
@@ -16,7 +16,7 @@ test("turn-divider files-changed chip opens the file's diff and highlights its r
 	await expect(routineActivityRows(page).filter({ hasText: "write" }).first()).toBeVisible({
 		timeout: 90_000,
 	});
-	await waitForDone(page);
+	await waitForAgentSettled(page);
 
 	const chip = page.getByTestId("turn-divider-files").first();
 	await expect(chip).toBeVisible({ timeout: 30_000 });
@@ -47,7 +47,7 @@ test("turn-divider counts a scratch task-spec as a spec and opens it from the Sp
 	await expect(routineActivityRows(page).filter({ hasText: "spec_create" }).first()).toBeVisible({
 		timeout: 90_000,
 	});
-	await waitForDone(page);
+	await waitForAgentSettled(page);
 
 	const specChip = page.getByTestId("turn-divider-specs").first();
 	await expect(specChip).toBeVisible({ timeout: 30_000 });
@@ -75,7 +75,7 @@ test("a multi-artifact chip expands into the round's list instead of guessing wh
 				"beta.txt containing the single line beta. Then stop.",
 		);
 	await page.getByTestId("chat-send").click();
-	await waitForDone(page);
+	await waitForAgentSettled(page);
 
 	const chip = page.getByTestId("turn-divider-files").first();
 	await expect(chip).toBeVisible({ timeout: 30_000 });
@@ -125,7 +125,7 @@ test("a spec written while the Specs tab is closed still counts as a spec", {
 		timeout: 90_000,
 	});
 	await expect(routineActivityRows(page).filter({ hasText: "spec_create" })).toHaveCount(0);
-	await waitForDone(page);
+	await waitForAgentSettled(page);
 
 	const specChip = page.getByTestId("turn-divider-specs").first();
 	await expect(specChip).toBeVisible({ timeout: 30_000 });
@@ -149,7 +149,7 @@ test("the two artifact chips are a switch: one list at a time, and re-clicking c
 				"---\nid: sample-doc-two\ntype: module-design\ntitle: Doc Two\nparent: sample-root\n---\n\n## Responsibility\n\nTwo.\n",
 		);
 	await page.getByTestId("chat-send").click();
-	await waitForDone(page);
+	await waitForAgentSettled(page);
 
 	const specsChip = page.getByTestId("turn-divider-specs").first();
 	const filesChip = page.getByTestId("turn-divider-files").first();

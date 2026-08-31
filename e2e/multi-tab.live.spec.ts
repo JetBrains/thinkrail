@@ -6,7 +6,7 @@ import {
 	worktreeRows,
 } from "./fixtures/app";
 
-test("a second tab hydrates the same workspace's chats and then sees live updates", {
+test("a second tab reopens the same workspace chat and then sees live updates", {
 	tag: "@agent",
 }, async ({ page, context }) => {
 	test.setTimeout(120_000);
@@ -28,11 +28,10 @@ test("a second tab hydrates the same workspace's chats and then sees live update
 	await page2.goto("/");
 	await expect(page2.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 	await revealFirstProjectWorkspaces(page2);
-	await worktreeRows(page2).first().click();
+	await worktreeRows(page2).first().getByRole("button").first().click();
+	await page2.getByTestId("chat-history").first().click();
+	await page2.getByTestId("closed-chat-item").first().click();
 
-	await expect(page2.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1, {
-		timeout: 30_000,
-	});
 	await expect(
 		page2.locator('[data-testid="chat-message"][data-role="user"]').filter({ hasText: "alpha" }),
 	).toBeVisible({ timeout: 30_000 });
