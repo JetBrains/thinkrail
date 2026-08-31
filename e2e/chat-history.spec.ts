@@ -175,6 +175,25 @@ test("coarse wheel input crosses realistic virtual geometry before a giant histo
 			};
 		})
 		.toEqual({ atPhysicalLatestEdge: true, latestRowIntersectsViewport: true });
+
+	await page.reload();
+	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+	await expect(latestRow).toBeVisible();
+	await expect(page.getByText(longBlockMarker, { exact: true })).toHaveCount(0);
+	await expect
+		.poll(async () => (await readChatScrollGeometry(chatScroll)).distanceFromEnd)
+		.toBeLessThanOrEqual(16);
+	await moveMouseToChatViewport(page, chatScroll);
+	for (let delta = 0; delta < 20; delta += 1) {
+		await page.mouse.wheel(0, -100);
+		await page.evaluate(() => new Promise(requestAnimationFrame));
+	}
+	const granular = await readChatScrollGeometry(chatScroll);
+
+	expect(granular.distanceFromEnd).toBeGreaterThan(substantialTravelFloor);
+	expect(Math.abs(granular.distanceFromEnd - after.distanceFromEnd)).toBeLessThanOrEqual(
+		granular.clientHeight,
+	);
 });
 
 test("a closed chat can be moved to trash from history", async ({ page }) => {

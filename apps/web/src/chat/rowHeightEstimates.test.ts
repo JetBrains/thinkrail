@@ -92,16 +92,16 @@ describe("chat row height estimates", () => {
 		expect(heights[0]).toBeGreaterThan(heights[2] ?? 0);
 	});
 
-	test("invalidates a cached row when streaming text changes under the same id", () => {
+	test("reuses a mounted estimate while streaming and refreshes it for a virtualizer remount", () => {
 		const cache = new Map();
 		const id = "assistant-stream:text:0";
 		const initial = estimateChatRowHeights([markdownRow(id, "Starting response.")], cache)[0];
-		const grown = estimateChatRowHeights(
-			[markdownRow(id, Array.from({ length: 60 }, () => paragraph).join("\n\n"))],
-			cache,
-		)[0];
+		const grownRow = markdownRow(id, Array.from({ length: 60 }, () => paragraph).join("\n\n"));
+		const cached = estimateChatRowHeights([grownRow], cache)[0];
+		const remounted = estimateChatRowHeights([grownRow], new Map())[0];
 
-		expect(grown).toBeGreaterThan(initial ?? 0);
+		expect(cached).toBe(initial);
+		expect(remounted).toBeGreaterThan(initial ?? 0);
 	});
 
 	test("models collapsed reports and expanded visualization payloads", () => {

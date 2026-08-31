@@ -456,6 +456,23 @@ describe("reading-band reader intent", () => {
 		expect(harness.writes).toEqual([0]);
 	});
 
+	it("keeps a manual return pinned while late row measurement expands the markerless range", () => {
+		const harness = createHarness({ streaming: false });
+		harness.controller.readerLeft();
+		harness.setGeometry({ scrollTop: 300, maxScrollTop: 900 });
+		harness.controller.returnToEdge();
+		expect(harness.writes).toEqual([900]);
+		expect(harness.pendingFrames()).toBe(1);
+
+		harness.setGeometry({ maxScrollTop: 1_400 });
+		harness.advance(16);
+		expect(harness.writes.at(-1)).toBe(1_400);
+		for (let frame = 0; frame < 3; frame += 1) harness.advance(16);
+
+		expect(harness.pendingFrames()).toBe(0);
+		expect(harness.controller.getSnapshot().following).toBe(true);
+	});
+
 	it("returns and reconstructs at the physical top when newest-first makes top the latest edge", () => {
 		const returning = createHarness({ latestEdge: "top" });
 		returning.controller.readerLeft();

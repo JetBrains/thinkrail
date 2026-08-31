@@ -52,6 +52,54 @@ async function selectOldestFirst(page: Page): Promise<void> {
 	await page.keyboard.press("Escape");
 }
 
+function seedTallQuestionnaire(name: string, toolCallId: string) {
+	const args: AskUserQuestionArgs = {
+		questions: [
+			{
+				question: "Which first-page rollout should we use?",
+				header: "First page",
+				options: optionsFor("First"),
+			},
+			{
+				question: "Which second-page rollout should we use?",
+				header: "Second page",
+				options: optionsFor("Second"),
+			},
+		],
+	};
+	const ack: AskUserQuestionAckDetails = { kind: "ack" };
+	const session = seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), {
+		name,
+		messages: [
+			{ role: "user", text: "Ask me to choose both rollout stages.", timestamp: BASE_TS },
+			{
+				role: "assistant",
+				content: [
+					{
+						type: "toolCall",
+						id: toolCallId,
+						name: "ask_user_question",
+						arguments: args,
+					},
+				],
+				stopReason: "toolUse",
+				timestamp: BASE_TS + 1_000,
+			},
+			{
+				role: "toolResult",
+				toolCallId,
+				toolName: "ask_user_question",
+				content: [{ type: "text", text: "Questions shown to the user; awaiting an answer." }],
+				details: ack,
+				isError: false,
+				timestamp: BASE_TS + 2_000,
+			},
+		],
+	});
+	utimesSync(session.path, new Date(BASE_TS), new Date(BASE_TS));
+	return session;
+}
+
 async function wheelUntilChatElementIntersects(
 	page: Page,
 	chatScroll: Locator,
@@ -81,51 +129,7 @@ test("a persisted tall questionnaire reveals the next page in the transcript wit
 	await page.setViewportSize({ width: 1280, height: 720 });
 	await openFixtureProject(page);
 
-	const toolCallId = "ask-tall-pages";
-	const args: AskUserQuestionArgs = {
-		questions: [
-			{
-				question: "Which first-page rollout should we use?",
-				header: "First page",
-				options: optionsFor("First"),
-			},
-			{
-				question: "Which second-page rollout should we use?",
-				header: "Second page",
-				options: optionsFor("Second"),
-			},
-		],
-	};
-	const ack: AskUserQuestionAckDetails = { kind: "ack" };
-	const session = seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), {
-		name: "tall persisted questionnaire",
-		messages: [
-			{ role: "user", text: "Ask me to choose both rollout stages.", timestamp: BASE_TS },
-			{
-				role: "assistant",
-				content: [
-					{
-						type: "toolCall",
-						id: toolCallId,
-						name: "ask_user_question",
-						arguments: args,
-					},
-				],
-				stopReason: "toolUse",
-				timestamp: BASE_TS + 1_000,
-			},
-			{
-				role: "toolResult",
-				toolCallId,
-				toolName: "ask_user_question",
-				content: [{ type: "text", text: "Questions shown to the user; awaiting an answer." }],
-				details: ack,
-				isError: false,
-				timestamp: BASE_TS + 2_000,
-			},
-		],
-	});
-	utimesSync(session.path, new Date(BASE_TS), new Date(BASE_TS));
+	const session = seedTallQuestionnaire("tall persisted questionnaire", "ask-tall-pages");
 
 	try {
 		await selectOldestFirst(page);
@@ -163,5 +167,56 @@ test("a persisted tall questionnaire reveals the next page in the transcript wit
 		await expect(chatScroll).toHaveAttribute("data-follow-state", "detached");
 	} finally {
 		rmSync(session.path, { force: true });
+	}
+});
+
+test("a coarse pointer reveals a returning page's text target without focusing it", async ({
+	browser,
+}) => {
+	const context = await browser.newContext({
+		hasTouch: true,
+		viewport: { width: 1280, height: 720 },
+	});
+	const page = await context.newPage();
+	await openFixtureProject(page);
+	const session = seedTallQuestionnaire("touch questionnaire", "ask-touch-pages");
+
+	try {
+		await enterDefaultWorkspace(page);
+		await hideAuxiliaryWorkbench(page);
+		await openChatFromHistory(page, "touch questionnaire");
+
+		const chatScroll = page.getByTestId("chat-scroll");
+		const card = page.locator('[data-testid="ask-user-question"][data-tone="active"]');
+		await expect(card).toBeVisible();
+		await card.getByTestId("ask-option").first().click();
+		const next = card.getByTestId("ask-continue");
+		await wheelUntilChatElementIntersects(page, chatScroll, next);
+		await next.click();
+
+		const custom = card.getByTestId("ask-custom");
+		await custom.fill("Use a custom second-stage rollout.");
+		await expect(custom).toBeFocused();
+		await card.getByTestId("ask-tab").first().click();
+		await expect(card.getByTestId("ask-question-text")).toHaveText(
+			"Which first-page rollout should we use?",
+		);
+		await wheelUntilChatElementIntersects(page, chatScroll, next);
+		await next.click();
+
+		const secondHeading = card.getByTestId("ask-question-text");
+		await expect(secondHeading).toHaveText("Which second-page rollout should we use?");
+		await expect
+			.poll(async () => ({
+				heading: (await readChatViewportIntersection(secondHeading)).intersects,
+				custom: (await readChatViewportIntersection(custom)).intersects,
+			}))
+			.toEqual({ heading: true, custom: true });
+		await expect(custom).not.toBeFocused();
+		expect(await nestedVerticalScrollSurfaces(card)).toEqual([]);
+		await expect(chatScroll).toHaveAttribute("data-follow-state", "detached");
+	} finally {
+		rmSync(session.path, { force: true });
+		await context.close();
 	}
 });

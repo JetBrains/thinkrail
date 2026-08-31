@@ -8,14 +8,7 @@ const PROSE_LINE_HEIGHT = 22;
 const CODE_LINE_HEIGHT = 20;
 const BLOCK_GAP = 10;
 
-export interface RowHeightEstimateCacheEntry {
-	signature: string;
-	source: unknown;
-	secondarySource: unknown;
-	height: number;
-}
-
-export type RowHeightEstimateCache = Map<string, RowHeightEstimateCacheEntry>;
+export type RowHeightEstimateCache = Map<string, number>;
 
 function clampHeight(height: number): number {
 	if (!Number.isFinite(height)) return MAX_ESTIMATED_HEIGHT;
@@ -162,45 +155,6 @@ export function estimateChatRowHeight(row: ChatRow): number {
 	}
 }
 
-interface RowEstimateIdentity {
-	signature: string;
-	source: unknown;
-	secondarySource: unknown;
-}
-
-function rowEstimateIdentity(row: ChatRow): RowEstimateIdentity {
-	switch (row.kind) {
-		case "markdown":
-		case "system":
-		case "error":
-			return { signature: row.kind, source: row.text, secondarySource: null };
-		case "user":
-			return {
-				signature: `${row.kind}:${userAttachmentCount(row)}`,
-				source: row.message.content,
-				secondarySource: null,
-			};
-		case "tool": {
-			const status = row.tool?.status ?? (row.dead ? "error" : "running");
-			return {
-				signature: `${row.kind}:${row.toolName}:${status}`,
-				source: row.args,
-				secondarySource: row.tool?.raw,
-			};
-		}
-		case "activity":
-			return { signature: row.kind, source: null, secondarySource: null };
-		case "subagentCompletion":
-			return { signature: row.kind, source: null, secondarySource: null };
-		case "compaction":
-			return { signature: row.kind, source: null, secondarySource: null };
-		case "retry":
-			return { signature: row.kind, source: null, secondarySource: null };
-		case "divider":
-			return { signature: row.kind, source: null, secondarySource: null };
-	}
-}
-
 export function estimateChatRowHeights(
 	rows: readonly ChatRow[],
 	cache: RowHeightEstimateCache,
@@ -208,17 +162,10 @@ export function estimateChatRowHeights(
 	const activeIds = new Set<string>();
 	const heights = rows.map((row) => {
 		activeIds.add(row.id);
-		const identity = rowEstimateIdentity(row);
 		const cached = cache.get(row.id);
-		if (
-			cached?.signature === identity.signature &&
-			cached.source === identity.source &&
-			cached.secondarySource === identity.secondarySource
-		) {
-			return cached.height;
-		}
+		if (cached !== undefined) return cached;
 		const height = estimateChatRowHeight(row);
-		cache.set(row.id, { ...identity, height });
+		cache.set(row.id, height);
 		return height;
 	});
 	for (const id of cache.keys()) {

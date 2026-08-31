@@ -6,6 +6,8 @@ const EDGE_TRIGGER_RATIO = 0.82;
 const EDGE_SETTLE_RATIO = 0.58;
 const TAIL_RUNWAY_RATIO = 1 - EDGE_SETTLE_RATIO;
 const ADVANCE_DURATION_MS = 220;
+const EDGE_PIN_STABLE_FRAMES = 3;
+const EDGE_PIN_MAX_FRAMES = 30;
 const GEOMETRY_EPSILON = 0.5;
 
 export type ReadingBandLatestEdge = "top" | "bottom";
@@ -125,6 +127,7 @@ export function createReadingBandController(
 	};
 	let frame: number | null = null;
 	let anchorFrame: number | null = null;
+	let edgePinFrame: number | null = null;
 	let activeStreamMount = streaming;
 	let reconstructed = false;
 	let runwayMode: "turn" | "floor" | null = null;
@@ -156,6 +159,11 @@ export function createReadingBandController(
 	const cancelAnchor = () => {
 		if (anchorFrame !== null) environment.cancelFrame(anchorFrame);
 		anchorFrame = null;
+	};
+
+	const cancelEdgePin = () => {
+		if (edgePinFrame !== null) environment.cancelFrame(edgePinFrame);
+		edgePinFrame = null;
 	};
 
 	const writeRunwayHeight = (height: number) => {
@@ -201,7 +209,34 @@ export function createReadingBandController(
 	const latestScrollTop = (bounds: ReadingBandScrollBounds) =>
 		latestEdge === "top" ? 0 : bounds.maxScrollTop;
 
+	const pinLatestEdge = () => {
+		cancelEdgePin();
+		let remainingFrames = EDGE_PIN_MAX_FRAMES;
+		let stableFrames = 0;
+		let previousTarget: number | null = null;
+		const pin = () => {
+			edgePinFrame = null;
+			const bounds = environment.readScrollBounds();
+			if (!bounds) return;
+			const target = latestScrollTop(bounds);
+			environment.writeScrollTop(target);
+			const measuredBounds = environment.readScrollBounds() ?? bounds;
+			const measuredTarget = latestScrollTop(measuredBounds);
+			const stable =
+				previousTarget !== null &&
+				Math.abs(measuredTarget - previousTarget) <= GEOMETRY_EPSILON &&
+				Math.abs(measuredBounds.scrollTop - measuredTarget) <= GEOMETRY_EPSILON;
+			stableFrames = stable ? stableFrames + 1 : 0;
+			previousTarget = measuredTarget;
+			remainingFrames -= 1;
+			if (stableFrames >= EDGE_PIN_STABLE_FRAMES || remainingFrames <= 0) return;
+			edgePinFrame = environment.requestFrame(pin);
+		};
+		pin();
+	};
+
 	const moveTo = (target: number, requireStreaming: boolean, reevaluate: boolean) => {
+		cancelEdgePin();
 		const bounds = environment.readScrollBounds();
 		if (!bounds || Math.abs(target - bounds.scrollTop) <= GEOMETRY_EPSILON) return;
 		cancelMotion();
@@ -257,12 +292,14 @@ export function createReadingBandController(
 		armImmediateTurn: () => {
 			cancelMotion();
 			cancelAnchor();
+			cancelEdgePin();
 			pendingTurnRunway = false;
 			publish({ following: true, runway: true });
 		},
 		userTurnArrived: (index, source) => {
 			if (source === "queued" && !state.following) return;
 			cancelMotion();
+			cancelEdgePin();
 			if (source === "immediate") publish({ following: true, runway: true });
 			const viewportHeight = environment.readViewportHeight();
 			if (viewportHeight <= 0) return;
@@ -284,10 +321,12 @@ export function createReadingBandController(
 		cancelMovement: () => {
 			cancelMotion();
 			cancelAnchor();
+			cancelEdgePin();
 		},
 		readerLeft: () => {
 			cancelMotion();
 			cancelAnchor();
+			cancelEdgePin();
 			publish({ following: false });
 		},
 		readerReachedEdge: () => publish({ following: true }),
@@ -295,10 +334,10 @@ export function createReadingBandController(
 			cancelMotion();
 			cancelAnchor();
 			publish({ following: true });
-			const bounds = environment.readScrollBounds();
-			if (bounds) environment.writeScrollTop(latestScrollTop(bounds));
+			pinLatestEdge();
 		},
 		setStreaming: (nextStreaming) => {
+			cancelEdgePin();
 			if (!nextStreaming) cancelMotion();
 			publish({
 				streaming: nextStreaming,
@@ -323,6 +362,7 @@ export function createReadingBandController(
 			if (edge === latestEdge) return;
 			cancelMotion();
 			cancelAnchor();
+			cancelEdgePin();
 			latestEdge = edge;
 			activeStreamMount = state.streaming;
 			reconstructed = false;
@@ -336,6 +376,7 @@ export function createReadingBandController(
 		dispose: () => {
 			cancelMotion();
 			cancelAnchor();
+			cancelEdgePin();
 			pendingTurnRunway = false;
 		},
 	};

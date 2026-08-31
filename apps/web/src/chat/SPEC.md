@@ -316,7 +316,8 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   an interactive descendant never undo that cancellation. Geometry alone never re-arms a detached reader.
   Renderers needing attention expose an element through `ChatActions`; `useChatScroll` alone reveals it in
   the transcript with a clamped direct scroll write. That local reveal never changes follow state, while the
-  **Latest** action always writes the physical latest edge even when no stream marker is mounted.
+  **Latest** action always writes the physical latest edge even when no stream marker is mounted, and
+  keeps that edge pinned for a bounded settling window while newly mounted rows replace estimates.
 - **Oldest-first reading band** — the established behavior remains intact. An immediate local send aligns
   its user row at 10% of transcript height clamped to 48–80px and gives the response a one-way 60%-viewport
   runway. A transient list header makes that inset possible even for the first row; the tail spacer starts

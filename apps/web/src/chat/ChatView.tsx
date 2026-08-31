@@ -235,7 +235,14 @@ export default function ChatView({
 		() => projectRows(chronologicalRows, chatMessageOrder),
 		[chronologicalRows, chatMessageOrder],
 	);
-	const rowHeightEstimateCache = useRef<RowHeightEstimateCache>(new Map()).current;
+	const rowHeightEstimateCacheRef = useRef<{
+		messageOrder: ChatMessageOrder;
+		cache: RowHeightEstimateCache;
+	}>({ messageOrder: chatMessageOrder, cache: new Map() });
+	if (rowHeightEstimateCacheRef.current.messageOrder !== chatMessageOrder) {
+		rowHeightEstimateCacheRef.current = { messageOrder: chatMessageOrder, cache: new Map() };
+	}
+	const rowHeightEstimateCache = rowHeightEstimateCacheRef.current.cache;
 	const rowHeightEstimates = useMemo(
 		() => estimateChatRowHeights(rows, rowHeightEstimateCache),
 		[rows, rowHeightEstimateCache],
