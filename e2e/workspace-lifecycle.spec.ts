@@ -30,6 +30,32 @@ test("workspace removal propagates — no zombie row in a second tab", async ({ 
 	await expect(page2.getByTestId("toast").filter({ hasText: created.name })).toBeVisible();
 });
 
+test("workspace rename propagates to a second tab through the authoritative snapshot", async ({
+	page,
+	context,
+}) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	const sourceRow = worktreeRows(page).first();
+
+	const page2 = await context.newPage();
+	await page2.goto("/");
+	await expect(page2.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+	await revealFirstProjectWorkspaces(page2);
+	const peerRow = worktreeRows(page2).first();
+	await expect(peerRow).toBeVisible();
+
+	await openWorkspaceMenu(sourceRow);
+	await page.getByTestId("workspace-rename").click();
+	await page.getByTestId("rename-workspace-input").fill("Shared Rename");
+	await page.getByTestId("rename-workspace-submit").click();
+
+	for (const row of [sourceRow, peerRow]) {
+		await expect(row.getByTestId("workspace-name")).toHaveText("Shared Rename");
+		await expect(row.getByTestId("workspace-branch")).toHaveText("shared-rename");
+	}
+});
+
 test("removing the active workspace restores the previously selected workspace", async ({
 	page,
 }) => {
