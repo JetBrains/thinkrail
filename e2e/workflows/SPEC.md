@@ -13,10 +13,11 @@ tags: [testing, workflow-system, pi]
 The headless workflow-test suite: drives a **real in-process pi agent** through the workflow skills
 ([[module-thinkrail-workflow]]) with **no browser and no HTTP host**, and decides pass/fail with a
 strict verdict model. Run on demand via `bun run test:workflows` (own Playwright config,
-`playwright.workflows.config.ts` — no `webServer`; shares the browser suite's global setup for the
-isolated `PI_CODING_AGENT_DIR` + pinned model, which `env.ts` then clones **per worker process**
-(pid-suffixed, auth + settings copied in): workers must never share one agent dir — a dying worker's
-session dispose overlapping the next worker's newborn session in the shared `sessions/` tree turned
+`playwright.workflows.config.ts` — no `webServer`; deliberately retains the local PI-auth setup rather than
+the browser agent suite's real-Central mode). Its isolated `PI_CODING_AGENT_DIR` + pinned model are cloned by
+`env.ts` **per worker process** (pid-suffixed, auth + settings copied in): workers must never share one agent
+dir — a dying worker's session dispose overlapping the next worker's newborn session in the shared
+`sessions/` tree turned
 one failure into an ENOENT cascade across every later live-session test. `env.ts` also sets an isolated
 `HOME`/vendor-home set so portable skill discovery never reads a developer's personal libraries. Needs
 pi auth and spends real provider tokens — never

@@ -1,5 +1,10 @@
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import { openFixtureProject, worktreeRows } from "./fixtures/app";
+import { isExactE2eModel, resolveE2eModel } from "./fixtures/centralAgent";
+import { E2E_CENTRAL_ARTIFACT, E2E_PI_AGENT_DIR } from "./fixtures/paths";
+import { E2eWire } from "./fixtures/wire";
 
 async function kickOff(page: import("@playwright/test").Page, prompt: string): Promise<void> {
 	const dialog = page.getByTestId("new-workspace-dialog");
@@ -16,18 +21,30 @@ test("the dialog shows the exact default model and its picker scrolls inside the
 	tag: "@agent",
 }, async ({ page }) => {
 	await openFixtureProject(page);
+	expect(existsSync(E2E_CENTRAL_ARTIFACT)).toBe(true);
+	const authPath = join(E2E_PI_AGENT_DIR, "auth.json");
+	if (existsSync(authPath))
+		expect(Object.keys(JSON.parse(readFileSync(authPath, "utf8")))).toEqual([]);
+	expect(existsSync(join(E2E_PI_AGENT_DIR, "models.json"))).toBe(false);
+
+	const wire = await E2eWire.connect();
+	const selected = await wire.request("model.default", {}).finally(() => wire.close());
+	expect(isExactE2eModel(selected.model, resolveE2eModel())).toBe(true);
+	if (!selected.model) throw new Error("Central agent model is missing after setup preflight");
+
 	await page.getByTestId("add-workspace").first().click();
 	const dialog = page.getByTestId("new-workspace-dialog");
 	await expect(dialog).toBeVisible();
 
 	const model = dialog.getByTestId("model-selector");
 	await expect(model).toBeEnabled();
-	await expect(model).not.toContainText("Default model");
-	await expect(model).not.toContainText("Select model");
+	await expect(model).toContainText(selected.model.name);
 
 	await model.click();
 	const list = page.locator("[cmdk-list]");
-	await expect(page.getByTestId("model-option").first()).toBeVisible();
+	const exactOption = page.getByTestId("model-option").filter({ hasText: selected.model.id });
+	await expect(exactOption).toHaveCount(1);
+	await expect(exactOption).toBeVisible();
 	await expect(list).toHaveJSProperty("scrollTop", 0);
 	await list.hover();
 	await page.mouse.wheel(0, 600);

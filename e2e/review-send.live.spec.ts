@@ -19,7 +19,15 @@ test("a review send reads back from the chat: summary → file → comment + fra
 		"export const one = 1;\nexport const two = 2;\nexport const three = 3;\n",
 	);
 	await page.getByTestId("tab-changes").click();
-	await page.getByTestId("change-item").filter({ hasText: "script.ts" }).click();
+	const changeItem = page.getByTestId("change-item").filter({ hasText: "script.ts" });
+	await expect(async () => {
+		const staleNotification = page
+			.getByRole("listitem")
+			.filter({ hasText: "Couldn't load this workspace's chats" })
+			.getByRole("button", { name: "Dismiss" });
+		if (await staleNotification.isVisible()) await staleNotification.click();
+		await changeItem.click({ timeout: 2_000 });
+	}).toPass({ timeout: 30_000 });
 	await page.getByTestId("diff-pane").getByText("two = 2").last().click();
 	await page.keyboard.press("Home");
 	await page.keyboard.press("Shift+End");
@@ -44,8 +52,11 @@ test("a review send reads back from the chat: summary → file → comment + fra
 	await unfoldAndAssert();
 
 	await expect(
-		page.locator('[data-testid="chat-message"][data-role="system"]').filter({ hasText: "Done" }),
+		page.locator('[data-testid="chat-message"][data-role="assistant"]').last(),
 	).toBeVisible({ timeout: 90_000 });
+	await expect(page.getByTestId("chat-scroll")).toHaveAttribute("data-streaming", "false", {
+		timeout: 90_000,
+	});
 
 	const chatTabs = page.locator('[data-testid="editor-tab"][data-kind="chat"]');
 	await chatTabs.first().getByTestId("editor-tab-close").click();

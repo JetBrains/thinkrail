@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { openWorkspaceChat, waitForDone } from "./fixtures/app";
+import { openWorkspaceChat, waitForAgentSettled } from "./fixtures/app";
 
 test("the agent maintains the chat's TODO plan live, and picks up a user-added item", {
 	tag: "@agent",
@@ -13,7 +13,7 @@ test("the agent maintains the chat's TODO plan live, and picks up a user-added i
 			'Use todo_write to create a TODO plan with one group titled "Demo" containing exactly two items titled "Alpha" and "Beta". Then do no other work — just mark both done with todo_update.',
 		);
 	await page.getByTestId("chat-send").click();
-	await waitForDone(page, 150_000);
+	await waitForAgentSettled(page, 150_000);
 
 	await page.getByTestId("chat-plan-toggle").click();
 	const popover = page.getByTestId("chat-plan-popover");
