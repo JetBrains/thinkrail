@@ -187,15 +187,7 @@ test("review creation retries when the diff target changes during base resolutio
 	gitIn(worktree, ["switch", "-c", "feature"]);
 	writeFileSync(join(worktree, "feature.ts"), "feature\n");
 	gitIn(worktree, ["add", "feature.ts"]);
-	gitIn(worktree, [
-		"-c",
-		"user.email=t@t",
-		"-c",
-		"user.name=t",
-		"commit",
-		"-m",
-		"feature",
-	]);
+	gitIn(worktree, ["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-m", "feature"]);
 	const featureHead = execFileSync("git", ["rev-parse", "HEAD"], {
 		cwd: worktree,
 		encoding: "utf8",
