@@ -1,4 +1,5 @@
-import type { UserMessage } from "@thinkrail/contracts";
+import type { DelegationRunDetails, UserMessage } from "@thinkrail/contracts";
+import type { ChatMessageOrder } from "./messageOrder";
 import { resolveProminence } from "./toolRegistry";
 import { strArg } from "./tools/toolHelpers";
 import type { ChatTurn, CompactionState, FailureRecovery, ToolResultState } from "./types";
@@ -38,6 +39,7 @@ export type ChatRow =
 			delayMs: number;
 	  }
 	| { kind: "markdown"; id: string; text: string }
+	| { kind: "subagentCompletion"; id: string; details: DelegationRunDetails; text: string }
 	| ({ kind: "tool"; id: string } & ToolCallData)
 	| {
 			kind: "activity";
@@ -46,6 +48,31 @@ export type ChatRow =
 			live: boolean;
 	  }
 	| { kind: "divider"; id: string; data: TurnDividerData };
+
+export function projectRows(rows: ChatRow[], messageOrder: ChatMessageOrder): ChatRow[] {
+	if (messageOrder === "oldest-first" || rows.length < 2) return rows;
+	const groups: ChatRow[][] = [];
+	let group: ChatRow[] = [];
+	for (const row of rows) {
+		if (row.kind === "user" && group.length > 0) {
+			groups.push(group);
+			group = [];
+		}
+		group.push(row);
+	}
+	if (group.length > 0) groups.push(group);
+
+	const projected: ChatRow[] = [];
+	for (let groupIndex = groups.length - 1; groupIndex >= 0; groupIndex -= 1) {
+		const current = groups[groupIndex];
+		if (!current) continue;
+		for (let rowIndex = current.length - 1; rowIndex >= 0; rowIndex -= 1) {
+			const row = current[rowIndex];
+			if (row) projected.push(row);
+		}
+	}
+	return projected;
+}
 
 function nestRoutineRun(steps: ActivityStep[]): ActivityStep[] {
 	const nested: ActivityStep[] = [];
@@ -151,6 +178,14 @@ export function deriveRows(
 						attempt: turn.attempt,
 						maxAttempts: turn.maxAttempts,
 						delayMs: turn.delayMs,
+					});
+					break;
+				case "subagentCompletion":
+					rows.push({
+						kind: "subagentCompletion",
+						id: turn.id,
+						details: turn.details,
+						text: turn.text,
 					});
 					break;
 			}

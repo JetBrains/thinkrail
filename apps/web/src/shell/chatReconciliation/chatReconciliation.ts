@@ -1,10 +1,8 @@
-import type { LayoutCenterTab, WorkspaceLayoutDocument } from "@thinkrail/contracts";
 import { useEffect, useRef } from "react";
 import { messagesToRuntime } from "../../chat/hydrate";
 import { type LayoutAttention, readLayoutSelection, tupleKey } from "../../lib";
 import {
 	type CenterNavigationStamp,
-	captureCenterNavigation,
 	chatTabId,
 	type EditorTab,
 	isConnectedGeneration,
@@ -21,13 +19,14 @@ import {
 	collectAllGroups,
 	findPlacedResource,
 	findTabLocation,
+	type LayoutCenterTab,
 	removeSessionLayoutTabs,
 	selectTab,
+	type WorkspaceLayoutDocument,
 } from "../layout";
-import { commitWorkspaceLayout } from "../layoutSync";
+import { commitWorkspaceLayout } from "../layoutState";
 
 const sessionHydration = new Map<string, Promise<boolean>>();
-const AUTO_OPEN_CHAT_LIMIT = 4;
 
 export function hydrateChatResource(workspaceId: string, sessionId: string): Promise<boolean> {
 	const state = useAppStore.getState();
@@ -153,7 +152,7 @@ export function useDeletedChatPlacementReconciliation(workspaceId: string): void
 		tombstonePruneAttempts.current.add(document);
 		const pruned = deletedPlacedSessions.reduce(removeSessionLayoutTabs, document);
 		if (pruned !== document) {
-			void commitWorkspaceLayout(workspaceId, pruned).catch(() => {
+			void commitWorkspaceLayout(workspaceId, pruned, document).catch(() => {
 				tombstonePruneAttempts.current.delete(document);
 			});
 		}
@@ -308,79 +307,14 @@ export function useWorkspaceChatCatalogReconciliation(
 						}
 					}
 				}
-				let sawKnown = false;
-				const toOpen: typeof summaries = [];
-				const toHistory: typeof summaries = [];
-				for (const summary of [...summaries].sort((a, b) => b.updatedAt - a.updatedAt)) {
-					if (summary.sessionId === handledRouteSessionId || placed.has(summary.sessionId))
-						continue;
-					if (useAppStore.getState().sessions[summary.sessionId]) {
-						sawKnown = true;
-						continue;
-					}
-					if (
-						(summary.live || (summary.openTodos ?? 0) > 0) &&
-						toOpen.length < AUTO_OPEN_CHAT_LIMIT
-					) {
-						toOpen.push(summary);
-					} else {
-						toHistory.push(summary);
-					}
-				}
-				if (
-					handledRouteSessionId === null &&
-					placed.size === 0 &&
-					toOpen.length === 0 &&
-					!sawKnown
-				) {
-					const fallback = toHistory.shift();
-					if (fallback) toOpen.push(fallback);
-				}
-				const navigation =
-					toOpen.length > 0 ? captureCenterNavigation(useAppStore.getState(), workspaceId) : null;
-				const loads = toOpen.map((summary) => ({
-					summary,
-					result: fetchMessages(summary.sessionId),
-				}));
-				let openedCount = 0;
-				const failedToOpen: typeof summaries = [];
-				for (const load of loads) {
-					const loaded = await load.result;
-					if (!live()) continue;
-					if (!loaded) {
-						failedToOpen.push(load.summary);
-						continue;
-					}
-					const { summary, messages } = loaded.result;
-					useAppStore
-						.getState()
-						.hydrateSession(
-							summary,
-							messagesToRuntime(messages, summary.lastSettlement),
-							false,
-							summary.live ? undefined : loaded.syncedTick,
-							{ activate: false },
-						);
-					const state = useAppStore.getState();
-					const cache = state.tabsByWorkspace[workspaceId]?.find(
-						(tab): tab is Extract<EditorTab, { kind: "chat" }> =>
-							tab.kind === "chat" && tab.sessionId === summary.sessionId,
+				const history = [...summaries]
+					.sort((a, b) => b.updatedAt - a.updatedAt)
+					.filter(
+						(summary) =>
+							summary.sessionId !== handledRouteSessionId &&
+							!placed.has(summary.sessionId) &&
+							!useAppStore.getState().sessions[summary.sessionId],
 					);
-					if (!state.sessions[summary.sessionId] || !cache) continue;
-					const activate = handledRouteSessionId === null && openedCount === 0;
-					openedCount += 1;
-					const routed = layoutOpenOptionsForNavigation(state, workspaceId, navigation);
-					state.enqueueLayoutIntent({
-						kind: "open",
-						workspaceId,
-						tab: cache,
-						intent: "keep",
-						...routed,
-						activate: activate && routed.activate !== false,
-						countNavigation: false,
-					});
-				}
-				const history = [...toHistory, ...failedToOpen];
 				if (!live() || history.length === 0) return;
 				useAppStore.getState().noteClosedChats(
 					workspaceId,
@@ -443,9 +377,6 @@ export function useChatLocationReconciliation(
 	const status = useAppStore((state) => state.status);
 	const connectionGeneration = useAppStore((state) => state.connectionGeneration);
 	const document = useAppStore((state) => state.layoutDocumentsByWorkspace[workspaceId]);
-	const pendingLayoutWrites = useAppStore(
-		(state) => state.layoutPendingByWorkspace[workspaceId]?.length ?? 0,
-	);
 	const chatLocationRequest = useAppStore((state) => state.chatLocationRequest);
 	const chatLocationFlight = useRef<{
 		request: object;
@@ -453,12 +384,7 @@ export function useChatLocationReconciliation(
 	} | null>(null);
 
 	useEffect(() => {
-		if (
-			!chatLocationRequest ||
-			chatLocationRequest.workspaceId !== workspaceId ||
-			!document ||
-			pendingLayoutWrites > 0
-		) {
+		if (!chatLocationRequest || chatLocationRequest.workspaceId !== workspaceId || !document) {
 			return;
 		}
 		const stateAtRequest = useAppStore.getState();
@@ -619,13 +545,5 @@ export function useChatLocationReconciliation(
 		return () => {
 			current = false;
 		};
-	}, [
-		changeAttention,
-		chatLocationRequest,
-		connectionGeneration,
-		document,
-		pendingLayoutWrites,
-		status,
-		workspaceId,
-	]);
+	}, [changeAttention, chatLocationRequest, connectionGeneration, document, status, workspaceId]);
 }

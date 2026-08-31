@@ -172,7 +172,7 @@ export function openExistingWorktree(projectId: string, requestedPath: string): 
 		worktreePath: entry.path,
 		baseBranch,
 		renamed: true,
-		initialTerminalEligible: true,
+		initialTerminalPending: true,
 	};
 	all.push(workspace);
 	saveWorkspaces(all);
@@ -191,17 +191,22 @@ function applyFolderTruth(ws: Workspace, truth: { branch: string; baseBranch: st
 	return true;
 }
 
-function diffStats(ws: Workspace): DiffStats | undefined {
-	const result = git(ws.worktreePath, changedFileArgs(resolveDiffRange(ws), "--shortstat"));
-	if (!result.ok) {
+async function diffStats(ws: Workspace): Promise<DiffStats | undefined> {
+	try {
+		const result = await gitAsync(
+			ws.worktreePath,
+			changedFileArgs(await resolveDiffRange(ws), "--shortstat"),
+		);
+		if (!result.ok) throw new Error(result.err);
+		if (!result.out) return { added: 0, removed: 0 };
+		return {
+			added: Number(/(\d+) insertion/.exec(result.out)?.[1] ?? 0),
+			removed: Number(/(\d+) deletion/.exec(result.out)?.[1] ?? 0),
+		};
+	} catch {
 		log.warn(`git diff --shortstat failed for workspace ${ws.id}`);
 		return undefined;
 	}
-	if (!result.out) return { added: 0, removed: 0 };
-	return {
-		added: Number(/(\d+) insertion/.exec(result.out)?.[1] ?? 0),
-		removed: Number(/(\d+) deletion/.exec(result.out)?.[1] ?? 0),
-	};
 }
 
 export async function createWorkspace(
@@ -228,12 +233,11 @@ export async function createWorkspace(
 	const remoteBase = remoteTrackingRef(baseBranch);
 	const baseMissing = () => remoteRefOid(project.path, baseBranch) === null;
 	if (remoteBase && baseMissing()) {
-		const fetched = await gitAsync(project.path, [
-			"fetch",
-			"origin",
-			"--",
-			baseBranch.slice("origin/".length),
-		]);
+		const fetched = await gitAsync(
+			project.path,
+			["fetch", "origin", "--", baseBranch.slice("origin/".length)],
+			{ network: true },
+		);
 		if (baseMissing())
 			throw new Error(
 				fetched.ok
@@ -263,7 +267,7 @@ export async function createWorkspace(
 		branch,
 		worktreePath,
 		baseBranch,
-		initialTerminalEligible: true,
+		initialTerminalPending: true,
 		...(displayName ? { renamed: true } : {}),
 	};
 	ensureWorkspaceScratchDir(workspace);
@@ -322,11 +326,22 @@ function ensureDefaultWorkspace(project: Project): Workspace {
 		worktreePath: project.path,
 		baseBranch,
 		renamed: true,
-		initialTerminalEligible: true,
+		initialTerminalPending: true,
 	};
 	all.push(workspace);
 	saveWorkspaces(all);
 	emit({ kind: "created", workspace });
+	return workspace;
+}
+
+export function completeInitialTerminalReservation(workspaceId: string): Workspace {
+	const all = loadWorkspaces();
+	const workspace = all.find((candidate) => candidate.id === workspaceId);
+	if (!workspace) throw new Error(`Unknown workspace: ${workspaceId}`);
+	if (!workspace.initialTerminalPending) return workspace;
+	delete workspace.initialTerminalPending;
+	saveWorkspaces(all);
+	emit({ kind: "updated", workspace });
 	return workspace;
 }
 
@@ -432,10 +447,10 @@ export function setWorkspaceDiffBase(id: string, ref: string | null): Workspace 
 	return ws;
 }
 
-export function listWorkspaces(
+export async function listWorkspaces(
 	projectId: string,
 	opts: { includeDiffStats?: boolean } = {},
-): Workspace[] {
+): Promise<Workspace[]> {
 	const project = getProjects().find((p) => p.id === projectId);
 	if (project) ensureDefaultWorkspace(project);
 	for (const workspace of loadWorkspaces()) {
@@ -443,13 +458,27 @@ export function listWorkspaces(
 			refreshUserOwnedWorkspace(workspace.id);
 		}
 	}
-	const rows = loadWorkspaces().filter((w) => w.projectId === projectId);
-	rows.sort((a, b) => (a.kind === "default" ? -1 : 0) - (b.kind === "default" ? -1 : 0));
+	const rows = projectRows(projectId);
 	if (opts.includeDiffStats === false) return rows;
-	return rows.map((w) => {
-		const stats = diffStats(w);
+	const statsByKey = new Map(
+		await Promise.all(rows.map(async (w) => [workspaceDiffKey(w), await diffStats(w)] as const)),
+	);
+	return projectRows(projectId).map((w) => {
+		const stats = statsByKey.get(workspaceDiffKey(w));
 		return stats ? { ...w, diffStats: stats } : w;
 	});
+}
+
+function projectRows(projectId: string): Workspace[] {
+	const rows = loadWorkspaces().filter((w) => w.projectId === projectId);
+	rows.sort((a, b) => (a.kind === "default" ? -1 : 0) - (b.kind === "default" ? -1 : 0));
+	return rows;
+}
+
+export function workspaceDiffKey(
+	ws: Pick<Workspace, "id" | "worktreePath" | "baseBranch" | "diffBase">,
+): string {
+	return `${ws.id}\u0000${ws.worktreePath}\u0000${ws.baseBranch}\u0000${ws.diffBase ?? ""}`;
 }
 
 export function listWorkspaceRecords(projectId: string): Workspace[] {
@@ -483,9 +512,9 @@ export function removeWorkspace(id: string): void {
 	if (ws) reclaimWorktree(ws);
 }
 
-export function workspaceDiffStats(id: string): DiffStats {
+export async function workspaceDiffStats(id: string): Promise<DiffStats> {
 	const ws = getWorkspace(id);
-	const stats = diffStats(ws);
+	const stats = await diffStats(ws);
 	if (!stats) throw new Error(`Could not read the diff stats of ${ws.name}`);
 	return stats;
 }

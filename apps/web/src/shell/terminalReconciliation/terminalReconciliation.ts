@@ -1,4 +1,4 @@
-import type { LayoutTerminalTab, WorkspaceLayoutDocument } from "@thinkrail/contracts";
+import { INITIAL_TERMINAL_TAB_KEY } from "@thinkrail/contracts";
 import { useEffect, useRef } from "react";
 import type { LayoutAttention } from "../../lib";
 import { useTerminalCatalog } from "../../panels/TerminalWorkbench";
@@ -6,11 +6,13 @@ import { type TerminalTab, useAppStore } from "../../store";
 import {
 	closeLayoutTab,
 	collectAllGroups,
-	createAuxiliaryGroup,
+	collectCenterGroups,
 	isLayoutUnavailable,
+	type LayoutTerminalTab,
 	moveTabToGroup,
 	openCenterTab,
 	primaryCenterGroupId,
+	type WorkspaceLayoutDocument,
 	withAvailablePlacementId,
 } from "../layout";
 
@@ -24,23 +26,32 @@ export function placeRecoveredTerminal(
 	document: WorkspaceLayoutDocument,
 	attention: LayoutAttention | undefined,
 	tab: LayoutTerminalTab,
-	maxBottomGroups: number,
 ): { document: WorkspaceLayoutDocument } {
-	const preferredId = attention?.lastFocusedSideGroupId.bottom;
-	const target =
-		document.bottom.groups.find((group) => group.id === preferredId) ??
+	const preferredBottomId = attention?.lastFocusedSideGroupId.bottom;
+	const bottomTarget =
+		document.bottom.groups.find((group) => group.id === preferredBottomId) ??
 		document.bottom.groups.at(-1);
-	const visible = document.bottom.visible;
-	const placed = target
-		? moveTabToGroup(document, tab, { area: "bottom", groupId: target.id })
-		: createAuxiliaryGroup(document, "bottom", tab, 0, maxBottomGroups);
-	if (isLayoutUnavailable(placed)) return { document };
-	return {
-		document: {
-			...placed.document,
-			bottom: { ...placed.document.bottom, visible },
-		},
-	};
+	if (bottomTarget) {
+		const visible = document.bottom.visible;
+		const placed = moveTabToGroup(document, tab, {
+			area: "bottom",
+			groupId: bottomTarget.id,
+		});
+		if (isLayoutUnavailable(placed)) return { document };
+		return {
+			document: {
+				...placed.document,
+				bottom: { ...placed.document.bottom, visible },
+			},
+		};
+	}
+	const centerGroups = collectCenterGroups(document.center);
+	const centerTarget =
+		centerGroups.find((group) => group.id === attention?.lastFocusedCenterGroupId) ??
+		centerGroups[0];
+	if (!centerTarget) return { document };
+	const placed = moveTabToGroup(document, tab, { area: "center", groupId: centerTarget.id });
+	return isLayoutUnavailable(placed) ? { document } : { document: placed.document };
 }
 
 export function useTerminalPlacementReconciliation(
@@ -53,11 +64,7 @@ export function useTerminalPlacementReconciliation(
 	const layoutIntent = useAppStore(
 		(state) => state.layoutIntents.find((intent) => intent.workspaceId === workspaceId) ?? null,
 	);
-	const pendingLayoutWrites = useAppStore(
-		(state) => state.layoutPendingByWorkspace[workspaceId]?.length ?? 0,
-	);
 	const attention = useAppStore((state) => state.layoutAttentionByWorkspace[workspaceId]);
-	const maxBottomGroups = useAppStore((state) => state.layoutSettings.maxBottomGroups);
 	const terminals = useAppStore((state) => state.terminalsByWorkspace[workspaceId] ?? NO_TERMINALS);
 	const terminalCatalogReady = useTerminalCatalog(workspaceId);
 	const reconciledTerminalCatalog = useRef<{
@@ -67,13 +74,7 @@ export function useTerminalPlacementReconciliation(
 	} | null>(null);
 
 	useEffect(() => {
-		if (
-			!document ||
-			!terminalCatalogReady ||
-			layoutIntent ||
-			pendingLayoutWrites > 0 ||
-			status !== "connected"
-		) {
+		if (!document || !terminalCatalogReady || layoutIntent || status !== "connected") {
 			return;
 		}
 		if (useAppStore.getState().layoutDocumentsByWorkspace[workspaceId] !== document) return;
@@ -109,7 +110,12 @@ export function useTerminalPlacementReconciliation(
 			if (!isLayoutUnavailable(refreshed)) next = refreshed.document;
 		}
 		const placed = new Set(placedTabs.map((tab) => tab.tabKey));
-		const missing = terminals.filter((tab) => !tab.reservationPending && !placed.has(tab.tabKey));
+		const missing = terminals.filter(
+			(tab) =>
+				tab.tabKey === INITIAL_TERMINAL_TAB_KEY &&
+				!tab.reservationPending &&
+				!placed.has(tab.tabKey),
+		);
 		for (const terminal of missing) {
 			const tab = withAvailablePlacementId(next, {
 				kind: "terminal" as const,
@@ -117,7 +123,7 @@ export function useTerminalPlacementReconciliation(
 				name: terminal.title,
 				tabKey: terminal.tabKey,
 			});
-			next = placeRecoveredTerminal(next, attention, tab, maxBottomGroups).document;
+			next = placeRecoveredTerminal(next, attention, tab).document;
 		}
 		if (next !== document) {
 			commit(next);
@@ -130,8 +136,6 @@ export function useTerminalPlacementReconciliation(
 		connectionGeneration,
 		document,
 		layoutIntent,
-		maxBottomGroups,
-		pendingLayoutWrites,
 		status,
 		terminalCatalogReady,
 		terminals,

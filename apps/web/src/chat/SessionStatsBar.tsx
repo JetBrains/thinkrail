@@ -8,13 +8,24 @@ export function formatTokens(count: number): string {
 	return `${Math.round(count / 1_000_000)}M`;
 }
 
+export function formatCost(cost: number): string {
+	return `$${cost.toFixed(3)}`;
+}
+
+export function formatElapsed(ms: number): string {
+	const totalSec = Math.round(ms / 1000);
+	const m = Math.floor(totalSec / 60);
+	const s = totalSec % 60;
+	return m > 0 ? `${m}m ${s}s` : `${s}s`;
+}
+
 export function usageParts(stats: SessionStats): string[] {
 	const parts: string[] = [];
 	if (stats.tokens.input) parts.push(`↑${formatTokens(stats.tokens.input)}`);
 	if (stats.tokens.output) parts.push(`↓${formatTokens(stats.tokens.output)}`);
 	if (stats.tokens.cacheRead) parts.push(`R${formatTokens(stats.tokens.cacheRead)}`);
 	if (stats.tokens.cacheWrite) parts.push(`W${formatTokens(stats.tokens.cacheWrite)}`);
-	if (stats.cost) parts.push(`$${stats.cost.toFixed(3)}`);
+	if (stats.cost) parts.push(formatCost(stats.cost));
 	return parts;
 }
 

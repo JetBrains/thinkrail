@@ -3,7 +3,13 @@ import type {
 	AskUserAnswersDetails,
 	TranscriptMessage,
 } from "@thinkrail/contracts";
-import { isAskUserAnswersMessage, isControlMessage, isRetriedAttempt } from "@thinkrail/contracts";
+import {
+	customMessageText,
+	isAskUserAnswersMessage,
+	isControlMessage,
+	isRetriedAttempt,
+	isSubagentCompletionMessage,
+} from "@thinkrail/contracts";
 import { userText } from "../lib";
 import { assistantFailureText } from "./assistantFailure";
 import type { ChatTurn, ToolResultState } from "./types";
@@ -15,9 +21,24 @@ export interface HydratedRuntime {
 	turnIdByMessageIndex: (string | null)[];
 }
 
+export interface HydrationOptions {
+	idScope?: string;
+}
+
+function transcriptTurnId(
+	message: TranscriptMessage,
+	index: number,
+	options: HydrationOptions,
+): string {
+	return options.idScope
+		? `${options.idScope}:${message.role}:${message.timestamp}:${index}`
+		: crypto.randomUUID();
+}
+
 export function messagesToRuntime(
 	messages: TranscriptMessage[],
 	lastSettlement?: AgentSettlement | null,
+	options: HydrationOptions = {},
 ): HydratedRuntime {
 	const turns: ChatTurn[] = [];
 	const toolResults: Record<string, ToolResultState> = {};
@@ -27,19 +48,19 @@ export function messagesToRuntime(
 		let turnId: string | null = null;
 		if (message.role === "user") {
 			if (!isControlMessage(userText(message.content))) {
-				turnId = crypto.randomUUID();
+				turnId = transcriptTurnId(message, index, options);
 				turns.push({ kind: "user", id: turnId, message });
 			}
 		} else if (message.role === "assistant") {
 			if (isRetriedAttempt(messages, index)) {
 			} else {
-				turnId = crypto.randomUUID();
+				turnId = transcriptTurnId(message, index, options);
 				turns.push({ kind: "assistant", id: turnId, message, streaming: false });
 			}
 		} else if (message.role === "compactionSummary") {
 			turns.push({
 				kind: "compaction",
-				id: crypto.randomUUID(),
+				id: transcriptTurnId(message, index, options),
 				status: "done",
 				summary: message.summary,
 				tokensBefore: message.tokensBefore,
@@ -51,6 +72,14 @@ export function messagesToRuntime(
 			};
 		} else if (isAskUserAnswersMessage(message)) {
 			askAnswers[message.details.toolCallId] = message.details.result;
+		} else if (isSubagentCompletionMessage(message)) {
+			turnId = transcriptTurnId(message, index, options);
+			turns.push({
+				kind: "subagentCompletion",
+				id: turnId,
+				details: message.details,
+				text: customMessageText(message.content),
+			});
 		}
 		turnIdByMessageIndex.push(turnId);
 	}
@@ -66,7 +95,9 @@ export function messagesToRuntime(
 	if (failure)
 		turns.push({
 			kind: "error",
-			id: crypto.randomUUID(),
+			id: options.idScope
+				? `${options.idScope}:error:${persistedTerminal?.timestamp ?? "settlement"}`
+				: crypto.randomUUID(),
 			text: failure,
 			recovery: "try-again",
 		});

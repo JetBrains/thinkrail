@@ -6,6 +6,7 @@ import {
 	RiSettings3Line as Settings,
 } from "@remixicon/react";
 import { useEffect, useRef } from "react";
+import { QuietScrollArea } from "../components/QuietScrollArea";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "../components/ui/resizable";
 import { IconTooltip } from "../components/ui/tooltip";
 import { ProjectTree } from "../panels/ProjectTree";
@@ -24,6 +25,7 @@ import type { ConnectionStatus } from "../transport";
 import { BrandLogo } from "./BrandLogo";
 import { CollapsedPanelRail } from "./CollapsedPanelRail";
 import { LayoutSettings } from "./LayoutSettings";
+import { useLocalLayoutState } from "./layoutState";
 import { useCollapsibleRegion } from "./useCollapsibleRegion";
 import { useGlobalHotkeys } from "./useGlobalHotkeys";
 import { WorkspaceWorkbench } from "./WorkspaceWorkbench";
@@ -41,6 +43,7 @@ const STATUS_DOT: Record<ConnectionStatus, string> = {
 };
 
 export function Shell() {
+	useLocalLayoutState();
 	const status = useAppStore((s) => s.status);
 	const StatusDot = status === "connected" ? RiCircleFill : Circle;
 	const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
@@ -210,9 +213,11 @@ export function Shell() {
 								tabIndex={-1}
 								aria-hidden={welcomeProjects.collapsed || undefined}
 								inert={welcomeProjects.collapsed ? true : undefined}
-								className="h-full overflow-auto bg-container-sidebar-bg p-12 outline-none"
+								className="h-full bg-container-sidebar-bg outline-none"
 							>
-								<ProjectTree />
+								<QuietScrollArea className="h-full" viewportClassName="p-12">
+									<ProjectTree />
+								</QuietScrollArea>
 							</aside>
 						</ResizablePanel>
 						<ResizableHandle

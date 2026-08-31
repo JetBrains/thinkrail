@@ -1,10 +1,17 @@
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { availableParallelism, tmpdir } from "node:os";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
+import { REAL_CENTRAL_E2E_ENV } from "./fixtures/centralAgent";
+import {
+	E2E_ROOT_DIR,
+	PARENT_SIGNAL_OWNER_ENV,
+	processRunnerInterruption,
+	runE2eProcess,
+	signalExitCode,
+} from "./processRunner";
 import { parseRunnerArgs, resolveShardCount } from "./shardPlan";
 
-const rootDir = dirname(dirname(fileURLToPath(import.meta.url)));
+const rootDir = E2E_ROOT_DIR;
 const bun = process.execPath;
 
 function elapsed(startedAt: number): string {
@@ -12,24 +19,19 @@ function elapsed(startedAt: number): string {
 }
 
 async function run(command: string[], env: NodeJS.ProcessEnv = process.env): Promise<number> {
-	const child = Bun.spawn(command, {
-		cwd: rootDir,
-		env,
-		stdin: "ignore",
-		stdout: "inherit",
-		stderr: "inherit",
-	});
-	return child.exited;
+	return (await runE2eProcess(command, { env })).exitCode;
 }
 
 function playwrightCommand(args: string[]): string[] {
-	return [bun, "x", "playwright", "test", "--grep-invert", "@agent", ...args];
+	return [bun, "x", "playwright", "test", ...args];
 }
 
 function childEnv(): NodeJS.ProcessEnv {
 	const env: NodeJS.ProcessEnv = { ...process.env, THINKRAIL_E2E_SKIP_BUILD: "1" };
 	delete env.THINKRAIL_E2E_LANE;
 	delete env.PLAYWRIGHT_BLOB_OUTPUT_FILE;
+	delete env[REAL_CENTRAL_E2E_ENV];
+	delete env[PARENT_SIGNAL_OWNER_ENV];
 	return env;
 }
 
@@ -70,17 +72,9 @@ async function runSerial(playwrightArgs: string[]): Promise<number> {
 async function runShards(shardCount: number, playwrightArgs: string[]): Promise<number> {
 	const startedAt = performance.now();
 	const reportDir = mkdtempSync(join(tmpdir(), "thinkrail-e2e-blobs-"));
-	const children: ReturnType<typeof Bun.spawn>[] = [];
-	let interrupted = false;
-	const stopChildren = () => {
-		interrupted = true;
-		for (const child of children) child.kill();
-	};
-	process.once("SIGINT", stopChildren);
-	process.once("SIGTERM", stopChildren);
+	const children: Promise<number>[] = [];
 
 	console.log(`E2E: running ${shardCount} isolated shards (one host and worker each)`);
-	const shardStarts = new Map<number, number>();
 	for (let shard = 1; shard <= shardCount; shard += 1) {
 		const env = {
 			...childEnv(),
@@ -96,34 +90,25 @@ async function runShards(shardCount: number, playwrightArgs: string[]): Promise<
 			"--reporter=blob",
 			`--output=${outputDir}`,
 		]);
-		shardStarts.set(shard, performance.now());
+		const shardStartedAt = performance.now();
 		children.push(
-			Bun.spawn(command, {
-				cwd: rootDir,
-				env,
-				stdin: "ignore",
-				stdout: "inherit",
-				stderr: "inherit",
+			runE2eProcess(command, { env }).then(({ exitCode }) => {
+				console.log(
+					`E2E: shard ${shard}/${shardCount} ${
+						exitCode === 0 ? "passed" : `failed (${exitCode})`
+					} in ${elapsed(shardStartedAt)}`,
+				);
+				return exitCode;
 			}),
 		);
 	}
 
-	const exitCodes = await Promise.all(
-		children.map(async (child, index) => {
-			const code = await child.exited;
-			const shard = index + 1;
-			const startedAt = shardStarts.get(shard);
-			console.log(
-				`E2E: shard ${shard}/${shardCount} ${code === 0 ? "passed" : `failed (${code})`} in ${
-					startedAt === undefined ? "unknown time" : elapsed(startedAt)
-				}`,
-			);
-			return code;
-		}),
-	);
-
-	process.off("SIGINT", stopChildren);
-	process.off("SIGTERM", stopChildren);
+	const exitCodes = await Promise.all(children);
+	const interruption = processRunnerInterruption();
+	if (interruption) {
+		console.error(`E2E: interrupted; temporary output retained at ${reportDir}`);
+		return signalExitCode(interruption);
+	}
 	const reports = readdirSync(reportDir).filter((name) => name.endsWith(".zip"));
 	let mergeCode = 1;
 	if (reports.length > 0) {
@@ -140,11 +125,10 @@ async function runShards(shardCount: number, playwrightArgs: string[]): Promise<
 		console.error(`E2E: no shard reports were produced; temporary output retained at ${reportDir}`);
 	}
 
-	const failed = interrupted || mergeCode !== 0 || exitCodes.some((code) => code !== 0);
+	const failed = mergeCode !== 0 || exitCodes.some((code) => code !== 0);
 	mergeLastRunFiles(reportDir, shardCount, failed);
 	if (mergeCode === 0) rmSync(reportDir, { recursive: true, force: true });
 	else console.error(`E2E: report merge failed; temporary output retained at ${reportDir}`);
-	if (interrupted) return 130;
 	console.log(
 		failed
 			? `E2E: one or more shards failed after ${elapsed(startedAt)}`
@@ -162,7 +146,7 @@ async function main(): Promise<number> {
 		hasPlaywrightArgs: playwrightArgs.length > 0,
 	});
 
-	if (!playwrightArgs.includes("--list")) {
+	if (!playwrightArgs.includes("--list") && process.env.THINKRAIL_E2E_SKIP_BUILD !== "1") {
 		const buildStartedAt = performance.now();
 		console.log("E2E: building web once before host startup");
 		const buildCode = await run([bun, "run", "build:web"]);

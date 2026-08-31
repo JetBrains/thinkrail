@@ -7,6 +7,7 @@ export {
 	IMAGE_MAX_BASE64_BYTES,
 	isComposerGrowthLimit,
 	isControlMessage,
+	isDelegationRunDetails,
 	isRetriedAttempt,
 	MAX_HISTORY_LIMIT,
 	MAX_HISTORY_QUERY_LENGTH,

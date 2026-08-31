@@ -3,6 +3,8 @@ export type DesktopRpc = {
 		requests: Record<string, never>;
 		messages: {
 			routeChanged: { hash: string };
+			preferenceWrite: { key: string; value: string };
+			preferenceRemove: { key: string };
 		};
 	};
 	webview: {

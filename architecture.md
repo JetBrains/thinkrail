@@ -4,7 +4,7 @@ type: architecture-design
 status: active
 title: ThinkRail — top-level architecture
 parent: goal-and-requirements
-covers: [client-host-split, cli-entrypoint, wire-contract, transport-endpoint, ui-shell-panels, git-worktrees, remote-tailscale, hydrate-then-stream, domain-vs-view-state, shared-workspace-layout, client-local-navigation, central-integration]
+covers: [client-host-split, cli-entrypoint, wire-contract, transport-endpoint, ui-shell-panels, git-worktrees, remote-tailscale, hydrate-then-stream, domain-vs-view-state, frontend-local-workbench-frame, client-local-navigation, central-integration]
 tags: [v1, architecture]
 ---
 
@@ -32,12 +32,16 @@ apps/web        UI client (mobile-first)                           ── depend
 apps/desktop    Electrobun local-host launcher (V1)                ── depends on ─▶ packages/server, packages/contracts, packages/shared
 apps/website    public landing + blog + /vibecoding (Cloudflare Pages) ── depends on ─▶ packages/website-analytics
 packages/website-analytics  dependency-free browser analytics policy for the public website
-packages/server createServer(): Bun.serve(HTTP+WS) + AgentSessionManager (in-process pi) ── depends on ─▶ packages/contracts, packages/shared
+packages/server createServer(): Bun.serve(HTTP+WS) + AgentSessionManager (in-process pi) ── depends on ─▶ packages/contracts, packages/shared, packages/pi-delegation, packages/pi-subagents
 packages/contracts  the wire (types-only)
 packages/shared     shellEnv (server-side only)
 packages/spec-graph portable pi extension: spec_* tools + skill (bundled into every session by packages/server;
                     its pi-free core/ read model also backs the host's spec.graph read method)
 packages/pi-visualize          portable pi extension: the visualize tool (bundled into every session)
+packages/pi-delegation         portable pure-pi package: the delegation core — agent sessions spawned
+                    from agent sessions (createChild + run-owning handle, lineage, registry, events)
+packages/pi-subagents          portable pure-pi extension: Agent + get_subagent_result tools over
+                    pi-delegation (bundled into every ThinkRail parent session by packages/server)
 packages/pi-thinkrail-workflow pi extension: the workflow skill system + its always-on routing rule
                     (bundled into every session; workspace-internal, not portable)
 ```
@@ -68,11 +72,14 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
    is keyed by backend profile so ids from one host are never interpreted against another.
 5. **UI = panels + shell.** Layout-agnostic, store-driven panels (project→workspace nav, file tree,
    Monaco editor, changes/diff, workspace-local review, terminal, chat, composer) never know their
-   arrangement. The desktop shell owns one host-synchronized IDE workbench: a recursively split center plus
-   auxiliary groups in vertical left/right stacks and a horizontally grouped bottom region with synchronized
-   height/alignment. Singleton tools move among auxiliary regions; terminals may also occupy center, with new
-   workspaces defaulting one terminal to bottom. A future mobile shell may project the same panels differently;
-   desktop docking does not define that projection. Detail: [[submodule-web-shell-layout]].
+   arrangement. Each desktop frontend window owns one locally persisted, resource-free workbench frame: a
+   recursively split center plus auxiliary groups in vertical left/right stacks and a horizontally grouped
+   bottom region. The frame's topology, singleton-tool placement, visibility, folds, geometry, and alignment
+   remain unchanged when that window switches workspace; workspace-scoped resources and attention project
+   into it from separate local views. Terminals may occupy center or auxiliary groups, with new workspaces
+   defaulting one terminal to bottom. Another window never rearranges this one. A future mobile shell may
+   project the same panels differently; desktop docking does not define that projection. Detail:
+   [[submodule-web-shell-layout]].
 6. **Workspaces are git worktrees (V1).** project (git repo) → workspace (`git worktree` on its own
    branch/cwd, under `~/.thinkrail/worktrees`) → {chats, files, terminals}. **Two deliberate
    exceptions, both `kind`-marked on the wire and both *user-owned* — never renamed or reclaimed by
@@ -90,41 +97,47 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
    workspace-local Review is V1.
 7. **Auth is external.** Tailscale ACLs / device identity are the auth; the app carries an `owner` field,
    not a login UI.
-8. **Hydrate-then-stream (every client reconstructs from the host).** A client never relies on having
-   *witnessed* events to know state — on connect it **reads** the current state, then **subscribes** to
-   live deltas. The host exposes the read side of the wire (`project.list` / `workspace.list` /
-   **`session.list`** / **`session.getMessages`**) alongside the `pi.event` delta stream. So a reload, a
-   second tab, a phone, or a **host restart** all rebuild the same view: `session.list` unions the host's
-   in-memory sessions (auto-restored as tabs) with pi's **on-disk** sessions (surfaced in chat-history,
-   re-opened on demand via `session.getMessages`, which attaches the persisted session back into the host).
-   The client is a **stateless projection**, never a second source of truth. An automatic agent run
+8. **Hydrate-then-stream (every client reconstructs domain state from the host).** A client never relies on
+   having *witnessed* events to know domain state—on connect it **reads** current state, then **subscribes**
+   to live deltas. The host exposes `project.list` / `workspace.list` / **`session.list`** /
+   **`session.getMessages`** alongside `pi.event`. A reload, second tab, phone, or **host restart** therefore
+   rebuilds the same projects, workspaces, sessions, and transcripts. `session.list` unions in-memory sessions
+   with pi's on-disk sessions; a surface hydrates its locally placed chats and lists all others in history for
+   explicit reopen. `session.created` supplies that history-only live delta when another frontend starts a
+   session; reconnect repairs a missed delta through `session.list`. It does not inherit another surface's tab
+   placement. The client is a **stateless
+   projection of domain state**, never a second domain source of truth; it separately owns frontend-local
+   navigation and workbench view state. An automatic agent run
    remains active through retries, compaction, and queued continuations: pi's `agent_end` is only an
    attempt boundary and may precede more work; `agent_settled` is the authoritative transition to idle.
-9. **Domain state, shared placement, and local attention.** *Domain* state — projects, workspaces,
-   **sessions + their transcripts**, terminals, git — is backend-owned, shared, and persistent; every
-   client hydrates it from the host. Workspace **placement state is deliberately shared too**: one
-   versioned host document owns center plus left/right/bottom auxiliary topology, open resource references,
-   tab order, preview identities, folds/visibility, and normalized geometry. Layout schema version 2 adds
-   bottom explicitly and migrates known version-1 documents to hidden/empty bottom without moving a resource;
-   a generic region map was rejected as an unnecessary rewrite of stable side contracts, while a separate
-   bottom snapshot would make cross-region moves non-atomic. A migrated snapshot is reported at revision 2
-   or later, so revision 1 identifies a first persisted version-2 layout—but not the age of its workspace.
-   Default-terminal seeding additionally requires the host-owned `Workspace.initialTerminalEligible` marker,
-   written only when a workspace record is first created; legacy records are never backfilled. Valid full
-   snapshots converge by monotonic revision, but
-   replacement is optimistic-concurrency guarded: a client names its exact accepted revision
-   (or create-only absence), and a stale full replacement conflicts with the current snapshot instead of
-   making the last arrival win. Left/right/bottom visibility, folds, extents, and bottom alignment are
-   structural; this remains placement only, never resource lifetime. *Attention and drafts* — selected tab per
-   group, last-focused group, uncommitted pointer/resize drafts, composer drafts — remain
-   per-client (ephemeral or local reload persistence), so one browser cannot steal another's focus. The active
-   client location is likewise local: one backend-relative route names main / Project Home / workspace / exact
-   chat; web stores it in a versioned fragment, while later native shells persist it per backend profile and
-   window/device. Incoming ids are validated against hydrated host state, and no backend-owned “current screen”
-   lets one client move another.
-   Corollary: closing a file/chat placement is a shared view action, not a domain dispose — the session
-   remains; terminal close retains its separate explicit PTY-lifetime semantics. Detail:
-   [[submodule-server-layout]] and [[submodule-web-shell-layout]].
+9. **Domain state, frontend-local frame, and workspace-local views.** *Domain* state — projects,
+   workspaces, **sessions + their transcripts**, terminal catalogs/PTYs, and git — is backend-owned, shared,
+   and persistent; every client hydrates it from the host. Current workbench state is view state and never
+   crosses the wire. Each browser tab or native window owns exactly one resource-free `WorkbenchFrame` for
+   center and left/right/bottom topology, singleton-tool placement, visibility, folds, normalized geometry,
+   bottom alignment, and restore targets. It separately owns one `WorkspaceViewState` per workspace for open
+   file/diff/chat/document/terminal placements, tab order, and previews, plus a per-workspace `LayoutAttention`
+   overlay keyed into that frame. The mounted workbench is a projection of those local values, not another
+   authority.
+
+   Frame mutations are local to one frontend window and persist through its shell-owned local storage
+   adapter. Switching workspace changes only the projected workspace view. Empty groups remain until an
+   explicit frame command removes or merges them; such a command atomically rehomes affected resources in
+   every locally retained workspace view. Applying a preset does the same. Another browser, device, or window
+   neither receives nor adopts those changes. Built-in presets and the default used by an explicit local frame
+   reset remain client-owned; only bounded, resource-free custom preset definitions are host-persisted and broadcast as
+   settings. No current-layout snapshot, revision, mutation, read/write method, or push channel exists on
+   the wire.
+
+   This remains placement only, never resource lifetime. Closing a file/chat placement is local and the
+   session remains; terminal close retains its explicit host-domain PTY semantics. The active client location
+   is likewise local: one backend-relative route names main / Project Home / workspace / exact chat; web stores
+   it in a versioned fragment, while native shells persist it per backend profile and window. Incoming ids are
+   validated against hydrated host state, and no backend-owned “current screen” or current layout lets one
+   client move another. A frontend surface with no valid local document starts directly from the Balanced
+   frame. Previously persisted host layout snapshots and old browser attention entries are never read,
+   migrated, or deleted; retired config, preset, and terminal-marker shapes are ignored rather than upgraded.
+   Detail: [[submodule-web-shell-layout]] and [[submodule-web-shell-layout-state]].
 10. **Dependencies pin exact versions.** Every dependency in every manifest pins an **exact** version — no
     ranges (`^` `~` `>` `<` `.x` `*`). Rationale: `pi` ships breaking releases daily, so a floating range is
     a live wire; more broadly, a silent minor/patch bump is the classic irreproducible-build trap. Exact
@@ -188,6 +201,18 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
     and desktop acquire the same canonical-data-directory ownership lease and share graceful shutdown.
     Desktop artifacts are additive and unsigned initially; native WebKitGTK on Ubuntu 24.04+/glibc 2.38 is
     the supported Linux floor. Detail: [[module-desktop]].
+
+16. **Delegation is portable; ThinkRail is one embedder.** `packages/pi-delegation` owns the session
+    fabric: one creation primitive with orthogonal axes, a run-owning handle, lineage, registry, and
+    lifecycle events. `packages/pi-subagents` consumes it to expose the `Agent` tools. Both work under
+    vanilla pi with the SDK as a `peerDependency` (peer deps are exempt from the exact-pin rule,
+    decision #10), create in-process hidden pi sessions, and keep their host bindings optional.
+    ThinkRail composes them in `packages/server`: one service per workspace, child transcripts under
+    the host data dir, a curated child-extension set, and the exact `ModelRuntime` retained by each
+    parent session so children stay on that parent's provider generation across Central changes. The
+    wire mirrors only the UI-facing run details and exposes transcript reads; neither portable package
+    depends on ThinkRail. Contract, semantics, and the full decision log:
+    [[module-pi-delegation]], [[module-pi-subagents]], and [[submodule-server-agent]].
 
 ## Invariants
 

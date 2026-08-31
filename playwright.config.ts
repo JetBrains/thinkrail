@@ -2,6 +2,13 @@ import { existsSync } from "node:fs";
 import { delimiter, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig, devices } from "@playwright/test";
+import { assertCentralPlaywrightRunner } from "./e2e/agentRunPlan";
+import {
+	CENTRAL_STUB_READ_ONLY_ENV,
+	isRealCentralE2e,
+	REAL_CENTRAL_E2E_ENV,
+} from "./e2e/fixtures/centralAgent";
+import { hermeticE2ePath, resolveBunExecutable } from "./e2e/fixtures/executables";
 import {
 	E2E_CENTRAL_BAD_EXTENSION_SOURCE,
 	E2E_CENTRAL_EXTENSION_SOURCE,
@@ -24,12 +31,10 @@ const staticDir = fileURLToPath(new URL("./apps/web/dist", import.meta.url));
 // (e2e/fixtures/portBlock.ts). Supersedes the manual THINKRAIL_E2E_PORT knob
 // (THINKRAIL_E2E_PORT_BASE pins the whole per-worktree block explicitly when ever needed).
 const PORT = E2E_PORT;
-const bunExecutable = (process.env.PATH ?? "")
-	.split(delimiter)
-	.map((directory) => join(directory, "bun"))
-	.find(existsSync);
-if (!bunExecutable) throw new Error("bun executable not found for the e2e host");
-const hostPath = [E2E_FAKE_BIN_DIR, "/usr/bin", "/bin", "/usr/sbin", "/sbin"].join(delimiter);
+const centralMode = isRealCentralE2e();
+assertCentralPlaywrightRunner(process.env, process.argv);
+const bunExecutable = resolveBunExecutable();
+const hostPath = hermeticE2ePath(E2E_FAKE_BIN_DIR);
 if (hostPath.split(delimiter).some((directory) => existsSync(join(directory, "pi"))))
 	throw new Error("e2e host PATH must not contain pi");
 const isShardLane = process.env.THINKRAIL_E2E_LANE !== undefined;
@@ -42,6 +47,7 @@ export default defineConfig({
 	// The headless workflow-test suite has its own config (playwright.workflows.config.ts) — no browser,
 	// no webServer; `bun run test:workflows`. Never picked up by the browser suites.
 	testIgnore: "workflows/**",
+	...(centralMode ? { grep: /@agent/ } : { grepInvert: /@agent/ }),
 	// One worker owns one stateful host. Shard lanes stay serial internally; fullyParallel only lets
 	// Playwright distribute individual tests (rather than uneven whole files) across separate processes.
 	fullyParallel: isShardLane,
@@ -82,9 +88,6 @@ export default defineConfig({
 			CLAUDE_CONFIG_DIR: `${E2E_HOME_DIR}/.claude`,
 			CODEX_HOME: `${E2E_HOME_DIR}/.codex`,
 			GEMINI_CLI_HOME: E2E_HOME_DIR,
-			// Point pi at an ISOLATED agent dir (seeded with a copy of the user's auth in globalSetup), so the
-			// @agent suite uses a real provider yet `setModel`/`setThinkingLevel` persist here — never the
-			// user's real `~/.pi/agent`. (Provider env vars in the inherited env still resolve auth too.)
 			PI_CODING_AGENT_DIR: E2E_PI_AGENT_DIR,
 			// Keep the suite hermetic: `model.list` fires a detached pi.dev catalog refresh (issue #98) that
 			// must never leave the machine in tests — PI_OFFLINE is pi's own convention and our guard honors it.
@@ -95,12 +98,18 @@ export default defineConfig({
 			CENTRAL_STUB_LOG: E2E_CENTRAL_LOG,
 			CENTRAL_STUB_EXTENSION_SOURCE: E2E_CENTRAL_EXTENSION_SOURCE,
 			CENTRAL_STUB_BAD_EXTENSION_SOURCE: E2E_CENTRAL_BAD_EXTENSION_SOURCE,
+			...(centralMode
+				? {
+						[REAL_CENTRAL_E2E_ENV]: "1",
+						[CENTRAL_STUB_READ_ONLY_ENV]: "1",
+					}
+				: {}),
 			// Where the stub `code` appends each invocation's argv, so a test can assert "Open in VS Code"
 			// actually launched with the right worktree path.
 			THINKRAIL_E2E_EDITOR_LOG: E2E_EDITOR_LOG,
 			// Register a deterministic fake OAuth provider (`e2e-oauth`) so the in-app login flow is drivable
 			// end-to-end without a real provider/browser (see packages/server/src/dev.ts).
-			THINKRAIL_E2E_FAKE_OAUTH: "1",
+			THINKRAIL_E2E_FAKE_OAUTH: centralMode ? "0" : "1",
 			// Analytics: every channel sends now, and `CI` is unset on a developer machine — so the suite
 			// mutes explicitly. Nothing an e2e run does may reach PostHog.
 			THINKRAIL_NO_ANALYTICS: "1",

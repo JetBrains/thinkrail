@@ -9,6 +9,8 @@ const roots: string[] = [];
 const modules = {
 	"packages/contracts": "@thinkrail/contracts",
 	"packages/shared": "@thinkrail/shared",
+	"packages/pi-delegation": "pi-delegation",
+	"packages/pi-subagents": "pi-subagents",
 	"packages/server": "@thinkrail/server",
 	"apps/web": "@thinkrail/web",
 	"apps/cli": "@thinkrail/cli",
@@ -30,9 +32,12 @@ function fixture(): string {
 	roots.push(root);
 	const dependencies: Record<string, Record<string, string>> = {
 		"packages/shared": { "@thinkrail/contracts": "workspace:*" },
+		"packages/pi-subagents": { "pi-delegation": "workspace:*" },
 		"packages/server": {
 			"@thinkrail/contracts": "workspace:*",
 			"@thinkrail/shared": "workspace:*",
+			"pi-delegation": "workspace:*",
+			"pi-subagents": "workspace:*",
 		},
 		"apps/web": { "@thinkrail/contracts": "workspace:*" },
 		"apps/cli": {
@@ -54,14 +59,19 @@ function fixture(): string {
 	return root;
 }
 
-test("accepts the contracts-server-web rings and thin launcher edges", () => {
+test("accepts the declared package rings and thin launcher edges", () => {
 	const root = fixture();
 	write(
 		root,
 		"packages/shared/src/value.ts",
 		'import type { Project } from "@thinkrail/contracts";',
 	);
-	write(root, "packages/server/src/value.ts", 'export * from "@thinkrail/contracts";');
+	write(root, "packages/pi-subagents/src/value.ts", 'export * from "pi-delegation";');
+	write(
+		root,
+		"packages/server/src/value.ts",
+		'import "pi-delegation"; import "pi-subagents"; export * from "@thinkrail/contracts";',
+	);
 	write(root, "apps/web/src/value.tsx", 'import type { Project } from "@thinkrail/contracts";');
 	write(root, "apps/cli/src/value.ts", 'import { bootHost } from "@thinkrail/server";');
 	write(
@@ -95,12 +105,14 @@ test("rejects manifest, type-only, dynamic, CommonJS, and relative cross-boundar
 	write(root, "apps/web/src/commonJsLeak.cjs", 'require("@thinkrail/server");');
 	write(root, "apps/cli/src/dynamicLeak.ts", 'void import("@thinkrail/web");');
 	write(root, "packages/shared/src/relativeLeak.ts", 'export * from "../../server/src/index";');
+	write(root, "packages/pi-delegation/src/leak.ts", 'import "pi-subagents";');
 
 	expect(moduleBoundaryViolations(root)).toEqual([
 		'apps/cli/src/dynamicLeak.ts: import "@thinkrail/web" creates forbidden apps/cli -> apps/web edge',
 		"apps/desktop/package.json: dependencies.@thinkrail/web creates forbidden apps/desktop -> apps/web edge",
 		'apps/web/src/commonJsLeak.cjs: import "@thinkrail/server" creates forbidden apps/web -> packages/server edge',
 		'apps/web/src/typeLeak.ts: import "@thinkrail/server" creates forbidden apps/web -> packages/server edge',
+		'packages/pi-delegation/src/leak.ts: import "pi-subagents" creates forbidden packages/pi-delegation -> packages/pi-subagents edge',
 		'packages/shared/src/relativeLeak.ts: import "../../server/src/index" creates forbidden packages/shared -> packages/server edge',
 	]);
 });

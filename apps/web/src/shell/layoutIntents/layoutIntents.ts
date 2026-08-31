@@ -1,8 +1,3 @@
-import type {
-	LayoutCenterTab,
-	LayoutTerminalTab,
-	WorkspaceLayoutDocument,
-} from "@thinkrail/contracts";
 import { useEffect } from "react";
 import type { LayoutAttention } from "../../lib";
 import {
@@ -27,9 +22,11 @@ import {
 	hideSide,
 	isLayoutUnavailable,
 	keepPreview,
+	type LayoutCenterTab,
 	type LayoutGroupLocation,
 	type LayoutOperationResult,
 	type LayoutTabFocusRequest,
+	type LayoutTerminalTab,
 	moveTabToGroup,
 	openCenterTab,
 	primaryCenterGroupId,
@@ -40,6 +37,7 @@ import {
 	setAuxiliaryGroupFolded,
 	showBottom,
 	showSide,
+	type WorkspaceLayoutDocument,
 	withAvailablePlacementId,
 } from "../layout";
 import { terminalLayoutId } from "../terminalReconciliation";
@@ -184,8 +182,8 @@ export function useLayoutIntentProcessing(
 	const layoutIntent = useAppStore(
 		(state) => state.layoutIntents.find((intent) => intent.workspaceId === workspaceId) ?? null,
 	);
-	const maxSideGroups = useAppStore((state) => state.layoutSettings.maxSideGroups);
-	const maxBottomGroups = useAppStore((state) => state.layoutSettings.maxBottomGroups);
+	const maxSideGroups = useAppStore((state) => state.localLayoutPreferences.maxSideGroups);
+	const maxBottomGroups = useAppStore((state) => state.localLayoutPreferences.maxBottomGroups);
 	const terminalReservationPending = useAppStore((state) => {
 		if (layoutIntent?.kind !== "place-terminal") return false;
 		return (

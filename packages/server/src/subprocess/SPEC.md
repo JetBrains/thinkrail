@@ -16,9 +16,11 @@ never what a particular child's output means.
 
 ## Boundary
 
-- **Owns:** `runBounded(argv, { timeoutMs, cwd?, env? })` → `{ ok, out, err, timedOut, waitedMs }`: spawn
-  detached, capture both streams, complete on the child's **exit**, and on expiry kill the whole process
-  group. A failed launch is a result (`ok: false`, the launch error as `err`), never a throw.
+- **Owns:** `runBounded(argv, { timeoutMs, cwd?, env? })` →
+  `{ ok, out, err, timedOut, launchFailed, waitedMs }`: spawn detached, capture both streams, complete on
+  the child's **exit**, and on expiry kill the whole process group. A failed launch is a result
+  (`ok: false`, `launchFailed: true`, the launch error as `err`), never a throw; callers can distinguish
+  infrastructure failure from a child that ran and exited nonzero.
 - **Public surface:** `runBounded`, `BoundedRun`, `BoundedRunOptions`.
 - **Allowed deps:** Bun/Node process APIs. Nothing else — it knows no feature, no wire type, no
   persistence.
@@ -103,7 +105,8 @@ never what a particular child's output means.
   stays unbuilt and needs the cancellation seam `dialog` wants above.
 - **Windows has no process groups.** `detached` maps to `UV_PROCESS_DETACHED` and the kill falls back to
   the direct child, so a grandchild there survives the timeout as before. The group-kill test is skipped
-  there rather than pretending otherwise.
+  there rather than pretending otherwise. Bounded children use `windowsHide` on Windows: background
+  lookups must not create a visible console window or steal focus from the browser client.
 - **The env defaults to the live `process.env`, not Bun's launch-time snapshot** — `boot`'s
   `resolveShellEnv()` repairs `PATH`/`LANG` by mutating `process.env` *after* startup, and a child spawned
   from the snapshot silently misses that repair. Both halves are pinned separately — a caller's `env`/`cwd`

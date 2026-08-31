@@ -10,11 +10,11 @@ import {
 	type WireModel,
 	type Workspace,
 	type WorkspaceFsChangedPayload,
-	type WorkspaceLayoutDocument,
 	type WorkspaceSkillChange,
 } from "@thinkrail/contracts";
 import type { ChatTurn, FailureRecovery } from "../chat/types";
 import { userText } from "../lib";
+import type { WorkspaceLayoutDocument } from "../shell/layout";
 import {
 	captureCenterNavigation,
 	chatTabId,
@@ -115,11 +115,12 @@ beforeEach(() => {
 		routeChatTargetGeneration: 0,
 		sessions: {},
 		extUiOrphans: [],
-		layoutSnapshotsByWorkspace: {},
+		workbenchFrame: null,
+		workspaceViewsByWorkspace: {},
+		layoutStateReady: false,
 		layoutDocumentsByWorkspace: {},
 		layoutAttentionByWorkspace: {},
-		layoutPendingByWorkspace: {},
-		layoutRemoteEpochByWorkspace: {},
+		layoutProjectionEpochByWorkspace: {},
 		layoutIntents: [],
 		tabsByWorkspace: {},
 		terminalsByWorkspace: {},
@@ -143,6 +144,7 @@ beforeEach(() => {
 		activeLogin: null,
 		settingsOpen: false,
 		settingsSection: "providers",
+		chatMessageOrder: "oldest-first",
 		toasts: [],
 	});
 });
@@ -445,6 +447,63 @@ test("an ask-user-answers custom message_end indexes into askAnswers (never the 
 	const ignored = rt("a");
 	expect(ignored.turns).toBe(before.turns);
 	expect(ignored.askAnswers).toBe(before.askAnswers);
+	expect(ignored.eventRevision).toBe(before.eventRevision + 1);
+});
+
+test("a subagent-completion custom message_end appends a subagentCompletion turn", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "a", null, "medium");
+
+	const details = {
+		childSessionId: "child-1",
+		roleName: "scout",
+		task: "map the repo",
+		status: "completed",
+		usage: {
+			input: 10,
+			output: 5,
+			cacheRead: 0,
+			cacheWrite: 0,
+			cost: 0.01,
+			turns: 3,
+			contextTokens: 15,
+		},
+		durationMs: 4200,
+	};
+	store.handlePiEvent(
+		{
+			type: "message_end",
+			message: {
+				role: "custom",
+				customType: "subagent-completion",
+				content: 'Subagent "scout" (child-1) completed:\n\nthe report',
+				display: true,
+				details,
+			},
+		} as unknown as PiEvent,
+		"a",
+	);
+	const turn = rt("a").turns.at(-1);
+	expect(turn?.kind).toBe("subagentCompletion");
+	expect(turn?.kind === "subagentCompletion" && turn.details.childSessionId).toBe("child-1");
+	expect(turn?.kind === "subagentCompletion" && turn.text).toContain("the report");
+
+	const before = rt("a");
+	store.handlePiEvent(
+		{
+			type: "message_end",
+			message: {
+				role: "custom",
+				customType: "subagent-completion",
+				content: "x",
+				display: true,
+				details: { nope: true },
+			},
+		} as unknown as PiEvent,
+		"a",
+	);
+	const ignored = rt("a");
+	expect(ignored.turns).toBe(before.turns);
 	expect(ignored.eventRevision).toBe(before.eventRevision + 1);
 });
 
@@ -1624,6 +1683,17 @@ test("noteClosedChats surfaces disk-only sessions in history, skipping live/open
 	store.noteClosedChats("ws1", [{ sessionId: "disk1", title: "Old chat", closedAt: 200 }]);
 	history = useAppStore.getState().closedChatsByWorkspace.ws1 ?? [];
 	expect(history).toHaveLength(2);
+	store.noteClosedChats("ws1", [{ sessionId: "disk1", title: "Renamed chat", closedAt: 400 }]);
+	history = useAppStore.getState().closedChatsByWorkspace.ws1 ?? [];
+	expect(history.find((chat) => chat.sessionId === "disk1")).toEqual({
+		sessionId: "disk1",
+		title: "Renamed chat",
+		closedAt: 200,
+	});
+
+	store.openChatSession("ws1", "disk1", null, "medium");
+	history = useAppStore.getState().closedChatsByWorkspace.ws1 ?? [];
+	expect(history.map((chat) => chat.sessionId)).toEqual(["disk2"]);
 });
 
 test("opening a chat never steals another resource's canonical cache id", () => {
@@ -2302,16 +2372,6 @@ test("applyWorkspaceRemoved drops the row, clears its tabs, and returns the acti
 	expect(s.historyOpenRequest).toBeNull();
 	expect(s.reviewFocusRequest).toBeNull();
 
-	const lateDocument: WorkspaceLayoutDocument = {
-		version: 2,
-		center: { kind: "group", id: "center", tabs: [] },
-		left: { visible: false, width: 0.2, groups: [] },
-		right: { visible: false, width: 0.2, groups: [] },
-		bottom: emptyBottomRegion(),
-		toolRestoreTargets: {},
-	};
-	s.installLayoutSnapshot({ workspaceId: "w1", revision: 1, document: lateDocument });
-	s.beginLayoutCommit("w1", lateDocument, "late-write");
 	s.setLayoutAttention("w1", {
 		selectedByGroup: {},
 		lastFocusedCenterGroupId: "center",
@@ -2862,6 +2922,13 @@ test("applyConfig projects the composer growth limit", () => {
 		composerGrowthLimit: "roomy",
 	});
 	expect(useAppStore.getState()).toHaveProperty("composerGrowthLimit", "roomy");
+});
+
+test("chat message order is browser-local and cannot be overwritten by host config", () => {
+	useAppStore.getState().setChatMessageOrder("newest-first");
+	const legacyConfig = { ...DEFAULT_CONFIG, chatMessageOrder: "oldest-first" };
+	useAppStore.getState().applyConfig(legacyConfig);
+	expect(useAppStore.getState().chatMessageOrder).toBe("newest-first");
 });
 
 test("diff tabs: openTab dedupes by id + activates; view + contents update in place", () => {

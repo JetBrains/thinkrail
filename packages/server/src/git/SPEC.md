@@ -19,16 +19,20 @@ ref off the workspace-create critical path.
 
 - **Owns:** `git(cwd, args)` (spawn git *sync*, capture trimmed stdout/stderr + ok; `opts.raw` keeps
   stdout byte-exact for file-content reads) and `gitAsync(cwd,
-- **Owns:** `git(cwd, args)` (spawn git *sync*, capture trimmed stdout/stderr + ok; `opts.raw` keeps
-  stdout byte-exact for file-content reads) and `gitAsync(cwd,
-  args, opts?)` (its async twin — off the event loop through `subprocess`' `runBounded`, for network-bound ops
-  like `fetch` that must not block the host: it owns only the git-shaped part, the 55s budget (`opts.timeoutMs`
-  overrides it) and the stalled/stderr wording, never the child-lifetime mechanics; `opts.env` lets a caller
-  run prompt-free with its own environment, e.g. `pr`'s non-interactive push). **A timeout keeps whatever git
-  wrote before the kill**: the runner drains continuously, so on expiry its `err` already holds the real
-  diagnosis — a publickey rejection, a proxy's refusal, `remote:` progress proving a large transfer was simply
-  still running. The ssh-key hint is what we say when git wrote *nothing*, never advice pasted over an
-  observation we already have (the message never names a cause we did not observe);
+  args, opts?)` (its async twin — off the event loop through `subprocess`' `runBounded`, same `raw` option,
+  for network-bound ops like `fetch` **and** the request-path reads below, neither of which may block the
+  host: it owns only the git-shaped part, the 55s budget and the stalled/stderr wording, never the
+  child-lifetime mechanics; `opts.env` lets a caller run prompt-free with its own environment, e.g. `pr`'s
+  non-interactive push, and `opts.network` marks fetch/push solely so a no-output timeout can name the
+  remote). **A timeout keeps whatever git wrote before the kill**: the runner drains continuously, so on
+  expiry its `err` already holds the real diagnosis — a publickey rejection, a proxy's refusal, `remote:`
+  progress proving a large transfer was simply still running. When git wrote *nothing*, an explicitly
+  networked operation gets the conditional ssh-key hint; a local `diff`/`log`/ref read gets only the
+  observed fact that git did not exit — never a fabricated remote cause. `gitAsync` carries
+  `failure: "timeout" | "launch"` for those execution failures; a normal nonzero Git exit carries no
+  execution failure, so semantic probes can distinguish "ref absent" from "Git never answered". The
+  reads take that same 55s default (`opts.timeoutMs` overrides it): a local read that has to be *bounded*
+  at all is a wedged git, and every one of them was unbounded before it moved off the loop;
   **`remoteTrackingRef(ref)`** → `refs/remotes/<ref>` for an `origin/` ref, else `null` — **the one place
   that spelling is built**, so the probe below and `workspaces`' `worktree add` cannot drift apart. Its
   reach is **creation only**, and `resolveDiffRange` is the named survivor: `diffBaseRef` hands git the
@@ -47,13 +51,26 @@ ref off the workspace-create critical path.
   `raw`; `gitAsync` alone accepts an `opts.env` override, e.g. `pr`'s non-interactive push, which layers its
   own SSH batch-mode settings): `process.env` plus `GIT_TERMINAL_PROMPT=0`, and **nothing else** by default.
   It reads no config and rewrites none of the user's ssh setup on its own;
-  **the scope→range resolver** — `resolveDiffRange(ws, scope?)` → `DiffRange` — **the one definition of what
+  **Request-path reads run through `gitAsync`** — `resolveDiffRange`,
+  `gitStatus`, `gitDiffFile`, `listCommits`, `listBranches` and the workspace badge fan-out are async, so a
+  multi-spawn read can never freeze the host's single cooperative event loop (profiled at 119–246ms of
+  frozen loop per `workspace.list` before the migration). The sync runner stays for **writers** (their
+  load→mutate→save atomicity depends on not interleaving — `gitCommitPaths`' index snapshot/restore, the
+  `workspaces` writers) and for **micro-plumbing leaf helpers** shared with those writers
+  (`currentBranch`/`tryCurrentBranch`/`resolveDefaultBranch`/`resolveCommitOid`/`readBlobAt`/`gitHeadSha`
+  — single fast local ref reads), plus `gitUncommittedPaths`, the deliberate lifecycle exception that
+  snapshots a TODO work window before the agent can continue past its `in_progress` tool end;
+  **the scope→range resolver** — `resolveDiffRange(ws, scope?)` → `Promise<DiffRange>` (async — and
+  deliberately kept the *single* implementation: its `reviews` consumers went async with it rather than
+  keeping a drift-prone sync twin) — **the one definition of what
   a `GitDiffScope` means** (`branch`: `git diff <merge-base(base, HEAD)>` + untracked, sides = **fork
   point** ↔ worktree — what the workspace changed *since diverging*, so a base that advanced underneath it
   (a fetch moving `origin/main`, upstream work landing) never surfaces as phantom changes; while the base
-  hasn't diverged the merge-base *is* its tip, and a failed `merge-base` (missing base, unrelated
+  hasn't diverged the merge-base *is* its tip, and a normal nonzero `merge-base` (missing base, unrelated
   histories, unborn `HEAD`) falls back to the raw ref, keeping the old error surfaces — and keeping the
-  file list ancestry-consistent with `listCommits`' `base..HEAD`;
+  file list ancestry-consistent with `listCommits`' `base..HEAD`; a timeout or launch failure throws
+  instead of impersonating that semantic outcome. The same distinction keeps a timed-out commit probe
+  from becoming `UNKNOWN_COMMIT`, and a timed-out parent probe from becoming a root commit;
   `uncommitted`: `git diff HEAD` + untracked, sides = `HEAD` ↔ worktree; `commit`: `git diff <sha>^ <sha>`, no
   untracked, both sides from history — a **root** commit degrades to `git show --format=` with an empty
   original, the same add-style degradation an absent path already gets; `pinned`: `git diff <oid>` +
@@ -63,7 +80,9 @@ ref off the workspace-create critical path.
   range — and that argv brackets its revs on **both** sides: **`--end-of-options`** ahead of them (no ref can be
   re-parsed as a git option) and a trailing **`--`** after them (a rev that also names a path on disk — a branch
   called `docs` — is read as a rev instead of failing the command as an "ambiguous argument"). A **failed**
-  `git diff`/`git show` **throws**; it is never reported as an empty change set (see Get right). A `commit` scope's `sha` is validated **twice** — shape (hex-oid regex, so a crafted value can never
+  `git diff`, untracked `ls-files`, or `git show` **throws**; only Git's explicit path-absent diagnostics
+  produce an empty file side, so a broken read is never reported as no changes or as an add/delete. A
+  `commit` scope's `sha` is validated **twice** — shape (hex-oid regex, so a crafted value can never
   reach a git argument as an option or a path) then existence (`rev-parse --verify`, whose full oid is what is
   then used) — and a vanished commit throws a **`CodedError("UNKNOWN_COMMIT")`** (`@thinkrail/shared/codedError`),
   which the host puts on the wire as `WsResponse.errorCode` and the client turns into "reset the scope, with a
@@ -97,7 +116,12 @@ ref off the workspace-create critical path.
   the center Monaco diff tab (`original` = the file at the range's start ref, raw, empty when absent there —
   untracked/added, a renamed file's new path, or a root commit — degrading to an add-style diff; `modified` =
   the worktree file (empty when deleted) for a range ending there, else the commit's own tree; the path is
-  escape-checked against the worktree root); **`listCommits(workspaceId)`** → `{ commits: GitCommit[] }` —
+  escape-checked against the worktree root; historical `show` runs with deterministic English diagnostics
+  so only Git's completed path-absent result becomes an empty side, while a timeout/launch failure always
+  throws even if it captured similar text); **`gitUncommittedPaths(workspaceId)`** → the synchronous
+  tracked + untracked path set reserved for the TODO baseline boundary above, read with NUL delimiters and
+  raw output so legal leading/trailing whitespace (or newlines) in a filename is identity, never trim;
+  `gitStatus` uses the same NUL-safe path treatment for its tracked/untracked rows; **`listCommits(workspaceId)`** → `{ commits: GitCommit[] }` —
   `git log <diff base>..HEAD`, newest first and capped, one `--format` line per commit whose fields are separated
   by a **NUL byte** and read at **fixed arity** (the leading four positionally, everything after them joined back
   as the subject). NUL is the one byte the repository-controlled text cannot smuggle in: an author ident carries
@@ -107,14 +131,17 @@ ref off the workspace-create critical path.
   subject one field over.) Free-text fields are then stripped of control characters **and of invisible
   deception** — bidi overrides/isolates, zero-width and format characters — before they go on the wire, while
   ordinary international text and emoji survive;
-  an unreadable range (deleted base, unborn HEAD) degrades to an empty list so the scope menu still offers its
-  other scopes; **`countUnpushedCommits(worktreePath, branch)`** (async — the sync twin would block the shared
+  an unreadable range (deleted base, unborn HEAD) that makes Git exit normally degrades to an empty list
+  so the scope menu still offers its other scopes; a timeout or launch failure throws instead of erasing a
+  previously valid list; **`countUnpushedCommits(worktreePath, branch)`** (async — the sync twin would block the shared
   event loop on every window-focus refetch) → `rev-list --count origin/<branch>..HEAD` (local
-  remote-tracking ref, no network), `null` when that ref doesn't exist (never pushed) — the host's
+  remote-tracking ref, no network), `null` only when that ref doesn't exist (never pushed); timeout/launch
+  failures throw, and a normal nonzero with a still-present ref throws instead of impersonating absence — the host's
   `workspace.openReview` composes it onto an open review (in parallel with the gh lookup, not after
   it) so the plan page can flag commits the PR doesn't have yet; `listBranches(projectId)` → `{ local, remote,
   defaultBranch }` (local `refs/heads`, remote `refs/remotes/origin` minus `origin/HEAD`, default =
-  `origin/HEAD`→`origin/main`→repo `HEAD`); **`resolveDefaultBranch(repoPath)`** — that default-branch
+  `origin/HEAD`→`origin/main`→repo `HEAD`; either ref-list failure throws, never a successful partial catalog),
+  **`resolveDefaultBranch(repoPath)`** — that default-branch
   resolution factored out (named once), shared by `listBranches` and the `workspaces` module's
   Default-workspace ensure (its `baseBranch`); its last fallback is `currentBranch`, so an unborn `HEAD`
   resolves to the branch name it will become, never the literal `"HEAD"` (which would persist into a
@@ -132,8 +159,9 @@ ref off the workspace-create critical path.
   nothing else — `origin/+main:refs/heads/victim` would have arrived as a **refspec** and let any client
   force-overwrite or create arbitrary local branches in every open project (an unsafe ref → the same
   `{ ok: false, moved: false }` no-op, never a throw, because this path is fire-and-forget). Its result also says whether the
-  fetch **`moved`** the local remote-tracking ref (first appearance included; compared on the
-  fully-qualified `refs/remotes/…` — the exact ref a fetch updates — so a local branch literally named
+  fetch **`moved`** the local remote-tracking ref (first appearance included; the post-fetch oid is
+  probed even when fetch reports failure, because Git may update the ref before a later failure/timeout;
+  compared on the fully-qualified `refs/remotes/…` — the exact ref a fetch updates — so a local branch literally named
   `origin/<b>` can't shadow the check via git's DWIM order): a moved ref *may* change what a sibling
   workspace's branch-scope diff means (its merge-base can move), and it is invisible to the `watch` module
   (the write lands in the project repo's shared `.git`, outside every watched location) — so the

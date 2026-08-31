@@ -44,7 +44,7 @@ test("skills badge: ignores capped build churn, flags a skill change, and clears
 	await page.keyboard.press("Escape");
 	await expect(skillsBtn).not.toHaveAttribute("data-stale", "true");
 
-	await page.getByTestId("new-chat").click();
+	await page.getByTestId("new-chat").first().click();
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(2);
 	await expect(page.getByTestId("open-skills")).toBeVisible();
 	await expect(page.getByTestId("open-skills")).not.toHaveAttribute("data-stale", "true");

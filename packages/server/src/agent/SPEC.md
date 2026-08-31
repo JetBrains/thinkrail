@@ -4,7 +4,7 @@ type: submodule-design
 status: active
 title: agent — in-process pi sessions
 parent: module-server
-depends-on: [module-contracts]
+depends-on: [module-contracts, module-pi-delegation, module-pi-subagents]
 references: [module-spec-graph, central-integration]
 tags: [v1, pi]
 ---
@@ -186,9 +186,12 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     cancelled:true}`), so its card hydrates as the normal skipped record;
     **`answerQuestion(sessionId, toolCallId, result)`** — the `ask_user_question` reply path (see the
     `askUserQuestion` bullet); **`settleSessionsForShutdown(timeoutMs)`** — the polite half of shutdown:
-    abort every streaming session and wait (bounded) so pi persists their "Operation aborted" tool results
-    before `process.exit` (the launcher's SIGINT/SIGTERM handler awaits it; whatever misses the window is
-    healed by the restart repair); `getSessionWorkspaceId(sessionId)` (the live session→workspace
+    abort every streaming parent, dispose every hidden child (including background children whose parent is
+    idle), include cascades already pending from concurrent removal, and wait for all of them under the one
+    bound so pi can persist their "Operation aborted" tool results before `process.exit` (the launcher's
+    SIGINT/SIGTERM handler awaits it; whatever misses the window is healed by the restart repair).
+    `disposeAllSessions` remains the synchronous emergency stop, but registers its best-effort child cascades
+    in the same pending set; `getSessionWorkspaceId(sessionId)` (the live session→workspace
     lookup the host's auto-rename hook keys on); `removeSession`/`disposeAllSessions`;
     **`removeWorkspaceSessions(workspaceId, cwd?)`** (the **archive teardown**: abort a streaming turn,
     then dispose every live session for the workspace **unconditionally** — bypassing the per-chat delete
@@ -215,7 +218,10 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     restores command access to the same
     transcript/live entry, and publishes nothing; there is deliberately no permanent-unlink fallback behind
     a recoverable UI action);
-    `setSessionPublisher` + `setSessionDeletedPublisher` + `setSessionManagerFactory` seams.
+    `setSessionPublisher` + `setSessionCreatedPublisher` (broadcast the initial `SessionSummary` after
+    `createSession` registers a new host-owned session—not when an existing transcript reattaches—so peer
+    frontends discover it without inheriting placement) +
+    `setSessionDeletedPublisher` + `setSessionManagerFactory` seams.
   - `oneshot` — one-shot LLM completions **without** an `AgentSession` (no tools/extensions/disk):
     `completeOnce(request)` picks a model from the shared runtime's authenticated set and dispatches a
     single `runtime.completeSimple()` — pi's canonical provider-agnostic request path, which resolves
@@ -347,9 +353,58 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     message. The count-aware cap also degrades a raw >2000px `read`-tool image to a note instead of a
     brick once a session crosses 21 images. Pure core (`guardOversizedImages`, `imageDimensions`)
     unit-tested with hand-built header bytes.
+  - `delegation` — ThinkRail's embedding of the portable **`pi-delegation`** core +
+    **`pi-subagents`** layer ([[module-pi-delegation]], [[module-pi-subagents]]): binds what only
+    the host knows — the delegation root under the data dir (`<dataDir>/delegation`),
+    `scope = workspaceId`, and the manager's `liveParentContext` projection (`ParentContext`, core
+    decision #23), including the exact `ModelRuntime` retained by that parent session. Existing
+    parents and their children therefore stay on their runtime generation across a Central change,
+    while parents created afterward project the new generation. The host-wide `getPiRuntime` resolver
+    is passed as the core's dynamic fallback rather than captured at service creation. One
+    `DelegationService` per workspace is cached (`delegationServiceFor`, synchronous — nothing awaits
+    at bind time); `subagentsExtensionFor(workspaceId)` hands the bound service to the
+    extension factory each session loads. Cascades: `removeSession`/`disposeAllSessions` fire
+    `disposeSessionChildren` — `removeSession` returns that cascade, the **delete transaction
+    awaits it before `publishDeleted`/resolving** (safe: the cascade carries its own swallow, so a
+    failing child abort can never fail a delete whose transcript is already trashed), and workspace
+    archival **awaits it per session** — plus every **pending cascade registered for the
+    workspace** (`disposeSession` removes the entry from `sessions` at cascade *start*, so a
+    concurrent archive would otherwise see no parent to await while a delete's or remove's child
+    cascade is still running; every `disposeSession` cascade registers in a per-workspace registry
+    the archive drains — PR #303 review finding + the concurrent half found in the same sweep,
+    both test-pinned via a test-gated child turn, deterministic in both directions: red because a
+    pre-fix archive `rm -rf`s in its synchronous prefix while the gate is provably closed, green
+    because the archive's completion is await-chained behind the cascade. Deliberately **cascades,
+    not delete transactions**: archival must stay unblocked by a delete wedged mid-trash — the
+    recycle-bin step has unbounded latency and never touches the store; that independence is its
+    own pinned behavior) — before `removeWorkspaceDelegation` (drops the service + deletes
+    `delegation/<workspaceId>`), so the store is never deleted under a live child — hidden
+    children never outlive their workspace.
+    `readChildTranscript` serves `subagent.getTranscript` from the store by
+    `(workspaceId, parentSessionId, childSessionId)` — the ids are wire strings that become path
+    segments, so it rejects path-like values (separators, `..`; the handler additionally validates
+    the workspace like every sibling read) — and returns the run's current registry `status`
+    alongside the messages, built from the raw entries via pi's canonical projection
+    (`buildSessionContext` — the same entry→message path a live `session.messages` takes) and
+    filtered through contracts' shared `isTranscriptMessageRole` exactly like `getSessionMessages`
+    (a private message-entry loop here once drifted: compaction is an entry *type*, not a message
+    role, so a compacted child's transcript lost its `compactionSummary` marker — PR #303 review
+    finding, test-pinned; absent after restart/dispose; wire meaning: [[module-contracts]]).
+    A missing transcript throws `CodedError("SUBAGENT_TRANSCRIPT_NOT_FOUND")` — the **permanent**
+    miss the web dialog stops polling on, named on the wire instead of pattern-matched from the
+    message ([[module-contracts]] owns the code set; this is the agent module's one
+    `@thinkrail/shared` import, mirroring `git`'s `CodedError` use).
+    Children opting into extensions
+    (`extensions: true` in their definition) get the **curated child set**
+    (`childExtensionFactories` in `extensions`): the headless-search policy + `pi-web-access` +
+    `pi-spec-graph` — deliberately not the parent's full set (rationale + the listed-children
+    carve-out: core decision #25). Web-access reaches the child set via a **named bundled-seam
+    field** (`BundledExtensions.webAccessFactory`) in the binary and a Bun `require` in dev — its
+    raw third-party `.ts` must stay out of the strict tsc graph.
   - `extensions` — Pi resource wiring. Candidate generation loads the reviewed external Central path once
     through a headless `DefaultResourceLoader` to apply provider registrations, without inspecting it.
-    `buildResourceLoader(cwd, settingsManager, excludedPaths)` then resolves Pi's normal settings/package +
+    `buildResourceLoader(cwd, settingsManager, getAdmission, excludedPaths, extraFactories?)` then resolves
+    Pi's normal settings/package +
     `.pi` / `.agents` extension set, removes that exact opaque identity **before loading**, and explicitly loads
     the remaining paths: sessions use the provider objects already owned by their retained generation, so
     arbitrary Central factory/errors/UI cannot reach `pi.extensionUi`. The Central identity is always excluded
@@ -407,7 +462,7 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
       file-path entries — their `skills/` dirs (`pi-spec-graph`, `pi-thinkrail-workflow`, `pi-todos`) are
       wired via **`additionalSkillPaths`**.
     - **Bundled launchers (compiled CLI binary and packaged desktop runtime):** the launcher awaits the
-      **`registerBundledRuntime({ factories, skillsDir, trashHelpers })` seam** before the first session — the same bundled extensions as
+      **`registerBundledRuntime({ factories, skillsDir, trashHelpers, webAccessFactory })` seam** before the first session — the same bundled extensions as
       **value-imported default-export factories** (pi gives `extensionFactories` full API parity with path loading; what's lost —
       file-relative `baseDir`, per-reload re-evaluation — none of them use) plus a staged on-disk
       skills dir (pi reads `SKILL.md` via plain fs, so skills must live on the real filesystem). The
@@ -439,8 +494,10 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     Jiti seam; it is never bundled, staged, or copied into ThinkRail. Both modes append
     `extensionFactories`: a **headless-search policy** (a `tool_call` hook defaulting
     `web_search`'s `workflow` to `"none"`, since pi-web-access would otherwise open a browser curator our
-    `rpc` host can't render), `askUserQuestionExtension` (registers the `ask_user_question` tool), **and**
-    `oversizedImageGuard` (the context-level image-size guard, see the `imageGuard` bullet).
+    `rpc` host can't render), `askUserQuestionExtension` (registers the `ask_user_question` tool),
+    `oversizedImageGuard` (the context-level image-size guard, see the `imageGuard` bullet), **and the
+    caller's `extraFactories`** — per-session host bindings (the workspace-bound subagents extension),
+    value-imported so dev and the compiled binary take the same path.
     Both session paths pass it as `resourceLoader`. `buildResourceLoader` stays internal; the seam +
     its types are on the barrel.
 - **Public surface (barrel):** the manager operations (incl. `answerQuestion` +
@@ -451,7 +508,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   `completeOnce`/`pickModel` +
   `OneShotRequest`/`OneShotResult`/`ModelTier`; the `webUiContext` seams; the `askUserQuestion` pure
   helpers (`validateQuestionnaire`/`buildQuestionnaireResponse`/`assessAnswerability`/
-  `buildAnswersMessage`); `repairDanglingToolCalls`; the skill catalog helpers
+  `buildAnswersMessage`); `repairDanglingToolCalls`; `liveParentContext` + `readChildTranscript`
+  (the delegation embedding); the skill catalog helpers
   `listSkillCommands(cwd, admission)` (filtered, pre-session autocomplete) / `listSkillCatalog(cwd, admission)`
   (unfiltered, the manager's `skills.state`) / `listProjectAliasSkillNames(cwd)` (present-alias count) /
   `isProjectSkillPath(relativePath)` (watch-classification predicate);
@@ -463,17 +521,22 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   fixtures + **pure catalog helpers value-imported from the package root** — today exactly
   `getSupportedThinkingLevels` + `clampThinkingLevel`, data-only projections over `Model`; *dispatch*
   still goes through the shared `ModelRuntime`, never pi-ai's stream/complete — plus the `/bun-oauth` + `/bedrock-provider`
-  + `/compat` subpaths, value-imported **only** inside `registerBundledRuntime`'s dynamic imports); `pi-web-access` + `pi-visualize` + `pi-spec-graph` +
-  `pi-thinkrail-workflow` + `pi-todos` (the bundled extensions — loaded by path, never value-imported here;
-  launcher-generated modules own the CLI binary and desktop runtime value imports); `typebox` (the
-  `ask_user_question` parameter schema); `trash` (the cross-platform OS recycle-bin implementation;
-  called with globbing disabled and allowed to throw — never degraded to `unlink`);
-  `@stroncium/procfs` (directly pinned solely for the compiled Linux trash parser inclusion seam);
-  `contracts` (`PiEvent`/`Model`/`ThinkingLevel`/`ImageContent`/`SessionStats`/`SlashCommandInfo`/`ExtUi*`/
-  `AskUserQuestion*`/`ProviderStatus*`); `log` (diagnostics + session-lifecycle debug traces); Node.
-- **Forbidden:** `host`; sibling features other than `log` (the `cwd` is passed in, not looked up via `persistence`);
-  Central process/filesystem knowledge—the caller supplies only the desired opaque extension paths for a
-  candidate.
+  + `/compat` subpaths, value-imported **only** inside `registerBundledRuntime`'s dynamic imports);
+  `pi-delegation` + `pi-subagents` (the portable delegation runtime and Agent-tool composition,
+  value-imported by the host embedding); `pi-web-access` + `pi-visualize` + `pi-spec-graph` +
+  `pi-thinkrail-workflow` + `pi-todos` (the bundled extension set — parent sessions load the set through
+  resource-loader paths or launcher factories; delegated children value-import `pi-spec-graph` and receive
+  the named `pi-web-access` factory through the bundled runtime seam, with source-mode Bun `require` as the
+  dev equivalent); `typebox` (the `ask_user_question` parameter schema); `trash` (the cross-platform OS
+  recycle-bin implementation; called with globbing disabled and allowed to throw — never degraded to
+  `unlink`); `@stroncium/procfs` (directly pinned solely for the compiled Linux trash parser inclusion seam);
+  `contracts` (`PiEvent`/`Model`/`ThinkingLevel`/`ImageContent`/`SessionStats`/`SessionSummary`/
+  `Session*Payload`/`SlashCommandInfo`/`ExtUi*`/`AskUserQuestion*`/`ProviderStatus*`); `log` (diagnostics +
+  session-lifecycle debug traces); `persistence` (`dataDir` only, to root the host-owned delegation
+  transcript store); Node.
+- **Forbidden:** `host`; sibling features other than `log` and the narrow `persistence.dataDir` edge (session
+  worktree `cwd` remains an input, never a persistence lookup); Central process/filesystem knowledge—the
+  caller supplies only the desired opaque extension paths for a candidate.
 
 ## Get right
 

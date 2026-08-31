@@ -13,13 +13,20 @@ test("a reload mid-stream does not duplicate the streaming assistant message", {
 	await page
 		.getByTestId("chat-input")
 		.fill(
-			"Write the numbers 1 to 1000 separated by spaces, as plain text on one line. " +
-				"No code blocks, no tools, no commentary — only the numbers.",
+			"Use the bash tool now to run `sleep 15; printf hydrated` exactly. " +
+				"Do not answer until it finishes, then reply with one sentence.",
 		);
 	await page.getByTestId("chat-send").click();
 
 	const assistant = page.locator('[data-testid="chat-message"][data-role="assistant"]');
-	await expect(assistant.first()).toBeVisible({ timeout: 60_000 });
+	const bashActivity = page
+		.locator(
+			'[data-testid="activity-step"][data-tool="bash"], [data-testid="activity-group"], [data-testid="thinking-group"]',
+		)
+		.filter({ hasText: "bash" })
+		.first();
+	await expect(bashActivity).toBeVisible({ timeout: 60_000 });
+	await expect(page.getByTestId("chat-scroll")).toHaveAttribute("data-streaming", "true");
 
 	await page.reload();
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
@@ -31,9 +38,8 @@ test("a reload mid-stream does not duplicate the streaming assistant message", {
 	});
 	await expect(page.getByTestId("stream-indicator")).toBeVisible({ timeout: 10_000 });
 
-	await expect(
-		page.locator('[data-testid="chat-message"][data-role="system"]').filter({ hasText: "Done" }),
-	).toBeVisible({ timeout: 120_000 });
-
+	await expect(page.getByTestId("chat-scroll")).toHaveAttribute("data-streaming", "false", {
+		timeout: 120_000,
+	});
 	await expect(assistant).toHaveCount(1);
 });

@@ -1,7 +1,12 @@
 import type { AppConfig, AppConfigUpdate } from "@thinkrail/contracts";
 import { loadConfig, saveConfig } from "../persistence";
+import { normalizeStoredCustomLayoutPresets, validateCustomLayoutPresets } from "./layoutPresets";
 
 type SettingsPublisher = (config: AppConfig) => void;
+type RuntimeAppConfigUpdate = AppConfigUpdate & {
+	chatMessageOrder?: unknown;
+	layout?: unknown;
+};
 
 let publishSettings: SettingsPublisher | null = null;
 
@@ -12,13 +17,28 @@ export function setSettingsPublisher(fn: SettingsPublisher | null): void {
 let cached: AppConfig | null = null;
 
 export function getConfig(): AppConfig {
-	cached ??= loadConfig();
+	if (cached) return cached;
+	const loaded = loadConfig();
+	const customLayoutPresets = normalizeStoredCustomLayoutPresets(loaded.customLayoutPresets);
+	cached = { ...loaded, customLayoutPresets };
+	if (JSON.stringify(customLayoutPresets) !== JSON.stringify(loaded.customLayoutPresets)) {
+		saveConfig(cached);
+	}
 	return cached;
 }
 
 export function updateConfig(partial: AppConfigUpdate): AppConfig {
-	const { reviewModel, reviewEffort, ...rest } = partial;
-	const next: AppConfig = { ...getConfig(), ...rest };
+	const runtimeUpdate: RuntimeAppConfigUpdate = { ...partial };
+	delete runtimeUpdate.chatMessageOrder;
+	delete runtimeUpdate.layout;
+	const { reviewModel, reviewEffort, customLayoutPresets, ...rest } = runtimeUpdate;
+	const next: AppConfig = {
+		...getConfig(),
+		...rest,
+		...(customLayoutPresets === undefined
+			? {}
+			: { customLayoutPresets: validateCustomLayoutPresets(customLayoutPresets) }),
+	};
 	if (reviewModel !== undefined) {
 		if (reviewModel === null) delete next.reviewModel;
 		else next.reviewModel = reviewModel;

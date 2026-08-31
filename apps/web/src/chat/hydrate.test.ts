@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import type { TranscriptMessage } from "@thinkrail/contracts";
 import { ASK_USER_ANSWERS_CUSTOM_TYPE } from "@thinkrail/contracts";
 import { messagesToRuntime } from "./hydrate";
+import { readRunDetails } from "./tools/subagent/runDetails";
 
 type Message = TranscriptMessage;
 
@@ -31,6 +32,27 @@ test("messagesToRuntime folds a transcript into ordered turns + a toolResults ma
 	).toBe(true);
 
 	expect(toolResults.tc1?.status).toBe("done");
+});
+
+test("a scoped append-only hydration preserves existing turn ids", () => {
+	const first = messagesToRuntime(messages, undefined, { idScope: "subagent:child-1" });
+	const second = messagesToRuntime(
+		[
+			...messages,
+			{
+				role: "assistant",
+				content: [{ type: "text", text: "one more thing" }],
+				timestamp: 4,
+			},
+		] as unknown as Message[],
+		undefined,
+		{ idScope: "subagent:child-1" },
+	);
+
+	expect(second.turns.slice(0, first.turns.length).map((turn) => turn.id)).toEqual(
+		first.turns.map((turn) => turn.id),
+	);
+	expect(new Set(second.turns.map((turn) => turn.id)).size).toBe(second.turns.length);
 });
 
 test("an assistant turn that ended in a provider error hydrates a following error turn", () => {
@@ -171,6 +193,41 @@ test("turnIdByMessageIndex maps each message's position to its own turn id, null
 	expect(turnIdByMessageIndex[4]).not.toBe(turns[3]?.id);
 });
 
+test("a subagent-completion custom message hydrates as its own subagentCompletion turn", () => {
+	const details = {
+		childSessionId: "child-1",
+		roleName: "scout",
+		task: "map the repo",
+		status: "completed",
+		usage: {
+			input: 10,
+			output: 5,
+			cacheRead: 0,
+			cacheWrite: 0,
+			cost: 0.01,
+			turns: 3,
+			contextTokens: 15,
+		},
+		durationMs: 4200,
+	};
+	const { turns, turnIdByMessageIndex } = messagesToRuntime([
+		{ role: "user", content: "go", timestamp: 1 },
+		{
+			role: "custom",
+			customType: "subagent-completion",
+			content: [{ type: "text", text: 'Subagent "scout" (child-1) completed:\n\nthe report' }],
+			display: true,
+			details,
+			timestamp: 2,
+		},
+	] as unknown as Message[]);
+	expect(turns.map((t) => t.kind)).toEqual(["user", "subagentCompletion"]);
+	const turn = turns[1];
+	expect(turn?.kind === "subagentCompletion" && turn.details.childSessionId).toBe("child-1");
+	expect(turn?.kind === "subagentCompletion" && turn.text).toContain("the report");
+	expect(turnIdByMessageIndex[1]).toBe(turns[1]?.id ?? null);
+});
+
 test("a failed tool result maps to error status", () => {
 	const { toolResults } = messagesToRuntime([
 		{
@@ -183,6 +240,38 @@ test("a failed tool result maps to error status", () => {
 		},
 	] as unknown as Message[]);
 	expect(toolResults.x?.status).toBe("error");
+});
+
+test("a failed Agent result keeps its run details — the transcript stays openable after reload", () => {
+	const details = {
+		childSessionId: "child-err",
+		roleName: "scout",
+		task: "doomed task",
+		status: "error",
+		usage: {
+			input: 1,
+			output: 0,
+			cacheRead: 0,
+			cacheWrite: 0,
+			cost: 0,
+			turns: 1,
+			contextTokens: 1,
+		},
+		durationMs: 10,
+	};
+	const { toolResults } = messagesToRuntime([
+		{
+			role: "toolResult",
+			toolCallId: "ag1",
+			toolName: "Agent",
+			content: [{ type: "text", text: 'Subagent "scout" (child-err) failed: boom' }],
+			isError: true,
+			details,
+			timestamp: 1,
+		},
+	] as unknown as Message[]);
+	expect(toolResults.ag1?.status).toBe("error");
+	expect(readRunDetails(toolResults.ag1?.raw)?.childSessionId).toBe("child-err");
 });
 
 test("a toolCall with no matching toolResult has no entry — the call renders as still running", () => {

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { TodoStore } from "pi-todos/core";
 import { gitCommitPaths } from "../git";
-import { reconcileChangeArtifacts } from "./artifacts";
+import { enqueueTodoMutation, reconcileChangeArtifacts } from "./artifacts";
 import {
 	clearAllPendingReviews,
 	dropReviewRecord,
@@ -200,7 +200,7 @@ test("requestTodoFix records changes_requested + feedback and renders the contex
 	const { id, sha } = committedItem(store, "Implement FloodWait handling", "flood.ts");
 	store.update(id, { summary: "Added throttling and fallback for failed batch sends." });
 
-	const { pkg, previous } = requestTodoFix({
+	const { pkg, previous, requested } = requestTodoFix({
 		workspaceId: "w1",
 		sessionId: SESSION,
 		id,
@@ -220,9 +220,26 @@ test("requestTodoFix records changes_requested + feedback and renders the contex
 	expect(review?.feedback).toBe("Don't retry RetryAfter here. Propagate it.");
 
 	// A pre-turn send rejection rolls the record back to what it replaced (here: none).
-	rollbackTodoFix({ workspaceId: "w1", sessionId: SESSION, id }, previous);
+	rollbackTodoFix({ workspaceId: "w1", sessionId: SESSION, id }, previous, requested);
 	const after = await listTodos({ workspaceId: "w1", sessionId: SESSION });
 	expect(after.todos.find((t) => t.id === id)?.review?.state).toBe("unreviewed");
+});
+
+test("a failed fix request cannot roll back a newer review decision", () => {
+	const store = new TodoStore(repo, SESSION);
+	const { id } = committedItem(store, "step", "impl.ts");
+	const { previous, requested } = requestTodoFix({
+		workspaceId: "w1",
+		sessionId: SESSION,
+		id,
+		feedback: "change it",
+	});
+	approveTodoReview({ workspaceId: "w1", sessionId: SESSION, id });
+
+	expect(rollbackTodoFix({ workspaceId: "w1", sessionId: SESSION, id }, previous, requested)).toBe(
+		false,
+	);
+	expect(readReviewRecords(repo, SESSION)[id]?.state).toBe("reviewed");
 });
 
 test("review ops reject diff-less or unknown items; empty feedback is refused", () => {
@@ -240,14 +257,14 @@ test("review ops reject diff-less or unknown items; empty feedback is refused", 
 	).toThrow(/must not be empty/);
 });
 
-test("a path-list fallback redo resets the review record (no sha to watermark against)", () => {
+test("a path-list fallback redo resets the review record (no sha to watermark against)", async () => {
 	const store = new TodoStore(repo, SESSION);
 	const todo = store.add({ title: "step" });
 	store.update(todo.id, { status: "in_progress" });
-	reconcileChangeArtifacts(store, repo, SESSION, () => []); // window (clean start)
+	await reconcileChangeArtifacts(store, repo, SESSION, async () => []); // window (clean start)
 	store.update(todo.id, { status: "done" });
 	// No commit fn → path-list fallback.
-	reconcileChangeArtifacts(store, repo, SESSION, () => ["a.ts"]);
+	await reconcileChangeArtifacts(store, repo, SESSION, async () => ["a.ts"]);
 	putReviewRecord(repo, SESSION, todo.id, {
 		state: "reviewed",
 		reviewedShas: [],
@@ -255,9 +272,9 @@ test("a path-list fallback redo resets the review record (no sha to watermark ag
 	});
 	// Re-open and re-work, landing in the fallback again — the stale decision is dropped.
 	store.update(todo.id, { status: "in_progress" });
-	reconcileChangeArtifacts(store, repo, SESSION, () => []);
+	await reconcileChangeArtifacts(store, repo, SESSION, async () => []);
 	store.update(todo.id, { status: "done" });
-	reconcileChangeArtifacts(store, repo, SESSION, () => ["b.ts"]);
+	await reconcileChangeArtifacts(store, repo, SESSION, async () => ["b.ts"]);
 	expect(readReviewRecords(repo, SESSION)[todo.id]).toBeUndefined();
 });
 
@@ -265,7 +282,7 @@ test("todo.remove prunes the item's review record; the plan summary rides listTo
 	const store = new TodoStore(repo, SESSION);
 	const { id } = committedItem(store, "step", "impl.ts");
 	approveTodoReview({ workspaceId: "w1", sessionId: SESSION, id });
-	removeTodo({ workspaceId: "w1", sessionId: SESSION, id });
+	await removeTodo({ workspaceId: "w1", sessionId: SESSION, id });
 	expect(readReviewRecords(repo, SESSION)).toEqual({});
 
 	store.setSummary("Everything landed; suite green.");
@@ -273,7 +290,7 @@ test("todo.remove prunes the item's review record; the plan summary rides listTo
 	expect(plan.summary).toBe("Everything landed; suite green.");
 });
 
-test("todo.remove rejects while the item is pending an agent review, leaving it in place", () => {
+test("todo.remove rejects while the item is pending an agent review, leaving it in place", async () => {
 	const store = new TodoStore(repo, SESSION);
 	const { id } = committedItem(store, "step", "impl.ts");
 	startTodoReview({ workspaceId: "w1", sessionId: SESSION, id });
@@ -281,9 +298,27 @@ test("todo.remove rejects while the item is pending an agent review, leaving it 
 	// Removing a `reviewing` item would strand the host's in-flight registration (currentReview,
 	// the per-plan latch) until the reviewer's turn settles, and let a stray add_review_comment file
 	// an orphan finding against an id that no longer exists — see host/SPEC.md.
-	expect(() => removeTodo({ workspaceId: "w1", sessionId: SESSION, id })).toThrow(
+	await expect(removeTodo({ workspaceId: "w1", sessionId: SESSION, id })).rejects.toThrow(
 		/currently under review/,
 	);
+	expect(store.get(id)).toBeDefined();
+});
+
+test("todo.remove rechecks the host's active-review guard after waiting in the mutation queue", async () => {
+	const store = new TodoStore(repo, SESSION);
+	const { id } = committedItem(store, "step", "impl.ts");
+	let release!: () => void;
+	const gate = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	const blocker = enqueueTodoMutation("w1", () => gate);
+	let active = false;
+	const removal = removeTodo({ workspaceId: "w1", sessionId: SESSION, id }, () => active);
+	active = true;
+	release();
+	await blocker;
+
+	await expect(removal).rejects.toThrow(/currently under review/);
 	expect(store.get(id)).toBeDefined();
 });
 
@@ -394,9 +429,9 @@ test("the path-list fallback drops the review verdict but preserves the spent au
 	// The worker's redo can't be committed (e.g. a shared window or pre-existing dirty paths), so
 	// reconcile falls back to a `change` path-list artifact instead of a new commit.
 	store.update(id, { status: "in_progress" });
-	reconcileChangeArtifacts(store, repo, SESSION, () => []);
+	await reconcileChangeArtifacts(store, repo, SESSION, async () => []);
 	store.update(id, { status: "done" });
-	reconcileChangeArtifacts(store, repo, SESSION, () => ["fix.ts"]);
+	await reconcileChangeArtifacts(store, repo, SESSION, async () => ["fix.ts"]);
 
 	// The sha-based verdict is honestly reset (no sha to watermark a path-list delta against)...
 	expect(readReviewRecords(repo, SESSION)[id]).toBeUndefined();

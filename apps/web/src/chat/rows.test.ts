@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { AssistantMessage } from "@thinkrail/contracts";
-import { deriveRows, turnDivider } from "./rows";
+import { type ChatRow, deriveRows, projectRows, turnDivider } from "./rows";
 import { registerToolRenderer } from "./toolRegistry";
 import type { ChatTurn, ToolResultState } from "./types";
 
@@ -63,6 +63,44 @@ const think = (thinking: string): Block => ({ type: "thinking", thinking });
 const text = (t: string): Block => ({ type: "text", text: t });
 
 const kinds = (rows: ReturnType<typeof deriveRows>) => rows.map((r) => r.kind);
+
+function messageRow(id: string, kind: "user" | "markdown"): ChatRow {
+	return kind === "user"
+		? { kind, id, message: { role: "user", content: id, timestamp: 0 } }
+		: { kind, id, text: id };
+}
+
+describe("projectRows message order", () => {
+	test("newest-first reverses both request groups and their rows while keeping a prelude separate", () => {
+		const rows: ChatRow[] = [
+			{ kind: "system", id: "prelude", text: "connected" },
+			messageRow("u1", "user"),
+			messageRow("a1", "markdown"),
+			{ kind: "system", id: "s1", text: "done" },
+			messageRow("u2", "user"),
+			messageRow("a2", "markdown"),
+			{ kind: "system", id: "s2", text: "done" },
+		];
+
+		expect(projectRows(rows, "newest-first").map((row) => row.id)).toEqual([
+			"s2",
+			"a2",
+			"u2",
+			"s1",
+			"a1",
+			"u1",
+			"prelude",
+		]);
+	});
+
+	test("oldest-first preserves canonical row order and newest-first preserves row objects", () => {
+		const activity: ChatRow = { kind: "activity", id: "work", steps: [], live: false };
+		const rows: ChatRow[] = [messageRow("u1", "user"), activity];
+		expect(projectRows(rows, "oldest-first")).toBe(rows);
+		expect(projectRows(rows, "newest-first")).toEqual([activity, rows[0]]);
+		expect(projectRows(rows, "newest-first")[0]).toBe(activity);
+	});
+});
 
 describe("deriveRows grouping", () => {
 	test("keeps one outer activity run and nests tools under the preceding thinking block", () => {
@@ -166,6 +204,36 @@ describe("deriveRows grouping", () => {
 		expect(rows[3]?.kind === "retry" && rows[3].source).toBe("summarization");
 		expect(rows[1]?.kind === "activity" && rows[1].steps.length).toBe(1);
 		expect(rows[4]?.kind === "activity" && rows[4].steps.length).toBe(1);
+	});
+
+	test("a subagentCompletion turn breaks the run and maps 1:1 to its own row", () => {
+		const details = {
+			childSessionId: "child-1",
+			roleName: "scout",
+			task: "map",
+			status: "completed",
+			usage: {
+				input: 1,
+				output: 1,
+				cacheRead: 0,
+				cacheWrite: 0,
+				cost: 0,
+				turns: 1,
+				contextTokens: 2,
+			},
+			durationMs: 1000,
+		} as const;
+		const turns: ChatTurn[] = [
+			user("u1"),
+			assistant("a1", [tc("t1")]),
+			{ kind: "subagentCompletion", id: "sc1", details, text: "the report" },
+			assistant("a2", [tc("t2")]),
+		];
+		const rows = deriveRows(turns, {}, true);
+		expect(kinds(rows)).toEqual(["user", "activity", "subagentCompletion", "activity"]);
+		const row = rows[2];
+		expect(row?.kind === "subagentCompletion" && row.details.childSessionId).toBe("child-1");
+		expect(row?.kind === "subagentCompletion" && row.text).toBe("the report");
 	});
 
 	test("steps carry dead from the owning message's stopReason (aborted calls never execute)", () => {

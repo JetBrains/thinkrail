@@ -11,6 +11,12 @@ import Electrobun, {
 } from "electrobun/bun";
 import { installDesktopApplicationMenu } from "./applicationMenu";
 import { externalNavigationUrl } from "./externalNavigation";
+import {
+	injectInitialDesktopPreferences,
+	readDesktopPreferenceRemove,
+	readDesktopPreferenceWrite,
+} from "./preferenceAdapter";
+import { PreferenceStore } from "./preferenceStore";
 import { RouteStore } from "./routeStore";
 import type { DesktopRpc } from "./rpc";
 import { ptyLibraryName, runtimeTarget } from "./runtimeTarget";
@@ -41,12 +47,11 @@ async function start(): Promise<void> {
 		channel,
 	});
 	const origin = `http://127.0.0.1:${host.port}`;
-	const routePath = join(
-		process.env.THINKRAIL_DESKTOP_USER_DATA ?? Utils.paths.userData,
-		"routes.json",
-	);
-	const routes = new RouteStore(routePath);
+	const userData = process.env.THINKRAIL_DESKTOP_USER_DATA ?? Utils.paths.userData;
+	const routes = new RouteStore(join(userData, "routes.json"));
+	const preferences = new PreferenceStore(join(userData, "preferences.json"));
 	const initialRoute = routes.read(BACKEND_PROFILE_ID, WINDOW_ID);
+	const initialPreferences = preferences.read(BACKEND_PROFILE_ID, WINDOW_ID);
 	const neutral = process.env.THINKRAIL_DESKTOP_E2E_HOST === "1";
 	const rpc = BrowserView.defineRPC<DesktopRpc>({
 		maxRequestTime: 5000,
@@ -56,10 +61,32 @@ async function start(): Promise<void> {
 				routeChanged: ({ hash }) => {
 					if (!neutral) routes.write(BACKEND_PROFILE_ID, WINDOW_ID, hash);
 				},
+				preferenceWrite: (payload) => {
+					if (neutral) return;
+					const preference = readDesktopPreferenceWrite(payload);
+					if (
+						preference &&
+						!preferences.write(BACKEND_PROFILE_ID, WINDOW_ID, preference.key, preference.value)
+					) {
+						console.error("[desktop] could not save a local preference");
+					}
+				},
+				preferenceRemove: (payload) => {
+					if (neutral) return;
+					const preference = readDesktopPreferenceRemove(payload);
+					if (preference && !preferences.remove(BACKEND_PROFILE_ID, WINDOW_ID, preference.key)) {
+						console.error("[desktop] could not remove a local preference");
+					}
+				},
 			},
 		},
 	});
-	const preload = neutral ? null : await Bun.file(join(runtimeDir, "preload.js")).text();
+	const preload = neutral
+		? null
+		: injectInitialDesktopPreferences(
+				await Bun.file(join(runtimeDir, "preload.js")).text(),
+				initialPreferences,
+			);
 	const mainWindow = new BrowserWindow({
 		title: "ThinkRail",
 		url: neutral ? "about:blank" : `${origin}/${initialRoute}`,

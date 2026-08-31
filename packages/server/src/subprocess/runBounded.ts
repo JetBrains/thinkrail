@@ -3,6 +3,7 @@ export type BoundedRun = {
 	out: string;
 	err: string;
 	timedOut: boolean;
+	launchFailed: boolean;
 	waitedMs: number;
 };
 
@@ -78,10 +79,11 @@ export async function runBounded(argv: string[], opts: BoundedRunOptions): Promi
 			stdout: "pipe",
 			stderr: "pipe",
 			detached: true,
+			windowsHide: process.platform === "win32",
 		});
 	} catch (cause) {
 		const err = cause instanceof Error ? cause.message : String(cause);
-		return { ok: false, out: "", err, timedOut: false, waitedMs: waitedMs() };
+		return { ok: false, out: "", err, timedOut: false, launchFailed: true, waitedMs: waitedMs() };
 	}
 
 	const out = sink(proc.stdout);
@@ -106,6 +108,7 @@ export async function runBounded(argv: string[], opts: BoundedRunOptions): Promi
 		out: out.text(),
 		err: err.text(),
 		timedOut: outcome === "timed-out",
+		launchFailed: false,
 		waitedMs: waitedMs(),
 	};
 }

@@ -4,6 +4,7 @@ import {
 	defaultWorkspaceRow,
 	enterDefaultWorkspace,
 	expandActivityStep,
+	openChatFromHistory,
 	openFixtureProject,
 } from "./fixtures/app";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
@@ -64,6 +65,7 @@ test("an image tool result previews inline and opens full screen", async ({ page
 
 	await expect(defaultWorkspaceRow(page)).toBeVisible();
 	await enterDefaultWorkspace(page);
+	await openChatFromHistory(page, "image result");
 
 	const step = await expandActivityStep(page, "read");
 	const thumbnail = step.getByTestId("tool-result-image-thumbnail");

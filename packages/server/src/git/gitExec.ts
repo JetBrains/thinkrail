@@ -8,10 +8,16 @@ const TAIL_CHARS = MAX_STDERR_CHARS - TRUNCATION_MARK.length - HEAD_CHARS;
 
 const STALLED = (waitedMs: number) =>
 	`timed out after ${Math.max(1, Math.round(waitedMs / 1000))}s`;
-const NO_ANSWER =
+const LOCAL_NO_ANSWER = "git did not exit";
+const NETWORK_NO_ANSWER =
 	"the remote never answered; if it uses SSH, a key that is not loaded is the usual cause (`ssh-add`)";
 
-type GitResult = { ok: boolean; out: string; err: string };
+export type GitResult = {
+	ok: boolean;
+	out: string;
+	err: string;
+	failure?: "timeout" | "launch";
+};
 
 export function nonInteractiveGitEnv(): Record<string, string | undefined> {
 	return { ...process.env, GIT_TERMINAL_PROMPT: "0" };
@@ -42,7 +48,12 @@ export function git(cwd: string, args: string[], opts: { raw?: boolean } = {}): 
 export async function gitAsync(
 	cwd: string,
 	args: string[],
-	opts: { timeoutMs?: number; env?: Record<string, string | undefined> } = {},
+	opts: {
+		raw?: boolean;
+		timeoutMs?: number;
+		env?: Record<string, string | undefined>;
+		network?: boolean;
+	} = {},
 ): Promise<GitResult> {
 	const run = await runBounded(["git", "-C", cwd, ...args], {
 		timeoutMs: opts.timeoutMs ?? NETWORK_TIMEOUT_MS,
@@ -50,7 +61,18 @@ export async function gitAsync(
 	});
 	if (run.timedOut) {
 		const captured = boundedStderr(run.err);
-		return { ok: false, out: "", err: `${STALLED(run.waitedMs)} — ${captured || NO_ANSWER}` };
+		const noAnswer = opts.network ? NETWORK_NO_ANSWER : LOCAL_NO_ANSWER;
+		return {
+			ok: false,
+			out: "",
+			err: `${STALLED(run.waitedMs)} — ${captured || noAnswer}`,
+			failure: "timeout",
+		};
 	}
-	return { ok: run.ok, out: run.out.trim(), err: boundedStderr(run.err) };
+	return {
+		ok: run.ok,
+		out: opts.raw ? run.out : run.out.trim(),
+		err: boundedStderr(run.err),
+		...(run.launchFailed && { failure: "launch" as const }),
+	};
 }

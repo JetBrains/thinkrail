@@ -11,8 +11,8 @@ tags: [v1]
 ## Responsibility
 
 Workspace-scoped `bun-pty` terminals rooted in the worktree cwd, and the per-workspace catalog of terminal
-identities. A tab's shell outlives every client that looks at it; workbench placement/order belongs to the
-separate layout snapshot and merely references `tabKey`.
+identities. A tab's shell outlives every client that looks at it; each frontend independently references its
+`tabKey` from local workspace-view placement, which this module never receives.
 
 ## Boundary
 
@@ -43,6 +43,11 @@ separate layout snapshot and merely references `tabKey`.
   persist the complete catalog, then publish membership; persistence failure removes the in-memory insertion
   and publishes nothing. `attachTerminal` remains idempotent get-or-create and the only way a PTY is born.
   This is not a liveness split: a client still never holds the only pointer to a running shell.
+- **The default terminal is a host-composed creation handshake, not layout seeding.** `host` sees the
+  workspace's durable pending marker, calls `reserveTerminal` with its deterministic key, and asks
+  `workspaces` to clear the marker only after catalog persistence succeeds. Retrying is idempotent; closing
+  that terminal later cannot recreate it because the marker is already clear. This module never imports the
+  workspace registry or chooses frontend placement.
 - **Durable terminal identities are bounded.** A workspace catalog holds at most 256 tabs; a key is non-empty
   and at most 500 characters, and a title is non-empty and at most 1000 characters. Reservation and new attach
   share those checks. Revival truncates oversized catalogs, drops invalid keys, and repairs invalid titles
