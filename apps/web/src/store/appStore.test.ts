@@ -144,6 +144,7 @@ beforeEach(() => {
 		activeLogin: null,
 		settingsOpen: false,
 		settingsSection: "providers",
+		chatMessageOrder: "oldest-first",
 		toasts: [],
 	});
 });
@@ -2921,6 +2922,13 @@ test("applyConfig projects the composer growth limit", () => {
 		composerGrowthLimit: "roomy",
 	});
 	expect(useAppStore.getState()).toHaveProperty("composerGrowthLimit", "roomy");
+});
+
+test("chat message order is browser-local and cannot be overwritten by host config", () => {
+	useAppStore.getState().setChatMessageOrder("newest-first");
+	const legacyConfig = { ...DEFAULT_CONFIG, chatMessageOrder: "oldest-first" };
+	useAppStore.getState().applyConfig(legacyConfig);
+	expect(useAppStore.getState().chatMessageOrder).toBe("newest-first");
 });
 
 test("diff tabs: openTab dedupes by id + activates; view + contents update in place", () => {

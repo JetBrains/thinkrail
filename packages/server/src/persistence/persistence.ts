@@ -64,6 +64,7 @@ export function loadConfig(): AppConfig {
 	if (!raw || typeof raw !== "object" || Array.isArray(raw)) return structuredClone(DEFAULT_CONFIG);
 	const value = raw as Record<string, unknown>;
 	const extensions = { ...value };
+	delete extensions.chatMessageOrder;
 	delete extensions.layout;
 	return {
 		...extensions,

@@ -14,6 +14,17 @@ tags: [v1, ui]
 The layout-agnostic, store-driven feature views. A panel fills its container and never knows its
 arrangement (so the mobile shell is an additive layer, not a rewrite).
 
+Changes and Review keep their fixed toolbars outside a panel-owned `components/QuietScrollArea`; Projects,
+Files, and Specs expose content for the shell-owned scroll wrapper described in `shell/SPEC.md`.
+`TerminalInstance` wraps xterm with `QuietScrollFrame`, which skins xterm's descendant custom scroll control
+without shrinking its hit target; top/bottom state comes from xterm's public `buffer.active.viewportY/baseY`
+and `onScroll`/`onWriteParsed` API rather than pretending its non-native viewport has DOM scroll metrics.
+Those edges also authoritatively signal whether vertical scrollback exists, allowing the frame to expose
+xterm's otherwise-invisible controller for local intent and accessibility modes without inventing a second
+scroll model. The same neutral intent-revealed thumb + directional curtains therefore follow the terminal
+wherever it is placed. Feature views never receive or derive left/right/bottom placement to achieve that
+treatment.
+
 ## Boundary
 
 - **Owns:** `ProjectTree`. Each top-level project row is a compact 28px IDE-tree row:
@@ -342,9 +353,14 @@ a project picker, the prompt hero, and the reused
   one fires `settings.update` and the UI **converges on the `settings.changed` broadcast** (no optimistic
   apply), a rejected update raising a toast; the picker never owns a theme list — it renders the catalog
   the glob discovered at build time); **`ChatSettings`** (the live section immediately after Appearance —
-  three radio cards over `store.composerGrowthLimit`, updating `AppConfig.composerGrowthLimit` with the same
-  converge-on-`settings.changed`, toast-on-rejection pattern; the labels explain when the one-line composer
-  stops growing, while `contracts` owns the closed preset ids/default); the **shell-owned injected Layout
+  **Message order** radio cards over `store.chatMessageOrder` (Oldest first, the compatibility default /
+  Newest first, the opt-in) followed by the three existing composer-growth cards. Message order applies
+  immediately and persists only in this client: browsers use the current host-qualified key, while a native
+  shell may inject its stable backend-profile/window adapter. Another browser, native window, or host is
+  unaffected; `chat/messageOrder` owns its closed ids and default. Composer growth remains a
+  top-level `AppConfig` field and converges on `settings.changed`, with a toast on rejection. Labels use
+  “message box” rather than the internal “composer” name when explaining where the user types); the
+  **shell-owned injected Layout
   section** (Balanced/Focus/Review
   plus named custom preset cards. Custom capture/rename/delete updates the host-synchronized catalog and
   converges through `settings.changed`; current/default selection and independent side/bottom limits are

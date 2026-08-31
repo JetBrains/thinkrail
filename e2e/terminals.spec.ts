@@ -4,6 +4,7 @@ import {
 	createWorkspaceViaDialog,
 	openFixtureProject,
 	openTerminal,
+	pseudoBackgroundColor,
 	revealFirstProjectWorkspaces,
 	runInTerminal,
 	visibleTerminal,
@@ -37,6 +38,113 @@ test("a workspace opens a terminal automatically, rooted in the worktree, with w
 
 	await runInTerminal(page, "echo TR_MARKER_IO");
 	await expect(term).toContainText("TR_MARKER_IO");
+});
+
+test("xterm uses the shared quiet rail and directional curtains", async ({ page }) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await waitTerminalReady(page);
+
+	const terminal = visibleTerminal(page);
+	const frame = terminal.locator('[data-quiet-scroll-surface="terminal"]');
+	const viewport = frame.locator(".xterm-scrollable-element");
+	const scrollbar = viewport.locator(".scrollbar.vertical");
+	const slider = scrollbar.locator(".slider");
+	const terminalInput = terminal.locator(".xterm-helper-textarea");
+	const terminalTab = page.getByTestId("terminal-tab").getByRole("tab");
+	const cues = frame.getByTestId("quiet-scroll-cues");
+	await expect(viewport).toHaveClass(/quiet-scroll-viewport/);
+
+	await runInTerminal(page, "for i in $(seq 1 80); do echo TR_SCROLL_$i; done");
+	await expect(visibleTerminalScreen(page)).toContainText("TR_SCROLL_80");
+	await expect(frame).toHaveAttribute("data-quiet-scroll-overflow-y", "true");
+	await expect(cues).toHaveAttribute("data-scroll-top", "true");
+	await expect(cues).not.toHaveAttribute("data-scroll-bottom", "true");
+
+	await terminalTab.focus();
+	await terminalTab.hover();
+	await expect
+		.poll(() => viewport.getAttribute("data-quiet-scroll-intent"), { timeout: 2_000 })
+		.toBeNull();
+	await expect.poll(() => scrollbar.evaluate((node) => getComputedStyle(node).opacity)).toBe("0");
+	await expect(slider).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+	await expect.poll(() => pseudoBackgroundColor(slider, "::before")).toBe("rgba(0, 0, 0, 0)");
+	await expect
+		.poll(async () => {
+			const [trackBox, sliderBox] = await Promise.all([
+				scrollbar.boundingBox(),
+				slider.boundingBox(),
+			]);
+			return trackBox?.width === sliderBox?.width;
+		})
+		.toBe(true);
+
+	const html = page.locator("html");
+	const originalContrast = await html.getAttribute("data-theme-contrast");
+	await html.evaluate((node) => node.setAttribute("data-theme-contrast", "high"));
+	await expect.poll(() => scrollbar.evaluate((node) => getComputedStyle(node).opacity)).toBe("1");
+	await expect(scrollbar).toHaveCSS("pointer-events", "auto");
+	await expect(scrollbar).toHaveCSS("z-index", "11");
+	await expect.poll(() => pseudoBackgroundColor(slider, "::before")).not.toBe("rgba(0, 0, 0, 0)");
+	await html.evaluate((node, contrast) => {
+		if (contrast) node.setAttribute("data-theme-contrast", contrast);
+		else node.removeAttribute("data-theme-contrast");
+	}, originalContrast);
+	await expect.poll(() => scrollbar.evaluate((node) => getComputedStyle(node).opacity)).toBe("0");
+	await expect.poll(() => pseudoBackgroundColor(slider, "::before")).toBe("rgba(0, 0, 0, 0)");
+
+	await terminalInput.focus();
+	await expect(viewport).toHaveAttribute("data-quiet-scroll-intent", "");
+	await expect.poll(() => scrollbar.evaluate((node) => getComputedStyle(node).opacity)).toBe("1");
+	await expect(scrollbar).toHaveCSS("pointer-events", "auto");
+	await terminalTab.focus();
+	await terminalTab.hover();
+	await expect
+		.poll(() => viewport.getAttribute("data-quiet-scroll-intent"), { timeout: 2_000 })
+		.toBeNull();
+	await expect.poll(() => scrollbar.evaluate((node) => getComputedStyle(node).opacity)).toBe("0");
+
+	await frame.hover({ position: { x: 20, y: 20 } });
+	await expect(viewport).toHaveAttribute("data-quiet-scroll-intent", "");
+	await expect.poll(() => scrollbar.evaluate((node) => getComputedStyle(node).opacity)).toBe("1");
+	await slider.hover();
+	await expect(slider).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+	await expect
+		.poll(() => slider.evaluate((node) => getComputedStyle(node, "::before").width))
+		.toBe("6px");
+
+	const [frameBox, sliderBox] = await Promise.all([frame.boundingBox(), slider.boundingBox()]);
+	if (!frameBox || !sliderBox) throw new Error("terminal scrollbar has no geometry");
+	await page.mouse.move(sliderBox.x + sliderBox.width / 2, sliderBox.y + sliderBox.height / 2);
+	await page.mouse.down();
+	await page.mouse.move(frameBox.x - 8, sliderBox.y + sliderBox.height / 2);
+	await expect(slider).toHaveClass(/active/);
+	await expect(viewport).toHaveAttribute("data-quiet-scroll-intent", "");
+	await expect(slider).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+	await expect.poll(() => scrollbar.evaluate((node) => getComputedStyle(node).opacity)).toBe("1");
+	await page.mouse.up();
+
+	await terminalTab.focus();
+	await terminalTab.hover();
+	await expect
+		.poll(() => viewport.getAttribute("data-quiet-scroll-intent"), { timeout: 2_000 })
+		.toBeNull();
+	await expect.poll(() => scrollbar.evaluate((node) => getComputedStyle(node).opacity)).toBe("0");
+	await page.emulateMedia({ forcedColors: "active" });
+	await expect.poll(() => scrollbar.evaluate((node) => getComputedStyle(node).opacity)).toBe("1");
+	await expect(scrollbar).toHaveCSS("pointer-events", "auto");
+	await page.emulateMedia({ forcedColors: "none" });
+
+	await page.emulateMedia({ reducedMotion: "reduce" });
+	await expect(scrollbar).toHaveCSS("transition-duration", "0s");
+	await expect
+		.poll(() => slider.evaluate((node) => getComputedStyle(node, "::before").transitionDuration))
+		.toBe("0s");
+	await page.emulateMedia({ reducedMotion: "no-preference" });
+
+	await frame.hover({ position: { x: 20, y: 20 } });
+	await page.mouse.wheel(0, -10_000);
+	await expect(cues).toHaveAttribute("data-scroll-bottom", "true");
 });
 
 test("terminals are workspace-scoped and survive workspace switches", async ({ page }) => {
@@ -460,6 +568,7 @@ test("a second client takes a terminal over and the first is told", async ({ pag
 	await expect(visibleTerminalScreen(page2)).toContainText("SECOND=yes");
 
 	await expect(visibleTerminal(page)).toHaveAttribute("data-detached", "true");
+	await expect(page.getByTestId("terminal-detached-overlay")).toHaveCSS("z-index", "30");
 
 	await page.getByTestId("terminal-take-back").click();
 	await waitTerminalReady(page);

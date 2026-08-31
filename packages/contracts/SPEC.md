@@ -201,9 +201,10 @@ of the host.
   height preference: 6 visual lines, 10 visual lines, or 50% of the mounted chat panel respectively;
   `"half-chat"` is the default, and the web owns translating these semantic ids into geometry;
   **`AppConfig`** (`{ theme, analyticsEnabled, terminalReplayKb, composerGrowthLimit,
-  customLayoutPresets }`—an extensible bag; `customLayoutPresets` is the bounded resource-free catalog and
-  is the **only** layout value synchronized by the host; current/default preset and group limits are web-local);
-  `analyticsEnabled` is the anonymous-usage-analytics switch, default `true`
+  customLayoutPresets, reviewModel?, reviewEffort?, reviewAutoFix }` — an extensible bag;
+  `customLayoutPresets` is the bounded resource-free catalog and is the **only** layout value synchronized
+  by the host; current/default preset and group limits are web-local); `analyticsEnabled` is the anonymous
+  usage-analytics switch, default `true`
   — it is the **only** analytics fact on the wire:
   the installation id stays server-side by design, see `submodule-server-analytics`) carries it with the
   **`DEFAULT_CONFIG`** fallback

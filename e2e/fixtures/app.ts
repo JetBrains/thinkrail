@@ -229,6 +229,13 @@ export function visibleTerminalScreen(page: Page): Locator {
 	return visibleTerminal(page).locator(".xterm-rows");
 }
 
+export function pseudoBackgroundColor(element: Locator, pseudo: string): Promise<string> {
+	return element.evaluate(
+		(node, pseudoElement) => getComputedStyle(node, pseudoElement).backgroundColor,
+		pseudo,
+	);
+}
+
 export async function waitTerminalReady(page: Page): Promise<void> {
 	await expect(visibleTerminal(page)).toHaveAttribute("data-ready", "true");
 }

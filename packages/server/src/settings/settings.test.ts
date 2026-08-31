@@ -2,7 +2,12 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { type AppConfig, DEFAULT_CONFIG, type LayoutPreset } from "@thinkrail/contracts";
+import {
+	type AppConfig,
+	type AppConfigUpdate,
+	DEFAULT_CONFIG,
+	type LayoutPreset,
+} from "@thinkrail/contracts";
 import { validateCustomLayoutPresets } from "./layoutPresets";
 import { getConfig, resetConfigCache, setSettingsPublisher, updateConfig } from "./settings";
 
@@ -93,6 +98,25 @@ test("loadConfig replaces an invalid composer growth preset with the default", (
 	);
 	resetConfigCache();
 	expect(getConfig()).toHaveProperty("composerGrowthLimit", "half-chat");
+});
+
+test("retired chat message order is stripped from disk and stale updates", () => {
+	writeFileSync(
+		join(dataDir, "config.json"),
+		JSON.stringify({ ...DEFAULT_CONFIG, chatMessageOrder: "newest-first" }),
+	);
+	resetConfigCache();
+	expect(getConfig()).not.toHaveProperty("chatMessageOrder");
+
+	const published: AppConfig[] = [];
+	setSettingsPublisher((config) => published.push(config));
+	const staleUpdate = { chatMessageOrder: "newest-first" } as AppConfigUpdate;
+	const next = updateConfig(staleUpdate);
+	expect(next).not.toHaveProperty("chatMessageOrder");
+	expect(published).toHaveLength(1);
+	expect(published[0]).not.toHaveProperty("chatMessageOrder");
+	const onDisk = JSON.parse(readFileSync(join(dataDir, "config.json"), "utf8"));
+	expect(onDisk).not.toHaveProperty("chatMessageOrder");
 });
 
 test("reviewAutoFix defaults on; an old config without it loads the default; toggling off round-trips", () => {
