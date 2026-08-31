@@ -57,11 +57,6 @@
 		}
 	}
 
-	/*
-	 * Opacity-only twin of `reveal`, for a remount whose subtree may contain `position: sticky`
-	 * descendants (e.g. ChatView's breadcrumbs) — `transform` on an ancestor breaks those, so this
-	 * variant never sets one.
-	 */
 	--animate-fade-in: fade-in 150ms ease-out;
 	@keyframes fade-in {
 		from {
