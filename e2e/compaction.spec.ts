@@ -1,11 +1,6 @@
 import { appendFileSync, realpathSync, utimesSync } from "node:fs";
 import { expect, test } from "@playwright/test";
-import {
-	defaultWorkspaceRow,
-	enterDefaultWorkspace,
-	openChatFromHistory,
-	openFixtureProject,
-} from "./fixtures/app";
+import { defaultWorkspaceRow, enterDefaultWorkspace, openFixtureProject } from "./fixtures/app";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { seedWorkspaceSession } from "./fixtures/sessions";
 
@@ -41,7 +36,7 @@ test("a compacted transcript marks where the summarized messages were", async ({
 
 	await expect(defaultWorkspaceRow(page)).toBeVisible();
 	await enterDefaultWorkspace(page);
-	await openChatFromHistory(page, "the long chat");
+	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 
 	await expect(page.getByText("kept question")).toBeVisible();
 	await expect(page.getByText("summarized question")).toHaveCount(0);
